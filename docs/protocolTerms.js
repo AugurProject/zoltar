@@ -91,7 +91,6 @@ window.protocolTermDefinitions = Object.freeze({
 	MAX_OPERATION_VALID_FOR_SECONDS: 'The maximum time a staged operation may remain valid.',
 	MAX_PENDING_SETTLEMENT_OPERATIONS: 'The maximum number of staged operations replayed from one settlement callback.',
 	MAX_RETENTION_RATE: 'The maximum retention rate used in security-pool accounting.',
-	MAX_UNRESOLVED_EXPORT_REFS: 'The maximum unresolved escalation references exported in one migration step. It keeps each transaction bounded.',
 	'maximum pending settlement operations': 'The cap on how many queued operations the coordinator will replay from one settlement callback.',
 	maxSettlementBaseFeeMultiplierBps: 'The multiplier that caps acceptable settlement base fee relative to request-time base fee.',
 	MERKLE_MOUNTAIN_RANGE_MAX_PEAKS: 'The maximum number of Merkle Mountain Range peaks the proof code accepts. This bounds proof size and gas.',

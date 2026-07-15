@@ -325,7 +325,7 @@ export type SecurityPoolVaultSummary = {
 
 type OwnForkRepBuckets = {
 	vaultRepAtFork: bigint
-	unallocatedEscrowChildRep: bigint
+	escalationChildRepPerSelectedOutcome: bigint
 	escrowSourceRepAtFork: bigint
 }
 
@@ -393,6 +393,12 @@ export type EscalationSide = {
 
 export type ReportingSettlementState = 'locked' | 'resolved' | 'migration-required' | 'migration-expired'
 
+type EscalationMigrationEntitlementStatus = {
+	initialized: boolean
+	materializedByOutcome: Record<ReportingOutcomeKey, boolean>
+	totalCurrentRep: bigint
+}
+
 type ReportingDetailsBase = {
 	completeSetCollateralAmount: bigint
 	currentTime: bigint
@@ -408,6 +414,7 @@ type ReportingDetailsBase = {
 	universeId: bigint
 	parentWithdrawalEnabled: boolean
 	viewerVaultAvailableEscalationRep: bigint | undefined
+	viewerEscalationMigrationEntitlement?: EscalationMigrationEntitlementStatus | undefined
 	viewerVaultExists: boolean
 	viewerVaultEscrowedRep: bigint | undefined
 	viewerVaultRepDepositShare: bigint | undefined

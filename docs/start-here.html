@@ -48,6 +48,17 @@
 						or redemption.
 					</p>
 					<p>
+						A selected continuation can start without waiting for inactive vaults. It copies
+						the complete parent escalation totals, receives its branch's complete backing,
+						and authorizes only vaults that opt into that branch. External forks reproduce
+						the drained game REP one-for-one; own forks reproduce the complete post-burn
+						escalation child bucket. Each vault exports only its three aggregate outcome totals
+						for <code>Invalid</code>, <code>Yes</code>, and <code>No</code>,
+						so it never processes another vault or deploys a child universe nobody selects.
+						The <a href="./whitepaper_placeholder.html#fig-placeholder-unresolved-migration">migration accounting diagram</a>
+						separates the snapshot, physical backing, and vault authorization paths.
+					</p>
+					<p>
 						Keep one distinction in mind throughout: Zoltar decides how
 						disagreement is represented, while Placeholder decides how a market
 						is collateralized, disputed, migrated, and repaired around that

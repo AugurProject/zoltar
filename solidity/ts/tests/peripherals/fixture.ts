@@ -109,20 +109,6 @@ const getMigrationProxyAddressAbi = [
 	},
 ] as const satisfies Abi
 
-const migrateVaultWithUnresolvedEscalationReturnAbi = [
-	{
-		inputs: [
-			{ internalType: 'contract ISecurityPool', name: 'securityPool', type: 'address' },
-			{ internalType: 'address', name: 'vault', type: 'address' },
-			{ internalType: 'uint256', name: 'childOutcomeIndex', type: 'uint256' },
-		],
-		name: 'migrateVaultWithUnresolvedEscalation',
-		outputs: [{ internalType: 'bool', name: 'moreToMigrate', type: 'bool' }],
-		stateMutability: 'nonpayable',
-		type: 'function',
-	},
-] as const satisfies Abi
-
 function formatStorageSlot(slot: bigint) {
 	return `0x${slot.toString(16).padStart(64, '0')}`
 }
@@ -406,7 +392,6 @@ function usePeripheralsTestFixture() {
 		peripherals_tokens_ShareToken_ShareToken,
 		test_peripherals_OwnForkEscalationClaimHarness_OwnForkEscalationClaimHarness,
 		getMigrationProxyAddressAbi,
-		migrateVaultWithUnresolvedEscalationReturnAbi,
 		formatStorageSlot,
 		getMappingStorageSlot,
 		reportBond,
@@ -567,6 +552,8 @@ export function usePeripheralsEscalationMigrationFixture() {
 		'getCompleteSetCollateralAmount',
 		'getRepToken',
 		'getAwaitingForkContinuation',
+		'getActiveVaultCount',
+		'getActiveVaults',
 		'getSecurityPoolsEscalationGame',
 		'getSecurityVault',
 		'getSystemState',
@@ -576,7 +563,6 @@ export function usePeripheralsEscalationMigrationFixture() {
 		'peripherals_EscalationGame_EscalationGame',
 		'peripherals_SecurityPoolForker_SecurityPoolForker',
 		'getMigrationProxyAddressAbi',
-		'migrateVaultWithUnresolvedEscalationReturnAbi',
 		'formatStorageSlot',
 		'getMappingStorageSlot',
 		'reportBond',

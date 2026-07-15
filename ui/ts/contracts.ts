@@ -1,4 +1,4 @@
-import { decodeEventLog, getAddress, zeroAddress, type Address, type Hash, type Hex, type TransactionReceipt } from '@zoltar/shared/ethereum'
+import { decodeEventLog, getAddress, zeroAddress, type Address, type Hex, type TransactionReceipt } from '@zoltar/shared/ethereum'
 import { ABIS } from './abis.js'
 import { sortBigIntsAscending } from '@zoltar/shared/bigInt'
 import { ORACLE_ASSUMED_REP_PER_ETH_PRICE } from '@zoltar/shared/oracleInitialReport'
@@ -13,7 +13,6 @@ import { decodeOracleQueueOperation, encodeOracleQueueOperation } from './lib/or
 import { getWethAddress } from './lib/uniswapQuoter.js'
 import {
 	Zoltar_Zoltar,
-	peripherals_EscalationGame_EscalationGame,
 	peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
 	peripherals_SecurityPoolForker_SecurityPoolForker,
 	peripherals_SecurityPool_SecurityPool,
@@ -87,7 +86,6 @@ const QUESTION_OUTCOME_ABI = [
 		type: 'function',
 	},
 ] as const
-const UNRESOLVED_ESCALATION_MIGRATION_BATCH_LIMIT = 128
 const OPEN_ORACLE_PRICE_UNITS = 30n
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
 type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
@@ -1114,7 +1112,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 	if (!hasTimestamp(block)) throw new Error('Unexpected block response')
 	const marketDetails = await loadMarketDetails(client, questionId)
 	const { auctionableRepAtFork, truthAuctionStartedAt, migratedRep, auctionedSecurityBondAllowance, forkOwnSecurityPool, forkOutcomeIndex } = requireForkDataView(forkData)
-	const [ownForkMigrationOwnFork, ownForkMigrationAuctionableRepAtFork, vaultRepAtFork, unallocatedEscrowChildRep, escrowSourceRepAtFork] = ownForkMigrationStatusTuple
+	const [ownForkMigrationOwnFork, ownForkMigrationAuctionableRepAtFork, vaultRepAtFork, escalationChildRepPerSelectedOutcome, escrowSourceRepAtFork] = ownForkMigrationStatusTuple
 	const systemState = getSecurityPoolSystemState(systemStateValue)
 	const forkOutcome = getForkOutcomeKey(forkOutcomeIndex, parentSecurityPoolAddress)
 	const hasForkActivity = deriveHasForkActivity({
@@ -1255,7 +1253,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 			? {
 					ownForkRepBuckets: {
 						vaultRepAtFork,
-						unallocatedEscrowChildRep,
+						escalationChildRepPerSelectedOutcome,
 						escrowSourceRepAtFork,
 					},
 				}
@@ -1400,44 +1398,19 @@ export async function migrateEscalationDeposits(client: WriteClient, securityPoo
 }
 export async function migrateVaultWithUnresolvedEscalation(client: WriteClient, securityPoolAddress: Address, vaultAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) {
 	const outcomeIndex = getReportingOutcomeValue(outcome)
-	return await executeForkAuctionAction(client, 'migrateUnresolvedEscalation', securityPoolAddress, universeId, async () => {
-		let lastHash: Hash | undefined
-		for (let batchIndex = 0; batchIndex < UNRESOLVED_ESCALATION_MIGRATION_BATCH_LIMIT; batchIndex += 1) {
-			lastHash = await writeContractAndWait(client, () => ({
+	return await executeForkAuctionAction(
+		client,
+		'migrateUnresolvedEscalation',
+		securityPoolAddress,
+		universeId,
+		async () =>
+			await writeContractAndWait(client, () => ({
 				address: getInfraContractAddresses().securityPoolForker,
 				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'migrateVaultWithUnresolvedEscalation',
 				args: [securityPoolAddress, vaultAddress, BigInt(outcomeIndex)],
-			}))
-			if (!(await hasPendingUnresolvedEscalationMigration(client, securityPoolAddress, vaultAddress))) return lastHash
-		}
-		throw new Error('Unresolved escalation migration still has pending batches after the transaction limit')
-	})
-}
-
-async function hasPendingUnresolvedEscalationMigration(client: Pick<ReadClient, 'readContract'>, securityPoolAddress: Address, vaultAddress: Address) {
-	const escalationGame = await client.readContract({
-		address: securityPoolAddress,
-		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'escalationGame',
-		args: [],
-	})
-	if (sameAddress(escalationGame, zeroAddress)) return false
-	const [hasUnexportedLocalDepositRefs, hasUnexportedForkedEscrow] = await Promise.all([
-		client.readContract({
-			address: escalationGame,
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'hasUnexportedLocalDepositRefs',
-			args: [vaultAddress],
-		}),
-		client.readContract({
-			address: escalationGame,
-			abi: peripherals_EscalationGame_EscalationGame.abi,
-			functionName: 'hasUnexportedForkedEscrow',
-			args: [vaultAddress],
-		}),
-	])
-	return hasUnexportedLocalDepositRefs || hasUnexportedForkedEscrow
+			})),
+	)
 }
 export async function startTruthAuctionForSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
 	return await executeForkAuctionAction(

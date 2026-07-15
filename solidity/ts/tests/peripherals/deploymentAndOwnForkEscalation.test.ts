@@ -543,10 +543,12 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
-		const ownForkRepBuckets = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
 		const parentEscalationGame = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier).securityPool
+		const yesChildEscalationGame = await getSecurityPoolsEscalationGame(client, yesChildPool)
+		const yesChildRepToken = getRepTokenAddress(yesUniverse)
+		const aggregateBackingBeforeClaim = await getERC20Balance(client, yesChildRepToken, yesChildEscalationGame)
 
 		const claimHash = await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
 		const claimReceipt = await client.getTransactionReceipt({ hash: claimHash })
@@ -561,6 +563,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 			)
 			.find(log => log.eventName === 'ClaimForkedEscalationDepositsToWallet')
 		if (claimLog === undefined) throw new Error('ClaimForkedEscalationDepositsToWallet log missing')
+		const aggregateBackingAfterClaim = await getERC20Balance(client, yesChildRepToken, yesChildEscalationGame)
 
 		const migrationHash = await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
 		const migrationReceipt = await client.getTransactionReceipt({ hash: migrationHash })
@@ -573,20 +576,28 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 					topics: log.topics,
 				}),
 			)
-			.find(log => log.eventName === 'LocalDepositsExported')
-		if (exportLog === undefined) throw new Error('LocalDepositsExported log missing after own-fork unresolved migration')
+			.find(log => log.eventName === 'VaultUnresolvedTotalsExported')
+		if (exportLog === undefined) throw new Error('VaultUnresolvedTotalsExported log missing after own-fork unresolved migration')
 
 		const childYesEscrow = await getForkedEscrowChildRepByOutcomeAndVault(client, yesChildPool, QuestionOutcome.Yes, client.account.address)
 		const childNoEscrow = await getForkedEscrowChildRepByOutcomeAndVault(client, yesChildPool, QuestionOutcome.No, client.account.address)
+		const childYesEscrowState = await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			address: yesChildEscalationGame,
+			functionName: 'getForkedEscrowByVaultAndOutcome',
+			args: [client.account.address, QuestionOutcome.Yes],
+		})
 		const parentVaultAfterMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const aggregateBackingAfterMigration = await getERC20Balance(client, yesChildRepToken, yesChildEscalationGame)
 
-		strictEqualTypeSafe(claimLog.args.walletRepPaid + childNoEscrow + childYesEscrow, ownForkRepBuckets.unallocatedEscrowChildRep, 'mixed own-fork claim and migration should partition the fixed child REP escrow bucket without creating extra child REP')
+		strictEqualTypeSafe(aggregateBackingBeforeClaim - aggregateBackingAfterClaim, claimLog.args.walletRepPaid, 'the direct claim should be paid from the selected childs aggregate escalation backing')
+		strictEqualTypeSafe(aggregateBackingAfterMigration, aggregateBackingAfterClaim, 'logical entitlement materialization should not mint or transfer additional child REP')
 		assert.deepStrictEqual([...exportLog.args.principalByOutcome], [0n, 0n, forkThreshold], 'unresolved migration should export only the remaining no-side source principal after the yes-side claim')
 		strictEqualTypeSafe(exportLog.args.principalToTransfer, forkThreshold, 'unresolved migration should consume only the remaining no-side source principal')
 		strictEqualTypeSafe(exportLog.args.repReceiver.toLowerCase(), addressString(0n).toLowerCase(), 'own-fork unresolved migration should not transfer parent REP to a receiver')
-		strictEqualTypeSafe(exportLog.args.transferredRep, false, 'own-fork unresolved migration should keep the parent REP in place')
+		strictEqualTypeSafe(exportLog.args.transferredRep, false, 'own-fork unresolved migration should not repeat the aggregate fork-time REP transfer')
 		assert.ok(claimLog.args.sourceRepClaimed > forkThreshold, 'the winning claim should pay out more than principal when it consumes the losing-side escrow')
-		strictEqualTypeSafe(childYesEscrow, 0n, 'the claimed yes-side deposit should not reappear as child escrow after unresolved migration')
+		strictEqualTypeSafe(childYesEscrowState[3], childYesEscrow, 'the direct yes-side claim should leave its child escrow history fully claimed')
 		assert.ok(childNoEscrow > 0n, 'the remaining no-side deposit should still migrate into child escrow')
 		strictEqualTypeSafe(parentVaultAfterMigration.repInEscalationGame, 0n, 'mixed own-fork claim and unresolved migration should clear the parent vault escalation lock')
 	})
@@ -923,7 +934,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 			await createChildUniverse(client, scenarioPool, QuestionOutcome.Yes)
 
 			const parentEscalationGame = await getSecurityPoolsEscalationGame(client, scenarioPool)
-			const decodeNoTransferLocalDepositsExported = async (transactionHash: `0x${string}`) => {
+			const decodeNoTransferVaultTotalsExported = async (transactionHash: `0x${string}`) => {
 				const receipt = await client.getTransactionReceipt({ hash: transactionHash })
 				const log = receipt.logs
 					.filter(receiptLog => receiptLog.address.toLowerCase() === parentEscalationGame.toLowerCase())
@@ -934,17 +945,16 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 							topics: receiptLog.topics,
 						}),
 					)
-					.find(receiptLog => receiptLog.eventName === 'LocalDepositsExported')
-				if (log === undefined) throw new Error('own-fork LocalDepositsExported log missing')
+					.find(receiptLog => receiptLog.eventName === 'VaultUnresolvedTotalsExported')
+				if (log === undefined) throw new Error('own-fork VaultUnresolvedTotalsExported log missing')
 				return log
 			}
 			const clientMigrationHash = await migrateVaultWithUnresolvedEscalation(client, scenarioPool, client.account.address, QuestionOutcome.Yes)
-			const noTransferExportLog = await decodeNoTransferLocalDepositsExported(clientMigrationHash)
+			const noTransferExportLog = await decodeNoTransferVaultTotalsExported(clientMigrationHash)
 			strictEqualTypeSafe(noTransferExportLog.args.vault.toLowerCase(), client.account.address.toLowerCase(), 'own-fork export log should identify the client vault')
 			strictEqualTypeSafe(noTransferExportLog.args.repReceiver.toLowerCase(), addressString(0n).toLowerCase(), 'own-fork export should not set a REP receiver')
 			assert.deepStrictEqual([...noTransferExportLog.args.principalByOutcome], [0n, clientYesEscalation, forkThreshold], 'own-fork export log should preserve source principal by original outcome')
 			strictEqualTypeSafe(noTransferExportLog.args.principalToTransfer, clientYesEscalation + forkThreshold, 'own-fork export log should report the consumed unresolved principal')
-			strictEqualTypeSafe(noTransferExportLog.args.exportCursor, 2n, 'own-fork export log should expose the exhausted two-ref cursor')
 			strictEqualTypeSafe(noTransferExportLog.args.transferredRep, false, 'own-fork unresolved export should not transfer parent REP')
 			await migrateVaultWithUnresolvedEscalation(attackerClient, scenarioPool, attackerClient.account.address, QuestionOutcome.Yes)
 

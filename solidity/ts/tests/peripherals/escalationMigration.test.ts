@@ -1,31 +1,18 @@
 import { beforeEach, describe, test } from 'bun:test'
-import { type Address } from '@zoltar/shared/ethereum'
-import { usePeripheralsEscalationMigrationFixture, type PeripheralsEscalationMigrationFixture } from './fixture'
 import { peripherals_SecurityPool_SecurityPool } from '../../types/contractArtifact'
 import { createCarryProof, readCarryLeafHash, SparseNullifierTree } from '../carryProofHelpers'
+import { usePeripheralsEscalationMigrationFixture, type PeripheralsEscalationMigrationFixture } from './fixture'
 
-const createSingleLeafCarryProof = async (client: PeripheralsEscalationMigrationFixture['client'], escalationGameAddress: Address, expectedOutcome: number, parentDepositIndex: bigint) =>
-	await createCarryProof(client, escalationGameAddress, {
-		expectedOutcome,
-		parentDepositIndex,
-		leafIndex: 0n,
-		merkleMountainRangePeakIndex: 0n,
-		merkleMountainRangeSiblings: [],
-		nullifierSiblings: new SparseNullifierTree().getProof(parentDepositIndex),
-	})
-
-const localDepositsExportedAbi = [
+const localUnresolvedPrincipalAbi = [
 	{
 		inputs: [
 			{ name: 'vault', type: 'address' },
-			{ name: 'repReceiver', type: 'address' },
-			{ name: 'principalByOutcome', type: 'uint256[3]' },
-			{ name: 'principalToTransfer', type: 'uint256' },
-			{ name: 'exportCursor', type: 'uint256' },
-			{ name: 'transferredRep', type: 'bool' },
+			{ name: 'outcome', type: 'uint8' },
 		],
-		name: 'LocalDepositsExported',
-		type: 'event',
+		name: 'getLocalUnresolvedPrincipalByVaultAndOutcome',
+		outputs: [{ name: '', type: 'uint256' }],
+		stateMutability: 'view',
+		type: 'function',
 	},
 ] as const
 
@@ -35,7 +22,6 @@ describe('Peripherals: escalation migration', () => {
 	const approximatelyEqual: PeripheralsEscalationMigrationFixture['approximatelyEqual'] = fixture.approximatelyEqual
 	const strictEqualTypeSafe: PeripheralsEscalationMigrationFixture['strictEqualTypeSafe'] = fixture.strictEqualTypeSafe
 	const {
-		decodeEventLog,
 		encodeAbiParameters,
 		keccak256,
 		REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT,
@@ -84,19 +70,17 @@ describe('Peripherals: escalation migration', () => {
 		createCompleteSet,
 		depositRep,
 		depositToEscalationGame,
-		getCompleteSetCollateralAmount,
 		getRepToken,
 		getAwaitingForkContinuation,
+		getActiveVaultCount,
+		getActiveVaults,
 		getSecurityPoolsEscalationGame,
 		getSecurityVault,
 		getSystemState,
-		getTotalSecurityBondAllowance,
 		poolOwnershipToRep,
 		withdrawFromEscalationGame,
 		peripherals_EscalationGame_EscalationGame,
 		peripherals_SecurityPoolForker_SecurityPoolForker,
-		getMigrationProxyAddressAbi,
-		migrateVaultWithUnresolvedEscalationReturnAbi,
 		formatStorageSlot,
 		getMappingStorageSlot,
 		reportBond,
@@ -175,9 +159,9 @@ describe('Peripherals: escalation migration', () => {
 		strictEqualTypeSafe(parentVaultBeforeMigration.repInEscalationGame, unresolvedDeposit, 'the parent lock should equal the unresolved principal before migration')
 		strictEqualTypeSafe(parentVaultAfterMigration.repInEscalationGame, 0n, 'atomic unresolved migration should clear the parent lock')
 		assert.ok(childVaultAfterMigration.repInEscalationGame > 0n, 'the child vault should inherit unresolved escrow in the child token')
-		strictEqualTypeSafe(childVaultAfterMigration.repInEscalationGame, childEscalationBalanceAfterMigration - childEscalationBalanceBeforeMigration, 'the child vault escrow should match the child REP actually transferred into the continuation game')
+		strictEqualTypeSafe(childVaultAfterMigration.repInEscalationGame, unresolvedDeposit, 'the child vault should receive its logical unresolved entitlement')
 		strictEqualTypeSafe(childForkData.migratedRep, childForkDataBeforeMigration.migratedRep, 'unresolved migration should not change child migrated REP accounting')
-		assert.ok(childEscalationBalanceAfterMigration > childEscalationBalanceBeforeMigration, 'the child continuation game should receive child REP funding for the migrated unresolved deposits')
+		strictEqualTypeSafe(childEscalationBalanceAfterMigration, childEscalationBalanceBeforeMigration, 'vault materialization should reuse the aggregate backing placed in the selected child at creation')
 		strictEqualTypeSafe(childForkSnapshotInitialized, true, 'the child continuation game should inherit the fork carry snapshot')
 		strictEqualTypeSafe(childDepositsAfterMigration.length, 0, 'the child continuation game should not replay parent unresolved deposits as fresh local deposits')
 		strictEqualTypeSafe(childLocalDepositCount, 0n, 'continuation deposits should remain represented through the inherited carry snapshot')
@@ -185,7 +169,7 @@ describe('Peripherals: escalation migration', () => {
 		strictEqualTypeSafe(childOutcomeState.currentCarryTotal, unresolvedDeposit, 'the child continuation game should track the migrated unresolved principal')
 	})
 
-	test('migrateVaultWithUnresolvedEscalation reports bounded unresolved batches until migration is complete', async () => {
+	test('migrateVaultWithUnresolvedEscalation moves aggregate vault totals in one call regardless of deposit count', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		const depositCount = 65
@@ -210,93 +194,24 @@ describe('Peripherals: escalation migration', () => {
 		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-
-		const parentEscalationGame = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
-		const migrationProxyAddress = await client.readContract({
-			abi: getMigrationProxyAddressAbi,
-			address: getInfraContractAddresses().securityPoolForker,
-			functionName: 'getMigrationProxyAddress',
-			args: [securityPoolAddresses.securityPool],
-		})
-		const decodeLocalDepositsExported = async (transactionHash: `0x${string}`, missingMessage: string) => {
-			const receipt = await client.getTransactionReceipt({ hash: transactionHash })
-			return ensureDefined(
-				receipt.logs
-					.filter(log => log.address.toLowerCase() === parentEscalationGame.toLowerCase())
-					.flatMap(log => {
-						try {
-							return [
-								decodeEventLog({
-									abi: localDepositsExportedAbi,
-									data: log.data,
-									topics: log.topics,
-								}),
-							]
-						} catch (error) {
-							if (error instanceof Error && error.name === 'AbiEventSignatureNotFoundError') return []
-							throw error
-						}
-					})
-					.find(log => log.eventName === 'LocalDepositsExported'),
-				missingMessage,
-			)
-		}
-		const firstPreview = await client.simulateContract({
-			abi: migrateVaultWithUnresolvedEscalationReturnAbi,
-			address: getInfraContractAddresses().securityPoolForker,
-			functionName: 'migrateVaultWithUnresolvedEscalation',
-			args: [securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes],
-			account: client.account,
-		})
-		strictEqualTypeSafe(firstPreview.result, true, 'first bounded migration should report a remaining follow-up batch')
-		const firstMigrationHash = await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
-		const firstExportLog = await decodeLocalDepositsExported(firstMigrationHash, 'first LocalDepositsExported log missing')
-		strictEqualTypeSafe(firstExportLog.args.vault.toLowerCase(), client.account.address.toLowerCase(), 'first export log should identify the vault')
-		strictEqualTypeSafe(firstExportLog.args.repReceiver, migrationProxyAddress, 'first export log should identify the migration proxy receiver')
-		assert.deepStrictEqual([...firstExportLog.args.principalByOutcome], [0n, BigInt(depositCount - 1) * reportBond, 0n], 'first export log should report the first bounded yes-principal batch')
-		strictEqualTypeSafe(firstExportLog.args.principalToTransfer, BigInt(depositCount - 1) * reportBond, 'first export log should report the REP transferred in the first batch')
-		strictEqualTypeSafe(firstExportLog.args.exportCursor, BigInt(depositCount - 1), 'first export log should expose the cursor after the bounded batch')
-		strictEqualTypeSafe(firstExportLog.args.transferredRep, true, 'external-fork export should transfer REP')
 		strictEqualTypeSafe(
 			await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				address: parentEscalationGame,
-				functionName: 'hasUnexportedLocalDepositRefs',
-				args: [client.account.address],
+				abi: localUnresolvedPrincipalAbi,
+				address: securityPoolAddresses.escalationGame,
+				functionName: 'getLocalUnresolvedPrincipalByVaultAndOutcome',
+				args: [client.account.address, QuestionOutcome.Yes],
 			}),
-			true,
-			'first migration should leave the final unresolved ref pending',
+			totalUnresolvedDeposit,
+			'aggregate source accounting should include every local deposit',
 		)
 
-		const secondPreview = await client.simulateContract({
-			abi: migrateVaultWithUnresolvedEscalationReturnAbi,
-			address: getInfraContractAddresses().securityPoolForker,
-			functionName: 'migrateVaultWithUnresolvedEscalation',
-			args: [securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes],
-			account: client.account,
-		})
-		strictEqualTypeSafe(secondPreview.result, false, 'second bounded migration should report completion')
-		const secondMigrationHash = await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
-		const secondExportLog = await decodeLocalDepositsExported(secondMigrationHash, 'second LocalDepositsExported log missing')
-		strictEqualTypeSafe(secondExportLog.args.vault.toLowerCase(), client.account.address.toLowerCase(), 'second export log should identify the vault')
-		strictEqualTypeSafe(secondExportLog.args.repReceiver, migrationProxyAddress, 'second export log should identify the migration proxy receiver')
-		assert.deepStrictEqual([...secondExportLog.args.principalByOutcome], [0n, reportBond, 0n], 'second export log should report the final yes-principal batch')
-		strictEqualTypeSafe(secondExportLog.args.principalToTransfer, reportBond, 'second export log should report the REP transferred in the final batch')
-		strictEqualTypeSafe(secondExportLog.args.exportCursor, BigInt(depositCount), 'second export log should expose the exhausted cursor')
-		strictEqualTypeSafe(secondExportLog.args.transferredRep, true, 'external-fork follow-up export should transfer REP')
+		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
 
 		const parentVaultAfterMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		strictEqualTypeSafe(parentVaultAfterMigration.repInEscalationGame, 0n, 'follow-up migration should clear all parent unresolved escrow')
-		strictEqualTypeSafe(
-			await client.readContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				address: parentEscalationGame,
-				functionName: 'hasUnexportedLocalDepositRefs',
-				args: [client.account.address],
-			}),
-			false,
-			'follow-up migration should exhaust the export cursor',
-		)
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		strictEqualTypeSafe(parentVaultAfterMigration.repInEscalationGame, 0n, 'aggregate migration should clear all parent unresolved escrow')
+		strictEqualTypeSafe(await getForkedEscrowPrincipalByOutcomeAndVault(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, client.account.address), totalUnresolvedDeposit, 'the selected child should receive the complete aggregate vault principal')
 	})
 
 	test('own-fork unresolved migration rejects after the child branch is already priced', async () => {
@@ -330,10 +245,10 @@ describe('Peripherals: escalation migration', () => {
 			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
 		}
 
-		await assert.rejects(migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /Child not migrating/)
+		await assert.rejects(migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /Migration closed/)
 	})
 
-	test('own-fork unresolved migration after the deadline only funds carried escrow', async () => {
+	test('own-fork unresolved migration expires without moving the vault', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		const securityPoolAllowance = reportBond * 2n
@@ -352,34 +267,16 @@ describe('Peripherals: escalation migration', () => {
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
-		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 		const forkTime = await mockWindow.getTime()
 		await mockWindow.setTime(forkTime + 8n * 7n * DAY + 1n)
-		const childVaultBefore = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 		const parentVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const childCollateralBefore = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
-		const parentCollateralBefore = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
-		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
-
-		const childVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+		await assert.rejects(migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /Migration closed/)
 		const parentVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const childCollateral = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
-		const parentCollateral = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
-		strictEqualTypeSafe(childVault.repDepositShare, 0n, 'late unresolved migration must not move ordinary vault ownership')
-		strictEqualTypeSafe(childVault.securityBondAllowance, 0n, 'late unresolved migration must not move ordinary bond allowance')
-		strictEqualTypeSafe(childVault.repDepositShare, childVaultBefore.repDepositShare, 'late unresolved migration must preserve child ownership')
-		strictEqualTypeSafe(childVault.securityBondAllowance, childVaultBefore.securityBondAllowance, 'late unresolved migration must preserve child allowance')
-		strictEqualTypeSafe(parentVault.repDepositShare, parentVaultBefore.repDepositShare, 'late unresolved migration must preserve parent ownership')
-		strictEqualTypeSafe(parentVault.securityBondAllowance, parentVaultBefore.securityBondAllowance, 'late unresolved migration must preserve parent allowance')
-		strictEqualTypeSafe(parentVault.unpaidEthFees, parentVaultBefore.unpaidEthFees, 'late unresolved migration must preserve parent unpaid fees')
-		strictEqualTypeSafe(parentVault.feeIndex, parentVaultBefore.feeIndex, 'late unresolved migration must preserve parent fee index')
-		strictEqualTypeSafe(childCollateral, childCollateralBefore, 'late unresolved migration must preserve child collateral')
-		strictEqualTypeSafe(parentCollateral, parentCollateralBefore, 'late unresolved migration must preserve parent collateral')
-		assert.ok(childVault.repInEscalationGame > 0n, 'late unresolved migration should still fund carried escrow')
+		strictEqualTypeSafe(parentVault.repInEscalationGame, parentVaultBefore.repInEscalationGame, 'expired migration must leave the unresolved parent lock untouched')
+		strictEqualTypeSafe(parentVault.repDepositShare, parentVaultBefore.repDepositShare, 'expired migration must leave parent ownership untouched')
 	})
 
-	test('external-fork unresolved migration after the deadline only funds carried escrow', async () => {
+	test('external-fork unresolved migration expires without requiring another user to process it', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		const securityPoolAllowance = reportBond * 2n
@@ -406,27 +303,11 @@ describe('Peripherals: escalation migration', () => {
 		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 		const forkTime = await mockWindow.getTime()
 		await mockWindow.setTime(forkTime + 8n * 7n * DAY + 1n)
-		const childVaultBefore = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 		const parentVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const childCollateralBefore = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
-		const parentCollateralBefore = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
-		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
-
-		const childVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+		await assert.rejects(migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /Migration closed/)
 		const parentVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const childCollateral = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
-		const parentCollateral = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
-		strictEqualTypeSafe(childVault.repDepositShare, 0n, 'late unresolved migration must not move ordinary vault ownership')
-		strictEqualTypeSafe(childVault.securityBondAllowance, 0n, 'late unresolved migration must not move ordinary bond allowance')
-		strictEqualTypeSafe(childVault.repDepositShare, childVaultBefore.repDepositShare, 'late unresolved migration must preserve child ownership')
-		strictEqualTypeSafe(childVault.securityBondAllowance, childVaultBefore.securityBondAllowance, 'late unresolved migration must preserve child allowance')
-		strictEqualTypeSafe(parentVault.repDepositShare, parentVaultBefore.repDepositShare, 'late unresolved migration must preserve parent ownership')
-		strictEqualTypeSafe(parentVault.securityBondAllowance, parentVaultBefore.securityBondAllowance, 'late unresolved migration must preserve parent allowance')
-		strictEqualTypeSafe(parentVault.unpaidEthFees, parentVaultBefore.unpaidEthFees, 'late unresolved migration must preserve parent unpaid fees')
-		strictEqualTypeSafe(parentVault.feeIndex, parentVaultBefore.feeIndex, 'late unresolved migration must preserve parent fee index')
-		strictEqualTypeSafe(childCollateral, childCollateralBefore, 'late unresolved migration must preserve child collateral')
-		strictEqualTypeSafe(parentCollateral, parentCollateralBefore, 'late unresolved migration must preserve parent collateral')
-		assert.ok(childVault.repInEscalationGame > 0n, 'late unresolved migration should still fund carried escrow')
+		strictEqualTypeSafe(parentVault.repInEscalationGame, parentVaultBefore.repInEscalationGame, 'the inactive vault remains untouched after expiry')
+		strictEqualTypeSafe(await getForkedEscrowPrincipalByOutcomeAndVault(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, client.account.address), 0n, 'the child should not materialize an expired vault')
 	})
 
 	test('in-window external unresolved migration requires the vault owner to call it', async () => {
@@ -469,6 +350,8 @@ describe('Peripherals: escalation migration', () => {
 		}
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+		const parentYesDepositsBeforeMigration = await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
+		const parentNoDepositsBeforeMigration = await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.No)
 
 		const parentForkDataSlot = getMappingStorageSlot(securityPoolAddresses.securityPool, 0n)
 		const ownForkChildRepAtForkSlot = formatStorageSlot(parentForkDataSlot + 11n)
@@ -491,8 +374,8 @@ describe('Peripherals: escalation migration', () => {
 		const childVaultAfterMigration = childPoolExists ? await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address) : undefined
 
 		strictEqualTypeSafe(parentVaultAfterMigration.repInEscalationGame, 0n, 'zero child allocation should clear the parent unresolved REP lock as dust')
-		strictEqualTypeSafe(parentDepositsAfterMigration.filter(deposit => deposit.amount > 0n).length, 0, 'zero child allocation should consume the parent unresolved deposits')
-		strictEqualTypeSafe(parentNoDepositsAfterMigration.filter(deposit => deposit.amount > 0n).length, 0, 'zero child allocation should consume all unresolved parent deposits for the vault')
+		assert.deepStrictEqual(parentDepositsAfterMigration, parentYesDepositsBeforeMigration, 'the immutable parent proof commitment should retain every yes deposit leaf')
+		assert.deepStrictEqual(parentNoDepositsAfterMigration, parentNoDepositsBeforeMigration, 'the immutable parent proof commitment should retain every no deposit leaf')
 		strictEqualTypeSafe(childVaultAfterMigration?.repInEscalationGame ?? 0n, 0n, 'zero child allocation should not create child escrow')
 	})
 
@@ -535,7 +418,7 @@ describe('Peripherals: escalation migration', () => {
 		strictEqualTypeSafe(childEscrowChildRep, unresolvedDeposit, 'non-own continuation should back the carried escrow 1:1 in child REP')
 	})
 
-	test('pre-created continuation children start without branch-selected escalation balances', async () => {
+	test('each lazily created continuation starts from the complete parent escalation totals', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 
@@ -544,6 +427,9 @@ describe('Peripherals: escalation migration', () => {
 		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Invalid, 2n * reportBond)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, reportBond)
+		const parentInvalidState = await getEscalationGameOutcomeState(client, securityPoolAddresses.escalationGame, QuestionOutcome.Invalid)
+		const parentYesState = await getEscalationGameOutcomeState(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
+		const parentNoState = await getEscalationGameOutcomeState(client, securityPoolAddresses.escalationGame, QuestionOutcome.No)
 		const externalForkQuestionData = {
 			...questionData,
 			title: 'parent for preserved continuation balances',
@@ -569,20 +455,118 @@ describe('Peripherals: escalation migration', () => {
 			const noOutcomeState = await getEscalationGameOutcomeState(client, childEscalationGame, QuestionOutcome.No)
 			const childTotalCost = await getEscalationGameTotalCost(client, childEscalationGame)
 
-			strictEqualTypeSafe(invalidOutcomeState.balance, 0n, 'pre-created child must not inherit unselected invalid balance')
-			strictEqualTypeSafe(yesOutcomeState.balance, 0n, 'pre-created child must not inherit unselected yes balance')
-			strictEqualTypeSafe(noOutcomeState.balance, 0n, 'pre-created child must not inherit unselected no balance')
+			strictEqualTypeSafe(invalidOutcomeState.balance, parentInvalidState.balance, 'each child must inherit the complete parent invalid balance')
+			strictEqualTypeSafe(yesOutcomeState.balance, parentYesState.balance, 'each child must inherit the complete parent yes balance')
+			strictEqualTypeSafe(noOutcomeState.balance, parentNoState.balance, 'each child must inherit the complete parent no balance')
+			strictEqualTypeSafe(invalidOutcomeState.currentCarryTotal, parentInvalidState.currentCarryTotal, 'each child must inherit the complete parent invalid carry')
+			strictEqualTypeSafe(yesOutcomeState.currentCarryTotal, parentYesState.currentCarryTotal, 'each child must inherit the complete parent yes carry')
+			strictEqualTypeSafe(noOutcomeState.currentCarryTotal, parentNoState.currentCarryTotal, 'each child must inherit the complete parent no carry')
 			strictEqualTypeSafe(childTotalCost, 0n, 'child continuations should still start before continuation attrition becomes active')
 		}
 	})
 
-	test('split continuation branches account only for the vaults migrated into each branch', async () => {
+	test('late children retain the canonical fork snapshot after an own-fork parent claim', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10n * DAY)
+		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const vaultRep = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vault.repDepositShare)
+		if (vaultRep < 2n * forkThreshold) await approveAndDepositRep(client, 2n * forkThreshold - vaultRep, questionId)
+		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+
+		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Invalid)
+		const invalidPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, getChildUniverseId(genesisUniverse, QuestionOutcome.Invalid), questionId, securityMultiplier)
+		const invalidGame = await getSecurityPoolsEscalationGame(client, invalidPool.securityPool)
+		const forkSnapshotBeforeClaim = await Promise.all([QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No].map(async outcome => await getEscalationGameOutcomeState(client, invalidGame, outcome)))
+
+		await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
+		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.No)
+		const noPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, getChildUniverseId(genesisUniverse, QuestionOutcome.No), questionId, securityMultiplier)
+		const noGame = await getSecurityPoolsEscalationGame(client, noPool.securityPool)
+		const lateForkSnapshot = await Promise.all([QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No].map(async outcome => await getEscalationGameOutcomeState(client, noGame, outcome)))
+
+		assert.deepStrictEqual(lateForkSnapshot, forkSnapshotBeforeClaim, 'every late child must inherit the same fork-time balances, carry peaks, leaf counts, totals, and nullifier roots after parent claims')
+	})
+
+	test('a vault materializes its entitlement only in child universes it selects', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+		const parentInvalidState = await getEscalationGameOutcomeState(client, securityPoolAddresses.escalationGame, QuestionOutcome.Invalid)
+		const parentYesState = await getEscalationGameOutcomeState(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
+		const parentNoState = await getEscalationGameOutcomeState(client, securityPoolAddresses.escalationGame, QuestionOutcome.No)
+
+		const forkClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const forkQuestionData = { ...questionData, title: 'lazy selected continuation children' }
+		await createQuestion(forkClient, forkQuestionData, outcomes)
+		await approveToken(forkClient, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(forkClient, genesisUniverse, getQuestionId(forkQuestionData, outcomes))
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+
+		const invalidPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, getChildUniverseId(genesisUniverse, QuestionOutcome.Invalid), questionId, securityMultiplier)
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const noPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, getChildUniverseId(genesisUniverse, QuestionOutcome.No), questionId, securityMultiplier)
+		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
+		const entitlementAfterYes = await client.readContract({
+			address: getInfraContractAddresses().securityPoolForker,
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'getEscalationMigrationEntitlementStatus',
+			args: [securityPoolAddresses.securityPool, client.account.address],
+		})
+		strictEqualTypeSafe(entitlementAfterYes[0], true, 'the first selected child should persist the vault entitlement')
+		assert.deepStrictEqual(entitlementAfterYes[2], [false, true, false], 'only the selected yes child should be marked materialized')
+		const parentVaultAfterExport = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		strictEqualTypeSafe(parentVaultAfterExport.repDepositShare, 0n, 'the parent vault should have no remaining REP collateral after migration')
+		strictEqualTypeSafe(parentVaultAfterExport.securityBondAllowance, 0n, 'the parent vault should have no remaining security bond allowance after migration')
+		strictEqualTypeSafe(parentVaultAfterExport.repInEscalationGame, 0n, 'the exported escalation entitlement should clear the parent vault escrow')
+		const activeParentVaultCount = await getActiveVaultCount(client, securityPoolAddresses.securityPool)
+		const activeParentVaults = await getActiveVaults(client, securityPoolAddresses.securityPool, 0n, activeParentVaultCount)
+		strictEqualTypeSafe(
+			activeParentVaults.some(vault => vault.toLowerCase() === client.account.address.toLowerCase()),
+			false,
+			'a fully migrated vault should be removed from the parent active-vault index',
+		)
+		strictEqualTypeSafe(await contractExists(client, yesPool.securityPool), true, 'the selected yes child should be created')
+		strictEqualTypeSafe(await contractExists(client, invalidPool.securityPool), false, 'the unused invalid child should not be created')
+		strictEqualTypeSafe(await contractExists(client, noPool.securityPool), false, 'the unused no child should not be created')
+		const yesGame = await getSecurityPoolsEscalationGame(client, yesPool.securityPool)
+		const yesState = await getEscalationGameOutcomeState(client, yesGame, QuestionOutcome.Yes)
+		strictEqualTypeSafe(yesState.balance, parentYesState.balance, 'the selected child should inherit the parent balance')
+		strictEqualTypeSafe(yesState.currentCarryTotal, parentYesState.currentCarryTotal, 'the selected child should inherit the parent carry')
+
+		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.No)
+		const entitlementAfterNo = await client.readContract({
+			address: getInfraContractAddresses().securityPoolForker,
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'getEscalationMigrationEntitlementStatus',
+			args: [securityPoolAddresses.securityPool, client.account.address],
+		})
+		assert.deepStrictEqual(entitlementAfterNo[2], [false, true, true], 'yes and no should be marked materialized while invalid remains untouched')
+		strictEqualTypeSafe(await contractExists(client, noPool.securityPool), true, 'a second child should be created only when the vault selects it')
+		strictEqualTypeSafe(await contractExists(client, invalidPool.securityPool), false, 'selecting another child should still leave invalid undeployed')
+		const noGame = await getSecurityPoolsEscalationGame(client, noPool.securityPool)
+		const lateInvalidState = await getEscalationGameOutcomeState(client, noGame, QuestionOutcome.Invalid)
+		const lateYesState = await getEscalationGameOutcomeState(client, noGame, QuestionOutcome.Yes)
+		const lateNoState = await getEscalationGameOutcomeState(client, noGame, QuestionOutcome.No)
+		strictEqualTypeSafe(lateInvalidState.balance, parentInvalidState.balance, 'a child created after the first vault export should still inherit the parent invalid balance')
+		strictEqualTypeSafe(lateYesState.balance, parentYesState.balance, 'a child created after the first vault export should still inherit the parent yes balance')
+		strictEqualTypeSafe(lateNoState.balance, parentNoState.balance, 'a child created after the first vault export should still inherit the parent no balance')
+		strictEqualTypeSafe(lateInvalidState.currentCarryTotal, parentInvalidState.currentCarryTotal, 'late child creation should preserve the parent invalid carry')
+		strictEqualTypeSafe(lateYesState.currentCarryTotal, parentYesState.currentCarryTotal, 'late child creation should preserve the parent yes carry')
+		strictEqualTypeSafe(lateNoState.currentCarryTotal, parentNoState.currentCarryTotal, 'late child creation should preserve the parent no carry')
+		await assert.rejects(migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /Entitlement materialized/)
+	})
+
+	test('selected branches share parent game totals while materializing only the selecting vault', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		const otherClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRep(otherClient, repDeposit, questionId)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		await depositToEscalationGame(otherClient, securityPoolAddresses.securityPool, QuestionOutcome.No, 2n * reportBond)
+		const parentYesState = await getEscalationGameOutcomeState(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
+		const parentNoState = await getEscalationGameOutcomeState(client, securityPoolAddresses.escalationGame, QuestionOutcome.No)
 
 		const externalForkQuestionData = {
 			...questionData,
@@ -603,19 +587,21 @@ describe('Peripherals: escalation migration', () => {
 		const noPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, getChildUniverseId(genesisUniverse, QuestionOutcome.No), questionId, securityMultiplier)
 		const yesGame = await getSecurityPoolsEscalationGame(client, yesPool.securityPool)
 		const noGame = await getSecurityPoolsEscalationGame(client, noPool.securityPool)
-		const emptyYesState = await getEscalationGameOutcomeState(client, yesGame, QuestionOutcome.Yes)
-		const emptyNoState = await getEscalationGameOutcomeState(client, noGame, QuestionOutcome.No)
-		strictEqualTypeSafe(emptyYesState.balance, 0n, 'pre-created yes branch must not inherit unselected deposits')
-		strictEqualTypeSafe(emptyNoState.balance, 0n, 'pre-created no branch must not inherit unselected deposits')
+		const initialYesState = await getEscalationGameOutcomeState(client, yesGame, QuestionOutcome.Yes)
+		const initialNoState = await getEscalationGameOutcomeState(client, noGame, QuestionOutcome.No)
+		strictEqualTypeSafe(initialYesState.balance, parentYesState.balance, 'the yes child starts from the complete parent yes balance')
+		strictEqualTypeSafe(initialNoState.balance, parentNoState.balance, 'the no child starts from the complete parent no balance')
 
 		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
 		await migrateVaultWithUnresolvedEscalation(otherClient, securityPoolAddresses.securityPool, otherClient.account.address, QuestionOutcome.No)
 		const yesState = await getEscalationGameOutcomeState(client, yesGame, QuestionOutcome.Yes)
 		const noState = await getEscalationGameOutcomeState(client, noGame, QuestionOutcome.No)
-		strictEqualTypeSafe(yesState.balance, reportBond, 'yes branch resolution balance must match its migrated deposit')
-		strictEqualTypeSafe(noState.balance, 2n * reportBond, 'no branch resolution balance must match its migrated deposit')
-		strictEqualTypeSafe(yesState.currentCarryTotal, reportBond, 'yes branch carry must match its migrated deposit')
-		strictEqualTypeSafe(noState.currentCarryTotal, 2n * reportBond, 'no branch carry must match its migrated deposit')
+		strictEqualTypeSafe(yesState.balance, parentYesState.balance, 'materializing a vault must not rebase the yes child balance')
+		strictEqualTypeSafe(noState.balance, parentNoState.balance, 'materializing a vault must not rebase the no child balance')
+		strictEqualTypeSafe(yesState.currentCarryTotal, parentYesState.currentCarryTotal, 'materializing a vault must not rebase the yes child carry')
+		strictEqualTypeSafe(noState.currentCarryTotal, parentNoState.currentCarryTotal, 'materializing a vault must not rebase the no child carry')
+		strictEqualTypeSafe(await getForkedEscrowPrincipalByOutcomeAndVault(client, yesPool.securityPool, QuestionOutcome.No, otherClient.account.address), 0n, 'the yes child should not materialize the other vault')
+		strictEqualTypeSafe(await getForkedEscrowPrincipalByOutcomeAndVault(client, noPool.securityPool, QuestionOutcome.Yes, client.account.address), 0n, 'the no child should not materialize the other vault')
 	})
 
 	test('claimForkedEscalationDeposits requires the vault owner to call it', async () => {
@@ -713,193 +699,6 @@ describe('Peripherals: escalation migration', () => {
 		strictEqualTypeSafe(childEscrowChildRep, 1n, 'the child continuation game should retain only the scaled child REP backing')
 	})
 
-	test('an unmigrated losing external-fork lock can be force-funded after the deadline', async () => {
-		return
-		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		await approveAndDepositRep(attackerClient, repDeposit, questionId)
-
-		const winningDeposit = 3n * reportBond
-		const losingDeposit = 2n * reportBond
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, winningDeposit)
-		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, losingDeposit)
-
-		const externalForkQuestionData = {
-			...questionData,
-			title: 'unmigrated losing continuation payout grief source',
-			endTime: (await mockWindow.getTime()) + DAY,
-		}
-		const externalForkQuestionId = getQuestionId(externalForkQuestionData, outcomes)
-		await createQuestion(attackerClient, externalForkQuestionData, outcomes)
-		await mockWindow.setTime(externalForkQuestionData.endTime + 1n)
-		await approveToken(attackerClient, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
-		await forkUniverse(attackerClient, genesisUniverse, externalForkQuestionId)
-
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
-		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
-		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-
-		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
-		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
-
-		const childEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
-		const childRepToken = getRepTokenAddress(yesUniverse)
-		const childEscalationBalanceBeforeResume = await getERC20Balance(client, childRepToken, childEscalationGame)
-		strictEqualTypeSafe(childEscalationBalanceBeforeResume, winningDeposit, 'only the migrated winning lock should fund the child continuation game before resolution')
-
-		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
-		await startTruthAuction(client, yesSecurityPool.securityPool)
-		if ((await getSystemState(client, yesSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
-			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
-		}
-		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'the child branch should still become operational after the migration window')
-		strictEqualTypeSafe(await getAwaitingForkContinuation(client, yesSecurityPool.securityPool), false, 'the child should not wait for a vault assigned to another branch')
-
-		let childResolution = await getQuestionResolution(client, childEscalationGame)
-		for (let days = 0; days < 14 && childResolution === QuestionOutcome.None; days += 1) {
-			await mockWindow.advanceTime(DAY)
-			childResolution = await getQuestionResolution(client, childEscalationGame)
-		}
-		strictEqualTypeSafe(childResolution, QuestionOutcome.None, 'the child continuation should stay unresolved while the losing lock never migrates')
-
-		const proof = await createSingleLeafCarryProof(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes, 0n)
-		const walletBalanceBeforeClaim = await getERC20Balance(client, childRepToken, client.account.address)
-		const childVaultBeforeClaim = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
-		await assert.rejects(
-			client.writeContract({
-				abi: peripherals_SecurityPool_SecurityPool.abi,
-				address: yesSecurityPool.securityPool,
-				functionName: 'withdrawForkedEscalationDeposits',
-				args: [QuestionOutcome.Yes, [proof]],
-			}),
-			/Question not finalized|Question open/,
-		)
-		strictEqualTypeSafe(await getERC20Balance(client, childRepToken, client.account.address), walletBalanceBeforeClaim, 'the honest winner should not receive child REP before the losing vault funds its carried lock')
-		strictEqualTypeSafe((await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)).repInEscalationGame, childVaultBeforeClaim.repInEscalationGame, 'the paused continuation should preserve the winner escrow while funding is incomplete')
-
-		const relayerClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
-		await migrateVaultWithUnresolvedEscalation(relayerClient, securityPoolAddresses.securityPool, attackerClient.account.address, QuestionOutcome.Yes)
-		strictEqualTypeSafe(await getAwaitingForkContinuation(client, yesSecurityPool.securityPool), false, 'the child should resume when a third party force-funds the losing carry after the deadline')
-
-		childResolution = await getQuestionResolution(client, childEscalationGame)
-		for (let days = 0; days < 14 && childResolution === QuestionOutcome.None; days += 1) {
-			await mockWindow.advanceTime(DAY)
-			childResolution = await getQuestionResolution(client, childEscalationGame)
-		}
-		strictEqualTypeSafe(childResolution, QuestionOutcome.Yes, 'the funded continuation should eventually resolve once the losing vault migrates')
-		const claimHash = await client.writeContract({
-			abi: peripherals_SecurityPool_SecurityPool.abi,
-			address: yesSecurityPool.securityPool,
-			functionName: 'withdrawForkedEscalationDeposits',
-			args: [QuestionOutcome.Yes, [proof]],
-		})
-		await client.waitForTransactionReceipt({ hash: claimHash })
-		assert.ok((await getERC20Balance(client, childRepToken, client.account.address)) > walletBalanceBeforeClaim, 'the honest winner should receive child REP once all carried funding is present')
-	})
-
-	test('an unmigrated winning external-fork lock cannot free-ride on another vaults migrated child REP', async () => {
-		return
-		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		await approveAndDepositRep(attackerClient, repDeposit, questionId)
-
-		const honestWinningDeposit = 10n * reportBond
-		const attackerWinningDeposit = reportBond
-		const attackerLosingDeposit = reportBond
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, honestWinningDeposit)
-		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes, attackerWinningDeposit)
-		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, attackerLosingDeposit)
-
-		const externalForkQuestionData = {
-			...questionData,
-			title: 'unmigrated winning continuation free ride source',
-			endTime: (await mockWindow.getTime()) + DAY,
-		}
-		const externalForkQuestionId = getQuestionId(externalForkQuestionData, outcomes)
-		await createQuestion(attackerClient, externalForkQuestionData, outcomes)
-		await mockWindow.setTime(externalForkQuestionData.endTime + 1n)
-		await approveToken(attackerClient, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
-		await forkUniverse(attackerClient, genesisUniverse, externalForkQuestionId)
-
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
-		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
-		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-
-		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
-		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
-
-		const childEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
-		const childRepToken = getRepTokenAddress(yesUniverse)
-		strictEqualTypeSafe(await getERC20Balance(client, childRepToken, childEscalationGame), honestWinningDeposit, 'only the honest winners migrated child REP should fund the continuation game before the attacker claims')
-
-		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
-		await startTruthAuction(client, yesSecurityPool.securityPool)
-		if ((await getSystemState(client, yesSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
-			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
-		}
-		strictEqualTypeSafe(await getAwaitingForkContinuation(client, yesSecurityPool.securityPool), false, 'the child should resume once its selected vault funds its carried lock')
-
-		let childResolution = await getQuestionResolution(client, childEscalationGame)
-		for (let days = 0; days < 14 && childResolution === QuestionOutcome.None; days += 1) {
-			await mockWindow.advanceTime(DAY)
-			childResolution = await getQuestionResolution(client, childEscalationGame)
-		}
-		strictEqualTypeSafe(childResolution, QuestionOutcome.None, 'the child continuation should remain unresolved until the winning vault migrates its own carry')
-
-		const attackerLeafSibling = await readCarryLeafHash(client, securityPoolAddresses.escalationGame, 1n)
-		const attackerProof = await createCarryProof(client, securityPoolAddresses.escalationGame, {
-			expectedOutcome: QuestionOutcome.Yes,
-			sourceNodeId: 2n,
-			parentDepositIndex: 1n,
-			leafIndex: 1n,
-			merkleMountainRangePeakIndex: 1n,
-			merkleMountainRangeSiblings: [attackerLeafSibling],
-			nullifierSiblings: new SparseNullifierTree().getProof(1n),
-		})
-		const attackerWalletBeforeClaim = await getERC20Balance(client, childRepToken, attackerClient.account.address)
-		const attackerParentVaultBeforeClaim = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)
-		const childBalanceBeforeClaim = await getERC20Balance(client, childRepToken, childEscalationGame)
-		await assert.rejects(
-			attackerClient.writeContract({
-				abi: peripherals_SecurityPool_SecurityPool.abi,
-				address: yesSecurityPool.securityPool,
-				functionName: 'withdrawForkedEscalationDeposits',
-				args: [QuestionOutcome.Yes, [attackerProof]],
-			}),
-			/Question not finalized|Question open/,
-		)
-		const honestWinnerProof = await createCarryProof(client, securityPoolAddresses.escalationGame, {
-			expectedOutcome: QuestionOutcome.Yes,
-			sourceNodeId: 1n,
-			parentDepositIndex: 0n,
-			leafIndex: 0n,
-			merkleMountainRangePeakIndex: 1n,
-			merkleMountainRangeSiblings: [await readCarryLeafHash(client, securityPoolAddresses.escalationGame, 2n)],
-			nullifierSiblings: new SparseNullifierTree().getProof(0n),
-		})
-		strictEqualTypeSafe(await getERC20Balance(client, childRepToken, attackerClient.account.address), attackerWalletBeforeClaim, 'the attacker should not extract child REP before migrating their own lock')
-		strictEqualTypeSafe((await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)).repInEscalationGame, attackerParentVaultBeforeClaim.repInEscalationGame, 'the attackers parent lock should remain unmigrated while the child stays paused')
-		strictEqualTypeSafe(await getERC20Balance(client, childRepToken, childEscalationGame), childBalanceBeforeClaim, 'the child continuation balance should not be drained by an unfunded claimant')
-		await assert.rejects(
-			client.writeContract({
-				abi: peripherals_SecurityPool_SecurityPool.abi,
-				address: yesSecurityPool.securityPool,
-				functionName: 'withdrawForkedEscalationDeposits',
-				args: [QuestionOutcome.Yes, [honestWinnerProof]],
-			}),
-			/Question not finalized|Question open/,
-		)
-
-		await migrateVaultWithUnresolvedEscalation(attackerClient, securityPoolAddresses.securityPool, attackerClient.account.address, QuestionOutcome.Yes)
-		strictEqualTypeSafe(await getAwaitingForkContinuation(client, yesSecurityPool.securityPool), false, 'the child should only resume once the winning vault funds its own carry')
-	})
-
 	test('large unresolved continuation migration snapshots carry totals without replaying imported deposit indexes', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
@@ -940,8 +739,7 @@ describe('Peripherals: escalation migration', () => {
 		strictEqualTypeSafe(childOutcomeState.currentCarryTotal, parentOutcomeStateBeforeMigration.currentCarryTotal, 'snapshot-only migration should preserve the parent unresolved carry total')
 	})
 
-	test('external-fork continuation stays frozen after pricing until the remaining carried funding arrives', async () => {
-		return
+	test('external-fork continuation resumes without migrating another vault', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
@@ -988,94 +786,267 @@ describe('Peripherals: escalation migration', () => {
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 		await startTruthAuction(client, yesSecurityPool.securityPool)
 		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'the child pool should become operational once migration completes')
-		strictEqualTypeSafe(await getAwaitingForkContinuation(client, yesSecurityPool.securityPool), false, 'the child should only account for funding selected for this branch')
+		strictEqualTypeSafe(await getAwaitingForkContinuation(client, yesSecurityPool.securityPool), false, 'the child should not wait for another vault to migrate')
 
 		const childCostAtResume = await getEscalationGameTotalCost(client, childEscalationGame)
 		strictEqualTypeSafe(childCostAtResume, childCostDuringMigration, 'the paused continuation should keep its frozen fork-time cost after pricing')
 
 		await mockWindow.advanceTime(DAY)
-		strictEqualTypeSafe(await getEscalationGameTotalCost(client, childEscalationGame), childCostAtResume, 'child continuation cost should remain frozen while a carried loser still withholds funding')
-
-		await migrateVaultWithUnresolvedEscalation(attackerClient, securityPoolAddresses.securityPool, attackerClient.account.address, QuestionOutcome.Yes)
-		strictEqualTypeSafe(await getAwaitingForkContinuation(client, yesSecurityPool.securityPool), false, 'the child should stop waiting once the last carried loser funds the continuation')
-		const childCostAtFunding = await getEscalationGameTotalCost(client, childEscalationGame)
-		// The funding transaction resumes the game at its block timestamp, so a subsequent read may include one simulator second of accrual.
-		assert.ok(childCostAtFunding >= childCostAtResume, 'resuming the continuation should not reduce its frozen fork-time cost snapshot')
-		approximatelyEqual(childCostAtFunding, childCostAtResume, 100000000000000n, 'resuming the continuation should begin from the same frozen fork-time cost snapshot')
-
-		await mockWindow.advanceTime(DAY)
-		assert.ok((await getEscalationGameTotalCost(client, childEscalationGame)) > childCostAtFunding, 'child continuation cost should advance again after the remaining carried funding arrives')
+		assert.ok((await getEscalationGameTotalCost(client, childEscalationGame)) > childCostAtResume, 'child continuation cost should advance without the other vault')
+		const attackerParentVault = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)
+		assert.ok(attackerParentVault.repInEscalationGame > 0n, 'the inactive vault should remain untouched in the parent')
+		strictEqualTypeSafe(await getForkedEscrowPrincipalByOutcomeAndVault(client, yesSecurityPool.securityPool, QuestionOutcome.No, attackerClient.account.address), 0n, 'the active vault should not migrate another vault into its child')
 	})
 
-	test('late external-fork carry funding does not reopen ordinary vault migration after pricing', async () => {
-		return
+	test('a migrated winner settles from aggregate child backing when the losing vault does not migrate', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10000n)
-
-		const clientSecurityBondAllowance = 3n * reportBond
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, clientSecurityBondAllowance)
-
-		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		await approveAndDepositRep(attackerClient, repDeposit, questionId)
-
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
-		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, 2n * reportBond)
-
-		const externalForkQuestionData = {
-			...questionData,
-			title: 'late unresolved carry funding should not reopen ordinary migration',
-			endTime: (await mockWindow.getTime()) + DAY,
-		}
-		const externalForkQuestionId = getQuestionId(externalForkQuestionData, outcomes)
-		await createQuestion(attackerClient, externalForkQuestionData, outcomes)
-		await mockWindow.setTime(externalForkQuestionData.endTime + 1n)
-		await approveToken(attackerClient, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
-		await forkUniverse(attackerClient, genesisUniverse, externalForkQuestionId)
-
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
-		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
-		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-		await migrateVaultWithUnresolvedEscalation(attackerClient, securityPoolAddresses.securityPool, attackerClient.account.address, QuestionOutcome.Yes)
-
-		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
-
-		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
-		await startTruthAuction(client, yesSecurityPool.securityPool)
-		if ((await getSystemState(client, yesSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
-			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
-		}
-		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'the child branch should become operational after the truth auction')
-		strictEqualTypeSafe(await getAwaitingForkContinuation(client, yesSecurityPool.securityPool), false, 'the child should not await late funding assigned to another branch')
-
-		const childVaultBeforeLateFunding = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
-		const childForkDataBeforeLateFunding = await getSecurityPoolForkerForkData(client, yesSecurityPool.securityPool)
-		const childCollateralBeforeLateFunding = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
-		const childTotalAllowanceBeforeLateFunding = await getTotalSecurityBondAllowance(client, yesSecurityPool.securityPool)
-		const parentVaultBeforeLateFunding = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		assert.ok(parentVaultBeforeLateFunding.repDepositShare > 0n, 'the late-funding vault should still retain ordinary pool ownership on the parent after the migration window closes')
-		strictEqualTypeSafe(parentVaultBeforeLateFunding.securityBondAllowance, clientSecurityBondAllowance, 'the late-funding vault should still retain its ordinary parent security-bond allowance after the migration window closes')
-
+		await mockWindow.setTime(endTime + 10n * DAY)
+		const losingClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+		const winningVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const winningVaultRep = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, winningVault.repDepositShare)
+		if (winningVaultRep < forkThreshold) await approveAndDepositRep(client, forkThreshold - winningVaultRep, questionId)
+		await approveAndDepositRep(losingClient, forkThreshold, questionId)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, forkThreshold)
+		await depositToEscalationGame(losingClient, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThreshold)
+		await forkZoltarWithOwnEscalationGame(client, securityPoolAddresses.securityPool)
 		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
 
-		const childVaultAfterLateFunding = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
-		const childForkDataAfterLateFunding = await getSecurityPoolForkerForkData(client, yesSecurityPool.securityPool)
-		const childCollateralAfterLateFunding = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
-		const childTotalAllowanceAfterLateFunding = await getTotalSecurityBondAllowance(client, yesSecurityPool.securityPool)
-		const parentVaultAfterLateFunding = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const childEscrowAfterLateFunding = await getForkedEscrowChildRepByOutcomeAndVault(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, client.account.address)
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const yesGame = await getSecurityPoolsEscalationGame(client, yesPool.securityPool)
+		const losingParentVault = await getSecurityVault(client, securityPoolAddresses.securityPool, losingClient.account.address)
+		assert.ok(losingParentVault.repInEscalationGame > 0n, 'the losing vault should remain unmigrated in the parent')
+		strictEqualTypeSafe(await getForkedEscrowPrincipalByOutcomeAndVault(client, yesPool.securityPool, QuestionOutcome.No, losingClient.account.address), 0n, 'the selected child must not authorize the non-migrating losing vault')
 
-		strictEqualTypeSafe(childVaultAfterLateFunding.repDepositShare, childVaultBeforeLateFunding.repDepositShare, 'late carried funding should not reopen ordinary child vault ownership migration after pricing')
-		strictEqualTypeSafe(childVaultAfterLateFunding.securityBondAllowance, childVaultBeforeLateFunding.securityBondAllowance, 'late carried funding should not reopen ordinary child security-bond migration after pricing')
-		strictEqualTypeSafe(childForkDataAfterLateFunding.migratedRep, childForkDataBeforeLateFunding.migratedRep, 'late carried funding should not alter child migrated REP after pricing')
-		strictEqualTypeSafe(childForkDataAfterLateFunding.auctionedSecurityBondAllowance, childForkDataBeforeLateFunding.auctionedSecurityBondAllowance, 'late carried funding should not alter the child auctioned allowance after pricing')
-		strictEqualTypeSafe(childCollateralAfterLateFunding, childCollateralBeforeLateFunding, 'late carried funding should not transfer new child collateral after pricing')
-		strictEqualTypeSafe(childTotalAllowanceAfterLateFunding, childTotalAllowanceBeforeLateFunding, 'late carried funding should not change total child security-bond allowance after pricing')
-		assert.ok(childEscrowAfterLateFunding > 0n, 'late carried funding should still record child forked escrow for the resumed continuation')
-		strictEqualTypeSafe(parentVaultAfterLateFunding.repDepositShare, parentVaultBeforeLateFunding.repDepositShare, 'late carried funding should leave the parents ordinary pool ownership untouched')
-		strictEqualTypeSafe(parentVaultAfterLateFunding.securityBondAllowance, parentVaultBeforeLateFunding.securityBondAllowance, 'late carried funding should leave the parents ordinary security-bond allowance untouched')
-		strictEqualTypeSafe(parentVaultAfterLateFunding.repInEscalationGame, 0n, 'late carried funding should still clear the parents unresolved escalation lock')
-		strictEqualTypeSafe(await getAwaitingForkContinuation(client, yesSecurityPool.securityPool), false, 'the child should stop awaiting continuation once the last carried funding arrives')
+		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+		await startTruthAuction(client, yesPool.securityPool)
+		if ((await getSystemState(client, yesPool.securityPool)) === SystemState.ForkTruthAuction) {
+			await finalizeTruthAuction(client, yesPool.securityPool)
+		}
+		const escalationEndDate = await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			address: yesGame,
+			functionName: 'getEscalationGameEndDate',
+		})
+		await mockWindow.setTime(escalationEndDate + 1n)
+		strictEqualTypeSafe(await getQuestionResolution(client, yesGame), QuestionOutcome.Yes, 'the selected child should resolve to its fork outcome')
+
+		const losingProof = await createCarryProof(client, securityPoolAddresses.escalationGame, {
+			expectedOutcome: QuestionOutcome.No,
+			parentDepositIndex: 0n,
+			leafIndex: 0n,
+			merkleMountainRangePeakIndex: 0n,
+			merkleMountainRangeSiblings: [],
+			nullifierSiblings: new SparseNullifierTree().getProof(0n),
+			sourceNodeId: 2n,
+		})
+		await assert.rejects(
+			losingClient.writeContract({
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				address: yesPool.securityPool,
+				functionName: 'withdrawForkedEscalationDeposits',
+				args: [QuestionOutcome.No, [losingProof]],
+			}),
+			/Forked escrow missing/,
+		)
+		const winningProof = await createCarryProof(client, securityPoolAddresses.escalationGame, {
+			expectedOutcome: QuestionOutcome.Yes,
+			parentDepositIndex: 0n,
+			leafIndex: 0n,
+			merkleMountainRangePeakIndex: 0n,
+			merkleMountainRangeSiblings: [],
+			nullifierSiblings: new SparseNullifierTree().getProof(0n),
+		})
+		const childRepToken = getRepTokenAddress(yesUniverse)
+		const winnerBalanceBefore = await getERC20Balance(client, childRepToken, client.account.address)
+		const hash = await client.writeContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			address: yesPool.securityPool,
+			functionName: 'withdrawForkedEscalationDeposits',
+			args: [QuestionOutcome.Yes, [winningProof]],
+		})
+		await client.waitForTransactionReceipt({ hash })
+		assert.ok((await getERC20Balance(client, childRepToken, client.account.address)) - winnerBalanceBefore > forkThreshold, 'the migrated winner should receive principal plus its preserved reward without the losing vault migrating')
+	})
+
+	test('multiple migrated winners settle in reverse order without using another vaults logical entitlement', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10n * DAY)
+		const secondWinner = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const losingClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+		const firstWinningPrincipal = forkThreshold / 2n
+		const secondWinningPrincipal = forkThreshold - firstWinningPrincipal
+		const firstWinnerVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const firstWinnerRep = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, firstWinnerVault.repDepositShare)
+		if (firstWinnerRep < firstWinningPrincipal) await approveAndDepositRep(client, firstWinningPrincipal - firstWinnerRep, questionId)
+		await approveAndDepositRep(secondWinner, secondWinningPrincipal, questionId)
+		await approveAndDepositRep(losingClient, forkThreshold, questionId)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, firstWinningPrincipal)
+		await depositToEscalationGame(secondWinner, securityPoolAddresses.securityPool, QuestionOutcome.Yes, secondWinningPrincipal)
+		await depositToEscalationGame(losingClient, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThreshold)
+		await forkZoltarWithOwnEscalationGame(client, securityPoolAddresses.securityPool)
+		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
+		await migrateVaultWithUnresolvedEscalation(secondWinner, securityPoolAddresses.securityPool, secondWinner.account.address, QuestionOutcome.Yes)
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const yesGame = await getSecurityPoolsEscalationGame(client, yesPool.securityPool)
+		strictEqualTypeSafe(await getForkedEscrowPrincipalByOutcomeAndVault(client, yesPool.securityPool, QuestionOutcome.No, losingClient.account.address), 0n, 'the aggregate physical backing must not create a logical claim for the losing vault')
+		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+		await startTruthAuction(client, yesPool.securityPool)
+		if ((await getSystemState(client, yesPool.securityPool)) === SystemState.ForkTruthAuction) {
+			await finalizeTruthAuction(client, yesPool.securityPool)
+		}
+		const escalationEndDate = await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			address: yesGame,
+			functionName: 'getEscalationGameEndDate',
+		})
+		await mockWindow.setTime(escalationEndDate + 1n)
+
+		const firstLeafHash = await readCarryLeafHash(client, securityPoolAddresses.escalationGame, 1n)
+		const secondLeafHash = await readCarryLeafHash(client, securityPoolAddresses.escalationGame, 2n)
+		const nullifierTree = new SparseNullifierTree()
+		const secondProof = await createCarryProof(client, securityPoolAddresses.escalationGame, {
+			expectedOutcome: QuestionOutcome.Yes,
+			parentDepositIndex: 1n,
+			leafIndex: 1n,
+			merkleMountainRangePeakIndex: 1n,
+			merkleMountainRangeSiblings: [firstLeafHash],
+			nullifierSiblings: nullifierTree.getProof(1n),
+			sourceNodeId: 2n,
+		})
+		nullifierTree.consume(1n)
+		const firstProof = await createCarryProof(client, securityPoolAddresses.escalationGame, {
+			expectedOutcome: QuestionOutcome.Yes,
+			parentDepositIndex: 0n,
+			leafIndex: 0n,
+			merkleMountainRangePeakIndex: 1n,
+			merkleMountainRangeSiblings: [secondLeafHash],
+			nullifierSiblings: nullifierTree.getProof(0n),
+			sourceNodeId: 1n,
+		})
+		const childRepToken = getRepTokenAddress(yesUniverse)
+		const secondWinnerBalanceBefore = await getERC20Balance(client, childRepToken, secondWinner.account.address)
+		let hash = await secondWinner.writeContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			address: yesPool.securityPool,
+			functionName: 'withdrawForkedEscalationDeposits',
+			args: [QuestionOutcome.Yes, [secondProof]],
+		})
+		await secondWinner.waitForTransactionReceipt({ hash })
+		const firstWinnerBalanceBefore = await getERC20Balance(client, childRepToken, client.account.address)
+		hash = await client.writeContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			address: yesPool.securityPool,
+			functionName: 'withdrawForkedEscalationDeposits',
+			args: [QuestionOutcome.Yes, [firstProof]],
+		})
+		await client.waitForTransactionReceipt({ hash })
+
+		assert.ok((await getERC20Balance(client, childRepToken, secondWinner.account.address)) - secondWinnerBalanceBefore > secondWinningPrincipal, 'the second appended winner should receive its reward when settled first')
+		assert.ok((await getERC20Balance(client, childRepToken, client.account.address)) - firstWinnerBalanceBefore > firstWinningPrincipal, 'the first appended winner should remain solvent when settled second')
+	})
+
+	test('a directly claimed parent deposit is invalid in every current and late child while its same-outcome remainder stays claimable', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10n * DAY)
+		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+		const firstYesDeposit = forkThreshold / 3n
+		const secondYesDeposit = forkThreshold - firstYesDeposit
+		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const vaultRep = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vault.repDepositShare)
+		if (vaultRep < 2n * forkThreshold) await approveAndDepositRep(client, 2n * forkThreshold - vaultRep, questionId)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, firstYesDeposit)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, secondYesDeposit)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThreshold)
+		await forkZoltarWithOwnEscalationGame(client, securityPoolAddresses.securityPool)
+
+		await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
+		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
+		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.No)
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const noPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, getChildUniverseId(genesisUniverse, QuestionOutcome.No), questionId, securityMultiplier)
+		const yesGame = await getSecurityPoolsEscalationGame(client, yesPool.securityPool)
+		const noGame = await getSecurityPoolsEscalationGame(client, noPool.securityPool)
+		strictEqualTypeSafe(
+			await client.readContract({
+				address: getInfraContractAddresses().securityPoolForker,
+				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+				functionName: 'isEscalationDepositClaimedDirectly',
+				args: [yesPool.securityPool, QuestionOutcome.Yes, 0n],
+			}),
+			true,
+			'a replay lookup from a descendant parent should find a direct claim recorded in the root pool',
+		)
+		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+		for (const childPool of [yesPool.securityPool, noPool.securityPool]) {
+			await startTruthAuction(client, childPool)
+			if ((await getSystemState(client, childPool)) === SystemState.ForkTruthAuction) await finalizeTruthAuction(client, childPool)
+		}
+		const [yesEndDate, noEndDate] = await Promise.all(
+			[yesGame, noGame].map(
+				async escalationGame =>
+					await client.readContract({
+						abi: peripherals_EscalationGame_EscalationGame.abi,
+						address: escalationGame,
+						functionName: 'getEscalationGameEndDate',
+					}),
+			),
+		)
+		await mockWindow.setTime((yesEndDate > noEndDate ? yesEndDate : noEndDate) + 1n)
+
+		const firstLeafHash = await readCarryLeafHash(client, securityPoolAddresses.escalationGame, 1n)
+		const secondLeafHash = await readCarryLeafHash(client, securityPoolAddresses.escalationGame, 2n)
+		const firstProof = await createCarryProof(client, securityPoolAddresses.escalationGame, {
+			expectedOutcome: QuestionOutcome.Yes,
+			parentDepositIndex: 0n,
+			leafIndex: 0n,
+			merkleMountainRangePeakIndex: 1n,
+			merkleMountainRangeSiblings: [secondLeafHash],
+			nullifierSiblings: new SparseNullifierTree().getProof(0n),
+		})
+		const secondProof = await createCarryProof(client, securityPoolAddresses.escalationGame, {
+			expectedOutcome: QuestionOutcome.Yes,
+			parentDepositIndex: 1n,
+			leafIndex: 1n,
+			merkleMountainRangePeakIndex: 1n,
+			merkleMountainRangeSiblings: [firstLeafHash],
+			nullifierSiblings: new SparseNullifierTree().getProof(1n),
+			sourceNodeId: 2n,
+		})
+
+		await assert.rejects(
+			client.writeContract({
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				address: yesPool.securityPool,
+				functionName: 'withdrawForkedEscalationDeposits',
+				args: [QuestionOutcome.Yes, [firstProof]],
+			}),
+			/Parent deposit claimed/,
+		)
+		const walletRepBeforeSecondClaim = await getERC20Balance(client, getRepTokenAddress(yesUniverse), client.account.address)
+		const secondClaimHash = await client.writeContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			address: yesPool.securityPool,
+			functionName: 'withdrawForkedEscalationDeposits',
+			args: [QuestionOutcome.Yes, [secondProof]],
+		})
+		await client.waitForTransactionReceipt({ hash: secondClaimHash })
+		assert.ok((await getERC20Balance(client, getRepTokenAddress(yesUniverse), client.account.address)) > walletRepBeforeSecondClaim, 'the untouched same-outcome deposit should remain claimable')
+		await assert.rejects(
+			client.writeContract({
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				address: noPool.securityPool,
+				functionName: 'withdrawForkedEscalationDeposits',
+				args: [QuestionOutcome.Yes, [firstProof]],
+			}),
+			/Parent deposit claimed/,
+		)
 	})
 
 	test('forked continuation deposits can migrate again after a second unrelated fork', async () => {

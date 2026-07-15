@@ -13,9 +13,13 @@ contract EscalationGameForkerHarness {
 			(sourcePrincipalByOutcome, currentRepByOutcome) = parentEscalationGame
 				.exportForkedEscrowByOutcomeWithoutTransfer(vault);
 		}
-		if (_sumOutcomeAmounts(sourcePrincipalByOutcome) != 0) return (sourcePrincipalByOutcome, currentRepByOutcome);
-		sourcePrincipalByOutcome = parentEscalationGame.exportVaultUnresolvedDepositAmountsWithoutTransfer(vault);
-		currentRepByOutcome = sourcePrincipalByOutcome;
+		uint256[3] memory localPrincipalByOutcome = parentEscalationGame.exportVaultUnresolvedTotalsWithoutTransfer(
+			vault
+		);
+		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
+			sourcePrincipalByOutcome[outcomeIndex] += localPrincipalByOutcome[outcomeIndex];
+			currentRepByOutcome[outcomeIndex] += localPrincipalByOutcome[outcomeIndex];
+		}
 	}
 
 	function migrateForkedEscrowWithoutTransferForTest(

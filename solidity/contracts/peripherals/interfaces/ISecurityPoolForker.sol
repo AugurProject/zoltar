@@ -8,7 +8,10 @@ import { IUniformPriceDualCapBatchAuction } from './IUniformPriceDualCapBatchAuc
 interface ISecurityPoolForker {
 	function getOwnForkRepBuckets(
 		ISecurityPool securityPool
-	) external view returns (uint256 vaultRepAtFork, uint256 unallocatedEscrowChildRep, uint256 escrowSourceRepAtFork);
+	)
+		external
+		view
+		returns (uint256 vaultRepAtFork, uint256 escalationChildRepPerSelectedOutcome, uint256 escrowSourceRepAtFork);
 	function getOwnForkMigrationStatus(
 		ISecurityPool securityPool
 	)
@@ -18,7 +21,7 @@ interface ISecurityPoolForker {
 			bool ownFork,
 			uint256 auctionableRepAtFork,
 			uint256 vaultRepAtFork,
-			uint256 unallocatedEscrowChildRep,
+			uint256 escalationChildRepPerSelectedOutcome,
 			uint256 escrowSourceRepAtFork
 		);
 	function initiateSecurityPoolFork(ISecurityPool securityPool) external;
@@ -29,13 +32,22 @@ interface ISecurityPoolForker {
 		ISecurityPool securityPool,
 		address vault,
 		uint256 childOutcomeIndex
-	) external returns (bool moreToMigrate);
+	) external;
+	function getEscalationMigrationEntitlementStatus(
+		ISecurityPool securityPool,
+		address vault
+	) external view returns (bool initialized, uint256 totalCurrentRep, bool[3] memory materializedByOutcome);
 	function claimForkedEscalationDeposits(
 		ISecurityPool securityPool,
 		address vault,
 		BinaryOutcomes.BinaryOutcome outcomeIndex,
 		uint256[] calldata depositIndexes
 	) external;
+	function isEscalationDepositClaimedDirectly(
+		ISecurityPool securityPool,
+		BinaryOutcomes.BinaryOutcome outcomeIndex,
+		uint256 parentDepositIndex
+	) external view returns (bool);
 	function startTruthAuction(ISecurityPool securityPool) external;
 	function finalizeTruthAuction(ISecurityPool securityPool) external;
 	function forkZoltarWithOwnEscalationGame(ISecurityPool securityPool) external;

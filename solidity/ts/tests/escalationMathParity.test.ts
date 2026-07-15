@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
-import { concatHex, encodeAbiParameters, encodeDeployData, keccak256, type Abi, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { concatHex, encodeAbiParameters, encodeDeployData, keccak256, zeroAddress, type Abi, type Address, type Hex } from '@zoltar/shared/ethereum'
 import assert from '../testsuite/simulator/utils/assert'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testsuite/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testsuite/simulator/utils/clients'
@@ -139,7 +139,7 @@ describe('Escalation math parity', () => {
 			data: encodeDeployData({
 				abi: escalationGameProofTestPoolArtifact.abi,
 				bytecode: `0x${escalationGameProofTestPoolArtifact.evm.bytecode.object}`,
-				args: [getZoltarAddress(), 0n, client.account.address],
+				args: [getZoltarAddress(), 0n, zeroAddress],
 			}),
 		})
 		const deploymentReceipt = await client.waitForTransactionReceipt({ hash: deploymentHash })

@@ -31,4 +31,9 @@ describe('transaction presentations', () => {
 		expect(intent.submittedTitle).toBe('Settle Finalized Refunds')
 		expect(intent.submittedDetail).toBe('Settle Finalized Refunds transaction submitted.')
 	})
+
+	test('keeps unresolved escalation entitlement reuse explicit after one child materializes', () => {
+		const presentation = createForkAuctionSuccessPresentation(createForkAuctionResult('migrateUnresolvedEscalation'))
+		expect(presentation.detail).toBe('The wallet’s aggregate escalation entitlement was captured and materialized in the chosen child universe. It remains available for other unselected child outcomes until the migration deadline.')
+	})
 })

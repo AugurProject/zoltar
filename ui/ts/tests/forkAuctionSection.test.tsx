@@ -450,7 +450,7 @@ describe('ForkAuctionSection', () => {
 						forkOwnSecurityPool: true,
 						ownForkRepBuckets: {
 							vaultRepAtFork: 12n,
-							unallocatedEscrowChildRep: 9n,
+							escalationChildRepPerSelectedOutcome: 9n,
 							escrowSourceRepAtFork: 18n,
 						},
 						systemState: 'forkMigration',
@@ -466,7 +466,7 @@ describe('ForkAuctionSection', () => {
 		let documentQueries = within(document.body)
 		expect(documentQueries.getByText('Advanced Diagnostics')).not.toBeNull()
 		expect(documentQueries.getByText('Pool REP At Fork')).not.toBeNull()
-		expect(documentQueries.getByText('Unallocated Escrow Child REP')).not.toBeNull()
+		expect(documentQueries.getByText('Escalation Child REP per Selected Outcome')).not.toBeNull()
 		expect(documentQueries.getByText('Escrow Source REP At Fork')).not.toBeNull()
 
 		await cleanupRenderedComponent?.()
@@ -493,7 +493,7 @@ describe('ForkAuctionSection', () => {
 		documentQueries = within(document.body)
 		expect(documentQueries.queryByText('Advanced Diagnostics')).toBeNull()
 		expect(documentQueries.queryByText('Pool REP At Fork')).toBeNull()
-		expect(documentQueries.queryByText('Unallocated Escrow Child REP')).toBeNull()
+		expect(documentQueries.queryByText('Escalation Child REP per Selected Outcome')).toBeNull()
 		expect(documentQueries.queryByText('Escrow Source REP At Fork')).toBeNull()
 	})
 
@@ -548,6 +548,78 @@ describe('ForkAuctionSection', () => {
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected unresolved migration action button')
 		expect(button.disabled).toBe(true)
 		expect(button.getAttribute('title')).toBe('Migration window has closed for this parent pool.')
+	})
+
+	test('keeps an exported escalation entitlement available for another selected child', async () => {
+		const walletAddress = getAddress('0x00000000000000000000000000000000000000ad')
+		const consumedDeposit = createReportingDeposit({
+			amount: 12n,
+			cumulativeAmount: 18n,
+			depositIndex: 4n,
+			depositor: walletAddress,
+		})
+		const onMigrateUnresolvedEscalation = mock((_selectedChildOutcome: 'invalid' | 'yes' | 'no') => undefined)
+		const parentPool = createChildPool({
+			parent: zeroAddress,
+			questionOutcome: 'none',
+			securityPoolAddress: PARENT_POOL_ADDRESS,
+			systemState: 'forkMigration',
+			vaults: [
+				{
+					escalationEscrowedRep: 0n,
+					repDepositShare: 0n,
+					securityBondAllowance: 0n,
+					unpaidEthFees: 0n,
+					vaultAddress: walletAddress,
+				},
+			],
+		})
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ address: walletAddress }),
+					currentStageView: 'migration',
+					currentTimestamp: 50n,
+					forkAuctionDetails: createForkAuctionDetails({
+						currentTime: 50n,
+						migrationEndsAt: 100n,
+						systemState: 'forkMigration',
+						truthAuction: undefined,
+						truthAuctionStartedAt: 0n,
+					}),
+					forkAuctionForm: createForkAuctionForm({ selectedOutcome: 'no' }),
+					onMigrateUnresolvedEscalation,
+					previewPool: parentPool,
+					reportingDetails: createActiveReportingDetails({
+						settlementState: 'locked',
+						sides: [
+							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: 12n, deposits: [consumedDeposit], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [consumedDeposit] },
+							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+						],
+						viewerEscalationMigrationEntitlement: {
+							initialized: true,
+							materializedByOutcome: { invalid: false, yes: true, no: false },
+							totalCurrentRep: 12n,
+						},
+						viewerVaultEscrowedRep: 0n,
+					}),
+					securityPools: [parentPool, createChildPool({ questionOutcome: 'yes' })],
+					selectedStageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('This wallet’s aggregate escalation entitlement is already captured. Select any child outcome that has not received it yet.')).not.toBeNull()
+		expect(documentQueries.queryByText('Current path: Must migrate into the selected child universe')).toBeNull()
+		const button = documentQueries.getByRole('button', { name: 'Migrate Unresolved Escalation To No' })
+		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected unresolved migration action button')
+		expect(button.disabled).toBe(false)
+		fireEvent.click(button)
+		expect(onMigrateUnresolvedEscalation).toHaveBeenLastCalledWith('no')
 	})
 
 	test('does not fall back to resolved-deposit migration after unresolved escalation migration expires', async () => {

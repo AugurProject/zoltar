@@ -177,8 +177,8 @@ test('EscalationGame storage layout keeps inherited state slots stable', () => {
 			{ label: 'totalEscrowedRep', slot: '434', offset: 0, type: 'uint256' },
 			{ label: 'unresolvedRepByVault', slot: '435', offset: 0, type: 'mapping(address => uint256)' },
 			{ label: 'totalLocalUnresolvedRep', slot: '436', offset: 0, type: 'uint256' },
-			{ label: 'unresolvedLocalDepositRefsByVault', slot: '437', offset: 0, type: 'mapping(address => uint256[])' },
-			{ label: 'unresolvedLocalDepositExportCursorByVault', slot: '438', offset: 0, type: 'mapping(address => uint256)' },
+			{ label: 'localUnresolvedPrincipalByVaultAndOutcome', slot: '437', offset: 0, type: 'mapping(address => uint256[3])' },
+			{ label: 'localUnresolvedTotalsExportedByVault', slot: '438', offset: 0, type: 'mapping(address => bool)' },
 			{
 				label: 'forkedEscrowByVaultAndOutcome',
 				slot: '439',

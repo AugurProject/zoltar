@@ -3171,10 +3171,9 @@
 							wins. Valid deposits prevent tied maxima below non-decision by
 							reducing the accepted amount by one atomic REP unit, or
 							reverting if that adjusted amount becomes invalid. Continuation
-							snapshots reject preserved positive tied maxima below
-							<code>nonDecisionThreshold</code>. Ties already at
-							<code>nonDecisionThreshold</code>, or all-zero preserved
-							balances, remain valid carried states.
+							snapshots preserve the parent balances exactly, including tied maxima
+							below <code>nonDecisionThreshold</code>, so all selected children begin
+							from the same unresolved state.
 						</p>
 						<div class="example-grid">
 							<label>
@@ -3594,10 +3593,9 @@
 						leading outcome wins. Valid deposits prevent tied maxima below
 						non-decision by reducing the accepted amount by one atomic REP
 						unit, or reverting if that adjusted amount becomes invalid.
-						Continuation snapshots reject preserved positive tied maxima below
-						<code>nonDecisionThreshold</code>. Ties already at the fixed
-						<code>nonDecisionThreshold</code>, or all-zero preserved
-						balances, remain valid carried states. A local deposit that brings
+						Continuation snapshots preserve the parent balances exactly, including
+						tied maxima below <code>nonDecisionThreshold</code>, so all selected
+						children begin from the same unresolved state. A local deposit that brings
 						a second outcome to <code>nonDecisionThreshold</code> records
 						<code>nonDecisionTimestamp</code> and opens the fork path. A fork
 						continuation can instead inherit a threshold tie without rebasing
@@ -4103,12 +4101,12 @@
 								<tr>
 									<td><code>migrateVaultWithUnresolvedEscalation</code></td>
 									<td>
-										An external fork interrupted unresolved local locks before
+										An own or external fork captured unresolved local locks before
 										the game finalized.
 									</td>
 									<td>
-										One vault's unresolved locks, possibly across multiple
-										calls.
+										One vault's aggregate <code>Invalid</code>/<code>Yes</code>/<code>No</code>
+										entitlement in one selected child.
 									</td>
 								</tr>
 								<tr>
@@ -4127,7 +4125,8 @@
 					<p>
 						Local withdrawals adjust the vault's parent-pool ownership by the
 						gain or loss relative to the original locked REP. Own-fork claims
-						instead convert source REP into child-universe REP and pay it to the
+						instead convert source REP into child-universe REP and release it from
+						the selected child's aggregate escalation backing to the
 						vault owner’s wallet, rather than minting child-pool ownership. In
 						the own-fork path, those claims must still be submitted before the
 						parent migration window closes.
@@ -4146,35 +4145,47 @@
 						Continuation withdrawals use Merkle Mountain Range proofs against
 						the inherited carry snapshot. Each accepted proof advances the
 						nullifier root, so a carried parent deposit cannot be replayed in
-						the child. The exact leaf fields, peak bagging order, proof-length
+						the child. A direct own-fork parent claim also records the deposit's
+						stable parent index in the forker before paying the wallet. Every
+						current or later-created child checks that parent-wide record before
+						accepting the inherited proof. This prevents a directly paid deposit
+						from consuming another same-outcome deposit's aggregate logical
+						escrow in any child. The exact leaf fields, peak bagging order, proof-length
 						rules, and 64-peak bound are documented in
 						<a href="./merkle-mountain-range.html">Merkle Mountain Range carry proofs</a>.
 					</p>
 					<p>
 						If an unrelated external Zoltar fork interrupts the local escalation
 						game before it resolves, unresolved escalation deposits stop being
-						withdrawable on the parent pool. The vault owner must migrate all
-						remaining unresolved parent locks for the chosen child universe
-						through repeated
-						<code>migrateVaultWithUnresolvedEscalation</code> calls until the
-						function reports no more work. Each call pages only a bounded chunk
-						of unresolved export data, so large carry sets can require multiple
-						transactions. If the vault does not migrate in time, the unresolved
-						position remains locked in the parent escalation game and is no
-						longer withdrawable from the parent pool.
+						withdrawable on the parent pool. The affected vault may call
+						<code>migrateVaultWithUnresolvedEscalation</code> once for each child
+						outcome it chooses. The first call exports that vault's three aggregate
+						outcome totals in constant-size work; later selected outcomes reuse the
+						stored entitlement. The forker exposes the captured state and all three
+						per-outcome materialization flags, so the interface keeps unselected outcomes
+						available after the three per-vault aggregate rows and parent vault escrow
+						counters are cleared. Individual deposit rows remain canonical proof material.
+						No caller processes another vault, and no unused child
+						universe is deployed. Fork initialization has already established the
+						aggregate backing once: an external fork locks the drained game REP, while
+						an own fork records the post-burn escalation child bucket. A selected child receives that complete backing
+						once, but only materialized vault escrow authorizes proofs. If the vault does not act before the migration
+						deadline, its unresolved parent lock remains and it receives no claim
+						authorization in children it did not select.
 					</p>
 					<figure class="diagram" id="fig-placeholder-unresolved-migration">
 						<svg
-							viewBox="0 0 920 230"
+							viewBox="0 0 920 400"
 							role="img"
 							aria-labelledby="unresolved-migration-title unresolved-migration-desc"
 						>
 							<title id="unresolved-migration-title">
-								Unresolved escalation migration
+								Three independent unresolved escalation migration lanes
 							</title>
 							<desc id="unresolved-migration-desc">
-								External fork interruption moves unresolved parent escalation
-								locks through paged export into a child continuation game.
+								Canonical snapshot state initializes the selected child's proof baseline.
+								Aggregate REP separately supplies physical child backing. Vault-specific
+								outcome aggregates separately become a stored entitlement and logical escrow.
 							</desc>
 							<defs>
 								<marker
@@ -4189,45 +4200,53 @@
 									<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
 								</marker>
 							</defs>
-							<rect class="svg-red" x="35" y="70" width="170" height="78" rx="10"></rect>
-							<text class="svg-label" x="120" y="101" text-anchor="middle">
-								Parent Game
-							</text>
-							<text class="svg-small" x="120" y="125" text-anchor="middle">
-								unresolved locks
-							</text>
-							<path class="svg-line" marker-end="url(#arrow-unresolved)" d="M 205 109 H 280"></path>
-							<rect class="svg-gold" x="280" y="70" width="190" height="78" rx="10"></rect>
-							<text class="svg-label" x="375" y="101" text-anchor="middle">
-								Paged Export
-							</text>
-							<text class="svg-small" x="375" y="125" text-anchor="middle">
-								up to 64 refs
-							</text>
-							<path class="svg-line" marker-end="url(#arrow-unresolved)" d="M 470 109 H 545"></path>
-							<rect class="svg-blue" x="545" y="70" width="170" height="78" rx="10"></rect>
-							<text class="svg-label" x="630" y="101" text-anchor="middle">
-								Child Carry
-							</text>
-							<text class="svg-small" x="630" y="125" text-anchor="middle">
-								MMR snapshot
-							</text>
-							<path class="svg-line" marker-end="url(#arrow-unresolved)" d="M 715 109 H 780"></path>
-							<rect class="svg-green" x="780" y="70" width="115" height="78" rx="10"></rect>
-							<text class="svg-label" x="838" y="101" text-anchor="middle">
-								Resume
-							</text>
-							<text class="svg-small" x="838" y="125" text-anchor="middle">
-								child game
-							</text>
+							<rect class="svg-gold" x="35" y="30" width="240" height="70" rx="10"></rect>
+							<text class="svg-label" x="155" y="59" text-anchor="middle">Canonical Fork Snapshot</text>
+							<text class="svg-small" x="155" y="82" text-anchor="middle">balances + carry + nullifiers</text>
+							<path class="svg-line" marker-end="url(#arrow-unresolved)" d="M 275 65 H 520"></path>
+							<rect class="svg-blue" x="520" y="30" width="270" height="70" rx="10"></rect>
+							<text class="svg-label" x="655" y="59" text-anchor="middle">Canonical Child Snapshot</text>
+							<text class="svg-small" x="655" y="82" text-anchor="middle">same proof state in every selected child</text>
+							<rect class="svg-gold" x="35" y="155" width="240" height="70" rx="10"></rect>
+							<text class="svg-label" x="155" y="184" text-anchor="middle">Aggregate REP Lock</text>
+							<text class="svg-small" x="155" y="207" text-anchor="middle">external drained REP or own-fork bucket</text>
+							<path class="svg-line" marker-end="url(#arrow-unresolved)" d="M 275 190 H 520"></path>
+							<rect class="svg-green" x="520" y="155" width="270" height="70" rx="10"></rect>
+							<text class="svg-label" x="655" y="184" text-anchor="middle">Physical Child Backing</text>
+							<text class="svg-small" x="655" y="207" text-anchor="middle">complete backing per selected child</text>
+							<rect class="svg-gold" x="35" y="285" width="190" height="70" rx="10"></rect>
+							<text class="svg-label" x="130" y="314" text-anchor="middle">Owner Export</text>
+							<text class="svg-small" x="130" y="337" text-anchor="middle">3 aggregate totals</text>
+							<path class="svg-line" marker-end="url(#arrow-unresolved)" d="M 225 320 H 355"></path>
+							<rect class="svg-blue" x="355" y="285" width="210" height="70" rx="10"></rect>
+							<text class="svg-label" x="460" y="314" text-anchor="middle">Stored Entitlement</text>
+							<text class="svg-small" x="460" y="337" text-anchor="middle">exported once per vault</text>
+							<path class="svg-line" marker-end="url(#arrow-unresolved)" d="M 565 320 H 695"></path>
+							<rect class="svg-red" x="695" y="285" width="190" height="70" rx="10"></rect>
+							<text class="svg-label" x="790" y="314" text-anchor="middle">Logical Vault Escrow</text>
+							<text class="svg-small" x="790" y="337" text-anchor="middle">one selected child per call</text>
+							<text class="svg-micro" x="460" y="382" text-anchor="middle">logical escrow is not a snapshot or child-resume prerequisite</text>
 						</svg>
 						<p class="diagram-caption">
 							<span class="figure-label">Unresolved Migration</span>Unresolved
-							parent locks are exported in bounded pages into child carry so the
-							continuation game can settle them later with proofs.
+							child carry and aggregate backing initialization are independent of vault escrow materialization.
+							Child creation may happen permissionlessly in an earlier transaction or at the
+							start of the public owner migration transaction. In that public wrapper, ordinary
+							vault migration creates, initializes, and backs the selected child before the
+							delegate captures and materializes the entitlement atomically. Resume follows child operation, not complete escrow funding
+							by every parent vault. A stored entitlement remains
+							reusable in each additional child outcome that the vault selects.
 						</p>
 					</figure>
 					<h3>Unresolved Escalation Migration Trace</h3>
+					<p>
+						Permissionless child creation can initialize carry before any owner exports.
+						The public <code>SecurityPoolForker.migrateVaultWithUnresolvedEscalation</code>
+						wrapper first invokes ordinary vault migration, which creates, initializes, and backs
+						the selected child. It then delegates entitlement capture and materialization. A revert rolls
+						back the entire transaction, so no partial result becomes externally visible.
+						Neither route makes vault export responsible for constructing the child carry snapshot.
+					</p>
 					<div class="table-wrap">
 						<table class="wide-table">
 							<thead>
@@ -4242,14 +4261,14 @@
 								<tr>
 									<td>Snapshot interruption</td>
 									<td><code>SecurityPoolForker</code></td>
-									<td>Records elapsed escalation time and unresolved outcome state.</td>
-									<td>The child continuation starts from the interrupted parent clock.</td>
+									<td>Stores the bond and elapsed-time baseline plus balances, carry totals, peaks, leaf counts, and nullifier roots.</td>
+									<td>Every selected child reads the same canonical snapshot even if an allowed parent claim occurs before late child creation.</td>
 								</tr>
 								<tr>
-									<td>Export parent refs</td>
-									<td><code>migrateVaultWithUnresolvedEscalation</code></td>
-									<td>Exports bounded batches of unresolved deposit references.</td>
-									<td>Large vault histories may require several transactions.</td>
+									<td>Lock aggregate backing</td>
+									<td><code>SecurityPoolForker.initiateSecurityPoolFork</code> or <code>forkZoltarWithOwnEscalationGame</code></td>
+									<td>An external fork moves the drained game's complete REP one-for-one. An own fork combines pool and game REP before the burn and stores the complete post-burn <code>escalationChildRepAtFork</code> bucket.</td>
+									<td>No later vault call transfers or locks another vault's tokens.</td>
 								</tr>
 								<tr>
 									<td>Initialize child carry</td>
@@ -4258,8 +4277,35 @@
 										which forwards to
 										<code>EscalationGame.initializeForkCarrySnapshotWithResolutionBalances</code>.
 									</td>
-									<td>Materializes inherited carry peaks and totals.</td>
-									<td>Child games can verify parent deposits without copying every leaf immediately.</td>
+									<td>Materializes inherited balances, carry peaks, totals, and roots.</td>
+									<td>Child games can verify parent deposits without copying every leaf.</td>
+								</tr>
+								<tr>
+									<td>Back selected child</td>
+									<td><code>SecurityPoolForkerVaultMigrationBase._ensureChildEscalationBacking</code></td>
+									<td>Reproduces the complete aggregate escalation backing into that selected child exactly once.</td>
+									<td>Migrated winners can receive preserved rewards without waiting for losing vaults.</td>
+								</tr>
+								<tr>
+									<td>Export vault totals</td>
+									<td>
+										<code>EscalationGameEscrow.exportVaultUnresolvedTotalsWithoutTransfer</code>, then
+										<code>EscalationGameForker._initializeEscalationMigrationEntitlement</code>
+									</td>
+									<td>The game clears and returns one aggregate principal tuple without transferring REP; the forker stores the returned entitlement.</td>
+									<td>Gas does not grow with the vault's deposit history or alter child carry totals.</td>
+								</tr>
+								<tr>
+									<td>Record vault escrow</td>
+									<td><code>migrateVaultWithUnresolvedEscalation</code></td>
+									<td>Materializes the stored entitlement as vault-specific escrow in one selected child.</td>
+									<td>Only the selecting vault receives logical claim authorization in that child.</td>
+								</tr>
+								<tr>
+									<td>Resume continuation</td>
+									<td><code>SecurityPoolForkerBase._finalizeAwaitingForkContinuationIfReady</code></td>
+									<td>Clears the wait marker when the child becomes operational.</td>
+									<td>Resume does not wait for every parent vault to materialize escrow.</td>
 								</tr>
 								<tr>
 									<td>Withdraw after child resolution</td>
@@ -4522,15 +4568,18 @@
 							external-fork escalation locks.
 						</li>
 						<li>
-							Vault owners with unresolved external-fork escalation locks call
-							<code>migrateVaultWithUnresolvedEscalation</code>, which can
-							require multiple calls before it returns that migration is
-							complete.
+							Vault owners with unresolved escalation locks captured by either an own
+							or external fork call
+							<code>migrateVaultWithUnresolvedEscalation</code> once for each
+							child outcome they choose. Each call materializes only that vault in
+							that selected child.
 						</li>
 						<li>
 							Vault owners claim winning own-fork escalation deposits through
 							<code>claimForkedEscalationDeposits</code>; the own-fork path is
-							open only during the parent migration window.
+							open only during the parent migration window. A successful direct
+							claim invalidates that stable deposit identity in every current and
+							future child continuation.
 						</li>
 						<li>
 							Parent collateral is partially transferred into child pools in
@@ -4820,11 +4869,11 @@
 						</p>
 					</figure>
 					<div class="callout">
-						Unresolved external-fork escalation positions migrate with the vault
-						through
-						<code>migrateVaultWithUnresolvedEscalation</code>. The child
-						continuation game is paused during the migration window, then
-						resumes once the child pool becomes operational.
+						Every selected continuation receives the complete parent game snapshot.
+						It also receives the game's complete aggregate physical backing once.
+						<code>migrateVaultWithUnresolvedEscalation</code> materializes only the
+						calling vault's aggregate claim authorization in that child. The child resumes when
+						its pool becomes operational; it does not wait for other vaults.
 					</div>
 					<p>
 						During vault migration, the forker also ensures the child pool is
@@ -5083,7 +5132,8 @@
 							</title>
 							<desc id="own-fork-buckets-desc">
 								Pool REP and unresolved escalation REP enter one Zoltar fork
-								balance, then split into vault and escalation child-REP buckets.
+								balance, then split into vault and aggregate escalation-backing buckets.
+								Vault-specific logical escrow is created separately and is not shown.
 							</desc>
 							<defs>
 								<marker
@@ -5183,24 +5233,25 @@
 								rx="10"
 							></rect>
 							<text class="svg-label" x="830" y="234" text-anchor="middle">
-								Escrow Bucket
+								Escalation Backing
 							</text>
 							<text class="svg-small" x="830" y="257" text-anchor="middle">
-								continue locks
+								post-burn child bucket
 							</text>
 						</svg>
 						<p class="diagram-caption">
 							<span class="figure-label">Own-Fork REP Buckets</span>In an own
 							fork, child REP is allocated between migrated vault ownership and
-							unresolved escalation escrow according to the pre-burn source REP
-							mix.
+							aggregate escalation backing according to the pre-burn source REP
+							mix. The complete post-burn escalation bucket backs each selected child;
+							vault-specific logical escrow is materialized separately and is not shown.
 						</p>
 					</figure>
 					<div class="equation" id="eq-placeholder-own-fork-rep-buckets">
 						<math
 							display="block"
-							aria-label="total REP before burn equals pool REP to fork plus escalation REP to fork, vault REP at fork equals zero when total REP before burn is zero otherwise pool REP to fork times auctionable REP at fork divided by total REP before burn, escalation child REP at fork equals auctionable REP at fork minus vault REP at fork, preview escalation child REP equals source REP amount times escalation child REP at fork divided by escalation source REP at fork, and escalation child REP to transfer equals the minimum of preview escalation child REP and remaining outcome escrow child REP"
-							data-source="totalRepBeforeBurn = poolRepToFork + escalationRepToFork; vaultRepAtFork = totalRepBeforeBurn == 0 ? 0 : poolRepToFork \cdot auctionableRepAtFork / totalRepBeforeBurn; escalationChildRepAtFork = auctionableRepAtFork - vaultRepAtFork; previewEscalationChildRep = sourceRepAmount \cdot escalationChildRepAtFork / escalationSourceRepAtFork; escalationChildRepToTransfer = min(previewEscalationChildRep, remainingOutcomeEscrowChildRep)"
+							aria-label="total REP before burn equals pool REP to fork plus escalation REP to fork, vault REP at fork equals zero when total REP before burn is zero otherwise the floor of pool REP to fork times auctionable REP at fork divided by total REP before burn, escalation child REP at fork equals auctionable REP at fork minus vault REP at fork, selected child escalation backing equals escalation child REP at fork, and vault escrow child REP equals the floor of source REP amount times escalation child REP at fork divided by escalation source REP at fork"
+							data-source="totalRepBeforeBurn = poolRepToFork + escalationRepToFork; vaultRepAtFork = totalRepBeforeBurn == 0 ? 0 : floor(poolRepToFork \cdot auctionableRepAtFork / totalRepBeforeBurn); escalationChildRepAtFork = auctionableRepAtFork - vaultRepAtFork; selectedChildEscalationBacking = escalationChildRepAtFork; vaultEscrowChildRep = floor(sourceRepAmount \cdot escalationChildRepAtFork / escalationSourceRepAtFork)"
 						>
 							<mtable>
 								<mtr>
@@ -5235,6 +5286,9 @@
 											</mtr>
 											<mtr>
 												<mtd>
+													<mrow>
+														<mi>floor</mi>
+														<mo>(</mo>
 													<mfrac>
 														<mrow>
 															<mi>poolRepToFork</mi>
@@ -5243,6 +5297,8 @@
 														</mrow>
 														<mi>totalRepBeforeBurn</mi>
 													</mfrac>
+														<mo>)</mo>
+													</mrow>
 												</mtd>
 												<mtd>
 													<mtext>otherwise</mtext>
@@ -5266,36 +5322,36 @@
 								</mtr>
 								<mtr>
 									<mtd>
-										<mi>previewEscalationChildRep</mi>
-									</mtd>
-									<mtd>
-										<mo>=</mo>
-									</mtd>
-									<mtd>
-										<mfrac>
+									<mi>selectedChildEscalationBacking</mi>
+								</mtd>
+								<mtd>
+									<mo>=</mo>
+								</mtd>
+								<mtd>
+									<mi>escalationChildRepAtFork</mi>
+								</mtd>
+							</mtr>
+							<mtr>
+								<mtd>
+									<mi>vaultEscrowChildRep</mi>
+								</mtd>
+								<mtd>
+									<mo>=</mo>
+								</mtd>
+								<mtd>
+									<mrow>
+										<mi>floor</mi>
+										<mo>(</mo>
+									<mfrac>
 											<mrow>
 												<mi>sourceRepAmount</mi>
 												<mo>&#x22C5;</mo>
 												<mi>escalationChildRepAtFork</mi>
 											</mrow>
 											<mi>escalationSourceRepAtFork</mi>
-										</mfrac>
-									</mtd>
-								</mtr>
-								<mtr>
-									<mtd>
-										<mi>escalationChildRepToTransfer</mi>
-									</mtd>
-									<mtd>
-										<mo>=</mo>
-									</mtd>
-									<mtd>
-										<mi>min</mi>
-										<mo>(</mo>
-										<mi>previewEscalationChildRep</mi>
-										<mo>,</mo>
-										<mi>remainingOutcomeEscrowChildRep</mi>
+									</mfrac>
 										<mo>)</mo>
+									</mrow>
 									</mtd>
 								</mtr>
 							</mtable>
@@ -5303,24 +5359,38 @@
 						<p class="equation-caption">
 							<span class="equation-label">Own-Fork Bucket Allocation</span>The
 							vault bucket follows the pool REP share of total source REP before
-							the fork burn; unresolved escalation migration then converts
-							source escrow through the escalation bucket’s child-REP ratio and
-							caps each outcome by its remaining escrow bucket.
+							the fork burn. Each selected child receives the complete escalation
+							bucket once, while a vault's logical escrow converts only that vault's
+							<code>sourceRepAmount</code> through the same child-REP ratio.
+							Here <code>sourceRepAmount</code> is the current REP represented by an
+							unresolved entitlement, or the winning payout used by a direct own-fork
+							claim. <code>sourcePrincipal</code> remains a separate logical quantity
+							that authorizes carried proofs.
 						</p>
 					</div>
+					<p>
+						Both ratios floor to atomic REP units. At the one-unit boundary, if
+						<code>sourceRepAmount · escalationChildRepAtFork</code> is smaller than
+						<code>escalationSourceRepAtFork</code>, one atomic source unit maps to
+						zero child REP even though its logical source principal remains recorded.
+					</p>
 					<p>
 						When a pool forks while its escalation game is unresolved, the
 						parent forker snapshots the unresolved game’s
 						<code>startBond</code>, <code>nonDecisionThreshold</code>, elapsed
-						escalation time, and per-outcome carry state. Each relevant child
+						escalation time, actual per-outcome balances, carry totals, peaks, leaf
+						counts, and nullifier roots. An external fork locks the drained game's complete
+						REP one-for-one. An own fork instead stores the complete post-burn escalation
+						child bucket after combining pool and game REP for the fork burn. Each selected child
 						pool can initialize its own paused fork-continuation escalation game
-						from that snapshot. The continuation preserves the parent live
+						from that canonical snapshot and receives the complete aggregate game
+						backing once. The continuation preserves the parent live
 						<code>Invalid</code>, <code>Yes</code>, and <code>No</code>
 						balances, each unresolved deposit’s original outcome, stable parent
-						deposit index, payout ordering, and the remaining REP backing that
-						still needs to arrive through forked escrow. Forked escrow then
-						tracks how much child REP backing has arrived for those inherited
-						unresolved deposits without rebasing the preserved live balances.
+						deposit index, and payout ordering. Each vault materializes its own
+						remaining logical claim authorization through forked escrow only in child
+						outcomes it selects. That escrow does not rebase the complete parent totals preserved
+						in the child game.
 					</p>
 					<p>
 						The continuation game remains paused during the migration window so
@@ -5330,10 +5400,14 @@
 						<code>SecurityPool.depositToEscalationGame</code> rejects new live
 						child deposits through the
 						<code>awaitingForkContinuation</code> guard.
+						Operational activation clears that guard without waiting for every parent
+						vault to materialize. An inactive vault therefore cannot make other users
+						pay to migrate its position or delay the child continuation.
 					</p>
 					<ol>
 						<li>
-							The parent pool forks and snapshots unresolved escalation state.
+							The parent pool forks, stores canonical unresolved escalation state, and
+							locks the game's aggregate physical REP once.
 						</li>
 						<li>
 							Each selected child pool is created in a child universe and marks
@@ -5341,12 +5415,12 @@
 						</li>
 						<li>
 							Each created child initializes a paused continuation escalation
-							game from that snapshot.
+							game from that snapshot and receives the full aggregate escalation backing once.
 						</li>
 						<li>
-							Affected vaults migrate unresolved parent locks through
-							<code>migrateVaultWithUnresolvedEscalation</code>; large carry
-							sets can require multiple calls.
+							An affected vault materializes its three aggregate outcome totals through
+							one <code>migrateVaultWithUnresolvedEscalation</code> call for each
+							child outcome it selects.
 						</li>
 						<li>
 							After the migration window and any required truth auction, the
@@ -5356,11 +5430,16 @@
 					</ol>
 					<p>
 						A continuation game can later reach non-decision too. When that
-						happens, it exports a materialized carry snapshot made from
-						inherited unresolved deposits plus new local deposits placed after
-						resume. That snapshot can seed another set of child continuation
-						games, so escalation does not end at a single fork; it can branch
-						recursively along with Zoltar universes.
+						happens, the forker stores the game's current balances, carry totals,
+						peaks, leaf counts, and current nullifier roots after any prior proof
+						consumption. It drains and locks the remaining aggregate physical REP
+						once. Each selected grandchild receives that same canonical snapshot and
+						the full remaining aggregate backing once; vault-specific escrow still
+						controls logical proof authorization. Escalation can therefore branch
+						recursively with Zoltar universes without replaying spent proofs or
+						requiring other vaults to migrate. Before consuming a carried proof,
+						the direct-claim replay check walks the pool's parent lineage, so a
+						claim recorded by any ancestor also blocks that proof in descendants.
 					</p>
 					<p>
 						For example, suppose Zoltar has two ended questions: “Did London record a
@@ -5391,7 +5470,9 @@
 							<desc id="recursive-desc">
 								A caller invokes Zoltar to fork a universe while one of its security pools has
 								an unresolved escalation. Later, migration into selected child branches deploys child pools
-								and initializes paused continuation games. If a resumed continuation reaches
+								and initializes paused continuation games. Canonical snapshot state supplies each selected
+								child's proof baseline; aggregate REP separately supplies physical backing; and each selected
+								vault's stored entitlement separately supplies logical escrow. If a resumed continuation reaches
 								non-decision, a caller can invoke the security-pool fork path and Zoltar forks
 								that child universe again.
 							</desc>
@@ -5439,7 +5520,7 @@
 								Zoltar Fork
 							</text>
 							<text class="svg-small" x="490" y="230" text-anchor="middle">
-								carry snapshot + forked escrow
+								selected branches created lazily
 							</text>
 							<path
 								class="svg-line"
@@ -5538,23 +5619,27 @@
 						</svg>
 						<p class="diagram-caption">
 							<span class="figure-label">Recursive Continuation</span>Each child
-							continuation game inherits the unresolved carry baseline. If a
+							continuation game receives the same canonical proof snapshot and separate
+							aggregate physical backing. Only a selected vault's stored entitlement creates
+							logical escrow in that branch. If a
 							child game later reaches non-decision, the carry can be exported
 							again into the next fork generation.
 						</p>
 					</figure>
 					<figure class="diagram" id="fig-placeholder-carry-snapshot">
 						<svg
-							viewBox="0 0 920 330"
+							viewBox="0 0 920 470"
 							role="img"
 							aria-labelledby="carry-detail-title carry-detail-desc"
 						>
 							<title id="carry-detail-title">
-								Continuation carry ingredients
+								Separate recursive continuation accounting lanes
 							</title>
 							<desc id="carry-detail-desc">
-								Inherited carry, local carry, and forked escrow combine into the
-								next fork snapshot.
+								Current balances, carry, and nullifiers form the canonical next
+								snapshot. Remaining aggregate REP separately funds physical child
+								backing. Vault outcome aggregates separately become a stored
+								entitlement and logical escrow only in selected children.
 							</desc>
 							<defs>
 								<marker
@@ -5572,95 +5657,100 @@
 							<rect
 								class="svg-blue"
 								x="54"
-								y="70"
-								width="210"
+								y="40"
+								width="250"
 								height="82"
 								rx="10"
 							></rect>
-							<text class="svg-label" x="159" y="103" text-anchor="middle">
-								Inherited Carry
+							<text class="svg-label" x="179" y="73" text-anchor="middle">
+								Current Game State
 							</text>
-							<text class="svg-small" x="159" y="128" text-anchor="middle">
-								parent proof baseline
+							<text class="svg-small" x="179" y="98" text-anchor="middle">
+								balances + carry + nullifiers
 							</text>
-							<rect
-								class="svg-gold"
-								x="54"
-								y="190"
-								width="210"
-								height="82"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="159" y="223" text-anchor="middle">
-								Local Carry
-							</text>
-							<text class="svg-small" x="159" y="248" text-anchor="middle">
-								new child deposits
-							</text>
-							<rect
-								class="svg-red"
-								x="354"
-								y="130"
-								width="220"
-								height="82"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="464" y="163" text-anchor="middle">
-								Forked Escrow
-							</text>
-							<text class="svg-small" x="464" y="188" text-anchor="middle">
-								child REP backing
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-carry)"
-								d="M 264 111 C 300 111 326 150 354 150"
-							></path>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-carry)"
-								d="M 264 231 C 310 226 334 204 354 184"
-							></path>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-carry)"
-								d="M 574 171 H 654"
-							></path>
 							<rect
 								class="svg-green"
 								x="654"
-								y="112"
+								y="40"
 								width="220"
-								height="118"
+								height="82"
 								rx="10"
 							></rect>
-							<text class="svg-label" x="764" y="151" text-anchor="middle">
-								Next Snapshot
+							<text class="svg-label" x="764" y="73" text-anchor="middle">
+								Canonical Snapshot
 							</text>
-							<text class="svg-small" x="764" y="176" text-anchor="middle">
-								materialized carry tree
+							<text class="svg-small" x="764" y="98" text-anchor="middle">
+								reused by every selected child
 							</text>
-							<text class="svg-small" x="764" y="198" text-anchor="middle">
-								nullifiers preserve
+							<path class="svg-line" marker-end="url(#arrow-carry)" d="M 304 81 H 654"></path>
+							<rect
+								class="svg-gold"
+								x="54"
+								y="180"
+								width="250"
+								height="82"
+								rx="10"
+							></rect>
+							<text class="svg-label" x="179" y="213" text-anchor="middle">
+								Remaining Aggregate REP
 							</text>
-							<text class="svg-small" x="764" y="216" text-anchor="middle">
-								spent proofs
+							<text class="svg-small" x="179" y="238" text-anchor="middle">
+								locked once at the fork
 							</text>
+							<rect
+								class="svg-green"
+								x="654"
+								y="180"
+								width="220"
+								height="82"
+								rx="10"
+							></rect>
+							<text class="svg-label" x="764" y="213" text-anchor="middle">
+								Physical Child Backing
+							</text>
+							<text class="svg-small" x="764" y="238" text-anchor="middle">
+								complete backing per selected child
+							</text>
+							<path class="svg-line" marker-end="url(#arrow-carry)" d="M 304 221 H 654"></path>
+							<rect class="svg-blue" x="54" y="330" width="250" height="82" rx="10"></rect>
+							<text class="svg-label" x="179" y="363" text-anchor="middle">
+								Vault Outcome Aggregates
+							</text>
+							<text class="svg-small" x="179" y="388" text-anchor="middle">
+								three principal totals
+							</text>
+							<rect class="svg-gold" x="354" y="330" width="220" height="82" rx="10"></rect>
+							<text class="svg-label" x="464" y="363" text-anchor="middle">
+								Stored Entitlement
+							</text>
+							<text class="svg-small" x="464" y="388" text-anchor="middle">
+								exported once per vault
+							</text>
+							<rect class="svg-red" x="654" y="330" width="220" height="82" rx="10"></rect>
+							<text class="svg-label" x="764" y="363" text-anchor="middle">
+								Logical Vault Escrow
+							</text>
+							<text class="svg-small" x="764" y="388" text-anchor="middle">
+								selected children only
+							</text>
+							<path class="svg-line" marker-end="url(#arrow-carry)" d="M 304 371 H 354"></path>
+							<path class="svg-line" marker-end="url(#arrow-carry)" d="M 574 371 H 654"></path>
 						</svg>
 						<p class="diagram-caption">
-							<span class="figure-label">Carry Snapshot</span>The continuation
-							game carries a proof baseline, tracks new local deposits, and
-							records escrow backing by original outcome.
+							<span class="figure-label">Recursive Accounting</span>The next canonical
+							snapshot, aggregate physical backing, and vault-specific logical authorization
+							travel in separate lanes. Materializing a vault entitlement does not construct
+							or alter the snapshot.
 						</p>
 					</figure>
 					<p>
 						The inherited-carry baseline is implemented with Merkle Mountain
 						Range peaks and nullifier roots so a child game can consume proofs
 						without replaying already-spent parent deposits. New child deposits
-						are tracked separately as local carry, and local unresolved export
-						work is paged in batches of at most
-						<code>64</code> refs per vault. This is why large unresolved carry
-						sets can require multiple migration calls.
+						are tracked separately as local carry. Migration exports per-vault
+						principal as exactly three outcome totals, while the immutable peaks and
+						leaves remain the proof commitment. Its gas cost therefore does not grow
+						with the vault's number of deposits.
 					</p>
 					<p>
 						Forked escrow records both source-principal amounts and converted
@@ -5932,25 +6022,26 @@
 								<tr>
 									<td>Parent fork</td>
 									<td>
-										A parent game has <code>12 REP</code> unresolved on
+										In this external-fork example, source REP converts to child REP
+										one-for-one. A parent game has <code>12 REP</code> unresolved on
 										<code>Yes</code> and <code>8 REP</code> unresolved on
 										<code>No</code>.
 									</td>
 									<td>
-										The fork snapshot preserves both original outcomes and
-										parent deposit indexes.
+										The fork snapshot preserves both original outcomes and parent
+										deposit indexes; the one-for-one conversion makes the child backing
+										<code>20 REP</code>.
 									</td>
 								</tr>
 								<tr>
 									<td>Child continuation</td>
 									<td>
-										The preferred child receives forked escrow backing and
-										resumes with the inherited <code>20 REP</code> carry after
-										migration.
+										The preferred child receives the complete <code>20 REP</code>
+										aggregate backing once and resumes with the inherited carry.
 									</td>
 									<td>
-										Inherited carry is settled by proof, while new deposits are
-										tracked as local child state.
+										Only selected vault escrow authorizes inherited proofs; new deposits
+										are tracked as local child state.
 									</td>
 								</tr>
 								<tr>
@@ -5968,12 +6059,12 @@
 								<tr>
 									<td>Second fork</td>
 									<td>
-										If the child game reaches non-decision, it exports a new
-										carry tree for the next generation of child pools.
+										If the child game reaches non-decision, the forker stores its current
+										carry state and nullifier roots and locks the remaining aggregate REP.
 									</td>
 									<td>
-										The recursive child does not replay settled proofs and does
-										not lose still-unsettled carried deposits.
+										Each selected grandchild receives the full remaining backing once;
+										vault migration grants only logical authorization there.
 									</td>
 								</tr>
 							</tbody>
@@ -8615,14 +8706,6 @@
 								<td><code>64</code></td>
 								<td>
 									Nullifier depth used to track consumed inherited-carry proofs.
-								</td>
-							</tr>
-							<tr>
-								<td><code>MAX_UNRESOLVED_EXPORT_REFS</code></td>
-								<td><code>64</code></td>
-								<td>
-									Maximum local unresolved deposit refs exported per vault per
-									migration batch.
 								</td>
 							</tr>
 						</tbody>

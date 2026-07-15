@@ -2,14 +2,11 @@
 pragma solidity 0.8.35;
 
 import { Zoltar } from '../Zoltar.sol';
-import { UniformPriceDualCapBatchAuction } from './UniformPriceDualCapBatchAuction.sol';
 import { ISecurityPool, SystemState } from './interfaces/ISecurityPool.sol';
 import { EscalationGame } from './EscalationGame.sol';
-import { MERKLE_MOUNTAIN_RANGE_MAX_PEAKS } from './EscalationGameTypes.sol';
-import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { SecurityPoolForkerStorage } from './SecurityPoolForkerStorage.sol';
-import { SecurityPoolForkerForkData } from './SecurityPoolForkerTypes.sol';
+import { EscalationForkSnapshot, SecurityPoolForkerForkData } from './SecurityPoolForkerTypes.sol';
 
 abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage {
 	Zoltar public immutable zoltar;
@@ -48,14 +45,6 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage {
 			childEscalationGame.forkResumedAt() != 0
 		) return;
 		if (child.awaitingForkContinuation()) {
-			ISecurityPool parent = child.parent();
-			if (
-				address(parent) != address(0x0) &&
-				!forkDataByPool[parent].ownFork &&
-				!childEscalationGame.isForkCarryFundingComplete()
-			) {
-				return;
-			}
 			child.setAwaitingForkContinuation(false);
 		}
 		child.resumeForkedEscalationGame();
@@ -70,18 +59,14 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage {
 			address(childEscalationGame) != address(0x0) &&
 			!childEscalationGame.forkCarrySnapshotInitialized()
 		) {
-			(
-				bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS][3] memory inheritedCarryPeaks,
-				uint256[3] memory inheritedCarryLeafCounts,
-				uint256[3] memory inheritedCarryTotals,
-				bytes32[3] memory inheritedNullifierRoots
-			) = parentEscalationGame.getForkCarrySnapshot();
+			EscalationForkSnapshot storage snapshot = escalationForkSnapshotByPool[parent];
+			require(snapshot.initialized, 'Fork snapshot missing');
 			child.initializeForkCarrySnapshotWithResolutionBalances(
-				inheritedCarryPeaks,
-				inheritedCarryLeafCounts,
-				inheritedCarryTotals,
-				[type(uint256).max, uint256(0), uint256(0)],
-				inheritedNullifierRoots
+				snapshot.carryPeaks,
+				snapshot.carryLeafCounts,
+				snapshot.carryTotals,
+				snapshot.resolutionBalances,
+				snapshot.nullifierRoots
 			);
 		}
 		_finalizeAwaitingForkContinuationIfReady(child, childEscalationGame);

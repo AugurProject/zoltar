@@ -164,13 +164,6 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		require(msg.sender == address(securityPool), 'Only pool');
 		require(forkContinuation, 'No fork mode');
 		require(!forkCarrySnapshotInitialized(), 'Snapshot initialized');
-		bool branchLocalAccounting = snapshotResolutionBalances[0] == type(uint256).max;
-		if (branchLocalAccounting) {
-			snapshotCarryTotals = [uint256(0), uint256(0), uint256(0)];
-			snapshotResolutionBalances = [uint256(0), uint256(0), uint256(0)];
-		}
-		// Defensive invariant: valid escalation-game state should never carry a positive tied leader below non-decision into a child snapshot.
-		require(!_hasInvalidTiedResolutionMaximum(snapshotResolutionBalances), 'Resolution tie');
 
 		bytes32[3] memory normalizedNullifierRoots;
 		uint256 totalCarry;
@@ -198,25 +191,9 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 			state.inheritedUnresolvedTotal = snapshotCarryTotals[outcomeIndex];
 			totalCarry += snapshotCarryTotals[outcomeIndex];
 		}
-		forkCarrySnapshotRequiresForkedEscrow = totalCarry > 0 || branchLocalAccounting;
+		forkCarrySnapshotRequiresForkedEscrow = totalCarry > 0;
 
 		emit ForkCarrySnapshotInitialized(snapshotLeafCountsInput, snapshotCarryTotals, normalizedNullifierRoots);
-	}
-
-	function _hasInvalidTiedResolutionMaximum(
-		uint256[3] memory snapshotResolutionBalances
-	) private view returns (bool) {
-		uint256 maxBalance = snapshotResolutionBalances[0];
-		if (snapshotResolutionBalances[1] > maxBalance) maxBalance = snapshotResolutionBalances[1];
-		if (snapshotResolutionBalances[2] > maxBalance) maxBalance = snapshotResolutionBalances[2];
-		if (maxBalance == 0) return false;
-		if (maxBalance >= nonDecisionThreshold) return false;
-
-		uint256 matches;
-		if (snapshotResolutionBalances[0] == maxBalance) matches += 1;
-		if (snapshotResolutionBalances[1] == maxBalance) matches += 1;
-		if (snapshotResolutionBalances[2] == maxBalance) matches += 1;
-		return matches >= 2;
 	}
 
 	function _getStableLocalParentDepositIndex(
@@ -383,6 +360,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		if (state.consumedParentDepositIndexes[stableParentDepositIndex]) return;
 		state.consumedParentDepositIndexes[stableParentDepositIndex] = true;
 		state.localUnresolvedTotal -= amount;
+		localUnresolvedPrincipalByVaultAndOutcome[depositor][outcomeIndex] -= amount;
 		uint256 nodeId = state.localNodeIds[depositIndex];
 		_clearLocalCarryLeafFromCurrentSnapshot(state, nodes[nodeId].carryLeafIndex);
 		_consumeUnresolvedRepForVault(depositor, amount);

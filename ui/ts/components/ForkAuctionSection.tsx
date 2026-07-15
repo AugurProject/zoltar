@@ -183,7 +183,7 @@ import {
 	UI_STRING_TRUTH_AUCTION_IS_ALREADY_FINALIZED,
 	UI_STRING_TRUTH_AUCTION_IS_STILL_ONGOING,
 	UI_STRING_TRUTH_AUCTION_STATUS,
-	UI_STRING_UNALLOCATED_ESCROW_CHILD_REP,
+	UI_STRING_ESCALATION_CHILD_REP_PER_SELECTED_OUTCOME,
 	UI_STRING_UNFILLED,
 	UI_STRING_UNRESOLVED_DEPOSITS_REMAIN_FOR_THIS_WALLET,
 	UI_STRING_UNRESOLVED_ESCALATION_DEPOSIT_DETAILS_ARE_UNAVAILABLE_FOR_THIS_POOL_RIGHT_NOW,
@@ -191,7 +191,9 @@ import {
 	UI_STRING_USE_UNRESOLVED_ESCALATION_MIGRATION_FOR_THIS_PARENT_POOL,
 	UI_STRING_USE_UNRESOLVED_ESCALATION_MIGRATION_TO_MOVE_LOCKED_POSITIONS_AND_VAULT_BALANCES_TOGETHER,
 	UI_STRING_UNRESOLVED_ESCALATION_MIGRATION_WITH_VAULT_DETAIL,
-	UI_STRING_UNRESOLVED_ESCALATION_SINGLE_CHILD_DETAIL,
+	UI_STRING_UNRESOLVED_ESCALATION_MULTI_CHILD_DETAIL,
+	UI_STRING_UNRESOLVED_ESCALATION_ENTITLEMENT_CAPTURED_DETAIL,
+	UI_TEMPLATE_UNRESOLVED_ESCALATION_ENTITLEMENT_ALREADY_MATERIALIZED,
 	UI_STRING_FORK_UNAVAILABLE_PLACEHOLDER,
 	UI_STRING_VAULT_MIGRATION_IS_ALREADY_COMPLETE_FOR_THIS_WALLET,
 	UI_STRING_VIEWING,
@@ -716,7 +718,10 @@ export function ForkAuctionSection({
 	const activeReportingDetails = reportingDetails?.status === 'active' ? reportingDetails : undefined
 	const isMigrationRequired = activeReportingDetails?.settlementState === 'migration-required'
 	const isMigrationExpired = activeReportingDetails?.settlementState === 'migration-expired'
-	const hasUnresolvedMigrationState = isMigrationRequired || isMigrationExpired
+	const escalationMigrationEntitlement = reportingDetails?.viewerEscalationMigrationEntitlement
+	const hasStoredEscalationMigrationEntitlement = escalationMigrationEntitlement?.initialized === true
+	const selectedOutcomeEscalationEntitlementMaterialized = escalationMigrationEntitlement?.materializedByOutcome[forkAuctionForm.selectedOutcome] === true
+	const hasUnresolvedMigrationState = isMigrationRequired || isMigrationExpired || hasStoredEscalationMigrationEntitlement
 	const selectedEscalationMigrationSide = reportingDetails?.status !== 'active' ? undefined : reportingDetails.sides.find(side => side.key === forkAuctionForm.selectedOutcome)
 	const selectedEscalationMigrationDeposits = selectedEscalationMigrationSide?.userDeposits ?? []
 	const selectedEscalationMigrationDepositIndexes = reportingForm?.selectedWithdrawDepositIndexesByOutcome[forkAuctionForm.selectedOutcome] ?? []
@@ -1067,8 +1072,10 @@ export function ForkAuctionSection({
 	})
 	const migrateUnresolvedEscalationGuardMessage = (() => {
 		if (migrationWindowClosedGuardMessage !== undefined) return migrationWindowClosedGuardMessage
-		if (!isMigrationRequired) return UI_STRING_UNRESOLVED_ESCALATION_MIGRATION_IS_UNAVAILABLE_FOR_THIS_POOL
 		if (loadingReportingDetails) return UI_STRING_LOADING_UNRESOLVED_ESCALATION_DEPOSITS
+		if (selectedOutcomeEscalationEntitlementMaterialized) return UI_TEMPLATE_UNRESOLVED_ESCALATION_ENTITLEMENT_ALREADY_MATERIALIZED(selectedOutcomeLabel)
+		if (hasStoredEscalationMigrationEntitlement) return undefined
+		if (!isMigrationRequired) return UI_STRING_UNRESOLVED_ESCALATION_MIGRATION_IS_UNAVAILABLE_FOR_THIS_POOL
 		if (activeReportingDetails === undefined) return UI_STRING_UNRESOLVED_ESCALATION_DEPOSIT_DETAILS_ARE_UNAVAILABLE_FOR_THIS_POOL_RIGHT_NOW
 		if (!hasUnresolvedMigrationDeposits) return UI_STRING_NO_UNRESOLVED_PARENT_ESCALATION_DEPOSITS_REMAIN_FOR_CONNECTED_WALLET
 		return undefined
@@ -1415,8 +1422,8 @@ export function ForkAuctionSection({
 						<MetricField label={UI_STRING_POOL_REP_AT_FORK}>
 							<CurrencyValue value={forkAuctionDetails.ownForkRepBuckets.vaultRepAtFork} suffix={UI_STRING_REP} />
 						</MetricField>
-						<MetricField label={UI_STRING_UNALLOCATED_ESCROW_CHILD_REP}>
-							<CurrencyValue value={forkAuctionDetails.ownForkRepBuckets.unallocatedEscrowChildRep} suffix={UI_STRING_REP} />
+						<MetricField label={UI_STRING_ESCALATION_CHILD_REP_PER_SELECTED_OUTCOME}>
+							<CurrencyValue value={forkAuctionDetails.ownForkRepBuckets.escalationChildRepPerSelectedOutcome} suffix={UI_STRING_REP} />
 						</MetricField>
 						<MetricField label={UI_STRING_ESCROW_SOURCE_REP_AT_FORK}>
 							<CurrencyValue value={forkAuctionDetails.ownForkRepBuckets.escrowSourceRepAtFork} suffix={UI_STRING_REP} />
@@ -1624,9 +1631,10 @@ export function ForkAuctionSection({
 										<p className='detail'>{isMigrationExpired ? UI_STRING_UNRESOLVED_ESCALATION_MIGRATION_WINDOW_CLOSED_DETAIL : UI_STRING_UNRESOLVED_ESCALATION_MIGRATION_WITH_VAULT_DETAIL}</p>
 										{loadingReportingDetails ? <p className='detail'>{UI_STRING_LOADING_UNRESOLVED_ESCALATION_DEPOSITS_FOR_THE_CONNECTED_WALLET}</p> : undefined}
 										{loadingReportingDetails || activeReportingDetails !== undefined ? undefined : <p className='detail'>{UI_STRING_UNRESOLVED_ESCALATION_DEPOSIT_DETAILS_ARE_UNAVAILABLE_FOR_THIS_POOL_RIGHT_NOW}</p>}
-										{activeReportingDetails !== undefined && !hasUnresolvedMigrationDeposits ? <p className='detail'>{UI_STRING_NO_UNRESOLVED_PARENT_ESCALATION_DEPOSITS_REMAIN_FOR_CONNECTED_WALLET}</p> : undefined}
-										<p className='detail'>{UI_STRING_UNRESOLVED_ESCALATION_SINGLE_CHILD_DETAIL}</p>
-										{activeReportingDetails === undefined
+										{hasStoredEscalationMigrationEntitlement ? <p className='detail'>{UI_STRING_UNRESOLVED_ESCALATION_ENTITLEMENT_CAPTURED_DETAIL}</p> : undefined}
+										{activeReportingDetails !== undefined && !hasUnresolvedMigrationDeposits && !hasStoredEscalationMigrationEntitlement ? <p className='detail'>{UI_STRING_NO_UNRESOLVED_PARENT_ESCALATION_DEPOSITS_REMAIN_FOR_CONNECTED_WALLET}</p> : undefined}
+										<p className='detail'>{UI_STRING_UNRESOLVED_ESCALATION_MULTI_CHILD_DETAIL}</p>
+										{activeReportingDetails === undefined || hasStoredEscalationMigrationEntitlement
 											? undefined
 											: unresolvedMigrationSides.map(side => (
 													<div className='field' key={side.key}>

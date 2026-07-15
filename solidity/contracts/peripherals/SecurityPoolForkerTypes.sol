@@ -33,3 +33,19 @@ struct OwnForkChildRepAllocation {
 	uint256 vaultChildRepUsed;
 	uint256 escrowChildRepUsed;
 }
+
+struct EscalationMigrationEntitlement {
+	uint256[3] sourcePrincipalByOutcome;
+	uint256[3] currentRepByOutcome;
+	uint256 totalCurrentRep;
+	bool initialized;
+}
+
+struct EscalationForkSnapshot {
+	bytes32[64][3] carryPeaks;
+	uint256[3] carryLeafCounts;
+	uint256[3] carryTotals;
+	uint256[3] resolutionBalances;
+	bytes32[3] nullifierRoots;
+	bool initialized;
+}

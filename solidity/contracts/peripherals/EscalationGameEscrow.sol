@@ -4,16 +4,17 @@ pragma solidity 0.8.35;
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameCarry } from './EscalationGameCarry.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
-import {
-	Deposit,
-	ForkedEscrowState,
-	LOCAL_DEPOSIT_REF_INDEX_MASK,
-	LOCAL_DEPOSIT_REF_OUTCOME_SHIFT,
-	MAX_UNRESOLVED_EXPORT_REFS,
-	OutcomeState
-} from './EscalationGameTypes.sol';
+import { ForkedEscrowState, OutcomeState } from './EscalationGameTypes.sol';
 
 abstract contract EscalationGameEscrow is EscalationGameCarry {
+	function getLocalUnresolvedPrincipalByVaultAndOutcome(
+		address vault,
+		BinaryOutcomes.BinaryOutcome outcome
+	) external view returns (uint256) {
+		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
+		return localUnresolvedPrincipalByVaultAndOutcome[vault][uint8(outcome)];
+	}
+
 	function recordForkedEscrowForOutcome(
 		address depositor,
 		BinaryOutcomes.BinaryOutcome outcome,
@@ -27,12 +28,6 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		ForkedEscrowState storage state = _recordForkedEscrow(depositor, outcome, sourcePrincipal, childRepAmount);
 		OutcomeState storage outcomeStateForEscrow = outcomeState[uint8(outcome)];
 		if (forkCarrySnapshotRequiresForkedEscrow) {
-			if (
-				outcomeStateForEscrow.forkedEscrowSourcePrincipalTotal == outcomeStateForEscrow.inheritedUnresolvedTotal
-			) {
-				outcomeStateForEscrow.balance += sourcePrincipal;
-				outcomeStateForEscrow.inheritedUnresolvedTotal += sourcePrincipal;
-			}
 			outcomeStateForEscrow.forkedEscrowSourcePrincipalTotal += sourcePrincipal;
 		}
 		uint256 outcomeBalance = outcomeStateForEscrow.balance;
@@ -60,17 +55,17 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		return (state.sourcePrincipal, state.sourcePrincipalClaimed, state.childRep, state.childRepClaimed);
 	}
 
-	function exportVaultUnresolvedDepositAmounts(
+	function exportVaultUnresolvedTotals(
 		address vault,
 		address repReceiver
 	) external onlySecurityPoolOrForker returns (uint256[3] memory principalByOutcome) {
-		(, principalByOutcome) = _exportVaultUnresolvedDepositBatchDetailed(vault, repReceiver, true);
+		return _exportVaultUnresolvedTotals(vault, repReceiver, true);
 	}
 
-	function exportVaultUnresolvedDepositAmountsWithoutTransfer(
+	function exportVaultUnresolvedTotalsWithoutTransfer(
 		address vault
 	) external onlySecurityPoolOrForker returns (uint256[3] memory principalByOutcome) {
-		(, principalByOutcome) = _exportVaultUnresolvedDepositBatchDetailed(vault, address(0x0), false);
+		return _exportVaultUnresolvedTotals(vault, address(0x0), false);
 	}
 
 	function exportForkedEscrowByOutcome(
@@ -93,25 +88,6 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		returns (uint256[3] memory sourcePrincipalByOutcome, uint256[3] memory childRepByOutcome)
 	{
 		return _exportForkedEscrowByOutcome(vault, address(0x0), false);
-	}
-
-	function hasUnexportedLocalDepositRefs(address vault) external view returns (bool) {
-		return unresolvedLocalDepositExportCursorByVault[vault] < unresolvedLocalDepositRefsByVault[vault].length;
-	}
-
-	function hasUnexportedForkedEscrow(address vault) external view returns (bool) {
-		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
-			ForkedEscrowState storage state = forkedEscrowByVaultAndOutcome[vault][outcomeIndex];
-			if (state.sourcePrincipal > state.sourcePrincipalClaimed || state.childRep > state.childRepClaimed) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	function _encodeLocalDepositRef(uint8 outcomeIndex, uint256 depositIndex) internal pure returns (uint256) {
-		require(depositIndex <= LOCAL_DEPOSIT_REF_INDEX_MASK, 'Deposit index too large');
-		return (uint256(outcomeIndex) << LOCAL_DEPOSIT_REF_OUTCOME_SHIFT) | depositIndex;
 	}
 
 	function _consumeForkedEscrow(
@@ -165,40 +141,26 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		totalEscrowedRep += childRepAmount;
 	}
 
-	function _exportVaultUnresolvedDepositBatchDetailed(
+	function _exportVaultUnresolvedTotals(
 		address vault,
 		address repReceiver,
 		bool transferRep
-	) private returns (uint256 principalToTransfer, uint256[3] memory principalByOutcome) {
-		uint256[] storage depositRefs = unresolvedLocalDepositRefsByVault[vault];
-		uint256 cursor = unresolvedLocalDepositExportCursorByVault[vault];
-		uint256 maxRefIndex = cursor + MAX_UNRESOLVED_EXPORT_REFS;
-		if (maxRefIndex > depositRefs.length) maxRefIndex = depositRefs.length;
-		for (uint256 refIndex = cursor; refIndex < maxRefIndex; refIndex++) {
-			(uint8 outcomeIndex, uint256 depositIndex) = _decodeLocalDepositRef(depositRefs[refIndex]);
-			OutcomeState storage state = outcomeState[outcomeIndex];
-			if (depositIndex >= state.deposits.length) continue;
-			Deposit memory deposit = state.deposits[depositIndex];
-			if (deposit.amount == 0 || deposit.depositor != vault) continue;
-			Deposit memory consumedDeposit = _consumeLocalDeposit(outcomeIndex, depositIndex);
-			state.balance -= consumedDeposit.amount;
-			principalToTransfer += consumedDeposit.amount;
-			principalByOutcome[outcomeIndex] += consumedDeposit.amount;
+	) private returns (uint256[3] memory principalByOutcome) {
+		require(vault != address(0x0), 'Vault is zero');
+		require(!localUnresolvedTotalsExportedByVault[vault], 'Vault totals exported');
+		localUnresolvedTotalsExportedByVault[vault] = true;
+		uint256 principalToTransfer;
+		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
+			uint256 principal = localUnresolvedPrincipalByVaultAndOutcome[vault][outcomeIndex];
+			principalByOutcome[outcomeIndex] = principal;
+			principalToTransfer += principal;
+			delete localUnresolvedPrincipalByVaultAndOutcome[vault][outcomeIndex];
 		}
-		unresolvedLocalDepositExportCursorByVault[vault] = maxRefIndex;
-		emit LocalDepositsExported(
-			vault,
-			repReceiver,
-			principalByOutcome,
-			principalToTransfer,
-			maxRefIndex,
-			transferRep
-		);
-		if (principalToTransfer == 0) return (0, principalByOutcome);
+		emit VaultUnresolvedTotalsExported(vault, repReceiver, principalByOutcome, principalToTransfer, transferRep);
+		if (principalToTransfer == 0) return principalByOutcome;
+		_consumeUnresolvedRepForVault(vault, principalToTransfer);
 		_consumeEscrowedRepForVault(vault, principalToTransfer);
-		if (transferRep) {
-			_safeTransferRep(repReceiver, principalToTransfer);
-		}
+		if (transferRep) _safeTransferRep(repReceiver, principalToTransfer);
 	}
 
 	function _exportForkedEscrowByOutcome(
@@ -238,13 +200,5 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		if (transferRep) {
 			_safeTransferRep(repReceiver, totalChildRepToTransfer);
 		}
-	}
-
-	function _decodeLocalDepositRef(
-		uint256 depositRef
-	) private pure returns (uint8 outcomeIndex, uint256 depositIndex) {
-		outcomeIndex = uint8(depositRef >> LOCAL_DEPOSIT_REF_OUTCOME_SHIFT);
-		require(outcomeIndex < 3, 'Bad deposit ref outcome');
-		depositIndex = depositRef & LOCAL_DEPOSIT_REF_INDEX_MASK;
 	}
 }

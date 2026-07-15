@@ -19,6 +19,22 @@ const QUESTION_OUTCOME_ABI = [
 		type: 'function',
 	},
 ] as const
+const ESCALATION_MIGRATION_ENTITLEMENT_STATUS_ABI = [
+	{
+		inputs: [
+			{ name: 'securityPool', type: 'address' },
+			{ name: 'vault', type: 'address' },
+		],
+		name: 'getEscalationMigrationEntitlementStatus',
+		outputs: [
+			{ name: 'initialized', type: 'bool' },
+			{ name: 'totalCurrentRep', type: 'uint256' },
+			{ name: 'materializedByOutcome', type: 'bool[3]' },
+		],
+		stateMutability: 'view',
+		type: 'function',
+	},
+] as const
 const CONTRACT_PAGE_SIZE = 30n
 const NULLIFIER_DEPTH = 64
 const CARRY_LEAF_ABI = parseAbiParameters('address depositor, uint8 outcome, uint256 amount, uint256 parentDepositIndex, uint256 cumulativeAmount, uint256 sourceNodeId')
@@ -442,16 +458,26 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 	if (accountAddress === undefined)
 		return {
 			viewerVaultAvailableEscalationRep: undefined,
+			viewerEscalationMigrationEntitlement: undefined,
 			viewerVaultExists: false,
 			viewerVaultEscrowedRep: undefined,
 			viewerVaultRepDepositShare: undefined,
 		}
-	const viewerVaultTuple = await client.readContract({
-		abi: peripherals_SecurityPool_SecurityPool.abi,
-		functionName: 'securityVaults',
-		address: securityPoolAddress,
-		args: [accountAddress],
-	})
+	const [viewerVaultTuple, escalationMigrationEntitlementTuple] = await Promise.all([
+		client.readContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'securityVaults',
+			address: securityPoolAddress,
+			args: [accountAddress],
+		}),
+		client.readContract({
+			abi: ESCALATION_MIGRATION_ENTITLEMENT_STATUS_ABI,
+			functionName: 'getEscalationMigrationEntitlementStatus',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [securityPoolAddress, accountAddress],
+		}),
+	])
+	const [entitlementInitialized, entitlementTotalCurrentRep, materializedByOutcome] = escalationMigrationEntitlementTuple
 	const viewerVaultTuples = requireSecurityVaultTupleArray([viewerVaultTuple], 'viewer security vault tuple')
 	const [viewerPoolOwnership, viewerSecurityBondAllowance, viewerUnpaidEthFees, viewerFeeIndex] = viewerVaultTuples[0] ?? []
 	if (typeof viewerPoolOwnership !== 'bigint' || typeof viewerSecurityBondAllowance !== 'bigint' || typeof viewerUnpaidEthFees !== 'bigint' || typeof viewerFeeIndex !== 'bigint') throw new Error('Unexpected viewer security vault tuple response')
@@ -482,6 +508,15 @@ async function loadViewerReportingVaultState(client: ReadClient, securityPoolAdd
 	const viewerVaultAvailableEscalationRep = viewerVaultRepDepositShare
 	return {
 		viewerVaultAvailableEscalationRep,
+		viewerEscalationMigrationEntitlement: {
+			initialized: entitlementInitialized,
+			materializedByOutcome: {
+				invalid: materializedByOutcome[0],
+				yes: materializedByOutcome[1],
+				no: materializedByOutcome[2],
+			},
+			totalCurrentRep: entitlementTotalCurrentRep,
+		},
 		viewerVaultExists,
 		viewerVaultEscrowedRep,
 		viewerVaultRepDepositShare,
@@ -649,17 +684,32 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		accountAddress === undefined || parentSecurityPoolAddress === zeroAddress || !useCarrySnapshot ? Promise.resolve([]) : loadForkCarriedEscalationDepositsFromParentSnapshot(client, escalationGameAddress, parentSecurityPoolAddress, 'yes', accountAddress),
 		accountAddress === undefined || parentSecurityPoolAddress === zeroAddress || !useCarrySnapshot ? Promise.resolve([]) : loadForkCarriedEscalationDepositsFromParentSnapshot(client, escalationGameAddress, parentSecurityPoolAddress, 'no', accountAddress),
 	])
+	const viewerEntitlementCaptured = viewerVaultState.viewerEscalationMigrationEntitlement?.initialized === true
 	const sides: EscalationSide[] = [
 		{
 			balance: balances[0] ?? 0n,
 			deposits: invalidDeposits,
-			importedUserDeposits: invalidParentSnapshotDeposits,
+			importedUserDeposits: viewerEntitlementCaptured ? [] : invalidParentSnapshotDeposits,
 			key: 'invalid',
 			label: getEscalationSideLabel('invalid'),
-			userDeposits: accountAddress === undefined ? [] : invalidDeposits.filter(deposit => deposit.depositor === accountAddress),
+			userDeposits: accountAddress === undefined || viewerEntitlementCaptured ? [] : invalidDeposits.filter(deposit => deposit.depositor === accountAddress),
 		},
-		{ balance: balances[1] ?? 0n, deposits: yesDeposits, importedUserDeposits: yesParentSnapshotDeposits, key: 'yes', label: getEscalationSideLabel('yes'), userDeposits: accountAddress === undefined ? [] : yesDeposits.filter(deposit => deposit.depositor === accountAddress) },
-		{ balance: balances[2] ?? 0n, deposits: noDeposits, importedUserDeposits: noParentSnapshotDeposits, key: 'no', label: getEscalationSideLabel('no'), userDeposits: accountAddress === undefined ? [] : noDeposits.filter(deposit => deposit.depositor === accountAddress) },
+		{
+			balance: balances[1] ?? 0n,
+			deposits: yesDeposits,
+			importedUserDeposits: viewerEntitlementCaptured ? [] : yesParentSnapshotDeposits,
+			key: 'yes',
+			label: getEscalationSideLabel('yes'),
+			userDeposits: accountAddress === undefined || viewerEntitlementCaptured ? [] : yesDeposits.filter(deposit => deposit.depositor === accountAddress),
+		},
+		{
+			balance: balances[2] ?? 0n,
+			deposits: noDeposits,
+			importedUserDeposits: viewerEntitlementCaptured ? [] : noParentSnapshotDeposits,
+			key: 'no',
+			label: getEscalationSideLabel('no'),
+			userDeposits: accountAddress === undefined || viewerEntitlementCaptured ? [] : noDeposits.filter(deposit => deposit.depositor === accountAddress),
+		},
 	]
 	let settlementState: ReportingSettlementState = 'locked'
 	if (normalizedQuestionOutcome !== 'none' && systemState === 'operational') {

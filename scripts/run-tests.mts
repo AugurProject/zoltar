@@ -39,8 +39,23 @@ args.push(...passthroughArgs)
 
 await cleanupStaleAnvilState('before')
 
+// Build shared production assets before parallel tests so productionBuild.test.ts
+// does not clear and regenerate ui/vendor while sharedAssets.test.ts traverses it.
+const productionBuild = Bun.spawn({
+	cmd: [process.execPath, 'run', 'ui:build:prod'],
+	stderr: 'inherit',
+	stdin: 'inherit',
+	stdout: 'inherit',
+})
+const productionBuildExitCode = await productionBuild.exited
+if (productionBuildExitCode !== 0) {
+	await cleanupStaleAnvilState('after')
+	process.exit(productionBuildExitCode)
+}
+
 const child = Bun.spawn({
 	cmd: [process.execPath, ...args],
+	env: { ...process.env, ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: '1' },
 	stderr: 'inherit',
 	stdin: 'inherit',
 	stdout: 'inherit',

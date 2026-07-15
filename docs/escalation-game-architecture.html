@@ -126,8 +126,8 @@
 						</tr>
 						<tr>
 							<td><code>EscalationGameEscrow.sol</code></td>
-							<td>Forked escrow records, vault export cursors, batch export bounds, and child REP accounting.</td>
-							<td>Escrow export has its own mutation surface and batching risks.</td>
+							<td>Forked escrow records, per-vault aggregate outcome totals, one-time export state, and child REP accounting.</td>
+							<td>Escrow export stays constant-size because it returns three logical outcome totals without moving tokens or scanning deposit history; aggregate physical REP was locked at fork initialization.</td>
 						</tr>
 						<tr>
 							<td><code>EscalationGameSettlement.sol</code></td>
@@ -163,9 +163,11 @@
 				<h2>Accounting Invariants</h2>
 				<p>
 					Safe refactors keep the local REP and unresolved-deposit counters in
-					sync. The shortest mental model is that every active lock must still
-					appear in both its vault-local counter and the corresponding global
-					total until settlement, claim, or export consumes it.
+					sync. Before aggregate export, every active vault lock appears in both
+					its vault-local counter and the corresponding global total. Aggregate
+					export clears those counters and the parent vault's escrow, while the
+					individual deposit rows remain only as canonical proof material and no
+					longer represent parent logical authorization or physical escrow.
 				</p>
 				<p>
 					The stable parent deposit identifier has two domains. In ordinary
@@ -203,11 +205,15 @@
 						</tr>
 						<tr>
 							<td>Active local deposit</td>
-							<td>A local deposit stays active while <code>Deposit.amount &gt; 0</code>.</td>
+							<td>Before aggregate export, <code>Deposit.amount &gt; 0</code> denotes an active local deposit. After <code>localUnresolvedTotalsExportedByVault[vault]</code> is set, retained nonzero rows are canonical proof material only, not active parent locks.</td>
 						</tr>
 						<tr>
 							<td>Local deposit consumption</td>
-							<td>Settlement, claim, or export must zero the amount, mark the stable parent deposit index consumed, reduce unresolved totals, and update the current carry snapshot.</td>
+							<td>Individual settlement, claim, or index-selected export must zero that deposit, mark its stable parent deposit index consumed, reduce unresolved totals, and update the current carry snapshot.</td>
+						</tr>
+						<tr>
+							<td>Aggregate vault export</td>
+							<td>The fixed-cost migration export clears only the vault's three outcome aggregates and escrow counters. It preserves individual deposit rows and the canonical carry commitment for proof verification in selected children.</td>
 						</tr>
 						<tr>
 							<td>Inherited settlement order</td>
@@ -217,12 +223,16 @@
 							<td>Forked escrow bounds</td>
 							<td>Forked escrow settlement releases child REP proportionally against source principal, and claimed counters never exceed recorded principal or child REP.</td>
 						</tr>
+						<tr>
+							<td>Direct parent claim identity</td>
+							<td>A direct own-fork claim records its stable parent deposit index in the shared forker. Every child checks that record before consuming its own carry nullifier, including children created after the claim.</td>
+						</tr>
 					</tbody>
 				</table>
 				<p>
 					The highest-risk paths already have regression coverage. Scenario tests
-					exercise consumed local carry leaves and bounded unresolved-vault
-					export, while
+					exercise consumed local carry leaves, constant-size unresolved-vault
+					export, and lazy child materialization, while
 					<code>escalationGameInterfaceRegression.test.ts</code> snapshots the
 					inherited storage layout so refactors do not silently move live slots.
 				</p>
@@ -287,19 +297,19 @@
 					<tbody>
 						<tr>
 							<td>Creation bytecode</td>
-							<td><code>27,625</code> bytes</td>
+							<td><code>27,137</code> bytes</td>
 						</tr>
 						<tr>
 							<td>Deployed bytecode</td>
-							<td><code>24,565</code> bytes</td>
+							<td><code>24,070</code> bytes</td>
 						</tr>
 						<tr>
 							<td>Project deployed-bytecode budget headroom</td>
-							<td><code>11</code> bytes below <code>24,576</code></td>
+							<td><code>506</code> bytes below <code>24,576</code></td>
 						</tr>
 						<tr>
 							<td>EIP-170 headroom</td>
-							<td><code>11</code> bytes below <code>24,576</code></td>
+							<td><code>506</code> bytes below <code>24,576</code></td>
 						</tr>
 					</tbody>
 				</table>

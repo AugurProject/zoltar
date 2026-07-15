@@ -88,6 +88,7 @@ contract EscalationGame is EscalationGameSettlement {
 		totalEscrowedRep += effectiveDeposit;
 		unresolvedRepByVault[depositor] += effectiveDeposit;
 		totalLocalUnresolvedRep += effectiveDeposit;
+		localUnresolvedPrincipalByVaultAndOutcome[depositor][uint8(outcome)] += effectiveDeposit;
 
 		Deposit memory deposit;
 		deposit.depositor = depositor;
@@ -98,7 +99,6 @@ contract EscalationGame is EscalationGameSettlement {
 		deposit.cumulativeAmount = newBalance;
 		selectedOutcomeState.deposits.push(deposit);
 		uint256 depositIndex = selectedOutcomeState.deposits.length - 1;
-		unresolvedLocalDepositRefsByVault[depositor].push(_encodeLocalDepositRef(uint8(outcome), depositIndex));
 		uint256 stableParentDepositIndex = _getStableLocalParentDepositIndex(uint8(outcome), depositIndex);
 		parentDepositIndex = stableParentDepositIndex;
 		uint256 nodeId = nextNodeId;

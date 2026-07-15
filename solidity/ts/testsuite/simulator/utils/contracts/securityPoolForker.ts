@@ -43,7 +43,7 @@ type SecurityPoolForkerForkData = {
 
 type OwnForkRepBuckets = {
 	vaultRepAtFork: bigint
-	unallocatedEscrowChildRep: bigint
+	escalationChildRepPerSelectedOutcome: bigint
 	escrowSourceRepAtFork: bigint
 }
 
@@ -235,7 +235,7 @@ export const getOwnForkRepBuckets = async (client: ReadClient, securityPoolAddre
 	)
 	return {
 		vaultRepAtFork: requireBigInt(repBuckets[0], 'Own fork REP bucket vault REP'),
-		unallocatedEscrowChildRep: requireBigInt(repBuckets[1], 'Own fork REP bucket unallocated child REP'),
+		escalationChildRepPerSelectedOutcome: requireBigInt(repBuckets[1], 'Own fork REP bucket per selected outcome'),
 		escrowSourceRepAtFork: requireBigInt(repBuckets[2], 'Own fork REP bucket escrow source REP'),
 	}
 }

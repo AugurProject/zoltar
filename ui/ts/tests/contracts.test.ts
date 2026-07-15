@@ -83,8 +83,6 @@ function createMockWriteClient(onSendTransaction: (request: { data?: Hex | undef
 		if (request.functionName === 'getVaultCount') return 0n
 		if (request.functionName === 'escalationGame') return escalationGameAddress
 		if (request.functionName === 'getDepositsByOutcomeLength') return 0n
-		if (request.functionName === 'hasUnexportedLocalDepositRefs') return false
-		if (request.functionName === 'hasUnexportedForkedEscrow') return false
 		throw new Error(`Unexpected readContract function: ${request.functionName}`)
 	})
 
@@ -353,7 +351,7 @@ describe('contracts helpers', () => {
 		expect(details.auctionableRepAtFork).toBe(30n)
 		expect(details.ownForkRepBuckets).toEqual({
 			vaultRepAtFork: 12n,
-			unallocatedEscrowChildRep: 9n,
+			escalationChildRepPerSelectedOutcome: 9n,
 			escrowSourceRepAtFork: 18n,
 		})
 	})
@@ -1008,7 +1006,7 @@ describe('contracts helpers', () => {
 		expect(decodedCall.args).toEqual([7n])
 	})
 
-	test('loadReportingDetails reports already-unlocked pool REP without subtracting escrow again', async () => {
+	test('loadReportingDetails reports unlocked pool REP and hides exported parent deposits from settlement', async () => {
 		const viewerAddress = getAddress('0x00000000000000000000000000000000000000ed')
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const unlockedPoolClaim = 70n
@@ -1041,15 +1039,20 @@ describe('contracts helpers', () => {
 				if (request.functionName === 'getEscalationGameEndDate') return 150n
 				if (request.functionName === 'getQuestionOutcome') return 3
 				if (request.functionName === 'getForkTime') return 0n
-				if (request.functionName === 'hasReachedNonDecision') return false
+				if (request.functionName === 'hasReachedNonDecision') return true
 				if (request.functionName === 'forkContinuation') return false
 				if (request.functionName === 'getForkThreshold') return 100n
 				if (request.functionName === 'escalationGame') return escalationGameAddress
 				if (request.functionName === 'escrowedRepByVault') return escrowedRep
 				if (request.functionName === 'securityVaults') return [100n, 0n, 0n, 0n, 0n]
+				if (request.functionName === 'getEscalationMigrationEntitlementStatus') return [true, escrowedRep, [false, true, false]]
 				if (request.functionName === 'poolOwnershipToRep') return unlockedPoolClaim
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
-				if (request.functionName === 'getDepositsByOutcome') return []
+				if (request.functionName === 'getDepositsByOutcome') {
+					const args = request.args
+					if (!Array.isArray(args) || typeof args[0] !== 'number') throw new Error('Expected deposit outcome args')
+					return args[0] === 1 ? [{ amount: escrowedRep, cumulativeAmount: escrowedRep, depositor: viewerAddress }] : []
+				}
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			}),
 		} as unknown as Parameters<typeof loadReportingDetails>[0]
@@ -1060,6 +1063,15 @@ describe('contracts helpers', () => {
 		expect(details.viewerVaultRepDepositShare).toBe(unlockedPoolClaim)
 		expect(details.viewerVaultEscrowedRep).toBe(escrowedRep)
 		expect(details.viewerVaultAvailableEscalationRep).toBe(unlockedPoolClaim)
+		expect(details.viewerEscalationMigrationEntitlement).toEqual({
+			initialized: true,
+			materializedByOutcome: { invalid: false, yes: true, no: false },
+			totalCurrentRep: escrowedRep,
+		})
+		const yesSide = details.sides.find(side => side.key === 'yes')
+		if (yesSide === undefined) throw new Error('Expected yes side')
+		expect(yesSide.deposits).toHaveLength(1)
+		expect(yesSide.userDeposits).toEqual([])
 	})
 
 	test('loadReportingDetails marks unrelated external-fork unresolved parent deposits as migration-required, not withdrawable', async () => {
@@ -1099,6 +1111,7 @@ describe('contracts helpers', () => {
 				if (request.functionName === 'escalationGame') return escalationGameAddress
 				if (request.functionName === 'escrowedRepByVault') return 9n
 				if (request.functionName === 'securityVaults') return [0n, 0n, 0n, 0n, 0n]
+				if (request.functionName === 'getEscalationMigrationEntitlementStatus') return [false, 0n, [false, false, false]]
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				if (request.functionName === 'getDepositsByOutcome') {
 					const args = request.args
@@ -1161,6 +1174,7 @@ describe('contracts helpers', () => {
 				if (request.functionName === 'escalationGame') return escalationGameAddress
 				if (request.functionName === 'escrowedRepByVault') return 9n
 				if (request.functionName === 'securityVaults') return [0n, 0n, 0n, 0n, 0n]
+				if (request.functionName === 'getEscalationMigrationEntitlementStatus') return [false, 0n, [false, false, false]]
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				if (request.functionName === 'getDepositsByOutcome') {
 					const args = request.args
