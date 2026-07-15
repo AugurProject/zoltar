@@ -4,12 +4,21 @@ Root `../AGENTS.md` applies first. This file adds design, accessibility, interac
 
 ## Design intent
 
-The UI is a restrained operations interface: dark technical palette, balanced density, serious utility-first tone, strong scanability, low decorative chrome, and one coherent system across routes.
+The UI is a restrained operations interface: dark technical palette, balanced density, serious utility-first tone, strong scanability, low decorative chrome, and one coherent system across routes. Teach workflows visually so users can understand goals, progress, state, and consequences with minimal reading.
 
 - Prefer hierarchy, alignment, rhythm, and semantic structure over visual effects.
 - Keep routes structurally consistent without forcing every workflow into an identical layout.
 - Do not introduce a page-specific visual language unless the user explicitly requests it.
 - Treat route composition and state transitions as first-order UI behavior, not cosmetic cleanup.
+
+## Visual explanation and progressive teaching
+
+- Show state, sequence, and consequence before explaining them in prose. Prefer progress indicators, state maps, timelines, previews, diagrams, and compact before/after comparisons when they communicate the workflow more clearly.
+- Use consistent semantic color, short badges, labeled icons, and shape to make status and available actions recognizable at a glance. Color or icons must not be the only cue.
+- Borrow the clarity of a well-designed game: establish the immediate goal, reveal complexity in stages, preview the effect of an action, respond immediately, and make success unmistakable. Do not add points, rewards, fantasy language, or decorative game theming unless the product calls for it.
+- Use motion to explain causality, progression, or a change of state. Keep animation brief, interruptible, free of avoidable layout shift, and paired with an equivalent reduced-motion presentation.
+- Prefer progressive disclosure and detail on demand over paragraphs of instructions. Do not hide information required to make a safe decision exclusively in a tooltip, hover state, or animation.
+- Keep icons familiar and labeled when their meaning could be ambiguous. Give icon-only controls accessible names.
 
 ## Route and surface structure
 
@@ -78,11 +87,12 @@ Keep cleanup bounded to the edited component, route, and directly shared primiti
 
 ## Copy
 
+- Use as little text as the user needs to act safely and confidently. Favor short labels, a direct action, and at most a one-line reason when visual structure already explains the rest.
 - Use concise operational language led by the managed object or action.
 - Use one term for one concept across routes.
 - Prefer direct verbs for actions and direct nouns for labels.
 - Avoid novelty copy when standard operational wording is clearer.
-- Do not use copy to compensate for weak hierarchy or unclear state.
+- Do not use paragraphs, repeated helper text, or tooltips to compensate for weak hierarchy or unclear state; improve the visual explanation first.
 
 ## Responsive behavior
 
@@ -98,6 +108,8 @@ For relevant UI changes, verify:
 
 - route hierarchy and surface roles
 - component reuse without semantic distortion
+- visual explanation of goals, progress, state, and consequences with minimal copy
+- meaningful use of color, badges, labeled icons, previews, and motion where they improve comprehension
 - keyboard operation, focus, accessible names, and non-color status cues
 - empty, loading, disabled, pending, success, and error states
 - transaction prerequisite and duplicate-submission guards

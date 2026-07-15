@@ -1,6 +1,6 @@
 name = "textReview"
 description = "Read-only documentation reviewer for reader journey, lifecycle and contract accuracy, mathematics, examples, security assumptions, and validation."
-model = "gpt-5.6-sol"
+model = "gpt-5.5"
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 nickname_candidates = ["Text", "Flow", "Docs"]

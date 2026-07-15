@@ -3,6 +3,7 @@ import * as path from 'node:path'
 import * as url from 'node:url'
 
 const supportedModelReasoningEfforts = new Map([
+	['gpt-5.5', new Set(['high'])],
 	['gpt-5.6-luna', new Set(['low', 'medium', 'high', 'xhigh', 'max'])],
 	['gpt-5.6-sol', new Set(['low', 'medium', 'high', 'xhigh', 'max', 'ultra'])],
 	['gpt-5.6-terra', new Set(['low', 'medium', 'high', 'xhigh', 'max', 'ultra'])],
@@ -43,7 +44,7 @@ function requiredString(config: Record<string, unknown>, key: string, filePath: 
 	return value
 }
 
-export function validateAgentConfigSource(filePath: string, source: string): AgentValidation {
+function validateAgentConfigSource(filePath: string, source: string): AgentValidation {
 	const errors: string[] = []
 	const config = parseToml(filePath, source, errors)
 	if (config === undefined) return { errors, name: undefined }
@@ -75,7 +76,7 @@ export function validateAgentConfigSource(filePath: string, source: string): Age
 	return { errors, name }
 }
 
-export function validateProjectAgentSources(agentSources: ReadonlyArray<{ filePath: string; source: string }>, rootInstructions: string, reviewContract: string, projectConfigSource: string) {
+function validateProjectAgentSources(agentSources: ReadonlyArray<{ filePath: string; source: string }>, rootInstructions: string, reviewContract: string, projectConfigSource: string) {
 	const errors: string[] = []
 	const names = new Map<string, string>()
 	const fileNames = new Set(agentSources.map(({ filePath }) => path.basename(filePath)))
