@@ -91,6 +91,7 @@ export const unknown = 'Unknown'
 export const availableNow = 'Available now'
 export const blocked = 'Blocked'
 export const formatCopyAddressValue = (address: CopyTemplateValue) => `Copy address ${address}`
+export const formatCopyIdentifierValue = (identifier: CopyTemplateValue) => `Copy identifier ${identifier}`
 export const metricUnavailablePlaceholder = '—'
 export const loadMore = 'Load More'
 export const nextPage = 'Next Page'

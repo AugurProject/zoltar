@@ -28,8 +28,9 @@ function buildGroupedOptions<TValue extends string>(groups: ViewTabsProps<TValue
 	})
 }
 
-export function ViewTabs<TValue extends string>({ ariaLabel, className = '', groups, onChange, options, orientation = 'horizontal', size = 'default', value, variant = 'subroute' }: ViewTabsProps<TValue>) {
+export function ViewTabs<TValue extends string>({ ariaLabel, className = '', groups, onChange, options, orientation = 'horizontal', semantics, size = 'default', value, variant = 'subroute' }: ViewTabsProps<TValue>) {
 	const indexedOptions = options.map((option, index) => ({ index, option }))
+	const resolvedSemantics = semantics ?? (options.every(option => option.panelId !== undefined) ? 'tabs' : 'switcher')
 	const groupedOptions = buildGroupedOptions(groups, indexedOptions)
 	const renderedOptions = groupedOptions === undefined ? indexedOptions : groupedOptions.flatMap(group => group.options)
 	const moveSelection = (currentIndex: number, direction: 'next' | 'previous' | 'first' | 'last') => {
@@ -66,21 +67,24 @@ export function ViewTabs<TValue extends string>({ ariaLabel, className = '', gro
 	const renderOption = (option: ViewTabOption<TValue>, index: number) => {
 		const active = option.value === value
 		const tabId = option.id ?? `${ariaLabel.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-')}-${String(option.value).toLowerCase()}-tab`
-		const commonProps = {
+		const sharedProps = {
 			className: `view-tab ${active ? 'active' : ''}`.trim(),
 			id: tabId,
-			role: 'tab',
-			'aria-controls': option.panelId,
 			'aria-description': option.reason,
-			'aria-selected': active,
-			tabIndex: active ? 0 : -1,
 			title: option.reason,
-			onClick: () => {
+			onClick: (event: MouseEvent) => {
 				if (option.disabled) return
+				if (option.href !== undefined && (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)) return
 				onChange(option.value)
 			},
-			onKeyDown: (event: KeyboardEvent) => handleKeyDown(index, event),
+			onKeyDown: resolvedSemantics === 'navigation' ? undefined : (event: KeyboardEvent) => handleKeyDown(index, event),
 		} as const
+		const semanticProps = (() => {
+			if (resolvedSemantics === 'navigation') return { 'aria-current': active ? ('page' as const) : undefined }
+			if (resolvedSemantics === 'tabs') return { 'aria-controls': option.panelId, 'aria-selected': active, role: 'tab' as const, tabIndex: active ? 0 : -1 }
+			return { 'aria-pressed': active }
+		})()
+		const commonProps = { ...sharedProps, ...semanticProps }
 		if (option.href !== undefined && option.disabled !== true)
 			return (
 				<a key={option.value} {...commonProps} href={option.href}>
@@ -101,8 +105,13 @@ export function ViewTabs<TValue extends string>({ ariaLabel, className = '', gro
 			</div>
 		))
 	}
+	const containerRole = ((): 'group' | 'tablist' | undefined => {
+		if (resolvedSemantics === 'navigation') return undefined
+		if (resolvedSemantics === 'tabs') return 'tablist'
+		return 'group'
+	})()
 	return (
-		<div className={`view-tabs ${variant} ${className}`.trim()} data-orientation={orientation} data-size={size} role='tablist' aria-label={ariaLabel}>
+		<div className={`view-tabs ${variant} ${className}`.trim()} data-orientation={orientation} data-size={size} role={containerRole} aria-label={containerRole === undefined ? undefined : ariaLabel}>
 			{renderOptions()}
 		</div>
 	)

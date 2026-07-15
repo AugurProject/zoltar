@@ -48,11 +48,15 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(routeSurface.classList.contains('surface')).toBe(true)
 		expect(routeSurface.classList.contains('default')).toBe(false)
 		expect(document.body.querySelector('.sticky-object-context.context-strip')).not.toBeNull()
+		const contextDetails = document.body.querySelector('.selected-pool-context-details')
+		if (!(contextDetails instanceof HTMLElement) || contextDetails.tagName !== 'DETAILS') throw new Error('Expected collapsible selected-pool context')
+		expect(contextDetails.hasAttribute('open')).toBe(false)
+		expect(contextDetails.querySelector('summary')?.textContent).toBe('Pool context and metrics')
 		expect(document.body.querySelectorAll('.selected-pool-workflow-content > .section-block.default')).toHaveLength(0)
 		expectSectionVariant('Vault Operations', 'plain')
 
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('tab', { name: 'Directory' }))
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Directory' }))
 		})
 		expectSectionVariant('Vault Directory', 'embedded')
 	})
@@ -105,13 +109,13 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		await renderWorkflow(createSecurityPoolWorkflowProps())
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('tablist', { name: 'Selected pool views' })).not.toBeNull()
+		expect(documentQueries.getByRole('group', { name: 'Selected pool views' })).not.toBeNull()
 		const secondaryGroup = documentQueries.getByRole('group', { name: 'Additional pool actions' })
-		expect(within(secondaryGroup).getByRole('tab', { name: 'Staged Operations' })).not.toBeNull()
-		expect(within(secondaryGroup).getByRole('tab', { name: 'Open Oracle' })).not.toBeNull()
+		expect(within(secondaryGroup).getByRole('button', { name: 'Staged Operations' })).not.toBeNull()
+		expect(within(secondaryGroup).getByRole('button', { name: 'Open Oracle' })).not.toBeNull()
 
 		for (const label of ['Vaults', 'Shares', 'Reporting', 'Fork & Migration', 'Staged Operations', 'Open Oracle']) {
-			const button = documentQueries.getByRole('tab', { name: label }) as HTMLButtonElement
+			const button = documentQueries.getByRole('button', { name: label }) as HTMLButtonElement
 			expect(button.disabled).toBe(true)
 			expect(button.title).toBe('Load a pool before using pool actions.')
 		}
@@ -184,7 +188,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.getByRole('link', { name: '0x1' })).not.toBeNull()
 		expect(document.body.textContent?.includes('0x2')).toBe(true)
 		for (const tabLabel of ['Vaults', 'Shares', 'Reporting', 'Fork & Migration', 'Staged Operations', 'Open Oracle']) {
-			const tab = documentQueries.getByRole('tab', { name: tabLabel })
+			const tab = documentQueries.getByRole('button', { name: tabLabel })
 			expect(tab.getAttribute('title')).toBeNull()
 		}
 		expect(documentQueries.queryByText('Switch to the same universe before using vault, share, reporting, and fork actions.')).toBeNull()
@@ -244,8 +248,8 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Selected Vault' })).toBeNull()
 		expect(documentQueries.getByText('Selected Vault Address')).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Vault Actions' })).not.toBeNull()
-		expect(documentQueries.getByRole('tab', { name: 'Staged Operations' })).not.toBeNull()
-		expect(documentQueries.getByRole('tab', { name: 'Open Oracle' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Staged Operations' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Open Oracle' })).not.toBeNull()
 		expect(documentQueries.getAllByRole('button', { name: 'Claim Fees' }).length).toBeGreaterThan(0)
 		const vaultSummarySection = vaultSummaryHeading.closest('section')
 		if (!(vaultSummarySection instanceof HTMLElement)) throw new Error('Expected a vault summary section')
@@ -258,8 +262,8 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByText('Manager')).toBeNull()
 		expect(documentQueries.getAllByText('Operational').length).toBeGreaterThan(0)
 		expect(documentQueries.getByText('Security Multiplier')).not.toBeNull()
-		const directoryButton = documentQueries.getByRole('tab', { name: 'Directory' })
-		expect(documentQueries.getByRole('tab', { name: 'Selected' })).not.toBeNull()
+		const directoryButton = documentQueries.getByRole('button', { name: 'Directory' })
+		expect(documentQueries.getByRole('button', { name: 'Selected' })).not.toBeNull()
 
 		await act(() => {
 			fireEvent.click(directoryButton)
@@ -808,7 +812,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('tab', { name: 'Directory' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Directory' }))
 		})
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Select Vault' }))

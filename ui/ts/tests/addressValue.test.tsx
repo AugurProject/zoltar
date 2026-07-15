@@ -10,31 +10,13 @@ import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 describe('AddressValue', () => {
 	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
-	let setClientWidth = (_nextWidth: number) => undefined
-	let setMeasureWidth = (_nextWidth: number) => undefined
 	let clipboardWriteText = mock(async () => undefined)
 
 	beforeEach(() => {
 		const domEnvironment = installDomEnvironment()
 		restoreDomEnvironment = domEnvironment.cleanup
-		let currentClientWidth = 300
-		let currentMeasureWidth = 120
 
 		clipboardWriteText = mock(async () => undefined)
-
-		const originalGetBoundingClientRect = domEnvironment.window.HTMLElement.prototype.getBoundingClientRect
-		Object.defineProperty(domEnvironment.window.HTMLElement.prototype, 'clientWidth', {
-			configurable: true,
-			get() {
-				if (this.classList.contains('address-value')) return currentClientWidth
-				return 0
-			},
-		})
-
-		domEnvironment.window.HTMLElement.prototype.getBoundingClientRect = function () {
-			if (this.classList.contains('address-value-measure')) return new domEnvironment.window.DOMRect(0, 0, currentMeasureWidth, 0)
-			return originalGetBoundingClientRect.call(this)
-		}
 
 		Reflect.set(navigator, 'clipboard', {
 			writeText: clipboardWriteText,
@@ -42,14 +24,6 @@ describe('AddressValue', () => {
 		Reflect.set(domEnvironment.window.navigator, 'clipboard', {
 			writeText: clipboardWriteText,
 		})
-
-		setClientWidth = nextWidth => {
-			currentClientWidth = nextWidth
-		}
-
-		setMeasureWidth = nextWidth => {
-			currentMeasureWidth = nextWidth
-		}
 	})
 
 	afterEach(async () => {
@@ -74,9 +48,6 @@ describe('AddressValue', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		setClientWidth(300)
-		setMeasureWidth(120)
-
 		const copyButton = documentQueries.getByRole('button', { name: `Copy address ${address}` }) as HTMLButtonElement
 		expect(copyButton.childNodes[0]?.textContent).toBe(address)
 		expect(copyButton.getAttribute('aria-label')).toBe(`Copy address ${address}`)
@@ -89,15 +60,18 @@ describe('AddressValue', () => {
 		})
 	})
 
-	test('shortens the displayed address when it does not fit the button width', async () => {
+	test('keeps the complete address visible in constrained layouts', async () => {
 		const address = '0x1234567890abcdef1234567890abcdef12345678'
-		setClientWidth(40)
-		setMeasureWidth(160)
-		const renderedComponent = await renderIntoDocument(<AddressValue address={address} />)
+		const renderedComponent = await renderIntoDocument(
+			<div style={{ width: '4rem' }}>
+				<AddressValue address={address} />
+			</div>,
+		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
 
 		const copyButton = documentQueries.getByRole('button', { name: `Copy address ${address}` }) as HTMLButtonElement
-		expect(copyButton.childNodes[0]?.textContent).toBe('0x1234…5678')
+		expect(copyButton.textContent).toBe(address)
+		expect(copyButton.querySelector('.address-value-measure')).toBeNull()
 	})
 })

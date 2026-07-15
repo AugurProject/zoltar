@@ -18,9 +18,14 @@ type EnumDropdownProps<T extends string> = {
 export function EnumDropdown<T extends string>({ ariaLabel, disabled = false, onChange, options, placeholder, value }: EnumDropdownProps<T>) {
 	const [open, setOpen] = useState(false)
 	const rootRef = useRef<HTMLDivElement | null>(null)
+	const triggerRef = useRef<HTMLButtonElement | null>(null)
 	const selectedOption = value === undefined ? undefined : options.find(option => option.value === value)
 	const triggerLabel = selectedOption?.label ?? value ?? placeholder ?? ''
 	const accessibleTriggerLabel = ariaLabel === undefined || triggerLabel === '' ? ariaLabel : commonCopy.formatLabelValue(ariaLabel, triggerLabel)
+	const closeAndFocusTrigger = () => {
+		setOpen(false)
+		triggerRef.current?.focus()
+	}
 
 	const focusMenuOptionAt = (currentTarget: HTMLButtonElement | null, direction: -1 | 1) => {
 		if (rootRef.current === null || currentTarget === null) return
@@ -31,6 +36,13 @@ export function EnumDropdown<T extends string>({ ariaLabel, disabled = false, on
 		const nextIndex = (currentIndex + direction + menuOptions.length) % menuOptions.length
 		menuOptions[nextIndex]?.focus()
 	}
+
+	useEffect(() => {
+		if (!open || rootRef.current === null) return
+		const selectedMenuOption = rootRef.current.querySelector<HTMLButtonElement>('.enum-dropdown-option.selected')
+		const firstMenuOption = rootRef.current.querySelector<HTMLButtonElement>('.enum-dropdown-option')
+		;(selectedMenuOption ?? firstMenuOption)?.focus()
+	}, [open])
 
 	useEffect(() => {
 		const handleDocumentMouseDown = (event: MouseEvent) => {
@@ -54,6 +66,7 @@ export function EnumDropdown<T extends string>({ ariaLabel, disabled = false, on
 	return (
 		<div className='enum-dropdown' ref={rootRef}>
 			<button
+				ref={triggerRef}
 				className={`enum-dropdown-trigger ${open ? 'open' : ''}`}
 				type='button'
 				disabled={disabled}
@@ -91,21 +104,21 @@ export function EnumDropdown<T extends string>({ ariaLabel, disabled = false, on
 							aria-selected={option.value === value}
 							onKeyDown={event => {
 								if (event.key === 'Escape') {
-									setOpen(false)
+									closeAndFocusTrigger()
 									return
 								}
 								if (event.key === 'ArrowDown') {
 									event.preventDefault()
-									focusMenuOptionAt(event.currentTarget as HTMLButtonElement, 1)
+									focusMenuOptionAt(event.currentTarget, 1)
 								}
 								if (event.key === 'ArrowUp') {
 									event.preventDefault()
-									focusMenuOptionAt(event.currentTarget as HTMLButtonElement, -1)
+									focusMenuOptionAt(event.currentTarget, -1)
 								}
 							}}
 							onClick={() => {
 								onChange(option.value)
-								setOpen(false)
+								closeAndFocusTrigger()
 							}}
 						>
 							{option.label}
