@@ -516,7 +516,9 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		securityPool.setSystemState(SystemState.ForkTruthAuction);
 		data.truthAuctionStarted = block.timestamp;
 		parent.updateCollateralAmount();
-		securityPool.setTotalShares(parent.shareTokenSupply());
+		securityPool.setTotalShares(
+			securityPool.shareToken().reconciledCompleteSetSupply(securityPool.universeId(), parent.shareTokenSupply())
+		);
 		parentCollateral = parentData.collateralAtFork;
 	}
 

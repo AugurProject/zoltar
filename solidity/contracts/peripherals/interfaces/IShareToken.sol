@@ -16,6 +16,7 @@ interface IShareToken {
 		uint248 _universeId,
 		BinaryOutcomes.BinaryOutcome _outcome
 	) external view returns (uint256);
+	function reconciledCompleteSetSupply(uint248 _universeId, uint256 _fallbackSupply) external view returns (uint256);
 	function balanceOfOutcome(
 		uint248 _universeId,
 		BinaryOutcomes.BinaryOutcome _outcome,
