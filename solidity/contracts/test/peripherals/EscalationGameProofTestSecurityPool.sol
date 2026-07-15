@@ -10,13 +10,26 @@ import { CarriedDepositProof } from '../../peripherals/EscalationGameTypes.sol';
 contract EscalationGameProofTestSecurityPool {
 	Zoltar public immutable zoltar;
 	uint248 public immutable universeId;
-	address public immutable securityPoolForker;
+	address private immutable configuredSecurityPoolForker;
 	EscalationGame public escalationGame;
 
-	constructor(Zoltar zoltarAddress, uint248 configuredUniverseId, address configuredSecurityPoolForker) {
+	constructor(Zoltar zoltarAddress, uint248 configuredUniverseId, address _configuredSecurityPoolForker) {
 		zoltar = zoltarAddress;
 		universeId = configuredUniverseId;
-		securityPoolForker = configuredSecurityPoolForker;
+		configuredSecurityPoolForker = _configuredSecurityPoolForker;
+	}
+
+	function securityPoolForker() external view returns (address) {
+		if (configuredSecurityPoolForker == address(0)) return address(this);
+		return configuredSecurityPoolForker;
+	}
+
+	function isEscalationDepositClaimedDirectly(
+		address,
+		BinaryOutcomes.BinaryOutcome,
+		uint256
+	) external pure returns (bool) {
+		return false;
 	}
 
 	function parent() external pure returns (address) {
@@ -114,7 +127,7 @@ contract EscalationGameProofTestSecurityPool {
 		address vault,
 		address repReceiver
 	) external returns (uint256 principalToTransfer) {
-		uint256[3] memory principalByOutcome = escalationGame.exportVaultUnresolvedDepositAmounts(vault, repReceiver);
+		uint256[3] memory principalByOutcome = escalationGame.exportVaultUnresolvedTotals(vault, repReceiver);
 		return principalByOutcome[0] + principalByOutcome[1] + principalByOutcome[2];
 	}
 

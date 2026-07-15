@@ -31,7 +31,6 @@ import { buildTruthAuctionBidRows, buildViewerTruthAuctionBidRows, updateTruthAu
 import { getTruthAuctionSettlementAction } from '../lib/truthAuctionSettlementActionState.js'
 import { getTruthAuctionSettlementActionAvailabilityMessage, getTruthAuctionSettlementBidRows, getTruthAuctionSettlementSelectionEstimate } from '../lib/truthAuctionSettlement.js'
 import { formatCurrencyInputBalance, formatDuration, formatRoundedCurrencyBalance } from '../lib/formatters.js'
-import { tryParseAddressInput } from '../lib/inputs.js'
 import { tryParseTruthAuctionAmountInput } from '../lib/marketForm.js'
 import { isMainnetChain } from '../lib/network.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../lib/reporting.js'
@@ -61,7 +60,7 @@ import {
 	UI_STRING_CONNECT_A_WALLET_BEFORE_USING_FORK_AND_AUCTION_ACTIONS,
 	UI_STRING_CONNECT_WALLET_TO_INSPECT_YOUR_PARENT_POOL_BALANCES,
 	UI_STRING_CURRENT_PATH_ELIGIBLE_FOR_CHILD_POOL_MIGRATION,
-	UI_STRING_ESCALATION_PATH_MUST_MIGRATE_INTO_EVERY_CHILD_CONTINUATION,
+	UI_STRING_CURRENT_PATH_MUST_MIGRATE_INTO_THE_SELECTED_CHILD_UNIVERSE,
 	UI_STRING_ENDED_AT,
 	UI_STRING_ENDS,
 	UI_STRING_ENTRY_DEPTH_PREFIX,
@@ -94,12 +93,12 @@ import {
 	UI_STRING_MAX_REP_BEING_SOLD,
 	UI_STRING_MIGRATED_BALANCES_FOR_THIS_OUTCOME,
 	UI_STRING_MIGRATED_REP,
-	UI_STRING_REGISTER_CHILD_DESTINATION,
+	UI_STRING_MIGRATE_POOL_TO_UNIVERSE,
 	UI_STRING_MIGRATE_RESOLVED_ESCALATION_DEPOSITS,
 	UI_STRING_MIGRATE_UNRESOLVED_ESCALATION_LOCKS,
 	UI_STRING_MIGRATE_VAULT,
 	UI_STRING_MIGRATING_ESCALATION_DEPOSITS_TRUNCATED,
-	UI_STRING_REGISTERING_CHILD_DESTINATION_TRUNCATED,
+	UI_STRING_MIGRATING_POOL_TO_UNIVERSE_TRUNCATED,
 	UI_STRING_MIGRATING_UNRESOLVED_ESCALATION_TRUNCATED,
 	UI_STRING_MIGRATING_VAULT,
 	UI_STRING_MIGRATION_ENDS,
@@ -133,8 +132,8 @@ import {
 	UI_STRING_PENDING_CONFIRMATION,
 	UI_STRING_PENDING_OUTCOME,
 	UI_STRING_POOL_REP_AT_FORK,
-	UI_STRING_CHILD_DESTINATION_ALREADY_REGISTERED_WITHOUT_REP,
-	UI_STRING_CHILD_DESTINATION_ALREADY_REGISTERED_WITH_REP,
+	UI_STRING_POOL_REP_STAGED_FOR_VAULT_MIGRATION_DETAIL,
+	UI_STRING_POOL_REP_HAS_ALREADY_BEEN_MIGRATED_TO_THE_SELECTED_CHILD_UNIVERSE,
 	UI_STRING_REFUND_ONLY_SETTLEMENT_RETURNS_LOCKED_ETH,
 	UI_STRING_REP,
 	UI_STRING_REP_AT_FORK,
@@ -169,13 +168,12 @@ import {
 	UI_STRING_SUBMIT_BID,
 	UI_STRING_SYSTEM_IS_FORKING,
 	UI_STRING_SETTLEMENT_ROUNDING_NOTICE,
-	UI_STRING_UNRESOLVED_ESCALATION_LATE_EXTERNAL_FUNDING_DETAIL,
-	UI_STRING_UNRESOLVED_ESCALATION_LATE_OWN_FUNDING_DETAIL,
+	UI_STRING_UNRESOLVED_ESCALATION_MIGRATION_WINDOW_CLOSED_DETAIL,
 	UI_STRING_UNRESOLVED_ESCALATION_MIGRATION_WINDOW_CLOSED_REASON,
 	UI_STRING_FORK_INACTIVE_DETAIL,
 	UI_STRING_CHILD_UNIVERSE_FULLY_MIGRATED_DETAIL,
 	UI_STRING_VAULT_MIGRATION_DETAIL,
-	UI_STRING_CHILD_DESTINATION_REGISTRATION_DETAIL,
+	UI_STRING_POOL_REP_MIGRATION_DETAIL,
 	UI_STRING_TRIGGERED_AT,
 	UI_STRING_TRUTH_AUCTION_ADDRESS,
 	UI_STRING_TRUTH_AUCTION,
@@ -185,20 +183,17 @@ import {
 	UI_STRING_TRUTH_AUCTION_IS_ALREADY_FINALIZED,
 	UI_STRING_TRUTH_AUCTION_IS_STILL_ONGOING,
 	UI_STRING_TRUTH_AUCTION_STATUS,
-	UI_STRING_UNALLOCATED_ESCROW_CHILD_REP,
+	UI_STRING_ESCALATION_CHILD_REP_PER_SELECTED_OUTCOME,
 	UI_STRING_UNFILLED,
 	UI_STRING_UNRESOLVED_DEPOSITS_REMAIN_FOR_THIS_WALLET,
 	UI_STRING_UNRESOLVED_ESCALATION_DEPOSIT_DETAILS_ARE_UNAVAILABLE_FOR_THIS_POOL_RIGHT_NOW,
 	UI_STRING_UNRESOLVED_ESCALATION_MIGRATION_IS_UNAVAILABLE_FOR_THIS_POOL,
 	UI_STRING_USE_UNRESOLVED_ESCALATION_MIGRATION_FOR_THIS_PARENT_POOL,
-	UI_STRING_FUND_UNRESOLVED_ESCALATION_CARRY_BEFORE_MIGRATING_ORDINARY_VAULT_BALANCES,
-	UI_STRING_FUND_INHERITED_ESCALATION_CARRY_FOR_THE_SPECIFIED_VAULT,
+	UI_STRING_USE_UNRESOLVED_ESCALATION_MIGRATION_TO_MOVE_LOCKED_POSITIONS_AND_VAULT_BALANCES_TOGETHER,
 	UI_STRING_UNRESOLVED_ESCALATION_MIGRATION_WITH_VAULT_DETAIL,
-	UI_STRING_UNRESOLVED_ESCALATION_ALL_CHILDREN_DETAIL,
-	UI_STRING_SPECIFIED_VAULT_ESCALATION_ALL_CHILDREN_DETAIL,
-	UI_STRING_TARGET_VAULT_ADDRESS,
-	UI_STRING_TARGET_VAULT_CARRY_FUNDING,
-	UI_STRING_ENTER_A_VALID_TARGET_VAULT_ADDRESS_FOR_LATE_CARRY_FUNDING,
+	UI_STRING_UNRESOLVED_ESCALATION_MULTI_CHILD_DETAIL,
+	UI_STRING_UNRESOLVED_ESCALATION_ENTITLEMENT_CAPTURED_DETAIL,
+	UI_TEMPLATE_UNRESOLVED_ESCALATION_ENTITLEMENT_ALREADY_MATERIALIZED,
 	UI_STRING_FORK_UNAVAILABLE_PLACEHOLDER,
 	UI_STRING_VAULT_MIGRATION_IS_ALREADY_COMPLETE_FOR_THIS_WALLET,
 	UI_STRING_VIEWING,
@@ -219,13 +214,13 @@ import {
 	UI_TEMPLATE_CHECKING_POOL_REP_MIGRATED_TO_CHILD_UNIVERSE,
 	UI_TEMPLATE_ESTIMATED_VALUE,
 	UI_TEMPLATE_ETH_PER_REP_VALUE,
-	UI_TEMPLATE_REGISTER_THE_VALUE_CHILD_DESTINATION_BEFORE_MOVING_VAULT_BALANCES,
-	UI_TEMPLATE_REGISTER_VALUE_CHILD_DESTINATION,
+	UI_TEMPLATE_MIGRATE_POOL_TO_THE_VALUE_UNIVERSE_BEFORE_MOVING_VAULT_BALANCES,
+	UI_TEMPLATE_MIGRATE_POOL_TO_VALUE_UNIVERSE,
 	UI_TEMPLATE_MIGRATE_SELECTED_VALUE_DEPOSITS,
-	UI_STRING_MIGRATE_UNRESOLVED_ESCALATION_TO_ALL_CHILDREN,
+	UI_TEMPLATE_MIGRATE_UNRESOLVED_ESCALATION_TO_VALUE,
 	UI_TEMPLATE_MIGRATE_VAULT_TO_VALUE,
 	UI_TEMPLATE_NO_VALUE_ESCALATION_DEPOSITS_ARE_CURRENTLY_AVAILABLE_TO_MIGRATE_FOR_THIS_WALLET,
-	UI_TEMPLATE_CHILD_DESTINATION_IS_ALREADY_REGISTERED,
+	UI_TEMPLATE_POOL_REP_HAS_ALREADY_BEEN_MIGRATED_TO_THE_VALUE_UNIVERSE,
 	UI_TEMPLATE_REFUND_ONLY_SETTLEMENT_RETURNS_LOCKED_ETH_AND_DOES_NOT_ASSIGN_VALUE,
 	UI_TEMPLATE_SECURITY_POOL_FOR_VALUE_UNIVERSE_DOES_NOT_EXIST,
 	UI_TEMPLATE_FINALIZED_REFUND_BATCH_SETTLEMENT_DETAIL,
@@ -723,14 +718,10 @@ export function ForkAuctionSection({
 	const activeReportingDetails = reportingDetails?.status === 'active' ? reportingDetails : undefined
 	const isMigrationRequired = activeReportingDetails?.settlementState === 'migration-required'
 	const isMigrationExpired = activeReportingDetails?.settlementState === 'migration-expired'
-	const hasUnresolvedMigrationState = isMigrationRequired || isMigrationExpired
-	const isOwnFork = forkAuctionDetails?.ownForkRepBuckets !== undefined
-	const isLateExternalCarryFunding = isMigrationExpired && !isOwnFork
-	const unresolvedEscalationMigrationDetail = (() => {
-		if (isLateExternalCarryFunding) return UI_STRING_UNRESOLVED_ESCALATION_LATE_EXTERNAL_FUNDING_DETAIL
-		if (isMigrationExpired) return UI_STRING_UNRESOLVED_ESCALATION_LATE_OWN_FUNDING_DETAIL
-		return UI_STRING_UNRESOLVED_ESCALATION_MIGRATION_WITH_VAULT_DETAIL
-	})()
+	const escalationMigrationEntitlement = reportingDetails?.viewerEscalationMigrationEntitlement
+	const hasStoredEscalationMigrationEntitlement = escalationMigrationEntitlement?.initialized === true
+	const selectedOutcomeEscalationEntitlementMaterialized = escalationMigrationEntitlement?.materializedByOutcome[forkAuctionForm.selectedOutcome] === true
+	const hasUnresolvedMigrationState = isMigrationRequired || isMigrationExpired || hasStoredEscalationMigrationEntitlement
 	const selectedEscalationMigrationSide = reportingDetails?.status !== 'active' ? undefined : reportingDetails.sides.find(side => side.key === forkAuctionForm.selectedOutcome)
 	const selectedEscalationMigrationDeposits = selectedEscalationMigrationSide?.userDeposits ?? []
 	const selectedEscalationMigrationDepositIndexes = reportingForm?.selectedWithdrawDepositIndexesByOutcome[forkAuctionForm.selectedOutcome] ?? []
@@ -1080,12 +1071,11 @@ export function ForkAuctionSection({
 		migrationEndsAt: forkAuctionDetails?.migrationEndsAt,
 	})
 	const migrateUnresolvedEscalationGuardMessage = (() => {
-		if (!hasUnresolvedMigrationState) return UI_STRING_UNRESOLVED_ESCALATION_MIGRATION_IS_UNAVAILABLE_FOR_THIS_POOL
-		if (isLateExternalCarryFunding) {
-			if (tryParseAddressInput(forkAuctionForm.vaultAddress) === undefined) return UI_STRING_ENTER_A_VALID_TARGET_VAULT_ADDRESS_FOR_LATE_CARRY_FUNDING
-			return undefined
-		}
+		if (migrationWindowClosedGuardMessage !== undefined) return migrationWindowClosedGuardMessage
 		if (loadingReportingDetails) return UI_STRING_LOADING_UNRESOLVED_ESCALATION_DEPOSITS
+		if (selectedOutcomeEscalationEntitlementMaterialized) return UI_TEMPLATE_UNRESOLVED_ESCALATION_ENTITLEMENT_ALREADY_MATERIALIZED(selectedOutcomeLabel)
+		if (hasStoredEscalationMigrationEntitlement) return undefined
+		if (!isMigrationRequired) return UI_STRING_UNRESOLVED_ESCALATION_MIGRATION_IS_UNAVAILABLE_FOR_THIS_POOL
 		if (activeReportingDetails === undefined) return UI_STRING_UNRESOLVED_ESCALATION_DEPOSIT_DETAILS_ARE_UNAVAILABLE_FOR_THIS_POOL_RIGHT_NOW
 		if (!hasUnresolvedMigrationDeposits) return UI_STRING_NO_UNRESOLVED_PARENT_ESCALATION_DEPOSITS_REMAIN_FOR_CONNECTED_WALLET
 		return undefined
@@ -1093,20 +1083,20 @@ export function ForkAuctionSection({
 	const migratePoolToUniverseGuardMessage = (() => {
 		if (loadingSelectedOutcomeMigrationSeedStatus) return UI_TEMPLATE_CHECKING_POOL_REP_MIGRATED_TO_CHILD_UNIVERSE(selectedOutcomeLabel)
 		if (selectedOutcomeMigrationSeedStatusError !== undefined) return selectedOutcomeMigrationSeedStatusError
-		if (selectedOutcomeMigrationSeedStatus?.registered) return UI_TEMPLATE_CHILD_DESTINATION_IS_ALREADY_REGISTERED(selectedOutcomeLabel)
+		if (selectedOutcomeMigrationSeedStatus?.seeded) return UI_TEMPLATE_POOL_REP_HAS_ALREADY_BEEN_MIGRATED_TO_THE_VALUE_UNIVERSE(selectedOutcomeLabel)
 		return undefined
 	})()
 	const selectedOutcomeMigrationSeedGuardMessage = (() => {
 		if (migrateVaultBalanceGuardMessage !== undefined) return undefined
 		if (loadingSelectedOutcomeMigrationSeedStatus) return UI_TEMPLATE_CHECKING_POOL_REP_MIGRATED_TO_CHILD_UNIVERSE(selectedOutcomeLabel)
 		if (selectedOutcomeMigrationSeedStatusError !== undefined) return selectedOutcomeMigrationSeedStatusError
-		if (selectedOutcomeMigrationSeedStatus === undefined || selectedOutcomeMigrationSeedStatus.registered) return undefined
-		return UI_TEMPLATE_REGISTER_THE_VALUE_CHILD_DESTINATION_BEFORE_MOVING_VAULT_BALANCES(selectedOutcomeLabel)
+		if (selectedOutcomeMigrationSeedStatus === undefined || selectedOutcomeMigrationSeedStatus.seeded) return undefined
+		return UI_TEMPLATE_MIGRATE_POOL_TO_THE_VALUE_UNIVERSE_BEFORE_MOVING_VAULT_BALANCES(selectedOutcomeLabel)
 	})()
 	const migrateVaultCompletedMessage = isVaultMigrationComplete ? UI_STRING_VAULT_MIGRATION_IS_ALREADY_COMPLETE_FOR_THIS_WALLET : undefined
 	const vaultMigrationInProgressMessage = isVaultMigrationPending ? UI_STRING_MIGRATING_VAULT : undefined
 	const migrateVaultGuardMessage = isMigrationRequired
-		? UI_STRING_FUND_UNRESOLVED_ESCALATION_CARRY_BEFORE_MIGRATING_ORDINARY_VAULT_BALANCES
+		? UI_STRING_USE_UNRESOLVED_ESCALATION_MIGRATION_TO_MOVE_LOCKED_POSITIONS_AND_VAULT_BALANCES_TOGETHER
 		: (migrationWindowClosedGuardMessage ?? migrateVaultBalanceGuardMessage ?? selectedOutcomeMigrationSeedGuardMessage ?? migrateVaultCompletedMessage ?? vaultMigrationInProgressMessage)
 	const submitBidGuardMessage = truthAuctionBidGuardMessage ?? bidPriceValidationMessage
 	const migrationStateBadge = getMigrationStateBadge({
@@ -1161,7 +1151,7 @@ export function ForkAuctionSection({
 	const onMigrateUnresolvedEscalationSubmit = () => {
 		setPendingEscalationMigrationSelection(undefined)
 		beginVaultMigrationProgress()
-		onMigrateUnresolvedEscalation(isLateExternalCarryFunding ? forkAuctionForm.vaultAddress : undefined)
+		onMigrateUnresolvedEscalation(forkAuctionForm.selectedOutcome)
 	}
 	const onWithdrawForkedEscalationSubmit = (outcome: ReportingOutcomeKey) => {
 		const selectedDepositIndexes = selectedImportedForkDepositIndexesByOutcome[outcome]
@@ -1432,8 +1422,8 @@ export function ForkAuctionSection({
 						<MetricField label={UI_STRING_POOL_REP_AT_FORK}>
 							<CurrencyValue value={forkAuctionDetails.ownForkRepBuckets.vaultRepAtFork} suffix={UI_STRING_REP} />
 						</MetricField>
-						<MetricField label={UI_STRING_UNALLOCATED_ESCROW_CHILD_REP}>
-							<CurrencyValue value={forkAuctionDetails.ownForkRepBuckets.unallocatedEscrowChildRep} suffix={UI_STRING_REP} />
+						<MetricField label={UI_STRING_ESCALATION_CHILD_REP_PER_SELECTED_OUTCOME}>
+							<CurrencyValue value={forkAuctionDetails.ownForkRepBuckets.escalationChildRepPerSelectedOutcome} suffix={UI_STRING_REP} />
 						</MetricField>
 						<MetricField label={UI_STRING_ESCROW_SOURCE_REP_AT_FORK}>
 							<CurrencyValue value={forkAuctionDetails.ownForkRepBuckets.escrowSourceRepAtFork} suffix={UI_STRING_REP} />
@@ -1632,28 +1622,19 @@ export function ForkAuctionSection({
 					{selectedStageAheadMessage === undefined ? undefined : <p className='detail'>{selectedStageAheadMessage}</p>}
 					{migrationSummaryCard}
 
-					<SectionBlock
-						title={isLateExternalCarryFunding ? UI_STRING_TARGET_VAULT_CARRY_FUNDING : UI_STRING_YOUR_MIGRATION_BALANCES}
-						variant='embedded'
-						description={isLateExternalCarryFunding ? UI_STRING_FUND_INHERITED_ESCALATION_CARRY_FOR_THE_SPECIFIED_VAULT : UI_STRING_WALLET_LEVEL_BALANCES_IN_THE_PARENT_POOL_THAT_MAY_STILL_NEED_MIGRATION}
-					>
-						{isLateExternalCarryFunding ? undefined : migrationBalancesContent}
+					<SectionBlock title={UI_STRING_YOUR_MIGRATION_BALANCES} variant='embedded' description={UI_STRING_WALLET_LEVEL_BALANCES_IN_THE_PARENT_POOL_THAT_MAY_STILL_NEED_MIGRATION}>
+						{migrationBalancesContent}
 						{accountState.address === undefined ? undefined : (
 							<>
 								{hasUnresolvedMigrationState ? (
 									<SectionBlock density='compact' headingLevel={4} title={UI_STRING_MIGRATE_UNRESOLVED_ESCALATION_LOCKS} variant='embedded'>
-										<p className='detail'>{unresolvedEscalationMigrationDetail}</p>
-										{isLateExternalCarryFunding ? (
-											<label className='field'>
-												<span>{UI_STRING_TARGET_VAULT_ADDRESS}</span>
-												<FormInput value={forkAuctionForm.vaultAddress} onInput={event => onForkAuctionFormChange({ vaultAddress: event.currentTarget.value })} />
-											</label>
-										) : undefined}
-										{!isLateExternalCarryFunding && loadingReportingDetails ? <p className='detail'>{UI_STRING_LOADING_UNRESOLVED_ESCALATION_DEPOSITS_FOR_THE_CONNECTED_WALLET}</p> : undefined}
-										{isLateExternalCarryFunding || loadingReportingDetails || activeReportingDetails !== undefined ? undefined : <p className='detail'>{UI_STRING_UNRESOLVED_ESCALATION_DEPOSIT_DETAILS_ARE_UNAVAILABLE_FOR_THIS_POOL_RIGHT_NOW}</p>}
-										{!isLateExternalCarryFunding && activeReportingDetails !== undefined && !hasUnresolvedMigrationDeposits ? <p className='detail'>{UI_STRING_NO_UNRESOLVED_PARENT_ESCALATION_DEPOSITS_REMAIN_FOR_CONNECTED_WALLET}</p> : undefined}
-										<p className='detail'>{isLateExternalCarryFunding ? UI_STRING_SPECIFIED_VAULT_ESCALATION_ALL_CHILDREN_DETAIL : UI_STRING_UNRESOLVED_ESCALATION_ALL_CHILDREN_DETAIL}</p>
-										{activeReportingDetails === undefined || isLateExternalCarryFunding
+										<p className='detail'>{isMigrationExpired ? UI_STRING_UNRESOLVED_ESCALATION_MIGRATION_WINDOW_CLOSED_DETAIL : UI_STRING_UNRESOLVED_ESCALATION_MIGRATION_WITH_VAULT_DETAIL}</p>
+										{loadingReportingDetails ? <p className='detail'>{UI_STRING_LOADING_UNRESOLVED_ESCALATION_DEPOSITS_FOR_THE_CONNECTED_WALLET}</p> : undefined}
+										{loadingReportingDetails || activeReportingDetails !== undefined ? undefined : <p className='detail'>{UI_STRING_UNRESOLVED_ESCALATION_DEPOSIT_DETAILS_ARE_UNAVAILABLE_FOR_THIS_POOL_RIGHT_NOW}</p>}
+										{hasStoredEscalationMigrationEntitlement ? <p className='detail'>{UI_STRING_UNRESOLVED_ESCALATION_ENTITLEMENT_CAPTURED_DETAIL}</p> : undefined}
+										{activeReportingDetails !== undefined && !hasUnresolvedMigrationDeposits && !hasStoredEscalationMigrationEntitlement ? <p className='detail'>{UI_STRING_NO_UNRESOLVED_PARENT_ESCALATION_DEPOSITS_REMAIN_FOR_CONNECTED_WALLET}</p> : undefined}
+										<p className='detail'>{UI_STRING_UNRESOLVED_ESCALATION_MULTI_CHILD_DETAIL}</p>
+										{activeReportingDetails === undefined || hasStoredEscalationMigrationEntitlement
 											? undefined
 											: unresolvedMigrationSides.map(side => (
 													<div className='field' key={side.key}>
@@ -1673,7 +1654,7 @@ export function ForkAuctionSection({
 																			{UI_STRING_INITIALLY_DEPOSITED_PREFIX}
 																			<CurrencyValue value={deposit.amount} suffix={UI_STRING_REP} />
 																		</>,
-																		UI_STRING_ESCALATION_PATH_MUST_MIGRATE_INTO_EVERY_CHILD_CONTINUATION,
+																		UI_STRING_CURRENT_PATH_MUST_MIGRATE_INTO_THE_SELECTED_CHILD_UNIVERSE,
 																		<>
 																			{UI_STRING_ENTRY_DEPTH_PREFIX}
 																			<CurrencyValue value={deposit.cumulativeAmount} suffix={UI_STRING_REP} />
@@ -1686,16 +1667,18 @@ export function ForkAuctionSection({
 														)}
 													</div>
 												))}
-										<div className='actions'>
-											{renderStageActionButton({
-												action: 'migrateUnresolvedEscalation',
-												availability: createActionAvailability(migrateUnresolvedEscalationGuardMessage),
-												idleLabel: UI_STRING_MIGRATE_UNRESOLVED_ESCALATION_TO_ALL_CHILDREN,
-												onClick: onMigrateUnresolvedEscalationSubmit,
-												pendingLabel: UI_STRING_MIGRATING_UNRESOLVED_ESCALATION_TRUNCATED,
-												tone: 'primary',
-											})}
-										</div>
+										{isMigrationExpired ? undefined : (
+											<div className='actions'>
+												{renderStageActionButton({
+													action: 'migrateUnresolvedEscalation',
+													availability: createActionAvailability(migrateUnresolvedEscalationGuardMessage),
+													idleLabel: UI_TEMPLATE_MIGRATE_UNRESOLVED_ESCALATION_TO_VALUE(selectedOutcomeLabel),
+													onClick: onMigrateUnresolvedEscalationSubmit,
+													pendingLabel: UI_STRING_MIGRATING_UNRESOLVED_ESCALATION_TRUNCATED,
+													tone: 'primary',
+												})}
+											</div>
+										)}
 									</SectionBlock>
 								) : (
 									<SectionBlock density='compact' headingLevel={4} title={UI_STRING_MIGRATE_RESOLVED_ESCALATION_DEPOSITS} variant='embedded'>
@@ -1755,44 +1738,40 @@ export function ForkAuctionSection({
 										</div>
 									</SectionBlock>
 								)}
-								{isLateExternalCarryFunding ? undefined : (
-									<>
-										<SectionBlock density='compact' headingLevel={4} title={UI_STRING_REGISTER_CHILD_DESTINATION} variant='embedded'>
-											<p className='detail'>{UI_STRING_CHILD_DESTINATION_REGISTRATION_DETAIL}</p>
-											{loadingSelectedOutcomeMigrationSeedStatus ? <p className='detail'>{UI_STRING_CHECKING_WHETHER_POOL_REP_IS_ALREADY_READY_FOR_SELECTED_CHILD_UNIVERSE}</p> : undefined}
-											{selectedOutcomeMigrationSeedStatusError === undefined || loadingSelectedOutcomeMigrationSeedStatus ? undefined : <p className='detail'>{selectedOutcomeMigrationSeedStatusError}</p>}
-											{loadingSelectedOutcomeMigrationSeedStatus || selectedOutcomeMigrationSeedStatusError !== undefined || selectedOutcomeMigrationSeedStatus === undefined || !selectedOutcomeMigrationSeedStatus.registered ? undefined : (
-												<p className='detail'>{selectedOutcomeMigrationSeedStatus.pendingProxyRepBalance > 0n || selectedOutcomeMigrationSeedStatus.childPoolRepBalance > 0n ? UI_STRING_CHILD_DESTINATION_ALREADY_REGISTERED_WITH_REP : UI_STRING_CHILD_DESTINATION_ALREADY_REGISTERED_WITHOUT_REP}</p>
-											)}
-											<div className='actions'>
-												{renderStageActionButton({
-													action: 'migrateRepToZoltar',
-													availability: createActionAvailability(migratePoolToUniverseGuardMessage),
-													idleLabel: UI_TEMPLATE_REGISTER_VALUE_CHILD_DESTINATION(selectedOutcomeLabel),
-													onClick: onMigrateSelectedOutcomeRepToZoltar,
-													pendingLabel: UI_STRING_REGISTERING_CHILD_DESTINATION_TRUNCATED,
-												})}
-											</div>
-										</SectionBlock>
-										<SectionBlock density='compact' headingLevel={4} title={UI_STRING_MIGRATE_VAULT} variant='embedded'>
-											<p className='detail'>{UI_STRING_VAULT_MIGRATION_DETAIL}</p>
-											{connectedWalletVaultSummary !== undefined && !hasWalletVaultMigrationBalance ? <p className='detail'>{UI_STRING_NO_REP_COLLATERAL_OR_SECURITY_BOND_ALLOWANCE_REMAINS}</p> : undefined}
-											{loadingSelectedOutcomeMigrationSeedStatus ? <p className='detail'>{UI_STRING_CHECKING_WHETHER_POOL_REP_IS_ALREADY_READY_FOR_SELECTED_CHILD_UNIVERSE}</p> : undefined}
-											{selectedOutcomeMigrationSeedStatusError === undefined || loadingSelectedOutcomeMigrationSeedStatus ? undefined : <p className='detail'>{selectedOutcomeMigrationSeedStatusError}</p>}
-											<div className='actions'>
-												{renderStageActionButton({
-													action: 'migrateVault',
-													availability: createActionAvailability(migrateVaultGuardMessage),
-													idleLabel: UI_TEMPLATE_MIGRATE_VAULT_TO_VALUE(selectedOutcomeLabel),
-													onClick: onMigrateVaultSubmit,
-													pendingLabel: UI_STRING_MIGRATING_VAULT,
-													tone: 'primary',
-												})}
-											</div>
-											{isVaultMigrationComplete ? <p className='detail'>{UI_STRING_ALREADY_MIGRATED_STATUS}</p> : undefined}
-										</SectionBlock>
-									</>
-								)}
+								<SectionBlock density='compact' headingLevel={4} title={UI_STRING_MIGRATE_POOL_TO_UNIVERSE} variant='embedded'>
+									<p className='detail'>{UI_STRING_POOL_REP_MIGRATION_DETAIL}</p>
+									{loadingSelectedOutcomeMigrationSeedStatus ? <p className='detail'>{UI_STRING_CHECKING_WHETHER_POOL_REP_IS_ALREADY_READY_FOR_SELECTED_CHILD_UNIVERSE}</p> : undefined}
+									{selectedOutcomeMigrationSeedStatusError === undefined || loadingSelectedOutcomeMigrationSeedStatus ? undefined : <p className='detail'>{selectedOutcomeMigrationSeedStatusError}</p>}
+									{loadingSelectedOutcomeMigrationSeedStatus || selectedOutcomeMigrationSeedStatusError !== undefined || selectedOutcomeMigrationSeedStatus === undefined || !selectedOutcomeMigrationSeedStatus.seeded ? undefined : (
+										<p className='detail'>{selectedOutcomeMigrationSeedStatus.childPoolRepBalance > 0n ? UI_STRING_POOL_REP_HAS_ALREADY_BEEN_MIGRATED_TO_THE_SELECTED_CHILD_UNIVERSE : UI_STRING_POOL_REP_STAGED_FOR_VAULT_MIGRATION_DETAIL}</p>
+									)}
+									<div className='actions'>
+										{renderStageActionButton({
+											action: 'migrateRepToZoltar',
+											availability: createActionAvailability(migratePoolToUniverseGuardMessage),
+											idleLabel: UI_TEMPLATE_MIGRATE_POOL_TO_VALUE_UNIVERSE(selectedOutcomeLabel),
+											onClick: onMigrateSelectedOutcomeRepToZoltar,
+											pendingLabel: UI_STRING_MIGRATING_POOL_TO_UNIVERSE_TRUNCATED,
+										})}
+									</div>
+								</SectionBlock>
+								<SectionBlock density='compact' headingLevel={4} title={UI_STRING_MIGRATE_VAULT} variant='embedded'>
+									<p className='detail'>{UI_STRING_VAULT_MIGRATION_DETAIL}</p>
+									{connectedWalletVaultSummary !== undefined && !hasWalletVaultMigrationBalance ? <p className='detail'>{UI_STRING_NO_REP_COLLATERAL_OR_SECURITY_BOND_ALLOWANCE_REMAINS}</p> : undefined}
+									{loadingSelectedOutcomeMigrationSeedStatus ? <p className='detail'>{UI_STRING_CHECKING_WHETHER_POOL_REP_IS_ALREADY_READY_FOR_SELECTED_CHILD_UNIVERSE}</p> : undefined}
+									{selectedOutcomeMigrationSeedStatusError === undefined || loadingSelectedOutcomeMigrationSeedStatus ? undefined : <p className='detail'>{selectedOutcomeMigrationSeedStatusError}</p>}
+									<div className='actions'>
+										{renderStageActionButton({
+											action: 'migrateVault',
+											availability: createActionAvailability(migrateVaultGuardMessage),
+											idleLabel: UI_TEMPLATE_MIGRATE_VAULT_TO_VALUE(selectedOutcomeLabel),
+											onClick: onMigrateVaultSubmit,
+											pendingLabel: UI_STRING_MIGRATING_VAULT,
+											tone: 'primary',
+										})}
+									</div>
+									{isVaultMigrationComplete ? <p className='detail'>{UI_STRING_ALREADY_MIGRATED_STATUS}</p> : undefined}
+								</SectionBlock>
 							</>
 						)}
 					</SectionBlock>

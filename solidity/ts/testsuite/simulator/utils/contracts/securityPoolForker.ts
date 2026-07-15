@@ -43,7 +43,7 @@ type SecurityPoolForkerForkData = {
 
 type OwnForkRepBuckets = {
 	vaultRepAtFork: bigint
-	unallocatedEscrowChildRep: bigint
+	escalationChildRepPerSelectedOutcome: bigint
 	escrowSourceRepAtFork: bigint
 }
 
@@ -93,13 +93,13 @@ export const migrateVault = async (client: WriteClient, securityPoolAddress: Add
 		}),
 	)
 
-export const migrateVaultWithUnresolvedEscalation = async (client: WriteClient, securityPoolAddress: Address, vault: Address) =>
+export const migrateVaultWithUnresolvedEscalation = async (client: WriteClient, securityPoolAddress: Address, vault: Address, childOutcome: bigint | QuestionOutcome) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 			functionName: 'migrateVaultWithUnresolvedEscalation',
 			address: getInfraContractAddresses().securityPoolForker,
-			args: [securityPoolAddress, vault],
+			args: [securityPoolAddress, vault, BigInt(childOutcome)],
 		}),
 	)
 
@@ -235,7 +235,7 @@ export const getOwnForkRepBuckets = async (client: ReadClient, securityPoolAddre
 	)
 	return {
 		vaultRepAtFork: requireBigInt(repBuckets[0], 'Own fork REP bucket vault REP'),
-		unallocatedEscrowChildRep: requireBigInt(repBuckets[1], 'Own fork REP bucket unallocated child REP'),
+		escalationChildRepPerSelectedOutcome: requireBigInt(repBuckets[1], 'Own fork REP bucket per selected outcome'),
 		escrowSourceRepAtFork: requireBigInt(repBuckets[2], 'Own fork REP bucket escrow source REP'),
 	}
 }

@@ -285,7 +285,7 @@ describe('Peripherals invariant harness', () => {
 		for (const outcome of branchOrder) {
 			await migrateVault(client, context.securityPool, outcome)
 		}
-		await migrateVaultWithUnresolvedEscalation(client, context.securityPool, client.account.address)
+		await migrateVaultWithUnresolvedEscalation(client, context.securityPool, client.account.address, QuestionOutcome.Yes)
 
 		const forkData = await getSecurityPoolForkerForkData(client, context.securityPool)
 		assert.ok(forkData.auctionableRepAtFork > 0n, 'forked pool should retain migration REP for branch settlement')

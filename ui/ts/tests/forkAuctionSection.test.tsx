@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { fireEvent, waitFor, within } from './testUtils/queries'
+import { fireEvent, within } from './testUtils/queries'
 import { h } from 'preact'
 import { type Address, getAddress, zeroAddress } from '@zoltar/shared/ethereum'
 import { ForkAuctionSection } from '../components/ForkAuctionSection.js'
@@ -177,8 +177,7 @@ function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSec
 	}
 }
 
-function createForkMigrationReadClient(registered = false, pendingProxyRepBalance = 0n): Pick<ReadClient, 'readContract'> {
-	const childRepToken = getAddress('0x00000000000000000000000000000000000000d4')
+function createForkMigrationReadClient(): Pick<ReadClient, 'readContract'> {
 	return {
 		readContract: mock(async request => {
 			switch (request.functionName) {
@@ -186,12 +185,10 @@ function createForkMigrationReadClient(registered = false, pendingProxyRepBalanc
 					return 11n
 				case 'getMigrationProxyAddress':
 					return zeroAddress
-				case 'isChildOutcomeRegistered':
-					return registered
 				case 'getRepToken':
-					return pendingProxyRepBalance > 0n ? childRepToken : zeroAddress
+					return zeroAddress
 				case 'balanceOf':
-					return Array.isArray(request.args) && request.args[0] === zeroAddress ? pendingProxyRepBalance : 0n
+					return 0n
 				default:
 					throw new Error(`Unexpected readContract call: ${String(request.functionName)}`)
 			}
@@ -220,7 +217,7 @@ function createProps(overrides: Partial<ForkAuctionSectionProps> = {}): ForkAuct
 		onInitiateFork: () => undefined,
 		onLoadForkAuction: () => undefined,
 		onMigrateEscalationDeposits: () => undefined,
-		onMigrateUnresolvedEscalation: () => undefined,
+		onMigrateUnresolvedEscalation: _selectedChildOutcome => undefined,
 		onMigrateRepToZoltar: () => undefined,
 		onMigrateVault: () => undefined,
 		onRefundLosingBids: () => undefined,
@@ -438,89 +435,9 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Register Child Destination' })).not.toBeNull()
-		expect(documentQueries.getByText('Register the selected child as a continuation destination. Any available pool REP is staged for that child; registration still succeeds when the current REP amount is zero.')).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Register Yes Child Destination' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Migrate Selected Yes Deposits' })).not.toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Migrate All Yes Deposits' })).toBeNull()
 		expect(documentQueries.getByText('Open')).not.toBeNull()
-	})
-
-	test('loads a registered zero-REP child destination from on-chain registration state', async () => {
-		const renderedComponent = await renderIntoDocument(
-			h(
-				ForkAuctionSection,
-				createProps({
-					currentStageView: 'migration',
-					forkAuctionDetails: createForkAuctionDetails({
-						systemState: 'forkMigration',
-						truthAuction: undefined,
-						truthAuctionStartedAt: 0n,
-					}),
-					forkMigrationReadClient: createForkMigrationReadClient(true),
-					selectedStageView: 'migration',
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		await waitFor(() => expect(documentQueries.getByText('The selected child destination is registered. No pool REP was available to stage.')).not.toBeNull())
-		const registrationButton = documentQueries.getByRole('button', { name: 'Register Yes Child Destination' })
-		if (!(registrationButton instanceof HTMLButtonElement)) throw new Error('Expected child destination registration button')
-		expect(registrationButton.disabled).toBe(true)
-		expect(registrationButton.getAttribute('title')).toBe('The Yes child destination is already registered.')
-	})
-
-	test('reports REP staged in the proxy for a registered child destination', async () => {
-		const renderedComponent = await renderIntoDocument(
-			h(
-				ForkAuctionSection,
-				createProps({
-					currentStageView: 'migration',
-					forkAuctionDetails: createForkAuctionDetails({
-						systemState: 'forkMigration',
-						truthAuction: undefined,
-						truthAuctionStartedAt: 0n,
-					}),
-					forkMigrationReadClient: createForkMigrationReadClient(true, 5n),
-					selectedStageView: 'migration',
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		await waitFor(() => expect(documentQueries.getByText('The selected child destination is registered and its available pool REP has been staged.')).not.toBeNull())
-		expect(documentQueries.queryByText('The selected child destination is registered. No pool REP was available to stage.')).toBeNull()
-	})
-
-	test('separates all-child escalation carry funding from ordinary vault migration', async () => {
-		const walletAddress = getAddress('0x00000000000000000000000000000000000000af')
-		const renderedComponent = await renderIntoDocument(
-			h(
-				ForkAuctionSection,
-				createProps({
-					accountState: createAccountState({ address: walletAddress }),
-					currentStageView: 'migration',
-					reportingDetails: createActiveReportingDetails({
-						settlementState: 'migration-required',
-						viewerVaultExists: true,
-						viewerVaultEscrowedRep: 12n,
-						viewerVaultRepDepositShare: 20n,
-					}),
-					selectedStageView: 'migration',
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		const button = documentQueries.getByRole('button', { name: 'Migrate Vault To Yes' })
-		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected vault migration action button')
-		expect(button.disabled).toBe(true)
-		expect(button.getAttribute('title')).toBe('Fund unresolved escalation carry in every registered child before migrating ordinary vault balances separately.')
-		expect(document.body.textContent?.includes('locked positions and vault balances together')).toBe(false)
 	})
 
 	test('shows advanced own-fork diagnostics only when own-fork migration data is available', async () => {
@@ -533,7 +450,7 @@ describe('ForkAuctionSection', () => {
 						forkOwnSecurityPool: true,
 						ownForkRepBuckets: {
 							vaultRepAtFork: 12n,
-							unallocatedEscrowChildRep: 9n,
+							escalationChildRepPerSelectedOutcome: 9n,
 							escrowSourceRepAtFork: 18n,
 						},
 						systemState: 'forkMigration',
@@ -549,7 +466,7 @@ describe('ForkAuctionSection', () => {
 		let documentQueries = within(document.body)
 		expect(documentQueries.getByText('Advanced Diagnostics')).not.toBeNull()
 		expect(documentQueries.getByText('Pool REP At Fork')).not.toBeNull()
-		expect(documentQueries.getByText('Unallocated Escrow Child REP')).not.toBeNull()
+		expect(documentQueries.getByText('Escalation Child REP per Selected Outcome')).not.toBeNull()
 		expect(documentQueries.getByText('Escrow Source REP At Fork')).not.toBeNull()
 
 		await cleanupRenderedComponent?.()
@@ -576,14 +493,12 @@ describe('ForkAuctionSection', () => {
 		documentQueries = within(document.body)
 		expect(documentQueries.queryByText('Advanced Diagnostics')).toBeNull()
 		expect(documentQueries.queryByText('Pool REP At Fork')).toBeNull()
-		expect(documentQueries.queryByText('Unallocated Escrow Child REP')).toBeNull()
+		expect(documentQueries.queryByText('Escalation Child REP per Selected Outcome')).toBeNull()
 		expect(documentQueries.queryByText('Escrow Source REP At Fork')).toBeNull()
 	})
 
-	test('allows permissionless external-fork carry funding for a target vault after the migration window closes', async () => {
+	test('disables unresolved escalation migration after the migration window closes', async () => {
 		const walletAddress = getAddress('0x00000000000000000000000000000000000000ab')
-		const targetVaultAddress = getAddress('0x00000000000000000000000000000000000000bc')
-		const onMigrateUnresolvedEscalation = mock((_vaultAddressInput?: string) => undefined)
 		const unresolvedDeposit = createReportingDeposit({
 			amount: 12n,
 			cumulativeAmount: 18n,
@@ -597,7 +512,6 @@ describe('ForkAuctionSection', () => {
 					accountState: createAccountState({ address: walletAddress }),
 					currentStageView: 'migration',
 					currentTimestamp: 200n,
-					forkAuctionForm: createForkAuctionForm({ vaultAddress: targetVaultAddress }),
 					forkAuctionDetails: createForkAuctionDetails({
 						currentTime: 200n,
 						migrationEndsAt: 100n,
@@ -606,7 +520,7 @@ describe('ForkAuctionSection', () => {
 						truthAuctionStartedAt: 0n,
 					}),
 					reportingDetails: createActiveReportingDetails({
-						settlementState: 'migration-expired',
+						settlementState: 'migration-required',
 						sides: [
 							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 							{ balance: 12n, deposits: [unresolvedDeposit], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [unresolvedDeposit] },
@@ -616,7 +530,6 @@ describe('ForkAuctionSection', () => {
 						viewerVaultEscrowedRep: 12n,
 						viewerVaultRepDepositShare: 12n,
 					}),
-					onMigrateUnresolvedEscalation,
 					reportingForm: createReportingForm({
 						selectedWithdrawDepositIndexesByOutcome: {
 							invalid: [],
@@ -631,20 +544,82 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const targetVaultSection = documentQueries.getByRole('heading', { name: 'Target Vault Carry Funding' }).closest('section')
-		if (!(targetVaultSection instanceof HTMLElement)) throw new Error('Expected target-vault carry funding section')
-		const targetVaultSectionText = targetVaultSection.textContent?.toLowerCase() ?? ''
-		expect(targetVaultSectionText.includes('your')).toBe(false)
-		expect(targetVaultSectionText.includes('this wallet')).toBe(false)
-		expect(targetVaultSectionText.includes('connected wallet')).toBe(false)
-		expect(targetVaultSectionText.includes('specified vault')).toBe(true)
-		expect(within(targetVaultSection).queryByText('Initially deposited:')).toBeNull()
-		const button = documentQueries.getByRole('button', { name: 'Migrate Unresolved Escalation To All Children' })
+		const button = documentQueries.getByRole('button', { name: 'Migrate Unresolved Escalation To Yes' })
+		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected unresolved migration action button')
+		expect(button.disabled).toBe(true)
+		expect(button.getAttribute('title')).toBe('Migration window has closed for this parent pool.')
+	})
+
+	test('keeps an exported escalation entitlement available for another selected child', async () => {
+		const walletAddress = getAddress('0x00000000000000000000000000000000000000ad')
+		const consumedDeposit = createReportingDeposit({
+			amount: 12n,
+			cumulativeAmount: 18n,
+			depositIndex: 4n,
+			depositor: walletAddress,
+		})
+		const onMigrateUnresolvedEscalation = mock((_selectedChildOutcome: 'invalid' | 'yes' | 'no') => undefined)
+		const parentPool = createChildPool({
+			parent: zeroAddress,
+			questionOutcome: 'none',
+			securityPoolAddress: PARENT_POOL_ADDRESS,
+			systemState: 'forkMigration',
+			vaults: [
+				{
+					escalationEscrowedRep: 0n,
+					repDepositShare: 0n,
+					securityBondAllowance: 0n,
+					unpaidEthFees: 0n,
+					vaultAddress: walletAddress,
+				},
+			],
+		})
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ address: walletAddress }),
+					currentStageView: 'migration',
+					currentTimestamp: 50n,
+					forkAuctionDetails: createForkAuctionDetails({
+						currentTime: 50n,
+						migrationEndsAt: 100n,
+						systemState: 'forkMigration',
+						truthAuction: undefined,
+						truthAuctionStartedAt: 0n,
+					}),
+					forkAuctionForm: createForkAuctionForm({ selectedOutcome: 'no' }),
+					onMigrateUnresolvedEscalation,
+					previewPool: parentPool,
+					reportingDetails: createActiveReportingDetails({
+						settlementState: 'locked',
+						sides: [
+							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: 12n, deposits: [consumedDeposit], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [consumedDeposit] },
+							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+						],
+						viewerEscalationMigrationEntitlement: {
+							initialized: true,
+							materializedByOutcome: { invalid: false, yes: true, no: false },
+							totalCurrentRep: 12n,
+						},
+						viewerVaultEscrowedRep: 0n,
+					}),
+					securityPools: [parentPool, createChildPool({ questionOutcome: 'yes' })],
+					selectedStageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('This wallet’s aggregate escalation entitlement is already captured. Select any child outcome that has not received it yet.')).not.toBeNull()
+		expect(documentQueries.queryByText('Current path: Must migrate into the selected child universe')).toBeNull()
+		const button = documentQueries.getByRole('button', { name: 'Migrate Unresolved Escalation To No' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected unresolved migration action button')
 		expect(button.disabled).toBe(false)
-		expect(documentQueries.getByLabelText('Target Vault Address')).not.toBeNull()
 		fireEvent.click(button)
-		expect(onMigrateUnresolvedEscalation).toHaveBeenCalledWith(targetVaultAddress)
+		expect(onMigrateUnresolvedEscalation).toHaveBeenLastCalledWith('no')
 	})
 
 	test('does not fall back to resolved-deposit migration after unresolved escalation migration expires', async () => {
@@ -686,13 +661,10 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Ordinary vault migration is closed. Any caller may now fund the inherited escalation carry for a target vault in every child continuation.')).not.toBeNull()
+		expect(documentQueries.getByText('The migration window for these unresolved parent escalation deposits has closed.')).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Migrate Unresolved Escalation Locks' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Migrate Resolved Escalation Deposits' })).toBeNull()
-		const unresolvedMigrationButton = documentQueries.getByRole('button', { name: 'Migrate Unresolved Escalation To All Children' })
-		if (!(unresolvedMigrationButton instanceof HTMLButtonElement)) throw new Error('Expected unresolved migration action button')
-		expect(unresolvedMigrationButton.disabled).toBe(true)
-		expect(unresolvedMigrationButton.getAttribute('title')).toBe('Enter a valid target vault address for late carry funding.')
+		expect(documentQueries.queryByRole('button', { name: 'Migrate Unresolved Escalation To Yes' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Migrate Selected Yes Deposits' })).toBeNull()
 	})
 

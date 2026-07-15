@@ -1,4 +1,4 @@
-import { decodeEventLog, getAddress, zeroAddress, type Address, type Hash, type Hex, type TransactionReceipt } from '@zoltar/shared/ethereum'
+import { decodeEventLog, getAddress, zeroAddress, type Address, type Hex, type TransactionReceipt } from '@zoltar/shared/ethereum'
 import { ABIS } from './abis.js'
 import { sortBigIntsAscending } from '@zoltar/shared/bigInt'
 import { ORACLE_ASSUMED_REP_PER_ETH_PRICE } from '@zoltar/shared/oracleInitialReport'
@@ -86,7 +86,6 @@ const QUESTION_OUTCOME_ABI = [
 		type: 'function',
 	},
 ] as const
-const UNRESOLVED_ESCALATION_MIGRATION_BATCH_LIMIT = 128
 const OPEN_ORACLE_PRICE_UNITS = 30n
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
 type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
@@ -996,27 +995,18 @@ export async function loadForkOutcomeMigrationSeedStatus(
 		universeId: bigint
 	},
 ) {
-	const outcomeIndex = BigInt(getReportingOutcomeValue(outcome))
-	const [childUniverseId, migrationProxyAddress, registered] = await Promise.all([
-		client.readContract({
-			abi: Zoltar_Zoltar.abi,
-			functionName: 'getChildUniverseId',
-			address: getZoltarAddress(),
-			args: [universeId, outcomeIndex],
-		}),
-		client.readContract({
-			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-			functionName: 'getMigrationProxyAddress',
-			address: getInfraContractAddresses().securityPoolForker,
-			args: [securityPoolAddress],
-		}),
-		client.readContract({
-			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-			functionName: 'isChildOutcomeRegistered',
-			address: getInfraContractAddresses().securityPoolForker,
-			args: [securityPoolAddress, outcomeIndex],
-		}),
-	])
+	const childUniverseId = await client.readContract({
+		abi: Zoltar_Zoltar.abi,
+		functionName: 'getChildUniverseId',
+		address: getZoltarAddress(),
+		args: [universeId, BigInt(getReportingOutcomeValue(outcome))],
+	})
+	const migrationProxyAddress = await client.readContract({
+		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+		functionName: 'getMigrationProxyAddress',
+		address: getInfraContractAddresses().securityPoolForker,
+		args: [securityPoolAddress],
+	})
 	const childRepToken = await client.readContract({
 		abi: Zoltar_Zoltar.abi,
 		functionName: 'getRepToken',
@@ -1030,7 +1020,7 @@ export async function loadForkOutcomeMigrationSeedStatus(
 			childUniverseId,
 			migrationProxyAddress,
 			pendingProxyRepBalance: 0n,
-			registered,
+			seeded: false,
 		}
 	}
 	const pendingProxyRepBalance = await client.readContract({
@@ -1055,7 +1045,7 @@ export async function loadForkOutcomeMigrationSeedStatus(
 		childUniverseId,
 		migrationProxyAddress,
 		pendingProxyRepBalance,
-		registered,
+		seeded: pendingProxyRepBalance > 0n || childPoolRepBalance > 0n,
 	}
 }
 
@@ -1122,7 +1112,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 	if (!hasTimestamp(block)) throw new Error('Unexpected block response')
 	const marketDetails = await loadMarketDetails(client, questionId)
 	const { auctionableRepAtFork, truthAuctionStartedAt, migratedRep, auctionedSecurityBondAllowance, forkOwnSecurityPool, forkOutcomeIndex } = requireForkDataView(forkData)
-	const [ownForkMigrationOwnFork, ownForkMigrationAuctionableRepAtFork, vaultRepAtFork, unallocatedEscrowChildRep, escrowSourceRepAtFork] = ownForkMigrationStatusTuple
+	const [ownForkMigrationOwnFork, ownForkMigrationAuctionableRepAtFork, vaultRepAtFork, escalationChildRepPerSelectedOutcome, escrowSourceRepAtFork] = ownForkMigrationStatusTuple
 	const systemState = getSecurityPoolSystemState(systemStateValue)
 	const forkOutcome = getForkOutcomeKey(forkOutcomeIndex, parentSecurityPoolAddress)
 	const hasForkActivity = deriveHasForkActivity({
@@ -1263,7 +1253,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 			? {
 					ownForkRepBuckets: {
 						vaultRepAtFork,
-						unallocatedEscrowChildRep,
+						escalationChildRepPerSelectedOutcome,
 						escrowSourceRepAtFork,
 					},
 				}
@@ -1406,29 +1396,21 @@ export async function migrateEscalationDeposits(client: WriteClient, securityPoo
 		}))
 	})
 }
-export async function migrateVaultWithUnresolvedEscalation(client: WriteClient, securityPoolAddress: Address, vaultAddress: Address, universeId: bigint) {
-	return await executeForkAuctionAction(client, 'migrateUnresolvedEscalation', securityPoolAddress, universeId, async () => {
-		let lastHash: Hash | undefined
-		for (let batchIndex = 0; batchIndex < UNRESOLVED_ESCALATION_MIGRATION_BATCH_LIMIT; batchIndex += 1) {
-			lastHash = await writeContractAndWait(client, () => ({
+export async function migrateVaultWithUnresolvedEscalation(client: WriteClient, securityPoolAddress: Address, vaultAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) {
+	const outcomeIndex = getReportingOutcomeValue(outcome)
+	return await executeForkAuctionAction(
+		client,
+		'migrateUnresolvedEscalation',
+		securityPoolAddress,
+		universeId,
+		async () =>
+			await writeContractAndWait(client, () => ({
 				address: getInfraContractAddresses().securityPoolForker,
 				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'migrateVaultWithUnresolvedEscalation',
-				args: [securityPoolAddress, vaultAddress],
-			}))
-			if (!(await hasPendingUnresolvedEscalationMigration(client, securityPoolAddress, vaultAddress))) return lastHash
-		}
-		throw new Error('Unresolved escalation migration still has pending batches after the transaction limit')
-	})
-}
-
-async function hasPendingUnresolvedEscalationMigration(client: Pick<ReadClient, 'readContract'>, securityPoolAddress: Address, vaultAddress: Address) {
-	return await client.readContract({
-		address: getInfraContractAddresses().securityPoolForker,
-		abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-		functionName: 'hasPendingUnresolvedEscalationMigration',
-		args: [securityPoolAddress, vaultAddress],
-	})
+				args: [securityPoolAddress, vaultAddress, BigInt(outcomeIndex)],
+			})),
+	)
 }
 export async function startTruthAuctionForSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
 	return await executeForkAuctionAction(

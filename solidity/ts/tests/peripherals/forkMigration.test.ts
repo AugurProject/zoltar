@@ -172,7 +172,7 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe((await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).unresolvedEscalationAtFork, true, 'the fork should preserve the unresolved escalation snapshot')
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-			await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address)
+			await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'delayed initialization should leave the child migration recoverable')
@@ -280,7 +280,27 @@ describe('Peripherals: fork migration', () => {
 			assert.ok(forkData.auctionableRepAtFork > 0n, 'repAtFork should keep a positive child REP anchor after the own-game fork')
 			assert.ok(forkData.auctionableRepAtFork <= repBalance + forkThreshold * 2n, 'repAtFork should stay bounded by the REP that actually participated in the own-game fork')
 			strictEqualTypeSafe(ownForkRepBuckets.escrowSourceRepAtFork, forkThreshold * 2n, 'own-fork source escrow should equal the fork-triggering escalation principal')
-			strictEqualTypeSafe(ownForkRepBuckets.vaultRepAtFork + ownForkRepBuckets.unallocatedEscrowChildRep, forkData.auctionableRepAtFork, 'own-fork child REP buckets should partition the full auctionable child REP anchor')
+			strictEqualTypeSafe(ownForkRepBuckets.vaultRepAtFork + ownForkRepBuckets.escalationChildRepPerSelectedOutcome, forkData.auctionableRepAtFork, 'own-fork child REP buckets should partition the full auctionable child REP anchor')
+		})
+
+		test('own-fork diagnostics retain the complete escalation backing available to every selected outcome', async () => {
+			const { ownForkRepBuckets } = await setupOwnForkWithEscrow()
+			const perSelectedOutcome = ownForkRepBuckets.escalationChildRepPerSelectedOutcome
+			assert.ok(perSelectedOutcome > 0n, 'test setup should have escalation backing for each selected outcome')
+
+			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+			const afterYesChild = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
+			strictEqualTypeSafe(afterYesChild.escalationChildRepPerSelectedOutcome, perSelectedOutcome, 'creating one child must not make the diagnostic imply that another outcome lost its backing')
+
+			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.No)
+			const afterNoChild = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
+			strictEqualTypeSafe(afterNoChild.escalationChildRepPerSelectedOutcome, perSelectedOutcome, 'each selected outcome should independently retain the fork-time escalation backing amount')
+			for (const outcome of [QuestionOutcome.Yes, QuestionOutcome.No]) {
+				const universe = getChildUniverseId(genesisUniverse, outcome)
+				const childPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, universe, questionId, securityMultiplier)
+				const childGame = await getSecurityPoolsEscalationGame(client, childPool.securityPool)
+				strictEqualTypeSafe(await getERC20Balance(client, getRepTokenAddress(universe), childGame), perSelectedOutcome, 'each created child should receive the complete per-selected-outcome escalation backing')
+			}
 		})
 
 		test('initiateSecurityPoolFork reverts after the own-game fork and ignores stray REP transferred to the forker', async () => {
@@ -1652,16 +1672,6 @@ describe('Peripherals: fork migration', () => {
 			await forkUniverse(client, genesisUniverse, questionId)
 			await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
-			strictEqualTypeSafe(
-				await client.readContract({
-					abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-					functionName: 'isChildOutcomeRegistered',
-					address: getInfraContractAddresses().securityPoolForker,
-					args: [securityPoolAddresses.securityPool, BigInt(QuestionOutcome.Yes)],
-				}),
-				true,
-				'zero-REP child destination registration should remain observable',
-			)
 
 			strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'Parent is forked')
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -1676,7 +1686,6 @@ describe('Peripherals: fork migration', () => {
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'yes System should be operational right away')
 			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), 0n, 'child contract did not record the amount correctly')
-			await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.No]), /closed/i, 'zero-migration-REP pools must not register a new destination after the deadline')
 		})
 	})
 
@@ -1910,7 +1919,7 @@ describe('Peripherals: fork migration', () => {
 			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 			strictEqualTypeSafe(await getRepToken(client, yesSecurityPool.securityPool), getRepTokenAddress(yesUniverse), 'createChildUniverse should still deploy the requested child branch at the inclusive external-fork deadline')
 
-			await mockWindow.setTime(migrationDeadline)
+			// Child creation mines at the inclusive deadline; the next transaction is one second later.
 			await assert.rejects(createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.No), /(Migration closed|Own-fork window closed)/i)
 		})
 
@@ -1930,7 +1939,7 @@ describe('Peripherals: fork migration', () => {
 			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 			strictEqualTypeSafe(await getRepToken(client, yesSecurityPool.securityPool), getRepTokenAddress(yesUniverse), 'createChildUniverse should still deploy the requested own-fork child branch at the inclusive migration deadline')
 
-			await mockWindow.setTime(migrationDeadline)
+			// Child creation mines at the inclusive deadline; the next transaction is one second later.
 			await assert.rejects(createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.No), /(Migration closed|Own-fork window closed)/i)
 		})
 
@@ -2013,7 +2022,7 @@ describe('Peripherals: fork migration', () => {
 			assert.ok(poolBalance > 0n, 'migrateRepToZoltar should still split child REP at the inclusive migration deadline')
 		})
 
-		test('migrateRepToZoltar remains closed once a child branch reaches pricing', async () => {
+		test('migrateRepToZoltar rejects once the child branch is already priced', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 			const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
@@ -2026,7 +2035,7 @@ describe('Peripherals: fork migration', () => {
 			await mockWindow.setTime((await mockWindow.getTime()) + 60n * DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 
-			await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes]), /closed/i)
+			await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes]), /Child closed/)
 		})
 
 		test('migrateVault preserves escalation migration state', async () => {
@@ -2195,7 +2204,7 @@ describe('Peripherals: fork migration', () => {
 			await forkZoltarWithOwnEscalationGame(client, securityPoolAddresses.securityPool)
 			const ownForkRepBuckets = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
 			assert.ok(ownForkRepBuckets.vaultRepAtFork > 0n, 'test setup should leave unlocked vault REP at fork')
-			assert.ok(ownForkRepBuckets.unallocatedEscrowChildRep > 0n, 'test setup should include separate escalation REP at fork')
+			assert.ok(ownForkRepBuckets.escalationChildRepPerSelectedOutcome > 0n, 'test setup should include separate escalation REP at fork')
 			const expectedChildRepClaim = (parentVaultBeforeFork.repDepositShare * ownForkRepBuckets.vaultRepAtFork) / parentDenominatorBeforeFork
 
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
@@ -2222,7 +2231,7 @@ describe('Peripherals: fork migration', () => {
 			await forkZoltarWithOwnEscalationGame(client, securityPoolAddresses.securityPool)
 			const ownForkRepBuckets = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
 			assert.ok(ownForkRepBuckets.vaultRepAtFork > 0n, 'test setup should leave unlocked vault REP at fork')
-			assert.ok(ownForkRepBuckets.unallocatedEscrowChildRep > 0n, 'test setup should include separate escalation REP at fork')
+			assert.ok(ownForkRepBuckets.escalationChildRepPerSelectedOutcome > 0n, 'test setup should include separate escalation REP at fork')
 
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)

@@ -7,6 +7,7 @@ import { ISecurityPool, SystemState } from './interfaces/ISecurityPool.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { SecurityPoolMigrationProxy } from './SecurityPoolMigrationProxy.sol';
+import { EscalationGame } from './EscalationGame.sol';
 import { SecurityPoolForkerBase } from './SecurityPoolForkerBase.sol';
 import { SecurityPoolForkerForkData, OwnForkChildRepAllocation } from './SecurityPoolForkerTypes.sol';
 
@@ -85,15 +86,10 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		child = childrenByPoolAndOutcome[parent][outcomeIndex];
 		if (address(child) == address(0x0)) {
 			require(parent.systemState() == SystemState.PoolForked, 'Parent not forked');
-			if (registeredContinuationDeploymentByPool[parent]) {
-				require(childOutcomeRegisteredByPool[parent][outcomeIndex], 'Unregistered continuation');
-			} else {
-				require(!escalationMigrationStartedByPool[parent], 'Escalation destinations locked');
-				require(
-					block.timestamp <= zoltar.getForkTime(parent.universeId()) + SecurityPoolUtils.MIGRATION_TIME,
-					'Migration closed'
-				);
-			}
+			require(
+				block.timestamp <= zoltar.getForkTime(parent.universeId()) + SecurityPoolUtils.MIGRATION_TIME,
+				'Migration closed'
+			);
 			uint248 childUniverseId = uint248(uint256(keccak256(abi.encode(parent.universeId(), outcomeIndex))));
 			if (address(zoltar.getRepToken(childUniverseId)) == address(0x0)) {
 				zoltar.deployChild(parent.universeId(), outcomeIndex);
@@ -118,10 +114,6 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 			forkDataByPool[child].truthAuction = truthAuction;
 			trustedAuctionAddresses[address(truthAuction)] = true;
 			childrenByPoolAndOutcome[parent][outcomeIndex] = child;
-			if (!childOutcomeRegisteredByPool[parent][outcomeIndex]) {
-				childOutcomeRegisteredByPool[parent][outcomeIndex] = true;
-				childOutcomeIndexesByPool[parent].push(outcomeIndex);
-			}
 			parent.authorizeChildPool(child);
 			emit ChildPoolLinked(parent, outcomeIndex, child, truthAuction);
 
@@ -145,7 +137,25 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		}
 
 		_initializeChildForkedEscalationGameIfNeeded(parent, child);
+		_ensureChildEscalationBacking(parent, outcomeIndex, child);
 		_sweepChildRepToPool(parent, outcomeIndex);
+	}
+
+	function _ensureChildEscalationBacking(ISecurityPool parent, uint256 outcomeIndex, ISecurityPool child) internal {
+		SecurityPoolForkerForkData storage parentForkData = forkDataByPool[parent];
+		if (
+			!parentForkData.unresolvedEscalationAtFork ||
+			escalationBackingMaterializedByPoolAndOutcome[parent][outcomeIndex]
+		) return;
+		escalationBackingMaterializedByPoolAndOutcome[parent][outcomeIndex] = true;
+		uint256 childRepAmount = parentForkData.escalationChildRepAtFork;
+		if (childRepAmount == 0) return;
+		EscalationGame childEscalationGame = child.escalationGame();
+		require(address(childEscalationGame) != address(0x0), 'Child game missing');
+		_splitMigrationRepToChild(parent, outcomeIndex, childRepAmount, parentForkData.ownFork, true);
+		SecurityPoolMigrationProxy migrationProxy = migrationProxyByPool[parent];
+		require(address(migrationProxy) != address(0x0), 'Proxy missing');
+		migrationProxy.sweepChildRep(address(childEscalationGame), child.repToken(), childRepAmount);
 	}
 
 	function _sweepChildRepToPool(ISecurityPool parent, uint256 outcomeIndex) internal {
@@ -322,18 +332,6 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		require(newAllocatedAmount <= escalationChildRepAtFork, 'Escrow REP high');
 		allocated.escrowChildRepUsed = newAllocatedAmount;
 		emit OwnForkChildRepAllocated(parent, outcomeIndex, allocated.vaultChildRepUsed, allocated.escrowChildRepUsed);
-	}
-
-	function _capOwnForkEscalationChildRep(
-		ISecurityPool parent,
-		uint256 outcomeIndex,
-		uint256 requestedAmount
-	) internal view returns (uint256) {
-		uint256 escalationChildRepAtFork = forkDataByPool[parent].escalationChildRepAtFork;
-		uint256 allocatedAmount = ownForkChildRepAllocationByPoolAndOutcome[parent][outcomeIndex].escrowChildRepUsed;
-		if (allocatedAmount >= escalationChildRepAtFork) return 0;
-		uint256 remainingAmount = escalationChildRepAtFork - allocatedAmount;
-		return requestedAmount < remainingAmount ? requestedAmount : remainingAmount;
 	}
 
 	function _splitMigrationRepToChild(

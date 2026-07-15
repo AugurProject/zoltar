@@ -316,8 +316,8 @@ export const UI_STRING_OWN_ESCALATION_FORK_SUBMITTED_DETAIL = 'This pool submitt
 export const UI_STRING_ZOLTAR_UNIVERSE_FORK_SUBMITTED_DETAIL = 'The selected Zoltar universe fork was submitted on-chain.'
 export const UI_STRING_POOL_READY_FOR_FORK_MIGRATION_DETAIL = 'This pool entered fork handling and is ready for migration actions.'
 export const UI_STRING_ESCALATION_DEPOSITS_MIGRATED_DETAIL = 'Selected escalation deposits were migrated into the chosen child universe.'
-export const UI_STRING_CHILD_DESTINATION_REGISTERED_AND_AVAILABLE_POOL_REP_STAGED = 'The child destination was registered; any available pool REP was staged for that child.'
-export const UI_STRING_UNRESOLVED_ESCALATION_MIGRATED_DETAIL = 'All unresolved parent escalation locks for the specified vault were copied into every registered child continuation game.'
+export const UI_STRING_POOL_LEVEL_REP_WAS_MIGRATED_INTO_THE_SELECTED_CHILD_UNIVERSE = 'Pool-level REP was migrated into the selected child universe.'
+export const UI_STRING_UNRESOLVED_ESCALATION_MIGRATED_DETAIL = 'The wallet’s aggregate escalation entitlement was captured and materialized in the chosen child universe. It remains available for other unselected child outcomes until the migration deadline.'
 export const UI_STRING_VAULT_MIGRATED_DETAIL = 'Vault REP collateral and security-bond allowance were migrated into the selected child universe.'
 export const UI_STRING_LOSING_BIDS_REFUNDED_DETAIL = 'Selected losing truth-auction bids were refunded.'
 export const UI_STRING_IMPORTED_FORK_CARRIED_ESCALATION_DEPOSITS_WERE_SETTLED = 'Imported fork-carried escalation deposits were settled.'
@@ -500,15 +500,15 @@ export const UI_TEMPLATE_TRUTH_AUCTION_CAN_BE_STARTED_IN_VALUE_ONCE_MIGRATION_EN
 export const UI_STRING_TRUTH_AUCTION_ALREADY_STARTED = 'Truth auction already started.'
 export const UI_STRING_LOADING_ELIGIBLE_ESCALATION_DEPOSITS = 'Loading eligible escalation deposits.'
 export const UI_STRING_USE_UNRESOLVED_ESCALATION_MIGRATION_FOR_THIS_PARENT_POOL = 'Use unresolved escalation migration for this parent pool.'
-export const UI_STRING_UNRESOLVED_ESCALATION_MIGRATION_WINDOW_CLOSED_REASON = 'The owner-directed deposit migration window has closed; unresolved fork carry may still be funded from the fork workflow.'
+export const UI_STRING_UNRESOLVED_ESCALATION_MIGRATION_WINDOW_CLOSED_REASON = 'The migration window for unresolved parent escalation deposits has closed.'
 export const UI_TEMPLATE_NO_VALUE_ESCALATION_DEPOSITS_ARE_CURRENTLY_AVAILABLE_TO_MIGRATE_FOR_THIS_WALLET = (value0: UiStringTemplateValue) => `No ${value0} escalation deposits are currently available to migrate for this wallet.`
 export const UI_STRING_SELECT_AT_LEAST_ONE_DEPOSIT_TO_MIGRATE = 'Select at least one deposit to migrate.'
 export const UI_STRING_UNRESOLVED_ESCALATION_MIGRATION_IS_UNAVAILABLE_FOR_THIS_POOL = 'Unresolved escalation migration is unavailable for this pool.'
 export const UI_STRING_LOADING_UNRESOLVED_ESCALATION_DEPOSITS = 'Loading unresolved escalation deposits.'
-export const UI_TEMPLATE_CHILD_DESTINATION_IS_ALREADY_REGISTERED = (value0: UiStringTemplateValue) => `The ${value0} child destination is already registered.`
-export const UI_TEMPLATE_REGISTER_THE_VALUE_CHILD_DESTINATION_BEFORE_MOVING_VAULT_BALANCES = (value0: UiStringTemplateValue) => `Register the ${value0} child destination before moving vault balances.`
+export const UI_TEMPLATE_POOL_REP_HAS_ALREADY_BEEN_MIGRATED_TO_THE_VALUE_UNIVERSE = (value0: UiStringTemplateValue) => `Pool REP has already been migrated to the ${value0} universe.`
+export const UI_TEMPLATE_MIGRATE_POOL_TO_THE_VALUE_UNIVERSE_BEFORE_MOVING_VAULT_BALANCES = (value0: UiStringTemplateValue) => `Migrate pool to the ${value0} universe before moving vault balances.`
 export const UI_STRING_VAULT_MIGRATION_IS_ALREADY_COMPLETE_FOR_THIS_WALLET = 'Vault migration is already complete for this wallet.'
-export const UI_STRING_FUND_UNRESOLVED_ESCALATION_CARRY_BEFORE_MIGRATING_ORDINARY_VAULT_BALANCES = 'Fund unresolved escalation carry in every registered child before migrating ordinary vault balances separately.'
+export const UI_STRING_USE_UNRESOLVED_ESCALATION_MIGRATION_TO_MOVE_LOCKED_POSITIONS_AND_VAULT_BALANCES_TOGETHER = 'Use unresolved escalation migration to move locked positions and vault balances together.'
 export const UI_STRING_SELECTED_LADDER_PRICE = 'Selected ladder price: '
 export const UI_STRING_BID_PRICE_ETH_REP = 'Bid Price (ETH / REP)'
 export const UI_STRING_BID_ESTIMATED_REP_DETAIL_INTRO = 'At the entered price, this bid would buy roughly '
@@ -529,7 +529,7 @@ export const UI_STRING_MIGRATION_ENDS = 'Migration Ends'
 export const UI_STRING_FORK_TYPE = 'Fork Type'
 export const UI_STRING_ADVANCED_DIAGNOSTICS = 'Advanced Diagnostics'
 export const UI_STRING_POOL_REP_AT_FORK = 'Pool REP At Fork'
-export const UI_STRING_UNALLOCATED_ESCROW_CHILD_REP = 'Unallocated Escrow Child REP'
+export const UI_STRING_ESCALATION_CHILD_REP_PER_SELECTED_OUTCOME = 'Escalation Child REP per Selected Outcome'
 export const UI_STRING_ESCROW_SOURCE_REP_AT_FORK = 'Escrow Source REP At Fork'
 export const UI_TEMPLATE_SETTLE_SELECTED_VALUE_FORK_CARRIED_DEPOSITS = (value0: UiStringTemplateValue) => `Settle Selected ${value0} Fork-Carried Deposits`
 export const UI_STRING_SETTLING_FORK_CARRIED_DEPOSITS_TRUNCATED = 'Settling fork-carried deposits...'
@@ -539,20 +539,16 @@ export const UI_STRING_TRIGGERED_AT = 'Triggered At'
 export const UI_STRING_FORK_INACTIVE_DETAIL = 'The system is not forking.'
 export const UI_STRING_YOUR_MIGRATION_BALANCES = 'Your Migration Balances'
 export const UI_STRING_WALLET_LEVEL_BALANCES_IN_THE_PARENT_POOL_THAT_MAY_STILL_NEED_MIGRATION = 'Wallet-level balances in the parent pool that may still need migration.'
-export const UI_STRING_TARGET_VAULT_CARRY_FUNDING = 'Target Vault Carry Funding'
-export const UI_STRING_FUND_INHERITED_ESCALATION_CARRY_FOR_THE_SPECIFIED_VAULT = 'Fund inherited escalation carry for the specified vault without migrating its ordinary vault position.'
 export const UI_STRING_MIGRATE_UNRESOLVED_ESCALATION_LOCKS = 'Migrate Unresolved Escalation Locks'
-export const UI_STRING_UNRESOLVED_ESCALATION_LATE_EXTERNAL_FUNDING_DETAIL = 'Ordinary vault migration is closed. Any caller may now fund the inherited escalation carry for a target vault in every child continuation.'
-export const UI_STRING_UNRESOLVED_ESCALATION_LATE_OWN_FUNDING_DETAIL = 'Ordinary vault migration is closed. The connected vault may still fund its inherited escalation carry in every child continuation.'
-export const UI_STRING_UNRESOLVED_ESCALATION_MIGRATION_WITH_VAULT_DETAIL = 'All unresolved parent escalation locks on this wallet will migrate into every child continuation game. Your ordinary vault position still migrates separately into the selected child universe.'
-export const UI_STRING_TARGET_VAULT_ADDRESS = 'Target Vault Address'
-export const UI_STRING_ENTER_A_VALID_TARGET_VAULT_ADDRESS_FOR_LATE_CARRY_FUNDING = 'Enter a valid target vault address for late carry funding.'
+export const UI_STRING_UNRESOLVED_ESCALATION_MIGRATION_WINDOW_CLOSED_DETAIL = 'The migration window for these unresolved parent escalation deposits has closed.'
+export const UI_STRING_UNRESOLVED_ESCALATION_MIGRATION_WITH_VAULT_DETAIL = 'This action captures all unresolved parent escalation totals for this wallet and materializes that aggregate entitlement in the selected child universe.'
 export const UI_STRING_LOADING_UNRESOLVED_ESCALATION_DEPOSITS_FOR_THE_CONNECTED_WALLET = 'Loading unresolved escalation deposits for the connected wallet…'
-export const UI_STRING_UNRESOLVED_ESCALATION_ALL_CHILDREN_DETAIL = 'All unresolved parent escalation locks on this wallet are copied into every registered child continuation. They cannot be directed to only one child.'
-export const UI_STRING_SPECIFIED_VAULT_ESCALATION_ALL_CHILDREN_DETAIL = 'All unresolved parent escalation locks for the specified vault are copied into every registered child continuation. They cannot be directed to only one child.'
+export const UI_STRING_UNRESOLVED_ESCALATION_MULTI_CHILD_DETAIL = 'The first action captures the wallet’s Invalid, Yes, and No aggregate totals. Before the deadline, the stored entitlement can be reused in any additional child universe that this wallet selects.'
+export const UI_STRING_UNRESOLVED_ESCALATION_ENTITLEMENT_CAPTURED_DETAIL = 'This wallet’s aggregate escalation entitlement is already captured. Select any child outcome that has not received it yet.'
+export const UI_TEMPLATE_UNRESOLVED_ESCALATION_ENTITLEMENT_ALREADY_MATERIALIZED = (value0: UiStringTemplateValue) => `This wallet’s escalation entitlement is already materialized in the ${value0} child universe.`
 export const UI_STRING_UNRESOLVED_DEPOSITS_REMAIN_FOR_THIS_WALLET = 'unresolved deposits remain for this wallet.'
-export const UI_STRING_ESCALATION_PATH_MUST_MIGRATE_INTO_EVERY_CHILD_CONTINUATION = 'Escalation path: Must migrate into every child continuation'
-export const UI_STRING_MIGRATE_UNRESOLVED_ESCALATION_TO_ALL_CHILDREN = 'Migrate Unresolved Escalation To All Children'
+export const UI_STRING_CURRENT_PATH_MUST_MIGRATE_INTO_THE_SELECTED_CHILD_UNIVERSE = 'Current path: Must migrate into the selected child universe'
+export const UI_TEMPLATE_MIGRATE_UNRESOLVED_ESCALATION_TO_VALUE = (value0: UiStringTemplateValue) => `Migrate Unresolved Escalation To ${value0}`
 export const UI_STRING_MIGRATING_UNRESOLVED_ESCALATION_TRUNCATED = 'Migrating unresolved escalation...'
 export const UI_STRING_MIGRATE_RESOLVED_ESCALATION_DEPOSITS = 'Migrate Resolved Escalation Deposits'
 export const UI_STRING_SELECTED_DEPOSITS_LEAVE_THE_PARENT_POOL_AND_REAPPEAR_ON_THE_CHOSEN_CHILD = 'Selected deposits leave the parent pool and reappear on the chosen child universe for later settlement.'
@@ -564,12 +560,12 @@ export const UI_STRING_WORTH_NOW_PENDING_MIGRATION_FINALIZATION = 'Worth now: Pe
 export const UI_STRING_CURRENT_PATH_ELIGIBLE_FOR_CHILD_POOL_MIGRATION = 'Current path: Eligible for child-pool migration'
 export const UI_TEMPLATE_MIGRATE_SELECTED_VALUE_DEPOSITS = (value0: UiStringTemplateValue) => `Migrate Selected ${value0} Deposits`
 export const UI_STRING_MIGRATING_ESCALATION_DEPOSITS_TRUNCATED = 'Migrating escalation deposits...'
-export const UI_STRING_REGISTER_CHILD_DESTINATION = 'Register Child Destination'
-export const UI_STRING_CHILD_DESTINATION_REGISTRATION_DETAIL = 'Register the selected child as a continuation destination. Any available pool REP is staged for that child; registration still succeeds when the current REP amount is zero.'
-export const UI_STRING_CHILD_DESTINATION_ALREADY_REGISTERED_WITH_REP = 'The selected child destination is registered and its available pool REP has been staged.'
-export const UI_STRING_CHILD_DESTINATION_ALREADY_REGISTERED_WITHOUT_REP = 'The selected child destination is registered. No pool REP was available to stage.'
-export const UI_TEMPLATE_REGISTER_VALUE_CHILD_DESTINATION = (value0: UiStringTemplateValue) => `Register ${value0} Child Destination`
-export const UI_STRING_REGISTERING_CHILD_DESTINATION_TRUNCATED = 'Registering child destination...'
+export const UI_STRING_MIGRATE_POOL_TO_UNIVERSE = 'Migrate Pool To Universe'
+export const UI_STRING_POOL_REP_MIGRATION_DETAIL = 'This moves pool-level REP shared by the selected outcome into the child universe. It affects the outcome pool, not just your vault.'
+export const UI_STRING_POOL_REP_HAS_ALREADY_BEEN_MIGRATED_TO_THE_SELECTED_CHILD_UNIVERSE = 'Pool REP has already been migrated to the selected child universe.'
+export const UI_STRING_POOL_REP_STAGED_FOR_VAULT_MIGRATION_DETAIL = 'Pool REP for this outcome is already staged and will sweep into the child universe during vault migration.'
+export const UI_TEMPLATE_MIGRATE_POOL_TO_VALUE_UNIVERSE = (value0: UiStringTemplateValue) => `Migrate Pool To ${value0} Universe`
+export const UI_STRING_MIGRATING_POOL_TO_UNIVERSE_TRUNCATED = 'Migrating pool to universe...'
 export const UI_STRING_VAULT_MIGRATION_DETAIL = 'This moves all remaining REP collateral and security-bond allowance from your parent vault into the selected child pool for this outcome.'
 export const UI_TEMPLATE_MIGRATE_VAULT_TO_VALUE = (value0: UiStringTemplateValue) => `Migrate Vault To ${value0}`
 export const UI_STRING_ALREADY_MIGRATED_STATUS = 'Already migrated'
@@ -1360,7 +1356,7 @@ export const UI_STRINGS = {
 	},
 	reportingSection: {
 		belowMinimumSelectedSideCapacityReason: 'Remaining selected-side capacity is below the minimum report bond.',
-		continueInForkAndMigrationReason: 'Continue in Fork & Migration to fund unresolved escalation carry in every registered child continuation.',
+		continueInForkAndMigrationReason: 'Continue in Fork & Migration to migrate unresolved escalation deposits into a child universe.',
 		continueInForkAndMigrationLabel: 'Continue in Fork & Migration',
 		contributionAmountHelpText: 'This is the REP you are willing to lock on the selected side. Larger amounts can change the proposed outcome or extend the escalation timer.',
 		contributionAmountLabel: 'Contribution Amount (REP)',
@@ -1452,7 +1448,7 @@ export const UI_STRINGS = {
 		reportingResolvedDetailLabel: (selectedOutcomeLabel: string) => `Market finalized as ${selectedOutcomeLabel}.`,
 		reportingTimedOutReason: UI_STRING_ESCALATION_ENDED_BY_TIMEOUT_THE_WINNER_IS_COMPUTED,
 		reportingTimedOutDetail: UI_STRING_ESCALATION_ENDED_BY_TIMEOUT_THE_WINNER_IS_COMPUTED,
-		migrationExpiredReason: 'The owner-directed deposit migration window has closed; unresolved fork carry may still be funded from the fork workflow.',
+		migrationExpiredReason: 'The migration window for these unresolved escalation deposits has closed.',
 		worthAfterFinalizationPendingLabel: 'Worth after finalization: Pending finalization',
 		worthNowLabel: 'Worth now:',
 		selectOutcomeAboveToEnableReportingMessage: UI_STRING_SELECT_AN_OUTCOME_SIDE_ABOVE_TO_ENABLE_REPORTING,

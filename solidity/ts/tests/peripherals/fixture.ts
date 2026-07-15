@@ -109,19 +109,6 @@ const getMigrationProxyAddressAbi = [
 	},
 ] as const satisfies Abi
 
-const migrateVaultWithUnresolvedEscalationReturnAbi = [
-	{
-		inputs: [
-			{ internalType: 'contract ISecurityPool', name: 'securityPool', type: 'address' },
-			{ internalType: 'address', name: 'vault', type: 'address' },
-		],
-		name: 'migrateVaultWithUnresolvedEscalation',
-		outputs: [{ internalType: 'bool', name: 'moreToMigrate', type: 'bool' }],
-		stateMutability: 'nonpayable',
-		type: 'function',
-	},
-] as const satisfies Abi
-
 function formatStorageSlot(slot: bigint) {
 	return `0x${slot.toString(16).padStart(64, '0')}`
 }
@@ -405,7 +392,6 @@ function usePeripheralsTestFixture() {
 		peripherals_tokens_ShareToken_ShareToken,
 		test_peripherals_OwnForkEscalationClaimHarness_OwnForkEscalationClaimHarness,
 		getMigrationProxyAddressAbi,
-		migrateVaultWithUnresolvedEscalationReturnAbi,
 		formatStorageSlot,
 		getMappingStorageSlot,
 		reportBond,
@@ -444,9 +430,9 @@ export function usePeripheralsDeploymentAndOwnForkEscalationFixture() {
 		'TEST_ADDRESSES',
 		'approveToken',
 		'contractExists',
-		'sortStringArrayByKeccak',
 		'getChildUniverseId',
 		'getERC20Balance',
+		'sortStringArrayByKeccak',
 		'addressString',
 		'approveAndDepositRep',
 		'manipulatePriceOracle',
@@ -458,7 +444,6 @@ export function usePeripheralsDeploymentAndOwnForkEscalationFixture() {
 		'createQuestion',
 		'getQuestionId',
 		'getQuestionEndDate',
-		'getScalarOutcomeIndex',
 		'OperationType',
 		'QuestionOutcome',
 		'SystemState',
@@ -471,7 +456,6 @@ export function usePeripheralsDeploymentAndOwnForkEscalationFixture() {
 		'forkZoltarWithOwnEscalationGame',
 		'claimForkedEscalationDeposits',
 		'migrateRepToZoltar',
-		'migrateVault',
 		'migrateVaultWithUnresolvedEscalation',
 		'getEscalationGameOutcomeState',
 		'forkUniverse',
@@ -526,7 +510,6 @@ export function usePeripheralsEscalationMigrationFixture() {
 		'TEST_ADDRESSES',
 		'approveToken',
 		'contractExists',
-		'sortStringArrayByKeccak',
 		'getChildUniverseId',
 		'getERC20Balance',
 		'addressString',
@@ -538,7 +521,6 @@ export function usePeripheralsEscalationMigrationFixture() {
 		'createQuestion',
 		'getQuestionId',
 		'getQuestionEndDate',
-		'getScalarOutcomeIndex',
 		'OperationType',
 		'QuestionOutcome',
 		'SystemState',
@@ -548,7 +530,6 @@ export function usePeripheralsEscalationMigrationFixture() {
 		'getForkedEscrowChildRepByOutcomeAndVault',
 		'getForkedEscrowPrincipalByOutcomeAndVault',
 		'getSecurityPoolForkerForkData',
-		'getOwnForkRepBuckets',
 		'forkZoltarWithOwnEscalationGame',
 		'initiateSecurityPoolFork',
 		'claimForkedEscalationDeposits',
@@ -571,6 +552,8 @@ export function usePeripheralsEscalationMigrationFixture() {
 		'getCompleteSetCollateralAmount',
 		'getRepToken',
 		'getAwaitingForkContinuation',
+		'getActiveVaultCount',
+		'getActiveVaults',
 		'getSecurityPoolsEscalationGame',
 		'getSecurityVault',
 		'getSystemState',
@@ -580,7 +563,6 @@ export function usePeripheralsEscalationMigrationFixture() {
 		'peripherals_EscalationGame_EscalationGame',
 		'peripherals_SecurityPoolForker_SecurityPoolForker',
 		'getMigrationProxyAddressAbi',
-		'migrateVaultWithUnresolvedEscalationReturnAbi',
 		'formatStorageSlot',
 		'getMappingStorageSlot',
 		'reportBond',

@@ -36,18 +36,27 @@
 						After sustained local non-decision, a caller can invoke the security-pool
 						fork path, which makes Zoltar fork the market's current universe. Before that
 						happens, a caller may use a different market's ended question to make Zoltar
-						fork that universe first; in that case, the fork freezes the unresolved
-						escalation state once. As each registered child
-						universe is created, its paused continuation game starts from that same state.
-						Bounded migration calls then fund every registered continuation against the same
-						frozen parent carry, without asking the vault to choose a child.
-						After it resumes, it can reach non-decision. A caller can then invoke the
+						fork that universe first; in that case, the
+						unresolved escalation migrates into selected child universes as paused
+						continuation games. Each continuation still disputes the original question
+						and, after it resumes, can reach non-decision. A caller can then invoke the
 						security-pool fork path, which forks that child universe using the original
 						question. The first fork's branches represent the
 						unrelated question's outcomes, while the recursive fork's branches represent
 						the original question's outcomes. That sequence drives the rest of
 						Placeholder: pool creation, trading, escalation, fork migration, then repair
 						or redemption.
+					</p>
+					<p>
+						A selected continuation can start without waiting for inactive vaults. It copies
+						the complete parent escalation totals, receives its branch's complete backing,
+						and authorizes only vaults that opt into that branch. External forks reproduce
+						the drained game REP one-for-one; own forks reproduce the complete post-burn
+						escalation child bucket. Each vault exports only its three aggregate outcome totals
+						for <code>Invalid</code>, <code>Yes</code>, and <code>No</code>,
+						so it never processes another vault or deploys a child universe nobody selects.
+						The <a href="./whitepaper_placeholder.html#fig-placeholder-unresolved-migration">migration accounting diagram</a>
+						separates the snapshot, physical backing, and vault authorization paths.
 					</p>
 					<p>
 						Keep one distinction in mind throughout: Zoltar decides how
@@ -411,7 +420,7 @@
 						</tr>
 						<tr>
 							<td>Fork path</td>
-							<td>If non-decision is reached, Zoltar forks. Ordinary vault ownership moves to each vault's selected child, while unresolved escalation carry and the complete parent escalation-game outcome and carry snapshot are preserved in every registered child.</td>
+							<td>If non-decision is reached, Zoltar forks and Placeholder migrates pool state into selected child pools.</td>
 							<td><code>Zoltar</code>, <code>SecurityPoolForker</code></td>
 							<td>The protocol preserves disagreement explicitly instead of forcing one branch.</td>
 						</tr>
@@ -465,7 +474,7 @@
 						<tr>
 							<td>Fork migration</td>
 							<td>Child universe, migration balance, migration proxy, child pool, carry snapshot.</td>
-							<td>A fork creates branches. Ordinary vault ownership moves to the vault's selected child, while unresolved escalation carry and the complete parent escalation-game outcome and carry snapshot are preserved in every registered child.</td>
+							<td>A fork creates branches; Placeholder moves pool state into the selected branch.</td>
 						</tr>
 						<tr>
 							<td>Auction repair</td>

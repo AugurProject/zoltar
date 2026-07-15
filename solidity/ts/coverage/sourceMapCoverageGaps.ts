@@ -55,7 +55,7 @@ export const knownSourceMapCoverageGaps = [
 			{ currentSourceMatches: 1, linePattern: /^require\s*\(\s*[A-Za-z_][A-Za-z0-9_]*\.length\s*==\s*NULLIFIER_DEPTH,\s*'Bad nullifier length'\s*\);$/ },
 			{ currentSourceMatches: 1, linePattern: /^bytes32\s+[A-Za-z_][A-Za-z0-9_]*\s*=\s*_getCurrentNullifierRoot\s*\(\s*[A-Za-z_][A-Za-z0-9_]*\s*\);$/ },
 			{ currentSourceMatches: 1, linePattern: /^require\s*\(\s*[A-Za-z_][A-Za-z0-9_]*\s*==\s*[A-Za-z_][A-Za-z0-9_]*,\s*'Bad nullifier proof'\s*\);$/ },
-			{ currentSourceMatches: 0, linePattern: /^if\s*\(\s*[A-Za-z_][A-Za-z0-9_]*\s*>\s*inheritedAmountToConsume\s*\)\s*\{$/ },
+			{ currentSourceMatches: 1, linePattern: /^if\s*\(\s*[A-Za-z_][A-Za-z0-9_]*\s*>\s*inheritedAmountToConsume\s*\)\s*\{$/ },
 		],
 	},
 ] satisfies readonly KnownSourceMapCoverageGapFileRule[]

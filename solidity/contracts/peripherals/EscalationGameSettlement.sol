@@ -3,6 +3,7 @@ pragma solidity 0.8.35;
 
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameEscrow } from './EscalationGameEscrow.sol';
+import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { CarriedDepositProof, Deposit } from './EscalationGameTypes.sol';
 
@@ -58,6 +59,14 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		uint8 outcomeIndex = uint8(outcome);
 		depositor = proof.depositor;
 		originalDepositAmount = proof.amount;
+		require(
+			!ISecurityPoolForker(securityPool.securityPoolForker()).isEscalationDepositClaimedDirectly(
+				securityPool.parent(),
+				outcome,
+				proof.parentDepositIndex
+			),
+			'Parent deposit claimed'
+		);
 		_verifyAndConsumeCarriedDepositProof(outcomeIndex, proof);
 		(
 			uint256 forkedEscrowPrincipal,
@@ -169,7 +178,6 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 	}
 
 	function drainAllRep(address receiver) external onlySecurityPoolOrForker returns (uint256 amount) {
-		require(nonDecisionTimestamp > 0, 'No non-decision');
 		require(receiver != address(0x0), 'REP receiver zero');
 		amount = repToken.balanceOf(address(this));
 		if (amount == 0) return 0;

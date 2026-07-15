@@ -34,8 +34,8 @@ abstract contract EscalationGameState {
 	uint256 public totalEscrowedRep;
 	mapping(address => uint256) internal unresolvedRepByVault;
 	uint256 internal totalLocalUnresolvedRep;
-	mapping(address => uint256[]) internal unresolvedLocalDepositRefsByVault;
-	mapping(address => uint256) internal unresolvedLocalDepositExportCursorByVault;
+	mapping(address => uint256[3]) internal localUnresolvedPrincipalByVaultAndOutcome;
+	mapping(address => bool) internal localUnresolvedTotalsExportedByVault;
 	mapping(address => mapping(uint8 => ForkedEscrowState)) internal forkedEscrowByVaultAndOutcome;
 	bool internal forkCarrySnapshotRequiresForkedEscrow;
 
@@ -88,12 +88,11 @@ abstract contract EscalationGameState {
 		uint256 sourceNodeId,
 		bytes32 leafHash
 	);
-	event LocalDepositsExported(
+	event VaultUnresolvedTotalsExported(
 		address vault,
 		address repReceiver,
 		uint256[3] principalByOutcome,
 		uint256 principalToTransfer,
-		uint256 exportCursor,
 		bool transferredRep
 	);
 	event ForkedEscrowRecorded(

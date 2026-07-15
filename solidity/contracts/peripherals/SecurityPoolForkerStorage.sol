@@ -6,7 +6,8 @@ import { SecurityPoolMigrationProxy } from './SecurityPoolMigrationProxy.sol';
 import {
 	SecurityPoolForkerForkData,
 	OwnForkChildRepAllocation,
-	PendingEscalationMigrationBatch
+	EscalationMigrationEntitlement,
+	EscalationForkSnapshot
 } from './SecurityPoolForkerTypes.sol';
 
 abstract contract SecurityPoolForkerStorage {
@@ -17,11 +18,13 @@ abstract contract SecurityPoolForkerStorage {
 	mapping(ISecurityPool => SecurityPoolMigrationProxy) internal migrationProxyByPool;
 	mapping(ISecurityPool => mapping(uint256 => uint256)) internal pendingChildRepByPoolAndOutcome;
 	mapping(ISecurityPool => mapping(uint256 => uint256)) internal childPoolRepSplitByPoolAndOutcome;
-	mapping(ISecurityPool => uint256[]) internal childOutcomeIndexesByPool;
-	mapping(ISecurityPool => mapping(uint256 => bool)) internal childOutcomeRegisteredByPool;
-	mapping(ISecurityPool => bool) internal escalationMigrationStartedByPool;
-	mapping(ISecurityPool => bool) internal registeredContinuationDeploymentByPool;
-	mapping(ISecurityPool => mapping(address => PendingEscalationMigrationBatch))
-		internal pendingEscalationMigrationBatchByPoolAndVault;
+	mapping(ISecurityPool => mapping(address => EscalationMigrationEntitlement))
+		internal escalationMigrationEntitlementByPoolAndVault;
+	mapping(ISecurityPool => mapping(address => mapping(uint256 => bool)))
+		internal escalationEntitlementMaterializedByPoolVaultAndOutcome;
+	mapping(ISecurityPool => EscalationForkSnapshot) internal escalationForkSnapshotByPool;
+	mapping(ISecurityPool => mapping(uint256 => bool)) internal escalationBackingMaterializedByPoolAndOutcome;
 	mapping(address => bool) internal trustedAuctionAddresses;
+	mapping(ISecurityPool => mapping(uint8 => mapping(uint256 => bool)))
+		internal directlyClaimedEscalationDepositByPoolOutcomeAndIndex;
 }

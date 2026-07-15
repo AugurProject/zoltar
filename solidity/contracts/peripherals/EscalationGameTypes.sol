@@ -11,9 +11,6 @@ uint256 constant MAX_EXP_ITERATIONS = 16;
 uint256 constant EXCESS_REWARD_WINDOW_DIVISOR = 2;
 uint256 constant MERKLE_MOUNTAIN_RANGE_MAX_PEAKS = 64;
 uint256 constant NULLIFIER_DEPTH = 64;
-uint256 constant LOCAL_DEPOSIT_REF_OUTCOME_SHIFT = 248;
-uint256 constant LOCAL_DEPOSIT_REF_INDEX_MASK = (1 << LOCAL_DEPOSIT_REF_OUTCOME_SHIFT) - 1;
-uint256 constant MAX_UNRESOLVED_EXPORT_REFS = 64;
 
 struct Deposit {
 	address depositor;

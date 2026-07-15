@@ -80,10 +80,11 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 			OutcomeState storage state = outcomeState[outcomeIndex];
 			carryPeaks[outcomeIndex] = state.currentPeaks;
 			carryLeafCounts[outcomeIndex] = state.currentLeafCount;
-			carryTotals[outcomeIndex] = state.forkedEscrowSourcePrincipalTotal + state.localUnresolvedTotal;
+			carryTotals[outcomeIndex] = state.inheritedUnresolvedTotal + state.localUnresolvedTotal;
 			nullifierRoots[outcomeIndex] = _getCurrentNullifierRoot(outcomeIndex);
 		}
 	}
+
 	function isForkCarryFundingComplete() external view returns (bool) {
 		if (!forkCarrySnapshotRequiresForkedEscrow) return true;
 		if (totalEscrowedRep == 0) return false;
@@ -163,8 +164,6 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		require(msg.sender == address(securityPool), 'Only pool');
 		require(forkContinuation, 'No fork mode');
 		require(!forkCarrySnapshotInitialized(), 'Snapshot initialized');
-		// Defensive invariant: valid escalation-game state should never carry a positive tied leader below non-decision into a child snapshot.
-		require(!_hasInvalidTiedResolutionMaximum(snapshotResolutionBalances), 'Resolution tie');
 
 		bytes32[3] memory normalizedNullifierRoots;
 		uint256 totalCarry;
@@ -195,22 +194,6 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		forkCarrySnapshotRequiresForkedEscrow = totalCarry > 0;
 
 		emit ForkCarrySnapshotInitialized(snapshotLeafCountsInput, snapshotCarryTotals, normalizedNullifierRoots);
-	}
-
-	function _hasInvalidTiedResolutionMaximum(
-		uint256[3] memory snapshotResolutionBalances
-	) private view returns (bool) {
-		uint256 maxBalance = snapshotResolutionBalances[0];
-		if (snapshotResolutionBalances[1] > maxBalance) maxBalance = snapshotResolutionBalances[1];
-		if (snapshotResolutionBalances[2] > maxBalance) maxBalance = snapshotResolutionBalances[2];
-		if (maxBalance == 0) return false;
-		if (maxBalance >= nonDecisionThreshold) return false;
-
-		uint256 matches;
-		if (snapshotResolutionBalances[0] == maxBalance) matches += 1;
-		if (snapshotResolutionBalances[1] == maxBalance) matches += 1;
-		if (snapshotResolutionBalances[2] == maxBalance) matches += 1;
-		return matches >= 2;
 	}
 
 	function _getStableLocalParentDepositIndex(
@@ -271,22 +254,6 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		require(deposit.amount > 0, 'Deposit settled');
 		selectedOutcomeState.deposits[depositIndex].amount = 0;
 		_markLocalDepositConsumed(outcomeIndex, depositIndex, deposit.amount, deposit.depositor);
-	}
-
-	function _consumeLocalDepositForForkExport(
-		uint8 outcomeIndex,
-		uint256 depositIndex
-	) internal returns (Deposit memory deposit) {
-		OutcomeState storage selectedOutcomeState = outcomeState[outcomeIndex];
-		deposit = selectedOutcomeState.deposits[depositIndex];
-		selectedOutcomeState.deposits[depositIndex].amount = 0;
-		uint256 stableParentDepositIndex = _getStableLocalParentDepositIndex(outcomeIndex, depositIndex);
-		selectedOutcomeState.consumedParentDepositIndexes[stableParentDepositIndex] = true;
-		unchecked {
-			selectedOutcomeState.localUnresolvedTotal -= deposit.amount;
-			selectedOutcomeState.forkedEscrowSourcePrincipalTotal += deposit.amount;
-		}
-		_consumeUnresolvedRepForVault(deposit.depositor, deposit.amount);
 	}
 
 	function _storeCurrentCarryPeaks(OutcomeState storage state, uint256 leafCount) private {
@@ -393,6 +360,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		if (state.consumedParentDepositIndexes[stableParentDepositIndex]) return;
 		state.consumedParentDepositIndexes[stableParentDepositIndex] = true;
 		state.localUnresolvedTotal -= amount;
+		localUnresolvedPrincipalByVaultAndOutcome[depositor][outcomeIndex] -= amount;
 		uint256 nodeId = state.localNodeIds[depositIndex];
 		_clearLocalCarryLeafFromCurrentSnapshot(state, nodes[nodeId].carryLeafIndex);
 		_consumeUnresolvedRepForVault(depositor, amount);
@@ -405,9 +373,8 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		state.consumedParentDepositIndexes[parentDepositIndex] = true;
 		uint256 inheritedAmountToConsume =
 			amount > state.inheritedUnresolvedTotal ? state.inheritedUnresolvedTotal : amount;
-		unchecked {
-			state.inheritedUnresolvedTotal -= inheritedAmountToConsume;
-			state.forkedEscrowSourcePrincipalTotal -= inheritedAmountToConsume;
+		state.inheritedUnresolvedTotal -= inheritedAmountToConsume;
+		if (amount > inheritedAmountToConsume) {
 			state.localUnresolvedTotal -= amount - inheritedAmountToConsume;
 		}
 	}

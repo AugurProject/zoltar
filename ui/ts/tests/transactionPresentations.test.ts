@@ -32,18 +32,8 @@ describe('transaction presentations', () => {
 		expect(intent.submittedDetail).toBe('Settle Finalized Refunds transaction submitted.')
 	})
 
-	test('attributes unresolved carry funding to the specified vault', () => {
+	test('keeps unresolved escalation entitlement reuse explicit after one child materializes', () => {
 		const presentation = createForkAuctionSuccessPresentation(createForkAuctionResult('migrateUnresolvedEscalation'))
-		expect(presentation.detail).toBe('All unresolved parent escalation locks for the specified vault were copied into every registered child continuation game.')
-		if (typeof presentation.detail !== 'string') throw new Error('Expected unresolved carry funding detail text')
-		expect(presentation.detail.includes('this wallet')).toBe(false)
-	})
-
-	test('describes zero-REP child registration without claiming REP moved', () => {
-		const presentation = createForkAuctionSuccessPresentation(createForkAuctionResult('migrateRepToZoltar'))
-		expect(presentation.detail).toBe('The child destination was registered; any available pool REP was staged for that child.')
-		if (typeof presentation.detail !== 'string') throw new Error('Expected child registration detail text')
-		expect(presentation.detail.includes('REP was migrated')).toBe(false)
-		expect(presentation.detail.includes('REP moved')).toBe(false)
+		expect(presentation.detail).toBe('The wallet’s aggregate escalation entitlement was captured and materialized in the chosen child universe. It remains available for other unselected child outcomes until the migration deadline.')
 	})
 })
