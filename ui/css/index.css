@@ -6,20 +6,24 @@
 
 :root {
 	color-scheme: dark;
-	--bg: #08111d;
-	--bg-deep: #050a11;
+	--bg: rgba(8, 17, 29, 1);
+	--bg-deep: rgba(5, 10, 17, 1);
 
 	/* text hierarchy */
-	--text: #e7f3ff;
+	--text: rgba(231, 243, 255, 1);
 	--text-secondary: rgba(207, 221, 238, 0.9);
 	--muted: rgba(160, 181, 207, 0.76);
-	--value: #d0e7f5;
+	--value: rgba(208, 231, 245, 1);
+	--color-white: rgba(255, 255, 255, 1);
+	--color-white-08: rgba(255, 255, 255, 0.08);
 
 	/* accents */
-	--accent: #38d5ff;
-	--accent-strong: #7c6cff;
+	--accent: rgba(56, 213, 255, 1);
+	--accent-strong: rgba(124, 108, 255, 1);
+	--accent-faint: rgba(56, 213, 255, 0.08);
 	--accent-soft: rgba(56, 213, 255, 0.12);
-	--accent-strong-soft: rgba(124, 108, 255, 0.12);
+	--accent-medium: rgba(56, 213, 255, 0.16);
+	--accent-emphasis-soft: rgba(56, 213, 255, 0.18);
 
 	/* semantic borders — structural (blue-tinted, passive) */
 	--border-subtle: rgba(159, 180, 207, 0.07);
@@ -30,7 +34,7 @@
 	/* semantic borders — interactive (cyan-tinted, signals clickability) */
 	--interactive-border: rgba(56, 213, 255, 0.22);
 	--interactive-border-hover: rgba(56, 213, 255, 0.36);
-	--interactive-bg: rgba(56, 213, 255, 0.08);
+	--interactive-bg: var(--accent-faint);
 	--interactive-bg-hover: rgba(56, 213, 255, 0.14);
 	--interactive-bg-active: rgba(124, 108, 255, 0.14);
 
@@ -41,16 +45,22 @@
 	--surface-card: rgba(12, 23, 38, 0.9);
 	--surface-card-end: rgba(8, 16, 27, 0.94);
 	--surface-inset: rgba(9, 18, 31, 0.58);
+	--surface-page: rgba(8, 16, 28, 0.72);
+	--surface-section: rgba(10, 20, 34, 0.82);
+	--surface-record: rgba(12, 23, 38, 0.88);
+	--surface-row: rgba(8, 16, 28, 0.42);
+	--surface-critical: rgba(61, 14, 25, 0.72);
 
 	/* status */
-	--success: #42e8c2;
+	--success: rgba(66, 232, 194, 1);
 	--success-soft: rgba(66, 232, 194, 0.12);
 	--success-border: rgba(66, 232, 194, 0.24);
-	--warning: #f5c86a;
+	--success-surface-gradient: linear-gradient(180deg, rgba(11, 51, 43, 0.92) 0%, rgba(8, 34, 29, 0.92) 100%);
+	--warning: rgba(245, 200, 106, 1);
 	--warning-soft: rgba(245, 200, 106, 0.12);
 	--warning-border: rgba(245, 200, 106, 0.24);
 	--warning-border-strong: rgba(245, 200, 106, 0.52);
-	--danger: #ff708f;
+	--danger: rgba(255, 112, 143, 1);
 	--danger-soft: rgba(255, 112, 143, 0.12);
 	--danger-border: rgba(255, 112, 143, 0.28);
 	--danger-border-strong: rgba(255, 112, 143, 0.56);
@@ -60,11 +70,26 @@
 	--control-border: rgba(154, 179, 211, 0.28);
 	--input-border: rgba(154, 179, 211, 0.3);
 	--focus: rgba(56, 213, 255, 0.48);
-	--primary-button-bg: #137f9f;
-	--primary-button-bg-hover: #1694b8;
-	--primary-button-border: #2ab5d8;
-	--primary-button-border-hover: #55c8e4;
-	--primary-button-shadow: rgba(255, 255, 255, 0.08);
+	--primary-button-bg: rgba(19, 127, 159, 1);
+	--primary-button-bg-hover: rgba(22, 148, 184, 1);
+	--primary-button-border: rgba(42, 181, 216, 1);
+	--primary-button-border-hover: rgba(85, 200, 228, 1);
+	--primary-button-shadow: var(--color-white-08);
+
+	/* spacing */
+	--space-1: 0.25rem;
+	--space-2: 0.5rem;
+	--space-3: 0.75rem;
+	--space-4: 1rem;
+	--space-5: 1.5rem;
+	--space-6: 2rem;
+	--space-7: 2.75rem;
+	--space-8: 3.5rem;
+
+	/* font families */
+	--font-family-sans: "Aptos", "Segoe UI", "Helvetica Neue", sans-serif;
+	--font-family-serif: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+	--font-family-mono: "IBM Plex Mono", "Courier New", monospace;
 
 	/* type scale — fixed */
 	--font-xs: 0.68rem;
@@ -94,30 +119,53 @@
 	--font-app-title: clamp(0.95rem, 1vw, 1.1rem);
 	--font-404: clamp(4rem, 9vw, 7.8rem);
 
+	/* motion */
+	--transition-fast: 140ms ease;
+	--transition-standard: 160ms ease;
+
 	/* decorative */
 	--glow-inset: 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
 	--glow-inset-subtle: 0 0 0 1px rgba(255, 255, 255, 0.02) inset;
 	--divider: linear-gradient(90deg, rgba(56, 213, 255, 0.24), var(--border-subtle) 50%, rgba(124, 108, 255, 0.2));
 	--slider-thumb-border: rgba(231, 243, 255, 0.8);
+	--shadow-color-soft: rgba(0, 0, 0, 0.12);
+	--shadow-color-strong: rgba(0, 0, 0, 0.35);
 
 	/* notice error */
-	--danger-text: #ffe5eb;
+	--danger-text: rgba(255, 229, 235, 1);
 	--notice-warning-gradient: linear-gradient(180deg, rgba(99, 77, 18, 0.96) 0%, rgba(66, 48, 11, 0.96) 100%);
 	--notice-error-gradient: linear-gradient(180deg, rgba(87, 18, 33, 0.94) 0%, rgba(59, 11, 22, 0.94) 100%);
 
 	/* elevated surfaces */
 	--surface-dropdown: rgba(5, 11, 21, 0.97);
 	--surface-modal: rgba(7, 17, 31, 0.96);
+
+	/* simulation */
+	--simulation-text: rgba(255, 244, 218, 1);
+	--simulation-text-secondary: rgba(255, 242, 213, 0.82);
+	--simulation-border-hover: rgba(255, 236, 180, 0.56);
+
+	/* truth auction */
+	--truth-auction-track: rgba(8, 18, 31, 1);
+	--truth-auction-eth: rgba(232, 166, 68, 1);
+	--truth-auction-eth-highlight: rgba(243, 209, 123, 1);
+	--truth-auction-rep: rgba(62, 159, 120, 1);
+	--truth-auction-rep-highlight: rgba(137, 208, 168, 1);
+
+	/* component hierarchy */
 	--radius-shell: 1rem;
 	--radius-section: 0.8rem;
 	--radius-panel: 0.8rem;
 	--radius-record: 0.85rem;
 	--radius-control: 0.6rem;
+	--divider-subtle: rgba(159, 180, 207, 0.1);
+	--divider-strong: rgba(159, 180, 207, 0.18);
+	--border-active: rgba(56, 213, 255, 0.52);
 	--text-primary: var(--text);
 }
 
 html {
-	font-family: "Aptos", "Segoe UI", "Helvetica Neue", sans-serif;
+	font-family: var(--font-family-sans);
 	background-color: var(--bg);
 	color: var(--text);
 	overflow-x: clip;
@@ -159,7 +207,7 @@ body::before {
 	inset: 0;
 	z-index: -1;
 	pointer-events: none;
-	background: radial-gradient(circle at 16% 0%, rgba(56, 213, 255, 0.09), transparent 25%), radial-gradient(circle at 86% 0%, rgba(124, 108, 255, 0.08), transparent 24%), linear-gradient(180deg, #0a1524 0%, #07101b 45%, var(--bg-deep) 100%);
+	background: radial-gradient(circle at 16% 0%, rgba(56, 213, 255, 0.09), transparent 25%), radial-gradient(circle at 86% 0%, rgba(124, 108, 255, 0.08), transparent 24%), linear-gradient(180deg, rgba(10, 21, 36, 1) 0%, rgba(7, 16, 27, 1) 45%, var(--bg-deep) 100%);
 }
 
 main {
@@ -221,7 +269,7 @@ main {
 
 h1 {
 	margin: 0;
-	font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+	font-family: var(--font-family-serif);
 	font-size: var(--font-h1);
 	line-height: 0.92;
 	letter-spacing: -0.055em;
@@ -230,7 +278,7 @@ h1 {
 
 h2 {
 	margin: 0;
-	font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+	font-family: var(--font-family-serif);
 	font-size: var(--font-h2);
 	line-height: 1.06;
 	letter-spacing: -0.04em;
@@ -264,9 +312,9 @@ button {
 	white-space: normal;
 	line-height: 1.2;
 	transition:
-		background 140ms ease,
-		border-color 140ms ease,
-		color 140ms ease;
+		background var(--transition-fast),
+		border-color var(--transition-fast),
+		color var(--transition-fast);
 }
 
 button:hover:not(:disabled) {
@@ -359,9 +407,9 @@ button.quiet:hover:not(:disabled) {
 	white-space: normal;
 	line-height: 1.2;
 	transition:
-		background 140ms ease,
-		border-color 140ms ease,
-		color 140ms ease;
+		background var(--transition-fast),
+		border-color var(--transition-fast),
+		color var(--transition-fast);
 }
 
 .button-link:hover {
@@ -406,7 +454,7 @@ button.quiet:hover:not(:disabled) {
 	-webkit-background-clip: text;
 	background-clip: text;
 	color: transparent;
-	text-shadow: 0 0 32px rgba(56, 213, 255, 0.08);
+	text-shadow: 0 0 32px var(--accent-faint);
 }
 
 .not-found-copy {
@@ -462,7 +510,7 @@ button.destructive-subtle:hover:not(:disabled) {
 	gap: 0.4rem;
 	border-radius: 3px;
 	padding: 0.46rem 0.74rem;
-	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-family: var(--font-family-mono);
 	font-size: var(--font-chip);
 	letter-spacing: 0.07em;
 	text-transform: uppercase;
@@ -485,7 +533,7 @@ button.destructive-subtle:hover:not(:disabled) {
 .panel-label,
 .metric-label,
 .workflow-section-label {
-	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-family: var(--font-family-mono);
 	text-transform: uppercase;
 	letter-spacing: 0.07em;
 	font-size: var(--font-label);
@@ -535,8 +583,8 @@ button.destructive-subtle:hover:not(:disabled) {
 	text-underline-offset: 0.16em;
 	text-overflow: ellipsis;
 	transition:
-		color 140ms ease,
-		text-decoration-color 140ms ease;
+		color var(--transition-fast),
+		text-decoration-color var(--transition-fast);
 	vertical-align: bottom;
 	white-space: nowrap;
 }
@@ -612,7 +660,7 @@ button.destructive-subtle:hover:not(:disabled) {
 
 .notice.success {
 	border-color: var(--success-border);
-	background: linear-gradient(180deg, rgba(11, 51, 43, 0.92) 0%, rgba(8, 34, 29, 0.92) 100%);
+	background: var(--success-surface-gradient);
 }
 
 .notice a {
@@ -637,17 +685,17 @@ button.destructive-subtle:hover:not(:disabled) {
 	height: 1.9rem;
 	min-width: 1.9rem;
 	padding: 0;
-	border: 1px solid color-mix(in srgb, var(--danger-border-strong) 78%, white 22%);
+	border: 1px solid color-mix(in srgb, var(--danger-border-strong) 78%, var(--color-white) 22%);
 	border-radius: 999px;
 	background: rgba(82, 16, 31, 0.18);
 	color: inherit;
 	line-height: 1;
 	opacity: 0.82;
 	transition:
-		opacity 140ms ease,
-		background-color 140ms ease,
-		border-color 140ms ease,
-		transform 140ms ease;
+		opacity var(--transition-fast),
+		background-color var(--transition-fast),
+		border-color var(--transition-fast),
+		transform var(--transition-fast);
 }
 
 .notice-dismiss-icon {
@@ -687,7 +735,7 @@ button.destructive-subtle:hover:not(:disabled) {
 }
 
 .notice-dismiss:focus-visible {
-	outline: 2px solid color-mix(in srgb, var(--danger-border-strong) 72%, white 28%);
+	outline: 2px solid color-mix(in srgb, var(--danger-border-strong) 72%, var(--color-white) 28%);
 	outline-offset: 2px;
 }
 
@@ -721,13 +769,13 @@ button.destructive-subtle:hover:not(:disabled) {
 	height: 0.5rem;
 	overflow: hidden;
 	border-radius: 999px;
-	background: color-mix(in srgb, var(--warning-border) 34%, white 66%);
+	background: color-mix(in srgb, var(--warning-border) 34%, var(--color-white) 66%);
 }
 
 .notice-progress-fill {
 	height: 100%;
 	border-radius: inherit;
-	background: linear-gradient(90deg, color-mix(in srgb, var(--warning) 74%, white 26%), color-mix(in srgb, var(--warning-border-strong) 84%, white 16%));
+	background: linear-gradient(90deg, color-mix(in srgb, var(--warning) 74%, var(--color-white) 26%), color-mix(in srgb, var(--warning-border-strong) 84%, var(--color-white) 16%));
 	transition: width 180ms ease-out;
 }
 
@@ -736,7 +784,7 @@ button.destructive-subtle:hover:not(:disabled) {
 }
 
 .simulation-progress-fill {
-	background: linear-gradient(90deg, color-mix(in srgb, var(--success) 70%, white 30%), color-mix(in srgb, var(--focus) 68%, white 32%));
+	background: linear-gradient(90deg, color-mix(in srgb, var(--success) 70%, var(--color-white) 30%), color-mix(in srgb, var(--focus) 68%, var(--color-white) 32%));
 }
 
 .loading-value {
@@ -973,7 +1021,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 }
 
 .overview-app-title {
-	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-family: var(--font-family-mono);
 	font-size: var(--font-app-title);
 	line-height: 1.15;
 	letter-spacing: 0.1em;
@@ -1005,7 +1053,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 .overview-inline-metrics strong {
 	display: block;
 	margin-top: 0.15rem;
-	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-family: var(--font-family-mono);
 	font-size: var(--font-value);
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
@@ -1015,7 +1063,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 }
 
 .overview-address-metric strong {
-	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-family: var(--font-family-mono);
 	font-size: var(--font-address);
 	letter-spacing: -0.01em;
 }
@@ -1086,7 +1134,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 
 .simulation-banner-header .detail,
 .simulation-banner .detail {
-	color: rgba(255, 242, 213, 0.82);
+	color: var(--simulation-text-secondary);
 }
 
 .simulation-banner-warning {
@@ -1095,13 +1143,13 @@ button.currency-value.copyable:hover:not(:disabled) {
 	border-radius: 0.85rem;
 	padding: 0.7rem 0.8rem;
 	background: rgba(255, 220, 120, 0.16);
-	color: #fff2cf;
+	color: rgba(255, 242, 207, 1);
 	font-size: var(--font-caption);
 	line-height: 1.45;
 }
 
 .simulation-banner-warning strong {
-	color: #fff7df;
+	color: rgba(255, 247, 223, 1);
 }
 
 .simulation-banner-list {
@@ -1130,7 +1178,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 }
 
 .simulation-stat-card strong {
-	color: #fff8e5;
+	color: rgba(255, 248, 229, 1);
 	font-size: var(--font-value);
 }
 
@@ -1140,7 +1188,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 
 .simulation-stat-label,
 .simulation-delay-label {
-	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-family: var(--font-family-mono);
 	font-size: var(--font-label);
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
@@ -1159,13 +1207,13 @@ button.currency-value.copyable:hover:not(:disabled) {
 	border-radius: var(--radius-control);
 	padding: 0.5rem 0.7rem;
 	background: rgba(56, 40, 7, 0.42);
-	color: #fff4da;
+	color: var(--simulation-text);
 	font-weight: 700;
 }
 
 .simulation-advanced-controls > summary:hover,
 .simulation-advanced-controls > summary:focus-visible {
-	border-color: rgba(255, 236, 180, 0.56);
+	border-color: var(--simulation-border-hover);
 	background: rgba(110, 77, 12, 0.42);
 	outline: none;
 	box-shadow: 0 0 0 3px rgba(255, 214, 102, 0.14);
@@ -1213,7 +1261,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 }
 
 .simulation-control-group-label {
-	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-family: var(--font-family-mono);
 	font-size: var(--font-label);
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
@@ -1254,7 +1302,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 	padding: 0.65rem 0.8rem;
 	font: inherit;
 	background: rgba(56, 40, 7, 0.58);
-	color: #fff4da;
+	color: var(--simulation-text);
 	text-overflow: ellipsis;
 }
 
@@ -1262,7 +1310,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 	appearance: none;
 	-webkit-appearance: none;
 	forced-color-adjust: none;
-	background-image: linear-gradient(45deg, transparent 50%, rgba(255, 242, 213, 0.82) 50%), linear-gradient(135deg, rgba(255, 242, 213, 0.82) 50%, transparent 50%);
+	background-image: linear-gradient(45deg, transparent 50%, var(--simulation-text-secondary) 50%), linear-gradient(135deg, var(--simulation-text-secondary) 50%, transparent 50%);
 	background-position:
 		calc(100% - 1rem) calc(50% - 0.15rem),
 		calc(100% - 0.7rem) calc(50% - 0.15rem);
@@ -1275,15 +1323,15 @@ button.currency-value.copyable:hover:not(:disabled) {
 
 .simulation-control-select option,
 .simulation-control-select optgroup {
-	background: #5f430a;
-	color: #fff4da;
+	background: rgba(95, 67, 10, 1);
+	color: var(--simulation-text);
 }
 
 .simulation-control-input:hover:not(:disabled),
 .simulation-control-input:focus-visible,
 .simulation-control-select:hover:not(:disabled),
 .simulation-control-select:focus-visible {
-	border-color: rgba(255, 236, 180, 0.56);
+	border-color: var(--simulation-border-hover);
 	background-color: rgba(110, 77, 12, 0.52);
 	outline: none;
 	box-shadow: 0 0 0 3px rgba(255, 214, 102, 0.14);
@@ -1293,17 +1341,17 @@ button.currency-value.copyable:hover:not(:disabled) {
 .simulation-banner select {
 	border-color: rgba(255, 227, 145, 0.36);
 	background: rgba(56, 40, 7, 0.42);
-	color: #fff4da;
+	color: var(--simulation-text);
 }
 
 .simulation-banner button.secondary:hover:not(:disabled),
 .simulation-banner select:hover:not(:disabled) {
-	border-color: rgba(255, 236, 180, 0.56);
+	border-color: var(--simulation-border-hover);
 	background: rgba(110, 77, 12, 0.42);
 }
 
 .simulation-banner .badge.ok {
-	color: #fff9e8;
+	color: rgba(255, 249, 232, 1);
 	border-color: rgba(255, 232, 164, 0.58);
 	background: rgba(29, 111, 85, 0.82);
 }
@@ -1472,7 +1520,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 	align-items: center;
 	border-radius: 3px;
 	padding: 0.32rem 0.68rem;
-	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-family: var(--font-family-mono);
 	font-size: var(--font-label);
 	text-transform: uppercase;
 	letter-spacing: 0.08em;
@@ -1503,7 +1551,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 
 .address {
 	margin-top: 0.55rem;
-	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-family: var(--font-family-mono);
 	word-break: break-all;
 	color: var(--text);
 }
@@ -1602,7 +1650,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 .workflow-question-grid strong.metric-field-value,
 .workflow-vault-grid strong.metric-field-value {
 	display: block;
-	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-family: var(--font-family-mono);
 	font-size: var(--font-value);
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
@@ -1647,7 +1695,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 	flex-direction: column;
 	align-items: flex-start;
 	gap: 0.18rem;
-	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-family: var(--font-family-mono);
 	font-size: var(--font-value);
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
@@ -1656,7 +1704,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 }
 
 .oracle-price-validity {
-	font-family: "Aptos", "Segoe UI", "Helvetica Neue", sans-serif;
+	font-family: var(--font-family-sans);
 	font-size: var(--font-caption);
 	font-weight: 500;
 	letter-spacing: normal;
@@ -1718,7 +1766,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 }
 
 .question-summary-id {
-	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-family: var(--font-family-mono);
 	font-size: var(--font-xs);
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
@@ -1741,7 +1789,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 .question-summary-grid strong {
 	display: block;
 	margin-top: 0.15rem;
-	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-family: var(--font-family-mono);
 	font-size: var(--font-value);
 	font-variant-numeric: tabular-nums;
 	color: var(--value);
@@ -1914,7 +1962,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 	background: var(--surface-inset);
 	box-shadow:
 		var(--glow-inset-subtle),
-		0 6px 18px rgba(0, 0, 0, 0.12);
+		0 6px 18px var(--shadow-color-soft);
 }
 
 .scalar-slider-rail.is-disabled {
@@ -1946,7 +1994,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 	height: 0.4rem;
 	transform: translateY(-50%);
 	background: linear-gradient(90deg, rgba(56, 213, 255, 0.92) 0%, rgba(124, 108, 255, 0.88) 100%);
-	box-shadow: 0 0 16px rgba(56, 213, 255, 0.16);
+	box-shadow: 0 0 16px var(--accent-medium);
 	pointer-events: none;
 }
 
@@ -1989,7 +2037,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 	background: linear-gradient(180deg, var(--text) 0%, rgba(56, 213, 255, 0.8) 100%);
 	box-shadow:
 		0 0 0 4px rgba(56, 213, 255, 0.1),
-		0 10px 20px rgba(0, 0, 0, 0.35);
+		0 10px 20px var(--shadow-color-strong);
 	appearance: none;
 	-webkit-appearance: none;
 }
@@ -2002,7 +2050,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 	background: linear-gradient(180deg, var(--text) 0%, rgba(56, 213, 255, 0.8) 100%);
 	box-shadow:
 		0 0 0 4px rgba(56, 213, 255, 0.1),
-		0 10px 20px rgba(0, 0, 0, 0.35);
+		0 10px 20px var(--shadow-color-strong);
 }
 
 .scalar-slider-stats {
@@ -2101,7 +2149,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 .question-preview-body strong {
 	display: block;
 	margin-top: 0.15rem;
-	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-family: var(--font-family-mono);
 	font-size: var(--font-value);
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
@@ -2117,7 +2165,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 	border: 1px solid var(--border-emphasis);
 	border-radius: var(--radius-record);
 	background: linear-gradient(180deg, rgba(14, 26, 44, 0.8) 0%, rgba(9, 18, 30, 0.88) 100%);
-	box-shadow: 0 14px 30px rgba(0, 0, 0, 0.12);
+	box-shadow: 0 14px 30px var(--shadow-color-soft);
 }
 
 .entity-card::before {
@@ -2125,7 +2173,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 	position: absolute;
 	inset: 0;
 	pointer-events: none;
-	background: linear-gradient(120deg, rgba(56, 213, 255, 0.16), transparent 26%, transparent 74%, rgba(124, 108, 255, 0.12));
+	background: linear-gradient(120deg, var(--accent-medium), transparent 26%, transparent 74%, rgba(124, 108, 255, 0.12));
 }
 
 .entity-card > * {
@@ -2220,7 +2268,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 }
 
 .entity-metric strong.metric-field-value {
-	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-family: var(--font-family-mono);
 	font-size: var(--font-value);
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
@@ -2338,7 +2386,7 @@ strong.metric-value-danger {
 	background: linear-gradient(180deg, var(--surface-raised) 0%, var(--surface-card-end) 100%);
 	box-shadow:
 		var(--glow-inset-subtle),
-		0 10px 30px rgba(0, 0, 0, 0.12);
+		0 10px 30px var(--shadow-color-soft);
 }
 
 .fork-stage-panel .entity-card-subsection-header {
@@ -2378,7 +2426,7 @@ strong.metric-value-danger {
 	background: linear-gradient(180deg, var(--surface-raised) 0%, var(--surface-card-end) 100%);
 	box-shadow:
 		var(--glow-inset-subtle),
-		0 12px 28px rgba(0, 0, 0, 0.12);
+		0 12px 28px var(--shadow-color-soft);
 }
 
 .fork-workflow-summary-primary,
@@ -2434,7 +2482,7 @@ strong.metric-value-danger {
 
 .fork-workflow-summary-metrics strong.metric-field-value {
 	display: block;
-	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-family: var(--font-family-mono);
 	font-size: var(--font-value);
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
@@ -2455,7 +2503,7 @@ strong.metric-value-danger {
 }
 
 .fork-workflow-summary-stat-copy strong {
-	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-family: var(--font-family-mono);
 	font-size: var(--font-value);
 	color: var(--value);
 	text-align: right;
@@ -2481,7 +2529,7 @@ strong.metric-value-danger {
 	height: 0.7rem;
 	border-radius: 999px;
 	border: 1px solid var(--border-default);
-	background: color-mix(in srgb, var(--surface-card-end) 82%, #08121f 18%);
+	background: color-mix(in srgb, var(--surface-card-end) 82%, var(--truth-auction-track) 18%);
 }
 
 .truth-auction-progress-fill {
@@ -2490,11 +2538,11 @@ strong.metric-value-danger {
 }
 
 .truth-auction-progress-fill.is-eth {
-	background: linear-gradient(90deg, #e8a644 0%, #f3d17b 100%);
+	background: linear-gradient(90deg, var(--truth-auction-eth) 0%, var(--truth-auction-eth-highlight) 100%);
 }
 
 .truth-auction-progress-fill.is-rep {
-	background: linear-gradient(90deg, #3e9f78 0%, #89d0a8 100%);
+	background: linear-gradient(90deg, var(--truth-auction-rep) 0%, var(--truth-auction-rep-highlight) 100%);
 }
 
 .truth-auction-market-board {
@@ -2568,7 +2616,7 @@ strong.metric-value-danger {
 	min-height: 13rem;
 	border: 1px solid var(--border-default);
 	border-radius: 1rem;
-	background: linear-gradient(180deg, rgba(232, 166, 68, 0.04), rgba(62, 159, 120, 0.04)), color-mix(in srgb, var(--surface-card-end) 82%, #08121f 18%);
+	background: linear-gradient(180deg, rgba(232, 166, 68, 0.04), rgba(62, 159, 120, 0.04)), color-mix(in srgb, var(--surface-card-end) 82%, var(--truth-auction-track) 18%);
 	overflow: hidden;
 }
 
@@ -2647,11 +2695,11 @@ strong.metric-value-danger {
 }
 
 .truth-auction-depth-marker.is-clearing .truth-auction-depth-marker-dot {
-	color: #e8a644;
+	color: var(--truth-auction-eth);
 }
 
 .truth-auction-depth-marker.is-selected .truth-auction-depth-marker-dot {
-	color: #3e9f78;
+	color: var(--truth-auction-rep);
 }
 
 .truth-auction-depth-marker.is-preview .truth-auction-depth-marker-dot {
@@ -2766,7 +2814,7 @@ strong.metric-value-danger {
 	height: 100%;
 	min-width: 0;
 	opacity: 0.17;
-	background: linear-gradient(90deg, #e8a644 0%, #3e9f78 100%);
+	background: linear-gradient(90deg, var(--truth-auction-eth) 0%, var(--truth-auction-rep) 100%);
 }
 
 .truth-auction-price-row-copy {
@@ -2833,11 +2881,11 @@ strong.metric-value-danger {
 
 .truth-auction-status-pill.is-warning,
 .truth-auction-price-row.is-warning {
-	border-color: color-mix(in srgb, #e8a644 55%, var(--border-default) 45%);
+	border-color: color-mix(in srgb, var(--truth-auction-eth) 55%, var(--border-default) 45%);
 }
 
 .truth-auction-status-pill.is-warning {
-	color: #f0bf5d;
+	color: rgba(240, 191, 93, 1);
 	background: rgba(232, 166, 68, 0.12);
 }
 
@@ -2853,7 +2901,7 @@ strong.metric-value-danger {
 
 .truth-auction-status-pill.is-default {
 	color: var(--muted);
-	background: color-mix(in srgb, var(--surface-card-end) 82%, #08121f 18%);
+	background: color-mix(in srgb, var(--surface-card-end) 82%, var(--truth-auction-track) 18%);
 }
 
 .truth-auction-price-row.is-clearing {
@@ -2862,7 +2910,7 @@ strong.metric-value-danger {
 }
 
 .truth-auction-price-row.is-selected {
-	outline: 2px solid color-mix(in srgb, #3e9f78 68%, transparent 32%);
+	outline: 2px solid color-mix(in srgb, var(--truth-auction-rep) 68%, transparent 32%);
 	outline-offset: 2px;
 }
 
@@ -2885,7 +2933,7 @@ strong.metric-value-danger {
 	border: 1px solid rgba(232, 166, 68, 0.24);
 	border-radius: 999px;
 	background: rgba(232, 166, 68, 0.08);
-	color: #f3d17b;
+	color: var(--truth-auction-eth-highlight);
 	font-size: 0.72rem;
 	font-weight: 600;
 	letter-spacing: 0.02em;
@@ -3037,7 +3085,7 @@ strong.metric-value-danger {
 	padding: 0.9rem 1.25rem 0.85rem;
 	border-bottom: 1px solid var(--border-default);
 	background: linear-gradient(180deg, rgba(11, 23, 39, 0.985) 0%, rgba(7, 17, 31, 0.96) 100%);
-	box-shadow: 0 0.75rem 1rem rgba(0, 0, 0, 0.12);
+	box-shadow: 0 0.75rem 1rem var(--shadow-color-soft);
 }
 
 .modal-header-title {
@@ -3079,7 +3127,7 @@ strong.metric-value-danger {
 .modal-summary-grid strong {
 	display: block;
 	margin-top: 0.15rem;
-	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-family: var(--font-family-mono);
 	font-size: var(--font-value);
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
@@ -3129,7 +3177,7 @@ strong.metric-value-danger {
 }
 
 .notice-stack-item.success {
-	background: linear-gradient(180deg, rgba(11, 51, 43, 0.92) 0%, rgba(8, 34, 29, 0.92) 100%);
+	background: var(--success-surface-gradient);
 	border-color: var(--success-border);
 }
 
@@ -3695,7 +3743,7 @@ strong.metric-value-danger {
 }
 
 .lookup-field-label {
-	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-family: var(--font-family-mono);
 	text-transform: uppercase;
 	letter-spacing: 0.08em;
 	font-size: var(--font-label);
@@ -3772,7 +3820,7 @@ strong.metric-value-danger {
 }
 
 .field span {
-	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-family: var(--font-family-mono);
 	text-transform: uppercase;
 	letter-spacing: 0.08em;
 	font-size: var(--font-label);
@@ -3835,7 +3883,7 @@ strong.metric-value-danger {
 .enum-dropdown-trigger:focus-visible {
 	outline: none;
 	border-color: var(--accent);
-	box-shadow: 0 0 0 4px rgba(56, 213, 255, 0.16);
+	box-shadow: 0 0 0 4px var(--accent-medium);
 }
 
 .enum-dropdown-trigger:disabled {
@@ -3871,7 +3919,7 @@ strong.metric-value-danger {
 	border: 1px solid var(--border-strong);
 	border-radius: var(--radius-control);
 	background: var(--surface-dropdown);
-	box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+	box-shadow: 0 20px 40px var(--shadow-color-strong);
 }
 
 .enum-dropdown-option {
@@ -3952,7 +4000,7 @@ strong.metric-value-danger {
 .field textarea:focus {
 	outline: none;
 	border-color: var(--accent);
-	box-shadow: 0 0 0 4px rgba(56, 213, 255, 0.16);
+	box-shadow: 0 0 0 4px var(--accent-medium);
 }
 
 .field input.is-invalid:focus,
@@ -4009,7 +4057,7 @@ button:focus-visible {
 .escalation-metrics strong {
 	display: block;
 	margin-top: 0.15rem;
-	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-family: var(--font-family-mono);
 	font-size: var(--font-value);
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
@@ -4068,11 +4116,11 @@ button:focus-visible {
 }
 
 .escalation-sides-legend-swatch-total {
-	background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 68%, white 32%), color-mix(in srgb, var(--accent-strong) 60%, white 40%));
+	background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 68%, var(--color-white) 32%), color-mix(in srgb, var(--accent-strong) 60%, var(--color-white) 40%));
 }
 
 .escalation-sides-legend-swatch-user {
-	background: linear-gradient(90deg, color-mix(in srgb, var(--success) 78%, white 22%), color-mix(in srgb, var(--accent) 52%, white 48%));
+	background: linear-gradient(90deg, color-mix(in srgb, var(--success) 78%, var(--color-white) 22%), color-mix(in srgb, var(--accent) 52%, var(--color-white) 48%));
 }
 
 .escalation-sides-legend-marker {
@@ -4088,7 +4136,7 @@ button:focus-visible {
 	position: absolute;
 	inset: 0.05rem 0.25rem;
 	border-radius: 999px;
-	background: color-mix(in srgb, var(--warning) 70%, white 30%);
+	background: color-mix(in srgb, var(--warning) 70%, var(--color-white) 30%);
 }
 
 .escalation-side {
@@ -4112,10 +4160,10 @@ button:focus-visible {
 }
 
 .escalation-side.selected {
-	background: linear-gradient(90deg, rgba(56, 213, 255, 0.18) 0%, rgba(56, 213, 255, 0.06) 100%);
+	background: linear-gradient(90deg, var(--accent-emphasis-soft) 0%, rgba(56, 213, 255, 0.06) 100%);
 	box-shadow:
 		inset 0 0 0 1px rgba(56, 213, 255, 0.4),
-		inset 0 0 2rem rgba(56, 213, 255, 0.08);
+		inset 0 0 2rem var(--accent-faint);
 }
 
 .escalation-side.leading {
@@ -4167,7 +4215,7 @@ button:focus-visible {
 	border-color: var(--interactive-border-hover);
 	background: var(--interactive-bg);
 	color: var(--text);
-	box-shadow: 0 0 0 1px rgba(56, 213, 255, 0.12) inset;
+	box-shadow: 0 0 0 1px var(--accent-soft) inset;
 }
 
 .escalation-side-chart {
@@ -4193,7 +4241,7 @@ button:focus-visible {
 	inset: 0 auto 0 0;
 	width: var(--side-ratio, 0%);
 	border-radius: inherit;
-	background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 75%, white 25%), color-mix(in srgb, var(--accent-strong) 58%, white 42%));
+	background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 75%, var(--color-white) 25%), color-mix(in srgb, var(--accent-strong) 58%, var(--color-white) 42%));
 }
 
 .escalation-side-user-bar {
@@ -4203,7 +4251,7 @@ button:focus-visible {
 	width: min(var(--user-ratio, 0%), calc(100% - 0.44rem));
 	transform: translateY(-50%);
 	border-radius: 999px;
-	background: linear-gradient(90deg, color-mix(in srgb, var(--success) 82%, white 18%), color-mix(in srgb, var(--accent) 52%, white 48%));
+	background: linear-gradient(90deg, color-mix(in srgb, var(--success) 82%, var(--color-white) 18%), color-mix(in srgb, var(--accent) 52%, var(--color-white) 48%));
 	box-shadow: 0 0 0 1px rgba(7, 17, 31, 0.32);
 	z-index: 1;
 }
@@ -4215,7 +4263,7 @@ button:focus-visible {
 	width: 0.22rem;
 	transform: translateX(-50%);
 	border-radius: 999px;
-	background: color-mix(in srgb, var(--warning) 72%, white 28%);
+	background: color-mix(in srgb, var(--warning) 72%, var(--color-white) 28%);
 	box-shadow: 0 0 0 1px rgba(7, 17, 31, 0.45);
 	z-index: 2;
 }
@@ -4451,25 +4499,6 @@ button:focus-visible {
 	}
 }
 
-:root {
-	--space-1: 0.25rem;
-	--space-2: 0.5rem;
-	--space-3: 0.75rem;
-	--space-4: 1rem;
-	--space-5: 1.5rem;
-	--space-6: 2rem;
-	--space-7: 2.75rem;
-	--space-8: 3.5rem;
-	--surface-page: rgba(8, 16, 28, 0.72);
-	--surface-section: rgba(10, 20, 34, 0.82);
-	--surface-record: rgba(12, 23, 38, 0.88);
-	--surface-row: rgba(8, 16, 28, 0.42);
-	--surface-critical: rgba(61, 14, 25, 0.72);
-	--divider-subtle: rgba(159, 180, 207, 0.1);
-	--divider-strong: rgba(159, 180, 207, 0.18);
-	--border-active: rgba(56, 213, 255, 0.52);
-}
-
 .route-shell {
 	display: grid;
 	gap: var(--space-4);
@@ -4484,7 +4513,7 @@ button:focus-visible {
 	padding-bottom: var(--space-2);
 	border-color: var(--divider-strong);
 	background: rgba(8, 17, 29, 0.9);
-	box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+	box-shadow: 0 10px 24px var(--shadow-color-soft);
 }
 
 .route-header {
@@ -4705,7 +4734,7 @@ button:focus-visible {
 
 .metric-tile-value {
 	display: block;
-	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-family: var(--font-family-mono);
 	font-size: clamp(1.05rem, 1.4vw, 1.4rem);
 	line-height: 1.05;
 	font-variant-numeric: tabular-nums;
@@ -4816,7 +4845,7 @@ button:focus-visible {
 	justify-self: center;
 	align-self: center;
 	padding: 0.25rem;
-	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-family: var(--font-family-mono);
 	font-size: var(--collateralization-font-size);
 	line-height: 1;
 	font-variant-numeric: tabular-nums;
@@ -4830,7 +4859,7 @@ button:focus-visible {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	text-shadow:
-		0 1px 1px rgba(0, 0, 0, 0.35),
+		0 1px 1px var(--shadow-color-strong),
 		0 0 1px rgba(0, 0, 0, 0.3);
 	letter-spacing: 0.02em;
 }
@@ -5004,7 +5033,7 @@ button:focus-visible {
 
 .progress-meter-value,
 .ranked-bar-item-value {
-	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-family: var(--font-family-mono);
 	font-size: var(--font-value);
 	font-variant-numeric: tabular-nums;
 	color: var(--text);
@@ -5025,7 +5054,7 @@ button:focus-visible {
 	inset: 0 auto 0 0;
 	border-radius: inherit;
 	background: linear-gradient(90deg, rgba(56, 213, 255, 0.92) 0%, rgba(124, 108, 255, 0.84) 100%);
-	box-shadow: 0 0 16px rgba(56, 213, 255, 0.18);
+	box-shadow: 0 0 16px var(--accent-emphasis-soft);
 }
 
 .progress-meter-footer {
@@ -5034,7 +5063,7 @@ button:focus-visible {
 }
 
 .progress-meter-secondary {
-	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-family: var(--font-family-mono);
 	font-variant-numeric: tabular-nums;
 	color: var(--text-secondary);
 }
@@ -5093,7 +5122,7 @@ button:focus-visible {
 
 .stage-timeline-item.is-active .stage-timeline-marker {
 	background: var(--accent);
-	box-shadow: 0 0 0 4px rgba(56, 213, 255, 0.12);
+	box-shadow: 0 0 0 4px var(--accent-soft);
 }
 
 .stage-timeline-copy {
@@ -5124,7 +5153,7 @@ button:focus-visible {
 	padding: 0.2rem 0.65rem;
 	border: 1px solid var(--border-default);
 	border-radius: 999px;
-	background: rgba(56, 213, 255, 0.08);
+	background: var(--accent-faint);
 	font-size: var(--font-chip);
 	color: var(--text-secondary);
 }
@@ -5207,7 +5236,7 @@ button:focus-visible {
 	display: grid;
 	gap: 0.35rem;
 	padding: 0.8rem 0.9rem;
-	border: 1px solid rgba(255, 255, 255, 0.08);
+	border: 1px solid var(--color-white-08);
 	border-radius: 0.95rem;
 	background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015));
 }
@@ -5343,7 +5372,7 @@ button:focus-visible {
 	grid-template-columns: repeat(3, minmax(0, 1fr));
 	padding-top: 0.15rem;
 	padding-bottom: 0.15rem;
-	border-top: 1px solid rgba(255, 255, 255, 0.08);
+	border-top: 1px solid var(--color-white-08);
 }
 
 .security-pool-strip-price,
@@ -5370,7 +5399,7 @@ button:focus-visible {
 
 .security-pool-strip-vaults {
 	padding-top: 0.35rem;
-	border-top: 1px solid rgba(255, 255, 255, 0.08);
+	border-top: 1px solid var(--color-white-08);
 }
 
 .security-pool-strip-ranked-list .ranked-bar-item {
@@ -5392,7 +5421,7 @@ button:focus-visible {
 
 .security-pool-card-inline-details {
 	padding-top: 0.1rem;
-	border-top: 1px solid rgba(255, 255, 255, 0.08);
+	border-top: 1px solid var(--color-white-08);
 }
 
 .security-pool-card-vault-preview {
@@ -5482,7 +5511,7 @@ button:focus-visible {
 .security-pool-browse-vault-row-id strong,
 .security-pool-browse-vault-row-kpi strong {
 	font-size: var(--font-value);
-	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-family: var(--font-family-mono);
 	font-variant-numeric: tabular-nums;
 	overflow-wrap: anywhere;
 }
@@ -5559,7 +5588,7 @@ button:focus-visible {
 	padding: 0.55rem 0.9rem;
 	border: 1px solid rgba(56, 213, 255, 0.14);
 	border-radius: 1.2rem;
-	background: radial-gradient(circle at top left, rgba(56, 213, 255, 0.12), transparent 32%), linear-gradient(180deg, rgba(10, 18, 31, 0.96), rgba(9, 16, 27, 0.92));
+	background: radial-gradient(circle at top left, var(--accent-soft), transparent 32%), linear-gradient(180deg, rgba(10, 18, 31, 0.96), rgba(9, 16, 27, 0.92));
 }
 
 .selected-pool-context-summary-hero-compact {
@@ -5606,20 +5635,20 @@ button:focus-visible {
 	display: grid;
 	gap: 0.75rem;
 	padding-top: 0.65rem;
-	border-top: 1px solid rgba(255, 255, 255, 0.08);
+	border-top: 1px solid var(--color-white-08);
 }
 
 .security-pool-hero-ribbon {
 	grid-template-columns: repeat(4, minmax(0, 1fr));
 	padding: 0.35rem 0 0.2rem;
-	border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+	border-bottom: 1px solid var(--color-white-08);
 }
 
 .security-pool-ribbon-stat {
 	display: grid;
 	gap: 0.35rem;
 	padding: 0.8rem 0.9rem;
-	border: 1px solid rgba(255, 255, 255, 0.08);
+	border: 1px solid var(--color-white-08);
 	border-radius: 1rem;
 	background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015));
 }
@@ -5672,7 +5701,7 @@ button:focus-visible {
 
 .security-pool-secondary-facts {
 	padding-top: 0.3rem;
-	border-top: 1px solid rgba(255, 255, 255, 0.08);
+	border-top: 1px solid var(--color-white-08);
 }
 
 .vault-position-card .entity-card-content {
@@ -5734,7 +5763,7 @@ button:focus-visible {
 	position: absolute;
 	inset: 0;
 	pointer-events: none;
-	background: radial-gradient(circle at top right, rgba(56, 213, 255, 0.08), transparent 45%);
+	background: radial-gradient(circle at top right, var(--accent-faint), transparent 45%);
 	opacity: 0.7;
 }
 
@@ -5824,7 +5853,7 @@ button:focus-visible {
 
 .security-pool-secondary-facts .metric-field {
 	padding: 0.8rem 0.9rem;
-	border: 1px solid rgba(255, 255, 255, 0.08);
+	border: 1px solid var(--color-white-08);
 	border-radius: 0.95rem;
 	background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.01));
 }
@@ -6013,7 +6042,7 @@ button:focus-visible {
 }
 
 .view-tab.active {
-	background: rgba(56, 213, 255, 0.12);
+	background: var(--accent-soft);
 	border-color: var(--border-active);
 	color: var(--text);
 }
@@ -6038,7 +6067,7 @@ button:focus-visible {
 }
 
 .transaction-action-status.success {
-	background: linear-gradient(180deg, rgba(11, 51, 43, 0.92) 0%, rgba(8, 34, 29, 0.92) 100%);
+	background: var(--success-surface-gradient);
 	border-color: var(--success-border);
 }
 
@@ -6157,9 +6186,9 @@ button:focus-visible {
 
 .section-mode-switch.view-tabs.subroute .view-tab.active,
 .security-pools-header-switch.view-tabs.subroute .view-tab.active {
-	background: rgba(56, 213, 255, 0.12);
+	background: var(--accent-soft);
 	border-color: var(--border-active);
-	box-shadow: inset 0 0 0 1px rgba(56, 213, 255, 0.08);
+	box-shadow: inset 0 0 0 1px var(--accent-faint);
 }
 
 .selected-pool-workspace {
@@ -6207,7 +6236,7 @@ button:focus-visible {
 
 .selected-pool-workflow-nav.view-tabs[data-orientation="vertical"] .view-tab.active {
 	border-left-color: var(--border-active);
-	background: rgba(56, 213, 255, 0.08);
+	background: var(--accent-faint);
 	box-shadow: none;
 }
 
@@ -6243,11 +6272,11 @@ button:focus-visible {
 	color: var(--text-primary);
 	text-align: left;
 	transition:
-		background-color 160ms ease,
-		border-color 160ms ease,
-		box-shadow 160ms ease,
-		color 160ms ease,
-		opacity 160ms ease;
+		background-color var(--transition-standard),
+		border-color var(--transition-standard),
+		box-shadow var(--transition-standard),
+		color var(--transition-standard),
+		opacity var(--transition-standard);
 }
 
 .fork-workflow-stage-icon {
@@ -6282,7 +6311,7 @@ button:focus-visible {
 	padding: 0.12rem 0.45rem;
 	border: 1px solid rgba(56, 213, 255, 0.28);
 	border-radius: 999px;
-	background: rgba(56, 213, 255, 0.12);
+	background: var(--accent-soft);
 	color: rgba(181, 243, 255, 0.96);
 	font-size: 0.68rem;
 	font-weight: 600;
@@ -6361,34 +6390,34 @@ button:focus-visible {
 
 .fork-workflow-stage.is-current {
 	border-color: rgba(56, 213, 255, 0.5);
-	background: linear-gradient(135deg, rgba(56, 213, 255, 0.18), rgba(56, 213, 255, 0.08)), rgba(10, 20, 36, 0.34);
+	background: linear-gradient(135deg, var(--accent-emphasis-soft), var(--accent-faint)), rgba(10, 20, 36, 0.34);
 	box-shadow: 0 0 0 1px rgba(56, 213, 255, 0.24);
 }
 
 .fork-workflow-stage.is-selected {
 	border-color: rgba(56, 213, 255, 0.34);
-	background: linear-gradient(135deg, rgba(56, 213, 255, 0.16), rgba(56, 213, 255, 0.06)), rgba(10, 20, 36, 0.34);
-	box-shadow: 0 0 0 1px rgba(56, 213, 255, 0.12);
-	color: rgb(233, 251, 255);
+	background: linear-gradient(135deg, var(--accent-medium), rgba(56, 213, 255, 0.06)), rgba(10, 20, 36, 0.34);
+	box-shadow: 0 0 0 1px var(--accent-soft);
+	color: rgba(233, 251, 255, 1);
 }
 
 .fork-workflow-stage.is-current .fork-workflow-stage-icon,
 .fork-workflow-stage.is-selected .fork-workflow-stage-icon {
-	background: rgba(56, 213, 255, 0.18);
+	background: var(--accent-emphasis-soft);
 }
 
 .fork-workflow-stage.is-selected .fork-workflow-stage-icon {
-	box-shadow: inset 0 0 0 1px rgba(56, 213, 255, 0.18);
+	box-shadow: inset 0 0 0 1px var(--accent-emphasis-soft);
 }
 
 .fork-workflow-stage.is-selected .fork-workflow-stage-copy strong {
-	color: rgb(243, 253, 255);
+	color: rgba(243, 253, 255, 1);
 }
 
 .fork-workflow-stage.is-complete:not(.is-current) {
 	border-color: rgba(56, 213, 255, 0.22);
-	background: linear-gradient(135deg, rgba(56, 213, 255, 0.12), rgba(56, 213, 255, 0.04)), rgba(10, 20, 36, 0.32);
-	box-shadow: inset 0 0 0 1px rgba(56, 213, 255, 0.08);
+	background: linear-gradient(135deg, var(--accent-soft), rgba(56, 213, 255, 0.04)), rgba(10, 20, 36, 0.32);
+	box-shadow: inset 0 0 0 1px var(--accent-faint);
 	opacity: 0.98;
 }
 
@@ -6400,13 +6429,13 @@ button:focus-visible {
 	color: var(--text-secondary);
 	font-size: 1rem;
 	transition:
-		color 160ms ease,
-		opacity 160ms ease,
-		text-shadow 160ms ease;
+		color var(--transition-standard),
+		opacity var(--transition-standard),
+		text-shadow var(--transition-standard);
 }
 
 .fork-workflow-stage-separator.is-complete {
-	color: rgb(56, 213, 255);
+	color: rgba(56, 213, 255, 1);
 	opacity: 0.95;
 	text-shadow: 0 0 0.7rem rgba(56, 213, 255, 0.2);
 }
@@ -6493,7 +6522,7 @@ button:focus-visible {
 }
 
 .selected-pool-context-grid strong.metric-field-value {
-	font-family: "IBM Plex Mono", "Courier New", monospace;
+	font-family: var(--font-family-mono);
 	font-size: var(--font-value);
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
@@ -6586,7 +6615,7 @@ button:focus-visible {
 
 .vault-content-switch .view-tab.active {
 	background: rgba(56, 213, 255, 0.1);
-	border-color: rgba(56, 213, 255, 0.18);
+	border-color: var(--accent-emphasis-soft);
 	box-shadow: none;
 }
 
@@ -6683,8 +6712,8 @@ button:focus-visible {
 	transform: scaleX(0.35);
 	transform-origin: center;
 	transition:
-		background-color 160ms ease,
-		transform 160ms ease;
+		background-color var(--transition-standard),
+		transform var(--transition-standard);
 }
 
 .route-subtab-nav.view-tabs.subroute .view-tab:hover:not(:disabled)::after {
