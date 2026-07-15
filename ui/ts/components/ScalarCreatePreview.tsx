@@ -1,7 +1,8 @@
+import * as commonCopy from '../copy/common.js'
+import * as marketCopy from '../copy/market.js'
 import { useEffect, useState } from 'preact/hooks'
 import { ScalarOutcomePicker } from './ScalarOutcomePicker.js'
 import { clampScalarTickIndex, formatScalarOutcomeLabel } from '../lib/scalarOutcome.js'
-import { UI_STRING_INVALID, UI_STRING_SCALAR_PREVIEW, UI_TEMPLATE_PAIR_SLASH } from '../lib/uiStrings.js'
 
 export type ScalarCreatePreviewDetails = {
 	answerUnit: string
@@ -30,12 +31,12 @@ export function ScalarCreatePreview({ details, selectedTick, onSelectedTickChang
 		<ScalarOutcomePicker
 			details={{ numTicks: details.numTicks }}
 			isInvalid={isInvalid}
-			label={UI_STRING_SCALAR_PREVIEW}
+			label={marketCopy.scalarPreview}
 			onInvalidChange={setIsInvalid}
 			onSelectedTickChange={onSelectedTickChange}
-			selectedOutcomeLabel={isInvalid ? UI_STRING_INVALID : formatScalarOutcomeLabel(details, clampedSelectedTickValue)}
+			selectedOutcomeLabel={isInvalid ? commonCopy.invalid : formatScalarOutcomeLabel(details, clampedSelectedTickValue)}
 			selectedTick={clampedSelectedTick}
-			selectedTickLabel={isInvalid ? UI_STRING_INVALID : UI_TEMPLATE_PAIR_SLASH(clampedSelectedTick, details.numTicks.toString())}
+			selectedTickLabel={isInvalid ? commonCopy.invalid : commonCopy.formatPairSlash(clampedSelectedTick, details.numTicks.toString())}
 			showMinMax={false}
 		/>
 	)

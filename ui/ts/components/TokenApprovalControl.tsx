@@ -1,3 +1,4 @@
+import * as commonCopy from '../copy/common.js'
 import { useEffect, useMemo, useState } from 'preact/hooks'
 import { ApprovedAmountValue } from './ApprovedAmountValue.js'
 import { CurrencyValue } from './CurrencyValue.js'
@@ -9,19 +10,6 @@ import { MetricField } from './MetricField.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage } from '../lib/tokenApproval.js'
-import {
-	UI_STRING_APPROVAL_AMOUNT,
-	UI_STRING_APPROVAL_AMOUNT_MUST_BE_A_DECIMAL_NUMBER,
-	UI_STRING_APPROVAL_SATISFIED,
-	UI_STRING_LEAVE_BLANK_FOR_REQUIRED_TOTAL,
-	UI_STRING_MAX,
-	UI_TEMPLATE_APPROVED_VALUE,
-	UI_TEMPLATE_APPROVE_MAX_VALUE,
-	UI_TEMPLATE_APPROVE_VALUE,
-	UI_TEMPLATE_APPROVE_TOKEN_AMOUNT,
-	UI_TEMPLATE_REQUIRED_VALUE,
-	UI_TEMPLATE_VALUE_APPROVAL_AMOUNT,
-} from '../lib/uiStrings.js'
 type TokenApprovalControlProps = {
 	actionLabel: string
 	allowanceError: string | undefined
@@ -59,10 +47,10 @@ function resolveApprovalButtonLabel({
 	tokenUnits: number
 }) {
 	if (pending) return <LoadingText>{pendingLabel}</LoadingText>
-	if (guardMessage !== undefined || nextApprovalAmount === undefined) return UI_TEMPLATE_APPROVE_VALUE(tokenSymbol)
-	if (requirementSatisfied && !isCustomAmount && !isMaxAmount) return UI_STRING_APPROVAL_SATISFIED
-	if (isMaxAmount) return UI_TEMPLATE_APPROVE_MAX_VALUE(tokenSymbol)
-	return UI_TEMPLATE_APPROVE_TOKEN_AMOUNT(formatCurrencyBalance(nextApprovalAmount, tokenUnits), tokenSymbol)
+	if (guardMessage !== undefined || nextApprovalAmount === undefined) return commonCopy.formatApproveValue(tokenSymbol)
+	if (requirementSatisfied && !isCustomAmount && !isMaxAmount) return commonCopy.approvalSatisfied
+	if (isMaxAmount) return commonCopy.formatApproveMaxValue(tokenSymbol)
+	return commonCopy.formatApproveTokenAmount(formatCurrencyBalance(nextApprovalAmount, tokenUnits), tokenSymbol)
 }
 export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoading, approvedAmount, disabled = false, guardMessage, onApprove, pending, pendingLabel, requiredAmount, resetKey, tokenSymbol, tokenUnits }: TokenApprovalControlProps) {
 	const [draftAmount, setDraftAmount] = useState('')
@@ -72,10 +60,10 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 	}, [resetKey])
 	const parsedAmount = useMemo(() => {
 		try {
-			return parseTokenApprovalAmountInput(draftAmount, UI_STRING_APPROVAL_AMOUNT, tokenUnits)
+			return parseTokenApprovalAmountInput(draftAmount, commonCopy.approvalAmount, tokenUnits)
 		} catch (error) {
 			return {
-				error: error instanceof Error ? error.message : UI_STRING_APPROVAL_AMOUNT_MUST_BE_A_DECIMAL_NUMBER,
+				error: error instanceof Error ? error.message : commonCopy.approvalAmountInvalidError,
 				kind: 'invalid' as const,
 			}
 		}
@@ -127,20 +115,20 @@ export function TokenApprovalControl({ actionLabel, allowanceError, allowanceLoa
 	return (
 		<div className='form-grid'>
 			<MetricGrid>
-				<MetricField label={UI_TEMPLATE_REQUIRED_VALUE(tokenSymbol)}>
+				<MetricField label={commonCopy.formatRequiredValue(tokenSymbol)}>
 					<CurrencyValue value={requiredAmount} units={tokenUnits} suffix={tokenSymbol} copyable={false} />
 				</MetricField>
-				<MetricField label={UI_TEMPLATE_APPROVED_VALUE(tokenSymbol)}>
+				<MetricField label={commonCopy.formatApprovedValue(tokenSymbol)}>
 					<ApprovedAmountValue loading={allowanceLoading} value={approvedAmount} requiredAmount={requiredAmount} units={tokenUnits} suffix={tokenSymbol} copyable={false} />
 				</MetricField>
 			</MetricGrid>
 
 			<label className='field approval-amount-field'>
-				<span className='approval-amount-label'>{UI_TEMPLATE_VALUE_APPROVAL_AMOUNT(tokenSymbol)}</span>
+				<span className='approval-amount-label'>{commonCopy.formatValueApprovalAmount(tokenSymbol)}</span>
 				<div className='field-inline approval-amount-controls'>
-					<FormInput className='field-inline-input' value={draftAmount} onInput={event => setDraftAmount(event.currentTarget.value)} placeholder={UI_STRING_LEAVE_BLANK_FOR_REQUIRED_TOTAL} invalid={amountValidationMessage !== undefined} disabled={controlsDisabled} />
+					<FormInput className='field-inline-input' value={draftAmount} onInput={event => setDraftAmount(event.currentTarget.value)} placeholder={commonCopy.leaveBlankForRequiredTotal} invalid={amountValidationMessage !== undefined} disabled={controlsDisabled} />
 					<button className='quiet field-inline-action' type='button' onClick={() => setDraftAmount('max')} disabled={controlsDisabled}>
-						{UI_STRING_MAX}
+						{commonCopy.max}
 					</button>
 				</div>
 			</label>

@@ -1,3 +1,4 @@
+import * as reportingCopy from '../copy/reporting.js'
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -9,7 +10,6 @@ import { zeroAddress } from '@zoltar/shared/ethereum'
 import { ReportingSection } from '../components/ReportingSection.js'
 import { formatDuration, formatTimestamp } from '../lib/formatters.js'
 import { getReportingLockedUntilMessage } from '../lib/reporting.js'
-import { UI_STRING_IF_NO_ONE_DISPUTES_AFTER_THIS_REPORT_THE_MARKET_WOULD_FINALIZE_IN } from '../lib/uiStrings.js'
 import { computeEscalationTimeSinceStartFromAttritionCost, ESCALATION_GAME_ACTIVATION_DELAY, getEscalationBalanceTuple, getEscalationBindingCapital, getSelectedOutcomeRewardWindowFillTimestamp } from '../lib/reportingDomain.js'
 import type { AccountState, ReportingFormState } from '../types/app.js'
 import type { ActiveReportingDetails, EscalationDeposit, MarketDetails, ReportingDetails } from '../types/contracts.js'
@@ -702,8 +702,8 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes('Submitting report...')).toBe(true)
-		expect(document.body.textContent?.includes('Loading...')).toBe(false)
+		expect(document.body.textContent?.includes('Submitting report…')).toBe(true)
+		expect(document.body.textContent?.includes('Loading…')).toBe(false)
 	})
 
 	test('shows a loading notice and disables withdraw-only controls while deposits refresh', async () => {
@@ -723,7 +723,7 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes('Loading escalation deposits...')).toBe(true)
+		expect(document.body.textContent?.includes('Loading escalation deposits…')).toBe(true)
 		const withdrawCheckbox = document.body.querySelector("input[type='checkbox']") as HTMLInputElement | null
 		if (!(withdrawCheckbox instanceof HTMLInputElement)) throw new Error('Expected withdraw checkbox')
 		expect(withdrawCheckbox.disabled).toBe(true)
@@ -1020,7 +1020,7 @@ describe('ReportingSection', () => {
 		expect(reportOutcomeSection.querySelectorAll('.currency-value.unavailable')).toHaveLength(0)
 		expect(document.body.textContent?.includes('Load reporting details to populate live stakes')).toBe(false)
 		expectTransactionButtonEnabled(document.body, 'Report Yes')
-		expect(document.body.textContent?.includes(UI_STRING_IF_NO_ONE_DISPUTES_AFTER_THIS_REPORT_THE_MARKET_WOULD_FINALIZE_IN)).toBe(true)
+		expect(document.body.textContent?.includes(reportingCopy.uncontestedFinalizationLead)).toBe(true)
 		expect(document.body.textContent?.includes(`Check back no later than ${formatTimestamp(150n + ESCALATION_GAME_ACTIVATION_DELAY)} (in 3d 0h 0m) to confirm Yes is the leading outcome before finalization.`)).toBe(true)
 	})
 
@@ -1041,7 +1041,7 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes(UI_STRING_IF_NO_ONE_DISPUTES_AFTER_THIS_REPORT_THE_MARKET_WOULD_FINALIZE_IN)).toBe(true)
+		expect(document.body.textContent?.includes(reportingCopy.uncontestedFinalizationLead)).toBe(true)
 		expect(document.body.textContent?.includes(`If no one disputes after this report, the market would finalize in ${formatDuration(ESCALATION_GAME_ACTIVATION_DELAY)}.`)).toBe(true)
 		expect(document.body.textContent?.includes(`Check back no later than ${formatTimestamp(latestCheckBackTimestamp)} (in ${formatDuration(ESCALATION_GAME_ACTIVATION_DELAY + hypotheticalDuration)}) to confirm Invalid is still leading if later disputes keep escalation open.`)).toBe(true)
 	})

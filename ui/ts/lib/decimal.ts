@@ -1,4 +1,5 @@
 import { parseUnits } from '@zoltar/shared/ethereum'
+import * as commonCopy from '../copy/common.js'
 
 const DECIMAL_INPUT_PATTERN = /^-?(?:\d+\.?\d*|\.\d+)$/
 
@@ -33,6 +34,6 @@ export function parseDecimalInput(value: string, label: string, units: number = 
 	const trimmed = value.trim()
 	if (trimmed === '') throw new Error(`${label} is required`)
 	const parsed = tryParseDecimalInput(trimmed, units)
-	if (parsed === undefined) throw new Error(`${label} must be a decimal number`)
+	if (parsed === undefined) throw new Error(commonCopy.formatDecimalNumberRequiredError(label))
 	return parsed
 }

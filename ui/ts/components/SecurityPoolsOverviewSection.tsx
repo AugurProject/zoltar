@@ -1,3 +1,5 @@
+import * as commonCopy from '../copy/common.js'
+import * as securityPoolCopy from '../copy/securityPool.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { AddressValue } from './AddressValue.js'
@@ -25,57 +27,6 @@ import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { getSecurityPoolStatusBadgeLabel } from '../lib/securityPoolLabels.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { getPoolCollateralizationPercent, getVaultCollateralizationPercent } from '../lib/trading.js'
-import {
-	UI_STRING_ACTIVE_VAULTS_IN_THIS_PREVIEW_NEWEST_ACTIVITY_FIRST,
-	UI_STRING_ALL_POOLS,
-	UI_STRING_ALL_STATES,
-	UI_STRING_ANNUAL_FEE,
-	UI_STRING_CREATE_SECURITY_POOL,
-	UI_STRING_ENDED,
-	UI_STRING_ETH,
-	UI_STRING_FILTER_THIS_PAGE_BY_POOL_ADDRESS_QUESTION_ID_OR_QUESTION_TEXT,
-	UI_STRING_FORK_MIGRATION,
-	UI_STRING_HAS_VAULTS,
-	UI_STRING_LOAD_SECURITY_POOLS,
-	UI_STRING_MANAGER_ADDRESS,
-	UI_STRING_MAX_PREFIX,
-	UI_STRING_MULTIPLIER,
-	UI_STRING_NONE,
-	UI_STRING_NO_MATCHES,
-	UI_STRING_NO_POOLS_MATCH_THE_CURRENT_SEARCH_AND_FILTER_SETTINGS,
-	UI_STRING_NO_SECURITY_POOLS,
-	UI_STRING_NO_VAULTS_IN_THIS_POOL,
-	UI_STRING_NO_VAULTS,
-	UI_STRING_OF_PREFIX,
-	UI_STRING_OPEN_INTEREST_MINTED,
-	UI_STRING_OPEN_ORACLE_PRICE,
-	UI_STRING_OPEN_POOL,
-	UI_STRING_OPERATIONAL,
-	UI_STRING_PERCENT,
-	UI_STRING_POOLS_SHOWN_ON_THIS_PAGE,
-	UI_STRING_POOL_ADDRESS,
-	UI_STRING_POOL_COLLATERALIZATION,
-	UI_STRING_POOL_FORKED,
-	UI_STRING_QUESTION_ID,
-	UI_STRING_REP,
-	UI_STRING_REP_COLLATERAL,
-	UI_STRING_RETRYING_SECURITY_POOLS_TRUNCATED,
-	UI_STRING_RETRY_LOADING_POOLS,
-	UI_STRING_REVIEW_LIQUIDATION,
-	UI_STRING_REVIEW_LIQUIDATION_DETAILS_FOR_THIS_VAULT_BEFORE_QUEUEING_THE_ACTION,
-	UI_STRING_SEARCH_LOADED_PAGE,
-	UI_STRING_SECURITY_BOND_ALLOWANCE,
-	UI_STRING_SECURITY_POOLS,
-	UI_STRING_SHOWING_PREFIX,
-	UI_STRING_SYSTEM_STATE,
-	UI_STRING_TRUTH_AUCTION,
-	UI_STRING_UNAVAILABLE,
-	UI_STRING_UNIVERSE,
-	UI_STRING_VAULTS,
-	UI_STRING_VAULT_COVERAGE,
-	UI_STRING_VAULT_PREVIEW_UNAVAILABLE,
-	UI_TEMPLATE_VAULT_COUNT_LABEL,
-} from '../lib/uiStrings.js'
 import { getPoolRegistryPresentation } from '../lib/userCopy.js'
 import { getToneRatioThreshold, getVisualRatio } from '../lib/visualMetrics.js'
 import type { SecurityPoolsOverviewSectionProps } from '../types/components.js'
@@ -191,10 +142,10 @@ export function SecurityPoolsOverviewSection({
 		return pool.securityPoolAddress.toLowerCase().includes(normalizedSearchText) || pool.questionId.toLowerCase().includes(normalizedSearchText) || pool.marketDetails.title.toLowerCase().includes(normalizedSearchText) || pool.marketDetails.description.toLowerCase().includes(normalizedSearchText)
 	})
 	return (
-		<RouteWorkflowPanel showHeader={false} title={UI_STRING_SECURITY_POOLS}>
+		<RouteWorkflowPanel showHeader={false} title={commonCopy.securityPools}>
 			<SectionBlock
 				density='compact'
-				title={UI_STRING_SECURITY_POOLS}
+				title={commonCopy.securityPools}
 				actions={
 					<PaginationControls
 						hasNextPage={hasNextPage}
@@ -214,41 +165,36 @@ export function SecurityPoolsOverviewSection({
 				{securityPoolOverviewError === undefined ? undefined : (
 					<div className='actions pool-registry-recovery-actions'>
 						<button className='secondary' type='button' onClick={retryPoolRegistryLoad} disabled={loadingSecurityPoolPage}>
-							{loadingSecurityPoolPage ? <LoadingText>{UI_STRING_RETRYING_SECURITY_POOLS_TRUNCATED}</LoadingText> : UI_STRING_RETRY_LOADING_POOLS}
+							{loadingSecurityPoolPage ? <LoadingText>{securityPoolCopy.retryingSecurityPoolsTruncated}</LoadingText> : securityPoolCopy.retryLoadingPools}
 						</button>
 					</div>
 				)}
 				<div className='filter-toolbar'>
 					<label className='field'>
-						<span>{UI_STRING_SEARCH_LOADED_PAGE}</span>
-						<FormInput value={searchText} onInput={event => setSearchText(event.currentTarget.value)} placeholder={UI_STRING_FILTER_THIS_PAGE_BY_POOL_ADDRESS_QUESTION_ID_OR_QUESTION_TEXT} />
+						<span>{securityPoolCopy.searchLoadedPage}</span>
+						<FormInput value={searchText} onInput={event => setSearchText(event.currentTarget.value)} placeholder={securityPoolCopy.poolSearchHelpText} />
 					</label>
 					<label className='field'>
-						<span>{UI_STRING_SYSTEM_STATE}</span>
+						<span>{securityPoolCopy.systemState}</span>
 						<select value={systemStateFilter} onChange={event => setSystemStateFilter(event.currentTarget.value as 'all' | SecurityPoolLifecycleState)}>
-							<option value='all'>{UI_STRING_ALL_STATES}</option>
-							<option value='operational'>{UI_STRING_OPERATIONAL}</option>
-							<option value='ended'>{UI_STRING_ENDED}</option>
-							<option value='poolForked'>{UI_STRING_POOL_FORKED}</option>
-							<option value='forkMigration'>{UI_STRING_FORK_MIGRATION}</option>
-							<option value='forkTruthAuction'>{UI_STRING_TRUTH_AUCTION}</option>
+							<option value='all'>{securityPoolCopy.allStates}</option>
+							<option value='operational'>{commonCopy.operational}</option>
+							<option value='ended'>{securityPoolCopy.ended}</option>
+							<option value='poolForked'>{securityPoolCopy.poolForked}</option>
+							<option value='forkMigration'>{securityPoolCopy.forkMigration}</option>
+							<option value='forkTruthAuction'>{commonCopy.truthAuction}</option>
 						</select>
 					</label>
 					<label className='field'>
-						<span>{UI_STRING_VAULT_COVERAGE}</span>
+						<span>{securityPoolCopy.vaultCoverage}</span>
 						<select value={vaultFilter} onChange={event => setVaultFilter(event.currentTarget.value as 'all' | 'has-vaults' | 'empty')}>
-							<option value='all'>{UI_STRING_ALL_POOLS}</option>
-							<option value='has-vaults'>{UI_STRING_HAS_VAULTS}</option>
-							<option value='empty'>{UI_STRING_NO_VAULTS}</option>
+							<option value='all'>{securityPoolCopy.allPools}</option>
+							<option value='has-vaults'>{securityPoolCopy.hasVaults}</option>
+							<option value='empty'>{securityPoolCopy.noVaults}</option>
 						</select>
 					</label>
 				</div>
-				{pagedSecurityPools.length > 0 ? (
-					<p className='detail'>
-						{filteredSecurityPools.length.toString()} {UI_STRING_OF_PREFIX}
-						{pagedSecurityPools.length.toString()} {UI_STRING_POOLS_SHOWN_ON_THIS_PAGE}
-					</p>
-				) : undefined}
+				{pagedSecurityPools.length > 0 ? <p className='detail'>{securityPoolCopy.formatPoolPageSummary(pagedSecurityPools.length, filteredSecurityPools.length)}</p> : undefined}
 
 				{(() => {
 					if (pagedSecurityPools.length === 0) {
@@ -259,21 +205,21 @@ export function SecurityPoolsOverviewSection({
 							if (isEmptyRegistry && onCreateSecurityPool !== undefined)
 								return (
 									<button className='primary' type='button' onClick={onCreateSecurityPool}>
-										{UI_STRING_CREATE_SECURITY_POOL}
+										{commonCopy.createSecurityPool}
 									</button>
 								)
 							if (isUncheckedRegistry && securityPoolOverviewError === undefined)
 								return (
 									<button className='secondary' type='button' onClick={retryPoolRegistryLoad} disabled={loadingSecurityPoolPage}>
-										{UI_STRING_LOAD_SECURITY_POOLS}
+										{securityPoolCopy.loadSecurityPools}
 									</button>
 								)
 							return undefined
 						})()
 
-						return <StateHint presentation={registryPresentation} title={isEmptyRegistry ? UI_STRING_NO_SECURITY_POOLS : undefined} actions={registryActions} />
+						return <StateHint presentation={registryPresentation} title={isEmptyRegistry ? securityPoolCopy.noSecurityPools : undefined} actions={registryActions} />
 					}
-					if (filteredSecurityPools.length === 0) return <StateHint presentation={{ key: 'empty', badgeLabel: UI_STRING_NO_MATCHES, badgeTone: 'muted', detail: UI_STRING_NO_POOLS_MATCH_THE_CURRENT_SEARCH_AND_FILTER_SETTINGS }} />
+					if (filteredSecurityPools.length === 0) return <StateHint presentation={{ key: 'empty', badgeLabel: commonCopy.noMatches, badgeTone: 'muted', detail: securityPoolCopy.poolFiltersEmpty }} />
 
 					return (
 						<div className='entity-card-list'>
@@ -307,38 +253,38 @@ export function SecurityPoolsOverviewSection({
 										actions={
 											onSelectSecurityPool === undefined ? undefined : (
 												<button className='primary' onClick={() => onSelectSecurityPool(pool.securityPoolAddress)}>
-													{UI_STRING_OPEN_POOL}
+													{securityPoolCopy.openPool}
 												</button>
 											)
 										}
 									>
 										<div className='security-pool-card-surface'>
-											<div className='security-pool-card-title-row' aria-label={UI_STRING_POOL_COLLATERALIZATION}>
-												<CollateralizationCircle className='security-pool-card-title-collateralization' collateralizationPercent={collateralizationPercent} targetCollateralizationPercent={targetCollateralizationPercent} size='small' label={UI_STRING_POOL_COLLATERALIZATION} />
+											<div className='security-pool-card-title-row' aria-label={securityPoolCopy.poolCollateralization}>
+												<CollateralizationCircle className='security-pool-card-title-collateralization' collateralizationPercent={collateralizationPercent} targetCollateralizationPercent={targetCollateralizationPercent} size='small' label={securityPoolCopy.poolCollateralization} />
 											</div>
 											<div className='security-pool-strip'>
 												<div className='security-pool-strip-story'>
 													<Question className='security-pool-strip-question' question={pool.marketDetails} showTitle={false} variant='preview' />
 													<div className='security-pool-strip-stats'>
 														<div>
-															<span>{UI_STRING_VAULTS}</span>
+															<span>{securityPoolCopy.vaults}</span>
 															<strong>{pool.vaultCount.toString()}</strong>
 														</div>
 														<div>
-															<span>{UI_STRING_MULTIPLIER}</span>
+															<span>{commonCopy.multiplier}</span>
 															<strong>{pool.securityMultiplier.toString()}x</strong>
 														</div>
 														<div>
-															<span>{UI_STRING_ANNUAL_FEE}</span>
+															<span>{securityPoolCopy.annualFee}</span>
 															<strong>
-																<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix={UI_STRING_PERCENT} />
+																<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix={commonCopy.percent} />
 															</strong>
 														</div>
 													</div>
 												</div>
 												<div className='security-pool-strip-signal'>
 													<div className='security-pool-strip-price'>
-														<span>{UI_STRING_OPEN_ORACLE_PRICE}</span>
+														<span>{commonCopy.openOraclePrice}</span>
 														<strong>
 															<OpenOraclePriceValue currentTimestamp={undefined} lastPrice={pool.lastOraclePrice} lastSettlementTimestamp={pool.lastOracleSettlementTimestamp} priceValidUntilTimestamp={undefined} />
 														</strong>
@@ -346,12 +292,12 @@ export function SecurityPoolsOverviewSection({
 													<div className='security-pool-card-progress security-pool-strip-meters'>
 														<ProgressMeter
 															className='security-pool-strip-meter'
-															label={UI_STRING_OPEN_INTEREST_MINTED}
+															label={securityPoolCopy.openInterestMinted}
 															maxValue={pool.totalSecurityBondAllowance}
 															secondaryValue={
 																<span className='detail'>
-																	{UI_STRING_MAX_PREFIX}
-																	<CurrencyValue value={pool.totalSecurityBondAllowance} suffix={UI_STRING_ETH} />
+																	{securityPoolCopy.maxLead}
+																	<CurrencyValue value={pool.totalSecurityBondAllowance} suffix={commonCopy.eth} />
 																</span>
 															}
 															tone={getToneRatioThreshold({
@@ -360,34 +306,34 @@ export function SecurityPoolsOverviewSection({
 																warningThreshold: 0.85,
 															})}
 															value={pool.completeSetCollateralAmount}
-															valueText={<CurrencyValue value={pool.completeSetCollateralAmount} suffix={UI_STRING_ETH} />}
+															valueText={<CurrencyValue value={pool.completeSetCollateralAmount} suffix={commonCopy.eth} />}
 														/>
 													</div>
 												</div>
 											</div>
 											<div className='security-pool-detail-rail security-pool-card-inline-details'>
-												<MetricField label={UI_STRING_POOL_ADDRESS}>
+												<MetricField label={securityPoolCopy.poolAddress}>
 													<AddressValue address={pool.securityPoolAddress} />
 												</MetricField>
-												<MetricField label={UI_STRING_MANAGER_ADDRESS}>
+												<MetricField label={securityPoolCopy.managerAddress}>
 													<AddressValue address={pool.managerAddress} />
 												</MetricField>
-												<MetricField label={UI_STRING_QUESTION_ID}>{pool.questionId}</MetricField>
-												<MetricField label={UI_STRING_UNIVERSE}>
+												<MetricField label={commonCopy.questionId}>{pool.questionId}</MetricField>
+												<MetricField label={commonCopy.universe}>
 													<UniverseLink format='hex' universeId={pool.universeId} />
 												</MetricField>
 											</div>
 											<div className='security-pool-browse-vaults'>
 												<div className='security-pool-browse-vaults-head'>
-													<h4>{UI_STRING_VAULTS}</h4>
-													<div className='security-pool-browse-vaults-count'>{UI_TEMPLATE_VAULT_COUNT_LABEL(pool.vaultCount.toString())}</div>
+													<h4>{securityPoolCopy.vaults}</h4>
+													<div className='security-pool-browse-vaults-count'>{securityPoolCopy.formatVaultCountLabel(pool.vaultCount.toString())}</div>
 												</div>
 												{pool.hasLoadedVaults === false ? (
-													<StateHint presentation={{ key: 'empty', badgeLabel: UI_STRING_UNAVAILABLE, badgeTone: 'muted', detail: UI_STRING_VAULT_PREVIEW_UNAVAILABLE }} />
+													<StateHint presentation={{ key: 'empty', badgeLabel: commonCopy.unavailable, badgeTone: 'muted', detail: securityPoolCopy.vaultPreviewUnavailable }} />
 												) : (
 													<div className='security-pool-browse-vault-list'>
 														{pool.vaults.length === 0 ? (
-															<StateHint presentation={{ key: 'empty', badgeLabel: UI_STRING_NONE, badgeTone: 'muted', detail: UI_STRING_NO_VAULTS_IN_THIS_POOL }} />
+															<StateHint presentation={{ key: 'empty', badgeLabel: commonCopy.none, badgeTone: 'muted', detail: securityPoolCopy.poolVaultsEmpty }} />
 														) : (
 															(() => {
 																const previewVaults = [...pool.vaults]
@@ -413,24 +359,24 @@ export function SecurityPoolsOverviewSection({
 																					</div>
 																				</div>
 																				<div className='security-pool-browse-vault-row-kpi'>
-																					<span>{UI_STRING_SECURITY_BOND_ALLOWANCE}</span>
+																					<span>{commonCopy.securityBondAllowance}</span>
 																					<strong>
-																						<CurrencyValue value={vault.securityBondAllowance} suffix={UI_STRING_ETH} />
+																						<CurrencyValue value={vault.securityBondAllowance} suffix={commonCopy.eth} />
 																					</strong>
 																				</div>
 																				<div className='security-pool-browse-vault-row-kpi'>
-																					<span>{UI_STRING_REP_COLLATERAL}</span>
+																					<span>{commonCopy.repCollateral}</span>
 																					<strong>
-																						<CurrencyValue value={vault.repDepositShare} suffix={UI_STRING_REP} />
+																						<CurrencyValue value={vault.repDepositShare} suffix={commonCopy.rep} />
 																					</strong>
 																				</div>
 																				<button
 																					className='secondary security-pool-browse-vault-row-liquidate'
 																					onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)}
 																					disabled={accountState.address === undefined || !isMainnet || !liquidationEnabled}
-																					title={UI_STRING_REVIEW_LIQUIDATION_DETAILS_FOR_THIS_VAULT_BEFORE_QUEUEING_THE_ACTION}
+																					title={securityPoolCopy.liquidationReviewHint}
 																				>
-																					{UI_STRING_REVIEW_LIQUIDATION}
+																					{securityPoolCopy.reviewLiquidation}
 																				</button>
 																			</div>
 																		</div>
@@ -438,13 +384,7 @@ export function SecurityPoolsOverviewSection({
 																})
 															})()
 														)}
-														{pool.vaultCount > BigInt(pool.vaults.length) ? (
-															<p className='detail'>
-																{UI_STRING_SHOWING_PREFIX}
-																{pool.vaults.length.toString()} {UI_STRING_OF_PREFIX}
-																{pool.vaultCount.toString()} {UI_STRING_ACTIVE_VAULTS_IN_THIS_PREVIEW_NEWEST_ACTIVITY_FIRST}
-															</p>
-														) : undefined}
+														{pool.vaultCount > BigInt(pool.vaults.length) ? <p className='detail'>{securityPoolCopy.formatVaultPreviewSummary(pool.vaults.length, pool.vaultCount)}</p> : undefined}
 													</div>
 												)}
 											</div>

@@ -1,3 +1,5 @@
+import * as commonCopy from '../copy/common.js'
+import * as marketCopy from '../copy/market.js'
 import { LoadingText } from './LoadingText.js'
 import { MetricGrid } from './MetricGrid.js'
 import { MetricField } from './MetricField.js'
@@ -5,23 +7,6 @@ import { OutcomeChipRow } from './OutcomeChipRow.js'
 import { TimestampValue } from './TimestampValue.js'
 import { assertNever } from '../lib/assert.js'
 import { appendInvalidOutcomeLabelIfMissing, isInvalidOutcomeLabel } from '../lib/outcomeLabels.js'
-import {
-	UI_STRING_ANSWER_UNIT,
-	UI_STRING_BINARY,
-	UI_STRING_CATEGORICAL,
-	UI_STRING_CREATED,
-	UI_STRING_DISPLAY_RANGE,
-	UI_STRING_END_TIME,
-	UI_STRING_LOADING_QUESTION_DETAILS_QUESTION_LOADING_QUESTION_DETAILS_LABEL,
-	UI_STRING_NONE,
-	UI_STRING_OUTCOMES,
-	UI_STRING_QUESTION_ID,
-	UI_STRING_QUESTION_TIMELINE,
-	UI_STRING_QUESTION_TYPE,
-	UI_STRING_SCALAR,
-	UI_STRING_TICKS,
-	UI_STRING_UNTITLED_QUESTION,
-} from '../lib/uiStrings.js'
 import type { MarketDetails } from '../types/contracts.js'
 
 type QuestionProps = {
@@ -45,7 +30,7 @@ type QuestionSummaryField =
 	  }
 
 export function getQuestionTitle(question: MarketDetails) {
-	return question.title.trim() === '' ? UI_STRING_UNTITLED_QUESTION : question.title
+	return question.title.trim() === '' ? marketCopy.untitledQuestion : question.title
 }
 
 function getQuestionDescription(question: MarketDetails) {
@@ -57,18 +42,18 @@ function getQuestionDescription(question: MarketDetails) {
 function getQuestionTypeLabel(question: MarketDetails) {
 	switch (question.marketType) {
 		case 'binary':
-			return UI_STRING_BINARY
+			return marketCopy.binary
 		case 'categorical':
-			return UI_STRING_CATEGORICAL
+			return marketCopy.categorical
 		case 'scalar':
-			return UI_STRING_SCALAR
+			return marketCopy.scalar
 		default:
 			return assertNever(question.marketType)
 	}
 }
 
 function getDisplayedOutcomes(question: MarketDetails) {
-	const outcomes = question.outcomeLabels.length === 0 ? [UI_STRING_SCALAR] : question.outcomeLabels
+	const outcomes = question.outcomeLabels.length === 0 ? [marketCopy.scalar] : question.outcomeLabels
 	return appendInvalidOutcomeLabelIfMissing(outcomes)
 }
 
@@ -78,15 +63,15 @@ function getDisplayRange(question: MarketDetails) {
 
 export function getQuestionSummaryFields(question: MarketDetails): QuestionSummaryField[] {
 	const fields: QuestionSummaryField[] = [
-		{ kind: 'text', label: UI_STRING_QUESTION_TYPE, value: getQuestionTypeLabel(question) },
-		{ kind: 'text', label: UI_STRING_QUESTION_ID, value: question.questionId },
-		{ kind: 'timestamp', label: UI_STRING_CREATED, value: question.createdAt },
-		{ kind: 'timestamp', label: UI_STRING_END_TIME, value: question.endTime },
-		{ kind: 'text', label: UI_STRING_OUTCOMES, value: getDisplayedOutcomes(question).join(', ') },
+		{ kind: 'text', label: marketCopy.questionType, value: getQuestionTypeLabel(question) },
+		{ kind: 'text', label: commonCopy.questionId, value: question.questionId },
+		{ kind: 'timestamp', label: marketCopy.created, value: question.createdAt },
+		{ kind: 'timestamp', label: marketCopy.endTime, value: question.endTime },
+		{ kind: 'text', label: marketCopy.outcomes, value: getDisplayedOutcomes(question).join(', ') },
 	]
 
 	if (question.marketType === 'scalar')
-		fields.push({ kind: 'text', label: UI_STRING_TICKS, value: question.numTicks.toString() }, { kind: 'text', label: UI_STRING_DISPLAY_RANGE, value: getDisplayRange(question) }, { kind: 'text', label: UI_STRING_ANSWER_UNIT, value: question.answerUnit === '' ? UI_STRING_NONE : question.answerUnit })
+		fields.push({ kind: 'text', label: marketCopy.ticks, value: question.numTicks.toString() }, { kind: 'text', label: marketCopy.displayRange, value: getDisplayRange(question) }, { kind: 'text', label: marketCopy.answerUnit, value: question.answerUnit === '' ? commonCopy.none : question.answerUnit })
 
 	return fields
 }
@@ -111,7 +96,7 @@ export function Question({ className = '', loading = false, question, showTitle 
 		return (
 			<div className={`question-summary ${className}`}>
 				<p className='detail'>
-					<LoadingText>{UI_STRING_LOADING_QUESTION_DETAILS_QUESTION_LOADING_QUESTION_DETAILS_LABEL}</LoadingText>
+					<LoadingText>{marketCopy.questionDetailsLoadingLabel}</LoadingText>
 				</p>
 			</div>
 		)
@@ -131,11 +116,11 @@ export function Question({ className = '', loading = false, question, showTitle 
 			? []
 			: [
 					{
-						label: UI_STRING_TICKS,
+						label: marketCopy.ticks,
 						value: question.numTicks.toString(),
 					},
 					{
-						label: UI_STRING_DISPLAY_RANGE,
+						label: marketCopy.displayRange,
 						value: getDisplayRange(question),
 					},
 				]
@@ -150,15 +135,15 @@ export function Question({ className = '', loading = false, question, showTitle 
 					</div>
 				)}
 				<OutcomeChipRow items={outcomeItems} />
-				<div className='question-preview-timeline' role='list' aria-label={UI_STRING_QUESTION_TIMELINE}>
+				<div className='question-preview-timeline' role='list' aria-label={marketCopy.questionTimeline}>
 					<div className='question-preview-timeline-item' role='listitem'>
-						<span className='question-preview-timeline-label'>{UI_STRING_CREATED}</span>
+						<span className='question-preview-timeline-label'>{marketCopy.created}</span>
 						<strong className='question-preview-timeline-value'>
 							<TimestampValue timestamp={question.createdAt} />
 						</strong>
 					</div>
 					<div className='question-preview-timeline-item' role='listitem'>
-						<span className='question-preview-timeline-label'>{UI_STRING_END_TIME}</span>
+						<span className='question-preview-timeline-label'>{marketCopy.endTime}</span>
 						<strong className='question-preview-timeline-value'>
 							<TimestampValue timestamp={question.endTime} />
 						</strong>
@@ -166,7 +151,7 @@ export function Question({ className = '', loading = false, question, showTitle 
 				</div>
 				<div className='question-preview-meta'>
 					<div className='question-preview-meta-item'>
-						<span className='question-preview-meta-label'>{UI_STRING_QUESTION_ID}</span>
+						<span className='question-preview-meta-label'>{commonCopy.questionId}</span>
 						<strong>{question.questionId}</strong>
 					</div>
 					{scalarFields.map(field => (

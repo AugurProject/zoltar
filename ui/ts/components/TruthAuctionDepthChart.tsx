@@ -1,9 +1,10 @@
+import * as commonCopy from '../copy/common.js'
+import * as forkAuctionCopy from '../copy/forkAuction.js'
 import { useRef } from 'preact/hooks'
 import { CurrencyValue } from './CurrencyValue.js'
 import { formatCurrencyInputBalance, formatRoundedCurrencyBalance } from '../lib/formatters.js'
 import { getVisualRatio } from '../lib/visualMetrics.js'
 import type { TruthAuctionDepthPoint } from '../lib/truthAuctionBook.js'
-import { UI_STRING_0_ETH, UI_STRING_ETH, UI_STRING_LOADED_DEPTH_ETH, UI_STRING_PRICE_ETH_PER_REP, UI_STRING_TRUTH_AUCTION_VISIBLE_DEPTH_CHART, UI_TEMPLATE_ETH_PER_REP_VALUE, UI_TEMPLATE_SELECT_PRICE_VALUE_ETH_REP_FROM_DEPTH_CHART } from '../lib/uiStrings.js'
 
 type TruthAuctionDepthChartProps = {
 	clearingTick?: bigint
@@ -22,7 +23,7 @@ const CHART_PADDING = {
 let nextDepthGradientId = 0
 
 function formatTruthAuctionPriceLabel(price: bigint) {
-	return UI_TEMPLATE_ETH_PER_REP_VALUE(formatRoundedCurrencyBalance(price, 18, 4))
+	return forkAuctionCopy.formatEthPerRepValue(formatRoundedCurrencyBalance(price, 18, 4))
 }
 
 function getDepthRatio(value: bigint, maxDepth: bigint) {
@@ -120,22 +121,22 @@ export function TruthAuctionDepthChart({ clearingTick, onSelectTick, points }: T
 		<>
 			<div className='truth-auction-depth-frame'>
 				<div className='truth-auction-depth-y-axis'>
-					<span className='truth-auction-depth-axis-title truth-auction-depth-axis-title-y'>{UI_STRING_LOADED_DEPTH_ETH}</span>
+					<span className='truth-auction-depth-axis-title truth-auction-depth-axis-title-y'>{forkAuctionCopy.loadedDepthEth}</span>
 					<div className='truth-auction-depth-y-ticks' aria-hidden='true'>
 						<span className='truth-auction-depth-axis-tick truth-auction-depth-y-tick is-max' style={{ top: `${(getDepthYPosition(maxLoadedDepth) / CHART_HEIGHT) * 100}%` }}>
-							<CurrencyValue copyable={false} value={maxLoadedDepth} suffix={UI_STRING_ETH} />
+							<CurrencyValue copyable={false} value={maxLoadedDepth} suffix={commonCopy.eth} />
 						</span>
 						{midpointDepth === undefined ? undefined : (
 							<span className='truth-auction-depth-axis-tick truth-auction-depth-y-tick is-mid' style={{ top: `${(getDepthYPosition(midpointDepth) / CHART_HEIGHT) * 100}%` }}>
-								<CurrencyValue copyable={false} value={midpointDepth} suffix={UI_STRING_ETH} />
+								<CurrencyValue copyable={false} value={midpointDepth} suffix={commonCopy.eth} />
 							</span>
 						)}
 						<span className='truth-auction-depth-axis-tick truth-auction-depth-y-tick is-min' style={{ top: `${(getDepthYPosition(0n) / CHART_HEIGHT) * 100}%` }}>
-							{UI_STRING_0_ETH}
+							{forkAuctionCopy.zeroEth}
 						</span>
 					</div>
 				</div>
-				<div className='truth-auction-depth-chart' role='group' aria-label={UI_STRING_TRUTH_AUCTION_VISIBLE_DEPTH_CHART}>
+				<div className='truth-auction-depth-chart' role='group' aria-label={forkAuctionCopy.truthAuctionVisibleDepthChart}>
 					<svg aria-hidden='true' viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} preserveAspectRatio='none'>
 						<defs>
 							<linearGradient id={gradientId} x1='0%' x2='100%' y1='0%' y2='0%'>
@@ -150,7 +151,7 @@ export function TruthAuctionDepthChart({ clearingTick, onSelectTick, points }: T
 					<div className='truth-auction-depth-hit-targets'>
 						{points.map((point, index) => (
 							<button
-								aria-label={UI_TEMPLATE_SELECT_PRICE_VALUE_ETH_REP_FROM_DEPTH_CHART(formatCurrencyInputBalance(point.price))}
+								aria-label={forkAuctionCopy.formatSelectPriceValueEthRepFromDepthChart(formatCurrencyInputBalance(point.price))}
 								aria-pressed={point.isSelected}
 								className='truth-auction-depth-hit-target'
 								key={point.tick.toString()}
@@ -174,7 +175,7 @@ export function TruthAuctionDepthChart({ clearingTick, onSelectTick, points }: T
 				{midpointPrice === undefined ? undefined : <span className='truth-auction-depth-axis-tick truth-auction-depth-x-tick is-mid'>{formatTruthAuctionPriceLabel(midpointPrice)}</span>}
 				{lowestLoadedPrice === undefined ? undefined : <span className='truth-auction-depth-axis-tick truth-auction-depth-x-tick is-min'>{formatTruthAuctionPriceLabel(lowestLoadedPrice)}</span>}
 			</div>
-			<div className='truth-auction-depth-axis-title truth-auction-depth-axis-title-x'>{UI_STRING_PRICE_ETH_PER_REP}</div>
+			<div className='truth-auction-depth-axis-title truth-auction-depth-axis-title-x'>{forkAuctionCopy.priceEthPerRep}</div>
 		</>
 	)
 }

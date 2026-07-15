@@ -1,9 +1,10 @@
+import * as commonCopy from '../copy/common.js'
+import * as forkAuctionCopy from '../copy/forkAuction.js'
 import type { ComponentChildren } from 'preact'
 import { CurrencyValue } from './CurrencyValue.js'
 import { MetricField } from './MetricField.js'
 import { SectionBlock } from './SectionBlock.js'
 import { AUCTIONED_BOND_ALLOWANCE_LABEL } from '../lib/forkAuction.js'
-import { UI_STRING_CLEARING_PRICE, UI_STRING_ENDS, UI_STRING_ETH, UI_STRING_ETH_RAISED, UI_STRING_MIN_BID, UI_STRING_REP, UI_STRING_REP_SOLD, UI_STRING_STARTS, UI_STRING_TRUTH_AUCTION, UI_STRING_WINNING_THRESHOLD } from '../lib/uiStrings.js'
 
 type TruthAuctionSummaryCardProps = {
 	auctionedBondAllowanceDisplay?: ComponentChildren | undefined
@@ -23,14 +24,14 @@ type TruthAuctionSummaryCardProps = {
 
 export function TruthAuctionSummaryCard({ auctionedBondAllowanceDisplay, badge, clearingPriceDisplay, displayedEthRaised, displayedRepSold, endsDisplay, ethRaiseCap, ethRaisedProgress, maxRepBeingSold, minBidSize, repSoldProgress, startedDisplay, winningThresholdPriceDisplay }: TruthAuctionSummaryCardProps) {
 	return (
-		<SectionBlock badge={badge} className='fork-workflow-summary-card truth-auction-summary-card' title={UI_STRING_TRUTH_AUCTION}>
+		<SectionBlock badge={badge} className='fork-workflow-summary-card truth-auction-summary-card' title={commonCopy.truthAuction}>
 			<div className='fork-workflow-summary'>
 				<div className='fork-workflow-summary-primary truth-auction-summary-primary'>
 					<div className='fork-workflow-summary-stat-group truth-auction-progress-group'>
 						<div className='fork-workflow-summary-stat-copy truth-auction-progress-copy'>
-							<span>{UI_STRING_ETH_RAISED}</span>
+							<span>{forkAuctionCopy.ethRaised}</span>
 							<strong>
-								<CurrencyValue value={displayedEthRaised} suffix={UI_STRING_ETH} /> / <CurrencyValue value={ethRaiseCap} suffix={UI_STRING_ETH} />
+								<CurrencyValue value={displayedEthRaised} suffix={commonCopy.eth} /> / <CurrencyValue value={ethRaiseCap} suffix={commonCopy.eth} />
 							</strong>
 						</div>
 						<div className='truth-auction-progress-track'>
@@ -39,9 +40,9 @@ export function TruthAuctionSummaryCard({ auctionedBondAllowanceDisplay, badge, 
 					</div>
 					<div className='fork-workflow-summary-stat-group truth-auction-progress-group'>
 						<div className='fork-workflow-summary-stat-copy truth-auction-progress-copy'>
-							<span>{UI_STRING_REP_SOLD}</span>
+							<span>{forkAuctionCopy.repSold}</span>
 							<strong>
-								<CurrencyValue value={displayedRepSold} suffix={UI_STRING_REP} /> / <CurrencyValue value={maxRepBeingSold} suffix={UI_STRING_REP} />
+								<CurrencyValue value={displayedRepSold} suffix={commonCopy.rep} /> / <CurrencyValue value={maxRepBeingSold} suffix={commonCopy.rep} />
 							</strong>
 						</div>
 						<div className='truth-auction-progress-track'>
@@ -50,12 +51,12 @@ export function TruthAuctionSummaryCard({ auctionedBondAllowanceDisplay, badge, 
 					</div>
 				</div>
 				<div className='fork-workflow-summary-metrics'>
-					<MetricField label={UI_STRING_STARTS}>{startedDisplay}</MetricField>
-					<MetricField label={UI_STRING_CLEARING_PRICE}>{clearingPriceDisplay}</MetricField>
+					<MetricField label={commonCopy.starts}>{startedDisplay}</MetricField>
+					<MetricField label={forkAuctionCopy.clearingPrice}>{clearingPriceDisplay}</MetricField>
 					{auctionedBondAllowanceDisplay === undefined ? undefined : <MetricField label={AUCTIONED_BOND_ALLOWANCE_LABEL}>{auctionedBondAllowanceDisplay}</MetricField>}
-					<MetricField label={UI_STRING_MIN_BID}>{<CurrencyValue value={minBidSize} suffix={UI_STRING_ETH} />}</MetricField>
-					<MetricField label={UI_STRING_ENDS}>{endsDisplay}</MetricField>
-					{winningThresholdPriceDisplay === undefined ? undefined : <MetricField label={UI_STRING_WINNING_THRESHOLD}>{winningThresholdPriceDisplay}</MetricField>}
+					<MetricField label={forkAuctionCopy.minBid}>{<CurrencyValue value={minBidSize} suffix={commonCopy.eth} />}</MetricField>
+					<MetricField label={commonCopy.ends}>{endsDisplay}</MetricField>
+					{winningThresholdPriceDisplay === undefined ? undefined : <MetricField label={forkAuctionCopy.winningThreshold}>{winningThresholdPriceDisplay}</MetricField>}
 				</div>
 			</div>
 		</SectionBlock>
