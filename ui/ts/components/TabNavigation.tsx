@@ -32,8 +32,8 @@ export function TabNavigation({ route, showDeployTab = true, augurPlaceHolderDep
 	})
 
 	return (
-		<nav className='tab-nav' aria-label={appCopy.applicationSections}>
-			<ViewTabs ariaLabel={appCopy.applicationSections} value={route === 'not-found' ? 'deploy' : route} variant='route' onChange={value => onRouteChange(value as Exclude<TabNavigationProps['route'], 'not-found'>)} options={options} />
+		<nav className='tab-nav' aria-label={appCopy.applicationSections} role='navigation'>
+			<ViewTabs ariaLabel={appCopy.applicationSections} semantics='navigation' value={route === 'not-found' ? 'deploy' : route} variant='route' onChange={value => onRouteChange(value as Exclude<TabNavigationProps['route'], 'not-found'>)} options={options} />
 		</nav>
 	)
 }

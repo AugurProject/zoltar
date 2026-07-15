@@ -177,6 +177,7 @@ export type ViewTabsProps<TValue extends string> = {
 	onChange: (value: TValue) => void
 	orientation?: 'horizontal' | 'vertical'
 	options: ViewTabOption<TValue>[]
+	semantics?: 'navigation' | 'switcher' | 'tabs'
 	size?: 'compact' | 'default'
 	value: TValue
 	variant?: 'route' | 'subroute'

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, within } from '../testUtils/queries'
 import { act } from 'preact/test-utils'
 import { GlobalTransactionTray } from '../../app/components/GlobalTransactionTray.js'
+import { createMarketCreationSuccessPresentation, createSecurityPoolCreationSuccessPresentation, createZoltarForkSuccessPresentation } from '../../features/transactionPresentations.js'
 import { installDomEnvironment } from '../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
 
@@ -52,6 +53,27 @@ describe('GlobalTransactionTray', () => {
 		expect(documentQueries.getByText('0x0b')).not.toBeNull()
 		expect(documentQueries.getByRole('link', { name: '0x1234000000000000000000000000000000000000000000000000000000000000' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Dismiss' })).not.toBeNull()
+	})
+
+	test('renders complete copyable question identifiers across success notices', async () => {
+		const questionId = '0x0000000000000000000000000000000000000000000000000000000000000001'
+		const presentations = [
+			createMarketCreationSuccessPresentation({ createQuestionHash: '0x1001', marketType: 'binary', questionId }),
+			createZoltarForkSuccessPresentation({ action: 'forkZoltar', hash: '0x1002', questionId, universeId: 0n }),
+			createSecurityPoolCreationSuccessPresentation({ deployPoolHash: '0x1003', questionId, securityMultiplier: 2n, securityPoolAddress: '0x0000000000000000000000000000000000000002', universeId: 0n }),
+		]
+		const renderedComponent = await renderIntoDocument(
+			<>
+				{presentations.map(presentation => (
+					<GlobalTransactionTray key={presentation.hash} transaction={presentation} />
+				))}
+			</>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const identifierButtons = within(document.body).getAllByRole('button', { name: `Copy identifier ${questionId}` })
+		expect(identifierButtons).toHaveLength(3)
+		for (const identifierButton of identifierButtons) expect(identifierButton.textContent).toBe(questionId)
 	})
 
 	test('renders a pending transaction with its explanation and hash but no dismiss control', async () => {

@@ -706,7 +706,12 @@ export function SecurityPoolWorkflowSection({
 						/>
 					</div>
 				</div>
-				{selectedPoolSummaryContent}
+				{selectedPoolSummaryContent === undefined ? undefined : (
+					<details className='selected-pool-context-details'>
+						<summary>{securityPoolCopy.poolContextAndMetrics}</summary>
+						<div className='selected-pool-context-details-content'>{selectedPoolSummaryContent}</div>
+					</details>
+				)}
 			</StickyObjectContext>
 			<ErrorNotice message={securityPoolOverviewError} />
 
@@ -729,6 +734,7 @@ export function SecurityPoolWorkflowSection({
 								{ ariaLabel: securityPoolCopy.additionalPoolActions, className: 'selected-pool-workflow-group selected-pool-workflow-group-secondary', values: SELECTED_POOL_SECONDARY_VIEWS },
 							]}
 							orientation='vertical'
+							semantics='switcher'
 							size='compact'
 							value={view}
 							onChange={nextView => onSelectedPoolViewChange(hasSelectedPoolAddress ? nextView : undefined)}
@@ -751,7 +757,7 @@ export function SecurityPoolWorkflowSection({
 											variant='plain'
 											actions={
 												<div className='actions'>
-													<ViewTabs ariaLabel={securityPoolCopy.selectedPoolVaultViews} className='vault-content-switch' size='compact' value={vaultView} onChange={setVaultView} options={selectedVaultViewOptions} />
+													<ViewTabs ariaLabel={securityPoolCopy.selectedPoolVaultViews} className='vault-content-switch' semantics='switcher' size='compact' value={vaultView} onChange={setVaultView} options={selectedVaultViewOptions} />
 												</div>
 											}
 										>

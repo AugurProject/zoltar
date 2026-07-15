@@ -178,6 +178,22 @@ describe('OverviewPanels', () => {
 		expect(onRefreshRepPrices).toHaveBeenCalledTimes(1)
 	})
 
+	test('keeps secondary environment metrics behind a mobile details disclosure', async () => {
+		const documentQueries = await renderOverviewPanels()
+		const detailsButton = documentQueries.getByRole('button', { name: 'Show environment details' })
+		const metrics = document.body.querySelector('.overview-inline-metrics')
+		if (!(metrics instanceof HTMLElement)) throw new Error('Expected overview metrics')
+
+		expect(detailsButton.getAttribute('aria-expanded')).toBe('false')
+		expect(metrics.classList.contains('mobile-expanded')).toBe(false)
+		expect(metrics.querySelectorAll('.overview-metric-secondary').length).toBeGreaterThan(0)
+
+		fireEvent.click(detailsButton)
+
+		expect(documentQueries.getByRole('button', { name: 'Hide environment details' }).getAttribute('aria-expanded')).toBe('true')
+		expect(metrics.classList.contains('mobile-expanded')).toBe(true)
+	})
+
 	test('keeps stale REP prices visible while the refresh control shows an in-flight refresh', async () => {
 		const documentQueries = await renderOverviewPanels({
 			isLoadingRepPrices: false,

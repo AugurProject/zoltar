@@ -186,6 +186,7 @@ const openOracleIntegration = await Bun.file('docs/open-oracle-integration.html'
 const operatorReference = await Bun.file('docs/operator-reference.md').text()
 const escalationGameArchitecture = await Bun.file('docs/escalation-game-architecture.html').text()
 const startHere = await Bun.file('docs/start-here.html').text()
+const sharedDocsCss = await Bun.file('docs/shared-docs.css').text()
 const uiCopyModuleGlob = new Bun.Glob('ui/ts/copy/*.ts')
 let uiCopy = ''
 for await (const path of uiCopyModuleGlob.scan('.')) {
@@ -264,6 +265,8 @@ assert.match(startHere, /A selected continuation can start without waiting for i
 assert.match(startHere, /A selected continuation can start without waiting for inactive vaults[\s\S]{0,260}External forks reproduce[\s\S]{0,100}one-for-one[\s\S]{0,140}own forks reproduce the complete post-burn/)
 assert.ok(!startHere.includes('Every continuation that a vault chooses to create'))
 assert.ok(!startHere.includes('aggregate outcome balances'))
+assert.match(sharedDocsCss, /body\.doc-openoracle \.diagram-wide > svg\s*{\s*min-width: 60rem;\s*}/)
+assert.doesNotMatch(sharedDocsCss, /body\.doc-openoracle svg text\.svg-(?:label|small)\s*{\s*font-size:/)
 assert.match(operatorReference, /A vault that makes no call before the deadline keeps its unresolved parent lock and has no logical child escrow[\s\S]{0,260}unselected children likewise have no escrow authorization for that vault/)
 assert.ok(!whitepaper.includes('MAX_UNRESOLVED_EXPORT_REFS'))
 assert.ok(!whitepaper.includes('Paged Export'))

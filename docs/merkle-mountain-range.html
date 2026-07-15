@@ -85,7 +85,7 @@
 					Any leaf count from <code>0</code> up to but not including <code>2^64</code> is
 					valid because its binary decomposition fits inside 64 peak slots.
 				</p>
-				<figure class="diagram" id="fig-mmr-peaks" aria-labelledby="mmr-peaks-title">
+				<figure class="diagram diagram-wide" id="fig-mmr-peaks" aria-labelledby="mmr-peaks-title">
 					<svg
 						viewBox="0 0 920 250"
 						role="img"
@@ -169,6 +169,55 @@
 						</tr>
 					</tbody>
 				</table>
+				<figure class="diagram diagram-wide" id="fig-mmr-proof-anatomy" aria-labelledby="mmr-proof-title">
+					<svg viewBox="0 0 940 390" role="img" aria-labelledby="mmr-proof-title mmr-proof-desc">
+						<title id="mmr-proof-title">A carried-deposit proof has an MMR membership lane and a separate nullifier lane</title>
+						<desc id="mmr-proof-desc">The membership lane combines the carried deposit leaf with bottom-up siblings inside its selected peak, then with other occupied peak roots in ascending height order to reconstruct the snapshot root. The nullifier lane hashes the stable parent deposit index and combines it with a fixed-depth sibling path to prove the claim has not already been consumed.</desc>
+						<defs>
+							<marker id="mmr-proof-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+								<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+							</marker>
+						</defs>
+						<text class="svg-small" x="28" y="34">MMR membership lane</text>
+						<rect class="svg-blue" x="28" y="52" width="178" height="70" rx="8"></rect>
+						<text class="svg-label" x="117" y="82" text-anchor="middle">Deposit leaf</text>
+						<text class="svg-small" x="117" y="104" text-anchor="middle">peak-local leafIndex</text>
+						<path class="svg-line" marker-end="url(#mmr-proof-arrow)" d="M 206 87 H 246"></path>
+						<rect class="svg-gold" x="246" y="52" width="206" height="70" rx="8"></rect>
+						<text class="svg-label" x="349" y="80" text-anchor="middle">In-peak siblings</text>
+						<text class="svg-small" x="349" y="103" text-anchor="middle">bottom-up, count = peak height</text>
+						<path class="svg-line" marker-end="url(#mmr-proof-arrow)" d="M 452 87 H 492"></path>
+						<rect class="svg-green" x="492" y="52" width="178" height="70" rx="8"></rect>
+						<text class="svg-label" x="581" y="82" text-anchor="middle">Selected peak</text>
+						<text class="svg-small" x="581" y="104" text-anchor="middle">peakIndex is its height</text>
+						<path class="svg-line" marker-end="url(#mmr-proof-arrow)" d="M 670 87 H 710"></path>
+						<rect class="svg-gold" x="710" y="42" width="202" height="90" rx="8"></rect>
+						<text class="svg-label" x="811" y="72" text-anchor="middle">Other peak roots</text>
+						<text class="svg-small" x="811" y="96" text-anchor="middle">ascending height order</text>
+						<text class="svg-small" x="811" y="116" text-anchor="middle">then bag right to left</text>
+						<path class="svg-line" marker-end="url(#mmr-proof-arrow)" d="M 811 132 V 172"></path>
+						<rect class="svg-green" x="710" y="172" width="202" height="64" rx="8"></rect>
+						<text class="svg-label" x="811" y="210" text-anchor="middle">Snapshot root</text>
+						<text class="svg-small" x="28" y="274">nullifier lane</text>
+						<rect class="svg-blue" x="28" y="292" width="220" height="64" rx="8"></rect>
+						<text class="svg-label" x="138" y="318" text-anchor="middle">parentDepositIndex</text>
+						<text class="svg-small" x="138" y="340" text-anchor="middle">stable replay identity</text>
+						<path class="svg-line" marker-end="url(#mmr-proof-arrow)" d="M 248 324 H 316"></path>
+						<rect class="svg-gold" x="316" y="292" width="228" height="64" rx="8"></rect>
+						<text class="svg-label" x="430" y="318" text-anchor="middle">Nullifier siblings</text>
+						<text class="svg-small" x="430" y="340" text-anchor="middle">fixed depth = 64</text>
+						<path class="svg-line" marker-end="url(#mmr-proof-arrow)" d="M 544 324 H 612"></path>
+						<rect class="svg-green" x="612" y="292" width="230" height="64" rx="8"></rect>
+						<text class="svg-label" x="727" y="318" text-anchor="middle">Current nullifier root</text>
+						<text class="svg-small" x="727" y="340" text-anchor="middle">empty leaf proves unspent</text>
+					</svg>
+					<p class="diagram-caption">
+						<span class="figure-label">Carry Proof Anatomy</span>The MMR sibling array
+						first reconstructs one selected peak and then supplies every other occupied
+						peak. The independent 64-level nullifier path prevents the same stable
+						deposit identity from being consumed twice.
+					</p>
+				</figure>
 				<p>
 					The index semantics are stricter than the field names might suggest.
 					<code>merkleMountainRangePeakIndex</code> is the occupied peak height, not the

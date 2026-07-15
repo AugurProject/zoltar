@@ -10,8 +10,8 @@ type RouteSubNavigationProps<TValue extends string> = {
 
 export function RouteSubNavigation<TValue extends string>({ ariaLabel, onChange, options, value }: RouteSubNavigationProps<TValue>) {
 	return (
-		<div className='route-subnav-shell'>
-			<ViewTabs ariaLabel={ariaLabel} className='route-subtab-nav' size='compact' value={value} variant='subroute' onChange={onChange} options={options} />
-		</div>
+		<nav className='route-subnav-shell' aria-label={ariaLabel} role='navigation'>
+			<ViewTabs ariaLabel={ariaLabel} className='route-subtab-nav' semantics='navigation' size='compact' value={value} variant='subroute' onChange={onChange} options={options} />
+		</nav>
 	)
 }

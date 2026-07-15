@@ -2,6 +2,7 @@ import * as commonCopy from '../copy/common.js'
 import * as transactionCopy from '../copy/transaction.js'
 import type { Hash } from '@zoltar/shared/ethereum'
 import { AddressValue } from '../components/AddressValue.js'
+import { IdentifierValue } from '../components/IdentifierValue.js'
 import { UniverseLink } from './universes/components/UniverseLink.js'
 import { formatCurrencyBalance } from '../lib/formatters.js'
 import { AUCTIONED_BOND_ALLOWANCE_LABEL } from './truth-auctions/lib/forkAuction.js'
@@ -57,7 +58,7 @@ export function createMarketCreationSuccessPresentation(result: MarketCreationRe
 		detail: transactionCopy.questionCreatedDetail,
 		hash: result.createQuestionHash,
 		rows: [
-			{ label: commonCopy.questionId, value: result.questionId },
+			{ label: commonCopy.questionId, value: <IdentifierValue value={result.questionId} /> },
 			{ label: transactionCopy.marketType, value: result.marketType },
 		],
 		title: transactionCopy.questionCreated,
@@ -86,7 +87,7 @@ export function createZoltarForkSuccessPresentation(result: ZoltarForkActionResu
 		hash: result.hash,
 		rows: [
 			{ label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
-			{ label: commonCopy.questionId, value: result.questionId },
+			{ label: commonCopy.questionId, value: <IdentifierValue value={result.questionId} /> },
 		],
 		title,
 		tone: 'success',
@@ -166,7 +167,7 @@ export function createSecurityPoolCreationSuccessPresentation(result: SecurityPo
 		rows: [
 			{ label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> },
 			{ label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
-			{ label: commonCopy.questionId, value: result.questionId },
+			{ label: commonCopy.questionId, value: <IdentifierValue value={result.questionId} /> },
 			{ label: commonCopy.securityMultiplier, value: result.securityMultiplier.toString() },
 		],
 		title: transactionCopy.securityPoolCreated,

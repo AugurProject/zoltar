@@ -160,7 +160,7 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 
 			const documentQueries = within(document.body)
 			await act(() => {
-				fireEvent.click(documentQueries.getByRole('tab', { name: 'Fork & Migration' }))
+				fireEvent.click(documentQueries.getByRole('button', { name: 'Fork & Migration' }))
 			})
 
 			expect(selectedViews).toEqual(['fork-workflow'])
@@ -428,7 +428,7 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 
 			const documentQueries = within(document.body)
 			expect(documentQueries.queryByRole('button', { name: 'Trigger Zoltar Fork' })).toBeNull()
-			expect(documentQueries.getByRole('tab', { name: 'Fork & Migration' })).not.toBeNull()
+			expect(documentQueries.getByRole('button', { name: 'Fork & Migration' })).not.toBeNull()
 			expect(document.body.textContent?.includes('Fork Migration')).toBe(true)
 		})
 

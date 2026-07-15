@@ -100,7 +100,7 @@ function createSimulationController(): SimulationController {
 }
 
 describe('AppHeaderShell', () => {
-	test('shows the simulation skip link only in simulation mode and focuses app content without changing the hash', async () => {
+	test('always shows a skip link and focuses app content without changing the hash', async () => {
 		const domEnvironment = installDomEnvironment('http://localhost/#/zoltar?simulate=1')
 		const appContent = document.createElement('main')
 		appContent.id = 'app-content'
@@ -113,7 +113,9 @@ describe('AppHeaderShell', () => {
 		const withoutSimulation = await renderIntoDocument(<AppHeaderShell overview={overview} simulationController={undefined} tabNavigation={tabNavigation} onRefresh={onRefresh} />)
 
 		try {
-			expect(within(withoutSimulation.container).queryByRole('button', { name: 'Skip simulation controls' })).toBeNull()
+			const skipLink = within(withoutSimulation.container).getByRole('button', { name: 'Skip to main content' })
+			fireEvent.click(skipLink)
+			expect(document.activeElement).toBe(appContent)
 		} finally {
 			await withoutSimulation.cleanup()
 		}
@@ -122,7 +124,7 @@ describe('AppHeaderShell', () => {
 		const withSimulation = await renderIntoDocument(<AppHeaderShell overview={overview} simulationController={createSimulationController()} tabNavigation={tabNavigation} onRefresh={onRefresh} />)
 
 		try {
-			const skipLink = within(withSimulation.container).getByRole('button', { name: 'Skip simulation controls' })
+			const skipLink = within(withSimulation.container).getByRole('button', { name: 'Skip to main content' })
 			fireEvent.click(skipLink)
 
 			expect(document.activeElement).toBe(appContent)

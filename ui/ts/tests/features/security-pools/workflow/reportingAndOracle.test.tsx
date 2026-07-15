@@ -244,7 +244,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		setCleanup(renderedComponent.cleanup)
 
 		const documentQueries = within(document.body)
-		expect((documentQueries.getByRole('tab', { name: 'Staged Operations' }) as HTMLElement).getAttribute('aria-selected')).toBe('true')
+		expect((documentQueries.getByRole('button', { name: 'Staged Operations' }) as HTMLElement).getAttribute('aria-pressed')).toBe('true')
 		expect(documentQueries.getByRole('heading', { name: 'Staged Operations' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Pool Oracle & Pending Operations' })).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Staged Operations List' })).not.toBeNull()
@@ -411,7 +411,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		setCleanup(renderedComponent.cleanup)
 
 		const documentQueries = within(document.body)
-		expect((documentQueries.getByRole('tab', { name: 'Open Oracle' }) as HTMLElement).getAttribute('aria-selected')).toBe('true')
+		expect((documentQueries.getByRole('button', { name: 'Open Oracle' }) as HTMLElement).getAttribute('aria-pressed')).toBe('true')
 		const priceOracleSection = documentQueries.getByRole('heading', { name: 'Open Oracle' }).closest('section')
 		if (!(priceOracleSection instanceof HTMLElement)) throw new Error('Expected the Open Oracle section to render')
 		const sectionQueries = within(priceOracleSection)
@@ -465,7 +465,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		setCleanup(renderedComponent.cleanup)
 
 		const documentQueries = within(document.body)
-		expect((documentQueries.getByRole('tab', { name: 'Reporting' }) as HTMLElement).getAttribute('aria-selected')).toBe('true')
+		expect((documentQueries.getByRole('button', { name: 'Reporting' }) as HTMLElement).getAttribute('aria-pressed')).toBe('true')
 
 		expect(documentQueries.queryByRole('tab', { name: 'Withdraw Escalation Deposits' })).toBeNull()
 		expect(selectedViews).toEqual([])

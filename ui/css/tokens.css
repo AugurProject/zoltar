@@ -69,6 +69,7 @@
 	--primary-button-border: rgba(42, 181, 216, 1);
 	--primary-button-border-hover: rgba(85, 200, 228, 1);
 	--primary-button-shadow: var(--color-white-08);
+	--touch-target-min: 2.75rem;
 
 	/* spacing */
 	--space-1: 0.25rem;
@@ -86,11 +87,11 @@
 	--font-family-mono: "IBM Plex Mono", "Courier New", monospace;
 
 	/* type scale — fixed */
-	--font-xs: 0.68rem;
-	--font-label: 0.7rem;
-	--font-chip: 0.72rem;
-	--font-tab: 0.73rem;
-	--font-subtab: 0.78rem;
+	--font-xs: 0.75rem;
+	--font-label: 0.75rem;
+	--font-chip: 0.76rem;
+	--font-tab: 0.8rem;
+	--font-subtab: 0.84rem;
 	--font-caption: 0.86rem;
 	--font-address: 0.86rem;
 	--font-value: 0.96rem;
@@ -98,8 +99,8 @@
 	--font-body: 1rem;
 	--font-base: 1.03rem;
 	--font-card-title: 1.12rem;
-	--font-small: 0.78rem;
-	--font-detail: 0.84rem;
+	--font-small: 0.82rem;
+	--font-detail: 0.88rem;
 	--font-h4: 0.96rem;
 	--font-section-title: 1.08rem;
 

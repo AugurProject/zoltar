@@ -54,6 +54,21 @@ describe('Question component', () => {
 		expect(document.body.textContent?.includes('(1m ago)')).toBe(true)
 	})
 
+	test('renders the complete question identifier in full and preview layouts', async () => {
+		const question = createQuestion()
+		const renderedComponent = await renderIntoDocument(
+			<>
+				<Question question={question} />
+				<Question question={question} variant='preview' />
+			</>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const identifierButtons = Array.from(document.body.querySelectorAll('.identifier-value'))
+		expect(identifierButtons).toHaveLength(2)
+		for (const identifierButton of identifierButtons) expect(identifierButton.textContent).toBe(question.questionId)
+	})
+
 	test('omits description copy when the question has no resolution context', async () => {
 		const renderedComponent = await renderIntoDocument(<Question question={createQuestion({ description: '' })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup

@@ -34,7 +34,6 @@
 					<a href="#questions">Question Encoding</a>
 					<a href="#question-types">Question Types</a>
 					<a href="#invalid">Invalid vs Malformed</a>
-					<a href="#lifecycle">Fork Lifecycle</a>
 					<a href="#thesis">Design Thesis</a>
 				</nav>
 			</aside>
@@ -207,25 +206,6 @@
 						</div>
 					</div>
 
-					<figure class="diagram" id="fig-zoltar-layer-boundary" aria-labelledby="overview-diagram-title">
-						<p class="diagram-title" id="overview-diagram-title">Core Layer Boundary</p>
-						<svg viewBox="0 0 820 260" role="img" aria-label="Zoltar manages questions, universes, forks, and REP splitting.">
-							<defs>
-								<marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-									<path d="M 0 0 L 10 5 L 0 10 z" fill="#615642"></path>
-								</marker>
-							</defs>
-							<rect class="svg-gold" x="260" y="44" width="300" height="150" rx="12"></rect>
-							<text class="svg-label" x="410" y="90" text-anchor="middle">Zoltar</text>
-							<text class="svg-small" x="410" y="122" text-anchor="middle">questions, universes, forks</text>
-							<text class="svg-small" x="410" y="148" text-anchor="middle">REP minting, burning, splitting</text>
-							<path class="svg-line" marker-end="url(#arrow)" d="M 100 120 H 245"></path>
-							<path class="svg-line" marker-end="url(#arrow)" d="M 575 120 H 720"></path>
-							<text class="svg-small" x="100" y="101" text-anchor="middle">registered questions</text>
-							<text class="svg-small" x="720" y="101" text-anchor="middle">child universes</text>
-						</svg>
-						<p class="diagram-caption"><span class="figure-label">Core Layer Boundary</span>Zoltar is the branching oracle layer: applications feed it questions and later consume the child-universe structure it defines.</p>
-					</figure>
 				</section>
 
 				<section class="paper-section" id="universe-model">
@@ -974,34 +954,10 @@
 					</p>
 				</section>
 
-				<section class="paper-section" id="lifecycle">
-					<div class="section-heading">
-						<h2>9. Example Fork Lifecycle</h2>
-						<a class="anchor-link" href="#lifecycle" aria-label="Link to Example Fork Lifecycle">#</a>
-					</div>
-					<p>
-						Consider a universe <code>parentUniverse</code> and a question
-						<code>forkQuestion</code>. After that question ends,
-						<code>forkUniverse</code> can record it as the fork question for
-						<code>parentUniverse</code>.
-					</p>
-					<ol class="step-list">
-						<li><span class="step-content"><code>forkUniverse(parentUniverse, forkQuestion)</code> records <code>forkQuestion</code> as the fork question for <code>parentUniverse</code>.</span></li>
-						<li><span class="step-content">Child universes are defined deterministically from <code>parentUniverse</code> and each valid outcome index.</span></li>
-						<li><span class="step-content">The fork initiator’s full parent-REP deposit leaves parent supply, and the post-haircut amount becomes migration balance.</span></li>
-						<li><span class="step-content">Any REP holder can add more REP into migration balance for the forked universe.</span></li>
-						<li><span class="step-content">REP holders call <code>splitMigrationRep</code> to mint child-universe REP across the outcome branches they support.</span></li>
-					</ol>
-					<p>
-						At that point, Zoltar has turned one disputed universe into multiple child
-						universes with separate reputation tokens. The higher-level economic meaning of
-						those branches is left to protocols built on top.
-					</p>
-				</section>
 
 				<section class="paper-section" id="thesis">
 					<div class="section-heading">
-						<h2>10. Design Thesis</h2>
+						<h2>9. Design Thesis</h2>
 						<a class="anchor-link" href="#thesis" aria-label="Link to Design Thesis">#</a>
 					</div>
 					<p class="lede">

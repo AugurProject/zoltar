@@ -18,45 +18,13 @@
 						system.
 					</p>
 					<p>
-						Only the hard cases leave that local path. If escalation cannot pick
-						a single answer safely, Zoltar records the fork and defines explicit
-						child branches. Child universes materialize only when migration or
-						<code>deployChild</code> first uses one of those branches, and
-						Placeholder migrates the market into whichever branches users choose
-						to keep using.
+						The ordinary lifecycle is question, pool, trading, local escalation,
+						then local resolution.
 					</p>
 					<p>
-						After a fork, a holder can build <em>migration balance</em> by
-						initiating the fork or adding parent REP after the fork.
-						Calling <code>splitMigrationRep</code> mints <em>child REP</em> in
-						each selected fork branch, with each branch receiving at most the
-						source balance.
-					</p>
-					<p>
-						After sustained local non-decision, a caller can invoke the security-pool
-						fork path, which makes Zoltar fork the market's current universe. Before that
-						happens, a caller may use a different market's ended question to make Zoltar
-						fork that universe first; in that case, the
-						unresolved escalation migrates into selected child universes as paused
-						continuation games. Each continuation still disputes the original question
-						and, after it resumes, can reach non-decision. A caller can then invoke the
-						security-pool fork path, which forks that child universe using the original
-						question. The first fork's branches represent the
-						unrelated question's outcomes, while the recursive fork's branches represent
-						the original question's outcomes. That sequence drives the rest of
-						Placeholder: pool creation, trading, escalation, fork migration, then repair
-						or redemption.
-					</p>
-					<p>
-						A selected continuation can start without waiting for inactive vaults. It copies
-						the complete parent escalation totals, receives its branch's complete backing,
-						and authorizes only vaults that opt into that branch. External forks reproduce
-						the drained game REP one-for-one; own forks reproduce the complete post-burn
-						escalation child bucket. Each vault exports only its three aggregate outcome totals
-						for <code>Invalid</code>, <code>Yes</code>, and <code>No</code>,
-						so it never processes another vault or deploys a child universe nobody selects.
-						The <a href="./placeholder-whitepaper.html#fig-placeholder-unresolved-migration">migration accounting diagram</a>
-						separates the snapshot, physical backing, and vault authorization paths.
+						Only hard cases leave the local path. If escalation cannot select one
+						answer safely, the system preserves the disagreement in explicit
+						child branches.
 					</p>
 					<p>
 						Keep one distinction in mind throughout: Zoltar decides how
@@ -128,7 +96,7 @@
 						</tr>
 					</tbody>
 				</table>
-				<figure class="diagram" id="fig-start-here-lifecycle">
+				<figure class="diagram diagram-wide" id="fig-start-here-lifecycle">
 					<svg
 						viewBox="0 0 920 220"
 						role="img"
@@ -269,6 +237,73 @@
 					Most markets are supposed to end here. The market stays in one
 					universe, uses one pool, and resolves locally without a fork.
 				</p>
+				<div class="equation" id="eq-start-here-complete-set">
+					<math
+						display="block"
+						aria-label="one complete set mints one invalid share plus one yes share plus one no share"
+						data-source="1 completeSet = 1 Invalid + 1 Yes + 1 No"
+					>
+						<mrow>
+							<mn>1</mn>
+							<mi>completeSet</mi>
+							<mo>=</mo>
+							<mn>1</mn>
+							<mi>Invalid</mi>
+							<mo>+</mo>
+							<mn>1</mn>
+							<mi>Yes</mi>
+							<mo>+</mo>
+							<mn>1</mn>
+							<mi>No</mi>
+						</mrow>
+					</math>
+					<p class="equation-caption">
+						<span class="equation-label">Complete Set</span>ETH collateral mints one
+						share for every market outcome; final redemption pays only the winning
+						outcome.
+					</p>
+				</div>
+				<figure class="diagram diagram-wide" id="fig-start-here-escalation-timeline">
+					<svg
+						viewBox="0 0 980 230"
+						role="img"
+						aria-label="A local escalation begins with the first post-question deposit, waits through a three-day activation delay, runs its cost curve for up to seven weeks, and ends in a local outcome or non-decision."
+					>
+						<defs>
+							<marker id="arrow-start-here-escalation" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+								<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+							</marker>
+						</defs>
+						<rect class="svg-blue" x="20" y="64" width="150" height="78" rx="8"></rect>
+						<text class="svg-label" x="95" y="94" text-anchor="middle">Question ends</text>
+						<text class="svg-small" x="95" y="119" text-anchor="middle">deposits may begin</text>
+						<path class="svg-line" marker-end="url(#arrow-start-here-escalation)" d="M 170 103 H 210"></path>
+						<rect class="svg-gold" x="210" y="64" width="170" height="78" rx="8"></rect>
+						<text class="svg-label" x="295" y="94" text-anchor="middle">First deposit</text>
+						<text class="svg-small" x="295" y="119" text-anchor="middle">deploys local game</text>
+						<path class="svg-line" marker-end="url(#arrow-start-here-escalation)" d="M 380 103 H 420"></path>
+						<rect class="svg-slate" x="420" y="64" width="150" height="78" rx="8"></rect>
+						<text class="svg-label" x="495" y="94" text-anchor="middle">Activation</text>
+						<text class="svg-small" x="495" y="119" text-anchor="middle">3-day delay</text>
+						<path class="svg-line" marker-end="url(#arrow-start-here-escalation)" d="M 570 103 H 610"></path>
+						<rect class="svg-gold" x="610" y="64" width="170" height="78" rx="8"></rect>
+						<text class="svg-label" x="695" y="94" text-anchor="middle">Cost rises</text>
+						<text class="svg-small" x="695" y="119" text-anchor="middle">up to 7 weeks</text>
+						<path class="svg-line" d="M 780 103 H 800"></path>
+						<circle cx="800" cy="103" r="4" fill="currentColor"></circle>
+						<path class="svg-line" marker-end="url(#arrow-start-here-escalation)" d="M 800 103 C 810 103 810 59 820 59"></path>
+						<path class="svg-line" marker-end="url(#arrow-start-here-escalation)" d="M 800 103 C 810 103 810 151 820 151"></path>
+						<rect class="svg-green" x="820" y="28" width="140" height="62" rx="8"></rect>
+						<text class="svg-label" x="890" y="63" text-anchor="middle">Local outcome</text>
+						<rect class="svg-red" x="820" y="120" width="140" height="62" rx="8"></rect>
+						<text class="svg-label" x="890" y="155" text-anchor="middle">Non-decision</text>
+					</svg>
+					<p class="diagram-caption">
+						<span class="figure-label">Local Escalation Timeline</span>A fork
+						continuation is the important exception: it starts paused and resumes
+						from its inherited elapsed time without a new activation delay.
+					</p>
+				</figure>
 				<ol>
 					<li>A question is registered in <code>ZoltarQuestionData</code>.</li>
 					<li>A Placeholder origin pool is deployed for a binary question in an unforked universe.</li>
@@ -304,6 +339,15 @@
 					hiding it.
 				</p>
 				<p>
+					Child universes materialize only when migration or
+					<code>deployChild</code> first uses one of their branches, and
+					Placeholder creates child pools only in branches users choose. A REP
+					holder builds <em>migration balance</em> by initiating the fork or
+					adding parent REP afterward. Calling <code>splitMigrationRep</code>
+					mints <em>child REP</em> in each selected branch, with each branch
+					receiving at most the source balance.
+				</p>
+				<p>
 					In the own-escalation branch, the local escalation game reaches
 					non-decision when two or more outcomes cross the fixed threshold, and
 					then <code>Zoltar</code> forks the parent universe on the disputed
@@ -321,6 +365,72 @@
 					<li>Child pools receive proportional collateral and REP state.</li>
 					<li>If collateral is short, the truth auction sells child REP for ETH repair.</li>
 				</ol>
+				<figure class="diagram diagram-wide" id="fig-start-here-pool-state-flow">
+					<svg
+						viewBox="0 0 980 320"
+						role="img"
+						aria-label="Pool fork activation moves a parent security pool from Operational to permanently PoolForked. Each selected child begins in ForkMigration, enters ForkTruthAuction after eight weeks, and becomes Operational either immediately when no repair is needed or later after auction finalization."
+					>
+						<defs>
+							<marker id="arrow-start-here-state" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+								<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+							</marker>
+						</defs>
+						<text class="svg-small" x="24" y="42">Parent pool</text>
+						<rect class="svg-green" x="150" y="18" width="190" height="64" rx="8"></rect>
+						<text class="svg-label" x="245" y="56" text-anchor="middle">Operational</text>
+						<path class="svg-line" marker-end="url(#arrow-start-here-state)" d="M 340 50 H 460"></path>
+						<text class="svg-small" x="400" y="34" text-anchor="middle">activateForkMode</text>
+						<rect class="svg-red" x="460" y="18" width="190" height="64" rx="8"></rect>
+						<text class="svg-label" x="555" y="56" text-anchor="middle">PoolForked</text>
+						<text class="svg-small" x="680" y="56">parent stays frozen</text>
+						<path class="svg-line" marker-end="url(#arrow-start-here-state)" d="M 555 82 C 555 120 215 120 215 146"></path>
+						<text class="svg-small" x="385" y="108" text-anchor="middle">selected child deployed</text>
+						<text class="svg-small" x="24" y="183">Selected child pool</text>
+						<rect class="svg-blue" x="120" y="154" width="190" height="64" rx="8"></rect>
+						<text class="svg-label" x="215" y="192" text-anchor="middle">ForkMigration</text>
+						<path class="svg-line" marker-end="url(#arrow-start-here-state)" d="M 310 186 H 460"></path>
+						<text class="svg-small" x="385" y="174" text-anchor="middle">after 8 weeks</text>
+						<rect class="svg-gold" x="460" y="154" width="190" height="64" rx="8"></rect>
+						<text class="svg-label" x="555" y="192" text-anchor="middle">ForkTruthAuction</text>
+						<path class="svg-line" marker-end="url(#arrow-start-here-state)" d="M 650 186 H 740"></path>
+						<rect class="svg-green" x="740" y="154" width="190" height="64" rx="8"></rect>
+						<text class="svg-label" x="835" y="192" text-anchor="middle">Operational</text>
+						<text class="svg-small" x="695" y="248" text-anchor="middle">same transaction if no repair</text>
+						<text class="svg-small" x="695" y="266" text-anchor="middle">otherwise after auction finalization</text>
+					</svg>
+					<p class="diagram-caption">
+						<span class="figure-label">Security Pool State Flow</span>A universe
+						fork alone leaves <code>systemState</code> as <code>Operational</code>,
+						although the fork already blocks <code>isOperational</code>-guarded calls.
+						Pool fork initiation calls <code>activateForkMode</code>. After the
+						eight-week migration window, <code>startTruthAuction</code> always moves
+						the child into <code>ForkTruthAuction</code>; a fully repaired child
+						finalizes back to <code>Operational</code> in the same transaction.
+					</p>
+				</figure>
+				<p>
+					An interrupted unresolved game follows the advanced continuation path.
+					A selected continuation can start without waiting for inactive vaults. It copies
+					the complete parent escalation totals. External forks reproduce the drained
+					game REP one-for-one; own forks reproduce the complete post-burn escalation
+					child bucket. During migration, each vault materializes its three aggregate outcome totals
+					for <code>Invalid</code>, <code>Yes</code>, and <code>No</code> only in
+					the child branches it selects. The
+					<a href="./placeholder-whitepaper.html#fig-placeholder-unresolved-migration">migration accounting diagram</a>
+					separates the canonical snapshot, aggregate REP backing, and vault-specific
+					escrow involved in that path.
+				</p>
+				<p>
+					If an unrelated market caused the first fork, a selected continuation
+					can resume in that fork's child universe and later reach non-decision
+					on the original market question. The resulting recursive fork splits
+					that child universe on the original question: the first fork's branches
+					represent the unrelated question, while the recursive branches represent
+					the original one. The
+					<a href="./placeholder-whitepaper.html#fig-placeholder-recursive-continuation">recursive continuation diagram</a>
+					shows both fork depths.
+				</p>
 				<p>
 					No contract declares one branch canonical. The system creates the
 					branches and leaves users, applications, and future economic activity
@@ -343,152 +453,7 @@
 				</p>
 			</section>
 
-			<section id="example-market">
-				<h2>One Example Market End to End</h2>
-				<p>
-					Imagine the question is <em>Will Example City receive more than 10
-					inches of rain in 2027?</em> Placeholder treats it as a binary market:
-					<code>Invalid</code>, <code>Yes</code>, and <code>No</code>.
-				</p>
-				<p>
-					The example below walks through the same lifecycle in one place so the
-					terms from the earlier sections appear in the order a user encounters
-					them.
-				</p>
-				<div class="equation" id="eq-start-here-complete-set">
-					<math
-						display="block"
-						aria-label="one complete set mints one invalid share plus one yes share plus one no share at the current collateral per share rate"
-						data-source="1 completeSet = 1 Invalid + 1 Yes + 1 No at current sharesToCash rate"
-					>
-						<mrow>
-							<mn>1</mn>
-							<mi>completeSet</mi>
-							<mo>=</mo>
-							<mn>1</mn>
-							<mi>Invalid</mi>
-							<mo>+</mo>
-							<mn>1</mn>
-							<mi>Yes</mi>
-							<mo>+</mo>
-							<mn>1</mn>
-							<mi>No</mi>
-						</mrow>
-					</math>
-					<p class="equation-caption">
-						<span class="equation-label">Complete Set</span>The example market
-						trades outcome shares. Deposited ETH mints complete sets through
-						<code>cashToShares</code>, and redemption converts winning shares
-						back to ETH through <code>sharesToCash</code> at the pool's current
-						collateral-per-share rate. A one-ETH claim is only the initial
-						simplifying case before fees or collateral changes alter that rate.
-					</p>
-				</div>
-				<table>
-					<thead>
-						<tr>
-							<th>Stage</th>
-							<th>What happens</th>
-							<th>Primary contracts</th>
-							<th>Why this stage exists</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr>
-							<td>Pool creation</td>
-							<td>The question is registered and an origin security pool is deployed.</td>
-							<td><code>ZoltarQuestionData</code>, <code>SecurityPoolFactory</code></td>
-							<td>Question data lives globally; market eligibility lives in Placeholder.</td>
-						</tr>
-						<tr>
-							<td>Trading</td>
-							<td>Traders mint complete sets, while vaults deposit REP and set bond allowance.</td>
-							<td><code>SecurityPool</code>, <code>ShareToken</code></td>
-							<td>ETH backs shares; REP backs the security capacity around that ETH.</td>
-						</tr>
-						<tr>
-							<td>Escalation</td>
-							<td>After question end, vault-backed REP can be locked behind <code>Invalid</code>, <code>Yes</code>, or <code>No</code>.</td>
-							<td><code>SecurityPool.depositToEscalationGame</code>, <code>EscalationGame</code></td>
-							<td>Local capital gets a chance to settle the market before a universe fork.</td>
-						</tr>
-						<tr>
-							<td>Local resolution</td>
-							<td>If one outcome wins locally, winning shares redeem and escalation deposits settle.</td>
-							<td><code>redeemShares</code>, <code>withdrawFromEscalationGame</code></td>
-							<td>This is the cheaper happy path; no universe split is needed.</td>
-						</tr>
-						<tr>
-							<td>Fork path</td>
-							<td>If non-decision is reached, Zoltar forks and Placeholder migrates pool state into selected child pools.</td>
-							<td><code>Zoltar</code>, <code>SecurityPoolForker</code></td>
-							<td>The protocol preserves disagreement explicitly instead of forcing one branch.</td>
-						</tr>
-						<tr>
-							<td>Auction repair</td>
-							<td>If a child pool needs ETH collateral, it sells child REP through the truth auction.</td>
-							<td><code>UniformPriceDualCapBatchAuction</code></td>
-							<td>The auction repairs collateral instead of deciding truth.</td>
-						</tr>
-						<tr>
-							<td>Redemption</td>
-							<td>Users redeem or continue trading in the child branch they treat as useful.</td>
-							<td><code>SecurityPool</code>, <code>ShareToken</code></td>
-							<td>Applications and users coordinate on branches after Zoltar creates them.</td>
-						</tr>
-					</tbody>
-				</table>
-			</section>
 
-			<section id="lifecycle-glossary">
-				<h2>Concept Glossary by Lifecycle Stage</h2>
-				<p>
-					The terms stay grouped by the stage where they first become useful, so
-					the same lifecycle order keeps the vocabulary anchored to the mechanism
-					that needs it.
-				</p>
-				<table>
-					<thead>
-						<tr>
-							<th>Stage</th>
-							<th>Terms to know</th>
-							<th>Plain-language anchor</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr>
-							<td>Question and pool setup</td>
-							<td>Universe, question id, outcome labels, origin pool.</td>
-							<td>Zoltar stores possible answers; Placeholder deploys an origin pool only for eligible questions.</td>
-						</tr>
-						<tr>
-							<td>Trading and underwriting</td>
-							<td>Complete set, share token, vault, security-bond allowance, retention rate.</td>
-							<td>ETH backs tradable shares; REP vaults provide backing and receive fees.</td>
-						</tr>
-						<tr>
-							<td>Escalation</td>
-							<td>Start bond, activation delay, running cost, binding capital, non-decision threshold.</td>
-							<td>Vault-backed REP competes locally before the system asks Zoltar to fork.</td>
-						</tr>
-						<tr>
-							<td>Fork migration</td>
-							<td>Child universe, migration balance, migration proxy, child pool, carry snapshot.</td>
-							<td>A fork creates branches; Placeholder moves pool state into the selected branch.</td>
-						</tr>
-						<tr>
-							<td>Auction repair</td>
-							<td>ETH raise cap, REP sale cap, clearing tick, underfunded threshold.</td>
-							<td>Weak child-pool collateral can be repaired by selling some child REP for ETH.</td>
-						</tr>
-						<tr>
-							<td>Solvency oracle</td>
-							<td>REP/ETH price, staged operation, freshness window, liquidation threshold.</td>
-							<td>Operations that change REP backing or ETH exposure need a fresh contestable price.</td>
-						</tr>
-					</tbody>
-				</table>
-			</section>
 
 			<section id="documentation-map">
 				<h2>Documentation Map</h2>
@@ -529,6 +494,10 @@
 							<td><a href="./operator-reference.md">Operator reference</a></td>
 						</tr>
 						<tr>
+							<td>Find transaction callers, prerequisites, effects, and events.</td>
+							<td><a href="./contract-interaction-reference.md">Contract interaction reference</a></td>
+						</tr>
+						<tr>
 							<td>Understand how the local dispute contract is split across Solidity modules.</td>
 							<td><a href="./escalation-game-architecture.html">EscalationGame architecture</a></td>
 						</tr>
@@ -544,54 +513,6 @@
 				</table>
 			</section>
 
-			<section id="supporting-contracts">
-				<h2>Supporting Contract Inventory</h2>
-				<p>
-					The whitepapers focus on protocol flow. The modules below round out the contract map
-					for readers who need the support-layer pieces named explicitly.
-				</p>
-				<table>
-					<thead>
-						<tr>
-							<th>Area</th>
-							<th>Named contracts and modules</th>
-							<th>Role</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr>
-							<td>ERC-20 infrastructure</td>
-							<td><code>ERC20</code>, <code>IERC20</code>, <code>IERC20Metadata</code>, <code>Context</code>, <code>SafeERC20Ops</code>, <code>ReputationToken</code></td>
-							<td>REP token mechanics, token interfaces, and safe transfer wrappers.</td>
-						</tr>
-						<tr>
-							<td>ERC-1155 infrastructure</td>
-							<td><code>ERC1155</code>, <code>ShareToken</code>, <code>TokenId</code>, <code>IShareToken</code>, <code>IERC1155</code>, <code>IERC1155Receiver</code>, <code>IERC165</code></td>
-							<td>Outcome-share token storage, interface support, and token-id encoding.</td>
-						</tr>
-						<tr>
-							<td>Factories and deployers</td>
-							<td><code>EscalationGameFactory</code>, <code>SecurityPoolFactory</code>, <code>SecurityPoolDeployer</code>, <code>ShareTokenFactory</code>, <code>UniformPriceDualCapBatchAuctionFactory</code>, <code>PriceOracleManagerAndOperatorQueuerFactory</code></td>
-							<td>Deterministic deployment entrypoints for pool, token, oracle, escalation-game, and auction instances.</td>
-						</tr>
-						<tr>
-							<td>Migration delegates and storage modules</td>
-							<td><code>SecurityPoolMigrationProxy</code>, <code>SecurityPoolForker</code>, <code>SecurityPoolForkerBase</code>, <code>SecurityPoolForkerStorage</code>, <code>SecurityPoolForkerTypes</code>, <code>SecurityPoolForkerVaultMigrationBase</code>, <code>SecurityPoolForkerVaultMigrationDelegate</code></td>
-							<td>Fork-time state routing, vault migration, child REP splitting, and stable migration identity.</td>
-						</tr>
-						<tr>
-							<td>Carry proof structure</td>
-							<td><code>MerkleMountainRange</code>, <code>EscalationGameTypes</code>, <code>EscalationGameState</code>, <code>EscalationGameCarry</code>, <code>EscalationGameProofVerifier</code></td>
-							<td>Proof structs, storage layout, inherited carry snapshots, and replay-resistant carried-deposit verification.</td>
-						</tr>
-						<tr>
-							<td>Deployment tracking</td>
-							<td><code>DeploymentStatusOracle</code></td>
-							<td>Mainnet deployment-step code-presence bitmap with one bit per configured address.</td>
-						</tr>
-					</tbody>
-				</table>
-			</section>
 		</main>
 		<script src="./protocolTerms.js"></script>
 		<script src="./termTooltips.js"></script>

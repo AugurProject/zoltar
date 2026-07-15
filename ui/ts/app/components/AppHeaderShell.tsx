@@ -23,11 +23,9 @@ export function AppHeaderShell({ overview, simulationController, subNavigation, 
 
 	return (
 		<>
-			{simulationController === undefined ? undefined : (
-				<button className='skip-link' type='button' onClick={focusAppContent}>
-					{appCopy.skipSimulationControls}
-				</button>
-			)}
+			<button className='skip-link' type='button' onClick={focusAppContent}>
+				{appCopy.skipToMainContent}
+			</button>
 			{simulationController === undefined ? undefined : <SimulationBanner controller={simulationController} onEnvironmentChanged={onEnvironmentChanged} onRefresh={onRefresh} />}
 			<div className='top-shell'>
 				<div className='top-shell-content'>

@@ -42,6 +42,7 @@ interface ISecurityPool {
 	function poolOwnershipDenominator() external view returns (uint256);
 	function securityMultiplier() external view returns (uint256);
 	function totalFeesOwedToVaults() external view returns (uint256);
+	function totalAccruedFees() external view returns (uint256);
 	function lastUpdatedFeeAccumulator() external view returns (uint256);
 	function currentRetentionRate() external view returns (uint256);
 	function awaitingForkContinuation() external view returns (bool);
@@ -122,10 +123,15 @@ interface ISecurityPool {
 		uint256 securityBondAllowance,
 		uint256 vaultFeeIndex
 	) external;
+	function addFeeEligibleSecurityBondAllowance(uint256 amount) external;
 	function setOwnershipDenominator(uint256 newDenominator) external;
 	function feeIndex() external view returns (uint256);
 	function setTotalShares(uint256 newTotalShares) external;
-	function setPoolFinancials(uint256 newCollateral, uint256 newTotalBondAllowance) external;
+	function setPoolFinancials(
+		uint256 newCollateral,
+		uint256 newTotalBondAllowance,
+		uint256 newFeeEligibleBondAllowance
+	) external;
 	function authorizeChildPool(ISecurityPool pool) external;
 	function questionData() external view returns (ZoltarQuestionData);
 	function drainAllRep() external;
