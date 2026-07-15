@@ -6,14 +6,14 @@
 
 :root {
 	color-scheme: dark;
-	--bg: #07111f;
-	--bg-deep: #060c14;
+	--bg: #08111d;
+	--bg-deep: #050a11;
 
 	/* text hierarchy */
 	--text: #e7f3ff;
-	--text-secondary: rgba(196, 218, 240, 0.88);
-	--muted: rgba(154, 179, 211, 0.78);
-	--value: #b8e8ff;
+	--text-secondary: rgba(207, 221, 238, 0.9);
+	--muted: rgba(160, 181, 207, 0.76);
+	--value: #d0e7f5;
 
 	/* accents */
 	--accent: #38d5ff;
@@ -22,10 +22,10 @@
 	--accent-strong-soft: rgba(124, 108, 255, 0.12);
 
 	/* semantic borders — structural (blue-tinted, passive) */
-	--border-subtle: rgba(96, 165, 250, 0.08);
-	--border-default: rgba(96, 165, 250, 0.16);
-	--border-strong: rgba(96, 165, 250, 0.3);
-	--border-emphasis: rgba(96, 165, 250, 0.32);
+	--border-subtle: rgba(159, 180, 207, 0.07);
+	--border-default: rgba(159, 180, 207, 0.14);
+	--border-strong: rgba(159, 180, 207, 0.24);
+	--border-emphasis: rgba(159, 180, 207, 0.28);
 
 	/* semantic borders — interactive (cyan-tinted, signals clickability) */
 	--interactive-border: rgba(56, 213, 255, 0.22);
@@ -35,11 +35,11 @@
 	--interactive-bg-active: rgba(124, 108, 255, 0.14);
 
 	/* surfaces */
-	--surface-raised: rgba(11, 25, 44, 0.88);
+	--surface-raised: rgba(11, 22, 37, 0.9);
 	--surface-sunken: rgba(10, 20, 36, 0.22);
 	--surface-overlay: rgba(5, 11, 21, 0.86);
-	--surface-card: rgba(14, 26, 44, 0.86);
-	--surface-card-end: rgba(8, 16, 28, 0.94);
+	--surface-card: rgba(12, 23, 38, 0.9);
+	--surface-card-end: rgba(8, 16, 27, 0.94);
 	--surface-inset: rgba(9, 18, 31, 0.58);
 
 	/* status */
@@ -60,11 +60,11 @@
 	--control-border: rgba(154, 179, 211, 0.28);
 	--input-border: rgba(154, 179, 211, 0.3);
 	--focus: rgba(56, 213, 255, 0.48);
-	--primary-button-bg: rgba(56, 213, 255, 0.11);
-	--primary-button-bg-hover: rgba(56, 213, 255, 0.16);
-	--primary-button-border: rgba(56, 213, 255, 0.22);
-	--primary-button-border-hover: rgba(56, 213, 255, 0.3);
-	--primary-button-shadow: rgba(56, 213, 255, 0.05);
+	--primary-button-bg: #137f9f;
+	--primary-button-bg-hover: #1694b8;
+	--primary-button-border: #2ab5d8;
+	--primary-button-border-hover: #55c8e4;
+	--primary-button-shadow: rgba(255, 255, 255, 0.08);
 
 	/* type scale — fixed */
 	--font-xs: 0.68rem;
@@ -108,11 +108,11 @@
 	/* elevated surfaces */
 	--surface-dropdown: rgba(5, 11, 21, 0.97);
 	--surface-modal: rgba(7, 17, 31, 0.96);
-	--radius-shell: 1.25rem;
-	--radius-section: 1rem;
-	--radius-panel: 1rem;
-	--radius-record: 1.1rem;
-	--radius-control: 0.75rem;
+	--radius-shell: 1rem;
+	--radius-section: 0.8rem;
+	--radius-panel: 0.8rem;
+	--radius-record: 0.85rem;
+	--radius-control: 0.6rem;
 	--text-primary: var(--text);
 }
 
@@ -159,9 +159,7 @@ body::before {
 	inset: 0;
 	z-index: -1;
 	pointer-events: none;
-	background:
-		radial-gradient(circle at 18% 8%, rgba(56, 213, 255, 0.18), transparent 22%), radial-gradient(circle at 82% 0%, rgba(124, 108, 255, 0.16), transparent 20%), radial-gradient(circle at 52% 118%, rgba(66, 232, 194, 0.1), transparent 34%),
-		linear-gradient(180deg, #0b1728 0%, #081220 34%, #09111c 64%, var(--bg-deep) 100%);
+	background: radial-gradient(circle at 16% 0%, rgba(56, 213, 255, 0.09), transparent 25%), radial-gradient(circle at 86% 0%, rgba(124, 108, 255, 0.08), transparent 24%), linear-gradient(180deg, #0a1524 0%, #07101b 45%, var(--bg-deep) 100%);
 }
 
 main {
@@ -212,7 +210,7 @@ main {
 .app-nav-stack {
 	display: grid;
 	gap: 0.2rem;
-	padding: 0.85rem 1rem 0.8rem;
+	padding: 0.65rem 0.8rem 0.6rem;
 	border-top: 1px solid rgba(255, 255, 255, 0.04);
 }
 
@@ -277,7 +275,7 @@ button:hover:not(:disabled) {
 }
 
 button:disabled {
-	opacity: 0.45;
+	opacity: 0.52;
 	cursor: not-allowed;
 }
 
@@ -298,7 +296,9 @@ button.primary {
 	color: var(--text);
 	border-color: var(--primary-button-border);
 	font-weight: 600;
-	box-shadow: 0 0 0 1px var(--primary-button-shadow) inset;
+	box-shadow:
+		0 0 0 1px var(--primary-button-shadow) inset,
+		0 5px 12px rgba(3, 15, 22, 0.18);
 }
 
 button.primary:hover:not(:disabled) {
@@ -309,9 +309,8 @@ button.primary:hover:not(:disabled) {
 
 button.quiet {
 	background: transparent;
-	color: var(--text);
-	border-color: var(--interactive-border);
-	background: var(--interactive-bg);
+	color: var(--text-secondary);
+	border-color: transparent;
 	padding-inline: 0.45rem;
 }
 
@@ -488,9 +487,9 @@ button.destructive-subtle:hover:not(:disabled) {
 .workflow-section-label {
 	font-family: "IBM Plex Mono", "Courier New", monospace;
 	text-transform: uppercase;
-	letter-spacing: 0.09em;
+	letter-spacing: 0.07em;
 	font-size: var(--font-label);
-	opacity: 0.9;
+	opacity: 1;
 	color: var(--muted);
 }
 
@@ -990,7 +989,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 .overview-inline-metrics {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 1rem 1.5rem;
+	gap: 0.75rem 1.15rem;
 	overflow-x: visible;
 	min-width: 0;
 	padding-bottom: 0;
@@ -999,7 +998,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 .overview-inline-metrics > div {
 	flex: 0 0 auto;
 	min-width: max-content;
-	padding-top: 0.5rem;
+	padding-top: 0.4rem;
 	border-top: 1px solid var(--border-default);
 }
 
@@ -1075,12 +1074,10 @@ button.currency-value.copyable:hover:not(:disabled) {
 }
 
 .simulation-banner {
-	padding: 0.8rem;
-	border: 1px solid rgba(245, 200, 106, 0.58);
-	background: linear-gradient(180deg, rgba(84, 61, 13, 0.96) 0%, rgba(58, 42, 8, 0.97) 100%), linear-gradient(180deg, rgba(255, 214, 102, 0.08) 0%, rgba(255, 214, 102, 0.04) 100%);
-	box-shadow:
-		0 0 0 1px rgba(255, 226, 148, 0.12) inset,
-		0 18px 34px rgba(41, 28, 3, 0.26);
+	padding: 0.65rem 0.75rem;
+	border: 1px solid rgba(245, 200, 106, 0.38);
+	background: rgba(67, 48, 11, 0.9);
+	box-shadow: 0 8px 20px rgba(28, 19, 2, 0.16);
 }
 
 .simulation-banner-header {
@@ -1093,10 +1090,10 @@ button.currency-value.copyable:hover:not(:disabled) {
 }
 
 .simulation-banner-warning {
-	margin-top: 1rem;
+	margin-top: 0.75rem;
 	border: 1px solid rgba(255, 227, 145, 0.44);
 	border-radius: 0.85rem;
-	padding: 0.9rem 1rem;
+	padding: 0.7rem 0.8rem;
 	background: rgba(255, 220, 120, 0.16);
 	color: #fff2cf;
 	font-size: var(--font-caption);
@@ -1120,21 +1117,21 @@ button.currency-value.copyable:hover:not(:disabled) {
 .simulation-banner-stats {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: 0.55rem;
+	gap: 0.45rem;
 }
 
 .simulation-stat-card {
 	display: grid;
 	gap: 0.2rem;
-	padding: 0.65rem 0.75rem;
+	padding: 0.5rem 0.65rem;
 	border: 1px solid rgba(255, 227, 145, 0.28);
 	border-radius: 0.75rem;
-	background: rgba(255, 244, 214, 0.12);
+	background: rgba(255, 244, 214, 0.08);
 }
 
 .simulation-stat-card strong {
 	color: #fff8e5;
-	font-size: 1.05rem;
+	font-size: var(--font-value);
 }
 
 .simulation-stat-card-wide {
@@ -1152,7 +1149,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 
 .simulation-advanced-controls {
 	display: grid;
-	gap: 0.8rem;
+	gap: 0.6rem;
 }
 
 .simulation-advanced-controls > summary {
@@ -1160,7 +1157,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 	cursor: pointer;
 	border: 1px solid rgba(255, 227, 145, 0.36);
 	border-radius: var(--radius-control);
-	padding: 0.65rem 0.85rem;
+	padding: 0.5rem 0.7rem;
 	background: rgba(56, 40, 7, 0.42);
 	color: #fff4da;
 	font-weight: 700;
@@ -3498,7 +3495,11 @@ strong.metric-value-danger {
 
 .action-launcher-card {
 	display: grid;
-	gap: 0.8rem;
+	gap: 0.65rem;
+	padding: 0.75rem 0;
+	border-width: 0 0 1px;
+	border-radius: 0;
+	background: transparent;
 }
 
 .action-launcher-card h4 {
@@ -3507,7 +3508,7 @@ strong.metric-value-danger {
 }
 
 .action-launcher-card.default {
-	border-color: var(--border-subtle);
+	border-color: var(--divider-subtle);
 }
 
 .action-launcher-card.ready {
@@ -3515,7 +3516,7 @@ strong.metric-value-danger {
 }
 
 .action-launcher-card.blocked {
-	border-color: var(--danger-border);
+	border-color: var(--divider-subtle);
 }
 
 .action-launcher-card-actions {
@@ -4440,7 +4441,9 @@ button:focus-visible {
 
 	.tab-nav {
 		top: 0.5rem;
-		padding: 0 0.75rem;
+		width: 100%;
+		min-width: 0;
+		padding: 0;
 	}
 
 	.contract-row {
@@ -4457,19 +4460,19 @@ button:focus-visible {
 	--space-6: 2rem;
 	--space-7: 2.75rem;
 	--space-8: 3.5rem;
-	--surface-page: rgba(9, 18, 31, 0.76);
-	--surface-section: rgba(11, 22, 38, 0.86);
-	--surface-record: rgba(13, 25, 42, 0.92);
-	--surface-row: rgba(8, 17, 30, 0.52);
+	--surface-page: rgba(8, 16, 28, 0.72);
+	--surface-section: rgba(10, 20, 34, 0.82);
+	--surface-record: rgba(12, 23, 38, 0.88);
+	--surface-row: rgba(8, 16, 28, 0.42);
 	--surface-critical: rgba(61, 14, 25, 0.72);
-	--divider-subtle: rgba(154, 179, 211, 0.12);
-	--divider-strong: rgba(154, 179, 211, 0.22);
+	--divider-subtle: rgba(159, 180, 207, 0.1);
+	--divider-strong: rgba(159, 180, 207, 0.18);
 	--border-active: rgba(56, 213, 255, 0.52);
 }
 
 .route-shell {
 	display: grid;
-	gap: var(--space-5);
+	gap: var(--space-4);
 	border: 0;
 	margin: 0;
 	padding: 0;
@@ -4477,18 +4480,21 @@ button:focus-visible {
 }
 
 .top-shell {
-	gap: var(--space-2);
-	padding-bottom: var(--space-3);
+	gap: var(--space-1);
+	padding-bottom: var(--space-2);
+	border-color: var(--divider-strong);
+	background: rgba(8, 17, 29, 0.9);
+	box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
 }
 
 .route-header {
 	display: grid;
 	gap: var(--space-4);
-	padding: var(--space-6);
+	padding: var(--space-5);
 	border: 1px solid var(--divider-strong);
 	border-radius: var(--radius-section);
-	background: linear-gradient(180deg, rgba(12, 23, 39, 0.82) 0%, rgba(9, 18, 31, 0.9) 100%);
-	box-shadow: 0 14px 28px rgba(0, 0, 0, 0.08);
+	background: var(--surface-section);
+	box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
 }
 
 .route-header-main,
@@ -4511,7 +4517,7 @@ button:focus-visible {
 .route-eyebrow {
 	margin: 0;
 	font-size: var(--font-label);
-	letter-spacing: 0.16em;
+	letter-spacing: 0.11em;
 	text-transform: uppercase;
 	color: var(--muted);
 }
@@ -4556,10 +4562,10 @@ button:focus-visible {
 .section-block.default,
 .section-block.surface {
 	padding: var(--space-5);
-	border: 1px solid var(--divider-strong);
+	border: 1px solid var(--divider-subtle);
 	border-radius: var(--radius-section);
-	background: rgba(10, 20, 36, 0.72);
-	box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
+	background: var(--surface-section);
+	box-shadow: none;
 }
 
 .section-block.plain {
@@ -4671,12 +4677,10 @@ button:focus-visible {
 	display: grid;
 	gap: 0.35rem;
 	padding: 0.95rem 1rem;
-	border: 1px solid var(--border-default);
+	border: 1px solid var(--divider-subtle);
 	border-radius: 0.95rem;
-	background: linear-gradient(180deg, rgba(13, 24, 42, 0.92) 0%, rgba(8, 16, 28, 0.92) 100%);
-	box-shadow:
-		var(--glow-inset-subtle),
-		0 10px 24px rgba(0, 0, 0, 0.12);
+	background: var(--surface-row);
+	box-shadow: none;
 	min-width: 0;
 }
 
@@ -5950,7 +5954,9 @@ button:focus-visible {
 	background: transparent;
 	box-shadow: none;
 	align-items: center;
-	gap: 0.45rem;
+	gap: 0.3rem;
+	flex-wrap: nowrap;
+	overflow-x: auto;
 }
 
 .view-tab {
@@ -5964,15 +5970,16 @@ button:focus-visible {
 }
 
 .view-tabs.route .view-tab {
-	padding: 0.68rem 0.92rem;
-	border-color: rgba(255, 255, 255, 0.04);
-	background: rgba(7, 15, 27, 0.22);
+	flex: 0 0 auto;
+	padding: 0.58rem 0.8rem;
+	border-color: transparent;
+	background: transparent;
 	color: rgba(194, 210, 231, 0.82);
 	font-size: var(--font-tab);
 	font-weight: 700;
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
-	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.015);
+	box-shadow: none;
 }
 
 .view-tabs.route .view-tab:hover:not(:disabled) {
@@ -5982,12 +5989,10 @@ button:focus-visible {
 }
 
 .view-tabs.route .view-tab.active {
-	background: linear-gradient(180deg, rgba(28, 63, 98, 0.96) 0%, rgba(22, 49, 77, 0.96) 100%);
-	border-color: rgba(56, 213, 255, 0.22);
+	background: rgba(28, 71, 101, 0.86);
+	border-color: rgba(56, 213, 255, 0.28);
 	color: var(--text);
-	box-shadow:
-		inset 0 1px 0 rgba(255, 255, 255, 0.04),
-		0 6px 14px rgba(0, 0, 0, 0.08);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .view-tabs.subroute {
@@ -6070,25 +6075,39 @@ button:focus-visible {
 }
 
 .overview-panel {
-	padding: var(--space-5) var(--space-6);
+	padding: var(--space-4) var(--space-5);
 	border: 1px solid var(--divider-strong);
 	border-radius: var(--radius-shell);
-	background: rgba(8, 18, 31, 0.7);
-	box-shadow: 0 16px 32px rgba(0, 0, 0, 0.12);
+	background: var(--surface-page);
+	box-shadow: none;
 }
 
 .overview-wallet-panel {
-	padding: var(--space-5) var(--space-6) var(--space-4);
+	padding: var(--space-4) var(--space-5) var(--space-3);
 	border: 0;
 	background: transparent;
 	box-shadow: none;
 }
 
 .overview-panel .route-header {
-	padding: 0 0 var(--space-3);
+	padding: 0 0 var(--space-2);
 	border: 0;
 	background: transparent;
 	box-shadow: none;
+}
+
+.overview-inline-metrics.data-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+	gap: var(--space-3) var(--space-4);
+}
+
+.overview-inline-metrics.data-grid > div {
+	min-width: 0;
+}
+
+.overview-inline-metrics.data-grid > .overview-address-metric {
+	grid-column: span 2;
 }
 
 .workflow-stack,
@@ -6573,9 +6592,9 @@ button:focus-visible {
 
 .record-card,
 .entity-card {
-	background: rgba(12, 24, 41, 0.82);
-	border-color: var(--divider-strong);
-	box-shadow: 0 14px 28px rgba(0, 0, 0, 0.1);
+	background: var(--surface-record);
+	border-color: var(--divider-subtle);
+	box-shadow: none;
 }
 
 .entity-card::before {
@@ -6783,11 +6802,11 @@ button:focus-visible {
 
 	.route-subtab-nav {
 		justify-content: flex-start;
-		flex-wrap: wrap;
+		flex-wrap: nowrap;
 		width: 100%;
 		min-width: 0;
-		row-gap: 0.35rem;
-		overflow: visible;
+		overflow-x: auto;
+		overflow-y: hidden;
 	}
 
 	.route-subtab-nav.view-tabs.subroute .view-tab {
@@ -6864,6 +6883,28 @@ button:focus-visible {
 }
 
 @media (max-width: 640px) {
+	main {
+		padding: 0.75rem 0.65rem 2.5rem;
+	}
+
+	.app-nav-stack {
+		padding: 0.5rem 0.55rem;
+	}
+
+	.overview-inline-metrics.data-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.overview-inline-metrics.data-grid > .overview-address-metric {
+		grid-column: 1 / -1;
+	}
+
+	.route-header,
+	.section-block,
+	.overview-panel {
+		padding: var(--space-3);
+	}
+
 	.security-pool-detail-rail,
 	.security-pool-browse-vault-row-top,
 	.security-pool-browse-vault-row-top-compact,
