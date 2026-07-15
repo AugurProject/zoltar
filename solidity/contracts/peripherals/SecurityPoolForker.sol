@@ -375,9 +375,10 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			data.escalationChildRepAtFork = escalationRepToLock;
 		}
 		uint256 repToLock = poolRepToLock + escalationRepToLock;
-		if (repToLock > 0) IERC20(address(rep)).safeTransfer(address(migrationProxy), repToLock);
-		uint256 proxyRepBalance = rep.balanceOf(address(migrationProxy));
-		if (proxyRepBalance > 0) migrationProxy.lockRep(proxyRepBalance);
+		if (repToLock > 0) {
+			IERC20(address(rep)).safeTransfer(address(migrationProxy), repToLock);
+			migrationProxy.lockRep(repToLock);
+		}
 		uint256 migrationBalance = zoltar.getMigrationRepBalance(address(migrationProxy), universe);
 		require(migrationBalance == previousMigrationBalance + repToLock, 'Migration balance mismatch');
 		data.auctionableRepAtFork = previousMigrationBalance + poolRepToLock;
@@ -720,10 +721,12 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		SecurityPoolMigrationProxy migrationProxy = _getOrDeployMigrationProxy(securityPool);
 		uint256 repBalanceAfter = rep.balanceOf(address(this));
 		uint256 repToFork = repBalanceAfter - repBalanceBefore;
+		uint256 forkThreshold = zoltar.getForkThreshold(securityPool.universeId());
+		require(repToFork >= forkThreshold, 'Fork REP');
 		if (repToFork > 0) IERC20(address(rep)).safeTransfer(address(migrationProxy), repToFork);
 		migrationProxy.forkUniverse(securityPool.questionId());
-		uint256 leftoverProxyRep = rep.balanceOf(address(migrationProxy));
-		if (leftoverProxyRep > 0) migrationProxy.lockRep(leftoverProxyRep);
+		uint256 excessForkRep = repToFork - forkThreshold;
+		if (excessForkRep > 0) migrationProxy.lockRep(excessForkRep);
 		uint256 forkTime = zoltar.getForkTime(securityPool.universeId());
 		require(forkTime > 0, 'Time');
 		// The universe fork extends the parent's fee horizon from the question end
