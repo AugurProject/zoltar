@@ -82,6 +82,7 @@ export type ZoltarChildUniverseSummary = {
 
 export type ZoltarUniverseSummary = {
 	childUniverses: ZoltarChildUniverseSummary[]
+	forkBurnDivisor?: bigint
 	forkThreshold: bigint
 	forkQuestionDetails: MarketDetails | undefined
 	forkTime: bigint
@@ -91,6 +92,7 @@ export type ZoltarUniverseSummary = {
 	reputationToken: Address
 	totalTheoreticalSupply: bigint
 	universeId: bigint
+	zoltarAddress?: Address
 }
 
 export type DeploymentStep = {
@@ -135,6 +137,16 @@ export type ZoltarMigrationActionResult = ActionResult & {
 	amount: bigint
 	outcomeIndexes: bigint[]
 	universeId: bigint
+}
+
+export type LiquidationFundingPreview = {
+	currentRepBalance: bigint
+	currentWethBalance: bigint
+	initialReportRepRequired: bigint
+	initialReportWethRequired: bigint
+	queueOperationEthValue: bigint
+	totalWalletEthRequired: bigint
+	wethShortfall: bigint
 }
 
 export type MarketDetails = QuestionData & {

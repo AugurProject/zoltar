@@ -392,6 +392,7 @@ describe('ForkAuctionSection', () => {
 	})
 
 	test('shows the selected outcome field and child-pool link in the settlement child pools section', async () => {
+		window.history.replaceState({}, '', 'http://localhost/#/security-pools?simulate=1&simScenario=securitypoolx2&selectedPoolView=reporting&universe=1')
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ForkAuctionSection,
@@ -409,6 +410,14 @@ describe('ForkAuctionSection', () => {
 		expect(childPoolLink).not.toBeNull()
 		expect(childPoolLink.closest('.fork-workflow-outcome-selector-row')).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Child Security Pools' })).not.toBeNull()
+		const listedChildPoolLink = documentQueries.getByRole('link', { name: 'Open security pool' })
+		for (const link of [childPoolLink, listedChildPoolLink]) {
+			const href = link.getAttribute('href') ?? ''
+			expect(href).toContain('simulate=1')
+			expect(href).toContain('simScenario=securitypoolx2')
+			expect(href).toContain('selectedPoolView=reporting')
+			expect(href).toContain('universe=11')
+		}
 	})
 
 	test('shows only the selected-deposit migration action in the migration panel', async () => {
@@ -1036,7 +1045,7 @@ describe('ForkAuctionSection', () => {
 		expect(submitBidButton.disabled).toBe(true)
 	})
 
-	test('keeps fork-auction actions disabled off mainnet without showing a switch-network message', async () => {
+	test('keeps fork-auction actions disabled off mainnet and shows switch-network recovery', async () => {
 		const currentChildPool = createChildPool({
 			securityPoolAddress: '0x00000000000000000000000000000000000000f7',
 			systemState: 'forkTruthAuction',
@@ -1094,8 +1103,8 @@ describe('ForkAuctionSection', () => {
 		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit Bid' })
 		if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected Submit Bid button to be a button element')
 		expect(submitBidButton.disabled).toBe(true)
-		expect(submitBidButton.title).toBe('')
-		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(false)
+		expect(submitBidButton.title).toBe('Switch to Ethereum mainnet.')
+		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
 	})
 
 	test('keeps fork-auction downstream blocker copy hidden off mainnet', async () => {
@@ -1156,7 +1165,7 @@ describe('ForkAuctionSection', () => {
 		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit Bid' })
 		if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected Submit Bid button to be a button element')
 		expect(submitBidButton.disabled).toBe(true)
-		expect(submitBidButton.title).toBe('')
+		expect(submitBidButton.title).toBe('Switch to Ethereum mainnet.')
 	})
 
 	test('shows a missing-universe notice without a creation button', async () => {

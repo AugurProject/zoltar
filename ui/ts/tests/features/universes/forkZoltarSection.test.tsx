@@ -9,6 +9,9 @@ import type { MarketDetails, ZoltarUniverseSummary } from '../../../types/contra
 import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
 
+const REP = 10n ** 18n
+const ZOLTAR_ADDRESS = '0x00000000000000000000000000000000000000a1' as const
+
 function createQuestion(): MarketDetails {
 	return {
 		answerUnit: '',
@@ -58,7 +61,7 @@ describe('ForkZoltarSection', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	test('keeps REP approval silently disabled off mainnet', async () => {
+	test('keeps REP approval disabled off mainnet and explains recovery', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(ForkZoltarSection, {
 				accountAddress: zeroAddress,
@@ -91,6 +94,39 @@ describe('ForkZoltarSection', () => {
 			.find(button => button.textContent?.startsWith('Approve ') === true)
 		if (approveButton === undefined) throw new Error('Expected approval button')
 		expect(approveButton.hasAttribute('disabled')).toBe(true)
-		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(false)
+		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
+	})
+
+	test('shows the permanent fork burn, migration credit, and Zoltar target before submission', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(ForkZoltarSection, {
+				accountAddress: zeroAddress,
+				hasLoadedZoltarQuestions: true,
+				isMainnet: true,
+				loadingZoltarForkAccess: false,
+				loadingZoltarQuestions: false,
+				onApproveZoltarForkRep: () => undefined,
+				onForkZoltar: () => undefined,
+				onZoltarForkQuestionIdChange: () => undefined,
+				zoltarForkActiveAction: undefined,
+				zoltarForkApproval: { error: undefined, loading: false, value: 100n * REP },
+				zoltarForkError: undefined,
+				zoltarForkPending: false,
+				zoltarForkQuestionId: '0x01',
+				zoltarForkRepBalance: 1000n * REP,
+				zoltarQuestions: [createQuestion()],
+				zoltarUniverse: createUniverse({ forkBurnDivisor: 5n, forkThreshold: 100n * REP, zoltarAddress: ZOLTAR_ADDRESS }),
+				zoltarUniverseState: 'ready',
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const review = within(document.body).getByRole('heading', { name: 'Transaction Review' }).closest('section')
+		if (review === null) throw new Error('Expected transaction review')
+		expect(review.textContent).toContain('Migration Custody Credit≈ 80.00 REP')
+		expect(review.textContent).toContain('Permanent REP Burn≈ 20.00 REP')
+		expect(review.textContent).toContain('Zoltar Contract')
+		expect(review.textContent).toContain(ZOLTAR_ADDRESS)
+		expect(review.textContent).not.toContain('Protocol FeeNone')
 	})
 })

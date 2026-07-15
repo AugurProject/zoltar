@@ -51,6 +51,7 @@ export type ChainBackend = {
 	createReadClient(): ReadClient
 	createWriteClient(accountAddress: Address, callbacks?: CreateWriteClientCallbacks): WriteClient
 	currentTimestamp?: bigint
+	disconnectWallet?: () => Promise<void>
 	getAccounts(): Promise<readonly Address[]>
 	getChainId(): Promise<string>
 	getProvider(): InjectedEthereum | undefined
@@ -61,11 +62,13 @@ export type ChainBackend = {
 	isBootstrapping?: boolean
 	profile: NetworkProfile
 	requestAccounts(): Promise<readonly Address[]>
+	requestAccountSelection?: () => Promise<readonly Address[]>
 	setReadBackendBlock?: (block: { number: bigint | undefined; timestamp: bigint | undefined }) => void
 	setReadTransportMode?: (mode: ReadTransportMode) => void
 	subscribe: ((handler: () => void) => () => void) | undefined
 	subscribeAccountsChanged(handler: () => void): () => void
 	subscribeChainChanged(handler: () => void): () => void
+	switchNetwork?: () => Promise<void>
 	waitUntilReady?(): Promise<void>
 }
 
@@ -173,6 +176,11 @@ export function createInjectedBackend({ rpcUrl }: { rpcUrl?: string } = {}): Cha
 				if (currentChainId !== MAINNET_NETWORK_PROFILE.chainIdHex) throw new Error('Wallet network changed. Switch to Ethereum mainnet and try again.')
 			})
 		},
+		disconnectWallet: async () => {
+			const ethereum = getProvider()
+			if (ethereum === undefined) throw new Error('No injected wallet found')
+			await ethereum.request({ method: 'wallet_revokePermissions', params: [{ eth_accounts: {} }] })
+		},
 		getAccounts: async () => await readProviderAccounts(getProvider()),
 		getChainId: async () => {
 			return await readProviderChainId(getProvider())
@@ -196,6 +204,12 @@ export function createInjectedBackend({ rpcUrl }: { rpcUrl?: string } = {}): Cha
 			if (!Array.isArray(result)) return []
 			return result.map(normalizeAccount).filter((address): address is Address => address !== undefined)
 		},
+		requestAccountSelection: async () => {
+			const ethereum = getProvider()
+			if (ethereum === undefined) return []
+			await ethereum.request({ method: 'wallet_requestPermissions', params: [{ eth_accounts: {} }] })
+			return await readProviderAccounts(ethereum)
+		},
 		setReadTransportMode: mode => {
 			readTransportMode = mode
 		},
@@ -217,6 +231,11 @@ export function createInjectedBackend({ rpcUrl }: { rpcUrl?: string } = {}): Cha
 			return () => {
 				ethereum?.removeListener?.('chainChanged', handler)
 			}
+		},
+		switchNetwork: async () => {
+			const ethereum = getProvider()
+			if (ethereum === undefined) throw new Error('No injected wallet found')
+			await ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: MAINNET_NETWORK_PROFILE.chainIdHex }] })
 		},
 	}
 }

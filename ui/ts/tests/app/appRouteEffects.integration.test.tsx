@@ -14,6 +14,7 @@ type RouteEffectsProps = Parameters<typeof useAppRouteEffects>[0]
 function createDefaultProps(overrides: Partial<RouteEffectsProps> = {}): RouteEffectsProps {
 	return {
 		accountAddress: undefined,
+		activeZoltarView: 'questions',
 		activeEnvironmentNonce: 0,
 		augurPlaceHolderDeploymentMissing: false,
 		environmentReady: true,
@@ -71,6 +72,35 @@ function UrlStateHarness() {
 }
 
 describe('app route effects integration', () => {
+	test('loads linked security pools once while browsing market questions', async () => {
+		const dom = installDomEnvironment('http://localhost/#/zoltar')
+		const calls: Array<string | undefined> = []
+		const initialProps = createDefaultProps({
+			loadSecurityPools: async securityPoolAddress => {
+				calls.push(securityPoolAddress)
+			},
+		})
+
+		const { cleanup, container } = await renderIntoDocument(<RouteEffectsHarness {...initialProps} />)
+		expect(calls).toEqual([undefined])
+
+		await act(() => {
+			render(
+				<RouteEffectsHarness
+					{...initialProps}
+					loadSecurityPools={async securityPoolAddress => {
+						calls.push(securityPoolAddress)
+					}}
+				/>,
+				container,
+			)
+		})
+
+		expect(calls).toEqual([undefined])
+		await cleanup()
+		dom.cleanup()
+	})
+
 	test('does not repeatedly reload the same unresolved open oracle report across rerenders', async () => {
 		const dom = installDomEnvironment()
 		const calls: string[] = []

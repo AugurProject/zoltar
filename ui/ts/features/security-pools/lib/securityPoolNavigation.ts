@@ -12,7 +12,7 @@ export function getSecurityPoolLinkHref(securityPoolAddress: string, selectedPoo
 	const currentSearch = getRouteHashSearch()
 	const nextSelectedPoolView = selectedPoolView ?? readSelectedPoolViewQueryParam(currentSearch)
 	const nextUniverseId = universeId ?? readUniverseQueryParam(currentSearch)
-	const securityPoolSearch = writeSecurityPoolQueryParam('', securityPoolAddress)
+	const securityPoolSearch = writeSecurityPoolQueryParam(currentSearch, securityPoolAddress)
 	const selectedPoolViewSearch = writeSelectedPoolViewQueryParam(securityPoolSearch, nextSelectedPoolView)
 	const nextSearch = writeUniverseQueryParam(selectedPoolViewSearch, nextUniverseId)
 	return buildRouteHref(SECURITY_POOLS_ROUTE, nextSearch)
@@ -23,5 +23,5 @@ export function navigateToSecurityPool(securityPoolAddress: string, selectedPool
 	if (window.location.hash === href) return
 
 	window.history.pushState({}, '', href)
-	window.dispatchEvent(new PopStateEvent('popstate'))
+	window.dispatchEvent(new Event('hashchange'))
 }

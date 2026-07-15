@@ -120,7 +120,7 @@ describe('MarketCreateQuestionSection', () => {
 		expect(updates.some(update => update.title === 'Updated title')).toBe(true)
 	})
 
-	test('shows timing guidance without duplicating validation notices', async () => {
+	test('shows neutral guidance until an invalid field is touched', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
@@ -148,9 +148,17 @@ describe('MarketCreateQuestionSection', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Question Type Guidance' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Draft Preview' })).not.toBeNull()
 		expect(documentQueries.getByText('Placeholder origin security pools support this exact Yes / No question shape.')).not.toBeNull()
+		expect(documentQueries.queryByText('Title is required')).toBeNull()
+		expect(titleInput.getAttribute('aria-describedby')).toBeNull()
+		expect(documentQueries.queryByText('Missing required fields: Title')).toBeNull()
+		expect(documentQueries.getByText('Complete the required question fields.')).not.toBeNull()
+
+		await act(() => {
+			titleInput.dispatchEvent(new Event('blur'))
+		})
+
 		expect(documentQueries.getByText('Title is required')).not.toBeNull()
 		expect(titleInput.getAttribute('aria-describedby')).toBe('market-create-title-error')
-		expect(documentQueries.getAllByText('Missing required fields: Title')).toHaveLength(1)
 	})
 
 	test('renders selected market details and triggers selection callbacks', async () => {
