@@ -7783,7 +7783,15 @@
 						reusable only inside its freshness window. It does not authorize a
 						fixed amount of operation exposure. The initial OpenOracle report is
 						instead sized from dispute profitability assumptions so a wrong
-						report at the target error is profitable to challenge.
+						report at the target error is profitable to challenge. This is an
+						intentional tradeoff: one contestable price is amortized across every
+						otherwise-valid operation in the five-minute cache rather than bonded
+						one-for-one against outside value. The
+						<a href="./openOracleIntegration.html#fixed-report-unmetered-exposure"
+							>fixed-report calculator</a
+						>
+						separates recoverable report funding from net accepted-report cost and
+						shows the resulting exposure multiple.
 					</p>
 					<figure class="diagram" id="fig-placeholder-oracle-flow">
 						<svg
@@ -8011,13 +8019,22 @@
 						the caller also chooses the initial <code>amount2</code> for the
 						atomic report submission.
 					</p>
-						<p>
-							While a report remains pending, only the original pending report
-							sponsor can queue more staged operations against that settlement.
-							Those follow-up queues pay no extra ETH join fee; other callers
-							must wait until the pending report settles before they can stage
-							their own operations.
-						</p>
+					<p>
+						While a report remains pending, only the original pending report
+						sponsor can queue more staged operations against that settlement.
+						Those follow-up queues pay no extra ETH join fee; other callers
+						must wait until the pending report settles before they can stage
+						their own operations. Sponsor exclusivity is intentional, and every
+						dispute resets the OpenOracle settlement clock. Timely rolling disputes
+						can therefore extend the exclusive lane without a coordinator-level
+						absolute deadline. Required REP grows to the escalation halt, then by
+						one atomic REP per dispute, while protocol fees and gas keep total cost
+						growing with duration. The
+						<a href="./openOracleIntegration.html#rolling-dispute-exclusivity"
+							>rolling-lock calculator</a
+						>
+						models that lower-bound cost.
+					</p>
 					<div class="equation" id="eq-placeholder-oracle-request-cost">
 						<math
 							display="block"
