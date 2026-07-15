@@ -13,6 +13,7 @@ import { UniverseLink } from './UniverseLink.js'
 import { isMainnetChain } from '../lib/network.js'
 import { renderRepPriceSourceLabel } from '../lib/repPriceSource.js'
 import type { OverviewPanelsProps } from '../types/components.js'
+import { useState } from 'preact/hooks'
 export function OverviewPanels({
 	activeUniverseId,
 	accountState,
@@ -39,6 +40,7 @@ export function OverviewPanels({
 	isRefreshing,
 	walletBootstrapComplete,
 }: OverviewPanelsProps) {
+	const [showEnvironmentDetails, setShowEnvironmentDetails] = useState(false)
 	const effectiveReadBackendStatus = readBackendStatus ?? {
 		blockNumber: undefined,
 		blockTimestamp: undefined,
@@ -102,7 +104,7 @@ export function OverviewPanels({
 					eyebrow={appCopy.operations}
 					title={appCopy.augurPlaceholderTitle}
 				/>
-				<DataGrid className='overview-inline-metrics' columns='auto'>
+				<DataGrid className={`overview-inline-metrics ${showEnvironmentDetails ? 'mobile-expanded' : ''}`.trim()} columns='auto'>
 					<MetricField className='overview-address-metric' label={appCopy.address}>
 						{(() => {
 							if (isWalletAddressLoading)
@@ -122,7 +124,7 @@ export function OverviewPanels({
 							<MetricField label={commonCopy.eth}>
 								<CurrencyValue value={accountState.ethBalance} loading={isRefreshing && accountState.ethBalance === undefined} suffix={commonCopy.eth} compactWhenOverflow />
 							</MetricField>
-							<MetricField label={commonCopy.weth}>
+							<MetricField className='overview-metric-secondary' label={commonCopy.weth}>
 								<CurrencyValue value={accountState.wethBalance} loading={isRefreshing && accountState.wethBalance === undefined} suffix={commonCopy.weth} compactWhenOverflow />
 							</MetricField>
 							<MetricField label={commonCopy.rep}>
@@ -131,6 +133,7 @@ export function OverviewPanels({
 						</>
 					) : undefined}
 					<MetricField
+						className='overview-metric-secondary'
 						label={
 							<span className='metric-label-with-action'>
 								<span>
@@ -145,6 +148,7 @@ export function OverviewPanels({
 						<CurrencyValue value={repPerEthPrice} loading={isLoadingRepPrices} copyable={false} />
 					</MetricField>
 					<MetricField
+						className='overview-metric-secondary'
 						label={
 							<>
 								{appCopy.repUsdc} {renderRepPriceSourceLabel(repUsdcSource, repUsdcSourceUrl)}
@@ -155,11 +159,14 @@ export function OverviewPanels({
 					</MetricField>
 					<MetricField label={commonCopy.universe}>{universeLabel}</MetricField>
 					{shouldShowParentUniverse ? (
-						<MetricField label={appCopy.parentUniverse}>
+						<MetricField className='overview-metric-secondary' label={appCopy.parentUniverse}>
 							<UniverseLink universeId={parentUniverseId} />
 						</MetricField>
 					) : undefined}
 				</DataGrid>
+				<button className='overview-details-toggle secondary' type='button' aria-expanded={showEnvironmentDetails} onClick={() => setShowEnvironmentDetails(current => !current)}>
+					{showEnvironmentDetails ? appCopy.hideEnvironmentDetails : appCopy.showEnvironmentDetails}
+				</button>
 				{universePresentation === undefined ? undefined : (
 					<StateHint
 						className='overview-universe-state'
