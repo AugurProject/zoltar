@@ -77,8 +77,9 @@ const formatRpcDiagnosticValue = (value: unknown): string => {
 	if (typeof value === 'string') return value
 	try {
 		return JSON.stringify(value) ?? String(value)
-	} catch {
-		return String(value)
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : String(error)
+		return `${String(value)} (JSON serialization failed: ${errorMessage})`
 	}
 }
 
