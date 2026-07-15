@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { connectToExistingAnvilNode, getAnvilConnectionMode, getGasCostsAnvilConnectionMode, getIsolatedAnvilArgs } from '../testSupport/simulator/anvilNode'
+import { connectToExistingAnvilNode, getAnvilConnectionMode, getGasCostsAnvilConnectionMode, getIsolatedAnvilArgs, parseAnvilListeningRpcUrl } from '../testSupport/simulator/anvilNode'
 
 test('getAnvilConnectionMode uses the platform default when ANVIL_RPC is not set', () => {
 	const originalAnvilRpc = process.env['ANVIL_RPC']
@@ -82,11 +82,16 @@ test('getGasCostsAnvilConnectionMode uses ANVIL_RPC when provided', () => {
 	}
 })
 
-test('isolated Anvil nodes disable persisted state snapshots', () => {
-	const expectedBaseArgs = ['--host', '127.0.0.1', '--port', '12345', '--chain-id', '1', '--timestamp', '1', '--block-base-fee-per-gas', '0', '--gas-price', '0', '--no-priority-fee', '--max-persisted-states', '0']
+test('isolated Anvil nodes atomically select a port and limit their runtime threads', () => {
+	const expectedBaseArgs = ['--host', '127.0.0.1', '--port', '0', '--threads', '1', '--chain-id', '1', '--timestamp', '1', '--block-base-fee-per-gas', '0', '--gas-price', '0', '--no-priority-fee', '--max-persisted-states', '0']
 
-	expect(getIsolatedAnvilArgs({ port: 12345 })).toEqual(expectedBaseArgs)
-	expect(getIsolatedAnvilArgs({ port: 12345, printTraces: true })).toEqual([...expectedBaseArgs, '--print-traces'])
+	expect(getIsolatedAnvilArgs()).toEqual(expectedBaseArgs)
+	expect(getIsolatedAnvilArgs({ printTraces: true })).toEqual([...expectedBaseArgs, '--print-traces'])
+})
+
+test('isolated Anvil startup reads the OS-assigned listening port', () => {
+	expect(parseAnvilListeningRpcUrl('Available Accounts\nListening on 127.0.0.1:43127\n')).toBe('http://127.0.0.1:43127')
+	expect(parseAnvilListeningRpcUrl('Listening on 127.0.0.1:')).toBeUndefined()
 })
 
 test('connectToExistingAnvilNode reports an actionable setup message when RPC validation fails', async () => {
