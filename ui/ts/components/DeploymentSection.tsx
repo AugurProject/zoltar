@@ -3,7 +3,18 @@ import { Badge } from './Badge.js'
 import { SectionBlock } from './SectionBlock.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
 import { getDeploymentStepAvailability, getPrerequisiteLabel } from '../lib/deployment.js'
-import { UI_STRINGS } from '../lib/uiStrings.js'
+import {
+	UI_STRING_CAN_DEPLOY_NOW,
+	UI_STRING_CODE_FOUND_AT_EXPECTED_ADDRESS,
+	UI_STRING_CONNECT_WALLET_TO_CONTINUE,
+	UI_STRING_DEPLOY,
+	UI_STRING_DEPLOYED,
+	UI_STRING_DEPLOYING,
+	UI_STRING_DEPLOYMENT_IN_PROGRESS,
+	UI_STRING_NOT_DEPLOYED_DEPLOYMENT_SECTION_NOT_DEPLOYED_BADGE_LABEL,
+	UI_STRING_WAITING,
+	UI_TEMPLATE_WAITING_FOR_PREREQUISITE_DETAIL,
+} from '../lib/uiStrings.js'
 
 type StepStatus = {
 	badgeTone: BadgeTone
@@ -16,46 +27,46 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 	if (stepDeployed)
 		return {
 			badgeTone: 'ok',
-			detail: UI_STRINGS.deploymentSection.codeFoundAtExpectedAddressDetail,
-			label: UI_STRINGS.deploymentSection.deployedBadgeLabel,
-			buttonLabel: UI_STRINGS.deploymentSection.deployedBadgeLabel,
+			detail: UI_STRING_CODE_FOUND_AT_EXPECTED_ADDRESS,
+			label: UI_STRING_DEPLOYED,
+			buttonLabel: UI_STRING_DEPLOYED,
 		}
 
 	if (isBusy)
 		return {
 			badgeTone: 'pending',
-			detail: UI_STRINGS.deploymentSection.deployingDetail,
-			label: UI_STRINGS.deploymentSection.deployingBadgeLabel,
-			buttonLabel: UI_STRINGS.deploymentSection.deployingPendingLabel,
+			detail: UI_STRING_DEPLOYMENT_IN_PROGRESS,
+			label: UI_STRING_DEPLOYING,
+			buttonLabel: UI_STRING_DEPLOYING,
 		}
 
 	if (prerequisiteLabel === undefined) {
 		if (accountAddress === undefined)
 			return {
 				badgeTone: 'pending',
-				detail: UI_STRINGS.deploymentSection.connectWalletToContinueDetail,
-				label: UI_STRINGS.deploymentSection.notDeployedBadgeLabel,
-				buttonLabel: UI_STRINGS.deploymentSection.deployButtonLabel,
+				detail: UI_STRING_CONNECT_WALLET_TO_CONTINUE,
+				label: UI_STRING_NOT_DEPLOYED_DEPLOYMENT_SECTION_NOT_DEPLOYED_BADGE_LABEL,
+				buttonLabel: UI_STRING_DEPLOY,
 			}
 		if (!isMainnet)
 			return {
 				badgeTone: 'pending',
-				label: UI_STRINGS.deploymentSection.notDeployedBadgeLabel,
-				buttonLabel: UI_STRINGS.deploymentSection.deployButtonLabel,
+				label: UI_STRING_NOT_DEPLOYED_DEPLOYMENT_SECTION_NOT_DEPLOYED_BADGE_LABEL,
+				buttonLabel: UI_STRING_DEPLOY,
 			}
 		return {
 			badgeTone: 'pending',
-			detail: UI_STRINGS.deploymentSection.canDeployNowDetail,
-			label: UI_STRINGS.deploymentSection.notDeployedBadgeLabel,
-			buttonLabel: UI_STRINGS.deploymentSection.deployButtonLabel,
+			detail: UI_STRING_CAN_DEPLOY_NOW,
+			label: UI_STRING_NOT_DEPLOYED_DEPLOYMENT_SECTION_NOT_DEPLOYED_BADGE_LABEL,
+			buttonLabel: UI_STRING_DEPLOY,
 		}
 	}
 
 	return {
 		badgeTone: 'blocked',
-		detail: UI_STRINGS.deploymentSection.waitingForPrerequisiteDetail(prerequisiteLabel),
-		label: UI_STRINGS.deploymentSection.waitingBadgeLabel,
-		buttonLabel: UI_STRINGS.deploymentSection.deployButtonLabel,
+		detail: UI_TEMPLATE_WAITING_FOR_PREREQUISITE_DETAIL(prerequisiteLabel),
+		label: UI_STRING_WAITING,
+		buttonLabel: UI_STRING_DEPLOY,
 	}
 }
 
@@ -86,7 +97,7 @@ export function DeploymentSection({ title, steps, allSteps, accountAddress, busy
 								<p className='address'>{step.address}</p>
 								{stepStatus.detail === undefined ? undefined : <p className='detail'>{stepStatus.detail}</p>}
 							</div>
-							<TransactionActionButton idleLabel={stepStatus.buttonLabel} pendingLabel={UI_STRINGS.deploymentSection.deployingPendingLabel} onClick={() => void onDeploy(step.id)} pending={isBusy} availability={availability} />
+							<TransactionActionButton idleLabel={stepStatus.buttonLabel} pendingLabel={UI_STRING_DEPLOYING} onClick={() => void onDeploy(step.id)} pending={isBusy} availability={availability} />
 						</div>
 					)
 				})}

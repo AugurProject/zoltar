@@ -332,7 +332,7 @@ export function lintSourceText(filePath: string, sourceText: string, changedLine
 					ts.forEachChild(node, visit)
 					return
 				}
-				failures.push(`${filePath}:${line + 1}:${character + 1} JSX text must come from UI_STRINGS`)
+				failures.push(`${filePath}:${line + 1}:${character + 1} JSX text must come from a named uiStrings export`)
 			}
 		}
 		if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateExpression(node)) && shouldReportLiteral(node)) {

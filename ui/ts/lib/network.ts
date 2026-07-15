@@ -1,6 +1,6 @@
 import type { Address } from '@zoltar/shared/ethereum'
 import { getActiveNetworkProfile } from './activeEnvironment.js'
-import { UI_STRINGS } from './uiStrings.js'
+import { UI_STRING_SWITCH_TO_ETHEREUM_MAINNET } from './uiStrings.js'
 
 export function isSupportedAppChain(chainId: string | undefined) {
 	const profile = getActiveNetworkProfile()
@@ -19,5 +19,5 @@ export function getWalletScopedAccountAddress(accountAddress: Address | undefine
 export function getWrongNetworkMessage() {
 	const profile = getActiveNetworkProfile()
 	if (profile.id === 'simulation') return undefined
-	return UI_STRINGS.userCopy.wallet.switchToMainnetDetail
+	return UI_STRING_SWITCH_TO_ETHEREUM_MAINNET
 }
