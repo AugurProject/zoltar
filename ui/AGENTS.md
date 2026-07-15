@@ -1,198 +1,108 @@
-# UI AGENTS
+# UI Instructions
 
-> See `../AGENTS.md` for repo-wide engineering, testing, formatting, and generated-file rules. Those instructions take precedence. This file adds UI-specific design and composition rules for anything under `ui/`.
+Root `../AGENTS.md` applies first. This file adds design, accessibility, interaction, and browser-QA requirements for changes under `ui/`.
 
-## Scope
+## Design intent
 
-This file governs visual design and UI composition inside `ui/`. It is intentionally stricter than a normal style guide. Follow it when editing layout, styling, copy structure, interaction states, or component composition.
+The UI is a restrained operations interface: dark technical palette, balanced density, serious utility-first tone, strong scanability, low decorative chrome, and one coherent system across routes.
 
-Do not treat this as optional guidance. If a UI change conflicts with this file, revise the UI change unless the user explicitly asks for an exception.
+- Prefer hierarchy, alignment, rhythm, and semantic structure over visual effects.
+- Keep routes structurally consistent without forcing every workflow into an identical layout.
+- Do not introduce a page-specific visual language unless the user explicitly requests it.
+- Treat route composition and state transitions as first-order UI behavior, not cosmetic cleanup.
 
-## Design Intent
+## Route and surface structure
 
-The UI is a restrained operations interface with these qualities:
-
-- dark technical palette
-- balanced density
-- serious utility-first tone
-- strong scanability
-- fewer decorative containers
-- one coherent visual system across all routes
-
-The design system is structurally consistent as well as visually consistent:
-
-- Routes share the same scaffolding.
-- Surface hierarchy is consistent from screen to screen.
-- Containers are used for semantic structure, not for decoration.
-- Repeated nested-card patterns are avoided unless they map to a real record hierarchy.
-
-## Non-Negotiable Principles
-
-- Prefer restraint over decoration.
-- Prefer hierarchy over visual effects.
-- Prefer alignment and rhythm over extra chrome.
-- Preserve scanability for dense operational content.
-- Use one consistent section grammar across routes.
-- Keep the UI serious and utility-first. Do not introduce playful or novelty styling.
-- Do not introduce a new visual language for a single page unless the user explicitly asks for it.
-- Judge UI changes at the route-composition level, not just per component.
-
-## Route-Level Structure
-
-Every top-level route should follow this order:
+A normal top-level route should present:
 
 1. Route intro or header
-2. Context summary or status strip
-3. View tabs if applicable
+2. Context summary or status
+3. View tabs when needed
 4. Main work sections
 
-Rules:
+Full-screen flows, callbacks, redirects, dialogs, and exceptional states may use another structure when their semantics require it. Preserve the shared shell, explain the exception in the implementation, and keep primary context visible.
 
-- Do not start a route with unexplained subtabs.
-- Do not let one route feel like a separate product from the others.
-- Do not copy `Deploy` literally. Preserve its restraint, scanability, and low-chrome feel.
-- Use route-level headings to explain what the screen manages before showing detailed controls.
-- Keep 404 and other exceptional states inside the same overall route grammar, even if they get a stronger hero treatment.
+Use three primary surface roles:
 
-## Surface Hierarchy
+- `page surface`: route frame or page background
+- `section surface`: default workflow or content wrapper
+- `record surface`: a concrete entity such as a pool, report, question, vault, or result
 
-Use only these visual layers:
+Prefer spacing and dividers for simple grouping. Avoid decorative nesting and normally keep container depth to two levels inside a route section. Dialogs, popovers, tables, and semantically nested records may exceed that limit when the additional layer communicates real structure.
 
-- `page surface`: the route frame or page-level background treatment
-- `section surface`: the default wrapper for content blocks and workflows
-- `record surface`: concrete entities such as pools, reports, questions, vaults, or result records
+## Components and reuse
 
-Rules:
+Inspect `ui/ts/components` and the touched route before introducing a primitive or pattern.
 
-- Section surfaces are the default content wrapper.
-- Record surfaces are for actual entities, not for every block of copy or every set of controls.
-- Do not stack multiple decorative surfaces without a clear semantic reason.
-- Cap visual nesting depth at two container levels inside a route section.
-- If a layout only needs grouping, use spacing and dividers before adding another surface.
+- Reuse a component when its semantic role, behavior, and accessibility match the need.
+- Adapt composition around the closest shared pattern when that preserves its meaning.
+- Add or generalize a shared primitive when reuse would distort semantics or create brittle exceptions.
+- Do not copy an existing one-off inconsistency into another route.
+- `EntityCard` is for entity records and concrete result summaries, not generic page layout.
+- `WorkflowSubsection` structures content inside a larger workflow and should not create a competing chrome system.
+- Metric grids, headers, section blocks, fields, badges, and tabs should converge on shared patterns.
 
-## Component Role Rules
+Keep cleanup bounded to the edited component, route, and directly shared primitive. Do not refactor unrelated routes solely to make a narrow change conform.
 
-Use available primitives according to role, not convenience.
+## Layout, type, and color
 
-- Reuse before create. Inspect `ui/ts/components` and the touched route before adding a wrapper, surface, field, card, tab, or selector pattern.
-- If an exact shared primitive does not exist, choose the closest existing primitive and adapt composition around it before inventing a new component.
-- If a touched area currently uses a unique local pattern, prefer switching it to a shared component even when that introduces a small visual change toward cross-route consistency.
-- Do not preserve a one-off local pattern just because it already exists. Existing inconsistency is not a design constraint.
-- `EntityCard` is for entity records and concrete result summaries.
-- Do not use `EntityCard` as the default page-layout box.
-- `WorkflowSubsection` should structure content inside a larger section.
-- Do not let `WorkflowSubsection` create a competing visual system with its own heavier chrome.
-- Metric grids should converge toward one shared pattern instead of multiplying route-specific variants.
-- Route headers, section blocks, and shared data grids define the preferred component architecture.
+- Maintain high information throughput with clear spacing, headings, alignment, and dividers.
+- Keep related data near the actions it unlocks and action placement stable across state changes.
+- Avoid oversized empty panels and cramped control clusters.
+- Use serif display type only for route or hero headings, mono for labels/addresses/hashes/numbers, and sans-serif for body copy and controls.
+- Use semantic variables from `ui/css/index.css`; add a semantic token for a genuinely new role instead of a raw one-off color.
+- Reserve stronger accent treatment for active, focused, or meaningful status states.
+- Keep gradients, glow, shine, and overlays subtle and mostly page-level.
 
-Implementation rule:
+## Interaction and transaction states
 
-- Check `ui/ts/components` and the touched route composition before adding a new UI primitive.
-- If a dedicated shared primitive does not exist, emulate the same role with the closest existing component and CSS pattern.
-- Before adding a new wrapper or class pattern, check whether an existing surface, badge, metric, or tab pattern already expresses that role.
-- New component structure should reinforce this surface model instead of creating a parallel one.
+- Active tabs and selected views must be immediately distinguishable.
+- Keep disabled controls legible and explain why the primary expected action is unavailable.
+- Disable a transaction action when known local state proves it will fail, using direct reasons such as `Insufficient balance`, `Switch to Ethereum mainnet`, or `Approval required`.
+- Revalidate transaction prerequisites immediately before submission when wallet, network, allowance, balance, or contract state may have changed.
+- Keep pending feedback inside the initiating button, keep the button disabled, and prevent duplicate submission until the action resolves.
+- Loading states must not cause avoidable layout jumps.
+- Use consistent empty, loading, success, warning, and error grammar.
+- Keep important state visible without hover and preserve action placement while content changes state.
 
-## Layout and Density Rules
+## Accessibility
 
-Target balanced density.
+- Use native semantic elements before ARIA and give every control an accessible name.
+- Support keyboard operation with a logical focus order and clearly visible focus state.
+- Tabs, dialogs, menus, and disclosure controls must expose the correct semantic state and keyboard behavior.
+- Associate validation and transaction errors with the relevant control; announce important pending, success, and failure updates through an appropriate live region.
+- Do not communicate status, selection, or errors through color alone.
+- Preserve readable contrast for text, controls, disabled states, focus indicators, and status surfaces.
+- Respect reduced-motion preferences and avoid motion that is required to understand state.
+- Keep touch targets usable on narrow screens and do not hide required actions behind hover-only interaction.
 
-- Keep enough breathing room between major sections to make scan paths obvious.
-- Do not create oversized empty panels with minimal content.
-- Do not create cramped inline control clusters without clear grouping.
-- Maintain high information throughput, but clarify grouping with spacing, headings, and dividers.
-- Align actions consistently within a section.
-- Keep related summary data visually near the actions it unlocks.
-- Use vertical rhythm to separate tasks before introducing extra borders or shadows.
+## Copy
 
-## Typography Rules
+- Use concise operational language led by the managed object or action.
+- Use one term for one concept across routes.
+- Prefer direct verbs for actions and direct nouns for labels.
+- Avoid novelty copy when standard operational wording is clearer.
+- Do not use copy to compensate for weak hierarchy or unclear state.
 
-- Use serif display type only for route-level or hero-level headings.
-- Use mono for labels, badges, addresses, hashes, and numeric values.
-- Use sans-serif for body copy and controls.
-- Do not mix type treatments arbitrarily inside one section.
-- Keep headings short and structurally meaningful.
-- Reuse the same heading level and tone for the same kind of content across routes.
+## Responsive behavior
 
-## Color and Token Rules
+- Preserve semantic section order between desktop and mobile.
+- Keep tabs and primary actions usable on narrow screens.
+- Prevent addresses, hashes, and numeric values from overflowing.
+- Wrap dense data gracefully; use horizontal scrolling only when preserving column relationships requires it.
+- Collapse columns without separating actions from their context.
 
-- Use semantic CSS variables from `ui/css/index.css`.
-- Do not introduce raw one-off colors when an existing token can represent the role.
-- If a new visual role is genuinely needed, add or rename a semantic token instead of hardcoding a new color inline.
-- Reserve stronger accent treatment for active state, focus state, or meaningful status.
-- Keep glow, gradients, and overlays subtle and mostly page-level.
-- Do not repeat decorative gradients or shine effects on every container.
-- Solve hierarchy with spacing, borders, type, and alignment before adding more color.
+## Validation checklist
 
-## Interaction and State Rules
+For relevant UI changes, verify:
 
-- Active tabs and selected views must be obvious at a glance.
-- Disabled states must remain legible while clearly unavailable.
-- If the UI can already determine that clicking a transaction action would send a failing transaction, disable the action instead of letting the user attempt it.
-- If a disabled transaction action is the main action the user is expected to take next, show the reason clearly. Use direct operational language such as `Insufficient balance`, `Switch to Ethereum mainnet`, or `Approval required`.
-- Loading states should not create layout jumps.
-- Success, warning, and error states should use consistent semantic patterns.
-- Empty states should use one grammar: status, explanation, and next action.
-- Status UI should communicate meaning, not just add visual noise.
-- Keep action placement stable when a section changes between empty, loading, and loaded states.
-- Do not hide important state behind hover-only styling.
-- When a user clicks a button to send a transaction, keep the loading spinner inside that button while the transaction is pending.
-- While a transaction button is showing its loading state, keep that button disabled until the pending action resolves.
+- route hierarchy and surface roles
+- component reuse without semantic distortion
+- keyboard operation, focus, accessible names, and non-color status cues
+- empty, loading, disabled, pending, success, and error states
+- transaction prerequisite and duplicate-submission guards
+- desktop and narrow/mobile layouts
+- long values and dense data
+- no edits to generated `ui/js/**`
 
-## Content and Copy Structure
-
-- Use concise operational language.
-- Lead with the object or action being managed.
-- Keep labels predictable and reusable across routes.
-- Use the same term for the same concept everywhere.
-- Avoid page-specific novelty copy when standard operational copy works.
-- Prefer direct verbs for actions and direct nouns for data labels.
-- Do not let copy structure compensate for weak layout structure.
-
-## Responsive Rules
-
-- Desktop and mobile must preserve the same section order.
-- Tabs must remain usable on narrow screens.
-- Long addresses, hashes, and numeric values must not overflow their containers.
-- Dense data should wrap gracefully instead of forcing unnecessary horizontal scrolling.
-- Collapse multi-column layouts to single-column layouts without changing the meaning or order of sections.
-- Preserve clear action placement on mobile. Do not let primary actions drift far from their context.
-
-## Anti-Patterns
-
-Do not:
-
-- introduce a new one-off panel style for a single route
-- add extra nested cards just to create separation
-- use `EntityCard` as the default wrapper for every block
-- start routes with unexplained subtabs
-- create a new metric-grid variant when an existing pattern can be reused
-- add more decorative gradients, shine overlays, or chrome to solve hierarchy problems
-- make non-Deploy routes visually louder than Deploy
-- leave a transaction-sending action enabled when known local state already proves it will fail
-- move transaction-loading feedback away from the button that initiated the action
-- edit generated `ui/js/**` files
-- copy a one-off or inconsistent pattern into a new screen without a clear design reason
-
-## Application Rules
-
-- UI work must make the touched area conform to the design contract in this file.
-- When two existing patterns conflict, choose the one that best matches the rules in this file.
-- Remove unnecessary nesting before adding new styling.
-- Treat route-composition issues as first-order UI issues, not as cosmetic cleanup.
-- Reuse established roles and patterns before inventing a new one.
-
-## Review Checklist
-
-Before finalizing a UI change, check:
-
-- Does this route follow the shared route rhythm?
-- Did I use the right surface level for each block?
-- Did I avoid unnecessary nesting?
-- Are tabs and active states obvious?
-- Are empty, loading, success, warning, and error states consistent?
-- Are transaction actions disabled when known prerequisites fail?
-- If the primary transaction action is disabled, is the reason visible and specific?
-- Does a pending transaction show its spinner inside the button that initiated it?
-- Does the change conform to the target system defined in this file?
-- Did I reuse existing patterns before inventing new ones?
-- Did I avoid touching generated `ui/js/**` output?
+Use the browser-local simulation harness described in root `AGENTS.md`. Record the tested scenario, viewport classes, and states in the final response. If browser QA is skipped, give a concrete reason the changed files cannot affect rendered or interactive behavior.
