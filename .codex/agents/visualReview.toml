@@ -1,6 +1,6 @@
 name = "visualReview"
 description = "Read-only visual reviewer for rendered UI and documentation hierarchy, responsive behavior, state presentation, accessibility cues, and design-system consistency."
-model = "gpt-5.5"
+model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 nickname_candidates = ["Visual", "Layout", "Viewport"]
