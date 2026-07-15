@@ -1,299 +1,212 @@
-# Startup Prerequisites
+# Repository Instructions
 
-Before starting work, check whether root dependencies are installed:
+## Scope and startup
+
+These instructions apply repository-wide. Nested `AGENTS.md` files add or override guidance for their subtree.
+
+Do not install dependencies for read-only inspection, planning, or prose review. Before running Bun-based commands or changing executable files, check root dependencies:
 
 ```bash
 test -d node_modules
 ```
 
-If `node_modules` is missing, install dependencies before proceeding:
+If missing, install exactly from the lockfile:
 
 ```bash
 bun install --frozen-lockfile
 ```
 
-# Quality Assurance Guidelines
+On a fresh checkout, use `bun install --frozen-lockfile && bun run setup` for a complete environment. For UI-only executable work, `bun install --frozen-lockfile && bun run ui:build` is sufficient.
 
-After completing the requested changes, choose validation based on the files and behavior touched by the task. Run each selected command separately, in the order below, and address issues before moving to the next selected check.
+## Working boundaries
 
-When a check is skipped, record the reason in the final response. A skip is appropriate only when the changed files cannot affect what that check validates.
+- Preserve unrelated staged, unstaged, and untracked user changes. Do not rewrite or remove them to simplify the task.
+- Treat TypeScript as source. Never inspect or edit a generated `js/` file when a corresponding TypeScript source exists.
+- Never edit `ui/js/**` or `shared/js/**` directly.
+- Do not modify imported compatibility contracts:
+  - `solidity/contracts/peripherals/openOracle/OpenOracle.sol`
+  - `solidity/contracts/peripherals/WETH9.sol`
+  - `solidity/contracts/peripherals/Multicall3.sol`
+- The protocol is not live. Do not preserve legacy ABIs, accessors, events, names, or compatibility shims solely for prior development deployments. Keep compatibility only for a current consumer, test, deployment script, or documented launch requirement.
+- Pin every `package.json` dependency to an exact version without `^` or `~`.
 
-## Validation Selection
+## Task change set
 
-Use the staged and unstaged diff, including untracked files intended for the PR, to decide which checks apply.
+Use the whole task change set when choosing validation and preparing review:
 
-1. **TypeScript type checking**
-   - Run TypeScript when any TypeScript source file changed (`.ts`, `.tsx`, `.mts`, or `.cts`), when TypeScript configuration changed, when package dependencies or scripts changed, when Solidity contracts or generated contract outputs changed, or when a change can affect generated TypeScript imports.
-   - If none of the TypeScript run conditions above apply, do not run TypeScript solely for docs, `AGENTS.md`, `.codex/agents`, Markdown, or comment-only changes. State why it was skipped.
-   - Default command:
-   ```bash
-   bun run tsc
-   ```
-   - **UI app-only exception**: If the change only affects UI application sources covered by `ui/tsconfig.json` (`ui/ts/**/*.ts` or `ui/ts/**/*.tsx`, excluding `ui/ts/tests`) and does not touch `solidity/`, `ui/build/**/*.mts`, `ui/dev-server.ts`, generated contract artifacts, or anything that depends on refreshed contract output, run:
-      ```bash
-      cd ui && bun x tsc --project tsconfig.json
-      ```
-      (Root `bun run tsc` is typecheck-only. UI JS emission for the live-reload watcher comes from `ui/tsconfig.json`.)
-   - **UI scripts/tests exception**: If the change touches `ui/ts/tests`, `ui/build/**/*.mts`, `ui/dev-server.ts`, `ui/tsconfig.json`, package scripts, or mixed UI and non-UI TypeScript, run the full `bun run tsc`.
-   - **Contract exception**: If contracts or generated contract outputs changed, run the full `bun run tsc`.
+- committed branch changes since the merge base with `origin/main`
+- staged changes
+- unstaged changes
+- task-related untracked files
 
-2. **Tests**
-   - Run tests when behavior changed, when a bug was fixed, when tests or test helpers changed, when contracts changed, when package dependencies changed, or when tooling/config changes can affect runtime behavior.
-   - For narrow changes, prefer the smallest meaningful targeted test command first. Run the full suite when changes touch contracts, shared behavior, cross-module contracts, package/dependency wiring, or broad app behavior.
-   - For docs-only, instruction-only, formatting-only, `.codex/agents`-only, or other non-executable changes, do not run tests unless the change affects a test runner, generated output, or executable tooling. State why tests were skipped.
-   - When the task is itself about tests, test fixtures, or test cleanup, do not require additional tests for the tests. Instead verify that the changed tests are meaningful and run the relevant test command.
-   - Full test command when TypeScript was not selected in the same validation cycle:
-     ```bash
-     bun run test
-     ```
-   - When `bun run tsc` has already passed in the same validation cycle, run the test runner directly so TypeScript is not checked twice:
-     ```bash
-     bun run ensure-contract-artifacts && bun run check:shared-dependencies && bun run test:run -- --bail=1
-     ```
-   - If tests require Anvil and the `anvil` executable is missing, install it with:
-     ```bash
-     bun run install:anvil
-     ```
+`scripts/changed-files.mts` is the canonical implementation for this calculation. Keep a separate note of pre-existing or unrelated worktree changes so validation and reviewers do not attribute them to the task.
 
-3. **Code formatting**
-   - Run formatting when changed files are covered by the formatter, including package files, Markdown in the configured paths, TypeScript, CSS, scripts, docs, UI files, or Solidity.
-   - If only files outside the formatter scope changed, do not run the full formatter solely for those files. Use a file-appropriate validation instead, such as a TOML parse for `.codex/agents/*.toml`, and run `git diff --check`.
-   - Default command:
-   ```bash
-   bun run format
-   ```
+## Validation
 
-4. **Biome check and lint scripts**
-   - Run `bun run check` when changed files are in the configured Biome or custom-lint scope, including `AGENTS.md`, docs, scripts, TypeScript, CSS, package files, UI files, or Solidity formatting.
-   - If only files outside that scope changed, skip `bun run check` and run a file-appropriate validation instead. Always run `git diff --check` before finalizing.
-   - Default command:
-   ```bash
-   bun run check
-   ```
+After implementation, select checks from the behavior and complete task change set. Run selected commands separately in the order below and fix failures before continuing. Always run `git diff --check` last. In the final response, list selected checks and concrete scope-based reasons for every skipped category.
 
-5. **Dead code analysis**
-   - Run knip when code imports/exports, test files, package scripts, package dependencies, config, TypeScript sources, or build entry points changed.
-   - Skip knip for docs-only, `AGENTS.md`-only, `.codex/agents`-only, formatting-only, or other changes that cannot affect the unused-code graph. State why it was skipped.
-   - Default command:
-   ```bash
-   bun run knip
-   ```
+### 1. TypeScript
 
-6. **Generated artifact freshness**
-   - Use `bun run check:generated-clean` only when validating artifact freshness for CI/release work or when generation scripts, contracts, shared build output, UI contract artifacts, or artifact policy changed.
-   - Do not regenerate or commit generated outputs unless the task explicitly requires it or a required check fails because an expected generated artifact is missing.
+Run `bun run tsc` when any of these change:
 
-## Autofix
+- `.ts`, `.tsx`, `.mts`, or `.cts` sources outside the UI app-only exception
+- TypeScript configuration
+- package dependencies or scripts
+- Solidity contracts or generated contract outputs
+- anything that can change generated TypeScript imports
 
-You can automatically fix many issues with:
+UI app-only exception: when changes are limited to `ui/ts/**/*.ts` or `ui/ts/**/*.tsx`, excluding `ui/ts/tests`, and do not touch contracts, `ui/build`, `ui/dev-server.ts`, generated artifacts, or consumers of refreshed contract output, run:
 
-- **Knip autofix** (removes unused exports and files):
-  ```bash
-  bun run knip:fix
-  ```
-  Review changes carefully.
+```bash
+cd ui && bun x tsc --project tsconfig.json
+```
 
-Repeat the relevant part of the validation cycle after each fix. If a fix expands the touched area, expand the validation scope accordingly.
+Use full `bun run tsc` for UI tests, UI build scripts, `ui/dev-server.ts`, `ui/tsconfig.json`, package scripts, mixed UI/non-UI TypeScript, contracts, or generated contract output.
 
-**Final requirement**: Every selected check must pass with zero errors. Skipped checks must have a concrete scope-based reason.
+Skip TypeScript for prose-only, instruction-only, `.codex/agents`-only, formatting-only, or comment-only changes that cannot affect generated imports or executable behavior.
 
-## Final Review Gate
+### 2. Tests
 
-For file-changing tasks that are being prepared for a PR, after the selected checks above pass, fetch `origin/main` and check whether the branch is behind:
+Run tests for behavior changes, bug fixes, tests or helpers, contracts, dependency wiring, and executable tooling or configuration.
+
+- Start with the smallest meaningful targeted test for a narrow change.
+- Run the full suite for contracts, shared behavior, cross-module interfaces, package/dependency wiring, or broad behavior.
+- If TypeScript has not already run, use `bun run test`; this command includes TypeScript transitively.
+- If `bun run tsc` already passed in the same cycle, avoid repeating it:
+
+```bash
+bun run ensure-contract-artifacts && bun run check:shared-dependencies && bun run test:run -- --bail=1
+```
+
+If selected tests require Anvil and `anvil` is missing, run `bun run install:anvil`.
+
+When the task changes tests themselves, running the relevant tests is sufficient; do not require a second layer of tests for those tests. Skip tests for non-executable documentation, instructions, formatting, and agent-prompt changes.
+
+### 3. Formatting
+
+Use the non-mutating check first:
+
+```bash
+bun run format:check
+```
+
+If it fails for intended task files, run `bun run format`, review every resulting change, and rerun the check. Do not retain formatter changes to unrelated user files.
+
+Skip the repository formatter when every changed file is outside its configured scope. For `.codex/agents/*.toml`, use `bun run check:agents` instead.
+
+### 4. Lint and repository checks
+
+- Use `bun run check:changed` for ordinary scoped changes covered by Biome, UI string linting, or agent configuration validation.
+- Use full `bun run check` for package scripts, lint/check scripts, docs tooling, Solidity, broad cross-project changes, or CI-parity validation. This broad command also runs documentation and generation-dependent checks.
+- For files outside those scopes, run a file-appropriate check.
+
+### 5. Dead code
+
+Run `bun run knip` when imports, exports, tests, package scripts or dependencies, configuration, TypeScript, or build entry points change. Skip it for prose-only, instruction-only, `.codex/agents`-only, or formatting-only changes that cannot affect the unused-code graph.
+
+### 6. Generated artifacts
+
+Run `bun run check:generated-clean` only for CI/release freshness work or when contracts, generation scripts, shared build output, UI contract artifacts, or artifact policy change.
+
+Generated outputs are intentionally untracked:
+
+| Output | Source or command |
+| --- | --- |
+| `shared/js/**` | `bun run shared:build` |
+| `solidity/artifacts/Contracts.json` | `bun run compile-contracts` |
+| `solidity/ts/types/contractArtifact.ts` | `bun run compile-contracts` |
+| `ui/ts/contractArtifact.ts` | `bun run generate` or `bun run ui:build` |
+| `ui/js/**` | UI TypeScript build |
+| `ui/vendor/**` | `bun run ui:vendor` |
+
+Do not regenerate or commit these outputs unless the task requires them or a required check reports a missing expected artifact. If a deployment workflow ever needs tracked generated artifacts, update this policy and add a dirty-diff freshness check in the same change.
+
+### 7. UI manual QA
+
+For visual, responsive, routing, form, or transaction-state behavior, perform browser QA in addition to automated checks. Use `bun run ui:serve` and `http://localhost:12345/?simulate=1` for walletless testing.
+
+Choose the smallest relevant scenario:
+
+- `simScenario=baseline`
+- `simScenario=deployed`
+- `simScenario=security-pool`
+- `simScenario=securitypoolx2`
+
+Check the changed flow at desktop and narrow/mobile widths, including relevant empty, loading, disabled, pending, success, and failure states. Uniswap-backed REP pricing is intentionally unavailable in simulation; quote-dependent UI must degrade gracefully.
+
+## Bug-fix process
+
+For a deterministic executable bug:
+
+1. Add or identify a focused regression test that reproduces the defect.
+2. Run it and confirm the expected failure before changing the implementation.
+3. Fix the root cause at the narrowest shared layer.
+4. Rerun the focused test and relevant surrounding suite.
+5. Run the full suite when contracts, shared behavior, or cross-module interfaces changed.
+
+If a failing automated reproduction is impractical, document why and provide the strongest deterministic validation available. Solidity bugs require the failing-test-first process and the full test suite.
+
+## Code style
+
+Automated formatters and linters enforce only part of this policy. Review the remaining judgment-based rules explicitly.
+
+- Use single quotes unless escaping requires double quotes.
+- Omit statement-ending semicolons.
+- Keep at most one consecutive empty line.
+- Avoid non-null assertions; validate unexpected `undefined` and throw an understandable error.
+- Do not use TypeScript directive comments such as `@ts-expect-error`, `@ts-ignore`, or `@ts-nocheck`.
+- Avoid casts, especially double casts. Prefer inferred types, generic constraints, narrower APIs, or runtime validation.
+- Prefer `undefined` for absence. Use `null` only when an external API or schema requires it.
+- Prefer functions, plain data, pure transformations, and composition over classes.
+- Do not use Solidity custom errors. Use understandable revert strings.
+
+## Documentation
+
+- Do not create standalone tests that only assert prose, tables, anchors, generated examples, or document structure.
+- Validate documentation with direct scripts such as `bun run docs:check-html`, formatting/linting, or a targeted executable check.
+- Runtime tests are appropriate for JavaScript embedded in documentation when that JavaScript has behavior.
+
+## Branch-current gate
+
+For a file-changing task explicitly being prepared for a PR, after validation run:
 
 ```bash
 git fetch origin main:refs/remotes/origin/main
 git rev-list --count HEAD..origin/main
 ```
 
-If the count is `0`, record that the branch is current and do not merge or rerun checks solely for this gate. If the count is nonzero, merge the latest `main` into the branch and resolve any conflicts if they exist. Rerun the selected checks after merging `main`, and again after any conflict resolution or follow-up edits. If the merge changes the touched area, update the validation scope before rerunning checks. Skip this step for read-only analysis, exploratory answers, or when the user explicitly asks not to merge; state the reason in the final response.
+If the count is `0`, record that the branch is current. If it is nonzero, merge `origin/main` only when the user explicitly requested branch synchronization or a PR-ready result; otherwise report the behind count and ask before merging. After a merge or conflict resolution, recalculate scope and rerun all applicable checks.
 
-As the final quality gate for any task that changes code, tests, configuration, or repo instructions, the main agent must spawn the project-scoped `reviewer` custom agent defined in `.codex/agents/reviewer.toml` and wait for it to complete before responding to the user. Start the reviewer from a clear task summary instead of relying on inherited conversation context.
+Skip this gate for read-only analysis, exploration, or when the user asks not to fetch or merge.
 
-The main agent must give the reviewer a structured request summary that includes:
+## Review gates
 
-- a brief verbatim excerpt or exact summary of the original user request
-- acceptance criteria derived from the request
-- intentional non-goals or exclusions
-- implementation summary
-- changed files or areas
-- validation commands and results, including concrete scope-based reasons for skipped checks
-- known risks, tradeoffs, or areas needing close attention
+`.codex/review-contract.md` is the canonical review handoff, severity, output, scoring, and closure policy.
 
-Send the reviewer a prompt with this shape:
+### Final reviewer
 
-```text
-Use the project-scoped reviewer instructions from .codex/agents/reviewer.toml.
+For every task that changes code, tests, configuration, agent definitions, or repository instructions, the main agent must spawn the project-scoped reviewer from `.codex/agents/reviewer.toml` after validation and any branch synchronization. Supply every handoff field required by the review contract, including the exact baseline and task paths. The reviewer must not modify files.
 
-Original user request:
-<brief verbatim excerpt or exact task summary>
+Disposition every finding using the contract. After material fixes, rerun affected checks and repeat the reviewer. Completion requires no valid High or Medium findings and an explicit disposition for every Low finding.
 
-Acceptance criteria:
-- <requirement 1>
-- <requirement 2>
+### Documentation reviewer
 
-Intentional non-goals / exclusions:
-- <anything intentionally not implemented>
+When documentation under `docs/` changes, run the project-scoped reviewer from `.codex/agents/textReview.toml` before the final reviewer. In addition to the standard handoff, list:
 
-Implementation summary:
-- <what changed and why>
+- changed documentation files
+- Solidity contracts described, or `none`
+- linked docs, tooltips, diagrams, examples, and shared references in the reading path
 
-Changed files / areas:
-- <file or area list>
+Ask it to assess story, flow, concept order, contract accuracy, MathML, notation, examples, and reader preparation. Disposition findings under the shared contract. Repeat the text review after material documentation fixes, then proceed to the final reviewer.
 
-Validation:
-- <command>: <passed/failed/skipped>
-- <skip reason, if skipped>
+### Final response
 
-Known risks or areas needing close attention:
-- <risk, tradeoff, or "none known">
+Lead with the delivered result. Report:
 
-Review the current worktree diff against origin/main, including committed branch changes, staged changes, unstaged changes, and untracked files intended for the task. Review the stated acceptance criteria and whether the changed code is named clearly, readable, and easy to understand.
-Do not modify files.
-Return findings grouped by High, Medium, and Low.
+- selected validation commands and results
+- scope-based skip reasons
+- final review score and material reviewer feedback
+- findings fixed or explicitly deferred under the contract
+- branch-current status when the branch gate applied
 
-Also include:
-- Validation assessment
-- Review limitations, or "None" if there are no limitations
-- Worktree-diff quality score from 0 to 100 using the reviewer rubric
-```
-
-After the reviewer finishes, the main agent must read the full review and decide how to handle every finding:
-
-- Fix all valid High, Medium, and Low issues before completing the task.
-- If a finding is a non-issue, improve the code, tests, names, or local explanation so a future reviewer can understand why the concern does not apply without needing this conversation.
-- If no High, Medium, or Low issues are found, the task may be marked complete.
-- If any High, Medium, or Low issues are fixed, rerun the required checks and repeat the reviewer gate until no valid findings remain.
-
-In the final response to the user, summarize the reviewer feedback received, report the score from each review pass, state which findings were addressed, note any findings considered non-issues and what readability or self-documenting improvements were made, and list the checks run after the final changes.
-
-## Documentation Text Review Gate
-
-When documentation under `docs/` is modified, the main agent must also spawn the project-scoped `textReview` custom agent defined in `.codex/agents/textReview.toml` and wait for it to complete before responding to the user. Start the text reviewer from a clear task summary instead of relying on inherited conversation context.
-
-The main agent must ask the text reviewer to review the changed docs for story, text flow, order of concepts, contract accuracy, MathML equation structure, notation clarity, interactive examples after complicated math, and whether concepts are introduced well for a reader who is familiar with Ethereum, cryptography, game theory, cryptocurrencies, Uniswap, the oracle problem, and mathematical notation. The request should list the changed documentation files, the Solidity contracts they describe, and any linked files or tooltips that affect the same reading path.
-
-Send the text reviewer a prompt with this shape:
-
-```text
-Use the project-scoped textReview instructions from .codex/agents/textReview.toml.
-
-Original user request:
-<brief verbatim excerpt or exact task summary>
-
-Acceptance criteria:
-- <requirement 1>
-- <requirement 2>
-
-Intentional non-goals / exclusions:
-- <anything intentionally not implemented>
-
-Implementation summary:
-- <what changed and why>
-
-Changed documentation files:
-- <docs file list>
-
-Solidity contracts described:
-- <contract file list, or "none">
-
-Linked docs, tooltips, diagrams, or shared references:
-- <related file or section list>
-
-Validation:
-- <command>: <passed/failed/skipped>
-- <skip reason, if skipped>
-
-Known risks or areas needing close attention:
-- <risk, tradeoff, or "none known">
-
-Review the current worktree diff against origin/main, including committed branch changes, staged changes, unstaged changes, and untracked files intended for the task. Review the changed docs for story, text flow, order of concepts, contract accuracy, MathML equation structure, notation clarity, interactive examples after complicated math, and whether concepts are introduced well for the target reader.
-Do not modify files.
-Return findings grouped by High, Medium, and Low.
-
-Also include:
-- Story arc
-- What works well
-- Contract sync assessment
-- Validation assessment
-- Review limitations, or "None" if there are no limitations
-- Review score from 0 to 100 using the textReview rubric
-```
-
-After the text reviewer finishes, the main agent must read the full review and decide how to handle every finding:
-
-- Fix all valid High, Medium, and Low documentation issues before completing the task.
-- If a finding is a non-issue, improve the text, captions, names, or local explanation so a future reader can understand why the concern does not apply without needing this conversation.
-- If no High, Medium, or Low issues are found, the documentation task may proceed to the final reviewer gate.
-- If any High, Medium, or Low issues are fixed, rerun the required documentation checks and repeat the `textReview` gate until no valid findings remain.
-
-In the final response to the user for docs-changing tasks, summarize the text-review feedback received, report the 0-100 review score from each text-review pass, state which findings were addressed, note any findings considered non-issues and what readability or contract-sync improvements were made, and list the checks run after the final changes.
-
-# Package Guidelines
-
-- **Version pinning**: All dependency versions in `package.json` must be exact (no `^` or `~`). This ensures reproducible builds.
-
-# Generated Artifact Policy
-
-- Generated build outputs and protocol artifacts are intentionally untracked. Keep `/ui/js`, `/shared/js`, `/ui/vendor`, `/solidity/artifacts`, `/ui/ts/contractArtifact.ts`, and `/solidity/ts/types/contractArtifact.ts` out of source review.
-- If a deployment workflow ever requires committing generated artifacts, update this policy in the same PR and add a freshness check that regenerates the artifacts and fails on a dirty tracked diff.
-- The generated artifact freshness rule in Validation Selection is the source of truth for when to run artifact freshness checks.
-
-# Protocol ABI Policy
-
-- The protocol is not live yet. Do not preserve legacy contract ABIs, storage accessors, events, function names, or compatibility shims solely for backwards compatibility with previous development deployments. Prefer clean contract interfaces and redeploy contracts when Solidity changes require ABI changes. Only keep compatibility surface area when a current source consumer, test, deployment script, or documented launch requirement needs it.
-
-# Code Style Guidelines
-
-- **Immutable imported contracts**: Do not modify `solidity/contracts/peripherals/openOracle/OpenOracle.sol`, `solidity/contracts/peripherals/WETH9.sol`, or `solidity/contracts/peripherals/Multicall3.sol`. These contracts are treated as externally sourced/compatibility contracts; address warnings or integration issues in tooling, wrappers, tests, or documented exceptions instead.
-- **Quotes**: Use single quotes (`'`) for strings. Double quotes are not allowed unless escaping is required.
-- **Semicolons**: Do not use semicolons at the end of statements.
-- **Empty lines**: Do not have multiple consecutive empty lines (maximum 1).
-- **Non-null assertions**: Do not use the `!` operator. Instead, perform explicit undefined checks and throw an error if a value is unexpectedly undefined.
-- **TypeScript directive comments**: Do not use TypeScript directive comments such as `// @ts-expect-error`, `// @ts-ignore`, or `// @ts-nocheck`; fix the type problem directly or restructure the code so the types are correct.
-- **Type assertions and casts**: Avoid type assertions and casting, especially double-cast patterns like `as unknown as SomeType`; prefer proper typing, generic constraints, narrower APIs, explicit runtime validation, or inferred types first.
-- **Nullability**: Avoid using `null`; prefer `undefined` for absent values unless an external API or schema explicitly requires `null`.
-- **Classes**: Avoid classes and class-based abstractions; prefer functional programming with plain data, pure functions, and composition.
-- **Solidity revert reasons**: Do not use Solidity custom errors. Use normal revert strings; they may be short, but they must be understandable English.
-
-Biome is configured to enforce these rules automatically. Run `bun run format` to format your code and `bun run check` to validate it.
-
-# Testing Guidelines
-
-## Bug Fix Process
-
-When a bug is found in Solidity code:
-
-1. **Write a failing test**: First, create a test case that reproduces the bug and demonstrates the incorrect behavior. This test should fail before any fix is applied.
-2. **Verify the failure**: Run the test to confirm it fails as expected.
-3. **Implement the fix**: Address the root cause in the Solidity code.
-4. **Make the test pass**: Run the test again to verify the fix resolves the issue.
-5. **Run the full test suite**: Ensure your fix doesn't introduce regressions elsewhere.
-
-This test-driven approach ensures:
-- The bug is properly documented and prevented from recurring
-- The fix is validated automatically
-- Regression testing is built into the process
-
-## Notes
-
-- The UI supports a browser-local simulation harness behind the `?simulate=1` URL flag. Use `bun run ui:serve` and open `http://localhost:12345/?simulate=1` for walletless manual QA.
-- Simulation mode is Tevm-backed, seeds QA accounts with ETH/WETH/REP, leaves the app contracts undeployed so the Deploy flow can be tested, and exposes developer-only controls in the yellow simulation banner.
-- Supported simulation scenarios are `simScenario=baseline`, `simScenario=deployed`, `simScenario=security-pool`, and `simScenario=securitypoolx2`.
-- Uniswap-backed REP pricing is intentionally disabled in simulation mode. Quote-dependent features should degrade gracefully rather than assuming mainnet liquidity exists.
-- This is a TypeScript project. Do not inspect or work from `js/` files anywhere in the repository when there is a corresponding TypeScript source file.
-- The project type-checks TypeScript before testing (`bun run tsc`). Generated JS or shared asset refreshes come from the setup/build scripts, not from `bun run tsc`.
-- The `shared/js/` directory is generated build output from `shared/ts/`. Do not edit it manually. Regenerate it via `bun run shared:build` when a workflow explicitly requires refreshed generated output.
-- Solidity contract artifacts are generated by `bun run compile-contracts`. This writes `solidity/artifacts/Contracts.json` and `solidity/ts/types/contractArtifact.ts`. From `solidity/`, `bun run setup` is sufficient to regenerate those Solidity-side artifacts.
-- UI contract artifacts are generated by `bun run generate` or any script that includes it, such as `bun run ui:build`. This writes `ui/ts/contractArtifact.ts`.
-- If a test or typecheck fails because `solidity/ts/types/contractArtifact.ts`, `solidity/artifacts/Contracts.json`, or `ui/ts/contractArtifact.ts` is missing, run `bun run generate`. If only the Solidity-side artifact files are needed, `bun run compile-contracts` is sufficient.
-- The `ui/js/` tree is generated from `ui/ts/`. In particular, `ui/js/tests/` is generated from `ui/ts/tests/` via `cd ui && bun run build:tests`. Do not manually edit generated `ui/js/**` files, and do not regenerate them unless the user explicitly asks for generated-output updates.
-- On a fresh checkout, use `bun install --frozen-lockfile && bun run setup` for the full local install. For UI-only work, `bun install --frozen-lockfile && bun run ui:build` is sufficient and will also regenerate `shared/js/` and `ui/ts/contractArtifact.ts`.
-- Do not assume `bun run tsc` regenerates contract artifacts unless the script definition has been updated to do so. Root `bun run tsc` remains a pure typecheck. For UI-only changes that need emitted JS for the watcher, use `cd ui && bun x tsc --project tsconfig.json`.
-- Never edit files directly in any `js/` directory. Changes may be overwritten by TypeScript compilation. Always use the corresponding `.ts` or `.tsx` source files.
-
-## Documentation Test Policy
-
-- Documentation should not have standalone test files when the test is only checking prose, tables, anchors, generated examples, or structural documentation rules.
-- Validate documentation with direct check scripts such as `bun run docs:check-html`, linting, formatting, or targeted executable checks instead of wrapping those checks in test files.
-- The only exception is JavaScript that lives inside documentation and has behavior that needs runtime verification. In that case, tests may exist for that embedded JavaScript.
+Mention earlier review passes only when they produced material fixes; do not turn the user handoff into an internal process log.

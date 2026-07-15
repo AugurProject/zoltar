@@ -1,10 +1,10 @@
+import * as securityPoolCopy from '../copy/securityPool.js'
 import type { ComponentChildren } from 'preact'
 import { CollateralizationCircle } from './CollateralizationCircle.js'
 import { AddressValue } from './AddressValue.js'
 import { VaultMetricGrid } from './VaultMetricGrid.js'
 import { getVaultCollateralizationPercent } from '../lib/trading.js'
 import type { ListedSecurityPool, SecurityPoolVaultSummary } from '../types/contracts.js'
-import { UI_STRING_ACTIVE_VAULTS_NEWEST_ACTIVITY_FIRST_ENTER_A_VAULT_ADDRESS_ABOVE_TO_INSPECT, UI_STRING_OF_PREFIX, UI_STRING_SHOWING_PREFIX } from '../lib/uiStrings.js'
 
 type SecurityPoolVaultDirectoryProps = {
 	emptyState: ComponentChildren
@@ -24,13 +24,7 @@ export function SecurityPoolVaultDirectory({ emptyState, pool, renderActions, re
 
 	return (
 		<div className='vault-position-list'>
-			{showingPartialDirectory ? (
-				<p className='detail'>
-					{UI_STRING_SHOWING_PREFIX}
-					{loadedVaultCount.toString()} {UI_STRING_OF_PREFIX}
-					{pool.vaultCount.toString()} {UI_STRING_ACTIVE_VAULTS_NEWEST_ACTIVITY_FIRST_ENTER_A_VAULT_ADDRESS_ABOVE_TO_INSPECT}
-				</p>
-			) : null}
+			{showingPartialDirectory ? <p className='detail'>{securityPoolCopy.formatVaultDirectorySummary(loadedVaultCount, pool.vaultCount)}</p> : null}
 			{pool.vaults.map(vault => {
 				const collateralizationPercent = getVaultCollateralizationPercent(vault.repDepositShare, vault.securityBondAllowance, repPerEthPrice)
 				const collateralizationTarget = pool.securityMultiplier * 100n * 10n ** 18n

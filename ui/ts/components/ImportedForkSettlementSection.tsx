@@ -1,3 +1,5 @@
+import * as commonCopy from '../copy/common.js'
+import * as forkAuctionCopy from '../copy/forkAuction.js'
 import type { ComponentChildren } from 'preact'
 import { useEffect, useMemo, useState } from 'preact/hooks'
 import { CurrencyValue } from './CurrencyValue.js'
@@ -6,22 +8,6 @@ import { SectionBlock } from './SectionBlock.js'
 import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, resolvePaginationPageIndex } from '../lib/pagination.js'
 import { getImportedEscalationDepositClaimAmount } from '../lib/reportingDomain.js'
 import type { ActiveReportingDetails, EscalationSide, ReportingOutcomeKey } from '../types/contracts.js'
-import {
-	UI_STRING_FORK_CARRIED_ESCALATION_DEPOSITS_CAN_BE_SETTLED_AFTER_CHILD_POOL_FINALIZES,
-	UI_STRING_IMPORTED_ENTRY_DEPTH,
-	UI_STRING_IMPORTED_FROM_PARENT_UNIVERSE,
-	UI_STRING_IMPORTED_FROM_THE_PARENT_UNIVERSE_SETTLE_THESE_POSITIONS_IN_THIS_CHILD_POOL,
-	UI_STRING_INITIALLY_DEPOSITED_PREFIX,
-	UI_STRING_NEXT_PARENT_DEPOSITS,
-	UI_STRING_PARENT_DEPOSIT_NUMBER,
-	UI_STRING_PREVIOUS_PARENT_DEPOSITS,
-	UI_STRING_REP,
-	UI_STRING_SETTLE_FORK_CARRIED_ESCALATION_DEPOSITS,
-	UI_STRING_WORTH_NOW_PENDING_FINAL_SETTLEMENT,
-	UI_STRING_WORTH_NOW_PREFIX,
-	UI_TEMPLATE_SELECT_AT_LEAST_ONE_VALUE_FORK_CARRIED_DEPOSIT_TO_SETTLE,
-	UI_TEMPLATE_IMPORTED_FORK_DEPOSIT_PAGE_SUMMARY,
-} from '../lib/uiStrings.js'
 
 const IMPORTED_FORK_SETTLEMENT_PAGE_SIZE = 25
 
@@ -62,10 +48,10 @@ function ImportedForkSettlementSide({ activeReportingDetails, disabled, onDeposi
 	const visibleDeposits = useMemo(() => side.importedUserDeposits.slice(pageStartIndex, pageEndIndex), [pageEndIndex, pageStartIndex, side.importedUserDeposits])
 	const paginationPageSummary = formatPaginationSummary(resolvedPageIndex, pageCount)
 	const paginationSummary =
-		side.importedUserDeposits.length > IMPORTED_FORK_SETTLEMENT_PAGE_SIZE && paginationPageSummary !== undefined ? UI_TEMPLATE_IMPORTED_FORK_DEPOSIT_PAGE_SUMMARY((pageStartIndex + 1).toString(), pageEndIndex.toString(), side.importedUserDeposits.length.toString(), paginationPageSummary) : undefined
+		side.importedUserDeposits.length > IMPORTED_FORK_SETTLEMENT_PAGE_SIZE && paginationPageSummary !== undefined ? forkAuctionCopy.formatImportedForkDepositPageSummary((pageStartIndex + 1).toString(), pageEndIndex.toString(), side.importedUserDeposits.length.toString(), paginationPageSummary) : undefined
 	const settlementGuardMessage = (() => {
-		if (!resolved) return UI_STRING_FORK_CARRIED_ESCALATION_DEPOSITS_CAN_BE_SETTLED_AFTER_CHILD_POOL_FINALIZES
-		if (selectedDepositIndexes.length === 0) return UI_TEMPLATE_SELECT_AT_LEAST_ONE_VALUE_FORK_CARRIED_DEPOSIT_TO_SETTLE(side.label.toLowerCase())
+		if (!resolved) return forkAuctionCopy.forkDepositSettlementAvailabilityDetail
+		if (selectedDepositIndexes.length === 0) return forkAuctionCopy.formatDepositSelectionRequired(side.label.toLowerCase())
 		return undefined
 	})()
 
@@ -76,7 +62,7 @@ function ImportedForkSettlementSide({ activeReportingDetails, disabled, onDeposi
 	return (
 		<SectionBlock density='compact' headingLevel={4} key={side.key} title={side.label} variant='embedded'>
 			<div className='field'>
-				<span>{UI_STRING_IMPORTED_FROM_PARENT_UNIVERSE}</span>
+				<span>{forkAuctionCopy.importedFromParentUniverse}</span>
 				<div className='escalation-selection-list'>
 					{visibleDeposits.map(deposit => {
 						const selected = selectedDepositIndexes.includes(deposit.parentDepositIndex)
@@ -86,26 +72,26 @@ function ImportedForkSettlementSide({ activeReportingDetails, disabled, onDeposi
 								<input checked={selected} disabled={disabled} onChange={event => onDepositSelectionChange(side.key, deposit.parentDepositIndex, event.currentTarget.checked)} type='checkbox' />
 								<div className='escalation-selection-item-copy'>
 									<strong>
-										{UI_STRING_PARENT_DEPOSIT_NUMBER}
+										{forkAuctionCopy.parentDepositNumber}
 										{deposit.parentDepositIndex.toString()}
 									</strong>
 									<span>
-										{UI_STRING_INITIALLY_DEPOSITED_PREFIX}
-										<CurrencyValue value={deposit.amount} suffix={UI_STRING_REP} />
+										{forkAuctionCopy.initiallyDepositedLead}
+										<CurrencyValue value={deposit.amount} suffix={commonCopy.rep} />
 									</span>
 									<span>
 										{claimAmount === undefined ? (
-											UI_STRING_WORTH_NOW_PENDING_FINAL_SETTLEMENT
+											forkAuctionCopy.worthNowPendingFinalSettlement
 										) : (
 											<>
-												{UI_STRING_WORTH_NOW_PREFIX}
-												<CurrencyValue value={claimAmount} suffix={UI_STRING_REP} />
+												{forkAuctionCopy.worthNowLead}
+												<CurrencyValue value={claimAmount} suffix={commonCopy.rep} />
 											</>
 										)}
 									</span>
 									<span>
-										{UI_STRING_IMPORTED_ENTRY_DEPTH}
-										<CurrencyValue value={deposit.cumulativeAmount} suffix={UI_STRING_REP} />
+										{forkAuctionCopy.importedEntryDepthLead}
+										<CurrencyValue value={deposit.cumulativeAmount} suffix={commonCopy.rep} />
 									</span>
 								</div>
 							</label>
@@ -116,10 +102,10 @@ function ImportedForkSettlementSide({ activeReportingDetails, disabled, onDeposi
 					<PaginationControls
 						hasNextPage={hasNextPage}
 						hasPreviousPage={hasPreviousPage}
-						nextLabel={UI_STRING_NEXT_PARENT_DEPOSITS}
+						nextLabel={forkAuctionCopy.nextParentDeposits}
 						onNextPage={() => setPageIndex(currentPageIndex => currentPageIndex + 1)}
 						onPreviousPage={() => setPageIndex(currentPageIndex => Math.max(0, currentPageIndex - 1))}
-						previousLabel={UI_STRING_PREVIOUS_PARENT_DEPOSITS}
+						previousLabel={forkAuctionCopy.previousParentDeposits}
 						summary={paginationSummary}
 					/>
 				)}
@@ -139,9 +125,9 @@ export function ImportedForkSettlementSection({ activeReportingDetails, disabled
 	if (sides.length === 0) return undefined
 
 	return (
-		<SectionBlock density='compact' title={UI_STRING_SETTLE_FORK_CARRIED_ESCALATION_DEPOSITS}>
-			<p className='detail'>{UI_STRING_IMPORTED_FROM_THE_PARENT_UNIVERSE_SETTLE_THESE_POSITIONS_IN_THIS_CHILD_POOL}</p>
-			{resolved ? undefined : <p className='detail'>{UI_STRING_FORK_CARRIED_ESCALATION_DEPOSITS_CAN_BE_SETTLED_AFTER_CHILD_POOL_FINALIZES}</p>}
+		<SectionBlock density='compact' title={forkAuctionCopy.settleForkCarriedEscalationDeposits}>
+			<p className='detail'>{forkAuctionCopy.importedDepositSettlementDetail}</p>
+			{resolved ? undefined : <p className='detail'>{forkAuctionCopy.forkDepositSettlementAvailabilityDetail}</p>}
 			{sides.map(side => (
 				<ImportedForkSettlementSide activeReportingDetails={activeReportingDetails} disabled={disabled} key={side.key} onDepositSelectionChange={onDepositSelectionChange} renderSettlementAction={renderSettlementAction} resolved={resolved} selectedDepositIndexes={selectedDepositIndexesByOutcome[side.key]} side={side} />
 			))}

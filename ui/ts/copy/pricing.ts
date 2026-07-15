@@ -1,0 +1,25 @@
+import type { CopyTemplateValue } from './types.js'
+
+export const formatWrappedValue = (value: CopyTemplateValue) => `(${value})`
+export const repPriceUnavailableDetail = 'REP/ETH price source is unavailable until a quote loads.'
+export const simulationPriceSourceDetail = 'Uses the simulation REP/ETH mock price.'
+export const uniswapV4PriceSourceDetail = 'Uses the live Uniswap V4 REP/ETH quote.'
+export const uniswapV3PriceSourceDetail = 'Uses the live Uniswap V3 REP/ETH quote.'
+export const mock = 'MOCK'
+export const priceFromTheSimulationMock = 'Price from the simulation mock'
+export const targetCollateralizationAtSimulationPrice = 'Target Collateralization @ Simulation Price'
+export const simulationRepEth = 'Simulation REP / ETH'
+export const uniswapV4BadgeLabel = 'u4'
+export const priceFromUniswapV4 = 'Price from Uniswap V4'
+export const targetCollateralizationAtUniswapV4Price = 'Target Collateralization @ Uniswap V4 Price'
+export const uniswapV4RepEth = 'Uniswap V4 REP / ETH'
+export const uniswapV3BadgeLabel = 'u3'
+export const priceFromUniswapV3 = 'Price from Uniswap V3'
+export const targetCollateralizationAtUniswapV3Price = 'Target Collateralization @ Uniswap V3 Price'
+export const uniswapV3RepEth = 'Uniswap V3 REP / ETH'
+export const targetCollateralization = 'Target Collateralization'
+export const collateralizationLabel = 'Collateralization'
+export const awaitingRepEthPrice = 'Awaiting REP/ETH price'
+export const noActiveAllowance = 'No active allowance'
+export const formatValueUnavailable = (label: CopyTemplateValue) => `${label} unavailable`
+export const formatCopyExactCurrencyValue = (exactValue: CopyTemplateValue) => `Copy exact value ${exactValue}`

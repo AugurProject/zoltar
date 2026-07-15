@@ -1,3 +1,5 @@
+import * as commonCopy from '../copy/common.js'
+import * as securityPoolCopy from '../copy/securityPool.js'
 import { sameAddress } from './address.js'
 import { assertNever } from './assert.js'
 import { formatDuration, formatRoundedCurrencyBalance } from './formatters.js'
@@ -323,43 +325,43 @@ export function applySelectedPoolWorkflowState(
 }
 export function getSelectedPoolWorkflowGuardMessage({ hasSelectedPoolAddress, selectedPoolLookupState, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolLookupState: LoadableValueState; selectedPoolUniverseMismatch: boolean }) {
 	if (selectedPoolUniverseMismatch) return undefined
-	if (selectedPoolLookupState === 'loading') return 'Wait for this pool to finish loading.'
-	if (selectedPoolLookupState === 'missing') return 'Load a valid pool before using pool actions.'
-	if (!hasSelectedPoolAddress || selectedPoolLookupState === 'unknown') return 'Load a pool before using pool actions.'
+	if (selectedPoolLookupState === 'loading') return securityPoolCopy.waitForPoolLoadingReason
+	if (selectedPoolLookupState === 'missing') return securityPoolCopy.loadValidPoolReason
+	if (!hasSelectedPoolAddress || selectedPoolLookupState === 'unknown') return securityPoolCopy.loadPoolReason
 	return undefined
 }
 export function getSelectedPoolWorkflowLockedPresentation({ hasSelectedPoolAddress, selectedPoolLookupState, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolLookupState: LoadableValueState; selectedPoolUniverseMismatch: boolean }): UserMessagePresentation {
 	if (selectedPoolUniverseMismatch)
 		return {
-			badgeLabel: 'Unavailable',
+			badgeLabel: commonCopy.unavailable,
 			badgeTone: 'blocked',
-			detail: 'This pool does not exist.',
+			detail: securityPoolCopy.selectedPoolUnavailableDetail,
 			key: 'unavailable',
 		}
 	if (selectedPoolLookupState === 'loading')
 		return {
-			detail: 'Loading...',
+			detail: commonCopy.loadingWithEllipsis,
 			detailIsLoading: true,
 			key: 'loading',
 		}
 	if (selectedPoolLookupState === 'missing')
 		return {
-			badgeLabel: 'Not found',
+			badgeLabel: commonCopy.notFound,
 			badgeTone: 'blocked',
-			detail: 'This security pool address was not found.',
+			detail: securityPoolCopy.securityPoolAddressNotFoundDetail,
 			key: 'not_found',
 		}
 	if (hasSelectedPoolAddress)
 		return {
-			badgeLabel: 'Not found',
+			badgeLabel: commonCopy.notFound,
 			badgeTone: 'blocked',
-			detail: 'Pool not found.',
+			detail: securityPoolCopy.poolNotFoundDetail,
 			key: 'not_found',
 		}
 	return {
-		badgeLabel: 'No pool selected',
+		badgeLabel: securityPoolCopy.noPoolSelectedBadgeLabel,
 		badgeTone: 'muted',
-		detail: 'No pool selected.',
+		detail: securityPoolCopy.noPoolSelectedDetail,
 		key: 'action_needed',
 	}
 }

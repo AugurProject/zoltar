@@ -171,7 +171,7 @@ describe('MarketSection', () => {
 
 		const renderedComponent = await renderIntoDocument(h(MarketSection, initialProps))
 		cleanupRenderedComponent = renderedComponent.cleanup
-		expect(within(document.body).getByText('Loading questions...')).not.toBeNull()
+		expect(within(document.body).getByText('Loading questions…')).not.toBeNull()
 		await waitFor(() => {
 			expect(calls).toEqual(['0:10'])
 		})
@@ -213,12 +213,12 @@ describe('MarketSection', () => {
 		await act(() => {
 			fireEvent.click(nextPageButton)
 		})
-		expect(documentQueries.getByText('Loading questions...')).not.toBeNull()
+		expect(documentQueries.getByText('Loading questions…')).not.toBeNull()
 
 		void failedPageLoad.promise.catch(() => undefined)
 		failedPageLoad.reject(new Error('page load failed'))
 		await waitFor(() => {
-			expect(documentQueries.queryByText('Loading questions...')).toBeNull()
+			expect(documentQueries.queryByText('Loading questions…')).toBeNull()
 			expect(documentQueries.getByText('Question page unavailable.')).not.toBeNull()
 		})
 	})
@@ -570,7 +570,7 @@ describe('MarketSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByText('No questions were returned for the selected page.')).toBeNull()
-		expect(documentQueries.getByText('Loading questions...')).not.toBeNull()
+		expect(documentQueries.getByText('Loading questions…')).not.toBeNull()
 	})
 
 	test('opens the create question view from the empty questions state', async () => {

@@ -76,7 +76,7 @@ describe('ScalarDeploymentSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Loading scalar range...')).not.toBeNull()
+		expect(documentQueries.getByText('Loading scalar range…')).not.toBeNull()
 	})
 
 	test('clamps selected ticks before confirming child universe deployment', async () => {

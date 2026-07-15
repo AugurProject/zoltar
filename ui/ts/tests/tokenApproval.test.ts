@@ -122,7 +122,7 @@ describe('token approval helpers', () => {
 		expect(
 			resolveTokenApprovalStatusMessage({
 				actionLabel: 'submitting the initial report',
-				amountValidationMessage: 'Approval amount must be a decimal number',
+				amountValidationMessage: 'Approval amount must be a decimal number.',
 				draftAmount: '24',
 				guardMessage: undefined,
 				nextApprovalAmount: 24n * ONE,
@@ -131,7 +131,7 @@ describe('token approval helpers', () => {
 				tokenLabel: 'ETH',
 				tokenUnits: 18,
 			}),
-		).toBe('Approval amount must be a decimal number')
+		).toBe('Approval amount must be a decimal number.')
 	})
 
 	test('resolveTokenApprovalStatusMessage preserves needed and partial approval copy', () => {

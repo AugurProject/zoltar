@@ -10,6 +10,7 @@ const BIOME_COVERED_FILE_PATTERNS = [
 	/^bun-test-setup[^/]*\.ts$/,
 	/^README\.md$/,
 	/^AGENTS\.md$/,
+	/^\.codex\/review-contract\.md$/,
 	/^docs\//,
 	/^scripts\//,
 	/^shared\/ts\//,

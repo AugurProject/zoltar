@@ -1,5 +1,5 @@
+import * as commonCopy from '../copy/common.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { UI_STRING_DROPDOWN_OPTIONS, UI_TEMPLATE_LABEL_VALUE } from '../lib/uiStrings.js'
 
 export type EnumDropdownOption<T extends string> = {
 	label: string
@@ -20,7 +20,7 @@ export function EnumDropdown<T extends string>({ ariaLabel, disabled = false, on
 	const rootRef = useRef<HTMLDivElement | null>(null)
 	const selectedOption = value === undefined ? undefined : options.find(option => option.value === value)
 	const triggerLabel = selectedOption?.label ?? value ?? placeholder ?? ''
-	const accessibleTriggerLabel = ariaLabel === undefined || triggerLabel === '' ? ariaLabel : UI_TEMPLATE_LABEL_VALUE(ariaLabel, triggerLabel)
+	const accessibleTriggerLabel = ariaLabel === undefined || triggerLabel === '' ? ariaLabel : commonCopy.formatLabelValue(ariaLabel, triggerLabel)
 
 	const focusMenuOptionAt = (currentTarget: HTMLButtonElement | null, direction: -1 | 1) => {
 		if (rootRef.current === null || currentTarget === null) return
@@ -81,7 +81,7 @@ export function EnumDropdown<T extends string>({ ariaLabel, disabled = false, on
 				<span className='enum-dropdown-chevron' aria-hidden='true' />
 			</button>
 			{open ? (
-				<div className='enum-dropdown-menu' role='listbox' aria-label={UI_STRING_DROPDOWN_OPTIONS}>
+				<div className='enum-dropdown-menu' role='listbox' aria-label={commonCopy.dropdownOptions}>
 					{options.map(option => (
 						<button
 							key={option.value}

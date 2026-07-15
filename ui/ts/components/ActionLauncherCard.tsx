@@ -1,7 +1,7 @@
+import * as commonCopy from '../copy/common.js'
 import type { ComponentChildren } from 'preact'
 import { ActionLauncherButton } from './ActionLauncherButton.js'
 import type { ReadinessAction } from '../types/components.js'
-import { UI_STRING_OPENING } from '../lib/uiStrings.js'
 
 type ActionLauncherCardProps = {
 	action: ReadinessAction
@@ -11,7 +11,7 @@ type ActionLauncherCardProps = {
 	tone?: 'primary' | 'secondary'
 }
 
-export function ActionLauncherCard({ action, children, pending = false, pendingLabel = UI_STRING_OPENING, tone = 'secondary' }: ActionLauncherCardProps) {
+export function ActionLauncherCard({ action, children, pending = false, pendingLabel = commonCopy.opening, tone = 'secondary' }: ActionLauncherCardProps) {
 	if (action.onAction === undefined && action.blocker === undefined && action.readiness !== 'blocked') return undefined
 	const disabled = action.readiness === 'blocked' || action.onAction === undefined || action.blocker !== undefined
 	return (

@@ -1,3 +1,5 @@
+import * as commonCopy from '../copy/common.js'
+import * as marketCopy from '../copy/market.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { EntityCard } from './EntityCard.js'
 import { LoadingText } from './LoadingText.js'
@@ -6,18 +8,6 @@ import { Question, getQuestionTitle } from './Question.js'
 import { SectionBlock } from './SectionBlock.js'
 import { StateHint } from './StateHint.js'
 import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, QUESTION_PAGE_SIZE } from '../lib/pagination.js'
-import {
-	UI_STRING_ALREADY_FORKED,
-	UI_STRING_CREATE_POOL_FROM_QUESTION,
-	UI_STRING_CREATE_QUESTION,
-	UI_STRING_LOADING_QUESTIONS,
-	UI_STRING_MARKETS,
-	UI_STRING_NO_QUESTIONS,
-	UI_STRING_NO_QUESTIONS_MARKET_QUESTIONS_SECTION_NO_QUESTIONS_DETAIL,
-	UI_STRING_NON_BINARY_QUESTIONS_ARE_VALID_IN_ZOLTAR_BUT_PLACEHOLDER_ORIGIN_POOLS_CURRENTLY_REQUIRE_AN_EXACT_BINARY_YES_NO_QUESTION,
-	UI_STRING_QUESTION_PAGE_UNAVAILABLE,
-	UI_STRING_USE_FOR_FORK,
-} from '../lib/uiStrings.js'
 import type { MarketDetailsPage } from '../types/contracts.js'
 
 function isCurrentQuestionPage(page: MarketDetailsPage | undefined, pageIndex: number, questionCount: bigint | undefined) {
@@ -87,7 +77,7 @@ export function MarketQuestionsSection({ environmentRefreshKey, hasForked, loadi
 	return (
 		<SectionBlock
 			density='compact'
-			title={UI_STRING_MARKETS}
+			title={commonCopy.markets}
 			actions={
 				<PaginationControls
 					hasNextPage={hasNextPage}
@@ -104,7 +94,7 @@ export function MarketQuestionsSection({ environmentRefreshKey, hasForked, loadi
 					if (loadingZoltarQuestionCount || loadingZoltarQuestions || isWaitingForPageData)
 						return (
 							<p className='detail'>
-								<LoadingText>{UI_STRING_LOADING_QUESTIONS}</LoadingText>
+								<LoadingText>{marketCopy.loadingQuestions}</LoadingText>
 							</p>
 						)
 					if (noQuestionsAvailable)
@@ -112,19 +102,19 @@ export function MarketQuestionsSection({ environmentRefreshKey, hasForked, loadi
 							<StateHint
 								presentation={{
 									key: 'empty',
-									badgeLabel: UI_STRING_NO_QUESTIONS,
+									badgeLabel: marketCopy.noQuestions,
 									badgeTone: 'muted',
-									detail: UI_STRING_NO_QUESTIONS_MARKET_QUESTIONS_SECTION_NO_QUESTIONS_DETAIL,
+									detail: marketCopy.noQuestionsDetail,
 								}}
-								title={UI_STRING_NO_QUESTIONS}
+								title={marketCopy.noQuestions}
 								actions={
 									<button className='primary' type='button' onClick={onCreateQuestion}>
-										{UI_STRING_CREATE_QUESTION}
+										{commonCopy.createQuestion}
 									</button>
 								}
 							/>
 						)
-					if (effectiveQuestionCount !== undefined && effectiveQuestionCount > 0n) return <p className='detail'>{UI_STRING_QUESTION_PAGE_UNAVAILABLE}</p>
+					if (effectiveQuestionCount !== undefined && effectiveQuestionCount > 0n) return <p className='detail'>{marketCopy.questionPageUnavailable}</p>
 
 					return undefined
 				})()
@@ -145,16 +135,16 @@ export function MarketQuestionsSection({ environmentRefreshKey, hasForked, loadi
 											onOpenForkTab()
 										}}
 									>
-										{hasForked ? UI_STRING_ALREADY_FORKED : UI_STRING_USE_FOR_FORK}
+										{hasForked ? marketCopy.alreadyForked : marketCopy.useForFork}
 									</button>
 									<button className='secondary' onClick={() => onUseQuestionForPool(question.questionId)} disabled={question.marketType !== 'binary'}>
-										{UI_STRING_CREATE_POOL_FROM_QUESTION}
+										{marketCopy.createPoolFromQuestion}
 									</button>
 								</div>
 							}
 						>
 							<Question question={question} showTitle={false} />
-							{question.marketType !== 'binary' ? <p className='detail'>{UI_STRING_NON_BINARY_QUESTIONS_ARE_VALID_IN_ZOLTAR_BUT_PLACEHOLDER_ORIGIN_POOLS_CURRENTLY_REQUIRE_AN_EXACT_BINARY_YES_NO_QUESTION}</p> : undefined}
+							{question.marketType !== 'binary' ? <p className='detail'>{marketCopy.nonBinaryPoolCompatibilityDetail}</p> : undefined}
 						</EntityCard>
 					))}
 				</div>

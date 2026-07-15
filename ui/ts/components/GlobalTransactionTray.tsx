@@ -1,8 +1,9 @@
+import * as commonCopy from '../copy/common.js'
+import * as transactionCopy from '../copy/transaction.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { Badge } from './Badge.js'
 import { TransactionHashLink } from './TransactionHashLink.js'
 import type { BadgeTone, GlobalTransactionPresentation } from '../types/components.js'
-import { UI_STRING_ATTENTION, UI_STRING_AWAITING_WALLET, UI_STRING_CONFIRMED, UI_STRING_DISMISS, UI_STRING_FAILED, UI_STRING_PENDING, UI_STRING_PREPARING } from '../lib/uiStrings.js'
 
 type GlobalTransactionTrayProps = {
 	transaction: GlobalTransactionPresentation | undefined
@@ -15,12 +16,12 @@ function getDismissKey(transaction: GlobalTransactionPresentation | undefined) {
 }
 
 function getTransactionBadge(tone: GlobalTransactionPresentation['tone']): { label: string; tone: BadgeTone } {
-	if (tone === 'preparing') return { tone: 'pending', label: UI_STRING_PREPARING }
-	if (tone === 'awaiting-wallet') return { tone: 'pending', label: UI_STRING_AWAITING_WALLET }
-	if (tone === 'pending') return { tone: 'pending', label: UI_STRING_PENDING }
-	if (tone === 'success') return { tone: 'ok', label: UI_STRING_CONFIRMED }
-	if (tone === 'error') return { tone: 'danger', label: UI_STRING_FAILED }
-	return { tone: 'warning', label: UI_STRING_ATTENTION }
+	if (tone === 'preparing') return { tone: 'pending', label: transactionCopy.preparing }
+	if (tone === 'awaiting-wallet') return { tone: 'pending', label: transactionCopy.awaitingWallet }
+	if (tone === 'pending') return { tone: 'pending', label: commonCopy.pending }
+	if (tone === 'success') return { tone: 'ok', label: transactionCopy.confirmed }
+	if (tone === 'error') return { tone: 'danger', label: commonCopy.failed }
+	return { tone: 'warning', label: transactionCopy.attention }
 }
 
 export function GlobalTransactionTray({ transaction }: GlobalTransactionTrayProps) {
@@ -82,7 +83,7 @@ export function GlobalTransactionTray({ transaction }: GlobalTransactionTrayProp
 							setDismissedKey(transactionDismissKey)
 						}}
 					>
-						{UI_STRING_DISMISS}
+						{transactionCopy.dismiss}
 					</button>
 				)}
 			</div>
