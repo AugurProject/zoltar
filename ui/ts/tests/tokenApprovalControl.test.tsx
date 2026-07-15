@@ -33,7 +33,7 @@ describe('TokenApprovalControl', () => {
 				guardMessage={undefined}
 				onApprove={() => undefined}
 				pending={false}
-				pendingLabel='Approving WETH...'
+				pendingLabel='Approving WETH…'
 				requiredAmount={30n * 10n ** 18n}
 				resetKey='weth-approval'
 				tokenSymbol='WETH'
@@ -64,7 +64,7 @@ describe('TokenApprovalControl', () => {
 				guardMessage='Connect a wallet before approving.'
 				onApprove={() => undefined}
 				pending={false}
-				pendingLabel='Approving WETH...'
+				pendingLabel='Approving WETH…'
 				requiredAmount={10n * 10n ** 18n}
 				resetKey='weth-approval-guard'
 				tokenSymbol='WETH'
@@ -90,7 +90,7 @@ describe('TokenApprovalControl', () => {
 				guardMessage={undefined}
 				onApprove={() => undefined}
 				pending={false}
-				pendingLabel='Approving WETH...'
+				pendingLabel='Approving WETH…'
 				requiredAmount={10n * 10n ** 18n}
 				resetKey='weth-approval-error'
 				tokenSymbol='WETH'
@@ -122,7 +122,7 @@ describe('TokenApprovalControl', () => {
 					approveCalls += 1
 				}}
 				pending={true}
-				pendingLabel='Approving WETH...'
+				pendingLabel='Approving WETH…'
 				requiredAmount={10n * 10n ** 18n}
 				resetKey='weth-approval-pending'
 				tokenSymbol='WETH'
@@ -132,7 +132,7 @@ describe('TokenApprovalControl', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const approveButton = documentQueries.getByRole('button', { name: 'Approving WETH...' }) as HTMLButtonElement
+		const approveButton = documentQueries.getByRole('button', { name: 'Approving WETH…' }) as HTMLButtonElement
 
 		expect(approveButton.disabled).toBe(true)
 		fireEvent.click(approveButton)
@@ -149,7 +149,7 @@ describe('TokenApprovalControl', () => {
 				guardMessage={undefined}
 				onApprove={() => undefined}
 				pending={false}
-				pendingLabel='Approving WETH...'
+				pendingLabel='Approving WETH…'
 				requiredAmount={10n * 10n ** 18n}
 				resetKey='weth-approval-invalid'
 				tokenSymbol='WETH'
@@ -167,6 +167,6 @@ describe('TokenApprovalControl', () => {
 
 		const approveButton = documentQueries.getByRole('button', { name: 'Approve WETH' }) as HTMLButtonElement
 		expect(approveButton.disabled).toBe(true)
-		expect(approveButton.title).toBe('Approval amount must be a decimal number')
+		expect(approveButton.title).toBe('Approval amount must be a decimal number.')
 	})
 })

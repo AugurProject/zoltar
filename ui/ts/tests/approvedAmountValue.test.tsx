@@ -1,3 +1,4 @@
+import * as commonCopy from '../copy/common.js'
 /// <reference types='bun-types' />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -5,7 +6,6 @@ import { within } from './testUtils/queries'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { ApprovedAmountValue, APPROVAL_MAX_DISPLAY_THRESHOLD } from '../components/ApprovedAmountValue.js'
-import { UI_STRING_MAX } from '../lib/uiStrings.js'
 
 describe('ApprovedAmountValue', () => {
 	let restoreDomEnvironment: (() => void) | undefined
@@ -27,7 +27,7 @@ describe('ApprovedAmountValue', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const valueBadge = documentQueries.getByText(UI_STRING_MAX)
+		const valueBadge = documentQueries.getByText(commonCopy.max)
 		expect(valueBadge.textContent).toBe('Max')
 		expect(valueBadge.className).toContain('approval-max')
 		expect(documentQueries.queryByText(/^≈/)).toBeNull()

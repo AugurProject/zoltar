@@ -1,3 +1,5 @@
+import * as commonCopy from '../copy/common.js'
+import * as forkAuctionCopy from '../copy/forkAuction.js'
 import { Fragment } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
@@ -38,201 +40,6 @@ import { buildRouteHref, SECURITY_POOLS_ROUTE } from '../lib/routing.js'
 import { getEscalationDepositClaimAmount, isPoolQuestionFinalized } from '../lib/reportingDomain.js'
 import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../lib/securityPoolState.js'
 import { getCurrentSelectedPoolForkAuctionDetails, getForkWorkflowStageSelection, type ForkWorkflowSelectionStage } from '../lib/securityPoolWorkflow.js'
-import {
-	UI_STRING_ADVANCED_DIAGNOSTICS,
-	UI_STRING_ALREADY_MIGRATED_STATUS,
-	UI_STRING_TRUTH_AUCTION_FINALIZATION_REQUIRED_DETAIL,
-	UI_STRING_BID_AMOUNT_ETH,
-	UI_STRING_BID_ESTIMATED_REP_DETAIL_INTRO,
-	UI_STRING_BID_ESTIMATED_REP_DETAIL_OUTRO,
-	UI_STRING_BID_PRICE_ETH_REP,
-	UI_STRING_BYPASSING_AUCTION_TRUNCATED,
-	UI_STRING_BYPASS_TRUTH_AUCTION,
-	UI_STRING_CHECKING_WHETHER_POOL_REP_IS_ALREADY_READY_FOR_SELECTED_CHILD_UNIVERSE,
-	UI_STRING_CHILD_POOL,
-	UI_STRING_CHILD_SECURITY_POOLS,
-	UI_STRING_CHOOSE_DEPOSITS_TO_MIGRATE,
-	UI_STRING_UNDERFUNDED_WINNING_BID_CLAIM_PREVIEW_UNAVAILABLE_DETAIL,
-	UI_STRING_CLEARING,
-	UI_STRING_CLEARING_PRICE,
-	UI_STRING_CLOSED,
-	UI_STRING_COLLATERAL,
-	UI_STRING_CONNECT_A_WALLET_BEFORE_USING_FORK_AND_AUCTION_ACTIONS,
-	UI_STRING_CONNECT_WALLET_TO_INSPECT_YOUR_PARENT_POOL_BALANCES,
-	UI_STRING_CURRENT_PATH_ELIGIBLE_FOR_CHILD_POOL_MIGRATION,
-	UI_STRING_CURRENT_PATH_MUST_MIGRATE_INTO_THE_SELECTED_CHILD_UNIVERSE,
-	UI_STRING_ENDED_AT,
-	UI_STRING_ENDS,
-	UI_STRING_ENTRY_DEPTH_PREFIX,
-	UI_STRING_ESCALATION_DEPOSITS_ARE_CURRENTLY_AVAILABLE_TO_MIGRATE_FOR_THIS_WALLET,
-	UI_STRING_ESCALATION_DEPOSIT_DETAILS_ARE_UNAVAILABLE_FOR_THIS_POOL,
-	UI_STRING_ESCROWED_REP,
-	UI_STRING_ESCROW_SOURCE_REP_AT_FORK,
-	UI_STRING_ESTIMATED_ETH_REFUNDED,
-	UI_STRING_TRUTH_AUCTION_REFUND_ESTIMATE_DETAIL,
-	UI_STRING_ESTIMATED_REP_CLAIMED,
-	UI_STRING_ETH,
-	UI_STRING_ETH_RAISED_PER_CAP,
-	UI_STRING_ETH_REP,
-	UI_STRING_FINALIZE_TRUTH_AUCTION,
-	UI_STRING_FINALIZING_TRUTH_AUCTION_TRUNCATED,
-	UI_STRING_FORK_LIFECYCLE_STAGES,
-	UI_STRING_FORK_TRIGGERED,
-	UI_STRING_FORK_TRUTH_AUCTION,
-	UI_STRING_FORK_TYPE,
-	UI_STRING_HEX_VALUE_PLACEHOLDER,
-	UI_STRING_INACTIVE,
-	UI_STRING_INITIALLY_DEPOSITED_PREFIX,
-	UI_STRING_LOADING_CURRENT_CHAIN_TIME,
-	UI_STRING_LOADING_ELIGIBLE_ESCALATION_DEPOSITS,
-	UI_STRING_LOADING_ESCALATION_DEPOSITS_FOR_THE_SELECTED_WALLET,
-	UI_STRING_LOADING_UNRESOLVED_ESCALATION_DEPOSITS,
-	UI_STRING_LOADING_UNRESOLVED_ESCALATION_DEPOSITS_FOR_THE_CONNECTED_WALLET,
-	UI_STRING_LOAD_A_POOL_TO_INSPECT_FORK_PROGRESS_MIGRATION_AND_THE_TRUTH_AUCTION,
-	UI_STRING_LOAD_THE_TRUTH_AUCTION_BEFORE_FINALIZING,
-	UI_STRING_MAX_REP_BEING_SOLD,
-	UI_STRING_MIGRATED_BALANCES_FOR_THIS_OUTCOME,
-	UI_STRING_MIGRATED_REP,
-	UI_STRING_MIGRATE_POOL_TO_UNIVERSE,
-	UI_STRING_MIGRATE_RESOLVED_ESCALATION_DEPOSITS,
-	UI_STRING_MIGRATE_UNRESOLVED_ESCALATION_LOCKS,
-	UI_STRING_MIGRATE_VAULT,
-	UI_STRING_MIGRATING_ESCALATION_DEPOSITS_TRUNCATED,
-	UI_STRING_MIGRATING_POOL_TO_UNIVERSE_TRUNCATED,
-	UI_STRING_MIGRATING_UNRESOLVED_ESCALATION_TRUNCATED,
-	UI_STRING_MIGRATING_VAULT,
-	UI_STRING_MIGRATION_ENDS,
-	UI_STRING_MIGRATION_IS_STILL_ACTIVE_TRUTH_AUCTION_CAN_START_ONCE_MIGRATION_ENDS,
-	UI_STRING_MIGRATION,
-	UI_STRING_MIGRATION_STARTED,
-	UI_STRING_MIGRATION_STATUS,
-	UI_STRING_MIGRATION_TIMING_IS_UNAVAILABLE,
-	UI_STRING_MIGRATION_WINDOW_HAS_CLOSED_FOR_THIS_PARENT_POOL,
-	UI_STRING_MIN_BID_SIZE,
-	UI_STRING_NO,
-	UI_STRING_NOT_STARTED,
-	UI_STRING_NOT_STARTED_BADGE_LABEL,
-	UI_STRING_ESCALATION_MIGRATION_EMPTY_ESCROW_DETAIL,
-	UI_STRING_METRIC_UNAVAILABLE_PLACEHOLDER,
-	UI_STRING_NOT_CHOSEN,
-	UI_STRING_NO_ESCROWED_REP_REMAINS_TO_MIGRATE_FOR_THE_CONNECTED_WALLET,
-	UI_STRING_NO_PARENT_COLLATERAL_REMAINS_TO_AUCTION_SO_THIS_STEP_IMMEDIATELY_BYPASSES_BIDDING,
-	UI_STRING_NO_PREFIX,
-	UI_STRING_NO_REP_COLLATERAL_OR_SECURITY_BOND_ALLOWANCE_REMAINS,
-	UI_STRING_NO_REP_WAS_PRESENT_AT_FORK_SO_NO_TRUTH_AUCTION_IS_NEEDED,
-	UI_STRING_NO_UNRESOLVED_PARENT_ESCALATION_DEPOSITS_REMAIN_FOR_CONNECTED_WALLET,
-	UI_STRING_OPEN,
-	UI_STRING_OPEN_SECURITY_POOL,
-	UI_STRING_OPERATIONAL,
-	UI_STRING_OUTCOME,
-	UI_STRING_OWN_ESCALATION_FORK,
-	UI_STRING_PARENT_POOL_VAULT_BALANCES_UNAVAILABLE_MIGRATION_DETAIL,
-	UI_STRING_PARENT_ZOLTAR_FORK,
-	UI_STRING_PENDING,
-	UI_STRING_PENDING_CONFIRMATION,
-	UI_STRING_PENDING_OUTCOME,
-	UI_STRING_POOL_REP_AT_FORK,
-	UI_STRING_POOL_REP_STAGED_FOR_VAULT_MIGRATION_DETAIL,
-	UI_STRING_POOL_REP_HAS_ALREADY_BEEN_MIGRATED_TO_THE_SELECTED_CHILD_UNIVERSE,
-	UI_STRING_REFUND_ONLY_SETTLEMENT_RETURNS_LOCKED_ETH,
-	UI_STRING_REP,
-	UI_STRING_REP_AT_FORK,
-	UI_STRING_REP_COLLATERAL,
-	UI_STRING_REP_PURCHASED,
-	UI_STRING_SECURITY_BOND_ALLOWANCE,
-	UI_STRING_SECURITY_POOL_ADDRESS,
-	UI_STRING_SELECTED_BIDS,
-	UI_STRING_SELECTED_BID_SETTLEMENT_PREVIEW,
-	UI_STRING_SELECTED_DEPOSITS_LEAVE_THE_PARENT_POOL_AND_REAPPEAR_ON_THE_CHOSEN_CHILD,
-	UI_STRING_SELECTED_LADDER_PRICE,
-	UI_STRING_SELECTED_OUTCOME_REP_COLLATERAL,
-	UI_STRING_SELECTED_OUTCOME_SECURITY_BOND_ALLOWANCE,
-	UI_STRING_SELECTED_REFUND_ROWS,
-	UI_STRING_SELECTED_WINNING_BIDS,
-	UI_STRING_SELECT_AT_LEAST_ONE_DEPOSIT_TO_MIGRATE,
-	UI_STRING_SETTLED,
-	UI_STRING_SETTLEMENT_AVAILABLE,
-	UI_STRING_SETTLEMENT,
-	UI_STRING_SETTLEMENT_STATUS,
-	UI_STRING_SETTLE_SELECTED_BIDS,
-	UI_STRING_SETTLING_FORK_CARRIED_DEPOSITS_TRUNCATED,
-	UI_STRING_SHORTFALL,
-	UI_STRING_STARTED,
-	UI_STRING_STARTING_TRUNCATED,
-	UI_STRING_STARTING_TRUTH_AUCTION,
-	UI_STRING_START_TRUTH_AUCTION,
-	UI_STRING_STATUS,
-	UI_STRING_SUBMITTING_A_BID_LOCKS_ETH_UNTIL_SETTLEMENT_LOSING,
-	UI_STRING_SUBMITTING_BID_TRUNCATED,
-	UI_STRING_SUBMITTING_SETTLEMENT_TRANSACTION_TRUNCATED,
-	UI_STRING_SUBMIT_BID,
-	UI_STRING_SYSTEM_IS_FORKING,
-	UI_STRING_SETTLEMENT_ROUNDING_NOTICE,
-	UI_STRING_UNRESOLVED_ESCALATION_MIGRATION_WINDOW_CLOSED_DETAIL,
-	UI_STRING_UNRESOLVED_ESCALATION_MIGRATION_WINDOW_CLOSED_REASON,
-	UI_STRING_FORK_INACTIVE_DETAIL,
-	UI_STRING_CHILD_UNIVERSE_FULLY_MIGRATED_DETAIL,
-	UI_STRING_VAULT_MIGRATION_DETAIL,
-	UI_STRING_POOL_REP_MIGRATION_DETAIL,
-	UI_STRING_TRIGGERED_AT,
-	UI_STRING_TRUTH_AUCTION_ADDRESS,
-	UI_STRING_TRUTH_AUCTION,
-	UI_STRING_TRUTH_AUCTION_ALREADY_STARTED,
-	UI_STRING_TRUTH_AUCTION_END_TIME_IS_UNAVAILABLE,
-	UI_STRING_TRUTH_AUCTION_HAS_ENDED,
-	UI_STRING_TRUTH_AUCTION_IS_ALREADY_FINALIZED,
-	UI_STRING_TRUTH_AUCTION_IS_STILL_ONGOING,
-	UI_STRING_TRUTH_AUCTION_STATUS,
-	UI_STRING_ESCALATION_CHILD_REP_PER_SELECTED_OUTCOME,
-	UI_STRING_UNFILLED,
-	UI_STRING_UNRESOLVED_DEPOSITS_REMAIN_FOR_THIS_WALLET,
-	UI_STRING_UNRESOLVED_ESCALATION_DEPOSIT_DETAILS_ARE_UNAVAILABLE_FOR_THIS_POOL_RIGHT_NOW,
-	UI_STRING_UNRESOLVED_ESCALATION_MIGRATION_IS_UNAVAILABLE_FOR_THIS_POOL,
-	UI_STRING_USE_UNRESOLVED_ESCALATION_MIGRATION_FOR_THIS_PARENT_POOL,
-	UI_STRING_USE_UNRESOLVED_ESCALATION_MIGRATION_TO_MOVE_LOCKED_POSITIONS_AND_VAULT_BALANCES_TOGETHER,
-	UI_STRING_UNRESOLVED_ESCALATION_MIGRATION_WITH_VAULT_DETAIL,
-	UI_STRING_UNRESOLVED_ESCALATION_MULTI_CHILD_DETAIL,
-	UI_STRING_UNRESOLVED_ESCALATION_ENTITLEMENT_CAPTURED_DETAIL,
-	UI_TEMPLATE_UNRESOLVED_ESCALATION_ENTITLEMENT_ALREADY_MATERIALIZED,
-	UI_STRING_FORK_UNAVAILABLE_PLACEHOLDER,
-	UI_STRING_VAULT_MIGRATION_IS_ALREADY_COMPLETE_FOR_THIS_WALLET,
-	UI_STRING_VIEWING,
-	UI_STRING_WALLET_LEVEL_BALANCES_IN_THE_PARENT_POOL_THAT_MAY_STILL_NEED_MIGRATION,
-	UI_TEMPLATE_FINALIZED_REFUND_ONLY_SETTLEMENT_NOTICE,
-	UI_TEMPLATE_LOADING_CHILD_AUCTION_DETAILS,
-	UI_TEMPLATE_START_TRUTH_AUCTION_DETAIL,
-	UI_TEMPLATE_WINNING_CLAIM_ALLOWANCE_HEADLINE,
-	UI_TEMPLATE_WINNING_BID_ALLOWANCE_NOTICE,
-	UI_TEMPLATE_WINNING_CLAIM_SETTLEMENT_NOTICE,
-	UI_STRING_WINNING_BIDS_BUY_MORE_THAN_REP,
-	UI_STRING_WORTH_NOW_PENDING_MIGRATION_FINALIZATION,
-	UI_STRING_WORTH_NOW_PREFIX,
-	UI_STRING_YES,
-	UI_STRING_YOUR_MIGRATION_BALANCES,
-	UI_TEMPLATE_CHILD_UNIVERSE_NOT_CREATED_FOR_OUTCOME_DETAIL,
-	UI_TEMPLATE_FINALIZED_TRUTH_AUCTION_SETTLEMENT_STATUS_DETAIL,
-	UI_TEMPLATE_CHECKING_POOL_REP_MIGRATED_TO_CHILD_UNIVERSE,
-	UI_TEMPLATE_ESTIMATED_VALUE,
-	UI_TEMPLATE_ETH_PER_REP_VALUE,
-	UI_TEMPLATE_MIGRATE_POOL_TO_THE_VALUE_UNIVERSE_BEFORE_MOVING_VAULT_BALANCES,
-	UI_TEMPLATE_MIGRATE_POOL_TO_VALUE_UNIVERSE,
-	UI_TEMPLATE_MIGRATE_SELECTED_VALUE_DEPOSITS,
-	UI_TEMPLATE_MIGRATE_UNRESOLVED_ESCALATION_TO_VALUE,
-	UI_TEMPLATE_MIGRATE_VAULT_TO_VALUE,
-	UI_TEMPLATE_NO_VALUE_ESCALATION_DEPOSITS_ARE_CURRENTLY_AVAILABLE_TO_MIGRATE_FOR_THIS_WALLET,
-	UI_TEMPLATE_POOL_REP_HAS_ALREADY_BEEN_MIGRATED_TO_THE_VALUE_UNIVERSE,
-	UI_TEMPLATE_REFUND_ONLY_SETTLEMENT_RETURNS_LOCKED_ETH_AND_DOES_NOT_ASSIGN_VALUE,
-	UI_TEMPLATE_SECURITY_POOL_FOR_VALUE_UNIVERSE_DOES_NOT_EXIST,
-	UI_TEMPLATE_FINALIZED_REFUND_BATCH_SETTLEMENT_DETAIL,
-	UI_TEMPLATE_MIXED_BID_BATCH_SETTLEMENT_DETAIL,
-	UI_TEMPLATE_REFUNDABLE_BID_BATCH_SETTLEMENT_DETAIL,
-	UI_TEMPLATE_WINNING_BID_BATCH_SETTLEMENT_DETAIL,
-	UI_TEMPLATE_SETTLE_SELECTED_VALUE_FORK_CARRIED_DEPOSITS,
-	UI_TEMPLATE_STARTS_IN_VALUE,
-	UI_TEMPLATE_TRUTH_AUCTION_CAN_BE_STARTED_IN_VALUE_ONCE_MIGRATION_ENDS,
-	UI_TEMPLATE_WINNING_ROWS_RECEIVE_ESTIMATED_CHILD_POOL_REP_PLUS_ESTIMATED_VALUE,
-	UI_TEMPLATE_WINNING_ROWS_RECEIVE_ESTIMATED_CHILD_POOL_REP_PLUS_ESTIMATED_VALUE_WHILE_REFUND,
-} from '../lib/uiStrings.js'
 import { writeSecurityPoolQueryParam, writeUniverseQueryParam } from '../lib/urlParams.js'
 import { getVisualRatio } from '../lib/visualMetrics.js'
 import { useForkAuctionInteractionState } from '../hooks/useForkAuctionInteractionState.js'
@@ -269,13 +76,13 @@ const FORK_WORKFLOW_NAV_STAGES: readonly ForkWorkflowSelectionStage[] = ['fork-t
 function getForkWorkflowStageLabel(stage: ForkWorkflowSelectionStage) {
 	switch (stage) {
 		case 'fork-triggered':
-			return UI_STRING_FORK_TRIGGERED
+			return commonCopy.forkTriggered
 		case 'migration':
-			return UI_STRING_MIGRATION
+			return forkAuctionCopy.migration
 		case 'auction':
-			return UI_STRING_TRUTH_AUCTION
+			return commonCopy.truthAuction
 		case 'settlement':
-			return UI_STRING_SETTLEMENT
+			return commonCopy.settlement
 		default:
 			return assertNever(stage)
 	}
@@ -312,18 +119,18 @@ function renderMetricValue(value: bigint | undefined, suffix: string, fallbackTe
 	return <CurrencyValue value={value} suffix={suffix} />
 }
 
-function renderTruthAuctionPriceValue(value: bigint | undefined, fallbackText: string = UI_STRING_METRIC_UNAVAILABLE_PLACEHOLDER) {
+function renderTruthAuctionPriceValue(value: bigint | undefined, fallbackText: string = commonCopy.metricUnavailablePlaceholder) {
 	if (value === undefined) return fallbackText
 	const formattedPrice = formatRoundedCurrencyBalance(value, 18, 4)
 	const exactPrice = formatCurrencyInputBalance(value)
 	return (
-		<span className='truth-auction-price-value' title={UI_TEMPLATE_ETH_PER_REP_VALUE(exactPrice)}>
-			{formattedPrice} {UI_STRING_ETH_REP}
+		<span className='truth-auction-price-value' title={forkAuctionCopy.formatEthPerRepValue(exactPrice)}>
+			{formattedPrice} {forkAuctionCopy.ethRep}
 		</span>
 	)
 }
 function renderAddress(address: string | undefined) {
-	if (address === undefined) return UI_STRING_METRIC_UNAVAILABLE_PLACEHOLDER
+	if (address === undefined) return commonCopy.metricUnavailablePlaceholder
 	return <AddressValue address={address} />
 }
 function renderTimestamp({ displayTimestamp, fallbackText }: { displayTimestamp: bigint | undefined; fallbackText: string }) {
@@ -335,7 +142,7 @@ function renderTruthAuctionDebtNotice(mode: 'bid' | 'settlement', showRefundOnly
 		return (
 			<WarningSurface as='section' variant='compact'>
 				<p className='detail'>
-					<strong>{UI_STRING_WINNING_BIDS_BUY_MORE_THAN_REP}</strong> {UI_TEMPLATE_WINNING_BID_ALLOWANCE_NOTICE(AUCTIONED_BOND_ALLOWANCE_LABEL)}
+					<strong>{forkAuctionCopy.winningBidPremiumDetail}</strong> {forkAuctionCopy.formatWinningBidAllowanceNotice(AUCTIONED_BOND_ALLOWANCE_LABEL)}
 				</p>
 			</WarningSurface>
 		)
@@ -345,7 +152,7 @@ function renderTruthAuctionDebtNotice(mode: 'bid' | 'settlement', showRefundOnly
 		return (
 			<WarningSurface as='section' variant='compact'>
 				<p className='detail'>
-					<strong>{UI_STRING_REFUND_ONLY_SETTLEMENT_RETURNS_LOCKED_ETH}</strong> {UI_TEMPLATE_FINALIZED_REFUND_ONLY_SETTLEMENT_NOTICE(AUCTIONED_BOND_ALLOWANCE_LABEL)}
+					<strong>{forkAuctionCopy.refundSettlementDetail}</strong> {forkAuctionCopy.formatFinalizedRefundOnlySettlementNotice(AUCTIONED_BOND_ALLOWANCE_LABEL)}
 				</p>
 			</WarningSurface>
 		)
@@ -354,7 +161,7 @@ function renderTruthAuctionDebtNotice(mode: 'bid' | 'settlement', showRefundOnly
 	return (
 		<WarningSurface as='section' variant='compact'>
 			<p className='detail'>
-				<strong>{UI_TEMPLATE_WINNING_CLAIM_ALLOWANCE_HEADLINE(AUCTIONED_BOND_ALLOWANCE_LABEL)}</strong> {UI_TEMPLATE_WINNING_CLAIM_SETTLEMENT_NOTICE(AUCTIONED_BOND_ALLOWANCE_LABEL)}
+				<strong>{forkAuctionCopy.formatWinningClaimAllowanceHeadline(AUCTIONED_BOND_ALLOWANCE_LABEL)}</strong> {forkAuctionCopy.formatWinningClaimSettlementNotice(AUCTIONED_BOND_ALLOWANCE_LABEL)}
 			</p>
 		</WarningSurface>
 	)
@@ -379,36 +186,36 @@ function renderTruthAuctionSettlementSelectionSummary({
 
 	const summaryDescription = (() => {
 		if (selectedClaimCount > 0 && selectedRefundCount > 0) {
-			return UI_TEMPLATE_WINNING_ROWS_RECEIVE_ESTIMATED_CHILD_POOL_REP_PLUS_ESTIMATED_VALUE_WHILE_REFUND(AUCTIONED_BOND_ALLOWANCE_LABEL)
+			return forkAuctionCopy.formatMixedSettlementPreviewDetail(AUCTIONED_BOND_ALLOWANCE_LABEL)
 		}
 		if (selectedClaimCount > 0) {
-			return UI_TEMPLATE_WINNING_ROWS_RECEIVE_ESTIMATED_CHILD_POOL_REP_PLUS_ESTIMATED_VALUE(AUCTIONED_BOND_ALLOWANCE_LABEL)
+			return forkAuctionCopy.formatWinningSettlementPreviewDetail(AUCTIONED_BOND_ALLOWANCE_LABEL)
 		}
-		return UI_TEMPLATE_REFUND_ONLY_SETTLEMENT_RETURNS_LOCKED_ETH_AND_DOES_NOT_ASSIGN_VALUE(AUCTIONED_BOND_ALLOWANCE_LABEL)
+		return forkAuctionCopy.formatRefundSettlementPreviewDetail(AUCTIONED_BOND_ALLOWANCE_LABEL)
 	})()
 
-	const refundDescription = estimatedEthRefunded > 0n ? UI_STRING_TRUTH_AUCTION_REFUND_ESTIMATE_DETAIL : undefined
+	const refundDescription = estimatedEthRefunded > 0n ? forkAuctionCopy.truthAuctionRefundEstimateDetail : undefined
 	let roundingDescription: string | undefined
 	if (selectedClaimCount > 0) {
 		if (estimatedRepClaimed === undefined) {
-			roundingDescription = UI_STRING_UNDERFUNDED_WINNING_BID_CLAIM_PREVIEW_UNAVAILABLE_DETAIL
+			roundingDescription = forkAuctionCopy.underfundedWinningClaimUnavailable
 		} else {
-			roundingDescription = UI_STRING_SETTLEMENT_ROUNDING_NOTICE
+			roundingDescription = forkAuctionCopy.settlementRoundingNotice
 		}
 	}
 
 	return (
 		<WarningSurface as='section' variant='compact'>
 			<p className='detail'>
-				<strong>{UI_STRING_SELECTED_BID_SETTLEMENT_PREVIEW}</strong> {summaryDescription}
+				<strong>{forkAuctionCopy.selectedBidSettlementPreview}</strong> {summaryDescription}
 			</p>
 			{renderWorkflowMetricGrid([
-				{ label: UI_STRING_SELECTED_BIDS, value: selectedRowCount.toString() },
-				{ label: UI_STRING_SELECTED_WINNING_BIDS, value: selectedClaimCount.toString() },
-				{ label: UI_STRING_SELECTED_REFUND_ROWS, value: selectedRefundCount.toString() },
-				{ label: UI_STRING_ESTIMATED_REP_CLAIMED, value: estimatedRepClaimed === undefined ? UI_STRING_METRIC_UNAVAILABLE_PLACEHOLDER : <CurrencyValue value={estimatedRepClaimed} suffix={UI_STRING_REP} /> },
-				{ label: UI_TEMPLATE_ESTIMATED_VALUE(AUCTIONED_BOND_ALLOWANCE_LABEL), value: estimatedAssignedBondAllowance === undefined ? UI_STRING_METRIC_UNAVAILABLE_PLACEHOLDER : <CurrencyValue value={estimatedAssignedBondAllowance} suffix={UI_STRING_ETH} /> },
-				{ label: UI_STRING_ESTIMATED_ETH_REFUNDED, value: <CurrencyValue value={estimatedEthRefunded} suffix={UI_STRING_ETH} /> },
+				{ label: forkAuctionCopy.selectedBids, value: selectedRowCount.toString() },
+				{ label: forkAuctionCopy.selectedWinningBids, value: selectedClaimCount.toString() },
+				{ label: forkAuctionCopy.selectedRefundRows, value: selectedRefundCount.toString() },
+				{ label: forkAuctionCopy.estimatedRepClaimed, value: estimatedRepClaimed === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={estimatedRepClaimed} suffix={commonCopy.rep} /> },
+				{ label: forkAuctionCopy.formatEstimatedValue(AUCTIONED_BOND_ALLOWANCE_LABEL), value: estimatedAssignedBondAllowance === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={estimatedAssignedBondAllowance} suffix={commonCopy.eth} /> },
+				{ label: forkAuctionCopy.estimatedEthRefunded, value: <CurrencyValue value={estimatedEthRefunded} suffix={commonCopy.eth} /> },
 			])}
 			{roundingDescription === undefined ? undefined : <p className='detail'>{roundingDescription}</p>}
 			{refundDescription === undefined ? undefined : <p className='detail'>{refundDescription}</p>}
@@ -417,24 +224,24 @@ function renderTruthAuctionSettlementSelectionSummary({
 }
 
 function getForkOnlyFallbackText(hasPreviewForkActivity: boolean) {
-	return hasPreviewForkActivity ? UI_STRING_METRIC_UNAVAILABLE_PLACEHOLDER : UI_STRING_FORK_UNAVAILABLE_PLACEHOLDER
+	return hasPreviewForkActivity ? commonCopy.metricUnavailablePlaceholder : forkAuctionCopy.forkUnavailablePlaceholder
 }
 
 function getForkTypeLabel(forkOwnSecurityPool: boolean) {
-	return forkOwnSecurityPool ? UI_STRING_OWN_ESCALATION_FORK : UI_STRING_PARENT_ZOLTAR_FORK
+	return forkOwnSecurityPool ? forkAuctionCopy.ownEscalationFork : forkAuctionCopy.parentZoltarFork
 }
 
 function getPreviewForkTypeLabel({ hasPreviewForkActivity, isSyntheticForkTriggerPreview, previewPool }: { hasPreviewForkActivity: boolean; isSyntheticForkTriggerPreview: boolean; previewPool: ListedSecurityPool | undefined }) {
-	if (previewPool === undefined) return UI_STRING_METRIC_UNAVAILABLE_PLACEHOLDER
-	if (!hasPreviewForkActivity) return UI_STRING_FORK_UNAVAILABLE_PLACEHOLDER
-	if (isSyntheticForkTriggerPreview) return UI_STRING_NOT_CHOSEN
+	if (previewPool === undefined) return commonCopy.metricUnavailablePlaceholder
+	if (!hasPreviewForkActivity) return forkAuctionCopy.forkUnavailablePlaceholder
+	if (isSyntheticForkTriggerPreview) return forkAuctionCopy.notChosen
 	return getForkTypeLabel(previewPool.forkOwnSecurityPool)
 }
 function getPreviewMigrationSummary(previewPool: ListedSecurityPool | undefined, hasPreviewForkActivity: boolean) {
-	if (previewPool === undefined) return UI_STRING_METRIC_UNAVAILABLE_PLACEHOLDER
-	if (!hasPreviewForkActivity) return UI_STRING_FORK_UNAVAILABLE_PLACEHOLDER
-	if (previewPool.truthAuctionStartedAt > 0n) return UI_STRING_METRIC_UNAVAILABLE_PLACEHOLDER
-	return UI_STRING_METRIC_UNAVAILABLE_PLACEHOLDER
+	if (previewPool === undefined) return commonCopy.metricUnavailablePlaceholder
+	if (!hasPreviewForkActivity) return forkAuctionCopy.forkUnavailablePlaceholder
+	if (previewPool.truthAuctionStartedAt > 0n) return commonCopy.metricUnavailablePlaceholder
+	return commonCopy.metricUnavailablePlaceholder
 }
 function getForkWorkflowStageAheadMessage(stage: ForkWorkflowSelectionStage, currentStage: ForkWorkflowSelectionStage) {
 	if (getForkWorkflowStageOrder(stage) <= getForkWorkflowStageOrder(currentStage)) return undefined
@@ -470,7 +277,7 @@ function renderWorkflowMetricGrid(metrics: DisplayMetric[]) {
 
 function renderChildSecurityPoolsSection({ auctionOutcomeSelector, childSecurityPools, renderSelectedOutcomeChildPoolNotice }: { auctionOutcomeSelector: ComponentChildren; childSecurityPools: ListedSecurityPool[]; renderSelectedOutcomeChildPoolNotice: () => ComponentChildren }) {
 	return (
-		<SectionBlock density='compact' headingLevel={4} title={UI_STRING_CHILD_SECURITY_POOLS} variant='embedded'>
+		<SectionBlock density='compact' headingLevel={4} title={forkAuctionCopy.childSecurityPools} variant='embedded'>
 			{auctionOutcomeSelector}
 			{renderSelectedOutcomeChildPoolNotice()}
 			{childSecurityPools.length === 0 ? null : (
@@ -480,14 +287,14 @@ function renderChildSecurityPoolsSection({ auctionOutcomeSelector, childSecurity
 						return (
 							<article className='fork-workflow-child-pool-card' key={pool.securityPoolAddress}>
 								<div className='fork-workflow-child-pool-card-copy'>
-									<strong>{pool.questionOutcome === 'none' ? UI_STRING_PENDING_OUTCOME : getReportingOutcomeLabel(pool.questionOutcome)}</strong>
-									<span>{pool.systemState === 'operational' ? UI_STRING_OPERATIONAL : getForkAuctionStageLabel(getForkAuctionStageView({ forkOutcome: pool.forkOutcome, migratedRep: pool.migratedRep, systemState: pool.systemState, truthAuctionStartedAt: pool.truthAuctionStartedAt }))}</span>
+									<strong>{pool.questionOutcome === 'none' ? forkAuctionCopy.pendingOutcome : getReportingOutcomeLabel(pool.questionOutcome)}</strong>
+									<span>{pool.systemState === 'operational' ? commonCopy.operational : getForkAuctionStageLabel(getForkAuctionStageView({ forkOutcome: pool.forkOutcome, migratedRep: pool.migratedRep, systemState: pool.systemState, truthAuctionStartedAt: pool.truthAuctionStartedAt }))}</span>
 								</div>
 								<div className='fork-workflow-child-pool-card-meta'>
 									<span>
 										<AddressValue address={pool.securityPoolAddress} />
 									</span>
-									<a href={childPoolHref}>{UI_STRING_OPEN_SECURITY_POOL}</a>
+									<a href={childPoolHref}>{forkAuctionCopy.openSecurityPool}</a>
 								</div>
 							</article>
 						)
@@ -505,33 +312,33 @@ function estimateBidRep(bidAmount: string, bidPrice: bigint | undefined) {
 	return estimateRepPurchased(parsedBidAmount, bidPrice)
 }
 function getStartTruthAuctionGuardMessage({ currentTimestamp, migrationEndsAt }: { currentTimestamp: bigint | undefined; migrationEndsAt: bigint | undefined }) {
-	if (migrationEndsAt === undefined) return UI_STRING_MIGRATION_TIMING_IS_UNAVAILABLE
-	if (currentTimestamp === undefined) return UI_STRING_LOADING_CURRENT_CHAIN_TIME
-	if (currentTimestamp <= migrationEndsAt) return UI_STRING_MIGRATION_IS_STILL_ACTIVE_TRUTH_AUCTION_CAN_START_ONCE_MIGRATION_ENDS
+	if (migrationEndsAt === undefined) return forkAuctionCopy.migrationTimingIsUnavailable
+	if (currentTimestamp === undefined) return forkAuctionCopy.loadingCurrentChainTime
+	if (currentTimestamp <= migrationEndsAt) return forkAuctionCopy.truthAuctionMigrationPendingDetail
 	return undefined
 }
 
 function getMigrationWindowClosedGuardMessage({ currentTimestamp, migrationEndsAt }: { currentTimestamp: bigint | undefined; migrationEndsAt: bigint | undefined }) {
-	if (migrationEndsAt === undefined) return UI_STRING_MIGRATION_TIMING_IS_UNAVAILABLE
-	if (currentTimestamp === undefined) return UI_STRING_LOADING_CURRENT_CHAIN_TIME
-	if (currentTimestamp > migrationEndsAt) return UI_STRING_MIGRATION_WINDOW_HAS_CLOSED_FOR_THIS_PARENT_POOL
+	if (migrationEndsAt === undefined) return forkAuctionCopy.migrationTimingIsUnavailable
+	if (currentTimestamp === undefined) return forkAuctionCopy.loadingCurrentChainTime
+	if (currentTimestamp > migrationEndsAt) return forkAuctionCopy.parentMigrationExpiredDetail
 	return undefined
 }
 
 function getTruthAuctionBypassReason({ migratedRep, parentCollateralAmount, auctionableRepAtFork }: { migratedRep: bigint; parentCollateralAmount: bigint | undefined; auctionableRepAtFork: bigint | undefined }) {
-	if (parentCollateralAmount === 0n) return UI_STRING_NO_PARENT_COLLATERAL_REMAINS_TO_AUCTION_SO_THIS_STEP_IMMEDIATELY_BYPASSES_BIDDING
+	if (parentCollateralAmount === 0n) return forkAuctionCopy.truthAuctionNoCollateralDetail
 	if (auctionableRepAtFork === undefined) return undefined
-	if (auctionableRepAtFork === 0n) return UI_STRING_NO_REP_WAS_PRESENT_AT_FORK_SO_NO_TRUTH_AUCTION_IS_NEEDED
-	if (migratedRep >= auctionableRepAtFork) return UI_STRING_CHILD_UNIVERSE_FULLY_MIGRATED_DETAIL
+	if (auctionableRepAtFork === 0n) return forkAuctionCopy.truthAuctionNoRepDetail
+	if (migratedRep >= auctionableRepAtFork) return forkAuctionCopy.childUniverseFullyMigratedDetail
 	return undefined
 }
 
 function getFinalizeTruthAuctionGuardMessage({ currentTimestamp, truthAuction, truthAuctionEndsAt }: { currentTimestamp: bigint | undefined; truthAuction: TruthAuctionMetrics | undefined; truthAuctionEndsAt: bigint | undefined }) {
-	if (truthAuction === undefined) return UI_STRING_LOAD_THE_TRUTH_AUCTION_BEFORE_FINALIZING
-	if (truthAuction.finalized) return UI_STRING_TRUTH_AUCTION_IS_ALREADY_FINALIZED
-	if (truthAuctionEndsAt === undefined) return UI_STRING_TRUTH_AUCTION_END_TIME_IS_UNAVAILABLE
-	if (currentTimestamp === undefined) return UI_STRING_LOADING_CURRENT_CHAIN_TIME
-	if (currentTimestamp <= truthAuctionEndsAt) return UI_STRING_TRUTH_AUCTION_IS_STILL_ONGOING
+	if (truthAuction === undefined) return forkAuctionCopy.truthAuctionLoadRequired
+	if (truthAuction.finalized) return forkAuctionCopy.truthAuctionFinalizedReason
+	if (truthAuctionEndsAt === undefined) return forkAuctionCopy.auctionEndTimeUnavailable
+	if (currentTimestamp === undefined) return forkAuctionCopy.loadingCurrentChainTime
+	if (currentTimestamp <= truthAuctionEndsAt) return forkAuctionCopy.auctionOngoingReason
 	return undefined
 }
 
@@ -554,26 +361,26 @@ function getTruthAuctionStateBadge({
 }): TruthAuctionStateBadge {
 	if (truthAuction === undefined) {
 		if (isStartTruthAuctionInProgress || (hasSelectedAuctionChildPool && truthAuctionStartedAt === 0n && startTruthAuctionCountdown !== undefined && startTruthAuctionCountdown > 0n)) {
-			return { label: UI_STRING_PENDING, tone: 'pending' }
+			return { label: commonCopy.pending, tone: 'pending' }
 		}
-		return { label: UI_STRING_INACTIVE, tone: 'muted' }
+		return { label: forkAuctionCopy.inactive, tone: 'muted' }
 	}
 	if (!truthAuction.finalized) {
 		if (truthAuction.hitCap && truthAuction.clearingTick !== undefined && truthAuction.clearingPrice !== undefined) {
-			return { label: UI_STRING_CLEARING, tone: 'pending' }
+			return { label: forkAuctionCopy.clearing, tone: 'pending' }
 		}
-		return { label: UI_STRING_OPEN, tone: 'pending' }
+		return { label: forkAuctionCopy.open, tone: 'pending' }
 	}
-	if (truthAuction.underfunded) return { label: UI_STRING_SHORTFALL, tone: 'blocked' }
-	if (truthAuction.hitCap) return { label: UI_STRING_SETTLED, tone: 'ok' }
-	return { label: UI_STRING_UNFILLED, tone: 'muted' }
+	if (truthAuction.underfunded) return { label: forkAuctionCopy.shortfall, tone: 'blocked' }
+	if (truthAuction.hitCap) return { label: commonCopy.settled, tone: 'ok' }
+	return { label: forkAuctionCopy.unfilled, tone: 'muted' }
 }
 
 function getMigrationStateBadge({ currentTimestamp, effectiveTruthAuctionStartedAt, migrationEndsAt }: { currentTimestamp: bigint | undefined; effectiveTruthAuctionStartedAt: bigint | undefined; migrationEndsAt: bigint | undefined }): MigrationStateBadge {
-	if (migrationEndsAt === undefined) return { label: UI_STRING_NOT_STARTED_BADGE_LABEL, tone: 'muted' }
-	if (effectiveTruthAuctionStartedAt !== undefined && effectiveTruthAuctionStartedAt > 0n) return { label: UI_STRING_CLOSED, tone: 'ok' }
-	if (currentTimestamp !== undefined && currentTimestamp >= migrationEndsAt) return { label: UI_STRING_CLOSED, tone: 'ok' }
-	return { label: UI_STRING_OPEN, tone: 'pending' }
+	if (migrationEndsAt === undefined) return { label: forkAuctionCopy.notStartedBadgeLabel, tone: 'muted' }
+	if (effectiveTruthAuctionStartedAt !== undefined && effectiveTruthAuctionStartedAt > 0n) return { label: forkAuctionCopy.closed, tone: 'ok' }
+	if (currentTimestamp !== undefined && currentTimestamp >= migrationEndsAt) return { label: forkAuctionCopy.closed, tone: 'ok' }
+	return { label: forkAuctionCopy.open, tone: 'pending' }
 }
 
 function isFullReadClient(client: Pick<ReadClient, 'readContract'> | ReadClient | undefined): client is ReadClient {
@@ -740,23 +547,23 @@ export function ForkAuctionSection({
 		const securityPoolHref = buildRouteHref(SECURITY_POOLS_ROUTE, writeUniverseQueryParam(securityPoolSearch, selectedAuctionChildPool.universeId))
 		return (
 			<a className='fork-workflow-outcome-link' href={securityPoolHref}>
-				{UI_STRING_CHILD_POOL}
+				{forkAuctionCopy.childPool}
 			</a>
 		)
 	}
 
 	const migrationBalancesContent = (() => {
-		if (accountState.address === undefined) return <p className='detail'>{UI_STRING_CONNECT_WALLET_TO_INSPECT_YOUR_PARENT_POOL_BALANCES}</p>
-		if (connectedWalletVaultSummary === undefined) return <p className='detail'>{UI_STRING_PARENT_POOL_VAULT_BALANCES_UNAVAILABLE_MIGRATION_DETAIL}</p>
+		if (accountState.address === undefined) return <p className='detail'>{forkAuctionCopy.parentBalancesWalletRequired}</p>
+		if (connectedWalletVaultSummary === undefined) return <p className='detail'>{forkAuctionCopy.parentVaultBalancesUnavailableDetail}</p>
 		const selectedOutcomeMigrationVaultBalanceContent = (() => {
 			if (selectedOutcomeMigrationChildPool === undefined) return undefined
 
 			return (
 				<>
-					<p className='detail'>{UI_STRING_MIGRATED_BALANCES_FOR_THIS_OUTCOME}</p>
+					<p className='detail'>{forkAuctionCopy.migratedBalancesForThisOutcome}</p>
 					{renderWorkflowMetricGrid([
-						{ label: UI_STRING_SELECTED_OUTCOME_REP_COLLATERAL, value: <CurrencyValue value={selectedOutcomeMigrationChildVault?.repDepositShare ?? 0n} suffix={UI_STRING_REP} /> },
-						{ label: UI_STRING_SELECTED_OUTCOME_SECURITY_BOND_ALLOWANCE, value: <CurrencyValue value={selectedOutcomeMigrationChildVault?.securityBondAllowance ?? 0n} suffix={UI_STRING_ETH} /> },
+						{ label: forkAuctionCopy.selectedOutcomeRepCollateral, value: <CurrencyValue value={selectedOutcomeMigrationChildVault?.repDepositShare ?? 0n} suffix={commonCopy.rep} /> },
+						{ label: forkAuctionCopy.selectedOutcomeSecurityBondAllowance, value: <CurrencyValue value={selectedOutcomeMigrationChildVault?.securityBondAllowance ?? 0n} suffix={commonCopy.eth} /> },
 					])}
 				</>
 			)
@@ -765,13 +572,13 @@ export function ForkAuctionSection({
 		return (
 			<>
 				{renderWorkflowMetricGrid([
-					{ label: UI_STRING_REP_COLLATERAL, value: <CurrencyValue value={connectedWalletVaultSummary.repDepositShare} suffix={UI_STRING_REP} /> },
-					{ label: UI_STRING_SECURITY_BOND_ALLOWANCE, value: <CurrencyValue value={connectedWalletVaultSummary.securityBondAllowance} suffix={UI_STRING_ETH} /> },
-					{ label: UI_STRING_ESCROWED_REP, value: <CurrencyValue value={effectiveEscrowedRepInEscalationGame ?? 0n} suffix={UI_STRING_REP} /> },
+					{ label: commonCopy.repCollateral, value: <CurrencyValue value={connectedWalletVaultSummary.repDepositShare} suffix={commonCopy.rep} /> },
+					{ label: commonCopy.securityBondAllowance, value: <CurrencyValue value={connectedWalletVaultSummary.securityBondAllowance} suffix={commonCopy.eth} /> },
+					{ label: commonCopy.escrowedRep, value: <CurrencyValue value={effectiveEscrowedRepInEscalationGame ?? 0n} suffix={commonCopy.rep} /> },
 				])}
 				<div className='form-grid fork-workflow-outcome-selector'>
 					<label className='field'>
-						<span>{UI_STRING_OUTCOME}</span>
+						<span>{commonCopy.outcome}</span>
 						<div className='fork-workflow-outcome-selector-row'>
 							<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={forkAuctionForm.selectedOutcome} onChange={selectedOutcome => onForkAuctionFormChange({ selectedOutcome })} />
 							{renderSelectedOutcomeChildPoolLink()}
@@ -785,8 +592,8 @@ export function ForkAuctionSection({
 	})()
 	const hasWalletVaultMigrationBalance = connectedWalletVaultSummary !== undefined && (connectedWalletVaultSummary.repDepositShare > 0n || connectedWalletVaultSummary.securityBondAllowance > 0n)
 	const hasWalletEscalationMigrationBalance = effectiveEscrowedRepInEscalationGame !== undefined && effectiveEscrowedRepInEscalationGame > 0n
-	const migrateVaultBalanceGuardMessage = connectedWalletVaultSummary !== undefined && !hasWalletVaultMigrationBalance ? UI_STRING_NO_REP_COLLATERAL_OR_SECURITY_BOND_ALLOWANCE_REMAINS : undefined
-	const migrateEscalationBalanceGuardMessage = connectedWalletVaultSummary !== undefined && !hasWalletEscalationMigrationBalance ? UI_STRING_NO_ESCROWED_REP_REMAINS_TO_MIGRATE_FOR_THE_CONNECTED_WALLET : undefined
+	const migrateVaultBalanceGuardMessage = connectedWalletVaultSummary !== undefined && !hasWalletVaultMigrationBalance ? forkAuctionCopy.poolMigrationCapacityEmpty : undefined
+	const migrateEscalationBalanceGuardMessage = connectedWalletVaultSummary !== undefined && !hasWalletEscalationMigrationBalance ? forkAuctionCopy.walletEscrowedRepEmpty : undefined
 	const totalUnresolvedMigrationDepositCount = unresolvedMigrationSides.reduce((count, side) => count + side.userDeposits.length, 0)
 	const hasUnresolvedMigrationDeposits = totalUnresolvedMigrationDepositCount > 0
 	const importedForkSettlementSides = activeReportingDetails?.sides.filter(side => side.importedUserDeposits.length > 0) ?? []
@@ -800,8 +607,8 @@ export function ForkAuctionSection({
 	const auctionWindow = getTruthAuctionWindow(effectiveTruthAuctionStartedAt)
 	const truthAuctionEndsAt = auctionTruthAuctionStatus?.auctionEndsAt ?? auctionWindow?.endsAt
 	const truthAuctionFallback = (() => {
-		if (auctionTruthAuctionStatus !== undefined) return UI_STRING_METRIC_UNAVAILABLE_PLACEHOLDER
-		if (hasSelectedAuctionChildPool) return UI_STRING_METRIC_UNAVAILABLE_PLACEHOLDER
+		if (auctionTruthAuctionStatus !== undefined) return commonCopy.metricUnavailablePlaceholder
+		if (hasSelectedAuctionChildPool) return commonCopy.metricUnavailablePlaceholder
 		return forkOnlyFallbackText
 	})()
 	const truthAuctionStatus = auctionTruthAuctionStatus
@@ -851,18 +658,18 @@ export function ForkAuctionSection({
 		if (hasStartedTruthAuction) {
 			return renderTimestamp({
 				displayTimestamp: effectiveTruthAuctionStartedAt,
-				fallbackText: UI_STRING_NOT_STARTED,
+				fallbackText: forkAuctionCopy.notStarted,
 			})
 		}
-		if (isStartTruthAuctionInProgress) return UI_STRING_STARTING_TRUNCATED
+		if (isStartTruthAuctionInProgress) return forkAuctionCopy.startingTruncated
 		if (effectiveTruthAuctionStartedAt === undefined || effectiveTruthAuctionStartedAt === 0n) {
-			if (startTruthAuctionCountdown !== undefined && startTruthAuctionCountdown > 0n) return UI_TEMPLATE_STARTS_IN_VALUE(formatDuration(startTruthAuctionCountdown))
-			return UI_STRING_NOT_STARTED
+			if (startTruthAuctionCountdown !== undefined && startTruthAuctionCountdown > 0n) return forkAuctionCopy.formatStartsInValue(formatDuration(startTruthAuctionCountdown))
+			return forkAuctionCopy.notStarted
 		}
-		return UI_STRING_NOT_STARTED
+		return forkAuctionCopy.notStarted
 	})()
 	const endsDisplay = (() => {
-		if (auctionWindow === undefined) return isStartTruthAuctionInProgress ? UI_STRING_PENDING_CONFIRMATION : UI_STRING_NOT_STARTED
+		if (auctionWindow === undefined) return isStartTruthAuctionInProgress ? forkAuctionCopy.pendingConfirmation : forkAuctionCopy.notStarted
 		return <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={auctionWindow.endsAt} />
 	})()
 	const hasStartedSelectedTruthAuctionTimeline = hasStartedTruthAuction || truthAuctionStatus !== undefined || selectedStage === 'auction' || selectedStage === 'settlement' || currentWorkflowStage === 'auction' || currentWorkflowStage === 'settlement'
@@ -887,15 +694,15 @@ export function ForkAuctionSection({
 			truthAuctionFallback
 		) : (
 			<Fragment>
-				<CurrencyValue value={displayedEthRaised} suffix={UI_STRING_ETH} /> / <CurrencyValue value={truthAuctionStatus.ethRaiseCap} suffix={UI_STRING_ETH} />
+				<CurrencyValue value={displayedEthRaised} suffix={commonCopy.eth} /> / <CurrencyValue value={truthAuctionStatus.ethRaiseCap} suffix={commonCopy.eth} />
 			</Fragment>
 		)
 	const clearingPriceDisplay = truthAuctionStatus === undefined ? truthAuctionFallback : renderTruthAuctionPriceValue(truthAuctionStatus.clearingPrice)
 	const settlementAvailableDisplay = (() => {
-		if (!hasSelectedAuctionChildPool) return UI_STRING_FORK_UNAVAILABLE_PLACEHOLDER
-		if (selectedAuctionContext?.claimingAvailable) return UI_STRING_YES
+		if (!hasSelectedAuctionChildPool) return forkAuctionCopy.forkUnavailablePlaceholder
+		if (selectedAuctionContext?.claimingAvailable) return commonCopy.yes
 
-		return UI_STRING_NO
+		return commonCopy.no
 	})()
 	const settlementBidRows = getTruthAuctionSettlementBidRows({
 		accountAddress: accountState.address,
@@ -933,16 +740,16 @@ export function ForkAuctionSection({
 			truthAuctionFinalized: truthAuctionStatus?.finalized === true,
 		}) ?? 'refundLosingBids'
 	const showRefundOnlySettlementDebtNotice = truthAuctionStatus?.finalized === true && selectedRefundSettlementBidRows.length > 0 && selectedClaimSettlementBidRows.length === 0
-	const settlementActionLabel = UI_STRING_SETTLE_SELECTED_BIDS
+	const settlementActionLabel = forkAuctionCopy.settleSelectedBids
 	const settlementActionDescription = (() => {
-		if (settlementSelectionMode === 'claim') return UI_TEMPLATE_WINNING_BID_BATCH_SETTLEMENT_DETAIL(AUCTIONED_BOND_ALLOWANCE_LABEL)
+		if (settlementSelectionMode === 'claim') return forkAuctionCopy.formatWinningBidBatchSettlementDetail(AUCTIONED_BOND_ALLOWANCE_LABEL)
 		if (settlementSelectionMode === 'refund') {
-			if (truthAuctionStatus?.finalized === true) return UI_TEMPLATE_FINALIZED_REFUND_BATCH_SETTLEMENT_DETAIL(AUCTIONED_BOND_ALLOWANCE_LABEL)
-			return UI_TEMPLATE_REFUNDABLE_BID_BATCH_SETTLEMENT_DETAIL(AUCTIONED_BOND_ALLOWANCE_LABEL)
+			if (truthAuctionStatus?.finalized === true) return forkAuctionCopy.formatFinalizedRefundBatchSettlementDetail(AUCTIONED_BOND_ALLOWANCE_LABEL)
+			return forkAuctionCopy.formatRefundableBidBatchSettlementDetail(AUCTIONED_BOND_ALLOWANCE_LABEL)
 		}
-		return UI_TEMPLATE_MIXED_BID_BATCH_SETTLEMENT_DETAIL(AUCTIONED_BOND_ALLOWANCE_LABEL)
+		return forkAuctionCopy.formatMixedBidBatchSettlementDetail(AUCTIONED_BOND_ALLOWANCE_LABEL)
 	})()
-	const settlementActionPendingLabel = UI_STRING_SUBMITTING_SETTLEMENT_TRANSACTION_TRUNCATED
+	const settlementActionPendingLabel = forkAuctionCopy.submittingSettlementTransactionTruncated
 	const auctionBidRows = buildTruthAuctionBidRows({
 		bids: aggregatedAuctionBids,
 		truthAuction: truthAuctionStatus,
@@ -962,7 +769,7 @@ export function ForkAuctionSection({
 		setSelectedSettlementBidKeys(currentKeys => updateTruthAuctionSettlementBidSelection(currentKeys, bidKey, checked))
 	}
 	const interactionDisabledReason = (() => {
-		if (accountState.address === undefined) return UI_STRING_CONNECT_A_WALLET_BEFORE_USING_FORK_AND_AUCTION_ACTIONS
+		if (accountState.address === undefined) return forkAuctionCopy.forkActionWalletRequired
 		if (!isMainnet) return undefined
 
 		return undefined
@@ -1007,10 +814,10 @@ export function ForkAuctionSection({
 		return (
 			<div className='notice success'>
 				<p>
-					<strong>{UI_STRING_TRUTH_AUCTION_HAS_ENDED}</strong> {truthAuctionStatus.finalized ? UI_TEMPLATE_FINALIZED_TRUTH_AUCTION_SETTLEMENT_STATUS_DETAIL(AUCTIONED_BOND_ALLOWANCE_LABEL) : UI_STRING_TRUTH_AUCTION_FINALIZATION_REQUIRED_DETAIL}{' '}
+					<strong>{forkAuctionCopy.auctionEndedStatus}</strong> {truthAuctionStatus.finalized ? forkAuctionCopy.formatFinalizedSettlementDetail(AUCTIONED_BOND_ALLOWANCE_LABEL) : forkAuctionCopy.truthAuctionFinalizationRequiredDetail}{' '}
 					{truthAuctionEndsAt === undefined ? undefined : (
 						<Fragment>
-							{UI_STRING_ENDED_AT}
+							{forkAuctionCopy.endedAtLead}
 							<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={truthAuctionEndsAt} />
 						</Fragment>
 					)}
@@ -1021,9 +828,9 @@ export function ForkAuctionSection({
 							action: 'finalizeTruthAuction',
 							availability: createActionAvailability(finalizeTruthAuctionGuardMessage),
 							forceEnabled: hasSelectedAuctionChildPool,
-							idleLabel: UI_STRING_FINALIZE_TRUTH_AUCTION,
+							idleLabel: forkAuctionCopy.finalizeTruthAuction,
 							onClick: onFinalizeTruthAuctionForSelectedAuction,
-							pendingLabel: UI_STRING_FINALIZING_TRUTH_AUCTION_TRUNCATED,
+							pendingLabel: forkAuctionCopy.finalizingTruthAuctionTruncated,
 						})}
 					</div>
 				)}
@@ -1033,7 +840,7 @@ export function ForkAuctionSection({
 	const startTruthAuctionReadyInText = (() => {
 		if (startTruthAuctionCountdown === undefined) return undefined
 		if (startTruthAuctionCountdown === 0n) return undefined
-		return UI_TEMPLATE_TRUTH_AUCTION_CAN_BE_STARTED_IN_VALUE_ONCE_MIGRATION_ENDS(formatDuration(startTruthAuctionCountdown))
+		return forkAuctionCopy.formatTruthAuctionStartDelay(formatDuration(startTruthAuctionCountdown))
 	})()
 	const isVaultMigrationComplete = hasCompletedVaultMigration || (connectedWalletVaultSummary !== undefined && !hasWalletVaultMigrationBalance)
 	const truthAuctionBypassReason = getTruthAuctionBypassReason({
@@ -1043,8 +850,8 @@ export function ForkAuctionSection({
 	})
 	const bidPriceValidationMessage = getTruthAuctionBidPriceValidationMessage(forkAuctionForm.submitBidPrice)
 	const startTruthAuctionAvailabilityMessage = (() => {
-		if (hasStartedTruthAuction) return UI_STRING_TRUTH_AUCTION_ALREADY_STARTED
-		if (isStartTruthAuctionInProgress) return UI_STRING_STARTING_TRUTH_AUCTION
+		if (hasStartedTruthAuction) return forkAuctionCopy.auctionStartedReason
+		if (isStartTruthAuctionInProgress) return forkAuctionCopy.startingTruthAuction
 		return startTruthAuctionGuardMessage
 	})()
 	const setSelectedEscalationMigrationDepositIndexes = (nextSelectedDepositIndexes: bigint[]) => {
@@ -1058,13 +865,13 @@ export function ForkAuctionSection({
 	}
 	const migrateSelectedEscalationDepositsGuardMessage = (() => {
 		if (migrateEscalationBalanceGuardMessage !== undefined) return migrateEscalationBalanceGuardMessage
-		if (loadingReportingDetails) return UI_STRING_LOADING_ELIGIBLE_ESCALATION_DEPOSITS
-		if (reportingDetails?.status !== 'active') return UI_STRING_ESCALATION_DEPOSIT_DETAILS_ARE_UNAVAILABLE_FOR_THIS_POOL
-		if (isMigrationRequired) return UI_STRING_USE_UNRESOLVED_ESCALATION_MIGRATION_FOR_THIS_PARENT_POOL
-		if (isMigrationExpired) return UI_STRING_UNRESOLVED_ESCALATION_MIGRATION_WINDOW_CLOSED_REASON
-		if (selectedEscalationMigrationDeposits.length === 0) return UI_TEMPLATE_NO_VALUE_ESCALATION_DEPOSITS_ARE_CURRENTLY_AVAILABLE_TO_MIGRATE_FOR_THIS_WALLET(selectedOutcomeLabel)
+		if (loadingReportingDetails) return forkAuctionCopy.eligibleDepositsLoading
+		if (reportingDetails?.status !== 'active') return forkAuctionCopy.escalationDepositDetailsUnavailable
+		if (isMigrationRequired) return forkAuctionCopy.useUnresolvedMigrationReason
+		if (isMigrationExpired) return forkAuctionCopy.unresolvedMigrationExpiredReason
+		if (selectedEscalationMigrationDeposits.length === 0) return forkAuctionCopy.formatNoMigratableEscalationDeposits(selectedOutcomeLabel)
 		if (selectedEscalationMigrationDepositIndexes.length > 0) return undefined
-		return UI_STRING_SELECT_AT_LEAST_ONE_DEPOSIT_TO_MIGRATE
+		return forkAuctionCopy.migrationDepositSelectionRequired
 	})()
 	const migrationWindowClosedGuardMessage = getMigrationWindowClosedGuardMessage({
 		currentTimestamp: effectiveCurrentTimestamp,
@@ -1072,32 +879,30 @@ export function ForkAuctionSection({
 	})
 	const migrateUnresolvedEscalationGuardMessage = (() => {
 		if (migrationWindowClosedGuardMessage !== undefined) return migrationWindowClosedGuardMessage
-		if (loadingReportingDetails) return UI_STRING_LOADING_UNRESOLVED_ESCALATION_DEPOSITS
-		if (selectedOutcomeEscalationEntitlementMaterialized) return UI_TEMPLATE_UNRESOLVED_ESCALATION_ENTITLEMENT_ALREADY_MATERIALIZED(selectedOutcomeLabel)
+		if (loadingReportingDetails) return forkAuctionCopy.unresolvedDepositsLoading
+		if (selectedOutcomeEscalationEntitlementMaterialized) return forkAuctionCopy.formatEntitlementAlreadyMaterialized(selectedOutcomeLabel)
 		if (hasStoredEscalationMigrationEntitlement) return undefined
-		if (!isMigrationRequired) return UI_STRING_UNRESOLVED_ESCALATION_MIGRATION_IS_UNAVAILABLE_FOR_THIS_POOL
-		if (activeReportingDetails === undefined) return UI_STRING_UNRESOLVED_ESCALATION_DEPOSIT_DETAILS_ARE_UNAVAILABLE_FOR_THIS_POOL_RIGHT_NOW
-		if (!hasUnresolvedMigrationDeposits) return UI_STRING_NO_UNRESOLVED_PARENT_ESCALATION_DEPOSITS_REMAIN_FOR_CONNECTED_WALLET
+		if (!isMigrationRequired) return forkAuctionCopy.unresolvedMigrationUnavailableReason
+		if (activeReportingDetails === undefined) return forkAuctionCopy.unresolvedDepositDetailsUnavailable
+		if (!hasUnresolvedMigrationDeposits) return forkAuctionCopy.walletUnresolvedDepositsEmpty
 		return undefined
 	})()
 	const migratePoolToUniverseGuardMessage = (() => {
-		if (loadingSelectedOutcomeMigrationSeedStatus) return UI_TEMPLATE_CHECKING_POOL_REP_MIGRATED_TO_CHILD_UNIVERSE(selectedOutcomeLabel)
+		if (loadingSelectedOutcomeMigrationSeedStatus) return forkAuctionCopy.formatCheckingPoolRepMigratedToChildUniverse(selectedOutcomeLabel)
 		if (selectedOutcomeMigrationSeedStatusError !== undefined) return selectedOutcomeMigrationSeedStatusError
-		if (selectedOutcomeMigrationSeedStatus?.seeded) return UI_TEMPLATE_POOL_REP_HAS_ALREADY_BEEN_MIGRATED_TO_THE_VALUE_UNIVERSE(selectedOutcomeLabel)
+		if (selectedOutcomeMigrationSeedStatus?.seeded) return forkAuctionCopy.formatPoolRepAlreadyMigrated(selectedOutcomeLabel)
 		return undefined
 	})()
 	const selectedOutcomeMigrationSeedGuardMessage = (() => {
 		if (migrateVaultBalanceGuardMessage !== undefined) return undefined
-		if (loadingSelectedOutcomeMigrationSeedStatus) return UI_TEMPLATE_CHECKING_POOL_REP_MIGRATED_TO_CHILD_UNIVERSE(selectedOutcomeLabel)
+		if (loadingSelectedOutcomeMigrationSeedStatus) return forkAuctionCopy.formatCheckingPoolRepMigratedToChildUniverse(selectedOutcomeLabel)
 		if (selectedOutcomeMigrationSeedStatusError !== undefined) return selectedOutcomeMigrationSeedStatusError
 		if (selectedOutcomeMigrationSeedStatus === undefined || selectedOutcomeMigrationSeedStatus.seeded) return undefined
-		return UI_TEMPLATE_MIGRATE_POOL_TO_THE_VALUE_UNIVERSE_BEFORE_MOVING_VAULT_BALANCES(selectedOutcomeLabel)
+		return forkAuctionCopy.formatPoolMigrationRequiredForVault(selectedOutcomeLabel)
 	})()
-	const migrateVaultCompletedMessage = isVaultMigrationComplete ? UI_STRING_VAULT_MIGRATION_IS_ALREADY_COMPLETE_FOR_THIS_WALLET : undefined
-	const vaultMigrationInProgressMessage = isVaultMigrationPending ? UI_STRING_MIGRATING_VAULT : undefined
-	const migrateVaultGuardMessage = isMigrationRequired
-		? UI_STRING_USE_UNRESOLVED_ESCALATION_MIGRATION_TO_MOVE_LOCKED_POSITIONS_AND_VAULT_BALANCES_TOGETHER
-		: (migrationWindowClosedGuardMessage ?? migrateVaultBalanceGuardMessage ?? selectedOutcomeMigrationSeedGuardMessage ?? migrateVaultCompletedMessage ?? vaultMigrationInProgressMessage)
+	const migrateVaultCompletedMessage = isVaultMigrationComplete ? forkAuctionCopy.vaultMigrationCompleteReason : undefined
+	const vaultMigrationInProgressMessage = isVaultMigrationPending ? forkAuctionCopy.migratingVault : undefined
+	const migrateVaultGuardMessage = isMigrationRequired ? forkAuctionCopy.combinedUnresolvedMigrationDetail : (migrationWindowClosedGuardMessage ?? migrateVaultBalanceGuardMessage ?? selectedOutcomeMigrationSeedGuardMessage ?? migrateVaultCompletedMessage ?? vaultMigrationInProgressMessage)
 	const submitBidGuardMessage = truthAuctionBidGuardMessage ?? bidPriceValidationMessage
 	const migrationStateBadge = getMigrationStateBadge({
 		currentTimestamp: effectiveCurrentTimestamp,
@@ -1202,33 +1007,33 @@ export function ForkAuctionSection({
 		if (selectedAuctionChildPool !== undefined) return undefined
 		return (
 			<div className='fork-workflow-outcome-notice'>
-				<p className='detail'>{UI_TEMPLATE_SECURITY_POOL_FOR_VALUE_UNIVERSE_DOES_NOT_EXIST(selectedOutcomeLabel)}</p>
+				<p className='detail'>{forkAuctionCopy.formatMissingOutcomePoolDetail(selectedOutcomeLabel)}</p>
 			</div>
 		)
 	}
-	const renderSubmitBidSection = ({ description, density = 'balanced', headingLevel = 3, title = UI_STRING_SUBMIT_BID, variant = 'embedded' }: { description?: ComponentChildren; density?: 'balanced' | 'compact'; headingLevel?: 3 | 4; title?: ComponentChildren; variant?: 'default' | 'embedded' }) => (
+	const renderSubmitBidSection = ({ description, density = 'balanced', headingLevel = 3, title = forkAuctionCopy.submitBid, variant = 'embedded' }: { description?: ComponentChildren; density?: 'balanced' | 'compact'; headingLevel?: 3 | 4; title?: ComponentChildren; variant?: 'default' | 'embedded' }) => (
 		<SectionBlock {...(description === undefined ? {} : { description })} density={density} headingLevel={headingLevel} title={title} variant={variant}>
 			<div className='form-grid'>
 				{submitBidPreviewTickSummary === undefined ? undefined : (
 					<p className='detail'>
-						{UI_STRING_SELECTED_LADDER_PRICE}
+						{forkAuctionCopy.selectedLadderPriceLead}
 						{renderTruthAuctionPriceValue(submitBidPreviewTickSummary.price)}
 					</p>
 				)}
 				<div className='field-row'>
 					<label className='field'>
-						<span>{UI_STRING_BID_PRICE_ETH_REP}</span>
+						<span>{forkAuctionCopy.bidPriceEthRep}</span>
 						<FormInput value={forkAuctionForm.submitBidPrice} onInput={event => onForkAuctionFormChange({ submitBidPrice: event.currentTarget.value })} />
 					</label>
 					<label className='field'>
-						<span>{UI_STRING_BID_AMOUNT_ETH}</span>
+						<span>{forkAuctionCopy.bidAmountEth}</span>
 						<FormInput value={forkAuctionForm.submitBidAmount} onInput={event => onForkAuctionFormChange({ submitBidAmount: event.currentTarget.value })} />
 					</label>
 				</div>
 				{enteredBidPrice === undefined ? undefined : (
 					<p className='detail'>
-						{UI_STRING_BID_ESTIMATED_REP_DETAIL_INTRO}
-						{estimatedRep === undefined ? UI_STRING_METRIC_UNAVAILABLE_PLACEHOLDER : <CurrencyValue value={estimatedRep} suffix={UI_STRING_REP} />} {UI_STRING_BID_ESTIMATED_REP_DETAIL_OUTRO}
+						{forkAuctionCopy.bidEstimatedRepDetailLead}
+						{estimatedRep === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={estimatedRep} suffix={commonCopy.rep} />} {forkAuctionCopy.bidEstimatedRepDetailTail}
 					</p>
 				)}
 				{renderTruthAuctionDebtNotice('bid')}
@@ -1237,9 +1042,9 @@ export function ForkAuctionSection({
 						action: 'submitBid',
 						availability: createActionAvailability(submitBidGuardMessage),
 						forceEnabled: hasSelectedAuctionChildPool,
-						idleLabel: UI_STRING_SUBMIT_BID,
+						idleLabel: forkAuctionCopy.submitBid,
 						onClick: onSubmitBidForSelectedAuction,
-						pendingLabel: UI_STRING_SUBMITTING_BID_TRUNCATED,
+						pendingLabel: forkAuctionCopy.submittingBidTruncated,
 					})}
 				</div>
 			</div>
@@ -1319,41 +1124,41 @@ export function ForkAuctionSection({
 		if (forkAuctionDetails?.migrationEndsAt !== undefined) return forkAuctionDetails.migrationEndsAt - FORK_MIGRATION_DURATION
 		return undefined
 	})()
-	const migrationRepAtForkDisplay = forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.auctionableRepAtFork} suffix={UI_STRING_REP} />
-	const migrationRepDisplay = renderMetricValue(forkAuctionDetails?.migratedRep ?? previewPool?.migratedRep, UI_STRING_REP, UI_STRING_METRIC_UNAVAILABLE_PLACEHOLDER)
-	const migrationCollateralDisplay = renderMetricValue(forkAuctionDetails?.completeSetCollateralAmount ?? previewPool?.completeSetCollateralAmount, UI_STRING_ETH, UI_STRING_METRIC_UNAVAILABLE_PLACEHOLDER)
-	const migrationStartedDisplay = migrationStartedAt === undefined || migrationStartedAt <= 0n ? UI_STRING_NOT_STARTED : <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={migrationStartedAt} />
+	const migrationRepAtForkDisplay = forkAuctionDetails === undefined ? forkOnlyFallbackText : <CurrencyValue value={forkAuctionDetails.auctionableRepAtFork} suffix={commonCopy.rep} />
+	const migrationRepDisplay = renderMetricValue(forkAuctionDetails?.migratedRep ?? previewPool?.migratedRep, commonCopy.rep, commonCopy.metricUnavailablePlaceholder)
+	const migrationCollateralDisplay = renderMetricValue(forkAuctionDetails?.completeSetCollateralAmount ?? previewPool?.completeSetCollateralAmount, commonCopy.eth, commonCopy.metricUnavailablePlaceholder)
+	const migrationStartedDisplay = migrationStartedAt === undefined || migrationStartedAt <= 0n ? forkAuctionCopy.notStarted : <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={migrationStartedAt} />
 	const migrationEndsDisplay = (() => {
 		if (forkAuctionDetails === undefined) return migrationSummaryText
 		if (hasStartedSelectedTruthAuctionTimeline && effectiveTruthAuctionStartedAt !== undefined && effectiveTruthAuctionStartedAt > 0n) {
 			return <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={effectiveTruthAuctionStartedAt} />
 		}
-		if (forkAuctionDetails.migrationEndsAt === undefined) return UI_STRING_NOT_STARTED
+		if (forkAuctionDetails.migrationEndsAt === undefined) return forkAuctionCopy.notStarted
 
 		return <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={forkAuctionDetails.migrationEndsAt} />
 	})()
 	const truthAuctionStateBadgeElement = <Badge tone={truthAuctionStateBadge.tone}>{truthAuctionStateBadge.label}</Badge>
 	const auctionStatusMetrics: DisplayMetric[] = [
-		{ label: UI_STRING_TRUTH_AUCTION_ADDRESS, value: renderAddress(auctionTruthAuctionAddress) },
-		{ label: UI_STRING_STARTED, value: startedDisplay },
-		{ label: UI_STRING_ENDS, value: endsDisplay },
-		{ label: UI_STRING_ETH_RAISED_PER_CAP, value: ethRaisedCapDisplay },
-		{ label: UI_STRING_REP_PURCHASED, value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={displayedRepSold} suffix={UI_STRING_REP} /> },
-		{ label: UI_STRING_CLEARING_PRICE, value: clearingPriceDisplay },
-		{ label: AUCTIONED_BOND_ALLOWANCE_LABEL, value: selectedAuctionContext === undefined ? truthAuctionFallback : <CurrencyValue value={selectedAuctionContext.auctionedSecurityBondAllowance} suffix={UI_STRING_ETH} /> },
-		{ label: UI_STRING_MIN_BID_SIZE, value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={truthAuctionStatus.minBidSize} suffix={UI_STRING_ETH} /> },
-		{ label: UI_STRING_MAX_REP_BEING_SOLD, value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={truthAuctionStatus.maxRepBeingSold} suffix={UI_STRING_REP} /> },
+		{ label: forkAuctionCopy.truthAuctionAddress, value: renderAddress(auctionTruthAuctionAddress) },
+		{ label: forkAuctionCopy.started, value: startedDisplay },
+		{ label: commonCopy.ends, value: endsDisplay },
+		{ label: forkAuctionCopy.ethRaisedPerCap, value: ethRaisedCapDisplay },
+		{ label: forkAuctionCopy.repPurchased, value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={displayedRepSold} suffix={commonCopy.rep} /> },
+		{ label: forkAuctionCopy.clearingPrice, value: clearingPriceDisplay },
+		{ label: AUCTIONED_BOND_ALLOWANCE_LABEL, value: selectedAuctionContext === undefined ? truthAuctionFallback : <CurrencyValue value={selectedAuctionContext.auctionedSecurityBondAllowance} suffix={commonCopy.eth} /> },
+		{ label: forkAuctionCopy.minBidSize, value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={truthAuctionStatus.minBidSize} suffix={commonCopy.eth} /> },
+		{ label: forkAuctionCopy.maxRepBeingSold, value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={truthAuctionStatus.maxRepBeingSold} suffix={commonCopy.rep} /> },
 	]
 	const settlementStatusMetrics: DisplayMetric[] = [
-		{ label: AUCTIONED_BOND_ALLOWANCE_LABEL, value: selectedAuctionContext === undefined ? truthAuctionFallback : <CurrencyValue value={selectedAuctionContext.auctionedSecurityBondAllowance} suffix={UI_STRING_ETH} /> },
-		{ label: UI_STRING_SETTLEMENT_AVAILABLE, value: settlementAvailableDisplay },
-		{ label: UI_STRING_ETH_RAISED_PER_CAP, value: ethRaisedCapDisplay },
-		{ label: UI_STRING_REP_PURCHASED, value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={displayedRepSold} suffix={UI_STRING_REP} /> },
+		{ label: AUCTIONED_BOND_ALLOWANCE_LABEL, value: selectedAuctionContext === undefined ? truthAuctionFallback : <CurrencyValue value={selectedAuctionContext.auctionedSecurityBondAllowance} suffix={commonCopy.eth} /> },
+		{ label: forkAuctionCopy.settlementAvailable, value: settlementAvailableDisplay },
+		{ label: forkAuctionCopy.ethRaisedPerCap, value: ethRaisedCapDisplay },
+		{ label: forkAuctionCopy.repPurchased, value: truthAuctionStatus === undefined ? truthAuctionFallback : <CurrencyValue value={displayedRepSold} suffix={commonCopy.rep} /> },
 	]
 	const auctionOutcomeSelector = (
 		<div className='form-grid fork-workflow-outcome-selector'>
 			<label className='field'>
-				<span>{UI_STRING_OUTCOME}</span>
+				<span>{commonCopy.outcome}</span>
 				<div className='fork-workflow-outcome-selector-row'>
 					<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={forkAuctionForm.selectedOutcome} onChange={selectedOutcome => onForkAuctionFormChange({ selectedOutcome })} />
 					{renderSelectedOutcomeChildPoolLink()}
@@ -1363,7 +1168,7 @@ export function ForkAuctionSection({
 	)
 	const selectedAuctionDetailsNotice = (() => {
 		if (!hasSelectedAuctionChildPool || selectedStage === 'migration') return undefined
-		if (loadingSelectedAuctionDetails) return <p className='detail'>{UI_TEMPLATE_LOADING_CHILD_AUCTION_DETAILS(selectedAuctionLabel)}</p>
+		if (loadingSelectedAuctionDetails) return <p className='detail'>{forkAuctionCopy.formatLoadingChildAuctionDetails(selectedAuctionLabel)}</p>
 		if (selectedAuctionContextError === undefined) return undefined
 		return <p className='detail'>{selectedAuctionContextError}</p>
 	})()
@@ -1371,7 +1176,7 @@ export function ForkAuctionSection({
 		if (!shouldShowTruthAuctionVisualization || truthAuctionStatus === undefined) return undefined
 		return (
 			<TruthAuctionSummaryCard
-				auctionedBondAllowanceDisplay={selectedAuctionContext === undefined ? UI_STRING_METRIC_UNAVAILABLE_PLACEHOLDER : <CurrencyValue value={selectedAuctionContext.auctionedSecurityBondAllowance} suffix={UI_STRING_ETH} />}
+				auctionedBondAllowanceDisplay={selectedAuctionContext === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={selectedAuctionContext.auctionedSecurityBondAllowance} suffix={commonCopy.eth} />}
 				badge={truthAuctionStateBadgeElement}
 				clearingPriceDisplay={renderTruthAuctionPriceValue(truthAuctionStatus.clearingPrice)}
 				displayedEthRaised={displayedEthRaised}
@@ -1388,45 +1193,45 @@ export function ForkAuctionSection({
 		)
 	})()
 	const migrationSummaryCard = (
-		<SectionBlock badge={migrationStatusBadge} className='fork-workflow-summary-card migration-summary-card' title={UI_STRING_MIGRATION_STATUS}>
+		<SectionBlock badge={migrationStatusBadge} className='fork-workflow-summary-card migration-summary-card' title={forkAuctionCopy.migrationStatus}>
 			<div className='fork-workflow-summary'>
 				<div className='fork-workflow-summary-primary migration-summary-primary'>
 					<div className='fork-workflow-summary-stat-group'>
 						<div className='fork-workflow-summary-stat-copy'>
-							<span>{UI_STRING_REP_AT_FORK}</span>
+							<span>{forkAuctionCopy.repAtFork}</span>
 							<strong>{migrationRepAtForkDisplay}</strong>
 						</div>
 					</div>
 					<div className='fork-workflow-summary-stat-group'>
 						<div className='fork-workflow-summary-stat-copy'>
-							<span>{UI_STRING_MIGRATED_REP}</span>
+							<span>{forkAuctionCopy.migratedRep}</span>
 							<strong>{migrationRepDisplay}</strong>
 						</div>
 					</div>
 					<div className='fork-workflow-summary-stat-group'>
 						<div className='fork-workflow-summary-stat-copy'>
-							<span>{UI_STRING_COLLATERAL}</span>
+							<span>{forkAuctionCopy.collateral}</span>
 							<strong>{migrationCollateralDisplay}</strong>
 						</div>
 					</div>
 				</div>
 				<div className='fork-workflow-summary-metrics'>
-					<MetricField label={UI_STRING_MIGRATION_STARTED}>{migrationStartedDisplay}</MetricField>
-					<MetricField label={UI_STRING_MIGRATION_ENDS}>{migrationEndsDisplay}</MetricField>
-					<MetricField label={UI_STRING_FORK_TYPE}>{resolvedForkTypeLabel}</MetricField>
+					<MetricField label={forkAuctionCopy.migrationStarted}>{migrationStartedDisplay}</MetricField>
+					<MetricField label={forkAuctionCopy.migrationEnds}>{migrationEndsDisplay}</MetricField>
+					<MetricField label={forkAuctionCopy.forkType}>{resolvedForkTypeLabel}</MetricField>
 				</div>
 			</div>
 			{forkAuctionDetails?.ownForkRepBuckets === undefined ? undefined : (
-				<ReadOnlyDetailAccordion title={UI_STRING_ADVANCED_DIAGNOSTICS}>
+				<ReadOnlyDetailAccordion title={forkAuctionCopy.advancedDiagnostics}>
 					<div className='fork-workflow-summary-metrics'>
-						<MetricField label={UI_STRING_POOL_REP_AT_FORK}>
-							<CurrencyValue value={forkAuctionDetails.ownForkRepBuckets.vaultRepAtFork} suffix={UI_STRING_REP} />
+						<MetricField label={forkAuctionCopy.poolRepAtFork}>
+							<CurrencyValue value={forkAuctionDetails.ownForkRepBuckets.vaultRepAtFork} suffix={commonCopy.rep} />
 						</MetricField>
-						<MetricField label={UI_STRING_ESCALATION_CHILD_REP_PER_SELECTED_OUTCOME}>
-							<CurrencyValue value={forkAuctionDetails.ownForkRepBuckets.escalationChildRepPerSelectedOutcome} suffix={UI_STRING_REP} />
+						<MetricField label={forkAuctionCopy.escalationChildRepPerSelectedOutcome}>
+							<CurrencyValue value={forkAuctionDetails.ownForkRepBuckets.escalationChildRepPerSelectedOutcome} suffix={commonCopy.rep} />
 						</MetricField>
-						<MetricField label={UI_STRING_ESCROW_SOURCE_REP_AT_FORK}>
-							<CurrencyValue value={forkAuctionDetails.ownForkRepBuckets.escrowSourceRepAtFork} suffix={UI_STRING_REP} />
+						<MetricField label={forkAuctionCopy.escrowSourceRepAtFork}>
+							<CurrencyValue value={forkAuctionDetails.ownForkRepBuckets.escrowSourceRepAtFork} suffix={commonCopy.rep} />
 						</MetricField>
 					</div>
 				</ReadOnlyDetailAccordion>
@@ -1519,9 +1324,9 @@ export function ForkAuctionSection({
 					renderStageActionButton({
 						action: 'settleForkedEscalation',
 						availability: createActionAvailability(guardMessage),
-						idleLabel: UI_TEMPLATE_SETTLE_SELECTED_VALUE_FORK_CARRIED_DEPOSITS(sideLabel),
+						idleLabel: forkAuctionCopy.formatSettleSelectedValueForkCarriedDeposits(sideLabel),
 						onClick: () => onWithdrawForkedEscalationSubmit(outcome),
-						pendingLabel: UI_STRING_SETTLING_FORK_CARRIED_DEPOSITS_TRUNCATED,
+						pendingLabel: forkAuctionCopy.settlingForkCarriedDepositsTruncated,
 						tone: 'secondary',
 					})
 				}
@@ -1549,7 +1354,7 @@ export function ForkAuctionSection({
 	}
 	const forkWorkflowStageNavigator = !hasLoadedPoolContext ? undefined : (
 		<div className='fork-workflow-stage-nav-shell'>
-			<div aria-label={UI_STRING_FORK_LIFECYCLE_STAGES} className='fork-workflow-stage-nav' role='tablist'>
+			<div aria-label={forkAuctionCopy.forkLifecycleStages} className='fork-workflow-stage-nav' role='tablist'>
 				{FORK_WORKFLOW_NAV_STAGES.map(stage => {
 					const stageLabel = getForkWorkflowStageLabel(stage)
 					return (
@@ -1574,7 +1379,7 @@ export function ForkAuctionSection({
 								{getForkWorkflowStageIcon(stage)}
 								<span className='fork-workflow-stage-copy'>
 									<strong>{stageLabel}</strong>
-									{selectedStage === stage ? <span className='fork-workflow-stage-indicator'>{UI_STRING_VIEWING}</span> : undefined}
+									{selectedStage === stage ? <span className='fork-workflow-stage-indicator'>{forkAuctionCopy.viewing}</span> : undefined}
 								</span>
 							</button>
 							{stage === FORK_WORKFLOW_NAV_STAGES[FORK_WORKFLOW_NAV_STAGES.length - 1] ? undefined : (
@@ -1598,20 +1403,20 @@ export function ForkAuctionSection({
 		if (selectedStage === 'fork-triggered')
 			return (
 				<fieldset aria-labelledby='fork-workflow-stage-fork-triggered' className='fork-stage-panel' disabled={disabled} id='fork-workflow-stage-panel-fork-triggered' role='tabpanel'>
-					<SectionBlock title={UI_STRING_FORK_TRIGGERED} variant='embedded'>
+					<SectionBlock title={commonCopy.forkTriggered} variant='embedded'>
 						{hasTriggeredFork ? (
 							renderWorkflowMetricGrid([
 								{
-									label: UI_STRING_STATUS,
-									value: UI_STRING_SYSTEM_IS_FORKING,
+									label: commonCopy.status,
+									value: forkAuctionCopy.systemIsForking,
 								},
 								{
-									label: UI_STRING_TRIGGERED_AT,
+									label: forkAuctionCopy.triggeredAt,
 									value: <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={universeForkTime} />,
 								},
 							])
 						) : (
-							<p className='detail'>{UI_STRING_FORK_INACTIVE_DETAIL}</p>
+							<p className='detail'>{forkAuctionCopy.forkInactiveDetail}</p>
 						)}
 					</SectionBlock>
 				</fieldset>
@@ -1622,28 +1427,25 @@ export function ForkAuctionSection({
 					{selectedStageAheadMessage === undefined ? undefined : <p className='detail'>{selectedStageAheadMessage}</p>}
 					{migrationSummaryCard}
 
-					<SectionBlock title={UI_STRING_YOUR_MIGRATION_BALANCES} variant='embedded' description={UI_STRING_WALLET_LEVEL_BALANCES_IN_THE_PARENT_POOL_THAT_MAY_STILL_NEED_MIGRATION}>
+					<SectionBlock title={forkAuctionCopy.yourMigrationBalances} variant='embedded' description={forkAuctionCopy.parentWalletBalancesDescription}>
 						{migrationBalancesContent}
 						{accountState.address === undefined ? undefined : (
 							<>
 								{hasUnresolvedMigrationState ? (
-									<SectionBlock density='compact' headingLevel={4} title={UI_STRING_MIGRATE_UNRESOLVED_ESCALATION_LOCKS} variant='embedded'>
-										<p className='detail'>{isMigrationExpired ? UI_STRING_UNRESOLVED_ESCALATION_MIGRATION_WINDOW_CLOSED_DETAIL : UI_STRING_UNRESOLVED_ESCALATION_MIGRATION_WITH_VAULT_DETAIL}</p>
-										{loadingReportingDetails ? <p className='detail'>{UI_STRING_LOADING_UNRESOLVED_ESCALATION_DEPOSITS_FOR_THE_CONNECTED_WALLET}</p> : undefined}
-										{loadingReportingDetails || activeReportingDetails !== undefined ? undefined : <p className='detail'>{UI_STRING_UNRESOLVED_ESCALATION_DEPOSIT_DETAILS_ARE_UNAVAILABLE_FOR_THIS_POOL_RIGHT_NOW}</p>}
-										{hasStoredEscalationMigrationEntitlement ? <p className='detail'>{UI_STRING_UNRESOLVED_ESCALATION_ENTITLEMENT_CAPTURED_DETAIL}</p> : undefined}
-										{activeReportingDetails !== undefined && !hasUnresolvedMigrationDeposits && !hasStoredEscalationMigrationEntitlement ? <p className='detail'>{UI_STRING_NO_UNRESOLVED_PARENT_ESCALATION_DEPOSITS_REMAIN_FOR_CONNECTED_WALLET}</p> : undefined}
-										<p className='detail'>{UI_STRING_UNRESOLVED_ESCALATION_MULTI_CHILD_DETAIL}</p>
+									<SectionBlock density='compact' headingLevel={4} title={forkAuctionCopy.migrateUnresolvedEscalationLocks} variant='embedded'>
+										<p className='detail'>{isMigrationExpired ? forkAuctionCopy.unresolvedMigrationExpiredDetail : forkAuctionCopy.unresolvedEscalationMigrationWithVaultDetail}</p>
+										{loadingReportingDetails ? <p className='detail'>{forkAuctionCopy.walletUnresolvedDepositsLoading}</p> : undefined}
+										{loadingReportingDetails || activeReportingDetails !== undefined ? undefined : <p className='detail'>{forkAuctionCopy.unresolvedDepositDetailsUnavailable}</p>}
+										{hasStoredEscalationMigrationEntitlement ? <p className='detail'>{forkAuctionCopy.capturedEntitlementDetail}</p> : undefined}
+										{activeReportingDetails !== undefined && !hasUnresolvedMigrationDeposits && !hasStoredEscalationMigrationEntitlement ? <p className='detail'>{forkAuctionCopy.walletUnresolvedDepositsEmpty}</p> : undefined}
+										<p className='detail'>{forkAuctionCopy.unresolvedEscalationMultiChildDetail}</p>
 										{activeReportingDetails === undefined || hasStoredEscalationMigrationEntitlement
 											? undefined
 											: unresolvedMigrationSides.map(side => (
 													<div className='field' key={side.key}>
 														<span>{side.label}</span>
 														{side.userDeposits.length === 0 ? (
-															<p className='detail'>
-																{UI_STRING_NO_PREFIX}
-																{side.label.toLowerCase()} {UI_STRING_UNRESOLVED_DEPOSITS_REMAIN_FOR_THIS_WALLET}
-															</p>
+															<p className='detail'>{forkAuctionCopy.formatNoUnresolvedDeposits(side.label)}</p>
 														) : (
 															<EscalationDepositSelectionList
 																disabled
@@ -1651,13 +1453,13 @@ export function ForkAuctionSection({
 																	deposit,
 																	details: [
 																		<>
-																			{UI_STRING_INITIALLY_DEPOSITED_PREFIX}
-																			<CurrencyValue value={deposit.amount} suffix={UI_STRING_REP} />
+																			{forkAuctionCopy.initiallyDepositedLead}
+																			<CurrencyValue value={deposit.amount} suffix={commonCopy.rep} />
 																		</>,
-																		UI_STRING_CURRENT_PATH_MUST_MIGRATE_INTO_THE_SELECTED_CHILD_UNIVERSE,
+																		forkAuctionCopy.selectedChildMigrationRequiredDetail,
 																		<>
-																			{UI_STRING_ENTRY_DEPTH_PREFIX}
-																			<CurrencyValue value={deposit.cumulativeAmount} suffix={UI_STRING_REP} />
+																			{forkAuctionCopy.entryDepthLead}
+																			<CurrencyValue value={deposit.cumulativeAmount} suffix={commonCopy.rep} />
 																		</>,
 																	],
 																}))}
@@ -1672,29 +1474,24 @@ export function ForkAuctionSection({
 												{renderStageActionButton({
 													action: 'migrateUnresolvedEscalation',
 													availability: createActionAvailability(migrateUnresolvedEscalationGuardMessage),
-													idleLabel: UI_TEMPLATE_MIGRATE_UNRESOLVED_ESCALATION_TO_VALUE(selectedOutcomeLabel),
+													idleLabel: forkAuctionCopy.formatMigrateUnresolvedEscalationToValue(selectedOutcomeLabel),
 													onClick: onMigrateUnresolvedEscalationSubmit,
-													pendingLabel: UI_STRING_MIGRATING_UNRESOLVED_ESCALATION_TRUNCATED,
+													pendingLabel: forkAuctionCopy.migratingUnresolvedEscalationTruncated,
 													tone: 'primary',
 												})}
 											</div>
 										)}
 									</SectionBlock>
 								) : (
-									<SectionBlock density='compact' headingLevel={4} title={UI_STRING_MIGRATE_RESOLVED_ESCALATION_DEPOSITS} variant='embedded'>
-										<p className='detail'>{UI_STRING_SELECTED_DEPOSITS_LEAVE_THE_PARENT_POOL_AND_REAPPEAR_ON_THE_CHOSEN_CHILD}</p>
-										{connectedWalletVaultSummary !== undefined && !hasWalletEscalationMigrationBalance ? <p className='detail'>{UI_STRING_ESCALATION_MIGRATION_EMPTY_ESCROW_DETAIL}</p> : undefined}
-										{loadingReportingDetails ? <p className='detail'>{UI_STRING_LOADING_ESCALATION_DEPOSITS_FOR_THE_SELECTED_WALLET}</p> : undefined}
-										{loadingReportingDetails || reportingDetails?.status === 'active' ? undefined : <p className='detail'>{UI_STRING_ESCALATION_DEPOSIT_DETAILS_ARE_UNAVAILABLE_FOR_THIS_POOL}</p>}
-										{showSelectedEscalationMigrationDeposits && !hasSelectedEscalationMigrationDeposits ? (
-											<p className='detail'>
-												{UI_STRING_NO_PREFIX}
-												{selectedOutcomeLabel} {UI_STRING_ESCALATION_DEPOSITS_ARE_CURRENTLY_AVAILABLE_TO_MIGRATE_FOR_THIS_WALLET}
-											</p>
-										) : undefined}
+									<SectionBlock density='compact' headingLevel={4} title={forkAuctionCopy.migrateResolvedEscalationDeposits} variant='embedded'>
+										<p className='detail'>{forkAuctionCopy.resolvedDepositMigrationDetail}</p>
+										{connectedWalletVaultSummary !== undefined && !hasWalletEscalationMigrationBalance ? <p className='detail'>{forkAuctionCopy.escalationMigrationEmptyEscrowDetail}</p> : undefined}
+										{loadingReportingDetails ? <p className='detail'>{forkAuctionCopy.walletEscalationDepositsLoading}</p> : undefined}
+										{loadingReportingDetails || reportingDetails?.status === 'active' ? undefined : <p className='detail'>{forkAuctionCopy.escalationDepositDetailsUnavailable}</p>}
+										{showSelectedEscalationMigrationDeposits && !hasSelectedEscalationMigrationDeposits ? <p className='detail'>{forkAuctionCopy.formatNoMigratableEscalationDeposits(selectedOutcomeLabel)}</p> : undefined}
 										{showSelectedEscalationMigrationDeposits && hasSelectedEscalationMigrationDeposits ? (
 											<div className='field'>
-												<span>{UI_STRING_CHOOSE_DEPOSITS_TO_MIGRATE}</span>
+												<span>{forkAuctionCopy.chooseDepositsToMigrate}</span>
 												<EscalationDepositSelectionList
 													disabled={forkAuctionActiveAction === 'migrateEscalationDeposits'}
 													items={selectedEscalationMigrationDeposits.map(deposit => {
@@ -1703,21 +1500,21 @@ export function ForkAuctionSection({
 															deposit,
 															details: [
 																<>
-																	{UI_STRING_INITIALLY_DEPOSITED_PREFIX}
-																	<CurrencyValue value={deposit.amount} suffix={UI_STRING_REP} />
+																	{forkAuctionCopy.initiallyDepositedLead}
+																	<CurrencyValue value={deposit.amount} suffix={commonCopy.rep} />
 																</>,
 																claimAmount === undefined ? (
-																	UI_STRING_WORTH_NOW_PENDING_MIGRATION_FINALIZATION
+																	forkAuctionCopy.worthNowPendingMigrationFinalization
 																) : (
 																	<>
-																		{UI_STRING_WORTH_NOW_PREFIX}
-																		<CurrencyValue value={claimAmount} suffix={UI_STRING_REP} />
+																		{forkAuctionCopy.worthNowLead}
+																		<CurrencyValue value={claimAmount} suffix={commonCopy.rep} />
 																	</>
 																),
-																UI_STRING_CURRENT_PATH_ELIGIBLE_FOR_CHILD_POOL_MIGRATION,
+																forkAuctionCopy.currentPathEligibleForChildPoolMigration,
 																<>
-																	{UI_STRING_ENTRY_DEPTH_PREFIX}
-																	<CurrencyValue value={deposit.cumulativeAmount} suffix={UI_STRING_REP} />
+																	{forkAuctionCopy.entryDepthLead}
+																	<CurrencyValue value={deposit.cumulativeAmount} suffix={commonCopy.rep} />
 																</>,
 															],
 														}
@@ -1731,46 +1528,46 @@ export function ForkAuctionSection({
 											{renderStageActionButton({
 												action: 'migrateEscalationDeposits',
 												availability: createActionAvailability(migrateSelectedEscalationDepositsGuardMessage),
-												idleLabel: UI_TEMPLATE_MIGRATE_SELECTED_VALUE_DEPOSITS(selectedOutcomeLabel),
+												idleLabel: forkAuctionCopy.formatMigrateSelectedValueDeposits(selectedOutcomeLabel),
 												onClick: onMigrateSelectedEscalationDeposits,
-												pendingLabel: UI_STRING_MIGRATING_ESCALATION_DEPOSITS_TRUNCATED,
+												pendingLabel: forkAuctionCopy.migratingEscalationDepositsTruncated,
 											})}
 										</div>
 									</SectionBlock>
 								)}
-								<SectionBlock density='compact' headingLevel={4} title={UI_STRING_MIGRATE_POOL_TO_UNIVERSE} variant='embedded'>
-									<p className='detail'>{UI_STRING_POOL_REP_MIGRATION_DETAIL}</p>
-									{loadingSelectedOutcomeMigrationSeedStatus ? <p className='detail'>{UI_STRING_CHECKING_WHETHER_POOL_REP_IS_ALREADY_READY_FOR_SELECTED_CHILD_UNIVERSE}</p> : undefined}
+								<SectionBlock density='compact' headingLevel={4} title={forkAuctionCopy.migratePoolToUniverse} variant='embedded'>
+									<p className='detail'>{forkAuctionCopy.poolRepMigrationDetail}</p>
+									{loadingSelectedOutcomeMigrationSeedStatus ? <p className='detail'>{forkAuctionCopy.selectedChildPoolRepReadinessLoading}</p> : undefined}
 									{selectedOutcomeMigrationSeedStatusError === undefined || loadingSelectedOutcomeMigrationSeedStatus ? undefined : <p className='detail'>{selectedOutcomeMigrationSeedStatusError}</p>}
 									{loadingSelectedOutcomeMigrationSeedStatus || selectedOutcomeMigrationSeedStatusError !== undefined || selectedOutcomeMigrationSeedStatus === undefined || !selectedOutcomeMigrationSeedStatus.seeded ? undefined : (
-										<p className='detail'>{selectedOutcomeMigrationSeedStatus.childPoolRepBalance > 0n ? UI_STRING_POOL_REP_HAS_ALREADY_BEEN_MIGRATED_TO_THE_SELECTED_CHILD_UNIVERSE : UI_STRING_POOL_REP_STAGED_FOR_VAULT_MIGRATION_DETAIL}</p>
+										<p className='detail'>{selectedOutcomeMigrationSeedStatus.childPoolRepBalance > 0n ? forkAuctionCopy.poolRepAlreadyMigratedDetail : forkAuctionCopy.poolRepStagedForVaultMigrationDetail}</p>
 									)}
 									<div className='actions'>
 										{renderStageActionButton({
 											action: 'migrateRepToZoltar',
 											availability: createActionAvailability(migratePoolToUniverseGuardMessage),
-											idleLabel: UI_TEMPLATE_MIGRATE_POOL_TO_VALUE_UNIVERSE(selectedOutcomeLabel),
+											idleLabel: forkAuctionCopy.formatMigratePoolToValueUniverse(selectedOutcomeLabel),
 											onClick: onMigrateSelectedOutcomeRepToZoltar,
-											pendingLabel: UI_STRING_MIGRATING_POOL_TO_UNIVERSE_TRUNCATED,
+											pendingLabel: forkAuctionCopy.migratingPoolToUniverseTruncated,
 										})}
 									</div>
 								</SectionBlock>
-								<SectionBlock density='compact' headingLevel={4} title={UI_STRING_MIGRATE_VAULT} variant='embedded'>
-									<p className='detail'>{UI_STRING_VAULT_MIGRATION_DETAIL}</p>
-									{connectedWalletVaultSummary !== undefined && !hasWalletVaultMigrationBalance ? <p className='detail'>{UI_STRING_NO_REP_COLLATERAL_OR_SECURITY_BOND_ALLOWANCE_REMAINS}</p> : undefined}
-									{loadingSelectedOutcomeMigrationSeedStatus ? <p className='detail'>{UI_STRING_CHECKING_WHETHER_POOL_REP_IS_ALREADY_READY_FOR_SELECTED_CHILD_UNIVERSE}</p> : undefined}
+								<SectionBlock density='compact' headingLevel={4} title={forkAuctionCopy.migrateVault} variant='embedded'>
+									<p className='detail'>{forkAuctionCopy.vaultMigrationDetail}</p>
+									{connectedWalletVaultSummary !== undefined && !hasWalletVaultMigrationBalance ? <p className='detail'>{forkAuctionCopy.poolMigrationCapacityEmpty}</p> : undefined}
+									{loadingSelectedOutcomeMigrationSeedStatus ? <p className='detail'>{forkAuctionCopy.selectedChildPoolRepReadinessLoading}</p> : undefined}
 									{selectedOutcomeMigrationSeedStatusError === undefined || loadingSelectedOutcomeMigrationSeedStatus ? undefined : <p className='detail'>{selectedOutcomeMigrationSeedStatusError}</p>}
 									<div className='actions'>
 										{renderStageActionButton({
 											action: 'migrateVault',
 											availability: createActionAvailability(migrateVaultGuardMessage),
-											idleLabel: UI_TEMPLATE_MIGRATE_VAULT_TO_VALUE(selectedOutcomeLabel),
+											idleLabel: forkAuctionCopy.formatMigrateVaultToValue(selectedOutcomeLabel),
 											onClick: onMigrateVaultSubmit,
-											pendingLabel: UI_STRING_MIGRATING_VAULT,
+											pendingLabel: forkAuctionCopy.migratingVault,
 											tone: 'primary',
 										})}
 									</div>
-									{isVaultMigrationComplete ? <p className='detail'>{UI_STRING_ALREADY_MIGRATED_STATUS}</p> : undefined}
+									{isVaultMigrationComplete ? <p className='detail'>{forkAuctionCopy.alreadyMigratedStatus}</p> : undefined}
 								</SectionBlock>
 							</>
 						)}
@@ -1792,7 +1589,7 @@ export function ForkAuctionSection({
 							{truthAuctionMarketViewSection}
 							{auctionWideBidsSection}
 							{renderSubmitBidSection({
-								description: UI_STRING_SUBMITTING_A_BID_LOCKS_ETH_UNTIL_SETTLEMENT_LOSING,
+								description: forkAuctionCopy.bidEscrowDetail,
 							})}
 							{viewerTruthAuctionBidsSection}
 						</fieldset>
@@ -1804,28 +1601,28 @@ export function ForkAuctionSection({
 						{renderSelectedOutcomeChildPoolNotice()}
 						{selectedAuctionDetailsNotice}
 						{truthAuctionEndedNotice}
-						<SectionBlock badge={truthAuctionStateBadgeElement} title={UI_STRING_TRUTH_AUCTION_STATUS} variant='embedded'>
+						<SectionBlock badge={truthAuctionStateBadgeElement} title={forkAuctionCopy.truthAuctionStatus} variant='embedded'>
 							{renderWorkflowMetricGrid(auctionStatusMetrics)}
 						</SectionBlock>
 
-						<SectionBlock title={UI_STRING_START_TRUTH_AUCTION} variant='embedded'>
-							<p className='detail'>{UI_TEMPLATE_START_TRUTH_AUCTION_DETAIL(AUCTIONED_BOND_ALLOWANCE_LABEL)}</p>
+						<SectionBlock title={forkAuctionCopy.startTruthAuction} variant='embedded'>
+							<p className='detail'>{forkAuctionCopy.formatStartTruthAuctionDetail(AUCTIONED_BOND_ALLOWANCE_LABEL)}</p>
 							{startTruthAuctionReadyInText === undefined ? undefined : <p className='detail'>{startTruthAuctionReadyInText}</p>}
 							{truthAuctionBypassReason === undefined ? undefined : <p className='detail'>{truthAuctionBypassReason}</p>}
 							<div className='actions'>
 								{renderStageActionButton({
 									action: 'startTruthAuction',
-									availability: createActionAvailability(!hasSelectedAuctionChildPool ? UI_TEMPLATE_CHILD_UNIVERSE_NOT_CREATED_FOR_OUTCOME_DETAIL(selectedAuctionLabel) : startTruthAuctionAvailabilityMessage),
+									availability: createActionAvailability(!hasSelectedAuctionChildPool ? forkAuctionCopy.formatMissingChildUniverseDetail(selectedAuctionLabel) : startTruthAuctionAvailabilityMessage),
 									forceEnabled: hasSelectedAuctionChildPool,
-									idleLabel: truthAuctionBypassReason === undefined ? UI_STRING_START_TRUTH_AUCTION : UI_STRING_BYPASS_TRUTH_AUCTION,
+									idleLabel: truthAuctionBypassReason === undefined ? forkAuctionCopy.startTruthAuction : forkAuctionCopy.bypassTruthAuction,
 									onClick: onStartTruthAuctionSubmit,
-									pendingLabel: truthAuctionBypassReason === undefined ? UI_STRING_STARTING_TRUTH_AUCTION : UI_STRING_BYPASSING_AUCTION_TRUNCATED,
+									pendingLabel: truthAuctionBypassReason === undefined ? forkAuctionCopy.startingTruthAuction : forkAuctionCopy.bypassingAuctionTruncated,
 									tone: 'primary',
 								})}
 							</div>
 						</SectionBlock>
 
-						{renderSubmitBidSection({ description: UI_STRING_SUBMITTING_A_BID_LOCKS_ETH_UNTIL_SETTLEMENT_LOSING })}
+						{renderSubmitBidSection({ description: forkAuctionCopy.bidEscrowDetail })}
 					</fieldset>
 				)
 			}
@@ -1852,7 +1649,7 @@ export function ForkAuctionSection({
 						{selectedStageAheadMessage === undefined ? undefined : <p className='detail'>{selectedStageAheadMessage}</p>}
 						{selectedAuctionDetailsNotice}
 						{truthAuctionEndedNotice}
-						<SectionBlock badge={truthAuctionStateBadgeElement} title={UI_STRING_SETTLEMENT_STATUS} variant='embedded'>
+						<SectionBlock badge={truthAuctionStateBadgeElement} title={forkAuctionCopy.settlementStatus} variant='embedded'>
 							{renderWorkflowMetricGrid(settlementStatusMetrics)}
 						</SectionBlock>
 						{truthAuctionSettlementSection}
@@ -1873,8 +1670,8 @@ export function ForkAuctionSection({
 		<>
 			{!showSecurityPoolAddressInput && hasLoadedPoolContext ? undefined : (
 				<div className='form-grid'>
-					{!showSecurityPoolAddressInput ? undefined : <LookupFieldRow label={UI_STRING_SECURITY_POOL_ADDRESS} value={forkAuctionForm.securityPoolAddress} onInput={securityPoolAddress => onForkAuctionFormChange({ securityPoolAddress })} placeholder={UI_STRING_HEX_VALUE_PLACEHOLDER} />}
-					{hasLoadedPoolContext ? undefined : <p className='detail'>{UI_STRING_LOAD_A_POOL_TO_INSPECT_FORK_PROGRESS_MIGRATION_AND_THE_TRUTH_AUCTION}</p>}
+					{!showSecurityPoolAddressInput ? undefined : <LookupFieldRow label={commonCopy.securityPoolAddress} value={forkAuctionForm.securityPoolAddress} onInput={securityPoolAddress => onForkAuctionFormChange({ securityPoolAddress })} placeholder={commonCopy.hexValuePlaceholder} />}
+					{hasLoadedPoolContext ? undefined : <p className='detail'>{forkAuctionCopy.forkWorkflowDescription}</p>}
 				</div>
 			)}
 			{forkWorkflowStageNavigator}
@@ -1885,7 +1682,7 @@ export function ForkAuctionSection({
 	)
 	if (embedInCard) return content
 	return (
-		<RouteWorkflowPanel showHeader={showHeader} title={UI_STRING_FORK_TRUTH_AUCTION}>
+		<RouteWorkflowPanel showHeader={showHeader} title={forkAuctionCopy.forkTruthAuction}>
 			{content}
 		</RouteWorkflowPanel>
 	)

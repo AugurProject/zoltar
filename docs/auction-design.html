@@ -93,7 +93,7 @@
 				auctioned security-bond allowance, rather than a direct REP token transfer.
 			</p>
 
-			<figure class="diagram" id="fig-auction-lifecycle">
+			<figure class="diagram diagram-wide" id="fig-auction-lifecycle">
 				<svg viewBox="0 0 880 180" role="img" aria-label="Migration closes, child pool shortfall is detected, auction starts, ETH bids are submitted, auction finalizes, and results settle into vault accounting.">
 					<defs>
 						<marker id="auction-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -279,6 +279,50 @@
 					winner set is the
 					finalized prefix boundary rather than a threshold-only price test.
 				</p>
+				<figure class="diagram diagram-wide" id="fig-auction-clearing-ladder">
+					<svg viewBox="0 0 980 360" role="img" aria-labelledby="auction-clearing-title auction-clearing-desc">
+						<title id="auction-clearing-title">Auction demand is evaluated from high ticks to low ticks before uniform or underfunded clearing</title>
+						<desc id="auction-clearing-desc">High-price bids are considered first. If cumulative demand reaches the ETH raise cap or REP sale cap, the first binding tick sets normal uniform clearing. If neither cap is reached, finalization selects the largest feasible high-to-low winning prefix and computes one synthetic underfunded price.</desc>
+						<defs>
+							<marker id="auction-clearing-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+								<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+							</marker>
+						</defs>
+						<text class="svg-small" x="40" y="34">higher ETH/REP limit</text>
+						<rect class="svg-green" x="40" y="52" width="230" height="64" rx="8"></rect>
+						<text class="svg-label" x="155" y="80" text-anchor="middle">High tick bids</text>
+						<text class="svg-small" x="155" y="101" text-anchor="middle">evaluated first</text>
+						<rect class="svg-gold" x="40" y="142" width="230" height="64" rx="8"></rect>
+						<text class="svg-label" x="155" y="170" text-anchor="middle">Binding tick</text>
+						<text class="svg-small" x="155" y="191" text-anchor="middle">marginal fill boundary</text>
+						<rect class="svg-red" x="40" y="232" width="230" height="64" rx="8"></rect>
+						<text class="svg-label" x="155" y="260" text-anchor="middle">Lower tick bids</text>
+						<text class="svg-small" x="155" y="281" text-anchor="middle">refunded below boundary</text>
+						<text class="svg-small" x="40" y="326">lower ETH/REP limit</text>
+						<path class="svg-line" marker-end="url(#auction-clearing-arrow)" d="M 270 84 C 330 84 330 120 390 120"></path>
+						<path class="svg-line" marker-end="url(#auction-clearing-arrow)" d="M 270 174 H 390"></path>
+						<path class="svg-line" marker-end="url(#auction-clearing-arrow)" d="M 270 264 C 330 264 330 228 390 228"></path>
+						<rect class="svg-blue" x="390" y="110" width="220" height="128" rx="8"></rect>
+						<text class="svg-label" x="500" y="150" text-anchor="middle">Descending demand</text>
+						<text class="svg-small" x="500" y="177" text-anchor="middle">accumulate ETH and REP</text>
+						<text class="svg-small" x="500" y="201" text-anchor="middle">until a cap binds</text>
+						<path class="svg-line" marker-end="url(#auction-clearing-arrow)" d="M 610 146 H 700"></path>
+						<path class="svg-line" marker-end="url(#auction-clearing-arrow)" d="M 610 214 H 700"></path>
+						<rect class="svg-green" x="700" y="64" width="240" height="94" rx="8"></rect>
+						<text class="svg-label" x="820" y="98" text-anchor="middle">Uniform clearing</text>
+						<text class="svg-small" x="820" y="124" text-anchor="middle">first ETH or REP cap reached</text>
+						<rect class="svg-gold" x="700" y="198" width="240" height="108" rx="8"></rect>
+						<text class="svg-label" x="820" y="232" text-anchor="middle">Underfunded clearing</text>
+						<text class="svg-small" x="820" y="258" text-anchor="middle">largest feasible winning prefix</text>
+						<text class="svg-small" x="820" y="280" text-anchor="middle">one synthetic all-REP price</text>
+					</svg>
+					<p class="diagram-caption">
+						<span class="figure-label">Clearing Price Ladder</span>The contract always
+						walks demand from expensive REP to cheap REP. What changes is the stopping
+						rule: a binding cap gives normal uniform clearing, while weak demand uses
+						the largest feasible prefix and one synthetic price.
+					</p>
+				</figure>
 				<p>
 					The interactive example below is where those branches become
 					concrete. The <code>Binding condition</code> output reports one of four

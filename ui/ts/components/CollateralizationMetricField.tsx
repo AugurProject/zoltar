@@ -1,9 +1,10 @@
+import * as commonCopy from '../copy/common.js'
+import * as pricingCopy from '../copy/pricing.js'
 import type { ComponentChildren } from 'preact'
 import { CurrencyValue } from './CurrencyValue.js'
 import { MetricField } from './MetricField.js'
 import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '../lib/repPriceSource.js'
 import { getCollateralizationDisplayState, getCollateralizationTone } from '../lib/trading.js'
-import { UI_STRING_AWAITING_REP_ETH_PRICE, UI_STRING_COLLATERALIZATION_LABEL, UI_STRING_NO_ACTIVE_ALLOWANCE, UI_STRING_PERCENT } from '../lib/uiStrings.js'
 type CollateralizationMetricFieldProps = {
 	className?: string | undefined
 	collateralizationPercent: bigint | undefined
@@ -18,12 +19,12 @@ function getDefaultLabel(repPerEthSource: RepPriceSource | undefined, repPerEthS
 	const repPriceSourceCopy = getRepPriceSourceCopy(repPerEthSource)
 	return (
 		<span title={repPriceSourceCopy.tooltip}>
-			{`${UI_STRING_COLLATERALIZATION_LABEL} `}
+			{`${pricingCopy.collateralizationLabel} `}
 			{renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
 		</span>
 	)
 }
-export function CollateralizationMetricField({ className, collateralizationPercent, label, repPerEthSource, repPerEthSourceUrl, securityBondAllowance, securityMultiplier, unavailableCopy = UI_STRING_AWAITING_REP_ETH_PRICE }: CollateralizationMetricFieldProps) {
+export function CollateralizationMetricField({ className, collateralizationPercent, label, repPerEthSource, repPerEthSourceUrl, securityBondAllowance, securityMultiplier, unavailableCopy = pricingCopy.awaitingRepEthPrice }: CollateralizationMetricFieldProps) {
 	const displayState = getCollateralizationDisplayState(securityBondAllowance, collateralizationPercent)
 	const tone = displayState === 'noActiveAllowance' ? undefined : getCollateralizationTone(collateralizationPercent, securityMultiplier)
 	const valueClassName = (() => {
@@ -35,10 +36,10 @@ export function CollateralizationMetricField({ className, collateralizationPerce
 	return (
 		<MetricField className={className} label={label ?? getDefaultLabel(repPerEthSource, repPerEthSourceUrl)} valueClassName={valueClassName}>
 			{(() => {
-				if (displayState === 'noActiveAllowance') return UI_STRING_NO_ACTIVE_ALLOWANCE
+				if (displayState === 'noActiveAllowance') return pricingCopy.noActiveAllowance
 				if (displayState === 'unavailable') return unavailableCopy
 
-				return <CurrencyValue value={collateralizationPercent} suffix={UI_STRING_PERCENT} copyable={false} />
+				return <CurrencyValue value={collateralizationPercent} suffix={commonCopy.percent} copyable={false} />
 			})()}
 		</MetricField>
 	)

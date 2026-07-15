@@ -1,11 +1,12 @@
+import * as commonCopy from '../copy/common.js'
+import * as pricingCopy from '../copy/pricing.js'
 import type { CollateralizationCircleProps } from '../types/components.js'
 import { formatCollateralizationCompactPercentLabel, getCollateralizationVisualPercent, getToneRatioThreshold, getVisualRatio } from '../lib/visualMetrics.js'
-import { UI_STRING_COLLATERALIZATION_LABEL, UI_TEMPLATE_LABEL_VALUE, UI_TEMPLATE_VALUE_UNAVAILABLE } from '../lib/uiStrings.js'
 
 const MAX_RING_COLLATERALIZATION_PERCENT = 999n * 10n ** 18n
 const MAX_RING_COLLATERALIZATION_LABEL = '999%+'
 
-export function CollateralizationCircle({ collateralizationPercent, className = '', label = UI_STRING_COLLATERALIZATION_LABEL, size = 'medium', successThreshold = 1, targetCollateralizationPercent, tone, warningThreshold = 0.65 }: CollateralizationCircleProps) {
+export function CollateralizationCircle({ collateralizationPercent, className = '', label = pricingCopy.collateralizationLabel, size = 'medium', successThreshold = 1, targetCollateralizationPercent, tone, warningThreshold = 0.65 }: CollateralizationCircleProps) {
 	const toneRatio = getVisualRatio({ value: collateralizationPercent, maxValue: targetCollateralizationPercent })
 	const resolvedTone =
 		tone ??
@@ -25,7 +26,7 @@ export function CollateralizationCircle({ collateralizationPercent, className = 
 	const strokeDashoffset = circumference - circumference * (clampedCollateralizationVisualPercent / 100)
 	const displayValueFitsInRing = collateralizationPercent === undefined || collateralizationPercent <= MAX_RING_COLLATERALIZATION_PERCENT
 	const ringDisplayValue = displayValueFitsInRing ? displayValue : MAX_RING_COLLATERALIZATION_LABEL
-	const exactValueTitle = collateralizationPercent === undefined ? UI_TEMPLATE_VALUE_UNAVAILABLE(label) : UI_TEMPLATE_LABEL_VALUE(label, displayValue)
+	const exactValueTitle = collateralizationPercent === undefined ? pricingCopy.formatValueUnavailable(label) : commonCopy.formatLabelValue(label, displayValue)
 
 	return (
 		<div className={['collateralization-gauge', `collateralization-gauge-size-${size}`, resolvedTone === undefined ? '' : `tone-${resolvedTone}`, className].filter(Boolean).join(' ').trim()} title={exactValueTitle}>

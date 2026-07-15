@@ -1,6 +1,6 @@
+import * as commonCopy from '../copy/common.js'
 import { useChainTimestamp } from '../lib/chainTimestamp.js'
 import { getOracleLastPriceDisplay, getOraclePriceValidityPresentation } from '../lib/securityPoolWorkflow.js'
-import { UI_STRING_UNAVAILABLE } from '../lib/uiStrings.js'
 
 type OpenOraclePriceValueProps = {
 	currentTimestamp?: bigint | undefined
@@ -10,7 +10,7 @@ type OpenOraclePriceValueProps = {
 }
 
 export function OpenOraclePriceValue({ currentTimestamp, lastPrice, lastSettlementTimestamp, priceValidUntilTimestamp }: OpenOraclePriceValueProps) {
-	if (lastPrice === undefined || lastSettlementTimestamp === 0n) return UI_STRING_UNAVAILABLE
+	if (lastPrice === undefined || lastSettlementTimestamp === 0n) return commonCopy.unavailable
 	const chainCurrentTimestamp = useChainTimestamp()
 	const resolvedCurrentTimestamp = currentTimestamp ?? chainCurrentTimestamp
 
