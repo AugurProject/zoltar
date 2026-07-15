@@ -244,6 +244,9 @@ async function checkCollateralRepairExample(): Promise<void> {
 }
 
 async function checkUnderfundedPrefixExample(): Promise<void> {
+	const html = await readFile('docs/whitepaper_placeholder.html', 'utf8')
+	assert.match(html, /human-unit real-number approximation:[\s\S]*exact\s+wei allocation also depends on <code>ethBefore<\/code>/i, 'underfunded prefix example should distinguish its approximate human-unit output from exact cumulative wei allocation')
+	assert.match(html, /Approximate bidder REP fill \(human units\):/, 'underfunded prefix example should label its bidder output as approximate')
 	const example = await loadInteractiveExample('docs/whitepaper_placeholder.html', 'underfunded-auction-example')
 
 	try {
@@ -478,18 +481,75 @@ assert.match(auctionDesignHtml, /underfundedWinningEth\s*&gt;\s*0/i, 'auction de
 assert.match(auctionDesignHtml, /type\(uint256\)\.max/i, 'auction design should document the no-winning-prefix underfunded threshold sentinel')
 assert.match(auctionDesignHtml, /refunds every bid/i, 'auction design should document the no-winning-prefix refund branch')
 assert.match(auctionDesignHtml, /ceilings the\s+synthetic underfunded threshold/i, 'auction design calculator copy should describe ceiling division for the synthetic underfunded threshold')
-assert.match(auctionDesignHtml, /floors\s+REP allocations/i, 'auction design calculator copy should distinguish threshold ceil from REP allocation floors')
+assert.match(auctionDesignHtml, /computes each allocation by\s+differencing cumulative floors at the bid's fixed\s+descending-tick\/submission position/i, 'auction design calculator copy should describe deterministic cumulative floor allocation')
+assert.doesNotMatch(auctionDesignHtml, /carries\s+remainders during paged withdrawals/i, 'auction design should not describe removed withdrawal-order remainder carry')
+assert.doesNotMatch(auctionDesignHtml, /carries division dust|carries division remainders/i, 'auction design should not describe deterministic cumulative allocation as mutable division carry')
 assert.doesNotMatch(auctionDesignHtml, /data-source="underfundedThreshold = ceil\(underfundedWinningEth \* PRICE_PRECISION \/ maxRepBeingSold\)"/i, 'auction design should not present the underfunded threshold formula as unconditional')
 assert.match(auctionDesignHtml, /data-source="underfundedThreshold = if underfundedWinningEth > 0 then ceil\(underfundedWinningEth \* PRICE_PRECISION \/ maxRepBeingSold\) else type\(uint256\)\.max"/i, 'auction design should present the underfunded threshold formula as piecewise')
 
 const operatorReferenceMarkdown = await readFile('docs/operator-reference.md', 'utf8')
+assert.match(operatorReferenceMarkdown, /checkpoints the parent vault before clearing its allowance[\s\S]*balance above `totalAccruedFees\(\)`/i, 'operator reference should preserve parent fee solvency during vault migration')
+assert.match(operatorReferenceMarkdown, /activateForkMode[\s\S]*universe fork[\s\S]*fork-time checkpoint[\s\S]*collateralAtFork/i, 'operator reference should document the ordered own-fork collateral checkpoint lifecycle')
+assert.match(operatorReferenceMarkdown, /external and own forks record one fixed[\s\S]*cumulative REP position[\s\S]*Truth-auction repair also uses the fixed snapshot/i, 'operator reference should document snapshot-based external and own-fork collateral repair')
+assert.match(operatorReferenceMarkdown, /once every eligible vault checkpoints[\s\S]*no vault can individually claim returns to collateral/i, 'operator reference should document final aggregate-only fee reserve release')
+assert.match(operatorReferenceMarkdown, /each claimed auction allowance joins incrementally[\s\S]*delayed claim adds to the pool’s live eligible total/i, 'operator reference should document live incremental fee eligibility for delayed auction claims')
+assert.match(operatorReferenceMarkdown, /## Security Pool Guardrails[\s\S]*totalFeesOwedToVaults[\s\S]*totalAccruedFees\(\)[\s\S]*## Share Migration/i, 'operator reference security-pool guardrails should define assigned and aggregate fee accounting')
 assert.match(
 	operatorReferenceMarkdown,
-	/underfunded auctions with a non-empty winning prefix reuse that remainder while dividing the full REP cap across winning ETH, while the no-winning-prefix sentinel allocates no REP and refunds every bid\./i,
-	'operator reference should qualify underfunded dust handling with the no-winning-prefix sentinel',
+	/derive each bid's REP from the difference between rounded cumulative allocations[\s\S]*no positive-price winning prefix, the sentinel allocates no REP and refunds every bid\./i,
+	'operator reference should document deterministic auction rounding and the no-winning-prefix sentinel',
 )
 
 const placeholderHtml = await readFile('docs/whitepaper_placeholder.html', 'utf8')
+const feeVectorPrecision = 10n ** 18n
+const feeVectorDecayCandidate = 7n
+const feeVectorEligibleAllowance = 3n
+const feeVectorIndexNumerator = feeVectorDecayCandidate * feeVectorPrecision + 1n
+const feeVectorIndexDelta = feeVectorIndexNumerator / feeVectorEligibleAllowance
+const feeVectorIndexRemainderOut = feeVectorIndexNumerator % feeVectorEligibleAllowance
+const feeVectorReserveNumerator = feeVectorIndexDelta * feeVectorEligibleAllowance + 5n
+const feeVectorReserveCredit = feeVectorReserveNumerator / feeVectorPrecision
+const feeVectorGlobalRemainderOut = feeVectorReserveNumerator % feeVectorPrecision
+assert.deepEqual(
+	{
+		collateralOut: 100n - feeVectorReserveCredit,
+		feeVectorGlobalRemainderOut,
+		feeVectorIndexRemainderOut,
+		feeVectorReserveCredit,
+	},
+	{
+		collateralOut: 93n,
+		feeVectorGlobalRemainderOut: 4n,
+		feeVectorIndexRemainderOut: 2n,
+		feeVectorReserveCredit: 7n,
+	},
+	'fee accrual documentation vector should preserve nonzero index and global remainders while subtracting only whole-wei reserve credit',
+)
+assert.doesNotMatch(placeholderHtml, /carried remainder across paged withdrawals/i, 'whitepaper auction examples should not describe removed withdrawal-order remainder carry')
+assert.doesNotMatch(placeholderHtml, /(?:collateralDecay|decayCandidate)[^\"]*totalSecurityBondAllowance/i, 'whitepaper fee-index formula should not use total capacity as the accrual denominator')
+assert.match(placeholderHtml, /feeEligibleSecurityBondAllowance/i, 'whitepaper fee-index formula should use assigned fee-eligible allowance')
+assert.match(placeholderHtml, /data-source="decayCandidate = collateralIn - floor\(collateralIn \\cdot rpow\(retentionRate, elapsedTime, pricePrecision\) \/ pricePrecision\)"/i, 'whitepaper should distinguish the fixed-point decay candidate from credited whole-wei fees')
+assert.match(placeholderHtml, /collateralOut = collateralIn - reserveCredit/i, 'whitepaper should define stored collateral as input collateral minus whole-wei reserve credit')
+assert.match(placeholderHtml, /feeEligibleSecurityBondAllowance == 0[\s\S]*feeIndexDelta[\s\S]*reserveCredit[\s\S]*advances the accumulator[\s\S]*prevents unclaimed auction allowance from earning retroactive fees/i, 'whitepaper fee-index section should document the zero-eligible-allowance no-accrual branch')
+assert.match(placeholderHtml, /Unallocated Reserve[\s\S]*Assigned Vault Debt[\s\S]*Vault Payout/i, 'whitepaper fee-flow diagram should show reserve, checkpointed debt, and redemption stages')
+assert.match(placeholderHtml, /vaultFeeRemainderOut/i, 'whitepaper fee-index formula should document per-vault fractional carry')
+assert.match(placeholderHtml, /actualCollateralDelta = min\(requestedCollateralDelta, parentCompleteSetCollateral\)/i, 'whitepaper own-fork collateral formula should reserve accrued parent fees')
+assert.match(placeholderHtml, /activateForkMode[\s\S]*universe fork[\s\S]*fork-time checkpoint[\s\S]*collateralAtFork/i, 'whitepaper should document the ordered own-fork collateral checkpoint lifecycle')
+assert.match(placeholderHtml, /Both external and[\s\S]*one fixed, fee-exclusive fork[\s\S]*cumulative ceiling accounting[\s\S]*Truth-auction repair uses the same snapshot/i, 'whitepaper should document fixed-snapshot cumulative collateral migration for external and own forks')
+assert.match(
+	placeholderHtml,
+	/data-source="migrationRepDenominatorAtFork = ownFork \? vaultRepAtFork : auctionableRepAtFork; migratedRep = floor\(parentPoolOwnership \\cdot migrationRepDenominatorAtFork \/ parentPoolOwnershipDenominator\)"/i,
+	'whitepaper should document the fork-specific migrated REP denominator and Solidity floor',
+)
+assert.match(
+	placeholderHtml,
+	/data-source="migrationRepDenominatorAtFork = ownFork \? vaultRepAtFork : auctionableRepAtFork; cumulativeCollateralTargetAfterMigration = ceil\(parentCollateralAtFork \\cdot cumulativeRepTransferredAfterMigration \/ migrationRepDenominatorAtFork\)/i,
+	'whitepaper should use the fork-specific denominator in cumulative collateral migration',
+)
+assert.doesNotMatch(placeholderHtml, /data-source="cumulativeCollateralTargetAfterMigration = ceil\(parentCollateralAtFork \\cdot cumulativeRepTransferredAfterMigration \/ vaultRepAtFork\)/i, 'whitepaper should not present the own-fork denominator as the generalized collateral migration formula')
+assert.match(placeholderHtml, /fork-neutral snapshot shared by both paths[\s\S]*ETH raise target[\s\S]*depends on auction demand/i, 'whitepaper should explain shared snapshot accounting and demand-dependent auction repair')
+assert.match(placeholderHtml, /After every eligible vault syncs[\s\S]*individually sub-wei vault remainders[\s\S]*returns to complete-set collateral/i, 'whitepaper should document final aggregate-only fee reserve release')
+assert.match(placeholderHtml, /Each delayed claim adds only its newly assigned amount[\s\S]*does not reconstruct that total from[\s\S]*allowance changes and[\s\S]*liquidations remain intact/i, 'whitepaper should document incremental live fee eligibility for delayed auction claims')
 assert.doesNotMatch(placeholderHtml, /whether the tick qualifies/i, 'whitepaper underfunded widget should not present threshold-only winner membership')
 assert.doesNotMatch(placeholderHtml, /refunded below threshold/i, 'whitepaper underfunded widget should not present threshold-only refunds')
 assert.doesNotMatch(placeholderHtml, /below-threshold bids/i, 'whitepaper truth-auction math should not describe underfunded losers as threshold-filtered bids')
@@ -503,9 +563,9 @@ assert.match(placeholderHtml, /data-source="underfundedThreshold = if underfunde
 assert.match(placeholderHtml, /<mi>underfundedThreshold<\/mi>[\s\S]*?<mtext>type\(uint256\)\.max<\/mtext>/i, 'whitepaper fill-math equation should visibly present the no-winning-prefix threshold branch')
 assert.match(
 	placeholderHtml,
-	/data-source="filledRep = floor\(ethUsed \\cdot pricePrecision \/ clearingPrice\); underfundedThreshold = if underfundedWinningEth > 0 then ceil\(underfundedWinningEth \\cdot pricePrecision \/ maxRepBeingSold\) else type\(uint256\)\.max; underfundedRepShare = if underfundedWinningEth > 0 then floor\(\(bidEth \\cdot maxRepBeingSold \+ clearingRemainderIn\) \/ underfundedWinningEth\) else not applicable; clearingRemainderOut = if underfundedWinningEth > 0 then \(bidEth \\cdot maxRepBeingSold \+ clearingRemainderIn\) mod underfundedWinningEth else not applicable"/i,
+	/data-source="fundedRepShare = floor\(\(ethBefore \+ ethUsed\) \\cdot pricePrecision \/ clearingPrice\) - floor\(ethBefore \\cdot pricePrecision \/ clearingPrice\); underfundedThreshold = if underfundedWinningEth > 0 then ceil\(underfundedWinningEth \\cdot pricePrecision \/ maxRepBeingSold\) else type\(uint256\)\.max; underfundedRepShare = if underfundedWinningEth > 0 then floor\(\(ethBefore \+ bidEth\) \\cdot maxRepBeingSold \/ underfundedWinningEth\) - floor\(ethBefore \\cdot maxRepBeingSold \/ underfundedWinningEth\) else not applicable"/i,
 	'whitepaper fill-math data-source should make the no-winning-prefix share branch explicit',
 )
 assert.match(placeholderHtml, /<mi>underfundedRepShare<\/mi>[\s\S]*?<mtext>not applicable<\/mtext>/i, 'whitepaper fill-math equation should visibly mark the no-winning-prefix REP-share branch as not applicable')
-assert.match(placeholderHtml, /<mi>clearingRemainderOut<\/mi>[\s\S]*?<mtext>not applicable<\/mtext>/i, 'whitepaper fill-math equation should visibly mark the no-winning-prefix remainder branch as not applicable')
-assert.match(placeholderHtml, /share and remainder rows are\s+not applicable,\s+and every bid refunds/i, 'whitepaper fill-math caption should explain the no-winning-prefix share behavior')
+assert.match(placeholderHtml, /share row is not applicable,\s+and every bid refunds/i, 'whitepaper fill-math caption should explain the no-winning-prefix share behavior')
+assert.match(placeholderHtml, /withdrawals cannot redirect rounding\s+units between bidders/i, 'whitepaper fill-math caption should explain deterministic rounding')

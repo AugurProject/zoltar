@@ -928,9 +928,11 @@
 					</ul>
 					<h3>Fee Extraction and Retention Rate</h3>
 					<p>
-						Complete-set collateral gradually decays into fees owed to vaults.
-						The retention rate falls as utilization rises, so security becomes
-						more expensive as open interest consumes underwriting slack.
+						Complete-set collateral gradually decays into an unallocated fee
+						reserve. Vault checkpoints turn whole-wei entitlements from that
+						reserve into redeemable vault debt. The retention rate falls as
+						utilization rises, so security becomes more expensive as open
+						interest consumes underwriting slack.
 					</p>
 					<ul>
 						<li>
@@ -938,14 +940,136 @@
 							gradually.
 						</li>
 						<li>
-							<code>totalFeesOwedToVaults</code> starts lower and grows over
-							time.
+							<code>totalFeesOwedToVaults</code> grows only when a vault
+							checkpoints whole-wei fees that it can redeem; accrued but not yet
+							checkpointed fees remain in a separate pool reserve.
 						</li>
 						<li><code>feeIndex</code> tracks vault fee accounting.</li>
 						<li>
 							<code>currentRetentionRate</code> changes as utilization changes.
 						</li>
 					</ul>
+					<figure class="diagram" id="fig-placeholder-fee-flow">
+						<svg
+							viewBox="0 0 860 270"
+							role="img"
+							aria-labelledby="fees-title fees-desc"
+						>
+							<title id="fees-title">Collateral retention and fee flow</title>
+							<desc id="fees-desc">
+								Complete-set collateral decays into an unallocated reserve. Vault
+								checkpoints assign whole wei as redeemable vault debt.
+							</desc>
+							<defs>
+								<marker
+									id="arrow-fees"
+									viewBox="0 0 10 10"
+									refX="8"
+									refY="5"
+									markerWidth="7"
+									markerHeight="7"
+									orient="auto-start-reverse"
+								>
+									<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+								</marker>
+							</defs>
+							<rect
+								class="svg-blue"
+								x="20"
+								y="54"
+								width="180"
+								height="78"
+								rx="10"
+							></rect>
+							<text class="svg-label" x="110" y="88" text-anchor="middle">
+								Complete-Set Collateral
+							</text>
+							<text class="svg-small" x="110" y="112" text-anchor="middle">
+								starts higher, decays over time
+							</text>
+							<path
+								class="svg-line"
+								marker-end="url(#arrow-fees)"
+								d="M 200 93 H 235"
+							></path>
+							<text class="svg-small" x="217" y="76" text-anchor="middle">
+								decay
+							</text>
+							<rect
+								class="svg-green"
+								x="235"
+								y="54"
+								width="180"
+								height="78"
+								rx="10"
+							></rect>
+							<text class="svg-label" x="325" y="88" text-anchor="middle">
+								Unallocated Reserve
+							</text>
+							<text class="svg-small" x="325" y="112" text-anchor="middle">
+								accrued, not yet redeemable
+							</text>
+							<path
+								class="svg-line"
+								marker-end="url(#arrow-fees)"
+								d="M 415 93 H 450"
+							></path>
+							<text class="svg-small" x="432" y="76" text-anchor="middle">
+								checkpoint
+							</text>
+							<rect
+								class="svg-blue"
+								x="450"
+								y="54"
+								width="180"
+								height="78"
+								rx="10"
+							></rect>
+							<text class="svg-label" x="540" y="88" text-anchor="middle">
+								Assigned Vault Debt
+							</text>
+							<text class="svg-small" x="540" y="112" text-anchor="middle">
+								whole wei, redeemable
+							</text>
+							<path
+								class="svg-line"
+								marker-end="url(#arrow-fees)"
+								d="M 630 93 H 665"
+							></path>
+							<text class="svg-small" x="647" y="76" text-anchor="middle">
+								redeem
+							</text>
+							<rect
+								class="svg-green"
+								x="665"
+								y="54"
+								width="175"
+								height="78"
+								rx="10"
+							></rect>
+							<text class="svg-label" x="752" y="88" text-anchor="middle">
+								Vault Payout
+							</text>
+							<text class="svg-small" x="752" y="112" text-anchor="middle">
+								ETH leaves the pool
+							</text>
+							<path
+								class="svg-line"
+								d="M 110 132 C 200 210 435 210 540 132"
+							></path>
+							<text class="svg-small" x="325" y="207" text-anchor="middle">
+								higher utilization lowers retention
+							</text>
+							<text class="svg-small" x="325" y="229" text-anchor="middle">
+								and accelerates fee extraction
+							</text>
+						</svg>
+						<p class="diagram-caption">
+							<span class="figure-label">Fee Flow</span>Complete-set collateral
+							decays into a reserve; checkpointing assigns whole-wei vault debt
+							before redemption.
+						</p>
+					</figure>
 					<p>
 						Retention follows a piecewise heuristic in
 						<code>SecurityPoolUtils.calculateRetentionRate</code>. It starts
@@ -1290,80 +1414,119 @@
 					<div class="equation" id="eq-placeholder-retention-decay">
 						<math
 							display="block"
-							aria-label="collateral at later time equals collateral at current time times retention rate raised to elapsed time"
-							data-source="collateralAtLaterTime = collateralAtCurrentTime \cdot pow(retentionRate, elapsedTime)"
+							aria-label="decay candidate equals collateral in minus the floor of collateral in times fixed point retention power divided by price precision"
+							data-source="decayCandidate = collateralIn - floor(collateralIn \cdot rpow(retentionRate, elapsedTime, pricePrecision) / pricePrecision)"
 						>
 							<mrow>
-								<mi>collateralAtLaterTime</mi>
+								<mi>decayCandidate</mi>
 								<mo>=</mo>
-								<mi>collateralAtCurrentTime</mi>
-								<mo>&#x22C5;</mo>
-								<msup>
-									<mi>retentionRate</mi>
-									<mi>elapsedTime</mi>
-								</msup>
+								<mi>collateralIn</mi>
+								<mo>-</mo>
+								<mi>floor</mi><mo>(</mo>
+								<mfrac>
+									<mrow><mi>collateralIn</mi><mo>&#x22C5;</mo><mi>rpow</mi><mo>(</mo><mi>retentionRate</mi><mo>,</mo><mi>elapsedTime</mi><mo>,</mo><mi>pricePrecision</mi><mo>)</mo></mrow>
+									<mi>pricePrecision</mi>
+								</mfrac>
+								<mo>)</mo>
 							</mrow>
 						</math>
 						<p class="equation-caption">
-							<span class="equation-label">Retention Decay</span>Complete-set
-							collateral decays exponentially into vault fees over elapsed time.
+							<span class="equation-label">Retention Decay Candidate</span
+							><code>rpow</code> uses fixed-point integer rounding. The candidate
+							feeds the index and remainder steps below; it is not yet the amount
+							removed from stored collateral.
 						</p>
 					</div>
+					<p>
+						When <code>feeEligibleSecurityBondAllowance == 0</code>, the pool
+						sets <code>feeIndexDelta</code> and <code>reserveCredit</code> to zero,
+						clears <code>feeIndexRemainder</code>, leaves collateral unchanged,
+						and advances the accumulator to the clamped current time. This
+						prevents unclaimed auction allowance from earning retroactive fees.
+						The remaining fee-index equations apply only when fee-eligible
+						allowance is positive.
+					</p>
 					<div class="equation" id="eq-placeholder-fee-index-accrual">
 						<math
 							display="block"
-							aria-label="fee index next equals fee index plus collateral decay times price precision divided by total security bond allowance, and vault fees equal allowance times fee index delta divided by price precision"
-							data-source="feeIndexNext = feeIndex + collateralDecay \cdot pricePrecision / totalSecurityBondAllowance; vaultFees = securityBondAllowance \cdot (feeIndex - vaultFeeIndex) / pricePrecision"
+							aria-label="fee index delta floors scaled decay candidate plus its carried remainder over fee eligible allowance; reserve credit floors the indexed eligible allowance plus global fee remainder over price precision; collateral out equals collateral in minus reserve credit; vault fees floor vault allowance times its index delta plus vault remainder over price precision"
+							data-source="feeIndexDelta = floor((decayCandidate \cdot pricePrecision + feeIndexRemainderIn) / feeEligibleSecurityBondAllowance); feeIndexRemainderOut = (decayCandidate \cdot pricePrecision + feeIndexRemainderIn) mod feeEligibleSecurityBondAllowance; reserveCredit = floor((feeIndexDelta \cdot feeEligibleSecurityBondAllowance + globalFeeRemainderIn) / pricePrecision); globalFeeRemainderOut = (feeIndexDelta \cdot feeEligibleSecurityBondAllowance + globalFeeRemainderIn) mod pricePrecision; collateralOut = collateralIn - reserveCredit; vaultFees = floor((vaultSecurityBondAllowance \cdot vaultFeeIndexDelta + vaultFeeRemainderIn) / pricePrecision); vaultFeeRemainderOut = (vaultSecurityBondAllowance \cdot vaultFeeIndexDelta + vaultFeeRemainderIn) mod pricePrecision"
 						>
 							<mtable>
 								<mtr>
+									<mtd><mi>feeIndexDelta</mi></mtd>
+									<mtd><mo>=</mo></mtd>
 									<mtd>
-										<mi>feeIndexNext</mi>
-									</mtd>
-									<mtd>
-										<mo>=</mo>
-									</mtd>
-									<mtd>
-										<mi>feeIndex</mi>
-										<mo>+</mo>
+										<mi>floor</mi>
+										<mo>(</mo>
 										<mfrac>
 											<mrow>
-												<mi>collateralDecay</mi>
+												<mi>decayCandidate</mi>
 												<mo>&#x22C5;</mo>
 												<mi>pricePrecision</mi>
+												<mo>+</mo>
+												<mi>feeIndexRemainderIn</mi>
 											</mrow>
-											<mi>totalSecurityBondAllowance</mi>
+											<mi>feeEligibleSecurityBondAllowance</mi>
 										</mfrac>
+										<mo>)</mo>
 									</mtd>
 								</mtr>
 								<mtr>
+									<mtd><mi>feeIndexRemainderOut</mi></mtd>
+									<mtd><mo>=</mo></mtd>
 									<mtd>
-										<mi>vaultFees</mi>
+										<mo>(</mo><mi>decayCandidate</mi><mo>&#x22C5;</mo><mi>pricePrecision</mi><mo>+</mo><mi>feeIndexRemainderIn</mi><mo>)</mo>
+										<mo>mod</mo><mi>feeEligibleSecurityBondAllowance</mi>
 									</mtd>
+								</mtr>
+								<mtr>
+									<mtd><mi>reserveCredit</mi></mtd>
+									<mtd><mo>=</mo></mtd>
 									<mtd>
-										<mo>=</mo>
+										<mi>floor</mi><mo>(</mo>
+										<mfrac><mrow><mi>feeIndexDelta</mi><mo>&#x22C5;</mo><mi>feeEligibleSecurityBondAllowance</mi><mo>+</mo><mi>globalFeeRemainderIn</mi></mrow><mi>pricePrecision</mi></mfrac>
+										<mo>)</mo>
 									</mtd>
+								</mtr>
+								<mtr>
+									<mtd><mi>globalFeeRemainderOut</mi></mtd>
+									<mtd><mo>=</mo></mtd>
 									<mtd>
-										<mfrac>
-											<mrow>
-												<mi>securityBondAllowance</mi>
-												<mo>&#x22C5;</mo>
-												<mo>(</mo>
-												<mi>feeIndex</mi>
-												<mo>-</mo>
-												<mi>vaultFeeIndex</mi>
-												<mo>)</mo>
-											</mrow>
-											<mi>pricePrecision</mi>
-										</mfrac>
+										<mo>(</mo><mi>feeIndexDelta</mi><mo>&#x22C5;</mo><mi>feeEligibleSecurityBondAllowance</mi><mo>+</mo><mi>globalFeeRemainderIn</mi><mo>)</mo>
+										<mo>mod</mo><mi>pricePrecision</mi>
+									</mtd>
+								</mtr>
+								<mtr>
+									<mtd><mi>collateralOut</mi></mtd>
+									<mtd><mo>=</mo></mtd>
+									<mtd><mi>collateralIn</mi><mo>-</mo><mi>reserveCredit</mi></mtd>
+								</mtr>
+								<mtr>
+									<mtd><mi>vaultFees</mi></mtd>
+									<mtd><mo>=</mo></mtd>
+									<mtd>
+										<mi>floor</mi><mo>(</mo>
+										<mfrac><mrow><mi>vaultSecurityBondAllowance</mi><mo>&#x22C5;</mo><mi>vaultFeeIndexDelta</mi><mo>+</mo><mi>vaultFeeRemainderIn</mi></mrow><mi>pricePrecision</mi></mfrac>
+										<mo>)</mo>
+									</mtd>
+								</mtr>
+								<mtr>
+									<mtd><mi>vaultFeeRemainderOut</mi></mtd>
+									<mtd><mo>=</mo></mtd>
+									<mtd>
+										<mo>(</mo><mi>vaultSecurityBondAllowance</mi><mo>&#x22C5;</mo><mi>vaultFeeIndexDelta</mi><mo>+</mo><mi>vaultFeeRemainderIn</mi><mo>)</mo>
+										<mo>mod</mo><mi>pricePrecision</mi>
 									</mtd>
 								</mtr>
 							</mtable>
 						</math>
 						<p class="equation-caption">
-							<span class="equation-label">Fee Index Accrual</span>Collateral
-							decay becomes a global fee-index increment, then each vault claims
-							the increment weighted by its security-bond allowance.
+							<span class="equation-label">Fee Index Accrual</span>Only assigned,
+							fee-eligible allowance divides the global index. Only whole-wei
+							<code>reserveCredit</code> leaves stored collateral; index and global
+							remainders retain the rest. Vault checkpoints preserve their own
+							fractional carry while moving whole wei into redeemable debt.
 						</p>
 					</div>
 					<p>
@@ -1374,6 +1537,30 @@
 						total bond allowance is zero or when the pool is outside
 						<code>Operational</code> mode, so fork handling does not silently
 						change the live fee curve.
+					</p>
+					<p>
+						A child pool begins a new fee epoch when migration and any truth
+						auction finalize. Only allowance already assigned to a vault enters
+						the fee denominator. Auctioned allowance becomes fee-eligible when
+						the winning bid is claimed, after that vault first checkpoints at the
+						current index. Each delayed claim adds only its newly assigned amount
+						to the live eligible total; it does not reconstruct that total from
+						fork-time migration counters, so intervening allowance changes and
+						liquidations remain intact. Per-vault fractional remainders survive public
+						checkpoints, while whole fees move from the pool reserve into
+						<code>totalFeesOwedToVaults</code>; this keeps aggregate debt equal
+						to redeemable vault balances. The <code>totalAccruedFees()</code>
+						view adds that assigned debt to the unallocated reserve when callers
+						need to reconcile all fee-adjusted collateral.
+					</p>
+					<p>
+						A fork permanently closes the parent's fee epoch. The pool tracks how
+						much eligible allowance still has not checkpointed the final index.
+						After every eligible vault syncs, any whole reserve wei left solely
+						from aggregating individually sub-wei vault remainders cannot become
+						redeemable, so it returns to complete-set collateral. Until the last
+						checkpoint, that reserve remains protected by
+						<code>totalAccruedFees()</code>.
 					</p>
 					<figure class="diagram" id="fig-placeholder-pool-accounting">
 						<svg
@@ -4369,10 +4556,23 @@
 					<div class="equation" id="eq-placeholder-fork-migration-proportion">
 						<math
 							display="block"
-							aria-label="migrated REP equals parent pool ownership times parent REP at fork divided by parent pool ownership denominator, and collateral to transfer equals parent collateral times migrated REP divided by parent REP at fork"
-							data-source="migratedRep = parentPoolOwnership \cdot parentRepAtFork / parentPoolOwnershipDenominator; collateralToTransfer = parentCollateral \cdot migratedRep / parentRepAtFork"
+							aria-label="migration REP denominator at fork equals vault REP at fork for an own fork and auctionable REP at fork for an external fork; migrated REP equals the floor of parent pool ownership times the migration REP denominator at fork divided by the parent pool ownership denominator"
+							data-source="migrationRepDenominatorAtFork = ownFork ? vaultRepAtFork : auctionableRepAtFork; migratedRep = floor(parentPoolOwnership \cdot migrationRepDenominatorAtFork / parentPoolOwnershipDenominator)"
 						>
 							<mtable>
+								<mtr>
+									<mtd>
+										<mi>migrationRepDenominatorAtFork</mi>
+									</mtd>
+									<mtd>
+										<mo>=</mo>
+										<mi>ownFork</mi>
+										<mo>?</mo>
+										<mi>vaultRepAtFork</mi>
+										<mo>:</mo>
+										<mi>auctionableRepAtFork</mi>
+									</mtd>
+								</mtr>
 								<mtr>
 									<mtd>
 										<mi>migratedRep</mi>
@@ -4381,59 +4581,62 @@
 										<mo>=</mo>
 									</mtd>
 									<mtd>
+										<mi>floor</mi>
+										<mo>(</mo>
 										<mfrac>
 											<mrow>
 												<mi>parentPoolOwnership</mi>
 												<mo>&#x22C5;</mo>
-												<mi>parentRepAtFork</mi>
+												<mi>migrationRepDenominatorAtFork</mi>
 											</mrow>
 											<mi>parentPoolOwnershipDenominator</mi>
 										</mfrac>
-									</mtd>
-								</mtr>
-								<mtr>
-									<mtd>
-										<mi>collateralToTransfer</mi>
-									</mtd>
-									<mtd>
-										<mo>=</mo>
-									</mtd>
-									<mtd>
-										<mfrac>
-											<mrow>
-												<mi>parentCollateral</mi>
-												<mo>&#x22C5;</mo>
-												<mi>migratedRep</mi>
-											</mrow>
-											<mi>parentRepAtFork</mi>
-										</mfrac>
+										<mo>)</mo>
 									</mtd>
 								</mtr>
 							</mtable>
 						</math>
 						<p class="equation-caption">
 							<span class="equation-label">Fork Migration Proportion</span
-							>Unlocked vault migration preserves the parent ownership share,
-							then transfers ETH collateral according to the migrated REP share
-							of REP at fork.
+							>Unlocked vault migration floors the parent ownership share against
+							the REP bucket that backs collateral for that fork type.
 						</p>
 					</div>
 					<p>
-						The equation above is the external-fork unlocked transfer path. In
-						an own-fork migration, child collateral uses cumulative ceiling
-						accounting so repeated vault migrations do not strand collateral
-						because each individual transfer rounded down.
+						The equation above gives the ownership proportion. Both external and
+						own-fork collateral transfers use one fixed, fee-exclusive fork
+						snapshot plus cumulative ceiling accounting, so repeated vault
+						migrations neither geometrically shrink later transfers nor strand
+						collateral through individual rounding. An external fork is already
+						known when <code>activateForkMode</code> checkpoints and records that
+						snapshot. The own-fork snapshot
+						uses this order: <code>activateForkMode</code> changes the pool state
+						and checkpoints through the pre-fork fee horizon; the proxy creates
+						the universe fork; a fork-time checkpoint covers the newly exposed
+						question-end-to-fork interval at the retained operational rate; then
+						<code>collateralAtFork</code> records the resulting fee-exclusive
+						collateral in the fork-neutral snapshot shared by both paths.
+						Truth-auction repair uses the same snapshot and the
+						child's cumulative migrated REP to set the missing collateral as its
+						ETH raise target; actual repair still depends on auction demand,
+						clearing, and tick-level integer rounding.
+						Before either migration
+						path clears the parent allowance, it also checkpoints the vault's
+						earned fees. Each ETH transfer subtracts from parent complete-set
+						collateral and is limited to the pool balance above
+						<code>totalAccruedFees()</code>, keeping both the unallocated reserve
+						and assigned vault debt funded in the parent.
 					</p>
-					<div class="equation" id="eq-placeholder-own-fork-collateral-ceiling">
+					<div class="equation" id="eq-placeholder-fork-collateral-ceiling">
 						<math
 							display="block"
-							aria-label="cumulative collateral required after migration equals ceiling of parent collateral at fork times cumulative REP transferred after migration divided by vault REP at fork; collateral delta to transfer equals cumulative collateral required after migration minus cumulative collateral already transferred"
-							data-source="cumulativeCollateralRequiredAfterMigration = ceil(parentCollateralAtFork \cdot cumulativeRepTransferredAfterMigration / vaultRepAtFork); collateralDeltaToTransfer = cumulativeCollateralRequiredAfterMigration - cumulativeCollateralAlreadyTransferred"
+							aria-label="cumulative collateral target after migration equals ceiling of parent collateral at fork times cumulative REP transferred after migration divided by the migration REP denominator at fork, which is vault REP at fork for an own fork and auctionable REP at fork for an external fork; requested collateral delta equals the cumulative target minus cumulative collateral already transferred; actual collateral delta is the minimum of requested delta and current parent complete-set collateral"
+							data-source="migrationRepDenominatorAtFork = ownFork ? vaultRepAtFork : auctionableRepAtFork; cumulativeCollateralTargetAfterMigration = ceil(parentCollateralAtFork \cdot cumulativeRepTransferredAfterMigration / migrationRepDenominatorAtFork); requestedCollateralDelta = cumulativeCollateralTargetAfterMigration - cumulativeCollateralAlreadyTransferred; actualCollateralDelta = min(requestedCollateralDelta, parentCompleteSetCollateral)"
 						>
 							<mtable>
 								<mtr>
 									<mtd>
-										<mi>cumulativeCollateralRequiredAfterMigration</mi>
+										<mi>cumulativeCollateralTargetAfterMigration</mi>
 									</mtd>
 									<mtd>
 										<mo>=</mo>
@@ -4445,29 +4648,35 @@
 												<mo>&#x22C5;</mo>
 												<mi>cumulativeRepTransferredAfterMigration</mi>
 											</mrow>
-											<mi>vaultRepAtFork</mi>
+											<mi>migrationRepDenominatorAtFork</mi>
 										</mfrac>
 										<mo>)</mo>
 									</mtd>
 								</mtr>
 								<mtr>
 									<mtd>
-										<mi>collateralDeltaToTransfer</mi>
+										<mi>requestedCollateralDelta</mi>
 									</mtd>
 									<mtd>
 										<mo>=</mo>
-										<mi>cumulativeCollateralRequiredAfterMigration</mi>
+										<mi>cumulativeCollateralTargetAfterMigration</mi>
 										<mo>-</mo>
 										<mi>cumulativeCollateralAlreadyTransferred</mi>
+									</mtd>
+								</mtr>
+								<mtr>
+									<mtd><mi>actualCollateralDelta</mi></mtd>
+									<mtd>
+										<mo>=</mo><mi>min</mi><mo>(</mo><mi>requestedCollateralDelta</mi><mo>,</mo><mi>parentCompleteSetCollateral</mi><mo>)</mo>
 									</mtd>
 								</mtr>
 							</mtable>
 						</math>
 						<p class="equation-caption">
-							<span class="equation-label">Own-Fork Collateral Ceiling</span>The
-							forker recomputes the cumulative collateral required after the
+							<span class="equation-label">Fork Collateral Ceiling</span>The
+							forker recomputes the cumulative collateral target after the
 							migration, subtracts cumulative collateral already transferred,
-							and sends only that newly required difference to the child pool.
+							and sends only the portion that does not back accrued parent fees.
 						</p>
 					</div>
 					<p>
@@ -6319,137 +6528,24 @@
 					<div class="equation" id="eq-placeholder-auction-fill-math">
 						<math
 							display="block"
-							aria-label="filled REP equals floor ETH used times price precision divided by clearing price, underfunded threshold equals the ceiling underfunded winning ETH times price precision divided by max REP being sold when the winning prefix is non-empty and otherwise type uint256 max, underfunded REP share equals floor bid ETH times max REP being sold plus carried remainder divided by underfunded winning ETH when the winning prefix is non-empty and otherwise not applicable, and the next carried remainder is the same numerator modulo underfunded winning ETH when the winning prefix is non-empty and otherwise not applicable"
-							data-source="filledRep = floor(ethUsed \cdot pricePrecision / clearingPrice); underfundedThreshold = if underfundedWinningEth > 0 then ceil(underfundedWinningEth \cdot pricePrecision / maxRepBeingSold) else type(uint256).max; underfundedRepShare = if underfundedWinningEth > 0 then floor((bidEth \cdot maxRepBeingSold + clearingRemainderIn) / underfundedWinningEth) else not applicable; clearingRemainderOut = if underfundedWinningEth > 0 then (bidEth \cdot maxRepBeingSold + clearingRemainderIn) mod underfundedWinningEth else not applicable"
+							aria-label="funded REP share is the difference between cumulative REP after and before the bid, underfunded threshold is piecewise on positive winning ETH, and underfunded REP share is the difference between cumulative pro rata REP after and before the bid"
+							data-source="fundedRepShare = floor((ethBefore + ethUsed) \cdot pricePrecision / clearingPrice) - floor(ethBefore \cdot pricePrecision / clearingPrice); underfundedThreshold = if underfundedWinningEth > 0 then ceil(underfundedWinningEth \cdot pricePrecision / maxRepBeingSold) else type(uint256).max; underfundedRepShare = if underfundedWinningEth > 0 then floor((ethBefore + bidEth) \cdot maxRepBeingSold / underfundedWinningEth) - floor(ethBefore \cdot maxRepBeingSold / underfundedWinningEth) else not applicable"
 						>
 							<mtable>
 								<mtr>
-									<mtd>
-										<mi>filledRep</mi>
-									</mtd>
-									<mtd>
-										<mo>=</mo>
-									</mtd>
-									<mtd>
-										<mi>floor</mi>
-										<mo>(</mo>
-										<mfrac>
-											<mrow>
-												<mi>ethUsed</mi>
-												<mo>&#x22C5;</mo>
-												<mi>pricePrecision</mi>
-											</mrow>
-											<mi>clearingPrice</mi>
-										</mfrac>
-										<mo>)</mo>
-									</mtd>
+									<mtd><mi>fundedRepShare</mi></mtd>
+									<mtd><mo>=</mo></mtd>
+									<mtd><mi>floor</mi><mo>(</mo><mfrac><mrow><mo>(</mo><mi>ethBefore</mi><mo>+</mo><mi>ethUsed</mi><mo>)</mo><mo>&#x22C5;</mo><mi>pricePrecision</mi></mrow><mi>clearingPrice</mi></mfrac><mo>)</mo><mo>-</mo><mi>floor</mi><mo>(</mo><mfrac><mrow><mi>ethBefore</mi><mo>&#x22C5;</mo><mi>pricePrecision</mi></mrow><mi>clearingPrice</mi></mfrac><mo>)</mo></mtd>
 								</mtr>
 								<mtr>
-									<mtd>
-										<mi>underfundedThreshold</mi>
-									</mtd>
-									<mtd>
-										<mo>=</mo>
-									</mtd>
-									<mtd>
-										<mrow>
-											<mo>{</mo>
-											<mtable>
-												<mtr>
-													<mtd>
-														<mi>ceil</mi>
-														<mo>(</mo>
-														<mfrac>
-															<mrow>
-																<mi>underfundedWinningEth</mi>
-																<mo>&#x22C5;</mo>
-																<mi>pricePrecision</mi>
-															</mrow>
-															<mi>maxRepBeingSold</mi>
-														</mfrac>
-														<mo>)</mo>
-													</mtd>
-													<mtd><mtext>if underfundedWinningEth &gt; 0</mtext></mtd>
-												</mtr>
-												<mtr>
-													<mtd><mtext>type(uint256).max</mtext></mtd>
-													<mtd><mtext>otherwise</mtext></mtd>
-												</mtr>
-											</mtable>
-										</mrow>
-									</mtd>
+									<mtd><mi>underfundedThreshold</mi></mtd>
+									<mtd><mo>=</mo></mtd>
+									<mtd><mrow><mo>{</mo><mtable><mtr><mtd><mi>ceil</mi><mo>(</mo><mfrac><mrow><mi>underfundedWinningEth</mi><mo>&#x22C5;</mo><mi>pricePrecision</mi></mrow><mi>maxRepBeingSold</mi></mfrac><mo>)</mo></mtd><mtd><mtext>if underfundedWinningEth &gt; 0</mtext></mtd></mtr><mtr><mtd><mtext>type(uint256).max</mtext></mtd><mtd><mtext>otherwise</mtext></mtd></mtr></mtable></mrow></mtd>
 								</mtr>
 								<mtr>
-									<mtd>
-										<mi>underfundedRepShare</mi>
-									</mtd>
-									<mtd>
-										<mo>=</mo>
-									</mtd>
-									<mtd>
-										<mrow>
-											<mo>{</mo>
-											<mtable>
-												<mtr>
-													<mtd>
-														<mi>floor</mi>
-														<mo>(</mo>
-														<mfrac>
-															<mrow>
-																<mi>bidEth</mi>
-																<mo>&#x22C5;</mo>
-																<mi>maxRepBeingSold</mi>
-																<mo>+</mo>
-																<mi>clearingRemainderIn</mi>
-															</mrow>
-															<mi>underfundedWinningEth</mi>
-														</mfrac>
-														<mo>)</mo>
-													</mtd>
-													<mtd><mtext>if underfundedWinningEth &gt; 0</mtext></mtd>
-												</mtr>
-												<mtr>
-													<mtd><mtext>not applicable</mtext></mtd>
-													<mtd><mtext>otherwise</mtext></mtd>
-												</mtr>
-											</mtable>
-										</mrow>
-									</mtd>
-								</mtr>
-								<mtr>
-									<mtd>
-										<mi>clearingRemainderOut</mi>
-									</mtd>
-									<mtd>
-										<mo>=</mo>
-									</mtd>
-									<mtd>
-										<mrow>
-											<mo>{</mo>
-											<mtable>
-												<mtr>
-													<mtd>
-														<mo>(</mo>
-														<mrow>
-															<mi>bidEth</mi>
-															<mo>&#x22C5;</mo>
-															<mi>maxRepBeingSold</mi>
-															<mo>+</mo>
-															<mi>clearingRemainderIn</mi>
-														</mrow>
-														<mo>)</mo>
-														<mo>mod</mo>
-														<mi>underfundedWinningEth</mi>
-													</mtd>
-													<mtd><mtext>if underfundedWinningEth &gt; 0</mtext></mtd>
-												</mtr>
-												<mtr>
-													<mtd><mtext>not applicable</mtext></mtd>
-													<mtd><mtext>otherwise</mtext></mtd>
-												</mtr>
-											</mtable>
-										</mrow>
-									</mtd>
+									<mtd><mi>underfundedRepShare</mi></mtd>
+									<mtd><mo>=</mo></mtd>
+									<mtd><mrow><mo>{</mo><mtable><mtr><mtd><mi>floor</mi><mo>(</mo><mfrac><mrow><mo>(</mo><mi>ethBefore</mi><mo>+</mo><mi>bidEth</mi><mo>)</mo><mo>&#x22C5;</mo><mi>maxRepBeingSold</mi></mrow><mi>underfundedWinningEth</mi></mfrac><mo>)</mo><mo>-</mo><mi>floor</mi><mo>(</mo><mfrac><mrow><mi>ethBefore</mi><mo>&#x22C5;</mo><mi>maxRepBeingSold</mi></mrow><mi>underfundedWinningEth</mi></mfrac><mo>)</mo></mtd><mtd><mtext>if underfundedWinningEth &gt; 0</mtext></mtd></mtr><mtr><mtd><mtext>not applicable</mtext></mtd><mtd><mtext>otherwise</mtext></mtd></mtr></mtable></mrow></mtd>
 								</mtr>
 							</mtable>
 						</math>
@@ -6462,20 +6558,23 @@
 							tick, and bids at ticks <code>&gt;= clearingTick</code> share the
 							synthetic uniform underfunded price. If
 							<code>underfundedWinningEth == 0</code>, the threshold row takes
-							<code>type(uint256).max</code>, the share and remainder rows are
-							not applicable, and every bid refunds.
+							<code>type(uint256).max</code>, the share row is not applicable,
+							and every bid refunds. <code>ethBefore</code> is fixed by descending
+							price and submission order, so withdrawals cannot redirect rounding
+							units between bidders.
 						</p>
 					</div>
 					<details class="interactive-example" id="underfunded-auction-example">
 						<summary>Adjust an underfunded synthetic uniform example</summary>
 						<p>
 							The widget assumes the bid is already inside the finalized
-							winning prefix. The winning ETH, REP sale cap, and bidder ETH then
-							determine the synthetic execution price, the bidder's REP fill,
-							and the REP assigned to the rest of the winning prefix. The tick
-							price input is only a consistency check: if the synthetic price is
-							above the tick limit, these inputs cannot describe a winning-prefix
-							bid.
+							winning prefix. It is a human-unit real-number approximation: the
+							winning ETH, REP sale cap, and bidder ETH determine the synthetic
+							execution price and approximate pro-rata shares. The contract's exact
+							wei allocation also depends on <code>ethBefore</code> and cumulative
+							integer floors. The tick price input is only a consistency check: if
+							the synthetic price is above the tick limit, these inputs cannot
+							describe a winning-prefix bid.
 						</p>
 						<div class="example-grid">
 							<label>
@@ -6539,11 +6638,11 @@
 								>
 							</li>
 							<li>
-								Bidder REP fill:
+								Approximate bidder REP fill (human units):
 								<output data-example-output="underfundedRepShare">40.0000 REP</output>
 							</li>
 							<li>
-								REP assigned to other winners:
+								Approximate REP assigned to other winners (human units):
 								<output data-example-output="repAssignedElsewhere">60.0000 REP</output>
 							</li>
 						</ul>
@@ -6554,6 +6653,13 @@
 						submission order. In the underfunded path, ticks at or above the
 						finalized <code>clearingTick</code> boundary share the full REP sale
 						cap pro rata by winning ETH contribution.
+					</p>
+					<p>
+						Both finalized paths assign division dust from deterministic
+						cumulative ETH positions. Each bid receives the difference between
+						the rounded cumulative REP after and before its fixed position. Paged
+						withdrawals therefore reconcile to the aggregate allocation without
+						making payout depend on claim order.
 					</p>
 					<p>
 						Settlement then turns purchased REP into child-pool vault
@@ -6707,9 +6813,9 @@
 							allowance share for the child branch.
 						</li>
 						<li>
-							Normal clearing carries division dust through
-							<code>clearingRemainder</code>; underfunded clearing reuses that
-							remainder while dividing the full REP cap across winning ETH.
+							Both clearing paths derive each bid's rounding allocation from its
+							deterministic cumulative ETH position, so claim order cannot move
+							REP dust between bidders.
 						</li>
 						<li>
 							Before finalization, losing bids below the currently found
@@ -6749,7 +6855,8 @@
 							raise cap, the underfunded winner set still shares the full REP
 							cap at one synthetic uniform price. The calculator shows
 							human-unit allocations; exact withdrawals use integer REP-wei
-							division with carried remainder across paged withdrawals.
+							division by differencing cumulative floor allocations before and
+							after each bid's fixed descending-tick/submission position.
 						</p>
 						<div class="example-grid">
 							<label>

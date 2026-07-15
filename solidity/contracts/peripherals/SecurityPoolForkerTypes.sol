@@ -21,9 +21,9 @@ struct SecurityPoolForkerForkData {
 	bool unresolvedEscalationAtFork;
 	uint256 outcomeIndex;
 	bool forkQuestionMatchesPoolQuestion;
-	uint256 ownForkCollateralAtFork;
-	uint256 ownForkMigratedRepCollateralized;
-	uint256 ownForkCollateralTransferred;
+	uint256 collateralAtFork;
+	uint256 migratedRepCollateralized;
+	uint256 collateralTransferred;
 	uint256 migratedSecurityBondAllowance;
 	uint256 auctionPoolOwnershipPerRep;
 	uint256 claimedAuctionPoolOwnership;

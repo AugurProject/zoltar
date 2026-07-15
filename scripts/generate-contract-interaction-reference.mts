@@ -125,6 +125,7 @@ const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	},
 	'solidity/contracts/peripherals/SecurityPool.sol': {
 		activateForkMode: ['external()'],
+		addFeeEligibleSecurityBondAllowance: ['external(uint256)'],
 		authorizeChildPool: ['external(ISecurityPool)'],
 		configureVault: ['external(address,uint256,uint256,uint256)'],
 		createCompleteSet: ['external()'],
@@ -144,7 +145,7 @@ const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 		resumeForkedEscalationGame: ['external()'],
 		setAwaitingForkContinuation: ['external(bool)'],
 		setOwnershipDenominator: ['external(uint256)'],
-		setPoolFinancials: ['external(uint256,uint256)'],
+		setPoolFinancials: ['external(uint256,uint256,uint256)'],
 		setStartingParams: ['external(uint256,uint256)'],
 		setSystemState: ['external(SystemState)'],
 		setTotalShares: ['external(uint256)'],
@@ -340,12 +341,12 @@ const contractReferences: ContractReference[] = [
 				signals: '`PoolForkModeActivated`, continuation events, and `SystemStateSet`',
 			},
 			{
-				call: '`configureVault`, accounting setters, pool drains/transfers, and `authorizeChildPool`',
+				call: '`configureVault`, fee-eligibility and accounting setters, pool drains/transfers, and `authorizeChildPool`',
 				caller: '`SecurityPoolForker` only',
-				declarations: [{ name: 'configureVault' }, { name: 'setOwnershipDenominator' }, { name: 'setTotalShares' }, { name: 'setPoolFinancials' }, { name: 'drainAllRep' }, { name: 'transferRep' }, { name: 'transferEth' }, { name: 'authorizeChildPool' }],
+				declarations: [{ name: 'configureVault' }, { name: 'addFeeEligibleSecurityBondAllowance' }, { name: 'setOwnershipDenominator' }, { name: 'setTotalShares' }, { name: 'setPoolFinancials' }, { name: 'drainAllRep' }, { name: 'transferRep' }, { name: 'transferEth' }, { name: 'authorizeChildPool' }],
 				effect: 'Configures migrated vault and pool state, authorizes children, and transfers migration assets.',
 				preconditions: 'Correct migration phase plus function-specific accounting and balance constraints.',
-				signals: 'Vault/configuration events and the corresponding token or ETH transfers',
+				signals: 'Vault/configuration events and the corresponding token or ETH transfers; `addFeeEligibleSecurityBondAllowance` has no dedicated event',
 			},
 			{
 				call: 'Direct ETH transfer to `receive()`',
@@ -651,7 +652,7 @@ const contractReferences: ContractReference[] = [
 			{
 				call: '`withdrawBids(withdrawFor, tickIndices)`',
 				caller: 'Auction owner only',
-				effect: 'Returns refunds and reports purchased REP for the selected beneficiary bids so the forker can credit pool ownership. Withdrawal-time allocation carries division dust through `clearingRemainder`.',
+				effect: 'Returns refunds and reports purchased REP for the selected beneficiary bids so the forker can credit pool ownership. Withdrawal-time allocation assigns division dust from deterministic cumulative ETH positions, making payout independent of claim order.',
 				declarations: [{ name: 'withdrawBids' }],
 				preconditions: 'Auction finalized; indexes belong to `withdrawFor`; bids not already claimed or refunded.',
 				signals: '`WithdrawBids`',

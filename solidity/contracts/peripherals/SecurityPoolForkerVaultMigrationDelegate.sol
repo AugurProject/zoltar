@@ -29,7 +29,6 @@ contract SecurityPoolForkerVaultMigrationDelegate is SecurityPoolForkerVaultMigr
 			block.timestamp <= zoltar.getForkTime(parent.universeId()) + SecurityPoolUtils.MIGRATION_TIME,
 			'Migration window closed'
 		);
-		parent.updateVaultFees(msg.sender);
 		ISecurityPool child = _getOrDeployChildPool(parent, outcomeIndex);
 		_migrateVaultUnlockedState(parent, child, msg.sender);
 	}
