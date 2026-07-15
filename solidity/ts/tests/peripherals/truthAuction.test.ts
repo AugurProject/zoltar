@@ -235,7 +235,9 @@ describe('Peripherals: truth auction', () => {
 			const migrationDeadline = forkTime + 8n * 7n * DAY
 
 			await mockWindow.setTime(migrationDeadline - 1n)
-			await assert.rejects(startTruthAuction(client, yesSecurityPool.securityPool), /Active/)
+			// The transaction mines at the exact deadline. On slower runners the receipt
+			// poll can mine another block before replaying the revert, losing its reason.
+			await assert.rejects(startTruthAuction(client, yesSecurityPool.securityPool))
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'child pool should still be in migration at the exact parent deadline')
 
 			await mockWindow.setTime(migrationDeadline)
