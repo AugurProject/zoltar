@@ -1,5 +1,5 @@
+import * as commonCopy from '../copy/common.js'
 import type { ComponentChildren } from 'preact'
-import { UI_STRING_LOAD_MORE, UI_STRING_NEXT_PAGE, UI_STRING_PREVIOUS_PAGE } from '../lib/uiStrings.js'
 
 type PaginationControlsProps = {
 	hasNextPage?: boolean
@@ -14,7 +14,7 @@ type PaginationControlsProps = {
 	summary?: ComponentChildren
 }
 
-export function PaginationControls({ hasNextPage = false, hasPreviousPage = false, loading = false, loadMoreLabel = UI_STRING_LOAD_MORE, nextLabel = UI_STRING_NEXT_PAGE, onLoadMore, onNextPage, onPreviousPage, previousLabel = UI_STRING_PREVIOUS_PAGE, summary }: PaginationControlsProps) {
+export function PaginationControls({ hasNextPage = false, hasPreviousPage = false, loading = false, loadMoreLabel = commonCopy.loadMore, nextLabel = commonCopy.nextPage, onLoadMore, onNextPage, onPreviousPage, previousLabel = commonCopy.previousPage, summary }: PaginationControlsProps) {
 	const hasPageNavigation = onPreviousPage !== undefined || onNextPage !== undefined
 	const hasLoadMore = onLoadMore !== undefined
 	if (!hasPageNavigation && !hasLoadMore && summary === undefined) return undefined

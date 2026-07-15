@@ -1,12 +1,68 @@
 import { expect, test } from 'bun:test'
-import { getChangedLineNumbers, getChangedUiTsxFiles, lintSourceText } from './lint-ui-tsx-strings.mts'
+import { getChangedLineNumbers, getChangedUiTsxFiles, lintCopySourceText, lintSourceText } from './lint-ui-tsx-strings.mts'
+
+test('lint-ui-tsx-strings enforces semantic copy names, template parameters, and ellipsis style', () => {
+	const legacyNameFailures = lintCopySourceText('ui/ts/copy/test.ts', "export const UI_STRING_LOADING = 'Loading…'")
+	const longNameFailures = lintCopySourceText('ui/ts/copy/test.ts', "export const simulationModeUsesBrowserLocalContractStateTransactionsDoNotAffectAPublicNetwork = 'Detail.'")
+	const positionalParameterFailures = lintCopySourceText('ui/ts/copy/test.ts', 'export const formatDetail = (value0: string) => `Detail ${value0}`')
+	const ellipsisFailures = lintCopySourceText('ui/ts/copy/test.ts', "export const loading = 'Loading...'")
+
+	expect(legacyNameFailures).toHaveLength(1)
+	expect(longNameFailures).toHaveLength(1)
+	expect(positionalParameterFailures).toHaveLength(1)
+	expect(ellipsisFailures).toHaveLength(1)
+})
+
+test('lint-ui-tsx-strings allows only recognized three-period truncation', () => {
+	const hexPlaceholderFailures = lintCopySourceText('ui/ts/copy/test.ts', "export const hashPlaceholder = '0x...'")
+	const valueTruncationFailures = lintCopySourceText('ui/ts/copy/test.ts', 'export const formatTruncatedValue = (value: string, byteCount: number) => `${value}... (${byteCount} bytes)`')
+	const mixedPendingFailures = lintCopySourceText('ui/ts/copy/test.ts', "export const loadingHash = 'Loading... 0x...'")
+	const embeddedHexFailures = lintCopySourceText('ui/ts/copy/test.ts', "export const malformedHash = 'prefix0x...suffix'")
+
+	expect(hexPlaceholderFailures).toHaveLength(0)
+	expect(valueTruncationFailures).toHaveLength(0)
+	expect(mixedPendingFailures).toHaveLength(1)
+	expect(embeddedHexFailures).toHaveLength(1)
+})
+
+test('lint-ui-tsx-strings rejects short sentence names and function-declaration bypasses', () => {
+	const sentenceNameFailures = lintCopySourceText('ui/ts/copy/test.ts', "export const thisVaultDoesNotExistDepositRepToCreateIt = 'This vault does not exist.'")
+	const shortErrorNameFailures = lintCopySourceText('ui/ts/copy/test.ts', "export const failedToLoadReports = 'Failed to load reports.'")
+	const emptySentenceNameFailures = lintCopySourceText('ui/ts/copy/test.ts', "export const noCorruptedStatesWereFound = 'No corrupted states were found.'")
+	const sentenceTemplateNameFailures = lintCopySourceText('ui/ts/copy/test.ts', 'export const formatCustomStateValueBasedOnValue = (stateName: string) => `State ${stateName}`')
+	const missingErrorRoleFailures = lintCopySourceText('ui/ts/copy/test.ts', 'export const formatMissingSavedState = (stateName: string) => `Missing ${stateName}.`')
+	const invalidStateNameFailures = lintCopySourceText('ui/ts/copy/test.ts', "export const selectedTickIsInvalid = 'Selected tick is invalid.'")
+	const requirementSentenceNameFailures = lintCopySourceText('ui/ts/copy/test.ts', "export const approvalAmountMustBeADecimalNumber = 'Approval amount must be a decimal number.'")
+	const functionDeclarationFailures = lintCopySourceText('ui/ts/copy/test.ts', 'export function UI_TEMPLATE_BAD(value0: string) { return `Detail ${value0}` }')
+
+	expect(sentenceNameFailures).toHaveLength(1)
+	expect(shortErrorNameFailures).toHaveLength(1)
+	expect(emptySentenceNameFailures).toHaveLength(1)
+	expect(sentenceTemplateNameFailures).toHaveLength(1)
+	expect(missingErrorRoleFailures).toHaveLength(1)
+	expect(invalidStateNameFailures).toHaveLength(1)
+	expect(requirementSentenceNameFailures).toHaveLength(1)
+	expect(functionDeclarationFailures).toHaveLength(2)
+})
+
+test('lint-ui-tsx-strings enforces fragment roles and prose punctuation', () => {
+	const unnamedFragmentFailures = lintCopySourceText('ui/ts/copy/test.ts', "export const amountCopy = 'Amount: '")
+	const namedFragmentFailures = lintCopySourceText('ui/ts/copy/test.ts', "export const amountLead = 'Amount: '")
+	const missingPunctuationFailures = lintCopySourceText('ui/ts/copy/test.ts', "export const poolSearchHelpText = 'Filter this page by pool address'")
+	const punctuatedFailures = lintCopySourceText('ui/ts/copy/test.ts', "export const poolSearchHelpText = 'Filter this page by pool address.'")
+
+	expect(unnamedFragmentFailures).toHaveLength(1)
+	expect(namedFragmentFailures).toHaveLength(0)
+	expect(missingPunctuationFailures).toHaveLength(1)
+	expect(punctuatedFailures).toHaveLength(0)
+})
 
 test('lint-ui-tsx-strings rejects interpolated template literals in user-facing props', () => {
 	const failures = lintSourceText('ui/ts/components/TestComponent.tsx', 'export function TestComponent({ source }: { source: string }) { return <Notice detail={`Ignored ${source} RPC override`} /> }')
 
 	expect(failures).toHaveLength(1)
 	expect(failures[0]).toStartWith('ui/ts/components/TestComponent.tsx:')
-	expect(failures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
+	expect(failures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
 })
 
 test('lint-ui-tsx-strings rejects direct DOM aria-label literals', () => {
@@ -14,7 +70,7 @@ test('lint-ui-tsx-strings rejects direct DOM aria-label literals', () => {
 
 	expect(failures).toHaveLength(1)
 	expect(failures[0]).toStartWith('ui/ts/components/TestButton.tsx:')
-	expect(failures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
+	expect(failures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
 })
 
 test('lint-ui-tsx-strings rejects direct DOM alt literals', () => {
@@ -22,14 +78,14 @@ test('lint-ui-tsx-strings rejects direct DOM alt literals', () => {
 
 	expect(failures).toHaveLength(1)
 	expect(failures[0]).toStartWith('ui/ts/components/TestImage.tsx:')
-	expect(failures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
+	expect(failures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
 })
 
 test('lint-ui-tsx-strings rejects direct aria text literals', () => {
 	const failures = lintSourceText('ui/ts/components/TestAriaText.tsx', "export function TestAriaText() { return <input aria-valuetext='Loading price' aria-description='Describe dialog' aria-placeholder='Loading price' aria-roledescription='Loading dialog' /> }")
 
 	expect(failures).toHaveLength(4)
-	expect(failures.every(failure => failure.includes('direct UI string literal must come from ui/ts/lib/uiStrings.ts'))).toBe(true)
+	expect(failures.every(failure => failure.includes('direct UI string literal must come from a module under ui/ts/copy'))).toBe(true)
 })
 
 test('lint-ui-tsx-strings rejects direct children and factory-call literals', () => {
@@ -40,9 +96,9 @@ test('lint-ui-tsx-strings rejects direct children and factory-call literals', ()
 	expect(childrenFailures).toHaveLength(1)
 	expect(innerHtmlFailures).toHaveLength(1)
 	expect(factoryCallFailures).toHaveLength(1)
-	expect(childrenFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
-	expect(innerHtmlFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
-	expect(factoryCallFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
+	expect(childrenFailures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
+	expect(innerHtmlFailures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
+	expect(factoryCallFailures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
 })
 
 test('lint-ui-tsx-strings ignores lowercase helper mode tokens passed to render helpers', () => {
@@ -59,8 +115,8 @@ test('lint-ui-tsx-strings still rejects lowercase visible copy passed through he
 
 	expect(failures).toHaveLength(1)
 	expect(renderLabelFailures).toHaveLength(1)
-	expect(failures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
-	expect(renderLabelFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
+	expect(failures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
+	expect(renderLabelFailures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
 })
 
 test('lint-ui-tsx-strings ignores local prop-object keys that are not direct user-facing literals', () => {
@@ -75,10 +131,10 @@ test('lint-ui-tsx-strings ignores local prop-object keys that are not direct use
 	)
 
 	expect(failures).toHaveLength(1)
-	expect(failures[0]).toContain('JSX text must come from a named uiStrings export')
+	expect(failures[0]).toContain('JSX text must come from a named UI copy export')
 	expect(jsxPayloadFailures).toHaveLength(0)
 	expect(localDescriptionPropsFailures).toHaveLength(1)
-	expect(localDescriptionPropsFailures[0]).toContain('JSX text must come from a named uiStrings export')
+	expect(localDescriptionPropsFailures[0]).toContain('JSX text must come from a named UI copy export')
 })
 
 test('lint-ui-tsx-strings rejects nested user-facing object payload literals inside JSX attributes', () => {
@@ -87,8 +143,8 @@ test('lint-ui-tsx-strings rejects nested user-facing object payload literals ins
 
 	expect(objectFailures).toHaveLength(1)
 	expect(arrayFailures).toHaveLength(1)
-	expect(objectFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
-	expect(arrayFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
+	expect(objectFailures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
+	expect(arrayFailures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
 })
 
 test('lint-ui-tsx-strings rejects direct literal values in local spread props objects', () => {
@@ -97,8 +153,8 @@ test('lint-ui-tsx-strings rejects direct literal values in local spread props ob
 
 	expect(titleFailures).toHaveLength(1)
 	expect(ariaDescriptionFailures).toHaveLength(1)
-	expect(titleFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
-	expect(ariaDescriptionFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
+	expect(titleFailures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
+	expect(ariaDescriptionFailures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
 })
 
 test('lint-ui-tsx-strings rejects direct suffix props and acronym JSX text', () => {
@@ -117,13 +173,13 @@ test('lint-ui-tsx-strings rejects direct suffix props and acronym JSX text', () 
 	expect(acronymTextFailures).toHaveLength(1)
 	expect(helperFailures).toHaveLength(1)
 	expect(lowercaseHelperFailures).toHaveLength(1)
-	expect(suffixFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
-	expect(wrappedSuffixFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
-	expect(wrappedAcronymFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
-	expect(summaryFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
-	expect(acronymTextFailures[0]).toContain('JSX text must come from a named uiStrings export')
-	expect(helperFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
-	expect(lowercaseHelperFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
+	expect(suffixFailures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
+	expect(wrappedSuffixFailures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
+	expect(wrappedAcronymFailures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
+	expect(summaryFailures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
+	expect(acronymTextFailures[0]).toContain('JSX text must come from a named UI copy export')
+	expect(helperFailures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
+	expect(lowercaseHelperFailures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
 })
 
 test('lint-ui-tsx-strings ignores className and internal helper tokens', () => {
@@ -139,14 +195,14 @@ test('lint-ui-tsx-strings rejects numeric visible user-facing prop literals', ()
 	const failures = lintSourceText('ui/ts/components/TestNumericPlaceholder.tsx', "export function TestNumericPlaceholder() { return <FormInput placeholder='0.0' /> }")
 
 	expect(failures).toHaveLength(1)
-	expect(failures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
+	expect(failures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
 })
 
 test('lint-ui-tsx-strings rejects expression-wrapped single-word user-facing prop literals', () => {
 	const failures = lintSourceText('ui/ts/components/TestWrappedProps.tsx', "export function TestWrappedProps() { return <Panel aria-label={'Close'} ariaLabel={'Close'} unavailableCopy={'Unavailable'} headerTitle={'Status'} loadMoreLabel={'More'} /> }")
 
 	expect(failures).toHaveLength(5)
-	expect(failures.every(failure => failure.includes('direct UI string literal must come from ui/ts/lib/uiStrings.ts'))).toBe(true)
+	expect(failures.every(failure => failure.includes('direct UI string literal must come from a module under ui/ts/copy'))).toBe(true)
 })
 
 test('lint-ui-tsx-strings rejects lowercase visible JSX text', () => {
@@ -154,7 +210,7 @@ test('lint-ui-tsx-strings rejects lowercase visible JSX text', () => {
 
 	expect(failures).toHaveLength(1)
 	expect(failures[0]).toStartWith('ui/ts/components/TestText.tsx:')
-	expect(failures[0]).toContain('JSX text must come from a named uiStrings export')
+	expect(failures[0]).toContain('JSX text must come from a named UI copy export')
 })
 
 test('lint-ui-tsx-strings rejects expression-wrapped visible JSX text', () => {
@@ -162,7 +218,7 @@ test('lint-ui-tsx-strings rejects expression-wrapped visible JSX text', () => {
 
 	expect(failures).toHaveLength(1)
 	expect(failures[0]).toStartWith('ui/ts/components/TestWrappedText.tsx:')
-	expect(failures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
+	expect(failures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
 })
 
 test('lint-ui-tsx-strings rejects user-facing local aliases', () => {
@@ -170,7 +226,7 @@ test('lint-ui-tsx-strings rejects user-facing local aliases', () => {
 
 	expect(failures).toHaveLength(1)
 	expect(failures[0]).toStartWith('ui/ts/components/TestAlias.tsx:')
-	expect(failures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
+	expect(failures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
 })
 
 test('lint-ui-tsx-strings rejects user-facing default prop values', () => {
@@ -178,21 +234,21 @@ test('lint-ui-tsx-strings rejects user-facing default prop values', () => {
 
 	expect(failures).toHaveLength(1)
 	expect(failures[0]).toStartWith('ui/ts/components/TestDefaultProp.tsx:')
-	expect(failures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
+	expect(failures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
 })
 
 test('lint-ui-tsx-strings rejects user-facing assignment expressions', () => {
 	const failures = lintSourceText('ui/ts/components/TestAssignedReason.tsx', "export function TestAssignedReason({ shouldBlock }: { shouldBlock: boolean }) { let disabledReason: string | undefined; disabledReason = shouldBlock ? 'Settle later.' : 'Settle now.'; return <Panel reason={disabledReason} /> }")
 
 	expect(failures).toHaveLength(2)
-	expect(failures.every(failure => failure.includes('direct UI string literal must come from ui/ts/lib/uiStrings.ts'))).toBe(true)
+	expect(failures.every(failure => failure.includes('direct UI string literal must come from a module under ui/ts/copy'))).toBe(true)
 })
 
 test('lint-ui-tsx-strings rejects direct user-facing assignments', () => {
 	const failures = lintSourceText('ui/ts/components/TestDirectAssignedReason.tsx', "export function TestDirectAssignedReason() { let disabledReason: string | undefined; disabledReason = 'Settle later.'; return <Panel reason={disabledReason} /> }")
 
 	expect(failures).toHaveLength(1)
-	expect(failures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
+	expect(failures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
 })
 
 test('lint-ui-tsx-strings rejects assigned user-facing reasons', () => {
@@ -210,10 +266,10 @@ test('lint-ui-tsx-strings rejects assigned user-facing reasons', () => {
 	expect(propertyAssignmentFailures).toHaveLength(1)
 	expect(elementAssignmentFailures).toHaveLength(1)
 	expect(allowedElementAssignmentFailures).toHaveLength(0)
-	expect(directAssignmentFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
-	expect(ternaryAssignmentFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
-	expect(propertyAssignmentFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
-	expect(elementAssignmentFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
+	expect(directAssignmentFailures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
+	expect(ternaryAssignmentFailures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
+	expect(propertyAssignmentFailures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
+	expect(elementAssignmentFailures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
 })
 
 test('lint-ui-tsx-strings rejects logical assignment expressions', () => {
@@ -224,9 +280,9 @@ test('lint-ui-tsx-strings rejects logical assignment expressions', () => {
 	expect(orEqualFailures).toHaveLength(1)
 	expect(andEqualFailures).toHaveLength(1)
 	expect(nullishEqualFailures).toHaveLength(1)
-	expect(orEqualFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
-	expect(andEqualFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
-	expect(nullishEqualFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
+	expect(orEqualFailures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
+	expect(andEqualFailures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
+	expect(nullishEqualFailures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
 })
 
 test('lint-ui-tsx-strings rejects assigned content variables', () => {
@@ -240,16 +296,16 @@ test('lint-ui-tsx-strings rejects assigned content variables', () => {
 	expect(declarationFailures).toHaveLength(1)
 	expect(assignmentFailures).toHaveLength(1)
 	expect(logicalAssignmentFailures).toHaveLength(1)
-	expect(declarationFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
-	expect(assignmentFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
-	expect(logicalAssignmentFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
+	expect(declarationFailures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
+	expect(assignmentFailures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
+	expect(logicalAssignmentFailures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
 })
 
 test('lint-ui-tsx-strings ignores comparison literals inside JSX expressions', () => {
 	const failures = lintSourceText('ui/ts/components/TestComparison.tsx', "export function TestComparison({ view }: { view: string }) { return <>{view === 'questions' ? <span>Shown</span> : <span>Hidden</span>}</> }")
 
 	expect(failures).toHaveLength(2)
-	expect(failures.every(failure => failure.includes('JSX text must come from a named uiStrings export'))).toBe(true)
+	expect(failures.every(failure => failure.includes('JSX text must come from a named UI copy export'))).toBe(true)
 })
 
 test('lint-ui-tsx-strings includes committed branch changes from origin/main', () => {
@@ -272,14 +328,14 @@ test('lint-ui-tsx-strings reports multiline JSX text when a later tracked line c
 	const failures = lintSourceText('ui/ts/components/TestMultilineJsxText.tsx', ['export function TestMultilineJsxText() {', '\treturn <span>', '\t\tLegacy', '\t\tCopy', '\t</span>', '}'].join('\n'), new Set([4]))
 
 	expect(failures).toHaveLength(1)
-	expect(failures[0]).toContain('JSX text must come from a named uiStrings export')
+	expect(failures[0]).toContain('JSX text must come from a named UI copy export')
 })
 
 test('lint-ui-tsx-strings reports multiline template literals when a later tracked line changes', () => {
 	const failures = lintSourceText('ui/ts/components/TestMultilineTemplate.tsx', ['export function TestMultilineTemplate() {', '\treturn <Panel detail={`Legacy', '\t\tCopy`} />', '}'].join('\n'), new Set([3]))
 
 	expect(failures).toHaveLength(1)
-	expect(failures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
+	expect(failures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
 })
 
 test('lint-ui-tsx-strings scans all lines for untracked files', () => {
@@ -315,8 +371,8 @@ test('lint-ui-tsx-strings rejects user-facing object properties and array litera
 	expect(arrayFailures).toHaveLength(2)
 	expect(helperFailures).toHaveLength(1)
 	expect(callFailures).toHaveLength(2)
-	expect(objectFailures.every(failure => failure.includes('direct UI string literal must come from ui/ts/lib/uiStrings.ts'))).toBe(true)
-	expect(arrayFailures.every(failure => failure.includes('direct UI string literal must come from ui/ts/lib/uiStrings.ts'))).toBe(true)
-	expect(helperFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
-	expect(callFailures.every(failure => failure.includes('direct UI string literal must come from ui/ts/lib/uiStrings.ts'))).toBe(true)
+	expect(objectFailures.every(failure => failure.includes('direct UI string literal must come from a module under ui/ts/copy'))).toBe(true)
+	expect(arrayFailures.every(failure => failure.includes('direct UI string literal must come from a module under ui/ts/copy'))).toBe(true)
+	expect(helperFailures[0]).toContain('direct UI string literal must come from a module under ui/ts/copy')
+	expect(callFailures.every(failure => failure.includes('direct UI string literal must come from a module under ui/ts/copy'))).toBe(true)
 })

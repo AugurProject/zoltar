@@ -1,11 +1,17 @@
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import ts from 'typescript'
 import { getChangedFiles } from './changed-files.mts'
 
 const UI_TSX_ROOT = path.join('ui', 'ts')
+const UI_COPY_ROOT = path.join(UI_TSX_ROOT, 'copy')
 const UI_TSX_CHANGED_FILE_PATTERN = /^ui\/ts\/.+\.tsx$/
+const MAX_COPY_EXPORT_NAME_LENGTH = 48
+const SENTENCE_STYLE_EXPORT_NAME_PATTERN =
+	/^(?:approvalAmountMustBeADecimalNumber$|connectAWalletBefore|connectWalletTo|enterA|failedTo|format[A-Z].*BasedOnValue|formatMissing(?![A-Za-z]*(?:Detail|Error)$)|loadAPoolBefore|loadA[A-Z]|no[A-Z].*Were[A-Z]|selectA(?:n|t)?[A-Z]|selectedTickIsInvalid$|the[A-Z]|this[A-Z]|usesThe[A-Z]|writeThe[A-Z])/u
+const COPY_FRAGMENT_NAME_PATTERN = /(?:Lead|Separator|Tail)$/u
+const COPY_PROSE_ROLE_NAME_PATTERN = /(?:Description|Detail|Error|HelpText|Hint|Instruction|Reason|Warning)$/u
 const USER_FACING_PROPERTY_NAMES = new Set([
 	'actionHint',
 	'actionLabel',
@@ -332,7 +338,7 @@ export function lintSourceText(filePath: string, sourceText: string, changedLine
 					ts.forEachChild(node, visit)
 					return
 				}
-				failures.push(`${filePath}:${line + 1}:${character + 1} JSX text must come from a named uiStrings export`)
+				failures.push(`${filePath}:${line + 1}:${character + 1} JSX text must come from a named UI copy export`)
 			}
 		}
 		if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateExpression(node)) && shouldReportLiteral(node)) {
@@ -341,7 +347,62 @@ export function lintSourceText(filePath: string, sourceText: string, changedLine
 				ts.forEachChild(node, visit)
 				return
 			}
-			failures.push(`${filePath}:${line + 1}:${character + 1} direct UI string literal must come from ui/ts/lib/uiStrings.ts`)
+			failures.push(`${filePath}:${line + 1}:${character + 1} direct UI string literal must come from a module under ui/ts/copy`)
+		}
+		ts.forEachChild(node, visit)
+	}
+	visit(sourceFile)
+	return failures
+}
+
+export function lintCopySourceText(filePath: string, sourceText: string) {
+	const sourceFile = ts.createSourceFile(filePath, sourceText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+	const failures: string[] = []
+	const validateCopyExport = (name: ts.Identifier, parameters: readonly ts.ParameterDeclaration[], initializer?: ts.Expression) => {
+		const { line, character } = sourceFile.getLineAndCharacterOfPosition(name.getStart(sourceFile))
+		const location = `${filePath}:${line + 1}:${character + 1}`
+		if (name.text.startsWith('UI_')) failures.push(`${location} copy export names must describe their semantic role without the legacy UI_STRING/UI_TEMPLATE prefix`)
+		if (name.text.length > MAX_COPY_EXPORT_NAME_LENGTH) failures.push(`${location} copy export name is longer than ${MAX_COPY_EXPORT_NAME_LENGTH} characters; name the UI role instead of repeating the full prose`)
+		if (SENTENCE_STYLE_EXPORT_NAME_PATTERN.test(name.text)) failures.push(`${location} copy export name repeats a sentence opening; name its UI role instead`)
+		for (const parameter of parameters) {
+			if (ts.isIdentifier(parameter.name) && /^value\d+$/u.test(parameter.name.text)) failures.push(`${location} copy template parameters must use domain names instead of positional value names`)
+		}
+		if (initializer === undefined || (!ts.isStringLiteral(initializer) && !ts.isNoSubstitutionTemplateLiteral(initializer))) return
+		const copyText = initializer.text
+		if (copyText.trim() !== copyText && !COPY_FRAGMENT_NAME_PATTERN.test(name.text)) failures.push(`${location} copy with leading or trailing whitespace must use a Lead, Separator, or Tail role suffix`)
+		if (COPY_PROSE_ROLE_NAME_PATTERN.test(name.text) && !/[.!?…:]$/u.test(copyText.trim())) failures.push(`${location} prose copy roles must end with punctuation`)
+	}
+	for (const statement of sourceFile.statements) {
+		const isExported = ts.canHaveModifiers(statement) && ts.getModifiers(statement)?.some(modifier => modifier.kind === ts.SyntaxKind.ExportKeyword) === true
+		if (!isExported) continue
+		if (ts.isFunctionDeclaration(statement) && statement.name !== undefined) {
+			validateCopyExport(statement.name, statement.parameters)
+			continue
+		}
+		if (ts.isVariableStatement(statement)) {
+			for (const declaration of statement.declarationList.declarations) {
+				if (!ts.isIdentifier(declaration.name)) continue
+				const parameters = declaration.initializer !== undefined && (ts.isArrowFunction(declaration.initializer) || ts.isFunctionExpression(declaration.initializer)) ? declaration.initializer.parameters : []
+				validateCopyExport(declaration.name, parameters, declaration.initializer)
+			}
+		}
+	}
+	const visit = (node: ts.Node) => {
+		if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateExpression(node)) {
+			const textSegments = getNodeTextSegments(node) ?? []
+			const [truncatedValueSpan, byteCountSpan] = ts.isTemplateExpression(node) ? node.templateSpans : []
+			const isValueTruncationTemplate = ts.isTemplateExpression(node) && truncatedValueSpan !== undefined && byteCountSpan !== undefined && node.templateSpans.length === 2 && node.head.text === '' && truncatedValueSpan.literal.text === '... (' && byteCountSpan.literal.text === ' bytes)'
+			const isExactHexPlaceholder = (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && node.text === '0x...'
+			const hasDisallowedThreePeriods =
+				!isExactHexPlaceholder &&
+				textSegments.some(segment => {
+					const withoutAllowedTruncation = isValueTruncationTemplate ? segment.replace('... (', '') : segment
+					return withoutAllowedTruncation.includes('...')
+				})
+			if (hasDisallowedThreePeriods) {
+				const { line, character } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
+				failures.push(`${filePath}:${line + 1}:${character + 1} pending copy must use the single ellipsis character`)
+			}
 		}
 		ts.forEachChild(node, visit)
 	}
@@ -355,20 +416,17 @@ function lintFile(filePath: string) {
 
 if (import.meta.main) {
 	const changedUiTsxFiles = getChangedUiTsxFiles()
-
-	if (changedUiTsxFiles.length === 0) {
-		console.log('lint-ui-tsx-strings: no changed UI .tsx files to audit')
-		process.exit(0)
-	}
-
-	const failures = changedUiTsxFiles.flatMap(lintFile)
+	const copyModuleFiles = readdirSync(UI_COPY_ROOT, { withFileTypes: true })
+		.filter(entry => entry.isFile() && entry.name.endsWith('.ts'))
+		.map(entry => path.join(UI_COPY_ROOT, entry.name))
+	const failures = [...changedUiTsxFiles.flatMap(lintFile), ...copyModuleFiles.flatMap(filePath => lintCopySourceText(filePath, readFileSync(filePath, 'utf8')))]
 
 	if (failures.length === 0) {
-		console.log(`lint-ui-tsx-strings: checked ${changedUiTsxFiles.length} changed UI .tsx file(s)`)
+		console.log(`lint-ui-tsx-strings: checked ${changedUiTsxFiles.length} changed UI .tsx file(s) and ${copyModuleFiles.length} copy module(s)`)
 		process.exit(0)
 	}
 
-	console.error('Direct UI strings are not allowed in changed .tsx files. Move them to ui/ts/lib/uiStrings.ts.')
+	console.error('UI copy validation failed. Keep user-facing text in clear ownership-based modules under ui/ts/copy.')
 	for (const failure of failures) console.error(failure)
 	process.exit(1)
 }

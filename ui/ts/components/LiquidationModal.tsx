@@ -1,3 +1,5 @@
+import * as commonCopy from '../copy/common.js'
+import * as liquidationCopy from '../copy/liquidation.js'
 import { useEffect, useId, useRef } from 'preact/hooks'
 import type { Address } from '@zoltar/shared/ethereum'
 import { AddressInfo } from './AddressInfo.js'
@@ -25,71 +27,6 @@ import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } fro
 import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '../lib/repPriceSource.js'
 import { getStagedOperationTimeoutSeconds, isOracleManagerPriceUsable } from '../lib/securityVault.js'
 import { getVaultCollateralizationPercent } from '../lib/trading.js'
-import {
-	UI_STRING_A_VALID_ORACLE_PRICE_WAS_ALREADY_AVAILABLE_SO_THE_LIQUIDATION_EXECUTED_IMMEDIATELY_AND_NO_STAGED_OPERATION_WAS_CREATED,
-	UI_STRING_AMOUNT,
-	UI_STRING_CALLER_COLLATERALIZATION_AT_OPEN_ORACLE,
-	UI_STRING_CALLER_VAULT,
-	UI_STRING_CALLER_VAULT_AFTER_LIQUIDATION,
-	UI_STRING_CANCEL,
-	UI_STRING_CHECK_STATE,
-	UI_STRING_CLOSE,
-	UI_STRING_COLLATERALIZATION_AT_OPEN_ORACLE,
-	UI_STRING_CONNECT_WALLET,
-	UI_STRING_ENTER_A_LIQUIDATION_AMOUNT,
-	UI_STRING_ENTER_A_LIQUIDATION_TIMEOUT_OF_AT_LEAST_1_MINUTE,
-	UI_STRING_ENTER_WHOLE_MINUTES_QUEUED_STAGED_OPERATIONS_MUST_STAY_EXECUTABLE_FOR_AT_LEAST_1_MINUTE_AFTER_THE_ORACLE_SETTLEMENT_WINDOW_COMPLETES,
-	UI_STRING_ETH,
-	UI_STRING_EXECUTE_VAULT_LIQUIDATION,
-	UI_STRING_EXECUTED,
-	UI_STRING_EXECUTING_LIQUIDATION,
-	UI_STRING_FAILED,
-	UI_STRING_INVALID_LIQUIDATION_PAIR,
-	UI_STRING_LIQUIDATE_VAULT,
-	UI_STRING_LIQUIDATION_AMOUNT_ETH,
-	UI_STRING_LIQUIDATION_EXECUTED,
-	UI_STRING_LIQUIDATION_FAILED,
-	UI_STRING_LIQUIDATION_QUEUED,
-	UI_STRING_LIQUIDATION_SUBMITTED,
-	UI_STRING_MANUAL_EXECUTION_TIMEOUT,
-	UI_STRING_MANUAL_QUEUED_OPERATION,
-	UI_STRING_MAX,
-	UI_STRING_MINUTES,
-	UI_STRING_MULTIPLIER_SUFFIX,
-	UI_STRING_NONE_SELECTED,
-	UI_STRING_OPEN_ORACLE_PRICE,
-	UI_STRING_QUEUE_LIQUIDATION,
-	UI_STRING_QUEUE_LIQUIDATION_LIQUIDATION_MODAL_QUEUE_LIQUIDATION_ACTION_LABEL,
-	UI_STRING_QUEUE_VAULT_LIQUIDATION,
-	UI_STRING_QUEUED,
-	UI_STRING_QUEUEING_LIQUIDATION,
-	UI_STRING_REFRESHING_LIQUIDATION_STATE,
-	UI_STRING_REFRESHING_LIQUIDATION_STATE_LIQUIDATION_MODAL_REFRESHING_LIQUIDATION_STATE_TITLE,
-	UI_STRING_REFRESHING_PRICE_VALIDITY,
-	UI_STRING_REFRESHING_WITHOUT_ELLIPSIS,
-	UI_STRING_RELOAD_THE_SELECTED_POOL_BEFORE_EXECUTING_LIQUIDATION,
-	UI_STRING_RELOAD_THE_SELECTED_POOL_BEFORE_LIQUIDATING,
-	UI_STRING_REP,
-	UI_STRING_REP_COLLATERAL,
-	UI_STRING_REP_MOVED,
-	UI_STRING_REP_PER_ETH,
-	UI_STRING_SECURITY_BOND_ALLOWANCE,
-	UI_STRING_SECURITY_MULTIPLIER,
-	UI_STRING_SECURITY_POOL,
-	UI_STRING_SELECT_A_TARGET_VAULT_FIRST,
-	UI_STRING_SELECT_A_TARGET_VAULT_THAT_IS_DIFFERENT_FROM_THE_CALLER_VAULT,
-	UI_STRING_STAGED_OPERATION,
-	UI_STRING_STAGED_OPERATION_RETRY,
-	UI_STRING_SUBMITTING_LIQUIDATION_LIQUIDATION_MODAL_LIQUIDATE_VAULT_PENDING_LABEL,
-	UI_STRING_TARGET_COLLATERALIZATION_AT_OPEN_ORACLE,
-	UI_STRING_TARGET_VAULT,
-	UI_STRING_THE_ORACLE_MANAGER_ATTEMPTED_THE_LIQUIDATION_IMMEDIATELY_BUT_THE_SECURITY_POOL_REJECTED_IT,
-	UI_STRING_TRANSACTION_STATE_UNAVAILABLE,
-	UI_STRING_UNAVAILABLE,
-	UI_STRING_VIEW_IN_STAGED_OPERATIONS,
-	UI_STRING_ZERO_DECIMAL_PLACEHOLDER,
-	UI_TEMPLATE_TIMEOUT_HELP_TEXT_RESOLVED,
-} from '../lib/uiStrings.js'
 import { useModalFocusIsolation } from '../hooks/useModalFocusIsolation.js'
 import type { SecurityPoolStateModel } from '../lib/securityPoolState.js'
 import type { ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../types/contracts.js'
@@ -136,11 +73,11 @@ function getLiquidationModalTitle(currentPoolOracleManagerDetails: OracleManager
 	const executionMode = getLiquidationExecutionMode(currentPoolOracleManagerDetails)
 	switch (executionMode) {
 		case 'execute':
-			return UI_STRING_EXECUTE_VAULT_LIQUIDATION
+			return liquidationCopy.executeVaultLiquidation
 		case 'queue':
-			return UI_STRING_QUEUE_VAULT_LIQUIDATION
+			return liquidationCopy.queueVaultLiquidation
 		case 'refreshing':
-			return UI_STRING_LIQUIDATE_VAULT
+			return liquidationCopy.liquidateVault
 		default:
 			return assertNever(executionMode)
 	}
@@ -149,11 +86,11 @@ function getLiquidationButtonLabels(currentPoolOracleManagerDetails: OracleManag
 	const executionMode = getLiquidationExecutionMode(currentPoolOracleManagerDetails)
 	switch (executionMode) {
 		case 'execute':
-			return { idle: UI_STRING_EXECUTE_VAULT_LIQUIDATION, pending: UI_STRING_EXECUTING_LIQUIDATION }
+			return { idle: liquidationCopy.executeVaultLiquidation, pending: liquidationCopy.executingLiquidation }
 		case 'queue':
-			return { idle: UI_STRING_QUEUE_LIQUIDATION, pending: UI_STRING_QUEUEING_LIQUIDATION }
+			return { idle: liquidationCopy.queueLiquidation, pending: liquidationCopy.queueingLiquidation }
 		case 'refreshing':
-			return { idle: UI_STRING_LIQUIDATE_VAULT, pending: UI_STRING_SUBMITTING_LIQUIDATION_LIQUIDATION_MODAL_LIQUIDATE_VAULT_PENDING_LABEL }
+			return { idle: liquidationCopy.liquidateVault, pending: liquidationCopy.liquidateVaultPendingLabel }
 		default:
 			return assertNever(executionMode)
 	}
@@ -175,22 +112,22 @@ function renderQueuedLiquidationStatusCard({
 		if (queuedLiquidationOperation === undefined) return null
 		return (
 			<TransactionStatusCard
-				title={UI_STRING_LIQUIDATION_QUEUED}
-				badge={<Badge tone='warning'>{UI_STRING_QUEUED}</Badge>}
+				title={liquidationCopy.liquidationQueued}
+				badge={<Badge tone='warning'>{liquidationCopy.queued}</Badge>}
 				metrics={
 					<MetricGrid>
-						<MetricField label={UI_STRING_STAGED_OPERATION}>#{queuedLiquidationOperation.operationId.toString()}</MetricField>
+						<MetricField label={commonCopy.stagedOperation}>#{queuedLiquidationOperation.operationId.toString()}</MetricField>
 						{queuedLiquidationOperation.amount === undefined ? null : (
-							<MetricField label={UI_STRING_AMOUNT}>
+							<MetricField label={commonCopy.amount}>
 								<CurrencyValue value={queuedLiquidationOperation.amount} />
 							</MetricField>
 						)}
 					</MetricGrid>
 				}
-				detail={queuedLiquidationStatus === 'manual-queued' ? UI_STRING_MANUAL_QUEUED_OPERATION : undefined}
+				detail={queuedLiquidationStatus === 'manual-queued' ? commonCopy.manualQueuedOperationDetail : undefined}
 				actions={
 					<button className='secondary' type='button' onClick={onViewInStagedOperations}>
-						{UI_STRING_VIEW_IN_STAGED_OPERATIONS}
+						{commonCopy.viewInStagedOperations}
 					</button>
 				}
 			/>
@@ -199,15 +136,15 @@ function renderQueuedLiquidationStatusCard({
 	if (queuedLiquidationStatus === 'failed')
 		return (
 			<TransactionStatusCard
-				title={UI_STRING_LIQUIDATION_FAILED}
-				badge={<Badge tone='blocked'>{UI_STRING_FAILED}</Badge>}
-				detail={getLiquidationExecutionFailureDetail(securityPoolOverviewResult?.stagedExecution?.errorMessage) ?? UI_STRING_THE_ORACLE_MANAGER_ATTEMPTED_THE_LIQUIDATION_IMMEDIATELY_BUT_THE_SECURITY_POOL_REJECTED_IT}
-				secondaryDetail={UI_STRING_STAGED_OPERATION_RETRY}
+				title={commonCopy.liquidationFailed}
+				badge={<Badge tone='blocked'>{commonCopy.failed}</Badge>}
+				detail={getLiquidationExecutionFailureDetail(securityPoolOverviewResult?.stagedExecution?.errorMessage) ?? liquidationCopy.immediateLiquidationRejectedDetail}
+				secondaryDetail={commonCopy.stagedOperationRetryDetail}
 			/>
 		)
-	if (queuedLiquidationStatus === 'executed') return <TransactionStatusCard title={UI_STRING_LIQUIDATION_EXECUTED} badge={<Badge tone='ok'>{UI_STRING_EXECUTED}</Badge>} detail={UI_STRING_A_VALID_ORACLE_PRICE_WAS_ALREADY_AVAILABLE_SO_THE_LIQUIDATION_EXECUTED_IMMEDIATELY_AND_NO_STAGED_OPERATION_WAS_CREATED} />
-	if (queuedLiquidationStatus === 'missing') return <TransactionStatusCard title={UI_STRING_LIQUIDATION_SUBMITTED} badge={<Badge tone='warning'>{UI_STRING_CHECK_STATE}</Badge>} detail={UI_STRING_TRANSACTION_STATE_UNAVAILABLE} />
-	return <TransactionStatusCard title={UI_STRING_REFRESHING_LIQUIDATION_STATE_LIQUIDATION_MODAL_REFRESHING_LIQUIDATION_STATE_TITLE} badge={<Badge tone='muted'>{UI_STRING_REFRESHING_WITHOUT_ELLIPSIS}</Badge>} detail={UI_STRING_REFRESHING_LIQUIDATION_STATE} />
+	if (queuedLiquidationStatus === 'executed') return <TransactionStatusCard title={commonCopy.liquidationExecuted} badge={<Badge tone='ok'>{commonCopy.executed}</Badge>} detail={liquidationCopy.immediateLiquidationSuccessDetail} />
+	if (queuedLiquidationStatus === 'missing') return <TransactionStatusCard title={commonCopy.liquidationSubmitted} badge={<Badge tone='warning'>{liquidationCopy.checkState}</Badge>} detail={commonCopy.transactionStateUnavailableDetail} />
+	return <TransactionStatusCard title={liquidationCopy.refreshingLiquidationStateTitle} badge={<Badge tone='muted'>{commonCopy.refreshingWithoutEllipsis}</Badge>} detail={liquidationCopy.refreshingLiquidationState} />
 }
 export function LiquidationModal({
 	accountAddress,
@@ -270,8 +207,8 @@ export function LiquidationModal({
 	const trimmedLiquidationTargetVault = liquidationTargetVault.trim()
 	const liquidationTimeoutDisplayValue = liquidationTimeoutMinutes === '' ? '' : liquidationTimeoutMinutes
 	const liquidationTimeoutSeconds = getStagedOperationTimeoutSeconds(tryParseBigIntInput(liquidationTimeoutDisplayValue))
-	const liquidationTimeoutHelpText = liquidationTimeoutSeconds === undefined ? UI_STRING_ENTER_WHOLE_MINUTES_QUEUED_STAGED_OPERATIONS_MUST_STAY_EXECUTABLE_FOR_AT_LEAST_1_MINUTE_AFTER_THE_ORACLE_SETTLEMENT_WINDOW_COMPLETES : UI_TEMPLATE_TIMEOUT_HELP_TEXT_RESOLVED(formatDuration(liquidationTimeoutSeconds))
-	const sameVaultWarning = accountAddress === undefined || trimmedLiquidationTargetVault === '' || !sameAddress(accountAddress, trimmedLiquidationTargetVault) ? undefined : UI_STRING_SELECT_A_TARGET_VAULT_THAT_IS_DIFFERENT_FROM_THE_CALLER_VAULT
+	const liquidationTimeoutHelpText = liquidationTimeoutSeconds === undefined ? liquidationCopy.stagedOperationTimeoutHelpText : liquidationCopy.formatTimeoutHelpTextResolved(formatDuration(liquidationTimeoutSeconds))
+	const sameVaultWarning = accountAddress === undefined || trimmedLiquidationTargetVault === '' || !sameAddress(accountAddress, trimmedLiquidationTargetVault) ? undefined : liquidationCopy.distinctTargetVaultRequired
 	const liquidationSimulation =
 		targetVaultSummary === undefined || poolOraclePrice === undefined || selectedPool?.securityMultiplier === undefined || liquidationAmountValue === undefined
 			? undefined
@@ -298,7 +235,7 @@ export function LiquidationModal({
 	})
 	const directLiquidationReason = (() => {
 		if (liquidationExecutionMode !== 'execute') return undefined
-		if (selectedPool?.securityMultiplier === undefined) return UI_STRING_RELOAD_THE_SELECTED_POOL_BEFORE_EXECUTING_LIQUIDATION
+		if (selectedPool?.securityMultiplier === undefined) return liquidationCopy.selectedPoolReloadRequired
 
 		return getLiquidationFailureReason({
 			callerVaultSummary,
@@ -316,7 +253,7 @@ export function LiquidationModal({
 						managerDetails: currentPoolOracleManagerDetails,
 					})
 					return getOracleRequestEthGuardMessage({
-						actionLabel: UI_STRING_QUEUE_LIQUIDATION_LIQUIDATION_MODAL_QUEUE_LIQUIDATION_ACTION_LABEL,
+						actionLabel: liquidationCopy.queueLiquidationActionLabel,
 						includeBuffer: funding?.includeBuffer === true,
 						requiredEthCost: funding?.ethCost,
 						walletEthBalance,
@@ -325,12 +262,12 @@ export function LiquidationModal({
 	const liquidationEnabled = poolState?.actions.queueLiquidation.enabled ?? true
 	const canUseLiquidationAction = accountAddress !== undefined && isMainnet
 	const liquidationActionReason = pickFirstReason(
-		liquidationExecutionMode === 'refreshing' ? UI_STRING_REFRESHING_PRICE_VALIDITY : undefined,
-		liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined ? UI_STRING_RELOAD_THE_SELECTED_POOL_BEFORE_LIQUIDATING : undefined,
-		trimmedLiquidationTargetVault === '' ? UI_STRING_SELECT_A_TARGET_VAULT_FIRST : undefined,
+		liquidationExecutionMode === 'refreshing' ? liquidationCopy.refreshingPriceValidity : undefined,
+		liquidationManagerAddress === undefined || liquidationSecurityPoolAddress === undefined ? liquidationCopy.liquidationPoolReloadRequired : undefined,
+		trimmedLiquidationTargetVault === '' ? liquidationCopy.targetVaultRequired : undefined,
 		sameVaultWarning,
-		liquidationAmount.trim() === '' ? UI_STRING_ENTER_A_LIQUIDATION_AMOUNT : undefined,
-		liquidationExecutionMode === 'queue' && liquidationTimeoutSeconds === undefined ? UI_STRING_ENTER_A_LIQUIDATION_TIMEOUT_OF_AT_LEAST_1_MINUTE : undefined,
+		liquidationAmount.trim() === '' ? liquidationCopy.liquidationAmountRequired : undefined,
+		liquidationExecutionMode === 'queue' && liquidationTimeoutSeconds === undefined ? liquidationCopy.liquidationTimeoutMinimumReason : undefined,
 		deterministicLiquidationReason,
 		directLiquidationReason,
 		queueLiquidationEthGuardMessage,
@@ -376,7 +313,7 @@ export function LiquidationModal({
 					<div className='modal-header-title'>
 						<h3 id={titleId}>{getLiquidationModalTitle(currentPoolOracleManagerDetails)}</h3>
 					</div>
-					<button ref={closeButtonRef} className='quiet modal-close-button' type='button' aria-label={UI_STRING_CLOSE} title={UI_STRING_CLOSE} onClick={closeLiquidationModal}>
+					<button ref={closeButtonRef} className='quiet modal-close-button' type='button' aria-label={commonCopy.close} title={commonCopy.close} onClick={closeLiquidationModal}>
 						×
 					</button>
 				</div>
@@ -388,21 +325,21 @@ export function LiquidationModal({
 				})}
 				<ErrorNotice message={securityPoolLiquidationError} />
 				<DataGrid className='modal-summary-grid' columns={2}>
-					<AddressInfo address={liquidationSecurityPoolAddress} label={UI_STRING_SECURITY_POOL} />
-					<MetricField label={UI_STRING_SECURITY_MULTIPLIER}>{selectedPool?.securityMultiplier === undefined ? UI_STRING_UNAVAILABLE : `${selectedPool.securityMultiplier.toString()}${UI_STRING_MULTIPLIER_SUFFIX}`}</MetricField>
-					<MetricField label={UI_STRING_CALLER_VAULT}>{accountAddress === undefined ? UI_STRING_CONNECT_WALLET : <AddressValue address={accountAddress} />}</MetricField>
-					<MetricField label={UI_STRING_TARGET_VAULT}>{trimmedLiquidationTargetVault === '' ? UI_STRING_NONE_SELECTED : <AddressValue address={trimmedLiquidationTargetVault} />}</MetricField>
-					<MetricField label={UI_STRING_OPEN_ORACLE_PRICE} valueTagName='span'>
+					<AddressInfo address={liquidationSecurityPoolAddress} label={liquidationCopy.securityPool} />
+					<MetricField label={commonCopy.securityMultiplier}>{selectedPool?.securityMultiplier === undefined ? commonCopy.unavailable : `${selectedPool.securityMultiplier.toString()}${liquidationCopy.multiplierSuffix}`}</MetricField>
+					<MetricField label={liquidationCopy.callerVault}>{accountAddress === undefined ? commonCopy.connectWallet : <AddressValue address={accountAddress} />}</MetricField>
+					<MetricField label={commonCopy.targetVault}>{trimmedLiquidationTargetVault === '' ? commonCopy.noneSelected : <AddressValue address={trimmedLiquidationTargetVault} />}</MetricField>
+					<MetricField label={commonCopy.openOraclePrice} valueTagName='span'>
 						<OpenOraclePriceValue currentTimestamp={currentTimestamp} lastPrice={poolOraclePrice} lastSettlementTimestamp={poolOracleSettlementTimestamp} priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp} />
 					</MetricField>
 					<CollateralizationMetricField
 						collateralizationPercent={poolOracleCollateralization}
-						label={UI_STRING_TARGET_COLLATERALIZATION_AT_OPEN_ORACLE}
+						label={liquidationCopy.targetCollateralizationAtOpenOracle}
 						repPerEthSource={undefined}
 						repPerEthSourceUrl={undefined}
 						securityBondAllowance={targetVaultSummary?.securityBondAllowance}
 						securityMultiplier={selectedPool?.securityMultiplier}
-						unavailableCopy={UI_STRING_UNAVAILABLE}
+						unavailableCopy={commonCopy.unavailable}
 					/>
 					<MetricField
 						label={
@@ -411,7 +348,7 @@ export function LiquidationModal({
 							</span>
 						}
 					>
-						{repPerEthPrice === undefined ? UI_STRING_UNAVAILABLE : <CurrencyValue value={repPerEthPrice} suffix={UI_STRING_REP_PER_ETH} copyable={false} />}
+						{repPerEthPrice === undefined ? commonCopy.unavailable : <CurrencyValue value={repPerEthPrice} suffix={commonCopy.repPerEth} copyable={false} />}
 					</MetricField>
 					<CollateralizationMetricField
 						collateralizationPercent={quotedPriceCollateralization}
@@ -424,23 +361,23 @@ export function LiquidationModal({
 						repPerEthSourceUrl={repPerEthSourceUrl}
 						securityBondAllowance={targetVaultSummary?.securityBondAllowance}
 						securityMultiplier={selectedPool?.securityMultiplier}
-						unavailableCopy={UI_STRING_UNAVAILABLE}
+						unavailableCopy={commonCopy.unavailable}
 					/>
 					<CollateralizationMetricField
 						collateralizationPercent={callerPoolOracleCollateralization}
-						label={UI_STRING_CALLER_COLLATERALIZATION_AT_OPEN_ORACLE}
+						label={liquidationCopy.callerCollateralizationAtOpenOracle}
 						repPerEthSource={undefined}
 						repPerEthSourceUrl={undefined}
 						securityBondAllowance={callerVaultSummary?.securityBondAllowance}
 						securityMultiplier={selectedPool?.securityMultiplier}
-						unavailableCopy={UI_STRING_UNAVAILABLE}
+						unavailableCopy={commonCopy.unavailable}
 					/>
 				</DataGrid>
 				{sameVaultWarning === undefined ? null : (
 					<WarningSurface as='section' variant='compact'>
 						<div className='entity-card-header'>
 							<div>
-								<h4>{UI_STRING_INVALID_LIQUIDATION_PAIR}</h4>
+								<h4>{liquidationCopy.invalidLiquidationPair}</h4>
 							</div>
 						</div>
 						<p className='detail'>{sameVaultWarning}</p>
@@ -448,20 +385,20 @@ export function LiquidationModal({
 				)}
 				<div className='form-grid'>
 					<label className='field'>
-						<span>{UI_STRING_LIQUIDATION_AMOUNT_ETH}</span>
+						<span>{liquidationCopy.liquidationAmountEth}</span>
 						<div className='field-inline'>
-							<FormInput className='field-inline-input' value={liquidationAmount} onInput={event => onLiquidationAmountChange(event.currentTarget.value)} placeholder={UI_STRING_ZERO_DECIMAL_PLACEHOLDER} />
+							<FormInput className='field-inline-input' value={liquidationAmount} onInput={event => onLiquidationAmountChange(event.currentTarget.value)} placeholder={commonCopy.zeroDecimalPlaceholder} />
 							<button className='quiet field-inline-action' type='button' onClick={() => onLiquidationAmountChange(liquidationMaxActionAmount === undefined ? '' : formatCurrencyInputBalance(liquidationMaxActionAmount))} disabled={liquidationMaxActionAmount === undefined || liquidationMaxActionAmount <= 0n}>
-								{UI_STRING_MAX}
+								{commonCopy.max}
 							</button>
 						</div>
 					</label>
 					{liquidationExecutionMode === 'execute' ? null : (
 						<label className='field'>
-							<span>{UI_STRING_MANUAL_EXECUTION_TIMEOUT}</span>
+							<span>{commonCopy.manualExecutionTimeout}</span>
 							<div className='field-inline'>
 								<FormInput className='field-inline-input' inputMode='numeric' min='1' pattern='[0-9]*' step='1' value={liquidationTimeoutDisplayValue} onInput={event => onLiquidationTimeoutMinutesChange(event.currentTarget.value)} />
-								<span className='field-inline-action'>{UI_STRING_MINUTES}</span>
+								<span className='field-inline-action'>{commonCopy.minutes}</span>
 							</div>
 						</label>
 					)}
@@ -471,34 +408,34 @@ export function LiquidationModal({
 					<section className='entity-card compact'>
 						<div className='entity-card-header'>
 							<div>
-								<h4>{UI_STRING_CALLER_VAULT_AFTER_LIQUIDATION}</h4>
+								<h4>{liquidationCopy.callerVaultAfterLiquidation}</h4>
 							</div>
 						</div>
 						<MetricGrid>
-							<MetricField label={UI_STRING_REP_COLLATERAL}>
-								<CurrencyValue value={liquidationSimulation.callerAfter.repDepositShare} suffix={UI_STRING_REP} />
+							<MetricField label={commonCopy.repCollateral}>
+								<CurrencyValue value={liquidationSimulation.callerAfter.repDepositShare} suffix={commonCopy.rep} />
 							</MetricField>
-							<MetricField label={UI_STRING_SECURITY_BOND_ALLOWANCE}>
-								<CurrencyValue value={liquidationSimulation.callerAfter.securityBondAllowance} suffix={UI_STRING_ETH} />
+							<MetricField label={commonCopy.securityBondAllowance}>
+								<CurrencyValue value={liquidationSimulation.callerAfter.securityBondAllowance} suffix={commonCopy.eth} />
 							</MetricField>
 							<CollateralizationMetricField
 								collateralizationPercent={liquidationSimulation.callerAfter.collateralization}
-								label={UI_STRING_COLLATERALIZATION_AT_OPEN_ORACLE}
+								label={liquidationCopy.collateralizationAtOpenOracle}
 								repPerEthSource={undefined}
 								repPerEthSourceUrl={undefined}
 								securityBondAllowance={liquidationSimulation.callerAfter.securityBondAllowance}
 								securityMultiplier={selectedPool?.securityMultiplier}
-								unavailableCopy={UI_STRING_UNAVAILABLE}
+								unavailableCopy={commonCopy.unavailable}
 							/>
-							<MetricField label={UI_STRING_REP_MOVED}>
-								<CurrencyValue value={liquidationSimulation.repToMove} suffix={UI_STRING_REP} />
+							<MetricField label={liquidationCopy.repMoved}>
+								<CurrencyValue value={liquidationSimulation.repToMove} suffix={commonCopy.rep} />
 							</MetricField>
 						</MetricGrid>
 					</section>
 				)}
 				<div className='actions liquidation-modal-actions'>
 					<button className='secondary' onClick={closeLiquidationModal}>
-						{UI_STRING_CANCEL}
+						{commonCopy.cancel}
 					</button>
 					<TransactionActionButton
 						idleLabel={buttonLabels.idle}

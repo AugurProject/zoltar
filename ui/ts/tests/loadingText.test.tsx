@@ -27,7 +27,7 @@ describe('LoadingText', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const wrapper = documentQueries.getByText('Loading...')
+		const wrapper = documentQueries.getByText('Loading…')
 
 		expect(wrapper).not.toBeNull()
 		expect(wrapper.className).toContain('loading-value')

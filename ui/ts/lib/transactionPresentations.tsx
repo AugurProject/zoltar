@@ -1,3 +1,5 @@
+import * as commonCopy from '../copy/common.js'
+import * as transactionCopy from '../copy/transaction.js'
 import type { ComponentChildren } from 'preact'
 import type { Account, Hash } from '@zoltar/shared/ethereum'
 import { AddressValue } from '../components/AddressValue.js'
@@ -20,114 +22,6 @@ import type {
 	ZoltarForkActionResult,
 	ZoltarMigrationActionResult,
 } from '../types/contracts.js'
-import {
-	UI_STRING_ACTION,
-	UI_STRING_UNRESOLVED_ESCALATION_MIGRATED_DETAIL,
-	UI_STRING_AMOUNT,
-	UI_STRING_APPROVING_FORK_REP,
-	UI_STRING_ARGUMENTS,
-	UI_STRING_TRADING_COMPLETE_SET_CREATED_DETAIL,
-	UI_STRING_A_NEW_ORACLE_PRICE_WAS_REQUESTED_SUCCESSFULLY,
-	UI_STRING_CALLDATA,
-	UI_STRING_CHAIN,
-	UI_STRING_CHILD_UNIVERSE_DEPLOYED,
-	UI_STRING_CHILD_UNIVERSE_DEPLOYMENT_TRANSACTION_SUBMITTED,
-	UI_STRING_CONFIRM_THE_TRANSACTION_IN_YOUR_WALLET,
-	UI_STRING_CONTRACT,
-	UI_STRING_CREATING_QUESTION,
-	UI_STRING_CREATING_SECURITY_POOL,
-	UI_STRING_DEPLOYING_CHILD_UNIVERSE,
-	UI_STRING_ETH,
-	UI_STRING_ETH_VALUE,
-	UI_STRING_EXECUTING_STAGED_OPERATION,
-	UI_STRING_FORKING_ZOLTAR,
-	UI_STRING_FORK_REP_APPROVED,
-	UI_STRING_FUNCTION,
-	UI_STRING_IMPORTED_FORK_CARRIED_ESCALATION_DEPOSITS_WERE_SETTLED,
-	UI_STRING_LIQUIDATION_EXECUTED,
-	UI_STRING_LIQUIDATION_FAILED,
-	UI_STRING_LIQUIDATION_SUBMITTED,
-	UI_STRING_LIQUIDATION_TRANSACTION_SUBMITTED,
-	UI_STRING_MARKET_TYPE,
-	UI_STRING_MATCHING_SHARES_WERE_BURNED_AND_COLLATERAL_WAS_RETURNED_FROM_THE_SELECTED_POOL,
-	UI_STRING_MIGRATION_REP_WAS_SPLIT_ACROSS_THE_SELECTED_CHILD_UNIVERSES,
-	UI_STRING_NULL,
-	UI_STRING_NONE,
-	UI_STRING_OUTCOME,
-	UI_STRING_OUTCOME_INDEX,
-	UI_STRING_OUTCOME_INDEXES,
-	UI_STRING_POOL,
-	UI_STRING_POOL_LEVEL_REP_WAS_MIGRATED_INTO_THE_SELECTED_CHILD_UNIVERSE,
-	UI_STRING_PREPARING_REP,
-	UI_STRING_PRICE_REQUESTED,
-	UI_STRING_PRICE_REQUEST_TRANSACTION_SUBMITTED,
-	UI_STRING_QUESTION_CREATED,
-	UI_STRING_QUESTION_CREATION_TRANSACTION_SUBMITTED,
-	UI_STRING_QUESTION_ID,
-	UI_STRING_REP_APPROVAL_TRANSACTION_SUBMITTED,
-	UI_STRING_REP_APPROVAL_WAS_UPDATED_FOR_THE_ZOLTAR_FORK_FLOW,
-	UI_STRING_REP_MIGRATION_TRANSACTION_SUBMITTED,
-	UI_STRING_REP_PREPARATION_TRANSACTION_SUBMITTED,
-	UI_STRING_REP_PREPARED,
-	UI_STRING_REP,
-	UI_STRING_REP_SPLIT,
-	UI_STRING_REP_WAS_ADDED_TO_YOUR_MIGRATION_BALANCE,
-	UI_STRING_REQUESTING_PRICE,
-	UI_STRING_RESOLVED_WINNING_SHARES_WERE_REDEEMED_FROM_THE_SELECTED_POOL,
-	UI_STRING_REVIEW_THE_PREPARED_TRANSACTION_BEFORE_IT_IS_SUBMITTED,
-	UI_STRING_REVIEW_THE_PREPARED_TRANSACTION_THEN_CONFIRM_IT_IN_YOUR_WALLET,
-	UI_STRING_SECURITY_MULTIPLIER,
-	UI_STRING_SECURITY_POOL_CREATED,
-	UI_STRING_SECURITY_POOL_DEPLOYMENT_TRANSACTION_SUBMITTED,
-	UI_STRING_ESCALATION_DEPOSITS_MIGRATED_DETAIL,
-	UI_STRING_ESCALATION_DEPOSITS_SETTLED_DETAIL,
-	UI_STRING_LOSING_BIDS_REFUNDED_DETAIL,
-	UI_STRING_PARENT_POOL_SHARES_MIGRATED_DETAIL,
-	UI_STRING_SENDER,
-	UI_STRING_SETTLE_FINALIZED_REFUNDS,
-	UI_STRING_SHARE_OUTCOME,
-	UI_STRING_SPLITTING_REP,
-	UI_STRING_STAGED_OPERATION,
-	UI_STRING_STAGED_OPERATION_EXECUTED,
-	UI_STRING_STAGED_OPERATION_TRANSACTION_SUBMITTED,
-	UI_STRING_SUBMITTING_IN_BROWSER_SIMULATION_NO_WALLET_CONFIRMATION_IS_REQUIRED,
-	UI_STRING_SUBMITTING_LIQUIDATION,
-	UI_STRING_TARGET_OUTCOME_INDEXES,
-	UI_STRING_LIQUIDATION_EXECUTED_IMMEDIATELY_DETAIL,
-	UI_STRING_LIQUIDATION_REQUEST_SUBMITTED_DETAIL,
-	UI_STRING_SECURITY_POOL_CREATED_DETAIL,
-	UI_STRING_CHILD_UNIVERSE_DEPLOYED_DETAIL,
-	UI_STRING_CHILD_UNIVERSE_LINKED_TO_FORK_PATH_DETAIL,
-	UI_STRING_QUESTION_CREATED_DETAIL,
-	UI_STRING_UNIVERSE_FORK_SUBMITTED_DETAIL,
-	UI_STRING_ZOLTAR_UNIVERSE_FORK_SUBMITTED_DETAIL,
-	UI_STRING_STAGED_ORACLE_OPERATION_EXECUTED_DETAIL,
-	UI_STRING_POOL_READY_FOR_FORK_MIGRATION_DETAIL,
-	UI_STRING_OWN_ESCALATION_FORK_SUBMITTED_DETAIL,
-	UI_STRING_TO,
-	UI_STRING_TRANSACTION_SUBMITTED_WAITING_FOR_CONFIRMATION,
-	UI_STRING_TRUTH_AUCTION_BID_SUBMITTED_BID_ETH_STAYS_COMMITTED_UNTIL_SETTLEMENT,
-	UI_STRING_TRUTH_AUCTION_STATE_WAS_STARTED_FOR_THE_SELECTED_CHILD_UNIVERSE,
-	UI_STRING_UNDEFINED,
-	UI_STRING_UNIVERSE,
-	UI_STRING_VAULT_MIGRATED_DETAIL,
-	UI_STRING_YOUR_SELECTED_REP_WAS_COMMITTED_TO_THE_CHOSEN_ESCALATION_SIDE,
-	UI_STRING_ZOLTAR_FORK_SUBMITTED,
-	UI_STRING_ZOLTAR_FORK_TRANSACTION_SUBMITTED,
-	UI_TEMPLATE_COMPLETED_SUCCESSFULLY,
-	UI_TEMPLATE_DEPLOYING_VALUE,
-	UI_TEMPLATE_LIQUIDATION_STAGED_AS_OPERATION_NUMBER_VALUE_AND_MUST_BE_EXECUTED_MANUALLY_AFTER,
-	UI_TEMPLATE_LIQUIDATION_STAGED_AS_OPERATION_NUMBER_VALUE_FOR_THE_NEXT_ORACLE_SETTLEMENT,
-	UI_TEMPLATE_FINALIZED_REFUND_SETTLEMENT_RESULT_DETAIL,
-	UI_TEMPLATE_MIXED_BID_SETTLEMENT_RESULT_DETAIL,
-	UI_TEMPLATE_WINNING_BID_SETTLEMENT_RESULT_DETAIL,
-	UI_TEMPLATE_STAGED_OPERATION_NUMBER_VALUE_WAS_QUEUED_AND_MUST_BE_EXECUTED_MANUALLY_AFTER,
-	UI_TEMPLATE_STAGED_OPERATION_NUMBER_VALUE_WAS_QUEUED_FOR_THE_NEXT_ORACLE_SETTLEMENT,
-	UI_TEMPLATE_TRANSACTION_SUBMITTED,
-	UI_TEMPLATE_VALUE_DEPLOYED,
-	UI_TEMPLATE_VALUE_TRUNCATED_VALUE_BYTES,
-	UI_TEMPLATE_VALUE_WAS_DEPLOYED_SUCCESSFULLY,
-} from './uiStrings.js'
 
 function buildPresentation({ detail, hash, rows, title, tone }: { detail: GlobalTransactionPresentation['detail']; hash: Hash; rows?: GlobalTransactionRow[]; title: GlobalTransactionPresentation['title']; tone: GlobalTransactionPresentation['tone'] }): GlobalTransactionPresentation {
 	return {
@@ -180,29 +74,29 @@ function getPreviewAccountAddress(account: Account | string | undefined) {
 function formatPreviewArgument(value: unknown): string {
 	if (typeof value === 'bigint') return value.toString()
 	if (Array.isArray(value)) return `[${value.map(formatPreviewArgument).join(', ')}]`
-	if (value === undefined) return UI_STRING_UNDEFINED
-	if (value === null) return UI_STRING_NULL
+	if (value === undefined) return transactionCopy.undefinedValue
+	if (value === null) return transactionCopy.nullValue
 	return String(value)
 }
 
 function formatPreviewData(data: string) {
 	const byteLength = Math.max(0, (data.length - 2) / 2)
 	if (data.length <= 74) return data
-	return UI_TEMPLATE_VALUE_TRUNCATED_VALUE_BYTES(data.slice(0, 66), byteLength.toString())
+	return transactionCopy.formatValueTruncatedValueBytes(data.slice(0, 66), byteLength.toString())
 }
 
 function getPreparedTransactionRows(intent: TransactionIntent, preview: TransactionRequestPreview): GlobalTransactionRow[] {
 	const senderAddress = getPreviewAccountAddress(preview.account)
 	return [
 		...(intent.rows ?? []),
-		...(senderAddress === undefined ? [] : [{ label: UI_STRING_SENDER, value: senderAddress }]),
-		...(preview.chainName === undefined ? [] : [{ label: UI_STRING_CHAIN, value: preview.chainName }]),
-		...(preview.contractAddress === undefined ? [] : [{ label: UI_STRING_CONTRACT, value: preview.contractAddress }]),
-		...(preview.to === undefined ? [] : [{ label: UI_STRING_TO, value: preview.to }]),
-		{ label: UI_STRING_FUNCTION, value: preview.functionName },
-		...(preview.value === undefined || preview.value === 0n ? [] : [{ label: UI_STRING_ETH_VALUE, value: `${formatCurrencyBalance(preview.value)} ${UI_STRING_ETH}` }]),
-		...(preview.data === undefined ? [] : [{ label: preview.dataLabel ?? UI_STRING_CALLDATA, value: formatPreviewData(preview.data) }]),
-		...(preview.args === undefined || preview.args.length === 0 ? [] : [{ label: UI_STRING_ARGUMENTS, value: preview.args.map(formatPreviewArgument).join(', ') }]),
+		...(senderAddress === undefined ? [] : [{ label: transactionCopy.sender, value: senderAddress }]),
+		...(preview.chainName === undefined ? [] : [{ label: transactionCopy.chain, value: preview.chainName }]),
+		...(preview.contractAddress === undefined ? [] : [{ label: transactionCopy.contract, value: preview.contractAddress }]),
+		...(preview.to === undefined ? [] : [{ label: transactionCopy.to, value: preview.to }]),
+		{ label: transactionCopy.functionLabel, value: preview.functionName },
+		...(preview.value === undefined || preview.value === 0n ? [] : [{ label: transactionCopy.ethValue, value: `${formatCurrencyBalance(preview.value)} ${commonCopy.eth}` }]),
+		...(preview.data === undefined ? [] : [{ label: preview.dataLabel ?? transactionCopy.calldata, value: formatPreviewData(preview.data) }]),
+		...(preview.args === undefined || preview.args.length === 0 ? [] : [{ label: transactionCopy.argumentListLabel, value: preview.args.map(formatPreviewArgument).join(', ') }]),
 	]
 }
 
@@ -210,16 +104,16 @@ export function createDeploymentTransactionIntent(stepLabel: string) {
 	return buildIntent({
 		action: 'deploy',
 		source: 'deployment',
-		submittedTitle: UI_TEMPLATE_DEPLOYING_VALUE(stepLabel),
-		submittedDetail: UI_STRING_TRANSACTION_SUBMITTED_WAITING_FOR_CONFIRMATION,
+		submittedTitle: transactionCopy.formatDeployingValue(stepLabel),
+		submittedDetail: transactionCopy.transactionConfirmationPendingDetail,
 	})
 }
 
 export function createDeploymentSuccessPresentation(stepLabel: string, hash: Hash) {
 	return buildPresentation({
-		detail: UI_TEMPLATE_VALUE_WAS_DEPLOYED_SUCCESSFULLY(stepLabel),
+		detail: transactionCopy.formatValueWasDeployedSuccessfully(stepLabel),
 		hash,
-		title: UI_TEMPLATE_VALUE_DEPLOYED(stepLabel),
+		title: transactionCopy.formatValueDeployed(stepLabel),
 		tone: 'success',
 	})
 }
@@ -227,7 +121,7 @@ export function createDeploymentSuccessPresentation(stepLabel: string, hash: Has
 export function createAwaitingWalletPresentation(intent: TransactionIntent, dismissKey: string) {
 	if (intent.requiresWalletConfirmation === false)
 		return buildHashlessPresentation({
-			detail: UI_STRING_SUBMITTING_IN_BROWSER_SIMULATION_NO_WALLET_CONFIRMATION_IS_REQUIRED,
+			detail: transactionCopy.simulationSubmissionDetail,
 			dismissKey,
 			title: intent.submittedTitle,
 			tone: 'preparing',
@@ -235,7 +129,7 @@ export function createAwaitingWalletPresentation(intent: TransactionIntent, dism
 		})
 
 	return buildHashlessPresentation({
-		detail: UI_STRING_CONFIRM_THE_TRANSACTION_IN_YOUR_WALLET,
+		detail: transactionCopy.walletConfirmationInstruction,
 		dismissKey,
 		title: intent.submittedTitle,
 		tone: 'awaiting-wallet',
@@ -246,7 +140,7 @@ export function createAwaitingWalletPresentation(intent: TransactionIntent, dism
 export function createPreparedWalletPresentation(intent: TransactionIntent, preview: TransactionRequestPreview, dismissKey: string): GlobalTransactionPresentation {
 	const requiresWalletConfirmation = preview.requiresWalletConfirmation ?? intent.requiresWalletConfirmation ?? true
 	return buildHashlessPresentation({
-		detail: requiresWalletConfirmation ? UI_STRING_REVIEW_THE_PREPARED_TRANSACTION_THEN_CONFIRM_IT_IN_YOUR_WALLET : UI_STRING_REVIEW_THE_PREPARED_TRANSACTION_BEFORE_IT_IS_SUBMITTED,
+		detail: requiresWalletConfirmation ? transactionCopy.walletConfirmationReviewDetail : transactionCopy.simulationSubmissionReviewDetail,
 		dismissKey,
 		rows: getPreparedTransactionRows(intent, preview),
 		title: intent.submittedTitle,
@@ -268,20 +162,20 @@ export function createMarketCreationTransactionIntent() {
 	return buildIntent({
 		action: 'createMarket',
 		source: 'zoltar',
-		submittedTitle: UI_STRING_CREATING_QUESTION,
-		submittedDetail: UI_STRING_QUESTION_CREATION_TRANSACTION_SUBMITTED,
+		submittedTitle: transactionCopy.creatingQuestion,
+		submittedDetail: transactionCopy.questionCreationSubmittedDetail,
 	})
 }
 
 export function createMarketCreationSuccessPresentation(result: MarketCreationResult) {
 	return buildPresentation({
-		detail: UI_STRING_QUESTION_CREATED_DETAIL,
+		detail: transactionCopy.questionCreatedDetail,
 		hash: result.createQuestionHash,
 		rows: [
-			{ label: UI_STRING_QUESTION_ID, value: result.questionId },
-			{ label: UI_STRING_MARKET_TYPE, value: result.marketType },
+			{ label: commonCopy.questionId, value: result.questionId },
+			{ label: transactionCopy.marketType, value: result.marketType },
 		],
-		title: UI_STRING_QUESTION_CREATED,
+		title: transactionCopy.questionCreated,
 		tone: 'success',
 	})
 }
@@ -294,20 +188,20 @@ export function createZoltarForkTransactionIntent(actionName: 'approve' | 'fork'
 	return buildIntent({
 		action: actionName,
 		source: 'zoltar',
-		submittedTitle: actionName === 'approve' ? UI_STRING_APPROVING_FORK_REP : UI_STRING_FORKING_ZOLTAR,
-		submittedDetail: actionName === 'approve' ? UI_STRING_REP_APPROVAL_TRANSACTION_SUBMITTED : UI_STRING_ZOLTAR_FORK_TRANSACTION_SUBMITTED,
+		submittedTitle: actionName === 'approve' ? transactionCopy.approvingForkRep : transactionCopy.forkingZoltar,
+		submittedDetail: actionName === 'approve' ? transactionCopy.repApprovalSubmittedDetail : transactionCopy.zoltarForkSubmittedDetail,
 	})
 }
 
 export function createZoltarForkSuccessPresentation(result: ZoltarForkActionResult) {
-	const title = result.action === 'approveForkRep' ? UI_STRING_FORK_REP_APPROVED : UI_STRING_ZOLTAR_FORK_SUBMITTED
-	const detail = result.action === 'approveForkRep' ? UI_STRING_REP_APPROVAL_WAS_UPDATED_FOR_THE_ZOLTAR_FORK_FLOW : UI_STRING_UNIVERSE_FORK_SUBMITTED_DETAIL
+	const title = result.action === 'approveForkRep' ? transactionCopy.forkRepApproved : transactionCopy.zoltarForkSubmitted
+	const detail = result.action === 'approveForkRep' ? transactionCopy.forkRepApprovalSuccessDetail : transactionCopy.universeForkSubmittedDetail
 	return buildPresentation({
 		detail,
 		hash: result.hash,
 		rows: [
-			{ label: UI_STRING_UNIVERSE, value: <UniverseLink universeId={result.universeId} /> },
-			{ label: UI_STRING_QUESTION_ID, value: result.questionId },
+			{ label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
+			{ label: commonCopy.questionId, value: result.questionId },
 		],
 		title,
 		tone: 'success',
@@ -322,20 +216,20 @@ export function createChildUniverseTransactionIntent(source: 'fork-auction' | 'z
 	return buildIntent({
 		action: 'createChildUniverse',
 		source,
-		submittedTitle: UI_STRING_DEPLOYING_CHILD_UNIVERSE,
-		submittedDetail: UI_STRING_CHILD_UNIVERSE_DEPLOYMENT_TRANSACTION_SUBMITTED,
+		submittedTitle: transactionCopy.deployingChildUniverse,
+		submittedDetail: transactionCopy.childUniverseDeploymentSubmittedDetail,
 	})
 }
 
 export function createChildUniverseSuccessPresentation(result: ZoltarChildUniverseActionResult) {
 	return buildPresentation({
-		detail: UI_STRING_CHILD_UNIVERSE_DEPLOYED_DETAIL,
+		detail: transactionCopy.childUniverseDeployedDetail,
 		hash: result.hash,
 		rows: [
-			{ label: UI_STRING_UNIVERSE, value: <UniverseLink universeId={result.universeId} /> },
-			{ label: UI_STRING_OUTCOME_INDEX, value: result.outcomeIndex.toString() },
+			{ label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
+			{ label: commonCopy.outcomeIndex, value: result.outcomeIndex.toString() },
 		],
-		title: UI_STRING_CHILD_UNIVERSE_DEPLOYED,
+		title: transactionCopy.childUniverseDeployed,
 		tone: 'success',
 	})
 }
@@ -348,21 +242,21 @@ export function createZoltarMigrationTransactionIntent(actionName: 'prepare' | '
 	return buildIntent({
 		action: actionName,
 		source: 'zoltar',
-		submittedTitle: actionName === 'prepare' ? UI_STRING_PREPARING_REP : UI_STRING_SPLITTING_REP,
-		submittedDetail: actionName === 'prepare' ? UI_STRING_REP_PREPARATION_TRANSACTION_SUBMITTED : UI_STRING_REP_MIGRATION_TRANSACTION_SUBMITTED,
+		submittedTitle: actionName === 'prepare' ? transactionCopy.preparingRep : transactionCopy.splittingRep,
+		submittedDetail: actionName === 'prepare' ? transactionCopy.repPreparationSubmittedDetail : transactionCopy.repMigrationSubmittedDetail,
 	})
 }
 
 export function createZoltarMigrationSuccessPresentation(result: ZoltarMigrationActionResult) {
 	return buildPresentation({
-		detail: result.action === 'addRepToMigrationBalance' ? UI_STRING_REP_WAS_ADDED_TO_YOUR_MIGRATION_BALANCE : UI_STRING_MIGRATION_REP_WAS_SPLIT_ACROSS_THE_SELECTED_CHILD_UNIVERSES,
+		detail: result.action === 'addRepToMigrationBalance' ? transactionCopy.migrationRepPreparationSuccessDetail : transactionCopy.repSplitSuccessDetail,
 		hash: result.hash,
 		rows: [
-			{ label: UI_STRING_UNIVERSE, value: <UniverseLink universeId={result.universeId} /> },
-			{ label: UI_STRING_AMOUNT, value: `${formatCurrencyBalance(result.amount)} ${UI_STRING_REP}` },
-			{ label: UI_STRING_OUTCOME_INDEXES, value: result.outcomeIndexes.length === 0 ? UI_STRING_NONE : result.outcomeIndexes.join(', ') },
+			{ label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
+			{ label: commonCopy.amount, value: `${formatCurrencyBalance(result.amount)} ${commonCopy.rep}` },
+			{ label: transactionCopy.outcomeIndexes, value: result.outcomeIndexes.length === 0 ? commonCopy.none : result.outcomeIndexes.join(', ') },
 		],
-		title: result.action === 'addRepToMigrationBalance' ? UI_STRING_REP_PREPARED : UI_STRING_REP_SPLIT,
+		title: result.action === 'addRepToMigrationBalance' ? transactionCopy.repPrepared : transactionCopy.repSplit,
 		tone: 'success',
 	})
 }
@@ -375,22 +269,22 @@ export function createSecurityPoolCreationTransactionIntent() {
 	return buildIntent({
 		action: 'createSecurityPool',
 		source: 'security-pools',
-		submittedTitle: UI_STRING_CREATING_SECURITY_POOL,
-		submittedDetail: UI_STRING_SECURITY_POOL_DEPLOYMENT_TRANSACTION_SUBMITTED,
+		submittedTitle: transactionCopy.creatingSecurityPool,
+		submittedDetail: transactionCopy.securityPoolDeploymentSubmittedDetail,
 	})
 }
 
 export function createSecurityPoolCreationSuccessPresentation(result: SecurityPoolCreationResult) {
 	return buildPresentation({
-		detail: UI_STRING_SECURITY_POOL_CREATED_DETAIL,
+		detail: transactionCopy.securityPoolCreatedDetail,
 		hash: result.deployPoolHash,
 		rows: [
-			{ label: UI_STRING_POOL, value: <AddressValue address={result.securityPoolAddress} /> },
-			{ label: UI_STRING_UNIVERSE, value: <UniverseLink universeId={result.universeId} /> },
-			{ label: UI_STRING_QUESTION_ID, value: result.questionId },
-			{ label: UI_STRING_SECURITY_MULTIPLIER, value: result.securityMultiplier.toString() },
+			{ label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> },
+			{ label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
+			{ label: commonCopy.questionId, value: result.questionId },
+			{ label: commonCopy.securityMultiplier, value: result.securityMultiplier.toString() },
 		],
-		title: UI_STRING_SECURITY_POOL_CREATED,
+		title: transactionCopy.securityPoolCreated,
 		tone: 'success',
 	})
 }
@@ -404,21 +298,19 @@ export function createSecurityVaultTransactionIntent(actionName: SecurityVaultAc
 		action: actionName,
 		source: 'security-vault',
 		submittedTitle: humanizeAction(actionName),
-		submittedDetail: UI_TEMPLATE_TRANSACTION_SUBMITTED(humanizeAction(actionName)),
+		submittedDetail: transactionCopy.formatTransactionSubmitted(humanizeAction(actionName)),
 	})
 }
 
 export function createSecurityVaultSuccessPresentation(result: SecurityVaultActionResult) {
 	let queuedOperationDetail: string | undefined
 	if (result.queuedOperation !== undefined) {
-		queuedOperationDetail = result.queuedOperation.isPendingSlot
-			? UI_TEMPLATE_STAGED_OPERATION_NUMBER_VALUE_WAS_QUEUED_FOR_THE_NEXT_ORACLE_SETTLEMENT(result.queuedOperation.operationId.toString())
-			: UI_TEMPLATE_STAGED_OPERATION_NUMBER_VALUE_WAS_QUEUED_AND_MUST_BE_EXECUTED_MANUALLY_AFTER(result.queuedOperation.operationId.toString())
+		queuedOperationDetail = result.queuedOperation.isPendingSlot ? transactionCopy.formatQueuedOperationAutoExecutionDetail(result.queuedOperation.operationId.toString()) : transactionCopy.formatQueuedOperationManualExecutionDetail(result.queuedOperation.operationId.toString())
 	}
 	return buildPresentation({
-		detail: queuedOperationDetail ?? UI_TEMPLATE_COMPLETED_SUCCESSFULLY(humanizeAction(result.action)),
+		detail: queuedOperationDetail ?? transactionCopy.formatCompletedSuccessfully(humanizeAction(result.action)),
 		hash: result.hash,
-		rows: [{ label: UI_STRING_ACTION, value: humanizeAction(result.action) }, ...(result.queuedOperation === undefined ? [] : [{ label: UI_STRING_STAGED_OPERATION, value: `#${result.queuedOperation.operationId.toString()}` }])],
+		rows: [{ label: transactionCopy.action, value: humanizeAction(result.action) }, ...(result.queuedOperation === undefined ? [] : [{ label: commonCopy.stagedOperation, value: `#${result.queuedOperation.operationId.toString()}` }])],
 		title: humanizeAction(result.action),
 		tone: 'success',
 	})
@@ -433,25 +325,25 @@ export function createTradingTransactionIntent(actionName: TradingActionResult['
 		action: actionName,
 		source: 'trading',
 		submittedTitle: humanizeAction(actionName),
-		submittedDetail: UI_TEMPLATE_TRANSACTION_SUBMITTED(humanizeAction(actionName)),
+		submittedDetail: transactionCopy.formatTransactionSubmitted(humanizeAction(actionName)),
 	})
 }
 
 export function createTradingSuccessPresentation(result: TradingActionResult) {
 	const detail = (() => {
-		if (result.action === 'createCompleteSet') return UI_STRING_TRADING_COMPLETE_SET_CREATED_DETAIL
-		if (result.action === 'redeemCompleteSet') return UI_STRING_MATCHING_SHARES_WERE_BURNED_AND_COLLATERAL_WAS_RETURNED_FROM_THE_SELECTED_POOL
-		if (result.action === 'migrateShares') return UI_STRING_PARENT_POOL_SHARES_MIGRATED_DETAIL
-		return UI_STRING_RESOLVED_WINNING_SHARES_WERE_REDEEMED_FROM_THE_SELECTED_POOL
+		if (result.action === 'createCompleteSet') return transactionCopy.tradingCompleteSetCreatedDetail
+		if (result.action === 'redeemCompleteSet') return transactionCopy.completeSetBurnSuccessDetail
+		if (result.action === 'migrateShares') return transactionCopy.parentPoolSharesMigratedDetail
+		return transactionCopy.shareRedemptionSuccessDetail
 	})()
 	return buildPresentation({
 		detail,
 		hash: result.hash,
 		rows: [
-			{ label: UI_STRING_POOL, value: <AddressValue address={result.securityPoolAddress} /> },
-			{ label: UI_STRING_UNIVERSE, value: <UniverseLink universeId={result.universeId} /> },
-			...(result.shareOutcome === undefined ? [] : [{ label: UI_STRING_SHARE_OUTCOME, value: getReportingOutcomeLabel(result.shareOutcome) }]),
-			...(result.targetOutcomeIndexes === undefined ? [] : [{ label: UI_STRING_TARGET_OUTCOME_INDEXES, value: result.targetOutcomeIndexes.join(', ') }]),
+			{ label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> },
+			{ label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
+			...(result.shareOutcome === undefined ? [] : [{ label: transactionCopy.shareOutcome, value: getReportingOutcomeLabel(result.shareOutcome) }]),
+			...(result.targetOutcomeIndexes === undefined ? [] : [{ label: transactionCopy.targetOutcomeIndexes, value: result.targetOutcomeIndexes.join(', ') }]),
 		],
 		title: humanizeAction(result.action),
 		tone: 'success',
@@ -467,19 +359,19 @@ export function createReportingTransactionIntent(actionName: ReportingActionResu
 		action: actionName,
 		source: 'reporting',
 		submittedTitle: humanizeAction(actionName),
-		submittedDetail: UI_TEMPLATE_TRANSACTION_SUBMITTED(humanizeAction(actionName)),
+		submittedDetail: transactionCopy.formatTransactionSubmitted(humanizeAction(actionName)),
 	})
 }
 
 export function createReportingSuccessPresentation(result: ReportingActionResult) {
-	const detail = result.action === 'reportOutcome' ? UI_STRING_YOUR_SELECTED_REP_WAS_COMMITTED_TO_THE_CHOSEN_ESCALATION_SIDE : UI_STRING_ESCALATION_DEPOSITS_SETTLED_DETAIL
+	const detail = result.action === 'reportOutcome' ? transactionCopy.reportingContributionSuccessDetail : transactionCopy.escalationDepositsSettledDetail
 	return buildPresentation({
 		detail,
 		hash: result.hash,
 		rows: [
-			{ label: UI_STRING_POOL, value: <AddressValue address={result.securityPoolAddress} /> },
-			{ label: UI_STRING_UNIVERSE, value: <UniverseLink universeId={result.universeId} /> },
-			{ label: UI_STRING_OUTCOME, value: getReportingOutcomeLabel(result.outcome) },
+			{ label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> },
+			{ label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
+			{ label: commonCopy.outcome, value: getReportingOutcomeLabel(result.outcome) },
 		],
 		title: humanizeAction(result.action),
 		tone: 'success',
@@ -494,23 +386,21 @@ export function createLiquidationTransactionIntent() {
 	return buildIntent({
 		action: 'queueLiquidation',
 		source: 'security-pools',
-		submittedTitle: UI_STRING_SUBMITTING_LIQUIDATION,
-		submittedDetail: UI_STRING_LIQUIDATION_TRANSACTION_SUBMITTED,
+		submittedTitle: transactionCopy.submittingLiquidation,
+		submittedDetail: transactionCopy.liquidationSubmittedDetail,
 	})
 }
 
 export function createLiquidationSuccessPresentation(result: SecurityPoolOverviewActionResult) {
-	let queuedOperationDetail: string = UI_STRING_LIQUIDATION_REQUEST_SUBMITTED_DETAIL
+	let queuedOperationDetail: string = transactionCopy.liquidationRequestSubmittedDetail
 	if (result.queuedOperation !== undefined) {
-		queuedOperationDetail = result.queuedOperation.isPendingSlot
-			? UI_TEMPLATE_LIQUIDATION_STAGED_AS_OPERATION_NUMBER_VALUE_FOR_THE_NEXT_ORACLE_SETTLEMENT(result.queuedOperation.operationId.toString())
-			: UI_TEMPLATE_LIQUIDATION_STAGED_AS_OPERATION_NUMBER_VALUE_AND_MUST_BE_EXECUTED_MANUALLY_AFTER(result.queuedOperation.operationId.toString())
+		queuedOperationDetail = result.queuedOperation.isPendingSlot ? transactionCopy.formatQueuedLiquidationAutoExecutionDetail(result.queuedOperation.operationId.toString()) : transactionCopy.formatQueuedLiquidationManualExecutionDetail(result.queuedOperation.operationId.toString())
 	}
 	return buildPresentation({
-		detail: result.stagedExecution?.success === true ? UI_STRING_LIQUIDATION_EXECUTED_IMMEDIATELY_DETAIL : queuedOperationDetail,
+		detail: result.stagedExecution?.success === true ? transactionCopy.liquidationExecutedImmediatelyDetail : queuedOperationDetail,
 		hash: result.hash,
-		rows: [{ label: UI_STRING_POOL, value: <AddressValue address={result.securityPoolAddress} /> }, ...(result.queuedOperation === undefined ? [] : [{ label: UI_STRING_STAGED_OPERATION, value: `#${result.queuedOperation.operationId.toString()}` }])],
-		title: result.stagedExecution?.success === true ? UI_STRING_LIQUIDATION_EXECUTED : UI_STRING_LIQUIDATION_SUBMITTED,
+		rows: [{ label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> }, ...(result.queuedOperation === undefined ? [] : [{ label: commonCopy.stagedOperation, value: `#${result.queuedOperation.operationId.toString()}` }])],
+		title: result.stagedExecution?.success === true ? commonCopy.liquidationExecuted : commonCopy.liquidationSubmitted,
 		tone: 'success',
 	})
 }
@@ -519,8 +409,8 @@ export function createLiquidationFailurePresentation(result: SecurityPoolOvervie
 	return buildPresentation({
 		detail,
 		hash: result.hash,
-		rows: [{ label: UI_STRING_POOL, value: <AddressValue address={result.securityPoolAddress} /> }, ...(result.stagedExecution === undefined ? [] : [{ label: UI_STRING_STAGED_OPERATION, value: `#${result.stagedExecution.operationId.toString()}` }])],
-		title: UI_STRING_LIQUIDATION_FAILED,
+		rows: [{ label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> }, ...(result.stagedExecution === undefined ? [] : [{ label: commonCopy.stagedOperation, value: `#${result.stagedExecution.operationId.toString()}` }])],
+		title: commonCopy.liquidationFailed,
 		tone: 'error',
 	})
 }
@@ -530,11 +420,11 @@ export function createLiquidationWarningPresentation(result: SecurityPoolOvervie
 }
 
 export function createPoolOracleTransactionIntent(actionName: 'executeStagedOperation' | 'requestPrice') {
-	let submittedTitle: string = UI_STRING_EXECUTING_STAGED_OPERATION
-	let submittedDetail: string = UI_STRING_STAGED_OPERATION_TRANSACTION_SUBMITTED
+	let submittedTitle: string = transactionCopy.executingStagedOperation
+	let submittedDetail: string = transactionCopy.stagedOperationSubmittedDetail
 	if (actionName === 'requestPrice') {
-		submittedTitle = UI_STRING_REQUESTING_PRICE
-		submittedDetail = UI_STRING_PRICE_REQUEST_TRANSACTION_SUBMITTED
+		submittedTitle = transactionCopy.requestingPrice
+		submittedDetail = transactionCopy.priceRequestSubmittedDetail
 	}
 	return buildIntent({
 		action: actionName,
@@ -545,16 +435,16 @@ export function createPoolOracleTransactionIntent(actionName: 'executeStagedOper
 }
 
 export function createPoolOracleSuccessPresentation(result: OpenOracleActionResult) {
-	let detail: string = UI_STRING_STAGED_ORACLE_OPERATION_EXECUTED_DETAIL
-	let title: string = UI_STRING_STAGED_OPERATION_EXECUTED
+	let detail: string = transactionCopy.stagedOracleOperationExecutedDetail
+	let title: string = transactionCopy.stagedOperationExecuted
 	if (result.action === 'requestPrice') {
-		detail = UI_STRING_A_NEW_ORACLE_PRICE_WAS_REQUESTED_SUCCESSFULLY
-		title = UI_STRING_PRICE_REQUESTED
+		detail = transactionCopy.priceRequestSuccessDetail
+		title = transactionCopy.priceRequested
 	}
 	return buildPresentation({
 		detail,
 		hash: result.hash,
-		rows: [{ label: UI_STRING_ACTION, value: humanizeAction(result.action) }],
+		rows: [{ label: transactionCopy.action, value: humanizeAction(result.action) }],
 		title,
 		tone: 'success',
 	})
@@ -569,15 +459,15 @@ export function createOpenOracleTransactionIntent(actionName: OpenOracleActionRe
 		action: actionName,
 		source: 'open-oracle',
 		submittedTitle: humanizeAction(actionName),
-		submittedDetail: UI_TEMPLATE_TRANSACTION_SUBMITTED(humanizeAction(actionName)),
+		submittedDetail: transactionCopy.formatTransactionSubmitted(humanizeAction(actionName)),
 	})
 }
 
 export function createOpenOracleSuccessPresentation(result: OpenOracleActionResult) {
 	return buildPresentation({
-		detail: UI_TEMPLATE_COMPLETED_SUCCESSFULLY(humanizeAction(result.action)),
+		detail: transactionCopy.formatCompletedSuccessfully(humanizeAction(result.action)),
 		hash: result.hash,
-		rows: [{ label: UI_STRING_ACTION, value: humanizeAction(result.action) }],
+		rows: [{ label: transactionCopy.action, value: humanizeAction(result.action) }],
 		title: humanizeAction(result.action),
 		tone: 'success',
 	})
@@ -593,56 +483,56 @@ export function createForkAuctionTransactionIntent(actionName: ForkAuctionAction
 		action: actionName,
 		source: 'fork-auction',
 		submittedTitle: resolvedSubmittedTitle,
-		submittedDetail: UI_TEMPLATE_TRANSACTION_SUBMITTED(String(resolvedSubmittedTitle)),
+		submittedDetail: transactionCopy.formatTransactionSubmitted(String(resolvedSubmittedTitle)),
 	})
 }
 
 export function createForkAuctionSuccessPresentation(result: ForkAuctionActionResult) {
-	const title = result.action === 'claimAuctionProceeds' && result.settlementMode === 'refund' ? UI_STRING_SETTLE_FINALIZED_REFUNDS : humanizeAction(result.action)
+	const title = result.action === 'claimAuctionProceeds' && result.settlementMode === 'refund' ? transactionCopy.settleFinalizedRefunds : humanizeAction(result.action)
 	const detail = (() => {
 		switch (result.action) {
 			case 'claimAuctionProceeds':
 				if (result.settlementMode === 'refund') {
-					return UI_TEMPLATE_FINALIZED_REFUND_SETTLEMENT_RESULT_DETAIL(AUCTIONED_BOND_ALLOWANCE_LABEL)
+					return transactionCopy.formatFinalizedRefundSettlementResultDetail(AUCTIONED_BOND_ALLOWANCE_LABEL)
 				}
 				if (result.settlementMode === 'claim') {
-					return UI_TEMPLATE_WINNING_BID_SETTLEMENT_RESULT_DETAIL(AUCTIONED_BOND_ALLOWANCE_LABEL)
+					return transactionCopy.formatWinningBidSettlementResultDetail(AUCTIONED_BOND_ALLOWANCE_LABEL)
 				}
-				return UI_TEMPLATE_MIXED_BID_SETTLEMENT_RESULT_DETAIL(AUCTIONED_BOND_ALLOWANCE_LABEL)
+				return transactionCopy.formatMixedBidSettlementResultDetail(AUCTIONED_BOND_ALLOWANCE_LABEL)
 			case 'createChildUniverse':
-				return UI_STRING_CHILD_UNIVERSE_LINKED_TO_FORK_PATH_DETAIL
+				return transactionCopy.childUniverseLinkedToForkPathDetail
 			case 'forkWithOwnEscalation':
-				return UI_STRING_OWN_ESCALATION_FORK_SUBMITTED_DETAIL
+				return transactionCopy.ownEscalationForkSubmittedDetail
 			case 'forkUniverse':
-				return UI_STRING_ZOLTAR_UNIVERSE_FORK_SUBMITTED_DETAIL
+				return transactionCopy.zoltarUniverseForkSubmittedDetail
 			case 'initiateFork':
-				return UI_STRING_POOL_READY_FOR_FORK_MIGRATION_DETAIL
+				return transactionCopy.poolReadyForForkMigrationDetail
 			case 'migrateEscalationDeposits':
-				return UI_STRING_ESCALATION_DEPOSITS_MIGRATED_DETAIL
+				return transactionCopy.escalationDepositsMigratedDetail
 			case 'migrateRepToZoltar':
-				return UI_STRING_POOL_LEVEL_REP_WAS_MIGRATED_INTO_THE_SELECTED_CHILD_UNIVERSE
+				return transactionCopy.poolRepMigrationSuccessDetail
 			case 'migrateUnresolvedEscalation':
-				return UI_STRING_UNRESOLVED_ESCALATION_MIGRATED_DETAIL
+				return transactionCopy.unresolvedEscalationMigratedDetail
 			case 'migrateVault':
-				return UI_STRING_VAULT_MIGRATED_DETAIL
+				return transactionCopy.vaultMigratedDetail
 			case 'refundLosingBids':
-				return UI_STRING_LOSING_BIDS_REFUNDED_DETAIL
+				return transactionCopy.losingBidsRefundedDetail
 			case 'settleForkedEscalation':
-				return UI_STRING_IMPORTED_FORK_CARRIED_ESCALATION_DEPOSITS_WERE_SETTLED
+				return transactionCopy.forkDepositSettlementSuccessDetail
 			case 'startTruthAuction':
-				return UI_STRING_TRUTH_AUCTION_STATE_WAS_STARTED_FOR_THE_SELECTED_CHILD_UNIVERSE
+				return transactionCopy.truthAuctionStartedSuccessDetail
 			case 'submitBid':
-				return UI_STRING_TRUTH_AUCTION_BID_SUBMITTED_BID_ETH_STAYS_COMMITTED_UNTIL_SETTLEMENT
+				return transactionCopy.truthAuctionBidSuccessDetail
 			default:
-				return UI_TEMPLATE_COMPLETED_SUCCESSFULLY(humanizeAction(result.action))
+				return transactionCopy.formatCompletedSuccessfully(humanizeAction(result.action))
 		}
 	})()
 	return buildPresentation({
 		detail,
 		hash: result.hash,
 		rows: [
-			{ label: UI_STRING_POOL, value: <AddressValue address={result.securityPoolAddress} /> },
-			{ label: UI_STRING_UNIVERSE, value: <UniverseLink universeId={result.universeId} /> },
+			{ label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> },
+			{ label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
 		],
 		title,
 		tone: 'success',

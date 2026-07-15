@@ -1,6 +1,6 @@
+import * as commonCopy from '../copy/common.js'
 import type { ComponentChildren } from 'preact'
 import { LoadingText } from './LoadingText.js'
-import { UI_STRING_LOADING_WITH_ELLIPSIS } from '../lib/uiStrings.js'
 
 type LoadableValueProps = {
 	children: ComponentChildren
@@ -8,6 +8,6 @@ type LoadableValueProps = {
 	placeholder?: ComponentChildren
 }
 
-export function LoadableValue({ children, loading, placeholder = UI_STRING_LOADING_WITH_ELLIPSIS }: LoadableValueProps) {
+export function LoadableValue({ children, loading, placeholder = commonCopy.loadingWithEllipsis }: LoadableValueProps) {
 	return loading ? <LoadingText>{placeholder}</LoadingText> : <>{children}</>
 }

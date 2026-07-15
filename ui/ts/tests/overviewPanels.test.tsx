@@ -142,7 +142,7 @@ describe('OverviewPanels', () => {
 		const documentQueries = await renderOverviewPanels({
 			isConnectingWallet: true,
 		})
-		const connectButton = documentQueries.getByRole('button', { name: 'Connecting...' })
+		const connectButton = documentQueries.getByRole('button', { name: 'Connecting…' })
 
 		if (!(connectButton instanceof HTMLButtonElement)) throw new Error('Expected connect button')
 		expect(connectButton.disabled).toBe(true)
@@ -156,7 +156,7 @@ describe('OverviewPanels', () => {
 
 		if (!(connectButton instanceof HTMLButtonElement)) throw new Error('Expected connect button')
 		expect(connectButton.disabled).toBe(false)
-		expect(documentQueries.getByText('Connecting...')).toBeDefined()
+		expect(documentQueries.getByText('Connecting…')).toBeDefined()
 	})
 
 	test('renders the REP/ETH panel from the canonical REP per ETH quote', async () => {
@@ -190,7 +190,7 @@ describe('OverviewPanels', () => {
 		if (!(refreshButton instanceof HTMLButtonElement)) throw new Error('Expected refresh button')
 
 		expect(refreshButton.disabled).toBe(true)
-		expect(refreshButton.title).toBe('Refreshing REP prices...')
+		expect(refreshButton.title).toBe('Refreshing REP prices…')
 		expect(documentQueries.getByTitle('2 439.024390243902439024')).toBeDefined()
 		expect(documentQueries.getByTitle('1.234567 USDC')).toBeDefined()
 	})

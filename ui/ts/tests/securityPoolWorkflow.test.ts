@@ -484,7 +484,7 @@ void describe('selected pool workflow visibility', () => {
 				selectedPoolUniverseMismatch: false,
 			}),
 		).toEqual({
-			detail: 'Loading...',
+			detail: 'Loading…',
 			detailIsLoading: true,
 			key: 'loading',
 		})

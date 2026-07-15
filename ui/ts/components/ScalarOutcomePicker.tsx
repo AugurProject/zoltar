@@ -1,6 +1,7 @@
+import * as commonCopy from '../copy/common.js'
+import * as marketCopy from '../copy/market.js'
 import { DataGrid } from './DataGrid.js'
 import { MetricField } from './MetricField.js'
-import { UI_STRING_CURRENT_VALUE, UI_STRING_INVALID, UI_STRING_MAX_VALUE, UI_STRING_MIN_VALUE, UI_STRING_OR, UI_STRING_SELECTED_OUTCOME, UI_STRING_SELECTED_TICK } from '../lib/uiStrings.js'
 import { tryParseBigIntInput } from '../lib/marketForm.js'
 import type { ScalarOutcomePickerProps } from '../types/components.js'
 import { clampScalarTickIndex, getScalarSliderFillWidth } from '../lib/scalarOutcome.js'
@@ -25,18 +26,18 @@ export function ScalarOutcomePicker({ action, details, disabled = false, isInval
 							<input disabled={disabled || isInvalid} type='range' min='0' max={details.numTicks.toString()} step='1' value={resolvedSelectedTick} aria-valuetext={typeof selectedOutcomeLabel === 'string' ? selectedOutcomeLabel : undefined} onInput={event => onSelectedTickChange(event.currentTarget.value)} />
 						</div>
 					</div>
-					<span className='scalar-or-divider'>{UI_STRING_OR}</span>
+					<span className='scalar-or-divider'>{marketCopy.or}</span>
 					<label className='scalar-invalid-toggle'>
 						<input type='checkbox' disabled={disabled} checked={isInvalid} onChange={event => onInvalidChange(event.currentTarget.checked)} />
-						<span>{UI_STRING_INVALID}</span>
+						<span>{commonCopy.invalid}</span>
 					</label>
 				</div>
 			</div>
 			<DataGrid className='scalar-slider-stats'>
-				{showMinMax ? <MetricField label={UI_STRING_MIN_VALUE}>{details.minValueLabel}</MetricField> : undefined}
-				<MetricField label={UI_STRING_SELECTED_TICK}>{selectedTickLabel}</MetricField>
-				<MetricField label={showMinMax ? UI_STRING_SELECTED_OUTCOME : UI_STRING_CURRENT_VALUE}>{selectedOutcomeLabel}</MetricField>
-				{showMinMax ? <MetricField label={UI_STRING_MAX_VALUE}>{details.maxValueLabel}</MetricField> : undefined}
+				{showMinMax ? <MetricField label={marketCopy.minValue}>{details.minValueLabel}</MetricField> : undefined}
+				<MetricField label={marketCopy.selectedTick}>{selectedTickLabel}</MetricField>
+				<MetricField label={showMinMax ? marketCopy.selectedOutcome : marketCopy.currentValue}>{selectedOutcomeLabel}</MetricField>
+				{showMinMax ? <MetricField label={marketCopy.maxValue}>{details.maxValueLabel}</MetricField> : undefined}
 			</DataGrid>
 			{action === undefined ? undefined : <div className='actions'>{action}</div>}
 		</div>

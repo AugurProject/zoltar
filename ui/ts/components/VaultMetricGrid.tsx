@@ -1,10 +1,11 @@
+import * as commonCopy from '../copy/common.js'
+import * as securityPoolCopy from '../copy/securityPool.js'
 import { CurrencyValue } from './CurrencyValue.js'
 import { MetricField } from './MetricField.js'
 import { TimestampValue } from './TimestampValue.js'
 import type { VaultMetricGridProps } from '../types/components.js'
 import { CollateralizationCircle } from './CollateralizationCircle.js'
 import { getVaultCollateralizationPercent } from '../lib/trading.js'
-import { UI_STRING_ESCROWED_REP, UI_STRING_ETH, UI_STRING_PRICE_VALID_UNTIL, UI_STRING_REP, UI_STRING_REP_COLLATERAL, UI_STRING_SECURITY_BOND_ALLOWANCE } from '../lib/uiStrings.js'
 
 function VaultPrimaryMetric({ className, label, suffix, value }: { className?: string; label: string; suffix: string; value: bigint | undefined }) {
 	return (
@@ -25,19 +26,19 @@ export function VaultMetricGrid({ className = '', layout = 'grid', escalationEsc
 		return (
 			<div className={['vault-preview-strip', className].filter(Boolean).join(' ')}>
 				<div className='vault-preview-strip-head'>
-					<VaultPrimaryMetric className='vault-preview-allowance' label={UI_STRING_SECURITY_BOND_ALLOWANCE} value={securityBondAllowance} suffix={UI_STRING_ETH} />
+					<VaultPrimaryMetric className='vault-preview-allowance' label={commonCopy.securityBondAllowance} value={securityBondAllowance} suffix={commonCopy.eth} />
 				</div>
 				<div className='vault-preview-side-metrics'>
-					<VaultPrimaryMetric label={UI_STRING_REP_COLLATERAL} value={repDepositShare} suffix={UI_STRING_REP} />
+					<VaultPrimaryMetric label={commonCopy.repCollateral} value={repDepositShare} suffix={commonCopy.rep} />
 				</div>
 				<div className='vault-preview-meta'>
 					{escalationEscrowedRep === undefined ? null : (
-						<MetricField label={UI_STRING_ESCROWED_REP}>
-							<CurrencyValue value={escalationEscrowedRep} suffix={UI_STRING_REP} />
+						<MetricField label={commonCopy.escrowedRep}>
+							<CurrencyValue value={escalationEscrowedRep} suffix={commonCopy.rep} />
 						</MetricField>
 					)}
 					{priceValidUntilTimestamp === undefined ? null : (
-						<MetricField label={UI_STRING_PRICE_VALID_UNTIL}>
+						<MetricField label={securityPoolCopy.priceValidUntil}>
 							<TimestampValue timestamp={priceValidUntilTimestamp} />
 						</MetricField>
 					)}
@@ -49,19 +50,19 @@ export function VaultMetricGrid({ className = '', layout = 'grid', escalationEsc
 		<div className={['vault-detail-stage', className].filter(Boolean).join(' ')}>
 			<div className='vault-detail-hero'>
 				<CollateralizationCircle className='vault-detail-collateralization' collateralizationPercent={collateralizationPercent} size='medium' targetCollateralizationPercent={targetCollateralizationPercent} />
-				<VaultPrimaryMetric className='vault-detail-hero-primary' label={UI_STRING_SECURITY_BOND_ALLOWANCE} value={securityBondAllowance} suffix={UI_STRING_ETH} />
+				<VaultPrimaryMetric className='vault-detail-hero-primary' label={commonCopy.securityBondAllowance} value={securityBondAllowance} suffix={commonCopy.eth} />
 				<div className='vault-detail-hero-secondary'>
-					<VaultPrimaryMetric label={UI_STRING_REP_COLLATERAL} value={repDepositShare} suffix={UI_STRING_REP} />
+					<VaultPrimaryMetric label={commonCopy.repCollateral} value={repDepositShare} suffix={commonCopy.rep} />
 				</div>
 			</div>
 			<div className='vault-detail-meta'>
 				{escalationEscrowedRep === undefined ? undefined : (
-					<MetricField label={UI_STRING_ESCROWED_REP}>
-						<CurrencyValue value={escalationEscrowedRep} suffix={UI_STRING_REP} />
+					<MetricField label={commonCopy.escrowedRep}>
+						<CurrencyValue value={escalationEscrowedRep} suffix={commonCopy.rep} />
 					</MetricField>
 				)}
 				{priceValidUntilTimestamp === undefined ? undefined : (
-					<MetricField label={UI_STRING_PRICE_VALID_UNTIL}>
+					<MetricField label={securityPoolCopy.priceValidUntil}>
 						<TimestampValue timestamp={priceValidUntilTimestamp} />
 					</MetricField>
 				)}

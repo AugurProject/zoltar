@@ -1,30 +1,11 @@
+import * as commonCopy from '../copy/common.js'
+import * as tradingCopy from '../copy/trading.js'
 import type { ComponentChildren } from 'preact'
 import { useEffect, useMemo, useState } from 'preact/hooks'
 import { OutcomeSelectionList } from './OutcomeSelectionList.js'
 import { ScalarOutcomePicker } from './ScalarOutcomePicker.js'
 import { WorkflowSubsection } from './WorkflowSubsection.js'
 import { clampScalarTickIndex, formatScalarOutcomeIndexLabel, formatScalarOutcomeLabel, getScalarOutcomeIndex, getScalarOutcomeIndexDescriptor } from '../lib/scalarOutcome.js'
-import {
-	UI_STRING_ADD_TARGET,
-	UI_STRING_CHILD_DEPLOYED,
-	UI_STRING_CHILD_NOT_DEPLOYED,
-	UI_STRING_CHILD_UNIVERSE_TARGETS_UNLOCK_AFTER_THIS_UNIVERSE_FORKS,
-	UI_STRING_CLEAR,
-	UI_STRING_INVALID,
-	UI_STRING_LOADING_FORK_QUESTION_DETAILS,
-	UI_STRING_LOADING_FORK_TARGET_UNIVERSES,
-	UI_STRING_LOADING_SCALAR_FORK_DETAILS,
-	UI_STRING_NO_TARGET_CHILD_UNIVERSES_AVAILABLE,
-	UI_STRING_NOT_SELECTED,
-	UI_STRING_REMOVE_TARGET,
-	UI_STRING_SELECT_ALL,
-	UI_STRING_SELECT_AT_LEAST_ONE_SCALAR_TARGET_UNIVERSE,
-	UI_STRING_SELECT_SCALAR_TARGET,
-	UI_STRING_SELECTED,
-	UI_STRING_TARGET_CHILD_UNIVERSES,
-	UI_TEMPLATE_MALFORMED_OUTCOME_LABEL,
-	UI_TEMPLATE_SELECTED_TICK_LABEL,
-} from '../lib/uiStrings.js'
 import type { MarketDetails, ZoltarChildUniverseSummary, ZoltarUniverseSummary } from '../types/contracts.js'
 
 type ShareMigrationTargetsSectionProps = {
@@ -44,7 +25,7 @@ type TargetOutcomePresentation = {
 }
 
 function getTargetOutcomeBadgeLabel(target: TargetOutcomePresentation) {
-	return target.exists ? UI_STRING_CHILD_DEPLOYED : UI_STRING_CHILD_NOT_DEPLOYED
+	return target.exists ? tradingCopy.childDeployed : tradingCopy.childNotDeployed
 }
 
 function renderTargetOutcomeRow(target: TargetOutcomePresentation, selected: boolean, disabled: boolean, onToggleOutcomeIndex: (outcomeIndex: bigint) => void) {
@@ -52,7 +33,7 @@ function renderTargetOutcomeRow(target: TargetOutcomePresentation, selected: boo
 		details: (
 			<>
 				<span>
-					<strong>{selected ? UI_STRING_SELECTED : UI_STRING_NOT_SELECTED}</strong>
+					<strong>{selected ? commonCopy.selected : tradingCopy.notSelected}</strong>
 				</span>
 				<span>
 					<strong>{getTargetOutcomeBadgeLabel(target)}</strong>
@@ -71,7 +52,7 @@ function getScalarSelectedTargetOutcomes(childUniverseByOutcomeIndex: Map<string
 	return selectedOutcomeIndexes.map(outcomeIndex => {
 		const childUniverse = childUniverseByOutcomeIndex.get(outcomeIndex.toString())
 		const descriptor = getScalarOutcomeIndexDescriptor(scalarQuestion, outcomeIndex)
-		const label = childUniverse?.outcomeLabel ?? (descriptor.kind === 'malformed' ? UI_TEMPLATE_MALFORMED_OUTCOME_LABEL(outcomeIndex.toString()) : formatScalarOutcomeIndexLabel(scalarQuestion, outcomeIndex))
+		const label = childUniverse?.outcomeLabel ?? (descriptor.kind === 'malformed' ? tradingCopy.formatMalformedOutcomeLabel(outcomeIndex.toString()) : formatScalarOutcomeIndexLabel(scalarQuestion, outcomeIndex))
 		return {
 			exists: childUniverse?.exists === true,
 			label,
@@ -102,11 +83,11 @@ export function ShareMigrationTargetsSection({ disabled, forkUniverse, onClearOu
 		setScalarOutcomeTick(nextTick)
 	}, [scalarOutcomeTick, scalarQuestion, selectedScalarTick])
 
-	if (forkUniverse === undefined) return renderTargetSection(UI_STRING_TARGET_CHILD_UNIVERSES, <p className='detail'>{UI_STRING_LOADING_FORK_TARGET_UNIVERSES}</p>)
+	if (forkUniverse === undefined) return renderTargetSection(tradingCopy.targetChildUniverses, <p className='detail'>{tradingCopy.loadingForkTargetUniverses}</p>)
 
-	if (!forkUniverse.hasForked) return renderTargetSection(UI_STRING_TARGET_CHILD_UNIVERSES, <p className='detail'>{UI_STRING_CHILD_UNIVERSE_TARGETS_UNLOCK_AFTER_THIS_UNIVERSE_FORKS}</p>)
+	if (!forkUniverse.hasForked) return renderTargetSection(tradingCopy.targetChildUniverses, <p className='detail'>{tradingCopy.childTargetsLockedReason}</p>)
 
-	if (forkUniverse.forkQuestionDetails === undefined) return renderTargetSection(UI_STRING_TARGET_CHILD_UNIVERSES, <p className='detail'>{UI_STRING_LOADING_FORK_QUESTION_DETAILS}</p>)
+	if (forkUniverse.forkQuestionDetails === undefined) return renderTargetSection(tradingCopy.targetChildUniverses, <p className='detail'>{tradingCopy.loadingForkQuestionDetails}</p>)
 
 	if (forkUniverse.forkQuestionDetails.marketType !== 'scalar') {
 		const childUniverses = forkUniverse.childUniverses.map(child => ({
@@ -117,36 +98,36 @@ export function ShareMigrationTargetsSection({ disabled, forkUniverse, onClearOu
 		const hasSelectableTargets = childUniverses.length > 0
 
 		return renderTargetSection(
-			UI_STRING_TARGET_CHILD_UNIVERSES,
-			<OutcomeSelectionList emptyMessage={UI_STRING_NO_TARGET_CHILD_UNIVERSES_AVAILABLE} items={childUniverses.map(target => renderTargetOutcomeRow(target, selectedOutcomeIndexSet.has(target.outcomeIndex.toString()), disabled, onToggleOutcomeIndex))} />,
+			tradingCopy.targetChildUniverses,
+			<OutcomeSelectionList emptyMessage={tradingCopy.targetChildUniversesEmpty} items={childUniverses.map(target => renderTargetOutcomeRow(target, selectedOutcomeIndexSet.has(target.outcomeIndex.toString()), disabled, onToggleOutcomeIndex))} />,
 			<div className='actions'>
 				<button className='quiet' type='button' onClick={onSelectAllOutcomeIndexes} disabled={disabled || !hasSelectableTargets}>
-					{UI_STRING_SELECT_ALL}
+					{tradingCopy.selectAll}
 				</button>
 				<button className='quiet' type='button' onClick={onClearOutcomeIndexes} disabled={disabled || selectedOutcomeIndexes.length === 0}>
-					{UI_STRING_CLEAR}
+					{tradingCopy.clear}
 				</button>
 			</div>,
 		)
 	}
 
-	if (scalarQuestion === undefined) return renderTargetSection(UI_STRING_TARGET_CHILD_UNIVERSES, <p className='detail'>{UI_STRING_LOADING_SCALAR_FORK_DETAILS}</p>)
+	if (scalarQuestion === undefined) return renderTargetSection(tradingCopy.targetChildUniverses, <p className='detail'>{tradingCopy.loadingScalarForkDetails}</p>)
 
 	const clampedSelectedScalarTick = clampScalarTickIndex(selectedScalarTick, scalarQuestion.numTicks)
 	const clampedScalarOutcomeTick = clampedSelectedScalarTick.toString()
 	const candidateOutcomeIndex = scalarOutcomeInvalid ? 0n : getScalarOutcomeIndex(scalarQuestion, clampedSelectedScalarTick)
-	const candidateOutcomeLabel = scalarOutcomeInvalid ? UI_STRING_INVALID : formatScalarOutcomeLabel(scalarQuestion, clampedSelectedScalarTick)
+	const candidateOutcomeLabel = scalarOutcomeInvalid ? commonCopy.invalid : formatScalarOutcomeLabel(scalarQuestion, clampedSelectedScalarTick)
 	const candidateSelected = selectedOutcomeIndexSet.has(candidateOutcomeIndex.toString())
 	const selectedTargetOutcomes = getScalarSelectedTargetOutcomes(childUniverseByOutcomeIndex, scalarQuestion, selectedOutcomeIndexes)
 
 	return renderTargetSection(
-		UI_STRING_TARGET_CHILD_UNIVERSES,
+		tradingCopy.targetChildUniverses,
 		<>
-			<OutcomeSelectionList emptyMessage={UI_STRING_SELECT_AT_LEAST_ONE_SCALAR_TARGET_UNIVERSE} items={selectedTargetOutcomes.map(target => renderTargetOutcomeRow(target, true, disabled, onToggleOutcomeIndex))} />
+			<OutcomeSelectionList emptyMessage={tradingCopy.scalarTargetSelectionRequired} items={selectedTargetOutcomes.map(target => renderTargetOutcomeRow(target, true, disabled, onToggleOutcomeIndex))} />
 			<ScalarOutcomePicker
 				action={
 					<button className='secondary' type='button' onClick={() => onToggleOutcomeIndex(candidateOutcomeIndex)} disabled={disabled}>
-						{candidateSelected ? UI_STRING_REMOVE_TARGET : UI_STRING_ADD_TARGET}
+						{candidateSelected ? tradingCopy.removeTarget : tradingCopy.addTarget}
 					</button>
 				}
 				details={{
@@ -156,16 +137,16 @@ export function ShareMigrationTargetsSection({ disabled, forkUniverse, onClearOu
 				}}
 				disabled={disabled}
 				isInvalid={scalarOutcomeInvalid}
-				label={UI_STRING_SELECT_SCALAR_TARGET}
+				label={tradingCopy.selectScalarTarget}
 				onInvalidChange={setScalarOutcomeInvalid}
 				onSelectedTickChange={setScalarOutcomeTick}
 				selectedOutcomeLabel={candidateOutcomeLabel}
 				selectedTick={clampedScalarOutcomeTick}
-				selectedTickLabel={scalarOutcomeInvalid ? UI_STRING_INVALID : UI_TEMPLATE_SELECTED_TICK_LABEL(clampedScalarOutcomeTick, scalarQuestion.numTicks.toString())}
+				selectedTickLabel={scalarOutcomeInvalid ? commonCopy.invalid : commonCopy.formatSelectedTickLabel(clampedScalarOutcomeTick, scalarQuestion.numTicks.toString())}
 			/>
 		</>,
 		<button className='quiet' type='button' onClick={onClearOutcomeIndexes} disabled={disabled || selectedOutcomeIndexes.length === 0}>
-			{UI_STRING_CLEAR}
+			{tradingCopy.clear}
 		</button>,
 	)
 }

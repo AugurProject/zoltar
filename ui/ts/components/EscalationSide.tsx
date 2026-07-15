@@ -1,8 +1,9 @@
+import * as commonCopy from '../copy/common.js'
+import * as forkAuctionCopy from '../copy/forkAuction.js'
 import type { JSX } from 'preact'
 import { CurrencyValue } from './CurrencyValue.js'
 import { Badge } from './Badge.js'
 import type { EscalationDeposit } from '../types/contracts.js'
-import { UI_STRING_LEADING, UI_STRING_REP, UI_STRING_SELECTED, UI_STRING_TOTAL_STAKE, UI_STRING_YOUR_STAKE } from '../lib/uiStrings.js'
 
 type EscalationSideDisplay = {
 	balance: bigint | undefined
@@ -82,8 +83,8 @@ export function EscalationSide({ bindingCapital, chartScaleMax, disabled = false
 						<span className='panel-label'>{side.label}</span>
 						{isLeading || isSelected ? (
 							<div className='escalation-side-badges'>
-								{isSelected ? <Badge className='escalation-side-selected-badge'>{UI_STRING_SELECTED}</Badge> : undefined}
-								{isLeading ? <Badge tone='ok'>{UI_STRING_LEADING}</Badge> : undefined}
+								{isSelected ? <Badge className='escalation-side-selected-badge'>{commonCopy.selected}</Badge> : undefined}
+								{isLeading ? <Badge tone='ok'>{forkAuctionCopy.leading}</Badge> : undefined}
 							</div>
 						) : undefined}
 					</div>
@@ -97,12 +98,12 @@ export function EscalationSide({ bindingCapital, chartScaleMax, disabled = false
 				</div>
 				<div className='escalation-side-values'>
 					<div className='escalation-side-value'>
-						<span className='metric-label'>{UI_STRING_TOTAL_STAKE}</span>
-						<CurrencyValue copyable={false} value={side.balance} suffix={UI_STRING_REP} />
+						<span className='metric-label'>{forkAuctionCopy.totalStake}</span>
+						<CurrencyValue copyable={false} value={side.balance} suffix={commonCopy.rep} />
 					</div>
 					<div className='escalation-side-value'>
-						<span className='metric-label'>{UI_STRING_YOUR_STAKE}</span>
-						<CurrencyValue copyable={false} value={side.userStake} suffix={UI_STRING_REP} />
+						<span className='metric-label'>{forkAuctionCopy.yourStake}</span>
+						<CurrencyValue copyable={false} value={side.userStake} suffix={commonCopy.rep} />
 					</div>
 				</div>
 			</div>
