@@ -10,11 +10,13 @@ import { OpenOraclePriceCoordinator } from './OpenOraclePriceCoordinator.sol';
 import {
 	ISecurityPool,
 	SecurityVault,
+	PoolAccountingSnapshot,
+	AccountingReason,
 	SystemState,
 	QuestionOutcome,
 	ISecurityPoolFactory
 } from './interfaces/ISecurityPool.sol';
-import { OpenOracle } from './openOracle/OpenOracle.sol';
+import { LoggedOpenOracle } from './openOracle/LoggedOpenOracle.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { EscalationGameFactory } from './factories/EscalationGameFactory.sol';
 import { EscalationGame } from './EscalationGame.sol';
@@ -23,6 +25,12 @@ import { ZoltarQuestionData } from '../ZoltarQuestionData.sol';
 import { SecurityPoolForker } from './SecurityPoolForker.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
+import { SecurityPoolEventEmitter } from './SecurityPoolEventEmitter.sol';
+
+interface ISecurityPoolDeploymentWorkerConfiguration {
+	function factory() external view returns (ISecurityPoolFactory);
+	function eventEmitter() external view returns (SecurityPoolEventEmitter);
+}
 
 // Security pool for one question, one universe, one denomination (ETH)
 contract SecurityPool is ISecurityPool {
@@ -37,13 +45,14 @@ contract SecurityPool is ISecurityPool {
 	IShareToken public immutable shareToken;
 	ReputationToken public immutable repToken;
 	OpenOraclePriceCoordinator public immutable priceOracleManagerAndOperatorQueuer;
-	OpenOracle public immutable openOracle;
+	LoggedOpenOracle public immutable openOracle;
 	EscalationGameFactory public immutable escalationGameFactory;
 	EscalationGame public escalationGame;
 	ZoltarQuestionData public immutable questionData;
 	address public immutable securityPoolForker;
 	address public immutable truthAuction;
 	ISecurityPoolFactory public immutable securityPoolFactory;
+	SecurityPoolEventEmitter private immutable eventEmitter;
 
 	uint256 public totalSecurityBondAllowance;
 	uint256 public completeSetCollateralAmount; // amount of eth that is backing complete sets, `address(this).balance - completeSetCollateralAmount` are the fees belonging to REP pool holders
@@ -78,60 +87,29 @@ contract SecurityPool is ISecurityPool {
 
 	SystemState public systemState;
 
-	event SecurityPoolStartingParamsSet(
-		uint256 lastUpdatedFeeAccumulator,
-		uint256 currentRetentionRate,
-		uint256 completeSetCollateralAmount,
-		uint256 initialRepEthPrice
+	event PerformWithdrawRep(
+		address indexed vault,
+		uint256 amount,
+		uint256 poolOwnership,
+		uint256 poolOwnershipDenominator
 	);
-	event SecurityBondAllowanceChange(address vault, uint256 from, uint256 to, uint256 totalSecurityBondAllowance);
-	event PerformWithdrawRep(address vault, uint256 amount, uint256 poolOwnership, uint256 poolOwnershipDenominator);
-	event PoolRetentionRateChanged(uint256 retentionRate);
-	event DepositRep(address vault, uint256 repAmount, uint256 poolOwnership, uint256 poolOwnershipDenominator);
-	event RedeemShares(
-		address redeemer,
-		uint256 sharesAmount,
-		uint256 ethValue,
-		uint256 shareTokenSupply,
-		uint256 completeSetCollateralAmount
-	);
-	event UpdateVaultFees(address vault, uint256 feeIndex, uint256 unpaidEthFees);
-	event RedeemFees(address vault, uint256 fees, uint256 totalFeesOwedToVaults);
-	event UpdateCollateralAmount(
-		uint256 totalFeesOwedToVaults,
-		uint256 completeSetCollateralAmount,
-		uint256 feeIndex,
-		uint256 lastUpdatedFeeAccumulator
-	);
-	event CreateCompleteSet(uint256 shareTokenSupply, uint256 completeSetsToMint, uint256 completeSetCollateralAmount);
-	event RedeemCompleteSet(
-		address redeemer,
-		uint256 completeSetAmount,
-		uint256 ethValue,
-		uint256 shareTokenSupply,
-		uint256 completeSetCollateralAmount
-	);
-	event PerformLiquidation(
-		address callerVault,
-		address targetVaultAddress,
-		uint256 debtAmount,
-		uint256 debtToMove,
-		uint256 repToMove,
-		uint256 callerPoolOwnership,
-		uint256 callerSecurityBondAllowance,
-		uint256 targetPoolOwnership,
-		uint256 targetSecurityBondAllowance
+	event DepositRep(address indexed vault, uint256 repAmount, uint256 poolOwnership, uint256 poolOwnershipDenominator);
+	event VaultLiquidated(
+		address indexed callerVault,
+		address indexed targetVault,
+		uint256 securityBondAllowanceMoved,
+		uint256 repAmountMoved
 	);
 	event RedeemRep(
-		address caller,
-		address vault,
+		address indexed caller,
+		address indexed vault,
 		uint256 repAmount,
 		uint256 poolOwnership,
 		uint256 poolOwnershipDenominator
 	);
 	event DepositToEscalationGame(
-		address vault,
-		BinaryOutcomes.BinaryOutcome outcome,
+		address indexed vault,
+		BinaryOutcomes.BinaryOutcome indexed outcome,
 		uint256 depositedAmount,
 		uint256 poolOwnershipEscrowed,
 		uint256 poolOwnership,
@@ -142,19 +120,8 @@ contract SecurityPool is ISecurityPool {
 	event EscalationGameSet(EscalationGame escalationGame);
 	event AwaitingForkContinuationSet(bool awaitingForkContinuation);
 	event SystemStateSet(SystemState systemState);
-	event VaultConfigured(
-		address vault,
-		uint256 poolOwnership,
-		uint256 securityBondAllowance,
-		uint256 unpaidEthFees,
-		uint256 feeIndex
-	);
 	event OwnershipDenominatorSet(uint256 poolOwnershipDenominator);
 	event ShareTokenSupplySet(uint256 shareTokenSupply);
-	event PoolFinancialsSet(uint256 completeSetCollateralAmount, uint256 totalSecurityBondAllowance);
-	event PoolRepTransferred(address receiver, uint256 amount);
-	event PoolEthTransferred(address receiver, uint256 amount);
-	event ChildPoolAuthorized(ISecurityPool pool);
 
 	modifier isOperational() {
 		// Once a universe forks, the parent pool freezes operational flows permanently.
@@ -179,12 +146,11 @@ contract SecurityPool is ISecurityPool {
 
 	constructor(
 		address _securityPoolForker,
-		ISecurityPoolFactory _securityPoolFactory,
 		ZoltarQuestionData _questionData,
 		EscalationGameFactory _escalationGameFactory,
 		OpenOraclePriceCoordinator _priceOracleManagerAndOperatorQueuer,
 		IShareToken _shareToken,
-		OpenOracle _openOracle,
+		LoggedOpenOracle _openOracle,
 		ISecurityPool _parent,
 		Zoltar _zoltar,
 		uint248 _universeId,
@@ -194,7 +160,9 @@ contract SecurityPool is ISecurityPool {
 		address _truthAuction
 	) {
 		universeId = _universeId;
-		securityPoolFactory = _securityPoolFactory;
+		ISecurityPoolDeploymentWorkerConfiguration worker = ISecurityPoolDeploymentWorkerConfiguration(msg.sender);
+		securityPoolFactory = worker.factory();
+		eventEmitter = worker.eventEmitter();
 		questionId = _questionId;
 		securityMultiplier = _securityMultiplier;
 		initialEscalationGameDeposit = _initialEscalationGameDeposit;
@@ -280,12 +248,7 @@ contract SecurityPool is ISecurityPool {
 		uint256 initialOraclePrice =
 			address(parent) == address(0x0) ? 0 : parent.priceOracleManagerAndOperatorQueuer().lastPrice();
 		priceOracleManagerAndOperatorQueuer.setRepEthPrice(initialOraclePrice);
-		emit SecurityPoolStartingParamsSet(
-			lastUpdatedFeeAccumulator,
-			currentRetentionRate,
-			completeSetCollateralAmount,
-			initialOraclePrice
-		);
+		_emitPoolAccountingCheckpoint(AccountingReason.PoolInitialization, address(0x0));
 	}
 
 	function updateCollateralAmount() public {
@@ -299,6 +262,7 @@ contract SecurityPool is ISecurityPool {
 		if (feeEligibleSecurityBondAllowance == 0) {
 			_clearFeeIndexRemainder();
 			lastUpdatedFeeAccumulator = feeEndDate < block.timestamp ? feeEndDate : block.timestamp;
+			_emitPoolAccountingCheckpoint(AccountingReason.Accrual, address(0x0));
 			return;
 		}
 
@@ -319,50 +283,90 @@ contract SecurityPool is ISecurityPool {
 		completeSetCollateralAmount -= creditedFees;
 		lastUpdatedFeeAccumulator = feeEndDate < block.timestamp ? feeEndDate : block.timestamp;
 
-		emit UpdateCollateralAmount(
-			totalFeesOwedToVaults,
-			completeSetCollateralAmount,
-			feeIndex,
-			lastUpdatedFeeAccumulator
-		);
+		_emitPoolAccountingCheckpoint(AccountingReason.Accrual, address(0x0));
 	}
 
 	function updateRetentionRate() public {
 		if (totalSecurityBondAllowance == 0) return;
 		if (systemState != SystemState.Operational) return; // if system state is not operational do not change fees
-		currentRetentionRate = SecurityPoolUtils.calculateRetentionRate(
+		uint256 nextRetentionRate = SecurityPoolUtils.calculateRetentionRate(
 			completeSetCollateralAmount,
 			totalSecurityBondAllowance
 		);
-		emit PoolRetentionRateChanged(currentRetentionRate);
+		if (nextRetentionRate == currentRetentionRate) return;
+		currentRetentionRate = nextRetentionRate;
+		_emitPoolAccountingCheckpoint(AccountingReason.RetentionRateChange, address(0x0));
 	}
 
 	function totalAccruedFees() external view returns (uint256) {
 		return totalFeesOwedToVaults + unallocatedFeeReserve;
 	}
 
+	function getPoolAccountingSnapshot() external view returns (PoolAccountingSnapshot memory) {
+		assembly ('memory-safe') {
+			let snapshot := mload(0x40)
+			mstore(snapshot, sload(2))
+			mstore(add(snapshot, 0x20), sload(1))
+			mstore(add(snapshot, 0x40), sload(12))
+			mstore(add(snapshot, 0x60), sload(6))
+			mstore(add(snapshot, 0x80), sload(11))
+			mstore(add(snapshot, 0xa0), sload(8))
+			mstore(add(snapshot, 0xc0), sload(9))
+			mstore(add(snapshot, 0xe0), sload(10))
+			mstore(add(snapshot, 0x100), sload(13))
+			mstore(add(snapshot, 0x120), sload(7))
+			mstore(add(snapshot, 0x140), sload(14))
+			return(snapshot, 0x160)
+		}
+	}
+
+	function _emitPoolAccountingCheckpoint(AccountingReason reason, address vault) private {
+		_emitEvent(abi.encodeCall(SecurityPoolEventEmitter.emitPoolAccountingCheckpoint, (reason, vault)));
+	}
+
+	function _emitVaultAccountingCheckpoint(address vault) private {
+		_emitEvent(abi.encodeCall(SecurityPoolEventEmitter.emitVaultAccountingCheckpoint, (vault)));
+	}
+
+	function _emitEvent(bytes memory eventCall) private {
+		(bool success, bytes memory returnData) = address(eventEmitter).delegatecall(eventCall);
+		if (!success) {
+			assembly ('memory-safe') {
+				revert(add(returnData, 0x20), mload(returnData))
+			}
+		}
+	}
+
 	function updateVaultFees(address vault) public {
 		updateCollateralAmount();
 		uint256 previousVaultFeeIndex = securityVaults[vault].feeIndex;
+		uint256 previousVaultFeeRemainder = vaultFeeRemainders[vault];
 		(uint256 fees, uint256 nextRemainder) = SecurityPoolUtils.calculateVaultFee(
 			securityVaults[vault].securityBondAllowance,
 			feeIndex - securityVaults[vault].feeIndex,
-			vaultFeeRemainders[vault]
+			previousVaultFeeRemainder
 		);
+		bool vaultAccountingChanged =
+			previousVaultFeeIndex != feeIndex || previousVaultFeeRemainder != nextRemainder || fees != 0;
+		bool poolAccountingChanged = fees != 0;
 		vaultFeeRemainders[vault] = nextRemainder;
 		securityVaults[vault].feeIndex = feeIndex;
 		if (previousVaultFeeIndex != feeIndex) {
-			uncheckpointedFeeEligibleAllowance -= securityVaults[vault].securityBondAllowance;
+			uint256 securityBondAllowance = securityVaults[vault].securityBondAllowance;
+			uncheckpointedFeeEligibleAllowance -= securityBondAllowance;
+			if (securityBondAllowance != 0) poolAccountingChanged = true;
 		}
 		unallocatedFeeReserve -= fees;
 		totalFeesOwedToVaults += fees;
 		securityVaults[vault].unpaidEthFees += fees;
 		if (uncheckpointedFeeEligibleAllowance == 0 && systemState == SystemState.PoolForked) {
+			if (unallocatedFeeReserve != 0) poolAccountingChanged = true;
 			completeSetCollateralAmount += unallocatedFeeReserve;
 			unallocatedFeeReserve = 0;
 		}
 		_syncActiveVault(vault);
-		emit UpdateVaultFees(vault, securityVaults[vault].feeIndex, securityVaults[vault].unpaidEthFees);
+		if (vaultAccountingChanged) _emitVaultAccountingCheckpoint(vault);
+		if (poolAccountingChanged) _emitPoolAccountingCheckpoint(AccountingReason.VaultCheckpoint, vault);
 	}
 
 	function redeemFees(address vault) external {
@@ -372,8 +376,9 @@ contract SecurityPool is ISecurityPool {
 		totalFeesOwedToVaults -= fees;
 		_reconcileCollateralBalanceAfterFeeRedemption(fees);
 		_syncActiveVault(vault);
+		_emitVaultAccountingCheckpoint(vault);
+		_emitPoolAccountingCheckpoint(AccountingReason.FeeRedemption, vault);
 		_sendEth(payable(vault), fees);
-		emit RedeemFees(vault, fees, totalFeesOwedToVaults);
 	}
 
 	function _reconcileCollateralBalanceAfterFeeRedemption(uint256 pendingFeePayout) internal {
@@ -426,6 +431,7 @@ contract SecurityPool is ISecurityPool {
 			securityVaults[vault].poolOwnership,
 			poolOwnershipDenominator
 		);
+		_emitVaultAccountingCheckpoint(vault);
 	}
 
 	function repToPoolOwnership(uint256 repAmount) public view returns (uint256) {
@@ -546,6 +552,7 @@ contract SecurityPool is ISecurityPool {
 		);
 		_syncActiveVault(msg.sender);
 		emit DepositRep(msg.sender, repAmount, securityVaults[msg.sender].poolOwnership, poolOwnershipDenominator);
+		_emitVaultAccountingCheckpoint(msg.sender);
 	}
 
 	////////////////////////////////////////
@@ -637,17 +644,10 @@ contract SecurityPool is ISecurityPool {
 		_syncActiveVault(targetVaultAddress);
 		_syncActiveVault(callerVault);
 
-		emit PerformLiquidation(
-			callerVault,
-			targetVaultAddress,
-			debtAmount,
-			debtToMove,
-			repToMove,
-			securityVaults[callerVault].poolOwnership,
-			securityVaults[callerVault].securityBondAllowance,
-			securityVaults[targetVaultAddress].poolOwnership,
-			securityVaults[targetVaultAddress].securityBondAllowance
-		);
+		emit VaultLiquidated(callerVault, targetVaultAddress, debtToMove, repToMove);
+		_emitVaultAccountingCheckpoint(targetVaultAddress);
+		_emitVaultAccountingCheckpoint(callerVault);
+		_emitPoolAccountingCheckpoint(AccountingReason.AllowanceChange, callerVault);
 	}
 
 	////////////////////////////////////////
@@ -679,8 +679,9 @@ contract SecurityPool is ISecurityPool {
 		_requireCapacityNotExceeded(totalSecurityBondAllowance, completeSetCollateralAmount);
 		_requireMinimumSecurityBondAllowance(amount, amount == 0, 'Bond min');
 		_syncActiveVault(callerVault);
-		emit SecurityBondAllowanceChange(callerVault, oldAllowance, amount, totalSecurityBondAllowance);
 		updateRetentionRate();
+		_emitVaultAccountingCheckpoint(callerVault);
+		_emitPoolAccountingCheckpoint(AccountingReason.AllowanceChange, callerVault);
 	}
 
 	////////////////////////////////////////
@@ -697,8 +698,15 @@ contract SecurityPool is ISecurityPool {
 		_requireCapacityNotExceeded(totalSecurityBondAllowance, nextCompleteSetCollateralAmount);
 		shareTokenSupply += completeSetsToMint;
 		completeSetCollateralAmount = nextCompleteSetCollateralAmount;
+		emit CompleteSetCreated(
+			msg.sender,
+			msg.value,
+			completeSetsToMint,
+			shareTokenSupply,
+			completeSetCollateralAmount
+		);
+		_emitPoolAccountingCheckpoint(AccountingReason.CollateralReconciliation, address(0x0));
 		shareToken.mintCompleteSets(universeId, msg.sender, completeSetsToMint);
-		emit CreateCompleteSet(shareTokenSupply, completeSetsToMint, completeSetCollateralAmount);
 		updateRetentionRate();
 	}
 
@@ -712,8 +720,15 @@ contract SecurityPool is ISecurityPool {
 		shareTokenSupply -= completeSetAmount;
 		completeSetCollateralAmount -= ethValue;
 		updateRetentionRate();
+		emit CompleteSetRedeemed(
+			msg.sender,
+			completeSetAmount,
+			ethValue,
+			shareTokenSupply,
+			completeSetCollateralAmount
+		);
+		_emitPoolAccountingCheckpoint(AccountingReason.CollateralReconciliation, address(0x0));
 		_sendEth(payable(msg.sender), ethValue);
-		emit RedeemCompleteSet(msg.sender, completeSetAmount, ethValue, shareTokenSupply, completeSetCollateralAmount);
 	}
 
 	function redeemShares() external {
@@ -730,8 +745,9 @@ contract SecurityPool is ISecurityPool {
 		uint256 ethValue = winningShareSupply == 0 ? 0 : (amount * completeSetCollateralAmount) / winningShareSupply;
 		shareTokenSupply = remainingWinningShareSupply;
 		completeSetCollateralAmount -= ethValue;
+		emit SharesRedeemed(msg.sender, amount, ethValue, shareTokenSupply, completeSetCollateralAmount);
+		_emitPoolAccountingCheckpoint(AccountingReason.CollateralReconciliation, address(0x0));
 		_sendEth(payable(msg.sender), ethValue);
-		emit RedeemShares(msg.sender, amount, ethValue, shareTokenSupply, completeSetCollateralAmount);
 	}
 
 	function redeemRep(address vault) external {
@@ -752,6 +768,7 @@ contract SecurityPool is ISecurityPool {
 		_syncActiveVault(vault);
 		IERC20(address(repToken)).safeTransfer(vault, repAmount);
 		emit RedeemRep(msg.sender, vault, repAmount, securityVaults[vault].poolOwnership, poolOwnershipDenominator);
+		_emitVaultAccountingCheckpoint(vault);
 	}
 
 	function withdrawForkedEscalationDeposits(QuestionOutcome outcome, CarriedDepositProof[] calldata proofs) external {
@@ -832,6 +849,7 @@ contract SecurityPool is ISecurityPool {
 			poolOwnershipDenominator,
 			escalationGame
 		);
+		_emitVaultAccountingCheckpoint(msg.sender);
 	}
 
 	function withdrawFromEscalationGame(
@@ -869,6 +887,7 @@ contract SecurityPool is ISecurityPool {
 		uint256 repTransferred = repToken.balanceOf(address(this));
 		IERC20(address(repToken)).safeTransfer(msg.sender, repTransferred);
 		emit PoolForkModeActivated(repTransferred, currentRetentionRate, systemState);
+		_emitPoolAccountingCheckpoint(AccountingReason.ForkActivation, address(0x0));
 	}
 
 	function initializeForkedEscalationGame(
@@ -886,6 +905,8 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function initializeForkCarrySnapshotWithResolutionBalances(
+		address sourceGame,
+		bytes32 snapshotId,
 		bytes32[64][3] memory inheritedCarryPeaks,
 		uint256[3] memory inheritedCarryLeafCounts,
 		uint256[3] memory inheritedCarryTotals,
@@ -894,6 +915,8 @@ contract SecurityPool is ISecurityPool {
 	) external onlyForker {
 		require(address(escalationGame) != address(0x0), 'Game missing');
 		EscalationGame(payable(address(escalationGame))).initializeForkCarrySnapshotWithResolutionBalances(
+			sourceGame,
+			snapshotId,
 			inheritedCarryPeaks,
 			inheritedCarryLeafCounts,
 			inheritedCarryTotals,
@@ -932,19 +955,16 @@ contract SecurityPool is ISecurityPool {
 		securityVaults[vault].securityBondAllowance = securityBondAllowance;
 		securityVaults[vault].feeIndex = vaultFeeIndex;
 		_syncActiveVault(vault);
-		emit VaultConfigured(
-			vault,
-			securityVaults[vault].poolOwnership,
-			securityVaults[vault].securityBondAllowance,
-			securityVaults[vault].unpaidEthFees,
-			securityVaults[vault].feeIndex
-		);
+		_emitVaultAccountingCheckpoint(vault);
+		_emitPoolAccountingCheckpoint(AccountingReason.AllowanceChange, vault);
 	}
 
-	function addFeeEligibleSecurityBondAllowance(uint256 amount) external onlyForker {
+	function addFeeEligibleSecurityBondAllowance(address vault, uint256 amount) external onlyForker {
 		feeEligibleSecurityBondAllowance += amount;
 		require(feeEligibleSecurityBondAllowance <= totalSecurityBondAllowance, 'Fee allowance high');
 		_clearFeeIndexRemainder();
+		_emitVaultAccountingCheckpoint(vault);
+		_emitPoolAccountingCheckpoint(AccountingReason.AuctionClaim, vault);
 	}
 
 	function _trackVault(address vault) private {
@@ -1024,18 +1044,7 @@ contract SecurityPool is ISecurityPool {
 		feeEligibleSecurityBondAllowance = newFeeEligibleBondAllowance;
 		lastUpdatedFeeAccumulator = block.timestamp;
 		_clearFeeIndexRemainder();
-		emit PoolFinancialsSet(completeSetCollateralAmount, totalSecurityBondAllowance);
-	}
-
-	function drainAllRep() external onlyForker {
-		uint256 amount = repToken.balanceOf(address(this));
-		IERC20(address(repToken)).safeTransfer(msg.sender, amount);
-		emit PoolRepTransferred(msg.sender, amount);
-	}
-
-	function transferRep(address receiver, uint256 amount) external onlyForker {
-		IERC20(address(repToken)).safeTransfer(receiver, amount);
-		emit PoolRepTransferred(receiver, amount);
+		_emitPoolAccountingCheckpoint(AccountingReason.ForkFinalization, address(0x0));
 	}
 
 	function transferEth(address payable receiver, uint256 amount) external onlyForker {
@@ -1047,8 +1056,8 @@ contract SecurityPool is ISecurityPool {
 			'Collateral low'
 		);
 		completeSetCollateralAmount -= amount;
+		_emitPoolAccountingCheckpoint(AccountingReason.CollateralReconciliation, address(0x0));
 		_sendEth(receiver, amount);
-		emit PoolEthTransferred(receiver, amount);
 	}
 
 	function _sendEth(address payable receiver, uint256 amount) private {
@@ -1058,7 +1067,6 @@ contract SecurityPool is ISecurityPool {
 
 	function authorizeChildPool(ISecurityPool pool) external onlyForker {
 		shareToken.authorize(pool);
-		emit ChildPoolAuthorized(pool);
 	}
 
 	receive() external payable {

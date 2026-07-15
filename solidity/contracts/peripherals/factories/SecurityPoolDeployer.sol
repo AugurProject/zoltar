@@ -4,19 +4,22 @@ pragma solidity 0.8.35;
 import { ZoltarQuestionData } from '../../ZoltarQuestionData.sol';
 import { SecurityPool } from '../SecurityPool.sol';
 import { ISecurityPool, ISecurityPoolFactory } from '../interfaces/ISecurityPool.sol';
-import { OpenOracle } from '../openOracle/OpenOracle.sol';
+import { LoggedOpenOracle } from '../openOracle/LoggedOpenOracle.sol';
 import { Zoltar } from '../../Zoltar.sol';
 import { IShareToken } from '../interfaces/IShareToken.sol';
 import { OpenOraclePriceCoordinator } from '../OpenOraclePriceCoordinator.sol';
 import { EscalationGameFactory } from './EscalationGameFactory.sol';
+import { SecurityPoolEventEmitter } from '../SecurityPoolEventEmitter.sol';
 
 contract SecurityPoolDeployer {
 	ISecurityPoolFactory immutable factory;
 	SecurityPoolDeploymentWorker immutable worker;
+	SecurityPoolEventEmitter immutable eventEmitter;
 
 	constructor() {
 		factory = ISecurityPoolFactory(msg.sender);
-		worker = new SecurityPoolDeploymentWorker();
+		eventEmitter = new SecurityPoolEventEmitter();
+		worker = new SecurityPoolDeploymentWorker(factory, eventEmitter);
 	}
 
 	function deploy(
@@ -25,7 +28,7 @@ contract SecurityPoolDeployer {
 		EscalationGameFactory escalationGameFactory,
 		OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer,
 		IShareToken shareToken,
-		OpenOracle openOracle,
+		LoggedOpenOracle openOracle,
 		ISecurityPool parent,
 		Zoltar zoltar,
 		uint248 universeId,
@@ -39,7 +42,6 @@ contract SecurityPoolDeployer {
 		return
 			worker.deploy(
 				securityPoolForker,
-				factory,
 				questionData,
 				escalationGameFactory,
 				priceOracleManagerAndOperatorQueuer,
@@ -58,21 +60,24 @@ contract SecurityPoolDeployer {
 
 contract SecurityPoolDeploymentWorker {
 	address immutable deployer;
+	ISecurityPoolFactory public immutable factory;
+	SecurityPoolEventEmitter public immutable eventEmitter;
 	bytes private securityPoolCreationCode;
 
-	constructor() {
+	constructor(ISecurityPoolFactory _factory, SecurityPoolEventEmitter _eventEmitter) {
 		deployer = msg.sender;
+		factory = _factory;
+		eventEmitter = _eventEmitter;
 		securityPoolCreationCode = type(SecurityPool).creationCode;
 	}
 
 	function deploy(
 		address securityPoolForker,
-		ISecurityPoolFactory securityPoolFactory,
 		ZoltarQuestionData questionData,
 		EscalationGameFactory escalationGameFactory,
 		OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer,
 		IShareToken shareToken,
-		OpenOracle openOracle,
+		LoggedOpenOracle openOracle,
 		ISecurityPool parent,
 		Zoltar zoltar,
 		uint248 universeId,
@@ -88,7 +93,6 @@ contract SecurityPoolDeploymentWorker {
 			securityPoolCreationCode,
 			abi.encode(
 				securityPoolForker,
-				securityPoolFactory,
 				questionData,
 				escalationGameFactory,
 				priceOracleManagerAndOperatorQueuer,

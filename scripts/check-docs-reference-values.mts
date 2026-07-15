@@ -9,6 +9,7 @@ const whitepaperPlaceholder = await readFile('docs/placeholder-whitepaper.html',
 const startHere = await readFile('docs/start-here.html', 'utf8')
 const operatorReference = await readFile('docs/operator-reference.md', 'utf8')
 const contractInteractionReference = await readFile('docs/contract-interaction-reference.md', 'utf8')
+const eventStream = await readFile('docs/event-stream.md', 'utf8')
 const escalationGameState = await readFile('solidity/contracts/peripherals/EscalationGameState.sol', 'utf8')
 const escalationGameTypes = await readFile('solidity/contracts/peripherals/EscalationGameTypes.sol', 'utf8')
 const escalationGameForker = await readFile('solidity/contracts/peripherals/EscalationGameForker.sol', 'utf8')
@@ -32,6 +33,7 @@ assertSimpleByteRow('Deployed bytecode', formatNumber(bytecodeSnapshot.deployedB
 assertBudgetHeadroomRow('Project deployed-bytecode budget headroom', formatNumber(expectedProjectBudget - bytecodeSnapshot.deployedBytes), formatNumber(expectedProjectBudget))
 assertBudgetHeadroomRow('EIP-170 headroom', formatNumber(expectedEip170Budget - bytecodeSnapshot.deployedBytes), formatNumber(expectedEip170Budget))
 assertContinuationIdentifierExplanation()
+assertEventStreamSemantics()
 assertZoltarForkDepths()
 assertCoordinatorRecoveryBranch()
 assertLiquidationFullCloseDocs()
@@ -41,7 +43,25 @@ assertContractInteractionDistinctions()
 function assertContinuationIdentifierExplanation(): void {
 	assert.ok(html.includes('uint256(keccak256(abi.encode(address(this), outcomeIndex, depositIndex)))'), 'docs/escalation-game-architecture.html must explain the fork-continuation stable parent deposit identifier formula')
 	assert.ok(html.includes('consumedParentDepositIndexes'), 'docs/escalation-game-architecture.html must connect the continuation identifier to consumedParentDepositIndexes')
-	assert.ok(html.includes('LocalDepositAppended') && html.includes('CarriedDepositClaimed') && html.includes('ClaimDeposit') && html.includes('exportUnresolvedDeposit'), 'docs/escalation-game-architecture.html must name the exact event and export surfaces that expose the continuation identifier')
+	assert.ok(html.includes('LocalDepositAppended') && html.includes('CarryDepositConsumed') && html.includes('ClaimDeposit') && html.includes('exportUnresolvedDeposit'), 'docs/escalation-game-architecture.html must name the exact event and export surfaces that expose the continuation identifier')
+	assert.ok(!html.includes('CarriedDepositClaimed'), 'docs/escalation-game-architecture.html must not reference the removed CarriedDepositClaimed event')
+}
+
+function assertEventStreamSemantics(): void {
+	assert.match(priceCoordinator, /PRICE_PRECISION = 1e18/)
+	assert.match(securityPoolUtils, /PRICE_PRECISION = 1e18/)
+	assert.match(securityPoolInterface, /Complete sets burned and net ETH paid/)
+	assert.match(securityPoolInterface, /Winning shares burned and net ETH paid/)
+	for (const documentedClaim of [
+		'Genesis REP has a separate balance-history anchor',
+		'Pool and vault `feeIndex` | `1e18` fixed-point',
+		'`currentRetentionRate` | `1e18` fixed-point per-second multiplier',
+		'Coordinator REP/ETH `price` | `(REP base units * 1e18) / ETH wei`',
+		'Redemption `ethAmount` fields are the net wei paid',
+		'`ethUsed + ethRefund = originalEthAmount`',
+	]) {
+		assert.ok(eventStream.includes(documentedClaim), `Missing event-stream unit or value-semantics claim: ${documentedClaim}`)
+	}
 }
 
 function assertZoltarForkDepths(): void {
@@ -174,7 +194,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /Mint and burn entrypoints \| An authorized `SecurityPool`/)
 	assert.match(contractInteractionReference, /Fixes the clearing mode, clearing tick, ETH totals, and aggregate REP allocation/)
 	assert.match(contractInteractionReference, /Withdrawal-time allocation assigns division dust from deterministic cumulative ETH positions, making payout independent of claim order/)
-	assert.match(contractInteractionReference, /addFeeEligibleSecurityBondAllowance\(amount\)[\s\S]*Finalized truth-auction settlement[\s\S]*newly auction-claimed security-bond allowance to the live fee denominator/)
+	assert.match(contractInteractionReference, /addFeeEligibleSecurityBondAllowance\(vault, amount\)[\s\S]*Finalized truth-auction settlement[\s\S]*newly auction-claimed security-bond allowance to the live fee denominator/)
 	assert.match(contractInteractionReference, /`SystemStateSet`/)
 	assert.match(securityPoolForker, /Before finalization, only refundable bids can be settled/)
 	assert.match(securityPoolForker, /require\(claimTickIndices\.length == 0, 'Not final'\)/)
@@ -198,7 +218,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(securityPoolForker, /address\(escalationGame\) == address\(0x0\) \|\| _forkOccurredBeforeEscalationSettled\(escalationGame, forkTime\)/)
 	assert.match(securityPoolForker, /'Resolved'/)
 	assert.match(securityPoolForker, /securityPool\.setSystemState\(SystemState\.ForkTruthAuction\)/)
-	assert.match(securityPoolForker, /securityPool\.addFeeEligibleSecurityBondAllowance\(newSecurityBondAllowance\)/)
+	assert.match(securityPoolForker, /securityPool\.addFeeEligibleSecurityBondAllowance\(vault, newSecurityBondAllowance\)/)
 	assert.match(truthAuction, /function _allocateRepFromCumulativePosition\(/)
 	assert.match(truthAuction, /return cumulativeRepAfter - cumulativeRepBefore/)
 	assert.match(truthAuction, /require\(msg\.sender == owner, 'Only the auction owner can refund losing bids on behalf of bidders'\)/)

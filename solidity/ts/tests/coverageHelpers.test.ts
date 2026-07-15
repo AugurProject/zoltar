@@ -902,6 +902,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			encodeDeployData({
 				abi: peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
 				bytecode: applyLibraries(peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.evm.bytecode.object),
+				args: [zeroAddress, zeroAddress],
 			}),
 		)
 		await assert.rejects(
@@ -911,7 +912,7 @@ describe('Solidity bytecode coverage helpers', () => {
 					data: encodeFunctionData({
 						abi: peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
 						functionName: 'deploy',
-						args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n, 1n, zeroAddress],
+						args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n, 1n, zeroAddress],
 					}),
 					gas: 10_000_000n,
 				}),

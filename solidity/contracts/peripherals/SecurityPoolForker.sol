@@ -29,66 +29,37 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	address private immutable vaultMigrationDelegate;
 	address private immutable escalationGameForkerDelegate;
 
-	event InitiateSecurityPoolFork(ISecurityPool securityPool, uint256 auctionableRepAtFork, bool ownFork);
-	event MigrationProxyDeployed(ISecurityPool securityPool, SecurityPoolMigrationProxy migrationProxy);
-	event MigrateVault(
-		ISecurityPool parent,
-		ISecurityPool child,
-		address vault,
-		uint256 outcome,
-		uint256 poolOwnership,
-		uint256 securityBondAllowance,
-		uint256 childPoolOwnership,
-		uint256 childSecurityBondAllowance
-	);
-	event MigrateRepFromParent(
-		ISecurityPool parent,
-		ISecurityPool child,
-		address vault,
-		uint256 parentSecurityBondAllowance,
-		uint256 parentPoolOwnership,
-		uint256 migratedSecurityBondAllowance
-	);
 	event ChildPoolLinked(
-		ISecurityPool parent,
-		uint256 outcomeIndex,
-		ISecurityPool child,
+		ISecurityPool indexed parent,
+		uint256 indexed outcomeIndex,
+		ISecurityPool indexed child,
 		UniformPriceDualCapBatchAuction truthAuction
 	);
-	event ChildRepSplit(ISecurityPool parent, uint256 outcomeIndex, uint256 childPoolRepSplit, uint256 pendingChildRep);
-	event ChildRepSwept(ISecurityPool parent, uint256 outcomeIndex, ISecurityPool child, uint256 amount);
-	event OwnForkChildRepAllocated(
-		ISecurityPool parent,
-		uint256 outcomeIndex,
-		uint256 vaultChildRepUsed,
-		uint256 escrowChildRepUsed
-	);
-	event ForkCollateralTransferred(
-		ISecurityPool parent,
-		ISecurityPool child,
-		uint256 childRepAmount,
-		uint256 migratedRepCollateralized,
-		uint256 collateralTransferred
+	event ChildRepSplit(
+		ISecurityPool indexed parent,
+		uint256 indexed outcomeIndex,
+		uint256 childPoolRepSplit,
+		uint256 pendingChildRep
 	);
 	event ClaimForkedEscalationDepositsToWallet(
-		ISecurityPool parent,
-		address vault,
-		BinaryOutcomes.BinaryOutcome outcomeIndex,
+		ISecurityPool indexed parent,
+		address indexed vault,
+		BinaryOutcomes.BinaryOutcome indexed outcomeIndex,
 		uint256[] depositIndexes,
 		uint256 sourceRepClaimed,
 		uint256 walletRepPaid,
 		bool ownFork
 	);
 	event TruthAuctionStarted(
-		ISecurityPool securityPool,
+		ISecurityPool indexed securityPool,
 		uint256 completeSetCollateralAmount,
 		uint256 repMigrated,
 		uint256 auctionableRepAtFork
 	);
-	event TruthAuctionFinalized(ISecurityPool securityPool);
+	event TruthAuctionFinalized(ISecurityPool indexed securityPool);
 	event ClaimAuctionProceeds(
-		ISecurityPool securityPool,
-		address vault,
+		ISecurityPool indexed securityPool,
+		address indexed vault,
 		uint256 amount,
 		uint256 poolOwnershipAmount,
 		uint256 poolOwnershipDenominator,
@@ -96,7 +67,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		uint256 claimedAuctionedSecurityBondAllowance
 	);
 	event FinalizeAuction(
-		ISecurityPool securityPool,
+		ISecurityPool indexed securityPool,
 		uint256 repAvailable,
 		uint256 migratedRep,
 		uint256 repPurchased,
@@ -265,6 +236,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			bytes32[3] memory nullifierRoots
 		) = escalationGame.getForkCarrySnapshot();
 		uint256[3] memory resolutionBalances = escalationGame.getOutcomeBalances();
+		bytes32[3] memory carryRoots = escalationGame.getForkCarryRoots();
 		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
 			for (uint8 peakIndex = 0; peakIndex < 64; peakIndex++) {
 				snapshot.carryPeaks[outcomeIndex][peakIndex] = carryPeaks[outcomeIndex][peakIndex];
@@ -275,6 +247,16 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			snapshot.nullifierRoots[outcomeIndex] = nullifierRoots[outcomeIndex];
 		}
 		snapshot.initialized = true;
+		data.escalationSnapshotId = keccak256(
+			abi.encode(
+				address(escalationGame),
+				carryRoots,
+				nullifierRoots,
+				carryLeafCounts,
+				carryTotals,
+				resolutionBalances
+			)
+		);
 		data.unresolvedEscalationAtFork = true;
 		data.escalationStartBondAtFork = escalationGame.startBond();
 		data.escalationNonDecisionThresholdAtFork = escalationGame.nonDecisionThreshold();
@@ -332,7 +314,6 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			address(this)
 		);
 		migrationProxyByPool[securityPool] = migrationProxy;
-		emit MigrationProxyDeployed(securityPool, migrationProxy);
 	}
 
 	function _initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child) internal override {
@@ -381,7 +362,20 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		uint256 migrationBalance = zoltar.getMigrationRepBalance(address(migrationProxy), universe);
 		require(migrationBalance == previousMigrationBalance + repToLock, 'Migration balance mismatch');
 		data.auctionableRepAtFork = previousMigrationBalance + poolRepToLock;
-		emit InitiateSecurityPoolFork(securityPool, data.auctionableRepAtFork, data.ownFork);
+		_delegateMigrationCall(
+			vaultMigrationDelegate,
+			abi.encodeCall(
+				SecurityPoolForkerVaultMigrationDelegate.emitForkSnapshotEvents,
+				(
+					securityPool,
+					address(migrationProxy),
+					address(escalationGame),
+					poolRepToLock,
+					escalationRepToLock,
+					migrationBalance
+				)
+			)
+		);
 		// TODO: we could pay the caller basefee*2 out of Open interest. We have to reward caller
 	}
 
@@ -417,14 +411,13 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		);
 	}
 
-	function _delegateMigrationCall(address delegate, bytes memory callData) private returns (bytes memory returnData) {
+	function _delegateMigrationCall(address delegate, bytes memory callData) private {
 		(bool success, bytes memory data) = delegate.delegatecall(callData);
 		if (!success) {
-			assembly {
+			assembly ('memory-safe') {
 				revert(add(data, 0x20), mload(data))
 			}
 		}
-		return data;
 	}
 
 	function createChildUniverse(ISecurityPool securityPool, uint256 outcomeIndex) external {
@@ -748,7 +741,20 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		data.collateralAtFork = securityPool.completeSetCollateralAmount();
 		data.migratedRepCollateralized = 0;
 		data.collateralTransferred = 0;
-		emit InitiateSecurityPoolFork(securityPool, data.auctionableRepAtFork, data.ownFork);
+		_delegateMigrationCall(
+			vaultMigrationDelegate,
+			abi.encodeCall(
+				SecurityPoolForkerVaultMigrationDelegate.emitForkSnapshotEvents,
+				(
+					securityPool,
+					address(migrationProxy),
+					address(escalationGame),
+					poolRepToFork,
+					escalationRepToFork,
+					zoltar.getMigrationRepBalance(address(migrationProxy), securityPool.universeId())
+				)
+			)
+		);
 	}
 
 	// Settles finalized truth-auction bids through the forker-owned auction.
@@ -822,7 +828,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			currentSecurityBondAllowance + newSecurityBondAllowance,
 			currentFeeIndex
 		);
-		securityPool.addFeeEligibleSecurityBondAllowance(newSecurityBondAllowance);
+		securityPool.addFeeEligibleSecurityBondAllowance(vault, newSecurityBondAllowance);
 		emit ClaimAuctionProceeds(
 			securityPool,
 			vault,

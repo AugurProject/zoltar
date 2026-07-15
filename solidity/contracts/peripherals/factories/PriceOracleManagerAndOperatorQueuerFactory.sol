@@ -4,7 +4,7 @@ import { IWeth9 } from '../interfaces/IWeth9.sol';
 import { ShareToken } from '../tokens/ShareToken.sol';
 import { ISecurityPool } from '../interfaces/ISecurityPool.sol';
 import { Zoltar } from '../../Zoltar.sol';
-import { OpenOracle } from '../openOracle/OpenOracle.sol';
+import { LoggedOpenOracle } from '../openOracle/LoggedOpenOracle.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
 import { OpenOraclePriceCoordinator } from '../OpenOraclePriceCoordinator.sol';
 
@@ -60,7 +60,7 @@ contract PriceOracleManagerAndOperatorQueuerFactory {
 	}
 
 	function deployPriceOracleManagerAndOperatorQueuer(
-		OpenOracle _openOracle,
+		LoggedOpenOracle _openOracle,
 		ReputationToken _reputationToken,
 		bytes32 salt
 	) external returns (OpenOraclePriceCoordinator) {

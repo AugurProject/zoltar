@@ -19,8 +19,11 @@
 					refactor must preserve.
 				</p>
 				<p>
-					The main boundary is simple. The game stack owns storage, counters,
-					escrow, carry state, and settlement effects. The external
+					The main boundary starts with one shared storage layout. The inherited
+					game stack owns most counters, escrow, carry state, and settlement
+					effects. Deposit intake runs through a layout-compatible
+					<code>EscalationGameDepositDelegate</code> using <code>delegatecall</code>,
+					so those writes still land in the game. The external
 					<code>EscalationGameProofVerifier</code> owns storage-free proof and
 					logarithm helpers. That separation keeps verification math reusable and
 					testable without giving it authority to consume deposits, advance
@@ -39,49 +42,53 @@
 				<p>
 					The first question in this stack is always ownership: which file is
 					allowed to mutate which part of the game. The state-owning modules form
-					one inheritance ladder under <code>EscalationGameState</code>, while
-					the proof verifier stays outside that ladder because it should never
-					write live game state.
+					one inheritance ladder over <code>EscalationGameStorage</code>. The
+					deposit delegate uses the same layout and may mutate it only while the
+					game invokes it with <code>delegatecall</code>. The proof verifier stays
+					outside both mutation paths because it should never write live game
+					state.
 				</p>
 				<figure class="diagram diagram-wide" id="fig-escalation-game-module-split" aria-labelledby="module-split-title">
-					<svg viewBox="0 0 920 320" role="img" aria-labelledby="module-split-title module-split-desc">
-						<title id="module-split-title">EscalationGame module split between state-owning modules and the external proof verifier</title>
-						<desc id="module-split-desc">A left-hand inheritance chain runs from state into calculations, carry, escrow, settlement, and the public game contract. Shared types sit outside that chain as imported definitions, while a separate proof verifier sits to the right and feeds verified math back into the mutable stack without inheriting storage.</desc>
+					<svg viewBox="0 0 920 360" role="img" aria-labelledby="module-split-title module-split-desc">
+						<title id="module-split-title">EscalationGame module split between inherited state modules, the deposit delegate, and the external proof verifier</title>
+						<desc id="module-split-desc">A left-hand inheritance chain runs from shared storage and state into calculations, carry, escrow, settlement, and the public game contract. A deposit delegate uses the same storage layout through delegatecall, while a separate proof verifier feeds verified math back into the mutable stack without acquiring storage authority.</desc>
 						<defs>
 							<marker id="escalation-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 								<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
 							</marker>
 						</defs>
-						<rect x="40" y="122" width="150" height="54" rx="10" class="svg-slate"></rect>
-						<text x="115" y="155" text-anchor="middle" class="svg-label">Types</text>
-						<rect x="220" y="122" width="150" height="54" rx="10" class="svg-blue"></rect>
-						<text x="295" y="155" text-anchor="middle" class="svg-label">State</text>
-						<rect x="400" y="122" width="150" height="54" rx="10" class="svg-green"></rect>
-						<text x="475" y="155" text-anchor="middle" class="svg-label">Calculations</text>
-						<rect x="580" y="122" width="120" height="54" rx="10" class="svg-green"></rect>
-						<text x="640" y="155" text-anchor="middle" class="svg-label">Carry</text>
-						<rect x="400" y="222" width="150" height="54" rx="10" class="svg-green"></rect>
-						<text x="475" y="255" text-anchor="middle" class="svg-label">Escrow</text>
-						<rect x="580" y="222" width="120" height="54" rx="10" class="svg-green"></rect>
-						<text x="640" y="255" text-anchor="middle" class="svg-label">Settlement</text>
-						<rect x="760" y="172" width="120" height="54" rx="10" class="svg-amber"></rect>
-						<text x="820" y="205" text-anchor="middle" class="svg-label">EscalationGame</text>
-						<rect x="720" y="122" width="160" height="54" rx="10" class="svg-rose"></rect>
-						<text x="800" y="155" text-anchor="middle" class="svg-label">ProofVerifier</text>
-						<line x1="370" y1="149" x2="400" y2="149" stroke="currentColor" stroke-width="2.5" marker-end="url(#escalation-arrow)"></line>
-						<line x1="550" y1="149" x2="580" y2="149" stroke="currentColor" stroke-width="2.5" marker-end="url(#escalation-arrow)"></line>
-						<line x1="620" y1="176" x2="520" y2="222" stroke="currentColor" stroke-width="2.5" marker-end="url(#escalation-arrow)"></line>
-						<line x1="550" y1="249" x2="580" y2="249" stroke="currentColor" stroke-width="2.5" marker-end="url(#escalation-arrow)"></line>
-						<line x1="700" y1="249" x2="760" y2="205" stroke="currentColor" stroke-width="2.5" marker-end="url(#escalation-arrow)"></line>
-						<line x1="190" y1="122" x2="250" y2="92" stroke="currentColor" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#escalation-arrow)"></line>
-						<line x1="190" y1="149" x2="400" y2="149" stroke="currentColor" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#escalation-arrow)"></line>
-						<line x1="190" y1="176" x2="610" y2="222" stroke="currentColor" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#escalation-arrow)"></line>
-						<line x1="720" y1="149" x2="690" y2="149" stroke="currentColor" stroke-width="2.5" marker-end="url(#escalation-arrow)"></line>
-						<text x="115" y="104" text-anchor="middle" class="svg-note">shared structs and constants</text>
-						<text x="804" y="105" text-anchor="middle" class="svg-note">storage-free proof math</text>
-						<text x="548" y="294" text-anchor="middle" class="svg-note">one inheritance chain shares the mutable state surface</text>
+						<rect x="30" y="100" width="130" height="50" rx="10" class="svg-slate"></rect>
+						<text x="95" y="131" text-anchor="middle" class="svg-label">Types</text>
+						<rect x="200" y="100" width="150" height="50" rx="10" class="svg-blue"></rect>
+						<text x="275" y="131" text-anchor="middle" class="svg-label">Storage / State</text>
+						<rect x="390" y="100" width="140" height="50" rx="10" class="svg-green"></rect>
+						<text x="460" y="131" text-anchor="middle" class="svg-label">Calculations</text>
+						<rect x="570" y="100" width="110" height="50" rx="10" class="svg-green"></rect>
+						<text x="625" y="131" text-anchor="middle" class="svg-label">Carry</text>
+						<rect x="390" y="215" width="140" height="50" rx="10" class="svg-green"></rect>
+						<text x="460" y="246" text-anchor="middle" class="svg-label">Escrow</text>
+						<rect x="570" y="215" width="120" height="50" rx="10" class="svg-green"></rect>
+						<text x="630" y="246" text-anchor="middle" class="svg-label">Settlement</text>
+						<rect x="730" y="155" width="160" height="50" rx="10" class="svg-amber"></rect>
+						<text x="810" y="186" text-anchor="middle" class="svg-label">EscalationGame</text>
+						<rect x="730" y="55" width="160" height="50" rx="10" class="svg-rose"></rect>
+						<text x="810" y="86" text-anchor="middle" class="svg-label">ProofVerifier</text>
+						<rect x="730" y="260" width="160" height="50" rx="10" class="svg-amber"></rect>
+						<text x="810" y="291" text-anchor="middle" class="svg-label">DepositDelegate</text>
+						<line x1="350" y1="125" x2="390" y2="125" stroke="currentColor" stroke-width="2.5" marker-end="url(#escalation-arrow)"></line>
+						<line x1="530" y1="125" x2="570" y2="125" stroke="currentColor" stroke-width="2.5" marker-end="url(#escalation-arrow)"></line>
+						<line x1="625" y1="150" x2="480" y2="215" stroke="currentColor" stroke-width="2.5" marker-end="url(#escalation-arrow)"></line>
+						<line x1="530" y1="240" x2="570" y2="240" stroke="currentColor" stroke-width="2.5" marker-end="url(#escalation-arrow)"></line>
+						<line x1="690" y1="240" x2="730" y2="190" stroke="currentColor" stroke-width="2.5" marker-end="url(#escalation-arrow)"></line>
+						<line x1="160" y1="125" x2="200" y2="125" stroke="currentColor" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#escalation-arrow)"></line>
+						<line x1="730" y1="80" x2="675" y2="113" stroke="currentColor" stroke-width="2.5" marker-end="url(#escalation-arrow)"></line>
+						<line x1="810" y1="205" x2="810" y2="260" stroke="currentColor" stroke-width="2.5" marker-end="url(#escalation-arrow)"></line>
+						<polyline points="730,285 275,285 275,150" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#escalation-arrow)"></polyline>
+						<text x="95" y="79" text-anchor="middle" class="svg-note">shared definitions</text>
+						<text x="810" y="34" text-anchor="middle" class="svg-note">storage-free proof math</text>
+						<text x="500" y="336" text-anchor="middle" class="svg-note">delegatecall preserves the game's shared storage surface</text>
 					</svg>
-					<p class="diagram-caption"><span class="figure-label">Mutable Stack Boundary</span>Only the inheritance chain owns live mutation. Shared types provide definitions, while the external proof verifier returns derived values without acquiring storage authority.</p>
+					<p class="diagram-caption"><span class="figure-label">Mutable Stack Boundary</span>The inherited stack and the layout-compatible deposit delegate mutate the game's shared storage. Shared types provide definitions, while the external proof verifier returns derived values without acquiring storage authority.</p>
 				</figure>
 				<div class="equation" id="eq-escalation-game-outcome-carry">
 					<math display="block" aria-label="Current carry total equals inherited unresolved total plus local unresolved total" data-source="currentCarryTotal = inheritedUnresolvedTotal + localUnresolvedTotal">
@@ -110,9 +117,14 @@
 							<td>Common types stay stable even when execution modules move.</td>
 						</tr>
 						<tr>
+							<td><code>EscalationGameStorage.sol</code></td>
+							<td>The storage layout shared by the inherited game stack and deposit delegate.</td>
+							<td>Keeping the layout in one base contract makes delegate writes target the same slots as direct game writes.</td>
+						</tr>
+						<tr>
 							<td><code>EscalationGameState.sol</code></td>
-							<td>Storage layout, events, constructor wiring, access control, and primitive escrow and unresolved counters.</td>
-							<td>All inherited modules need one authoritative storage surface.</td>
+							<td>Events, constructor wiring, access control, and primitive escrow and unresolved counters over the shared layout.</td>
+							<td>All inherited modules need one authoritative state-management surface.</td>
 						</tr>
 						<tr>
 							<td><code>EscalationGameCalculations.sol</code></td>
@@ -136,8 +148,13 @@
 						</tr>
 						<tr>
 							<td><code>EscalationGame.sol</code></td>
-							<td>Start and resume entrypoints plus local deposit intake from <code>SecurityPool</code>.</td>
-							<td>The top-level contract should stay small enough to show the public surface clearly.</td>
+							<td>Start and resume entrypoints plus the access-controlled local-deposit entrypoint used by <code>SecurityPool</code>.</td>
+							<td>The top-level contract validates the caller and delegates deposit mutation while preserving the public surface.</td>
+						</tr>
+						<tr>
+							<td><code>EscalationGameDepositDelegate.sol</code></td>
+							<td>Deposit validation, escrow and unresolved accounting, node and carry-leaf creation, and deposit events.</td>
+							<td>Moving this cohesive mutation path behind <code>delegatecall</code> reduces deployed game bytecode without changing storage ownership.</td>
 						</tr>
 						<tr>
 							<td><code>EscalationGameProofVerifier.sol</code></td>
@@ -178,7 +195,7 @@
 					the same carry/nullifier key just because both were appended at local
 					index zero. That same identifier is stored in carry leaves, emitted by
 					<code>LocalDepositAppended</code>,
-					<code>CarriedDepositClaimed</code>, and
+					<code>CarryDepositConsumed</code>, and
 					<code>ClaimDeposit</code>, returned by both
 					<code>exportUnresolvedDeposit</code> overloads, and consumed through
 					<code>consumedParentDepositIndexes</code>.
@@ -281,11 +298,12 @@
 			<section id="deployment-bytecode">
 				<h2>Deployment and Bytecode</h2>
 				<p>
-					The proof verifier split also exists because bytecode headroom is
-					tight. Keeping proof math outside the state-owning contract keeps the
-					contract under the current bytecode budgets and leaves only limited
-					headroom for small execution changes without collapsing the public
-					game contract into an unreviewable blob.
+					The proof verifier and deposit delegate splits also exist because
+					bytecode headroom is tight. Keeping proof math and the cohesive deposit
+					mutation path outside the deployed game bytecode keeps the contract
+					under the current bytecode budgets and leaves only limited headroom for
+					small execution changes without collapsing the public game contract
+					into an unreviewable blob.
 				</p>
 				<table>
 					<thead>
@@ -297,19 +315,19 @@
 					<tbody>
 						<tr>
 							<td>Creation bytecode</td>
-							<td><code>27,137</code> bytes</td>
+							<td><code>32,132</code> bytes</td>
 						</tr>
 						<tr>
 							<td>Deployed bytecode</td>
-							<td><code>24,070</code> bytes</td>
+							<td><code>24,307</code> bytes</td>
 						</tr>
 						<tr>
 							<td>Project deployed-bytecode budget headroom</td>
-							<td><code>506</code> bytes below <code>24,576</code></td>
+							<td><code>269</code> bytes below <code>24,576</code></td>
 						</tr>
 						<tr>
 							<td>EIP-170 headroom</td>
-							<td><code>506</code> bytes below <code>24,576</code></td>
+							<td><code>269</code> bytes below <code>24,576</code></td>
 						</tr>
 					</tbody>
 				</table>

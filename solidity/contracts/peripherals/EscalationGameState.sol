@@ -7,112 +7,56 @@ import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameProofVerifier } from './EscalationGameProofVerifier.sol';
-import { ForkedEscrowState, Node, OutcomeState } from './EscalationGameTypes.sol';
+import { IEscalationGameEvents } from './interfaces/IEscalationGame.sol';
+import { EscalationGameStorage } from './EscalationGameStorage.sol';
 
-abstract contract EscalationGameState {
+abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameEvents {
 	using SafeERC20Ops for IERC20;
 
 	uint256 internal constant activationDelay = 3 days;
-	uint256 public activationTime;
 	ISecurityPool public immutable securityPool;
 	ReputationToken public immutable repToken;
 	EscalationGameProofVerifier internal immutable proofVerifier;
-	uint256 public nonDecisionThreshold;
-	uint256 public startBond;
-	uint256 internal lnRatioScaled;
 	address internal immutable owner;
-	uint256 public nonDecisionTimestamp;
-	bool public forkContinuation;
-	uint256 public forkElapsedAtStart;
-	uint256 public forkResumedAt;
 	bytes32 internal immutable EMPTY_NULLIFIER_ROOT;
-	// Outcome-indexed state uses 0 = Invalid, 1 = Yes, 2 = No.
-	OutcomeState[3] internal outcomeState;
-	uint256 internal nextNodeId = 1;
-	mapping(uint256 => Node) public nodes;
-	mapping(address => uint256) public escrowedRepByVault;
-	uint256 public totalEscrowedRep;
-	mapping(address => uint256) internal unresolvedRepByVault;
-	uint256 internal totalLocalUnresolvedRep;
-	mapping(address => uint256[3]) internal localUnresolvedPrincipalByVaultAndOutcome;
-	mapping(address => bool) internal localUnresolvedTotalsExportedByVault;
-	mapping(address => mapping(uint8 => ForkedEscrowState)) internal forkedEscrowByVaultAndOutcome;
-	bool internal forkCarrySnapshotRequiresForkedEscrow;
 
 	event GameStarted(uint256 activationTime, uint256 startBond, uint256 nonDecisionThreshold);
 	event GameContinuedFromFork(uint256 startBond, uint256 nonDecisionThreshold, uint256 elapsedAtFork);
-	event ForkCarrySnapshotInitialized(
-		uint256[3] snapshotLeafCounts,
-		uint256[3] inheritedTotals,
-		bytes32[3] inheritedNullifierRoots
-	);
 	event ForkContinuationResumed(uint256 resumedAt);
-	event NonDecisionReached(uint256 nonDecisionTimestamp);
-	event DepositOnOutcome(
-		address depositor,
-		BinaryOutcomes.BinaryOutcome outcome,
-		uint256 amount,
-		uint256 depositIndex,
-		uint256 cumulativeAmount,
-		uint256 escrowedRepByVault,
-		uint256 totalEscrowedRep
-	);
-	event WithdrawDeposit(
-		address depositor,
-		BinaryOutcomes.BinaryOutcome outcome,
-		uint256 amountToWithdraw,
-		uint256 depositIndex
-	);
 	event ClaimDeposit(
-		address depositor,
-		BinaryOutcomes.BinaryOutcome outcome,
-		uint256 parentDepositIndex,
+		address indexed depositor,
+		BinaryOutcomes.BinaryOutcome indexed outcome,
+		uint256 indexed parentDepositIndex,
 		uint256 originalDepositAmount,
 		uint256 amountToWithdraw,
 		uint256 burnAmount,
 		bool transferredRep
 	);
-	event LocalDepositAppended(
-		uint256 indexed nodeId,
-		BinaryOutcomes.BinaryOutcome outcome,
-		address depositor,
-		uint256 amount,
-		uint256 parentDepositIndex,
-		uint256 cumulativeAmount
-	);
-	event CarriedDepositClaimed(
-		BinaryOutcomes.BinaryOutcome outcome,
-		address depositor,
-		uint256 amount,
-		uint256 parentDepositIndex,
-		uint256 sourceNodeId,
-		bytes32 leafHash
-	);
 	event VaultUnresolvedTotalsExported(
-		address vault,
+		address indexed vault,
 		address repReceiver,
 		uint256[3] principalByOutcome,
 		uint256 principalToTransfer,
 		bool transferredRep
 	);
 	event ForkedEscrowRecorded(
-		address depositor,
-		BinaryOutcomes.BinaryOutcome outcome,
+		address indexed depositor,
+		BinaryOutcomes.BinaryOutcome indexed outcome,
 		uint256 sourcePrincipalTotal,
 		uint256 childRepTotal,
 		uint256 escrowedRepByVault,
 		uint256 totalEscrowedRep,
 		uint256 outcomeBalance
 	);
-	event VaultEscrowUpdated(address vault, uint256 escrowedRepByVault, uint256 totalEscrowedRep);
+	event VaultEscrowUpdated(address indexed vault, uint256 escrowedRepByVault, uint256 totalEscrowedRep);
 	event ForkedEscrowClaimed(
-		address depositor,
-		BinaryOutcomes.BinaryOutcome outcome,
+		address indexed depositor,
+		BinaryOutcomes.BinaryOutcome indexed outcome,
 		uint256 sourcePrincipalClaimed,
 		uint256 childRepClaimed
 	);
 	event ForkedEscrowExported(
-		address vault,
+		address indexed vault,
 		address repReceiver,
 		uint256[3] sourcePrincipalByOutcome,
 		uint256[3] childRepByOutcome,

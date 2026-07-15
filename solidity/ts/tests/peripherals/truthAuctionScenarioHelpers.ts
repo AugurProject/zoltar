@@ -80,7 +80,7 @@ export function createPeripheralsTruthAuctionScenarioHelpers({ genesisUniverse, 
 		await mockWindow.setTime(forkSourceQuestionData.endTime + 1n)
 		await approveToken(effectiveForkingClient, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		await forkUniverse(effectiveForkingClient, genesisUniverse, forkSourceQuestionId)
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+		return await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 	}
 
 	const setupStartedTruthAuction = async (titlePrefix: string) => {

@@ -17,7 +17,7 @@ import {
 	peripherals_factories_SecurityPoolFactory_SecurityPoolFactory,
 	peripherals_factories_ShareTokenFactory_ShareTokenFactory,
 	peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
-	peripherals_openOracle_OpenOracle_OpenOracle,
+	peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle,
 	peripherals_SecurityPool_SecurityPool,
 	peripherals_SecurityPoolForker_SecurityPoolForker,
 	peripherals_SecurityPoolUtils_SecurityPoolUtils,
@@ -171,7 +171,7 @@ export const { getInfraContractAddresses } = createInfraContractAddressHelper({
 	getZoltarAddress,
 	getZoltarQuestionDataAddress,
 	multicall3Bytecode: MULTICALL3_BYTECODE,
-	openOracleBytecode: `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`,
+	openOracleBytecode: `0x${peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.evm.bytecode.object}`,
 	priceOracleManagerAndOperatorQueuerFactoryBytecode: getPriceOracleManagerAndOperatorQueuerFactoryByteCode(),
 	proxyDeployerAddress: addressString(PROXY_DEPLOYER_ADDRESS),
 	scalarOutcomesBytecode: `0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`,
@@ -239,12 +239,12 @@ export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 			),
 		]),
 	getRepTokenAddress,
-	getSecurityPoolInitCode: ({ escalationGameFactory, openOracle, parent, priceOracleManagerAndOperatorQueuer, questionId, securityMultiplier, securityPoolFactory, securityPoolForker, shareToken, truthAuction, universeId, zoltar, zoltarQuestionData }) =>
+	getSecurityPoolInitCode: ({ escalationGameFactory, openOracle, parent, priceOracleManagerAndOperatorQueuer, questionId, securityMultiplier, securityPoolForker, shareToken, truthAuction, universeId, zoltar, zoltarQuestionData }) =>
 		(() => {
 			return encodeDeployData({
 				abi: peripherals_SecurityPool_SecurityPool.abi,
 				bytecode: applyLibraries(peripherals_SecurityPool_SecurityPool.evm.bytecode.object),
-				args: [securityPoolForker, securityPoolFactory, zoltarQuestionData, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, questionId, securityMultiplier, DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDeposit, truthAuction],
+				args: [securityPoolForker, zoltarQuestionData, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, questionId, securityMultiplier, DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDeposit, truthAuction],
 			})
 		})(),
 	getShareTokenInitCode: (securityPoolFactory, zoltarAddress, questionId) =>
@@ -340,7 +340,7 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	if (!existence['uniformPriceDualCapBatchAuctionFactory']) await deployBytecode('uniformPriceDualCapBatchAuctionFactory', `0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`)
 	if (!existence['scalarOutcomes']) await deployBytecode('scalarOutcomes', `0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`)
 	if (!existence['securityPoolUtils']) await deployBytecode('securityPoolUtils', `0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`)
-	if (!existence['openOracle']) await deployBytecode('openOracle', `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`)
+	if (!existence['openOracle']) await deployBytecode('openOracle', `0x${peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.evm.bytecode.object}`)
 	if (!existence['zoltarQuestionData']) await deployBytecode('zoltarQuestionData', getZoltarQuestionDataByteCode())
 	if (!existence['zoltar']) {
 		const initCode = encodeDeployData({

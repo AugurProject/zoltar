@@ -38,7 +38,7 @@ import {
 	requestPriceWithValue,
 } from '../testSupport/simulator/utils/contracts/peripherals'
 import { depositRep, getSecurityVault } from '../testSupport/simulator/utils/contracts/securityPool'
-import { peripherals_openOracle_OpenOracle_OpenOracle, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '../types/contractArtifact'
+import { peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '../types/contractArtifact'
 import { isIgnorableLogDecodeError } from './logDecodeErrors'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
@@ -147,7 +147,7 @@ const findSettlementCallbackExecutedLog = (logs: TransactionReceiptLogs) =>
 		.map(log => {
 			try {
 				return decodeEventLog({
-					abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+					abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
 					data: log.data,
 					topics: log.topics,
 				})

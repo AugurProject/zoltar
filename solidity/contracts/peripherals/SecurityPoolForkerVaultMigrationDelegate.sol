@@ -7,6 +7,7 @@ import { ISecurityPoolForkerChildEscalationGameInitializer } from './interfaces/
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { SecurityPoolForkerBase } from './SecurityPoolForkerBase.sol';
+import { SecurityPoolForkerForkData } from './SecurityPoolForkerTypes.sol';
 import { SecurityPoolForkerVaultMigrationBase } from './SecurityPoolForkerVaultMigrationBase.sol';
 
 contract SecurityPoolForkerVaultMigrationDelegate is SecurityPoolForkerVaultMigrationBase {
@@ -35,5 +36,35 @@ contract SecurityPoolForkerVaultMigrationDelegate is SecurityPoolForkerVaultMigr
 
 	function ensureChildPoolRepSplit(ISecurityPool parent, uint256 outcomeIndex, uint256 requiredSplit) public {
 		_ensureChildPoolRepSplit(parent, outcomeIndex, requiredSplit);
+	}
+
+	function emitForkSnapshotEvents(
+		ISecurityPool parent,
+		address migrationProxy,
+		address sourceGame,
+		uint256 poolRepAtFork,
+		uint256 escalationRepAtFork,
+		uint256 resultingLockedRep
+	) external {
+		SecurityPoolForkerForkData storage data = forkDataByPool[parent];
+		if (data.unresolvedEscalationAtFork) {
+			emit EscalationRepDrainedAtFork(parent, sourceGame, escalationRepAtFork);
+		}
+		emit ParentRepLocked(parent, migrationProxy, poolRepAtFork, escalationRepAtFork, resultingLockedRep);
+		emit SecurityPoolForkSnapshot(
+			parent,
+			migrationProxy,
+			data.ownFork,
+			data.unresolvedEscalationAtFork,
+			data.collateralAtFork,
+			poolRepAtFork,
+			data.auctionableRepAtFork,
+			data.escalationSourceRepAtFork,
+			data.escalationChildRepAtFork,
+			data.escalationStartBondAtFork,
+			data.escalationNonDecisionThresholdAtFork,
+			data.escalationElapsedAtFork,
+			data.escalationSnapshotId
+		);
 	}
 }

@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, getAddress, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { getOpenOracleAddress, loadOracleManagerDetails, loadOpenOracleReportSummaries, settleOracleReport } from '../../protocol/index.js'
-import { peripherals_openOracle_OpenOracle_OpenOracle } from '../../contractArtifact.js'
+import { peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle } from '../../contractArtifact.js'
 import { createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from './testSupport.js'
 
 const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
@@ -131,7 +131,7 @@ describe('openOracle protocol client', () => {
 		expect(capturedGas).toBe(5_000_000n)
 		expect(capturedData).toBeDefined()
 		const decodedCall = decodeFunctionData({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
 			data: capturedData ?? ('0x' satisfies Hex),
 		})
 		expect(decodedCall.functionName).toBe('settle')

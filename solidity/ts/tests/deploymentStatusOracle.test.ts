@@ -7,7 +7,7 @@ import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import { setupTestAccounts, ensureProxyDeployerDeployed } from '../testSupport/simulator/utils/utilities'
 import { ensureDeploymentStatusOracleDeployed, ensureInfraDeployed, getDeploymentStepAddresses, loadDeploymentStatusOracleMask } from '../testSupport/simulator/utils/contracts/deployPeripherals'
-import { ScalarOutcomes_ScalarOutcomes, peripherals_Multicall3_Multicall3, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, peripherals_openOracle_OpenOracle_OpenOracle } from '../types/contractArtifact'
+import { ScalarOutcomes_ScalarOutcomes, peripherals_Multicall3_Multicall3, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle } from '../types/contractArtifact'
 import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
 import { PROXY_DEPLOYER_ADDRESS } from '../testSupport/simulator/utils/constants'
 
@@ -48,7 +48,7 @@ describe('Deployment Status Oracle Test Suite', () => {
 
 		await deployViaProxy(MULTICALL3_BYTECODE)
 		await deployViaProxy(`0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`)
-		await deployViaProxy(`0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`)
+		await deployViaProxy(`0x${peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.evm.bytecode.object}`)
 
 		const deploymentMask = await loadDeploymentStatusOracleMask(client)
 
@@ -57,7 +57,7 @@ describe('Deployment Status Oracle Test Suite', () => {
 
 	test('ensureInfraDeployed repairs an out-of-order partial deployment', async () => {
 		await deployViaProxy(`0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`)
-		await deployViaProxy(`0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`)
+		await deployViaProxy(`0x${peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.evm.bytecode.object}`)
 		await deployViaProxy(`0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`)
 		await deployViaProxy(`0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`)
 

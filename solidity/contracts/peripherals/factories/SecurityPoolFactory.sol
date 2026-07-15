@@ -3,7 +3,7 @@ pragma solidity 0.8.35;
 import { ZoltarQuestionData } from '../../ZoltarQuestionData.sol';
 import { SecurityPool } from '../SecurityPool.sol';
 import { ISecurityPool, ISecurityPoolFactory } from '../interfaces/ISecurityPool.sol';
-import { OpenOracle } from '../openOracle/OpenOracle.sol';
+import { LoggedOpenOracle } from '../openOracle/LoggedOpenOracle.sol';
 import { Zoltar } from '../../Zoltar.sol';
 import { ShareTokenFactory } from './ShareTokenFactory.sol';
 import { UniformPriceDualCapBatchAuctionFactory } from './UniformPriceDualCapBatchAuctionFactory.sol';
@@ -22,7 +22,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	UniformPriceDualCapBatchAuctionFactory immutable uniformPriceDualCapBatchAuctionFactory;
 	PriceOracleManagerAndOperatorQueuerFactory immutable priceOracleManagerAndOperatorQueuerFactory;
 	Zoltar immutable zoltar;
-	OpenOracle immutable openOracle;
+	LoggedOpenOracle immutable openOracle;
 	EscalationGameFactory immutable escalationGameFactory;
 	ZoltarQuestionData immutable questionData;
 	ISecurityPoolForker immutable securityPoolForker;
@@ -31,12 +31,12 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	SecurityPoolDeployment[] private securityPoolDeployments;
 
 	event DeploySecurityPool(
-		ISecurityPool securityPool,
+		ISecurityPool indexed securityPool,
 		UniformPriceDualCapBatchAuction truthAuction,
 		OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer,
 		IShareToken shareToken,
-		ISecurityPool parent,
-		uint248 universeId,
+		ISecurityPool indexed parent,
+		uint248 indexed universeId,
 		uint256 questionId,
 		uint256 securityMultiplier,
 		uint256 currentRetentionRate,
@@ -47,7 +47,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		ISecurityPoolForker _securityPoolForker,
 		ZoltarQuestionData _questionData,
 		EscalationGameFactory _escalationGameFactory,
-		OpenOracle _openOracle,
+		LoggedOpenOracle _openOracle,
 		Zoltar _zoltar,
 		ShareTokenFactory _shareTokenFactory,
 		UniformPriceDualCapBatchAuctionFactory _uniformPriceDualCapBatchAuctionFactory,

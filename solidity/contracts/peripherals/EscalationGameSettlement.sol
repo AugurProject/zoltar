@@ -6,6 +6,7 @@ import { EscalationGameEscrow } from './EscalationGameEscrow.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { CarriedDepositProof, Deposit } from './EscalationGameTypes.sol';
+import { CarryConsumptionReason } from './interfaces/IEscalationGame.sol';
 
 abstract contract EscalationGameSettlement is EscalationGameEscrow {
 	function claimDepositForWinning(
@@ -38,7 +39,7 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 	) public onlySecurityPoolOrForker returns (address depositor, uint256 amount, uint256 parentDepositIndex) {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
 		uint8 outcomeIndex = uint8(outcome);
-		Deposit memory deposit = _consumeLocalDeposit(outcomeIndex, depositIndex);
+		Deposit memory deposit = _consumeLocalDeposit(outcomeIndex, depositIndex, CarryConsumptionReason.Export);
 		depositor = deposit.depositor;
 		amount = deposit.amount;
 		_consumeEscrowedRepForVault(depositor, amount);
@@ -67,7 +68,13 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 			),
 			'Parent deposit claimed'
 		);
-		_verifyAndConsumeCarriedDepositProof(outcomeIndex, proof);
+		_verifyAndConsumeCarriedDepositProof(
+			outcomeIndex,
+			proof,
+			outcome == questionResolution
+				? CarryConsumptionReason.WinningClaim
+				: CarryConsumptionReason.LosingSettlement
+		);
 		(
 			uint256 forkedEscrowPrincipal,
 			uint256 forkedEscrowChildRep,
@@ -97,10 +104,8 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 					Math.ceilDiv(burnAmount * forkedEscrowChildRep, forkedEscrowPrincipal),
 					true
 				);
-				emit WithdrawDeposit(depositor, outcome, amountToWithdraw, proof.parentDepositIndex);
 				return (depositor, amountToWithdraw, originalDepositAmount);
 			}
-			emit WithdrawDeposit(depositor, outcome, 0, proof.parentDepositIndex);
 			return (depositor, 0, originalDepositAmount);
 		}
 		require(!forkCarrySnapshotRequiresForkedEscrow, 'Forked escrow missing');
@@ -123,10 +128,8 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 				burnAmount,
 				true
 			);
-			emit WithdrawDeposit(depositor, outcome, amountToWithdraw, proof.parentDepositIndex);
 			return (depositor, amountToWithdraw, originalDepositAmount);
 		}
-		emit WithdrawDeposit(depositor, outcome, 0, proof.parentDepositIndex);
 	}
 
 	function exportUnresolvedDeposit(
@@ -136,7 +139,7 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
 		require(!forkCarrySnapshotRequiresForkedEscrow, 'Forked proof unsupported');
 		uint8 outcomeIndex = uint8(outcome);
-		_verifyAndConsumeCarriedDepositProof(outcomeIndex, proof);
+		_verifyAndConsumeCarriedDepositProof(outcomeIndex, proof, CarryConsumptionReason.Export);
 		depositor = proof.depositor;
 		amount = proof.amount;
 		parentDepositIndex = proof.parentDepositIndex;
@@ -157,14 +160,16 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 				depositIndex,
 				questionResolution
 			);
-			emit WithdrawDeposit(depositor, questionResolution, amountToWithdraw, depositIndex);
 			return (depositor, amountToWithdraw, originalDepositAmount);
 		}
-		Deposit memory deposit = _consumeLocalDeposit(uint8(outcome), depositIndex);
+		Deposit memory deposit = _consumeLocalDeposit(
+			uint8(outcome),
+			depositIndex,
+			CarryConsumptionReason.LosingSettlement
+		);
 		depositor = deposit.depositor;
 		originalDepositAmount = deposit.amount;
 		_consumeEscrowedRepForVault(depositor, originalDepositAmount);
-		emit WithdrawDeposit(depositor, outcome, 0, depositIndex);
 	}
 
 	function sweepResidualRepToSecurityPool() external {
@@ -209,7 +214,11 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		BinaryOutcomes.BinaryOutcome outcome,
 		bool transferredRep
 	) private returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) {
-		Deposit memory deposit = _consumeLocalDeposit(uint8(outcome), depositIndex);
+		Deposit memory deposit = _consumeLocalDeposit(
+			uint8(outcome),
+			depositIndex,
+			transferredRep ? CarryConsumptionReason.WinningClaim : CarryConsumptionReason.DirectParentClaim
+		);
 		depositor = deposit.depositor;
 		originalDepositAmount = deposit.amount;
 		uint256 burnAmount;

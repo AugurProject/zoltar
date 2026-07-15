@@ -2232,7 +2232,7 @@ describe('Peripherals: fork migration', () => {
 				assert.ok(firstTransfer > 0n && firstTransfer < parentCollateralAtFork, 'first of two external-fork vaults should transfer a strict collateral fraction')
 				const secondMigrationHash = await migrateVault(secondVaultClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 				const secondMigrationReceipt = await client.getTransactionReceipt({ hash: secondMigrationHash })
-				const collateralTransferLog = secondMigrationReceipt.logs
+				const migrationCheckpointLog = secondMigrationReceipt.logs
 					.filter(log => log.address.toLowerCase() === getInfraContractAddresses().securityPoolForker.toLowerCase())
 					.map(log =>
 						decodeEventLog({
@@ -2241,11 +2241,11 @@ describe('Peripherals: fork migration', () => {
 							topics: log.topics,
 						}),
 					)
-					.find(log => log.eventName === 'ForkCollateralTransferred')
-				if (collateralTransferLog === undefined) throw new Error('external ForkCollateralTransferred log missing')
+					.find(log => log.eventName === 'VaultMigrationCheckpoint')
+				if (migrationCheckpointLog === undefined) throw new Error('external VaultMigrationCheckpoint log missing')
 				return {
 					childTransfer: (await getETHBalance(client, yesSecurityPool.securityPool)) - childEthBefore,
-					eventCollateralTransferred: collateralTransferLog.args.collateralTransferred,
+					eventCollateralTransferred: migrationCheckpointLog.args.cumulativeCollateralTransferred,
 					parentCollateral: await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool),
 					parentTransfer: parentEthBefore - (await getETHBalance(client, securityPoolAddresses.securityPool)),
 				}
@@ -2404,7 +2404,7 @@ describe('Peripherals: fork migration', () => {
 
 			const migrationHash = await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			const migrationReceipt = await client.getTransactionReceipt({ hash: migrationHash })
-			const collateralTransferLog = migrationReceipt.logs
+			const migrationCheckpointLog = migrationReceipt.logs
 				.filter(log => log.address.toLowerCase() === getInfraContractAddresses().securityPoolForker.toLowerCase())
 				.map(log =>
 					decodeEventLog({
@@ -2413,15 +2413,15 @@ describe('Peripherals: fork migration', () => {
 						topics: log.topics,
 					}),
 				)
-				.find(log => log.eventName === 'ForkCollateralTransferred')
-			if (collateralTransferLog === undefined) throw new Error('own-fork ForkCollateralTransferred log missing')
+				.find(log => log.eventName === 'VaultMigrationCheckpoint')
+			if (migrationCheckpointLog === undefined) throw new Error('own-fork VaultMigrationCheckpoint log missing')
 
 			const parentCollateralAfterMigration = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
 			const childEthAfterMigration = await getETHBalance(client, yesSecurityPool.securityPool)
 			assert.ok(parentCollateralBeforeMigration > 0n, `test setup should leave collateral available before migration: ${parentCollateralBeforeMigration}`)
 			strictEqualTypeSafe(parentCollateralAfterMigration, 0n, 'all remaining pool collateral should leave the parent when all vault REP migrates')
 			strictEqualTypeSafe(childEthAfterMigration - childEthBeforeMigration, parentCollateralBeforeMigration, 'the child should receive the full remaining migrated pool collateral')
-			strictEqualTypeSafe(collateralTransferLog.args.collateralTransferred, parentCollateralBeforeMigration, 'the fork-neutral transfer event should report the complete own-fork cumulative collateral')
+			strictEqualTypeSafe(migrationCheckpointLog.args.cumulativeCollateralTransferred, parentCollateralBeforeMigration, 'the migration checkpoint should report the complete own-fork cumulative collateral')
 		})
 	})
 

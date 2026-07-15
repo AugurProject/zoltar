@@ -2,7 +2,7 @@
 pragma solidity 0.8.35;
 
 import { IWeth9 } from './interfaces/IWeth9.sol';
-import { OpenOracle } from './openOracle/OpenOracle.sol';
+import { LoggedOpenOracle } from './openOracle/LoggedOpenOracle.sol';
 import { ReputationToken } from '../ReputationToken.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
@@ -47,7 +47,7 @@ contract OpenOraclePriceCoordinator {
 	uint256 public lastPrice; // (REP * PRICE_PRECISION) / ETH;
 	ReputationToken public immutable reputationToken;
 	ISecurityPool public securityPool;
-	OpenOracle public immutable openOracle;
+	LoggedOpenOracle public immutable openOracle;
 	IWeth9 public immutable weth;
 	uint256 public immutable gasConsumedOpenOracleReportPrice;
 	uint32 public immutable gasConsumedSettlement;
@@ -65,32 +65,32 @@ contract OpenOraclePriceCoordinator {
 	uint256 public immutable minLiquidationPriceDistanceBps;
 	uint256 public pendingReportMaxSettlementBaseFee;
 
-	event SecurityPoolSet(ISecurityPool securityPool);
+	event SecurityPoolSet(ISecurityPool indexed securityPool);
 	event RepEthPriceSet(uint256 price);
-	event PriceRequested(uint256 reportId, uint256 pendingReportMaxSettlementBaseFee);
+	event PriceRequested(uint256 indexed reportId, uint256 pendingReportMaxSettlementBaseFee);
 	event PriceReportRejected(
-		uint256 reportId,
+		uint256 indexed reportId,
 		string reason,
 		uint256 pendingReportId,
 		uint256 pendingReportMaxSettlementBaseFee,
 		uint256 lastPrice,
 		uint256 lastSettlementTimestamp
 	);
-	event PriceReported(uint256 reportId, uint256 price, uint256 lastSettlementTimestamp);
+	event PriceReported(uint256 indexed reportId, uint256 price, uint256 lastSettlementTimestamp);
 	event PendingReportRecovered(
-		uint256 reportId,
+		uint256 indexed reportId,
 		uint256 settlementTimestamp,
 		uint256 pendingReportId,
 		uint256 pendingReportMaxSettlementBaseFee,
 		uint256 lastPrice,
 		uint256 lastSettlementTimestamp
 	);
-	event PendingOperationRecoveryConsumed(uint256 operationId, OperationType operation);
+	event PendingOperationRecoveryConsumed(uint256 indexed operationId, OperationType operation);
 	event StagedOperationQueued(
-		uint256 operationId,
+		uint256 indexed operationId,
 		OperationType operation,
-		address initiatorVault,
-		address targetVault,
+		address indexed initiatorVault,
+		address indexed targetVault,
 		uint256 amount,
 		uint256 queuedAt,
 		uint256 validForSeconds,
@@ -100,7 +100,12 @@ contract OpenOraclePriceCoordinator {
 		uint256 snapshotDenominator,
 		bool isPendingSlot
 	);
-	event ExecutedStagedOperation(uint256 operationId, OperationType operation, bool success, string errorMessage);
+	event ExecutedStagedOperation(
+		uint256 indexed operationId,
+		OperationType operation,
+		bool success,
+		string errorMessage
+	);
 
 	// This is not a FIFO queue. We keep append-only operation records plus a bounded
 	// pending settlement list that auto-executes once a fresh oracle price arrives.
@@ -116,7 +121,7 @@ contract OpenOraclePriceCoordinator {
 	uint256[] private pendingSettlementOperationIds;
 
 	constructor(
-		OpenOracle _openOracle,
+		LoggedOpenOracle _openOracle,
 		ReputationToken _reputationToken,
 		IWeth9 _weth,
 		uint256 _gasConsumedOpenOracleReportPrice,
@@ -214,7 +219,7 @@ contract OpenOraclePriceCoordinator {
 		pendingReportMaxSettlementBaseFee =
 			(block.basefee * maxSettlementBaseFeeMultiplierBps) / SecurityPoolUtils.BPS_DENOMINATOR;
 
-		OpenOracle.CreateReportParams memory reportparams = OpenOracle.CreateReportParams({
+		LoggedOpenOracle.CreateReportParams memory reportparams = LoggedOpenOracle.CreateReportParams({
 			exactToken1Report: uint128(exactToken1Report),
 			escalationHalt: uint128(escalationHalt), // amount of token1 past which escalation stops but disputes can still happen
 			settlerReward: uint96(settlerReward), // eth paid to settler in wei

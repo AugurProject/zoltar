@@ -1,7 +1,55 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-interface IUniformPriceDualCapBatchAuction {
+interface IUniformPriceDualCapBatchAuctionEvents {
+	enum BidSettlementStatus {
+		Winning,
+		PartiallyFilled,
+		Losing,
+		PreFinalizationRefund
+	}
+
+	/// @notice Lifecycle anchor. Timestamps use Unix seconds; ETH values use wei and REP uses token base units.
+	event AuctionStarted(
+		uint256 startTimestamp,
+		uint256 endTimestamp,
+		uint256 ethRaiseCap,
+		uint256 maxRepBeingSold,
+		uint256 minBidSize
+	);
+	/// @notice Stable per-tick bid identity and the resulting FIFO cumulative ETH position. ETH values use wei.
+	event BidSubmitted(
+		address indexed bidder,
+		int256 indexed tick,
+		uint256 indexed bidIndex,
+		uint256 ethAmount,
+		uint256 cumulativeEthAtTick
+	);
+	/// @notice Final aggregate clearing state; ETH fields use wei, REP uses token base units,
+	/// `grossEthAccepted` is the accepted ETH transferred to the owner, and `funded` distinguishes
+	/// cap-clearing from underfunded mode.
+	event AuctionFinalized(
+		int256 indexed clearingTick,
+		uint256 grossEthAccepted,
+		uint256 repSold,
+		uint256 ethFilledAtClearingTick,
+		bool funded
+	);
+	/// @notice One bid's complete settlement or pre-finalization refund. ETH fields use wei, REP uses token base
+	/// units, and `ethUsed + ethRefund` equals `originalEthAmount`.
+	event BidSettled(
+		address indexed bidder,
+		int256 indexed tick,
+		uint256 indexed bidIndex,
+		uint256 originalEthAmount,
+		uint256 ethUsed,
+		uint256 repFilled,
+		uint256 ethRefund,
+		BidSettlementStatus status
+	);
+}
+
+interface IUniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEvents {
 	struct Bid {
 		address bidder;
 		uint256 ethAmount;
@@ -31,12 +79,6 @@ interface IUniformPriceDualCapBatchAuction {
 		int256 tick;
 		uint256 bidIndex;
 	}
-
-	event AuctionStarted(uint256 ethRaiseCap, uint256 maxRepBeingSold, uint256 minBidSize);
-	event SubmitBid(address bidder, int256 tick, uint256 amount);
-	event Finalized(uint256 ethToSend, bool hitCap, int256 foundTick, uint256 repFilled, uint256 ethFilled);
-	event WithdrawBids(address withdrawFor, TickIndex[] tickIndices, uint256 totalFilledRep, uint256 totalEthRefund);
-	event RefundLosingBids(address bidder, TickIndex[] tickIndices, uint256 ethAmount);
 
 	function owner() external view returns (address);
 

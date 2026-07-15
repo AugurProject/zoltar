@@ -55,7 +55,9 @@ function getDeploymentStepAddress(id: 'securityPoolFactory' | 'zoltarQuestionDat
 }
 
 function getSecurityPoolAddressFromReceipt(receipt: TransactionReceipt) {
+	const securityPoolFactory = getInfraContractAddresses().securityPoolFactory
 	for (const log of receipt.logs) {
+		if (!sameAddress(log.address, securityPoolFactory)) continue
 		try {
 			const decodedLog = decodeEventLog({
 				abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,

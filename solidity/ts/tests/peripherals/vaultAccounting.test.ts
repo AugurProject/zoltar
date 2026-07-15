@@ -3,7 +3,7 @@ import { usePeripheralsVaultAccountingFixture, type PeripheralsVaultAccountingFi
 
 const depositRepEvent = {
 	inputs: [
-		{ name: 'vault', type: 'address' },
+		{ name: 'vault', type: 'address', indexed: true },
 		{ name: 'repAmount', type: 'uint256' },
 		{ name: 'poolOwnership', type: 'uint256' },
 		{ name: 'poolOwnershipDenominator', type: 'uint256' },
@@ -277,6 +277,21 @@ describe('Peripherals: vault accounting', () => {
 
 		const newestFirstVaultsAfterTouch = await getActiveVaults(client, securityPoolAddresses.securityPool, 0n, 3n)
 		assert.deepStrictEqual(newestFirstVaultsAfterTouch, [client.account.address, thirdClient.account.address], 'updating an active vault should move it to the front of the newest-first active vault preview')
+	})
+
+	test('updateVaultFees emits no accounting checkpoints for an empty vault after accrual is capped', async () => {
+		const emptyVaultPrivateKey = TEST_ADDRESSES[4]
+		if (emptyVaultPrivateKey === undefined) throw new Error('empty vault test address missing')
+		const emptyVault = addressString(emptyVaultPrivateKey)
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 1n)
+		await updateVaultFees(client, securityPoolAddresses.securityPool, emptyVault)
+
+		const noOpHash = await updateVaultFees(client, securityPoolAddresses.securityPool, emptyVault)
+		const noOpReceipt = await client.getTransactionReceipt({ hash: noOpHash })
+		const poolLogs = noOpReceipt.logs.filter(log => log.address.toLowerCase() === securityPoolAddresses.securityPool.toLowerCase())
+
+		assert.deepStrictEqual(poolLogs, [], 'a true no-op vault checkpoint should not emit pool accounting events')
 	})
 
 	test('withdrawal after question end releases escalation lock without changing ownership in single-sided case', async () => {
