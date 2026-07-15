@@ -166,6 +166,14 @@ body.doc-openoracle .equation {
 	border-radius: var(--radius);
 	background: var(--soft);
 }
+body.doc-openoracle .diagram {
+	overflow-x: auto;
+	overscroll-behavior-x: contain;
+	scrollbar-width: thin;
+}
+body.doc-openoracle .diagram-wide > svg {
+	min-width: 60rem;
+}
 body.doc-openoracle .equation {
 	overflow-x: auto;
 	overscroll-behavior-x: contain;
@@ -201,6 +209,21 @@ body.doc-openoracle .svg-red {
 	stroke: var(--red);
 	stroke-width: 2;
 }
+body.doc-openoracle .svg-slate {
+	fill: var(--paper);
+	stroke: var(--muted);
+	stroke-width: 2;
+}
+body.doc-openoracle .svg-amber {
+	fill: var(--gold-soft);
+	stroke: var(--gold);
+	stroke-width: 2;
+}
+body.doc-openoracle .svg-rose {
+	fill: var(--red-soft);
+	stroke: var(--red);
+	stroke-width: 2;
+}
 body.doc-openoracle .svg-line {
 	fill: none;
 	stroke: var(--muted);
@@ -212,6 +235,10 @@ body.doc-openoracle .svg-label {
 	font-weight: 700;
 }
 body.doc-openoracle .svg-small {
+	fill: var(--muted);
+	font-size: 13px;
+}
+body.doc-openoracle .svg-note {
 	fill: var(--muted);
 	font-size: 13px;
 }
@@ -384,12 +411,6 @@ body.doc-openoracle td math {
 		display: block;
 		overflow-x: auto;
 		white-space: nowrap;
-	}
-	body.doc-openoracle svg text.svg-label {
-		font-size: 15px;
-	}
-	body.doc-openoracle svg text.svg-small {
-		font-size: 12px;
 	}
 }
 

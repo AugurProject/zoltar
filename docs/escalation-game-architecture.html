@@ -43,7 +43,7 @@
 					the proof verifier stays outside that ladder because it should never
 					write live game state.
 				</p>
-				<figure class="diagram" id="fig-escalation-game-module-split" aria-labelledby="module-split-title">
+				<figure class="diagram diagram-wide" id="fig-escalation-game-module-split" aria-labelledby="module-split-title">
 					<svg viewBox="0 0 920 320" role="img" aria-labelledby="module-split-title module-split-desc">
 						<title id="module-split-title">EscalationGame module split between state-owning modules and the external proof verifier</title>
 						<desc id="module-split-desc">A left-hand inheritance chain runs from state into calculations, carry, escrow, settlement, and the public game contract. Shared types sit outside that chain as imported definitions, while a separate proof verifier sits to the right and feeds verified math back into the mutable stack without inheriting storage.</desc>
@@ -81,7 +81,7 @@
 						<text x="804" y="105" text-anchor="middle" class="svg-note">storage-free proof math</text>
 						<text x="548" y="294" text-anchor="middle" class="svg-note">one inheritance chain shares the mutable state surface</text>
 					</svg>
-					<p class="diagram-caption"><span class="figure-label">Mutable Stack Boundary</span><code>EscalationGameState</code>, <code>EscalationGameCalculations</code>, <code>EscalationGameCarry</code>, <code>EscalationGameEscrow</code>, <code>EscalationGameSettlement</code>, and <code>EscalationGame</code> form one inheritance chain that shares the mutable state surface. <code>EscalationGameTypes</code> is shared type and constant material, and the proof verifier stays separate so proof math can be reused without acquiring authority to mutate live game state.</p>
+					<p class="diagram-caption"><span class="figure-label">Mutable Stack Boundary</span>Only the inheritance chain owns live mutation. Shared types provide definitions, while the external proof verifier returns derived values without acquiring storage authority.</p>
 				</figure>
 				<div class="equation" id="eq-escalation-game-outcome-carry">
 					<math display="block" aria-label="Current carry total equals inherited unresolved total plus local unresolved total" data-source="currentCarryTotal = inheritedUnresolvedTotal + localUnresolvedTotal">
