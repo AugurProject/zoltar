@@ -134,6 +134,8 @@ Choose the smallest relevant scenario:
 
 Check the changed flow at desktop and narrow/mobile widths, including relevant empty, loading, disabled, pending, success, and failure states. Uniswap-backed REP pricing is intentionally unavailable in simulation; quote-dependent UI must degrade gracefully.
 
+Capture current-state screenshots for the visual-review handoff. Normally use `1440x900` for desktop and `390x844` for narrow/mobile; record the exact dimensions and explain any different viewport. Include baseline or before screenshots when they are trustworthy and readily available, but do not manufacture a baseline for a new surface. Record the route, scenario, state, browser, screenshot path or evidence identifier, intentional differences, and any console or runtime errors. Do not commit QA screenshots unless the task explicitly requires tracked visual fixtures.
+
 ## Bug-fix process
 
 For a deterministic executable bug:
@@ -183,9 +185,15 @@ Skip this gate for read-only analysis, exploration, or when the user asks not to
 
 `.codex/review-contract.md` is the canonical review handoff, severity, output, scoring, and closure policy.
 
+### Visual reviewer
+
+For every task that can affect rendered UI or rendered documentation, run the project-scoped reviewer from `.codex/agents/visualReview.toml` after browser QA and any documentation review, and before the final reviewer. This includes changes to styles, rendered components, route or document composition, visible copy, icons, diagrams, assets, and shared visual primitives. Skip it only when the changed files cannot affect rendered appearance or interaction, and record the concrete reason in validation and the final response.
+
+Supply the standard handoff plus every visual-review field required by the review contract. The reviewer must not modify files. Disposition every finding using the contract. After material visual fixes, repeat the relevant browser QA at the affected viewports and states, then rerun the visual reviewer. Completion requires no valid High or Medium visual findings and an explicit disposition for every Low visual finding.
+
 ### Final reviewer
 
-For every task that changes code, tests, configuration, agent definitions, or repository instructions, the main agent must spawn the project-scoped reviewer from `.codex/agents/reviewer.toml` after validation and any branch synchronization. Supply every handoff field required by the review contract, including the exact baseline and task paths. The reviewer must not modify files.
+For every task that changes code, tests, configuration, agent definitions, or repository instructions, the main agent must spawn the project-scoped reviewer from `.codex/agents/reviewer.toml` after validation, any branch synchronization, and any specialized review gates. Supply every handoff field required by the review contract, including the exact baseline and task paths, and summarize material specialized-review results. The reviewer must not modify files.
 
 Disposition every finding using the contract. After material fixes, rerun affected checks and repeat the reviewer. Completion requires no valid High or Medium findings and an explicit disposition for every Low finding.
 
@@ -197,7 +205,7 @@ When documentation under `docs/` changes, run the project-scoped reviewer from `
 - Solidity contracts described, or `none`
 - linked docs, tooltips, diagrams, examples, and shared references in the reading path
 
-Ask it to assess story, flow, concept order, contract accuracy, MathML, notation, examples, and reader preparation. Disposition findings under the shared contract. Repeat the text review after material documentation fixes, then proceed to the final reviewer.
+Ask it to assess story, flow, concept order, contract accuracy, MathML, notation, examples, and reader preparation. Disposition findings under the shared contract. Repeat the text review after material documentation fixes, then proceed to the visual reviewer when the documentation change can affect rendered appearance, followed by the final reviewer.
 
 ### Final response
 
@@ -206,6 +214,7 @@ Lead with the delivered result. Report:
 - selected validation commands and results
 - scope-based skip reasons
 - final review score and material reviewer feedback
+- visual-review evidence, score, and material feedback when the visual gate applied
 - findings fixed or explicitly deferred under the contract
 - branch-current status when the branch gate applied
 

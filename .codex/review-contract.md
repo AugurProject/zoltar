@@ -16,6 +16,17 @@ The parent agent must provide:
 - validation commands and results, including scope-based skip reasons
 - known risks or areas needing close attention
 
+For a visual-review handoff, the parent must additionally provide:
+
+- changed routes, rendered documents, components, and shared visual primitives
+- simulation scenario, fixture, route, or document URL used for each capture
+- current screenshot paths or attached evidence identifiers, plus baseline or before evidence when available
+- browser and exact viewport dimensions for each capture
+- states exercised, including relevant long-content and dense-data cases
+- intentional visual differences
+- console or runtime errors observed during browser QA
+- relevant states or surfaces that were inaccessible or intentionally not exercised, with reasons
+
 If an input is unavailable, the reviewer must continue with best effort and record the gap under `Review limitations` instead of guessing.
 
 ## Scope
