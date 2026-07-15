@@ -276,7 +276,7 @@ describe.serial('OpenOracleSection integration', () => {
 		})
 		const reportDetails = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
 
-		await clickElement(within(document.body).getByRole('tab', { name: 'Browse' }))
+		await clickElement(within(document.body).getByRole('button', { name: 'Browse' }))
 		await waitFor(() => {
 			expect(within(document.body).getByText(`Report #${reportId.toString()}`)).not.toBeNull()
 		})

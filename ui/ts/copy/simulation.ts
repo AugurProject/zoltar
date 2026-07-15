@@ -12,7 +12,7 @@ export const plus1Day = '+1 day'
 export const plus1Week = '+1 week'
 export const plus1Month = '+1 month'
 export const plus1Year = '+1 year'
-export const formatQaValue = (label: CopyTemplateValue) => `QA ${label}`
+export const formatQaAccountNumber = (accountIndex: CopyTemplateValue) => `QA account ${accountIndex}`
 export const ready = 'Ready'
 export const bootstrapping = 'Bootstrapping'
 export const formatSavedStateDetail = (stateName: CopyTemplateValue, scenarioLabel: CopyTemplateValue, savedAt: CopyTemplateValue) => `Custom state "${stateName}" based on ${scenarioLabel}. Saved ${savedAt}.`

@@ -11,6 +11,7 @@ import { useCopyToClipboard } from '../hooks/useCopyToClipboard.js'
 import { getSimulationScenarioDescription, getSimulationScenarioLabel, SIMULATION_SCENARIOS } from '../simulation/scenarios.js'
 import { deleteSavedSimulationState, getSavedSimulationStateStorageSummary, persistSavedSimulationState, removeCorruptedSavedSimulationStates, type SavedSimulationStateRecord, type SavedSimulationStateStorageSummary } from '../simulation/savedStates.js'
 import { OperationModal } from './OperationModal.js'
+import { AddressValue } from './AddressValue.js'
 import { TimestampValue } from './TimestampValue.js'
 import { Badge } from './Badge.js'
 import type { BadgeTone } from '../types/components.js'
@@ -66,8 +67,8 @@ function hasSavedSimulationStateRoute() {
 	return stateId !== null && stateId.trim() !== ''
 }
 
-function getSimulationAccountOptionLabel(account: string) {
-	return simulationCopy.formatQaValue(account)
+function getSimulationAccountOptionLabel(accountIndex: number) {
+	return simulationCopy.formatQaAccountNumber((accountIndex + 1).toString())
 }
 
 function getScenarioStatus(parameters: { bootstrapError: string | undefined; isBootstrapped: boolean }): { badgeTone: BadgeTone; label: string } {
@@ -294,6 +295,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 							<Badge tone='ok'>{commonCopy.active}</Badge>
 							<h3>{simulationCopy.qaAccount}</h3>
 						</div>
+						<AddressValue address={selectedAccount.value} />
 					</div>
 					<select
 						className='simulation-control-select'
@@ -308,9 +310,9 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 							})
 						}}
 					>
-						{controller.accounts.map(account => (
+						{controller.accounts.map((account, accountIndex) => (
 							<option key={account} value={account}>
-								{getSimulationAccountOptionLabel(account)}
+								{getSimulationAccountOptionLabel(accountIndex)}
 							</option>
 						))}
 					</select>
