@@ -19,6 +19,10 @@ library SecurityPoolUtils {
 	uint256 constant MIN_REP_DEPOSIT = 10 ether; // 10 rep
 
 	function rpow(uint256 x, uint256 n, uint256 baseUnit) external pure returns (uint256 z) {
+		return _rpow(x, n, baseUnit);
+	}
+
+	function _rpow(uint256 x, uint256 n, uint256 baseUnit) private pure returns (uint256 z) {
 		z = n % 2 != 0 ? x : baseUnit;
 		for (n /= 2; n != 0; n /= 2) {
 			x = (x * x) / baseUnit;
@@ -26,6 +30,61 @@ library SecurityPoolUtils {
 				z = (z * x) / baseUnit;
 			}
 		}
+	}
+
+	function calculateFeeAccrual(
+		uint256 collateral,
+		uint256 retentionRate,
+		uint256 timeDelta,
+		uint256 indexRemainder,
+		uint256 eligibleAllowance,
+		uint256 feesOwedRemainder
+	)
+		external
+		pure
+		returns (uint256 feeIndexDelta, uint256 nextIndexRemainder, uint256 creditedFees, uint256 nextFeesOwedRemainder)
+	{
+		uint256 nextCollateral = (collateral * _rpow(retentionRate, timeDelta, PRICE_PRECISION)) / PRICE_PRECISION;
+		uint256 scaledFeeDelta = (collateral - nextCollateral) * PRICE_PRECISION + indexRemainder;
+		feeIndexDelta = scaledFeeDelta / eligibleAllowance;
+		nextIndexRemainder = scaledFeeDelta % eligibleAllowance;
+		uint256 feesOwedDelta = feeIndexDelta * eligibleAllowance + feesOwedRemainder;
+		creditedFees = feesOwedDelta / PRICE_PRECISION;
+		nextFeesOwedRemainder = feesOwedDelta % PRICE_PRECISION;
+	}
+
+	function calculateVaultFee(
+		uint256 allowance,
+		uint256 feeIndexDelta,
+		uint256 remainder
+	) external pure returns (uint256 fees, uint256 nextRemainder) {
+		uint256 numerator = allowance * feeIndexDelta + remainder;
+		return (numerator / PRICE_PRECISION, numerator % PRICE_PRECISION);
+	}
+
+	function calculateLiquidationTransfer(
+		uint256 vaultRep,
+		uint256 targetAllowance,
+		uint256 requestedDebt,
+		uint256 repEthPrice
+	) external pure returns (uint256 debtToMove, uint256 repToMove) {
+		uint256 maxDebtToMove;
+		if (vaultRep > MIN_REP_DEPOSIT) {
+			maxDebtToMove =
+				((vaultRep - MIN_REP_DEPOSIT) * PRICE_PRECISION * BPS_DENOMINATOR) /
+				(repEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS));
+			if (maxDebtToMove > targetAllowance) maxDebtToMove = targetAllowance;
+		}
+		if (maxDebtToMove < targetAllowance && targetAllowance - maxDebtToMove <= MIN_SECURITY_BOND_DEBT) {
+			maxDebtToMove =
+				targetAllowance > MIN_SECURITY_BOND_DEBT ? targetAllowance - MIN_SECURITY_BOND_DEBT : targetAllowance;
+		}
+		debtToMove = requestedDebt > maxDebtToMove ? maxDebtToMove : requestedDebt;
+		if (debtToMove == 0) return (0, 0);
+		uint256 repNumerator = debtToMove * repEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS);
+		uint256 repDenominator = PRICE_PRECISION * BPS_DENOMINATOR;
+		repToMove = repNumerator / repDenominator;
+		if (repToMove * repDenominator < repNumerator) repToMove += 1;
 	}
 
 	// Starts at MAX_RETENTION_RATE, decreases linearly until the 80% utilization dip,

@@ -544,13 +544,14 @@ describe('Auction', () => {
 			assert.ok(totalFilled <= maxRep, 'total filled exceeds maxRep')
 		})
 
-		test('normal auction carries clearing-price dust so finalized REP stays claimable', async () => {
+		test('normal auction assigns cross-tick clearing-price dust independently of withdrawal order', async () => {
 			const alice = createTestClient(1)
 			const bob = createTestClient(2)
+			const expensiveTick = 2n
 			const clearingDustTick = 1n
 
 			await startAuction(client, auctionAddress, 2n, 100n)
-			await submitBid(alice, auctionAddress, clearingDustTick, 1n)
+			await submitBid(alice, auctionAddress, expensiveTick, 1n)
 			await submitBid(bob, auctionAddress, clearingDustTick, 1n)
 
 			const clearing = await computeClearing(client, auctionAddress)
@@ -560,16 +561,27 @@ describe('Auction', () => {
 
 			const totalRepPurchased = await getTotalRepPurchased(client, auctionAddress)
 			strictEqualTypeSafe(totalRepPurchased, 1n, 'aggregate auction accounting should purchase one wei REP')
+			const settlementSnapshot = await mockWindow.anvilSnapshot()
 
-			const aliceWithdrawal = await simulateWithdrawBids(client, auctionAddress, alice.account.address, [{ tick: clearingDustTick, bidIndex: 0n }])
-			strictEqualTypeSafe(aliceWithdrawal.totalFilledRep, 0n, 'first dust-sized withdrawal should only carry a remainder')
+			const aliceWithdrawal = await simulateWithdrawBids(client, auctionAddress, alice.account.address, [{ tick: expensiveTick, bidIndex: 0n }])
+			strictEqualTypeSafe(aliceWithdrawal.totalFilledRep, 0n, 'the higher-tick dust bid should round down at the start of the winning prefix')
 			strictEqualTypeSafe(aliceWithdrawal.totalEthRefund, 0n, 'winning dust-sized withdrawal should not refund ETH')
-			await withdrawBids(client, auctionAddress, alice.account.address, [{ tick: clearingDustTick, bidIndex: 0n }])
+			await withdrawBids(client, auctionAddress, alice.account.address, [{ tick: expensiveTick, bidIndex: 0n }])
 
-			const bobWithdrawal = await simulateWithdrawBids(client, auctionAddress, bob.account.address, [{ tick: clearingDustTick, bidIndex: 1n }])
-			strictEqualTypeSafe(bobWithdrawal.totalFilledRep, 1n, 'second dust-sized withdrawal should receive the carried REP')
+			const bobWithdrawal = await simulateWithdrawBids(client, auctionAddress, bob.account.address, [{ tick: clearingDustTick, bidIndex: 0n }])
+			strictEqualTypeSafe(bobWithdrawal.totalFilledRep, 1n, 'the lower winning tick should receive the deterministic cross-tick rounding unit')
 			strictEqualTypeSafe(bobWithdrawal.totalEthRefund, 0n, 'winning dust-sized withdrawal should not refund ETH')
 			strictEqualTypeSafe(aliceWithdrawal.totalFilledRep + bobWithdrawal.totalFilledRep, totalRepPurchased, 'all finalized REP should be claimable across sequential withdrawals')
+
+			await mockWindow.anvilRevert(settlementSnapshot)
+
+			const bobFirstWithdrawal = await simulateWithdrawBids(client, auctionAddress, bob.account.address, [{ tick: clearingDustTick, bidIndex: 0n }])
+			strictEqualTypeSafe(bobFirstWithdrawal.totalFilledRep, bobWithdrawal.totalFilledRep, 'Bob allocation should not depend on withdrawing before Alice')
+			await withdrawBids(client, auctionAddress, bob.account.address, [{ tick: clearingDustTick, bidIndex: 0n }])
+			const aliceSecondWithdrawal = await simulateWithdrawBids(client, auctionAddress, alice.account.address, [{ tick: expensiveTick, bidIndex: 0n }])
+			strictEqualTypeSafe(aliceSecondWithdrawal.totalFilledRep, aliceWithdrawal.totalFilledRep, 'Alice allocation should not depend on withdrawing after Bob')
+			await withdrawBids(client, auctionAddress, alice.account.address, [{ tick: expensiveTick, bidIndex: 0n }])
+			strictEqualTypeSafe(aliceSecondWithdrawal.totalFilledRep + bobFirstWithdrawal.totalFilledRep, totalRepPurchased, 'reverse-order withdrawals should reconcile to finalized REP')
 		})
 
 		test('multiple bids at same tick from same bidder (FIFO pro-rata)', async () => {
@@ -983,20 +995,69 @@ describe('Auction', () => {
 			const expectedTotalRep = maxRepBeingSold
 			strictEqualTypeSafe(await getTotalRepPurchased(client, auctionAddress), expectedTotalRep, 'totalRepPurchased should equal the full REP cap')
 
-			let withdrawnRep = 0n
-			for (const [withdrawFor, bidIndex] of [
+			const settlementSnapshot = await mockWindow.anvilSnapshot()
+			const winningBids = [
 				[alice.account.address, 0n],
 				[bob.account.address, 1n],
 				[carol.account.address, 2n],
-			] as const) {
+			] as const
+			const forwardRepByBid: bigint[] = []
+			let withdrawnRep = 0n
+			for (const [withdrawFor, bidIndex] of winningBids) {
 				const result = await simulateWithdrawBids(client, auctionAddress, withdrawFor, [{ tick: winningTick, bidIndex }])
 				strictEqualTypeSafe(result.totalEthRefund, 0n, 'winning same-tick bid should not receive an ETH refund')
+				forwardRepByBid[Number(bidIndex)] = result.totalFilledRep
 				withdrawnRep += result.totalFilledRep
 				await withdrawBids(client, auctionAddress, withdrawFor, [{ tick: winningTick, bidIndex }])
 			}
 
 			strictEqualTypeSafe(withdrawnRep, expectedTotalRep, 'separate same-tick withdrawals should reconcile to the finalized REP cap')
 			await assertContractEmpty(client, auctionAddress)
+
+			await mockWindow.anvilRevert(settlementSnapshot)
+			let reverseWithdrawnRep = 0n
+			for (const [withdrawFor, bidIndex] of [...winningBids].reverse()) {
+				const result = await simulateWithdrawBids(client, auctionAddress, withdrawFor, [{ tick: winningTick, bidIndex }])
+				strictEqualTypeSafe(result.totalFilledRep, forwardRepByBid[Number(bidIndex)], 'underfunded REP allocation should not depend on withdrawal order')
+				reverseWithdrawnRep += result.totalFilledRep
+				await withdrawBids(client, auctionAddress, withdrawFor, [{ tick: winningTick, bidIndex }])
+			}
+			strictEqualTypeSafe(reverseWithdrawnRep, expectedTotalRep, 'reverse-order underfunded withdrawals should reconcile to the finalized REP cap')
+			await assertContractEmpty(client, auctionAddress)
+		})
+
+		test('underfunded cross-tick dust allocation is independent of withdrawal order', async () => {
+			const alice = createTestClient(0)
+			const bob = createTestClient(1)
+			const expensiveTick = tickForPrice(4n * PRICE_PRECISION)
+			const cheaperWinningTick = tickForPrice(3n * PRICE_PRECISION)
+
+			await startAuction(client, auctionAddress, 1_000n, 1n)
+			await submitBid(alice, auctionAddress, expensiveTick, 1n)
+			await submitBid(bob, auctionAddress, cheaperWinningTick, 1n)
+			await mockWindow.advanceTime(AUCTION_TIME + 1n)
+			await finalize(client, auctionAddress)
+
+			strictEqualTypeSafe(await getTotalRepPurchased(client, auctionAddress), 1n, 'underfunded auction should sell its one-wei REP cap')
+			const settlementSnapshot = await mockWindow.anvilSnapshot()
+			const aliceForward = await simulateWithdrawBids(client, auctionAddress, alice.account.address, [{ tick: expensiveTick, bidIndex: 0n }])
+			await withdrawBids(client, auctionAddress, alice.account.address, [{ tick: expensiveTick, bidIndex: 0n }])
+			const bobForward = await simulateWithdrawBids(client, auctionAddress, bob.account.address, [{ tick: cheaperWinningTick, bidIndex: 0n }])
+			await withdrawBids(client, auctionAddress, bob.account.address, [{ tick: cheaperWinningTick, bidIndex: 0n }])
+
+			strictEqualTypeSafe(aliceForward.totalFilledRep, 0n, 'higher-tick bid should round down at the start of the winning prefix')
+			strictEqualTypeSafe(bobForward.totalFilledRep, 1n, 'lower winning tick should receive the cross-tick rounding unit')
+			strictEqualTypeSafe(aliceForward.totalFilledRep + bobForward.totalFilledRep, 1n, 'forward withdrawals should reconcile to the underfunded REP cap')
+
+			await mockWindow.anvilRevert(settlementSnapshot)
+			const bobReverse = await simulateWithdrawBids(client, auctionAddress, bob.account.address, [{ tick: cheaperWinningTick, bidIndex: 0n }])
+			await withdrawBids(client, auctionAddress, bob.account.address, [{ tick: cheaperWinningTick, bidIndex: 0n }])
+			const aliceReverse = await simulateWithdrawBids(client, auctionAddress, alice.account.address, [{ tick: expensiveTick, bidIndex: 0n }])
+			await withdrawBids(client, auctionAddress, alice.account.address, [{ tick: expensiveTick, bidIndex: 0n }])
+
+			strictEqualTypeSafe(bobReverse.totalFilledRep, bobForward.totalFilledRep, 'lower-tick allocation should not depend on withdrawing first')
+			strictEqualTypeSafe(aliceReverse.totalFilledRep, aliceForward.totalFilledRep, 'higher-tick allocation should not depend on withdrawing second')
+			strictEqualTypeSafe(aliceReverse.totalFilledRep + bobReverse.totalFilledRep, 1n, 'reverse withdrawals should reconcile to the underfunded REP cap')
 		})
 
 		test('underfunded auctions treat bids exactly at the threshold price as winners', async () => {

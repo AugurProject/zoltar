@@ -44,12 +44,12 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		uint256 vaultChildRepUsed,
 		uint256 escrowChildRepUsed
 	);
-	event OwnForkCollateralTransferred(
+	event ForkCollateralTransferred(
 		ISecurityPool parent,
 		ISecurityPool child,
 		uint256 childRepAmount,
-		uint256 ownForkMigratedRepCollateralized,
-		uint256 ownForkCollateralTransferred
+		uint256 migratedRepCollateralized,
+		uint256 collateralTransferred
 	);
 	event ClaimForkedEscalationDepositsToWallet(
 		ISecurityPool parent,
@@ -181,16 +181,7 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		return (sourceRepAmount * repBuckets.escalationChildRepAtFork) / escalationSourceRepAtFork;
 	}
 
-	function _migrateVaultUnlockedState(
-		ISecurityPool parent,
-		ISecurityPool child,
-		address vault
-	) internal returns (uint256 migratedRep) {
-		bool shouldTransferCollateral = !forkDataByPool[parent].ownFork;
-		return _migrateVaultUnlockedState(parent, child, vault, shouldTransferCollateral);
-	}
-
-	function _transferOwnForkMigratedCollateralToChild(
+	function _transferForkMigratedCollateralToChild(
 		ISecurityPool parent,
 		ISecurityPool child,
 		uint256 childRepAmount
@@ -198,21 +189,24 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		if (childRepAmount == 0) return;
 		parent.updateCollateralAmount();
 		SecurityPoolForkerForkData storage parentForkData = forkDataByPool[parent];
-		uint256 vaultRepAtFork = parentForkData.vaultRepAtFork;
-		uint256 parentCollateralAtFork = parentForkData.ownForkCollateralAtFork;
+		uint256 vaultRepAtFork =
+			parentForkData.ownFork ? parentForkData.vaultRepAtFork : parentForkData.auctionableRepAtFork;
+		uint256 parentCollateralAtFork = parentForkData.collateralAtFork;
 		if (vaultRepAtFork == 0 || parentCollateralAtFork == 0) return;
-		uint256 nextRepTransferred = parentForkData.ownForkMigratedRepCollateralized + childRepAmount;
+		uint256 nextRepTransferred = parentForkData.migratedRepCollateralized + childRepAmount;
 		require(nextRepTransferred <= vaultRepAtFork, 'Collateral high');
-		uint256 nextCollateralTransferred = Math.ceilDiv(parentCollateralAtFork * nextRepTransferred, vaultRepAtFork);
-		uint256 ethToTransfer = nextCollateralTransferred - parentForkData.ownForkCollateralTransferred;
-		parentForkData.ownForkMigratedRepCollateralized = nextRepTransferred;
-		parentForkData.ownForkCollateralTransferred = nextCollateralTransferred;
-		emit OwnForkCollateralTransferred(
+		uint256 targetCollateralTransferred = Math.ceilDiv(parentCollateralAtFork * nextRepTransferred, vaultRepAtFork);
+		uint256 ethToTransfer = targetCollateralTransferred - parentForkData.collateralTransferred;
+		uint256 availableCollateral = parent.completeSetCollateralAmount();
+		if (ethToTransfer > availableCollateral) ethToTransfer = availableCollateral;
+		parentForkData.migratedRepCollateralized = nextRepTransferred;
+		parentForkData.collateralTransferred += ethToTransfer;
+		emit ForkCollateralTransferred(
 			parent,
 			child,
 			childRepAmount,
-			parentForkData.ownForkMigratedRepCollateralized,
-			parentForkData.ownForkCollateralTransferred
+			parentForkData.migratedRepCollateralized,
+			parentForkData.collateralTransferred
 		);
 		if (ethToTransfer == 0) return;
 		parent.transferEth(payable(address(child)), ethToTransfer);
@@ -248,15 +242,16 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 	function _migrateVaultUnlockedState(
 		ISecurityPool parent,
 		ISecurityPool child,
-		address vault,
-		bool shouldTransferCollateral
+		address vault
 	) internal returns (uint256 migratedRep) {
 		uint256 parentRepAtFork =
 			forkDataByPool[parent].ownFork
 				? forkDataByPool[parent].vaultRepAtFork
 				: forkDataByPool[parent].auctionableRepAtFork;
 		child.updateVaultFees(vault);
-		parent.updateCollateralAmount();
+		// Checkpoint the parent entitlement in the same routine that clears the
+		// allowance, so future migration entry points cannot strand reserve fees.
+		parent.updateVaultFees(vault);
 		(uint256 parentPoolOwnership, uint256 parentSecurityBondAllowance, , uint256 parentVaultFeeIndex) = parent
 			.securityVaults(vault);
 		(
@@ -284,12 +279,7 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 			uint256 nextMigratedRep = childForkData.migratedRep + migratedRep;
 			_ensureMigratedVaultRepBacked(parent, child, nextMigratedRep);
 			childForkData.migratedRep = nextMigratedRep;
-			if (shouldTransferCollateral) {
-				uint256 collateralToTransfer = (parent.completeSetCollateralAmount() * migratedRep) / parentRepAtFork;
-				parent.transferEth(payable(child), collateralToTransfer);
-			} else if (forkDataByPool[parent].ownFork) {
-				_transferOwnForkMigratedCollateralToChild(parent, child, migratedRep);
-			}
+			_transferForkMigratedCollateralToChild(parent, child, migratedRep);
 		}
 
 		child.configureVault(

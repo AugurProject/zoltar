@@ -561,8 +561,8 @@
 						<code>&gt;= clearingTick</code> when
 						<code>underfundedWinningEth &gt; 0</code>, and those winners
 						share the full REP sale cap pro rata by winning ETH. Solidity
-						carries division dust forward so paged withdrawals reconcile to
-						the finalized aggregate result.
+						differences cumulative floor allocations at fixed bid positions, so
+						paged withdrawals reconcile independently of claim order.
 					</p>
 				</div>
 				<table>
@@ -611,13 +611,11 @@
 					price is zero.
 				</p>
 				<p>
-					Both finalized allocation paths carry division dust across paged
-					withdrawals. Normal clearing carries <code>clearingRemainder</code>
-					through the uniform-price ETH-to-REP division, and underfunded
-					clearing uses that same remainder carry while dividing the full REP
-					cap across winning ETH. Later withdrawals may receive remainder
-					carried from earlier integer division so bid-level withdrawals
-					reconcile to the aggregate finalized REP allocation.
+					Both finalized allocation paths derive each bid's REP from its fixed
+					cumulative winning-ETH position. The bid receives the difference
+					between rounded cumulative REP after and before that position. This
+					reconciles paged withdrawals to the aggregate allocation while making
+					rounding independent of claim order.
 				</p>
 			</section>
 
@@ -636,8 +634,9 @@
 							clears at a uniform price, while weak demand still settles the
 							qualifying winner set at one synthetic uniform price. It uses
 							real-number arithmetic for readability; the contract ceilings the
-							synthetic underfunded threshold, floors REP allocations, and carries
-							remainders during paged withdrawals.
+							synthetic underfunded threshold and computes each allocation by
+							differencing cumulative floors at the bid's fixed
+							descending-tick/submission position.
 						</p>
 					<div class="example-grid">
 						<label>

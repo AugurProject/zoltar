@@ -2,6 +2,7 @@
 pragma solidity 0.8.35;
 
 import { IUniformPriceDualCapBatchAuction } from './interfaces/IUniformPriceDualCapBatchAuction.sol';
+import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
 // Gas bound: finalize() descends AVL aggregate paths and never scans bids. The
 // tick range admits at most 1,048,577 distinct price levels, so an AVL tree over
@@ -59,8 +60,6 @@ contract UniformPriceDualCapBatchAuction {
 	address public immutable owner;
 
 	bool public underfunded;
-	// Carries uniform settlement division dust so bid-level withdrawals reconcile to totalRepPurchased.
-	uint256 public clearingRemainder;
 	uint256 public underfundedThreshold;
 	uint256 public underfundedWinningEth;
 	uint256 public activeTickCount;
@@ -198,9 +197,18 @@ contract UniformPriceDualCapBatchAuction {
 			require(bid.bidder == withdrawFor, 'Bid does not belong to the requested withdrawal address');
 			require(bid.ethAmount > 0 && !bid.claimed, 'Bid has already been claimed or does not exist');
 
+			uint256 activeCumulativeEthBeforeBid =
+				bid.cumulativeEth - bid.ethAmount - _getRefundedCumulativeEthBeforeIndex(tick, index);
+			uint256 cumulativeWinningEthBeforeBid = _getActiveEthAboveTick(root, tick) + activeCumulativeEthBeforeBid;
+
 			if (underfunded) {
 				if (underfundedWinningEth > 0 && tick >= clearingTick) {
-					totalFilledRep += _allocateRepProRata(bid.ethAmount, maxRepBeingSold, underfundedWinningEth);
+					totalFilledRep += _allocateRepFromCumulativePosition(
+						cumulativeWinningEthBeforeBid,
+						bid.ethAmount,
+						maxRepBeingSold,
+						underfundedWinningEth
+					);
 					// no ETH refund
 				} else {
 					// Loser: full ETH refund
@@ -212,11 +220,15 @@ contract UniformPriceDualCapBatchAuction {
 					totalEthRefund += bid.ethAmount;
 				} else if (tick > clearingTick) {
 					// Fully winning: convert all ETH to REP
-					totalFilledRep += _allocateRepAtClearingPrice(bid.ethAmount, clearingPriceLocal);
+					totalFilledRep += _allocateRepFromCumulativePosition(
+						cumulativeWinningEthBeforeBid,
+						bid.ethAmount,
+						PRICE_PRECISION,
+						clearingPriceLocal
+					);
 				} else {
 					// Tick == clearingTick: partial fill using FIFO within this price level.
-					uint256 previousCumulativeEth =
-						bid.cumulativeEth - bid.ethAmount - _getRefundedCumulativeEthBeforeIndex(tick, index);
+					uint256 previousCumulativeEth = activeCumulativeEthBeforeBid;
 					uint256 ethUsed;
 					uint256 cumulativeEth = previousCumulativeEth + bid.ethAmount;
 					if (ethFilledAtClearing <= previousCumulativeEth) {
@@ -227,7 +239,12 @@ contract UniformPriceDualCapBatchAuction {
 						ethUsed = ethFilledAtClearing - previousCumulativeEth;
 					}
 					if (ethUsed > bid.ethAmount) ethUsed = bid.ethAmount;
-					totalFilledRep += _allocateRepAtClearingPrice(ethUsed, clearingPriceLocal);
+					totalFilledRep += _allocateRepFromCumulativePosition(
+						cumulativeWinningEthBeforeBid,
+						ethUsed,
+						PRICE_PRECISION,
+						clearingPriceLocal
+					);
 					totalEthRefund += bid.ethAmount - ethUsed;
 				}
 			}
@@ -440,25 +457,27 @@ contract UniformPriceDualCapBatchAuction {
 			});
 	}
 
-	function _allocateRepAtClearingPrice(
+	function _allocateRepFromCumulativePosition(
+		uint256 cumulativeEthBefore,
 		uint256 ethUsed,
-		uint256 clearingPriceLocal
-	) private returns (uint256 repShare) {
-		if (ethUsed == 0 || clearingPriceLocal == 0) return 0;
-		uint256 numerator = ethUsed * PRICE_PRECISION + clearingRemainder;
-		repShare = numerator / clearingPriceLocal;
-		clearingRemainder = numerator % clearingPriceLocal;
+		uint256 repNumerator,
+		uint256 denominator
+	) private pure returns (uint256 repShare) {
+		if (ethUsed == 0 || repNumerator == 0 || denominator == 0) return 0;
+		uint256 cumulativeRepBefore = Math.mulDiv(cumulativeEthBefore, repNumerator, denominator);
+		uint256 cumulativeRepAfter = Math.mulDiv(cumulativeEthBefore + ethUsed, repNumerator, denominator);
+		return cumulativeRepAfter - cumulativeRepBefore;
 	}
 
-	function _allocateRepProRata(
-		uint256 ethUsed,
-		uint256 repToDistribute,
-		uint256 totalEth
-	) private returns (uint256 repShare) {
-		if (ethUsed == 0 || repToDistribute == 0 || totalEth == 0) return 0;
-		uint256 numerator = ethUsed * repToDistribute + clearingRemainder;
-		repShare = numerator / totalEth;
-		clearingRemainder = numerator % totalEth;
+	function _getActiveEthAboveTick(uint256 nodeId, int256 tick) private view returns (uint256 ethAbove) {
+		if (nodeId == 0) return 0;
+		Node storage node = nodes[nodeId];
+		if (tick < node.tick) {
+			uint256 rightEth = node.right == 0 ? 0 : nodes[node.right].subtreeEth;
+			return rightEth + node.totalEth + _getActiveEthAboveTick(node.left, tick);
+		}
+		if (tick > node.tick) return _getActiveEthAboveTick(node.right, tick);
+		return node.right == 0 ? 0 : nodes[node.right].subtreeEth;
 	}
 
 	function _fillActiveTickPage(
