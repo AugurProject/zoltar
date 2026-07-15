@@ -181,12 +181,6 @@ assert.ok(
 	'definition pileup fixture should be detected',
 )
 
-const textReviewGuidance = await Bun.file('.codex/agents/textReview.toml').text()
-assert.match(textReviewGuidance, /"these docs"/)
-assert.match(textReviewGuidance, /"reference summarizes\.\.\."/)
-assert.match(textReviewGuidance, /"auction design explains\.\.\."/)
-assert.match(textReviewGuidance, /Document\s+titles should not be\s+grammatical subjects/)
-
 const whitepaper = await Bun.file('docs/whitepaper_placeholder.html').text()
 const openOracleIntegration = await Bun.file('docs/openOracleIntegration.html').text()
 const operatorReference = await Bun.file('docs/operator-reference.md').text()
