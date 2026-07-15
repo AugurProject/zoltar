@@ -39,7 +39,22 @@ import type { TransactionRequestPreview } from './lib/chainBackend.js'
 import { buildRouteHref, DEPLOY_ROUTE, getRouteHashSearch, OPEN_ORACLE_ROUTE, SECURITY_POOLS_ROUTE, ZOLTAR_ROUTE } from './lib/routing.js'
 import { writeOpenOracleViewQueryParam, writeSecurityPoolsViewQueryParam, writeZoltarViewQueryParam } from './lib/urlParams.js'
 import { getUniversePresentation } from './lib/userCopy.js'
-import { UI_STRINGS } from './lib/uiStrings.js'
+import {
+	UI_STRING_BROWSE,
+	UI_STRING_BROWSE_POOLS,
+	UI_STRING_CREATE_POOL,
+	UI_STRING_CREATE_QUESTION,
+	UI_STRING_CREATE_REPORT,
+	UI_STRING_FORK_ZOLTAR,
+	UI_STRING_MANAGE_POOL,
+	UI_STRING_MARKET_VIEWS,
+	UI_STRING_MIGRATE_REP,
+	UI_STRING_ORACLE_REPORT_VIEWS,
+	UI_STRING_QUESTIONS_AND_MARKETS,
+	UI_STRING_REP_MIGRATION_UNAVAILABLE_BECAUSE_UNIVERSE_HAS_NOT_FORKED,
+	UI_STRING_REPORT_DETAILS,
+	UI_STRING_SECURITY_POOLS_VIEWS,
+} from './lib/uiStrings.js'
 import { formatUniverseCollectionLabel } from './lib/universe.js'
 import { resolveEnumValue, resolveFirstMatchingValue } from './lib/viewState.js'
 import type { ReportingFormState } from './types/app.js'
@@ -710,18 +725,18 @@ export function App() {
 	if (route === 'zoltar') {
 		routeSubNavigation = (
 			<RouteSubNavigation
-				ariaLabel={UI_STRINGS.app.zoltar.subNavigationAriaLabel}
+				ariaLabel={UI_STRING_MARKET_VIEWS}
 				value={activeZoltarView}
 				onChange={view => setZoltarView(view)}
 				options={[
-					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'questions')), label: UI_STRINGS.app.zoltar.questionsAndMarketsLabel, value: 'questions' },
-					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'create')), label: UI_STRINGS.app.zoltar.createQuestionLabel, value: 'create' },
-					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'fork')), label: UI_STRINGS.app.zoltar.forkOracleLabel, value: 'fork' },
+					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'questions')), label: UI_STRING_QUESTIONS_AND_MARKETS, value: 'questions' },
+					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'create')), label: UI_STRING_CREATE_QUESTION, value: 'create' },
+					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'fork')), label: UI_STRING_FORK_ZOLTAR, value: 'fork' },
 					{
-						label: UI_STRINGS.app.zoltar.migrateRepLabel,
+						label: UI_STRING_MIGRATE_REP,
 						value: 'migrate',
 						disabled: zoltarUniverse?.hasForked !== true,
-						...(zoltarUniverse?.hasForked === true ? { href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'migrate')) } : { reason: UI_STRINGS.app.zoltar.forkOracleRequiredForRepMigrationReason }),
+						...(zoltarUniverse?.hasForked === true ? { href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'migrate')) } : { reason: UI_STRING_REP_MIGRATION_UNAVAILABLE_BECAUSE_UNIVERSE_HAS_NOT_FORKED }),
 					},
 				]}
 			/>
@@ -729,26 +744,26 @@ export function App() {
 	} else if (route === 'security-pools') {
 		routeSubNavigation = (
 			<RouteSubNavigation
-				ariaLabel={UI_STRINGS.app.securityPools.subNavigationAriaLabel}
+				ariaLabel={UI_STRING_SECURITY_POOLS_VIEWS}
 				value={activeSecurityPoolsView}
 				onChange={view => setSecurityPoolsView(view)}
 				options={[
-					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')), label: UI_STRINGS.app.securityPools.browsePoolsLabel, value: 'browse' },
-					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'create')), label: UI_STRINGS.app.securityPools.createPoolLabel, value: 'create' },
-					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'operate')), label: UI_STRINGS.app.securityPools.managePoolLabel, value: 'operate' },
+					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')), label: UI_STRING_BROWSE_POOLS, value: 'browse' },
+					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'create')), label: UI_STRING_CREATE_POOL, value: 'create' },
+					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'operate')), label: UI_STRING_MANAGE_POOL, value: 'operate' },
 				]}
 			/>
 		)
 	} else if (route === 'open-oracle') {
 		routeSubNavigation = (
 			<RouteSubNavigation
-				ariaLabel={UI_STRINGS.app.openOracle.subNavigationAriaLabel}
+				ariaLabel={UI_STRING_ORACLE_REPORT_VIEWS}
 				value={activeOpenOracleView}
 				onChange={view => setOpenOracleView(view)}
 				options={[
-					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'browse')), label: UI_STRINGS.app.openOracle.browseLabel, value: 'browse' },
-					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'create')), label: UI_STRINGS.app.openOracle.createReportLabel, value: 'create' },
-					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'selected-report')), label: UI_STRINGS.app.openOracle.reportDetailsLabel, value: 'selected-report' },
+					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'browse')), label: UI_STRING_BROWSE, value: 'browse' },
+					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'create')), label: UI_STRING_CREATE_REPORT, value: 'create' },
+					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'selected-report')), label: UI_STRING_REPORT_DETAILS, value: 'selected-report' },
 				]}
 			/>
 		)

@@ -75,10 +75,10 @@ test('lint-ui-tsx-strings ignores local prop-object keys that are not direct use
 	)
 
 	expect(failures).toHaveLength(1)
-	expect(failures[0]).toContain('JSX text must come from UI_STRINGS')
+	expect(failures[0]).toContain('JSX text must come from a named uiStrings export')
 	expect(jsxPayloadFailures).toHaveLength(0)
 	expect(localDescriptionPropsFailures).toHaveLength(1)
-	expect(localDescriptionPropsFailures[0]).toContain('JSX text must come from UI_STRINGS')
+	expect(localDescriptionPropsFailures[0]).toContain('JSX text must come from a named uiStrings export')
 })
 
 test('lint-ui-tsx-strings rejects nested user-facing object payload literals inside JSX attributes', () => {
@@ -121,7 +121,7 @@ test('lint-ui-tsx-strings rejects direct suffix props and acronym JSX text', () 
 	expect(wrappedSuffixFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
 	expect(wrappedAcronymFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
 	expect(summaryFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
-	expect(acronymTextFailures[0]).toContain('JSX text must come from UI_STRINGS')
+	expect(acronymTextFailures[0]).toContain('JSX text must come from a named uiStrings export')
 	expect(helperFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
 	expect(lowercaseHelperFailures[0]).toContain('direct UI string literal must come from ui/ts/lib/uiStrings.ts')
 })
@@ -154,7 +154,7 @@ test('lint-ui-tsx-strings rejects lowercase visible JSX text', () => {
 
 	expect(failures).toHaveLength(1)
 	expect(failures[0]).toStartWith('ui/ts/components/TestText.tsx:')
-	expect(failures[0]).toContain('JSX text must come from UI_STRINGS')
+	expect(failures[0]).toContain('JSX text must come from a named uiStrings export')
 })
 
 test('lint-ui-tsx-strings rejects expression-wrapped visible JSX text', () => {
@@ -203,7 +203,7 @@ test('lint-ui-tsx-strings rejects assigned user-facing reasons', () => {
 	)
 	const propertyAssignmentFailures = lintSourceText('ui/ts/components/TestPropertyAssignedReason.tsx', "export function TestPropertyAssignedReason() { const copy = { reason: '' }; copy.reason = 'Settle later.'; return <Panel reason={copy.reason} /> }")
 	const elementAssignmentFailures = lintSourceText('ui/ts/components/TestElementAssignedReason.tsx', "export function TestElementAssignedReason() { const copy: Record<string, string> = {}; copy['aria-label'] = 'Close dialog'; return <button /> }")
-	const allowedElementAssignmentFailures = lintSourceText('ui/ts/components/TestAllowedElementAssignedReason.tsx', "export function TestAllowedElementAssignedReason() { const copy: Record<string, string> = {}; copy['aria-label'] = UI_STRINGS.common.closeLabel; return <button /> }")
+	const allowedElementAssignmentFailures = lintSourceText('ui/ts/components/TestAllowedElementAssignedReason.tsx', "export function TestAllowedElementAssignedReason() { const copy: Record<string, string> = {}; copy['aria-label'] = UI_STRING_CLOSE; return <button /> }")
 
 	expect(directAssignmentFailures).toHaveLength(1)
 	expect(ternaryAssignmentFailures).toHaveLength(1)
@@ -249,7 +249,7 @@ test('lint-ui-tsx-strings ignores comparison literals inside JSX expressions', (
 	const failures = lintSourceText('ui/ts/components/TestComparison.tsx', "export function TestComparison({ view }: { view: string }) { return <>{view === 'questions' ? <span>Shown</span> : <span>Hidden</span>}</> }")
 
 	expect(failures).toHaveLength(2)
-	expect(failures.every(failure => failure.includes('JSX text must come from UI_STRINGS'))).toBe(true)
+	expect(failures.every(failure => failure.includes('JSX text must come from a named uiStrings export'))).toBe(true)
 })
 
 test('lint-ui-tsx-strings includes committed branch changes from origin/main', () => {
@@ -272,7 +272,7 @@ test('lint-ui-tsx-strings reports multiline JSX text when a later tracked line c
 	const failures = lintSourceText('ui/ts/components/TestMultilineJsxText.tsx', ['export function TestMultilineJsxText() {', '\treturn <span>', '\t\tLegacy', '\t\tCopy', '\t</span>', '}'].join('\n'), new Set([4]))
 
 	expect(failures).toHaveLength(1)
-	expect(failures[0]).toContain('JSX text must come from UI_STRINGS')
+	expect(failures[0]).toContain('JSX text must come from a named uiStrings export')
 })
 
 test('lint-ui-tsx-strings reports multiline template literals when a later tracked line changes', () => {

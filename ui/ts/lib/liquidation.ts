@@ -1,6 +1,15 @@
 import { LIQUIDATION_BPS_DENOMINATOR, LIQUIDATION_PRICE_PRECISION, LIQUIDATION_REP_BONUS_BPS, getLiquidationRepToMove } from '@zoltar/shared/liquidation'
 import { getVaultCollateralizationPercent } from './trading.js'
-import { UI_STRINGS } from './uiStrings.js'
+import {
+	UI_STRING_NO_DEBT_IS_EXECUTABLE_FOR_LIQUIDATION_AT_THE_CURRENT_TARGET_SIDE_BOUNDS,
+	UI_STRING_THE_CALLER_VAULT_WOULD_BECOME_UNDERCOLLATERALIZED_AFTER_THIS_LIQUIDATION_OR_THE_LIQUIDATOR_VAULT_IS_THE_TARGET_VAULT,
+	UI_STRING_THE_CALLER_VAULT_WOULD_REMAIN_BELOW_THE_MINIMUM_REP_COLLATERAL_AFTER_LIQUIDATION,
+	UI_STRING_THE_CALLER_VAULT_WOULD_REMAIN_BELOW_THE_MINIMUM_SECURITY_BOND_ALLOWANCE_AFTER_LIQUIDATION,
+	UI_STRING_THE_TARGET_VAULT_IS_NOT_LIQUIDATABLE_AT_THE_CURRENT_PRICE,
+	UI_STRING_THE_TARGET_VAULT_WOULD_FALL_BELOW_THE_MINIMUM_REP_COLLATERAL_AFTER_LIQUIDATION,
+	UI_STRING_THE_TARGET_VAULT_WOULD_FALL_BELOW_THE_MINIMUM_SECURITY_BOND_ALLOWANCE_AFTER_LIQUIDATION,
+	UI_STRING_THIS_LIQUIDATION_AMOUNT_IS_TOO_SMALL_TO_IMPROVE_THE_TARGET_VAULT_HEALTH_AFTER_ROUNDING,
+} from './uiStrings.js'
 import type { SecurityPoolVaultSummary } from '../types/contracts.js'
 
 const MIN_SECURITY_BOND_DEBT = 1n * 10n ** 18n
@@ -23,21 +32,21 @@ function getRepToMoveForLiquidation(debtToMove: bigint, repPerEthPrice: bigint, 
 export function getLiquidationExecutionFailureDetail(errorMessage: string | undefined) {
 	switch (errorMessage) {
 		case 'Target safe':
-			return UI_STRINGS.liquidationModal.liquidationFailureTargetSafeDetail
+			return UI_STRING_THE_TARGET_VAULT_IS_NOT_LIQUIDATABLE_AT_THE_CURRENT_PRICE
 		case 'No liq':
-			return UI_STRINGS.liquidationModal.liquidationFailureNoExecutableDebtDetail
+			return UI_STRING_NO_DEBT_IS_EXECUTABLE_FOR_LIQUIDATION_AT_THE_CURRENT_TARGET_SIDE_BOUNDS
 		case 'No gain':
-			return UI_STRINGS.liquidationModal.liquidationFailureNoHealthGainDetail
+			return UI_STRING_THIS_LIQUIDATION_AMOUNT_IS_TOO_SMALL_TO_IMPROVE_THE_TARGET_VAULT_HEALTH_AFTER_ROUNDING
 		case 'Caller bad':
-			return UI_STRINGS.liquidationModal.liquidationFailureUndercollateralizedCallerDetail
+			return UI_STRING_THE_CALLER_VAULT_WOULD_BECOME_UNDERCOLLATERALIZED_AFTER_THIS_LIQUIDATION_OR_THE_LIQUIDATOR_VAULT_IS_THE_TARGET_VAULT
 		case 'Target REP':
-			return UI_STRINGS.liquidationModal.liquidationFailureTargetRepDetail
+			return UI_STRING_THE_TARGET_VAULT_WOULD_FALL_BELOW_THE_MINIMUM_REP_COLLATERAL_AFTER_LIQUIDATION
 		case 'Target debt':
-			return UI_STRINGS.liquidationModal.liquidationFailureTargetDebtDetail
+			return UI_STRING_THE_TARGET_VAULT_WOULD_FALL_BELOW_THE_MINIMUM_SECURITY_BOND_ALLOWANCE_AFTER_LIQUIDATION
 		case 'Caller REP':
-			return UI_STRINGS.liquidationModal.liquidationFailureCallerRepDetail
+			return UI_STRING_THE_CALLER_VAULT_WOULD_REMAIN_BELOW_THE_MINIMUM_REP_COLLATERAL_AFTER_LIQUIDATION
 		case 'Caller debt':
-			return UI_STRINGS.liquidationModal.liquidationFailureCallerDebtDetail
+			return UI_STRING_THE_CALLER_VAULT_WOULD_REMAIN_BELOW_THE_MINIMUM_SECURITY_BOND_ALLOWANCE_AFTER_LIQUIDATION
 		default:
 			return errorMessage
 	}
@@ -163,7 +172,7 @@ export function getDeterministicLiquidationFailureReason({
 	}
 	const targetMaxDebtToMove = maxDebtToMove === undefined || maxDebtToMove > targetVaultSummary.securityBondAllowance ? targetVaultSummary.securityBondAllowance : maxDebtToMove
 	const debtToMove = liquidationAmount < targetMaxDebtToMove ? liquidationAmount : targetMaxDebtToMove
-	if (debtToMove <= 0n) return UI_STRINGS.liquidationModal.liquidationFailureNoExecutableDebtDetail
+	if (debtToMove <= 0n) return UI_STRING_NO_DEBT_IS_EXECUTABLE_FOR_LIQUIDATION_AT_THE_CURRENT_TARGET_SIDE_BOUNDS
 	const repToMove = repPerEthPrice === undefined ? undefined : getRepToMoveForLiquidation(debtToMove, repPerEthPrice, targetVaultSummary.securityBondAllowance, targetVaultSummary.repDepositShare)
 	const targetAfterAllowance = targetVaultSummary.securityBondAllowance - debtToMove
 	const targetAfterRepDeposit = repToMove === undefined ? undefined : targetVaultSummary.repDepositShare - repToMove
