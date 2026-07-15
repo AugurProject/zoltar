@@ -16,7 +16,7 @@ import { installDomEnvironment } from '../testUtils/domEnvironment.js'
 const DEFAULT_SIMULATION_REP_PER_ETH_PRICE = 3n * 10n ** 18n
 const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
 const SEEDED_REP_DEPOSIT = 10_000n * 10n ** 18n
-const SEEDED_SECURITY_BOND_ALLOWANCE = 100n * 10n ** 18n
+const SEEDED_SECURITY_BOND_ALLOWANCE = 80n * 10n ** 18n
 type SimulationBackend = Awaited<ReturnType<typeof createSimulationBackend>>
 afterEach(() => {
 	resetActiveEnvironmentForTesting()

@@ -159,6 +159,7 @@ export interface AnvilWindowEthereum {
 	anvilSnapshot: () => Promise<string>
 	anvilRevert: (snapshotId: string) => Promise<void>
 	request: (args: { method: string; params?: unknown }) => Promise<unknown>
+	requestRaw: (args: { method: string; params?: unknown }) => Promise<unknown>
 	on: () => void
 	removeListener: () => void
 }
@@ -195,6 +196,20 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 
 	// Make JSON-RPC request to Anvil
 	let requestId = 0
+	const requestRaw = async (args: { method: string; params?: unknown[] | unknown | undefined }): Promise<unknown> => {
+		const isSendTransactionMethod = args.method === 'eth_sendTransaction' || args.method === 'wallet_sendTransaction' || args.method === 'eth_sendRawTransaction'
+		const params = isSendTransactionMethod ? normalizeAnvilTransactionParams(ensureArray(args.params)) : ensureArray(args.params)
+		const response = await fetch(ANVIL_RPC, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ jsonrpc: '2.0', id: requestId++, method: args.method, params }),
+		})
+		if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+		const json = parseJsonRpcResponse(await response.json())
+		if (json.error !== undefined) throw new Error(json.error.message || 'RPC error')
+		ensureDefined(json.result, 'json.result is undefined')
+		return json.result
+	}
 	const request = async (args: { method: string; params?: unknown[] | unknown | undefined; skipCoverage?: boolean }): Promise<unknown> => {
 		const isSendTransactionMethod = args.method === 'eth_sendTransaction' || args.method === 'wallet_sendTransaction' || args.method === 'eth_sendRawTransaction'
 		const params = isSendTransactionMethod ? normalizeAnvilTransactionParams(ensureArray(args.params)) : ensureArray(args.params)
@@ -463,6 +478,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 
 	const mock: AnvilWindowEthereum = {
 		request,
+		requestRaw,
 		on: () => {},
 		removeListener: () => {},
 		addStateOverrides,
