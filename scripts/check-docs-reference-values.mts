@@ -37,6 +37,7 @@ assertCoordinatorRecoveryBranch()
 assertLiquidationFullCloseDocs()
 assertStartHereTimelines()
 assertContractInteractionDistinctions()
+assertTruthAuctionRepairParameter()
 
 function assertContinuationIdentifierExplanation(): void {
 	assert.ok(html.includes('uint256(keccak256(abi.encode(address(this), outcomeIndex, depositIndex)))'), 'docs/escalation-game-architecture.html must explain the fork-continuation stable parent deposit identifier formula')
@@ -209,6 +210,13 @@ function assertContractInteractionDistinctions(): void {
 	for (const compatibilitySource of ['utils/ReentrancyGuard.sol', 'token/ERC20/IERC20.sol', 'token/ERC20/utils/SafeERC20.sol', 'utils/math/Math.sol']) {
 		assert.ok(operatorReference.includes(`openOracle/openzeppelin/contracts/${compatibilitySource}`), `Operator Reference must directly link ${compatibilitySource}`)
 	}
+}
+
+function assertTruthAuctionRepairParameter(): void {
+	const repairBpsMatch = securityPoolUtils.match(/uint256 constant MIN_TRUTH_AUCTION_REPAIR_BPS = BPS_DENOMINATOR/)
+	assert.ok(repairBpsMatch, 'SecurityPoolUtils must keep the truth-auction repair floor tied to BPS_DENOMINATOR')
+	const normalizedPlaceholder = whitepaperPlaceholder.replaceAll(/\s+/g, ' ')
+	assert.match(normalizedPlaceholder, /<code>MIN_TRUTH_AUCTION_REPAIR_BPS<\/code>[\s\S]*?<code>10000 bps \(100%\)<\/code>/, 'whitepaper parameter table must document the exact 100% truth-auction repair floor')
 }
 
 function assertSimpleByteRow(label: string, expectedValue: string): void {

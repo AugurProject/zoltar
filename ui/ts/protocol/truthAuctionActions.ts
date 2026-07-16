@@ -1,5 +1,5 @@
 import { type Address } from '@zoltar/shared/ethereum'
-import { peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../contractArtifact.js'
+import { peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_SecurityPool_SecurityPool, peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../contractArtifact.js'
 import type { WriteClient } from '../types/contracts.js'
 import { writeContractAndWait } from './core.js'
 import { getInfraContractAddresses } from './deploymentHelpers.js'
@@ -71,17 +71,35 @@ export async function settleTruthAuctionBids(client: WriteClient, securityPoolAd
 	)
 }
 export async function finalizeSecurityPoolTruthAuction(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
-	return await executeForkAuctionAction(
-		client,
-		'finalizeTruthAuction',
-		securityPoolAddress,
-		universeId,
-		async () =>
-			await writeContractAndWait(client, () => ({
-				address: getInfraContractAddresses().securityPoolForker,
-				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
-				functionName: 'finalizeTruthAuction',
-				args: [securityPoolAddress],
-			})),
-	)
+	return await executeForkAuctionAction(client, 'finalizeTruthAuction', securityPoolAddress, universeId, async () => {
+		const truthAuctionAddress = await client.readContract({
+			address: securityPoolAddress,
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			functionName: 'truthAuction',
+			args: [],
+		})
+		const [[auctionEthToSend], ethRaiseCap] = await Promise.all([
+			client.readContract({
+				address: truthAuctionAddress,
+				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				functionName: 'previewFinalization',
+				args: [],
+			}),
+			client.readContract({
+				address: truthAuctionAddress,
+				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+				functionName: 'ethRaiseCap',
+				args: [],
+			}),
+		])
+		if (auctionEthToSend > ethRaiseCap) throw new Error('Truth auction finalization preview exceeds its repair target.')
+		const exactRepairContribution = ethRaiseCap - auctionEthToSend
+		return await writeContractAndWait(client, () => ({
+			address: getInfraContractAddresses().securityPoolForker,
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'finalizeTruthAuction',
+			args: [securityPoolAddress],
+			value: exactRepairContribution,
+		}))
+	})
 }

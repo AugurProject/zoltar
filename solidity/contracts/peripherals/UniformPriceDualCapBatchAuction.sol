@@ -129,44 +129,62 @@ contract UniformPriceDualCapBatchAuction {
 		require(block.timestamp >= auctionStarted + AUCTION_TIME, 'Auction bidding period is still active');
 
 		(bool hitCap, int256 foundTick, uint256 accumulatedEth, uint256 ethAtClearingTick) = computeClearing();
+		(
+			int256 finalClearingTick,
+			uint256 finalUnderfundedWinningEth,
+			uint256 finalRepPurchased,
+			uint256 ethToSend
+		) = _computeFinalizationOutcome(hitCap, foundTick, accumulatedEth);
 		finalized = true;
-		clearingTick = foundTick;
+		clearingTick = finalClearingTick;
 		ethFilledAtClearing = ethAtClearingTick;
 		ethRaised = accumulatedEth;
-
-		uint256 ethToSend;
-		if (hitCap) {
-			uint256 clearingPrice = tickToPrice(clearingTick);
-			totalRepPurchased = clearingPrice > 0 ? (accumulatedEth * PRICE_PRECISION) / clearingPrice : 0;
-			ethToSend = accumulatedEth;
-		} else {
-			// Underfunded bids buy REP only at or above the auction reserve implied by
-			// both caps. This keeps REP issued proportional to ETH actually raised.
-			underfunded = true;
-			if (ethRaised == 0 || maxRepBeingSold == 0) {
-				clearingTick = 0;
-				underfundedWinningEth = 0;
-				totalRepPurchased = 0;
-				ethToSend = 0;
-			} else {
-				clearingTick = _priceToCeilingTick(underfundedThreshold);
-				uint256 clearingPrice = tickToPrice(clearingTick);
-				if (clearingPrice < underfundedThreshold) {
-					totalRepPurchased = 0;
-					ethToSend = 0;
-				} else {
-					underfundedWinningEth =
-						_getActiveEthAboveTick(root, clearingTick) + _getEthAtTick(root, clearingTick);
-					totalRepPurchased = Math.mulDiv(underfundedWinningEth, PRICE_PRECISION, clearingPrice);
-					if (totalRepPurchased > maxRepBeingSold) totalRepPurchased = maxRepBeingSold;
-					ethToSend = underfundedWinningEth;
-				}
-			}
-		}
+		underfunded = !hitCap;
+		underfundedWinningEth = finalUnderfundedWinningEth;
+		totalRepPurchased = finalRepPurchased;
 
 		(bool sent, ) = payable(owner).call{ value: ethToSend }('');
 		require(sent, 'Auction failed to send raised ETH to the owner');
 		emit Finalized(ethToSend, hitCap, clearingTick, totalRepPurchased, accumulatedEth);
+	}
+
+	function previewFinalization() external view returns (uint256 ethToSend, uint256 repPurchased) {
+		(bool hitCap, int256 foundTick, uint256 accumulatedEth, ) = computeClearing();
+		(, , repPurchased, ethToSend) = _computeFinalizationOutcome(hitCap, foundTick, accumulatedEth);
+	}
+
+	function _computeFinalizationOutcome(
+		bool hitCap,
+		int256 foundTick,
+		uint256 accumulatedEth
+	)
+		private
+		view
+		returns (
+			int256 finalClearingTick,
+			uint256 finalUnderfundedWinningEth,
+			uint256 finalRepPurchased,
+			uint256 ethToSend
+		)
+	{
+		if (hitCap) {
+			uint256 fundedClearingPrice = tickToPrice(foundTick);
+			finalRepPurchased = fundedClearingPrice > 0 ? (accumulatedEth * PRICE_PRECISION) / fundedClearingPrice : 0;
+			return (foundTick, 0, finalRepPurchased, accumulatedEth);
+		}
+
+		// Underfunded bids buy REP only at or above the auction reserve implied by
+		// both caps. This keeps REP issued proportional to ETH actually raised.
+		if (accumulatedEth == 0 || maxRepBeingSold == 0) return (0, 0, 0, 0);
+		finalClearingTick = _priceToCeilingTick(underfundedThreshold);
+		uint256 clearingPrice = tickToPrice(finalClearingTick);
+		if (clearingPrice < underfundedThreshold) return (finalClearingTick, 0, 0, 0);
+
+		finalUnderfundedWinningEth =
+			_getActiveEthAboveTick(root, finalClearingTick) + _getEthAtTick(root, finalClearingTick);
+		finalRepPurchased = Math.mulDiv(maxRepBeingSold, finalUnderfundedWinningEth, ethRaiseCap);
+		if (finalRepPurchased == 0) return (finalClearingTick, 0, 0, 0);
+		return (finalClearingTick, finalUnderfundedWinningEth, finalRepPurchased, finalUnderfundedWinningEth);
 	}
 
 	function computeClearing()

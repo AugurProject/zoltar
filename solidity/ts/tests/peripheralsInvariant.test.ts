@@ -7,7 +7,7 @@ import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/
 import { createWriteClient, WriteClient } from '../testSupport/simulator/utils/clients'
 import { BURN_ADDRESS, DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { addressString } from '../testSupport/simulator/utils/bigint'
-import { approveAndDepositRep, handleOracleReporting, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
+import { approveAndDepositRep, handleOracleReporting, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
 import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
 import {
 	executeStagedOperation,
@@ -16,10 +16,12 @@ import {
 	getPendingSettlementOperationCount,
 	getPendingSettlementOperationIds,
 	getQueuedOperationEthCost,
+	getEthRaiseCap,
 	getQuestionEndDate,
 	getRequestPriceEthCost,
 	getStagedOperation,
 	getStagedOperationCounter,
+	migrateShares,
 	OperationType,
 	participateAuction,
 	queueLiquidationAtForcedPrice,
@@ -52,7 +54,9 @@ import {
 	getCompleteSetCollateralAmount,
 	getPoolOwnershipDenominator,
 	getSecurityVault,
+	getShareTokenSupply,
 	getSystemState,
+	getTotalAccruedFees,
 	getTotalFeesOwedToVaults,
 	getTotalRepBalance,
 	getTotalSecurityBondAllowance,
@@ -63,9 +67,9 @@ import { approveToken, contractExists, getChildUniverseId as deriveChildUniverse
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { SystemState } from '../testSupport/simulator/types/peripheralTypes'
 import { ensureDefined, strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
-import { computeClearing, deployUniformPriceDualCapBatchAuction, finalize as finalizeAuction, getBidCountAtTick, getEthRaiseCap, getEthRaised, getTotalRepPurchased, simulateWithdrawBids, startAuction, submitBid, withdrawBids } from '../testSupport/simulator/utils/contracts/auction'
+import { computeClearing, deployUniformPriceDualCapBatchAuction, finalize as finalizeAuction, getEthRaised, getTotalRepPurchased, simulateWithdrawBids, startAuction, submitBid, withdrawBids } from '../testSupport/simulator/utils/contracts/auction'
 import { getUniformPriceDualCapBatchAuctionAddress } from '../testSupport/simulator/utils/contracts/deployments'
-import { tickToPrice } from '../testSupport/simulator/utils/tickMath'
+import { priceToClosestTick, tickToPrice } from '../testSupport/simulator/utils/tickMath'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -73,7 +77,6 @@ const genesisUniverse = 0n
 const securityMultiplier = 2n
 const repDeposit = 1000n * 10n ** 18n
 const AUCTION_TIME = 604800n
-const formatStorageSlot = (slot: bigint) => `0x${slot.toString(16).padStart(64, '0')}`
 
 type EscrowAccountingSnapshot = {
 	escalationGameTokenBalance: bigint
@@ -897,34 +900,95 @@ describe('Peripherals invariant harness', () => {
 		}
 	})
 
-	test('forced ETH before the first mint remains separate from accounted collateral', async () => {
-		const forcedSurplus = 10n ** 18n
-		const mintAmount = 2n * 10n ** 18n
+	test('positive-value mint fuzzing always returns shares and preserves unsolicited ETH surplus', async () => {
 		const priceOracle = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, securityMultiplier).priceOracleManagerAndOperatorQueuer
-		await mockWindow.setBalance(context.securityPool, forcedSurplus)
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, repDeposit / 4n)
+		const forcedSurplus = 17n * 10n ** 18n + 3n
+		await mockWindow.setBalance(context.securityPool, (await getETHBalance(client, context.securityPool)) + forcedSurplus)
 
-		await createCompleteSet(client, context.securityPool, mintAmount)
+		let state = 0x51a2e5n
+		const nextMintAmount = () => {
+			state = (state * 6364136223846793005n + 1442695040888963407n) & ((1n << 64n) - 1n)
+			return (state % (3n * 10n ** 18n)) + 1n
+		}
+		const mintAmounts = [1n, 10n ** 9n, 10n ** 15n, 1n * 10n ** 18n, nextMintAmount(), nextMintAmount(), nextMintAmount()]
+		const minter = createClient(2)
 
-		strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, context.securityPool), mintAmount, 'only the mint payment should become complete-set collateral')
-		strictEqualTypeSafe(await getETHBalance(client, context.securityPool), forcedSurplus + mintAmount, 'raw balance should retain the unsolicited surplus beside accounted collateral')
+		for (const mintAmount of mintAmounts) {
+			const nominalSupplyBefore = await getShareTokenSupply(client, context.securityPool)
+			await createCompleteSet(minter, context.securityPool, mintAmount)
+			const nominalSupplyAfter = await getShareTokenSupply(client, context.securityPool)
+			assert.ok(nominalSupplyAfter > nominalSupplyBefore, `successful positive mint must issue nonzero shares for ${mintAmount.toString()} wei`)
+
+			const accountedEth = (await getCompleteSetCollateralAmount(client, context.securityPool)) + (await getTotalAccruedFees(client, context.securityPool))
+			strictEqualTypeSafe((await getETHBalance(client, context.securityPool)) - accountedEth, forcedSurplus, 'mint and fee accounting must leave unsolicited ETH in a separate invariant surplus bucket')
+		}
 	})
 
-	test('a positive-value complete-set mint cannot succeed with zero shares', async () => {
-		const collateral = 10n * 10n ** 18n
-		await mockWindow.setBalance(context.securityPool, collateral)
-		await mockWindow.addStateOverrides({
-			[context.securityPool]: {
-				stateDiff: {
-					[formatStorageSlot(1n)]: 100n * 10n ** 18n,
-					[formatStorageSlot(2n)]: collateral,
-					[formatStorageSlot(5n)]: 1n * 10n ** 18n,
-				},
-			},
-		})
+	test.each([
+		{ path: 'external', seed: 0xe71e2a1n },
+		{ path: 'own', seed: 0x0a11f04bn },
+	] as const)('stateful $path-fork lifecycle fuzzing reaches a consistent reactivated child', async ({ path, seed }) => {
+		const parentAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, securityMultiplier)
+		const allowance = repDeposit / 4n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, parentAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, allowance)
+		const shareHolder = createClient(2)
+		const mintAmount = (seed % (5n * 10n ** 18n)) + 1n * 10n ** 18n
+		await createCompleteSet(shareHolder, context.securityPool, mintAmount)
+		strictEqualTypeSafe(await getSystemState(client, context.securityPool), SystemState.Operational, 'lifecycle should begin operational')
 
-		await assert.rejects(createCompleteSet(client, context.securityPool, 1n), /Exchange rate undefined/)
-		strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, context.securityPool), collateral, 'the rejected mint must preserve collateral accounting')
+		if (path === 'own') {
+			await mockWindow.setTime(context.questionEndDate + 1n)
+			await manipulatePriceOracle(client, mockWindow, parentAddresses.priceOracleManagerAndOperatorQueuer)
+			const forkThreshold = (await getZoltarForkThreshold(client, genesisUniverse)) / securityMultiplier
+			await depositRep(client, context.securityPool, 2n * forkThreshold)
+			await triggerOwnGameFork(client, context.securityPool)
+		} else {
+			await triggerExternalForkForSecurityPool(undefined, 'stateful lifecycle fork source')
+		}
+		strictEqualTypeSafe(await getSystemState(client, context.securityPool), SystemState.PoolForked, 'forking should freeze the parent pool')
+
+		const migrationActions = shuffle(['invalid-shares', 'yes-shares', 'no-shares', 'rep', 'vault'] as const, seed)
+		for (const action of migrationActions) {
+			if (action === 'rep') {
+				await migrateRepToZoltar(client, context.securityPool, [QuestionOutcome.Yes])
+			} else if (action === 'vault') {
+				await migrateVault(client, context.securityPool, QuestionOutcome.Yes)
+			} else {
+				let outcome = QuestionOutcome.No
+				if (action === 'invalid-shares') outcome = QuestionOutcome.Invalid
+				if (action === 'yes-shares') outcome = QuestionOutcome.Yes
+				await migrateShares(shareHolder, parentAddresses.shareToken, genesisUniverse, outcome, [QuestionOutcome.Yes])
+			}
+		}
+
+		const yesUniverse = getChildUniverseIdForOutcome(QuestionOutcome.Yes)
+		const yesAddresses = getSecurityPoolAddresses(context.securityPool, yesUniverse, context.questionId, securityMultiplier)
+		strictEqualTypeSafe(await getSystemState(client, yesAddresses.securityPool), SystemState.ForkMigration, 'migrated child should remain isolated until the repair phase')
+		await mockWindow.advanceTime(8n * 7n * DAY + 1n)
+		await startTruthAuction(client, yesAddresses.securityPool)
+
+		if ((await getSystemState(client, yesAddresses.securityPool)) === SystemState.ForkTruthAuction) {
+			const ethRaiseCap = await getEthRaiseCap(client, yesAddresses.truthAuction)
+			if (ethRaiseCap > 0n) {
+				const parentForkData = await getSecurityPoolForkerForkData(client, context.securityPool)
+				const repAtFork = path === 'own' ? (await getOwnForkRepBuckets(client, context.securityPool)).vaultRepAtFork : parentForkData.auctionableRepAtFork
+				await participateAuction(createClient(3), yesAddresses.truthAuction, repAtFork / 4n, ethRaiseCap)
+			}
+			await mockWindow.advanceTime(AUCTION_TIME + 1n)
+			await finalizeTruthAuction(client, yesAddresses.securityPool)
+		}
+
+		strictEqualTypeSafe(await getSystemState(client, yesAddresses.securityPool), SystemState.Operational, 'settled child should reactivate after randomized migration ordering')
+		const supplyBeforeReactivatedMint = await getShareTokenSupply(client, yesAddresses.securityPool)
+		if (path === 'external') {
+			await createCompleteSet(createClient(4), yesAddresses.securityPool, 1n * 10n ** 18n)
+			assert.ok((await getShareTokenSupply(client, yesAddresses.securityPool)) > supplyBeforeReactivatedMint, 'reactivated unresolved child should accept a positive complete-set mint')
+		} else {
+			await assert.rejects(createCompleteSet(createClient(4), yesAddresses.securityPool, 1n * 10n ** 18n), /Resolved/)
+			strictEqualTypeSafe(await getShareTokenSupply(client, yesAddresses.securityPool), supplyBeforeReactivatedMint, 'resolved own-fork child should reactivate without reopening complete-set minting')
+		}
+		strictEqualTypeSafe(await getSystemState(client, context.securityPool), SystemState.PoolForked, 'reactivating a child must not reopen the parent')
 	})
 
 	test('fork and migration state transitions preserve REP supply and child mapping', async () => {
@@ -1004,70 +1068,6 @@ describe('Peripherals invariant harness', () => {
 		const yesBalanceBeforeRepeat = await getERC20Balance(client, getRepTokenAddress(yesUniverseId), yesSecurityPool)
 		await migrateRepToZoltar(client, context.securityPool, [QuestionOutcome.Yes])
 		strictEqualTypeSafe(await getERC20Balance(client, getRepTokenAddress(yesUniverseId), yesSecurityPool), yesBalanceBeforeRepeat, 'repeat migration after vault migration should not mint extra child REP')
-	})
-
-	test('seeded cross-contract actions preserve accounting through fork, migration, auction, and child reactivation', async () => {
-		for (const seed of [0x51n, 0x9dn, 0x1337n]) {
-			const seedSnapshot = await mockWindow.anvilSnapshot()
-			const passiveVault = createClient(1)
-			const firstBidder = createClient(2)
-			const secondBidder = createClient(3)
-			await mockWindow.setTime(context.questionEndDate + 10000n)
-			await approveAndDepositRep(passiveVault, repDeposit, context.questionId)
-			const priceOracle = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, securityMultiplier).priceOracleManagerAndOperatorQueuer
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, repDeposit / 4n)
-			await createCompleteSet(createClient(4), context.securityPool, 10n * 10n ** 18n)
-			strictEqualTypeSafe(await getSystemState(client, context.securityPool), SystemState.Operational, `seed ${seed.toString()}: parent should begin operational`)
-
-			await triggerExternalForkForSecurityPool(undefined, `stateful seed ${seed.toString()}`)
-			strictEqualTypeSafe(await getSystemState(client, context.securityPool), SystemState.PoolForked, `seed ${seed.toString()}: parent should enter PoolForked`)
-
-			await migrateRepToZoltar(client, context.securityPool, [QuestionOutcome.Yes])
-			await migrateVault(client, context.securityPool, QuestionOutcome.Yes)
-			for (const migrationOutcome of shuffle([QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No], seed)) {
-				await migrateRepToZoltar(client, context.securityPool, [migrationOutcome])
-			}
-
-			const yesUniverse = getChildUniverseIdForOutcome(QuestionOutcome.Yes)
-			const yesPool = getSecurityPoolAddresses(context.securityPool, yesUniverse, context.questionId, securityMultiplier)
-			strictEqualTypeSafe(await getSystemState(client, yesPool.securityPool), SystemState.ForkMigration, `seed ${seed.toString()}: child should remain in ForkMigration before the deadline`)
-
-			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
-			await startTruthAuction(client, yesPool.securityPool)
-			strictEqualTypeSafe(await getSystemState(client, yesPool.securityPool), SystemState.ForkTruthAuction, `seed ${seed.toString()}: under-repaired child should enter ForkTruthAuction`)
-
-			const repAtFork = (await getSecurityPoolForkerForkData(client, context.securityPool)).auctionableRepAtFork
-			const ethToRepair = await getEthRaiseCap(client, yesPool.truthAuction)
-			const firstEth = ethToRepair / 2n
-			const secondEth = ethToRepair - firstEth
-			const bidActions = shuffle(
-				[
-					{ bidder: firstBidder, rep: repAtFork / 8n, eth: firstEth },
-					{ bidder: secondBidder, rep: repAtFork / 8n, eth: secondEth },
-				],
-				seed ^ 0xa5n,
-			)
-			const bids: Array<{ bidder: WriteClient; tick: bigint; bidIndex: bigint }> = []
-			for (const action of bidActions) {
-				const tick = await participateAuction(action.bidder, yesPool.truthAuction, action.rep, action.eth)
-				bids.push({ bidder: action.bidder, tick, bidIndex: (await getBidCountAtTick(client, yesPool.truthAuction, tick)) - 1n })
-			}
-
-			await mockWindow.advanceTime(AUCTION_TIME + DAY)
-			await finalizeTruthAuction(client, yesPool.securityPool)
-			strictEqualTypeSafe(await getSystemState(client, yesPool.securityPool), SystemState.Operational, `seed ${seed.toString()}: fully repaired child should reactivate`)
-
-			for (const bid of shuffle(bids, seed ^ 0x5an)) {
-				await claimAuctionProceeds(client, yesPool.securityPool, bid.bidder.account.address, [{ tick: bid.tick, bidIndex: bid.bidIndex }])
-			}
-
-			const childSnapshot = await readPoolAccountingSnapshot(client, yesPool.securityPool)
-			assert.ok(childSnapshot.completeSetCollateral <= childSnapshot.ethBalance, `seed ${seed.toString()}: accounted child collateral must not exceed raw ETH`)
-			assert.ok(childSnapshot.repBalance > 0n, `seed ${seed.toString()}: reactivated child must retain REP backing`)
-			assert.ok(childSnapshot.poolOwnershipDenominator > 0n, `seed ${seed.toString()}: child ownership denominator must remain positive`)
-			assert.ok((await getTotalRepPurchased(client, yesPool.truthAuction)) > 0n, `seed ${seed.toString()}: repair auction must issue REP only against raised ETH`)
-			await mockWindow.anvilRevert(seedSnapshot)
-		}
 	})
 
 	test('own-fork locks excess parent REP into the migration balance', async () => {
@@ -1286,14 +1286,18 @@ describe('Peripherals invariant harness', () => {
 		const vaultB = createClient(2)
 		const vaultC = createClient(3)
 		await approveAndDepositRep(vaultA, repDeposit, context.questionId)
-		await approveAndDepositRep(vaultB, repDeposit / 10n, context.questionId)
+		await approveAndDepositRep(vaultB, repDeposit, context.questionId)
 		await approveAndDepositRep(vaultC, repDeposit, context.questionId)
 
 		const priceOracle = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, securityMultiplier).priceOracleManagerAndOperatorQueuer
 		await manipulatePriceOracleAndPerformOperation(vaultA, mockWindow, priceOracle, OperationType.SetSecurityBondsAllowance, vaultA.account.address, repDeposit / 20n)
 		const vaultBBeforeExit = await getSecurityVault(client, context.securityPool, vaultB.account.address)
 		const vaultBRepClaim = await poolOwnershipToRep(client, context.securityPool, vaultBBeforeExit.repDepositShare)
-		await manipulatePriceOracleAndPerformOperation(vaultB, mockWindow, priceOracle, OperationType.WithdrawRep, vaultB.account.address, vaultBRepClaim)
+		for (let withdrawalIndex = 0n; withdrawalIndex < 5n; withdrawalIndex++) {
+			const withdrawalAmount = withdrawalIndex === 4n ? vaultBRepClaim : vaultBRepClaim / 5n
+			await manipulatePriceOracleAndPerformOperation(vaultB, mockWindow, priceOracle, OperationType.WithdrawRep, vaultB.account.address, withdrawalAmount)
+			if (withdrawalIndex < 4n) await mockWindow.advanceTime(10n * 60n)
+		}
 
 		const activeVaultCount = await getActiveVaultCount(client, context.securityPool)
 		const activeVaults = Array.from(await getActiveVaults(client, context.securityPool, 0n, activeVaultCount + 2n))
@@ -1317,7 +1321,7 @@ describe('Peripherals invariant harness', () => {
 		await deployUniformPriceDualCapBatchAuction(client, client.account.address)
 		const underfundedAuctionAddress = getUniformPriceDualCapBatchAuctionAddress(client.account.address)
 		const rejectedZeroPriceTick = -450000n
-		const lowPriceTick = -20000n
+		const lowPriceTick = 0n
 		const lowPriceBid = 2n * 10n ** 18n
 		const underfundedMaxRepBeingSold = 1000n * 10n ** 18n
 
@@ -1330,21 +1334,23 @@ describe('Peripherals invariant harness', () => {
 		strictEqualTypeSafe(underfundedClearing.hitCap, false, 'accepted low-price bid should leave this auction underfunded')
 		await mockWindow.advanceTime(AUCTION_TIME + 1n)
 		await finalizeAuction(client, underfundedAuctionAddress)
-		const underfundedExpectedRep = 0n
-		strictEqualTypeSafe(await getTotalRepPurchased(client, underfundedAuctionAddress), underfundedExpectedRep, 'underfunded bids below the cap-implied reserve should not purchase REP')
-		strictEqualTypeSafe(await getEthRaised(client, underfundedAuctionAddress), 0n, 'below-reserve ETH should not enter the clearing total')
+		const underfundedExpectedRep = (underfundedMaxRepBeingSold * lowPriceBid) / (1000n * 10n ** 18n)
+		strictEqualTypeSafe(await getTotalRepPurchased(client, underfundedAuctionAddress), underfundedExpectedRep, 'underfunded winning bids should receive REP in proportion to ETH raised')
+		strictEqualTypeSafe(await getEthRaised(client, underfundedAuctionAddress), lowPriceBid, 'underfunded accounting should record the submitted ETH')
 
 		const underfundedResult = await simulateWithdrawBids(client, underfundedAuctionAddress, underfundedBidder.account.address, [{ tick: lowPriceTick, bidIndex: 0n }])
-		strictEqualTypeSafe(underfundedResult.totalFilledRep, underfundedExpectedRep, 'low-price underfunded bidder should not receive REP below reserve')
-		strictEqualTypeSafe(underfundedResult.totalEthRefund, lowPriceBid, 'low-price underfunded bidder should receive a full refund')
+		strictEqualTypeSafe(underfundedResult.totalFilledRep, underfundedExpectedRep, 'underfunded winner should fill only the REP backed by raised ETH')
+		strictEqualTypeSafe(underfundedResult.totalEthRefund, 0n, 'low-price underfunded winner should not receive an ETH refund')
 
 		const refundAuctionOwner = createClient(3)
 		await deployUniformPriceDualCapBatchAuction(client, refundAuctionOwner.account.address)
 		const refundAuctionAddress = getUniformPriceDualCapBatchAuctionAddress(refundAuctionOwner.account.address)
 		const refundOnlyTick = -20000n
-		const winningTick = 7000n
+		const reservePrice = 2n * 10n ** 18n
+		const closestReserveTick = priceToClosestTick(reservePrice)
+		const winningTick = tickToPrice(closestReserveTick) >= reservePrice ? closestReserveTick : closestReserveTick + 1n
 		const refundOnlyBid = 2n * 10n ** 18n
-		const winningBid = 12n * 10n ** 18n
+		const winningBid = 24n * 10n ** 18n
 		assert.ok(tickToPrice(refundOnlyTick) > 0n, 'refund-only setup should use an accepted positive-price tick')
 
 		await startAuction(refundAuctionOwner, refundAuctionAddress, 20n * 10n ** 18n, 10n * 10n ** 18n)
@@ -1356,12 +1362,13 @@ describe('Peripherals invariant harness', () => {
 		const auctionBalanceBeforeWithdrawals = await getETHBalance(client, refundAuctionAddress)
 		const refundOnlyResult = await simulateWithdrawBids(refundAuctionOwner, refundAuctionAddress, underfundedBidder.account.address, [{ tick: refundOnlyTick, bidIndex: 0n }])
 		const winningResult = await simulateWithdrawBids(refundAuctionOwner, refundAuctionAddress, lowPriceBidder.account.address, [{ tick: winningTick, bidIndex: 0n }])
+		const expectedWinningRep = await getTotalRepPurchased(client, refundAuctionAddress)
+		const acceptedWinningEth = await getEthRaised(client, refundAuctionAddress)
 		strictEqualTypeSafe(refundOnlyResult.totalFilledRep, 0n, 'refund-only low-price bid should not fill REP')
 		strictEqualTypeSafe(refundOnlyResult.totalEthRefund, refundOnlyBid, 'refund-only low-price bid should receive all ETH back')
-		const expectedWinningRep = await getTotalRepPurchased(client, refundAuctionAddress)
-		assert.ok(expectedWinningRep > 0n && expectedWinningRep < 10n * 10n ** 18n, 'underfunded reserve-price demand should purchase a proportional REP amount')
-		strictEqualTypeSafe(winningResult.totalFilledRep, expectedWinningRep, 'winning bid should receive the proportional finalized REP allocation')
-		strictEqualTypeSafe(winningResult.totalEthRefund, 0n, 'qualifying underfunded demand should be retained at the reserve tick')
+		strictEqualTypeSafe(winningResult.totalFilledRep, expectedWinningRep, 'winning bid should fill the finalized REP allocation')
+		assert.ok(expectedWinningRep > 0n && expectedWinningRep <= 10n * 10n ** 18n, 'winning REP must remain positive and capped')
+		strictEqualTypeSafe(winningResult.totalEthRefund, winningBid - acceptedWinningEth, 'winning bid should refund ETH above the finalized allocation')
 
 		await withdrawBids(refundAuctionOwner, refundAuctionAddress, underfundedBidder.account.address, [{ tick: refundOnlyTick, bidIndex: 0n }])
 		await withdrawBids(refundAuctionOwner, refundAuctionAddress, lowPriceBidder.account.address, [{ tick: winningTick, bidIndex: 0n }])

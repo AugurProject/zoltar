@@ -41,7 +41,7 @@ window.protocolTermDefinitions = Object.freeze({
 	'contract fee': 'A protocol or reporter fee charged by the relevant contract path.',
 	coordinator: 'The contract that manages price-dependent operations. It requests OpenOracle reports, stores fresh prices, and runs queued actions.',
 	'deterministic child universe': 'A child universe whose id can be recomputed from the parent universe and outcome index.',
-	dispute: 'A challenge to an OpenOracle report. The challenger posts a larger report to replace the earlier one.',
+	dispute: 'A challenge to an OpenOracle report. The challenger posts the contract-required replacement token amounts.',
 	'dispute barrier': 'The cost or liquidity hurdle an honest reporter must overcome to challenge a bad report.',
 	'dispute delay': 'The OpenOracle waiting period before disputes are allowed after a report; a zero value means disputes are allowed immediately.',
 	disputeDelay: 'The OpenOracle delay before disputes are allowed after each report; a zero value allows immediate disputes.',
@@ -195,7 +195,7 @@ window.protocolTermDefinitions = Object.freeze({
 	'terminal payoff': 'The final payoff used by the simplified attack model.',
 	'truth auction': 'A child-pool auction that sells child-universe REP for ETH to repair missing collateral. It repairs solvency instead of choosing the truthful branch.',
 	underfundedThreshold:
-		'The synthetic ETH/REP execution price for a non-empty finalized winning prefix in an underfunded auction. When underfundedWinningEth is positive, the winner set is fixed by the stored clearingTick boundary and those winning bids share the full REP sale cap pro rata by winning ETH. If no winning prefix exists, the contract stores type(uint256).max, totalRepPurchased stays zero, and every bid refunds.',
+		'The fixed proportional ETH/REP reserve for an underfunded auction, computed by ceiling ethRaiseCap times price precision over maxRepBeingSold. Ticks at or above its ceiling tick share floor(maxRepBeingSold times underfundedWinningEth divided by ethRaiseCap) pro rata by winning ETH. If no bid qualifies or proportional REP rounds to zero, no winning ETH is retained and every bid refunds.',
 	'underfunded remainder': 'The remaining obligation after available proceeds or collateral are insufficient.',
 	underwriting: 'Supplying REP-backed capacity to support market obligations and security-pool operations.',
 	'unresolved escalation': 'A local dispute that has not produced a winner and may need fork handling.',

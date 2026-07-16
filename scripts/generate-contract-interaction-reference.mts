@@ -437,11 +437,11 @@ const contractReferences: ContractReference[] = [
 				signals: '`TruthAuctionStarted`; immediate no-auction paths also emit `FinalizeAuction` and `TruthAuctionFinalized`',
 			},
 			{
-				call: '`finalizeTruthAuction(securityPool)`',
+				call: '`finalizeTruthAuction(securityPool)` with exact-shortfall ETH',
 				caller: 'Anyone',
-				effect: 'Finalizes the ended auction, transfers repair ETH, and fixes bidder ownership and allowance rates. The child becomes operational only if migration-routed collateral plus auction ETH meets the full parent collateral snapshot.',
+				effect: 'Finalizes the ended auction, combines migration-routed collateral, auction ETH, and the caller contribution into exact repair, then fixes bidder ownership and allowance rates. The contribution creates no ownership or allowance rights.',
 				declarations: [{ name: 'finalizeTruthAuction' }],
-				preconditions: 'Truth auction started and its one-week window has passed.',
+				preconditions: 'Truth auction started and its one-week window has passed; `msg.value` exactly equals the parent collateral snapshot minus migration-routed collateral and auction ETH. Underpayment and overpayment revert; forced ETH does not reduce the required contribution.',
 				signals: '`FinalizeAuction`, `TruthAuctionFinalized`, and auction `Finalized`',
 			},
 			{
@@ -614,7 +614,7 @@ const contractReferences: ContractReference[] = [
 	{
 		name: 'UniformPriceDualCapBatchAuction',
 		purpose: 'Collects ETH bids under ETH-raise and REP-sale caps, computes one clearing result, and supports paged settlement.',
-		readSurface: 'Use auction summary fields, `computeClearing`, `tickToPrice`, tick pagination, active-tick pagination, and bidder bid pagination before submitting settlement indexes.',
+		readSurface: 'Use auction summary fields, `computeClearing`, `previewFinalization`, `tickToPrice`, tick pagination, active-tick pagination, and bidder bid pagination before finalizing or submitting settlement indexes.',
 		sourcePath: 'solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol',
 		interactions: [
 			{
