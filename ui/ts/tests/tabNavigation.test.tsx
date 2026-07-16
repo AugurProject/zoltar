@@ -48,8 +48,27 @@ describe('TabNavigation', () => {
 		expect(documentQueries.getByRole('link', { name: 'Markets' }).getAttribute('aria-current')).toBe('page')
 		expect(documentQueries.getByRole('link', { name: 'Security Pools' }).getAttribute('href')).toBe('#/security-pools?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Oracle Reports' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1')
+		expect(documentQueries.getByRole('combobox', { name: 'Current application section' })).not.toBeNull()
+		expect(documentQueries.getByRole('link', { name: 'Protocol Guide' }).getAttribute('href')).toBe('https://augurproject.github.io/zoltar/docs/start-here.html')
 		expect(documentQueries.queryByRole('link', { name: 'Zoltar' })).toBeNull()
 		expect(documentQueries.queryByRole('link', { name: 'Open Oracle' })).toBeNull()
+	})
+
+	test('changes routes from the compact route selector', async () => {
+		const routeChanges: string[] = []
+		const rendered = await renderIntoDocument(
+			h(
+				TabNavigation,
+				createProps({
+					onRouteChange: route => routeChanges.push(route),
+				}),
+			),
+		)
+		cleanupRenderedComponent = rendered.cleanup
+
+		fireEvent.change(within(document.body).getByRole('combobox', { name: 'Current application section' }), { target: { value: 'security-pools' } })
+
+		expect(routeChanges).toEqual(['security-pools'])
 	})
 
 	test('uses the deployment prerequisite copy for disabled application sections', async () => {

@@ -101,7 +101,7 @@ describe('transactionTray', () => {
 		})
 		const prepared = markTransactionPrepared(requested, {
 			account: '0x00000000000000000000000000000000000000a1',
-			args: [1n, ['yes', 'no']],
+			args: [1n, { title: 'Will this resolve?' }, ['yes', 'no']],
 			chainName: 'Ethereum',
 			contractAddress: '0x00000000000000000000000000000000000000b2',
 			functionName: 'createQuestion',
@@ -112,8 +112,33 @@ describe('transactionTray', () => {
 		expect(prepared.active?.tone).toBe('awaiting-wallet')
 		expect(prepared.active?.detail).toBe('Review the prepared transaction, then confirm it in your wallet.')
 		expect(prepared.active?.rows?.some(row => row.label === 'Function' && row.value === 'createQuestion')).toBe(true)
-		expect(prepared.active?.rows?.some(row => row.label === 'Arguments' && row.value === '1, [yes, no]')).toBe(true)
+		expect(prepared.active?.rows?.some(row => row.label === 'Arguments' && row.value === '1, {title: Will this resolve?}, [yes, no]')).toBe(true)
+		expect(prepared.active?.rows?.some(row => String(row.value).includes('[object Object]'))).toBe(false)
 		expect(submitted.active?.rows?.some(row => row.label === 'Contract' && row.value === '0x00000000000000000000000000000000000000b2')).toBe(true)
+	})
+
+	test('formats self-referential arrays and mixed object-array cycles safely', () => {
+		const selfReferentialArray: unknown[] = []
+		selfReferentialArray.push(selfReferentialArray)
+		const mixedCycle: { values?: unknown[] } = {}
+		mixedCycle.values = [mixedCycle]
+		const requested = markTransactionRequested(createInitialTransactionTrayState(), {
+			action: 'createMarket',
+			source: 'zoltar',
+			submittedDetail: 'Question creation transaction submitted.',
+			submittedTitle: 'Creating Question',
+		})
+
+		const prepared = markTransactionPrepared(requested, {
+			account: '0x00000000000000000000000000000000000000a1',
+			args: [selfReferentialArray, mixedCycle],
+			chainName: 'Ethereum',
+			contractAddress: '0x00000000000000000000000000000000000000b2',
+			functionName: 'createQuestion',
+			value: 0n,
+		})
+
+		expect(prepared.active?.rows?.some(row => row.label === 'Arguments' && row.value === '[[circular value]], {values: [[circular value]]}')).toBe(true)
 	})
 
 	test('uses non-wallet prepared copy for raw broadcasts', () => {

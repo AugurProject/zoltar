@@ -16,6 +16,8 @@ import { MetricField } from '../../../components/MetricField.js'
 import { OpenOraclePriceValue } from '../../open-oracle/components/OpenOraclePriceValue.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
 import { TransactionReview } from '../../../components/TransactionReview.js'
+import { TransactionNetworkValue } from '../../../components/TransactionNetworkValue.js'
+import { TransactionUniverseValue } from '../../universes/components/TransactionUniverseValue.js'
 import { WarningSurface } from '../../../components/WarningSurface.js'
 import { TransactionStatusCard } from '../../../components/TransactionStatusCard.js'
 import { assertNever } from '../../../lib/assert.js'
@@ -461,6 +463,12 @@ export function LiquidationModal({
 					</section>
 				)}
 				<TransactionReview
+					context={[
+						{ label: commonCopy.question, value: selectedPool?.marketDetails.title ?? commonCopy.unavailable },
+						{ label: liquidationCopy.securityPool, value: liquidationSecurityPoolAddress === undefined ? commonCopy.unavailable : <AddressValue address={liquidationSecurityPoolAddress} /> },
+						{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={selectedPool?.universeId} /> },
+						{ label: commonCopy.targetVault, value: trimmedLiquidationTargetVault === '' ? commonCopy.noneSelected : <AddressValue address={trimmedLiquidationTargetVault} /> },
+					]}
 					primary={[
 						{ label: liquidationCopy.debtAssumed, value: <CurrencyValue value={liquidationAmountValue} suffix={commonCopy.eth} /> },
 						{ label: liquidationCopy.repMoved, value: <CurrencyValue value={liquidationSimulation?.repToMove} suffix={commonCopy.rep} /> },
@@ -504,7 +512,7 @@ export function LiquidationModal({
 								]
 							: [{ label: liquidationCopy.oracleRequestEth, value: transactionReviewCopy.noProtocolFee }]),
 						{ label: transactionReviewCopy.contract, value: liquidationManagerAddress === undefined ? commonCopy.unavailable : <AddressValue address={liquidationManagerAddress} /> },
-						{ label: transactionReviewCopy.network, value: transactionReviewCopy.ethereumMainnet },
+						{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
 					]}
 					risks={[liquidationCopy.liquidationStateRisk, ...(liquidationExecutionMode === 'queue' ? [liquidationCopy.queuedLiquidationRisk, liquidationCopy.queuedFundingSequenceRisk] : [])]}
 				/>

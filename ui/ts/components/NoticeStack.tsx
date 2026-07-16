@@ -11,19 +11,20 @@ export function NoticeStack({ items }: NoticeStackProps) {
 
 	return (
 		<div className='page-notices'>
-			{orderNoticeItems(items).map(item =>
-				item.tone === 'warning' ? (
-					<WarningSurface key={item.id} as='div' className='notice notice-stack-item'>
+			{orderNoticeItems(items).map(item => {
+				const liveRegion = item.tone === 'blocking' ? { ariaLive: 'assertive' as const, role: 'alert' as const } : { ariaLive: 'polite' as const, role: 'status' as const }
+				return item.tone === 'warning' ? (
+					<WarningSurface key={item.id} ariaLive={liveRegion.ariaLive} role={liveRegion.role} as='div' className='notice notice-stack-item'>
 						{item.title === undefined ? undefined : <strong className='notice-title'>{item.title}</strong>}
 						<div>{item.detail}</div>
 					</WarningSurface>
 				) : (
-					<div key={item.id} className={`notice notice-stack-item ${item.tone}`}>
+					<div key={item.id} className={`notice notice-stack-item ${item.tone}`} role={liveRegion.role} aria-live={liveRegion.ariaLive}>
 						{item.title === undefined ? undefined : <strong className='notice-title'>{item.title}</strong>}
 						<div>{item.detail}</div>
 					</div>
-				),
-			)}
+				)
+			})}
 		</div>
 	)
 }

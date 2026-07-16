@@ -115,7 +115,7 @@ export function getDefaultForkAuctionFormState(): ForkAuctionFormState {
 export function getDefaultZoltarMigrationFormState(): ZoltarMigrationFormState {
 	return {
 		amount: '0.0',
-		outcomeIndexes: '0',
+		outcomeIndexes: '',
 	}
 }
 

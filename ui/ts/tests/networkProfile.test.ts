@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/shared/ethereum'
-import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, buildTransactionExplorerUrl, createSimulationProfile } from '../lib/networkProfile.js'
+import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, buildTransactionExplorerUrl, createSimulationProfile, formatTransactionNetworkLabel } from '../lib/networkProfile.js'
 
 describe('network profile helpers', () => {
 	test('exports expected defaults for Ethereum mainnet', () => {
@@ -36,5 +36,10 @@ describe('network profile helpers', () => {
 		expect(profile.displayName).toBe('Browser Simulation')
 		expect(profile.repPricingMode).toBe('mock')
 		expect(profile.transactionExplorerBaseUrl).toBeUndefined()
+		expect(formatTransactionNetworkLabel(profile)).toBe('Browser Simulation · local sandbox')
+	})
+
+	test('uses the public network name for mainnet transaction reviews', () => {
+		expect(formatTransactionNetworkLabel(MAINNET_NETWORK_PROFILE)).toBe('Ethereum Mainnet')
 	})
 })

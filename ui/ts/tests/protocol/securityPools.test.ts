@@ -288,10 +288,11 @@ describe('securityPools protocol client', () => {
 		expect(pool.vaults.map(vault => vault.vaultAddress)).toEqual([...previewVaultAddresses])
 	})
 
-	test('loadSecurityPoolPage defers browse-page vault previews until a pool is opened', async () => {
+	test('loadSecurityPoolPage includes bounded actionable vault previews', async () => {
 		const questionId = 1n
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const viewerVaultAddress = getAddress('0x00000000000000000000000000000000000000c4')
+		const previewVaultAddresses = [getAddress('0x00000000000000000000000000000000000000c1'), getAddress('0x00000000000000000000000000000000000000c2'), getAddress('0x00000000000000000000000000000000000000c3')]
 		let getActiveVaultsCallCount = 0
 		let securityVaultSummaryMulticallCount = 0
 		const client = createMockLoaderClient({
@@ -328,9 +329,10 @@ describe('securityPools protocol client', () => {
 				if (request.functionName === 'getActiveVaultCount') return 5n
 				if (request.functionName === 'getActiveVaults') {
 					getActiveVaultsCallCount += 1
-					throw new Error('Browse-page loads should defer vault previews')
+					expect(request.args).toEqual([0n, 3n])
+					return previewVaultAddresses
 				}
-				if (request.functionName === 'securityVaults') throw new Error('Browse-page loads should not fetch per-vault summaries')
+				if (request.functionName === 'securityVaults') throw new Error('Expected batched securityVaults multicall')
 				if (request.functionName === 'escalationGame') return zeroAddress
 				if (request.functionName === 'getTotalRepBalance') return 100n
 				if (request.functionName === 'poolOwnershipDenominator') return 10n
@@ -343,10 +345,10 @@ describe('securityPools protocol client', () => {
 		const [pool] = page.pools
 		if (pool === undefined) throw new Error('Expected one paged security pool')
 
-		expect(getActiveVaultsCallCount).toBe(0)
-		expect(securityVaultSummaryMulticallCount).toBe(0)
-		expect(pool.hasLoadedVaults).toBe(false)
-		expect(pool.vaults).toEqual([])
+		expect(getActiveVaultsCallCount).toBe(1)
+		expect(securityVaultSummaryMulticallCount).toBe(1)
+		expect(pool.hasLoadedVaults).toBe(true)
+		expect(pool.vaults.map(vault => vault.vaultAddress)).toEqual([...previewVaultAddresses, viewerVaultAddress])
 		expect(pool.vaultCount).toBe(5n)
 		expect(pool.totalRepDeposit).toBe(100n)
 		expect(pool.questionId).toBe('0x1')
