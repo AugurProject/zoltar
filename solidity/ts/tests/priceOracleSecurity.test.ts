@@ -1157,11 +1157,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		for (let operationId = 6n; operationId <= 8n; operationId += 1n) {
 			await executeStagedOperation(liquidatorClient, priceOracle, operationId)
 		}
-		assert.strictEqual(
-			await getPriceRoundRemainingNotional(client, priceOracle),
-			liquidationDebt,
-			'the preceding allowance should leave exactly the unbonused liquidation debt in the report budget',
-		)
+		assert.strictEqual(await getPriceRoundRemainingNotional(client, priceOracle), liquidationDebt, 'the preceding allowance should leave exactly the unbonused liquidation debt in the report budget')
 		const liquidationHash = await executeStagedOperation(liquidatorClient, priceOracle, 9n)
 		const liquidationReceipt = await liquidatorClient.waitForTransactionReceipt({ hash: liquidationHash })
 		const liquidationExecution = findExecutedStagedOperationLog(liquidationReceipt.logs)
