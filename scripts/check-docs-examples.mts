@@ -541,6 +541,8 @@ assert.match(auctionDesignHtml, /Forced ETH does not count/i, 'auction design sh
 assert.match(auctionDesignHtml, /floor\(maxRepBeingSold \* underfundedWinningEth \/ ethRaiseCap\)/i, 'auction design should derive proportional REP from the two caps and retained ETH')
 assert.match(auctionDesignHtml, /acts only as the bid-eligibility boundary[\s\S]*Aggregate purchased REP is determined independently/i, 'auction design should distinguish the reserve boundary from proportional REP calculation')
 assert.doesNotMatch(auctionDesignHtml, /actual execution price|purchased REP by retained ETH at the reserve tick/i, 'auction design should not describe the underfunded eligibility boundary as an execution price')
+assert.doesNotMatch(auctionDesignHtml, /Qualifying ETH buys REP at the ceiling tick|tick rounds up[\s\S]*exact integer fills can be slightly lower/i, 'auction worked examples should not attribute proportional REP allocation to the reserve tick price')
+assert.match(auctionDesignHtml, /ceiling tick[\s\S]*only the\s+eligibility boundary[\s\S]*cap-ratio REP allocation[\s\S]*floors aggregate and per-bid\s+allocations/i, 'auction worked examples should distinguish bid eligibility from integer cap-ratio allocation')
 assert.match(auctionDesignHtml, /auction ETH divided by <code>ethRaiseCap<\/code>[\s\S]*explicit repair[\s\S]*neither allowance nor ownership/i, 'auction design should exclude explicit repair contributions from bidder rights')
 assert.match(auctionDesignHtml, /1 \/ 0\.11 ≈ 9\.09 REP[\s\S]*below the <code>10 REP<\/code> cap/i, 'auction design tiny-demand example should remain strictly below the REP cap')
 

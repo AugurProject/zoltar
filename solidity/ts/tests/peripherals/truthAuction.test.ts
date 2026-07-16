@@ -3,7 +3,7 @@ import { encodeFunctionData } from '@zoltar/shared/ethereum'
 import { peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../../types/contractArtifact'
 import { usePeripheralsTruthAuctionFixture, type PeripheralsTruthAuctionFixture } from './fixture'
 import { getExpectedLiquidationRepMove } from './liquidationTestHelpers'
-import { getMaxRepBeingSold, getMinBidSize, submitBid } from '../../testSupport/simulator/utils/contracts/auction'
+import { getMaxRepBeingSold, getMinBidSize, isFinalized, submitBid } from '../../testSupport/simulator/utils/contracts/auction'
 import { queueLiquidationAtForcedPrice } from '../../testSupport/simulator/utils/contracts/peripherals'
 import { getUniverseData } from '../../testSupport/simulator/utils/contracts/zoltar'
 
@@ -372,6 +372,20 @@ describe('Peripherals: truth auction', () => {
 			await assert.rejects(finalizeTruthAuction(client, yesSecurityPool.securityPool), /Repair/)
 
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'failed repair validation must leave the child inactive')
+
+			const childBalanceBeforeOverRepair = await getETHBalance(client, yesSecurityPool.securityPool)
+			const forkerBalanceBeforeOverRepair = await getETHBalance(client, getInfraContractAddresses().securityPoolForker)
+			const auctionBalanceBeforeOverRepair = await getETHBalance(client, yesSecurityPool.truthAuction)
+			const collateralBeforeOverRepair = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
+			await assert.rejects(finalizeTruthAuction(client, yesSecurityPool.securityPool, expectedEthToBuy + 1n), /Repair/)
+
+			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'over-repair rejection must leave the child in truth auction')
+			strictEqualTypeSafe(await isFinalized(client, yesSecurityPool.truthAuction), false, 'over-repair rejection must roll back auction finalization')
+			strictEqualTypeSafe(await getETHBalance(client, yesSecurityPool.securityPool), childBalanceBeforeOverRepair, 'over-repair rejection must not move ETH into the child')
+			strictEqualTypeSafe(await getETHBalance(client, getInfraContractAddresses().securityPoolForker), forkerBalanceBeforeOverRepair, 'over-repair rejection must not strand ETH in the forker')
+			strictEqualTypeSafe(await getETHBalance(client, yesSecurityPool.truthAuction), auctionBalanceBeforeOverRepair, 'over-repair rejection must preserve auction ETH')
+			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), collateralBeforeOverRepair, 'over-repair rejection must preserve tracked collateral')
+			strictEqualTypeSafe(await getTotalRepPurchased(client, yesSecurityPool.truthAuction), 0n, 'over-repair rejection must preserve auction REP accounting')
 
 			await finalizeTruthAuction(client, yesSecurityPool.securityPool, expectedEthToBuy)
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'an explicit contribution that completes the configured repair may activate the child')

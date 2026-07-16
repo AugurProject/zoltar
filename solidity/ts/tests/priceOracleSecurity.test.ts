@@ -985,6 +985,46 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(await getSecurityPoolsEscalationGame(client, securityPool), zeroAddress, 'rejected escalation exposure must revert game deployment atomically')
 	})
 
+	test('successful escalation deposits debit their exact round exposure and cumulative deposits cannot overflow it', async () => {
+		const pricePrecision = 10n ** 18n
+		const poolAllowance = 500n * 10n ** 18n
+		await depositRep(client, securityPool, 4n * repDeposit)
+		await mockWindow.setTime(questionEndDate + 1n)
+		await settleAndExecuteAllowanceSchedule([poolAllowance])
+
+		await mockWindow.advanceTime(DAY)
+		const requestedPrice = 3n * pricePrecision
+		const freshRoundEthCost = await getRequestPriceEthCost(client, priceOracle)
+		await requestPriceIfNeededAndStageOperationWithInitialReportAmount2(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, poolAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, getInitialReportAmount2ForPrice(requestedPrice), freshRoundEthCost)
+		await handleOracleReporting(client, mockWindow, priceOracle, requestedPrice)
+		assert.strictEqual(await getPriceRoundConsumedNotional(client, priceOracle), 0n, 'same-value allowance setup should leave the fresh report budget unconsumed')
+
+		const settledPrice = await getLastPrice(client, priceOracle)
+		const ceilRepValue = (repAmount: bigint) => (repAmount * pricePrecision + settledPrice - 1n) / settledPrice
+		const firstDeposit = 10n * 10n ** 18n + 1n
+		const firstExpectedNotional = ceilRepValue(firstDeposit)
+		await depositToEscalationGame(client, securityPool, QuestionOutcome.Yes, firstDeposit)
+		assert.strictEqual(await getPriceRoundConsumedNotional(client, priceOracle), firstExpectedNotional, 'successful escalation deposit should debit the exact ceil-valued REP notional')
+
+		const cappedDeposit = (poolAllowance * settledPrice + pricePrecision - 1n) / pricePrecision
+		await depositToEscalationGame(client, securityPool, QuestionOutcome.Yes, cappedDeposit)
+		const consumedAfterCappedDeposit = firstExpectedNotional + poolAllowance
+		assert.strictEqual(await getPriceRoundConsumedNotional(client, priceOracle), consumedAfterCappedDeposit, 'escalation exposure should cap each positive deposit at the live pool allowance')
+		assert.ok(consumedAfterCappedDeposit < (await getPriceRoundMaxNotional(client, priceOracle)), 'regression setup should leave less than one capped deposit of report budget')
+
+		const vaultBeforeOverflow = await getSecurityVault(client, securityPool, client.account.address)
+		const escalationGameBeforeOverflow = await getSecurityPoolsEscalationGame(client, securityPool)
+		const escrowBalanceBeforeOverflow = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), escalationGameBeforeOverflow)
+		await assert.rejects(depositToEscalationGame(client, securityPool, QuestionOutcome.Yes, cappedDeposit), /oracle report exposure exceeded/i)
+
+		const vaultAfterOverflow = await getSecurityVault(client, securityPool, client.account.address)
+		assert.strictEqual(await getPriceRoundConsumedNotional(client, priceOracle), consumedAfterCappedDeposit, 'rejected cumulative escalation overflow must not debit the round')
+		assert.strictEqual(vaultAfterOverflow.repDepositShare, vaultBeforeOverflow.repDepositShare, 'rejected cumulative escalation overflow must preserve vault ownership')
+		assert.strictEqual(vaultAfterOverflow.repInEscalationGame, vaultBeforeOverflow.repInEscalationGame, 'rejected cumulative escalation overflow must preserve vault escrow')
+		assert.strictEqual(await getSecurityPoolsEscalationGame(client, securityPool), escalationGameBeforeOverflow, 'rejected cumulative escalation overflow must preserve the active game')
+		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), escalationGameBeforeOverflow), escrowBalanceBeforeOverflow, 'rejected cumulative escalation overflow must preserve escrow token backing')
+	})
+
 	test('oracle callback derives its secured notional directly from accepted report amounts', async () => {
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
 		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)

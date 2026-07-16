@@ -372,10 +372,11 @@
 					<p>
 						The examples below use <code>maxRepBeingSold = 10 REP</code> and
 						<code>ethRaiseCap = 20 ETH</code>, producing a reserve of
-						<code>2 ETH/REP</code>. Qualifying ETH buys REP at the ceiling tick
-						for that reserve; bids below it refund. Because that tick rounds up
-						to a representable price, the allocation figures below are ideal-price
-						approximations; the contract's exact integer fills can be slightly lower.
+						<code>2 ETH/REP</code>. The ceiling tick for that reserve is only the
+						eligibility boundary; bids below it refund. Qualifying ETH receives
+						the cap-ratio REP allocation. The figures below use human-unit
+						approximations, while the contract floors aggregate and per-bid
+						allocations in atomic units.
 					</p>
 					<table>
 						<thead>
