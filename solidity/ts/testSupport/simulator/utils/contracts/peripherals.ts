@@ -182,6 +182,30 @@ export const getPendingReportId = async (client: ReadClient, priceOracleManagerA
 		args: [],
 	})
 
+export const getPriceRoundMaxNotional = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
+	await client.readContract({
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+		functionName: 'priceRoundMaxNotional',
+		address: priceOracleManagerAndOperatorQueuer,
+		args: [],
+	})
+
+export const getPriceRoundConsumedNotional = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
+	await client.readContract({
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+		functionName: 'priceRoundConsumedNotional',
+		address: priceOracleManagerAndOperatorQueuer,
+		args: [],
+	})
+
+export const getPriceRoundRemainingNotional = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
+	await client.readContract({
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+		functionName: 'getPriceRoundRemainingNotional',
+		address: priceOracleManagerAndOperatorQueuer,
+		args: [],
+	})
+
 export const getPendingReportMaxSettlementBaseFee = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
 	await client.readContract({
 		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,

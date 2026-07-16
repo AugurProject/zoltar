@@ -348,8 +348,9 @@
 								</td>
 								<td>
 									Underfunded demand buys REP at the cap-implied reserve in
-									proportion to qualifying ETH. A child remains inactive until
-									its tracked collateral reaches the complete repair target.
+									proportion to qualifying ETH. Any remaining repair contribution
+									issues no ownership or allowance, and a child activates only at
+									the complete repair target.
 								</td>
 							</tr>
 						</tbody>
@@ -1556,7 +1557,8 @@
 								<td>
 									Purchased auction REP, pool ownership, and auctioned allowance
 									are credited to the same bidder vault without replacing its
-									live migrated position.
+									live migrated position. Claimable allowance is limited to the
+									fraction funded by auction ETH.
 								</td>
 								<td>Reviewed preservation</td>
 								<td>
@@ -1588,25 +1590,25 @@
 								<td>Reviewed preservation</td>
 								<td>
 									<a
-										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
-										><code>_captureUnclaimedCollateralForAuction</code></a
+										href="../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationDelegate.sol"
+										><code>finalizeTruthAuctionRepair</code></a
 									>
 								</td>
 							</tr>
 							<tr>
 								<td><code>AUC-09</code></td>
 								<td>
-									Full collateral repair assumes sufficient auction demand. With
-									weak demand, finalization sells REP only in proportion to
-									qualifying ETH and leaves the child inactive below its repair
-									target.
+									Weak auction demand sells REP and assigns allowance only in
+									proportion to qualifying auction ETH. Finalization requires the
+									caller to supply the exact remaining repair amount; otherwise it
+									reverts and leaves the child inactive.
 								</td>
-								<td>Economic or external assumption</td>
+								<td>Contract guard</td>
 								<td>
 									<a href="./auction-design.html">Weak-demand behavior</a>,
 									<a
-										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
-										><code>_consumeTruthAuctionRep</code></a
+										href="../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationDelegate.sol"
+										><code>finalizeTruthAuctionRepair</code></a
 									>
 								</td>
 							</tr>

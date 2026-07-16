@@ -587,13 +587,17 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		require(securityPool.systemState() == SystemState.ForkTruthAuction, 'Not auction');
 		SecurityPoolForkerForkData storage data = _getForkData(securityPool);
 		SecurityPoolForkerForkData storage parentData = _getForkData(securityPool.parent());
-		ISecurityPool parent = securityPool.parent();
 		(uint256 repPurchased, uint256 auctionEthReceived) = _consumeTruthAuctionRep(securityPool, data);
-		_captureUnclaimedCollateralForAuction(securityPool, parent, data, auctionEthReceived);
+		_delegateMigrationCall(
+			vaultMigrationDelegate,
+			abi.encodeWithSelector(
+				SecurityPoolForkerVaultMigrationDelegate.finalizeTruthAuctionRepair.selector,
+				securityPool,
+				auctionEthReceived,
+				parentData.collateralAtFork
+			)
+		);
 		_finalizeOwnershipAfterAuction(securityPool, data, parentData, repPurchased);
-		if (data.forkCollateralReceived >= parentData.collateralAtFork) {
-			securityPool.setSystemState(SystemState.Operational);
-		}
 		_finalizeEscalationStateAfterAuction(securityPool, parentData);
 		_emitFinalizeAuctionEvent(securityPool, parentData, data, repPurchased);
 		emit TruthAuctionFinalized(securityPool);
@@ -614,24 +618,6 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			}
 			repPurchased = data.truthAuction.totalRepPurchased();
 		}
-	}
-
-	function _captureUnclaimedCollateralForAuction(
-		ISecurityPool securityPool,
-		ISecurityPool parent,
-		SecurityPoolForkerForkData storage data,
-		uint256 auctionEthReceived
-	) private {
-		// Only protocol-routed fork collateral and auction proceeds back complete sets.
-		// ETH forced into the child bypasses receive() and remains an unaccounted surplus.
-		data.forkCollateralReceived += auctionEthReceived;
-		uint256 parentTotalSecurityBondAllowance = parent.totalSecurityBondAllowance();
-		data.auctionedSecurityBondAllowance = parentTotalSecurityBondAllowance - data.migratedSecurityBondAllowance;
-		securityPool.setPoolFinancials(
-			data.forkCollateralReceived,
-			parentTotalSecurityBondAllowance,
-			data.migratedSecurityBondAllowance
-		);
 	}
 
 	function _finalizeOwnershipAfterAuction(
@@ -705,7 +691,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		);
 	}
 
-	function finalizeTruthAuction(ISecurityPool securityPool) external {
+	function finalizeTruthAuction(ISecurityPool securityPool) external payable {
 		require(
 			block.timestamp > _getForkData(securityPool).truthAuctionStarted + SecurityPoolUtils.AUCTION_TIME,
 			'Auction open'
