@@ -169,6 +169,9 @@ test('send transaction throws a targeted error when Anvil never returns a receip
 		if (request.method === 'eth_getBlockByNumber') return createJsonRpcResponse(request, { result: { timestamp: '0x0' } })
 		if (request.method === 'eth_sendTransaction') return createJsonRpcResponse(request, { result: transactionHash })
 		if (request.method === 'eth_getTransactionReceipt') return createJsonRpcResponse(request, { result: null })
+		if (request.method === 'eth_getTransactionByHash') return createJsonRpcResponse(request, { result: null })
+		if (request.method === 'eth_blockNumber') return createJsonRpcResponse(request, { result: '0x7' })
+		if (request.method === 'txpool_status') return createJsonRpcResponse(request, { result: { pending: '0x0', queued: '0x0' } })
 		throw new Error(`Unexpected JSON-RPC method: ${request.method}`)
 	})
 	globalThis.fetch = mockedFetch
@@ -187,7 +190,68 @@ test('send transaction throws a targeted error when Anvil never returns a receip
 					},
 				],
 			}),
-		).rejects.toThrow(`Anvil did not return a receipt for sent transaction ${transactionHash} within 180000ms.`)
+		).rejects.toThrow(`Anvil did not return a receipt for sent transaction ${transactionHash} within 180000ms. Diagnostics: transaction not found; latest block 0x7; transaction pool {"pending":"0x0","queued":"0x0"}.`)
+	} finally {
+		Date.now = originalDateNow
+	}
+})
+
+test('send transaction preserves the receipt timeout when diagnostic RPC calls stop responding', async () => {
+	delete process.env['SOLIDITY_BYTECODE_COVERAGE']
+	const originalDateNow = Date.now
+	const clockValues = [0, 1, 180_001, 180_002]
+	const transactionHash = `0x${'56'.repeat(32)}`
+	const diagnosticMethods = new Set(['eth_getTransactionByHash', 'eth_blockNumber', 'txpool_status'])
+
+	const mockedFetch = createMockedFetch(async (_input: URL | RequestInfo, init?: RequestInit | BunFetchRequestInit) => {
+		if (typeof init?.body !== 'string') throw new Error('Expected a JSON-RPC string body')
+		const request = JSON.parse(init.body) as JsonRpcRequest
+
+		if (request.method === 'anvil_reset' || request.method === 'anvil_setNextBlockBaseFeePerGas' || request.method === 'evm_setNextBlockTimestamp' || request.method === 'evm_mine') return createJsonRpcResponse(request, { result: '0x1' })
+		if (request.method === 'eth_getBlockByNumber') return createJsonRpcResponse(request, { result: { timestamp: '0x0' } })
+		if (request.method === 'eth_sendTransaction') return createJsonRpcResponse(request, { result: transactionHash })
+		if (request.method === 'eth_getTransactionReceipt') return createJsonRpcResponse(request, { result: null })
+		if (diagnosticMethods.has(request.method)) {
+			const signal = init.signal
+			if (signal === undefined || signal === null) throw new Error(`Expected ${request.method} to use an abort signal`)
+			return await new Promise<Response>((_resolve, reject) => {
+				const rejectAsAborted = () => reject(new Error('mocked diagnostic RPC aborted'))
+				if (signal.aborted) {
+					rejectAsAborted()
+					return
+				}
+				signal.addEventListener('abort', rejectAsAborted, { once: true })
+			})
+		}
+		throw new Error(`Unexpected JSON-RPC method: ${request.method}`)
+	})
+	globalThis.fetch = mockedFetch
+
+	Date.now = () => clockValues.shift() ?? 180_002
+	try {
+		const anvilWindow = await getMockedEthSimulateWindowEthereum()
+		const diagnosticStart = performance.now()
+		let caughtError: unknown
+		try {
+			await anvilWindow.request({
+				method: 'eth_sendTransaction',
+				params: [
+					{
+						data: '0xabcd',
+						from: '0x0000000000000000000000000000000000000001',
+						to: '0x0000000000000000000000000000000000000002',
+					},
+				],
+			})
+		} catch (error) {
+			caughtError = error
+		}
+		if (!(caughtError instanceof Error)) throw new Error('Expected the transaction request to fail')
+		expect(caughtError.message).toContain(`Anvil did not return a receipt for sent transaction ${transactionHash} within 180000ms.`)
+		expect(caughtError.message).toContain('transaction lookup failed: Anvil RPC eth_getTransactionByHash did not respond within 1000ms')
+		expect(caughtError.message).toContain('latest block lookup failed: Anvil RPC eth_blockNumber did not respond within 1000ms')
+		expect(caughtError.message).toContain('transaction pool lookup failed: Anvil RPC txpool_status did not respond within 1000ms')
+		expect(performance.now() - diagnosticStart).toBeLessThan(2_000)
 	} finally {
 		Date.now = originalDateNow
 	}

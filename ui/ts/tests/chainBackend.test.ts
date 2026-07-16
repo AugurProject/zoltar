@@ -233,6 +233,22 @@ describe('injected backend read transport', () => {
 		expect(await backend.requestAccounts()).toEqual([getAddress(validAddress)])
 	})
 
+	test('forwards account selection, disconnect, and network switching to the injected wallet', async () => {
+		const calls: string[] = []
+		ensureWindowObject().ethereum = createMockInjectedEthereum(async ({ method }) => {
+			calls.push(method)
+			if (method === 'eth_accounts') return [zeroAddress]
+			return []
+		})
+		const backend = createInjectedBackend()
+
+		expect(await backend.requestAccountSelection?.()).toEqual([zeroAddress])
+		await backend.switchNetwork?.()
+		await backend.disconnectWallet?.()
+
+		expect(calls).toEqual(['wallet_requestPermissions', 'eth_accounts', 'wallet_switchEthereumChain', 'wallet_revokePermissions'])
+	})
+
 	test('invokes injected transaction callbacks for write methods', async () => {
 		const callbacks: string[] = []
 		let sendRawTransactionCalls = 0

@@ -1,8 +1,10 @@
 import * as commonCopy from '../../../copy/common.js'
 import * as tradingCopy from '../../../copy/trading.js'
+import * as transactionReviewCopy from '../../../copy/transactionReview.js'
 import { useEffect, useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { ActionLauncherCard } from '../../../components/ActionLauncherCard.js'
+import { AddressValue } from '../../../components/AddressValue.js'
 import { CurrencyValue } from '../../../components/CurrencyValue.js'
 import { EnumDropdown } from '../../../components/EnumDropdown.js'
 import { ErrorNotice } from '../../../components/ErrorNotice.js'
@@ -15,6 +17,7 @@ import { RouteWorkflowPanel } from '../../../components/RouteWorkflowPanel.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
 import { ShareMigrationTargetsSection } from '../../universes/components/ShareMigrationTargetsSection.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
+import { TransactionReview } from '../../../components/TransactionReview.js'
 import { formatCurrencyInputBalance } from '../../../lib/formatters.js'
 import { tryParseBigIntListInput } from '../../../lib/inputs.js'
 import { isMainnetChain } from '../../../lib/network.js'
@@ -27,6 +30,7 @@ import {
 	getTradingMigrateSharesGuardMessage,
 	getTradingMintGuardMessage,
 	getTradingRedeemCompleteSetGuardMessage,
+	convertCollateralAmountToShareAmount,
 	convertShareAmountToCollateralAmount,
 	getTradingRedeemSharesGuardMessage,
 	hasUndefinedCompleteSetExchangeRate,
@@ -35,6 +39,7 @@ import {
 	NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE,
 	UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE,
 } from '../lib/trading.js'
+import { tryParseTradingAmountInput } from '../lib/marketForm.js'
 import type { ReadinessAction } from '../../types.js'
 import type { TradingSectionProps } from '../../types.js'
 type TradingActionModal = 'mint' | 'redeem-complete-sets' | 'migrate-shares' | 'redeem-shares' | undefined
@@ -94,6 +99,14 @@ export function TradingSection({
 	const selectedTargetOutcomeIndexSet = new Set(selectedTargetOutcomeIndexes.map(value => value.toString()))
 	const totalShareCount = displayShareBalances === undefined ? undefined : displayShareBalances.invalid + displayShareBalances.no + displayShareBalances.yes
 	const walletOnWrongNetwork = accountState.address !== undefined && !isMainnet
+	const mintAmount = tryParseTradingAmountInput(tradingForm.completeSetAmount)
+	const mintedShareAmount = mintAmount === undefined ? undefined : convertCollateralAmountToShareAmount(mintAmount, selectedPool?.completeSetCollateralAmount, selectedPool?.shareTokenSupply)
+	const resultingEthBalance = mintAmount === undefined || accountState.ethBalance === undefined || mintAmount > accountState.ethBalance ? undefined : accountState.ethBalance - mintAmount
+	const redeemAmount = tryParseTradingAmountInput(tradingForm.redeemAmount)
+	const redeemShareAmount = redeemAmount === undefined ? undefined : convertCollateralAmountToShareAmount(redeemAmount, selectedPool?.completeSetCollateralAmount, selectedPool?.shareTokenSupply)
+	const resultingRedeemEthBalance = redeemAmount === undefined || accountState.ethBalance === undefined ? undefined : accountState.ethBalance + redeemAmount
+	const resolvedWinningShareBalance = selectedPool === undefined || selectedPool.questionOutcome === 'none' ? undefined : getSelectedOutcomeShareBalance(shareBalances, selectedPool.questionOutcome)
+	const resolvedWinningPayout = convertShareAmountToCollateralAmount(resolvedWinningShareBalance, selectedPool?.completeSetCollateralAmount, selectedPool?.shareTokenSupply)
 	const mintGuardMessage = getTradingMintGuardMessage({
 		accountAddress: accountState.address,
 		completeSetCollateralAmount: selectedPool?.completeSetCollateralAmount,
@@ -138,7 +151,7 @@ export function TradingSection({
 		if (accountState.address === undefined) return tradingCopy.completeSetMintWalletRequiredReason
 
 		return (() => {
-			if (!isMainnet) return undefined
+			if (!isMainnet) return commonCopy.mainnetRequiredReason
 			if (selectedPool?.questionOutcome !== 'none') return tradingCopy.marketFinalizedReason
 			if (remainingMintCapacity === undefined) return tradingCopy.loadingMintCapacity
 			if (hasUndefinedCompleteSetExchangeRate(selectedPool?.completeSetCollateralAmount, selectedPool?.shareTokenSupply) === true) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
@@ -159,7 +172,7 @@ export function TradingSection({
 		if (accountState.address === undefined) return tradingCopy.completeSetBurnWalletRequiredReason
 
 		return (() => {
-			if (!isMainnet) return undefined
+			if (!isMainnet) return commonCopy.mainnetRequiredReason
 			if (loadingTradingDetails) return tradingCopy.loadingWalletShareBalances
 
 			return (() => {
@@ -175,7 +188,7 @@ export function TradingSection({
 		if (accountState.address === undefined) return tradingCopy.shareMigrationWalletRequiredReason
 
 		return (() => {
-			if (!isMainnet) return undefined
+			if (!isMainnet) return commonCopy.mainnetRequiredReason
 			if (loadingTradingForkUniverse) return tradingCopy.loadingForkTargetUniversesReason
 
 			return (() => {
@@ -195,7 +208,7 @@ export function TradingSection({
 		? tradingCopy.shareRedemptionPoolRequiredReason
 		: (() => {
 				if (accountState.address === undefined) return tradingCopy.shareRedemptionWalletRequiredReason
-				if (!isMainnet) return undefined
+				if (!isMainnet) return commonCopy.mainnetRequiredReason
 				if (selectedPool?.questionOutcome === 'none') return tradingCopy.poolResolutionRequired
 
 				return undefined
@@ -204,6 +217,11 @@ export function TradingSection({
 	const effectiveRedeemCompleteSetsLauncherBlocker = redeemCompleteSetsLauncherBlocker ?? (redeemCompleteSetsEnabled ? undefined : tradingCopy.formatActionUnavailableReason(tradingCopy.redeemCompleteSetsActionLabel))
 	const effectiveMigrateSharesLauncherBlocker = migrateSharesLauncherBlocker ?? (migrateSharesEnabled ? undefined : tradingCopy.formatActionUnavailableReason(tradingCopy.migrateForkedShares))
 	const effectiveRedeemSharesLauncherBlocker = redeemSharesLauncherBlocker ?? (redeemSharesEnabled ? undefined : tradingCopy.formatActionUnavailableReason(tradingCopy.redeemSharesActionLabel))
+	const getModalActionReason = (actionEnabled: boolean, guardMessage: string | undefined) => {
+		if (!isMainnet) return commonCopy.mainnetRequiredReason
+		if (!actionEnabled) return undefined
+		return guardMessage
+	}
 	const shareMigrationSelectionDisabled = poolUniverseHasForked !== true
 	const setAllTargetOutcomeIndexes = () => {
 		onTradingFormChange({ targetOutcomeIndexes: getDefaultShareMigrationTargetOutcomeIndexes(tradingForkUniverse) })
@@ -366,14 +384,49 @@ export function TradingSection({
 					<span>{tradingCopy.mintCompleteSetsAmount}</span>
 					<FormInput value={tradingForm.completeSetAmount} inputMode='decimal' onInput={event => onTradingFormChange({ completeSetAmount: event.currentTarget.value })} />
 				</label>
-				{mintGuardMessage === undefined ? undefined : <p className='detail'>{mintGuardMessage}</p>}
+				<TransactionReview
+					primary={[
+						{
+							label: transactionReviewCopy.youPay,
+							value: mintAmount === undefined ? transactionReviewCopy.amountUnavailable : <CurrencyValue value={mintAmount} suffix={commonCopy.eth} />,
+						},
+						{
+							label: tradingCopy.estimatedSharesReceived,
+							value:
+								mintedShareAmount === undefined ? (
+									transactionReviewCopy.amountUnavailable
+								) : (
+									<span>
+										{commonCopy.yes}
+										{' + '}
+										<CurrencyValue value={mintedShareAmount} />
+										{' · '}
+										{commonCopy.no}
+										{' + '}
+										<CurrencyValue value={mintedShareAmount} />
+										{' · '}
+										{commonCopy.invalid}
+										{' + '}
+										<CurrencyValue value={mintedShareAmount} />
+									</span>
+								),
+						},
+					]}
+					details={[
+						{ label: tradingCopy.retentionFeeAtExecution, value: tradingCopy.retentionFeeEstimateDetail },
+						{ label: transactionReviewCopy.resultingEthBalance, value: <CurrencyValue value={resultingEthBalance} suffix={commonCopy.eth} /> },
+						{ label: transactionReviewCopy.contract, value: selectedPool === undefined ? commonCopy.unavailable : <AddressValue address={selectedPool.securityPoolAddress} /> },
+						{ label: transactionReviewCopy.network, value: transactionReviewCopy.ethereumMainnet },
+					]}
+					risks={[tradingCopy.mintBalanceRisk]}
+				/>
 				<div className='actions'>
 					<TransactionActionButton
 						idleLabel={tradingCopy.mintCompleteSets}
 						pendingLabel={tradingCopy.mintingCompleteSets}
 						onClick={onCreateCompleteSet}
 						pending={tradingActiveAction === 'createCompleteSet'}
-						availability={{ disabled: !isMainnet || !mintEnabled || mintGuardMessage !== undefined, reason: mintEnabled ? mintGuardMessage : undefined }}
+						availability={{ disabled: !isMainnet || !mintEnabled || mintGuardMessage !== undefined, reason: getModalActionReason(mintEnabled, mintGuardMessage) }}
 					/>
 				</div>
 			</OperationModal>
@@ -396,7 +449,29 @@ export function TradingSection({
 						</button>
 					</div>
 				</label>
-				{redeemCompleteSetGuardMessage === undefined ? undefined : <p className='detail'>{redeemCompleteSetGuardMessage}</p>}
+				<TransactionReview
+					primary={[
+						{
+							label: transactionReviewCopy.youPay,
+							value:
+								redeemShareAmount === undefined ? (
+									transactionReviewCopy.amountUnavailable
+								) : (
+									<span>
+										{tradingCopy.matchingOutcomeShares}: <CurrencyValue value={redeemShareAmount} />
+									</span>
+								),
+						},
+						{ label: tradingCopy.estimatedEthReceived, value: <CurrencyValue value={redeemAmount} suffix={commonCopy.eth} /> },
+					]}
+					details={[
+						{ label: tradingCopy.retentionFeeAtExecution, value: tradingCopy.retentionFeeEstimateDetail },
+						{ label: tradingCopy.estimatedResultingEthBalance, value: <CurrencyValue value={resultingRedeemEthBalance} suffix={commonCopy.eth} /> },
+						{ label: transactionReviewCopy.contract, value: selectedPool === undefined ? commonCopy.unavailable : <AddressValue address={selectedPool.securityPoolAddress} /> },
+						{ label: transactionReviewCopy.network, value: transactionReviewCopy.ethereumMainnet },
+					]}
+					risks={[tradingCopy.redeemCompleteSetRisk]}
+				/>
 				<div className='actions'>
 					<TransactionActionButton
 						idleLabel={tradingCopy.redeemCompleteSets}
@@ -404,7 +479,7 @@ export function TradingSection({
 						onClick={onRedeemCompleteSet}
 						pending={tradingActiveAction === 'redeemCompleteSet'}
 						tone='secondary'
-						availability={{ disabled: !isMainnet || !redeemCompleteSetsEnabled || redeemCompleteSetGuardMessage !== undefined, reason: redeemCompleteSetsEnabled ? redeemCompleteSetGuardMessage : undefined }}
+						availability={{ disabled: !isMainnet || !redeemCompleteSetsEnabled || redeemCompleteSetGuardMessage !== undefined, reason: getModalActionReason(redeemCompleteSetsEnabled, redeemCompleteSetGuardMessage) }}
 					/>
 				</div>
 			</OperationModal>
@@ -423,7 +498,29 @@ export function TradingSection({
 					selectedOutcomeIndexes={selectedTargetOutcomeIndexes}
 					selectedOutcomeIndexSet={selectedTargetOutcomeIndexSet}
 				/>
-				{migrateSharesGuardMessage === undefined ? undefined : <p className='detail'>{migrateSharesGuardMessage}</p>}
+				<TransactionReview
+					primary={[
+						{ label: tradingCopy.sourceOutcomeShares, value: <CurrencyValue value={selectedOutcomeBalance} /> },
+						{
+							label: tradingCopy.recreatedChildShares,
+							value:
+								selectedTargetOutcomeIndexes.length === 0 ? (
+									tradingCopy.targetChildUniversesEmpty
+								) : (
+									<span>
+										<CurrencyValue value={selectedOutcomeBalance} /> × {selectedTargetOutcomeIndexes.length.toString()}
+									</span>
+								),
+						},
+					]}
+					details={[
+						{ label: tradingCopy.selectedChildUniversesLabel, value: selectedTargetOutcomeIndexes.length === 0 ? tradingCopy.notSelected : selectedTargetOutcomeIndexes.join(', ') },
+						{ label: transactionReviewCopy.protocolFee, value: transactionReviewCopy.noProtocolFee },
+						{ label: transactionReviewCopy.contract, value: selectedPool === undefined ? commonCopy.unavailable : <AddressValue address={selectedPool.securityPoolAddress} /> },
+						{ label: transactionReviewCopy.network, value: transactionReviewCopy.ethereumMainnet },
+					]}
+					risks={[tradingCopy.shareMigrationRisk]}
+				/>
 				<div className='actions'>
 					<TransactionActionButton
 						idleLabel={tradingCopy.migrateShares}
@@ -431,13 +528,25 @@ export function TradingSection({
 						onClick={onMigrateShares}
 						pending={tradingActiveAction === 'migrateShares'}
 						tone='secondary'
-						availability={{ disabled: !isMainnet || !migrateSharesEnabled || migrateSharesGuardMessage !== undefined, reason: migrateSharesEnabled ? migrateSharesGuardMessage : undefined }}
+						availability={{ disabled: !isMainnet || !migrateSharesEnabled || migrateSharesGuardMessage !== undefined, reason: getModalActionReason(migrateSharesEnabled, migrateSharesGuardMessage) }}
 					/>
 				</div>
 			</OperationModal>
 
 			<OperationModal description={tradingCopy.winningShareRedemptionDescription} isOpen={activeModal === 'redeem-shares'} onClose={() => setActiveModal(undefined)} title={tradingCopy.redeemResolvedShares}>
-				{redeemSharesGuardMessage === undefined ? undefined : <p className='detail'>{redeemSharesGuardMessage}</p>}
+				<TransactionReview
+					primary={[
+						{ label: tradingCopy.winningShares, value: <CurrencyValue value={resolvedWinningShareBalance} /> },
+						{ label: tradingCopy.estimatedEthReceived, value: <CurrencyValue value={resolvedWinningPayout} suffix={commonCopy.eth} /> },
+					]}
+					details={[
+						{ label: tradingCopy.retentionFeeAtExecution, value: tradingCopy.retentionFeeEstimateDetail },
+						{ label: tradingCopy.estimatedResultingEthBalance, value: <CurrencyValue value={resolvedWinningPayout === undefined || accountState.ethBalance === undefined ? undefined : accountState.ethBalance + resolvedWinningPayout} suffix={commonCopy.eth} /> },
+						{ label: transactionReviewCopy.contract, value: selectedPool === undefined ? commonCopy.unavailable : <AddressValue address={selectedPool.securityPoolAddress} /> },
+						{ label: transactionReviewCopy.network, value: transactionReviewCopy.ethereumMainnet },
+					]}
+					risks={[tradingCopy.resolvedShareRisk]}
+				/>
 				<div className='actions'>
 					<TransactionActionButton
 						idleLabel={tradingCopy.redeemShares}
@@ -445,7 +554,7 @@ export function TradingSection({
 						onClick={onRedeemShares}
 						pending={tradingActiveAction === 'redeemShares'}
 						tone='secondary'
-						availability={{ disabled: !isMainnet || !redeemSharesEnabled || redeemSharesGuardMessage !== undefined, reason: redeemSharesEnabled ? redeemSharesGuardMessage : undefined }}
+						availability={{ disabled: !isMainnet || !redeemSharesEnabled || redeemSharesGuardMessage !== undefined, reason: getModalActionReason(redeemSharesEnabled, redeemSharesGuardMessage) }}
 					/>
 				</div>
 			</OperationModal>

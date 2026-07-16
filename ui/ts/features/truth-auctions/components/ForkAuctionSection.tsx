@@ -1,5 +1,6 @@
 import * as commonCopy from '../../../copy/common.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
+import * as transactionReviewCopy from '../../../copy/transactionReview.js'
 import { Fragment } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
@@ -18,7 +19,9 @@ import { MetricField } from '../../../components/MetricField.js'
 import { ReadOnlyDetailAccordion } from '../../../components/ReadOnlyDetailAccordion.js'
 import { RouteWorkflowPanel } from '../../../components/RouteWorkflowPanel.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
+import { SecurityPoolLink } from '../../security-pools/components/SecurityPoolLink.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
+import { TransactionReview } from '../../../components/TransactionReview.js'
 import { TimestampValue } from '../../../components/TimestampValue.js'
 import { TruthAuctionBidsSection, ViewerTruthAuctionBidsSection } from './TruthAuctionBidsSection.js'
 import { TruthAuctionMarketViewSection } from './TruthAuctionMarketViewSection.js'
@@ -36,11 +39,9 @@ import { formatCurrencyInputBalance, formatDuration, formatRoundedCurrencyBalanc
 import { tryParseTruthAuctionAmountInput } from '../../markets/lib/marketForm.js'
 import { isMainnetChain } from '../../../lib/network.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
-import { buildRouteHref, SECURITY_POOLS_ROUTE } from '../../../lib/routing.js'
 import { getEscalationDepositClaimAmount, isPoolQuestionFinalized } from '../../reporting/lib/reportingDomain.js'
 import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../../security-pools/lib/securityPoolState.js'
 import { getCurrentSelectedPoolForkAuctionDetails, getForkWorkflowStageSelection, type ForkWorkflowSelectionStage } from '../../security-pools/lib/securityPoolWorkflow.js'
-import { writeSecurityPoolQueryParam, writeUniverseQueryParam } from '../../../lib/urlParams.js'
 import { getVisualRatio } from '../../../lib/visualMetrics.js'
 import { useForkAuctionInteractionState } from '../hooks/useForkAuctionInteractionState.js'
 import { useSelectedAuctionReadState } from '../hooks/useSelectedAuctionReadState.js'
@@ -282,23 +283,22 @@ function renderChildSecurityPoolsSection({ auctionOutcomeSelector, childSecurity
 			{renderSelectedOutcomeChildPoolNotice()}
 			{childSecurityPools.length === 0 ? null : (
 				<div className='fork-workflow-child-pool-list'>
-					{childSecurityPools.map(pool => {
-						const childPoolHref = buildRouteHref(SECURITY_POOLS_ROUTE, writeUniverseQueryParam(writeSecurityPoolQueryParam('', pool.securityPoolAddress), pool.universeId))
-						return (
-							<article className='fork-workflow-child-pool-card' key={pool.securityPoolAddress}>
-								<div className='fork-workflow-child-pool-card-copy'>
-									<strong>{pool.questionOutcome === 'none' ? forkAuctionCopy.pendingOutcome : getReportingOutcomeLabel(pool.questionOutcome)}</strong>
-									<span>{pool.systemState === 'operational' ? commonCopy.operational : getForkAuctionStageLabel(getForkAuctionStageView({ forkOutcome: pool.forkOutcome, migratedRep: pool.migratedRep, systemState: pool.systemState, truthAuctionStartedAt: pool.truthAuctionStartedAt }))}</span>
-								</div>
-								<div className='fork-workflow-child-pool-card-meta'>
-									<span>
-										<AddressValue address={pool.securityPoolAddress} />
-									</span>
-									<a href={childPoolHref}>{forkAuctionCopy.openSecurityPool}</a>
-								</div>
-							</article>
-						)
-					})}
+					{childSecurityPools.map(pool => (
+						<article className='fork-workflow-child-pool-card' key={pool.securityPoolAddress}>
+							<div className='fork-workflow-child-pool-card-copy'>
+								<strong>{pool.questionOutcome === 'none' ? forkAuctionCopy.pendingOutcome : getReportingOutcomeLabel(pool.questionOutcome)}</strong>
+								<span>{pool.systemState === 'operational' ? commonCopy.operational : getForkAuctionStageLabel(getForkAuctionStageView({ forkOutcome: pool.forkOutcome, migratedRep: pool.migratedRep, systemState: pool.systemState, truthAuctionStartedAt: pool.truthAuctionStartedAt }))}</span>
+							</div>
+							<div className='fork-workflow-child-pool-card-meta'>
+								<span>
+									<AddressValue address={pool.securityPoolAddress} />
+								</span>
+								<SecurityPoolLink securityPoolAddress={pool.securityPoolAddress} universeId={pool.universeId}>
+									{forkAuctionCopy.openSecurityPool}
+								</SecurityPoolLink>
+							</div>
+						</article>
+					))}
 				</div>
 			)}
 		</SectionBlock>
@@ -543,12 +543,10 @@ export function ForkAuctionSection({
 	function renderSelectedOutcomeChildPoolLink() {
 		if (selectedAuctionChildPool === undefined) return undefined
 
-		const securityPoolSearch = writeSecurityPoolQueryParam('', selectedAuctionChildPool.securityPoolAddress)
-		const securityPoolHref = buildRouteHref(SECURITY_POOLS_ROUTE, writeUniverseQueryParam(securityPoolSearch, selectedAuctionChildPool.universeId))
 		return (
-			<a className='fork-workflow-outcome-link' href={securityPoolHref}>
+			<SecurityPoolLink className='fork-workflow-outcome-link' securityPoolAddress={selectedAuctionChildPool.securityPoolAddress} universeId={selectedAuctionChildPool.universeId}>
 				{forkAuctionCopy.childPool}
-			</a>
+			</SecurityPoolLink>
 		)
 	}
 
@@ -601,9 +599,12 @@ export function ForkAuctionSection({
 	const importedForkSettlementResolved = isPoolQuestionFinalized(activeReportingDetails)
 	const childSecurityPools = securityPoolAddress === undefined ? [] : securityPools.filter(pool => sameAddress(pool.parent, securityPoolAddress))
 	const enteredBidPreview = getTruthAuctionBidPreview(forkAuctionForm.submitBidPrice)
-	const enteredBidPrice = enteredBidPreview?.price
+	const enteredBidPrice = enteredBidPreview?.enteredPrice
+	const submittedBidPrice = enteredBidPreview?.submittedPrice
 	const enteredBidTick = enteredBidPreview?.tick
-	const estimatedRep = estimateBidRep(forkAuctionForm.submitBidAmount, enteredBidPrice)
+	const enteredBidAmount = tryParseTruthAuctionAmountInput(forkAuctionForm.submitBidAmount)
+	const estimatedRep = estimateBidRep(forkAuctionForm.submitBidAmount, submittedBidPrice)
+	const resultingBidEthBalance = enteredBidAmount === undefined || accountState.ethBalance === undefined || enteredBidAmount > accountState.ethBalance ? undefined : accountState.ethBalance - enteredBidAmount
 	const auctionWindow = getTruthAuctionWindow(effectiveTruthAuctionStartedAt)
 	const truthAuctionEndsAt = auctionTruthAuctionStatus?.auctionEndsAt ?? auctionWindow?.endsAt
 	const truthAuctionFallback = (() => {
@@ -770,7 +771,7 @@ export function ForkAuctionSection({
 	}
 	const interactionDisabledReason = (() => {
 		if (accountState.address === undefined) return forkAuctionCopy.forkActionWalletRequired
-		if (!isMainnet) return undefined
+		if (!isMainnet) return commonCopy.mainnetRequiredReason
 
 		return undefined
 	})()
@@ -987,7 +988,7 @@ export function ForkAuctionSection({
 	}) {
 		const resolvedAvailability = availability ?? { disabled: false, reason: undefined }
 		const actionEnabled = forceEnabled ?? forkPoolState.actions[action].enabled
-		const disabledReason = !isMainnet ? undefined : (interactionDisabledReason ?? resolvedAvailability.reason)
+		const disabledReason = !isMainnet ? commonCopy.mainnetRequiredReason : (interactionDisabledReason ?? resolvedAvailability.reason)
 		const isPending = pending ?? forkAuctionActiveAction === action
 		return (
 			<TransactionActionButton
@@ -1037,6 +1038,21 @@ export function ForkAuctionSection({
 					</p>
 				)}
 				{renderTruthAuctionDebtNotice('bid')}
+				<TransactionReview
+					primary={[
+						{ label: transactionReviewCopy.youPay, value: <CurrencyValue value={enteredBidAmount} suffix={commonCopy.eth} /> },
+						{ label: forkAuctionCopy.potentialRepIfFilled, value: <CurrencyValue value={estimatedRep} suffix={commonCopy.rep} /> },
+					]}
+					details={[
+						{ label: forkAuctionCopy.enteredBidPrice, value: enteredBidPrice === undefined ? commonCopy.metricUnavailablePlaceholder : renderTruthAuctionPriceValue(enteredBidPrice) },
+						{ label: forkAuctionCopy.submittedTickPrice, value: submittedBidPrice === undefined ? commonCopy.metricUnavailablePlaceholder : renderTruthAuctionPriceValue(submittedBidPrice) },
+						{ label: transactionReviewCopy.resultingEthBalance, value: <CurrencyValue value={resultingBidEthBalance} suffix={commonCopy.eth} /> },
+						{ label: transactionReviewCopy.protocolFee, value: transactionReviewCopy.noProtocolFee },
+						{ label: transactionReviewCopy.contract, value: auctionTruthAuctionAddress === undefined ? commonCopy.unavailable : <AddressValue address={auctionTruthAuctionAddress} /> },
+						{ label: transactionReviewCopy.network, value: transactionReviewCopy.ethereumMainnet },
+					]}
+					risks={[forkAuctionCopy.bidEscrowRisk, forkAuctionCopy.bidFillRisk, forkAuctionCopy.winningBidDebtRisk]}
+				/>
 				<div className='actions'>
 					{renderStageActionButton({
 						action: 'submitBid',
@@ -1586,8 +1602,10 @@ export function ForkAuctionSection({
 							{selectedAuctionDetailsNotice}
 							{truthAuctionEndedNotice}
 							{truthAuctionHero}
-							{truthAuctionMarketViewSection}
-							{auctionWideBidsSection}
+							<ReadOnlyDetailAccordion title={forkAuctionCopy.marketDepthAndBidHistory}>
+								{truthAuctionMarketViewSection}
+								{auctionWideBidsSection}
+							</ReadOnlyDetailAccordion>
 							{renderSubmitBidSection({
 								description: forkAuctionCopy.bidEscrowDetail,
 							})}

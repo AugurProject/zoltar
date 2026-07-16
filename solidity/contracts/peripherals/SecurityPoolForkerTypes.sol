@@ -27,6 +27,7 @@ struct SecurityPoolForkerForkData {
 	uint256 migratedSecurityBondAllowance;
 	uint256 auctionPoolOwnershipPerRep;
 	uint256 claimedAuctionPoolOwnership;
+	uint256 forkCollateralReceived;
 }
 
 struct OwnForkChildRepAllocation {

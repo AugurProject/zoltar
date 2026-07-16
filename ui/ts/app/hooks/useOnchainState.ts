@@ -196,6 +196,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 	const environmentReadyLoad = useLoadController()
 	const walletBootstrapComplete = useSignal(false)
 	const isConnectingWallet = useSignal(false)
+	const isManagingWallet = useSignal(false)
 	const nextRefresh = useRequestGuard()
 	const nextChainClockRefresh = useRequestGuard()
 	const errorMessage = useSignal<string | undefined>(undefined)
@@ -373,6 +374,34 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 			isConnectingWallet.value = false
 		}
 	}
+	const runWalletManagementAction = async (action: (backend: ChainBackend) => Promise<void>, fallbackMessage: string) => {
+		if (isManagingWallet.value) return
+		try {
+			isManagingWallet.value = true
+			errorMessage.value = undefined
+			await action(getActiveBackend())
+			await refreshState()
+		} catch (error) {
+			errorMessage.value = getErrorMessage(error, fallbackMessage)
+		} finally {
+			isManagingWallet.value = false
+		}
+	}
+	const changeWallet = async () =>
+		await runWalletManagementAction(async backend => {
+			if (backend.requestAccountSelection === undefined) throw new Error('This wallet does not support account switching from the application. Open the wallet and choose another account.')
+			await backend.requestAccountSelection()
+		}, 'Wallet account change failed')
+	const disconnectWallet = async () =>
+		await runWalletManagementAction(async backend => {
+			if (backend.disconnectWallet === undefined) throw new Error('This wallet does not support disconnecting from the application. Disconnect this site in the wallet.')
+			await backend.disconnectWallet()
+		}, 'Wallet disconnect failed')
+	const switchNetwork = async () =>
+		await runWalletManagementAction(async backend => {
+			if (backend.switchNetwork === undefined) throw new Error('This wallet does not support switching networks from the application. Switch to Ethereum mainnet in the wallet.')
+			await backend.switchNetwork()
+		}, 'Network switch failed')
 
 	useEffect(() => {
 		void refreshState()
@@ -457,6 +486,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 
 	return {
 		accountState: accountState.value,
+		changeWallet,
 		connectWallet,
 		currentBlockNumber: currentBlockNumber.value,
 		currentTimestamp: currentTimestamp.value,
@@ -472,11 +502,14 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		hasInjectedWallet: hasInjectedWallet.value,
 		hasLoadedDeploymentStatuses: deploymentStatusesLoaded.value,
 		isConnectingWallet: isConnectingWallet.value,
+		isManagingWallet: isManagingWallet.value,
 		isLoadingDeploymentStatuses: deploymentStatusLoad.isLoading.value,
 		isRefreshing: walletStateLoad.isLoading.value,
 		augurPlaceHolderDeployed: augurPlaceHolderDeployed.value,
 		refreshState,
 		setDeploymentStatuses,
+		disconnectWallet,
+		switchNetwork,
 		walletBootstrapComplete: walletBootstrapComplete.value,
 	}
 }
