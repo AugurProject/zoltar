@@ -889,6 +889,77 @@ describe('Peripherals: fork migration', () => {
 	})
 
 	describe('open interest and share redemption', () => {
+		for (const [label, forcedBalance] of [
+			['one wei', 1n],
+			['a large surplus', repDeposit],
+		] as const) {
+			test(`forced ${label} cannot brick the first complete-set mint`, async () => {
+				const securityPoolAllowance = repDeposit / 4n
+				await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+				await mockWindow.setBalance(securityPoolAddresses.securityPool, forcedBalance)
+
+				await redeemFees(client, securityPoolAddresses.securityPool, addressString(TEST_ADDRESSES[4]))
+
+				strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool), 0n, 'unsolicited ETH should remain outside complete-set collateral before bootstrap')
+				strictEqualTypeSafe(await getShareTokenSupply(client, securityPoolAddresses.securityPool), 0n, 'fee reconciliation should not create complete-set supply')
+
+				const depositor = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+				const depositAmount = 1n * 10n ** 18n
+				await createCompleteSet(depositor, securityPoolAddresses.securityPool, depositAmount)
+
+				const depositorShares = await balanceOfShares(depositor, securityPoolAddresses.shareToken, genesisUniverse, depositor.account.address)
+				const expectedShares = depositAmount * PRICE_PRECISION
+				strictEqualTypeSafe(await getShareTokenSupply(client, securityPoolAddresses.securityPool), expectedShares, 'the first positive deposit should bootstrap positive complete-set supply')
+				strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool), depositAmount, 'only the depositor ETH should become complete-set collateral')
+				strictEqualTypeSafe(await getETHBalance(client, securityPoolAddresses.securityPool), forcedBalance + depositAmount, 'the forced balance should remain isolated from complete-set accounting')
+				strictEqualTypeSafe(depositorShares[0], expectedShares, 'the depositor should receive invalid shares')
+				strictEqualTypeSafe(depositorShares[1], expectedShares, 'the depositor should receive yes shares')
+				strictEqualTypeSafe(depositorShares[2], expectedShares, 'the depositor should receive no shares')
+			})
+		}
+
+		test('nonzero fee redemption does not classify forced ETH as complete-set collateral', async () => {
+			const securityPoolAllowance = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+			await createCompleteSet(client, securityPoolAddresses.securityPool, 100n * 10n ** 18n)
+			await mockWindow.advanceTime(30n * DAY)
+			await updateVaultFees(client, securityPoolAddresses.securityPool, client.account.address)
+
+			const vaultBeforeRedemption = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+			assert.ok(vaultBeforeRedemption.unpaidEthFees > 0n, 'test setup should accrue nonzero fees')
+			const balanceBeforeForcedEth = await getETHBalance(client, securityPoolAddresses.securityPool)
+			await mockWindow.setBalance(securityPoolAddresses.securityPool, balanceBeforeForcedEth + 1n)
+
+			await redeemFees(client, securityPoolAddresses.securityPool, client.account.address)
+
+			const collateralAfterRedemption = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+			const accruedFeesAfterRedemption = await getTotalAccruedFees(client, securityPoolAddresses.securityPool)
+			strictEqualTypeSafe(await getETHBalance(client, securityPoolAddresses.securityPool), collateralAfterRedemption + accruedFeesAfterRedemption + 1n, 'forced ETH should remain isolated from collateral and fee accounting after the payout')
+		})
+
+		test('a zero-output complete-set mint reverts without retaining user ETH', async () => {
+			const victim = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+			await mockWindow.addStateOverrides({
+				[securityPoolAddresses.securityPool]: {
+					stateDiff: {
+						[formatStorageSlot(1n)]: 3n,
+						[formatStorageSlot(2n)]: 2n,
+						[formatStorageSlot(5n)]: 1n,
+					},
+				},
+			})
+			await mockWindow.setBalance(securityPoolAddresses.securityPool, 2n)
+			const victimBalanceBefore = await getETHBalance(client, victim.account.address)
+			const poolBalanceBefore = await getETHBalance(client, securityPoolAddresses.securityPool)
+
+			await assert.rejects(createCompleteSet(victim, securityPoolAddresses.securityPool, 1n), /Zero shares/)
+
+			strictEqualTypeSafe(await getETHBalance(client, victim.account.address), victimBalanceBefore, 'a failed zero-output mint should refund all user ETH')
+			strictEqualTypeSafe(await getETHBalance(client, securityPoolAddresses.securityPool), poolBalanceBefore, 'a failed zero-output mint should not increase the pool balance')
+			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool), 2n, 'a failed zero-output mint should not change collateral accounting')
+			strictEqualTypeSafe(await getShareTokenSupply(client, securityPoolAddresses.securityPool), 1n, 'a failed zero-output mint should not change share supply')
+		})
+
 		test('Open Interest Fees (non forking)', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			strictEqualTypeSafe(endTime > (await mockWindow.getTime()), true, 'question has already ended')
