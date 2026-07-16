@@ -539,6 +539,8 @@ assert.match(auctionDesignHtml, /data-source="underfundedThreshold = ceil\(ethRa
 assert.match(auctionDesignHtml, /under-repaired attempt\s+reverts with the child still inactive in <code>ForkTruthAuction<\/code>/i, 'auction design should document exact-repair rollback')
 assert.match(auctionDesignHtml, /Forced ETH does not count/i, 'auction design should exclude forced ETH from the child activation ratio')
 assert.match(auctionDesignHtml, /floor\(maxRepBeingSold \* underfundedWinningEth \/ ethRaiseCap\)/i, 'auction design should derive proportional REP from the two caps and retained ETH')
+assert.match(auctionDesignHtml, /acts only as the bid-eligibility boundary[\s\S]*Aggregate purchased REP is determined independently/i, 'auction design should distinguish the reserve boundary from proportional REP calculation')
+assert.doesNotMatch(auctionDesignHtml, /actual execution price|purchased REP by retained ETH at the reserve tick/i, 'auction design should not describe the underfunded eligibility boundary as an execution price')
 assert.match(auctionDesignHtml, /auction ETH divided by <code>ethRaiseCap<\/code>[\s\S]*explicit repair[\s\S]*neither allowance nor ownership/i, 'auction design should exclude explicit repair contributions from bidder rights')
 assert.match(auctionDesignHtml, /1 \/ 0\.11 ≈ 9\.09 REP[\s\S]*below the <code>10 REP<\/code> cap/i, 'auction design tiny-demand example should remain strictly below the REP cap')
 
@@ -552,6 +554,7 @@ assert.match(operatorReferenceMarkdown, /## Security Pool Guardrails[\s\S]*total
 assert.match(operatorReferenceMarkdown, /derive each bid's REP from the difference between rounded cumulative allocations[\s\S]*no bid meets the cap-implied reserve, no REP is allocated and every bid refunds\./i, 'operator reference should document deterministic auction rounding and the no-qualifying-bid branch')
 
 const placeholderHtml = await readFile('docs/placeholder-whitepaper.html', 'utf8')
+const invariantsHtml = await readFile('docs/invariants.html', 'utf8')
 const feeVectorPrecision = 10n ** 18n
 const feeVectorDecayCandidate = 7n
 const feeVectorEligibleAllowance = 3n
@@ -618,5 +621,13 @@ assert.match(
 	'whitepaper fill-math data-source should connect the cap-implied reserve, retained ETH, and proportional REP allocation',
 )
 assert.match(placeholderHtml, /data-source="auctionedSecurityBondAllowance = floor\(unmigratedSecurityBondAllowance \\cdot auctionEthReceived \/ ethRaiseCap\)/i, 'whitepaper should scale auction allowance by auction ETH only')
+assert.match(
+	placeholderHtml,
+	/data-source="auctionedSecurityBondAllowance = floor\(unmigratedSecurityBondAllowance \\cdot auctionEthReceived \/ ethRaiseCap\); poolOwnershipAmount = purchasedRepAmount \\cdot auctionPoolOwnershipPerRep; newSecurityBondAllowance = finalClaim \? auctionedSecurityBondAllowance - claimedAuctionedSecurityBondAllowance : floor\(auctionedSecurityBondAllowance \\cdot purchasedRepAmount \/ totalRepPurchased\)"/i,
+	'whitepaper settlement equation should floor both auction-wide and non-final per-claim allowance scaling',
+)
 assert.match(placeholderHtml, /Explicit repair contributions issue no\s+allowance or ownership/i, 'whitepaper should exclude explicit repair contributions from bidder rights')
 assert.match(placeholderHtml, /withdrawals cannot redirect rounding\s+units between bidders/i, 'whitepaper fill-math caption should explain deterministic rounding')
+assert.match(placeholderHtml, /weak and no caller supplies the exact\s+remaining shortfall[\s\S]*finalization reverts[\s\S]*ForkTruthAuction/i, 'whitepaper failure modes should preserve exact-repair rollback')
+assert.doesNotMatch(placeholderHtml, /resume with only\s+partial collateral repair|underfunded repair|retained ETH at the reserve tick/i, 'whitepaper should not retain obsolete partial-repair or tick-price execution claims')
+assert.match(invariantsHtml, /AUC-09[\s\S]*SecurityPoolForkerVaultMigrationDelegate\.sol[\s\S]*finalizeTruthAuctionRepair/i, 'invariant evidence should point exact repair to the delegate guard')

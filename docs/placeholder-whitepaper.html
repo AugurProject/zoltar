@@ -6060,8 +6060,9 @@
 							<span>Edge cases</span>
 							<b
 								>If demand is weak, bids at or above the cap-implied reserve buy
-								REP in proportion to retained ETH. Lower bids refund, and an
-								under-repaired child remains inactive.</b
+								REP in proportion to retained ETH. Lower bids refund. The
+								finalizer must supply the exact remaining shortfall, or
+								finalization reverts and the child remains inactive.</b
 							>
 						</div>
 					</div>
@@ -6163,8 +6164,8 @@
 								Truth auction repair balance sheet
 							</title>
 							<desc id="balance-sheet-desc">
-								A child pool before auction, after successful repair, and after
-								underfunded repair.
+								A child pool before auction, after full auction repair, and after
+								weak auction demand plus the exact caller-supplied shortfall.
 							</desc>
 							<defs>
 								<marker
@@ -6247,24 +6248,25 @@
 								rx="10"
 							></rect>
 							<text class="svg-label" x="803" y="190" text-anchor="middle">
-								Underfunded
+								Shortfall Contribution
 							</text>
 							<text class="svg-small" x="803" y="222" text-anchor="middle">
-								partial ETH repair
+								auction ETH below cap
 							</text>
 							<text class="svg-small" x="803" y="247" text-anchor="middle">
-								collateral gap remains
+								caller supplies exact gap
 							</text>
 							<text class="svg-small" x="803" y="272" text-anchor="middle">
-								child remains inactive
+								full target before activation
 							</text>
 						</svg>
 						<p class="diagram-caption">
 							<span class="figure-label">Truth Auction Balance Sheet</span>The
 							auction repairs a child pool by trading part of that child
 							universe’s scarce REP for the ETH needed to restore collateral. The
-							child becomes operational only after migrated collateral plus auction
-							proceeds meet the full parent collateral snapshot.
+							child becomes operational only after migrated collateral, auction
+							proceeds, and any exact caller-supplied shortfall meet the full parent
+							collateral snapshot; otherwise finalization reverts.
 						</p>
 					</figure>
 					<p>
@@ -6644,9 +6646,10 @@
 						In normal clearing, bids above the clearing tick win in full, bids
 						below it lose, and bids at the clearing tick are filled in
 						submission order. In the underfunded path, ticks at or above the
-						finalized <code>clearingTick</code> boundary share only the REP bought
-						by retained ETH at the reserve tick, pro rata by winning ETH
-						contribution.
+						finalized <code>clearingTick</code> eligibility boundary share the
+						cap-ratio <code>totalRepPurchased</code> allocation pro rata by
+						winning ETH contribution. The tick selects qualifying bids; it is not
+						the execution price used to calculate aggregate REP.
 					</p>
 					<p>
 						Both finalized paths assign division dust from deterministic
@@ -6673,8 +6676,8 @@
 					>
 						<math
 							display="block"
-							aria-label="auctioned security bond allowance equals unmigrated allowance times auction ETH received divided by the ETH raise cap; auction pool ownership amount equals purchased REP amount times auction pool ownership per REP; and new security bond allowance equals remaining auctioned allowance for the final claim, otherwise auctioned security bond allowance times purchased REP amount divided by total REP purchased"
-							data-source="auctionedSecurityBondAllowance = floor(unmigratedSecurityBondAllowance \cdot auctionEthReceived / ethRaiseCap); poolOwnershipAmount = purchasedRepAmount \cdot auctionPoolOwnershipPerRep; newSecurityBondAllowance = finalClaim ? auctionedSecurityBondAllowance - claimedAuctionedSecurityBondAllowance : auctionedSecurityBondAllowance \cdot purchasedRepAmount / totalRepPurchased"
+							aria-label="auctioned security bond allowance equals the floor of unmigrated allowance times auction ETH received divided by the ETH raise cap; auction pool ownership amount equals purchased REP amount times auction pool ownership per REP; and new security bond allowance equals remaining auctioned allowance for the final claim, otherwise the floor of auctioned security bond allowance times purchased REP amount divided by total REP purchased"
+							data-source="auctionedSecurityBondAllowance = floor(unmigratedSecurityBondAllowance \cdot auctionEthReceived / ethRaiseCap); poolOwnershipAmount = purchasedRepAmount \cdot auctionPoolOwnershipPerRep; newSecurityBondAllowance = finalClaim ? auctionedSecurityBondAllowance - claimedAuctionedSecurityBondAllowance : floor(auctionedSecurityBondAllowance \cdot purchasedRepAmount / totalRepPurchased)"
 						>
 							<mtable>
 								<mtr>
@@ -6732,6 +6735,8 @@
 											</mtr>
 											<mtr>
 												<mtd>
+													<mi>floor</mi>
+													<mo>(</mo>
 													<mfrac>
 														<mrow>
 															<mi>auctionedSecurityBondAllowance</mi>
@@ -6740,6 +6745,7 @@
 														</mrow>
 														<mi>totalRepPurchased</mi>
 													</mfrac>
+													<mo>)</mo>
 												</mtd>
 												<mtd>
 													<mtext>otherwise</mtext>
@@ -6823,8 +6829,9 @@
 					<div class="callout">
 						Underfunded intuition: both caps imply a reserve price. Bids below its
 						ceiling tick refund, while retained ETH buys only the REP it funds at
-						that tick price. Weak demand therefore leaves inventory unsold instead
-						of transferring the full REP cap to a minimally funded bidder.
+						the cap ratio, independent of that tick's rounded price. Weak demand
+						therefore leaves inventory unsold instead of transferring the full REP
+						cap to a minimally funded bidder.
 					</div>
 					<p>
 						The <code>Binding condition</code> output reports one of four
@@ -7665,8 +7672,9 @@
 					<h3>Operational Failure Modes</h3>
 					<ul>
 						<li>
-							If truth-auction demand is weak, a child pool can resume with only
-							partial collateral repair.
+							If truth-auction demand is weak and no caller supplies the exact
+							remaining shortfall, finalization reverts and the child remains
+							inactive in <code>ForkTruthAuction</code>.
 						</li>
 						<li>
 							If REP/ETH liquidity is thin or price discovery is poor,

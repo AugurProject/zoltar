@@ -359,7 +359,7 @@
 						<tr>
 							<td>At the binding level</td>
 							<td>Shares the marginal fill FIFO inside that tick.</td>
-							<td>Shares the proportional purchased REP by retained ETH at the reserve tick.</td>
+							<td>Qualifies at the reserve boundary, then shares the cap-ratio REP allocation by retained ETH.</td>
 						</tr>
 						<tr>
 							<td>Below the binding level</td>
@@ -555,9 +555,10 @@
 					</math>
 					<p class="equation-caption">
 						<span class="equation-label">Underfunded Threshold</span
-						><code>PRICE_PRECISION = 1e18</code>. The actual execution price is
-						<code>tickToPrice(clearingTick)</code>, the first supported tick at or
-						above this reserve. Aggregate purchased REP is
+						><code>PRICE_PRECISION = 1e18</code>.
+						<code>tickToPrice(clearingTick)</code> is the first supported tick at
+						or above this reserve and acts only as the bid-eligibility boundary.
+						Aggregate purchased REP is determined independently by
 						<code>floor(maxRepBeingSold * underfundedWinningEth / ethRaiseCap)</code>,
 						and winners at or above that tick share it pro rata by retained ETH. Solidity
 						differences cumulative floor allocations at fixed bid positions, so
