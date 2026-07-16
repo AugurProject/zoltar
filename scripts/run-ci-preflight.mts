@@ -1,10 +1,13 @@
 import * as process from 'node:process'
 
+const existingNodeOptions = process.env['NODE_OPTIONS']
+const applicationTypeScriptNodeOptions = existingNodeOptions === undefined || existingNodeOptions === '' ? '--max-old-space-size=6144' : `${existingNodeOptions} --max-old-space-size=6144`
+
 const tasks = [
-	{ command: ['run', 'tsc:app'], name: 'Application TypeScript' },
-	{ command: ['run', 'tsc:scripts'], name: 'Script TypeScript' },
-	{ command: ['run', 'tsc:solidity:current'], name: 'Solidity TypeScript' },
-	{ command: ['run', 'ui:build:prod:current'], name: 'Production UI build' },
+	{ command: ['run', 'tsc:app'], name: 'Application TypeScript', nodeOptions: applicationTypeScriptNodeOptions },
+	{ command: ['run', 'tsc:scripts'], name: 'Script TypeScript', nodeOptions: undefined },
+	{ command: ['run', 'tsc:solidity:current'], name: 'Solidity TypeScript', nodeOptions: undefined },
+	{ command: ['run', 'ui:build:prod:current'], name: 'Production UI build', nodeOptions: undefined },
 ] as const
 
 const results = await Promise.all(
@@ -12,6 +15,7 @@ const results = await Promise.all(
 		console.log(`Starting ${task.name}: bun ${task.command.join(' ')}`)
 		const child = Bun.spawn({
 			cmd: [process.execPath, ...task.command],
+			...(task.nodeOptions === undefined ? {} : { env: { ...process.env, NODE_OPTIONS: task.nodeOptions } }),
 			stderr: 'inherit',
 			stdin: 'inherit',
 			stdout: 'inherit',
