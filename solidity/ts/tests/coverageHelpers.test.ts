@@ -879,7 +879,7 @@ describe('Solidity bytecode coverage helpers', () => {
 		const priceOracleFactoryAddress = await deployContract(
 			encodeDeployData({
 				abi: peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.abi,
-				bytecode: `0x${peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object}`,
+				bytecode: applyLibraries(peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object),
 				args: [zeroAddress, 100000n, 1000000, ORACLE_EXACT_TOKEN1_REPORT, 480, 0, 100000, 10000, 115, true, true, client.account.address, 100000n, 30000n, 1000n],
 			}),
 		)
