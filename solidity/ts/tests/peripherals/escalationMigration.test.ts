@@ -784,12 +784,44 @@ describe('Peripherals: escalation migration', () => {
 		strictEqualTypeSafe(await getEscalationGameTotalCost(client, childEscalationGame), childCostDuringMigration, 'continuation cost should stay frozen while the child is still in fork migration')
 
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+		const forkElapsedAtStartBeforeResume = await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			address: childEscalationGame,
+			functionName: 'forkElapsedAtStart',
+			args: [],
+		})
 		await startTruthAuction(client, yesSecurityPool.securityPool)
 		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'the child pool should become operational once migration completes')
 		strictEqualTypeSafe(await getAwaitingForkContinuation(client, yesSecurityPool.securityPool), false, 'the child should not wait for another vault to migrate')
 
+		const forkElapsedAtStartAfterResume = await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			address: childEscalationGame,
+			functionName: 'forkElapsedAtStart',
+			args: [],
+		})
+		strictEqualTypeSafe(forkElapsedAtStartAfterResume, forkElapsedAtStartBeforeResume, 'resuming the continuation must preserve its frozen fork-time elapsed value')
+		const forkResumedAt = await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			address: childEscalationGame,
+			functionName: 'forkResumedAt',
+			args: [],
+		})
+		assert.ok(forkResumedAt > 0n, 'pricing should resume the child continuation')
+		// Exercise a post-resume block explicitly instead of depending on how quickly
+		// the local or CI RPC serves the reads after the pricing transaction.
+		await mockWindow.advanceTime(6n)
+		const latestBlock = await client.getBlock()
+		assert.ok(latestBlock.timestamp >= forkResumedAt, 'the latest block should not predate continuation resumption')
+		const expectedChildCostAtResume = await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			address: childEscalationGame,
+			functionName: 'computeIterativeAttritionCost',
+			args: [forkElapsedAtStartBeforeResume + (latestBlock.timestamp - forkResumedAt)],
+		})
 		const childCostAtResume = await getEscalationGameTotalCost(client, childEscalationGame)
-		strictEqualTypeSafe(childCostAtResume, childCostDuringMigration, 'the paused continuation should keep its frozen fork-time cost after pricing')
+		strictEqualTypeSafe(childCostAtResume, expectedChildCostAtResume, 'the resumed continuation should add only post-resume block time to its frozen fork-time elapsed value')
+		assert.ok(childCostAtResume >= childCostDuringMigration, 'resuming the continuation must not reduce its frozen fork-time cost')
 
 		await mockWindow.advanceTime(DAY)
 		assert.ok((await getEscalationGameTotalCost(client, childEscalationGame)) > childCostAtResume, 'child continuation cost should advance without the other vault')
