@@ -6,6 +6,7 @@ import { act } from 'preact/test-utils'
 import { render } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { OperationModal } from '../components/OperationModal.js'
+import { AddressValue } from '../components/AddressValue.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 
 function OperationModalHarness() {
@@ -160,6 +161,42 @@ describe('OperationModal', () => {
 		if (descriptionId === null) throw new Error('Expected dialog description id')
 		const descriptionElement = document.getElementById(descriptionId)
 		expect(descriptionElement?.textContent).toBe(description)
+
+		render(null, container)
+		container.remove()
+	})
+
+	test('keeps transaction object identity at the top of the confirmation dialog', async () => {
+		const container = document.createElement('div')
+		document.body.appendChild(container)
+		const poolAddress = '0x6E2940600Ac1a17F51A1F82429aDF75f2df6Dab6'
+		const vaultAddress = '0x00000000000000000000000000000000000000A1'
+
+		await act(() => {
+			render(
+				<OperationModal
+					context={[
+						{ label: 'Question', value: 'Will this resolve?' },
+						{ label: 'Security pool', value: <AddressValue address={poolAddress} /> },
+						{ label: 'Universe', value: 'Genesis (0)' },
+						{ label: 'Vault', value: <AddressValue address={vaultAddress} /> },
+					]}
+					isOpen
+					onClose={() => undefined}
+					title='Review Action'
+				>
+					<button type='button'>Confirm</button>
+				</OperationModal>,
+				container,
+			)
+		})
+
+		const dialog = within(container).getByRole('dialog', { name: 'Review Action' })
+		expect(within(dialog).getByText('Confirm transaction context')).not.toBeNull()
+		expect(within(dialog).getByText('Will this resolve?')).not.toBeNull()
+		expect(within(dialog).getByText('Genesis (0)')).not.toBeNull()
+		expect(within(dialog).getByRole('button', { name: `Copy address ${poolAddress}` }).textContent).toBe(poolAddress)
+		expect(within(dialog).getByRole('button', { name: `Copy address ${vaultAddress}` }).textContent).toBe(vaultAddress)
 
 		render(null, container)
 		container.remove()

@@ -23,6 +23,7 @@ export const callbackGasLimit = 'Callback Gas Limit'
 export const formatCurrentAmount1Label = (tokenSymbol: string) => `Current Amount 1 (${tokenSymbol})`
 export const formatCurrentAmount2Label = (tokenSymbol: string) => `Current Amount 2 (${tokenSymbol})`
 export const formatTokenPairSuffix = (token1Symbol: string, token2Symbol: string) => commonCopy.formatPairSlash(token1Symbol, token2Symbol)
+export const formatReportBrowseTitle = (token1Symbol: string, token2Symbol: string, reportId: string) => `${formatTokenPairSuffix(token1Symbol, token2Symbol)} · ${formatReportNumberTitle(reportId)}`
 export const createAnother = 'Create Another'
 export const createStandaloneOracleGame = 'Create Standalone Oracle Game'
 export const creating = 'Creating…'

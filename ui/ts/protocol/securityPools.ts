@@ -55,7 +55,9 @@ function getDeploymentStepAddress(id: 'securityPoolFactory' | 'zoltarQuestionDat
 }
 
 function getSecurityPoolAddressFromReceipt(receipt: TransactionReceipt) {
+	const securityPoolFactory = getInfraContractAddresses().securityPoolFactory
 	for (const log of receipt.logs) {
+		if (!sameAddress(log.address, securityPoolFactory)) continue
 		try {
 			const decodedLog = decodeEventLog({
 				abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
@@ -474,7 +476,7 @@ export async function loadSecurityPoolPage(client: ReadClient, pageIndex: number
 	const deployments = await loadSecurityPoolDeployments(client, startIndex, count)
 	const pools = await loadListedSecurityPools(client, deployments, {
 		...(accountAddress === undefined ? {} : { accountAddress }),
-		vaultDetailMode: 'selected',
+		vaultDetailMode: 'all',
 		vaultPreviewLimit: SECURITY_POOL_PAGE_VAULT_PREVIEW_LIMIT,
 	})
 	return {

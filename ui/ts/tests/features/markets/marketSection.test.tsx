@@ -216,6 +216,10 @@ describe('MarketSection', () => {
 		expect(sharesLink.getAttribute('href')).toContain('universe=11')
 		expect(sharesLink.getAttribute('href')).toContain('selectedPoolView=trading')
 		expect(reportingLink.getAttribute('href')).toContain('selectedPoolView=reporting')
+		expect(documentQueries.getByText('Complete-set operations')).not.toBeNull()
+		expect(documentQueries.getByText('Mint or redeem matching Yes, No, and Invalid shares. Outcome-price trading is not available in this pool.')).not.toBeNull()
+		expect(documentQueries.getByText('Open Interest')).not.toBeNull()
+		expect(documentQueries.getByText('Share Supply')).not.toBeNull()
 	})
 
 	test('distinguishes linked-pool loading, failure recovery, and a confirmed empty result', async () => {
@@ -793,7 +797,9 @@ describe('MarketSection', () => {
 		const modal = documentQueries.getByRole('dialog')
 		expect(modal).not.toBeNull()
 		expect(documentQueries.getAllByText('Fork Zoltar').length > 0).toBe(true)
-		expectTransactionButtonDisabled(modal as HTMLElement, 'Fork Zoltar', 'Select a valid fork question before forking Zoltar.')
+		expect(within(modal as HTMLElement).getByText('Confirm transaction context')).not.toBeNull()
+		expect(modal.textContent).toContain('QuestionNone selected')
+		expectTransactionButtonDisabled(modal as HTMLElement, 'Fork Zoltar', 'Select a valid fork question before approving REP or forking Zoltar.')
 	})
 
 	test('opens root-universe child-universe deployment in a modal', async () => {

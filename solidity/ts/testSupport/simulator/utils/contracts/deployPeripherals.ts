@@ -1,7 +1,7 @@
 import { concatHex, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, type Address, type Hex, toHex } from '@zoltar/shared/ethereum'
 import { createSecurityPoolAddressHelper } from '@zoltar/shared/addressDerivation'
 import { createApplyLinkedLibrariesHelper, createDeploymentStatusOracleAddressHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from '@zoltar/shared/deploymentAddresses'
-import { ORACLE_EXACT_TOKEN1_REPORT, ORACLE_FEE_PERCENTAGE, ORACLE_MULTIPLIER, ORACLE_PROTOCOL_FEE } from '@zoltar/shared/oracleInitialReport'
+import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_FEE_PERCENTAGE, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_MULTIPLIER, ORACLE_PROTOCOL_FEE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/shared/oracleInitialReport'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
 import { WriteClient, writeContractAndWait } from '../clients'
 import { PROXY_DEPLOYER_ADDRESS } from '../constants'
@@ -30,7 +30,7 @@ import {
 import { objectEntries } from '../typescript'
 import { getRepTokenAddress } from './zoltar'
 
-export { ORACLE_EXACT_TOKEN1_REPORT } from '@zoltar/shared/oracleInitialReport'
+export { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/shared/oracleInitialReport'
 
 const ZERO_SALT: Hex = toHex(0, { size: 32 })
 const MULTICALL3_BYTECODE = `0x${peripherals_Multicall3_Multicall3.evm.bytecode.object}` satisfies Hex
@@ -67,12 +67,32 @@ function getPriceOracleManagerAndOperatorQueuerFactoryByteCode(): Hex {
 	return concatHex([
 		applyLibraries(peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object),
 		encodeAbiParameters(
-			[{ type: 'address' }, { type: 'uint256' }, { type: 'uint32' }, { type: 'uint256' }, { type: 'uint48' }, { type: 'uint24' }, { type: 'uint24' }, { type: 'uint24' }, { type: 'uint16' }, { type: 'bool' }, { type: 'bool' }, { type: 'address' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }],
+			[
+				{ type: 'address' },
+				{ type: 'uint256' },
+				{ type: 'uint32' },
+				{ type: 'uint256' },
+				{ type: 'uint256' },
+				{ type: 'uint256' },
+				{ type: 'uint48' },
+				{ type: 'uint24' },
+				{ type: 'uint24' },
+				{ type: 'uint24' },
+				{ type: 'uint16' },
+				{ type: 'bool' },
+				{ type: 'bool' },
+				{ type: 'address' },
+				{ type: 'uint256' },
+				{ type: 'uint256' },
+				{ type: 'uint256' },
+			],
 			[
 				MAINNET_WETH_ADDRESS,
 				ORACLE_REPORT_GAS,
 				ORACLE_SETTLEMENT_GAS,
-				ORACLE_EXACT_TOKEN1_REPORT,
+				ORACLE_GAS_UNITS_FOR_ONE_DISPUTE,
+				ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE,
+				OPEN_ORACLE_SECURITY_MULTIPLIER_BPS,
 				ORACLE_SETTLEMENT_TIME,
 				ORACLE_DISPUTE_DELAY,
 				ORACLE_PROTOCOL_FEE,
@@ -205,6 +225,8 @@ export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 					{ type: 'uint256' },
 					{ type: 'uint32' },
 					{ type: 'uint256' },
+					{ type: 'uint256' },
+					{ type: 'uint256' },
 					{ type: 'uint48' },
 					{ type: 'uint24' },
 					{ type: 'uint24' },
@@ -223,7 +245,9 @@ export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 					MAINNET_WETH_ADDRESS,
 					ORACLE_REPORT_GAS,
 					ORACLE_SETTLEMENT_GAS,
-					ORACLE_EXACT_TOKEN1_REPORT,
+					ORACLE_GAS_UNITS_FOR_ONE_DISPUTE,
+					ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE,
+					OPEN_ORACLE_SECURITY_MULTIPLIER_BPS,
 					ORACLE_SETTLEMENT_TIME,
 					ORACLE_DISPUTE_DELAY,
 					ORACLE_PROTOCOL_FEE,
@@ -239,12 +263,12 @@ export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 			),
 		]),
 	getRepTokenAddress,
-	getSecurityPoolInitCode: ({ escalationGameFactory, openOracle, parent, priceOracleManagerAndOperatorQueuer, questionId, securityMultiplier, securityPoolFactory, securityPoolForker, shareToken, truthAuction, universeId, zoltar, zoltarQuestionData }) =>
+	getSecurityPoolInitCode: ({ escalationGameFactory, openOracle, parent, priceOracleManagerAndOperatorQueuer, questionId, securityMultiplier, securityPoolForker, shareToken, truthAuction, universeId, zoltar, zoltarQuestionData }) =>
 		(() => {
 			return encodeDeployData({
 				abi: peripherals_SecurityPool_SecurityPool.abi,
 				bytecode: applyLibraries(peripherals_SecurityPool_SecurityPool.evm.bytecode.object),
-				args: [securityPoolForker, securityPoolFactory, zoltarQuestionData, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, questionId, securityMultiplier, DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDeposit, truthAuction],
+				args: [securityPoolForker, zoltarQuestionData, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, questionId, securityMultiplier, DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDeposit, truthAuction],
 			})
 		})(),
 	getShareTokenInitCode: (securityPoolFactory, zoltarAddress, questionId) =>

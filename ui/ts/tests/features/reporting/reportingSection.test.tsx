@@ -314,6 +314,11 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(false)
 		expect((documentQueries.getByRole('radio', { name: /^Yes/ }) as HTMLButtonElement).textContent?.includes('Selected')).toBe(true)
 		expect(document.body.textContent?.includes('Settle Escalation Deposits')).toBe(true)
+		const transactionContext = document.body.querySelector('.transaction-object-context')
+		if (!(transactionContext instanceof HTMLElement)) throw new Error('Expected reporting transaction context')
+		expect(transactionContext.textContent?.includes('Universe 1')).toBe(true)
+		expect(transactionContext.textContent?.includes('Source Vault')).toBe(true)
+		expect(transactionContext.textContent?.includes(zeroAddress)).toBe(true)
 	})
 
 	test('suppresses the Pending Start banner once an escalation game has been initialized', async () => {
@@ -372,6 +377,9 @@ describe('ReportingSection', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Reporting Not Enabled' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Reporting Context' })).toBeNull()
 		expect(documentQueries.queryByText('Opens In')).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Escalation Metrics' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Report Outcome' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Settle Escalation Deposits' })).toBeNull()
 		expect(document.body.textContent?.includes(getReportingLockedUntilMessage(100n, 50n))).toBe(true)
 	})
 

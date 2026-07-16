@@ -9,7 +9,11 @@ export const addressCopied = 'Address Copied'
 export const switchToEthereumMainnet = 'Switch to Ethereum Mainnet'
 export const ethereumMainnet = 'Ethereum Mainnet'
 export const managingWallet = 'Updating wallet…'
-export const formatWalletNetwork = (chainId: string | undefined) => (chainId === undefined ? 'Unknown network' : `Chain ${chainId}`)
+export const formatWalletNetwork = (chainId: string | undefined) => {
+	if (chainId === undefined) return 'Unknown network'
+	if (chainId === '0xaa36a7') return 'Sepolia (11155111)'
+	return `Chain ${chainId}`
+}
 export const oracleReports = 'Oracle Reports'
 export const questionsAndMarkets = 'Questions & Markets'
 export const refreshRepPrices = 'Refresh REP prices'
@@ -67,3 +71,6 @@ export const showEnvironmentDetails = 'Show environment details'
 export const hideEnvironmentDetails = 'Hide environment details'
 export const applicationSections = 'Application sections'
 export const deploymentRequiredDetail = 'Deploy the application contracts before using this section.'
+export const currentApplicationSection = 'Current application section'
+export const protocolGuide = 'Protocol Guide'
+export const protocolGuideHref = 'https://augurproject.github.io/zoltar/docs/start-here.html'

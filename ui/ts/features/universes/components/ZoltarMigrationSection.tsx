@@ -14,6 +14,8 @@ import { StateHint } from '../../../components/StateHint.js'
 import { TokenApprovalControl } from '../../../components/TokenApprovalControl.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
 import { TransactionReview } from '../../../components/TransactionReview.js'
+import { TransactionNetworkValue } from '../../../components/TransactionNetworkValue.js'
+import { TransactionUniverseValue } from './TransactionUniverseValue.js'
 import { UniverseLink } from './UniverseLink.js'
 import { getMigrationOutcomeSplitLimit, MigrationOutcomeUniversesSection } from './MigrationOutcomeUniversesSection.js'
 import type { LoadableValueState } from '../../../lib/loadState.js'
@@ -234,9 +236,10 @@ export function ZoltarMigrationSection({
 				</DataGrid>
 				<div className='form-grid'>
 					<div className='field'>
-						<span>{zoltarCopy.migrationAmount}</span>
+						<label htmlFor='zoltar-migration-amount'>{zoltarCopy.migrationAmount}</label>
 						<div className='field-inline'>
 							<FormInput
+								id='zoltar-migration-amount'
 								className='field-inline-input'
 								invalid={isMigrationAmountInvalid}
 								inputMode='decimal'
@@ -282,6 +285,11 @@ export function ZoltarMigrationSection({
 					)}
 
 					<TransactionReview
+						context={[
+							{ label: commonCopy.question, value: rootUniverse?.forkQuestionDetails?.title ?? commonCopy.unavailable },
+							{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={rootUniverse?.universeId} /> },
+							{ label: zoltarCopy.selectedDestinations, value: selectedDestinationsContent },
+						]}
 						primary={[
 							needsAdditionalPreparation ? { label: transactionReviewCopy.youPay, value: <CurrencyValue value={missingPreparationAmount} suffix={commonCopy.rep} /> } : { label: zoltarCopy.migrationAmount, value: <CurrencyValue value={migrationAmount} suffix={commonCopy.rep} /> },
 							needsAdditionalPreparation ? { label: zoltarCopy.repMovedToMigrationCustody, value: <CurrencyValue value={missingPreparationAmount} suffix={commonCopy.rep} /> } : { label: zoltarCopy.childUniverseRepReceived, value: <CurrencyValue value={splitRepReceived} suffix={commonCopy.rep} /> },
@@ -297,7 +305,7 @@ export function ZoltarMigrationSection({
 							})),
 							{ label: transactionReviewCopy.protocolFee, value: transactionReviewCopy.noProtocolFee },
 							{ label: transactionReviewCopy.contract, value: rootUniverse?.zoltarAddress === undefined ? commonCopy.unavailable : <AddressValue address={rootUniverse.zoltarAddress} /> },
-							{ label: transactionReviewCopy.network, value: transactionReviewCopy.ethereumMainnet },
+							{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
 						]}
 						risks={[zoltarCopy.migrationDestinationRisk, zoltarCopy.migrationSplitRisk]}
 					/>

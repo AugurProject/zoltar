@@ -144,6 +144,7 @@ export function MarketCreateQuestionSection({
 	const draftQuestionContextLabel = normalizedDescription === '' ? marketCopy.needsContext : marketCopy.contextProvided
 	const markFieldTouched = (field: MarketFormFieldName) => setTouchedFields(current => new Set([...current, field]))
 	const getVisibleFieldError = (field: MarketFormFieldName) => (touchedFields.has(field) ? marketFormValidation.fieldErrors[field] : undefined)
+	const canCreateQuestion = accountAddress !== undefined && isMainnet && !marketCreating && marketFormValidation.isValid
 	useEffect(() => {
 		if (scalarCreatePreviewDetails === undefined) return
 		const clampedTick = clampScalarTickIndex(BigInt(scalarCreatePreviewTick), scalarCreatePreviewDetails.numTicks).toString()
@@ -225,7 +226,16 @@ export function MarketCreateQuestionSection({
 						</div>
 					</div>
 
-					<div className='form-grid'>
+					<form
+						aria-label={commonCopy.createQuestion}
+						className='form-grid'
+						noValidate
+						onSubmit={event => {
+							event.preventDefault()
+							if (!canCreateQuestion) return
+							onCreateMarket()
+						}}
+					>
 						<div className='field'>
 							<span>{marketCopy.questionType}</span>
 							<EnumDropdown ariaLabel={marketCopy.questionType} options={MARKET_TYPE_OPTIONS} value={marketForm.marketType} onChange={marketType => onMarketFormChange({ marketType })} />
@@ -425,10 +435,11 @@ export function MarketCreateQuestionSection({
 							<TransactionActionButton
 								idleLabel={commonCopy.createQuestion}
 								pendingLabel={marketCopy.createQuestionPendingLabel}
-								onClick={onCreateMarket}
+								onClick={() => undefined}
 								pending={marketCreating}
+								type='submit'
 								availability={{
-									disabled: accountAddress === undefined || !isMainnet || marketCreating || !marketFormValidation.isValid,
+									disabled: !canCreateQuestion,
 									reason: (() => {
 										if (accountAddress === undefined) return marketCopy.questionCreationWalletRequired
 										if (!isMainnet) return commonCopy.mainnetRequiredReason
@@ -438,7 +449,7 @@ export function MarketCreateQuestionSection({
 								}}
 							/>
 						</div>
-					</div>
+					</form>
 				</SectionBlock>
 			) : undefined}
 

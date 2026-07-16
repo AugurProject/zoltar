@@ -5,9 +5,9 @@ import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { deployUniformPriceDualCapBatchAuction } from '../testSupport/simulator/utils/contracts/auction'
-import { ORACLE_EXACT_TOKEN1_REPORT, deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
+import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
 import { depositOnOutcome, deployEscalationGame, getEscalationGameOutcomeState } from '../testSupport/simulator/utils/contracts/escalationGame'
-import { executeStagedOperation, getEthRaiseCap, getIsPriceValid, getRequestPriceEthCost, getStagedOperation, getStagedOperationCounter, OperationType, requestPriceIfNeededAndStageOperation, requestPriceIfNeededAndStageOperationWithInitialReportAmount2 } from '../testSupport/simulator/utils/contracts/peripherals'
+import { executeStagedOperation, getEthRaiseCap, getIsPriceValid, getRequestPriceEthCost, getStagedOperation, getStagedOperationCounter, OperationType, requestPriceIfNeededAndStageOperation, requestPriceIfNeededAndStageOperationWithInitialReportPrice } from '../testSupport/simulator/utils/contracts/peripherals'
 import { approveAndDepositRep, handleOracleReporting, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
 import { depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getRepToken, getSecurityVault, getTotalSecurityBondAllowance } from '../testSupport/simulator/utils/contracts/securityPool'
 import { createChildUniverse, getMigratedRep, getOwnForkRepBuckets, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault } from '../testSupport/simulator/utils/contracts/securityPoolForker'
@@ -20,6 +20,7 @@ import { createWriteClient, type WriteClient, writeContractAndWait } from '../te
 import {
 	peripherals_EscalationGame_EscalationGame,
 	peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
+	peripherals_SecurityPool_SecurityPool,
 	peripherals_factories_ShareTokenFactory_ShareTokenFactory,
 	peripherals_tokens_ShareToken_ShareToken,
 	test_peripherals_CompleteSetReentrantReceiver_CompleteSetReentrantReceiver,
@@ -34,8 +35,6 @@ const repDeposit = 1000n * 10n ** 18n
 const initialEscalationGameDeposit = 1n * 10n ** 18n
 const largeEscalationGameDeposit = 100n * 10n ** 18n
 const outcomes = ['Yes', 'No']
-const PRICE_PRECISION = 10n ** 18n
-
 describe('security regression coverage', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
 	let client: WriteClient
@@ -103,11 +102,69 @@ describe('security regression coverage', () => {
 		return contractAddress
 	}
 
+	test('nested complete-set checkpoints fold in callback log order', async () => {
+		const mockWindow = getAnvilWindowEthereum()
+		const initialValue = 6n * 10n ** 18n
+		const reentrantValue = 6n * 10n ** 18n
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, 20n * 10n ** 18n)
+		const receiver = await deployCompleteSetReentrantReceiver(securityPoolAddresses.securityPool)
+		assert.equal(
+			await client.readContract({
+				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				address: securityPoolAddresses.shareToken,
+				functionName: 'isAuthorized',
+				args: [securityPoolAddresses.securityPool],
+			}),
+			true,
+			'security pool must remain authorized to mint shares',
+		)
+		const attackHash = await writeContractAndWait(client, () =>
+			client.writeContract({
+				abi: test_peripherals_CompleteSetReentrantReceiver_CompleteSetReentrantReceiver.abi,
+				address: receiver,
+				functionName: 'attack',
+				args: [initialValue, reentrantValue],
+				value: initialValue + reentrantValue,
+				gas: 15_000_000n,
+			}),
+		)
+		const attackReceipt = await client.waitForTransactionReceipt({ hash: attackHash })
+		const completeSetLogs = attackReceipt.logs
+			.filter(log => log.address.toLowerCase() === securityPoolAddresses.securityPool.toLowerCase())
+			.map(log => {
+				try {
+					return decodeEventLog({
+						abi: peripherals_SecurityPool_SecurityPool.abi,
+						data: log.data,
+						topics: log.topics,
+					})
+				} catch (error) {
+					if (!isIgnorableLogDecodeError(error)) throw error
+					return undefined
+				}
+			})
+			.filter(log => log?.eventName === 'CompleteSetCreated')
+		assert.equal(completeSetLogs.length, 2)
+		const outerLog = completeSetLogs[0]
+		const nestedLog = completeSetLogs[1]
+		if (outerLog?.eventName !== 'CompleteSetCreated' || nestedLog?.eventName !== 'CompleteSetCreated') {
+			throw new Error('complete-set checkpoint missing')
+		}
+		assert.equal(outerLog.args.creator, receiver)
+		assert.equal(outerLog.args.ethAmount, initialValue)
+		assert.equal(outerLog.args.resultingCollateral, initialValue)
+		assert.equal(nestedLog.args.creator, receiver)
+		assert.equal(nestedLog.args.ethAmount, reentrantValue)
+		assert.equal(nestedLog.args.resultingCollateral, initialValue + reentrantValue)
+		assert.equal(nestedLog.args.resultingCollateral, await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool))
+	})
+
 	test('complete-set capacity is enforced across ERC1155 receiver reentrancy', async () => {
 		const mockWindow = getAnvilWindowEthereum()
 		const capacity = 10n * 10n ** 18n
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, capacity)
 		const receiver = await deployCompleteSetReentrantReceiver(securityPoolAddresses.securityPool)
+		const blockBeforeAttack = await client.getBlockNumber()
 
 		await assert.rejects(
 			writeContractAndWait(client, () =>
@@ -117,11 +174,20 @@ describe('security regression coverage', () => {
 					functionName: 'attack',
 					args: [6n * 10n ** 18n, 6n * 10n ** 18n],
 					value: 12n * 10n ** 18n,
+					gas: 15_000_000n,
 				}),
 			),
 			/receiver rejected tokens/,
 		)
 		assert.equal(await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool), 0n)
+		assert.deepStrictEqual(
+			await client.getLogs({
+				address: securityPoolAddresses.securityPool,
+				fromBlock: blockBeforeAttack + 1n,
+			}),
+			[],
+			'reverted nested creation must not leave durable pool events',
+		)
 	})
 
 	test('vault migration backs migrated child accounting even without prior branch REP migration', async () => {
@@ -267,15 +333,14 @@ describe('security regression coverage', () => {
 		await approveAndDepositRep(liquidator, repDeposit * 10n, questionId)
 		await mockWindow.advanceTime(2n * 60n * 60n)
 
-		const forcedInitialReportAmount2 = (ORACLE_EXACT_TOKEN1_REPORT * PRICE_PRECISION) / forcedLiquidationPrice
-		await requestPriceIfNeededAndStageOperationWithInitialReportAmount2(
+		await requestPriceIfNeededAndStageOperationWithInitialReportPrice(
 			liquidator,
 			securityPoolAddresses.priceOracleManagerAndOperatorQueuer,
 			OperationType.SetSecurityBondsAllowance,
 			liquidator.account.address,
 			1n,
 			5n * 60n,
-			forcedInitialReportAmount2 > 0n ? forcedInitialReportAmount2 : 1n,
+			forcedLiquidationPrice,
 			await getRequestPriceEthCost(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer),
 		)
 		for (let index = 1; index < 4; index++) {

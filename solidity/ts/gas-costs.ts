@@ -14,7 +14,7 @@ import {
 	OperationType,
 	requestPrice,
 	requestPriceIfNeededAndStageOperation,
-	requestPriceIfNeededAndStageOperationWithInitialReportAmount2,
+	requestPriceIfNeededAndStageOperationWithInitialReportPrice,
 	wrapWeth,
 } from './testSupport/simulator/utils/contracts/peripherals'
 import { manipulatePriceOracle, manipulatePriceOracleAndPerformOperation } from './testSupport/simulator/utils/contracts/peripheralsTestUtils'
@@ -441,9 +441,9 @@ const scenarios: Scenario[] = [
 			await confirmApproveAndDepositRep(bob, context, repDepositAmount * 10n)
 			await confirmTx(carol, createCompleteSet(carol, context.addresses.securityPool, openInterestAmount))
 			await anvil.advanceTime(2n * DAY)
-			const initialReportAmount2 = (reportBond * coordinatorPricePrecision) / 10n ** 19n
+			const initialReportPrice = (reportBond * coordinatorPricePrecision) / 10n ** 19n
 			const ethCost = await getRequestPriceEthCost(bob, context.addresses.priceOracleManagerAndOperatorQueuer)
-			await confirmTx(bob, requestPriceIfNeededAndStageOperationWithInitialReportAmount2(bob, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, alice.account.address, securityBondAllowance, defaultSelfOperationValidForSeconds, initialReportAmount2, ethCost))
+			await confirmTx(bob, requestPriceIfNeededAndStageOperationWithInitialReportPrice(bob, context.addresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, alice.account.address, securityBondAllowance, defaultSelfOperationValidForSeconds, initialReportPrice, ethCost))
 			const pendingReportId = await getPendingReportId(bob, context.addresses.priceOracleManagerAndOperatorQueuer)
 			await anvil.advanceTime(DAY)
 			return await waitForGas(bob, openOracleSettle(bob, pendingReportId))

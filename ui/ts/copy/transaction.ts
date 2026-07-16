@@ -7,6 +7,7 @@ export const formatCompletedSuccessfully = (operationLabel: CopyTemplateValue) =
 export const formatTransactionSubmitted = (transactionLabel: CopyTemplateValue) => `${transactionLabel} transaction submitted.`
 export const undefinedValue = 'undefined'
 export const nullValue = 'null'
+export const circularValue = '[circular value]'
 export const formatValueTruncatedValueBytes = (value: CopyTemplateValue, byteCount: CopyTemplateValue) => `${value}... (${byteCount} bytes)`
 export const sender = 'Sender'
 export const chain = 'Chain'

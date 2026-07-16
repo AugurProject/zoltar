@@ -13,7 +13,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0x92728A7FD0e154e2464848440d50c2eE991daED8"
+			"address": "0x4E273b5c1b42C404E49012c3D1E97e4E652ACce6"
 		},
 		{
 			"id": "multicall3",
@@ -23,7 +23,7 @@
 		{
 			"id": "uniformPriceDualCapBatchAuctionFactory",
 			"label": "UniformPriceDualCapBatchAuctionFactory",
-			"address": "0x8Fd1d63073E09ae6f3de6A07a86492e1CbDE3794"
+			"address": "0x82D2192655A4B3815C2C3aF96d50831ba0ef2778"
 		},
 		{
 			"id": "scalarOutcomes",
@@ -33,7 +33,7 @@
 		{
 			"id": "securityPoolUtils",
 			"label": "SecurityPoolUtils",
-			"address": "0x793731992E60970423599a1189c8a894f89c9A54"
+			"address": "0x10293D04A06C49E2BFFD84c1A1739b2A59EB9A69"
 		},
 		{
 			"id": "openOracle",
@@ -53,34 +53,34 @@
 		{
 			"id": "shareTokenFactory",
 			"label": "ShareTokenFactory",
-			"address": "0xA19Bd8022eB908e4dC5cF3732Ef634bA6de48218"
+			"address": "0x0C1a69559a296589510fA436e333d182B20a0263"
 		},
 		{
 			"id": "priceOracleManagerAndOperatorQueuerFactory",
 			"label": "OpenOracle Price Coordinator Factory",
-			"address": "0x387b805E0aAb4642E34Ded70C65A2d9526b3AC13"
+			"address": "0x65378e90f0c76e86d8111Ca1fb5d2a8912534159"
 		},
 		{
 			"id": "securityPoolForker",
 			"label": "Security Pool Forker",
-			"address": "0x2e671d17788531a81EC903c556046eb0BE3394CE"
+			"address": "0xfb9fF03dea98454CeADc679204ec6A5EeF3fa313"
 		},
 		{
 			"id": "escalationGameFactory",
 			"label": "Escalation Game Factory",
-			"address": "0x900FB18CEdf66d34cE29184f6515d8CF71A92987"
+			"address": "0x236E6A5735B3B10d6123000D4725323f88E24666"
 		},
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0xeF1dD0b1BdD7b71A3c53e410DE8F48f1A99eA557"
+			"address": "0xf7Cae4aD6046cc05862D958B2A7011aD4A8fe838"
 		}
 	],
 	"derivedContracts": [
 		{
 			"id": "escalationGameProofVerifier",
 			"label": "Escalation Game Proof Verifier",
-			"address": "0xB71854F8876D8DFeB81dfaE24d9bae33f86b955B"
+			"address": "0x84F30C869d001395ca12ba4849A70e496Ff7522a"
 		}
 	]
 }

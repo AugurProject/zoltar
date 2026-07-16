@@ -259,7 +259,7 @@ describe('ForkAuctionSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Fork Workflow' })).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Migration Status' })).not.toBeNull()
 
-		const forkTriggeredTab = documentQueries.getByRole('tab', { name: 'Fork Triggered' })
+		const forkTriggeredTab = documentQueries.getByRole('tab', { name: 'Fork Readiness' })
 		const migrationTab = documentQueries.getByRole('tab', { name: 'Migration' })
 		const auctionTab = documentQueries.getByRole('tab', { name: 'Truth Auction' })
 		const settlementTab = documentQueries.getByRole('tab', { name: 'Settlement' })

@@ -323,7 +323,7 @@ body.paper-placeholder .example-output {
 }
 body.doc-openoracle .example-output-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
 	gap: 0.75rem;
 	margin-top: 1rem;
 }
@@ -431,11 +431,6 @@ body.doc-openoracle td math {
 		display: block;
 		overflow-x: auto;
 		white-space: nowrap;
-	}
-	body.doc-openoracle .operation-notional-table {
-		display: table;
-		table-layout: fixed;
-		white-space: normal;
 	}
 }
 

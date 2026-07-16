@@ -169,7 +169,7 @@ describe('OverviewPanels', () => {
 		})
 
 		fireEvent.click(documentQueries.getByText('Account Menu'))
-		expect(documentQueries.getByText('Chain 0xaa36a7')).not.toBeNull()
+		expect(documentQueries.getByText('Sepolia (11155111)')).not.toBeNull()
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Change Wallet' }))
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Switch to Ethereum Mainnet' }))
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Disconnect' }))

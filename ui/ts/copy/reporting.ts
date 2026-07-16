@@ -24,6 +24,7 @@ export const forkRequiredSettlementReason = 'Escalation deposits remain locked a
 export const initiallyDeposited = 'Initially deposited:'
 export const leadHoldingCapital = 'Lead-holding capital'
 export const loadingAvailableVaultRep = 'Loading available vault REP.'
+export const sourceVault = 'Source Vault'
 export const presetDetailsRequired = 'Load reporting details before using presets.'
 export const loadingEscalation = 'Loading escalation…'
 export const refreshReporting = 'Refresh reporting'

@@ -2,8 +2,9 @@ import * as commonCopy from '../copy/common.js'
 import { useId, useRef } from 'preact/hooks'
 import { useModalFocusIsolation } from '../hooks/useModalFocusIsolation.js'
 import type { OperationModalProps } from '../types/components.js'
+import { TransactionObjectContext } from './TransactionObjectContext.js'
 
-export function OperationModal({ children, description, isOpen, onClose, title }: OperationModalProps) {
+export function OperationModal({ children, context = [], description, isOpen, onClose, title }: OperationModalProps) {
 	const dialogRef = useRef<HTMLElement | null>(null)
 	const closeButtonRef = useRef<HTMLButtonElement | null>(null)
 	const titleId = useId()
@@ -35,6 +36,7 @@ export function OperationModal({ children, description, isOpen, onClose, title }
 						{description}
 					</p>
 				)}
+				<TransactionObjectContext items={context} />
 				<div className='operation-modal-body'>{children}</div>
 			</section>
 		</div>

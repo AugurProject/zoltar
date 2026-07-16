@@ -30,9 +30,9 @@ contract Zoltar {
 	mapping(address => mapping(uint248 => AddressRepMigration)) private migrationRepBalances; // userAddress -> fromUniverse
 
 	event UniverseForked(
-		address forker,
-		uint248 universeId,
-		uint256 questionId,
+		address indexed forker,
+		uint248 indexed universeId,
+		uint256 indexed questionId,
 		uint256 forkTime,
 		uint256 forkThreshold,
 		uint256 migrationRepBalance,
@@ -40,35 +40,35 @@ contract Zoltar {
 	);
 	event DeployChild(
 		address deployer,
-		uint248 universeId,
-		uint256 outcomeIndex,
-		uint248 childUniverseId,
+		uint248 indexed universeId,
+		uint256 indexed outcomeIndex,
+		uint248 indexed childUniverseId,
 		ReputationToken childReputationToken,
 		uint256 childUniverseTheoreticalSupply
 	);
 	event MigrationRepAdded(
-		address migrator,
-		uint248 universeId,
+		address indexed migrator,
+		uint248 indexed universeId,
 		uint256 amount,
 		uint256 migrationRepBalance,
 		uint256 universeTheoreticalSupply
 	);
 	event MigrationRepSplit(
-		address migrator,
+		address indexed migrator,
 		address recipient,
-		uint248 universeId,
+		uint248 indexed universeId,
 		uint256 outcomeIndex,
-		uint248 childUniverseId,
+		uint248 indexed childUniverseId,
 		uint256 amount,
 		uint256 childMigrationRepAmount
 	);
 	event UniverseInitialized(
-		uint248 universeId,
+		uint248 indexed universeId,
 		uint256 forkTime,
 		uint256 forkQuestionId,
 		uint256 forkingOutcomeIndex,
 		ReputationToken reputationToken,
-		uint248 parentUniverseId,
+		uint248 indexed parentUniverseId,
 		uint256 universeTheoreticalSupply
 	);
 

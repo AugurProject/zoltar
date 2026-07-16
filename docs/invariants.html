@@ -329,15 +329,16 @@
 							<tr>
 								<td><code>ORA-07</code></td>
 								<td>
-									Aggregate operation notional authorized by one accepted price
-									is capped by a configured report-round budget.
+									Initial-report funding follows request-block gas economics and
+									configured correction profitability rather than a fixed token
+									amount or protected-operation notional.
 								</td>
 								<td>
-									Each accepted report establishes a notional budget from its
-									accepted token amounts and the configured escalation-halt
-									multiplier. Successful staged operations and direct escalation
-									deposits consume that shared budget; whether the multiplier is
-									economically sufficient remains a parameter assumption.
+									The coordinator derives a WETH minimum from the request
+									block's base fee and tunable gas, Open Oracle Security
+									multiplier, target-error, and fee parameters. The sponsor may
+									voluntarily fund more WETH; queued-operation value does not
+									enter the calculation.
 								</td>
 							</tr>
 							<tr>
@@ -348,9 +349,10 @@
 								</td>
 								<td>
 									Underfunded demand buys REP at the cap-implied reserve in
-									proportion to qualifying ETH. Any remaining repair contribution
-									issues no ownership or allowance, and a child activates only at
-									the complete repair target.
+									proportion to qualifying ETH when the aggregate REP result is
+									positive; a zero result refunds every bid. Any remaining repair
+									contribution issues no ownership or allowance, and a child
+									activates only at the complete repair target.
 								</td>
 							</tr>
 						</tbody>
@@ -1331,7 +1333,7 @@
 								<td><code>ORA-02</code></td>
 								<td>
 									An accepted price is positive REP per ETH:
-									<code>amount1 REP × 1e18 / amount2 WETH</code>. Higher values
+									<code>amount2 REP × 1e18 / amount1 WETH</code>. Higher values
 									require more REP for the same ETH obligation.
 								</td>
 								<td>Contract guard</td>
@@ -1404,15 +1406,15 @@
 							<tr>
 								<td><code>ORA-07</code></td>
 								<td>
-									Aggregate operation notional authorized by one accepted report
-									is capped by the configured report-round budget derived from
-									accepted report amounts and the escalation-halt multiplier.
+									The initial-report WETH minimum derives from request-block gas
+									economics and configured correction profitability, independently
+									of queued-operation or pool-value notional.
 								</td>
 								<td>Reviewed preservation</td>
 								<td>
 									<a
-										href="./open-oracle-integration.html#fixed-report-unmetered-exposure"
-										>Configured report exposure budget</a
+										href="./open-oracle-integration.html#initial-report-estimator-example"
+										>Dynamic minimum report estimator</a
 									>
 								</td>
 							</tr>
@@ -1572,7 +1574,9 @@
 								<td><code>AUC-07</code></td>
 								<td>
 									REP ownership issued during repair is proportional to
-									qualifying ETH raised at or above the cap-implied reserve.
+									qualifying ETH raised at or above the cap-implied reserve. If
+									the proportional aggregate rounds to zero REP, no ETH is
+									retained and every bid refunds.
 								</td>
 								<td>Reviewed preservation</td>
 								<td>
@@ -1867,8 +1871,9 @@
 									<a href="../solidity/ts/tests/priceOracleSecurity.test.ts"
 										><code>priceOracleSecurity.test.ts</code></a
 									>
-									>, including aggregate report-budget accounting, manual
-									overflow execution, and staged-operation invariant tests.
+									>, including dynamic minimum report sizing, sponsor
+									exclusivity, manual overflow execution, and staged-operation
+									invariant tests.
 								</td>
 								<td>
 									Same-block dispute/settlement ordering and validation that the

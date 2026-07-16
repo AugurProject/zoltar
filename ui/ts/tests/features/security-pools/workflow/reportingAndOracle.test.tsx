@@ -47,7 +47,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(summaryLabels).not.toContain('Truth Auction')
 	})
 
-	test('shows disabled reporting actions before market end instead of a placeholder message', async () => {
+	test('defers future reporting actions until the market has ended', async () => {
 		const futureMarket = createMarketDetails({ endTime: 1_700_003_600n })
 		const expectedLockedReason = getReportingLockedUntilMessage(futureMarket.endTime, 1_700_000_000n)
 		const renderedComponent = await renderIntoDocument(
@@ -70,20 +70,18 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Reporting Context' })).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Reporting Not Enabled' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Outcome Sides' })).toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Escalation Metrics' })).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Report Outcome' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Escalation Metrics' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Report Outcome' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Withdraw Escalation Deposits' })).toBeNull()
 		expect(documentQueries.queryByText('Load reporting details to populate live stakes, bond progression, and deposit indexes.')).toBeNull()
 		expect(documentQueries.queryByText('Reporting unlocks after the market end timestamp for the selected pool.')).toBeNull()
 		expect(documentQueries.queryByText(expectedLockedReason)).not.toBeNull()
-		expect(document.body.querySelectorAll('.escalation-side')).toHaveLength(3)
+		expect(document.body.querySelectorAll('.escalation-side')).toHaveLength(0)
 		expect(document.body.textContent?.includes('Your deposits: None')).toBe(false)
 		expect(document.body.textContent?.includes('Projected payout for current amount')).toBe(false)
 		expect(document.body.textContent?.includes('Projected profit if this side wins')).toBe(false)
 
-		const reportButton = documentQueries.getByRole('button', { name: 'Report On Selected Side' }) as HTMLButtonElement
-		expect(reportButton.disabled).toBe(true)
-		expect(reportButton.title).toBe(expectedLockedReason)
+		expect(documentQueries.queryByRole('button', { name: 'Report On Selected Side' })).toBeNull()
 	})
 
 	test('locks reporting actions while the selected pool is not operational', async () => {
@@ -205,9 +203,9 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		setCleanup(renderedComponent.cleanup)
 
 		const documentQueries = within(document.body)
-		const reportButton = documentQueries.getByRole('button', { name: 'Report On Selected Side' }) as HTMLButtonElement
-		expect(reportButton.disabled).toBe(true)
-		expect(reportButton.title).toBe(getReportingLockedUntilMessage(100n, 100n))
+		expect(documentQueries.getByRole('heading', { name: 'Reporting Not Enabled' })).not.toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Report On Selected Side' })).toBeNull()
+		expect(documentQueries.queryByText(getReportingLockedUntilMessage(100n, 100n))).not.toBeNull()
 	})
 
 	test('renders staged operations management inside the staged operations tab instead of a standalone section', async () => {

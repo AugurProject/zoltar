@@ -894,11 +894,11 @@ void describe('fork auction helpers', () => {
 		expect(rowsViewModel.rows.map(row => row.statusLabel)).toEqual(['Refunded', 'Winning', 'Winning'])
 		expect(rowsViewModel.rows[0]?.settlementControl?.disabled).toBe(true)
 		expect(rowsViewModel.rows[1]?.settlementControl).toEqual({
-			ariaLabel: 'Select bid for settlement',
+			ariaLabel: 'Select winning bid 2: 1 ETH at 1.001100550165033004 ETH/REP',
 			bidKey: winningBidKey,
 			checked: true,
 			disabled: false,
-			title: 'Select bid for settlement',
+			title: 'Select winning bid 2: 1 ETH at 1.001100550165033004 ETH/REP',
 		})
 		expect(rowsViewModel.rows[2]?.settlementControl?.ariaLabel).toBe('Bid is not settlement-eligible')
 		expect(updateTruthAuctionSettlementBidSelection([winningBidKey], winningBidKey, true)).toEqual([winningBidKey])

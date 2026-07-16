@@ -69,16 +69,41 @@ describe('CollateralizationCircle', () => {
 		expect(gaugeValue.className).toBe('collateralization-gauge-value')
 	})
 
-	test('caps oversized collateralization percentages inside the ring with an exact tooltip', async () => {
+	test('shows oversized collateralization percentages visibly beside a compact ring value', async () => {
 		const renderedComponent = await renderIntoDocument(<CollateralizationCircle collateralizationPercent={3667n * 10n ** 18n} targetCollateralizationPercent={150n * 10n ** 18n} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
+		const documentQueries = within(document.body)
 		const gauge = document.querySelector('.collateralization-gauge')
-		const gaugeValue = within(document.body).getByText('999%+')
+		const gaugeValue = documentQueries.getByText('>999%')
 
 		expect(gauge?.className).not.toContain('has-external-value')
 		expect(gauge?.getAttribute('title')).toBe('Collateralization: 3 667%; target: 150%')
 		expect(gaugeValue.className).toBe('collateralization-gauge-value')
+		expect(documentQueries.getByText('Above target')).not.toBeNull()
+		expect(documentQueries.getByText('3 667%')).not.toBeNull()
+	})
+
+	test('describes oversized collateralization relative to an equally oversized target', async () => {
+		const renderedComponent = await renderIntoDocument(<CollateralizationCircle collateralizationPercent={1000n * 10n ** 18n} targetCollateralizationPercent={1000n * 10n ** 18n} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('>999%')).not.toBeNull()
+		expect(documentQueries.getByText('At target')).not.toBeNull()
+		expect(documentQueries.queryByText('Above target')).toBeNull()
+		expect(documentQueries.getByText('Target 1 000%')).not.toBeNull()
+	})
+
+	test('describes oversized collateralization below a higher target', async () => {
+		const renderedComponent = await renderIntoDocument(<CollateralizationCircle collateralizationPercent={1000n * 10n ** 18n} targetCollateralizationPercent={1200n * 10n ** 18n} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('>999%')).not.toBeNull()
+		expect(documentQueries.getByText('Below target')).not.toBeNull()
+		expect(documentQueries.queryByText('Above target')).toBeNull()
+		expect(documentQueries.getByText('Target 1 200%')).not.toBeNull()
 	})
 
 	test('keeps the largest displayed collateralization label inside the ring', async () => {
@@ -86,11 +111,12 @@ describe('CollateralizationCircle', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const gauge = document.querySelector('.collateralization-gauge')
-		const gaugeValue = within(document.body).getByText('999%+')
+		const documentQueries = within(document.body)
+		const gaugeValue = documentQueries.getByText('>999%')
 
 		expect(gauge?.className).not.toContain('has-external-value')
 		expect(gauge?.getAttribute('title')).toBe('Collateralization: 1 000%; target: 150%')
-		expect(gaugeValue.className).toBe('collateralization-gauge-value')
+		expect(documentQueries.getByText('1 000%')).not.toBeNull()
 		expect(gaugeValue.parentElement?.className).toContain('collateralization-gauge')
 	})
 
@@ -116,7 +142,7 @@ describe('CollateralizationCircle', () => {
 				<circle class='collateralization-gauge-progress' cx='50' cy='50' r='36.8'></circle>
 			</svg>
 		</span>
-		<strong class='collateralization-gauge-value'>999%+</strong>
+		<strong class='collateralization-gauge-value'>>999%</strong>
 		<span class='collateralization-gauge-label'>Collateralization</span>
 	</div>
 	<pre id='fit-result'></pre>
@@ -148,7 +174,7 @@ describe('CollateralizationCircle', () => {
 			const parsedResult: unknown = JSON.parse(resultText)
 			if (!isGaugeFitResult(parsedResult)) throw new Error(`Unexpected gauge fit result: ${resultText}`)
 
-			expect(parsedResult.text).toBe('999%+')
+			expect(parsedResult.text).toBe('&gt;999%')
 			expect(parsedResult.scrollWidth).toBeLessThanOrEqual(parsedResult.clientWidth)
 			expect(parsedResult.valueLeft).toBeGreaterThanOrEqual(parsedResult.ringLeft)
 			expect(parsedResult.valueRight).toBeLessThanOrEqual(parsedResult.ringRight)

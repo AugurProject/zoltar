@@ -215,8 +215,15 @@ export function MarketQuestionsSection({
 																{commonCopy.universe}: <UniverseLink universeId={pool.universeId} />
 															</span>
 															<span>
-																{marketCopy.poolCollateral}: <CurrencyValue value={pool.completeSetCollateralAmount} suffix={commonCopy.eth} copyable={false} />
+																<strong>{marketCopy.openInterest}</strong>: <CurrencyValue value={pool.completeSetCollateralAmount} suffix={commonCopy.eth} copyable={false} />
 															</span>
+															<span>
+																<strong>{marketCopy.shareSupply}</strong>: <CurrencyValue value={pool.shareTokenSupply} copyable={false} />
+															</span>
+														</div>
+														<div className='market-linked-pool-participation'>
+															<strong>{marketCopy.completeSetOperations}</strong>
+															<span>{marketCopy.completeSetOperationsDetail}</span>
 														</div>
 														<div className='actions'>
 															<SecurityPoolLink className='button-link secondary' securityPoolAddress={pool.securityPoolAddress} selectedPoolView='trading' universeId={pool.universeId}>

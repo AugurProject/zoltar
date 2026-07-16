@@ -47,7 +47,8 @@ export const loadSecurityPools = 'Load Security Pools'
 export const noSecurityPools = 'No security pools'
 export const poolFiltersEmpty = 'No pools match the current search and filter settings.'
 export const managerAddress = 'Manager Address'
-export const vaultPreviewUnavailable = 'Vault preview unavailable.'
+export const previewDeferred = 'Preview deferred'
+export const formatVaultPreviewDeferred = (vaultCount: CopyTemplateValue) => `${vaultCount} vault${Number(vaultCount) === 1 ? '' : commonCopy.pluralSuffix} ${Number(vaultCount) === 1 ? 'is' : 'are'} registered. Open the pool to load individual vault details.`
 export const liquidationReviewHint = 'Review liquidation details for this vault before queueing the action.'
 export const formatVaultPreviewSummary = (loadedVaultCount: CopyTemplateValue, totalVaultCount: CopyTemplateValue) => `Showing ${loadedVaultCount} of ${totalVaultCount} active vaults in this preview, newest activity first.`
 export const formatVaultDirectorySummary = (loadedVaultCount: CopyTemplateValue, totalVaultCount: CopyTemplateValue) => `Showing ${loadedVaultCount} of ${totalVaultCount} active vaults, newest activity first. Enter a vault address above to inspect any specific vault.`
