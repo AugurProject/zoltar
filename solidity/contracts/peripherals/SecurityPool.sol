@@ -516,10 +516,11 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function cashToShares(uint256 eth) public view returns (uint256) {
-		if (completeSetCollateralAmount == 0) {
-			if (shareTokenSupply != 0) revert('Exchange rate undefined');
+		if (shareTokenSupply == 0) {
+			require(completeSetCollateralAmount == 0, 'Exchange rate undefined');
 			return eth * SecurityPoolUtils.PRICE_PRECISION;
 		}
+		require(completeSetCollateralAmount > 0, 'Exchange rate undefined');
 		return (eth * shareTokenSupply) / completeSetCollateralAmount;
 	}
 
@@ -684,6 +685,7 @@ contract SecurityPool is ISecurityPool {
 		require(msg.value > 0 && !isEscalationResolved(), 'Resolved');
 		updateCollateralAmount();
 		uint256 completeSetsToMint = cashToShares(msg.value);
+		require(completeSetsToMint > 0, 'Zero shares');
 		uint256 nextCompleteSetCollateralAmount = completeSetCollateralAmount + msg.value;
 		_requireCapacityNotExceeded(totalSecurityBondAllowance, nextCompleteSetCollateralAmount);
 		shareTokenSupply += completeSetsToMint;

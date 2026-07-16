@@ -136,7 +136,7 @@ describe('security vault guards', () => {
 				requiredEthCost: 1n,
 				walletEthBalance: 1n,
 			}),
-		).toBeUndefined()
+		).toBe('Switch to Ethereum mainnet.')
 
 		expect(
 			getVaultRequestPriceGuardMessage({
@@ -157,7 +157,7 @@ describe('security vault guards', () => {
 				isPriceValid: true,
 				resolvedPendingOperationId: 1n,
 			}),
-		).toBeUndefined()
+		).toBe('Switch to Ethereum mainnet.')
 
 		expect(
 			getVaultExecutePendingOperationGuardMessage({

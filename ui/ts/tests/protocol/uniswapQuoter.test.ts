@@ -20,7 +20,7 @@ import {
 	quoteRepForEth,
 	quoteTokenForEth,
 } from '../../protocol/uniswapQuoter.js'
-import { createConnectedReadClient, type ReadClient } from '../../lib/clients.js'
+import type { ReadClient } from '../../lib/clients.js'
 import { MAINNET_NETWORK_PROFILE } from '../../lib/networkProfile.js'
 type SimulateArgs = Parameters<ReadClient['simulateContract']>[0]
 type RawSimulateParam = {
@@ -229,7 +229,7 @@ void describe('quoteBestV3ExactInput', () => {
 			tokenIn?: string
 			tokenOut?: string
 		} = {}
-		const client = createConnectedReadClient()
+		const client = createStubReadClient()
 		const simulateContract: ReadClient['simulateContract'] = async args => {
 			const typedArgs = args as SimulateArgs
 			const [param] = typedArgs.args as [RawV3SimulateParam]
@@ -238,6 +238,7 @@ void describe('quoteBestV3ExactInput', () => {
 			return { result: [1n, 0n, 0, 0n], request: {} as never } as never
 		}
 		client.simulateContract = simulateContract
+		client.readContract = async () => zeroAddress as never
 		await quoteBestV3ExactInput(client, ETH_ADDRESS, REP_ADDRESS, 1n, [100])
 		expect(captured.tokenIn).toBe(WETH_ADDRESS)
 		expect(captured.tokenOut).toBe(REP_ADDRESS)
@@ -255,7 +256,7 @@ void describe('quoteBestV3ExactInputWithSource', () => {
 			tokenA: Address
 			tokenB: Address
 		}> = []
-		const client = createConnectedReadClient()
+		const client = createStubReadClient()
 		const simulateContract: ReadClient['simulateContract'] = async args => {
 			const typedArgs = args as SimulateArgs
 			const [param] = typedArgs.args as [RawV3SimulateParam]

@@ -19,7 +19,7 @@ export function isIgnorableLogDecodeError(error: unknown) {
 	return error instanceof Error && ignorableLogDecodeErrorNames.includes(error.name)
 }
 
-const recoverableContractReadErrorNames = ['CallExecutionError', 'ContractFunctionExecutionError', 'ContractFunctionRevertedError', 'HttpRequestError', 'InvalidAddressError', 'RpcRequestError', 'TimeoutError', 'UnknownNodeError']
+const recoverableContractReadErrorNames = ['CallExecutionError', 'ContractFunctionExecutionError', 'ContractFunctionRevertedError', 'HttpRequestError', 'InvalidAddressError', 'RpcError', 'RpcRequestError', 'TimeoutError', 'UnknownNodeError']
 const recoverableContractReadPatterns = ['abi', 'call reverted', 'contract function', 'execution reverted', 'internal json-rpc', 'json-rpc', 'network', 'no data', 'returned no data', 'rpc', 'should not be used', 'symbol']
 
 export function isRecoverableContractReadError(error: unknown) {

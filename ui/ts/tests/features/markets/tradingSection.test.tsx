@@ -441,7 +441,7 @@ void describe('TradingSection', () => {
 		expect(mintButton.title).toBe(NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE)
 	})
 
-	void test('keeps minting disabled off mainnet without showing a switch-network message after the modal is already open', async () => {
+	void test('keeps minting disabled off mainnet and explains how to recover after the modal is already open', async () => {
 		const renderedComponent = await renderIntoDocument(<TradingSectionNetworkHarness />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -463,8 +463,34 @@ void describe('TradingSection', () => {
 		mintSubmitButton = modalQueries.getByRole('button', { name: 'Mint Complete Sets' })
 		if (!(mintSubmitButton instanceof HTMLButtonElement)) throw new Error('Expected Mint Complete Sets transaction button after network switch')
 		expect(mintSubmitButton.disabled).toBe(true)
-		expect(mintSubmitButton.title).toBe('')
-		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(false)
+		expect(mintSubmitButton.title).toBe('Switch to Ethereum mainnet.')
+		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
+	})
+
+	void test('labels checkpoint-dependent mint outputs as estimates and explains retention fees', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					tradingForm: createTradingForm({ completeSetAmount: '1' }),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
+		})
+
+		const dialog = within(within(document.body).getByRole('dialog', { name: 'Mint Complete Sets' }))
+		expect(dialog.getByRole('heading', { name: 'Transaction Review' })).not.toBeNull()
+		expect(dialog.getByText('You Pay')).not.toBeNull()
+		expect(dialog.getByText('Estimated Shares Received')).not.toBeNull()
+		expect(dialog.getByText('Retention Fee at Execution')).not.toBeNull()
+		expect(dialog.getByText(/accrued pool retention fees are checkpointed/i)).not.toBeNull()
+		expect(dialog.getByText('Resulting ETH Balance')).not.toBeNull()
+		expect(document.body.textContent?.includes('Yes +')).toBe(true)
+		expect(document.body.textContent?.includes('No +')).toBe(true)
+		expect(document.body.textContent?.includes('Invalid +')).toBe(true)
 	})
 
 	void test('shows the minting disabled reason on the launcher when migrated shares have no collateral exchange rate', async () => {
