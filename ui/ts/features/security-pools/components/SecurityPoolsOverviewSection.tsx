@@ -339,7 +339,7 @@ export function SecurityPoolsOverviewSection({
 													<div className='security-pool-browse-vaults-count'>{securityPoolCopy.formatVaultCountLabel(pool.vaultCount.toString())}</div>
 												</div>
 												{pool.hasLoadedVaults === false ? (
-													<StateHint presentation={{ key: 'empty', badgeLabel: commonCopy.unavailable, badgeTone: 'muted', detail: securityPoolCopy.vaultPreviewUnavailable }} />
+													<StateHint title={securityPoolCopy.previewDeferred} presentation={{ key: 'empty', badgeLabel: securityPoolCopy.previewDeferred, badgeTone: 'muted', detail: securityPoolCopy.formatVaultPreviewDeferred(pool.vaultCount.toString()) }} />
 												) : (
 													<div className='security-pool-browse-vault-list'>
 														{pool.vaults.length === 0 ? (
