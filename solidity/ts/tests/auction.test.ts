@@ -1133,6 +1133,34 @@ describe('Auction', () => {
 			strictEqualTypeSafe(aliceReverse.totalFilledRep + bobReverse.totalFilledRep, expectedTotalRep, 'reverse withdrawals should reconcile to proportional REP purchased')
 		})
 
+		test('rounded intermediate prefixes do not hide a later valid underfunded prefix', async () => {
+			const highBidder = createTestClient(0)
+			const mediumBidder = createTestClient(1)
+			const lowBidder = createTestClient(2)
+			const highTick = tickForPrice(4n * PRICE_PRECISION)
+			const mediumTick = tickForPrice(3n * PRICE_PRECISION)
+			const lowTick = tickForPrice((7n * PRICE_PRECISION) / 4n)
+
+			await startAuction(client, auctionAddress, 4n, 2n)
+			await submitBid(highBidder, auctionAddress, highTick, 1n)
+			await submitBid(mediumBidder, auctionAddress, mediumTick, 1n)
+			await submitBid(lowBidder, auctionAddress, lowTick, 1n)
+
+			const clearingPre = await computeClearing(client, auctionAddress)
+			strictEqualTypeSafe(clearingPre.hitCap, false, 'the below-reserve low tick should leave the auction underfunded')
+			await finalizeAndVerify(client, auctionAddress)
+
+			strictEqualTypeSafe(await getTotalRepPurchased(client, auctionAddress), 1n, 'two qualifying wei should purchase one proportional REP wei')
+
+			const highResult = await simulateWithdrawBids(client, auctionAddress, highBidder.account.address, [{ tick: highTick, bidIndex: 0n }])
+			const mediumResult = await simulateWithdrawBids(client, auctionAddress, mediumBidder.account.address, [{ tick: mediumTick, bidIndex: 0n }])
+			const lowResult = await simulateWithdrawBids(client, auctionAddress, lowBidder.account.address, [{ tick: lowTick, bidIndex: 0n }])
+			strictEqualTypeSafe(highResult.totalFilledRep + mediumResult.totalFilledRep, 1n, 'the valid winning prefix should reconcile to its one-wei REP allocation')
+			strictEqualTypeSafe(highResult.totalEthRefund + mediumResult.totalEthRefund, 0n, 'the qualifying high-and-medium bids should retain their ETH')
+			strictEqualTypeSafe(lowResult.totalFilledRep, 0n, 'the below-reserve low bid should receive no REP')
+			strictEqualTypeSafe(lowResult.totalEthRefund, 1n, 'the below-reserve low bid should refund in full')
+		})
+
 		test('underfunded auctions treat bids exactly at the threshold price as winners', async () => {
 			const ethRaiseCap = 1_000n * 10n ** 18n
 			const maxRepBeingSold = 100n * 10n ** 18n

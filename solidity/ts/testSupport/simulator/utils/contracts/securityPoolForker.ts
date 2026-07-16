@@ -113,13 +113,14 @@ export const startTruthAuction = async (client: WriteClient, securityPoolAddress
 		}),
 	)
 
-export const finalizeTruthAuction = async (client: WriteClient, securityPoolAddress: Address) =>
+export const finalizeTruthAuction = async (client: WriteClient, securityPoolAddress: Address, repairContribution = 0n) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
 			functionName: 'finalizeTruthAuction',
 			address: getInfraContractAddresses().securityPoolForker,
 			args: [securityPoolAddress],
+			value: repairContribution,
 		}),
 	)
 

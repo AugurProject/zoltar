@@ -117,7 +117,7 @@ interface ISecurityPoolForker is ISecurityPoolForkerEvents {
 		uint256 parentDepositIndex
 	) external view returns (bool);
 	function startTruthAuction(ISecurityPool securityPool) external;
-	function finalizeTruthAuction(ISecurityPool securityPool) external;
+	function finalizeTruthAuction(ISecurityPool securityPool) external payable;
 	function forkZoltarWithOwnEscalationGame(ISecurityPool securityPool) external;
 	function claimAuctionProceeds(
 		ISecurityPool securityPool,

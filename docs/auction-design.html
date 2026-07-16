@@ -81,10 +81,10 @@
 				When bidding ends, anyone may call <code>finalizeTruthAuction</code>.
 				Finalization clears the batch auction, sends the raised ETH into the
 				repair path, and computes the accounting rates used to settle bidders.
-				The child becomes operational only when legitimate migration collateral
-				plus retained auction ETH reaches the full fork snapshot. Forced ETH does
-				not count toward that ratio; an under-repaired child remains inactive in
-				<code>ForkTruthAuction</code>.
+				If legitimate migration collateral plus retained auction ETH is short of
+				the full fork snapshot, the caller must supply the exact remaining repair
+				contribution. Forced ETH does not count, and an under-repaired attempt
+				reverts with the child still inactive in <code>ForkTruthAuction</code>.
 			</p>
 
 			<p>
@@ -127,8 +127,8 @@
 				<p class="diagram-caption">
 					<span class="figure-label">Auction Lifecycle</span>
 					After migration closes, a child-pool shortfall can be repaired through auction. ETH bids restore collateral, while winning
-					claims are settled into vault accounting. REP doesn't leave the system. If retained ETH is insufficient, settlement completes
-					but the child remains inactive in <code>ForkTruthAuction</code>.
+					claims are settled into vault accounting. REP doesn't leave the system. If retained ETH is insufficient, finalization requires
+					the exact remaining contribution; contribution-only ETH creates no bidder rights.
 				</p>
 			</figure>
 
@@ -273,8 +273,9 @@
 					<code>underfundedThreshold = ceil(ethRaiseCap · 1e18 /
 					maxRepBeingSold)</code>, stores the lowest tick whose price reaches that
 					reserve as <code>clearingTick</code>, retains ETH at or above that tick,
-					and refunds lower ticks. Purchased REP is retained ETH divided by the
-					actual ceiling-tick price, capped by <code>maxRepBeingSold</code>.
+					and refunds lower ticks. Purchased REP is the sale cap multiplied by
+					the fraction of the ETH target actually retained, so integer tick
+					rounding cannot turn accepted positive ETH into zero REP.
 				</p>
 				<figure class="diagram diagram-wide" id="fig-auction-clearing-ladder">
 					<svg viewBox="0 0 980 360" role="img" aria-labelledby="auction-clearing-title auction-clearing-desc">
@@ -358,7 +359,7 @@
 						<tr>
 							<td>At the binding level</td>
 							<td>Shares the marginal fill FIFO inside that tick.</td>
-							<td>Shares the proportional purchased REP by retained ETH at the reserve tick.</td>
+							<td>Qualifies at the reserve boundary, then shares the cap-ratio REP allocation by retained ETH.</td>
 						</tr>
 						<tr>
 							<td>Below the binding level</td>
@@ -371,10 +372,11 @@
 					<p>
 						The examples below use <code>maxRepBeingSold = 10 REP</code> and
 						<code>ethRaiseCap = 20 ETH</code>, producing a reserve of
-						<code>2 ETH/REP</code>. Qualifying ETH buys REP at the ceiling tick
-						for that reserve; bids below it refund. Because that tick rounds up
-						to a representable price, the allocation figures below are ideal-price
-						approximations; the contract's exact integer fills can be slightly lower.
+						<code>2 ETH/REP</code>. The ceiling tick for that reserve is only the
+						eligibility boundary; bids below it refund. Qualifying ETH receives
+						the cap-ratio REP allocation. The figures below use human-unit
+						approximations, while the contract floors aggregate and per-bid
+						allocations in atomic units.
 					</p>
 					<table>
 						<thead>
@@ -554,10 +556,12 @@
 					</math>
 					<p class="equation-caption">
 						<span class="equation-label">Underfunded Threshold</span
-						><code>PRICE_PRECISION = 1e18</code>. The actual execution price is
-						<code>tickToPrice(clearingTick)</code>, the first supported tick at or
-						above this reserve. Winners at or above that tick share
-						<code>totalRepPurchased</code> pro rata by retained ETH. Solidity
+						><code>PRICE_PRECISION = 1e18</code>.
+						<code>tickToPrice(clearingTick)</code> is the first supported tick at
+						or above this reserve and acts only as the bid-eligibility boundary.
+						Aggregate purchased REP is determined independently by
+						<code>floor(maxRepBeingSold * underfundedWinningEth / ethRaiseCap)</code>,
+						and winners at or above that tick share it pro rata by retained ETH. Solidity
 						differences cumulative floor allocations at fixed bid positions, so
 						paged withdrawals reconcile independently of claim order.
 					</p>
@@ -598,7 +602,10 @@
 					The forker withdraws finalized bid results, converts purchased REP into
 					pool ownership with <code>auctionPoolOwnershipPerRep</code>, and adds
 					the matching slice of <code>auctionedSecurityBondAllowance</code> to
-					the bidder's vault. In other words, the bidder is buying a share of the
+					the bidder's vault. That allowance pool is itself scaled by retained
+					auction ETH divided by <code>ethRaiseCap</code>; explicit repair
+					contributions create neither allowance nor ownership. In other words,
+					the bidder is buying a share of the
 					repaired child-pool vault state, including the debt-bearing allowance
 					that still has to be backed.
 				</p>

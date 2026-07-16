@@ -150,9 +150,13 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 				} else {
 					underfundedWinningEth =
 						_getActiveEthAboveTick(root, clearingTick) + _getEthAtTick(root, clearingTick);
-					totalRepPurchased = Math.mulDiv(underfundedWinningEth, PRICE_PRECISION, clearingPrice);
-					if (totalRepPurchased > maxRepBeingSold) totalRepPurchased = maxRepBeingSold;
-					ethToSend = underfundedWinningEth;
+					totalRepPurchased = Math.mulDiv(maxRepBeingSold, underfundedWinningEth, ethRaiseCap);
+					if (totalRepPurchased == 0) {
+						underfundedWinningEth = 0;
+						ethToSend = 0;
+					} else {
+						ethToSend = underfundedWinningEth;
+					}
 				}
 			}
 		}

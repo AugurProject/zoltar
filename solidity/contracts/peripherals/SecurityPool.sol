@@ -189,6 +189,10 @@ contract SecurityPool is ISecurityPool {
 		return vaults.length;
 	}
 
+	function securityPoolEventEmitter() external view returns (address) {
+		return address(eventEmitter);
+	}
+
 	function getActiveVaultCount() external view returns (uint256) {
 		return activeVaultCount;
 	}

@@ -232,6 +232,7 @@ interface ISecurityPool {
 	function transferEth(address payable receiver, uint256 amount) external;
 
 	function securityPoolForker() external view returns (address);
+	function securityPoolEventEmitter() external view returns (address);
 
 	receive() external payable;
 }

@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { AccountingReason, PoolAccountingSnapshot } from './interfaces/ISecurityPool.sol';
+import { AccountingReason, ISecurityPool, PoolAccountingSnapshot } from './interfaces/ISecurityPool.sol';
+import { ISecurityPoolForkerEvents } from './interfaces/ISecurityPoolForker.sol';
+import { SecurityPoolForkerStorage } from './SecurityPoolForkerStorage.sol';
+import { SecurityPoolForkerForkData } from './SecurityPoolForkerTypes.sol';
 
 /// @notice Delegate-called event encoder that keeps verbose checkpoint schemas out of SecurityPool runtime code.
-contract SecurityPoolEventEmitter {
+contract SecurityPoolEventEmitter is SecurityPoolForkerStorage, ISecurityPoolForkerEvents {
 	// SecurityPool accounting occupies slots 1-14 and its SecurityVault mapping is slot 16.
 	// This delegate is intentionally storage-layout coupled; storage-layout tests protect these anchors.
 	uint256 private constant SECURITY_VAULTS_SLOT = 16;
@@ -91,6 +94,36 @@ contract SecurityPoolEventEmitter {
 			vaultFeeIndex,
 			resultingPoolOwnershipDenominator,
 			resultingFeeEligibleSecurityBondAllowance
+		);
+	}
+
+	function emitForkSnapshotEvents(
+		ISecurityPool parent,
+		address migrationProxy,
+		address sourceGame,
+		uint256 poolRepAtFork,
+		uint256 escalationRepAtFork,
+		uint256 resultingLockedRep
+	) external payable {
+		SecurityPoolForkerForkData storage data = forkDataByPool[parent];
+		if (data.unresolvedEscalationAtFork) {
+			emit EscalationRepDrainedAtFork(parent, sourceGame, escalationRepAtFork);
+		}
+		emit ParentRepLocked(parent, migrationProxy, poolRepAtFork, escalationRepAtFork, resultingLockedRep);
+		emit SecurityPoolForkSnapshot(
+			parent,
+			migrationProxy,
+			data.ownFork,
+			data.unresolvedEscalationAtFork,
+			data.collateralAtFork,
+			poolRepAtFork,
+			data.auctionableRepAtFork,
+			data.escalationSourceRepAtFork,
+			data.escalationChildRepAtFork,
+			data.escalationStartBondAtFork,
+			data.escalationNonDecisionThresholdAtFork,
+			data.escalationElapsedAtFork,
+			data.escalationSnapshotId
 		);
 	}
 }

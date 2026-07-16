@@ -44,7 +44,6 @@ const eventSourceByName: Record<string, string> = {
 	DepositToEscalationGame: 'solidity/contracts/peripherals/SecurityPool.sol',
 	EscalationGameSet: 'solidity/contracts/peripherals/SecurityPool.sol',
 	ExecutedStagedOperation: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
-	FinalizeAuction: 'solidity/contracts/peripherals/SecurityPoolForker.sol',
 	ForkContinuationResumed: 'solidity/contracts/peripherals/EscalationGameState.sol',
 	GameContinuedFromFork: 'solidity/contracts/peripherals/EscalationGameState.sol',
 	GameStarted: 'solidity/contracts/peripherals/EscalationGameState.sol',
@@ -427,7 +426,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Closes migration accounting and either reopens a fully backed child or starts its repair auction.',
 				declarations: [{ name: 'startTruthAuction' }],
 				preconditions: 'Child migration window ended; pool is in fork migration; required child REP is available.',
-				signals: '`TruthAuctionStarted`; immediate no-auction paths also emit `FinalizeAuction` and `TruthAuctionFinalized`',
+				signals: '`TruthAuctionStarted`; immediate no-auction paths also emit `TruthAuctionFinalized` and pool accounting checkpoints',
 			},
 			{
 				call: '`finalizeTruthAuction(securityPool)`',
@@ -435,7 +434,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Finalizes the ended auction, transfers repair ETH, and fixes bidder ownership and allowance rates. The child becomes operational only if migration-routed collateral plus auction ETH meets the full parent collateral snapshot.',
 				declarations: [{ name: 'finalizeTruthAuction' }],
 				preconditions: 'Truth auction started and its one-week window has passed.',
-				signals: '`FinalizeAuction`, `TruthAuctionFinalized`, and auction `AuctionFinalized`',
+				signals: '`TruthAuctionFinalized`, auction `AuctionFinalized`, and pool accounting checkpoints',
 			},
 			{
 				call: '`settleAuctionBids(securityPool, vault, claimTickIndices, refundTickIndices)`',
