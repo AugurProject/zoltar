@@ -365,13 +365,17 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 					const fundingEnvironmentRefreshKey = latestEnvironmentRefreshKey.current
 					const fundingPreviewKey = getLiquidationFundingPreviewRequestKey(managerAddress, walletAddress, fundingEnvironmentRefreshKey)
 					const ensureFundingContextIsCurrent = () => {
-						if (getCurrentLiquidationFundingPreviewRequestKey() !== fundingPreviewKey) throw new Error('The wallet or network changed while loading liquidation funding. Review the refreshed funding requirements and try again.')
+						if (latestAccountAddress.current?.toLowerCase() !== walletAddress.toLowerCase() || latestEnvironmentRefreshKey.current !== fundingEnvironmentRefreshKey) {
+							throw new Error('The wallet or network changed while loading liquidation funding. Review the refreshed funding requirements and try again.')
+						}
 					}
 					const writeClient = dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted })
 					const fundingPreview = await resolveLiquidationFundingPreview(managerAddress, walletAddress)
 					ensureFundingContextIsCurrent()
-					liquidationFundingPreview.value = fundingPreview
-					liquidationFundingPreviewResolvedKey.value = fundingPreviewKey
+					if (getCurrentLiquidationFundingPreviewRequestKey() === fundingPreviewKey) {
+						liquidationFundingPreview.value = fundingPreview
+						liquidationFundingPreviewResolvedKey.value = fundingPreviewKey
+					}
 					if (fundingPreview.currentRepBalance < fundingPreview.initialReportRepRequired) throw new Error(`Need ${formatCurrencyBalance(fundingPreview.initialReportRepRequired - fundingPreview.currentRepBalance)} more REP in this wallet to fund the initial report.`)
 					const walletEthBalance = fundingPreview.totalWalletEthRequired === 0n ? undefined : await dependencies.createConnectedReadClient().getBalance({ address: walletAddress })
 					ensureFundingContextIsCurrent()
