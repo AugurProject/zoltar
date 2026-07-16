@@ -34,9 +34,12 @@ export function createSecurityPoolsOverviewDependencies(overrides: Partial<UseSe
 		loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
 			currentRepBalance: 1n,
 			currentWethBalance: 1n,
-			exactToken1Report: 1n,
 			initialReportAmount2: 1n,
+			maximumInitialWeth: 1n,
+			minimumToken1Report: 1n,
+			proposedRepPerEthPrice: 1n,
 			reputationTokenAddress: zeroHash as never,
+			requestedInitialWeth: 0n,
 			wethShortfall: 0n,
 		})),
 		loadOracleManagerDetails: mock(async () => defaultManagerDetails),

@@ -1,5 +1,5 @@
 import { concatHex, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, toHex, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { ORACLE_EXACT_TOKEN1_REPORT, ORACLE_FEE_PERCENTAGE, ORACLE_MULTIPLIER, ORACLE_PROTOCOL_FEE } from '@zoltar/shared/oracleInitialReport'
+import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_FEE_PERCENTAGE, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_MULTIPLIER, ORACLE_PROTOCOL_FEE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/shared/oracleInitialReport'
 import { createApplyLinkedLibrariesHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from '@zoltar/shared/deploymentAddresses'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
 import { bigintToAddress } from './helpers.js'
@@ -18,7 +18,7 @@ import {
 	peripherals_openOracle_OpenOracle_OpenOracle,
 } from '../contractArtifact.js'
 
-export { ORACLE_EXACT_TOKEN1_REPORT } from '@zoltar/shared/oracleInitialReport'
+export { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/shared/oracleInitialReport'
 
 export const PROXY_DEPLOYER_ADDRESS = bigintToAddress(0x7a0d94f55792c434d74a40883c6ed8545e406d12n)
 export const ZERO_SALT = toHex(0, { size: 32 })
@@ -78,12 +78,32 @@ export const getPriceOracleManagerAndOperatorQueuerFactoryByteCode = () =>
 	concatHex([
 		`0x${peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object}`,
 		encodeAbiParameters(
-			[{ type: 'address' }, { type: 'uint256' }, { type: 'uint32' }, { type: 'uint256' }, { type: 'uint48' }, { type: 'uint24' }, { type: 'uint24' }, { type: 'uint24' }, { type: 'uint16' }, { type: 'bool' }, { type: 'bool' }, { type: 'address' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }],
+			[
+				{ type: 'address' },
+				{ type: 'uint256' },
+				{ type: 'uint32' },
+				{ type: 'uint256' },
+				{ type: 'uint256' },
+				{ type: 'uint256' },
+				{ type: 'uint48' },
+				{ type: 'uint24' },
+				{ type: 'uint24' },
+				{ type: 'uint24' },
+				{ type: 'uint16' },
+				{ type: 'bool' },
+				{ type: 'bool' },
+				{ type: 'address' },
+				{ type: 'uint256' },
+				{ type: 'uint256' },
+				{ type: 'uint256' },
+			],
 			[
 				MAINNET_WETH_ADDRESS,
 				ORACLE_REPORT_GAS,
 				ORACLE_SETTLEMENT_GAS,
-				ORACLE_EXACT_TOKEN1_REPORT,
+				ORACLE_GAS_UNITS_FOR_ONE_DISPUTE,
+				ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE,
+				OPEN_ORACLE_SECURITY_MULTIPLIER_BPS,
 				ORACLE_SETTLEMENT_TIME,
 				ORACLE_DISPUTE_DELAY,
 				ORACLE_PROTOCOL_FEE,

@@ -262,8 +262,8 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 					if (walletEthBalance !== undefined && walletEthBalance < requiredEthValue) throw new Error(`Need ${formatCurrencyBalance(requiredEthValue - walletEthBalance)} more ETH in this wallet to queue this liquidation.`)
 					if (requiredEthValue > 0n) {
 						const fundingRequirement = await dependencies.loadCoordinatorInitialReportFundingRequirement(writeClient, managerAddress, walletAddress)
-						if (fundingRequirement.currentRepBalance < fundingRequirement.exactToken1Report) {
-							throw new Error(`Need ${formatCurrencyBalance(fundingRequirement.exactToken1Report - fundingRequirement.currentRepBalance)} more REP in this wallet to fund the initial report.`)
+						if (fundingRequirement.currentRepBalance < fundingRequirement.initialReportAmount2) {
+							throw new Error(`Need ${formatCurrencyBalance(fundingRequirement.initialReportAmount2 - fundingRequirement.currentRepBalance)} more REP in this wallet to fund the initial report.`)
 						}
 						const managerDetails = await dependencies.loadOracleManagerDetails(managerAddress)
 						const requiredEthWithWrap = addOpenOracleBountyBuffer(managerDetails.requestPriceEthCost) + fundingRequirement.wethShortfall

@@ -796,7 +796,7 @@
 					<p>
 						The next equations compare REP backing with ETH-denominated
 						obligations. This price is a price-oracle value, not a truth
-						outcome. OpenOracle settles REP/WETH amounts, and the coordinator
+						outcome. OpenOracle settles WETH/REP amounts, and the coordinator
 						stores the result as scaled REP per ETH because solvency checks
 						compare REP backing against ETH obligations.
 					</p>
@@ -7079,7 +7079,7 @@
 					</p>
 					<p>
 						The OpenOracle path is contestable before the coordinator can use
-						it: the coordinator requests a REP/WETH report and atomically posts
+						it: the coordinator requests a WETH/REP report and atomically posts
 						the sponsor-funded initial token amounts, disputers can replace a bad
 						report with a larger one, a settler finalizes the report after the
 						timing window, and the settlement callback returns the final amounts
@@ -7101,17 +7101,15 @@
 					<p>
 						When the coordinator accepts a settled REP/ETH price, that price is
 						reusable only inside its freshness window. It does not authorize a
-						fixed amount of operation exposure. The initial OpenOracle report is
-						instead sized from dispute profitability assumptions so a wrong
-						report at the target error is profitable to challenge. This is an
+						fixed amount of operation exposure. The minimum WETH side of the
+						initial OpenOracle report is instead calculated from the request
+						block's base fee so a price wrong by the configured target error
+						(initially five percent) is profitable to
+						challenge after fees with the configured gas-cost buffer. This is an
 						intentional tradeoff: one contestable price is amortized across every
 						otherwise-valid operation in the five-minute cache rather than bonded
-						one-for-one against outside value. The
-						<a href="./open-oracle-integration.html#fixed-report-unmetered-exposure"
-							>fixed-report calculator</a
-						>
-						separates recoverable report funding from net accepted-report cost and
-						shows the resulting exposure multiple.
+						one-for-one against outside value. No queued-operation or pool-value
+						notional enters the WETH calculation.
 					</p>
 					<figure class="diagram" id="fig-placeholder-oracle-flow">
 						<svg
@@ -7289,7 +7287,7 @@
 								</tr>
 								<tr>
 									<td>Create report</td>
-									<td><code>requestPrice(amount2)</code></td>
+									<td><code>requestPrice(proposedRepPerEthPrice, requestedInitialWeth)</code></td>
 									<td>Funds one pending OpenOracle report, atomically submits the sponsor-funded initial stake, and records callback gas/basefee bounds.</td>
 									<td>The requester pays for the contestable price path when the cache is stale and cannot open a redundant report while the cache is still fresh.</td>
 								</tr>
@@ -7318,7 +7316,7 @@
 										pending settlement list is empty, another staged request can
 										fund a replacement report. If pending settlement operation IDs
 										still remain, an operator or user must call direct
-										<code>requestPrice(amount2)</code> with the ETH bounty and
+										<code>requestPrice(proposedRepPerEthPrice, requestedInitialWeth)</code> with the ETH bounty and
 										initial-report funding, then let that replacement report settle.
 									</td>
 								</tr>
@@ -7333,11 +7331,12 @@
 					</div>
 					<p>
 						When no fresh price is available, the caller funds the OpenOracle
-						request bounty and the initial REP/WETH position. The coordinator
-						sizes the ETH cost from the current base fee, the callback gas
-						limit, and the configured gas budget for reporting the price, while
-						the caller also chooses the initial <code>amount2</code> for the
-						atomic report submission.
+						request bounty and the initial WETH/REP position. The coordinator
+						sizes both the ETH bounty and minimum WETH side from the current base
+						fee and configured gas parameters. The caller may request a larger
+						initial WETH amount and proposes a REP/ETH price; the coordinator
+						selects the greater WETH amount and derives the matching REP
+						<code>amount2</code> in the same request block.
 					</p>
 					<p>
 						While a report remains pending, only the original pending report
@@ -7347,13 +7346,9 @@
 						their own operations. Sponsor exclusivity is intentional, and every
 						dispute resets the OpenOracle settlement clock. Timely rolling disputes
 						can therefore extend the exclusive lane without a coordinator-level
-						absolute deadline. Required REP grows to the escalation halt, then by
-						one atomic REP per dispute, while protocol fees and gas keep total cost
-						growing with duration. The
-						<a href="./open-oracle-integration.html#rolling-dispute-exclusivity"
-							>rolling-lock calculator</a
-						>
-						models that lower-bound cost.
+						absolute deadline. Required WETH grows to the escalation halt, then by
+						one atomic WETH unit per dispute, while protocol fees and gas keep
+						total cost growing with duration.
 					</p>
 					<div class="equation" id="eq-placeholder-oracle-request-cost">
 						<math
@@ -7415,93 +7410,87 @@
 						</p>
 					</div>
 					<p>
-						The initial report equation below names the configured REP-side
-						<code>exactToken1Report</code>. It is a dispute-profitability
-						parameter, not an exposure cap. The numerator estimates one dispute
-						gas cost converted into REP with a profit buffer; the denominator is
-						the target price-error room left after OpenOracle fees and expected
-						adverse REP/ETH movement during settlement.
+						WETH is OpenOracle <code>token1</code>, so the coordinator can size
+						the minimum side directly in the same unit as gas cost. For the
+						worst-direction configured REP/ETH target error (initially five
+						percent), the correction-profit
+						fraction after fees is
+						<code>(targetPriceErrorForDispute - protocolFee - reporterFee) / (1 + targetPriceErrorForDispute)</code>.
+						The report divides the buffered base-fee gas cost by that fraction.
 					</p>
 					<div class="equation" id="eq-placeholder-initial-report-size">
 						<math
 							display="block"
-							aria-label="exact token one report equals the ceiling of required disputer profit buffer times gas units for one dispute times assumed gas price in ETH per gas times REP per ETH price divided by target price error for dispute minus OpenOracle fees over one plus target price error for dispute minus dispute report size multiplier times expected adverse REP ETH price move during settlement"
-							data-source="exactToken1Report = ceil(requiredDisputerProfitBuffer \cdot gasUnitsForOneDispute \cdot assumedGasPriceInEthPerGas \cdot repPerEthPrice / (((targetPriceErrorForDispute - (openOracleProtocolFeeFraction + openOracleReporterFeeFraction)) / (1 + targetPriceErrorForDispute)) - disputeReportSizeMultiplier \cdot expectedRepEthPriceMoveDuringSettlement))"
+							aria-label="minimum WETH report equals at least one wei or the ceiling of block base fee times dispute gas units times Open Oracle Security multiplier basis points times one plus target error divided by ten thousand times target error minus protocol and reporter fees"
+							data-source="minimumWethReport = max(1, ceil(block.basefee \cdot gasUnitsForOneDispute \cdot openOracleSecurityMultiplierBps \cdot (percentagePrecision + targetPriceErrorForDispute) / (10000 \cdot (targetPriceErrorForDispute - protocolFee - reporterFee))))"
 						>
 							<mrow>
-								<mi>exactToken1Report</mi>
+								<mi>minimumWethReport</mi>
 								<mo>=</mo>
+								<mi>max</mi>
+								<mo>(</mo>
+								<mn>1</mn>
+								<mo>,</mo>
 								<mi>ceil</mi>
 								<mo>(</mo>
 								<mfrac>
 									<mrow>
-										<mi>requiredDisputerProfitBuffer</mi>
+										<mi>block.basefee</mi>
 										<mo>&#x22C5;</mo>
 										<mi>gasUnitsForOneDispute</mi>
 										<mo>&#x22C5;</mo>
-										<mi>assumedGasPriceInEthPerGas</mi>
+										<mi>openOracleSecurityMultiplierBps</mi>
 										<mo>&#x22C5;</mo>
-										<mi>repPerEthPrice</mi>
+										<mo>(</mo>
+										<mi>percentagePrecision</mi>
+										<mo>+</mo>
+										<mi>targetPriceErrorForDispute</mi>
+										<mo>)</mo>
 									</mrow>
 									<mrow>
-										<mfrac>
-											<mrow>
-												<mi>targetPriceErrorForDispute</mi>
-												<mo>-</mo>
-												<mo>(</mo>
-												<mi>openOracleProtocolFeeFraction</mi>
-												<mo>+</mo>
-												<mi>openOracleReporterFeeFraction</mi>
-												<mo>)</mo>
-											</mrow>
-											<mrow>
-												<mn>1</mn>
-												<mo>+</mo>
-												<mi>targetPriceErrorForDispute</mi>
-											</mrow>
-										</mfrac>
-										<mo>-</mo>
-										<mi>disputeReportSizeMultiplier</mi>
+										<mn>10000</mn>
 										<mo>&#x22C5;</mo>
-										<mi>expectedRepEthPriceMoveDuringSettlement</mi>
+										<mo>(</mo>
+										<mi>targetPriceErrorForDispute</mi>
+										<mo>-</mo>
+										<mi>protocolFee</mi>
+										<mo>-</mo>
+										<mi>reporterFee</mi>
+										<mo>)</mo>
 									</mrow>
 								</mfrac>
+								<mo>)</mo>
 								<mo>)</mo>
 							</mrow>
 						</math>
 						<p class="equation-caption">
-							<span class="equation-label">Initial Report Size</span>The report
-							size is independent of outside funds at risk; it only needs to make a
-							wrong report profitable to dispute under the stated assumptions.
+							<span class="equation-label">Dynamic Minimum WETH Report</span>The
+							request transaction calculates the minimum WETH amount from its
+							<code>block.basefee</code>. It does not use a REP price or the value
+							of any operation protected by the resulting price.
 						</p>
 					</div>
 					<p>
-						The canonical formula inputs live in
-						<code>shared/ts/oracleInitialReport.ts</code>, exported as
-						<code>@zoltar/shared/oracleInitialReport</code>. The UI deployment
-						helper and simulator deployment helper consume that shared value.
-						The current inputs are
-						<code>requiredDisputerProfitBuffer = 2x</code>,
-						<code>gasUnitsForOneDispute = 300,000 gas</code>,
-						<code>assumedGasPriceInEthPerGas = 30 gwei</code>,
-						<code>repPerEthPrice = 1,000 REP / ETH</code>,
-						<code>targetPriceErrorForDispute = 10%</code>,
-						<code>openOracleProtocolFeeFraction = 1%</code>,
-						<code>openOracleReporterFeeFraction = 0.1%</code>,
-						<code>disputeReportSizeMultiplier = 1.15x</code>, and
-						<code>expectedRepEthPriceMoveDuringSettlement = 1%</code>. Those
-						values produce a positive denominator and
-						<code>exactToken1Report = 259.332023575638507216 REP</code>
-						(<code>259332023575638507216</code> atomic REP). The helpers
-						evaluate the displayed equation with
-						<code>ORACLE_FORMULA_PRECISION = 1e18</code> fixed-point integers:
-						fee fractions, <code>disputeReportSizeMultiplier</code>,
-						<code>disputeProfitFraction</code>, and
-						<code>priceMoveFraction</code> use integer division that floors at
-						that precision, then the final report amount uses ceiling division
-						by <code>ORACLE_FORMULA_PRECISION * denominator</code>. If the
-						denominator is zero or negative, the assumptions do not leave enough
-						price-error room for profitable disputes.
+						The current parameters are
+						<code>gasUnitsForOneDispute = 300,000</code>,
+						<code>openOracleSecurityMultiplierBps = 100,000</code>
+						(<code>10x</code>),
+						<code>targetPriceErrorForDispute = 5%</code>,
+						<code>protocolFee = 1%</code>, and
+						<code>reporterFee = 0.1%</code>. At <code>30 gwei</code> they
+						produce <code>minimumToken1Report() = 2.423076923076923077 WETH</code>.
+						The target error and Open Oracle Security multiplier are deployment-configured
+						coordinator immutables; five percent and ten-times are the initial
+						defaults, not hard-coded formula constants.
+						At zero base fee the coordinator uses one wei because OpenOracle
+						requires a non-zero exact report. The sponsor may pass zero to use the
+						minimum or request a larger initial WETH position, supplies a proposed
+						REP/ETH price, and the coordinator computes
+						<code>initialWethReport = max(minimumToken1Report(), requestedInitialWeth)</code>
+						and <code>amount2 = ceil(initialWethReport * proposedRepPerEthPrice / 1e18)</code>
+						atomically. A successful correction swaps that wrong
+						position at an unfavorable rate, replaces the reporter, and leaves the
+						wrong reporter bearing the corresponding loss after fees and rounding.
 					</p>
 					<div class="equation" id="eq-placeholder-liquidation-price-distance">
 						<math
@@ -8103,6 +8092,30 @@
 								</td>
 							</tr>
 							<tr>
+								<td><code>gasUnitsForOneDispute</code></td>
+								<td><code>300000</code></td>
+								<td>
+									Modeled gas for one correction dispute. Deployment-configured
+									coordinator immutable.
+								</td>
+							</tr>
+							<tr>
+								<td><code>targetPriceErrorForDispute</code></td>
+								<td><code>500000 / 10000000</code> (<code>5%</code>)</td>
+								<td>
+									Wrong-price threshold used by the WETH sizing formula.
+									Deployment-configured coordinator immutable.
+								</td>
+							</tr>
+							<tr>
+								<td><code>openOracleSecurityMultiplierBps</code></td>
+								<td><code>100000 bps</code> (<code>10x</code>)</td>
+								<td>
+									Multiplier applied to modeled base-fee dispute gas cost.
+									Deployment-configured coordinator immutable.
+								</td>
+							</tr>
+							<tr>
 								<td><code>MAX_PENDING_SETTLEMENT_OPERATIONS</code></td>
 								<td><code>4</code></td>
 								<td>
@@ -8121,23 +8134,31 @@
 								</td>
 							</tr>
 							<tr>
-								<td>OpenOracle <code>exactToken1Report</code></td>
+								<td><code>minimumToken1Report()</code></td>
 								<td>
-									<code>259.332023575638507216 REP</code>
-									(<code>259332023575638507216</code> atomic REP), computed
-									from the initial report size equation.
+									Dynamic WETH amount computed from <code>block.basefee</code>;
+									<code>2.423076923076923077 WETH</code> at <code>30 gwei</code>.
 								</td>
 								<td>
-									Initial report liquidity parameter, stored as an ERC-20 atomic
-									REP amount and sized from dispute profitability assumptions.
-									Derived deployment parameter.
+									Minimum WETH side sized from correction profitability. Calculated
+									inside each request rather than stored as a deployment amount.
+								</td>
+							</tr>
+							<tr>
+								<td>OpenOracle <code>exactToken1Report</code></td>
+								<td>
+									The greater of <code>minimumToken1Report()</code> and the caller's
+									<code>requestedInitialWeth</code>.
+								</td>
+								<td>
+									Exact per-report snapshot of the selected initial WETH position;
+									callers may voluntarily post more than the minimum.
 								</td>
 							</tr>
 							<tr>
 								<td>OpenOracle <code>escalationHalt</code></td>
 								<td>
-									<code>2,593.32023575638507216 REP</code>
-									(<code>2593320235756385072160</code> atomic REP), computed as
+									<code>10x</code> the request's selected initial WETH report, computed as
 									<math
 										aria-label="exact token one report times escalation halt multiplier basis points divided by ten thousand"
 										data-source="exactToken1Report \cdot escalationHaltMultiplierBps / 10000"
@@ -8148,8 +8169,8 @@
 								</td>
 								<td>
 									Dynamic halt threshold for multiplicative report escalation;
-									later reports add one atomic REP unit at a time. Derived from
-									the deployment report size and escalation-halt multiplier.
+									later reports add one atomic WETH unit at a time. Derived from
+									the request's report size and escalation-halt multiplier.
 								</td>
 							</tr>
 							<tr>

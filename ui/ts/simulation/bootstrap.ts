@@ -36,36 +36,9 @@ import { advanceSimulationTime, getSimulationChainTimestamp, initializeSimulatio
 import type { SimulationScenario } from './scenarios.js'
 
 type TevmLikeClient = ReturnType<typeof createMemoryClient>
-const COORDINATOR_PRICE_PRECISION = 10n ** 18n
 
-async function readCoordinatorExactToken1Report(readClient: ReadClient, managerAddress: Address) {
-	if ('readContract' in readClient && typeof readClient.readContract === 'function') {
-		const exactToken1Report = await readClient.readContract({
-			address: managerAddress,
-			abi: [
-				{
-					type: 'function',
-					name: 'exactToken1Report',
-					stateMutability: 'view',
-					inputs: [],
-					outputs: [{ name: '', type: 'uint256' }],
-				},
-			] as const,
-			functionName: 'exactToken1Report',
-			args: [],
-		})
-		if (typeof exactToken1Report === 'bigint') return exactToken1Report
-	}
-
-	const managerDetails = await loadOracleManagerDetails(readClient, managerAddress)
-	if (managerDetails.exactToken1Report === undefined) throw new Error('Missing coordinator exactToken1Report for seeded simulation bootstrap')
-	return managerDetails.exactToken1Report
-}
-
-async function getSeededCoordinatorInitialReportAmount2(readClient: ReadClient, managerAddress: Address) {
-	const exactToken1Report = await readCoordinatorExactToken1Report(readClient, managerAddress)
-	const amount2 = (exactToken1Report * COORDINATOR_PRICE_PRECISION) / SEEDED_REP_ETH_PRICE
-	return amount2 > 0n ? amount2 : 1n
+function getSeededCoordinatorInitialReportPrice() {
+	return SEEDED_REP_ETH_PRICE
 }
 type BootstrapProgressHandler = (progress: { label: string; value: number }) => Promise<void> | void
 
@@ -536,8 +509,8 @@ async function configureSecurityBondAllowance({
 	securityBondAllowance: bigint
 }) {
 	const writeClient = createWriteClient(accountAddress)
-	const initialReportAmount2 = await getSeededCoordinatorInitialReportAmount2(readClient, managerAddress)
-	const queueResult = await queueOracleManagerOperation(writeClient, managerAddress, 'setSecurityBondsAllowance', accountAddress, securityBondAllowance, STAGED_SELF_OPERATION_TIMEOUT_SECONDS, initialReportAmount2)
+	const initialReportPrice = getSeededCoordinatorInitialReportPrice()
+	const queueResult = await queueOracleManagerOperation(writeClient, managerAddress, 'setSecurityBondsAllowance', accountAddress, securityBondAllowance, STAGED_SELF_OPERATION_TIMEOUT_SECONDS, initialReportPrice)
 	if (queueResult.stagedExecution?.success === false) throw new Error(queueResult.stagedExecution.errorMessage ?? `Failed to seed security bond allowance for ${accountAddress}`)
 	await ensureSecurityBondAllowanceConfigured({
 		accountAddress,
@@ -570,9 +543,9 @@ async function ensureSecurityBondAllowanceConfigured({
 	let updatedVault = await loadRequiredSecurityVault(readClient, securityPoolAddress, accountAddress, accountAddress)
 	for (let attempt = 0; updatedVault.securityBondAllowance !== securityBondAllowance && attempt < 5; attempt += 1) {
 		const managerDetails = await loadOracleManagerDetails(readClient, managerAddress)
-		const initialReportAmount2 = await getSeededCoordinatorInitialReportAmount2(readClient, managerAddress)
+		const initialReportPrice = getSeededCoordinatorInitialReportPrice()
 		if (managerDetails.pendingOperation?.operation !== 'setSecurityBondsAllowance' || managerDetails.pendingOperation.targetVault !== accountAddress || managerDetails.pendingOperation.amount !== securityBondAllowance) {
-			await queueOracleManagerOperation(writeClient, managerAddress, 'setSecurityBondsAllowance', accountAddress, securityBondAllowance, STAGED_SELF_OPERATION_TIMEOUT_SECONDS, initialReportAmount2)
+			await queueOracleManagerOperation(writeClient, managerAddress, 'setSecurityBondsAllowance', accountAddress, securityBondAllowance, STAGED_SELF_OPERATION_TIMEOUT_SECONDS, initialReportPrice)
 		}
 
 		if (managerDetails.pendingReportId > 0n) {
@@ -656,8 +629,8 @@ async function settleSeededOracleReport({
 	securityBondAllowance: bigint
 }) {
 	const writeClient = createWriteClient(accountAddress)
-	const initialReportAmount2 = await getSeededCoordinatorInitialReportAmount2(readClient, managerAddress)
-	await queueOracleManagerOperation(writeClient, managerAddress, 'setSecurityBondsAllowance', accountAddress, securityBondAllowance, STAGED_SELF_OPERATION_TIMEOUT_SECONDS, initialReportAmount2)
+	const initialReportPrice = getSeededCoordinatorInitialReportPrice()
+	await queueOracleManagerOperation(writeClient, managerAddress, 'setSecurityBondsAllowance', accountAddress, securityBondAllowance, STAGED_SELF_OPERATION_TIMEOUT_SECONDS, initialReportPrice)
 	await onProgressStep(`Configuring oracle manager for ${poolLabel}`)
 
 	const oracleManagerDetails = await loadOracleManagerDetails(readClient, managerAddress)
@@ -690,8 +663,8 @@ async function refreshSeededOraclePrice({ accountAddress, createWriteClient, man
 	let managerDetails = await loadOracleManagerDetails(readClient, managerAddress)
 	if (managerDetails.isPriceValid) return
 	if (managerDetails.pendingReportId === 0n) {
-		const initialReportAmount2 = await getSeededCoordinatorInitialReportAmount2(readClient, managerAddress)
-		await requestOraclePrice(writeClient, managerAddress, initialReportAmount2)
+		const initialReportPrice = getSeededCoordinatorInitialReportPrice()
+		await requestOraclePrice(writeClient, managerAddress, initialReportPrice)
 		managerDetails = await loadOracleManagerDetails(readClient, managerAddress)
 	}
 	if (managerDetails.pendingReportId === 0n) {

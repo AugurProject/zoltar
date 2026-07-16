@@ -7,7 +7,7 @@ import { GENESIS_REPUTATION_TOKEN } from '../constants'
 import { approveToken, contractExists, getERC20Balance } from '../utilities'
 import { WriteClient } from '../clients'
 import assert from '../assert'
-import { getIsPriceValid, getLastPrice, getOpenOracleReportMeta, getOpenOracleReportStatus, getPendingReportId, getRequestPriceEthCost, openOracleSettle, OperationType, requestPriceIfNeededAndStageOperationWithInitialReportAmount2, requestPriceWithValue } from './peripherals'
+import { getIsPriceValid, getLastPrice, getOpenOracleReportMeta, getOpenOracleReportStatus, getPendingReportId, getRequestPriceEthCost, openOracleSettle, OperationType, requestPriceIfNeededAndStageOperationWithInitialReportPrice, requestPriceWithValue } from './peripherals'
 import { QuestionOutcome } from '../../types/types'
 import { forkZoltarWithOwnEscalationGame } from './securityPoolForker'
 import { getTotalTheoreticalSupply } from './zoltar'
@@ -18,31 +18,6 @@ const securityMultiplier = 2n
 const PRICE_PRECISION = 10n ** 18n
 const DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS = 5n * 60n
 const ORACLE_PRICE_VALID_FOR_SECONDS = 5n * 60n
-
-const getCoordinatorExactToken1Report = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address) => {
-	const value = await client.readContract({
-		abi: [
-			{
-				type: 'function',
-				name: 'exactToken1Report',
-				stateMutability: 'view',
-				inputs: [],
-				outputs: [{ name: '', type: 'uint256' }],
-			},
-		],
-		functionName: 'exactToken1Report',
-		address: priceOracleManagerAndOperatorQueuer,
-		args: [],
-	})
-	if (typeof value !== 'bigint') throw new Error('Unexpected exactToken1Report response')
-	return value
-}
-
-const getInitialReportAmount2 = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, forceRepEthPriceTo: bigint) => {
-	const exactToken1Report = await getCoordinatorExactToken1Report(client, priceOracleManagerAndOperatorQueuer)
-	const amount2 = (exactToken1Report * PRICE_PRECISION) / forceRepEthPriceTo
-	return amount2 > 0n ? amount2 : 1n
-}
 
 export const approveAndDepositRep = async (client: WriteClient, repDeposit: bigint, questionId: bigint) => {
 	const securityPoolAddress = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, securityMultiplier).securityPool
@@ -79,11 +54,11 @@ export const handleOracleReporting = async (client: WriteClient, mockWindow: Anv
 
 	const reportMeta = await getOpenOracleReportMeta(client, pendingReportId)
 	const reportStatus = await getOpenOracleReportStatus(client, pendingReportId)
-	const expectedAmount1 = await getCoordinatorExactToken1Report(client, priceOracleManagerAndOperatorQueuer)
-	const expectedAmount2 = await getInitialReportAmount2(client, priceOracleManagerAndOperatorQueuer, forceRepEthPriceTo)
-	const expectedSettledPrice = (expectedAmount1 * PRICE_PRECISION) / expectedAmount2
+	const expectedAmount1 = reportMeta.exactToken1Report
+	const expectedAmount2 = (expectedAmount1 * forceRepEthPriceTo + PRICE_PRECISION - 1n) / PRICE_PRECISION
+	const expectedSettledPrice = (expectedAmount2 * PRICE_PRECISION) / expectedAmount1
 
-	assert.strictEqual(reportStatus.currentAmount1, expectedAmount1, 'pending report should preserve the coordinator exact token1 amount')
+	assert.strictEqual(reportStatus.currentAmount1, expectedAmount1, 'pending report should preserve the coordinator-selected token1 amount')
 	assert.strictEqual(reportStatus.currentAmount2, expectedAmount2, 'pending report should already encode the forced price before settlement')
 	assert.notStrictEqual(reportStatus.currentReporter, zeroAddress, 'pending report should already have an initial reporter')
 	assert.strictEqual(reportStatus.currentReporter, expectedReporter, 'pending report should preserve the request sponsor as the current reporter')
@@ -97,9 +72,8 @@ export const handleOracleReporting = async (client: WriteClient, mockWindow: Anv
 }
 
 export const manipulatePriceOracleAndPerformOperation = async (client: WriteClient, mockWindow: AnvilWindowEthereum, priceOracleManagerAndOperatorQueuer: Address, operation: OperationType, targetVault: Address, amount: bigint, forceRepEthPriceTo: bigint = PRICE_PRECISION) => {
-	const initialReportAmount2 = await getInitialReportAmount2(client, priceOracleManagerAndOperatorQueuer, forceRepEthPriceTo)
 	const ethCost = await getRequestPriceEthCost(client, priceOracleManagerAndOperatorQueuer)
-	await requestPriceIfNeededAndStageOperationWithInitialReportAmount2(client, priceOracleManagerAndOperatorQueuer, operation, targetVault, amount, DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS, initialReportAmount2, ethCost)
+	await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, priceOracleManagerAndOperatorQueuer, operation, targetVault, amount, DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS, forceRepEthPriceTo, ethCost)
 	await handleOracleReporting(client, mockWindow, priceOracleManagerAndOperatorQueuer, forceRepEthPriceTo)
 }
 
@@ -107,9 +81,8 @@ export const manipulatePriceOracle = async (client: WriteClient, mockWindow: Anv
 	if (await getIsPriceValid(client, priceOracleManagerAndOperatorQueuer)) {
 		await mockWindow.advanceTime(ORACLE_PRICE_VALID_FOR_SECONDS + 1n)
 	}
-	const initialReportAmount2 = await getInitialReportAmount2(client, priceOracleManagerAndOperatorQueuer, forceRepEthPriceTo)
 	const ethCost = await getRequestPriceEthCost(client, priceOracleManagerAndOperatorQueuer)
-	await requestPriceWithValue(client, priceOracleManagerAndOperatorQueuer, ethCost, initialReportAmount2)
+	await requestPriceWithValue(client, priceOracleManagerAndOperatorQueuer, ethCost, forceRepEthPriceTo)
 	await handleOracleReporting(client, mockWindow, priceOracleManagerAndOperatorQueuer, forceRepEthPriceTo)
 }
 

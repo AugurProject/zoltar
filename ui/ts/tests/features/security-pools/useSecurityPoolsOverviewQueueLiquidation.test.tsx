@@ -213,9 +213,12 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 			loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
 				currentRepBalance: 10n,
 				currentWethBalance: 0n,
-				exactToken1Report: 10n,
 				initialReportAmount2: 5n,
+				maximumInitialWeth: 10n,
+				minimumToken1Report: 10n,
+				proposedRepPerEthPrice: 1n,
 				reputationTokenAddress: getAddress('0x0000000000000000000000000000000000000006'),
+				requestedInitialWeth: 0n,
 				wethShortfall: 5n,
 			})),
 			loadOracleManagerDetails: mock(async () => ({

@@ -84,7 +84,7 @@ function assertCoordinatorRecoveryBranch(): void {
 	const normalizedPlaceholder = whitepaperPlaceholder.replaceAll(/\s+/g, ' ')
 	for (const documentedClaim of [
 		'If the pending settlement list is empty, another staged request can fund a replacement report.',
-		'If pending settlement operation IDs still remain, an operator or user must call direct <code>requestPrice(amount2)</code> with the ETH bounty and initial-report funding, then let that replacement report settle.',
+		'If pending settlement operation IDs still remain, an operator or user must call direct <code>requestPrice(proposedRepPerEthPrice, requestedInitialWeth)</code> with the ETH bounty and initial-report funding, then let that replacement report settle.',
 	]) {
 		assert.ok(normalizedPlaceholder.includes(documentedClaim), `Missing coordinator recovery-branch claim: ${documentedClaim}`)
 	}

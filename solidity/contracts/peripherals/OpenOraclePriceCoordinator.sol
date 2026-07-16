@@ -6,11 +6,13 @@ import { OpenOracle } from './openOracle/OpenOracle.sol';
 import { ReputationToken } from '../ReputationToken.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
+import { Math } from '@openzeppelin/contracts/utils/math/Math.sol';
 
 // price oracle
 uint256 constant PRICE_VALID_FOR_SECONDS = 5 minutes;
 uint256 constant PRICE_PRECISION = 1e18;
 uint256 constant MAX_OPERATION_VALID_FOR_SECONDS = 5 minutes;
+uint256 constant OPEN_ORACLE_PERCENTAGE_PRECISION = 1e7;
 
 enum OperationType {
 	Liquidation,
@@ -51,7 +53,9 @@ contract OpenOraclePriceCoordinator {
 	IWeth9 public immutable weth;
 	uint256 public immutable gasConsumedOpenOracleReportPrice;
 	uint32 public immutable gasConsumedSettlement;
-	uint256 public immutable exactToken1Report;
+	uint256 public immutable gasUnitsForOneDispute;
+	uint256 public immutable targetPriceErrorForDispute;
+	uint256 public immutable openOracleSecurityMultiplierBps;
 	uint48 public immutable settlementTime;
 	uint24 public immutable disputeDelay;
 	uint24 public immutable protocolFee;
@@ -121,7 +125,9 @@ contract OpenOraclePriceCoordinator {
 		IWeth9 _weth,
 		uint256 _gasConsumedOpenOracleReportPrice,
 		uint32 _gasConsumedSettlement,
-		uint256 _exactToken1Report,
+		uint256 _gasUnitsForOneDispute,
+		uint256 _targetPriceErrorForDispute,
+		uint256 _openOracleSecurityMultiplierBps,
 		uint48 _settlementTime,
 		uint24 _disputeDelay,
 		uint24 _protocolFee,
@@ -139,7 +145,27 @@ contract OpenOraclePriceCoordinator {
 		weth = _weth;
 		gasConsumedOpenOracleReportPrice = _gasConsumedOpenOracleReportPrice;
 		gasConsumedSettlement = _gasConsumedSettlement;
-		exactToken1Report = _exactToken1Report;
+		require(_gasUnitsForOneDispute > 0, 'Dispute gas units must be greater than zero');
+		require(
+			_targetPriceErrorForDispute <= OPEN_ORACLE_PERCENTAGE_PRECISION,
+			'Target price error cannot exceed one hundred percent'
+		);
+		require(
+			_openOracleSecurityMultiplierBps >= SecurityPoolUtils.BPS_DENOMINATOR,
+			'Open Oracle Security multiplier must be at least one hundred percent'
+		);
+		require(
+			uint256(_protocolFee) + uint256(_feePercentage) < _targetPriceErrorForDispute,
+			'Oracle fees must be below the target price error'
+		);
+		require(
+			_openOracleSecurityMultiplierBps <=
+				type(uint256).max / (OPEN_ORACLE_PERCENTAGE_PRECISION + _targetPriceErrorForDispute),
+			'Open Oracle Security multiplier is too large'
+		);
+		gasUnitsForOneDispute = _gasUnitsForOneDispute;
+		targetPriceErrorForDispute = _targetPriceErrorForDispute;
+		openOracleSecurityMultiplierBps = _openOracleSecurityMultiplierBps;
 		settlementTime = _settlementTime;
 		disputeDelay = _disputeDelay;
 		protocolFee = _protocolFee;
@@ -190,11 +216,24 @@ contract OpenOraclePriceCoordinator {
 		return uint32(callbackGasLimit);
 	}
 
-	function requestPrice(uint256 amount2) public payable {
+	function minimumToken1Report() public view returns (uint256) {
+		uint256 disputeGasCost = Math.mulDiv(block.basefee, gasUnitsForOneDispute, 1);
+		if (disputeGasCost == 0) return 1;
+		uint256 correctionProfitNumerator = targetPriceErrorForDispute - uint256(protocolFee) - uint256(feePercentage);
+		return
+			Math.mulDiv(
+				disputeGasCost,
+				openOracleSecurityMultiplierBps * (OPEN_ORACLE_PERCENTAGE_PRECISION + targetPriceErrorForDispute),
+				SecurityPoolUtils.BPS_DENOMINATOR * correctionProfitNumerator,
+				Math.Rounding.Ceil
+			);
+	}
+
+	function requestPrice(uint256 proposedRepPerEthPrice, uint256 requestedInitialWeth) public payable {
 		uint256 ethCost = getRequestPriceEthCost();
 		require(msg.value >= ethCost, 'ETH bounty is too small to request a fresh oracle price');
 		require(!isPriceValid(), 'A fresh oracle price is already available');
-		_requestPrice(msg.sender, ethCost, amount2);
+		_requestPrice(msg.sender, ethCost, proposedRepPerEthPrice, requestedInitialWeth);
 
 		uint256 excess = msg.value - ethCost;
 		if (excess > 0) {
@@ -203,26 +242,38 @@ contract OpenOraclePriceCoordinator {
 		}
 	}
 
-	function _requestPrice(address sponsor, uint256 ethCost, uint256 amount2) private {
+	function _requestPrice(
+		address sponsor,
+		uint256 ethCost,
+		uint256 proposedRepPerEthPrice,
+		uint256 requestedInitialWeth
+	) private {
 		require(pendingReportId == 0, 'Oracle price request is already pending');
-		require(amount2 > 0, 'Initial oracle token2 report amount must be non-zero');
-		uint256 escalationHalt = (exactToken1Report * escalationHaltMultiplierBps) / SecurityPoolUtils.BPS_DENOMINATOR;
+		require(proposedRepPerEthPrice > 0, 'Initial oracle REP per ETH price must be non-zero');
+		uint256 minimumWethReport = minimumToken1Report();
+		uint256 initialWethReport = requestedInitialWeth > minimumWethReport ? requestedInitialWeth : minimumWethReport;
+		uint256 amount2 = Math.mulDiv(initialWethReport, proposedRepPerEthPrice, PRICE_PRECISION, Math.Rounding.Ceil);
+		uint256 escalationHalt = Math.mulDiv(
+			initialWethReport,
+			escalationHaltMultiplierBps,
+			SecurityPoolUtils.BPS_DENOMINATOR
+		);
 		uint256 settlerReward = block.basefee * 2 * gasConsumedOpenOracleReportPrice;
-		require(exactToken1Report <= type(uint128).max, 'Oracle exact token1 report amount exceeds uint128 maximum');
+		require(initialWethReport <= type(uint128).max, 'Oracle initial WETH report amount exceeds uint128 maximum');
 		require(escalationHalt <= type(uint128).max, 'Oracle escalation halt amount exceeds uint128 maximum');
 		require(settlerReward <= type(uint96).max, 'Oracle settler reward exceeds uint96 maximum');
 		pendingReportMaxSettlementBaseFee =
 			(block.basefee * maxSettlementBaseFeeMultiplierBps) / SecurityPoolUtils.BPS_DENOMINATOR;
 
 		OpenOracle.CreateReportParams memory reportparams = OpenOracle.CreateReportParams({
-			exactToken1Report: uint128(exactToken1Report),
+			exactToken1Report: uint128(initialWethReport),
 			escalationHalt: uint128(escalationHalt), // amount of token1 past which escalation stops but disputes can still happen
 			settlerReward: uint96(settlerReward), // eth paid to settler in wei
-			token1Address: address(reputationToken), // address of token1 in the oracle report instance
+			token1Address: address(weth), // exact WETH liquidity side of the oracle report instance
 			settlementTime: settlementTime,
 			disputeDelay: disputeDelay,
 			protocolFee: protocolFee,
-			token2Address: address(weth), // address of token2 in the oracle report instance
+			token2Address: address(reputationToken), // REP amount expresses the proposed REP/ETH price
 			callbackGasLimit: getSettlementCallbackGasLimit(), // gas the settlement callback must use
 			feePercentage: feePercentage,
 			multiplier: multiplier,
@@ -234,24 +285,29 @@ contract OpenOraclePriceCoordinator {
 
 		pendingReportSponsor = sponsor;
 		pendingReportId = openOracle.createReportInstance{ value: ethCost }(reportparams);
-		_submitInitialReport(pendingReportId, sponsor, amount2);
+		_submitInitialReport(pendingReportId, sponsor, initialWethReport, amount2);
 		emit PriceRequested(pendingReportId, pendingReportMaxSettlementBaseFee);
 	}
 
-	function _submitInitialReport(uint256 reportId, address sponsor, uint256 amount2) private {
-		require(amount2 <= type(uint128).max, 'Oracle initial token2 report amount exceeds uint128 maximum');
+	function _submitInitialReport(
+		uint256 reportId,
+		address sponsor,
+		uint256 initialWethReport,
+		uint256 amount2
+	) private {
+		require(amount2 <= type(uint128).max, 'Oracle initial REP report amount exceeds uint128 maximum');
 		(bytes32 stateHash, , , , , ) = openOracle.extraData(reportId);
 		require(
-			reputationToken.transferFrom(sponsor, address(this), exactToken1Report),
+			weth.transferFrom(sponsor, address(this), initialWethReport),
+			'WETH transfer for initial report failed'
+		);
+		require(
+			reputationToken.transferFrom(sponsor, address(this), amount2),
 			'REP transfer for initial report failed'
 		);
-		require(weth.transferFrom(sponsor, address(this), amount2), 'WETH transfer for initial report failed');
-		require(
-			reputationToken.approve(address(openOracle), exactToken1Report),
-			'REP approval for initial report failed'
-		);
-		require(weth.approve(address(openOracle), amount2), 'WETH approval for initial report failed');
-		openOracle.submitInitialReport(reportId, uint128(exactToken1Report), uint128(amount2), stateHash, sponsor);
+		require(weth.approve(address(openOracle), initialWethReport), 'WETH approval for initial report failed');
+		require(reputationToken.approve(address(openOracle), amount2), 'REP approval for initial report failed');
+		openOracle.submitInitialReport(reportId, uint128(initialWethReport), uint128(amount2), stateHash, sponsor);
 	}
 
 	function recoverSettledPendingReport() public {
@@ -304,7 +360,7 @@ contract OpenOraclePriceCoordinator {
 			_emitPriceReportRejected(reportId, 'Empty oracle settlement');
 			return;
 		}
-		uint256 price = (amount1 * PRICE_PRECISION) / amount2;
+		uint256 price = Math.mulDiv(amount2, PRICE_PRECISION, amount1);
 		if (price == 0) {
 			_emitPriceReportRejected(reportId, 'Oracle price is zero');
 			return;
@@ -347,7 +403,8 @@ contract OpenOraclePriceCoordinator {
 		address targetVault,
 		uint256 amount,
 		uint256 validForSeconds,
-		uint256 initialReportAmount2
+		uint256 proposedRepPerEthPrice,
+		uint256 requestedInitialWeth
 	) public payable {
 		if (operation != OperationType.SetSecurityBondsAllowance) {
 			require(amount > 0, 'Staged operation amount must be non-zero');
@@ -418,7 +475,7 @@ contract OpenOraclePriceCoordinator {
 				uint256 ethCost = getRequestPriceEthCost();
 				require(msg.value >= ethCost, 'Not enough ETH was provided to request a fresh oracle price');
 				retained += ethCost;
-				_requestPrice(msg.sender, ethCost, initialReportAmount2);
+				_requestPrice(msg.sender, ethCost, proposedRepPerEthPrice, requestedInitialWeth);
 			}
 		}
 

@@ -3,7 +3,7 @@ import { peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } fro
 import { usePeripheralsTruthAuctionFixture, type PeripheralsTruthAuctionFixture } from './fixture'
 import { getExpectedLiquidationRepMove } from './liquidationTestHelpers'
 import { getMaxRepBeingSold, getMinBidSize } from '../../testSupport/simulator/utils/contracts/auction'
-import { queueLiquidationAtForcedPrice } from '../../testSupport/simulator/utils/contracts/peripherals'
+import { getLastPrice, queueLiquidationAtForcedPrice } from '../../testSupport/simulator/utils/contracts/peripherals'
 import { getUniverseData } from '../../testSupport/simulator/utils/contracts/zoltar'
 
 describe('Peripherals: truth auction', () => {
@@ -1308,6 +1308,7 @@ describe('Peripherals: truth auction', () => {
 
 			const liquidationAttemptStartBlock = await client.getBlockNumber()
 			await liquidateClaimableChildVault(liquidationChunk)
+			const settledLiquidationPrice = await getLastPrice(client, yesSecurityPool.priceOracleManagerAndOperatorQueuer)
 
 			const targetVaultAfterLiquidation = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 			const liquidatorVaultAfterLiquidation = await getSecurityVault(client, yesSecurityPool.securityPool, liquidatorClient.account.address)
@@ -1338,7 +1339,7 @@ describe('Peripherals: truth auction', () => {
 
 			const actualDebtMoved = targetVaultBeforeLiquidation.securityBondAllowance - targetVaultAfterLiquidation.securityBondAllowance
 
-			const expectedRepMove = getExpectedLiquidationRepMove(actualDebtMoved, forcedPrice)
+			const expectedRepMove = getExpectedLiquidationRepMove(actualDebtMoved, settledLiquidationPrice)
 			strictEqualTypeSafe(actualDebtMoved > 0n, true, 'partial liquidation before claim should reduce the migrated vault allowance')
 			approximatelyEqual(targetRepAfterLiquidation, targetRepBeforeLiquidation - expectedRepMove, 2n, 'liquidation should seize migrated vault REP before claim')
 			approximatelyEqual(

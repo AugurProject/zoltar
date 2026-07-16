@@ -5684,6 +5684,10 @@ button:focus-visible {
 	min-width: 0;
 }
 
+.security-pool-browse-vault-row-title > .collateralization-gauge {
+	flex: 0 0 auto;
+}
+
 .security-pool-browse-vault-row-title .security-pool-browse-vault-row-id {
 	align-self: center;
 	flex: 1 1 auto;
