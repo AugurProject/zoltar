@@ -3055,6 +3055,7 @@ strong.metric-value-danger {
 	width: min(48rem, 100%);
 	max-height: min(90vh, 58rem);
 	overflow: auto;
+	isolation: isolate;
 	display: grid;
 	gap: 1rem;
 	padding: 1.25rem;
@@ -3071,7 +3072,7 @@ strong.metric-value-danger {
 	gap: 1rem;
 	position: sticky;
 	top: -1.25rem;
-	z-index: 1;
+	z-index: 10;
 	margin: -1.25rem -1.25rem 0;
 	padding: 0.9rem 1.25rem 0.85rem;
 	border-bottom: 1px solid var(--border-default);

@@ -18,11 +18,19 @@ const testRoots = ['scripts', 'shared/ts', 'solidity/ts', 'ui/build', 'ui/ts']
 const ignoredDirectoryNames = new Set(['node_modules', 'js', 'dist', 'vendor'])
 
 const knownFileWeights = new Map<string, number>([
-	['solidity/ts/tests/priceOracleSecurity.test.ts', 29],
-	['ui/ts/tests/simulation/activeEnvironment.test.ts', 90],
-	['solidity/ts/tests/escalationGame.test.ts', 21],
-	['solidity/ts/tests/auction.test.ts', 11],
-	['ui/ts/tests/features/open-oracle/openOracleSection.integration.test.tsx', 8],
+	['ui/ts/tests/simulation/securityPoolEnvironments.test.ts', 80],
+	['solidity/ts/tests/peripherals/forkMigration.test.ts', 37],
+	['solidity/ts/tests/peripherals/truthAuction.test.ts', 19],
+	['solidity/ts/tests/priceOracleSecurity.test.ts', 15],
+	['solidity/ts/tests/escalationGame.test.ts', 15],
+	['ui/ts/tests/simulation/activeEnvironment.test.ts', 15],
+	['solidity/ts/tests/auction.test.ts', 14],
+	['solidity/ts/tests/peripherals/escalationMigration.test.ts', 9],
+	['ui/ts/tests/features/open-oracle/openOracleSection.integration.test.tsx', 6],
+	['solidity/ts/tests/peripherals/deploymentAndOwnForkEscalation.test.ts', 5],
+	['solidity/ts/tests/peripherals/vaultAccounting.test.ts', 5],
+	['ui/ts/tests/simulation/deployedEnvironment.test.ts', 4],
+	['solidity/ts/tests/peripheralsInvariant.test.ts', 4],
 	['solidity/ts/tests/peripherals/receiveGuards.test.ts', 2],
 ])
 
