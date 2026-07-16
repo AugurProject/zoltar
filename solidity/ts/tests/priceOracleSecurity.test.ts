@@ -21,6 +21,7 @@ import {
 	getLastPrice,
 	getOpenOracleExtraData,
 	getOpenOracleReportMeta,
+	getOpenOracleReportStatus,
 	getPendingOperationSlotId,
 	getPendingReportId,
 	getPendingReportMaxSettlementBaseFee,
@@ -36,6 +37,7 @@ import {
 	requestPriceIfNeededAndStageOperationWithInitialReportAmount2,
 	requestPriceIfNeededAndStageOperationWithValue,
 	requestPriceWithValue,
+	wrapWeth,
 } from '../testSupport/simulator/utils/contracts/peripherals'
 import { depositRep, depositToEscalationGame, getSecurityPoolsEscalationGame, getSecurityVault } from '../testSupport/simulator/utils/contracts/securityPool'
 import { peripherals_openOracle_OpenOracle_OpenOracle, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '../types/contractArtifact'
@@ -570,6 +572,62 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(pendingReportIdAfterJoin, pendingReportIdBeforeJoin, 'the sponsor should reuse the existing oracle request')
 		assert.strictEqual(zeroCostJoinRejected, true, 'non-sponsors should be rejected while a pending oracle settlement is in flight')
 		assert.strictEqual((await getPendingSettlementOperationIds(client, priceOracle)).length, 2, 'the sponsor should still be able to queue additional pending operations without paying a join fee')
+	})
+
+	test('rolling OpenOracle disputes extend sponsor exclusivity without corrupting the pending operation queue', async () => {
+		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		const sponsorAllowance = repDeposit / 4n
+		const sponsorAllowanceAfterDispute = repDeposit / 5n
+		await approveToken(counterpartyClient, addressString(GENESIS_REPUTATION_TOKEN), securityPool)
+		await depositRep(counterpartyClient, securityPool, repDeposit)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, sponsorAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
+
+		const reportId = await getPendingReportId(client, priceOracle)
+		const reportMeta = await getOpenOracleReportMeta(client, reportId)
+		const reportStatusBeforeDispute = await getOpenOracleReportStatus(client, reportId)
+		const extraDataBeforeDispute = await getOpenOracleExtraData(client, reportId)
+		const openOracle = getInfraContractAddresses().openOracle
+		const disputedAmount1 = (reportStatusBeforeDispute.currentAmount1 * reportMeta.multiplier) / 100n
+		const disputedAmount2 = (reportStatusBeforeDispute.currentAmount2 * 8n) / 10n
+		await wrapWeth(counterpartyClient, reportStatusBeforeDispute.currentAmount2 * 3n)
+		await approveToken(counterpartyClient, addressString(GENESIS_REPUTATION_TOKEN), openOracle)
+		await approveToken(counterpartyClient, WETH_ADDRESS, openOracle)
+		const disputeHash = await counterpartyClient.writeContract({
+			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			functionName: 'disputeAndSwap',
+			address: openOracle,
+			args: [reportId, addressString(GENESIS_REPUTATION_TOKEN), disputedAmount1, disputedAmount2, counterpartyClient.account.address, reportStatusBeforeDispute.currentAmount2, extraDataBeforeDispute.stateHash],
+		})
+		await counterpartyClient.waitForTransactionReceipt({ hash: disputeHash })
+
+		const reportStatusAfterDispute = await getOpenOracleReportStatus(client, reportId)
+		assert.strictEqual(reportStatusAfterDispute.currentReporter, counterpartyClient.account.address, 'the disputer should become the current reporter')
+		assert.strictEqual(reportStatusAfterDispute.currentAmount1, disputedAmount1, 'the disputed REP amount should become current')
+		assert.strictEqual(reportStatusAfterDispute.currentAmount2, disputedAmount2, 'the disputed WETH amount should become current')
+		assert.ok(reportStatusAfterDispute.reportTimestamp > reportStatusBeforeDispute.reportTimestamp, 'a dispute should reset the settlement clock')
+		assert.strictEqual((await getOpenOracleExtraData(client, reportId)).numReports, extraDataBeforeDispute.numReports + 1, 'the dispute should append exactly one history entry')
+		assert.strictEqual(await getPendingReportId(client, priceOracle), reportId, 'the coordinator should keep tracking the disputed report')
+		assert.deepStrictEqual(await getPendingSettlementOperationIds(client, priceOracle), [1n], 'the sponsor queue should remain unchanged by a dispute')
+
+		await assert.rejects(
+			counterpartyClient.simulateContract({
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				functionName: 'requestPriceIfNeededAndStageOperation',
+				address: priceOracle,
+				args: [OperationType.SetSecurityBondsAllowance, counterpartyClient.account.address, repDeposit / 6n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 1n],
+				account: counterpartyClient.account,
+			}),
+			/Only the pending report sponsor can queue more operations until settlement/,
+		)
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, sponsorAllowanceAfterDispute, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+		assert.deepStrictEqual(await getPendingSettlementOperationIds(client, priceOracle), [1n, 2n], 'the original sponsor should retain queue append rights after a dispute')
+
+		await mockWindow.setTime(reportStatusAfterDispute.reportTimestamp + reportMeta.settlementTime - 1n)
+		await openOracleSettle(client, reportId)
+		assert.strictEqual(await getPendingReportId(client, priceOracle), 0n, 'settlement should clear the disputed pending report')
+		assert.deepStrictEqual(await getPendingSettlementOperationIds(client, priceOracle), [], 'settlement should consume the undamaged pending queue')
+		assert.strictEqual((await getSecurityVault(client, securityPool, client.account.address)).securityBondAllowance, sponsorAllowanceAfterDispute, 'queued sponsor operations should execute in order after the final settlement')
 	})
 
 	test('only the pending report sponsor can queue overflow operations while settlement is pending', async () => {
