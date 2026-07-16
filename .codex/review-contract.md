@@ -4,6 +4,8 @@ This contract is the canonical handoff, severity, output, scoring, and closure p
 
 ## Handoff
 
+Review-context isolation is a hard precondition. The parent must launch the reviewer in a newly spawned project-scoped sub-agent with no inherited conversation turns, using `fork_turns="none"` or the platform-equivalent fresh-context option. The structured handoff is the reviewer's sole task-specific context. Do not reuse a prior reviewer or substitute an inline review by the parent. If isolated spawning is unavailable, the review gate is incomplete.
+
 The parent agent must provide:
 
 - original user request or exact task summary
