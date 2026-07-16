@@ -10,15 +10,17 @@ import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import assert from '../testSupport/simulator/utils/assert'
 import { deployEscalationGame, depositOnOutcome, getActivationTime, getBalances, getEscalationGameDeposits, getQuestionResolution } from '../testSupport/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
-import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/deployPeripherals'
+import { ensureInfraDeployed, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
 import {
 	peripherals_EscalationGame_EscalationGame,
 	peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier,
+	peripherals_SecurityPoolForker_SecurityPoolForker,
 	ReputationToken_ReputationToken,
 	test_peripherals_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact,
 	test_peripherals_EscalationGameForkerHarness_EscalationGameForkerHarness as escalationGameForkerHarnessArtifact,
 	test_peripherals_FalseReturningERC20_FalseReturningERC20,
 	test_peripherals_IncompatibleEscalationGameProofVerifier_IncompatibleEscalationGameProofVerifier as incompatibleProofVerifierArtifact,
+	test_peripherals_SecurityPoolAncestorTestNode_SecurityPoolAncestorTestNode as securityPoolAncestorTestNodeArtifact,
 } from '../types/contractArtifact'
 import { getERC20Balance } from '../testSupport/simulator/utils/utilities'
 import { isIgnorableLogDecodeError } from './logDecodeErrors'
@@ -186,6 +188,18 @@ describe('Escalation Game Test Suite', () => {
 		})
 		const testSecurityPoolDeploymentReceipt = await client.waitForTransactionReceipt({ hash: testSecurityPoolDeploymentHash })
 		return requireContractAddress(testSecurityPoolDeploymentReceipt.contractAddress, 'proof test security pool deployment address')
+	}
+
+	async function deploySecurityPoolAncestorNode(parent: Address) {
+		const deploymentHash = await client.sendTransaction({
+			data: encodeDeployData({
+				abi: securityPoolAncestorTestNodeArtifact.abi,
+				bytecode: `0x${securityPoolAncestorTestNodeArtifact.evm.bytecode.object}`,
+				args: [parent],
+			}),
+		})
+		const deploymentReceipt = await client.waitForTransactionReceipt({ hash: deploymentHash })
+		return requireContractAddress(deploymentReceipt.contractAddress, 'security pool ancestor node deployment address')
 	}
 
 	async function deployIncompatibleProofVerifier() {
@@ -1115,12 +1129,35 @@ describe('Escalation Game Test Suite', () => {
 			merkleMountainRangeSiblings: [childLocalLeafHash],
 			nullifierSiblings: nullifierTree.getProof(0n),
 		}
-		await withdrawDepositViaProofTestSecurityPool(grandchild.testSecurityPoolAddress, QuestionOutcome.Yes, proof)
+		const settlementHash = await withdrawDepositViaProofTestSecurityPool(grandchild.testSecurityPoolAddress, QuestionOutcome.Yes, proof)
+		const settlementReceipt = await client.waitForTransactionReceipt({ hash: settlementHash })
+		assert.ok(settlementReceipt.gasUsed < 2_000_000n, `recursive grandchild carry proof settlement must stay below the 2,000,000 gas bound; used ${settlementReceipt.gasUsed}`)
 
 		const remainingCarryTotal = await readCarryTotal(grandchild.escalationGameAddress, QuestionOutcome.Yes)
 		assert.strictEqual(remainingCarryTotal, reportBond, 'only the child-local unresolved carry should remain after settling the inherited parent leaf')
 		const grandchildRoot = await readCarryRoot(grandchild.escalationGameAddress, QuestionOutcome.Yes)
 		assert.strictEqual(grandchildRoot, hashParent(parentLeafHash, childLocalLeafHash), 'grandchild should snapshot the recursive child carry set as a true two-leaf Merkle Mountain Range')
+	})
+
+	test('recursive security-pool ancestor checks stay within an explicit gas bound', async () => {
+		let deepestAncestor = zeroAddress
+		const ancestorDepth = 32
+		for (let depth = 0; depth < ancestorDepth; depth++) deepestAncestor = await deploySecurityPoolAncestorNode(deepestAncestor)
+
+		const forkerAddress = getInfraContractAddresses().securityPoolForker
+		const checkHash = await client.sendTransaction({
+			to: forkerAddress,
+			data: encodeFunctionData({
+				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+				functionName: 'isEscalationDepositClaimedDirectly',
+				args: [deepestAncestor, QuestionOutcome.Yes, 0n],
+			}),
+			gas: 2_000_000n,
+		})
+		const checkReceipt = await client.waitForTransactionReceipt({ hash: checkHash })
+
+		assert.strictEqual(checkReceipt.status, 'success', 'the 32-level ancestor check should complete successfully')
+		assert.ok(checkReceipt.gasUsed < 500_000n, `the 32-level ancestor check must stay below the 500,000 gas bound; used ${checkReceipt.gasUsed}`)
 	})
 
 	test('fork carry grandchild instances reject child-local leaves that were already settled before the recursive fork', async () => {

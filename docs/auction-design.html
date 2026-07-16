@@ -35,8 +35,9 @@
 					truth auction, using the proceeds to raise as much repair ETH as market
 					demand supports. Strong demand can fully restore the collateral shortfall;
 					when weak demand still produces a non-empty feasible winning prefix, the
-					auction clears the full REP cap at a lower synthetic price and can leave share
-					collateral below its pre-fork level. With no bids, it sells no REP. The auction
+					auction sells REP in proportion to the fraction of the ETH target raised.
+					The child remains inactive until auction proceeds plus an explicit repair
+					contribution restore the full fork snapshot. With no bids, it sells no REP. The auction
 					discovers that repair price; it does not determine which branch is true.
 				</p>
 
@@ -45,18 +46,17 @@
 					it is trying to raise a fixed amount of ETH, and it is not allowed to
 					sell more than a fixed amount of child-universe REP. Strong demand
 					can hit the ETH target first, or it can bind the REP sale cap first.
-					When finalization finds a non-empty winning prefix, weak demand does
-					not leave unsold REP behind. Instead, the auction fixes that winning
-					bid prefix, refunds lower bids, and still clears the full REP cap at
-					one synthetic uniform price. A bidder at the minimum tick receives the full
-					REP cap only when it is the sole member of the finalized winning prefix. A
+					When finalization finds a non-empty winning prefix, the auction fixes that
+					bid prefix at the proportional reserve price, refunds lower bids, and
+					allocates REP pro rata. A minimum-size bidder receives only its ETH-funded
+					fraction of the REP cap. A
 					later qualifying bid can make the bidders share the cap, exclude the
 					minimum-tick bid, or move the auction into normal funded clearing during the
 					one-week auction. Placeholder runs this process through
 					the <code>UniformPriceDualCapBatchAuction</code> contract, then
 					writes winning claims back into vault state rather than paying out
 					simple token transfers, so bidders buy into the child pool
-					and its matching security-bond allowance instead of merely receiving
+					and the auction-funded fraction of its matching security-bond allowance instead of merely receiving
 					REP.
 				</p>
 
@@ -85,6 +85,8 @@
 				When bidding ends, anyone may call <code>finalizeTruthAuction</code>.
 				Finalization clears the batch auction, sends the raised ETH into the
 				repair path, and computes the accounting rates used to settle bidders.
+				If auction ETH is short, the caller must supply the exact remaining
+				repair contribution; otherwise the child stays inactive and finalization reverts.
 			</p>
 
 			<p>
@@ -167,8 +169,8 @@
 						<td>
 							Supplies ETH demand for the repair. The minimum bid is
 							<code>max(ethRaiseCap / 100000, 1 wei)</code>. Under weak demand,
-							even a minimum qualifying bid can be enough to join the finalized
-							winner set that buys the full REP cap.
+							a minimum qualifying bid can join the finalized winner set but buys
+							only its proportional REP amount.
 						</td>
 					</tr>
 
@@ -268,21 +270,22 @@
 				</p>
 				<p>
 					When demand never reaches a full clearing price, the auction switches
-					into the underfunded branch. Finalization then walks demand from the
-					highest tick downward, fixes the largest winning prefix whose
-					synthetic execution price does not exceed the lowest winning tick's
-					limit, stores that lowest winning tick as <code>clearingTick</code>,
+					into the underfunded branch. Finalization first ceilings the fixed
+					proportional reserve <code>ethRaiseCap · PRICE_PRECISION /
+					maxRepBeingSold</code>, then walks demand from the highest tick downward
+					and fixes the largest prefix whose ticks meet that reserve. It stores the
+					lowest winning tick as <code>clearingTick</code>,
 					refunds lower ticks, and, when that winning prefix is non-empty,
-					sells the full REP cap at <code>underfundedThreshold</code>. If no
-					winning prefix exists, every bid refunds instead. Winners still
-					settle at one synthetic uniform price; the difference is that the
-					winner set is the
-					finalized prefix boundary rather than a threshold-only price test.
+					sells the same fraction of the REP cap as the fraction of the ETH
+					repair target raised. If no
+					winning prefix exists, or if its aggregate proportional REP allocation
+					rounds to zero, every bid refunds instead. Winners share the finalized
+					atom-rounded REP amount pro rata by ETH at deterministic cumulative positions.
 				</p>
 				<figure class="diagram diagram-wide" id="fig-auction-clearing-ladder">
 					<svg viewBox="0 0 980 360" role="img" aria-labelledby="auction-clearing-title auction-clearing-desc">
 						<title id="auction-clearing-title">Auction demand is evaluated from high ticks to low ticks before uniform or underfunded clearing</title>
-						<desc id="auction-clearing-desc">High-price bids are considered first. If cumulative demand reaches the ETH raise cap or REP sale cap, the first binding tick sets normal uniform clearing. If neither cap is reached, finalization selects the largest feasible high-to-low winning prefix and computes one synthetic underfunded price.</desc>
+						<desc id="auction-clearing-desc">High-price bids are considered first. If cumulative demand reaches the ETH raise cap or REP sale cap, the first binding tick sets normal uniform clearing. If neither cap is reached, finalization selects the high-to-low prefix at or above the fixed proportional reserve and allocates the ETH-funded REP fraction.</desc>
 						<defs>
 							<marker id="auction-clearing-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 								<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
@@ -313,14 +316,14 @@
 						<text class="svg-small" x="820" y="124" text-anchor="middle">first ETH or REP cap reached</text>
 						<rect class="svg-gold" x="700" y="198" width="240" height="108" rx="8"></rect>
 						<text class="svg-label" x="820" y="232" text-anchor="middle">Underfunded clearing</text>
-						<text class="svg-small" x="820" y="258" text-anchor="middle">largest feasible winning prefix</text>
-						<text class="svg-small" x="820" y="280" text-anchor="middle">one synthetic all-REP price</text>
+						<text class="svg-small" x="820" y="258" text-anchor="middle">fixed proportional reserve</text>
+						<text class="svg-small" x="820" y="280" text-anchor="middle">ETH-funded REP allocation</text>
 					</svg>
 					<p class="diagram-caption">
 						<span class="figure-label">Clearing Price Ladder</span>The contract always
 						walks demand from expensive REP to cheap REP. What changes is the stopping
 						rule: a binding cap gives normal uniform clearing, while weak demand uses
-						the largest feasible prefix and one synthetic price.
+						the proportional reserve and allocates only the ETH-funded REP fraction.
 					</p>
 				</figure>
 				<p>
@@ -332,12 +335,10 @@
 					weak-demand path.
 				</p>
 				<p>
-					Under weak demand, the auction is designed to maximize retained ETH
-					while still clearing the full REP cap. In the underfunded branch, the
-					contract does not sell only the fraction of REP matched by submitted
-					ETH. It finds the largest high-to-low winning prefix whose members can
-					all accept one synthetic all-REP price, then clears the full REP cap
-					against that prefix. This branch only applies while normal funded
+					Under weak demand, the auction retains the largest feasible high-to-low
+					winning prefix and sells REP in direct proportion to repair ETH. If the
+					winning prefix raises one quarter of <code>ethRaiseCap</code>, it buys one
+					quarter of <code>maxRepBeingSold</code>. This branch only applies while normal funded
 					clearing still fails. If adding a lower positive bid would make the
 					REP cap bind at that lower tick, the contract does not stay
 					underfunded with a narrower winner set. It switches into the normal
@@ -346,17 +347,18 @@
 				<p>
 					This includes the extreme unattended-auction case. If the only
 					qualifying demand is a single minimum bid, and that bid still forms a
-					valid winning prefix, the auction intentionally allocates the entire
-					<code>maxRepBeingSold</code> amount to that winner at the synthetic
-					underfunded price. Finalization records the full
+					valid winning prefix, the auction allocates only the proportional REP
+					amount backed by that bid. Finalization records the proportional
 					<code>totalRepPurchased</code> amount and the auction ownership
 					conversion rate. When
 					<code>SecurityPoolForker.claimAuctionProceeds</code> later settles the
 					winning bid, the forker maps that purchased REP into the
-					corresponding pool-ownership credit and auctioned allowance share for
-					the child branch. This mechanism prefers finalizing the auction path
-					with the available winning ETH and selling the committed REP cap,
-					rather than leaving the REP sale partially unsold.
+					corresponding pool-ownership credit. The claimable auction allowance pool
+					is itself scaled by auction ETH retained over <code>ethRaiseCap</code>;
+					explicit repair contributions create neither allowance nor ownership.
+					This mechanism prefers finalizing the auction path
+					with the available winning ETH without transferring disproportionate
+					child ownership.
 				</p>
 				<table>
 					<thead>
@@ -375,7 +377,7 @@
 						<tr>
 							<td>At the binding level</td>
 							<td>Shares the marginal fill FIFO inside that tick.</td>
-							<td>Shares the full REP cap pro rata by winning ETH at the synthetic underfunded clearing price.</td>
+							<td>Shares proportional purchased REP pro rata by winning ETH at the synthetic underfunded clearing price.</td>
 						</tr>
 						<tr>
 							<td>Below the binding level</td>
@@ -386,13 +388,10 @@
 					</table>
 					<h3>Worked Underfunded Examples</h3>
 					<p>
-						The examples below use the intended weak-demand rule: sell all REP
-						to the largest feasible high-to-low winning prefix, then settle that
-						prefix pro rata by winning ETH. In all three examples,
+						The examples below use the proportional weak-demand rule. In all three,
 						<code>maxRepBeingSold = 100 REP</code> and
-						<code>ethRaiseCap = 1,000 ETH</code>, so the ETH cap never binds and
-						the auction stays underfunded only if cumulative demand remains below
-						the REP cap at every active tick.
+						<code>ethRaiseCap = 1,000 ETH</code>. Each <code>10 ETH</code> of
+						winning demand therefore buys <code>1 REP</code>.
 					</p>
 					<table>
 						<thead>
@@ -407,87 +406,62 @@
 							<tr>
 								<td>Two-bidder underfunded prefix</td>
 								<td>
-									Bob: <code>6 ETH @ 4 ETH/REP</code>
+									Bob: <code>6 ETH @ 14 ETH/REP</code>
 									<br />
-									Alice: <code>4 ETH @ 2 ETH/REP</code>
+									Alice: <code>4 ETH @ 12 ETH/REP</code>
 								</td>
 								<td>
-									At Bob's higher tick, cumulative demand is
-									<code>6 / 4 = 1.5 REP</code>, so the REP cap is not reached.
-									<br />
-									At Alice's lower tick, cumulative demand is
-									<code>10 / 2 = 5 REP</code>, so funded clearing still fails.
-									<br />
-									The final synthetic all-REP price is
-									<code>10 / 100 = 0.10 ETH/REP</code>, which stays below both
-									winning limits.
+									The prefix raises <code>10 / 1,000</code> of the target and buys
+									<code>100 · 10 / 1,000 = 1 REP</code>. Its synthetic price is
+									<code>10 / 1 = 10 ETH/REP</code>, below both limits.
 								</td>
 								<td>
 									The system keeps <code>10 ETH</code>.
 									<br />
-									Bob and Alice share all <code>100 REP</code> pro rata by
-									winning ETH.
+									Bob and Alice share <code>1 REP</code> pro rata by winning ETH.
 									<br />
-									Bob receives <code>60 REP</code> and Alice receives
-									<code>40 REP</code>.
+									Bob receives <code>0.6 REP</code> and Alice receives
+									<code>0.4 REP</code>.
 								</td>
 							</tr>
 							<tr>
 								<td>Three-bidder underfunded prefix</td>
 								<td>
-									Alice: <code>5 ETH @ 5 ETH/REP</code>
+									Alice: <code>5 ETH @ 15 ETH/REP</code>
 									<br />
-									Bob: <code>3 ETH @ 3 ETH/REP</code>
+									Bob: <code>3 ETH @ 13 ETH/REP</code>
 									<br />
-									Carol: <code>2 ETH @ 2 ETH/REP</code>
+									Carol: <code>2 ETH @ 11 ETH/REP</code>
 								</td>
 								<td>
-									At the active ticks, cumulative demand is
-									<code>5 / 5 = 1 REP</code>, then
-									<code>8 / 3 ≈ 2.67 REP</code>, then
-									<code>10 / 2 = 5 REP</code>.
-									<br />
-									All of those remain below the <code>100 REP</code> cap, so
-									the funded branch never triggers.
-									<br />
-									The final synthetic all-REP price is again
-									<code>10 / 100 = 0.10 ETH/REP</code>, which all three bids
-									accept.
+									The combined <code>10 ETH</code> buys <code>1 REP</code> at the
+									<code>10 ETH/REP</code> synthetic price, which every bid accepts.
 								</td>
 								<td>
 									The system keeps <code>10 ETH</code>.
 									<br />
-									Alice, Bob, and Carol share all <code>100 REP</code> pro rata
-									by winning ETH.
+									Alice, Bob, and Carol share <code>1 REP</code> pro rata by winning ETH.
 									<br />
-									Alice receives <code>50 REP</code>, Bob <code>30 REP</code>,
-									and Carol <code>20 REP</code>.
+									Alice receives <code>0.5 REP</code>, Bob <code>0.3 REP</code>,
+									and Carol <code>0.2 REP</code>.
 								</td>
 							</tr>
 							<tr>
 								<td>Tiny-demand edge case</td>
 								<td>
-									Alice: <code>1 ETH @ 0.10 ETH/REP</code>
+									Alice: <code>1 ETH @ 12 ETH/REP</code>
 									<br />
 									No other positive-price bids.
 								</td>
 								<td>
-									At Alice's tick, cumulative demand is
-									<code>1 / 0.10 = 10 REP</code>, so funded clearing still
-									fails.
-									<br />
-									Alice alone is feasible because
-									<code>1 / 100 = 0.01 ETH/REP</code>, which stays below her
-									<code>0.10</code> limit.
+									Alice funds <code>1 / 1,000</code> of the target and buys
+									<code>0.1 REP</code> at <code>10 ETH/REP</code>, below her limit.
 								</td>
 								<td>
 									The system keeps <code>1 ETH</code>.
 									<br />
-									Alice receives all <code>100 REP</code>.
-									<br />
-									That extreme result is still intended: once the auction is
-									underfunded, the rule is to clear the full REP cap at the best
-									feasible all-REP price, not to leave unsold REP behind.
+									Alice receives <code>0.1 REP</code>; the other
+									<code>99.9 REP</code> remains unsold.
 								</td>
 							</tr>
 						</tbody>
@@ -547,9 +521,11 @@
 					path; binding or potentially winning bids stay in the auction.
 				</p>
 				<p>
-					In the underfunded branch, finalization computes
-					<code>underfundedThreshold</code> from the finalized
-					<code>underfundedWinningEth</code> after the winning prefix is fixed.
+					In the underfunded branch, finalization computes the fixed proportional
+					reserve <code>underfundedThreshold = ceil(ethRaiseCap ·
+					PRICE_PRECISION / maxRepBeingSold)</code> before fixing the winning
+					prefix. It then sets <code>totalRepPurchased = floor(maxRepBeingSold ·
+					underfundedWinningEth / ethRaiseCap)</code>.
 					If <code>underfundedWinningEth &gt; 0</code>, the stored
 					<code>clearingTick</code> marks the lowest winning tick and
 					underfunded withdrawals settle bids at ticks
@@ -564,8 +540,8 @@
 				<div class="equation" id="eq-auction-underfunded-threshold">
 					<math
 						display="block"
-						aria-label="underfunded threshold equals the ceiling underfunded winning ETH times price precision divided by maximum rep being sold when the winning prefix is non-empty, otherwise type uint256 max"
-						data-source="underfundedThreshold = if underfundedWinningEth > 0 then ceil(underfundedWinningEth * PRICE_PRECISION / maxRepBeingSold) else type(uint256).max"
+						aria-label="underfunded threshold equals the ceiling ETH raise cap times price precision divided by maximum REP being sold when proportional purchased REP is positive, otherwise type uint256 max"
+						data-source="underfundedThreshold = if totalRepPurchased > 0 then ceil(ethRaiseCap * PRICE_PRECISION / maxRepBeingSold) else type(uint256).max"
 					>
 						<mrow>
 							<mi>underfundedThreshold</mi>
@@ -579,7 +555,7 @@
 											<mo>(</mo>
 											<mfrac>
 												<mrow>
-													<mi>underfundedWinningEth</mi>
+													<mi>ethRaiseCap</mi>
 													<mo>&#x22C5;</mo>
 													<mi>PRICE_PRECISION</mi>
 												</mrow>
@@ -599,12 +575,11 @@
 					</math>
 					<p class="equation-caption">
 						<span class="equation-label">Underfunded Threshold</span
-						><code>PRICE_PRECISION = 1e18</code>. This is the synthetic
-						execution price for the finalized winning prefix, not the only
-						winner predicate. Underfunded winners are the bids at ticks
+						><code>PRICE_PRECISION = 1e18</code>. This fixed proportional
+						reserve is the monotonic winner predicate. Underfunded winners are the bids at ticks
 						<code>&gt;= clearingTick</code> when
 						<code>underfundedWinningEth &gt; 0</code>, and those winners
-						share the full REP sale cap pro rata by winning ETH. Solidity
+						share proportional purchased REP pro rata by winning ETH. Solidity
 						differences cumulative floor allocations at fixed bid positions, so
 						paged withdrawals reconcile independently of claim order.
 					</p>
@@ -635,8 +610,8 @@
 						</tr>
 						<tr>
 							<td>Underfunded winning ticks</td>
-							<td>Ticks at or above <code>clearingTick</code> share the full REP cap pro rata by winning ETH at the synthetic <code>underfundedThreshold</code> price.</td>
-							<td>Weak demand still clears at one synthetic uniform price, but the winner set is the finalized prefix boundary rather than a pure threshold-price cutoff.</td>
+							<td>Ticks at or above <code>clearingTick</code> qualify at the fixed <code>underfundedThreshold</code> reserve, then share atom-rounded proportional REP pro rata by winning ETH.</td>
+							<td>A prefix-independent reserve keeps the AVL search monotonic even when an intermediate prefix would round to zero REP.</td>
 						</tr>
 					</tbody>
 				</table>
@@ -675,10 +650,10 @@
 						<p>
 							The simplified calculator uses three fixed price levels to show
 							the same two high-level outcomes as the contract: strong demand
-							clears at a uniform price, while weak demand still settles the
-							qualifying winner set at one synthetic uniform price. It uses
+							clears at a uniform price, while weak demand qualifies winners at the
+							fixed proportional reserve and shares the funded REP amount. It uses
 							real-number arithmetic for readability; the contract ceilings the
-							synthetic underfunded threshold and computes each allocation by
+							fixed proportional reserve and computes each allocation by
 							differencing cumulative floors at the bid's fixed
 							descending-tick/submission position.
 						</p>
@@ -946,7 +921,7 @@
 						let winningBidCount = 0;
 						for (const bid of activeBids) {
 							const candidateWinningEth = winningEth + bid.eth;
-							const candidateThreshold = candidateWinningEth / repInventory;
+							const candidateThreshold = ethRaiseCap / repInventory;
 							if (candidateThreshold <= bid.price) {
 								winningEth = candidateWinningEth;
 								winningBidCount += 1;
@@ -958,9 +933,16 @@
 							}
 							break;
 						}
-						const threshold = winningEth === 0 ? Number.POSITIVE_INFINITY : winningEth / repInventory;
+						const totalRepPurchased = (winningEth * repInventory) / ethRaiseCap;
+						const threshold =
+							totalRepPurchased === 0
+								? Number.POSITIVE_INFINITY
+								: ethRaiseCap / repInventory;
 						for (const winningBid of activeBids.slice(0, winningBidCount)) {
-							if (winningEth > 0) repResults[winningBid.key] = (winningBid.eth * repInventory) / winningEth;
+							if (winningEth > 0) {
+								repResults[winningBid.key] =
+									(winningBid.eth * totalRepPurchased) / winningEth;
+							}
 						}
 						accumulatedEth = winningEth;
 						write("clearingMode", "underfunded synthetic uniform");

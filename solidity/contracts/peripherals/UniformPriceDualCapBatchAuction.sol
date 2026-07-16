@@ -139,9 +139,9 @@ contract UniformPriceDualCapBatchAuction {
 			totalRepPurchased = clearingPrice > 0 ? (accumulatedEth * PRICE_PRECISION) / clearingPrice : 0;
 			ethToSend = accumulatedEth;
 		} else {
-			// Underfunded: sell the full REP cap at one synthetic clearing price implied
-			// by the qualifying winning ETH. Bids outside the finalized winning prefix
-			// remain refundable.
+			// Underfunded: sell only the fraction of the REP cap backed by the fraction
+			// of the ETH target actually raised. Bids outside the finalized winning
+			// prefix remain refundable.
 			underfunded = true;
 			if (ethRaised == 0 || maxRepBeingSold == 0) {
 				clearingTick = 0;
@@ -157,9 +157,15 @@ contract UniformPriceDualCapBatchAuction {
 					totalRepPurchased = 0;
 					ethToSend = 0;
 				} else {
-					underfundedThreshold = _ceilDiv(underfundedWinningEth * PRICE_PRECISION, maxRepBeingSold);
-					totalRepPurchased = maxRepBeingSold;
-					ethToSend = underfundedWinningEth;
+					totalRepPurchased = Math.mulDiv(maxRepBeingSold, underfundedWinningEth, ethRaiseCap);
+					if (totalRepPurchased == 0) {
+						underfundedThreshold = type(uint256).max;
+						underfundedWinningEth = 0;
+						ethToSend = 0;
+					} else {
+						underfundedThreshold = _getUnderfundedThreshold();
+						ethToSend = underfundedWinningEth;
+					}
 				}
 			}
 		}
@@ -206,7 +212,7 @@ contract UniformPriceDualCapBatchAuction {
 					totalFilledRep += _allocateRepFromCumulativePosition(
 						cumulativeWinningEthBeforeBid,
 						bid.ethAmount,
-						maxRepBeingSold,
+						totalRepPurchased,
 						underfundedWinningEth
 					);
 					// no ETH refund
@@ -579,7 +585,7 @@ contract UniformPriceDualCapBatchAuction {
 	) internal view returns (uint256 winningEth, int256 lowestWinningTick, bool hasWinningTick, bool stopped) {
 		if (nodeId == 0) return (accEth, 0, false, false);
 		Node storage node = nodes[nodeId];
-		uint256 thresholdIfWholeSubtreeWins = _ceilDiv((accEth + node.subtreeEth) * PRICE_PRECISION, maxRepBeingSold);
+		uint256 thresholdIfWholeSubtreeWins = _getUnderfundedThreshold();
 		uint256 subtreeMinPrice = tickToPrice(node.minClearingTick);
 		if (thresholdIfWholeSubtreeWins <= subtreeMinPrice)
 			return (accEth + node.subtreeEth, node.minClearingTick, true, false);
@@ -593,7 +599,7 @@ contract UniformPriceDualCapBatchAuction {
 		if (stopped) return (accEth, winningTickFromRight, hasWinningTickFromRight, true);
 
 		uint256 candidateEth = accEth + node.totalEth;
-		uint256 thresholdIfNodeWins = _ceilDiv(candidateEth * PRICE_PRECISION, maxRepBeingSold);
+		uint256 thresholdIfNodeWins = _getUnderfundedThreshold();
 		if (thresholdIfNodeWins > tickToPrice(node.tick))
 			return (accEth, winningTickFromRight, hasWinningTickFromRight, true);
 
@@ -606,6 +612,14 @@ contract UniformPriceDualCapBatchAuction {
 		);
 		if (hasWinningTickFromLeft) lowestWinningTickLocal = winningTickFromLeft;
 		return (accEth, lowestWinningTickLocal, true, stopped);
+	}
+
+	function _getUnderfundedThreshold() private view returns (uint256) {
+		// The proportional reserve is independent of the accumulated prefix, so a
+		// rejected lower tick cannot become eligible only because another bid crosses
+		// an integer REP boundary. Finalization still floors aggregate REP purchased and
+		// refunds every prefix when the aggregate allocation rounds to zero.
+		return Math.mulDiv(ethRaiseCap, PRICE_PRECISION, maxRepBeingSold, Math.Rounding.Ceil);
 	}
 
 	function _insert(uint256 nodeId, int256 tick, address bidder, uint256 ethAmount) internal returns (uint256) {

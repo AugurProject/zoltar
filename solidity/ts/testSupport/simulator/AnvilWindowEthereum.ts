@@ -190,6 +190,7 @@ export interface AnvilWindowEthereum {
 	anvilSnapshot: () => Promise<string>
 	anvilRevert: (snapshotId: string) => Promise<void>
 	request: (args: { method: string; params?: unknown }) => Promise<unknown>
+	rawRequest: (args: { method: string; params?: unknown }) => Promise<unknown>
 	on: () => void
 	removeListener: () => void
 }
@@ -402,6 +403,24 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		return json.result
 	}
 
+	// Same-block ordering tests need to queue transactions without the normal
+	// request wrapper mining and replaying each send before returning.
+	const rawRequest = async (args: { method: string; params?: unknown[] | unknown | undefined }): Promise<unknown> => {
+		const raw = await fetchJsonRpcResponse({
+			rpcUrl: ANVIL_RPC,
+			method: args.method,
+			body: JSON.stringify({
+				jsonrpc: '2.0',
+				id: requestId++,
+				method: args.method,
+				params: ensureArray(args.params),
+			}),
+		})
+		const json = parseJsonRpcResponse(raw)
+		if (json.error !== undefined) throw new Error(json.error.message || 'RPC error')
+		return json.result
+	}
+
 	// Reset Anvil to a clean state before each test
 	await request({ method: 'anvil_reset', params: [] })
 	await request({ method: 'anvil_setNextBlockBaseFeePerGas', params: ['0x0'] })
@@ -529,6 +548,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 
 	const mock: AnvilWindowEthereum = {
 		request,
+		rawRequest,
 		on: () => {},
 		removeListener: () => {},
 		addStateOverrides,
