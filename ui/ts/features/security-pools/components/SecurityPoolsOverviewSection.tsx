@@ -40,16 +40,20 @@ export function SecurityPoolsOverviewSection({
 	liquidationAmount,
 	liquidationMaxAmount,
 	liquidationManagerAddress,
+	liquidationFundingPreview,
+	liquidationFundingPreviewError,
 	liquidationModalOpen,
 	liquidationSecurityPoolAddress,
 	liquidationTargetVault,
 	liquidationTimeoutMinutes,
 	loadingPoolOracleManager,
+	loadingLiquidationFundingPreview,
 	loadingSecurityPoolPage,
 	onCreateSecurityPool,
 	onLiquidationAmountChange,
 	onLiquidationTimeoutMinutesChange,
 	onLoadPoolOracleManager,
+	onLoadLiquidationFundingPreview,
 	onLoadSecurityPoolPage,
 	onOpenLiquidationModal,
 	onQueueLiquidation,
@@ -253,7 +257,7 @@ export function SecurityPoolsOverviewSection({
 										}
 										actions={
 											onSelectSecurityPool === undefined ? undefined : (
-												<button className='primary' onClick={() => onSelectSecurityPool(pool.securityPoolAddress)}>
+												<button className='primary' onClick={() => onSelectSecurityPool(pool.securityPoolAddress, pool.universeId)}>
 													{securityPoolCopy.openPool}
 												</button>
 											)
@@ -377,7 +381,7 @@ export function SecurityPoolsOverviewSection({
 																					className='secondary security-pool-browse-vault-row-liquidate'
 																					onClick={() => onOpenLiquidationModal(pool.managerAddress, pool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)}
 																					disabled={accountState.address === undefined || !isMainnet || !liquidationEnabled}
-																					title={securityPoolCopy.liquidationReviewHint}
+																					title={!isMainnet && accountState.address !== undefined ? commonCopy.mainnetRequiredReason : securityPoolCopy.liquidationReviewHint}
 																				>
 																					{securityPoolCopy.reviewLiquidation}
 																				</button>
@@ -408,12 +412,16 @@ export function SecurityPoolsOverviewSection({
 				liquidationAmount={liquidationAmount}
 				liquidationMaxAmount={liquidationMaxAmount}
 				liquidationManagerAddress={liquidationManagerAddress}
+				liquidationFundingPreview={liquidationFundingPreview}
+				liquidationFundingPreviewError={liquidationFundingPreviewError}
 				liquidationModalOpen={liquidationModalOpen}
 				liquidationSecurityPoolAddress={liquidationSecurityPoolAddress}
 				liquidationTimeoutMinutes={liquidationTimeoutMinutes}
 				loadingPoolOracleManager={loadingPoolOracleManager}
+				loadingLiquidationFundingPreview={loadingLiquidationFundingPreview}
 				liquidationTargetVault={liquidationTargetVault}
 				onLoadPoolOracleManager={onLoadPoolOracleManager}
+				onLoadLiquidationFundingPreview={onLoadLiquidationFundingPreview}
 				onSelectedPoolViewChange={() => undefined}
 				poolState={selectedPoolWithState?.poolState}
 				repPerEthPrice={repPerEthPrice}
@@ -423,6 +431,7 @@ export function SecurityPoolsOverviewSection({
 				securityPoolOverviewActiveAction={securityPoolOverviewActiveAction}
 				securityPoolLiquidationError={securityPoolLiquidationError}
 				securityPoolOverviewResult={securityPoolOverviewResult}
+				walletEthBalance={accountState.ethBalance}
 				callerVaultSummary={callerVaultSummary}
 				targetVaultSummary={targetVaultSummary}
 				onLiquidationAmountChange={onLiquidationAmountChange}

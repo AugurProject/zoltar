@@ -2,13 +2,21 @@ import * as commonCopy from '../../../copy/common.js'
 import * as marketCopy from '../../../copy/market.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { EntityCard } from '../../../components/EntityCard.js'
+import { Badge } from '../../../components/Badge.js'
+import { CurrencyValue } from '../../../components/CurrencyValue.js'
 import { LoadingText } from '../../../components/LoadingText.js'
 import { PaginationControls } from '../../../components/PaginationControls.js'
 import { Question, getQuestionTitle } from './Question.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
 import { StateHint } from '../../../components/StateHint.js'
+import { SecurityPoolLink } from '../../security-pools/components/SecurityPoolLink.js'
+import { UniverseLink } from '../../universes/components/UniverseLink.js'
+import { getSecurityPoolStatusBadgeLabel } from '../../security-pools/lib/securityPoolLabels.js'
+import { deriveSecurityPoolLifecycleState } from '../../security-pools/lib/securityPoolState.js'
+import { sameCaseInsensitiveText } from '../../../lib/caseInsensitive.js'
+import { zeroAddress } from '@zoltar/shared/ethereum'
 import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, QUESTION_PAGE_SIZE } from '../../../lib/pagination.js'
-import type { MarketDetailsPage } from '../../../types/contracts.js'
+import type { ListedSecurityPool, MarketDetailsPage } from '../../../types/contracts.js'
 
 function isCurrentQuestionPage(page: MarketDetailsPage | undefined, pageIndex: number, questionCount: bigint | undefined) {
 	return page?.pageIndex === pageIndex && page.pageSize === QUESTION_PAGE_SIZE && (questionCount === undefined || page.questionCount === questionCount)
@@ -17,17 +25,39 @@ function isCurrentQuestionPage(page: MarketDetailsPage | undefined, pageIndex: n
 type MarketQuestionsSectionProps = {
 	environmentRefreshKey: number
 	hasForked: boolean
+	hasLoadedSecurityPools: boolean
+	loadingSecurityPools: boolean
 	loadingZoltarQuestionCount: boolean
 	loadingZoltarQuestions: boolean
 	onCreateQuestion: () => void
 	onLoadZoltarQuestionPage: (pageIndex: number, pageSize: number) => Promise<void>
+	onLoadSecurityPools: () => void
 	onOpenForkTab: () => void
 	onUseQuestionForFork: (questionId: string) => void
 	onUseQuestionForPool: (questionId: string) => void
+	securityPools: ListedSecurityPool[]
+	securityPoolsLoadError: string | undefined
 	zoltarQuestionCount: bigint | undefined
 	zoltarQuestionPage: MarketDetailsPage | undefined
 }
-export function MarketQuestionsSection({ environmentRefreshKey, hasForked, loadingZoltarQuestionCount, loadingZoltarQuestions, onCreateQuestion, onLoadZoltarQuestionPage, onOpenForkTab, onUseQuestionForFork, onUseQuestionForPool, zoltarQuestionCount, zoltarQuestionPage }: MarketQuestionsSectionProps) {
+export function MarketQuestionsSection({
+	environmentRefreshKey,
+	hasForked,
+	hasLoadedSecurityPools,
+	loadingSecurityPools,
+	loadingZoltarQuestionCount,
+	loadingZoltarQuestions,
+	onCreateQuestion,
+	onLoadSecurityPools,
+	onLoadZoltarQuestionPage,
+	onOpenForkTab,
+	onUseQuestionForFork,
+	onUseQuestionForPool,
+	securityPools,
+	securityPoolsLoadError,
+	zoltarQuestionCount,
+	zoltarQuestionPage,
+}: MarketQuestionsSectionProps) {
 	const noQuestionsAvailable = zoltarQuestionCount === 0n
 	const [pageIndex, setPageIndex] = useState(0)
 	const [activePageRequestKey, setActivePageRequestKey] = useState<string | undefined>(undefined)
@@ -145,6 +175,74 @@ export function MarketQuestionsSection({ environmentRefreshKey, hasForked, loadi
 						>
 							<Question question={question} showTitle={false} />
 							{question.marketType !== 'binary' ? <p className='detail'>{marketCopy.nonBinaryPoolCompatibilityDetail}</p> : undefined}
+							{(() => {
+								const linkedPools = securityPools.filter(pool => sameCaseInsensitiveText(pool.questionId, question.questionId))
+								const linkedPoolsContent = (() => {
+									if (!hasLoadedSecurityPools) {
+										if (securityPoolsLoadError === undefined)
+											return (
+												<p className='detail'>
+													<LoadingText>{marketCopy.loadingLinkedPools}</LoadingText>
+												</p>
+											)
+										return (
+											<div>
+												<p className='error-text' role='alert'>
+													{securityPoolsLoadError}
+												</p>
+												<button className='secondary' type='button' onClick={onLoadSecurityPools} disabled={loadingSecurityPools}>
+													{marketCopy.retryLinkedPools}
+												</button>
+											</div>
+										)
+									}
+									if (linkedPools.length === 0) return <p className='detail'>{marketCopy.noLinkedPool}</p>
+									return (
+										<div className='market-linked-pool-list'>
+											{linkedPools.map(pool => {
+												const lifecycleState = deriveSecurityPoolLifecycleState({
+													hasForkActivity: pool.hasForkActivity,
+													isChildPool: pool.parent !== zeroAddress,
+													questionOutcome: pool.questionOutcome,
+													systemState: pool.systemState,
+													universeHasForked: pool.universeHasForked,
+												})
+												const statusLabel = getSecurityPoolStatusBadgeLabel({ hasForkActivity: pool.hasForkActivity, lifecycleState, questionOutcome: pool.questionOutcome })
+												return (
+													<div className='market-linked-pool' key={pool.securityPoolAddress}>
+														<div className='market-linked-pool-summary'>
+															<Badge tone={lifecycleState === 'operational' ? 'ok' : 'warning'}>{statusLabel}</Badge>
+															<span>
+																{commonCopy.universe}: <UniverseLink universeId={pool.universeId} />
+															</span>
+															<span>
+																{marketCopy.poolCollateral}: <CurrencyValue value={pool.completeSetCollateralAmount} suffix={commonCopy.eth} copyable={false} />
+															</span>
+														</div>
+														<div className='actions'>
+															<SecurityPoolLink className='button-link secondary' securityPoolAddress={pool.securityPoolAddress} selectedPoolView='trading' universeId={pool.universeId}>
+																{marketCopy.openSharesAndPosition}
+															</SecurityPoolLink>
+															<SecurityPoolLink className='button-link secondary' securityPoolAddress={pool.securityPoolAddress} selectedPoolView='reporting' universeId={pool.universeId}>
+																{marketCopy.openReporting}
+															</SecurityPoolLink>
+														</div>
+													</div>
+												)
+											})}
+										</div>
+									)
+								})()
+								return (
+									<section className='market-linked-pools' aria-label={marketCopy.linkedPools}>
+										<div className='market-linked-pools-header'>
+											<strong>{marketCopy.linkedPools}</strong>
+											<span>{marketCopy.linkedPoolsDetail}</span>
+										</div>
+										{linkedPoolsContent}
+									</section>
+								)
+							})()}
 						</EntityCard>
 					))}
 				</div>

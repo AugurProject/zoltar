@@ -33,13 +33,17 @@ describe('OverviewPanels', () => {
 				wethBalance: undefined,
 			},
 			isConnectingWallet: false,
+			isManagingWallet: false,
 			isLoadingRepPrices: false,
 			isRefreshingRepPrices: false,
 			isLoadingUniverseRepBalance: false,
 			isRefreshing: false,
 			onConnect: () => undefined,
+			onChangeWallet: () => undefined,
+			onDisconnectWallet: () => undefined,
 			onGoToGenesisUniverse: () => undefined,
 			onRefreshRepPrices: () => undefined,
+			onSwitchNetwork: () => undefined,
 			parentUniverseId: undefined,
 			repPerEthPrice: undefined,
 			repPerEthSource: undefined,
@@ -146,6 +150,33 @@ describe('OverviewPanels', () => {
 
 		if (!(connectButton instanceof HTMLButtonElement)) throw new Error('Expected connect button')
 		expect(connectButton.disabled).toBe(true)
+	})
+
+	test('offers account management and wrong-network recovery for a connected wallet', async () => {
+		const onChangeWallet = mock(() => undefined)
+		const onDisconnectWallet = mock(() => undefined)
+		const onSwitchNetwork = mock(() => undefined)
+		const documentQueries = await renderOverviewPanels({
+			accountState: {
+				address: '0x1234567890123456789012345678901234567890',
+				chainId: '0xaa36a7',
+				ethBalance: undefined,
+				wethBalance: undefined,
+			},
+			onChangeWallet,
+			onDisconnectWallet,
+			onSwitchNetwork,
+		})
+
+		fireEvent.click(documentQueries.getByText('Account Menu'))
+		expect(documentQueries.getByText('Chain 0xaa36a7')).not.toBeNull()
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Change Wallet' }))
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Switch to Ethereum Mainnet' }))
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Disconnect' }))
+
+		expect(onChangeWallet).toHaveBeenCalledTimes(1)
+		expect(onSwitchNetwork).toHaveBeenCalledTimes(1)
+		expect(onDisconnectWallet).toHaveBeenCalledTimes(1)
 	})
 
 	test('keeps the connect wallet button idle during bootstrap-only loading', async () => {

@@ -63,8 +63,9 @@ describe('CollateralizationCircle', () => {
 		const gaugeValue = documentQueries.getByText('140%')
 
 		expect(gauge?.className).not.toContain('has-external-value')
-		expect(gauge?.getAttribute('title')).toBe('Collateralization: 140%')
+		expect(gauge?.getAttribute('title')).toBe('Collateralization: 140%; target: 150%')
 		expect(gaugeValue).not.toBeNull()
+		expect(documentQueries.getByText('Target 150%')).not.toBeNull()
 		expect(gaugeValue.className).toBe('collateralization-gauge-value')
 	})
 
@@ -76,7 +77,7 @@ describe('CollateralizationCircle', () => {
 		const gaugeValue = within(document.body).getByText('999%+')
 
 		expect(gauge?.className).not.toContain('has-external-value')
-		expect(gauge?.getAttribute('title')).toBe('Collateralization: 3 667%')
+		expect(gauge?.getAttribute('title')).toBe('Collateralization: 3 667%; target: 150%')
 		expect(gaugeValue.className).toBe('collateralization-gauge-value')
 	})
 
@@ -88,7 +89,7 @@ describe('CollateralizationCircle', () => {
 		const gaugeValue = within(document.body).getByText('999%+')
 
 		expect(gauge?.className).not.toContain('has-external-value')
-		expect(gauge?.getAttribute('title')).toBe('Collateralization: 1 000%')
+		expect(gauge?.getAttribute('title')).toBe('Collateralization: 1 000%; target: 150%')
 		expect(gaugeValue.className).toBe('collateralization-gauge-value')
 		expect(gaugeValue.parentElement?.className).toContain('collateralization-gauge')
 	})

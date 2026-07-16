@@ -74,7 +74,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expectSectionVariant('Open Oracle', 'plain')
 	})
 
-	test('keeps oracle actions silently disabled off mainnet', async () => {
+	test('keeps oracle actions disabled off mainnet and explains recovery', async () => {
 		const renderOffMainnetOracleView = async (selectedPoolView: 'price-oracle' | 'staged-operations') =>
 			renderIntoDocument(
 				<SecurityPoolWorkflowSection
@@ -95,14 +95,14 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		const priceOracleRender = await renderOffMainnetOracleView('price-oracle')
 		setCleanup(priceOracleRender.cleanup)
 
-		expect(getTransactionButtonState(document.body, 'Request New Price')).toEqual({ disabled: true, reason: undefined })
+		expect(getTransactionButtonState(document.body, 'Request New Price')).toEqual({ disabled: true, reason: 'Switch to Ethereum mainnet.' })
 
 		await priceOracleRender.cleanup()
 
 		const stagedOperationsRender = await renderOffMainnetOracleView('staged-operations')
 		setCleanup(stagedOperationsRender.cleanup)
 
-		expect(getTransactionButtonState(document.body, 'Execute Staged Operation')).toEqual({ disabled: true, reason: undefined })
+		expect(getTransactionButtonState(document.body, 'Execute Staged Operation')).toEqual({ disabled: true, reason: 'Switch to Ethereum mainnet.' })
 	})
 
 	test('keeps the workflow rail visible with disabled items before a pool loads', async () => {
@@ -184,9 +184,11 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 
 		const documentQueries = within(document.body)
 		expect(document.body.textContent?.includes('This pool belongs to')).toBe(true)
-		expect(document.body.textContent?.includes('This pool does not exist.')).toBe(true)
+		expect(document.body.textContent?.includes('Pool actions are locked until the app uses the same universe.')).toBe(true)
 		expect(documentQueries.getByRole('link', { name: '0x1' })).not.toBeNull()
 		expect(document.body.textContent?.includes('0x2')).toBe(true)
+		expect(documentQueries.getByRole('button', { name: 'Switch to Pool Universe' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Return to Current Universe' })).not.toBeNull()
 		for (const tabLabel of ['Vaults', 'Shares', 'Reporting', 'Fork & Migration', 'Staged Operations', 'Open Oracle']) {
 			const tab = documentQueries.getByRole('button', { name: tabLabel })
 			expect(tab.getAttribute('title')).toBeNull()
