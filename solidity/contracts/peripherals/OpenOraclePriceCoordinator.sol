@@ -2,7 +2,7 @@
 pragma solidity 0.8.35;
 
 import { IWeth9 } from './interfaces/IWeth9.sol';
-import { LoggedOpenOracle } from './openOracle/LoggedOpenOracle.sol';
+import { OpenOracle } from './openOracle/OpenOracle.sol';
 import { ReputationToken } from '../ReputationToken.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
@@ -49,7 +49,7 @@ contract OpenOraclePriceCoordinator {
 	uint256 public lastPrice; // (REP * PRICE_PRECISION) / ETH;
 	ReputationToken public immutable reputationToken;
 	ISecurityPool public securityPool;
-	LoggedOpenOracle public immutable openOracle;
+	OpenOracle public immutable openOracle;
 	IWeth9 public immutable weth;
 	uint256 public immutable gasConsumedOpenOracleReportPrice;
 	uint32 public immutable gasConsumedSettlement;
@@ -125,7 +125,7 @@ contract OpenOraclePriceCoordinator {
 	uint256[] private pendingSettlementOperationIds;
 
 	constructor(
-		LoggedOpenOracle _openOracle,
+		OpenOracle _openOracle,
 		ReputationToken _reputationToken,
 		IWeth9 _weth,
 		uint256 _gasConsumedOpenOracleReportPrice,
@@ -223,7 +223,7 @@ contract OpenOraclePriceCoordinator {
 		pendingReportMaxSettlementBaseFee =
 			(block.basefee * maxSettlementBaseFeeMultiplierBps) / SecurityPoolUtils.BPS_DENOMINATOR;
 
-		LoggedOpenOracle.CreateReportParams memory reportparams = LoggedOpenOracle.CreateReportParams({
+		OpenOracle.CreateReportParams memory reportparams = OpenOracle.CreateReportParams({
 			exactToken1Report: uint128(exactToken1Report),
 			escalationHalt: uint128(escalationHalt), // amount of token1 past which escalation stops but disputes can still happen
 			settlerReward: uint96(settlerReward), // eth paid to settler in wei

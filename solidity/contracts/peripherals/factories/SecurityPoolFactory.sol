@@ -3,7 +3,7 @@ pragma solidity 0.8.35;
 import { ZoltarQuestionData } from '../../ZoltarQuestionData.sol';
 import { SecurityPool } from '../SecurityPool.sol';
 import { ISecurityPool, ISecurityPoolFactory } from '../interfaces/ISecurityPool.sol';
-import { LoggedOpenOracle } from '../openOracle/LoggedOpenOracle.sol';
+import { OpenOracle } from '../openOracle/OpenOracle.sol';
 import { Zoltar } from '../../Zoltar.sol';
 import { ShareTokenFactory } from './ShareTokenFactory.sol';
 import { UniformPriceDualCapBatchAuctionFactory } from './UniformPriceDualCapBatchAuctionFactory.sol';
@@ -22,7 +22,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	UniformPriceDualCapBatchAuctionFactory immutable uniformPriceDualCapBatchAuctionFactory;
 	PriceOracleManagerAndOperatorQueuerFactory immutable priceOracleManagerAndOperatorQueuerFactory;
 	Zoltar immutable zoltar;
-	LoggedOpenOracle immutable openOracle;
+	OpenOracle immutable openOracle;
 	EscalationGameFactory immutable escalationGameFactory;
 	ZoltarQuestionData immutable questionData;
 	ISecurityPoolForker immutable securityPoolForker;
@@ -47,7 +47,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		ISecurityPoolForker _securityPoolForker,
 		ZoltarQuestionData _questionData,
 		EscalationGameFactory _escalationGameFactory,
-		LoggedOpenOracle _openOracle,
+		OpenOracle _openOracle,
 		Zoltar _zoltar,
 		ShareTokenFactory _shareTokenFactory,
 		UniformPriceDualCapBatchAuctionFactory _uniformPriceDualCapBatchAuctionFactory,

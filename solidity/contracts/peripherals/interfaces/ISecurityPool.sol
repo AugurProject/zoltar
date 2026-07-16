@@ -2,7 +2,7 @@
 pragma solidity 0.8.35;
 
 import { Zoltar } from '../../Zoltar.sol';
-import { LoggedOpenOracle } from '../openOracle/LoggedOpenOracle.sol';
+import { OpenOracle } from '../openOracle/OpenOracle.sol';
 import { UniformPriceDualCapBatchAuction } from '../UniformPriceDualCapBatchAuction.sol';
 import { IShareToken } from './IShareToken.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
@@ -155,7 +155,7 @@ interface ISecurityPool {
 	function repToken() external view returns (ReputationToken);
 	function securityPoolFactory() external view returns (ISecurityPoolFactory);
 	function priceOracleManagerAndOperatorQueuer() external view returns (OpenOraclePriceCoordinator);
-	function openOracle() external view returns (LoggedOpenOracle);
+	function openOracle() external view returns (OpenOracle);
 	function shareTokenSupply() external view returns (uint256);
 	function truthAuction() external view returns (address);
 

@@ -1,13 +1,7 @@
 import { encodeDeployData, getAddress, type Address, type Hash, type Hex } from '@zoltar/shared/ethereum'
 import { ABIS } from '../abis.js'
 import { createDeploymentStatusOracleAddressHelper } from '@zoltar/shared/deploymentAddresses'
-import {
-	DeploymentStatusOracle_DeploymentStatusOracle,
-	ScalarOutcomes_ScalarOutcomes,
-	peripherals_SecurityPoolUtils_SecurityPoolUtils,
-	peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
-	peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle,
-} from '../contractArtifact.js'
+import { DeploymentStatusOracle_DeploymentStatusOracle, ScalarOutcomes_ScalarOutcomes, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, peripherals_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
 import {
 	MULTICALL3_BYTECODE,
 	PROXY_DEPLOYER_ADDRESS,
@@ -220,7 +214,7 @@ export function getDeploymentSteps(): DeploymentStep[] {
 			label: 'OpenOracle',
 			address: addresses.openOracle,
 			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, `0x${peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.evm.bytecode.object}`),
+			deploy: async client => await deployViaProxy(client, `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`),
 		},
 		{
 			id: 'zoltarQuestionData',

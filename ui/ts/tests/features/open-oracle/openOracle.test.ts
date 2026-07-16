@@ -1538,7 +1538,7 @@ describe('Open Oracle helpers', () => {
 
 		const openOracleAddress = getOpenOracleAddress()
 		const stateHash = (await getOpenOracleExtraData(client, reportId)).stateHash
-		await expect(submitInitialOracleReport(uiWriteClient, openOracleAddress, reportId, amount1, amount1, stateHash)).rejects.toThrow(/report already submitted/i)
+		await expect(submitInitialOracleReport(uiWriteClient, openOracleAddress, reportId, amount1, amount1, stateHash)).rejects.toThrow(/0xcc0220a9|reportalreadysubmitted|custom error/i)
 	})
 
 	test('submitInitialOracleReport rejects an invalid state hash', async () => {
@@ -1572,7 +1572,7 @@ describe('Open Oracle helpers', () => {
 		const stateHash = (await getOpenOracleExtraData(client, reportId)).stateHash
 		const invalidStateHash = stateHash === '0x0000000000000000000000000000000000000000000000000000000000000000' ? '0x0000000000000000000000000000000000000000000000000000000000000001' : '0x0000000000000000000000000000000000000000000000000000000000000000'
 
-		await expect(submitInitialOracleReport(uiWriteClient, openOracleAddress, reportId, amount1, amount2, invalidStateHash)).rejects.toThrow(/invalid state hash/i)
+		await expect(submitInitialOracleReport(uiWriteClient, openOracleAddress, reportId, amount1, amount2, invalidStateHash)).rejects.toThrow(/0x937d7862|invalidstatehash/i)
 	})
 
 	test('ui wrapWeth helper deposits ETH into WETH and reports the wrap action', async () => {

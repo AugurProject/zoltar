@@ -282,8 +282,6 @@ export type ReplayState = {
 	authorizations: Map<Address, Map<Address, boolean>>
 	coordinatorOperations: Map<Address, Map<bigint, CoordinatorOperationReplay>>
 	coordinators: Map<Address, CoordinatorReplay>
-	oracleTokenLiabilities: Map<Address, Map<Address, bigint>>
-	oracleEthLiabilities: Map<Address, bigint>
 }
 
 export function createReplayState(): ReplayState {
@@ -331,8 +329,6 @@ export function createReplayState(): ReplayState {
 		authorizations: new Map(),
 		coordinatorOperations: new Map(),
 		coordinators: new Map(),
-		oracleTokenLiabilities: new Map(),
-		oracleEthLiabilities: new Map(),
 	}
 }
 
@@ -1184,47 +1180,6 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 	})
 }
 
-function updateOracleTokenLiability(state: ReplayState, recipient: Address, token: Address, delta: bigint) {
-	let liabilities = state.oracleTokenLiabilities.get(recipient)
-	if (liabilities === undefined) {
-		liabilities = new Map()
-		state.oracleTokenLiabilities.set(recipient, liabilities)
-	}
-	const resultingLiability = (liabilities.get(token) ?? 0n) + delta
-	if (resultingLiability < 0n) throw new Error('oracle token liability cannot become negative')
-	liabilities.set(token, resultingLiability)
-}
-
-export function reduceOracleEvent(state: ReplayState, log: ReplayLog) {
-	if (log.eventName === 'ProtocolFeeAccrued') {
-		updateOracleTokenLiability(state, requireAddress(log.args, 'recipient'), requireAddress(log.args, 'token'), requireBigInt(log.args, 'amount'))
-		return
-	}
-	if (log.eventName === 'TokenPayoutResult') {
-		const paid = requireBoolean(log.args, 'paid')
-		const reason = requireBigInt(log.args, 'reason')
-		if (!paid && reason !== 4n) {
-			updateOracleTokenLiability(state, requireAddress(log.args, 'recipient'), requireAddress(log.args, 'token'), requireBigInt(log.args, 'amount'))
-		}
-		return
-	}
-	if (log.eventName === 'TokenFeesWithdrawn') {
-		updateOracleTokenLiability(state, requireAddress(log.args, 'recipient'), requireAddress(log.args, 'token'), -requireBigInt(log.args, 'amount'))
-		return
-	}
-	if (log.eventName === 'EthPayoutResult' && !requireBoolean(log.args, 'paid')) {
-		const recipient = requireAddress(log.args, 'recipient')
-		state.oracleEthLiabilities.set(recipient, (state.oracleEthLiabilities.get(recipient) ?? 0n) + requireBigInt(log.args, 'amount'))
-		return
-	}
-	if (log.eventName === 'EthFeesWithdrawn') {
-		const recipient = requireAddress(log.args, 'recipient')
-		const resultingLiability = (state.oracleEthLiabilities.get(recipient) ?? 0n) - requireBigInt(log.args, 'amount')
-		if (resultingLiability < 0n) throw new Error('oracle ETH liability cannot become negative')
-		state.oracleEthLiabilities.set(recipient, resultingLiability)
-	}
-}
-
 export function reduceZoltarLog(state: ReplayState, log: ReplayLog, recognizedRepTokens: ReadonlySet<Address>) {
 	reduceZoltarEvent(state, log)
 	reduceReputationTokenEvent(state, log, recognizedRepTokens)
@@ -1235,7 +1190,6 @@ export function reduceZoltarLog(state: ReplayState, log: ReplayLog, recognizedRe
 	reduceEscalationEvent(state, log)
 	reduceAuctionEvent(state, log)
 	reduceCoordinatorEvent(state, log)
-	reduceOracleEvent(state, log)
 }
 
 export function replayZoltarEvents(logs: readonly ReplayLog[], orphanedBlockHashes: ReadonlySet<Hex> = new Set()) {

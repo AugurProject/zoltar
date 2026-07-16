@@ -15,7 +15,7 @@ import {
 	peripherals_factories_SecurityPoolFactory_SecurityPoolFactory,
 	peripherals_factories_ShareTokenFactory_ShareTokenFactory,
 	peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
-	peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle,
+	peripherals_openOracle_OpenOracle_OpenOracle,
 } from '../contractArtifact.js'
 
 export { ORACLE_EXACT_TOKEN1_REPORT } from '@zoltar/shared/oracleInitialReport'
@@ -165,7 +165,7 @@ export const { getInfraContractAddresses } = createInfraContractAddressHelper({
 	getZoltarAddress,
 	getZoltarQuestionDataAddress,
 	multicall3Bytecode: MULTICALL3_BYTECODE,
-	openOracleBytecode: `0x${peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.evm.bytecode.object}`,
+	openOracleBytecode: `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`,
 	priceOracleManagerAndOperatorQueuerFactoryBytecode: getPriceOracleManagerAndOperatorQueuerFactoryByteCode(),
 	proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
 	scalarOutcomesBytecode: `0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`,

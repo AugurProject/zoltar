@@ -4,7 +4,7 @@ pragma solidity 0.8.35;
 import { ZoltarQuestionData } from '../../ZoltarQuestionData.sol';
 import { SecurityPool } from '../SecurityPool.sol';
 import { ISecurityPool, ISecurityPoolFactory } from '../interfaces/ISecurityPool.sol';
-import { LoggedOpenOracle } from '../openOracle/LoggedOpenOracle.sol';
+import { OpenOracle } from '../openOracle/OpenOracle.sol';
 import { Zoltar } from '../../Zoltar.sol';
 import { IShareToken } from '../interfaces/IShareToken.sol';
 import { OpenOraclePriceCoordinator } from '../OpenOraclePriceCoordinator.sol';
@@ -28,7 +28,7 @@ contract SecurityPoolDeployer {
 		EscalationGameFactory escalationGameFactory,
 		OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer,
 		IShareToken shareToken,
-		LoggedOpenOracle openOracle,
+		OpenOracle openOracle,
 		ISecurityPool parent,
 		Zoltar zoltar,
 		uint248 universeId,
@@ -77,7 +77,7 @@ contract SecurityPoolDeploymentWorker {
 		EscalationGameFactory escalationGameFactory,
 		OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer,
 		IShareToken shareToken,
-		LoggedOpenOracle openOracle,
+		OpenOracle openOracle,
 		ISecurityPool parent,
 		Zoltar zoltar,
 		uint248 universeId,

@@ -642,46 +642,6 @@ describe('event-only replay', () => {
 		if (replayed.escalationResidualRepSwept.get(game) !== 2n) throw new Error('residual REP sweep mismatch')
 	})
 
-	test('oracle payout and withdrawal events reconstruct outstanding liabilities', () => {
-		const recipient = '0x2222222222222222222222222222222222222222'
-		const token = '0x3333333333333333333333333333333333333333'
-		const failedTokenPayout = createReplayLog({
-			eventName: 'TokenPayoutResult',
-			args: { reportId: 1n, recipient, token, amount: 7n, paid: false, reason: 0n },
-		})
-		const protocolFee = createReplayLog({
-			blockNumber: 2n,
-			transactionHash: '0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
-			eventName: 'ProtocolFeeAccrued',
-			args: { reportId: 2n, recipient, token, amount: 3n, reason: 0n },
-		})
-		const failedEthPayout = createReplayLog({
-			blockNumber: 3n,
-			transactionHash: '0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
-			eventName: 'EthPayoutResult',
-			args: { reportId: 2n, recipient, amount: 5n, paid: false, reason: 2n },
-		})
-		const tokenWithdrawal = createReplayLog({
-			blockNumber: 4n,
-			transactionHash: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
-			eventName: 'TokenFeesWithdrawn',
-			args: { recipient, token, amount: 10n },
-		})
-		const ethWithdrawal = createReplayLog({
-			blockNumber: 5n,
-			transactionHash: '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
-			eventName: 'EthFeesWithdrawn',
-			args: { recipient, amount: 5n },
-		})
-		const replayed = replayZoltarEvents([ethWithdrawal, failedEthPayout, protocolFee, failedTokenPayout, tokenWithdrawal])
-		if (replayed.oracleTokenLiabilities.get(recipient)?.get(token) !== 0n) {
-			throw new Error('oracle token liability replay mismatch')
-		}
-		if (replayed.oracleEthLiabilities.get(recipient) !== 0n) {
-			throw new Error('oracle ETH liability replay mismatch')
-		}
-	})
-
 	test('vault migration replay keeps the same vault isolated across parallel child pools', () => {
 		const parentPool: Address = '0x1111111111111111111111111111111111111111'
 		const yesChildPool: Address = '0x2222222222222222222222222222222222222222'

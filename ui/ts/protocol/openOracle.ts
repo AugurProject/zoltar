@@ -10,7 +10,7 @@ import { loadOpenOracleInitialReportPrice } from './openOraclePricing.js'
 import { getOpenOracleCreateParameterValidationMessage } from './openOracleValidation.js'
 import { decodeOracleQueueOperation, encodeOracleQueueOperation } from './oracleQueueOperation.js'
 import { getWethAddress } from './uniswapQuoter.js'
-import { peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle } from '../contractArtifact.js'
+import { peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
 import type { OpenOracleActionResult, OracleManagerDetails, OracleQueueOperation, ReadClient, OpenOracleReportSummary, OpenOracleReportSummaryPage, StagedOracleExecutionResult, StagedOracleQueuedResult, WriteClient } from '../types/contracts.js'
 import { hasTimestampAndNumber, requireStagedOperationTupleArray, requireOpenOracleExtraDataTuple, requireOpenOracleExtraDataTupleArray, requireOpenOracleReportMetaTuple, requireOpenOracleReportMetaTupleArray, requireOpenOracleReportStatusTuple, requireOpenOracleReportStatusTupleArray } from './helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from './core.js'
@@ -211,13 +211,13 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 	if (pendingReportId > 0n) {
 		const [extraData, reportMeta] = await readRequiredMulticall(client, [
 			{
-				abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 				functionName: 'extraData',
 				address: resolvedOracleAddress,
 				args: [pendingReportId],
 			},
 			{
-				abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 				functionName: 'reportMeta',
 				address: resolvedOracleAddress,
 				args: [pendingReportId],
@@ -269,19 +269,19 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 	const [[meta, status, extra], block] = await Promise.all([
 		readRequiredMulticall(client, [
 			{
-				abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 				functionName: 'reportMeta',
 				address: openOracleAddress,
 				args: [reportId],
 			},
 			{
-				abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 				functionName: 'reportStatus',
 				address: openOracleAddress,
 				args: [reportId],
 			},
 			{
-				abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 				functionName: 'extraData',
 				address: openOracleAddress,
 				args: [reportId],
@@ -364,7 +364,7 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 	if (!Number.isInteger(pageSize) || pageSize <= 0) throw new Error('Page size must be a positive integer')
 	const openOracleAddress = getOpenOracleAddress()
 	const nextReportId = await client.readContract({
-		abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'nextReportId',
 		address: openOracleAddress,
 		args: [],
@@ -399,7 +399,7 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 		readRequiredMulticall(
 			client,
 			reportIds.map(reportId => ({
-				abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 				functionName: 'reportMeta',
 				address: openOracleAddress,
 				args: [reportId],
@@ -408,7 +408,7 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 		readRequiredMulticall(
 			client,
 			reportIds.map(reportId => ({
-				abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 				functionName: 'reportStatus',
 				address: openOracleAddress,
 				args: [reportId],
@@ -417,7 +417,7 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 		readRequiredMulticall(
 			client,
 			reportIds.map(reportId => ({
-				abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 				functionName: 'extraData',
 				address: openOracleAddress,
 				args: [reportId],
@@ -544,7 +544,7 @@ export async function createOpenOracleReportInstance(
 	if (validationMessage !== undefined) throw new Error(validationMessage)
 	const callParams = {
 		address: getOpenOracleAddress(),
-		abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'createReportInstance',
 		args: [parameters.token1Address, parameters.token2Address, parameters.exactToken1Report, parameters.feePercentage, parameters.multiplier, parameters.settlementTime, parameters.escalationHalt, parameters.disputeDelay, parameters.protocolFee, parameters.settlerReward],
 		value: parameters.ethValue,
@@ -809,7 +809,7 @@ export async function wrapWeth(client: WriteClient, amount: bigint) {
 export async function submitInitialOracleReport(client: WriteClient, openOracleAddress: Address, reportId: bigint, amount1: bigint, amount2: bigint, stateHash: Hex) {
 	const hash = await writeContractAndWait(client, () => ({
 		address: openOracleAddress,
-		abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'submitInitialReport',
 		args: [reportId, amount1, amount2, stateHash],
 	}))
@@ -821,7 +821,7 @@ export async function submitInitialOracleReport(client: WriteClient, openOracleA
 export async function settleOracleReport<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt>, openOracleAddress: Address, reportId: bigint) {
 	const hash = await writeContractAndWait(client, () => ({
 		address: openOracleAddress,
-		abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'settle',
 		gas: 5000000n,
 		args: [reportId],
@@ -834,7 +834,7 @@ export async function settleOracleReport<TReceipt extends Pick<TransactionReceip
 export async function disputeOracleReport(client: WriteClient, openOracleAddress: Address, reportId: bigint, tokenToSwap: Address, newAmount1: bigint, newAmount2: bigint, amt2Expected: bigint, stateHash: Hex) {
 	const hash = await writeContractAndWait(client, () => ({
 		address: openOracleAddress,
-		abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'disputeAndSwap',
 		args: [reportId, tokenToSwap, newAmount1, newAmount2, amt2Expected, stateHash],
 	}))

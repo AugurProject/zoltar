@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
-import { decodeEventLog, encodeDeployData, getAddress, type Address, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
+import { decodeEventLog, encodeDeployData, getAddress, keccak256, type Address, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
 import assert from '../testSupport/simulator/utils/assert'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
@@ -11,7 +11,7 @@ import { getOpenOracleExtraData, getOpenOracleReportMeta, getOpenOracleReportSta
 import { approveToken, getERC20Balance, getETHBalance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { ensureDefined } from '../testSupport/simulator/utils/testUtils'
 import {
-	peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle,
+	peripherals_openOracle_OpenOracle_OpenOracle,
 	test_peripherals_OpenOracleAdversarialHarnesses_OpenOracleNoReturnToken,
 	test_peripherals_OpenOracleAdversarialHarnesses_OpenOracleReentrantCallback,
 	test_peripherals_OpenOracleAdversarialHarnesses_OpenOracleRejectingETHReceiver,
@@ -75,7 +75,7 @@ describe('OpenOracle dispute economics', () => {
 
 	const createReport = async (client: WriteClient, parameters: ReportParameters) => {
 		const reportId = await client.readContract({
-			abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 			address: openOracle,
 			functionName: 'nextReportId',
 			args: [],
@@ -84,7 +84,7 @@ describe('OpenOracle dispute economics', () => {
 		const settlerReward = parameters.settlerReward ?? 0n
 		await writeContractAndWait(client, () =>
 			client.writeContract({
-				abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 				address: openOracle,
 				functionName: 'createReportInstance',
 				args: [
@@ -116,7 +116,7 @@ describe('OpenOracle dispute economics', () => {
 		const { stateHash } = await getOpenOracleExtraData(client, reportId)
 		return await writeContractAndWait(client, () =>
 			client.writeContract({
-				abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 				address: openOracle,
 				functionName: 'submitInitialReport',
 				args: [reportId, amount1, amount2, stateHash, reporter],
@@ -127,7 +127,7 @@ describe('OpenOracle dispute economics', () => {
 	const dispute = async (client: WriteClient, reportId: bigint, tokenToSwap: Address, newAmount1: bigint, newAmount2: bigint, amount2Expected: bigint, stateHash: Hex, recipient = client.account.address) =>
 		await writeContractAndWait(client, () =>
 			client.writeContract({
-				abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 				address: openOracle,
 				functionName: 'disputeAndSwap',
 				args: [reportId, tokenToSwap, newAmount1, newAmount2, recipient, amount2Expected, stateHash],
@@ -136,7 +136,7 @@ describe('OpenOracle dispute economics', () => {
 
 	const getProtocolFee = async (recipient: Address, token: Address) =>
 		await creator.readContract({
-			abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 			address: openOracle,
 			functionName: 'protocolFees',
 			args: [recipient, token],
@@ -144,7 +144,7 @@ describe('OpenOracle dispute economics', () => {
 
 	const getAccruedETH = async (recipient: Address) =>
 		await creator.readContract({
-			abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 			address: openOracle,
 			functionName: 'accruedProtocolFees',
 			args: [recipient],
@@ -152,7 +152,7 @@ describe('OpenOracle dispute economics', () => {
 
 	const getDisputeRecord = async (reportId: bigint, index: bigint): Promise<DisputeRecord> => {
 		const result = await creator.readContract({
-			abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 			address: openOracle,
 			functionName: 'disputeHistory',
 			args: [reportId, index],
@@ -162,16 +162,17 @@ describe('OpenOracle dispute economics', () => {
 	}
 
 	const getTokenBalance = async (token: Address, owner: Address) => await getERC20Balance(creator, token, owner)
-	const assertOracleRevert = async (execute: () => Promise<unknown>, expectedMessage: string) => {
+	const assertCustomError = async (execute: () => Promise<unknown>, errorName: string) => {
 		let rejection: unknown
 		try {
 			await execute()
 		} catch (error) {
 			rejection = error
 		}
-		if (!(rejection instanceof Error)) throw new Error(`Expected ${expectedMessage} revert`)
+		if (!(rejection instanceof Error)) throw new Error(`Expected ${errorName} custom error`)
+		const selector = keccak256(`${errorName}()`).slice(0, 10).toLowerCase()
 		const errorMessage = rejection.message.toLowerCase()
-		assert.ok(errorMessage.includes(expectedMessage.toLowerCase()), `Expected ${expectedMessage}, received: ${rejection.message}`)
+		assert.ok(errorMessage.includes(errorName.toLowerCase()) || errorMessage.includes(selector), `Expected ${errorName} (${selector}), received: ${rejection.message}`)
 	}
 
 	const getTokenTotal = async (token: Address, owners: readonly Address[]) => {
@@ -274,7 +275,7 @@ describe('OpenOracle dispute economics', () => {
 		const firstDisputeLog = firstDisputeReceipt.logs
 			.map(log => {
 				try {
-					return decodeEventLog({ abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi, data: log.data, topics: log.topics })
+					return decodeEventLog({ abi: peripherals_openOracle_OpenOracle_OpenOracle.abi, data: log.data, topics: log.topics })
 				} catch (error) {
 					assert.ok(error instanceof Error, 'log decode failures should be errors')
 					return undefined
@@ -336,7 +337,7 @@ describe('OpenOracle dispute economics', () => {
 		})
 
 		await mockWindow.setTime(secondStatus.reportTimestamp + SETTLEMENT_TIME - 2n)
-		await assertOracleRevert(() => openOracleSettle(settler, reportId), 'Settle too early')
+		await assertCustomError(() => openOracleSettle(settler, reportId), 'SettleTooEarly')
 		const currentReporterToken1BeforeSettlement = await getTokenBalance(token1, secondDisputer.account.address)
 		const currentReporterToken2BeforeSettlement = await getTokenBalance(token2, secondDisputer.account.address)
 		await openOracleSettle(settler, reportId)
@@ -353,7 +354,7 @@ describe('OpenOracle dispute economics', () => {
 			reporterToken2: await getTokenBalance(token2, secondDisputer.account.address),
 			status: await getOpenOracleReportStatus(creator, reportId),
 		}
-		await assertOracleRevert(() => openOracleSettle(settler, reportId), 'Already settled')
+		await assertCustomError(() => openOracleSettle(settler, reportId), 'AlreadySettled')
 		assert.deepStrictEqual(
 			{
 				oracleToken1: await getTokenBalance(token1, openOracle),
@@ -370,7 +371,7 @@ describe('OpenOracle dispute economics', () => {
 		for (const token of [token1, token2]) {
 			await writeContractAndWait(creator, () =>
 				creator.writeContract({
-					abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+					abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 					address: openOracle,
 					functionName: 'getProtocolFees',
 					args: [token],
@@ -408,24 +409,24 @@ describe('OpenOracle dispute economics', () => {
 			reporterToken2: await getTokenBalance(token2, initialReporter.account.address),
 			status: await getOpenOracleReportStatus(creator, reportId),
 		})
-		const assertRevertUnchanged = async (execute: () => Promise<unknown>, expectedMessage: string) => {
+		const assertRevertUnchanged = async (execute: () => Promise<unknown>, expectedErrorName: string) => {
 			const before = await readAccountingSnapshot()
-			await assertOracleRevert(execute, expectedMessage)
+			await assertCustomError(execute, expectedErrorName)
 			assert.deepStrictEqual(await readAccountingSnapshot(), before)
 		}
 
 		await mockWindow.setTime(initialStatus.reportTimestamp + DISPUTE_DELAY - 2n)
-		await assertRevertUnchanged(() => dispute(firstDisputer, reportId, token1, 1_200n, 800n, 1_000n, stateHash), 'Dispute too early')
-		await assertRevertUnchanged(() => dispute(firstDisputer, reportId, token1, 1_200n, 800n, 1_000n, invalidStateHash), 'Invalid state hash')
-		await assertRevertUnchanged(() => dispute(firstDisputer, reportId, token1, 1_200n, 800n, 999n, stateHash), 'Unexpected amount2')
-		await assertRevertUnchanged(() => dispute(firstDisputer, reportId, settler.account.address, 1_200n, 800n, 1_000n, stateHash), 'Invalid swap token')
-		await assertRevertUnchanged(() => dispute(firstDisputer, reportId, token1, 1_200n, 1_200n, 1_000n, stateHash), 'Price inside fee boundary')
-		await assertRevertUnchanged(() => dispute(firstDisputer, reportId, token1, 1_199n, 800n, 1_000n, stateHash), 'Invalid amount1')
-		await assertRevertUnchanged(() => dispute(firstDisputer, reportId, token1, 1_200n, 0n, 1_000n, stateHash), 'Amounts zero')
-		await assertRevertUnchanged(() => dispute(firstDisputer, reportId, token1, 1_200n, 800n, 1_000n, stateHash, zeroAddress), 'Invalid disputer')
+		await assertRevertUnchanged(() => dispute(firstDisputer, reportId, token1, 1_200n, 800n, 1_000n, stateHash), 'DisputeTooEarly')
+		await assertRevertUnchanged(() => dispute(firstDisputer, reportId, token1, 1_200n, 800n, 1_000n, invalidStateHash), 'InvalidStateHash')
+		await assertRevertUnchanged(() => dispute(firstDisputer, reportId, token1, 1_200n, 800n, 999n, stateHash), 'InvalidAmount2Expected')
+		await assertRevertUnchanged(() => dispute(firstDisputer, reportId, settler.account.address, 1_200n, 800n, 1_000n, stateHash), 'InvalidTokenToSwap')
+		await assertRevertUnchanged(() => dispute(firstDisputer, reportId, token1, 1_200n, 1_200n, 1_000n, stateHash), 'NewPriceInsideFeeBoundary')
+		await assertRevertUnchanged(() => dispute(firstDisputer, reportId, token1, 1_199n, 800n, 1_000n, stateHash), 'InvalidAmount1')
+		await assertRevertUnchanged(() => dispute(firstDisputer, reportId, token1, 1_200n, 0n, 1_000n, stateHash), 'AmountsCannotBeZero')
+		await assertRevertUnchanged(() => dispute(firstDisputer, reportId, token1, 1_200n, 800n, 1_000n, stateHash, zeroAddress), 'AddressCannotBeZero')
 
 		await mockWindow.setTime(initialStatus.reportTimestamp + SETTLEMENT_TIME)
-		await assertRevertUnchanged(() => dispute(firstDisputer, reportId, token1, 1_200n, 800n, 1_000n, stateHash), 'Dispute too late')
+		await assertRevertUnchanged(() => dispute(firstDisputer, reportId, token1, 1_200n, 800n, 1_000n, stateHash), 'DisputeTooLate')
 	})
 
 	test('legacy no-return ERC20s fund, dispute in both directions, settle, and withdraw fees conservatively', async () => {
@@ -489,7 +490,7 @@ describe('OpenOracle dispute economics', () => {
 		for (const token of [token1, token2]) {
 			await writeContractAndWait(creator, () =>
 				creator.writeContract({
-					abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+					abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 					address: openOracle,
 					functionName: 'getProtocolFees',
 					args: [token],
@@ -572,7 +573,7 @@ describe('OpenOracle dispute economics', () => {
 
 		await writeContractAndWait(firstDisputer, () =>
 			firstDisputer.writeContract({
-				abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 				address: openOracle,
 				functionName: 'getProtocolFees',
 				args: [token1],
@@ -589,7 +590,7 @@ describe('OpenOracle dispute economics', () => {
 		)
 		await writeContractAndWait(firstDisputer, () =>
 			firstDisputer.writeContract({
-				abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 				address: openOracle,
 				functionName: 'getProtocolFees',
 				args: [token1],
@@ -687,7 +688,7 @@ describe('OpenOracle dispute economics', () => {
 		const status = await getOpenOracleReportStatus(creator, reportId)
 		const stateHash = (await getOpenOracleExtraData(creator, reportId)).stateHash
 		await mockWindow.setTime(status.reportTimestamp + DISPUTE_DELAY - 1n)
-		await assertOracleRevert(() => dispute(firstDisputer, reportId, token1, 1_002n, 800n, 1_000n, stateHash), 'Escalation halted')
+		await assertCustomError(() => dispute(firstDisputer, reportId, token1, 1_002n, 800n, 1_000n, stateHash), 'EscalationHalted')
 		await dispute(firstDisputer, reportId, token1, 1_001n, 800n, 1_000n, stateHash)
 		const disputedStatus = await getOpenOracleReportStatus(creator, reportId)
 		assert.strictEqual(disputedStatus.currentAmount1, 1_001n)
@@ -706,7 +707,7 @@ describe('OpenOracle dispute economics', () => {
 		await dispute(firstDisputer, reportId, token1, 1_200n, 800n, 1_000n, stateHash)
 		const disputedStatus = await getOpenOracleReportStatus(creator, reportId)
 		assert.strictEqual(disputedStatus.reportTimestamp, status.reportTimestamp + SETTLEMENT_TIME)
-		await assertOracleRevert(() => openOracleSettle(settler, reportId), 'Settle too early')
+		await assertCustomError(() => openOracleSettle(settler, reportId), 'SettleTooEarly')
 		assert.strictEqual((await getOpenOracleReportMeta(creator, reportId)).settlementTime, SETTLEMENT_TIME)
 	})
 })

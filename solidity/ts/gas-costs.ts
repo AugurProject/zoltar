@@ -1,6 +1,6 @@
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import type { Hash } from '@zoltar/shared/ethereum'
-import { peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle, Zoltar_Zoltar } from './types/contractArtifact'
+import { peripherals_openOracle_OpenOracle_OpenOracle, Zoltar_Zoltar } from './types/contractArtifact'
 import { createAnvilNodeForConnectionMode, getGasCostsAnvilConnectionMode } from './testSupport/simulator/anvilNode'
 import { submitBid, refundLosingBids } from './testSupport/simulator/utils/contracts/auction'
 import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from './testSupport/simulator/utils/contracts/deployPeripherals'
@@ -242,7 +242,7 @@ const prepareDirectOpenOracleInitialReport = async () => {
 	const openOracleAddress = getInfraContractAddresses().openOracle
 	const reportId: bigint = await alice.readContract({
 		address: openOracleAddress,
-		abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'nextReportId',
 		args: [],
 	})
@@ -251,7 +251,7 @@ const prepareDirectOpenOracleInitialReport = async () => {
 		writeContractAndWait(alice, () =>
 			alice.writeContract({
 				address: openOracleAddress,
-				abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 				functionName: 'createReportInstance',
 				args: [addressString(GENESIS_REPUTATION_TOKEN), WETH_ADDRESS, reportBond, 0, 100, DAY, reportBond, 0, 0, 0],
 			}),

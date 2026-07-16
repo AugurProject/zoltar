@@ -16,7 +16,7 @@ import {
 	QuestionOutcome,
 	ISecurityPoolFactory
 } from './interfaces/ISecurityPool.sol';
-import { LoggedOpenOracle } from './openOracle/LoggedOpenOracle.sol';
+import { OpenOracle } from './openOracle/OpenOracle.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { EscalationGameFactory } from './factories/EscalationGameFactory.sol';
 import { EscalationGame } from './EscalationGame.sol';
@@ -45,7 +45,7 @@ contract SecurityPool is ISecurityPool {
 	IShareToken public immutable shareToken;
 	ReputationToken public immutable repToken;
 	OpenOraclePriceCoordinator public immutable priceOracleManagerAndOperatorQueuer;
-	LoggedOpenOracle public immutable openOracle;
+	OpenOracle public immutable openOracle;
 	EscalationGameFactory public immutable escalationGameFactory;
 	EscalationGame public escalationGame;
 	ZoltarQuestionData public immutable questionData;
@@ -150,7 +150,7 @@ contract SecurityPool is ISecurityPool {
 		EscalationGameFactory _escalationGameFactory,
 		OpenOraclePriceCoordinator _priceOracleManagerAndOperatorQueuer,
 		IShareToken _shareToken,
-		LoggedOpenOracle _openOracle,
+		OpenOracle _openOracle,
 		ISecurityPool _parent,
 		Zoltar _zoltar,
 		uint248 _universeId,

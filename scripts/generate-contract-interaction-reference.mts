@@ -556,7 +556,7 @@ const contractReferences: ContractReference[] = [
 			},
 			{
 				call: '`openOracleCallback(...)`',
-				caller: 'Configured `LoggedOpenOracle` only',
+				caller: 'Configured `OpenOracle` only',
 				effect: 'A valid settlement updates the price and auto-executes the bounded pending batch. A rejected settlement clears pending-report state but leaves staged operations queued for a later valid price path.',
 				declarations: [{ name: 'openOracleCallback' }],
 				preconditions: 'Callback report matches the pending report; high basefee or zero values reject the price after clearing pending report state.',

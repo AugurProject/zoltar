@@ -3,7 +3,7 @@ import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
 import { WETH_ADDRESS } from '../constants'
 import {
 	peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction,
-	peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle,
+	peripherals_openOracle_OpenOracle_OpenOracle,
 	peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
 	peripherals_tokens_ShareToken_ShareToken,
 	ZoltarQuestionData_ZoltarQuestionData,
@@ -182,6 +182,30 @@ export const getPendingReportId = async (client: ReadClient, priceOracleManagerA
 		args: [],
 	})
 
+export const getPriceRoundMaxNotional = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
+	await client.readContract({
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+		functionName: 'priceRoundMaxNotional',
+		address: priceOracleManagerAndOperatorQueuer,
+		args: [],
+	})
+
+export const getPriceRoundConsumedNotional = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
+	await client.readContract({
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+		functionName: 'priceRoundConsumedNotional',
+		address: priceOracleManagerAndOperatorQueuer,
+		args: [],
+	})
+
+export const getPriceRoundRemainingNotional = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
+	await client.readContract({
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+		functionName: 'getPriceRoundRemainingNotional',
+		address: priceOracleManagerAndOperatorQueuer,
+		args: [],
+	})
+
 export const getPendingReportMaxSettlementBaseFee = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
 	await client.readContract({
 		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
@@ -279,7 +303,7 @@ function isOpenOracleExtraData(value: unknown): value is readonly [Hex, Address,
 
 export const getOpenOracleExtraData = async (client: ReadClient, extraDataId: bigint): Promise<ExtraReportData> => {
 	const result: unknown = await client.readContract({
-		abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'extraData',
 		address: getInfraContractAddresses().openOracle,
 		args: [extraDataId],
@@ -301,7 +325,7 @@ export const getOpenOracleExtraData = async (client: ReadClient, extraDataId: bi
 
 export const getOpenOracleReportStatus = async (client: ReadClient, reportId: bigint): Promise<ReportStatus> => {
 	const result = await client.readContract({
-		abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'reportStatus',
 		address: getInfraContractAddresses().openOracle,
 		args: [reportId],
@@ -322,7 +346,7 @@ export const getOpenOracleReportStatus = async (client: ReadClient, reportId: bi
 export const openOracleSubmitInitialReport = async (client: WriteClient, reportId: bigint, amount1: bigint, amount2: bigint, stateHash: Hex) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
-			abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'submitInitialReport',
 			address: getInfraContractAddresses().openOracle,
 			args: [reportId, amount1, amount2, stateHash],
@@ -333,7 +357,7 @@ export const openOracleSubmitInitialReport = async (client: WriteClient, reportI
 export const openOracleSettle = async (client: WriteClient, reportId: bigint) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
-			abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'settle',
 			address: getInfraContractAddresses().openOracle,
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
@@ -344,7 +368,7 @@ export const openOracleSettle = async (client: WriteClient, reportId: bigint) =>
 export const openOracleSettleWithGasPrice = async (client: WriteClient, reportId: bigint, gasPrice: bigint) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
-			abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'settle',
 			address: getInfraContractAddresses().openOracle,
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
@@ -406,7 +430,7 @@ interface ReportMeta {
 
 export const getOpenOracleReportMeta = async (client: ReadClient, reportId: bigint): Promise<ReportMeta> => {
 	const reportMetaData = await client.readContract({
-		abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
+		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'reportMeta',
 		address: getInfraContractAddresses().openOracle,
 		args: [reportId],
