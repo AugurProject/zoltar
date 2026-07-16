@@ -209,7 +209,7 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Latest Oracle Action' })).toBeNull()
 	})
 
-	test('keeps standalone create silently disabled off mainnet', async () => {
+	test('keeps standalone create disabled off mainnet and explains recovery', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				OpenOracleSection,
@@ -238,7 +238,7 @@ describe('OpenOracleSection route create view', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonDisabled(document.body, 'Create Standalone Oracle Game')
-		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(false)
+		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
 	})
 
 	test('renders selected report actions without readiness cards or visible blocker copy', async () => {
@@ -268,7 +268,7 @@ describe('OpenOracleSection route create view', () => {
 		expectTransactionButtonDisabled(document.body, 'Dispute & Swap', 'This report is not ready to dispute.')
 	})
 
-	test('keeps selected-report approvals silently disabled off mainnet', async () => {
+	test('keeps selected-report approvals disabled off mainnet and explains recovery', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				OpenOracleSection,
@@ -300,7 +300,7 @@ describe('OpenOracleSection route create view', () => {
 		const approveButton = documentQueries.getAllByRole('button').find(button => button.textContent?.startsWith('Approve ') === true)
 		if (approveButton === undefined) throw new Error('Expected approval button')
 		expect(approveButton.hasAttribute('disabled')).toBe(true)
-		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(false)
+		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
 	})
 
 	test('disables create when the wallet lacks enough ETH for the attached value', async () => {

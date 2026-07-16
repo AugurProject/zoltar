@@ -138,6 +138,10 @@ body.doc-openoracle code {
 	font-size: 0.94em;
 	overflow-wrap: anywhere;
 }
+body.doc-openoracle td > code:only-child {
+	white-space: nowrap;
+	overflow-wrap: normal;
+}
 body.doc-openoracle ul {
 	margin: 0 0 1rem;
 	padding-left: 1.25rem;
@@ -147,6 +151,22 @@ body.doc-openoracle table {
 	margin-top: 0.75rem;
 	border-collapse: collapse;
 	font-size: 0.95rem;
+}
+body.doc-openoracle .table-scroll {
+	margin-top: 0.75rem;
+	overflow-x: auto;
+	overscroll-behavior-x: contain;
+	scrollbar-width: thin;
+}
+body.doc-openoracle .table-scroll:focus-visible,
+body.doc-openoracle .diagram:focus-visible,
+body.doc-openoracle .equation:focus-visible {
+	outline: 2px solid var(--blue);
+	outline-offset: 0.2rem;
+}
+body.doc-openoracle .table-scroll table {
+	min-width: 54rem;
+	margin-top: 0;
 }
 body.doc-openoracle th,
 body.doc-openoracle td {

@@ -45,7 +45,7 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 	const canDeployScalarChild = accountAddress !== undefined && isMainnet && hasForked && !selectedScalarChildExists
 	const deployReason = (() => {
 		if (accountAddress === undefined) return marketCopy.childDeploymentWalletRequiredReason
-		if (!isMainnet) return undefined
+		if (!isMainnet) return commonCopy.mainnetRequiredReason
 
 		return (() => {
 			if (!hasForked) return marketCopy.childUniversesNotForkedReason

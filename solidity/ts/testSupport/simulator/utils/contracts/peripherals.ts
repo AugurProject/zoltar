@@ -11,7 +11,7 @@ import {
 import { QuestionOutcome } from '../../types/types'
 import { getInfraContractAddresses } from './deployPeripherals'
 import { threeShareArrayToCash } from './securityPool'
-import { priceToClosestTick } from '../tickMath'
+import { priceToClosestTick, tickToPrice } from '../tickMath'
 import { HIGH_GAS_SIMULATOR_WRITE_GAS } from '../constants'
 import { requireAddress } from '../utilities'
 
@@ -440,7 +440,8 @@ export const participateAuction = async (client: WriteClient, auctionAddress: Ad
 	if (repToBuy === 0n) throw new Error('repToBuy cannot be zero')
 	// Compute price: ethToInvest / repToBuy in PRICE_PRECISION units
 	const price = (ethToInvest * 1_000_000_000_000_000_000n) / repToBuy
-	const tick = priceToClosestTick(price)
+	const closestTick = priceToClosestTick(price)
+	const tick = tickToPrice(closestTick) < price ? closestTick + 1n : closestTick
 	await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,

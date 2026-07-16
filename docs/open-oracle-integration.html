@@ -74,8 +74,9 @@
 					</p>
 				<p>
 					OpenOracle creates report instances for a token pair. Reporters submit
-					token amounts, later reporters can dispute by posting a larger report,
-					and a report can settle after its timing window. When a
+					token amounts, later reporters can dispute by posting the
+					contract-required replacement amounts, and a report can settle after
+					its timing window. When a
 					<span class="term" tabindex="0">callback</span>
 					contract is configured, settlement calls that contract with the
 					settled amounts.
@@ -400,7 +401,7 @@
 					Disputes can still replace those amounts, and settlement returns the
 					final accepted amounts through the callback.
 				</p>
-				<p>
+				<p id="rolling-dispute-exclusivity">
 					The coordinator refuses <code>requestPrice(proposedRepPerEthPrice, requestedInitialWeth)</code> while its
 					cached price is still fresh, so callers cannot open a redundant
 					pending report on top of a usable price. Once the cached price has
@@ -408,7 +409,11 @@
 					<code>pendingReportSponsor</code> can queue more staged operations
 					against that in-flight settlement. Those follow-up queues pay no
 					additional ETH join fee, and other callers must wait for settlement
-					before staging their own operations.
+					before staging their own operations. Every successful dispute replaces
+					the current report and restarts its settlement window, so repeated
+					disputes can extend this exclusivity. Liveness therefore assumes that
+					economically rational disputes eventually stop or that a future
+					protocol guard bounds the extension.
 				</p>
 				<p>
 					The money flow is easiest to follow if each role is separated. The
@@ -704,7 +709,9 @@
 						minimum is calculated inside <code>requestPrice</code> from that
 						transaction's <code>block.basefee</code>. Integer division rounds up.
 						A zero-base-fee block uses one wei because OpenOracle rejects a zero
-						report minimum.
+						report minimum. That one-wei value is a nonzero sentinel, not a
+						monotonic escalation guarantee: OpenOracle's later multiplier
+						calculation floors to an integer.
 					</p>
 				</div>
 				<p>
@@ -1514,9 +1521,17 @@
 					of OpenOracle's inclusion analysis remains a useful template for
 					modeling censorship and delay, but it is not a proof that outside
 					operation exposure is bonded. In this integration the escalation
-					variable is WETH: disputes multiply the required token-one amount until
-					<code>escalationHalt</code>, after which each dispute adds one atomic
-					WETH unit. The selected initial amount is
+					variable is WETH. Before <code>escalationHalt</code>, OpenOracle
+					requires
+					<code
+						>min(floor(oldAmount1 × multiplier / 100),
+						escalationHalt)</code
+					>. With the configured multiplier of <code>115</code>, prior token-one
+					amounts from one through six wei therefore remain unchanged rather
+					than growing; seven wei is the first amount that increases. At or
+					above the halt, each dispute instead requires
+					<code>oldAmount1 + 1</code>, adding one atomic WETH unit. The selected
+					initial amount is
 					<code>max(minimumToken1Report(), requestedInitialWeth)</code>, and the
 					halt scales from that selected request-block snapshot.
 				</p>
@@ -1655,10 +1670,12 @@
 							<td><code>multiplier</code></td>
 							<td><code>115</code></td>
 							<td>
-								Requires each dispute report to increase the WETH
-								<code>token1</code> amount to <code>1.15x</code> the prior report
-								until <code>escalationHalt</code>; later disputes add one atomic
-								WETH unit.
+								Before <code>escalationHalt</code>, requires WETH
+								<code>token1</code> equal to
+								<code>floor(prior amount × 1.15)</code>, capped at the halt.
+								Integer flooring leaves prior amounts of one through six wei
+								unchanged. At or above the halt, each dispute requires one more
+								atomic WETH unit.
 							</td>
 						</tr>
 						<tr>

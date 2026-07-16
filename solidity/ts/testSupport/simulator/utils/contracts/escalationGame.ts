@@ -72,6 +72,28 @@ export const getStartBond = async (client: ReadClient, escalationGame: AccountAd
 		'Start bond',
 	)
 
+export const getTotalEscrowedRep = async (client: ReadClient, escalationGame: AccountAddress): Promise<bigint> =>
+	requireBigInt(
+		await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'totalEscrowedRep',
+			address: escalationGame,
+			args: [],
+		}),
+		'Total escrowed REP',
+	)
+
+export const getEscrowedRepByVault = async (client: ReadClient, escalationGame: AccountAddress, vault: AccountAddress): Promise<bigint> =>
+	requireBigInt(
+		await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'escrowedRepByVault',
+			address: escalationGame,
+			args: [vault],
+		}),
+		'Escrowed REP by vault',
+	)
+
 export const getEscalationGameDeposits = async (client: ReadClient, escalationGame: AccountAddress, outcome: QuestionOutcome) => {
 	let currentIndex = 0n
 	const pages: EscalationDeposit[] = []

@@ -257,7 +257,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'Trader',
 				effect: 'Adds collateral and mints one `Invalid`, `Yes`, and `No` share per complete-set unit.',
 				declarations: [{ name: 'createCompleteSet' }],
-				preconditions: 'Operational, unforked, unresolved, not awaiting continuation; positive ETH; bond capacity covers the new collateral.',
+				preconditions: 'Operational, unforked, unresolved, not awaiting continuation; positive ETH converts to at least one complete-set unit; bond capacity covers the new collateral.',
 				signals: '`CreateCompleteSet`',
 			},
 			{
@@ -359,9 +359,9 @@ const contractReferences: ContractReference[] = [
 			{
 				call: 'Direct ETH transfer to `receive()`',
 				caller: "Forker, this pool's truth auction, or parent pool only",
-				effect: 'Accepts ETH used by migration and auction settlement.',
+				effect: 'Accepts protocol-routed ETH used by migration and auction settlement. Forced ETH remains raw, unaccounted surplus rather than collateral or fees.',
 				declarations: [{ kind: 'receive', name: 'receive' }],
-				preconditions: 'Sender is one of the three authorized protocol addresses.',
+				preconditions: 'Sender is one of the three authorized protocol addresses. Forced ETH bypasses this ordinary-call guard.',
 				signals: 'No dedicated receive event; the calling protocol step emits its own event',
 			},
 		],
@@ -439,7 +439,7 @@ const contractReferences: ContractReference[] = [
 			{
 				call: '`finalizeTruthAuction(securityPool)`',
 				caller: 'Anyone',
-				effect: 'Finalizes the ended auction, transfers repair ETH, and fixes bidder ownership and allowance rates.',
+				effect: 'Finalizes the ended auction, transfers repair ETH, and fixes bidder ownership and allowance rates. The child becomes operational only if migration-routed collateral plus auction ETH meets the full parent collateral snapshot.',
 				declarations: [{ name: 'finalizeTruthAuction' }],
 				preconditions: 'Truth auction started and its one-week window has passed.',
 				signals: '`FinalizeAuction`, `TruthAuctionFinalized`, and auction `Finalized`',
@@ -548,7 +548,7 @@ const contractReferences: ContractReference[] = [
 			{
 				call: '`executeStagedOperation(operationId)`',
 				caller: 'Anyone',
-				effect: 'Consumes and attempts one active staged operation using the current fresh price.',
+				effect: "Consumes and attempts one active staged operation using the current fresh price. Price-report funding is independent of the operation's notional; the downstream operation applies its own protocol bounds.",
 				declarations: [{ name: 'executeStagedOperation' }],
 				preconditions: 'Operation exists and coordinator price is fresh; lifecycle failures are emitted rather than retried.',
 				signals: '`ExecutedStagedOperation`',

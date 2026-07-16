@@ -124,16 +124,22 @@ export function SecurityPoolWorkflowSection({
 	liquidationAmount,
 	liquidationMaxAmount,
 	liquidationManagerAddress,
+	liquidationFundingPreview,
+	liquidationFundingPreviewError,
 	liquidationModalOpen,
 	liquidationSecurityPoolAddress,
 	liquidationTargetVault,
 	liquidationTimeoutMinutes,
 	loadingPoolOracleManager,
+	loadingLiquidationFundingPreview,
 	loadingSecurityPools,
 	onLiquidationAmountChange,
 	onLiquidationTimeoutMinutesChange,
 	onLoadPoolOracleManager,
+	onLoadLiquidationFundingPreview,
 	onOpenLiquidationModal,
+	onReturnToCurrentUniverse,
+	onSwitchToPoolUniverse,
 	onQueueLiquidation,
 	onExecutePendingPoolOperation,
 	onRefreshSelectedPoolData,
@@ -720,6 +726,14 @@ export function SecurityPoolWorkflowSection({
 					<p className='detail'>
 						<span>{securityPoolCopy.poolUniverseLead}</span> <UniverseLink format='hex' universeId={selectedPool.universeId} /> <span>{securityPoolCopy.activeUniverseSeparator}</span> <span>{formatUniverseIdHex(activeUniverseId)}</span>. <span>{securityPoolCopy.missingPoolDetail}</span>
 					</p>
+					<div className='actions'>
+						<button className='primary' type='button' onClick={() => onSwitchToPoolUniverse?.(selectedPool.universeId, selectedPool.securityPoolAddress)}>
+							{securityPoolCopy.switchToPoolUniverse}
+						</button>
+						<button className='secondary' type='button' onClick={onReturnToCurrentUniverse}>
+							{securityPoolCopy.returnToCurrentUniverse}
+						</button>
+					</div>
 				</SectionBlock>
 			)}
 
@@ -818,7 +832,7 @@ export function SecurityPoolWorkflowSection({
 																	className='secondary'
 																	onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)}
 																	disabled={accountState.address === undefined || !isMainnet || currentPoolOracleManagerDetails?.isPriceValid === false || !liquidationEnabled}
-																	title={securityPoolCopy.reviewLiquidation}
+																	title={!isMainnet && accountState.address !== undefined ? commonCopy.mainnetRequiredReason : securityPoolCopy.reviewLiquidation}
 																>
 																	{securityPoolCopy.reviewLiquidation}
 																</button>
@@ -977,7 +991,7 @@ export function SecurityPoolWorkflowSection({
 													tone='secondary'
 													availability={{
 														disabled: !selectedPoolStateModel.actions.executeStagedOperation.enabled || !canUseOracleActions || executePendingOperationGuardMessage !== undefined,
-														reason: selectedPoolStateModel.actions.executeStagedOperation.enabled && canUseOracleActions ? executePendingOperationGuardMessage : undefined,
+														reason: selectedPoolStateModel.actions.executeStagedOperation.enabled ? executePendingOperationGuardMessage : undefined,
 													}}
 												/>
 											)}
@@ -1022,7 +1036,7 @@ export function SecurityPoolWorkflowSection({
 												tone='secondary'
 												availability={{
 													disabled: !selectedPoolStateModel.actions.requestPrice.enabled || !canUseOracleActions || requestPriceGuardMessage !== undefined,
-													reason: selectedPoolStateModel.actions.requestPrice.enabled && canUseOracleActions ? requestPriceGuardMessage : undefined,
+													reason: selectedPoolStateModel.actions.requestPrice.enabled ? requestPriceGuardMessage : undefined,
 												}}
 											/>
 										</div>
@@ -1041,12 +1055,16 @@ export function SecurityPoolWorkflowSection({
 				liquidationAmount={liquidationAmount}
 				liquidationMaxAmount={liquidationMaxAmount}
 				liquidationManagerAddress={liquidationManagerAddress}
+				liquidationFundingPreview={liquidationFundingPreview}
+				liquidationFundingPreviewError={liquidationFundingPreviewError}
 				liquidationModalOpen={liquidationModalOpen}
 				liquidationSecurityPoolAddress={liquidationSecurityPoolAddress}
 				liquidationTimeoutMinutes={liquidationTimeoutMinutes}
 				loadingPoolOracleManager={loadingPoolOracleManager}
+				loadingLiquidationFundingPreview={loadingLiquidationFundingPreview}
 				liquidationTargetVault={liquidationTargetVault}
 				onLoadPoolOracleManager={onLoadPoolOracleManager}
+				onLoadLiquidationFundingPreview={onLoadLiquidationFundingPreview}
 				onSelectedPoolViewChange={onSelectedPoolViewChange}
 				poolState={selectedPoolStateModel}
 				repPerEthPrice={repPerEthPrice}

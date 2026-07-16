@@ -9,7 +9,7 @@ describe('securityPoolNavigation', () => {
 	let restoreDomEnvironment: (() => void) | undefined
 
 	beforeEach(() => {
-		const domEnvironment = installDomEnvironment('http://localhost/#/security-pools?selectedPoolView=vaults&universe=11')
+		const domEnvironment = installDomEnvironment('http://localhost/#/security-pools?selectedPoolView=vaults&universe=11&simulate=1&simScenario=securitypoolx2')
 		restoreDomEnvironment = domEnvironment.cleanup
 	})
 
@@ -30,6 +30,8 @@ describe('securityPoolNavigation', () => {
 		expect(hrefSearchParams.get('securityPoolsView')).toBe('operate')
 		expect(hrefSearchParams.get('selectedPoolView')).toBe('fork-workflow')
 		expect(hrefSearchParams.get('universe')).toBe('12')
+		expect(hrefSearchParams.get('simulate')).toBe('1')
+		expect(hrefSearchParams.get('simScenario')).toBe('securitypoolx2')
 	})
 
 	test('preserves the current selected pool view when the caller does not provide one', () => {

@@ -6,7 +6,7 @@ import { OpenOracle } from './openOracle/OpenOracle.sol';
 import { ReputationToken } from '../ReputationToken.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
-import { Math } from '@openzeppelin/contracts/utils/math/Math.sol';
+import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
 // price oracle
 uint256 constant PRICE_VALID_FOR_SECONDS = 5 minutes;

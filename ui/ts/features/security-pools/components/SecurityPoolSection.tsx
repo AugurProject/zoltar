@@ -73,7 +73,7 @@ export function SecurityPoolSection({
 				variant='record'
 				actions={
 					<div className='actions'>
-						<button className='primary' onClick={() => onOpenCreatedPool?.(securityPoolResult.securityPoolAddress)}>
+						<button className='primary' onClick={() => onOpenCreatedPool?.(securityPoolResult.securityPoolAddress, securityPoolResult.universeId)}>
 							{securityPoolCopy.openPool}
 						</button>
 						{onReturnToBrowse === undefined ? undefined : (

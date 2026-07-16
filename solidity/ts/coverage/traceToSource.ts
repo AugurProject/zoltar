@@ -507,15 +507,20 @@ const parseCallTargetAddress = (step: Record<string, unknown>): string | undefin
 	return parseStackAddress(stack[stack.length - 2])
 }
 
-const resolveTraceSteps = (rawSteps: readonly unknown[]): ResolvedTraceStep[] => {
+const resolveTraceSteps = (rawSteps: readonly unknown[], rootCodeAddress?: string): ResolvedTraceStep[] => {
 	const codeAddressByDepth = new Map<number, string>()
 	const pendingCodeAddressByDepth = new Map<number, string>()
 	const resolvedSteps: ResolvedTraceStep[] = []
+	let rootDepth: number | undefined
 
 	for (const rawStep of rawSteps) {
 		if (!isRecord(rawStep)) continue
 
 		const depth = parseDepthValue(rawStep['depth']) ?? 0
+		if (rootDepth === undefined) {
+			rootDepth = depth
+			if (rootCodeAddress !== undefined) codeAddressByDepth.set(depth, normalizeAddress(rootCodeAddress))
+		}
 		for (const mappedDepth of [...codeAddressByDepth.keys()]) {
 			if (mappedDepth > depth) codeAddressByDepth.delete(mappedDepth)
 		}
@@ -544,6 +549,12 @@ const resolveTraceSteps = (rawSteps: readonly unknown[]): ResolvedTraceStep[] =>
 
 	return resolvedSteps
 }
+
+export const resolveTraceStepAddressesForTest = (rawSteps: readonly unknown[], rootCodeAddress?: string) =>
+	resolveTraceSteps(rawSteps, rootCodeAddress).map(step => ({
+		codeAddress: step.codeAddress,
+		stepAddress: step.stepAddress,
+	}))
 
 const collectProfilesForAddresses = async (addresses: readonly string[], request: RpcRequest, profileByBytecode: CoverageProfileMap, addressProfileCache: Map<string, CachedAddressProfiles>, callContext?: CallCoverageContext): Promise<Map<string, CoverageProfile[]>> => {
 	const result: Map<string, CoverageProfile[]> = new Map()
@@ -685,6 +696,7 @@ const initializeCoverageLines = async (profileMaps: CoverageProfileMaps, rootPat
 
 let profileMapsPromise: Promise<CoverageProfileMaps> | undefined
 const lineCoverage: Map<string, Map<number, number>> = new Map()
+const profileSegmentHitsForTest = new Map<CoverageProfile, Map<string, { segment: ParsedSourceMapSegment; hitCount: number }>>()
 const addressProfileCache: Map<string, CachedAddressProfiles> = new Map()
 let coverageLinesInitialized = false
 let coverageRevision = 0
@@ -734,6 +746,29 @@ export const flushSolidityBytecodeCoverageForTest = async (): Promise<void> => {
 		}
 		await writeCoverage()
 	}
+}
+
+export const getSolidityBytecodeCoverageProfileHitCountForTest = async (sourceSuffix: string, lineNumber: number): Promise<number> => {
+	const config = getSolidityBytecodeCoverageConfig()
+	let hitCount = 0
+	for (const [profile, segmentHits] of profileSegmentHitsForTest) {
+		for (const { segment, hitCount: segmentHitCount } of segmentHits.values()) {
+			const sourcePath = profile.sourceFileNames[segment.sourceIndex]
+			if (sourcePath === undefined || !sourcePath.endsWith(sourceSuffix)) continue
+			const candidates = [path.join(config.rootPath, sourcePath), path.join(config.rootPath, 'solidity', sourcePath)]
+			for (const candidate of candidates) {
+				try {
+					const source = await fs.readFile(candidate, 'utf8')
+					const { startLine, endLine } = lineRangeFromSourceOffset(source.length, computeLineStartOffsets(source), segment.sourceOffset, segment.sourceLength)
+					if (lineNumber >= startLine && lineNumber <= endLine) hitCount += segmentHitCount
+					break
+				} catch (error) {
+					if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error
+				}
+			}
+		}
+	}
+	return hitCount
 }
 
 function isIgnorableTraceRequestError(error: unknown) {
@@ -808,7 +843,8 @@ const collectBytecodeCoverageForTrace = async (options: { readonly request: RpcR
 	const receiptToAddresses = toAddressList(options.receipt?.to)
 	const receiptContractAddresses = toAddressList(options.receipt?.contractAddress)
 	for (const contractAddress of receiptContractAddresses) invalidateSolidityBytecodeCoverageAddressCache(contractAddress)
-	const resolvedSteps = resolveTraceSteps(options.structLogs)
+	const rootCodeAddress = txToAddresses[0] ?? receiptToAddresses[0] ?? receiptContractAddresses[0]
+	const resolvedSteps = resolveTraceSteps(options.structLogs, rootCodeAddress)
 	const addresses = new Set([...txToAddresses, ...receiptToAddresses, ...receiptContractAddresses])
 	for (const step of resolvedSteps) {
 		if (step.stepAddress !== undefined) addresses.add(step.stepAddress)
@@ -824,9 +860,6 @@ const collectBytecodeCoverageForTrace = async (options: { readonly request: RpcR
 	for (const contractAddress of receiptContractAddresses) {
 		if (creationProfiles !== undefined && creationProfiles.length > 0) profilesByAddress.set(contractAddress, creationProfiles)
 	}
-	const fallbackProfiles = new Set<CoverageProfile>()
-	for (const profileSet of profilesByAddress.values()) for (const profile of profileSet) fallbackProfiles.add(profile)
-	const fallbackProfileList = fallbackProfiles.size > 0 ? [...fallbackProfiles] : undefined
 	const segmentHitCountsByProfile = new Map<CoverageProfile, Map<string, { segment: ParsedSourceMapSegment; hitCount: number }>>()
 
 	for (const { rawStep, stepAddress, codeAddress } of resolvedSteps) {
@@ -835,7 +868,7 @@ const collectBytecodeCoverageForTrace = async (options: { readonly request: RpcR
 
 		const codeAddressProfileSet = codeAddress === undefined ? undefined : profilesByAddress.get(codeAddress)
 		const stepAddressProfileSet = stepAddress === undefined ? undefined : profilesByAddress.get(stepAddress)
-		const activeProfiles = codeAddressProfileSet ?? stepAddressProfileSet ?? fallbackProfileList
+		const activeProfiles = codeAddressProfileSet ?? stepAddressProfileSet
 		if (activeProfiles === undefined) continue
 
 		for (const profile of activeProfiles) {
@@ -847,6 +880,14 @@ const collectBytecodeCoverageForTrace = async (options: { readonly request: RpcR
 			segmentHits.set(key, { segment, hitCount: (existing?.hitCount ?? 0) + 1 })
 			if (existing === undefined) segmentHitCountsByProfile.set(profile, segmentHits)
 		}
+	}
+	for (const [profile, segmentHitCounts] of segmentHitCountsByProfile) {
+		const accumulatedHits = profileSegmentHitsForTest.get(profile) ?? new Map<string, { segment: ParsedSourceMapSegment; hitCount: number }>()
+		for (const [key, { segment, hitCount }] of segmentHitCounts) {
+			const existing = accumulatedHits.get(key)
+			accumulatedHits.set(key, { segment, hitCount: (existing?.hitCount ?? 0) + hitCount })
+		}
+		profileSegmentHitsForTest.set(profile, accumulatedHits)
 	}
 
 	for (const [profile, segmentHitCounts] of segmentHitCountsByProfile.entries()) {

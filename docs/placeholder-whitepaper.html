@@ -925,6 +925,13 @@
 							capacity before minting shares, then updates pool accounting
 							before the share-token mint call.
 						</li>
+						<li>
+							A positive ETH deposit must convert through
+							<code>cashToShares</code> to at least one complete-set unit. If
+							the current exchange rate would round the mint to zero shares,
+							<code>createCompleteSet</code> reverts with
+							<code>Exchange rate undefined</code> instead of accepting collateral.
+						</li>
 					</ul>
 					<h3>Fee Extraction and Retention Rate</h3>
 					<p>
@@ -2290,8 +2297,10 @@
 					<p>
 						At the implementation level, <code>redeemShares</code> burns the
 						holder’s full balance of the winning token id and pays
-						<code>sharesToCash(amount)</code> out of the pool’s current
-						collateral accounting. In the healthy case this corresponds to a
+						the burned amount’s pro-rata share of current collateral, using the
+						actual winning token supply immediately before the burn as the
+						denominator. It does not use the nominal complete-set
+						<code>shareTokenSupply</code>. In the healthy case this corresponds to a
 						clean <code>1:1</code> redemption outcome against the economic
 						meaning of a complete-set claim, subject to collateral accounting
 						remaining intact through migration and any required auction repair.
@@ -2299,8 +2308,8 @@
 					<div class="equation" id="eq-placeholder-share-redemption">
 						<math
 							display="block"
-							aria-label="cash payout equals floor of complete set amount times complete set collateral amount divided by share token supply"
-							data-source="cashPayout = floor(completeSetAmount \cdot completeSetCollateralAmount / shareTokenSupply)"
+							aria-label="cash payout equals floor of burned winning shares times complete set collateral amount divided by actual winning token supply before the burn"
+							data-source="cashPayout = floor(burnedWinningShares \cdot completeSetCollateralAmount / winningTokenSupplyBeforeBurn)"
 						>
 							<mrow>
 								<mi>cashPayout</mi>
@@ -2309,20 +2318,20 @@
 								<mo>(</mo>
 								<mfrac>
 									<mrow>
-										<mi>completeSetAmount</mi>
+										<mi>burnedWinningShares</mi>
 										<mo>&#x22C5;</mo>
 										<mi>completeSetCollateralAmount</mi>
 									</mrow>
-									<mi>shareTokenSupply</mi>
+									<mi>winningTokenSupplyBeforeBurn</mi>
 								</mfrac>
 								<mo>)</mo>
 							</mrow>
 						</math>
 						<p class="equation-caption">
 							<span class="equation-label">Share Redemption</span
-							><code>sharesToCash</code> pays a pro-rata share of the pool's
-							current collateral accounting, with Solidity integer division
-							flooring any remainder.
+							>The actual winning ERC-1155 supply, not nominal complete-set
+							supply, determines each pro-rata payout. Solidity integer division
+							floors any remainder.
 						</p>
 					</div>
 					<p>
@@ -3939,7 +3948,11 @@
 							<tr>
 								<td><code>ForkTruthAuction</code></td>
 								<td>Child pool repairs missing collateral by selling REP.</td>
-								<td>Auction finalizes and pool returns to operational mode.</td>
+								<td>
+									Auction finalizes; the child returns to operational mode only if
+									legitimate routed collateral reaches the full fork snapshot.
+									Otherwise it remains inactive in this state.
+								</td>
 							</tr>
 						</tbody>
 					</table>
@@ -3957,8 +3970,9 @@
 								SecurityPool fork state machine
 							</title>
 							<desc id="state-machine-desc">
-								Contract states and transition functions from operational parent
-								to operational child.
+								Contract states and conditional transition functions from an
+								operational parent to a fully repaired operational child; an
+								under-repaired child remains in the truth-auction state.
 							</desc>
 							<defs>
 								<marker
@@ -4062,7 +4076,7 @@
 								d="M 720 257 H 800"
 							></path>
 							<text class="svg-micro" x="760" y="240" text-anchor="middle">
-								finalize
+								full repair
 							</text>
 							<rect
 								class="svg-green"
@@ -4076,7 +4090,7 @@
 								Operational
 							</text>
 							<text class="svg-small" x="860" y="274" text-anchor="middle">
-								child
+								full repair
 							</text>
 							<path
 								class="svg-line"
@@ -4095,8 +4109,11 @@
 						</svg>
 						<p class="diagram-caption">
 							<span class="figure-label">Fork State Machine</span>The parent
-							stops mutating once forked; child pools do migration, optional
-							auction repair, and then return to operational mode.
+							stops mutating once forked; child pools do migration and optional
+							auction repair. Only a child whose legitimate routed collateral
+							reaches the full snapshot returns to operational mode. Forced ETH
+							does not satisfy that condition; an under-repaired child remains
+							inactive in <code>ForkTruthAuction</code>.
 						</p>
 					</figure>
 					<ul>
@@ -4180,8 +4197,8 @@
 								<tr>
 									<td>Resume child pool</td>
 									<td>Forker-controlled pool setters</td>
-									<td>Finalizes child accounting and returns to operational mode.</td>
-									<td>Users should interact with a consistent child state after migration and repair.</td>
+									<td>Returns a fully collateral-repaired child to operational mode.</td>
+									<td>An under-repaired child remains inactive in <code>ForkTruthAuction</code>.</td>
 								</tr>
 							</tbody>
 						</table>
@@ -4319,6 +4336,13 @@
 						so one parent pool has one predictable migration identity across
 						<code>lockRep</code>, <code>forkUniverse</code>,
 						<code>splitToChild</code>, and child REP sweeping.
+					</p>
+					<p>
+						The address is predictable, but prefunding it does not create pool
+						migration credit. Fork accounting measures REP newly routed through
+						the proxy and Zoltar’s migration ledger; any ERC-20 balance already
+						at the address remains isolated surplus and is not swept into a child
+						on the pool’s behalf.
 					</p>
 					<figure class="diagram" id="fig-placeholder-migration-proxy">
 						<svg
@@ -4616,8 +4640,8 @@
 						question-end-to-fork interval at the retained operational rate; then
 						<code>collateralAtFork</code> records the resulting fee-exclusive
 						collateral in the fork-neutral snapshot shared by both paths.
-						Truth-auction repair uses the same snapshot and the
-						child's cumulative migrated REP to set the missing collateral as its
+						Truth-auction repair subtracts the child's actual cumulative routed
+						collateral from that snapshot to set the missing collateral as its
 						ETH raise target; actual repair still depends on auction demand,
 						clearing, and tick-level integer rounding.
 						Before either migration
@@ -5841,73 +5865,38 @@
 					<div class="equation" id="eq-placeholder-truth-auction-shortfall">
 						<math
 							display="block"
-							aria-label="ETH collateral to buy equals zero when the repair denominator REP at fork amount is zero or migrated REP amount reaches that denominator, otherwise parent collateral amount minus the floored parent collateral amount times migrated REP amount divided by repair denominator REP at fork amount"
-							data-source="ethCollateralToBuy = 0 if repairDenominatorRepAtForkAmount = 0 or migratedRepAmount >= repairDenominatorRepAtForkAmount; otherwise parentCollateralAmount - floor(parentCollateralAmount \cdot migratedRepAmount / repairDenominatorRepAtForkAmount)"
+							aria-label="ETH collateral to buy equals the greater of zero and parent collateral at fork minus collateral actually received through migration"
+							data-source="ethCollateralToBuy = max(0, parentCollateralAtFork - forkCollateralReceived)"
 						>
 							<mrow>
 								<mi>ethCollateralToBuy</mi>
 								<mo>=</mo>
-								<mo>{</mo>
-								<mtable>
-									<mtr>
-										<mtd>
-											<mn>0</mn>
-										</mtd>
-										<mtd>
-											<mtext>if</mtext>
-											<mi>repairDenominatorRepAtForkAmount</mi>
-											<mo>=</mo>
-											<mn>0</mn>
-											<mtext>or</mtext>
-											<mi>migratedRepAmount</mi>
-											<mo>&#x2265;</mo>
-											<mi>repairDenominatorRepAtForkAmount</mi>
-										</mtd>
-									</mtr>
-									<mtr>
-										<mtd>
-											<mrow>
-												<mi>parentCollateralAmount</mi>
-												<mo>-</mo>
-												<mrow>
-													<mo>&#x230A;</mo>
-													<mfrac>
-														<mrow>
-															<mi>parentCollateralAmount</mi>
-															<mo>&#x22C5;</mo>
-															<mi>migratedRepAmount</mi>
-														</mrow>
-														<mi>repairDenominatorRepAtForkAmount</mi>
-													</mfrac>
-													<mo>&#x230B;</mo>
-												</mrow>
-											</mrow>
-										</mtd>
-										<mtd>
-											<mtext>otherwise</mtext>
-										</mtd>
-									</mtr>
-								</mtable>
+								<mi>max</mi>
+								<mo>(</mo>
+								<mn>0</mn>
+								<mo>,</mo>
+								<mi>parentCollateralAtFork</mi>
+								<mo>-</mo>
+								<mi>forkCollateralReceived</mi>
+								<mo>)</mo>
 							</mrow>
 						</math>
 						<p class="equation-caption">
 							<span class="equation-label">Auction Shortfall</span>The truth
-							auction targets the parent collateral not already covered by
-							migrated REP. The denominator is the contract’s repair
-							denominator: own-fork repair uses <code>vaultRepAtFork</code>,
-							while external-fork repair uses <code>auctionableRepAtFork</code>.
+							auction targets the exact parent snapshot not already received by
+							the child. <code>forkCollateralReceived</code> sums actual routed
+							transfers after cumulative-ceiling calculation and the parent’s
+							available-collateral cap; nominal migrated REP is not substituted.
 						</p>
 					</div>
 					<details class="interactive-example" id="collateral-repair-example">
 						<summary>Adjust child collateral repair</summary>
 						<p>
 							In this example, the parent obligations still require 50 ETH of
-							collateral, the repair denominator is 200 REP, and 190 REP
-							migrate into the child branch. That branch therefore receives
-							190/200 of the parent collateral, or 47.5 ETH, leaving a 2.5 ETH
-							shortfall before any repair auction raises more ETH. Each child
-							branch is sized against its own migrated collateral and its own
-							remaining shortfall.
+							collateral and the child actually received 47.5 ETH through routed,
+							capped migration transfers. That leaves an exact 2.5 ETH shortfall
+							before any repair auction raises more ETH. Each child branch is
+							sized against its own received collateral and remaining shortfall.
 						</p>
 						<div class="example-grid">
 							<label>
@@ -5927,33 +5916,19 @@
 								>
 							</label>
 							<label>
-								Repair denominator REP at fork
-								<input
-									type="range"
-									min="10"
-									max="500"
-									step="1"
-									value="200"
-									data-example-input="repairDenominatorRepAtFork"
-								/>
-								<span
-									class="example-value"
-									data-example-value="repairDenominatorRepAtFork"
-									>200 REP</span
-								>
-							</label>
-							<label>
-								Migrated REP
+								Migration-routed collateral received
 								<input
 									type="range"
 									min="0"
-									max="500"
-									step="1"
-									value="190"
-									data-example-input="migratedRep"
+									max="200"
+									step="0.5"
+									value="47.5"
+									data-example-input="forkCollateralReceived"
 								/>
-								<span class="example-value" data-example-value="migratedRep"
-									>190 REP</span
+								<span
+									class="example-value"
+									data-example-value="forkCollateralReceived"
+									>47.5 ETH</span
 								>
 							</label>
 							<label>
@@ -6024,8 +5999,8 @@
 						</div>
 						<div class="example-output-grid">
 							<div>
-								<span>Migrated collateral</span
-								><output data-example-output="migratedCollateral"
+								<span>Routed collateral received</span
+								><output data-example-output="routedCollateral"
 									>47.50 ETH</output
 								>
 							</div>
@@ -6044,12 +6019,6 @@
 							<div>
 								<span>Repair status</span
 								><output data-example-output="repairStatus">full repair</output>
-							</div>
-							<div>
-								<span>Migration bounds</span
-								><output data-example-output="migrationBounds"
-									>within repair denominator REP</output
-								>
 							</div>
 						</div>
 					</details>
@@ -6089,16 +6058,19 @@
 						<div class="summary-card">
 							<span>Edge cases</span>
 							<b
-								>If demand is weak and finalization finds a non-empty winning
-								prefix, qualifying ticks still settle at one synthetic uniform
-								price and share the full REP cap. If no winning prefix exists,
-								every bid refunds instead.</b
+								>If demand is weak, bids at or above the cap-implied reserve buy
+								REP in proportion to retained ETH. Lower bids refund, and an
+								under-repaired child remains inactive.</b
 							>
 						</div>
 					</div>
 					<p>
 						The repair target is the contract’s direct statement of the
-						collateral gap after proportional REP migration. The auction start
+						collateral gap: <code>parentCollateralAtFork</code> minus
+						<code>forkCollateralReceived</code>, floored at zero. The received
+						counter records actual cumulative-ceiling transfers after the
+						parent’s available-collateral cap, so nominal migrated REP cannot
+						overstate child funding. The auction start
 						gate is tied to the parent pool’s fork timestamp plus the eight-week
 						migration window, not to any child-universe fork time. If migrated
 						REP has reached the pool-auctionable baseline, or if that baseline
@@ -6283,15 +6255,25 @@
 								collateral gap remains
 							</text>
 							<text class="svg-small" x="803" y="272" text-anchor="middle">
-								child still continues
+								child remains inactive
 							</text>
 						</svg>
 						<p class="diagram-caption">
 							<span class="figure-label">Truth Auction Balance Sheet</span>The
 							auction repairs a child pool by trading part of that child
-							universe’s scarce REP for the ETH needed to restore collateral.
+							universe’s scarce REP for the ETH needed to restore collateral. The
+							child becomes operational only after migrated collateral plus auction
+							proceeds meet the full parent collateral snapshot.
 						</p>
 					</figure>
+					<p>
+						The forker tracks collateral received through migration and the auction
+						separately from the child contract's raw ETH balance. ETH forced into the
+						child does not count toward the repair target. If an underfunded auction
+						ends below that target, finalization records its result but leaves the
+						child in <code>ForkTruthAuction</code> rather than making an insolvent
+						branch operational.
+					</p>
 					<h3>Auction Mechanics</h3>
 					<div class="equation" id="eq-placeholder-auction-tick-price">
 						<math
@@ -6507,29 +6489,24 @@
 						clearing design</a> shows how descending demand produces either a normal
 						binding-cap result or the distinct underfunded result described below. The
 						<a href="./auction-design.html#settlement">settlement rules</a> explain how
-						paged withdrawals carry division dust without changing the finalized
+						paged withdrawals allocate division dust from fixed cumulative positions
+						without changing the finalized
 						aggregate REP allocation.
 					</p>
 					<p>
-						For the underfunded threshold row below,
-						<code>underfundedWinningEth</code> is the finalized winning ETH kept
-						after the winning prefix is fixed and ticks below
-						<code>clearingTick</code> are excluded for refund. If
-						<code>underfundedWinningEth &gt; 0</code>, the contract computes the
-						synthetic threshold from that winning ETH and allocates the full REP
-						cap across ticks <code>&gt;= clearingTick</code>. If no winning
-						prefix exists, <code>underfundedThreshold</code> is stored as
-						<code>type(uint256).max</code>, <code>totalRepPurchased</code>
-						remains zero, and every bid refunds. The contract still records
-						aggregate submitted <code>ethRaised</code>, but the underfunded
-						threshold and uniform winner allocation both use
-						<code>underfundedWinningEth</code> when it is non-zero.
+						For underfunded clearing, the contract derives
+						<code>underfundedThreshold</code> from <code>ethRaiseCap</code> and
+						<code>maxRepBeingSold</code>, then uses the first supported tick at
+						or above that reserve as <code>clearingTick</code>.
+						<code>underfundedWinningEth</code> records ETH at or above that tick;
+						lower bids refund. <code>totalRepPurchased</code> is retained ETH
+						divided by the ceiling-tick price, rather than the full REP cap.
 					</p>
 					<div class="equation" id="eq-placeholder-auction-fill-math">
 						<math
 							display="block"
-							aria-label="funded REP share is the difference between cumulative REP after and before the bid, underfunded threshold is piecewise on positive winning ETH, and underfunded REP share is the difference between cumulative pro rata REP after and before the bid"
-							data-source="fundedRepShare = floor((ethBefore + ethUsed) \cdot pricePrecision / clearingPrice) - floor(ethBefore \cdot pricePrecision / clearingPrice); underfundedThreshold = if underfundedWinningEth > 0 then ceil(underfundedWinningEth \cdot pricePrecision / maxRepBeingSold) else type(uint256).max; underfundedRepShare = if underfundedWinningEth > 0 then floor((ethBefore + bidEth) \cdot maxRepBeingSold / underfundedWinningEth) - floor(ethBefore \cdot maxRepBeingSold / underfundedWinningEth) else not applicable"
+							aria-label="funded REP share is the difference between cumulative REP after and before the bid, underfunded threshold comes from both caps, and underfunded REP share is the difference between cumulative proportional allocations"
+							data-source="fundedRepShare = floor((ethBefore + ethUsed) \cdot pricePrecision / clearingPrice) - floor(ethBefore \cdot pricePrecision / clearingPrice); underfundedThreshold = ceil(ethRaiseCap \cdot pricePrecision / maxRepBeingSold); totalRepPurchased = floor(underfundedWinningEth \cdot pricePrecision / clearingPrice); underfundedRepShare = floor((ethBefore + bidEth) \cdot totalRepPurchased / underfundedWinningEth) - floor(ethBefore \cdot totalRepPurchased / underfundedWinningEth)"
 						>
 							<mtable>
 								<mtr>
@@ -6540,43 +6517,52 @@
 								<mtr>
 									<mtd><mi>underfundedThreshold</mi></mtd>
 									<mtd><mo>=</mo></mtd>
-									<mtd><mrow><mo>{</mo><mtable><mtr><mtd><mi>ceil</mi><mo>(</mo><mfrac><mrow><mi>underfundedWinningEth</mi><mo>&#x22C5;</mo><mi>pricePrecision</mi></mrow><mi>maxRepBeingSold</mi></mfrac><mo>)</mo></mtd><mtd><mtext>if underfundedWinningEth &gt; 0</mtext></mtd></mtr><mtr><mtd><mtext>type(uint256).max</mtext></mtd><mtd><mtext>otherwise</mtext></mtd></mtr></mtable></mrow></mtd>
+									<mtd><mi>ceil</mi><mo>(</mo><mfrac><mrow><mi>ethRaiseCap</mi><mo>&#x22C5;</mo><mi>pricePrecision</mi></mrow><mi>maxRepBeingSold</mi></mfrac><mo>)</mo></mtd>
 								</mtr>
 								<mtr>
 									<mtd><mi>underfundedRepShare</mi></mtd>
 									<mtd><mo>=</mo></mtd>
-									<mtd><mrow><mo>{</mo><mtable><mtr><mtd><mi>floor</mi><mo>(</mo><mfrac><mrow><mo>(</mo><mi>ethBefore</mi><mo>+</mo><mi>bidEth</mi><mo>)</mo><mo>&#x22C5;</mo><mi>maxRepBeingSold</mi></mrow><mi>underfundedWinningEth</mi></mfrac><mo>)</mo><mo>-</mo><mi>floor</mi><mo>(</mo><mfrac><mrow><mi>ethBefore</mi><mo>&#x22C5;</mo><mi>maxRepBeingSold</mi></mrow><mi>underfundedWinningEth</mi></mfrac><mo>)</mo></mtd><mtd><mtext>if underfundedWinningEth &gt; 0</mtext></mtd></mtr><mtr><mtd><mtext>not applicable</mtext></mtd><mtd><mtext>otherwise</mtext></mtd></mtr></mtable></mrow></mtd>
+									<mtd><mi>floor</mi><mo>(</mo><mfrac><mrow><mo>(</mo><mi>ethBefore</mi><mo>+</mo><mi>bidEth</mi><mo>)</mo><mo>&#x22C5;</mo><mi>totalRepPurchased</mi></mrow><mi>underfundedWinningEth</mi></mfrac><mo>)</mo><mo>-</mo><mi>floor</mi><mo>(</mo><mfrac><mrow><mi>ethBefore</mi><mo>&#x22C5;</mo><mi>totalRepPurchased</mi></mrow><mi>underfundedWinningEth</mi></mfrac><mo>)</mo></mtd>
 								</mtr>
 							</mtable>
 						</math>
 						<p class="equation-caption">
 							<span class="equation-label">Auction Fill Math</span>Uniform
 							clearing converts filled ETH at the uniform clearing price;
-							underfunded clearing sets a threshold price from winning ETH and
-							distributes the full REP cap across those winners pro rata by ETH.
+							underfunded clearing sets a reserve from both caps and distributes
+							only the REP purchased by retained ETH.
 							The stored <code>clearingTick</code> marks the lowest winning
 							tick, and bids at ticks <code>&gt;= clearingTick</code> share the
-							synthetic uniform underfunded price. If
-							<code>underfundedWinningEth == 0</code>, the threshold row takes
-							<code>type(uint256).max</code>, the share row is not applicable,
-							and every bid refunds. <code>ethBefore</code> is fixed by descending
+							ceiling-tick reserve price. If
+							<code>underfundedWinningEth == 0</code>, no REP is allocated,
+							and every bid refunds. The stored threshold remains the cap-implied
+							reserve even when no ETH qualifies. <code>ethBefore</code> is fixed by descending
 							price and submission order, so withdrawals cannot redirect rounding
 							units between bidders.
 						</p>
 					</div>
 					<details class="interactive-example" id="underfunded-auction-example">
-						<summary>Adjust an underfunded synthetic uniform example</summary>
+						<summary>Adjust an underfunded reserve-price example</summary>
 						<p>
 							The widget assumes the bid is already inside the finalized
-							winning prefix. It is a human-unit real-number approximation: the
-							winning ETH, REP sale cap, and bidder ETH determine the synthetic
-							execution price and approximate pro-rata shares. The contract's exact
+							reserve winner set. It is a human-unit real-number approximation: the
+							ETH raise cap and REP sale cap determine the reserve, while qualifying
+							ETH determines proportional REP purchased. The contract's exact
 							wei allocation also depends on <code>ethBefore</code> and cumulative
 							integer floors. The tick price input is only a consistency check: if
-							the synthetic price is above the tick limit, these inputs cannot
-							describe a winning-prefix bid.
+							the cap-implied reserve is above the tick limit, that bid is refunded.
 						</p>
 						<div class="example-grid">
+							<label>
+								ETH raise cap
+								<input
+									type="number"
+									min="0.0001"
+									step="1"
+									value="20"
+									data-example-input="underfundedEthRaiseCap"
+								/>
+							</label>
 							<label>
 								Max REP being sold
 								<input
@@ -6626,24 +6612,24 @@
 								>
 							</li>
 							<li>
-								Prefix note:
+								Reserve note:
 								<output data-example-output="tickStatus"
-									>inputs are consistent with a winning-prefix bid</output
+									>tick meets the cap-implied reserve</output
 								>
 							</li>
 							<li>
 								Underfunded threshold:
 								<output data-example-output="underfundedThreshold"
-									>0.1000 ETH/REP</output
+									>0.2000 ETH/REP</output
 								>
 							</li>
 							<li>
 								Approximate bidder REP fill (human units):
-								<output data-example-output="underfundedRepShare">40.0000 REP</output>
+								<output data-example-output="underfundedRepShare">20.0000 REP</output>
 							</li>
 							<li>
 								Approximate REP assigned to other winners (human units):
-								<output data-example-output="repAssignedElsewhere">60.0000 REP</output>
+								<output data-example-output="repAssignedElsewhere">30.0000 REP</output>
 							</li>
 						</ul>
 					</details>
@@ -6651,8 +6637,9 @@
 						In normal clearing, bids above the clearing tick win in full, bids
 						below it lose, and bids at the clearing tick are filled in
 						submission order. In the underfunded path, ticks at or above the
-						finalized <code>clearingTick</code> boundary share the full REP sale
-						cap pro rata by winning ETH contribution.
+						finalized <code>clearingTick</code> boundary share only the REP bought
+						by retained ETH at the reserve tick, pro rata by winning ETH
+						contribution.
 					</p>
 					<p>
 						Both finalized paths assign division dust from deterministic
@@ -6773,44 +6760,19 @@
 						</li>
 						<li>
 							In an underfunded auction, the contract computes
-							<math
-								aria-label="underfunded threshold equals the ceiling underfunded winning ETH times price precision divided by max REP being sold when the winning prefix is non-empty, otherwise type uint256 max"
-								data-source="underfundedThreshold = if underfundedWinningEth > 0 then ceil(underfundedWinningEth \cdot PRICE_PRECISION / maxRepBeingSold) else type(uint256).max"
-								><mi>underfundedThreshold</mi><mo>=</mo
-								><mrow
-									><mo>{</mo><mtable
-										><mtr
-											><mtd
-												><mi>ceil</mi><mo>(</mo><mfrac
-													><mrow
-														><mi>underfundedWinningEth</mi><mo>&#x22C5;</mo
-														><mi>PRICE_PRECISION</mi></mrow
-													><mi>maxRepBeingSold</mi></mfrac
-												><mo>)</mo></mtd
-											><mtd><mtext>if underfundedWinningEth &gt; 0</mtext></mtd></mtr
-										><mtr><mtd><mtext>type(uint256).max</mtext></mtd><mtd><mtext>otherwise</mtext></mtd></mtr></mtable
-									></mrow></math
-							>, where <code>underfundedWinningEth</code> is the finalized ETH
-							kept after the winning prefix is fixed and losing bids are
-							refunded.
+							<code>underfundedThreshold = ceil(ethRaiseCap · PRICE_PRECISION /
+							maxRepBeingSold)</code> and selects the first supported tick at or
+							above that reserve.
 						</li>
 						<li>
-							When <code>underfundedWinningEth &gt; 0</code>, the stored
-							<code>clearingTick</code> marks the lowest winning tick.
-							Underfunded winners are bids at ticks
-							<code>&gt;= clearingTick</code>, and those winners share the full
-							REP cap pro rata by ETH at the synthetic
-							<code>underfundedThreshold</code> price. If no winning prefix
-							exists, the contract stores <code>type(uint256).max</code>,
-							<code>totalRepPurchased</code> stays zero, and every bid refunds.
+							Bids at ticks <code>&gt;= clearingTick</code> retain their ETH and
+							share the proportional <code>totalRepPurchased</code>; lower bids
+							refund. If no bid qualifies, no REP is sold.
 						</li>
 						<li>
-							Under weak demand, a lone qualifying bid can still be the only
-							valid winning prefix. In that case, the contract allocates the
-							full REP cap to that bidder pro rata by ETH at the synthetic
-							underfunded price, and the forker later maps that purchased REP
-							into the corresponding pool-ownership credit and auctioned
-							allowance share for the child branch.
+							A lone minimum bid below reserve receives a full refund. A lone bid
+							at or above reserve receives only the REP its ETH purchases, and the
+							forker maps that amount into pool ownership and auctioned allowance.
 						</li>
 						<li>
 							Both clearing paths derive each bid's rounding allocation from its
@@ -6828,12 +6790,10 @@
 						</li>
 					</ul>
 					<div class="callout">
-						Underfunded intuition: winning ticks still clear at one synthetic
-						price, and the winner set is the finalized tick prefix rather than
-						a standalone threshold-price cutoff. The adjustable example above
-						shows how weak demand can still sell the full REP cap once the
-						winner set is fixed, including the case where that winner set is
-						only a minimum qualifying bid.
+						Underfunded intuition: both caps imply a reserve price. Bids below its
+						ceiling tick refund, while retained ETH buys only the REP it funds at
+						that tick price. Weak demand therefore leaves inventory unsold instead
+						of transferring the full REP cap to a minimally funded bidder.
 					</div>
 					<p>
 						The <code>Binding condition</code> output reports one of four
@@ -6851,9 +6811,9 @@
 							overshoot the sale constraint. The contract input is an integer
 							tick. This example uses a three-level tick-derived ladder displayed near
 							<code>5</code>, <code>4</code>, and <code>3 ETH/REP</code> to keep
-							the arithmetic readable. If qualifying demand is below the ETH
-							raise cap, the underfunded winner set still shares the full REP
-							cap at one synthetic uniform price. The calculator shows
+							the arithmetic readable. If qualifying demand is below both caps,
+							only bids at or above the cap-implied reserve are retained and their
+							ETH buys a proportional REP amount. The calculator shows
 							human-unit allocations; exact withdrawals use integer REP-wei
 							division by differencing cumulative floor allocations before and
 							after each bid's fixed descending-tick/submission position.
@@ -6866,11 +6826,11 @@
 									min="1"
 									max="60"
 									step="1"
-									value="20"
+									value="12"
 									data-example-input="ethRaiseCap"
 								/>
 								<span class="example-value" data-example-value="ethRaiseCap"
-									>20 ETH</span
+									>12 ETH</span
 								>
 							</label>
 							<label>
@@ -7346,9 +7306,15 @@
 						their own operations. Sponsor exclusivity is intentional, and every
 						dispute resets the OpenOracle settlement clock. Timely rolling disputes
 						can therefore extend the exclusive lane without a coordinator-level
-						absolute deadline. Required WETH grows to the escalation halt, then by
-						one atomic WETH unit per dispute, while protocol fees and gas keep
-						total cost growing with duration.
+						absolute deadline. Before the escalation halt, required WETH is
+						<code
+							>min(floor(oldAmount1 × multiplier / 100),
+							escalationHalt)</code
+						>. With multiplier <code>115</code>, integer flooring leaves
+						one-through-six-wei amounts unchanged; seven wei is the first amount
+						that grows. At or above the halt, each dispute requires one more
+						atomic WETH unit, while protocol fees and gas keep total cost growing
+						with duration.
 					</p>
 					<div class="equation" id="eq-placeholder-oracle-request-cost">
 						<math
@@ -8242,9 +8208,11 @@
 								<td>OpenOracle <code>multiplier</code></td>
 								<td><code>115</code></td>
 								<td>
-									New report amount must be <code>1.15x</code> the prior amount
-									until the escalation halt. Deployment-configured OpenOracle
-									parameter.
+									Before the escalation halt, the new token-one amount is
+									<code>floor(prior amount × 1.15)</code>, capped at the halt.
+									Integer flooring leaves prior amounts of one through six wei
+									unchanged. At or above the halt, each dispute adds one atomic
+									token-one unit. Deployment-configured OpenOracle parameter.
 								</td>
 							</tr>
 							<tr>
@@ -8835,62 +8803,49 @@
 			});
 			bindExample("collateral-repair-example", (context) => {
 				const parentCollateral = context.read("parentCollateral");
-				const repairDenominatorRepAtFork = Math.max(
-					context.read("repairDenominatorRepAtFork"),
-					1,
-				);
-				const migratedRep = Math.min(
-					context.read("migratedRep"),
-					repairDenominatorRepAtFork,
+				const forkCollateralReceived = Math.min(
+					context.read("forkCollateralReceived"),
+					parentCollateral,
 				);
 				const auctionRaised = context.read("auctionRaised");
-				const migratedCollateral =
-					(parentCollateral * migratedRep) / repairDenominatorRepAtFork;
 				const initialShortfall = Math.max(
 					0,
-					parentCollateral - migratedCollateral,
+					parentCollateral - forkCollateralReceived,
 				);
 				const repairEth = Math.min(auctionRaised, initialShortfall);
 				const remainingShortfall = Math.max(0, initialShortfall - repairEth);
 				const scale = 600 / Math.max(parentCollateral, 1);
 				context.writeValue("parentCollateral", formatEth(parentCollateral));
 				context.writeValue(
-					"repairDenominatorRepAtFork",
-					formatRep(repairDenominatorRepAtFork),
+					"forkCollateralReceived",
+					formatEth(forkCollateralReceived),
 				);
-				context.writeValue("migratedRep", formatRep(migratedRep));
 				context.writeValue("auctionRaised", formatEth(auctionRaised));
 				context.setRectWidth(
 					"migratedCollateral",
-					Math.min(migratedCollateral * scale, 600),
+					Math.min(forkCollateralReceived * scale, 600),
 				);
 				context.setRectX(
 					"auctionRepair",
-					80 + Math.min(migratedCollateral * scale, 600),
+					80 + Math.min(forkCollateralReceived * scale, 600),
 				);
 				context.setRectWidth(
 					"auctionRepair",
 					Math.min(
 						repairEth * scale,
-						Math.max(0, 600 - migratedCollateral * scale),
+						Math.max(0, 600 - forkCollateralReceived * scale),
 					),
 				);
 				context.writeText(
 					"repairTarget",
 					`target ${formatEth(parentCollateral)}`,
 				);
-				context.write("migratedCollateral", formatEth(migratedCollateral));
+				context.write("routedCollateral", formatEth(forkCollateralReceived));
 				context.write("initialShortfall", formatEth(initialShortfall));
 				context.write("remainingShortfall", formatEth(remainingShortfall));
 				context.write(
 					"repairStatus",
 					remainingShortfall === 0 ? "full repair" : "partial repair",
-				);
-				context.write(
-					"migrationBounds",
-					context.read("migratedRep") > repairDenominatorRepAtFork
-						? "migration limited to repair denominator REP"
-						: "within repair denominator REP",
 				);
 			});
 			bindExample("auction-clearing-example", (context) => {
@@ -8909,9 +8864,15 @@
 					{ name: "bob", eth: bobEth, price: 4 },
 					{ name: "carol", eth: carolEth, price: 3 },
 				];
-				const activeBids = bids.filter((bid) => bid.eth > 0);
+				const underfundedThreshold = ethRaiseCap / repInventory;
+				const submittedBids = bids.filter((bid) => bid.eth > 0);
+				const activeBids = submittedBids.filter(
+					(bid) => bid.price >= underfundedThreshold,
+				);
 				let ethRaised = 0;
-				let refunds = 0;
+				let refunds = submittedBids
+					.filter((bid) => bid.price < underfundedThreshold)
+					.reduce((sum, bid) => sum + bid.eth, 0);
 				const repResults = { alice: 0, bob: 0, carol: 0 };
 				let accumulatedEth = 0;
 				let clearingPrice = 0;
@@ -8986,40 +8947,21 @@
 					context.write("underfundedThreshold", "not underfunded");
 				} else {
 					let winningEth = 0;
-					let winningBidCount = 0;
 					for (const bid of activeBids) {
-						const candidateWinningEth = winningEth + bid.eth;
-						const candidateThreshold =
-							repInventory === 0 ? Number.POSITIVE_INFINITY : candidateWinningEth / repInventory;
-						if (candidateThreshold <= bid.price) {
-							winningEth = candidateWinningEth;
-							winningBidCount += 1;
-							continue;
-						}
-						refunds += bid.eth;
-						for (const losingBid of activeBids.slice(activeBids.indexOf(bid) + 1)) {
-							refunds += losingBid.eth;
-						}
-						break;
-					}
-					const underfundedThreshold =
-						repInventory === 0 || winningEth === 0
-							? Number.POSITIVE_INFINITY
-							: winningEth / repInventory;
-					for (const winningBid of activeBids.slice(0, winningBidCount)) {
-						if (winningEth > 0) {
-							repResults[winningBid.name] = (winningBid.eth * repInventory) / winningEth;
-							ethRaised += winningBid.eth;
+						if (bid.price >= underfundedThreshold) {
+							winningEth += bid.eth;
+							repResults[bid.name] = bid.eth / underfundedThreshold;
+						} else {
+							refunds += bid.eth;
 						}
 					}
-					context.write("clearingMode", "underfunded synthetic uniform");
+					ethRaised = winningEth;
+					context.write("clearingMode", "underfunded reserve clearing");
 					context.write("bindingCondition", "underfunded");
 					context.write("thresholdInputEth", formatEth(winningEth));
 					context.write(
 						"underfundedThreshold",
-						winningEth === 0
-							? "no winning ETH"
-							: `${formatFixed(underfundedThreshold)} ETH/REP`,
+						`${formatFixed(underfundedThreshold)} ETH/REP`,
 					);
 				}
 				const repScale = 560 / Math.max(repInventory, 1);
@@ -9132,6 +9074,10 @@
 				const formatRep = (repValue) => `${repValue.toFixed(4)} REP`;
 				const formatPrice = (priceValue) => `${priceValue.toFixed(4)} ETH/REP`;
 				const updateUnderfundedAuctionExample = () => {
+					const underfundedEthRaiseCap = Math.max(
+						readExampleNumber("underfundedEthRaiseCap"),
+						0.0001,
+					);
 					const maxRepBeingSold = Math.max(
 						readExampleNumber("maxRepBeingSold"),
 						0.0001,
@@ -9147,33 +9093,30 @@
 					);
 					const inputWasClamped = bidEth !== Math.max(readExampleNumber("bidEth"), 0);
 					const underfundedThreshold =
-						underfundedWinningEth <= 0
-							? Number.POSITIVE_INFINITY
-							: underfundedWinningEth / maxRepBeingSold;
-					const winningPrefixConsistent =
-						underfundedWinningEth > 0 && tickPrice >= underfundedThreshold;
+						underfundedEthRaiseCap / maxRepBeingSold;
+					const winningPrefixConsistent = tickPrice >= underfundedThreshold;
+					const totalRepPurchased = winningPrefixConsistent
+						? underfundedWinningEth / underfundedThreshold
+						: 0;
 					const underfundedRepShare =
-						winningPrefixConsistent && underfundedWinningEth > 0
-							? (bidEth * maxRepBeingSold) / underfundedWinningEth
+						winningPrefixConsistent
+							? bidEth / underfundedThreshold
 							: 0;
 					const repAssignedElsewhere = Math.max(
-						maxRepBeingSold - underfundedRepShare,
+						totalRepPurchased - underfundedRepShare,
 						0,
 					);
 
 					exampleOutputs.inputNote.value = inputWasClamped
 						? "bid ETH was clamped to total winning ETH"
 						: "inputs are consistent";
-					if (underfundedWinningEth <= 0) {
-						exampleOutputs.tickStatus.value = "no winning prefix";
-						exampleOutputs.underfundedThreshold.value = "no winning ETH";
-					} else if (winningPrefixConsistent) {
+					if (winningPrefixConsistent) {
 						exampleOutputs.tickStatus.value =
-							"inputs are consistent with a winning-prefix bid";
+							"tick meets the cap-implied reserve";
 						exampleOutputs.underfundedThreshold.value = formatPrice(underfundedThreshold);
 					} else {
 						exampleOutputs.tickStatus.value =
-							"synthetic price exceeds this tick limit";
+							"tick is below the cap-implied reserve";
 						exampleOutputs.underfundedThreshold.value = formatPrice(underfundedThreshold);
 					}
 					exampleOutputs.underfundedRepShare.value =

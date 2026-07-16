@@ -76,7 +76,7 @@ export const getEscalationGameFactoryByteCode = () =>
 
 export const getPriceOracleManagerAndOperatorQueuerFactoryByteCode = () =>
 	concatHex([
-		`0x${peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object}`,
+		applyLibraries(peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object),
 		encodeAbiParameters(
 			[
 				{ type: 'address' },

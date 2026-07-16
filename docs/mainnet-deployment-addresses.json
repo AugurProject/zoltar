@@ -13,7 +13,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0x1FDd77104bCbC2363d1C6e9D9648676d0FB861c4"
+			"address": "0xA489c995D097fABF95722Df9627Cf3fF8e90139D"
 		},
 		{
 			"id": "multicall3",
@@ -23,7 +23,7 @@
 		{
 			"id": "uniformPriceDualCapBatchAuctionFactory",
 			"label": "UniformPriceDualCapBatchAuctionFactory",
-			"address": "0x6D4A5C7cd40eB885451E98DF4A30De10994037c7"
+			"address": "0x5e84E5F71ff399CDa8DF6E03ce354965C4d52e7a"
 		},
 		{
 			"id": "scalarOutcomes",
@@ -33,7 +33,7 @@
 		{
 			"id": "securityPoolUtils",
 			"label": "SecurityPoolUtils",
-			"address": "0x2825E1BcB747D24Be406eF6AC0DaC84cc85C2710"
+			"address": "0xfA24d690774E8Dc654E38372e7aD1d55D940aFd3"
 		},
 		{
 			"id": "openOracle",
@@ -53,34 +53,34 @@
 		{
 			"id": "shareTokenFactory",
 			"label": "ShareTokenFactory",
-			"address": "0x4F6725b4e7DcaA21725c7D0F9428C258E52A2a91"
+			"address": "0xf7618B9d9C188004179aB77B8B790dB21A64AFb7"
 		},
 		{
 			"id": "priceOracleManagerAndOperatorQueuerFactory",
 			"label": "OpenOracle Price Coordinator Factory",
-			"address": "0x425a48C393503b3ECCC9274Db78079f269e35aB4"
+			"address": "0xD5675D7cD86349CE967c7342D4b6c681496fd2A1"
 		},
 		{
 			"id": "securityPoolForker",
 			"label": "Security Pool Forker",
-			"address": "0x392A50025e940D3B32Bc360a5Ce3A01631A9C9A0"
+			"address": "0x162d3A29414B4B6623a9E3F0c7a95e2c0Cd715D5"
 		},
 		{
 			"id": "escalationGameFactory",
 			"label": "Escalation Game Factory",
-			"address": "0x2621681F5602e5787104111809508356B3e39067"
+			"address": "0x53fA4cdC203eeb50c6ecF75902Dd61F4C92eC935"
 		},
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0x79c8270C8f2c2797b82F6B98386b9B6c25576173"
+			"address": "0x2Ec77e5Bd4b5eE5565aF44ba169b5459C262a0f2"
 		}
 	],
 	"derivedContracts": [
 		{
 			"id": "escalationGameProofVerifier",
 			"label": "Escalation Game Proof Verifier",
-			"address": "0x58004B90695187FFfFd28611dCb757e365283770"
+			"address": "0x0bf7a369924dfbAF18e55bfBEDB549f13Ab055d9"
 		}
 	]
 }

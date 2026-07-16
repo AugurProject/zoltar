@@ -561,7 +561,10 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	) private view returns (uint256 ethToBuy) {
 		uint256 poolAuctionableRepAtFork = _getPoolAuctionableRepAtFork(parentData);
 		if (poolAuctionableRepAtFork == 0 || data.migratedRep >= poolAuctionableRepAtFork) return 0;
-		ethToBuy = parentCollateral - (parentCollateral * data.migratedRep) / poolAuctionableRepAtFork;
+		if (data.forkCollateralReceived >= parentCollateral) return 0;
+		// Migration rounds each branch's cumulative collateral target up. Auction only
+		// the exact unfilled snapshot remainder so final collateral cannot exceed it.
+		ethToBuy = parentCollateral - data.forkCollateralReceived;
 	}
 
 	function _getTruthAuctionCap(
@@ -585,9 +588,12 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		SecurityPoolForkerForkData storage data = _getForkData(securityPool);
 		SecurityPoolForkerForkData storage parentData = _getForkData(securityPool.parent());
 		ISecurityPool parent = securityPool.parent();
-		uint256 repPurchased = _consumeTruthAuctionRep(securityPool, data);
-		_captureUnclaimedCollateralForAuction(securityPool, parent, data);
+		(uint256 repPurchased, uint256 auctionEthReceived) = _consumeTruthAuctionRep(securityPool, data);
+		_captureUnclaimedCollateralForAuction(securityPool, parent, data, auctionEthReceived);
 		_finalizeOwnershipAfterAuction(securityPool, data, parentData, repPurchased);
+		if (data.forkCollateralReceived >= parentData.collateralAtFork) {
+			securityPool.setSystemState(SystemState.Operational);
+		}
 		_finalizeEscalationStateAfterAuction(securityPool, parentData);
 		_emitFinalizeAuctionEvent(securityPool, parentData, data, repPurchased);
 		emit TruthAuctionFinalized(securityPool);
@@ -597,32 +603,32 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	function _consumeTruthAuctionRep(
 		ISecurityPool securityPool,
 		SecurityPoolForkerForkData storage data
-	) private returns (uint256 repPurchased) {
+	) private returns (uint256 repPurchased, uint256 ethReceived) {
 		if (data.truthAuction.auctionStarted() != 0) {
 			uint256 balanceBeforeFinalize = address(this).balance;
 			data.truthAuction.finalize();
-			uint256 ethReceived = address(this).balance - balanceBeforeFinalize;
+			ethReceived = address(this).balance - balanceBeforeFinalize;
 			if (ethReceived > 0) {
 				(bool sent, ) = payable(address(securityPool)).call{ value: ethReceived }('');
 				require(sent, 'ETH');
 			}
 			repPurchased = data.truthAuction.totalRepPurchased();
 		}
-		securityPool.setSystemState(SystemState.Operational);
 	}
 
 	function _captureUnclaimedCollateralForAuction(
 		ISecurityPool securityPool,
 		ISecurityPool parent,
-		SecurityPoolForkerForkData storage data
+		SecurityPoolForkerForkData storage data,
+		uint256 auctionEthReceived
 	) private {
-		uint256 balance = address(securityPool).balance;
-		uint256 accruedFees = securityPool.totalAccruedFees();
-		uint256 collateralAmount = balance >= accruedFees ? balance - accruedFees : 0;
+		// Only protocol-routed fork collateral and auction proceeds back complete sets.
+		// ETH forced into the child bypasses receive() and remains an unaccounted surplus.
+		data.forkCollateralReceived += auctionEthReceived;
 		uint256 parentTotalSecurityBondAllowance = parent.totalSecurityBondAllowance();
 		data.auctionedSecurityBondAllowance = parentTotalSecurityBondAllowance - data.migratedSecurityBondAllowance;
 		securityPool.setPoolFinancials(
-			collateralAmount,
+			data.forkCollateralReceived,
 			parentTotalSecurityBondAllowance,
 			data.migratedSecurityBondAllowance
 		);

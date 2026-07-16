@@ -620,7 +620,7 @@ describe('ReportingSection', () => {
 		expectTransactionButtonEnabled(document.body, 'Settle All Yes Deposits')
 	})
 
-	test('keeps reporting disabled off mainnet without showing a switch-network message', async () => {
+	test('keeps reporting disabled off mainnet and shows the switch-network recovery', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -636,10 +636,10 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonDisabled(document.body, 'Report Yes')
-		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(false)
+		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
 	})
 
-	test('keeps escalation settlement disabled off mainnet without showing a switch-network message', async () => {
+	test('keeps escalation settlement disabled off mainnet and shows the switch-network recovery', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -663,7 +663,7 @@ describe('ReportingSection', () => {
 
 		expectTransactionButtonDisabled(document.body, 'Settle Selected Yes Deposits')
 		expectTransactionButtonDisabled(document.body, 'Settle All Yes Deposits')
-		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(false)
+		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
 	})
 
 	test('shows a locked-settlement reason before withdrawals unlock in active reporting', async () => {

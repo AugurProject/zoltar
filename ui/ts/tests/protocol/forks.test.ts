@@ -189,7 +189,7 @@ describe('forks protocol client', () => {
 	test('loadForkAuctionDetails hides the synthetic clearing price when a finalized underfunded auction has no winning prefix', async () => {
 		const questionId = 1n
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
-		const noWinningPrefixThreshold = 2n ** 256n - 1n
+		const noWinningPrefixThreshold = 2n * 10n ** 18n
 		const client = createMockLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(5n),
 			multicall: async request => {
@@ -200,7 +200,7 @@ describe('forks protocol client', () => {
 				if (getContractFunctionName(firstContract) === 'getForkTime') return [0n]
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
 				if (getContractFunctionName(firstContract) === 'computeClearing') {
-					return [[false, 0n, 1n * 10n ** 18n, 0n], 20n * 10n ** 18n, 13n * 10n ** 18n, true, 12n * 10n ** 18n, 1n * 10n ** 18n, 0n, true, noWinningPrefixThreshold, 0n, 0n]
+					return [[false, 0n, 0n, 0n], 20n * 10n ** 18n, 0n, true, 12n * 10n ** 18n, 1n * 10n ** 18n, 0n, true, noWinningPrefixThreshold, 0n, 0n]
 				}
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
 			},

@@ -46,7 +46,7 @@ contract SecurityPool is ISecurityPool {
 	ISecurityPoolFactory public immutable securityPoolFactory;
 
 	uint256 public totalSecurityBondAllowance;
-	uint256 public completeSetCollateralAmount; // amount of eth that is backing complete sets, `address(this).balance - completeSetCollateralAmount` are the fees belonging to REP pool holders
+	uint256 public completeSetCollateralAmount; // protocol-accounted ETH backing complete sets; raw balance can also contain fees or unsolicited surplus
 	uint256 public poolOwnershipDenominator;
 	uint256 public securityMultiplier;
 	uint256 public shareTokenSupply;
@@ -370,18 +370,9 @@ contract SecurityPool is ISecurityPool {
 		uint256 fees = securityVaults[vault].unpaidEthFees;
 		securityVaults[vault].unpaidEthFees = 0;
 		totalFeesOwedToVaults -= fees;
-		_reconcileCollateralBalanceAfterFeeRedemption(fees);
 		_syncActiveVault(vault);
 		_sendEth(payable(vault), fees);
 		emit RedeemFees(vault, fees, totalFeesOwedToVaults);
-	}
-
-	function _reconcileCollateralBalanceAfterFeeRedemption(uint256 pendingFeePayout) internal {
-		uint256 balanceAfterPayout = address(this).balance - pendingFeePayout;
-		uint256 accountedBalance = completeSetCollateralAmount + unallocatedFeeReserve + totalFeesOwedToVaults;
-		if (balanceAfterPayout > accountedBalance) {
-			completeSetCollateralAmount += balanceAfterPayout - accountedBalance;
-		}
 	}
 
 	function _clearFeeIndexRemainder() internal {
@@ -525,10 +516,11 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function cashToShares(uint256 eth) public view returns (uint256) {
-		if (completeSetCollateralAmount == 0) {
-			if (shareTokenSupply != 0) revert('Exchange rate undefined');
+		if (shareTokenSupply == 0) {
+			require(completeSetCollateralAmount == 0, 'Exchange rate undefined');
 			return eth * SecurityPoolUtils.PRICE_PRECISION;
 		}
+		require(completeSetCollateralAmount > 0, 'Exchange rate undefined');
 		return (eth * shareTokenSupply) / completeSetCollateralAmount;
 	}
 
@@ -584,24 +576,19 @@ contract SecurityPool is ISecurityPool {
 			'Target safe'
 		);
 
-		(uint256 debtToMove, uint256 repToMove) = SecurityPoolUtils.calculateLiquidationTransfer(
-			vaultsRepDeposit,
-			snapshotTargetAllowance,
-			debtAmount,
-			repEthPrice
-		);
+		(uint256 debtToMove, uint256 repToMove, uint256 ownershipToMove) = SecurityPoolUtils
+			.calculateLiquidationTransfer(
+				snapshotTargetOwnership,
+				snapshotTargetAllowance,
+				snapshotTotalRep,
+				snapshotDenominator,
+				debtAmount,
+				repEthPrice,
+				securityVaults[targetVaultAddress].poolOwnership,
+				getTotalRepBalance(),
+				poolOwnershipDenominator
+			);
 		require(debtToMove > 0, 'No liq');
-		uint256 ownershipToMove = repToPoolOwnership(repToMove);
-		if (debtToMove == snapshotTargetAllowance) {
-			uint256 currentTargetOwnership = securityVaults[targetVaultAddress].poolOwnership;
-			if (
-				ownershipToMove >= currentTargetOwnership ||
-				poolOwnershipToRep(currentTargetOwnership - ownershipToMove) < SecurityPoolUtils.MIN_REP_DEPOSIT
-			) {
-				repToMove = poolOwnershipToRep(currentTargetOwnership);
-				ownershipToMove = currentTargetOwnership;
-			}
-		}
 		require(
 			debtToMove * securityMultiplier * repEthPrice > repToMove * SecurityPoolUtils.PRICE_PRECISION,
 			'No gain'
@@ -693,6 +680,7 @@ contract SecurityPool is ISecurityPool {
 		require(msg.value > 0 && !isEscalationResolved(), 'Resolved');
 		updateCollateralAmount();
 		uint256 completeSetsToMint = cashToShares(msg.value);
+		require(completeSetsToMint > 0, 'Exchange rate undefined');
 		uint256 nextCompleteSetCollateralAmount = completeSetCollateralAmount + msg.value;
 		_requireCapacityNotExceeded(totalSecurityBondAllowance, nextCompleteSetCollateralAmount);
 		shareTokenSupply += completeSetsToMint;
@@ -817,7 +805,6 @@ contract SecurityPool is ISecurityPool {
 		_requireVaultBondCoverage(remainingRep, securityVaults[msg.sender].securityBondAllowance, repEthPrice);
 		_requirePoolBondCoverage(postTransferRepBalance, totalSecurityBondAllowance, repEthPrice);
 		_requireMinimumVaultRep(remainingRep, updatedPoolOwnership == 0, 'Vault REP below minimum');
-
 		securityVaults[msg.sender].poolOwnership = updatedPoolOwnership;
 		poolOwnershipDenominator = postTransferPoolOwnershipDenominator;
 		IERC20(address(repToken)).safeTransfer(address(escalationGame), depositedAmount);

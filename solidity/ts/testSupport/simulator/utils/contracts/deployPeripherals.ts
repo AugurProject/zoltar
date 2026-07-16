@@ -65,7 +65,7 @@ function getDeploymentStatusOracleByteCode() {
 
 function getPriceOracleManagerAndOperatorQueuerFactoryByteCode(): Hex {
 	return concatHex([
-		`0x${peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object}`,
+		applyLibraries(peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object),
 		encodeAbiParameters(
 			[
 				{ type: 'address' },
@@ -216,7 +216,7 @@ export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 	getInfraContracts: () => getInfraContractAddresses(),
 	getPriceOracleManagerAndOperatorQueuerInitCode: (openOracle, repToken) =>
 		concatHex([
-			`0x${peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.evm.bytecode.object}`,
+			applyLibraries(peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.evm.bytecode.object),
 			encodeAbiParameters(
 				[
 					{ type: 'address' },

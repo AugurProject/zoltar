@@ -1,5 +1,6 @@
-import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
+import { createBalancedTestShards, discoverTestFiles, toBunTestPath } from './test-discovery.mts'
 
 const coverageDirectory = join(process.cwd(), 'solidity', 'coverage')
 const summaryPath = join(coverageDirectory, 'coverage-summary.json')
@@ -124,101 +125,58 @@ const writeCoverageSummary = async (summary: SolidityCoverageSummary): Promise<v
 	await writeFile(lcovPath, emitLcov(summary))
 }
 
-const testShards = [
-	[
-		'solidity/ts/tests/erc1155.test.ts',
-		'solidity/ts/tests/escalationGameForkThreshold.test.ts',
-		'solidity/ts/tests/zoltar.test.ts',
-		'solidity/ts/tests/deploymentStatusOracle.test.ts',
-		'solidity/ts/tests/escalationGame.test.ts',
-		'solidity/ts/tests/safeErc20.test.ts',
-		'solidity/ts/tests/useIsolatedAnvilNode.test.ts',
-		'solidity/ts/tests/questionData.test.ts',
-		'solidity/ts/tests/securityPoolForkerStorageLayout.test.ts',
-		'solidity/ts/tests/securityRegression.test.ts',
-		'solidity/ts/tests/multicall3.test.ts',
-		'solidity/ts/tests/securityPoolUtils.test.ts',
-		'solidity/ts/tests/escalationGameInterfaceRegression.test.ts',
-		'solidity/ts/tests/peripheralsInvariant.test.ts',
-		'solidity/ts/tests/auction.test.ts',
-	],
-	[
-		'solidity/ts/tests/coverageHelpers.test.ts',
-		'solidity/ts/tests/priceOracleSecurity.test.ts',
-		'solidity/ts/tests/anvilWindowEthereum.test.ts',
-		'solidity/ts/tests/peripherals/truthAuction.test.ts',
-		'solidity/ts/tests/peripherals/forkMigration.test.ts',
-		'solidity/ts/tests/peripherals/receiveGuards.test.ts',
-		'solidity/ts/tests/peripherals/vaultAccounting.test.ts',
-		'solidity/ts/tests/peripherals/escalationMigration.test.ts',
-		'solidity/ts/tests/peripherals/deploymentAndOwnForkEscalation.test.ts',
-	],
-]
+const bytecodeCoverageWeights = new Map<string, number>([
+	['solidity/ts/tests/peripherals/forkMigration.test.ts', 30],
+	['solidity/ts/tests/peripherals/truthAuction.test.ts', 24],
+	['solidity/ts/tests/escalationGame.test.ts', 18],
+	['solidity/ts/tests/peripherals/escalationMigration.test.ts', 18],
+	['solidity/ts/tests/peripheralsInvariant.test.ts', 12],
+	['solidity/ts/tests/priceOracleSecurity.test.ts', 10],
+	['solidity/ts/tests/openOracleDispute.test.ts', 5],
+])
 
-const discoverSolidityTestFiles = async (directory: string): Promise<string[]> => {
-	const entries = await readdir(directory, { withFileTypes: true })
-	const discoveredFiles: string[] = []
-	for (const entry of entries) {
-		const absolutePath = join(directory, entry.name)
-		if (entry.isDirectory()) {
-			discoveredFiles.push(...(await discoverSolidityTestFiles(absolutePath)))
-			continue
-		}
-		if (!entry.isFile() || !entry.name.endsWith('.test.ts')) continue
-		discoveredFiles.push(relative(process.cwd(), absolutePath).split('\\').join('/'))
+export async function discoverSolidityBytecodeTestFiles(repositoryRoot = process.cwd()) {
+	const files = await discoverTestFiles(repositoryRoot, ['solidity/ts'])
+	return files.filter(file => file.startsWith('solidity/ts/tests/') || file.startsWith('solidity/ts/fuzz/'))
+}
+
+export async function createSolidityBytecodeTestShards(repositoryRoot = process.cwd(), shardCount = 2) {
+	const files = await discoverSolidityBytecodeTestFiles(repositoryRoot)
+	const weightedFiles = files.map(filePath => ({ filePath, weight: bytecodeCoverageWeights.get(filePath) ?? 1 })).sort((left, right) => right.weight - left.weight || left.filePath.localeCompare(right.filePath))
+	return createBalancedTestShards(weightedFiles, shardCount).map(shard => shard.files)
+}
+
+if (import.meta.main) {
+	const testShards = await createSolidityBytecodeTestShards()
+	const shardArgumentIndex = process.argv.findIndex(argument => argument === '--shard')
+	const shardNumberArgument = shardArgumentIndex === -1 ? undefined : process.argv[shardArgumentIndex + 1]
+	const shardNumber = shardNumberArgument === undefined ? undefined : Number.parseInt(shardNumberArgument, 10)
+	let selectedShards = testShards
+	if (shardNumber !== undefined) {
+		const selectedShard = testShards[shardNumber - 1]
+		if (selectedShard === undefined) throw new Error(`Unknown Solidity bytecode coverage shard: ${shardNumberArgument}`)
+		selectedShards = [selectedShard]
 	}
-	return discoveredFiles.sort((first, second) => first.localeCompare(second))
-}
 
-const validateShardCoverage = async (): Promise<void> => {
-	const discoveredFiles = await discoverSolidityTestFiles(join(process.cwd(), 'solidity', 'ts', 'tests'))
-	const listedFiles = testShards.flat()
-	const listedFileCounts = new Map<string, number>()
-	for (const listedFile of listedFiles) listedFileCounts.set(listedFile, (listedFileCounts.get(listedFile) ?? 0) + 1)
+	let mergedSummary = process.argv.includes('--no-clean') ? await readCoverageSummary() : undefined
 
-	const discoveredFileSet = new Set(discoveredFiles)
-	const missingFiles = discoveredFiles.filter(discoveredFile => !listedFileCounts.has(discoveredFile))
-	const staleFiles = listedFiles.filter(listedFile => !discoveredFileSet.has(listedFile))
-	const duplicateFiles = [...listedFileCounts.entries()].filter(([, count]) => count !== 1).map(([listedFile]) => listedFile)
-	if (missingFiles.length === 0 && staleFiles.length === 0 && duplicateFiles.length === 0) return
-
-	const lines = ['Solidity bytecode coverage shards must list every solidity/ts/tests/**/*.test.ts file exactly once.']
-	if (missingFiles.length > 0) lines.push(`Missing from shards:\n${missingFiles.map(file => `  - ${file}`).join('\n')}`)
-	if (staleFiles.length > 0) lines.push(`Listed but not found:\n${staleFiles.map(file => `  - ${file}`).join('\n')}`)
-	if (duplicateFiles.length > 0) lines.push(`Listed more than once:\n${duplicateFiles.map(file => `  - ${file}`).join('\n')}`)
-	throw new Error(lines.join('\n'))
-}
-
-await validateShardCoverage()
-
-const shardArgumentIndex = process.argv.findIndex(argument => argument === '--shard')
-const shardNumberArgument = shardArgumentIndex === -1 ? undefined : process.argv[shardArgumentIndex + 1]
-const shardNumber = shardNumberArgument === undefined ? undefined : Number.parseInt(shardNumberArgument, 10)
-let selectedShards = testShards
-if (shardNumber !== undefined) {
-	const selectedShard = testShards[shardNumber - 1]
-	if (selectedShard === undefined) throw new Error(`Unknown Solidity bytecode coverage shard: ${shardNumberArgument}`)
-	selectedShards = [selectedShard]
-}
-
-let mergedSummary = process.argv.includes('--no-clean') ? await readCoverageSummary() : undefined
-
-for (const testShard of selectedShards) {
-	const shardIndex = testShards.indexOf(testShard) + 1
-	console.log(`Running Solidity bytecode coverage shard ${shardIndex}/${testShards.length}`)
-	await rm(coverageDirectory, { recursive: true, force: true })
-	const shardProcess = Bun.spawn(['bun', 'test', '--timeout', '300000', ...testShard], {
-		env: {
-			...Bun.env,
-			SOLIDITY_BYTECODE_COVERAGE: '1',
-		},
-		stdout: 'inherit',
-		stderr: 'inherit',
-	})
-	const exitCode = await shardProcess.exited
-	if (exitCode !== 0) globalThis.process.exit(exitCode)
-	const shardSummary = await readCoverageSummary()
-	if (shardSummary === undefined) throw new Error(`Coverage shard ${shardIndex} did not write a summary`)
-	mergedSummary = mergeCoverageSummaries(mergedSummary, shardSummary)
-	await writeCoverageSummary(mergedSummary)
+	for (const testShard of selectedShards) {
+		const shardIndex = testShards.indexOf(testShard) + 1
+		console.log(`Running Solidity bytecode coverage shard ${shardIndex}/${testShards.length}`)
+		await rm(coverageDirectory, { recursive: true, force: true })
+		const shardProcess = Bun.spawn(['bun', 'test', '--timeout', '300000', ...testShard.map(toBunTestPath)], {
+			env: {
+				...Bun.env,
+				SOLIDITY_BYTECODE_COVERAGE: '1',
+			},
+			stdout: 'inherit',
+			stderr: 'inherit',
+		})
+		const exitCode = await shardProcess.exited
+		if (exitCode !== 0) globalThis.process.exit(exitCode)
+		const shardSummary = await readCoverageSummary()
+		if (shardSummary === undefined) throw new Error(`Coverage shard ${shardIndex} did not write a summary`)
+		mergedSummary = mergeCoverageSummaries(mergedSummary, shardSummary)
+		await writeCoverageSummary(mergedSummary)
+	}
 }

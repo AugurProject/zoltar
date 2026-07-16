@@ -4,7 +4,16 @@ import assert from '../testSupport/simulator/utils/assert'
 import { encodeDeployData, encodeFunctionData, type Address, type Hash, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
 import { privateKeyToAccount } from '@zoltar/shared/ethereum'
 import { knownSourceMapCoverageGaps } from '../coverage/sourceMapCoverageGaps'
-import { collectBytecodeCoverageForCall, collectBytecodeCoverageForTransaction, flushSolidityBytecodeCoverageForTest, getKnownSourceMapCoverageGapRuleMatchCountsForTest, getSolidityCoverableLineNumbersForTest, resetSolidityBytecodeCoverageAddressCache } from '../coverage/traceToSource'
+import {
+	collectBytecodeCoverageForCall,
+	collectBytecodeCoverageForTransaction,
+	flushSolidityBytecodeCoverageForTest,
+	getKnownSourceMapCoverageGapRuleMatchCountsForTest,
+	getSolidityBytecodeCoverageProfileHitCountForTest,
+	getSolidityCoverableLineNumbersForTest,
+	resetSolidityBytecodeCoverageAddressCache,
+	resolveTraceStepAddressesForTest,
+} from '../coverage/traceToSource'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
@@ -18,6 +27,8 @@ import {
 	peripherals_factories_SecurityPoolDeployer_SecurityPoolDeployer,
 	peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker,
 	ReputationToken_ReputationToken,
+	test_peripherals_CoverageHelpersHarness_CoverageAttributionDecoy,
+	test_peripherals_CoverageHelpersHarness_CoverageAttributionExecuted,
 	test_peripherals_CoverageHelpersHarness_CoverageHelpersHarness,
 	test_peripherals_CoverageHelpersHarness_ERC1155CoverageHarness,
 	test_peripherals_CoverageHelpersHarness_EscalationGameFactoryCoverageSecurityPool,
@@ -211,6 +222,22 @@ test('coverage classifier keeps similar lines coverable when source-map gap cont
 	assert.deepStrictEqual(getSolidityCoverableLineNumbersForTest('/tmp/solidity/contracts/peripherals/tokens/ERC1155.sol', erc1155Return), [3])
 })
 
+test('coverage trace resolution never attributes unresolved nested program counters to fallback contracts', () => {
+	const rootAddress = '0x0000000000000000000000000000000000000011'
+	const resolved = resolveTraceStepAddressesForTest(
+		[
+			{ depth: 1, op: 'PUSH1', pc: 0 },
+			{ depth: 2, op: 'PUSH1', pc: 0 },
+		],
+		rootAddress,
+	)
+
+	assert.deepStrictEqual(resolved, [
+		{ codeAddress: rootAddress, stepAddress: undefined },
+		{ codeAddress: undefined, stepAddress: undefined },
+	])
+})
+
 describe('Solidity bytecode coverage helpers', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
@@ -277,6 +304,97 @@ describe('Solidity bytecode coverage helpers', () => {
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
 		participantClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await setupTestAccounts(mockWindow)
+	})
+
+	test('production attribution ignores unresolved nested PCs shared by unexecuted contract profiles', async () => {
+		if (!isCoverageEnabled()) return
+
+		const executedAddress = await deployContract(
+			encodeDeployData({
+				abi: test_peripherals_CoverageHelpersHarness_CoverageAttributionExecuted.abi,
+				bytecode: `0x${test_peripherals_CoverageHelpersHarness_CoverageAttributionExecuted.evm.bytecode.object}`,
+			}),
+		)
+		const decoyAddress = await deployContract(
+			encodeDeployData({
+				abi: test_peripherals_CoverageHelpersHarness_CoverageAttributionDecoy.abi,
+				bytecode: `0x${test_peripherals_CoverageHelpersHarness_CoverageAttributionDecoy.evm.bytecode.object}`,
+			}),
+		)
+		const sourcePath = 'solidity/contracts/test/peripherals/CoverageHelpersHarness.sol'
+		const decoyLine = await findLineNumberByExactSource(sourcePath, 'uint256 decoyValue = 23;')
+		const fixtureSourceSuffix = 'contracts/test/peripherals/CoverageHelpersHarness.sol'
+		const decoyBeforeExecution = await getSolidityBytecodeCoverageProfileHitCountForTest(fixtureSourceSuffix, decoyLine)
+		const decoyData = encodeFunctionData({
+			abi: test_peripherals_CoverageHelpersHarness_CoverageAttributionDecoy.abi,
+			functionName: 'select',
+			args: [true],
+		})
+		const decoyHash = await client.sendTransaction({ to: decoyAddress, data: decoyData })
+		const decoyReceipt = await client.waitForTransactionReceipt({ hash: decoyHash })
+		assert.strictEqual(decoyReceipt.status, 'success', 'decoy attribution fixture call should succeed')
+		const rawDecoyTrace = await mockWindow.request({
+			method: 'debug_traceTransaction',
+			params: [decoyHash, { disableStack: false, disableMemory: true, disableStorage: true }],
+		})
+		if (!isRecord(rawDecoyTrace)) throw new Error('Decoy attribution fixture trace is missing')
+		const decoyStructLogs = rawDecoyTrace['structLogs']
+		if (!Array.isArray(decoyStructLogs)) throw new Error('Decoy attribution fixture trace is missing struct logs')
+		await collectBytecodeCoverageForTransaction({
+			request: mockWindow.request.bind(mockWindow),
+			transactionHash: decoyHash,
+			transaction: { to: decoyAddress, data: decoyData },
+			receipt: { to: decoyAddress },
+		})
+		assert.ok((await getSolidityBytecodeCoverageProfileHitCountForTest(fixtureSourceSuffix, decoyLine)) > decoyBeforeExecution, 'the decoy trace PCs should map to the guarded decoy source line')
+
+		const data = encodeFunctionData({
+			abi: test_peripherals_CoverageHelpersHarness_CoverageAttributionExecuted.abi,
+			functionName: 'select',
+			args: [true],
+		})
+		const hash = await client.sendTransaction({ to: executedAddress, data })
+		const receipt = await client.waitForTransactionReceipt({ hash })
+		assert.strictEqual(receipt.status, 'success', 'executed attribution fixture call should succeed')
+		const rawTrace = await mockWindow.request({
+			method: 'debug_traceTransaction',
+			params: [hash, { disableStack: false, disableMemory: true, disableStorage: true }],
+		})
+		if (!isRecord(rawTrace)) throw new Error('Attribution fixture trace is missing')
+		const structLogs = rawTrace['structLogs']
+		if (!Array.isArray(structLogs)) throw new Error('Attribution fixture trace is missing struct logs')
+		const unresolvedNestedSteps = decoyStructLogs.flatMap(step => {
+			if (!isRecord(step) || typeof step['pc'] !== 'number') return []
+			return [{ depth: 3, op: 'PUSH1', pc: step['pc'] }]
+		})
+		assert.ok(unresolvedNestedSteps.length > 0, 'decoy attribution fixture should produce unresolved PCs')
+
+		const executedLine = await findLineNumberByExactSource(sourcePath, 'uint256 executedValue = 11;')
+		const unreachableLine = await findLineNumberByExactSource(sourcePath, 'uint256 unreachableDecoyValue = 29;')
+		const executedBefore = await getSolidityBytecodeCoverageProfileHitCountForTest(fixtureSourceSuffix, executedLine)
+		const decoyBefore = await getSolidityBytecodeCoverageProfileHitCountForTest(fixtureSourceSuffix, decoyLine)
+		const unreachableBefore = await getSolidityBytecodeCoverageProfileHitCountForTest(fixtureSourceSuffix, unreachableLine)
+
+		resetSolidityBytecodeCoverageAddressCache()
+		const requestWithUnresolvedNestedSteps = async (args: { method: string; params?: unknown[] | undefined }): Promise<unknown> => {
+			if (args.method === 'debug_traceTransaction') {
+				return {
+					...rawTrace,
+					structLogs: [...structLogs, { address: decoyAddress, depth: 2, op: 'STOP' }, ...unresolvedNestedSteps],
+				}
+			}
+			return await mockWindow.request(args)
+		}
+		await collectBytecodeCoverageForTransaction({
+			request: requestWithUnresolvedNestedSteps,
+			transactionHash: hash,
+			transaction: { to: executedAddress, data },
+			receipt: { to: executedAddress },
+		})
+
+		assert.ok((await getSolidityBytecodeCoverageProfileHitCountForTest(fixtureSourceSuffix, executedLine)) > executedBefore, 'the actual root contract should receive production-path coverage')
+		assert.strictEqual(await getSolidityBytecodeCoverageProfileHitCountForTest(fixtureSourceSuffix, decoyLine), decoyBefore, 'unresolved nested PCs must not cover an unexecuted profile with overlapping program counters')
+		assert.strictEqual(await getSolidityBytecodeCoverageProfileHitCountForTest(fixtureSourceSuffix, unreachableLine), unreachableBefore, 'the deliberately unreachable decoy line must remain uncovered')
 	})
 
 	test('attributes raw transaction deployment coverage using transaction input fetched by hash', async () => {
@@ -879,7 +997,7 @@ describe('Solidity bytecode coverage helpers', () => {
 		const priceOracleFactoryAddress = await deployContract(
 			encodeDeployData({
 				abi: peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.abi,
-				bytecode: `0x${peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object}`,
+				bytecode: applyLibraries(peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object),
 				args: [zeroAddress, 100000n, 1000000, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, 480, 0, 100000, 10000, 115, true, true, client.account.address, 100000n, 30000n, 1000n],
 			}),
 		)
