@@ -79,6 +79,14 @@ jobs:
       - name: Refresh generated shared package installs
         run: bun run refresh:shared-dependencies
 
+      - name: Cache TypeScript incremental state
+        uses: actions/cache@v5
+        with:
+          path: .tsbuildinfo
+          key: ${{ runner.os }}-tsbuildinfo-${{ hashFiles('bun.lock', 'package.json', 'tsconfig.json', 'tsconfig.scripts.json', 'shared/package.json', 'shared/tsconfig.json', 'ui/package.json', 'ui/tsconfig.json', 'solidity/package.json', 'solidity/tsconfig.json', 'solidity/tsconfig.typecheck.json') }}-${{ hashFiles('shared/ts/**', 'ui/ts/**') }}
+          restore-keys: |
+            ${{ runner.os }}-tsbuildinfo-${{ hashFiles('bun.lock', 'package.json', 'tsconfig.json', 'tsconfig.scripts.json', 'shared/package.json', 'shared/tsconfig.json', 'ui/package.json', 'ui/tsconfig.json', 'solidity/package.json', 'solidity/tsconfig.json', 'solidity/tsconfig.typecheck.json') }}-
+
       - name: Format
         run: bun run format
 
@@ -97,11 +105,8 @@ jobs:
 
           git diff --check
 
-      - name: TypeScript type checking
-        run: bun run tsc:ci:current
-
-      - name: Production UI build and mainnet deployment validation
-        run: bun run ui:build:prod:current
+      - name: TypeScript checks and production UI build
+        run: bun run ci:preflight:current
 
       - name: Tests, checks, dead code analysis, and audits
         shell: bash
@@ -222,7 +227,7 @@ jobs:
             done
           fi
 
-          start_task "Biome and Solidity checks" "bun run check"
+          start_task "Biome and Solidity checks" "bun run check:ci:current"
           start_task "Dead code analysis" "bun run knip"
           start_task "Dependency audit" "bun audit && (cd ui && bun audit) && (cd solidity && bun audit)"
 
