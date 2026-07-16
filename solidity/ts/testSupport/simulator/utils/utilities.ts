@@ -1,4 +1,4 @@
-import { encodeAbiParameters, getAddress, keccak256 } from '@zoltar/shared/ethereum'
+import { encodeAbiParameters, getAddress, keccak256, toHex } from '@zoltar/shared/ethereum'
 import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/shared/constants'
 import { ReadClient, WriteClient, writeContractAndWait } from './clients'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS, TEST_ADDRESSES } from './constants'
@@ -20,6 +20,17 @@ function hexToBytes(value: string) {
 		result[i] = Number.parseInt(value.slice(i * 2 + 2, i * 2 + 4), 16)
 	}
 	return result
+}
+
+function shortStringStorageValue(value: string) {
+	const valueHex = toHex(value).slice(2)
+	const byteLength = valueHex.length / 2
+	if (byteLength > 31) throw new Error('Token metadata exceeds Solidity short-string storage')
+	return BigInt(`0x${valueHex.padEnd(62, '0')}${(byteLength * 2).toString(16).padStart(2, '0')}`)
+}
+
+function storageSlot(slot: bigint) {
+	return `0x${slot.toString(16).padStart(64, '0')}`
 }
 
 export function requireArray(value: unknown, context: string): unknown[] {
@@ -107,6 +118,10 @@ export const setupTestAccounts = async (anvilWindowEthereum: AnvilWindowEthereum
 	await anvilWindowEthereum.addStateOverrides({
 		[addressString(GENESIS_REPUTATION_TOKEN)]: {
 			code: bytes,
+			stateDiff: {
+				[storageSlot(3n)]: shortStringStorageValue('Reputation'),
+				[storageSlot(4n)]: shortStringStorageValue('REP'),
+			},
 		},
 	})
 
@@ -139,6 +154,11 @@ export const setupTestAccounts = async (anvilWindowEthereum: AnvilWindowEthereum
 	await anvilWindowEthereum.addStateOverrides({
 		[wethAddress]: {
 			code: wethBytes,
+			stateDiff: {
+				[storageSlot(0n)]: shortStringStorageValue('Wrapped Ether'),
+				[storageSlot(1n)]: shortStringStorageValue('WETH'),
+				[storageSlot(2n)]: 18n,
+			},
 		},
 	})
 }

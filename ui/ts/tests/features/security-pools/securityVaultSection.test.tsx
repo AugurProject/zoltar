@@ -391,9 +391,18 @@ describe('SecurityVaultSection', () => {
 
 		const depositDialog = documentQueries.getByRole('dialog', { name: 'Deposit REP' })
 		const depositDialogQueries = within(depositDialog)
+		const transactionContext = depositDialog.querySelector('.transaction-object-context')
+		if (!(transactionContext instanceof HTMLElement)) throw new Error('Expected deposit transaction context')
 		expect(depositDialogQueries.queryByRole('heading', { name: 'Vault Summary' })).toBeNull()
 		expect(depositDialogQueries.getByText('This vault does not exist. Deposit REP to create it.')).not.toBeNull()
 		expect(depositDialogQueries.getByText('REP Collateral Amount')).not.toBeNull()
+		expect(transactionContext.textContent?.includes('Universe 1')).toBe(true)
+		expect(transactionContext.textContent?.includes('Ethereum Mainnet')).toBe(true)
+		expect(
+			within(transactionContext)
+				.getAllByRole('button', { name: `Copy address ${zeroAddress}` })
+				.every(button => button.textContent === zeroAddress),
+		).toBe(true)
 	})
 
 	test('fills the security bond allowance input from the backed Max amount', async () => {

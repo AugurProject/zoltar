@@ -48,6 +48,11 @@ export type StickyContextItem = {
 	value: ComponentChildren
 }
 
+export type TransactionContextItem = {
+	label: ComponentChildren
+	value: ComponentChildren
+}
+
 export type LifecycleStagePresentation = {
 	availableActions: string[]
 	blockedActions: string[]
@@ -198,6 +203,7 @@ export type TransactionActionButtonProps = {
 
 export type OperationModalProps = {
 	children: ComponentChildren
+	context?: TransactionContextItem[]
 	description?: ComponentChildren
 	isOpen: boolean
 	onClose: () => void

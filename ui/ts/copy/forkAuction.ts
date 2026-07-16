@@ -51,6 +51,7 @@ export const yourStake = 'Your stake'
 export const formatMissingOutcomePoolDetail = (outcomeLabel: CopyTemplateValue) => `Security Pool for ${outcomeLabel} universe does not exist.`
 export const forkUnavailablePlaceholder = '-'
 export const migration = 'Migration'
+export const forkReadiness = 'Fork Readiness'
 export const notChosen = 'Not chosen'
 export const systemIsForking = 'System is forking'
 export const ethRep = 'ETH / REP'

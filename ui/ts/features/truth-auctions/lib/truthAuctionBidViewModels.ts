@@ -3,6 +3,7 @@ import type { ForkWorkflowSelectionStage } from '../../security-pools/lib/securi
 import { getTruthAuctionSettlementBidKey } from './truthAuctionSettlement.js'
 import { sameAddress } from '../../../lib/address.js'
 import { getTruthAuctionBidDisposition, getTruthAuctionDispositionClassName, getTruthAuctionPriceAtTick } from './truthAuctionBook.js'
+import { formatCurrencyInputBalance } from '../../../lib/formatters.js'
 import type { TruthAuctionBidView, TruthAuctionMetrics } from '../../../types/contracts.js'
 
 type LocalSettlementBidStatus = 'claimed' | 'refunded'
@@ -90,6 +91,7 @@ export function buildViewerTruthAuctionBidRows({
 		const inSessionSettlementResult = settlementResultByKey[settlementBidKey]
 		const isSettlementBidActions = selectedStage === 'settlement' && isSettlementBid && inSessionSettlementResult === undefined && !isSettlementInProgress
 		const isSettlementBidSelectable = inSessionSettlementResult === undefined && !isSettlementInProgress
+		const settlementControlLabel = `Select ${disposition.label.toLowerCase()} bid ${bid.bidIndex.toString()}: ${formatCurrencyInputBalance(bid.ethAmount)} ETH at ${formatCurrencyInputBalance(getTruthAuctionPriceAtTick(bid.tick))} ETH/REP`
 		const statusLabel = (() => {
 			if (inSessionSettlementResult === 'claimed') return 'Claimed'
 			if (inSessionSettlementResult === 'refunded') return 'Refunded'
@@ -107,11 +109,11 @@ export function buildViewerTruthAuctionBidRows({
 			price: getTruthAuctionPriceAtTick(bid.tick),
 			settlementControl: showSettlementActionColumn
 				? {
-						ariaLabel: isSettlementBidActions ? 'Select bid for settlement' : 'Bid is not settlement-eligible',
+						ariaLabel: isSettlementBidActions ? settlementControlLabel : 'Bid is not settlement-eligible',
 						bidKey: settlementBidKey,
 						checked: isSettlementBidActions ? selectedBidKeys.includes(settlementBidKey) : false,
 						disabled: !isSettlementBidActions || !isSettlementBidSelectable,
-						title: isSettlementBidActions ? 'Select bid for settlement' : 'This bid is not settlement-eligible',
+						title: isSettlementBidActions ? settlementControlLabel : 'This bid is not settlement-eligible',
 					}
 				: undefined,
 			statusLabel,

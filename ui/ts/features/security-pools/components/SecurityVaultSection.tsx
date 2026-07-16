@@ -1,5 +1,6 @@
 import * as commonCopy from '../../../copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
+import * as transactionReviewCopy from '../../../copy/transactionReview.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { AddressValue } from '../../../components/AddressValue.js'
 import { ActionLauncherCard } from '../../../components/ActionLauncherCard.js'
@@ -21,6 +22,8 @@ import { StateHint } from '../../../components/StateHint.js'
 import { TimestampValue } from '../../../components/TimestampValue.js'
 import { TokenApprovalControl } from '../../../components/TokenApprovalControl.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
+import { TransactionNetworkValue } from '../../../components/TransactionNetworkValue.js'
+import { TransactionUniverseValue } from '../../universes/components/TransactionUniverseValue.js'
 import { VaultMetricGrid } from './VaultMetricGrid.js'
 import { WarningSurface } from '../../../components/WarningSurface.js'
 import { normalizeAddress, sameAddress } from '../../../lib/address.js'
@@ -290,6 +293,7 @@ export function SecurityVaultSection({
 	securityVaultRepBalance,
 	securityVaultResult,
 	selectedPoolSecurityMultiplier,
+	selectedMarketTitle,
 	selectedPoolTotalRepDeposit,
 	selectedPoolTotalSecurityBondAllowance,
 	showHeader = true,
@@ -318,6 +322,13 @@ export function SecurityVaultSection({
 		? securityVaultDetails
 		: undefined
 	const selectedVaultIsOwnedByAccount = isSelectedVaultOwnedByAccountHelper(selectedVaultAddress, accountState.address)
+	const vaultTransactionContext = [
+		...(selectedMarketTitle === undefined ? [] : [{ label: commonCopy.question, value: selectedMarketTitle }]),
+		{ label: commonCopy.securityPoolAddress, value: <AddressValue address={currentSelectedVaultDetails?.securityPoolAddress ?? normalizedSecurityVaultForm.securityPoolAddress} /> },
+		...(currentSelectedVaultDetails?.universeId === undefined ? [] : [{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={currentSelectedVaultDetails.universeId} /> }]),
+		{ label: securityPoolCopy.vault, value: <AddressValue address={selectedVaultAddress === '' ? undefined : selectedVaultAddress} /> },
+		{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
+	]
 	const depositAmount = tryParseRepAmountInput(normalizedSecurityVaultForm.depositAmount)
 	const securityBondAllowanceAmount = tryParseRepAmountInput(normalizedSecurityVaultForm.securityBondAllowanceAmount)
 	const withdrawAmount = tryParseRepAmountInput(normalizedSecurityVaultForm.repWithdrawAmount)
@@ -539,7 +550,7 @@ export function SecurityVaultSection({
 				</div>
 			</SectionBlock>
 			<ErrorNotice message={securityVaultError} />
-			<OperationModal isOpen={vaultActionModal === 'deposit-rep'} onClose={() => setVaultActionModal(undefined)} title={securityPoolCopy.depositRep}>
+			<OperationModal context={vaultTransactionContext} isOpen={vaultActionModal === 'deposit-rep'} onClose={() => setVaultActionModal(undefined)} title={securityPoolCopy.depositRep}>
 				{currentSelectedVaultDetails === undefined ? <p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
@@ -622,7 +633,7 @@ export function SecurityVaultSection({
 				)}
 			</OperationModal>
 
-			<OperationModal isOpen={vaultActionModal === 'withdraw-rep'} onClose={() => setVaultActionModal(undefined)} title={repExitActionLabel} description={effectiveRepExitMode === 'redeem' ? securityPoolCopy.repRedemptionDescription : securityPoolCopy.withdrawalWorkflowDescription}>
+			<OperationModal context={vaultTransactionContext} isOpen={vaultActionModal === 'withdraw-rep'} onClose={() => setVaultActionModal(undefined)} title={repExitActionLabel} description={effectiveRepExitMode === 'redeem' ? securityPoolCopy.repRedemptionDescription : securityPoolCopy.withdrawalWorkflowDescription}>
 				{currentSelectedVaultDetails === undefined ? <p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
@@ -743,7 +754,7 @@ export function SecurityVaultSection({
 				)}
 			</OperationModal>
 
-			<OperationModal isOpen={vaultActionModal === 'set-bond-allowance'} onClose={() => setVaultActionModal(undefined)} title={securityPoolCopy.setBondAllowance} description={securityPoolCopy.bondAllowanceConfirmationDetail}>
+			<OperationModal context={vaultTransactionContext} isOpen={vaultActionModal === 'set-bond-allowance'} onClose={() => setVaultActionModal(undefined)} title={securityPoolCopy.setBondAllowance} description={securityPoolCopy.bondAllowanceConfirmationDetail}>
 				{currentSelectedVaultDetails === undefined ? <p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
@@ -803,7 +814,7 @@ export function SecurityVaultSection({
 				)}
 			</OperationModal>
 
-			<OperationModal isOpen={vaultActionModal === 'claim-fees'} onClose={() => setVaultActionModal(undefined)} title={securityPoolCopy.claimFees} description={securityPoolCopy.feeRedemptionConfirmationDetail}>
+			<OperationModal context={vaultTransactionContext} isOpen={vaultActionModal === 'claim-fees'} onClose={() => setVaultActionModal(undefined)} title={securityPoolCopy.claimFees} description={securityPoolCopy.feeRedemptionConfirmationDetail}>
 				<MetricGrid>
 					<MetricField label={securityPoolCopy.claimableFees}>{currentSelectedVaultDetails === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={currentSelectedVaultDetails.unpaidEthFees} suffix={commonCopy.eth} />}</MetricField>
 					<MetricField label={securityPoolCopy.vault}>{selectedVaultAddress === undefined ? commonCopy.noneSelected : <AddressValue address={selectedVaultAddress} />}</MetricField>
