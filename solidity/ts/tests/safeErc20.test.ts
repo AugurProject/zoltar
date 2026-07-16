@@ -122,6 +122,7 @@ describe('Safe ERC20 Operations', () => {
 			encodeDeployData({
 				abi: peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
 				bytecode: applyLibraries(peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.evm.bytecode.object),
+				args: [zeroAddress, zeroAddress],
 			}),
 		)
 
@@ -131,7 +132,7 @@ describe('Safe ERC20 Operations', () => {
 					abi: peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
 					address: deploymentWorker,
 					functionName: 'deploy',
-					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n, 1n, zeroAddress],
+					args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n, 1n, zeroAddress],
 				}),
 			),
 			/SafeERC20Ops token address must contain contract code/,

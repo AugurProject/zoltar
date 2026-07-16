@@ -19,6 +19,46 @@ struct SecurityVault {
 	uint256 feeIndex;
 }
 
+/// @notice Complete pool fee and collateral accounting state. All ETH fields use wei and all allowance
+/// fields use the pool's security-bond denomination. Fee indexes use 1e18 fixed-point precision.
+struct PoolAccountingSnapshot {
+	/// @dev ETH reserved as complete-set collateral, in wei.
+	uint256 completeSetCollateralAmount;
+	/// @dev Resulting sum of vault security-bond allowances, in wei-denominated allowance units.
+	uint256 totalSecurityBondAllowance;
+	/// @dev Allowance currently participating in fee accrual, in the same units as total allowance.
+	uint256 feeEligibleSecurityBondAllowance;
+	/// @dev Whole wei already assigned to vaults but not yet redeemed.
+	uint256 totalFeesOwedToVaults;
+	/// @dev Whole accrued wei not yet assigned by a vault checkpoint.
+	uint256 unallocatedFeeReserve;
+	/// @dev Cumulative fee per eligible allowance unit, scaled by 1e18.
+	uint256 feeIndex;
+	/// @dev Division carry from fee-index allocation; scoped to the current allowance denominator.
+	uint256 feeIndexRemainder;
+	/// @dev Sub-wei carry from total fee accrual, always less than 1e18.
+	uint256 totalFeesOwedRemainder;
+	/// @dev Eligible allowance whose vault fee indexes have not consumed the latest global index delta.
+	uint256 uncheckpointedFeeEligibleAllowance;
+	/// @dev Last accrual timestamp, in Unix seconds.
+	uint256 lastUpdatedFeeAccumulator;
+	/// @dev Per-second collateral retention multiplier, scaled by 1e18.
+	uint256 currentRetentionRate;
+}
+
+enum AccountingReason {
+	Accrual,
+	VaultCheckpoint,
+	FeeRedemption,
+	AllowanceChange,
+	AuctionClaim,
+	PoolInitialization,
+	ForkActivation,
+	CollateralReconciliation,
+	RetentionRateChange,
+	ForkFinalization
+}
+
 enum SystemState {
 	Operational,
 	PoolForked,
@@ -33,6 +73,60 @@ enum QuestionOutcome {
 }
 
 interface ISecurityPool {
+	/// @notice Authoritative resulting accounting state after a mutation. `vault` is zero for pool-wide causes.
+	event PoolAccountingCheckpoint(
+		AccountingReason reason,
+		address indexed vault,
+		uint256 completeSetCollateralAmount,
+		uint256 totalSecurityBondAllowance,
+		uint256 feeEligibleSecurityBondAllowance,
+		uint256 totalFeesOwedToVaults,
+		uint256 unallocatedFeeReserve,
+		uint256 feeIndex,
+		uint256 feeIndexRemainder,
+		uint256 totalFeesOwedRemainder,
+		uint256 uncheckpointedFeeEligibleAllowance,
+		uint256 lastUpdatedFeeAccumulator,
+		uint256 currentRetentionRate
+	);
+	/// @notice Authoritative resulting vault state and the affected global denominators. Ownership uses
+	/// pool-ownership units, allowance uses wei-denominated bond units, fees use wei, and `feeIndex` and
+	/// `vaultFeeRemainder` use 1e18 fixed-point precision.
+	event VaultAccountingCheckpoint(
+		address indexed vault,
+		uint256 poolOwnershipAmount,
+		uint256 securityBondAllowance,
+		uint256 unpaidEthFees,
+		uint256 feeIndex,
+		uint256 vaultFeeRemainder,
+		uint256 resultingPoolOwnershipDenominator,
+		uint256 resultingFeeEligibleSecurityBondAllowance
+	);
+	/// @notice Complete sets minted for `creator`. ETH fields use wei; share fields use share-token units.
+	event CompleteSetCreated(
+		address indexed creator,
+		uint256 ethAmount,
+		uint256 sharesMinted,
+		uint256 resultingShareTokenSupply,
+		uint256 resultingCollateral
+	);
+	/// @notice Complete sets burned and net ETH paid to `redeemer`.
+	event CompleteSetRedeemed(
+		address indexed redeemer,
+		uint256 shareAmount,
+		uint256 ethAmount,
+		uint256 resultingShareTokenSupply,
+		uint256 resultingCollateral
+	);
+	/// @notice Winning shares burned and net ETH paid to `redeemer`.
+	event SharesRedeemed(
+		address indexed redeemer,
+		uint256 shareAmount,
+		uint256 ethAmount,
+		uint256 resultingShareTokenSupply,
+		uint256 resultingCollateral
+	);
+
 	// -------- View Functions --------
 	function questionId() external view returns (uint256);
 	function universeId() external view returns (uint248);
@@ -43,6 +137,9 @@ interface ISecurityPool {
 	function securityMultiplier() external view returns (uint256);
 	function totalFeesOwedToVaults() external view returns (uint256);
 	function totalAccruedFees() external view returns (uint256);
+	function getPoolAccountingSnapshot() external view returns (PoolAccountingSnapshot memory snapshot);
+	/// @notice Sub-wei numerator carried into the vault's next fee checkpoint, with denominator `1e18`.
+	function getVaultFeeRemainder(address vault) external view returns (uint256);
 	function lastUpdatedFeeAccumulator() external view returns (uint256);
 	function currentRetentionRate() external view returns (uint256);
 	function awaitingForkContinuation() external view returns (bool);
@@ -107,6 +204,8 @@ interface ISecurityPool {
 		uint256 elapsedAtFork
 	) external;
 	function initializeForkCarrySnapshotWithResolutionBalances(
+		address sourceGame,
+		bytes32 snapshotId,
 		bytes32[64][3] memory inheritedCarryPeaks,
 		uint256[3] memory inheritedCarryLeafCounts,
 		uint256[3] memory inheritedCarryTotals,
@@ -123,7 +222,7 @@ interface ISecurityPool {
 		uint256 securityBondAllowance,
 		uint256 vaultFeeIndex
 	) external;
-	function addFeeEligibleSecurityBondAllowance(uint256 amount) external;
+	function addFeeEligibleSecurityBondAllowance(address vault, uint256 amount) external;
 	function setOwnershipDenominator(uint256 newDenominator) external;
 	function feeIndex() external view returns (uint256);
 	function setTotalShares(uint256 newTotalShares) external;
@@ -134,11 +233,10 @@ interface ISecurityPool {
 	) external;
 	function authorizeChildPool(ISecurityPool pool) external;
 	function questionData() external view returns (ZoltarQuestionData);
-	function drainAllRep() external;
-	function transferRep(address receiver, uint256 amount) external;
 	function transferEth(address payable receiver, uint256 amount) external;
 
 	function securityPoolForker() external view returns (address);
+	function securityPoolEventEmitter() external view returns (address);
 
 	receive() external payable;
 }

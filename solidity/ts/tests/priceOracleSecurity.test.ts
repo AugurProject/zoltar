@@ -43,6 +43,7 @@ import {
 import { depositRep, getSecurityVault } from '../testSupport/simulator/utils/contracts/securityPool'
 import { peripherals_openOracle_OpenOracle_OpenOracle, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '../types/contractArtifact'
 import { isIgnorableLogDecodeError } from './logDecodeErrors'
+import { replayZoltarEvents, type ReplayLog } from './eventReplay/eventReplayModel'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -315,6 +316,73 @@ describe('Price Oracle Refund Security Tests', () => {
 		const settleHash = await openOracleSettle(client, pendingReportId)
 		const settleReceipt = await client.waitForTransactionReceipt({ hash: settleHash })
 		return { pendingReportId, settleReceipt }
+	}
+
+	const assertCoordinatorReplayMatchesStorage = async (logs: TransactionReceiptLogs, context: string) => {
+		const chainId = BigInt(await client.getChainId())
+		const replayLogs: ReplayLog[] = []
+		for (const log of logs) {
+			if (log.address.toLowerCase() !== priceOracle.toLowerCase()) continue
+			let decoded: ReturnType<typeof decodeEventLog>
+			try {
+				decoded = decodeEventLog({
+					abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+					data: log.data,
+					topics: log.topics,
+				})
+			} catch (error) {
+				if (!isIgnorableLogDecodeError(error)) throw error
+				continue
+			}
+			if (
+				log.blockHash === null ||
+				log.blockHash === undefined ||
+				log.blockNumber === null ||
+				log.blockNumber === undefined ||
+				log.transactionHash === null ||
+				log.transactionHash === undefined ||
+				log.transactionIndex === null ||
+				log.logIndex === null ||
+				typeof decoded.args !== 'object' ||
+				decoded.args === null ||
+				Array.isArray(decoded.args)
+			) {
+				throw new Error(`${context}: coordinator log identity or named arguments are incomplete`)
+			}
+			replayLogs.push({
+				chainId,
+				blockHash: log.blockHash,
+				blockNumber: log.blockNumber,
+				transactionHash: log.transactionHash,
+				transactionIndex: Number(log.transactionIndex),
+				logIndex: Number(log.logIndex),
+				emitter: log.address,
+				eventName: decoded.eventName,
+				args: Object.fromEntries(Object.entries(decoded.args)),
+			})
+		}
+		const replayed = replayZoltarEvents(replayLogs).coordinators.get(priceOracle)
+		if (replayed === undefined || replayed.checkpointReason === undefined) throw new Error(`${context}: coordinator state checkpoint was not replayed`)
+		const [pendingReportId, pendingReportSponsor, pendingOperationSlotId, pendingReportMaxSettlementBaseFee, lastPrice, lastSettlementTimestamp, stagedOperationCounter, activeStagedOperationCount, pendingSettlementOperationCount] = await Promise.all([
+			getPendingReportId(client, priceOracle),
+			client.readContract({ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'pendingReportSponsor', address: priceOracle, args: [] }),
+			getPendingOperationSlotId(client, priceOracle),
+			getPendingReportMaxSettlementBaseFee(client, priceOracle),
+			getLastPrice(client, priceOracle),
+			client.readContract({ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'lastSettlementTimestamp', address: priceOracle, args: [] }),
+			client.readContract({ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'stagedOperationCounter', address: priceOracle, args: [] }),
+			getActiveStagedOperationCount(client, priceOracle),
+			getPendingSettlementOperationCount(client, priceOracle),
+		])
+		assert.strictEqual(replayed.pendingReportId, pendingReportId, `${context}: pending report replay mismatch`)
+		assert.strictEqual(replayed.pendingReportSponsor, pendingReportSponsor, `${context}: report sponsor replay mismatch`)
+		assert.strictEqual(replayed.pendingOperationSlotId, pendingOperationSlotId, `${context}: pending operation replay mismatch`)
+		assert.strictEqual(replayed.pendingReportMaxSettlementBaseFee, pendingReportMaxSettlementBaseFee, `${context}: settlement base-fee replay mismatch`)
+		assert.strictEqual(replayed.lastPrice, lastPrice, `${context}: last price replay mismatch`)
+		assert.strictEqual(replayed.lastSettlementTimestamp, lastSettlementTimestamp, `${context}: settlement timestamp replay mismatch`)
+		assert.strictEqual(replayed.stagedOperationCounter, stagedOperationCounter, `${context}: operation counter replay mismatch`)
+		assert.strictEqual(replayed.activeStagedOperationCount, activeStagedOperationCount, `${context}: active operation count replay mismatch`)
+		assert.strictEqual(replayed.pendingSettlementOperationCount, pendingSettlementOperationCount, `${context}: pending settlement count replay mismatch`)
 	}
 
 	test('coordinator dynamically sizes the minimum WETH report side from the current base fee', async () => {
@@ -632,6 +700,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const settlementHash = await openOracleSettleWithGasPrice(client, pendingReportId, 1n)
 		const settlementReceipt = await client.waitForTransactionReceipt({ hash: settlementHash })
 		await mockWindow.setNextBlockBaseFeePerGasToZero()
+		await assertCoordinatorReplayMatchesStorage(settlementReceipt.logs, 'rejected report')
 
 		const isPriceValid = await getIsPriceValid(client, priceOracle)
 		const pendingReportIdAfterSettlement = await getPendingReportId(client, priceOracle)
@@ -777,7 +846,9 @@ describe('Price Oracle Refund Security Tests', () => {
 		await approveToken(counterpartyClient, addressString(GENESIS_REPUTATION_TOKEN), securityPool)
 		await depositRep(counterpartyClient, securityPool, repDeposit)
 
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, sponsorAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
+		const sponsorRequestHash = await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, sponsorAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
+		const sponsorRequestReceipt = await client.waitForTransactionReceipt({ hash: sponsorRequestHash })
+		await assertCoordinatorReplayMatchesStorage(sponsorRequestReceipt.logs, 'sponsored report request')
 
 		const pendingReportIdBeforeJoin = await getPendingReportId(client, priceOracle)
 		const queuedOperationEthCost = await getQueuedOperationEthCost(client, priceOracle)
@@ -942,6 +1013,7 @@ describe('Price Oracle Refund Security Tests', () => {
 
 		const recoveryHash = await recoverSettledPendingReport(client, priceOracle)
 		const recoveryReceipt = await client.waitForTransactionReceipt({ hash: recoveryHash })
+		await assertCoordinatorReplayMatchesStorage(recoveryReceipt.logs, 'pending report recovery')
 
 		const pendingReportIdAfterRecovery = await getPendingReportId(client, priceOracle)
 		const pendingMaxSettlementBaseFeeAfterRecovery = await getPendingReportMaxSettlementBaseFee(client, priceOracle)
@@ -1026,12 +1098,18 @@ describe('Price Oracle Refund Security Tests', () => {
 		const thirdAllowance = repDeposit / 6n
 		const fourthAllowance = repDeposit / 7n
 		const fifthAllowance = repDeposit / 8n
+		const queuedOperationLogs: TransactionReceiptLogs[number][] = []
+		const queueOperation = async (allowance: bigint, value: bigint) => {
+			const transactionHash = await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, allowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, value)
+			const receipt = await client.getTransactionReceipt({ hash: transactionHash })
+			queuedOperationLogs.push(...receipt.logs)
+		}
 
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, firstAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, secondAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, queuedOperationEthCost)
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, thirdAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, queuedOperationEthCost)
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, fourthAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, queuedOperationEthCost)
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, fifthAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+		await queueOperation(firstAllowance, ethCost)
+		await queueOperation(secondAllowance, queuedOperationEthCost)
+		await queueOperation(thirdAllowance, queuedOperationEthCost)
+		await queueOperation(fourthAllowance, queuedOperationEthCost)
+		await queueOperation(fifthAllowance, 0n)
 
 		const pendingOperationSlotId = await getPendingOperationSlotId(client, priceOracle)
 		const pendingReportId = await getPendingReportId(client, priceOracle)
@@ -1053,6 +1131,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(activeOperations[4]?.amount, firstAllowance, 'oldest pending operation should retain its amount')
 
 		const { pendingReportId: settledReportId, settleReceipt } = await settlePendingReportWithPrice(10n ** 18n)
+		await assertCoordinatorReplayMatchesStorage([...queuedOperationLogs, ...settleReceipt.logs], 'reported price and staged execution')
 		const priceReportedLog = findPriceReportedLog(settleReceipt.logs)
 		if (priceReportedLog === undefined) throw new Error('missing PriceReported log')
 		const callbackLog = findSettlementCallbackExecutedLog(settleReceipt.logs)

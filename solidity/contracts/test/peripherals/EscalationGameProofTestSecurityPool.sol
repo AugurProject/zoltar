@@ -77,6 +77,8 @@ contract EscalationGameProofTestSecurityPool {
 			rep.transferFrom(msg.sender, address(escalationGame), totalInheritedPrincipal);
 		}
 		escalationGame.initializeForkCarrySnapshotWithResolutionBalances(
+			address(0x0),
+			bytes32(0),
 			inheritedCarryPeaks,
 			inheritedCarryLeafCounts,
 			inheritedCarryTotals,
@@ -99,10 +101,36 @@ contract EscalationGameProofTestSecurityPool {
 			rep.transferFrom(msg.sender, address(escalationGame), totalResolutionBalance);
 		}
 		escalationGame.initializeForkCarrySnapshotWithResolutionBalances(
+			address(0x0),
+			bytes32(0),
 			inheritedCarryPeaks,
 			inheritedCarryLeafCounts,
 			inheritedCarryTotals,
 			inheritedResolutionBalances,
+			inheritedNullifierRoots
+		);
+	}
+
+	function initializeForkCarrySnapshotFromSource(
+		address sourceGame,
+		bytes32 snapshotId,
+		bytes32[64][3] memory inheritedCarryPeaks,
+		uint256[3] memory inheritedCarryLeafCounts,
+		uint256[3] memory inheritedCarryTotals,
+		bytes32[3] memory inheritedNullifierRoots
+	) external {
+		uint256 totalInheritedPrincipal = inheritedCarryTotals[0] + inheritedCarryTotals[1] + inheritedCarryTotals[2];
+		if (totalInheritedPrincipal > 0) {
+			ReputationToken rep = zoltar.getRepToken(universeId);
+			rep.transferFrom(msg.sender, address(escalationGame), totalInheritedPrincipal);
+		}
+		escalationGame.initializeForkCarrySnapshotWithResolutionBalances(
+			sourceGame,
+			snapshotId,
+			inheritedCarryPeaks,
+			inheritedCarryLeafCounts,
+			inheritedCarryTotals,
+			inheritedCarryTotals,
 			inheritedNullifierRoots
 		);
 	}

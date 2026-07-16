@@ -31,12 +31,12 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	SecurityPoolDeployment[] private securityPoolDeployments;
 
 	event DeploySecurityPool(
-		ISecurityPool securityPool,
+		ISecurityPool indexed securityPool,
 		UniformPriceDualCapBatchAuction truthAuction,
 		OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer,
 		IShareToken shareToken,
-		ISecurityPool parent,
-		uint248 universeId,
+		ISecurityPool indexed parent,
+		uint248 indexed universeId,
 		uint256 questionId,
 		uint256 securityMultiplier,
 		uint256 currentRetentionRate,

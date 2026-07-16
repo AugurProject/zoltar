@@ -585,7 +585,7 @@ describe('Peripherals: truth auction', () => {
 			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 			const denominatorBeforeStart = await getPoolOwnershipDenominator(client, yesSecurityPool.securityPool)
 			const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
-			const initiateForkLog = initiateForkReceipt.logs
+			const forkSnapshotLog = initiateForkReceipt.logs
 				.filter(log => log.address.toLowerCase() === getInfraContractAddresses().securityPoolForker.toLowerCase())
 				.map(log =>
 					decodeEventLog({
@@ -594,11 +594,11 @@ describe('Peripherals: truth auction', () => {
 						topics: log.topics,
 					}),
 				)
-				.find(log => log.eventName === 'InitiateSecurityPoolFork')
-			if (initiateForkLog === undefined) throw new Error('missing InitiateSecurityPoolFork log')
-			assert.strictEqual(initiateForkLog.args.securityPool, securityPoolAddresses.securityPool, 'InitiateSecurityPoolFork should identify the parent pool')
-			assert.strictEqual(initiateForkLog.args.auctionableRepAtFork, forkData.auctionableRepAtFork, 'InitiateSecurityPoolFork should expose the updated auctionable REP')
-			assert.strictEqual(initiateForkLog.args.ownFork, false, 'InitiateSecurityPoolFork should identify external fork mode')
+				.find(log => log.eventName === 'SecurityPoolForkSnapshot')
+			if (forkSnapshotLog === undefined) throw new Error('missing SecurityPoolForkSnapshot log')
+			assert.strictEqual(forkSnapshotLog.args.parentPool, securityPoolAddresses.securityPool, 'fork snapshot should identify the parent pool')
+			assert.strictEqual(forkSnapshotLog.args.auctionableRepAtFork, forkData.auctionableRepAtFork, 'fork snapshot should expose the updated auctionable REP')
+			assert.strictEqual(forkSnapshotLog.args.ownFork, false, 'fork snapshot should identify external fork mode')
 			strictEqualTypeSafe(await getMigratedRep(client, yesSecurityPool.securityPool), forkData.auctionableRepAtFork, 'all parent REP should already be represented by migrated vault ownership in this fast path')
 
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)

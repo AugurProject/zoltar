@@ -3,14 +3,131 @@ pragma solidity 0.8.35;
 
 import { MerkleMountainRange } from './MerkleMountainRange.sol';
 import {
+	EXCESS_REWARD_WINDOW_DIVISOR,
 	LN2_SCALED,
 	MAX_ATANH_ITERATIONS,
+	MAX_EXP_ITERATIONS,
 	MERKLE_MOUNTAIN_RANGE_MAX_PEAKS,
 	NULLIFIER_DEPTH,
 	SCALE
 } from './EscalationGameTypes.sol';
+import { BinaryOutcomes } from './BinaryOutcomes.sol';
 
 contract EscalationGameProofVerifier {
+	function computeIterativeAttritionCost(
+		uint256 startBond,
+		uint256 nonDecisionThreshold,
+		uint256 lnRatioScaled,
+		uint256 timeSinceStart,
+		uint256 escalationTimeLength
+	) external pure returns (uint256) {
+		require(timeSinceStart <= escalationTimeLength, 'Time too high');
+		if (timeSinceStart == 0) return startBond;
+		if (timeSinceStart == escalationTimeLength) return nonDecisionThreshold;
+		uint256 exponent = (lnRatioScaled * timeSinceStart) / escalationTimeLength;
+		uint256 exponentPow2 = exponent / LN2_SCALED;
+		uint256 exponentRemainder = exponent - exponentPow2 * LN2_SCALED;
+		uint256 expScaled = SCALE;
+		uint256 term = exponentRemainder;
+		expScaled += term;
+		for (uint256 k = 2; k < MAX_EXP_ITERATIONS; ) {
+			term = (term * exponentRemainder) / (k * SCALE);
+			if (term == 0) break;
+			expScaled += term;
+			unchecked {
+				++k;
+			}
+		}
+		expScaled <<= exponentPow2;
+		uint256 cost = (startBond * expScaled) / SCALE;
+		return cost > nonDecisionThreshold ? nonDecisionThreshold : cost;
+	}
+
+	function computeAcceptedDepositAmount(
+		uint256 outcomeIndex,
+		uint256 requestedAmount,
+		uint256 currentBalance,
+		uint256 room,
+		uint256 startBond,
+		uint256 nonDecisionThreshold,
+		uint256[3] calldata balances
+	) external pure returns (uint256 acceptedAmount, uint256 newBalance) {
+		acceptedAmount = requestedAmount > room ? room : requestedAmount;
+		newBalance = currentBalance + acceptedAmount;
+		uint256 maxBalance = _maxOutcomeBalance(balances[0], balances[1], balances[2]);
+		bool otherHasMax = _otherOutcomeHasBalance(outcomeIndex, balances[0], balances[1], balances[2], maxBalance);
+		if (newBalance == maxBalance && otherHasMax && maxBalance < nonDecisionThreshold) {
+			acceptedAmount -= 1;
+			newBalance = currentBalance + acceptedAmount;
+		}
+		require(acceptedAmount >= startBond || newBalance == nonDecisionThreshold, 'Below start bond');
+	}
+
+	function computeWinningWithdrawal(
+		uint256 depositAmount,
+		uint256 cumulativeAmount,
+		uint256 bindingCapitalAmount,
+		uint256 winningOutcomeBalance,
+		uint256 actualForkThreshold,
+		uint256 nonDecisionThreshold
+	) external pure returns (uint256 amountToWithdraw, uint256 burnAmount) {
+		uint256 depositStart = cumulativeAmount - depositAmount;
+		uint256 rewardEligibleCapAmount = bindingCapitalAmount + bindingCapitalAmount / EXCESS_REWARD_WINDOW_DIVISOR;
+		uint256 rewardEligiblePrincipalAmount =
+			winningOutcomeBalance < rewardEligibleCapAmount ? winningOutcomeBalance : rewardEligibleCapAmount;
+		if (rewardEligiblePrincipalAmount == 0) {
+			amountToWithdraw = depositAmount;
+		} else {
+			uint256 eligibleEndAmount =
+				cumulativeAmount < rewardEligibleCapAmount ? cumulativeAmount : rewardEligibleCapAmount;
+			uint256 rewardEligibleDepositAmount =
+				eligibleEndAmount > depositStart ? eligibleEndAmount - depositStart : 0;
+			if (rewardEligibleDepositAmount > depositAmount) rewardEligibleDepositAmount = depositAmount;
+			uint256 bonusShare =
+				(rewardEligibleDepositAmount * ((bindingCapitalAmount * 3) / 5)) / rewardEligiblePrincipalAmount;
+			burnAmount =
+				(rewardEligibleDepositAmount * ((bindingCapitalAmount * 2) / 5)) / rewardEligiblePrincipalAmount;
+			amountToWithdraw = depositAmount + bonusShare;
+		}
+		if (actualForkThreshold < nonDecisionThreshold) {
+			amountToWithdraw = (amountToWithdraw * actualForkThreshold) / nonDecisionThreshold;
+		}
+	}
+
+	function resolveQuestion(
+		uint256[3] calldata balances,
+		uint256 currentTotalCost
+	) external pure returns (BinaryOutcomes.BinaryOutcome) {
+		if (_countBalancesAtLeast(balances[0], balances[1], balances[2], currentTotalCost) >= 2) {
+			return BinaryOutcomes.BinaryOutcome.None;
+		}
+		if (balances[0] == 0 && balances[1] == 0 && balances[2] == 0) {
+			return BinaryOutcomes.BinaryOutcome.Invalid;
+		}
+		return _getStrictLeaderOrNone(balances[0], balances[1], balances[2]);
+	}
+
+	function hasReachedNonDecision(
+		uint256[3] calldata balances,
+		uint256 nonDecisionThreshold
+	) external pure returns (bool) {
+		return _countBalancesAtLeast(balances[0], balances[1], balances[2], nonDecisionThreshold) >= 2;
+	}
+
+	function medianBalance(uint256[3] calldata balances) external pure returns (uint256) {
+		uint256 invalidBalance = balances[0];
+		uint256 yesBalance = balances[1];
+		uint256 noBalance = balances[2];
+		if (
+			(invalidBalance >= yesBalance && invalidBalance <= noBalance) ||
+			(invalidBalance >= noBalance && invalidBalance <= yesBalance)
+		) return invalidBalance;
+		if (
+			(yesBalance >= invalidBalance && yesBalance <= noBalance) ||
+			(yesBalance >= noBalance && yesBalance <= invalidBalance)
+		) return yesBalance;
+		return noBalance;
+	}
 	function computeEmptyNullifierRoot() external pure returns (bytes32 root) {
 		root = bytes32(0);
 		for (uint256 depth = 0; depth < NULLIFIER_DEPTH; depth++) {
@@ -153,5 +270,49 @@ contract EscalationGameProofVerifier {
 				++k;
 			}
 		}
+	}
+
+	function _countBalancesAtLeast(
+		uint256 invalidBalance,
+		uint256 yesBalance,
+		uint256 noBalance,
+		uint256 threshold
+	) private pure returns (uint8 count) {
+		if (invalidBalance >= threshold) count += 1;
+		if (yesBalance >= threshold) count += 1;
+		if (noBalance >= threshold) count += 1;
+	}
+
+	function _maxOutcomeBalance(
+		uint256 invalidBalance,
+		uint256 yesBalance,
+		uint256 noBalance
+	) private pure returns (uint256 maxBalance) {
+		maxBalance = invalidBalance;
+		if (yesBalance > maxBalance) maxBalance = yesBalance;
+		if (noBalance > maxBalance) maxBalance = noBalance;
+	}
+
+	function _otherOutcomeHasBalance(
+		uint256 outcomeIndex,
+		uint256 invalidBalance,
+		uint256 yesBalance,
+		uint256 noBalance,
+		uint256 targetBalance
+	) private pure returns (bool) {
+		if (outcomeIndex == 0) return yesBalance == targetBalance || noBalance == targetBalance;
+		if (outcomeIndex == 1) return invalidBalance == targetBalance || noBalance == targetBalance;
+		return invalidBalance == targetBalance || yesBalance == targetBalance;
+	}
+
+	function _getStrictLeaderOrNone(
+		uint256 invalidBalance,
+		uint256 yesBalance,
+		uint256 noBalance
+	) private pure returns (BinaryOutcomes.BinaryOutcome) {
+		if (invalidBalance > yesBalance && invalidBalance > noBalance) return BinaryOutcomes.BinaryOutcome.Invalid;
+		if (yesBalance > invalidBalance && yesBalance > noBalance) return BinaryOutcomes.BinaryOutcome.Yes;
+		if (noBalance > invalidBalance && noBalance > yesBalance) return BinaryOutcomes.BinaryOutcome.No;
+		return BinaryOutcomes.BinaryOutcome.None;
 	}
 }
