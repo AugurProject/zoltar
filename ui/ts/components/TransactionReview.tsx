@@ -1,6 +1,8 @@
 import * as transactionReviewCopy from '../copy/transactionReview.js'
 import { useId } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
+import type { TransactionContextItem } from '../types/components.js'
+import { TransactionObjectContext } from './TransactionObjectContext.js'
 
 type TransactionReviewRow = {
 	label: ComponentChildren
@@ -9,15 +11,17 @@ type TransactionReviewRow = {
 
 type TransactionReviewProps = {
 	className?: string
+	context?: TransactionContextItem[]
 	details?: TransactionReviewRow[]
 	primary: TransactionReviewRow[]
 	risks?: ComponentChildren[]
 }
 
-export function TransactionReview({ className = '', details = [], primary, risks = [] }: TransactionReviewProps) {
+export function TransactionReview({ className = '', context = [], details = [], primary, risks = [] }: TransactionReviewProps) {
 	const titleId = useId()
 	return (
 		<section className={`transaction-review ${className}`.trim()} aria-labelledby={titleId}>
+			<TransactionObjectContext items={context} />
 			<div className='transaction-review-header'>
 				<h4 id={titleId}>{transactionReviewCopy.transactionReview}</h4>
 				<p className='detail'>{transactionReviewCopy.reviewBeforeSubmitting}</p>

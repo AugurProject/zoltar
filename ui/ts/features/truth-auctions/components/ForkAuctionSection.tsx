@@ -22,6 +22,8 @@ import { SectionBlock } from '../../../components/SectionBlock.js'
 import { SecurityPoolLink } from '../../security-pools/components/SecurityPoolLink.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
 import { TransactionReview } from '../../../components/TransactionReview.js'
+import { TransactionNetworkValue } from '../../../components/TransactionNetworkValue.js'
+import { TransactionUniverseValue } from '../../universes/components/TransactionUniverseValue.js'
 import { TimestampValue } from '../../../components/TimestampValue.js'
 import { TruthAuctionBidsSection, ViewerTruthAuctionBidsSection } from './TruthAuctionBidsSection.js'
 import { TruthAuctionMarketViewSection } from './TruthAuctionMarketViewSection.js'
@@ -77,7 +79,7 @@ const FORK_WORKFLOW_NAV_STAGES: readonly ForkWorkflowSelectionStage[] = ['fork-t
 function getForkWorkflowStageLabel(stage: ForkWorkflowSelectionStage) {
 	switch (stage) {
 		case 'fork-triggered':
-			return commonCopy.forkTriggered
+			return forkAuctionCopy.forkReadiness
 		case 'migration':
 			return forkAuctionCopy.migration
 		case 'auction':
@@ -1039,6 +1041,12 @@ export function ForkAuctionSection({
 				)}
 				{renderTruthAuctionDebtNotice('bid')}
 				<TransactionReview
+					context={[
+						{ label: commonCopy.question, value: selectedAuctionChildPool?.marketDetails.title ?? previewPool?.marketDetails.title ?? commonCopy.unavailable },
+						{ label: commonCopy.securityPoolAddress, value: auctionSecurityPoolAddress === undefined ? commonCopy.unavailable : <AddressValue address={auctionSecurityPoolAddress} /> },
+						{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={selectedAuctionChildPool?.universeId ?? universeId} /> },
+						{ label: commonCopy.outcome, value: selectedAuctionLabel },
+					]}
 					primary={[
 						{ label: transactionReviewCopy.youPay, value: <CurrencyValue value={enteredBidAmount} suffix={commonCopy.eth} /> },
 						{ label: forkAuctionCopy.potentialRepIfFilled, value: <CurrencyValue value={estimatedRep} suffix={commonCopy.rep} /> },
@@ -1049,7 +1057,7 @@ export function ForkAuctionSection({
 						{ label: transactionReviewCopy.resultingEthBalance, value: <CurrencyValue value={resultingBidEthBalance} suffix={commonCopy.eth} /> },
 						{ label: transactionReviewCopy.protocolFee, value: transactionReviewCopy.noProtocolFee },
 						{ label: transactionReviewCopy.contract, value: auctionTruthAuctionAddress === undefined ? commonCopy.unavailable : <AddressValue address={auctionTruthAuctionAddress} /> },
-						{ label: transactionReviewCopy.network, value: transactionReviewCopy.ethereumMainnet },
+						{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
 					]}
 					risks={[forkAuctionCopy.bidEscrowRisk, forkAuctionCopy.bidFillRisk, forkAuctionCopy.winningBidDebtRisk]}
 				/>

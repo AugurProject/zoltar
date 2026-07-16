@@ -880,6 +880,7 @@ export function SecurityPoolWorkflowSection({
 												poolState={selectedPoolStateModel}
 												selectedPoolTotalRepDeposit={selectedPool?.totalRepDeposit}
 												selectedPoolTotalSecurityBondAllowance={selectedPool?.totalSecurityBondAllowance}
+												selectedMarketTitle={selectedPool?.marketDetails.title}
 												showHeader={false}
 												showLookupSection={false}
 												showSecurityPoolAddressInput={false}

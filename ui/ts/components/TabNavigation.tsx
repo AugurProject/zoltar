@@ -34,6 +34,19 @@ export function TabNavigation({ route, showDeployTab = true, augurPlaceHolderDep
 	return (
 		<nav className='tab-nav' aria-label={appCopy.applicationSections} role='navigation'>
 			<ViewTabs ariaLabel={appCopy.applicationSections} semantics='navigation' value={route === 'not-found' ? 'deploy' : route} variant='route' onChange={value => onRouteChange(value as Exclude<TabNavigationProps['route'], 'not-found'>)} options={options} />
+			<label className='mobile-route-select'>
+				<span>{appCopy.currentApplicationSection}</span>
+				<select aria-label={appCopy.currentApplicationSection} value={route === 'not-found' ? 'deploy' : route} onChange={event => onRouteChange(event.currentTarget.value as Exclude<TabNavigationProps['route'], 'not-found'>)}>
+					{options.map(option => (
+						<option key={option.value} value={option.value} disabled={option.disabled}>
+							{option.label}
+						</option>
+					))}
+				</select>
+			</label>
+			<a className='protocol-guide-link' href={appCopy.protocolGuideHref} target='_blank' rel='noreferrer'>
+				{appCopy.protocolGuide}
+			</a>
 		</nav>
 	)
 }

@@ -18,6 +18,8 @@ import { SectionBlock } from '../../../components/SectionBlock.js'
 import { ShareMigrationTargetsSection } from '../../universes/components/ShareMigrationTargetsSection.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
 import { TransactionReview } from '../../../components/TransactionReview.js'
+import { TransactionNetworkValue } from '../../../components/TransactionNetworkValue.js'
+import { TransactionUniverseValue } from '../../universes/components/TransactionUniverseValue.js'
 import { formatCurrencyInputBalance } from '../../../lib/formatters.js'
 import { tryParseBigIntListInput } from '../../../lib/inputs.js'
 import { isMainnetChain } from '../../../lib/network.js'
@@ -229,6 +231,15 @@ export function TradingSection({
 	const clearTargetOutcomeIndexes = () => {
 		onTradingFormChange({ targetOutcomeIndexes: '' })
 	}
+	const getTransactionContext = (outcome: string) =>
+		selectedPool === undefined
+			? []
+			: [
+					{ label: commonCopy.question, value: selectedPool.marketDetails.title },
+					{ label: commonCopy.securityPoolAddress, value: <AddressValue address={selectedPool.securityPoolAddress} /> },
+					{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={selectedPool.universeId} /> },
+					{ label: commonCopy.outcome, value: outcome },
+				]
 	useEffect(() => {
 		if (tradingResult === undefined) return
 		setActiveModal(currentModal => {
@@ -369,7 +380,7 @@ export function TradingSection({
 
 			<ErrorNotice message={tradingError} />
 
-			<OperationModal description={tradingCopy.completeSetMintReviewDetail} isOpen={activeModal === 'mint'} onClose={() => setActiveModal(undefined)} title={tradingCopy.mintCompleteSets}>
+			<OperationModal context={getTransactionContext('Complete set · Yes + No + Invalid')} description={tradingCopy.completeSetMintReviewDetail} isOpen={activeModal === 'mint'} onClose={() => setActiveModal(undefined)} title={tradingCopy.mintCompleteSets}>
 				{selectedPool === undefined ? undefined : (
 					<MetricGrid>
 						<MetricField label={tradingCopy.bondAllowanceInUse}>
@@ -416,7 +427,7 @@ export function TradingSection({
 						{ label: tradingCopy.retentionFeeAtExecution, value: tradingCopy.retentionFeeEstimateDetail },
 						{ label: transactionReviewCopy.resultingEthBalance, value: <CurrencyValue value={resultingEthBalance} suffix={commonCopy.eth} /> },
 						{ label: transactionReviewCopy.contract, value: selectedPool === undefined ? commonCopy.unavailable : <AddressValue address={selectedPool.securityPoolAddress} /> },
-						{ label: transactionReviewCopy.network, value: transactionReviewCopy.ethereumMainnet },
+						{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
 					]}
 					risks={[tradingCopy.mintBalanceRisk]}
 				/>
@@ -431,7 +442,7 @@ export function TradingSection({
 				</div>
 			</OperationModal>
 
-			<OperationModal description={tradingCopy.redeemCompleteSetsHelpText} isOpen={activeModal === 'redeem-complete-sets'} onClose={() => setActiveModal(undefined)} title={tradingCopy.redeemCompleteSets}>
+			<OperationModal context={getTransactionContext('Complete set · Yes + No + Invalid')} description={tradingCopy.redeemCompleteSetsHelpText} isOpen={activeModal === 'redeem-complete-sets'} onClose={() => setActiveModal(undefined)} title={tradingCopy.redeemCompleteSets}>
 				<label className='field'>
 					<span>{tradingCopy.redeemCompleteSetsAmount}</span>
 					<div className='field-inline'>
@@ -468,7 +479,7 @@ export function TradingSection({
 						{ label: tradingCopy.retentionFeeAtExecution, value: tradingCopy.retentionFeeEstimateDetail },
 						{ label: tradingCopy.estimatedResultingEthBalance, value: <CurrencyValue value={resultingRedeemEthBalance} suffix={commonCopy.eth} /> },
 						{ label: transactionReviewCopy.contract, value: selectedPool === undefined ? commonCopy.unavailable : <AddressValue address={selectedPool.securityPoolAddress} /> },
-						{ label: transactionReviewCopy.network, value: transactionReviewCopy.ethereumMainnet },
+						{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
 					]}
 					risks={[tradingCopy.redeemCompleteSetRisk]}
 				/>
@@ -484,7 +495,7 @@ export function TradingSection({
 				</div>
 			</OperationModal>
 
-			<OperationModal description={tradingCopy.shareMigrationReviewDetail} isOpen={activeModal === 'migrate-shares'} onClose={() => setActiveModal(undefined)} title={tradingCopy.migrateForkedSharesTitle}>
+			<OperationModal context={getTransactionContext(getReportingOutcomeLabel(tradingForm.selectedShareOutcome))} description={tradingCopy.shareMigrationReviewDetail} isOpen={activeModal === 'migrate-shares'} onClose={() => setActiveModal(undefined)} title={tradingCopy.migrateForkedSharesTitle}>
 				<label className='field'>
 					<span>{tradingCopy.shareOutcomeToMigrate}</span>
 					<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={tradingForm.selectedShareOutcome} onChange={selectedShareOutcome => onTradingFormChange({ selectedShareOutcome })} disabled={shareMigrationSelectionDisabled} />
@@ -517,7 +528,7 @@ export function TradingSection({
 						{ label: tradingCopy.selectedChildUniversesLabel, value: selectedTargetOutcomeIndexes.length === 0 ? tradingCopy.notSelected : selectedTargetOutcomeIndexes.join(', ') },
 						{ label: transactionReviewCopy.protocolFee, value: transactionReviewCopy.noProtocolFee },
 						{ label: transactionReviewCopy.contract, value: selectedPool === undefined ? commonCopy.unavailable : <AddressValue address={selectedPool.securityPoolAddress} /> },
-						{ label: transactionReviewCopy.network, value: transactionReviewCopy.ethereumMainnet },
+						{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
 					]}
 					risks={[tradingCopy.shareMigrationRisk]}
 				/>
@@ -533,7 +544,13 @@ export function TradingSection({
 				</div>
 			</OperationModal>
 
-			<OperationModal description={tradingCopy.winningShareRedemptionDescription} isOpen={activeModal === 'redeem-shares'} onClose={() => setActiveModal(undefined)} title={tradingCopy.redeemResolvedShares}>
+			<OperationModal
+				context={getTransactionContext(selectedPool?.questionOutcome === undefined || selectedPool.questionOutcome === 'none' ? commonCopy.unavailable : getReportingOutcomeLabel(selectedPool.questionOutcome))}
+				description={tradingCopy.winningShareRedemptionDescription}
+				isOpen={activeModal === 'redeem-shares'}
+				onClose={() => setActiveModal(undefined)}
+				title={tradingCopy.redeemResolvedShares}
+			>
 				<TransactionReview
 					primary={[
 						{ label: tradingCopy.winningShares, value: <CurrencyValue value={resolvedWinningShareBalance} /> },
@@ -543,7 +560,7 @@ export function TradingSection({
 						{ label: tradingCopy.retentionFeeAtExecution, value: tradingCopy.retentionFeeEstimateDetail },
 						{ label: tradingCopy.estimatedResultingEthBalance, value: <CurrencyValue value={resolvedWinningPayout === undefined || accountState.ethBalance === undefined ? undefined : accountState.ethBalance + resolvedWinningPayout} suffix={commonCopy.eth} /> },
 						{ label: transactionReviewCopy.contract, value: selectedPool === undefined ? commonCopy.unavailable : <AddressValue address={selectedPool.securityPoolAddress} /> },
-						{ label: transactionReviewCopy.network, value: transactionReviewCopy.ethereumMainnet },
+						{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
 					]}
 					risks={[tradingCopy.resolvedShareRisk]}
 				/>

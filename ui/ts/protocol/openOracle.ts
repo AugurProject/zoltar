@@ -20,6 +20,16 @@ type CoordinatorInitialReportClient = Parameters<typeof loadOpenOracleInitialRep
 const OPEN_ORACLE_PRICE_UNITS = 30n
 const ACTIVE_STAGED_OPERATION_PREVIEW_LIMIT = 25n
 const COORDINATOR_PRICE_PRECISION = 10n ** 18n
+
+function normalizeOpenOracleTokenMetadata(tokenAddress: Address, decimalsValue: unknown, symbolValue: unknown) {
+	const decimals = Number(decimalsValue)
+	const symbol = String(symbolValue).trim()
+	if (!Number.isInteger(decimals) || decimals < 0 || decimals > 255) throw new Error(`Token metadata for ${tokenAddress} returned invalid decimals`)
+	if (symbol === '') throw new Error(`Token metadata for ${tokenAddress} returned an empty symbol`)
+	if (sameAddress(tokenAddress, getWethAddress()) && (decimals !== 18 || symbol !== 'WETH')) throw new Error(`WETH metadata is invalid for ${tokenAddress}`)
+	return { decimals, symbol }
+}
+
 function getStagedOracleExecutionResult(receipt: TransactionReceipt, managerAddress: Address, expectedOperation: OracleQueueOperation): StagedOracleExecutionResult | undefined {
 	for (const log of receipt.logs) {
 		if (!sameAddress(log.address, managerAddress)) continue
@@ -320,6 +330,8 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 			args: [],
 		},
 	])
+	const token1Metadata = normalizeOpenOracleTokenMetadata(reportMeta[4], token1Decimals, token1Symbol)
+	const token2Metadata = normalizeOpenOracleTokenMetadata(reportMeta[6], token2Decimals, token2Symbol)
 	return {
 		reportId,
 		openOracleAddress,
@@ -353,10 +365,10 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 		protocolFeeRecipient: reportExtra[4],
 		trackDisputes: reportExtra[5],
 		lastReportOppoTime: BigInt(reportStatus[6]),
-		token1Decimals: Number(token1Decimals),
-		token2Decimals: Number(token2Decimals),
-		token1Symbol: String(token1Symbol),
-		token2Symbol: String(token2Symbol),
+		token1Decimals: token1Metadata.decimals,
+		token2Decimals: token2Metadata.decimals,
+		token1Symbol: token1Metadata.symbol,
+		token2Symbol: token2Metadata.symbol,
 	}
 }
 export async function loadOpenOracleReportSummaries(client: ReadClient, pageIndex: number, pageSize: number): Promise<OpenOracleReportSummaryPage> {
@@ -463,10 +475,7 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 			const decimals = tokenDecimals[index]
 			const symbol = tokenSymbols[index]
 			if (decimals === undefined || symbol === undefined) throw new Error('Unexpected token metadata response')
-			tokenMetadata.set(tokenAddress, {
-				decimals: Number(decimals),
-				symbol: String(symbol),
-			})
+			tokenMetadata.set(tokenAddress, normalizeOpenOracleTokenMetadata(tokenAddress, decimals, symbol))
 		}
 	}
 	const reports = reportIds.map((reportId, index) => {

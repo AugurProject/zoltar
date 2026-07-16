@@ -88,6 +88,9 @@ const SECURITY_POOL_X2_AUCTION_UNMIGRATED_REP_DEPOSIT = 1_000n * 10n ** 18n
 const SECURITY_POOL_X2_AUCTION_BID_PRICES = [getTruthAuctionPriceAtTick(12n), getTruthAuctionPriceAtTick(10n), getTruthAuctionPriceAtTick(8n)] as const
 const SECURITY_POOL_X2_AUCTION_BID_AMOUNTS = [3n * 10n ** 18n, 4n * 10n ** 18n, 5n * 10n ** 18n, 6n * 10n ** 18n, 3n * 10n ** 18n, 4n * 10n ** 18n, 5n * 10n ** 18n, 3n * 10n ** 18n, 4n * 10n ** 18n, 5n * 10n ** 18n] as const
 const WETH_TOKEN_MINT_AMOUNT = 10_000n * 10n ** 18n
+const WETH_NAME_SLOT = 0n
+const WETH_SYMBOL_SLOT = 1n
+const WETH_DECIMALS_SLOT = 2n
 const ZOLTAR_CONSTRUCTOR_GENESIS_REP_TOKEN_ADDRESS = MAINNET_NETWORK_PROFILE.genesisRepTokenAddress
 const ZOLTAR_GENESIS_REPUTATION_TOKEN_OFFSET = 3n
 const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
@@ -133,6 +136,13 @@ function storageIndex(slot: bigint) {
 
 function storageValue(value: bigint) {
 	return toHex(value, { size: 32 })
+}
+
+function shortStringStorageValue(value: string) {
+	const valueHex = toHex(value).slice(2)
+	const byteLength = valueHex.length / 2
+	if (byteLength > 31) throw new Error('Simulation token metadata exceeds Solidity short-string storage')
+	return storageValue(BigInt(`0x${valueHex.padEnd(62, '0')}${(byteLength * 2).toString(16).padStart(2, '0')}`))
 }
 
 function requireReceiptContractAddress(code: Hex | undefined, address: Address, label: string) {
@@ -352,6 +362,9 @@ async function deploySimulationTokens({
 		address: profile.wethAddress,
 		bytecode: `0x${peripherals_WETH9_WETH9.evm.deployedBytecode.object}`,
 	})
+	await memoryClient.setStorageAt({ address: profile.wethAddress, index: storageIndex(WETH_NAME_SLOT), value: shortStringStorageValue('Wrapped Ether') })
+	await memoryClient.setStorageAt({ address: profile.wethAddress, index: storageIndex(WETH_SYMBOL_SLOT), value: shortStringStorageValue('WETH') })
+	await memoryClient.setStorageAt({ address: profile.wethAddress, index: storageIndex(WETH_DECIMALS_SLOT), value: storageValue(18n) })
 	await reportBootstrapProgress(onProgress, 'Installing simulation WETH token', 0.2)
 	const theoreticalSupply = await seedGenesisRepTokenState({
 		accounts,

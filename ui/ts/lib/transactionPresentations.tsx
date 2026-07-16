@@ -50,11 +50,21 @@ function getPreviewAccountAddress(account: Account | string | undefined) {
 	return typeof account === 'string' ? account : account.address
 }
 
-function formatPreviewArgument(value: unknown): string {
+function formatPreviewArgument(value: unknown, seenObjects: Set<object> = new Set()): string {
 	if (typeof value === 'bigint') return value.toString()
-	if (Array.isArray(value)) return `[${value.map(formatPreviewArgument).join(', ')}]`
 	if (value === undefined) return transactionCopy.undefinedValue
 	if (value === null) return transactionCopy.nullValue
+	if (typeof value === 'object') {
+		if (seenObjects.has(value)) return transactionCopy.circularValue
+		seenObjects.add(value)
+		const formattedValue = Array.isArray(value)
+			? `[${value.map(item => formatPreviewArgument(item, seenObjects)).join(', ')}]`
+			: `{${Object.entries(value)
+					.map(([key, entryValue]) => `${key}: ${formatPreviewArgument(entryValue, seenObjects)}`)
+					.join(', ')}}`
+		seenObjects.delete(value)
+		return formattedValue
+	}
 	return String(value)
 }
 
@@ -75,7 +85,7 @@ function getPreparedTransactionRows(intent: TransactionIntent, preview: Transact
 		{ label: transactionCopy.functionLabel, value: preview.functionName },
 		...(preview.value === undefined || preview.value === 0n ? [] : [{ label: transactionCopy.ethValue, value: `${formatCurrencyBalance(preview.value)} ${commonCopy.eth}` }]),
 		...(preview.data === undefined ? [] : [{ label: preview.dataLabel ?? transactionCopy.calldata, value: formatPreviewData(preview.data) }]),
-		...(preview.args === undefined || preview.args.length === 0 ? [] : [{ label: transactionCopy.argumentListLabel, value: preview.args.map(formatPreviewArgument).join(', ') }]),
+		...(preview.args === undefined || preview.args.length === 0 ? [] : [{ label: transactionCopy.argumentListLabel, value: preview.args.map(argument => formatPreviewArgument(argument)).join(', ') }]),
 	]
 }
 

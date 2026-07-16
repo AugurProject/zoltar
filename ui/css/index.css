@@ -81,7 +81,8 @@ main {
 .top-shell {
 	display: grid;
 	gap: 0;
-	overflow: hidden;
+	overflow: visible;
+	isolation: isolate;
 	border: 1px solid var(--divider-strong);
 	border-radius: var(--radius-shell);
 	background: linear-gradient(180deg, rgba(11, 23, 39, 0.9) 0%, rgba(8, 16, 28, 0.88) 100%);
@@ -1311,8 +1312,8 @@ button.currency-value.copyable:hover:not(:disabled) {
 }
 
 .tab-nav {
-	position: sticky;
-	top: 0.75rem;
+	position: relative;
+	top: auto;
 	z-index: 20;
 	display: flex;
 	flex-wrap: nowrap;
@@ -1324,7 +1325,35 @@ button.currency-value.copyable:hover:not(:disabled) {
 	border-top: 0;
 	background: transparent;
 	backdrop-filter: none;
-	overflow-x: auto;
+	overflow: visible;
+}
+
+.mobile-route-select {
+	display: none;
+}
+
+.protocol-guide-link {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: var(--touch-target-min);
+	margin-left: auto;
+	padding: 0.58rem 0.8rem;
+	border: 1px solid var(--interactive-border);
+	border-radius: var(--radius-control);
+	color: var(--accent);
+	font-size: var(--font-tab);
+	font-weight: 700;
+	letter-spacing: 0.05em;
+	text-decoration: none;
+	white-space: nowrap;
+}
+
+.protocol-guide-link:hover,
+.protocol-guide-link:focus-visible {
+	border-color: var(--interactive-border-hover);
+	background: var(--interactive-bg-hover);
+	color: var(--text);
 }
 
 .subtab-nav {
@@ -3139,6 +3168,63 @@ strong.metric-value-danger {
 	align-self: flex-start;
 }
 
+.transaction-object-context {
+	display: grid;
+	gap: var(--space-2);
+	padding: var(--space-3);
+	border: 1px solid var(--border-active);
+	border-radius: var(--radius-control);
+	background: var(--accent-faint);
+}
+
+.transaction-object-context > strong {
+	font-size: var(--font-caption);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+.transaction-object-context dl {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+	gap: var(--space-2) var(--space-3);
+	margin: 0;
+}
+
+.transaction-object-context dl > div {
+	display: grid;
+	gap: var(--space-1);
+	min-width: 0;
+}
+
+.transaction-object-context dt {
+	color: var(--muted);
+	font-family: var(--font-family-mono);
+	font-size: var(--font-label);
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+}
+
+.transaction-object-context dd {
+	min-width: 0;
+	margin: 0;
+	color: var(--text);
+	font-weight: 650;
+	overflow-wrap: anywhere;
+}
+
+.transaction-object-context .address-value.copyable,
+.transaction-object-context .identifier-value.copyable {
+	display: block;
+	width: 100%;
+	min-height: auto;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	text-align: left;
+	overflow-wrap: anywhere;
+	white-space: normal;
+}
+
 .transaction-review {
 	display: grid;
 	gap: 0.85rem;
@@ -4588,7 +4674,7 @@ strong.metric-value-danger {
 	}
 
 	.tab-nav {
-		top: 0.5rem;
+		top: auto;
 		width: 100%;
 		min-width: 0;
 		padding: 0;
@@ -7139,6 +7225,35 @@ strong.metric-value-danger {
 
 	.app-nav-stack {
 		padding: 0.5rem 0.55rem;
+	}
+
+	.tab-nav > .view-tabs.route {
+		display: none;
+	}
+
+	.mobile-route-select {
+		display: grid;
+		flex: 1 1 12rem;
+		gap: var(--space-1);
+		min-width: 0;
+		color: var(--text-subtle);
+		font-size: var(--font-caption);
+	}
+
+	.mobile-route-select select {
+		width: 100%;
+		min-width: 0;
+		min-height: var(--touch-target-min);
+		padding: 0.58rem 2rem 0.58rem 0.7rem;
+		border: 1px solid var(--control-border);
+		border-radius: var(--radius-control);
+		background-color: var(--control-bg);
+		color: var(--text);
+	}
+
+	.protocol-guide-link {
+		flex: 0 0 auto;
+		margin-left: 0;
 	}
 
 	.overview-inline-metrics.data-grid {

@@ -112,6 +112,22 @@ describe('ZoltarMigrationSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Split REP', 'REP migration is unavailable because this universe has not forked.')
 	})
 
+	test('labels the irreversible migration amount and requires an explicit destination', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ZoltarMigrationSection,
+				createProps({
+					zoltarMigrationForm: createForm({ amount: '10', outcomeIndexes: '' }),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(within(document.body).getByLabelText('Migration Amount')).not.toBeNull()
+		expect(document.body.querySelector('[aria-pressed="true"]')).toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Split REP', 'Select at least one outcome universe.')
+	})
+
 	test('enables prepare when additional REP must be moved into the migration balance', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(

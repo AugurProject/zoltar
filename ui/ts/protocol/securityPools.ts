@@ -476,7 +476,7 @@ export async function loadSecurityPoolPage(client: ReadClient, pageIndex: number
 	const deployments = await loadSecurityPoolDeployments(client, startIndex, count)
 	const pools = await loadListedSecurityPools(client, deployments, {
 		...(accountAddress === undefined ? {} : { accountAddress }),
-		vaultDetailMode: 'selected',
+		vaultDetailMode: 'all',
 		vaultPreviewLimit: SECURITY_POOL_PAGE_VAULT_PREVIEW_LIMIT,
 	})
 	return {
