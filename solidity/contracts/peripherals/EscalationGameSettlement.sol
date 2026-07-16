@@ -68,18 +68,25 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 			),
 			'Parent deposit claimed'
 		);
-		_verifyAndConsumeCarriedDepositProof(
-			outcomeIndex,
-			proof,
-			outcome == questionResolution
-				? CarryConsumptionReason.WinningClaim
-				: CarryConsumptionReason.LosingSettlement
-		);
+		_verifyAndConsumeCarriedDepositProof(outcomeIndex, proof);
 		(
 			uint256 forkedEscrowPrincipal,
 			uint256 forkedEscrowChildRep,
 			uint256 forkedEscrowChildRepToRelease
 		) = _consumeForkedEscrow(depositor, outcome, originalDepositAmount);
+		CarryConsumptionReason consumptionReason =
+			outcome == questionResolution
+				? CarryConsumptionReason.WinningClaim
+				: CarryConsumptionReason.LosingSettlement;
+		if (forkedEscrowPrincipal > 0) consumptionReason = CarryConsumptionReason.ForkedEscrowClaim;
+		_emitCarryDepositConsumed(
+			outcomeIndex,
+			proof.depositor,
+			proof.amount,
+			proof.parentDepositIndex,
+			proof.sourceNodeId,
+			consumptionReason
+		);
 		if (forkedEscrowPrincipal > 0) {
 			_consumeEscrowedRepForVault(depositor, forkedEscrowChildRepToRelease);
 			if (outcome == questionResolution) {
@@ -139,7 +146,15 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
 		require(!forkCarrySnapshotRequiresForkedEscrow, 'Forked proof unsupported');
 		uint8 outcomeIndex = uint8(outcome);
-		_verifyAndConsumeCarriedDepositProof(outcomeIndex, proof, CarryConsumptionReason.Export);
+		_verifyAndConsumeCarriedDepositProof(outcomeIndex, proof);
+		_emitCarryDepositConsumed(
+			outcomeIndex,
+			proof.depositor,
+			proof.amount,
+			proof.parentDepositIndex,
+			proof.sourceNodeId,
+			CarryConsumptionReason.Export
+		);
 		depositor = proof.depositor;
 		amount = proof.amount;
 		parentDepositIndex = proof.parentDepositIndex;

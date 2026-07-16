@@ -293,22 +293,10 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		state.currentLeafCount = leafCount + 1;
 	}
 
-	function _verifyAndConsumeCarriedDepositProof(
-		uint8 outcomeIndex,
-		CarriedDepositProof calldata proof,
-		CarryConsumptionReason reason
-	) internal {
+	function _verifyAndConsumeCarriedDepositProof(uint8 outcomeIndex, CarriedDepositProof calldata proof) internal {
 		_verifyCarriedDepositMerkleMountainRangeProof(outcomeIndex, proof);
 		_verifyAndAdvanceNullifier(outcomeIndex, proof.parentDepositIndex, proof.nullifierSiblings);
 		_consumeCarriedDeposit(outcomeIndex, proof.parentDepositIndex, proof.amount);
-		_emitCarryDepositConsumed(
-			outcomeIndex,
-			proof.depositor,
-			proof.amount,
-			proof.parentDepositIndex,
-			proof.sourceNodeId,
-			reason
-		);
 	}
 
 	function _consumeLocalDeposit(
@@ -340,7 +328,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		uint256 parentDepositIndex,
 		uint256 sourceNodeId,
 		CarryConsumptionReason reason
-	) private {
+	) internal {
 		(, , bytes32 carryRoot, uint256 carryTotal) = _getCurrentCarrySnapshot(outcomeIndex);
 		bytes memory eventData = abi.encode(
 			BinaryOutcomes.BinaryOutcome(outcomeIndex),

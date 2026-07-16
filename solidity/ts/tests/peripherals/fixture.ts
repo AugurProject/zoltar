@@ -892,6 +892,7 @@ export function usePeripheralsVaultAccountingFixture() {
 		'getVaultCount',
 		'getVaults',
 		'poolOwnershipToRep',
+		'redeemFees',
 		'redeemRep',
 		'updateVaultFees',
 		'withdrawFromEscalationGame',

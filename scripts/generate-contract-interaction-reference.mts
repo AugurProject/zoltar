@@ -250,7 +250,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'Trader',
 				effect: 'Adds collateral and mints one `Invalid`, `Yes`, and `No` share per complete-set unit.',
 				declarations: [{ name: 'createCompleteSet' }],
-				preconditions: 'Operational, unforked, unresolved, not awaiting continuation; positive ETH; bond capacity covers the new collateral.',
+				preconditions: 'Operational, unforked, unresolved, not awaiting continuation; positive ETH converts to at least one complete-set unit; bond capacity covers the new collateral.',
 				signals: '`CompleteSetCreated` and `PoolAccountingCheckpoint`',
 			},
 			{
@@ -352,9 +352,9 @@ const contractReferences: ContractReference[] = [
 			{
 				call: 'Direct ETH transfer to `receive()`',
 				caller: "Forker, this pool's truth auction, or parent pool only",
-				effect: 'Accepts ETH used by migration and auction settlement.',
+				effect: 'Accepts protocol-routed ETH used by migration and auction settlement. Forced ETH remains raw, unaccounted surplus rather than collateral or fees.',
 				declarations: [{ kind: 'receive', name: 'receive' }],
-				preconditions: 'Sender is one of the three authorized protocol addresses.',
+				preconditions: 'Sender is one of the three authorized protocol addresses. Forced ETH bypasses this ordinary-call guard.',
 				signals: 'No dedicated receive event; the calling protocol step emits its own event',
 			},
 		],
@@ -432,7 +432,7 @@ const contractReferences: ContractReference[] = [
 			{
 				call: '`finalizeTruthAuction(securityPool)`',
 				caller: 'Anyone',
-				effect: 'Finalizes the ended auction, transfers repair ETH, and fixes bidder ownership and allowance rates.',
+				effect: 'Finalizes the ended auction, transfers repair ETH, and fixes bidder ownership and allowance rates. The child becomes operational only if migration-routed collateral plus auction ETH meets the full parent collateral snapshot.',
 				declarations: [{ name: 'finalizeTruthAuction' }],
 				preconditions: 'Truth auction started and its one-week window has passed.',
 				signals: '`FinalizeAuction`, `TruthAuctionFinalized`, and auction `AuctionFinalized`',
@@ -518,7 +518,7 @@ const contractReferences: ContractReference[] = [
 	{
 		name: 'OpenOraclePriceCoordinator',
 		purpose: 'Obtains a fresh REP-per-ETH price and gates withdrawal, allowance, and liquidation operations behind it.',
-		readSurface: 'Use `isPriceValid`, request-cost getters, pending report fields, `getPendingOperationSlot`, active-operation pagination, and pending-settlement IDs to reconstruct oracle and operation state.',
+		readSurface: 'Use `isPriceValid`, `priceRoundMaxNotional`, `priceRoundConsumedNotional`, `getPriceRoundRemainingNotional`, request-cost getters, pending report fields, `getPendingOperationSlot`, active-operation pagination, and pending-settlement IDs to reconstruct oracle and operation state.',
 		sourcePath: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 		interactions: [
 			{
@@ -541,9 +541,9 @@ const contractReferences: ContractReference[] = [
 			{
 				call: '`executeStagedOperation(operationId)`',
 				caller: 'Anyone',
-				effect: 'Consumes and attempts one active staged operation using the current fresh price.',
+				effect: 'Consumes and attempts one active staged operation using the current fresh price. Successful risk-increasing operations debit the shared report-round budget; reductions and collateral withdrawals with no outstanding pool allowance debit zero.',
 				declarations: [{ name: 'executeStagedOperation' }],
-				preconditions: 'Operation exists and coordinator price is fresh; lifecycle failures are emitted rather than retried.',
+				preconditions: "Operation exists and coordinator price is fresh; lifecycle failures are emitted rather than retried. The operation's ETH notional must fit the report round's remaining configured budget.",
 				signals: '`ExecutedStagedOperation`',
 			},
 			{

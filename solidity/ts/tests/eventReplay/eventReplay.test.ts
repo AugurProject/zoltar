@@ -682,6 +682,48 @@ describe('event-only replay', () => {
 		}
 	})
 
+	test('vault migration replay keeps the same vault isolated across parallel child pools', () => {
+		const parentPool: Address = '0x1111111111111111111111111111111111111111'
+		const yesChildPool: Address = '0x2222222222222222222222222222222222222222'
+		const noChildPool: Address = '0x3333333333333333333333333333333333333333'
+		const vault: Address = '0x4444444444444444444444444444444444444444'
+		const migrationLog = (childPool: Address, outcomeIndex: bigint, logIndex: number) =>
+			createReplayLog({
+				emitter: '0x5555555555555555555555555555555555555555',
+				eventName: 'VaultMigrationCheckpoint',
+				logIndex,
+				args: {
+					parentPool,
+					childPool,
+					vault,
+					outcomeIndex,
+					migratedRepDelta: 1n,
+					resultingChildMigratedRepTotal: 1n,
+					resultingParentPoolOwnershipAmount: 0n,
+					resultingParentSecurityBondAllowance: 0n,
+					resultingChildPoolOwnershipAmount: 1n,
+					resultingChildSecurityBondAllowance: 1n,
+					resultingParentPoolOwnershipDenominator: 0n,
+					resultingChildPoolOwnershipDenominator: 1n,
+					resultingParentTotalSecurityBondAllowance: 0n,
+					resultingChildTotalSecurityBondAllowance: 1n,
+					collateralDelta: 0n,
+					cumulativeCollateralTransferred: 0n,
+				},
+			})
+
+		const replayed = replayZoltarEvents([migrationLog(noChildPool, 2n, 1), migrationLog(yesChildPool, 1n, 0)])
+		const migrationsByChild = replayed.vaultMigrations.get(parentPool)
+		const yesMigrations = migrationsByChild?.get(yesChildPool)
+		const noMigrations = migrationsByChild?.get(noChildPool)
+		if (!(yesMigrations instanceof Map) || !yesMigrations.has(vault)) {
+			throw new Error('Yes-child vault migration was overwritten')
+		}
+		if (!(noMigrations instanceof Map) || !noMigrations.has(vault)) {
+			throw new Error('No-child vault migration was overwritten')
+		}
+	})
+
 	test('protocol reducers reconstruct relationships, REP, lifecycle, and commitment state', () => {
 		const zoltar = '0x1111111111111111111111111111111111111111'
 		const repToken = '0x2222222222222222222222222222222222222222'

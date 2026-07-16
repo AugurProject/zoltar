@@ -1,4 +1,5 @@
 import { beforeEach, describe, test } from 'bun:test'
+import { peripherals_SecurityPool_SecurityPool } from '../../types/contractArtifact'
 import { usePeripheralsVaultAccountingFixture, type PeripheralsVaultAccountingFixture } from './fixture'
 
 const depositRepEvent = {
@@ -70,6 +71,7 @@ describe('Peripherals: vault accounting', () => {
 		getVaultCount,
 		getVaults,
 		poolOwnershipToRep,
+		redeemFees,
 		redeemRep,
 		updateVaultFees,
 		withdrawFromEscalationGame,
@@ -134,6 +136,24 @@ describe('Peripherals: vault accounting', () => {
 		strictEqualTypeSafe(depositArgs.repAmount, depositAmount, 'event should include the deposited REP amount')
 		strictEqualTypeSafe(depositArgs.poolOwnership, vault.repDepositShare, 'event should include updated vault ownership')
 		strictEqualTypeSafe(depositArgs.poolOwnershipDenominator, poolOwnershipDenominator, 'event should include updated pool ownership denominator')
+	})
+
+	test('zero-fee redemption emits no redemption checkpoint and does not call the recipient', async () => {
+		const redemptionHash = await redeemFees(client, securityPoolAddresses.securityPool, securityPoolAddresses.shareToken)
+		const receipt = await client.getTransactionReceipt({ hash: redemptionHash })
+		const poolLogs = receipt.logs.filter(log => log.address.toLowerCase() === securityPoolAddresses.securityPool.toLowerCase())
+		const decodedPoolLogs = poolLogs.map(log =>
+			decodeEventLog({
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				data: log.data,
+				topics: log.topics,
+			}),
+		)
+		assert.strictEqual(
+			decodedPoolLogs.some(log => log.eventName === 'PoolAccountingCheckpoint' && log.args.reason === 2n),
+			false,
+			'a true zero-fee redemption should not emit a fee-redemption checkpoint',
+		)
 	})
 
 	test('share token metadata includes the question id', async () => {

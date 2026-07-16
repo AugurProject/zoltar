@@ -237,7 +237,7 @@
 					auction, and lifecycle boundaries rather than by Solidity file.
 				</p>
 				<ul>
-					<li><a href="#open-violations">Open launch violations</a></li>
+					<li><a href="#launch-remediations">Remediated launch findings</a></li>
 					<li><a href="#authority">Authority and deployment identity</a></li>
 					<li><a href="#universes">Universes, REP supply, and migration</a></li>
 					<li>
@@ -254,17 +254,18 @@
 				</ul>
 			</section>
 
-			<section id="open-violations">
-				<h2>Open Launch Violations</h2>
+			<section id="launch-remediations">
+				<h2>Remediated Launch Findings</h2>
 				<p>
-					These are required safety properties, not descriptions of current
-					behavior. Each has a confirmed failure path in the audited
-					implementation.
+					These properties had confirmed failure paths in the audited
+					implementation. The current implementation enforces them and retains
+					focused regression coverage. Their stable identifiers remain in this
+					catalog so future changes preserve the fixes.
 				</p>
 				<div
 					class="table-scroll"
 					role="region"
-					aria-label="Open invariant violations"
+					aria-label="Remediated invariant findings"
 					tabindex="0"
 				>
 					<table>
@@ -272,7 +273,7 @@
 							<tr>
 								<th>ID</th>
 								<th>Required invariant</th>
-								<th>Current failure</th>
+								<th>Current enforcement</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -283,8 +284,10 @@
 									change pool fork initiation.
 								</td>
 								<td>
-									One prefunded REP wei makes the proxy ledger delta exceed the
-									forker's expected delta, so every initiation attempt reverts.
+									The forker migrates only the REP received from the pool or
+									escalation game during the call and checks the migration-ledger
+									delta. Prefunded proxy REP remains isolated in both external-
+									and own-fork paths.
 								</td>
 							</tr>
 							<tr>
@@ -294,8 +297,9 @@
 									economically consistent supply denominator.
 								</td>
 								<td>
-									A child prices new sets from full parent supply but redeems
-									against actual migrated winning supply.
+									Child setup reconciles balanced actual outcome supplies,
+									complete-set operations reject unequal supplies, and winning
+									redemption divides collateral by the actual winning supply.
 								</td>
 							</tr>
 							<tr>
@@ -305,8 +309,9 @@
 									required transition.
 								</td>
 								<td>
-									Raw child balance can exceed inherited allowance and
-									permanently revert truth-auction finalization.
+									Collateral is tracked independently from raw balance. Fork
+									migration and auction finalization add only protocol-routed
+									ETH, leaving forced ETH as unaccounted surplus.
 								</td>
 							</tr>
 							<tr>
@@ -316,30 +321,35 @@
 									positive quantity of every outcome share.
 								</td>
 								<td>
-									One reconciled forced ETH wei creates positive collateral with
-									zero supply, after which deposits mint zero forever.
+									A zero-supply pool can bootstrap only with zero tracked
+									collateral, and a mint that would calculate zero shares
+									reverts without changing accounting.
 								</td>
 							</tr>
 							<tr>
 								<td><code>ORA-07</code></td>
 								<td>
-									The value authorized by one price is bounded by the economic
-									security contesting that report.
+									Aggregate operation notional authorized by one accepted price
+									is capped by a configured report-round budget.
 								</td>
 								<td>
-									A fixed report secures otherwise unmetered withdrawals,
-									allowance changes, and liquidations during the price cache.
+									Each accepted report establishes a notional budget from its
+									accepted token amounts and the configured escalation-halt
+									multiplier. Successful staged operations and direct escalation
+									deposits consume that shared budget; whether the multiplier is
+									economically sufficient remains a parameter assumption.
 								</td>
 							</tr>
 							<tr>
 								<td><code>AUC-07</code></td>
 								<td>
-									Ownership and allowance issued by recapitalization remain
-									proportional to ETH repair achieved.
+									REP ownership issued by recapitalization remains proportional
+									to qualifying ETH repair achieved.
 								</td>
 								<td>
-									A lone minimum underfunded bid may receive almost the full
-									child REP cap while repairing only a tiny part of the deficit.
+									Underfunded demand buys REP at the cap-implied reserve in
+									proportion to qualifying ETH. A child remains inactive until
+									its tracked collateral reaches the complete repair target.
 								</td>
 							</tr>
 						</tbody>
@@ -699,10 +709,11 @@
 									exchange rate, increase liabilities, or block a required
 									transition.
 								</td>
-								<td>Open violation</td>
+								<td>Reviewed preservation</td>
 								<td>
 									<a href="../solidity/contracts/peripherals/SecurityPool.sol"
-										><code>receive</code> and fee reconciliation</a
+										><code>receive</code>, tracked collateral, and fee
+										redemption</a
 									>,
 									<a
 										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
@@ -714,16 +725,18 @@
 								<td><code>BAL-03</code></td>
 								<td>
 									Tracked complete-set collateral never exceeds total
-									security-bond allowance, including after fee-redemption
-									reconciliation of unsolicited ETH.
+									security-bond allowance. Fee checkpointing and redemption
+									cannot reclassify unsolicited ETH as collateral.
 								</td>
-								<td>Open violation</td>
+								<td>Reviewed preservation</td>
 								<td>
 									<a href="../solidity/contracts/peripherals/SecurityPool.sol"
-										><code>_requireCapacityNotExceeded</code> versus
-										<code
-											>_reconcileCollateralBalanceAfterFeeRedemption</code
-										></a
+										><code>_requireCapacityNotExceeded</code>,
+										<code>setPoolFinancials</code>, and fee redemption</a
+									>,
+									<a
+										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
+										>fork finalization</a
 									>
 								</td>
 							</tr>
@@ -818,10 +831,9 @@
 								<td><code>SHARE-03</code></td>
 								<td>
 									A successful positive-value complete-set mint returns a
-									positive share amount and respects a caller-specified minimum
-									output.
+									positive share amount.
 								</td>
-								<td>Open violation</td>
+								<td>Contract guard</td>
 								<td>
 									<a href="../solidity/contracts/peripherals/SecurityPool.sol"
 										><code>cashToShares</code> and
@@ -836,7 +848,7 @@
 									identical to the supply used to divide collateral after
 									resolution.
 								</td>
-								<td>Open violation</td>
+								<td>Reviewed preservation</td>
 								<td>
 									<a href="../solidity/contracts/peripherals/SecurityPool.sol"
 										><code>cashToShares</code> and <code>redeemShares</code></a
@@ -962,7 +974,7 @@
 									cannot block initiation or become unclassified migration
 									principal.
 								</td>
-								<td>Open violation</td>
+								<td>Reviewed preservation</td>
 								<td>
 									<a
 										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
@@ -1063,26 +1075,32 @@
 							<tr>
 								<td><code>FORK-11</code></td>
 								<td>
-									Before child complete-set minting reopens, actual Invalid,
-									Yes, and No supplies are reconciled with the pool's pricing
-									supply.
+									Child pricing supply equals balanced actual Invalid, Yes, and
+									No supply; when outcome supplies differ, complete-set minting
+									and burning remain blocked.
 								</td>
-								<td>Open violation</td>
+								<td>Reviewed preservation</td>
 								<td>
 									<a
 										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
 										><code>setTotalShares</code> during auction preparation</a
+									>,
+									<a
+										href="../solidity/contracts/peripherals/tokens/ShareToken.sol"
+										><code>reconciledCompleteSetSupply</code> and
+										complete-set supply guards</a
 									>
 								</td>
 							</tr>
 							<tr>
 								<td><code>FORK-12</code></td>
 								<td>
-									A child becomes operational only after REP, vault, escalation,
-									share-supply, fee, collateral, and auction accounting are
-									mutually consistent.
+									A child becomes operational only after tracked collateral
+									reaches the parent fork snapshot. Separate guards keep
+									complete-set operations blocked when migrated share supplies
+									are inconsistent.
 								</td>
-								<td>Open violation</td>
+								<td>Reviewed preservation</td>
 								<td>
 									<a
 										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
@@ -1385,14 +1403,15 @@
 							<tr>
 								<td><code>ORA-07</code></td>
 								<td>
-									Aggregate external value authorized by one accepted report is
-									capped in proportion to report and dispute security.
+									Aggregate operation notional authorized by one accepted report
+									is capped by the configured report-round budget derived from
+									accepted report amounts and the escalation-halt multiplier.
 								</td>
-								<td>Open violation</td>
+								<td>Reviewed preservation</td>
 								<td>
 									<a
 										href="./open-oracle-integration.html#fixed-report-unmetered-exposure"
-										>Fixed report and unmetered exposure</a
+										>Configured report exposure budget</a
 									>
 								</td>
 							</tr>
@@ -1550,14 +1569,13 @@
 							<tr>
 								<td><code>AUC-07</code></td>
 								<td>
-									REP ownership and allowance issued during repair are
-									proportional to actual ETH raised, subject to an explicit
-									maximum dilution rule.
+									REP ownership issued during repair is proportional to
+									qualifying ETH raised at or above the cap-implied reserve.
 								</td>
-								<td>Open violation</td>
+								<td>Reviewed preservation</td>
 								<td>
 									<a href="./auction-design.html"
-										>Underfunded full-cap clearing</a
+										>Reserve-priced underfunded clearing</a
 									>
 								</td>
 							</tr>
@@ -1567,7 +1585,7 @@
 									Auction finalization succeeds regardless of unsolicited ETH
 									already present in the child pool or forker.
 								</td>
-								<td>Open violation</td>
+								<td>Reviewed preservation</td>
 								<td>
 									<a
 										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
@@ -1579,8 +1597,9 @@
 								<td><code>AUC-09</code></td>
 								<td>
 									Full collateral repair assumes sufficient auction demand. With
-									weak demand, finalization can sell the REP cap and return the
-									child to operation with a residual collateral haircut.
+									weak demand, finalization sells REP only in proportion to
+									qualifying ETH and leaves the child inactive below its repair
+									target.
 								</td>
 								<td>Economic or external assumption</td>
 								<td>
@@ -1642,7 +1661,7 @@
 									despite dust, unsolicited balances, empty collections, and
 									adversarial call ordering.
 								</td>
-								<td>Open violation</td>
+								<td>Proposed guard</td>
 								<td>
 									<code>FORK-04</code>, <code>BAL-02</code>, and
 									<code>AUC-08</code>
@@ -1811,11 +1830,16 @@
 									<a
 										href="../solidity/ts/tests/peripherals/forkMigration.test.ts"
 										><code>forkMigration.test.ts</code></a
-									>.
+									>, plus
+									<a href="../solidity/ts/tests/peripheralsInvariant.test.ts"
+										><code>peripheralsInvariant.test.ts</code></a
+									>. Together, these cover forced balances, prefunded migration
+									proxies, zero-supply bootstrap, unequal child outcome
+									supplies, and positive-output mints.
 								</td>
 								<td>
-									Forced ETH/REP, zero-supply bootstrap, unequal child outcome
-									supplies, and minimum-output properties.
+									Caller-selectable mint slippage protection and broader
+									stateful vault/share accounting sequences.
 								</td>
 							</tr>
 							<tr>
@@ -1841,11 +1865,12 @@
 									<a href="../solidity/ts/tests/priceOracleSecurity.test.ts"
 										><code>priceOracleSecurity.test.ts</code></a
 									>
-									and staged-operation invariant tests.
+									>, including aggregate report-budget accounting, manual
+									overflow execution, and staged-operation invariant tests.
 								</td>
 								<td>
-									Aggregate per-report notional budget and same-block
-									dispute/settlement ordering.
+									Same-block dispute/settlement ordering and validation that the
+									configured multiplier is economically sufficient.
 								</td>
 							</tr>
 							<tr>
@@ -1857,11 +1882,13 @@
 									<a
 										href="../solidity/ts/tests/peripherals/truthAuction.test.ts"
 										><code>truthAuction.test.ts</code></a
-									>, and tick-math fuzzing.
+									>, including repair-ratio, forced-balance finalization,
+									reserve-price, proportional underfunding, claim-order, and
+									tick-math coverage.
 								</td>
 								<td>
-									Repair-ratio, forced-balance finalization, reserve-price, and
-									dilution bounds.
+									Stateful bidder/order fuzzing and an explicit recovery policy
+									for a child left inactive by weak auction demand.
 								</td>
 							</tr>
 							<tr>
@@ -1873,8 +1900,8 @@
 									and deadline scenario tests.
 								</td>
 								<td>
-									Stateful action-sequence fuzzing with dust, adversarial
-									ordering, and forced balances.
+									Stateful action-sequence fuzzing with dust and adversarial
+									ordering across repeated forks.
 								</td>
 							</tr>
 						</tbody>

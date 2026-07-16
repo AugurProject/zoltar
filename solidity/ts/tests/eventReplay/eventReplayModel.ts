@@ -256,7 +256,7 @@ export type ReplayState = {
 	completeSetSupplies: Map<Address, bigint>
 	vaults: Map<Address, Map<Address, VaultAccountingReplay>>
 	forks: Map<Address, ForkReplay>
-	vaultMigrations: Map<Address, Map<Address, VaultMigrationReplay>>
+	vaultMigrations: Map<Address, Map<Address, Map<Address, VaultMigrationReplay>>>
 	poolChildren: Map<Address, Map<bigint, Address>>
 	escalationSnapshots: Map<Address, Hex>
 	escalationCarryRoots: Map<Address, HexTriple>
@@ -763,13 +763,15 @@ export function reduceForkerEvent(state: ReplayState, log: ReplayLog) {
 	}
 	if (log.eventName === 'VaultMigrationCheckpoint') {
 		const parentPool = requireAddress(log.args, 'parentPool')
-		let migrations = state.vaultMigrations.get(parentPool)
+		const childPool = requireAddress(log.args, 'childPool')
+		const migrationsByChild = getOrCreateNestedMap(state.vaultMigrations, parentPool)
+		let migrations = migrationsByChild.get(childPool)
 		if (migrations === undefined) {
 			migrations = new Map()
-			state.vaultMigrations.set(parentPool, migrations)
+			migrationsByChild.set(childPool, migrations)
 		}
 		migrations.set(requireAddress(log.args, 'vault'), {
-			childPool: requireAddress(log.args, 'childPool'),
+			childPool,
 			outcomeIndex: requireBigInt(log.args, 'outcomeIndex'),
 			migratedRepDelta: requireBigInt(log.args, 'migratedRepDelta'),
 			resultingChildMigratedRepTotal: requireBigInt(log.args, 'resultingChildMigratedRepTotal'),

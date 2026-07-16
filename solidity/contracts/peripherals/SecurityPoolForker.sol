@@ -228,7 +228,9 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	) private {
 		if (!_forkOccurredBeforeEscalationSettled(escalationGame, forkTime)) return;
 		EscalationForkSnapshot storage snapshot = escalationForkSnapshotByPool[securityPool];
-		require(!snapshot.initialized, 'Fork snapshot set');
+		// Keep this unreachable double-initialization guard data-free so the forker
+		// remains deployable under the EIP-170 runtime bytecode limit.
+		if (snapshot.initialized) revert();
 		(
 			bytes32[64][3] memory carryPeaks,
 			uint256[3] memory carryLeafCounts,
@@ -584,6 +586,9 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		(uint256 repPurchased, uint256 auctionEthReceived) = _consumeTruthAuctionRep(securityPool, data);
 		_captureUnclaimedCollateralForAuction(securityPool, parent, data, auctionEthReceived);
 		_finalizeOwnershipAfterAuction(securityPool, data, parentData, repPurchased);
+		if (data.forkCollateralReceived >= parentData.collateralAtFork) {
+			securityPool.setSystemState(SystemState.Operational);
+		}
 		_finalizeEscalationStateAfterAuction(securityPool, parentData);
 		_emitFinalizeAuctionEvent(securityPool, parentData, data, repPurchased);
 		emit TruthAuctionFinalized(securityPool);
@@ -604,7 +609,6 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			}
 			repPurchased = data.truthAuction.totalRepPurchased();
 		}
-		securityPool.setSystemState(SystemState.Operational);
 	}
 
 	function _captureUnclaimedCollateralForAuction(
@@ -615,11 +619,11 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	) private {
 		// Only protocol-routed fork collateral and auction proceeds back complete sets.
 		// ETH forced into the child bypasses receive() and remains an unaccounted surplus.
-		uint256 collateralAmount = data.forkCollateralReceived + auctionEthReceived;
+		data.forkCollateralReceived += auctionEthReceived;
 		uint256 parentTotalSecurityBondAllowance = parent.totalSecurityBondAllowance();
 		data.auctionedSecurityBondAllowance = parentTotalSecurityBondAllowance - data.migratedSecurityBondAllowance;
 		securityPool.setPoolFinancials(
-			collateralAmount,
+			data.forkCollateralReceived,
 			parentTotalSecurityBondAllowance,
 			data.migratedSecurityBondAllowance
 		);

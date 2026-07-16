@@ -372,6 +372,7 @@ contract SecurityPool is ISecurityPool {
 	function redeemFees(address vault) external {
 		updateVaultFees(vault);
 		uint256 fees = securityVaults[vault].unpaidEthFees;
+		if (fees == 0) return;
 		securityVaults[vault].unpaidEthFees = 0;
 		totalFeesOwedToVaults -= fees;
 		_syncActiveVault(vault);
@@ -583,24 +584,19 @@ contract SecurityPool is ISecurityPool {
 			'Target safe'
 		);
 
-		(uint256 debtToMove, uint256 repToMove) = SecurityPoolUtils.calculateLiquidationTransfer(
-			vaultsRepDeposit,
-			snapshotTargetAllowance,
-			debtAmount,
-			repEthPrice
-		);
+		(uint256 debtToMove, uint256 repToMove, uint256 ownershipToMove) = SecurityPoolUtils
+			.calculateLiquidationTransfer(
+				snapshotTargetOwnership,
+				snapshotTargetAllowance,
+				snapshotTotalRep,
+				snapshotDenominator,
+				debtAmount,
+				repEthPrice,
+				securityVaults[targetVaultAddress].poolOwnership,
+				getTotalRepBalance(),
+				poolOwnershipDenominator
+			);
 		require(debtToMove > 0, 'No liq');
-		uint256 ownershipToMove = repToPoolOwnership(repToMove);
-		if (debtToMove == snapshotTargetAllowance) {
-			uint256 currentTargetOwnership = securityVaults[targetVaultAddress].poolOwnership;
-			if (
-				ownershipToMove >= currentTargetOwnership ||
-				poolOwnershipToRep(currentTargetOwnership - ownershipToMove) < SecurityPoolUtils.MIN_REP_DEPOSIT
-			) {
-				repToMove = poolOwnershipToRep(currentTargetOwnership);
-				ownershipToMove = currentTargetOwnership;
-			}
-		}
 		require(
 			debtToMove * securityMultiplier * repEthPrice > repToMove * SecurityPoolUtils.PRICE_PRECISION,
 			'No gain'
@@ -686,7 +682,7 @@ contract SecurityPool is ISecurityPool {
 		require(msg.value > 0 && !isEscalationResolved(), 'Resolved');
 		updateCollateralAmount();
 		uint256 completeSetsToMint = cashToShares(msg.value);
-		require(completeSetsToMint > 0, 'Zero shares');
+		require(completeSetsToMint > 0, 'Exchange rate undefined');
 		uint256 nextCompleteSetCollateralAmount = completeSetCollateralAmount + msg.value;
 		_requireCapacityNotExceeded(totalSecurityBondAllowance, nextCompleteSetCollateralAmount);
 		shareTokenSupply += completeSetsToMint;
@@ -827,6 +823,7 @@ contract SecurityPool is ISecurityPool {
 		_requireVaultBondCoverage(remainingRep, securityVaults[msg.sender].securityBondAllowance, repEthPrice);
 		_requirePoolBondCoverage(postTransferRepBalance, totalSecurityBondAllowance, repEthPrice);
 		_requireMinimumVaultRep(remainingRep, updatedPoolOwnership == 0, 'Vault REP below minimum');
+		priceOracleManagerAndOperatorQueuer.consumeEscalationDepositNotional(depositedAmount);
 
 		securityVaults[msg.sender].poolOwnership = updatedPoolOwnership;
 		poolOwnershipDenominator = postTransferPoolOwnershipDenominator;
