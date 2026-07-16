@@ -562,8 +562,8 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		uint256 poolAuctionableRepAtFork = _getPoolAuctionableRepAtFork(parentData);
 		if (poolAuctionableRepAtFork == 0 || data.migratedRep >= poolAuctionableRepAtFork) return 0;
 		if (data.forkCollateralReceived >= parentCollateral) return 0;
-		// Migration rounds cumulative collateral targets up. Auction only the exact
-		// unfilled snapshot remainder so final collateral cannot exceed the target.
+		// Migration rounds each branch's cumulative collateral target up. Auction only
+		// the exact unfilled snapshot remainder so final collateral cannot exceed it.
 		ethToBuy = parentCollateral - data.forkCollateralReceived;
 	}
 
@@ -623,7 +623,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		uint256 auctionEthReceived
 	) private {
 		// Only protocol-routed fork collateral and auction proceeds back complete sets.
-		// ETH forced into the child bypasses receive() and remains unaccounted surplus.
+		// ETH forced into the child bypasses receive() and remains an unaccounted surplus.
 		data.forkCollateralReceived += auctionEthReceived;
 		uint256 parentTotalSecurityBondAllowance = parent.totalSecurityBondAllowance();
 		data.auctionedSecurityBondAllowance = parentTotalSecurityBondAllowance - data.migratedSecurityBondAllowance;
