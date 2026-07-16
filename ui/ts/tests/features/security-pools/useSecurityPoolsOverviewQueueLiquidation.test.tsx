@@ -209,9 +209,12 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 			loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
 				currentRepBalance: 25n,
 				currentWethBalance: 2n,
-				exactToken1Report: 10n,
-				initialReportAmount2: 5n,
+				initialReportAmount2: 10n,
+				maximumInitialWeth: 5n,
+				minimumToken1Report: 5n,
+				proposedRepPerEthPrice: 2n * 10n ** 18n,
 				reputationTokenAddress: getAddress('0x0000000000000000000000000000000000000006'),
+				requestedInitialWeth: 0n,
 				wethShortfall: 3n,
 			})),
 			loadOracleManagerQueueOperationEthValue: mock(async () => 12n),
@@ -245,9 +248,12 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		const loadCoordinatorInitialReportFundingRequirement = mock(async (_client: TestSecurityPoolsOverviewWriteClient, _managerAddress: Address, walletAddress: Address) => ({
 			currentRepBalance: walletAddress === WALLET_ADDRESS ? 25n : 50n,
 			currentWethBalance: walletAddress === WALLET_ADDRESS ? 2n : 4n,
-			exactToken1Report: 10n,
-			initialReportAmount2: 5n,
+			initialReportAmount2: 10n,
+			maximumInitialWeth: 5n,
+			minimumToken1Report: 5n,
+			proposedRepPerEthPrice: 2n * 10n ** 18n,
 			reputationTokenAddress: getAddress('0x0000000000000000000000000000000000000006'),
+			requestedInitialWeth: 0n,
 			wethShortfall: walletAddress === WALLET_ADDRESS ? 3n : 1n,
 		}))
 		const dependencies = createSecurityPoolsOverviewDependencies({
@@ -285,17 +291,23 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		const firstWalletFunding = createDeferred<{
 			currentRepBalance: bigint
 			currentWethBalance: bigint
-			exactToken1Report: bigint
 			initialReportAmount2: bigint
+			maximumInitialWeth: bigint
+			minimumToken1Report: bigint
+			proposedRepPerEthPrice: bigint
 			reputationTokenAddress: Address
+			requestedInitialWeth: bigint
 			wethShortfall: bigint
 		}>()
 		const secondWalletFunding = createDeferred<{
 			currentRepBalance: bigint
 			currentWethBalance: bigint
-			exactToken1Report: bigint
 			initialReportAmount2: bigint
+			maximumInitialWeth: bigint
+			minimumToken1Report: bigint
+			proposedRepPerEthPrice: bigint
 			reputationTokenAddress: Address
+			requestedInitialWeth: bigint
 			wethShortfall: bigint
 		}>()
 		const loadCoordinatorInitialReportFundingRequirement = mock(async (_client: TestSecurityPoolsOverviewWriteClient, _managerAddress: Address, walletAddress: Address) => await (walletAddress === WALLET_ADDRESS ? firstWalletFunding.promise : secondWalletFunding.promise))
@@ -324,9 +336,12 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		firstWalletFunding.resolve({
 			currentRepBalance: 25n,
 			currentWethBalance: 2n,
-			exactToken1Report: 10n,
-			initialReportAmount2: 5n,
+			initialReportAmount2: 10n,
+			maximumInitialWeth: 5n,
+			minimumToken1Report: 5n,
+			proposedRepPerEthPrice: 2n * 10n ** 18n,
 			reputationTokenAddress: getAddress('0x0000000000000000000000000000000000000006'),
+			requestedInitialWeth: 0n,
 			wethShortfall: 3n,
 		})
 		await act(async () => {
@@ -338,9 +353,12 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		secondWalletFunding.resolve({
 			currentRepBalance: 50n,
 			currentWethBalance: 4n,
-			exactToken1Report: 10n,
-			initialReportAmount2: 5n,
+			initialReportAmount2: 10n,
+			maximumInitialWeth: 5n,
+			minimumToken1Report: 5n,
+			proposedRepPerEthPrice: 2n * 10n ** 18n,
 			reputationTokenAddress: getAddress('0x0000000000000000000000000000000000000006'),
+			requestedInitialWeth: 0n,
 			wethShortfall: 1n,
 		})
 		await act(async () => {
@@ -411,9 +429,12 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 			loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
 				currentRepBalance: 10n,
 				currentWethBalance: 0n,
-				exactToken1Report: 10n,
 				initialReportAmount2: 5n,
+				maximumInitialWeth: 10n,
+				minimumToken1Report: 10n,
+				proposedRepPerEthPrice: 1n,
 				reputationTokenAddress: getAddress('0x0000000000000000000000000000000000000006'),
+				requestedInitialWeth: 0n,
 				wethShortfall: 5n,
 			})),
 			loadOracleManagerDetails: mock(async () => ({

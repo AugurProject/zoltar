@@ -805,8 +805,6 @@ contract SecurityPool is ISecurityPool {
 		_requireVaultBondCoverage(remainingRep, securityVaults[msg.sender].securityBondAllowance, repEthPrice);
 		_requirePoolBondCoverage(postTransferRepBalance, totalSecurityBondAllowance, repEthPrice);
 		_requireMinimumVaultRep(remainingRep, updatedPoolOwnership == 0, 'Vault REP below minimum');
-		priceOracleManagerAndOperatorQueuer.consumeEscalationDepositNotional(depositedAmount);
-
 		securityVaults[msg.sender].poolOwnership = updatedPoolOwnership;
 		poolOwnershipDenominator = postTransferPoolOwnershipDenominator;
 		IERC20(address(repToken)).safeTransfer(address(escalationGame), depositedAmount);

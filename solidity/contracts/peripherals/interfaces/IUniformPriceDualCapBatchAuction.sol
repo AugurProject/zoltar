@@ -57,6 +57,7 @@ interface IUniformPriceDualCapBatchAuction {
 	function submitBid(int256 tick) external payable;
 
 	function finalize() external;
+	function previewFinalization() external view returns (uint256 ethToSend, uint256 repPurchased);
 
 	function computeClearing()
 		external

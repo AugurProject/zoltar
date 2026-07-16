@@ -6075,6 +6075,10 @@ strong.metric-value-danger {
 	min-width: 0;
 }
 
+.security-pool-browse-vault-row-title > .collateralization-gauge {
+	flex: 0 0 auto;
+}
+
 .security-pool-browse-vault-row-title .security-pool-browse-vault-row-id {
 	align-self: center;
 	flex: 1 1 auto;
@@ -7361,6 +7365,13 @@ strong.metric-value-danger {
 
 	.security-pool-browse-vault-row-title {
 		align-items: flex-start;
+		flex-direction: column;
+		gap: 0.65rem;
+	}
+
+	.security-pool-browse-vault-row-title .security-pool-browse-vault-row-id {
+		align-self: stretch;
+		width: 100%;
 	}
 
 	.security-pool-browse-vault-row-liquidate,

@@ -758,7 +758,10 @@ describe('Peripherals: fork migration', () => {
 			const minimumAllowance = 1n * 10n ** 18n
 			const allowanceCreationPrice = 6n * 10n ** 18n
 			const liquidationPrice = 61n * 10n ** 17n
-			const extraRepAmount = 3n * 10n ** 18n
+			// A zero-basefee request has a one-wei minimum WETH side, so ceiling the
+			// proposed 6.1 REP/ETH price produces a settled price of 7 REP/ETH.
+			// Top up past that rounded liquidation boundary.
+			const extraRepAmount = 5n * 10n ** 18n
 
 			await approveToken(targetClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
 			await depositRep(targetClient, securityPoolAddresses.securityPool, minimumRepDeposit)

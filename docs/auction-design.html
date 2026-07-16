@@ -35,8 +35,9 @@
 					truth auction, using the proceeds to raise as much repair ETH as market
 					demand supports. Strong demand can fully restore the collateral shortfall;
 					when demand is weak, only bids at or above the cap-implied reserve buy
-					REP, in proportion to the ETH actually retained. With no qualifying bids,
-					it sells no REP. The auction
+					REP, in proportion to the ETH that would otherwise be retained. With no
+					qualifying bids, or when the proportional aggregate rounds to zero REP,
+					every bid refunds. The auction
 					discovers that repair price; it does not determine which branch is true.
 				</p>
 
@@ -46,8 +47,9 @@
 					sell more than a fixed amount of child-universe REP. Strong demand
 					can hit the ETH target first, or it can bind the REP sale cap first.
 					When neither cap binds, the auction derives a reserve from both caps,
-					retains only bids at or above that reserve's ceiling tick, and sells the
-					proportional REP those bids fund. Lower bids refund. This prevents a lone
+					selects bids at or above that reserve's ceiling tick, and calculates the
+					proportional REP those bids fund. Lower bids refund; if that aggregate REP
+					rounds to zero, every bid refunds. This prevents a lone
 					minimum bidder from extracting the full REP inventory. Placeholder runs this process through
 					the <code>UniformPriceDualCapBatchAuction</code> contract, then
 					writes winning claims back into vault state rather than paying out
@@ -273,14 +275,15 @@
 					<code>underfundedThreshold = ceil(ethRaiseCap · 1e18 /
 					maxRepBeingSold)</code>, stores the lowest tick whose price reaches that
 					reserve as <code>clearingTick</code>, retains ETH at or above that tick,
-					and refunds lower ticks. Purchased REP is the sale cap multiplied by
-					the fraction of the ETH target actually retained, so integer tick
-					rounding cannot turn accepted positive ETH into zero REP.
+					and refunds lower ticks when the resulting proportional REP is positive.
+					Purchased REP is the sale cap multiplied by the fraction of the ETH target
+					represented by qualifying bids. If that aggregate floors to zero, the
+					contract resets retained ETH to zero and every bid refunds.
 				</p>
 				<figure class="diagram diagram-wide" id="fig-auction-clearing-ladder">
 					<svg viewBox="0 0 980 360" role="img" aria-labelledby="auction-clearing-title auction-clearing-desc">
 						<title id="auction-clearing-title">Auction demand is evaluated from high ticks to low ticks before uniform or underfunded clearing</title>
-						<desc id="auction-clearing-desc">High-price bids are considered first. If cumulative demand reaches the ETH raise cap or REP sale cap, the first binding tick sets normal uniform clearing. If neither cap is reached, finalization retains bids at or above the cap-implied reserve tick and allocates REP proportionally.</desc>
+						<desc id="auction-clearing-desc">High-price bids are considered first. If cumulative demand reaches the ETH raise cap or REP sale cap, the first binding tick sets normal uniform clearing. If neither cap is reached, finalization selects bids at or above the cap-implied reserve tick and allocates REP proportionally, unless the aggregate rounds to zero and every bid refunds.</desc>
 						<defs>
 							<marker id="auction-clearing-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 								<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
@@ -330,15 +333,17 @@
 					weak-demand path.
 				</p>
 				<p>
-					Under weak demand, the auction retains only demand willing to pay the
-					reserve implied by the ETH and REP caps. It sells only the REP funded by
-					that retained ETH. If cumulative demand instead reaches either cap at an
+					Under weak demand, the auction selects only demand willing to pay the
+					reserve implied by the ETH and REP caps. It retains that ETH and sells
+					proportional REP only when the aggregate REP result is positive; otherwise
+					every bid refunds. If cumulative demand instead reaches either cap at an
 					active tick, the normal funded-clearing branch applies.
 				</p>
 				<p>
 					A lone minimum bidder below reserve receives a refund and no REP. A lone
 					bidder at or above reserve receives only the proportional REP purchased
-					by its ETH. <code>SecurityPoolForker.claimAuctionProceeds</code> maps
+					by its ETH, unless that aggregate floors to zero and the bid refunds.
+					<code>SecurityPoolForker.claimAuctionProceeds</code> maps
 					that purchased REP into the corresponding pool-ownership credit and
 					auctioned allowance share for the child branch.
 				</p>
@@ -354,12 +359,12 @@
 						<tr>
 							<td>Above the binding level</td>
 							<td>Wins in full at the uniform clearing price.</td>
-							<td>Wins only if its tick is at or above the cap-implied reserve <code>clearingTick</code>.</td>
+							<td>Qualifies only if its tick is at or above the cap-implied reserve <code>clearingTick</code>; every bid still refunds if aggregate REP rounds to zero.</td>
 						</tr>
 						<tr>
 							<td>At the binding level</td>
 							<td>Shares the marginal fill FIFO inside that tick.</td>
-							<td>Qualifies at the reserve boundary, then shares the cap-ratio REP allocation by retained ETH.</td>
+							<td>Qualifies at the reserve boundary, then shares a positive cap-ratio REP allocation by retained ETH; a zero aggregate refunds all bids.</td>
 						</tr>
 						<tr>
 							<td>Below the binding level</td>
@@ -525,10 +530,12 @@
 					In the underfunded branch, finalization computes
 					<code>underfundedThreshold</code> from the two auction caps. The
 					stored <code>clearingTick</code> is the lowest supported tick at or
-					above that reserve, and withdrawals retain bids at ticks
-					<code>&gt;= clearingTick</code>. If no bid qualifies,
-					<code>totalRepPurchased</code> stays zero and every bid refunds. With
-					no qualifying ETH, the stored threshold remains the cap-implied reserve.
+					above that reserve. If qualifying bids produce positive
+					<code>totalRepPurchased</code>, withdrawals retain bids at ticks
+					<code>&gt;= clearingTick</code>. If no bid qualifies or the proportional
+					aggregate floors to zero, <code>underfundedWinningEth</code> is reset to
+					zero and every bid refunds. The stored threshold remains the cap-implied
+					reserve.
 					Both <code>ethRaised</code> and
 					<code>underfundedWinningEth</code> exclude below-reserve demand.
 				</p>
@@ -561,7 +568,9 @@
 						or above this reserve and acts only as the bid-eligibility boundary.
 						Aggregate purchased REP is determined independently by
 						<code>floor(maxRepBeingSold * underfundedWinningEth / ethRaiseCap)</code>,
-						and winners at or above that tick share it pro rata by retained ETH. Solidity
+						and winners at or above that tick share it pro rata by retained ETH
+						when the result is positive. A zero result resets retained ETH to zero
+						and refunds every bid. Solidity
 						differences cumulative floor allocations at fixed bid positions, so
 						paged withdrawals reconcile independently of claim order.
 					</p>
@@ -592,7 +601,7 @@
 						</tr>
 						<tr>
 							<td>Underfunded winning ticks</td>
-							<td>Ticks at or above <code>clearingTick</code> share proportional <code>totalRepPurchased</code> by retained ETH.</td>
+							<td>Ticks at or above <code>clearingTick</code> share positive proportional <code>totalRepPurchased</code> by retained ETH; if the aggregate is zero, all bids refund.</td>
 							<td>The cap-implied reserve prevents REP issuance from exceeding qualifying ETH demand.</td>
 						</tr>
 					</tbody>

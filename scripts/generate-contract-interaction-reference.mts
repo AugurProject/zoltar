@@ -118,8 +118,8 @@ const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 		executeStagedOperation: ['public(uint256)'],
 		openOracleCallback: ['external(uint256,uint256,uint256,uint256,address,address)'],
 		recoverSettledPendingReport: ['public()'],
-		requestPrice: ['public(uint256)'],
-		requestPriceIfNeededAndStageOperation: ['public(OperationType,address,uint256,uint256,uint256)'],
+		requestPrice: ['public(uint256,uint256)'],
+		requestPriceIfNeededAndStageOperation: ['public(OperationType,address,uint256,uint256,uint256,uint256)'],
 		setRepEthPrice: ['public(uint256)'],
 		setSecurityPool: ['public(ISecurityPool)'],
 	},
@@ -437,11 +437,11 @@ const contractReferences: ContractReference[] = [
 				signals: '`TruthAuctionStarted`; immediate no-auction paths also emit `FinalizeAuction` and `TruthAuctionFinalized`',
 			},
 			{
-				call: '`finalizeTruthAuction(securityPool)`',
+				call: '`finalizeTruthAuction(securityPool)` with exact-shortfall ETH',
 				caller: 'Anyone',
-				effect: 'Finalizes the ended auction, transfers repair ETH, and fixes bidder ownership and allowance rates. The child becomes operational only if migration-routed collateral plus auction ETH meets the full parent collateral snapshot.',
+				effect: 'Finalizes the ended auction, combines migration-routed collateral, auction ETH, and the caller contribution into exact repair, then fixes bidder ownership and allowance rates. The contribution creates no ownership or allowance rights.',
 				declarations: [{ name: 'finalizeTruthAuction' }],
-				preconditions: 'Truth auction started and its one-week window has passed.',
+				preconditions: 'Truth auction started and its one-week window has passed; `msg.value` exactly equals the parent collateral snapshot minus migration-routed collateral and auction ETH. Underpayment and overpayment revert; forced ETH does not reduce the required contribution.',
 				signals: '`FinalizeAuction`, `TruthAuctionFinalized`, and auction `Finalized`',
 			},
 			{
@@ -525,7 +525,7 @@ const contractReferences: ContractReference[] = [
 	{
 		name: 'OpenOraclePriceCoordinator',
 		purpose: 'Obtains a fresh REP-per-ETH price and gates withdrawal, allowance, and liquidation operations behind it.',
-		readSurface: 'Use `isPriceValid`, `priceRoundMaxNotional`, `priceRoundConsumedNotional`, `getPriceRoundRemainingNotional`, request-cost getters, pending report fields, `getPendingOperationSlot`, active-operation pagination, and pending-settlement IDs to reconstruct oracle and operation state.',
+		readSurface: 'Use `isPriceValid`, `minimumToken1Report`, request-cost getters, pending report fields, `getPendingOperationSlot`, active-operation pagination, and pending-settlement IDs to reconstruct oracle and operation state.',
 		sourcePath: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 		interactions: [
 			{
@@ -534,23 +534,23 @@ const contractReferences: ContractReference[] = [
 				effect: 'Records the operation, executes immediately with a fresh price, or attaches it to a bounded pending settlement batch and opens a report when required.',
 				declarations: [{ name: 'requestPriceIfNeededAndStageOperation' }],
 				preconditions:
-					'Unresolved pool; valid target and nonzero amount except zero allowance; timeout from 1 second through 5 minutes. Bounty, initial REP/WETH funding, and approvals are required only when this call opens a new report; staging beside a pending report or queued rejected-report work does not open or fund another report.',
+					'Unresolved pool; valid target and nonzero amount except zero allowance; timeout from 1 second through 5 minutes. Bounty, buffered funding for at least the dynamic WETH minimum and coordinator-derived REP side, and approvals are required only when this call opens a new report; the caller may request a larger initial WETH amount. Staging beside a pending report or queued rejected-report work does not open or fund another report.',
 				signals: '`StagedOperationQueued`, possibly `PriceRequested`, then `ExecutedStagedOperation`',
 			},
 			{
-				call: '`requestPrice(amount2)` with report funding',
+				call: '`requestPrice(proposedRepPerEthPrice, requestedInitialWeth)` with report funding',
 				caller: 'Anyone when no fresh price or report is pending',
-				effect: 'Opens and atomically funds a fresh REP/WETH report without staging a new operation.',
+				effect: 'Opens and atomically funds a fresh WETH/REP report without staging a new operation.',
 				declarations: [{ name: 'requestPrice' }],
-				preconditions: 'Cached price stale; no pending report; ETH bounty and initial REP/WETH funding and approvals available.',
+				preconditions: 'Cached price stale; no pending report; nonzero proposed REP/ETH price, ETH bounty, and funding and approvals for at least the dynamic WETH minimum plus matching REP. Zero requested WETH uses the minimum; a larger request voluntarily increases the initial report.',
 				signals: '`PriceRequested`',
 			},
 			{
 				call: '`executeStagedOperation(operationId)`',
 				caller: 'Anyone',
-				effect: 'Consumes and attempts one active staged operation using the current fresh price. Successful risk-increasing operations debit the shared report-round budget; reductions and collateral withdrawals with no outstanding pool allowance debit zero.',
+				effect: "Consumes and attempts one active staged operation using the current fresh price. Price-report funding is independent of the operation's notional; the downstream operation applies its own protocol bounds.",
 				declarations: [{ name: 'executeStagedOperation' }],
-				preconditions: "Operation exists and coordinator price is fresh; lifecycle failures are emitted rather than retried. The operation's ETH notional must fit the report round's remaining configured budget.",
+				preconditions: 'Operation exists and coordinator price is fresh; lifecycle failures are emitted rather than retried.',
 				signals: '`ExecutedStagedOperation`',
 			},
 			{
@@ -614,7 +614,7 @@ const contractReferences: ContractReference[] = [
 	{
 		name: 'UniformPriceDualCapBatchAuction',
 		purpose: 'Collects ETH bids under ETH-raise and REP-sale caps, computes one clearing result, and supports paged settlement.',
-		readSurface: 'Use auction summary fields, `computeClearing`, `tickToPrice`, tick pagination, active-tick pagination, and bidder bid pagination before submitting settlement indexes.',
+		readSurface: 'Use auction summary fields, `computeClearing`, `previewFinalization`, `tickToPrice`, tick pagination, active-tick pagination, and bidder bid pagination before finalizing or submitting settlement indexes.',
 		sourcePath: 'solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol',
 		interactions: [
 			{
