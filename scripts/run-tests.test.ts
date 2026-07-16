@@ -7,12 +7,13 @@ import { DEFAULT_ANVIL_STATE_MAX_AGE_MS } from './cleanup-foundry-anvil-state.mt
 
 const createTemporaryDirectory = async (prefix: string) => await mkdtemp(join(tmpdir(), prefix))
 
-const runTestWrapper = async ({ homeDirectory, testFile }: { readonly homeDirectory: string; readonly testFile: string }) => {
+const runTestWrapper = async ({ homeDirectory, testFile, useExistingProductionBuild = false }: { readonly homeDirectory: string; readonly testFile: string; readonly useExistingProductionBuild?: boolean }) => {
 	const child = Bun.spawn({
 		cmd: [process.execPath, './scripts/run-tests.mts', '--parallel=1', testFile],
 		env: {
 			...process.env,
 			HOME: homeDirectory,
+			...(useExistingProductionBuild ? { ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: '1' } : {}),
 		},
 		stderr: 'pipe',
 		stdout: 'pipe',
@@ -20,6 +21,27 @@ const runTestWrapper = async ({ homeDirectory, testFile }: { readonly homeDirect
 	const [exitCode, stderr, stdout] = await Promise.all([child.exited, new Response(child.stderr).text(), new Response(child.stdout).text()])
 	return { exitCode, stderr, stdout }
 }
+
+test('run-tests preserves a prepared production build when requested', async () => {
+	const workspaceDirectory = await createTemporaryDirectory('run-tests-existing-production-build-')
+	const homeDirectory = join(workspaceDirectory, 'home')
+	const testFile = join(workspaceDirectory, 'passing.test.ts')
+	const productionBuildMarker = join(process.cwd(), 'ui', 'dist', 'run-tests-existing-production-build.marker')
+
+	try {
+		await mkdir(join(process.cwd(), 'ui', 'dist'), { recursive: true })
+		await writeFile(productionBuildMarker, 'prepared')
+		await writeFile(testFile, "import { expect, test } from 'bun:test'\ntest('passes', () => expect(1).toBe(1))\n")
+
+		const result = await runTestWrapper({ homeDirectory, testFile, useExistingProductionBuild: true })
+
+		expect(result.exitCode).toBe(0)
+		expect(existsSync(productionBuildMarker)).toBe(true)
+	} finally {
+		await rm(productionBuildMarker, { force: true })
+		await rm(workspaceDirectory, { recursive: true, force: true })
+	}
+})
 
 test('run-tests cleans stale Anvil state before and after a passing child test', async () => {
 	const workspaceDirectory = await createTemporaryDirectory('run-tests-cleanup-')
