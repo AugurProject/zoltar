@@ -206,6 +206,7 @@ export const formatLoadedBidCoverageSummary = (loadedBidCount: CopyTemplateValue
 export const loadingAuctionBids = 'Loading auction bids…'
 export const auctionPriceLevelsEmpty = 'No active prices are currently visible for this auction.'
 export const loadedPriceBidsEmpty = 'No bids are currently indexed for the loaded prices.'
+export const scrollableAuctionBidHistory = 'Scrollable auction bid history'
 export const loadMoreTruthAuctionBids = 'Load More Truth Auction Bids'
 export const myBids = 'My Bids'
 export const walletBidsConnectionRequired = 'Connect a wallet to inspect your submitted truth auction bids.'

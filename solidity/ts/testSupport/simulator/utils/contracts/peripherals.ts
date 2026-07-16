@@ -43,25 +43,22 @@ const ERC20_APPROVE_ABI = [
 	},
 ] as const
 
-const getCoordinatorExactToken1Report = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
+const getCoordinatorMinimumToken1Report = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
 	await client.readContract({
 		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-		functionName: 'exactToken1Report',
+		functionName: 'minimumToken1Report',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: [],
 	})
 
-const getDefaultInitialReportAmount2 = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) => {
-	const exactToken1Report = await getCoordinatorExactToken1Report(client, priceOracleManagerAndOperatorQueuer)
+const getDefaultInitialReportPrice = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) => {
 	const lastPrice = await getLastPrice(client, priceOracleManagerAndOperatorQueuer)
-	if (lastPrice === 0n) return exactToken1Report
-	const amount2 = (exactToken1Report * PRICE_PRECISION) / lastPrice
-	return amount2 > 0n ? amount2 : 1n
+	return lastPrice > 0n ? lastPrice : PRICE_PRECISION
 }
 
-const fundCoordinatorInitialReport = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, amount2: bigint) => {
-	const [exactToken1Report, rawReputationTokenAddress] = await Promise.all([
-		getCoordinatorExactToken1Report(client, priceOracleManagerAndOperatorQueuer),
+const fundCoordinatorInitialReport = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, proposedRepPerEthPrice: bigint, requestedInitialWeth = 0n) => {
+	const [minimumToken1Report, rawReputationTokenAddress] = await Promise.all([
+		getCoordinatorMinimumToken1Report(client, priceOracleManagerAndOperatorQueuer),
 		client.readContract({
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'reputationToken',
@@ -70,21 +67,24 @@ const fundCoordinatorInitialReport = async (client: WriteClient, priceOracleMana
 		}),
 	])
 	const reputationTokenAddress = requireAddress(rawReputationTokenAddress, 'Oracle coordinator reputation token')
+	const bufferedMinimumToken1Report = minimumToken1Report * 2n
+	const maximumInitialWeth = requestedInitialWeth > bufferedMinimumToken1Report ? requestedInitialWeth : bufferedMinimumToken1Report
+	const maximumAmount2 = (maximumInitialWeth * proposedRepPerEthPrice + PRICE_PRECISION - 1n) / PRICE_PRECISION
 	const wethBalance: bigint = await client.readContract({
 		abi: ERC20_APPROVE_ABI,
 		functionName: 'balanceOf',
 		address: WETH_ADDRESS,
 		args: [client.account.address],
 	})
-	if (wethBalance < amount2) {
-		await wrapWeth(client, amount2 - wethBalance)
+	if (wethBalance < maximumInitialWeth) {
+		await wrapWeth(client, maximumInitialWeth - wethBalance)
 	}
 	await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: ERC20_APPROVE_ABI,
 			functionName: 'approve',
-			address: reputationTokenAddress,
-			args: [priceOracleManagerAndOperatorQueuer, exactToken1Report],
+			address: WETH_ADDRESS,
+			args: [priceOracleManagerAndOperatorQueuer, maximumInitialWeth],
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
@@ -92,28 +92,28 @@ const fundCoordinatorInitialReport = async (client: WriteClient, priceOracleMana
 		client.writeContract({
 			abi: ERC20_APPROVE_ABI,
 			functionName: 'approve',
-			address: WETH_ADDRESS,
-			args: [priceOracleManagerAndOperatorQueuer, amount2],
+			address: reputationTokenAddress,
+			args: [priceOracleManagerAndOperatorQueuer, maximumAmount2],
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
 	)
-	return { amount2, exactToken1Report }
+	return { maximumAmount2, maximumInitialWeth, minimumToken1Report, proposedRepPerEthPrice, requestedInitialWeth }
 }
 
 export const requestPriceIfNeededAndStageOperationWithValue = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, operation: OperationType, targetVault: Address, amount: bigint, validForSeconds: bigint, value: bigint) =>
-	await requestPriceIfNeededAndStageOperationWithInitialReportAmount2(client, priceOracleManagerAndOperatorQueuer, operation, targetVault, amount, validForSeconds, await getDefaultInitialReportAmount2(client, priceOracleManagerAndOperatorQueuer), value)
+	await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, priceOracleManagerAndOperatorQueuer, operation, targetVault, amount, validForSeconds, await getDefaultInitialReportPrice(client, priceOracleManagerAndOperatorQueuer), value)
 
-export const requestPriceIfNeededAndStageOperationWithInitialReportAmount2 = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, operation: OperationType, targetVault: Address, amount: bigint, validForSeconds: bigint, initialReportAmount2: bigint, value: bigint) => {
+export const requestPriceIfNeededAndStageOperationWithInitialReportPrice = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, operation: OperationType, targetVault: Address, amount: bigint, validForSeconds: bigint, proposedRepPerEthPrice: bigint, value: bigint, requestedInitialWeth = 0n) => {
 	const shouldRequestPrice = !(await getIsPriceValid(client, priceOracleManagerAndOperatorQueuer)) && (await getPendingReportId(client, priceOracleManagerAndOperatorQueuer)) === 0n && (await getPendingSettlementOperationCount(client, priceOracleManagerAndOperatorQueuer)) === 0n
 	if (shouldRequestPrice) {
-		await fundCoordinatorInitialReport(client, priceOracleManagerAndOperatorQueuer, initialReportAmount2)
+		await fundCoordinatorInitialReport(client, priceOracleManagerAndOperatorQueuer, proposedRepPerEthPrice, requestedInitialWeth)
 	}
 	return await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'requestPriceIfNeededAndStageOperation',
 			address: priceOracleManagerAndOperatorQueuer,
-			args: [operation, targetVault, amount, validForSeconds, initialReportAmount2],
+			args: [operation, targetVault, amount, validForSeconds, proposedRepPerEthPrice, requestedInitialWeth],
 			value,
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
@@ -126,10 +126,8 @@ export const requestPriceIfNeededAndStageOperation = async (client: WriteClient,
 }
 
 export const queueLiquidationAtForcedPrice = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, targetVault: Address, liquidationAmount: bigint, forcedPrice: bigint, validForSeconds = DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS) => {
-	const exactToken1Report = await getCoordinatorExactToken1Report(client, priceOracleManagerAndOperatorQueuer)
-	const initialReportAmount2 = (exactToken1Report * PRICE_PRECISION) / forcedPrice || 1n
 	const ethCost = await getRequestPriceEthCost(client, priceOracleManagerAndOperatorQueuer)
-	return await requestPriceIfNeededAndStageOperationWithInitialReportAmount2(client, priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, targetVault, liquidationAmount, validForSeconds, initialReportAmount2, ethCost)
+	return await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, targetVault, liquidationAmount, validForSeconds, forcedPrice, ethCost)
 }
 
 export const executeStagedOperation = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, operationId: bigint) =>
@@ -145,18 +143,18 @@ export const executeStagedOperation = async (client: WriteClient, priceOracleMan
 
 export const requestPrice = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address) => {
 	const ethCost = await getRequestPriceEthCost(client, priceOracleManagerAndOperatorQueuer)
-	return await requestPriceWithValue(client, priceOracleManagerAndOperatorQueuer, ethCost, await getDefaultInitialReportAmount2(client, priceOracleManagerAndOperatorQueuer))
+	return await requestPriceWithValue(client, priceOracleManagerAndOperatorQueuer, ethCost, await getDefaultInitialReportPrice(client, priceOracleManagerAndOperatorQueuer))
 }
 
-export const requestPriceWithValue = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, value: bigint, initialReportAmount2?: bigint) => {
-	const resolvedInitialReportAmount2 = initialReportAmount2 ?? (await getDefaultInitialReportAmount2(client, priceOracleManagerAndOperatorQueuer))
-	await fundCoordinatorInitialReport(client, priceOracleManagerAndOperatorQueuer, resolvedInitialReportAmount2)
+export const requestPriceWithValue = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, value: bigint, proposedRepPerEthPrice?: bigint, requestedInitialWeth = 0n) => {
+	const resolvedInitialReportPrice = proposedRepPerEthPrice ?? (await getDefaultInitialReportPrice(client, priceOracleManagerAndOperatorQueuer))
+	await fundCoordinatorInitialReport(client, priceOracleManagerAndOperatorQueuer, resolvedInitialReportPrice, requestedInitialWeth)
 	return await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'requestPrice',
 			address: priceOracleManagerAndOperatorQueuer,
-			args: [resolvedInitialReportAmount2],
+			args: [resolvedInitialReportPrice, requestedInitialWeth],
 			value,
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
@@ -178,30 +176,6 @@ export const getPendingReportId = async (client: ReadClient, priceOracleManagerA
 	await client.readContract({
 		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'pendingReportId',
-		address: priceOracleManagerAndOperatorQueuer,
-		args: [],
-	})
-
-export const getPriceRoundMaxNotional = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
-	await client.readContract({
-		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-		functionName: 'priceRoundMaxNotional',
-		address: priceOracleManagerAndOperatorQueuer,
-		args: [],
-	})
-
-export const getPriceRoundConsumedNotional = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
-	await client.readContract({
-		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-		functionName: 'priceRoundConsumedNotional',
-		address: priceOracleManagerAndOperatorQueuer,
-		args: [],
-	})
-
-export const getPriceRoundRemainingNotional = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
-	await client.readContract({
-		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-		functionName: 'getPriceRoundRemainingNotional',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: [],
 	})

@@ -241,6 +241,20 @@ describe('OpenOracleSection route create view', () => {
 		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
 	})
 
+	test('teaches the standalone operator flow before the advanced creation fields', async () => {
+		const renderedComponent = await renderIntoDocument(h(OpenOracleSection, createOpenOracleSectionProps()))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Standalone operator workflow')).not.toBeNull()
+		expect(documentQueries.getByText('1. Verify token pair')).not.toBeNull()
+		expect(documentQueries.getByText('2. Set economics')).not.toBeNull()
+		expect(documentQueries.getByText('3. Set dispute timing')).not.toBeNull()
+		expect(documentQueries.getByText('This flow creates infrastructure, not a market position.')).not.toBeNull()
+		expect(documentQueries.getByText('1. Verify token pair').className).not.toContain('current')
+		expect(document.body.textContent?.match(/Pool-managed/g)).toHaveLength(1)
+	})
+
 	test('renders selected report actions without readiness cards or visible blocker copy', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(

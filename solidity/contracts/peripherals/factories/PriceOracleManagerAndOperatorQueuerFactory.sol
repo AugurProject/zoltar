@@ -12,7 +12,9 @@ contract PriceOracleManagerAndOperatorQueuerFactory {
 	IWeth9 public immutable weth;
 	uint256 public immutable gasConsumedOpenOracleReportPrice;
 	uint32 public immutable gasConsumedSettlement;
-	uint256 public immutable exactToken1Report;
+	uint256 public immutable gasUnitsForOneDispute;
+	uint256 public immutable targetPriceErrorForDispute;
+	uint256 public immutable openOracleSecurityMultiplierBps;
 	uint48 public immutable settlementTime;
 	uint24 public immutable disputeDelay;
 	uint24 public immutable protocolFee;
@@ -29,7 +31,9 @@ contract PriceOracleManagerAndOperatorQueuerFactory {
 		IWeth9 _weth,
 		uint256 _gasConsumedOpenOracleReportPrice,
 		uint32 _gasConsumedSettlement,
-		uint256 _exactToken1Report,
+		uint256 _gasUnitsForOneDispute,
+		uint256 _targetPriceErrorForDispute,
+		uint256 _openOracleSecurityMultiplierBps,
 		uint48 _settlementTime,
 		uint24 _disputeDelay,
 		uint24 _protocolFee,
@@ -45,7 +49,9 @@ contract PriceOracleManagerAndOperatorQueuerFactory {
 		weth = _weth;
 		gasConsumedOpenOracleReportPrice = _gasConsumedOpenOracleReportPrice;
 		gasConsumedSettlement = _gasConsumedSettlement;
-		exactToken1Report = _exactToken1Report;
+		gasUnitsForOneDispute = _gasUnitsForOneDispute;
+		targetPriceErrorForDispute = _targetPriceErrorForDispute;
+		openOracleSecurityMultiplierBps = _openOracleSecurityMultiplierBps;
 		settlementTime = _settlementTime;
 		disputeDelay = _disputeDelay;
 		protocolFee = _protocolFee;
@@ -71,7 +77,9 @@ contract PriceOracleManagerAndOperatorQueuerFactory {
 				weth,
 				gasConsumedOpenOracleReportPrice,
 				gasConsumedSettlement,
-				exactToken1Report,
+				gasUnitsForOneDispute,
+				targetPriceErrorForDispute,
+				openOracleSecurityMultiplierBps,
 				settlementTime,
 				disputeDelay,
 				protocolFee,

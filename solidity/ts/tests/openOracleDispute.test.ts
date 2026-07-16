@@ -429,6 +429,29 @@ describe('OpenOracle dispute economics', () => {
 		await assertRevertUnchanged(() => dispute(firstDisputer, reportId, token1, 1_200n, 800n, 1_000n, stateHash), 'DisputeTooLate')
 	})
 
+	test('pre-halt multiplier flooring keeps a one-unit token1 report unchanged', async () => {
+		const token1 = getAddress(addressString(GENESIS_REPUTATION_TOKEN))
+		const token2: Address = WETH_ADDRESS
+		await approveAndFundStandardTokens([initialReporter, firstDisputer], 100n)
+		const reportId = await createReport(creator, {
+			token1,
+			token2,
+			exactToken1Report: 1n,
+			multiplier: 115,
+			escalationHalt: 100n,
+		})
+		await submitInitialReport(initialReporter, reportId, 1n, 10n)
+		const initialStatus = await getOpenOracleReportStatus(creator, reportId)
+		const stateHash = (await getOpenOracleExtraData(creator, reportId)).stateHash
+
+		await mockWindow.setTime(initialStatus.reportTimestamp + DISPUTE_DELAY - 1n)
+		await dispute(firstDisputer, reportId, token1, 1n, 8n, 10n, stateHash)
+
+		const disputedStatus = await getOpenOracleReportStatus(creator, reportId)
+		assert.strictEqual(disputedStatus.currentAmount1, 1n, 'floor(1 * 115 / 100) should keep the pre-halt token1 amount at one')
+		assert.strictEqual(disputedStatus.currentAmount2, 8n, 'the dispute should still replace the token2 amount')
+	})
+
 	test('legacy no-return ERC20s fund, dispute in both directions, settle, and withdraw fees conservatively', async () => {
 		const token1 = await deployContract(
 			creator,

@@ -47,7 +47,7 @@ export function createMockReadClient(readContract: MockReadContractHandler): Moc
 export const mockTransactionHash = '0x00000000000000000000000000000000000000000000000000000000000000c3' satisfies Hash
 
 export function createMockWriteClient(
-	onSendTransaction: (request: { data?: Hex | undefined; gas?: bigint | undefined; to?: Address | null | undefined }) => void,
+	onSendTransaction: (request: { data?: Hex | undefined; gas?: bigint | undefined; to?: Address | null | undefined; value?: bigint | undefined }) => void,
 	readContract: MockReadContractHandler = async request => {
 		throw new Error(`Unexpected readContract function: ${request.functionName}`)
 	},
