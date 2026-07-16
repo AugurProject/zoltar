@@ -541,6 +541,73 @@ describe('Price Oracle Refund Security Tests', () => {
 		}
 	})
 
+	test('oracle settlement accepts the exact nonzero basefee cap and rejects one wei above it', async () => {
+		const requestBaseFeeWeiPerGas = 1n * 10n ** 9n
+		const expectedSettlementBaseFeeCap = (requestBaseFeeWeiPerGas * ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS) / 10000n
+		const minimumWethReport = calculateOracleMinimumWethReport({
+			...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
+			baseFeeWeiPerGas: requestBaseFeeWeiPerGas,
+		})
+		const callbackGasLimit = BigInt(ORACLE_SETTLEMENT_GAS) * 4n
+		const requestEthCost = requestBaseFeeWeiPerGas * 4n * (callbackGasLimit + ORACLE_REPORT_GAS) + 101n
+		const proposedRepPerEthPrice = 10n ** 18n
+
+		await wrapWeth(client, minimumWethReport * 2n)
+		await approveToken(client, WETH_ADDRESS, priceOracle)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
+
+		const requestAtConfiguredBaseFee = async () => {
+			await mockWindow.request({
+				method: 'anvil_setNextBlockBaseFeePerGas',
+				params: [`0x${requestBaseFeeWeiPerGas.toString(16)}`],
+			})
+			const requestHash = await client.writeContract({
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				functionName: 'requestPrice',
+				address: priceOracle,
+				args: [proposedRepPerEthPrice, 0n],
+				value: requestEthCost,
+				gasPrice: requestBaseFeeWeiPerGas,
+			})
+			await client.waitForTransactionReceipt({ hash: requestHash })
+			const reportId = await getPendingReportId(client, priceOracle)
+			assert.ok(reportId > 0n, 'nonzero-basefee request should create a pending report')
+			assert.strictEqual(await getPendingReportMaxSettlementBaseFee(client, priceOracle), expectedSettlementBaseFeeCap, 'request should snapshot the configured nonzero settlement basefee cap')
+			return reportId
+		}
+
+		const acceptedReportId = await requestAtConfiguredBaseFee()
+		const acceptedReportMeta = await getOpenOracleReportMeta(client, acceptedReportId)
+		await mockWindow.advanceTime(BigInt(acceptedReportMeta.settlementTime) + 1n)
+		await mockWindow.request({
+			method: 'anvil_setNextBlockBaseFeePerGas',
+			params: [`0x${expectedSettlementBaseFeeCap.toString(16)}`],
+		})
+		const acceptedHash = await openOracleSettleWithGasPrice(client, acceptedReportId, expectedSettlementBaseFeeCap)
+		const acceptedReceipt = await client.waitForTransactionReceipt({ hash: acceptedHash })
+		assert.strictEqual(findPriceReportRejectedLog(acceptedReceipt.logs), undefined, 'settlement at the exact basefee cap should not be rejected')
+		assert.ok(findPriceReportedLog(acceptedReceipt.logs) !== undefined, 'settlement at the exact basefee cap should report the accepted price')
+		assert.strictEqual(await getIsPriceValid(client, priceOracle), true, 'settlement at the exact basefee cap should validate the price')
+
+		await mockWindow.setNextBlockBaseFeePerGasToZero()
+		await mockWindow.advanceTime(5n * 60n + 1n)
+		const rejectedReportId = await requestAtConfiguredBaseFee()
+		const rejectedReportMeta = await getOpenOracleReportMeta(client, rejectedReportId)
+		await mockWindow.advanceTime(BigInt(rejectedReportMeta.settlementTime) + 1n)
+		const rejectedSettlementBaseFee = expectedSettlementBaseFeeCap + 1n
+		await mockWindow.request({
+			method: 'anvil_setNextBlockBaseFeePerGas',
+			params: [`0x${rejectedSettlementBaseFee.toString(16)}`],
+		})
+		const rejectedHash = await openOracleSettleWithGasPrice(client, rejectedReportId, rejectedSettlementBaseFee)
+		const rejectedReceipt = await client.waitForTransactionReceipt({ hash: rejectedHash })
+		const rejectedLog = findPriceReportRejectedLog(rejectedReceipt.logs)
+		if (rejectedLog === undefined) throw new Error('missing PriceReportRejected log')
+		assert.strictEqual(findPriceReportedLog(rejectedReceipt.logs), undefined, 'settlement one wei above the basefee cap must not report a price')
+		assert.strictEqual(rejectedLog.args.reason, 'Base fee too high', 'settlement one wei above the cap should expose the basefee rejection reason')
+		assert.strictEqual(await getIsPriceValid(client, priceOracle), false, 'settlement one wei above the basefee cap must leave the stale price invalid')
+	})
+
 	test('oracle settlement skips price updates and staged execution when settlement basefee is too high', async () => {
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
 		const unsafeAllowance = repDeposit / 4n

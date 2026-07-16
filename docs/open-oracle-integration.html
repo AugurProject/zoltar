@@ -1495,11 +1495,29 @@
 						threshold.
 					</li>
 					<li>
-						<strong>Block stuffing:</strong> the coordinator records a
-						request-time max settlement base fee and rejects the callback if
-						settlement base fee exceeds
-						<code>maxSettlementBaseFeeMultiplierBps = 30000</code>, currently
-						<code>3x</code>.
+						<strong>Settlement base-fee boundary:</strong> the coordinator records
+						a request-time max settlement base fee and rejects the callback only
+						when settlement base fee is greater than that cap. Equality is
+						accepted. With the default <code>10x</code> Open Oracle Security
+						multiplier and <code>3x</code>
+						<code>maxSettlementBaseFeeMultiplierBps</code>, correction profit at
+						the configured target error remains <code>10 / 3</code> times the
+						one-dispute gas cost at the largest admitted settlement base fee.
+						That relationship is a deployment assumption, not a constructor
+						invariant: the constructor checks each multiplier's lower bound but
+						does not require the settlement cap to remain below the Open Oracle
+						Security multiplier.
+					</li>
+					<li>
+						<strong>Settlement validation scope:</strong> the callback does not
+						recompute <code>minimumToken1Report()</code> from settlement base fee
+						and does not compare the final price with an external truth source. It
+						checks the request-time base-fee cap, requires nonzero final WETH and
+						REP amounts and a nonzero integer REP/ETH ratio, then records that
+						ratio. Honest arbitrage monitoring, transaction inclusion, and
+						transient base-fee behavior therefore remain assumptions. The cap is
+						a rejection boundary, not operation-value insurance or proof that an
+						accepted price is externally correct.
 					</li>
 					<li>
 						<strong>Callback scope:</strong> only up to four operations are

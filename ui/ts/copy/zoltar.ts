@@ -1,6 +1,7 @@
 import type { CopyTemplateValue } from './types.js'
 
 export const forkZoltar = 'Fork Zoltar'
+export const viewForkDetails = 'View Fork Details'
 export const migrateRep = 'Migrate REP'
 export const prepareRep = 'Prepare REP'
 export const splitRep = 'Split REP'

@@ -13,6 +13,8 @@ import { StateHint } from '../../../components/StateHint.js'
 import { TokenApprovalControl } from '../../../components/TokenApprovalControl.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
 import { TransactionReview } from '../../../components/TransactionReview.js'
+import { TransactionNetworkValue } from '../../../components/TransactionNetworkValue.js'
+import { TransactionUniverseValue } from './TransactionUniverseValue.js'
 import { WorkflowSubsection } from '../../../components/WorkflowSubsection.js'
 import { sameCaseInsensitiveText } from '../../../lib/caseInsensitive.js'
 import { resolveLoadableValueState, type LoadableValueState } from '../../../lib/loadState.js'
@@ -153,6 +155,10 @@ export function ForkZoltarSection({
 				{selectedQuestionPresentation === undefined ? undefined : <StateHint presentation={selectedQuestionPresentation} />}
 
 				<TransactionReview
+					context={[
+						{ label: commonCopy.question, value: selectedQuestion?.title ?? zoltarCopy.forkQuestionRequiredReason },
+						{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={rootUniverse?.universeId} /> },
+					]}
 					primary={[
 						{ label: transactionReviewCopy.youPay, value: <CurrencyValue value={rootUniverse?.forkThreshold} suffix={commonCopy.rep} /> },
 						{ label: zoltarCopy.migrationCustodyCredit, value: <CurrencyValue value={migrationCustodyCredit} suffix={commonCopy.rep} /> },
@@ -162,7 +168,7 @@ export function ForkZoltarSection({
 						{ label: zoltarCopy.permanentRepBurn, value: <CurrencyValue value={permanentRepBurn} suffix={commonCopy.rep} /> },
 						{ label: transactionReviewCopy.resultingRepBalance, value: <CurrencyValue value={resultingRepBalance} suffix={commonCopy.rep} /> },
 						{ label: zoltarCopy.zoltarContract, value: rootUniverse?.zoltarAddress === undefined ? commonCopy.unavailable : <AddressValue address={rootUniverse.zoltarAddress} /> },
-						{ label: transactionReviewCopy.network, value: transactionReviewCopy.ethereumMainnet },
+						{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
 					]}
 					risks={[zoltarCopy.forkIrreversibleRisk, zoltarCopy.forkMigrationRisk]}
 				/>

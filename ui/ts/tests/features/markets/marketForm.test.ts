@@ -32,7 +32,7 @@ describe('market form defaults and conversion helpers', () => {
 		expect(getDefaultOpenOracleCreateFormState().multiplier).toBe('100')
 		expect(getDefaultForkAuctionFormState().repMigrationOutcomes).toBe('yes')
 		expect(getDefaultZoltarMigrationFormState().amount).toBe('0.0')
-		expect(getDefaultZoltarMigrationFormState().outcomeIndexes).toBe('0')
+		expect(getDefaultZoltarMigrationFormState().outcomeIndexes).toBe('')
 	})
 
 	test('parses integers and rejects malformed decimal values', () => {

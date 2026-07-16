@@ -369,6 +369,7 @@ export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 	poolState?: SecurityPoolStateModel | undefined
 	selectedPoolTotalRepDeposit?: bigint | undefined
 	selectedPoolTotalSecurityBondAllowance?: bigint | undefined
+	selectedMarketTitle?: string | undefined
 	autoLoadVault?: boolean
 	showLookupSection?: boolean
 	showSummarySection?: boolean

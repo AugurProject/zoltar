@@ -7091,9 +7091,9 @@
 						The OpenOracle path is contestable before the coordinator can use
 						it: the coordinator requests a WETH/REP report and atomically posts
 						the sponsor-funded initial token amounts, disputers can replace a bad
-						report with a larger one, a settler finalizes the report after the
-						timing window, and the settlement callback returns the final amounts
-						to the coordinator.
+						report with the contract-required replacement amounts, a settler
+						finalizes the report after the timing window, and the settlement
+						callback returns the final amounts to the coordinator.
 						Request, dispute, settlement, and callback safety checks are
 						detailed in the dedicated
 						<a href="./open-oracle-integration.html">OpenOracle integration</a>

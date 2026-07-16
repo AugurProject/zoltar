@@ -15,6 +15,7 @@ import { MetricField } from '../../../components/MetricField.js'
 import { OpenOraclePriceValue } from '../../open-oracle/components/OpenOraclePriceValue.js'
 import { PaginationControls } from '../../../components/PaginationControls.js'
 import { ProgressMeter } from '../../../components/ProgressMeter.js'
+import { ReadOnlyDetailAccordion } from '../../../components/ReadOnlyDetailAccordion.js'
 import { CollateralizationCircle } from './CollateralizationCircle.js'
 import { Question, getQuestionTitle } from '../../markets/components/Question.js'
 import { RouteWorkflowPanel } from '../../../components/RouteWorkflowPanel.js'
@@ -316,20 +317,22 @@ export function SecurityPoolsOverviewSection({
 													</div>
 												</div>
 											</div>
-											<div className='security-pool-detail-rail security-pool-card-inline-details'>
-												<MetricField label={securityPoolCopy.poolAddress}>
-													<AddressValue address={pool.securityPoolAddress} />
-												</MetricField>
-												<MetricField label={securityPoolCopy.managerAddress}>
-													<AddressValue address={pool.managerAddress} />
-												</MetricField>
-												<MetricField label={commonCopy.questionId}>
-													<IdentifierValue value={pool.questionId} />
-												</MetricField>
-												<MetricField label={commonCopy.universe}>
-													<UniverseLink format='hex' universeId={pool.universeId} />
-												</MetricField>
-											</div>
+											<ReadOnlyDetailAccordion title={commonCopy.technicalDetails}>
+												<div className='security-pool-detail-rail security-pool-card-inline-details'>
+													<MetricField label={securityPoolCopy.poolAddress}>
+														<AddressValue address={pool.securityPoolAddress} />
+													</MetricField>
+													<MetricField label={securityPoolCopy.managerAddress}>
+														<AddressValue address={pool.managerAddress} />
+													</MetricField>
+													<MetricField label={commonCopy.questionId}>
+														<IdentifierValue value={pool.questionId} />
+													</MetricField>
+													<MetricField label={commonCopy.universe}>
+														<UniverseLink format='hex' universeId={pool.universeId} />
+													</MetricField>
+												</div>
+											</ReadOnlyDetailAccordion>
 											<div className='security-pool-browse-vaults'>
 												<div className='security-pool-browse-vaults-head'>
 													<h4>{securityPoolCopy.vaults}</h4>
