@@ -19,6 +19,7 @@ test('SecurityPool event delegate storage anchors match the host layout', () => 
 		['uncheckpointedFeeEligibleAllowance', '13'],
 		['currentRetentionRate', '14'],
 		['securityVaults', '16'],
+		['vaultFeeRemainders', '17'],
 	])
 	for (const [label, expectedSlot] of expectedSlots) {
 		const entry = layout.find(candidate => candidate.label === label)

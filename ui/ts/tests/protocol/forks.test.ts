@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, getAddress, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { depositRepToSecurityPool, loadForkAuctionDetails, migrateSharesFromUniverse } from '../../protocol/index.js'
+import { depositRepToSecurityPool, finalizeSecurityPoolTruthAuction, loadForkAuctionDetails, migrateSharesFromUniverse } from '../../protocol/index.js'
 import { getForkOutcomeKey } from '../../protocol/helpers.js'
 import { peripherals_tokens_ShareToken_ShareToken } from '../../contractArtifact.js'
 import { asWriteClient, createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from './testSupport.js'
@@ -26,6 +26,25 @@ function createForkMockWriteClient(onSendTransaction: (request: { data?: Hex | u
 }
 
 describe('forks protocol client', () => {
+	test('finalizeSecurityPoolTruthAuction sends the exact on-chain repair shortfall', async () => {
+		let capturedValue: bigint | undefined
+		const client = createMockWriteClient(
+			request => {
+				capturedValue = request.value
+			},
+			async request => {
+				if (request.functionName === 'truthAuction') return truthAuctionAddress
+				if (request.functionName === 'previewFinalization') return [3n, 4n]
+				if (request.functionName === 'ethRaiseCap') return 10n
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		)
+
+		await finalizeSecurityPoolTruthAuction(asWriteClient(client), securityPoolAddress, 12n)
+
+		expect(capturedValue).toBe(7n)
+	})
+
 	test('migrateSharesFromUniverse sorts target outcomes before submission without deduplicating', async () => {
 		let capturedData: Hex | undefined
 		let capturedTo: Address | null | undefined

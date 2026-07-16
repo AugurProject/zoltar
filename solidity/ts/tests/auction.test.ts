@@ -130,6 +130,15 @@ describe('Auction', () => {
 		strictEqualTypeSafe(await isFinalized(client, auctionAddress), true, 'auction not finalized')
 	}
 
+	async function previewFinalization(client: WriteClient, auctionAddress: Address) {
+		return await client.readContract({
+			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			functionName: 'previewFinalization',
+			address: auctionAddress,
+			args: [],
+		})
+	}
+
 	function assertWithdrawal(amounts: { totalFilledRep: bigint; totalEthRefund: bigint }, expectedFilledRep: bigint, expectedRefund: bigint, tolerance?: bigint) {
 		if (tolerance !== undefined) {
 			approximatelyEqual(amounts.totalFilledRep, expectedFilledRep, tolerance, 'filledRep mismatch')
@@ -486,6 +495,9 @@ describe('Auction', () => {
 
 			const clearing = await computeClearing(client, auctionAddress)
 			assertExpectedClearing(clearing, tick)
+			const [previewEthToSend, previewRepPurchased] = await previewFinalization(client, auctionAddress)
+			strictEqualTypeSafe(previewEthToSend, raiseCap, 'funded preview should return the ETH sent at finalization')
+			strictEqualTypeSafe(previewRepPurchased, raiseCap, 'funded preview should return the REP purchased at finalization')
 
 			await finalizeAndVerify(client, auctionAddress)
 
@@ -887,6 +899,9 @@ describe('Auction', () => {
 			const ethRaiseCap = 100n * 10n ** 18n
 			const maxRepBeingSold = 100n * 10n ** 18n
 			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+			const [previewEthToSend, previewRepPurchased] = await previewFinalization(client, auctionAddress)
+			strictEqualTypeSafe(previewEthToSend, 0n, 'no-bid preview should send no ETH')
+			strictEqualTypeSafe(previewRepPurchased, 0n, 'no-bid preview should purchase no REP')
 
 			const ownerBalanceBeforeFinalize = await getETHBalance(client, client.account.address)
 			await mockWindow.advanceTime(AUCTION_TIME + 1n)
@@ -985,12 +1000,18 @@ describe('Auction', () => {
 			// Check clearing result before finalize to verify underfunded condition
 			const clearingPre = await computeClearing(client, auctionAddress)
 			strictEqualTypeSafe(clearingPre.hitCap, false, 'hitCap should be false (underfunded)')
+			const [previewEthToSend, previewRepPurchased] = await previewFinalization(client, auctionAddress)
+			const expectedWinningEth = aliceEth + bobEth
+			const expectedRepPurchased = (maxRepBeingSold * expectedWinningEth) / ethRaiseCap
+			strictEqualTypeSafe(previewEthToSend, expectedWinningEth, 'underfunded preview should return qualifying ETH')
+			strictEqualTypeSafe(previewRepPurchased, expectedRepPurchased, 'underfunded preview should return proportional REP')
 
 			// Finalize the auction
 			await mockWindow.advanceTime(AUCTION_TIME + 1n)
 			await finalize(client, auctionAddress)
 
 			const totalRep = await getTotalRepPurchased(client, auctionAddress)
+			strictEqualTypeSafe(totalRep, previewRepPurchased, 'finalization should use the previewed REP amount')
 			assert.ok(totalRep > 0n && totalRep < maxRepBeingSold, 'underfunded demand should buy a positive amount below the REP cap')
 			const expectedBobRep = (bobEth * totalRep) / (aliceEth + bobEth)
 			const expectedAliceRep = totalRep - expectedBobRep

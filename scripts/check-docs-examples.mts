@@ -2,7 +2,6 @@ import { readFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 import assert from 'node:assert/strict'
 
-import { ORACLE_EXACT_TOKEN1_REPORT } from '../shared/ts/oracleInitialReport'
 import { Window } from 'happy-dom'
 
 type InteractiveExampleHarness = {
@@ -89,13 +88,6 @@ async function loadAuctionExample({ filePath, exampleId }: AuctionExampleScenari
 
 function assertEqual(actual: string, expected: string, message: string): void {
 	assert.equal(actual, expected, `${message}: expected "${expected}", got "${actual}"`)
-}
-
-function formatAtomicRepForDocs(atomicRep: bigint): string {
-	const atomicRepPerRep = 10n ** 18n
-	const whole = atomicRep / atomicRepPerRep
-	const fraction = atomicRep % atomicRepPerRep
-	return `${whole.toLocaleString()}.${fraction.toString().padStart(18, '0')} REP`
 }
 
 async function checkDefaultFundedClearing(scenario: AuctionExampleScenario): Promise<void> {
@@ -232,8 +224,18 @@ async function checkCollateralRepairExample(): Promise<void> {
 		assertEqual(output('routedCollateral'), '47.50 ETH', 'collateral repair default routed collateral')
 		assertEqual(output('initialShortfall'), '2.50 ETH', 'collateral repair default initial shortfall')
 		assertEqual(output('remainingShortfall'), '0 ETH', 'collateral repair default remaining shortfall')
-		assertEqual(output('repairStatus'), 'full repair', 'collateral repair default repair status')
+		assertEqual(output('repairStatus'), 'no contribution required', 'collateral repair default finalization requirement')
 		assertEqual(targetText.textContent?.trim() ?? '', 'target 50 ETH', 'collateral repair default target text')
+
+		const auctionRaisedInput = example.querySelector('[data-example-input="auctionRaised"]')
+		if (!(auctionRaisedInput instanceof window.HTMLInputElement)) {
+			throw new Error('Missing collateral repair auction-raised input')
+		}
+		auctionRaisedInput.value = '1'
+		auctionRaisedInput.dispatchEvent(new window.Event('input', { bubbles: true }))
+
+		assertEqual(output('remainingShortfall'), '1.50 ETH', 'collateral repair exact finalizer contribution')
+		assertEqual(output('repairStatus'), 'exact contribution required', 'collateral repair underfunded finalization requirement')
 	} finally {
 		window.close()
 	}
@@ -242,6 +244,7 @@ async function checkCollateralRepairExample(): Promise<void> {
 	assert.match(html, />50 ETH<\/span/, 'collateral repair parent collateral default should remain 50 ETH')
 	assert.match(html, />47\.5 ETH<\/span/, 'collateral repair routed-collateral default should remain 47.5 ETH')
 	assert.match(html, />2\.5 ETH<\/span/, 'collateral repair auction-raised default should remain 2.5 ETH')
+	assert.match(html, /underpayment or\s+overpayment reverts the entire finalization/i, 'collateral repair prose should explain exact-contribution rollback')
 }
 
 async function checkUnderfundedPrefixExample(): Promise<void> {
@@ -325,54 +328,39 @@ async function checkPayoutRegionExample(): Promise<void> {
 	}
 }
 
-async function checkFixedExposureCostExample(): Promise<void> {
-	const example = await loadInteractiveExample('docs/open-oracle-integration.html', 'fixed-exposure-cost-example')
+async function checkDynamicWethReportExample(): Promise<void> {
+	const example = await loadInteractiveExample('docs/open-oracle-integration.html', 'initial-report-estimator-example')
 
 	try {
-		assertEqual(example.output('fixedReportedPrice'), '2,431 REP/ETH', 'fixed exposure default reported price')
-		assertEqual(example.output('fixedWethPosted'), '0.106677 WETH', 'fixed exposure default WETH position')
-		assertEqual(example.output('fixedPositionCapital'), '0.224022 ETH', 'fixed exposure default report capital')
-		assertEqual(example.output('fixedRequestBounty'), '0.001148 ETH', 'fixed exposure default request bounty')
-		assertEqual(example.output('fixedExternalCost'), '0.000064 ETH ($0.11)', 'fixed exposure default external-settler cost')
-		assertEqual(example.output('fixedSelfCost'), '0.000100 ETH ($0.18)', 'fixed exposure default self-settler cost')
-		assertEqual(example.output('fixedExposureMultiple'), '4.76x', 'fixed exposure default authorized exposure ratio')
+		assertEqual(example.output('estimatedMinimumWethReport'), '2.423076923076923077 WETH', 'dynamic report default minimum WETH')
+		assertEqual(example.output('selectedInitialWethReport'), '2.423076923076923077 WETH', 'dynamic report default selected WETH')
+		assertEqual(example.output('selectedEscalationHalt'), '24.230769230769230770 WETH', 'dynamic report default escalation halt')
+		assertEqual(example.output('disputeGasCost'), '0.009000 ETH', 'dynamic report default dispute gas cost')
+		assertEqual(example.output('bufferedGasCost'), '0.090000 ETH', 'dynamic report default buffered gas cost')
+		assertEqual(example.output('correctionProfitFraction'), '3.7143%', 'dynamic report default correction profit fraction')
+		assertEqual(example.output('estimatorSafetyState'), 'fees below target error', 'dynamic report default safety state')
 
-		example.setInput('outsideExposure', 20000)
-		assertEqual(example.output('fixedExposureMultiple'), '4.76x', 'fixed exposure should remain capped when attempted outside exposure increases')
-		assertEqual(example.output('fixedPositionCapital'), '0.224022 ETH', 'fixed exposure report capital should remain fixed when outside exposure changes')
+		example.setInput('blockBaseFeeGwei', 60)
+		assertEqual(example.output('estimatedMinimumWethReport'), '4.846153846153846154 WETH', 'dynamic report minimum should scale linearly with base fee')
 
-		const requestBountyBeforePriorityFeeChange = example.output('fixedRequestBounty')
-		example.setInput('fixedEffectiveGasPriceGwei', 0.2)
-		assertEqual(example.output('fixedRequestBounty'), requestBountyBeforePriorityFeeChange, 'effective gas price should not change the basefee-derived request bounty')
-		const externalCostBeforeSettlementGasChange = example.output('fixedExternalCost')
-		example.setInput('fixedSettlementGas', 1000000)
-		assertEqual(example.output('fixedExternalCost'), externalCostBeforeSettlementGasChange, 'settlement gas should not change the external-settler sponsor cost')
-		assertEqual(example.output('fixedSelfCost'), '0.000300 ETH ($0.53)', 'settlement gas should change the sponsor self-settlement cost')
+		example.setInput('requestedInitialWeth', 6)
+		assertEqual(example.output('estimatedMinimumWethReport'), '4.846153846153846154 WETH', 'caller-selected WETH should not change the computed minimum')
+		assertEqual(example.output('selectedInitialWethReport'), '6.000000000000000000 WETH', 'caller can select WETH above the computed minimum')
+		assertEqual(example.output('selectedEscalationHalt'), '60.000000000000000000 WETH', 'escalation halt should scale from selected initial WETH')
 
-		example.setInput('fixedBaseFeeGwei', 1)
-		example.setInput('fixedEffectiveGasPriceGwei', 0.01)
-		assertEqual(example.output('fixedExternalCost'), '0.000700 ETH ($1.23)', 'fixed report transaction cost should clamp effective gas price to block base fee')
+		example.setInput('blockBaseFeeGwei', 0)
+		example.setInput('requestedInitialWeth', 0)
+		assertEqual(example.output('estimatedMinimumWethReport'), '0.000000000000000001 WETH', 'zero base fee should retain the OpenOracle one-wei minimum')
+
+		example.setInput('blockBaseFeeGwei', 30)
+		example.setInput('openOracleProtocolFee', 5)
+		example.setInput('openOracleReporterFee', 2)
+		assertEqual(example.output('estimatedMinimumWethReport'), 'unsafe: fees meet or exceed target error', 'fees at or above the target error should be rejected')
+		assertEqual(example.output('selectedInitialWethReport'), 'unsafe: fees meet or exceed target error', 'unsafe fees should prevent selecting an initial report')
+		assertEqual(example.output('estimatorSafetyState'), 'unsafe: fees meet or exceed target error', 'unsafe fee configuration should be explicit')
 	} finally {
 		example.close()
 	}
-}
-
-function checkOracleReportBudgetMath(): void {
-	const precision = 10n ** 18n
-	const configuredRepNotional = ORACLE_EXACT_TOKEN1_REPORT * 10n
-	const changedAcceptedAmount1 = ORACLE_EXACT_TOKEN1_REPORT * 2n
-	const changedAcceptedAmount2 = ORACLE_EXACT_TOKEN1_REPORT
-	const changedPriceBudget = (configuredRepNotional * changedAcceptedAmount2) / changedAcceptedAmount1
-	assert.equal(changedPriceBudget, configuredRepNotional / 2n, 'a changed accepted report ratio should revalue the configured REP budget directly from settled amounts')
-
-	const roundingBoundaryAmount1 = ORACLE_EXACT_TOKEN1_REPORT
-	const roundingBoundaryAmount2 = 49_683_737_645_364_500_012_549_948_619_954_461_467n
-	const roundedAcceptedPrice = (roundingBoundaryAmount1 * precision) / roundingBoundaryAmount2
-	const directBudget = (configuredRepNotional * roundingBoundaryAmount2) / roundingBoundaryAmount1
-	const invertedRoundedPriceBudget = (configuredRepNotional * precision) / roundedAcceptedPrice
-	assert.equal(roundedAcceptedPrice, 5n, 'rounding vector should exercise a low non-zero accepted price')
-	assert.equal(directBudget, roundingBoundaryAmount2 * 10n, 'the configured report budget should equal ten times settled token2 at the rounding boundary')
-	assert.ok(directBudget < invertedRoundedPriceBudget, 'direct settled-amount budget math should avoid exposure inflation from inverting a rounded accepted price')
 }
 
 function checkExactRepCapEquality(): void {
@@ -382,63 +370,6 @@ function checkExactRepCapEquality(): void {
 	const repDemand = (ethAtTick * precision) / priceAtTick
 	const maxRepBeingSold = 10n * precision
 	assert.ok(repDemand >= maxRepBeingSold, 'demand exactly equal to the REP cap should select funded clearing')
-}
-
-async function checkRollingLockCostExample(): Promise<void> {
-	const example = await loadInteractiveExample('docs/open-oracle-integration.html', 'rolling-lock-cost-example')
-
-	try {
-		assertEqual(example.output('lockDisputeCount'), '179', 'rolling lock default dispute count')
-		const expectedFinalReport = ORACLE_EXACT_TOKEN1_REPORT * 10n + 162n
-		assertEqual(example.output('lockFinalReport'), formatAtomicRepForDocs(expectedFinalReport), 'rolling lock default should derive from the canonical deployment report')
-		assertEqual(example.output('lockPricePathValidity'), 'valid; minimum deviation 0.55%', 'rolling lock default alternating price path')
-		assertEqual(example.output('lockPeakCapital'), '2.358749 ETH', 'rolling lock default peak locked principal')
-		assertEqual(example.output('lockMaxLiquidRep'), '5,215.166994106090380438 REP', 'rolling lock default transient REP requirement')
-		assertEqual(example.output('lockMaxWethAdded'), '0.142410 WETH', 'rolling lock default transient WETH requirement')
-		assertEqual(example.output('lockProtocolFeeRepExact'), '4,369.939338389373684113 REP', 'rolling lock default exact protocol-fee REP')
-		assertEqual(example.output('lockProtocolFeeCost'), '1.977348 ETH', 'rolling lock default protocol fees')
-		assertEqual(example.output('lockReporterFeeTransfer'), '0.197735 ETH', 'rolling lock default internal reporter fees')
-		assertEqual(example.output('lockDisputeGasCost'), '0.005370 ETH', 'rolling lock default dispute gas')
-		assertEqual(example.output('lockSettlementGasCost'), '0.000050 ETH', 'rolling lock default terminal settlement gas')
-		assertEqual(example.output('lockCapitalCarry'), '0.000303 ETH', 'rolling lock default capital carry')
-		assertEqual(example.output('lockTotalCost'), '1.983121 ETH ($3,471)', 'rolling lock default lower-bound total')
-
-		example.setInput('lockPriceDeviation', 0.1)
-		assertEqual(example.output('lockPricePathValidity'), 'invalid; minimum deviation 0.55%', 'rolling lock should reject an alternating path inside the fee boundary')
-
-		example.setInput('lockDurationHours', 1)
-		example.setInput('lockSettlementMinutes', 30)
-		example.setInput('lockInitialRep', 100)
-		example.setInput('lockHaltMultiple', 10)
-		example.setInput('lockPriceDeviation', 1)
-		assertEqual(example.output('lockMaxLiquidRep'), '216.100000000000000000 REP', 'pre-halt roll should include new REP, old REP, reporter fee, and protocol fee')
-
-		example.setInput('lockDurationHours', 2)
-		example.setInput('lockSettlementMinutes', 60)
-		example.setInput('lockHaltMultiple', 1)
-		assertEqual(example.output('lockMaxLiquidRep'), '201.100000000000000001 REP', 'post-halt roll should add exactly one atomic REP before transient fees')
-
-		example.setInput('lockDurationHours', 1)
-		example.setInput('lockSettlementMinutes', 1)
-		example.setInput('lockInitialRep', 10)
-		example.setInput('lockHaltMultiple', 1)
-		assertEqual(example.output('lockProtocolFeeRepExact'), '5.900000000000000000 REP', 'protocol fees should floor every post-halt dispute separately')
-
-		example.setInput('lockDurationHours', 1)
-		example.setInput('lockSettlementMinutes', 60)
-		assertEqual(example.output('lockDisputeCount'), '0', 'opening report should cover one settlement interval without a dispute')
-		assertEqual(example.output('lockProtocolFeeCost'), '0.000000 ETH', 'no rolling disputes should pay no dispute protocol fee')
-
-		example.setInput('lockDurationHours', 24)
-		example.setInput('lockSettlementMinutes', 8)
-		example.setInput('lockInitialRep', 259.332)
-		example.setInput('lockHaltMultiple', 10)
-		example.setInput('lockBaseFeeGwei', 1)
-		example.setInput('lockGasPriceGwei', 0.01)
-		assertEqual(example.output('lockDisputeGasCost'), '0.053700 ETH', 'rolling dispute gas should clamp effective gas price to block base fee')
-	} finally {
-		example.close()
-	}
 }
 
 function escapeRegExp(value: string): string {
@@ -506,23 +437,13 @@ await checkCollateralRepairExample()
 await checkUnderfundedPrefixExample()
 await checkResolutionEdgeExample()
 await checkPayoutRegionExample()
-await checkFixedExposureCostExample()
-checkOracleReportBudgetMath()
+await checkDynamicWethReportExample()
 checkExactRepCapEquality()
-await checkRollingLockCostExample()
 
 const openOracleHtml = await readFile('docs/open-oracle-integration.html', 'utf8')
-assert.doesNotMatch(openOracleHtml, /operation volume is not\s+metered by the accepted report/i, 'OpenOracle integration should not retain the stale unmetered-operation claim')
-assert.match(
-	openOracleHtml,
-	/configuredRepNotional = floor\(reportRep \\cdot escalationHaltMultiplierBps \/ 10000\); reportBudget = floor\(configuredRepNotional \\cdot acceptedAmount2 \/ acceptedAmount1\)/i,
-	'OpenOracle integration should derive the configured budget directly from the escalation-halt REP amount and accepted report amounts',
-)
-assert.match(openOracleHtml, /configured notional limit, not proof[\s\S]*multiplier's sufficiency remains a parameter assumption/i, 'OpenOracle integration should distinguish the configured exposure cap from an economic-safety proof')
-assert.doesNotMatch(openOracleHtml, /Secured Exposure Budget/i, 'OpenOracle integration should not label a parameter-selected cap as secured exposure')
-for (const equationId of ['eq-openoracle-fixed-report-cost', 'eq-openoracle-rolling-lock-cost']) {
-	assert.doesNotMatch(blockWithId(openOracleHtml, equationId), /<mi>(?:R|P|e|E|Q|N|D|T|H|m|u|F)<\/mi>/, `${equationId} should use descriptive domain names instead of one-letter identifiers`)
-}
+assert.doesNotMatch(blockWithId(openOracleHtml, 'eq-openoracle-initial-report-size'), /<mi>(?:R|P|e|E|Q|N|D|T|H|m|u|F)<\/mi>/, 'dynamic report equation should use descriptive domain names instead of one-letter identifiers')
+assert.doesNotMatch(openOracleHtml, /259\.332023575638507216 REP/, 'OpenOracle integration should not retain the removed fixed REP report')
+assert.match(openOracleHtml, /WETH as <code>token1<\/code> and\s+REP as <code>token2<\/code>/, 'OpenOracle integration should document WETH as the exact token-one side')
 
 const auctionDesignHtml = await readFile('docs/auction-design.html', 'utf8')
 assert.doesNotMatch(auctionDesignHtml, /buy only the REP they demanded/i, 'auction design should not describe underfunded fills as per-tick demand')
@@ -553,7 +474,11 @@ assert.match(operatorReferenceMarkdown, /external and own forks record one fixed
 assert.match(operatorReferenceMarkdown, /once every eligible vault checkpoints[\s\S]*no vault can individually claim returns to collateral/i, 'operator reference should document final aggregate-only fee reserve release')
 assert.match(operatorReferenceMarkdown, /each claimed auction allowance joins incrementally[\s\S]*delayed claim adds to the pool’s live eligible total/i, 'operator reference should document live incremental fee eligibility for delayed auction claims')
 assert.match(operatorReferenceMarkdown, /## Security Pool Guardrails[\s\S]*totalFeesOwedToVaults[\s\S]*totalAccruedFees\(\)[\s\S]*## Share Migration/i, 'operator reference security-pool guardrails should define assigned and aggregate fee accounting')
-assert.match(operatorReferenceMarkdown, /derive each bid's REP from the difference between rounded cumulative allocations[\s\S]*no bid meets the cap-implied reserve, no REP is allocated and every bid refunds\./i, 'operator reference should document deterministic auction rounding and the no-qualifying-bid branch')
+assert.match(
+	operatorReferenceMarkdown,
+	/derive each bid's REP from the difference between rounded cumulative allocations[\s\S]*no bid meets the cap-implied reserve, or qualifying ETH produces a zero proportional REP aggregate,[\s\S]*every bid refunds\./i,
+	'operator reference should document deterministic auction rounding and both zero-allocation refund branches',
+)
 
 const placeholderHtml = await readFile('docs/placeholder-whitepaper.html', 'utf8')
 const invariantsHtml = await readFile('docs/invariants.html', 'utf8')
@@ -615,6 +540,7 @@ assert.doesNotMatch(placeholderHtml, /underfundedThreshold = ceil\(underfundedWi
 assert.match(placeholderHtml, /underfundedThreshold = ceil\(ethRaiseCap \\cdot pricePrecision \/ maxRepBeingSold\)/i, 'whitepaper fill math should derive the reserve from both caps')
 assert.doesNotMatch(placeholderHtml, /max-uint sentinel/i, 'whitepaper should not describe the removed no-bid threshold sentinel')
 assert.match(placeholderHtml, /every bid refunds/i, 'whitepaper underfunded prose should document the no-winning-prefix refund branch')
+assert.match(placeholderHtml, /proportional aggregate REP[\s\S]*floors to zero[\s\S]*refunds every bid/i, 'whitepaper underfunded prose should document the zero-proportional-REP refund branch')
 assert.match(placeholderHtml, /under-repaired finalization attempt reverts[\s\S]*remains inactive in <code>ForkTruthAuction<\/code>/i, 'whitepaper should document exact-repair rollback')
 assert.match(placeholderHtml, /Forced ETH[\s\S]*does\s+not\s+satisfy\s+that\s+condition/i, 'whitepaper should exclude forced ETH from child activation')
 assert.match(

@@ -65,21 +65,23 @@ export function TruthAuctionBidsSection({ aggregatedAuctionBidCountForLoadedTick
 			{!loadingAggregatedAuctionBids && loadedTickCount === 0 ? <p className='detail'>{forkAuctionCopy.auctionPriceLevelsEmpty}</p> : undefined}
 			{!loadingAggregatedAuctionBids && loadedTickCount > 0 && rows.length === 0 ? <p className='detail'>{forkAuctionCopy.loadedPriceBidsEmpty}</p> : undefined}
 			{rows.length === 0 ? undefined : (
-				<div className='truth-auction-bid-table'>
+				<div className='truth-auction-bid-table truth-auction-bid-table-scroll' role='region' aria-label={forkAuctionCopy.scrollableAuctionBidHistory} tabIndex={0}>
 					<AuctionBidsHeader />
 					{rows.map(row => (
 						<div className='truth-auction-bid-row is-wide is-no-actions' key={row.key}>
-							<span className='truth-auction-bid-row-label'>{renderPriceValue(row.price)}</span>
-							<div className='truth-auction-bid-row-address'>
+							<span className='truth-auction-bid-row-label' data-label={forkAuctionCopy.priceEthPerRep}>
+								{renderPriceValue(row.price)}
+							</span>
+							<div className='truth-auction-bid-row-address' data-label={forkAuctionCopy.bidder}>
 								<AddressValue address={row.bidder} />
 							</div>
-							<span>
+							<span data-label={forkAuctionCopy.bidAmountEth}>
 								<CurrencyValue value={row.ethAmount} suffix={commonCopy.eth} />
 							</span>
-							<span>
+							<span data-label={forkAuctionCopy.loadedDepthEth}>
 								<CurrencyValue value={row.cumulativeEth} suffix={commonCopy.eth} />
 							</span>
-							<span className='truth-auction-bid-row-status'>
+							<span className='truth-auction-bid-row-status' data-label={commonCopy.status}>
 								<span className={`truth-auction-status-pill ${row.statusToneClassName}`}>{row.statusLabel}</span>
 							</span>
 						</div>
@@ -103,7 +105,7 @@ export function ViewerTruthAuctionBidsSection({ accountAddress, hasMoreViewerBid
 					{rows.map(row => (
 						<div className={`truth-auction-bid-row is-wallet ${showSettlementActionColumn ? '' : 'is-no-actions'}`} key={row.key}>
 							{showSettlementActionColumn ? (
-								<div className='truth-auction-bid-row-actions'>
+								<div className='truth-auction-bid-row-actions' data-label={commonCopy.selected}>
 									{(() => {
 										const settlementControl = row.settlementControl
 										if (settlementControl === undefined) return undefined
@@ -111,11 +113,13 @@ export function ViewerTruthAuctionBidsSection({ accountAddress, hasMoreViewerBid
 									})()}
 								</div>
 							) : undefined}
-							<span className='truth-auction-bid-row-label'>{renderPriceValue(row.price)}</span>
-							<span>
+							<span className='truth-auction-bid-row-label' data-label={forkAuctionCopy.priceEthPerRep}>
+								{renderPriceValue(row.price)}
+							</span>
+							<span data-label={forkAuctionCopy.bidAmountEth}>
 								<CurrencyValue value={row.ethAmount} suffix={commonCopy.eth} />
 							</span>
-							<span className='truth-auction-bid-row-status'>
+							<span className='truth-auction-bid-row-status' data-label={commonCopy.status}>
 								<span className={`truth-auction-status-pill ${row.statusToneClassName}`}>{row.statusLabel}</span>
 							</span>
 						</div>

@@ -5,9 +5,9 @@ import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { deployUniformPriceDualCapBatchAuction } from '../testSupport/simulator/utils/contracts/auction'
-import { ORACLE_EXACT_TOKEN1_REPORT, deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
+import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
 import { depositOnOutcome, deployEscalationGame, getEscalationGameOutcomeState } from '../testSupport/simulator/utils/contracts/escalationGame'
-import { executeStagedOperation, getEthRaiseCap, getIsPriceValid, getRequestPriceEthCost, getStagedOperation, getStagedOperationCounter, OperationType, requestPriceIfNeededAndStageOperation, requestPriceIfNeededAndStageOperationWithInitialReportAmount2 } from '../testSupport/simulator/utils/contracts/peripherals'
+import { executeStagedOperation, getEthRaiseCap, getIsPriceValid, getRequestPriceEthCost, getStagedOperation, getStagedOperationCounter, OperationType, requestPriceIfNeededAndStageOperation, requestPriceIfNeededAndStageOperationWithInitialReportPrice } from '../testSupport/simulator/utils/contracts/peripherals'
 import { approveAndDepositRep, handleOracleReporting, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
 import { depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getRepToken, getSecurityVault, getTotalSecurityBondAllowance } from '../testSupport/simulator/utils/contracts/securityPool'
 import { createChildUniverse, getMigratedRep, getOwnForkRepBuckets, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault } from '../testSupport/simulator/utils/contracts/securityPoolForker'
@@ -35,8 +35,6 @@ const repDeposit = 1000n * 10n ** 18n
 const initialEscalationGameDeposit = 1n * 10n ** 18n
 const largeEscalationGameDeposit = 100n * 10n ** 18n
 const outcomes = ['Yes', 'No']
-const PRICE_PRECISION = 10n ** 18n
-
 describe('security regression coverage', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
 	let client: WriteClient
@@ -335,15 +333,14 @@ describe('security regression coverage', () => {
 		await approveAndDepositRep(liquidator, repDeposit * 10n, questionId)
 		await mockWindow.advanceTime(2n * 60n * 60n)
 
-		const forcedInitialReportAmount2 = (ORACLE_EXACT_TOKEN1_REPORT * PRICE_PRECISION) / forcedLiquidationPrice
-		await requestPriceIfNeededAndStageOperationWithInitialReportAmount2(
+		await requestPriceIfNeededAndStageOperationWithInitialReportPrice(
 			liquidator,
 			securityPoolAddresses.priceOracleManagerAndOperatorQueuer,
 			OperationType.SetSecurityBondsAllowance,
 			liquidator.account.address,
 			1n,
 			5n * 60n,
-			forcedInitialReportAmount2 > 0n ? forcedInitialReportAmount2 : 1n,
+			forcedLiquidationPrice,
 			await getRequestPriceEthCost(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer),
 		)
 		for (let index = 1; index < 4; index++) {

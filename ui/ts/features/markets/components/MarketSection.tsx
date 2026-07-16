@@ -75,7 +75,7 @@ export function MarketSection({
 	const selectedForkQuestion = zoltarQuestions.find(question => question.questionId.toLowerCase() === zoltarForkQuestionId.trim().toLowerCase()) ?? zoltarUniverse?.forkQuestionDetails
 	const forkModalTitle = hasForked ? zoltarCopy.viewForkDetails : zoltarCopy.forkZoltar
 	const forkContext = [
-		{ label: commonCopy.question, value: selectedForkQuestion?.title ?? (zoltarForkQuestionId.trim() === '' ? commonCopy.unavailable : zoltarForkQuestionId) },
+		{ label: commonCopy.question, value: selectedForkQuestion?.title ?? (zoltarForkQuestionId.trim() === '' ? commonCopy.noneSelected : zoltarForkQuestionId) },
 		{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={zoltarUniverse?.universeId} /> },
 	]
 

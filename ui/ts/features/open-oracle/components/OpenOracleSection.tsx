@@ -1002,6 +1002,17 @@ export function OpenOracleSection({
 					)}
 					<SectionBlock title={openOracleCopy.openOracleGame} variant='plain' description={openOracleCopy.standaloneOracleDescription}>
 						<p className='notice warning'>{openOracleCopy.standaloneOracleWarningDetail}</p>
+						<div className='workflow-summary-strip workflow-guide workflow-guide-compact'>
+							<div className='workflow-guide-intro'>
+								<strong>{openOracleCopy.standaloneOperatorWorkflow}</strong>
+								<p className='detail'>{openOracleCopy.standaloneOperatorWorkflowDetail}</p>
+							</div>
+							<div className='workflow-summary-strip-steps'>
+								<span>{openOracleCopy.verifyTokenPairStep}</span>
+								<span>{openOracleCopy.setEconomicsStep}</span>
+								<span>{openOracleCopy.setDisputeTimingStep}</span>
+							</div>
+						</div>
 						<div className='form-grid'>
 							<SectionBlock headingLevel={4} title={openOracleCopy.tokenPair} variant='embedded'>
 								<div className='field-row'>

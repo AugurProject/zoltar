@@ -1,6 +1,6 @@
 import { beforeEach, describe, test } from 'bun:test'
 import { decodeEventLog, zeroAddress, type Abi, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { peripherals_SecurityPool_SecurityPool, Zoltar_Zoltar } from '../../types/contractArtifact'
+import { peripherals_EscalationGame_EscalationGame, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken, Zoltar_Zoltar } from '../../types/contractArtifact'
 import { getMigrationRepBalance, getUniverseData, getUniverseTheoreticalSupply } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { hashCarryLeaf, hashParent } from '../carryProofHelpers'
 import { isIgnorableLogDecodeError } from '../logDecodeErrors'
@@ -146,7 +146,7 @@ describe('event-only replay', () => {
 		if (replayedVault?.vaultFeeRemainder !== 7n) throw new Error('vault fee remainder was not replayed')
 	})
 
-	test('coordinator checkpoints preserve report sponsorship and round exposure state', () => {
+	test('coordinator checkpoints preserve report sponsorship and operation state', () => {
 		const coordinator = '0x1111111111111111111111111111111111111111'
 		const sponsor = '0x2222222222222222222222222222222222222222'
 		const replayed = replayZoltarEvents([
@@ -163,8 +163,6 @@ describe('event-only replay', () => {
 					pendingReportMaxSettlementBaseFee: 100n,
 					lastPrice: 12n,
 					lastSettlementTimestamp: 20n,
-					priceRoundMaxNotional: 200n,
-					priceRoundConsumedNotional: 75n,
 					stagedOperationCounter: 4n,
 					activeStagedOperationCount: 2n,
 					pendingSettlementOperationCount: 1n,
@@ -173,8 +171,7 @@ describe('event-only replay', () => {
 		])
 		const replayedCoordinator = replayed.coordinators.get(coordinator)
 		if (replayedCoordinator?.pendingReportSponsor !== sponsor) throw new Error('pending report sponsor was not replayed')
-		if (replayedCoordinator.priceRoundMaxNotional !== 200n) throw new Error('round maximum notional was not replayed')
-		if (replayedCoordinator.priceRoundConsumedNotional !== 75n) throw new Error('round consumed notional was not replayed')
+		if (replayedCoordinator.activeStagedOperationCount !== 2n) throw new Error('active operation count was not replayed')
 	})
 
 	test('REP discovery replays genesis token history before the ZoltarQuestionData event anchor', () => {
@@ -235,6 +232,103 @@ describe('event-only replay', () => {
 		if (replayed.repSupply.get(genesisRep) !== 100n) throw new Error('genesis REP supply mismatch')
 		if (replayed.universeForks.get('0')?.migrationRepBalance !== 36n) throw new Error('genesis universe fork state mismatch')
 		if (replayed.universes.get('0')?.universeTheoreticalSupply !== 60n) throw new Error('genesis universe supply checkpoint mismatch')
+	})
+
+	test('pool discovery retains earlier setup logs and expands ERC1155 batches by token id', () => {
+		const factory = '0x1111111111111111111111111111111111111111'
+		const pool = '0x2222222222222222222222222222222222222222'
+		const shareToken = '0x3333333333333333333333333333333333333333'
+		const coordinator = '0x4444444444444444444444444444444444444444'
+		const holder = '0x5555555555555555555555555555555555555555'
+		const receiver = '0x6666666666666666666666666666666666666666'
+		const unrecognizedEmitter = '0x7777777777777777777777777777777777777777'
+		const game = '0x8888888888888888888888888888888888888888'
+		const unrecognizedGame = '0x9999999999999999999999999999999999999999'
+		const logs = [
+			createReplayLog({
+				emitter: shareToken,
+				eventName: 'AuthorizationUpdated',
+				logIndex: 0,
+				args: { account: pool, actor: factory, authorized: true },
+			}),
+			createReplayLog({ emitter: pool, logIndex: 1 }),
+			createReplayLog({
+				emitter: coordinator,
+				eventName: 'CoordinatorStateCheckpoint',
+				logIndex: 2,
+				args: {
+					reason: 0n,
+					reportId: 0n,
+					operationId: 0n,
+					pendingReportId: 0n,
+					pendingReportSponsor: zeroAddress,
+					pendingOperationSlotId: 0n,
+					pendingReportMaxSettlementBaseFee: 0n,
+					lastPrice: 0n,
+					lastSettlementTimestamp: 0n,
+					stagedOperationCounter: 0n,
+					activeStagedOperationCount: 0n,
+					pendingSettlementOperationCount: 0n,
+				},
+			}),
+			createReplayLog({
+				emitter: shareToken,
+				eventName: 'TransferBatch',
+				logIndex: 3,
+				args: { operator: pool, from: zeroAddress, to: holder, ids: [1n, 2n], values: [10n, 20n] },
+			}),
+			createReplayLog({
+				emitter: shareToken,
+				eventName: 'TransferBatch',
+				logIndex: 4,
+				args: { operator: holder, from: holder, to: receiver, ids: [1n, 2n], values: [3n, 5n] },
+			}),
+			createReplayLog({
+				emitter: shareToken,
+				eventName: 'TransferBatch',
+				logIndex: 5,
+				args: { operator: receiver, from: receiver, to: zeroAddress, ids: [1n, 2n], values: [1n, 2n] },
+			}),
+			createReplayLog({
+				emitter: factory,
+				eventName: 'DeploySecurityPool',
+				logIndex: 8,
+				args: {
+					securityPool: pool,
+					truthAuction: zeroAddress,
+					priceOracleManagerAndOperatorQueuer: coordinator,
+					shareToken,
+					parent: zeroAddress,
+					universeId: 1n,
+					questionId: 2n,
+					securityMultiplier: 3n,
+					currentRetentionRate: 4n,
+					completeSetCollateralAmount: 0n,
+				},
+			}),
+			createReplayLog({
+				emitter: unrecognizedEmitter,
+				eventName: 'AuthorizationUpdated',
+				logIndex: 9,
+				args: { account: holder, actor: holder, authorized: true },
+			}),
+			createReplayLog({ emitter: game, eventName: 'GameStarted', logIndex: 6, args: { activationTime: 10n, startBond: 2n, nonDecisionThreshold: 20n } }),
+			createReplayLog({ emitter: pool, eventName: 'EscalationGameSet', logIndex: 7, args: { escalationGame: game } }),
+			createReplayLog({ emitter: unrecognizedGame, eventName: 'GameStarted', logIndex: 10, args: { activationTime: 10n, startBond: 2n, nonDecisionThreshold: 20n } }),
+		]
+
+		const replayed = replayZoltarEvents(logs, new Set(), new Set([factory]))
+		if (replayed.poolDeployments.get(pool)?.shareToken !== shareToken) throw new Error('pool relationship was not pre-discovered')
+		if (replayed.authorizations.get(shareToken)?.get(pool) !== true) throw new Error('constructor authorization was not retained')
+		if (replayed.authorizations.has(unrecognizedEmitter)) throw new Error('unrecognized authorization emitter was accepted')
+		if (replayed.escalationLifecycles.get(game)?.activationTime !== 10n) throw new Error('initial game lifecycle was not retained')
+		if (replayed.escalationLifecycles.has(unrecognizedGame)) throw new Error('unrecognized escalation-game emitter was accepted')
+		if (replayed.pools.get(pool)?.completeSetCollateralAmount !== 1n) throw new Error('pool initialization checkpoint was not retained')
+		if (replayed.coordinators.get(coordinator)?.checkpointReason !== 0n) throw new Error('coordinator setup checkpoint was not retained')
+		if (replayed.shareTokenBalances.get(shareToken)?.get(1n)?.get(holder) !== 7n) throw new Error('token 1 holder balance mismatch')
+		if (replayed.shareTokenBalances.get(shareToken)?.get(2n)?.get(receiver) !== 3n) throw new Error('token 2 receiver balance mismatch')
+		if (replayed.shareTokenSupplies.get(shareToken)?.get(1n) !== 9n) throw new Error('token 1 supply mismatch')
+		if (replayed.shareTokenSupplies.get(shareToken)?.get(2n) !== 18n) throw new Error('token 2 supply mismatch')
 	})
 
 	test('a question created before root Zoltar deployment replays with universe and coordinator terminal state', () => {
@@ -351,7 +445,20 @@ describe('event-only replay', () => {
 				emitter: coordinator,
 				eventName: 'StagedOperationQueued',
 				logIndex: 11,
-				args: { operationId: 7n, operation: 2n, initiatorVault: forker, targetVault: pool, amount: 3n, queuedAt: 27n },
+				args: {
+					operationId: 7n,
+					operation: 2n,
+					initiatorVault: forker,
+					targetVault: pool,
+					amount: 3n,
+					queuedAt: 27n,
+					validForSeconds: 300n,
+					snapshotTargetOwnership: 11n,
+					snapshotTargetAllowance: 12n,
+					snapshotTotalRep: 13n,
+					snapshotDenominator: 14n,
+					isPendingSlot: true,
+				},
 			}),
 			createReplayLog({
 				emitter: coordinator,
@@ -397,13 +504,39 @@ describe('event-only replay', () => {
 				emitter: firstCoordinator,
 				eventName: 'StagedOperationQueued',
 				logIndex: 2,
-				args: { operationId: 1n, operation: 0n, initiatorVault: firstVault, targetVault: firstVault, amount: 3n, queuedAt: 10n },
+				args: {
+					operationId: 1n,
+					operation: 0n,
+					initiatorVault: firstVault,
+					targetVault: firstVault,
+					amount: 3n,
+					queuedAt: 10n,
+					validForSeconds: 300n,
+					snapshotTargetOwnership: 5n,
+					snapshotTargetAllowance: 6n,
+					snapshotTotalRep: 7n,
+					snapshotDenominator: 8n,
+					isPendingSlot: true,
+				},
 			}),
 			createReplayLog({
 				emitter: secondCoordinator,
 				eventName: 'StagedOperationQueued',
 				logIndex: 3,
-				args: { operationId: 1n, operation: 1n, initiatorVault: secondVault, targetVault: secondVault, amount: 4n, queuedAt: 11n },
+				args: {
+					operationId: 1n,
+					operation: 1n,
+					initiatorVault: secondVault,
+					targetVault: secondVault,
+					amount: 4n,
+					queuedAt: 11n,
+					validForSeconds: 600n,
+					snapshotTargetOwnership: 9n,
+					snapshotTargetAllowance: 10n,
+					snapshotTotalRep: 11n,
+					snapshotDenominator: 12n,
+					isPendingSlot: false,
+				},
 			}),
 		]
 
@@ -610,19 +743,38 @@ describe('event-only replay', () => {
 		if (replayed.universes.get('9')?.forkQuestionId !== 8n) throw new Error('child fork question mismatch')
 	})
 
-	test('canonical security-pool resulting-state events reconstruct child initialization', () => {
+	test('canonical security-pool deployment and resulting-state events reconstruct child initialization', () => {
+		const factory = '0x3333333333333333333333333333333333333333'
 		const pool = '0x1111111111111111111111111111111111111111'
 		const game = '0x2222222222222222222222222222222222222222'
+		const parent = '0x4444444444444444444444444444444444444444'
 		const logs = [
-			createReplayLog({ emitter: pool, eventName: 'ShareTokenSupplySet', logIndex: 0, args: { shareTokenSupply: 40n } }),
-			createReplayLog({ emitter: pool, eventName: 'OwnershipDenominatorSet', logIndex: 1, args: { poolOwnershipDenominator: 50n } }),
-			createReplayLog({ emitter: pool, eventName: 'SystemStateSet', logIndex: 2, args: { systemState: 2n } }),
+			createReplayLog({
+				emitter: factory,
+				eventName: 'DeploySecurityPool',
+				logIndex: 0,
+				args: {
+					securityPool: pool,
+					truthAuction: zeroAddress,
+					priceOracleManagerAndOperatorQueuer: zeroAddress,
+					shareToken: zeroAddress,
+					parent,
+					universeId: 1n,
+					questionId: 2n,
+					securityMultiplier: 3n,
+					currentRetentionRate: 4n,
+					completeSetCollateralAmount: 5n,
+				},
+			}),
+			createReplayLog({ emitter: pool, eventName: 'ShareTokenSupplySet', logIndex: 1, args: { shareTokenSupply: 40n } }),
+			createReplayLog({ emitter: pool, eventName: 'OwnershipDenominatorSet', logIndex: 2, args: { poolOwnershipDenominator: 50n } }),
 			createReplayLog({ emitter: pool, eventName: 'AwaitingForkContinuationSet', logIndex: 3, args: { awaitingForkContinuation: true } }),
 			createReplayLog({ emitter: pool, eventName: 'EscalationGameSet', logIndex: 4, args: { escalationGame: game } }),
 			createReplayLog({ emitter: pool, eventName: 'PoolForkModeActivated', logIndex: 5, args: { repTransferred: 60n, currentRetentionRate: 70n, systemState: 1n } }),
 		]
 
 		const replayed = replayZoltarEvents(logs)
+		if (replayed.poolDeployments.get(pool)?.securityMultiplier !== 3n) throw new Error('child security multiplier mismatch')
 		if (replayed.completeSetSupplies.get(pool) !== 40n) throw new Error('child share-token supply mismatch')
 		const poolState = replayed.poolStates.get(pool)
 		if (poolState?.shareTokenSupply !== 40n) throw new Error('child pool share-token state mismatch')
@@ -883,6 +1035,9 @@ describe('event-only replay', () => {
 					parent: zeroAddress,
 					universeId: 9n,
 					questionId: 12n,
+					securityMultiplier: 3n,
+					currentRetentionRate: 4n,
+					completeSetCollateralAmount: 0n,
 				},
 			}),
 			createReplayLog({
@@ -956,7 +1111,20 @@ describe('event-only replay', () => {
 				emitter: coordinator,
 				eventName: 'StagedOperationQueued',
 				logIndex: 12,
-				args: { operationId: 3n, operation: 1n, initiatorVault: migrator, targetVault: pool, amount: 2n, queuedAt: 21n },
+				args: {
+					operationId: 3n,
+					operation: 1n,
+					initiatorVault: migrator,
+					targetVault: pool,
+					amount: 2n,
+					queuedAt: 21n,
+					validForSeconds: 300n,
+					snapshotTargetOwnership: 5n,
+					snapshotTargetAllowance: 6n,
+					snapshotTotalRep: 7n,
+					snapshotDenominator: 8n,
+					isPendingSlot: true,
+				},
 			}),
 			createReplayLog({
 				emitter: coordinator,
@@ -1035,6 +1203,169 @@ describe('event-only replay', () => {
 		}
 		return replayLogs
 	}
+
+	test('actual origin deployment pre-discovers relationships before constructor checkpoints', async () => {
+		const questionData = { ...fixture.questionData, title: 'Event replay deployment discovery' }
+		const questionId = fixture.getQuestionId(questionData, fixture.outcomes)
+		await fixture.createQuestion(client, questionData, fixture.outcomes)
+		const factory = fixture.getInfraContractAddresses().securityPoolFactory
+		const deploymentHash = await client.writeContract({
+			address: factory,
+			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+			functionName: 'deployOriginSecurityPool',
+			args: [fixture.genesisUniverse, questionId, fixture.securityMultiplier],
+		})
+		const receipt = await client.waitForTransactionReceipt({ hash: deploymentHash })
+		if (receipt.status === 'reverted') throw new Error('origin pool deployment reverted')
+		const addresses = fixture.getSecurityPoolAddresses(zeroAddress, fixture.genesisUniverse, questionId, fixture.securityMultiplier)
+		const blockNumber = receipt.blockNumber
+		const replayLogs = (
+			await Promise.all([
+				getContractReplayLogs(factory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi, blockNumber, blockNumber),
+				getContractReplayLogs(addresses.securityPool, peripherals_SecurityPool_SecurityPool.abi, blockNumber, blockNumber),
+				getContractReplayLogs(addresses.shareToken, peripherals_tokens_ShareToken_ShareToken.abi, blockNumber, blockNumber),
+				getContractReplayLogs(addresses.priceOracleManagerAndOperatorQueuer, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, blockNumber, blockNumber),
+			])
+		)
+			.flat()
+			.filter(log => log.transactionHash === deploymentHash)
+		const deploymentLog = replayLogs.find(log => log.eventName === 'DeploySecurityPool')
+		const authorizationLog = replayLogs.find(log => log.eventName === 'AuthorizationUpdated')
+		const poolCheckpointLog = replayLogs.find(log => log.eventName === 'PoolAccountingCheckpoint')
+		const coordinatorCheckpointLog = replayLogs.find(log => log.eventName === 'CoordinatorStateCheckpoint')
+		if (deploymentLog === undefined || authorizationLog === undefined || poolCheckpointLog === undefined || coordinatorCheckpointLog === undefined) {
+			throw new Error('origin deployment receipt is missing replay relationships or setup checkpoints')
+		}
+		for (const setupLog of [authorizationLog, poolCheckpointLog, coordinatorCheckpointLog]) {
+			if (setupLog.logIndex >= deploymentLog.logIndex) throw new Error('setup checkpoint did not precede relationship discovery')
+		}
+
+		const replayed = replayZoltarEvents(replayLogs, new Set(), new Set([factory]))
+		if (replayed.poolDeployments.get(addresses.securityPool)?.shareToken !== addresses.shareToken) throw new Error('origin deployment relationship mismatch')
+		if (replayed.authorizations.get(addresses.shareToken)?.get(addresses.securityPool) !== true) throw new Error('origin pool authorization was not replayed')
+		if (replayed.pools.get(addresses.securityPool)?.reason !== 5n) throw new Error('origin pool initialization checkpoint was not replayed')
+		if (replayed.coordinators.get(addresses.priceOracleManagerAndOperatorQueuer)?.securityPool !== addresses.securityPool) {
+			throw new Error('origin coordinator setup checkpoint was not replayed')
+		}
+	})
+
+	test('actual queued coordinator operation replays every governing field and pending membership', async () => {
+		const coordinator = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
+		const validForSeconds = 300n
+		const transactionHash = await fixture.requestPriceIfNeededAndStageOperation(client, coordinator, fixture.OperationType.SetSecurityBondsAllowance, client.account.address, fixture.reportBond, validForSeconds)
+		const receipt = await client.getTransactionReceipt({ hash: transactionHash })
+		const replayLogs = (await getContractReplayLogs(coordinator, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, receipt.blockNumber, receipt.blockNumber)).filter(log => log.transactionHash === transactionHash)
+		const queuedLog = replayLogs.find(log => log.eventName === 'StagedOperationQueued')
+		if (queuedLog === undefined) throw new Error('queued operation event missing')
+		const operationId = queuedLog.args['operationId']
+		if (typeof operationId !== 'bigint') throw new Error('queued operation ID missing')
+		const replayed = replayZoltarEvents(replayLogs)
+		const operation = replayed.coordinatorOperations.get(coordinator)?.get(operationId)
+		if (operation === undefined) throw new Error('queued operation replay missing')
+		const storedOperation = await client.readContract({
+			address: coordinator,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'stagedOperations',
+			args: [operationId],
+		})
+		strictEqualTypeSafe(operation.operation, storedOperation[0], 'queued operation type replay mismatch')
+		strictEqualTypeSafe(operation.initiatorVault, storedOperation[1], 'queued initiator replay mismatch')
+		strictEqualTypeSafe(operation.targetVault, storedOperation[2], 'queued target replay mismatch')
+		strictEqualTypeSafe(operation.amount, storedOperation[3], 'queued amount replay mismatch')
+		strictEqualTypeSafe(operation.queuedAt, storedOperation[4], 'queued timestamp replay mismatch')
+		strictEqualTypeSafe(operation.validForSeconds, storedOperation[5], 'queued validity replay mismatch')
+		strictEqualTypeSafe(operation.snapshotTargetOwnership, storedOperation[6], 'queued ownership snapshot replay mismatch')
+		strictEqualTypeSafe(operation.snapshotTargetAllowance, storedOperation[7], 'queued allowance snapshot replay mismatch')
+		strictEqualTypeSafe(operation.snapshotTotalRep, storedOperation[8], 'queued REP snapshot replay mismatch')
+		strictEqualTypeSafe(operation.snapshotDenominator, storedOperation[9], 'queued denominator snapshot replay mismatch')
+		const pendingOperationIds = await client.readContract({
+			address: coordinator,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'getPendingSettlementOperationIds',
+			args: [],
+		})
+		strictEqualTypeSafe(operation.isPendingSlot, pendingOperationIds.includes(operationId), 'queued pending-set membership replay mismatch')
+		strictEqualTypeSafe(replayed.coordinators.get(coordinator)?.pendingOperationSlotId, operationId, 'queued compatibility slot replay mismatch')
+	})
+
+	test('actual first escalation deposit pre-discovers the game before its lifecycle event', async () => {
+		await mockWindow.setTime(fixture.questionData.endTime + 1n)
+		const depositHash = await fixture.depositToEscalationGame(client, securityPoolAddresses.securityPool, fixture.QuestionOutcome.Yes, fixture.reportBond)
+		const receipt = await client.getTransactionReceipt({ hash: depositHash })
+		const factory = fixture.getInfraContractAddresses().securityPoolFactory
+		const factoryLogs = await getContractReplayLogs(factory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi, 0n, receipt.blockNumber)
+		const deploymentLogs = factoryLogs.filter(log => {
+			const deployedPool = log.args['securityPool']
+			return log.eventName === 'DeploySecurityPool' && typeof deployedPool === 'string' && deployedPool.toLowerCase() === securityPoolAddresses.securityPool.toLowerCase()
+		})
+		const receiptLogs = (
+			await Promise.all([getContractReplayLogs(securityPoolAddresses.securityPool, peripherals_SecurityPool_SecurityPool.abi, receipt.blockNumber, receipt.blockNumber), getContractReplayLogs(securityPoolAddresses.escalationGame, peripherals_EscalationGame_EscalationGame.abi, receipt.blockNumber, receipt.blockNumber)])
+		)
+			.flat()
+			.filter(log => log.transactionHash === depositHash)
+		const gameStarted = receiptLogs.find(log => log.eventName === 'GameStarted')
+		const gameSet = receiptLogs.find(log => log.eventName === 'EscalationGameSet')
+		if (deploymentLogs.length !== 1 || gameStarted === undefined || gameSet === undefined) throw new Error('first escalation deposit is missing discovery events')
+		if (gameStarted.logIndex >= gameSet.logIndex) throw new Error('game lifecycle event did not precede pool relationship event')
+
+		const replayed = replayZoltarEvents([...deploymentLogs, ...receiptLogs], new Set(), new Set([factory]))
+		if (replayed.poolStates.get(securityPoolAddresses.securityPool)?.escalationGame !== securityPoolAddresses.escalationGame) {
+			throw new Error('pool escalation-game relationship was not replayed')
+		}
+		if (replayed.escalationLifecycles.get(securityPoolAddresses.escalationGame)?.activationTime === undefined) {
+			throw new Error('initial escalation-game lifecycle was not replayed')
+		}
+	})
+
+	test('actual child continuation pre-discovers the game before its continuation event', async () => {
+		await mockWindow.setTime(fixture.questionData.endTime + 1n)
+		await fixture.depositToEscalationGame(client, securityPoolAddresses.securityPool, fixture.QuestionOutcome.Yes, fixture.reportBond)
+		await fixture.triggerExternalForkForSecurityPool(undefined, 'event replay child continuation')
+		await fixture.migrateRepToZoltar(client, securityPoolAddresses.securityPool, [fixture.QuestionOutcome.Yes])
+		const childDeploymentHash = await fixture.createChildUniverse(client, securityPoolAddresses.securityPool, fixture.QuestionOutcome.Yes)
+		const receipt = await client.getTransactionReceipt({ hash: childDeploymentHash })
+		const childUniverseId = fixture.getChildUniverseId(fixture.genesisUniverse, fixture.QuestionOutcome.Yes)
+		const child = fixture.getSecurityPoolAddresses(securityPoolAddresses.securityPool, childUniverseId, fixture.questionId, fixture.securityMultiplier)
+		const factory = fixture.getInfraContractAddresses().securityPoolFactory
+		const factoryLogs = await getContractReplayLogs(factory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi, 0n, receipt.blockNumber)
+		const deploymentLogs = factoryLogs.filter(log => {
+			const deployedPool = log.args['securityPool']
+			return log.eventName === 'DeploySecurityPool' && typeof deployedPool === 'string' && deployedPool.toLowerCase() === child.securityPool.toLowerCase()
+		})
+		const receiptLogs = (await Promise.all([getContractReplayLogs(child.securityPool, peripherals_SecurityPool_SecurityPool.abi, receipt.blockNumber, receipt.blockNumber), getContractReplayLogs(child.escalationGame, peripherals_EscalationGame_EscalationGame.abi, receipt.blockNumber, receipt.blockNumber)]))
+			.flat()
+			.filter(log => log.transactionHash === childDeploymentHash)
+			.filter(log => log.emitter.toLowerCase() !== child.escalationGame.toLowerCase() || log.eventName === 'GameContinuedFromFork')
+		const continued = receiptLogs.find(log => log.eventName === 'GameContinuedFromFork')
+		const gameSet = receiptLogs.find(log => log.eventName === 'EscalationGameSet')
+		if (deploymentLogs.length !== 1 || continued === undefined || gameSet === undefined) throw new Error('child continuation is missing discovery events')
+		if (continued.logIndex >= gameSet.logIndex) throw new Error('child continuation event did not precede pool relationship event')
+		if (receiptLogs.some(log => log.eventName === 'SystemStateSet')) throw new Error('child constructor state should not depend on a synthetic system-state event')
+
+		const replayed = replayZoltarEvents([...deploymentLogs, ...receiptLogs], new Set(), new Set([factory]))
+		const deployment = replayed.poolDeployments.get(child.securityPool)
+		if (deployment === undefined) throw new Error('child pool deployment replay missing')
+		const [storedSecurityMultiplier, storedCurrentRetentionRate, storedCollateral, storedSystemState] = await Promise.all([
+			client.readContract({ address: child.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'securityMultiplier', args: [] }),
+			client.readContract({ address: child.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'currentRetentionRate', args: [] }),
+			client.readContract({ address: child.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'completeSetCollateralAmount', args: [] }),
+			client.readContract({ address: child.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'systemState', args: [] }),
+		])
+		strictEqualTypeSafe(deployment.factory, factory, 'child factory replay mismatch')
+		strictEqualTypeSafe(deployment.parent, securityPoolAddresses.securityPool, 'child parent replay mismatch')
+		strictEqualTypeSafe(deployment.universeId, childUniverseId, 'child universe replay mismatch')
+		strictEqualTypeSafe(deployment.questionId, fixture.questionId, 'child question replay mismatch')
+		strictEqualTypeSafe(deployment.truthAuction, child.truthAuction, 'child auction replay mismatch')
+		strictEqualTypeSafe(deployment.coordinator, child.priceOracleManagerAndOperatorQueuer, 'child coordinator replay mismatch')
+		strictEqualTypeSafe(deployment.shareToken, child.shareToken, 'child share token replay mismatch')
+		strictEqualTypeSafe(deployment.securityMultiplier, storedSecurityMultiplier, 'child security multiplier replay mismatch')
+		strictEqualTypeSafe(deployment.currentRetentionRate, storedCurrentRetentionRate, 'child retention rate replay mismatch')
+		strictEqualTypeSafe(deployment.completeSetCollateralAmount, storedCollateral, 'child collateral replay mismatch')
+		strictEqualTypeSafe(replayed.poolStates.get(child.securityPool)?.systemState, storedSystemState, 'child constructor system state replay mismatch')
+		if (replayed.escalationLifecycles.get(child.escalationGame)?.forkContinuation !== true) {
+			throw new Error('child continuation lifecycle was not replayed')
+		}
+	})
 
 	test('actual universe logs reconstruct migration balances and child storage', async () => {
 		await fixture.triggerExternalForkForSecurityPool(undefined, 'event replay universe state source')

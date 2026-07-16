@@ -101,6 +101,9 @@ export type PoolDeploymentReplay = {
 	truthAuction: Address
 	coordinator: Address
 	shareToken: Address
+	securityMultiplier: bigint
+	currentRetentionRate: bigint
+	completeSetCollateralAmount: bigint
 }
 
 export type AuctionLifecycleReplay = {
@@ -114,10 +117,16 @@ export type AuctionLifecycleReplay = {
 
 export type CoordinatorOperationReplay = {
 	operation: bigint
-	initiatorVault?: Address
-	targetVault?: Address
-	amount?: bigint
-	queuedAt?: bigint
+	initiatorVault: Address
+	targetVault: Address
+	amount: bigint
+	queuedAt: bigint
+	validForSeconds: bigint
+	snapshotTargetOwnership: bigint
+	snapshotTargetAllowance: bigint
+	snapshotTotalRep: bigint
+	snapshotDenominator: bigint
+	isPendingSlot: boolean
 	status: 'Queued' | 'Succeeded' | 'Failed' | 'Recovered'
 	errorMessage?: string
 }
@@ -237,8 +246,6 @@ export type CoordinatorReplay = {
 	pendingReportSponsor: Address
 	pendingOperationSlotId: bigint
 	pendingReportMaxSettlementBaseFee: bigint
-	priceRoundMaxNotional: bigint
-	priceRoundConsumedNotional: bigint
 	stagedOperationCounter: bigint
 	activeStagedOperationCount: bigint
 	pendingSettlementOperationCount: bigint
@@ -300,6 +307,8 @@ export type ReplayState = {
 	auctionBids: Map<Address, Map<string, AuctionBidReplay>>
 	auctions: Map<Address, AuctionLifecycleReplay>
 	authorizations: Map<Address, Map<Address, boolean>>
+	shareTokenBalances: Map<Address, Map<bigint, Map<Address, bigint>>>
+	shareTokenSupplies: Map<Address, Map<bigint, bigint>>
 	coordinatorOperations: Map<Address, Map<bigint, CoordinatorOperationReplay>>
 	coordinators: Map<Address, CoordinatorReplay>
 }
@@ -349,6 +358,8 @@ export function createReplayState(): ReplayState {
 		auctionBids: new Map(),
 		auctions: new Map(),
 		authorizations: new Map(),
+		shareTokenBalances: new Map(),
+		shareTokenSupplies: new Map(),
 		coordinatorOperations: new Map(),
 		coordinators: new Map(),
 	}
@@ -391,6 +402,17 @@ function requireStringArray(args: Readonly<Record<string, unknown>>, field: stri
 		strings.push(entry)
 	}
 	return strings
+}
+
+function requireBigIntArray(args: Readonly<Record<string, unknown>>, field: string) {
+	const value = args[field]
+	if (!Array.isArray(value)) throw new Error(`${field} must contain bigints`)
+	const bigints: bigint[] = []
+	for (const entry of value) {
+		if (typeof entry !== 'bigint') throw new Error(`${field} must contain bigints`)
+		bigints.push(entry)
+	}
+	return bigints
 }
 
 function requireAddress(args: Readonly<Record<string, unknown>>, field: string) {
@@ -670,25 +692,84 @@ export function reduceReputationTokenEvent(state: ReplayState, log: ReplayLog, r
 
 export function reducePoolFactoryEvent(state: ReplayState, log: ReplayLog) {
 	if (log.eventName !== 'DeploySecurityPool') return
-	state.poolDeployments.set(requireAddress(log.args, 'securityPool'), {
+	const securityPool = requireAddress(log.args, 'securityPool')
+	const parent = requireAddress(log.args, 'parent')
+	const currentRetentionRate = requireBigInt(log.args, 'currentRetentionRate')
+	state.poolDeployments.set(securityPool, {
 		factory: log.emitter,
-		parent: requireAddress(log.args, 'parent'),
+		parent,
 		universeId: requireBigInt(log.args, 'universeId'),
 		questionId: requireBigInt(log.args, 'questionId'),
 		truthAuction: requireAddress(log.args, 'truthAuction'),
 		coordinator: requireAddress(log.args, 'priceOracleManagerAndOperatorQueuer'),
 		shareToken: requireAddress(log.args, 'shareToken'),
+		securityMultiplier: requireBigInt(log.args, 'securityMultiplier'),
+		currentRetentionRate,
+		completeSetCollateralAmount: requireBigInt(log.args, 'completeSetCollateralAmount'),
 	})
+	const poolState = state.poolStates.get(securityPool) ?? {}
+	poolState.systemState = parent === ZERO_ADDRESS ? 0n : 2n
+	poolState.currentRetentionRate = currentRetentionRate
+	state.poolStates.set(securityPool, poolState)
+}
+
+function applyShareTokenTransfer(state: ReplayState, token: Address, from: Address, to: Address, id: bigint, value: bigint) {
+	let balancesById = state.shareTokenBalances.get(token)
+	if (balancesById === undefined) {
+		balancesById = new Map()
+		state.shareTokenBalances.set(token, balancesById)
+	}
+	let balances = balancesById.get(id)
+	if (balances === undefined) {
+		balances = new Map()
+		balancesById.set(id, balances)
+	}
+	if (from !== ZERO_ADDRESS) {
+		const resultingFromBalance = (balances.get(from) ?? 0n) - value
+		if (resultingFromBalance < 0n) throw new Error('share-token balance cannot become negative')
+		balances.set(from, resultingFromBalance)
+	}
+	if (to !== ZERO_ADDRESS) balances.set(to, (balances.get(to) ?? 0n) + value)
+
+	let supplies = state.shareTokenSupplies.get(token)
+	if (supplies === undefined) {
+		supplies = new Map()
+		state.shareTokenSupplies.set(token, supplies)
+	}
+	let supplyDelta = 0n
+	if (from === ZERO_ADDRESS) supplyDelta += value
+	if (to === ZERO_ADDRESS) supplyDelta -= value
+	const resultingSupply = (supplies.get(id) ?? 0n) + supplyDelta
+	if (resultingSupply < 0n) throw new Error('share-token supply cannot become negative')
+	supplies.set(id, resultingSupply)
 }
 
 export function reduceShareTokenEvent(state: ReplayState, log: ReplayLog) {
-	if (log.eventName !== 'AuthorizationUpdated') return
-	let authorizations = state.authorizations.get(log.emitter)
-	if (authorizations === undefined) {
-		authorizations = new Map()
-		state.authorizations.set(log.emitter, authorizations)
+	if (log.eventName === 'AuthorizationUpdated') {
+		let authorizations = state.authorizations.get(log.emitter)
+		if (authorizations === undefined) {
+			authorizations = new Map()
+			state.authorizations.set(log.emitter, authorizations)
+		}
+		authorizations.set(requireAddress(log.args, 'account'), requireBoolean(log.args, 'authorized'))
+		return
 	}
-	authorizations.set(requireAddress(log.args, 'account'), requireBoolean(log.args, 'authorized'))
+	if (log.eventName === 'TransferSingle') {
+		applyShareTokenTransfer(state, log.emitter, requireAddress(log.args, 'from'), requireAddress(log.args, 'to'), requireBigInt(log.args, 'id'), requireBigInt(log.args, 'value'))
+		return
+	}
+	if (log.eventName !== 'TransferBatch') return
+	const ids = requireBigIntArray(log.args, 'ids')
+	const values = requireBigIntArray(log.args, 'values')
+	if (ids.length !== values.length) throw new Error('TransferBatch ids and values length mismatch')
+	const from = requireAddress(log.args, 'from')
+	const to = requireAddress(log.args, 'to')
+	for (let index = 0; index < ids.length; index += 1) {
+		const id = ids[index]
+		const value = values[index]
+		if (id === undefined || value === undefined) throw new Error('TransferBatch item is missing')
+		applyShareTokenTransfer(state, log.emitter, from, to, id, value)
+	}
 }
 
 export function reduceSecurityPoolEvent(state: ReplayState, log: ReplayLog) {
@@ -1168,8 +1249,6 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 			pendingReportSponsor: ZERO_ADDRESS,
 			pendingOperationSlotId: 0n,
 			pendingReportMaxSettlementBaseFee: 0n,
-			priceRoundMaxNotional: 0n,
-			priceRoundConsumedNotional: 0n,
 			stagedOperationCounter: 0n,
 			activeStagedOperationCount: 0n,
 			pendingSettlementOperationCount: 0n,
@@ -1187,8 +1266,6 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 		coordinator.pendingReportMaxSettlementBaseFee = requireBigInt(log.args, 'pendingReportMaxSettlementBaseFee')
 		coordinator.lastPrice = requireBigInt(log.args, 'lastPrice')
 		coordinator.lastSettlementTimestamp = requireBigInt(log.args, 'lastSettlementTimestamp')
-		coordinator.priceRoundMaxNotional = requireBigInt(log.args, 'priceRoundMaxNotional')
-		coordinator.priceRoundConsumedNotional = requireBigInt(log.args, 'priceRoundConsumedNotional')
 		coordinator.stagedOperationCounter = requireBigInt(log.args, 'stagedOperationCounter')
 		coordinator.activeStagedOperationCount = requireBigInt(log.args, 'activeStagedOperationCount')
 		coordinator.pendingSettlementOperationCount = requireBigInt(log.args, 'pendingSettlementOperationCount')
@@ -1247,9 +1324,11 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 	const operationId = requireBigInt(log.args, 'operationId')
 	if (log.eventName === 'PendingOperationRecoveryConsumed') {
 		const queued = operations.get(operationId)
+		if (queued === undefined) throw new Error('recovered coordinator operation was not queued')
 		operations.set(operationId, {
 			...queued,
 			operation: requireBigInt(log.args, 'operation'),
+			isPendingSlot: false,
 			status: 'Recovered',
 		})
 		return
@@ -1261,6 +1340,12 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 			targetVault: requireAddress(log.args, 'targetVault'),
 			amount: requireBigInt(log.args, 'amount'),
 			queuedAt: requireBigInt(log.args, 'queuedAt'),
+			validForSeconds: requireBigInt(log.args, 'validForSeconds'),
+			snapshotTargetOwnership: requireBigInt(log.args, 'snapshotTargetOwnership'),
+			snapshotTargetAllowance: requireBigInt(log.args, 'snapshotTargetAllowance'),
+			snapshotTotalRep: requireBigInt(log.args, 'snapshotTotalRep'),
+			snapshotDenominator: requireBigInt(log.args, 'snapshotDenominator'),
+			isPendingSlot: requireBoolean(log.args, 'isPendingSlot'),
 			status: 'Queued',
 		})
 		return
@@ -1268,27 +1353,39 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 	if (log.eventName !== 'ExecutedStagedOperation') return
 	const success = requireBoolean(log.args, 'success')
 	const queued = operations.get(operationId)
+	if (queued === undefined) throw new Error('executed coordinator operation was not queued')
 	operations.set(operationId, {
 		...queued,
 		operation: requireBigInt(log.args, 'operation'),
+		isPendingSlot: false,
 		status: success ? 'Succeeded' : 'Failed',
 		errorMessage: requireString(log.args, 'errorMessage'),
 	})
 }
 
-export function reduceZoltarLog(state: ReplayState, log: ReplayLog, recognizedRepTokens: ReadonlySet<Address>) {
-	reduceZoltarEvent(state, log)
-	reduceReputationTokenEvent(state, log, recognizedRepTokens)
-	reducePoolFactoryEvent(state, log)
-	reduceShareTokenEvent(state, log)
-	reduceSecurityPoolEvent(state, log)
-	reduceForkerEvent(state, log)
-	reduceEscalationEvent(state, log)
-	reduceAuctionEvent(state, log)
-	reduceCoordinatorEvent(state, log)
+type PoolRelationshipDiscovery = {
+	factories: ReadonlySet<Address>
+	pools: ReadonlySet<Address>
+	shareTokens: ReadonlySet<Address>
+	auctions: ReadonlySet<Address>
+	coordinators: ReadonlySet<Address>
+	escalationGames: ReadonlySet<Address>
 }
 
-export function replayZoltarEvents(logs: readonly ReplayLog[], orphanedBlockHashes: ReadonlySet<Hex> = new Set()) {
+export function reduceZoltarLog(state: ReplayState, log: ReplayLog, recognizedRepTokens: ReadonlySet<Address>, poolRelationships?: PoolRelationshipDiscovery) {
+	const emitter = getAddress(log.emitter)
+	reduceZoltarEvent(state, log)
+	reduceReputationTokenEvent(state, log, recognizedRepTokens)
+	if (poolRelationships === undefined || poolRelationships.factories.has(emitter)) reducePoolFactoryEvent(state, log)
+	if (poolRelationships === undefined || poolRelationships.shareTokens.has(emitter)) reduceShareTokenEvent(state, log)
+	if (poolRelationships === undefined || poolRelationships.pools.has(emitter)) reduceSecurityPoolEvent(state, log)
+	reduceForkerEvent(state, log)
+	if (poolRelationships === undefined || poolRelationships.escalationGames.has(emitter)) reduceEscalationEvent(state, log)
+	if (poolRelationships === undefined || poolRelationships.auctions.has(emitter)) reduceAuctionEvent(state, log)
+	if (poolRelationships === undefined || poolRelationships.coordinators.has(emitter)) reduceCoordinatorEvent(state, log)
+}
+
+export function replayZoltarEvents(logs: readonly ReplayLog[], orphanedBlockHashes: ReadonlySet<Hex> = new Set(), knownPoolFactories?: ReadonlySet<Address>) {
 	const state = createReplayState()
 	const orderedLogs = logs
 		.filter(log => !orphanedBlockHashes.has(log.blockHash))
@@ -1302,11 +1399,34 @@ export function replayZoltarEvents(logs: readonly ReplayLog[], orphanedBlockHash
 		if (log.eventName === 'UniverseInitialized') recognizedRepTokens.add(requireAddress(log.args, 'reputationToken'))
 		if (log.eventName === 'DeployChild') recognizedRepTokens.add(requireAddress(log.args, 'childReputationToken'))
 	}
+	let poolRelationships: PoolRelationshipDiscovery | undefined
+	if (knownPoolFactories !== undefined) {
+		const factories = new Set([...knownPoolFactories].map(factory => getAddress(factory)))
+		const pools = new Set<Address>()
+		const shareTokens = new Set<Address>()
+		const auctions = new Set<Address>()
+		const coordinators = new Set<Address>()
+		const escalationGames = new Set<Address>()
+		for (const log of orderedLogs) {
+			if (log.eventName !== 'DeploySecurityPool' || !factories.has(getAddress(log.emitter))) continue
+			reducePoolFactoryEvent(state, log)
+			pools.add(requireAddress(log.args, 'securityPool'))
+			shareTokens.add(requireAddress(log.args, 'shareToken'))
+			const truthAuction = requireAddress(log.args, 'truthAuction')
+			if (truthAuction !== ZERO_ADDRESS) auctions.add(truthAuction)
+			coordinators.add(requireAddress(log.args, 'priceOracleManagerAndOperatorQueuer'))
+		}
+		for (const log of orderedLogs) {
+			if (log.eventName !== 'EscalationGameSet' || !pools.has(getAddress(log.emitter))) continue
+			escalationGames.add(requireAddress(log.args, 'escalationGame'))
+		}
+		poolRelationships = { factories, pools, shareTokens, auctions, coordinators, escalationGames }
+	}
 	for (const log of orderedLogs) {
 		const identity = getCanonicalEventIdentity(log)
 		if (state.identities.has(identity)) continue
 		state.identities.add(identity)
-		reduceZoltarLog(state, log, recognizedRepTokens)
+		reduceZoltarLog(state, log, recognizedRepTokens, poolRelationships)
 	}
 	return state
 }

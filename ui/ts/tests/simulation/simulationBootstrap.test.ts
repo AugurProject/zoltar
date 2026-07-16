@@ -146,7 +146,8 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 	const openOracleByManager = new Map<Address, Address>()
 	const managerToPool = new Map<Address, Address>()
 	const coordinatorExactToken1Report = 100n
-	const expectedInitialReportAmount2 = (coordinatorExactToken1Report * 10n ** 18n) / (3n * 10n ** 18n)
+	const expectedProposedRepPerEthPrice = 3n * 10n ** 18n
+	const expectedInitialReportAmount2 = (coordinatorExactToken1Report * expectedProposedRepPerEthPrice) / 10n ** 18n
 	const repState = createRepTokenMockState()
 	const vaultAddressByPool: Record<Address, Address[]> = {}
 	if (scenario === 'security-pool') {
@@ -480,10 +481,10 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				universeId: 0n,
 			} as never
 		}),
-		queueOracleManagerOperation: mock(async (_client: never, managerAddress: Address, operation: string, targetVault: Address, amount: bigint, _validForSeconds: bigint, initialReportAmount2?: bigint) => {
+		queueOracleManagerOperation: mock(async (_client: never, managerAddress: Address, operation: string, targetVault: Address, amount: bigint, _validForSeconds: bigint, proposedRepPerEthPrice?: bigint) => {
 			state.callLog.queueOracleManagerOperation += 1
 			if (operation === 'setSecurityBondsAllowance') {
-				if (initialReportAmount2 !== expectedInitialReportAmount2) throw new Error(`Unexpected seeded initial report amount ${initialReportAmount2?.toString() ?? 'undefined'}`)
+				if (proposedRepPerEthPrice !== expectedProposedRepPerEthPrice) throw new Error(`Unexpected seeded REP per ETH price ${proposedRepPerEthPrice?.toString() ?? 'undefined'}`)
 				pendingOperations[managerAddress] = {
 					targetVault,
 					amount,
@@ -499,11 +500,11 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 					openOracleAddress: reportOpenOracleAddress,
 					reportId,
 					currentReporter: targetVault,
-					currentAmount2: initialReportAmount2,
+					currentAmount2: expectedInitialReportAmount2,
 				})
 				pendingReports[reportKey] = {
 					currentAmount1: coordinatorExactToken1Report,
-					currentAmount2: initialReportAmount2,
+					currentAmount2: expectedInitialReportAmount2,
 					currentReporter: targetVault,
 					reportTimestamp: SIMULATION_INITIAL_TIMESTAMP,
 					settlementTime: 1n,

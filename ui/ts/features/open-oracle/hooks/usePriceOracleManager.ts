@@ -103,8 +103,8 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 					if ((refreshedManagerDetails?.pendingReportId ?? 0n) > 0n) throw new Error('Oracle price request is already pending')
 					const writeClient = createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted })
 					const initialReportFunding = await loadCoordinatorInitialReportFundingRequirement(writeClient, managerAddress, walletAddress)
-					if (initialReportFunding.currentRepBalance < initialReportFunding.exactToken1Report) {
-						throw new Error(`Need ${formatCurrencyBalance(initialReportFunding.exactToken1Report - initialReportFunding.currentRepBalance)} more REP in this wallet to fund the initial report.`)
+					if (initialReportFunding.currentRepBalance < initialReportFunding.initialReportAmount2) {
+						throw new Error(`Need ${formatCurrencyBalance(initialReportFunding.initialReportAmount2 - initialReportFunding.currentRepBalance)} more REP in this wallet to fund the initial report.`)
 					}
 					const walletEthBalance = await createConnectedReadClient().getBalance({ address: walletAddress })
 					const totalRequiredEth = addOpenOracleBountyBuffer(refreshedManagerDetails?.requestPriceEthCost ?? 0n) + initialReportFunding.wethShortfall
@@ -118,7 +118,7 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 						walletEthBalance,
 					})
 					if (requestPriceGuardMessage !== undefined) throw new Error(requestPriceGuardMessage)
-					return await requestOraclePrice(writeClient, managerAddress, initialReportFunding.initialReportAmount2)
+					return await requestOraclePrice(writeClient, managerAddress, initialReportFunding.proposedRepPerEthPrice)
 				},
 				'Failed to request price',
 				result => {

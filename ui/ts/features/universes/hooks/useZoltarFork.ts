@@ -119,10 +119,12 @@ function resolveSubmittedForkQuestionId(submittedQuestionId: string) {
 	return parseBigIntInput(submittedQuestionId, 'Fork question ID')
 }
 
-function resolveUniverseForkQuestionId(universe: ZoltarUniverseSummary) {
-	const questionIdString = universe.forkQuestionDetails?.questionId ?? ''
-	if (questionIdString === '') throw new Error('Fork question ID is missing')
-	return BigInt(questionIdString)
+function resolveForkQuestionId(submittedQuestionId: string, universe: ZoltarUniverseSummary) {
+	if (!universe.hasForked) return resolveSubmittedForkQuestionId(submittedQuestionId)
+
+	const universeQuestionId = universe.forkQuestionDetails?.questionId
+	if (universeQuestionId === undefined || universeQuestionId === '') throw new Error('Fork question ID is missing')
+	return BigInt(universeQuestionId)
 }
 
 export function useZoltarFork(
@@ -213,7 +215,7 @@ export function useZoltarFork(
 		})
 	}
 
-	const runZoltarForkAction = async (actionName: 'approve' | 'fork', action: (walletAddress: Address, universe: ZoltarUniverseSummary, questionId: bigint) => Promise<ZoltarForkActionResult>, errorFallback: string, refreshAfter: boolean, questionIdSource: 'submitted' | 'universe') => {
+	const runZoltarForkAction = async (actionName: 'approve' | 'fork', action: (walletAddress: Address, universe: ZoltarUniverseSummary, questionId: bigint) => Promise<ZoltarForkActionResult>, errorFallback: string, refreshAfter: boolean) => {
 		if (
 			!requireWallet(
 				accountAddress,
@@ -238,7 +240,7 @@ export function useZoltarFork(
 				await assertActiveWallet(accountAddress)
 				onTransactionRequested(createZoltarForkTransactionIntent(actionName))
 				const universe = await ensureZoltarUniverse()
-				const questionId = questionIdSource === 'submitted' ? resolveSubmittedForkQuestionId(submittedQuestionId) : resolveUniverseForkQuestionId(universe)
+				const questionId = resolveForkQuestionId(submittedQuestionId, universe)
 				result = await action(accountAddress, universe, questionId)
 				zoltarForkResult.value = result
 				zoltarForkFeedback.value = createSuccessActionFeedback(result.action, getSuccessTitle(actionName), result.hash)
@@ -278,7 +280,6 @@ export function useZoltarFork(
 				},
 				'Failed to approve REP for Zoltar fork',
 				false,
-				'universe',
 			),
 		[runZoltarForkAction, onTransactionPrepared, onTransactionSubmitted, dependencies],
 	)
@@ -292,7 +293,6 @@ export function useZoltarFork(
 			},
 			'Failed to fork Zoltar',
 			true,
-			'submitted',
 		)
 
 	useEffect(() => {
