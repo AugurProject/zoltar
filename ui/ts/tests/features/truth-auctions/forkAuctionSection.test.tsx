@@ -976,8 +976,8 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Auctioned Bond Allowance (OI Debt)')).not.toBeNull()
-		expect(documentQueries.getByText('Winning bids buy more than REP.')).not.toBeNull()
-		expect(documentQueries.getByText(/remaining open-interest debt being assigned to auction participants/)).not.toBeNull()
+		expect(documentQueries.queryByText('Winning bids buy more than REP.')).toBeNull()
+		expect(documentQueries.getByText('Winning settlement can also assign a pro-rata share of the pool security-bond allowance.')).not.toBeNull()
 	})
 
 	test('disables bid submission when the entered bid price is an oversized out-of-range value', async () => {

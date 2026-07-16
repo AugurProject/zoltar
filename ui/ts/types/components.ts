@@ -67,7 +67,7 @@ export type ReadinessBlocker = {
 export type ReadinessAction = {
 	actionLabel: string
 	blocker?: string
-	description: string
+	description?: string
 	onAction?: () => void
 	readiness: 'blocked' | 'ready' | 'warning'
 	key: string

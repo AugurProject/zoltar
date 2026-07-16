@@ -138,17 +138,7 @@ function renderTimestamp({ displayTimestamp, fallbackText }: { displayTimestamp:
 	if (displayTimestamp === undefined) return fallbackText
 	return <TimestampValue timestamp={displayTimestamp} />
 }
-function renderTruthAuctionDebtNotice(mode: 'bid' | 'settlement', showRefundOnlySettlementCopy = false) {
-	if (mode === 'bid') {
-		return (
-			<WarningSurface as='section' variant='compact'>
-				<p className='detail'>
-					<strong>{forkAuctionCopy.winningBidPremiumDetail}</strong> {forkAuctionCopy.formatWinningBidAllowanceNotice(AUCTIONED_BOND_ALLOWANCE_LABEL)}
-				</p>
-			</WarningSurface>
-		)
-	}
-
+function renderTruthAuctionDebtNotice(showRefundOnlySettlementCopy = false) {
 	if (showRefundOnlySettlementCopy) {
 		return (
 			<WarningSurface as='section' variant='compact'>
@@ -1012,8 +1002,8 @@ export function ForkAuctionSection({
 			</div>
 		)
 	}
-	const renderSubmitBidSection = ({ description, density = 'balanced', headingLevel = 3, title = forkAuctionCopy.submitBid, variant = 'embedded' }: { description?: ComponentChildren; density?: 'balanced' | 'compact'; headingLevel?: 3 | 4; title?: ComponentChildren; variant?: 'default' | 'embedded' }) => (
-		<SectionBlock {...(description === undefined ? {} : { description })} density={density} headingLevel={headingLevel} title={title} variant={variant}>
+	const renderSubmitBidSection = () => (
+		<SectionBlock title={forkAuctionCopy.submitBid} variant='embedded'>
 			<div className='form-grid'>
 				{submitBidPreviewTickSummary === undefined ? undefined : (
 					<p className='detail'>
@@ -1031,13 +1021,6 @@ export function ForkAuctionSection({
 						<FormInput value={forkAuctionForm.submitBidAmount} onInput={event => onForkAuctionFormChange({ submitBidAmount: event.currentTarget.value })} />
 					</label>
 				</div>
-				{enteredBidPrice === undefined ? undefined : (
-					<p className='detail'>
-						{forkAuctionCopy.bidEstimatedRepDetailLead}
-						{estimatedRep === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={estimatedRep} suffix={commonCopy.rep} />} {forkAuctionCopy.bidEstimatedRepDetailTail}
-					</p>
-				)}
-				{renderTruthAuctionDebtNotice('bid')}
 				<TransactionReview
 					primary={[
 						{ label: transactionReviewCopy.youPay, value: <CurrencyValue value={enteredBidAmount} suffix={commonCopy.eth} /> },
@@ -1092,7 +1075,7 @@ export function ForkAuctionSection({
 		<SectionBlock density='compact' title={title} headingLevel={4} variant='embedded'>
 			{description === undefined ? undefined : <p className='detail'>{description}</p>}
 			{selectionSummary}
-			{renderTruthAuctionDebtNotice('settlement', showRefundOnlySettlementDebtNotice)}
+			{renderTruthAuctionDebtNotice(showRefundOnlySettlementDebtNotice)}
 			<div className='actions'>
 				{renderStageActionButton({
 					action,
@@ -1606,9 +1589,7 @@ export function ForkAuctionSection({
 								{truthAuctionMarketViewSection}
 								{auctionWideBidsSection}
 							</ReadOnlyDetailAccordion>
-							{renderSubmitBidSection({
-								description: forkAuctionCopy.bidEscrowDetail,
-							})}
+							{renderSubmitBidSection()}
 							{viewerTruthAuctionBidsSection}
 						</fieldset>
 					)
@@ -1640,7 +1621,7 @@ export function ForkAuctionSection({
 							</div>
 						</SectionBlock>
 
-						{renderSubmitBidSection({ description: forkAuctionCopy.bidEscrowDetail })}
+						{renderSubmitBidSection()}
 					</fieldset>
 				)
 			}

@@ -301,7 +301,7 @@ describe.serial('OpenOracleSection integration', () => {
 		await clickElement(within(document.body).getByRole('button', { name: 'Initial Report' }))
 		const initialReportDialog = within(document.body).getByRole('dialog', { name: 'Submit Initial Report' })
 		await waitFor(() => {
-			expect(within(initialReportDialog).getByRole('heading', { level: 4, name: 'Initial Report' })).not.toBeNull()
+			expect(within(initialReportDialog).getByLabelText(/^Price \(/)).not.toBeNull()
 		})
 		expect(within(initialReportDialog).queryByRole('heading', { level: 2, name: 'Open Oracle' })).toBeNull()
 		expect(within(initialReportDialog).queryByRole('heading', { level: 3, name: 'Report Details' })).toBeNull()

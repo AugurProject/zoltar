@@ -18,7 +18,7 @@ export function ActionLauncherCard({ action, children, pending = false, pendingL
 		<section className={`action-launcher-card ${action.readiness}`}>
 			<div className='action-launcher-card-copy'>
 				<h4>{action.title}</h4>
-				<p className='detail'>{action.description}</p>
+				{action.description === undefined ? undefined : <p className='detail'>{action.description}</p>}
 				{children}
 			</div>
 			<div className='action-launcher-card-actions'>

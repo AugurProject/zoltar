@@ -252,10 +252,7 @@ function ReportingSectionHarness({ initialProps }: { initialProps?: Partial<Repo
 }
 
 function findProjectionPreviewElement() {
-	return Array.from(document.body.querySelectorAll('p.detail')).find(element => {
-		const text = element.textContent ?? ''
-		return text.includes('Check back no later than') || text.includes('Check back immediately')
-	})
+	return Array.from(document.body.querySelectorAll('.transaction-review-detail-row')).find(element => element.firstElementChild?.textContent === reportingCopy.timerEffect)?.lastElementChild
 }
 
 function findProjectionPreviewText() {
@@ -1060,7 +1057,7 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes('Reporting is open. Select an outcome side below to enable reporting.')).toBe(true)
+		expect(document.body.textContent?.includes('Reporting is open. Select an outcome side below to enable reporting.')).toBe(false)
 		expect(document.body.textContent?.includes('Select an outcome side above to enable reporting.')).toBe(true)
 		expectTransactionButtonDisabled(document.body, 'Report On Selected Side', 'Select an outcome side before reporting on a market.')
 	})
@@ -1101,7 +1098,7 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes('Enter a valid report amount to preview profit.')).toBe(false)
 	})
 
-	test('shows the timer-extension preview below the report button for contributions that raise binding capital', async () => {
+	test('shows the timer-extension preview once in transaction review for contributions that raise binding capital', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -1117,11 +1114,10 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const reportButton = documentQueries.getByRole('button', { name: 'Report No' })
 		const preview = findProjectionPreviewElement()
-		if (preview === undefined) throw new Error('Expected projection preview to render')
+		if (preview === undefined || preview === null) throw new Error('Expected projection preview to render')
 		const expectedCheckBackTimestamp = getSelectedOutcomeRewardWindowFillTimestamp(createDynamicReportingDetails(), 'no', rep(2n))
-		expect(reportButton.compareDocumentPosition(preview) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+		expect(documentQueries.getAllByText(/This contribution would extend the timer by/)).toHaveLength(1)
 		expect(preview.textContent?.includes('projects roughly')).toBe(true)
 		expect(preview.textContent?.includes('This contribution would extend the timer by')).toBe(true)
 		expect(preview.textContent?.includes('the market would finalize in')).toBe(true)

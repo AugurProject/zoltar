@@ -58,7 +58,6 @@ export function MarketSection({
 	zoltarMigrationForm,
 	zoltarMigrationPending,
 	zoltarMigrationPreparedRepBalance,
-	zoltarMigrationResult,
 	zoltarQuestionCount,
 	zoltarQuestionPage,
 	zoltarQuestions,
@@ -215,7 +214,6 @@ export function MarketSection({
 						zoltarMigrationForm={zoltarMigrationForm}
 						zoltarMigrationPending={zoltarMigrationPending}
 						zoltarMigrationPreparedRepBalance={zoltarMigrationPreparedRepBalance}
-						zoltarMigrationResult={zoltarMigrationResult}
 						zoltarUniverse={zoltarUniverse}
 						zoltarUniverseState={zoltarUniverseState}
 						onApproveZoltarForkRep={onApproveZoltarForkRep}

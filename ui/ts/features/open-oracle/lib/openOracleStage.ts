@@ -6,8 +6,8 @@ export function getOpenOracleStagePresentation(actionMode: OpenOracleSelectedRep
 	switch (actionMode) {
 		case 'initial-report':
 			return {
-				availableActions: ['Submit initial report'],
-				blockedActions: ['Dispute', 'Settle'],
+				availableActions: [],
+				blockedActions: [],
 				detail: 'This report is waiting for its first report submission.',
 				key: 'awaiting-initial-report',
 				label: 'Awaiting Initial Report',
@@ -15,7 +15,7 @@ export function getOpenOracleStagePresentation(actionMode: OpenOracleSelectedRep
 			}
 		case 'dispute':
 			return {
-				availableActions: ['Dispute report', 'Settle when the dispute window ends'],
+				availableActions: [],
 				blockedActions: [],
 				detail: 'This report has an active lifecycle and may still be disputed.',
 				key: 'dispute-window',
@@ -24,8 +24,8 @@ export function getOpenOracleStagePresentation(actionMode: OpenOracleSelectedRep
 			}
 		case 'settle':
 			return {
-				availableActions: ['Settle report'],
-				blockedActions: ['Further disputes'],
+				availableActions: [],
+				blockedActions: [],
 				detail: 'The dispute window has ended and this report is ready to settle.',
 				key: 'ready-to-settle',
 				label: 'Ready To Settle',
@@ -34,7 +34,7 @@ export function getOpenOracleStagePresentation(actionMode: OpenOracleSelectedRep
 		case 'read-only':
 			return {
 				availableActions: [],
-				blockedActions: ['Initial report', 'Dispute', 'Settle'],
+				blockedActions: [],
 				detail: 'This report is already settled and no further write actions are available.',
 				key: 'settled',
 				label: 'Settled',

@@ -151,7 +151,6 @@ function createMarketSectionProps(overrides: Partial<MarketSectionProps> = {}): 
 		zoltarMigrationForm: getDefaultZoltarMigrationFormState(),
 		zoltarMigrationPending: false,
 		zoltarMigrationPreparedRepBalance: 0n,
-		zoltarMigrationResult: undefined,
 		zoltarQuestionCount: 0n,
 		zoltarQuestionPage: undefined,
 		zoltarQuestions: [],

@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { describe, expect, test } from 'bun:test'
-import { getMetricPlaceholderPresentation, getPageNotFoundPresentation, getPoolRegistryPresentation, getReportPresentation, getUniversePresentation, getWalletPresentation } from '../lib/userCopy.js'
+import { getMetricPlaceholderPresentation, getPoolRegistryPresentation, getReportPresentation, getUniversePresentation, getWalletPresentation } from '../lib/userCopy.js'
 
 void describe('user copy helpers', () => {
 	void test('maps pool selection states semantically', () => {
@@ -67,7 +67,6 @@ void describe('user copy helpers', () => {
 		expect(getUniversePresentation('ready')).toBeUndefined()
 		expect(getReportPresentation({ kind: 'report', state: 'loading' })?.detail).toBe('retrieving…')
 		expect(getReportPresentation({ kind: 'report', state: 'ready' })).toBeUndefined()
-		expect(getPageNotFoundPresentation().key).toBe('page_not_found')
 	})
 
 	void test('maps wallet branch states with non-increasing permission checks', () => {

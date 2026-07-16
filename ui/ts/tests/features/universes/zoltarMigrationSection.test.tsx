@@ -14,7 +14,6 @@ import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from 
 type ZoltarMigrationSectionProps = Parameters<typeof ZoltarMigrationSection>[0]
 const REP = 10n ** 18n
 const ZOLTAR_ADDRESS = '0x00000000000000000000000000000000000000a1' as const
-const HASH = '0x0000000000000000000000000000000000000000000000000000000000000001' as const
 
 function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarUniverseSummary {
 	return {
@@ -108,6 +107,7 @@ describe('ZoltarMigrationSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
+		expect(Array.from(document.body.querySelectorAll('.migration-workflow-steps span')).map(step => step.textContent)).toEqual(['1. Choose destinations', '2. Prepare REP', '3. Split REP'])
 		expectTransactionButtonDisabled(document.body, 'Prepare REP', 'REP preparation is unavailable because this universe has not forked.')
 		expectTransactionButtonDisabled(document.body, 'Split REP', 'REP migration is unavailable because this universe has not forked.')
 	})
@@ -180,26 +180,13 @@ describe('ZoltarMigrationSection', () => {
 		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
 	})
 
-	test('advances to one verify stage after the selected split succeeds', async () => {
-		const renderedComponent = await renderIntoDocument(
-			h(
-				ZoltarMigrationSection,
-				createProps({
-					zoltarMigrationResult: {
-						action: 'splitMigrationRep',
-						amount: 10n * REP,
-						hash: HASH,
-						outcomeIndexes: [1n],
-						universeId: 1n,
-					},
-				}),
-			),
-		)
+	test('shows the final workflow stage when destinations and prepared REP are ready', async () => {
+		const renderedComponent = await renderIntoDocument(h(ZoltarMigrationSection, createProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const currentSteps = document.body.querySelectorAll('.migration-workflow-steps .current')
 		expect(currentSteps).toHaveLength(1)
-		expect(currentSteps[0]?.textContent).toBe('6. Verify destination REP')
+		expect(currentSteps[0]?.textContent).toBe('3. Split REP')
 	})
 
 	test('reviews labeled child-universe outputs against the Zoltar contract without consuming custody', async () => {

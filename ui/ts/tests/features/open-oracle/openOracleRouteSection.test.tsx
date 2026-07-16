@@ -1,4 +1,3 @@
-import * as openOracleCopy from '../../../copy/openOracle.js'
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -268,6 +267,30 @@ describe('OpenOracleSection route create view', () => {
 		expectTransactionButtonDisabled(document.body, 'Dispute & Swap', 'This report is not ready to dispute.')
 	})
 
+	test('omits the empty report actions section for a settled report', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				OpenOracleSection,
+				createOpenOracleSectionProps({
+					activeView: 'selected-report',
+					openOracleReportDetails: createOpenOracleReportDetails({
+						currentReporter: '0x3000000000000000000000000000000000000000',
+						isDistributed: true,
+						reportTimestamp: 100n,
+						settlementTimestamp: 161n,
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByRole('heading', { name: 'Report Actions' })).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Report Details' })).not.toBeNull()
+		expect(documentQueries.getByText('This report is already settled and no further write actions are available.')).not.toBeNull()
+		expect(documentQueries.queryByText('This report is settled. No write actions are available.')).toBeNull()
+	})
+
 	test('keeps selected-report approvals disabled off mainnet and explains recovery', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -320,10 +343,6 @@ describe('OpenOracleSection route create view', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonDisabled(document.body, 'Create Standalone Oracle Game', 'Need 100 more ETH in this wallet to create the selected standalone Open Oracle game.')
-	})
-
-	test('formats browse description with the shared page size', () => {
-		expect(openOracleCopy.formatBrowseReportsDescription('10')).toContain('10 reports')
 	})
 
 	test('does not disable create before token decimals are loaded for large but valid token1 amounts', async () => {

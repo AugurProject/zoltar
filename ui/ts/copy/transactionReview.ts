@@ -1,5 +1,4 @@
 export const transactionReview = 'Transaction Review'
-export const reviewBeforeSubmitting = 'Review the value movement, resulting state, and material risks before submitting.'
 export const risksAndConsequences = 'Risks and Consequences'
 export const youPay = 'You Pay'
 export const protocolFee = 'Protocol Fee'

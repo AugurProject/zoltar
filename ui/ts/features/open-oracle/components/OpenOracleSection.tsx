@@ -176,7 +176,7 @@ export function renderSelectedReportActionSection({
 	token1Symbol,
 	token2Symbol,
 }: {
-	actionMode: OpenOracleSelectedReportActionMode
+	actionMode: Exclude<OpenOracleSelectedReportActionMode, 'read-only'>
 	disputeSubmission: OpenOracleDisputeSubmissionDetails | undefined
 	initialReportSubmission: OpenOracleInitialReportSubmissionDetails
 	isConnected: boolean
@@ -229,7 +229,7 @@ export function renderSelectedReportActionSection({
 				return undefined
 			})()
 			return (
-				<SectionBlock headingLevel={4} title={openOracleCopy.initialReport} variant='embedded'>
+				<SectionBlock variant='embedded'>
 					<div className='form-grid'>
 						{openOracleReportDetails === undefined
 							? undefined
@@ -357,7 +357,7 @@ export function renderSelectedReportActionSection({
 				return disputeDisabledMessage ?? (disputeSubmission?.blockMessage?.kind === 'visible' ? disputeSubmission.blockMessage.message : undefined)
 			})()
 			return (
-				<SectionBlock headingLevel={4} title={openOracleCopy.disputeReport} variant='embedded'>
+				<SectionBlock variant='embedded'>
 					<div className='form-grid'>
 						{openOracleReportDetails === undefined
 							? undefined
@@ -445,7 +445,7 @@ export function renderSelectedReportActionSection({
 				return settleDisabledMessage
 			})()
 			return (
-				<SectionBlock headingLevel={4} title={openOracleCopy.settleReport} variant='embedded'>
+				<SectionBlock variant='embedded'>
 					<div className='form-grid'>
 						{openOracleReportDetails === undefined
 							? undefined
@@ -472,12 +472,6 @@ export function renderSelectedReportActionSection({
 				</SectionBlock>
 			)
 		}
-		case 'read-only':
-			return (
-				<SectionBlock headingLevel={4} title={openOracleCopy.settledReport} variant='embedded'>
-					<p className='detail'>{openOracleCopy.settledReportReadOnlyDetail}</p>
-				</SectionBlock>
-			)
 		default:
 			return assertNever(actionMode)
 	}
@@ -572,7 +566,6 @@ function renderReportDetailsCard(
 				eyebrow={openOracleCopy.openOracleReportDetails}
 				title={openOracleCopy.formatReportNumberTitle(openOracleReportDetails.reportId.toString())}
 				items={[
-					{ label: openOracleCopy.stage, value: stage.label },
 					{ label: openOracleCopy.tokenPair, value: openOracleCopy.formatTokenPairSuffix(openOracleReportDetails.token1Symbol, openOracleReportDetails.token2Symbol) },
 					{ label: openOracleCopy.reporter, value: openOracleReportDetails.currentReporter === zeroAddress ? commonCopy.none : <AddressValue address={openOracleReportDetails.currentReporter} /> },
 					{
@@ -582,25 +575,24 @@ function renderReportDetailsCard(
 				]}
 			/>
 			<LifecycleStageBanner stage={stage} />
-			<SectionBlock title={openOracleCopy.reportActions} description={openOracleCopy.reportActionFlowHint}>
-				<div className='action-readiness-grid'>
-					{readinessActions.map(action => (
-						<ActionLauncherCard key={action.key} action={action} />
-					))}
-				</div>
-			</SectionBlock>
+			{readinessActions.length > 0 ? (
+				<SectionBlock title={openOracleCopy.reportActions}>
+					<div className='action-readiness-grid'>
+						{readinessActions.map(action => (
+							<ActionLauncherCard key={action.key} action={action} />
+						))}
+					</div>
+				</SectionBlock>
+			) : undefined}
 			<SectionBlock badge={<Badge tone={statusTone}>{status}</Badge>} title={commonCopy.reportDetails}>
 				{reportControls}
 				<MetricGrid variant='question'>
-					{renderReportField(openOracleCopy.reportId, openOracleReportDetails.reportId.toString())}
 					{renderReportField(openOracleCopy.oracleAddress, <AddressValue address={openOracleReportDetails.openOracleAddress} />)}
-					{renderReportField(openOracleCopy.currentReporter, openOracleReportDetails.currentReporter === zeroAddress ? openOracleCopy.noneAwaitingInitialReport : <AddressValue address={openOracleReportDetails.currentReporter} />)}
-					{renderReportField(openOracleCopy.currentPrice, <CurrencyValue value={openOracleReportDetails.price} suffix={openOracleCopy.formatTokenPairSuffix(openOracleReportDetails.token1Symbol, openOracleReportDetails.token2Symbol)} units={OPEN_ORACLE_PRICE_UNITS} copyable={false} />)}
 					{renderReportField(openOracleCopy.settlementTimestamp, <TimestampValue currentTimestamp={openOracleReportDetails.currentTime} timestamp={openOracleReportDetails.settlementTimestamp} zeroText={openOracleCopy.notSettled} />)}
 				</MetricGrid>
 			</SectionBlock>
 			<div className='report-detail-stack'>
-				<ReadOnlyDetailAccordion defaultOpen title={openOracleCopy.identity}>
+				<ReadOnlyDetailAccordion title={openOracleCopy.identity}>
 					{renderReportSection(openOracleCopy.identity, [
 						{
 							label: openOracleCopy.oracleAddress,
@@ -905,6 +897,7 @@ export function OpenOracleSection({
 				report.token2.toLowerCase().includes(normalizedBrowseSearchText)
 			)
 		}) ?? []
+	const hasActiveBrowseFilters = normalizedBrowseSearchText !== '' || browseStatusFilter !== 'all'
 	const openBrowseReport = async (reportId: bigint) => {
 		onOpenOracleFormChange({ reportId: reportId.toString() })
 		onActiveViewChange('selected-report')
@@ -927,7 +920,6 @@ export function OpenOracleSection({
 						}
 						density='compact'
 						title={openOracleCopy.browseReports}
-						description={openOracleCopy.formatBrowseReportsDescription(BROWSE_PAGE_SIZE.toString())}
 					>
 						<ErrorNotice message={browseError} />
 						<div className='filter-toolbar'>
@@ -946,7 +938,7 @@ export function OpenOracleSection({
 								</select>
 							</label>
 						</div>
-						{browsePage === undefined ? undefined : <p className='detail'>{openOracleCopy.formatBrowseShownCountSummary(filteredBrowseReports.length.toString(), browsePage.reports.length.toString())}</p>}
+						{browsePage === undefined || !hasActiveBrowseFilters ? undefined : <p className='detail'>{openOracleCopy.formatBrowseShownCountSummary(filteredBrowseReports.length.toString(), browsePage.reports.length.toString())}</p>}
 						{loadingBrowse ? (
 							<StateHint presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'pending', detail: openOracleCopy.reportSummariesRefreshingDetail }} />
 						) : (
@@ -975,7 +967,7 @@ export function OpenOracleSection({
 							</div>
 						</SectionBlock>
 					)}
-					<SectionBlock title={openOracleCopy.openOracleGame} variant='plain' description={openOracleCopy.standaloneOracleDescription}>
+					<SectionBlock title={openOracleCopy.openOracleGame} variant='plain'>
 						<p className='notice warning'>{openOracleCopy.standaloneOracleWarningDetail}</p>
 						<div className='form-grid'>
 							<SectionBlock headingLevel={4} title={openOracleCopy.tokenPair} variant='embedded'>

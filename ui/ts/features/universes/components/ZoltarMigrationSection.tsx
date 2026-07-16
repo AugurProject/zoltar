@@ -24,7 +24,7 @@ import { deriveTokenApprovalRequirement, type TokenApprovalState } from '../../.
 import { getUniversePresentation } from '../../../lib/userCopy.js'
 import { getMigrationGuardMessage } from '../lib/zoltarMigrationGuards.js'
 import type { ZoltarMigrationFormState } from '../../../types/app.js'
-import type { ZoltarMigrationActionResult, ZoltarUniverseSummary } from '../../../types/contracts.js'
+import type { ZoltarUniverseSummary } from '../../../types/contracts.js'
 
 type ZoltarMigrationSectionProps = {
 	accountAddress: Address | undefined
@@ -43,7 +43,6 @@ type ZoltarMigrationSectionProps = {
 	zoltarMigrationForm: ZoltarMigrationFormState
 	zoltarMigrationPending: boolean
 	zoltarMigrationPreparedRepBalance: bigint | undefined
-	zoltarMigrationResult?: ZoltarMigrationActionResult | undefined
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 	zoltarUniverseState: LoadableValueState
 	onApproveZoltarForkRep: (amount?: bigint) => void
@@ -83,7 +82,6 @@ export function ZoltarMigrationSection({
 	zoltarMigrationForm,
 	zoltarMigrationPending,
 	zoltarMigrationPreparedRepBalance,
-	zoltarMigrationResult,
 	zoltarUniverse,
 	zoltarUniverseState,
 	onApproveZoltarForkRep,
@@ -114,29 +112,15 @@ export function ZoltarMigrationSection({
 	const walletRepAfterPrepare = zoltarForkRepBalance === undefined || missingPreparationAmount > zoltarForkRepBalance ? undefined : zoltarForkRepBalance - missingPreparationAmount
 	const custodyRepAfterPrepare = (zoltarMigrationPreparedRepBalance ?? 0n) + missingPreparationAmount
 	const splitRepReceived = migrationAmount === undefined ? undefined : migrationAmount * BigInt(selectedChildUniverses.length)
-	const splitResultMatchesSelection =
-		zoltarMigrationResult?.action === 'splitMigrationRep' &&
-		rootUniverse !== undefined &&
-		migrationAmount !== undefined &&
-		zoltarMigrationResult.universeId === rootUniverse.universeId &&
-		zoltarMigrationResult.amount === migrationAmount &&
-		zoltarMigrationResult.outcomeIndexes.length === selectedOutcomeIndexes.length &&
-		zoltarMigrationResult.outcomeIndexes.every((outcomeIndex, index) => outcomeIndex === selectedOutcomeIndexes[index])
 	const workflowStage = (() => {
-		if (zoltarMigrationActiveAction === 'split') return 'split'
-		if (splitResultMatchesSelection) return 'verify'
 		if (!hasValidAmount || !hasValidOutcomeIndexes) return 'choose'
-		if (needsAdditionalPreparation && (!hasSufficientAllowance || zoltarForkActiveAction === 'approve')) return 'approve'
-		if (needsAdditionalPreparation || zoltarMigrationActiveAction === 'prepare') return 'prepare'
-		return 'confirm'
+		if (needsAdditionalPreparation || zoltarForkActiveAction === 'approve' || zoltarMigrationActiveAction === 'prepare') return 'prepare'
+		return 'split'
 	})()
 	const workflowSteps = [
 		{ key: 'choose', label: zoltarCopy.chooseDestinationStep },
-		{ key: 'approve', label: zoltarCopy.approveRepStep },
-		{ key: 'prepare', label: zoltarCopy.prepareCustodyStep },
-		{ key: 'confirm', label: zoltarCopy.confirmMigrationStep },
-		{ key: 'split', label: zoltarCopy.splitMigrationStep },
-		{ key: 'verify', label: zoltarCopy.verifyMigrationStep },
+		{ key: 'prepare', label: zoltarCopy.prepareRepStep },
+		{ key: 'split', label: zoltarCopy.splitRepStep },
 	] as const
 	const selectedDestinationsContent =
 		selectedChildUniverses.length === 0

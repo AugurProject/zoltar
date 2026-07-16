@@ -20,7 +20,6 @@ export function TransactionReview({ className = '', details = [], primary, risks
 		<section className={`transaction-review ${className}`.trim()} aria-labelledby={titleId}>
 			<div className='transaction-review-header'>
 				<h4 id={titleId}>{transactionReviewCopy.transactionReview}</h4>
-				<p className='detail'>{transactionReviewCopy.reviewBeforeSubmitting}</p>
 			</div>
 			<div className='transaction-review-primary' role='list'>
 				{primary.map((row, index) => (

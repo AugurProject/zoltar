@@ -79,20 +79,11 @@ function renderFieldError(field: MarketFormFieldName, message: string | undefine
 function getMarketTypeGuidance(marketType: MarketFormState['marketType']) {
 	switch (marketType) {
 		case 'binary':
-			return {
-				description: marketCopy.binaryQuestionDescription,
-				steps: [marketCopy.binaryTitleGuidance, marketCopy.binaryEventWindowGuidance, marketCopy.binaryResolutionGuidance],
-			}
+			return marketCopy.binaryQuestionDescription
 		case 'categorical':
-			return {
-				description: marketCopy.categoricalOutcomesGuidance,
-				steps: [marketCopy.categoricalOutcomeClarityGuidance, marketCopy.categoricalExceptionsGuidance, marketCopy.categoricalVerifiabilityGuidance],
-			}
+			return marketCopy.categoricalOutcomesGuidance
 		case 'scalar':
-			return {
-				description: marketCopy.scalarQuestionDescription,
-				steps: [marketCopy.scalarRangeGuidance, marketCopy.scalarUnitGuidance, marketCopy.scalarResolutionGuidance],
-			}
+			return marketCopy.scalarQuestionDescription
 		default:
 			return assertNever(marketType)
 	}
@@ -225,12 +216,8 @@ export function MarketCreateQuestionSection({
 			)}
 
 			{marketResult === undefined ? (
-				<SectionBlock title={commonCopy.createQuestion} variant='plain' description={marketCopy.questionCreationDescription}>
+				<SectionBlock title={commonCopy.createQuestion} variant='plain'>
 					<div className='workflow-summary-strip workflow-guide'>
-						<div className='workflow-guide-intro'>
-							<strong>{marketCopy.resolverQuestionGuidance}</strong>
-							<p className='detail'>{marketTypeGuidance.description}</p>
-						</div>
 						<div className='workflow-summary-strip-steps'>
 							<span className='current'>{marketCopy.step1DefineTheEventClearly}</span>
 							<span>{marketCopy.step2ExplainHowItResolves}</span>
@@ -238,19 +225,11 @@ export function MarketCreateQuestionSection({
 						</div>
 					</div>
 
-					<SectionBlock headingLevel={4} title={marketCopy.questionTypeGuidance} variant='embedded'>
-						<ul className='requirements-checklist'>
-							{marketTypeGuidance.steps.map(step => (
-								<li key={step}>{step}</li>
-							))}
-						</ul>
-					</SectionBlock>
-
 					<div className='form-grid'>
 						<div className='field'>
 							<span>{marketCopy.questionType}</span>
 							<EnumDropdown ariaLabel={marketCopy.questionType} options={MARKET_TYPE_OPTIONS} value={marketForm.marketType} onChange={marketType => onMarketFormChange({ marketType })} />
-							<p className='field-help'>{marketTypeGuidance.description}</p>
+							<p className='field-help'>{marketTypeGuidance}</p>
 						</div>
 
 						<div className='field'>
@@ -408,7 +387,7 @@ export function MarketCreateQuestionSection({
 							return undefined
 						})()}
 
-						<SectionBlock headingLevel={4} title={marketCopy.draftPreview} variant='embedded' description={marketCopy.draftPreviewDescription}>
+						<SectionBlock headingLevel={4} title={marketCopy.draftPreview} variant='embedded'>
 							<div className='question-draft-preview'>
 								<div className='question-draft-preview-header'>
 									<div className='question-summary-heading'>

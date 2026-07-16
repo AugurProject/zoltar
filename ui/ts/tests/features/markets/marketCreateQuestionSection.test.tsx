@@ -94,7 +94,7 @@ describe('MarketCreateQuestionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Write the question the way a resolver will read it.')).not.toBeNull()
+		expect(documentQueries.getAllByText('Ask a yes-or-no question that can be resolved from one public source of truth.')).toHaveLength(1)
 		const questionTypeButton = documentQueries.getByRole('button', { name: 'Question Type: Binary' })
 		await act(() => {
 			fireEvent.click(questionTypeButton)
@@ -145,7 +145,8 @@ describe('MarketCreateQuestionSection', () => {
 		const documentQueries = within(document.body)
 		const titleInput = documentQueries.getByLabelText('Title')
 		expect(documentQueries.getByText('Times use your browser timezone. Leave start time blank to allow activity immediately after creation.')).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Question Type Guidance' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Question Type Guidance' })).toBeNull()
+		expect(documentQueries.getAllByText('Ask a yes-or-no question that can be resolved from one public source of truth.')).toHaveLength(1)
 		expect(documentQueries.getByRole('heading', { name: 'Draft Preview' })).not.toBeNull()
 		expect(documentQueries.getByText('Placeholder origin security pools support this exact Yes / No question shape.')).not.toBeNull()
 		expect(documentQueries.queryByText('Title is required')).toBeNull()

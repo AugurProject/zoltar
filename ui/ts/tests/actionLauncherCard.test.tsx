@@ -39,6 +39,15 @@ describe('ActionLauncherCard', () => {
 		expect(document.body.querySelectorAll('.warning-surface.action-launcher-card')).toHaveLength(0)
 	})
 
+	test('omits filler copy when an action does not need a description', async () => {
+		const renderedComponent = await renderIntoDocument(<ActionLauncherCard action={{ actionLabel: 'Deposit REP', key: 'deposit', onAction: () => undefined, readiness: 'ready', title: 'Deposit REP' }} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const card = within(document.body).getByRole('heading', { name: 'Deposit REP' }).closest('.action-launcher-card')
+		if (!(card instanceof HTMLElement)) throw new Error('Expected an action launcher card')
+		expect(card.querySelector('.action-launcher-card-copy .detail')).toBeNull()
+	})
+
 	test('disables a launcher when blocker text is present even if an action handler exists', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<ActionLauncherCard

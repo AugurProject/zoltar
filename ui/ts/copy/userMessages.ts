@@ -1,6 +1,5 @@
 export const notChecked = 'Not checked'
 export const wrongNetwork = 'Wrong network'
-export const pageNotFoundActionHint = 'Open one of the sections below.'
 export const emptyPoolRegistryActionHint = 'Create a pool from an exact Yes / No question to enable shares, reporting, and vault workflows.'
 export const emptyPoolRegistryDetail = 'No security pools are available in this universe.'
 export const refreshingPoolRegistryDetail = 'Refreshing pools.'

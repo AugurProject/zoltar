@@ -74,7 +74,6 @@ export const entryDepth = 'Entry depth:'
 export const refreshFinalizedOutcomeReason = 'Escalation has ended. Refresh reporting to view the finalized outcome before settling deposits.'
 export const reportingDetailsRequired = 'Load reporting details to view the escalation state for this pool.'
 export const reportingOpenDetail = 'Reporting is open.'
-export const reportingOutcomeSelectionHint = 'Reporting is open. Select an outcome side below to enable reporting.'
 export const poolFinalizedReason = 'This pool is already finalized.'
 export const questionFinalizationRequired = 'Escalation deposits cannot be settled until the question is finalized.'
 export const formatReportingResolvedDetailLabel = (selectedOutcomeLabel: string) => `Market finalized as ${selectedOutcomeLabel}.`
