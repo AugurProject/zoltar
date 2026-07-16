@@ -59,6 +59,28 @@ contract ERC1155CoverageHarness is ERC1155 {
 	}
 }
 
+contract CoverageAttributionExecuted {
+	function select(bool firstBranch) external pure returns (uint256) {
+		if (firstBranch) {
+			uint256 executedValue = 11;
+			return executedValue;
+		}
+		uint256 unreachableValue = 19;
+		return unreachableValue;
+	}
+}
+
+contract CoverageAttributionDecoy {
+	function select(bool firstBranch) external pure returns (uint256) {
+		if (firstBranch) {
+			uint256 decoyValue = 23;
+			return decoyValue;
+		}
+		uint256 unreachableDecoyValue = 29;
+		return unreachableDecoyValue;
+	}
+}
+
 contract EscalationGameFactoryCoverageSecurityPool {
 	ReputationToken public immutable repToken;
 
