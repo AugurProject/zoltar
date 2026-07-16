@@ -17,12 +17,15 @@ export function MarketSection({
 	accountState,
 	activeView,
 	environmentRefreshKey,
+	securityPools = [],
+	hasLoadedSecurityPools,
 	hasLoadedZoltarQuestions,
 	loadingZoltarForkAccess,
 	zoltarForkActiveAction,
 	loadingZoltarQuestionCount,
 	loadingZoltarQuestions,
 	loadingZoltarUniverse,
+	loadingSecurityPools,
 	marketForm,
 	marketCreating,
 	marketError,
@@ -33,6 +36,7 @@ export function MarketSection({
 	onCreateMarket,
 	onForkZoltar,
 	onLoadZoltarQuestionPage,
+	onLoadSecurityPools,
 	onMarketFormChange,
 	onMigrateInternalRep,
 	onPrepareRepForMigration,
@@ -60,6 +64,7 @@ export function MarketSection({
 	zoltarQuestions,
 	zoltarUniverse,
 	zoltarUniverseState,
+	securityPoolsLoadError,
 }: MarketSectionProps) {
 	const hasForked = zoltarUniverse?.hasForked === true
 	const isMainnet = isMainnetChain(accountState.chainId)
@@ -124,11 +129,16 @@ export function MarketSection({
 							onLoadZoltarQuestionPage={onLoadZoltarQuestionPage}
 							loadingZoltarQuestionCount={loadingZoltarQuestionCount}
 							loadingZoltarQuestions={loadingZoltarQuestions}
+							loadingSecurityPools={loadingSecurityPools}
+							hasLoadedSecurityPools={hasLoadedSecurityPools}
+							onLoadSecurityPools={onLoadSecurityPools}
 							onOpenForkTab={() => onActiveViewChange('fork')}
 							onUseQuestionForFork={onUseQuestionForFork}
 							onUseQuestionForPool={onUseQuestionForPool}
 							zoltarQuestionCount={zoltarQuestionCount}
 							zoltarQuestionPage={zoltarQuestionPage}
+							securityPools={securityPools}
+							securityPoolsLoadError={securityPoolsLoadError}
 						/>
 					</>
 				) : undefined}

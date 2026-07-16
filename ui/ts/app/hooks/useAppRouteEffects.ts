@@ -6,11 +6,12 @@ type AppRoute = 'deploy' | 'not-found' | 'open-oracle' | 'security-pools' | 'zol
 
 type Props = {
 	accountAddress: Address | undefined
+	activeZoltarView: 'create' | 'fork' | 'migrate' | 'questions'
 	augurPlaceHolderDeploymentMissing: boolean
 	activeEnvironmentNonce: number
 	environmentReady: boolean
 	loadOracleReport: (reportId: string) => Promise<void>
-	loadSecurityPools: (securityPoolAddress?: string) => Promise<void>
+	loadSecurityPools: (securityPoolAddress?: string) => Promise<boolean | void>
 	navigate: (route: 'deploy' | 'open-oracle' | 'security-pools' | 'zoltar') => void
 	openOracleFormReportId: string
 	openOracleReportDetailsReportId: bigint | undefined
@@ -31,6 +32,10 @@ type Props = {
 
 export function shouldLoadOpenOracleReportFromUrl({ environmentReady, route, urlOpenOracleReportId }: { environmentReady: boolean; route: AppRoute; urlOpenOracleReportId: string }) {
 	return environmentReady && route === 'open-oracle' && urlOpenOracleReportId !== ''
+}
+
+export function shouldLoadMarketSecurityPools({ activeZoltarView, environmentReady, route, walletBootstrapComplete }: { activeZoltarView: Props['activeZoltarView']; environmentReady: boolean; route: AppRoute; walletBootstrapComplete: boolean }) {
+	return environmentReady && walletBootstrapComplete && route === 'zoltar' && activeZoltarView === 'questions'
 }
 
 export function shouldRefreshSelectedPoolForRoute({
@@ -64,6 +69,7 @@ export function getSelectedVaultAddressForRoutePoolChange({ accountAddress, last
 
 export function useAppRouteEffects({
 	accountAddress,
+	activeZoltarView,
 	augurPlaceHolderDeploymentMissing,
 	activeEnvironmentNonce,
 	environmentReady,
@@ -90,6 +96,7 @@ export function useAppRouteEffects({
 	const loadSecurityPoolsRef = useRef(loadSecurityPools)
 	const navigateRef = useRef(navigate)
 	const lastRequestedOpenOracleReportId = useRef<string | undefined>(undefined)
+	const lastRequestedMarketSecurityPools = useRef<string | undefined>(undefined)
 	const lastRequestedSecurityPoolAddress = useRef<string | undefined>(undefined)
 	const lastSelectedPoolEnvironmentNonce = useRef<number | undefined>(undefined)
 	const lastSelectedSecurityPoolAddress = useRef<string | undefined>(undefined)
@@ -97,6 +104,19 @@ export function useAppRouteEffects({
 	loadOracleReportRef.current = loadOracleReport
 	loadSecurityPoolsRef.current = loadSecurityPools
 	navigateRef.current = navigate
+
+	useEffect(() => {
+		if (!shouldLoadMarketSecurityPools({ activeZoltarView, environmentReady, route, walletBootstrapComplete })) {
+			lastRequestedMarketSecurityPools.current = undefined
+			return
+		}
+		const requestKey = `${activeEnvironmentNonce}:${accountAddress ?? ''}`
+		if (lastRequestedMarketSecurityPools.current === requestKey) return
+		lastRequestedMarketSecurityPools.current = requestKey
+		void loadSecurityPoolsRef.current().then(loaded => {
+			if (loaded === false && lastRequestedMarketSecurityPools.current === requestKey) lastRequestedMarketSecurityPools.current = undefined
+		})
+	}, [accountAddress, activeEnvironmentNonce, activeZoltarView, environmentReady, route, walletBootstrapComplete])
 
 	useEffect(() => {
 		const shouldLoadReport = shouldLoadOpenOracleReportFromUrl({ environmentReady, route, urlOpenOracleReportId })

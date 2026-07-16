@@ -205,21 +205,26 @@ export function renderSelectedReportActionSection({
 	const settleAvailability = openOracleReportDetails === undefined ? { canAct: true, message: undefined } : getOpenOracleSettleAvailability(openOracleReportDetails)
 	switch (actionMode) {
 		case 'initial-report':
+			const token1ApprovalGuardMessage = (() => {
+				if (!isConnected) return openOracleCopy.formatDisconnectedWalletApprovalReason(token1Symbol)
+				if (!isMainnet) return commonCopy.mainnetRequiredReason
+				return undefined
+			})()
 			const token2ApprovalGuardMessage = (() => {
 				if (!isConnected) return openOracleCopy.formatDisconnectedWalletApprovalReason(token2Symbol)
-				if (!isMainnet) return undefined
+				if (!isMainnet) return commonCopy.mainnetRequiredReason
 				if (initialReportSubmission.amount2 === undefined) return openOracleCopy.formatEnterValidPriceBeforeApprovingReason(token1Symbol, token2Symbol)
 				return undefined
 			})()
 			const wrapDisabledReason = (() => {
 				if (!isConnected) return openOracleCopy.wrapEthWalletRequiredReason
-				if (!isMainnet) return undefined
+				if (!isMainnet) return commonCopy.mainnetRequiredReason
 				if (initialReportSubmission.wrapRequiredWethMessage?.kind === 'visible') return initialReportSubmission.wrapRequiredWethMessage.message
 				return undefined
 			})()
 			const submitInitialReportDisabledReason = (() => {
 				if (!isConnected) return openOracleCopy.initialReportWalletRequired
-				if (!isMainnet) return undefined
+				if (!isMainnet) return commonCopy.mainnetRequiredReason
 				if (initialReportSubmission.blockMessage?.kind === 'visible') return initialReportSubmission.blockMessage.message
 				return undefined
 			})()
@@ -255,7 +260,7 @@ export function renderSelectedReportActionSection({
 								allowanceLoading={openOracleInitialReportState.token1Approval.loading}
 								approvedAmount={openOracleInitialReportState.token1Approval.value}
 								disabled={!isConnected || !isMainnet}
-								guardMessage={!isConnected ? openOracleCopy.formatDisconnectedWalletApprovalReason(token1Symbol) : undefined}
+								guardMessage={token1ApprovalGuardMessage}
 								onApprove={amount => onApproveToken1(amount)}
 								pending={openOracleActiveAction === 'approveToken1'}
 								pendingLabel={openOracleCopy.formatApprovingTokenPendingLabel(token1Symbol)}
@@ -338,17 +343,17 @@ export function renderSelectedReportActionSection({
 			})()
 			const disputeToken1ApprovalGuardMessage = (() => {
 				if (!isConnected) return openOracleCopy.formatDisconnectedWalletApprovalReason(token1Symbol)
-				if (!isMainnet) return undefined
+				if (!isMainnet) return commonCopy.mainnetRequiredReason
 				return token1ApprovalGuardMessage
 			})()
 			const disputeToken2ApprovalGuardMessage = (() => {
 				if (!isConnected) return openOracleCopy.formatDisconnectedWalletApprovalReason(token2Symbol)
-				if (!isMainnet) return undefined
+				if (!isMainnet) return commonCopy.mainnetRequiredReason
 				return token2ApprovalGuardMessage
 			})()
 			const disputeActionDisabledReason = (() => {
 				if (!isConnected) return openOracleCopy.disputeWalletRequiredReason
-				if (!isMainnet) return undefined
+				if (!isMainnet) return commonCopy.mainnetRequiredReason
 				return disputeDisabledMessage ?? (disputeSubmission?.blockMessage?.kind === 'visible' ? disputeSubmission.blockMessage.message : undefined)
 			})()
 			return (
@@ -436,7 +441,7 @@ export function renderSelectedReportActionSection({
 			})()
 			const settleActionDisabledReason = (() => {
 				if (!isConnected) return openOracleCopy.settlementWalletRequiredReason
-				if (!isMainnet) return undefined
+				if (!isMainnet) return commonCopy.mainnetRequiredReason
 				return settleDisabledMessage
 			})()
 			return (

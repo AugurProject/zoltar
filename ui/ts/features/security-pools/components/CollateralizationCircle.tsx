@@ -1,4 +1,3 @@
-import * as commonCopy from '../../../copy/common.js'
 import * as pricingCopy from '../../../copy/pricing.js'
 import type { CollateralizationCircleProps } from '../../types.js'
 import { formatCollateralizationCompactPercentLabel, getCollateralizationVisualPercent, getToneRatioThreshold, getVisualRatio } from '../../../lib/visualMetrics.js'
@@ -26,7 +25,8 @@ export function CollateralizationCircle({ collateralizationPercent, className = 
 	const strokeDashoffset = circumference - circumference * (clampedCollateralizationVisualPercent / 100)
 	const displayValueFitsInRing = collateralizationPercent === undefined || collateralizationPercent <= MAX_RING_COLLATERALIZATION_PERCENT
 	const ringDisplayValue = displayValueFitsInRing ? displayValue : MAX_RING_COLLATERALIZATION_LABEL
-	const exactValueTitle = collateralizationPercent === undefined ? pricingCopy.formatValueUnavailable(label) : commonCopy.formatLabelValue(label, displayValue)
+	const targetDisplayValue = formatCollateralizationCompactPercentLabel(targetCollateralizationPercent)
+	const exactValueTitle = collateralizationPercent === undefined ? pricingCopy.formatValueUnavailable(label) : pricingCopy.formatCollateralizationWithTarget(label, displayValue, targetDisplayValue)
 
 	return (
 		<div className={['collateralization-gauge', `collateralization-gauge-size-${size}`, resolvedTone === undefined ? '' : `tone-${resolvedTone}`, className].filter(Boolean).join(' ').trim()} title={exactValueTitle}>
@@ -37,7 +37,10 @@ export function CollateralizationCircle({ collateralizationPercent, className = 
 				</svg>
 			</span>
 			<strong className='collateralization-gauge-value'>{ringDisplayValue}</strong>
-			<span className='collateralization-gauge-label'>{label}</span>
+			<span className='collateralization-gauge-copy'>
+				<span className='collateralization-gauge-label'>{label}</span>
+				<span className='collateralization-gauge-target'>{pricingCopy.formatTargetValue(targetDisplayValue)}</span>
+			</span>
 		</div>
 	)
 }

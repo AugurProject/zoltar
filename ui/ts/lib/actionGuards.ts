@@ -25,7 +25,7 @@ function getWalletRequiredReason(walletRequiredReason: string | undefined) {
 
 export function getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason }: WalletMainnetGuardParameters): WalletMainnetGuardState {
 	if (accountAddress === undefined) return { blocked: true, reason: getWalletRequiredReason(walletRequiredReason) }
-	if (!isMainnet) return { blocked: true, reason: undefined }
+	if (!isMainnet) return { blocked: true, reason: commonCopy.mainnetRequiredReason }
 	return { blocked: false, reason: undefined }
 }
 
@@ -36,7 +36,7 @@ export function getWalletMainnetGuardMessage(parameters: WalletMainnetGuardParam
 
 export function getWalletConnectionMainnetGuardState({ isMainnet, walletConnected, walletRequiredReason }: WalletConnectionMainnetGuardParameters): WalletMainnetGuardState {
 	if (!walletConnected) return { blocked: true, reason: getWalletRequiredReason(walletRequiredReason) }
-	if (!isMainnet) return { blocked: true, reason: undefined }
+	if (!isMainnet) return { blocked: true, reason: commonCopy.mainnetRequiredReason }
 	return { blocked: false, reason: undefined }
 }
 

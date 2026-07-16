@@ -1,4 +1,5 @@
 import type { ViewTabOption, ViewTabsProps } from '../types/components.js'
+import { useEffect, useRef, useState } from 'preact/hooks'
 
 type IndexedViewTabOption<TValue extends string> = {
 	index: number
@@ -29,6 +30,8 @@ function buildGroupedOptions<TValue extends string>(groups: ViewTabsProps<TValue
 }
 
 export function ViewTabs<TValue extends string>({ ariaLabel, className = '', groups, onChange, options, orientation = 'horizontal', semantics, size = 'default', value, variant = 'subroute' }: ViewTabsProps<TValue>) {
+	const containerRef = useRef<HTMLDivElement>(null)
+	const [overflowEdges, setOverflowEdges] = useState({ end: false, start: false })
 	const indexedOptions = options.map((option, index) => ({ index, option }))
 	const resolvedSemantics = semantics ?? (options.every(option => option.panelId !== undefined) ? 'tabs' : 'switcher')
 	const groupedOptions = buildGroupedOptions(groups, indexedOptions)
@@ -110,8 +113,45 @@ export function ViewTabs<TValue extends string>({ ariaLabel, className = '', gro
 		if (resolvedSemantics === 'tabs') return 'tablist'
 		return 'group'
 	})()
+	useEffect(() => {
+		const container = containerRef.current
+		if (container === null || orientation !== 'horizontal') return
+		const scrollBehavior = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+		const updateOverflowEdges = () => {
+			const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth)
+			setOverflowEdges({
+				end: container.scrollLeft < maxScrollLeft - 1,
+				start: container.scrollLeft > 1,
+			})
+		}
+		const scrollActiveOptionIntoView = () => {
+			const activeOption = container.querySelector('.view-tab.active')
+			if (container.scrollWidth <= container.clientWidth || !(activeOption instanceof HTMLElement)) return
+			const containerRect = container.getBoundingClientRect()
+			const activeOptionRect = activeOption.getBoundingClientRect()
+			const centeredScrollLeft = container.scrollLeft + activeOptionRect.left - containerRect.left - (container.clientWidth - activeOptionRect.width) / 2
+			const targetScrollLeft = Math.min(container.scrollWidth - container.clientWidth, Math.max(0, centeredScrollLeft))
+			if (typeof container.scrollTo === 'function') container.scrollTo({ behavior: scrollBehavior, left: targetScrollLeft })
+			else container.scrollLeft = targetScrollLeft
+		}
+		updateOverflowEdges()
+		scrollActiveOptionIntoView()
+		container.addEventListener('scroll', updateOverflowEdges, { passive: true })
+		const resizeObserver =
+			typeof ResizeObserver === 'undefined'
+				? undefined
+				: new ResizeObserver(() => {
+						updateOverflowEdges()
+						scrollActiveOptionIntoView()
+					})
+		resizeObserver?.observe(container)
+		return () => {
+			container.removeEventListener('scroll', updateOverflowEdges)
+			resizeObserver?.disconnect()
+		}
+	}, [options.length, orientation, value])
 	return (
-		<div className={`view-tabs ${variant} ${className}`.trim()} data-orientation={orientation} data-size={size} role={containerRole} aria-label={containerRole === undefined ? undefined : ariaLabel}>
+		<div ref={containerRef} className={`view-tabs ${variant} ${overflowEdges.start ? 'has-overflow-start' : ''} ${overflowEdges.end ? 'has-overflow-end' : ''} ${className}`.trim()} data-orientation={orientation} data-size={size} role={containerRole} aria-label={containerRole === undefined ? undefined : ariaLabel}>
 			{renderOptions()}
 		</div>
 	)

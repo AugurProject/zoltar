@@ -140,11 +140,15 @@ describe('LiquidationModal', () => {
 			liquidationAmount: '1',
 			liquidationMaxAmount: 5n * 10n ** 18n,
 			liquidationManagerAddress: zeroAddress,
+			liquidationFundingPreview: undefined,
+			liquidationFundingPreviewError: undefined,
 			liquidationModalOpen: true,
 			liquidationSecurityPoolAddress: zeroAddress,
 			liquidationTargetVault: defaultTargetVaultAddress,
 			liquidationTimeoutMinutes: '5',
 			loadingPoolOracleManager: false,
+			loadingLiquidationFundingPreview: false,
+			onLoadLiquidationFundingPreview: () => undefined,
 			onLoadPoolOracleManager: () => undefined,
 			onLiquidationAmountChange: () => undefined,
 			onLiquidationTimeoutMinutesChange: () => undefined,
@@ -208,6 +212,33 @@ describe('LiquidationModal', () => {
 		expect(document.body.textContent?.includes('This queued staged operation will expire 5m after the oracle settlement window completes.')).toBe(true)
 	})
 
+	test('reviews the complete queued liquidation funding sequence and resulting balances', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false }),
+			liquidationFundingPreview: {
+				currentRepBalance: 25n * ETH,
+				currentWethBalance: 1n * ETH,
+				initialReportRepRequired: 10n * ETH,
+				initialReportWethRequired: 2n * ETH,
+				queueOperationEthValue: (12n * ETH) / 10n,
+				totalWalletEthRequired: (22n * ETH) / 10n,
+				wethShortfall: 1n * ETH,
+			},
+			walletEthBalance: 5n * ETH,
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const review = within(document.body).getByRole('heading', { name: 'Transaction Review' }).closest('section')
+		if (review === null) throw new Error('Expected transaction review')
+		expect(review.textContent).toContain('Buffered Queue Cost≈ 1.20 ETH')
+		expect(review.textContent).toContain('ETH Wrapped to WETH≈ 1.00 ETH')
+		expect(review.textContent).toContain('REP Locked for Initial Report≈ 10.00 REP')
+		expect(review.textContent).toContain('WETH Locked for Initial Report≈ 2.00 WETH')
+		expect(review.textContent).toContain('Total Wallet ETH Required≈ 2.20 ETH')
+		expect(review.textContent).toContain('Resulting Wallet ETH≈ 2.80 ETH')
+		expect(review.textContent).toContain('request funding may require multiple wallet transactions')
+	})
+
 	test('uses neutral missing-state copy after a queued liquidation succeeds without visible manager state', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
@@ -240,7 +271,7 @@ describe('LiquidationModal', () => {
 		expectTransactionButtonDisabled(document.body, 'Queue Liquidation', 'Enter a liquidation timeout of at least 1 minute.')
 	})
 
-	test('keeps liquidation silently disabled off mainnet', async () => {
+	test('keeps liquidation disabled off mainnet and explains recovery', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: true,
@@ -249,8 +280,8 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(getTransactionButtonState(document.body, 'Execute Vault Liquidation')).toEqual({ disabled: true, reason: undefined })
-		expect(document.body.textContent?.includes('Switch to Ethereum mainnet before liquidating.')).toBe(false)
+		expect(getTransactionButtonState(document.body, 'Execute Vault Liquidation')).toEqual({ disabled: true, reason: 'Switch to Ethereum mainnet.' })
+		expect(document.body.textContent?.includes('Switch to Ethereum mainnet.')).toBe(true)
 	})
 
 	test('traps focus while open and restores it when closed', async () => {
@@ -649,6 +680,15 @@ describe('LiquidationModal', () => {
 				isPriceValid: false,
 				requestPriceEthCost: 10n * ETH,
 			}),
+			liquidationFundingPreview: {
+				currentRepBalance: 0n,
+				currentWethBalance: 0n,
+				initialReportRepRequired: 0n,
+				initialReportWethRequired: 0n,
+				queueOperationEthValue: 12n * ETH,
+				totalWalletEthRequired: 12n * ETH,
+				wethShortfall: 0n,
+			},
 			targetVaultSummary: createTargetVaultSummary({
 				repDepositShare: 100n * 10n ** 18n,
 				securityBondAllowance: 100n * 10n ** 18n,
@@ -667,6 +707,15 @@ describe('LiquidationModal', () => {
 			currentPoolOracleManagerDetails: createOracleManagerDetails({
 				isPriceValid: false,
 			}),
+			liquidationFundingPreview: {
+				currentRepBalance: 0n,
+				currentWethBalance: 0n,
+				initialReportRepRequired: 0n,
+				initialReportWethRequired: 0n,
+				queueOperationEthValue: 1n,
+				totalWalletEthRequired: 1n,
+				wethShortfall: 0n,
+			},
 			liquidationAmount: '100',
 			selectedPool: createSelectedPool({
 				securityMultiplier: 2n,

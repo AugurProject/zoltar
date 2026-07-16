@@ -25,6 +25,7 @@ import {
 } from '../../../features/truth-auctions/lib/truthAuctionBook.js'
 import { getTruthAuctionSettlementActionAvailabilityMessage, getTruthAuctionSettlementBidKey, getTruthAuctionSettlementBidRows, getTruthAuctionSettlementSelectionEstimate, getTruthAuctionSettlementSelectionState } from '../../../features/truth-auctions/lib/truthAuctionSettlement.js'
 import type { TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '../../../types/contracts.js'
+import { formatCurrencyInputBalance } from '../../../lib/formatters.js'
 
 const walletAddress: Address = '0x0000000000000000000000000000000000000001'
 const otherWalletAddress: Address = '0x0000000000000000000000000000000000000002'
@@ -195,6 +196,16 @@ void describe('fork auction helpers', () => {
 		expect(getTruthAuctionTickAtPrice(0n)).toBeUndefined()
 	})
 
+	void test('previews the exact floored price submitted for an in-between bid price', () => {
+		const tick12Price = getTruthAuctionPriceAtTick(12n)
+		const enteredPrice = (tick12Price + getTruthAuctionPriceAtTick(13n)) / 2n
+		const preview = getTruthAuctionBidPreview(formatCurrencyInputBalance(enteredPrice))
+
+		expect(preview?.enteredPrice).toBe(enteredPrice)
+		expect(preview?.submittedPrice).toBe(tick12Price)
+		expect(preview?.tick).toBe(12n)
+	})
+
 	void test('rejects prices outside the contract-supported truth auction range', () => {
 		const maxSupportedPrice = getTruthAuctionPriceAtTick(TRUTH_AUCTION_MAX_TICK)
 		const smallestSupportedPositiveTick = getTruthAuctionTickAtPrice(1n)
@@ -261,7 +272,7 @@ void describe('fork auction helpers', () => {
 				truthAuction: createTruthAuction(),
 				walletEthBalance: 100n,
 			}),
-		).toBeUndefined()
+		).toBe('Switch to Ethereum mainnet.')
 
 		expect(
 			getTruthAuctionBidGuardMessage({

@@ -204,6 +204,22 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(identifier.textContent).toBe(questionId)
 	})
 
+	test('preserves the pool universe when opening a child-universe pool', async () => {
+		const pool = createSecurityPool({
+			securityPoolAddress: '0x0000000000000000000000000000000000000101',
+			universeId: 11n,
+		})
+		const onSelectSecurityPool = mock((..._args: unknown[]) => undefined)
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ onSelectSecurityPool, securityPools: [pool] })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Open Pool' }))
+		})
+
+		expect(onSelectSecurityPool).toHaveBeenCalledWith(pool.securityPoolAddress, 11n)
+	})
+
 	test('does not render a local liquidation transaction notice', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection

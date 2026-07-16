@@ -375,9 +375,10 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			data.escalationChildRepAtFork = escalationRepToLock;
 		}
 		uint256 repToLock = poolRepToLock + escalationRepToLock;
-		if (repToLock > 0) IERC20(address(rep)).safeTransfer(address(migrationProxy), repToLock);
-		uint256 proxyRepBalance = rep.balanceOf(address(migrationProxy));
-		if (proxyRepBalance > 0) migrationProxy.lockRep(proxyRepBalance);
+		if (repToLock > 0) {
+			IERC20(address(rep)).safeTransfer(address(migrationProxy), repToLock);
+			migrationProxy.lockRep(repToLock);
+		}
 		uint256 migrationBalance = zoltar.getMigrationRepBalance(address(migrationProxy), universe);
 		require(migrationBalance == previousMigrationBalance + repToLock, 'Migration balance mismatch');
 		data.auctionableRepAtFork = previousMigrationBalance + poolRepToLock;
@@ -516,7 +517,9 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		securityPool.setSystemState(SystemState.ForkTruthAuction);
 		data.truthAuctionStarted = block.timestamp;
 		parent.updateCollateralAmount();
-		securityPool.setTotalShares(parent.shareTokenSupply());
+		securityPool.setTotalShares(
+			securityPool.shareToken().reconciledCompleteSetSupply(securityPool.universeId(), parent.shareTokenSupply())
+		);
 		parentCollateral = parentData.collateralAtFork;
 	}
 
@@ -558,7 +561,10 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	) private view returns (uint256 ethToBuy) {
 		uint256 poolAuctionableRepAtFork = _getPoolAuctionableRepAtFork(parentData);
 		if (poolAuctionableRepAtFork == 0 || data.migratedRep >= poolAuctionableRepAtFork) return 0;
-		ethToBuy = parentCollateral - (parentCollateral * data.migratedRep) / poolAuctionableRepAtFork;
+		if (data.forkCollateralReceived >= parentCollateral) return 0;
+		// Migration rounds each branch's cumulative collateral target up. Auction only
+		// the exact unfilled snapshot remainder so final collateral cannot exceed it.
+		ethToBuy = parentCollateral - data.forkCollateralReceived;
 	}
 
 	function _getTruthAuctionCap(
@@ -582,8 +588,8 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		SecurityPoolForkerForkData storage data = _getForkData(securityPool);
 		SecurityPoolForkerForkData storage parentData = _getForkData(securityPool.parent());
 		ISecurityPool parent = securityPool.parent();
-		uint256 repPurchased = _consumeTruthAuctionRep(securityPool, data);
-		_captureUnclaimedCollateralForAuction(securityPool, parent, data);
+		(uint256 repPurchased, uint256 auctionEthReceived) = _consumeTruthAuctionRep(securityPool, data);
+		_captureUnclaimedCollateralForAuction(securityPool, parent, data, auctionEthReceived);
 		_finalizeOwnershipAfterAuction(securityPool, data, parentData, repPurchased);
 		_finalizeEscalationStateAfterAuction(securityPool, parentData);
 		_emitFinalizeAuctionEvent(securityPool, parentData, data, repPurchased);
@@ -594,11 +600,11 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	function _consumeTruthAuctionRep(
 		ISecurityPool securityPool,
 		SecurityPoolForkerForkData storage data
-	) private returns (uint256 repPurchased) {
+	) private returns (uint256 repPurchased, uint256 ethReceived) {
 		if (data.truthAuction.auctionStarted() != 0) {
 			uint256 balanceBeforeFinalize = address(this).balance;
 			data.truthAuction.finalize();
-			uint256 ethReceived = address(this).balance - balanceBeforeFinalize;
+			ethReceived = address(this).balance - balanceBeforeFinalize;
 			if (ethReceived > 0) {
 				(bool sent, ) = payable(address(securityPool)).call{ value: ethReceived }('');
 				require(sent, 'ETH');
@@ -611,11 +617,12 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	function _captureUnclaimedCollateralForAuction(
 		ISecurityPool securityPool,
 		ISecurityPool parent,
-		SecurityPoolForkerForkData storage data
+		SecurityPoolForkerForkData storage data,
+		uint256 auctionEthReceived
 	) private {
-		uint256 balance = address(securityPool).balance;
-		uint256 accruedFees = securityPool.totalAccruedFees();
-		uint256 collateralAmount = balance >= accruedFees ? balance - accruedFees : 0;
+		// Only protocol-routed fork collateral and auction proceeds back complete sets.
+		// ETH forced into the child bypasses receive() and remains an unaccounted surplus.
+		uint256 collateralAmount = data.forkCollateralReceived + auctionEthReceived;
 		uint256 parentTotalSecurityBondAllowance = parent.totalSecurityBondAllowance();
 		data.auctionedSecurityBondAllowance = parentTotalSecurityBondAllowance - data.migratedSecurityBondAllowance;
 		securityPool.setPoolFinancials(
@@ -720,10 +727,12 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		SecurityPoolMigrationProxy migrationProxy = _getOrDeployMigrationProxy(securityPool);
 		uint256 repBalanceAfter = rep.balanceOf(address(this));
 		uint256 repToFork = repBalanceAfter - repBalanceBefore;
+		uint256 forkThreshold = zoltar.getForkThreshold(securityPool.universeId());
+		require(repToFork >= forkThreshold, 'Fork REP');
 		if (repToFork > 0) IERC20(address(rep)).safeTransfer(address(migrationProxy), repToFork);
 		migrationProxy.forkUniverse(securityPool.questionId());
-		uint256 leftoverProxyRep = rep.balanceOf(address(migrationProxy));
-		if (leftoverProxyRep > 0) migrationProxy.lockRep(leftoverProxyRep);
+		uint256 excessForkRep = repToFork - forkThreshold;
+		if (excessForkRep > 0) migrationProxy.lockRep(excessForkRep);
 		uint256 forkTime = zoltar.getForkTime(securityPool.universeId());
 		require(forkTime > 0, 'Time');
 		// The universe fork extends the parent's fee horizon from the question end
