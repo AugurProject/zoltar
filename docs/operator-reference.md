@@ -12,6 +12,11 @@ how the REP/ETH coordinator stages or recovers operations.
 Implementation guardrails map to their contract sources so operators can check
 each rule against the exact Solidity implementation.
 
+The [Protocol Invariants](./invariants.html) catalog connects those local
+guardrails to cross-contract conservation, lifecycle, liveness, and economic
+security properties, including launch-critical properties that the current
+contracts do not preserve.
+
 ## Immutable Protocol Release Posture
 
 Zoltar and Placeholder are intended to launch as immutable, permissionless
