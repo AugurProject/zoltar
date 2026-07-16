@@ -1,8 +1,8 @@
 import { availableParallelism } from 'node:os'
 import { cleanupFoundryAnvilState } from './cleanup-foundry-anvil-state.mts'
+import { discoverTestFiles, getDefaultTestParallelism, isExplicitTestPath, toBunTestPath } from './test-discovery.mts'
 
-const maximumParallelism = 12
-const defaultParallelism = Math.max(1, Math.min(maximumParallelism, availableParallelism()))
+const defaultParallelism = getDefaultTestParallelism(availableParallelism())
 const cleanupStaleAnvilState = async (phase: 'before' | 'after') => {
 	try {
 		const result = await cleanupFoundryAnvilState()
@@ -36,6 +36,8 @@ if (!hasArg('--parallel')) args.push(`--parallel=${defaultParallelism}`)
 if (!hasArg('--timeout')) args.push('--timeout', '300000')
 
 args.push(...passthroughArgs)
+const hasExplicitTestPath = passthroughArgs.some(argument => isExplicitTestPath(argument))
+if (!hasExplicitTestPath) args.push(...(await discoverTestFiles()).map(toBunTestPath))
 
 await cleanupStaleAnvilState('before')
 

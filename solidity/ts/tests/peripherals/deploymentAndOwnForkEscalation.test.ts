@@ -107,7 +107,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		const multiOutcomeQuestionId = getQuestionId(multiOutcomeQuestionData, multiOutcomes)
 
 		// Attempt to deploy security pool with non-binary question should fail.
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, multiOutcomeQuestionId, securityMultiplier))
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, multiOutcomeQuestionId, securityMultiplier), /Security pool question must have exactly two outcomes/)
 	})
 
 	test('cannot deploy security pool with scalar question', async () => {
@@ -127,7 +127,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		const scalarQuestionId = getQuestionId(scalarQuestionData, scalarOutcomes)
 
 		// Attempt to deploy security pool with scalar question should fail.
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, scalarQuestionId, securityMultiplier))
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, scalarQuestionId, securityMultiplier), /Security pool question must have exactly two outcomes/)
 	})
 
 	test('cannot deploy security pool with non-existent question', async () => {
