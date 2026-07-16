@@ -110,8 +110,22 @@ test('production build can be served as static files', async () => {
 	}
 })
 
-async function waitForDevToolsPort(portFilePath: string) {
-	for (let attempt = 0; attempt < 200; attempt += 1) {
+test('Chromium DevTools port discovery tolerates delayed publication under runner contention', async () => {
+	const profilePath = await fs.mkdtemp(path.join(os.tmpdir(), 'zoltar-delayed-devtools-port-'))
+	const portFilePath = path.join(profilePath, 'DevToolsActivePort')
+	const delayedWrite = Bun.sleep(5_100).then(async () => await fs.writeFile(portFilePath, '9222\n/devtools/browser/test\n'))
+
+	try {
+		await expect(waitForDevToolsPort(portFilePath)).resolves.toBe(9222)
+	} finally {
+		await delayedWrite
+		await fs.rm(profilePath, { force: true, recursive: true })
+	}
+})
+
+async function waitForDevToolsPort(portFilePath: string, timeoutMilliseconds = 30_000) {
+	const deadline = Date.now() + timeoutMilliseconds
+	while (Date.now() < deadline) {
 		try {
 			const contents = await fs.readFile(portFilePath, 'utf8')
 			const port = Number.parseInt(contents.split('\n')[0] ?? '', 10)
@@ -119,9 +133,11 @@ async function waitForDevToolsPort(portFilePath: string) {
 		} catch (error) {
 			if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error
 		}
-		await Bun.sleep(25)
+		const remainingMilliseconds = deadline - Date.now()
+		if (remainingMilliseconds <= 0) break
+		await Bun.sleep(Math.min(25, remainingMilliseconds))
 	}
-	throw new Error('Chromium did not publish its DevTools port')
+	throw new Error(`Chromium did not publish its DevTools port within ${timeoutMilliseconds.toString()}ms`)
 }
 
 async function waitForChromiumPageWebSocketUrl(port: number, timeoutMilliseconds = 5_000) {
@@ -360,38 +376,38 @@ async function loadProductionDocumentInChromium(pageUrl: string, viewport: { hei
 	}
 }
 
-productionBrowserTest('production bundle boots worker-backed protocol scenarios in Chromium', async () => {
-	if (server === undefined) throw new Error('Production test server did not start')
-	if (chromiumPath === undefined) throw new Error('Chromium is required for the production browser smoke test')
-	const baseUrl = server.url.toString().replace(/\/$/, '')
-	const scenarios = [
-		{
-			hash: '#/deploy?simulate=1&simScenario=baseline',
-			expected: 'Deploy Contracts',
-			name: 'baseline deployment',
-			viewport: { height: 900, width: 1440 },
-		},
-		{
-			hash: '#/zoltar?simulate=1&simScenario=deployed',
-			expected: 'Questions & Markets',
-			name: 'deployed protocol',
-			viewport: { height: 900, width: 1440 },
-		},
-		{
-			hash: '#/security-pools?simulate=1&simScenario=security-pool',
-			expected: 'Security Pools',
-			name: 'seeded pool at narrow width',
-			viewport: { height: 844, width: 390 },
-		},
-		{
-			hash: '#/security-pools?simulate=1&simScenario=securitypoolx2-auction',
-			expected: 'Truth Auction',
-			name: 'fork and auction',
-			viewport: { height: 900, width: 1440 },
-		},
-	] as const
+const productionBrowserScenarios = [
+	{
+		hash: '#/deploy?simulate=1&simScenario=baseline',
+		expected: 'Deploy Contracts',
+		name: 'baseline deployment',
+		viewport: { height: 900, width: 1440 },
+	},
+	{
+		hash: '#/zoltar?simulate=1&simScenario=deployed',
+		expected: 'Questions & Markets',
+		name: 'deployed protocol',
+		viewport: { height: 900, width: 1440 },
+	},
+	{
+		hash: '#/security-pools?simulate=1&simScenario=security-pool',
+		expected: 'Security Pools',
+		name: 'seeded pool at narrow width',
+		viewport: { height: 844, width: 390 },
+	},
+	{
+		hash: '#/security-pools?simulate=1&simScenario=securitypoolx2-auction',
+		expected: 'Truth Auction',
+		name: 'fork and auction',
+		viewport: { height: 900, width: 1440 },
+	},
+] as const
 
-	for (const scenario of scenarios) {
+for (const scenario of productionBrowserScenarios) {
+	productionBrowserTest(`production bundle boots the ${scenario.name} scenario in Chromium`, async () => {
+		if (server === undefined) throw new Error('Production test server did not start')
+		if (chromiumPath === undefined) throw new Error('Chromium is required for the production browser smoke test')
+		const baseUrl = server.url.toString().replace(/\/$/, '')
 		const state = JSON.parse(await loadProductionDocumentInChromium(`${baseUrl}/${scenario.hash}`, scenario.viewport))
 		if (typeof state !== 'object' || state === null || !('body' in state) || !('html' in state) || typeof state.body !== 'string' || typeof state.html !== 'string' || !('height' in state) || !('width' in state)) {
 			throw new Error(`${scenario.name} returned an invalid document state`)
@@ -402,8 +418,8 @@ productionBrowserTest('production bundle boots worker-backed protocol scenarios 
 		expect(state.height).toBe(scenario.viewport.height)
 		expect(state.width).toBe(scenario.viewport.width)
 		expect(state.body).not.toContain('Failed to initialize the app environment')
-	}
-})
+	})
+}
 
 productionBrowserTest('production bundle executes deployment, reporting, fork migration, failure recovery, and truth auction finalization', async () => {
 	if (server === undefined) throw new Error('Production test server did not start')
