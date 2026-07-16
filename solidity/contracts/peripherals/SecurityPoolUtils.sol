@@ -59,28 +59,56 @@ library SecurityPoolUtils {
 	}
 
 	function calculateLiquidationTransfer(
-		uint256 vaultRep,
-		uint256 targetAllowance,
+		uint256 snapshotTargetOwnership,
+		uint256 snapshotTargetAllowance,
+		uint256 snapshotTotalRep,
+		uint256 snapshotDenominator,
 		uint256 requestedDebt,
-		uint256 repEthPrice
-	) external pure returns (uint256 debtToMove, uint256 repToMove) {
+		uint256 repEthPrice,
+		uint256 currentTargetOwnership,
+		uint256 currentTotalRep,
+		uint256 currentDenominator
+	) external pure returns (uint256 debtToMove, uint256 repToMove, uint256 ownershipToMove) {
+		uint256 vaultRep =
+			snapshotDenominator == 0
+				? snapshotTargetOwnership / PRICE_PRECISION
+				: (snapshotTargetOwnership * snapshotTotalRep) / snapshotDenominator;
 		uint256 maxDebtToMove;
 		if (vaultRep > MIN_REP_DEPOSIT) {
 			maxDebtToMove =
 				((vaultRep - MIN_REP_DEPOSIT) * PRICE_PRECISION * BPS_DENOMINATOR) /
 				(repEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS));
-			if (maxDebtToMove > targetAllowance) maxDebtToMove = targetAllowance;
+			if (maxDebtToMove > snapshotTargetAllowance) maxDebtToMove = snapshotTargetAllowance;
 		}
-		if (maxDebtToMove < targetAllowance && targetAllowance - maxDebtToMove <= MIN_SECURITY_BOND_DEBT) {
+		if (
+			maxDebtToMove < snapshotTargetAllowance && snapshotTargetAllowance - maxDebtToMove <= MIN_SECURITY_BOND_DEBT
+		) {
 			maxDebtToMove =
-				targetAllowance > MIN_SECURITY_BOND_DEBT ? targetAllowance - MIN_SECURITY_BOND_DEBT : targetAllowance;
+				snapshotTargetAllowance > MIN_SECURITY_BOND_DEBT
+					? snapshotTargetAllowance - MIN_SECURITY_BOND_DEBT
+					: snapshotTargetAllowance;
 		}
 		debtToMove = requestedDebt > maxDebtToMove ? maxDebtToMove : requestedDebt;
-		if (debtToMove == 0) return (0, 0);
+		if (debtToMove == 0) return (0, 0, 0);
 		uint256 repNumerator = debtToMove * repEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS);
 		uint256 repDenominator = PRICE_PRECISION * BPS_DENOMINATOR;
 		repToMove = repNumerator / repDenominator;
 		if (repToMove * repDenominator < repNumerator) repToMove += 1;
+		ownershipToMove =
+			currentDenominator == 0 || currentTotalRep == 0
+				? repToMove * PRICE_PRECISION
+				: (repToMove * currentDenominator) / currentTotalRep;
+		if (debtToMove == snapshotTargetAllowance) {
+			uint256 remainingRep =
+				currentDenominator == 0 || ownershipToMove >= currentTargetOwnership
+					? 0
+					: ((currentTargetOwnership - ownershipToMove) * currentTotalRep) / currentDenominator;
+			if (ownershipToMove >= currentTargetOwnership || remainingRep < MIN_REP_DEPOSIT) {
+				repToMove =
+					currentDenominator == 0 ? 0 : (currentTargetOwnership * currentTotalRep) / currentDenominator;
+				ownershipToMove = currentTargetOwnership;
+			}
+		}
 	}
 
 	// Starts at MAX_RETENTION_RATE, decreases linearly until the 80% utilization dip,

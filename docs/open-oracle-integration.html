@@ -113,8 +113,10 @@
 					<p id="integration-terms">
 						After the coordinator accepts a settlement, that accepted REP/WETH
 						report becomes a REP/ETH coordinator price. The price is reusable only
-						while it remains inside the freshness window; operation volume is not
-						metered by the accepted report.
+						while it remains inside the freshness window. Successful operations
+						share one risk-notional budget derived from the accepted report;
+						an operation beyond the remaining budget fails with
+						<code>oracle report exposure exceeded</code>.
 					</p>
 					<p>
 						Four coordinator terms drive the rest of the integration behavior:
@@ -1210,9 +1212,10 @@
 				<h2>Intentional Economic Tradeoffs</h2>
 				<p>
 					Two coordinator behaviors are deliberate. First, an accepted report
-					starts one operation-notional budget equal to the fixed REP report
-					converted to ETH at the accepted price. Successful operations debit that
-					budget even when they are manually executed outside the callback batch.
+					opens a five-minute price round whose aggregate successful operation
+						notional is capped by the configured escalation-halt REP amount at the
+						accepted token ratio. Current parameters set that amount to ten times
+						the initial report.
 					Second, the caller who pays for a stale-price refresh
 					owns the staging lane until that report settles. A sequence of timely
 					disputes can extend both the report and that exclusivity.
@@ -1220,35 +1223,42 @@
 				<p>
 					These choices amortize one contestable report across bounded pool activity and
 					prevent unrelated callers from attaching operations to someone else's
-					in-flight refresh. The operation boundary is one-to-one with the report's
-					REP-side ETH value, while report availability still has no maximum pending
-					duration. The calculators below make the capital, budget, and flow
-					costs explicit.
+					in-flight refresh. The report budget bounds accepted-price exposure,
+					but it is a configured notional limit, not proof that the chosen
+					escalation-halt multiplier makes a false report economically safe. The
+					multiplier's sufficiency remains a parameter assumption, while economic
+					contestability and the absence of a maximum pending
+					duration remain separate boundaries. The calculators below make the
+					resulting capital and flow costs explicit.
 				</p>
 
-				<h3 id="fixed-report-metered-exposure">
-					Fixed Report Cost and Metered Operation Exposure
+				<h3 id="fixed-report-unmetered-exposure">
+					Fixed Report Cost and Configured Exposure Budget
 				</h3>
 				<p>
 					<code>reportRep</code> is the fixed REP-side report amount,
 					<code>referencePrice</code> is the reference REP-per-ETH price,
-					<code>reportedError</code> is the reported upward error, and
-					<code>outsideExposure</code> is requested operation notional. At settlement,
-					the coordinator first floors the accepted fixed-point REP/ETH price,
-					then floors <code>exactToken1Report · PRICE_PRECISION / settledPrice</code>
-					to obtain the round's ETH-notional budget. The sponsor reports
+					<code>reportedError</code> is the initial report's upward error, and
+					<code>outsideExposure</code> is the outside value that can react to the
+					accepted price. The sponsor reports
 					<code>reportedPrice = referencePrice · (1 + reportedError)</code> and
-					posts <code>reportRep / reportedPrice</code> WETH. The
-					WETH position and operation budget are close in the undisputed
-					real-number example, but they are different runtime quantities with
-					different units. The REP and WETH are principal: OpenOracle returns both
-					to the accepted reporter at settlement. An undisputed report pays no percentage fee.
+					posts <code>initialAmount2 = reportRep / reportedPrice</code> WETH.
+					At settlement, the coordinator first computes
+					<code>configuredRepNotional = floor(reportRep · escalationHaltMultiplierBps / 10,000)</code>,
+					then computes the budget as
+					<code>floor(configuredRepNotional · acceptedAmount2 / acceptedAmount1)</code>.
+					For an undisputed initial report under current parameters this equals
+					ten times <code>initialAmount2</code>; after a dispute it scales the
+					configured REP baseline at the final accepted ratio without
+					inverting an already rounded price. The
+					REP and WETH are principal: OpenOracle returns both to the accepted
+					reporter at settlement. An undisputed report pays no percentage fee.
 				</p>
 				<div class="equation" id="eq-openoracle-fixed-report-cost">
 					<math
 						display="block"
 						aria-label="fixed report funding and accepted report cost"
-						data-source="reportedPrice = referencePrice \cdot (1 + reportedError); amount2 = reportRep / reportedPrice; settledPrice = floor(settledAmount1 \cdot PRICE_PRECISION / settledAmount2); operationBudget = floor(exactToken1Report \cdot PRICE_PRECISION / settledPrice); reportCapital = reportRep / referencePrice + amount2; requestBounty = blockBaseFee \cdot 4 \cdot (callbackGasLimit + gasConsumedOpenOracleReportPrice) + 101; settlerReward = blockBaseFee \cdot 2 \cdot gasConsumedOpenOracleReportPrice; capitalCarry = (reportCapital + requestBounty) \cdot capitalRate \cdot settlementTime / year; externalSettlerCost = requestTransactionGasCost + capitalCarry + settlerReward; selfSettlerCost = requestTransactionGasCost + capitalCarry + settlementTransactionGasCost; requestedBudgetMultiple = outsideExposure / operationBudget"
+						data-source="reportedPrice = referencePrice \cdot (1 + reportedError); initialAmount2 = reportRep / reportedPrice; acceptedPrice = floor(acceptedAmount1 \cdot pricePrecision / acceptedAmount2); configuredRepNotional = floor(reportRep \cdot escalationHaltMultiplierBps / 10000); reportBudget = floor(configuredRepNotional \cdot acceptedAmount2 / acceptedAmount1); authorizedExposure = min(outsideExposure, reportBudget); reportCapital = reportRep / referencePrice + initialAmount2; requestBounty = blockBaseFee \cdot 4 \cdot (callbackGasLimit + gasConsumedOpenOracleReportPrice) + 101; settlerReward = blockBaseFee \cdot 2 \cdot gasConsumedOpenOracleReportPrice; capitalCarry = (reportCapital + requestBounty) \cdot capitalRate \cdot settlementTime / year; externalSettlerCost = requestTransactionGasCost + capitalCarry + settlerReward; selfSettlerCost = requestTransactionGasCost + capitalCarry + settlementTransactionGasCost; exposureMultiple = authorizedExposure / reportCapital"
 					>
 						<mtable>
 							<mtr>
@@ -1257,19 +1267,29 @@
 								<mtd><mi>referencePrice</mi><mo>&#x22C5;</mo><mo>(</mo><mn>1</mn><mo>+</mo><mi>reportedError</mi><mo>)</mo></mtd>
 							</mtr>
 							<mtr>
-								<mtd><mi>amount2</mi></mtd>
+								<mtd><mi>initialAmount2</mi></mtd>
 								<mtd><mo>=</mo></mtd>
 								<mtd><mi>reportRep</mi><mo>/</mo><mi>reportedPrice</mi></mtd>
 							</mtr>
 							<mtr>
-								<mtd><mi>settledPrice</mi></mtd>
+								<mtd><mi>acceptedPrice</mi></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mi>floor</mi><mo>(</mo><mi>settledAmount1</mi><mo>&#x22C5;</mo><mi>PRICE_PRECISION</mi><mo>/</mo><mi>settledAmount2</mi><mo>)</mo></mtd>
+								<mtd><mi>floor</mi><mo>(</mo><mi>acceptedAmount1</mi><mo>&#x22C5;</mo><mi>pricePrecision</mi><mo>/</mo><mi>acceptedAmount2</mi><mo>)</mo></mtd>
 							</mtr>
 							<mtr>
-								<mtd><mi>operationBudget</mi></mtd>
+								<mtd><mi>configuredRepNotional</mi></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mi>floor</mi><mo>(</mo><mi>exactToken1Report</mi><mo>&#x22C5;</mo><mi>PRICE_PRECISION</mi><mo>/</mo><mi>settledPrice</mi><mo>)</mo></mtd>
+								<mtd><mi>floor</mi><mo>(</mo><mi>reportRep</mi><mo>&#x22C5;</mo><mi>escalationHaltMultiplierBps</mi><mo>/</mo><mn>10000</mn><mo>)</mo></mtd>
+							</mtr>
+							<mtr>
+								<mtd><mi>reportBudget</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><mi>floor</mi><mo>(</mo><mi>configuredRepNotional</mi><mo>&#x22C5;</mo><mi>acceptedAmount2</mi><mo>/</mo><mi>acceptedAmount1</mi><mo>)</mo></mtd>
+							</mtr>
+							<mtr>
+								<mtd><mi>authorizedExposure</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><mi>min</mi><mo>(</mo><mi>outsideExposure</mi><mo>,</mo><mi>reportBudget</mi><mo>)</mo></mtd>
 							</mtr>
 							<mtr>
 								<mtd><mi>reportCapital</mi></mtd>
@@ -1287,9 +1307,9 @@
 								<mtd><mi>requestGas</mi><mo>+</mo><mi>capitalCarry</mi><mo>+</mo><mi>settlementGas</mi></mtd>
 							</mtr>
 							<mtr>
-								<mtd><mi>requestedBudgetMultiple</mi></mtd>
+								<mtd><mi>exposureMultiple</mi></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mi>outsideExposure</mi><mo>/</mo><mi>operationBudget</mi></mtd>
+								<mtd><mi>authorizedExposure</mi><mo>/</mo><mi>reportCapital</mi></mtd>
 							</mtr>
 						</mtable>
 					</math>
@@ -1297,55 +1317,25 @@
 						<span class="equation-label">Accepted Report Cost</span>The request
 						bounty and token position are funding requirements, not necessarily
 						losses. The initial reporter receives the bounty minus the settler
-						reward, and a self-settling sponsor also receives that reward. Budget
-						arithmetic uses integer token atoms and wei; the calculator below is
-						an explicitly real-number approximation of an undisputed report.
+						reward, and a self-settling sponsor also receives that reward.
 					</p>
 				</div>
-				<table class="operation-notional-table">
-					<thead>
-						<tr>
-							<th>Successful operation</th>
-							<th>ETH notional debited from the round</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr>
-							<td>Security-bond allowance update</td>
-							<td><code>max(requestedAllowance - currentAllowance, 0)</code>. Reductions consume zero.</td>
-						</tr>
-						<tr>
-							<td>REP withdrawal</td>
-							<td><code>ceil(actualWithdrawRep · PRICE_PRECISION / settledPrice)</code>, using the REP amount the pool will actually release rather than the larger requested amount.</td>
-						</tr>
-						<tr>
-							<td>Liquidation</td>
-							<td><code>max(debtToMove, ceil(repToMove · PRICE_PRECISION / settledPrice))</code>, using the same previewed debt and REP transfer—including full-close handling—as the pool.</td>
-						</tr>
-					</tbody>
-				</table>
-				<p>
-					The coordinator checks this notional against the remaining round budget
-					before calling the pool and debits it only after the pool call succeeds.
-					Budget rejection consumes the staged operation but not budget. Manual
-					execution of overflow operations uses the same check as callback execution.
-				</p>
 				<p>
 					The real-number defaults below use the market snapshot already stated
 					above: approximately <code>2,210 REP/ETH</code>,
 					<code>$1,750.34/ETH</code>, and <code>0.07 gwei</code> base fee. With
-					<code>259.332 REP</code>, a reported price ten percent high, and
-					<code>10,000 ETH</code> of requested notional, the report position is about
-					<code>0.224 ETH</code>, its initial WETH leg is about <code>0.1067 WETH</code>,
-					and the undisputed approximate operation budget is <code>0.1067 ETH</code>.
-					The requested amount is therefore about <code>93,741x</code>
-					the budget; operations above the remaining budget fail rather than execute.
+					<code>259.332 REP</code>, a reported price ten percent high, and an
+					attempted <code>10,000 ETH</code> of outside exposure, the report
+					position is about <code>0.224 ETH</code> and the configured operation
+					budget is about <code>1.06677 ETH</code>. Operations beyond that round budget
+					fail; increasing attempted outside exposure does not change the report
+					or request cost.
 				</p>
 				<details class="interactive-example" id="fixed-exposure-cost-example" open>
-					<summary>Adjust fixed report cost and requested operation notional</summary>
+					<summary>Adjust fixed report cost and outside exposure</summary>
 					<div class="example-grid">
 						<label>
-							Requested operation notional
+							Outside exposure
 							<input type="range" min="100" max="100000" step="100" value="10000" data-example-input="outsideExposure" />
 							<span class="example-value" data-example-value="outsideExposure">10,000 ETH</span>
 						</label>
@@ -1402,14 +1392,13 @@
 					</div>
 					<div class="example-output-grid">
 						<div><span>Reported price</span><output data-example-output="fixedReportedPrice">2,431 REP/ETH</output></div>
-						<div><span>Initial WETH posted</span><output data-example-output="fixedWethPosted">0.106677 WETH</output></div>
-						<div><span>Approximate round operation budget</span><output data-example-output="fixedOperationBudget">0.106677 ETH</output></div>
+						<div><span>WETH posted</span><output data-example-output="fixedWethPosted">0.106677 WETH</output></div>
 						<div><span>Report position capital</span><output data-example-output="fixedPositionCapital">0.224022 ETH</output></div>
 						<div><span>Request bounty locked</span><output data-example-output="fixedRequestBounty">0.001148 ETH</output></div>
 						<div><span>Opening funding plus request gas</span><output data-example-output="fixedFundingRequired">0.225220 ETH</output></div>
 						<div><span>Net cost, external settler</span><output data-example-output="fixedExternalCost">0.000064 ETH ($0.11)</output></div>
 						<div><span>Net cost, sponsor self-settles</span><output data-example-output="fixedSelfCost">0.000100 ETH ($0.18)</output></div>
-						<div><span>Requested notional / round budget</span><output data-example-output="fixedExposureMultiple">93,741x</output></div>
+						<div><span>Authorized exposure / report capital</span><output data-example-output="fixedExposureMultiple">4.76x</output></div>
 					</div>
 					<p class="detail">
 						The transaction-gas inputs are scenario estimates, not coordinator
@@ -1417,9 +1406,19 @@
 						price includes any priority fee and determines transaction spend; the
 						calculator clamps it to at least the selected block base fee. The
 						net-cost outputs assume the report is not disputed and
-						the principal is returned. A wrong report faces dispute, price risk,
+						the principal is returned; the displayed report budget therefore uses
+						the initial accepted amounts. The settled-amount formula above covers a
+						different accepted report after dispute. A wrong report faces dispute, price risk,
 						transaction-ordering risk, and possible outside losses; the attack model
-						below addresses that separate contestability boundary.
+						below addresses that separate contestability boundary. Successful
+						withdrawals debit the REP actually withdrawn at the accepted price,
+						capped by the pool's outstanding allowance; a pool with no allowance
+						therefore exposes no value when collateral exits. Allowance increases
+						debit the live increment; liquidations debit the greater of ETH debt
+						moved and the exact bonus-adjusted REP value. Accepted escalation
+						deposits debit their REP value, capped by outstanding pool allowance.
+						Failed operations and allowance
+						reductions do not consume the round budget.
 					</p>
 				</details>
 
@@ -3199,7 +3198,6 @@
 				const ethUsd = Math.max(context.read("fixedEthUsd"), 0);
 				const reportedPrice = referencePrice * (1 + reportedError);
 				const wethPosted = reportRep / reportedPrice;
-				const operationBudget = reportRep / reportedPrice;
 				const positionCapital = reportRep / referencePrice + wethPosted;
 				const baseFeeEthPerGas = baseFeeGwei * 1e-9;
 				const callbackGasLimit = 4_000_000;
@@ -3225,9 +3223,12 @@
 					requestGasCost + capitalCarry + settlementGasCost;
 				const fundingRequired =
 					positionCapital + requestBounty + requestGasCost;
+					const escalationHaltMultiplier = 10;
+					const reportBudget = wethPosted * escalationHaltMultiplier;
+					const authorizedExposure = Math.min(outsideExposure, reportBudget);
 				const exposureMultiple =
-					operationBudget > 0
-						? outsideExposure / operationBudget
+					positionCapital > 0
+						? authorizedExposure / positionCapital
 						: Number.POSITIVE_INFINITY;
 				const formatEthPrecise = (value) => `${value.toFixed(6)} ETH`;
 				const formatEthWithUsd = (value) =>
@@ -3284,10 +3285,6 @@
 					`${wethPosted.toFixed(6)} WETH`,
 				);
 				context.writeOutput(
-					"fixedOperationBudget",
-					formatEthPrecise(operationBudget),
-				);
-				context.writeOutput(
 					"fixedPositionCapital",
 					formatEthPrecise(positionCapital),
 				);
@@ -3310,7 +3307,7 @@
 				context.writeOutput(
 					"fixedExposureMultiple",
 					Number.isFinite(exposureMultiple)
-						? `${exposureMultiple.toLocaleString(undefined, { maximumFractionDigits: 0 })}x`
+						? `${exposureMultiple.toLocaleString(undefined, { maximumFractionDigits: 2 })}x`
 						: "unbounded",
 				);
 			});

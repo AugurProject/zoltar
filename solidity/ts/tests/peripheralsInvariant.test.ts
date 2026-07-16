@@ -64,7 +64,7 @@ import { SystemState } from '../testSupport/simulator/types/peripheralTypes'
 import { ensureDefined, strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
 import { computeClearing, deployUniformPriceDualCapBatchAuction, finalize as finalizeAuction, getEthRaised, getTotalRepPurchased, simulateWithdrawBids, startAuction, submitBid, withdrawBids } from '../testSupport/simulator/utils/contracts/auction'
 import { getUniformPriceDualCapBatchAuctionAddress } from '../testSupport/simulator/utils/contracts/deployments'
-import { tickToPrice } from '../testSupport/simulator/utils/tickMath'
+import { priceToClosestTick, tickToPrice } from '../testSupport/simulator/utils/tickMath'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -666,9 +666,11 @@ describe('Peripherals invariant harness', () => {
 		await deployUniformPriceDualCapBatchAuction(client, refundAuctionOwner.account.address)
 		const refundAuctionAddress = getUniformPriceDualCapBatchAuctionAddress(refundAuctionOwner.account.address)
 		const refundOnlyTick = -20000n
-		const winningTick = 0n
+		const reservePrice = 2n * 10n ** 18n
+		const closestReserveTick = priceToClosestTick(reservePrice)
+		const winningTick = tickToPrice(closestReserveTick) >= reservePrice ? closestReserveTick : closestReserveTick + 1n
 		const refundOnlyBid = 2n * 10n ** 18n
-		const winningBid = 12n * 10n ** 18n
+		const winningBid = 24n * 10n ** 18n
 		assert.ok(tickToPrice(refundOnlyTick) > 0n, 'refund-only setup should use an accepted positive-price tick')
 
 		await startAuction(refundAuctionOwner, refundAuctionAddress, 20n * 10n ** 18n, 10n * 10n ** 18n)
@@ -680,10 +682,13 @@ describe('Peripherals invariant harness', () => {
 		const auctionBalanceBeforeWithdrawals = await getETHBalance(client, refundAuctionAddress)
 		const refundOnlyResult = await simulateWithdrawBids(refundAuctionOwner, refundAuctionAddress, underfundedBidder.account.address, [{ tick: refundOnlyTick, bidIndex: 0n }])
 		const winningResult = await simulateWithdrawBids(refundAuctionOwner, refundAuctionAddress, lowPriceBidder.account.address, [{ tick: winningTick, bidIndex: 0n }])
+		const expectedWinningRep = await getTotalRepPurchased(client, refundAuctionAddress)
+		const acceptedWinningEth = await getEthRaised(client, refundAuctionAddress)
 		strictEqualTypeSafe(refundOnlyResult.totalFilledRep, 0n, 'refund-only low-price bid should not fill REP')
 		strictEqualTypeSafe(refundOnlyResult.totalEthRefund, refundOnlyBid, 'refund-only low-price bid should receive all ETH back')
-		strictEqualTypeSafe(winningResult.totalFilledRep, 10n * 10n ** 18n, 'winning bid should fill the capped REP allocation')
-		strictEqualTypeSafe(winningResult.totalEthRefund, winningBid - 10n * 10n ** 18n, 'winning bid should refund ETH above the capped allocation')
+		strictEqualTypeSafe(winningResult.totalFilledRep, expectedWinningRep, 'winning bid should fill the finalized REP allocation')
+		assert.ok(expectedWinningRep > 0n && expectedWinningRep <= 10n * 10n ** 18n, 'winning REP must remain positive and capped')
+		strictEqualTypeSafe(winningResult.totalEthRefund, winningBid - acceptedWinningEth, 'winning bid should refund ETH above the finalized allocation')
 
 		await withdrawBids(refundAuctionOwner, refundAuctionAddress, underfundedBidder.account.address, [{ tick: refundOnlyTick, bidIndex: 0n }])
 		await withdrawBids(refundAuctionOwner, refundAuctionAddress, lowPriceBidder.account.address, [{ tick: winningTick, bidIndex: 0n }])

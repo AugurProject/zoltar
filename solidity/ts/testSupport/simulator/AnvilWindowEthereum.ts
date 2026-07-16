@@ -190,7 +190,7 @@ export interface AnvilWindowEthereum {
 	anvilSnapshot: () => Promise<string>
 	anvilRevert: (snapshotId: string) => Promise<void>
 	request: (args: { method: string; params?: unknown }) => Promise<unknown>
-	rawRequest: (args: { method: string; params?: unknown }) => Promise<unknown>
+	requestRaw: (args: { method: string; params?: unknown }) => Promise<unknown>
 	on: () => void
 	removeListener: () => void
 }
@@ -227,6 +227,23 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 
 	// Make JSON-RPC request to Anvil
 	let requestId = 0
+	const requestRaw = async (args: { method: string; params?: unknown[] | unknown | undefined }): Promise<unknown> => {
+		const isSendTransactionMethod = args.method === 'eth_sendTransaction' || args.method === 'wallet_sendTransaction' || args.method === 'eth_sendRawTransaction'
+		const params = isSendTransactionMethod ? normalizeAnvilTransactionParams(ensureArray(args.params)) : ensureArray(args.params)
+		const raw = await fetchJsonRpcResponse({
+			rpcUrl: ANVIL_RPC,
+			method: args.method,
+			body: JSON.stringify({ jsonrpc: '2.0', id: requestId++, method: args.method, params }),
+		})
+		const json = parseJsonRpcResponse(raw)
+		const hasResult = 'result' in json
+		const hasError = 'error' in json
+		if (hasResult && hasError) throw new Error('Invalid JSON-RPC response: both result and error present')
+		if (!hasResult && !hasError) throw new Error('Invalid JSON-RPC response: neither result nor error present')
+		if (json.error !== undefined) throw new Error(json.error.message || 'RPC error')
+		ensureDefined(json.result, 'json.result is undefined')
+		return json.result
+	}
 	const request = async (args: { method: string; params?: unknown[] | unknown | undefined; skipCoverage?: boolean; rpcTimeoutMs?: number }): Promise<unknown> => {
 		const isSendTransactionMethod = args.method === 'eth_sendTransaction' || args.method === 'wallet_sendTransaction' || args.method === 'eth_sendRawTransaction'
 		const params = isSendTransactionMethod ? normalizeAnvilTransactionParams(ensureArray(args.params)) : ensureArray(args.params)
@@ -403,24 +420,6 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		return json.result
 	}
 
-	// Same-block ordering tests need to queue transactions without the normal
-	// request wrapper mining and replaying each send before returning.
-	const rawRequest = async (args: { method: string; params?: unknown[] | unknown | undefined }): Promise<unknown> => {
-		const raw = await fetchJsonRpcResponse({
-			rpcUrl: ANVIL_RPC,
-			method: args.method,
-			body: JSON.stringify({
-				jsonrpc: '2.0',
-				id: requestId++,
-				method: args.method,
-				params: ensureArray(args.params),
-			}),
-		})
-		const json = parseJsonRpcResponse(raw)
-		if (json.error !== undefined) throw new Error(json.error.message || 'RPC error')
-		return json.result
-	}
-
 	// Reset Anvil to a clean state before each test
 	await request({ method: 'anvil_reset', params: [] })
 	await request({ method: 'anvil_setNextBlockBaseFeePerGas', params: ['0x0'] })
@@ -548,7 +547,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 
 	const mock: AnvilWindowEthereum = {
 		request,
-		rawRequest,
+		requestRaw,
 		on: () => {},
 		removeListener: () => {},
 		addStateOverrides,

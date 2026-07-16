@@ -1,7 +1,8 @@
 /// <reference types='bun-types' />
 
 import { afterEach, describe, expect, mock, test } from 'bun:test'
-import { h } from 'preact'
+import { h, type ComponentChildren } from 'preact'
+import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/shared/ethereum'
 import { createSecurityPoolPageFromLoadedPools, shouldFallbackToAllSecurityPoolsPage, useSecurityPoolsOverview, type UseSecurityPoolsOverviewDependencies } from '../../../features/security-pools/hooks/useSecurityPoolsOverview.js'
@@ -75,10 +76,11 @@ function createListedSecurityPool(questionId: string, securityPoolAddress: Addre
 }
 
 function createHarness(dependencies: UseSecurityPoolsOverviewDependencies<TestSecurityPoolsOverviewWriteClient>, onRender: (state: UseSecurityPoolsOverviewState) => void) {
-	return function SecurityPoolsOverviewHarness() {
+	return function SecurityPoolsOverviewHarness({ environmentRefreshKey = 0 }: { children?: ComponentChildren; environmentRefreshKey?: number }) {
 		const state = useSecurityPoolsOverview(
 			{
 				accountAddress: zeroAddress,
+				environmentRefreshKey,
 				onTransactionFinished: () => undefined,
 				onTransactionPresented: () => undefined,
 				onTransactionRequested: () => undefined,
@@ -226,6 +228,35 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		expect(loadSecurityPoolPage).toHaveBeenCalledTimes(1)
 		expect(requireHookState(hookState).securityPoolOverviewError).toBeUndefined()
 		expect(requireHookState(hookState).securityPoolPage?.pools.map(pool => pool.questionId)).toEqual(['0x01'])
+	})
+
+	void test('marks prior-environment pool results stale until the current environment loads', async () => {
+		const domEnvironment = installDomEnvironment()
+		restoreDomEnvironment = domEnvironment.cleanup
+		const firstLoad = createDeferred<ListedSecurityPool[]>()
+		const loadAllSecurityPools = mock(async () => (loadAllSecurityPools.mock.calls.length === 1 ? await firstLoad.promise : [createListedSecurityPool('0x02')]))
+		const dependencies = createSecurityPoolsOverviewDependencies({ loadAllSecurityPools })
+		let hookState: UseSecurityPoolsOverviewState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, { environmentRefreshKey: 0 }))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const staleLoadPromise = requireHookState(hookState).loadSecurityPools()
+		await act(() => {
+			render(h(Harness, { environmentRefreshKey: 1 }), renderedComponent.container)
+		})
+		firstLoad.resolve([createListedSecurityPool('0x01')])
+		await staleLoadPromise
+
+		expect(requireHookState(hookState).hasLoadedSecurityPools).toBe(false)
+		expect(requireHookState(hookState).securityPoolsLoadedEnvironmentRefreshKey).toBe(0)
+		await act(async () => {
+			await requireHookState(hookState).loadSecurityPools()
+		})
+		expect(requireHookState(hookState).hasLoadedSecurityPools).toBe(true)
+		expect(requireHookState(hookState).securityPools.map(pool => pool.questionId)).toEqual(['0x02'])
 	})
 
 	void test('queueLiquidation snapshots the submitted modal inputs before async preflight completes', async () => {

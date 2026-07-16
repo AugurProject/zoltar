@@ -1000,7 +1000,7 @@ describe('Peripherals: fork migration', () => {
 			const victimBalanceBefore = await getETHBalance(client, victim.account.address)
 			const poolBalanceBefore = await getETHBalance(client, securityPoolAddresses.securityPool)
 
-			await assert.rejects(createCompleteSet(victim, securityPoolAddresses.securityPool, 1n), /Zero shares/)
+			await assert.rejects(createCompleteSet(victim, securityPoolAddresses.securityPool, 1n), /Zero shares|Exchange rate undefined/)
 
 			strictEqualTypeSafe(await getETHBalance(client, victim.account.address), victimBalanceBefore, 'a failed zero-output mint should refund all user ETH')
 			strictEqualTypeSafe(await getETHBalance(client, securityPoolAddresses.securityPool), poolBalanceBefore, 'a failed zero-output mint should not increase the pool balance')

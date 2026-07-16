@@ -399,12 +399,12 @@ describe('ForkAuctionSection settlement summary', () => {
 		const truthAuction = createTruthAuction({
 			clearingPrice: undefined,
 			clearingTick: 0n,
-			ethRaised: ONE_UNIT,
+			ethRaised: 0n,
 			finalized: true,
 			hitCap: false,
 			totalRepPurchased: 0n,
 			underfunded: true,
-			underfundedThreshold: 2n ** 256n - 1n,
+			underfundedThreshold: 2n * ONE_UNIT,
 			underfundedWinningEth: 0n,
 		})
 		const childPool = createChildPool()

@@ -117,7 +117,7 @@ describe('Peripherals: truth auction', () => {
 	})
 
 	const directAnvilRequest = async (method: string, params: readonly unknown[]) => {
-		return await mockWindow.rawRequest({ method, params })
+		return await mockWindow.requestRaw({ method, params })
 	}
 
 	const queueDirectTransaction = async (from: `0x${string}`, to: `0x${string}`, data: `0x${string}`, value = 0n) => {

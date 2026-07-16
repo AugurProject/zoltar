@@ -1,0 +1,1967 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Zoltar Protocol Invariants</title>
+		<link rel="stylesheet" href="./shared-docs.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main>
+			<header>
+				<h1>Zoltar Protocol Invariants</h1>
+				<p>
+					An invariant is a statement that must remain true at every successful
+					external-call boundary, across every legal lifecycle transition, or
+					under the economic assumptions named beside it. Reverts may interrupt
+					a transition, but they must roll back all of its state and asset
+					effects.
+				</p>
+				<p>
+					The catalog separates local contract guards from cross-contract
+					properties and economic assumptions. It also records launch-critical
+					properties that the current contracts do not preserve. A documented
+					implementation choice is not automatically a safe invariant.
+				</p>
+				<p>
+					New to Zoltar's actors and fork lifecycle? Read
+					<a href="./start-here.html">Start Here</a> before using this catalog
+					as a contract or test reference.
+				</p>
+				<figure
+					class="diagram diagram-wide"
+					id="fig-invariant-layers"
+					role="region"
+					aria-labelledby="invariant-layers-title"
+					tabindex="0"
+				>
+					<svg
+						viewBox="0 0 920 260"
+						role="img"
+						aria-labelledby="invariant-layers-title invariant-layers-desc"
+					>
+						<title id="invariant-layers-title">Protocol invariant layers</title>
+						<desc id="invariant-layers-desc">
+							Four connected layers run from local authority guards through
+							cross-contract conservation and lifecycle liveness to economic
+							security. A failure in an earlier layer invalidates the safety
+							claims built above it.
+						</desc>
+						<defs>
+							<marker
+								id="arrow-invariant-layers"
+								viewBox="0 0 10 10"
+								refX="8"
+								refY="5"
+								markerWidth="7"
+								markerHeight="7"
+								orient="auto-start-reverse"
+							>
+								<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+							</marker>
+						</defs>
+						<rect
+							class="svg-blue"
+							x="25"
+							y="72"
+							width="190"
+							height="112"
+							rx="10"
+						></rect>
+						<text class="svg-label" x="120" y="108" text-anchor="middle">
+							Authority
+						</text>
+						<text class="svg-small" x="120" y="134" text-anchor="middle">
+							canonical callers
+						</text>
+						<text class="svg-small" x="120" y="157" text-anchor="middle">
+							one-time wiring
+						</text>
+						<path
+							class="svg-line"
+							marker-end="url(#arrow-invariant-layers)"
+							d="M 215 128 H 250"
+						></path>
+						<rect
+							class="svg-green"
+							x="250"
+							y="72"
+							width="190"
+							height="112"
+							rx="10"
+						></rect>
+						<text class="svg-label" x="345" y="108" text-anchor="middle">
+							Conservation
+						</text>
+						<text class="svg-small" x="345" y="134" text-anchor="middle">
+							ETH, REP, shares
+						</text>
+						<text class="svg-small" x="345" y="157" text-anchor="middle">
+							claims and reserves
+						</text>
+						<path
+							class="svg-line"
+							marker-end="url(#arrow-invariant-layers)"
+							d="M 440 128 H 475"
+						></path>
+						<rect
+							class="svg-gold"
+							x="475"
+							y="72"
+							width="190"
+							height="112"
+							rx="10"
+						></rect>
+						<text class="svg-label" x="570" y="108" text-anchor="middle">
+							Lifecycle
+						</text>
+						<text class="svg-small" x="570" y="134" text-anchor="middle">
+							legal transitions
+						</text>
+						<text class="svg-small" x="570" y="157" text-anchor="middle">
+							permissionless liveness
+						</text>
+						<path
+							class="svg-line"
+							marker-end="url(#arrow-invariant-layers)"
+							d="M 665 128 H 700"
+						></path>
+						<rect
+							class="svg-red"
+							x="700"
+							y="72"
+							width="195"
+							height="112"
+							rx="10"
+						></rect>
+						<text class="svg-label" x="798" y="108" text-anchor="middle">
+							Economics
+						</text>
+						<text class="svg-small" x="798" y="134" text-anchor="middle">
+							bounded exposure
+						</text>
+						<text class="svg-small" x="798" y="157" text-anchor="middle">
+							inclusion and incentives
+						</text>
+						<text class="svg-note" x="460" y="225" text-anchor="middle">
+							Each layer depends on every invariant to its left.
+						</text>
+					</svg>
+					<p class="diagram-caption">
+						<span class="figure-label">Invariant Dependency</span>Correct
+						callers are necessary but insufficient. Their actions must conserve
+						assets, every mandatory state transition must remain reachable, and
+						the resulting external exposure must stay within its economic
+						security.
+					</p>
+				</figure>
+			</header>
+
+			<section id="standing">
+				<h2>Standing and Scope</h2>
+				<p>
+					A standing describes the strongest claim supported by the current
+					local implementation and its tests. It is not a formal proof. Changes
+					to any contract named in the evidence column must preserve the full
+					statement, not only the check performed in one function.
+				</p>
+				<div
+					class="table-scroll"
+					role="region"
+					aria-label="Invariant standing definitions"
+					tabindex="0"
+				>
+					<table>
+						<thead>
+							<tr>
+								<th>Standing</th>
+								<th>Meaning</th>
+								<th>Required response</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td><strong>Contract guard</strong></td>
+								<td>
+									A direct authorization, bound, or state check enforces the
+									property locally.
+								</td>
+								<td>Keep the guard and test its negative boundary.</td>
+							</tr>
+							<tr>
+								<td><strong>Reviewed preservation</strong></td>
+								<td>
+									Several contracts cooperate to preserve the property in
+									reviewed flows and tests.
+								</td>
+								<td>
+									Protect it with cross-contract invariant and lifecycle tests.
+								</td>
+							</tr>
+							<tr>
+								<td><strong>Open violation</strong></td>
+								<td>
+									A concrete sequence reaches a state that contradicts the
+									required property.
+								</td>
+								<td>Fix before deployment and retain a regression test.</td>
+							</tr>
+							<tr>
+								<td><strong>Economic or external assumption</strong></td>
+								<td>
+									Solidity cannot guarantee the property without honest
+									participation, liquidity, or transaction inclusion.
+								</td>
+								<td>
+									Bound the exposure, monitor the assumption, and document its
+									failure mode.
+								</td>
+							</tr>
+							<tr>
+								<td><strong>Proposed guard</strong></td>
+								<td>
+									The property closes a missing safety or verification boundary
+									not currently represented as one assertion.
+								</td>
+								<td>
+									Add a contract check, model assertion, or invariant harness
+									where practical.
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<p>
+					Invariant identifiers are stable review labels. They are grouped by
+					authority, universe, asset, share, vault, fork, escalation, oracle,
+					auction, and lifecycle boundaries rather than by Solidity file.
+				</p>
+				<ul>
+					<li><a href="#launch-remediations">Remediated launch findings</a></li>
+					<li><a href="#authority">Authority and deployment identity</a></li>
+					<li><a href="#universes">Universes, REP supply, and migration</a></li>
+					<li>
+						<a href="#pool-accounting">Pool assets, shares, and vaults</a>
+					</li>
+					<li><a href="#forks">Forks and child isolation</a></li>
+					<li><a href="#escalation">Escalation games and carried claims</a></li>
+					<li><a href="#oracle">REP/ETH oracle operations</a></li>
+					<li><a href="#auctions">Truth auctions</a></li>
+					<li>
+						<a href="#lifecycle">Lifecycle, liveness, and external calls</a>
+					</li>
+					<li><a href="#verification">Verification obligations</a></li>
+				</ul>
+			</section>
+
+			<section id="launch-remediations">
+				<h2>Remediated Launch Findings</h2>
+				<p>
+					These properties had confirmed failure paths in the audited
+					implementation. The current implementation enforces them and retains
+					focused regression coverage. Their stable identifiers remain in this
+					catalog so future changes preserve the fixes.
+				</p>
+				<div
+					class="table-scroll"
+					role="region"
+					aria-label="Remediated invariant findings"
+					tabindex="0"
+				>
+					<table>
+						<thead>
+							<tr>
+								<th>ID</th>
+								<th>Required invariant</th>
+								<th>Current enforcement</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td><code>FORK-04</code></td>
+								<td>
+									Unsolicited REP at a migration-proxy address cannot block or
+									change pool fork initiation.
+								</td>
+								<td>
+									The forker migrates only the REP received from the pool or
+									escalation game during the call and checks the migration-ledger
+									delta. Prefunded proxy REP remains isolated in both external-
+									and own-fork paths.
+								</td>
+							</tr>
+							<tr>
+								<td><code>SHARE-04</code></td>
+								<td>
+									Complete-set minting and winning-share redemption use one
+									economically consistent supply denominator.
+								</td>
+								<td>
+									Child setup reconciles balanced actual outcome supplies,
+									complete-set operations reject unequal supplies, and winning
+									redemption divides collateral by the actual winning supply.
+								</td>
+							</tr>
+							<tr>
+								<td><code>BAL-02</code></td>
+								<td>
+									Unsolicited ETH cannot alter collateral accounting or block a
+									required transition.
+								</td>
+								<td>
+									Collateral is tracked independently from raw balance. Fork
+									migration and auction finalization add only protocol-routed
+									ETH, leaving forced ETH as unaccounted surplus.
+								</td>
+							</tr>
+							<tr>
+								<td><code>SHARE-03</code></td>
+								<td>
+									Every successful positive-value complete-set mint creates a
+									positive quantity of every outcome share.
+								</td>
+								<td>
+									A zero-supply pool can bootstrap only with zero tracked
+									collateral, and a mint that would calculate zero shares
+									reverts without changing accounting.
+								</td>
+							</tr>
+							<tr>
+								<td><code>ORA-07</code></td>
+								<td>
+									Aggregate operation notional authorized by one accepted price
+									is capped by a configured report-round budget.
+								</td>
+								<td>
+									Each accepted report establishes a notional budget from its
+									accepted token amounts and the configured escalation-halt
+									multiplier. Successful staged operations and direct escalation
+									deposits consume that shared budget; whether the multiplier is
+									economically sufficient remains a parameter assumption.
+								</td>
+							</tr>
+							<tr>
+								<td><code>AUC-07</code></td>
+								<td>
+									REP ownership issued by recapitalization remains proportional
+									to qualifying ETH repair achieved.
+								</td>
+								<td>
+									Underfunded demand buys REP at the cap-implied reserve in
+									proportion to qualifying ETH. Any remaining repair contribution
+									issues no ownership or allowance, and a child activates only at
+									the complete repair target.
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</section>
+
+			<section id="authority">
+				<h2>Authority and Deployment Identity</h2>
+				<div
+					class="table-scroll"
+					role="region"
+					aria-label="Authority and deployment invariants"
+					tabindex="0"
+				>
+					<table>
+						<thead>
+							<tr>
+								<th>ID</th>
+								<th>Invariant</th>
+								<th>Standing</th>
+								<th>Primary evidence</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td><code>AUTH-01</code></td>
+								<td>
+									Only the immutable coordinator may execute price-sensitive
+									pool operations, and only the immutable forker may mutate fork
+									accounting or transfer migration assets.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										><code>SecurityPool.onlyValidOracle</code> and
+										<code>onlyForker</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>AUTH-02</code></td>
+								<td>
+									The pool and its coordinator bind once during atomic factory
+									deployment; no external caller gets a transaction boundary in
+									which it can install a substitute pool.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol"
+										><code>SecurityPoolFactory</code></a
+									>,
+									<a
+										href="../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
+										><code>setSecurityPool</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>AUTH-03</code></td>
+								<td>
+									No mutable owner, governance address, upgrade implementation,
+									or emergency operator can replace protocol logic after
+									deployment.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a
+										href="./operator-reference.md#immutable-protocol-release-posture"
+										>Immutable release posture</a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>AUTH-04</code></td>
+								<td>
+									Every canonical CREATE2 address commits to the correct
+									factory, salt, constructor arguments, parent identity,
+									universe, question, and multiplier.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol"
+										><code>SecurityPoolFactory</code></a
+									>,
+									<a href="../shared/ts/addressDerivation.ts"
+										><code>addressDerivation.ts</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>AUTH-05</code></td>
+								<td>
+									Delegatecall targets are constructor-installed protocol
+									modules, and every target interprets the forker's storage with
+									the same layout.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
+										><code>SecurityPoolForker</code></a
+									>, interface and storage-layout regression tests
+								</td>
+							</tr>
+							<tr>
+								<td><code>AUTH-06</code></td>
+								<td>
+									Permissionless settlement may choose when work is processed,
+									but funds and ownership always go to the recorded vault,
+									bidder, depositor, or share holder.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a href="./contract-interaction-reference.md"
+										>Contract interaction reference</a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>AUTH-07</code></td>
+								<td>
+									Published deployment addresses correspond to the reviewed
+									bytecode and constructor wiring, not merely to addresses
+									containing code.
+								</td>
+								<td>Proposed guard</td>
+								<td>
+									<a href="./deployment-status.html"
+										>Deployment Status Oracle limits</a
+									>,
+									<a href="./mainnet-deployment-addresses.json"
+										>mainnet manifest</a
+									>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</section>
+
+			<section id="universes">
+				<h2>Universes, REP Supply, and Migration</h2>
+				<div
+					class="table-scroll"
+					role="region"
+					aria-label="Universe and REP invariants"
+					tabindex="0"
+				>
+					<table>
+						<thead>
+							<tr>
+								<th>ID</th>
+								<th>Invariant</th>
+								<th>Standing</th>
+								<th>Primary evidence</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td><code>UNI-01</code></td>
+								<td>
+									An initialized universe records at most one fork time and one
+									fork question.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a href="../solidity/contracts/Zoltar.sol"
+										><code>Zoltar.forkUniverse</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>UNI-02</code></td>
+								<td>
+									A fork uses an existing, ended, globally valid question;
+									higher layers may impose a narrower pool-to-question
+									relationship.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a href="../solidity/contracts/Zoltar.sol"
+										><code>forkUniverse</code></a
+									>,
+									<a href="./zoltar-whitepaper.html#questions"
+										>question model</a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>UNI-03</code></td>
+								<td>
+									The fork threshold equals the parent theoretical supply
+									divided by the configured divisor; initiating the fork removes
+									the threshold and credits only the post-haircut migration
+									amount.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a href="../solidity/contracts/Zoltar.sol"
+										><code>getForkThreshold</code> and
+										<code>forkUniverse</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>UNI-04</code></td>
+								<td>
+									A child universe identity is exactly the truncated hash of its
+									parent universe and fork outcome; one parent-outcome pair maps
+									to one child.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a href="../solidity/contracts/Zoltar.sol"
+										><code>getChildUniverseId</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>UNI-05</code></td>
+								<td>
+									Only well-formed outcomes of the recorded fork question can
+									deploy child universes or receive migrated REP.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a href="../solidity/contracts/Zoltar.sol"
+										><code>deployChild</code> and
+										<code>splitRepInternal</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>UNI-06</code></td>
+								<td>
+									For one migrator and one child, cumulative child REP minted
+									never exceeds that migrator's parent migration balance.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a href="../solidity/contracts/Zoltar.sol"
+										><code>childMigrationRepAmounts</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>UNI-07</code></td>
+								<td>
+									REP migration may reproduce the same source amount into
+									several selected children, but every resulting balance is a
+									distinct child token and the burned parent REP is not
+									restored.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a href="../solidity/contracts/Zoltar.sol"
+										><code>splitRepInternal</code></a
+									>,
+									<a href="../solidity/contracts/ReputationToken.sol"
+										><code>ReputationToken</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>UNI-08</code></td>
+								<td>
+									A child theoretical-supply snapshot includes the credited
+									initiator migration balance while permanently excluding the
+									uncredited fork haircut.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a href="../solidity/contracts/Zoltar.sol"
+										><code>childUniverseTheoreticalSupplySnapshots</code></a
+									>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</section>
+
+			<section id="pool-accounting">
+				<h2>Pool Assets, Shares, and Vaults</h2>
+				<p>
+					The raw ETH balance needs an explicit surplus term. Without it, forced
+					ETH is indistinguishable from collateral and can change an exchange
+					rate or lifecycle precondition.
+				</p>
+				<div
+					class="equation"
+					id="eq-pool-eth-conservation"
+					role="region"
+					aria-label="ETH conservation equation"
+					tabindex="0"
+				>
+					<math
+						display="block"
+						aria-label="Raw ETH balance equals complete set collateral plus unallocated fee reserve plus total fees owed to vaults plus explicit surplus"
+						data-source="rawEthBalance = completeSetCollateral + unallocatedFeeReserve + totalFeesOwedToVaults + explicitSurplus"
+					>
+						<mrow>
+							<mi>rawEthBalance</mi>
+							<mo>=</mo>
+							<mi>completeSetCollateral</mi>
+							<mo>+</mo>
+							<mi>unallocatedFeeReserve</mi>
+							<mo>+</mo>
+							<mi>totalFeesOwedToVaults</mi>
+							<mo>+</mo>
+							<mi>explicitSurplus</mi>
+						</mrow>
+					</math>
+					<p class="equation-caption">
+						<span class="equation-label">ETH Conservation Boundary</span>Every
+						successful external call should reconcile raw ETH into named
+						liabilities or an explicit surplus bucket. Raw balance alone must
+						not define collateral.
+					</p>
+				</div>
+				<div
+					class="table-scroll"
+					role="region"
+					aria-label="Pool accounting invariants"
+					tabindex="0"
+				>
+					<table>
+						<thead>
+							<tr>
+								<th>ID</th>
+								<th>Invariant</th>
+								<th>Standing</th>
+								<th>Primary evidence</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td><code>BAL-01</code></td>
+								<td>
+									At every transaction boundary, raw ETH equals collateral, fee
+									liabilities, reserves, and an explicit non-liability surplus.
+								</td>
+								<td>Proposed guard</td>
+								<td>
+									<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										>Pool ETH accounting</a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>BAL-02</code></td>
+								<td>
+									Unsolicited ETH cannot change collateral, initialize an
+									exchange rate, increase liabilities, or block a required
+									transition.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										><code>receive</code>, tracked collateral, and fee
+										redemption</a
+									>,
+									<a
+										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
+										>auction finalization</a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>BAL-03</code></td>
+								<td>
+									Tracked complete-set collateral never exceeds total
+									security-bond allowance. Fee checkpointing and redemption
+									cannot reclassify unsolicited ETH as collateral.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										><code>_requireCapacityNotExceeded</code>,
+										<code>setPoolFinancials</code>, and fee redemption</a
+									>,
+									<a
+										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
+										>fork finalization</a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>BAL-04</code></td>
+								<td>
+									Allowance-setting requires strict REP coverage, while REP
+									withdrawals preserve coverage with equality permitted, at the
+									latest valid REP-per-ETH price. The security multiplier
+									applies separately to liquidation thresholds and transfer
+									constraints.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										>Allowance and withdrawal checks</a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>BAL-05</code></td>
+								<td>
+									Pool ownership claims remain proportional to the pool's actual
+									REP after deposits, withdrawals, liquidations, escalation
+									transfers, migration, and auction claims.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										><code>repToPoolOwnership</code> and
+										<code>poolOwnershipToRep</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>BAL-06</code></td>
+								<td>
+									Every accrued fee wei is represented once as unallocated
+									reserve or vault debt, and redemption clears the debt before
+									ETH is sent.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										>Fee accumulator and <code>redeemFees</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>BAL-07</code></td>
+								<td>
+									Fork transfers and redemptions cannot spend ETH reserved for
+									unpaid or unallocated fees.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										><code>transferEth</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>SHARE-01</code></td>
+								<td>
+									A complete-set mint or burn changes Invalid, Yes, and No
+									balances by the same amount in the same universe.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/tokens/ShareToken.sol"
+										><code>mintCompleteSets</code> and
+										<code>burnCompleteSets</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>SHARE-02</code></td>
+								<td>
+									Before outcome finalization, burning one complete set returns
+									its fee-adjusted pro-rata collateral and reduces supply and
+									collateral consistently.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										><code>redeemCompleteSet</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>SHARE-03</code></td>
+								<td>
+									A successful positive-value complete-set mint returns a
+									positive share amount.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										><code>cashToShares</code> and
+										<code>createCompleteSet</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>SHARE-04</code></td>
+								<td>
+									The supply used to price a new complete set is economically
+									identical to the supply used to divide collateral after
+									resolution.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										><code>cashToShares</code> and <code>redeemShares</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>SHARE-05</code></td>
+								<td>
+									Total ETH paid to winning shares never exceeds the collateral
+									available when redemption begins; rounding residue remains for
+									later winning holders.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										><code>redeemShares</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>VAULT-01</code></td>
+								<td>
+									REP escrowed in an escalation game cannot also be withdrawn,
+									liquidated as unlocked REP, or migrated as unlocked vault
+									ownership.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										>Escrow checks</a
+									>,
+									<a href="../solidity/contracts/peripherals/EscalationGame.sol"
+										><code>EscalationGame</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>VAULT-02</code></td>
+								<td>
+									A liquidation conserves aggregate ownership and allowance,
+									leaves the caller covered, obeys minimum vault sizes, and
+									cannot be replayed from a stale target snapshot.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a href="./liquidation.html">Liquidation design</a>,
+									<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										><code>performLiquidation</code></a
+									>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</section>
+
+			<section id="forks">
+				<h2>Forks and Child Isolation</h2>
+				<div
+					class="table-scroll"
+					role="region"
+					aria-label="Fork and child isolation invariants"
+					tabindex="0"
+				>
+					<table>
+						<thead>
+							<tr>
+								<th>ID</th>
+								<th>Invariant</th>
+								<th>Standing</th>
+								<th>Primary evidence</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td><code>FORK-01</code></td>
+								<td>
+									Once the parent universe forks, parent operational flows
+									freeze and the parent pool never re-enters
+									<code>Operational</code>.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										><code>isOperational</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>FORK-02</code></td>
+								<td>
+									Fork time, collateral, REP buckets, ownership denominator,
+									escalation state, and allowance snapshots are captured once
+									and remain the common basis for every child.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
+										>Fork snapshot preparation</a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>FORK-03</code></td>
+								<td>
+									One parent pool owns one deterministic migration proxy and one
+									isolated Zoltar migration ledger identity.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
+										><code>getMigrationProxyAddress</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>FORK-04</code></td>
+								<td>
+									Preexisting or unsolicited REP at the deterministic proxy
+									cannot block initiation or become unclassified migration
+									principal.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
+										><code>initiateSecurityPoolFork</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>FORK-05</code></td>
+								<td>
+									Child creation, share migration, vault migration, REP
+									splitting, and own-fork claims agree on the parent fork time
+									and the exact eight-week boundary.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/SecurityPoolUtils.sol"
+										><code>MIGRATION_TIME</code></a
+									>, migration deadline tests
+								</td>
+							</tr>
+							<tr>
+								<td><code>FORK-06</code></td>
+								<td>
+									A child pool has the expected parent, child universe, factory,
+									forker, auction, share token, question, and security
+									multiplier.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol"
+										><code>_validateChildPoolDeployment</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>FORK-07</code></td>
+								<td>
+									Migrating unlocked vault state credits one child and clears
+									the corresponding parent ownership and allowance before it can
+									be reused.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol"
+										><code>_migrateVaultUnlockedState</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>FORK-08</code></td>
+								<td>
+									A vault's aggregate unresolved escalation entitlement is
+									captured once and materialized at most once in each selected
+									child branch.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/EscalationGameForker.sol"
+										>Escalation migration</a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>FORK-09</code></td>
+								<td>
+									Cumulative parent ETH transferred to children never exceeds
+									the fork collateral snapshot and is derived from cumulative
+									migrated REP, not per-call rounding.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol"
+										><code>_transferForkMigratedCollateralToChild</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>FORK-10</code></td>
+								<td>
+									Share migration burns the holder's entire parent token-ID
+									balance, rejects duplicate or malformed target outcomes, and
+									mints the same amount into every selected child.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/tokens/ShareToken.sol"
+										><code>ShareToken.migrate</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>FORK-11</code></td>
+								<td>
+									Child pricing supply equals balanced actual Invalid, Yes, and
+									No supply; when outcome supplies differ, complete-set minting
+									and burning remain blocked.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
+										><code>setTotalShares</code> during auction preparation</a
+									>,
+									<a
+										href="../solidity/contracts/peripherals/tokens/ShareToken.sol"
+										><code>reconciledCompleteSetSupply</code> and
+										complete-set supply guards</a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>FORK-12</code></td>
+								<td>
+									A child becomes operational only after tracked collateral
+									reaches the parent fork snapshot. Separate guards keep
+									complete-set operations blocked when migrated share supplies
+									are inconsistent.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
+										>Truth-auction start and finalization</a
+									>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</section>
+
+			<section id="escalation">
+				<h2>Escalation Games and Carried Claims</h2>
+				<div
+					class="table-scroll"
+					role="region"
+					aria-label="Escalation game invariants"
+					tabindex="0"
+				>
+					<table>
+						<thead>
+							<tr>
+								<th>ID</th>
+								<th>Invariant</th>
+								<th>Standing</th>
+								<th>Primary evidence</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td><code>ESC-01</code></td>
+								<td>
+									<code>totalEscrowedRep</code> equals the sum of live vault
+									escrow and forked child REP backing.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/EscalationGameState.sol"
+										>Escalation state</a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>ESC-02</code></td>
+								<td>
+									<code>totalLocalUnresolvedRep</code> equals the sum of
+									unresolved local deposits, and each vault-local counter is its
+									exact component.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/EscalationGameState.sol"
+										>Unresolved counters</a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>ESC-03</code></td>
+								<td>
+									For each outcome, current unresolved carry equals inherited
+									unresolved carry plus unresolved local deposits.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a
+										href="./escalation-game-architecture.html#accounting-invariants"
+										>Escalation accounting invariants</a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>ESC-04</code></td>
+								<td>
+									Stable parent deposit identifiers are domain-separated across
+									continuation contracts, outcomes, and local deposit indexes.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a
+										href="./escalation-game-architecture.html#accounting-invariants"
+										>Stable deposit identity</a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>ESC-05</code></td>
+								<td>
+									Every local or inherited deposit can be claimed, settled,
+									refunded, or exported at most once in one game lineage.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/EscalationGameCarry.sol"
+										>Carry nullifiers</a
+									>, <a href="./merkle-mountain-range.html">MMR proofs</a>
+								</td>
+							</tr>
+							<tr>
+								<td><code>ESC-06</code></td>
+								<td>
+									Aggregate unresolved export clears live parent authorization
+									and escrow once while preserving immutable proof material for
+									selected children.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/EscalationGameSettlement.sol"
+										>Export functions</a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>ESC-07</code></td>
+								<td>
+									Forked escrow claims never exceed either recorded source
+									principal or child REP backing for the outcome.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/EscalationGameEscrow.sol"
+										>Forked escrow accounting</a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>ESC-08</code></td>
+								<td>
+									Winning principal, rewards, losing principal, retained
+									residual and swept REP reconcile to the game balance without
+									creating REP.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/EscalationGameSettlement.sol"
+										>Settlement</a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>ESC-09</code></td>
+								<td>
+									Once resolution or non-decision closes a game path, later
+									deposits cannot reopen or change that terminal result.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a href="../solidity/contracts/peripherals/EscalationGame.sol"
+										><code>EscalationGame</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>ESC-10</code></td>
+								<td>
+									A direct own-fork parent claim invalidates the matching proof
+									in existing and later descendants before any child-local
+									nullifier is consumed.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/EscalationGameForker.sol"
+										>Forked claims</a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>ESC-11</code></td>
+								<td>
+									Residual REP cannot be swept to the pool while any local or
+									forked escrow remains unsettled.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/EscalationGameSettlement.sol"
+										><code>sweepResidualRepToSecurityPool</code></a
+									>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</section>
+
+			<section id="oracle">
+				<h2>REP/ETH Oracle Operations</h2>
+				<div
+					class="table-scroll"
+					role="region"
+					aria-label="Oracle invariants"
+					tabindex="0"
+				>
+					<table>
+						<thead>
+							<tr>
+								<th>ID</th>
+								<th>Invariant</th>
+								<th>Standing</th>
+								<th>Primary evidence</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td><code>ORA-01</code></td>
+								<td>
+									Only the configured OpenOracle may supply a settlement
+									callback, and its report identifier must equal the
+									coordinator's pending report.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
+										><code>openOracleCallback</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>ORA-02</code></td>
+								<td>
+									An accepted price is positive REP per ETH:
+									<code>amount1 REP × 1e18 / amount2 WETH</code>. Higher values
+									require more REP for the same ETH obligation.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
+										><code>openOracleCallback</code></a
+									>,
+									<a href="./open-oracle-integration.html">ratio direction</a>
+								</td>
+							</tr>
+							<tr>
+								<td><code>ORA-03</code></td>
+								<td>
+									A cached price is usable only while nonzero and strictly
+									younger than the five-minute validity window.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
+										><code>isPriceValid</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>ORA-04</code></td>
+								<td>
+									Every staged operation has one immutable identifier and is
+									consumed at most once, whether execution succeeds or fails.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
+										><code>executeStagedOperation</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>ORA-05</code></td>
+								<td>
+									Withdrawals and allowance changes target the initiating vault;
+									liquidations target another vault and fail when the protected
+									snapshot becomes stale.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
+										>Staging and snapshot checks</a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>ORA-06</code></td>
+								<td>
+									Expired, stale, zero-effect, or too-close operations are
+									consumed with an observable failure result rather than
+									remaining executable forever.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
+										><code>executeStagedOperation</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>ORA-07</code></td>
+								<td>
+									Aggregate operation notional authorized by one accepted report
+									is capped by the configured report-round budget derived from
+									accepted report amounts and the escalation-halt multiplier.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a
+										href="./open-oracle-integration.html#fixed-report-unmetered-exposure"
+										>Configured report exposure budget</a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>ORA-08</code></td>
+								<td>
+									A dispute that is timely under the stated deadline cannot lose
+									solely because settlement is ordered first at the same
+									timestamp.
+								</td>
+								<td>Proposed guard</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/openOracle/OpenOracle.sol"
+										><code>settle</code> and dispute validation</a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>ORA-09</code></td>
+								<td>
+									Pending sponsor exclusivity cannot block unrelated solvency
+									operations for an unbounded duration.
+								</td>
+								<td>Economic or external assumption</td>
+								<td>
+									<a
+										href="./open-oracle-integration.html#rolling-dispute-exclusivity"
+										>Rolling dispute exclusivity</a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>ORA-10</code></td>
+								<td>
+									At least one rational, capitalized participant monitors wrong
+									reports and can obtain timely dispute inclusion.
+								</td>
+								<td>Economic or external assumption</td>
+								<td>
+									<a href="./open-oracle-integration.html#security-guarantee"
+										>OpenOracle security model</a
+									>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</section>
+
+			<section id="auctions">
+				<h2>Truth Auctions</h2>
+				<div
+					class="table-scroll"
+					role="region"
+					aria-label="Truth auction invariants"
+					tabindex="0"
+				>
+					<table>
+						<thead>
+							<tr>
+								<th>ID</th>
+								<th>Invariant</th>
+								<th>Standing</th>
+								<th>Primary evidence</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td><code>AUC-01</code></td>
+								<td>
+									Bids are accepted only during the one-week window, at a
+									supported tick whose computed ETH-per-REP price is positive,
+									and at or above the auction's minimum bid size.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"
+										><code>submitBid</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>AUC-02</code></td>
+								<td>
+									Final retained ETH never exceeds the ETH raise cap, and total
+									purchased REP never exceeds the REP sale cap.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"
+										><code>computeClearing</code> and <code>finalize</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>AUC-03</code></td>
+								<td>
+									Each bid is settled or refunded at most once; claimed state is
+									set before an external ETH refund.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"
+										><code>withdrawBids</code> and refund functions</a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>AUC-04</code></td>
+								<td>
+									Cumulative allocation math makes aggregate REP and refund
+									results independent of post-finalization claim order.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"
+										><code>_allocateRepFromCumulativePosition</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>AUC-05</code></td>
+								<td>
+									A zero-demand auction sells zero REP, while every positive
+									winning allocation reconciles to the stored aggregate REP
+									purchase and the remaining bid ETH is refundable.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a href="./auction-design.html#settlement"
+										>Auction settlement</a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>AUC-06</code></td>
+								<td>
+									Purchased auction REP, pool ownership, and auctioned allowance
+									are credited to the same bidder vault without replacing its
+									live migrated position. Claimable allowance is limited to the
+									fraction funded by auction ETH.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
+										>Auction-claim settlement</a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>AUC-07</code></td>
+								<td>
+									REP ownership issued during repair is proportional to
+									qualifying ETH raised at or above the cap-implied reserve.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a href="./auction-design.html"
+										>Reserve-priced underfunded clearing</a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>AUC-08</code></td>
+								<td>
+									Auction finalization succeeds regardless of unsolicited ETH
+									already present in the child pool or forker.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationDelegate.sol"
+										><code>finalizeTruthAuctionRepair</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>AUC-09</code></td>
+								<td>
+									Weak auction demand sells REP and assigns allowance only in
+									proportion to qualifying auction ETH. Finalization requires the
+									caller to supply the exact remaining repair amount; otherwise it
+									reverts and leaves the child inactive.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a href="./auction-design.html">Weak-demand behavior</a>,
+									<a
+										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
+										><code>_consumeTruthAuctionRep</code></a
+									>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</section>
+
+			<section id="lifecycle">
+				<h2>Lifecycle, Liveness, and External Calls</h2>
+				<div
+					class="table-scroll"
+					role="region"
+					aria-label="Lifecycle and liveness invariants"
+					tabindex="0"
+				>
+					<table>
+						<thead>
+							<tr>
+								<th>ID</th>
+								<th>Invariant</th>
+								<th>Standing</th>
+								<th>Primary evidence</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td><code>LIFE-01</code></td>
+								<td>
+									Pool state topology permits only
+									<code>Operational → PoolForked</code> for a parent and
+									<code>ForkMigration → ForkTruthAuction → Operational</code>
+									for a child.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/interfaces/ISecurityPool.sol"
+										><code>SystemState</code></a
+									>,
+									<a
+										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
+										>fork transitions</a
+									>; see <code>FORK-12</code> for child accounting consistency.
+								</td>
+							</tr>
+							<tr>
+								<td><code>LIFE-02</code></td>
+								<td>
+									Every permissionless transition required for resolution,
+									migration, auction completion, or withdrawal remains callable
+									despite dust, unsolicited balances, empty collections, and
+									adversarial call ordering.
+								</td>
+								<td>Proposed guard</td>
+								<td>
+									<code>FORK-04</code>, <code>BAL-02</code>, and
+									<code>AUC-08</code>
+								</td>
+							</tr>
+							<tr>
+								<td><code>LIFE-03</code></td>
+								<td>
+									An uncaught revert rolls back every state mutation and
+									transfer in the transition; deliberate consumed failures emit
+									an explicit result and cannot be retried.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>Solidity atomicity, coordinator consumed-failure paths</td>
+							</tr>
+							<tr>
+								<td><code>LIFE-04</code></td>
+								<td>
+									Exact deadline behavior is specified and tested at one second
+									before, equality, and one second after every migration,
+									dispute, auction, escalation, and operation-expiry boundary.
+								</td>
+								<td>Proposed guard</td>
+								<td>
+									Boundary tests across fork migration, auctions, escalation,
+									and OpenOracle
+								</td>
+							</tr>
+							<tr>
+								<td><code>LIFE-05</code></td>
+								<td>
+									No mandatory transition loops over an attacker-unbounded
+									history in one transaction; callers use bounded pages, fixed
+									outcome sets, proofs, or balanced-tree traversal.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									Vault pages, bid pages, MMR proofs, and auction AVL traversal
+								</td>
+							</tr>
+							<tr>
+								<td><code>EXT-01</code></td>
+								<td>
+									REP, child REP, and WETH obey the exact transfer,
+									return-value, decimal, and callback behavior assumed by pool
+									and oracle accounting.
+								</td>
+								<td>Economic or external assumption</td>
+								<td>
+									<a href="../solidity/contracts/SafeERC20Ops.sol"
+										><code>SafeERC20Ops</code></a
+									>, fixed token addresses
+								</td>
+							</tr>
+							<tr>
+								<td><code>EXT-02</code></td>
+								<td>
+									External ETH or token callbacks observe effects already
+									committed for that action, and a failed transfer reverts
+									without leaving partial accounting.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									Pool redemption, auction refund, and oracle refund paths
+								</td>
+							</tr>
+							<tr>
+								<td><code>EXT-03</code></td>
+								<td>
+									ERC-1155 receiver callbacks cannot mint beyond pool capacity,
+									alter the amount minted, or reenter the same accounting effect
+									twice.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										><code>createCompleteSet</code></a
+									>, receiver callback tests
+								</td>
+							</tr>
+							<tr>
+								<td><code>EXT-04</code></td>
+								<td>
+									Block builders cannot turn an equality boundary into an
+									unreviewed priority rule that changes ownership, settlement,
+									or dispute rights.
+								</td>
+								<td>Proposed guard</td>
+								<td>
+									<code>ORA-08</code> and same-block auction ordering analysis
+								</td>
+							</tr>
+							<tr>
+								<td><code>EXT-05</code></td>
+								<td>
+									Recursive fork depth stays within a gas bound that permits
+									proof verification, claim settlement, and ancestor replay
+									checks.
+								</td>
+								<td>Proposed guard</td>
+								<td>
+									Recursive escalation and fork tests; no explicit maximum
+									currently exists
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</section>
+
+			<section id="verification">
+				<h2>Verification Obligations</h2>
+				<p>
+					A change should name the invariant identifiers it can affect. Tests
+					should then attempt to falsify those statements across the complete
+					transaction sequence, including calls immediately before and after the
+					state transition.
+				</p>
+				<div
+					class="table-scroll"
+					role="region"
+					aria-label="Invariant verification matrix"
+					tabindex="0"
+				>
+					<table>
+						<thead>
+							<tr>
+								<th>Family</th>
+								<th>Existing coverage</th>
+								<th>Required additions</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>Authority and deployment</td>
+								<td>
+									Factory, CREATE2, fake-parent, interface, and storage-layout
+									regression tests.
+								</td>
+								<td>
+									Manifest-to-runtime bytecode and constructor-wiring
+									verification.
+								</td>
+							</tr>
+							<tr>
+								<td>Universes and REP</td>
+								<td>
+									<a href="../solidity/ts/tests/zoltar.test.ts"
+										><code>zoltar.test.ts</code></a
+									>
+									and fork/migration invariant scenarios.
+								</td>
+								<td>
+									Stateful supply conservation across several recursive forks
+									and selected child sets.
+								</td>
+							</tr>
+							<tr>
+								<td>Pool, shares, and vaults</td>
+								<td>
+									<a
+										href="../solidity/ts/tests/peripherals/vaultAccounting.test.ts"
+										><code>vaultAccounting.test.ts</code></a
+									>
+									and
+									<a
+										href="../solidity/ts/tests/peripherals/forkMigration.test.ts"
+										><code>forkMigration.test.ts</code></a
+									>, plus
+									<a href="../solidity/ts/tests/peripheralsInvariant.test.ts"
+										><code>peripheralsInvariant.test.ts</code></a
+									>. Together, these cover forced balances, prefunded migration
+									proxies, zero-supply bootstrap, unequal child outcome
+									supplies, and positive-output mints.
+								</td>
+								<td>
+									Caller-selectable mint slippage protection and broader
+									stateful vault/share accounting sequences.
+								</td>
+							</tr>
+							<tr>
+								<td>Escalation and carry</td>
+								<td>
+									<a href="../solidity/ts/tests/escalationGame.test.ts"
+										><code>escalationGame.test.ts</code></a
+									>
+									and
+									<a
+										href="../solidity/ts/tests/peripherals/escalationMigration.test.ts"
+										><code>escalationMigration.test.ts</code></a
+									>.
+								</td>
+								<td>
+									Explicit gas bounds for maximum supported lineage depth and
+									proof history.
+								</td>
+							</tr>
+							<tr>
+								<td>Oracle</td>
+								<td>
+									<a href="../solidity/ts/tests/priceOracleSecurity.test.ts"
+										><code>priceOracleSecurity.test.ts</code></a
+									>
+									>, including aggregate report-budget accounting, manual
+									overflow execution, and staged-operation invariant tests.
+								</td>
+								<td>
+									Same-block dispute/settlement ordering and validation that the
+									configured multiplier is economically sufficient.
+								</td>
+							</tr>
+							<tr>
+								<td>Auctions</td>
+								<td>
+									<a href="../solidity/ts/tests/auction.test.ts"
+										><code>auction.test.ts</code></a
+									>,
+									<a
+										href="../solidity/ts/tests/peripherals/truthAuction.test.ts"
+										><code>truthAuction.test.ts</code></a
+									>, including repair-ratio, forced-balance finalization,
+									reserve-price, proportional underfunding, claim-order, and
+									tick-math coverage.
+								</td>
+								<td>
+									Stateful bidder/order fuzzing and an explicit recovery policy
+									for a child left inactive by weak auction demand.
+								</td>
+							</tr>
+							<tr>
+								<td>Cross-contract lifecycle</td>
+								<td>
+									<a href="../solidity/ts/tests/peripheralsInvariant.test.ts"
+										><code>peripheralsInvariant.test.ts</code></a
+									>
+									and deadline scenario tests.
+								</td>
+								<td>
+									Stateful action-sequence fuzzing with dust and adversarial
+									ordering across repeated forks.
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<ul>
+					<li>
+						Test zero, one atomic unit, equality, just below, and just above
+						every bound.
+					</li>
+					<li>
+						Test unsolicited ETH and token balances at every deterministic
+						address and balance-derived accounting boundary.
+					</li>
+					<li>
+						Assert both conservation and liveness: preserving balances is
+						insufficient if no caller can complete the next state transition.
+					</li>
+					<li>
+						For economic assumptions, state the attacker objective, honest
+						participant, capital requirement, inclusion window, and maximum
+						protocol exposure when the assumption fails.
+					</li>
+				</ul>
+			</section>
+
+			<section id="related-reading">
+				<h2>Related Reading</h2>
+				<ul>
+					<li>
+						<a href="./start-here.html">Start Here</a> for the protocol
+						lifecycle and actors.
+					</li>
+					<li>
+						<a href="./operator-reference.md">Operator Reference</a> for
+						contract guardrails and launch procedures.
+					</li>
+					<li>
+						<a href="./contract-interaction-reference.md"
+							>Contract Interaction Reference</a
+						>
+						for callers, prerequisites, effects, and events.
+					</li>
+					<li>
+						<a href="./escalation-game-architecture.html#accounting-invariants"
+							>EscalationGame Architecture</a
+						>
+						for detailed carry and escrow accounting.
+					</li>
+					<li>
+						<a href="./open-oracle-integration.html">OpenOracle Integration</a>
+						and <a href="./auction-design.html">Auction Design</a> for economic
+						failure assumptions.
+					</li>
+				</ul>
+			</section>
+		</main>
+		<script src="./protocolTerms.js"></script>
+		<script src="./termTooltips.js"></script>
+	</body>
+</html>

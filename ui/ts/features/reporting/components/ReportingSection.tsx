@@ -1,7 +1,9 @@
 import * as commonCopy from '../../../copy/common.js'
 import * as reportingCopy from '../../../copy/reporting.js'
+import * as transactionReviewCopy from '../../../copy/transactionReview.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { CurrencyValue } from '../../../components/CurrencyValue.js'
+import { AddressValue } from '../../../components/AddressValue.js'
 import { EscalationDepositSelectionList } from './EscalationDepositSelectionList.js'
 import { ErrorNotice } from '../../../components/ErrorNotice.js'
 import { FormInput } from '../../../components/FormInput.js'
@@ -13,6 +15,7 @@ import { MetricField } from '../../../components/MetricField.js'
 import { RouteWorkflowPanel } from '../../../components/RouteWorkflowPanel.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
+import { TransactionReview } from '../../../components/TransactionReview.js'
 import { TimestampValue } from '../../../components/TimestampValue.js'
 import { assertNever } from '../../../lib/assert.js'
 import { pickFirstReason } from '../../../lib/actionAvailability.js'
@@ -411,6 +414,8 @@ export function ReportingSection({
 		)
 	}
 	const projectedReportingPreview = getProjectedReportingPreview()
+	const resultingAvailableReportingRep =
+		effectiveReportingDetails?.viewerVaultAvailableEscalationRep === undefined || actualReportDepositAmount === undefined || actualReportDepositAmount > effectiveReportingDetails.viewerVaultAvailableEscalationRep ? undefined : effectiveReportingDetails.viewerVaultAvailableEscalationRep - actualReportDepositAmount
 	const reportButtonLabel = selectedOutcome === undefined ? reportingCopy.reportOnSelectedSide : reportingCopy.formatReportSelectedOutcomeButtonLabel(selectedOutcomeLabel)
 	const minimumOutcomeChangeContribution = selectedOutcome === undefined ? { amount: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMinimumOutcomeChangeContribution(effectiveReportingDetails, selectedOutcome)
 	const maxProfitContribution = selectedOutcome === undefined ? { amount: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMaxProfitContribution(effectiveReportingDetails, selectedOutcome)
@@ -674,13 +679,28 @@ export function ReportingSection({
 							{reportingCopy.acceptedAmountTail}
 						</p>
 					)}
+					<TransactionReview
+						primary={[
+							{ label: reportingCopy.repPlacedAtRisk, value: <CurrencyValue value={actualReportDepositAmount} suffix={commonCopy.rep} /> },
+							{ label: reportingCopy.backedOutcome, value: selectedOutcome === undefined ? reportingCopy.selectedSide : selectedOutcomeLabel },
+						]}
+						details={[
+							{ label: reportingCopy.currentTentativeOutcome, value: leadingOutcome === undefined ? reportingCopy.pendingFinalization : getReportingOutcomeLabel(leadingOutcome) },
+							{ label: reportingCopy.timerEffect, value: projectedReportingPreview ?? commonCopy.metricUnavailablePlaceholder },
+							{ label: reportingCopy.availableVaultRepAfterReport, value: <CurrencyValue value={resultingAvailableReportingRep} suffix={commonCopy.rep} /> },
+							{ label: transactionReviewCopy.protocolFee, value: transactionReviewCopy.noProtocolFee },
+							{ label: transactionReviewCopy.contract, value: effectiveReportingDetails === undefined ? commonCopy.unavailable : <AddressValue address={effectiveReportingDetails.securityPoolAddress} /> },
+							{ label: transactionReviewCopy.network, value: transactionReviewCopy.ethereumMainnet },
+						]}
+						risks={[reportingCopy.ifThisSideLoses, reportingCopy.reportingLockRisk, reportingCopy.reportTimerRisk]}
+					/>
 					<div className='actions'>
 						<TransactionActionButton
 							idleLabel={reportButtonLabel}
 							pendingLabel={reportingCopy.submittingReport}
 							onClick={onReportOutcome}
 							pending={reportingActiveAction === 'reportOutcome'}
-							availability={{ disabled: !isMainnet || !reportOutcomeEnabled || reportGuardMessage !== undefined, reason: reportGuardMessage }}
+							availability={{ disabled: !isMainnet || !reportOutcomeEnabled || reportGuardMessage !== undefined, reason: !isMainnet ? commonCopy.mainnetRequiredReason : reportGuardMessage }}
 						/>
 					</div>
 					{projectedReportingPreview === undefined ? undefined : <p className='detail'>{projectedReportingPreview}</p>}

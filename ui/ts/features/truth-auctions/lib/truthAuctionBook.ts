@@ -472,7 +472,8 @@ export function getTruthAuctionBidPreview(submitBidPriceInput: string) {
 	const enteredBidTick = getTruthAuctionTickAtPrice(enteredBidPrice)
 	if (enteredBidTick === undefined) return undefined
 	return {
-		price: enteredBidPrice,
+		enteredPrice: enteredBidPrice,
+		submittedPrice: getTruthAuctionPriceAtTick(enteredBidTick),
 		tick: enteredBidTick,
 	}
 }

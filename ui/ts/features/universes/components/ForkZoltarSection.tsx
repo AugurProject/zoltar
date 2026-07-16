@@ -1,7 +1,9 @@
 import * as commonCopy from '../../../copy/common.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
+import * as transactionReviewCopy from '../../../copy/transactionReview.js'
 import type { Address } from '@zoltar/shared/ethereum'
 import { CurrencyValue } from '../../../components/CurrencyValue.js'
+import { AddressValue } from '../../../components/AddressValue.js'
 import { DataGrid } from '../../../components/DataGrid.js'
 import { ErrorNotice } from '../../../components/ErrorNotice.js'
 import { FormInput } from '../../../components/FormInput.js'
@@ -10,6 +12,7 @@ import { Question } from '../../markets/components/Question.js'
 import { StateHint } from '../../../components/StateHint.js'
 import { TokenApprovalControl } from '../../../components/TokenApprovalControl.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
+import { TransactionReview } from '../../../components/TransactionReview.js'
 import { WorkflowSubsection } from '../../../components/WorkflowSubsection.js'
 import { sameCaseInsensitiveText } from '../../../lib/caseInsensitive.js'
 import { resolveLoadableValueState, type LoadableValueState } from '../../../lib/loadState.js'
@@ -60,6 +63,7 @@ export function ForkZoltarSection({
 	const hasEnoughRep = rootUniverse !== undefined && zoltarForkRepBalance !== undefined && zoltarForkRepBalance >= rootUniverse.forkThreshold
 	const approvalRequirement = deriveTokenApprovalRequirement(rootUniverse?.forkThreshold, zoltarForkApproval.value)
 	const hasEnoughApproval = rootUniverse !== undefined && approvalRequirement.hasSufficientApproval
+	const hasForkEconomics = rootUniverse?.forkBurnDivisor !== undefined && rootUniverse.forkBurnDivisor > 1n && rootUniverse.zoltarAddress !== undefined
 	const selectedQuestionId = zoltarForkQuestionId.trim()
 	const hasSelectedQuestionId = selectedQuestionId !== ''
 	const selectedQuestion = selectedQuestionId === '' ? undefined : zoltarQuestions.find(question => sameCaseInsensitiveText(question.questionId, selectedQuestionId))
@@ -69,9 +73,12 @@ export function ForkZoltarSection({
 		value: selectedQuestion,
 	})
 	const selectedQuestionPresentation = hasSelectedQuestionId && selectedQuestionLookupState !== 'ready' ? getReportPresentation({ kind: 'question', state: selectedQuestionLookupState }) : undefined
-	const canFork = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && !hasForked && !zoltarForkPending && selectedQuestion !== undefined && hasEnoughRep && hasEnoughApproval
+	const canFork = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && !hasForked && !zoltarForkPending && selectedQuestion !== undefined && hasEnoughRep && hasEnoughApproval && hasForkEconomics
+	const resultingRepBalance = rootUniverse === undefined || zoltarForkRepBalance === undefined || zoltarForkRepBalance < rootUniverse.forkThreshold ? undefined : zoltarForkRepBalance - rootUniverse.forkThreshold
+	const permanentRepBurn = rootUniverse?.forkBurnDivisor === undefined || rootUniverse.forkBurnDivisor <= 1n ? undefined : rootUniverse.forkThreshold / rootUniverse.forkBurnDivisor
+	const migrationCustodyCredit = rootUniverse === undefined || permanentRepBurn === undefined ? undefined : rootUniverse.forkThreshold - permanentRepBurn
 	const approvalGuardMessage = (() => {
-		const walletPresentation = getWalletPresentation({ accountAddress, isMainnet: true })
+		const walletPresentation = getWalletPresentation({ accountAddress, isMainnet })
 		if (walletPresentation !== undefined) return walletPresentation.detail
 		if (rootUniverse === undefined) return undefined
 		if (hasForked) return zoltarCopy.alreadyForkedReason
@@ -81,12 +88,13 @@ export function ForkZoltarSection({
 		accountAddress === undefined
 			? zoltarCopy.forkWalletRequiredReason
 			: (() => {
-					if (!isMainnet) return undefined
+					if (!isMainnet) return commonCopy.mainnetRequiredReason
 					if (rootUniverse === undefined) return zoltarCopy.forkDataRequiredReason
 
 					return (() => {
 						if (hasForked) return zoltarCopy.alreadyForkedReason
 						if (selectedQuestion === undefined) return zoltarCopy.forkQuestionRequiredReason
+						if (!hasForkEconomics) return zoltarCopy.forkEconomicsRequiredReason
 
 						return (() => {
 							if (!hasEnoughRep) return zoltarCopy.forkRepInsufficientReason
@@ -143,6 +151,21 @@ export function ForkZoltarSection({
 					</WorkflowSubsection>
 				)}
 				{selectedQuestionPresentation === undefined ? undefined : <StateHint presentation={selectedQuestionPresentation} />}
+
+				<TransactionReview
+					primary={[
+						{ label: transactionReviewCopy.youPay, value: <CurrencyValue value={rootUniverse?.forkThreshold} suffix={commonCopy.rep} /> },
+						{ label: zoltarCopy.migrationCustodyCredit, value: <CurrencyValue value={migrationCustodyCredit} suffix={commonCopy.rep} /> },
+					]}
+					details={[
+						{ label: zoltarCopy.selectedForkQuestion, value: selectedQuestion === undefined ? zoltarCopy.forkQuestionRequiredReason : selectedQuestion.title },
+						{ label: zoltarCopy.permanentRepBurn, value: <CurrencyValue value={permanentRepBurn} suffix={commonCopy.rep} /> },
+						{ label: transactionReviewCopy.resultingRepBalance, value: <CurrencyValue value={resultingRepBalance} suffix={commonCopy.rep} /> },
+						{ label: zoltarCopy.zoltarContract, value: rootUniverse?.zoltarAddress === undefined ? commonCopy.unavailable : <AddressValue address={rootUniverse.zoltarAddress} /> },
+						{ label: transactionReviewCopy.network, value: transactionReviewCopy.ethereumMainnet },
+					]}
+					risks={[zoltarCopy.forkIrreversibleRisk, zoltarCopy.forkMigrationRisk]}
+				/>
 
 				<div className='actions'>
 					<TransactionActionButton

@@ -12,14 +12,14 @@ describe('actionGuards', () => {
 		).toBe('Connect a wallet before settling escalation deposits.')
 	})
 
-	test('keeps wrong-network UI silent while still disabling actions', () => {
+	test('explains wrong-network recovery while disabling actions', () => {
 		expect(
 			getWalletMainnetGuardMessage({
 				accountAddress: '0x0000000000000000000000000000000000000001',
 				isMainnet: false,
 				walletRequiredReason: 'Connect a wallet before settling escalation deposits.',
 			}),
-		).toBeUndefined()
+		).toBe('Switch to Ethereum mainnet.')
 
 		expect(
 			getWalletMainnetGuardState({
@@ -27,7 +27,7 @@ describe('actionGuards', () => {
 				isMainnet: false,
 				walletRequiredReason: 'Connect a wallet before settling escalation deposits.',
 			}),
-		).toEqual({ blocked: true, reason: undefined })
+		).toEqual({ blocked: true, reason: 'Switch to Ethereum mainnet.' })
 
 		expect(
 			getWalletMainnetActionAvailability({
@@ -35,7 +35,7 @@ describe('actionGuards', () => {
 				isMainnet: false,
 				walletRequiredReason: 'Connect a wallet before settling escalation deposits.',
 			}),
-		).toEqual({ disabled: true, reason: undefined })
+		).toEqual({ disabled: true, reason: 'Switch to Ethereum mainnet.' })
 	})
 
 	test('falls back to the shared continue copy when no custom wallet reason is provided', () => {

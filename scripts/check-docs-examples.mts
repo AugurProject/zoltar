@@ -17,6 +17,7 @@ type AuctionExampleScenario = {
 	defaultAliceReceives: string
 	defaultBobReceives: string
 	defaultCarolReceives: string
+	underfundedAliceReceives: string
 	filePath: string
 	exampleId: string
 }
@@ -142,15 +143,14 @@ async function checkUnderfundedPath(scenario: AuctionExampleScenario): Promise<v
 		example.setInput('bobEth', 0)
 		example.setInput('carolEth', 0)
 
-		assertEqual(example.output('clearingMode'), 'underfunded synthetic uniform', `${scenario.filePath} underfunded clearing mode`)
+		assertEqual(example.output('clearingMode'), 'underfunded reserve clearing', `${scenario.filePath} underfunded clearing mode`)
 		assertEqual(example.output('bindingCondition'), 'underfunded', `${scenario.filePath} underfunded binding condition`)
 		assertEqual(example.labelFor('ethRaised'), 'ETH retained', `${scenario.filePath} underfunded ETH retained label`)
 		assertEqual(example.output('ethRaised'), '16 ETH', `${scenario.filePath} underfunded retained ETH`)
 		assertEqual(example.labelFor('thresholdInputEth'), 'Winning ETH kept', `${scenario.filePath} underfunded threshold label`)
 		assertEqual(example.output('thresholdInputEth'), '16 ETH', `${scenario.filePath} underfunded threshold input ETH`)
 		assertEqual(example.output('underfundedThreshold'), '5 ETH/REP', `${scenario.filePath} underfunded threshold`)
-		const expectedAliceRep = scenario.filePath === 'docs/placeholder-whitepaper.html' ? '3.20 REP' : '3.2 REP'
-		assertEqual(example.output('aliceReceives'), expectedAliceRep, `${scenario.filePath} underfunded Alice REP`)
+		assertEqual(example.output('aliceReceives'), scenario.underfundedAliceReceives, `${scenario.filePath} underfunded Alice REP`)
 		assertEqual(example.output('bobReceives'), '0 REP', `${scenario.filePath} underfunded Bob REP`)
 		assertEqual(example.output('carolReceives'), '0 REP', `${scenario.filePath} underfunded Carol REP`)
 		assertEqual(example.output('refunds'), '0 ETH', `${scenario.filePath} underfunded refunds`)
@@ -168,11 +168,12 @@ async function checkAllZeroBids(scenario: AuctionExampleScenario): Promise<void>
 		example.setInput('bobEth', 0)
 		example.setInput('carolEth', 0)
 
-		assertEqual(example.output('clearingMode'), 'underfunded synthetic uniform', `${scenario.filePath} zero-bid clearing mode`)
+		assertEqual(example.output('clearingMode'), 'underfunded reserve clearing', `${scenario.filePath} zero-bid clearing mode`)
 		assertEqual(example.output('bindingCondition'), 'underfunded', `${scenario.filePath} zero-bid binding condition`)
 		assertEqual(example.output('ethRaised'), '0 ETH', `${scenario.filePath} zero-bid retained ETH`)
 		assertEqual(example.output('thresholdInputEth'), '0 ETH', `${scenario.filePath} zero-bid threshold input ETH`)
-		assertEqual(example.output('underfundedThreshold'), 'no winning ETH', `${scenario.filePath} zero-bid threshold`)
+		const expectedThreshold = scenario.filePath === 'docs/placeholder-whitepaper.html' ? '7.50 ETH/REP' : '7.5 ETH/REP'
+		assertEqual(example.output('underfundedThreshold'), expectedThreshold, `${scenario.filePath} zero-bid threshold`)
 		assertEqual(example.output('aliceReceives'), '0 REP', `${scenario.filePath} zero-bid Alice REP`)
 		assertEqual(example.output('bobReceives'), '0 REP', `${scenario.filePath} zero-bid Bob REP`)
 		assertEqual(example.output('carolReceives'), '0 REP', `${scenario.filePath} zero-bid Carol REP`)
@@ -222,40 +223,25 @@ async function checkCollateralRepairExample(): Promise<void> {
 			}
 			return element.value
 		}
-		const setInput = (name: string, value: number) => {
-			const element = example.querySelector(`[data-example-input="${name}"]`)
-			if (!(element instanceof window.HTMLInputElement)) {
-				throw new Error(`Missing collateral repair input: ${name}`)
-			}
-			element.value = value.toString()
-			element.dispatchEvent(new window.Event('input', { bubbles: true }))
-		}
 
 		const targetText = example.querySelector('[data-example-text="repairTarget"]')
 		if (!(targetText instanceof window.SVGTextElement)) {
 			throw new Error('Missing collateral repair target text')
 		}
 
-		assertEqual(output('forkCollateralReceived'), '47.50 ETH', 'collateral repair default accounted fork collateral')
+		assertEqual(output('routedCollateral'), '47.50 ETH', 'collateral repair default routed collateral')
 		assertEqual(output('initialShortfall'), '2.50 ETH', 'collateral repair default initial shortfall')
-		assertEqual(output('requiredContribution'), '1 ETH', 'collateral repair default required explicit contribution')
-		assertEqual(output('finalCollateral'), '50 ETH', 'collateral repair default final accounted collateral')
-		assertEqual(output('repairStatus'), 'operational: exact repair', 'collateral repair default repair status')
+		assertEqual(output('remainingShortfall'), '0 ETH', 'collateral repair default remaining shortfall')
+		assertEqual(output('repairStatus'), 'full repair', 'collateral repair default repair status')
 		assertEqual(targetText.textContent?.trim() ?? '', 'target 50 ETH', 'collateral repair default target text')
-
-		setInput('finalizationContribution', 0.5)
-		assertEqual(output('repairStatus'), 'reverts: repair below 100%', 'collateral repair should reject an insufficient contribution')
-		setInput('finalizationContribution', 2)
-		assertEqual(output('repairStatus'), 'reverts: contribution exceeds snapshot', 'collateral repair should reject an excess contribution')
 	} finally {
 		window.close()
 	}
 
-	assert.match(html, /actually delivered 47\.5 ETH after\s+cumulative ceiling rounding/i, 'collateral repair prose should use actual routed collateral')
+	assert.match(html, /actually received 47\.5 ETH through routed,[\s\S]*capped migration transfers/, 'collateral repair prose should match actual routed collateral')
 	assert.match(html, />50 ETH<\/span/, 'collateral repair parent collateral default should remain 50 ETH')
-	assert.match(html, />47\.5 ETH<\/span/, 'collateral repair accounted fork-collateral default should remain 47.5 ETH')
-	assert.match(html, />1\.5 ETH<\/span/, 'collateral repair auction-raised default should remain 1.5 ETH')
-	assert.match(html, />1 ETH<\/span/, 'collateral repair explicit-contribution default should remain 1 ETH')
+	assert.match(html, />47\.5 ETH<\/span/, 'collateral repair routed-collateral default should remain 47.5 ETH')
+	assert.match(html, />2\.5 ETH<\/span/, 'collateral repair auction-raised default should remain 2.5 ETH')
 }
 
 async function checkUnderfundedPrefixExample(): Promise<void> {
@@ -265,18 +251,18 @@ async function checkUnderfundedPrefixExample(): Promise<void> {
 	const example = await loadInteractiveExample('docs/placeholder-whitepaper.html', 'underfunded-auction-example')
 
 	try {
-		assertEqual(example.output('tickStatus'), 'inputs are consistent with a winning-prefix bid', 'underfunded prefix example default status')
-		assertEqual(example.output('underfundedThreshold'), '1.0000 ETH/REP', 'underfunded prefix example default threshold')
-		assertEqual(example.output('underfundedRepShare'), '4.0000 REP', 'underfunded prefix example default REP share')
-		assertEqual(example.output('repAssignedElsewhere'), '6.0000 REP', 'underfunded prefix example default remainder allocation')
+		assertEqual(example.output('tickStatus'), 'tick meets the cap-implied reserve', 'underfunded reserve example default status')
+		assertEqual(example.output('underfundedThreshold'), '0.2000 ETH/REP', 'underfunded reserve example default threshold')
+		assertEqual(example.output('underfundedRepShare'), '20.0000 REP', 'underfunded reserve example default REP share')
+		assertEqual(example.output('repAssignedElsewhere'), '30.0000 REP', 'underfunded reserve example default remainder allocation')
 
 		example.setInput('maxRepBeingSold', 4)
 		example.setInput('underfundedWinningEth', 8)
 		example.setInput('tickPrice', 1)
 		example.setInput('bidEth', 3)
 
-		assertEqual(example.output('tickStatus'), 'proportional reserve exceeds this tick limit', 'underfunded prefix example inconsistent status')
-		assertEqual(example.output('underfundedThreshold'), '25.0000 ETH/REP', 'underfunded prefix example inconsistent threshold')
+		assertEqual(example.output('tickStatus'), 'tick is below the cap-implied reserve', 'underfunded reserve example inconsistent status')
+		assertEqual(example.output('underfundedThreshold'), '5.0000 ETH/REP', 'underfunded reserve example inconsistent threshold')
 		assertEqual(example.output('underfundedRepShare'), 'not applicable', 'underfunded prefix example inconsistent REP share')
 		assertEqual(example.output('repAssignedElsewhere'), 'not applicable', 'underfunded prefix example inconsistent remainder allocation')
 	} finally {
@@ -345,15 +331,14 @@ async function checkFixedExposureCostExample(): Promise<void> {
 	try {
 		assertEqual(example.output('fixedReportedPrice'), '2,431 REP/ETH', 'fixed exposure default reported price')
 		assertEqual(example.output('fixedWethPosted'), '0.106677 WETH', 'fixed exposure default WETH position')
-		assertEqual(example.output('fixedOperationBudget'), '0.106677 ETH', 'fixed exposure default approximate ETH operation budget')
 		assertEqual(example.output('fixedPositionCapital'), '0.224022 ETH', 'fixed exposure default report capital')
 		assertEqual(example.output('fixedRequestBounty'), '0.001148 ETH', 'fixed exposure default request bounty')
 		assertEqual(example.output('fixedExternalCost'), '0.000064 ETH ($0.11)', 'fixed exposure default external-settler cost')
 		assertEqual(example.output('fixedSelfCost'), '0.000100 ETH ($0.18)', 'fixed exposure default self-settler cost')
-		assertEqual(example.output('fixedExposureMultiple'), '93,741x', 'fixed exposure default requested-budget multiple')
+		assertEqual(example.output('fixedExposureMultiple'), '4.76x', 'fixed exposure default authorized exposure ratio')
 
 		example.setInput('outsideExposure', 20000)
-		assertEqual(example.output('fixedExposureMultiple'), '187,482x', 'fixed exposure should scale requested notional without changing the round budget')
+		assertEqual(example.output('fixedExposureMultiple'), '4.76x', 'fixed exposure should remain capped when attempted outside exposure increases')
 		assertEqual(example.output('fixedPositionCapital'), '0.224022 ETH', 'fixed exposure report capital should remain fixed when outside exposure changes')
 
 		const requestBountyBeforePriorityFeeChange = example.output('fixedRequestBounty')
@@ -370,6 +355,33 @@ async function checkFixedExposureCostExample(): Promise<void> {
 	} finally {
 		example.close()
 	}
+}
+
+function checkOracleReportBudgetMath(): void {
+	const precision = 10n ** 18n
+	const configuredRepNotional = ORACLE_EXACT_TOKEN1_REPORT * 10n
+	const changedAcceptedAmount1 = ORACLE_EXACT_TOKEN1_REPORT * 2n
+	const changedAcceptedAmount2 = ORACLE_EXACT_TOKEN1_REPORT
+	const changedPriceBudget = (configuredRepNotional * changedAcceptedAmount2) / changedAcceptedAmount1
+	assert.equal(changedPriceBudget, configuredRepNotional / 2n, 'a changed accepted report ratio should revalue the configured REP budget directly from settled amounts')
+
+	const roundingBoundaryAmount1 = ORACLE_EXACT_TOKEN1_REPORT
+	const roundingBoundaryAmount2 = 49_683_737_645_364_500_012_549_948_619_954_461_467n
+	const roundedAcceptedPrice = (roundingBoundaryAmount1 * precision) / roundingBoundaryAmount2
+	const directBudget = (configuredRepNotional * roundingBoundaryAmount2) / roundingBoundaryAmount1
+	const invertedRoundedPriceBudget = (configuredRepNotional * precision) / roundedAcceptedPrice
+	assert.equal(roundedAcceptedPrice, 5n, 'rounding vector should exercise a low non-zero accepted price')
+	assert.equal(directBudget, roundingBoundaryAmount2 * 10n, 'the configured report budget should equal ten times settled token2 at the rounding boundary')
+	assert.ok(directBudget < invertedRoundedPriceBudget, 'direct settled-amount budget math should avoid exposure inflation from inverting a rounded accepted price')
+}
+
+function checkExactRepCapEquality(): void {
+	const precision = 10n ** 18n
+	const ethAtTick = 1n * precision
+	const priceAtTick = precision / 10n
+	const repDemand = (ethAtTick * precision) / priceAtTick
+	const maxRepBeingSold = 10n * precision
+	assert.ok(repDemand >= maxRepBeingSold, 'demand exactly equal to the REP cap should select funded clearing')
 }
 
 async function checkRollingLockCostExample(): Promise<void> {
@@ -449,14 +461,16 @@ const scenarios: AuctionExampleScenario[] = [
 		defaultCarolReceives: '1.67 REP',
 		filePath: 'docs/auction-design.html',
 		exampleId: 'simple-auction-example',
+		underfundedAliceReceives: '3.2 REP',
 	},
 	{
-		defaultBindingCondition: 'REP cap',
+		defaultBindingCondition: 'both caps',
 		defaultAliceReceives: '1 REP',
 		defaultBobReceives: '1.33 REP',
 		defaultCarolReceives: '1.67 REP',
 		filePath: 'docs/placeholder-whitepaper.html',
 		exampleId: 'auction-clearing-example',
+		underfundedAliceReceives: '3.20 REP',
 	},
 ]
 
@@ -467,14 +481,25 @@ for (const scenario of scenarios) {
 	await checkAllZeroBids(scenario)
 }
 
-await checkSourceLabelsAndThresholdText('docs/auction-design.html', ['write("clearingMode", "underfunded synthetic uniform")', 'write("bindingCondition", "underfunded")', 'write("thresholdInputEth", formatEth(winningEth))', 'let winningEth = 0', 'winningEth = candidateWinningEth', 'accumulatedEth = winningEth'])
+await checkSourceLabelsAndThresholdText('docs/auction-design.html', [
+	'write("clearingMode", "underfunded reserve clearing")',
+	'write("bindingCondition", "underfunded")',
+	'write("thresholdInputEth", formatEth(winningEth))',
+	'const threshold = ethRaiseCap / repInventory',
+	'bid.price >= threshold',
+	'repResults[bid.key] = bid.eth / threshold',
+	'accumulatedEth = winningEth',
+])
 
 await checkSourceLabelsAndThresholdText('docs/placeholder-whitepaper.html', [
-	'const activeBids = bids.filter((bid) => bid.eth > 0)',
-	'context.write("clearingMode", "underfunded synthetic uniform")',
+	'const submittedBids = bids.filter((bid) => bid.eth > 0)',
+	'(bid) => bid.price >= underfundedThreshold',
+	'context.write("clearingMode", "underfunded reserve clearing")',
 	'context.write("bindingCondition", "underfunded")',
 	'context.write("thresholdInputEth", formatEth(winningEth))',
-	'ethRaised += winningBid.eth',
+	'const underfundedThreshold = ethRaiseCap / repInventory',
+	'bid.price >= underfundedThreshold',
+	'repResults[bid.name] = bid.eth / underfundedThreshold',
 ])
 
 await checkCollateralRepairExample()
@@ -482,43 +507,49 @@ await checkUnderfundedPrefixExample()
 await checkResolutionEdgeExample()
 await checkPayoutRegionExample()
 await checkFixedExposureCostExample()
+checkOracleReportBudgetMath()
+checkExactRepCapEquality()
 await checkRollingLockCostExample()
 
 const openOracleHtml = await readFile('docs/open-oracle-integration.html', 'utf8')
+assert.doesNotMatch(openOracleHtml, /operation volume is not\s+metered by the accepted report/i, 'OpenOracle integration should not retain the stale unmetered-operation claim')
+assert.match(
+	openOracleHtml,
+	/configuredRepNotional = floor\(reportRep \\cdot escalationHaltMultiplierBps \/ 10000\); reportBudget = floor\(configuredRepNotional \\cdot acceptedAmount2 \/ acceptedAmount1\)/i,
+	'OpenOracle integration should derive the configured budget directly from the escalation-halt REP amount and accepted report amounts',
+)
+assert.match(openOracleHtml, /configured notional limit, not proof[\s\S]*multiplier's sufficiency remains a parameter assumption/i, 'OpenOracle integration should distinguish the configured exposure cap from an economic-safety proof')
+assert.doesNotMatch(openOracleHtml, /Secured Exposure Budget/i, 'OpenOracle integration should not label a parameter-selected cap as secured exposure')
 for (const equationId of ['eq-openoracle-fixed-report-cost', 'eq-openoracle-rolling-lock-cost']) {
 	assert.doesNotMatch(blockWithId(openOracleHtml, equationId), /<mi>(?:R|P|e|E|Q|N|D|T|H|m|u|F)<\/mi>/, `${equationId} should use descriptive domain names instead of one-letter identifiers`)
 }
-assert.match(openOracleHtml, /operationBudget = floor\(exactToken1Report \\cdot PRICE_PRECISION \/ settledPrice\)/i, 'OpenOracle fixed-report equation should distinguish the exact ETH-notional budget from WETH posted')
-assert.match(openOracleHtml, /ceil\(actualWithdrawRep · PRICE_PRECISION \/ settledPrice\)[\s\S]*max\(debtToMove, ceil\(repToMove · PRICE_PRECISION \/ settledPrice\)\)/i, 'OpenOracle docs should define withdrawal and liquidation operation notional')
-assert.match(openOracleHtml, /Budget rejection consumes the staged operation but not budget[\s\S]*Manual\s+execution of overflow operations uses the same check/i, 'OpenOracle docs should cover unsuccessful and manually executed budget paths')
 
 const auctionDesignHtml = await readFile('docs/auction-design.html', 'utf8')
 assert.doesNotMatch(auctionDesignHtml, /buy only the REP they demanded/i, 'auction design should not describe underfunded fills as per-tick demand')
-assert.match(auctionDesignHtml, /sells REP in proportion to the fraction of the ETH target raised/i, 'auction design should document proportional underfunded REP issuance')
-assert.match(auctionDesignHtml, /non-empty winning prefix/i, 'auction design should qualify underfunded settlement with a non-empty winning prefix')
-assert.match(auctionDesignHtml, /underfundedWinningEth\s*&gt;\s*0/i, 'auction design should qualify the underfunded winner rule with a positive winning prefix')
-assert.match(auctionDesignHtml, /type\(uint256\)\.max/i, 'auction design should document the no-winning-prefix underfunded threshold sentinel')
-assert.match(auctionDesignHtml, /refunds every bid/i, 'auction design should document the no-winning-prefix refund branch')
-assert.match(auctionDesignHtml, /ceilings the\s+fixed proportional reserve/i, 'auction design calculator copy should describe ceiling division for the fixed proportional reserve')
+assert.match(auctionDesignHtml, /inventory remains unsold|leaves inventory unsold/i, 'auction design should explain that weak demand leaves REP inventory unsold')
+assert.match(auctionDesignHtml, /only bids at or above the cap-implied reserve/i, 'auction design should make reserve qualification explicit')
+assert.doesNotMatch(auctionDesignHtml, /max-uint sentinel/i, 'auction design should not describe the removed no-bid threshold sentinel')
+assert.match(auctionDesignHtml, /every bid refunds/i, 'auction design should document the no-qualifying-bid refund branch')
+assert.match(auctionDesignHtml, /ceilings the underfunded reserve to a tick/i, 'auction design calculator copy should describe rounding the cap-implied reserve to a tick')
 assert.match(auctionDesignHtml, /computes each allocation by\s+differencing cumulative floors at the bid's fixed\s+descending-tick\/submission position/i, 'auction design calculator copy should describe deterministic cumulative floor allocation')
 assert.doesNotMatch(auctionDesignHtml, /carries\s+remainders during paged withdrawals/i, 'auction design should not describe removed withdrawal-order remainder carry')
 assert.doesNotMatch(auctionDesignHtml, /carries division dust|carries division remainders/i, 'auction design should not describe deterministic cumulative allocation as mutable division carry')
-assert.doesNotMatch(auctionDesignHtml, /underfundedWinningEth \* PRICE_PRECISION \/ maxRepBeingSold/i, 'auction design should not price proportional underfunded issuance against the full REP cap')
-assert.match(auctionDesignHtml, /data-source="underfundedThreshold = if totalRepPurchased > 0 then ceil\(ethRaiseCap \* PRICE_PRECISION \/ maxRepBeingSold\) else type\(uint256\)\.max"/i, 'auction design should present the fixed proportional reserve formula as piecewise')
+assert.doesNotMatch(auctionDesignHtml, /underfundedThreshold = ceil\(underfundedWinningEth \* PRICE_PRECISION \/ maxRepBeingSold\)/i, 'auction design should not derive the reserve from winning ETH')
+assert.match(auctionDesignHtml, /data-source="underfundedThreshold = ceil\(ethRaiseCap \* PRICE_PRECISION \/ maxRepBeingSold\)"/i, 'auction design should derive the underfunded reserve from both caps')
+assert.match(auctionDesignHtml, /under-repaired attempt\s+reverts with the child still inactive in <code>ForkTruthAuction<\/code>/i, 'auction design should document exact-repair rollback')
+assert.match(auctionDesignHtml, /Forced ETH does not count/i, 'auction design should exclude forced ETH from the child activation ratio')
+assert.match(auctionDesignHtml, /floor\(maxRepBeingSold \* underfundedWinningEth \/ ethRaiseCap\)/i, 'auction design should derive proportional REP from the two caps and retained ETH')
+assert.match(auctionDesignHtml, /auction ETH divided by <code>ethRaiseCap<\/code>[\s\S]*explicit repair[\s\S]*neither allowance nor ownership/i, 'auction design should exclude explicit repair contributions from bidder rights')
+assert.match(auctionDesignHtml, /1 \/ 0\.11 ≈ 9\.09 REP[\s\S]*below the <code>10 REP<\/code> cap/i, 'auction design tiny-demand example should remain strictly below the REP cap')
 
 const operatorReferenceMarkdown = await readFile('docs/operator-reference.md', 'utf8')
 assert.match(operatorReferenceMarkdown, /checkpoints the parent vault before clearing its allowance[\s\S]*balance above `totalAccruedFees\(\)`/i, 'operator reference should preserve parent fee solvency during vault migration')
 assert.match(operatorReferenceMarkdown, /activateForkMode[\s\S]*universe fork[\s\S]*fork-time checkpoint[\s\S]*collateralAtFork/i, 'operator reference should document the ordered own-fork collateral checkpoint lifecycle')
-assert.match(operatorReferenceMarkdown, /external and own forks record one fixed[\s\S]*cumulative REP position[\s\S]*Truth-auction repair also uses the fixed snapshot/i, 'operator reference should document snapshot-based external and own-fork collateral repair')
+assert.match(operatorReferenceMarkdown, /external and own forks record one fixed[\s\S]*cumulative REP position[\s\S]*Truth-auction repair uses the fixed snapshot minus the child’s actual cumulative routed collateral/i, 'operator reference should document exact snapshot-based collateral repair')
 assert.match(operatorReferenceMarkdown, /once every eligible vault checkpoints[\s\S]*no vault can individually claim returns to collateral/i, 'operator reference should document final aggregate-only fee reserve release')
 assert.match(operatorReferenceMarkdown, /each claimed auction allowance joins incrementally[\s\S]*delayed claim adds to the pool’s live eligible total/i, 'operator reference should document live incremental fee eligibility for delayed auction claims')
-assert.match(operatorReferenceMarkdown, /Claimable auction security-bond allowance is first scaled to `unmigratedAllowance \* auctionEthReceived \/ ethRaiseCap`[\s\S]*unfunded remainder stays unassigned and is not fee-eligible/i, 'operator reference should tie auction allowance rights to bidder ETH only')
 assert.match(operatorReferenceMarkdown, /## Security Pool Guardrails[\s\S]*totalFeesOwedToVaults[\s\S]*totalAccruedFees\(\)[\s\S]*## Share Migration/i, 'operator reference security-pool guardrails should define assigned and aggregate fee accounting')
-assert.match(
-	operatorReferenceMarkdown,
-	/derive each bid's REP from the difference between rounded cumulative allocations[\s\S]*no positive-price winning prefix, the sentinel allocates no REP and refunds every bid\./i,
-	'operator reference should document deterministic auction rounding and the no-winning-prefix sentinel',
-)
+assert.match(operatorReferenceMarkdown, /derive each bid's REP from the difference between rounded cumulative allocations[\s\S]*no bid meets the cap-implied reserve, no REP is allocated and every bid refunds\./i, 'operator reference should document deterministic auction rounding and the no-qualifying-bid branch')
 
 const placeholderHtml = await readFile('docs/placeholder-whitepaper.html', 'utf8')
 const feeVectorPrecision = 10n ** 18n
@@ -546,6 +577,7 @@ assert.deepEqual(
 	'fee accrual documentation vector should preserve nonzero index and global remainders while subtracting only whole-wei reserve credit',
 )
 assert.doesNotMatch(placeholderHtml, /carried remainder across paged withdrawals/i, 'whitepaper auction examples should not describe removed withdrawal-order remainder carry')
+assert.doesNotMatch(placeholderHtml, /paged withdrawals carr(?:y|ies) division dust/i, 'whitepaper should describe fixed cumulative-position allocation rather than mutable division carry')
 assert.doesNotMatch(placeholderHtml, /(?:collateralDecay|decayCandidate)[^\"]*totalSecurityBondAllowance/i, 'whitepaper fee-index formula should not use total capacity as the accrual denominator')
 assert.match(placeholderHtml, /feeEligibleSecurityBondAllowance/i, 'whitepaper fee-index formula should use assigned fee-eligible allowance')
 assert.match(placeholderHtml, /data-source="decayCandidate = collateralIn - floor\(collateralIn \\cdot rpow\(retentionRate, elapsedTime, pricePrecision\) \/ pricePrecision\)"/i, 'whitepaper should distinguish the fixed-point decay candidate from credited whole-wei fees')
@@ -555,45 +587,36 @@ assert.match(placeholderHtml, /Unallocated Reserve[\s\S]*Assigned Vault Debt[\s\
 assert.match(placeholderHtml, /vaultFeeRemainderOut/i, 'whitepaper fee-index formula should document per-vault fractional carry')
 assert.match(placeholderHtml, /actualCollateralDelta = min\(requestedCollateralDelta, parentCompleteSetCollateral\)/i, 'whitepaper own-fork collateral formula should reserve accrued parent fees')
 assert.match(placeholderHtml, /activateForkMode[\s\S]*universe fork[\s\S]*fork-time checkpoint[\s\S]*collateralAtFork/i, 'whitepaper should document the ordered own-fork collateral checkpoint lifecycle')
-assert.match(placeholderHtml, /Both external and[\s\S]*one fixed, fee-exclusive fork[\s\S]*cumulative ceiling accounting[\s\S]*Truth-auction repair uses the same snapshot/i, 'whitepaper should document fixed-snapshot cumulative collateral migration for external and own forks')
+assert.match(placeholderHtml, /Both external and[\s\S]*one fixed, fee-exclusive fork[\s\S]*cumulative\s+ceiling accounting[\s\S]*Truth-auction repair subtracts the child's actual cumulative routed\s+collateral/i, 'whitepaper should document exact fixed-snapshot collateral repair')
 assert.match(
 	placeholderHtml,
 	/data-source="migrationRepDenominatorAtFork = ownFork \? vaultRepAtFork : auctionableRepAtFork; migratedRep = floor\(parentPoolOwnership \\cdot migrationRepDenominatorAtFork \/ parentPoolOwnershipDenominator\)"/i,
 	'whitepaper should document the fork-specific migrated REP denominator and Solidity floor',
 )
+assert.match(placeholderHtml, /data-source="ethCollateralToBuy = max\(0, parentCollateralAtFork - forkCollateralReceived\)"/i, 'whitepaper should derive the auction repair target from actual routed collateral')
+assert.match(placeholderHtml, /cumulative-ceiling transfers[\s\S]*available-collateral cap[\s\S]*nominal migrated REP/i, 'whitepaper should explain exact and capped collateral-repair accounting')
 assert.match(
 	placeholderHtml,
 	/data-source="migrationRepDenominatorAtFork = ownFork \? vaultRepAtFork : auctionableRepAtFork; cumulativeCollateralTargetAfterMigration = ceil\(parentCollateralAtFork \\cdot cumulativeRepTransferredAfterMigration \/ migrationRepDenominatorAtFork\)/i,
 	'whitepaper should use the fork-specific denominator in cumulative collateral migration',
 )
-assert.match(
-	placeholderHtml,
-	/data-source="ethCollateralToBuy = 0 if poolAuctionableRepAtFork = 0 or migratedRep >= poolAuctionableRepAtFork or forkCollateralReceived >= parentCollateralAtFork; otherwise parentCollateralAtFork - forkCollateralReceived"/i,
-	'whitepaper truth-auction target should use actual cumulatively rounded fork collateral received',
-)
-assert.doesNotMatch(placeholderHtml, /parentCollateralAmount - floor\(parentCollateralAmount \\cdot migratedRepAmount/i, 'whitepaper should not recompute truth-auction collateral from a floor-rounded REP ratio')
-assert.match(placeholderHtml, /MIN_TRUTH_AUCTION_REPAIR_BPS = 100%[\s\S]*sum must[\s\S]*equal <code>parentCollateralAtFork<\/code>[\s\S]*leaving the child in <code>ForkTruthAuction<\/code>/i, 'whitepaper should document atomic exact repair and rollback')
 assert.doesNotMatch(placeholderHtml, /data-source="cumulativeCollateralTargetAfterMigration = ceil\(parentCollateralAtFork \\cdot cumulativeRepTransferredAfterMigration \/ vaultRepAtFork\)/i, 'whitepaper should not present the own-fork denominator as the generalized collateral migration formula')
 assert.match(placeholderHtml, /fork-neutral snapshot shared by both paths[\s\S]*ETH raise target[\s\S]*depends on auction demand/i, 'whitepaper should explain shared snapshot accounting and demand-dependent auction repair')
 assert.match(placeholderHtml, /After every eligible vault syncs[\s\S]*individually sub-wei vault remainders[\s\S]*returns to complete-set collateral/i, 'whitepaper should document final aggregate-only fee reserve release')
 assert.match(placeholderHtml, /Each delayed claim adds only its newly assigned amount[\s\S]*does not reconstruct that total from[\s\S]*allowance changes and[\s\S]*liquidations remain intact/i, 'whitepaper should document incremental live fee eligibility for delayed auction claims')
-assert.doesNotMatch(placeholderHtml, /whether the tick qualifies/i, 'whitepaper underfunded widget should not present threshold-only winner membership')
-assert.doesNotMatch(placeholderHtml, /refunded below threshold/i, 'whitepaper underfunded widget should not present threshold-only refunds')
-assert.doesNotMatch(placeholderHtml, /below-threshold bids/i, 'whitepaper truth-auction math should not describe underfunded losers as threshold-filtered bids')
-assert.doesNotMatch(placeholderHtml, /underfundedWinningEth \\cdot PRICE_PRECISION \/ maxRepBeingSold/i, 'whitepaper should not price proportional underfunded issuance against the full REP cap')
-assert.match(placeholderHtml, /When\s*<code>underfundedWinningEth\s*&gt;\s*0<\/code>,\s*the stored\s*<code>clearingTick<\/code>/i, 'whitepaper quick-reference bullet should qualify clearingTick winners with a positive winning prefix')
-assert.match(placeholderHtml, /underfundedWinningEth\s*&gt;\s*0/i, 'whitepaper underfunded prose should qualify the winner rule with a positive winning prefix')
-assert.match(placeholderHtml, /type\(uint256\)\.max/i, 'whitepaper underfunded prose should document the no-winning-prefix threshold sentinel')
+assert.match(placeholderHtml, /cap-implied reserve/i, 'whitepaper underfunded explanations should identify the reserve derived from both caps')
+assert.match(placeholderHtml, /lower bids refund/i, 'whitepaper truth-auction description should explain reserve-filtered refunds')
+assert.doesNotMatch(placeholderHtml, /underfundedThreshold = ceil\(underfundedWinningEth \\cdot (?:PRICE_PRECISION|pricePrecision) \/ maxRepBeingSold\)/i, 'whitepaper should not derive the reserve from winning ETH')
+assert.match(placeholderHtml, /underfundedThreshold = ceil\(ethRaiseCap \\cdot pricePrecision \/ maxRepBeingSold\)/i, 'whitepaper fill math should derive the reserve from both caps')
+assert.doesNotMatch(placeholderHtml, /max-uint sentinel/i, 'whitepaper should not describe the removed no-bid threshold sentinel')
 assert.match(placeholderHtml, /every bid refunds/i, 'whitepaper underfunded prose should document the no-winning-prefix refund branch')
-assert.match(placeholderHtml, /finalization finds a non-empty\s+winning\s+prefix/i, 'whitepaper underfunded summary should qualify settlement with a non-empty winning prefix')
-assert.match(placeholderHtml, /data-source="underfundedThreshold = if totalRepPurchased > 0 then ceil\(ethRaiseCap \\cdot PRICE_PRECISION \/ maxRepBeingSold\) else type\(uint256\)\.max"/i, 'whitepaper quick-reference formula should present the fixed proportional reserve as piecewise')
-assert.match(placeholderHtml, /<mi>underfundedThreshold<\/mi>[\s\S]*?<mtext>type\(uint256\)\.max<\/mtext>/i, 'whitepaper fill-math equation should visibly present the no-winning-prefix threshold branch')
+assert.match(placeholderHtml, /under-repaired finalization attempt reverts[\s\S]*remains inactive in <code>ForkTruthAuction<\/code>/i, 'whitepaper should document exact-repair rollback')
+assert.match(placeholderHtml, /Forced ETH[\s\S]*does\s+not\s+satisfy\s+that\s+condition/i, 'whitepaper should exclude forced ETH from child activation')
 assert.match(
 	placeholderHtml,
-	/data-source="fundedRepShare = floor\(\(ethBefore \+ ethUsed\) \\cdot pricePrecision \/ clearingPrice\) - floor\(ethBefore \\cdot pricePrecision \/ clearingPrice\); totalRepPurchased = floor\(maxRepBeingSold \\cdot underfundedWinningEth \/ ethRaiseCap\); underfundedThreshold = if totalRepPurchased > 0 then ceil\(ethRaiseCap \\cdot pricePrecision \/ maxRepBeingSold\) else type\(uint256\)\.max; underfundedRepShare = if totalRepPurchased > 0 then floor\(\(ethBefore \+ bidEth\) \\cdot totalRepPurchased \/ underfundedWinningEth\) - floor\(ethBefore \\cdot totalRepPurchased \/ underfundedWinningEth\) else not applicable"/i,
-	'whitepaper fill-math data-source should make the no-winning-prefix share branch explicit',
+	/data-source="fundedRepShare = floor\(\(ethBefore \+ ethUsed\) \\cdot pricePrecision \/ clearingPrice\) - floor\(ethBefore \\cdot pricePrecision \/ clearingPrice\); underfundedThreshold = ceil\(ethRaiseCap \\cdot pricePrecision \/ maxRepBeingSold\); totalRepPurchased = floor\(maxRepBeingSold \\cdot underfundedWinningEth \/ ethRaiseCap\); underfundedRepShare = floor\(\(ethBefore \+ bidEth\) \\cdot totalRepPurchased \/ underfundedWinningEth\) - floor\(ethBefore \\cdot totalRepPurchased \/ underfundedWinningEth\)"/i,
+	'whitepaper fill-math data-source should connect the cap-implied reserve, retained ETH, and proportional REP allocation',
 )
-assert.match(placeholderHtml, /<mi>underfundedRepShare<\/mi>[\s\S]*?<mtext>not applicable<\/mtext>/i, 'whitepaper fill-math equation should visibly mark the no-winning-prefix REP-share branch as not applicable')
-assert.match(placeholderHtml, /share row is not applicable,\s+and every bid refunds/i, 'whitepaper fill-math caption should explain the no-winning-prefix share behavior')
-assert.match(placeholderHtml, /auctionedSecurityBondAllowance = floor\(unmigratedSecurityBondAllowance \\cdot auctionEthReceived \/ ethRaiseCap\)/i, 'whitepaper should tie claimable auction allowance to bidder ETH only')
+assert.match(placeholderHtml, /data-source="auctionedSecurityBondAllowance = floor\(unmigratedSecurityBondAllowance \\cdot auctionEthReceived \/ ethRaiseCap\)/i, 'whitepaper should scale auction allowance by auction ETH only')
+assert.match(placeholderHtml, /Explicit repair contributions issue no\s+allowance or ownership/i, 'whitepaper should exclude explicit repair contributions from bidder rights')
 assert.match(placeholderHtml, /withdrawals cannot redirect rounding\s+units between bidders/i, 'whitepaper fill-math caption should explain deterministic rounding')

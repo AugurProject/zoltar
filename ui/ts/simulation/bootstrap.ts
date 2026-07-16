@@ -79,11 +79,10 @@ const SECURITY_MULTIPLIER = 2n
 const SECURITY_POOL_REP_DEPOSIT = 10_000n * 10n ** 18n
 const SECURITY_BOND_ALLOWANCE = 80n * 10n ** 18n
 const SECURITY_POOL_X2_PRIMARY_REP_DEPOSIT = 12_000n * 10n ** 18n
-const SECURITY_POOL_X2_PRIMARY_SECURITY_BOND_ALLOWANCE = SECURITY_BOND_ALLOWANCE
+const SECURITY_POOL_X2_PRIMARY_SECURITY_BOND_ALLOWANCE = 40n * 10n ** 18n
 const SECURITY_POOL_X2_SECONDARY_REP_DEPOSIT = SECURITY_POOL_REP_DEPOSIT
-const SECURITY_POOL_X2_SECONDARY_SECURITY_BOND_ALLOWANCE = SECURITY_BOND_ALLOWANCE
+const SECURITY_POOL_X2_SECONDARY_SECURITY_BOND_ALLOWANCE = 40n * 10n ** 18n
 const STAGED_SELF_OPERATION_TIMEOUT_SECONDS = 5n * 60n
-const SEEDED_ORACLE_PRICE_VALIDITY_SECONDS = 5n * 60n
 const SECURITY_POOL_X2_AUCTION_EXTRA_REP_DEPOSIT = 20_000_000n * 10n ** 18n
 const SECURITY_POOL_X2_AUCTION_UNMIGRATED_REP_DEPOSIT = 1_000n * 10n ** 18n
 const SECURITY_POOL_X2_AUCTION_BID_PRICES = [getTruthAuctionPriceAtTick(12n), getTruthAuctionPriceAtTick(10n), getTruthAuctionPriceAtTick(8n)] as const
@@ -536,7 +535,6 @@ async function configureSecurityBondAllowance({
 	securityPoolAddress: Address
 	securityBondAllowance: bigint
 }) {
-	await advanceSimulationTime(memoryClient, SEEDED_ORACLE_PRICE_VALIDITY_SECONDS + 1n)
 	const writeClient = createWriteClient(accountAddress)
 	const initialReportAmount2 = await getSeededCoordinatorInitialReportAmount2(readClient, managerAddress)
 	const queueResult = await queueOracleManagerOperation(writeClient, managerAddress, 'setSecurityBondsAllowance', accountAddress, securityBondAllowance, STAGED_SELF_OPERATION_TIMEOUT_SECONDS, initialReportAmount2)

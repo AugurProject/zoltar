@@ -10,7 +10,7 @@ export function shouldRefreshSelectedPoolDataOnViewOpen({ currentSecurityPoolAdd
 	return resolvedSecurityPoolAddress.trim() !== '' && !selectedPoolHasLoadedDetails
 }
 
-export function SecurityPoolsSection({ activeView, createPool, onActiveViewChange, overview, workflow }: SecurityPoolsSectionProps) {
+export function SecurityPoolsSection({ activeView, createPool, onActiveUniverseChange, onActiveViewChange, overview, workflow }: SecurityPoolsSectionProps) {
 	const view = activeView
 
 	const openView = (nextView: SecurityPoolsView, nextSecurityPoolAddress?: string) => {
@@ -27,7 +27,8 @@ export function SecurityPoolsSection({ activeView, createPool, onActiveViewChang
 			{view === 'browse' ? (
 				<SecurityPoolsOverviewSection
 					{...overview}
-					onSelectSecurityPool={securityPoolAddress => {
+					onSelectSecurityPool={(securityPoolAddress, universeId) => {
+						onActiveUniverseChange?.(universeId)
 						workflow.onSecurityPoolAddressChange(securityPoolAddress)
 						openView('operate', securityPoolAddress)
 					}}
@@ -39,7 +40,8 @@ export function SecurityPoolsSection({ activeView, createPool, onActiveViewChang
 					{...createPool}
 					onReturnToBrowse={() => openView('browse')}
 					showHeader={false}
-					onOpenCreatedPool={securityPoolAddress => {
+					onOpenCreatedPool={(securityPoolAddress, universeId) => {
+						onActiveUniverseChange?.(universeId)
 						workflow.onSecurityPoolAddressChange(securityPoolAddress)
 						openView('operate', securityPoolAddress)
 					}}
