@@ -185,7 +185,7 @@ Skip this gate for read-only analysis, exploration, or when the user asks not to
 
 `.codex/review-contract.md` is the canonical review handoff, severity, output, scoring, and closure policy.
 
-Run every required reviewer in a newly spawned project-scoped sub-agent with no inherited conversation history. Use `fork_turns="none"` when spawning, or the platform-equivalent fresh-context option. Do not reuse an existing agent, run the review in the main agent, or expose earlier chat turns. The structured handoff required by `.codex/review-contract.md` is the reviewer's only task-specific context. If fresh-context spawning is unavailable, report that the review gate could not be completed; do not substitute a context-bearing review.
+Apply the review-context isolation rule in `.codex/review-contract.md` to every required reviewer.
 
 ### Visual reviewer
 
@@ -195,7 +195,7 @@ Supply the standard handoff plus every visual-review field required by the revie
 
 ### Final reviewer
 
-For every task that changes code, tests, configuration, agent definitions, or repository instructions, the main agent must spawn the project-scoped reviewer from `.codex/agents/reviewer.toml` after validation, any branch synchronization, and any specialized review gates. Spawn it with no inherited turns as required above. Supply every handoff field required by the review contract, including the exact baseline and task paths, and summarize material specialized-review results. The reviewer must not modify files.
+For every task that changes code, tests, configuration, agent definitions, or repository instructions, the main agent must spawn the project-scoped reviewer from `.codex/agents/reviewer.toml` after validation, any branch synchronization, and any specialized review gates. Supply every handoff field required by the review contract, including the exact baseline and task paths, and summarize material specialized-review results. The reviewer must not modify files.
 
 Disposition every finding using the contract. After material fixes, rerun affected checks and repeat the reviewer. Completion requires no valid High or Medium findings and an explicit disposition for every Low finding.
 

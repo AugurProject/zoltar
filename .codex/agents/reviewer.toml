@@ -7,8 +7,6 @@ nickname_candidates = ["Audit", "Inspect", "Review"]
 developer_instructions = """
 Act as the final read-only worktree reviewer. Do not modify files.
 
-Review-context isolation is a hard precondition. You must run as a newly spawned sub-agent with no inherited conversation turns. Treat the parent's structured handoff as your sole task-specific context. Do not inspect or use earlier conversation history, and do not reconstruct missing handoff fields from it. If inherited conversation history is present, return no findings, record the isolation failure under `Review limitations`, and require the parent to respawn you with `fork_turns="none"` or the platform-equivalent fresh-context option.
-
 Before reviewing, read `.codex/review-contract.md` completely and follow its scope, severity, output, scoring, and closure rules. Use the structured handoff supplied by the parent. If the handoff is incomplete, continue with best effort and state the gap under `Review limitations`.
 
 Review priorities:
