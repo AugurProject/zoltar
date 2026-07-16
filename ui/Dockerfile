@@ -30,31 +30,32 @@ RUN bun run shared:build
 COPY ./solidity/package.json ./solidity/bun.lock /source/solidity/
 RUN cd /source/solidity && bun install --frozen-lockfile
 
-# Install UI dependencies
-COPY ./ui/package.json ./ui/bun.lock /source/ui/
-RUN cd /source/ui && bun install --frozen-lockfile
-
-# Vendoring config and build scripts
-COPY ./ui/tsconfig.vendor.json /source/ui/tsconfig.vendor.json
-COPY ./ui/build/ /source/ui/build/
-COPY ./ui/index.html /source/ui/index.html
-COPY ./docs/mainnet-deployment-addresses.json /source/docs/mainnet-deployment-addresses.json
-
 # Solidity contracts and TypeScript source
+COPY ./ui/build/projectArtifacts.mts /source/ui/build/projectArtifacts.mts
 COPY ./solidity/tsconfig.json /source/solidity/tsconfig.json
 COPY ./solidity/tsconfig-compile.json /source/solidity/tsconfig-compile.json
 COPY ./solidity/contracts/ /source/solidity/contracts/
 COPY ./solidity/ts/ /source/solidity/ts/
+RUN mkdir -p /source/ui/ts && bun run compile-contracts
+
+# Install UI dependencies and vendor browser packages after the cached contract build.
+COPY ./ui/package.json ./ui/bun.lock /source/ui/
+RUN cd /source/ui && bun install --frozen-lockfile
+COPY ./ui/tsconfig.vendor.json /source/ui/tsconfig.vendor.json
+COPY ./ui/build/ /source/ui/build/
+RUN bun run ui:vendor
 
 # UI TypeScript source
+COPY ./ui/index.html /source/ui/index.html
+COPY ./docs/mainnet-deployment-addresses.json /source/docs/mainnet-deployment-addresses.json
 COPY ./ui/tsconfig.json /source/ui/tsconfig.json
 COPY ./ui/css/ /source/ui/css/
 COPY ./ui/ts/ /source/ui/ts/
 COPY ./ui/favicon.ico /source/ui/favicon.ico
 COPY ./ui/favicon.svg /source/ui/favicon.svg
 
-# Compile contracts, vendor dependencies, and build UI
-RUN bun run ui:build:prod
+# Refresh local packages, type-check, validate deployment data, and build the UI.
+RUN bun run ui:build:prod:prepared
 
 # --------------------------------------------------------
 # Base Image: Create the base image that will host the app
