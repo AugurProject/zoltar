@@ -594,7 +594,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		await approveToken(counterpartyClient, addressString(GENESIS_REPUTATION_TOKEN), openOracle)
 		await approveToken(counterpartyClient, WETH_ADDRESS, openOracle)
 		const disputeHash = await counterpartyClient.writeContract({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			abi: peripherals_openOracle_LoggedOpenOracle_LoggedOpenOracle.abi,
 			functionName: 'disputeAndSwap',
 			address: openOracle,
 			args: [reportId, addressString(GENESIS_REPUTATION_TOKEN), disputedAmount1, disputedAmount2, counterpartyClient.account.address, reportStatusBeforeDispute.currentAmount2, extraDataBeforeDispute.stateHash],
