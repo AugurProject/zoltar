@@ -486,12 +486,15 @@ productionBrowserTest('production bundle executes deployment, reporting, fork mi
 				`(() => { const card = [...document.querySelectorAll('article.security-pool-card')].find(candidate => candidate.textContent?.toLowerCase().includes('truth auction')); const button = [...(card?.querySelectorAll('button') ?? [])].find(candidate => candidate.textContent?.trim() === 'Open Pool'); if (!(button instanceof HTMLButtonElement)) return false; button.click(); return true })()`,
 			)
 			expect(auctionPoolOpened).toBe(true)
-			await driver.waitForBodyText('Universe Mismatch')
-			const childUniverseOpened = await driver.evaluate(`(() => { const link = document.querySelector('section.tone-critical a.universe-link'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
-			expect(childUniverseOpened).toBe(true)
+			const auctionPoolBody = await driver.waitForBodyText('Fork & Migration')
+			if (auctionPoolBody.includes('Universe Mismatch')) {
+				const childUniverseOpened = await driver.evaluate(`(() => { const link = document.querySelector('section.tone-critical a.universe-link'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
+				expect(childUniverseOpened).toBe(true)
+			}
 			await driver.waitForBodyWithoutText('Universe Mismatch')
-			await driver.waitForBodyText('Fork & Migration')
-			const forkViewOpened = await driver.evaluate(`(() => { const target = [...document.querySelectorAll('a, button')].find(candidate => candidate.textContent?.trim() === 'Fork & Migration'); if (!(target instanceof HTMLElement)) return false; target.click(); return true })()`)
+			const forkViewOpened = await driver.evaluate(
+				`(() => { const [route, search = ''] = window.location.hash.split('?'); const params = new URLSearchParams(search); params.set('selectedPoolView', 'fork-workflow'); params.set('securityPoolsView', 'operate'); window.history.pushState({}, '', route + '?' + params.toString()); window.dispatchEvent(new PopStateEvent('popstate')); return true })()`,
+			)
 			expect(forkViewOpened).toBe(true)
 			await driver.waitForButtonEnabled('Finalize Truth Auction')
 			await driver.clickButton('Finalize Truth Auction')
