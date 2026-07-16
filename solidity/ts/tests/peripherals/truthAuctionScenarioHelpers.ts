@@ -5,13 +5,13 @@ import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { approveAndDepositRep, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../../testSupport/simulator/utils/contracts/peripheralsTestUtils'
 import { getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployPeripherals'
 import { createQuestion, getQuestionId as buildQuestionId } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { createCompleteSet, depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getRepToken, getTotalSecurityBondAllowance } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { createCompleteSet, depositRep, depositToEscalationGame, getRepToken, getTotalSecurityBondAllowance } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { createWriteClient, WriteClient } from '../../testSupport/simulator/utils/clients'
-import { getQuestionEndDate, OperationType, participateAuction } from '../../testSupport/simulator/utils/contracts/peripherals'
+import { getEthRaiseCap, getQuestionEndDate, OperationType, participateAuction } from '../../testSupport/simulator/utils/contracts/peripherals'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import { strictEqualTypeSafe } from '../../testSupport/simulator/utils/testUtils'
-import { finalizeTruthAuction, getMigratedRep, getOwnForkRepBuckets, getQuestionOutcome, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault, startTruthAuction } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
+import { finalizeTruthAuction, getOwnForkRepBuckets, getQuestionOutcome, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault, startTruthAuction } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
 import { getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress, forkUniverse } from '../../testSupport/simulator/utils/contracts/zoltar'
 
 type SecurityPoolAddresses = {
@@ -114,9 +114,7 @@ export function createPeripheralsTruthAuctionScenarioHelpers({ genesisUniverse, 
 		await startTruthAuction(client, yesSecurityPool.securityPool)
 
 		const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableRepAtFork
-		const migratedRep = await getMigratedRep(client, yesSecurityPool.securityPool)
-		const completeSetAmount = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
-		const expectedEthToBuy = completeSetAmount - (completeSetAmount * migratedRep) / repAtFork
+		const expectedEthToBuy = await getEthRaiseCap(client, yesSecurityPool.truthAuction)
 
 		return {
 			expectedEthToBuy,

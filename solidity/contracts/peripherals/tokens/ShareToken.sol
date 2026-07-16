@@ -77,6 +77,9 @@ contract ShareToken is ERC1155, IShareToken {
 
 	function mintCompleteSets(uint248 _universeId, address _account, uint256 _cashAmount) external {
 		require(authorized[msg.sender] == true, 'ShareToken caller is not authorized to mint complete sets');
+		(bool isReconciled, ) = _getActualCompleteSetSupply(_universeId);
+		require(isReconciled, 'Share supply mismatch');
+		require(_cashAmount > 0, 'Exchange rate undefined');
 		uint256[] memory _tokenIds = new uint256[](Constants.NUM_OUTCOMES);
 		uint256[] memory _values = new uint256[](Constants.NUM_OUTCOMES);
 
@@ -90,6 +93,8 @@ contract ShareToken is ERC1155, IShareToken {
 
 	function burnCompleteSets(uint248 _universeId, address _owner, uint256 _amount) external {
 		require(authorized[msg.sender] == true, 'ShareToken caller is not authorized to burn complete sets');
+		(bool isReconciled, ) = _getActualCompleteSetSupply(_universeId);
+		require(isReconciled, 'Share supply mismatch');
 		uint256[] memory _tokenIds = new uint256[](Constants.NUM_OUTCOMES);
 		uint256[] memory _values = new uint256[](Constants.NUM_OUTCOMES);
 
@@ -121,6 +126,20 @@ contract ShareToken is ERC1155, IShareToken {
 	) public view returns (uint256) {
 		uint256 _tokenId = getTokenId(_universeId, _outcome);
 		return totalSupply(_tokenId);
+	}
+
+	function _getActualCompleteSetSupply(
+		uint248 _universeId
+	) private view returns (bool isReconciled, uint256 actualSupply) {
+		actualSupply = totalSupplyForOutcome(_universeId, BinaryOutcomes.BinaryOutcome.Invalid);
+		uint256 yesSupply = totalSupplyForOutcome(_universeId, BinaryOutcomes.BinaryOutcome.Yes);
+		uint256 noSupply = totalSupplyForOutcome(_universeId, BinaryOutcomes.BinaryOutcome.No);
+		isReconciled = actualSupply == yesSupply && yesSupply == noSupply;
+	}
+
+	function reconciledCompleteSetSupply(uint248 _universeId, uint256 _fallbackSupply) external view returns (uint256) {
+		(bool isReconciled, uint256 actualSupply) = _getActualCompleteSetSupply(_universeId);
+		return isReconciled ? actualSupply : _fallbackSupply;
 	}
 
 	function balanceOfOutcome(

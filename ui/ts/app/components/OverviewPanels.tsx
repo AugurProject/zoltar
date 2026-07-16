@@ -1,6 +1,7 @@
 import * as appCopy from '../../copy/app.js'
 import * as commonCopy from '../../copy/common.js'
 import { useState } from 'preact/hooks'
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard.js'
 import { RouteHeader } from '../../components/RouteHeader.js'
 import { AddressValue } from '../../components/AddressValue.js'
 import { Badge } from '../../components/Badge.js'
@@ -18,12 +19,16 @@ export function OverviewPanels({
 	activeUniverseId,
 	accountState,
 	isConnectingWallet,
+	isManagingWallet,
 	isLoadingRepPrices,
 	isRefreshingRepPrices,
 	isLoadingUniverseRepBalance,
 	onConnect,
+	onChangeWallet,
+	onDisconnectWallet,
 	onGoToGenesisUniverse,
 	onRefreshRepPrices,
+	onSwitchNetwork,
 	parentUniverseId,
 	readBackendStatus,
 	repPerEthPrice,
@@ -41,6 +46,7 @@ export function OverviewPanels({
 	walletBootstrapComplete,
 }: OverviewPanelsProps) {
 	const [showEnvironmentDetails, setShowEnvironmentDetails] = useState(false)
+	const { copied: addressCopied, copyText } = useCopyToClipboard()
 	const effectiveReadBackendStatus = readBackendStatus ?? {
 		blockNumber: undefined,
 		blockTimestamp: undefined,
@@ -65,6 +71,41 @@ export function OverviewPanels({
 		if (isBrowserSimulationReadBackend) return appCopy.simulationNetworkDisclaimer
 		return undefined
 	})()
+	const walletNetworkLabel = walletOnMainnet ? appCopy.ethereumMainnet : appCopy.formatWalletNetwork(accountState.chainId)
+	const accountActions = (() => {
+		if (accountState.address === undefined)
+			return (
+				<button className='secondary' type='button' onClick={onConnect} disabled={isConnectingWallet}>
+					{isConnectingWallet ? <LoadingText>{appCopy.connecting}</LoadingText> : commonCopy.connectWallet}
+				</button>
+			)
+		if (isBrowserSimulationReadBackend) return undefined
+		return (
+			<details className='account-menu'>
+				<summary className='secondary'>{appCopy.accountMenu}</summary>
+				<div className='account-menu-popover'>
+					<p className='account-menu-network'>
+						<span>{appCopy.currentNetwork}</span>
+						<strong>{walletNetworkLabel}</strong>
+					</p>
+					<button className='secondary' type='button' onClick={onChangeWallet} disabled={isManagingWallet}>
+						{appCopy.changeWallet}
+					</button>
+					<button className='secondary' type='button' onClick={() => void copyText(accountState.address ?? '')} disabled={isManagingWallet}>
+						{addressCopied ? appCopy.addressCopied : appCopy.copyAddress}
+					</button>
+					{hasWrongWalletNetwork ? (
+						<button className='primary' type='button' onClick={onSwitchNetwork} disabled={isManagingWallet}>
+							{appCopy.switchToEthereumMainnet}
+						</button>
+					) : undefined}
+					<button className='quiet' type='button' onClick={onDisconnectWallet} disabled={isManagingWallet}>
+						{isManagingWallet ? appCopy.managingWallet : appCopy.disconnectWallet}
+					</button>
+				</div>
+			</details>
+		)
+	})()
 	const operationsHeaderDescription = (() => {
 		const forkDescription = (() => {
 			if (!universeHasForked) return undefined
@@ -87,13 +128,7 @@ export function OverviewPanels({
 		<section className='overview-shell'>
 			<article className='overview-panel overview-wallet-panel'>
 				<RouteHeader
-					actions={
-						accountState.address === undefined ? (
-							<button className='secondary' type='button' onClick={onConnect} disabled={isConnectingWallet}>
-								{isConnectingWallet ? <LoadingText>{appCopy.connecting}</LoadingText> : commonCopy.connectWallet}
-							</button>
-						) : undefined
-					}
+					actions={accountActions}
 					badge={
 						<span className='environment-badge-row'>
 							{environmentBadge}

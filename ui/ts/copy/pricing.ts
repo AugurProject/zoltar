@@ -22,4 +22,6 @@ export const collateralizationLabel = 'Collateralization'
 export const awaitingRepEthPrice = 'Awaiting REP/ETH price'
 export const noActiveAllowance = 'No active allowance'
 export const formatValueUnavailable = (label: CopyTemplateValue) => `${label} unavailable`
+export const formatCollateralizationWithTarget = (label: CopyTemplateValue, value: CopyTemplateValue, target: CopyTemplateValue) => `${label}: ${value}; target: ${target}`
+export const formatTargetValue = (value: CopyTemplateValue) => `Target ${value}`
 export const formatCopyExactCurrencyValue = (exactValue: CopyTemplateValue) => `Copy exact value ${exactValue}`

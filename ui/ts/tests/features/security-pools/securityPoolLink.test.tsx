@@ -47,16 +47,16 @@ describe('SecurityPoolLink', () => {
 		const link = documentQueries.getByRole('link', { name: securityPoolAddress }) as HTMLAnchorElement
 		const expectedHref = getSecurityPoolLinkHref(securityPoolAddress, 'fork-workflow', 11n)
 		expect(link.getAttribute('href')).toBe(expectedHref)
-		let popstateCount = 0
-		window.addEventListener('popstate', () => {
-			popstateCount += 1
+		let hashchangeCount = 0
+		window.addEventListener('hashchange', () => {
+			hashchangeCount += 1
 		})
 
 		await act(() => {
 			fireEvent.click(link)
 		})
 		expect(window.location.hash).toBe(expectedHref)
-		expect(popstateCount).toBe(1)
+		expect(hashchangeCount).toBe(1)
 	})
 
 	test('renders custom children and keeps modified clicks on the link href', async () => {
@@ -68,15 +68,15 @@ describe('SecurityPoolLink', () => {
 		const link = documentQueries.getByRole('link', { name: 'Parent pool' }) as HTMLAnchorElement
 		expect(link).not.toBeNull()
 		const expectedHref = getSecurityPoolLinkHref(securityPoolAddress)
-		let popstateCount = 0
-		window.addEventListener('popstate', () => {
-			popstateCount += 1
+		let hashchangeCount = 0
+		window.addEventListener('hashchange', () => {
+			hashchangeCount += 1
 		})
 
 		await act(() => {
 			fireEvent.click(link, { ctrlKey: true })
 		})
 		expect(link.getAttribute('href')).toBe(expectedHref)
-		expect(popstateCount).toBe(0)
+		expect(hashchangeCount).toBe(0)
 	})
 })

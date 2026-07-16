@@ -57,8 +57,9 @@ const DEFAULT_ANVIL_TRANSACTION_GAS = '0x1c9c380'
 // CI can keep Anvil receipts pending well past a minute when multiple shards
 // are driving simulator-backed transactions concurrently.
 const SEND_TRANSACTION_RECEIPT_TIMEOUT_MS = 180_000
-const SEND_TRANSACTION_RECEIPT_POLL_INTERVAL_MS = 10
+const SEND_TRANSACTION_RECEIPT_POLL_INTERVAL_MS = 100
 const SEND_TRANSACTION_RECEIPT_MINE_INTERVAL_MS = 1_000
+const RECEIPT_DIAGNOSTIC_RPC_TIMEOUT_MS = 1_000
 
 const isObjectRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 
@@ -69,6 +70,16 @@ const parseTransactionReceipt = (value: unknown): RpcTransactionReceipt | undefi
 		...(typeof typed['status'] === 'string' ? { status: typed['status'] } : {}),
 		...(typeof typed['to'] === 'string' ? { to: typed['to'] } : {}),
 		...(typeof typed['contractAddress'] === 'string' ? { contractAddress: typed['contractAddress'] } : {}),
+	}
+}
+
+const formatRpcDiagnosticValue = (value: unknown): string => {
+	if (typeof value === 'string') return value
+	try {
+		return JSON.stringify(value) ?? String(value)
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : String(error)
+		return `${String(value)} (JSON serialization failed: ${errorMessage})`
 	}
 }
 
@@ -119,6 +130,26 @@ function parseJsonRpcResponse(raw: unknown): JsonRpcSuccess {
 	if ('error' in raw && raw.error !== undefined && !isJsonRpcError(raw.error)) throw new Error('Invalid JSON-RPC response: malformed error object')
 
 	return raw
+}
+
+const fetchJsonRpcResponse = async ({ body, method, rpcUrl, timeoutMs }: { body: string; method: string; rpcUrl: string; timeoutMs?: number }): Promise<unknown> => {
+	const controller = timeoutMs === undefined ? undefined : new AbortController()
+	const timeoutId = controller === undefined || timeoutMs === undefined ? undefined : setTimeout(() => controller.abort(), timeoutMs)
+	try {
+		const response = await fetch(rpcUrl, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body,
+			...(controller === undefined ? {} : { signal: controller.signal }),
+		})
+		if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+		return await response.json()
+	} catch (error) {
+		if (controller?.signal.aborted === true && timeoutMs !== undefined) throw new Error(`Anvil RPC ${method} did not respond within ${timeoutMs.toString()}ms`)
+		throw error
+	} finally {
+		if (timeoutId !== undefined) clearTimeout(timeoutId)
+	}
 }
 
 function parseSnapshotId(value: unknown) {
@@ -195,7 +226,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 
 	// Make JSON-RPC request to Anvil
 	let requestId = 0
-	const request = async (args: { method: string; params?: unknown[] | unknown | undefined; skipCoverage?: boolean }): Promise<unknown> => {
+	const request = async (args: { method: string; params?: unknown[] | unknown | undefined; skipCoverage?: boolean; rpcTimeoutMs?: number }): Promise<unknown> => {
 		const isSendTransactionMethod = args.method === 'eth_sendTransaction' || args.method === 'wallet_sendTransaction' || args.method === 'eth_sendRawTransaction'
 		const params = isSendTransactionMethod ? normalizeAnvilTransactionParams(ensureArray(args.params)) : ensureArray(args.params)
 		const ethCallCoverageRequest = args.skipCoverage || args.method !== 'eth_call' ? undefined : parseEthCallCoverageRequest(params)
@@ -213,9 +244,10 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 			})
 		}
 
-		const response = await fetch(ANVIL_RPC, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
+		const raw = await fetchJsonRpcResponse({
+			rpcUrl: ANVIL_RPC,
+			method: args.method,
+			...(args.rpcTimeoutMs === undefined ? {} : { timeoutMs: args.rpcTimeoutMs }),
 			body: JSON.stringify({
 				jsonrpc: '2.0',
 				id: requestId++,
@@ -223,8 +255,6 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 				params,
 			}),
 		})
-		if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-		const raw = await response.json()
 		const json = parseJsonRpcResponse(raw)
 
 		// Validate JSON-RPC response structure
@@ -279,6 +309,39 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 			}
 			return undefined
 		}
+		const getReceiptWaitDiagnostics = async (hash: string): Promise<string> => {
+			const transactionDiagnostic = (async (): Promise<string> => {
+				try {
+					const transaction = await request({
+						method: 'eth_getTransactionByHash',
+						params: [hash],
+						rpcTimeoutMs: RECEIPT_DIAGNOSTIC_RPC_TIMEOUT_MS,
+					})
+					if (transaction === null) return 'transaction not found'
+					if (isObjectRecord(transaction) && transaction['blockNumber'] === null) return 'transaction still pending'
+					return `transaction lookup ${formatRpcDiagnosticValue(transaction)}`
+				} catch (error) {
+					return `transaction lookup failed: ${error instanceof Error ? error.message : String(error)}`
+				}
+			})()
+			const latestBlockDiagnostic = (async (): Promise<string> => {
+				try {
+					const latestBlockNumber = await request({ method: 'eth_blockNumber', params: [], rpcTimeoutMs: RECEIPT_DIAGNOSTIC_RPC_TIMEOUT_MS })
+					return `latest block ${formatRpcDiagnosticValue(latestBlockNumber)}`
+				} catch (error) {
+					return `latest block lookup failed: ${error instanceof Error ? error.message : String(error)}`
+				}
+			})()
+			const transactionPoolDiagnostic = (async (): Promise<string> => {
+				try {
+					const transactionPoolStatus = await request({ method: 'txpool_status', params: [], rpcTimeoutMs: RECEIPT_DIAGNOSTIC_RPC_TIMEOUT_MS })
+					return `transaction pool ${formatRpcDiagnosticValue(transactionPoolStatus)}`
+				} catch (error) {
+					return `transaction pool lookup failed: ${error instanceof Error ? error.message : String(error)}`
+				}
+			})()
+			return (await Promise.all([transactionDiagnostic, latestBlockDiagnostic, transactionPoolDiagnostic])).join('; ')
+		}
 
 		// For eth_getTransactionReceipt, return the receipt even if status === '0x0' (reverted)
 		// Callers can check the status field themselves
@@ -291,7 +354,10 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		}
 		if (isSendTransactionMethod && params[0] !== undefined && typeof json.result === 'string') {
 			const receiptResult = await waitForReceiptStatus(json.result)
-			if (receiptResult === undefined) throw new Error(`Anvil did not return a receipt for sent transaction ${json.result} within ${SEND_TRANSACTION_RECEIPT_TIMEOUT_MS.toString()}ms.`)
+			if (receiptResult === undefined) {
+				const diagnostics = await getReceiptWaitDiagnostics(json.result)
+				throw new Error(`Anvil did not return a receipt for sent transaction ${json.result} within ${SEND_TRANSACTION_RECEIPT_TIMEOUT_MS.toString()}ms. Diagnostics: ${diagnostics}.`)
+			}
 			const parsedReceipt = parseTransactionReceipt(receiptResult.receipt)
 			const transaction = isRpcTransactionRequest(params[0]) ? params[0] : undefined
 			let transactionData = transaction !== undefined && typeof transaction.data === 'string' ? transaction.data : undefined

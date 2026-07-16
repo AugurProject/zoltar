@@ -85,7 +85,7 @@ describe('DeploymentSection', () => {
 		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[deploymentStep]} allSteps={[deploymentStep]} accountAddress={zeroAddress} busyStepId={undefined} isMainnet={false} onDeploy={async () => undefined} />)
 		cleanupRendered = rendered.cleanup
 
-		expect(rendered.container.textContent).not.toContain('Switch to Ethereum mainnet.')
+		expect(rendered.container.textContent).toContain('Switch to Ethereum mainnet.')
 		expectTransactionButtonDisabled(document.body, 'Deploy')
 	})
 

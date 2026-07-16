@@ -28,6 +28,7 @@ struct SecurityPoolForkerForkData {
 	uint256 auctionPoolOwnershipPerRep;
 	uint256 claimedAuctionPoolOwnership;
 	bytes32 escalationSnapshotId;
+	uint256 forkCollateralReceived;
 }
 
 struct OwnForkChildRepAllocation {

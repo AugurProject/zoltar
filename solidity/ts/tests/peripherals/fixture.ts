@@ -807,6 +807,7 @@ export function usePeripheralsTruthAuctionFixture() {
 		'getTotalSecurityBondAllowance',
 		'getVaultCount',
 		'poolOwnershipToRep',
+		'redeemFees',
 		'redeemRep',
 		'updateVaultFees',
 		'peripherals_SecurityPoolForker_SecurityPoolForker',

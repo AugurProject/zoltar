@@ -236,7 +236,7 @@ void describe('trading helpers', () => {
 				totalRepDeposit: 0n,
 				totalSecurityBondAllowance: 10n,
 			}),
-		).toBeUndefined()
+		).toBe('Switch to Ethereum mainnet.')
 	})
 
 	void test('surfaces the local mint block reasons before the transaction is sent', () => {
@@ -567,7 +567,7 @@ void describe('trading helpers', () => {
 		).toBe('Select valid target child universes.')
 	})
 
-	void test('only checks local prerequisites before resolved-share redemption', () => {
+	void test('checks local and network prerequisites before resolved-share redemption', () => {
 		expect(
 			getTradingRedeemSharesGuardMessage({
 				accountAddress: undefined,
@@ -590,7 +590,7 @@ void describe('trading helpers', () => {
 				hasSelectedPool: true,
 				isMainnet: false,
 			}),
-		).toBeUndefined()
+		).toBe('Switch to Ethereum mainnet.')
 
 		expect(
 			getTradingRedeemSharesGuardMessage({

@@ -189,6 +189,7 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		if (ethToTransfer > availableCollateral) ethToTransfer = availableCollateral;
 		parentForkData.migratedRepCollateralized = nextRepTransferred;
 		parentForkData.collateralTransferred += ethToTransfer;
+		forkDataByPool[child].forkCollateralReceived += ethToTransfer;
 		if (ethToTransfer == 0) return;
 		parent.transferEth(payable(address(child)), ethToTransfer);
 	}

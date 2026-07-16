@@ -101,7 +101,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 									disabled: accountAddress === undefined || !isMainnet || !hasForked || child.exists,
 									reason: (() => {
 										if (accountAddress === undefined) return marketCopy.childDeploymentWalletRequiredReason
-										if (!isMainnet) return undefined
+										if (!isMainnet) return commonCopy.mainnetRequiredReason
 
 										return (() => {
 											if (!hasForked) return marketCopy.childUniversesNotForkedReason
@@ -128,7 +128,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 									? marketCopy.childDeploymentSelectionRequired
 									: (() => {
 											if (accountAddress === undefined) return marketCopy.childDeploymentWalletRequiredReason
-											if (!isMainnet) return undefined
+											if (!isMainnet) return commonCopy.mainnetRequiredReason
 
 											return (() => {
 												if (!hasForked) return marketCopy.childUniversesNotForkedReason
