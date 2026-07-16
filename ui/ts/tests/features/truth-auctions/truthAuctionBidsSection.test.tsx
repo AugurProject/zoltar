@@ -72,8 +72,13 @@ describe('TruthAuctionBidsSection', () => {
 		)
 		cleanupRendered = rendered.cleanup
 
-		expect(within(document.body).getByText('Price 42')).not.toBeNull()
-		expect(within(document.body).getByText('Winning')).not.toBeNull()
+		const priceValue = within(document.body).getByText('Price 42')
+		const statusValue = within(document.body).getByText('Winning')
+		expect(priceValue.getAttribute('data-label')).toBe('Price (ETH / REP)')
+		expect(statusValue.parentElement?.getAttribute('data-label')).toBe('Status')
+		const bidHistory = within(document.body).getByRole('region', { name: 'Scrollable auction bid history' })
+		expect(bidHistory.className).toContain('truth-auction-bid-table-scroll')
+		expect(bidHistory.getAttribute('tabindex')).toBe('0')
 		fireEvent.click(within(document.body).getByRole('button', { name: 'Load More Truth Auction Bids' }))
 		expect(loadMoreCalls).toBe(1)
 	})

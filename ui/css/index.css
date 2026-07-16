@@ -2087,9 +2087,9 @@ button.currency-value.copyable:hover:not(:disabled) {
 }
 
 .market-linked-pool {
-	display: flex;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(12rem, 0.8fr) auto;
 	align-items: center;
-	justify-content: space-between;
 	gap: 1rem;
 	padding: 0.75rem;
 	border: 1px solid var(--border-default);
@@ -2102,6 +2102,19 @@ button.currency-value.copyable:hover:not(:disabled) {
 	align-items: center;
 	flex-wrap: wrap;
 	gap: 0.55rem 0.9rem;
+}
+
+.market-linked-pool-participation {
+	display: grid;
+	gap: 0.2rem;
+	color: var(--muted);
+	font-size: var(--font-detail);
+	line-height: 1.45;
+}
+
+.market-linked-pool-participation strong {
+	color: var(--text);
+	font-size: var(--font-label);
 }
 
 .market-column {
@@ -2969,6 +2982,13 @@ strong.metric-value-danger {
 	gap: 0.6rem;
 }
 
+.truth-auction-bid-table-scroll {
+	max-height: min(38rem, 70vh);
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	scrollbar-gutter: stable;
+}
+
 .truth-auction-bid-row {
 	display: grid;
 	grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.2fr) minmax(0, 0.85fr) minmax(0, 0.9fr) auto minmax(0, 1.15fr);
@@ -3328,7 +3348,7 @@ strong.metric-value-danger {
 
 	.market-linked-pool {
 		align-items: stretch;
-		flex-direction: column;
+		grid-template-columns: 1fr;
 	}
 }
 
@@ -4568,8 +4588,41 @@ strong.metric-value-danger {
 
 	.truth-auction-bid-row,
 	.truth-auction-bid-row.is-wide,
-	.truth-auction-bid-row.is-wallet {
+	.truth-auction-bid-row.is-wide.is-no-actions,
+	.truth-auction-bid-row.is-wallet,
+	.truth-auction-bid-row.is-wallet.is-no-actions {
 		grid-template-columns: 1fr;
+	}
+
+	.truth-auction-bid-row.is-header {
+		display: none;
+	}
+
+	.truth-auction-bid-row:not(.is-header) > [data-label] {
+		display: grid;
+		grid-column: 1 / -1;
+		grid-template-columns: minmax(6.5rem, 0.85fr) minmax(0, 1fr);
+		align-items: start;
+		gap: 0.75rem;
+	}
+
+	.truth-auction-bid-row:not(.is-header) > [data-label]::before {
+		content: attr(data-label);
+		color: var(--muted);
+		font-size: var(--font-label);
+		font-weight: 600;
+		letter-spacing: 0.08em;
+		line-height: 1.35;
+		text-transform: uppercase;
+	}
+
+	.truth-auction-bid-row:not(.is-header) > .truth-auction-bid-row-address[data-label] {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 0.3rem;
+	}
+
+	.truth-auction-bid-table-scroll {
+		max-height: min(32rem, 65vh);
 	}
 
 	.truth-auction-bid-row-actions {
@@ -5061,6 +5114,21 @@ strong.metric-value-danger {
 	letter-spacing: 0.14em;
 	text-transform: uppercase;
 	color: var(--muted);
+	white-space: nowrap;
+}
+
+.collateralization-gauge-status {
+	color: currentColor;
+	font-size: var(--font-label);
+	line-height: 1.25;
+	white-space: nowrap;
+}
+
+.collateralization-gauge-exact {
+	color: var(--text);
+	font-family: var(--font-family-mono);
+	font-size: var(--font-caption);
+	font-variant-numeric: tabular-nums;
 	white-space: nowrap;
 }
 
@@ -6000,9 +6068,10 @@ strong.metric-value-danger {
 }
 
 .security-pool-browse-vault-row-title {
-	display: flex;
-	gap: 0.3rem;
-	align-items: center;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: 0.55rem;
+	align-items: start;
 	min-width: 0;
 }
 
@@ -6010,6 +6079,10 @@ strong.metric-value-danger {
 	align-self: center;
 	flex: 1 1 auto;
 	min-width: 0;
+}
+
+.security-pool-browse-vault-row-title .collateralization-gauge {
+	justify-self: start;
 }
 
 .vault-position-title-copy .address-value.copyable,
