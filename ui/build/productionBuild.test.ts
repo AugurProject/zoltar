@@ -124,6 +124,85 @@ async function waitForDevToolsPort(portFilePath: string) {
 	throw new Error('Chromium did not publish its DevTools port')
 }
 
+async function waitForChromiumPageWebSocketUrl(port: number, timeoutMilliseconds = 5_000) {
+	const deadline = Date.now() + timeoutMilliseconds
+	let lastObservedState = 'no response'
+
+	while (Date.now() < deadline) {
+		try {
+			const remainingMilliseconds = deadline - Date.now()
+			const targetsResponse = await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(remainingMilliseconds) })
+			if (!targetsResponse.ok) {
+				lastObservedState = `HTTP ${targetsResponse.status.toString()} ${targetsResponse.statusText}`.trim()
+			} else {
+				const targets: unknown = await targetsResponse.json()
+				lastObservedState = JSON.stringify(targets) ?? String(targets)
+				if (Array.isArray(targets)) {
+					const pageTarget = targets.find(target => typeof target === 'object' && target !== null && 'type' in target && target.type === 'page' && 'webSocketDebuggerUrl' in target && typeof target.webSocketDebuggerUrl === 'string')
+					if (typeof pageTarget === 'object' && pageTarget !== null && 'webSocketDebuggerUrl' in pageTarget && typeof pageTarget.webSocketDebuggerUrl === 'string') {
+						return pageTarget.webSocketDebuggerUrl
+					}
+				}
+			}
+		} catch (error) {
+			lastObservedState = error instanceof Error ? error.message : String(error)
+		}
+
+		const remainingMilliseconds = deadline - Date.now()
+		if (remainingMilliseconds <= 0) break
+		await Bun.sleep(Math.min(50, remainingMilliseconds))
+	}
+
+	throw new Error(`Chromium page target was unavailable after ${timeoutMilliseconds.toString()}ms. Last observed state: ${lastObservedState}`)
+}
+
+test('Chromium page target discovery tolerates an initially empty target list', async () => {
+	let requestCount = 0
+	const pageWebSocketUrl = 'ws://127.0.0.1/devtools/page/test'
+	const devToolsServer = Bun.serve({
+		fetch: () => {
+			requestCount += 1
+			return Response.json(requestCount === 1 ? [] : [{ type: 'page', webSocketDebuggerUrl: pageWebSocketUrl }])
+		},
+		port: 0,
+	})
+
+	try {
+		await expect(waitForChromiumPageWebSocketUrl(devToolsServer.port)).resolves.toBe(pageWebSocketUrl)
+		expect(requestCount).toBe(2)
+	} finally {
+		devToolsServer.stop(true)
+	}
+})
+
+test('Chromium page target discovery bounds a stalled target response', async () => {
+	const stalledResponse = new Promise<Response>(() => undefined)
+	const devToolsServer = Bun.serve({
+		fetch: () => stalledResponse,
+		port: 0,
+	})
+	let rejection: unknown
+	const discoveryResult = waitForChromiumPageWebSocketUrl(devToolsServer.port, 100).then(
+		() => 'resolved',
+		error => {
+			rejection = error
+			return 'rejected'
+		},
+	)
+
+	try {
+		const result = await Promise.race([discoveryResult, Bun.sleep(250).then(() => 'pending')])
+		expect(result).toBe('rejected')
+		expect(rejection).toBeInstanceOf(Error)
+		if (!(rejection instanceof Error)) throw new Error('Chromium page target discovery did not return an error')
+		expect(rejection.message).toContain('Last observed state:')
+		expect(rejection.message).not.toContain('Last observed state: no response')
+	} finally {
+		devToolsServer.stop(true)
+		await discoveryResult
+	}
+})
+
 function readEvaluationString(response: unknown) {
 	if (typeof response !== 'object' || response === null || !('result' in response)) throw new Error('Chromium evaluation result was missing')
 	const result = response.result
@@ -151,15 +230,7 @@ async function loadProductionDocumentInChromium(pageUrl: string, viewport: { hei
 
 	try {
 		const port = await waitForDevToolsPort(path.join(profilePath, 'DevToolsActivePort'))
-		const targetsResponse = await fetch(`http://127.0.0.1:${port}/json/list`)
-		const targets = await targetsResponse.json()
-		if (!Array.isArray(targets)) throw new Error('Chromium returned an invalid DevTools target list')
-		const pageTarget = targets.find(target => typeof target === 'object' && target !== null && 'type' in target && target.type === 'page')
-		if (typeof pageTarget !== 'object' || pageTarget === null || !('webSocketDebuggerUrl' in pageTarget) || typeof pageTarget.webSocketDebuggerUrl !== 'string') {
-			throw new Error('Chromium page target was unavailable')
-		}
-
-		socket = new WebSocket(pageTarget.webSocketDebuggerUrl)
+		socket = new WebSocket(await waitForChromiumPageWebSocketUrl(port))
 		await new Promise<void>((resolve, reject) => {
 			socket?.addEventListener('open', () => resolve(), { once: true })
 			socket?.addEventListener('error', () => reject(new Error('Chromium DevTools connection failed')), { once: true })
