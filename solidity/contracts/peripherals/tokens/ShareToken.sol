@@ -18,9 +18,8 @@ contract ShareToken is ERC1155, IShareToken {
 	string public name;
 	string public symbol;
 	Zoltar public immutable zoltar;
-	mapping(address => bool) authorized;
-	event Authorized(address indexed securityPool);
-	event Migrate(address migrator, uint256 fromId, uint256 toId, uint256 fromIdBalance);
+	mapping(address => bool) private authorized;
+	event Migrate(address indexed migrator, uint256 indexed fromId, uint256 indexed toId, uint256 fromIdBalance);
 
 	constructor(address owner, Zoltar _zoltar, uint256 questionId) {
 		zoltar = _zoltar;
@@ -28,6 +27,7 @@ contract ShareToken is ERC1155, IShareToken {
 		name = string.concat('Shares-', questionIdString);
 		symbol = string.concat('SHARE-', questionIdString);
 		authorized[owner] = true;
+		emit AuthorizationUpdated(owner, msg.sender, true);
 	}
 
 	function uintToString(uint256 value) internal pure returns (string memory) {
@@ -51,8 +51,13 @@ contract ShareToken is ERC1155, IShareToken {
 
 	function authorize(ISecurityPool _securityPoolCandidate) external {
 		require(authorized[msg.sender], 'ShareToken caller is not authorized to add another authorized pool');
+		if (authorized[address(_securityPoolCandidate)]) return;
 		authorized[address(_securityPoolCandidate)] = true;
-		emit Authorized(address(_securityPoolCandidate));
+		emit AuthorizationUpdated(address(_securityPoolCandidate), msg.sender, true);
+	}
+
+	function isAuthorized(address account) external view returns (bool) {
+		return authorized[account];
 	}
 
 	function getUniverseId(uint256 id) internal pure returns (uint248 universeId) {

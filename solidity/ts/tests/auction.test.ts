@@ -4,7 +4,7 @@ import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereu
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { contractExists, getETHBalance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
-import { encodeAbiParameters, encodeFunctionData, isHex, keccak256, type Address, type Hash } from '@zoltar/shared/ethereum'
+import { decodeEventLog, encodeAbiParameters, encodeFunctionData, isHex, keccak256, type Address, type Hash } from '@zoltar/shared/ethereum'
 import {
 	computeClearing,
 	deployUniformPriceDualCapBatchAuction,
@@ -80,6 +80,19 @@ describe('Auction', () => {
 	function createTestClient(idx: number): WriteClient {
 		const address = ensureDefined(TEST_ADDRESSES[idx], `TEST_ADDRESSES[${idx}] is undefined`)
 		return createWriteClient(mockWindow, address, 0)
+	}
+
+	async function decodeAuctionEvents(hash: Hash) {
+		const receipt = await client.waitForTransactionReceipt({ hash })
+		return receipt.logs
+			.filter(log => log.address.toLowerCase() === auctionAddress.toLowerCase())
+			.map(log =>
+				decodeEventLog({
+					abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+					data: log.data,
+					topics: log.topics,
+				}),
+			)
 	}
 
 	function tickForPrice(price: bigint): bigint {
@@ -1251,6 +1264,58 @@ describe('Auction', () => {
 	})
 
 	describe('Bid Submission', () => {
+		test('BidSubmitted exposes stable same-tick indices and cumulative ETH', async () => {
+			await setupStandardAuction(client, auctionAddress)
+			const sameTick = 0n
+			const firstAmount = 2n * ATTOETH_PER_ETH
+			const secondAmount = 3n * ATTOETH_PER_ETH
+
+			const firstHash = await submitBid(client, auctionAddress, sameTick, firstAmount)
+			const secondHash = await submitBid(client, auctionAddress, sameTick, secondAmount)
+			const firstLog = (await decodeAuctionEvents(firstHash)).find(log => log.eventName === 'BidSubmitted')
+			const secondLog = (await decodeAuctionEvents(secondHash)).find(log => log.eventName === 'BidSubmitted')
+			if (firstLog === undefined || secondLog === undefined) throw new Error('missing BidSubmitted log')
+
+			assert.strictEqual(firstLog.args.bidder, client.account.address)
+			assert.strictEqual(firstLog.args.tick, sameTick)
+			assert.strictEqual(firstLog.args.bidIndex, 0n)
+			assert.strictEqual(firstLog.args.ethAmount, firstAmount)
+			assert.strictEqual(firstLog.args.cumulativeEthAtTick, firstAmount)
+			assert.strictEqual(secondLog.args.bidIndex, 1n)
+			assert.strictEqual(secondLog.args.cumulativeEthAtTick, firstAmount + secondAmount)
+		})
+
+		test('BidSettled expands same-tick FIFO settlement per bid', async () => {
+			const sameTick = 0n
+			const bidAmount = 7n * ATTOETH_PER_ETH
+			await startAuction(client, auctionAddress, 10n * ATTOETH_PER_ETH, 10n * ATTOETH_PER_ETH)
+			await submitBid(client, auctionAddress, sameTick, bidAmount)
+			await submitBid(client, auctionAddress, sameTick, bidAmount)
+			await finalizeAndVerify(client, auctionAddress)
+
+			const withdrawalHash = await withdrawBids(client, auctionAddress, client.account.address, [
+				{ tick: sameTick, bidIndex: 0n },
+				{ tick: sameTick, bidIndex: 1n },
+			])
+			const settlementLogs = (await decodeAuctionEvents(withdrawalHash)).filter(log => log.eventName === 'BidSettled')
+			assert.strictEqual(settlementLogs.length, 2)
+			const firstSettlement = settlementLogs[0]
+			const secondSettlement = settlementLogs[1]
+			if (firstSettlement?.eventName !== 'BidSettled' || secondSettlement?.eventName !== 'BidSettled') {
+				throw new Error('missing per-bid settlement log')
+			}
+			assert.strictEqual(firstSettlement.args.bidIndex, 0n)
+			assert.strictEqual(firstSettlement.args.ethUsed, bidAmount)
+			assert.strictEqual(firstSettlement.args.repFilled, bidAmount)
+			assert.strictEqual(firstSettlement.args.ethRefund, 0n)
+			assert.strictEqual(firstSettlement.args.status, 0n)
+			assert.strictEqual(secondSettlement.args.bidIndex, 1n)
+			assert.strictEqual(secondSettlement.args.ethUsed, 3n * ATTOETH_PER_ETH)
+			assert.strictEqual(secondSettlement.args.repFilled, 3n * ATTOETH_PER_ETH)
+			assert.strictEqual(secondSettlement.args.ethRefund, 4n * ATTOETH_PER_ETH)
+			assert.strictEqual(secondSettlement.args.status, 1n)
+		})
+
 		test('minimum bid size enforcement', async () => {
 			const ethRaiseCap = 50000n
 			const maxRepBeingSold = 1n * 10n ** 18n

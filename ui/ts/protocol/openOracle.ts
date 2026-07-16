@@ -28,8 +28,10 @@ function normalizeOpenOracleTokenMetadata(tokenAddress: Address, decimalsValue: 
 	if (sameAddress(tokenAddress, getWethAddress()) && (decimals !== 18 || symbol !== 'WETH')) throw new Error(`WETH metadata is invalid for ${tokenAddress}`)
 	return { decimals, symbol }
 }
-function getStagedOracleExecutionResult(receipt: TransactionReceipt, expectedOperation: OracleQueueOperation): StagedOracleExecutionResult | undefined {
+
+function getStagedOracleExecutionResult(receipt: TransactionReceipt, managerAddress: Address, expectedOperation: OracleQueueOperation): StagedOracleExecutionResult | undefined {
 	for (const log of receipt.logs) {
+		if (!sameAddress(log.address, managerAddress)) continue
 		try {
 			const decodedLog = decodeEventLog({
 				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
@@ -54,8 +56,9 @@ function getStagedOracleExecutionResult(receipt: TransactionReceipt, expectedOpe
 	return undefined
 }
 
-function getStagedOracleQueuedResult(receipt: TransactionReceipt, expectedOperation: OracleQueueOperation): StagedOracleQueuedResult | undefined {
+function getStagedOracleQueuedResult(receipt: TransactionReceipt, managerAddress: Address, expectedOperation: OracleQueueOperation): StagedOracleQueuedResult | undefined {
 	for (const log of receipt.logs) {
+		if (!sameAddress(log.address, managerAddress)) continue
 		try {
 			const decodedLog = decodeEventLog({
 				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
@@ -783,7 +786,7 @@ export async function executeOracleManagerStagedOperation(client: WriteContractC
 		args: [operationId],
 		gas: 5_000_000n,
 	}))
-	const stagedExecution = getStagedOracleExecutionResult(receipt, 'liquidation') ?? getStagedOracleExecutionResult(receipt, 'withdrawRep') ?? getStagedOracleExecutionResult(receipt, 'setSecurityBondsAllowance')
+	const stagedExecution = getStagedOracleExecutionResult(receipt, managerAddress, 'liquidation') ?? getStagedOracleExecutionResult(receipt, managerAddress, 'withdrawRep') ?? getStagedOracleExecutionResult(receipt, managerAddress, 'setSecurityBondsAllowance')
 	return {
 		action: 'executeStagedOperation',
 		hash,
@@ -861,8 +864,8 @@ export async function queueSecurityPoolLiquidation(client: WriteClient, managerA
 		value: queueOperationEthValue,
 	}
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)
-	const queuedOperation = getStagedOracleQueuedResult(receipt, 'liquidation')
-	const stagedExecution = getStagedOracleExecutionResult(receipt, 'liquidation')
+	const queuedOperation = getStagedOracleQueuedResult(receipt, managerAddress, 'liquidation')
+	const stagedExecution = getStagedOracleExecutionResult(receipt, managerAddress, 'liquidation')
 	return {
 		hash,
 		...(queuedOperation === undefined ? {} : { queuedOperation }),
@@ -883,8 +886,8 @@ export async function queueOracleManagerOperation(client: WriteClient, managerAd
 		value: queueOperationEthValue,
 	}
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)
-	const queuedOperation = getStagedOracleQueuedResult(receipt, operation)
-	const stagedExecution = getStagedOracleExecutionResult(receipt, operation)
+	const queuedOperation = getStagedOracleQueuedResult(receipt, managerAddress, operation)
+	const stagedExecution = getStagedOracleExecutionResult(receipt, managerAddress, operation)
 	return {
 		action: 'queueOperation',
 		hash,

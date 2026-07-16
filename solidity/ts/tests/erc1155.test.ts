@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import assert from '../testSupport/simulator/utils/assert'
-import { encodeDeployData, encodeFunctionData, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { decodeEventLog, encodeDeployData, encodeFunctionData, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
@@ -8,6 +8,7 @@ import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/de
 import { ensureZoltarDeployed, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
+import { addressString } from '../testSupport/simulator/utils/bigint'
 import { peripherals_tokens_ShareToken_ShareToken, test_peripherals_ERC1155ReceiverMock_ERC1155NonReceiver, test_peripherals_ERC1155ReceiverMock_ERC1155ReceiverMock } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
@@ -109,6 +110,75 @@ describe('ERC1155 Compliance Test Suite', () => {
 			}),
 			true,
 			'share token should support ERC1155',
+		)
+	})
+
+	test('authorization events identify constructor and chained authorization actors', async () => {
+		const deploymentHash = await client.sendTransaction({
+			data: encodeDeployData({
+				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				bytecode: `0x${peripherals_tokens_ShareToken_ShareToken.evm.bytecode.object}`,
+				args: [client.account.address, getZoltarAddress(), 2n],
+			}),
+		})
+		const deploymentReceipt = await client.waitForTransactionReceipt({ hash: deploymentHash })
+		const shareTokenAddress = deploymentReceipt.contractAddress
+		if (shareTokenAddress === undefined || shareTokenAddress === null) throw new Error('share token address missing')
+		const constructorLog = deploymentReceipt.logs
+			.filter(log => log.address.toLowerCase() === shareTokenAddress.toLowerCase())
+			.map(log =>
+				decodeEventLog({
+					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					data: log.data,
+					topics: log.topics,
+				}),
+			)
+			.find(log => log.eventName === 'AuthorizationUpdated')
+		if (constructorLog === undefined) throw new Error('constructor authorization log missing')
+		assert.strictEqual(constructorLog.args.account, client.account.address)
+		assert.strictEqual(constructorLog.args.actor, client.account.address)
+		assert.strictEqual(constructorLog.args.authorized, true)
+
+		await writeContractAndWait(client, () =>
+			client.writeContract({
+				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				address: shareTokenAddress,
+				functionName: 'authorize',
+				args: [operatorClient.account.address],
+			}),
+		)
+		const chainedAccount = TEST_ADDRESSES[2]
+		if (chainedAccount === undefined) throw new Error('chained authorization account missing')
+		const chainedHash = await writeContractAndWait(operatorClient, () =>
+			operatorClient.writeContract({
+				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				address: shareTokenAddress,
+				functionName: 'authorize',
+				args: [addressString(chainedAccount)],
+			}),
+		)
+		const chainedReceipt = await client.waitForTransactionReceipt({ hash: chainedHash })
+		const chainedLog = chainedReceipt.logs
+			.map(log =>
+				decodeEventLog({
+					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					data: log.data,
+					topics: log.topics,
+				}),
+			)
+			.find(log => log.eventName === 'AuthorizationUpdated')
+		if (chainedLog === undefined) throw new Error('chained authorization log missing')
+		assert.strictEqual(chainedLog.args.account, addressString(chainedAccount))
+		assert.strictEqual(chainedLog.args.actor, operatorClient.account.address)
+		assert.strictEqual(chainedLog.args.authorized, true)
+		assert.strictEqual(
+			await client.readContract({
+				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				address: shareTokenAddress,
+				functionName: 'isAuthorized',
+				args: [addressString(chainedAccount)],
+			}),
+			true,
 		)
 	})
 

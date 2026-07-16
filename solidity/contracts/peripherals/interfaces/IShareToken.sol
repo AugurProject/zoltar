@@ -5,7 +5,12 @@ import '../interfaces/ISecurityPool.sol';
 import '../BinaryOutcomes.sol';
 
 interface IShareToken {
+	/// @notice Resulting authorization for `account`.
+	/// @param actor Constructor deployer for the initial owner authorization; already-authorized caller thereafter.
+	event AuthorizationUpdated(address indexed account, address indexed actor, bool authorized);
+
 	function authorize(ISecurityPool _securityPoolCandidate) external;
+	function isAuthorized(address account) external view returns (bool);
 	function mintCompleteSets(uint248 _universeId, address _account, uint256 _cashAmount) external;
 	function burnCompleteSets(uint248 _universeId, address _owner, uint256 _amount) external;
 	function burnTokenIdAndGetRemainingSupply(

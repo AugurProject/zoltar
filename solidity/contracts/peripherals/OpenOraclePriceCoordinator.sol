@@ -20,6 +20,17 @@ enum OperationType {
 	SetSecurityBondsAllowance
 }
 
+enum CoordinatorCheckpointReason {
+	SecurityPoolSetup,
+	PriceSeeded,
+	PriceRequested,
+	PriceReported,
+	PriceRejected,
+	PendingReportRecovered,
+	OperationQueued,
+	OperationExecuted
+}
+
 struct StagedOperation {
 	OperationType operation;
 	address initiatorVault;
@@ -69,32 +80,32 @@ contract OpenOraclePriceCoordinator {
 	uint256 public immutable minLiquidationPriceDistanceBps;
 	uint256 public pendingReportMaxSettlementBaseFee;
 
-	event SecurityPoolSet(ISecurityPool securityPool);
+	event SecurityPoolSet(ISecurityPool indexed securityPool);
 	event RepEthPriceSet(uint256 price);
-	event PriceRequested(uint256 reportId, uint256 pendingReportMaxSettlementBaseFee);
+	event PriceRequested(uint256 indexed reportId, uint256 pendingReportMaxSettlementBaseFee);
 	event PriceReportRejected(
-		uint256 reportId,
+		uint256 indexed reportId,
 		string reason,
 		uint256 pendingReportId,
 		uint256 pendingReportMaxSettlementBaseFee,
 		uint256 lastPrice,
 		uint256 lastSettlementTimestamp
 	);
-	event PriceReported(uint256 reportId, uint256 price, uint256 lastSettlementTimestamp);
+	event PriceReported(uint256 indexed reportId, uint256 price, uint256 lastSettlementTimestamp);
 	event PendingReportRecovered(
-		uint256 reportId,
+		uint256 indexed reportId,
 		uint256 settlementTimestamp,
 		uint256 pendingReportId,
 		uint256 pendingReportMaxSettlementBaseFee,
 		uint256 lastPrice,
 		uint256 lastSettlementTimestamp
 	);
-	event PendingOperationRecoveryConsumed(uint256 operationId, OperationType operation);
+	event PendingOperationRecoveryConsumed(uint256 indexed operationId, OperationType operation);
 	event StagedOperationQueued(
-		uint256 operationId,
+		uint256 indexed operationId,
 		OperationType operation,
-		address initiatorVault,
-		address targetVault,
+		address indexed initiatorVault,
+		address indexed targetVault,
 		uint256 amount,
 		uint256 queuedAt,
 		uint256 validForSeconds,
@@ -104,7 +115,28 @@ contract OpenOraclePriceCoordinator {
 		uint256 snapshotDenominator,
 		bool isPendingSlot
 	);
-	event ExecutedStagedOperation(uint256 operationId, OperationType operation, bool success, string errorMessage);
+	event ExecutedStagedOperation(
+		uint256 indexed operationId,
+		OperationType operation,
+		bool success,
+		string errorMessage
+	);
+	/// @notice Authoritative operation-governing and report state after a coordinator mutation.
+	/// REP/ETH prices use 1e18 precision. The base-fee field uses wei.
+	event CoordinatorStateCheckpoint(
+		CoordinatorCheckpointReason reason,
+		uint256 indexed reportId,
+		uint256 indexed operationId,
+		uint256 pendingReportId,
+		address pendingReportSponsor,
+		uint256 pendingOperationSlotId,
+		uint256 pendingReportMaxSettlementBaseFee,
+		uint256 lastPrice,
+		uint256 lastSettlementTimestamp,
+		uint256 stagedOperationCounter,
+		uint256 activeStagedOperationCount,
+		uint256 pendingSettlementOperationCount
+	);
 
 	// This is not a FIFO queue. We keep append-only operation records plus a bounded
 	// pending settlement list that auto-executes once a fresh oracle price arrives.
@@ -192,12 +224,14 @@ contract OpenOraclePriceCoordinator {
 		require(address(securityPool) == address(0x0), 'Security pool has already been set on the oracle coordinator');
 		securityPool = _securityPool;
 		emit SecurityPoolSet(securityPool);
+		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.SecurityPoolSetup, 0, 0);
 	}
 
 	function setRepEthPrice(uint256 _lastPrice) public {
 		require(msg.sender == address(securityPool), 'Only the security pool can seed the REP/ETH price');
 		lastPrice = _lastPrice;
 		emit RepEthPriceSet(lastPrice);
+		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PriceSeeded, 0, 0);
 	}
 
 	function getRequestPriceEthCost() public view returns (uint256) {
@@ -287,6 +321,7 @@ contract OpenOraclePriceCoordinator {
 		pendingReportId = openOracle.createReportInstance{ value: ethCost }(reportparams);
 		_submitInitialReport(pendingReportId, sponsor, initialWethReport, amount2);
 		emit PriceRequested(pendingReportId, pendingReportMaxSettlementBaseFee);
+		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PriceRequested, pendingReportId, 0);
 	}
 
 	function _submitInitialReport(
@@ -326,6 +361,7 @@ contract OpenOraclePriceCoordinator {
 			lastPrice,
 			lastSettlementTimestamp
 		);
+		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PendingReportRecovered, reportId, 0);
 	}
 
 	function _consumeRecoveredPendingOperation() private {
@@ -378,6 +414,7 @@ contract OpenOraclePriceCoordinator {
 				}
 			}
 		}
+		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PriceReported, reportId, 0);
 	}
 
 	function _emitPriceReportRejected(uint256 reportId, string memory reason) private {
@@ -389,6 +426,7 @@ contract OpenOraclePriceCoordinator {
 			lastPrice,
 			lastSettlementTimestamp
 		);
+		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PriceRejected, reportId, 0);
 	}
 
 	function isPriceValid() public view returns (bool) {
@@ -554,6 +592,7 @@ contract OpenOraclePriceCoordinator {
 		string memory errorMessage
 	) private {
 		emit ExecutedStagedOperation(operationId, operation, success, errorMessage);
+		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.OperationExecuted, 0, operationId);
 	}
 
 	function _consumeAndEmitExecutedStagedOperation(
@@ -645,6 +684,28 @@ contract OpenOraclePriceCoordinator {
 			stagedOperation.snapshotTotalRep,
 			stagedOperation.snapshotDenominator,
 			isPendingSlot
+		);
+		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.OperationQueued, pendingReportId, operationId);
+	}
+
+	function _emitCoordinatorStateCheckpoint(
+		CoordinatorCheckpointReason reason,
+		uint256 reportId,
+		uint256 operationId
+	) private {
+		emit CoordinatorStateCheckpoint(
+			reason,
+			reportId,
+			operationId,
+			pendingReportId,
+			pendingReportSponsor,
+			pendingOperationSlotId,
+			pendingReportMaxSettlementBaseFee,
+			lastPrice,
+			lastSettlementTimestamp,
+			stagedOperationCounter,
+			activeStagedOperationCount,
+			pendingSettlementOperationIds.length
 		);
 	}
 
