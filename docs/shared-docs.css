@@ -148,6 +148,22 @@ body.doc-openoracle table {
 	border-collapse: collapse;
 	font-size: 0.95rem;
 }
+body.doc-openoracle .table-scroll {
+	margin-top: 0.75rem;
+	overflow-x: auto;
+	overscroll-behavior-x: contain;
+	scrollbar-width: thin;
+}
+body.doc-openoracle .table-scroll:focus-visible,
+body.doc-openoracle .diagram:focus-visible,
+body.doc-openoracle .equation:focus-visible {
+	outline: 2px solid var(--blue);
+	outline-offset: 0.2rem;
+}
+body.doc-openoracle .table-scroll table {
+	min-width: 54rem;
+	margin-top: 0;
+}
 body.doc-openoracle th,
 body.doc-openoracle td {
 	padding: 0.7rem;
