@@ -103,12 +103,20 @@ describe('Peripherals: vault accounting', () => {
 		questionId = fixture.questionId
 	})
 
+	const withdrawRepAcrossFreshOracleRounds = async (vaultClient: PeripheralsVaultAccountingFixture['client'], amount: bigint) => {
+		for (let withdrawalIndex = 0n; withdrawalIndex < 5n; withdrawalIndex++) {
+			const withdrawalAmount = withdrawalIndex === 4n ? amount : amount / 5n
+			await manipulatePriceOracleAndPerformOperation(vaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, vaultClient.account.address, withdrawalAmount, reportedRepEthPrice)
+			if (withdrawalIndex < 4n) await mockWindow.advanceTime(10n * 60n)
+		}
+	}
+
 	test('can deposit rep and withdraw it', async () => {
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, repDeposit, reportedRepEthPrice)
+		const startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
+		await withdrawRepAcrossFreshOracleRounds(client, repDeposit)
 		strictEqualTypeSafe(await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), reportedRepEthPrice, 'Price was not set!')
 		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool), 0n, 100n, 'Did not empty security pool of rep')
-		const startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
-		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), startBalance, 100n, 'Did not get rep back')
+		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), startBalance + repDeposit, 100n, 'Did not get rep back')
 	})
 
 	test('deposit events expose updated vault and pool ownership state', async () => {
@@ -247,7 +255,7 @@ describe('Peripherals: vault accounting', () => {
 		strictEqualTypeSafe(await getVaultCount(client, securityPoolAddresses.securityPool), 2n, 'historical vault count should include both vaults')
 		strictEqualTypeSafe(await getActiveVaultCount(client, securityPoolAddresses.securityPool), 2n, 'active vault count should include both funded vaults')
 
-		await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, attackerClient.account.address, repDeposit, reportedRepEthPrice)
+		await withdrawRepAcrossFreshOracleRounds(attackerClient, repDeposit)
 
 		const historicalVaultCount = await getVaultCount(client, securityPoolAddresses.securityPool)
 		const activeVaultCount = await getActiveVaultCount(client, securityPoolAddresses.securityPool)
@@ -268,7 +276,7 @@ describe('Peripherals: vault accounting', () => {
 		const newestFirstVaultsBeforeRemoval = await getActiveVaults(client, securityPoolAddresses.securityPool, 0n, 3n)
 		assert.deepStrictEqual(newestFirstVaultsBeforeRemoval, [thirdClient.account.address, attackerClient.account.address, client.account.address], 'active vault paging should list the most recently activated vaults first')
 
-		await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, attackerClient.account.address, repDeposit, reportedRepEthPrice)
+		await withdrawRepAcrossFreshOracleRounds(attackerClient, repDeposit)
 
 		const newestFirstVaultsAfterRemoval = await getActiveVaults(client, securityPoolAddresses.securityPool, 0n, 3n)
 		assert.deepStrictEqual(newestFirstVaultsAfterRemoval, [thirdClient.account.address, client.account.address], 'removing a middle vault should preserve newest-first ordering for the remaining active vaults')
@@ -480,7 +488,7 @@ describe('Peripherals: vault accounting', () => {
 		const availableRepBeforeWithdrawal = await getTotalRepBalance(client, securityPoolAddresses.securityPool)
 		const aliceWalletRepBeforeWithdrawal = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 
-		await requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, repDeposit)
+		await withdrawRepAcrossFreshOracleRounds(client, repDeposit)
 
 		const availableRepAfterWithdrawal = await getTotalRepBalance(client, securityPoolAddresses.securityPool)
 		const aliceWalletRepAfterWithdrawal = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)

@@ -129,4 +129,5 @@ library SecurityPoolUtils {
 
 	// auction
 	uint256 constant MAX_AUCTION_VAULT_HAIRCUT_DIVISOR = 1_000_000;
+	uint256 constant MIN_TRUTH_AUCTION_REPAIR_BPS = BPS_DENOMINATOR;
 }

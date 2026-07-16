@@ -5,8 +5,8 @@ import { getExpectedLiquidationRepMove } from './liquidationTestHelpers'
 import { addRepToMigrationBalance, getMigrationRepBalance, getUniverseData, splitMigrationRep } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { queueLiquidationAtForcedPrice } from '../../testSupport/simulator/utils/contracts/peripherals'
 import { getQuestionResolution } from '../../testSupport/simulator/utils/contracts/escalationGame'
+import { peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken } from '../../types/contractArtifact'
 import { test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackFactoryMock, test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackParentMock } from '../../types/contractArtifact'
-import { getMaxRepBeingSold } from '../../testSupport/simulator/utils/contracts/auction'
 
 describe('Peripherals: fork migration', () => {
 	const fixture = usePeripheralsForkMigrationFixture()
@@ -54,6 +54,7 @@ describe('Peripherals: fork migration', () => {
 		participateAuction,
 		requestPriceIfNeededAndStageOperation,
 		getScalarOutcomeIndex,
+		tickToPrice,
 		QuestionOutcome,
 		SystemState,
 		ensureDefined,
@@ -120,18 +121,6 @@ describe('Peripherals: fork migration', () => {
 		triggerExternalForkForSecurityPool,
 		setupOwnForkWithEscrow,
 	} = fixture
-	const prefundedRepCases = (() => {
-		const cases = [
-			{ label: 'one wei boundary', amount: 1n },
-			{ label: 'large boundary', amount: repDeposit / 2n },
-		]
-		let state = 0x5ec0f00dn
-		for (let index = 0; index < 4; index++) {
-			state = (state * 1664525n + 1013904223n) & 0xffffffffn
-			cases.push({ label: `deterministic fuzz case ${index + 1}`, amount: 1n + (state % (repDeposit / 2n)) })
-		}
-		return cases
-	})()
 
 	let mockWindow: PeripheralsForkMigrationFixture['mockWindow']
 
@@ -159,6 +148,19 @@ describe('Peripherals: fork migration', () => {
 			args: [securityPoolAddresses.securityPool],
 		})
 
+	const getOutcomeShareSupplies = async (shareToken: `0x${string}`, universeId: bigint) =>
+		await Promise.all(
+			[QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No].map(
+				async outcome =>
+					await client.readContract({
+						abi: peripherals_tokens_ShareToken_ShareToken.abi,
+						functionName: 'totalSupplyForOutcome',
+						address: shareToken,
+						args: [universeId, outcome],
+					}),
+			),
+		)
+
 	const assertVaultMigrationPreservesParentFees = async (vaultClient: PeripheralsForkMigrationFixture['client'], migrate: () => Promise<void>) => {
 		const beforeMigrationSnapshot = await mockWindow.anvilSnapshot()
 		await updateVaultFees(vaultClient, securityPoolAddresses.securityPool, vaultClient.account.address)
@@ -181,42 +183,47 @@ describe('Peripherals: fork migration', () => {
 	}
 
 	describe('child universe and own-fork entry', () => {
-		for (const { label, amount: prefundedRep } of prefundedRepCases) {
-			test(`external fork initiation ignores ${label} of REP sent to the undeployed migration proxy`, async () => {
-				const migrationProxyAddress = await getMigrationProxyAddress()
-				const parentRepToken = getRepTokenAddress(genesisUniverse)
+		const prefundedRepCases = (() => {
+			let state = 0x5eedf00dn
+			const nextAmount = () => {
+				state = (state * 6364136223846793005n + 1442695040888963407n) & ((1n << 64n) - 1n)
+				return (state % repDeposit) + 1n
+			}
+			return [{ name: 'one wei', amount: 1n }, { name: 'maximum corpus amount', amount: repDeposit }, ...Array.from({ length: 3 }, (_, index) => ({ name: `seeded fuzz case ${index + 1}`, amount: nextAmount() }))]
+		})()
 
-				assert.ok(!(await contractExists(client, migrationProxyAddress)), 'migration proxy should not exist before fork initiation')
-				await transferRepToAddress(client, migrationProxyAddress, prefundedRep)
-				strictEqualTypeSafe(await getERC20Balance(client, parentRepToken, migrationProxyAddress), prefundedRep, 'predicted proxy should hold the unsolicited REP before deployment')
+		test.each(prefundedRepCases)('external fork initiation isolates prefunded REP for $name', async ({ name, amount: prefundedRep }) => {
+			const migrationProxyAddress = await getMigrationProxyAddress()
+			const parentRepToken = getRepTokenAddress(genesisUniverse)
 
-				await triggerExternalForkForSecurityPool(undefined, `prefunded proxy ${label}`)
+			assert.ok(!(await contractExists(client, migrationProxyAddress)), 'migration proxy should not exist before fork initiation')
+			await transferRepToAddress(client, migrationProxyAddress, prefundedRep)
+			strictEqualTypeSafe(await getERC20Balance(client, parentRepToken, migrationProxyAddress), prefundedRep, 'predicted proxy should hold the unsolicited REP before deployment')
 
-				const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
-				strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'prefunding must not prevent the parent pool from entering fork mode')
-				assert.ok(await contractExists(client, migrationProxyAddress), 'migration proxy should deploy successfully despite the prefund')
-				strictEqualTypeSafe(await getERC20Balance(client, parentRepToken, migrationProxyAddress), prefundedRep, 'unsolicited REP should remain isolated as proxy surplus')
-				strictEqualTypeSafe(await getMigrationRepBalance(client, genesisUniverse, migrationProxyAddress), forkData.auctionableRepAtFork, 'unsolicited REP must not enter the pool migration ledger')
-			})
-		}
+			await triggerExternalForkForSecurityPool(undefined, `prefunded proxy ${name}`)
 
-		for (const { label, amount: prefundedRep } of prefundedRepCases) {
-			test(`own fork initiation excludes ${label} sent to the undeployed migration proxy`, async () => {
-				const migrationProxyAddress = await getMigrationProxyAddress()
-				const baselineSnapshot = await mockWindow.anvilSnapshot()
-				const baseline = await setupOwnForkWithEscrow()
+			const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
+			strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'prefunding must not prevent the parent pool from entering fork mode')
+			assert.ok(await contractExists(client, migrationProxyAddress), 'migration proxy should deploy successfully despite the prefund')
+			strictEqualTypeSafe(await getERC20Balance(client, parentRepToken, migrationProxyAddress), prefundedRep, 'unsolicited REP should remain isolated as proxy surplus')
+			strictEqualTypeSafe(await getMigrationRepBalance(client, genesisUniverse, migrationProxyAddress), forkData.auctionableRepAtFork, 'unsolicited REP must not enter the pool migration ledger')
+		})
 
-				await mockWindow.anvilRevert(baselineSnapshot)
-				await transferRepToAddress(client, migrationProxyAddress, prefundedRep)
-				const prefunded = await setupOwnForkWithEscrow()
+		test.each(prefundedRepCases)('own fork initiation isolates prefunded REP for $name', async ({ amount: prefundedRep }) => {
+			const migrationProxyAddress = await getMigrationProxyAddress()
+			const baselineSnapshot = await mockWindow.anvilSnapshot()
+			const baseline = await setupOwnForkWithEscrow()
 
-				strictEqualTypeSafe(prefunded.forkData.auctionableRepAtFork, baseline.forkData.auctionableRepAtFork, 'unsolicited REP must not increase own-fork auctionable REP')
-				strictEqualTypeSafe(prefunded.ownForkRepBuckets.vaultRepAtFork, baseline.ownForkRepBuckets.vaultRepAtFork, 'unsolicited REP must not increase vault migration backing')
-				strictEqualTypeSafe(prefunded.ownForkRepBuckets.escalationChildRepPerSelectedOutcome, baseline.ownForkRepBuckets.escalationChildRepPerSelectedOutcome, 'unsolicited REP must not increase escalation migration backing')
-				strictEqualTypeSafe(await getERC20Balance(client, getRepTokenAddress(genesisUniverse), migrationProxyAddress), prefundedRep, 'unsolicited REP should remain isolated as proxy surplus after the own fork')
-				strictEqualTypeSafe(await getMigrationRepBalance(client, genesisUniverse, migrationProxyAddress), prefunded.forkData.auctionableRepAtFork, 'unsolicited REP must not enter the own-fork migration ledger')
-			})
-		}
+			await mockWindow.anvilRevert(baselineSnapshot)
+			await transferRepToAddress(client, migrationProxyAddress, prefundedRep)
+			const prefunded = await setupOwnForkWithEscrow()
+
+			strictEqualTypeSafe(prefunded.forkData.auctionableRepAtFork, baseline.forkData.auctionableRepAtFork, 'unsolicited REP must not increase own-fork auctionable REP')
+			strictEqualTypeSafe(prefunded.ownForkRepBuckets.vaultRepAtFork, baseline.ownForkRepBuckets.vaultRepAtFork, 'unsolicited REP must not increase vault migration backing')
+			strictEqualTypeSafe(prefunded.ownForkRepBuckets.escalationChildRepPerSelectedOutcome, baseline.ownForkRepBuckets.escalationChildRepPerSelectedOutcome, 'unsolicited REP must not increase escalation migration backing')
+			strictEqualTypeSafe(await getERC20Balance(client, getRepTokenAddress(genesisUniverse), migrationProxyAddress), prefundedRep, 'unsolicited REP should remain isolated as proxy surplus after the own fork')
+			strictEqualTypeSafe(await getMigrationRepBalance(client, genesisUniverse, migrationProxyAddress), prefunded.forkData.auctionableRepAtFork, 'unsolicited REP must not enter the own-fork migration ledger')
+		})
 
 		test('allows delayed fork initialization for an escalation game unresolved at the universe fork', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
@@ -452,7 +459,7 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(canLiquidate(initialPrice, securityPoolAllowance, repDeposit, 2n), false, 'Should not be able to liquidate yet')
 			// REP/ETH increases to 10x, 10 REP = 1 ETH (rep drops in value)
 			const forcedPrice = PRICE_PRECISION * 10n
-			const liquidationAmount = 10n * 10n ** 18n
+			const liquidationAmount = 20n * 10n ** 18n
 			await queueLiquidationAtForcedPrice(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, liquidationAmount, forcedPrice)
 
 			await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, forcedPrice)
@@ -484,7 +491,7 @@ describe('Peripherals: fork migration', () => {
 
 			const targetVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const targetClaimBefore = await getVaultRepClaim(client.account.address)
-			const liquidationAmount = 10n * 10n ** 18n
+			const liquidationAmount = 20n * 10n ** 18n
 
 			await assert.rejects(requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, liquidationAmount), /Caller bad/)
 
@@ -525,7 +532,7 @@ describe('Peripherals: fork migration', () => {
 
 			// Queue liquidation (liquidator requests price to trigger liquidation)
 			const forcedPrice = PRICE_PRECISION * 10n
-			const liquidationAmount = 10n * 10n ** 18n
+			const liquidationAmount = 20n * 10n ** 18n
 			await queueLiquidationAtForcedPrice(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, liquidationAmount, forcedPrice)
 
 			// Record liquidator's ownership before attack
@@ -563,32 +570,51 @@ describe('Peripherals: fork migration', () => {
 			approximatelyEqual(denominatorAfter, PRICE_PRECISION * repDeposit * 16n, 1n, 'ownership denominator should reflect the additional attack deposit')
 		})
 
-		test('a liquidation above the secured report notional is rejected without changing vaults', async () => {
+		test('a max liquidation can clear the full target debt and seize REP', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
-			const securityPoolAllowance = 75n * 10n ** 18n
+			for (let withdrawalIndex = 0n; withdrawalIndex < 3n; withdrawalIndex++) {
+				await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, repDeposit / 5n)
+				await mockWindow.advanceTime(10n * 60n)
+			}
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, repDeposit / 10n)
+			await mockWindow.advanceTime(10n * 60n)
+			const securityPoolAllowance = 20n * 10n ** 18n
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
 
 			const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveToken(liquidatorClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
 			await depositRep(liquidatorClient, securityPoolAddresses.securityPool, repDeposit * 2n)
-			await depositRep(client, securityPoolAddresses.securityPool, repDeposit * 3n)
 			await mockWindow.advanceTime(100000n)
 
 			const targetVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const liquidatorVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
+			const targetRepBeforeLiquidation = await getVaultRepClaim(client.account.address)
 			const liquidationAmount = securityPoolAllowance
 
-			await queueLiquidationAtForcedPrice(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, liquidationAmount, PRICE_PRECISION * 40n)
-			await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, PRICE_PRECISION * 40n)
+			await queueLiquidationAtForcedPrice(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, liquidationAmount, PRICE_PRECISION * 10n)
+			await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, PRICE_PRECISION * 10n)
 
-			const targetVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-			const liquidatorVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
+			const targetVaultAfterFirstLiquidation = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+			const liquidatorVaultAfterFirstLiquidation = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
+			const targetClaimAfterFirstLiquidation = await getVaultRepClaim(client.account.address)
+			const liquidatorClaimAfterFirstLiquidation = await getVaultRepClaim(liquidatorClient.account.address)
+			const expectedRepMove = getExpectedLiquidationRepMove(liquidationAmount, PRICE_PRECISION * 10n)
+			strictEqualTypeSafe(targetVaultAfterFirstLiquidation.securityBondAllowance, 0n, 'max liquidation should clear the full target debt when enough REP is available')
+			assert.ok(targetVaultAfterFirstLiquidation.repDepositShare < targetVaultBefore.repDepositShare, 'max liquidation should reduce the target ownership')
+			strictEqualTypeSafe(liquidatorVaultAfterFirstLiquidation.securityBondAllowance, liquidatorVaultBefore.securityBondAllowance + liquidationAmount, 'the liquidator should absorb the full requested debt when the target has enough REP to pay the penalty')
+			approximatelyEqual(targetClaimAfterFirstLiquidation, targetRepBeforeLiquidation - expectedRepMove, 1n, 'max liquidation should leave the target with the post-penalty REP remainder')
+			approximatelyEqual(liquidatorClaimAfterFirstLiquidation, repDeposit * 2n + expectedRepMove, 1n, 'max liquidation should pay the liquidator the seized REP')
 
-			strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, targetVaultBefore.securityBondAllowance, 'an over-budget liquidation must not move target debt')
-			strictEqualTypeSafe(targetVaultAfter.repDepositShare, targetVaultBefore.repDepositShare, 'an over-budget liquidation must not move target REP')
-			strictEqualTypeSafe(liquidatorVaultAfter.securityBondAllowance, liquidatorVaultBefore.securityBondAllowance, 'an over-budget liquidation must not move debt to the liquidator')
-			strictEqualTypeSafe(liquidatorVaultAfter.repDepositShare, liquidatorVaultBefore.repDepositShare, 'an over-budget liquidation must not move REP to the liquidator')
+			await queueLiquidationAtForcedPrice(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, liquidationAmount, PRICE_PRECISION * 10n)
+			await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, PRICE_PRECISION * 10n)
+
+			const targetVaultAfterSecondLiquidation = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+			const liquidatorVaultAfterSecondLiquidation = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
+
+			strictEqualTypeSafe(targetVaultAfterSecondLiquidation.securityBondAllowance, targetVaultAfterFirstLiquidation.securityBondAllowance, 'once fully liquidated, the vault should not change under the same price')
+			strictEqualTypeSafe(targetVaultAfterSecondLiquidation.repDepositShare, targetVaultAfterFirstLiquidation.repDepositShare, 'a second same-price liquidation should not move more REP after debt is cleared')
+			strictEqualTypeSafe(liquidatorVaultAfterSecondLiquidation.securityBondAllowance, liquidatorVaultAfterFirstLiquidation.securityBondAllowance, 'a second same-price liquidation should not move more debt after debt is cleared')
 		})
 
 		test('liquidation leaves state unchanged when the only safe dust-avoiding chunk would strand caller debt dust', async () => {
@@ -842,20 +868,19 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(targetClaimAfterLock, repDeposit - lockedDeposit, 'locking REP should move the committed principal out of the vault claim')
 			strictEqualTypeSafe(canLiquidate(PRICE_PRECISION, securityPoolAllowance, targetClaimAfterLock, 2n), true, 'the vault should become liquidatable once its unlocked vault REP falls below the required backing')
 
-			const liquidationChunk = securityPoolAllowance / 2n
 			await manipulatePriceOracle(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
-			await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, liquidationChunk)
+			await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, securityPoolAllowance)
 
 			const targetVaultAfterLiquidation = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const liquidatorVaultAfterLiquidation = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
 			const targetClaimAfterLiquidation = await getVaultRepClaim(client.account.address)
 			const liquidatorClaimAfterLiquidation = await getVaultRepClaim(liquidatorClient.account.address)
-			const expectedRepMove = getExpectedLiquidationRepMove(liquidationChunk, PRICE_PRECISION)
 
+			const expectedRepMove = getExpectedLiquidationRepMove(securityPoolAllowance, PRICE_PRECISION)
 			strictEqualTypeSafe(targetVaultAfterLiquidation.repInEscalationGame, lockedDeposit, 'liquidation should leave the targets escalation commitment untouched')
-			strictEqualTypeSafe(targetVaultAfterLiquidation.securityBondAllowance, securityPoolAllowance - liquidationChunk, 'the secured liquidation chunk should reduce only unlocked-vault debt')
-			approximatelyEqual(targetClaimAfterLiquidation, repDeposit - lockedDeposit - expectedRepMove, 1n, 'the secured liquidation chunk should seize only unlocked vault REP')
-			strictEqualTypeSafe(liquidatorVaultAfterLiquidation.securityBondAllowance, liquidationChunk, 'the liquidator should absorb the executed debt chunk')
+			strictEqualTypeSafe(targetVaultAfterLiquidation.securityBondAllowance, 0n, 'liquidation should clear the unlocked-vault debt when enough unlocked REP is available')
+			approximatelyEqual(targetClaimAfterLiquidation, repDeposit - lockedDeposit - expectedRepMove, 1n, 'liquidation should seize only unlocked vault REP')
+			strictEqualTypeSafe(liquidatorVaultAfterLiquidation.securityBondAllowance, securityPoolAllowance, 'the liquidator should absorb the executed debt amount')
 			approximatelyEqual(liquidatorClaimAfterLiquidation, repDeposit * 2n + expectedRepMove, 1n, 'the liquidator should receive the unlocked REP seized from the target')
 		})
 
@@ -915,6 +940,32 @@ describe('Peripherals: fork migration', () => {
 			})
 		}
 
+		test('forced ETH during migration remains surplus while accounted collateral moves to the child', async () => {
+			const securityPoolAllowance = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+			await createCompleteSet(client, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
+			await triggerExternalForkForSecurityPool(undefined, 'forced ETH migration source')
+			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+
+			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const forcedParentSurplus = 7n * 10n ** 18n
+			const forcedChildSurplus = 11n * 10n ** 18n
+			const parentRawBalanceBeforeForce = await getETHBalance(client, securityPoolAddresses.securityPool)
+			await mockWindow.setBalance(securityPoolAddresses.securityPool, parentRawBalanceBeforeForce + forcedParentSurplus)
+			await mockWindow.setBalance(yesSecurityPool.securityPool, forcedChildSurplus)
+			const parentCollateralBeforeMigration = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+
+			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+			const parentCollateralAfterMigration = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+			const migratedCollateral = parentCollateralBeforeMigration - parentCollateralAfterMigration
+			assert.ok(migratedCollateral > 0n, 'test setup should migrate positive accounted collateral')
+			strictEqualTypeSafe(await getETHBalance(client, securityPoolAddresses.securityPool), parentRawBalanceBeforeForce + forcedParentSurplus - migratedCollateral, 'parent migration should transfer only accounted collateral and retain forced surplus')
+			strictEqualTypeSafe(await getETHBalance(client, yesSecurityPool.securityPool), forcedChildSurplus + migratedCollateral, 'child raw balance should separate forced surplus from migrated collateral')
+			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), 0n, 'child collateral should remain unsettled until truth-auction finalization')
+		})
+
 		test('nonzero fee redemption does not classify forced ETH as complete-set collateral', async () => {
 			const securityPoolAllowance = repDeposit / 4n
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
@@ -949,7 +1000,7 @@ describe('Peripherals: fork migration', () => {
 			const victimBalanceBefore = await getETHBalance(client, victim.account.address)
 			const poolBalanceBefore = await getETHBalance(client, securityPoolAddresses.securityPool)
 
-			await assert.rejects(createCompleteSet(victim, securityPoolAddresses.securityPool, 1n), /Exchange rate undefined/)
+			await assert.rejects(createCompleteSet(victim, securityPoolAddresses.securityPool, 1n), /Zero shares|Exchange rate undefined/)
 
 			strictEqualTypeSafe(await getETHBalance(client, victim.account.address), victimBalanceBefore, 'a failed zero-output mint should refund all user ETH')
 			strictEqualTypeSafe(await getETHBalance(client, securityPoolAddresses.securityPool), poolBalanceBefore, 'a failed zero-output mint should not increase the pool balance')
@@ -1307,10 +1358,10 @@ describe('Peripherals: fork migration', () => {
 			let externalAuctionCollateral = 0n
 			if (yesStateAfterStart === SystemState.ForkTruthAuction) {
 				const yesAuctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+				const repAtFork = (await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)).auctionableRepAtFork
 				const yesEthRaiseCap = await getEthRaiseCap(client, yesSecurityPool.truthAuction)
-				const yesAuctionCap = await getMaxRepBeingSold(client, yesSecurityPool.truthAuction)
 				externalAuctionCollateral = yesEthRaiseCap
-				await participateAuction(yesAuctionParticipant, yesSecurityPool.truthAuction, yesAuctionCap, yesEthRaiseCap + yesEthRaiseCap / 100n + 1n)
+				await participateAuction(yesAuctionParticipant, yesSecurityPool.truthAuction, repAtFork / 2n, yesEthRaiseCap)
 				await mockWindow.advanceTime(7n * DAY + DAY)
 				await finalizeTruthAuction(client, yesSecurityPool.securityPool)
 			} else {
@@ -1391,8 +1442,9 @@ describe('Peripherals: fork migration', () => {
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 			if ((await getSystemState(client, yesSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
+				const repairContribution = await getEthRaiseCap(client, yesSecurityPool.truthAuction)
 				await mockWindow.advanceTime(7n * DAY + DAY)
-				await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+				await finalizeTruthAuction(client, yesSecurityPool.securityPool, repairContribution)
 			}
 
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'child pool should become operational after migration accounting settles')
@@ -1655,7 +1707,9 @@ describe('Peripherals: fork migration', () => {
 				await claimAuctionProceeds(client, yesSecurityPool.securityPool, yesAuctionParticipant.account.address, [{ tick: yesAuctionTick, bidIndex: 0n }])
 				const yesAuctionParticipantVault = await getSecurityVault(client, yesSecurityPool.securityPool, yesAuctionParticipant.account.address)
 				yesAuctionParticipantRep = await poolOwnershipToRep(client, yesSecurityPool.securityPool, yesAuctionParticipantVault.repDepositShare)
-				strictEqualTypeSafe(yesAuctionParticipantRep, await getTotalRepPurchased(client, yesSecurityPool.truthAuction), 'the only yes-auction bidder should receive the finalized purchased REP')
+				const yesClearingPrice = tickToPrice(yesAuctionTick)
+				const expectedYesRep = (yesAuctionEthRaiseCap * 1_000_000_000_000_000_000n) / yesClearingPrice
+				approximatelyEqual(yesAuctionParticipantRep, expectedYesRep, 1_000n, 'yes auction participant should get expected REP')
 			}
 
 			const originalYesVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
@@ -1690,7 +1744,9 @@ describe('Peripherals: fork migration', () => {
 				await claimAuctionProceeds(client, noSecurityPool.securityPool, noAuctionParticipant.account.address, [{ tick: noAuctionTick, bidIndex: 0n }])
 				const noAuctionParticipantVault = await getSecurityVault(client, noSecurityPool.securityPool, noAuctionParticipant.account.address)
 				const noAuctionParticipantRep = await poolOwnershipToRep(client, noSecurityPool.securityPool, noAuctionParticipantVault.repDepositShare)
-				strictEqualTypeSafe(noAuctionParticipantRep, await getTotalRepPurchased(client, noSecurityPool.truthAuction), 'the only no-auction bidder should receive the finalized purchased REP')
+				const noClearingPrice = tickToPrice(noAuctionTick)
+				const expectedNoRep = (noAuctionEthRaiseCap * 1_000_000_000_000_000_000n) / noClearingPrice
+				approximatelyEqual(noAuctionParticipantRep, expectedNoRep, 1_000n, 'no auction participant should get expected REP')
 			}
 
 			const originalNoVault = await getSecurityVault(client, noSecurityPool.securityPool, attackerClient.account.address)
@@ -1722,7 +1778,9 @@ describe('Peripherals: fork migration', () => {
 				await claimAuctionProceeds(client, invalidSecurityPool.securityPool, invalidAuctionParticipant.account.address, [{ tick: invalidAuctionTick, bidIndex: 0n }])
 				const invalidAuctionParticipantVault = await getSecurityVault(client, invalidSecurityPool.securityPool, invalidAuctionParticipant.account.address)
 				const invalidAuctionParticipantRep = await poolOwnershipToRep(client, invalidSecurityPool.securityPool, invalidAuctionParticipantVault.repDepositShare)
-				strictEqualTypeSafe(invalidAuctionParticipantRep, await getTotalRepPurchased(client, invalidSecurityPool.truthAuction), 'the only invalid-auction bidder should receive the finalized purchased REP')
+				const invalidClearingPrice = tickToPrice(invalidAuctionTick)
+				const expectedInvalidRep = (ownForkParentCollateralAtFork * 1_000_000_000_000_000_000n) / invalidClearingPrice
+				approximatelyEqual(invalidAuctionParticipantRep, expectedInvalidRep, 1_000n, 'invalid auction participant should get expected REP')
 			}
 
 			// Resolved child pools must not accept new complete sets.
@@ -1828,10 +1886,10 @@ describe('Peripherals: fork migration', () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 			const startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
-			const withdrawalChunk = repDeposit / 4n
-			for (let index = 0; index < 4; index++) {
-				await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, withdrawalChunk)
-				if (index < 3) await mockWindow.advanceTime(5n * 60n + 1n)
+			for (let withdrawalIndex = 0n; withdrawalIndex < 5n; withdrawalIndex++) {
+				const withdrawalAmount = withdrawalIndex === 4n ? repDeposit : repDeposit / 5n
+				await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, withdrawalAmount)
+				if (withdrawalIndex < 4n) await mockWindow.advanceTime(10n * 60n)
 			}
 			strictEqualTypeSafe(await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), 1n * PRICE_PRECISION, 'Price was not set!')
 			approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool), 0n, 100n, 'Did not empty security pool of rep')
@@ -1986,6 +2044,8 @@ describe('Peripherals: fork migration', () => {
 			const childCollateralBeforeMint = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
 			const childShareSupplyBeforeMint = await getShareTokenSupply(client, yesSecurityPool.securityPool)
 			strictEqualTypeSafe(childShareSupplyBeforeMint, migratedParentMintAmount * PRICE_PRECISION, 'child exchange-rate supply should use the balanced shares actually migrated into the child')
+			const outcomeSuppliesBeforeMint = await getOutcomeShareSupplies(yesSecurityPool.shareToken, yesUniverse)
+			assert.deepStrictEqual(outcomeSuppliesBeforeMint, [childShareSupplyBeforeMint, childShareSupplyBeforeMint, childShareSupplyBeforeMint], 'balanced partial migration should reconcile nominal child supply with every ERC-1155 outcome supply before minting')
 
 			await createCompleteSet(newMinter, yesSecurityPool.securityPool, childMintAmount)
 
@@ -1994,7 +2054,9 @@ describe('Peripherals: fork migration', () => {
 			assert.ok(childCollateralAfterMint <= childCollateralBeforeMint + childMintAmount, 'child complete-set mint should accrue fees before adding new collateral')
 			const updatedCollateralBeforeMint = childCollateralAfterMint - childMintAmount
 			const expectedMintedShares = updatedCollateralBeforeMint === 0n ? childMintAmount * PRICE_PRECISION : (childMintAmount * childShareSupplyBeforeMint) / updatedCollateralBeforeMint
-			strictEqualTypeSafe(await getShareTokenSupply(client, yesSecurityPool.securityPool), childShareSupplyBeforeMint + expectedMintedShares, 'child complete-set mint should add shares at the settled exchange rate')
+			const childShareSupplyAfterMint = await getShareTokenSupply(client, yesSecurityPool.securityPool)
+			strictEqualTypeSafe(childShareSupplyAfterMint, childShareSupplyBeforeMint + expectedMintedShares, 'child complete-set mint should add shares at the settled exchange rate')
+			assert.deepStrictEqual(await getOutcomeShareSupplies(yesSecurityPool.shareToken, yesUniverse), [childShareSupplyAfterMint, childShareSupplyAfterMint, childShareSupplyAfterMint], 'successful child minting should preserve nominal and per-outcome supply equality')
 
 			await manipulatePriceOracle(newMinter, mockWindow, yesSecurityPool.priceOracleManagerAndOperatorQueuer)
 			await approveToken(newMinter, getRepTokenAddress(yesUniverse), yesSecurityPool.securityPool)
@@ -2030,12 +2092,9 @@ describe('Peripherals: fork migration', () => {
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 			if ((await getSystemState(client, yesSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
-				const ethRaiseCap = await getEthRaiseCap(client, yesSecurityPool.truthAuction)
-				const auctionCap = await getMaxRepBeingSold(client, yesSecurityPool.truthAuction)
-				const auctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
-				await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, auctionCap, ethRaiseCap + ethRaiseCap / 100n + 1n)
+				const repairContribution = await getEthRaiseCap(client, yesSecurityPool.truthAuction)
 				await mockWindow.advanceTime(7n * DAY + DAY)
-				await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+				await finalizeTruthAuction(client, yesSecurityPool.securityPool, repairContribution)
 			}
 
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'child pool should be operational after fork accounting settles')
@@ -2045,6 +2104,9 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(ensureDefined(migratedBalances[0], 'invalid child balance missing'), 0n, 'invalid supply should remain unmigrated')
 			strictEqualTypeSafe(ensureDefined(migratedBalances[1], 'yes child balance missing'), parentMintAmount * PRICE_PRECISION, 'yes supply should migrate unevenly')
 			strictEqualTypeSafe(ensureDefined(migratedBalances[2], 'no child balance missing'), 0n, 'no supply should remain unmigrated')
+			const nominalSupplyBeforeFailedMint = await getShareTokenSupply(client, yesSecurityPool.securityPool)
+			assert.deepStrictEqual(await getOutcomeShareSupplies(yesSecurityPool.shareToken, yesUniverse), [0n, parentMintAmount * PRICE_PRECISION, 0n], 'unequal migration should expose the actual Invalid/Yes/No supply mismatch against nominal pool supply')
+			strictEqualTypeSafe(nominalSupplyBeforeFailedMint, parentMintAmount * PRICE_PRECISION, 'unreconciled child accounting should retain the parent nominal fallback until minting is safe')
 
 			const newMinter = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
 			const collateralBeforeFailedMint = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
@@ -2076,13 +2138,15 @@ describe('Peripherals: fork migration', () => {
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 			if ((await getSystemState(client, yesSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
+				const repairContribution = await getEthRaiseCap(client, yesSecurityPool.truthAuction)
 				await mockWindow.advanceTime(7n * DAY + DAY)
-				await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+				await finalizeTruthAuction(client, yesSecurityPool.securityPool, repairContribution)
 			}
 
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'child pool should be operational after fork accounting settles')
 			assert.ok((await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)) > 0n, 'test setup requires collateral without migrated shares')
 			strictEqualTypeSafe(await getShareTokenSupply(client, yesSecurityPool.securityPool), 0n, 'zero migrated outcome supplies should reconcile to zero')
+			assert.deepStrictEqual(await getOutcomeShareSupplies(yesSecurityPool.shareToken, yesUniverse), [0n, 0n, 0n], 'zero migration should reconcile nominal and all actual ERC-1155 outcome supplies before rejecting orphan-collateral minting')
 
 			const newMinter = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
 			const collateralBeforeFailedMint = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
@@ -2091,7 +2155,7 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(await getShareTokenSupply(client, yesSecurityPool.securityPool), 0n, 'rejected mint should preserve zero reconciled supply')
 		})
 
-		test('child pool with migrated shares but no collateral remains inactive without auction repair', async () => {
+		test('child pool with migrated shares but no collateral remains inactive before complete-set minting', async () => {
 			const parentAllowance = repDeposit / 4n
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, parentAllowance)
 
@@ -2111,19 +2175,36 @@ describe('Peripherals: fork migration', () => {
 
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
-			if ((await getSystemState(client, yesSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
-				await mockWindow.advanceTime(7n * DAY + DAY)
-				await finalizeTruthAuction(client, yesSecurityPool.securityPool)
-			}
 
-			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'an unrepaired zero-collateral child must remain inactive')
+			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'an uncollateralized child must remain in its repair phase')
 			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), 0n, 'test setup requires a zero-collateral child')
 			strictEqualTypeSafe(await getShareTokenSupply(client, yesSecurityPool.securityPool), parentMintAmount * PRICE_PRECISION, 'test setup requires migrated child complete-set shares')
+			assert.deepStrictEqual(await getOutcomeShareSupplies(yesSecurityPool.shareToken, yesUniverse), [parentMintAmount * PRICE_PRECISION, parentMintAmount * PRICE_PRECISION, parentMintAmount * PRICE_PRECISION], 'balanced migrated shares should match nominal supply even when collateral is still zero')
+			strictEqualTypeSafe(await getTotalSecurityBondAllowance(client, yesSecurityPool.securityPool), 0n, 'inactive child financials must not expose parent mint capacity before repair')
+			await mockWindow.advanceTime(7n * DAY + DAY)
+			await assert.rejects(finalizeTruthAuction(client, yesSecurityPool.securityPool), /Repair/)
+			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'failed repair must not reactivate an uncollateralized child')
 
 			const newMinter = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
 			const childCollateralBeforeFailedMint = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
 			const childShareSupplyBeforeFailedMint = await getShareTokenSupply(client, yesSecurityPool.securityPool)
-			await assert.rejects(createCompleteSet(newMinter, yesSecurityPool.securityPool, 1n * 10n ** 18n), /Pool not operational|Pool inactive/)
+			const childMintRejected = await newMinter
+				.simulateContract({
+					abi: peripherals_SecurityPool_SecurityPool.abi,
+					functionName: 'createCompleteSet',
+					address: yesSecurityPool.securityPool,
+					args: [],
+					account: newMinter.account,
+					value: 1n * 10n ** 18n,
+				})
+				.then(
+					() => false,
+					error => {
+						if (!(error instanceof Error)) throw error
+						return true
+					},
+				)
+			strictEqualTypeSafe(childMintRejected, true, 'zero-collateral child should reject new complete-set minting')
 			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), childCollateralBeforeFailedMint, 'failed child mint should not add collateral')
 			strictEqualTypeSafe(await getShareTokenSupply(client, yesSecurityPool.securityPool), childShareSupplyBeforeFailedMint, 'failed child mint should not mint shares')
 		})
@@ -2471,6 +2552,7 @@ describe('Peripherals: fork migration', () => {
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
 			const unmigratedVaultClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveAndDepositRep(unmigratedVaultClient, repDeposit, questionId)
+			await mockWindow.advanceTime(10n * 60n)
 			await manipulatePriceOracleAndPerformOperation(unmigratedVaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, unmigratedVaultClient.account.address, securityPoolAllowance)
 			await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 
@@ -2499,7 +2581,7 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'partial external migration should require a truth auction')
 			strictEqualTypeSafe(await getEthRaiseCap(client, yesSecurityPool.truthAuction), expectedAuctionCollateral, 'truth auction should price the missing share from the fixed fork collateral snapshot')
 			const auctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
-			await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, forkData.auctionableRepAtFork, expectedAuctionCollateral)
+			await participateAuction(auctionParticipant, yesSecurityPool.truthAuction, forkData.auctionableRepAtFork / 2n, expectedAuctionCollateral)
 			await mockWindow.advanceTime(7n * DAY + DAY)
 			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
 
