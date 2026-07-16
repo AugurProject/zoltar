@@ -10,7 +10,7 @@ import { MarketSection } from '../../../features/markets/components/MarketSectio
 import { getDefaultMarketFormState, getDefaultZoltarMigrationFormState } from '../../../features/markets/lib/marketForm.js'
 import type { AccountState } from '../../../types/app.js'
 import type { MarketSectionProps } from '../../../features/types.js'
-import type { ZoltarUniverseSummary } from '../../../types/contracts.js'
+import type { ListedSecurityPool, ZoltarUniverseSummary } from '../../../types/contracts.js'
 import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled } from '../../testUtils/transactionActionButton.js'
@@ -69,18 +69,51 @@ function createBinaryForkQuestion() {
 	}
 }
 
+function createLinkedSecurityPool(questionId: string): ListedSecurityPool {
+	return {
+		completeSetCollateralAmount: 4n,
+		currentRetentionRate: 0n,
+		forkOutcome: 'none',
+		forkOwnSecurityPool: false,
+		hasForkActivity: false,
+		hasLoadedVaults: true,
+		lastOraclePrice: undefined,
+		lastOracleSettlementTimestamp: 0n,
+		managerAddress: zeroAddress,
+		marketDetails: createBinaryForkQuestion(),
+		migratedRep: 0n,
+		parent: zeroAddress,
+		questionId,
+		questionOutcome: 'none',
+		securityMultiplier: 2n,
+		securityPoolAddress: '0x0000000000000000000000000000000000000011',
+		shareTokenSupply: 4n,
+		systemState: 'operational',
+		totalRepDeposit: 10n,
+		totalSecurityBondAllowance: 4n,
+		truthAuctionAddress: zeroAddress,
+		truthAuctionStartedAt: 0n,
+		universeHasForked: false,
+		universeId: 11n,
+		vaultCount: 0n,
+		vaults: [],
+	}
+}
+
 function createMarketSectionProps(overrides: Partial<MarketSectionProps> = {}): MarketSectionProps {
 	return {
 		accountState: createAccountState(),
 		activeUniverseId: 1n,
 		activeView: 'questions',
 		environmentRefreshKey: 0,
+		hasLoadedSecurityPools: true,
 		hasLoadedZoltarQuestions: false,
 		loadingZoltarForkAccess: false,
 		zoltarForkActiveAction: undefined,
 		loadingZoltarQuestionCount: false,
 		loadingZoltarQuestions: false,
 		loadingZoltarUniverse: false,
+		loadingSecurityPools: false,
 		marketForm: getDefaultMarketFormState(),
 		marketCreating: false,
 		marketError: undefined,
@@ -92,6 +125,7 @@ function createMarketSectionProps(overrides: Partial<MarketSectionProps> = {}): 
 		onForkZoltar: () => undefined,
 		onLoadZoltarQuestionPage: async () => undefined,
 		onLoadZoltarQuestions: async () => undefined,
+		onLoadSecurityPools: () => undefined,
 		onMarketFormChange: () => undefined,
 		onMigrateInternalRep: () => undefined,
 		onPrepareRepForMigration: () => undefined,
@@ -123,6 +157,7 @@ function createMarketSectionProps(overrides: Partial<MarketSectionProps> = {}): 
 		zoltarQuestions: [],
 		zoltarUniverse: createZoltarUniverse(),
 		zoltarUniverseState: 'ready',
+		securityPoolsLoadError: undefined,
 		...overrides,
 	}
 }
@@ -155,6 +190,64 @@ describe('MarketSection', () => {
 		const sectionHeader = questionsTitle.closest('.section-block-header')
 		if (sectionHeader === null) throw new Error('Expected Markets title to render inside a section header')
 		expect(sectionHeader.querySelector('[role="tablist"][aria-label="Market views"]')).toBeNull()
+	})
+
+	test('links a question directly to its child-universe shares and reporting workflows', async () => {
+		const question = createBinaryForkQuestion()
+		const renderedComponent = await renderIntoDocument(
+			h(
+				MarketSection,
+				createMarketSectionProps({
+					securityPools: [createLinkedSecurityPool(question.questionId)],
+					zoltarQuestionCount: 1n,
+					zoltarQuestionPage: {
+						pageIndex: 0,
+						pageSize: 10,
+						questionCount: 1n,
+						questions: [question],
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const sharesLink = documentQueries.getByRole('link', { name: 'Open Shares & Position' })
+		const reportingLink = documentQueries.getByRole('link', { name: 'Open Reporting' })
+		expect(sharesLink.getAttribute('href')).toContain('universe=11')
+		expect(sharesLink.getAttribute('href')).toContain('selectedPoolView=trading')
+		expect(reportingLink.getAttribute('href')).toContain('selectedPoolView=reporting')
+	})
+
+	test('distinguishes linked-pool loading, failure recovery, and a confirmed empty result', async () => {
+		const question = createBinaryForkQuestion()
+		const onLoadSecurityPools = mock(() => undefined)
+		const baseProps = createMarketSectionProps({
+			hasLoadedSecurityPools: false,
+			loadingSecurityPools: true,
+			onLoadSecurityPools,
+			zoltarQuestionCount: 1n,
+			zoltarQuestionPage: { pageIndex: 0, pageSize: 10, questionCount: 1n, questions: [question] },
+		})
+		const renderedComponent = await renderIntoDocument(h(MarketSection, baseProps))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(within(document.body).getByText('Loading linked pools…')).not.toBeNull()
+		expect(within(document.body).queryByText('No tradeable pool is linked to this question yet.')).toBeNull()
+
+		await act(() => {
+			render(h(MarketSection, { ...baseProps, loadingSecurityPools: false, securityPoolsLoadError: 'Pool lookup failed' }), renderedComponent.container)
+		})
+		expect(within(document.body).getByText('Pool lookup failed')).not.toBeNull()
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Retry linked pools' }))
+		})
+		expect(onLoadSecurityPools).toHaveBeenCalledTimes(1)
+
+		await act(() => {
+			render(h(MarketSection, { ...baseProps, hasLoadedSecurityPools: true, loadingSecurityPools: false, securityPoolsLoadError: undefined }), renderedComponent.container)
+		})
+		expect(within(document.body).getByText('No tradeable pool is linked to this question yet.')).not.toBeNull()
 	})
 
 	test('auto-loads questions once when opening the questions view without loaded data', async () => {

@@ -6,6 +6,7 @@ import type {
 	DeploymentStepId,
 	ForkAuctionActionResult,
 	ForkAuctionDetails,
+	LiquidationFundingPreview,
 	ListedSecurityPool,
 	MarketCreationResult,
 	MarketDetails,
@@ -124,6 +125,7 @@ export type OverviewPanelsProps = {
 	activeUniverseId: bigint
 	accountState: AccountState
 	isConnectingWallet: boolean
+	isManagingWallet: boolean
 	walletBootstrapComplete: boolean
 	parentUniverseId: bigint | undefined
 	universeRepBalance: bigint | undefined
@@ -139,8 +141,11 @@ export type OverviewPanelsProps = {
 	isLoadingRepPrices: boolean
 	isRefreshingRepPrices: boolean
 	onConnect: () => void
+	onChangeWallet: () => void
+	onDisconnectWallet: () => void
 	onGoToGenesisUniverse: () => void
 	onRefreshRepPrices: () => void
+	onSwitchNetwork: () => void
 	readBackendStatus?: ReadBackendStatus
 } & RepPerEthPriceProps
 
@@ -164,6 +169,11 @@ export type MarketRouteContentProps = {
 	accountState: AccountState
 	activeUniverseId: bigint
 	activeView: ZoltarView
+	securityPools?: ListedSecurityPool[]
+	hasLoadedSecurityPools: boolean
+	loadingSecurityPools: boolean
+	onLoadSecurityPools: () => void
+	securityPoolsLoadError: string | undefined
 	environmentRefreshKey: number
 	onApproveZoltarForkRep: (amount?: bigint) => void
 	onCreateChildUniverseForOutcomeIndex: (outcomeIndex: bigint) => void
@@ -216,7 +226,7 @@ export type SecurityPoolRouteContentProps = {
 	checkingDuplicateOriginPool: boolean
 	duplicateOriginPoolExists: boolean
 	onCreateSecurityPool: () => void
-	onOpenCreatedPool?: (securityPoolAddress: Address) => void
+	onOpenCreatedPool?: (securityPoolAddress: Address, universeId: bigint) => void
 	loadingMarketDetails: boolean
 	marketDetails: MarketDetails | undefined
 	poolCreationMarketDetails: MarketDetails | undefined
@@ -241,10 +251,13 @@ type LiquidationModalStateProps = {
 	liquidationAmount: string
 	liquidationMaxAmount: bigint | undefined
 	liquidationManagerAddress: Address | undefined
+	liquidationFundingPreview?: LiquidationFundingPreview | undefined
+	liquidationFundingPreviewError?: string | undefined
 	liquidationModalOpen: boolean
 	liquidationSecurityPoolAddress: Address | undefined
 	liquidationTimeoutMinutes: string
 	loadingPoolOracleManager: boolean
+	loadingLiquidationFundingPreview?: boolean | undefined
 	securityPoolOverviewActiveAction: SecurityPoolOverviewActionResult['action'] | undefined
 	securityPoolOverviewError: string | undefined
 	securityPoolLiquidationError: string | undefined
@@ -252,6 +265,7 @@ type LiquidationModalStateProps = {
 	onLiquidationAmountChange: (value: string) => void
 	onLiquidationTimeoutMinutesChange: (value: string) => void
 	onLoadPoolOracleManager: (managerAddress: Address) => void
+	onLoadLiquidationFundingPreview?: ((managerAddress: Address) => void) | undefined
 	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
 	poolOracleManagerDetails: OracleManagerDetails | undefined
 }
@@ -267,7 +281,7 @@ export type SecurityPoolsOverviewRouteContentProps = {
 	onCreateSecurityPool?: () => void
 	onLoadSecurityPoolPage: (pageIndex: number, pageSize: number, requestKey: string) => void
 	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => void
-	onSelectSecurityPool?: (securityPoolAddress: string) => void
+	onSelectSecurityPool?: (securityPoolAddress: string, universeId: bigint) => void
 	onLoadSecurityPools: () => void
 	securityPoolOverviewError: string | undefined
 	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
@@ -286,6 +300,8 @@ export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
 	forkAuction: ForkAuctionRouteContentProps
 	loadingSecurityPools: boolean
 	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => void
+	onReturnToCurrentUniverse?: () => void
+	onSwitchToPoolUniverse?: (universeId: bigint, securityPoolAddress: Address) => void
 	onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint) => void
 	onRefreshSelectedPoolData: (securityPoolAddress?: string) => void
 	onRequestPoolPrice: (managerAddress: Address) => void
@@ -312,6 +328,7 @@ export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
 export type SecurityPoolsSectionProps = {
 	activeView: SecurityPoolsView
 	createPool: SecurityPoolRouteContentProps
+	onActiveUniverseChange?: (universeId: bigint) => void
 	onActiveViewChange: (view: SecurityPoolsView) => void
 	overview: SecurityPoolsOverviewRouteContentProps
 	workflow: SecurityPoolWorkflowRouteContentProps

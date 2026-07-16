@@ -97,7 +97,7 @@ describe('zoltar contract helpers', () => {
 	test('loadZoltarUniverseSummary returns a non-forked universe summary for an active universe', async () => {
 		const client = createReadClient({
 			multicallResponses: [
-				[REP_TOKEN, [0n, 9n, 0n, getAddress('0x00000000000000000000000000000000000000ff'), 123n], 0n, 999n],
+				[REP_TOKEN, [0n, 9n, 0n, getAddress('0x00000000000000000000000000000000000000ff'), 123n], 0n, 999n, 5n],
 				[QUESTION_TUPLE_BINARY, 0n],
 			],
 			readContractHandlers: {
@@ -113,12 +113,14 @@ describe('zoltar contract helpers', () => {
 		expect(summary?.forkQuestionDetails).toBeUndefined()
 		expect(summary?.childUniverses).toEqual([])
 		expect(summary?.totalTheoreticalSupply).toBe(111n)
+		expect(summary?.forkBurnDivisor).toBe(5n)
+		expect(summary?.zoltarAddress).toBeDefined()
 	})
 
 	test('loadZoltarUniverseSummary handles forked scalar details and an empty child-universe page', async () => {
 		const client = createReadClient({
 			multicallResponses: [
-				[REP_TOKEN, [0n, 55n, 2n, getAddress('0x0000000000000000000000000000000000000000'), 77n], 15n, 5n],
+				[REP_TOKEN, [0n, 55n, 2n, getAddress('0x0000000000000000000000000000000000000000'), 77n], 15n, 5n, 5n],
 				[QUESTION_TUPLE_SCALAR, 1n],
 			],
 			readContractHandlers: {
@@ -142,7 +144,7 @@ describe('zoltar contract helpers', () => {
 		const childUniverseTuple3 = [7n, 8n, 9n, getAddress('0x0000000000000000000000000000000000000030'), 97n]
 		const childUniverseIds = [10n, 20n, 30n]
 		const client = createReadClient({
-			multicallResponses: [[REP_TOKEN, [0n, 44n, 1n, getAddress('0x0000000000000000000000000000000000000000'), 123n], 12n, 9n], [QUESTION_TUPLE_BINARY, 1n], childUniverseIds, [childUniverseTuple1, childUniverseTuple2, childUniverseTuple3]],
+			multicallResponses: [[REP_TOKEN, [0n, 44n, 1n, getAddress('0x0000000000000000000000000000000000000000'), 123n], 12n, 9n, 5n], [QUESTION_TUPLE_BINARY, 1n], childUniverseIds, [childUniverseTuple1, childUniverseTuple2, childUniverseTuple3]],
 			readContractHandlers: {
 				getTotalTheoreticalSupply: async () => 999n,
 				getOutcomeLabels: async () => ['Yes', 'No'],

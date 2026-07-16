@@ -628,24 +628,24 @@ void describe('OpenOracleSection', () => {
 		expect(getButtonDisabledReason(disputeButton)).toBe('Insufficient WETH balance for this dispute. Need 2, wallet has 1.')
 	})
 
-	void test('keeps create and selected-report actions silently disabled off mainnet', () => {
+	void test('keeps create and selected-report actions disabled off mainnet with recovery guidance', () => {
 		const initialReportSection = renderInitialReportActionSection({ isMainnet: false })
 		const submitButton = findButton(initialReportSection, 'Submit Initial Report')
 		if (submitButton === undefined) throw new Error('Expected initial report controls to render')
 		expect(getButtonDisabled(submitButton)).toBe(true)
-		expect(getButtonDisabledReason(submitButton)).not.toBe('Switch to Ethereum mainnet.')
+		expect(getButtonDisabledReason(submitButton)).toBe('Switch to Ethereum mainnet.')
 
 		const disputeSection = renderDisputeActionSection({ isMainnet: false })
 		const disputeButton = findButton(disputeSection, 'Dispute & Swap')
 		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
 		expect(getButtonDisabled(disputeButton)).toBe(true)
-		expect(getButtonDisabledReason(disputeButton)).not.toBe('Switch to Ethereum mainnet.')
+		expect(getButtonDisabledReason(disputeButton)).toBe('Switch to Ethereum mainnet.')
 
 		const settleSection = renderSettleActionSection({ isMainnet: false })
 		const settleButton = findButton(settleSection, 'Settle Report')
 		if (settleButton === undefined) throw new Error('Expected settle action button to render')
 		expect(getButtonDisabled(settleButton)).toBe(true)
-		expect(getButtonDisabledReason(settleButton)).not.toBe('Switch to Ethereum mainnet.')
+		expect(getButtonDisabledReason(settleButton)).toBe('Switch to Ethereum mainnet.')
 	})
 
 	void test('keeps downstream selected-report blocker copy hidden off mainnet', () => {
@@ -656,7 +656,7 @@ void describe('OpenOracleSection', () => {
 		const invalidSubmitButton = findButton(invalidInitialReportSection, 'Submit Initial Report')
 		if (invalidSubmitButton === undefined) throw new Error('Expected initial report controls to render')
 		expect(getButtonDisabled(invalidSubmitButton)).toBe(true)
-		expect(getButtonDisabledReason(invalidSubmitButton)).toBeUndefined()
+		expect(getButtonDisabledReason(invalidSubmitButton)).toBe('Switch to Ethereum mainnet.')
 		expect(getTextContent(invalidInitialReportSection)).not.toContain('Enter a valid')
 
 		const invalidDisputeSection = renderDisputeActionSection({
@@ -666,7 +666,7 @@ void describe('OpenOracleSection', () => {
 		const disputeButton = findButton(invalidDisputeSection, 'Dispute & Swap')
 		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
 		expect(getButtonDisabled(disputeButton)).toBe(true)
-		expect(getButtonDisabledReason(disputeButton)).toBeUndefined()
+		expect(getButtonDisabledReason(disputeButton)).toBe('Switch to Ethereum mainnet.')
 		expect(getTextContent(invalidDisputeSection)).not.toContain('Load a report first.')
 
 		const invalidSettleSection = renderSettleActionSection({
@@ -681,7 +681,7 @@ void describe('OpenOracleSection', () => {
 		const settleButton = findButton(invalidSettleSection, 'Settle Report')
 		if (settleButton === undefined) throw new Error('Expected settle action button to render')
 		expect(getButtonDisabled(settleButton)).toBe(true)
-		expect(getButtonDisabledReason(settleButton)).toBeUndefined()
+		expect(getButtonDisabledReason(settleButton)).toBe('Switch to Ethereum mainnet.')
 		expect(getTextContent(invalidSettleSection)).not.toContain('Load a report first.')
 	})
 

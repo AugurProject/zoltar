@@ -48,7 +48,7 @@ describe('security pool creation guards', () => {
 				securityPoolCreating: false,
 				zoltarUniverseHasForked: false,
 			}),
-		).toBeUndefined()
+		).toBe('Switch to Ethereum mainnet.')
 
 		expect(
 			getSecurityPoolCreateDisabledReason({

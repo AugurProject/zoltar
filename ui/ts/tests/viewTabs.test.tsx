@@ -219,4 +219,114 @@ describe('ViewTabs', () => {
 		const reportsTabs = within(document.body).getAllByRole('button', { name: 'Reports' })
 		expect(reportsTabs).toHaveLength(1)
 	})
+
+	test('avoids animated active-tab scrolling when reduced motion is requested', async () => {
+		const clientWidthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
+		const scrollWidthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollWidth')
+		const originalMatchMedia = window.matchMedia
+		const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
+		const originalScrollTo = HTMLElement.prototype.scrollTo
+		const requestedBehaviors: (ScrollBehavior | undefined)[] = []
+		let scrollIntoViewCalls = 0
+		Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 200 })
+		Object.defineProperty(HTMLElement.prototype, 'scrollWidth', { configurable: true, get: () => 400 })
+		window.matchMedia = query => ({
+			addEventListener: () => undefined,
+			addListener: () => undefined,
+			dispatchEvent: () => false,
+			matches: query === '(prefers-reduced-motion: reduce)',
+			media: query,
+			onchange: null,
+			removeEventListener: () => undefined,
+			removeListener: () => undefined,
+		})
+		HTMLElement.prototype.scrollIntoView = () => {
+			scrollIntoViewCalls += 1
+		}
+		HTMLElement.prototype.scrollTo = (optionsOrX?: number | ScrollToOptions, _y?: number) => {
+			const options = typeof optionsOrX === 'object' ? optionsOrX : undefined
+			requestedBehaviors.push(typeof options === 'object' ? options.behavior : undefined)
+		}
+
+		try {
+			const renderedComponent = await renderIntoDocument(
+				<ViewTabs
+					ariaLabel='Motion Tabs'
+					value='reports'
+					onChange={() => undefined}
+					options={[
+						{ label: 'Overview', value: 'overview' },
+						{ label: 'Reports', value: 'reports' },
+					]}
+				/>,
+			)
+			cleanupRenderedComponent = renderedComponent.cleanup
+
+			expect(requestedBehaviors).toEqual(['auto'])
+			expect(scrollIntoViewCalls).toBe(0)
+		} finally {
+			window.matchMedia = originalMatchMedia
+			HTMLElement.prototype.scrollIntoView = originalScrollIntoView
+			HTMLElement.prototype.scrollTo = originalScrollTo
+			if (clientWidthDescriptor === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'clientWidth')
+			else Object.defineProperty(HTMLElement.prototype, 'clientWidth', clientWidthDescriptor)
+			if (scrollWidthDescriptor === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'scrollWidth')
+			else Object.defineProperty(HTMLElement.prototype, 'scrollWidth', scrollWidthDescriptor)
+		}
+	})
+
+	test('keeps the active tab visible when a horizontal tab strip becomes narrower', async () => {
+		const clientWidthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
+		const scrollWidthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollWidth')
+		const originalResizeObserver = globalThis.ResizeObserver
+		const originalScrollTo = HTMLElement.prototype.scrollTo
+		let clientWidth = 400
+		let resizeCallback: ResizeObserverCallback | undefined
+		const requestedScrollPositions: number[] = []
+		class MockResizeObserver implements ResizeObserver {
+			constructor(callback: ResizeObserverCallback) {
+				resizeCallback = callback
+			}
+			disconnect() {}
+			observe() {}
+			unobserve() {}
+		}
+		Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => clientWidth })
+		Object.defineProperty(HTMLElement.prototype, 'scrollWidth', { configurable: true, get: () => 400 })
+		Reflect.set(globalThis, 'ResizeObserver', MockResizeObserver)
+		HTMLElement.prototype.scrollTo = (optionsOrX?: number | ScrollToOptions) => {
+			if (typeof optionsOrX === 'object' && optionsOrX.left !== undefined) requestedScrollPositions.push(optionsOrX.left)
+		}
+
+		try {
+			const renderedComponent = await renderIntoDocument(
+				<ViewTabs
+					ariaLabel='Responsive Tabs'
+					value='migration'
+					onChange={() => undefined}
+					options={[
+						{ label: 'Questions', value: 'questions' },
+						{ label: 'Create Question', value: 'create' },
+						{ label: 'Fork Zoltar', value: 'fork' },
+						{ label: 'Migrate REP', value: 'migration' },
+					]}
+				/>,
+			)
+			cleanupRenderedComponent = renderedComponent.cleanup
+			expect(requestedScrollPositions).toEqual([])
+
+			clientWidth = 200
+			await act(() => resizeCallback?.([], {} as ResizeObserver))
+
+			expect(requestedScrollPositions.length).toBe(1)
+		} finally {
+			HTMLElement.prototype.scrollTo = originalScrollTo
+			if (originalResizeObserver === undefined) Reflect.deleteProperty(globalThis, 'ResizeObserver')
+			else Reflect.set(globalThis, 'ResizeObserver', originalResizeObserver)
+			if (clientWidthDescriptor === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'clientWidth')
+			else Object.defineProperty(HTMLElement.prototype, 'clientWidth', clientWidthDescriptor)
+			if (scrollWidthDescriptor === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'scrollWidth')
+			else Object.defineProperty(HTMLElement.prototype, 'scrollWidth', scrollWidthDescriptor)
+		}
+	})
 })
