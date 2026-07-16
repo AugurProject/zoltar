@@ -8,9 +8,11 @@ import { SecurityPoolForkerForkData } from './SecurityPoolForkerTypes.sol';
 
 /// @notice Delegate-called event encoder that keeps verbose checkpoint schemas out of SecurityPool runtime code.
 contract SecurityPoolEventEmitter is SecurityPoolForkerStorage, ISecurityPoolForkerEvents {
-	// SecurityPool accounting occupies slots 1-14 and its SecurityVault mapping is slot 16.
+	// SecurityPool accounting occupies slots 1-14, its SecurityVault mapping is slot 16,
+	// and its per-vault fee remainder mapping is slot 17.
 	// This delegate is intentionally storage-layout coupled; storage-layout tests protect these anchors.
 	uint256 private constant SECURITY_VAULTS_SLOT = 16;
+	uint256 private constant VAULT_FEE_REMAINDERS_SLOT = 17;
 	event PoolAccountingCheckpoint(
 		AccountingReason reason,
 		address indexed vault,
@@ -32,6 +34,7 @@ contract SecurityPoolEventEmitter is SecurityPoolForkerStorage, ISecurityPoolFor
 		uint256 securityBondAllowance,
 		uint256 unpaidEthFees,
 		uint256 feeIndex,
+		uint256 vaultFeeRemainder,
 		uint256 resultingPoolOwnershipDenominator,
 		uint256 resultingFeeEligibleSecurityBondAllowance
 	);
@@ -76,13 +79,16 @@ contract SecurityPoolEventEmitter is SecurityPoolForkerStorage, ISecurityPoolFor
 		uint256 securityBondAllowance;
 		uint256 unpaidEthFees;
 		uint256 vaultFeeIndex;
+		uint256 vaultFeeRemainder;
 		uint256 resultingPoolOwnershipDenominator;
 		uint256 resultingFeeEligibleSecurityBondAllowance;
+		bytes32 vaultFeeRemainderSlot = keccak256(abi.encode(vault, VAULT_FEE_REMAINDERS_SLOT));
 		assembly {
 			poolOwnershipAmount := sload(vaultSlot)
 			securityBondAllowance := sload(add(vaultSlot, 1))
 			unpaidEthFees := sload(add(vaultSlot, 2))
 			vaultFeeIndex := sload(add(vaultSlot, 3))
+			vaultFeeRemainder := sload(vaultFeeRemainderSlot)
 			resultingPoolOwnershipDenominator := sload(3)
 			resultingFeeEligibleSecurityBondAllowance := sload(12)
 		}
@@ -92,6 +98,7 @@ contract SecurityPoolEventEmitter is SecurityPoolForkerStorage, ISecurityPoolFor
 			securityBondAllowance,
 			unpaidEthFees,
 			vaultFeeIndex,
+			vaultFeeRemainder,
 			resultingPoolOwnershipDenominator,
 			resultingFeeEligibleSecurityBondAllowance
 		);

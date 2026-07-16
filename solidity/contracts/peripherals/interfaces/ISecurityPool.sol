@@ -90,13 +90,15 @@ interface ISecurityPool {
 		uint256 currentRetentionRate
 	);
 	/// @notice Authoritative resulting vault state and the affected global denominators. Ownership uses
-	/// pool-ownership units, allowance uses wei-denominated bond units, fees use wei, and `feeIndex` is 1e18-scaled.
+	/// pool-ownership units, allowance uses wei-denominated bond units, fees use wei, and `feeIndex` and
+	/// `vaultFeeRemainder` use 1e18 fixed-point precision.
 	event VaultAccountingCheckpoint(
 		address indexed vault,
 		uint256 poolOwnershipAmount,
 		uint256 securityBondAllowance,
 		uint256 unpaidEthFees,
 		uint256 feeIndex,
+		uint256 vaultFeeRemainder,
 		uint256 resultingPoolOwnershipDenominator,
 		uint256 resultingFeeEligibleSecurityBondAllowance
 	);
@@ -136,6 +138,8 @@ interface ISecurityPool {
 	function totalFeesOwedToVaults() external view returns (uint256);
 	function totalAccruedFees() external view returns (uint256);
 	function getPoolAccountingSnapshot() external view returns (PoolAccountingSnapshot memory snapshot);
+	/// @notice Sub-wei numerator carried into the vault's next fee checkpoint, with denominator `1e18`.
+	function getVaultFeeRemainder(address vault) external view returns (uint256);
 	function lastUpdatedFeeAccumulator() external view returns (uint256);
 	function currentRetentionRate() external view returns (uint256);
 	function awaitingForkContinuation() external view returns (bool);

@@ -59,6 +59,9 @@ function assertEventStreamSemantics(): void {
 		'Coordinator REP/ETH `price` | `(REP base units * 1e18) / ETH wei`',
 		'Redemption `ethAmount` fields are the net wei paid',
 		'`ethUsed + ethRefund = originalEthAmount`',
+		'preserve an immutable copy of the current roots, counts, peaks, and leaves under `escalationSnapshotId`',
+		'select that historical version by `snapshotId`',
+		'clone the frozen peaks and leaves into the child',
 	]) {
 		assert.ok(eventStream.includes(documentedClaim), `Missing event-stream unit or value-semantics claim: ${documentedClaim}`)
 	}

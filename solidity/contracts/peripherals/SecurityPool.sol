@@ -324,6 +324,10 @@ contract SecurityPool is ISecurityPool {
 		}
 	}
 
+	function getVaultFeeRemainder(address vault) external view returns (uint256) {
+		return vaultFeeRemainders[vault];
+	}
+
 	function _emitPoolAccountingCheckpoint(AccountingReason reason, address vault) private {
 		_emitEvent(abi.encodeCall(SecurityPoolEventEmitter.emitPoolAccountingCheckpoint, (reason, vault)));
 	}

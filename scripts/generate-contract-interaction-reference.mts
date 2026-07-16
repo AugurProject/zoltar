@@ -38,6 +38,7 @@ const eventSourceByName: Record<string, string> = {
 	ClaimForkedEscalationDepositsToWallet: 'solidity/contracts/peripherals/SecurityPoolForker.sol',
 	CompleteSetCreated: 'solidity/contracts/peripherals/interfaces/ISecurityPool.sol',
 	CompleteSetRedeemed: 'solidity/contracts/peripherals/interfaces/ISecurityPool.sol',
+	CoordinatorStateCheckpoint: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	DeployChild: 'solidity/contracts/Zoltar.sol',
 	DepositOnOutcome: 'solidity/contracts/peripherals/interfaces/IEscalationGame.sol',
 	DepositRep: 'solidity/contracts/peripherals/SecurityPool.sol',
@@ -109,6 +110,7 @@ const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 		withdrawDeposit: ['public(CarriedDepositProof,BinaryOutcomes.BinaryOutcome)', 'public(uint256,BinaryOutcomes.BinaryOutcome)'],
 	},
 	'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol': {
+		consumeEscalationDepositNotional: ['external(uint256)'],
 		executeStagedOperation: ['public(uint256)'],
 		openOracleCallback: ['external(uint256,uint256,uint256,uint256,address,address)'],
 		recoverSettledPendingReport: ['public()'],
@@ -527,7 +529,7 @@ const contractReferences: ContractReference[] = [
 				declarations: [{ name: 'requestPriceIfNeededAndStageOperation' }],
 				preconditions:
 					'Unresolved pool; valid target and nonzero amount except zero allowance; timeout from 1 second through 5 minutes. Bounty, initial REP/WETH funding, and approvals are required only when this call opens a new report; staging beside a pending report or queued rejected-report work does not open or fund another report.',
-				signals: '`StagedOperationQueued`, possibly `PriceRequested`, then `ExecutedStagedOperation`',
+				signals: '`StagedOperationQueued`, possibly `PriceRequested`, then `ExecutedStagedOperation`; authoritative `CoordinatorStateCheckpoint` records',
 			},
 			{
 				call: '`requestPrice(amount2)` with report funding',
@@ -535,7 +537,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Opens and atomically funds a fresh REP/WETH report without staging a new operation.',
 				declarations: [{ name: 'requestPrice' }],
 				preconditions: 'Cached price stale; no pending report; ETH bounty and initial REP/WETH funding and approvals available.',
-				signals: '`PriceRequested`',
+				signals: '`PriceRequested` and `CoordinatorStateCheckpoint`',
 			},
 			{
 				call: '`executeStagedOperation(operationId)`',
@@ -543,7 +545,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Consumes and attempts one active staged operation using the current fresh price. Successful risk-increasing operations debit the shared report-round budget; reductions and collateral withdrawals with no outstanding pool allowance debit zero.',
 				declarations: [{ name: 'executeStagedOperation' }],
 				preconditions: "Operation exists and coordinator price is fresh; lifecycle failures are emitted rather than retried. The operation's ETH notional must fit the report round's remaining configured budget.",
-				signals: '`ExecutedStagedOperation`',
+				signals: '`ExecutedStagedOperation` and `CoordinatorStateCheckpoint`',
 			},
 			{
 				call: '`recoverSettledPendingReport()`',
@@ -551,7 +553,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Clears a pending report whose normal callback path did not clear coordinator state and consumes its pending-operation slot.',
 				declarations: [{ name: 'recoverSettledPendingReport' }],
 				preconditions: 'A pending report ID exists; callers should verify the underlying report actually settled.',
-				signals: '`PendingReportRecovered`, optionally `PendingOperationRecoveryConsumed`',
+				signals: '`PendingReportRecovered`, optionally `PendingOperationRecoveryConsumed`, and `CoordinatorStateCheckpoint`',
 			},
 			{
 				call: '`openOracleCallback(...)`',
@@ -559,7 +561,15 @@ const contractReferences: ContractReference[] = [
 				effect: 'A valid settlement updates the price and auto-executes the bounded pending batch. A rejected settlement clears pending-report state but leaves staged operations queued for a later valid price path.',
 				declarations: [{ name: 'openOracleCallback' }],
 				preconditions: 'Callback report matches the pending report; high basefee or zero values reject the price after clearing pending report state.',
-				signals: '`PriceReported` or `PriceReportRejected`; operation execution events',
+				signals: '`PriceReported` or `PriceReportRejected`; operation execution events; authoritative `CoordinatorStateCheckpoint` records',
+			},
+			{
+				call: '`consumeEscalationDepositNotional(repAmount)`',
+				caller: 'Configured `SecurityPool` only',
+				effect: 'Debits the accepted escalation deposit against the current report round exposure budget.',
+				declarations: [{ name: 'consumeEscalationDepositNotional' }],
+				preconditions: "Caller is the configured pool; the deposit's allowance-capped ETH notional fits the report round's remaining budget.",
+				signals: '`CoordinatorStateCheckpoint` when positive notional is consumed',
 			},
 			{
 				call: '`setSecurityPool(pool)` and `setRepEthPrice(price)`',
@@ -567,7 +577,7 @@ const contractReferences: ContractReference[] = [
 				effect: "Sets the pool once or seeds the coordinator's price value. Normal factory deployment wires the pool atomically before returning the coordinator.",
 				declarations: [{ name: 'setSecurityPool' }, { name: 'setRepEthPrice' }],
 				preconditions: '`securityPool` is still unset for `setSecurityPool`; caller equals the configured pool for `setRepEthPrice`.',
-				signals: '`SecurityPoolSet`, `RepEthPriceSet`',
+				signals: '`SecurityPoolSet`, `RepEthPriceSet`, and `CoordinatorStateCheckpoint`',
 			},
 		],
 	},

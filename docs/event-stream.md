@@ -6,9 +6,9 @@ Open Oracle logging is outside this event-stream contract. Zoltar continues to u
 
 ## Deployment anchor and schema version
 
-For each chain, record the successful deployment receipt for the root `Zoltar` deployment and the addresses produced by the deployment flow. The receipt block is the inclusive protocol-schema start block. Do not begin at the first later transaction because constructor events, including initial share-token authorization, are part of the stream.
+For each chain, record the successful deployment receipt for `ZoltarQuestionData` and use its block as the inclusive protocol-schema start block. Question creation is permissionless as soon as that contract exists, including before the later root `Zoltar` deployment. Also record every subsequent deployment receipt and address produced by the deployment flow. Do not begin at the root `Zoltar` receipt or the first application transaction: doing so can omit early `QuestionCreated` logs or constructor events such as initial share-token authorization.
 
-Genesis REP has a separate balance-history anchor because it exists before `Zoltar`. Discover its address from the root `UniverseInitialized` event, then load that token's standard `Transfer` history from its own deployment receipt through the protocol head and merge those logs into canonical order. Pre-discover REP token addresses from `UniverseInitialized` and `DeployChild` before reducing the ordered stream so the earlier genesis transfers are not discarded. Child REP tokens are deployed inside the protocol stream and need no earlier anchor. If a chain cannot supply the genesis token's complete event history, event-only REP balance and supply indexing on that chain is unsupported.
+Genesis REP has a separate balance-history anchor because it exists before `ZoltarQuestionData`. Discover its address from the root `UniverseInitialized` event, then load that token's standard `Transfer` history from its own deployment receipt through the protocol head and merge those logs into canonical order. Pre-discover REP token addresses from `UniverseInitialized` and `DeployChild` before reducing the ordered stream so the earlier genesis transfers are not discarded. Child REP tokens are deployed inside the protocol stream and need no earlier anchor. If a chain cannot supply the genesis token's complete event history, event-only REP balance and supply indexing on that chain is unsupported.
 
 The prelaunch Zoltar-owned event set is schema version 1. A deployment with different event signatures is a new cutover: store its deployment block and contract-address set as a separate schema segment. Never merge logs from two schema segments by event name alone.
 
@@ -38,6 +38,7 @@ The emitting address identifies the current pool, game, auction, token, or coord
 | `shareAmount`, `sharesMinted`, share-token supply | Share-token base units | Mint/burn amounts are deltas. `resultingShareTokenSupply` is the authoritative post-action total. Integer division in redemption rounds the wei payout down. |
 | `poolOwnershipAmount` and ownership denominators | Internal pool-ownership units | Initial conversion uses `repAmount * 1e18`; later conversions preserve the current proportional ownership ratio with Solidity integer rounding. Resulting denominators replace prior totals. |
 | Pool and vault `feeIndex` | `1e18` fixed-point fee-per-eligible-allowance unit | Index deltas truncate toward zero. `feeIndexRemainder` carries the allocation numerator modulo the current eligible-allowance denominator. |
+| `vaultFeeRemainder` | Sub-wei numerator with denominator `1e18` | Carries one vault's fractional entitlement into its next `VaultAccountingCheckpoint`. It is authoritative even when `unpaidEthFees` does not change. |
 | `totalFeesOwedRemainder` | Sub-wei numerator with denominator `1e18` | Carries truncated global fee accrual into the next checkpoint and is always below `1e18`. |
 | `currentRetentionRate` | `1e18` fixed-point per-second multiplier | Applied with integer exponentiation and division; lower values retain less collateral over time. |
 | Coordinator REP/ETH `price` | `(REP base units * 1e18) / ETH wei` | Truncates toward zero. A larger value means more REP is required per ETH. |
@@ -59,15 +60,17 @@ Use protocol events, not transfer inference, to discover relationships:
 | Escalation continuation | `ForkCarryCheckpoint`, `CarryDepositConsumed` |
 | Pool and vault accounting | `PoolAccountingCheckpoint`, `VaultAccountingCheckpoint` |
 | Auction demand and settlement | `AuctionStarted`, `BidSubmitted`, `AuctionFinalized`, `BidSettled` |
-| Coordinator operations | `StagedOperationQueued`, `ExecutedStagedOperation`, terminal report events |
+| Coordinator operations | `StagedOperationQueued`, `ExecutedStagedOperation`, terminal report events, `CoordinatorStateCheckpoint` |
 
 Protocol-global identifiers are universe and question IDs, contract addresses, and escalation snapshot IDs. Contract-local counters are stable only as composite keys: use `(game or snapshot lineage, outcome, parentDepositIndex)`, `(sourceGame, outcome, sourceNodeId)`, `(auction emitter, tick, bidIndex)`, and `(coordinator emitter, operationId)`. Mutable labels are not identifiers.
 
 ## Canonical reducers
 
-Pool accounting is checkpoint based. Replace all eleven fields whenever `PoolAccountingCheckpoint` is observed. Replace the named vault record and its global denominators on `VaultAccountingCheckpoint`. Action events explain cause; checkpoint values are authoritative when both appear.
+Pool accounting is checkpoint based. Replace all eleven fields whenever `PoolAccountingCheckpoint` is observed. Replace the named vault record, including `vaultFeeRemainder`, and its global denominators on `VaultAccountingCheckpoint`. Action events explain cause; checkpoint values are authoritative when both appear.
 
-For escalation, append each `LocalDepositAppended` leaf under its stable deposit index. `ForkCarryCheckpoint` fixes the roots, counts, unresolved totals, and resolution balances written to the child. Apply each `CarryDepositConsumed` by its explicit reason and resulting roots/totals. Do not reconstruct a peak array from storage.
+For the Zoltar-owned oracle coordinator, replace pending report ID and sponsor, pending operation slot and counts, base-fee guard, latest price and settlement time, and price-round maximum and consumed notional whenever `CoordinatorStateCheckpoint` is observed. The associated report and operation IDs identify the cause; zero means that cause has no corresponding ID. Report and operation action events retain lifecycle history, while the checkpoint is the authoritative resulting state. Open Oracle's internal payouts and liabilities remain outside this contract.
+
+For escalation, append each `LocalDepositAppended` leaf under its stable deposit index and retain the live event-derived MMR peaks and leaves for every game. When `SecurityPoolForkSnapshot` records an unresolved escalation, resolve its source game from the pool relationship and `EscalationRepDrainedAtFork`, then preserve an immutable copy of the current roots, counts, peaks, and leaves under `escalationSnapshotId`; later source consumption updates only the live version. On `ForkCarryCheckpoint`, select that historical version by `snapshotId`, verify its source game and each checkpoint count/root, then clone the frozen peaks and leaves into the child before applying child-local deposits. The checkpoint fixes the roots, counts, unresolved totals, and resolution balances written to that child. Apply each `CarryDepositConsumed` by its explicit reason and resulting roots/totals. Reconstruct and maintain peaks from events; never read them from contract storage.
 
 For auctions, create a bid on every `BidSubmitted`. The stable identity is `(auction emitter, tick, bidIndex)`, including same-tick FIFO bids. Replace that bid's settlement fields on `BidSettled`. Batch calls emit one settlement event per affected bid.
 

@@ -33,6 +33,7 @@ export type VaultAccountingReplay = {
 	securityBondAllowance: bigint
 	unpaidEthFees: bigint
 	feeIndex: bigint
+	vaultFeeRemainder: bigint
 	resultingPoolOwnershipDenominator: bigint
 	resultingFeeEligibleSecurityBondAllowance: bigint
 }
@@ -227,16 +228,33 @@ export type CoordinatorReportReplay = {
 
 export type CoordinatorReplay = {
 	securityPool?: Address
+	checkpointReason?: bigint
+	checkpointReportId?: bigint
+	checkpointOperationId?: bigint
 	lastPrice: bigint
 	lastSettlementTimestamp: bigint
 	pendingReportId: bigint
+	pendingReportSponsor: Address
+	pendingOperationSlotId: bigint
 	pendingReportMaxSettlementBaseFee: bigint
+	priceRoundMaxNotional: bigint
+	priceRoundConsumedNotional: bigint
+	stagedOperationCounter: bigint
+	activeStagedOperationCount: bigint
+	pendingSettlementOperationCount: bigint
 	reports: Map<bigint, CoordinatorReportReplay>
 }
 
 type BigIntTriple = [bigint, bigint, bigint]
 type HexTriple = [Hex, Hex, Hex]
 type HexPeaksTriple = [Hex[], Hex[], Hex[]]
+type EscalationCarrySnapshotReplay = {
+	sourceGame: Address
+	carryRoots: HexTriple
+	carryPeaks: HexPeaksTriple
+	carryLeaves: HexPeaksTriple
+	leafCounts: BigIntTriple
+}
 
 export type ReplayState = {
 	identities: Set<string>
@@ -258,6 +276,8 @@ export type ReplayState = {
 	forks: Map<Address, ForkReplay>
 	vaultMigrations: Map<Address, Map<Address, Map<Address, VaultMigrationReplay>>>
 	poolChildren: Map<Address, Map<bigint, Address>>
+	forkEscalationSources: Map<Address, Address>
+	escalationCarrySnapshots: Map<Hex, EscalationCarrySnapshotReplay>
 	escalationSnapshots: Map<Address, Hex>
 	escalationCarryRoots: Map<Address, HexTriple>
 	escalationCarryPeaks: Map<Address, HexPeaksTriple>
@@ -305,6 +325,8 @@ export function createReplayState(): ReplayState {
 		forks: new Map(),
 		vaultMigrations: new Map(),
 		poolChildren: new Map(),
+		forkEscalationSources: new Map(),
+		escalationCarrySnapshots: new Map(),
 		escalationSnapshots: new Map(),
 		escalationCarryRoots: new Map(),
 		escalationCarryPeaks: new Map(),
@@ -414,6 +436,7 @@ function getOrCreateNestedMap<K, V>(outer: Map<Address, Map<K, V>>, emitter: Add
 }
 
 const ZERO_HASH = bytesToHex(new Uint8Array(32))
+const ZERO_ADDRESS: Address = '0x0000000000000000000000000000000000000000'
 
 function hashParent(left: Hex, right: Hex) {
 	return keccak256(concatHex([left, right]))
@@ -463,6 +486,18 @@ function rebuildCarryPeaks(leaves: readonly Hex[]) {
 		appendCarryHash(peaks, BigInt(leafIndex), leaf)
 	}
 	return peaks
+}
+
+function cloneHexTriple(values: HexTriple): HexTriple {
+	return [values[0], values[1], values[2]]
+}
+
+function cloneBigIntTriple(values: BigIntTriple): BigIntTriple {
+	return [values[0], values[1], values[2]]
+}
+
+function cloneHexPeaksTriple(values: HexPeaksTriple): HexPeaksTriple {
+	return [values[0].slice(), values[1].slice(), values[2].slice()]
 }
 
 function appendCarryLeaf(state: ReplayState, emitter: Address, deposit: EscalationDepositReplay) {
@@ -730,6 +765,7 @@ export function reduceSecurityPoolEvent(state: ReplayState, log: ReplayLog) {
 			securityBondAllowance: requireBigInt(log.args, 'securityBondAllowance'),
 			unpaidEthFees: requireBigInt(log.args, 'unpaidEthFees'),
 			feeIndex: requireBigInt(log.args, 'feeIndex'),
+			vaultFeeRemainder: requireBigInt(log.args, 'vaultFeeRemainder'),
 			resultingPoolOwnershipDenominator: requireBigInt(log.args, 'resultingPoolOwnershipDenominator'),
 			resultingFeeEligibleSecurityBondAllowance: requireBigInt(log.args, 'resultingFeeEligibleSecurityBondAllowance'),
 		})
@@ -739,12 +775,18 @@ export function reduceSecurityPoolEvent(state: ReplayState, log: ReplayLog) {
 }
 
 export function reduceForkerEvent(state: ReplayState, log: ReplayLog) {
+	if (log.eventName === 'EscalationRepDrainedAtFork') {
+		state.forkEscalationSources.set(requireAddress(log.args, 'parentPool'), requireAddress(log.args, 'sourceGame'))
+		return
+	}
 	if (log.eventName === 'SecurityPoolForkSnapshot') {
 		const parentPool = requireAddress(log.args, 'parentPool')
+		const unresolvedEscalation = requireBoolean(log.args, 'unresolvedEscalation')
+		const escalationSnapshotId = requireHex(log.args, 'escalationSnapshotId')
 		state.forks.set(parentPool, {
 			migrationProxy: requireAddress(log.args, 'migrationProxy'),
 			ownFork: requireBoolean(log.args, 'ownFork'),
-			unresolvedEscalation: requireBoolean(log.args, 'unresolvedEscalation'),
+			unresolvedEscalation,
 			collateralAtFork: requireBigInt(log.args, 'collateralAtFork'),
 			poolRepAtFork: requireBigInt(log.args, 'poolRepAtFork'),
 			auctionableRepAtFork: requireBigInt(log.args, 'auctionableRepAtFork'),
@@ -753,8 +795,26 @@ export function reduceForkerEvent(state: ReplayState, log: ReplayLog) {
 			escalationStartBondAtFork: requireBigInt(log.args, 'escalationStartBondAtFork'),
 			escalationNonDecisionThresholdAtFork: requireBigInt(log.args, 'escalationNonDecisionThresholdAtFork'),
 			escalationElapsedAtFork: requireBigInt(log.args, 'escalationElapsedAtFork'),
-			escalationSnapshotId: requireHex(log.args, 'escalationSnapshotId'),
+			escalationSnapshotId,
 		})
+		if (unresolvedEscalation) {
+			const sourceGame = state.forkEscalationSources.get(parentPool) ?? state.poolStates.get(parentPool)?.escalationGame
+			if (sourceGame === undefined) throw new Error('fork snapshot references an unknown escalation game')
+			const carryRoots = state.escalationCarryRoots.get(sourceGame)
+			const carryPeaks = state.escalationCarryPeaks.get(sourceGame)
+			const carryLeaves = state.escalationCarryLeaves.get(sourceGame)
+			const leafCounts = state.escalationLeafCounts.get(sourceGame)
+			if (carryRoots === undefined || carryPeaks === undefined || carryLeaves === undefined || leafCounts === undefined) {
+				throw new Error('fork snapshot source carry state is incomplete')
+			}
+			state.escalationCarrySnapshots.set(escalationSnapshotId, {
+				sourceGame,
+				carryRoots: cloneHexTriple(carryRoots),
+				carryPeaks: cloneHexPeaksTriple(carryPeaks),
+				carryLeaves: cloneHexPeaksTriple(carryLeaves),
+				leafCounts: cloneBigIntTriple(leafCounts),
+			})
+		}
 		return
 	}
 	if (log.eventName === 'VaultMigrationCheckpoint') {
@@ -835,7 +895,8 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 		return
 	}
 	if (log.eventName === 'ForkCarryCheckpoint') {
-		state.escalationSnapshots.set(log.emitter, requireHex(log.args, 'snapshotId'))
+		const snapshotId = requireHex(log.args, 'snapshotId')
+		state.escalationSnapshots.set(log.emitter, snapshotId)
 		const carryRoots = requireHexTriple(log.args, 'carryRoots')
 		const leafCounts = requireBigIntTriple(log.args, 'leafCounts')
 		state.escalationCarryRoots.set(log.emitter, carryRoots)
@@ -844,27 +905,38 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 		state.escalationUnresolvedTotals.set(log.emitter, requireBigIntTriple(log.args, 'unresolvedTotals'))
 		state.escalationResolutionBalances.set(log.emitter, requireBigIntTriple(log.args, 'resolutionBalances'))
 		const sourceGame = requireAddress(log.args, 'sourceGame')
-		const sourcePeaks = state.escalationCarryPeaks.get(sourceGame)
-		const sourceLeafCounts = state.escalationLeafCounts.get(sourceGame)
-		if (sourcePeaks !== undefined && sourceLeafCounts !== undefined) {
-			for (let outcomeIndex = 0; outcomeIndex < 3; outcomeIndex += 1) {
-				const sourceOutcomePeaks = sourcePeaks[outcomeIndex]
-				const sourceLeafCount = sourceLeafCounts[outcomeIndex]
-				const checkpointLeafCount = leafCounts[outcomeIndex]
-				const checkpointRoot = carryRoots[outcomeIndex]
-				if (sourceOutcomePeaks === undefined || sourceLeafCount === undefined || checkpointLeafCount === undefined || checkpointRoot === undefined) {
-					throw new Error('fork carry checkpoint outcome is incomplete')
-				}
-				if (sourceLeafCount !== checkpointLeafCount || bagCarryPeaks(sourceOutcomePeaks, sourceLeafCount) !== checkpointRoot) {
-					throw new Error('fork carry checkpoint does not match replayed source leaves')
-				}
+		let snapshot = state.escalationCarrySnapshots.get(snapshotId)
+		if (snapshot === undefined) {
+			const sourceCarryRoots = state.escalationCarryRoots.get(sourceGame)
+			const sourceCarryPeaks = state.escalationCarryPeaks.get(sourceGame)
+			const sourceCarryLeaves = state.escalationCarryLeaves.get(sourceGame)
+			const sourceLeafCounts = state.escalationLeafCounts.get(sourceGame)
+			if (sourceCarryRoots === undefined || sourceCarryPeaks === undefined || sourceCarryLeaves === undefined || sourceLeafCounts === undefined) {
+				throw new Error('fork carry checkpoint references unknown source carry state')
 			}
-			state.escalationCarryPeaks.set(log.emitter, [sourcePeaks[0].slice(), sourcePeaks[1].slice(), sourcePeaks[2].slice()])
-			const sourceLeaves = state.escalationCarryLeaves.get(sourceGame)
-			if (sourceLeaves !== undefined) {
-				state.escalationCarryLeaves.set(log.emitter, [sourceLeaves[0].slice(), sourceLeaves[1].slice(), sourceLeaves[2].slice()])
+			snapshot = {
+				sourceGame,
+				carryRoots: cloneHexTriple(sourceCarryRoots),
+				carryPeaks: cloneHexPeaksTriple(sourceCarryPeaks),
+				carryLeaves: cloneHexPeaksTriple(sourceCarryLeaves),
+				leafCounts: cloneBigIntTriple(sourceLeafCounts),
 			}
 		}
+		if (snapshot.sourceGame !== sourceGame) throw new Error('fork carry checkpoint source game does not match its fork snapshot')
+		for (let outcomeIndex = 0; outcomeIndex < 3; outcomeIndex += 1) {
+			const sourceOutcomePeaks = snapshot.carryPeaks[outcomeIndex]
+			const sourceLeafCount = snapshot.leafCounts[outcomeIndex]
+			const checkpointLeafCount = leafCounts[outcomeIndex]
+			const checkpointRoot = carryRoots[outcomeIndex]
+			if (sourceOutcomePeaks === undefined || sourceLeafCount === undefined || checkpointLeafCount === undefined || checkpointRoot === undefined) {
+				throw new Error('fork carry checkpoint outcome is incomplete')
+			}
+			if (sourceLeafCount !== checkpointLeafCount || snapshot.carryRoots[outcomeIndex] !== checkpointRoot || bagCarryPeaks(sourceOutcomePeaks, sourceLeafCount) !== checkpointRoot) {
+				throw new Error('fork carry checkpoint does not match its replayed fork snapshot')
+			}
+		}
+		state.escalationCarryPeaks.set(log.emitter, cloneHexPeaksTriple(snapshot.carryPeaks))
+		state.escalationCarryLeaves.set(log.emitter, cloneHexPeaksTriple(snapshot.carryLeaves))
 		return
 	}
 	if (log.eventName === 'LocalDepositAppended') {
@@ -1085,7 +1157,7 @@ export function reduceAuctionEvent(state: ReplayState, log: ReplayLog) {
 }
 
 export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
-	const coordinatorEventNames = new Set(['SecurityPoolSet', 'RepEthPriceSet', 'PriceRequested', 'PriceReported', 'PriceReportRejected', 'PendingReportRecovered', 'PendingOperationRecoveryConsumed', 'StagedOperationQueued', 'ExecutedStagedOperation'])
+	const coordinatorEventNames = new Set(['SecurityPoolSet', 'RepEthPriceSet', 'PriceRequested', 'PriceReported', 'PriceReportRejected', 'PendingReportRecovered', 'PendingOperationRecoveryConsumed', 'StagedOperationQueued', 'ExecutedStagedOperation', 'CoordinatorStateCheckpoint'])
 	if (!coordinatorEventNames.has(log.eventName)) return
 	let coordinator = state.coordinators.get(log.emitter)
 	if (coordinator === undefined) {
@@ -1093,10 +1165,34 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 			lastPrice: 0n,
 			lastSettlementTimestamp: 0n,
 			pendingReportId: 0n,
+			pendingReportSponsor: ZERO_ADDRESS,
+			pendingOperationSlotId: 0n,
 			pendingReportMaxSettlementBaseFee: 0n,
+			priceRoundMaxNotional: 0n,
+			priceRoundConsumedNotional: 0n,
+			stagedOperationCounter: 0n,
+			activeStagedOperationCount: 0n,
+			pendingSettlementOperationCount: 0n,
 			reports: new Map(),
 		}
 		state.coordinators.set(log.emitter, coordinator)
+	}
+	if (log.eventName === 'CoordinatorStateCheckpoint') {
+		coordinator.checkpointReason = requireBigInt(log.args, 'reason')
+		coordinator.checkpointReportId = requireBigInt(log.args, 'reportId')
+		coordinator.checkpointOperationId = requireBigInt(log.args, 'operationId')
+		coordinator.pendingReportId = requireBigInt(log.args, 'pendingReportId')
+		coordinator.pendingReportSponsor = requireAddress(log.args, 'pendingReportSponsor')
+		coordinator.pendingOperationSlotId = requireBigInt(log.args, 'pendingOperationSlotId')
+		coordinator.pendingReportMaxSettlementBaseFee = requireBigInt(log.args, 'pendingReportMaxSettlementBaseFee')
+		coordinator.lastPrice = requireBigInt(log.args, 'lastPrice')
+		coordinator.lastSettlementTimestamp = requireBigInt(log.args, 'lastSettlementTimestamp')
+		coordinator.priceRoundMaxNotional = requireBigInt(log.args, 'priceRoundMaxNotional')
+		coordinator.priceRoundConsumedNotional = requireBigInt(log.args, 'priceRoundConsumedNotional')
+		coordinator.stagedOperationCounter = requireBigInt(log.args, 'stagedOperationCounter')
+		coordinator.activeStagedOperationCount = requireBigInt(log.args, 'activeStagedOperationCount')
+		coordinator.pendingSettlementOperationCount = requireBigInt(log.args, 'pendingSettlementOperationCount')
+		return
 	}
 	if (log.eventName === 'SecurityPoolSet') {
 		coordinator.securityPool = requireAddress(log.args, 'securityPool')
