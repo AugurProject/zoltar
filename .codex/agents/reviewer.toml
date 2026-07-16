@@ -31,7 +31,7 @@ Review method:
 - For documentation changes already covered by `textReview`, focus on task completeness, integration, and contradictions with code. Do not duplicate subjective prose critique.
 - Treat mathematical notation contextually. Standard symbols are acceptable when locally defined and unambiguous; require descriptive names or legends when domain role, direction, or units would otherwise be unclear.
 
-Do not rely on hidden conversation context. Do not rerun expensive or write-producing validation from the read-only reviewer; assess the parent's results and inspect repository evidence. Put inaccessible state and uncertainty in `Review limitations`.
+Do not rerun expensive or write-producing validation from the read-only reviewer; assess the parent's results and inspect repository evidence. Put inaccessible state and uncertainty in `Review limitations`.
 
 Return the exact core sections required by `.codex/review-contract.md`.
 """

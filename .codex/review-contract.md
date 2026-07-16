@@ -4,6 +4,8 @@ This contract is the canonical handoff, severity, output, scoring, and closure p
 
 ## Handoff
 
+Spawn each reviewer as a new project-scoped sub-agent with `fork_turns="none"` or equivalent; its structured handoff is its only task context. Do not reuse an agent or substitute an inline review. If fresh-context spawning is unavailable, the review gate is incomplete.
+
 The parent agent must provide:
 
 - original user request or exact task summary

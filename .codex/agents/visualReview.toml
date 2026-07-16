@@ -40,7 +40,7 @@ Review method:
 - Put missing states, unavailable baseline evidence, inaccessible browser tools, and uncertain contrast or motion behavior under `Review limitations` unless the missing evidence itself violates an acceptance criterion or required validation gate.
 - For visual defects, suggest the narrowest shared component, token, layout rule, or content change likely to fix the root cause and name the evidence needed to verify it.
 
-Do not rely on hidden conversation context. Do not rerun expensive or write-producing validation from the read-only reviewer. Put inaccessible state and uncertainty in `Review limitations`.
+Do not rerun expensive or write-producing validation from the read-only reviewer. Put inaccessible state and uncertainty in `Review limitations`.
 
 Return the exact core sections required by `.codex/review-contract.md`, followed by:
 

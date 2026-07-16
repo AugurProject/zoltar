@@ -185,9 +185,11 @@ Skip this gate for read-only analysis, exploration, or when the user asks not to
 
 `.codex/review-contract.md` is the canonical review handoff, severity, output, scoring, and closure policy.
 
+Apply the review-context isolation rule in `.codex/review-contract.md` to every required reviewer.
+
 ### Visual reviewer
 
-For every task that can affect rendered UI or rendered documentation, run the project-scoped reviewer from `.codex/agents/visualReview.toml` after browser QA and any documentation review, and before the final reviewer. This includes changes to styles, rendered components, route or document composition, visible copy, icons, diagrams, assets, and shared visual primitives. Skip it only when the changed files cannot affect rendered appearance or interaction, and record the concrete reason in validation and the final response.
+For every task that can affect rendered UI or rendered documentation, spawn the project-scoped reviewer from `.codex/agents/visualReview.toml` after browser QA and any documentation review, and before the final reviewer. This includes changes to styles, rendered components, route or document composition, visible copy, icons, diagrams, assets, and shared visual primitives. Skip it only when the changed files cannot affect rendered appearance or interaction, and record the concrete reason in validation and the final response.
 
 Supply the standard handoff plus every visual-review field required by the review contract. The reviewer must not modify files. Disposition every finding using the contract. After material visual fixes, repeat the relevant browser QA at the affected viewports and states, then rerun the visual reviewer. Completion requires no valid High or Medium visual findings and an explicit disposition for every Low visual finding.
 
@@ -199,7 +201,7 @@ Disposition every finding using the contract. After material fixes, rerun affect
 
 ### Documentation reviewer
 
-When documentation under `docs/` changes, run the project-scoped reviewer from `.codex/agents/textReview.toml` before the final reviewer. In addition to the standard handoff, list:
+When documentation under `docs/` changes, spawn the project-scoped reviewer from `.codex/agents/textReview.toml` before the final reviewer. In addition to the standard handoff, list:
 
 - changed documentation files
 - Solidity contracts described, or `none`
