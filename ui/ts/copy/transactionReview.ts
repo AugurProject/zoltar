@@ -1,5 +1,6 @@
 export const transactionReview = 'Transaction Review'
 export const confirmContext = 'Confirm transaction context'
+export const technicalDetails = 'Technical Details'
 export const risksAndConsequences = 'Risks and Consequences'
 export const youPay = 'You Pay'
 export const protocolFee = 'Protocol Fee'

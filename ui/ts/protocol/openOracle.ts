@@ -19,6 +19,17 @@ type CoordinatorInitialReportClient = Parameters<typeof loadOpenOracleInitialRep
 const OPEN_ORACLE_PRICE_UNITS = 30n
 const ACTIVE_STAGED_OPERATION_PREVIEW_LIMIT = 25n
 const COORDINATOR_PRICE_PRECISION = 10n ** 18n
+const OPEN_ORACLE_REPORT_MISSING_ERROR_NAME = 'OpenOracleReportMissingError'
+
+export function createOpenOracleReportMissingError(reportId: bigint) {
+	const error = new Error(`Oracle report #${reportId.toString()} does not exist`)
+	error.name = OPEN_ORACLE_REPORT_MISSING_ERROR_NAME
+	return error
+}
+
+export function isOpenOracleReportMissingError(error: unknown) {
+	return error instanceof Error && error.name === OPEN_ORACLE_REPORT_MISSING_ERROR_NAME
+}
 
 function normalizeOpenOracleTokenMetadata(tokenAddress: Address, decimalsValue: unknown, symbolValue: unknown) {
 	const decimals = Number(decimalsValue)
@@ -302,7 +313,7 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 	const reportStatus = requireOpenOracleReportStatusTuple(status, 'open oracle report status')
 	const reportExtra = requireOpenOracleExtraDataTuple(extra, 'open oracle report extra')
 	if (!hasTimestampAndNumber(block)) throw new Error('Unexpected block response')
-	if (reportMeta[4] === zeroAddress) throw new Error(`Oracle report #${reportId.toString()} does not exist`)
+	if (reportMeta[4] === zeroAddress) throw createOpenOracleReportMissingError(reportId)
 	const [token1Decimals, token2Decimals, token1Symbol, token2Symbol] = await readRequiredMulticall(client, [
 		{
 			abi: ABIS.mainnet.erc20,

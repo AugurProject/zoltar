@@ -56,7 +56,7 @@ export type TransactionContextItem = {
 export type LifecycleStagePresentation = {
 	availableActions: string[]
 	blockedActions: string[]
-	detail: string
+	detail?: string
 	key: string
 	label: string
 	tone: 'critical' | 'default' | 'success' | 'warning'
@@ -73,6 +73,7 @@ export type ReadinessAction = {
 	actionLabel: string
 	blocker?: string
 	description?: string
+	disabledReasonId?: string
 	onAction?: () => void
 	readiness: 'blocked' | 'ready' | 'warning'
 	key: string

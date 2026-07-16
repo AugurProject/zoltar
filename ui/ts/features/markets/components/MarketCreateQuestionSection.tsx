@@ -218,14 +218,6 @@ export function MarketCreateQuestionSection({
 
 			{marketResult === undefined ? (
 				<SectionBlock title={commonCopy.createQuestion} variant='plain'>
-					<div className='workflow-summary-strip workflow-guide'>
-						<div className='workflow-summary-strip-steps'>
-							<span className='current'>{marketCopy.step1DefineTheEventClearly}</span>
-							<span>{marketCopy.step2ExplainHowItResolves}</span>
-							<span>{marketCopy.step3SetTheTimingWindow}</span>
-						</div>
-					</div>
-
 					<form
 						aria-label={commonCopy.createQuestion}
 						className='form-grid'
@@ -254,7 +246,6 @@ export function MarketCreateQuestionSection({
 									placeholder={marketCopy.questionTitlePlaceholder}
 								/>
 							</label>
-							<p className='field-help'>{marketCopy.questionTitleHelpText}</p>
 							{renderFieldError('title', getVisibleFieldError('title'))}
 						</div>
 

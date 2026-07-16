@@ -107,6 +107,7 @@ export const switchToPoolUniverse = 'Switch to Pool Universe'
 export const returnToCurrentUniverse = 'Return to Current Universe'
 export const vaultDirectory = 'Vault Directory'
 export const vaultOperations = 'Vault Operations'
+export const refreshVaultActionsDetail = 'Refresh the vault to use these actions.'
 export const invalidVaultAddressHint = 'Try another vault address.'
 export const forkAlreadyTriggeredSettlementReason = 'Zoltar fork has already been triggered for this pool. Continue in Fork & Migration.'
 export const poolForkMigrationStatus = 'This pool has already entered Fork & Migration.'
@@ -152,7 +153,7 @@ export const firstDepositMeetsTheVaultMinimum = 'First deposit meets the vault m
 export const newVaultsRequireAtLeast = 'New vaults require at least'
 export const claimableFeesAreAvailable = 'Claimable fees are available'
 export const formatInsufficientRepBalanceDetail = (amount: string) => `Insufficient REP balance. Deposit amount exceeds your wallet balance by ${amount} REP.`
-export const formatVaultLauncherBlockerReason = (action: 'claim-fees' | 'deposit-rep' | 'rep-exit-redeem' | 'rep-exit-withdraw' | 'set-bond-allowance', blocker: 'connect-wallet' | 'missing-vault' | 'refresh-vault' | 'select-own-vault') => {
+export const formatVaultLauncherBlockerReason = (action: 'claim-fees' | 'deposit-rep' | 'rep-exit-redeem' | 'rep-exit-withdraw' | 'set-bond-allowance', blocker: 'connect-wallet' | 'missing-vault' | 'select-own-vault') => {
 	if (blocker === 'missing-vault') return missingVaultDetail
 
 	if (blocker === 'connect-wallet') {
@@ -163,19 +164,11 @@ export const formatVaultLauncherBlockerReason = (action: 'claim-fees' | 'deposit
 		return 'Connect a wallet before setting the security bond allowance.'
 	}
 
-	if (blocker === 'select-own-vault') {
-		if (action === 'claim-fees') return 'Select your own vault to claim fees.'
-		if (action === 'deposit-rep') return 'Select your own vault to deposit REP.'
-		if (action === 'rep-exit-redeem') return 'Select your own vault to redeem REP.'
-		if (action === 'rep-exit-withdraw') return 'Select your own vault to withdraw REP.'
-		return 'Select your own vault to set the security bond allowance.'
-	}
-
-	if (action === 'claim-fees') return 'Refresh the vault before claiming fees.'
-	if (action === 'deposit-rep') return 'Refresh the vault before depositing REP.'
-	if (action === 'rep-exit-redeem') return 'Refresh the vault before redeeming REP.'
-	if (action === 'rep-exit-withdraw') return 'Refresh the vault before withdrawing REP.'
-	return 'Refresh the vault before setting the security bond allowance.'
+	if (action === 'claim-fees') return 'Select your own vault to claim fees.'
+	if (action === 'deposit-rep') return 'Select your own vault to deposit REP.'
+	if (action === 'rep-exit-redeem') return 'Select your own vault to redeem REP.'
+	if (action === 'rep-exit-withdraw') return 'Select your own vault to withdraw REP.'
+	return 'Select your own vault to set the security bond allowance.'
 }
 export const oracleFundingPendingDetail = 'Oracle execution can be funded until a fresh price arrives.'
 export const selfServiceExecutionTimeoutHelpText = 'Enter whole minutes. Queued self-service operations must stay executable for at least 1 minute after the oracle settlement window completes.'
@@ -192,7 +185,6 @@ export const repAvailableToQueue = 'REP Available To Queue'
 export const walletDepositBalanceStatus = 'Wallet REP balance covers the deposit amount'
 export const formatRepBalanceShortageDetail = (amount: string) => `Need ${amount} more REP.`
 export const actionRejectedDetail = 'The security pool rejected the action.'
-export const invalidPoolAddressHint = 'Try another pool address.'
 export const repWithdrawalExecuted = 'REP Withdrawal Executed'
 export const repWithdrawalFailed = 'REP Withdrawal Failed'
 export const immediateWithdrawalRejectedDetail = 'The oracle manager attempted the withdrawal immediately, but the security pool rejected it.'

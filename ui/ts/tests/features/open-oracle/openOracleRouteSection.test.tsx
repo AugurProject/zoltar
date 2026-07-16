@@ -103,7 +103,6 @@ function createOpenOracleSectionProps(overrides: Partial<OpenOracleSectionProps>
 		activeView: 'create',
 		accountState: createAccountState(),
 		loadingOpenOracleCreate: false,
-		loadingOracleReport: false,
 		onActiveViewChange: () => undefined,
 		onApproveToken1: () => undefined,
 		onApproveToken2: () => undefined,
@@ -123,6 +122,7 @@ function createOpenOracleSectionProps(overrides: Partial<OpenOracleSectionProps>
 		openOracleDisputeSubmission,
 		openOracleInitialReportSubmission,
 		openOracleInitialReportState,
+		openOracleReportLookupState: 'unknown',
 		openOracleReportDetails,
 		openOracleResult: undefined,
 		...overrides,
@@ -240,18 +240,16 @@ describe('OpenOracleSection route create view', () => {
 		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
 	})
 
-	test('teaches the standalone operator flow before the advanced creation fields', async () => {
+	test('keeps the standalone safety warning without redundant workflow guidance', async () => {
 		const renderedComponent = await renderIntoDocument(h(OpenOracleSection, createOpenOracleSectionProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Standalone operator workflow')).not.toBeNull()
-		expect(documentQueries.getByText('1. Verify token pair')).not.toBeNull()
-		expect(documentQueries.getByText('2. Set economics')).not.toBeNull()
-		expect(documentQueries.getByText('3. Set dispute timing')).not.toBeNull()
-		expect(documentQueries.getByText('This flow creates infrastructure, not a market position.')).not.toBeNull()
-		expect(documentQueries.getByText('1. Verify token pair').className).not.toContain('current')
-		expect(document.body.textContent?.match(/Pool-managed/g)).toHaveLength(1)
+		expect(documentQueries.getByText('Standalone only. Start pool-managed requests from a security pool.')).not.toBeNull()
+		expect(documentQueries.getByRole('textbox', { name: 'Base Token Address' })).not.toBeNull()
+		expect(documentQueries.getByRole('textbox', { name: 'Quote Token Address' })).not.toBeNull()
+		expect(document.body.textContent?.includes('Standalone operator workflow')).toBe(false)
+		expect(document.body.textContent?.match(/pool-managed/gi) ?? []).toHaveLength(1)
 	})
 
 	test('renders selected report actions without readiness cards or visible blocker copy', async () => {
@@ -281,6 +279,72 @@ describe('OpenOracleSection route create view', () => {
 		expectTransactionButtonDisabled(document.body, 'Dispute & Swap', 'This report is not ready to dispute.')
 	})
 
+	test('keeps blank and unsubmitted report lookups quiet', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				OpenOracleSection,
+				createOpenOracleSectionProps({
+					activeView: 'selected-report',
+					openOracleForm: getDefaultOpenOracleFormState(),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText('Not checked')).toBeNull()
+		expect(document.body.textContent?.includes('Refresh reports')).toBe(false)
+
+		await cleanupRenderedComponent()
+		cleanupRenderedComponent = undefined
+		const unsubmittedRenderedComponent = await renderIntoDocument(
+			h(
+				OpenOracleSection,
+				createOpenOracleSectionProps({
+					activeView: 'selected-report',
+					openOracleForm: { ...getDefaultOpenOracleFormState(), reportId: '999' },
+				}),
+			),
+		)
+		cleanupRenderedComponent = unsubmittedRenderedComponent.cleanup
+
+		expect(within(document.body).queryByText('No report matches this ID. Try another report ID.')).toBeNull()
+
+		await cleanupRenderedComponent()
+		cleanupRenderedComponent = undefined
+		const missingRenderedComponent = await renderIntoDocument(
+			h(
+				OpenOracleSection,
+				createOpenOracleSectionProps({
+					activeView: 'selected-report',
+					openOracleForm: { ...getDefaultOpenOracleFormState(), reportId: '999' },
+					openOracleReportLookupState: 'missing',
+				}),
+			),
+		)
+		cleanupRenderedComponent = missingRenderedComponent.cleanup
+
+		expect(within(document.body).getByText('No report matches this ID. Try another report ID.')).not.toBeNull()
+	})
+
+	test('does not let an older pending lookup block a replacement report ID', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				OpenOracleSection,
+				createOpenOracleSectionProps({
+					activeView: 'selected-report',
+					openOracleForm: { ...getDefaultOpenOracleFormState(), reportId: '2' },
+					openOracleReportLookupState: 'unknown',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const openReportButton = within(document.body).getByRole('button', { name: 'Open report' })
+		expect(openReportButton.hasAttribute('disabled')).toBe(false)
+		expect(within(document.body).queryByText('Loading…')).toBeNull()
+	})
+
 	test('omits the empty report actions section for a settled report', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -301,7 +365,8 @@ describe('OpenOracleSection route create view', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('heading', { name: 'Report Actions' })).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Report Details' })).not.toBeNull()
-		expect(documentQueries.getByText('This report is already settled and no further write actions are available.')).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Settled' })).not.toBeNull()
+		expect(documentQueries.queryByText('This report is already settled and no further write actions are available.')).toBeNull()
 		expect(documentQueries.queryByText('This report is settled. No write actions are available.')).toBeNull()
 	})
 
@@ -422,20 +487,24 @@ describe('OpenOracleSection route create view', () => {
 		const exactToken1ReportInput = documentQueries.getByLabelText('Exact Token1 Report')
 		const settlerRewardInput = documentQueries.getByLabelText('Settler Reward')
 		const ethValueInput = documentQueries.getByLabelText('ETH Value To Send')
-		const feePercentageInput = documentQueries.getByLabelText('Fee Percentage')
-		const settlementTimeInput = documentQueries.getByLabelText('Settlement Time')
+		const baseTokenAddressInput = documentQueries.getByLabelText('Base Token Address')
+		const quoteTokenAddressInput = documentQueries.getByLabelText('Quote Token Address')
+		const feePercentageInput = documentQueries.getByLabelText('Dispute Fee (%)')
+		const settlementTimeInput = documentQueries.getByLabelText('Settlement Delay (seconds)')
 		const escalationHaltInput = documentQueries.getByLabelText('Escalation Halt')
-		const disputeDelayInput = documentQueries.getByLabelText('Dispute Delay')
-		const protocolFeeInput = documentQueries.getByLabelText('Protocol Fee')
+		const disputeDelayInput = documentQueries.getByLabelText('Dispute Delay (seconds)')
+		const protocolFeeInput = documentQueries.getByLabelText('Protocol Fee (%)')
 
 		expect(exactToken1ReportInput.getAttribute('aria-describedby')).toBe('open-oracle-exact-token1-report-help')
 		expect(settlerRewardInput.getAttribute('aria-describedby')).toBe('open-oracle-settler-reward-help')
 		expect(ethValueInput.getAttribute('aria-describedby')).toBe('open-oracle-eth-value-help')
-		expect(feePercentageInput.getAttribute('aria-describedby')).toBe('open-oracle-fee-percentage-help')
-		expect(settlementTimeInput.getAttribute('aria-describedby')).toBe('open-oracle-settlement-time-help')
+		expect(baseTokenAddressInput.hasAttribute('aria-describedby')).toBe(false)
+		expect(quoteTokenAddressInput.hasAttribute('aria-describedby')).toBe(false)
+		expect(feePercentageInput.hasAttribute('aria-describedby')).toBe(false)
+		expect(settlementTimeInput.hasAttribute('aria-describedby')).toBe(false)
 		expect(escalationHaltInput.getAttribute('aria-describedby')).toBe('open-oracle-escalation-halt-help')
-		expect(disputeDelayInput.getAttribute('aria-describedby')).toBe('open-oracle-dispute-delay-help')
-		expect(protocolFeeInput.getAttribute('aria-describedby')).toBe('open-oracle-protocol-fee-help')
+		expect(disputeDelayInput.hasAttribute('aria-describedby')).toBe(false)
+		expect(protocolFeeInput.hasAttribute('aria-describedby')).toBe(false)
 		expect(exactToken1ReportInput.getAttribute('inputmode')).toBe('decimal')
 		expect(settlerRewardInput.getAttribute('inputmode')).toBe('decimal')
 		expect(ethValueInput.getAttribute('inputmode')).toBe('decimal')
@@ -447,11 +516,11 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.getByText('Token1 amount to report, entered as a decimal value for the token1 address.')).not.toBeNull()
 		expect(documentQueries.getByText('ETH paid to the account that settles the report.')).not.toBeNull()
 		expect(documentQueries.getByText('ETH sent with creation; must cover required funding and the settler reward.')).not.toBeNull()
-		expect(documentQueries.getByText('Fee charged during dispute economics, entered as a percentage.')).not.toBeNull()
-		expect(documentQueries.getByText('Delay in seconds after the initial report before settlement can begin.')).not.toBeNull()
+		expect(documentQueries.queryByText('Fee charged during dispute economics, entered as a percentage.')).toBeNull()
+		expect(documentQueries.queryByText('Delay in seconds after the initial report before settlement can begin.')).toBeNull()
 		expect(documentQueries.getByText('Token1 amount where dispute escalation stops, entered as a decimal value for the token1 address.')).not.toBeNull()
-		expect(documentQueries.getByText('Delay in seconds after the initial report before disputes can begin.')).not.toBeNull()
-		expect(documentQueries.getByText('Protocol fee charged during disputes, entered as a percentage.')).not.toBeNull()
+		expect(documentQueries.queryByText('Delay in seconds after the initial report before disputes can begin.')).toBeNull()
+		expect(documentQueries.queryByText('Protocol fee charged during disputes, entered as a percentage.')).toBeNull()
 	})
 
 	test('uses the shared live chain timestamp to switch a selected report into settle mode', async () => {

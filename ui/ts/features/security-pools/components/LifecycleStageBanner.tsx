@@ -37,7 +37,7 @@ export function LifecycleStageBanner({ stage }: LifecycleStageBannerProps) {
 			<WarningSurface className='lifecycle-stage-banner'>
 				<div className='lifecycle-stage-banner-main'>
 					<h3>{stage.label}</h3>
-					<p className='detail'>{stage.detail}</p>
+					{stage.detail === undefined ? undefined : <p className='detail'>{stage.detail}</p>}
 				</div>
 				{actions}
 			</WarningSurface>
@@ -47,7 +47,7 @@ export function LifecycleStageBanner({ stage }: LifecycleStageBannerProps) {
 		<section className={`lifecycle-stage-banner ${stage.tone}`}>
 			<div className='lifecycle-stage-banner-main'>
 				<h3>{stage.label}</h3>
-				<p className='detail'>{stage.detail}</p>
+				{stage.detail === undefined ? undefined : <p className='detail'>{stage.detail}</p>}
 			</div>
 			{actions}
 		</section>

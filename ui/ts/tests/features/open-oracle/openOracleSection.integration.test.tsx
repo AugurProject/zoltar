@@ -96,7 +96,6 @@ function OpenOracleSectionHarness({ accountAddress, initialActiveView = 'create'
 				activeView={activeView}
 				accountState={accountState}
 				loadingOpenOracleCreate={openOracle.loadingOpenOracleCreate}
-				loadingOracleReport={openOracle.loadingOracleReport}
 				onActiveViewChange={setActiveView}
 				onApproveToken1={amount => void openOracle.approveToken1(amount)}
 				onApproveToken2={amount => void openOracle.approveToken2(amount)}
@@ -116,6 +115,7 @@ function OpenOracleSectionHarness({ accountAddress, initialActiveView = 'create'
 				openOracleForm={openOracle.openOracleForm}
 				openOracleInitialReportSubmission={openOracle.openOracleInitialReportSubmission}
 				openOracleInitialReportState={openOracle.openOracleInitialReportState}
+				openOracleReportLookupState={openOracle.openOracleReportLookupState}
 				openOracleReportDetails={openOracle.openOracleReportDetails}
 				openOracleResult={openOracle.openOracleResult}
 			/>
@@ -172,17 +172,17 @@ async function clickElement(element: HTMLElement) {
 }
 
 async function fillOpenOracleCreateForm() {
-	await setInputValue('Token1 Address', openOracleCreateParameters.token1Address)
-	await setInputValue('Token2 Address', openOracleCreateParameters.token2Address)
+	await setInputValue('Base Token Address', openOracleCreateParameters.token1Address)
+	await setInputValue('Quote Token Address', openOracleCreateParameters.token2Address)
 	await setInputValue('Exact Token1 Report', formatCurrencyInputBalance(openOracleCreateParameters.exactToken1Report))
 	await setInputValue('Settler Reward', formatCurrencyInputBalance(openOracleCreateParameters.settlerReward))
 	await setInputValue('ETH Value To Send', formatCurrencyInputBalance(openOracleCreateParameters.ethValue))
-	await setInputValue('Fee Percentage', formatOpenOracleFeePercentageInput(BigInt(openOracleCreateParameters.feePercentage)))
+	await setInputValue('Dispute Fee (%)', formatOpenOracleFeePercentageInput(BigInt(openOracleCreateParameters.feePercentage)))
 	await setInputValue('Multiplier', openOracleCreateParameters.multiplier.toString())
-	await setInputValue('Settlement Time', openOracleCreateParameters.settlementTime.toString())
+	await setInputValue('Settlement Delay (seconds)', openOracleCreateParameters.settlementTime.toString())
 	await setInputValue('Escalation Halt', formatCurrencyInputBalance(openOracleCreateParameters.escalationHalt))
-	await setInputValue('Dispute Delay', openOracleCreateParameters.disputeDelay.toString())
-	await setInputValue('Protocol Fee', formatOpenOracleFeePercentageInput(BigInt(openOracleCreateParameters.protocolFee)))
+	await setInputValue('Dispute Delay (seconds)', openOracleCreateParameters.disputeDelay.toString())
+	await setInputValue('Protocol Fee (%)', formatOpenOracleFeePercentageInput(BigInt(openOracleCreateParameters.protocolFee)))
 }
 
 async function loadSelectedReportInUi() {

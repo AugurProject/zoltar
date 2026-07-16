@@ -144,7 +144,9 @@ describe('MarketCreateQuestionSection', () => {
 
 		const documentQueries = within(document.body)
 		const titleInput = documentQueries.getByLabelText('Title')
-		expect(documentQueries.getByText('Times use your browser timezone. Leave start time blank to allow activity immediately after creation.')).not.toBeNull()
+		expect(documentQueries.getByText('Local time; blank start means immediately.')).not.toBeNull()
+		expect(documentQueries.queryByText('Use a short question that clearly distinguishes the possible outcomes.')).toBeNull()
+		expect(document.body.querySelector('.workflow-summary-strip')).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Question Type Guidance' })).toBeNull()
 		expect(documentQueries.getAllByText('Ask a yes-or-no question that can be resolved from one public source of truth.')).toHaveLength(1)
 		expect(documentQueries.getByRole('heading', { name: 'Draft Preview' })).not.toBeNull()

@@ -502,7 +502,7 @@ function renderReportDetailsCard(
 	openOracleDisputeSubmission: OpenOracleSectionProps['openOracleDisputeSubmission'],
 	openOracleInitialReportSubmission: OpenOracleSectionProps['openOracleInitialReportSubmission'],
 	openOracleActiveAction: OpenOracleSectionProps['openOracleActiveAction'],
-	loadingOracleReport: boolean,
+	openOracleReportLookupState: OpenOracleSectionProps['openOracleReportLookupState'],
 	isConnected: boolean,
 	isMainnet: boolean,
 	selectedReportModal: SelectedReportModal,
@@ -517,6 +517,7 @@ function renderReportDetailsCard(
 	onSubmitInitialReport: () => void,
 	onWrapWethForInitialReport: () => void,
 ) {
+	const loadingSelectedReport = openOracleReportLookupState === 'loading'
 	const reportControls = (
 		<div className='form-grid'>
 			<LookupFieldRow
@@ -524,9 +525,9 @@ function renderReportDetailsCard(
 				value={openOracleForm.reportId}
 				onInput={reportId => onOpenOracleFormChange({ reportId })}
 				action={
-					<button className='secondary' onClick={() => onLoadOracleReport(openOracleForm.reportId)} disabled={loadingOracleReport}>
+					<button className='secondary' onClick={() => onLoadOracleReport(openOracleForm.reportId)} disabled={loadingSelectedReport}>
 						{(() => {
-							if (loadingOracleReport) return <LoadingText>{commonCopy.loadingWithEllipsis}</LoadingText>
+							if (loadingSelectedReport) return <LoadingText>{commonCopy.loadingWithEllipsis}</LoadingText>
 							if (openOracleReportDetails === undefined) return openOracleCopy.openReport
 
 							return openOracleCopy.refreshReport
@@ -537,15 +538,12 @@ function renderReportDetailsCard(
 		</div>
 	)
 	if (openOracleReportDetails === undefined) {
-		const reportPresentation = getReportPresentation({
-			kind: 'report',
-			state: (() => {
-				if (loadingOracleReport) return 'loading'
-				if (openOracleForm.reportId.trim() === '') return 'unknown'
-
-				return 'missing'
-			})(),
-		})
+		const reportLookupPresentationState = (() => {
+			if (openOracleReportLookupState === 'missing') return 'missing'
+			if (openOracleReportLookupState === 'loading') return 'loading'
+			return 'unknown'
+		})()
+		const reportPresentation = getReportPresentation({ kind: 'report', state: reportLookupPresentationState })
 		return (
 			<SectionBlock title={commonCopy.reportDetails}>
 				{reportControls}
@@ -832,7 +830,6 @@ function renderReportDetailsCard(
 export function OpenOracleSection({
 	activeView,
 	accountState,
-	loadingOracleReport,
 	onApproveToken1,
 	onApproveToken2,
 	onCreateOpenOracleGame,
@@ -852,6 +849,7 @@ export function OpenOracleSection({
 	openOracleForm,
 	openOracleInitialReportState,
 	openOracleInitialReportSubmission,
+	openOracleReportLookupState,
 	openOracleReportDetails,
 	openOracleResult,
 	onActiveViewChange,
@@ -999,17 +997,11 @@ export function OpenOracleSection({
 								<div className='field-row'>
 									<label className='field'>
 										<span>{openOracleCopy.token1Address}</span>
-										<FormInput value={openOracleCreateForm.token1Address} onInput={event => onOpenOracleCreateFormChange({ token1Address: event.currentTarget.value })} placeholder={commonCopy.hexValuePlaceholder} aria-label={openOracleCopy.token1Address} aria-describedby='open-oracle-token1-address-help' />
-										<p id='open-oracle-token1-address-help' className='field-help'>
-											{openOracleCopy.baseTokenHelpText}
-										</p>
+										<FormInput value={openOracleCreateForm.token1Address} onInput={event => onOpenOracleCreateFormChange({ token1Address: event.currentTarget.value })} placeholder={commonCopy.hexValuePlaceholder} aria-label={openOracleCopy.token1Address} />
 									</label>
 									<label className='field'>
 										<span>{openOracleCopy.token2Address}</span>
-										<FormInput value={openOracleCreateForm.token2Address} onInput={event => onOpenOracleCreateFormChange({ token2Address: event.currentTarget.value })} placeholder={commonCopy.hexValuePlaceholder} aria-label={openOracleCopy.token2Address} aria-describedby='open-oracle-token2-address-help' />
-										<p id='open-oracle-token2-address-help' className='field-help'>
-											{openOracleCopy.quoteTokenHelpText}
-										</p>
+										<FormInput value={openOracleCreateForm.token2Address} onInput={event => onOpenOracleCreateFormChange({ token2Address: event.currentTarget.value })} placeholder={commonCopy.hexValuePlaceholder} aria-label={openOracleCopy.token2Address} />
 									</label>
 								</div>
 							</SectionBlock>
@@ -1040,11 +1032,8 @@ export function OpenOracleSection({
 								</label>
 								<div className='field-row'>
 									<label className='field'>
-										<span>{openOracleCopy.feePercentage}</span>
-										<FormInput value={openOracleCreateForm.feePercentage} inputMode='decimal' onInput={event => onOpenOracleCreateFormChange({ feePercentage: event.currentTarget.value })} aria-label={openOracleCopy.feePercentage} aria-describedby='open-oracle-fee-percentage-help' />
-										<p id='open-oracle-fee-percentage-help' className='field-help'>
-											{openOracleCopy.disputeFeeHelpText}
-										</p>
+										<span>{openOracleCopy.disputeFeePercentage}</span>
+										<FormInput value={openOracleCreateForm.feePercentage} inputMode='decimal' onInput={event => onOpenOracleCreateFormChange({ feePercentage: event.currentTarget.value })} aria-label={openOracleCopy.disputeFeePercentage} />
 									</label>
 									<label className='field'>
 										<span>{commonCopy.multiplier}</span>
@@ -1059,11 +1048,8 @@ export function OpenOracleSection({
 							<SectionBlock headingLevel={4} title={openOracleCopy.timing} variant='embedded'>
 								<div className='field-row'>
 									<label className='field'>
-										<span>{openOracleCopy.settlementTime}</span>
-										<FormInput value={openOracleCreateForm.settlementTime} inputMode='numeric' onInput={event => onOpenOracleCreateFormChange({ settlementTime: event.currentTarget.value })} aria-label={openOracleCopy.settlementTime} aria-describedby='open-oracle-settlement-time-help' />
-										<p id='open-oracle-settlement-time-help' className='field-help'>
-											{openOracleCopy.settlementDelayHelpText}
-										</p>
+										<span>{openOracleCopy.settlementDelaySeconds}</span>
+										<FormInput value={openOracleCreateForm.settlementTime} inputMode='numeric' onInput={event => onOpenOracleCreateFormChange({ settlementTime: event.currentTarget.value })} aria-label={openOracleCopy.settlementDelaySeconds} />
 									</label>
 									<label className='field'>
 										<span>{openOracleCopy.escalationHalt}</span>
@@ -1075,18 +1061,12 @@ export function OpenOracleSection({
 								</div>
 								<div className='field-row'>
 									<label className='field'>
-										<span>{openOracleCopy.disputeDelay}</span>
-										<FormInput value={openOracleCreateForm.disputeDelay} inputMode='numeric' onInput={event => onOpenOracleCreateFormChange({ disputeDelay: event.currentTarget.value })} aria-label={openOracleCopy.disputeDelay} aria-describedby='open-oracle-dispute-delay-help' />
-										<p id='open-oracle-dispute-delay-help' className='field-help'>
-											{openOracleCopy.disputeDelayHelpText}
-										</p>
+										<span>{openOracleCopy.disputeDelaySeconds}</span>
+										<FormInput value={openOracleCreateForm.disputeDelay} inputMode='numeric' onInput={event => onOpenOracleCreateFormChange({ disputeDelay: event.currentTarget.value })} aria-label={openOracleCopy.disputeDelaySeconds} />
 									</label>
 									<label className='field'>
-										<span>{openOracleCopy.protocolFee}</span>
-										<FormInput value={openOracleCreateForm.protocolFee} inputMode='decimal' onInput={event => onOpenOracleCreateFormChange({ protocolFee: event.currentTarget.value })} aria-label={openOracleCopy.protocolFee} aria-describedby='open-oracle-protocol-fee-help' />
-										<p id='open-oracle-protocol-fee-help' className='field-help'>
-											{openOracleCopy.protocolFeeHelpText}
-										</p>
+										<span>{openOracleCopy.protocolFeePercentage}</span>
+										<FormInput value={openOracleCreateForm.protocolFee} inputMode='decimal' onInput={event => onOpenOracleCreateFormChange({ protocolFee: event.currentTarget.value })} aria-label={openOracleCopy.protocolFeePercentage} />
 									</label>
 								</div>
 							</SectionBlock>
@@ -1115,7 +1095,7 @@ export function OpenOracleSection({
 						openOracleDisputeSubmission,
 						openOracleInitialReportSubmission,
 						openOracleActiveAction,
-						loadingOracleReport,
+						openOracleReportLookupState,
 						isConnected,
 						isMainnet,
 						selectedReportModal,

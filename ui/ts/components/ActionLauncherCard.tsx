@@ -22,7 +22,16 @@ export function ActionLauncherCard({ action, children, pending = false, pendingL
 				{children}
 			</div>
 			<div className='action-launcher-card-actions'>
-				<ActionLauncherButton idleLabel={action.actionLabel} pendingLabel={pendingLabel} onClick={() => action.onAction?.()} pending={pending} tone={tone} availability={{ disabled, reason: action.blocker }} showDisabledReason />
+				<ActionLauncherButton
+					{...(action.disabledReasonId === undefined ? {} : { describedBy: action.disabledReasonId })}
+					idleLabel={action.actionLabel}
+					pendingLabel={pendingLabel}
+					onClick={() => action.onAction?.()}
+					pending={pending}
+					tone={tone}
+					availability={{ disabled, reason: action.blocker }}
+					showDisabledReason
+				/>
 			</div>
 		</section>
 	)

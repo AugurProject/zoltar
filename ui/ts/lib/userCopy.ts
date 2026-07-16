@@ -159,12 +159,7 @@ export function getReportPresentation({ kind, state }: { kind: 'question' | 'rep
 				detailIsLoading: true,
 			})
 		case 'unknown':
-			return createPresentation('not_checked', {
-				actionHint: userMessagesCopy.formatRefreshLookupAction(kind),
-				badgeLabel: userMessagesCopy.notChecked,
-				badgeTone: 'muted',
-				detail: userMessagesCopy.formatUncheckedLookupDetail(kind),
-			})
+			return undefined
 		case 'missing':
 			return createPresentation('not_found', {
 				badgeLabel: commonCopy.notFound,

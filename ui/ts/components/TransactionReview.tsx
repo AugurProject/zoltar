@@ -3,6 +3,7 @@ import { useId } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
 import type { TransactionContextItem } from '../types/components.js'
 import { TransactionObjectContext } from './TransactionObjectContext.js'
+import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
 
 type TransactionReviewRow = {
 	label: ComponentChildren
@@ -15,9 +16,23 @@ type TransactionReviewProps = {
 	details?: TransactionReviewRow[]
 	primary: TransactionReviewRow[]
 	risks?: ComponentChildren[]
+	technicalDetails?: TransactionReviewRow[]
 }
 
-export function TransactionReview({ className = '', context = [], details = [], primary, risks = [] }: TransactionReviewProps) {
+function renderDetailRows(rows: TransactionReviewRow[]) {
+	return (
+		<div className='transaction-review-details' role='list'>
+			{rows.map((row, index) => (
+				<div className='transaction-review-detail-row' key={`${index}`} role='listitem'>
+					<span>{row.label}</span>
+					<strong>{row.value}</strong>
+				</div>
+			))}
+		</div>
+	)
+}
+
+export function TransactionReview({ className = '', context = [], details = [], primary, risks = [], technicalDetails = [] }: TransactionReviewProps) {
 	const titleId = useId()
 	return (
 		<section className={`transaction-review ${className}`.trim()} aria-labelledby={titleId}>
@@ -33,16 +48,7 @@ export function TransactionReview({ className = '', context = [], details = [], 
 					</div>
 				))}
 			</div>
-			{details.length === 0 ? undefined : (
-				<div className='transaction-review-details' role='list'>
-					{details.map((row, index) => (
-						<div className='transaction-review-detail-row' key={`${index}`} role='listitem'>
-							<span>{row.label}</span>
-							<strong>{row.value}</strong>
-						</div>
-					))}
-				</div>
-			)}
+			{details.length === 0 ? undefined : renderDetailRows(details)}
 			{risks.length === 0 ? undefined : (
 				<div className='transaction-review-risks'>
 					<strong>{transactionReviewCopy.risksAndConsequences}</strong>
@@ -53,6 +59,7 @@ export function TransactionReview({ className = '', context = [], details = [], 
 					</ul>
 				</div>
 			)}
+			{technicalDetails.length === 0 ? undefined : <ReadOnlyDetailAccordion title={transactionReviewCopy.technicalDetails}>{renderDetailRows(technicalDetails)}</ReadOnlyDetailAccordion>}
 		</section>
 	)
 }

@@ -8,7 +8,6 @@ export function getOpenOracleStagePresentation(actionMode: OpenOracleSelectedRep
 			return {
 				availableActions: [],
 				blockedActions: [],
-				detail: 'This report is waiting for its first report submission.',
 				key: 'awaiting-initial-report',
 				label: 'Awaiting Initial Report',
 				tone: 'warning',
@@ -17,7 +16,6 @@ export function getOpenOracleStagePresentation(actionMode: OpenOracleSelectedRep
 			return {
 				availableActions: [],
 				blockedActions: [],
-				detail: 'This report has an active lifecycle and may still be disputed.',
 				key: 'dispute-window',
 				label: 'Dispute Window Open',
 				tone: 'default',
@@ -26,7 +24,6 @@ export function getOpenOracleStagePresentation(actionMode: OpenOracleSelectedRep
 			return {
 				availableActions: [],
 				blockedActions: [],
-				detail: 'The dispute window has ended and this report is ready to settle.',
 				key: 'ready-to-settle',
 				label: 'Ready To Settle',
 				tone: 'success',
@@ -35,7 +32,6 @@ export function getOpenOracleStagePresentation(actionMode: OpenOracleSelectedRep
 			return {
 				availableActions: [],
 				blockedActions: [],
-				detail: 'This report is already settled and no further write actions are available.',
 				key: 'settled',
 				label: 'Settled',
 				tone: 'success',

@@ -161,7 +161,7 @@ export function ZoltarMigrationSection({
 		if (splitLimit === undefined) return zoltarCopy.outcomeBalancesLoading
 		if (splitLimit === 0n) return zoltarCopy.migrationAmountAlreadySplitDetail
 		if (!hasSufficientSplitLimit) return zoltarCopy.formatSplitCapacityDetail(formatCurrencyBalance(splitLimit))
-		return zoltarCopy.migrationSplitInstruction
+		return undefined
 	})()
 	const migrationAmountHintMessage = (() => {
 		const guard = getMigrationGuardMessage(accountAddress, isMainnet, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, zoltarCopy.migrationNotForkedReason)
@@ -205,10 +205,6 @@ export function ZoltarMigrationSection({
 		<>
 			<SectionBlock title={zoltarCopy.migrateRep}>
 				<div className='workflow-summary-strip workflow-guide'>
-					<div className='workflow-guide-intro'>
-						<strong>{zoltarCopy.migrationWorkflow}</strong>
-						<p className='detail'>{zoltarCopy.migrationWorkflowDetail}</p>
-					</div>
 					<div className='workflow-summary-strip-steps migration-workflow-steps'>
 						{workflowSteps.map(step => (
 							<span className={workflowStage === step.key ? 'current' : ''} key={step.key}>
@@ -303,11 +299,13 @@ export function ZoltarMigrationSection({
 								label: zoltarCopy.destinationRepAfterSplit(child.outcomeLabel),
 								value: <CurrencyValue value={migrationAmount === undefined || zoltarMigrationChildRepBalances[child.universeId.toString()] === undefined ? undefined : (zoltarMigrationChildRepBalances[child.universeId.toString()] ?? 0n) + migrationAmount} suffix={commonCopy.rep} />,
 							})),
+						]}
+						risks={[zoltarCopy.migrationDestinationRisk, zoltarCopy.migrationSplitRisk]}
+						technicalDetails={[
 							{ label: transactionReviewCopy.protocolFee, value: transactionReviewCopy.noProtocolFee },
 							{ label: transactionReviewCopy.contract, value: rootUniverse?.zoltarAddress === undefined ? commonCopy.unavailable : <AddressValue address={rootUniverse.zoltarAddress} /> },
 							{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
 						]}
-						risks={[zoltarCopy.migrationDestinationRisk, zoltarCopy.migrationSplitRisk]}
 					/>
 
 					<div className='actions'>

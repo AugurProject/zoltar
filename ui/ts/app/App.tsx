@@ -196,7 +196,6 @@ export function App() {
 		disputeReport,
 		loadOracleReport,
 		loadingOpenOracleCreate,
-		loadingOracleReport,
 		openOracleActiveAction,
 		openOracleCreateForm,
 		openOracleDisputeSubmission,
@@ -204,6 +203,7 @@ export function App() {
 		openOracleForm,
 		openOracleInitialReportSubmission,
 		openOracleInitialReportState,
+		openOracleReportLookupState,
 		openOracleReportDetails,
 		openOracleResult,
 		refreshPrice,
@@ -716,7 +716,6 @@ export function App() {
 	const openOracleRouteContentProps: OpenOracleSectionProps = {
 		activeView: activeOpenOracleView,
 		accountState,
-		loadingOracleReport,
 		onApproveToken1: amount => void approveToken1(amount),
 		onApproveToken2: amount => void approveToken2(amount),
 		onCreateOpenOracleGame: () => void createOpenOracleGame(),
@@ -740,6 +739,7 @@ export function App() {
 		openOracleForm,
 		openOracleInitialReportSubmission,
 		openOracleInitialReportState,
+		openOracleReportLookupState,
 		openOracleReportDetails,
 		openOracleResult,
 	}

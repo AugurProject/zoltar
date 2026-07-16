@@ -252,4 +252,33 @@ describe('ForkZoltarSection', () => {
 		expect(confirmationInput.value).toBe('')
 		expect(forkButton.hasAttribute('disabled')).toBe(true)
 	})
+
+	test('gives direct recovery when the fork question ID is missing', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(ForkZoltarSection, {
+				accountAddress: zeroAddress,
+				hasLoadedZoltarQuestions: true,
+				isMainnet: true,
+				loadingZoltarForkAccess: false,
+				loadingZoltarQuestions: false,
+				onApproveZoltarForkRep: () => undefined,
+				onForkZoltar: () => undefined,
+				onZoltarForkQuestionIdChange: () => undefined,
+				zoltarForkActiveAction: undefined,
+				zoltarForkApproval: { error: undefined, loading: false, value: 0n },
+				zoltarForkError: undefined,
+				zoltarForkPending: false,
+				zoltarForkQuestionId: '0x02',
+				zoltarForkRepBalance: 1000n,
+				zoltarQuestions: [createQuestion()],
+				zoltarUniverse: createUniverse(),
+				zoltarUniverseState: 'ready',
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('No question matches this ID. Try another question ID.')).not.toBeNull()
+		expect(document.body.textContent?.includes('Refresh questions')).toBe(false)
+	})
 })

@@ -203,6 +203,7 @@ describe('ZoltarMigrationSection', () => {
 		const currentSteps = document.body.querySelectorAll('.migration-workflow-steps .current')
 		expect(currentSteps).toHaveLength(1)
 		expect(currentSteps[0]?.textContent).toBe('3. Split REP')
+		expect(document.body.textContent?.includes('Ready to split.')).toBe(false)
 	})
 
 	test('reviews labeled child-universe outputs against the Zoltar contract without consuming custody', async () => {
