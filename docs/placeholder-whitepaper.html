@@ -796,7 +796,7 @@
 					<p>
 						The next equations compare REP backing with ETH-denominated
 						obligations. This price is a price-oracle value, not a truth
-						outcome. OpenOracle settles REP/WETH amounts, and the coordinator
+						outcome. OpenOracle settles WETH/REP amounts, and the coordinator
 						stores the result as scaled REP per ETH because solvency checks
 						compare REP backing against ETH obligations.
 					</p>
@@ -3949,9 +3949,9 @@
 								<td><code>ForkTruthAuction</code></td>
 								<td>Child pool repairs missing collateral by selling REP.</td>
 								<td>
-									Auction finalizes; the child returns to operational mode only if
-									legitimate routed collateral reaches the full fork snapshot.
-									Otherwise it remains inactive in this state.
+									Auction finalization requires legitimate routed collateral plus
+									any explicit caller contribution to equal the full fork snapshot.
+									An under-repaired attempt reverts and remains inactive in this state.
 								</td>
 							</tr>
 						</tbody>
@@ -4111,9 +4111,10 @@
 							<span class="figure-label">Fork State Machine</span>The parent
 							stops mutating once forked; child pools do migration and optional
 							auction repair. Only a child whose legitimate routed collateral
-							reaches the full snapshot returns to operational mode. Forced ETH
-							does not satisfy that condition; an under-repaired child remains
-							inactive in <code>ForkTruthAuction</code>.
+							plus an explicit repair contribution reaches the full snapshot
+							returns to operational mode. Forced ETH does not satisfy that
+							condition; an under-repaired finalization attempt reverts and
+							remains inactive in <code>ForkTruthAuction</code>.
 						</p>
 					</figure>
 					<ul>
@@ -5895,7 +5896,9 @@
 							In this example, the parent obligations still require 50 ETH of
 							collateral and the child actually received 47.5 ETH through routed,
 							capped migration transfers. That leaves an exact 2.5 ETH shortfall
-							before any repair auction raises more ETH. Each child branch is
+							before any repair auction raises more ETH. The finalizer must supply
+							the exact shortfall that remains after the auction; underpayment or
+							overpayment reverts the entire finalization. Each child branch is
 							sized against its own received collateral and remaining shortfall.
 						</p>
 						<div class="example-grid">
@@ -6011,14 +6014,16 @@
 								>
 							</div>
 							<div>
-								<span>Remaining shortfall</span
+								<span>Exact finalizer contribution</span
 								><output data-example-output="remainingShortfall"
 									>0.00 ETH</output
 								>
 							</div>
 							<div>
-								<span>Repair status</span
-								><output data-example-output="repairStatus">full repair</output>
+								<span>Finalization requirement</span
+								><output data-example-output="repairStatus"
+									>no contribution required</output
+								>
 							</div>
 						</div>
 					</details>
@@ -6059,8 +6064,10 @@
 							<span>Edge cases</span>
 							<b
 								>If demand is weak, bids at or above the cap-implied reserve buy
-								REP in proportion to retained ETH. Lower bids refund, and an
-								under-repaired child remains inactive.</b
+								REP in proportion to retained ETH. Lower bids refund; if integer
+								rounding produces zero aggregate REP, every bid refunds. The
+								finalizer must supply the exact remaining shortfall, or
+								finalization reverts and the child remains inactive.</b
 							>
 						</div>
 					</div>
@@ -6162,8 +6169,8 @@
 								Truth auction repair balance sheet
 							</title>
 							<desc id="balance-sheet-desc">
-								A child pool before auction, after successful repair, and after
-								underfunded repair.
+								A child pool before auction, after full auction repair, and after
+								weak auction demand plus the exact caller-supplied shortfall.
 							</desc>
 							<defs>
 								<marker
@@ -6246,33 +6253,35 @@
 								rx="10"
 							></rect>
 							<text class="svg-label" x="803" y="190" text-anchor="middle">
-								Underfunded
+								Shortfall Contribution
 							</text>
 							<text class="svg-small" x="803" y="222" text-anchor="middle">
-								partial ETH repair
+								auction ETH below cap
 							</text>
 							<text class="svg-small" x="803" y="247" text-anchor="middle">
-								collateral gap remains
+								caller supplies exact gap
 							</text>
 							<text class="svg-small" x="803" y="272" text-anchor="middle">
-								child remains inactive
+								full target before activation
 							</text>
 						</svg>
 						<p class="diagram-caption">
 							<span class="figure-label">Truth Auction Balance Sheet</span>The
 							auction repairs a child pool by trading part of that child
 							universe’s scarce REP for the ETH needed to restore collateral. The
-							child becomes operational only after migrated collateral plus auction
-							proceeds meet the full parent collateral snapshot.
+							child becomes operational only after migrated collateral, auction
+							proceeds, and any exact caller-supplied shortfall meet the full parent
+							collateral snapshot; otherwise finalization reverts.
 						</p>
 					</figure>
 					<p>
 						The forker tracks collateral received through migration and the auction
 						separately from the child contract's raw ETH balance. ETH forced into the
 						child does not count toward the repair target. If an underfunded auction
-						ends below that target, finalization records its result but leaves the
-						child in <code>ForkTruthAuction</code> rather than making an insolvent
-						branch operational.
+						ends below that target, the finalizer must supply the exact shortfall.
+						Otherwise finalization reverts and leaves the child in
+						<code>ForkTruthAuction</code>. Contribution-only ETH creates no REP
+						ownership or security-bond allowance.
 					</p>
 					<h3>Auction Mechanics</h3>
 					<div class="equation" id="eq-placeholder-auction-tick-price">
@@ -6499,14 +6508,16 @@
 						<code>maxRepBeingSold</code>, then uses the first supported tick at
 						or above that reserve as <code>clearingTick</code>.
 						<code>underfundedWinningEth</code> records ETH at or above that tick;
-						lower bids refund. <code>totalRepPurchased</code> is retained ETH
-						divided by the ceiling-tick price, rather than the full REP cap.
+						lower bids refund. <code>totalRepPurchased</code> is the REP sale cap
+						multiplied by the fraction of <code>ethRaiseCap</code> retained. If
+						that proportional amount floors to zero, the contract resets
+						<code>underfundedWinningEth</code> to zero and refunds every bid.
 					</p>
 					<div class="equation" id="eq-placeholder-auction-fill-math">
 						<math
 							display="block"
 							aria-label="funded REP share is the difference between cumulative REP after and before the bid, underfunded threshold comes from both caps, and underfunded REP share is the difference between cumulative proportional allocations"
-							data-source="fundedRepShare = floor((ethBefore + ethUsed) \cdot pricePrecision / clearingPrice) - floor(ethBefore \cdot pricePrecision / clearingPrice); underfundedThreshold = ceil(ethRaiseCap \cdot pricePrecision / maxRepBeingSold); totalRepPurchased = floor(underfundedWinningEth \cdot pricePrecision / clearingPrice); underfundedRepShare = floor((ethBefore + bidEth) \cdot totalRepPurchased / underfundedWinningEth) - floor(ethBefore \cdot totalRepPurchased / underfundedWinningEth)"
+							data-source="fundedRepShare = floor((ethBefore + ethUsed) \cdot pricePrecision / clearingPrice) - floor(ethBefore \cdot pricePrecision / clearingPrice); underfundedThreshold = ceil(ethRaiseCap \cdot pricePrecision / maxRepBeingSold); totalRepPurchased = floor(maxRepBeingSold \cdot underfundedWinningEth / ethRaiseCap); underfundedRepShare = floor((ethBefore + bidEth) \cdot totalRepPurchased / underfundedWinningEth) - floor(ethBefore \cdot totalRepPurchased / underfundedWinningEth)"
 						>
 							<mtable>
 								<mtr>
@@ -6518,6 +6529,11 @@
 									<mtd><mi>underfundedThreshold</mi></mtd>
 									<mtd><mo>=</mo></mtd>
 									<mtd><mi>ceil</mi><mo>(</mo><mfrac><mrow><mi>ethRaiseCap</mi><mo>&#x22C5;</mo><mi>pricePrecision</mi></mrow><mi>maxRepBeingSold</mi></mfrac><mo>)</mo></mtd>
+								</mtr>
+								<mtr>
+									<mtd><mi>totalRepPurchased</mi></mtd>
+									<mtd><mo>=</mo></mtd>
+									<mtd><mi>floor</mi><mo>(</mo><mfrac><mrow><mi>maxRepBeingSold</mi><mo>&#x22C5;</mo><mi>underfundedWinningEth</mi></mrow><mi>ethRaiseCap</mi></mfrac><mo>)</mo></mtd>
 								</mtr>
 								<mtr>
 									<mtd><mi>underfundedRepShare</mi></mtd>
@@ -6533,9 +6549,10 @@
 							only the REP purchased by retained ETH.
 							The stored <code>clearingTick</code> marks the lowest winning
 							tick, and bids at ticks <code>&gt;= clearingTick</code> share the
-							ceiling-tick reserve price. If
-							<code>underfundedWinningEth == 0</code>, no REP is allocated,
-							and every bid refunds. The stored threshold remains the cap-implied
+							proportional aggregate allocation. If no ETH qualifies or the
+							proportional <code>totalRepPurchased</code> floors to zero, the
+							contract resets <code>underfundedWinningEth</code> to zero, no REP
+							is allocated, and every bid refunds. The stored threshold remains the cap-implied
 							reserve even when no ETH qualifies. <code>ethBefore</code> is fixed by descending
 							price and submission order, so withdrawals cannot redirect rounding
 							units between bidders.
@@ -6637,9 +6654,10 @@
 						In normal clearing, bids above the clearing tick win in full, bids
 						below it lose, and bids at the clearing tick are filled in
 						submission order. In the underfunded path, ticks at or above the
-						finalized <code>clearingTick</code> boundary share only the REP bought
-						by retained ETH at the reserve tick, pro rata by winning ETH
-						contribution.
+						finalized <code>clearingTick</code> eligibility boundary share the
+						cap-ratio <code>totalRepPurchased</code> allocation pro rata by
+						winning ETH contribution. The tick selects qualifying bids; it is not
+						the execution price used to calculate aggregate REP.
 					</p>
 					<p>
 						Both finalized paths assign division dust from deterministic
@@ -6654,9 +6672,11 @@
 						auction-specific
 						<code>auctionPoolOwnershipPerRep</code> rate set during auction
 						finalization. Any security-bond allowance left behind by parent
-						vaults is assigned to auction buyers pro rata by purchased REP, with
-						the final settlement claim taking the remainder left by integer
-						division.
+						vaults is first scaled by the fraction of <code>ethRaiseCap</code>
+						actually supplied by auction bids, then assigned to auction buyers
+						pro rata by purchased REP. Explicit repair contributions issue no
+						allowance or ownership. The final settlement claim takes the
+						remainder left by integer division.
 					</p>
 					<div
 						class="equation"
@@ -6664,10 +6684,31 @@
 					>
 						<math
 							display="block"
-							aria-label="auction pool ownership amount equals purchased REP amount times auction pool ownership per REP, and new security bond allowance equals remaining auctioned allowance for the final claim, otherwise auctioned security bond allowance times purchased REP amount divided by total REP purchased"
-							data-source="poolOwnershipAmount = purchasedRepAmount \cdot auctionPoolOwnershipPerRep; newSecurityBondAllowance = finalClaim ? auctionedSecurityBondAllowance - claimedAuctionedSecurityBondAllowance : auctionedSecurityBondAllowance \cdot purchasedRepAmount / totalRepPurchased"
+							aria-label="auctioned security bond allowance equals the floor of unmigrated allowance times auction ETH received divided by the ETH raise cap; auction pool ownership amount equals purchased REP amount times auction pool ownership per REP; and new security bond allowance equals remaining auctioned allowance for the final claim, otherwise the floor of auctioned security bond allowance times purchased REP amount divided by total REP purchased"
+							data-source="auctionedSecurityBondAllowance = floor(unmigratedSecurityBondAllowance \cdot auctionEthReceived / ethRaiseCap); poolOwnershipAmount = purchasedRepAmount \cdot auctionPoolOwnershipPerRep; newSecurityBondAllowance = finalClaim ? auctionedSecurityBondAllowance - claimedAuctionedSecurityBondAllowance : floor(auctionedSecurityBondAllowance \cdot purchasedRepAmount / totalRepPurchased)"
 						>
 							<mtable>
+								<mtr>
+									<mtd>
+										<mi>auctionedSecurityBondAllowance</mi>
+									</mtd>
+									<mtd>
+										<mo>=</mo>
+									</mtd>
+									<mtd>
+										<mi>floor</mi>
+										<mo>(</mo>
+										<mfrac>
+											<mrow>
+												<mi>unmigratedSecurityBondAllowance</mi>
+												<mo>&#x22C5;</mo>
+												<mi>auctionEthReceived</mi>
+											</mrow>
+											<mi>ethRaiseCap</mi>
+										</mfrac>
+										<mo>)</mo>
+									</mtd>
+								</mtr>
 								<mtr>
 									<mtd>
 										<mi>poolOwnershipAmount</mi>
@@ -6702,6 +6743,8 @@
 											</mtr>
 											<mtr>
 												<mtd>
+													<mi>floor</mi>
+													<mo>(</mo>
 													<mfrac>
 														<mrow>
 															<mi>auctionedSecurityBondAllowance</mi>
@@ -6710,6 +6753,7 @@
 														</mrow>
 														<mi>totalRepPurchased</mi>
 													</mfrac>
+													<mo>)</mo>
 												</mtd>
 												<mtd>
 													<mtext>otherwise</mtext>
@@ -6723,9 +6767,10 @@
 						<p class="equation-caption">
 							<span class="equation-label">Auction Settlement Allocation</span
 							>Winning auction settlement credits purchased REP into pool
-							ownership and carries inherited security-bond allowance to buyers
-							in the same purchased-REP proportion, while the final claim
-							absorbs rounding dust.
+							ownership and carries only the auction-ETH-funded fraction of
+							inherited security-bond allowance to buyers in the same
+							purchased-REP proportion, while the final claim absorbs rounding
+							dust.
 						</p>
 					</div>
 					<ul>
@@ -6767,7 +6812,9 @@
 						<li>
 							Bids at ticks <code>&gt;= clearingTick</code> retain their ETH and
 							share the proportional <code>totalRepPurchased</code>; lower bids
-							refund. If no bid qualifies, no REP is sold.
+							refund. If no bid qualifies or the proportional aggregate REP
+							amount floors to zero, the contract retains no ETH, sells no REP,
+							and refunds every bid.
 						</li>
 						<li>
 							A lone minimum bid below reserve receives a full refund. A lone bid
@@ -6792,8 +6839,10 @@
 					<div class="callout">
 						Underfunded intuition: both caps imply a reserve price. Bids below its
 						ceiling tick refund, while retained ETH buys only the REP it funds at
-						that tick price. Weak demand therefore leaves inventory unsold instead
-						of transferring the full REP cap to a minimally funded bidder.
+						the cap ratio, independent of that tick's rounded price. Weak demand
+						therefore leaves inventory unsold instead of transferring the full REP
+						cap to a minimally funded bidder. If that proportional purchase floors
+						to zero REP, no ETH is retained and all bids refund.
 					</div>
 					<p>
 						The <code>Binding condition</code> output reports one of four
@@ -6813,7 +6862,8 @@
 							<code>5</code>, <code>4</code>, and <code>3 ETH/REP</code> to keep
 							the arithmetic readable. If qualifying demand is below both caps,
 							only bids at or above the cap-implied reserve are retained and their
-							ETH buys a proportional REP amount. The calculator shows
+							ETH buys a proportional REP amount, unless that amount floors to
+							zero and every bid refunds. The calculator shows
 							human-unit allocations; exact withdrawals use integer REP-wei
 							division by differencing cumulative floor allocations before and
 							after each bid's fixed descending-tick/submission position.
@@ -7039,11 +7089,11 @@
 					</p>
 					<p>
 						The OpenOracle path is contestable before the coordinator can use
-						it: the coordinator requests a REP/WETH report and atomically posts
+						it: the coordinator requests a WETH/REP report and atomically posts
 						the sponsor-funded initial token amounts, disputers can replace a bad
-						report with a larger one, a settler finalizes the report after the
-						timing window, and the settlement callback returns the final amounts
-						to the coordinator.
+						report with the contract-required replacement amounts, a settler
+						finalizes the report after the timing window, and the settlement
+						callback returns the final amounts to the coordinator.
 						Request, dispute, settlement, and callback safety checks are
 						detailed in the dedicated
 						<a href="./open-oracle-integration.html">OpenOracle integration</a>
@@ -7059,27 +7109,17 @@
 						collateral.
 					</p>
 					<p>
-					When the coordinator accepts a settled REP/ETH price, that price is
-					reusable only inside its freshness window and receives an aggregate
-						operation-notional budget equal to the configured escalation-halt REP
-						amount at the accepted token ratio. With current parameters that amount
-						is ten times the initial report. Successful allowance increases, exact
-						bonus-adjusted liquidations, escalation deposits, and collateral
-						withdrawals up to the pool's outstanding allowance debit that budget.
-						Failed operations, allowance reductions, and withdrawals
-					from a pool with no outstanding allowance do not. Operations that
-					would exceed the remainder fail.
-					This configured cap is a contract-enforced notional limit, not proof
-					that the chosen multiplier makes a false report economically safe; the
-					multiplier's sufficiency remains an explicit parameter assumption.
-					The initial OpenOracle report is also sized from dispute profitability
-					assumptions so a wrong report at the target error is profitable to
-					challenge. The
-						<a href="./open-oracle-integration.html#fixed-report-unmetered-exposure"
-							>configured-exposure calculator</a
-						>
-						separates recoverable report funding from net accepted-report cost and
-						shows the authorized exposure ratio.
+						When the coordinator accepts a settled REP/ETH price, that price is
+						reusable only inside its freshness window. It does not authorize a
+						fixed amount of operation exposure. The minimum WETH side of the
+						initial OpenOracle report is instead calculated from the request
+						block's base fee so a price wrong by the configured target error
+						(initially five percent) is profitable to
+						challenge after fees with the configured gas-cost buffer. This is an
+						intentional tradeoff: one contestable price is amortized across every
+						otherwise-valid operation in the five-minute cache rather than bonded
+						one-for-one against outside value. No queued-operation or pool-value
+						notional enters the WETH calculation.
 					</p>
 					<figure class="diagram" id="fig-placeholder-oracle-flow">
 						<svg
@@ -7257,7 +7297,7 @@
 								</tr>
 								<tr>
 									<td>Create report</td>
-									<td><code>requestPrice(amount2)</code></td>
+									<td><code>requestPrice(proposedRepPerEthPrice, requestedInitialWeth)</code></td>
 									<td>Funds one pending OpenOracle report, atomically submits the sponsor-funded initial stake, and records callback gas/basefee bounds.</td>
 									<td>The requester pays for the contestable price path when the cache is stale and cannot open a redundant report while the cache is still fresh.</td>
 								</tr>
@@ -7286,7 +7326,7 @@
 										pending settlement list is empty, another staged request can
 										fund a replacement report. If pending settlement operation IDs
 										still remain, an operator or user must call direct
-										<code>requestPrice(amount2)</code> with the ETH bounty and
+										<code>requestPrice(proposedRepPerEthPrice, requestedInitialWeth)</code> with the ETH bounty and
 										initial-report funding, then let that replacement report settle.
 									</td>
 								</tr>
@@ -7301,11 +7341,12 @@
 					</div>
 					<p>
 						When no fresh price is available, the caller funds the OpenOracle
-						request bounty and the initial REP/WETH position. The coordinator
-						sizes the ETH cost from the current base fee, the callback gas
-						limit, and the configured gas budget for reporting the price, while
-						the caller also chooses the initial <code>amount2</code> for the
-						atomic report submission.
+						request bounty and the initial WETH/REP position. The coordinator
+						sizes both the ETH bounty and minimum WETH side from the current base
+						fee and configured gas parameters. The caller may request a larger
+						initial WETH amount and proposes a REP/ETH price; the coordinator
+						selects the greater WETH amount and derives the matching REP
+						<code>amount2</code> in the same request block.
 					</p>
 					<p>
 						While a report remains pending, only the original pending report
@@ -7315,13 +7356,15 @@
 						their own operations. Sponsor exclusivity is intentional, and every
 						dispute resets the OpenOracle settlement clock. Timely rolling disputes
 						can therefore extend the exclusive lane without a coordinator-level
-						absolute deadline. Required REP grows to the escalation halt, then by
-						one atomic REP per dispute, while protocol fees and gas keep total cost
-						growing with duration. The
-						<a href="./open-oracle-integration.html#rolling-dispute-exclusivity"
-							>rolling-lock calculator</a
-						>
-						models that lower-bound cost.
+						absolute deadline. Before the escalation halt, required WETH is
+						<code
+							>min(floor(oldAmount1 × multiplier / 100),
+							escalationHalt)</code
+						>. With multiplier <code>115</code>, integer flooring leaves
+						one-through-six-wei amounts unchanged; seven wei is the first amount
+						that grows. At or above the halt, each dispute requires one more
+						atomic WETH unit, while protocol fees and gas keep total cost growing
+						with duration.
 					</p>
 					<div class="equation" id="eq-placeholder-oracle-request-cost">
 						<math
@@ -7383,93 +7426,87 @@
 						</p>
 					</div>
 					<p>
-						The initial report equation below names the configured REP-side
-						<code>exactToken1Report</code>. It is a dispute-profitability
-						parameter, not an exposure cap. The numerator estimates one dispute
-						gas cost converted into REP with a profit buffer; the denominator is
-						the target price-error room left after OpenOracle fees and expected
-						adverse REP/ETH movement during settlement.
+						WETH is OpenOracle <code>token1</code>, so the coordinator can size
+						the minimum side directly in the same unit as gas cost. For the
+						worst-direction configured REP/ETH target error (initially five
+						percent), the correction-profit
+						fraction after fees is
+						<code>(targetPriceErrorForDispute - protocolFee - reporterFee) / (1 + targetPriceErrorForDispute)</code>.
+						The report divides the buffered base-fee gas cost by that fraction.
 					</p>
 					<div class="equation" id="eq-placeholder-initial-report-size">
 						<math
 							display="block"
-							aria-label="exact token one report equals the ceiling of required disputer profit buffer times gas units for one dispute times assumed gas price in ETH per gas times REP per ETH price divided by target price error for dispute minus OpenOracle fees over one plus target price error for dispute minus dispute report size multiplier times expected adverse REP ETH price move during settlement"
-							data-source="exactToken1Report = ceil(requiredDisputerProfitBuffer \cdot gasUnitsForOneDispute \cdot assumedGasPriceInEthPerGas \cdot repPerEthPrice / (((targetPriceErrorForDispute - (openOracleProtocolFeeFraction + openOracleReporterFeeFraction)) / (1 + targetPriceErrorForDispute)) - disputeReportSizeMultiplier \cdot expectedRepEthPriceMoveDuringSettlement))"
+							aria-label="minimum WETH report equals at least one wei or the ceiling of block base fee times dispute gas units times Open Oracle Security multiplier basis points times one plus target error divided by ten thousand times target error minus protocol and reporter fees"
+							data-source="minimumWethReport = max(1, ceil(block.basefee \cdot gasUnitsForOneDispute \cdot openOracleSecurityMultiplierBps \cdot (percentagePrecision + targetPriceErrorForDispute) / (10000 \cdot (targetPriceErrorForDispute - protocolFee - reporterFee))))"
 						>
 							<mrow>
-								<mi>exactToken1Report</mi>
+								<mi>minimumWethReport</mi>
 								<mo>=</mo>
+								<mi>max</mi>
+								<mo>(</mo>
+								<mn>1</mn>
+								<mo>,</mo>
 								<mi>ceil</mi>
 								<mo>(</mo>
 								<mfrac>
 									<mrow>
-										<mi>requiredDisputerProfitBuffer</mi>
+										<mi>block.basefee</mi>
 										<mo>&#x22C5;</mo>
 										<mi>gasUnitsForOneDispute</mi>
 										<mo>&#x22C5;</mo>
-										<mi>assumedGasPriceInEthPerGas</mi>
+										<mi>openOracleSecurityMultiplierBps</mi>
 										<mo>&#x22C5;</mo>
-										<mi>repPerEthPrice</mi>
+										<mo>(</mo>
+										<mi>percentagePrecision</mi>
+										<mo>+</mo>
+										<mi>targetPriceErrorForDispute</mi>
+										<mo>)</mo>
 									</mrow>
 									<mrow>
-										<mfrac>
-											<mrow>
-												<mi>targetPriceErrorForDispute</mi>
-												<mo>-</mo>
-												<mo>(</mo>
-												<mi>openOracleProtocolFeeFraction</mi>
-												<mo>+</mo>
-												<mi>openOracleReporterFeeFraction</mi>
-												<mo>)</mo>
-											</mrow>
-											<mrow>
-												<mn>1</mn>
-												<mo>+</mo>
-												<mi>targetPriceErrorForDispute</mi>
-											</mrow>
-										</mfrac>
-										<mo>-</mo>
-										<mi>disputeReportSizeMultiplier</mi>
+										<mn>10000</mn>
 										<mo>&#x22C5;</mo>
-										<mi>expectedRepEthPriceMoveDuringSettlement</mi>
+										<mo>(</mo>
+										<mi>targetPriceErrorForDispute</mi>
+										<mo>-</mo>
+										<mi>protocolFee</mi>
+										<mo>-</mo>
+										<mi>reporterFee</mi>
+										<mo>)</mo>
 									</mrow>
 								</mfrac>
+								<mo>)</mo>
 								<mo>)</mo>
 							</mrow>
 						</math>
 						<p class="equation-caption">
-							<span class="equation-label">Initial Report Size</span>The report
-							size is independent of outside funds at risk; it only needs to make a
-							wrong report profitable to dispute under the stated assumptions.
+							<span class="equation-label">Dynamic Minimum WETH Report</span>The
+							request transaction calculates the minimum WETH amount from its
+							<code>block.basefee</code>. It does not use a REP price or the value
+							of any operation protected by the resulting price.
 						</p>
 					</div>
 					<p>
-						The canonical formula inputs live in
-						<code>shared/ts/oracleInitialReport.ts</code>, exported as
-						<code>@zoltar/shared/oracleInitialReport</code>. The UI deployment
-						helper and simulator deployment helper consume that shared value.
-						The current inputs are
-						<code>requiredDisputerProfitBuffer = 2x</code>,
-						<code>gasUnitsForOneDispute = 300,000 gas</code>,
-						<code>assumedGasPriceInEthPerGas = 30 gwei</code>,
-						<code>repPerEthPrice = 1,000 REP / ETH</code>,
-						<code>targetPriceErrorForDispute = 10%</code>,
-						<code>openOracleProtocolFeeFraction = 1%</code>,
-						<code>openOracleReporterFeeFraction = 0.1%</code>,
-						<code>disputeReportSizeMultiplier = 1.15x</code>, and
-						<code>expectedRepEthPriceMoveDuringSettlement = 1%</code>. Those
-						values produce a positive denominator and
-						<code>exactToken1Report = 259.332023575638507216 REP</code>
-						(<code>259332023575638507216</code> atomic REP). The helpers
-						evaluate the displayed equation with
-						<code>ORACLE_FORMULA_PRECISION = 1e18</code> fixed-point integers:
-						fee fractions, <code>disputeReportSizeMultiplier</code>,
-						<code>disputeProfitFraction</code>, and
-						<code>priceMoveFraction</code> use integer division that floors at
-						that precision, then the final report amount uses ceiling division
-						by <code>ORACLE_FORMULA_PRECISION * denominator</code>. If the
-						denominator is zero or negative, the assumptions do not leave enough
-						price-error room for profitable disputes.
+						The current parameters are
+						<code>gasUnitsForOneDispute = 300,000</code>,
+						<code>openOracleSecurityMultiplierBps = 100,000</code>
+						(<code>10x</code>),
+						<code>targetPriceErrorForDispute = 5%</code>,
+						<code>protocolFee = 1%</code>, and
+						<code>reporterFee = 0.1%</code>. At <code>30 gwei</code> they
+						produce <code>minimumToken1Report() = 2.423076923076923077 WETH</code>.
+						The target error and Open Oracle Security multiplier are deployment-configured
+						coordinator immutables; five percent and ten-times are the initial
+						defaults, not hard-coded formula constants.
+						At zero base fee the coordinator uses one wei because OpenOracle
+						requires a non-zero exact report. The sponsor may pass zero to use the
+						minimum or request a larger initial WETH position, supplies a proposed
+						REP/ETH price, and the coordinator computes
+						<code>initialWethReport = max(minimumToken1Report(), requestedInitialWeth)</code>
+						and <code>amount2 = ceil(initialWethReport * proposedRepPerEthPrice / 1e18)</code>
+						atomically. A successful correction swaps that wrong
+						position at an unfavorable rate, replaces the reporter, and leaves the
+						wrong reporter bearing the corresponding loss after fees and rounding.
 					</p>
 					<div class="equation" id="eq-placeholder-liquidation-price-distance">
 						<math
@@ -7634,8 +7671,9 @@
 					<h3>Operational Failure Modes</h3>
 					<ul>
 						<li>
-							If truth-auction demand is weak, a child pool can resume with only
-							partial collateral repair.
+							If truth-auction demand is weak and no caller supplies the exact
+							remaining shortfall, finalization reverts and the child remains
+							inactive in <code>ForkTruthAuction</code>.
 						</li>
 						<li>
 							If REP/ETH liquidity is thin or price discovery is poor,
@@ -7943,6 +7981,16 @@
 								</td>
 							</tr>
 							<tr>
+								<td><code>MIN_TRUTH_AUCTION_REPAIR_BPS</code></td>
+								<td><code>10000 bps (100%)</code></td>
+								<td>
+									Minimum collateral repair required before a child can become
+									operational. At 100%, the finalizer must contribute the exact
+									shortfall left after migration and auction ETH. Solidity
+									constant in <code>SecurityPoolUtils</code>.
+								</td>
+							</tr>
+							<tr>
 								<td>Auction tick bounds</td>
 								<td><code>-524288</code> to <code>524288</code></td>
 								<td>
@@ -8071,6 +8119,30 @@
 								</td>
 							</tr>
 							<tr>
+								<td><code>gasUnitsForOneDispute</code></td>
+								<td><code>300000</code></td>
+								<td>
+									Modeled gas for one correction dispute. Deployment-configured
+									coordinator immutable.
+								</td>
+							</tr>
+							<tr>
+								<td><code>targetPriceErrorForDispute</code></td>
+								<td><code>500000 / 10000000</code> (<code>5%</code>)</td>
+								<td>
+									Wrong-price threshold used by the WETH sizing formula.
+									Deployment-configured coordinator immutable.
+								</td>
+							</tr>
+							<tr>
+								<td><code>openOracleSecurityMultiplierBps</code></td>
+								<td><code>100000 bps</code> (<code>10x</code>)</td>
+								<td>
+									Multiplier applied to modeled base-fee dispute gas cost.
+									Deployment-configured coordinator immutable.
+								</td>
+							</tr>
+							<tr>
 								<td><code>MAX_PENDING_SETTLEMENT_OPERATIONS</code></td>
 								<td><code>4</code></td>
 								<td>
@@ -8089,23 +8161,31 @@
 								</td>
 							</tr>
 							<tr>
-								<td>OpenOracle <code>exactToken1Report</code></td>
+								<td><code>minimumToken1Report()</code></td>
 								<td>
-									<code>259.332023575638507216 REP</code>
-									(<code>259332023575638507216</code> atomic REP), computed
-									from the initial report size equation.
+									Dynamic WETH amount computed from <code>block.basefee</code>;
+									<code>2.423076923076923077 WETH</code> at <code>30 gwei</code>.
 								</td>
 								<td>
-									Initial report liquidity parameter, stored as an ERC-20 atomic
-									REP amount and sized from dispute profitability assumptions.
-									Derived deployment parameter.
+									Minimum WETH side sized from correction profitability. Calculated
+									inside each request rather than stored as a deployment amount.
+								</td>
+							</tr>
+							<tr>
+								<td>OpenOracle <code>exactToken1Report</code></td>
+								<td>
+									The greater of <code>minimumToken1Report()</code> and the caller's
+									<code>requestedInitialWeth</code>.
+								</td>
+								<td>
+									Exact per-report snapshot of the selected initial WETH position;
+									callers may voluntarily post more than the minimum.
 								</td>
 							</tr>
 							<tr>
 								<td>OpenOracle <code>escalationHalt</code></td>
 								<td>
-									<code>2,593.32023575638507216 REP</code>
-									(<code>2593320235756385072160</code> atomic REP), computed as
+									<code>10x</code> the request's selected initial WETH report, computed as
 									<math
 										aria-label="exact token one report times escalation halt multiplier basis points divided by ten thousand"
 										data-source="exactToken1Report \cdot escalationHaltMultiplierBps / 10000"
@@ -8116,8 +8196,8 @@
 								</td>
 								<td>
 									Dynamic halt threshold for multiplicative report escalation;
-									later reports add one atomic REP unit at a time. Derived from
-									the deployment report size and escalation-halt multiplier.
+									later reports add one atomic WETH unit at a time. Derived from
+									the request's report size and escalation-halt multiplier.
 								</td>
 							</tr>
 							<tr>
@@ -8189,9 +8269,11 @@
 								<td>OpenOracle <code>multiplier</code></td>
 								<td><code>115</code></td>
 								<td>
-									New report amount must be <code>1.15x</code> the prior amount
-									until the escalation halt. Deployment-configured OpenOracle
-									parameter.
+									Before the escalation halt, the new token-one amount is
+									<code>floor(prior amount × 1.15)</code>, capped at the halt.
+									Integer flooring leaves prior amounts of one through six wei
+									unchanged. At or above the halt, each dispute adds one atomic
+									token-one unit. Deployment-configured OpenOracle parameter.
 								</td>
 							</tr>
 							<tr>
@@ -8824,7 +8906,9 @@
 				context.write("remainingShortfall", formatEth(remainingShortfall));
 				context.write(
 					"repairStatus",
-					remainingShortfall === 0 ? "full repair" : "partial repair",
+					remainingShortfall === 0
+						? "no contribution required"
+						: "exact contribution required",
 				);
 			});
 			bindExample("auction-clearing-example", (context) => {

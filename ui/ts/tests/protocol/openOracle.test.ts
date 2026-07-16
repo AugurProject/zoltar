@@ -2,20 +2,22 @@
 
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, getAddress, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { getOpenOracleAddress, loadOracleManagerDetails, loadOpenOracleReportSummaries, settleOracleReport } from '../../protocol/index.js'
+import { getOpenOracleAddress, loadOpenOracleReportDetails, loadOracleManagerDetails, loadOpenOracleReportSummaries, settleOracleReport } from '../../protocol/index.js'
 import { peripherals_openOracle_OpenOracle_OpenOracle } from '../../contractArtifact.js'
+import { MAINNET_WETH_ADDRESS } from '../../lib/networkProfile.js'
 import { createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from './testSupport.js'
 
 const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
 const alternateSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000a2')
 const token1Address = getAddress('0x00000000000000000000000000000000000000d1')
 const token2Address = getAddress('0x00000000000000000000000000000000000000d2')
+const wethAddress = getAddress(MAINNET_WETH_ADDRESS)
 
 describe('openOracle protocol client', () => {
 	test('loadOpenOracleReportSummaries keeps reports disputed when dispute history returns to the initial reporter', async () => {
 		const initialReporter = getAddress('0x00000000000000000000000000000000000000e1')
 		const client = createMockLoaderClient({
-			getBlock: async () => createBlockWithTimestamp(0n),
+			getBlock: async () => ({ number: 1n, timestamp: 0n }),
 			multicall: async request => {
 				const contracts = request.contracts
 				const firstContract = contracts[0]
@@ -45,6 +47,74 @@ describe('openOracle protocol client', () => {
 
 		expect(report.currentReporter).toBe(initialReporter)
 		expect(report.disputeOccurred).toBe(true)
+	})
+
+	test('loadOpenOracleReportDetails rejects invalid token decimals', async () => {
+		const initialReporter = getAddress('0x00000000000000000000000000000000000000e1')
+		const client = createMockLoaderClient({
+			getBlock: async () => ({ number: 1n, timestamp: 0n }),
+			multicall: async request => {
+				const firstFunctionName = getContractFunctionName(request.contracts[0])
+				if (firstFunctionName === 'reportMeta') {
+					return [
+						[100n, 0n, 0n, 0n, token1Address, 0, token2Address, true, 0, 0, 0, 0],
+						[100n, 10n, initialReporter, 1, 0, initialReporter, 0],
+						['0x0000000000000000000000000000000000000000000000000000000000000000', zeroAddress, 1, 0, zeroAddress, false],
+					]
+				}
+				if (firstFunctionName === 'decimals') return [256n, 18n, 'REP', 'TOK']
+				throw new Error(`Unexpected multicall contract: ${firstFunctionName}`)
+			},
+			readContract: async request => {
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		await expect(loadOpenOracleReportDetails(client, getOpenOracleAddress(), 1n)).rejects.toThrow(`Token metadata for ${token1Address} returned invalid decimals`)
+	})
+
+	test('loadOpenOracleReportSummaries rejects empty token symbols', async () => {
+		const initialReporter = getAddress('0x00000000000000000000000000000000000000e1')
+		const client = createMockLoaderClient({
+			getBlock: async () => createBlockWithTimestamp(0n),
+			multicall: async request => {
+				const firstFunctionName = getContractFunctionName(request.contracts[0])
+				if (firstFunctionName === 'reportMeta') return [[100n, 0n, 0n, 0n, token1Address, 0, token2Address, true, 0, 0, 0, 0]]
+				if (firstFunctionName === 'reportStatus') return [[100n, 10n, initialReporter, 1, 0, initialReporter, 0]]
+				if (firstFunctionName === 'extraData') return [['0x0000000000000000000000000000000000000000000000000000000000000000', zeroAddress, 1, 0, zeroAddress, false]]
+				if (firstFunctionName === 'decimals') return [18n, 18n]
+				if (firstFunctionName === 'symbol') return [' ', 'TOK']
+				throw new Error(`Unexpected multicall contract: ${firstFunctionName}`)
+			},
+			readContract: async request => {
+				if (request.functionName === 'nextReportId') return 2n
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		await expect(loadOpenOracleReportSummaries(client, 0, 10)).rejects.toThrow(`Token metadata for ${token1Address} returned an empty symbol`)
+	})
+
+	test('loadOpenOracleReportSummaries rejects mismatched configured WETH metadata', async () => {
+		const initialReporter = getAddress('0x00000000000000000000000000000000000000e1')
+		const client = createMockLoaderClient({
+			getBlock: async () => createBlockWithTimestamp(0n),
+			multicall: async request => {
+				const firstFunctionName = getContractFunctionName(request.contracts[0])
+				if (firstFunctionName === 'reportMeta') return [[100n, 0n, 0n, 0n, token1Address, 0, wethAddress, true, 0, 0, 0, 0]]
+				if (firstFunctionName === 'reportStatus') return [[100n, 10n, initialReporter, 1, 0, initialReporter, 0]]
+				if (firstFunctionName === 'extraData') return [['0x0000000000000000000000000000000000000000000000000000000000000000', zeroAddress, 1, 0, zeroAddress, false]]
+				if (firstFunctionName === 'decimals') return [18n, 18n]
+				if (firstFunctionName === 'symbol') return ['REP', 'ETH']
+				throw new Error(`Unexpected multicall contract: ${firstFunctionName}`)
+			},
+			readContract: async request => {
+				if (request.functionName === 'nextReportId') return 2n
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		await expect(loadOpenOracleReportSummaries(client, 0, 10)).rejects.toThrow(`WETH metadata is invalid for ${wethAddress}`)
 	})
 
 	test('loadOracleManagerDetails caps active staged operation previews and preserves the pending slot outside the preview window', async () => {

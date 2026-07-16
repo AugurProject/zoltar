@@ -7,16 +7,10 @@ import { EscalationGame } from './EscalationGame.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { SecurityPoolForkerStorage } from './SecurityPoolForkerStorage.sol';
 import { EscalationForkSnapshot, SecurityPoolForkerForkData } from './SecurityPoolForkerTypes.sol';
+import { ISecurityPoolForkerEvents } from './interfaces/ISecurityPoolForker.sol';
 
-abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage {
+abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage, ISecurityPoolForkerEvents {
 	Zoltar public immutable zoltar;
-
-	event OwnForkRepBucketsSet(
-		ISecurityPool parent,
-		uint256 vaultRepAtFork,
-		uint256 escalationChildRepAtFork,
-		uint256 escalationSourceRepAtFork
-	);
 
 	constructor(Zoltar _zoltar) {
 		zoltar = _zoltar;
@@ -62,6 +56,8 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage {
 			EscalationForkSnapshot storage snapshot = escalationForkSnapshotByPool[parent];
 			require(snapshot.initialized, 'Fork snapshot missing');
 			child.initializeForkCarrySnapshotWithResolutionBalances(
+				address(parentEscalationGame),
+				forkDataByPool[parent].escalationSnapshotId,
 				snapshot.carryPeaks,
 				snapshot.carryLeafCounts,
 				snapshot.carryTotals,
@@ -82,6 +78,5 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage {
 		repBuckets.vaultRepAtFork = vaultRepAtFork;
 		repBuckets.escalationChildRepAtFork = escalationChildRepAtFork;
 		repBuckets.escalationSourceRepAtFork = escalationSourceRep;
-		emit OwnForkRepBucketsSet(parent, vaultRepAtFork, escalationChildRepAtFork, escalationSourceRep);
 	}
 }

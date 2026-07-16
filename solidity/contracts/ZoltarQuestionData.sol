@@ -23,7 +23,7 @@ contract ZoltarQuestionData {
 	uint256[] public questionIds;
 
 	event QuestionCreated(
-		uint256 questionId,
+		uint256 indexed questionId,
 		uint256 createdTimestamp,
 		QuestionData questionData,
 		string[] outcomeOptions

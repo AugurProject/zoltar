@@ -47,8 +47,8 @@ export type OracleOperationBounty = {
 	creator: Address
 	executionErrorMessage: string | undefined
 	executionStatus: OracleOperationExecutionStatus
-	maximumInitialReportAmount2: bigint
-	minimumInitialReportAmount2: bigint
+	maximumInitialWeth: bigint
+	minimumInitialWeth: bigint
 	operation: OracleQueueOperation
 	operationId: bigint
 	operator: Address
@@ -63,8 +63,8 @@ export type OracleOperationBounty = {
 export type OracleOperationBountyInput = {
 	acceptanceDeadline: bigint
 	amount: bigint
-	maximumInitialReportAmount2: bigint
-	minimumInitialReportAmount2: bigint
+	maximumInitialWeth: bigint
+	minimumInitialWeth: bigint
 	operation: OracleQueueOperation
 	rewardAmount: bigint
 	rewardToken: Address

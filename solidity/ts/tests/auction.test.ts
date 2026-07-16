@@ -4,7 +4,7 @@ import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereu
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { contractExists, getETHBalance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
-import { encodeAbiParameters, encodeFunctionData, isHex, keccak256, type Address, type Hash } from '@zoltar/shared/ethereum'
+import { decodeEventLog, encodeAbiParameters, encodeFunctionData, isHex, keccak256, type Address, type Hash } from '@zoltar/shared/ethereum'
 import {
 	computeClearing,
 	deployUniformPriceDualCapBatchAuction,
@@ -82,6 +82,19 @@ describe('Auction', () => {
 		return createWriteClient(mockWindow, address, 0)
 	}
 
+	async function decodeAuctionEvents(hash: Hash) {
+		const receipt = await client.waitForTransactionReceipt({ hash })
+		return receipt.logs
+			.filter(log => log.address.toLowerCase() === auctionAddress.toLowerCase())
+			.map(log =>
+				decodeEventLog({
+					abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+					data: log.data,
+					topics: log.topics,
+				}),
+			)
+	}
+
 	function tickForPrice(price: bigint): bigint {
 		return priceToClosestTick(price)
 	}
@@ -115,6 +128,15 @@ describe('Auction', () => {
 		await mockWindow.advanceTime(AUCTION_TIME + 1n)
 		await finalize(client, auctionAddress)
 		strictEqualTypeSafe(await isFinalized(client, auctionAddress), true, 'auction not finalized')
+	}
+
+	async function previewFinalization(client: WriteClient, auctionAddress: Address) {
+		return await client.readContract({
+			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
+			functionName: 'previewFinalization',
+			address: auctionAddress,
+			args: [],
+		})
 	}
 
 	function assertWithdrawal(amounts: { totalFilledRep: bigint; totalEthRefund: bigint }, expectedFilledRep: bigint, expectedRefund: bigint, tolerance?: bigint) {
@@ -473,6 +495,9 @@ describe('Auction', () => {
 
 			const clearing = await computeClearing(client, auctionAddress)
 			assertExpectedClearing(clearing, tick)
+			const [previewEthToSend, previewRepPurchased] = await previewFinalization(client, auctionAddress)
+			strictEqualTypeSafe(previewEthToSend, raiseCap, 'funded preview should return the ETH sent at finalization')
+			strictEqualTypeSafe(previewRepPurchased, raiseCap, 'funded preview should return the REP purchased at finalization')
 
 			await finalizeAndVerify(client, auctionAddress)
 
@@ -874,6 +899,9 @@ describe('Auction', () => {
 			const ethRaiseCap = 100n * 10n ** 18n
 			const maxRepBeingSold = 100n * 10n ** 18n
 			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+			const [previewEthToSend, previewRepPurchased] = await previewFinalization(client, auctionAddress)
+			strictEqualTypeSafe(previewEthToSend, 0n, 'no-bid preview should send no ETH')
+			strictEqualTypeSafe(previewRepPurchased, 0n, 'no-bid preview should purchase no REP')
 
 			const ownerBalanceBeforeFinalize = await getETHBalance(client, client.account.address)
 			await mockWindow.advanceTime(AUCTION_TIME + 1n)
@@ -972,12 +1000,18 @@ describe('Auction', () => {
 			// Check clearing result before finalize to verify underfunded condition
 			const clearingPre = await computeClearing(client, auctionAddress)
 			strictEqualTypeSafe(clearingPre.hitCap, false, 'hitCap should be false (underfunded)')
+			const [previewEthToSend, previewRepPurchased] = await previewFinalization(client, auctionAddress)
+			const expectedWinningEth = aliceEth + bobEth
+			const expectedRepPurchased = (maxRepBeingSold * expectedWinningEth) / ethRaiseCap
+			strictEqualTypeSafe(previewEthToSend, expectedWinningEth, 'underfunded preview should return qualifying ETH')
+			strictEqualTypeSafe(previewRepPurchased, expectedRepPurchased, 'underfunded preview should return proportional REP')
 
 			// Finalize the auction
 			await mockWindow.advanceTime(AUCTION_TIME + 1n)
 			await finalize(client, auctionAddress)
 
 			const totalRep = await getTotalRepPurchased(client, auctionAddress)
+			strictEqualTypeSafe(totalRep, previewRepPurchased, 'finalization should use the previewed REP amount')
 			assert.ok(totalRep > 0n && totalRep < maxRepBeingSold, 'underfunded demand should buy a positive amount below the REP cap')
 			const expectedBobRep = (bobEth * totalRep) / (aliceEth + bobEth)
 			const expectedAliceRep = totalRep - expectedBobRep
@@ -1120,6 +1154,34 @@ describe('Auction', () => {
 			strictEqualTypeSafe(aliceReverse.totalFilledRep + bobReverse.totalFilledRep, expectedTotalRep, 'reverse withdrawals should reconcile to proportional REP purchased')
 		})
 
+		test('rounded intermediate prefixes do not hide a later valid underfunded prefix', async () => {
+			const highBidder = createTestClient(0)
+			const mediumBidder = createTestClient(1)
+			const lowBidder = createTestClient(2)
+			const highTick = tickForPrice(4n * PRICE_PRECISION)
+			const mediumTick = tickForPrice(3n * PRICE_PRECISION)
+			const lowTick = tickForPrice((7n * PRICE_PRECISION) / 4n)
+
+			await startAuction(client, auctionAddress, 4n, 2n)
+			await submitBid(highBidder, auctionAddress, highTick, 1n)
+			await submitBid(mediumBidder, auctionAddress, mediumTick, 1n)
+			await submitBid(lowBidder, auctionAddress, lowTick, 1n)
+
+			const clearingPre = await computeClearing(client, auctionAddress)
+			strictEqualTypeSafe(clearingPre.hitCap, false, 'the below-reserve low tick should leave the auction underfunded')
+			await finalizeAndVerify(client, auctionAddress)
+
+			strictEqualTypeSafe(await getTotalRepPurchased(client, auctionAddress), 1n, 'two qualifying wei should purchase one proportional REP wei')
+
+			const highResult = await simulateWithdrawBids(client, auctionAddress, highBidder.account.address, [{ tick: highTick, bidIndex: 0n }])
+			const mediumResult = await simulateWithdrawBids(client, auctionAddress, mediumBidder.account.address, [{ tick: mediumTick, bidIndex: 0n }])
+			const lowResult = await simulateWithdrawBids(client, auctionAddress, lowBidder.account.address, [{ tick: lowTick, bidIndex: 0n }])
+			strictEqualTypeSafe(highResult.totalFilledRep + mediumResult.totalFilledRep, 1n, 'the valid winning prefix should reconcile to its one-wei REP allocation')
+			strictEqualTypeSafe(highResult.totalEthRefund + mediumResult.totalEthRefund, 0n, 'the qualifying high-and-medium bids should retain their ETH')
+			strictEqualTypeSafe(lowResult.totalFilledRep, 0n, 'the below-reserve low bid should receive no REP')
+			strictEqualTypeSafe(lowResult.totalEthRefund, 1n, 'the below-reserve low bid should refund in full')
+		})
+
 		test('underfunded auctions treat bids exactly at the threshold price as winners', async () => {
 			const ethRaiseCap = 1_000n * 10n ** 18n
 			const maxRepBeingSold = 100n * 10n ** 18n
@@ -1202,6 +1264,58 @@ describe('Auction', () => {
 	})
 
 	describe('Bid Submission', () => {
+		test('BidSubmitted exposes stable same-tick indices and cumulative ETH', async () => {
+			await setupStandardAuction(client, auctionAddress)
+			const sameTick = 0n
+			const firstAmount = 2n * ATTOETH_PER_ETH
+			const secondAmount = 3n * ATTOETH_PER_ETH
+
+			const firstHash = await submitBid(client, auctionAddress, sameTick, firstAmount)
+			const secondHash = await submitBid(client, auctionAddress, sameTick, secondAmount)
+			const firstLog = (await decodeAuctionEvents(firstHash)).find(log => log.eventName === 'BidSubmitted')
+			const secondLog = (await decodeAuctionEvents(secondHash)).find(log => log.eventName === 'BidSubmitted')
+			if (firstLog === undefined || secondLog === undefined) throw new Error('missing BidSubmitted log')
+
+			assert.strictEqual(firstLog.args.bidder, client.account.address)
+			assert.strictEqual(firstLog.args.tick, sameTick)
+			assert.strictEqual(firstLog.args.bidIndex, 0n)
+			assert.strictEqual(firstLog.args.ethAmount, firstAmount)
+			assert.strictEqual(firstLog.args.cumulativeEthAtTick, firstAmount)
+			assert.strictEqual(secondLog.args.bidIndex, 1n)
+			assert.strictEqual(secondLog.args.cumulativeEthAtTick, firstAmount + secondAmount)
+		})
+
+		test('BidSettled expands same-tick FIFO settlement per bid', async () => {
+			const sameTick = 0n
+			const bidAmount = 7n * ATTOETH_PER_ETH
+			await startAuction(client, auctionAddress, 10n * ATTOETH_PER_ETH, 10n * ATTOETH_PER_ETH)
+			await submitBid(client, auctionAddress, sameTick, bidAmount)
+			await submitBid(client, auctionAddress, sameTick, bidAmount)
+			await finalizeAndVerify(client, auctionAddress)
+
+			const withdrawalHash = await withdrawBids(client, auctionAddress, client.account.address, [
+				{ tick: sameTick, bidIndex: 0n },
+				{ tick: sameTick, bidIndex: 1n },
+			])
+			const settlementLogs = (await decodeAuctionEvents(withdrawalHash)).filter(log => log.eventName === 'BidSettled')
+			assert.strictEqual(settlementLogs.length, 2)
+			const firstSettlement = settlementLogs[0]
+			const secondSettlement = settlementLogs[1]
+			if (firstSettlement?.eventName !== 'BidSettled' || secondSettlement?.eventName !== 'BidSettled') {
+				throw new Error('missing per-bid settlement log')
+			}
+			assert.strictEqual(firstSettlement.args.bidIndex, 0n)
+			assert.strictEqual(firstSettlement.args.ethUsed, bidAmount)
+			assert.strictEqual(firstSettlement.args.repFilled, bidAmount)
+			assert.strictEqual(firstSettlement.args.ethRefund, 0n)
+			assert.strictEqual(firstSettlement.args.status, 0n)
+			assert.strictEqual(secondSettlement.args.bidIndex, 1n)
+			assert.strictEqual(secondSettlement.args.ethUsed, 3n * ATTOETH_PER_ETH)
+			assert.strictEqual(secondSettlement.args.repFilled, 3n * ATTOETH_PER_ETH)
+			assert.strictEqual(secondSettlement.args.ethRefund, 4n * ATTOETH_PER_ETH)
+			assert.strictEqual(secondSettlement.args.status, 1n)
+		})
+
 		test('minimum bid size enforcement', async () => {
 			const ethRaiseCap = 50000n
 			const maxRepBeingSold = 1n * 10n ** 18n

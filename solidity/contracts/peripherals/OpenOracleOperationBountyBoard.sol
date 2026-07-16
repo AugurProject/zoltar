@@ -25,8 +25,8 @@ struct OperationBounty {
 	address rewardToken;
 	uint256 rewardAmount;
 	uint256 acceptanceDeadline;
-	uint256 minimumInitialReportAmount2;
-	uint256 maximumInitialReportAmount2;
+	uint256 minimumInitialWeth;
+	uint256 maximumInitialWeth;
 	uint256 operationId;
 	uint256 reportId;
 	OperationBountyState state;
@@ -51,8 +51,8 @@ contract OpenOracleOperationBountyBoard {
 		uint256 validForSeconds,
 		uint256 rewardAmount,
 		uint256 acceptanceDeadline,
-		uint256 minimumInitialReportAmount2,
-		uint256 maximumInitialReportAmount2
+		uint256 minimumInitialWeth,
+		uint256 maximumInitialWeth
 	);
 	event OperationBountyAccepted(
 		uint256 indexed bountyId,
@@ -87,8 +87,8 @@ contract OpenOracleOperationBountyBoard {
 		address rewardToken,
 		uint256 rewardAmount,
 		uint256 acceptanceDeadline,
-		uint256 minimumInitialReportAmount2,
-		uint256 maximumInitialReportAmount2
+		uint256 minimumInitialWeth,
+		uint256 maximumInitialWeth
 	) external returns (uint256 bountyId) {
 		coordinator.validateOperationBounty(operation, msg.sender, targetVault, amount, validForSeconds);
 		require(
@@ -98,7 +98,7 @@ contract OpenOracleOperationBountyBoard {
 		require(rewardAmount > 0, 'Operation bounty reward must be positive');
 		require(acceptanceDeadline > block.timestamp, 'Operation bounty acceptance deadline must be in the future');
 		require(
-			maximumInitialReportAmount2 == 0 || minimumInitialReportAmount2 <= maximumInitialReportAmount2,
+			maximumInitialWeth == 0 || minimumInitialWeth <= maximumInitialWeth,
 			'Operation bounty initial report bounds are invalid'
 		);
 
@@ -113,8 +113,8 @@ contract OpenOracleOperationBountyBoard {
 			rewardToken: rewardToken,
 			rewardAmount: rewardAmount,
 			acceptanceDeadline: acceptanceDeadline,
-			minimumInitialReportAmount2: minimumInitialReportAmount2,
-			maximumInitialReportAmount2: maximumInitialReportAmount2,
+			minimumInitialWeth: minimumInitialWeth,
+			maximumInitialWeth: maximumInitialWeth,
 			operationId: 0,
 			reportId: 0,
 			state: OperationBountyState.Open
@@ -130,14 +130,15 @@ contract OpenOracleOperationBountyBoard {
 			validForSeconds,
 			rewardAmount,
 			acceptanceDeadline,
-			minimumInitialReportAmount2,
-			maximumInitialReportAmount2
+			minimumInitialWeth,
+			maximumInitialWeth
 		);
 	}
 
 	function acceptOperationBounty(
 		uint256 bountyId,
-		uint256 initialReportAmount2
+		uint256 proposedRepPerEthPrice,
+		uint256 requestedInitialWeth
 	) external payable returns (uint256 operationId) {
 		OperationBounty storage bounty = operationBounties[bountyId];
 		require(bounty.state == OperationBountyState.Open, 'Operation bounty is not open');
@@ -145,10 +146,15 @@ contract OpenOracleOperationBountyBoard {
 		if (!coordinator.isPriceValid()) {
 			uint256 currentPendingReportId = coordinator.pendingReportId();
 			if (currentPendingReportId == 0) {
-				_validateInitialReportAmount(bounty, initialReportAmount2);
+				uint256 minimumWethReport = coordinator.minimumToken1Report();
+				uint256 initialWethReport =
+					requestedInitialWeth > minimumWethReport ? requestedInitialWeth : minimumWethReport;
+				_validateInitialWeth(bounty, initialWethReport);
 			} else {
-				(, uint128 currentAmount2, , , , , ) = coordinator.openOracle().reportStatus(currentPendingReportId);
-				_validateInitialReportAmount(bounty, currentAmount2);
+				(uint128 currentInitialWeth, , , , , , ) = coordinator.openOracle().reportStatus(
+					currentPendingReportId
+				);
+				_validateInitialWeth(bounty, currentInitialWeth);
 			}
 		}
 
@@ -161,22 +167,17 @@ contract OpenOracleOperationBountyBoard {
 			bounty.targetVault,
 			bounty.amount,
 			bounty.validForSeconds,
-			initialReportAmount2
+			proposedRepPerEthPrice,
+			requestedInitialWeth
 		);
 		bounty.operationId = operationId;
 		emit OperationBountyAccepted(bountyId, msg.sender, operationId, bounty.reportId);
 	}
 
-	function _validateInitialReportAmount(OperationBounty storage bounty, uint256 initialReportAmount2) private view {
-		require(
-			initialReportAmount2 >= bounty.minimumInitialReportAmount2,
-			'Initial report WETH amount is below the bounty minimum'
-		);
-		if (bounty.maximumInitialReportAmount2 != 0) {
-			require(
-				initialReportAmount2 <= bounty.maximumInitialReportAmount2,
-				'Initial report WETH amount exceeds the bounty maximum'
-			);
+	function _validateInitialWeth(OperationBounty storage bounty, uint256 initialWeth) private view {
+		require(initialWeth >= bounty.minimumInitialWeth, 'Initial report WETH amount is below the bounty minimum');
+		if (bounty.maximumInitialWeth != 0) {
+			require(initialWeth <= bounty.maximumInitialWeth, 'Initial report WETH amount exceeds the bounty maximum');
 		}
 	}
 

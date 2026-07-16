@@ -278,7 +278,11 @@ describe.serial('OpenOracleSection integration', () => {
 
 		await clickElement(within(document.body).getByRole('button', { name: 'Browse' }))
 		await waitFor(() => {
-			expect(within(document.body).getByText(`Report #${reportId.toString()}`)).not.toBeNull()
+			expect(
+				within(document.body).getByRole('heading', {
+					name: `${reportDetails.token1Symbol} / ${reportDetails.token2Symbol} · Report #${reportId.toString()}`,
+				}),
+			).not.toBeNull()
 		})
 		await clickElement(within(document.body).getByRole('button', { name: 'Open report' }))
 

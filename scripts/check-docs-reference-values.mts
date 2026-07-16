@@ -4,11 +4,13 @@ import { getMainnetProtocolConfig } from '../shared/ts/protocolConfig'
 
 const html = await readFile('docs/escalation-game-architecture.html', 'utf8')
 const liquidationHtml = await readFile('docs/liquidation.html', 'utf8')
+const openOracleIntegration = await readFile('docs/open-oracle-integration.html', 'utf8')
 const zoltarWhitepaper = await readFile('docs/zoltar-whitepaper.html', 'utf8')
 const whitepaperPlaceholder = await readFile('docs/placeholder-whitepaper.html', 'utf8')
 const startHere = await readFile('docs/start-here.html', 'utf8')
 const operatorReference = await readFile('docs/operator-reference.md', 'utf8')
 const contractInteractionReference = await readFile('docs/contract-interaction-reference.md', 'utf8')
+const eventStream = await readFile('docs/event-stream.md', 'utf8')
 const escalationGameState = await readFile('solidity/contracts/peripherals/EscalationGameState.sol', 'utf8')
 const escalationGameTypes = await readFile('solidity/contracts/peripherals/EscalationGameTypes.sol', 'utf8')
 const escalationGameForker = await readFile('solidity/contracts/peripherals/EscalationGameForker.sol', 'utf8')
@@ -32,16 +34,46 @@ assertSimpleByteRow('Deployed bytecode', formatNumber(bytecodeSnapshot.deployedB
 assertBudgetHeadroomRow('Project deployed-bytecode budget headroom', formatNumber(expectedProjectBudget - bytecodeSnapshot.deployedBytes), formatNumber(expectedProjectBudget))
 assertBudgetHeadroomRow('EIP-170 headroom', formatNumber(expectedEip170Budget - bytecodeSnapshot.deployedBytes), formatNumber(expectedEip170Budget))
 assertContinuationIdentifierExplanation()
+assertEventStreamSemantics()
 assertZoltarForkDepths()
 assertCoordinatorRecoveryBranch()
+assertCoordinatorSettlementEconomics()
 assertLiquidationFullCloseDocs()
 assertStartHereTimelines()
 assertContractInteractionDistinctions()
+assertTruthAuctionRepairParameter()
 
 function assertContinuationIdentifierExplanation(): void {
 	assert.ok(html.includes('uint256(keccak256(abi.encode(address(this), outcomeIndex, depositIndex)))'), 'docs/escalation-game-architecture.html must explain the fork-continuation stable parent deposit identifier formula')
 	assert.ok(html.includes('consumedParentDepositIndexes'), 'docs/escalation-game-architecture.html must connect the continuation identifier to consumedParentDepositIndexes')
-	assert.ok(html.includes('LocalDepositAppended') && html.includes('CarriedDepositClaimed') && html.includes('ClaimDeposit') && html.includes('exportUnresolvedDeposit'), 'docs/escalation-game-architecture.html must name the exact event and export surfaces that expose the continuation identifier')
+	assert.ok(html.includes('LocalDepositAppended') && html.includes('CarryDepositConsumed') && html.includes('ClaimDeposit') && html.includes('exportUnresolvedDeposit'), 'docs/escalation-game-architecture.html must name the exact event and export surfaces that expose the continuation identifier')
+	assert.ok(!html.includes('CarriedDepositClaimed'), 'docs/escalation-game-architecture.html must not reference the removed CarriedDepositClaimed event')
+}
+
+function assertEventStreamSemantics(): void {
+	assert.match(priceCoordinator, /PRICE_PRECISION = 1e18/)
+	assert.match(securityPoolUtils, /PRICE_PRECISION = 1e18/)
+	assert.match(securityPoolInterface, /Complete sets burned and net ETH paid/)
+	assert.match(securityPoolInterface, /Winning shares burned and net ETH paid/)
+	for (const documentedClaim of [
+		'Genesis REP has a separate balance-history anchor',
+		'First scan `DeploySecurityPool` logs from the configured `SecurityPoolFactory`',
+		'Apply the same pre-pass to `EscalationGameSet` logs from recognized pools',
+		'Accept escalation signatures only from game addresses collected through this pool relationship',
+		'Pool and vault `feeIndex` | `1e18` fixed-point',
+		'`currentRetentionRate` | `1e18` fixed-point per-second multiplier',
+		'Coordinator REP/ETH `price` | `(REP base units * 1e18) / ETH wei`',
+		'Redemption `ethAmount` fields are the net wei paid',
+		'`ethUsed + ethRefund = originalEthAmount`',
+		'preserve an immutable copy of the current roots, counts, peaks, and leaves under `escalationSnapshotId`',
+		'select that historical version by `snapshotId`',
+		'clone the frozen peaks and leaves into the child',
+		'require `ids.length == values.length`',
+		'apply each `(ids[i], values[i])` pair in array order',
+		'Array-taking protocol calls expand into one cause event per affected item',
+	]) {
+		assert.ok(eventStream.includes(documentedClaim), `Missing event-stream unit or value-semantics claim: ${documentedClaim}`)
+	}
 }
 
 function assertZoltarForkDepths(): void {
@@ -84,10 +116,28 @@ function assertCoordinatorRecoveryBranch(): void {
 	const normalizedPlaceholder = whitepaperPlaceholder.replaceAll(/\s+/g, ' ')
 	for (const documentedClaim of [
 		'If the pending settlement list is empty, another staged request can fund a replacement report.',
-		'If pending settlement operation IDs still remain, an operator or user must call direct <code>requestPrice(amount2)</code> with the ETH bounty and initial-report funding, then let that replacement report settle.',
+		'If pending settlement operation IDs still remain, an operator or user must call direct <code>requestPrice(proposedRepPerEthPrice, requestedInitialWeth)</code> with the ETH bounty and initial-report funding, then let that replacement report settle.',
 	]) {
 		assert.ok(normalizedPlaceholder.includes(documentedClaim), `Missing coordinator recovery-branch claim: ${documentedClaim}`)
 	}
+}
+
+function assertCoordinatorSettlementEconomics(): void {
+	const normalizedIntegration = openOracleIntegration.replaceAll(/\s+/g, ' ')
+	for (const documentedClaim of [
+		'Equality is accepted.',
+		'correction profit at the configured target error remains <code>10 / 3</code> times the one-dispute gas cost at the largest admitted settlement base fee.',
+		'That relationship is a deployment assumption, not a constructor invariant',
+		"the constructor checks each multiplier's lower bound but does not require the settlement cap to remain below the Open Oracle Security multiplier.",
+		'the callback does not recompute <code>minimumToken1Report()</code> from settlement base fee and does not compare the final price with an external truth source.',
+		'The cap is a rejection boundary, not operation-value insurance or proof that an accepted price is externally correct.',
+	]) {
+		assert.ok(normalizedIntegration.includes(documentedClaim), `Missing coordinator settlement-economics claim: ${documentedClaim}`)
+	}
+	assert.match(priceCoordinator, /if \(block\.basefee > pendingReportMaxSettlementBaseFee\)/, 'coordinator must accept settlement base fee equal to the request-time cap')
+	assert.match(priceCoordinator, /if \(amount1 == 0 \|\| amount2 == 0\)/, 'coordinator must reject empty settled token amounts')
+	assert.match(priceCoordinator, /uint256 price = Math\.mulDiv\(amount2, PRICE_PRECISION, amount1\)/, 'coordinator must derive the settled REP/ETH ratio from final token amounts')
+	assert.doesNotMatch(whitepaperPlaceholder, /disputers can replace a bad\s+report with a larger one/, 'whitepaper must not claim every dispute strictly increases the report after integer flooring')
 }
 
 function assertLiquidationFullCloseDocs(): void {
@@ -172,11 +222,13 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /Operational, unresolved pool in an unforked universe/)
 	assert.match(whitepaperPlaceholder, /cashToShares[\s\S]*Exchange rate undefined/)
 	assert.match(contractInteractionReference, /if an escalation game exists, the universe fork occurred before that game settled/)
+	assert.match(contractInteractionReference, /`CarryDepositConsumed`; additionally `ClaimDeposit` for a winning payout/)
+	assert.match(contractInteractionReference, /`EscalationRepDrainedAtFork` when unresolved escalation exists/)
 	assert.match(contractInteractionReference, /Initially authorized `SecurityPoolFactory` for an origin pool; an authorized parent `SecurityPool` for a child pool/)
 	assert.match(contractInteractionReference, /Mint and burn entrypoints \| An authorized `SecurityPool`/)
 	assert.match(contractInteractionReference, /Fixes the clearing mode, clearing tick, ETH totals, and aggregate REP allocation/)
 	assert.match(contractInteractionReference, /Withdrawal-time allocation assigns division dust from deterministic cumulative ETH positions, making payout independent of claim order/)
-	assert.match(contractInteractionReference, /addFeeEligibleSecurityBondAllowance\(amount\)[\s\S]*Finalized truth-auction settlement[\s\S]*newly auction-claimed security-bond allowance to the live fee denominator/)
+	assert.match(contractInteractionReference, /addFeeEligibleSecurityBondAllowance\(vault, amount\)[\s\S]*Finalized truth-auction settlement[\s\S]*newly auction-claimed security-bond allowance to the live fee denominator/)
 	assert.match(contractInteractionReference, /`SystemStateSet`/)
 	assert.match(securityPoolForker, /Before finalization, only refundable bids can be settled/)
 	assert.match(securityPoolForker, /require\(claimTickIndices\.length == 0, 'Not final'\)/)
@@ -200,7 +252,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(securityPoolForker, /address\(escalationGame\) == address\(0x0\) \|\| _forkOccurredBeforeEscalationSettled\(escalationGame, forkTime\)/)
 	assert.match(securityPoolForker, /'Resolved'/)
 	assert.match(securityPoolForker, /securityPool\.setSystemState\(SystemState\.ForkTruthAuction\)/)
-	assert.match(securityPoolForker, /securityPool\.addFeeEligibleSecurityBondAllowance\(newSecurityBondAllowance\)/)
+	assert.match(securityPoolForker, /securityPool\.addFeeEligibleSecurityBondAllowance\(vault, newSecurityBondAllowance\)/)
 	assert.match(truthAuction, /function _allocateRepFromCumulativePosition\(/)
 	assert.match(truthAuction, /return cumulativeRepAfter - cumulativeRepBefore/)
 	assert.match(truthAuction, /require\(msg\.sender == owner, 'Only the auction owner can refund losing bids on behalf of bidders'\)/)
@@ -209,6 +261,13 @@ function assertContractInteractionDistinctions(): void {
 	for (const compatibilitySource of ['utils/ReentrancyGuard.sol', 'token/ERC20/IERC20.sol', 'token/ERC20/utils/SafeERC20.sol', 'utils/math/Math.sol']) {
 		assert.ok(operatorReference.includes(`openOracle/openzeppelin/contracts/${compatibilitySource}`), `Operator Reference must directly link ${compatibilitySource}`)
 	}
+}
+
+function assertTruthAuctionRepairParameter(): void {
+	const repairBpsMatch = securityPoolUtils.match(/uint256 constant MIN_TRUTH_AUCTION_REPAIR_BPS = BPS_DENOMINATOR/)
+	assert.ok(repairBpsMatch, 'SecurityPoolUtils must keep the truth-auction repair floor tied to BPS_DENOMINATOR')
+	const normalizedPlaceholder = whitepaperPlaceholder.replaceAll(/\s+/g, ' ')
+	assert.match(normalizedPlaceholder, /<code>MIN_TRUTH_AUCTION_REPAIR_BPS<\/code>[\s\S]*?<code>10000 bps \(100%\)<\/code>/, 'whitepaper parameter table must document the exact 100% truth-auction repair floor')
 }
 
 function assertSimpleByteRow(label: string, expectedValue: string): void {

@@ -1,33 +1,54 @@
 import { describe, expect, test } from 'bun:test'
-import { DEFAULT_ORACLE_EXACT_TOKEN1_REPORT_PARAMETERS, ORACLE_EXACT_TOKEN1_REPORT, ORACLE_FORMULA_PRECISION, calculateOracleExactToken1Report } from '@zoltar/shared/oracleInitialReport'
+import { DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, ORACLE_PERCENTAGE_PRECISION, calculateOracleMinimumWethReport } from '@zoltar/shared/oracleInitialReport'
 
 describe('oracle initial report sizing', () => {
-	test('matches the deployment default exactToken1Report', () => {
-		expect(ORACLE_EXACT_TOKEN1_REPORT).toBe(259332023575638507216n)
-		expect(calculateOracleExactToken1Report()).toBe(ORACLE_EXACT_TOKEN1_REPORT)
+	test('uses the OpenOracle non-zero minimum when the current base fee is zero', () => {
+		expect(calculateOracleMinimumWethReport()).toBe(1n)
 	})
 
-	test('rounds up fractional report sizes', () => {
+	test('sizes WETH so a five-percent correction earns ten times the dispute gas cost by default', () => {
+		const baseFeeWeiPerGas = 30n * 10n ** 9n
+		const minimumWethReport = calculateOracleMinimumWethReport({
+			...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
+			baseFeeWeiPerGas,
+		})
+		const feeSum = BigInt(DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS.openOracleProtocolFee + DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS.openOracleReporterFee)
+		const correctionProfitWei = (minimumWethReport * (DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS.targetPriceErrorForDispute - feeSum)) / (ORACLE_PERCENTAGE_PRECISION + DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS.targetPriceErrorForDispute)
+		const bufferedGasCostWei = (DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS.gasUnitsForOneDispute * baseFeeWeiPerGas * DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS.openOracleSecurityMultiplierBps) / 10000n
+
+		expect(minimumWethReport).toBe(2423076923076923077n)
+		expect(correctionProfitWei).toBeGreaterThanOrEqual(bufferedGasCostWei)
+	})
+
+	test('allows deployments to tune the target correction error', () => {
 		expect(
-			calculateOracleExactToken1Report({
-				assumedGasPriceWeiPerGas: 1n,
-				assumedRepPerEthPrice: ORACLE_FORMULA_PRECISION,
-				disputeReportSizeMultiplier: 100,
-				expectedRepEthPriceMoveDuringSettlement: 0n,
+			calculateOracleMinimumWethReport({
+				...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
+				baseFeeWeiPerGas: 30n * 10n ** 9n,
+				openOracleSecurityMultiplierBps: 100000n,
+				targetPriceErrorForDispute: 1000000n,
+			}),
+		).toBe(1112359550561797753n)
+	})
+
+	test('rounds up fractional WETH report sizes', () => {
+		expect(
+			calculateOracleMinimumWethReport({
+				baseFeeWeiPerGas: 1n,
 				gasUnitsForOneDispute: 1n,
 				openOracleProtocolFee: 0,
 				openOracleReporterFee: 0,
-				requiredDisputerProfitBuffer: ORACLE_FORMULA_PRECISION,
-				targetPriceErrorForDispute: 2n * ORACLE_FORMULA_PRECISION,
+				openOracleSecurityMultiplierBps: 10000n,
+				targetPriceErrorForDispute: ORACLE_PERCENTAGE_PRECISION,
 			}),
 		).toBe(2n)
 	})
 
-	test('rejects unsafe denominator assumptions', () => {
+	test('rejects fees that eliminate the target correction profit', () => {
 		expect(() =>
-			calculateOracleExactToken1Report({
-				...DEFAULT_ORACLE_EXACT_TOKEN1_REPORT_PARAMETERS,
-				targetPriceErrorForDispute: ORACLE_FORMULA_PRECISION / 100n,
+			calculateOracleMinimumWethReport({
+				...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
+				targetPriceErrorForDispute: 100000n,
 			}),
 		).toThrow('Cannot divide by zero or a negative denominator')
 	})

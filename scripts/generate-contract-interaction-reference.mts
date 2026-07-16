@@ -19,6 +19,7 @@ type ContractDeclaration = {
 type ContractReference = {
 	interactions: Interaction[]
 	name: string
+	parameterNotes?: string[]
 	purpose: string
 	readSurface: string
 	sourcePath: string
@@ -27,64 +28,61 @@ type ContractReference = {
 const outputPath = 'docs/contract-interaction-reference.md'
 
 const eventSourceByName: Record<string, string> = {
-	AuctionStarted: 'solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol',
-	Authorized: 'solidity/contracts/peripherals/tokens/ShareToken.sol',
-	CarriedDepositClaimed: 'solidity/contracts/peripherals/EscalationGameState.sol',
+	AuctionStarted: 'solidity/contracts/peripherals/interfaces/IUniformPriceDualCapBatchAuction.sol',
+	AuctionFinalized: 'solidity/contracts/peripherals/interfaces/IUniformPriceDualCapBatchAuction.sol',
+	AuthorizationUpdated: 'solidity/contracts/peripherals/interfaces/IShareToken.sol',
+	BidSettled: 'solidity/contracts/peripherals/interfaces/IUniformPriceDualCapBatchAuction.sol',
+	BidSubmitted: 'solidity/contracts/peripherals/interfaces/IUniformPriceDualCapBatchAuction.sol',
+	CarryDepositConsumed: 'solidity/contracts/peripherals/interfaces/IEscalationGame.sol',
 	ClaimAuctionProceeds: 'solidity/contracts/peripherals/SecurityPoolForker.sol',
 	ClaimDeposit: 'solidity/contracts/peripherals/EscalationGameState.sol',
 	ClaimForkedEscalationDepositsToWallet: 'solidity/contracts/peripherals/SecurityPoolForker.sol',
-	CreateCompleteSet: 'solidity/contracts/peripherals/SecurityPool.sol',
+	CompleteSetCreated: 'solidity/contracts/peripherals/interfaces/ISecurityPool.sol',
+	CompleteSetRedeemed: 'solidity/contracts/peripherals/interfaces/ISecurityPool.sol',
+	CoordinatorStateCheckpoint: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	DeployChild: 'solidity/contracts/Zoltar.sol',
-	DepositOnOutcome: 'solidity/contracts/peripherals/EscalationGameState.sol',
+	DepositOnOutcome: 'solidity/contracts/peripherals/interfaces/IEscalationGame.sol',
 	DepositRep: 'solidity/contracts/peripherals/SecurityPool.sol',
 	DepositToEscalationGame: 'solidity/contracts/peripherals/SecurityPool.sol',
 	EscalationGameSet: 'solidity/contracts/peripherals/SecurityPool.sol',
+	EscalationRepDrainedAtFork: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
 	ExecutedStagedOperation: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
-	FinalizeAuction: 'solidity/contracts/peripherals/SecurityPoolForker.sol',
-	Finalized: 'solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol',
 	ForkContinuationResumed: 'solidity/contracts/peripherals/EscalationGameState.sol',
 	GameContinuedFromFork: 'solidity/contracts/peripherals/EscalationGameState.sol',
 	GameStarted: 'solidity/contracts/peripherals/EscalationGameState.sol',
-	InitiateSecurityPoolFork: 'solidity/contracts/peripherals/SecurityPoolForker.sol',
-	LocalDepositAppended: 'solidity/contracts/peripherals/EscalationGameState.sol',
+	LocalDepositAppended: 'solidity/contracts/peripherals/interfaces/IEscalationGame.sol',
 	Migrate: 'solidity/contracts/peripherals/tokens/ShareToken.sol',
-	MigrateVault: 'solidity/contracts/peripherals/SecurityPoolForker.sol',
+	VaultMigrationCheckpoint: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
 	MigrationRepAdded: 'solidity/contracts/Zoltar.sol',
 	MigrationRepSplit: 'solidity/contracts/Zoltar.sol',
-	NonDecisionReached: 'solidity/contracts/peripherals/EscalationGameState.sol',
+	NonDecisionReached: 'solidity/contracts/peripherals/interfaces/IEscalationGame.sol',
+	OperationBountyBoardSet: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	OperationBountyAccepted: 'solidity/contracts/peripherals/OpenOracleOperationBountyBoard.sol',
 	OperationBountyClaimed: 'solidity/contracts/peripherals/OpenOracleOperationBountyBoard.sol',
 	OperationBountyPosted: 'solidity/contracts/peripherals/OpenOracleOperationBountyBoard.sol',
 	OperationBountyRefunded: 'solidity/contracts/peripherals/OpenOracleOperationBountyBoard.sol',
 	PendingOperationRecoveryConsumed: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	PendingReportRecovered: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
-	PerformLiquidation: 'solidity/contracts/peripherals/SecurityPool.sol',
+	ParentRepLocked: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
 	PerformWithdrawRep: 'solidity/contracts/peripherals/SecurityPool.sol',
 	PoolForkModeActivated: 'solidity/contracts/peripherals/SecurityPool.sol',
-	PoolRetentionRateChanged: 'solidity/contracts/peripherals/SecurityPool.sol',
 	PriceReportRejected: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	PriceReported: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	PriceRequested: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
-	RedeemCompleteSet: 'solidity/contracts/peripherals/SecurityPool.sol',
-	RedeemFees: 'solidity/contracts/peripherals/SecurityPool.sol',
 	RedeemRep: 'solidity/contracts/peripherals/SecurityPool.sol',
-	RedeemShares: 'solidity/contracts/peripherals/SecurityPool.sol',
-	RefundLosingBids: 'solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol',
 	RepEthPriceSet: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	ResidualRepSweptToSecurityPool: 'solidity/contracts/peripherals/EscalationGameState.sol',
-	SecurityBondAllowanceChange: 'solidity/contracts/peripherals/SecurityPool.sol',
 	SecurityPoolSet: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
-	SecurityPoolStartingParamsSet: 'solidity/contracts/peripherals/SecurityPool.sol',
+	SecurityPoolForkSnapshot: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
+	SharesRedeemed: 'solidity/contracts/peripherals/interfaces/ISecurityPool.sol',
 	StagedOperationQueued: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
-	SubmitBid: 'solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol',
 	SystemStateSet: 'solidity/contracts/peripherals/SecurityPool.sol',
 	TruthAuctionFinalized: 'solidity/contracts/peripherals/SecurityPoolForker.sol',
 	TruthAuctionStarted: 'solidity/contracts/peripherals/SecurityPoolForker.sol',
 	UniverseForked: 'solidity/contracts/Zoltar.sol',
-	UpdateCollateralAmount: 'solidity/contracts/peripherals/SecurityPool.sol',
-	UpdateVaultFees: 'solidity/contracts/peripherals/SecurityPool.sol',
-	WithdrawBids: 'solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol',
-	WithdrawDeposit: 'solidity/contracts/peripherals/EscalationGameState.sol',
+	PoolAccountingCheckpoint: 'solidity/contracts/peripherals/interfaces/ISecurityPool.sol',
+	VaultAccountingCheckpoint: 'solidity/contracts/peripherals/interfaces/ISecurityPool.sol',
+	VaultLiquidated: 'solidity/contracts/peripherals/SecurityPool.sol',
 }
 
 const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
@@ -101,7 +99,7 @@ const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 		startFromFork: ['external(uint256,uint256,uint256)'],
 	},
 	'solidity/contracts/peripherals/EscalationGameCarry.sol': {
-		initializeForkCarrySnapshotWithResolutionBalances: ['external(bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS][3],uint256[3],uint256[3],uint256[3],bytes32[3])'],
+		initializeForkCarrySnapshotWithResolutionBalances: ['external(address,bytes32,bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS][3],uint256[3],uint256[3],uint256[3],bytes32[3])'],
 	},
 	'solidity/contracts/peripherals/EscalationGameEscrow.sol': {
 		exportForkedEscrowByOutcome: ['external(address,address)'],
@@ -122,27 +120,27 @@ const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 		executeStagedOperation: ['public(uint256)'],
 		openOracleCallback: ['external(uint256,uint256,uint256,uint256,address,address)'],
 		recoverSettledPendingReport: ['public()'],
-		requestPrice: ['public(uint256)'],
-		requestPriceIfNeededAndStageOperation: ['public(OperationType,address,uint256,uint256,uint256)'],
+		requestPrice: ['public(uint256,uint256)'],
+		requestPriceIfNeededAndStageOperation: ['public(OperationType,address,uint256,uint256,uint256,uint256)'],
+		setOperationBountyBoard: ['external(address)'],
 		setRepEthPrice: ['public(uint256)'],
 		setSecurityPool: ['public(ISecurityPool)'],
 	},
 	'solidity/contracts/peripherals/OpenOracleOperationBountyBoard.sol': {
-		acceptOperationBounty: ['external(uint256,uint256)'],
+		acceptOperationBounty: ['external(uint256,uint256,uint256)'],
 		claimOperationBounty: ['external(uint256)'],
 		postOperationBounty: ['external(OperationType,address,uint256,uint256,address,uint256,uint256,uint256,uint256)'],
 		refundOperationBounty: ['external(uint256)'],
 	},
 	'solidity/contracts/peripherals/SecurityPool.sol': {
 		activateForkMode: ['external()'],
-		addFeeEligibleSecurityBondAllowance: ['external(uint256)'],
+		addFeeEligibleSecurityBondAllowance: ['external(address,uint256)'],
 		authorizeChildPool: ['external(ISecurityPool)'],
 		configureVault: ['external(address,uint256,uint256,uint256)'],
 		createCompleteSet: ['external()'],
 		depositRep: ['external(uint256)'],
 		depositToEscalationGame: ['external(BinaryOutcomes.BinaryOutcome,uint256)'],
-		drainAllRep: ['external()'],
-		initializeForkCarrySnapshotWithResolutionBalances: ['external(bytes32[64][3],uint256[3],uint256[3],uint256[3],bytes32[3])'],
+		initializeForkCarrySnapshotWithResolutionBalances: ['external(address,bytes32,bytes32[64][3],uint256[3],uint256[3],uint256[3],bytes32[3])'],
 		initializeForkedEscalationGame: ['external(uint256,uint256,uint256)'],
 		performLiquidation: ['external(address,address,uint256,uint256,uint256,uint256,uint256)'],
 		performSetSecurityBondsAllowance: ['external(address,uint256)'],
@@ -160,7 +158,6 @@ const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 		setSystemState: ['external(SystemState)'],
 		setTotalShares: ['external(uint256)'],
 		transferEth: ['external(address payable,uint256)'],
-		transferRep: ['external(address,uint256)'],
 		updateCollateralAmount: ['public()'],
 		updateRetentionRate: ['public()'],
 		updateVaultFees: ['public(address)'],
@@ -260,7 +257,7 @@ const contractReferences: ContractReference[] = [
 				effect: "Accrues and pays the vault's unpaid ETH fees.",
 				declarations: [{ name: 'redeemFees' }],
 				preconditions: 'Pool can send the resulting ETH payment.',
-				signals: '`UpdateVaultFees`, `RedeemFees`',
+				signals: '`VaultAccountingCheckpoint` and `PoolAccountingCheckpoint`',
 			},
 			{
 				call: '`createCompleteSet()` with ETH',
@@ -268,7 +265,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Adds collateral and mints one `Invalid`, `Yes`, and `No` share per complete-set unit.',
 				declarations: [{ name: 'createCompleteSet' }],
 				preconditions: 'Operational, unforked, unresolved, not awaiting continuation; positive ETH converts to at least one complete-set unit; bond capacity covers the new collateral.',
-				signals: '`CreateCompleteSet`',
+				signals: '`CompleteSetCreated` and `PoolAccountingCheckpoint`',
 			},
 			{
 				call: '`redeemCompleteSet(completeSetAmount)`',
@@ -276,7 +273,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Burns equal balances of all three outcomes and returns ETH at the current collateral-per-share rate.',
 				declarations: [{ name: 'redeemCompleteSet' }],
 				preconditions: 'Operational and unforked; caller owns the complete set.',
-				signals: '`RedeemCompleteSet`',
+				signals: '`CompleteSetRedeemed` and `PoolAccountingCheckpoint`',
 			},
 			{
 				call: '`redeemShares()`',
@@ -284,7 +281,7 @@ const contractReferences: ContractReference[] = [
 				effect: "Burns the caller's full winning balance and pays its pro-rata remaining collateral.",
 				declarations: [{ name: 'redeemShares' }],
 				preconditions: 'Operational pool with a final outcome.',
-				signals: '`RedeemShares`',
+				signals: '`SharesRedeemed` and `PoolAccountingCheckpoint`',
 			},
 			{
 				call: '`redeemRep(vault)`',
@@ -308,7 +305,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Settles local deposits and routes any winning REP to their recorded depositor.',
 				declarations: [{ name: 'withdrawFromEscalationGame' }],
 				preconditions: 'Operational pool and final outcome; external-fork timing may require migration instead.',
-				signals: 'Escalation-game `ClaimDeposit` and `WithdrawDeposit`',
+				signals: 'Escalation-game `CarryDepositConsumed`; additionally `ClaimDeposit` for a winning payout',
 			},
 			{
 				call: '`withdrawForkedEscalationDeposits(outcome, proofs)`',
@@ -316,7 +313,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Verifies and consumes carried proofs, then pays winning child REP to the recorded depositor.',
 				declarations: [{ name: 'withdrawForkedEscalationDeposits' }],
 				preconditions: 'Operational child pool with a final outcome and initialized continuation game.',
-				signals: 'Escalation-game `ClaimDeposit`, `CarriedDepositClaimed`, and `WithdrawDeposit`',
+				signals: 'Escalation-game `CarryDepositConsumed`; additionally `ClaimDeposit` for a winning payout',
 			},
 			{
 				call: '`updateCollateralAmount()`, `updateRetentionRate()`, `updateVaultFees(vault)`',
@@ -324,7 +321,7 @@ const contractReferences: ContractReference[] = [
 				effect: "Advances fee, collateral, retention, or vault accounting without transferring the caller's assets.",
 				declarations: [{ name: 'updateCollateralAmount' }, { name: 'updateRetentionRate' }, { name: 'updateVaultFees' }],
 				preconditions: 'No special caller permission; each function may intentionally no-op at a boundary.',
-				signals: '`UpdateCollateralAmount`, `PoolRetentionRateChanged`, or `UpdateVaultFees` when state changes',
+				signals: '`PoolAccountingCheckpoint` or `VaultAccountingCheckpoint` when state changes',
 			},
 			{
 				call: '`performWithdrawRep`, `performLiquidation`, `performSetSecurityBondsAllowance`',
@@ -332,7 +329,7 @@ const contractReferences: ContractReference[] = [
 				effect: "Executes the corresponding solvency-sensitive vault operation with the coordinator's fresh REP/ETH price.",
 				declarations: [{ name: 'performWithdrawRep' }, { name: 'performLiquidation' }, { name: 'performSetSecurityBondsAllowance' }],
 				preconditions: 'Operational, unresolved pool in an unforked universe; coordinator price is fresh; operation-specific solvency and snapshot checks pass.',
-				signals: '`PerformWithdrawRep`, `PerformLiquidation`, or `SecurityBondAllowanceChange`',
+				signals: '`PerformWithdrawRep`, `VaultLiquidated`, `VaultAccountingCheckpoint`, or `PoolAccountingCheckpoint`',
 			},
 			{
 				call: '`setStartingParams(...)`',
@@ -340,7 +337,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Seeds fee timing, retention, collateral, and inherited child price during deployment.',
 				declarations: [{ name: 'setStartingParams' }],
 				preconditions: 'Deployment wiring through the factory.',
-				signals: '`SecurityPoolStartingParamsSet`',
+				signals: '`PoolAccountingCheckpoint`',
 			},
 			{
 				call: '`activateForkMode`, continuation initialization/resume, `setAwaitingForkContinuation`, and `setSystemState`',
@@ -353,18 +350,18 @@ const contractReferences: ContractReference[] = [
 			{
 				call: '`configureVault`, accounting setters, pool drains/transfers, and `authorizeChildPool`',
 				caller: '`SecurityPoolForker` only',
-				declarations: [{ name: 'configureVault' }, { name: 'setOwnershipDenominator' }, { name: 'setTotalShares' }, { name: 'setPoolFinancials' }, { name: 'drainAllRep' }, { name: 'transferRep' }, { name: 'transferEth' }, { name: 'authorizeChildPool' }],
+				declarations: [{ name: 'configureVault' }, { name: 'setOwnershipDenominator' }, { name: 'setTotalShares' }, { name: 'setPoolFinancials' }, { name: 'transferEth' }, { name: 'authorizeChildPool' }],
 				effect: 'Configures migrated or auction-settled vault and pool state, authorizes children, and transfers migration assets.',
 				preconditions: 'Correct forker-controlled migration or finalized-auction settlement context plus function-specific accounting and balance constraints.',
 				signals: 'Vault/configuration events and the corresponding token or ETH transfers',
 			},
 			{
-				call: '`addFeeEligibleSecurityBondAllowance(amount)`',
+				call: '`addFeeEligibleSecurityBondAllowance(vault, amount)`',
 				caller: '`SecurityPoolForker` only',
 				declarations: [{ name: 'addFeeEligibleSecurityBondAllowance' }],
 				effect: 'Adds newly auction-claimed security-bond allowance to the live fee denominator and clears the pooled fee-index rounding remainder.',
 				preconditions: 'Finalized truth-auction settlement; the resulting fee-eligible allowance cannot exceed total security-bond allowance.',
-				signals: '`ClaimAuctionProceeds` from the surrounding forker settlement; no dedicated event from SecurityPool',
+				signals: '`ClaimAuctionProceeds`, `VaultAccountingCheckpoint`, and `PoolAccountingCheckpoint`',
 			},
 			{
 				call: 'Direct ETH transfer to `receive()`',
@@ -388,7 +385,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Freezes the parent pool after an external universe fork, drains pool and game REP, and records the canonical migration snapshot.',
 				declarations: [{ name: 'initiateSecurityPoolFork' }],
 				preconditions: 'Pool operational; its universe already forked; fork state not initialized; if an escalation game exists, the universe fork occurred before that game settled.',
-				signals: '`InitiateSecurityPoolFork`',
+				signals: '`SecurityPoolForkSnapshot` and `ParentRepLocked`; additionally `EscalationRepDrainedAtFork` when unresolved escalation exists',
 			},
 			{
 				call: '`forkZoltarWithOwnEscalationGame(securityPool)`',
@@ -396,7 +393,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Uses a game non-decision to fork Zoltar, freezes the pool, and records own-fork REP buckets and snapshot state.',
 				declarations: [{ name: 'forkZoltarWithOwnEscalationGame' }],
 				preconditions: 'Pool operational; escalation reached non-decision; universe not already forked.',
-				signals: '`InitiateSecurityPoolFork` and Zoltar fork events',
+				signals: '`SecurityPoolForkSnapshot`, `ParentRepLocked`, and Zoltar fork events; additionally `EscalationRepDrainedAtFork` when unresolved escalation exists',
 			},
 			{
 				call: '`migrateRepToZoltar(securityPool, outcomeIndices)`',
@@ -420,7 +417,7 @@ const contractReferences: ContractReference[] = [
 				declarations: [{ name: 'migrateVault' }],
 				effect: "Moves the caller's currently unlocked REP ownership, allowance, fees, and collateral into one child pool. Repeat calls can have no additional unlocked state to move.",
 				preconditions: 'Migration window open. Unresolved escalation escrow is handled separately; the aggregate-entitlement wrapper calls this function first to migrate unlocked state.',
-				signals: '`MigrateVault`',
+				signals: '`VaultMigrationCheckpoint`',
 			},
 			{
 				call: '`migrateVaultWithUnresolvedEscalation(securityPool, vault, childOutcomeIndex)`',
@@ -444,15 +441,15 @@ const contractReferences: ContractReference[] = [
 				effect: 'Closes migration accounting and either reopens a fully backed child or starts its repair auction.',
 				declarations: [{ name: 'startTruthAuction' }],
 				preconditions: 'Child migration window ended; pool is in fork migration; required child REP is available.',
-				signals: '`TruthAuctionStarted`; immediate no-auction paths also emit `FinalizeAuction` and `TruthAuctionFinalized`',
+				signals: '`TruthAuctionStarted`; immediate no-auction paths also emit `TruthAuctionFinalized` and pool accounting checkpoints',
 			},
 			{
-				call: '`finalizeTruthAuction(securityPool)`',
+				call: '`finalizeTruthAuction(securityPool)` with exact-shortfall ETH',
 				caller: 'Anyone',
-				effect: 'Finalizes the ended auction, transfers repair ETH, and fixes bidder ownership and allowance rates. The child becomes operational only if migration-routed collateral plus auction ETH meets the full parent collateral snapshot.',
+				effect: 'Finalizes the ended auction, combines migration-routed collateral, auction ETH, and the caller contribution into exact repair, then fixes bidder ownership and allowance rates. The contribution creates no ownership or allowance rights.',
 				declarations: [{ name: 'finalizeTruthAuction' }],
-				preconditions: 'Truth auction started and its one-week window has passed.',
-				signals: '`FinalizeAuction`, `TruthAuctionFinalized`, and auction `Finalized`',
+				preconditions: 'Truth auction started and its one-week window has passed; `msg.value` exactly equals the parent collateral snapshot minus migration-routed collateral and auction ETH. Underpayment and overpayment revert; forced ETH does not reduce the required contribution.',
+				signals: '`TruthAuctionFinalized`, auction `AuctionFinalized`, and pool accounting checkpoints',
 			},
 			{
 				call: '`settleAuctionBids(securityPool, vault, claimTickIndices, refundTickIndices)`',
@@ -460,7 +457,7 @@ const contractReferences: ContractReference[] = [
 				declarations: [{ name: 'settleAuctionBids' }],
 				effect: 'Before finalization, refunds only provably losing bids. After finalization, combines claim and refund indexes into one settlement withdrawal.',
 				preconditions: 'At least one index; before finalization the claim list must be empty and refund indexes must be eligible; after finalization all indexes must belong to the named vault and remain unsettled.',
-				signals: 'Underlying auction `RefundLosingBids` or `WithdrawBids`; `ClaimAuctionProceeds` when REP is purchased',
+				signals: 'Underlying auction `BidSettled`; `ClaimAuctionProceeds` when REP is purchased',
 			},
 			{
 				call: '`claimAuctionProceeds(securityPool, vault, tickIndices)`',
@@ -468,7 +465,7 @@ const contractReferences: ContractReference[] = [
 				declarations: [{ name: 'claimAuctionProceeds' }],
 				effect: 'Withdraws finalized bid settlements and converts purchased REP into child-pool ownership and allowance for the bidder.',
 				preconditions: 'Auction finalized; indexes belong to the named vault and are not already settled.',
-				signals: 'Underlying auction `WithdrawBids`; `ClaimAuctionProceeds` when REP is purchased',
+				signals: 'Underlying auction `BidSettled`; `ClaimAuctionProceeds` when REP is purchased',
 			},
 		],
 	},
@@ -535,8 +532,7 @@ const contractReferences: ContractReference[] = [
 	{
 		name: 'OpenOraclePriceCoordinator',
 		purpose: 'Obtains a fresh REP-per-ETH price and gates withdrawal, allowance, and liquidation operations behind it.',
-		readSurface:
-			'Use `isPriceValid`, `priceRoundMaxNotional`, `priceRoundConsumedNotional`, `getPriceRoundRemainingNotional`, request-cost getters, pending report fields, `getPendingOperationSlot`, active-operation pagination, pending-settlement IDs, `operationBountyBoard`, and `operationExecutionResults` to reconstruct oracle and operation state.',
+		readSurface: 'Use `isPriceValid`, `minimumToken1Report`, request-cost getters, pending report fields, `getPendingOperationSlot`, active-operation pagination, pending-settlement IDs, `operationBountyBoard`, and `operationExecutionResults` to reconstruct oracle and operation state.',
 		sourcePath: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 		interactions: [
 			{
@@ -545,24 +541,24 @@ const contractReferences: ContractReference[] = [
 				effect: 'Records the operation, executes immediately with a fresh price, or attaches it to a bounded pending settlement batch and opens a report when required.',
 				declarations: [{ name: 'requestPriceIfNeededAndStageOperation' }],
 				preconditions:
-					'Unresolved pool; valid target and nonzero amount except zero allowance; timeout from 1 second through 5 minutes. Bounty, initial REP/WETH funding, and approvals are required only when this call opens a new report; staging beside a pending report or queued rejected-report work does not open or fund another report.',
-				signals: '`StagedOperationQueued`, possibly `PriceRequested`, then `ExecutedStagedOperation`',
+					'Unresolved pool; valid target and nonzero amount except zero allowance; timeout from 1 second through 5 minutes. Bounty, buffered funding for at least the dynamic WETH minimum and coordinator-derived REP side, and approvals are required only when this call opens a new report; the caller may request a larger initial WETH amount. Staging beside a pending report or queued rejected-report work does not open or fund another report.',
+				signals: '`StagedOperationQueued`, possibly `PriceRequested`, then `ExecutedStagedOperation`; authoritative `CoordinatorStateCheckpoint` records',
 			},
 			{
-				call: '`requestPrice(amount2)` with report funding',
+				call: '`requestPrice(proposedRepPerEthPrice, requestedInitialWeth)` with report funding',
 				caller: 'Anyone when no fresh price or report is pending',
-				effect: 'Opens and atomically funds a fresh REP/WETH report without staging a new operation.',
+				effect: 'Opens and atomically funds a fresh WETH/REP report without staging a new operation.',
 				declarations: [{ name: 'requestPrice' }],
-				preconditions: 'Cached price stale; no pending report; ETH bounty and initial REP/WETH funding and approvals available.',
-				signals: '`PriceRequested`',
+				preconditions: 'Cached price stale; no pending report; nonzero proposed REP/ETH price, ETH bounty, and funding and approvals for at least the dynamic WETH minimum plus matching REP. Zero requested WETH uses the minimum; a larger request voluntarily increases the initial report.',
+				signals: '`PriceRequested` and `CoordinatorStateCheckpoint`',
 			},
 			{
 				call: '`executeStagedOperation(operationId)`',
 				caller: 'Anyone',
-				effect: 'Consumes and attempts one active staged operation using the current fresh price. Successful risk-increasing operations debit the shared report-round budget; reductions and collateral withdrawals with no outstanding pool allowance debit zero.',
+				effect: "Consumes and attempts one active staged operation using the current fresh price. Price-report funding is independent of the operation's notional; the downstream operation applies its own protocol bounds.",
 				declarations: [{ name: 'executeStagedOperation' }],
-				preconditions: "Operation exists and coordinator price is fresh; lifecycle failures are emitted rather than retried. The operation's ETH notional must fit the report round's remaining configured budget.",
-				signals: '`ExecutedStagedOperation`',
+				preconditions: 'Operation exists and coordinator price is fresh; lifecycle failures are emitted rather than retried.',
+				signals: '`ExecutedStagedOperation` and `CoordinatorStateCheckpoint`',
 			},
 			{
 				call: '`recoverSettledPendingReport()`',
@@ -570,7 +566,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Clears a pending report whose normal callback path did not clear coordinator state and consumes its pending-operation slot.',
 				declarations: [{ name: 'recoverSettledPendingReport' }],
 				preconditions: 'A pending report ID exists; callers should verify the underlying report actually settled.',
-				signals: '`PendingReportRecovered`, optionally `PendingOperationRecoveryConsumed`',
+				signals: '`PendingReportRecovered`, optionally `PendingOperationRecoveryConsumed`, and `CoordinatorStateCheckpoint`',
 			},
 			{
 				call: '`openOracleCallback(...)`',
@@ -578,7 +574,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'A valid settlement updates the price and auto-executes the bounded pending batch. A rejected settlement clears pending-report state but leaves staged operations queued for a later valid price path.',
 				declarations: [{ name: 'openOracleCallback' }],
 				preconditions: 'Callback report matches the pending report; high basefee or zero values reject the price after clearing pending report state.',
-				signals: '`PriceReported` or `PriceReportRejected`; operation execution events',
+				signals: '`PriceReported` or `PriceReportRejected`; operation execution events; authoritative `CoordinatorStateCheckpoint` records',
 			},
 			{
 				call: '`setSecurityPool(pool)` and `setRepEthPrice(price)`',
@@ -586,18 +582,31 @@ const contractReferences: ContractReference[] = [
 				effect: "Sets the pool once or seeds the coordinator's price value. Normal factory deployment wires the pool atomically before returning the coordinator.",
 				declarations: [{ name: 'setSecurityPool' }, { name: 'setRepEthPrice' }],
 				preconditions: '`securityPool` is still unset for `setSecurityPool`; caller equals the configured pool for `setRepEthPrice`.',
-				signals: '`SecurityPoolSet`, `RepEthPriceSet`',
+				signals: '`SecurityPoolSet`, `RepEthPriceSet`, and `CoordinatorStateCheckpoint`',
+			},
+			{
+				call: '`setOperationBountyBoard(board)`',
+				caller: 'Configured deployment factory only',
+				effect: 'Attaches the coordinator’s bounty board once. Normal factory deployment deploys and attaches the board before returning the coordinator.',
+				declarations: [{ name: 'setOperationBountyBoard' }],
+				preconditions: '`operationBountyBoard` is still unset and `board` contains contract code.',
+				signals: '`OperationBountyBoardSet`',
 			},
 		],
 	},
 	{
 		name: 'OpenOracleOperationBountyBoard',
+		parameterNotes: [
+			'`operation` selects the restricted coordinator operation and `targetVault` identifies its vault. `amount` uses REP base units for `WithdrawRep`; `Liquidation` and `SetSecurityBondsAllowance` use ETH-denominated base units. `validForSeconds` is an integer number of seconds greater than zero and no more than 300.',
+			'`rewardToken` must be this pool’s REP or WETH, and `rewardAmount` uses that token’s base units and must be positive. `acceptanceDeadline` is a Unix timestamp in seconds and must be in the future when posted.',
+			'`minimumInitialWeth` and `maximumInitialWeth` use WETH base units. Zero minimum imposes no lower bound; zero maximum is unbounded. A nonzero maximum must be at least the minimum.',
+		],
 		purpose: 'Escrows REP or WETH rewards so one account can request a restricted pool operation while a permissionless operator supplies the temporary OpenOracle reporting capital. The original self-funded coordinator calls remain available.',
 		readSurface: "Use `coordinator`, `reputationToken`, `weth`, `nextOperationBountyId`, `operationBounties`, and `getOperationBounties` to discover terms and lifecycle state. Pair an assigned bounty's `operationId` with the coordinator's `operationExecutionResults` entry.",
 		sourcePath: 'solidity/contracts/peripherals/OpenOracleOperationBountyBoard.sol',
 		interactions: [
 			{
-				call: '`postOperationBounty(...)`',
+				call: '`postOperationBounty(operation, targetVault, amount, validForSeconds, rewardToken, rewardAmount, acceptanceDeadline, minimumInitialWeth, maximumInitialWeth)`',
 				caller: 'Operation creator',
 				declarations: [{ name: 'postOperationBounty' }],
 				effect: 'Escrows the reward and records the creator as the eventual operation initiator.',
@@ -605,12 +614,13 @@ const contractReferences: ContractReference[] = [
 				signals: '`OperationBountyPosted`',
 			},
 			{
-				call: '`acceptOperationBounty(bountyId, initialReportAmount2)`',
+				call: '`acceptOperationBounty(bountyId, proposedRepPerEthPrice, requestedInitialWeth)`',
 				caller: 'Anyone for an open bounty; only the current report sponsor while a report is pending',
 				declarations: [{ name: 'acceptOperationBounty' }],
-				effect: "Assigns the operator, stages the creator's operation, executes against a fresh cache or opens/joins a report, and records the operation and report IDs. The accepting account owns the initial OpenOracle report position.",
+				effect:
+					"Assigns the operator, stages the creator's operation, executes against a fresh cache or opens/joins a report, and records the operation and report IDs. Fresh-cache acceptance opens no report position. For stale acceptance, the accepting account opens the report as its initial sponsor-reporter or must already be the pending report's initial sponsor.",
 				preconditions:
-					"Acceptance deadline has not passed and the coordinator revalidates the operation against current pool state. When the cache is stale, the four-operation pending settlement queue must have room and either the proposed initial WETH or the pending report's current WETH must fit the creator's bounds. A new report also requires the operator's coordinator REP/WETH approvals and ETH request cost; joining a pending report requires that report's sponsor.",
+					"Acceptance deadline has not passed and the coordinator revalidates the operation against current pool state. When the cache is stale, the four-operation pending settlement queue must have room. A new report checks `max(current minimumToken1Report(), requestedInitialWeth)` against the creator's WETH bounds; joining a pending report checks that report's current WETH amount. A new report also requires the operator's coordinator REP/WETH approvals and ETH request cost; joining a pending report requires that report's sponsor.",
 				signals: '`OperationBountyAccepted`, `StagedOperationQueued`, possibly `PriceRequested` and `ExecutedStagedOperation`',
 			},
 			{
@@ -651,7 +661,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Adds the candidate pool to the set allowed to mint, burn, and authorize descendants.',
 				declarations: [{ name: 'authorize' }],
 				preconditions: 'Caller is already authorized.',
-				signals: '`Authorized`',
+				signals: '`AuthorizationUpdated`',
 			},
 			{
 				call: 'Mint and burn entrypoints',
@@ -666,7 +676,7 @@ const contractReferences: ContractReference[] = [
 	{
 		name: 'UniformPriceDualCapBatchAuction',
 		purpose: 'Collects ETH bids under ETH-raise and REP-sale caps, computes one clearing result, and supports paged settlement.',
-		readSurface: 'Use auction summary fields, `computeClearing`, `tickToPrice`, tick pagination, active-tick pagination, and bidder bid pagination before submitting settlement indexes.',
+		readSurface: 'Use auction summary fields, `computeClearing`, `previewFinalization`, `tickToPrice`, tick pagination, active-tick pagination, and bidder bid pagination before finalizing or submitting settlement indexes.',
 		sourcePath: 'solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol',
 		interactions: [
 			{
@@ -683,7 +693,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Adds ETH demand at the selected positive-price tick.',
 				declarations: [{ name: 'submitBid' }],
 				preconditions: 'Auction active and unfinalized; before one-week deadline; bid meets `minBidSize`; tick maps to nonzero price.',
-				signals: '`SubmitBid`',
+				signals: '`BidSubmitted`',
 			},
 			{
 				call: '`refundLosingBids(tickIndices)`',
@@ -691,7 +701,7 @@ const contractReferences: ContractReference[] = [
 				declarations: [{ name: 'refundLosingBids' }],
 				effect: "Refunds the caller's bids already provably below the current clearing tick before finalization.",
 				preconditions: 'Auction started and unfinalized; auction has reached a clearing price; indexes belong to the caller and are strictly losing and unrefunded.',
-				signals: '`RefundLosingBids`',
+				signals: '`BidSettled`',
 			},
 			{
 				call: '`refundLosingBidsFor(bidder, tickIndices)`',
@@ -699,7 +709,7 @@ const contractReferences: ContractReference[] = [
 				declarations: [{ name: 'refundLosingBidsFor' }],
 				effect: "Refunds a named bidder's bids already provably below the current clearing tick before finalization.",
 				preconditions: 'Auction started and unfinalized; auction has reached a clearing price; indexes belong to the named bidder and are strictly losing and unrefunded.',
-				signals: '`RefundLosingBids`',
+				signals: '`BidSettled`',
 			},
 			{
 				call: '`finalize()`',
@@ -707,7 +717,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Fixes the clearing mode, clearing tick, ETH totals, and aggregate REP allocation.',
 				declarations: [{ name: 'finalize' }],
 				preconditions: 'Auction started, not finalized, and one-week deadline reached.',
-				signals: '`Finalized`',
+				signals: '`AuctionFinalized`',
 			},
 			{
 				call: '`withdrawBids(withdrawFor, tickIndices)`',
@@ -715,7 +725,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Returns refunds and reports purchased REP for the selected beneficiary bids so the forker can credit pool ownership. Withdrawal-time allocation assigns division dust from deterministic cumulative ETH positions, making payout independent of claim order.',
 				declarations: [{ name: 'withdrawBids' }],
 				preconditions: 'Auction finalized; indexes belong to `withdrawFor`; bids not already claimed or refunded.',
-				signals: '`WithdrawBids`',
+				signals: '`BidSettled`',
 			},
 		],
 	},
@@ -771,7 +781,8 @@ async function generateMarkdown(): Promise<string> {
 	const sections = contractReferences.map(contractReference => {
 		const sourceLink = `../${contractReference.sourcePath}`
 		const rows = contractReference.interactions.map(interaction => `| ${interaction.call} | ${interaction.caller} | ${interaction.preconditions} | ${interaction.effect} | ${interaction.signals} |`).join('\n')
-		return `## ${contractReference.name}\n\n${contractReference.purpose} [Source](${sourceLink})\n\nRead surface: ${contractReference.readSurface}\n\n| Transaction | Caller | Main prerequisites | State or asset effect | Primary signals |\n| --- | --- | --- | --- | --- |\n${rows}`
+		const parameterNotes = contractReference.parameterNotes === undefined ? '' : `\n\nParameter notes:\n\n${contractReference.parameterNotes.map(note => `- ${note}`).join('\n')}`
+		return `## ${contractReference.name}\n\n${contractReference.purpose} [Source](${sourceLink})\n\nRead surface: ${contractReference.readSurface}${parameterNotes}\n\n| Transaction | Caller | Main prerequisites | State or asset effect | Primary signals |\n| --- | --- | --- | --- | --- |\n${rows}`
 	})
 
 	return `<!-- Generated by scripts/generate-contract-interaction-reference.mts. Do not edit directly. -->

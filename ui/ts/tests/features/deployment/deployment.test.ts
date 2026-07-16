@@ -6,13 +6,17 @@ import { findNextDeployableStep, getDeploymentSections, getDeploymentStepAvailab
 import { createConnectedReadClient } from '../../../lib/clients.js'
 import type { InjectedEthereum } from '../../../injectedEthereum.js'
 import { getDeploymentSteps, getMulticall3Address, getOpenOracleAddress, loadDeploymentStatusOracleSnapshot, loadZoltarUniverseSummary } from '../../../protocol/index.js'
-import { ORACLE_EXACT_TOKEN1_REPORT } from '../../../protocol/deploymentHelpers.js'
+import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '../../../protocol/deploymentHelpers.js'
 import type { DeploymentStatus, ReadClient } from '../../../types/contracts.js'
 import { AnvilWindowEthereum } from '../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient as SolidityWriteClient } from '../../../../../solidity/ts/testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../../../../solidity/ts/testSupport/simulator/utils/constants'
-import { ORACLE_EXACT_TOKEN1_REPORT as SIMULATOR_ORACLE_EXACT_TOKEN1_REPORT } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployPeripherals'
+import {
+	ORACLE_GAS_UNITS_FOR_ONE_DISPUTE as SIMULATOR_ORACLE_GAS_UNITS_FOR_ONE_DISPUTE,
+	OPEN_ORACLE_SECURITY_MULTIPLIER_BPS as SIMULATOR_OPEN_ORACLE_SECURITY_MULTIPLIER_BPS,
+	ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE as SIMULATOR_ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE,
+} from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployPeripherals'
 import { ensureProxyDeployerDeployed, setupTestAccounts } from '../../../../../solidity/ts/testSupport/simulator/utils/utilities'
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
@@ -159,9 +163,10 @@ void describe('deployment helpers', () => {
 		expect(multicall3Step?.address).toBe(getMulticall3Address())
 	})
 
-	void test('oracle initial report size matches simulator deployment helpers', () => {
-		expect(ORACLE_EXACT_TOKEN1_REPORT).toBe(259332023575638507216n)
-		expect(SIMULATOR_ORACLE_EXACT_TOKEN1_REPORT).toBe(ORACLE_EXACT_TOKEN1_REPORT)
+	void test('oracle dispute gas and profitability parameters match simulator deployment helpers', () => {
+		expect(SIMULATOR_ORACLE_GAS_UNITS_FOR_ONE_DISPUTE).toBe(ORACLE_GAS_UNITS_FOR_ONE_DISPUTE)
+		expect(SIMULATOR_ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE).toBe(ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE)
+		expect(SIMULATOR_OPEN_ORACLE_SECURITY_MULTIPLIER_BPS).toBe(OPEN_ORACLE_SECURITY_MULTIPLIER_BPS)
 	})
 
 	void test('loadDeploymentStatusOracleSnapshot returns the proxy deployer when the oracle is missing', async () => {

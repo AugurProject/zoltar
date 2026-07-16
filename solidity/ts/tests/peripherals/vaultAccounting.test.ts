@@ -1,9 +1,10 @@
 import { beforeEach, describe, test } from 'bun:test'
+import { peripherals_SecurityPool_SecurityPool } from '../../types/contractArtifact'
 import { usePeripheralsVaultAccountingFixture, type PeripheralsVaultAccountingFixture } from './fixture'
 
 const depositRepEvent = {
 	inputs: [
-		{ name: 'vault', type: 'address' },
+		{ name: 'vault', type: 'address', indexed: true },
 		{ name: 'repAmount', type: 'uint256' },
 		{ name: 'poolOwnership', type: 'uint256' },
 		{ name: 'poolOwnershipDenominator', type: 'uint256' },
@@ -70,6 +71,7 @@ describe('Peripherals: vault accounting', () => {
 		getVaultCount,
 		getVaults,
 		poolOwnershipToRep,
+		redeemFees,
 		redeemRep,
 		updateVaultFees,
 		withdrawFromEscalationGame,
@@ -103,12 +105,20 @@ describe('Peripherals: vault accounting', () => {
 		questionId = fixture.questionId
 	})
 
+	const withdrawRepAcrossFreshOracleRounds = async (vaultClient: PeripheralsVaultAccountingFixture['client'], amount: bigint) => {
+		for (let withdrawalIndex = 0n; withdrawalIndex < 5n; withdrawalIndex++) {
+			const withdrawalAmount = withdrawalIndex === 4n ? amount : amount / 5n
+			await manipulatePriceOracleAndPerformOperation(vaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, vaultClient.account.address, withdrawalAmount, reportedRepEthPrice)
+			if (withdrawalIndex < 4n) await mockWindow.advanceTime(10n * 60n)
+		}
+	}
+
 	test('can deposit rep and withdraw it', async () => {
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, repDeposit, reportedRepEthPrice)
+		const startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
+		await withdrawRepAcrossFreshOracleRounds(client, repDeposit)
 		strictEqualTypeSafe(await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), reportedRepEthPrice, 'Price was not set!')
 		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool), 0n, 100n, 'Did not empty security pool of rep')
-		const startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
-		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), startBalance, 100n, 'Did not get rep back')
+		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), startBalance + repDeposit, 100n, 'Did not get rep back')
 	})
 
 	test('deposit events expose updated vault and pool ownership state', async () => {
@@ -134,6 +144,24 @@ describe('Peripherals: vault accounting', () => {
 		strictEqualTypeSafe(depositArgs.repAmount, depositAmount, 'event should include the deposited REP amount')
 		strictEqualTypeSafe(depositArgs.poolOwnership, vault.repDepositShare, 'event should include updated vault ownership')
 		strictEqualTypeSafe(depositArgs.poolOwnershipDenominator, poolOwnershipDenominator, 'event should include updated pool ownership denominator')
+	})
+
+	test('zero-fee redemption emits no redemption checkpoint and does not call the recipient', async () => {
+		const redemptionHash = await redeemFees(client, securityPoolAddresses.securityPool, securityPoolAddresses.shareToken)
+		const receipt = await client.getTransactionReceipt({ hash: redemptionHash })
+		const poolLogs = receipt.logs.filter(log => log.address.toLowerCase() === securityPoolAddresses.securityPool.toLowerCase())
+		const decodedPoolLogs = poolLogs.map(log =>
+			decodeEventLog({
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				data: log.data,
+				topics: log.topics,
+			}),
+		)
+		assert.strictEqual(
+			decodedPoolLogs.some(log => log.eventName === 'PoolAccountingCheckpoint' && log.args.reason === 2n),
+			false,
+			'a true zero-fee redemption should not emit a fee-redemption checkpoint',
+		)
 	})
 
 	test('share token metadata includes the question id', async () => {
@@ -247,7 +275,7 @@ describe('Peripherals: vault accounting', () => {
 		strictEqualTypeSafe(await getVaultCount(client, securityPoolAddresses.securityPool), 2n, 'historical vault count should include both vaults')
 		strictEqualTypeSafe(await getActiveVaultCount(client, securityPoolAddresses.securityPool), 2n, 'active vault count should include both funded vaults')
 
-		await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, attackerClient.account.address, repDeposit, reportedRepEthPrice)
+		await withdrawRepAcrossFreshOracleRounds(attackerClient, repDeposit)
 
 		const historicalVaultCount = await getVaultCount(client, securityPoolAddresses.securityPool)
 		const activeVaultCount = await getActiveVaultCount(client, securityPoolAddresses.securityPool)
@@ -268,7 +296,7 @@ describe('Peripherals: vault accounting', () => {
 		const newestFirstVaultsBeforeRemoval = await getActiveVaults(client, securityPoolAddresses.securityPool, 0n, 3n)
 		assert.deepStrictEqual(newestFirstVaultsBeforeRemoval, [thirdClient.account.address, attackerClient.account.address, client.account.address], 'active vault paging should list the most recently activated vaults first')
 
-		await manipulatePriceOracleAndPerformOperation(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, attackerClient.account.address, repDeposit, reportedRepEthPrice)
+		await withdrawRepAcrossFreshOracleRounds(attackerClient, repDeposit)
 
 		const newestFirstVaultsAfterRemoval = await getActiveVaults(client, securityPoolAddresses.securityPool, 0n, 3n)
 		assert.deepStrictEqual(newestFirstVaultsAfterRemoval, [thirdClient.account.address, client.account.address], 'removing a middle vault should preserve newest-first ordering for the remaining active vaults')
@@ -277,6 +305,21 @@ describe('Peripherals: vault accounting', () => {
 
 		const newestFirstVaultsAfterTouch = await getActiveVaults(client, securityPoolAddresses.securityPool, 0n, 3n)
 		assert.deepStrictEqual(newestFirstVaultsAfterTouch, [client.account.address, thirdClient.account.address], 'updating an active vault should move it to the front of the newest-first active vault preview')
+	})
+
+	test('updateVaultFees emits no accounting checkpoints for an empty vault after accrual is capped', async () => {
+		const emptyVaultPrivateKey = TEST_ADDRESSES[4]
+		if (emptyVaultPrivateKey === undefined) throw new Error('empty vault test address missing')
+		const emptyVault = addressString(emptyVaultPrivateKey)
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 1n)
+		await updateVaultFees(client, securityPoolAddresses.securityPool, emptyVault)
+
+		const noOpHash = await updateVaultFees(client, securityPoolAddresses.securityPool, emptyVault)
+		const noOpReceipt = await client.getTransactionReceipt({ hash: noOpHash })
+		const poolLogs = noOpReceipt.logs.filter(log => log.address.toLowerCase() === securityPoolAddresses.securityPool.toLowerCase())
+
+		assert.deepStrictEqual(poolLogs, [], 'a true no-op vault checkpoint should not emit pool accounting events')
 	})
 
 	test('withdrawal after question end releases escalation lock without changing ownership in single-sided case', async () => {
@@ -480,7 +523,7 @@ describe('Peripherals: vault accounting', () => {
 		const availableRepBeforeWithdrawal = await getTotalRepBalance(client, securityPoolAddresses.securityPool)
 		const aliceWalletRepBeforeWithdrawal = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 
-		await requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, repDeposit)
+		await withdrawRepAcrossFreshOracleRounds(client, repDeposit)
 
 		const availableRepAfterWithdrawal = await getTotalRepBalance(client, securityPoolAddresses.securityPool)
 		const aliceWalletRepAfterWithdrawal = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)

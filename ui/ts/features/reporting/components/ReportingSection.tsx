@@ -16,6 +16,8 @@ import { RouteWorkflowPanel } from '../../../components/RouteWorkflowPanel.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
 import { TransactionReview } from '../../../components/TransactionReview.js'
+import { TransactionNetworkValue } from '../../../components/TransactionNetworkValue.js'
+import { TransactionUniverseValue } from '../../universes/components/TransactionUniverseValue.js'
 import { TimestampValue } from '../../../components/TimestampValue.js'
 import { assertNever } from '../../../lib/assert.js'
 import { pickFirstReason } from '../../../lib/actionAvailability.js'
@@ -560,7 +562,7 @@ export function ReportingSection({
 				</div>
 			) : undefined}
 
-			{showFullReporting ? (
+			{showFullReporting && reportingReady !== false ? (
 				<SectionBlock className='reporting-metrics-section' title={reportingCopy.escalationMetrics} variant='embedded'>
 					<div className='escalation-metrics'>
 						<MetricField label={reportingCopy.nonDecisionThreshold}>
@@ -577,7 +579,7 @@ export function ReportingSection({
 				</SectionBlock>
 			) : undefined}
 
-			{showFullReporting ? (
+			{showFullReporting && reportingReady !== false ? (
 				<SectionBlock className='reporting-outcome-section' title={reportingCopy.reportOutcome} variant='embedded'>
 					<div className='escalation-sides-shell'>
 						<div className='escalation-sides-legend'>
@@ -680,6 +682,13 @@ export function ReportingSection({
 						</p>
 					)}
 					<TransactionReview
+						context={[
+							{ label: commonCopy.question, value: marketDetails?.title ?? commonCopy.unavailable },
+							{ label: commonCopy.securityPoolAddress, value: effectiveReportingDetails === undefined ? commonCopy.unavailable : <AddressValue address={effectiveReportingDetails.securityPoolAddress} /> },
+							{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={effectiveReportingDetails?.universeId} /> },
+							{ label: reportingCopy.sourceVault, value: <AddressValue address={accountState.address} /> },
+							{ label: commonCopy.outcome, value: selectedOutcome === undefined ? reportingCopy.selectedSide : selectedOutcomeLabel },
+						]}
 						primary={[
 							{ label: reportingCopy.repPlacedAtRisk, value: <CurrencyValue value={actualReportDepositAmount} suffix={commonCopy.rep} /> },
 							{ label: reportingCopy.backedOutcome, value: selectedOutcome === undefined ? reportingCopy.selectedSide : selectedOutcomeLabel },
@@ -690,7 +699,7 @@ export function ReportingSection({
 							{ label: reportingCopy.availableVaultRepAfterReport, value: <CurrencyValue value={resultingAvailableReportingRep} suffix={commonCopy.rep} /> },
 							{ label: transactionReviewCopy.protocolFee, value: transactionReviewCopy.noProtocolFee },
 							{ label: transactionReviewCopy.contract, value: effectiveReportingDetails === undefined ? commonCopy.unavailable : <AddressValue address={effectiveReportingDetails.securityPoolAddress} /> },
-							{ label: transactionReviewCopy.network, value: transactionReviewCopy.ethereumMainnet },
+							{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
 						]}
 						risks={[reportingCopy.ifThisSideLoses, reportingCopy.reportingLockRisk, reportingCopy.reportTimerRisk]}
 					/>
@@ -707,7 +716,7 @@ export function ReportingSection({
 				</SectionBlock>
 			) : undefined}
 
-			{showSettlementSection ? (
+			{showSettlementSection && reportingReady !== false ? (
 				<SectionBlock className='reporting-settlement-section' title={reportingCopy.settleEscalationDeposits} variant='embedded'>
 					{reportingStageKey === 'forkTriggered' ? <p className='detail'>{forkAlreadyTriggered ? FORK_ALREADY_TRIGGERED_SETTLEMENT_REASON : FORK_TRIGGERED_SETTLEMENT_REASON}</p> : undefined}
 					{activeReportingDetails?.settlementState === 'migration-required' ? <p className='detail'>{forkAlreadyTriggered ? reportingCopy.continueForkMigrationDetail : reportingCopy.forkMigrationRequiredDetail}</p> : undefined}

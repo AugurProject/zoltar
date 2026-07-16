@@ -47,7 +47,8 @@ export const loadSecurityPools = 'Load Security Pools'
 export const noSecurityPools = 'No security pools'
 export const poolFiltersEmpty = 'No pools match the current search and filter settings.'
 export const managerAddress = 'Manager Address'
-export const vaultPreviewUnavailable = 'Vault preview unavailable.'
+export const previewDeferred = 'Preview deferred'
+export const formatVaultPreviewDeferred = (vaultCount: CopyTemplateValue) => `${vaultCount} vault${Number(vaultCount) === 1 ? '' : commonCopy.pluralSuffix} ${Number(vaultCount) === 1 ? 'is' : 'are'} registered. Open the pool to load individual vault details.`
 export const liquidationReviewHint = 'Review liquidation details for this vault before queueing the action.'
 export const formatVaultPreviewSummary = (loadedVaultCount: CopyTemplateValue, totalVaultCount: CopyTemplateValue) => `Showing ${loadedVaultCount} of ${totalVaultCount} active vaults in this preview, newest activity first.`
 export const formatVaultDirectorySummary = (loadedVaultCount: CopyTemplateValue, totalVaultCount: CopyTemplateValue) => `Showing ${loadedVaultCount} of ${totalVaultCount} active vaults, newest activity first. Enter a vault address above to inspect any specific vault.`
@@ -105,9 +106,11 @@ export const enterValidBountyId = 'Enter a positive bounty ID.'
 export const bountyPaid = 'Paid'
 export const bountyRefunded = 'Refunded'
 export const bountyOpen = 'Open'
+export const bountyAcceptanceExpiredState = 'Acceptance expired'
 export const bountyReadyToClaim = 'Ready to claim'
 export const bountyFailed = 'Execution failed'
 export const bountyInProgress = 'In progress'
+export const bountyExecutionExpired = 'Execution expired'
 export const creator = 'Creator'
 export const operator = 'Operator'
 export const reward = 'Reward'
@@ -135,7 +138,9 @@ export const enterValidInitialWethBounds = 'Enter valid decimal initial-report W
 export const enterOrderedInitialWethBounds = 'The minimum initial-report WETH cannot exceed the maximum.'
 export const formatOperationAmountLabel = (unit: string) => `Amount (${unit})`
 export const bountyAcceptanceExpired = 'This bounty’s acceptance window has expired.'
+export const bountySettlementQueueFull = 'This bounty cannot be accepted while the pending settlement queue is full.'
 export const failedBountyCannotBeClaimed = 'Failed operation bounties cannot be claimed.'
+export const expiredBountyCannotBeClaimed = 'Expired operation bounties cannot be claimed.'
 export const waitForBountyExecution = 'Wait for the staged operation to execute successfully.'
 export const waitForBountyFailure = 'The creator can refund after the operation fails.'
 export const formatOperationBountyLabel = (bountyId: string, operationLabel: string) => `Bounty #${bountyId} · ${operationLabel}`

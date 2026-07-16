@@ -1,6 +1,7 @@
 import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import assert from '../testSupport/simulator/utils/assert'
 import { decodeEventLog, encodeAbiParameters, encodeDeployData, keccak256, type Address, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
+import { DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, calculateOracleMinimumWethReport } from '@zoltar/shared/oracleInitialReport'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient } from '../testSupport/simulator/utils/clients'
@@ -9,7 +10,7 @@ import { addressString, dateToBigintSeconds } from '../testSupport/simulator/uti
 import { approveToken, setupTestAccounts, getERC20Balance, getETHBalance } from '../testSupport/simulator/utils/utilities'
 import { approveAndDepositRep } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
 import { handleOracleReporting } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
-import { ORACLE_EXACT_TOKEN1_REPORT, applyLibraries, deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
+import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, applyLibraries, deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
 import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/zoltar'
 import {
@@ -34,20 +35,22 @@ import {
 	openOracleSettleWithGasPrice,
 	recoverSettledPendingReport,
 	requestPrice,
-	requestPriceIfNeededAndStageOperationWithInitialReportAmount2,
+	requestPriceIfNeededAndStageOperationWithInitialReportPrice,
 	requestPriceIfNeededAndStageOperationWithValue,
 	requestPriceWithValue,
 	wrapWeth,
 } from '../testSupport/simulator/utils/contracts/peripherals'
-import { depositRep, depositToEscalationGame, getSecurityPoolsEscalationGame, getSecurityVault } from '../testSupport/simulator/utils/contracts/securityPool'
+import { depositRep, getSecurityVault } from '../testSupport/simulator/utils/contracts/securityPool'
 import { peripherals_openOracle_OpenOracle_OpenOracle, peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '../types/contractArtifact'
 import { isIgnorableLogDecodeError } from './logDecodeErrors'
-import { QuestionOutcome } from '../testSupport/simulator/types/types'
+import { replayZoltarEvents, type ReplayLog } from './eventReplay/eventReplayModel'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
 type TransactionReceiptLogs = Awaited<ReturnType<WriteClient['waitForTransactionReceipt']>>['logs']
 const OPEN_ORACLE_EXTRA_DATA_MAPPING_SLOT = 6n
+const OPEN_ORACLE_REPORT_STATUS_MAPPING_SLOT = 3n
+
 const findExecutedStagedOperationLog = (logs: TransactionReceiptLogs) =>
 	logs
 		.map(log => {
@@ -160,7 +163,7 @@ const findSettlementCallbackExecutedLog = (logs: TransactionReceiptLogs) =>
 		})
 		.find(log => log?.eventName === 'SettlementCallbackExecuted')
 
-type OracleCoordinatorConstructorArgs = [Address, Address, Address, Address, bigint, number, bigint, number, number, number, number, number, boolean, boolean, Address, bigint, bigint, bigint]
+type OracleCoordinatorConstructorArgs = [Address, Address, Address, Address, bigint, number, bigint, bigint, bigint, number, number, number, number, number, boolean, boolean, Address, bigint, bigint, bigint]
 
 function encodeOracleCoordinatorDeployData(args: OracleCoordinatorConstructorArgs) {
 	return encodeDeployData({
@@ -207,7 +210,6 @@ describe('Price Oracle Refund Security Tests', () => {
 	const ORACLE_TIME_TYPE = true
 	const ORACLE_TRACK_DISPUTES = true
 	const ORACLE_ESCALATION_HALT_MULTIPLIER_BPS = 100000n
-	const ORACLE_BPS_DENOMINATOR = 10000n
 	const ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS = 30000n
 	const ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS = 1000n
 
@@ -218,7 +220,9 @@ describe('Price Oracle Refund Security Tests', () => {
 		WETH_ADDRESS,
 		ORACLE_REPORT_GAS,
 		ORACLE_SETTLEMENT_GAS,
-		ORACLE_EXACT_TOKEN1_REPORT,
+		ORACLE_GAS_UNITS_FOR_ONE_DISPUTE,
+		ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE,
+		OPEN_ORACLE_SECURITY_MULTIPLIER_BPS,
 		ORACLE_SETTLEMENT_TIME,
 		ORACLE_DISPUTE_DELAY,
 		ORACLE_PROTOCOL_FEE,
@@ -260,6 +264,17 @@ describe('Price Oracle Refund Security Tests', () => {
 		await openOracleSettle(client, pendingReportId)
 	}
 
+	const forcePendingReportAmount2ToZero = async (reportId: bigint, amount1: bigint) => {
+		const statusAmountsSlot = getMappingStorageSlot(reportId, OPEN_ORACLE_REPORT_STATUS_MAPPING_SLOT)
+		await mockWindow.addStateOverrides({
+			[getInfraContractAddresses().openOracle]: {
+				stateDiff: {
+					[formatStorageSlot(statusAmountsSlot)]: amount1,
+				},
+			},
+		})
+	}
+
 	beforeEach(async () => {
 		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
@@ -295,11 +310,6 @@ describe('Price Oracle Refund Security Tests', () => {
 	})
 
 	const queueStagedOperation = async (operation: OperationType, targetVault: Address, amount: bigint, validForSeconds: bigint, value = 0n) => await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, operation, targetVault, amount, validForSeconds, value)
-	const getInitialReportAmount2ForPrice = (repEthPrice: bigint) => {
-		const amount2 = (ORACLE_EXACT_TOKEN1_REPORT * 10n ** 18n) / repEthPrice
-		return amount2 > 0n ? amount2 : 1n
-	}
-
 	const fillPendingSettlementOperationList = async (ethCost: bigint, queuedOperationEthCost: bigint, validForSeconds: bigint) => {
 		for (let index = 0; index < 4; index++) {
 			await queueStagedOperation(OperationType.SetSecurityBondsAllowance, client.account.address, BigInt(index + 1), validForSeconds, index === 0 ? ethCost : queuedOperationEthCost)
@@ -317,39 +327,241 @@ describe('Price Oracle Refund Security Tests', () => {
 		return { pendingReportId, settleReceipt }
 	}
 
-	const getConfiguredRoundNotional = () => (ORACLE_EXACT_TOKEN1_REPORT * ORACLE_ESCALATION_HALT_MULTIPLIER_BPS) / ORACLE_BPS_DENOMINATOR
-
-	const getExposureExhaustionAllowanceSchedule = () => {
-		const configuredNotional = getConfiguredRoundNotional()
-		const allowanceChunk = repDeposit / securityMultiplier
-		const schedule: bigint[] = []
-		let remainingNotional = configuredNotional
-		while (remainingNotional >= allowanceChunk) {
-			schedule.push(allowanceChunk, 0n)
-			remainingNotional -= allowanceChunk
+	const assertCoordinatorReplayMatchesStorage = async (logs: TransactionReceiptLogs, context: string) => {
+		const chainId = BigInt(await client.getChainId())
+		const replayLogs: ReplayLog[] = []
+		for (const log of logs) {
+			if (log.address.toLowerCase() !== priceOracle.toLowerCase()) continue
+			let decoded: ReturnType<typeof decodeEventLog>
+			try {
+				decoded = decodeEventLog({
+					abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+					data: log.data,
+					topics: log.topics,
+				})
+			} catch (error) {
+				if (!isIgnorableLogDecodeError(error)) throw error
+				continue
+			}
+			if (
+				log.blockHash === null ||
+				log.blockHash === undefined ||
+				log.blockNumber === null ||
+				log.blockNumber === undefined ||
+				log.transactionHash === null ||
+				log.transactionHash === undefined ||
+				log.transactionIndex === null ||
+				log.logIndex === null ||
+				typeof decoded.args !== 'object' ||
+				decoded.args === null ||
+				Array.isArray(decoded.args)
+			) {
+				throw new Error(`${context}: coordinator log identity or named arguments are incomplete`)
+			}
+			replayLogs.push({
+				chainId,
+				blockHash: log.blockHash,
+				blockNumber: log.blockNumber,
+				transactionHash: log.transactionHash,
+				transactionIndex: Number(log.transactionIndex),
+				logIndex: Number(log.logIndex),
+				emitter: log.address,
+				eventName: decoded.eventName,
+				args: Object.fromEntries(Object.entries(decoded.args)),
+			})
 		}
-		if (remainingNotional > 0n) schedule.push(remainingNotional)
-		return schedule
+		const replayed = replayZoltarEvents(replayLogs).coordinators.get(priceOracle)
+		if (replayed === undefined || replayed.checkpointReason === undefined) throw new Error(`${context}: coordinator state checkpoint was not replayed`)
+		const [pendingReportId, pendingReportSponsor, pendingOperationSlotId, pendingReportMaxSettlementBaseFee, lastPrice, lastSettlementTimestamp, stagedOperationCounter, activeStagedOperationCount, pendingSettlementOperationCount] = await Promise.all([
+			getPendingReportId(client, priceOracle),
+			client.readContract({ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'pendingReportSponsor', address: priceOracle, args: [] }),
+			getPendingOperationSlotId(client, priceOracle),
+			getPendingReportMaxSettlementBaseFee(client, priceOracle),
+			getLastPrice(client, priceOracle),
+			client.readContract({ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'lastSettlementTimestamp', address: priceOracle, args: [] }),
+			client.readContract({ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'stagedOperationCounter', address: priceOracle, args: [] }),
+			getActiveStagedOperationCount(client, priceOracle),
+			getPendingSettlementOperationCount(client, priceOracle),
+		])
+		assert.strictEqual(replayed.pendingReportId, pendingReportId, `${context}: pending report replay mismatch`)
+		assert.strictEqual(replayed.pendingReportSponsor, pendingReportSponsor, `${context}: report sponsor replay mismatch`)
+		assert.strictEqual(replayed.pendingOperationSlotId, pendingOperationSlotId, `${context}: pending operation replay mismatch`)
+		assert.strictEqual(replayed.pendingReportMaxSettlementBaseFee, pendingReportMaxSettlementBaseFee, `${context}: settlement base-fee replay mismatch`)
+		assert.strictEqual(replayed.lastPrice, lastPrice, `${context}: last price replay mismatch`)
+		assert.strictEqual(replayed.lastSettlementTimestamp, lastSettlementTimestamp, `${context}: settlement timestamp replay mismatch`)
+		assert.strictEqual(replayed.stagedOperationCounter, stagedOperationCounter, `${context}: operation counter replay mismatch`)
+		assert.strictEqual(replayed.activeStagedOperationCount, activeStagedOperationCount, `${context}: active operation count replay mismatch`)
+		assert.strictEqual(replayed.pendingSettlementOperationCount, pendingSettlementOperationCount, `${context}: pending settlement count replay mismatch`)
 	}
 
-	const settleAndExecuteAllowanceSchedule = async (allowanceSchedule: readonly bigint[]) => {
-		const ethCost = await getRequestPriceEthCost(client, priceOracle)
-		for (let index = 0; index < allowanceSchedule.length; index += 1) {
-			const allowance = allowanceSchedule[index]
-			if (allowance === undefined) throw new Error(`allowanceSchedule[${index}] is undefined`)
-			await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, allowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, index === 0 ? ethCost : 0n)
-		}
-		const { settleReceipt } = await settlePendingReportWithPrice(10n ** 18n)
-		const manualReceipts = []
-		for (let operationId = 5n; operationId <= BigInt(allowanceSchedule.length); operationId += 1n) {
-			const hash = await executeStagedOperation(client, priceOracle, operationId)
-			manualReceipts.push(await client.waitForTransactionReceipt({ hash }))
-		}
-		return { manualReceipts, settleReceipt }
-	}
+	test('coordinator dynamically sizes the minimum WETH report side from the current base fee', async () => {
+		const sizingConfigurationAbi = [
+			{
+				inputs: [],
+				name: 'targetPriceErrorForDispute',
+				outputs: [{ type: 'uint256' }],
+				stateMutability: 'view',
+				type: 'function',
+			},
+			{
+				inputs: [],
+				name: 'openOracleSecurityMultiplierBps',
+				outputs: [{ type: 'uint256' }],
+				stateMutability: 'view',
+				type: 'function',
+			},
+		] as const
+		const targetPriceErrorForDispute = await client.readContract({ abi: sizingConfigurationAbi, functionName: 'targetPriceErrorForDispute', address: priceOracle, args: [] })
+		const openOracleSecurityMultiplierBps = await client.readContract({ abi: sizingConfigurationAbi, functionName: 'openOracleSecurityMultiplierBps', address: priceOracle, args: [] })
+		assert.strictEqual(targetPriceErrorForDispute, 500000n, 'the initial target price error should be five percent')
+		assert.strictEqual(openOracleSecurityMultiplierBps, 100000n, 'the initial Open Oracle Security multiplier should be ten times gas cost')
+
+		const minimumToken1Report = await client.readContract({
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'minimumToken1Report',
+			address: priceOracle,
+			args: [],
+		})
+
+		assert.strictEqual(minimumToken1Report, 1n, 'zero-basefee test chains should use only the one-wei OpenOracle non-zero minimum')
+		await requestPrice(client, priceOracle)
+
+		const reportId = await getPendingReportId(client, priceOracle)
+		const reportMeta = await getOpenOracleReportMeta(client, reportId)
+		assert.strictEqual(reportMeta.exactToken1Report, minimumToken1Report, 'the request should snapshot the dynamic WETH requirement')
+		assert.strictEqual(reportMeta.token1, WETH_ADDRESS, 'WETH should be the exact token1 report side')
+		assert.strictEqual(reportMeta.token2.toLowerCase(), addressString(GENESIS_REPUTATION_TOKEN).toLowerCase(), 'REP should be the price-expressing token2 side')
+
+		const baseFeeWeiPerGas = 30n * 10n ** 9n
+		await mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [`0x${baseFeeWeiPerGas.toString(16)}`] })
+		await mockWindow.request({ method: 'evm_mine', params: [] })
+		const sizedForBaseFee = await client.readContract({
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'minimumToken1Report',
+			address: priceOracle,
+			args: [],
+		})
+		assert.strictEqual(sizedForBaseFee, calculateOracleMinimumWethReport({ ...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, baseFeeWeiPerGas }), 'the on-chain WETH calculation should match the shared integer formula')
+	})
+
+	test('caller can voluntarily fund initial WETH above the coordinator minimum', async () => {
+		const proposedRepPerEthPrice = 10n ** 18n
+		const requestedInitialWeth = 10n
+		const requestPriceWithMinimumAbi = [
+			{
+				inputs: [
+					{ name: 'proposedRepPerEthPrice', type: 'uint256' },
+					{ name: 'requestedInitialWeth', type: 'uint256' },
+				],
+				name: 'requestPrice',
+				outputs: [],
+				stateMutability: 'payable',
+				type: 'function',
+			},
+		] as const
+
+		await wrapWeth(client, requestedInitialWeth)
+		await approveToken(client, WETH_ADDRESS, priceOracle)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
+
+		const hash = await client.writeContract({
+			abi: requestPriceWithMinimumAbi,
+			functionName: 'requestPrice',
+			address: priceOracle,
+			args: [proposedRepPerEthPrice, requestedInitialWeth],
+			value: await getRequestPriceEthCost(client, priceOracle),
+		})
+		await client.waitForTransactionReceipt({ hash })
+
+		const reportId = await getPendingReportId(client, priceOracle)
+		const reportMeta = await getOpenOracleReportMeta(client, reportId)
+		const reportStatus = await getOpenOracleReportStatus(client, reportId)
+		assert.strictEqual(reportMeta.exactToken1Report, requestedInitialWeth, 'OpenOracle should require the larger caller-selected initial WETH amount')
+		assert.strictEqual(reportMeta.escalationHalt, requestedInitialWeth * 10n, 'the escalation halt should scale from the actual initial WETH amount')
+		assert.strictEqual(reportStatus.currentAmount1, requestedInitialWeth, 'the initial report should contain the caller-selected WETH amount')
+		assert.strictEqual(reportStatus.currentAmount2, requestedInitialWeth, 'the coordinator should derive matching REP from the selected WETH amount and proposed price')
+	})
+
+	test('request-block WETH sizing preserves the submitted REP per ETH price after basefee moves', async () => {
+		const requestBaseFeeWeiPerGas = 45n * 10n ** 9n
+		const proposedRepPerEthPrice = 1000n * 10n ** 18n
+		const maximumMinimumWethReport = calculateOracleMinimumWethReport({ ...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, baseFeeWeiPerGas: requestBaseFeeWeiPerGas })
+		await wrapWeth(client, maximumMinimumWethReport)
+		await approveToken(client, WETH_ADDRESS, priceOracle)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
+
+		await mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [`0x${requestBaseFeeWeiPerGas.toString(16)}`] })
+		await mockWindow.request({ method: 'evm_mine', params: [] })
+		const requestMinimumWethReport = await client.readContract({
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'minimumToken1Report',
+			address: priceOracle,
+			args: [],
+		})
+		const requestHash = await client.writeContract({
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'requestPrice',
+			address: priceOracle,
+			args: [proposedRepPerEthPrice, 0n],
+			value: (await getRequestPriceEthCost(client, priceOracle)) + requestMinimumWethReport,
+			gasPrice: requestBaseFeeWeiPerGas,
+		})
+		await client.waitForTransactionReceipt({ hash: requestHash })
+
+		const reportStatus = await getOpenOracleReportStatus(client, await getPendingReportId(client, priceOracle))
+		const expectedRepAmount = (reportStatus.currentAmount1 * proposedRepPerEthPrice + 10n ** 18n - 1n) / 10n ** 18n
+		assert.strictEqual(reportStatus.currentAmount2, expectedRepAmount, 'the coordinator should derive REP from the proposed price and request-block WETH amount')
+	})
+
+	test('coordinator deployments can tune the target price error and Open Oracle Security multiplier', async () => {
+		const tunedTargetPriceError = 1000000n
+		const tunedOpenOracleSecurityMultiplierBps = 30000n
+		const tunedArgs = getOracleCoordinatorConstructorArgs()
+		tunedArgs[7] = tunedTargetPriceError
+		tunedArgs[8] = tunedOpenOracleSecurityMultiplierBps
+		const tunedCoordinator = await deployContract(encodeOracleCoordinatorDeployData(tunedArgs))
+
+		assert.strictEqual(await client.readContract({ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'targetPriceErrorForDispute', address: tunedCoordinator, args: [] }), tunedTargetPriceError)
+		assert.strictEqual(await client.readContract({ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'openOracleSecurityMultiplierBps', address: tunedCoordinator, args: [] }), tunedOpenOracleSecurityMultiplierBps)
+
+		const baseFeeWeiPerGas = 30n * 10n ** 9n
+		await mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [`0x${baseFeeWeiPerGas.toString(16)}`] })
+		await mockWindow.request({ method: 'evm_mine', params: [] })
+		assert.strictEqual(
+			await client.readContract({ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'minimumToken1Report', address: tunedCoordinator, args: [] }),
+			calculateOracleMinimumWethReport({
+				...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
+				baseFeeWeiPerGas,
+				openOracleSecurityMultiplierBps: tunedOpenOracleSecurityMultiplierBps,
+				targetPriceErrorForDispute: tunedTargetPriceError,
+			}),
+		)
+	})
 
 	test('coordinator constructor rejects unsafe oracle risk parameters', async () => {
 		const baseArgs = getOracleCoordinatorConstructorArgs()
+		const buildArgsWithSizingParameters = (gasUnitsForOneDispute: bigint, targetPriceErrorForDispute: bigint, openOracleSecurityMultiplierBps: bigint, protocolFee: number, feePercentage: number): OracleCoordinatorConstructorArgs => [
+			baseArgs[0],
+			baseArgs[1],
+			baseArgs[2],
+			baseArgs[3],
+			baseArgs[4],
+			baseArgs[5],
+			gasUnitsForOneDispute,
+			targetPriceErrorForDispute,
+			openOracleSecurityMultiplierBps,
+			baseArgs[9],
+			baseArgs[10],
+			protocolFee,
+			feePercentage,
+			baseArgs[13],
+			baseArgs[14],
+			baseArgs[15],
+			baseArgs[16],
+			baseArgs[17],
+			baseArgs[18],
+			baseArgs[19],
+		]
 		const buildArgsWithRiskParameters = (escalationHaltMultiplierBps: bigint, maxSettlementBaseFeeMultiplierBps: bigint, minLiquidationPriceDistanceBps: bigint): OracleCoordinatorConstructorArgs => [
 			baseArgs[0],
 			baseArgs[1],
@@ -366,11 +578,29 @@ describe('Price Oracle Refund Security Tests', () => {
 			baseArgs[12],
 			baseArgs[13],
 			baseArgs[14],
+			baseArgs[15],
+			baseArgs[16],
 			escalationHaltMultiplierBps,
 			maxSettlementBaseFeeMultiplierBps,
 			minLiquidationPriceDistanceBps,
 		]
 		const invalidRiskParameterCases: Array<{ args: OracleCoordinatorConstructorArgs; message: RegExp }> = [
+			{
+				args: buildArgsWithSizingParameters(0n, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_PROTOCOL_FEE, ORACLE_FEE_PERCENTAGE),
+				message: /dispute gas units must be greater than zero/i,
+			},
+			{
+				args: buildArgsWithSizingParameters(ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, 9999n, ORACLE_PROTOCOL_FEE, ORACLE_FEE_PERCENTAGE),
+				message: /open oracle security multiplier must be at least one hundred percent/i,
+			},
+			{
+				args: buildArgsWithSizingParameters(ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, 10000001n, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_PROTOCOL_FEE, ORACLE_FEE_PERCENTAGE),
+				message: /target price error cannot exceed one hundred percent/i,
+			},
+			{
+				args: buildArgsWithSizingParameters(ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, 490000, 10000),
+				message: /oracle fees must be below the target price error/i,
+			},
 			{
 				args: buildArgsWithRiskParameters(0n, ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS, ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS),
 				message: /escalation halt multiplier must be greater than zero/i,
@@ -394,20 +624,26 @@ describe('Price Oracle Refund Security Tests', () => {
 		const operator = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const rewardAmount = 2n * 10n ** 18n
 		const targetAllowance = repDeposit / 4n
-		const initialReportAmount2 = ORACLE_EXACT_TOKEN1_REPORT
+		const proposedRepPerEthPrice = 10n ** 18n
+		const initialWeth = await client.readContract({
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			address: priceOracle,
+			functionName: 'minimumToken1Report',
+			args: [],
+		})
 		const ethCost = await getRequestPriceEthCost(operator, priceOracle)
 
 		await wrapWeth(client, rewardAmount)
 		await approveToken(client, WETH_ADDRESS, operationBountyBoard)
 		await approveToken(operator, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
-		await wrapWeth(operator, initialReportAmount2)
+		await wrapWeth(operator, initialWeth)
 		await approveToken(operator, WETH_ADDRESS, priceOracle)
 
 		const postHash = await client.writeContract({
 			abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
 			address: operationBountyBoard,
 			functionName: 'postOperationBounty',
-			args: [OperationType.SetSecurityBondsAllowance, client.account.address, targetAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, WETH_ADDRESS, rewardAmount, currentTimestamp + DAY, initialReportAmount2, initialReportAmount2],
+			args: [OperationType.SetSecurityBondsAllowance, client.account.address, targetAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, WETH_ADDRESS, rewardAmount, currentTimestamp + DAY, initialWeth, initialWeth],
 		})
 		await client.waitForTransactionReceipt({ hash: postHash })
 
@@ -415,7 +651,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
 			address: operationBountyBoard,
 			functionName: 'acceptOperationBounty',
-			args: [1n, initialReportAmount2],
+			args: [1n, proposedRepPerEthPrice, initialWeth],
 			value: ethCost,
 		})
 		await operator.waitForTransactionReceipt({ hash: acceptHash })
@@ -428,7 +664,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
 			address: operationBountyBoard,
 			functionName: 'postOperationBounty',
-			args: [OperationType.SetSecurityBondsAllowance, client.account.address, targetAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, WETH_ADDRESS, 1n, currentTimestamp + DAY, initialReportAmount2 + 1n, 0n],
+			args: [OperationType.SetSecurityBondsAllowance, client.account.address, targetAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, WETH_ADDRESS, 1n, currentTimestamp + DAY, initialWeth + 1n, 0n],
 		})
 		await client.waitForTransactionReceipt({ hash: boundedPostHash })
 		await assert.rejects(
@@ -436,7 +672,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
 				address: operationBountyBoard,
 				functionName: 'acceptOperationBounty',
-				args: [2n, initialReportAmount2],
+				args: [2n, 0n, 0n],
 			}),
 			/below the bounty minimum|reverted/i,
 		)
@@ -454,6 +690,111 @@ describe('Price Oracle Refund Security Tests', () => {
 		await operator.waitForTransactionReceipt({ hash: claimHash })
 		const operatorWethAfterClaim = await getERC20Balance(operator, WETH_ADDRESS, operator.account.address)
 		assert.strictEqual(operatorWethAfterClaim - operatorWethBeforeClaim, rewardAmount, 'the successful operator should receive the escrowed WETH reward')
+	})
+
+	test('operation bounty bounds apply to the current dynamic WETH minimum and allow exact equality', async () => {
+		const operator = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const rewardAmount = 1n
+		const proposedRepPerEthPrice = 10n ** 18n
+		const requestBaseFeeWeiPerGas = 30n * 10n ** 9n
+		const currentMinimumWeth = calculateOracleMinimumWethReport({
+			...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
+			baseFeeWeiPerGas: requestBaseFeeWeiPerGas,
+		})
+		const overpaidEthCost = 1n * 10n ** 18n
+
+		await wrapWeth(client, rewardAmount * 2n)
+		await approveToken(client, WETH_ADDRESS, operationBountyBoard)
+		await approveToken(operator, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
+		await wrapWeth(operator, currentMinimumWeth)
+		await approveToken(operator, WETH_ADDRESS, priceOracle)
+
+		const belowDynamicMaximumHash = await client.writeContract({
+			abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
+			address: operationBountyBoard,
+			functionName: 'postOperationBounty',
+			args: [OperationType.SetSecurityBondsAllowance, client.account.address, repDeposit / 4n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, WETH_ADDRESS, rewardAmount, currentTimestamp + DAY, 0n, currentMinimumWeth - 1n],
+		})
+		await client.waitForTransactionReceipt({ hash: belowDynamicMaximumHash })
+		await mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [`0x${requestBaseFeeWeiPerGas.toString(16)}`] })
+		await assert.rejects(
+			operator.writeContract({
+				abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
+				address: operationBountyBoard,
+				functionName: 'acceptOperationBounty',
+				args: [1n, proposedRepPerEthPrice, 0n],
+				gasPrice: requestBaseFeeWeiPerGas,
+				value: overpaidEthCost,
+			}),
+			/exceeds the bounty maximum|reverted/i,
+		)
+
+		await mockWindow.setNextBlockBaseFeePerGasToZero()
+		const exactBoundsHash = await client.writeContract({
+			abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
+			address: operationBountyBoard,
+			functionName: 'postOperationBounty',
+			args: [OperationType.SetSecurityBondsAllowance, client.account.address, repDeposit / 4n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, WETH_ADDRESS, rewardAmount, currentTimestamp + DAY, currentMinimumWeth, currentMinimumWeth],
+		})
+		await client.waitForTransactionReceipt({ hash: exactBoundsHash })
+		await mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [`0x${requestBaseFeeWeiPerGas.toString(16)}`] })
+		const acceptHash = await operator.writeContract({
+			abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
+			address: operationBountyBoard,
+			functionName: 'acceptOperationBounty',
+			args: [2n, proposedRepPerEthPrice, 0n],
+			gasPrice: requestBaseFeeWeiPerGas,
+			value: overpaidEthCost,
+		})
+		await operator.waitForTransactionReceipt({ hash: acceptHash })
+
+		const pendingReport = await getOpenOracleReportStatus(operator, await getPendingReportId(operator, priceOracle))
+		assert.strictEqual(pendingReport.currentAmount1, currentMinimumWeth, 'exact dynamic-minimum equality should satisfy both bounty bounds')
+	})
+
+	test('fresh-price bounty acceptance executes without transferring a report position to the operator', async () => {
+		const operator = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const rewardAmount = 1n
+		const targetAllowance = repDeposit / 4n
+
+		await requestPrice(client, priceOracle)
+		await settlePendingReportWithPrice(10n ** 18n)
+		const settledReport = await getOpenOracleReportStatus(client, 1n)
+		assert.strictEqual(settledReport.initialReporter, client.account.address, 'the creator should own the report that populated the fresh cache')
+
+		await wrapWeth(client, rewardAmount)
+		await approveToken(client, WETH_ADDRESS, operationBountyBoard)
+		const postHash = await client.writeContract({
+			abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
+			address: operationBountyBoard,
+			functionName: 'postOperationBounty',
+			args: [OperationType.SetSecurityBondsAllowance, client.account.address, targetAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, WETH_ADDRESS, rewardAmount, currentTimestamp + DAY, 0n, 0n],
+		})
+		await client.waitForTransactionReceipt({ hash: postHash })
+
+		const operatorRepBefore = await getERC20Balance(operator, addressString(GENESIS_REPUTATION_TOKEN), operator.account.address)
+		const operatorWethBefore = await getERC20Balance(operator, WETH_ADDRESS, operator.account.address)
+		const acceptHash = await operator.writeContract({
+			abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
+			address: operationBountyBoard,
+			functionName: 'acceptOperationBounty',
+			args: [1n, 0n, 0n],
+		})
+		await operator.waitForTransactionReceipt({ hash: acceptHash })
+
+		assert.strictEqual(await getPendingReportId(operator, priceOracle), 0n, 'fresh-cache bounty acceptance should not open a report')
+		assert.strictEqual((await getOpenOracleReportStatus(operator, 1n)).initialReporter, client.account.address, 'fresh-cache acceptance should not change the settled report owner')
+		assert.strictEqual(await getERC20Balance(operator, addressString(GENESIS_REPUTATION_TOKEN), operator.account.address), operatorRepBefore, 'fresh-cache acceptance should not transfer REP reporting capital')
+		assert.strictEqual(await getERC20Balance(operator, WETH_ADDRESS, operator.account.address), operatorWethBefore, 'fresh-cache acceptance should not transfer WETH reporting capital')
+		assert.strictEqual((await getSecurityVault(client, securityPool, client.account.address)).securityBondAllowance, targetAllowance, 'fresh-cache acceptance should execute the creator operation immediately')
+		const executionResult = await client.readContract({
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			address: priceOracle,
+			functionName: 'operationExecutionResults',
+			args: [1n],
+		})
+		assert.strictEqual(executionResult[0], 2n, 'fresh-cache execution should record success')
+		assert.strictEqual(executionResult[1], 1n, 'fresh-cache execution should associate the report that populated the cache')
 	})
 
 	test('operation bounty acceptance reverts when the pending settlement queue is full', async () => {
@@ -477,7 +818,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
 				address: operationBountyBoard,
 				functionName: 'acceptOperationBounty',
-				args: [1n, 0n],
+				args: [1n, 0n, 0n],
 			}),
 			/Operation bounty cannot fit in the pending settlement queue|reverted/i,
 		)
@@ -487,20 +828,26 @@ describe('Price Oracle Refund Security Tests', () => {
 		const operator = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const rewardToken = addressString(GENESIS_REPUTATION_TOKEN)
 		const rewardAmount = 3n * 10n ** 18n
-		const initialReportAmount2 = ORACLE_EXACT_TOKEN1_REPORT
+		const proposedRepPerEthPrice = 10n ** 18n
+		const initialWeth = await client.readContract({
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			address: priceOracle,
+			functionName: 'minimumToken1Report',
+			args: [],
+		})
 		const creatorRepBeforePost = await getERC20Balance(client, rewardToken, client.account.address)
 		const ethCost = await getRequestPriceEthCost(operator, priceOracle)
 
 		await approveToken(client, rewardToken, operationBountyBoard)
 		await approveToken(operator, rewardToken, priceOracle)
-		await wrapWeth(operator, initialReportAmount2)
+		await wrapWeth(operator, initialWeth)
 		await approveToken(operator, WETH_ADDRESS, priceOracle)
 
 		const postHash = await client.writeContract({
 			abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
 			address: operationBountyBoard,
 			functionName: 'postOperationBounty',
-			args: [OperationType.SetSecurityBondsAllowance, client.account.address, repDeposit * 100n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, rewardToken, rewardAmount, currentTimestamp + DAY, initialReportAmount2, initialReportAmount2],
+			args: [OperationType.SetSecurityBondsAllowance, client.account.address, repDeposit * 100n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, rewardToken, rewardAmount, currentTimestamp + DAY, initialWeth, initialWeth],
 		})
 		await client.waitForTransactionReceipt({ hash: postHash })
 
@@ -508,7 +855,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
 			address: operationBountyBoard,
 			functionName: 'acceptOperationBounty',
-			args: [1n, initialReportAmount2],
+			args: [1n, proposedRepPerEthPrice, initialWeth],
 			value: ethCost,
 		})
 		await operator.waitForTransactionReceipt({ hash: acceptHash })
@@ -546,13 +893,19 @@ describe('Price Oracle Refund Security Tests', () => {
 		const operator = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const disputer = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 		const rewardAmount = 10n ** 18n
-		const initialReportAmount2 = ORACLE_EXACT_TOKEN1_REPORT
+		const proposedRepPerEthPrice = 10n ** 18n
+		const initialWeth = await client.readContract({
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			address: priceOracle,
+			functionName: 'minimumToken1Report',
+			args: [],
+		})
 		const ethCost = await getRequestPriceEthCost(operator, priceOracle)
 
 		await wrapWeth(client, rewardAmount)
 		await approveToken(client, WETH_ADDRESS, operationBountyBoard)
 		await approveToken(operator, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
-		await wrapWeth(operator, initialReportAmount2)
+		await wrapWeth(operator, initialWeth)
 		await approveToken(operator, WETH_ADDRESS, priceOracle)
 		const postHash = await client.writeContract({
 			abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
@@ -565,10 +918,10 @@ describe('Price Oracle Refund Security Tests', () => {
 			abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
 			address: operationBountyBoard,
 			functionName: 'acceptOperationBounty',
-			args: [1n, initialReportAmount2],
+			args: [1n, proposedRepPerEthPrice, initialWeth],
 			value: ethCost,
 		})
-		await operator.waitForTransactionReceipt({ hash: acceptHash })
+		const acceptReceipt = await operator.waitForTransactionReceipt({ hash: acceptHash })
 
 		const reportId = await getPendingReportId(operator, priceOracle)
 		const reportMeta = await getOpenOracleReportMeta(operator, reportId)
@@ -578,8 +931,8 @@ describe('Price Oracle Refund Security Tests', () => {
 		const cancellationDeadline = stagedOperation[4] + BigInt(ORACLE_SETTLEMENT_TIME) + DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS
 		const openOracle = getInfraContractAddresses().openOracle
 		const disputedAmount1 = (reportStatusBeforeDispute.currentAmount1 * reportMeta.multiplier) / 100n
-		const disputedAmount2 = (reportStatusBeforeDispute.currentAmount2 * 8n) / 10n
-		await wrapWeth(disputer, reportStatusBeforeDispute.currentAmount2 * 3n)
+		const disputedAmount2 = reportStatusBeforeDispute.currentAmount2 * 2n
+		await wrapWeth(disputer, reportStatusBeforeDispute.currentAmount1 * 4n)
 		await approveToken(disputer, addressString(GENESIS_REPUTATION_TOKEN), openOracle)
 		await approveToken(disputer, WETH_ADDRESS, openOracle)
 		await mockWindow.setTime(reportStatusBeforeDispute.reportTimestamp + reportMeta.settlementTime - 1n)
@@ -587,13 +940,34 @@ describe('Price Oracle Refund Security Tests', () => {
 			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'disputeAndSwap',
 			address: openOracle,
-			args: [reportId, addressString(GENESIS_REPUTATION_TOKEN), disputedAmount1, disputedAmount2, disputer.account.address, reportStatusBeforeDispute.currentAmount2, extraDataBeforeDispute.stateHash],
+			args: [reportId, WETH_ADDRESS, disputedAmount1, disputedAmount2, disputer.account.address, reportStatusBeforeDispute.currentAmount2, extraDataBeforeDispute.stateHash],
 		})
 		await disputer.waitForTransactionReceipt({ hash: disputeHash })
 		const reportStatusAfterDispute = await getOpenOracleReportStatus(operator, reportId)
 		assert.ok(reportStatusAfterDispute.reportTimestamp + reportMeta.settlementTime > cancellationDeadline, 'the dispute should move report settlement past the fixed bounty deadline')
 		assert.strictEqual(reportStatusAfterDispute.currentReporter, disputer.account.address, 'the disputer should own the replacement REP/WETH report position')
 		assert.strictEqual(reportStatusAfterDispute.initialReporter, operator.account.address, 'the assigned operator should remain entitled to the eventual initial-reporter ETH reward')
+
+		await wrapWeth(client, rewardAmount)
+		const joinedBountyPostHash = await client.writeContract({
+			abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
+			address: operationBountyBoard,
+			functionName: 'postOperationBounty',
+			args: [OperationType.SetSecurityBondsAllowance, client.account.address, repDeposit / 5n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, WETH_ADDRESS, rewardAmount, currentTimestamp + DAY, 0n, 0n],
+		})
+		await client.waitForTransactionReceipt({ hash: joinedBountyPostHash })
+		const joinedBountyAcceptHash = await operator.writeContract({
+			abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
+			address: operationBountyBoard,
+			functionName: 'acceptOperationBounty',
+			args: [2n, 0n, 0n],
+		})
+		const joinedBountyAcceptReceipt = await operator.waitForTransactionReceipt({
+			hash: joinedBountyAcceptHash,
+		})
+		const reportStatusAfterJoinedBounty = await getOpenOracleReportStatus(operator, reportId)
+		assert.strictEqual(reportStatusAfterJoinedBounty.initialReporter, operator.account.address, 'the initial sponsor should remain the joined bounty operator after a dispute')
+		assert.strictEqual(reportStatusAfterJoinedBounty.currentReporter, disputer.account.address, 'joining a post-dispute bounty should not transfer the current token position back to its initial sponsor')
 
 		await mockWindow.setTime(cancellationDeadline)
 		await assert.rejects(
@@ -616,7 +990,8 @@ describe('Price Oracle Refund Security Tests', () => {
 			functionName: 'refundOperationBounty',
 			args: [1n],
 		})
-		await client.waitForTransactionReceipt({ hash: refundHash })
+		const refundReceipt = await client.waitForTransactionReceipt({ hash: refundHash })
+		await assertCoordinatorReplayMatchesStorage([...acceptReceipt.logs, ...joinedBountyAcceptReceipt.logs, ...refundReceipt.logs], 'expired bounty cancellation')
 		const executionResult = await client.readContract({
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			address: priceOracle,
@@ -631,6 +1006,73 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(reportStatusAfterCancellation.currentReporter, disputer.account.address, 'the disputer should retain the pending replacement token position')
 		assert.strictEqual(reportStatusAfterCancellation.initialReporter, operator.account.address, 'bounty cancellation should not change the initial reporter awaiting its ETH reward')
 		assert.strictEqual(reportStatusAfterCancellation.settlementTimestamp, 0n, 'the disputed report should remain unsettled after bounty cancellation')
+	})
+
+	test('oracle settlement accepts the exact nonzero basefee cap and rejects one wei above it', async () => {
+		const requestBaseFeeWeiPerGas = 1n * 10n ** 9n
+		const expectedSettlementBaseFeeCap = (requestBaseFeeWeiPerGas * ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS) / 10000n
+		const minimumWethReport = calculateOracleMinimumWethReport({
+			...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
+			baseFeeWeiPerGas: requestBaseFeeWeiPerGas,
+		})
+		const callbackGasLimit = BigInt(ORACLE_SETTLEMENT_GAS) * 4n
+		const requestEthCost = requestBaseFeeWeiPerGas * 4n * (callbackGasLimit + ORACLE_REPORT_GAS) + 101n
+		const proposedRepPerEthPrice = 10n ** 18n
+
+		await wrapWeth(client, minimumWethReport * 2n)
+		await approveToken(client, WETH_ADDRESS, priceOracle)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
+
+		const requestAtConfiguredBaseFee = async () => {
+			await mockWindow.request({
+				method: 'anvil_setNextBlockBaseFeePerGas',
+				params: [`0x${requestBaseFeeWeiPerGas.toString(16)}`],
+			})
+			const requestHash = await client.writeContract({
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				functionName: 'requestPrice',
+				address: priceOracle,
+				args: [proposedRepPerEthPrice, 0n],
+				value: requestEthCost,
+				gasPrice: requestBaseFeeWeiPerGas,
+			})
+			await client.waitForTransactionReceipt({ hash: requestHash })
+			const reportId = await getPendingReportId(client, priceOracle)
+			assert.ok(reportId > 0n, 'nonzero-basefee request should create a pending report')
+			assert.strictEqual(await getPendingReportMaxSettlementBaseFee(client, priceOracle), expectedSettlementBaseFeeCap, 'request should snapshot the configured nonzero settlement basefee cap')
+			return reportId
+		}
+
+		const acceptedReportId = await requestAtConfiguredBaseFee()
+		const acceptedReportMeta = await getOpenOracleReportMeta(client, acceptedReportId)
+		await mockWindow.advanceTime(BigInt(acceptedReportMeta.settlementTime) + 1n)
+		await mockWindow.request({
+			method: 'anvil_setNextBlockBaseFeePerGas',
+			params: [`0x${expectedSettlementBaseFeeCap.toString(16)}`],
+		})
+		const acceptedHash = await openOracleSettleWithGasPrice(client, acceptedReportId, expectedSettlementBaseFeeCap)
+		const acceptedReceipt = await client.waitForTransactionReceipt({ hash: acceptedHash })
+		assert.strictEqual(findPriceReportRejectedLog(acceptedReceipt.logs), undefined, 'settlement at the exact basefee cap should not be rejected')
+		assert.ok(findPriceReportedLog(acceptedReceipt.logs) !== undefined, 'settlement at the exact basefee cap should report the accepted price')
+		assert.strictEqual(await getIsPriceValid(client, priceOracle), true, 'settlement at the exact basefee cap should validate the price')
+
+		await mockWindow.setNextBlockBaseFeePerGasToZero()
+		await mockWindow.advanceTime(5n * 60n + 1n)
+		const rejectedReportId = await requestAtConfiguredBaseFee()
+		const rejectedReportMeta = await getOpenOracleReportMeta(client, rejectedReportId)
+		await mockWindow.advanceTime(BigInt(rejectedReportMeta.settlementTime) + 1n)
+		const rejectedSettlementBaseFee = expectedSettlementBaseFeeCap + 1n
+		await mockWindow.request({
+			method: 'anvil_setNextBlockBaseFeePerGas',
+			params: [`0x${rejectedSettlementBaseFee.toString(16)}`],
+		})
+		const rejectedHash = await openOracleSettleWithGasPrice(client, rejectedReportId, rejectedSettlementBaseFee)
+		const rejectedReceipt = await client.waitForTransactionReceipt({ hash: rejectedHash })
+		const rejectedLog = findPriceReportRejectedLog(rejectedReceipt.logs)
+		if (rejectedLog === undefined) throw new Error('missing PriceReportRejected log')
+		assert.strictEqual(findPriceReportedLog(rejectedReceipt.logs), undefined, 'settlement one wei above the basefee cap must not report a price')
+		assert.strictEqual(rejectedLog.args.reason, 'Base fee too high', 'settlement one wei above the cap should expose the basefee rejection reason')
+		assert.strictEqual(await getIsPriceValid(client, priceOracle), false, 'settlement one wei above the basefee cap must leave the stale price invalid')
 	})
 
 	test('oracle settlement skips price updates and staged execution when settlement basefee is too high', async () => {
@@ -657,6 +1099,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const settlementHash = await openOracleSettleWithGasPrice(client, pendingReportId, 1n)
 		const settlementReceipt = await client.waitForTransactionReceipt({ hash: settlementHash })
 		await mockWindow.setNextBlockBaseFeePerGasToZero()
+		await assertCoordinatorReplayMatchesStorage(settlementReceipt.logs, 'rejected report')
 
 		const isPriceValid = await getIsPriceValid(client, priceOracle)
 		const pendingReportIdAfterSettlement = await getPendingReportId(client, priceOracle)
@@ -690,18 +1133,23 @@ describe('Price Oracle Refund Security Tests', () => {
 		const initialBalance = await getETHBalance(client, client.account.address)
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
 		const overpayment = ethCost * 2n
-		const lastPrice = await getLastPrice(client, priceOracle)
-		const initialReportAmount2 = lastPrice === 0n ? ORACLE_EXACT_TOKEN1_REPORT : (ORACLE_EXACT_TOKEN1_REPORT * 10n ** 18n) / lastPrice || 1n
+		const minimumWethReport = await client.readContract({
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'minimumToken1Report',
+			address: priceOracle,
+			args: [],
+		})
 
 		// Call requestPrice with overpayment
 		await requestPriceWithValue(client, priceOracle, overpayment)
 
 		const finalBalance = await getETHBalance(client, client.account.address)
 
-		// The caller still funds the WETH side of the atomic initial report in addition
-		// to the ETH bounty, but any extra ETH value should be refunded.
-		const expectedNetCost = ethCost + initialReportAmount2
-		assert.strictEqual(initialBalance - finalBalance, expectedNetCost, `Caller should net pay the ETH bounty plus the WETH-side initial report funding (${expectedNetCost}), but paid ${initialBalance - finalBalance}`)
+		// The helper wraps a 2x WETH execution buffer before requesting the report.
+		// The unused WETH remains with the caller; any extra native ETH value should
+		// still be refunded by the coordinator.
+		const expectedEthDecrease = ethCost + minimumWethReport * 2n
+		assert.strictEqual(initialBalance - finalBalance, expectedEthDecrease, `Caller should spend the ETH bounty plus the buffered WETH funding (${expectedEthDecrease}), but spent ${initialBalance - finalBalance}`)
 	})
 
 	test('requestPriceIfNeededAndStageOperation should not drain preexisting contract balance', async () => {
@@ -752,14 +1200,15 @@ describe('Price Oracle Refund Security Tests', () => {
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
 		const unsafeAllowance = repDeposit * 10n
 
-		const invalidAmount2 = ORACLE_EXACT_TOKEN1_REPORT * 10n ** 18n + 1n
-		await mockWindow.setBalance(client.account.address, invalidAmount2 + ethCost + 10n ** 18n)
-		await requestPriceIfNeededAndStageOperationWithInitialReportAmount2(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, unsafeAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, invalidAmount2, ethCost)
+		const invalidInitialReportPrice = 1n
+		await mockWindow.setBalance(client.account.address, invalidInitialReportPrice + ethCost + 10n ** 18n)
+		await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, unsafeAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, invalidInitialReportPrice, ethCost)
 
 		const pendingReportId = await getPendingReportId(client, priceOracle)
 		assert.ok(pendingReportId > 0n, 'setup should leave a pending oracle report')
 
 		const reportMeta = await getOpenOracleReportMeta(client, pendingReportId)
+		await forcePendingReportAmount2ToZero(pendingReportId, reportMeta.exactToken1Report)
 		await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)
 		await openOracleSettle(client, pendingReportId)
 
@@ -796,7 +1245,9 @@ describe('Price Oracle Refund Security Tests', () => {
 		await approveToken(counterpartyClient, addressString(GENESIS_REPUTATION_TOKEN), securityPool)
 		await depositRep(counterpartyClient, securityPool, repDeposit)
 
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, sponsorAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
+		const sponsorRequestHash = await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, sponsorAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
+		const sponsorRequestReceipt = await client.waitForTransactionReceipt({ hash: sponsorRequestHash })
+		await assertCoordinatorReplayMatchesStorage(sponsorRequestReceipt.logs, 'sponsored report request')
 
 		const pendingReportIdBeforeJoin = await getPendingReportId(client, priceOracle)
 		const queuedOperationEthCost = await getQueuedOperationEthCost(client, priceOracle)
@@ -805,7 +1256,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'requestPriceIfNeededAndStageOperation',
 				address: priceOracle,
-				args: [OperationType.SetSecurityBondsAllowance, counterpartyClient.account.address, counterpartyAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 1n],
+				args: [OperationType.SetSecurityBondsAllowance, counterpartyClient.account.address, counterpartyAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 1n, 0n],
 				account: counterpartyClient.account,
 			})
 			.then(
@@ -833,7 +1284,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const sponsorAllowanceAfterDispute = repDeposit / 5n
 		await approveToken(counterpartyClient, addressString(GENESIS_REPUTATION_TOKEN), securityPool)
 		await depositRep(counterpartyClient, securityPool, repDeposit)
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, sponsorAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
+		await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, sponsorAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 10n ** 18n, ethCost, 1000n)
 
 		const reportId = await getPendingReportId(client, priceOracle)
 		const reportMeta = await getOpenOracleReportMeta(client, reportId)
@@ -842,7 +1293,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const openOracle = getInfraContractAddresses().openOracle
 		const disputedAmount1 = (reportStatusBeforeDispute.currentAmount1 * reportMeta.multiplier) / 100n
 		const disputedAmount2 = (reportStatusBeforeDispute.currentAmount2 * 8n) / 10n
-		await wrapWeth(counterpartyClient, reportStatusBeforeDispute.currentAmount2 * 3n)
+		await wrapWeth(counterpartyClient, reportStatusBeforeDispute.currentAmount1 * 3n)
 		await approveToken(counterpartyClient, addressString(GENESIS_REPUTATION_TOKEN), openOracle)
 		await approveToken(counterpartyClient, WETH_ADDRESS, openOracle)
 		const disputeHash = await counterpartyClient.writeContract({
@@ -855,8 +1306,8 @@ describe('Price Oracle Refund Security Tests', () => {
 
 		const reportStatusAfterDispute = await getOpenOracleReportStatus(client, reportId)
 		assert.strictEqual(reportStatusAfterDispute.currentReporter, counterpartyClient.account.address, 'the disputer should become the current reporter')
-		assert.strictEqual(reportStatusAfterDispute.currentAmount1, disputedAmount1, 'the disputed REP amount should become current')
-		assert.strictEqual(reportStatusAfterDispute.currentAmount2, disputedAmount2, 'the disputed WETH amount should become current')
+		assert.strictEqual(reportStatusAfterDispute.currentAmount1, disputedAmount1, 'the disputed WETH amount should become current')
+		assert.strictEqual(reportStatusAfterDispute.currentAmount2, disputedAmount2, 'the disputed REP amount should become current')
 		assert.ok(reportStatusAfterDispute.reportTimestamp > reportStatusBeforeDispute.reportTimestamp, 'a dispute should reset the settlement clock')
 		assert.strictEqual((await getOpenOracleExtraData(client, reportId)).numReports, extraDataBeforeDispute.numReports + 1, 'the dispute should append exactly one history entry')
 		assert.strictEqual(await getPendingReportId(client, priceOracle), reportId, 'the coordinator should keep tracking the disputed report')
@@ -867,7 +1318,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'requestPriceIfNeededAndStageOperation',
 				address: priceOracle,
-				args: [OperationType.SetSecurityBondsAllowance, counterpartyClient.account.address, repDeposit / 6n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 1n],
+				args: [OperationType.SetSecurityBondsAllowance, counterpartyClient.account.address, repDeposit / 6n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 1n, 0n],
 				account: counterpartyClient.account,
 			}),
 			/Only the pending report sponsor can queue more operations until settlement/,
@@ -896,7 +1347,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'requestPriceIfNeededAndStageOperation',
 				address: priceOracle,
-				args: [OperationType.SetSecurityBondsAllowance, counterpartyClient.account.address, repDeposit / 5n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 1n],
+				args: [OperationType.SetSecurityBondsAllowance, counterpartyClient.account.address, repDeposit / 5n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 1n, 0n],
 				account: counterpartyClient.account,
 			})
 			.then(
@@ -922,12 +1373,13 @@ describe('Price Oracle Refund Security Tests', () => {
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
 		const unsafeAllowance = repDeposit * 10n
 
-		const invalidAmount2 = ORACLE_EXACT_TOKEN1_REPORT * 10n ** 18n + 1n
-		await mockWindow.setBalance(client.account.address, invalidAmount2 + ethCost + 10n ** 18n)
-		await requestPriceIfNeededAndStageOperationWithInitialReportAmount2(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, unsafeAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, invalidAmount2, ethCost)
+		const invalidInitialReportPrice = 1n
+		await mockWindow.setBalance(client.account.address, invalidInitialReportPrice + ethCost + 10n ** 18n)
+		await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, unsafeAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, invalidInitialReportPrice, ethCost)
 
 		const pendingReportId = await getPendingReportId(client, priceOracle)
 		const reportMeta = await getOpenOracleReportMeta(client, pendingReportId)
+		await forcePendingReportAmount2ToZero(pendingReportId, reportMeta.exactToken1Report)
 		await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)
 		await openOracleSettle(client, pendingReportId)
 		await mockWindow.advanceTime(DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS + 1n)
@@ -960,6 +1412,7 @@ describe('Price Oracle Refund Security Tests', () => {
 
 		const recoveryHash = await recoverSettledPendingReport(client, priceOracle)
 		const recoveryReceipt = await client.waitForTransactionReceipt({ hash: recoveryHash })
+		await assertCoordinatorReplayMatchesStorage(recoveryReceipt.logs, 'pending report recovery')
 
 		const pendingReportIdAfterRecovery = await getPendingReportId(client, priceOracle)
 		const pendingMaxSettlementBaseFeeAfterRecovery = await getPendingReportMaxSettlementBaseFee(client, priceOracle)
@@ -1044,12 +1497,18 @@ describe('Price Oracle Refund Security Tests', () => {
 		const thirdAllowance = repDeposit / 6n
 		const fourthAllowance = repDeposit / 7n
 		const fifthAllowance = repDeposit / 8n
+		const queuedOperationLogs: TransactionReceiptLogs[number][] = []
+		const queueOperation = async (allowance: bigint, value: bigint) => {
+			const transactionHash = await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, allowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, value)
+			const receipt = await client.getTransactionReceipt({ hash: transactionHash })
+			queuedOperationLogs.push(...receipt.logs)
+		}
 
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, firstAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, secondAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, queuedOperationEthCost)
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, thirdAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, queuedOperationEthCost)
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, fourthAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, queuedOperationEthCost)
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, fifthAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+		await queueOperation(firstAllowance, ethCost)
+		await queueOperation(secondAllowance, queuedOperationEthCost)
+		await queueOperation(thirdAllowance, queuedOperationEthCost)
+		await queueOperation(fourthAllowance, queuedOperationEthCost)
+		await queueOperation(fifthAllowance, 0n)
 
 		const pendingOperationSlotId = await getPendingOperationSlotId(client, priceOracle)
 		const pendingReportId = await getPendingReportId(client, priceOracle)
@@ -1071,6 +1530,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(activeOperations[4]?.amount, firstAllowance, 'oldest pending operation should retain its amount')
 
 		const { pendingReportId: settledReportId, settleReceipt } = await settlePendingReportWithPrice(10n ** 18n)
+		await assertCoordinatorReplayMatchesStorage([...queuedOperationLogs, ...settleReceipt.logs], 'reported price and staged execution')
 		const priceReportedLog = findPriceReportedLog(settleReceipt.logs)
 		if (priceReportedLog === undefined) throw new Error('missing PriceReported log')
 		const callbackLog = findSettlementCallbackExecutedLog(settleReceipt.logs)
@@ -1119,73 +1579,6 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(finalVault.securityBondAllowance, fifthAllowance, 'manual overflow execution should apply the final allowance update')
 	})
 
-	test('one oracle report cannot authorize aggregate exposure beyond its secured notional, including manual overflow', async () => {
-		const exhaustionSchedule = getExposureExhaustionAllowanceSchedule()
-		const overflowSchedule = [...exhaustionSchedule, 0n, 1n]
-		const { manualReceipts } = await settleAndExecuteAllowanceSchedule(overflowSchedule)
-		const finalReceipt = manualReceipts.at(-1)
-		if (finalReceipt === undefined) throw new Error('missing manual overflow receipt')
-		const manualExecution = findExecutedStagedOperationLog(finalReceipt.logs)
-		if (manualExecution === undefined) throw new Error('missing manual overflow execution log')
-		assert.strictEqual(manualExecution.args.success, false, 'manual overflow must use the same exhausted report budget')
-		assert.strictEqual(manualExecution.args.errorMessage, 'oracle report exposure exceeded')
-		assert.strictEqual((await getSecurityVault(client, securityPool, client.account.address)).securityBondAllowance, 0n, 'zero-notional reductions should remain executable after report exposure is exhausted')
-		assert.strictEqual(await client.readContract({ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'priceRoundConsumedNotional', address: priceOracle, args: [] }), getConfiguredRoundNotional(), 'successful operations should consume the configured round budget exactly')
-	})
-
-	test('an exhausted oracle report cannot authorize escalation-game REP exposure', async () => {
-		await mockWindow.setTime(questionEndDate + 1n)
-		await settleAndExecuteAllowanceSchedule(getExposureExhaustionAllowanceSchedule())
-
-		const vaultBefore = await getSecurityVault(client, securityPool, client.account.address)
-		assert.strictEqual(await getSecurityPoolsEscalationGame(client, securityPool), zeroAddress, 'regression setup should not have an escalation game')
-
-		await assert.rejects(async () => await depositToEscalationGame(client, securityPool, QuestionOutcome.Yes, 10n ** 18n), /oracle report exposure exceeded/i)
-
-		const vaultAfter = await getSecurityVault(client, securityPool, client.account.address)
-		assert.strictEqual(vaultAfter.repDepositShare, vaultBefore.repDepositShare, 'rejected escalation exposure must not move vault ownership')
-		assert.strictEqual(vaultAfter.repInEscalationGame, vaultBefore.repInEscalationGame, 'rejected escalation exposure must not escrow REP')
-		assert.strictEqual(await getSecurityPoolsEscalationGame(client, securityPool), zeroAddress, 'rejected escalation exposure must revert game deployment atomically')
-	})
-
-	test('oracle callback derives its secured notional directly from accepted report amounts', async () => {
-		const ethCost = await getRequestPriceEthCost(client, priceOracle)
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
-
-		const pendingReportId = await getPendingReportId(client, priceOracle)
-		const openOracle = getInfraContractAddresses().openOracle
-		await mockWindow.impersonateAccount(openOracle)
-		await mockWindow.setBalance(openOracle, 10n ** 18n)
-		const openOracleClient = createWriteClient(mockWindow, BigInt(openOracle), 0)
-		const acceptedAmount1 = ORACLE_EXACT_TOKEN1_REPORT
-		const acceptedAmount2 = 49_683_737_645_364_500_012_549_948_619_954_461_467n
-		const roundedAcceptedPrice = (acceptedAmount1 * 10n ** 18n) / acceptedAmount2
-		const configuredRepNotional = getConfiguredRoundNotional()
-		const budgetFromRoundedPrice = (configuredRepNotional * 10n ** 18n) / roundedAcceptedPrice
-
-		const callbackHash = await openOracleClient.writeContract({
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'openOracleCallback',
-			address: priceOracle,
-			args: [pendingReportId, acceptedAmount1, acceptedAmount2, 0n, zeroAddress, zeroAddress],
-			gas: BigInt(ORACLE_SETTLEMENT_GAS),
-		})
-		const callbackReceipt = await openOracleClient.waitForTransactionReceipt({ hash: callbackHash })
-		const securedNotional = await client.readContract({
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'priceRoundMaxNotional',
-			address: priceOracle,
-			args: [],
-		})
-		const priceReportedLog = findPriceReportedLog(callbackReceipt.logs)
-		if (priceReportedLog === undefined) throw new Error('missing direct callback PriceReported log')
-
-		assert.strictEqual(roundedAcceptedPrice, 5n, 'rounding vector should produce a low non-zero accepted price')
-		assert.strictEqual(priceReportedLog.args.price, roundedAcceptedPrice, 'callback should publish the rounded accepted price')
-		assert.strictEqual(securedNotional, acceptedAmount2 * (ORACLE_ESCALATION_HALT_MULTIPLIER_BPS / ORACLE_BPS_DENOMINATOR), 'the configured report budget should value the escalation-halt REP amount at the accepted token ratio')
-		assert.ok(securedNotional < budgetFromRoundedPrice, 'budget calculation must not inflate exposure by inverting the rounded accepted price')
-	})
-
 	test('empty-vault withdrawals cannot occupy pending oracle settlement slots', async () => {
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const ethCost = await getRequestPriceEthCost(attackerClient, priceOracle)
@@ -1211,19 +1604,12 @@ describe('Price Oracle Refund Security Tests', () => {
 		await settlePendingReportWithPrice(10n ** 18n)
 
 		const vaultAfterWithdrawal = await getSecurityVault(client, securityPool, withdrawalClient.account.address)
-		const consumedNotional = await client.readContract({
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'priceRoundConsumedNotional',
-			address: priceOracle,
-			args: [],
-		})
 		assert.strictEqual(vaultAfterWithdrawal.repDepositShare, 0n, 'over-requested withdrawal should still withdraw the full vault balance')
-		assert.strictEqual(consumedNotional, 0n, 'a withdrawal cannot expose value when the pool has no outstanding allowance')
 	})
 
 	test('pending withdrawals that become zero-effect during execution fail without blocking the successful withdrawal', async () => {
 		const withdrawalClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const availableRep = ORACLE_EXACT_TOKEN1_REPORT / 2n
+		const availableRep = repDeposit / 2n
 		await approveAndDepositRep(withdrawalClient, availableRep, questionId)
 		const ethCost = await getRequestPriceEthCost(withdrawalClient, priceOracle)
 		const queuedOperationEthCost = await getQueuedOperationEthCost(withdrawalClient, priceOracle)
@@ -1261,7 +1647,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
 		await mockWindow.advanceTime(DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS + 1n)
 
-		await requestPriceIfNeededAndStageOperationWithInitialReportAmount2(liquidatorClient, priceOracle, OperationType.Liquidation, client.account.address, liquidationAmount, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, getInitialReportAmount2ForPrice(nearThresholdPrice), ethCost)
+		await requestPriceIfNeededAndStageOperationWithInitialReportPrice(liquidatorClient, priceOracle, OperationType.Liquidation, client.account.address, liquidationAmount, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, nearThresholdPrice, ethCost)
 		await handleOracleReporting(client, mockWindow, priceOracle, nearThresholdPrice, liquidatorClient.account.address)
 
 		const targetVault = await getSecurityVault(client, securityPool, client.account.address)
@@ -1271,73 +1657,6 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(targetVault.securityBondAllowance, targetAllowance, 'near-threshold liquidations must not reduce the target vault allowance')
 		assert.strictEqual(liquidatorVault.securityBondAllowance, 0n, 'near-threshold liquidations must not move debt to the liquidator vault')
 		assert.strictEqual(stagedOperation[1], zeroAddress, 'near-threshold liquidation attempts should be consumed as failed staged operations')
-	})
-
-	test('liquidation exposure uses the exact bonus-adjusted REP transfer', async () => {
-		const ethCost = await getRequestPriceEthCost(client, priceOracle)
-		const targetAllowance = 150n * 10n ** 18n
-		const liquidationDebt = 10n * 10n ** 18n
-		const liquidationPrice = 7n * 10n ** 18n
-		const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-
-		await approveToken(liquidatorClient, addressString(GENESIS_REPUTATION_TOKEN), securityPool)
-		await depositRep(liquidatorClient, securityPool, repDeposit)
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, targetAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
-		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
-		await mockWindow.advanceTime(DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS + 1n)
-
-		const initialReportAmount2 = getInitialReportAmount2ForPrice(liquidationPrice)
-		const reportBudget = (initialReportAmount2 * ORACLE_ESCALATION_HALT_MULTIPLIER_BPS) / ORACLE_BPS_DENOMINATOR
-		const allowanceNotionalToConsume = reportBudget - liquidationDebt
-		const allowanceChunk = 100n * 10n ** 18n
-		const allowanceSchedule: bigint[] = []
-		let remainingAllowanceNotional = allowanceNotionalToConsume
-		while (remainingAllowanceNotional >= allowanceChunk) {
-			allowanceSchedule.push(allowanceChunk, 0n)
-			remainingAllowanceNotional -= allowanceChunk
-		}
-		if (remainingAllowanceNotional > 0n) allowanceSchedule.push(remainingAllowanceNotional)
-		const secondReportEthCost = await getRequestPriceEthCost(liquidatorClient, priceOracle)
-		const queuedOperationEthCost = await getQueuedOperationEthCost(liquidatorClient, priceOracle)
-		for (let index = 0; index < allowanceSchedule.length; index += 1) {
-			const allowance = allowanceSchedule[index]
-			if (allowance === undefined) throw new Error(`allowanceSchedule[${index}] is undefined`)
-			if (index === 0) {
-				await requestPriceIfNeededAndStageOperationWithInitialReportAmount2(liquidatorClient, priceOracle, OperationType.SetSecurityBondsAllowance, liquidatorClient.account.address, allowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, initialReportAmount2, secondReportEthCost)
-			} else {
-				await requestPriceIfNeededAndStageOperationWithValue(liquidatorClient, priceOracle, OperationType.SetSecurityBondsAllowance, liquidatorClient.account.address, allowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, queuedOperationEthCost)
-			}
-		}
-		await requestPriceIfNeededAndStageOperationWithValue(liquidatorClient, priceOracle, OperationType.Liquidation, client.account.address, liquidationDebt, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, queuedOperationEthCost)
-
-		const targetBefore = await getSecurityVault(client, securityPool, client.account.address)
-		const liquidatorBefore = await getSecurityVault(client, securityPool, liquidatorClient.account.address)
-		const pendingReportId = await getPendingReportId(client, priceOracle)
-		const reportMeta = await getOpenOracleReportMeta(client, pendingReportId)
-		await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)
-		const settleHash = await openOracleSettle(liquidatorClient, pendingReportId)
-		await liquidatorClient.waitForTransactionReceipt({ hash: settleHash })
-		for (let operationId = 6n; operationId <= 8n; operationId += 1n) {
-			await executeStagedOperation(liquidatorClient, priceOracle, operationId)
-		}
-		assert.strictEqual(
-			await client.readContract({ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'getPriceRoundRemainingNotional', address: priceOracle, args: [] }),
-			liquidationDebt,
-			'the preceding allowance should leave exactly the unbonused liquidation debt in the report budget',
-		)
-		const liquidationHash = await executeStagedOperation(liquidatorClient, priceOracle, 9n)
-		const liquidationReceipt = await liquidatorClient.waitForTransactionReceipt({ hash: liquidationHash })
-		const liquidationExecution = findExecutedStagedOperationLog(liquidationReceipt.logs)
-		if (liquidationExecution === undefined) throw new Error('missing exact-notional liquidation execution log')
-
-		const targetAfter = await getSecurityVault(client, securityPool, client.account.address)
-		const liquidatorAfter = await getSecurityVault(client, securityPool, liquidatorClient.account.address)
-		assert.strictEqual(liquidationExecution.args.success, false, 'bonus-adjusted REP exposure beyond the remaining budget must fail')
-		assert.strictEqual(liquidationExecution.args.errorMessage, 'oracle report exposure exceeded')
-		assert.strictEqual(targetAfter.securityBondAllowance, targetBefore.securityBondAllowance, 'rejected liquidation must not move target debt')
-		assert.strictEqual(targetAfter.repDepositShare, targetBefore.repDepositShare, 'rejected liquidation must not move target ownership')
-		assert.strictEqual(liquidatorAfter.securityBondAllowance, remainingAllowanceNotional, 'only the preceding budget-consuming allowance schedule should execute')
-		assert.strictEqual(liquidatorAfter.repDepositShare, liquidatorBefore.repDepositShare, 'rejected liquidation must not move ownership to the liquidator')
 	})
 
 	test('staged operations can only be executed once', async () => {

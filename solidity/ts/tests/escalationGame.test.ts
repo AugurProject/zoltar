@@ -10,19 +10,22 @@ import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import assert from '../testSupport/simulator/utils/assert'
 import { deployEscalationGame, depositOnOutcome, getActivationTime, getBalances, getEscalationGameDeposits, getQuestionResolution } from '../testSupport/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
-import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/deployPeripherals'
+import { ensureInfraDeployed, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
 import {
 	peripherals_EscalationGame_EscalationGame,
 	peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier,
+	peripherals_SecurityPoolForker_SecurityPoolForker,
 	ReputationToken_ReputationToken,
 	test_peripherals_EscalationGameProofTestSecurityPool_EscalationGameProofTestSecurityPool as escalationGameProofTestPoolArtifact,
 	test_peripherals_EscalationGameForkerHarness_EscalationGameForkerHarness as escalationGameForkerHarnessArtifact,
 	test_peripherals_FalseReturningERC20_FalseReturningERC20,
 	test_peripherals_IncompatibleEscalationGameProofVerifier_IncompatibleEscalationGameProofVerifier as incompatibleProofVerifierArtifact,
+	test_peripherals_SecurityPoolAncestorTestNode_SecurityPoolAncestorTestNode as securityPoolAncestorTestNodeArtifact,
 } from '../types/contractArtifact'
 import { getERC20Balance } from '../testSupport/simulator/utils/utilities'
 import { isIgnorableLogDecodeError } from './logDecodeErrors'
 import { computeForkContinuationParentDepositIndex, createCarryProof as createCarryProofFromHelpers, hashCarryLeaf, hashParent, readCarryLeafHash as readCarryLeafHashFromHelpers, SparseNullifierTree } from './carryProofHelpers'
+import { replayZoltarEvents, type ReplayLog } from './eventReplay/eventReplayModel'
 
 const ESCALATION_TIME_LENGTH = 4233600n
 const MAX_UINT256 = 2n ** 256n - 1n
@@ -50,6 +53,22 @@ const initializeForkCarrySnapshotWithResolutionBalancesAbi: Abi = [
 			{ name: 'snapshotNullifierRoots', type: 'bytes32[3]' },
 		],
 		name: 'initializeForkCarrySnapshotWithResolutionBalances',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+]
+const initializeForkCarrySnapshotFromSourceAbi: Abi = [
+	{
+		inputs: [
+			{ name: 'sourceGame', type: 'address' },
+			{ name: 'snapshotId', type: 'bytes32' },
+			{ name: 'snapshotPeaksInput', type: 'bytes32[64][3]' },
+			{ name: 'snapshotLeafCountsInput', type: 'uint256[3]' },
+			{ name: 'snapshotCarryTotals', type: 'uint256[3]' },
+			{ name: 'snapshotNullifierRoots', type: 'bytes32[3]' },
+		],
+		name: 'initializeForkCarrySnapshotFromSource',
 		outputs: [],
 		stateMutability: 'nonpayable',
 		type: 'function',
@@ -186,6 +205,18 @@ describe('Escalation Game Test Suite', () => {
 		})
 		const testSecurityPoolDeploymentReceipt = await client.waitForTransactionReceipt({ hash: testSecurityPoolDeploymentHash })
 		return requireContractAddress(testSecurityPoolDeploymentReceipt.contractAddress, 'proof test security pool deployment address')
+	}
+
+	async function deploySecurityPoolAncestorNode(parent: Address) {
+		const deploymentHash = await client.sendTransaction({
+			data: encodeDeployData({
+				abi: securityPoolAncestorTestNodeArtifact.abi,
+				bytecode: `0x${securityPoolAncestorTestNodeArtifact.evm.bytecode.object}`,
+				args: [parent],
+			}),
+		})
+		const deploymentReceipt = await client.waitForTransactionReceipt({ hash: deploymentHash })
+		return requireContractAddress(deploymentReceipt.contractAddress, 'security pool ancestor node deployment address')
 	}
 
 	async function deployIncompatibleProofVerifier() {
@@ -500,6 +531,57 @@ describe('Escalation Game Test Suite', () => {
 					args: [inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedResolutionBalances, inheritedNullifierRoots],
 				}),
 		)
+
+	const initializeSnapshotFromSourceViaTestSecurityPool = async (
+		testSecurityPoolAddress: Address,
+		sourceGame: Address,
+		snapshotId: Hex,
+		inheritedCarryPeaks: readonly [PeakArray, PeakArray, PeakArray],
+		inheritedCarryLeafCounts: readonly [bigint, bigint, bigint],
+		inheritedCarryTotals: readonly [bigint, bigint, bigint],
+		inheritedNullifierRoots: readonly [Hex, Hex, Hex],
+	) =>
+		await writeContractAndWait(
+			client,
+			async () =>
+				await client.writeContract({
+					abi: initializeForkCarrySnapshotFromSourceAbi,
+					address: testSecurityPoolAddress,
+					functionName: 'initializeForkCarrySnapshotFromSource',
+					args: [sourceGame, snapshotId, inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedNullifierRoots],
+				}),
+		)
+
+	const getEscalationReplayLogs = async (transactionHashes: readonly Hex[], gameAddresses: ReadonlySet<string>) => {
+		const chainId = BigInt(await client.getChainId())
+		const replayLogs: ReplayLog[] = []
+		for (const transactionHash of transactionHashes) {
+			const receipt = await client.getTransactionReceipt({ hash: transactionHash })
+			for (const log of receipt.logs) {
+				if (!gameAddresses.has(log.address.toLowerCase())) continue
+				let decoded: ReturnType<typeof decodeEventLog>
+				try {
+					decoded = decodeEventLog({ abi: peripherals_EscalationGame_EscalationGame.abi, data: log.data, topics: log.topics })
+				} catch (error) {
+					if (!isIgnorableLogDecodeError(error)) throw error
+					continue
+				}
+				if (typeof decoded.args !== 'object' || decoded.args === null || Array.isArray(decoded.args)) throw new Error('escalation event arguments are not named')
+				replayLogs.push({
+					chainId,
+					blockHash: receipt.blockHash,
+					blockNumber: receipt.blockNumber,
+					transactionHash: receipt.transactionHash,
+					transactionIndex: Number(receipt.transactionIndex),
+					logIndex: Number(log.logIndex),
+					emitter: log.address,
+					eventName: decoded.eventName,
+					args: Object.fromEntries(Object.entries(decoded.args)),
+				})
+			}
+		}
+		return replayLogs
+	}
 
 	const recordForkedEscrowForOutcomeViaTestSecurityPool = async (testSecurityPoolAddress: Address, depositor: Address, outcome: QuestionOutcome, sourcePrincipal: bigint, childRepAmount: bigint) =>
 		await writeContractAndWait(
@@ -913,7 +995,7 @@ describe('Escalation Game Test Suite', () => {
 			args: [],
 		})
 		const initializeSnapshotReceipt = await client.waitForTransactionReceipt({ hash: initializeSnapshotHash })
-		const snapshotInitializedLog = initializeSnapshotReceipt.logs
+		const carryCheckpointLog = initializeSnapshotReceipt.logs
 			.map(log => {
 				try {
 					return decodeEventLog({
@@ -926,16 +1008,16 @@ describe('Escalation Game Test Suite', () => {
 					return undefined
 				}
 			})
-			.find(log => log?.eventName === 'ForkCarrySnapshotInitialized')
+			.find(log => log?.eventName === 'ForkCarryCheckpoint')
 
-		if (snapshotInitializedLog === undefined) {
-			throw new Error('missing ForkCarrySnapshotInitialized log')
+		if (carryCheckpointLog === undefined) {
+			throw new Error('missing ForkCarryCheckpoint log')
 		}
 
 		assert.strictEqual(snapshotInitialized, true, 'initialized snapshots with empty nullifier roots should not look uninitialized')
 		assert.strictEqual(yesNullifierRoot, emptyNullifierRoot, 'outcome state should expose the normalized empty nullifier root')
 		assert.strictEqual(forkCarrySnapshot[3][1], emptyNullifierRoot, 'fork carry snapshots should export normalized empty nullifier roots')
-		assert.deepStrictEqual(snapshotInitializedLog.args.inheritedNullifierRoots, [emptyNullifierRoot, emptyNullifierRoot, emptyNullifierRoot], 'snapshot initialization logs should emit normalized empty nullifier roots')
+		assert.deepStrictEqual(carryCheckpointLog.args.nullifierRoots, [emptyNullifierRoot, emptyNullifierRoot, emptyNullifierRoot], 'snapshot checkpoints should emit normalized empty nullifier roots')
 	})
 
 	test('short carried proof reverts with a readable proof length reason', async () => {
@@ -1115,7 +1197,9 @@ describe('Escalation Game Test Suite', () => {
 			merkleMountainRangeSiblings: [childLocalLeafHash],
 			nullifierSiblings: nullifierTree.getProof(0n),
 		}
-		await withdrawDepositViaProofTestSecurityPool(grandchild.testSecurityPoolAddress, QuestionOutcome.Yes, proof)
+		const settlementHash = await withdrawDepositViaProofTestSecurityPool(grandchild.testSecurityPoolAddress, QuestionOutcome.Yes, proof)
+		const settlementReceipt = await client.waitForTransactionReceipt({ hash: settlementHash })
+		assert.ok(settlementReceipt.gasUsed < 2_000_000n, `recursive grandchild carry proof settlement must stay below the 2,000,000 gas bound; used ${settlementReceipt.gasUsed}`)
 
 		const remainingCarryTotal = await readCarryTotal(grandchild.escalationGameAddress, QuestionOutcome.Yes)
 		assert.strictEqual(remainingCarryTotal, reportBond, 'only the child-local unresolved carry should remain after settling the inherited parent leaf')
@@ -1123,11 +1207,32 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual(grandchildRoot, hashParent(parentLeafHash, childLocalLeafHash), 'grandchild should snapshot the recursive child carry set as a true two-leaf Merkle Mountain Range')
 	})
 
+	test('recursive security-pool ancestor checks stay within an explicit gas bound', async () => {
+		let deepestAncestor = zeroAddress
+		const ancestorDepth = 32
+		for (let depth = 0; depth < ancestorDepth; depth++) deepestAncestor = await deploySecurityPoolAncestorNode(deepestAncestor)
+
+		const forkerAddress = getInfraContractAddresses().securityPoolForker
+		const checkHash = await client.sendTransaction({
+			to: forkerAddress,
+			data: encodeFunctionData({
+				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+				functionName: 'isEscalationDepositClaimedDirectly',
+				args: [deepestAncestor, QuestionOutcome.Yes, 0n],
+			}),
+			gas: 2_000_000n,
+		})
+		const checkReceipt = await client.waitForTransactionReceipt({ hash: checkHash })
+
+		assert.strictEqual(checkReceipt.status, 'success', 'the 32-level ancestor check should complete successfully')
+		assert.ok(checkReceipt.gasUsed < 500_000n, `the 32-level ancestor check must stay below the 500,000 gas bound; used ${checkReceipt.gasUsed}`)
+	})
+
 	test('fork carry grandchild instances reject child-local leaves that were already settled before the recursive fork', async () => {
 		const parent = await deployEscalationGameWithProofPool()
-		await startEscalation(parent.escalationGameAddress, reportBond, nonDecisionThreshold)
-		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, 2n * reportBond)
-		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 3n * reportBond)
+		const parentStartHash = await startEscalation(parent.escalationGameAddress, reportBond, nonDecisionThreshold)
+		const parentInvalidDepositHash = await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Invalid, 2n * reportBond)
+		const parentYesDepositHash = await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 3n * reportBond)
 
 		const parentInvalidPeaks = await readCarryPeaks(parent.escalationGameAddress, QuestionOutcome.Invalid)
 		const parentYesPeaks = await readCarryPeaks(parent.escalationGameAddress, QuestionOutcome.Yes)
@@ -1139,11 +1244,19 @@ describe('Escalation Game Test Suite', () => {
 		const parentYesNullifierRoot = await readNullifierRoot(parent.escalationGameAddress, QuestionOutcome.Yes)
 
 		const child = await deployEscalationGameWithProofPool()
-		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
-		await initializeSnapshotViaTestSecurityPool(child.testSecurityPoolAddress, [parentInvalidPeaks, parentYesPeaks, zeroPeakArray()], [parentInvalidLeafCount, parentYesLeafCount, 0n], [parentInvalidCarryTotal, parentYesCarryTotal, 0n], [parentInvalidNullifierRoot, parentYesNullifierRoot, zeroHash()])
-		await depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		const childStartHash = await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
+		const childCheckpointHash = await initializeSnapshotFromSourceViaTestSecurityPool(
+			child.testSecurityPoolAddress,
+			parent.escalationGameAddress,
+			zeroHash(),
+			[parentInvalidPeaks, parentYesPeaks, zeroPeakArray()],
+			[parentInvalidLeafCount, parentYesLeafCount, 0n],
+			[parentInvalidCarryTotal, parentYesCarryTotal, 0n],
+			[parentInvalidNullifierRoot, parentYesNullifierRoot, zeroHash()],
+		)
+		const childLocalDepositHash = await depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
-		await claimDepositForWinningViaTestSecurityPool(child.testSecurityPoolAddress, 0n, QuestionOutcome.Yes)
+		const childClaimHash = await claimDepositForWinningViaTestSecurityPool(child.testSecurityPoolAddress, 0n, QuestionOutcome.Yes)
 
 		const childInvalidPeaks = await readCarryPeaks(child.escalationGameAddress, QuestionOutcome.Invalid)
 		const childYesPeaks = await readCarryPeaks(child.escalationGameAddress, QuestionOutcome.Yes)
@@ -1155,8 +1268,16 @@ describe('Escalation Game Test Suite', () => {
 		const childYesNullifierRoot = await readNullifierRoot(child.escalationGameAddress, QuestionOutcome.Yes)
 		const parentLeafHash = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, 3n * reportBond, 0n, 3n * reportBond, 2n)
 		const grandchild = await deployEscalationGameWithProofPool()
-		await startEscalationFromFork(grandchild.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
-		await initializeSnapshotViaTestSecurityPool(grandchild.testSecurityPoolAddress, [childInvalidPeaks, childYesPeaks, zeroPeakArray()], [childInvalidLeafCount, childYesLeafCount, 0n], [childInvalidCarryTotal, childYesCarryTotal, 0n], [childInvalidNullifierRoot, childYesNullifierRoot, zeroHash()])
+		const grandchildStartHash = await startEscalationFromFork(grandchild.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
+		const grandchildCheckpointHash = await initializeSnapshotFromSourceViaTestSecurityPool(
+			grandchild.testSecurityPoolAddress,
+			child.escalationGameAddress,
+			zeroHash(),
+			[childInvalidPeaks, childYesPeaks, zeroPeakArray()],
+			[childInvalidLeafCount, childYesLeafCount, 0n],
+			[childInvalidCarryTotal, childYesCarryTotal, 0n],
+			[childInvalidNullifierRoot, childYesNullifierRoot, zeroHash()],
+		)
 		await advanceForkContinuationPastStart(grandchild.escalationGameAddress, recursiveResolutionTargetCost)
 
 		const nullifierTree = new SparseNullifierTree()
@@ -1180,6 +1301,13 @@ describe('Escalation Game Test Suite', () => {
 
 		const grandchildRoot = await readCarryRoot(grandchild.escalationGameAddress, QuestionOutcome.Yes)
 		assert.strictEqual(grandchildRoot, hashParent(parentLeafHash, zeroHash()), 'the recursive grandchild snapshot should keep the settled child-local position cleared in place')
+		const replayLogs = await getEscalationReplayLogs(
+			[parentStartHash, parentInvalidDepositHash, parentYesDepositHash, childStartHash, childCheckpointHash, childLocalDepositHash, childClaimHash, grandchildStartHash, grandchildCheckpointHash],
+			new Set([parent.escalationGameAddress.toLowerCase(), child.escalationGameAddress.toLowerCase(), grandchild.escalationGameAddress.toLowerCase()]),
+		)
+		const replayed = replayZoltarEvents(replayLogs)
+		assert.strictEqual(replayed.escalationCarryRoots.get(grandchild.escalationGameAddress)?.[QuestionOutcome.Yes], grandchildRoot, 'event-only replay should match the recursive grandchild carry root')
+		assert.strictEqual(replayed.escalationCarryPeaks.get(grandchild.escalationGameAddress)?.[QuestionOutcome.Yes]?.[1], childYesPeaks[1], 'event-only replay should match the recursive grandchild carry peak')
 	})
 
 	test('grandchild local settlement does not lock an inherited child-local carried deposit with the same deposit index', async () => {
@@ -1394,6 +1522,7 @@ describe('Escalation Game Test Suite', () => {
 					args: [vault, client.account.address],
 				}),
 			)
+
 			for (const deposit of deposits) {
 				if (deposit.vault === vault) deposit.escrowed = false
 			}
@@ -1450,11 +1579,11 @@ describe('Escalation Game Test Suite', () => {
 		const yesState = await readOutcomeState(escalationGameAddress, QuestionOutcome.Yes)
 		assert.strictEqual(depositLog.args.depositor, vault, 'deposit log should identify the depositing vault')
 		assert.strictEqual(depositLog.args.outcome, BigInt(QuestionOutcome.Yes), 'deposit log should identify the outcome')
-		assert.strictEqual(depositLog.args.amount, amount, 'deposit log should expose the requested amount')
+		assert.strictEqual(depositLog.args.repAmount, amount, 'deposit log should expose the requested amount')
 		assert.strictEqual(depositLog.args.depositIndex, 0n, 'deposit log should expose the new deposit index')
-		assert.strictEqual(depositLog.args.cumulativeAmount, yesState.balance, 'deposit log should expose the updated outcome balance')
-		assert.strictEqual(depositLog.args.escrowedRepByVault, vaultEscrow, 'deposit log should expose the updated vault escrow')
-		assert.strictEqual(depositLog.args.totalEscrowedRep, totalEscrow, 'deposit log should expose the updated total escrow')
+		assert.strictEqual(depositLog.args.cumulativeRepAmount, yesState.balance, 'deposit log should expose the updated outcome balance')
+		assert.strictEqual(depositLog.args.resultingVaultEscrowedRep, vaultEscrow, 'deposit log should expose the updated vault escrow')
+		assert.strictEqual(depositLog.args.resultingTotalEscrowedRep, totalEscrow, 'deposit log should expose the updated total escrow')
 	})
 
 	test('forked-escrow winner payout is sent to the wallet', async () => {
@@ -1484,9 +1613,12 @@ describe('Escalation Game Test Suite', () => {
 		const genRepToken = getRepTokenAddress(0n)
 		const walletBalanceBefore = await getERC20Balance(client, genRepToken, client.account.address)
 		const childEscrowBefore = await readEscrowedRepByVault(child.escalationGameAddress, client.account.address)
-		await withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, proof)
+		const withdrawalHash = await withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, proof)
+		const replayLogs = await getEscalationReplayLogs([withdrawalHash], new Set([child.escalationGameAddress.toLowerCase()]))
+		const consumptionLog = replayLogs.find(log => log.eventName === 'CarryDepositConsumed')
 		const walletBalanceAfter = await getERC20Balance(client, genRepToken, client.account.address)
 		const childEscrowAfter = await readEscrowedRepByVault(child.escalationGameAddress, client.account.address)
+		assert.strictEqual(consumptionLog?.args['reason'], 4n, 'forked-escrow proof consumption should expose its distinct cause')
 		assert.strictEqual(walletBalanceAfter - walletBalanceBefore, proof.amount, 'winning forked escrow withdrawals should transfer REP to the beneficiary vault')
 		assert.strictEqual(childEscrowBefore, proof.amount, 'test setup should record forked escrow as active child-game escrow')
 		assert.strictEqual(childEscrowAfter, 0n, 'winning forked escrow withdrawals should clear the child-game escrow lock')
@@ -1794,9 +1926,12 @@ describe('Escalation Game Test Suite', () => {
 
 		const proof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 0n, [], new SparseNullifierTree().getProof(0n))
 		const walletBalanceBefore = await getERC20Balance(client, getRepTokenAddress(0n), client.account.address)
-		await withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, proof)
+		const withdrawalHash = await withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, proof)
+		const replayLogs = await getEscalationReplayLogs([withdrawalHash], new Set([child.escalationGameAddress.toLowerCase()]))
+		const consumptionLog = replayLogs.find(log => log.eventName === 'CarryDepositConsumed')
 		const walletBalanceAfter = await getERC20Balance(client, getRepTokenAddress(0n), client.account.address)
 		const childEscrowAfter = await readEscrowedRepByVault(child.escalationGameAddress, client.account.address)
+		assert.strictEqual(consumptionLog?.args['reason'], 4n, 'losing forked-escrow proof consumption should expose its distinct cause')
 		assert.strictEqual(walletBalanceAfter - walletBalanceBefore, 0n, 'zero-child dust proof should settle without paying REP')
 		assert.strictEqual(childEscrowAfter, 1n, 'settling a zero-child proof must not drain escrow backing another outcome')
 	})

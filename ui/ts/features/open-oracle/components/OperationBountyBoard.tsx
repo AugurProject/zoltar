@@ -45,19 +45,20 @@ function getOperationUnit(operation: OracleQueueOperation) {
 	return operation === 'withdrawRep' ? commonCopy.rep : commonCopy.eth
 }
 
-function getBountyStateLabel(bounty: OracleOperationBounty) {
+function getBountyStateLabel(bounty: OracleOperationBounty, acceptanceExpired: boolean, refundExpired: boolean) {
 	if (bounty.state === 'paid') return securityPoolCopy.bountyPaid
 	if (bounty.state === 'refunded') return securityPoolCopy.bountyRefunded
-	if (bounty.state === 'open') return securityPoolCopy.bountyOpen
+	if (bounty.state === 'open') return acceptanceExpired ? securityPoolCopy.bountyAcceptanceExpiredState : securityPoolCopy.bountyOpen
 	if (bounty.executionStatus === 'succeeded') return securityPoolCopy.bountyReadyToClaim
 	if (bounty.executionStatus === 'failed') return securityPoolCopy.bountyFailed
+	if (refundExpired) return securityPoolCopy.bountyExecutionExpired
 	return securityPoolCopy.bountyInProgress
 }
 
-function getBountyTone(bounty: OracleOperationBounty) {
+function getBountyTone(bounty: OracleOperationBounty, acceptanceExpired: boolean, refundExpired: boolean) {
 	if (bounty.state === 'paid' || bounty.executionStatus === 'succeeded') return 'ok' as const
 	if (bounty.state === 'refunded') return 'muted' as const
-	if (bounty.executionStatus === 'failed') return 'blocked' as const
+	if (bounty.executionStatus === 'failed' || (bounty.state === 'open' && acceptanceExpired) || refundExpired) return 'blocked' as const
 	return 'warning' as const
 }
 
@@ -66,18 +67,20 @@ function resolveBountyTargetVault(operation: OracleQueueOperation, targetVault: 
 	return tryParseAddressInput(targetVault)
 }
 
-function getAcceptGuardMessage(accountAddress: Address | undefined, isMainnet: boolean, acceptanceExpired: boolean) {
+function getAcceptGuardMessage(accountAddress: Address | undefined, isMainnet: boolean, acceptanceExpired: boolean, settlementQueueFull: boolean) {
 	if (accountAddress === undefined) return securityPoolCopy.acceptBountyWalletReason
 	if (!isMainnet) return commonCopy.mainnetRequiredReason
 	if (acceptanceExpired) return securityPoolCopy.bountyAcceptanceExpired
+	if (settlementQueueFull) return securityPoolCopy.bountySettlementQueueFull
 	return undefined
 }
 
-function getClaimGuardMessage(isMainnet: boolean, executionStatus: OracleOperationBounty['executionStatus']) {
+function getClaimGuardMessage(isMainnet: boolean, executionStatus: OracleOperationBounty['executionStatus'], refundExpired: boolean) {
 	if (!isMainnet) return commonCopy.mainnetRequiredReason
+	if (executionStatus === 'succeeded') return undefined
 	if (executionStatus === 'failed') return securityPoolCopy.failedBountyCannotBeClaimed
-	if (executionStatus !== 'succeeded') return securityPoolCopy.waitForBountyExecution
-	return undefined
+	if (refundExpired) return securityPoolCopy.expiredBountyCannotBeClaimed
+	return securityPoolCopy.waitForBountyExecution
 }
 
 function getRefundGuardMessage(isMainnet: boolean, refundEnabled: boolean, refundAvailableAt: bigint | undefined) {
@@ -140,8 +143,8 @@ export function OperationBountyBoard({ accountAddress, activeAction, activeBount
 		onPost(managerDetails.managerAddress, {
 			acceptanceDeadline: currentTimestamp + resolvedAcceptanceMinutes * 60n,
 			amount: resolvedAmount,
-			maximumInitialReportAmount2: resolvedMaximumInitialWeth,
-			minimumInitialReportAmount2: resolvedMinimumInitialWeth,
+			maximumInitialWeth: resolvedMaximumInitialWeth,
+			minimumInitialWeth: resolvedMinimumInitialWeth,
 			operation,
 			rewardAmount: resolvedRewardAmount,
 			rewardToken: resolvedRewardToken,
@@ -150,6 +153,7 @@ export function OperationBountyBoard({ accountAddress, activeAction, activeBount
 		})
 	}
 	const operationBounties = managerDetails.operationBounties ?? []
+	const settlementQueueFull = !managerDetails.isPriceValid && BigInt(managerDetails.pendingSettlementOperationIds.length) >= managerDetails.pendingSettlementQueueCapacity
 	const bountyLookupGuardMessage = resolvedBountyId === undefined || resolvedBountyId <= 0n ? securityPoolCopy.enterValidBountyId : undefined
 	const loadBounty = () => {
 		if (resolvedBountyId === undefined || resolvedBountyId <= 0n) return
@@ -258,8 +262,8 @@ export function OperationBountyBoard({ accountAddress, activeAction, activeBount
 						const acceptanceExpired = currentTimestamp !== undefined && currentTimestamp > bounty.acceptanceDeadline
 						const refundExpired = currentTimestamp !== undefined && bounty.refundAvailableAt !== undefined && currentTimestamp > bounty.refundAvailableAt
 						const refundEnabled = bounty.state === 'open' || bounty.executionStatus === 'failed' || refundExpired
-						const acceptGuardMessage = getAcceptGuardMessage(accountAddress, isMainnet, acceptanceExpired)
-						const claimGuardMessage = getClaimGuardMessage(isMainnet, bounty.executionStatus)
+						const acceptGuardMessage = getAcceptGuardMessage(accountAddress, isMainnet, acceptanceExpired, settlementQueueFull)
+						const claimGuardMessage = getClaimGuardMessage(isMainnet, bounty.executionStatus, refundExpired)
 						const refundGuardMessage = getRefundGuardMessage(isMainnet, refundEnabled, bounty.refundAvailableAt)
 						const rewardSymbol = sameAddress(bounty.rewardToken, managerDetails.reputationTokenAddress) ? commonCopy.rep : commonCopy.weth
 						const bountyOperationUnit = getOperationUnit(bounty.operation)
@@ -270,7 +274,7 @@ export function OperationBountyBoard({ accountAddress, activeAction, activeBount
 										<h5 className='entity-card-title'>{securityPoolCopy.formatOperationBountyLabel(bounty.bountyId.toString(), getOperationLabel(bounty.operation))}</h5>
 										<p className='detail'>{securityPoolCopy.formatExecutionWindowDetail((bounty.validForSeconds / 60n).toString())}</p>
 									</div>
-									<Badge tone={getBountyTone(bounty)}>{getBountyStateLabel(bounty)}</Badge>
+									<Badge tone={getBountyTone(bounty, acceptanceExpired, refundExpired)}>{getBountyStateLabel(bounty, acceptanceExpired, refundExpired)}</Badge>
 								</div>
 								<MetricGrid className='entity-card-body'>
 									<MetricField label={securityPoolCopy.creator}>
@@ -285,6 +289,8 @@ export function OperationBountyBoard({ accountAddress, activeAction, activeBount
 									<MetricField label={securityPoolCopy.reward}>
 										<CurrencyValue value={bounty.rewardAmount} suffix={rewardSymbol} />
 									</MetricField>
+									<MetricField label={securityPoolCopy.minimumInitialWeth}>{bounty.minimumInitialWeth === 0n ? securityPoolCopy.noMinimum : <CurrencyValue value={bounty.minimumInitialWeth} suffix={commonCopy.weth} />}</MetricField>
+									<MetricField label={securityPoolCopy.maximumInitialWeth}>{bounty.maximumInitialWeth === 0n ? securityPoolCopy.noMaximum : <CurrencyValue value={bounty.maximumInitialWeth} suffix={commonCopy.weth} />}</MetricField>
 									<MetricField label={securityPoolCopy.acceptBy}>{formatTimestamp(bounty.acceptanceDeadline)}</MetricField>
 									{bounty.operator === '0x0000000000000000000000000000000000000000' ? null : (
 										<MetricField label={securityPoolCopy.operator}>

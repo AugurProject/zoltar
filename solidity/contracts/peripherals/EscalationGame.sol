@@ -7,14 +7,19 @@ import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameProofVerifier } from './EscalationGameProofVerifier.sol';
 import { EscalationGameSettlement } from './EscalationGameSettlement.sol';
 import { EscalationGameState } from './EscalationGameState.sol';
-import { Deposit, ESCALATION_TIME_LENGTH, Node, OutcomeState } from './EscalationGameTypes.sol';
+import { ESCALATION_TIME_LENGTH, OutcomeState } from './EscalationGameTypes.sol';
+import { EscalationGameDepositDelegate } from './EscalationGameDepositDelegate.sol';
 
 contract EscalationGame is EscalationGameSettlement {
+	EscalationGameDepositDelegate private immutable depositDelegate;
+
 	constructor(
 		ISecurityPool _securityPool,
 		ReputationToken _repToken,
 		EscalationGameProofVerifier _proofVerifier
-	) EscalationGameState(_securityPool, _repToken, _proofVerifier) {}
+	) EscalationGameState(_securityPool, _repToken, _proofVerifier) {
+		depositDelegate = new EscalationGameDepositDelegate();
+	}
 
 	function start(uint256 _startBond, uint256 _nonDecisionThreshold) external {
 		_initializeStartParams(_startBond, _nonDecisionThreshold);
@@ -64,78 +69,19 @@ contract EscalationGame is EscalationGameSettlement {
 		uint256 amount,
 		uint256 expectedCumulativeAmount
 	) external returns (uint256 parentDepositIndex) {
-		require(nonDecisionTimestamp == 0, 'Non-decision done');
 		require(msg.sender == address(securityPool), 'Only security pool');
-		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
-		require(getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'Question resolved');
-		require(outcomeState[uint8(outcome)].balance < nonDecisionThreshold, 'Outcome full');
-		require(amount > 0, 'Amount is zero');
-		uint256 outcomeIndex = uint256(outcome);
-		OutcomeState storage selectedOutcomeState = outcomeState[outcomeIndex];
-		uint256 currentBalance = selectedOutcomeState.balance;
-		uint256 room = nonDecisionThreshold - currentBalance;
-		(uint256 effectiveDeposit, uint256 newBalance) = _getAcceptedDepositAmount(
-			outcomeIndex,
-			amount,
-			currentBalance,
-			room
+		(bool success, bytes memory returnData) = address(depositDelegate).delegatecall(
+			abi.encodeCall(
+				EscalationGameDepositDelegate.recordDeposit,
+				(depositor, outcome, amount, expectedCumulativeAmount)
+			)
 		);
-		require(effectiveDeposit == amount, 'Deposit exceeds room');
-		require(newBalance == expectedCumulativeAmount, 'Preview mismatch');
-
-		selectedOutcomeState.balance += effectiveDeposit;
-		escrowedRepByVault[depositor] += effectiveDeposit;
-		totalEscrowedRep += effectiveDeposit;
-		unresolvedRepByVault[depositor] += effectiveDeposit;
-		totalLocalUnresolvedRep += effectiveDeposit;
-		localUnresolvedPrincipalByVaultAndOutcome[depositor][uint8(outcome)] += effectiveDeposit;
-
-		Deposit memory deposit;
-		deposit.depositor = depositor;
-		deposit.amount = effectiveDeposit;
-		// `cumulativeAmount` snapshots this outcome's depth immediately after this append.
-		// If this outcome later wins, settlement intentionally uses this append order to determine
-		// which interval of the deposit landed inside the later reward-eligible window.
-		deposit.cumulativeAmount = newBalance;
-		selectedOutcomeState.deposits.push(deposit);
-		uint256 depositIndex = selectedOutcomeState.deposits.length - 1;
-		uint256 stableParentDepositIndex = _getStableLocalParentDepositIndex(uint8(outcome), depositIndex);
-		parentDepositIndex = stableParentDepositIndex;
-		uint256 nodeId = nextNodeId;
-		nextNodeId += 1;
-		Node storage node = nodes[nodeId];
-		node.parentNodeId = selectedOutcomeState.localHeadNodeId;
-		node.depositor = depositor;
-		node.outcome = outcome;
-		node.amount = effectiveDeposit;
-		node.parentDepositIndex = stableParentDepositIndex;
-		node.cumulativeAmount = deposit.cumulativeAmount;
-		node.carryLeafIndex = selectedOutcomeState.currentLeafCount;
-		selectedOutcomeState.localNodeIds.push(nodeId);
-		selectedOutcomeState.localHeadNodeId = nodeId;
-		selectedOutcomeState.localUnresolvedTotal += effectiveDeposit;
-		_appendLocalCarryLeafToCurrentSnapshot(selectedOutcomeState, nodeId);
-		emit LocalDepositAppended(
-			nodeId,
-			outcome,
-			depositor,
-			effectiveDeposit,
-			stableParentDepositIndex,
-			deposit.cumulativeAmount
-		);
-		emit DepositOnOutcome(
-			depositor,
-			outcome,
-			deposit.amount,
-			depositIndex,
-			deposit.cumulativeAmount,
-			escrowedRepByVault[depositor],
-			totalEscrowedRep
-		);
-		if (hasReachedNonDecision()) {
-			nonDecisionTimestamp = block.timestamp;
-			emit NonDecisionReached(nonDecisionTimestamp);
+		if (!success) {
+			assembly ('memory-safe') {
+				revert(add(returnData, 0x20), mload(returnData))
+			}
 		}
+		parentDepositIndex = abi.decode(returnData, (uint256));
 	}
 
 	function _initializeStartParams(uint256 _startBond, uint256 _nonDecisionThreshold) private {

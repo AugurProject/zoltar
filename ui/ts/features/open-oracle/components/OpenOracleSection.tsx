@@ -1,5 +1,6 @@
 import * as commonCopy from '../../../copy/common.js'
 import * as openOracleCopy from '../../../copy/openOracle.js'
+import * as transactionReviewCopy from '../../../copy/transactionReview.js'
 import { useEffect, useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
 import { zeroAddress } from '@zoltar/shared/ethereum'
@@ -24,6 +25,7 @@ import { StickyObjectContext } from '../../../components/StickyObjectContext.js'
 import { StateHint } from '../../../components/StateHint.js'
 import { TokenApprovalControl } from '../../../components/TokenApprovalControl.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
+import { TransactionNetworkValue } from '../../../components/TransactionNetworkValue.js'
 import { TimestampValue } from '../../../components/TimestampValue.js'
 import { useLoadController } from '../../../hooks/useLoadController.js'
 import { assertNever } from '../../../lib/assert.js'
@@ -100,6 +102,14 @@ function renderReportSection(
 		</SectionBlock>
 	)
 }
+function renderReportFields(
+	fields: Array<{
+		label: string
+		value: ComponentChildren
+	}>,
+) {
+	return <MetricGrid variant='question'>{fields.map(field => renderReportField(field.label, field.value))}</MetricGrid>
+}
 function renderInitialPriceSourceLabel(priceSource: string, priceSourceUrl: string | undefined) {
 	if (priceSourceUrl === undefined) return <strong>{priceSource}</strong>
 	return (
@@ -128,7 +138,7 @@ function renderReportSummaryCard(report: OpenOracleReportSummary, onSelectReport
 		<EntityCard
 			key={report.reportId.toString()}
 			className='compact'
-			title={openOracleCopy.formatReportNumberTitle(report.reportId.toString())}
+			title={openOracleCopy.formatReportBrowseTitle(report.token1Symbol, report.token2Symbol, report.reportId.toString())}
 			badge={<Badge tone={statusTone}>{status}</Badge>}
 			actions={
 				<div className='actions'>
@@ -139,19 +149,28 @@ function renderReportSummaryCard(report: OpenOracleReportSummary, onSelectReport
 			}
 		>
 			<MetricGrid variant='question'>
-				{renderReportField(
-					openOracleCopy.tokenPair,
-					<>
-						<AddressValue address={report.token1} /> / <AddressValue address={report.token2} />
-					</>,
-				)}
 				{renderReportField(openOracleCopy.currentPrice, <CurrencyValue value={report.price} suffix={openOracleCopy.formatTokenPairSuffix(report.token1Symbol, report.token2Symbol)} units={OPEN_ORACLE_PRICE_UNITS} copyable={false} />)}
-				{renderReportField(openOracleCopy.currentReporter, report.currentReporter === zeroAddress ? commonCopy.none : <AddressValue address={report.currentReporter} />)}
 				{renderReportField(openOracleCopy.formatCurrentAmount1Label(report.token1Symbol), <CurrencyValue value={report.currentAmount1} suffix={report.token1Symbol} units={report.token1Decimals} copyable={false} />)}
 				{renderReportField(openOracleCopy.formatCurrentAmount2Label(report.token2Symbol), <CurrencyValue value={report.currentAmount2} suffix={report.token2Symbol} units={report.token2Decimals} copyable={false} />)}
 				{renderReportField(openOracleCopy.reportTimestamp, <TimestampValue timestamp={report.reportTimestamp} zeroText={openOracleCopy.awaitingInitialReportLabel} />)}
 				{renderReportField(openOracleCopy.settlementTimestamp, <TimestampValue timestamp={report.settlementTimestamp} zeroText={openOracleCopy.notSettled} />)}
 			</MetricGrid>
+			<ReadOnlyDetailAccordion title={commonCopy.technicalDetails}>
+				{renderReportFields([
+					{
+						label: report.token1Symbol,
+						value: <AddressValue address={report.token1} />,
+					},
+					{
+						label: report.token2Symbol,
+						value: <AddressValue address={report.token2} />,
+					},
+					{
+						label: openOracleCopy.currentReporter,
+						value: report.currentReporter === zeroAddress ? commonCopy.none : <AddressValue address={report.currentReporter} />,
+					},
+				])}
+			</ReadOnlyDetailAccordion>
 		</EntityCard>
 	)
 }
@@ -566,6 +585,12 @@ function renderReportDetailsCard(
 		return action
 	})
 	if (openOracleInitialReportSubmission === undefined) return undefined
+	const reportTransactionContext = [
+		{ label: openOracleCopy.reportId, value: openOracleReportDetails.reportId.toString() },
+		{ label: openOracleCopy.tokenPair, value: openOracleCopy.formatTokenPairSuffix(openOracleReportDetails.token1Symbol, openOracleReportDetails.token2Symbol) },
+		{ label: openOracleCopy.oracleAddress, value: <AddressValue address={openOracleReportDetails.openOracleAddress} /> },
+		{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
+	]
 	return (
 		<>
 			<StickyObjectContext
@@ -601,7 +626,7 @@ function renderReportDetailsCard(
 			</SectionBlock>
 			<div className='report-detail-stack'>
 				<ReadOnlyDetailAccordion defaultOpen title={openOracleCopy.identity}>
-					{renderReportSection(openOracleCopy.identity, [
+					{renderReportFields([
 						{
 							label: openOracleCopy.oracleAddress,
 							value: <AddressValue address={openOracleReportDetails.openOracleAddress} />,
@@ -738,7 +763,7 @@ function renderReportDetailsCard(
 				</ReadOnlyDetailAccordion>
 			</div>
 
-			<OperationModal isOpen={selectedReportModal === 'initial-report'} onClose={() => onSelectedReportModalChange(undefined)} title={openOracleCopy.submitInitialReport} description={openOracleCopy.initialReportReviewHint}>
+			<OperationModal context={reportTransactionContext} isOpen={selectedReportModal === 'initial-report'} onClose={() => onSelectedReportModalChange(undefined)} title={openOracleCopy.submitInitialReport} description={openOracleCopy.initialReportReviewHint}>
 				{renderSelectedReportActionSection({
 					actionMode: 'initial-report',
 					disputeSubmission: openOracleDisputeSubmission,
@@ -762,7 +787,7 @@ function renderReportDetailsCard(
 				})}
 			</OperationModal>
 
-			<OperationModal isOpen={selectedReportModal === 'dispute'} onClose={() => onSelectedReportModalChange(undefined)} title={openOracleCopy.disputeAndSwap} description={openOracleCopy.replacementSwapAmountsHint}>
+			<OperationModal context={reportTransactionContext} isOpen={selectedReportModal === 'dispute'} onClose={() => onSelectedReportModalChange(undefined)} title={openOracleCopy.disputeAndSwap} description={openOracleCopy.replacementSwapAmountsHint}>
 				{renderSelectedReportActionSection({
 					actionMode: 'dispute',
 					disputeSubmission: openOracleDisputeSubmission,
@@ -786,7 +811,7 @@ function renderReportDetailsCard(
 				})}
 			</OperationModal>
 
-			<OperationModal isOpen={selectedReportModal === 'settle'} onClose={() => onSelectedReportModalChange(undefined)} title={openOracleCopy.settleReport} description={openOracleCopy.settlementConfirmationHint}>
+			<OperationModal context={reportTransactionContext} isOpen={selectedReportModal === 'settle'} onClose={() => onSelectedReportModalChange(undefined)} title={openOracleCopy.settleReport} description={openOracleCopy.settlementConfirmationHint}>
 				{renderSelectedReportActionSection({
 					actionMode: 'settle',
 					disputeSubmission: openOracleDisputeSubmission,
@@ -977,6 +1002,17 @@ export function OpenOracleSection({
 					)}
 					<SectionBlock title={openOracleCopy.openOracleGame} variant='plain' description={openOracleCopy.standaloneOracleDescription}>
 						<p className='notice warning'>{openOracleCopy.standaloneOracleWarningDetail}</p>
+						<div className='workflow-summary-strip workflow-guide workflow-guide-compact'>
+							<div className='workflow-guide-intro'>
+								<strong>{openOracleCopy.standaloneOperatorWorkflow}</strong>
+								<p className='detail'>{openOracleCopy.standaloneOperatorWorkflowDetail}</p>
+							</div>
+							<div className='workflow-summary-strip-steps'>
+								<span>{openOracleCopy.verifyTokenPairStep}</span>
+								<span>{openOracleCopy.setEconomicsStep}</span>
+								<span>{openOracleCopy.setDisputeTimingStep}</span>
+							</div>
+						</div>
 						<div className='form-grid'>
 							<SectionBlock headingLevel={4} title={openOracleCopy.tokenPair} variant='embedded'>
 								<div className='field-row'>

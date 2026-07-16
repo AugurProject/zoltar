@@ -11,7 +11,7 @@ import { addressString } from '../../../../../solidity/ts/testSupport/simulator/
 import { AnvilWindowEthereum } from '../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient as SolidityWriteClient } from '../../../../../solidity/ts/testSupport/simulator/utils/clients'
-import { ensureInfraDeployed, getSecurityPoolAddresses } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployPeripherals'
+import { ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployPeripherals'
 import { ensureZoltarDeployed } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { ensureProxyDeployerDeployed, setupTestAccounts } from '../../../../../solidity/ts/testSupport/simulator/utils/utilities'
@@ -81,9 +81,19 @@ describe('security pool creation helper', () => {
 	test('uses the deployment receipt event instead of the latest global deployment record', async () => {
 		const deploySecurityPoolEvent = peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi.find((entry: (typeof peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi)[number]) => entry.type === 'event' && entry.name === 'DeploySecurityPool')
 		if (deploySecurityPoolEvent === undefined) throw new Error('DeploySecurityPool event missing from abi')
-		const deploySecurityPoolInputs = deploySecurityPoolEvent.inputs.map(input => ({ name: input.name, type: input.type }))
+		const deploySecurityPoolDataInputs = deploySecurityPoolEvent.inputs.filter(input => !input.indexed).map(input => ({ name: input.name, type: input.type }))
 
 		const expectedSecurityPoolAddress = addressString(TEST_ADDRESSES[6]) as Address
+		const spoofedSecurityPoolAddress = addressString(TEST_ADDRESSES[5]) as Address
+		const createDeploymentLog = (emitter: Address, securityPoolAddress: Address) => ({
+			address: emitter,
+			data: encodeAbiParameters(deploySecurityPoolDataInputs, [zeroAddress, zeroAddress, zeroAddress, 123n, 2n, 999_999_996_848_000_000n, 0n]),
+			topics: encodeEventTopics({
+				abi: [deploySecurityPoolEvent],
+				eventName: 'DeploySecurityPool',
+				args: { securityPool: securityPoolAddress, parent: zeroAddress, universeId: 0n },
+			}),
+		})
 		const fakeClientBase: Pick<UiWriteClient, 'account' | 'sendTransaction' | 'waitForTransactionReceipt'> = {
 			account: {
 				address: addressString(TEST_ADDRESSES[0]) as Address,
@@ -93,16 +103,7 @@ describe('security pool creation helper', () => {
 			waitForTransactionReceipt: async () =>
 				({
 					status: 'success',
-					logs: [
-						{
-							address: zeroAddress,
-							data: encodeAbiParameters(deploySecurityPoolInputs, [expectedSecurityPoolAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, 0n, 123n, 2n, 999_999_996_848_000_000n, 0n]),
-							topics: encodeEventTopics({
-								abi: [deploySecurityPoolEvent],
-								eventName: 'DeploySecurityPool',
-							}),
-						},
-					],
+					logs: [createDeploymentLog(zeroAddress, spoofedSecurityPoolAddress), createDeploymentLog(getInfraContractAddresses().securityPoolFactory, expectedSecurityPoolAddress)],
 				}) as never,
 		}
 		const fakeClient = fakeClientBase as UiWriteClient

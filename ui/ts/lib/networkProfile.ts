@@ -59,3 +59,7 @@ export function buildTransactionExplorerUrl(profile: NetworkProfile, hash: Hash)
 	if (profile.transactionExplorerBaseUrl === undefined) return undefined
 	return `${profile.transactionExplorerBaseUrl}${hash}`
 }
+
+export function formatTransactionNetworkLabel(profile: NetworkProfile) {
+	return profile.id === 'simulation' ? `${profile.displayName} · local sandbox` : profile.displayName
+}

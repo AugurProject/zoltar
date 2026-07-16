@@ -75,7 +75,7 @@ function getSecurityPoolDeployerAddress(securityPoolFactory: Address) {
 function getSecurityPoolDeploymentWorkerAddress(securityPoolFactory: Address) {
 	return getCreateAddress({
 		from: getSecurityPoolDeployerAddress(securityPoolFactory),
-		nonce: 1n,
+		nonce: 2n,
 	})
 }
 

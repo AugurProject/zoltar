@@ -19,7 +19,7 @@ import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
-import { ORACLE_EXACT_TOKEN1_REPORT, applyLibraries } from '../testSupport/simulator/utils/contracts/deployPeripherals'
+import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, applyLibraries } from '../testSupport/simulator/utils/contracts/deployPeripherals'
 import {
 	DeploymentStatusOracle_DeploymentStatusOracle,
 	peripherals_factories_EscalationGameFactory_EscalationGameFactory,
@@ -998,7 +998,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			encodeDeployData({
 				abi: peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.abi,
 				bytecode: applyLibraries(peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object),
-				args: [zeroAddress, 100000n, 1000000, ORACLE_EXACT_TOKEN1_REPORT, 480, 0, 100000, 10000, 115, true, true, client.account.address, 100000n, 30000n, 1000n],
+				args: [zeroAddress, 100000n, 1000000, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, 480, 0, 100000, 10000, 115, true, true, client.account.address, 100000n, 30000n, 1000n],
 			}),
 		)
 		await transact(
@@ -1020,6 +1020,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			encodeDeployData({
 				abi: peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
 				bytecode: applyLibraries(peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.evm.bytecode.object),
+				args: [zeroAddress, zeroAddress],
 			}),
 		)
 		await assert.rejects(
@@ -1029,7 +1030,7 @@ describe('Solidity bytecode coverage helpers', () => {
 					data: encodeFunctionData({
 						abi: peripherals_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker.abi,
 						functionName: 'deploy',
-						args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n, 1n, zeroAddress],
+						args: [zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, zeroAddress, fakeZoltar, 0n, 0n, 2n, 1n, zeroAddress],
 					}),
 					gas: 10_000_000n,
 				}),

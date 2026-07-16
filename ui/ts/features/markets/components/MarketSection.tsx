@@ -9,6 +9,7 @@ import { MarketOverviewSection } from './MarketOverviewSection.js'
 import { MarketQuestionsSection } from './MarketQuestionsSection.js'
 import { OperationModal } from '../../../components/OperationModal.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
+import { TransactionUniverseValue } from '../../universes/components/TransactionUniverseValue.js'
 import { ZoltarMigrationSection } from '../../universes/components/ZoltarMigrationSection.js'
 import { isMainnetChain } from '../../../lib/network.js'
 import type { MarketSectionProps } from '../../types.js'
@@ -71,6 +72,12 @@ export function MarketSection({
 	const view = activeView
 	const showUniverseSummary = view === 'questions' && zoltarUniverse !== undefined
 	const [forkModalOpen, setForkModalOpen] = useState(false)
+	const selectedForkQuestion = zoltarQuestions.find(question => question.questionId.toLowerCase() === zoltarForkQuestionId.trim().toLowerCase()) ?? zoltarUniverse?.forkQuestionDetails
+	const forkModalTitle = hasForked ? zoltarCopy.viewForkDetails : zoltarCopy.forkZoltar
+	const forkContext = [
+		{ label: commonCopy.question, value: selectedForkQuestion?.title ?? (zoltarForkQuestionId.trim() === '' ? commonCopy.noneSelected : zoltarForkQuestionId) },
+		{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={zoltarUniverse?.universeId} /> },
+	]
 
 	useEffect(() => {
 		if (view !== 'migrate') return
@@ -168,12 +175,12 @@ export function MarketSection({
 						<SectionBlock title={marketCopy.fork}>
 							<div className='actions'>
 								<button className='primary' type='button' onClick={() => setForkModalOpen(true)}>
-									{zoltarCopy.forkZoltar}
+									{forkModalTitle}
 								</button>
 							</div>
 							{zoltarForkQuestionId.trim() === '' ? undefined : <p className='detail'>{marketCopy.formatSelectedForkQuestionDetail(zoltarForkQuestionId)}</p>}
 						</SectionBlock>
-						<OperationModal isOpen={forkModalOpen} onClose={() => setForkModalOpen(false)} title={zoltarCopy.forkZoltar}>
+						<OperationModal context={forkContext} isOpen={forkModalOpen} onClose={() => setForkModalOpen(false)} title={forkModalTitle}>
 							<ForkZoltarSection
 								accountAddress={accountState.address}
 								hasLoadedZoltarQuestions={hasLoadedZoltarQuestions}

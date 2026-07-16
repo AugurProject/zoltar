@@ -14,7 +14,7 @@ export const reportId = 'Report ID'
 export const settlementTime = 'Settlement Time'
 export const settlerReward = 'Settler Reward'
 export const tokenPair = 'Token Pair'
-export const standaloneOracleDescription = 'Direct Open Oracle creation for protocol testing. This bypasses pool-managed oracle-manager staging, so confirm addresses, token amounts, fees, and timing before submitting.'
+export const standaloneOracleDescription = 'Create a standalone Open Oracle game and review token addresses, amounts, fees, and timing before submitting.'
 export const openOracleGame = 'Open Oracle Game'
 export const formatApprovingTokenPendingLabel = (tokenSymbol: string) => `Approving ${tokenSymbol}…`
 export const browseReports = 'Browse Reports'
@@ -26,6 +26,7 @@ export const callbackGasLimit = 'Callback Gas Limit'
 export const formatCurrentAmount1Label = (tokenSymbol: string) => `Current Amount 1 (${tokenSymbol})`
 export const formatCurrentAmount2Label = (tokenSymbol: string) => `Current Amount 2 (${tokenSymbol})`
 export const formatTokenPairSuffix = (token1Symbol: string, token2Symbol: string) => commonCopy.formatPairSlash(token1Symbol, token2Symbol)
+export const formatReportBrowseTitle = (token1Symbol: string, token2Symbol: string, reportId: string) => `${formatTokenPairSuffix(token1Symbol, token2Symbol)} · ${formatReportNumberTitle(reportId)}`
 export const createAnother = 'Create Another'
 export const createStandaloneOracleGame = 'Create Standalone Oracle Game'
 export const creating = 'Creating…'
@@ -107,6 +108,11 @@ export const openOracleReportDetails = 'Open Oracle Report Details'
 export const searchByReportIdTokenSymbolOrTokenAddress = 'Search by report ID, token symbol, or token address'
 export const staleQuoteWarning = 'This quote is stale and will be refreshed before submission.'
 export const standaloneOracleWarningDetail = 'Use this only when you intend to create a standalone oracle game directly from the connected wallet. Pool-managed oracle requests should be started from a selected security pool.'
+export const standaloneOperatorWorkflow = 'Standalone operator workflow'
+export const standaloneOperatorWorkflowDetail = 'This flow creates infrastructure, not a market position.'
+export const verifyTokenPairStep = '1. Verify token pair'
+export const setEconomicsStep = '2. Set economics'
+export const setDisputeTimingStep = '3. Set dispute timing'
 export const submitting = 'Submitting…'
 export const formatTimingValue = (timingAmount: CopyTemplateValue, usesSeconds: boolean) => `${timingAmount} ${usesSeconds ? 's' : 'blocks'}`
 export const timing = 'Timing'

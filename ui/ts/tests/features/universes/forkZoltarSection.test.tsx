@@ -1,8 +1,8 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { h } from 'preact'
-import { within } from '../../testUtils/queries'
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { h, render } from 'preact'
+import { fireEvent, within } from '../../testUtils/queries'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { ForkZoltarSection } from '../../../features/universes/components/ForkZoltarSection.js'
 import type { MarketDetails, ZoltarUniverseSummary } from '../../../types/contracts.js'
@@ -97,6 +97,51 @@ describe('ForkZoltarSection', () => {
 		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
 	})
 
+	test('requires a valid fork question before REP approval', async () => {
+		const createProps = (questionId: string) => ({
+			accountAddress: zeroAddress,
+			hasLoadedZoltarQuestions: true,
+			isMainnet: true,
+			loadingZoltarForkAccess: false,
+			loadingZoltarQuestions: false,
+			onApproveZoltarForkRep: () => undefined,
+			onForkZoltar: () => undefined,
+			onZoltarForkQuestionIdChange: () => undefined,
+			zoltarForkActiveAction: undefined,
+			zoltarForkApproval: { error: undefined, loading: false, value: 0n },
+			zoltarForkError: undefined,
+			zoltarForkPending: false,
+			zoltarForkQuestionId: questionId,
+			zoltarForkRepBalance: 1000n,
+			zoltarQuestions: [createQuestion()],
+			zoltarUniverse: createUniverse(),
+			zoltarUniverseState: 'ready' as const,
+		})
+
+		for (const questionId of ['', '0x02']) {
+			const renderedComponent = await renderIntoDocument(h(ForkZoltarSection, createProps(questionId)))
+			const approveButton = within(renderedComponent.container)
+				.getAllByRole('button')
+				.find(button => button.textContent?.startsWith('Approve ') === true)
+			if (approveButton === undefined) throw new Error('Expected approval button')
+			expect(approveButton.hasAttribute('disabled')).toBe(true)
+			expect(renderedComponent.container.textContent).toContain('Select a valid fork question before approving REP or forking Zoltar.')
+			const review = within(renderedComponent.container).getByRole('heading', { name: 'Transaction Review' }).closest('section')
+			if (review === null) throw new Error('Expected transaction review')
+			expect(review.textContent).not.toContain('Selected Fork Question')
+			expect(review.textContent).not.toContain('Select a valid fork question before approving REP or forking Zoltar.')
+			await renderedComponent.cleanup()
+		}
+
+		const renderedComponent = await renderIntoDocument(h(ForkZoltarSection, createProps('0x01')))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const approveButton = within(renderedComponent.container)
+			.getAllByRole('button')
+			.find(button => button.textContent?.startsWith('Approve ') === true)
+		if (approveButton === undefined) throw new Error('Expected approval button')
+		expect(approveButton.hasAttribute('disabled')).toBe(false)
+	})
+
 	test('shows the permanent fork burn, migration credit, and Zoltar target before submission', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(ForkZoltarSection, {
@@ -128,5 +173,83 @@ describe('ForkZoltarSection', () => {
 		expect(review.textContent).toContain('Zoltar Contract')
 		expect(review.textContent).toContain(ZOLTAR_ADDRESS)
 		expect(review.textContent).not.toContain('Protocol FeeNone')
+	})
+
+	test('requires the user to type the irreversible fork confirmation before submission', async () => {
+		const onForkZoltar = mock(() => undefined)
+		const renderedComponent = await renderIntoDocument(
+			h(ForkZoltarSection, {
+				accountAddress: zeroAddress,
+				hasLoadedZoltarQuestions: true,
+				isMainnet: true,
+				loadingZoltarForkAccess: false,
+				loadingZoltarQuestions: false,
+				onApproveZoltarForkRep: () => undefined,
+				onForkZoltar,
+				onZoltarForkQuestionIdChange: () => undefined,
+				zoltarForkActiveAction: undefined,
+				zoltarForkApproval: { error: undefined, loading: false, value: 100n * REP },
+				zoltarForkError: undefined,
+				zoltarForkPending: false,
+				zoltarForkQuestionId: '0x01',
+				zoltarForkRepBalance: 1000n * REP,
+				zoltarQuestions: [createQuestion()],
+				zoltarUniverse: createUniverse({ forkBurnDivisor: 5n, forkThreshold: 100n * REP, zoltarAddress: ZOLTAR_ADDRESS }),
+				zoltarUniverseState: 'ready',
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const confirmationInput = documentQueries.getByRole('textbox', { name: 'Type FORK to confirm' })
+		const forkButton = documentQueries.getByRole('button', { name: 'Fork Zoltar' })
+		expect(forkButton.hasAttribute('disabled')).toBe(true)
+
+		fireEvent.input(confirmationInput, { target: { value: 'FORK' } })
+		expect(forkButton.hasAttribute('disabled')).toBe(false)
+		fireEvent.click(forkButton)
+		expect(onForkZoltar).toHaveBeenCalledTimes(1)
+	})
+
+	test('requires fresh confirmation when the selected fork question changes', async () => {
+		const createProps = (questionId: string) => ({
+			accountAddress: zeroAddress,
+			hasLoadedZoltarQuestions: true,
+			isMainnet: true,
+			loadingZoltarForkAccess: false,
+			loadingZoltarQuestions: false,
+			onApproveZoltarForkRep: () => undefined,
+			onForkZoltar: () => undefined,
+			onZoltarForkQuestionIdChange: () => undefined,
+			zoltarForkActiveAction: undefined,
+			zoltarForkApproval: { error: undefined, loading: false, value: 100n * REP },
+			zoltarForkError: undefined,
+			zoltarForkPending: false,
+			zoltarForkQuestionId: questionId,
+			zoltarForkRepBalance: 1000n * REP,
+			zoltarQuestions: [
+				createQuestion(),
+				{
+					...createQuestion(),
+					questionId: '0x02',
+					title: 'Second fork question title',
+				},
+			],
+			zoltarUniverse: createUniverse({ forkBurnDivisor: 5n, forkThreshold: 100n * REP, zoltarAddress: ZOLTAR_ADDRESS }),
+			zoltarUniverseState: 'ready' as const,
+		})
+		const renderedComponent = await renderIntoDocument(h(ForkZoltarSection, createProps('0x01')))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const componentQueries = within(renderedComponent.container)
+		const confirmationInput = componentQueries.getByRole('textbox', { name: 'Type FORK to confirm' }) as HTMLInputElement
+		const forkButton = componentQueries.getByRole('button', { name: 'Fork Zoltar' })
+
+		fireEvent.input(confirmationInput, { target: { value: 'FORK' } })
+		expect(forkButton.hasAttribute('disabled')).toBe(false)
+
+		render(h(ForkZoltarSection, createProps('0x02')), renderedComponent.container)
+
+		expect(confirmationInput.value).toBe('')
+		expect(forkButton.hasAttribute('disabled')).toBe(true)
 	})
 })

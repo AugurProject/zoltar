@@ -6,8 +6,8 @@ import './ERC20.sol';
 contract ReputationToken is ERC20 {
 	uint256 private totalTheoreticalSupply;
 	address public immutable zoltar;
-	event Mint(address account, uint256 value);
-	event Burn(address account, uint256 value, uint256 totalTheoreticalSupply);
+	event Mint(address indexed account, uint256 value);
+	event Burn(address indexed account, uint256 value, uint256 totalTheoreticalSupply);
 	event TheoreticalSupplySet(uint256 totalTheoreticalSupply);
 
 	modifier isZoltar() {
