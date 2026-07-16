@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import type { Address } from '@zoltar/shared/ethereum'
 import { createReportingAndOracleFixture, useSecurityPoolWorkflowSectionTestDom } from './fixture'
 
 describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
@@ -6,6 +7,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 	const { setCleanup } = testDom
 	const fixture = createReportingAndOracleFixture()
 	const {
+		fireEvent,
 		within,
 		getAddress,
 		zeroAddress,
@@ -422,6 +424,163 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(documentQueries.getByRole('button', { name: 'Request New Price' })).not.toBeNull()
 		expect(sectionQueries.getByText('Pending Request')).not.toBeNull()
 		expect(sectionQueries.getByRole('button', { name: /Report #\s*12/ })).not.toBeNull()
+	})
+
+	test('keeps self-funded requests and exposes creator, operator, claim, and refund bounty controls', async () => {
+		const walletAddress = getAddress('0x00000000000000000000000000000000000000a1')
+		const otherAddress = getAddress('0x00000000000000000000000000000000000000b2')
+		const repToken = getAddress('0x00000000000000000000000000000000000000c3')
+		const wethToken = getAddress('0x00000000000000000000000000000000000000d4')
+		const loadedBountyIds: Array<{ bountyId: bigint; managerAddress: Address }> = []
+		const refundedBountyIds: Array<{ bountyId: bigint; managerAddress: Address }> = []
+		let clearedLookupErrors = 0
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={1_000n}>
+				<SecurityPoolWorkflowSection
+					{...createSecurityPoolWorkflowProps({
+						accountState: createAccountState({ address: walletAddress }),
+						checkedSecurityPoolAddress: zeroAddress,
+						poolOracleManagerDetails: createOracleManagerDetails({
+							operationBountyBoardAddress: otherAddress,
+							operationBounties: [
+								{
+									acceptanceDeadline: 2_000n,
+									amount: 2n * 10n ** 18n,
+									bountyId: 4n,
+									creator: otherAddress,
+									executionErrorMessage: undefined,
+									executionStatus: 'none',
+									maximumInitialReportAmount2: 0n,
+									minimumInitialReportAmount2: 0n,
+									operation: 'liquidation',
+									operationId: 0n,
+									operator: zeroAddress,
+									refundAvailableAt: undefined,
+									reportId: 0n,
+									rewardAmount: 1n * 10n ** 18n,
+									rewardToken: repToken,
+									state: 'open',
+									targetVault: otherAddress,
+									validForSeconds: 300n,
+								},
+								{
+									acceptanceDeadline: 2_000n,
+									amount: 5n * 10n ** 18n,
+									bountyId: 3n,
+									creator: walletAddress,
+									executionErrorMessage: undefined,
+									executionStatus: 'none',
+									maximumInitialReportAmount2: 0n,
+									minimumInitialReportAmount2: 0n,
+									operation: 'setSecurityBondsAllowance',
+									operationId: 0n,
+									operator: zeroAddress,
+									refundAvailableAt: undefined,
+									reportId: 0n,
+									rewardAmount: 2n * 10n ** 18n,
+									rewardToken: wethToken,
+									state: 'open',
+									targetVault: walletAddress,
+									validForSeconds: 300n,
+								},
+								{
+									acceptanceDeadline: 2_000n,
+									amount: 1n * 10n ** 18n,
+									bountyId: 2n,
+									creator: otherAddress,
+									executionErrorMessage: undefined,
+									executionStatus: 'succeeded',
+									maximumInitialReportAmount2: 0n,
+									minimumInitialReportAmount2: 0n,
+									operation: 'liquidation',
+									operationId: 8n,
+									operator: walletAddress,
+									refundAvailableAt: undefined,
+									reportId: 4n,
+									rewardAmount: 3n * 10n ** 18n,
+									rewardToken: repToken,
+									state: 'assigned',
+									targetVault: otherAddress,
+									validForSeconds: 300n,
+								},
+								{
+									acceptanceDeadline: 2_000n,
+									amount: 1n * 10n ** 18n,
+									bountyId: 1n,
+									creator: walletAddress,
+									executionErrorMessage: 'oracle report exposure exceeded',
+									executionStatus: 'failed',
+									maximumInitialReportAmount2: 0n,
+									minimumInitialReportAmount2: 0n,
+									operation: 'withdrawRep',
+									operationId: 7n,
+									operator: otherAddress,
+									refundAvailableAt: undefined,
+									reportId: 4n,
+									rewardAmount: 1n * 10n ** 18n,
+									rewardToken: wethToken,
+									state: 'assigned',
+									targetVault: walletAddress,
+									validForSeconds: 300n,
+								},
+							],
+							reputationTokenAddress: repToken,
+							wethAddress: wethToken,
+						}),
+						poolOracleActiveAction: 'acceptOperationBounty',
+						poolOracleActiveBountyId: 3n,
+						onLoadPoolOperationBounty: (managerAddress, bountyId) => loadedBountyIds.push({ bountyId, managerAddress }),
+						onClearPoolOperationBountyLookupError: () => {
+							clearedLookupErrors += 1
+						},
+						onRefundPoolOperationBounty: (managerAddress, bountyId) => refundedBountyIds.push({ bountyId, managerAddress }),
+						poolOperationBountyLookupError: 'Operation bounty #99 does not exist',
+						securityPoolAddress: zeroAddress,
+						securityPools: [createSelectedPool()],
+						selectedPoolView: 'price-oracle',
+					})}
+					showHeader={false}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		setCleanup(renderedComponent.cleanup)
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'Self-funded price request' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Request New Price' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Operation Bounties', level: 3 })).not.toBeNull()
+		expect(documentQueries.getByText('Acceptance revalidates the operation and, when the price is stale, requires room in the four-operation settlement batch.')).not.toBeNull()
+		expect(documentQueries.getByText("Optional bounds apply to either a proposed new report's WETH amount or the current WETH amount of an existing pending report.")).not.toBeNull()
+		expect(documentQueries.getByText('The cancellation deadline is fixed when accepted: queued time + one oracle settlement window + this execution window. Disputes do not extend it.')).not.toBeNull()
+		const operationPicker = documentQueries.getByRole('combobox', { name: 'Operation' })
+		expect(documentQueries.getByLabelText('Amount (ETH)')).not.toBeNull()
+		fireEvent.change(operationPicker, { currentTarget: { value: 'withdrawRep' }, target: { value: 'withdrawRep' } })
+		expect(documentQueries.getByLabelText('Amount (REP)')).not.toBeNull()
+		fireEvent.change(operationPicker, { currentTarget: { value: 'liquidation' }, target: { value: 'liquidation' } })
+		expect(documentQueries.getByLabelText('Amount (ETH)')).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Operation bounties', level: 4 })).not.toBeNull()
+		expect(documentQueries.getByRole('alert').textContent).toContain('Operation bounty #99 does not exist')
+		fireEvent.input(documentQueries.getByLabelText('Bounty ID'), { currentTarget: { value: '1' }, target: { value: '1' } })
+		expect(clearedLookupErrors).toBe(1)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Load Bounty' }))
+		expect(loadedBountyIds).toEqual([{ bountyId: 1n, managerAddress: zeroAddress }])
+		const allowanceBountyHeading = documentQueries.getByRole('heading', { name: 'Bounty #3 · Set Bond Allowance', level: 5 })
+		const liquidationBountyHeading = documentQueries.getByRole('heading', { name: 'Bounty #2 · Liquidation', level: 5 })
+		const withdrawalBountyHeading = documentQueries.getByRole('heading', { name: 'Bounty #1 · Withdraw REP', level: 5 })
+		const allowanceBountyCard = allowanceBountyHeading.closest('article')
+		const liquidationBountyCard = liquidationBountyHeading.closest('article')
+		const withdrawalBountyCard = withdrawalBountyHeading.closest('article')
+		if (allowanceBountyCard === null || liquidationBountyCard === null || withdrawalBountyCard === null) throw new Error('Expected bounty headings to be nested in bounty cards')
+		expect(within(allowanceBountyCard).getByText('≈ 5.00 ETH')).not.toBeNull()
+		expect(within(liquidationBountyCard).getByText('≈ 1.00 ETH')).not.toBeNull()
+		expect(within(withdrawalBountyCard).getByText('≈ 1.00 REP')).not.toBeNull()
+		fireEvent.click(within(withdrawalBountyCard).getByRole('button', { name: 'Cancel & Refund' }))
+		expect(refundedBountyIds).toEqual([{ bountyId: 1n, managerAddress: zeroAddress }])
+		expect(documentQueries.getByRole('button', { name: 'Post Bounty' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Accepting bounty…' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Accept & Fund Report' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Claim Bounty' })).not.toBeNull()
+		expect(documentQueries.getAllByRole('button', { name: /Refund|Cancel & Refund/ })).toHaveLength(2)
 	})
 
 	test('disables Request New Price when the wallet lacks the buffered oracle bounty ETH', async () => {

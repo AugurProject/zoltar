@@ -14,6 +14,7 @@ import type {
 	OpenOracleActionResult,
 	OpenOracleReportDetails,
 	OracleManagerDetails,
+	OracleOperationBountyInput,
 	ReadClient,
 	ReportingActionResult,
 	ReportingDetails,
@@ -299,10 +300,17 @@ export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
 	checkedSecurityPoolAddress: string | undefined
 	forkAuction: ForkAuctionRouteContentProps
 	loadingSecurityPools: boolean
+	loadingPoolOperationBounty: boolean
 	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => void
 	onReturnToCurrentUniverse?: () => void
 	onSwitchToPoolUniverse?: (universeId: bigint, securityPoolAddress: Address) => void
 	onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint) => void
+	onAcceptPoolOperationBounty?: (managerAddress: Address, bountyId: bigint) => void
+	onClaimPoolOperationBounty?: (managerAddress: Address, bountyId: bigint) => void
+	onClearPoolOperationBountyLookupError?: () => void
+	onLoadPoolOperationBounty?: (managerAddress: Address, bountyId: bigint) => void
+	onPostPoolOperationBounty?: (managerAddress: Address, bounty: OracleOperationBountyInput) => void
+	onRefundPoolOperationBounty?: (managerAddress: Address, bountyId: bigint) => void
 	onRefreshSelectedPoolData: (securityPoolAddress?: string) => void
 	onRequestPoolPrice: (managerAddress: Address) => void
 	onSelectedPoolViewChange: (view: string | undefined) => void
@@ -310,7 +318,9 @@ export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
 	selectedPoolRefreshNonce: number
 	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
 	poolOracleActiveAction: OpenOracleActionResult['action'] | undefined
+	poolOracleActiveBountyId: bigint | undefined
 	poolOracleManagerError: string | undefined
+	poolOperationBountyLookupError: string | undefined
 	poolPriceOracleResult: OpenOracleActionResult | undefined
 	universeForkTime?: bigint | undefined
 	selectedPoolView: string

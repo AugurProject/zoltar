@@ -194,11 +194,12 @@ export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 			args: [securityPool, repToken, proofVerifier],
 		}),
 	getInfraContracts: () => getInfraContractAddresses(),
-	getPriceOracleManagerAndOperatorQueuerInitCode: (openOracle, repToken) =>
+	getPriceOracleManagerAndOperatorQueuerInitCode: (factory, openOracle, repToken) =>
 		concatHex([
 			applyLibraries(peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.evm.bytecode.object),
 			encodeAbiParameters(
 				[
+					{ type: 'address' },
 					{ type: 'address' },
 					{ type: 'address' },
 					{ type: 'address' },
@@ -218,6 +219,7 @@ export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 					{ type: 'uint256' },
 				],
 				[
+					factory,
 					openOracle,
 					repToken,
 					MAINNET_WETH_ADDRESS,

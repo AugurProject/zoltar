@@ -52,6 +52,10 @@ const eventSourceByName: Record<string, string> = {
 	MigrationRepAdded: 'solidity/contracts/Zoltar.sol',
 	MigrationRepSplit: 'solidity/contracts/Zoltar.sol',
 	NonDecisionReached: 'solidity/contracts/peripherals/EscalationGameState.sol',
+	OperationBountyAccepted: 'solidity/contracts/peripherals/OpenOracleOperationBountyBoard.sol',
+	OperationBountyClaimed: 'solidity/contracts/peripherals/OpenOracleOperationBountyBoard.sol',
+	OperationBountyPosted: 'solidity/contracts/peripherals/OpenOracleOperationBountyBoard.sol',
+	OperationBountyRefunded: 'solidity/contracts/peripherals/OpenOracleOperationBountyBoard.sol',
 	PendingOperationRecoveryConsumed: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	PendingReportRecovered: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	PerformLiquidation: 'solidity/contracts/peripherals/SecurityPool.sol',
@@ -122,6 +126,12 @@ const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 		requestPriceIfNeededAndStageOperation: ['public(OperationType,address,uint256,uint256,uint256)'],
 		setRepEthPrice: ['public(uint256)'],
 		setSecurityPool: ['public(ISecurityPool)'],
+	},
+	'solidity/contracts/peripherals/OpenOracleOperationBountyBoard.sol': {
+		acceptOperationBounty: ['external(uint256,uint256)'],
+		claimOperationBounty: ['external(uint256)'],
+		postOperationBounty: ['external(OperationType,address,uint256,uint256,address,uint256,uint256,uint256,uint256)'],
+		refundOperationBounty: ['external(uint256)'],
 	},
 	'solidity/contracts/peripherals/SecurityPool.sol': {
 		activateForkMode: ['external()'],
@@ -525,7 +535,8 @@ const contractReferences: ContractReference[] = [
 	{
 		name: 'OpenOraclePriceCoordinator',
 		purpose: 'Obtains a fresh REP-per-ETH price and gates withdrawal, allowance, and liquidation operations behind it.',
-		readSurface: 'Use `isPriceValid`, `priceRoundMaxNotional`, `priceRoundConsumedNotional`, `getPriceRoundRemainingNotional`, request-cost getters, pending report fields, `getPendingOperationSlot`, active-operation pagination, and pending-settlement IDs to reconstruct oracle and operation state.',
+		readSurface:
+			'Use `isPriceValid`, `priceRoundMaxNotional`, `priceRoundConsumedNotional`, `getPriceRoundRemainingNotional`, request-cost getters, pending report fields, `getPendingOperationSlot`, active-operation pagination, pending-settlement IDs, `operationBountyBoard`, and `operationExecutionResults` to reconstruct oracle and operation state.',
 		sourcePath: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 		interactions: [
 			{
@@ -576,6 +587,47 @@ const contractReferences: ContractReference[] = [
 				declarations: [{ name: 'setSecurityPool' }, { name: 'setRepEthPrice' }],
 				preconditions: '`securityPool` is still unset for `setSecurityPool`; caller equals the configured pool for `setRepEthPrice`.',
 				signals: '`SecurityPoolSet`, `RepEthPriceSet`',
+			},
+		],
+	},
+	{
+		name: 'OpenOracleOperationBountyBoard',
+		purpose: 'Escrows REP or WETH rewards so one account can request a restricted pool operation while a permissionless operator supplies the temporary OpenOracle reporting capital. The original self-funded coordinator calls remain available.',
+		readSurface: "Use `coordinator`, `reputationToken`, `weth`, `nextOperationBountyId`, `operationBounties`, and `getOperationBounties` to discover terms and lifecycle state. Pair an assigned bounty's `operationId` with the coordinator's `operationExecutionResults` entry.",
+		sourcePath: 'solidity/contracts/peripherals/OpenOracleOperationBountyBoard.sol',
+		interactions: [
+			{
+				call: '`postOperationBounty(...)`',
+				caller: 'Operation creator',
+				declarations: [{ name: 'postOperationBounty' }],
+				effect: 'Escrows the reward and records the creator as the eventual operation initiator.',
+				preconditions: 'Coordinator operation validation passes; reward is positive pool REP or WETH; acceptance deadline is in the future; optional initial-report WETH bounds are ordered; token approval covers the reward.',
+				signals: '`OperationBountyPosted`',
+			},
+			{
+				call: '`acceptOperationBounty(bountyId, initialReportAmount2)`',
+				caller: 'Anyone for an open bounty; only the current report sponsor while a report is pending',
+				declarations: [{ name: 'acceptOperationBounty' }],
+				effect: "Assigns the operator, stages the creator's operation, executes against a fresh cache or opens/joins a report, and records the operation and report IDs. The accepting account owns the initial OpenOracle report position.",
+				preconditions:
+					"Acceptance deadline has not passed and the coordinator revalidates the operation against current pool state. When the cache is stale, the four-operation pending settlement queue must have room and either the proposed initial WETH or the pending report's current WETH must fit the creator's bounds. A new report also requires the operator's coordinator REP/WETH approvals and ETH request cost; joining a pending report requires that report's sponsor.",
+				signals: '`OperationBountyAccepted`, `StagedOperationQueued`, possibly `PriceRequested` and `ExecutedStagedOperation`',
+			},
+			{
+				call: '`claimOperationBounty(bountyId)`',
+				caller: 'Assigned operator',
+				declarations: [{ name: 'claimOperationBounty' }],
+				effect: 'Pays the escrowed reward once and marks the bounty paid.',
+				preconditions: 'Coordinator execution result is `Succeeded`.',
+				signals: '`OperationBountyClaimed`',
+			},
+			{
+				call: '`refundOperationBounty(bountyId)`',
+				caller: 'Bounty creator',
+				declarations: [{ name: 'refundOperationBounty' }],
+				effect: 'Returns escrow to the creator and, for an expired pending operation, consumes it as failed.',
+				preconditions: 'Bounty is still open, its assigned operation failed, or `block.timestamp > queuedAt + settlementTime + validForSeconds`. Equality is not expired, and OpenOracle disputes do not extend this fixed deadline. Successful operations cannot be refunded.',
+				signals: '`OperationBountyRefunded`, possibly `ExecutedStagedOperation` state through the coordinator result record',
 			},
 		],
 	},
@@ -727,7 +779,7 @@ async function generateMarkdown(): Promise<string> {
 
 The main state-changing protocol calls map to caller authority, lifecycle prerequisites, effects, and observable events below. The conceptual flow begins in [Start Here](./start-here.html), while the [Operator Reference](./operator-reference.md) covers edge cases and the application build consumes the complete generated ABI.
 
-The tables focus on transaction entrypoints in the seven contracts that users and protocol components interact with directly. Read-only getters are summarized as a read surface instead of repeating every public storage accessor. Protocol-only rows identify calls that applications should observe but ordinary users should reach through the owning pool, forker, factory, or coordinator.
+The tables focus on transaction entrypoints in the eight contracts that users and protocol components interact with directly. Read-only getters are summarized as a read surface instead of repeating every public storage accessor. Protocol-only rows identify calls that applications should observe but ordinary users should reach through the owning pool, forker, factory, or coordinator.
 
 Failure behavior follows Solidity transaction semantics: an uncaught revert rolls back the transaction. The coordinator is the important exception at the workflow level because it deliberately consumes several failed staged operations and records the result in \`ExecutedStagedOperation\`.
 

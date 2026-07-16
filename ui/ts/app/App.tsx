@@ -218,7 +218,25 @@ export function App() {
 	const updateReportingForm = (update: Partial<ReportingFormState>) => {
 		setReportingForm(current => applyReportingFormUpdate(current, update))
 	}
-	const { executePendingPoolOperation, loadingPoolOracleManager, loadPoolOracleManager, poolOracleActiveAction, poolOracleManagerDetails, poolOracleManagerError, poolPriceOracleResult, requestPoolPrice } = usePriceOracleManager(walletScopedHookConfig)
+	const {
+		acceptPoolOperationBounty,
+		claimPoolOperationBounty,
+		clearPoolOperationBountyLookupError,
+		executePendingPoolOperation,
+		loadingPoolOracleManager,
+		loadingPoolOperationBounty,
+		loadPoolOracleManager,
+		loadPoolOperationBounty,
+		poolOracleActiveAction,
+		poolOracleActiveBountyId,
+		poolOracleManagerDetails,
+		poolOracleManagerError,
+		poolOperationBountyLookupError,
+		poolPriceOracleResult,
+		postPoolOperationBounty,
+		refundPoolOperationBounty,
+		requestPoolPrice,
+	} = usePriceOracleManager(walletScopedHookConfig)
 	const {
 		checkedSecurityPoolAddress,
 		closeLiquidationModal,
@@ -622,11 +640,18 @@ export function App() {
 				refreshSelectedPoolData(selectedSecurityPoolAddress)
 			},
 			onQueueLiquidation: (managerAddress: Address, selectedSecurityPoolAddress: Address) => void queueLiquidation(managerAddress, selectedSecurityPoolAddress),
+			onAcceptPoolOperationBounty: (managerAddress, bountyId) => void acceptPoolOperationBounty(managerAddress, bountyId),
+			onClaimPoolOperationBounty: (managerAddress, bountyId) => void claimPoolOperationBounty(managerAddress, bountyId),
+			onClearPoolOperationBountyLookupError: clearPoolOperationBountyLookupError,
 			onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint) => void executePendingPoolOperation(managerAddress, operationId),
+			onPostPoolOperationBounty: (managerAddress, bounty) => void postPoolOperationBounty(managerAddress, bounty),
+			onRefundPoolOperationBounty: (managerAddress, bountyId) => void refundPoolOperationBounty(managerAddress, bountyId),
 			loadingPoolOracleManager,
+			loadingPoolOperationBounty,
 			loadingLiquidationFundingPreview,
 			loadingSecurityPools,
 			onLoadPoolOracleManager: (managerAddress: Address) => void loadPoolOracleManager(managerAddress),
+			onLoadPoolOperationBounty: (managerAddress: Address, bountyId: bigint) => void loadPoolOperationBounty(managerAddress, bountyId),
 			onRequestPoolPrice: (managerAddress: Address) => void requestPoolPrice(managerAddress),
 			onRefreshSelectedPoolData: refreshSelectedPoolData,
 			onSelectedPoolViewChange: setSelectedPoolView,
@@ -641,8 +666,10 @@ export function App() {
 			securityPoolLiquidationError,
 			securityPoolOverviewResult,
 			poolOracleActiveAction,
+			poolOracleActiveBountyId,
 			poolOracleManagerDetails,
 			poolOracleManagerError,
+			poolOperationBountyLookupError,
 			poolPriceOracleResult,
 			selectedPoolRefreshNonce,
 			universeForkTime: zoltarUniverse?.forkTime,

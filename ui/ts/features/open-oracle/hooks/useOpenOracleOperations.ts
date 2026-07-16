@@ -193,6 +193,14 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 	currentSelectedReportIdRef.current = currentSelectedReportIdInput
 	const getPendingTitle = (actionName: OpenOracleActionResult['action']) => {
 		switch (actionName) {
+			case 'acceptOperationBounty':
+				return 'Accepting operation bounty'
+			case 'claimOperationBounty':
+				return 'Claiming operation bounty'
+			case 'postOperationBounty':
+				return 'Posting operation bounty'
+			case 'refundOperationBounty':
+				return 'Refunding operation bounty'
 			case 'approveToken1':
 				return 'Approving token1'
 			case 'approveToken2':
@@ -219,6 +227,14 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 	}
 	const getSuccessTitle = (actionName: OpenOracleActionResult['action']) => {
 		switch (actionName) {
+			case 'acceptOperationBounty':
+				return 'Operation bounty accepted'
+			case 'claimOperationBounty':
+				return 'Operation bounty claimed'
+			case 'postOperationBounty':
+				return 'Operation bounty posted'
+			case 'refundOperationBounty':
+				return 'Operation bounty refunded'
 			case 'approveToken1':
 				return 'Token1 approved'
 			case 'approveToken2':
@@ -245,6 +261,14 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 	}
 	const getFailureTitle = (actionName: OpenOracleActionResult['action']) => {
 		switch (actionName) {
+			case 'acceptOperationBounty':
+				return 'Operation bounty acceptance failed'
+			case 'claimOperationBounty':
+				return 'Operation bounty claim failed'
+			case 'postOperationBounty':
+				return 'Operation bounty post failed'
+			case 'refundOperationBounty':
+				return 'Operation bounty refund failed'
 			case 'approveToken1':
 				return 'Token1 approval failed'
 			case 'approveToken2':

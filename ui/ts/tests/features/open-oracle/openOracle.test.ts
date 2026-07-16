@@ -3,6 +3,7 @@
 import { beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { getAddress, zeroAddress, type Address, type Hash } from '@zoltar/shared/ethereum'
 import {
+	acceptOracleOperationBounty,
 	createOpenOracleReportInstance,
 	executeOracleManagerStagedOperation,
 	getOpenOracleAddress,
@@ -11,6 +12,8 @@ import {
 	loadOpenOracleReportDetails,
 	loadOpenOracleReportSummaries,
 	loadOracleManagerDetails,
+	loadOracleOperationBounty,
+	postOracleOperationBounty,
 	queueOracleManagerOperation,
 	requestOraclePrice,
 	settleOracleReport,
@@ -53,6 +56,7 @@ import { approveToken, setupTestAccounts, ensureProxyDeployerDeployed } from '..
 import { AnvilWindowEthereum } from '../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient } from '../../../../../solidity/ts/testSupport/simulator/utils/clients'
+import { peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard } from '../../../contractArtifact.js'
 import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployPeripherals'
 import { ensureZoltarDeployed } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData'
@@ -1193,6 +1197,68 @@ describe('Open Oracle helpers', () => {
 		expect(details.lastSettlementTimestamp).toBe(0n)
 		expect(details.isPriceValid).toBe(false)
 		expect(details.priceValidUntilTimestamp).toBe(undefined)
+		expect(details.operationBountyBoardAddress).not.toBe(zeroAddress)
+		expect(details.operationBounties).toEqual([])
+	})
+
+	test('posts and accepts a WETH operation bounty through the UI protocol client', async () => {
+		const currentTimestamp = await mockWindow.getTime()
+		const postResult = await postOracleOperationBounty(uiWriteClient, managerAddress, {
+			acceptanceDeadline: currentTimestamp + DAY,
+			amount: 0n,
+			maximumInitialReportAmount2: 0n,
+			minimumInitialReportAmount2: 0n,
+			operation: 'setSecurityBondsAllowance',
+			rewardAmount: 10n ** 18n,
+			rewardToken: WETH_ADDRESS,
+			targetVault: uiWriteClient.account.address,
+			validForSeconds: DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS,
+		})
+		expect(postResult.action).toBe('postOperationBounty')
+
+		let managerDetails = await loadOracleManagerDetails(uiReadClient, managerAddress)
+		const postedBounty = managerDetails.operationBounties?.[0]
+		expect(postedBounty?.state).toBe('open')
+		expect(postedBounty?.creator).toBe(uiWriteClient.account.address)
+		expect(postedBounty?.rewardToken).toBe(WETH_ADDRESS)
+
+		const acceptResult = await acceptOracleOperationBounty(uiWriteClient, managerAddress, 1n)
+		expect(acceptResult.action).toBe('acceptOperationBounty')
+		managerDetails = await loadOracleManagerDetails(uiReadClient, managerAddress)
+		expect(managerDetails.operationBounties?.[0]?.state).toBe('assigned')
+		expect(managerDetails.operationBounties?.[0]?.operator).toBe(uiWriteClient.account.address)
+		expect(managerDetails.operationBounties?.[0]?.executionStatus).toBe('pending')
+		expect(managerDetails.pendingReportId).toBeGreaterThan(0n)
+	})
+
+	test('loads bounty one directly after newer bounties push it out of the preview', async () => {
+		const currentTimestamp = await mockWindow.getTime()
+		const managerDetails = await loadOracleManagerDetails(uiReadClient, managerAddress)
+		const boardAddress = managerDetails.operationBountyBoardAddress
+		if (boardAddress === undefined) throw new Error('Expected operation bounty board address')
+		await wrapWethTestHelper(client, 26n)
+		await approveToken(client, WETH_ADDRESS, boardAddress)
+		for (let index = 0; index < 26; index += 1) {
+			const hash = await client.writeContract({
+				abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
+				address: boardAddress,
+				functionName: 'postOperationBounty',
+				args: [OperationType.SetSecurityBondsAllowance, client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, WETH_ADDRESS, 1n, currentTimestamp + DAY, 0n, 0n],
+			})
+			await client.waitForTransactionReceipt({ hash })
+		}
+
+		const preview = await loadOracleManagerDetails(uiReadClient, managerAddress)
+		expect(preview.operationBounties).toHaveLength(25)
+		expect(preview.operationBounties?.[0]?.bountyId).toBe(26n)
+		expect(preview.operationBounties?.[24]?.bountyId).toBe(2n)
+		expect(preview.operationBounties?.some(bounty => bounty.bountyId === 1n)).toBe(false)
+
+		const oldestBounty = await loadOracleOperationBounty(uiReadClient, managerAddress, boardAddress, 1n)
+		expect(oldestBounty.bountyId).toBe(1n)
+		expect(oldestBounty.creator).toBe(client.account.address)
+		expect(oldestBounty.state).toBe('open')
+		await expect(loadOracleOperationBounty(uiReadClient, managerAddress, boardAddress, 27n)).rejects.toThrow('Operation bounty #27 does not exist')
 	})
 
 	test('requestOraclePrice creates a pending report visible via loadOpenOracleReportDetails', async () => {

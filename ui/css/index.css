@@ -2185,7 +2185,8 @@ button.currency-value.copyable:hover:not(:disabled) {
 	min-width: 0;
 }
 
-.entity-card-copy h3 {
+.entity-card-copy h3,
+.entity-card-copy .entity-card-title {
 	margin: 0;
 	font-size: var(--font-card-title);
 	line-height: 1.1;

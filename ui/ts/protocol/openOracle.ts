@@ -10,8 +10,22 @@ import { loadOpenOracleInitialReportPrice } from './openOraclePricing.js'
 import { getOpenOracleCreateParameterValidationMessage } from './openOracleValidation.js'
 import { decodeOracleQueueOperation, encodeOracleQueueOperation } from './oracleQueueOperation.js'
 import { getWethAddress } from './uniswapQuoter.js'
-import { peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
-import type { OpenOracleActionResult, OracleManagerDetails, OracleQueueOperation, ReadClient, OpenOracleReportSummary, OpenOracleReportSummaryPage, StagedOracleExecutionResult, StagedOracleQueuedResult, WriteClient } from '../types/contracts.js'
+import { peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
+import type {
+	OpenOracleActionResult,
+	OracleManagerDetails,
+	OracleOperationBounty,
+	OracleOperationBountyInput,
+	OracleOperationBountyState,
+	OracleOperationExecutionStatus,
+	OracleQueueOperation,
+	ReadClient,
+	OpenOracleReportSummary,
+	OpenOracleReportSummaryPage,
+	StagedOracleExecutionResult,
+	StagedOracleQueuedResult,
+	WriteClient,
+} from '../types/contracts.js'
 import { hasTimestampAndNumber, requireStagedOperationTupleArray, requireOpenOracleExtraDataTuple, requireOpenOracleExtraDataTupleArray, requireOpenOracleReportMetaTuple, requireOpenOracleReportMetaTupleArray, requireOpenOracleReportStatusTuple, requireOpenOracleReportStatusTupleArray } from './helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from './core.js'
 import { getInfraContractAddresses, getOpenOracleAddress } from './deploymentHelpers.js'
@@ -19,7 +33,24 @@ import { getInfraContractAddresses, getOpenOracleAddress } from './deploymentHel
 type CoordinatorInitialReportClient = Parameters<typeof loadOpenOracleInitialReportPrice>[0]
 const OPEN_ORACLE_PRICE_UNITS = 30n
 const ACTIVE_STAGED_OPERATION_PREVIEW_LIMIT = 25n
+const OPERATION_BOUNTY_PREVIEW_LIMIT = 25n
 const COORDINATOR_PRICE_PRECISION = 10n ** 18n
+type RawOperationBounty = {
+	acceptanceDeadline: bigint
+	amount: bigint
+	creator: Address
+	maximumInitialReportAmount2: bigint
+	minimumInitialReportAmount2: bigint
+	operation: bigint
+	operationId: bigint
+	operator: Address
+	reportId: bigint
+	rewardAmount: bigint
+	rewardToken: Address
+	state: bigint
+	targetVault: Address
+	validForSeconds: bigint
+}
 function getStagedOracleExecutionResult(receipt: TransactionReceipt, expectedOperation: OracleQueueOperation): StagedOracleExecutionResult | undefined {
 	for (const log of receipt.logs) {
 		try {
@@ -85,73 +116,248 @@ function requireBigintArray(value: unknown, context: string) {
 	return result
 }
 
-export async function loadOracleManagerDetails(client: ReadClient, managerAddress: Address, openOracleAddress?: Address): Promise<OracleManagerDetails> {
-	const [lastPrice, pendingOperationSlotId, pendingSettlementOperationIds, pendingSettlementQueueCapacity, pendingReportId, queuedOperationEthCost, requestPriceEthCost, rawIsPriceValid, lastSettlementTimestamp, activeStagedOperationCount] = await readRequiredMulticall(client, [
-		{
+function decodeOperationBountyState(value: bigint | number): OracleOperationBountyState {
+	switch (BigInt(value)) {
+		case 1n:
+			return 'open'
+		case 2n:
+			return 'assigned'
+		case 3n:
+			return 'paid'
+		case 4n:
+			return 'refunded'
+		default:
+			throw new Error(`Unknown operation bounty state: ${value}`)
+	}
+}
+
+function decodeOperationExecutionStatus(value: bigint | number): OracleOperationExecutionStatus {
+	switch (BigInt(value)) {
+		case 0n:
+			return 'none'
+		case 1n:
+			return 'pending'
+		case 2n:
+			return 'succeeded'
+		case 3n:
+			return 'failed'
+		default:
+			throw new Error(`Unknown operation execution status: ${value}`)
+	}
+}
+
+async function normalizeOperationBounty(client: ReadClient, managerAddress: Address, settlementTime: bigint, bountyId: bigint, bounty: RawOperationBounty): Promise<OracleOperationBounty> {
+	let executionStatus: OracleOperationExecutionStatus = 'none'
+	let executionErrorMessage: string | undefined
+	let refundAvailableAt: bigint | undefined
+	if (bounty.operationId > 0n) {
+		const [executionResult, stagedOperation] = await Promise.all([
+			client.readContract({
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				address: managerAddress,
+				functionName: 'operationExecutionResults',
+				args: [bounty.operationId],
+			}),
+			client.readContract({
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				address: managerAddress,
+				functionName: 'stagedOperations',
+				args: [bounty.operationId],
+			}),
+		])
+		executionStatus = decodeOperationExecutionStatus(executionResult[0])
+		executionErrorMessage = executionResult[2].trim() === '' ? undefined : executionResult[2]
+		if (executionStatus === 'pending' && stagedOperation[1] !== zeroAddress) refundAvailableAt = stagedOperation[4] + settlementTime + stagedOperation[5]
+	}
+	return {
+		acceptanceDeadline: bounty.acceptanceDeadline,
+		amount: bounty.amount,
+		bountyId,
+		creator: getAddress(bounty.creator),
+		executionErrorMessage,
+		executionStatus,
+		maximumInitialReportAmount2: bounty.maximumInitialReportAmount2,
+		minimumInitialReportAmount2: bounty.minimumInitialReportAmount2,
+		operation: decodeOracleQueueOperation(bounty.operation),
+		operationId: bounty.operationId,
+		operator: getAddress(bounty.operator),
+		reportId: bounty.reportId,
+		refundAvailableAt,
+		rewardAmount: bounty.rewardAmount,
+		rewardToken: getAddress(bounty.rewardToken),
+		state: decodeOperationBountyState(bounty.state),
+		targetVault: getAddress(bounty.targetVault),
+		validForSeconds: bounty.validForSeconds,
+	}
+}
+
+export async function loadOracleOperationBounty(client: ReadClient, managerAddress: Address, boardAddress: Address, bountyId: bigint): Promise<OracleOperationBounty> {
+	if (boardAddress === zeroAddress) throw new Error('This oracle coordinator does not have an operation bounty board')
+	if (bountyId <= 0n) throw new Error('Operation bounty ID must be positive')
+	const nextBountyId = await client.readContract({
+		abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
+		address: boardAddress,
+		functionName: 'nextOperationBountyId',
+		args: [],
+	})
+	if (bountyId >= nextBountyId) throw new Error(`Operation bounty #${bountyId} does not exist`)
+	const [settlementTime, bounty] = await Promise.all([
+		client.readContract({
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'lastPrice',
 			address: managerAddress,
+			functionName: 'settlementTime',
 			args: [],
-		},
-		{
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'pendingOperationSlotId',
-			address: managerAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'getPendingSettlementOperationIds',
-			address: managerAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'MAX_PENDING_SETTLEMENT_OPERATIONS',
-			address: managerAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'pendingReportId',
-			address: managerAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'getQueuedOperationEthCost',
-			address: managerAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'getRequestPriceEthCost',
-			address: managerAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'isPriceValid',
-			address: managerAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'lastSettlementTimestamp',
-			address: managerAddress,
-			args: [],
-		},
-		{
-			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'getActiveStagedOperationCount',
-			address: managerAddress,
-			args: [],
-		},
+		}),
+		client.readContract({
+			abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
+			address: boardAddress,
+			functionName: 'operationBounties',
+			args: [bountyId],
+		}),
 	])
+	return await normalizeOperationBounty(client, managerAddress, settlementTime, bountyId, {
+		creator: bounty[0],
+		operator: bounty[1],
+		operation: bounty[2],
+		targetVault: bounty[3],
+		amount: bounty[4],
+		validForSeconds: bounty[5],
+		rewardToken: bounty[6],
+		rewardAmount: bounty[7],
+		acceptanceDeadline: bounty[8],
+		minimumInitialReportAmount2: bounty[9],
+		maximumInitialReportAmount2: bounty[10],
+		operationId: bounty[11],
+		reportId: bounty[12],
+		state: bounty[13],
+	})
+}
+
+async function loadOperationBounties(client: ReadClient, managerAddress: Address, boardAddress: Address): Promise<OracleOperationBounty[]> {
+	if (boardAddress === zeroAddress) return []
+	const [nextBountyId, settlementTime] = await Promise.all([
+		client.readContract({
+			abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
+			address: boardAddress,
+			functionName: 'nextOperationBountyId',
+			args: [],
+		}),
+		client.readContract({
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			address: managerAddress,
+			functionName: 'settlementTime',
+			args: [],
+		}),
+	])
+	if (nextBountyId <= 1n) return []
+	const bountyCount = nextBountyId - 1n < OPERATION_BOUNTY_PREVIEW_LIMIT ? nextBountyId - 1n : OPERATION_BOUNTY_PREVIEW_LIMIT
+	const startId = nextBountyId - bountyCount
+	const [bountyIds, bounties] = await client.readContract({
+		abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
+		address: boardAddress,
+		functionName: 'getOperationBounties',
+		args: [startId, bountyCount],
+	})
+	const normalizedBounties = await Promise.all(
+		bounties.map(async (bounty, index) => {
+			const bountyId = bountyIds[index]
+			if (bountyId === undefined) throw new Error('Missing operation bounty id')
+			return await normalizeOperationBounty(client, managerAddress, BigInt(settlementTime), bountyId, bounty)
+		}),
+	)
+	return normalizedBounties.reverse()
+}
+
+export async function loadOracleManagerDetails(client: ReadClient, managerAddress: Address, openOracleAddress?: Address): Promise<OracleManagerDetails> {
+	const [lastPrice, pendingOperationSlotId, pendingSettlementOperationIds, pendingSettlementQueueCapacity, pendingReportId, queuedOperationEthCost, requestPriceEthCost, rawIsPriceValid, lastSettlementTimestamp, activeStagedOperationCount, rawOperationBountyBoardAddress, rawReputationTokenAddress, rawWethAddress] =
+		await readRequiredMulticall(client, [
+			{
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				functionName: 'lastPrice',
+				address: managerAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				functionName: 'pendingOperationSlotId',
+				address: managerAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				functionName: 'getPendingSettlementOperationIds',
+				address: managerAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				functionName: 'MAX_PENDING_SETTLEMENT_OPERATIONS',
+				address: managerAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				functionName: 'pendingReportId',
+				address: managerAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				functionName: 'getQueuedOperationEthCost',
+				address: managerAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				functionName: 'getRequestPriceEthCost',
+				address: managerAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				functionName: 'isPriceValid',
+				address: managerAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				functionName: 'lastSettlementTimestamp',
+				address: managerAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				functionName: 'getActiveStagedOperationCount',
+				address: managerAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				functionName: 'operationBountyBoard',
+				address: managerAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				functionName: 'reputationToken',
+				address: managerAddress,
+				args: [],
+			},
+			{
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				functionName: 'weth',
+				address: managerAddress,
+				args: [],
+			},
+		])
 	const normalizedPendingSettlementOperationIds = requireBigintArray(pendingSettlementOperationIds, 'pending settlement operation ids')
 	const normalizedPendingSettlementQueueCapacity = requireBigintValue(pendingSettlementQueueCapacity, 'pending settlement queue capacity')
 	const normalizedQueuedOperationEthCost = requireBigintValue(queuedOperationEthCost, 'queued operation ETH cost')
 	const normalizedRequestPriceEthCost = requireBigintValue(requestPriceEthCost, 'request price ETH cost')
+	const operationBountyBoardAddress = getAddress(rawOperationBountyBoardAddress)
+	const reputationTokenAddress = getAddress(rawReputationTokenAddress)
+	const wethAddress = getAddress(rawWethAddress)
+	const operationBounties = await loadOperationBounties(client, managerAddress, operationBountyBoardAddress)
 	const resolvedOracleAddress = openOracleAddress ?? getInfraContractAddresses().openOracle
 	let callbackStateHash: Hex | undefined
 	let exactToken1Report: bigint | undefined
@@ -235,6 +441,8 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		lastSettlementTimestamp,
 		managerAddress,
 		openOracleAddress: resolvedOracleAddress,
+		operationBounties,
+		operationBountyBoardAddress,
 		pendingOperation,
 		pendingOperationSlotId,
 		pendingSettlementOperationIds: normalizedPendingSettlementOperationIds,
@@ -242,10 +450,12 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		pendingReportId,
 		priceValidUntilTimestamp: getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp),
 		queuedOperationEthCost: normalizedQueuedOperationEthCost,
+		reputationTokenAddress,
 		requestPriceEthCost: normalizedRequestPriceEthCost,
 		stagedOperations,
 		token1,
 		token2,
+		wethAddress,
 	}
 }
 function compareStagedOperationIdsDescending(left: { operationId: bigint }, right: { operationId: bigint }) {
@@ -768,6 +978,151 @@ export async function requestOraclePrice(client: WriteClient, managerAddress: Ad
 		action: 'requestPrice',
 		hash,
 	} satisfies OpenOracleActionResult
+}
+
+export async function postOracleOperationBounty(client: WriteClient, managerAddress: Address, bounty: OracleOperationBountyInput) {
+	const boardAddress = getAddress(
+		await client.readContract({
+			address: managerAddress,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'operationBountyBoard',
+			args: [],
+		}),
+	)
+	if (boardAddress === zeroAddress) throw new Error('This oracle coordinator does not have an operation bounty board')
+	if (sameAddress(bounty.rewardToken, getWethAddress())) {
+		const currentWethBalance = await client.readContract({
+			address: getWethAddress(),
+			abi: ABIS.mainnet.erc20,
+			functionName: 'balanceOf',
+			args: [client.account.address],
+		})
+		if (currentWethBalance < bounty.rewardAmount) await wrapWeth(client, bounty.rewardAmount - currentWethBalance)
+	}
+	await writeContractAndWait(client, () => ({
+		address: bounty.rewardToken,
+		abi: ABIS.mainnet.erc20,
+		functionName: 'approve',
+		args: [boardAddress, bounty.rewardAmount],
+	}))
+	const hash = await writeContractAndWait(client, () => ({
+		address: boardAddress,
+		abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
+		functionName: 'postOperationBounty',
+		args: [encodeOracleQueueOperation(bounty.operation), bounty.targetVault, bounty.amount, bounty.validForSeconds, bounty.rewardToken, bounty.rewardAmount, bounty.acceptanceDeadline, bounty.minimumInitialReportAmount2, bounty.maximumInitialReportAmount2],
+	}))
+	return {
+		action: 'postOperationBounty',
+		hash,
+	} satisfies OpenOracleActionResult
+}
+
+export async function acceptOracleOperationBounty(client: WriteClient, managerAddress: Address, bountyId: bigint) {
+	const [rawBoardAddress, isPriceValid, pendingReportId, rawPendingReportSponsor] = await Promise.all([
+		client.readContract({
+			address: managerAddress,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'operationBountyBoard',
+			args: [],
+		}),
+		client.readContract({
+			address: managerAddress,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'isPriceValid',
+			args: [],
+		}),
+		client.readContract({
+			address: managerAddress,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'pendingReportId',
+			args: [],
+		}),
+		client.readContract({
+			address: managerAddress,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'pendingReportSponsor',
+			args: [],
+		}),
+	])
+	const boardAddress = getAddress(rawBoardAddress)
+	if (boardAddress === zeroAddress) throw new Error('This oracle coordinator does not have an operation bounty board')
+	let initialReportAmount2 = 0n
+	let value = 0n
+	if (!isPriceValid) {
+		let shouldFundInitialReport = false
+		const bounty = await client.readContract({
+			address: boardAddress,
+			abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
+			functionName: 'operationBounties',
+			args: [bountyId],
+		})
+		if (pendingReportId === 0n) {
+			initialReportAmount2 = await getCoordinatorInitialReportAmount2(client, managerAddress)
+			shouldFundInitialReport = true
+		} else {
+			if (!sameAddress(rawPendingReportSponsor, client.account.address)) throw new Error('Only the operator funding the pending OpenOracle report can accept another bounty before settlement')
+			const rawOpenOracleAddress = await client.readContract({
+				address: managerAddress,
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				functionName: 'openOracle',
+				args: [],
+			})
+			const reportStatus = await client.readContract({
+				address: getAddress(rawOpenOracleAddress),
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				functionName: 'reportStatus',
+				args: [pendingReportId],
+			})
+			initialReportAmount2 = reportStatus[1]
+		}
+		if (initialReportAmount2 < bounty[9]) throw new Error('The current initial report WETH amount is below this bounty’s minimum')
+		if (bounty[10] > 0n && initialReportAmount2 > bounty[10]) throw new Error('The current initial report WETH amount exceeds this bounty’s maximum')
+		if (shouldFundInitialReport) {
+			await fundCoordinatorInitialReport(client, managerAddress, initialReportAmount2)
+			value = await loadBufferedOracleRequestEthCost(client, managerAddress)
+		}
+	}
+	const hash = await writeContractAndWait(client, () => ({
+		address: boardAddress,
+		abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
+		functionName: 'acceptOperationBounty',
+		args: [bountyId, initialReportAmount2],
+		value,
+	}))
+	return {
+		action: 'acceptOperationBounty',
+		hash,
+	} satisfies OpenOracleActionResult
+}
+
+async function settleOracleOperationBounty(client: WriteClient, managerAddress: Address, bountyId: bigint, action: 'claimOperationBounty' | 'refundOperationBounty') {
+	const boardAddress = getAddress(
+		await client.readContract({
+			address: managerAddress,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'operationBountyBoard',
+			args: [],
+		}),
+	)
+	if (boardAddress === zeroAddress) throw new Error('This oracle coordinator does not have an operation bounty board')
+	const hash = await writeContractAndWait(client, () => ({
+		address: boardAddress,
+		abi: peripherals_OpenOracleOperationBountyBoard_OpenOracleOperationBountyBoard.abi,
+		functionName: action,
+		args: [bountyId],
+	}))
+	return {
+		action,
+		hash,
+	} satisfies OpenOracleActionResult
+}
+
+export async function claimOracleOperationBounty(client: WriteClient, managerAddress: Address, bountyId: bigint) {
+	return await settleOracleOperationBounty(client, managerAddress, bountyId, 'claimOperationBounty')
+}
+
+export async function refundOracleOperationBounty(client: WriteClient, managerAddress: Address, bountyId: bigint) {
+	return await settleOracleOperationBounty(client, managerAddress, bountyId, 'refundOperationBounty')
 }
 export async function executeOracleManagerStagedOperation(client: WriteContractClient, managerAddress: Address, operationId: bigint) {
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => ({

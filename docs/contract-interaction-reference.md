@@ -3,7 +3,7 @@
 
 The main state-changing protocol calls map to caller authority, lifecycle prerequisites, effects, and observable events below. The conceptual flow begins in [Start Here](./start-here.html), while the [Operator Reference](./operator-reference.md) covers edge cases and the application build consumes the complete generated ABI.
 
-The tables focus on transaction entrypoints in the seven contracts that users and protocol components interact with directly. Read-only getters are summarized as a read surface instead of repeating every public storage accessor. Protocol-only rows identify calls that applications should observe but ordinary users should reach through the owning pool, forker, factory, or coordinator.
+The tables focus on transaction entrypoints in the eight contracts that users and protocol components interact with directly. Read-only getters are summarized as a read surface instead of repeating every public storage accessor. Protocol-only rows identify calls that applications should observe but ordinary users should reach through the owning pool, forker, factory, or coordinator.
 
 Failure behavior follows Solidity transaction semantics: an uncaught revert rolls back the transaction. The coordinator is the important exception at the workflow level because it deliberately consumes several failed staged operations and records the result in `ExecutedStagedOperation`.
 
@@ -83,7 +83,7 @@ Read surface: Use `getCurrentCost`, `totalCost`, `getEscalationGameEndDate`, `ge
 
 Obtains a fresh REP-per-ETH price and gates withdrawal, allowance, and liquidation operations behind it. [Source](../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol)
 
-Read surface: Use `isPriceValid`, `priceRoundMaxNotional`, `priceRoundConsumedNotional`, `getPriceRoundRemainingNotional`, request-cost getters, pending report fields, `getPendingOperationSlot`, active-operation pagination, and pending-settlement IDs to reconstruct oracle and operation state.
+Read surface: Use `isPriceValid`, `priceRoundMaxNotional`, `priceRoundConsumedNotional`, `getPriceRoundRemainingNotional`, request-cost getters, pending report fields, `getPendingOperationSlot`, active-operation pagination, pending-settlement IDs, `operationBountyBoard`, and `operationExecutionResults` to reconstruct oracle and operation state.
 
 | Transaction | Caller | Main prerequisites | State or asset effect | Primary signals |
 | --- | --- | --- | --- | --- |
@@ -93,6 +93,19 @@ Read surface: Use `isPriceValid`, `priceRoundMaxNotional`, `priceRoundConsumedNo
 | `recoverSettledPendingReport()` | Anyone | A pending report ID exists; callers should verify the underlying report actually settled. | Clears a pending report whose normal callback path did not clear coordinator state and consumes its pending-operation slot. | `PendingReportRecovered`, optionally `PendingOperationRecoveryConsumed` |
 | `openOracleCallback(...)` | Configured `OpenOracle` only | Callback report matches the pending report; high basefee or zero values reject the price after clearing pending report state. | A valid settlement updates the price and auto-executes the bounded pending batch. A rejected settlement clears pending-report state but leaves staged operations queued for a later valid price path. | `PriceReported` or `PriceReportRejected`; operation execution events |
 | `setSecurityPool(pool)` and `setRepEthPrice(price)` | First caller for pool wiring; configured pool for inherited child price | `securityPool` is still unset for `setSecurityPool`; caller equals the configured pool for `setRepEthPrice`. | Sets the pool once or seeds the coordinator's price value. Normal factory deployment wires the pool atomically before returning the coordinator. | `SecurityPoolSet`, `RepEthPriceSet` |
+
+## OpenOracleOperationBountyBoard
+
+Escrows REP or WETH rewards so one account can request a restricted pool operation while a permissionless operator supplies the temporary OpenOracle reporting capital. The original self-funded coordinator calls remain available. [Source](../solidity/contracts/peripherals/OpenOracleOperationBountyBoard.sol)
+
+Read surface: Use `coordinator`, `reputationToken`, `weth`, `nextOperationBountyId`, `operationBounties`, and `getOperationBounties` to discover terms and lifecycle state. Pair an assigned bounty's `operationId` with the coordinator's `operationExecutionResults` entry.
+
+| Transaction | Caller | Main prerequisites | State or asset effect | Primary signals |
+| --- | --- | --- | --- | --- |
+| `postOperationBounty(...)` | Operation creator | Coordinator operation validation passes; reward is positive pool REP or WETH; acceptance deadline is in the future; optional initial-report WETH bounds are ordered; token approval covers the reward. | Escrows the reward and records the creator as the eventual operation initiator. | `OperationBountyPosted` |
+| `acceptOperationBounty(bountyId, initialReportAmount2)` | Anyone for an open bounty; only the current report sponsor while a report is pending | Acceptance deadline has not passed and the coordinator revalidates the operation against current pool state. When the cache is stale, the four-operation pending settlement queue must have room and either the proposed initial WETH or the pending report's current WETH must fit the creator's bounds. A new report also requires the operator's coordinator REP/WETH approvals and ETH request cost; joining a pending report requires that report's sponsor. | Assigns the operator, stages the creator's operation, executes against a fresh cache or opens/joins a report, and records the operation and report IDs. The accepting account owns the initial OpenOracle report position. | `OperationBountyAccepted`, `StagedOperationQueued`, possibly `PriceRequested` and `ExecutedStagedOperation` |
+| `claimOperationBounty(bountyId)` | Assigned operator | Coordinator execution result is `Succeeded`. | Pays the escrowed reward once and marks the bounty paid. | `OperationBountyClaimed` |
+| `refundOperationBounty(bountyId)` | Bounty creator | Bounty is still open, its assigned operation failed, or `block.timestamp > queuedAt + settlementTime + validForSeconds`. Equality is not expired, and OpenOracle disputes do not extend this fixed deadline. Successful operations cannot be refunded. | Returns escrow to the creator and, for an expired pending operation, consumes it as failed. | `OperationBountyRefunded`, possibly `ExecutedStagedOperation` state through the coordinator result record |
 
 ## ShareToken
 

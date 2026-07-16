@@ -16,6 +16,7 @@ import { LoadingText } from '../../../components/LoadingText.js'
 import { MetricGrid } from '../../../components/MetricGrid.js'
 import { MetricField } from '../../../components/MetricField.js'
 import { OpenOraclePriceValue } from '../../open-oracle/components/OpenOraclePriceValue.js'
+import { OperationBountyBoard } from '../../open-oracle/components/OperationBountyBoard.js'
 import { getQuestionTitle, Question } from '../../markets/components/Question.js'
 import { ReportingSection } from '../../reporting/components/ReportingSection.js'
 import { RouteWorkflowPanel } from '../../../components/RouteWorkflowPanel.js'
@@ -131,23 +132,32 @@ export function SecurityPoolWorkflowSection({
 	liquidationTargetVault,
 	liquidationTimeoutMinutes,
 	loadingPoolOracleManager,
+	loadingPoolOperationBounty,
 	loadingLiquidationFundingPreview,
 	loadingSecurityPools,
 	onLiquidationAmountChange,
 	onLiquidationTimeoutMinutesChange,
 	onLoadPoolOracleManager,
+	onLoadPoolOperationBounty = () => {},
 	onLoadLiquidationFundingPreview,
 	onOpenLiquidationModal,
 	onReturnToCurrentUniverse,
 	onSwitchToPoolUniverse,
 	onQueueLiquidation,
+	onAcceptPoolOperationBounty = () => {},
+	onClaimPoolOperationBounty = () => {},
+	onClearPoolOperationBountyLookupError = () => {},
 	onExecutePendingPoolOperation,
+	onPostPoolOperationBounty = () => {},
+	onRefundPoolOperationBounty = () => {},
 	onRefreshSelectedPoolData,
 	onRequestPoolPrice,
 	onViewPendingReport,
 	poolOracleActiveAction,
+	poolOracleActiveBountyId,
 	poolOracleManagerDetails,
 	poolOracleManagerError,
+	poolOperationBountyLookupError,
 	poolPriceOracleResult,
 	universeForkTime,
 	selectedPoolRefreshNonce,
@@ -1001,45 +1011,66 @@ export function SecurityPoolWorkflowSection({
 
 								{view === 'price-oracle' && loadedSelectedPool !== undefined ? (
 									<SectionBlock density='compact' title={securityPoolCopy.openOracle} variant='plain'>
-										<MetricGrid>
-											<MetricField label={commonCopy.openOraclePrice} valueTagName='span'>
-												<OpenOraclePriceValue
-													currentTimestamp={currentTimestamp}
-													lastPrice={(currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastPrice}
-													lastSettlementTimestamp={(currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastSettlementTimestamp ?? 0n}
-													priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp}
-												/>
-											</MetricField>
-											{currentPoolOracleManagerDetails === undefined ? undefined : (
-												<MetricField label={securityPoolCopy.requestCost}>
-													<CurrencyValue value={currentPoolOracleManagerDetails.requestPriceEthCost} suffix={commonCopy.eth} />
-												</MetricField>
-											)}
-											{currentPoolOracleManagerDetails?.pendingReportId === undefined || currentPoolOracleManagerDetails.pendingReportId === 0n ? undefined : (
-												<MetricField label={securityPoolCopy.pendingRequest}>
-													<button className='link' type='button' onClick={() => onViewPendingReport(currentPoolOracleManagerDetails.pendingReportId)}>
-														{securityPoolCopy.formatPendingReportLabel(currentPoolOracleManagerDetails.pendingReportId.toString())}
-													</button>
-												</MetricField>
-											)}
-										</MetricGrid>
 										<ErrorNotice message={poolOracleManagerError} />
-										<div className='actions'>
-											<button className='secondary' onClick={() => onLoadPoolOracleManager(loadedSelectedPool.managerAddress)} disabled={loadingPoolOracleManager}>
-												{loadingPoolOracleManager ? <LoadingText>{securityPoolCopy.refreshingOracle}</LoadingText> : securityPoolCopy.refreshOracle}
-											</button>
-											<TransactionActionButton
-												idleLabel={securityPoolCopy.requestNewPrice}
-												pendingLabel={securityPoolCopy.requestingNewPrice}
-												onClick={() => onRequestPoolPrice(loadedSelectedPool.managerAddress)}
-												pending={poolOracleActiveAction === 'requestPrice'}
-												tone='secondary'
-												availability={{
-													disabled: !selectedPoolStateModel.actions.requestPrice.enabled || !canUseOracleActions || requestPriceGuardMessage !== undefined,
-													reason: selectedPoolStateModel.actions.requestPrice.enabled ? requestPriceGuardMessage : undefined,
-												}}
+										<SectionBlock density='compact' headingLevel={3} title={securityPoolCopy.selfFundedPriceRequest} variant='embedded'>
+											<p className='detail'>{securityPoolCopy.selfFundedPriceRequestDetail}</p>
+											<MetricGrid>
+												<MetricField label={commonCopy.openOraclePrice} valueTagName='span'>
+													<OpenOraclePriceValue
+														currentTimestamp={currentTimestamp}
+														lastPrice={(currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastPrice}
+														lastSettlementTimestamp={(currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastSettlementTimestamp ?? 0n}
+														priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp}
+													/>
+												</MetricField>
+												{currentPoolOracleManagerDetails === undefined ? undefined : (
+													<MetricField label={securityPoolCopy.requestCost}>
+														<CurrencyValue value={currentPoolOracleManagerDetails.requestPriceEthCost} suffix={commonCopy.eth} />
+													</MetricField>
+												)}
+												{currentPoolOracleManagerDetails?.pendingReportId === undefined || currentPoolOracleManagerDetails.pendingReportId === 0n ? undefined : (
+													<MetricField label={securityPoolCopy.pendingRequest}>
+														<button className='link' type='button' onClick={() => onViewPendingReport(currentPoolOracleManagerDetails.pendingReportId)}>
+															{securityPoolCopy.formatPendingReportLabel(currentPoolOracleManagerDetails.pendingReportId.toString())}
+														</button>
+													</MetricField>
+												)}
+											</MetricGrid>
+											<div className='actions'>
+												<button className='secondary' onClick={() => onLoadPoolOracleManager(loadedSelectedPool.managerAddress)} disabled={loadingPoolOracleManager}>
+													{loadingPoolOracleManager ? <LoadingText>{securityPoolCopy.refreshingOracle}</LoadingText> : securityPoolCopy.refreshOracle}
+												</button>
+												<TransactionActionButton
+													idleLabel={securityPoolCopy.requestNewPrice}
+													pendingLabel={securityPoolCopy.requestingNewPrice}
+													onClick={() => onRequestPoolPrice(loadedSelectedPool.managerAddress)}
+													pending={poolOracleActiveAction === 'requestPrice'}
+													tone='secondary'
+													availability={{
+														disabled: !selectedPoolStateModel.actions.requestPrice.enabled || !canUseOracleActions || requestPriceGuardMessage !== undefined,
+														reason: selectedPoolStateModel.actions.requestPrice.enabled ? requestPriceGuardMessage : undefined,
+													}}
+												/>
+											</div>
+										</SectionBlock>
+										{currentPoolOracleManagerDetails === undefined ? undefined : (
+											<OperationBountyBoard
+												accountAddress={accountState.address}
+												activeAction={poolOracleActiveAction}
+												activeBountyId={poolOracleActiveBountyId}
+												currentTimestamp={currentTimestamp}
+												isMainnet={isMainnet}
+												managerDetails={currentPoolOracleManagerDetails}
+												loadingBounty={loadingPoolOperationBounty}
+												lookupError={poolOperationBountyLookupError}
+												onAccept={onAcceptPoolOperationBounty}
+												onClaim={onClaimPoolOperationBounty}
+												onClearLookupError={onClearPoolOperationBountyLookupError}
+												onLoad={onLoadPoolOperationBounty}
+												onPost={onPostPoolOperationBounty}
+												onRefund={onRefundPoolOperationBounty}
 											/>
-										</div>
+										)}
 									</SectionBlock>
 								) : undefined}
 							</>

@@ -413,6 +413,51 @@
 					reward, and disputes can replace the initial report before
 					settlement.
 				</p>
+				<h3 id="operation-bounties">Self-funded and bounty-funded operations</h3>
+				<p>
+					The direct workflow remains available. A vault owner or liquidator can
+					call <code>requestPriceIfNeededAndStageOperation</code>, supply the
+					initial REP, WETH, and ETH when a report is needed, and remain the
+					OpenOracle reporter. An operation bounty is an additional workflow; it
+					does not replace direct funding or remove OpenOracle's reporting-capital
+					requirement.
+				</p>
+				<p>
+					Each coordinator has an <code>OpenOracleOperationBountyBoard</code>.
+					A creator posts the same restricted operation data, an acceptance
+					deadline, optional minimum and maximum initial-report WETH amounts, and
+					an escrowed reward in that pool's REP or WETH. The creator remains the
+					operation initiator, so withdrawals and allowance updates still target
+					the creator's vault even though a different account funds the report.
+				</p>
+				<p>
+					When the cached price is stale and no report is pending, any account can
+					accept an open bounty by supplying the coordinator's REP, WETH, and ETH
+					requirements. That account becomes the OpenOracle report sponsor and
+					reporter. While its report remains pending, only that same sponsor can
+					accept more bounties into the four-operation callback batch, and
+					acceptance revalidates the requested operation against current pool state.
+					A full batch rejects another bounty. A fresh cached price needs no new
+					reporting capital and executes the accepted operation immediately.
+				</p>
+				<p>
+					The coordinator records a durable pending, succeeded, or failed result
+					for every staged operation. Only the assigned operator can claim escrow,
+					and only after a succeeded result. The creator can withdraw an open
+					bounty at any time, recover a failed bounty, or cancel an assigned bounty
+					only when <code>block.timestamp &gt; queuedAt + settlementTime +
+					validForSeconds</code>. Equality is not expired. This deadline is fixed at
+					acceptance: a dispute resets the report's settlement clock but does not
+					extend the bounty deadline. The creator can therefore recover escrow while
+					the disputed report remains pending. The dispute swaps out the assigned
+					operator's REP/WETH position and makes the disputer the current reporter
+					with the replacement token position. The assigned operator remains the
+					initial reporter awaiting the report's eventual ETH reporter reward, but
+					loses bounty eligibility if the operation expires. Operators must price that
+					rolling-dispute risk into the reward. This separates who requests the
+					operation from who temporarily locks reporting capital, without weakening
+					the oracle's capital requirements.
+				</p>
 				<p>
 					Worked example using a market snapshot taken at
 					<code>2026-07-09 09:49:35 UTC</code>: at that moment Ethereum base
