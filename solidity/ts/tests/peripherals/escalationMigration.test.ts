@@ -333,7 +333,9 @@ describe('Peripherals: escalation migration', () => {
 		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
-		await assert.rejects(migrateVaultWithUnresolvedEscalation(relayerClient, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes))
+		const vaultBeforeRelayedAttempt = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		await assert.rejects(migrateVaultWithUnresolvedEscalation(relayerClient, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /Only vault/)
+		assert.deepStrictEqual(await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address), vaultBeforeRelayedAttempt, 'a rejected relayer must not mutate the parent vault')
 	})
 
 	test('migrateVaultWithUnresolvedEscalation clears parent escrow as dust when the child allocation rounds to zero', async () => {

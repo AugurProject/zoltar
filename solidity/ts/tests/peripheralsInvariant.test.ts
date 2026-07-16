@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
+import { beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import assert from '../testSupport/simulator/utils/assert'
 import type { Address } from '@zoltar/shared/ethereum'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
@@ -24,6 +24,7 @@ import {
 	migrateShares,
 	OperationType,
 	participateAuction,
+	queueLiquidationAtForcedPrice,
 	requestPriceIfNeededAndStageOperationWithValue,
 } from '../testSupport/simulator/utils/contracts/peripherals'
 import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
@@ -32,6 +33,8 @@ import {
 	claimAuctionProceeds,
 	createChildUniverse,
 	finalizeTruthAuction,
+	getForkedEscrowChildRepByOutcomeAndVault,
+	getForkedEscrowPrincipalByOutcomeAndVault,
 	getMigrationProxyAddress,
 	getOwnForkRepBuckets,
 	getSecurityPoolForkerForkData,
@@ -41,9 +44,11 @@ import {
 	migrateVaultWithUnresolvedEscalation,
 	startTruthAuction,
 } from '../testSupport/simulator/utils/contracts/securityPoolForker'
+import { getEscalationGameDeposits, getEscrowedRepByVault, getTotalEscrowedRep } from '../testSupport/simulator/utils/contracts/escalationGame'
 import {
 	createCompleteSet,
 	depositRep,
+	depositToEscalationGame,
 	getActiveVaultCount,
 	getActiveVaults,
 	getCompleteSetCollateralAmount,
@@ -72,6 +77,31 @@ const genesisUniverse = 0n
 const securityMultiplier = 2n
 const repDeposit = 1000n * 10n ** 18n
 const AUCTION_TIME = 604800n
+
+type EscrowAccountingSnapshot = {
+	escalationGameTokenBalance: bigint
+	escrowedRepByVault: readonly bigint[]
+	poolVaultLocks: readonly bigint[]
+	totalEscrowedRep: bigint
+}
+
+const assertEscrowAccountingSnapshot = (snapshot: EscrowAccountingSnapshot, label: string, { tokenBacking = 'exact' }: { tokenBacking?: 'at-least' | 'exact' | 'none' } = {}) => {
+	strictEqualTypeSafe(snapshot.escrowedRepByVault.length, snapshot.poolVaultLocks.length, `${label}: pool and escalation-game vault pages should cover the same actors`)
+	for (const [index, escrowedRep] of snapshot.escrowedRepByVault.entries()) {
+		strictEqualTypeSafe(escrowedRep, ensureDefined(snapshot.poolVaultLocks[index], `${label}: pool vault lock ${index.toString()} is missing`), `${label}: pool and escalation-game vault locks should match for actor ${index.toString()}`)
+	}
+	strictEqualTypeSafe(
+		snapshot.escrowedRepByVault.reduce((sum, amount) => sum + amount, 0n),
+		snapshot.totalEscrowedRep,
+		`${label}: per-vault escalation escrow should sum to the game total`,
+	)
+	if (tokenBacking === 'exact') strictEqualTypeSafe(snapshot.escalationGameTokenBalance, snapshot.totalEscrowedRep, `${label}: escalation-game token backing should equal recorded escrow`)
+	if (tokenBacking === 'at-least') assert.ok(snapshot.escalationGameTokenBalance >= snapshot.totalEscrowedRep, `${label}: prefunded escalation-game token balance should cover recorded escrow`)
+}
+
+const assertEscrowMigrationConservation = ({ childSourcePrincipal, parentRemainingPrincipal, sourcePrincipalAtFork }: { childSourcePrincipal: bigint; parentRemainingPrincipal: bigint; sourcePrincipalAtFork: bigint }, label: string) => {
+	strictEqualTypeSafe(parentRemainingPrincipal + childSourcePrincipal, sourcePrincipalAtFork, `${label}: parent remainder plus child source principal should conserve the fork-time escrow entitlement`)
+}
 
 type HarnessContext = {
 	questionId: bigint
@@ -104,6 +134,12 @@ const shuffle = <T>(values: readonly T[], seed: bigint): T[] => {
 }
 
 const getQuestionOutcomes = () => sortStringArrayByKeccak(['Yes', 'No'])
+
+const getStatefulInvariantSeeds = () => {
+	const configuredSeed = process.env['ZOLTAR_INVARIANT_SEED']
+	if (configuredSeed !== undefined) return [BigInt(configuredSeed)]
+	return [0x51a7en, 0xc011a7n, 0xdeadbeefn]
+}
 
 describe('Peripherals invariant harness', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
@@ -139,6 +175,30 @@ describe('Peripherals invariant harness', () => {
 	}
 
 	const getChildUniverseIdForOutcome = (outcome: QuestionOutcome) => deriveChildUniverseId(genesisUniverse, BigInt(outcome))
+
+	const assertSecurityPoolEscrowAccounting = async ({ actors, escalationGame, label, repToken, securityPool }: { actors: readonly WriteClient[]; escalationGame: Address; label: string; repToken: Address; securityPool: Address }) => {
+		if (!(await contractExists(client, escalationGame))) return
+		const [escrowedRepByVault, poolVaults, totalEscrowedRep, escalationGameTokenBalance, systemState] = await Promise.all([
+			Promise.all(actors.map(actor => getEscrowedRepByVault(client, escalationGame, actor.account.address))),
+			Promise.all(actors.map(actor => getSecurityVault(client, securityPool, actor.account.address))),
+			getTotalEscrowedRep(client, escalationGame),
+			getERC20Balance(client, repToken, escalationGame),
+			getSystemState(client, securityPool),
+		])
+		let tokenBacking: 'at-least' | 'exact' | 'none' = 'exact'
+		if (systemState === SystemState.PoolForked) tokenBacking = 'none'
+		else if (systemState === SystemState.ForkMigration) tokenBacking = 'at-least'
+		assertEscrowAccountingSnapshot(
+			{
+				escalationGameTokenBalance,
+				escrowedRepByVault,
+				poolVaultLocks: poolVaults.map(vault => vault.repInEscalationGame),
+				totalEscrowedRep,
+			},
+			label,
+			{ tokenBacking },
+		)
+	}
 
 	const triggerExternalForkForSecurityPool = async (forkingClient: WriteClient | undefined = undefined, titlePrefix = 'external fork source') => {
 		const effectiveForkingClient = forkingClient ?? createClient(5)
@@ -218,6 +278,626 @@ describe('Peripherals invariant harness', () => {
 	beforeEach(() => {
 		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0)
+	})
+
+	test('escrow accounting model rejects dropped and duplicated migration backing', () => {
+		const balancedSnapshot = {
+			escalationGameTokenBalance: 30n,
+			escrowedRepByVault: [10n, 20n],
+			poolVaultLocks: [10n, 20n],
+			totalEscrowedRep: 30n,
+		} as const
+		assertEscrowAccountingSnapshot(balancedSnapshot, 'balanced mutation fixture')
+		expect(() => assertEscrowAccountingSnapshot({ ...balancedSnapshot, escalationGameTokenBalance: 29n }, 'dropped backing mutation')).toThrow(/token backing should equal recorded escrow/)
+		expect(() => assertEscrowAccountingSnapshot({ ...balancedSnapshot, escrowedRepByVault: [10n, 21n] }, 'duplicated vault mutation')).toThrow(/pool and escalation-game vault locks should match/)
+		assertEscrowMigrationConservation({ childSourcePrincipal: 20n, parentRemainingPrincipal: 10n, sourcePrincipalAtFork: 30n }, 'balanced migration fixture')
+		expect(() => assertEscrowMigrationConservation({ childSourcePrincipal: 19n, parentRemainingPrincipal: 10n, sourcePrincipalAtFork: 30n }, 'dropped migration mutation')).toThrow(/conserve the fork-time escrow entitlement/)
+		expect(() => assertEscrowMigrationConservation({ childSourcePrincipal: 21n, parentRemainingPrincipal: 10n, sourcePrincipalAtFork: 30n }, 'duplicated migration mutation')).toThrow(/conserve the fork-time escrow entitlement/)
+	})
+
+	test('replayable multi-pool action traces preserve lifecycle accounting', async () => {
+		const seedBaseline = await mockWindow.anvilSnapshot()
+		let currentSeedBaseline = seedBaseline
+		const parentRepToken = getRepTokenAddress(genesisUniverse)
+		const secondSecurityMultiplier = 3n
+
+		for (const seed of getStatefulInvariantSeeds()) {
+			const trace: string[] = []
+			const runAction = async (name: string, action: () => Promise<unknown>) => {
+				trace.push(name)
+				try {
+					await action()
+				} catch (error) {
+					const message = error instanceof Error ? error.message : String(error)
+					throw new Error(`Stateful invariant seed ${seed.toString()} failed after ${trace.join(' -> ')}: ${message}`, { cause: error })
+				}
+			}
+
+			const assertPoolAccounting = async (securityPool: Address, label: string) => {
+				const activeVaultCount = await getActiveVaultCount(client, securityPool)
+				const activeVaults = await getActiveVaults(client, securityPool, 0n, activeVaultCount + 1n)
+				const vaults = await Promise.all(activeVaults.map(vault => getSecurityVault(client, securityPool, vault)))
+				const totalAllowanceFromVaults = vaults.reduce((sum, vault) => sum + vault.securityBondAllowance, 0n)
+				const totalOwnershipFromVaults = vaults.reduce((sum, vault) => sum + vault.repDepositShare, 0n)
+				const totalRep = await getTotalRepBalance(client, securityPool)
+				const totalClaims = (await Promise.all(vaults.map(vault => poolOwnershipToRep(client, securityPool, vault.repDepositShare)))).reduce((sum, claim) => sum + claim, 0n)
+				const collateral = await getCompleteSetCollateralAmount(client, securityPool)
+				const feesOwed = await getTotalFeesOwedToVaults(client, securityPool)
+				const ethBalance = await getETHBalance(client, securityPool)
+
+				strictEqualTypeSafe(BigInt(activeVaults.length), activeVaultCount, `${label}: active-vault count should match its page`)
+				assert.strictEqual(new Set(activeVaults).size, activeVaults.length, `${label}: active-vault page should not duplicate actors`)
+				strictEqualTypeSafe(await getERC20Balance(client, parentRepToken, securityPool), totalRep, `${label}: recorded REP should equal the token balance`)
+				strictEqualTypeSafe(totalAllowanceFromVaults, await getTotalSecurityBondAllowance(client, securityPool), `${label}: aggregate allowance should equal the sum of vault allowances`)
+				strictEqualTypeSafe(totalOwnershipFromVaults, await getPoolOwnershipDenominator(client, securityPool), `${label}: ownership denominator should equal active vault ownership`)
+				assert.ok(totalClaims <= totalRep, `${label}: rounded vault claims must not exceed pool REP`)
+				assert.ok(totalRep - totalClaims <= activeVaultCount, `${label}: aggregate REP rounding dust should be bounded by active vault count`)
+				assert.ok(collateral + feesOwed <= ethBalance, `${label}: collateral and allocated fee obligations must remain ETH-backed`)
+				assert.ok((await getTotalSecurityBondAllowance(client, securityPool)) >= collateral, `${label}: open interest must remain backed by aggregate allowance`)
+			}
+
+			const parentSupplyBeforeActions = await getUniverseTheoreticalSupply(client, genesisUniverse)
+			const burnBalanceBeforeActions = await getERC20Balance(client, parentRepToken, addressString(BURN_ADDRESS))
+			const assertParentSupplyAccounting = async (label: string) => {
+				const currentSupply = await getUniverseTheoreticalSupply(client, genesisUniverse)
+				const currentBurnBalance = await getERC20Balance(client, parentRepToken, addressString(BURN_ADDRESS))
+				strictEqualTypeSafe(parentSupplyBeforeActions - currentSupply, currentBurnBalance - burnBalanceBeforeActions, `${label}: parent theoretical-supply decrease should equal intentional REP burns`)
+			}
+
+			await runAction('deploy second pool', async () => {
+				await deployOriginSecurityPool(client, genesisUniverse, context.questionId, secondSecurityMultiplier)
+			})
+			const firstPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, securityMultiplier)
+			const secondPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, secondSecurityMultiplier)
+			const actorA = createClient(1)
+			const actorB = createClient(2)
+			const actorC = createClient(3)
+			const actors = [client, actorA, actorB, actorC]
+			await runAction('deploy and start interleaved accounting auction', async () => {
+				await deployUniformPriceDualCapBatchAuction(client, client.account.address)
+				await startAuction(client, getUniformPriceDualCapBatchAuctionAddress(client.account.address), 100n * 10n ** 18n, 100n * 10n ** 18n)
+			})
+			const accountingAuction = getUniformPriceDualCapBatchAuctionAddress(client.account.address)
+			let actorAAuctionTick: bigint | undefined
+			let actorBAuctionTick: bigint | undefined
+			for (const actor of actors) {
+				await approveToken(actor, parentRepToken, firstPoolAddresses.securityPool)
+				await approveToken(actor, parentRepToken, secondPoolAddresses.securityPool)
+			}
+
+			const depositActions = shuffle(
+				[
+					{ name: 'actor A deposits in first pool', execute: async () => await depositRep(actorA, firstPoolAddresses.securityPool, repDeposit) },
+					{ name: 'actor B deposits in first pool', execute: async () => await depositRep(actorB, firstPoolAddresses.securityPool, repDeposit) },
+					{ name: 'creator deposits in second pool', execute: async () => await depositRep(client, secondPoolAddresses.securityPool, repDeposit) },
+					{ name: 'actor A deposits in second pool', execute: async () => await depositRep(actorA, secondPoolAddresses.securityPool, repDeposit) },
+					{ name: 'actor B deposits in second pool', execute: async () => await depositRep(actorB, secondPoolAddresses.securityPool, repDeposit) },
+					{ name: 'actor C deposits in first pool', execute: async () => await depositRep(actorC, firstPoolAddresses.securityPool, repDeposit / 2n) },
+					{ name: 'actor C deposits in second pool', execute: async () => await depositRep(actorC, secondPoolAddresses.securityPool, repDeposit / 3n) },
+					{
+						name: 'actor A bids during pool deposits',
+						execute: async () => {
+							actorAAuctionTick = await participateAuction(actorA, accountingAuction, 60n * 10n ** 18n, 60n * 10n ** 18n)
+						},
+					},
+					{
+						name: 'actor B bids during pool deposits',
+						execute: async () => {
+							actorBAuctionTick = await participateAuction(actorB, accountingAuction, 40n * 10n ** 18n, 60n * 10n ** 18n)
+						},
+					},
+				],
+				seed,
+			)
+			for (const action of depositActions) {
+				await runAction(action.name, action.execute)
+				await assertPoolAccounting(firstPoolAddresses.securityPool, `${action.name}, first pool`)
+				await assertPoolAccounting(secondPoolAddresses.securityPool, `${action.name}, second pool`)
+				await assertParentSupplyAccounting(action.name)
+			}
+
+			const allowanceActions = shuffle(
+				[
+					{
+						name: 'creator sets first-pool allowance',
+						execute: async () => await manipulatePriceOracleAndPerformOperation(client, mockWindow, firstPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, repDeposit / 3n),
+					},
+					{
+						name: 'actor A sets first-pool allowance',
+						execute: async () => await manipulatePriceOracleAndPerformOperation(actorA, mockWindow, firstPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, actorA.account.address, repDeposit / 5n),
+					},
+					{
+						name: 'creator sets second-pool allowance',
+						execute: async () => await manipulatePriceOracleAndPerformOperation(client, mockWindow, secondPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, repDeposit / 4n),
+					},
+					{
+						name: 'actor B sets second-pool allowance',
+						execute: async () => await manipulatePriceOracleAndPerformOperation(actorB, mockWindow, secondPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, actorB.account.address, repDeposit / 6n),
+					},
+				],
+				seed ^ 0xa110aacen,
+			)
+			for (const action of allowanceActions) {
+				await runAction(action.name, action.execute)
+				await assertPoolAccounting(firstPoolAddresses.securityPool, `${action.name}, first pool`)
+				await assertPoolAccounting(secondPoolAddresses.securityPool, `${action.name}, second pool`)
+				await assertParentSupplyAccounting(action.name)
+			}
+
+			const openInterestActions = shuffle(
+				[
+					{ name: 'actor B opens first-pool complete sets', execute: async () => await createCompleteSet(actorB, firstPoolAddresses.securityPool, 20n * 10n ** 18n) },
+					{ name: 'actor C opens first-pool complete sets', execute: async () => await createCompleteSet(actorC, firstPoolAddresses.securityPool, 15n * 10n ** 18n) },
+					{ name: 'actor A opens second-pool complete sets', execute: async () => await createCompleteSet(actorA, secondPoolAddresses.securityPool, 25n * 10n ** 18n) },
+					{ name: 'actor C opens second-pool complete sets', execute: async () => await createCompleteSet(actorC, secondPoolAddresses.securityPool, 10n * 10n ** 18n) },
+				],
+				seed ^ 0xc011a7n,
+			)
+			for (const action of openInterestActions) {
+				await runAction(action.name, action.execute)
+				await assertPoolAccounting(firstPoolAddresses.securityPool, `${action.name}, first pool`)
+				await assertPoolAccounting(secondPoolAddresses.securityPool, `${action.name}, second pool`)
+				await assertParentSupplyAccounting(action.name)
+			}
+
+			await runAction('advance target question to reporting', async () => await mockWindow.setTime(context.questionEndDate + 1n))
+			await runAction('refresh first-pool price for escalation', async () => await manipulatePriceOracleAndPerformOperation(client, mockWindow, firstPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, repDeposit / 3n))
+			const escalationActions = shuffle(
+				[
+					{ name: 'actor A escrows first-pool REP on yes', execute: async () => await depositToEscalationGame(actorA, firstPoolAddresses.securityPool, QuestionOutcome.Yes, repDeposit / 10n) },
+					{ name: 'actor B escrows first-pool REP on no', execute: async () => await depositToEscalationGame(actorB, firstPoolAddresses.securityPool, QuestionOutcome.No, repDeposit / 10n) },
+				],
+				seed ^ 0xe5ca1a7en,
+			)
+			for (const action of escalationActions) {
+				await runAction(action.name, action.execute)
+				await assertPoolAccounting(firstPoolAddresses.securityPool, action.name)
+				await assertSecurityPoolEscrowAccounting({ actors, escalationGame: firstPoolAddresses.escalationGame, label: `${action.name}, parent escalation`, repToken: parentRepToken, securityPool: firstPoolAddresses.securityPool })
+				await assertParentSupplyAccounting(action.name)
+			}
+			const actorAEscrowAtFork = (await getSecurityVault(client, firstPoolAddresses.securityPool, actorA.account.address)).repInEscalationGame
+			const actorBEscrowAtFork = (await getSecurityVault(client, firstPoolAddresses.securityPool, actorB.account.address)).repInEscalationGame
+			assert.ok(actorAEscrowAtFork > 0n, 'actor A should have unresolved escrow before the fork')
+			assert.ok(actorBEscrowAtFork > 0n, 'actor B should have unresolved escrow before the fork')
+			const parentYesDepositsAtFork = await getEscalationGameDeposits(client, firstPoolAddresses.escalationGame, QuestionOutcome.Yes)
+			const parentNoDepositsAtFork = await getEscalationGameDeposits(client, firstPoolAddresses.escalationGame, QuestionOutcome.No)
+			if (actorAAuctionTick === undefined || actorBAuctionTick === undefined) throw new Error('seeded auction bids were not executed')
+			const actorATick = actorAAuctionTick
+			const actorBTick = actorBAuctionTick
+			await runAction('finalize interleaved accounting auction', async () => await finalizeAuction(client, accountingAuction))
+			const auctionBalanceBeforeClaims = await getETHBalance(client, accountingAuction)
+			const actorAEthBeforeClaims = await getETHBalance(client, actorA.account.address)
+			const actorBEthBeforeClaims = await getETHBalance(client, actorB.account.address)
+			const auctionClaimActions = shuffle(
+				[
+					{ name: 'actor A claims interleaved auction', execute: async () => await withdrawBids(client, accountingAuction, actorA.account.address, [{ tick: actorATick, bidIndex: 0n }]) },
+					{ name: 'actor B claims interleaved auction', execute: async () => await withdrawBids(client, accountingAuction, actorB.account.address, [{ tick: actorBTick, bidIndex: 0n }]) },
+				],
+				seed ^ 0xa0c710n,
+			)
+			for (const action of auctionClaimActions) {
+				await runAction(action.name, action.execute)
+				await assertParentSupplyAccounting(action.name)
+			}
+			const bidderClaimDelta = (await getETHBalance(client, actorA.account.address)) - actorAEthBeforeClaims + ((await getETHBalance(client, actorB.account.address)) - actorBEthBeforeClaims)
+			strictEqualTypeSafe(bidderClaimDelta, auctionBalanceBeforeClaims - (await getETHBalance(client, accountingAuction)), 'interleaved bidder payouts must reconcile to the auction ETH decrease')
+			await assert.rejects(withdrawBids(client, accountingAuction, actorA.account.address, [{ tick: actorATick, bidIndex: 0n }]), /already been claimed/i)
+
+			await runAction('fork shared universe and freeze first pool', async () => await triggerExternalForkForSecurityPool(createClient(5), `stateful seed ${seed.toString()}`))
+			await assertParentSupplyAccounting('shared universe fork')
+			await runAction('freeze second pool', async () => await initiateSecurityPoolFork(client, secondPoolAddresses.securityPool))
+			await assertParentSupplyAccounting('second pool fork initiation')
+			strictEqualTypeSafe(await getSystemState(client, firstPoolAddresses.securityPool), SystemState.PoolForked, 'first parent pool should be forked')
+			strictEqualTypeSafe(await getSystemState(client, secondPoolAddresses.securityPool), SystemState.PoolForked, 'second parent pool should be forked')
+
+			await runAction('create first-pool yes child', async () => await createChildUniverse(client, firstPoolAddresses.securityPool, QuestionOutcome.Yes))
+			await runAction('create second-pool yes child', async () => await createChildUniverse(client, secondPoolAddresses.securityPool, QuestionOutcome.Yes))
+			const yesUniverse = getChildUniverseIdForOutcome(QuestionOutcome.Yes)
+			const yesRepToken = getRepTokenAddress(yesUniverse)
+			const firstYesPoolAddresses = getSecurityPoolAddresses(firstPoolAddresses.securityPool, yesUniverse, context.questionId, securityMultiplier)
+			const secondYesPoolAddresses = getSecurityPoolAddresses(secondPoolAddresses.securityPool, yesUniverse, context.questionId, secondSecurityMultiplier)
+			const firstYesPool = firstYesPoolAddresses.securityPool
+			const secondYesPool = secondYesPoolAddresses.securityPool
+			const parentSupplyAfterLocking = await getUniverseTheoreticalSupply(client, genesisUniverse)
+			const burnBalanceAfterLocking = await getERC20Balance(client, parentRepToken, addressString(BURN_ADDRESS))
+
+			const migrationActions = shuffle(
+				[
+					{ name: 'split first-pool REP to yes', execute: async () => await migrateRepToZoltar(client, firstPoolAddresses.securityPool, [QuestionOutcome.Yes]) },
+					{ name: 'repeat first-pool REP split', execute: async () => await migrateRepToZoltar(actorC, firstPoolAddresses.securityPool, [QuestionOutcome.Yes]) },
+					{ name: 'migrate creator from first pool', execute: async () => await migrateVault(client, firstPoolAddresses.securityPool, QuestionOutcome.Yes) },
+					{ name: 'migrate actor A and unresolved first-pool escrow', execute: async () => await migrateVaultWithUnresolvedEscalation(actorA, firstPoolAddresses.securityPool, actorA.account.address, QuestionOutcome.Yes) },
+					{ name: 'migrate actor B and unresolved first-pool escrow', execute: async () => await migrateVaultWithUnresolvedEscalation(actorB, firstPoolAddresses.securityPool, actorB.account.address, QuestionOutcome.Yes) },
+					{ name: 'split second-pool REP to yes', execute: async () => await migrateRepToZoltar(client, secondPoolAddresses.securityPool, [QuestionOutcome.Yes]) },
+					{ name: 'repeat second-pool REP split', execute: async () => await migrateRepToZoltar(actorC, secondPoolAddresses.securityPool, [QuestionOutcome.Yes]) },
+					{ name: 'migrate creator from second pool', execute: async () => await migrateVault(client, secondPoolAddresses.securityPool, QuestionOutcome.Yes) },
+					{ name: 'migrate actor A from second pool', execute: async () => await migrateVault(actorA, secondPoolAddresses.securityPool, QuestionOutcome.Yes) },
+					{ name: 'migrate actor B from second pool', execute: async () => await migrateVault(actorB, secondPoolAddresses.securityPool, QuestionOutcome.Yes) },
+				],
+				seed ^ 0xf07cn,
+			)
+			for (const action of migrationActions) {
+				await runAction(action.name, action.execute)
+				strictEqualTypeSafe(await getUniverseTheoreticalSupply(client, genesisUniverse), parentSupplyAfterLocking, `${action.name}: child migration must not burn parent REP again`)
+				strictEqualTypeSafe(await getERC20Balance(client, parentRepToken, addressString(BURN_ADDRESS)), burnBalanceAfterLocking, `${action.name}: child migration must not move parent REP after locking`)
+				assert.ok((await getERC20Balance(client, yesRepToken, firstYesPool)) <= (await getSecurityPoolForkerForkData(client, firstPoolAddresses.securityPool)).auctionableRepAtFork, `${action.name}: first child pool mint must stay backed by its fork balance`)
+				assert.ok((await getERC20Balance(client, yesRepToken, secondYesPool)) <= (await getSecurityPoolForkerForkData(client, secondPoolAddresses.securityPool)).auctionableRepAtFork, `${action.name}: second child pool mint must stay backed by its fork balance`)
+				await assertSecurityPoolEscrowAccounting({ actors, escalationGame: firstPoolAddresses.escalationGame, label: `${action.name}, parent escalation`, repToken: parentRepToken, securityPool: firstPoolAddresses.securityPool })
+				await assertSecurityPoolEscrowAccounting({ actors, escalationGame: firstYesPoolAddresses.escalationGame, label: `${action.name}, child escalation`, repToken: yesRepToken, securityPool: firstYesPool })
+			}
+
+			for (const [parentPool, childPool, vaultClients] of [
+				[firstPoolAddresses.securityPool, firstYesPool, [client, actorA, actorB]],
+				[secondPoolAddresses.securityPool, secondYesPool, [client, actorA, actorB]],
+			] as const) {
+				for (const vaultClient of vaultClients) {
+					strictEqualTypeSafe((await getSecurityVault(client, parentPool, vaultClient.account.address)).repDepositShare, 0n, 'migrated parent ownership should be consumed exactly once')
+					assert.ok((await getSecurityVault(client, childPool, vaultClient.account.address)).repDepositShare > 0n, 'migrated child vault should receive ownership')
+				}
+			}
+			strictEqualTypeSafe((await getSecurityVault(client, firstPoolAddresses.securityPool, actorA.account.address)).repInEscalationGame, 0n, 'actor A parent escrow entitlement should be consumed exactly once')
+			strictEqualTypeSafe((await getSecurityVault(client, firstPoolAddresses.securityPool, actorB.account.address)).repInEscalationGame, 0n, 'actor B parent escrow entitlement should be consumed exactly once')
+			const actorAChildEscrow = (await getSecurityVault(client, firstYesPool, actorA.account.address)).repInEscalationGame
+			const actorBChildEscrow = (await getSecurityVault(client, firstYesPool, actorB.account.address)).repInEscalationGame
+			assert.ok(actorAChildEscrow > 0n, 'actor A unresolved escrow should continue in the child')
+			assert.ok(actorBChildEscrow > 0n, 'actor B unresolved escrow should continue in the child')
+			const actorAChildSourcePrincipal = await getForkedEscrowPrincipalByOutcomeAndVault(client, firstYesPool, QuestionOutcome.Yes, actorA.account.address)
+			const actorBChildSourcePrincipal = await getForkedEscrowPrincipalByOutcomeAndVault(client, firstYesPool, QuestionOutcome.No, actorB.account.address)
+			strictEqualTypeSafe(await getForkedEscrowChildRepByOutcomeAndVault(client, firstYesPool, QuestionOutcome.Yes, actorA.account.address), actorAChildEscrow, 'actor A child REP backing should equal its child vault lock')
+			strictEqualTypeSafe(await getForkedEscrowChildRepByOutcomeAndVault(client, firstYesPool, QuestionOutcome.No, actorB.account.address), actorBChildEscrow, 'actor B child REP backing should equal its child vault lock')
+			assertEscrowMigrationConservation({ childSourcePrincipal: actorAChildSourcePrincipal, parentRemainingPrincipal: 0n, sourcePrincipalAtFork: actorAEscrowAtFork }, 'actor A exported escalation')
+			assertEscrowMigrationConservation({ childSourcePrincipal: actorBChildSourcePrincipal, parentRemainingPrincipal: 0n, sourcePrincipalAtFork: actorBEscrowAtFork }, 'actor B exported escalation')
+			assert.deepStrictEqual(await getEscalationGameDeposits(client, firstPoolAddresses.escalationGame, QuestionOutcome.Yes), parentYesDepositsAtFork, 'exported parent Yes deposits should remain in the immutable proof commitment')
+			assert.deepStrictEqual(await getEscalationGameDeposits(client, firstPoolAddresses.escalationGame, QuestionOutcome.No), parentNoDepositsAtFork, 'exported parent No deposits should remain in the immutable proof commitment')
+			strictEqualTypeSafe((await getEscalationGameDeposits(client, firstYesPoolAddresses.escalationGame, QuestionOutcome.Yes)).length, 0, 'child escalation should carry parent Yes escrow without replaying local deposits')
+			strictEqualTypeSafe((await getEscalationGameDeposits(client, firstYesPoolAddresses.escalationGame, QuestionOutcome.No)).length, 0, 'child escalation should carry parent No escrow without replaying local deposits')
+
+			await mockWindow.anvilRevert(currentSeedBaseline)
+			currentSeedBaseline = await mockWindow.anvilSnapshot()
+		}
+	})
+
+	test('model-backed action handler preserves accounting across adversarial lifecycle interleavings', async () => {
+		const handlerBaseline = await mockWindow.anvilSnapshot()
+		let currentHandlerBaseline = handlerBaseline
+		const parentRepToken = getRepTokenAddress(genesisUniverse)
+		const secondSecurityMultiplier = 3n
+		const configuredSeed = process.env['ZOLTAR_INVARIANT_SEED']
+		const seeds = configuredSeed === undefined ? [0xa11ce5n, 0xbadc0den, 0xdecafbadn] : [BigInt(configuredSeed)]
+
+		for (const seed of seeds) {
+			const trace: string[] = []
+			const completed = new Set<string>()
+			let randomState = seed & ((1n << 64n) - 1n)
+			const nextRandom = () => {
+				randomState = (randomState * 6364136223846793005n + 1442695040888963407n) & ((1n << 64n) - 1n)
+				return randomState
+			}
+			const failWithTrace = (error: unknown): never => {
+				const message = error instanceof Error ? error.message : String(error)
+				throw new Error(`Adversarial invariant seed ${seed.toString()} failed after ${trace.join(' -> ')}: ${message}`, { cause: error })
+			}
+
+			await deployOriginSecurityPool(client, genesisUniverse, context.questionId, secondSecurityMultiplier)
+			const firstPool = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, securityMultiplier)
+			const secondPool = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, secondSecurityMultiplier)
+			const yesUniverse = getChildUniverseIdForOutcome(QuestionOutcome.Yes)
+			const firstYesPoolAddresses = getSecurityPoolAddresses(firstPool.securityPool, yesUniverse, context.questionId, securityMultiplier)
+			const secondYesPoolAddresses = getSecurityPoolAddresses(secondPool.securityPool, yesUniverse, context.questionId, secondSecurityMultiplier)
+			const secondYesPool = secondYesPoolAddresses.securityPool
+			const secondYesRepToken = getRepTokenAddress(yesUniverse)
+			const actorA = createClient(1)
+			const actorB = createClient(2)
+			const actorC = createClient(3)
+			const actors = [client, actorA, actorB, actorC]
+			for (const actor of actors) {
+				await approveToken(actor, parentRepToken, firstPool.securityPool)
+				await approveToken(actor, parentRepToken, secondPool.securityPool)
+			}
+			await deployUniformPriceDualCapBatchAuction(client, client.account.address)
+			const accountingAuction = getUniformPriceDualCapBatchAuctionAddress(client.account.address)
+
+			const parentSupplyAtStart = await getUniverseTheoreticalSupply(client, genesisUniverse)
+			const burnBalanceAtStart = await getERC20Balance(client, parentRepToken, addressString(BURN_ADDRESS))
+			const forkThreshold = await getZoltarForkThreshold(client, genesisUniverse)
+			let actorAAuctionTick: bigint | undefined
+			let actorBAuctionTick: bigint | undefined
+			let actorAFirstEscrowSourceAtFork = 0n
+
+			const assertPoolAccounting = async (securityPool: Address, label: string) => {
+				const activeVaultCount = await getActiveVaultCount(client, securityPool)
+				const activeVaults = await getActiveVaults(client, securityPool, 0n, activeVaultCount + 1n)
+				const vaults = await Promise.all(activeVaults.map(vault => getSecurityVault(client, securityPool, vault)))
+				const aggregateAllowance = vaults.reduce((sum, vault) => sum + vault.securityBondAllowance, 0n)
+				const aggregateOwnership = vaults.reduce((sum, vault) => sum + vault.repDepositShare, 0n)
+				const totalRep = await getTotalRepBalance(client, securityPool)
+				const roundedClaims = (await Promise.all(vaults.map(vault => poolOwnershipToRep(client, securityPool, vault.repDepositShare)))).reduce((sum, claim) => sum + claim, 0n)
+				const collateral = await getCompleteSetCollateralAmount(client, securityPool)
+				const feesOwed = await getTotalFeesOwedToVaults(client, securityPool)
+				const systemState = await getSystemState(client, securityPool)
+				strictEqualTypeSafe(BigInt(activeVaults.length), activeVaultCount, `${label}: active vault page should match count`)
+				const totalAllowance = await getTotalSecurityBondAllowance(client, securityPool)
+				if (systemState === SystemState.PoolForked) assert.ok(aggregateAllowance <= totalAllowance, `${label}: consumed fork allowances cannot exceed the frozen allowance snapshot`)
+				else strictEqualTypeSafe(aggregateAllowance, totalAllowance, `${label}: allowances should reconcile`)
+				const ownershipDenominator = await getPoolOwnershipDenominator(client, securityPool)
+				if (systemState === SystemState.PoolForked) assert.ok(aggregateOwnership <= ownershipDenominator, `${label}: consumed fork entitlements cannot exceed the frozen ownership snapshot`)
+				else strictEqualTypeSafe(aggregateOwnership, ownershipDenominator, `${label}: ownership should reconcile`)
+				strictEqualTypeSafe(await getERC20Balance(client, parentRepToken, securityPool), totalRep, `${label}: REP balance should reconcile`)
+				assert.ok(roundedClaims <= totalRep, `${label}: rounded claims cannot exceed pool REP`)
+				assert.ok(totalRep - roundedClaims <= activeVaultCount, `${label}: REP rounding dust should be bounded`)
+				assert.ok(collateral + feesOwed <= (await getETHBalance(client, securityPool)), `${label}: ETH obligations should remain backed`)
+				assert.ok(totalAllowance >= collateral, `${label}: open interest should remain allowance-backed`)
+			}
+
+			const readModelSnapshot = async () => ({
+				burnBalance: await getERC20Balance(client, parentRepToken, addressString(BURN_ADDRESS)),
+				firstPool: await readPoolAccountingSnapshot(client, firstPool.securityPool),
+				firstVaults: await Promise.all(actors.map(actor => getSecurityVault(client, firstPool.securityPool, actor.account.address))),
+				parentSupply: await getUniverseTheoreticalSupply(client, genesisUniverse),
+				secondPool: await readPoolAccountingSnapshot(client, secondPool.securityPool),
+				secondVaults: await Promise.all(actors.map(actor => getSecurityVault(client, secondPool.securityPool, actor.account.address))),
+			})
+			const readSecondChildEntitlementSnapshot = async () => ({
+				childForkData: await getSecurityPoolForkerForkData(client, secondYesPool),
+				childPool: await readPoolAccountingSnapshot(client, secondYesPool),
+				childRepTokenBalance: await getERC20Balance(client, secondYesRepToken, secondYesPool),
+				childVault: await getSecurityVault(client, secondYesPool, actorA.account.address),
+				parentForkData: await getSecurityPoolForkerForkData(client, secondPool.securityPool),
+			})
+
+			const assertGlobalAccounting = async (label: string) => {
+				strictEqualTypeSafe(parentSupplyAtStart - (await getUniverseTheoreticalSupply(client, genesisUniverse)), (await getERC20Balance(client, parentRepToken, addressString(BURN_ADDRESS))) - burnBalanceAtStart, `${label}: theoretical supply reduction should equal intentional burns`)
+				await assertPoolAccounting(firstPool.securityPool, `${label}, first pool`)
+				await assertPoolAccounting(secondPool.securityPool, `${label}, second pool`)
+				await assertSecurityPoolEscrowAccounting({ actors, escalationGame: firstPool.escalationGame, label: `${label}, first parent escalation`, repToken: parentRepToken, securityPool: firstPool.securityPool })
+				await assertSecurityPoolEscrowAccounting({ actors, escalationGame: secondPool.escalationGame, label: `${label}, second parent escalation`, repToken: parentRepToken, securityPool: secondPool.securityPool })
+				await assertSecurityPoolEscrowAccounting({ actors, escalationGame: firstYesPoolAddresses.escalationGame, label: `${label}, first child escalation`, repToken: secondYesRepToken, securityPool: firstYesPoolAddresses.securityPool })
+				await assertSecurityPoolEscrowAccounting({ actors, escalationGame: secondYesPoolAddresses.escalationGame, label: `${label}, second child escalation`, repToken: secondYesRepToken, securityPool: secondYesPool })
+			}
+
+			type HandlerAction = {
+				name: string
+				enabled: () => boolean
+				execute: () => Promise<unknown>
+			}
+			const actions: HandlerAction[] = [
+				{
+					name: 'start independent auction',
+					enabled: () => true,
+					execute: async () => await startAuction(client, accountingAuction, 100n * 10n ** 18n, 100n * 10n ** 18n),
+				},
+				{
+					name: 'premature vault migration is atomic',
+					enabled: () => true,
+					execute: async () => {
+						const before = await readModelSnapshot()
+						await assert.rejects(migrateVault(actorA, firstPool.securityPool, QuestionOutcome.Yes), /Parent not forked/)
+						assert.deepStrictEqual(await readModelSnapshot(), before, 'failed pre-fork migration should preserve the complete accounting model')
+					},
+				},
+				{
+					name: 'creator funds own-fork capacity',
+					enabled: () => true,
+					execute: async () => await depositRep(client, firstPool.securityPool, 2n * forkThreshold + repDeposit),
+				},
+				{
+					name: 'actor A deposits first pool',
+					enabled: () => true,
+					execute: async () => await depositRep(actorA, firstPool.securityPool, repDeposit),
+				},
+				{
+					name: 'actor B deposits first pool',
+					enabled: () => true,
+					execute: async () => await depositRep(actorB, firstPool.securityPool, repDeposit * 2n),
+				},
+				{
+					name: 'actor A deposits second pool',
+					enabled: () => true,
+					execute: async () => await depositRep(actorA, secondPool.securityPool, repDeposit),
+				},
+				{
+					name: 'actor B deposits second pool',
+					enabled: () => true,
+					execute: async () => await depositRep(actorB, secondPool.securityPool, repDeposit),
+				},
+				{
+					name: 'actor C deposits withdrawable REP',
+					enabled: () => true,
+					execute: async () => await depositRep(actorC, secondPool.securityPool, repDeposit),
+				},
+				{
+					name: 'actor A sets liquidatable allowance',
+					enabled: () => completed.has('actor A deposits first pool'),
+					execute: async () => await manipulatePriceOracleAndPerformOperation(actorA, mockWindow, firstPool.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, actorA.account.address, 75n * 10n ** 18n),
+				},
+				{
+					name: 'actor B opens first-pool interest',
+					enabled: () => completed.has('actor A sets liquidatable allowance'),
+					execute: async () => await createCompleteSet(actorB, firstPool.securityPool, 50n * 10n ** 18n),
+				},
+				{
+					name: 'actor C withdraws before fork',
+					enabled: () => completed.has('actor C deposits withdrawable REP'),
+					execute: async () => await manipulatePriceOracleAndPerformOperation(actorC, mockWindow, secondPool.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, actorC.account.address, repDeposit),
+				},
+				{
+					name: 'self-liquidation is consumed atomically',
+					enabled: () => completed.has('actor B opens first-pool interest'),
+					execute: async () => {
+						const before = await readModelSnapshot()
+						await assert.rejects(queueLiquidationAtForcedPrice(actorA, firstPool.priceOracleManagerAndOperatorQueuer, actorA.account.address, 10n * 10n ** 18n, 10n * 10n ** 18n), /Caller bad/)
+						assert.deepStrictEqual(await readModelSnapshot(), before, 'rejected self-liquidation should preserve the complete accounting model')
+					},
+				},
+				{
+					name: 'actor B liquidates actor A',
+					enabled: () => completed.has('self-liquidation is consumed atomically') && completed.has('actor B deposits first pool'),
+					execute: async () => {
+						await queueLiquidationAtForcedPrice(actorB, firstPool.priceOracleManagerAndOperatorQueuer, actorA.account.address, 25n * 10n ** 18n, 10n * 10n ** 18n)
+						await handleOracleReporting(actorB, mockWindow, firstPool.priceOracleManagerAndOperatorQueuer, 10n * 10n ** 18n)
+					},
+				},
+				{
+					name: 'actor A bids before lifecycle fork',
+					enabled: () => completed.has('start independent auction'),
+					execute: async () => {
+						actorAAuctionTick = await participateAuction(actorA, accountingAuction, 60n * 10n ** 18n, 60n * 10n ** 18n)
+					},
+				},
+				{
+					name: 'actor B bids before lifecycle fork',
+					enabled: () => completed.has('start independent auction'),
+					execute: async () => {
+						actorBAuctionTick = await participateAuction(actorB, accountingAuction, 40n * 10n ** 18n, 60n * 10n ** 18n)
+					},
+				},
+				{
+					name: 'advance into reporting',
+					enabled: () => ['creator funds own-fork capacity', 'actor B liquidates actor A', 'actor C withdraws before fork', 'actor A bids before lifecycle fork', 'actor B bids before lifecycle fork'].every(name => completed.has(name)),
+					execute: async () => await mockWindow.setTime(context.questionEndDate + 1n),
+				},
+				{
+					name: 'refresh first-pool reporting price',
+					enabled: () => completed.has('advance into reporting'),
+					execute: async () => {
+						const actorAVault = await getSecurityVault(client, firstPool.securityPool, actorA.account.address)
+						await manipulatePriceOracleAndPerformOperation(actorA, mockWindow, firstPool.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, actorA.account.address, actorAVault.securityBondAllowance)
+					},
+				},
+				{
+					name: 'actor A reports yes',
+					enabled: () => completed.has('refresh first-pool reporting price'),
+					execute: async () => {
+						await depositToEscalationGame(actorA, firstPool.securityPool, QuestionOutcome.Yes, 10n * 10n ** 18n)
+						actorAFirstEscrowSourceAtFork = (await getSecurityVault(client, firstPool.securityPool, actorA.account.address)).repInEscalationGame
+					},
+				},
+				{
+					name: 'own escalation triggers universe fork',
+					enabled: () => completed.has('actor A reports yes'),
+					execute: async () => await triggerOwnGameFork(client, firstPool.securityPool),
+				},
+				{
+					name: 'freeze second pool after universe fork',
+					enabled: () => completed.has('own escalation triggers universe fork'),
+					execute: async () => await initiateSecurityPoolFork(client, secondPool.securityPool),
+				},
+				{
+					name: 'finalize independent auction',
+					enabled: () => completed.has('advance into reporting'),
+					execute: async () => await finalizeAuction(client, accountingAuction),
+				},
+				{
+					name: 'actor A claims auction',
+					enabled: () => completed.has('finalize independent auction') && actorAAuctionTick !== undefined,
+					execute: async () => await withdrawBids(client, accountingAuction, actorA.account.address, [{ tick: ensureDefined(actorAAuctionTick, 'actor A tick missing'), bidIndex: 0n }]),
+				},
+				{
+					name: 'actor A double claim is atomic',
+					enabled: () => completed.has('actor A claims auction') && actorAAuctionTick !== undefined,
+					execute: async () => {
+						const before = await readModelSnapshot()
+						const auctionBalanceBefore = await getETHBalance(client, accountingAuction)
+						await assert.rejects(withdrawBids(client, accountingAuction, actorA.account.address, [{ tick: ensureDefined(actorAAuctionTick, 'actor A tick missing'), bidIndex: 0n }]), /already been claimed/i)
+						assert.deepStrictEqual(await readModelSnapshot(), before, 'double claim should preserve pool and supply accounting')
+						strictEqualTypeSafe(await getETHBalance(client, accountingAuction), auctionBalanceBefore, 'double claim should preserve auction escrow')
+					},
+				},
+				{
+					name: 'actor B claims auction',
+					enabled: () => completed.has('finalize independent auction') && actorBAuctionTick !== undefined,
+					execute: async () => await withdrawBids(client, accountingAuction, actorB.account.address, [{ tick: ensureDefined(actorBAuctionTick, 'actor B tick missing'), bidIndex: 0n }]),
+				},
+				{
+					name: 'create first yes child',
+					enabled: () => completed.has('own escalation triggers universe fork'),
+					execute: async () => await createChildUniverse(client, firstPool.securityPool, QuestionOutcome.Yes),
+				},
+				{
+					name: 'create second yes child',
+					enabled: () => completed.has('freeze second pool after universe fork'),
+					execute: async () => await createChildUniverse(client, secondPool.securityPool, QuestionOutcome.Yes),
+				},
+				{
+					name: 'split first pool REP',
+					enabled: () => completed.has('create first yes child'),
+					execute: async () => await migrateRepToZoltar(client, firstPool.securityPool, [QuestionOutcome.Yes]),
+				},
+				{
+					name: 'split second pool REP',
+					enabled: () => completed.has('create second yes child'),
+					execute: async () => await migrateRepToZoltar(client, secondPool.securityPool, [QuestionOutcome.Yes]),
+				},
+				{
+					name: 'migrate creator unresolved first vault',
+					enabled: () => completed.has('split first pool REP'),
+					execute: async () => await migrateVaultWithUnresolvedEscalation(client, firstPool.securityPool, client.account.address, QuestionOutcome.Yes),
+				},
+				{
+					name: 'migrate actor A unresolved first vault',
+					enabled: () => completed.has('split first pool REP'),
+					execute: async () => await migrateVaultWithUnresolvedEscalation(actorA, firstPool.securityPool, actorA.account.address, QuestionOutcome.Yes),
+				},
+				{
+					name: 'migrate actor A second vault',
+					enabled: () => completed.has('split second pool REP'),
+					execute: async () => await migrateVault(actorA, secondPool.securityPool, QuestionOutcome.Yes),
+				},
+				{
+					name: 'repeat second vault migration is atomic',
+					enabled: () => completed.has('migrate actor A second vault'),
+					execute: async () => {
+						const parentBefore = await readModelSnapshot()
+						const childBefore = await readSecondChildEntitlementSnapshot()
+						await migrateVault(actorA, secondPool.securityPool, QuestionOutcome.Yes)
+						assert.deepStrictEqual(await readModelSnapshot(), parentBefore, 'repeated migration should not recreate a parent entitlement')
+						assert.deepStrictEqual(await readSecondChildEntitlementSnapshot(), childBefore, 'repeated migration should not duplicate child ownership, allowance, REP, or migrated allocation')
+					},
+				},
+			]
+			const requiredTerminalActions = ['actor A double claim is atomic', 'actor B claims auction', 'migrate creator unresolved first vault', 'migrate actor A unresolved first vault', 'repeat second vault migration is atomic']
+
+			for (let step = 0; step < 100 && !requiredTerminalActions.every(name => completed.has(name)); step += 1) {
+				const enabledActions = actions.filter(action => !completed.has(action.name) && action.enabled())
+				if (enabledActions.length === 0) failWithTrace(new Error('action handler reached a nonterminal dead end'))
+				const action = enabledActions[Number(nextRandom() % BigInt(enabledActions.length))]
+				if (action === undefined) failWithTrace(new Error('seed selected an unavailable action'))
+				trace.push(action.name)
+				try {
+					await action.execute()
+					completed.add(action.name)
+					await assertGlobalAccounting(action.name)
+				} catch (error) {
+					failWithTrace(error)
+				}
+			}
+			assert.ok(
+				requiredTerminalActions.every(name => completed.has(name)),
+				`seed ${seed.toString()} should reach every terminal entitlement`,
+			)
+			assert.ok(trace.indexOf('finalize independent auction') < trace.indexOf('migrate actor A unresolved first vault') || trace.indexOf('finalize independent auction') < trace.indexOf('migrate actor A second vault'), 'independent auction actions should cross lifecycle action classes')
+			strictEqualTypeSafe(await getSystemState(client, firstPool.securityPool), SystemState.PoolForked, 'own-fork parent should remain frozen')
+			strictEqualTypeSafe(await getSystemState(client, secondPool.securityPool), SystemState.PoolForked, 'external parent should remain frozen')
+
+			const firstYesPool = firstYesPoolAddresses.securityPool
+			assert.ok((await getSecurityVault(client, firstYesPool, client.account.address)).repDepositShare > 0n, 'creator ownership should migrate to own-fork child')
+			const actorAChildVault = await getSecurityVault(client, firstYesPool, actorA.account.address)
+			assert.ok(actorAChildVault.repInEscalationGame > 0n, 'actor A unresolved escrow should continue in own-fork child')
+			strictEqualTypeSafe((await getSecurityVault(client, firstPool.securityPool, actorA.account.address)).repInEscalationGame, 0n, 'actor A source escrow should be consumed from the parent exactly once')
+			const actorAChildSourcePrincipal = await getForkedEscrowPrincipalByOutcomeAndVault(client, firstYesPool, QuestionOutcome.Yes, actorA.account.address)
+			const actorAChildRep = await getForkedEscrowChildRepByOutcomeAndVault(client, firstYesPool, QuestionOutcome.Yes, actorA.account.address)
+			assertEscrowMigrationConservation({ childSourcePrincipal: actorAChildSourcePrincipal, parentRemainingPrincipal: 0n, sourcePrincipalAtFork: actorAFirstEscrowSourceAtFork }, 'handler actor A exported escalation')
+			strictEqualTypeSafe(actorAChildRep, actorAChildVault.repInEscalationGame, 'handler child REP backing should equal the migrated child vault lock')
+			const actorAParentYesDeposits = (await getEscalationGameDeposits(client, firstPool.escalationGame, QuestionOutcome.Yes)).filter(deposit => deposit.depositor === actorA.account.address)
+			strictEqualTypeSafe(actorAParentYesDeposits.length, 1, 'handler should preserve one immutable parent Yes deposit commitment for actor A')
+			strictEqualTypeSafe(ensureDefined(actorAParentYesDeposits[0], 'handler parent Yes deposit is missing').amount, actorAFirstEscrowSourceAtFork, 'handler parent deposit commitment should preserve the exact source principal')
+			strictEqualTypeSafe((await getEscalationGameDeposits(client, firstYesPoolAddresses.escalationGame, QuestionOutcome.Yes)).length, 0, 'handler child should carry escrow without replaying it as a local deposit')
+			assert.ok((await getSecurityVault(client, secondYesPool, actorA.account.address)).repDepositShare > 0n, 'actor A ownership should migrate to external-fork child')
+			strictEqualTypeSafe((await getSecurityVault(client, secondPool.securityPool, actorA.account.address)).repDepositShare, 0n, 'second parent entitlement should be consumed once')
+
+			await mockWindow.anvilRevert(currentHandlerBaseline)
+			currentHandlerBaseline = await mockWindow.anvilSnapshot()
+		}
 	})
 
 	test('positive-value mint fuzzing always returns shares and preserves unsolicited ETH surplus', async () => {
