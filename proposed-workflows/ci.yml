@@ -1,0 +1,250 @@
+name: CI Gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  BUN_VERSION: 1.3.13
+  FOUNDRY_VERSION: v1.5.1
+  ZOLTAR_CI_TEST_SHARDS: 4
+
+jobs:
+  required:
+    name: Required
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup Foundry / Anvil
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: ${{ env.FOUNDRY_VERSION }}
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v5
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'bun.lockb', 'ui/bun.lock', 'ui/bun.lockb', 'solidity/bun.lock', 'solidity/bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: |
+          bun install --frozen-lockfile
+          (cd ui && bun install --frozen-lockfile)
+          (cd solidity && bun install --frozen-lockfile)
+
+      - name: Verify Anvil
+        run: anvil --version
+      - name: Cache generated artifacts
+        uses: actions/cache@v5
+        with:
+          path: |
+            shared/js
+            solidity/artifacts
+            solidity/.contract-hash.json
+            solidity/ts/types/contractArtifact.ts
+            solidity/types/contractArtifact.ts
+            ui/ts/abis.ts
+            ui/ts/contractArtifact.ts
+            ui/vendor
+          key: ${{ runner.os }}-generated-${{ hashFiles('bun.lock', 'ui/bun.lock', 'solidity/bun.lock', 'shared/package.json', 'shared/tsconfig.json', 'shared/ts/**', 'solidity/package.json', 'solidity/tsconfig-compile.json', 'solidity/ts/abi/abis.ts', 'solidity/ts/compile.ts', 'solidity/contracts/**', 'ui/build/projectArtifacts.mts', 'ui/index.html') }}
+          restore-keys: |
+            ${{ runner.os }}-generated-
+
+      - name: Generate and verify generated artifacts
+        run: bun run check:generated-clean
+
+      - name: Refresh generated shared package installs
+        run: bun run refresh:shared-dependencies
+
+      - name: Cache TypeScript incremental state
+        uses: actions/cache@v5
+        with:
+          path: .tsbuildinfo
+          key: ${{ runner.os }}-tsbuildinfo-${{ hashFiles('bun.lock', 'package.json', 'tsconfig.json', 'tsconfig.scripts.json', 'shared/package.json', 'shared/tsconfig.json', 'ui/package.json', 'ui/tsconfig.json', 'solidity/package.json', 'solidity/tsconfig.json', 'solidity/tsconfig.typecheck.json') }}-${{ hashFiles('shared/ts/**', 'ui/ts/**') }}
+          restore-keys: |
+            ${{ runner.os }}-tsbuildinfo-${{ hashFiles('bun.lock', 'package.json', 'tsconfig.json', 'tsconfig.scripts.json', 'shared/package.json', 'shared/tsconfig.json', 'ui/package.json', 'ui/tsconfig.json', 'solidity/package.json', 'solidity/tsconfig.json', 'solidity/tsconfig.typecheck.json') }}-
+
+      - name: Format
+        run: bun run format
+
+      - name: Verify pre-task worktree cleanliness
+        run: |
+          if ! git diff --exit-code -- .; then
+            echo 'Generated files or formatting changed tracked files. Run the relevant command locally and commit the result.'
+            exit 1
+          fi
+
+          if [[ -n "$(git status --porcelain --untracked-files=normal)" ]]; then
+            git status --short
+            echo 'CI generated untracked files. Commit them or update .gitignore as appropriate.'
+            exit 1
+          fi
+
+          git diff --check
+
+      - name: TypeScript checks and production UI build
+        run: bun run ci:preflight:current
+
+      - name: Tests, checks, dead code analysis, and audits
+        shell: bash
+        env:
+          ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: "1"
+        run: |
+          set -Eeuo pipefail
+
+          require_positive_integer() {
+            local name="$1"
+            local value="$2"
+            if [[ ! "$value" =~ ^[1-9][0-9]*$ ]]; then
+              echo "::error::${name} must be a positive integer."
+              exit 1
+            fi
+          }
+
+          test_shards="${ZOLTAR_CI_TEST_SHARDS:-4}"
+          require_positive_integer ZOLTAR_CI_TEST_SHARDS "$test_shards"
+
+          if [[ -n "${ZOLTAR_CI_TEST_PARALLEL:-}" ]]; then
+            test_parallel="$ZOLTAR_CI_TEST_PARALLEL"
+            require_positive_integer ZOLTAR_CI_TEST_PARALLEL "$test_parallel"
+          elif (( "$(nproc)" >= 8 )); then
+            test_parallel=2
+          else
+            test_parallel=1
+          fi
+
+          echo "Using ${test_shards} test shard(s) with --parallel=${test_parallel}."
+
+          declare -a task_pids=()
+          declare -A task_names=()
+
+          start_task() {
+            local name="$1"
+            local command="$2"
+            echo
+            echo "==> Starting ${name}"
+            echo "$ ${command}"
+            setsid bash -c "$command" &
+            local pid="$!"
+            task_pids+=("$pid")
+            task_names["$pid"]="$name"
+          }
+
+          remove_pid() {
+            local completed_pid="$1"
+            local -a remaining_pids=()
+            local pid
+            for pid in "${task_pids[@]}"; do
+              if [[ "$pid" != "$completed_pid" ]]; then
+                remaining_pids+=("$pid")
+              fi
+            done
+            task_pids=("${remaining_pids[@]}")
+          }
+
+          terminate_remaining() {
+            local failed_name="$1"
+            local pid
+            for pid in "${task_pids[@]}"; do
+              if kill -0 "$pid" 2>/dev/null; then
+                echo "Aborting ${task_names[$pid]} because ${failed_name} failed."
+                kill -TERM "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+              fi
+            done
+
+            sleep 5
+
+            for pid in "${task_pids[@]}"; do
+              if kill -0 "$pid" 2>/dev/null; then
+                echo "Force-aborting ${task_names[$pid]}."
+                kill -KILL "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+              fi
+            done
+
+            for pid in "${task_pids[@]}"; do
+              wait "$pid" 2>/dev/null || true
+            done
+          }
+
+          wait_for_tasks() {
+            local completed_pid
+            local failed_name
+            local status
+
+            while ((${#task_pids[@]} > 0)); do
+              completed_pid=''
+              if wait -n -p completed_pid "${task_pids[@]}"; then
+                status=0
+              else
+                status="$?"
+              fi
+
+              if [[ -z "$completed_pid" ]]; then
+                break
+              fi
+
+              failed_name="${task_names[$completed_pid]}"
+              remove_pid "$completed_pid"
+
+              if ((status != 0)); then
+                echo "::error::${failed_name} failed with exit code ${status}."
+                terminate_remaining "$failed_name"
+                exit "$status"
+              fi
+
+              echo "PASS ${failed_name}"
+            done
+          }
+
+          if ((test_shards == 1)); then
+            start_task "Tests" "bun run test:run:balanced-shard -- --bail=1 --parallel=${test_parallel} --shard=1/1"
+          else
+            for shard in $(seq 1 "$test_shards"); do
+              start_task "Tests shard ${shard}/${test_shards}" "bun run test:run:balanced-shard -- --bail=1 --parallel=${test_parallel} --shard=${shard}/${test_shards}"
+            done
+          fi
+
+          start_task "Biome and Solidity checks" "bun run check:ci:current"
+          start_task "Dead code analysis" "bun run knip"
+          start_task "Dependency audit" "bun audit && (cd ui && bun audit) && (cd solidity && bun audit)"
+
+          wait_for_tasks
+
+      - name: Verify final worktree cleanliness
+        if: ${{ always() }}
+        run: |
+          if ! git diff --exit-code -- .; then
+            echo 'CI left tracked file changes. Commit intended changes or fix generated output churn.'
+            exit 1
+          fi
+
+          if [[ -n "$(git status --porcelain --untracked-files=normal)" ]]; then
+            git status --short
+            echo 'CI generated untracked files. Commit them or update .gitignore as appropriate.'
+            exit 1
+          fi
+
+          git diff --check
