@@ -6,6 +6,7 @@ import { OpenOracle } from './openOracle/OpenOracle.sol';
 import { ReputationToken } from '../ReputationToken.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
+import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
 // price oracle
 uint256 constant PRICE_VALID_FOR_SECONDS = 5 minutes;
@@ -38,6 +39,7 @@ contract OpenOraclePriceCoordinator {
 	string private constant STAGED_OPERATION_ERROR_STALE_LIQUIDATION = 'stale liquidation';
 	string private constant STAGED_OPERATION_ERROR_ZERO_WITHDRAW = 'withdraw amount has no effect';
 	string private constant STAGED_OPERATION_ERROR_MIN_LIQUIDATION_DISTANCE = 'liquidation too close to threshold';
+	string private constant STAGED_OPERATION_ERROR_REPORT_EXPOSURE = 'oracle report exposure exceeded';
 	string private constant STAGED_OPERATION_ERROR_PANIC = 'Panic';
 	string private constant STAGED_OPERATION_ERROR_UNKNOWN = 'Unknown error';
 	uint256 public pendingReportId;
@@ -64,6 +66,8 @@ contract OpenOraclePriceCoordinator {
 	uint256 public immutable maxSettlementBaseFeeMultiplierBps;
 	uint256 public immutable minLiquidationPriceDistanceBps;
 	uint256 public pendingReportMaxSettlementBaseFee;
+	uint256 public priceRoundMaxNotional;
+	uint256 public priceRoundConsumedNotional;
 
 	event SecurityPoolSet(ISecurityPool securityPool);
 	event RepEthPriceSet(uint256 price);
@@ -311,6 +315,13 @@ contract OpenOraclePriceCoordinator {
 		}
 		lastSettlementTimestamp = block.timestamp;
 		lastPrice = price;
+		priceRoundConsumedNotional = 0;
+		uint256 configuredRepNotional = Math.mulDiv(
+			exactToken1Report,
+			escalationHaltMultiplierBps,
+			SecurityPoolUtils.BPS_DENOMINATOR
+		);
+		priceRoundMaxNotional = Math.mulDiv(configuredRepNotional, amount2, amount1);
 		emit PriceReported(reportId, lastPrice, lastSettlementTimestamp);
 		if (pendingSettlementOperationIds.length != 0) {
 			uint256[] memory operationIds = pendingSettlementOperationIds;
@@ -340,6 +351,20 @@ contract OpenOraclePriceCoordinator {
 			lastPrice > 0 &&
 			lastSettlementTimestamp != 0 &&
 			lastSettlementTimestamp + PRICE_VALID_FOR_SECONDS > block.timestamp;
+	}
+
+	function getPriceRoundRemainingNotional() public view returns (uint256) {
+		if (priceRoundConsumedNotional >= priceRoundMaxNotional) return 0;
+		return priceRoundMaxNotional - priceRoundConsumedNotional;
+	}
+
+	function consumeEscalationDepositNotional(uint256 repAmount) external {
+		require(msg.sender == address(securityPool), 'Only security pool can consume exposure');
+		uint256 operationNotional = _repToEthNotional(repAmount);
+		uint256 poolAllowance = securityPool.totalSecurityBondAllowance();
+		if (operationNotional > poolAllowance) operationNotional = poolAllowance;
+		require(operationNotional <= getPriceRoundRemainingNotional(), STAGED_OPERATION_ERROR_REPORT_EXPOSURE);
+		_consumePriceRoundNotional(operationNotional);
 	}
 
 	function requestPriceIfNeededAndStageOperation(
@@ -381,8 +406,8 @@ contract OpenOraclePriceCoordinator {
 		// Capture the target vault state at queue time. Liquidation may still execute if
 		// the target deposits more REP after staging, but allowance changes or ownership
 		// decreases make a liquidation snapshot stale. Non-liquidation operations keep
-		// the snapshot for history and execution-event context, but price validity no
-		// longer meters operations by snapshot or live external-value exposure.
+		// the snapshot for history and execution-event context. The report-round budget
+		// meters the live risk notional of successful operations at execution time.
 		// Liquidation should value the vault's full collateral claim. That means using the
 		// pool's total REP balance here rather than only the currently withdrawable balance.
 		(uint256 snapshotTargetOwnership, uint256 snapshotTargetAllowance, , ) = securityPool.securityVaults(
@@ -472,6 +497,16 @@ contract OpenOraclePriceCoordinator {
 			);
 			return;
 		}
+		uint256 operationNotional = _getOperationNotional(stagedOperation);
+		if (operationNotional > getPriceRoundRemainingNotional()) {
+			_consumeAndEmitExecutedStagedOperation(
+				operationId,
+				stagedOperation.operation,
+				false,
+				STAGED_OPERATION_ERROR_REPORT_EXPOSURE
+			);
+			return;
+		}
 		if (stagedOperation.operation == OperationType.Liquidation) {
 			if (!_isLiquidationBeyondMinPriceDistance(stagedOperation)) {
 				_consumeAndEmitExecutedStagedOperation(
@@ -482,11 +517,11 @@ contract OpenOraclePriceCoordinator {
 				);
 				return;
 			}
-			_executeLiquidationStagedOperation(operationId, stagedOperation);
+			_executeLiquidationStagedOperation(operationId, stagedOperation, operationNotional);
 		} else if (stagedOperation.operation == OperationType.WithdrawRep) {
-			_executeWithdrawRepStagedOperation(operationId, stagedOperation);
+			_executeWithdrawRepStagedOperation(operationId, stagedOperation, operationNotional);
 		} else {
-			_executeSetSecurityBondAllowanceStagedOperation(operationId, stagedOperation);
+			_executeSetSecurityBondAllowanceStagedOperation(operationId, stagedOperation, operationNotional);
 		}
 	}
 
@@ -521,7 +556,11 @@ contract OpenOraclePriceCoordinator {
 		_emitExecutedStagedOperation(operationId, operation, false, reason);
 	}
 
-	function _executeLiquidationStagedOperation(uint256 operationId, StagedOperation memory stagedOperation) private {
+	function _executeLiquidationStagedOperation(
+		uint256 operationId,
+		StagedOperation memory stagedOperation,
+		uint256 operationNotional
+	) private {
 		_consumeStagedOperation(operationId);
 		try
 			securityPool.performLiquidation(
@@ -534,6 +573,7 @@ contract OpenOraclePriceCoordinator {
 				stagedOperation.snapshotDenominator
 			)
 		{
+			_consumePriceRoundNotional(operationNotional);
 			_completeExecutedStagedOperation(operationId, stagedOperation.operation);
 		} catch Error(string memory reason) {
 			_emitExecutedStagedOperationFailure(operationId, stagedOperation.operation, reason);
@@ -544,9 +584,14 @@ contract OpenOraclePriceCoordinator {
 		}
 	}
 
-	function _executeWithdrawRepStagedOperation(uint256 operationId, StagedOperation memory stagedOperation) private {
+	function _executeWithdrawRepStagedOperation(
+		uint256 operationId,
+		StagedOperation memory stagedOperation,
+		uint256 operationNotional
+	) private {
 		_consumeStagedOperation(operationId);
 		try securityPool.performWithdrawRep(stagedOperation.initiatorVault, stagedOperation.amount) {
+			_consumePriceRoundNotional(operationNotional);
 			_completeExecutedStagedOperation(operationId, stagedOperation.operation);
 		} catch Error(string memory reason) {
 			_emitExecutedStagedOperationFailure(operationId, stagedOperation.operation, reason);
@@ -559,10 +604,12 @@ contract OpenOraclePriceCoordinator {
 
 	function _executeSetSecurityBondAllowanceStagedOperation(
 		uint256 operationId,
-		StagedOperation memory stagedOperation
+		StagedOperation memory stagedOperation,
+		uint256 operationNotional
 	) private {
 		_consumeStagedOperation(operationId);
 		try securityPool.performSetSecurityBondsAllowance(stagedOperation.initiatorVault, stagedOperation.amount) {
+			_consumePriceRoundNotional(operationNotional);
 			_completeExecutedStagedOperation(operationId, stagedOperation.operation);
 		} catch Error(string memory reason) {
 			_emitExecutedStagedOperationFailure(operationId, stagedOperation.operation, reason);
@@ -571,6 +618,42 @@ contract OpenOraclePriceCoordinator {
 		} catch (bytes memory) {
 			_emitExecutedStagedOperationFailure(operationId, stagedOperation.operation, STAGED_OPERATION_ERROR_UNKNOWN);
 		}
+	}
+
+	function _consumePriceRoundNotional(uint256 notional) private {
+		priceRoundConsumedNotional += notional;
+	}
+
+	function _getOperationNotional(StagedOperation memory stagedOperation) private view returns (uint256) {
+		if (stagedOperation.operation == OperationType.Liquidation) {
+			(uint256 currentTargetOwnership, , , ) = securityPool.securityVaults(stagedOperation.targetVault);
+			(uint256 debtToMove, uint256 repToMove, ) = SecurityPoolUtils.calculateLiquidationTransfer(
+				stagedOperation.snapshotTargetOwnership,
+				stagedOperation.snapshotTargetAllowance,
+				stagedOperation.snapshotTotalRep,
+				stagedOperation.snapshotDenominator,
+				stagedOperation.amount,
+				lastPrice,
+				currentTargetOwnership,
+				securityPool.getTotalRepBalance(),
+				securityPool.poolOwnershipDenominator()
+			);
+			uint256 repEthNotional = _repToEthNotional(repToMove);
+			return debtToMove > repEthNotional ? debtToMove : repEthNotional;
+		}
+		if (stagedOperation.operation == OperationType.WithdrawRep) {
+			(, uint256 withdrawRepAmount) = _previewWithdrawRep(stagedOperation.initiatorVault, stagedOperation.amount);
+			uint256 collateralRemovedNotional = _repToEthNotional(withdrawRepAmount);
+			uint256 poolAllowance = securityPool.totalSecurityBondAllowance();
+			return collateralRemovedNotional > poolAllowance ? poolAllowance : collateralRemovedNotional;
+		}
+		(, uint256 currentAllowance, , ) = securityPool.securityVaults(stagedOperation.initiatorVault);
+		return stagedOperation.amount > currentAllowance ? stagedOperation.amount - currentAllowance : 0;
+	}
+
+	function _repToEthNotional(uint256 repAmount) private view returns (uint256) {
+		if (repAmount == 0 || lastPrice == 0) return 0;
+		return Math.mulDiv(repAmount, PRICE_PRECISION, lastPrice, Math.Rounding.Ceil);
 	}
 
 	function _emitStagedOperationQueued(uint256 operationId, bool isPendingSlot) private {

@@ -103,6 +103,7 @@ contract UniformPriceDualCapBatchAuction {
 
 		maxRepBeingSold = _maxRepBeingSold;
 		ethRaiseCap = _ethRaiseCap;
+		underfundedThreshold = Math.mulDiv(_ethRaiseCap, PRICE_PRECISION, _maxRepBeingSold, Math.Rounding.Ceil);
 		auctionStarted = block.timestamp;
 		minBidSize = _ethRaiseCap / MIN_BID_SIZE_DIVISOR;
 		if (minBidSize < 1) minBidSize = 1;
@@ -139,26 +140,25 @@ contract UniformPriceDualCapBatchAuction {
 			totalRepPurchased = clearingPrice > 0 ? (accumulatedEth * PRICE_PRECISION) / clearingPrice : 0;
 			ethToSend = accumulatedEth;
 		} else {
-			// Underfunded: sell the full REP cap at one synthetic clearing price implied
-			// by the qualifying winning ETH. Bids outside the finalized winning prefix
-			// remain refundable.
+			// Underfunded bids buy REP only at or above the auction reserve implied by
+			// both caps. This keeps REP issued proportional to ETH actually raised.
 			underfunded = true;
 			if (ethRaised == 0 || maxRepBeingSold == 0) {
 				clearingTick = 0;
-				underfundedThreshold = type(uint256).max;
 				underfundedWinningEth = 0;
 				totalRepPurchased = 0;
 				ethToSend = 0;
 			} else {
-				bool hasWinningTick;
-				(underfundedWinningEth, clearingTick, hasWinningTick, ) = _findUnderfundedWinningPrefix(root, 0);
-				if (!hasWinningTick) {
-					underfundedThreshold = type(uint256).max;
+				clearingTick = _priceToCeilingTick(underfundedThreshold);
+				uint256 clearingPrice = tickToPrice(clearingTick);
+				if (clearingPrice < underfundedThreshold) {
 					totalRepPurchased = 0;
 					ethToSend = 0;
 				} else {
-					underfundedThreshold = _ceilDiv(underfundedWinningEth * PRICE_PRECISION, maxRepBeingSold);
-					totalRepPurchased = maxRepBeingSold;
+					underfundedWinningEth =
+						_getActiveEthAboveTick(root, clearingTick) + _getEthAtTick(root, clearingTick);
+					totalRepPurchased = Math.mulDiv(underfundedWinningEth, PRICE_PRECISION, clearingPrice);
+					if (totalRepPurchased > maxRepBeingSold) totalRepPurchased = maxRepBeingSold;
 					ethToSend = underfundedWinningEth;
 				}
 			}
@@ -206,7 +206,7 @@ contract UniformPriceDualCapBatchAuction {
 					totalFilledRep += _allocateRepFromCumulativePosition(
 						cumulativeWinningEthBeforeBid,
 						bid.ethAmount,
-						maxRepBeingSold,
+						totalRepPurchased,
 						underfundedWinningEth
 					);
 					// no ETH refund
@@ -402,6 +402,10 @@ contract UniformPriceDualCapBatchAuction {
 		return rep >= maxRepBeingSold;
 	}
 
+	function _isClearingTick(int256 tick) private view returns (bool) {
+		return tickToPrice(tick) >= underfundedThreshold;
+	}
+
 	function _subtreeWouldClear(uint256 nodeId, uint256 accEth) internal view returns (bool) {
 		if (nodeId == 0) return false;
 		Node storage node = nodes[nodeId];
@@ -538,6 +542,11 @@ contract UniformPriceDualCapBatchAuction {
 			}
 		}
 
+		// This node and its entire left subtree are below the cap-implied reserve.
+		// They remain in subtreeEth for refunds and pagination but cannot establish
+		// a funded clearing price or contribute ETH to a winning prefix.
+		if (!_isClearingTick(node.tick)) return (false, lastValidTick, accEth, lastValidEthAtTick);
+
 		uint256 price = tickToPrice(node.tick);
 		uint256 ethToTake = price == 0 ? 0 : node.totalEth;
 		if (accEth > 0) {
@@ -573,45 +582,21 @@ contract UniformPriceDualCapBatchAuction {
 		return _compute(node.left, accEth, lastValidTick, lastValidEth, lastValidEthAtTick);
 	}
 
-	function _findUnderfundedWinningPrefix(
-		uint256 nodeId,
-		uint256 accEth
-	) internal view returns (uint256 winningEth, int256 lowestWinningTick, bool hasWinningTick, bool stopped) {
-		if (nodeId == 0) return (accEth, 0, false, false);
-		Node storage node = nodes[nodeId];
-		uint256 thresholdIfWholeSubtreeWins = _ceilDiv((accEth + node.subtreeEth) * PRICE_PRECISION, maxRepBeingSold);
-		uint256 subtreeMinPrice = tickToPrice(node.minClearingTick);
-		if (thresholdIfWholeSubtreeWins <= subtreeMinPrice)
-			return (accEth + node.subtreeEth, node.minClearingTick, true, false);
-
-		int256 winningTickFromRight;
-		bool hasWinningTickFromRight;
-		(accEth, winningTickFromRight, hasWinningTickFromRight, stopped) = _findUnderfundedWinningPrefix(
-			node.right,
-			accEth
-		);
-		if (stopped) return (accEth, winningTickFromRight, hasWinningTickFromRight, true);
-
-		uint256 candidateEth = accEth + node.totalEth;
-		uint256 thresholdIfNodeWins = _ceilDiv(candidateEth * PRICE_PRECISION, maxRepBeingSold);
-		if (thresholdIfNodeWins > tickToPrice(node.tick))
-			return (accEth, winningTickFromRight, hasWinningTickFromRight, true);
-
-		int256 lowestWinningTickLocal = node.tick;
-		int256 winningTickFromLeft;
-		bool hasWinningTickFromLeft;
-		(accEth, winningTickFromLeft, hasWinningTickFromLeft, stopped) = _findUnderfundedWinningPrefix(
-			node.left,
-			candidateEth
-		);
-		if (hasWinningTickFromLeft) lowestWinningTickLocal = winningTickFromLeft;
-		return (accEth, lowestWinningTickLocal, true, stopped);
+	function _priceToCeilingTick(uint256 price) private pure returns (int256) {
+		int256 low = MIN_TICK;
+		int256 high = MAX_TICK;
+		while (low < high) {
+			int256 middle = low + (high - low) / 2;
+			if (tickToPrice(middle) >= price) high = middle;
+			else low = middle + 1;
+		}
+		return low;
 	}
 
 	function _insert(uint256 nodeId, int256 tick, address bidder, uint256 ethAmount) internal returns (uint256) {
 		if (nodeId == 0) {
 			uint256 newId = nextId++;
-			uint256 nodeClearingEth = tickToPrice(tick) == 0 ? 0 : ethAmount;
+			uint256 nodeClearingEth = _isClearingTick(tick) ? ethAmount : 0;
 			nodes[newId] = Node({
 				tick: tick,
 				totalEth: ethAmount,
@@ -676,7 +661,7 @@ contract UniformPriceDualCapBatchAuction {
 			rightClearingEth = nodes[node.right].subtreeClearingEth;
 		}
 
-		uint256 nodeClearingEth = tickToPrice(node.tick) == 0 ? 0 : node.totalEth;
+		uint256 nodeClearingEth = _isClearingTick(node.tick) ? node.totalEth : 0;
 		node.subtreeEth = node.totalEth + leftEth + rightEth;
 		node.subtreeClearingEth = nodeClearingEth + leftClearingEth + rightClearingEth;
 		node.height = 1 + (leftH > rightH ? leftH : rightH);

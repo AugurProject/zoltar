@@ -6,7 +6,7 @@ import type { SimulationScenario } from '../../simulation/scenarios.js'
 import { createBootstrappedSimulationBackendWithRetry, type SimulationBackend } from './testUtils.js'
 
 const SEEDED_REP_DEPOSIT = 10_000n * 10n ** 18n
-const SEEDED_SECURITY_BOND_ALLOWANCE = 100n * 10n ** 18n
+const SEEDED_SECURITY_BOND_ALLOWANCE = 80n * 10n ** 18n
 
 void describe('security-pool simulation backends', () => {
 	let securityPoolBackend: SimulationBackend

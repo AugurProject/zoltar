@@ -16,6 +16,10 @@ const localUnresolvedPrincipalAbi = [
 	},
 ] as const
 
+const CARRY_PROOF_GAS_LIMIT = 3_000_000n
+const RECURSIVE_ANCESTOR_CHECK_GAS_LIMIT = 8_000_000n
+const RECURSIVE_CARRY_MIGRATION_GAS_LIMIT = 26_000_000n
+
 describe('Peripherals: escalation migration', () => {
 	const fixture = usePeripheralsEscalationMigrationFixture()
 	const assert: PeripheralsEscalationMigrationFixture['assert'] = fixture.assert
@@ -1038,7 +1042,8 @@ describe('Peripherals: escalation migration', () => {
 			functionName: 'withdrawForkedEscalationDeposits',
 			args: [QuestionOutcome.Yes, [secondProof]],
 		})
-		await client.waitForTransactionReceipt({ hash: secondClaimHash })
+		const secondClaimReceipt = await client.waitForTransactionReceipt({ hash: secondClaimHash })
+		assert.ok(secondClaimReceipt.gasUsed < CARRY_PROOF_GAS_LIMIT, `carry-proof verification used ${secondClaimReceipt.gasUsed.toString()} gas, above the ${CARRY_PROOF_GAS_LIMIT.toString()} ceiling`)
 		assert.ok((await getERC20Balance(client, getRepTokenAddress(yesUniverse), client.account.address)) > walletRepBeforeSecondClaim, 'the untouched same-outcome deposit should remain claimable')
 		await assert.rejects(
 			client.writeContract({
@@ -1105,9 +1110,13 @@ describe('Peripherals: escalation migration', () => {
 		})
 
 		await forkUniverse(attackerClient, yesUniverse, secondForkQuestionId)
-		await initiateSecurityPoolFork(client, yesSecurityPool.securityPool)
+		const recursiveInitiationHash = await initiateSecurityPoolFork(client, yesSecurityPool.securityPool)
+		const recursiveInitiationReceipt = await client.getTransactionReceipt({ hash: recursiveInitiationHash })
+		assert.ok(recursiveInitiationReceipt.gasUsed < RECURSIVE_ANCESTOR_CHECK_GAS_LIMIT, `recursive fork initiation used ${recursiveInitiationReceipt.gasUsed.toString()} gas, above the ${RECURSIVE_ANCESTOR_CHECK_GAS_LIMIT.toString()} ceiling`)
 		await migrateRepToZoltar(client, yesSecurityPool.securityPool, [QuestionOutcome.Yes])
-		await migrateVaultWithUnresolvedEscalation(client, yesSecurityPool.securityPool, client.account.address, QuestionOutcome.Yes)
+		const recursiveMigrationHash = await migrateVaultWithUnresolvedEscalation(client, yesSecurityPool.securityPool, client.account.address, QuestionOutcome.Yes)
+		const recursiveMigrationReceipt = await client.getTransactionReceipt({ hash: recursiveMigrationHash })
+		assert.ok(recursiveMigrationReceipt.gasUsed < RECURSIVE_CARRY_MIGRATION_GAS_LIMIT, `recursive carry migration used ${recursiveMigrationReceipt.gasUsed.toString()} gas, above the ${RECURSIVE_CARRY_MIGRATION_GAS_LIMIT.toString()} ceiling`)
 
 		const grandchildUniverse = getChildUniverseId(yesUniverse, QuestionOutcome.Yes)
 		const grandchildSecurityPool = getSecurityPoolAddresses(yesSecurityPool.securityPool, grandchildUniverse, questionId, securityMultiplier)
