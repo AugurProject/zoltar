@@ -60,7 +60,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up CI
-        uses: ./proposed-github-actions/.github/actions/setup-ci
+        uses: ./.github/actions/setup-ci
         with:
           verify-generated: "true"
 
@@ -141,7 +141,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up CI
-        uses: ./proposed-github-actions/.github/actions/setup-ci
+        uses: ./.github/actions/setup-ci
 
       - name: Download production UI build
         uses: actions/download-artifact@v5
@@ -176,7 +176,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up CI
-        uses: ./proposed-github-actions/.github/actions/setup-ci
+        uses: ./.github/actions/setup-ci
 
       - name: Run repository checks
         run: bun run check:ci:current
@@ -192,7 +192,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up CI
-        uses: ./proposed-github-actions/.github/actions/setup-ci
+        uses: ./.github/actions/setup-ci
 
       - name: Run Knip
         run: bun run knip
