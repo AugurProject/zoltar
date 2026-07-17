@@ -7108,7 +7108,7 @@
 						queue. This price path is only for security backing against ETH
 						collateral.
 					</p>
-					<p>
+					<p id="oracle-economic-security-assumption">
 						When the coordinator accepts a settled REP/ETH price, that price is
 						reusable only inside its freshness window. It does not authorize a
 						fixed amount of operation exposure. The minimum WETH side of the
@@ -7119,7 +7119,13 @@
 						intentional tradeoff: one contestable price is amortized across every
 						otherwise-valid operation in the five-minute cache rather than bonded
 						one-for-one against outside value. No queued-operation or pool-value
-						notional enters the WETH calculation.
+						notional enters the WETH calculation. The protocol therefore assumes
+						at least one independent, rational, adequately capitalized OpenOracle
+						participant continuously monitors pending reports, acts whenever
+						correction is profitable under the configured economics, and can
+						obtain inclusion before settlement. Failure of that monitoring or
+						inclusion assumption is outside the claimed security model; the
+						coordinator does not cap resulting loss by report liquidity.
 					</p>
 					<figure class="diagram" id="fig-placeholder-oracle-flow">
 						<svg
