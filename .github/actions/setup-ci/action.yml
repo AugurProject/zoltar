@@ -10,6 +10,16 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Fetch repository comparison history
+      if: github.job == 'checks'
+      shell: bash
+      run: |
+        if [[ "$(git rev-parse --is-shallow-repository)" == "true" ]]; then
+          git fetch --no-tags --prune --unshallow origin '+refs/heads/*:refs/remotes/origin/*'
+        elif ! git rev-parse --verify --quiet refs/remotes/origin/main; then
+          git fetch --no-tags --prune origin '+refs/heads/main:refs/remotes/origin/main'
+        fi
+
     - name: Setup Bun
       uses: oven-sh/setup-bun@v2
       with:
