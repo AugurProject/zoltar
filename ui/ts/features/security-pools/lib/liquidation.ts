@@ -171,8 +171,8 @@ export function getDeterministicLiquidationFailureReason({
 	const callerAfterAllowance = (callerVaultSummary?.securityBondAllowance ?? 0n) + debtToMove
 	if (targetAfterRepDeposit !== undefined && targetAfterRepDeposit !== 0n && targetAfterRepDeposit < MIN_REP_DEPOSIT) return 'The target vault would fall below the minimum REP collateral after liquidation.'
 	if (targetAfterAllowance !== 0n && targetAfterAllowance < MIN_SECURITY_BOND_DEBT) return 'The target vault would fall below the minimum security bond allowance after liquidation.'
-	if (callerAfterRepDeposit < MIN_REP_DEPOSIT) return 'The caller vault would remain below the minimum REP collateral after liquidation.'
-	if (callerAfterAllowance < MIN_SECURITY_BOND_DEBT) return 'The caller vault would remain below the minimum security bond allowance after liquidation.'
+	if (callerAfterRepDeposit < MIN_REP_DEPOSIT) return 'Your vault would remain below the minimum REP collateral after liquidation.'
+	if (callerAfterAllowance < MIN_SECURITY_BOND_DEBT) return 'Your vault would remain below the minimum security bond allowance after liquidation.'
 	if (repToMove !== undefined && repPerEthPrice !== undefined && securityMultiplier !== undefined && !improvesTargetHealth(debtToMove, repToMove, repPerEthPrice, securityMultiplier)) {
 		return 'This liquidation amount is too small to improve the target vault health after rounding.'
 	}
@@ -223,8 +223,8 @@ export function getLiquidationFailureReason({
 		targetVaultSummary,
 	})
 	if (isVaultLiquidatable(repPerEthPrice, simulation.callerAfter.securityBondAllowance, simulation.callerAfter.repDepositShare, securityMultiplier)) {
-		if (isVaultLiquidatable(repPerEthPrice, simulation.callerBefore.securityBondAllowance, simulation.callerBefore.repDepositShare, securityMultiplier)) return 'The caller vault would remain liquidatable after this liquidation.'
-		return 'The caller vault would become liquidatable after this liquidation.'
+		if (isVaultLiquidatable(repPerEthPrice, simulation.callerBefore.securityBondAllowance, simulation.callerBefore.repDepositShare, securityMultiplier)) return 'Your vault would remain liquidatable after this liquidation.'
+		return 'Your vault would become liquidatable after this liquidation.'
 	}
 	return undefined
 }

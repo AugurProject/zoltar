@@ -273,7 +273,7 @@ assert.ok(!whitepaper.includes('Paged Export'))
 assert.ok(!operatorReference.includes('Local carry batching'))
 assert.match(whitepaper, /snapshots preserve the parent balances exactly, including tied maxima\s+below <code>nonDecisionThreshold<\/code>/)
 assert.match(operatorReference, /Continuation snapshots preserve the parent balances exactly, including ties/)
-assert.match(uiCopy, /stored entitlement can be reused in any additional child universe/)
+assert.match(uiCopy, /Captures all unresolved deposits once; reuse the entitlement in other child universes until the migration deadline\./)
 assert.match(uiCopy, /remains available for other unselected child outcomes until the migration deadline/)
 assert.ok(!uiCopy.includes('They cannot be split across multiple outcomes.'))
 

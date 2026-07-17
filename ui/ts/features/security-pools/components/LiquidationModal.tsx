@@ -394,6 +394,17 @@ export function LiquidationModal({
 						securityMultiplier={selectedPool?.securityMultiplier}
 						unavailableCopy={commonCopy.unavailable}
 					/>
+					{liquidationSimulation === undefined ? undefined : (
+						<CollateralizationMetricField
+							collateralizationPercent={liquidationSimulation.callerAfter.collateralization}
+							label={liquidationCopy.resultingCallerCollateralization}
+							repPerEthSource={undefined}
+							repPerEthSourceUrl={undefined}
+							securityBondAllowance={liquidationSimulation.callerAfter.securityBondAllowance}
+							securityMultiplier={selectedPool?.securityMultiplier}
+							unavailableCopy={commonCopy.unavailable}
+						/>
+					)}
 				</DataGrid>
 				{sameVaultWarning === undefined ? null : (
 					<WarningSurface as='section' variant='compact'>
@@ -433,41 +444,10 @@ export function LiquidationModal({
 						</button>
 					</div>
 				)}
-				{liquidationSimulation === undefined ? null : (
-					<section className='entity-card compact'>
-						<div className='entity-card-header'>
-							<div>
-								<h4>{liquidationCopy.callerVaultAfterLiquidation}</h4>
-							</div>
-						</div>
-						<MetricGrid>
-							<MetricField label={commonCopy.repCollateral}>
-								<CurrencyValue value={liquidationSimulation.callerAfter.repDepositShare} suffix={commonCopy.rep} />
-							</MetricField>
-							<MetricField label={commonCopy.securityBondAllowance}>
-								<CurrencyValue value={liquidationSimulation.callerAfter.securityBondAllowance} suffix={commonCopy.eth} />
-							</MetricField>
-							<CollateralizationMetricField
-								collateralizationPercent={liquidationSimulation.callerAfter.collateralization}
-								label={liquidationCopy.collateralizationAtOpenOracle}
-								repPerEthSource={undefined}
-								repPerEthSourceUrl={undefined}
-								securityBondAllowance={liquidationSimulation.callerAfter.securityBondAllowance}
-								securityMultiplier={selectedPool?.securityMultiplier}
-								unavailableCopy={commonCopy.unavailable}
-							/>
-							<MetricField label={liquidationCopy.repMoved}>
-								<CurrencyValue value={liquidationSimulation.repToMove} suffix={commonCopy.rep} />
-							</MetricField>
-						</MetricGrid>
-					</section>
-				)}
 				<TransactionReview
 					context={[
 						{ label: commonCopy.question, value: selectedPool?.marketDetails.title ?? commonCopy.unavailable },
-						{ label: liquidationCopy.securityPool, value: liquidationSecurityPoolAddress === undefined ? commonCopy.unavailable : <AddressValue address={liquidationSecurityPoolAddress} /> },
 						{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={selectedPool?.universeId} /> },
-						{ label: commonCopy.targetVault, value: trimmedLiquidationTargetVault === '' ? commonCopy.noneSelected : <AddressValue address={trimmedLiquidationTargetVault} /> },
 					]}
 					primary={[
 						{ label: liquidationCopy.debtAssumed, value: <CurrencyValue value={liquidationAmountValue} suffix={commonCopy.eth} /> },
@@ -477,41 +457,48 @@ export function LiquidationModal({
 					details={[
 						{ label: liquidationCopy.resultingCallerRep, value: <CurrencyValue value={liquidationSimulation?.callerAfter.repDepositShare} suffix={commonCopy.rep} /> },
 						{ label: liquidationCopy.resultingCallerBond, value: <CurrencyValue value={liquidationSimulation?.callerAfter.securityBondAllowance} suffix={commonCopy.eth} /> },
-						...(liquidationExecutionMode === 'queue'
+					]}
+					disclosures={
+						liquidationExecutionMode === 'queue'
 							? [
-									{ label: liquidationCopy.bufferedQueueCost, value: <CurrencyValue value={liquidationFundingPreview?.queueOperationEthValue} suffix={commonCopy.eth} /> },
-									{ label: liquidationCopy.ethWrappedToWeth, value: <CurrencyValue value={liquidationFundingPreview?.wethShortfall} suffix={commonCopy.eth} /> },
-									{ label: liquidationCopy.repLockedForInitialReport, value: <CurrencyValue value={liquidationFundingPreview?.initialReportRepRequired} suffix={commonCopy.rep} /> },
-									{ label: liquidationCopy.wethLockedForInitialReport, value: <CurrencyValue value={liquidationFundingPreview?.initialReportWethRequired} suffix={commonCopy.weth} /> },
 									{
-										label: liquidationCopy.resultingWalletEth,
-										value: <CurrencyValue value={liquidationFundingPreview === undefined || walletEthBalance === undefined || liquidationFundingPreview.totalWalletEthRequired > walletEthBalance ? undefined : walletEthBalance - liquidationFundingPreview.totalWalletEthRequired} suffix={commonCopy.eth} />,
-									},
-									{
-										label: liquidationCopy.resultingWalletRep,
-										value: (
-											<CurrencyValue
-												value={liquidationFundingPreview === undefined || liquidationFundingPreview.initialReportRepRequired > liquidationFundingPreview.currentRepBalance ? undefined : liquidationFundingPreview.currentRepBalance - liquidationFundingPreview.initialReportRepRequired}
-												suffix={commonCopy.rep}
-											/>
-										),
-									},
-									{
-										label: liquidationCopy.resultingWalletWeth,
-										value: (
-											<CurrencyValue
-												value={
-													liquidationFundingPreview === undefined || liquidationFundingPreview.initialReportWethRequired > liquidationFundingPreview.currentWethBalance + liquidationFundingPreview.wethShortfall
-														? undefined
-														: liquidationFundingPreview.currentWethBalance + liquidationFundingPreview.wethShortfall - liquidationFundingPreview.initialReportWethRequired
-												}
-												suffix={commonCopy.weth}
-											/>
-										),
+										title: liquidationCopy.fundingDetails,
+										rows: [
+											{ label: liquidationCopy.bufferedQueueCost, value: <CurrencyValue value={liquidationFundingPreview?.queueOperationEthValue} suffix={commonCopy.eth} /> },
+											{ label: liquidationCopy.ethWrappedToWeth, value: <CurrencyValue value={liquidationFundingPreview?.wethShortfall} suffix={commonCopy.eth} /> },
+											{ label: liquidationCopy.repLockedForInitialReport, value: <CurrencyValue value={liquidationFundingPreview?.initialReportRepRequired} suffix={commonCopy.rep} /> },
+											{ label: liquidationCopy.wethLockedForInitialReport, value: <CurrencyValue value={liquidationFundingPreview?.initialReportWethRequired} suffix={commonCopy.weth} /> },
+											{
+												label: liquidationCopy.resultingWalletEth,
+												value: <CurrencyValue value={liquidationFundingPreview === undefined || walletEthBalance === undefined || liquidationFundingPreview.totalWalletEthRequired > walletEthBalance ? undefined : walletEthBalance - liquidationFundingPreview.totalWalletEthRequired} suffix={commonCopy.eth} />,
+											},
+											{
+												label: liquidationCopy.resultingWalletRep,
+												value: (
+													<CurrencyValue
+														value={liquidationFundingPreview === undefined || liquidationFundingPreview.initialReportRepRequired > liquidationFundingPreview.currentRepBalance ? undefined : liquidationFundingPreview.currentRepBalance - liquidationFundingPreview.initialReportRepRequired}
+														suffix={commonCopy.rep}
+													/>
+												),
+											},
+											{
+												label: liquidationCopy.resultingWalletWeth,
+												value: (
+													<CurrencyValue
+														value={
+															liquidationFundingPreview === undefined || liquidationFundingPreview.initialReportWethRequired > liquidationFundingPreview.currentWethBalance + liquidationFundingPreview.wethShortfall
+																? undefined
+																: liquidationFundingPreview.currentWethBalance + liquidationFundingPreview.wethShortfall - liquidationFundingPreview.initialReportWethRequired
+														}
+														suffix={commonCopy.weth}
+													/>
+												),
+											},
+										],
 									},
 								]
-							: [{ label: liquidationCopy.oracleRequestEth, value: transactionReviewCopy.noProtocolFee }]),
-					]}
+							: []
+					}
 					risks={[liquidationCopy.liquidationStateRisk, ...(liquidationExecutionMode === 'queue' ? [liquidationCopy.queuedLiquidationRisk, liquidationCopy.queuedFundingSequenceRisk] : [])]}
 					technicalDetails={[
 						{ label: transactionReviewCopy.contract, value: liquidationManagerAddress === undefined ? commonCopy.unavailable : <AddressValue address={liquidationManagerAddress} /> },

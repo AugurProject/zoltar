@@ -157,13 +157,11 @@ export const yourMigrationBalances = 'Your Migration Balances'
 export const parentWalletBalancesDescription = 'Wallet-level balances in the parent pool that may still need migration.'
 export const migrateUnresolvedEscalationLocks = 'Migrate Unresolved Escalation Locks'
 export const unresolvedMigrationExpiredDetail = 'The migration window for these unresolved parent escalation deposits has closed.'
-export const unresolvedEscalationMigrationWithVaultDetail = 'This action captures all unresolved parent escalation totals for this wallet and materializes that aggregate entitlement in the selected child universe.'
+export const unresolvedEscalationMigrationWithVaultDetail = 'Captures all unresolved deposits once; reuse the entitlement in other child universes until the migration deadline.'
 export const walletUnresolvedDepositsLoading = 'Loading unresolved escalation deposits for the connected wallet…'
-export const unresolvedEscalationMultiChildDetail = 'The first action captures the wallet’s Invalid, Yes, and No aggregate totals. Before the deadline, the stored entitlement can be reused in any additional child universe that this wallet selects.'
-export const capturedEntitlementDetail = 'This wallet’s aggregate escalation entitlement is already captured. Select any child outcome that has not received it yet.'
+export const capturedEntitlementDetail = 'Entitlement captured; select a child outcome that has not received it yet.'
 export const formatEntitlementAlreadyMaterialized = (outcomeLabel: CopyTemplateValue) => `This wallet’s escalation entitlement is already materialized in the ${outcomeLabel} child universe.`
 export const formatNoUnresolvedDeposits = (outcomeLabel: string) => `No ${outcomeLabel.toLowerCase()} unresolved deposits remain for this wallet.`
-export const selectedChildMigrationRequiredDetail = 'Current path: Must migrate into the selected child universe.'
 export const formatMigrateUnresolvedEscalationToValue = (outcomeLabel: CopyTemplateValue) => `Migrate Unresolved Escalation To ${outcomeLabel}`
 export const migratingUnresolvedEscalationTruncated = 'Migrating unresolved escalation…'
 export const migrateResolvedEscalationDeposits = 'Migrate Resolved Escalation Deposits'
@@ -172,7 +170,6 @@ export const escalationMigrationEmptyEscrowDetail = 'No escrowed REP is currentl
 export const walletEscalationDepositsLoading = 'Loading escalation deposits for the selected wallet…'
 export const chooseDepositsToMigrate = 'Choose deposits to migrate'
 export const worthNowPendingMigrationFinalization = 'Worth now: Pending migration/finalization'
-export const currentPathEligibleForChildPoolMigration = 'Current path: Eligible for child-pool migration'
 export const formatMigrateSelectedValueDeposits = (outcomeLabel: CopyTemplateValue) => `Migrate Selected ${outcomeLabel} Deposits`
 export const migratingEscalationDepositsTruncated = 'Migrating escalation deposits…'
 export const migratePoolToUniverse = 'Migrate Pool To Universe'

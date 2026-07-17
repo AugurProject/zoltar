@@ -14,6 +14,10 @@ type TransactionReviewProps = {
 	className?: string
 	context?: TransactionContextItem[]
 	details?: TransactionReviewRow[]
+	disclosures?: Array<{
+		rows: TransactionReviewRow[]
+		title: string
+	}>
 	primary: TransactionReviewRow[]
 	risks?: ComponentChildren[]
 	technicalDetails?: TransactionReviewRow[]
@@ -32,7 +36,7 @@ function renderDetailRows(rows: TransactionReviewRow[]) {
 	)
 }
 
-export function TransactionReview({ className = '', context = [], details = [], primary, risks = [], technicalDetails = [] }: TransactionReviewProps) {
+export function TransactionReview({ className = '', context = [], details = [], disclosures = [], primary, risks = [], technicalDetails = [] }: TransactionReviewProps) {
 	const titleId = useId()
 	return (
 		<section className={`transaction-review ${className}`.trim()} aria-labelledby={titleId}>
@@ -59,6 +63,11 @@ export function TransactionReview({ className = '', context = [], details = [], 
 					</ul>
 				</div>
 			)}
+			{disclosures.map(disclosure => (
+				<ReadOnlyDetailAccordion key={disclosure.title} title={disclosure.title}>
+					{renderDetailRows(disclosure.rows)}
+				</ReadOnlyDetailAccordion>
+			))}
 			{technicalDetails.length === 0 ? undefined : <ReadOnlyDetailAccordion title={transactionReviewCopy.technicalDetails}>{renderDetailRows(technicalDetails)}</ReadOnlyDetailAccordion>}
 		</section>
 	)

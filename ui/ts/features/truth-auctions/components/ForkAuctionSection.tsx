@@ -1442,12 +1442,16 @@ export function ForkAuctionSection({
 							<>
 								{hasUnresolvedMigrationState ? (
 									<SectionBlock density='compact' headingLevel={4} title={forkAuctionCopy.migrateUnresolvedEscalationLocks} variant='embedded'>
-										<p className='detail'>{isMigrationExpired ? forkAuctionCopy.unresolvedMigrationExpiredDetail : forkAuctionCopy.unresolvedEscalationMigrationWithVaultDetail}</p>
-										{loadingReportingDetails ? <p className='detail'>{forkAuctionCopy.walletUnresolvedDepositsLoading}</p> : undefined}
-										{loadingReportingDetails || activeReportingDetails !== undefined ? undefined : <p className='detail'>{forkAuctionCopy.unresolvedDepositDetailsUnavailable}</p>}
-										{hasStoredEscalationMigrationEntitlement ? <p className='detail'>{forkAuctionCopy.capturedEntitlementDetail}</p> : undefined}
-										{activeReportingDetails !== undefined && !hasUnresolvedMigrationDeposits && !hasStoredEscalationMigrationEntitlement ? <p className='detail'>{forkAuctionCopy.walletUnresolvedDepositsEmpty}</p> : undefined}
-										<p className='detail'>{forkAuctionCopy.unresolvedEscalationMultiChildDetail}</p>
+										<p className='detail'>
+											{(() => {
+												if (isMigrationExpired) return forkAuctionCopy.unresolvedMigrationExpiredDetail
+												if (loadingReportingDetails) return forkAuctionCopy.walletUnresolvedDepositsLoading
+												if (activeReportingDetails === undefined) return forkAuctionCopy.unresolvedDepositDetailsUnavailable
+												if (hasStoredEscalationMigrationEntitlement) return forkAuctionCopy.capturedEntitlementDetail
+												if (!hasUnresolvedMigrationDeposits) return forkAuctionCopy.walletUnresolvedDepositsEmpty
+												return forkAuctionCopy.unresolvedEscalationMigrationWithVaultDetail
+											})()}
+										</p>
 										{activeReportingDetails === undefined || hasStoredEscalationMigrationEntitlement
 											? undefined
 											: unresolvedMigrationSides.map(side => (
@@ -1465,7 +1469,6 @@ export function ForkAuctionSection({
 																			{forkAuctionCopy.initiallyDepositedLead}
 																			<CurrencyValue value={deposit.amount} suffix={commonCopy.rep} />
 																		</>,
-																		forkAuctionCopy.selectedChildMigrationRequiredDetail,
 																		<>
 																			{forkAuctionCopy.entryDepthLead}
 																			<CurrencyValue value={deposit.cumulativeAmount} suffix={commonCopy.rep} />
@@ -1520,7 +1523,6 @@ export function ForkAuctionSection({
 																		<CurrencyValue value={claimAmount} suffix={commonCopy.rep} />
 																	</>
 																),
-																forkAuctionCopy.currentPathEligibleForChildPoolMigration,
 																<>
 																	{forkAuctionCopy.entryDepthLead}
 																	<CurrencyValue value={deposit.cumulativeAmount} suffix={commonCopy.rep} />

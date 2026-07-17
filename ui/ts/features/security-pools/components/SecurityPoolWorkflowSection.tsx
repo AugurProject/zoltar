@@ -939,7 +939,7 @@ export function SecurityPoolWorkflowSection({
 								{view === 'staged-operations' && loadedSelectedPool !== undefined ? (
 									<SectionBlock density='compact' title={securityPoolCopy.stagedOperations} variant='plain'>
 										<ErrorNotice message={poolOracleManagerError} />
-										<SectionBlock density='compact' headingLevel={4} title={securityPoolCopy.stagedOperationsList} variant='embedded'>
+										<SectionBlock density='compact' variant='embedded'>
 											{stagedOperations.map(operation => (
 												<WarningSurface key={operation.operationId.toString()} as='article' className='warning-entity-card' variant='compact'>
 													<div className='entity-card-header'>

@@ -124,7 +124,7 @@ export function SecurityPoolSection({
 				</>
 			) : (
 				<>
-					<SectionBlock title={commonCopy.createPool} variant='plain'>
+					<SectionBlock title={showHeader ? undefined : commonCopy.createPool} variant='plain'>
 						<div className='form-grid'>
 							<div className='field'>
 								<LookupFieldRow label={commonCopy.questionId} value={securityPoolForm.marketId} onInput={marketId => onSecurityPoolFormChange({ marketId })} placeholder={commonCopy.hexValuePlaceholder} />
@@ -154,7 +154,6 @@ export function SecurityPoolSection({
 							<div className='field'>
 								<span>{securityPoolCopy.initialOpenInterestFeeYear}</span>
 								<strong>{formatOpenInterestFeePerYearPercent(ORIGIN_POOL_INITIAL_RETENTION_RATE)}</strong>
-								<p className='field-help'>{securityPoolCopy.initialOpenInterestFeeHelpText}</p>
 							</div>
 
 							<div className='actions'>

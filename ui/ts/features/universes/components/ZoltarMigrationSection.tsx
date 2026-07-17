@@ -14,6 +14,8 @@ import { StateHint } from '../../../components/StateHint.js'
 import { TokenApprovalControl } from '../../../components/TokenApprovalControl.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
 import { TransactionReview } from '../../../components/TransactionReview.js'
+import { ReadOnlyDetailAccordion } from '../../../components/ReadOnlyDetailAccordion.js'
+import { MetricGrid } from '../../../components/MetricGrid.js'
 import { TransactionNetworkValue } from '../../../components/TransactionNetworkValue.js'
 import { TransactionUniverseValue } from './TransactionUniverseValue.js'
 import { UniverseLink } from './UniverseLink.js'
@@ -290,16 +292,6 @@ export function ZoltarMigrationSection({
 							needsAdditionalPreparation ? { label: transactionReviewCopy.youPay, value: <CurrencyValue value={missingPreparationAmount} suffix={commonCopy.rep} /> } : { label: zoltarCopy.migrationAmount, value: <CurrencyValue value={migrationAmount} suffix={commonCopy.rep} /> },
 							needsAdditionalPreparation ? { label: zoltarCopy.repMovedToMigrationCustody, value: <CurrencyValue value={missingPreparationAmount} suffix={commonCopy.rep} /> } : { label: zoltarCopy.childUniverseRepReceived, value: <CurrencyValue value={splitRepReceived} suffix={commonCopy.rep} /> },
 						]}
-						details={[
-							{ label: zoltarCopy.selectedDestinations, value: selectedDestinationsContent },
-							{ label: zoltarCopy.afterPrepareWalletBalance, value: <CurrencyValue value={walletRepAfterPrepare} suffix={commonCopy.rep} /> },
-							{ label: zoltarCopy.afterPrepareCustodyBalance, value: <CurrencyValue value={custodyRepAfterPrepare} suffix={commonCopy.rep} /> },
-							{ label: zoltarCopy.afterSplitCustodyBalanceUnchanged, value: <CurrencyValue value={zoltarMigrationPreparedRepBalance} suffix={commonCopy.rep} /> },
-							...selectedChildUniverses.map(child => ({
-								label: zoltarCopy.destinationRepAfterSplit(child.outcomeLabel),
-								value: <CurrencyValue value={migrationAmount === undefined || zoltarMigrationChildRepBalances[child.universeId.toString()] === undefined ? undefined : (zoltarMigrationChildRepBalances[child.universeId.toString()] ?? 0n) + migrationAmount} suffix={commonCopy.rep} />,
-							})),
-						]}
 						risks={[zoltarCopy.migrationDestinationRisk, zoltarCopy.migrationSplitRisk]}
 						technicalDetails={[
 							{ label: transactionReviewCopy.protocolFee, value: transactionReviewCopy.noProtocolFee },
@@ -307,6 +299,25 @@ export function ZoltarMigrationSection({
 							{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
 						]}
 					/>
+
+					<ReadOnlyDetailAccordion title={zoltarCopy.balanceChanges}>
+						<MetricGrid>
+							<MetricField label={zoltarCopy.afterPrepareWalletBalance}>
+								<CurrencyValue value={walletRepAfterPrepare} suffix={commonCopy.rep} />
+							</MetricField>
+							<MetricField label={zoltarCopy.afterPrepareCustodyBalance}>
+								<CurrencyValue value={custodyRepAfterPrepare} suffix={commonCopy.rep} />
+							</MetricField>
+							<MetricField label={zoltarCopy.afterSplitCustodyBalanceUnchanged}>
+								<CurrencyValue value={zoltarMigrationPreparedRepBalance} suffix={commonCopy.rep} />
+							</MetricField>
+							{selectedChildUniverses.map(child => (
+								<MetricField key={child.universeId.toString()} label={zoltarCopy.destinationRepAfterSplit(child.outcomeLabel)}>
+									<CurrencyValue value={migrationAmount === undefined || zoltarMigrationChildRepBalances[child.universeId.toString()] === undefined ? undefined : (zoltarMigrationChildRepBalances[child.universeId.toString()] ?? 0n) + migrationAmount} suffix={commonCopy.rep} />
+								</MetricField>
+							))}
+						</MetricGrid>
+					</ReadOnlyDetailAccordion>
 
 					<div className='actions'>
 						<TransactionActionButton

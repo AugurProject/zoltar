@@ -65,7 +65,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		await renderLoadedPool({ selectedPoolView: 'staged-operations' })
 
 		expectSectionVariant('Staged Operations', 'plain')
-		expectSectionVariant('Staged Operations List', 'embedded')
+		expect(document.body.querySelector('.section-block.embedded')).not.toBeNull()
 	})
 
 	test('renders open oracle as an unframed selected-pool workflow section', async () => {

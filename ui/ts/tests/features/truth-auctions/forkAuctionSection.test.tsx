@@ -622,7 +622,7 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('This wallet’s aggregate escalation entitlement is already captured. Select any child outcome that has not received it yet.')).not.toBeNull()
+		expect(documentQueries.getByText('Entitlement captured; select a child outcome that has not received it yet.')).not.toBeNull()
 		expect(documentQueries.queryByText('Current path: Must migrate into the selected child universe')).toBeNull()
 		const button = documentQueries.getByRole('button', { name: 'Migrate Unresolved Escalation To No' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected unresolved migration action button')
