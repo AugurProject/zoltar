@@ -4673,21 +4673,6 @@ strong.metric-value-danger {
 		gap: 0.7rem;
 	}
 
-	.reporting-workflow-section .workflow-summary-strip {
-		gap: var(--space-2);
-	}
-
-	.reporting-workflow-section .workflow-summary-strip-steps {
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-		gap: var(--space-1);
-	}
-
-	.reporting-workflow-section .workflow-summary-strip-steps span {
-		padding: 0.38rem 0.45rem;
-		font-size: var(--font-caption);
-		white-space: nowrap;
-	}
-
 	.reporting-metrics-section .escalation-metrics {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: var(--space-2);

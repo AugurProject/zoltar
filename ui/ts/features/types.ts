@@ -26,7 +26,6 @@ import type {
 	SecurityVaultDetails,
 	TradingActionResult,
 	TradingDetails,
-	ZoltarMigrationActionResult,
 	ZoltarUniverseSummary,
 } from '../types/contracts.js'
 import type { ActionAvailability, ReadinessAction } from '../types/components.js'
@@ -214,7 +213,6 @@ export type MarketRouteContentProps = {
 	zoltarMigrationChildRepBalances: Record<string, bigint | undefined>
 	zoltarMigrationPending: boolean
 	zoltarMigrationPreparedRepBalance: bigint | undefined
-	zoltarMigrationResult: ZoltarMigrationActionResult | undefined
 	zoltarQuestions: MarketDetails[]
 	zoltarMigrationActiveAction: 'prepare' | 'split' | undefined
 	zoltarUniverse: ZoltarUniverseSummary | undefined
@@ -379,7 +377,6 @@ export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 
 type OpenOracleRouteContentProps = {
 	accountState: AccountState
-	loadingOracleReport: boolean
 	onApproveToken1: (amount?: bigint) => void
 	onApproveToken2: (amount?: bigint) => void
 	onCreateOpenOracleGame: () => void
@@ -423,9 +420,12 @@ type OpenOracleRouteContentProps = {
 	openOracleInitialReportSubmission: OpenOracleInitialReportSubmissionDetails | undefined
 	openOracleCreateForm: OpenOracleCreateFormState
 	openOracleForm: OpenOracleFormState
+	openOracleReportLookupState: OpenOracleReportLookupState
 	openOracleReportDetails: OpenOracleReportDetails | undefined
 	openOracleResult: OpenOracleActionResult | undefined
 }
+
+export type OpenOracleReportLookupState = 'unknown' | 'loading' | 'ready' | 'missing' | 'load-failed'
 
 export type OpenOracleView = 'browse' | 'create' | 'selected-report'
 

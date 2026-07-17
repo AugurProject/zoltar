@@ -35,6 +35,25 @@
 						coordinator size the report directly from ETH-denominated gas cost,
 						without assuming a REP/ETH conversion price.
 					</p>
+					<div class="callout" id="active-arbitrager-assumption">
+						<p>
+							<strong>Economic security assumption.</strong> Placeholder assumes
+							at least one independent, rational, adequately capitalized
+							OpenOracle participant continuously monitors pending REP/ETH
+							reports, acts whenever correction is profitable under the
+							configured economics, and can get that transaction included
+							before the report settles. The report minimum makes a target-size
+							correction profitable after modeled gas and fees. It is not
+							collateral sized to the value of withdrawals, liquidations, or
+							allowance changes that may use the resulting price.
+						</p>
+						<p>
+							This is a required deployment assumption, not a condition the
+							coordinator verifies onchain. If monitoring or timely transaction
+							inclusion fails for the full settlement window, the integration
+							does not bound downstream loss by report liquidity.
+						</p>
+					</div>
 					<p>
 						The contract and research context lives in:
 						<a href="https://docs.openoracle.org">OpenOracle documentation</a>,
@@ -611,13 +630,17 @@
 			</section>
 
 			<section id="security-guarantee">
-				<h2>Security Guardrails</h2>
+				<h2>Security Model and Guardrails</h2>
 				<p>
 					Placeholder uses the oracle to preserve solvency accounting around ETH
-					obligations backed by REP. The guarantee is conditional: operations
-					that can change REP backing or security-bond exposure must use a
-					fresh, economically contestable REP/ETH price and must pass local
-					coordinator checks before they can affect the pool.
+					obligations backed by REP. Its economic security depends on the
+					<a href="#active-arbitrager-assumption">active-arbitrager assumption</a>:
+					a report wrong by enough to offer the configured correction profit is
+					corrected because at least one participant can and will act before
+					settlement. Separately, operations that can change REP backing or
+					security-bond exposure must use a fresh, economically contestable
+					REP/ETH price and pass local coordinator checks before they can affect
+					the pool.
 				</p>
 				<ul>
 					<li>
@@ -896,10 +919,12 @@
 			<section id="intentional-economic-tradeoffs">
 				<h2>Intentional Economic Tradeoffs</h2>
 				<p>
-					This integration implements an arbitrage-accuracy guarantee, not
-					operation-value insurance. The minimum WETH side is large enough for a
-					configured target-error correction (initially five percent) to cover the
-					modeled dispute gas cost with the configured profit buffer. It does not increase with a queued
+					This integration uses incentive compatibility, not operation-value
+					insurance. The minimum WETH side is large enough for a configured
+					target-error correction (initially five percent) to cover the modeled
+					dispute gas cost with the configured profit buffer. Under the
+					active-arbitrager assumption, that profitable correction is the security
+					mechanism. The minimum intentionally does not increase with a queued
 					withdrawal, liquidation, allowance, total pool value, or any other
 					reserved operation exposure.
 				</p>
@@ -908,9 +933,11 @@
 					operation that executes during the five-minute freshness window. The
 					coordinator does not debit a notional exposure budget and does not
 					claim that the oracle report can reimburse losses caused by an accepted
-					wrong price. Its assumption is narrower: an included arbitrager acts
-					when the report is wrong enough to offer the targeted WETH-denominated
-					profit.
+					wrong price. Increasing protected value without increasing report
+					liquidity is consequently consistent with the intended model: security
+					comes from the assumed presence and timely inclusion of a participant
+					taking the targeted WETH-denominated correction profit, not from
+					matching the report stake to the largest downstream payoff.
 				</p>
 				<p>
 					The stale-price refresh sponsor retains the staging lane while its
@@ -922,14 +949,18 @@
 			</section>
 
 			<section id="attack-model">
-				<h2>Attack Model and Defenses</h2>
+				<h2>Assumption Boundary and Attack Model</h2>
 				<p>
-					The security question is not whether OpenOracle can discover market
-					truth. It is whether an attacker can profit by forcing Placeholder to
-					use a bad REP/ETH price long enough for a solvency-sensitive operation
-					to execute. Honest reporters can dispute bad reports, so the model
-					compares the attacker's outside payoff with the liquidity, delay, and
-					censorship cost needed to keep an honest correction out.
+					The protocol model assumes that a profitable honest correction is
+					included before a wrong report settles. Under that assumption,
+					Placeholder does not use an operation's outside value to size the
+					report. The analysis below describes the boundary of that assumption:
+					if an attacker can keep every correcting transaction out for the
+					settlement window, the attacker may force Placeholder to use a bad
+					REP/ETH price long enough for a solvency-sensitive operation to execute.
+					The comparison between outside payoff, report liquidity, delay, and
+					censorship cost is therefore a stress test of the deployment assumption,
+					not a contract-enforced exposure cap.
 				</p>
 				<p>
 					OpenOracle's inclusion analysis models an attacker who posts a wrong
@@ -1466,10 +1497,11 @@
 				<p>
 					Placeholder defends this model by making wrong reports profitable to
 					dispute at the target error, forcing liquidations to be meaningfully
-					past threshold, and rejecting bad settlement environments. This assumes
-					honest arbitragers are monitoring the REP/ETH price and their dispute or
-					arbitrage transactions can be included; the report size is not scaled by
-					the outside payoff protected by the price.
+					past threshold, and rejecting bad settlement environments. The protocol
+					then assumes active honest arbitragers monitor the REP/ETH price and can
+					obtain transaction inclusion before settlement. Failure of that
+					assumption is outside the claimed security model; the report size is not
+					scaled by the outside payoff protected by the price.
 				</p>
 				<ul>
 					<li>

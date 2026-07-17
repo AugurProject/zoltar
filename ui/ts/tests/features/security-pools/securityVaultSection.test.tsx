@@ -168,6 +168,22 @@ describe('SecurityVaultSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Claim Fees')
 	})
 
+	test('directs a missing vault lookup to another vault address', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					securityVaultDetails: undefined,
+					securityVaultMissing: true,
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Try another vault address.')).not.toBeNull()
+		expect(documentQueries.queryByText('Try another pool address.')).toBeNull()
+	})
+
 	test('keeps fee-claim actions available when a zeroed vault still has claimable fees', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection

@@ -8,7 +8,7 @@ import { MetricField } from '../../../components/MetricField.js'
 import { renderSelectedReportActionSection } from '../../../features/open-oracle/components/OpenOracleSection.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
-import { deriveOpenOracleDisputeSubmissionDetails, deriveOpenOracleInitialReportSubmissionDetails, getOpenOracleSelectedReportActionMode, type OpenOracleDisputeSubmissionDetails, type OpenOracleInitialReportSubmissionDetails } from '../../../features/open-oracle/lib/openOracle.js'
+import { deriveOpenOracleDisputeSubmissionDetails, deriveOpenOracleInitialReportSubmissionDetails, type OpenOracleDisputeSubmissionDetails, type OpenOracleInitialReportSubmissionDetails } from '../../../features/open-oracle/lib/openOracle.js'
 import { getDefaultOpenOracleFormState } from '../../../features/markets/lib/marketForm.js'
 import type { AccountState, OpenOracleFormState } from '../../../types/app.js'
 import type { OpenOracleSectionProps } from '../../../features/types.js'
@@ -330,7 +330,7 @@ function renderDisputeActionSection({
 	})
 
 	return renderSelectedReportActionSection({
-		actionMode: getOpenOracleSelectedReportActionMode(openOracleReportDetails),
+		actionMode: 'dispute',
 		disputeSubmission,
 		initialReportSubmission: deriveOpenOracleInitialReportSubmissionDetails({
 			approvedToken1Amount: 0n,
@@ -433,7 +433,7 @@ function renderSettleActionSection({
 }
 
 void describe('OpenOracleSection', () => {
-	void test('removes the redundant wallet metric row from the selected initial report action', () => {
+	void test('keeps selected initial report context without redundant wallet metrics or an action heading', () => {
 		const section = renderInitialReportActionSection()
 		const metricFieldLabels = getMetricFieldLabels(section)
 		const textContent = getTextContent(section)
@@ -444,7 +444,8 @@ void describe('OpenOracleSection', () => {
 
 		expect(metricFieldLabels).not.toContain('Wallet REPv2')
 		expect(metricFieldLabels).not.toContain('Wallet WETH')
-		expect(sectionTitles).toContain('Initial Report')
+		expect(sectionTitles).toContain('Report Context')
+		expect(sectionTitles).not.toContain('Initial Report')
 		expect(sectionTitles).toContain('REPv2 Approval')
 		expect(sectionTitles).toContain('WETH Approval')
 		expect(textContent).not.toContain('determine whether this report needs more WETH')
@@ -512,7 +513,8 @@ void describe('OpenOracleSection', () => {
 
 		expect(getButtonDisabled(settleButton)).toBe(false)
 		expect(findButton(section, 'Dispute & Swap')).toBeUndefined()
-		expect(getSectionTitles(section)).toContain('Settle Report')
+		expect(getSectionTitles(section)).toContain('Settlement Summary')
+		expect(getSectionTitles(section)).not.toContain('Settle Report')
 		expect(getSectionTitles(section)).not.toContain('Dispute Report')
 		expect(getButtonDisabledReason(settleButton)).toBeUndefined()
 	})
@@ -536,7 +538,7 @@ void describe('OpenOracleSection', () => {
 		expect(getButtonDisabledReason(disputeButton)).toBe('This report is not ready to dispute.')
 		expect(getTextContent(section).includes('Blocked:')).toBe(false)
 		expect(getSectionTitles(section)).toContain('Current Report State')
-		expect(getSectionTitles(section)).toContain('Dispute Report')
+		expect(getSectionTitles(section)).not.toContain('Dispute Report')
 	})
 
 	void test('renders dispute approval controls and blocks submit until required approvals are present', () => {

@@ -252,10 +252,7 @@ function ReportingSectionHarness({ initialProps }: { initialProps?: Partial<Repo
 }
 
 function findProjectionPreviewElement() {
-	return Array.from(document.body.querySelectorAll('p.detail')).find(element => {
-		const text = element.textContent ?? ''
-		return text.includes('Check back no later than') || text.includes('Check back immediately')
-	})
+	return Array.from(document.body.querySelectorAll('.transaction-review-detail-row')).find(element => element.firstElementChild?.textContent === reportingCopy.timerEffect)?.lastElementChild
 }
 
 function findProjectionPreviewText() {
@@ -283,11 +280,13 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('heading', { name: 'Active' })).toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Reporting Workflow' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Reporting Workflow' })).toBeNull()
+		expect(document.body.querySelector('.reporting-workflow-section')).toBeNull()
+		expect(document.body.querySelector('.workflow-summary-strip')).toBeNull()
 		expect(document.body.textContent?.includes('Current guidance')).toBe(false)
 		expect(document.body.textContent?.includes('Reporting is the dispute game that locks vault REP behind an outcome until the market finalizes or forks.')).toBe(false)
 		expect(document.body.textContent?.includes('These values show how much stake is required, how long the current dispute window lasts, and whether the question is close to finalization.')).toBe(false)
-		expect(document.body.textContent?.includes('Escalation is live. Review the bond, side balances, and time remaining before contributing or withdrawing.')).toBe(true)
+		expect(document.body.textContent?.includes('Escalation is live. Review the bond, side balances, and time remaining before contributing or withdrawing.')).toBe(false)
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(false)
 		expect(documentQueries.queryByRole('button', { name: 'Outcome Side' })).toBeNull()
 		expect(document.body.querySelectorAll('.escalation-side.selected').length).toBe(0)
@@ -1068,7 +1067,7 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes('Reporting is open. Select an outcome side below to enable reporting.')).toBe(true)
+		expect(document.body.textContent?.includes('Reporting is open. Select an outcome side below to enable reporting.')).toBe(false)
 		expect(document.body.textContent?.includes('Select an outcome side above to enable reporting.')).toBe(true)
 		expectTransactionButtonDisabled(document.body, 'Report On Selected Side', 'Select an outcome side before reporting on a market.')
 	})
@@ -1109,7 +1108,7 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes('Enter a valid report amount to preview profit.')).toBe(false)
 	})
 
-	test('shows the timer-extension preview below the report button for contributions that raise binding capital', async () => {
+	test('shows the timer-extension preview once in transaction review for contributions that raise binding capital', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -1125,11 +1124,10 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const reportButton = documentQueries.getByRole('button', { name: 'Report No' })
 		const preview = findProjectionPreviewElement()
-		if (preview === undefined) throw new Error('Expected projection preview to render')
+		if (preview === undefined || preview === null) throw new Error('Expected projection preview to render')
 		const expectedCheckBackTimestamp = getSelectedOutcomeRewardWindowFillTimestamp(createDynamicReportingDetails(), 'no', rep(2n))
-		expect(reportButton.compareDocumentPosition(preview) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+		expect(documentQueries.getAllByText(/This contribution would extend the timer by/)).toHaveLength(1)
 		expect(preview.textContent?.includes('projects roughly')).toBe(true)
 		expect(preview.textContent?.includes('This contribution would extend the timer by')).toBe(true)
 		expect(preview.textContent?.includes('the market would finalize in')).toBe(true)
