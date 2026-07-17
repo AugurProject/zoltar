@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { getMainnetProtocolConfig } from '../shared/ts/protocolConfig'
 
 const html = await readFile('docs/escalation-game-architecture.html', 'utf8')
+const invariantsHtml = await readFile('docs/invariants.html', 'utf8')
 const liquidationHtml = await readFile('docs/liquidation.html', 'utf8')
 const openOracleIntegration = await readFile('docs/open-oracle-integration.html', 'utf8')
 const zoltarWhitepaper = await readFile('docs/zoltar-whitepaper.html', 'utf8')
@@ -206,6 +207,10 @@ function assertStartHereTimelines(): void {
 }
 
 function assertContractInteractionDistinctions(): void {
+	assert.match(invariantsHtml, /<code>SHARE-04<\/code>[\s\S]*maximum actual outcome supply[\s\S]*actual winning supply/)
+	assert.match(contractInteractionReference, /getForkThreshold`, `getNonDecisionThreshold`, `getUniverseTheoreticalSupply`/)
+	assert.match(contractInteractionReference, /getQuestionResolution`, `getFinalQuestionResolution`, `fixedQuestionOutcome`/)
+	assert.match(contractInteractionReference, /startFromFork\(startBond, nonDecisionThreshold, elapsedAtFork, fixedQuestionOutcome\)[\s\S]*After the continuation deadline, `getFinalQuestionResolution` returns the fixed outcome/)
 	assert.match(contractInteractionReference, /currently unlocked REP ownership/)
 	assert.match(contractInteractionReference, /aggregate-entitlement wrapper calls this function first to migrate unlocked state/)
 	assert.match(contractInteractionReference, /Before finalization, refunds only provably losing bids/)
@@ -225,7 +230,9 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /`CarryDepositConsumed`; additionally `ClaimDeposit` for a winning payout/)
 	assert.match(contractInteractionReference, /`EscalationRepDrainedAtFork` when unresolved escalation exists/)
 	assert.match(contractInteractionReference, /Initially authorized `SecurityPoolFactory` for an origin pool; an authorized parent `SecurityPool` for a child pool/)
-	assert.match(contractInteractionReference, /Mint and burn entrypoints \| An authorized `SecurityPool`/)
+	assert.match(contractInteractionReference, /`mintCompleteSets\(universeId, account, amount\)` \| An authorized `SecurityPool`/)
+	assert.match(contractInteractionReference, /`burnCompleteSets\(universeId, account, amount\)` \| An authorized `SecurityPool`/)
+	assert.match(contractInteractionReference, /`burnTokenIdAndGetRemainingSupply\(tokenId, account\)` \| An authorized `SecurityPool`/)
 	assert.match(contractInteractionReference, /Fixes the clearing mode, clearing tick, ETH totals, and aggregate REP allocation/)
 	assert.match(contractInteractionReference, /Withdrawal-time allocation assigns division dust from deterministic cumulative ETH positions, making payout independent of claim order/)
 	assert.match(contractInteractionReference, /addFeeEligibleSecurityBondAllowance\(vault, amount\)[\s\S]*Finalized truth-auction settlement[\s\S]*newly auction-claimed security-bond allowance to the live fee denominator/)

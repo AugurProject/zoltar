@@ -11,7 +11,7 @@ Failure behavior follows Solidity transaction semantics: an uncaught revert roll
 
 Registers universe forks and turns burned parent REP into branch-specific child REP. [Source](../solidity/contracts/Zoltar.sol)
 
-Read surface: Use `universes`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThreshold`, `getUniverseTheoreticalSupply`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalance` to reconstruct universe and migration state.
+Read surface: Use `universes`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThreshold`, `getNonDecisionThreshold`, `getUniverseTheoreticalSupply`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalance` to reconstruct universe and migration state.
 
 | Transaction | Caller | Main prerequisites | State or asset effect | Primary signals |
 | --- | --- | --- | --- | --- |
@@ -30,8 +30,8 @@ Read surface: Use the public accounting fields plus `getVaults`, `getActiveVault
 | --- | --- | --- | --- | --- |
 | `depositRep(repAmount)` | Vault owner | Operational, unforked, unresolved pool; resulting vault REP meets the minimum. | Transfers REP into the pool and credits proportional pool ownership. | `DepositRep` |
 | `redeemFees(vault)` | Anyone; ETH is always sent to `vault` | Pool can send the resulting ETH payment. | Accrues and pays the vault's unpaid ETH fees. | `VaultAccountingCheckpoint` and `PoolAccountingCheckpoint` |
-| `createCompleteSet()` with ETH | Trader | Operational, unforked, unresolved, not awaiting continuation; positive ETH converts to at least one complete-set unit; bond capacity covers the new collateral. | Adds collateral and mints one `Invalid`, `Yes`, and `No` share per complete-set unit. | `CompleteSetCreated` and `PoolAccountingCheckpoint` |
-| `redeemCompleteSet(completeSetAmount)` | Complete-set holder | Operational and unforked; caller owns the complete set. | Burns equal balances of all three outcomes and returns ETH at the current collateral-per-share rate. | `CompleteSetRedeemed` and `PoolAccountingCheckpoint` |
+| `createCompleteSet()` with ETH | Trader | Operational, unforked, unresolved, not awaiting continuation; all three outcome supplies are equal; positive ETH converts to at least one complete-set unit; bond capacity covers the new collateral. | Adds collateral and mints one `Invalid`, `Yes`, and `No` share per complete-set unit. | `CompleteSetCreated` and `PoolAccountingCheckpoint` |
+| `redeemCompleteSet(completeSetAmount)` | Complete-set holder | Operational and unforked; caller owns the complete set. | Burns equal balances of all three outcomes and returns ETH using the largest live outcome supply as the collateral denominator, so balanced holders can exit even after one-sided fork migration. | `CompleteSetRedeemed` and `PoolAccountingCheckpoint` |
 | `redeemShares()` | Winning-share holder | Operational pool with a final outcome. | Burns the caller's full winning balance and pays its pro-rata remaining collateral. | `SharesRedeemed` and `PoolAccountingCheckpoint` |
 | `redeemRep(vault)` | Anyone; REP is always sent to `vault` | Operational pool with a final outcome; no escalation escrow remains; vault has redeemable REP. | Burns the vault's pool-ownership claim and returns its proportional REP. | `RedeemRep` |
 | `depositToEscalationGame(outcome, maxAmount)` | Vault owner | Question end has passed; pool operational in an unforked universe and not awaiting continuation; outcome and amount accepted; remaining vault and pool backing stay solvent; fresh price when allowance is nonzero. | Deploys the local game on the first deposit, removes enough vault ownership, and escrows accepted REP on the selected outcome. | `EscalationGameSet` on first deposit; `DepositToEscalationGame` |
@@ -69,12 +69,12 @@ Read surface: Use `forkData`, `getMigratedRep`, `getEscalationMigrationEntitleme
 
 Escrows outcome REP, raises the running resolution cost, detects non-decision, and settles local or carried deposits. [Source](../solidity/contracts/peripherals/EscalationGame.sol)
 
-Read surface: Use `getCurrentCost`, `totalCost`, `getEscalationGameEndDate`, `getQuestionResolution`, `hasReachedNonDecision`, `getBindingCapital`, `getOutcomeBalances`, deposit pagination, carry snapshot views, and escrow views. Ordinary users route deposits and withdrawals through `SecurityPool`.
+Read surface: Use `getCurrentCost`, `totalCost`, `getEscalationGameEndDate`, `getQuestionResolution`, `getFinalQuestionResolution`, `fixedQuestionOutcome`, `hasReachedNonDecision`, `getBindingCapital`, `getOutcomeBalances`, deposit pagination, carry snapshot views, and escrow views. Ordinary users route deposits and withdrawals through `SecurityPool`.
 
 | Transaction | Caller | Main prerequisites | State or asset effect | Primary signals |
 | --- | --- | --- | --- | --- |
 | `start(startBond, nonDecisionThreshold)` | Deploying `EscalationGameFactory` owner | Game not already started; threshold exceeds the positive start bond; both are at least 1 REP. | Initializes a local game and sets activation three days after deployment. | `GameStarted` |
-| `startFromFork(...)` and `resumeFromFork()` | Factory owner starts; owner or security pool resumes | Valid start parameters and inherited elapsed time no greater than seven weeks; continuation resumes once. | Initializes a paused continuation with inherited elapsed time, then resumes its remaining escalation clock. | `GameContinuedFromFork`, `ForkContinuationResumed` |
+| `startFromFork(startBond, nonDecisionThreshold, elapsedAtFork, fixedQuestionOutcome)` and `resumeFromFork()` | Factory owner starts; owner or security pool resumes | Valid start parameters and inherited elapsed time no greater than seven weeks; continuation resumes once. | Initializes a paused continuation with inherited elapsed time and an optional fixed matching-question child outcome, then resumes its remaining escalation clock. After the continuation deadline, `getFinalQuestionResolution` returns the fixed outcome when one is present. | `GameContinuedFromFork`, `ForkContinuationResumed` |
 | `recordDepositFromSecurityPool(...)` | Owning `SecurityPool` only | Game unresolved; valid outcome; preview and accepted cumulative amount match; room remains below threshold. | Appends an accepted local deposit, updates outcome and vault escrow, and records its carry leaf. | `LocalDepositAppended`, `DepositOnOutcome`, optionally `NonDecisionReached` |
 | Claim, withdrawal, export, carry initialization, and forked-escrow entrypoints | Owning pool or `SecurityPoolForker`, depending on the function | Caller authority plus final-resolution, proof, nullifier, escrow, and lifecycle guards for the selected path. | Settles local or carried deposits, initializes canonical continuation proofs, or exports unresolved vault aggregates during migration. | Claim, withdrawal, carry, export, escrow, and nullifier events |
 | `sweepResidualRepToSecurityPool()` | Anyone | Final outcome; no unresolved principal; no vault escrow; positive residual balance. | Returns otherwise stranded residual REP to the owning pool. | `ResidualRepSweptToSecurityPool` |
@@ -98,13 +98,15 @@ Read surface: Use `isPriceValid`, `minimumToken1Report`, request-cost getters, p
 
 Stores universe-aware ERC-1155 outcome shares and reproduces a holder's full source balance into selected fork branches. [Source](../solidity/contracts/peripherals/tokens/ShareToken.sol)
 
-Read surface: Use standard ERC-1155 reads plus `totalSupplyForOutcome`, `balanceOfOutcome`, `balanceOfShares`, `getTokenId`, `getTokenIds`, and `unpackTokenId`.
+Read surface: Use standard ERC-1155 reads plus `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getTokenId`, `getTokenIds`, and `unpackTokenId`.
 
 | Transaction | Caller | Main prerequisites | State or asset effect | Primary signals |
 | --- | --- | --- | --- | --- |
 | `migrate(fromId, targetOutcomeIndexes)` | Holder of the source token ID | Source universe forked; eight-week window open; positive source balance; nonempty, strictly increasing, well-formed outcomes. | Burns the holder's full source balance and mints the same balance into every selected child-universe token ID. | ERC-1155 transfer events and `Migrate` per branch |
 | `authorize(securityPoolCandidate)` | Initially authorized `SecurityPoolFactory` for an origin pool; an authorized parent `SecurityPool` for a child pool | Caller is already authorized. | Adds the candidate pool to the set allowed to mint, burn, and authorize descendants. | `AuthorizationUpdated` |
-| Mint and burn entrypoints | An authorized `SecurityPool` | Caller is authorized; token balances cover burns. | Performs pool-requested complete-set minting, complete-set burning, or winning-token burning. | ERC-1155 transfer events |
+| `mintCompleteSets(universeId, account, amount)` | An authorized `SecurityPool` | Caller is authorized; global Invalid, Yes, and No supplies are equal before minting. | Mints `amount` each of Invalid, Yes, and No to `account`. | ERC-1155 transfer events |
+| `burnCompleteSets(universeId, account, amount)` | An authorized `SecurityPool` | Caller is authorized; `account` owns at least `amount` of every outcome. | Burns `amount` each of Invalid, Yes, and No from `account`; global outcome supplies may differ. | ERC-1155 transfer events |
+| `burnTokenIdAndGetRemainingSupply(tokenId, account)` | An authorized `SecurityPool` | Caller is authorized. | Burns `account`'s full balance of `tokenId` and returns the burned amount and that token ID's remaining supply. | ERC-1155 transfer events |
 
 ## UniformPriceDualCapBatchAuction
 
@@ -115,7 +117,7 @@ Read surface: Use auction summary fields, `computeClearing`, `previewFinalizatio
 | Transaction | Caller | Main prerequisites | State or asset effect | Primary signals |
 | --- | --- | --- | --- | --- |
 | `startAuction(ethRaiseCap, maxRepBeingSold)` | Auction owner (`SecurityPoolForker`) only | Auction not previously started; both caps are positive. | Starts the one-week auction and fixes its two caps and minimum bid. | `AuctionStarted` |
-| `submitBid(tick)` with ETH | Any bidder | Auction active and unfinalized; before one-week deadline; bid meets `minBidSize`; tick maps to nonzero price. | Adds ETH demand at the selected positive-price tick. | `BidSubmitted` |
+| `submitBid(tick)` with ETH | Any bidder | Auction active and unfinalized; before one-week deadline; bid meets `minBidSize`; tick maps to nonzero price. | Adds ETH demand at the selected positive-price tick while extending that tick's append-only cumulative bid and refund history, including when a fully refunded tick becomes active again. | `BidSubmitted` |
 | `refundLosingBids(tickIndices)` | Bidder for its own bids | Auction started and unfinalized; auction has reached a clearing price; indexes belong to the caller and are strictly losing and unrefunded. | Refunds the caller's bids already provably below the current clearing tick before finalization. | `BidSettled` |
 | `refundLosingBidsFor(bidder, tickIndices)` | Auction owner (`SecurityPoolForker`) only; public callers use `settleAuctionBids` | Auction started and unfinalized; auction has reached a clearing price; indexes belong to the named bidder and are strictly losing and unrefunded. | Refunds a named bidder's bids already provably below the current clearing tick before finalization. | `BidSettled` |
 | `finalize()` | Auction owner (`SecurityPoolForker`) only; users reach it through `finalizeTruthAuction` | Auction started, not finalized, and one-week deadline reached. | Fixes the clearing mode, clearing tick, ETH totals, and aggregate REP allocation. | `AuctionFinalized` |

@@ -1446,6 +1446,67 @@ describe('Auction', () => {
 			strictEqualTypeSafe(activeSummary?.active, true, 'winning tick should remain active')
 		})
 
+		test('a bid submitted after a fully refunded tick is recreated remains withdrawable', async () => {
+			const ethRaiseCap = 10n * ATTOETH_PER_ETH
+			const maxRepBeingSold = 10n * ATTOETH_PER_ETH
+			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+
+			const firstBidder = createTestClient(1)
+			const secondBidder = createTestClient(2)
+			const losingTick = -20_000n
+			const winningTick = 0n
+			const firstLosingBid = 2n * ATTOETH_PER_ETH
+			const secondLosingBid = 3n * ATTOETH_PER_ETH
+			const winningBid = 12n * ATTOETH_PER_ETH
+
+			await submitBid(firstBidder, auctionAddress, losingTick, firstLosingBid)
+			await submitBid(client, auctionAddress, winningTick, winningBid)
+			await refundLosingBids(firstBidder, auctionAddress, [{ tick: losingTick, bidIndex: 0n }])
+			await submitBid(secondBidder, auctionAddress, losingTick, secondLosingBid)
+			await finalizeAndVerify(client, auctionAddress)
+
+			await withdrawBids(client, auctionAddress, client.account.address, [{ tick: winningTick, bidIndex: 0n }])
+			strictEqualTypeSafe(await getETHBalance(client, auctionAddress), secondLosingBid, 'only the later losing bid should remain in the auction')
+			await withdrawBids(client, auctionAddress, secondBidder.account.address, [{ tick: losingTick, bidIndex: 1n }])
+			strictEqualTypeSafe(await getETHBalance(client, auctionAddress), 0n, 'the later losing bid should be fully refunded')
+		})
+
+		test('refund-prefix positions remain correct across repeated tick deletion and recreation', async () => {
+			const ethRaiseCap = 10n * ATTOETH_PER_ETH
+			const maxRepBeingSold = 10n * ATTOETH_PER_ETH
+			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+
+			const firstBidder = createTestClient(1)
+			const secondBidder = createTestClient(2)
+			const thirdBidder = createTestClient(3)
+			const fourthBidder = createTestClient(4)
+			const losingTick = -20_000n
+			const winningTick = 0n
+			const firstAmount = 2n * ATTOETH_PER_ETH
+			const secondAmount = 3n * ATTOETH_PER_ETH
+			const thirdAmount = 4n * ATTOETH_PER_ETH
+			const fourthAmount = 5n * ATTOETH_PER_ETH
+
+			await submitBid(firstBidder, auctionAddress, losingTick, firstAmount)
+			await submitBid(client, auctionAddress, winningTick, 12n * ATTOETH_PER_ETH)
+			await refundLosingBids(firstBidder, auctionAddress, [{ tick: losingTick, bidIndex: 0n }])
+			await submitBid(secondBidder, auctionAddress, losingTick, secondAmount)
+			await submitBid(thirdBidder, auctionAddress, losingTick, thirdAmount)
+
+			const firstRecreatedPage = await getBidPageAtTick(client, auctionAddress, losingTick, 0n, 10n)
+			strictEqualTypeSafe(firstRecreatedPage[1]?.cumulativeEth, firstAmount + secondAmount, 'recreated bid should continue historical cumulative ETH')
+			strictEqualTypeSafe(firstRecreatedPage[1]?.activeCumulativeEthBeforeBid, 0n, 'first recreated bid should follow only refunded history')
+			strictEqualTypeSafe(firstRecreatedPage[2]?.activeCumulativeEthBeforeBid, secondAmount, 'later recreated bid should include only active predecessors')
+
+			await refundLosingBids(secondBidder, auctionAddress, [{ tick: losingTick, bidIndex: 1n }])
+			await refundLosingBids(thirdBidder, auctionAddress, [{ tick: losingTick, bidIndex: 2n }])
+			await submitBid(fourthBidder, auctionAddress, losingTick, fourthAmount)
+
+			const secondRecreatedPage = await getBidPageAtTick(client, auctionAddress, losingTick, 0n, 10n)
+			strictEqualTypeSafe(secondRecreatedPage[3]?.cumulativeEth, firstAmount + secondAmount + thirdAmount + fourthAmount, 'second recreation should preserve the full cumulative history')
+			strictEqualTypeSafe(secondRecreatedPage[3]?.activeCumulativeEthBeforeBid, 0n, 'second recreation should subtract every historical refund')
+		})
+
 		test('active tick pages stay sorted by descending tick and exclude refunded-away historical levels', async () => {
 			const ethRaiseCap = 10n * ATTOETH_PER_ETH
 			const maxRepBeingSold = 10n * ATTOETH_PER_ETH

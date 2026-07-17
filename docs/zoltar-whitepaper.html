@@ -503,7 +503,7 @@
 						therefore remote limits rather than near-term fork incentives. Implementers
 						should nevertheless treat the first boundary as an explicit parameter limit:
 						<code>SecurityPool</code> initializes an escalation game's non-decision threshold
-						as half the current fork threshold, while <code>EscalationGame</code> requires that
+						as the ceiling of half the current fork threshold, while <code>EscalationGame</code> requires that
 						value to be strictly greater than its starting bond. A deployment expected to
 						survive thousands of recursive forks needs either a minimum fork threshold or
 						a compatible rule for scaling escalation parameters.

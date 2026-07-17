@@ -4,6 +4,7 @@ pragma solidity 0.8.35;
 import { ISecurityPool } from '../interfaces/ISecurityPool.sol';
 import { EscalationGame } from '../EscalationGame.sol';
 import { EscalationGameProofVerifier } from '../EscalationGameProofVerifier.sol';
+import { BinaryOutcomes } from '../BinaryOutcomes.sol';
 
 contract EscalationGameFactory {
 	EscalationGameProofVerifier public immutable proofVerifier;
@@ -23,10 +24,11 @@ contract EscalationGameFactory {
 	function deployEscalationGameFromFork(
 		uint256 startBond,
 		uint256 nonDecisionThreshold,
-		uint256 elapsedAtFork
+		uint256 elapsedAtFork,
+		BinaryOutcomes.BinaryOutcome fixedQuestionOutcome
 	) external returns (EscalationGame) {
 		EscalationGame gameImplementation = _deployEscalationGame();
-		gameImplementation.startFromFork(startBond, nonDecisionThreshold, elapsedAtFork);
+		gameImplementation.startFromFork(startBond, nonDecisionThreshold, elapsedAtFork, fixedQuestionOutcome);
 		return gameImplementation;
 	}
 

@@ -261,7 +261,7 @@ describe('Escalation Game Test Suite', () => {
 					abi: peripherals_EscalationGame_EscalationGame.abi,
 					address: escalationGameAddress,
 					functionName: 'startFromFork',
-					args: [startBond, nonDecisionThreshold, elapsedAtFork],
+					args: [startBond, nonDecisionThreshold, elapsedAtFork, QuestionOutcome.None],
 				}),
 		)
 
