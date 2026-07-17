@@ -2,17 +2,20 @@
 
 import { describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress } from '@zoltar/shared/ethereum'
-import { ErrorNotice } from '../../../components/ErrorNotice.js'
-import { FormInput } from '../../../components/FormInput.js'
-import { MetricField } from '../../../components/MetricField.js'
 import { renderSelectedReportActionSection } from '../../../features/open-oracle/components/OpenOracleSection.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
-import { deriveOpenOracleDisputeSubmissionDetails, deriveOpenOracleInitialReportSubmissionDetails, getOpenOracleSelectedReportActionMode, type OpenOracleDisputeSubmissionDetails, type OpenOracleInitialReportSubmissionDetails } from '../../../features/open-oracle/lib/openOracle.js'
+import { deriveOpenOracleDisputeSubmissionDetails, getOpenOracleSelectedReportActionMode, type OpenOracleDisputeSubmissionDetails } from '../../../features/open-oracle/lib/openOracle.js'
 import { getDefaultOpenOracleFormState } from '../../../features/markets/lib/marketForm.js'
 import type { AccountState, OpenOracleFormState } from '../../../types/app.js'
 import type { OpenOracleSectionProps } from '../../../features/types.js'
 import type { OpenOracleReportDetails } from '../../../types/contracts.js'
+import { OpenOracleSection } from '../../../features/open-oracle/components/OpenOracleSection.js'
+import { getDefaultOpenOracleCreateFormState } from '../../../features/markets/lib/marketForm.js'
+import { createFakeBackend } from '../../testUtils/fakeBackend.js'
+import { installActiveEnvironmentForTesting } from '../../../lib/activeEnvironment.js'
+import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
+import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
 
 type VNodeLike = {
 	props: Record<string, unknown>
@@ -46,16 +49,6 @@ function getTextContent(node: unknown): string {
 	if (Array.isArray(node)) return node.map(child => getTextContent(child)).join('')
 	if (!isVNodeLike(node)) return ''
 	return getTextContent(node.props['children'])
-}
-
-function getMetricFieldLabels(node: unknown) {
-	const labels: string[] = []
-	visitTree(node, vnode => {
-		if (vnode.type !== MetricField) return
-		const label = vnode.props['label']
-		if (typeof label === 'string') labels.push(label)
-	})
-	return labels
 }
 
 function getButtonLikeLabel(vnode: VNodeLike) {
@@ -94,15 +87,6 @@ function findButton(node: unknown, label: string) {
 	return matchingButton
 }
 
-function getButtonLabels(node: unknown) {
-	const labels: string[] = []
-	visitTree(node, vnode => {
-		const label = getButtonLikeLabel(vnode)
-		if (label !== undefined) labels.push(label)
-	})
-	return labels
-}
-
 function getSectionTitles(node: unknown) {
 	const titles: string[] = []
 	visitTree(node, vnode => {
@@ -111,15 +95,6 @@ function getSectionTitles(node: unknown) {
 		if (typeof title === 'string') titles.push(title)
 	})
 	return titles
-}
-
-function hasVNodeType(node: unknown, type: unknown) {
-	let found = false
-	visitTree(node, vnode => {
-		if (found || vnode.type !== type) return
-		found = true
-	})
-	return found
 }
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
@@ -183,18 +158,8 @@ function createOpenOracleReportDetails(overrides: Partial<OpenOracleReportDetail
 	}
 }
 
-function createOpenOracleInitialReportState(overrides: Partial<OpenOracleSectionProps['openOracleInitialReportState']> = {}): OpenOracleSectionProps['openOracleInitialReportState'] {
+function createOpenOracleTokenAccessState(overrides: Partial<OpenOracleSectionProps['openOracleTokenAccessState']> = {}): OpenOracleSectionProps['openOracleTokenAccessState'] {
 	return {
-		defaultPrice: '2',
-		defaultPriceError: undefined,
-		defaultPriceSource: 'Uniswap V3',
-		defaultPriceSourceUrl: 'https://app.uniswap.org/explore/pools/ethereum/0x1',
-		ethBalance: 2n * 10n ** 18n,
-		ethBalanceError: undefined,
-		quoteAttemptedSources: undefined,
-		quoteFailureKind: undefined,
-		quoteFailureReason: undefined,
-		quoteLoading: false,
 		token1Approval: {
 			error: undefined,
 			loading: false,
@@ -217,9 +182,41 @@ function createOpenOracleInitialReportState(overrides: Partial<OpenOracleSection
 	}
 }
 
+function createOpenOracleSectionProps(): OpenOracleSectionProps {
+	return {
+		accountState: createAccountState(),
+		activeView: 'browse',
+		environmentReady: true,
+		loadingOpenOracleCreate: false,
+		loadingOracleReport: false,
+		onActiveViewChange: () => undefined,
+		onApproveToken1: () => undefined,
+		onApproveToken2: () => undefined,
+		onCreateOpenOracleGame: () => undefined,
+		onDisputeReport: () => undefined,
+		onLoadOracleReport: () => undefined,
+		onOpenOracleCreateFormChange: () => undefined,
+		onOpenOracleFormChange: () => undefined,
+		onSettleReport: () => undefined,
+		onWithdrawOpenOracleBalance: () => undefined,
+		openOracleActiveAction: undefined,
+		openOracleActiveWithdrawalBalance: undefined,
+		openOracleCreateForm: getDefaultOpenOracleCreateFormState(),
+		openOracleDisputeSubmission: undefined,
+		openOracleError: undefined,
+		openOracleForm: createOpenOracleForm(),
+		openOracleReportDetails: undefined,
+		openOracleResult: undefined,
+		openOracleTokenAccessState: createOpenOracleTokenAccessState(),
+		openOracleWithdrawableBalances: undefined,
+		openOracleWithdrawableBalancesError: undefined,
+		openOracleWithdrawableBalancesLoading: false,
+	}
+}
+
 function createOpenOracleDisputeSubmission({
 	openOracleForm = createOpenOracleForm(),
-	openOracleInitialReportState = createOpenOracleInitialReportState(),
+	openOracleTokenAccessState = createOpenOracleTokenAccessState(),
 	openOracleReportDetails = createOpenOracleReportDetails({
 		currentReporter: getAddress('0x3000000000000000000000000000000000000000'),
 		currentTime: 200n,
@@ -228,82 +225,24 @@ function createOpenOracleDisputeSubmission({
 	}),
 }: {
 	openOracleForm?: OpenOracleFormState
-	openOracleInitialReportState?: OpenOracleSectionProps['openOracleInitialReportState']
+	openOracleTokenAccessState?: OpenOracleSectionProps['openOracleTokenAccessState']
 	openOracleReportDetails?: OpenOracleReportDetails
 } = {}): OpenOracleDisputeSubmissionDetails {
 	return deriveOpenOracleDisputeSubmissionDetails({
-		approvedToken1Amount: openOracleInitialReportState.token1Approval.value,
-		approvedToken2Amount: openOracleInitialReportState.token2Approval.value,
+		approvedToken1Amount: openOracleTokenAccessState.token1Approval.value,
+		approvedToken2Amount: openOracleTokenAccessState.token2Approval.value,
 		disputeNewAmount1Input: openOracleForm.disputeNewAmount1,
 		disputeNewAmount2Input: openOracleForm.disputeNewAmount2,
 		disputeTokenToSwap: openOracleForm.disputeTokenToSwap,
 		reportDetails: openOracleReportDetails,
-		token1AllowanceError: openOracleInitialReportState.token1Approval.error,
-		token1Balance: openOracleInitialReportState.token1Balance,
-		token1BalanceError: openOracleInitialReportState.token1BalanceError,
-		token1Decimals: openOracleInitialReportState.token1Decimals ?? openOracleReportDetails.token1Decimals,
-		token2AllowanceError: openOracleInitialReportState.token2Approval.error,
-		token2Balance: openOracleInitialReportState.token2Balance,
-		token2BalanceError: openOracleInitialReportState.token2BalanceError,
-		token2Decimals: openOracleInitialReportState.token2Decimals ?? openOracleReportDetails.token2Decimals,
-	})
-}
-
-function renderInitialReportActionSection({
-	accountState = createAccountState(),
-	isMainnet = true,
-	openOracleForm = createOpenOracleForm(),
-	openOracleInitialReportState = createOpenOracleInitialReportState(),
-	openOracleReportDetails = createOpenOracleReportDetails(),
-}: {
-	accountState?: AccountState
-	isMainnet?: boolean
-	openOracleForm?: OpenOracleFormState
-	openOracleInitialReportState?: OpenOracleSectionProps['openOracleInitialReportState']
-	openOracleReportDetails?: OpenOracleReportDetails
-} = {}) {
-	const initialReportSubmission: OpenOracleInitialReportSubmissionDetails = deriveOpenOracleInitialReportSubmissionDetails({
-		approvedToken1Amount: openOracleInitialReportState.token1Approval.value,
-		approvedToken2Amount: openOracleInitialReportState.token2Approval.value,
-		defaultPrice: openOracleInitialReportState.defaultPrice,
-		defaultPriceError: openOracleInitialReportState.defaultPriceError,
-		defaultPriceSource: openOracleInitialReportState.defaultPriceSource,
-		defaultPriceSourceUrl: openOracleInitialReportState.defaultPriceSourceUrl,
-		priceInput: openOracleForm.price,
-		quoteAttemptedSources: openOracleInitialReportState.quoteAttemptedSources,
-		quoteFailureReason: openOracleInitialReportState.quoteFailureReason,
-		reportDetails: openOracleReportDetails,
-		token1AllowanceError: openOracleInitialReportState.token1Approval.error,
-		token1Balance: openOracleInitialReportState.token1Balance,
-		token1BalanceError: openOracleInitialReportState.token1BalanceError,
-		token1Decimals: openOracleInitialReportState.token1Decimals ?? openOracleReportDetails.token1Decimals,
-		token2AllowanceError: openOracleInitialReportState.token2Approval.error,
-		token2Balance: openOracleInitialReportState.token2Balance,
-		token2BalanceError: openOracleInitialReportState.token2BalanceError,
-		token2Decimals: openOracleInitialReportState.token2Decimals ?? openOracleReportDetails.token2Decimals,
-		walletEthBalance: openOracleInitialReportState.ethBalance,
-	})
-
-	return renderSelectedReportActionSection({
-		actionMode: 'initial-report',
-		disputeSubmission: undefined,
-		initialReportSubmission,
-		isConnected: accountState.address !== undefined,
-		isMainnet,
-		onApproveToken1: () => undefined,
-		onApproveToken2: () => undefined,
-		onDisputeReport: () => undefined,
-		onOpenOracleFormChange: () => undefined,
-		onRefreshPrice: () => undefined,
-		onSettleReport: () => undefined,
-		onSubmitInitialReport: () => undefined,
-		onWrapWethForInitialReport: () => undefined,
-		openOracleActiveAction: undefined,
-		openOracleForm,
-		openOracleInitialReportState,
-		openOracleReportDetails,
-		token1Symbol: openOracleReportDetails.token1Symbol,
-		token2Symbol: openOracleReportDetails.token2Symbol,
+		token1AllowanceError: openOracleTokenAccessState.token1Approval.error,
+		token1Balance: openOracleTokenAccessState.token1Balance,
+		token1BalanceError: openOracleTokenAccessState.token1BalanceError,
+		token1Decimals: openOracleTokenAccessState.token1Decimals ?? openOracleReportDetails.token1Decimals,
+		token2AllowanceError: openOracleTokenAccessState.token2Approval.error,
+		token2Balance: openOracleTokenAccessState.token2Balance,
+		token2BalanceError: openOracleTokenAccessState.token2BalanceError,
+		token2Decimals: openOracleTokenAccessState.token2Decimals ?? openOracleReportDetails.token2Decimals,
 	})
 }
 
@@ -311,7 +250,7 @@ function renderDisputeActionSection({
 	accountState = createAccountState(),
 	isMainnet = true,
 	openOracleForm = createOpenOracleForm(),
-	openOracleInitialReportState = createOpenOracleInitialReportState(),
+	openOracleTokenAccessState = createOpenOracleTokenAccessState(),
 	openOracleReportDetails = createOpenOracleReportDetails({
 		currentReporter: getAddress('0x3000000000000000000000000000000000000000'),
 		reportTimestamp: 100n,
@@ -320,52 +259,28 @@ function renderDisputeActionSection({
 	accountState?: AccountState
 	isMainnet?: boolean
 	openOracleForm?: OpenOracleFormState
-	openOracleInitialReportState?: OpenOracleSectionProps['openOracleInitialReportState']
+	openOracleTokenAccessState?: OpenOracleSectionProps['openOracleTokenAccessState']
 	openOracleReportDetails?: OpenOracleReportDetails
 } = {}) {
 	const disputeSubmission = createOpenOracleDisputeSubmission({
 		openOracleForm,
-		openOracleInitialReportState,
+		openOracleTokenAccessState,
 		openOracleReportDetails,
 	})
 
 	return renderSelectedReportActionSection({
 		actionMode: getOpenOracleSelectedReportActionMode(openOracleReportDetails),
 		disputeSubmission,
-		initialReportSubmission: deriveOpenOracleInitialReportSubmissionDetails({
-			approvedToken1Amount: 0n,
-			approvedToken2Amount: 0n,
-			defaultPrice: undefined,
-			defaultPriceError: undefined,
-			defaultPriceSource: undefined,
-			defaultPriceSourceUrl: undefined,
-			priceInput: '',
-			quoteAttemptedSources: undefined,
-			quoteFailureReason: undefined,
-			reportDetails: undefined,
-			token1AllowanceError: undefined,
-			token1Balance: undefined,
-			token1BalanceError: undefined,
-			token1Decimals: openOracleReportDetails.token1Decimals,
-			token2AllowanceError: undefined,
-			token2Balance: undefined,
-			token2BalanceError: undefined,
-			token2Decimals: openOracleReportDetails.token2Decimals,
-			walletEthBalance: undefined,
-		}),
 		isConnected: accountState.address !== undefined,
 		isMainnet,
 		onApproveToken1: () => undefined,
 		onApproveToken2: () => undefined,
 		onDisputeReport: () => undefined,
 		onOpenOracleFormChange: () => undefined,
-		onRefreshPrice: () => undefined,
 		onSettleReport: () => undefined,
-		onSubmitInitialReport: () => undefined,
-		onWrapWethForInitialReport: () => undefined,
 		openOracleActiveAction: undefined,
 		openOracleForm,
-		openOracleInitialReportState,
+		openOracleTokenAccessState,
 		openOracleReportDetails,
 		token1Symbol: openOracleReportDetails.token1Symbol,
 		token2Symbol: openOracleReportDetails.token2Symbol,
@@ -392,40 +307,16 @@ function renderSettleActionSection({
 	return renderSelectedReportActionSection({
 		actionMode: 'settle',
 		disputeSubmission: undefined,
-		initialReportSubmission: deriveOpenOracleInitialReportSubmissionDetails({
-			approvedToken1Amount: 0n,
-			approvedToken2Amount: 0n,
-			defaultPrice: undefined,
-			defaultPriceError: undefined,
-			defaultPriceSource: undefined,
-			defaultPriceSourceUrl: undefined,
-			priceInput: '',
-			quoteAttemptedSources: undefined,
-			quoteFailureReason: undefined,
-			reportDetails: undefined,
-			token1AllowanceError: undefined,
-			token1Balance: undefined,
-			token1BalanceError: undefined,
-			token1Decimals: openOracleReportDetails.token1Decimals,
-			token2AllowanceError: undefined,
-			token2Balance: undefined,
-			token2BalanceError: undefined,
-			token2Decimals: openOracleReportDetails.token2Decimals,
-			walletEthBalance: undefined,
-		}),
 		isConnected: accountState.address !== undefined,
 		isMainnet,
 		onApproveToken1: () => undefined,
 		onApproveToken2: () => undefined,
 		onDisputeReport: () => undefined,
 		onOpenOracleFormChange: () => undefined,
-		onRefreshPrice: () => undefined,
 		onSettleReport: () => undefined,
-		onSubmitInitialReport: () => undefined,
-		onWrapWethForInitialReport: () => undefined,
 		openOracleActiveAction: undefined,
 		openOracleForm,
-		openOracleInitialReportState: createOpenOracleInitialReportState(),
+		openOracleTokenAccessState: createOpenOracleTokenAccessState(),
 		openOracleReportDetails,
 		token1Symbol: openOracleReportDetails.token1Symbol,
 		token2Symbol: openOracleReportDetails.token2Symbol,
@@ -433,67 +324,26 @@ function renderSettleActionSection({
 }
 
 void describe('OpenOracleSection', () => {
-	void test('removes the redundant wallet metric row from the selected initial report action', () => {
-		const section = renderInitialReportActionSection()
-		const metricFieldLabels = getMetricFieldLabels(section)
-		const textContent = getTextContent(section)
-		const sectionTitles = getSectionTitles(section)
-		const buttonLabels = getButtonLabels(section)
-		const wrapButton = findButton(section, 'Wrap needed ETH to WETH')
-		const submitButton = findButton(section, 'Submit Initial Report')
-
-		expect(metricFieldLabels).not.toContain('Wallet REPv2')
-		expect(metricFieldLabels).not.toContain('Wallet WETH')
-		expect(sectionTitles).toContain('Initial Report')
-		expect(sectionTitles).toContain('REPv2 Approval')
-		expect(sectionTitles).toContain('WETH Approval')
-		expect(textContent).not.toContain('determine whether this report needs more WETH')
-		expect(buttonLabels.indexOf('Wrap needed ETH to WETH')).toBeGreaterThan(-1)
-		expect(buttonLabels.indexOf('Wrap needed ETH to WETH')).toBeLessThan(buttonLabels.indexOf('Submit Initial Report'))
-		expect(wrapButton).toBeDefined()
-		expect(submitButton).toBeDefined()
-	})
-
-	void test('renders approval-required submission messages as normal detail text instead of an error notice', () => {
-		const section = renderInitialReportActionSection({
-			openOracleInitialReportState: createOpenOracleInitialReportState({
-				token1Approval: {
-					error: undefined,
-					loading: false,
-					value: 10n ** 18n,
-				},
-				token2Approval: {
-					error: undefined,
-					loading: false,
-					value: 0n,
-				},
-			}),
+	void test('waits for the active environment before loading browse reports', async () => {
+		const domEnvironment = installDomEnvironment()
+		let browseLoadAttempts = 0
+		const restoreActiveEnvironment = installActiveEnvironmentForTesting({
+			...createFakeBackend(),
+			createReadClient: () => {
+				browseLoadAttempts += 1
+				throw new Error('Browse reports must not load before the environment is ready')
+			},
 		})
+		const rendered = await renderIntoDocument(<OpenOracleSection {...createOpenOracleSectionProps()} environmentReady={false} />)
 
-		expect(getTextContent(section)).toContain('WETH approval required')
-		expect(hasVNodeType(section, ErrorNotice)).toBe(false)
-	})
-
-	void test('renders initial-report quote freshness metadata', () => {
-		const section = renderInitialReportActionSection({
-			openOracleInitialReportState: createOpenOracleInitialReportState({
-				quoteBlockNumber: 123n,
-				quoteLoadedAtMs: Date.now() - 70_000,
-				quoteStale: true,
-			}),
-		})
-		const textContent = getTextContent(section)
-
-		expect(textContent).toContain('Quote loaded at block 123')
-		expect(textContent).toContain('This quote is stale and will be refreshed before submission.')
-	})
-
-	void test('uses the shared form input for initial-report and dispute amount fields', () => {
-		const initialReportSection = renderInitialReportActionSection()
-		const disputeSection = renderDisputeActionSection()
-
-		expect(hasVNodeType(initialReportSection, FormInput)).toBe(true)
-		expect(hasVNodeType(disputeSection, FormInput)).toBe(true)
+		try {
+			await Promise.resolve()
+			expect(browseLoadAttempts).toBe(0)
+		} finally {
+			await rendered.cleanup()
+			restoreActiveEnvironment()
+			domEnvironment.cleanup()
+		}
 	})
 
 	void test('renders settle-only controls after the dispute window closes', () => {
@@ -558,7 +408,7 @@ void describe('OpenOracleSection', () => {
 			disputeNewAmount1: (20n * tokenUnits).toString(),
 			disputeNewAmount2: (7n * tokenUnits).toString(),
 		})
-		const openOracleInitialReportState = createOpenOracleInitialReportState({
+		const openOracleTokenAccessState = createOpenOracleTokenAccessState({
 			token1Approval: {
 				error: undefined,
 				loading: false,
@@ -572,7 +422,7 @@ void describe('OpenOracleSection', () => {
 		})
 		const section = renderDisputeActionSection({
 			openOracleForm,
-			openOracleInitialReportState,
+			openOracleTokenAccessState,
 			openOracleReportDetails,
 		})
 
@@ -603,7 +453,7 @@ void describe('OpenOracleSection', () => {
 			disputeNewAmount1: (20n * tokenUnits).toString(),
 			disputeNewAmount2: (7n * tokenUnits).toString(),
 		})
-		const openOracleInitialReportState = createOpenOracleInitialReportState({
+		const openOracleTokenAccessState = createOpenOracleTokenAccessState({
 			token1Approval: {
 				error: undefined,
 				loading: false,
@@ -618,7 +468,7 @@ void describe('OpenOracleSection', () => {
 		})
 		const section = renderDisputeActionSection({
 			openOracleForm,
-			openOracleInitialReportState,
+			openOracleTokenAccessState,
 			openOracleReportDetails,
 		})
 
@@ -629,12 +479,6 @@ void describe('OpenOracleSection', () => {
 	})
 
 	void test('keeps create and selected-report actions disabled off mainnet with recovery guidance', () => {
-		const initialReportSection = renderInitialReportActionSection({ isMainnet: false })
-		const submitButton = findButton(initialReportSection, 'Submit Initial Report')
-		if (submitButton === undefined) throw new Error('Expected initial report controls to render')
-		expect(getButtonDisabled(submitButton)).toBe(true)
-		expect(getButtonDisabledReason(submitButton)).toBe('Switch to Ethereum mainnet.')
-
 		const disputeSection = renderDisputeActionSection({ isMainnet: false })
 		const disputeButton = findButton(disputeSection, 'Dispute & Swap')
 		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
@@ -649,16 +493,6 @@ void describe('OpenOracleSection', () => {
 	})
 
 	void test('keeps downstream selected-report blocker copy hidden off mainnet', () => {
-		const invalidInitialReportSection = renderInitialReportActionSection({
-			isMainnet: false,
-			openOracleForm: createOpenOracleForm({ price: '' }),
-		})
-		const invalidSubmitButton = findButton(invalidInitialReportSection, 'Submit Initial Report')
-		if (invalidSubmitButton === undefined) throw new Error('Expected initial report controls to render')
-		expect(getButtonDisabled(invalidSubmitButton)).toBe(true)
-		expect(getButtonDisabledReason(invalidSubmitButton)).toBe('Switch to Ethereum mainnet.')
-		expect(getTextContent(invalidInitialReportSection)).not.toContain('Enter a valid')
-
 		const invalidDisputeSection = renderDisputeActionSection({
 			isMainnet: false,
 			openOracleForm: createOpenOracleForm({ reportId: '' }),
@@ -687,12 +521,6 @@ void describe('OpenOracleSection', () => {
 
 	void test('keeps disconnected-wallet reasons for selected-report actions', () => {
 		const disconnectedAccount = createAccountState({ address: undefined })
-
-		const initialReportSection = renderInitialReportActionSection({ accountState: disconnectedAccount })
-		const submitButton = findButton(initialReportSection, 'Submit Initial Report')
-		if (submitButton === undefined) throw new Error('Expected initial report controls to render')
-		expect(getButtonDisabled(submitButton)).toBe(true)
-		expect(getButtonDisabledReason(submitButton)).toBe('Connect a wallet before submitting the initial report.')
 
 		const disputeSection = renderDisputeActionSection({ accountState: disconnectedAccount })
 		const disputeButton = findButton(disputeSection, 'Dispute & Swap')

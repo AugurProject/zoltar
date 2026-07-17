@@ -1,4 +1,17 @@
-import type { Address, Hex } from '@zoltar/shared/ethereum'
+import type { Address, Hex, TransactionLog } from '@zoltar/shared/ethereum'
+import {
+	decodeOpenOracleStatePreimage,
+	getOpenOracleGameTuple,
+	getOpenOracleHelperTuple,
+	getOpenOracleReportIdFromTopic,
+	hasOpenOracleFlag,
+	OPEN_ORACLE_FLAG_TIME_TYPE,
+	OPEN_ORACLE_FLAG_TRACK_DISPUTES,
+	OPEN_ORACLE_REPORT_DISPUTED_TOPIC,
+	OPEN_ORACLE_REPORT_SETTLED_TOPIC,
+	OPEN_ORACLE_REPORT_SUBMITTED_TOPIC,
+	type OpenOracleStatePreimage,
+} from '@zoltar/shared/openOracle'
 import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
 import { WETH_ADDRESS } from '../constants'
 import {
@@ -271,85 +284,104 @@ interface ReportStatus {
 	lastReportOppoTime: bigint
 }
 
-function isOpenOracleExtraData(value: unknown): value is readonly [Hex, Address, bigint, bigint, Address, boolean] {
-	return Array.isArray(value) && value.length === 6
+type OpenOracleEventState = {
+	initial: OpenOracleStatePreimage
+	latest: OpenOracleStatePreimage
+	reportCount: number
+	settlementBlockNumber: bigint | undefined
+}
+
+function compareOpenOracleLogs(left: TransactionLog, right: TransactionLog) {
+	const leftBlock = left.blockNumber ?? -1n
+	const rightBlock = right.blockNumber ?? -1n
+	if (leftBlock !== rightBlock) return leftBlock < rightBlock ? -1 : 1
+	const leftIndex = left.logIndex ?? -1n
+	const rightIndex = right.logIndex ?? -1n
+	if (leftIndex === rightIndex) return 0
+	return leftIndex < rightIndex ? -1 : 1
+}
+
+export const loadOpenOracleEventState = async (client: ReadClient, reportId: bigint): Promise<OpenOracleEventState> => {
+	const address = getInfraContractAddresses().openOracle
+	const logs = await client.getLogs({ address, fromBlock: 0n })
+	let state: OpenOracleEventState | undefined
+	for (const log of [...logs].sort(compareOpenOracleLogs)) {
+		const signature = log.topics[0]?.toLowerCase()
+		const reportIdTopic = log.topics[1]
+		if (reportIdTopic === undefined || getOpenOracleReportIdFromTopic(reportIdTopic) !== reportId) continue
+		if (signature === OPEN_ORACLE_REPORT_SUBMITTED_TOPIC.toLowerCase() || signature === OPEN_ORACLE_REPORT_DISPUTED_TOPIC.toLowerCase()) {
+			const preimage = decodeOpenOracleStatePreimage(log.data, reportId)
+			state = state === undefined ? { initial: preimage, latest: preimage, reportCount: 1, settlementBlockNumber: undefined } : { ...state, latest: preimage, reportCount: state.reportCount + 1 }
+		} else if (signature === OPEN_ORACLE_REPORT_SETTLED_TOPIC.toLowerCase() && state !== undefined) {
+			state.settlementBlockNumber = log.blockNumber ?? undefined
+		}
+	}
+	if (state === undefined) throw new Error(`OpenOracle report ${reportId.toString()} does not exist`)
+	if (state.settlementBlockNumber !== undefined) {
+		const block = await client.getBlock({ blockNumber: state.settlementBlockNumber })
+		const settlementTimestamp = hasOpenOracleFlag(state.latest.game, OPEN_ORACLE_FLAG_TIME_TYPE) ? block.timestamp : state.settlementBlockNumber
+		state.latest = { ...state.latest, game: { ...state.latest.game, settlementTimestamp } }
+	}
+	return state
 }
 
 export const getOpenOracleExtraData = async (client: ReadClient, extraDataId: bigint): Promise<ExtraReportData> => {
-	const result: unknown = await client.readContract({
+	const state = await loadOpenOracleEventState(client, extraDataId)
+	const stateHash = await client.readContract({
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-		functionName: 'extraData',
+		functionName: 'oracleGame',
 		address: getInfraContractAddresses().openOracle,
 		args: [extraDataId],
 	})
-
-	if (!isOpenOracleExtraData(result)) throw new Error('OpenOracle extraData returned an unexpected shape')
-
-	const [stateHash, callbackContract, numReports, callbackGasLimit, protocolFeeRecipient, trackDisputes] = result
-
 	return {
 		stateHash,
-		callbackContract,
-		numReports: Number(numReports),
-		callbackGasLimit: Number(callbackGasLimit),
-		protocolFeeRecipient,
-		trackDisputes,
+		callbackContract: state.latest.game.callbackContract,
+		numReports: state.reportCount,
+		callbackGasLimit: Number(state.latest.game.callbackGasLimit),
+		protocolFeeRecipient: state.latest.game.protocolFeeRecipient,
+		trackDisputes: hasOpenOracleFlag(state.latest.game, OPEN_ORACLE_FLAG_TRACK_DISPUTES),
 	}
 }
 
 export const getOpenOracleReportStatus = async (client: ReadClient, reportId: bigint): Promise<ReportStatus> => {
-	const result = await client.readContract({
-		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-		functionName: 'reportStatus',
-		address: getInfraContractAddresses().openOracle,
-		args: [reportId],
-	})
-	if (!Array.isArray(result) || result.length !== 7) throw new Error('OpenOracle reportStatus returned an unexpected shape')
-	const [currentAmount1, currentAmount2, currentReporter, reportTimestamp, settlementTimestamp, initialReporter, lastReportOppoTime] = result
+	const state = await loadOpenOracleEventState(client, reportId)
 	return {
-		currentAmount1,
-		currentAmount2,
-		currentReporter,
-		reportTimestamp,
-		settlementTimestamp,
-		initialReporter,
-		lastReportOppoTime,
+		currentAmount1: state.latest.game.currentAmount1,
+		currentAmount2: state.latest.game.currentAmount2,
+		currentReporter: state.latest.game.currentReporter,
+		reportTimestamp: state.latest.game.reportTimestamp,
+		settlementTimestamp: state.latest.game.settlementTimestamp,
+		initialReporter: state.initial.game.currentReporter,
+		lastReportOppoTime: state.latest.game.lastReportOppoTime,
 	}
 }
 
-export const openOracleSubmitInitialReport = async (client: WriteClient, reportId: bigint, amount1: bigint, amount2: bigint, stateHash: Hex) =>
-	await writeContractAndWait(client, () =>
-		client.writeContract({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-			functionName: 'submitInitialReport',
-			address: getInfraContractAddresses().openOracle,
-			args: [reportId, amount1, amount2, stateHash],
-			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
-		}),
-	)
-
-export const openOracleSettle = async (client: WriteClient, reportId: bigint) =>
-	await writeContractAndWait(client, () =>
+export const openOracleSettle = async (client: WriteClient, reportId: bigint) => {
+	const state = await loadOpenOracleEventState(client, reportId)
+	return await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'settle',
 			address: getInfraContractAddresses().openOracle,
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
-			args: [reportId],
+			args: [reportId, getOpenOracleGameTuple(state.latest.game), getOpenOracleHelperTuple(state.latest.helper)],
 		}),
 	)
+}
 
-export const openOracleSettleWithGasPrice = async (client: WriteClient, reportId: bigint, gasPrice: bigint) =>
-	await writeContractAndWait(client, () =>
+export const openOracleSettleWithGasPrice = async (client: WriteClient, reportId: bigint, gasPrice: bigint) => {
+	const state = await loadOpenOracleEventState(client, reportId)
+	return await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'settle',
 			address: getInfraContractAddresses().openOracle,
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 			gasPrice,
-			args: [reportId],
+			args: [reportId, getOpenOracleGameTuple(state.latest.game), getOpenOracleHelperTuple(state.latest.helper)],
 		}),
 	)
+}
 
 export const getRequestPriceEthCost = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
 	await client.readContract({
@@ -403,28 +435,21 @@ interface ReportMeta {
 }
 
 export const getOpenOracleReportMeta = async (client: ReadClient, reportId: bigint): Promise<ReportMeta> => {
-	const reportMetaData = await client.readContract({
-		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-		functionName: 'reportMeta',
-		address: getInfraContractAddresses().openOracle,
-		args: [reportId],
-	})
-
-	const [exactToken1Report, escalationHalt, fee, settlerReward, token1, settlementTime, token2, timeType, feePercentage, protocolFee, multiplier, disputeDelay] = reportMetaData
-
+	const state = await loadOpenOracleEventState(client, reportId)
+	const game = state.latest.game
 	return {
-		exactToken1Report,
-		escalationHalt,
-		fee,
-		settlerReward,
-		token1,
-		settlementTime,
-		token2,
-		timeType,
-		feePercentage,
-		protocolFee,
-		multiplier,
-		disputeDelay,
+		exactToken1Report: state.initial.game.currentAmount1,
+		escalationHalt: game.escalationHalt,
+		fee: 0n,
+		settlerReward: game.settlerReward,
+		token1: game.token1,
+		settlementTime: game.settlementTime,
+		token2: game.token2,
+		timeType: hasOpenOracleFlag(game, OPEN_ORACLE_FLAG_TIME_TYPE),
+		feePercentage: game.feePercentage,
+		protocolFee: game.protocolFee,
+		multiplier: game.multiplier,
+		disputeDelay: game.disputeDelay,
 	}
 }
 

@@ -7088,12 +7088,14 @@
 						necessary, Zoltar forks.
 					</p>
 					<p>
-						The OpenOracle path is contestable before the coordinator can use
-						it: the coordinator requests a WETH/REP report and atomically posts
-						the sponsor-funded initial token amounts, disputers can replace a bad
-						report with the contract-required replacement amounts, a settler
-						finalizes the report after the timing window, and the settlement
-						callback returns the final amounts to the coordinator.
+							The OpenOracle path is contestable before the coordinator can use
+							it: the sponsor funds the request, the coordinator atomically posts
+							the initial token amounts and becomes the onchain reporter, disputers
+							can replace a bad report with the contract-required replacement
+							amounts, and a settler finalizes the report after the timing window.
+							OpenOracle credits the final position to the final reporter. Its callback
+							supplies the accepted amounts to the coordinator, which withdraws only
+							its own internal WETH/REP balances back to the sponsor.
 						Request, dispute, settlement, and callback safety checks are
 						detailed in the dedicated
 						<a href="./open-oracle-integration.html">OpenOracle integration</a>
@@ -7245,13 +7247,13 @@
 									OpenOracle
 								</text>
 								<text class="svg-small" x="793" y="239" text-anchor="middle">
-									sponsor posts initial report
+									coordinator reports
 								</text>
 							<text class="svg-small" x="793" y="255" text-anchor="middle">
-								disputer may replace
+								sponsor funds
 							</text>
 							<text class="svg-small" x="793" y="271" text-anchor="middle">
-								settler callback
+								dispute or settle
 							</text>
 							<path
 								class="svg-line"
@@ -8091,7 +8093,8 @@
 						</tbody>
 					</table>
 					<h3>Oracle Parameters</h3>
-					<table>
+					<div class="table-wrap">
+						<table>
 						<thead>
 							<tr>
 								<th>Parameter</th>
@@ -8178,7 +8181,7 @@
 								</td>
 							</tr>
 							<tr>
-								<td>OpenOracle <code>exactToken1Report</code></td>
+									<td>OpenOracle initial <code>currentAmount1</code></td>
 								<td>
 									The greater of <code>minimumToken1Report()</code> and the caller's
 									<code>requestedInitialWeth</code>.
@@ -8193,9 +8196,9 @@
 								<td>
 									<code>10x</code> the request's selected initial WETH report, computed as
 									<math
-										aria-label="exact token one report times escalation halt multiplier basis points divided by ten thousand"
-										data-source="exactToken1Report \cdot escalationHaltMultiplierBps / 10000"
-										><mi>exactToken1Report</mi><mo>&#x22C5;</mo
+											aria-label="initial current amount one times escalation halt multiplier basis points divided by ten thousand"
+											data-source="currentAmount1 \cdot escalationHaltMultiplierBps / 10000"
+											><mi>currentAmount1</mi><mo>&#x22C5;</mo
 										><mi>escalationHaltMultiplierBps</mi><mo>/</mo
 										><mn>10000</mn></math
 									>
@@ -8210,16 +8213,17 @@
 								<td>OpenOracle <code>settlerReward</code></td>
 								<td>
 									<math
-										aria-label="block base fee times 2 times gas consumed open oracle report price"
-										data-source="block.basefee \cdot 2 \cdot gasConsumedOpenOracleReportPrice"
-										><mi>block.basefee</mi><mo>&#x22C5;</mo><mn>2</mn
-										><mo>&#x22C5;</mo
-										><mi>gasConsumedOpenOracleReportPrice</mi></math
+										aria-label="block base fee times 4 times the sum of callback gas limit and gas consumed open oracle report price, plus 101"
+										data-source="block.basefee \cdot 4 \cdot (callbackGasLimit + gasConsumedOpenOracleReportPrice) + 101"
+										><mi>block.basefee</mi><mo>&#x22C5;</mo><mn>4</mn
+										><mo>&#x22C5;</mo><mo>(</mo><mi>callbackGasLimit</mi
+										><mo>+</mo><mi>gasConsumedOpenOracleReportPrice</mi
+										><mo>)</mo><mo>+</mo><mn>101</mn></math
 									>
 								</td>
 								<td>
-									Dynamic ETH reward paid to settler, derived from current
-									<code>block.basefee</code> and report gas configuration.
+										The full request bounty paid to the settler, derived from current
+										<code>block.basefee</code>, callback gas, and report gas configuration.
 								</td>
 							</tr>
 							<tr>
@@ -8305,7 +8309,7 @@
 								<td><code>100000</code></td>
 								<td>
 									Multiplier used to derive the OpenOracle escalation halt from
-									<code>exactToken1Report</code>, equal to <code>10x</code>.
+										initial <code>currentAmount1</code>, equal to <code>10x</code>.
 									Deployment-configured coordinator parameter.
 								</td>
 							</tr>
@@ -8348,7 +8352,8 @@
 								<td>Mainnet immutable token address used in REP/ETH price reports.</td>
 							</tr>
 						</tbody>
-					</table>
+						</table>
+					</div>
 				</section>
 
 

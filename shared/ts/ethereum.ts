@@ -380,6 +380,7 @@ type ClientRequestParameters = {
 }
 
 type BlockTag = 'earliest' | 'latest' | 'pending'
+type LogTopicFilter = Hex | readonly Hex[] | null
 
 type PublicClientShape<TTransport extends Transport, TChain extends Chain | undefined> = {
 	chain: TChain
@@ -390,7 +391,7 @@ type PublicClientShape<TTransport extends Transport, TChain extends Chain | unde
 	getBlockNumber: () => Promise<bigint>
 	getChainId: () => Promise<number>
 	getCode: (parameters: { address: Address; blockTag?: BlockTag | undefined }) => Promise<Hex | undefined>
-	getLogs: <TEvent extends AbiParameter | undefined>(parameters: { address?: Address | undefined; event?: TEvent; fromBlock?: bigint | undefined; toBlock?: bigint | undefined }) => Promise<readonly RpcLogForEvent<TEvent>[]>
+	getLogs: <TEvent extends AbiParameter | undefined>(parameters: { address?: Address | undefined; event?: TEvent; fromBlock?: bigint | undefined; toBlock?: bigint | undefined; topics?: readonly LogTopicFilter[] | undefined }) => Promise<readonly RpcLogForEvent<TEvent>[]>
 	getTransaction: (parameters: { hash: Hash }) => Promise<BlockTransaction>
 	getTransactionReceipt: (parameters: { hash: Hash }) => Promise<TransactionReceipt>
 	multicall: <TContracts extends readonly ContractFunctionParameters[], TAllowFailure extends boolean>(parameters: { allowFailure: TAllowFailure; contracts: TContracts; multicallAddress: Address }) => Promise<MulticallReturnType<TContracts, TAllowFailure>>
@@ -1282,15 +1283,17 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			)
 			return result === '0x' ? undefined : result
 		},
-		getLogs: async <TEvent extends AbiParameter | undefined>(parameters: { address?: Address | undefined; event?: TEvent; fromBlock?: bigint | undefined; toBlock?: bigint | undefined }) => {
+		getLogs: async <TEvent extends AbiParameter | undefined>(parameters: { address?: Address | undefined; event?: TEvent; fromBlock?: bigint | undefined; toBlock?: bigint | undefined; topics?: readonly LogTopicFilter[] | undefined }) => {
 			const event = parameters.event
+			if (event !== undefined && parameters.topics !== undefined) throw new Error('getLogs accepts either an event or raw topics, not both')
 			const topics =
-				event === undefined
+				parameters.topics ??
+				(event === undefined
 					? undefined
 					: encodeEventTopics({
 							abi: [event],
 							eventName: event.name ?? 'event',
-						})
+						}))
 			const rawLogs = await requestTransport<unknown[]>(transport, {
 				method: 'eth_getLogs',
 				params: [

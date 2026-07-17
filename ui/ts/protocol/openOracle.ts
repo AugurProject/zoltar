@@ -1,4 +1,5 @@
-import { decodeEventLog, getAddress, zeroAddress, type Address, type Hex, type TransactionReceipt } from '@zoltar/shared/ethereum'
+import { decodeEventLog, getAddress, maxUint256, zeroAddress, type Address, type Hex, type TransactionReceipt } from '@zoltar/shared/ethereum'
+import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hasOpenOracleFlag, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_STORE_PRICE, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
 import { ABIS } from '../abis.js'
 import { sameAddress } from '../lib/address.js'
 import { isIgnorableLogDecodeError } from '../lib/errors.js'
@@ -10,10 +11,11 @@ import { getOpenOracleCreateParameterValidationMessage } from './openOracleValid
 import { decodeOracleQueueOperation, encodeOracleQueueOperation } from './oracleQueueOperation.js'
 import { getWethAddress } from './uniswapQuoter.js'
 import { peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
-import type { OpenOracleActionResult, OracleManagerDetails, OracleQueueOperation, ReadClient, OpenOracleReportSummary, OpenOracleReportSummaryPage, StagedOracleExecutionResult, StagedOracleQueuedResult, WriteClient } from '../types/contracts.js'
-import { hasTimestampAndNumber, requireStagedOperationTupleArray, requireOpenOracleExtraDataTuple, requireOpenOracleExtraDataTupleArray, requireOpenOracleReportMetaTuple, requireOpenOracleReportMetaTupleArray, requireOpenOracleReportStatusTuple, requireOpenOracleReportStatusTupleArray } from './helpers.js'
+import type { OpenOracleActionResult, OpenOracleWithdrawableBalances, OracleManagerDetails, OracleQueueOperation, ReadClient, OpenOracleReportSummary, OpenOracleReportSummaryPage, StagedOracleExecutionResult, StagedOracleQueuedResult, WriteClient } from '../types/contracts.js'
+import { hasTimestampAndNumber, requireStagedOperationTupleArray } from './helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from './core.js'
 import { getInfraContractAddresses, getOpenOracleAddress } from './deploymentHelpers.js'
+import { loadOpenOracleEventState, loadOpenOracleEventStates } from './openOracleState.js'
 
 type CoordinatorInitialReportClient = Parameters<typeof loadOpenOracleInitialReportPrice>[0]
 const OPEN_ORACLE_PRICE_UNITS = 30n
@@ -218,24 +220,16 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		}
 	}
 	if (pendingReportId > 0n) {
-		const [extraData, reportMeta] = await readRequiredMulticall(client, [
-			{
-				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-				functionName: 'extraData',
-				address: resolvedOracleAddress,
-				args: [pendingReportId],
-			},
-			{
-				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-				functionName: 'reportMeta',
-				address: resolvedOracleAddress,
-				args: [pendingReportId],
-			},
-		])
-		callbackStateHash = extraData[0]
-		exactToken1Report = reportMeta[0]
-		token1 = reportMeta[4]
-		token2 = reportMeta[6]
+		const eventState = await loadOpenOracleEventState(client, resolvedOracleAddress, pendingReportId)
+		callbackStateHash = await client.readContract({
+			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			functionName: 'oracleGame',
+			address: resolvedOracleAddress,
+			args: [pendingReportId],
+		})
+		exactToken1Report = eventState.initial.game.currentAmount1
+		token1 = eventState.latest.game.token1
+		token2 = eventState.latest.game.token2
 	}
 	return {
 		activeStagedOperationCount,
@@ -269,101 +263,83 @@ function calculateOpenOraclePrice(amount1: bigint, amount2: bigint) {
 	return amount2 === 0n ? 0n : (amount1 * 10n ** OPEN_ORACLE_PRICE_UNITS) / amount2
 }
 
-function hasOpenOracleDisputeOccurred(currentReporter: Address, initialReporter: Address, numReports: bigint) {
-	if (numReports > 1n) return true
-	if (currentReporter === zeroAddress || initialReporter === zeroAddress) return false
-	return !sameAddress(currentReporter, initialReporter)
-}
 export async function loadOpenOracleReportDetails(client: ReadClient, openOracleAddress: Address, reportId: bigint): Promise<import('../types/contracts.js').OpenOracleReportDetails> {
-	const [[meta, status, extra], block] = await Promise.all([
-		readRequiredMulticall(client, [
-			{
-				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-				functionName: 'reportMeta',
-				address: openOracleAddress,
-				args: [reportId],
-			},
-			{
-				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-				functionName: 'reportStatus',
-				address: openOracleAddress,
-				args: [reportId],
-			},
-			{
-				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-				functionName: 'extraData',
-				address: openOracleAddress,
-				args: [reportId],
-			},
-		]),
+	const [eventState, stateHash, block] = await Promise.all([
+		loadOpenOracleEventState(client, openOracleAddress, reportId),
+		client.readContract({
+			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			functionName: 'oracleGame',
+			address: openOracleAddress,
+			args: [reportId],
+		}),
 		client.getBlock(),
 	])
-	const reportMeta = requireOpenOracleReportMetaTuple(meta, 'open oracle report meta')
-	const reportStatus = requireOpenOracleReportStatusTuple(status, 'open oracle report status')
-	const reportExtra = requireOpenOracleExtraDataTuple(extra, 'open oracle report extra')
 	if (!hasTimestampAndNumber(block)) throw new Error('Unexpected block response')
-	if (reportMeta[4] === zeroAddress) throw new Error(`Oracle report #${reportId.toString()} does not exist`)
+	const { game } = eventState.latest
+	const initialGame = eventState.initial.game
+	const expectedStateHash = hashOpenOracleStatePreimage(eventState.latest)
+	if (stateHash.toLowerCase() !== expectedStateHash.toLowerCase()) throw new Error(`OpenOracle report #${reportId.toString()} event state does not match its on-chain state hash`)
 	const [token1Decimals, token2Decimals, token1Symbol, token2Symbol] = await readRequiredMulticall(client, [
 		{
 			abi: ABIS.mainnet.erc20,
 			functionName: 'decimals',
-			address: reportMeta[4],
+			address: game.token1,
 			args: [],
 		},
 		{
 			abi: ABIS.mainnet.erc20,
 			functionName: 'decimals',
-			address: reportMeta[6],
+			address: game.token2,
 			args: [],
 		},
 		{
 			abi: ABIS.mainnet.erc20,
 			functionName: 'symbol',
-			address: reportMeta[4],
+			address: game.token1,
 			args: [],
 		},
 		{
 			abi: ABIS.mainnet.erc20,
 			functionName: 'symbol',
-			address: reportMeta[6],
+			address: game.token2,
 			args: [],
 		},
 	])
-	const token1Metadata = normalizeOpenOracleTokenMetadata(reportMeta[4], token1Decimals, token1Symbol)
-	const token2Metadata = normalizeOpenOracleTokenMetadata(reportMeta[6], token2Decimals, token2Symbol)
+	const token1Metadata = normalizeOpenOracleTokenMetadata(game.token1, token1Decimals, token1Symbol)
+	const token2Metadata = normalizeOpenOracleTokenMetadata(game.token2, token2Decimals, token2Symbol)
 	return {
 		reportId,
 		openOracleAddress,
 		currentTime: block.timestamp,
 		currentBlockNumber: block.number,
-		exactToken1Report: reportMeta[0],
-		escalationHalt: reportMeta[1],
-		fee: reportMeta[2],
-		settlerReward: reportMeta[3],
-		token1: reportMeta[4],
-		settlementTime: BigInt(reportMeta[5]),
-		token2: reportMeta[6],
-		timeType: reportMeta[7],
-		feePercentage: BigInt(reportMeta[8]),
-		protocolFee: BigInt(reportMeta[9]),
-		multiplier: BigInt(reportMeta[10]),
-		disputeDelay: BigInt(reportMeta[11]),
-		currentAmount1: reportStatus[0],
-		currentAmount2: reportStatus[1],
-		price: calculateOpenOraclePrice(reportStatus[0], reportStatus[1]),
-		currentReporter: reportStatus[2],
-		reportTimestamp: BigInt(reportStatus[3]),
-		settlementTimestamp: BigInt(reportStatus[4]),
-		initialReporter: reportStatus[5],
-		disputeOccurred: hasOpenOracleDisputeOccurred(reportStatus[2], reportStatus[5], BigInt(reportExtra[2])),
-		isDistributed: BigInt(reportStatus[4]) > 0n,
-		stateHash: reportExtra[0],
-		callbackContract: reportExtra[1],
-		numReports: BigInt(reportExtra[2]),
-		callbackGasLimit: Number(reportExtra[3]),
-		protocolFeeRecipient: reportExtra[4],
-		trackDisputes: reportExtra[5],
-		lastReportOppoTime: BigInt(reportStatus[6]),
+		exactToken1Report: initialGame.currentAmount1,
+		escalationHalt: game.escalationHalt,
+		fee: 0n,
+		settlerReward: game.settlerReward,
+		token1: game.token1,
+		settlementTime: game.settlementTime,
+		token2: game.token2,
+		timeType: hasOpenOracleFlag(game, OPEN_ORACLE_FLAG_TIME_TYPE),
+		feePercentage: game.feePercentage,
+		protocolFee: game.protocolFee,
+		multiplier: game.multiplier,
+		disputeDelay: game.disputeDelay,
+		currentAmount1: game.currentAmount1,
+		currentAmount2: game.currentAmount2,
+		price: calculateOpenOraclePrice(game.currentAmount1, game.currentAmount2),
+		currentReporter: game.currentReporter,
+		reportTimestamp: game.reportTimestamp,
+		settlementTimestamp: game.settlementTimestamp,
+		initialReporter: initialGame.currentReporter,
+		disputeOccurred: eventState.reportCount > 1n,
+		isDistributed: eventState.settled,
+		stateHash,
+		callbackContract: game.callbackContract,
+		numReports: eventState.reportCount,
+		callbackGasLimit: Number(game.callbackGasLimit),
+		protocolFeeRecipient: game.protocolFeeRecipient,
+		trackDisputes: hasOpenOracleFlag(game, OPEN_ORACLE_FLAG_TRACK_DISPUTES),
+		lastReportOppoTime: game.lastReportOppoTime,
 		token1Decimals: token1Metadata.decimals,
 		token2Decimals: token2Metadata.decimals,
 		token1Symbol: token1Metadata.symbol,
@@ -406,42 +382,13 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 		reportIds.push(reportId)
 		if (reportId === pageStartId) break
 	}
-	const [metaResults, statusResults, extraResults] = await Promise.all([
-		readRequiredMulticall(
-			client,
-			reportIds.map(reportId => ({
-				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-				functionName: 'reportMeta',
-				address: openOracleAddress,
-				args: [reportId],
-			})),
-		),
-		readRequiredMulticall(
-			client,
-			reportIds.map(reportId => ({
-				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-				functionName: 'reportStatus',
-				address: openOracleAddress,
-				args: [reportId],
-			})),
-		),
-		readRequiredMulticall(
-			client,
-			reportIds.map(reportId => ({
-				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-				functionName: 'extraData',
-				address: openOracleAddress,
-				args: [reportId],
-			})),
-		),
-	])
-	const metas = requireOpenOracleReportMetaTupleArray(metaResults, 'open oracle report metas')
-	const statuses = requireOpenOracleReportStatusTupleArray(statusResults, 'open oracle report statuses')
-	const extras = requireOpenOracleExtraDataTupleArray(extraResults, 'open oracle report extras')
+	const eventStates = await loadOpenOracleEventStates(client, openOracleAddress, new Set(reportIds))
 	const tokenAddresses = new Set<Address>()
-	for (const meta of metas) {
-		if (meta[4] !== zeroAddress) tokenAddresses.add(meta[4])
-		if (meta[6] !== zeroAddress) tokenAddresses.add(meta[6])
+	for (const reportId of reportIds) {
+		const state = eventStates.get(reportId)
+		if (state === undefined) throw new Error(`Oracle report #${reportId.toString()} does not exist`)
+		tokenAddresses.add(state.latest.game.token1)
+		tokenAddresses.add(state.latest.game.token2)
 	}
 	const uniqueTokenAddresses = [...tokenAddresses]
 	const tokenMetadata = new Map<
@@ -477,27 +424,26 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 			tokenMetadata.set(tokenAddress, normalizeOpenOracleTokenMetadata(tokenAddress, decimals, symbol))
 		}
 	}
-	const reports = reportIds.map((reportId, index) => {
-		const meta = metas[index]
-		const status = statuses[index]
-		const extra = extras[index]
-		if (meta === undefined || status === undefined || extra === undefined) throw new Error('Unexpected oracle report summary response')
-		const token1Metadata = tokenMetadata.get(meta[4])
-		const token2Metadata = tokenMetadata.get(meta[6])
+	const reports = reportIds.map(reportId => {
+		const state = eventStates.get(reportId)
+		if (state === undefined) throw new Error('Unexpected oracle report summary response')
+		const game = state.latest.game
+		const token1Metadata = tokenMetadata.get(game.token1)
+		const token2Metadata = tokenMetadata.get(game.token2)
 		if (token1Metadata === undefined || token2Metadata === undefined) throw new Error('Unexpected oracle token metadata response')
 		return {
-			currentAmount1: status[0],
-			currentAmount2: status[1],
-			currentReporter: status[2],
-			disputeOccurred: hasOpenOracleDisputeOccurred(status[2], status[5], BigInt(extra[2])),
-			exactToken1Report: meta[0],
-			isDistributed: BigInt(status[4]) > 0n,
-			price: calculateOpenOraclePrice(status[0], status[1]),
+			currentAmount1: game.currentAmount1,
+			currentAmount2: game.currentAmount2,
+			currentReporter: game.currentReporter,
+			disputeOccurred: state.reportCount > 1n,
+			exactToken1Report: state.initial.game.currentAmount1,
+			isDistributed: state.settled,
+			price: calculateOpenOraclePrice(game.currentAmount1, game.currentAmount2),
 			reportId,
-			reportTimestamp: BigInt(status[3]),
-			settlementTimestamp: BigInt(status[4]),
-			token1: meta[4],
-			token2: meta[6],
+			reportTimestamp: game.reportTimestamp,
+			settlementTimestamp: game.settlementTimestamp,
+			token1: game.token1,
+			token2: game.token2,
 			token1Decimals: token1Metadata.decimals,
 			token2Decimals: token2Metadata.decimals,
 			token1Symbol: token1Metadata.symbol,
@@ -518,6 +464,7 @@ export async function createOpenOracleReportInstance(
 		disputeDelay: number
 		escalationHalt: bigint
 		exactToken1Report: bigint
+		initialToken2Amount: bigint
 		ethValue: bigint
 		feePercentage: number
 		multiplier: number
@@ -540,6 +487,7 @@ export async function createOpenOracleReportInstance(
 		disputeDelay: BigInt(parameters.disputeDelay),
 		escalationHalt: parameters.escalationHalt,
 		exactToken1Report: parameters.exactToken1Report,
+		initialToken2Amount: parameters.initialToken2Amount,
 		ethValue: parameters.ethValue,
 		feePercentage: BigInt(parameters.feePercentage),
 		multiplier: BigInt(parameters.multiplier),
@@ -550,11 +498,61 @@ export async function createOpenOracleReportInstance(
 		token2Address: parameters.token2Address,
 	})
 	if (validationMessage !== undefined) throw new Error(validationMessage)
+	let wethFundingAmount = 0n
+	if (sameAddress(parameters.token1Address, getWethAddress())) wethFundingAmount = parameters.exactToken1Report
+	else if (sameAddress(parameters.token2Address, getWethAddress())) wethFundingAmount = parameters.initialToken2Amount
+	if (wethFundingAmount > 0n) {
+		const wethBalance = await client.readContract({
+			address: getWethAddress(),
+			abi: ABIS.mainnet.erc20,
+			functionName: 'balanceOf',
+			args: [client.account.address],
+		})
+		if (wethBalance < wethFundingAmount) await wrapWeth(client, wethFundingAmount - wethBalance)
+	}
+	await writeContractAndWait(client, () => ({
+		address: parameters.token1Address,
+		abi: ABIS.mainnet.erc20,
+		functionName: 'approve',
+		args: [getOpenOracleAddress(), parameters.exactToken1Report],
+	}))
+	await writeContractAndWait(client, () => ({
+		address: parameters.token2Address,
+		abi: ABIS.mainnet.erc20,
+		functionName: 'approve',
+		args: [getOpenOracleAddress(), parameters.initialToken2Amount],
+	}))
 	const callParams = {
 		address: getOpenOracleAddress(),
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-		functionName: 'createReportInstance',
-		args: [parameters.token1Address, parameters.token2Address, parameters.exactToken1Report, parameters.feePercentage, parameters.multiplier, parameters.settlementTime, parameters.escalationHalt, parameters.disputeDelay, parameters.protocolFee, parameters.settlerReward],
+		functionName: 'report',
+		args: [
+			[
+				parameters.exactToken1Report,
+				parameters.initialToken2Amount,
+				client.account.address,
+				0n,
+				0n,
+				parameters.token1Address,
+				0n,
+				BigInt(parameters.settlementTime),
+				parameters.escalationHalt,
+				client.account.address,
+				parameters.settlerReward,
+				parameters.token2Address,
+				0,
+				parameters.disputeDelay,
+				parameters.feePercentage,
+				parameters.multiplier,
+				zeroAddress,
+				0,
+				parameters.protocolFee,
+				Number(OPEN_ORACLE_FLAG_TIME_TYPE | OPEN_ORACLE_FLAG_TRACK_DISPUTES | OPEN_ORACLE_FLAG_STORE_ALL | OPEN_ORACLE_FLAG_STORE_PRICE),
+			],
+			false,
+			false,
+			[0n, 0n, 0n, 0n],
+		],
 		value: parameters.ethValue,
 	}
 	const hash = await writeContractAndWait(client, () => callParams)
@@ -813,37 +811,67 @@ export async function wrapWeth(client: WriteClient, amount: bigint) {
 		hash,
 	} satisfies OpenOracleActionResult
 }
-export async function submitInitialOracleReport(client: WriteClient, openOracleAddress: Address, reportId: bigint, amount1: bigint, amount2: bigint, stateHash: Hex) {
+export async function loadOpenOracleWithdrawableBalances(client: Pick<ReadClient, 'readContract'>, openOracleAddress: Address, holder: Address, token1: Address, token2: Address): Promise<OpenOracleWithdrawableBalances> {
+	const loadBalance = async (token: Address) =>
+		requireBigintValue(
+			await client.readContract({
+				address: openOracleAddress,
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				functionName: 'tokenHolder',
+				args: [holder, token],
+			}),
+			'Open Oracle token holder balance',
+		)
+	const [rawEth, rawToken1, rawToken2] = await Promise.all([loadBalance(zeroAddress), loadBalance(token1), loadBalance(token2)])
+	const availableBalance = (balance: bigint) => (balance > 1n ? balance - 1n : 0n)
+	return {
+		eth: availableBalance(rawEth),
+		token1: availableBalance(rawToken1),
+		token2: availableBalance(rawToken2),
+	}
+}
+export async function withdrawOpenOracleBalance<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt>, openOracleAddress: Address, token: Address, recipient: Address): Promise<OpenOracleActionResult> {
 	const hash = await writeContractAndWait(client, () => ({
 		address: openOracleAddress,
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-		functionName: 'submitInitialReport',
-		args: [reportId, amount1, amount2, stateHash],
+		functionName: 'withdrawTo',
+		args: [token, maxUint256, recipient],
 	}))
 	return {
-		action: 'submitInitialReport',
+		action: 'withdrawBalance',
 		hash,
-	} satisfies OpenOracleActionResult
+	}
 }
-export async function settleOracleReport<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt>, openOracleAddress: Address, reportId: bigint) {
+export async function settleOracleReport(client: WriteClient, openOracleAddress: Address, reportId: bigint): Promise<OpenOracleActionResult>
+export async function settleOracleReport<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt>, openOracleAddress: Address, reportId: bigint, preimage: OpenOracleStatePreimage): Promise<OpenOracleActionResult>
+export async function settleOracleReport<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt> & Partial<Pick<ReadClient, 'getBlock' | 'getLogs'> & Pick<WriteClient, 'account'>>, openOracleAddress: Address, reportId: bigint, preimage?: OpenOracleStatePreimage) {
+	let resolvedPreimage = preimage
+	if (resolvedPreimage === undefined) {
+		const { getBlock, getLogs } = client
+		if (getBlock === undefined || getLogs === undefined) throw new Error('OpenOracle settlement requires a client that can load report events')
+		resolvedPreimage = (await loadOpenOracleEventState({ getBlock, getLogs }, openOracleAddress, reportId)).latest
+	}
 	const hash = await writeContractAndWait(client, () => ({
 		address: openOracleAddress,
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'settle',
 		gas: 5000000n,
-		args: [reportId],
+		args: [reportId, getOpenOracleGameTuple(resolvedPreimage.game), getOpenOracleHelperTuple(resolvedPreimage.helper)],
 	}))
 	return {
 		action: 'settle',
 		hash,
 	} satisfies OpenOracleActionResult
 }
-export async function disputeOracleReport(client: WriteClient, openOracleAddress: Address, reportId: bigint, tokenToSwap: Address, newAmount1: bigint, newAmount2: bigint, amt2Expected: bigint, stateHash: Hex) {
+export async function disputeOracleReport(client: WriteClient, openOracleAddress: Address, reportId: bigint, tokenToSwap: Address, newAmount1: bigint, newAmount2: bigint, _amt2Expected: bigint, stateHash: Hex) {
+	const state = await loadOpenOracleEventState(client, openOracleAddress, reportId)
+	const currentStateHash = hashOpenOracleStatePreimage(state.latest)
+	if (currentStateHash.toLowerCase() !== stateHash.toLowerCase()) throw new Error('This report changed on-chain. Reload it before disputing.')
 	const hash = await writeContractAndWait(client, () => ({
 		address: openOracleAddress,
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-		functionName: 'disputeAndSwap',
-		args: [reportId, tokenToSwap, newAmount1, newAmount2, amt2Expected, stateHash],
+		functionName: 'dispute',
+		args: [reportId, tokenToSwap, newAmount1, newAmount2, client.account.address, false, false, getOpenOracleGameTuple(state.latest.game), getOpenOracleHelperTuple(state.latest.helper), [0n, 0n, 0n, 0n]],
 	}))
 	return {
 		action: 'dispute',

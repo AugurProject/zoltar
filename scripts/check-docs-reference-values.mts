@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { getMainnetProtocolConfig } from '../shared/ts/protocolConfig'
 
 const html = await readFile('docs/escalation-game-architecture.html', 'utf8')
+const invariantsHtml = await readFile('docs/invariants.html', 'utf8')
 const liquidationHtml = await readFile('docs/liquidation.html', 'utf8')
 const openOracleIntegration = await readFile('docs/open-oracle-integration.html', 'utf8')
 const zoltarWhitepaper = await readFile('docs/zoltar-whitepaper.html', 'utf8')
@@ -15,6 +16,8 @@ const escalationGameState = await readFile('solidity/contracts/peripherals/Escal
 const escalationGameTypes = await readFile('solidity/contracts/peripherals/EscalationGameTypes.sol', 'utf8')
 const escalationGameForker = await readFile('solidity/contracts/peripherals/EscalationGameForker.sol', 'utf8')
 const priceCoordinator = await readFile('solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol', 'utf8')
+const openOracleProvenance = await readFile('solidity/contracts/peripherals/openOracle/UPSTREAM.md', 'utf8')
+const openOracleState = await readFile('shared/ts/openOracle.ts', 'utf8')
 const securityPool = await readFile('solidity/contracts/peripherals/SecurityPool.sol', 'utf8')
 const securityPoolFactory = await readFile('solidity/contracts/peripherals/factories/SecurityPoolFactory.sol', 'utf8')
 const securityPoolInterface = await readFile('solidity/contracts/peripherals/interfaces/ISecurityPool.sol', 'utf8')
@@ -38,6 +41,7 @@ assertEventStreamSemantics()
 assertZoltarForkDepths()
 assertCoordinatorRecoveryBranch()
 assertCoordinatorSettlementEconomics()
+assertOpenOracleVendorAndEventDocs()
 assertLiquidationFullCloseDocs()
 assertStartHereTimelines()
 assertContractInteractionDistinctions()
@@ -137,7 +141,28 @@ function assertCoordinatorSettlementEconomics(): void {
 	assert.match(priceCoordinator, /if \(block\.basefee > pendingReportMaxSettlementBaseFee\)/, 'coordinator must accept settlement base fee equal to the request-time cap')
 	assert.match(priceCoordinator, /if \(amount1 == 0 \|\| amount2 == 0\)/, 'coordinator must reject empty settled token amounts')
 	assert.match(priceCoordinator, /uint256 price = Math\.mulDiv\(amount2, PRICE_PRECISION, amount1\)/, 'coordinator must derive the settled REP/ETH ratio from final token amounts')
+	assert.match(priceCoordinator, /uint256 ethCost = getRequestPriceEthCost\(\)/, 'coordinator must derive the request bounty from getRequestPriceEthCost')
+	assert.match(priceCoordinator, /uint256 settlerReward = ethCost/, 'coordinator must assign the entire request bounty to the OpenOracle settler reward')
+	assert.match(priceCoordinator, /settlerReward: uint96\(settlerReward\)/, 'coordinator report creation must forward the full request bounty as settler reward')
+	const requestBountyFormula = 'data-source="block.basefee \\cdot 4 \\cdot (callbackGasLimit + gasConsumedOpenOracleReportPrice) + 101"'
+	assert.ok(openOracleIntegration.includes(requestBountyFormula), 'OpenOracle integration parameter table must use the current full request-bounty settler reward')
+	assert.ok(whitepaperPlaceholder.includes(requestBountyFormula), 'whitepaper OpenOracle parameter table must use the current full request-bounty settler reward')
 	assert.doesNotMatch(whitepaperPlaceholder, /disputers can replace a bad\s+report with a larger one/, 'whitepaper must not claim every dispute strictly increases the report after integer flooring')
+}
+
+function assertOpenOracleVendorAndEventDocs(): void {
+	for (const pinnedRevision of ['ae4578bb4fa9d32820ac32c482f318cdbd63bfa2', 'c64a1edb67b6e3f4a15cca8909c9482ad33a02b0', 'src/OpenOracleSlim.sol', 'OpenZeppelin Contracts v5.4.0']) {
+		assert.ok(openOracleProvenance.includes(pinnedRevision), `OpenOracle provenance must retain ${pinnedRevision}`)
+	}
+	for (const reconstructionClaim of ['topic 1 is the indexed 32-byte report ID', '`data` is exactly 235 raw packed bytes', 'set `settlementTimestamp` from the settlement block']) {
+		assert.ok(eventStream.includes(reconstructionClaim), `OpenOracle event reconstruction docs must retain: ${reconstructionClaim}`)
+	}
+	assert.match(openOracleState, /new Uint8Array\(235\)/, 'shared OpenOracle encoder must retain the documented 235-byte packed layout')
+	assert.match(openOracleState, /if \(bytes\.length !== 235\)/, 'shared OpenOracle decoder must reject non-canonical packed lengths')
+	assert.doesNotMatch(whitepaperPlaceholder, /sponsor posts initial report/, 'whitepaper diagrams must not identify the funding sponsor as the on-chain reporter')
+	assert.match(whitepaperPlaceholder, /coordinator reports\s*<\/text>\s*<text[^>]+>\s*sponsor funds/, 'whitepaper oracle flow must distinguish the coordinator reporter from the funding sponsor')
+	assert.doesNotMatch(openOracleIntegration, /<code>openOracleReportPrice<\/code>/, 'OpenOracle integration must not name the removed openOracleReportPrice function')
+	assert.doesNotMatch(invariantsHtml, /<\/a\s*>\s*>\s*and\s*<a href="\.\.\/solidity\/ts\/tests\/openOracleDispute\.test\.ts"/, 'oracle verification row must not render a stray greater-than marker between test links')
 }
 
 function assertLiquidationFullCloseDocs(): void {
@@ -258,8 +283,8 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(truthAuction, /require\(msg\.sender == owner, 'Only the auction owner can refund losing bids on behalf of bidders'\)/)
 	assert.match(zoltar, /safeTransferFrom\(migrator, Constants\.BURN_ADDRESS, amount\)/)
 	assert.match(zoltar, /ReputationToken\(address\(reputationToken\)\)\.burn\(migrator, amount\)/)
-	for (const compatibilitySource of ['utils/ReentrancyGuard.sol', 'token/ERC20/IERC20.sol', 'token/ERC20/utils/SafeERC20.sol', 'utils/math/Math.sol']) {
-		assert.ok(operatorReference.includes(`openOracle/openzeppelin/contracts/${compatibilitySource}`), `Operator Reference must directly link ${compatibilitySource}`)
+	for (const integrationSource of ['libraries/Errors.sol', 'interfaces/ISignatureTransfer.sol', 'openzeppelin/contracts/token/ERC20/IERC20.sol', 'openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol']) {
+		assert.ok(operatorReference.includes(`openOracle/${integrationSource}`), `Operator Reference must directly link ${integrationSource}`)
 	}
 }
 

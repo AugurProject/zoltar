@@ -45,7 +45,6 @@ export function getDefaultOpenOracleFormState(): OpenOracleFormState {
 		disputeNewAmount2: '0',
 		disputeTokenToSwap: 'token1',
 		reportId: '',
-		price: '',
 		stateHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
 	}
 }
@@ -55,6 +54,7 @@ export function getDefaultOpenOracleCreateFormState(): OpenOracleCreateFormState
 		disputeDelay: '0',
 		escalationHalt: '0',
 		exactToken1Report: '0',
+		initialToken2Amount: '0',
 		ethValue: '0',
 		feePercentage: '0',
 		multiplier: '100',

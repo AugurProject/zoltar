@@ -4,15 +4,6 @@ import type { LifecycleStagePresentation } from '../../types.js'
 
 export function getOpenOracleStagePresentation(actionMode: OpenOracleSelectedReportActionMode): LifecycleStagePresentation {
 	switch (actionMode) {
-		case 'initial-report':
-			return {
-				availableActions: ['Submit initial report'],
-				blockedActions: ['Dispute', 'Settle'],
-				detail: 'This report is waiting for its first report submission.',
-				key: 'awaiting-initial-report',
-				label: 'Awaiting Initial Report',
-				tone: 'warning',
-			}
 		case 'dispute':
 			return {
 				availableActions: ['Dispute report', 'Settle when the dispute window ends'],
@@ -34,8 +25,8 @@ export function getOpenOracleStagePresentation(actionMode: OpenOracleSelectedRep
 		case 'read-only':
 			return {
 				availableActions: [],
-				blockedActions: ['Initial report', 'Dispute', 'Settle'],
-				detail: 'This report is already settled and no further write actions are available.',
+				blockedActions: ['Dispute', 'Settle'],
+				detail: 'This report can no longer be disputed or settled.',
 				key: 'settled',
 				label: 'Settled',
 				tone: 'success',

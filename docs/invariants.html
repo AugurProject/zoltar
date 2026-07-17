@@ -1421,11 +1421,11 @@
 							<tr>
 								<td><code>ORA-08</code></td>
 								<td>
-									A dispute that is timely under the stated deadline cannot lose
-									solely because settlement is ordered first at the same
-									timestamp.
+									The settlement deadline is exclusive: disputes require the
+									current clock to be strictly before the deadline, while
+									settlement is available at and after it.
 								</td>
-								<td>Proposed guard</td>
+								<td>Contract guard</td>
 								<td>
 									<a
 										href="../solidity/contracts/peripherals/openOracle/OpenOracle.sol"
@@ -1873,13 +1873,17 @@
 									<a href="../solidity/ts/tests/priceOracleSecurity.test.ts"
 										><code>priceOracleSecurity.test.ts</code></a
 									>
-									>, including dynamic minimum report sizing, sponsor
+									and
+									<a href="../solidity/ts/tests/openOracleDispute.test.ts"
+										><code>openOracleDispute.test.ts</code></a
+									>, including exact-deadline settlement exclusivity, dynamic minimum
+									report sizing, sponsor
 									exclusivity, manual overflow execution, and staged-operation
 									invariant tests.
 								</td>
 								<td>
-									Same-block dispute/settlement ordering and validation that the
-									configured multiplier is economically sufficient.
+									Validation that the configured multiplier is economically sufficient
+									under deployment-specific gas and inclusion assumptions.
 								</td>
 							</tr>
 							<tr>
