@@ -20,6 +20,13 @@ enum OperationType {
 	SetSecurityBondsAllowance
 }
 
+enum OperationExecutionStatus {
+	None,
+	Pending,
+	Succeeded,
+	Failed
+}
+
 enum CoordinatorCheckpointReason {
 	SecurityPoolSetup,
 	PriceSeeded,
@@ -44,6 +51,12 @@ struct StagedOperation {
 	uint256 snapshotDenominator;
 }
 
+struct OperationExecutionResult {
+	OperationExecutionStatus status;
+	uint256 reportId;
+	string errorMessage;
+}
+
 contract OpenOraclePriceCoordinator {
 	uint256 public constant MAX_PENDING_SETTLEMENT_OPERATIONS = 4;
 	string private constant STAGED_OPERATION_EXECUTION_OK = '';
@@ -53,12 +66,16 @@ contract OpenOraclePriceCoordinator {
 	string private constant STAGED_OPERATION_ERROR_MIN_LIQUIDATION_DISTANCE = 'liquidation too close to threshold';
 	string private constant STAGED_OPERATION_ERROR_PANIC = 'Panic';
 	string private constant STAGED_OPERATION_ERROR_UNKNOWN = 'Unknown error';
+	string private constant STAGED_OPERATION_ERROR_CALLBACK_RECOVERY = 'settlement callback recovery';
 	uint256 public pendingReportId;
 	address public pendingReportSponsor;
+	uint256 public lastPriceReportId;
 	uint256 public pendingOperationSlotId;
 	uint256 public lastSettlementTimestamp;
 	uint256 public lastPrice; // (REP * PRICE_PRECISION) / ETH;
 	ReputationToken public immutable reputationToken;
+	address public immutable deploymentFactory;
+	address public operationBountyBoard;
 	ISecurityPool public securityPool;
 	OpenOracle public immutable openOracle;
 	IWeth9 public immutable weth;
@@ -81,6 +98,7 @@ contract OpenOraclePriceCoordinator {
 	uint256 public pendingReportMaxSettlementBaseFee;
 
 	event SecurityPoolSet(ISecurityPool indexed securityPool);
+	event OperationBountyBoardSet(address indexed operationBountyBoard);
 	event RepEthPriceSet(uint256 price);
 	event PriceRequested(uint256 indexed reportId, uint256 pendingReportMaxSettlementBaseFee);
 	event PriceReportRejected(
@@ -144,6 +162,7 @@ contract OpenOraclePriceCoordinator {
 	// execution removes older entries from the set.
 	uint256 public stagedOperationCounter;
 	mapping(uint256 => StagedOperation) public stagedOperations;
+	mapping(uint256 => OperationExecutionResult) public operationExecutionResults;
 	uint256 private activeStagedOperationCount;
 	uint256 private latestActiveStagedOperationId;
 	mapping(uint256 => uint256) private olderActiveStagedOperationIds;
@@ -152,6 +171,7 @@ contract OpenOraclePriceCoordinator {
 	uint256[] private pendingSettlementOperationIds;
 
 	constructor(
+		address _deploymentFactory,
 		OpenOracle _openOracle,
 		ReputationToken _reputationToken,
 		IWeth9 _weth,
@@ -172,6 +192,7 @@ contract OpenOraclePriceCoordinator {
 		uint256 _maxSettlementBaseFeeMultiplierBps,
 		uint256 _minLiquidationPriceDistanceBps
 	) {
+		deploymentFactory = _deploymentFactory;
 		reputationToken = _reputationToken;
 		openOracle = _openOracle;
 		weth = _weth;
@@ -225,6 +246,14 @@ contract OpenOraclePriceCoordinator {
 		securityPool = _securityPool;
 		emit SecurityPoolSet(securityPool);
 		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.SecurityPoolSetup, 0, 0);
+	}
+
+	function setOperationBountyBoard(address _operationBountyBoard) external {
+		require(msg.sender == deploymentFactory, 'Only the deployment factory can set the operation bounty board');
+		require(operationBountyBoard == address(0), 'Operation bounty board has already been set');
+		require(_operationBountyBoard.code.length > 0, 'Operation bounty board must contain contract code');
+		operationBountyBoard = _operationBountyBoard;
+		emit OperationBountyBoardSet(_operationBountyBoard);
 	}
 
 	function setRepEthPrice(uint256 _lastPrice) public {
@@ -352,7 +381,7 @@ contract OpenOraclePriceCoordinator {
 		pendingReportId = 0;
 		pendingReportSponsor = address(0);
 		pendingReportMaxSettlementBaseFee = 0;
-		_consumeRecoveredPendingOperation();
+		_consumeRecoveredPendingOperation(reportId);
 		emit PendingReportRecovered(
 			reportId,
 			settlementTimestamp,
@@ -364,13 +393,19 @@ contract OpenOraclePriceCoordinator {
 		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PendingReportRecovered, reportId, 0);
 	}
 
-	function _consumeRecoveredPendingOperation() private {
+	function _consumeRecoveredPendingOperation(uint256 reportId) private {
 		uint256 operationId = pendingOperationSlotId;
 		if (operationId == 0) return;
 		pendingOperationSlotId = 0;
 		StagedOperation memory stagedOperation = stagedOperations[operationId];
 		if (stagedOperation.initiatorVault == address(0)) return;
 		_consumeStagedOperation(operationId);
+		_recordOperationExecutionResult(
+			operationId,
+			OperationExecutionStatus.Failed,
+			reportId,
+			STAGED_OPERATION_ERROR_CALLBACK_RECOVERY
+		);
 		emit PendingOperationRecoveryConsumed(operationId, stagedOperation.operation);
 	}
 
@@ -403,6 +438,7 @@ contract OpenOraclePriceCoordinator {
 		}
 		lastSettlementTimestamp = block.timestamp;
 		lastPrice = price;
+		lastPriceReportId = reportId;
 		emit PriceReported(reportId, lastPrice, lastSettlementTimestamp);
 		if (pendingSettlementOperationIds.length != 0) {
 			uint256[] memory operationIds = pendingSettlementOperationIds;
@@ -444,60 +480,13 @@ contract OpenOraclePriceCoordinator {
 		uint256 proposedRepPerEthPrice,
 		uint256 requestedInitialWeth
 	) public payable {
-		if (operation != OperationType.SetSecurityBondsAllowance) {
-			require(amount > 0, 'Staged operation amount must be non-zero');
-		}
-		require(validForSeconds > 0, 'Staged operation timeout must be positive');
-		require(
-			validForSeconds <= MAX_OPERATION_VALID_FOR_SECONDS,
-			'Staged operation timeout exceeds the maximum allowed'
-		);
-		if (operation != OperationType.Liquidation) {
-			require(targetVault == msg.sender, 'Self-targeted staged operation target must match the initiator vault');
-		} else {
-			require(targetVault != msg.sender, 'Caller bad');
-		}
-		require(
-			!securityPool.isEscalationResolved(),
-			'question already resolved, so staged operations are unavailable'
-		);
 		if (pendingReportId != 0) {
 			require(
 				msg.sender == pendingReportSponsor,
 				'Only the pending report sponsor can queue more operations until settlement'
 			);
 		}
-		if (operation == OperationType.WithdrawRep) {
-			(, uint256 withdrawRepAmount) = _previewWithdrawRep(msg.sender, amount);
-			require(withdrawRepAmount > 0, 'Withdraw amount has no effect');
-		}
-		stagedOperationCounter++;
-		uint256 operationId = stagedOperationCounter;
-		// Capture the target vault state at queue time. Liquidation may still execute if
-		// the target deposits more REP after staging, but allowance changes or ownership
-		// decreases make a liquidation snapshot stale. Non-liquidation operations keep
-		// the snapshot for history and execution-event context, but price validity no
-		// longer meters operations by snapshot or live external-value exposure.
-		// Liquidation should value the vault's full collateral claim. That means using the
-		// pool's total REP balance here rather than only the currently withdrawable balance.
-		(uint256 snapshotTargetOwnership, uint256 snapshotTargetAllowance, , ) = securityPool.securityVaults(
-			targetVault
-		);
-		uint256 snapshotTotalRep = securityPool.getTotalRepBalance();
-		uint256 snapshotDenominator = securityPool.poolOwnershipDenominator();
-		stagedOperations[operationId] = StagedOperation({
-			operation: operation,
-			initiatorVault: msg.sender,
-			targetVault: targetVault,
-			amount: amount,
-			queuedAt: block.timestamp,
-			validForSeconds: validForSeconds,
-			snapshotTargetOwnership: snapshotTargetOwnership,
-			snapshotTargetAllowance: snapshotTargetAllowance,
-			snapshotTotalRep: snapshotTotalRep,
-			snapshotDenominator: snapshotDenominator
-		});
-		_trackActiveStagedOperation(operationId);
+		uint256 operationId = _stageOperation(operation, msg.sender, targetVault, amount, validForSeconds);
 
 		uint256 retained = 0; // amount to retain from msg.value (cost incurred)
 
@@ -514,6 +503,7 @@ contract OpenOraclePriceCoordinator {
 				require(msg.value >= ethCost, 'Not enough ETH was provided to request a fresh oracle price');
 				retained += ethCost;
 				_requestPrice(msg.sender, ethCost, proposedRepPerEthPrice, requestedInitialWeth);
+				operationExecutionResults[operationId].reportId = pendingReportId;
 			}
 		}
 
@@ -523,6 +513,154 @@ contract OpenOraclePriceCoordinator {
 			(bool sent, ) = payable(msg.sender).call{ value: refund }('');
 			require(sent, 'Oracle coordinator failed to return unused ETH');
 		}
+	}
+
+	function _validateOperationRequest(
+		OperationType operation,
+		address initiatorVault,
+		address targetVault,
+		uint256 amount,
+		uint256 validForSeconds
+	) private view {
+		if (operation != OperationType.SetSecurityBondsAllowance) {
+			require(amount > 0, 'Staged operation amount must be non-zero');
+		}
+		require(validForSeconds > 0, 'Staged operation timeout must be positive');
+		require(
+			validForSeconds <= MAX_OPERATION_VALID_FOR_SECONDS,
+			'Staged operation timeout exceeds the maximum allowed'
+		);
+		if (operation != OperationType.Liquidation) {
+			require(
+				targetVault == initiatorVault,
+				'Self-targeted staged operation target must match the initiator vault'
+			);
+		} else {
+			require(targetVault != initiatorVault, 'Caller bad');
+		}
+		require(
+			!securityPool.isEscalationResolved(),
+			'question already resolved, so staged operations are unavailable'
+		);
+		if (operation == OperationType.WithdrawRep) {
+			(, uint256 withdrawRepAmount) = _previewWithdrawRep(initiatorVault, amount);
+			require(withdrawRepAmount > 0, 'Withdraw amount has no effect');
+		}
+	}
+
+	function _stageOperation(
+		OperationType operation,
+		address initiatorVault,
+		address targetVault,
+		uint256 amount,
+		uint256 validForSeconds
+	) private returns (uint256 operationId) {
+		_validateOperationRequest(operation, initiatorVault, targetVault, amount, validForSeconds);
+		stagedOperationCounter++;
+		operationId = stagedOperationCounter;
+		// Capture the target vault state at queue time. Liquidation may still execute if
+		// the target deposits more REP after staging, but allowance changes or ownership
+		// decreases make a liquidation snapshot stale. Non-liquidation operations keep
+		// the snapshot for history and execution-event context.
+		// Liquidation should value the vault's full collateral claim. That means using the
+		// pool's total REP balance here rather than only the currently withdrawable balance.
+		(uint256 snapshotTargetOwnership, uint256 snapshotTargetAllowance, , ) = securityPool.securityVaults(
+			targetVault
+		);
+		uint256 snapshotTotalRep = securityPool.getTotalRepBalance();
+		uint256 snapshotDenominator = securityPool.poolOwnershipDenominator();
+		stagedOperations[operationId] = StagedOperation({
+			operation: operation,
+			initiatorVault: initiatorVault,
+			targetVault: targetVault,
+			amount: amount,
+			queuedAt: block.timestamp,
+			validForSeconds: validForSeconds,
+			snapshotTargetOwnership: snapshotTargetOwnership,
+			snapshotTargetAllowance: snapshotTargetAllowance,
+			snapshotTotalRep: snapshotTotalRep,
+			snapshotDenominator: snapshotDenominator
+		});
+		operationExecutionResults[operationId].status = OperationExecutionStatus.Pending;
+		_trackActiveStagedOperation(operationId);
+	}
+
+	function validateOperationBounty(
+		OperationType operation,
+		address creator,
+		address targetVault,
+		uint256 amount,
+		uint256 validForSeconds
+	) external view {
+		_validateOperationRequest(operation, creator, targetVault, amount, validForSeconds);
+	}
+
+	function stageAndRequestOperationBounty(
+		address operator,
+		address creator,
+		OperationType operation,
+		address targetVault,
+		uint256 amount,
+		uint256 validForSeconds,
+		uint256 proposedRepPerEthPrice,
+		uint256 requestedInitialWeth
+	) external payable returns (uint256 operationId, uint256 reportId) {
+		require(msg.sender == operationBountyBoard, 'Only the operation bounty board can stage a bounty');
+		operationId = _stageOperation(operation, creator, targetVault, amount, validForSeconds);
+
+		uint256 retained;
+		if (isPriceValid()) {
+			reportId = lastPriceReportId;
+			operationExecutionResults[operationId].reportId = reportId;
+			_emitStagedOperationQueued(operationId, false);
+			executeStagedOperation(operationId);
+		} else {
+			if (pendingReportId != 0) {
+				require(
+					operator == pendingReportSponsor,
+					'Only the pending report sponsor can accept bounties until settlement'
+				);
+			}
+			require(
+				_trackPendingSettlementOperation(operationId),
+				'Operation bounty cannot fit in the pending settlement queue'
+			);
+			_emitStagedOperationQueued(operationId, true);
+			if (pendingReportId == 0) {
+				uint256 ethCost = getRequestPriceEthCost();
+				require(msg.value >= ethCost, 'Not enough ETH was provided to accept the operation bounty');
+				retained = ethCost;
+				_requestPrice(operator, ethCost, proposedRepPerEthPrice, requestedInitialWeth);
+			}
+			reportId = pendingReportId;
+			operationExecutionResults[operationId].reportId = reportId;
+		}
+
+		uint256 refund = msg.value - retained;
+		if (refund > 0) {
+			(bool sent, ) = payable(operator).call{ value: refund }('');
+			require(sent, 'Oracle coordinator failed to return unused bounty acceptance ETH');
+		}
+	}
+
+	function cancelExpiredOperationBounty(uint256 operationId) external {
+		require(msg.sender == operationBountyBoard, 'Only the operation bounty board can cancel a bounty operation');
+		StagedOperation storage stagedOperation = stagedOperations[operationId];
+		require(stagedOperation.initiatorVault != address(0), 'Operation bounty is no longer active');
+		require(
+			block.timestamp > stagedOperation.queuedAt + settlementTime + stagedOperation.validForSeconds,
+			'Assigned operation bounty is still executable'
+		);
+		OperationType operation = stagedOperation.operation;
+		_consumeStagedOperation(operationId);
+		_recordOperationExecutionResult(
+			operationId,
+			OperationExecutionStatus.Failed,
+			operationExecutionResults[operationId].reportId,
+			STAGED_OPERATION_ERROR_EXPIRED
+		);
+		emit ExecutedStagedOperation(operationId, operation, false, STAGED_OPERATION_ERROR_EXPIRED);
+		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.OperationExecuted, 0, operationId);
 	}
 
 	function executeStagedOperation(uint256 operationId) public {
@@ -591,8 +729,26 @@ contract OpenOraclePriceCoordinator {
 		bool success,
 		string memory errorMessage
 	) private {
+		_recordOperationExecutionResult(
+			operationId,
+			success ? OperationExecutionStatus.Succeeded : OperationExecutionStatus.Failed,
+			lastPriceReportId,
+			errorMessage
+		);
 		emit ExecutedStagedOperation(operationId, operation, success, errorMessage);
 		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.OperationExecuted, 0, operationId);
+	}
+
+	function _recordOperationExecutionResult(
+		uint256 operationId,
+		OperationExecutionStatus status,
+		uint256 reportId,
+		string memory errorMessage
+	) private {
+		OperationExecutionResult storage result = operationExecutionResults[operationId];
+		result.status = status;
+		result.reportId = reportId;
+		result.errorMessage = errorMessage;
 	}
 
 	function _consumeAndEmitExecutedStagedOperation(

@@ -38,6 +38,39 @@ export type ForkAuctionAction =
 	| 'forkUniverse'
 export type TruthAuctionSettlementMode = 'claim' | 'mixed' | 'refund'
 export type OracleQueueOperation = 'liquidation' | 'withdrawRep' | 'setSecurityBondsAllowance'
+export type OracleOperationBountyState = 'open' | 'assigned' | 'paid' | 'refunded'
+export type OracleOperationExecutionStatus = 'none' | 'pending' | 'succeeded' | 'failed'
+export type OracleOperationBounty = {
+	acceptanceDeadline: bigint
+	amount: bigint
+	bountyId: bigint
+	creator: Address
+	executionErrorMessage: string | undefined
+	executionStatus: OracleOperationExecutionStatus
+	maximumInitialWeth: bigint
+	minimumInitialWeth: bigint
+	operation: OracleQueueOperation
+	operationId: bigint
+	operator: Address
+	reportId: bigint
+	refundAvailableAt: bigint | undefined
+	rewardAmount: bigint
+	rewardToken: Address
+	state: OracleOperationBountyState
+	targetVault: Address
+	validForSeconds: bigint
+}
+export type OracleOperationBountyInput = {
+	acceptanceDeadline: bigint
+	amount: bigint
+	maximumInitialWeth: bigint
+	minimumInitialWeth: bigint
+	operation: OracleQueueOperation
+	rewardAmount: bigint
+	rewardToken: Address
+	targetVault: Address
+	validForSeconds: bigint
+}
 export type StagedOracleOperation = {
 	amount: bigint
 	initiatorVault: Address
@@ -202,6 +235,8 @@ export type OracleManagerDetails = {
 	lastSettlementTimestamp: bigint
 	managerAddress: Address
 	openOracleAddress: Address
+	operationBounties?: OracleOperationBounty[]
+	operationBountyBoardAddress?: Address
 	pendingOperation: StagedOracleOperation | undefined
 	pendingOperationSlotId: bigint
 	pendingSettlementOperationIds: bigint[]
@@ -209,14 +244,16 @@ export type OracleManagerDetails = {
 	pendingReportId: bigint
 	priceValidUntilTimestamp: bigint | undefined
 	queuedOperationEthCost: bigint
+	reputationTokenAddress?: Address
 	requestPriceEthCost: bigint
 	stagedOperations?: StagedOracleOperation[]
 	token1: Address | undefined
 	token2: Address | undefined
+	wethAddress?: Address
 }
 
 export type OpenOracleActionResult = ActionResult & {
-	action: 'approveToken1' | 'approveToken2' | 'createReportInstance' | 'dispute' | 'executeStagedOperation' | 'queueOperation' | 'requestPrice' | 'settle' | 'submitInitialReport' | 'wrapWeth'
+	action: 'acceptOperationBounty' | 'approveToken1' | 'approveToken2' | 'claimOperationBounty' | 'createReportInstance' | 'dispute' | 'executeStagedOperation' | 'postOperationBounty' | 'queueOperation' | 'refundOperationBounty' | 'requestPrice' | 'settle' | 'submitInitialReport' | 'wrapWeth'
 	queuedOperation?: StagedOracleQueuedResult
 	stagedExecution?: StagedOracleExecutionResult
 }

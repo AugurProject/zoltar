@@ -18,7 +18,7 @@ const localUnresolvedPrincipalAbi = [
 
 const CARRY_PROOF_GAS_LIMIT = 3_000_000n
 const RECURSIVE_ANCESTOR_CHECK_GAS_LIMIT = 8_000_000n
-const RECURSIVE_CARRY_MIGRATION_GAS_LIMIT = 26_000_000n
+const RECURSIVE_CARRY_MIGRATION_GAS_LIMIT = 28_000_000n
 
 describe('Peripherals: escalation migration', () => {
 	const fixture = usePeripheralsEscalationMigrationFixture()

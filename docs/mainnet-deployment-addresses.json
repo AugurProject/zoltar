@@ -13,7 +13,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0x4E273b5c1b42C404E49012c3D1E97e4E652ACce6"
+			"address": "0x8eac8b7494e02bdFbfBa21e4F034a234D0AB6B67"
 		},
 		{
 			"id": "multicall3",
@@ -23,7 +23,7 @@
 		{
 			"id": "uniformPriceDualCapBatchAuctionFactory",
 			"label": "UniformPriceDualCapBatchAuctionFactory",
-			"address": "0x82D2192655A4B3815C2C3aF96d50831ba0ef2778"
+			"address": "0xf1985EF4426B00234ECfa3f5f7fb75aE599829Bc"
 		},
 		{
 			"id": "scalarOutcomes",
@@ -43,44 +43,44 @@
 		{
 			"id": "zoltarQuestionData",
 			"label": "ZoltarQuestionData",
-			"address": "0x0B44b5428ed177B279455Ae6245C8aD46702725B"
+			"address": "0x7b7b253A8a74B1546d82De3b1Ce5d63bE82B5AE9"
 		},
 		{
 			"id": "zoltar",
 			"label": "Zoltar",
-			"address": "0xaf86B881e999Ede37Ef1213e74FA85bd1EBC4a04"
+			"address": "0xc81af0da1d9D8d5a62aa7812FcdE012779Af0a5c"
 		},
 		{
 			"id": "shareTokenFactory",
 			"label": "ShareTokenFactory",
-			"address": "0x0C1a69559a296589510fA436e333d182B20a0263"
+			"address": "0xBC3089974EFbe01144D4F767271fa341Cc462Ce2"
 		},
 		{
 			"id": "priceOracleManagerAndOperatorQueuerFactory",
 			"label": "OpenOracle Price Coordinator Factory",
-			"address": "0x65378e90f0c76e86d8111Ca1fb5d2a8912534159"
+			"address": "0xE580b1e14f8Cf82C2beFffbD891B2eb0eFc67876"
 		},
 		{
 			"id": "securityPoolForker",
 			"label": "Security Pool Forker",
-			"address": "0xfb9fF03dea98454CeADc679204ec6A5EeF3fa313"
+			"address": "0xFCFf9EEC821E905b7538D5A2C2351D4A57eD2C5e"
 		},
 		{
 			"id": "escalationGameFactory",
 			"label": "Escalation Game Factory",
-			"address": "0x236E6A5735B3B10d6123000D4725323f88E24666"
+			"address": "0x8402a984e1563628C3F2E52d4bA6a69DE8b2b9aF"
 		},
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0xf7Cae4aD6046cc05862D958B2A7011aD4A8fe838"
+			"address": "0x3D9FC77f1Fc861af9b7f6f9d78ae94C07efd8A9F"
 		}
 	],
 	"derivedContracts": [
 		{
 			"id": "escalationGameProofVerifier",
 			"label": "Escalation Game Proof Verifier",
-			"address": "0x84F30C869d001395ca12ba4849A70e496Ff7522a"
+			"address": "0xADEFB3006bCeE3b3F01A24eF9A0D63581041a699"
 		}
 	]
 }
