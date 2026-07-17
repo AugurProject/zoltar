@@ -2,6 +2,7 @@
 pragma solidity 0.8.35;
 
 import { ForkedEscrowState, Node, OutcomeState } from './EscalationGameTypes.sol';
+import { BinaryOutcomes } from './BinaryOutcomes.sol';
 
 abstract contract EscalationGameStorage {
 	uint256 public activationTime;
@@ -23,4 +24,5 @@ abstract contract EscalationGameStorage {
 	mapping(address => bool) internal localUnresolvedTotalsExportedByVault;
 	mapping(address => mapping(uint8 => ForkedEscrowState)) internal forkedEscrowByVaultAndOutcome;
 	bool internal forkCarrySnapshotRequiresForkedEscrow;
+	BinaryOutcomes.BinaryOutcome public fixedQuestionOutcome;
 }

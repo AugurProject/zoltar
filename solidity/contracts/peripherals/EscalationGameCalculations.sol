@@ -3,8 +3,6 @@ pragma solidity 0.8.35;
 
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameState } from './EscalationGameState.sol';
-import { ISecurityPool } from './interfaces/ISecurityPool.sol';
-import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 import { ESCALATION_TIME_LENGTH } from './EscalationGameTypes.sol';
 
 abstract contract EscalationGameCalculations is EscalationGameState {
@@ -62,18 +60,14 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 	function getQuestionResolution() public view returns (BinaryOutcomes.BinaryOutcome outcome) {
 		(uint256 invalidBalance, uint256 yesBalance, uint256 noBalance) = _getOutcomeBalances();
 		outcome = proofVerifier.resolveQuestion([invalidBalance, yesBalance, noBalance], totalCost());
-		if (forkContinuation && block.timestamp > getEscalationGameEndDate()) {
-			ISecurityPool parent = securityPool.parent();
-			if (address(parent) != address(0x0)) {
-				ISecurityPoolForker forker = ISecurityPoolForker(securityPool.securityPoolForker());
-				(bool ownFork, , , , ) = forker.getOwnForkMigrationStatus(parent);
-				if (ownFork) {
-					BinaryOutcomes.BinaryOutcome forkOutcome = forker.getQuestionOutcome(securityPool);
-					if (forkOutcome != BinaryOutcomes.BinaryOutcome.None) outcome = forkOutcome;
-				}
-			}
-		}
+		if (fixedQuestionOutcome != BinaryOutcomes.BinaryOutcome.None && block.timestamp > getEscalationGameEndDate())
+			outcome = fixedQuestionOutcome;
 		return outcome;
+	}
+
+	function getFinalQuestionResolution() public view returns (BinaryOutcomes.BinaryOutcome) {
+		if (block.timestamp <= getEscalationGameEndDate()) return BinaryOutcomes.BinaryOutcome.None;
+		return getQuestionResolution();
 	}
 
 	function hasReachedNonDecision() public view returns (bool) {

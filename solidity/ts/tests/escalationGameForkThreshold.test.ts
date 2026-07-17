@@ -134,8 +134,10 @@ describe('Escalation Game Fork Threshold Test', () => {
 		const depositAmount = 1n * 10n ** 18n
 		const repToken = getRepTokenAddress(genesisUniverse)
 		const initialTotalSupply = await getTotalTheoreticalSupply(client, repToken)
-		const overriddenTotalSupply = initialTotalSupply / 10n
-		const expectedThreshold = overriddenTotalSupply / DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor / 2n
+		const approximateForkThreshold = initialTotalSupply / 10n / DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
+		const oddForkThreshold = approximateForkThreshold % 2n === 0n ? approximateForkThreshold + 1n : approximateForkThreshold
+		const overriddenTotalSupply = oddForkThreshold * DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
+		const expectedThreshold = (oddForkThreshold + 1n) / 2n
 		const universeSupplySlot = keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [genesisUniverse, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT]))
 
 		await mockWindow.addStateOverrides({

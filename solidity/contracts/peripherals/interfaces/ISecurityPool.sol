@@ -201,7 +201,8 @@ interface ISecurityPool {
 	function initializeForkedEscalationGame(
 		uint256 startBond,
 		uint256 nonDecisionThreshold,
-		uint256 elapsedAtFork
+		uint256 elapsedAtFork,
+		BinaryOutcomes.BinaryOutcome fixedQuestionOutcome
 	) external;
 	function initializeForkCarrySnapshotWithResolutionBalances(
 		address sourceGame,

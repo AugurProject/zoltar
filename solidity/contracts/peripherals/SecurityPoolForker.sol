@@ -337,10 +337,14 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		SecurityPoolForkerForkData storage parentForkData = forkDataByPool[parent];
 		if (!parentForkData.unresolvedEscalationAtFork) return;
 		if (address(child.escalationGame()) == address(0x0)) {
+			SecurityPoolForkerForkData storage childForkData = forkDataByPool[child];
 			child.initializeForkedEscalationGame(
 				parentForkData.escalationStartBondAtFork,
 				parentForkData.escalationNonDecisionThresholdAtFork,
-				parentForkData.escalationElapsedAtFork
+				parentForkData.escalationElapsedAtFork,
+				childForkData.fixedQuestionOutcomePlusOne == 0
+					? BinaryOutcomes.BinaryOutcome.None
+					: BinaryOutcomes.BinaryOutcome(childForkData.fixedQuestionOutcomePlusOne - 1)
 			);
 		}
 		super._initializeChildForkedEscalationGameIfNeeded(parent, child);
@@ -523,9 +527,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		securityPool.setSystemState(SystemState.ForkTruthAuction);
 		data.truthAuctionStarted = block.timestamp;
 		parent.updateCollateralAmount();
-		securityPool.setTotalShares(
-			securityPool.shareToken().reconciledCompleteSetSupply(securityPool.universeId(), parent.shareTokenSupply())
-		);
+		securityPool.setTotalShares(securityPool.shareToken().maximumOutcomeSupply(securityPool.universeId()));
 		parentCollateral = parentData.collateralAtFork;
 	}
 
@@ -854,22 +856,16 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	) external view returns (BinaryOutcomes.BinaryOutcome outcome) {
 		SystemState systemState = securityPool.systemState();
 		if (systemState == SystemState.PoolForked) return BinaryOutcomes.BinaryOutcome.None;
-		ISecurityPool parent = securityPool.parent();
-		if (address(parent) != address(0x0)) {
-			SecurityPoolForkerForkData storage parentData = _getForkData(parent);
-			SecurityPoolForkerForkData storage childData = _getForkData(securityPool);
-			if (parentData.forkQuestionMatchesPoolQuestion) {
-				require(childData.outcomeIndex <= uint256(BinaryOutcomes.BinaryOutcome.No), 'Bad out');
-				return BinaryOutcomes.BinaryOutcome(childData.outcomeIndex);
-			}
-		}
+		SecurityPoolForkerForkData storage data = _getForkData(securityPool);
+		if (data.fixedQuestionOutcomePlusOne > 0)
+			return BinaryOutcomes.BinaryOutcome(data.fixedQuestionOutcomePlusOne - 1);
 		if (systemState == SystemState.Operational) {
 			EscalationGame escalationGame = securityPool.escalationGame();
 			uint256 forkTime = zoltar.getForkTime(securityPool.universeId());
 			if (address(escalationGame) != address(0x0)) {
 				uint256 escalationEndDate = escalationGame.getEscalationGameEndDate();
 				if (block.timestamp > escalationEndDate && (forkTime == 0 || escalationEndDate < forkTime))
-					return escalationGame.getQuestionResolution();
+					return escalationGame.getFinalQuestionResolution();
 			}
 		}
 		return BinaryOutcomes.BinaryOutcome.None;

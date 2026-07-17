@@ -297,9 +297,11 @@
 									economically consistent supply denominator.
 								</td>
 								<td>
-									Child setup reconciles balanced actual outcome supplies,
-									complete-set operations reject unequal supplies, and winning
-									redemption divides collateral by the actual winning supply.
+									Child setup uses the maximum actual outcome supply as its
+									collateral denominator. Unequal supplies block new complete-set
+									minting, while holders of all three outcomes retain proportional
+									complete-set redemption; winning redemption divides collateral by
+									the actual winning supply.
 								</td>
 							</tr>
 							<tr>
@@ -1078,9 +1080,10 @@
 							<tr>
 								<td><code>FORK-11</code></td>
 								<td>
-									Child pricing supply equals balanced actual Invalid, Yes, and
-									No supply; when outcome supplies differ, complete-set minting
-									and burning remain blocked.
+									Child pricing supply equals the maximum actual Invalid, Yes, or
+									No supply. When outcome supplies differ, complete-set minting is
+									blocked, but a holder with all three outcomes can burn them for a
+									proportional share of collateral using that maximum denominator.
 								</td>
 								<td>Reviewed preservation</td>
 								<td>
@@ -1090,8 +1093,8 @@
 									>,
 									<a
 										href="../solidity/contracts/peripherals/tokens/ShareToken.sol"
-										><code>reconciledCompleteSetSupply</code> and
-										complete-set supply guards</a
+										><code>maximumOutcomeSupply</code> and complete-set mint/burn
+										guards</a
 									>
 								</td>
 							</tr>
@@ -1100,8 +1103,8 @@
 								<td>
 									A child becomes operational only after tracked collateral
 									reaches the parent fork snapshot. Separate guards keep
-									complete-set operations blocked when migrated share supplies
-									are inconsistent.
+									new complete-set minting blocked when migrated share supplies
+									are inconsistent without blocking proportional burns.
 								</td>
 								<td>Reviewed preservation</td>
 								<td>

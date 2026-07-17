@@ -23,15 +23,22 @@ contract EscalationGame is EscalationGameSettlement {
 
 	function start(uint256 _startBond, uint256 _nonDecisionThreshold) external {
 		_initializeStartParams(_startBond, _nonDecisionThreshold);
+		fixedQuestionOutcome = BinaryOutcomes.BinaryOutcome.None;
 		activationTime = block.timestamp + activationDelay;
 		emit GameStarted(activationTime, startBond, nonDecisionThreshold);
 	}
 
-	function startFromFork(uint256 _startBond, uint256 _nonDecisionThreshold, uint256 elapsedAtFork) external {
+	function startFromFork(
+		uint256 _startBond,
+		uint256 _nonDecisionThreshold,
+		uint256 elapsedAtFork,
+		BinaryOutcomes.BinaryOutcome _fixedQuestionOutcome
+	) external {
 		_initializeStartParams(_startBond, _nonDecisionThreshold);
 		require(elapsedAtFork <= ESCALATION_TIME_LENGTH, 'Fork time too high');
 		forkContinuation = true;
 		forkElapsedAtStart = elapsedAtFork;
+		fixedQuestionOutcome = _fixedQuestionOutcome;
 		emit GameContinuedFromFork(startBond, nonDecisionThreshold, elapsedAtFork);
 	}
 
