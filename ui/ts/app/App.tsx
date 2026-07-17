@@ -308,7 +308,6 @@ export function App() {
 		value: zoltarUniverse,
 	})
 	const showZoltarUniverseWarning = canReadOnchainData && zoltarUniverseState === 'missing'
-	const showZoltarUniverseForkedWarning = zoltarUniverse?.hasForked === true
 	const disableRouteContent = route !== 'deploy' && (!readBackendReady || augurPlaceHolderDeploymentMissing || showZoltarUniverseWarning)
 	const isRouteContentDisabled = disableRouteContent
 	const universeLabel = formatUniverseCollectionLabel([activeUniverseId])
@@ -796,15 +795,7 @@ export function App() {
 			<ChainTimestampContext.Provider value={currentTimestamp}>
 				<main>
 					<AppPageHeading pageTitle={pageTitle} />
-					<AppStatusNotices
-						errorMessage={errorMessage}
-						readBackendMessage={readBackendMessage}
-						readBackendStatus={readBackendStatus}
-						simulationBootstrapError={environmentBootstrapError}
-						showAugurPlaceHolderDeploymentWarning={showAugurPlaceHolderDeploymentWarning}
-						showZoltarUniverseForkedWarning={showZoltarUniverseForkedWarning}
-						zoltarUniverse={zoltarUniverse}
-					/>
+					<AppStatusNotices errorMessage={errorMessage} readBackendMessage={readBackendMessage} readBackendStatus={readBackendStatus} simulationBootstrapError={environmentBootstrapError} showAugurPlaceHolderDeploymentWarning={showAugurPlaceHolderDeploymentWarning} />
 					<AppHeaderShell overview={overviewProps} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onEnvironmentChanged={refreshActiveEnvironment} onRefresh={refreshSimulationView} />
 					<GlobalTransactionTray transaction={transactionState.value.active} />
 

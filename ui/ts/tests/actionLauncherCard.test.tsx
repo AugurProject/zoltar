@@ -32,10 +32,10 @@ describe('ActionLauncherCard', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect((documentQueries.getByRole('heading', { name: 'Ready Action' }) as HTMLElement).closest('.warning-surface')).toBeNull()
-		expect((documentQueries.getByRole('heading', { name: 'Ready Action' }) as HTMLElement).closest('.action-launcher-card.ready')).not.toBeNull()
-		expect((documentQueries.getByRole('heading', { name: 'Blocked Action' }) as HTMLElement).closest('.warning-surface')).toBeNull()
-		expect((documentQueries.getByRole('heading', { name: 'Blocked Action' }) as HTMLElement).closest('.action-launcher-card.blocked')).not.toBeNull()
+		expect((documentQueries.getByRole('button', { name: 'Ready Action' }) as HTMLElement).closest('.warning-surface')).toBeNull()
+		expect((documentQueries.getByRole('button', { name: 'Ready Action' }) as HTMLElement).closest('.action-launcher-card.ready')).not.toBeNull()
+		expect((documentQueries.getByRole('button', { name: 'Blocked Action' }) as HTMLElement).closest('.warning-surface')).toBeNull()
+		expect((documentQueries.getByRole('button', { name: 'Blocked Action' }) as HTMLElement).closest('.action-launcher-card.blocked')).not.toBeNull()
 		expect(document.body.querySelectorAll('.warning-surface.action-launcher-card')).toHaveLength(0)
 	})
 
@@ -43,9 +43,22 @@ describe('ActionLauncherCard', () => {
 		const renderedComponent = await renderIntoDocument(<ActionLauncherCard action={{ actionLabel: 'Deposit REP', key: 'deposit', onAction: () => undefined, readiness: 'ready', title: 'Deposit REP' }} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const card = within(document.body).getByRole('heading', { name: 'Deposit REP' }).closest('.action-launcher-card')
+		const button = within(document.body).getByRole('button', { name: 'Deposit REP' })
+		const card = button.closest('.action-launcher-card')
 		if (!(card instanceof HTMLElement)) throw new Error('Expected an action launcher card')
-		expect(card.querySelector('.action-launcher-card-copy .detail')).toBeNull()
+		expect(card.classList.contains('compact')).toBe(true)
+		expect(card.querySelector('.action-launcher-card-copy')).toBeNull()
+		expect(within(card).queryByRole('heading', { name: 'Deposit REP' })).toBeNull()
+	})
+
+	test('does not repeat a case-equivalent action label as a heading', async () => {
+		const renderedComponent = await renderIntoDocument(<ActionLauncherCard action={{ actionLabel: 'Mint complete sets', description: 'Lock collateral to mint one share for each outcome.', key: 'mint', onAction: () => undefined, readiness: 'ready', title: 'Mint Complete Sets' }} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const card = within(document.body).getByRole('button', { name: 'Mint complete sets' }).closest('.action-launcher-card')
+		if (!(card instanceof HTMLElement)) throw new Error('Expected an action launcher card')
+		expect(within(card).queryByRole('heading', { name: 'Mint Complete Sets' })).toBeNull()
+		expect(within(card).getByText('Lock collateral to mint one share for each outcome.')).not.toBeNull()
 	})
 
 	test('disables a launcher when blocker text is present even if an action handler exists', async () => {

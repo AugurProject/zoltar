@@ -473,7 +473,6 @@ export function renderSelectedReportActionSection({
 									{ label: openOracleCopy.currentReporter, value: openOracleReportDetails.currentReporter === zeroAddress ? commonCopy.none : <AddressValue address={openOracleReportDetails.currentReporter} /> },
 									{ label: openOracleCopy.settlementTimestamp, value: <TimestampValue currentTimestamp={openOracleReportDetails.currentTime} timestamp={openOracleReportDetails.settlementTimestamp} zeroText={openOracleCopy.notSettled} /> },
 								])}
-						<p className='detail'>{openOracleCopy.settlementConfirmationHelpText}</p>
 						<div className='actions'>
 							<TransactionActionButton
 								idleLabel={openOracleCopy.settleReport}
@@ -740,7 +739,7 @@ function renderReportDetailsCard(
 				</ReadOnlyDetailAccordion>
 			</div>
 
-			<OperationModal context={reportTransactionContext} isOpen={selectedReportModal === 'initial-report'} onClose={() => onSelectedReportModalChange(undefined)} title={openOracleCopy.submitInitialReport} description={openOracleCopy.initialReportReviewHint}>
+			<OperationModal context={reportTransactionContext} isOpen={selectedReportModal === 'initial-report'} onClose={() => onSelectedReportModalChange(undefined)} title={openOracleCopy.submitInitialReport}>
 				{renderSelectedReportActionSection({
 					actionMode: 'initial-report',
 					disputeSubmission: openOracleDisputeSubmission,
@@ -764,7 +763,7 @@ function renderReportDetailsCard(
 				})}
 			</OperationModal>
 
-			<OperationModal context={reportTransactionContext} isOpen={selectedReportModal === 'dispute'} onClose={() => onSelectedReportModalChange(undefined)} title={openOracleCopy.disputeAndSwap} description={openOracleCopy.replacementSwapAmountsHint}>
+			<OperationModal context={reportTransactionContext} isOpen={selectedReportModal === 'dispute'} onClose={() => onSelectedReportModalChange(undefined)} title={openOracleCopy.disputeAndSwap}>
 				{renderSelectedReportActionSection({
 					actionMode: 'dispute',
 					disputeSubmission: openOracleDisputeSubmission,
@@ -788,7 +787,7 @@ function renderReportDetailsCard(
 				})}
 			</OperationModal>
 
-			<OperationModal context={reportTransactionContext} isOpen={selectedReportModal === 'settle'} onClose={() => onSelectedReportModalChange(undefined)} title={openOracleCopy.settleReport} description={openOracleCopy.settlementConfirmationHint}>
+			<OperationModal context={reportTransactionContext} isOpen={selectedReportModal === 'settle'} onClose={() => onSelectedReportModalChange(undefined)} title={openOracleCopy.settleReport}>
 				{renderSelectedReportActionSection({
 					actionMode: 'settle',
 					disputeSubmission: openOracleDisputeSubmission,
@@ -966,7 +965,7 @@ export function OpenOracleSection({
 			{view === 'create' ? (
 				<div className='workflow-stack route-workflow-stack'>
 					{openOracleResult?.action !== 'createReportInstance' ? undefined : (
-						<SectionBlock title={openOracleCopy.createSuccess} description={openOracleCopy.reportCreatedDetail}>
+						<SectionBlock title={openOracleCopy.createSuccess}>
 							<div className='actions'>
 								<button className='primary' type='button' onClick={() => onActiveViewChange('browse')}>
 									{commonCopy.returnToBrowse}

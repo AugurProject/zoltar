@@ -17,7 +17,6 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 	if (stepDeployed)
 		return {
 			badgeTone: 'ok',
-			detail: deploymentCopy.expectedCodeFoundStatus,
 			label: commonCopy.deployed,
 			buttonLabel: commonCopy.deployed,
 		}
@@ -87,7 +86,7 @@ export function DeploymentSection({ title, steps, allSteps, accountAddress, busy
 								<p className='address'>{step.address}</p>
 								{stepStatus.detail === undefined ? undefined : <p className='detail'>{stepStatus.detail}</p>}
 							</div>
-							<TransactionActionButton idleLabel={stepStatus.buttonLabel} pendingLabel={deploymentCopy.deploying} onClick={() => void onDeploy(step.id)} pending={isBusy} availability={availability} />
+							{step.deployed ? undefined : <TransactionActionButton idleLabel={stepStatus.buttonLabel} pendingLabel={deploymentCopy.deploying} onClick={() => void onDeploy(step.id)} pending={isBusy} availability={availability} />}
 						</div>
 					)
 				})}

@@ -147,6 +147,7 @@ export function SecurityPoolsOverviewSection({
 		if (normalizedSearchText === '') return true
 		return pool.securityPoolAddress.toLowerCase().includes(normalizedSearchText) || pool.questionId.toLowerCase().includes(normalizedSearchText) || pool.marketDetails.title.toLowerCase().includes(normalizedSearchText) || pool.marketDetails.description.toLowerCase().includes(normalizedSearchText)
 	})
+	const hasActiveFilters = normalizedSearchText !== '' || systemStateFilter !== 'all' || vaultFilter !== 'all'
 	return (
 		<RouteWorkflowPanel showHeader={false} title={commonCopy.securityPools}>
 			<SectionBlock
@@ -200,7 +201,7 @@ export function SecurityPoolsOverviewSection({
 						</select>
 					</label>
 				</div>
-				{pagedSecurityPools.length > 0 ? <p className='detail'>{securityPoolCopy.formatPoolPageSummary(pagedSecurityPools.length, filteredSecurityPools.length)}</p> : undefined}
+				{hasActiveFilters && pagedSecurityPools.length > 0 ? <p className='detail'>{securityPoolCopy.formatPoolPageSummary(filteredSecurityPools.length, pagedSecurityPools.length)}</p> : undefined}
 
 				{(() => {
 					if (pagedSecurityPools.length === 0) {

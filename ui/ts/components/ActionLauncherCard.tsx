@@ -14,13 +14,17 @@ type ActionLauncherCardProps = {
 export function ActionLauncherCard({ action, children, pending = false, pendingLabel = commonCopy.opening, tone = 'secondary' }: ActionLauncherCardProps) {
 	if (action.onAction === undefined && action.blocker === undefined && action.readiness !== 'blocked') return undefined
 	const disabled = action.readiness === 'blocked' || action.onAction === undefined || action.blocker !== undefined
+	const showTitle = action.title.trim().toLowerCase() !== action.actionLabel.trim().toLowerCase()
+	const showCopy = action.description !== undefined || showTitle || children !== undefined
 	return (
-		<section className={`action-launcher-card ${action.readiness}`}>
-			<div className='action-launcher-card-copy'>
-				<h4>{action.title}</h4>
-				{action.description === undefined ? undefined : <p className='detail'>{action.description}</p>}
-				{children}
-			</div>
+		<section className={`action-launcher-card ${action.readiness} ${showCopy ? '' : 'compact'}`.trim()}>
+			{showCopy ? (
+				<div className='action-launcher-card-copy'>
+					{showTitle ? <h4>{action.title}</h4> : undefined}
+					{action.description === undefined ? undefined : <p className='detail'>{action.description}</p>}
+					{children}
+				</div>
+			) : undefined}
 			<div className='action-launcher-card-actions'>
 				<ActionLauncherButton
 					{...(action.disabledReasonId === undefined ? {} : { describedBy: action.disabledReasonId })}

@@ -1469,6 +1469,8 @@ export function ForkAuctionSection({
 																			{forkAuctionCopy.initiallyDepositedLead}
 																			<CurrencyValue value={deposit.amount} suffix={commonCopy.rep} />
 																		</>,
+																	],
+																	secondaryDetails: [
 																		<>
 																			{forkAuctionCopy.entryDepthLead}
 																			<CurrencyValue value={deposit.cumulativeAmount} suffix={commonCopy.rep} />
@@ -1523,6 +1525,8 @@ export function ForkAuctionSection({
 																		<CurrencyValue value={claimAmount} suffix={commonCopy.rep} />
 																	</>
 																),
+															],
+															secondaryDetails: [
 																<>
 																	{forkAuctionCopy.entryDepthLead}
 																	<CurrencyValue value={deposit.cumulativeAmount} suffix={commonCopy.rep} />

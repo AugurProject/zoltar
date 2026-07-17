@@ -44,14 +44,14 @@ export const pageUrl = 'page URL'
 export const formatReadRpcOverrideIgnoredDetail = (sourceLabel: string, url: string, reason: string, configuredRpcLabel: string, activeRpcUrl: string) => `Ignored ${sourceLabel} RPC override (${url}): ${reason} ${configuredRpcLabel} is ${activeRpcUrl}.`
 export const formatReadRpcOverrideFromUrlDetail = (configuredRpcLabel: string, rpcUrl: string) => `${configuredRpcLabel} came from the page URL: ${rpcUrl}. Verify this endpoint before relying on displayed onchain state.`
 export const formatReadRpcOverrideActiveDetail = (configuredRpcLabel: string, sourceLabel: string, rpcUrl: string) => `${configuredRpcLabel} came from ${sourceLabel}: ${rpcUrl}. Verify this endpoint before relying on displayed onchain state.`
+export const customReadRpcWarningDetail = 'Custom read RPC active. Verify it before acting on displayed chain state.'
+export const readRpcOverrideIgnoredDetail = 'A custom read RPC was ignored. The configured fallback is active.'
 export const readWriteNetworkMismatchDetail = 'Displayed onchain state may not match the network this interface writes to.'
 export const readRpcMismatch = 'Read RPC mismatch'
 export const readRpcOverrideActive = 'Read RPC override active'
 export const setupIncomplete = 'Setup incomplete'
 export const simulationBootstrapFailed = 'Simulation bootstrap failed'
 export const staleReadBackendDetail = 'Displayed onchain state may be behind the latest chain state. Refresh or switch RPC before acting on balances, settlement, or liquidation.'
-export const hasForkedOn = 'has forked on'
-export const universeForked = 'Universe forked'
 export const urlProvidedReadRpc = 'URL-provided read RPC'
 export const address = 'Address'
 export const augurPlaceholderTitle = 'Augur Placeholder'

@@ -29,7 +29,7 @@ describe('transaction presentations', () => {
 	test('uses refund-only transaction intent copy for finalized refund settlement submissions', () => {
 		const intent = createForkAuctionTransactionIntent('claimAuctionProceeds', { submittedTitle: 'Settle Finalized Refunds' })
 		expect(intent.submittedTitle).toBe('Settle Finalized Refunds')
-		expect(intent.submittedDetail).toBe('Settle Finalized Refunds transaction submitted.')
+		expect(intent.submittedDetail).toBeUndefined()
 	})
 
 	test('keeps unresolved escalation entitlement reuse explicit after one child materializes', () => {

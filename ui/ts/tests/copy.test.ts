@@ -10,7 +10,8 @@ test('fork migration empty states are complete templates', () => {
 })
 
 test('security-pool count summaries own their complete prose', () => {
-	expect(securityPoolCopy.formatPoolPageSummary(5, 12)).toBe('Showing 5 of 12 matching pools on this page.')
+	expect(securityPoolCopy.formatPoolPageSummary(5, 12)).toBe('Matches: 5 of 12 pools on this page.')
+	expect(securityPoolCopy.formatPoolPageSummary(1, 1)).toBe('Matches: 1 of 1 pool on this page.')
 	expect(securityPoolCopy.formatVaultDirectorySummary(3n, 8n)).toBe('Showing 3 of 8 active vaults, newest activity first. Enter a vault address above to inspect any specific vault.')
 	expect(securityPoolCopy.formatVaultPreviewSummary(3, 8n)).toBe('Showing 3 of 8 active vaults in this preview, newest activity first.')
 })

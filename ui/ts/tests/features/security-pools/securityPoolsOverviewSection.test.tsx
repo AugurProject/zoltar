@@ -777,6 +777,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText(/Matches:/)).toBeNull()
 		const systemStateSelect = documentQueries.getByLabelText('System State')
 		if (!(systemStateSelect instanceof window.HTMLSelectElement)) throw new Error('Expected system state filter')
 		systemStateSelect.value = 'ended'
@@ -786,6 +787,7 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		expect(documentQueries.queryByText('Operational pool')).toBeNull()
 		expect(documentQueries.getAllByText('Ended pool').length).toBeGreaterThan(0)
+		expect(documentQueries.getByText('Matches: 1 of 2 pools on this page.')).not.toBeNull()
 	})
 
 	test('clamps the current page when the loaded pool count shrinks', async () => {
