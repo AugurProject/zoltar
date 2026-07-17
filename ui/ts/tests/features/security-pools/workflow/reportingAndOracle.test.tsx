@@ -245,7 +245,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect((documentQueries.getByRole('button', { name: 'Staged Operations' }) as HTMLElement).getAttribute('aria-pressed')).toBe('true')
 		expect(documentQueries.getByRole('heading', { name: 'Staged Operations' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Pool Oracle & Pending Operations' })).toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Staged Operations List' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Staged Operations List' })).toBeNull()
 		expect(documentQueries.getByText('No staged operations are currently queued for this pool.')).not.toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Request New Price' })).toBeNull()
 	})

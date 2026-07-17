@@ -147,7 +147,7 @@ describe('SecurityPoolSection', () => {
 		expect(headings).not.toContain('Question Context')
 		expect(headings).not.toContain('Requirements')
 		expect(headings).not.toContain('Existing Pools')
-		expect(documentQueries.getByText('Initial Open Interest Fee / Year')).not.toBeNull()
+		expect(documentQueries.getByText('Starting Annual Fee')).not.toBeNull()
 		expect(documentQueries.getByText(formatOpenInterestFeePerYearPercent(ORIGIN_POOL_INITIAL_RETENTION_RATE))).not.toBeNull()
 		expect(documentQueries.queryByRole('textbox', { name: 'Open Interest Fee / Year (%)' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Before You Deploy' })).toBeNull()
@@ -162,7 +162,7 @@ describe('SecurityPoolSection', () => {
 		const documentQueries = within(document.body)
 		const securityMultiplierInput = documentQueries.getByRole('textbox', { name: 'Security Multiplier' })
 		expect(securityMultiplierInput.getAttribute('aria-describedby')).toBe('security-pool-security-multiplier-help')
-		expect(documentQueries.getByText('Security Multiplier sets the REP collateral target relative to open interest. Higher values require more REP backing and create a thicker safety buffer.')).not.toBeNull()
+		expect(documentQueries.getByText('REP target relative to open interest; higher values require more REP.')).not.toBeNull()
 	})
 
 	test('previews the pasted question before pool creation without a manual load action', async () => {

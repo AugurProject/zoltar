@@ -586,6 +586,7 @@ function renderReportDetailsCard(
 	return (
 		<>
 			<StickyObjectContext
+				badge={<Badge tone={statusTone}>{status}</Badge>}
 				eyebrow={openOracleCopy.openOracleReportDetails}
 				title={openOracleCopy.formatReportNumberTitle(openOracleReportDetails.reportId.toString())}
 				items={[
@@ -597,6 +598,7 @@ function renderReportDetailsCard(
 					},
 				]}
 			/>
+			{reportControls}
 			<LifecycleStageBanner stage={stage} />
 			{readinessActions.length > 0 ? (
 				<SectionBlock title={openOracleCopy.reportActions}>
@@ -607,20 +609,9 @@ function renderReportDetailsCard(
 					</div>
 				</SectionBlock>
 			) : undefined}
-			<SectionBlock badge={<Badge tone={statusTone}>{status}</Badge>} title={commonCopy.reportDetails}>
-				{reportControls}
-				<MetricGrid variant='question'>
-					{renderReportField(openOracleCopy.oracleAddress, <AddressValue address={openOracleReportDetails.openOracleAddress} />)}
-					{renderReportField(openOracleCopy.settlementTimestamp, <TimestampValue currentTimestamp={openOracleReportDetails.currentTime} timestamp={openOracleReportDetails.settlementTimestamp} zeroText={openOracleCopy.notSettled} />)}
-				</MetricGrid>
-			</SectionBlock>
 			<div className='report-detail-stack'>
 				<ReadOnlyDetailAccordion title={openOracleCopy.identity}>
 					{renderReportFields([
-						{
-							label: openOracleCopy.oracleAddress,
-							value: <AddressValue address={openOracleReportDetails.openOracleAddress} />,
-						},
 						{
 							label: openOracleReportDetails.token1Symbol,
 							value: <AddressValue address={openOracleReportDetails.token1} />,
@@ -628,10 +619,6 @@ function renderReportDetailsCard(
 						{
 							label: openOracleReportDetails.token2Symbol,
 							value: <AddressValue address={openOracleReportDetails.token2} />,
-						},
-						{
-							label: openOracleCopy.currentReporter,
-							value: openOracleReportDetails.currentReporter === zeroAddress ? openOracleCopy.noneAwaitingInitialReport : <AddressValue address={openOracleReportDetails.currentReporter} />,
 						},
 						{
 							label: openOracleCopy.initialReporter,
@@ -1070,6 +1057,9 @@ export function OpenOracleSection({
 									</label>
 								</div>
 							</SectionBlock>
+							<ReadOnlyDetailAccordion title={openOracleCopy.parameterDetails}>
+								<p className='detail'>{openOracleCopy.standaloneParameterDetails}</p>
+							</ReadOnlyDetailAccordion>
 
 							<div className='actions'>
 								<TransactionActionButton

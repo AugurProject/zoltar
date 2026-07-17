@@ -286,7 +286,10 @@ describe.serial('OpenOracleSection integration', () => {
 		})
 		await clickElement(within(document.body).getByRole('button', { name: 'Open report' }))
 
-		await waitFor(() => getSectionByTitle('Report Details'))
+		await waitFor(() => {
+			const context = document.body.querySelector('.sticky-object-context')
+			if (!(context instanceof HTMLElement)) throw new Error('Expected selected report context')
+		})
 		let economicsSummary: HTMLElement | undefined
 		await waitFor(() => {
 			const summary = Array.from(document.body.querySelectorAll('summary')).find(summary => summary.textContent?.trim() === 'Economics')

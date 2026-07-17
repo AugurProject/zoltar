@@ -823,7 +823,7 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('The caller vault would remain below the minimum security bond allowance after liquidation.')).not.toBeNull()
+		expect(documentQueries.getByText('Your vault would remain below the minimum security bond allowance after liquidation.')).not.toBeNull()
 
 		renderedComponent.cleanup()
 		cleanupRenderedComponent = undefined
@@ -1225,7 +1225,7 @@ describe('LiquidationModal', () => {
 		if (!(maxButton instanceof HTMLButtonElement)) throw new Error('Expected liquidation Max button')
 		expect(maxButton.disabled).toBe(true)
 
-		const repMovedLabel = Array.from(document.body.querySelectorAll('.metric-label')).find(element => element.textContent === 'Rep Moved')
+		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'Rep Moved')
 		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected Rep Moved label')
 		const repMovedValue = repMovedLabel.nextElementSibling
 		if (!(repMovedValue instanceof HTMLElement)) throw new Error('Expected Rep Moved value')
@@ -1329,7 +1329,7 @@ describe('LiquidationModal', () => {
 		const actionContainer = cancelButton.closest('.liquidation-modal-actions')
 
 		expect(executeButton.disabled).toBe(true)
-		expect(documentQueries.getByText('The caller vault would become liquidatable after this liquidation.')).not.toBeNull()
+		expect(documentQueries.getByText('Your vault would become liquidatable after this liquidation.')).not.toBeNull()
 		expect(actionContainer).not.toBeNull()
 		expect(actionContainer?.className).toContain('actions')
 		expect(actionContainer?.className).toContain('liquidation-modal-actions')
@@ -1361,7 +1361,7 @@ describe('LiquidationModal', () => {
 		const executeButton = documentQueries.getByRole('button', { name: 'Execute Vault Liquidation' }) as HTMLButtonElement
 
 		expect(executeButton.disabled).toBe(true)
-		expect(documentQueries.getByText('The caller vault would remain liquidatable after this liquidation.')).not.toBeNull()
+		expect(documentQueries.getByText('Your vault would remain liquidatable after this liquidation.')).not.toBeNull()
 	})
 
 	test('renders the target vault with the shared address value component', async () => {
@@ -1418,7 +1418,7 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Invalid Liquidation Pair' })).not.toBeNull()
 		expect(document.body.querySelector('.warning-surface')).not.toBeNull()
 		expect(document.body.querySelector('.badge.warn')).toBeNull()
-		expect(documentQueries.getAllByText('Select a target vault that is different from the caller vault.')).toHaveLength(2)
+		expect(documentQueries.getAllByText('Select a target vault that is different from your vault.')).toHaveLength(2)
 	})
 
 	test('shows the caller vault and a post-liquidation simulation', async () => {
@@ -1446,9 +1446,11 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Caller Vault')).not.toBeNull()
+		expect(documentQueries.getByText('Your Vault')).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: `Copy address ${callerVaultAddress}` })).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Caller Vault After Liquidation' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Caller Vault After Liquidation' })).toBeNull()
+		expect(documentQueries.getByText('Your REP After')).not.toBeNull()
+		expect(documentQueries.getByText('Your Bond Allowance After')).not.toBeNull()
 		expect(documentQueries.getByText('Rep Moved')).not.toBeNull()
 	})
 
@@ -1476,7 +1478,7 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const repMovedLabel = Array.from(document.body.querySelectorAll('.metric-label')).find(element => element.textContent === 'Rep Moved')
+		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'Rep Moved')
 		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected Rep Moved label')
 		const repMovedValue = repMovedLabel.nextElementSibling
 		if (!(repMovedValue instanceof HTMLElement)) throw new Error('Expected Rep Moved value')
@@ -1606,7 +1608,7 @@ describe('LiquidationModal', () => {
 		expect(executeButton.disabled).toBe(false)
 		expect(documentQueries.getByText(/Simulation REP \/ ETH/)).not.toBeNull()
 		expect(documentQueries.getByText(/Target Collateralization @ Simulation Price/)).not.toBeNull()
-		const repMovedLabel = Array.from(document.body.querySelectorAll('.metric-label')).find(element => element.textContent === 'Rep Moved')
+		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'Rep Moved')
 		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected Rep Moved label')
 		const repMovedValueBefore = repMovedLabel.nextElementSibling
 		if (!(repMovedValueBefore instanceof HTMLElement)) throw new Error('Expected Rep Moved value')
@@ -1672,7 +1674,7 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		const targetOpenOracleValue = documentQueries.getByText(/66\.67 %/).closest('.metric-field-value')
 		const callerOpenOracleValue = documentQueries.getByText(/400\.00 %/).closest('.metric-field-value')
-		const callerAfterLiquidationLabel = documentQueries.getByText(/^Collateralization @ Open Oracle$/)
+		const callerAfterLiquidationLabel = documentQueries.getByText(/^Your Collateralization After$/)
 		const callerAfterLiquidationValue = callerAfterLiquidationLabel.parentElement?.querySelector('.metric-field-value')
 
 		expect(targetOpenOracleValue?.className.split(' ')).toEqual(expect.arrayContaining(['metric-field-value', 'metric-value-danger']))
@@ -1693,7 +1695,7 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const thresholdMetric = within(document.body).getByText('Target Collateralization @ Open Oracle').parentElement
+		const thresholdMetric = within(document.body).getByText('Target Collateralization at Oracle Price').parentElement
 		const thresholdValue = thresholdMetric?.querySelector('.metric-field-value')
 
 		expect(thresholdValue?.className).toContain('metric-value-success')

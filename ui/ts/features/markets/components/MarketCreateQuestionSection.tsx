@@ -54,7 +54,7 @@ function getScalarCreatePreviewDetails(marketForm: MarketFormState, scalarInputs
 }
 
 function getPoolEligibilityMessage(marketType: MarketFormState['marketType']) {
-	if (marketType === 'binary') return marketCopy.binaryPoolCompatibilityHint
+	if (marketType === 'binary') return undefined
 	if (marketType === 'categorical') return marketCopy.categoricalPoolCompatibilityDetail
 	return marketCopy.scalarPoolCompatibilityDetail
 }
@@ -141,7 +141,6 @@ export function MarketCreateQuestionSection({
 	const normalizedDescription = marketForm.description.trim()
 	const draftDescription = normalizedDescription === '' ? marketCopy.missingResolutionNotesHelpText : marketForm.description
 	const draftTitle = marketForm.title.trim() === '' ? marketCopy.questionTitleRequired : marketForm.title
-	const draftQuestionContextLabel = normalizedDescription === '' ? marketCopy.needsContext : marketCopy.contextProvided
 	const markFieldTouched = (field: MarketFormFieldName) => setTouchedFields(current => new Set([...current, field]))
 	const getVisibleFieldError = (field: MarketFormFieldName) => (touchedFields.has(field) ? marketFormValidation.fieldErrors[field] : undefined)
 	const canCreateQuestion = accountAddress !== undefined && isMainnet && !marketCreating && marketFormValidation.isValid
@@ -211,7 +210,7 @@ export function MarketCreateQuestionSection({
 						<MetricField label={marketCopy.creationTransactionHash}>
 							<TransactionHashLink hash={marketResult.createQuestionHash} />
 						</MetricField>
-						<p className='detail'>{getPoolEligibilityMessage(marketResult.marketType)}</p>
+						{getPoolEligibilityMessage(marketResult.marketType) === undefined ? undefined : <p className='detail'>{getPoolEligibilityMessage(marketResult.marketType)}</p>}
 					</div>
 				</EntityCard>
 			)}
@@ -288,7 +287,7 @@ export function MarketCreateQuestionSection({
 							</div>
 						</div>
 						<p className='field-help'>{marketCopy.questionTimingHelpText}</p>
-						<p className='field-help'>{getPoolEligibilityMessage(marketForm.marketType)}</p>
+						{getPoolEligibilityMessage(marketForm.marketType) === undefined ? undefined : <p className='field-help'>{getPoolEligibilityMessage(marketForm.marketType)}</p>}
 
 						{marketForm.marketType === 'categorical' ? (
 							<div className='field'>
@@ -395,14 +394,7 @@ export function MarketCreateQuestionSection({
 										<strong>{draftTitle}</strong>
 										<p className='detail'>{draftDescription}</p>
 									</div>
-									<div className='question-draft-preview-statuses' role='list' aria-label={marketCopy.draftQuestionStatus}>
-										<span className='question-draft-preview-chip' role='listitem'>
-											{marketForm.marketType}
-										</span>
-										<span className={`question-draft-preview-chip ${normalizedDescription === '' ? 'warning' : 'ok'}`} role='listitem'>
-											{draftQuestionContextLabel}
-										</span>
-									</div>
+									<span className='question-draft-preview-chip'>{marketForm.marketType}</span>
 								</div>
 								<OutcomeChipRow items={draftOutcomeItems} />
 								<div className='question-draft-preview-meta' role='list' aria-label={marketCopy.draftQuestionSummary}>
@@ -413,10 +405,6 @@ export function MarketCreateQuestionSection({
 									<div className='question-draft-preview-meta-item' role='listitem'>
 										<span>{commonCopy.ends}</span>
 										<strong>{marketForm.endTime.trim() === '' ? marketCopy.endTimeRequired : marketForm.endTime}</strong>
-									</div>
-									<div className='question-draft-preview-meta-item' role='listitem'>
-										<span>{marketCopy.riskCue}</span>
-										<strong>{normalizedDescription === '' ? marketCopy.lowTrustUntilContextIsAdded : marketCopy.contextIsPresentForReview}</strong>
 									</div>
 								</div>
 							</div>

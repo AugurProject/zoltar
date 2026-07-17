@@ -15,7 +15,6 @@ import { LoadingText } from '../../../components/LoadingText.js'
 import { MetricGrid } from '../../../components/MetricGrid.js'
 import { MetricField } from '../../../components/MetricField.js'
 import { OperationModal } from '../../../components/OperationModal.js'
-import { RequirementsChecklist } from '../../../components/RequirementsChecklist.js'
 import { RouteWorkflowPanel } from '../../../components/RouteWorkflowPanel.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
 import { StateHint } from '../../../components/StateHint.js'
@@ -48,7 +47,6 @@ import {
 	hasValidSecurityVaultOraclePrice,
 	isSecurityVaultDepositBelowMinimum,
 	isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper,
-	MIN_SECURITY_BOND_ALLOWANCE,
 	MIN_SECURITY_VAULT_REP_DEPOSIT,
 } from '../lib/securityVault.js'
 import type { StagedOracleOperation } from '../../../types/contracts.js'
@@ -356,7 +354,6 @@ export function SecurityVaultSection({
 		totalRepDeposit: selectedPoolTotalRepDeposit,
 		totalSecurityBondAllowance: selectedPoolTotalSecurityBondAllowance,
 	})
-	const hasValidSecurityBondAllowanceAmount = securityBondAllowanceAmount !== undefined && securityBondAllowanceAmount >= 0n && (securityBondAllowanceAmount === 0n || securityBondAllowanceAmount >= MIN_SECURITY_BOND_ALLOWANCE)
 	const isDepositBelowMinimum = isSecurityVaultDepositBelowMinimum(currentSelectedVaultDetails?.repDepositShare, depositAmount)
 	const hasClaimableFees = currentSelectedVaultDetails !== undefined && currentSelectedVaultDetails.unpaidEthFees > 0n
 	const hasSufficientDepositAllowance = selectedVaultIsOwnedByAccount && depositAmount !== undefined && depositAmount > 0n && approvalRequirement.hasSufficientApproval
@@ -613,18 +610,6 @@ export function SecurityVaultSection({
 							tokenUnits={18}
 							disabled={!approveRepEnabled || !canUseLoadedVaultActions}
 						/>
-						<RequirementsChecklist
-							items={[
-								{ key: 'owned', label: securityPoolCopy.selectedVaultOwnershipStatus, resolved: selectedVaultIsOwnedByAccount },
-								{
-									key: 'balance',
-									label: securityPoolCopy.walletDepositBalanceStatus,
-									resolved: repBalanceGap === undefined || repBalanceGap <= 0n,
-									...(repBalanceGap !== undefined && repBalanceGap > 0n ? { detail: securityPoolCopy.formatRepBalanceShortageDetail(formatCurrencyBalance(repBalanceGap)) } : {}),
-								},
-								{ key: 'minimum', label: securityPoolCopy.firstDepositMeetsTheVaultMinimum, resolved: !isDepositBelowMinimum, ...(isDepositBelowMinimum ? { detail: securityPoolCopy.formatFirstDepositMinimumChecklistDetail(formatCurrencyBalance(MIN_SECURITY_VAULT_REP_DEPOSIT)) } : {}) },
-							]}
-						/>
 						<div className='actions'>
 							<button className='secondary' type='button' onClick={() => setVaultActionModal(undefined)}>
 								{commonCopy.cancel}
@@ -713,35 +698,6 @@ export function SecurityVaultSection({
 							</label>
 						)}
 						{effectiveRepExitMode === 'redeem' ? null : renderStagedOperationTimeoutField()}
-						<RequirementsChecklist
-							items={
-								effectiveRepExitMode === 'redeem'
-									? [
-											{ key: 'owned', label: securityPoolCopy.selectedVaultOwnershipStatus, resolved: selectedVaultIsOwnedByAccount },
-											{
-												key: 'locked',
-												label: securityPoolCopy.noEscalationRepStatus,
-												resolved: currentSelectedVaultDetails.escalationEscrowedRep === 0n,
-												...(currentSelectedVaultDetails.escalationEscrowedRep > 0n ? { detail: securityPoolCopy.escalationWithdrawalRequiredDetail } : {}),
-											},
-											{ key: 'redeemable', label: securityPoolCopy.vaultRedeemableRepStatus, resolved: redeemableRepAmount !== undefined && redeemableRepAmount > 0n },
-										]
-									: [
-											{ key: 'owned', label: securityPoolCopy.selectedVaultOwnershipStatus, resolved: selectedVaultIsOwnedByAccount },
-											{
-												key: 'oracle',
-												label: hasValidOraclePrice ? securityPoolCopy.oraclePriceAvailableStatus : securityPoolCopy.oracleFundingPendingDetail,
-												resolved: hasValidOraclePrice || withdrawRepFunding !== undefined,
-											},
-											{
-												key: 'withdrawable',
-												label: hasValidOraclePrice ? securityPoolCopy.withdrawableRep : securityPoolCopy.vaultRepQueueableStatus,
-												resolved: queuedWithdrawRepLimit !== undefined && queuedWithdrawRepLimit > 0n,
-											},
-											{ key: 'timeout', label: securityPoolCopy.manualTimeoutMinimumStatus, resolved: stagedOperationTimeoutSeconds !== undefined },
-										]
-							}
-						/>
 						<div className='actions'>
 							<button className='secondary' type='button' onClick={() => setVaultActionModal(undefined)}>
 								{commonCopy.cancel}
@@ -797,14 +753,6 @@ export function SecurityVaultSection({
 							</div>
 						</label>
 						{renderStagedOperationTimeoutField()}
-						<RequirementsChecklist
-							items={[
-								{ key: 'owned', label: securityPoolCopy.selectedVaultOwnershipStatus, resolved: selectedVaultIsOwnedByAccount },
-								{ key: 'oracle', label: securityPoolCopy.oraclePriceAvailableStatus, resolved: hasValidOraclePrice },
-								{ key: 'allowance', label: securityPoolCopy.formatAllowanceChecklistLabel(formatCurrencyBalance(MIN_SECURITY_BOND_ALLOWANCE)), resolved: hasValidSecurityBondAllowanceAmount },
-								{ key: 'timeout', label: securityPoolCopy.manualTimeoutMinimumStatus, resolved: stagedOperationTimeoutSeconds !== undefined },
-							]}
-						/>
 						<div className='actions'>
 							<button className='secondary' type='button' onClick={() => setVaultActionModal(undefined)}>
 								{commonCopy.cancel}
@@ -827,17 +775,17 @@ export function SecurityVaultSection({
 					<MetricField label={securityPoolCopy.claimableFees}>{currentSelectedVaultDetails === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={currentSelectedVaultDetails.unpaidEthFees} suffix={commonCopy.eth} />}</MetricField>
 					<MetricField label={securityPoolCopy.vault}>{selectedVaultAddress === undefined ? commonCopy.noneSelected : <AddressValue address={selectedVaultAddress} />}</MetricField>
 				</MetricGrid>
-				<RequirementsChecklist
-					items={[
-						{ key: 'owned', label: securityPoolCopy.selectedVaultOwnershipStatus, resolved: selectedVaultIsOwnedByAccount },
-						{ key: 'fees', label: securityPoolCopy.claimableFeesAreAvailable, resolved: hasClaimableFees },
-					]}
-				/>
 				<div className='actions'>
 					<button className='secondary' type='button' onClick={() => setVaultActionModal(undefined)}>
 						{commonCopy.cancel}
 					</button>
-					<TransactionActionButton idleLabel={securityPoolCopy.claimFees} pendingLabel={securityPoolCopy.claimingFees} onClick={onRedeemFees} pending={securityVaultActiveAction === 'redeemFees'} availability={{ disabled: !claimFeesEnabled || !canUseLoadedVaultActions || !hasClaimableFees, reason: undefined }} />
+					<TransactionActionButton
+						idleLabel={securityPoolCopy.claimFees}
+						pendingLabel={securityPoolCopy.claimingFees}
+						onClick={onRedeemFees}
+						pending={securityVaultActiveAction === 'redeemFees'}
+						availability={{ disabled: !claimFeesEnabled || !canUseLoadedVaultActions || !hasClaimableFees, reason: canUseLoadedVaultActions && !hasClaimableFees ? securityPoolCopy.noClaimableFeesReason : claimFeesLauncherBlocker }}
+					/>
 				</div>
 			</OperationModal>
 		</>
