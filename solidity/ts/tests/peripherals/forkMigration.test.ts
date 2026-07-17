@@ -2627,6 +2627,110 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(await getQuestionOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'matching-question child should resolve to its branch outcome')
 		})
 
+		test.each([
+			{
+				name: 'matching then unrelated inherits the first fixed outcome',
+				firstForkMatches: true,
+				secondForkMatches: false,
+				expectedOutcome: QuestionOutcome.Yes,
+			},
+			{
+				name: 'unrelated then matching installs the second branch outcome',
+				firstForkMatches: false,
+				secondForkMatches: true,
+				expectedOutcome: QuestionOutcome.No,
+			},
+			{
+				name: 'matching then matching replaces the first fixed outcome',
+				firstForkMatches: true,
+				secondForkMatches: true,
+				expectedOutcome: QuestionOutcome.No,
+			},
+		])('$name across a recursive continuation', async ({ firstForkMatches, secondForkMatches, expectedOutcome }) => {
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime + 10000n)
+			const opposingClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+			await approveAndDepositRep(opposingClient, repDeposit, questionId)
+			const recursiveDeposit = 2n * reportBond
+			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, recursiveDeposit)
+			await depositToEscalationGame(opposingClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes, recursiveDeposit)
+			await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+
+			let firstForkQuestionId = questionId
+			if (!firstForkMatches) {
+				const firstForkQuestionData = {
+					...questionData,
+					title: 'first unrelated recursive fixed-outcome source',
+				}
+				firstForkQuestionId = getQuestionId(firstForkQuestionData, outcomes)
+				await createQuestion(client, firstForkQuestionData, outcomes)
+			}
+			await forkUniverse(client, genesisUniverse, firstForkQuestionId)
+			await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+			await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
+
+			const firstChildUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+			const firstChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, firstChildUniverse, questionId, securityMultiplier)
+			const firstChildGame = await getSecurityPoolsEscalationGame(client, firstChildPool.securityPool)
+			strictEqualTypeSafe(
+				await client.readContract({
+					abi: peripherals_EscalationGame_EscalationGame.abi,
+					address: firstChildGame,
+					functionName: 'fixedQuestionOutcome',
+				}),
+				BigInt(firstForkMatches ? QuestionOutcome.Yes : QuestionOutcome.None),
+				'first continuation should encode only a matching-question fixed outcome',
+			)
+
+			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+			await startTruthAuction(client, firstChildPool.securityPool)
+			strictEqualTypeSafe(await getSystemState(client, firstChildPool.securityPool), SystemState.Operational, 'first recursive child should become operational before its own fork')
+
+			let secondForkQuestionId = questionId
+			if (!secondForkMatches) {
+				const secondForkQuestionData = {
+					...questionData,
+					title: 'second unrelated recursive fixed-outcome source',
+					endTime: await mockWindow.getTime(),
+				}
+				secondForkQuestionId = getQuestionId(secondForkQuestionData, outcomes)
+				await createQuestion(client, secondForkQuestionData, outcomes)
+			}
+
+			const firstChildRepToken = await getRepToken(client, firstChildPool.securityPool)
+			const firstChildForkThreshold = await getZoltarForkThreshold(client, firstChildUniverse)
+			const firstChildBalanceSlot = formatStorageSlot(getMappingStorageSlot(client.account.address, 0n))
+			await mockWindow.addStateOverrides({
+				[firstChildRepToken]: {
+					stateDiff: {
+						[firstChildBalanceSlot]: firstChildForkThreshold * 2n,
+					},
+				},
+			})
+
+			await forkUniverse(client, firstChildUniverse, secondForkQuestionId)
+			await initiateSecurityPoolFork(client, firstChildPool.securityPool)
+			await migrateRepToZoltar(client, firstChildPool.securityPool, [QuestionOutcome.No])
+			await migrateVaultWithUnresolvedEscalation(client, firstChildPool.securityPool, client.account.address, QuestionOutcome.No)
+
+			const secondChildUniverse = getChildUniverseId(firstChildUniverse, QuestionOutcome.No)
+			const secondChildPool = getSecurityPoolAddresses(firstChildPool.securityPool, secondChildUniverse, questionId, securityMultiplier)
+			const secondChildGame = await getSecurityPoolsEscalationGame(client, secondChildPool.securityPool)
+			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+			await startTruthAuction(client, secondChildPool.securityPool)
+			strictEqualTypeSafe(await getSystemState(client, secondChildPool.securityPool), SystemState.Operational, 'second recursive child should become operational before final resolution')
+			const secondChildGameEndDate = await client.readContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: secondChildGame,
+				functionName: 'getEscalationGameEndDate',
+			})
+			await mockWindow.setTime(secondChildGameEndDate + 1n)
+
+			strictEqualTypeSafe(await getQuestionOutcome(client, secondChildPool.securityPool), expectedOutcome, 'recursive child pool should retain the canonical matching-question outcome')
+			strictEqualTypeSafe(await getQuestionResolution(client, secondChildGame), expectedOutcome, 'recursive continuation game should settle against the same canonical outcome')
+		})
+
 		test('a direct same-question fork settles carried deposits against the selected child branch', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
@@ -2665,6 +2769,28 @@ describe('Peripherals: fork migration', () => {
 				merkleMountainRangeSiblings: [],
 				nullifierSiblings: new SparseNullifierTree().getProof(0n),
 			})
+			const canonicalSettlementSnapshot = await mockWindow.anvilSnapshot()
+			await mockWindow.addStateOverrides({
+				[yesEscalationGame]: {
+					stateDiff: {
+						[formatStorageSlot(440n)]: 1n | (BigInt(QuestionOutcome.No) << 8n),
+					},
+				},
+			})
+			strictEqualTypeSafe(await getQuestionResolution(client, yesEscalationGame), QuestionOutcome.No, 'storage override should create a divergent game-local payout result')
+			strictEqualTypeSafe(await getQuestionOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'storage override must leave the canonical child branch unchanged')
+			await assert.rejects(
+				client.writeContract({
+					abi: peripherals_SecurityPool_SecurityPool.abi,
+					address: yesSecurityPool.securityPool,
+					functionName: 'withdrawForkedEscalationDeposits',
+					args: [QuestionOutcome.No, [noProof]],
+				}),
+				/Pool\/game outcome mismatch/,
+			)
+			await mockWindow.anvilRevert(canonicalSettlementSnapshot)
+			strictEqualTypeSafe(await getQuestionResolution(client, yesEscalationGame), QuestionOutcome.Yes, 'reverting the mismatch override should restore the canonical game result')
+
 			const childRepToken = getRepTokenAddress(yesUniverse)
 			const walletRepBeforeClaim = await getERC20Balance(client, childRepToken, client.account.address)
 			const hash = await client.writeContract({

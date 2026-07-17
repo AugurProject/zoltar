@@ -11,7 +11,7 @@ Failure behavior follows Solidity transaction semantics: an uncaught revert roll
 
 Registers universe forks and turns burned parent REP into branch-specific child REP. [Source](../solidity/contracts/Zoltar.sol)
 
-Read surface: Use `universes`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThreshold`, `getUniverseTheoreticalSupply`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalance` to reconstruct universe and migration state.
+Read surface: Use `universes`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThreshold`, `getNonDecisionThreshold`, `getUniverseTheoreticalSupply`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalance` to reconstruct universe and migration state.
 
 | Transaction | Caller | Main prerequisites | State or asset effect | Primary signals |
 | --- | --- | --- | --- | --- |
@@ -69,12 +69,12 @@ Read surface: Use `forkData`, `getMigratedRep`, `getEscalationMigrationEntitleme
 
 Escrows outcome REP, raises the running resolution cost, detects non-decision, and settles local or carried deposits. [Source](../solidity/contracts/peripherals/EscalationGame.sol)
 
-Read surface: Use `getCurrentCost`, `totalCost`, `getEscalationGameEndDate`, `getQuestionResolution`, `hasReachedNonDecision`, `getBindingCapital`, `getOutcomeBalances`, deposit pagination, carry snapshot views, and escrow views. Ordinary users route deposits and withdrawals through `SecurityPool`.
+Read surface: Use `getCurrentCost`, `totalCost`, `getEscalationGameEndDate`, `getQuestionResolution`, `getFinalQuestionResolution`, `fixedQuestionOutcome`, `hasReachedNonDecision`, `getBindingCapital`, `getOutcomeBalances`, deposit pagination, carry snapshot views, and escrow views. Ordinary users route deposits and withdrawals through `SecurityPool`.
 
 | Transaction | Caller | Main prerequisites | State or asset effect | Primary signals |
 | --- | --- | --- | --- | --- |
 | `start(startBond, nonDecisionThreshold)` | Deploying `EscalationGameFactory` owner | Game not already started; threshold exceeds the positive start bond; both are at least 1 REP. | Initializes a local game and sets activation three days after deployment. | `GameStarted` |
-| `startFromFork(...)` and `resumeFromFork()` | Factory owner starts; owner or security pool resumes | Valid start parameters and inherited elapsed time no greater than seven weeks; continuation resumes once. | Initializes a paused continuation with inherited elapsed time, then resumes its remaining escalation clock. | `GameContinuedFromFork`, `ForkContinuationResumed` |
+| `startFromFork(startBond, nonDecisionThreshold, elapsedAtFork, fixedQuestionOutcome)` and `resumeFromFork()` | Factory owner starts; owner or security pool resumes | Valid start parameters and inherited elapsed time no greater than seven weeks; continuation resumes once. | Initializes a paused continuation with inherited elapsed time and an optional fixed matching-question child outcome, then resumes its remaining escalation clock. After the continuation deadline, `getFinalQuestionResolution` returns the fixed outcome when one is present. | `GameContinuedFromFork`, `ForkContinuationResumed` |
 | `recordDepositFromSecurityPool(...)` | Owning `SecurityPool` only | Game unresolved; valid outcome; preview and accepted cumulative amount match; room remains below threshold. | Appends an accepted local deposit, updates outcome and vault escrow, and records its carry leaf. | `LocalDepositAppended`, `DepositOnOutcome`, optionally `NonDecisionReached` |
 | Claim, withdrawal, export, carry initialization, and forked-escrow entrypoints | Owning pool or `SecurityPoolForker`, depending on the function | Caller authority plus final-resolution, proof, nullifier, escrow, and lifecycle guards for the selected path. | Settles local or carried deposits, initializes canonical continuation proofs, or exports unresolved vault aggregates during migration. | Claim, withdrawal, carry, export, escrow, and nullifier events |
 | `sweepResidualRepToSecurityPool()` | Anyone | Final outcome; no unresolved principal; no vault escrow; positive residual balance. | Returns otherwise stranded residual REP to the owning pool. | `ResidualRepSweptToSecurityPool` |
@@ -98,13 +98,15 @@ Read surface: Use `isPriceValid`, `minimumToken1Report`, request-cost getters, p
 
 Stores universe-aware ERC-1155 outcome shares and reproduces a holder's full source balance into selected fork branches. [Source](../solidity/contracts/peripherals/tokens/ShareToken.sol)
 
-Read surface: Use standard ERC-1155 reads plus `totalSupplyForOutcome`, `balanceOfOutcome`, `balanceOfShares`, `getTokenId`, `getTokenIds`, and `unpackTokenId`.
+Read surface: Use standard ERC-1155 reads plus `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getTokenId`, `getTokenIds`, and `unpackTokenId`.
 
 | Transaction | Caller | Main prerequisites | State or asset effect | Primary signals |
 | --- | --- | --- | --- | --- |
 | `migrate(fromId, targetOutcomeIndexes)` | Holder of the source token ID | Source universe forked; eight-week window open; positive source balance; nonempty, strictly increasing, well-formed outcomes. | Burns the holder's full source balance and mints the same balance into every selected child-universe token ID. | ERC-1155 transfer events and `Migrate` per branch |
 | `authorize(securityPoolCandidate)` | Initially authorized `SecurityPoolFactory` for an origin pool; an authorized parent `SecurityPool` for a child pool | Caller is already authorized. | Adds the candidate pool to the set allowed to mint, burn, and authorize descendants. | `AuthorizationUpdated` |
-| Mint and burn entrypoints | An authorized `SecurityPool` | Caller is authorized; token balances cover burns. | Performs pool-requested complete-set minting, complete-set burning, or winning-token burning. Minting requires equal global outcome supplies; burning requires only that the holder owns equal amounts and reports the largest remaining outcome supply. | ERC-1155 transfer events |
+| `mintCompleteSets(universeId, account, amount)` | An authorized `SecurityPool` | Caller is authorized; global Invalid, Yes, and No supplies are equal before minting. | Mints `amount` each of Invalid, Yes, and No to `account`. | ERC-1155 transfer events |
+| `burnCompleteSets(universeId, account, amount)` | An authorized `SecurityPool` | Caller is authorized; `account` owns at least `amount` of every outcome. | Burns `amount` each of Invalid, Yes, and No from `account`; global outcome supplies may differ. | ERC-1155 transfer events |
+| `burnTokenIdAndGetRemainingSupply(tokenId, account)` | An authorized `SecurityPool` | Caller is authorized. | Burns `account`'s full balance of `tokenId` and returns the burned amount and that token ID's remaining supply. | ERC-1155 transfer events |
 
 ## UniformPriceDualCapBatchAuction
 

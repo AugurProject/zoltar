@@ -5664,12 +5664,17 @@
 					</div>
 					<h3>Child Outcome Resolution</h3>
 					<p>
-						Child pools resolve outcomes through the forker. In an own-fork
-						child, the child's outcome is fixed by the child's Zoltar outcome
-						index. In an external-fork child, a local escalation result is used
-						only if that escalation ended before the universe forked; otherwise
-						the child remains unresolved until its own continuation or later
-						state produces an outcome.
+						Child pools resolve outcomes through the forker. When the parent
+						universe forks on the pool's question, each child stores its selected
+						Zoltar outcome index as the fixed result, whether the fork began
+						through the pool-specific path or a direct Zoltar call. That result
+						applies after the continuation deadline and remains fixed through
+						later unrelated descendants. A child created by an unrelated fork
+						without an inherited fixed result uses a local escalation result only
+						if the escalation ended before the universe forked; otherwise it
+						remains unresolved until continuation or later state produces an
+						outcome. The <code>ownFork</code> flag changes accounting, not question
+						semantics.
 					</p>
 					<figure class="diagram" id="fig-placeholder-system-decision-flow">
 						<svg
@@ -7836,7 +7841,10 @@
 						</div>
 						<div class="parameter-card">
 							<span>Non-Decision Threshold</span>
-							<b><code>totalTheoreticalRepSupply / 40</code>.</b>
+							<b
+								><code>ceil(forkThreshold / 2)</code> via
+								<code>Zoltar.getNonDecisionThreshold</code>.</b
+							>
 						</div>
 						<div class="parameter-card">
 							<span>Reward Window</span>

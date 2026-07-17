@@ -187,7 +187,7 @@ const contractReferences: ContractReference[] = [
 	{
 		name: 'Zoltar',
 		purpose: 'Registers universe forks and turns burned parent REP into branch-specific child REP.',
-		readSurface: 'Use `universes`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThreshold`, `getUniverseTheoreticalSupply`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalance` to reconstruct universe and migration state.',
+		readSurface: 'Use `universes`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThreshold`, `getNonDecisionThreshold`, `getUniverseTheoreticalSupply`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalance` to reconstruct universe and migration state.',
 		sourcePath: 'solidity/contracts/Zoltar.sol',
 		interactions: [
 			{
@@ -459,7 +459,8 @@ const contractReferences: ContractReference[] = [
 	{
 		name: 'EscalationGame',
 		purpose: 'Escrows outcome REP, raises the running resolution cost, detects non-decision, and settles local or carried deposits.',
-		readSurface: 'Use `getCurrentCost`, `totalCost`, `getEscalationGameEndDate`, `getQuestionResolution`, `hasReachedNonDecision`, `getBindingCapital`, `getOutcomeBalances`, deposit pagination, carry snapshot views, and escrow views. Ordinary users route deposits and withdrawals through `SecurityPool`.',
+		readSurface:
+			'Use `getCurrentCost`, `totalCost`, `getEscalationGameEndDate`, `getQuestionResolution`, `getFinalQuestionResolution`, `fixedQuestionOutcome`, `hasReachedNonDecision`, `getBindingCapital`, `getOutcomeBalances`, deposit pagination, carry snapshot views, and escrow views. Ordinary users route deposits and withdrawals through `SecurityPool`.',
 		sourcePath: 'solidity/contracts/peripherals/EscalationGame.sol',
 		interactions: [
 			{
@@ -471,9 +472,9 @@ const contractReferences: ContractReference[] = [
 				signals: '`GameStarted`',
 			},
 			{
-				call: '`startFromFork(...)` and `resumeFromFork()`',
+				call: '`startFromFork(startBond, nonDecisionThreshold, elapsedAtFork, fixedQuestionOutcome)` and `resumeFromFork()`',
 				caller: 'Factory owner starts; owner or security pool resumes',
-				effect: 'Initializes a paused continuation with inherited elapsed time, then resumes its remaining escalation clock.',
+				effect: 'Initializes a paused continuation with inherited elapsed time and an optional fixed matching-question child outcome, then resumes its remaining escalation clock. After the continuation deadline, `getFinalQuestionResolution` returns the fixed outcome when one is present.',
 				declarations: [{ name: 'startFromFork' }, { name: 'resumeFromFork' }],
 				preconditions: 'Valid start parameters and inherited elapsed time no greater than seven weeks; continuation resumes once.',
 				signals: '`GameContinuedFromFork`, `ForkContinuationResumed`',
@@ -576,7 +577,7 @@ const contractReferences: ContractReference[] = [
 	{
 		name: 'ShareToken',
 		purpose: "Stores universe-aware ERC-1155 outcome shares and reproduces a holder's full source balance into selected fork branches.",
-		readSurface: 'Use standard ERC-1155 reads plus `totalSupplyForOutcome`, `balanceOfOutcome`, `balanceOfShares`, `getTokenId`, `getTokenIds`, and `unpackTokenId`.',
+		readSurface: 'Use standard ERC-1155 reads plus `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getTokenId`, `getTokenIds`, and `unpackTokenId`.',
 		sourcePath: 'solidity/contracts/peripherals/tokens/ShareToken.sol',
 		interactions: [
 			{
@@ -596,11 +597,27 @@ const contractReferences: ContractReference[] = [
 				signals: '`AuthorizationUpdated`',
 			},
 			{
-				call: 'Mint and burn entrypoints',
+				call: '`mintCompleteSets(universeId, account, amount)`',
 				caller: 'An authorized `SecurityPool`',
-				effect: 'Performs pool-requested complete-set minting, complete-set burning, or winning-token burning. Minting requires equal global outcome supplies; burning requires only that the holder owns equal amounts and reports the largest remaining outcome supply.',
-				declarations: [{ name: 'mintCompleteSets' }, { name: 'burnCompleteSets' }, { name: 'burnTokenIdAndGetRemainingSupply' }],
-				preconditions: 'Caller is authorized; token balances cover burns.',
+				effect: 'Mints `amount` each of Invalid, Yes, and No to `account`.',
+				declarations: [{ name: 'mintCompleteSets' }],
+				preconditions: 'Caller is authorized; global Invalid, Yes, and No supplies are equal before minting.',
+				signals: 'ERC-1155 transfer events',
+			},
+			{
+				call: '`burnCompleteSets(universeId, account, amount)`',
+				caller: 'An authorized `SecurityPool`',
+				effect: 'Burns `amount` each of Invalid, Yes, and No from `account`; global outcome supplies may differ.',
+				declarations: [{ name: 'burnCompleteSets' }],
+				preconditions: 'Caller is authorized; `account` owns at least `amount` of every outcome.',
+				signals: 'ERC-1155 transfer events',
+			},
+			{
+				call: '`burnTokenIdAndGetRemainingSupply(tokenId, account)`',
+				caller: 'An authorized `SecurityPool`',
+				effect: "Burns `account`'s full balance of `tokenId` and returns the burned amount and that token ID's remaining supply.",
+				declarations: [{ name: 'burnTokenIdAndGetRemainingSupply' }],
+				preconditions: 'Caller is authorized.',
 				signals: 'ERC-1155 transfer events',
 			},
 		],

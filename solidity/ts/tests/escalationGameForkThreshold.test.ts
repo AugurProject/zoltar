@@ -17,7 +17,7 @@ import { depositToEscalationGame, getSecurityVault, poolOwnershipToRep } from '.
 import { getNonDecisionThreshold } from '../testSupport/simulator/utils/contracts/escalationGame'
 import { getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { addressString } from '../testSupport/simulator/utils/bigint'
-import { peripherals_SecurityPool_SecurityPool } from '../types/contractArtifact'
+import { peripherals_SecurityPool_SecurityPool, Zoltar_Zoltar } from '../types/contractArtifact'
 import { getERC20Balance } from '../testSupport/simulator/utils/utilities'
 import { GENESIS_REPUTATION_TOKEN } from '../testSupport/simulator/utils/constants'
 
@@ -162,5 +162,36 @@ describe('Escalation Game Fork Threshold Test', () => {
 			'initial escalation deposit should match deployment config',
 		)
 		assert.strictEqual(await getNonDecisionThreshold(client, securityPoolAddresses.escalationGame), expectedThreshold, 'escalation threshold should follow Zoltar tracked supply')
+	})
+
+	test.each([
+		{ name: 'even', forkThreshold: 100n },
+		{ name: 'odd', forkThreshold: 101n },
+	])('uses ceiling-half non-decision funding boundaries for an $name fork threshold', async ({ forkThreshold }) => {
+		const overriddenTotalSupply = forkThreshold * DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
+		const universeSupplySlot = keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [genesisUniverse, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT]))
+		await mockWindow.addStateOverrides({
+			[getZoltarAddress()]: {
+				stateDiff: {
+					[universeSupplySlot]: overriddenTotalSupply,
+				},
+			},
+		})
+
+		const nonDecisionThreshold = await client.readContract({
+			abi: Zoltar_Zoltar.abi,
+			address: getZoltarAddress(),
+			functionName: 'getNonDecisionThreshold',
+			args: [genesisUniverse],
+		})
+		const expectedThreshold = (forkThreshold + 1n) / 2n
+		const twoOutcomeTotal = 2n * nonDecisionThreshold
+
+		assert.strictEqual(nonDecisionThreshold, expectedThreshold, 'non-decision should use ceiling division by two')
+		assert.ok(twoOutcomeTotal >= forkThreshold, 'two threshold outcomes must always fund the fork threshold')
+		assert.ok(2n * (nonDecisionThreshold - 1n) < forkThreshold, 'one wei less on both outcomes must remain below fork funding')
+		assert.strictEqual(forkThreshold - 1n >= twoOutcomeTotal, false, 'F - 1 total REP must never fund two threshold outcomes')
+		assert.strictEqual(forkThreshold >= twoOutcomeTotal, forkThreshold % 2n === 0n, 'exactly F total REP funds two threshold outcomes only when F is even')
+		assert.strictEqual(forkThreshold + 1n >= twoOutcomeTotal, true, 'F + 1 total REP must fund two threshold outcomes')
 	})
 })
