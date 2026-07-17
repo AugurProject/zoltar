@@ -112,6 +112,7 @@ export type VaultMetricGridProps = {
 
 export type DeploymentSectionProps = {
 	title: string
+	completedGroup?: boolean
 	steps: DeploymentStatus[]
 	allSteps: DeploymentStatus[]
 	accountAddress: Address | undefined

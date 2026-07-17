@@ -598,7 +598,7 @@ function renderReportDetailsCard(
 				]}
 			/>
 			{reportControls}
-			<LifecycleStageBanner stage={stage} />
+			{stage.label === status ? undefined : <LifecycleStageBanner stage={stage} />}
 			{readinessActions.length > 0 ? (
 				<SectionBlock title={openOracleCopy.reportActions}>
 					<div className='action-readiness-grid'>
@@ -660,7 +660,7 @@ function renderReportDetailsCard(
 				</ReadOnlyDetailAccordion>
 
 				<ReadOnlyDetailAccordion title={commonCopy.status}>
-					{renderReportSection(commonCopy.status, [
+					{renderReportFields([
 						{
 							label: openOracleCopy.reportTimestamp,
 							value: <TimestampValue currentTimestamp={openOracleReportDetails.currentTime} timestamp={openOracleReportDetails.reportTimestamp} zeroText={openOracleCopy.awaitingInitialReportLabel} />,
@@ -689,7 +689,7 @@ function renderReportDetailsCard(
 				</ReadOnlyDetailAccordion>
 
 				<ReadOnlyDetailAccordion title={commonCopy.settlement}>
-					{renderReportSection(commonCopy.settlement, [
+					{renderReportFields([
 						{
 							label: openOracleCopy.settlementTime,
 							value: openOracleCopy.formatTimingValue(openOracleReportDetails.settlementTime, openOracleReportDetails.timeType),
@@ -714,7 +714,7 @@ function renderReportDetailsCard(
 				</ReadOnlyDetailAccordion>
 
 				<ReadOnlyDetailAccordion title={openOracleCopy.callbackExtra}>
-					{renderReportSection(openOracleCopy.callbackExtra, [
+					{renderReportFields([
 						{
 							label: openOracleCopy.callbackContract,
 							value: openOracleReportDetails.callbackContract === zeroAddress ? commonCopy.none : <AddressValue address={openOracleReportDetails.callbackContract} />,

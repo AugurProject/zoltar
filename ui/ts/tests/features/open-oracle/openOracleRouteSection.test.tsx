@@ -365,9 +365,38 @@ describe('OpenOracleSection route create view', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('heading', { name: 'Report Actions' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Report Details' })).toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Settled' })).not.toBeNull()
+		expect(document.body.querySelector('.sticky-object-context .badge')?.textContent).toBe('Settled')
+		expect(document.body.querySelector('.lifecycle-stage-banner')).toBeNull()
 		expect(documentQueries.queryByText('This report is already settled and no further write actions are available.')).toBeNull()
 		expect(documentQueries.queryByText('This report is settled. No write actions are available.')).toBeNull()
+		for (const disclosureTitle of ['Status', 'Settlement', 'Callback / Extra']) {
+			const summary = documentQueries.getByText(disclosureTitle, { selector: 'summary' })
+			const disclosure = summary.closest('details')
+			if (!(disclosure instanceof HTMLElement)) throw new Error(`Expected ${disclosureTitle} disclosure`)
+			expect(within(disclosure).getAllByText(disclosureTitle)).toHaveLength(1)
+		}
+	})
+
+	test('keeps an action-stage banner when it adds timing context beyond status', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				OpenOracleSection,
+				createOpenOracleSectionProps({
+					activeView: 'selected-report',
+					openOracleReportDetails: createOpenOracleReportDetails({
+						currentReporter: '0x3000000000000000000000000000000000000000',
+						currentTime: 120n,
+						disputeDelay: 10n,
+						reportTimestamp: 100n,
+						settlementTime: 60n,
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.querySelector('.sticky-object-context .badge')?.textContent).toBe('Pending')
+		expect(within(document.body).getByRole('heading', { name: 'Dispute Window Open' })).not.toBeNull()
 	})
 
 	test('keeps selected-report approvals disabled off mainnet and explains recovery', async () => {

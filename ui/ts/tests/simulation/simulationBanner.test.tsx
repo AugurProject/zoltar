@@ -98,7 +98,25 @@ describe('SimulationBanner', () => {
 
 		try {
 			const documentQueries = within(renderedComponent.container)
+			expect(documentQueries.getByRole('heading', { name: 'Browser Simulation' })).not.toBeNull()
+			expect(documentQueries.queryByText('Simulation Mode')).toBeNull()
 			expect(documentQueries.getByText('One seeded market, one security pool, and one funded vault with an active security bond allowance. Use it to test pool actions and liquidation paths.')).not.toBeNull()
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
+	test('does not repeat generic framing inside advanced controls', async () => {
+		const domEnvironment = installDomEnvironment()
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={createSimulationController()} onRefresh={async () => undefined} />)
+
+		try {
+			const advancedControls = openAdvancedControls(renderedComponent.container)
+			const advancedQueries = within(advancedControls)
+			expect(advancedQueries.queryByRole('heading', { name: 'Controls' })).toBeNull()
+			expect(advancedQueries.queryByText('Use these controls for repeatable manual UI QA without a wallet extension.')).toBeNull()
+			expect(advancedQueries.getByText('Query delay (ms)')).not.toBeNull()
 		} finally {
 			await renderedComponent.cleanup()
 			domEnvironment.cleanup()

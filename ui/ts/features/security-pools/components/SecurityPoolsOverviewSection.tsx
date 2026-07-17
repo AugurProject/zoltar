@@ -179,7 +179,7 @@ export function SecurityPoolsOverviewSection({
 				<div className='filter-toolbar'>
 					<label className='field'>
 						<span>{securityPoolCopy.searchLoadedPage}</span>
-						<FormInput value={searchText} onInput={event => setSearchText(event.currentTarget.value)} placeholder={securityPoolCopy.poolSearchHelpText} />
+						<FormInput value={searchText} onInput={event => setSearchText(event.currentTarget.value)} placeholder={securityPoolCopy.poolSearchPlaceholder} />
 					</label>
 					<label className='field'>
 						<span>{securityPoolCopy.systemState}</span>
@@ -337,7 +337,6 @@ export function SecurityPoolsOverviewSection({
 											<div className='security-pool-browse-vaults'>
 												<div className='security-pool-browse-vaults-head'>
 													<h4>{securityPoolCopy.vaults}</h4>
-													<div className='security-pool-browse-vaults-count'>{securityPoolCopy.formatVaultCountLabel(pool.vaultCount.toString())}</div>
 												</div>
 												{pool.hasLoadedVaults === false ? (
 													<StateHint title={securityPoolCopy.previewDeferred} presentation={{ key: 'empty', badgeLabel: securityPoolCopy.previewDeferred, badgeTone: 'muted', detail: securityPoolCopy.formatVaultPreviewDeferred(pool.vaultCount.toString()) }} />
