@@ -185,6 +185,5 @@ export function useZoltarMigration({
 		zoltarMigrationFeedback: zoltarMigrationFeedback.value,
 		zoltarMigrationForm: zoltarMigrationForm.value,
 		zoltarMigrationPending: zoltarMigrationPending.value,
-		zoltarMigrationResult: zoltarMigrationResult.value,
 	}
 }

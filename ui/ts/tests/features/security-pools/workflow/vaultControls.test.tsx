@@ -39,7 +39,10 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		if (!(depositLauncherButton instanceof HTMLElement)) throw new Error('Expected deposit launcher button')
 
 		expect(depositLauncherButton.hasAttribute('disabled')).toBe(true)
-		expect(depositLauncherButton.getAttribute('title')).toBe('Refresh the vault before depositing REP.')
+		expect(depositLauncherButton.getAttribute('title')).toBeNull()
+		const refreshReason = documentQueries.getByText('Refresh the vault to use these actions.')
+		expect(documentQueries.getAllByText('Refresh the vault to use these actions.')).toHaveLength(1)
+		expect(depositLauncherButton.getAttribute('aria-describedby')).toBe(refreshReason.getAttribute('id'))
 		expect(loadSecurityVaultCalls).toContain(undefined)
 
 		await act(() => {

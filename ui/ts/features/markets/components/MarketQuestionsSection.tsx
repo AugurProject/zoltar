@@ -107,7 +107,7 @@ export function MarketQuestionsSection({
 	return (
 		<SectionBlock
 			density='compact'
-			title={commonCopy.markets}
+			title={marketCopy.questions}
 			actions={
 				<PaginationControls
 					hasNextPage={hasNextPage}
@@ -134,7 +134,6 @@ export function MarketQuestionsSection({
 									key: 'empty',
 									badgeLabel: marketCopy.noQuestions,
 									badgeTone: 'muted',
-									detail: marketCopy.noQuestionsDetail,
 								}}
 								title={marketCopy.noQuestions}
 								actions={

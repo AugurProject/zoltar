@@ -476,7 +476,7 @@ export function ReportingSection({
 	const reportOutcomeSelectionMessage = showFullReporting && reportingStatus !== 'missing' && selectedOutcome === undefined && !reportControlsLocked ? SELECT_OUTCOME_TO_ENABLE_REPORTING_MESSAGE : undefined
 	let reportingOpenNotice: string | undefined
 	if (showFullReporting && reportingStatus === 'not-started' && effectiveReportingDetails?.questionOutcome === 'none') {
-		reportingOpenNotice = selectedOutcome === undefined ? reportingCopy.reportingOutcomeSelectionHint : reportingCopy.reportingOpenDetail
+		reportingOpenNotice = reportingCopy.reportingOpenDetail
 	}
 	const withdrawActionPending = reportingActiveAction === 'withdrawEscalation'
 	const shouldShowWithdrawEmptyState = !loadingReportingDetails && reportingStatus !== 'missing' && withdrawableSides.length === 0
@@ -524,25 +524,9 @@ export function ReportingSection({
 			})
 		: undefined
 	const reportingStageBanner = reportingStage?.key === 'escalation-active' ? undefined : reportingStage
-	const reportingWorkflowSummary = reportingStage?.detail ?? reportingCopy.outcomeSelectionHelpText
 	const showReportingHeaderStack = showFullReporting && (showSecurityPoolAddressInput || reportingStageBanner !== undefined || reportingOpenNotice !== undefined)
 	const sections = (
 		<>
-			{showFullReporting ? (
-				<SectionBlock className='reporting-workflow-section' title={reportingCopy.reportingWorkflow} density='compact' variant='plain'>
-					<div className='workflow-summary-strip workflow-guide workflow-guide-compact'>
-						<div className='workflow-guide-intro'>
-							<p className='detail'>{reportingWorkflowSummary}</p>
-						</div>
-						<div className='workflow-summary-strip-steps'>
-							<span className='current'>{reportingCopy.step1Outcome}</span>
-							<span>{reportingCopy.step2LockRep}</span>
-							<span>{reportingCopy.step3Settle}</span>
-						</div>
-					</div>
-				</SectionBlock>
-			) : undefined}
-
 			{showReportingHeaderStack ? (
 				<div className='reporting-header-stack'>
 					{showSecurityPoolAddressInput ? (
@@ -697,11 +681,13 @@ export function ReportingSection({
 							{ label: reportingCopy.currentTentativeOutcome, value: leadingOutcome === undefined ? reportingCopy.pendingFinalization : getReportingOutcomeLabel(leadingOutcome) },
 							{ label: reportingCopy.timerEffect, value: projectedReportingPreview ?? commonCopy.metricUnavailablePlaceholder },
 							{ label: reportingCopy.availableVaultRepAfterReport, value: <CurrencyValue value={resultingAvailableReportingRep} suffix={commonCopy.rep} /> },
+						]}
+						risks={[reportingCopy.ifThisSideLoses, reportingCopy.reportingLockRisk, reportingCopy.reportTimerRisk]}
+						technicalDetails={[
 							{ label: transactionReviewCopy.protocolFee, value: transactionReviewCopy.noProtocolFee },
 							{ label: transactionReviewCopy.contract, value: effectiveReportingDetails === undefined ? commonCopy.unavailable : <AddressValue address={effectiveReportingDetails.securityPoolAddress} /> },
 							{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
 						]}
-						risks={[reportingCopy.ifThisSideLoses, reportingCopy.reportingLockRisk, reportingCopy.reportTimerRisk]}
 					/>
 					<div className='actions'>
 						<TransactionActionButton
@@ -712,7 +698,6 @@ export function ReportingSection({
 							availability={{ disabled: !isMainnet || !reportOutcomeEnabled || reportGuardMessage !== undefined, reason: !isMainnet ? commonCopy.mainnetRequiredReason : reportGuardMessage }}
 						/>
 					</div>
-					{projectedReportingPreview === undefined ? undefined : <p className='detail'>{projectedReportingPreview}</p>}
 				</SectionBlock>
 			) : undefined}
 

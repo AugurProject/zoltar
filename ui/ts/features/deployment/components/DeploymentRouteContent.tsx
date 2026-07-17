@@ -51,7 +51,7 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextM
 					</DataGrid>
 				}
 			/>
-			<SectionBlock title={deploymentCopy.deploymentGroups} description={!isLoadingDeploymentStatuses && nextMissingStep !== undefined ? `${deploymentCopy.nextDeployableContract} ${nextMissingStep.label}` : deploymentCopy.deploymentCompleteDetail}>
+			<SectionBlock title={deploymentCopy.deploymentGroups}>
 				<div className='workflow-stack'>
 					{deploymentSections.map(section => {
 						const allDeployed = section.steps.length > 0 && section.steps.every(step => step.deployed)

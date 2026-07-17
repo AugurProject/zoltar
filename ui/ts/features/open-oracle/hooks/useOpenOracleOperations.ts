@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'preact/hooks'
 import { useFormState } from '../../../hooks/useFormState.js'
 import { useLoadController } from '../../../hooks/useLoadController.js'
 import { ABIS } from '../../../abis.js'
-import { approveErc20, createOpenOracleReportInstance, disputeOracleReport, getOpenOracleAddress, loadOpenOracleReportDetails, readOptionalMulticall, settleOracleReport, submitInitialOracleReport, wrapWeth } from '../../../protocol/index.js'
+import { approveErc20, createOpenOracleReportInstance, disputeOracleReport, getOpenOracleAddress, isOpenOracleReportMissingError, loadOpenOracleReportDetails, readOptionalMulticall, settleOracleReport, submitInitialOracleReport, wrapWeth } from '../../../protocol/index.js'
 import { assertNever } from '../../../lib/assert.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../../../lib/clients.js'
 import { getErrorMessage } from '../../../lib/errors.js'
@@ -35,6 +35,7 @@ import { buildWriteActionConfig, runWriteAction } from '../../../lib/writeAction
 import { refreshWalletStateOnly } from '../../../lib/refreshState.js'
 import type { OpenOracleCreateFormState, OpenOracleFormState, WriteOperationsParameters } from '../../../types/app.js'
 import type { OpenOracleActionResult, OpenOracleReportDetails } from '../../../types/contracts.js'
+import type { OpenOracleReportLookupState } from '../../types.js'
 
 type UseOpenOracleOperationsParameters = WriteOperationsParameters & {
 	enabled: boolean
@@ -154,9 +155,10 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 	const openOracleError = useSignal<string | undefined>(undefined)
 	const openOracleActiveAction = useSignal<OpenOracleActionResult['action'] | undefined>(undefined)
 	const openOracleFeedback = useSignal<ActionFeedback<OpenOracleActionResult['action']> | undefined>(undefined)
-	const { state: openOracleForm, setState: setOpenOracleForm } = useFormState<OpenOracleFormState>(getDefaultOpenOracleFormState())
+	const { state: openOracleForm, setState: setOpenOracleFormState } = useFormState<OpenOracleFormState>(getDefaultOpenOracleFormState())
 	const openOracleResult = useSignal<OpenOracleActionResult | undefined>(undefined)
 	const openOracleReportDetails = useSignal<OpenOracleReportDetails | undefined>(undefined)
+	const openOracleReportLookupState = useSignal<OpenOracleReportLookupState>('unknown')
 	const loadedOpenOracleReportId = useSignal<bigint | undefined>(undefined)
 	const openOracleInitialReportDefaultPrice = useSignal<string | undefined>(undefined)
 	const openOracleInitialReportDefaultPriceError = useSignal<string | undefined>(undefined)
@@ -556,6 +558,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 		await oracleReportLoad.run({
 			onStart: () => {
 				openOracleError.value = undefined
+				openOracleReportLookupState.value = 'loading'
 			},
 			load: async () => {
 				const reportIdValue = reportIdInput?.trim() ?? openOracleForm.value.reportId
@@ -572,14 +575,32 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			onSuccess: ({ details }: LoadedOracleReportResult) => {
 				if (!isCurrentLoad() || !isSelectedReportCurrent(requestedReportIdInput)) return
 				applyLoadedOracleReport(details, { resetPrice: true })
+				openOracleReportLookupState.value = 'ready'
 			},
 			onError: (error: unknown) => {
 				if (!isCurrentLoad() || !isSelectedReportCurrent(requestedReportIdInput)) return
 				openOracleReportDetails.value = undefined
 				loadedOpenOracleReportId.value = undefined
 				resetOpenOracleInitialReportState(false)
-				openOracleError.value = getErrorMessage(error, 'Failed to load oracle report')
+				const reportMissing = isOpenOracleReportMissingError(error)
+				openOracleReportLookupState.value = reportMissing ? 'missing' : 'load-failed'
+				openOracleError.value = reportMissing ? undefined : getErrorMessage(error, 'Failed to load oracle report')
 			},
+		})
+	}
+	const setOpenOracleForm = (updater: (current: OpenOracleFormState) => OpenOracleFormState) => {
+		setOpenOracleFormState(current => {
+			const next = updater(current)
+			const nextReportId = next.reportId.trim()
+			if (nextReportId === current.reportId.trim()) return next
+
+			currentSelectedReportIdRef.current = nextReportId
+			openOracleReportLookupState.value = 'unknown'
+			openOracleReportDetails.value = undefined
+			loadedOpenOracleReportId.value = undefined
+			openOracleError.value = undefined
+			resetOpenOracleInitialReportState(false)
+			return { ...getDefaultOpenOracleFormState(), reportId: next.reportId }
 		})
 	}
 
@@ -931,7 +952,6 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 		openOracleActiveAction: openOracleActiveAction.value,
 		refreshPrice: () => void refreshOpenOracleInitialReportQuote(openOracleReportDetails.value),
 		loadingOpenOracleCreate: loadingOpenOracleCreate.value,
-		loadingOracleReport: oracleReportLoad.isLoading.value,
 		openOracleCreateForm: openOracleCreateForm.value,
 		openOracleDisputeSubmission,
 		openOracleError: openOracleError.value,
@@ -963,6 +983,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			tokenAccessRefreshing: openOracleInitialReportTokenAccessRefreshing.value && openOracleInitialReportTokenAccessLoad.isLoading.value,
 		},
 		openOracleInitialReportSubmission,
+		openOracleReportLookupState: openOracleReportLookupState.value,
 		openOracleReportDetails: openOracleReportDetails.value,
 		openOracleResult: openOracleResult.value,
 		resetOpenOracleCreateForm: () => {

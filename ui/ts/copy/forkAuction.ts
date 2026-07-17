@@ -23,7 +23,6 @@ export const repPurchased = 'REP Purchased'
 export const startingTruthAuction = 'Starting truth auction…'
 export const startTruthAuction = 'Start Truth Auction'
 export const submitBid = 'Submit Bid'
-export const bidEscrowDetail = 'Submitting a bid locks ETH until settlement. Losing bids are refunded during settlement.'
 export const unresolvedDepositDetailsUnavailable = 'Unresolved escalation deposit details are unavailable for this pool right now.'
 export const worthNowLead = 'Worth now: '
 export const formatCheckingPoolRepMigratedToChildUniverse = (outcomeLabel: CopyTemplateValue) => `Checking whether pool REP has already been migrated for the ${outcomeLabel} child universe.`
@@ -55,8 +54,6 @@ export const forkReadiness = 'Fork Readiness'
 export const notChosen = 'Not chosen'
 export const systemIsForking = 'System is forking'
 export const ethRep = 'ETH / REP'
-export const winningBidPremiumDetail = 'Winning bids buy more than REP.'
-export const formatWinningBidAllowanceNotice = (allowanceLabel: CopyTemplateValue) => `When you later claim a filled bid, the vault also receives a pro-rata share of the ${allowanceLabel}. That allowance is the remaining open-interest debt being assigned to auction participants.`
 export const refundSettlementDetail = 'Refund-only settlement returns locked ETH.'
 export const formatFinalizedRefundOnlySettlementNotice = (allowanceLabel: CopyTemplateValue) => `Finalized refund-only settlement uses the child-pool settlement path to unlock ETH, and it does not assign child-pool REP or ${allowanceLabel}.`
 export const formatWinningClaimAllowanceHeadline = (allowanceLabel: CopyTemplateValue) => `Winning claims add REP and ${allowanceLabel}.`
@@ -132,8 +129,6 @@ export const vaultMigrationCompleteReason = 'Vault migration is already complete
 export const combinedUnresolvedMigrationDetail = 'Use unresolved escalation migration to move locked positions and vault balances together.'
 export const selectedLadderPriceLead = 'Selected ladder price: '
 export const bidPriceEthRep = 'Bid Price (ETH / REP)'
-export const bidEstimatedRepDetailLead = 'At the entered price, this bid would buy roughly '
-export const bidEstimatedRepDetailTail = 'if fully filled.'
 export const submittingBidTruncated = 'Submitting bid…'
 export const truthAuctionAddress = 'Truth Auction Address'
 export const started = 'Started'

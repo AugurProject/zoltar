@@ -18,11 +18,20 @@ export function ActionLauncherCard({ action, children, pending = false, pendingL
 		<section className={`action-launcher-card ${action.readiness}`}>
 			<div className='action-launcher-card-copy'>
 				<h4>{action.title}</h4>
-				<p className='detail'>{action.description}</p>
+				{action.description === undefined ? undefined : <p className='detail'>{action.description}</p>}
 				{children}
 			</div>
 			<div className='action-launcher-card-actions'>
-				<ActionLauncherButton idleLabel={action.actionLabel} pendingLabel={pendingLabel} onClick={() => action.onAction?.()} pending={pending} tone={tone} availability={{ disabled, reason: action.blocker }} showDisabledReason />
+				<ActionLauncherButton
+					{...(action.disabledReasonId === undefined ? {} : { describedBy: action.disabledReasonId })}
+					idleLabel={action.actionLabel}
+					pendingLabel={pendingLabel}
+					onClick={() => action.onAction?.()}
+					pending={pending}
+					tone={tone}
+					availability={{ disabled, reason: action.blocker }}
+					showDisabledReason
+				/>
 			</div>
 		</section>
 	)
