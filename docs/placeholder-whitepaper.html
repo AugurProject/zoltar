@@ -914,7 +914,9 @@
 						<li>
 							While the pool is operational, a full complete set can be burned
 							with <code>redeemCompleteSet</code> to recover its pro rata share
-							of collateral.
+							of collateral. After one-sided child migration, this payout uses
+							the maximum outcome supply as its denominator, so balanced holders
+							retain an exit even though unequal supplies still disable minting.
 						</li>
 						<li>
 							After the fork route finalizes an outcome, users can redeem
@@ -5662,12 +5664,17 @@
 					</div>
 					<h3>Child Outcome Resolution</h3>
 					<p>
-						Child pools resolve outcomes through the forker. In an own-fork
-						child, the child's outcome is fixed by the child's Zoltar outcome
-						index. In an external-fork child, a local escalation result is used
-						only if that escalation ended before the universe forked; otherwise
-						the child remains unresolved until its own continuation or later
-						state produces an outcome.
+						Child pools resolve outcomes through the forker. When the parent
+						universe forks on the pool's question, each child stores its selected
+						Zoltar outcome index as the fixed result, whether the fork began
+						through the pool-specific path or a direct Zoltar call. That result
+						applies after the continuation deadline and remains fixed through
+						later unrelated descendants. A child created by an unrelated fork
+						without an inherited fixed result uses a local escalation result only
+						if the escalation ended before the universe forked; otherwise it
+						remains unresolved until continuation or later state produces an
+						outcome. The <code>ownFork</code> flag changes accounting, not question
+						semantics.
 					</p>
 					<figure class="diagram" id="fig-placeholder-system-decision-flow">
 						<svg
@@ -7834,7 +7841,10 @@
 						</div>
 						<div class="parameter-card">
 							<span>Non-Decision Threshold</span>
-							<b><code>totalTheoreticalRepSupply / 40</code>.</b>
+							<b
+								><code>ceil(forkThreshold / 2)</code> via
+								<code>Zoltar.getNonDecisionThreshold</code>.</b
+							>
 						</div>
 						<div class="parameter-card">
 							<span>Reward Window</span>
@@ -7902,24 +7912,13 @@
 							</tr>
 							<tr>
 								<td>Escalation <code>nonDecisionThreshold</code></td>
-								<td><code>totalTheoreticalRepSupply / 40</code></td>
+								<td><code>ceil(forkThreshold / 2)</code></td>
 								<td>
-									Deployed as
-									<math
-										aria-label="REP token total theoretical supply divided by fork threshold divisor times 2"
-										data-source="repToken.getTotalTheoreticalSupply() / (forkThresholdDivisor \cdot 2)"
-										><mfrac
-											><mrow
-												><mi>repToken.getTotalTheoreticalSupply</mi><mo>(</mo
-												><mo>)</mo></mrow
-											><mrow
-												><mi>forkThresholdDivisor</mi><mo>&#x22C5;</mo
-												><mn>2</mn></mrow
-											></mfrac
-										></math
-									>.
-									Deployment-derived threshold using the REP token's theoretical
-									supply and the configured fork threshold divisor.
+									Deployed as <code>Zoltar.getNonDecisionThreshold(universeId)</code>.
+									Zoltar first floors theoretical supply by the configured fork
+									threshold divisor, then rounds half of that fork threshold upward.
+									Two outcomes at non-decision therefore always contain enough REP
+									to fund the fork when the threshold is odd.
 								</td>
 							</tr>
 							<tr>

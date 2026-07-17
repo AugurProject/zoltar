@@ -110,8 +110,8 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 		// Same-price rationing is intentionally time-priority, not pro-rata. Bids at
 		// one tick append in submission order, and any marginal clearing-tick fill
 		// consumes earlier same-tick ETH before later same-tick ETH.
-		root = _insert(root, tick, msg.sender, msg.value);
-		uint256 bidIndex = bidsAtTick[tick].length - 1;
+		root = _insert(root, tick, msg.value);
+		uint256 bidIndex = _appendBid(tick, msg.sender, msg.value);
 		emit BidSubmitted(msg.sender, tick, bidIndex, msg.value, bidsAtTick[tick][bidIndex].cumulativeEth);
 	}
 
@@ -208,8 +208,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 			require(bid.bidder == withdrawFor, 'Bid does not belong to the requested withdrawal address');
 			require(bid.ethAmount > 0 && !bid.claimed, 'Bid has already been claimed or does not exist');
 
-			uint256 activeCumulativeEthBeforeBid =
-				bid.cumulativeEth - bid.ethAmount - _getRefundedCumulativeEthBeforeIndex(tick, index);
+			uint256 activeCumulativeEthBeforeBid = _getActiveCumulativeEthBeforeBid(tick, index, bid);
 			uint256 cumulativeWinningEthBeforeBid = _getActiveEthAboveTick(root, tick) + activeCumulativeEthBeforeBid;
 			uint256 ethUsed;
 			uint256 repFilled;
@@ -478,8 +477,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 		uint256 bidIndex
 	) internal view returns (IUniformPriceDualCapBatchAuction.BidView memory) {
 		Bid storage bid = bidsAtTick[tick][bidIndex];
-		uint256 activeCumulativeEthBeforeBid =
-			bid.cumulativeEth - bid.ethAmount - _getRefundedCumulativeEthBeforeIndex(tick, bidIndex);
+		uint256 activeCumulativeEthBeforeBid = _getActiveCumulativeEthBeforeBid(tick, bidIndex, bid);
 		return
 			IUniformPriceDualCapBatchAuction.BidView({
 				tick: tick,
@@ -625,7 +623,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 		return low;
 	}
 
-	function _insert(uint256 nodeId, int256 tick, address bidder, uint256 ethAmount) internal returns (uint256) {
+	function _insert(uint256 nodeId, int256 tick, uint256 ethAmount) internal returns (uint256) {
 		if (nodeId == 0) {
 			uint256 newId = nextId++;
 			uint256 nodeClearingEth = _isClearingTick(tick) ? ethAmount : 0;
@@ -640,38 +638,38 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 				minClearingTick: nodeClearingEth == 0 ? int256(0) : tick
 			});
 			activeTickCount += 1;
-
-			bidsAtTick[tick].push(
-				Bid({ bidder: bidder, ethAmount: ethAmount, cumulativeEth: ethAmount, claimed: false })
-			);
-			if (!hasSeenTick[tick]) {
-				hasSeenTick[tick] = true;
-				seenTicks.push(tick);
-			}
-			bidderBidRefs[bidder].push(BidRef({ tick: tick, bidIndex: bidsAtTick[tick].length - 1 }));
-
 			return newId;
 		}
 
 		Node storage node = nodes[nodeId];
 		if (tick == node.tick) {
 			node.totalEth += ethAmount;
-			uint256 cumulativeEth =
-				bidsAtTick[tick].length == 0
-					? ethAmount
-					: bidsAtTick[tick][bidsAtTick[tick].length - 1].cumulativeEth + ethAmount;
-			bidsAtTick[tick].push(
-				Bid({ bidder: bidder, ethAmount: ethAmount, cumulativeEth: cumulativeEth, claimed: false })
-			);
-			bidderBidRefs[bidder].push(BidRef({ tick: tick, bidIndex: bidsAtTick[tick].length - 1 }));
 		} else if (tick < node.tick) {
-			node.left = _insert(node.left, tick, bidder, ethAmount);
+			node.left = _insert(node.left, tick, ethAmount);
 		} else {
-			node.right = _insert(node.right, tick, bidder, ethAmount);
+			node.right = _insert(node.right, tick, ethAmount);
 		}
 
 		_update(nodeId);
 		return _balance(nodeId);
+	}
+
+	function _appendBid(int256 tick, address bidder, uint256 ethAmount) private returns (uint256 bidIndex) {
+		bidIndex = bidsAtTick[tick].length;
+		uint256 cumulativeEth = bidIndex == 0 ? ethAmount : bidsAtTick[tick][bidIndex - 1].cumulativeEth + ethAmount;
+		uint256 treeIndex = bidIndex + 1;
+		uint256 leastSignificantBit = _leastSignificantBit(treeIndex);
+		refundedBidPrefixTree[tick][treeIndex] =
+			_getRefundedCumulativeEthBeforeIndex(tick, bidIndex) -
+			_getRefundedCumulativeEthBeforeIndex(tick, treeIndex - leastSignificantBit);
+		bidsAtTick[tick].push(
+			Bid({ bidder: bidder, ethAmount: ethAmount, cumulativeEth: cumulativeEth, claimed: false })
+		);
+		if (!hasSeenTick[tick]) {
+			hasSeenTick[tick] = true;
+			seenTicks.push(tick);
+		}
+		bidderBidRefs[bidder].push(BidRef({ tick: tick, bidIndex: bidIndex }));
 	}
 
 	function _update(uint256 nodeId) internal {
@@ -787,6 +785,17 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 			cumulativeEth += refundedBidPrefixTree[tick][treeIndex];
 			treeIndex -= _leastSignificantBit(treeIndex);
 		}
+	}
+
+	function _getActiveCumulativeEthBeforeBid(
+		int256 tick,
+		uint256 bidIndex,
+		Bid storage bid
+	) private view returns (uint256) {
+		uint256 grossCumulativeEthBeforeBid = bid.cumulativeEth - bid.ethAmount;
+		uint256 refundedCumulativeEthBeforeBid = _getRefundedCumulativeEthBeforeIndex(tick, bidIndex);
+		require(refundedCumulativeEthBeforeBid <= grossCumulativeEthBeforeBid, 'Refund prefix exceeds bid history');
+		return grossCumulativeEthBeforeBid - refundedCumulativeEthBeforeBid;
 	}
 
 	function _addRefundedBidPrefixAmount(int256 tick, uint256 index, uint256 amount) internal {

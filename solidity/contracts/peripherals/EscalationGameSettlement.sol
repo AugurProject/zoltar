@@ -55,7 +55,7 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount)
 	{
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
-		BinaryOutcomes.BinaryOutcome questionResolution = getQuestionResolution();
+		BinaryOutcomes.BinaryOutcome questionResolution = _getPayoutQuestionResolution();
 		require(questionResolution != BinaryOutcomes.BinaryOutcome.None, 'Question not final');
 		uint8 outcomeIndex = uint8(outcome);
 		depositor = proof.depositor;
@@ -168,7 +168,7 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		require(msg.sender == address(securityPool), 'Only pool');
 		require(nonDecisionTimestamp == 0, 'Non-decision done');
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
-		BinaryOutcomes.BinaryOutcome questionResolution = getQuestionResolution();
+		BinaryOutcomes.BinaryOutcome questionResolution = _getPayoutQuestionResolution();
 		require(questionResolution != BinaryOutcomes.BinaryOutcome.None, 'Question not final');
 		if (outcome == questionResolution) {
 			(depositor, amountToWithdraw, originalDepositAmount) = claimDepositForWinning(
@@ -188,7 +188,7 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 	}
 
 	function sweepResidualRepToSecurityPool() external {
-		require(getQuestionResolution() != BinaryOutcomes.BinaryOutcome.None, 'Question not final');
+		require(getFinalQuestionResolution() != BinaryOutcomes.BinaryOutcome.None, 'Question not final');
 		require(_totalUnresolvedPrincipal() == 0, 'Principal remains');
 		require(totalEscrowedRep == 0, 'Escrowed REP remains');
 		uint256 amount = repToken.balanceOf(address(this));
@@ -222,6 +222,15 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 	function getDepositsByOutcomeLength(BinaryOutcomes.BinaryOutcome outcome) external view returns (uint256) {
 		if (outcome == BinaryOutcomes.BinaryOutcome.None) return 0;
 		return outcomeState[uint8(outcome)].deposits.length;
+	}
+
+	function _getPayoutQuestionResolution() private view returns (BinaryOutcomes.BinaryOutcome questionResolution) {
+		questionResolution = getFinalQuestionResolution();
+		require(
+			questionResolution ==
+				ISecurityPoolForker(securityPool.securityPoolForker()).getQuestionOutcome(securityPool),
+			'Pool/game outcome mismatch'
+		);
 	}
 
 	function _claimDepositForWinning(

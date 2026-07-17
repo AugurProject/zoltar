@@ -32,6 +32,10 @@ contract EscalationGameProofTestSecurityPool {
 		return false;
 	}
 
+	function getQuestionOutcome(address) external view returns (BinaryOutcomes.BinaryOutcome) {
+		return escalationGame.getFinalQuestionResolution();
+	}
+
 	function parent() external pure returns (address) {
 		return address(0x0);
 	}

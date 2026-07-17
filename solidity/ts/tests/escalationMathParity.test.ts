@@ -93,7 +93,7 @@ describe('Escalation math parity', () => {
 					abi: peripherals_EscalationGame_EscalationGame.abi,
 					address: escalationGameAddress,
 					functionName: 'startFromFork',
-					args: [reportBond, nonDecisionThreshold, elapsedAtFork],
+					args: [reportBond, nonDecisionThreshold, elapsedAtFork, QuestionOutcome.None],
 				}),
 		)
 

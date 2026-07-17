@@ -800,7 +800,7 @@ contract SecurityPool is ISecurityPool {
 			require(block.timestamp > endTime, 'Question active');
 			escalationGame = escalationGameFactory.deployEscalationGame(
 				initialEscalationGameDeposit,
-				zoltar.getForkThreshold(universeId) / 2
+				zoltar.getNonDecisionThreshold(universeId)
 			);
 			emit EscalationGameSet(escalationGame);
 		} else {
@@ -889,13 +889,15 @@ contract SecurityPool is ISecurityPool {
 	function initializeForkedEscalationGame(
 		uint256 startBond,
 		uint256 nonDecisionThreshold,
-		uint256 elapsedAtFork
+		uint256 elapsedAtFork,
+		BinaryOutcomes.BinaryOutcome fixedQuestionOutcome
 	) external onlyForker {
 		require(address(escalationGame) == address(0x0), 'Game set');
 		escalationGame = escalationGameFactory.deployEscalationGameFromFork(
 			startBond,
 			nonDecisionThreshold,
-			elapsedAtFork
+			elapsedAtFork,
+			fixedQuestionOutcome
 		);
 		emit EscalationGameSet(escalationGame);
 	}
