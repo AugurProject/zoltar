@@ -426,10 +426,12 @@ export function TradingSection({
 					details={[
 						{ label: tradingCopy.retentionFeeAtExecution, value: tradingCopy.retentionFeeEstimateDetail },
 						{ label: transactionReviewCopy.resultingEthBalance, value: <CurrencyValue value={resultingEthBalance} suffix={commonCopy.eth} /> },
+					]}
+					risks={[tradingCopy.mintBalanceRisk]}
+					technicalDetails={[
 						{ label: transactionReviewCopy.contract, value: selectedPool === undefined ? commonCopy.unavailable : <AddressValue address={selectedPool.securityPoolAddress} /> },
 						{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
 					]}
-					risks={[tradingCopy.mintBalanceRisk]}
 				/>
 				<div className='actions'>
 					<TransactionActionButton
@@ -478,10 +480,12 @@ export function TradingSection({
 					details={[
 						{ label: tradingCopy.retentionFeeAtExecution, value: tradingCopy.retentionFeeEstimateDetail },
 						{ label: tradingCopy.estimatedResultingEthBalance, value: <CurrencyValue value={resultingRedeemEthBalance} suffix={commonCopy.eth} /> },
+					]}
+					risks={[tradingCopy.redeemCompleteSetRisk]}
+					technicalDetails={[
 						{ label: transactionReviewCopy.contract, value: selectedPool === undefined ? commonCopy.unavailable : <AddressValue address={selectedPool.securityPoolAddress} /> },
 						{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
 					]}
-					risks={[tradingCopy.redeemCompleteSetRisk]}
 				/>
 				<div className='actions'>
 					<TransactionActionButton
@@ -524,13 +528,13 @@ export function TradingSection({
 								),
 						},
 					]}
-					details={[
-						{ label: tradingCopy.selectedChildUniversesLabel, value: selectedTargetOutcomeIndexes.length === 0 ? tradingCopy.notSelected : selectedTargetOutcomeIndexes.join(', ') },
+					details={[{ label: tradingCopy.selectedChildUniversesLabel, value: selectedTargetOutcomeIndexes.length === 0 ? tradingCopy.notSelected : selectedTargetOutcomeIndexes.join(', ') }]}
+					risks={[tradingCopy.shareMigrationRisk]}
+					technicalDetails={[
 						{ label: transactionReviewCopy.protocolFee, value: transactionReviewCopy.noProtocolFee },
 						{ label: transactionReviewCopy.contract, value: selectedPool === undefined ? commonCopy.unavailable : <AddressValue address={selectedPool.securityPoolAddress} /> },
 						{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
 					]}
-					risks={[tradingCopy.shareMigrationRisk]}
 				/>
 				<div className='actions'>
 					<TransactionActionButton
@@ -559,10 +563,12 @@ export function TradingSection({
 					details={[
 						{ label: tradingCopy.retentionFeeAtExecution, value: tradingCopy.retentionFeeEstimateDetail },
 						{ label: tradingCopy.estimatedResultingEthBalance, value: <CurrencyValue value={resolvedWinningPayout === undefined || accountState.ethBalance === undefined ? undefined : accountState.ethBalance + resolvedWinningPayout} suffix={commonCopy.eth} /> },
+					]}
+					risks={[tradingCopy.resolvedShareRisk]}
+					technicalDetails={[
 						{ label: transactionReviewCopy.contract, value: selectedPool === undefined ? commonCopy.unavailable : <AddressValue address={selectedPool.securityPoolAddress} /> },
 						{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
 					]}
-					risks={[tradingCopy.resolvedShareRisk]}
 				/>
 				<div className='actions'>
 					<TransactionActionButton

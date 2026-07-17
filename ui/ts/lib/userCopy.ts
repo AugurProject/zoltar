@@ -5,7 +5,7 @@ import { assertNever } from './assert.js'
 import { getWrongNetworkMessage } from './network.js'
 import type { LoadableValueState } from './loadState.js'
 
-export type UserMessageKey = 'not_checked' | 'loading' | 'not_found' | 'empty' | 'action_needed' | 'wrong_network' | 'wallet_disconnected' | 'unavailable' | 'page_not_found' | 'load_failed'
+export type UserMessageKey = 'not_checked' | 'loading' | 'not_found' | 'empty' | 'action_needed' | 'wrong_network' | 'wallet_disconnected' | 'unavailable' | 'load_failed'
 
 type UserMessageTone = 'muted' | 'pending' | 'blocked' | 'error' | 'ok'
 
@@ -159,12 +159,7 @@ export function getReportPresentation({ kind, state }: { kind: 'question' | 'rep
 				detailIsLoading: true,
 			})
 		case 'unknown':
-			return createPresentation('not_checked', {
-				actionHint: userMessagesCopy.formatRefreshLookupAction(kind),
-				badgeLabel: userMessagesCopy.notChecked,
-				badgeTone: 'muted',
-				detail: userMessagesCopy.formatUncheckedLookupDetail(kind),
-			})
+			return undefined
 		case 'missing':
 			return createPresentation('not_found', {
 				badgeLabel: commonCopy.notFound,
@@ -176,12 +171,4 @@ export function getReportPresentation({ kind, state }: { kind: 'question' | 'rep
 		default:
 			return assertNever(state)
 	}
-}
-
-export function getPageNotFoundPresentation() {
-	return createPresentation('page_not_found', {
-		actionHint: userMessagesCopy.pageNotFoundActionHint,
-		badgeLabel: commonCopy.pageNotFound,
-		badgeTone: 'blocked',
-	})
 }

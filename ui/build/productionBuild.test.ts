@@ -18,6 +18,7 @@ const productionIndexPath = path.join(distRootPath, 'index.html')
 const productionCssPath = path.join(distRootPath, 'css', 'index.css')
 const productionTokensCssPath = path.join(distRootPath, 'css', 'tokens.css')
 const productionFaviconPaths = [path.join(distRootPath, 'favicon.ico'), path.join(distRootPath, 'favicon.svg')]
+const CHROMIUM_STARTUP_TIMEOUT_MILLISECONDS = 30_000
 
 let server: Bun.Server | undefined
 
@@ -110,28 +111,85 @@ test('production build can be served as static files', async () => {
 	}
 })
 
-async function waitForDevToolsPort(portFilePath: string) {
-	for (let attempt = 0; attempt < 200; attempt += 1) {
+type BrowserProcessStatus = Pick<Bun.Subprocess, 'exitCode' | 'signalCode'>
+type BrowserProcess = Pick<Bun.Subprocess, 'exitCode' | 'exited' | 'signalCode'>
+
+function describeBrowserExit(browserProcess: BrowserProcessStatus) {
+	if (browserProcess.exitCode !== null) return `code ${browserProcess.exitCode.toString()}`
+	if (browserProcess.signalCode !== null) return `signal ${browserProcess.signalCode}`
+	return undefined
+}
+
+async function rejectWhenBrowserExits(browserProcess: BrowserProcess, pendingAction: string): Promise<never> {
+	const fallbackExitStatus = await browserProcess.exited
+	const browserExit = describeBrowserExit(browserProcess) ?? `status ${fallbackExitStatus.toString()}`
+	throw new Error(`Chromium exited with ${browserExit} before ${pendingAction}`)
+}
+
+function createChromiumStartupError(error: unknown, browserExit: string, stderr: string) {
+	const message = error instanceof Error ? error.message : String(error)
+	const diagnostic = stderr === '' ? 'Chromium produced no stderr output.' : `Chromium stderr:\n${stderr}`
+	return new Error(`${message}\nChromium exit: ${browserExit}\n${diagnostic}`, { cause: error })
+}
+
+async function waitForDevToolsPort(portFilePath: string, browserProcess?: BrowserProcessStatus, timeoutMilliseconds = CHROMIUM_STARTUP_TIMEOUT_MILLISECONDS) {
+	const deadline = Date.now() + timeoutMilliseconds
+	let lastObservedState = 'port file not created'
+
+	while (Date.now() < deadline) {
+		const browserExit = browserProcess === undefined ? undefined : describeBrowserExit(browserProcess)
+		if (browserExit !== undefined) throw new Error(`Chromium exited with ${browserExit} before publishing its DevTools port`)
+
 		try {
 			const contents = await fs.readFile(portFilePath, 'utf8')
 			const port = Number.parseInt(contents.split('\n')[0] ?? '', 10)
 			if (Number.isInteger(port) && port > 0) return port
+			lastObservedState = `invalid port file contents: ${JSON.stringify(contents)}`
 		} catch (error) {
 			if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error
 		}
-		await Bun.sleep(25)
+
+		const remainingMilliseconds = deadline - Date.now()
+		if (remainingMilliseconds <= 0) break
+		await Bun.sleep(Math.min(25, remainingMilliseconds))
 	}
-	throw new Error('Chromium did not publish its DevTools port')
+
+	throw new Error(`Chromium did not publish its DevTools port within ${timeoutMilliseconds.toString()}ms. Last observed state: ${lastObservedState}`)
 }
 
-async function waitForChromiumPageWebSocketUrl(port: number, timeoutMilliseconds = 5_000) {
+test('Chromium DevTools port discovery tolerates delayed startup', async () => {
+	const profilePath = await fs.mkdtemp(path.join(os.tmpdir(), 'zoltar-delayed-devtools-port-'))
+	const portFilePath = path.join(profilePath, 'DevToolsActivePort')
+	const writePortFile = Bun.sleep(5_250).then(async () => await fs.writeFile(portFilePath, '9222\n'))
+
+	try {
+		await expect(waitForDevToolsPort(portFilePath)).resolves.toBe(9222)
+	} finally {
+		await writePortFile
+		await fs.rm(profilePath, { force: true, recursive: true })
+	}
+})
+
+test('Chromium DevTools port discovery reports an early browser exit', async () => {
+	await expect(waitForDevToolsPort('/missing/chromium/DevToolsActivePort', { exitCode: 17, signalCode: null })).rejects.toThrow('Chromium exited with code 17 before publishing its DevTools port')
+})
+
+test('Chromium DevTools port discovery reports an early browser signal', async () => {
+	await expect(waitForDevToolsPort('/missing/chromium/DevToolsActivePort', { exitCode: null, signalCode: 'SIGTERM' }, 50)).rejects.toThrow('Chromium exited with signal SIGTERM before publishing its DevTools port')
+})
+
+async function waitForChromiumPageWebSocketUrl(port: number, timeoutMilliseconds = 5_000, browserProcess?: BrowserProcess) {
 	const deadline = Date.now() + timeoutMilliseconds
 	let lastObservedState = 'no response'
 
 	while (Date.now() < deadline) {
+		const browserExit = browserProcess === undefined ? undefined : describeBrowserExit(browserProcess)
+		if (browserExit !== undefined) throw new Error(`Chromium exited with ${browserExit} before exposing a DevTools page target`)
+
 		try {
 			const remainingMilliseconds = deadline - Date.now()
-			const targetsResponse = await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(remainingMilliseconds) })
+			const targetsRequest = fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(remainingMilliseconds) })
+			const targetsResponse = browserProcess === undefined ? await targetsRequest : await Promise.race([targetsRequest, rejectWhenBrowserExits(browserProcess, 'exposing a DevTools page target')])
 			if (!targetsResponse.ok) {
 				lastObservedState = `HTTP ${targetsResponse.status.toString()} ${targetsResponse.statusText}`.trim()
 			} else {
@@ -145,6 +203,7 @@ async function waitForChromiumPageWebSocketUrl(port: number, timeoutMilliseconds
 				}
 			}
 		} catch (error) {
+			if (browserProcess !== undefined && describeBrowserExit(browserProcess) !== undefined) throw error
 			lastObservedState = error instanceof Error ? error.message : String(error)
 		}
 
@@ -154,6 +213,17 @@ async function waitForChromiumPageWebSocketUrl(port: number, timeoutMilliseconds
 	}
 
 	throw new Error(`Chromium page target was unavailable after ${timeoutMilliseconds.toString()}ms. Last observed state: ${lastObservedState}`)
+}
+
+async function waitForChromiumWebSocketOpen(socket: WebSocket, browserProcess: BrowserProcess, timeoutMilliseconds = 5_000) {
+	const socketOpen = new Promise<void>((resolve, reject) => {
+		socket.addEventListener('open', () => resolve(), { once: true })
+		socket.addEventListener('error', () => reject(new Error('Chromium DevTools connection failed')), { once: true })
+	})
+	const connectionTimeout = Bun.sleep(timeoutMilliseconds).then(() => {
+		throw new Error(`Chromium DevTools connection did not open within ${timeoutMilliseconds.toString()}ms`)
+	})
+	await Promise.race([socketOpen, rejectWhenBrowserExits(browserProcess, 'opening its DevTools WebSocket'), connectionTimeout])
 }
 
 test('Chromium page target discovery tolerates an initially empty target list', async () => {
@@ -203,6 +273,148 @@ test('Chromium page target discovery bounds a stalled target response', async ()
 	}
 })
 
+type BrowserTermination = {
+	exitCode: number | null
+	exitStatus: number
+	signalCode: BrowserProcessStatus['signalCode']
+	stderr: string
+}
+
+function createDeferred<Value>() {
+	let resolvePromise: ((value: Value) => void) | undefined
+	const promise = new Promise<Value>(resolve => {
+		resolvePromise = resolve
+	})
+
+	return {
+		promise,
+		resolve: (value: Value) => {
+			if (resolvePromise === undefined) throw new Error('Deferred promise was not initialized')
+			resolvePromise(value)
+		},
+	}
+}
+
+function createControllableBrowserProcess() {
+	let exitCode: number | null = null
+	let signalCode: BrowserProcessStatus['signalCode'] = null
+	const browserExit = createDeferred<number>()
+	const browserProcess: BrowserProcess = {
+		get exitCode() {
+			return exitCode
+		},
+		exited: browserExit.promise,
+		get signalCode() {
+			return signalCode
+		},
+	}
+
+	return {
+		browserProcess,
+		terminate: (termination: BrowserTermination) => {
+			exitCode = termination.exitCode
+			signalCode = termination.signalCode
+			browserExit.resolve(termination.exitStatus)
+		},
+	}
+}
+
+async function captureTargetDiscoveryBrowserExit(termination: BrowserTermination) {
+	const requestStarted = createDeferred<void>()
+	const stalledResponse = new Promise<Response>(() => undefined)
+	const devToolsServer = Bun.serve({
+		fetch: () => {
+			requestStarted.resolve()
+			return stalledResponse
+		},
+		port: 0,
+	})
+	const browserController = createControllableBrowserProcess()
+	const discoveryFailure = waitForChromiumPageWebSocketUrl(devToolsServer.port, 5_000, browserController.browserProcess).then(
+		() => new Error('Chromium page target discovery unexpectedly succeeded'),
+		error => error,
+	)
+
+	try {
+		await requestStarted.promise
+		const exitStartedAt = performance.now()
+		browserController.terminate(termination)
+		const error = await discoveryFailure
+		const elapsedMilliseconds = performance.now() - exitStartedAt
+		const browserExit = describeBrowserExit(browserController.browserProcess) ?? `status ${(await browserController.browserProcess.exited).toString()}`
+		return { elapsedMilliseconds, startupError: createChromiumStartupError(error, browserExit, termination.stderr) }
+	} finally {
+		devToolsServer.stop(true)
+	}
+}
+
+test('Chromium page target discovery reports a browser exit after its request starts', async () => {
+	const { elapsedMilliseconds, startupError } = await captureTargetDiscoveryBrowserExit({ exitCode: 23, exitStatus: 23, signalCode: null, stderr: 'fatal code startup' })
+
+	expect(elapsedMilliseconds).toBeLessThan(1_000)
+	expect(startupError.message).toContain('Chromium exited with code 23 before exposing a DevTools page target')
+	expect(startupError.message).toContain('Chromium exit: code 23')
+	expect(startupError.message).toContain('Chromium stderr:\nfatal code startup')
+})
+
+test('Chromium page target discovery reports a browser signal after its request starts', async () => {
+	const { elapsedMilliseconds, startupError } = await captureTargetDiscoveryBrowserExit({ exitCode: null, exitStatus: 143, signalCode: 'SIGTERM', stderr: 'fatal signal startup' })
+
+	expect(elapsedMilliseconds).toBeLessThan(1_000)
+	expect(startupError.message).toContain('Chromium exited with signal SIGTERM before exposing a DevTools page target')
+	expect(startupError.message).toContain('Chromium exit: signal SIGTERM')
+	expect(startupError.message).toContain('Chromium stderr:\nfatal signal startup')
+})
+
+async function captureWebSocketHandshakeBrowserExit(termination: BrowserTermination) {
+	const handshakeStarted = createDeferred<void>()
+	const stalledResponse = new Promise<Response>(() => undefined)
+	const devToolsServer = Bun.serve({
+		fetch: () => {
+			handshakeStarted.resolve()
+			return stalledResponse
+		},
+		port: 0,
+	})
+	const browserController = createControllableBrowserProcess()
+	const socket = new WebSocket(`ws://127.0.0.1:${devToolsServer.port.toString()}`)
+	const connectionFailure = waitForChromiumWebSocketOpen(socket, browserController.browserProcess).then(
+		() => new Error('Chromium DevTools WebSocket unexpectedly opened'),
+		error => error,
+	)
+
+	try {
+		await handshakeStarted.promise
+		const exitStartedAt = performance.now()
+		browserController.terminate(termination)
+		const error = await connectionFailure
+		const elapsedMilliseconds = performance.now() - exitStartedAt
+		const browserExit = describeBrowserExit(browserController.browserProcess) ?? `status ${(await browserController.browserProcess.exited).toString()}`
+		return { elapsedMilliseconds, startupError: createChromiumStartupError(error, browserExit, termination.stderr) }
+	} finally {
+		socket.close()
+		devToolsServer.stop(true)
+	}
+}
+
+test('Chromium DevTools connection reports a browser exit during its WebSocket handshake', async () => {
+	const { elapsedMilliseconds, startupError } = await captureWebSocketHandshakeBrowserExit({ exitCode: 24, exitStatus: 24, signalCode: null, stderr: 'fatal handshake code startup' })
+
+	expect(elapsedMilliseconds).toBeLessThan(1_000)
+	expect(startupError.message).toContain('Chromium exited with code 24 before opening its DevTools WebSocket')
+	expect(startupError.message).toContain('Chromium exit: code 24')
+	expect(startupError.message).toContain('Chromium stderr:\nfatal handshake code startup')
+})
+
+test('Chromium DevTools connection reports a browser signal during its WebSocket handshake', async () => {
+	const { elapsedMilliseconds, startupError } = await captureWebSocketHandshakeBrowserExit({ exitCode: null, exitStatus: 143, signalCode: 'SIGTERM', stderr: 'fatal handshake signal startup' })
+
+	expect(elapsedMilliseconds).toBeLessThan(1_000)
+	expect(startupError.message).toContain('Chromium exited with signal SIGTERM before opening its DevTools WebSocket')
+	expect(startupError.message).toContain('Chromium exit: signal SIGTERM')
+	expect(startupError.message).toContain('Chromium stderr:\nfatal handshake signal startup')
+})
+
 function readEvaluationString(response: unknown) {
 	if (typeof response !== 'object' || response === null || !('result' in response)) throw new Error('Chromium evaluation result was missing')
 	const result = response.result
@@ -225,16 +437,16 @@ type ProductionBrowserDriver = {
 async function loadProductionDocumentInChromium(pageUrl: string, viewport: { height: number; width: number }, interact?: (driver: ProductionBrowserDriver) => Promise<void>) {
 	if (chromiumPath === undefined) throw new Error('Chromium is required for the production browser smoke test')
 	const profilePath = await fs.mkdtemp(path.join(os.tmpdir(), 'zoltar-production-browser-'))
-	const browser = Bun.spawn([chromiumPath, '--headless', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--remote-debugging-port=0', `--user-data-dir=${profilePath}`, '--window-size=1440,900', 'about:blank'], { stderr: 'ignore', stdout: 'ignore' })
+	const browser = Bun.spawn([chromiumPath, '--headless', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--remote-debugging-port=0', `--user-data-dir=${profilePath}`, '--window-size=1440,900', 'about:blank'], { stderr: 'pipe', stdout: 'ignore' })
+	const browserStderr = new Response(browser.stderr).text()
+	let devToolsConnected = false
 	let socket: WebSocket | undefined
 
 	try {
-		const port = await waitForDevToolsPort(path.join(profilePath, 'DevToolsActivePort'))
-		socket = new WebSocket(await waitForChromiumPageWebSocketUrl(port))
-		await new Promise<void>((resolve, reject) => {
-			socket?.addEventListener('open', () => resolve(), { once: true })
-			socket?.addEventListener('error', () => reject(new Error('Chromium DevTools connection failed')), { once: true })
-		})
+		const port = await waitForDevToolsPort(path.join(profilePath, 'DevToolsActivePort'), browser)
+		socket = new WebSocket(await waitForChromiumPageWebSocketUrl(port, 5_000, browser))
+		await waitForChromiumWebSocketOpen(socket, browser)
+		devToolsConnected = true
 
 		let requestId = 0
 		const pendingRequests = new Map<number, { reject: (error: Error) => void; resolve: (value: unknown) => void }>()
@@ -352,10 +564,20 @@ async function loadProductionDocumentInChromium(pageUrl: string, viewport: { hei
 				returnByValue: true,
 			}),
 		)
+	} catch (error) {
+		if (devToolsConnected) throw error
+		const spontaneousBrowserExit = describeBrowserExit(browser)
+		browser.kill()
+		const exitCode = await browser.exited
+		const cleanupBrowserExit = describeBrowserExit(browser) ?? `status ${exitCode.toString()}`
+		const browserExit = spontaneousBrowserExit ?? `test terminated Chromium with ${cleanupBrowserExit}`
+		const stderr = (await browserStderr).trim()
+		throw createChromiumStartupError(error, browserExit, stderr)
 	} finally {
 		socket?.close()
 		browser.kill()
 		await browser.exited
+		await browserStderr
 		await fs.rm(profilePath, { force: true, recursive: true })
 	}
 }

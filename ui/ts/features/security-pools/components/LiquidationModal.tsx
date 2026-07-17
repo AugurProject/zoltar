@@ -511,10 +511,12 @@ export function LiquidationModal({
 									},
 								]
 							: [{ label: liquidationCopy.oracleRequestEth, value: transactionReviewCopy.noProtocolFee }]),
+					]}
+					risks={[liquidationCopy.liquidationStateRisk, ...(liquidationExecutionMode === 'queue' ? [liquidationCopy.queuedLiquidationRisk, liquidationCopy.queuedFundingSequenceRisk] : [])]}
+					technicalDetails={[
 						{ label: transactionReviewCopy.contract, value: liquidationManagerAddress === undefined ? commonCopy.unavailable : <AddressValue address={liquidationManagerAddress} /> },
 						{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
 					]}
-					risks={[liquidationCopy.liquidationStateRisk, ...(liquidationExecutionMode === 'queue' ? [liquidationCopy.queuedLiquidationRisk, liquidationCopy.queuedFundingSequenceRisk] : [])]}
 				/>
 				<div className='actions liquidation-modal-actions'>
 					<button className='secondary' onClick={closeLiquidationModal}>
