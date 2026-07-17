@@ -146,6 +146,18 @@ body.doc-openoracle ul {
 	margin: 0 0 1rem;
 	padding-left: 1.25rem;
 }
+body.doc-openoracle .callout {
+	margin: 1.25rem 0;
+	padding: 1rem 1.1rem;
+	border: 1px solid color-mix(in srgb, var(--gold) 28%, var(--line));
+	border-left: 0.35rem solid var(--gold);
+	border-radius: var(--radius);
+	background: color-mix(in srgb, var(--gold-soft) 62%, var(--paper));
+}
+body.doc-openoracle .callout strong {
+	display: block;
+	margin-bottom: 0.25rem;
+}
 body.doc-openoracle table {
 	width: 100%;
 	margin-top: 0.75rem;
