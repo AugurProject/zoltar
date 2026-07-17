@@ -18,7 +18,6 @@ export function getOpenOracleReadinessActions({ actionMode, disputeMessage, hasR
 		const settleBlocker = baseBlocker ?? settleMessage
 		actions.push({
 			actionLabel: 'Settle Report',
-			description: 'Review settlement readiness and settle once the dispute window has closed.',
 			key: 'settle-report',
 			readiness: settleBlocker === undefined ? 'ready' : 'blocked',
 			title: 'Settle Report',
@@ -29,21 +28,11 @@ export function getOpenOracleReadinessActions({ actionMode, disputeMessage, hasR
 		const settleBlocker = baseBlocker ?? settleMessage
 		actions.push({
 			actionLabel: 'Settle Report',
-			description: 'Confirm settlement once the report is ready.',
 			key: 'settle-report',
 			readiness: settleBlocker === undefined ? 'ready' : 'blocked',
 			title: 'Settle Report',
 			...(settleBlocker === undefined ? {} : { blocker: settleBlocker }),
 		})
 	}
-	if (actionMode === 'read-only')
-		actions.push({
-			actionLabel: 'No write action',
-			description: 'This report has completed its lifecycle.',
-			key: 'settled-read-only',
-			readiness: 'ready',
-			title: 'Settled Report',
-		})
-
 	return actions
 }

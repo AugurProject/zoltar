@@ -6,18 +6,16 @@ export function getOpenOracleStagePresentation(actionMode: OpenOracleSelectedRep
 	switch (actionMode) {
 		case 'dispute':
 			return {
-				availableActions: ['Dispute report', 'Settle when the dispute window ends'],
+				availableActions: [],
 				blockedActions: [],
-				detail: 'This report has an active lifecycle and may still be disputed.',
 				key: 'dispute-window',
 				label: 'Dispute Window Open',
 				tone: 'default',
 			}
 		case 'settle':
 			return {
-				availableActions: ['Settle report'],
-				blockedActions: ['Further disputes'],
-				detail: 'The dispute window has ended and this report is ready to settle.',
+				availableActions: [],
+				blockedActions: [],
 				key: 'ready-to-settle',
 				label: 'Ready To Settle',
 				tone: 'success',
@@ -25,8 +23,7 @@ export function getOpenOracleStagePresentation(actionMode: OpenOracleSelectedRep
 		case 'read-only':
 			return {
 				availableActions: [],
-				blockedActions: ['Dispute', 'Settle'],
-				detail: 'This report can no longer be disputed or settled.',
+				blockedActions: [],
 				key: 'settled',
 				label: 'Settled',
 				tone: 'success',

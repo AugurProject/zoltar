@@ -65,7 +65,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		await renderLoadedPool({ selectedPoolView: 'staged-operations' })
 
 		expectSectionVariant('Staged Operations', 'plain')
-		expectSectionVariant('Staged Operations List', 'embedded')
+		expect(document.body.querySelector('.section-block.embedded')).not.toBeNull()
 	})
 
 	test('renders open oracle as an unframed selected-pool workflow section', async () => {
@@ -494,10 +494,18 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expectTransactionButtonDisabled(document.body, 'Withdraw REP')
 		expectTransactionButtonDisabled(document.body, 'Set Bond Allowance')
 		expectTransactionButtonDisabled(document.body, 'Claim Fees')
-		expect((documentQueries.getByRole('button', { name: 'Deposit REP' }) as HTMLButtonElement).title).toBe('Refresh the vault before depositing REP.')
-		expect((documentQueries.getByRole('button', { name: 'Withdraw REP' }) as HTMLButtonElement).title).toBe('Refresh the vault before withdrawing REP.')
-		expect((documentQueries.getByRole('button', { name: 'Set Bond Allowance' }) as HTMLButtonElement).title).toBe('Refresh the vault before setting the security bond allowance.')
-		expect((documentQueries.getByRole('button', { name: 'Claim Fees' }) as HTMLButtonElement).title).toBe('Refresh the vault before claiming fees.')
+		const refreshReason = documentQueries.getByText('Refresh the vault to use these actions.')
+		const refreshReasonId = refreshReason.getAttribute('id')
+		expect(refreshReasonId).not.toBeNull()
+		expect(documentQueries.getAllByText('Refresh the vault to use these actions.')).toHaveLength(1)
+		expect((documentQueries.getByRole('button', { name: 'Deposit REP' }) as HTMLButtonElement).title).toBe('')
+		expect((documentQueries.getByRole('button', { name: 'Deposit REP' }) as HTMLButtonElement).getAttribute('aria-describedby')).toBe(refreshReasonId)
+		expect((documentQueries.getByRole('button', { name: 'Withdraw REP' }) as HTMLButtonElement).title).toBe('')
+		expect((documentQueries.getByRole('button', { name: 'Withdraw REP' }) as HTMLButtonElement).getAttribute('aria-describedby')).toBe(refreshReasonId)
+		expect((documentQueries.getByRole('button', { name: 'Set Bond Allowance' }) as HTMLButtonElement).title).toBe('')
+		expect((documentQueries.getByRole('button', { name: 'Set Bond Allowance' }) as HTMLButtonElement).getAttribute('aria-describedby')).toBe(refreshReasonId)
+		expect((documentQueries.getByRole('button', { name: 'Claim Fees' }) as HTMLButtonElement).title).toBe('')
+		expect((documentQueries.getByRole('button', { name: 'Claim Fees' }) as HTMLButtonElement).getAttribute('aria-describedby')).toBe(refreshReasonId)
 		expect((documentQueries.getByRole('button', { name: 'Review Liquidation' }) as HTMLButtonElement).title).toBe('')
 	})
 

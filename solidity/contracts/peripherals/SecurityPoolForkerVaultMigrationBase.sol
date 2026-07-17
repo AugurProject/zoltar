@@ -83,8 +83,14 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 				0
 			);
 			_validateChildPoolDeployment(parent, child, truthAuction, outcomeIndex, childUniverseId);
-			forkDataByPool[child].outcomeIndex = outcomeIndex;
-			forkDataByPool[child].truthAuction = truthAuction;
+			SecurityPoolForkerForkData storage childData = forkDataByPool[child];
+			childData.outcomeIndex = outcomeIndex;
+			childData.truthAuction = truthAuction;
+			SecurityPoolForkerForkData storage parentData = forkDataByPool[parent];
+			childData.fixedQuestionOutcomePlusOne =
+				parentData.forkQuestionMatchesPoolQuestion
+					? uint8(outcomeIndex + 1)
+					: parentData.fixedQuestionOutcomePlusOne;
 			trustedAuctionAddresses[address(truthAuction)] = true;
 			childrenByPoolAndOutcome[parent][outcomeIndex] = child;
 			parent.authorizeChildPool(child);

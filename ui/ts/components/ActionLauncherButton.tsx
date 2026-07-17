@@ -5,6 +5,7 @@ import type { ActionAvailability } from '../types/components.js'
 type ActionLauncherButtonProps = {
 	availability?: ActionAvailability
 	className?: string
+	describedBy?: string
 	disabled?: boolean
 	idleLabel: ComponentChildren
 	onClick: () => void
@@ -15,12 +16,12 @@ type ActionLauncherButtonProps = {
 	type?: 'button' | 'submit'
 }
 
-export function ActionLauncherButton({ availability, className = '', disabled = false, idleLabel, onClick, pending = false, pendingLabel, showDisabledReason = false, tone = 'primary', type = 'button' }: ActionLauncherButtonProps) {
+export function ActionLauncherButton({ availability, className = '', describedBy, disabled = false, idleLabel, onClick, pending = false, pendingLabel, showDisabledReason = false, tone = 'primary', type = 'button' }: ActionLauncherButtonProps) {
 	const isDisabled = disabled || pending || availability?.disabled === true
 	const disabledReason = isDisabled ? availability?.reason : undefined
 	return (
 		<div className={`tx-action ${className}`.trim()}>
-			<button className={`tx-action-button ${tone}`} type={type} onClick={onClick} disabled={isDisabled} title={disabledReason}>
+			<button aria-describedby={describedBy} className={`tx-action-button ${tone}`} type={type} onClick={onClick} disabled={isDisabled} title={disabledReason}>
 				{pending ? <LoadingText>{pendingLabel}</LoadingText> : idleLabel}
 			</button>
 			{(() => {

@@ -107,7 +107,7 @@ export function MarketQuestionsSection({
 	return (
 		<SectionBlock
 			density='compact'
-			title={commonCopy.markets}
+			title={marketCopy.questions}
 			actions={
 				<PaginationControls
 					hasNextPage={hasNextPage}
@@ -134,7 +134,6 @@ export function MarketQuestionsSection({
 									key: 'empty',
 									badgeLabel: marketCopy.noQuestions,
 									badgeTone: 'muted',
-									detail: marketCopy.noQuestionsDetail,
 								}}
 								title={marketCopy.noQuestions}
 								actions={
@@ -224,7 +223,6 @@ export function MarketQuestionsSection({
 														</div>
 														<div className='market-linked-pool-participation'>
 															<strong>{marketCopy.completeSetOperations}</strong>
-															<span>{marketCopy.completeSetOperationsDetail}</span>
 														</div>
 														<div className='actions'>
 															<SecurityPoolLink className='button-link secondary' securityPoolAddress={pool.securityPoolAddress} selectedPoolView='trading' universeId={pool.universeId}>
@@ -244,7 +242,6 @@ export function MarketQuestionsSection({
 									<section className='market-linked-pools' aria-label={marketCopy.linkedPools}>
 										<div className='market-linked-pools-header'>
 											<strong>{marketCopy.linkedPools}</strong>
-											<span>{marketCopy.linkedPoolsDetail}</span>
 										</div>
 										{linkedPoolsContent}
 									</section>

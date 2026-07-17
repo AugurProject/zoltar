@@ -23,7 +23,6 @@ describe('open oracle readiness actions', () => {
 			{
 				actionLabel: 'Settle Report',
 				blocker: 'Wait until the dispute window closes.',
-				description: 'Review settlement readiness and settle once the dispute window has closed.',
 				key: 'settle-report',
 				readiness: 'blocked',
 				title: 'Settle Report',
@@ -51,7 +50,6 @@ describe('open oracle readiness actions', () => {
 			{
 				actionLabel: 'Settle Report',
 				blocker: 'Load a report first.',
-				description: 'Review settlement readiness and settle once the dispute window has closed.',
 				key: 'settle-report',
 				readiness: 'blocked',
 				title: 'Settle Report',
@@ -70,7 +68,6 @@ describe('open oracle readiness actions', () => {
 		).toEqual([
 			{
 				actionLabel: 'Settle Report',
-				description: 'Confirm settlement once the report is ready.',
 				key: 'settle-report',
 				readiness: 'ready',
 				title: 'Settle Report',
@@ -84,14 +81,6 @@ describe('open oracle readiness actions', () => {
 				hasReport: true,
 				settleMessage: undefined,
 			}),
-		).toEqual([
-			{
-				actionLabel: 'No write action',
-				description: 'This report has completed its lifecycle.',
-				key: 'settled-read-only',
-				readiness: 'ready',
-				title: 'Settled Report',
-			},
-		])
+		).toEqual([])
 	})
 })

@@ -93,8 +93,6 @@ contract ShareToken is ERC1155, IShareToken {
 
 	function burnCompleteSets(uint248 _universeId, address _owner, uint256 _amount) external {
 		require(authorized[msg.sender] == true, 'ShareToken caller is not authorized to burn complete sets');
-		(bool isReconciled, ) = _getActualCompleteSetSupply(_universeId);
-		require(isReconciled, 'Share supply mismatch');
 		uint256[] memory _tokenIds = new uint256[](Constants.NUM_OUTCOMES);
 		uint256[] memory _values = new uint256[](Constants.NUM_OUTCOMES);
 
@@ -137,9 +135,12 @@ contract ShareToken is ERC1155, IShareToken {
 		isReconciled = actualSupply == yesSupply && yesSupply == noSupply;
 	}
 
-	function reconciledCompleteSetSupply(uint248 _universeId, uint256 _fallbackSupply) external view returns (uint256) {
-		(bool isReconciled, uint256 actualSupply) = _getActualCompleteSetSupply(_universeId);
-		return isReconciled ? actualSupply : _fallbackSupply;
+	function maximumOutcomeSupply(uint248 _universeId) external view returns (uint256 maximumSupply) {
+		maximumSupply = totalSupplyForOutcome(_universeId, BinaryOutcomes.BinaryOutcome.Invalid);
+		uint256 yesSupply = totalSupplyForOutcome(_universeId, BinaryOutcomes.BinaryOutcome.Yes);
+		uint256 noSupply = totalSupplyForOutcome(_universeId, BinaryOutcomes.BinaryOutcome.No);
+		if (yesSupply > maximumSupply) maximumSupply = yesSupply;
+		if (noSupply > maximumSupply) maximumSupply = noSupply;
 	}
 
 	function balanceOfOutcome(

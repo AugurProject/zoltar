@@ -5,7 +5,7 @@ import { getAddress, zeroAddress } from '@zoltar/shared/ethereum'
 import { renderSelectedReportActionSection } from '../../../features/open-oracle/components/OpenOracleSection.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
-import { deriveOpenOracleDisputeSubmissionDetails, getOpenOracleSelectedReportActionMode, type OpenOracleDisputeSubmissionDetails } from '../../../features/open-oracle/lib/openOracle.js'
+import { deriveOpenOracleDisputeSubmissionDetails, type OpenOracleDisputeSubmissionDetails } from '../../../features/open-oracle/lib/openOracle.js'
 import { getDefaultOpenOracleFormState } from '../../../features/markets/lib/marketForm.js'
 import type { AccountState, OpenOracleFormState } from '../../../types/app.js'
 import type { OpenOracleSectionProps } from '../../../features/types.js'
@@ -188,7 +188,6 @@ function createOpenOracleSectionProps(): OpenOracleSectionProps {
 		activeView: 'browse',
 		environmentReady: true,
 		loadingOpenOracleCreate: false,
-		loadingOracleReport: false,
 		onActiveViewChange: () => undefined,
 		onApproveToken1: () => undefined,
 		onApproveToken2: () => undefined,
@@ -205,6 +204,7 @@ function createOpenOracleSectionProps(): OpenOracleSectionProps {
 		openOracleDisputeSubmission: undefined,
 		openOracleError: undefined,
 		openOracleForm: createOpenOracleForm(),
+		openOracleReportLookupState: 'unknown',
 		openOracleReportDetails: undefined,
 		openOracleResult: undefined,
 		openOracleTokenAccessState: createOpenOracleTokenAccessState(),
@@ -269,7 +269,7 @@ function renderDisputeActionSection({
 	})
 
 	return renderSelectedReportActionSection({
-		actionMode: getOpenOracleSelectedReportActionMode(openOracleReportDetails),
+		actionMode: 'dispute',
 		disputeSubmission,
 		isConnected: accountState.address !== undefined,
 		isMainnet,
@@ -362,7 +362,8 @@ void describe('OpenOracleSection', () => {
 
 		expect(getButtonDisabled(settleButton)).toBe(false)
 		expect(findButton(section, 'Dispute & Swap')).toBeUndefined()
-		expect(getSectionTitles(section)).toContain('Settle Report')
+		expect(getSectionTitles(section)).toContain('Settlement Summary')
+		expect(getSectionTitles(section)).not.toContain('Settle Report')
 		expect(getSectionTitles(section)).not.toContain('Dispute Report')
 		expect(getButtonDisabledReason(settleButton)).toBeUndefined()
 	})
@@ -386,7 +387,7 @@ void describe('OpenOracleSection', () => {
 		expect(getButtonDisabledReason(disputeButton)).toBe('This report is not ready to dispute.')
 		expect(getTextContent(section).includes('Blocked:')).toBe(false)
 		expect(getSectionTitles(section)).toContain('Current Report State')
-		expect(getSectionTitles(section)).toContain('Dispute Report')
+		expect(getSectionTitles(section)).not.toContain('Dispute Report')
 	})
 
 	void test('renders dispute approval controls and blocks submit until required approvals are present', () => {

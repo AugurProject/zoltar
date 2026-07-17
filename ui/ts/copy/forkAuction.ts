@@ -23,7 +23,6 @@ export const repPurchased = 'REP Purchased'
 export const startingTruthAuction = 'Starting truth auction…'
 export const startTruthAuction = 'Start Truth Auction'
 export const submitBid = 'Submit Bid'
-export const bidEscrowDetail = 'Submitting a bid locks ETH until settlement. Losing bids are refunded during settlement.'
 export const unresolvedDepositDetailsUnavailable = 'Unresolved escalation deposit details are unavailable for this pool right now.'
 export const worthNowLead = 'Worth now: '
 export const formatCheckingPoolRepMigratedToChildUniverse = (outcomeLabel: CopyTemplateValue) => `Checking whether pool REP has already been migrated for the ${outcomeLabel} child universe.`
@@ -55,8 +54,6 @@ export const forkReadiness = 'Fork Readiness'
 export const notChosen = 'Not chosen'
 export const systemIsForking = 'System is forking'
 export const ethRep = 'ETH / REP'
-export const winningBidPremiumDetail = 'Winning bids buy more than REP.'
-export const formatWinningBidAllowanceNotice = (allowanceLabel: CopyTemplateValue) => `When you later claim a filled bid, the vault also receives a pro-rata share of the ${allowanceLabel}. That allowance is the remaining open-interest debt being assigned to auction participants.`
 export const refundSettlementDetail = 'Refund-only settlement returns locked ETH.'
 export const formatFinalizedRefundOnlySettlementNotice = (allowanceLabel: CopyTemplateValue) => `Finalized refund-only settlement uses the child-pool settlement path to unlock ETH, and it does not assign child-pool REP or ${allowanceLabel}.`
 export const formatWinningClaimAllowanceHeadline = (allowanceLabel: CopyTemplateValue) => `Winning claims add REP and ${allowanceLabel}.`
@@ -132,8 +129,6 @@ export const vaultMigrationCompleteReason = 'Vault migration is already complete
 export const combinedUnresolvedMigrationDetail = 'Use unresolved escalation migration to move locked positions and vault balances together.'
 export const selectedLadderPriceLead = 'Selected ladder price: '
 export const bidPriceEthRep = 'Bid Price (ETH / REP)'
-export const bidEstimatedRepDetailLead = 'At the entered price, this bid would buy roughly '
-export const bidEstimatedRepDetailTail = 'if fully filled.'
 export const submittingBidTruncated = 'Submitting bid…'
 export const truthAuctionAddress = 'Truth Auction Address'
 export const started = 'Started'
@@ -162,13 +157,11 @@ export const yourMigrationBalances = 'Your Migration Balances'
 export const parentWalletBalancesDescription = 'Wallet-level balances in the parent pool that may still need migration.'
 export const migrateUnresolvedEscalationLocks = 'Migrate Unresolved Escalation Locks'
 export const unresolvedMigrationExpiredDetail = 'The migration window for these unresolved parent escalation deposits has closed.'
-export const unresolvedEscalationMigrationWithVaultDetail = 'This action captures all unresolved parent escalation totals for this wallet and materializes that aggregate entitlement in the selected child universe.'
+export const unresolvedEscalationMigrationWithVaultDetail = 'Captures all unresolved deposits once; reuse the entitlement in other child universes until the migration deadline.'
 export const walletUnresolvedDepositsLoading = 'Loading unresolved escalation deposits for the connected wallet…'
-export const unresolvedEscalationMultiChildDetail = 'The first action captures the wallet’s Invalid, Yes, and No aggregate totals. Before the deadline, the stored entitlement can be reused in any additional child universe that this wallet selects.'
-export const capturedEntitlementDetail = 'This wallet’s aggregate escalation entitlement is already captured. Select any child outcome that has not received it yet.'
+export const capturedEntitlementDetail = 'Entitlement captured; select a child outcome that has not received it yet.'
 export const formatEntitlementAlreadyMaterialized = (outcomeLabel: CopyTemplateValue) => `This wallet’s escalation entitlement is already materialized in the ${outcomeLabel} child universe.`
 export const formatNoUnresolvedDeposits = (outcomeLabel: string) => `No ${outcomeLabel.toLowerCase()} unresolved deposits remain for this wallet.`
-export const selectedChildMigrationRequiredDetail = 'Current path: Must migrate into the selected child universe.'
 export const formatMigrateUnresolvedEscalationToValue = (outcomeLabel: CopyTemplateValue) => `Migrate Unresolved Escalation To ${outcomeLabel}`
 export const migratingUnresolvedEscalationTruncated = 'Migrating unresolved escalation…'
 export const migrateResolvedEscalationDeposits = 'Migrate Resolved Escalation Deposits'
@@ -177,7 +170,6 @@ export const escalationMigrationEmptyEscrowDetail = 'No escrowed REP is currentl
 export const walletEscalationDepositsLoading = 'Loading escalation deposits for the selected wallet…'
 export const chooseDepositsToMigrate = 'Choose deposits to migrate'
 export const worthNowPendingMigrationFinalization = 'Worth now: Pending migration/finalization'
-export const currentPathEligibleForChildPoolMigration = 'Current path: Eligible for child-pool migration'
 export const formatMigrateSelectedValueDeposits = (outcomeLabel: CopyTemplateValue) => `Migrate Selected ${outcomeLabel} Deposits`
 export const migratingEscalationDepositsTruncated = 'Migrating escalation deposits…'
 export const migratePoolToUniverse = 'Migrate Pool To Universe'

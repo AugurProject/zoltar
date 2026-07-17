@@ -89,14 +89,16 @@
 					<h2>OpenOracle Role</h2>
 					<p>
 						The generic oracle lifecycle comes first. Placeholder's coordinator
-						is only a consumer of the report that OpenOracle settles.
+						calls OpenOracle and becomes the initial reporter, then consumes the
+						settled result through OpenOracle's callback.
 					</p>
 				<p>
 					OpenOracle atomically creates and funds a report for a token pair.
 					Only its state hash is stored for an active game; the full preimage is
 					emitted as packed report data. Later reporters can dispute by posting the
-					contract-required replacement amounts, and a report can settle after
-					its timing window. When a
+					contract-required replacement amounts. A dispute is valid only while
+					<code>currentTime &lt; reportTimestamp + settlementTime</code>; settlement
+					becomes valid at equality, when a dispute is already too late. When a
 					<span class="term" tabindex="0">callback</span>
 					contract is configured, settlement calls that contract with the
 					settled amounts.
@@ -454,10 +456,11 @@
 				</p>
 				<p>
 					The money flow is easiest to follow if each role is separated. The
-					triggering caller pays the ETH request bounty, posts the initial
-					WETH/REP report amounts, and becomes the queue owner for that stale
-					refresh window. The eventual settler still receives the settler
-					reward, and disputes can replace the initial report before
+					triggering caller pays the ETH request bounty, supplies the initial
+					WETH/REP, and becomes the queue owner for that stale refresh window.
+					The coordinator transfers and approves those assets, calls OpenOracle,
+					and becomes the initial reporter. The eventual settler still receives
+					the settler reward, and disputes can replace the initial report before
 					settlement.
 				</p>
 				<p>
@@ -579,7 +582,7 @@
 					</math>
 					<p class="equation-caption">
 						<span class="equation-label">Worked Initial Report Stake</span>The
-						refresh sponsor posts exactly
+						refresh sponsor supplies exactly
 						<code>0.005621086396153847 WETH</code> and approximately
 						<code>12.422600935500001870 REP</code>. Because this example requests
 						zero additional WETH, the selected amount equals the minimum computed
@@ -728,8 +731,7 @@
 					may pass zero to use that minimum or request a larger initial WETH amount.
 					The coordinator sets
 					<code>initialWethReport = max(minimumToken1Report(), requestedInitialWeth)</code>,
-					snapshots that selected amount into OpenOracle's
-					OpenOracle <code>currentAmount1</code>, and derives
+					sets OpenOracle <code>currentAmount1</code> to that selected amount, and derives
 					<code>amount2 = ceil(initialWethReport * proposedRepPerEthPrice / 1e18)</code>
 					inside the same transaction. If that price is wrong
 					by at least the configured target error (initially five percent), the resulting correction opportunity is
@@ -1612,12 +1614,12 @@
 						<tr>
 							<td>OpenOracle initial <code>currentAmount1</code></td>
 							<td>
-								The greater of <code>minimumToken1Report()</code> and the caller's
+								The greater of <code>minimumToken1Report()</code> and the sponsor's
 								<code>requestedInitialWeth</code>
 							</td>
 							<td>
-								Snapshots the selected initial WETH amount for this report instance;
-								callers may voluntarily post more than the minimum.
+								The sponsor may request and fund more than the minimum; the coordinator
+								submits the selected amount as <code>currentAmount1</code>.
 							</td>
 						</tr>
 						<tr>
@@ -1662,8 +1664,9 @@
 							<td><code>disputeDelay</code></td>
 							<td><code>0</code></td>
 							<td>
-								Allows disputes immediately after each report; the dispute
-								opportunity still lasts until the settlement delay elapses.
+								Allows disputes immediately after each report and strictly before
+								its settlement deadline. At the deadline, settlement is valid and a
+								dispute is too late.
 							</td>
 						</tr>
 						<tr>

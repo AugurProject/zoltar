@@ -622,7 +622,7 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('This wallet’s aggregate escalation entitlement is already captured. Select any child outcome that has not received it yet.')).not.toBeNull()
+		expect(documentQueries.getByText('Entitlement captured; select a child outcome that has not received it yet.')).not.toBeNull()
 		expect(documentQueries.queryByText('Current path: Must migrate into the selected child universe')).toBeNull()
 		const button = documentQueries.getByRole('button', { name: 'Migrate Unresolved Escalation To No' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected unresolved migration action button')
@@ -976,8 +976,8 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Auctioned Bond Allowance (OI Debt)')).not.toBeNull()
-		expect(documentQueries.getByText('Winning bids buy more than REP.')).not.toBeNull()
-		expect(documentQueries.getByText(/remaining open-interest debt being assigned to auction participants/)).not.toBeNull()
+		expect(documentQueries.queryByText('Winning bids buy more than REP.')).toBeNull()
+		expect(documentQueries.getByText('Winning settlement can also assign a pro-rata share of the pool security-bond allowance.')).not.toBeNull()
 	})
 
 	test('disables bid submission when the entered bid price is an oversized out-of-range value', async () => {

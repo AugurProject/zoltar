@@ -171,10 +171,12 @@ export function ForkZoltarSection({
 					details={[
 						{ label: zoltarCopy.permanentRepBurn, value: <CurrencyValue value={permanentRepBurn} suffix={commonCopy.rep} /> },
 						{ label: transactionReviewCopy.resultingRepBalance, value: <CurrencyValue value={resultingRepBalance} suffix={commonCopy.rep} /> },
+					]}
+					risks={[zoltarCopy.forkIrreversibleRisk, zoltarCopy.forkMigrationRisk]}
+					technicalDetails={[
 						{ label: zoltarCopy.zoltarContract, value: rootUniverse?.zoltarAddress === undefined ? commonCopy.unavailable : <AddressValue address={rootUniverse.zoltarAddress} /> },
 						{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
 					]}
-					risks={[zoltarCopy.forkIrreversibleRisk, zoltarCopy.forkMigrationRisk]}
 				/>
 
 				<label className='field'>

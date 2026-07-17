@@ -1,4 +1,3 @@
-import * as reportingCopy from '../../../copy/reporting.js'
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -252,10 +251,7 @@ function ReportingSectionHarness({ initialProps }: { initialProps?: Partial<Repo
 }
 
 function findProjectionPreviewElement() {
-	return Array.from(document.body.querySelectorAll('p.detail')).find(element => {
-		const text = element.textContent ?? ''
-		return text.includes('Check back no later than') || text.includes('Check back immediately')
-	})
+	return within(document.body).getByRole('heading', { name: 'Transaction Review' }).closest('section')
 }
 
 function findProjectionPreviewText() {
@@ -283,11 +279,13 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('heading', { name: 'Active' })).toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Reporting Workflow' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Reporting Workflow' })).toBeNull()
+		expect(document.body.querySelector('.reporting-workflow-section')).toBeNull()
+		expect(document.body.querySelector('.workflow-summary-strip')).toBeNull()
 		expect(document.body.textContent?.includes('Current guidance')).toBe(false)
 		expect(document.body.textContent?.includes('Reporting is the dispute game that locks vault REP behind an outcome until the market finalizes or forks.')).toBe(false)
 		expect(document.body.textContent?.includes('These values show how much stake is required, how long the current dispute window lasts, and whether the question is close to finalization.')).toBe(false)
-		expect(document.body.textContent?.includes('Escalation is live. Review the bond, side balances, and time remaining before contributing or withdrawing.')).toBe(true)
+		expect(document.body.textContent?.includes('Escalation is live. Review the bond, side balances, and time remaining before contributing or withdrawing.')).toBe(false)
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(false)
 		expect(documentQueries.queryByRole('button', { name: 'Outcome Side' })).toBeNull()
 		expect(document.body.querySelectorAll('.escalation-side.selected').length).toBe(0)
@@ -320,8 +318,8 @@ describe('ReportingSection', () => {
 		const transactionContext = document.body.querySelector('.transaction-object-context')
 		if (!(transactionContext instanceof HTMLElement)) throw new Error('Expected reporting transaction context')
 		expect(transactionContext.textContent?.includes('Universe 1')).toBe(true)
-		expect(transactionContext.textContent?.includes('Source Vault')).toBe(true)
-		expect(transactionContext.textContent?.includes(zeroAddress)).toBe(true)
+		expect(transactionContext.textContent?.includes('Source Vault')).toBe(false)
+		expect(transactionContext.textContent?.includes(zeroAddress)).toBe(false)
 	})
 
 	test('suppresses the Pending Start banner once an escalation game has been initialized', async () => {
@@ -556,7 +554,8 @@ describe('ReportingSection', () => {
 		expect(document.body.querySelectorAll('.escalation-side.selected').length).toBe(1)
 		expect(document.body.textContent?.includes('Selected side currently has')).toBe(false)
 		expect(selectedButton.textContent?.includes('Selected')).toBe(true)
-		expect(document.body.textContent?.includes('If Yes wins and no one else contributes afterward')).toBe(true)
+		expect(document.body.textContent?.includes('Estimated profit if Yes wins')).toBe(true)
+		expect(document.body.textContent?.includes('Assumes no later contributions.')).toBe(true)
 	})
 
 	test('removes the approval explainer copy and still blocks when unlocked vault REP is insufficient', async () => {
@@ -1028,8 +1027,8 @@ describe('ReportingSection', () => {
 		expect(reportOutcomeSection.querySelectorAll('.currency-value.unavailable')).toHaveLength(0)
 		expect(document.body.textContent?.includes('Load reporting details to populate live stakes')).toBe(false)
 		expectTransactionButtonEnabled(document.body, 'Report Yes')
-		expect(document.body.textContent?.includes(reportingCopy.uncontestedFinalizationLead)).toBe(true)
-		expect(document.body.textContent?.includes(`Check back no later than ${formatTimestamp(150n + ESCALATION_GAME_ACTIVATION_DELAY)} (in 3d 0h 0m) to confirm Yes is the leading outcome before finalization.`)).toBe(true)
+		expect(document.body.textContent?.includes('Timer ChangeStarts escalation')).toBe(true)
+		expect(document.body.textContent?.includes(`Recheck By${formatTimestamp(150n + ESCALATION_GAME_ACTIVATION_DELAY)} (in 3d 0h 0m)`)).toBe(true)
 	})
 
 	test('separates the 3-day first-report window from the later check-back deadline for larger first reports', async () => {
@@ -1049,9 +1048,8 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes(reportingCopy.uncontestedFinalizationLead)).toBe(true)
-		expect(document.body.textContent?.includes(`If no one disputes after this report, the market would finalize in ${formatDuration(ESCALATION_GAME_ACTIVATION_DELAY)}.`)).toBe(true)
-		expect(document.body.textContent?.includes(`Check back no later than ${formatTimestamp(latestCheckBackTimestamp)} (in ${formatDuration(ESCALATION_GAME_ACTIVATION_DELAY + hypotheticalDuration)}) to confirm Invalid is still leading if later disputes keep escalation open.`)).toBe(true)
+		expect(document.body.textContent?.includes('Timer ChangeStarts escalation')).toBe(true)
+		expect(document.body.textContent?.includes(`Recheck By${formatTimestamp(latestCheckBackTimestamp)} (in ${formatDuration(ESCALATION_GAME_ACTIVATION_DELAY + hypotheticalDuration)})`)).toBe(true)
 	})
 
 	test('shows explicit outcome-selection guidance before the first report starts escalation', async () => {
@@ -1068,7 +1066,7 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes('Reporting is open. Select an outcome side below to enable reporting.')).toBe(true)
+		expect(document.body.textContent?.includes('Reporting is open. Select an outcome side below to enable reporting.')).toBe(false)
 		expect(document.body.textContent?.includes('Select an outcome side above to enable reporting.')).toBe(true)
 		expectTransactionButtonDisabled(document.body, 'Report On Selected Side', 'Select an outcome side before reporting on a market.')
 	})
@@ -1105,11 +1103,11 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(findProjectionPreviewText().includes('projects roughly')).toBe(true)
+		expect(findProjectionPreviewText().includes('Estimated profit if Yes wins')).toBe(true)
 		expect(document.body.textContent?.includes('Enter a valid report amount to preview profit.')).toBe(false)
 	})
 
-	test('shows the timer-extension preview below the report button for contributions that raise binding capital', async () => {
+	test('shows the timer-extension preview once in transaction review for contributions that raise binding capital', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -1125,17 +1123,14 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const reportButton = documentQueries.getByRole('button', { name: 'Report No' })
 		const preview = findProjectionPreviewElement()
-		if (preview === undefined) throw new Error('Expected projection preview to render')
+		if (preview === undefined || preview === null) throw new Error('Expected projection preview to render')
 		const expectedCheckBackTimestamp = getSelectedOutcomeRewardWindowFillTimestamp(createDynamicReportingDetails(), 'no', rep(2n))
-		expect(reportButton.compareDocumentPosition(preview) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
-		expect(preview.textContent?.includes('projects roughly')).toBe(true)
-		expect(preview.textContent?.includes('This contribution would extend the timer by')).toBe(true)
-		expect(preview.textContent?.includes('the market would finalize in')).toBe(true)
-		expect(preview.textContent?.includes('Check back no later than')).toBe(true)
+		expect(documentQueries.getAllByText(/^Extends /)).toHaveLength(1)
+		expect(preview.textContent?.includes('Estimated profit if No wins')).toBe(true)
+		expect(preview.textContent?.includes('Timer ChangeExtends')).toBe(true)
+		expect(preview.textContent?.includes('Recheck By')).toBe(true)
 		expect(expectedCheckBackTimestamp === undefined ? false : preview.textContent?.includes(formatTimestamp(expectedCheckBackTimestamp))).toBe(true)
-		expect(preview.textContent?.includes('to confirm No is the leading outcome before the remaining reward-eligible REP on No is filled.')).toBe(true)
 		expect(document.body.textContent?.includes('became binding capital')).toBe(false)
 	})
 
@@ -1155,9 +1150,9 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const previewText = findProjectionPreviewText()
-		expect(previewText.includes('projects roughly')).toBe(true)
-		expect(previewText.includes('This contribution would not extend the timer, and if no one disputes after it, the market would finalize in')).toBe(true)
-		expect(previewText.includes(`Check back no later than ${formatTimestamp(reportingDetails.escalationEndTime)} (in ${formatDuration(reportingDetails.escalationEndTime - reportingDetails.currentTime)}) to confirm Yes is the leading outcome before finalization.`)).toBe(true)
+		expect(previewText.includes('Estimated profit if Yes wins')).toBe(true)
+		expect(previewText.includes('Timer ChangeNo change')).toBe(true)
+		expect(previewText.includes(`Recheck By${formatTimestamp(reportingDetails.escalationEndTime)} (in ${formatDuration(reportingDetails.escalationEndTime - reportingDetails.currentTime)})`)).toBe(true)
 		expect(document.body.textContent?.includes('became binding capital')).toBe(false)
 	})
 
@@ -1184,8 +1179,8 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const previewText = findProjectionPreviewText()
-		expect(previewText.includes('This contribution would end the escalation and finalize the market immediately.')).toBe(true)
-		expect(previewText.includes('Check back immediately to confirm the market finalized as Yes.')).toBe(true)
+		expect(previewText.includes('Timer ChangeFinalizes immediately')).toBe(true)
+		expect(previewText.includes('Estimated profit if Yes wins')).toBe(true)
 	})
 
 	test('shows the accepted-deposit note when the typed contribution exceeds the remaining room on the selected side', async () => {
@@ -1209,7 +1204,7 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(findProjectionPreviewText().includes('This contribution would not extend the timer, and if no one disputes after it, the market would finalize in')).toBe(true)
+		expect(findProjectionPreviewText().includes('Timer ChangeNo change')).toBe(true)
 		expect(document.body.textContent?.includes('this action would lock')).toBe(true)
 		expect(document.body.textContent?.includes('instead of the full entered amount.')).toBe(true)
 	})
@@ -1580,7 +1575,7 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes('Load reporting details before using presets.')).toBe(false)
 	})
 
-	test('shows unavailable preset reasons for impossible active-game states', async () => {
+	test('shows one associated blocker when contribution capacity disables both presets', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -1590,12 +1585,12 @@ describe('ReportingSection', () => {
 						sides: [
 							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
 							{ balance: rep(20n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-							{ balance: rep(19n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+							{ balance: rep(20n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 						],
 						startBond: rep(1n),
 					}),
 					reportingForm: createReportingForm({
-						selectedOutcome: 'no',
+						selectedOutcome: 'yes',
 					}),
 				}),
 			),
@@ -1603,11 +1598,14 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const amountInput = documentQueries.getByLabelText('Contribution Amount (REP)') as HTMLInputElement
-		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Min to take the lead' }))
-		})
-		expect(amountInput.value).toBe('1')
+		const blocker = documentQueries.getByText('No remaining contribution capacity is available on the selected side.')
+		const minimumButton = documentQueries.getByRole('button', { name: 'Min to take the lead' }) as HTMLButtonElement
+		const maxProfitButton = documentQueries.getByRole('button', { name: 'Max profit' }) as HTMLButtonElement
+		expect(minimumButton.disabled).toBe(true)
+		expect(maxProfitButton.disabled).toBe(true)
+		expect(blocker.id).not.toBe('')
+		expect(minimumButton.getAttribute('aria-describedby')).toBe(blocker.id)
+		expect(maxProfitButton.getAttribute('aria-describedby')).toBe(blocker.id)
 	})
 
 	test('removes side-level deposit and projection detail lines from the shared outcome chart', async () => {
@@ -1817,7 +1815,7 @@ describe('ReportingSection', () => {
 
 		const amountInput = within(document.body).getByRole('textbox', { name: /^Contribution Amount \(REP\)/ })
 		expect((amountInput as HTMLInputElement).value).toBe('1500')
-		expect(document.body.textContent?.includes('projects roughly')).toBe(true)
+		expect(document.body.textContent?.includes('Estimated profit if No wins')).toBe(true)
 	})
 
 	test('disables the minimum-outcome-change preset when the selected side already leads', async () => {

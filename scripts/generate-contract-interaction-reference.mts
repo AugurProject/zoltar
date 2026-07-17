@@ -90,7 +90,7 @@ const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 		recordDepositFromSecurityPool: ['external(address,BinaryOutcomes.BinaryOutcome,uint256,uint256)'],
 		resumeFromFork: ['external()'],
 		start: ['external(uint256,uint256)'],
-		startFromFork: ['external(uint256,uint256,uint256)'],
+		startFromFork: ['external(uint256,uint256,uint256,BinaryOutcomes.BinaryOutcome)'],
 	},
 	'solidity/contracts/peripherals/EscalationGameCarry.sol': {
 		initializeForkCarrySnapshotWithResolutionBalances: ['external(address,bytes32,bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS][3],uint256[3],uint256[3],uint256[3],bytes32[3])'],
@@ -128,7 +128,7 @@ const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 		depositRep: ['external(uint256)'],
 		depositToEscalationGame: ['external(BinaryOutcomes.BinaryOutcome,uint256)'],
 		initializeForkCarrySnapshotWithResolutionBalances: ['external(address,bytes32,bytes32[64][3],uint256[3],uint256[3],uint256[3],bytes32[3])'],
-		initializeForkedEscalationGame: ['external(uint256,uint256,uint256)'],
+		initializeForkedEscalationGame: ['external(uint256,uint256,uint256,BinaryOutcomes.BinaryOutcome)'],
 		performLiquidation: ['external(address,address,uint256,uint256,uint256,uint256,uint256)'],
 		performSetSecurityBondsAllowance: ['external(address,uint256)'],
 		performWithdrawRep: ['external(address,uint256)'],
@@ -187,7 +187,7 @@ const contractReferences: ContractReference[] = [
 	{
 		name: 'Zoltar',
 		purpose: 'Registers universe forks and turns burned parent REP into branch-specific child REP.',
-		readSurface: 'Use `universes`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThreshold`, `getUniverseTheoreticalSupply`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalance` to reconstruct universe and migration state.',
+		readSurface: 'Use `universes`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThreshold`, `getNonDecisionThreshold`, `getUniverseTheoreticalSupply`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalance` to reconstruct universe and migration state.',
 		sourcePath: 'solidity/contracts/Zoltar.sol',
 		interactions: [
 			{
@@ -251,13 +251,13 @@ const contractReferences: ContractReference[] = [
 				caller: 'Trader',
 				effect: 'Adds collateral and mints one `Invalid`, `Yes`, and `No` share per complete-set unit.',
 				declarations: [{ name: 'createCompleteSet' }],
-				preconditions: 'Operational, unforked, unresolved, not awaiting continuation; positive ETH converts to at least one complete-set unit; bond capacity covers the new collateral.',
+				preconditions: 'Operational, unforked, unresolved, not awaiting continuation; all three outcome supplies are equal; positive ETH converts to at least one complete-set unit; bond capacity covers the new collateral.',
 				signals: '`CompleteSetCreated` and `PoolAccountingCheckpoint`',
 			},
 			{
 				call: '`redeemCompleteSet(completeSetAmount)`',
 				caller: 'Complete-set holder',
-				effect: 'Burns equal balances of all three outcomes and returns ETH at the current collateral-per-share rate.',
+				effect: 'Burns equal balances of all three outcomes and returns ETH using the largest live outcome supply as the collateral denominator, so balanced holders can exit even after one-sided fork migration.',
 				declarations: [{ name: 'redeemCompleteSet' }],
 				preconditions: 'Operational and unforked; caller owns the complete set.',
 				signals: '`CompleteSetRedeemed` and `PoolAccountingCheckpoint`',
@@ -459,7 +459,8 @@ const contractReferences: ContractReference[] = [
 	{
 		name: 'EscalationGame',
 		purpose: 'Escrows outcome REP, raises the running resolution cost, detects non-decision, and settles local or carried deposits.',
-		readSurface: 'Use `getCurrentCost`, `totalCost`, `getEscalationGameEndDate`, `getQuestionResolution`, `hasReachedNonDecision`, `getBindingCapital`, `getOutcomeBalances`, deposit pagination, carry snapshot views, and escrow views. Ordinary users route deposits and withdrawals through `SecurityPool`.',
+		readSurface:
+			'Use `getCurrentCost`, `totalCost`, `getEscalationGameEndDate`, `getQuestionResolution`, `getFinalQuestionResolution`, `fixedQuestionOutcome`, `hasReachedNonDecision`, `getBindingCapital`, `getOutcomeBalances`, deposit pagination, carry snapshot views, and escrow views. Ordinary users route deposits and withdrawals through `SecurityPool`.',
 		sourcePath: 'solidity/contracts/peripherals/EscalationGame.sol',
 		interactions: [
 			{
@@ -471,9 +472,9 @@ const contractReferences: ContractReference[] = [
 				signals: '`GameStarted`',
 			},
 			{
-				call: '`startFromFork(...)` and `resumeFromFork()`',
+				call: '`startFromFork(startBond, nonDecisionThreshold, elapsedAtFork, fixedQuestionOutcome)` and `resumeFromFork()`',
 				caller: 'Factory owner starts; owner or security pool resumes',
-				effect: 'Initializes a paused continuation with inherited elapsed time, then resumes its remaining escalation clock.',
+				effect: 'Initializes a paused continuation with inherited elapsed time and an optional fixed matching-question child outcome, then resumes its remaining escalation clock. After the continuation deadline, `getFinalQuestionResolution` returns the fixed outcome when one is present.',
 				declarations: [{ name: 'startFromFork' }, { name: 'resumeFromFork' }],
 				preconditions: 'Valid start parameters and inherited elapsed time no greater than seven weeks; continuation resumes once.',
 				signals: '`GameContinuedFromFork`, `ForkContinuationResumed`',
@@ -576,7 +577,7 @@ const contractReferences: ContractReference[] = [
 	{
 		name: 'ShareToken',
 		purpose: "Stores universe-aware ERC-1155 outcome shares and reproduces a holder's full source balance into selected fork branches.",
-		readSurface: 'Use standard ERC-1155 reads plus `totalSupplyForOutcome`, `balanceOfOutcome`, `balanceOfShares`, `getTokenId`, `getTokenIds`, and `unpackTokenId`.',
+		readSurface: 'Use standard ERC-1155 reads plus `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getTokenId`, `getTokenIds`, and `unpackTokenId`.',
 		sourcePath: 'solidity/contracts/peripherals/tokens/ShareToken.sol',
 		interactions: [
 			{
@@ -596,11 +597,27 @@ const contractReferences: ContractReference[] = [
 				signals: '`AuthorizationUpdated`',
 			},
 			{
-				call: 'Mint and burn entrypoints',
+				call: '`mintCompleteSets(universeId, account, amount)`',
 				caller: 'An authorized `SecurityPool`',
-				effect: 'Performs pool-requested complete-set minting, complete-set burning, or winning-token burning.',
-				declarations: [{ name: 'mintCompleteSets' }, { name: 'burnCompleteSets' }, { name: 'burnTokenIdAndGetRemainingSupply' }],
-				preconditions: 'Caller is authorized; token balances cover burns.',
+				effect: 'Mints `amount` each of Invalid, Yes, and No to `account`.',
+				declarations: [{ name: 'mintCompleteSets' }],
+				preconditions: 'Caller is authorized; global Invalid, Yes, and No supplies are equal before minting.',
+				signals: 'ERC-1155 transfer events',
+			},
+			{
+				call: '`burnCompleteSets(universeId, account, amount)`',
+				caller: 'An authorized `SecurityPool`',
+				effect: 'Burns `amount` each of Invalid, Yes, and No from `account`; global outcome supplies may differ.',
+				declarations: [{ name: 'burnCompleteSets' }],
+				preconditions: 'Caller is authorized; `account` owns at least `amount` of every outcome.',
+				signals: 'ERC-1155 transfer events',
+			},
+			{
+				call: '`burnTokenIdAndGetRemainingSupply(tokenId, account)`',
+				caller: 'An authorized `SecurityPool`',
+				effect: "Burns `account`'s full balance of `tokenId` and returns the burned amount and that token ID's remaining supply.",
+				declarations: [{ name: 'burnTokenIdAndGetRemainingSupply' }],
+				preconditions: 'Caller is authorized.',
 				signals: 'ERC-1155 transfer events',
 			},
 		],
@@ -622,7 +639,7 @@ const contractReferences: ContractReference[] = [
 			{
 				call: '`submitBid(tick)` with ETH',
 				caller: 'Any bidder',
-				effect: 'Adds ETH demand at the selected positive-price tick.',
+				effect: "Adds ETH demand at the selected positive-price tick while extending that tick's append-only cumulative bid and refund history, including when a fully refunded tick becomes active again.",
 				declarations: [{ name: 'submitBid' }],
 				preconditions: 'Auction active and unfinalized; before one-week deadline; bid meets `minBidSize`; tick maps to nonzero price.',
 				signals: '`BidSubmitted`',

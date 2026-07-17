@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { describe, expect, test } from 'bun:test'
-import { getMetricPlaceholderPresentation, getPageNotFoundPresentation, getPoolRegistryPresentation, getReportPresentation, getUniversePresentation, getWalletPresentation } from '../lib/userCopy.js'
+import { getMetricPlaceholderPresentation, getPoolRegistryPresentation, getReportPresentation, getUniversePresentation, getWalletPresentation } from '../lib/userCopy.js'
 
 void describe('user copy helpers', () => {
 	void test('maps pool selection states semantically', () => {
@@ -25,7 +25,9 @@ void describe('user copy helpers', () => {
 
 	void test('maps universe and report lookup states semantically', () => {
 		expect(getUniversePresentation('missing')?.key).toBe('not_found')
-		expect(getReportPresentation({ kind: 'question', state: 'unknown' })?.actionHint).toBe('Refresh questions')
+		expect(getReportPresentation({ kind: 'question', state: 'unknown' })).toBeUndefined()
+		expect(getReportPresentation({ kind: 'question', state: 'missing' })?.detail).toBe('No question matches this ID. Try another question ID.')
+		expect(getReportPresentation({ kind: 'report', state: 'missing' })?.detail).toBe('No report matches this ID. Try another report ID.')
 		expect(getReportPresentation({ kind: 'question', state: 'loading' })).toEqual({
 			detail: 'retrieving…',
 			detailIsLoading: true,
@@ -67,7 +69,6 @@ void describe('user copy helpers', () => {
 		expect(getUniversePresentation('ready')).toBeUndefined()
 		expect(getReportPresentation({ kind: 'report', state: 'loading' })?.detail).toBe('retrieving…')
 		expect(getReportPresentation({ kind: 'report', state: 'ready' })).toBeUndefined()
-		expect(getPageNotFoundPresentation().key).toBe('page_not_found')
 	})
 
 	void test('maps wallet branch states with non-increasing permission checks', () => {

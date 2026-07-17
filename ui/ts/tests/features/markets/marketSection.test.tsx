@@ -151,7 +151,6 @@ function createMarketSectionProps(overrides: Partial<MarketSectionProps> = {}): 
 		zoltarMigrationForm: getDefaultZoltarMigrationFormState(),
 		zoltarMigrationPending: false,
 		zoltarMigrationPreparedRepBalance: 0n,
-		zoltarMigrationResult: undefined,
 		zoltarQuestionCount: 0n,
 		zoltarQuestionPage: undefined,
 		zoltarQuestions: [],
@@ -217,8 +216,8 @@ describe('MarketSection', () => {
 		expect(sharesLink.getAttribute('href')).toContain('universe=11')
 		expect(sharesLink.getAttribute('href')).toContain('selectedPoolView=trading')
 		expect(reportingLink.getAttribute('href')).toContain('selectedPoolView=reporting')
-		expect(documentQueries.getByText('Complete-set operations')).not.toBeNull()
-		expect(documentQueries.getByText('Mint or redeem matching Yes, No, and Invalid shares. Outcome-price trading is not available in this pool.')).not.toBeNull()
+		expect(documentQueries.getByText('Complete sets only')).not.toBeNull()
+		expect(document.body.textContent?.includes('Mint or redeem matching Yes, No, and Invalid shares.')).toBe(false)
 		expect(documentQueries.getByText('Open Interest')).not.toBeNull()
 		expect(documentQueries.getByText('Share Supply')).not.toBeNull()
 	})

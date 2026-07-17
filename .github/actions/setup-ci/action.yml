@@ -1,0 +1,80 @@
+name: Set up Zoltar CI proposal
+description: Install pinned tools and dependencies, then restore or generate build inputs
+
+inputs:
+  verify-generated:
+    description: Always regenerate and verify generated inputs
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Fetch repository comparison history
+      if: github.job == 'checks'
+      shell: bash
+      run: |
+        if [[ "$(git rev-parse --is-shallow-repository)" == "true" ]]; then
+          git fetch --no-tags --prune --unshallow origin '+refs/heads/*:refs/remotes/origin/*'
+        elif ! git rev-parse --verify --quiet refs/remotes/origin/main; then
+          git fetch --no-tags --prune origin '+refs/heads/main:refs/remotes/origin/main'
+        fi
+
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: ${{ env.BUN_VERSION }}
+
+    - name: Setup Foundry / Anvil
+      uses: foundry-rs/foundry-toolchain@v1
+      with:
+        version: ${{ env.FOUNDRY_VERSION }}
+
+    - name: Cache Bun dependencies
+      uses: actions/cache@v5
+      with:
+        path: ~/.bun/install/cache
+        key: ${{ runner.os }}-bun-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'ui/bun.lock', 'solidity/bun.lock') }}
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        bun install --frozen-lockfile
+        (cd ui && bun install --frozen-lockfile)
+        (cd solidity && bun install --frozen-lockfile)
+
+    - name: Cache generated shared package
+      id: shared-cache
+      uses: actions/cache@v5
+      with:
+        path: shared/js
+        key: ${{ runner.os }}-shared-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'package.json', 'shared/package.json', 'shared/tsconfig.json', 'shared/ts/**') }}
+
+    - name: Cache generated contract artifacts
+      id: contract-cache
+      uses: actions/cache@v5
+      with:
+        path: |
+          solidity/artifacts
+          solidity/.contract-hash.json
+          solidity/ts/types/contractArtifact.ts
+          solidity/types/contractArtifact.ts
+          ui/ts/abis.ts
+          ui/ts/contractArtifact.ts
+        key: ${{ runner.os }}-contracts-${{ env.BUN_VERSION }}-${{ env.FOUNDRY_VERSION }}-${{ hashFiles('bun.lock', 'solidity/bun.lock', 'solidity/package.json', 'solidity/tsconfig-compile.json', 'solidity/ts/abi/abis.ts', 'solidity/ts/compile.ts', 'solidity/contracts/**', 'ui/build/projectArtifacts.mts') }}
+
+    - name: Cache UI vendor assets
+      id: vendor-cache
+      uses: actions/cache@v5
+      with:
+        path: ui/vendor
+        key: ${{ runner.os }}-ui-vendor-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'ui/bun.lock', 'ui/package.json', 'ui/tsconfig.vendor.json', 'ui/build/bundlerPaths.mts', 'ui/build/vendor.mts') }}
+
+    - name: Generate and verify generated artifacts
+      if: inputs.verify-generated == 'true' || steps.shared-cache.outputs.cache-hit != 'true' || steps.contract-cache.outputs.cache-hit != 'true' || steps.vendor-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: bun run check:generated-clean
+
+    - name: Refresh generated shared package installs
+      shell: bash
+      run: bun run refresh:shared-dependencies

@@ -111,6 +111,11 @@ contract Zoltar {
 		return getUniverseTheoreticalSupply(universeId) / forkThresholdDivisor;
 	}
 
+	function getNonDecisionThreshold(uint248 universeId) public view returns (uint256) {
+		uint256 forkThreshold = getForkThreshold(universeId);
+		return forkThreshold / 2 + (forkThreshold % 2);
+	}
+
 	function getUniverseTheoreticalSupply(uint248 universeId) public view returns (uint256) {
 		return universeTheoreticalSupplies[universeId];
 	}

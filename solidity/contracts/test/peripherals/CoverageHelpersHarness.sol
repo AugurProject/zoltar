@@ -102,7 +102,13 @@ contract EscalationGameFactoryCoverageSecurityPool {
 		uint256 nonDecisionThreshold,
 		uint256 elapsedAtFork
 	) external returns (EscalationGame) {
-		return factory.deployEscalationGameFromFork(startBond, nonDecisionThreshold, elapsedAtFork);
+		return
+			factory.deployEscalationGameFromFork(
+				startBond,
+				nonDecisionThreshold,
+				elapsedAtFork,
+				BinaryOutcomes.BinaryOutcome.None
+			);
 	}
 }
 

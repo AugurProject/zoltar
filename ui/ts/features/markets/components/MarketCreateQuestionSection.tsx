@@ -54,7 +54,7 @@ function getScalarCreatePreviewDetails(marketForm: MarketFormState, scalarInputs
 }
 
 function getPoolEligibilityMessage(marketType: MarketFormState['marketType']) {
-	if (marketType === 'binary') return marketCopy.binaryPoolCompatibilityHint
+	if (marketType === 'binary') return undefined
 	if (marketType === 'categorical') return marketCopy.categoricalPoolCompatibilityDetail
 	return marketCopy.scalarPoolCompatibilityDetail
 }
@@ -79,20 +79,11 @@ function renderFieldError(field: MarketFormFieldName, message: string | undefine
 function getMarketTypeGuidance(marketType: MarketFormState['marketType']) {
 	switch (marketType) {
 		case 'binary':
-			return {
-				description: marketCopy.binaryQuestionDescription,
-				steps: [marketCopy.binaryTitleGuidance, marketCopy.binaryEventWindowGuidance, marketCopy.binaryResolutionGuidance],
-			}
+			return marketCopy.binaryQuestionDescription
 		case 'categorical':
-			return {
-				description: marketCopy.categoricalOutcomesGuidance,
-				steps: [marketCopy.categoricalOutcomeClarityGuidance, marketCopy.categoricalExceptionsGuidance, marketCopy.categoricalVerifiabilityGuidance],
-			}
+			return marketCopy.categoricalOutcomesGuidance
 		case 'scalar':
-			return {
-				description: marketCopy.scalarQuestionDescription,
-				steps: [marketCopy.scalarRangeGuidance, marketCopy.scalarUnitGuidance, marketCopy.scalarResolutionGuidance],
-			}
+			return marketCopy.scalarQuestionDescription
 		default:
 			return assertNever(marketType)
 	}
@@ -150,7 +141,6 @@ export function MarketCreateQuestionSection({
 	const normalizedDescription = marketForm.description.trim()
 	const draftDescription = normalizedDescription === '' ? marketCopy.missingResolutionNotesHelpText : marketForm.description
 	const draftTitle = marketForm.title.trim() === '' ? marketCopy.questionTitleRequired : marketForm.title
-	const draftQuestionContextLabel = normalizedDescription === '' ? marketCopy.needsContext : marketCopy.contextProvided
 	const markFieldTouched = (field: MarketFormFieldName) => setTouchedFields(current => new Set([...current, field]))
 	const getVisibleFieldError = (field: MarketFormFieldName) => (touchedFields.has(field) ? marketFormValidation.fieldErrors[field] : undefined)
 	const canCreateQuestion = accountAddress !== undefined && isMainnet && !marketCreating && marketFormValidation.isValid
@@ -220,33 +210,13 @@ export function MarketCreateQuestionSection({
 						<MetricField label={marketCopy.creationTransactionHash}>
 							<TransactionHashLink hash={marketResult.createQuestionHash} />
 						</MetricField>
-						<p className='detail'>{getPoolEligibilityMessage(marketResult.marketType)}</p>
+						{getPoolEligibilityMessage(marketResult.marketType) === undefined ? undefined : <p className='detail'>{getPoolEligibilityMessage(marketResult.marketType)}</p>}
 					</div>
 				</EntityCard>
 			)}
 
 			{marketResult === undefined ? (
-				<SectionBlock title={commonCopy.createQuestion} variant='plain' description={marketCopy.questionCreationDescription}>
-					<div className='workflow-summary-strip workflow-guide'>
-						<div className='workflow-guide-intro'>
-							<strong>{marketCopy.resolverQuestionGuidance}</strong>
-							<p className='detail'>{marketTypeGuidance.description}</p>
-						</div>
-						<div className='workflow-summary-strip-steps'>
-							<span className='current'>{marketCopy.step1DefineTheEventClearly}</span>
-							<span>{marketCopy.step2ExplainHowItResolves}</span>
-							<span>{marketCopy.step3SetTheTimingWindow}</span>
-						</div>
-					</div>
-
-					<SectionBlock headingLevel={4} title={marketCopy.questionTypeGuidance} variant='embedded'>
-						<ul className='requirements-checklist'>
-							{marketTypeGuidance.steps.map(step => (
-								<li key={step}>{step}</li>
-							))}
-						</ul>
-					</SectionBlock>
-
+				<SectionBlock title={commonCopy.createQuestion} variant='plain'>
 					<form
 						aria-label={commonCopy.createQuestion}
 						className='form-grid'
@@ -260,7 +230,7 @@ export function MarketCreateQuestionSection({
 						<div className='field'>
 							<span>{marketCopy.questionType}</span>
 							<EnumDropdown ariaLabel={marketCopy.questionType} options={MARKET_TYPE_OPTIONS} value={marketForm.marketType} onChange={marketType => onMarketFormChange({ marketType })} />
-							<p className='field-help'>{marketTypeGuidance.description}</p>
+							<p className='field-help'>{marketTypeGuidance}</p>
 						</div>
 
 						<div className='field'>
@@ -275,7 +245,6 @@ export function MarketCreateQuestionSection({
 									placeholder={marketCopy.questionTitlePlaceholder}
 								/>
 							</label>
-							<p className='field-help'>{marketCopy.questionTitleHelpText}</p>
 							{renderFieldError('title', getVisibleFieldError('title'))}
 						</div>
 
@@ -318,7 +287,7 @@ export function MarketCreateQuestionSection({
 							</div>
 						</div>
 						<p className='field-help'>{marketCopy.questionTimingHelpText}</p>
-						<p className='field-help'>{getPoolEligibilityMessage(marketForm.marketType)}</p>
+						{getPoolEligibilityMessage(marketForm.marketType) === undefined ? undefined : <p className='field-help'>{getPoolEligibilityMessage(marketForm.marketType)}</p>}
 
 						{marketForm.marketType === 'categorical' ? (
 							<div className='field'>
@@ -418,21 +387,14 @@ export function MarketCreateQuestionSection({
 							return undefined
 						})()}
 
-						<SectionBlock headingLevel={4} title={marketCopy.draftPreview} variant='embedded' description={marketCopy.draftPreviewDescription}>
+						<SectionBlock headingLevel={4} title={marketCopy.draftPreview} variant='embedded'>
 							<div className='question-draft-preview'>
 								<div className='question-draft-preview-header'>
 									<div className='question-summary-heading'>
 										<strong>{draftTitle}</strong>
 										<p className='detail'>{draftDescription}</p>
 									</div>
-									<div className='question-draft-preview-statuses' role='list' aria-label={marketCopy.draftQuestionStatus}>
-										<span className='question-draft-preview-chip' role='listitem'>
-											{marketForm.marketType}
-										</span>
-										<span className={`question-draft-preview-chip ${normalizedDescription === '' ? 'warning' : 'ok'}`} role='listitem'>
-											{draftQuestionContextLabel}
-										</span>
-									</div>
+									<span className='question-draft-preview-chip'>{marketForm.marketType}</span>
 								</div>
 								<OutcomeChipRow items={draftOutcomeItems} />
 								<div className='question-draft-preview-meta' role='list' aria-label={marketCopy.draftQuestionSummary}>
@@ -443,10 +405,6 @@ export function MarketCreateQuestionSection({
 									<div className='question-draft-preview-meta-item' role='listitem'>
 										<span>{commonCopy.ends}</span>
 										<strong>{marketForm.endTime.trim() === '' ? marketCopy.endTimeRequired : marketForm.endTime}</strong>
-									</div>
-									<div className='question-draft-preview-meta-item' role='listitem'>
-										<span>{marketCopy.riskCue}</span>
-										<strong>{normalizedDescription === '' ? marketCopy.lowTrustUntilContextIsAdded : marketCopy.contextIsPresentForReview}</strong>
 									</div>
 								</div>
 							</div>

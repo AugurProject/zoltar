@@ -21,6 +21,17 @@ type CoordinatorInitialReportClient = Parameters<typeof loadOpenOracleInitialRep
 const OPEN_ORACLE_PRICE_UNITS = 30n
 const ACTIVE_STAGED_OPERATION_PREVIEW_LIMIT = 25n
 const COORDINATOR_PRICE_PRECISION = 10n ** 18n
+const OPEN_ORACLE_REPORT_MISSING_ERROR_NAME = 'OpenOracleReportMissingError'
+
+export function createOpenOracleReportMissingError(reportId: bigint) {
+	const error = new Error(`Oracle report #${reportId.toString()} does not exist`)
+	error.name = OPEN_ORACLE_REPORT_MISSING_ERROR_NAME
+	return error
+}
+
+export function isOpenOracleReportMissingError(error: unknown) {
+	return error instanceof Error && error.name === OPEN_ORACLE_REPORT_MISSING_ERROR_NAME
+}
 
 function normalizeOpenOracleTokenMetadata(tokenAddress: Address, decimalsValue: unknown, symbolValue: unknown) {
 	const decimals = Number(decimalsValue)
@@ -265,7 +276,10 @@ function calculateOpenOraclePrice(amount1: bigint, amount2: bigint) {
 
 export async function loadOpenOracleReportDetails(client: ReadClient, openOracleAddress: Address, reportId: bigint): Promise<import('../types/contracts.js').OpenOracleReportDetails> {
 	const [eventState, stateHash, block] = await Promise.all([
-		loadOpenOracleEventState(client, openOracleAddress, reportId),
+		loadOpenOracleEventState(client, openOracleAddress, reportId).catch(error => {
+			if (error instanceof Error && error.message === `Oracle report #${reportId.toString()} does not exist`) throw createOpenOracleReportMissingError(reportId)
+			throw error
+		}),
 		client.readContract({
 			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'oracleGame',
