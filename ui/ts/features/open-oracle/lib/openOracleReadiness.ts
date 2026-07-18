@@ -1,18 +1,10 @@
 import type { OpenOracleSelectedReportActionMode } from './openOracle.js'
 import type { ReadinessAction } from '../../types.js'
 
-export function getOpenOracleReadinessActions({ actionMode, disputeMessage, hasReport, reportId, settleMessage }: { actionMode: OpenOracleSelectedReportActionMode; disputeMessage: string | undefined; hasReport: boolean; reportId: string; settleMessage: string | undefined }): ReadinessAction[] {
+export function getOpenOracleReadinessActions({ actionMode, disputeMessage, hasReport, settleMessage }: { actionMode: OpenOracleSelectedReportActionMode; disputeMessage: string | undefined; hasReport: boolean; settleMessage: string | undefined }): ReadinessAction[] {
 	const baseBlocker = !hasReport ? 'Load a report first.' : undefined
 	const actions: ReadinessAction[] = []
 
-	if (actionMode === 'initial-report')
-		actions.push({
-			actionLabel: 'Initial Report',
-			key: 'submit-initial-report',
-			readiness: baseBlocker === undefined ? 'ready' : 'blocked',
-			title: reportId === '' ? 'Submit Initial Report' : `Submit Initial Report For #${reportId}`,
-			...(baseBlocker === undefined ? {} : { blocker: baseBlocker }),
-		})
 	if (actionMode === 'dispute') {
 		const disputeBlocker = baseBlocker ?? disputeMessage
 		actions.push({

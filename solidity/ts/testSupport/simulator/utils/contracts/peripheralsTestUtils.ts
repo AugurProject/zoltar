@@ -44,7 +44,7 @@ export const triggerOwnGameFork = async (client: WriteClient, securityPoolAddres
 	await forkZoltarWithOwnEscalationGame(client, securityPoolAddress)
 }
 
-export const handleOracleReporting = async (client: WriteClient, mockWindow: AnvilWindowEthereum, priceOracleManagerAndOperatorQueuer: Address, forceRepEthPriceTo: bigint, expectedReporter: Address = client.account.address) => {
+export const handleOracleReporting = async (client: WriteClient, mockWindow: AnvilWindowEthereum, priceOracleManagerAndOperatorQueuer: Address, forceRepEthPriceTo: bigint) => {
 	const pendingReportId = await getPendingReportId(client, priceOracleManagerAndOperatorQueuer)
 	if (pendingReportId === 0n) {
 		// operation already executed
@@ -61,8 +61,8 @@ export const handleOracleReporting = async (client: WriteClient, mockWindow: Anv
 	assert.strictEqual(reportStatus.currentAmount1, expectedAmount1, 'pending report should preserve the coordinator-selected token1 amount')
 	assert.strictEqual(reportStatus.currentAmount2, expectedAmount2, 'pending report should already encode the forced price before settlement')
 	assert.notStrictEqual(reportStatus.currentReporter, zeroAddress, 'pending report should already have an initial reporter')
-	assert.strictEqual(reportStatus.currentReporter, expectedReporter, 'pending report should preserve the request sponsor as the current reporter')
-	assert.strictEqual(reportStatus.initialReporter, expectedReporter, 'pending report should preserve the request sponsor as the initial reporter')
+	assert.strictEqual(reportStatus.currentReporter, priceOracleManagerAndOperatorQueuer, 'pending report should use the coordinator as the current reporter')
+	assert.strictEqual(reportStatus.initialReporter, priceOracleManagerAndOperatorQueuer, 'pending report should preserve the coordinator as the initial reporter')
 	assert.ok(reportStatus.reportTimestamp > 0n, 'pending report should already have a report timestamp')
 
 	await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)

@@ -2,7 +2,6 @@ import * as commonCopy from './common.js'
 import type { CopyTemplateValue } from './types.js'
 
 export const settleReport = 'Settle Report'
-export const submitInitialReport = 'Submit Initial Report'
 export const disputeAndSwap = 'Dispute & Swap'
 export const disputeDelay = 'Dispute Delay'
 export const disputeDelaySeconds = 'Dispute Delay (seconds)'
@@ -31,7 +30,7 @@ export const formatReportBrowseTitle = (token1Symbol: string, token2Symbol: stri
 export const createAnother = 'Create Another'
 export const createStandaloneOracleGame = 'Create Standalone Oracle Game'
 export const creating = 'Creating…'
-export const reportCreatedDetail = 'The report instance was created successfully.'
+export const reportCreatedDetail = 'The funded report was created successfully.'
 export const createSuccess = 'Create Success'
 export const currentPrice = 'Current Price'
 export const currentReportState = 'Current Report State'
@@ -43,37 +42,34 @@ export const disputeOccurred = 'Dispute Occurred'
 export const formatDisconnectedWalletApprovalReason = (tokenSymbol: string) => `Connect a wallet before approving ${tokenSymbol}.`
 export const disputeWalletRequiredReason = 'Connect a wallet before disputing the report.'
 export const settlementWalletRequiredReason = 'Connect a wallet before settling the report.'
-export const initialReportWalletRequired = 'Connect a wallet before submitting the initial report.'
-export const wrapEthWalletRequiredReason = 'Connect a wallet before wrapping ETH.'
 export const economics = 'Economics'
 export const formatDisputeAmountsInvalidReason = (tokenSymbol: string) => `Enter valid dispute amounts before approving ${tokenSymbol}.`
-export const formatEnterValidPriceBeforeApprovingReason = (token1Symbol: string, token2Symbol: string) => `Enter a valid ${token1Symbol} / ${token2Symbol} price before approving ${token2Symbol}.`
 export const disputeEscalationStopAmountHelpText = 'Base-token amount that ends escalation.'
 export const creationFundingRequirementHelpText = 'ETH funding, including the settler reward.'
 export const ethValueToSend = 'ETH Value To Send'
 export const formatExactTokenRequiredLabel = (tokenSymbol: string) => `Exact ${tokenSymbol} Required`
 export const initialToken1AmountHelpText = 'Base-token amount to report.'
 export const exactToken1Report = 'Exact Token1 Report'
+export const initialToken2Amount = 'Initial Token2 Amount'
+export const initialToken2AmountHelpText = 'Quote-token amount to report.'
 export const fee = 'Fee'
-export const fetchPriceFromUniswap = 'Fetch price from Uniswap'
-export const fetching = 'Fetching…'
 export const identity = 'Identity'
 export const initialEconomics = 'Initial Economics'
-export const reportContext = 'Report Context'
-export const initialReportReviewHint = 'Review price source, approvals, and token balances before submitting the initial report.'
 export const initialReporter = 'Initial Reporter'
-export const submittingTheInitialReport = 'submitting the initial report'
 export const lastReportOpportunity = 'Last Report Opportunity'
 export const reportLoadError = 'Failed to load Open Oracle reports.'
 export const reportLoadRequired = 'Load a report first.'
 export const escalationMultiplierHelpText = 'Dispute escalation multiplier.'
 export const formatNewAmountMustBeExactDetail = (tokenSymbol: string, amount: string) => `New ${tokenSymbol} amount must be exactly ${amount} for this dispute.`
+export const oracleBalances = 'Your Oracle Balances'
+export const oracleBalancesDetail = 'Settlement rewards, returned report liquidity, and dispute proceeds stay in the Oracle until the credited account withdraws them.'
+export const noOracleBalances = 'No withdrawable Oracle balances are available for this token pair.'
+export const loadingOracleBalances = 'Loading Oracle balances…'
+export const withdrawBalance = (tokenSymbol: string) => `Withdraw ${tokenSymbol}`
+export const withdrawingBalance = (tokenSymbol: string) => `Withdrawing ${tokenSymbol}…`
 export const numberOfReports = 'Number of Reports'
 export const openReport = 'Open report'
 export const oracleAddress = 'Oracle Address'
-export const priceExample = '1.00'
-export const formatPriceFieldLabel = (token1Symbol: string, token2Symbol: string) => `Price (${token1Symbol} / ${token2Symbol})`
-export const priceSource = 'Price source:'
 export const protocolFeeRecipient = 'Protocol Fee Recipient'
 export const report = 'Report'
 export const formatReportNumberTitle = (reportId: string) => commonCopy.formatReportNumberLabel(reportId)
@@ -89,7 +85,6 @@ export const settlementTimestamp = 'Settlement Timestamp'
 export const notSettled = 'Not settled'
 export const stateHash = 'State Hash'
 export const allStatuses = 'All statuses'
-export const awaitingInitialReport = 'Awaiting initial report'
 export const disputed = 'Disputed'
 export const oracleGamesEmpty = 'No Open Oracle games found.'
 export const reportFiltersEmpty = 'No reports match the current search and status filters.'
@@ -98,32 +93,15 @@ export const refreshReport = 'Refresh report'
 export const reportAmounts = 'Report Amounts'
 export const openOracleReportDetails = 'Open Oracle Report Details'
 export const searchByReportIdTokenSymbolOrTokenAddress = 'Search by report ID, token symbol, or token address'
-export const staleQuoteWarning = 'This quote is stale and will be refreshed before submission.'
 export const standaloneOracleWarningDetail = 'Standalone only. Start pool-managed requests from a security pool.'
-export const submitting = 'Submitting…'
 export const formatTimingValue = (timingAmount: CopyTemplateValue, usesSeconds: boolean) => `${timingAmount} ${usesSeconds ? 's' : 'blocks'}`
 export const timing = 'Timing'
-export const formatQuoteLoadedDetail = (quoteBlockNumberText: string | undefined, ageText: string) => (quoteBlockNumberText === undefined ? `Quote loaded ${ageText}.` : `Quote loaded at block ${quoteBlockNumberText} ${ageText}.`)
-export const formatQuoteAgeText = (quoteLoadedAtMs: number) => {
-	const elapsedSeconds = Math.max(0, Math.floor((Date.now() - quoteLoadedAtMs) / 1000))
-	if (elapsedSeconds < 60) return `${elapsedSeconds}s ago`
-	const elapsedMinutes = Math.floor(elapsedSeconds / 60)
-	if (elapsedMinutes < 60) return `${elapsedMinutes}m ago`
-	const elapsedHours = Math.floor(elapsedMinutes / 60)
-	return `${elapsedHours}h ago`
-}
 export const token1Address = 'Base Token Address'
 export const formatTokenApprovalTitle = (tokenSymbol: string) => `${tokenSymbol} Approval`
 export const token2Address = 'Quote Token Address'
 export const tokenToSwapOut = 'Token to Swap Out'
 export const trackDisputes = 'Track Disputes'
-export const awaitingInitialReportLabel = 'Awaiting Initial Report'
 export const formatNewTokenAmountFieldLabel = (tokenSymbol: string) => `New ${tokenSymbol} Amount`
-export const need = 'Need'
-export const wethShortfallTail = 'more WETH for this report.'
-export const wrapNeededEthToWeth = 'Wrap needed ETH to WETH'
-export const wrappingEth = 'Wrapping ETH…'
 export const reporter = 'Reporter'
-export const stage = 'Stage'
 export const parameterDetails = 'Parameter Details'
 export const standaloneParameterDetails = 'Exact report and escalation-halt amounts use base-token decimals. ETH funding must cover required funding and the settler reward. Dispute settings determine escalation timing and economics.'
