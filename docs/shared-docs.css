@@ -142,6 +142,86 @@ body.doc-openoracle td > code:only-child {
 	white-space: nowrap;
 	overflow-wrap: normal;
 }
+body.doc-openoracle .invariant-example {
+	margin: 0.55rem 0 0;
+	padding-top: 0.45rem;
+	border-top: 1px solid var(--line);
+	color: var(--muted);
+}
+body.doc-openoracle .invariant-example strong {
+	color: var(--ink);
+}
+body.doc-openoracle .invariant-list {
+	display: grid;
+	gap: 0.65rem;
+	margin-top: 0.75rem;
+}
+body.doc-openoracle .invariant-entry {
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: var(--paper);
+}
+body.doc-openoracle .invariant-entry summary {
+	padding: 0.85rem 1rem;
+	cursor: pointer;
+	font-weight: 750;
+}
+body.doc-openoracle .invariant-entry summary::marker {
+	color: var(--blue);
+}
+body.doc-openoracle .invariant-entry summary code {
+	margin: 0 0.65rem 0 0.35rem;
+	white-space: nowrap;
+}
+body.doc-openoracle .invariant-entry summary:focus-visible {
+	outline: 2px solid var(--blue);
+	outline-offset: 0.15rem;
+	border-radius: var(--radius);
+}
+body.doc-openoracle .invariant-entry[open] summary {
+	border-bottom: 1px solid var(--line);
+	background: var(--soft);
+}
+body.doc-openoracle .invariant-title {
+	font-size: 1.02rem;
+}
+body.doc-openoracle .invariant-details {
+	padding: 0.9rem 1rem 1rem;
+}
+body.doc-openoracle .invariant-label {
+	margin: 0 0 0.35rem;
+	color: var(--muted);
+	font-size: 0.78rem;
+	font-weight: 800;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+}
+body.doc-openoracle .invariant-property {
+	line-height: 1.55;
+}
+body.doc-openoracle .invariant-metadata {
+	display: grid;
+	grid-template-columns: minmax(8rem, 0.7fr) minmax(11rem, 1fr) minmax(14rem, 1.5fr);
+	gap: 0.65rem;
+	margin: 0.85rem 0 0;
+}
+body.doc-openoracle .invariant-metadata > div {
+	padding: 0.65rem 0.7rem;
+	border: 1px solid var(--line);
+	border-radius: 0.35rem;
+	background: var(--soft);
+}
+body.doc-openoracle .invariant-metadata dt {
+	margin-bottom: 0.2rem;
+	color: var(--muted);
+	font-size: 0.78rem;
+	font-weight: 800;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+body.doc-openoracle .invariant-metadata dd {
+	margin: 0;
+}
 body.doc-openoracle ul {
 	margin: 0 0 1rem;
 	padding-left: 1.25rem;
@@ -443,6 +523,23 @@ body.doc-openoracle td math {
 		display: block;
 		overflow-x: auto;
 		white-space: nowrap;
+	}
+	body.doc-openoracle.invariants-catalog table {
+		display: table;
+		overflow-x: visible;
+		white-space: normal;
+	}
+	body.doc-openoracle .invariant-entry summary {
+		padding: 0.75rem;
+	}
+	body.doc-openoracle .invariant-entry summary code {
+		margin-left: 0.15rem;
+	}
+	body.doc-openoracle .invariant-details {
+		padding: 0.8rem;
+	}
+	body.doc-openoracle .invariant-metadata {
+		grid-template-columns: 1fr;
 	}
 }
 
