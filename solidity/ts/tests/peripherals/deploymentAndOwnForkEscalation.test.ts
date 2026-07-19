@@ -4,8 +4,8 @@ import type { Abi, Address } from '@zoltar/shared/ethereum'
 import type { WriteClient } from '../../testSupport/simulator/utils/clients'
 import { peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken } from '../../types/contractArtifact'
 import { getQuestionResolution as readQuestionResolution } from '../../testSupport/simulator/utils/contracts/escalationGame'
-import { deployChild } from '../../testSupport/simulator/utils/contracts/zoltar'
-import { finalizeTruthAuction, startTruthAuction } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
+import { deployChild, getZoltarForkThreshold } from '../../testSupport/simulator/utils/contracts/zoltar'
+import { finalizeTruthAuction, initiateSecurityPoolFork, startTruthAuction } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
 import { createCarryProof, SparseNullifierTree } from '../carryProofHelpers'
 
 describe('Peripherals: deployment and own-fork escalation', () => {
@@ -159,7 +159,161 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		await assert.rejects(deployOriginSecurityPool(client, missingUniverseId, questionId, securityMultiplier), /universe is missing/)
 	})
 
+	test('rejects a parallel origin pool before deploying the canonical fork child', async () => {
+		const forkQuestionData = {
+			...questionData,
+			title: `parallel origin fork source ${await mockWindow.getTime()}`,
+			endTime: (await mockWindow.getTime()) + DAY,
+		}
+		const forkQuestionId = getQuestionId(forkQuestionData, outcomes)
+		await createQuestion(client, forkQuestionData, outcomes)
+		await mockWindow.setTime(forkQuestionData.endTime + 1n)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(client, genesisUniverse, forkQuestionId)
+		await deployChild(client, genesisUniverse, BigInt(QuestionOutcome.Yes))
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		await assert.rejects(deployOriginSecurityPool(client, yesUniverse, questionId, securityMultiplier), /canonical ancestor/i)
+
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		assert.ok(await contractExists(client, yesSecurityPool.securityPool), 'canonical child pool should remain deployable after the rejected origin attempt')
+		strictEqualTypeSafe(
+			await client.readContract({
+				abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+				functionName: 'getCanonicalSecurityPool',
+				address: getInfraContractAddresses().securityPoolFactory,
+				args: [yesUniverse, questionId, securityMultiplier],
+			}),
+			yesSecurityPool.securityPool,
+			'factory registry should point the child namespace to the canonical fork child',
+		)
+		strictEqualTypeSafe(
+			await client.readContract({
+				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				functionName: 'canonicalPoolByUniverse',
+				address: securityPoolAddresses.shareToken,
+				args: [yesUniverse],
+			}),
+			yesSecurityPool.securityPool,
+			'share token should authorize exactly the canonical fork child for the child universe',
+		)
+		await assert.rejects(deployOriginSecurityPool(client, yesUniverse, questionId, securityMultiplier), /canonical ancestor|canonical key/i)
+	})
+
+	test('rejects a parallel origin pool when only a higher canonical ancestor exists', async () => {
+		const firstForkQuestionData = {
+			...questionData,
+			title: `recursive origin first fork ${await mockWindow.getTime()}`,
+			endTime: (await mockWindow.getTime()) + DAY,
+		}
+		const firstForkQuestionId = getQuestionId(firstForkQuestionData, outcomes)
+		await createQuestion(client, firstForkQuestionData, outcomes)
+		await mockWindow.setTime(firstForkQuestionData.endTime + 1n)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(client, genesisUniverse, firstForkQuestionId)
+		await deployChild(client, genesisUniverse, BigInt(QuestionOutcome.Yes))
+
+		const firstChildUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const firstChildRepToken = getRepTokenAddress(firstChildUniverse)
+		const firstChildForkThreshold = await getZoltarForkThreshold(client, firstChildUniverse)
+		const firstChildBalanceSlot = formatStorageSlot(getMappingStorageSlot(client.account.address, 0n))
+		await mockWindow.addStateOverrides({
+			[firstChildRepToken]: {
+				stateDiff: {
+					[firstChildBalanceSlot]: firstChildForkThreshold * 2n,
+				},
+			},
+		})
+
+		const secondForkQuestionData = {
+			...questionData,
+			title: `recursive origin second fork ${await mockWindow.getTime()}`,
+			endTime: (await mockWindow.getTime()) + DAY,
+		}
+		const secondForkQuestionId = getQuestionId(secondForkQuestionData, outcomes)
+		await createQuestion(client, secondForkQuestionData, outcomes)
+		await mockWindow.setTime(secondForkQuestionData.endTime + 1n)
+		await approveToken(client, firstChildRepToken, getZoltarAddress())
+		await forkUniverse(client, firstChildUniverse, secondForkQuestionId)
+		await deployChild(client, firstChildUniverse, BigInt(QuestionOutcome.No))
+
+		const grandchildUniverse = getChildUniverseId(firstChildUniverse, QuestionOutcome.No)
+		await assert.rejects(deployOriginSecurityPool(client, grandchildUniverse, questionId, securityMultiplier), /canonical ancestor/i)
+
+		const unrelatedQuestionData = {
+			...questionData,
+			title: `recursive origin unrelated market ${await mockWindow.getTime()}`,
+			endTime: (await mockWindow.getTime()) + DAY,
+		}
+		const unrelatedQuestionId = getQuestionId(unrelatedQuestionData, outcomes)
+		await createQuestion(client, unrelatedQuestionData, outcomes)
+		await deployOriginSecurityPool(client, grandchildUniverse, unrelatedQuestionId, securityMultiplier)
+		const unrelatedPool = getSecurityPoolAddresses(addressString(0n), grandchildUniverse, unrelatedQuestionId, securityMultiplier)
+		assert.ok(await contractExists(client, unrelatedPool.securityPool), 'a genuinely unrelated grandchild market should remain deployable')
+	})
+
+	test('stateful factory sequences keep one canonical collateral ledger per child token namespace', async () => {
+		const forkQuestionData = {
+			...questionData,
+			title: `stateful canonical pool fork ${await mockWindow.getTime()}`,
+			endTime: (await mockWindow.getTime()) + DAY,
+		}
+		const forkQuestionId = getQuestionId(forkQuestionData, outcomes)
+		await createQuestion(client, forkQuestionData, outcomes)
+		await mockWindow.setTime(forkQuestionData.endTime + 1n)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(client, genesisUniverse, forkQuestionId)
+
+		const branchOutcomes = [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No]
+		for (const outcome of branchOutcomes) {
+			await deployChild(client, genesisUniverse, BigInt(outcome))
+		}
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+
+		let fuzzState = 0x5ec01n
+		const shuffledOutcomes = [...branchOutcomes]
+		for (let index = shuffledOutcomes.length - 1; index > 0; index--) {
+			fuzzState = (fuzzState * 6364136223846793005n + 1442695040888963407n) & ((1n << 64n) - 1n)
+			const swapIndex = Number(fuzzState % BigInt(index + 1))
+			const currentOutcome = shuffledOutcomes[index]
+			const swapOutcome = shuffledOutcomes[swapIndex]
+			if (currentOutcome === undefined || swapOutcome === undefined) throw new Error('stateful outcome shuffle failed')
+			shuffledOutcomes[index] = swapOutcome
+			shuffledOutcomes[swapIndex] = currentOutcome
+		}
+
+		for (const outcome of shuffledOutcomes) {
+			const childUniverse = getChildUniverseId(genesisUniverse, outcome)
+			await assert.rejects(deployOriginSecurityPool(client, childUniverse, questionId, securityMultiplier), /canonical ancestor/i)
+			await createChildUniverse(client, securityPoolAddresses.securityPool, outcome)
+			const childPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, childUniverse, questionId, securityMultiplier).securityPool
+			const factoryCanonicalPool = await client.readContract({
+				abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+				functionName: 'getCanonicalSecurityPool',
+				address: getInfraContractAddresses().securityPoolFactory,
+				args: [childUniverse, questionId, securityMultiplier],
+			})
+			const tokenCanonicalPool = await client.readContract({
+				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				functionName: 'canonicalPoolByUniverse',
+				address: securityPoolAddresses.shareToken,
+				args: [childUniverse],
+			})
+			strictEqualTypeSafe(factoryCanonicalPool, childPool, 'factory should retain one canonical child collateral ledger')
+			strictEqualTypeSafe(tokenCanonicalPool, childPool, 'share token namespace should retain the same canonical child ledger')
+			await assert.rejects(deployOriginSecurityPool(client, childUniverse, questionId, securityMultiplier), /canonical ancestor|canonical key/i)
+		}
+	})
+
 	test('reuses and authorizes the share token when sibling universes deploy the same market', async () => {
+		const siblingMarketQuestionData = {
+			...questionData,
+			title: `sibling market ${await mockWindow.getTime()}`,
+		}
+		const siblingMarketQuestionId = getQuestionId(siblingMarketQuestionData, outcomes)
+		await createQuestion(client, siblingMarketQuestionData, outcomes)
 		const forkQuestionData = {
 			...questionData,
 			title: `sibling share token source ${await mockWindow.getTime()}`,
@@ -176,11 +330,11 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const noUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.No)
-		await deployOriginSecurityPool(client, yesUniverse, questionId, securityMultiplier)
-		await deployOriginSecurityPool(client, noUniverse, questionId, securityMultiplier)
+		await deployOriginSecurityPool(client, yesUniverse, siblingMarketQuestionId, securityMultiplier)
+		await deployOriginSecurityPool(client, noUniverse, siblingMarketQuestionId, securityMultiplier)
 
-		const yesPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), yesUniverse, questionId, securityMultiplier)
-		const noPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), noUniverse, questionId, securityMultiplier)
+		const yesPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), yesUniverse, siblingMarketQuestionId, securityMultiplier)
+		const noPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), noUniverse, siblingMarketQuestionId, securityMultiplier)
 		strictEqualTypeSafe(yesPoolAddresses.shareToken, noPoolAddresses.shareToken, 'sibling markets should reuse their share token')
 		for (const [securityPool, universe] of [
 			[yesPoolAddresses.securityPool, yesUniverse],

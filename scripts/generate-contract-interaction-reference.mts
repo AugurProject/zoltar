@@ -120,7 +120,7 @@ const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 		setSecurityPool: ['public(ISecurityPool)'],
 	},
 	'solidity/contracts/peripherals/SecurityPool.sol': {
-		activateForkMode: ['external()'],
+		activateForkMode: ['external(bool)'],
 		addFeeEligibleSecurityBondAllowance: ['external(address,uint256)'],
 		authorizeChildPool: ['external(ISecurityPool)'],
 		configureVault: ['external(address,uint256,uint256,uint256)'],

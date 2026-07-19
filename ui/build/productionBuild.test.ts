@@ -19,6 +19,7 @@ const productionCssPath = path.join(distRootPath, 'css', 'index.css')
 const productionTokensCssPath = path.join(distRootPath, 'css', 'tokens.css')
 const productionFaviconPaths = [path.join(distRootPath, 'favicon.ico'), path.join(distRootPath, 'favicon.svg')]
 const CHROMIUM_STARTUP_TIMEOUT_MILLISECONDS = 30_000
+const CHROMIUM_DEVTOOLS_PROBE_TIMEOUT_MILLISECONDS = 1_000
 
 let server: Bun.Server | undefined
 
@@ -178,7 +179,7 @@ test('Chromium DevTools port discovery reports an early browser signal', async (
 	await expect(waitForDevToolsPort('/missing/chromium/DevToolsActivePort', { exitCode: null, signalCode: 'SIGTERM' }, 50)).rejects.toThrow('Chromium exited with signal SIGTERM before publishing its DevTools port')
 })
 
-async function waitForChromiumPageWebSocketUrl(port: number, timeoutMilliseconds = 5_000, browserProcess?: BrowserProcess) {
+async function waitForChromiumPageWebSocketUrl(port: number, timeoutMilliseconds = CHROMIUM_STARTUP_TIMEOUT_MILLISECONDS, browserProcess?: BrowserProcess) {
 	const deadline = Date.now() + timeoutMilliseconds
 	let lastObservedState = 'no response'
 
@@ -188,7 +189,7 @@ async function waitForChromiumPageWebSocketUrl(port: number, timeoutMilliseconds
 
 		try {
 			const remainingMilliseconds = deadline - Date.now()
-			const targetsRequest = fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(remainingMilliseconds) })
+			const targetsRequest = fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(Math.min(remainingMilliseconds, CHROMIUM_DEVTOOLS_PROBE_TIMEOUT_MILLISECONDS)) })
 			const targetsResponse = browserProcess === undefined ? await targetsRequest : await Promise.race([targetsRequest, rejectWhenBrowserExits(browserProcess, 'exposing a DevTools page target')])
 			if (!targetsResponse.ok) {
 				lastObservedState = `HTTP ${targetsResponse.status.toString()} ${targetsResponse.statusText}`.trim()
@@ -239,6 +240,45 @@ test('Chromium page target discovery tolerates an initially empty target list', 
 
 	try {
 		await expect(waitForChromiumPageWebSocketUrl(devToolsServer.port)).resolves.toBe(pageWebSocketUrl)
+		expect(requestCount).toBe(2)
+	} finally {
+		devToolsServer.stop(true)
+	}
+})
+
+test('Chromium page target discovery tolerates a delayed initial page target', async () => {
+	let firstRequestAt: number | undefined
+	const pageWebSocketUrl = 'ws://127.0.0.1/devtools/page/test'
+	const devToolsServer = Bun.serve({
+		fetch: () => {
+			const now = Date.now()
+			firstRequestAt ??= now
+			return Response.json(now - firstRequestAt < 5_250 ? [] : [{ type: 'page', webSocketDebuggerUrl: pageWebSocketUrl }])
+		},
+		port: 0,
+	})
+
+	try {
+		await expect(waitForChromiumPageWebSocketUrl(devToolsServer.port)).resolves.toBe(pageWebSocketUrl)
+	} finally {
+		devToolsServer.stop(true)
+	}
+})
+
+test('Chromium page target discovery retries after a stalled target response', async () => {
+	let requestCount = 0
+	const stalledResponse = new Promise<Response>(() => undefined)
+	const pageWebSocketUrl = 'ws://127.0.0.1/devtools/page/test'
+	const devToolsServer = Bun.serve({
+		fetch: () => {
+			requestCount += 1
+			return requestCount === 1 ? stalledResponse : Response.json([{ type: 'page', webSocketDebuggerUrl: pageWebSocketUrl }])
+		},
+		port: 0,
+	})
+
+	try {
+		await expect(waitForChromiumPageWebSocketUrl(devToolsServer.port, 2_500)).resolves.toBe(pageWebSocketUrl)
 		expect(requestCount).toBe(2)
 	} finally {
 		devToolsServer.stop(true)
@@ -432,6 +472,7 @@ type ProductionBrowserDriver = {
 	waitForButtonEnabled: (label: string, occurrence?: number) => Promise<void>
 	waitForBodyText: (text: string) => Promise<string>
 	waitForBodyWithoutText: (text: string) => Promise<string>
+	waitForTransactionStatus: (status: string, title: string) => Promise<string>
 }
 
 async function loadProductionDocumentInChromium(pageUrl: string, viewport: { height: number; width: number }, interact?: (driver: ProductionBrowserDriver) => Promise<void>) {
@@ -444,7 +485,7 @@ async function loadProductionDocumentInChromium(pageUrl: string, viewport: { hei
 
 	try {
 		const port = await waitForDevToolsPort(path.join(profilePath, 'DevToolsActivePort'), browser)
-		socket = new WebSocket(await waitForChromiumPageWebSocketUrl(port, 5_000, browser))
+		socket = new WebSocket(await waitForChromiumPageWebSocketUrl(port, CHROMIUM_STARTUP_TIMEOUT_MILLISECONDS, browser))
 		await waitForChromiumWebSocketOpen(socket, browser)
 		devToolsConnected = true
 
@@ -556,6 +597,14 @@ async function loadProductionDocumentInChromium(pageUrl: string, viewport: { hei
 			},
 			waitForBodyText: async text => await waitForBody(body => body.includes(text), JSON.stringify(text)),
 			waitForBodyWithoutText: async text => await waitForBody(body => !body.includes(text), `body to omit ${JSON.stringify(text)}`),
+			waitForTransactionStatus: async (status, title) => {
+				for (let attempt = 0; attempt < 2400; attempt += 1) {
+					const matches = await evaluate(`(() => { const notice = document.querySelector('.global-transaction-notice'); return notice?.querySelector('.badge')?.textContent?.trim() === ${JSON.stringify(status)} && notice?.querySelector('strong')?.textContent?.trim() === ${JSON.stringify(title)} })()`)
+					if (matches === true) return await readBody()
+					await Bun.sleep(50)
+				}
+				throw new Error(`Timed out waiting for ${status} transaction ${title}. Last body: ${await readBody()}`)
+			},
 		}
 		await interact?.(driver)
 		return readEvaluationString(
@@ -669,7 +718,7 @@ productionBrowserTest('production bundle executes deployment, reporting, fork mi
 			expect(failedBody).toContain('Deposit Rep')
 			await driver.waitForButtonEnabled('Deposit REP', 1)
 			await driver.clickButton('Deposit REP', 1)
-			const poolBody = await driver.waitForBodyText('Deposit Rep completed successfully.')
+			const poolBody = await driver.waitForTransactionStatus('Confirmed', 'Deposit Rep')
 			expect(poolBody).toContain('Manage Pool')
 
 			await driver.resize({ height: 900, width: 1440 })
@@ -695,7 +744,7 @@ productionBrowserTest('production bundle executes deployment, reporting, fork mi
 			}
 			expect(reportingDepositReady).toBe(true)
 			await driver.clickButton('Deposit REP', 1)
-			await driver.waitForBodyText('Deposit Rep completed successfully.')
+			await driver.waitForTransactionStatus('Confirmed', 'Deposit Rep')
 			await driver.clickButton('Open Oracle')
 			await driver.waitForButtonEnabled('Request New Price')
 			await driver.clickButton('Request New Price')
@@ -710,7 +759,7 @@ productionBrowserTest('production bundle executes deployment, reporting, fork mi
 			await driver.clickButton('Settle Report')
 			await driver.waitForButtonEnabled('Settle Report', 1)
 			await driver.clickButton('Settle Report', 1)
-			await driver.waitForBodyText('Settle completed successfully.')
+			await driver.waitForTransactionStatus('Confirmed', 'Settle')
 			const reportingPoolsOpened = await driver.evaluate(`(() => { const target = [...document.querySelectorAll('a, button')].find(candidate => candidate.textContent?.trim() === 'Security Pools'); if (!(target instanceof HTMLElement)) return false; target.click(); return true })()`)
 			expect(reportingPoolsOpened).toBe(true)
 			await driver.waitForButtonEnabled('Reporting')
@@ -791,7 +840,7 @@ productionBrowserTest('production bundle executes deployment, reporting, fork mi
 			expect(forkViewOpened).toBe(true)
 			await driver.waitForButtonEnabled('Finalize Truth Auction')
 			await driver.clickButton('Finalize Truth Auction')
-			const finalizedBody = await driver.waitForBodyText('Finalize Truth Auction completed successfully.')
+			const finalizedBody = await driver.waitForTransactionStatus('Confirmed', 'Finalize Truth Auction')
 			expect(finalizedBody).toContain('Truth Auction')
 		}),
 	)

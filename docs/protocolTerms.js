@@ -113,7 +113,7 @@ window.protocolTermDefinitions = Object.freeze({
 	NULLIFIER_DEPTH: 'The depth of the tree used to remember consumed proofs. It prevents the same carried deposit from being used twice.',
 	'number of ticks': 'The scalar-outcome denominator used to map a scalar answer onto payout numerators.',
 	oracle: 'Zoltar is the truth/forking oracle, and OpenOracle is the REP/ETH price oracle. They answer different questions.',
-	openoracle: 'The report-and-dispute price oracle used by Placeholder for bounded REP/ETH pricing.',
+	openoracle: 'The report-and-dispute oracle used by Placeholder for fresh, contestable REP/ETH pricing without an onchain value or deviation bound.',
 	operation: 'A protocol action, such as a liquidation, withdrawal, or allowance update.',
 	outcome: 'A possible answer or payoff branch for a question or market.',
 	'outcome index': 'The numeric identifier for a valid question outcome or child-universe branch.',

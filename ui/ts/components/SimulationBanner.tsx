@@ -228,8 +228,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 		<section className='panel contract-panel simulation-banner'>
 			<div className='contract-panel-header simulation-banner-header'>
 				<div>
-					<h2>{simulationCopy.simulationMode}</h2>
-					<p className='detail'>{simulationCopy.browserSimulation}</p>
+					<h2>{simulationCopy.browserSimulation}</h2>
 				</div>
 			</div>
 			<div className='contract-list simulation-banner-list'>
@@ -337,8 +336,6 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 					<summary>{simulationCopy.qaControlsPricesAndTimeTravel}</summary>
 					<div className='simulation-banner-controls'>
 						<div className='contract-copy'>
-							<h3>{simulationCopy.controls}</h3>
-							<p className='detail'>{simulationCopy.manualQaDescription}</p>
 							<div className='simulation-delay-grid'>
 								<label className='simulation-delay-field'>
 									<span className='simulation-delay-label'>{simulationCopy.queryDelayMs}</span>

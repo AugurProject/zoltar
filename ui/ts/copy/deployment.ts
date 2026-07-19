@@ -1,6 +1,5 @@
 export const deploying = 'Deploying…'
 export const deploymentReadyStatus = 'Can deploy now.'
-export const expectedCodeFoundStatus = 'Code found at expected address.'
 export const deploymentRunningStatus = 'Deployment in progress.'
 export const notDeployedBadgeLabel = 'Not Deployed'
 export const waiting = 'Waiting'

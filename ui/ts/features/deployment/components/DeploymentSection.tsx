@@ -17,7 +17,6 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 	if (stepDeployed)
 		return {
 			badgeTone: 'ok',
-			detail: deploymentCopy.expectedCodeFoundStatus,
 			label: commonCopy.deployed,
 			buttonLabel: commonCopy.deployed,
 		}
@@ -60,9 +59,9 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 	}
 }
 
-export function DeploymentSection({ title, steps, allSteps, accountAddress, busyStepId, isMainnet, onDeploy }: DeploymentSectionProps) {
+export function DeploymentSection({ title, completedGroup = false, steps, allSteps, accountAddress, busyStepId, isMainnet, onDeploy }: DeploymentSectionProps) {
 	return (
-		<SectionBlock className='contract-panel' title={title}>
+		<SectionBlock className='contract-panel' title={completedGroup ? undefined : title}>
 			<div className='contract-list'>
 				{steps.map(step => {
 					const stepIndex = allSteps.findIndex(candidate => candidate.id === step.id)
@@ -81,13 +80,13 @@ export function DeploymentSection({ title, steps, allSteps, accountAddress, busy
 						<div className='contract-row' key={step.id}>
 							<div className='contract-copy'>
 								<div className='contract-topline'>
-									{stepStatus.label === undefined ? undefined : <Badge tone={stepStatus.badgeTone}>{stepStatus.label}</Badge>}
+									{stepStatus.label === undefined || (completedGroup && step.deployed) ? undefined : <Badge tone={stepStatus.badgeTone}>{stepStatus.label}</Badge>}
 									<h3>{step.label}</h3>
 								</div>
 								<p className='address'>{step.address}</p>
 								{stepStatus.detail === undefined ? undefined : <p className='detail'>{stepStatus.detail}</p>}
 							</div>
-							<TransactionActionButton idleLabel={stepStatus.buttonLabel} pendingLabel={deploymentCopy.deploying} onClick={() => void onDeploy(step.id)} pending={isBusy} availability={availability} />
+							{step.deployed ? undefined : <TransactionActionButton idleLabel={stepStatus.buttonLabel} pendingLabel={deploymentCopy.deploying} onClick={() => void onDeploy(step.id)} pending={isBusy} availability={availability} />}
 						</div>
 					)
 				})}

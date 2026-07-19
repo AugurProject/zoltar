@@ -859,7 +859,7 @@ void describe('SecurityPoolsSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const searchInput = documentQueries.getByPlaceholderText('Filter this page by pool address, question ID, or question text.')
+		const searchInput = documentQueries.getByPlaceholderText('Address, question ID, or text')
 		if (!(searchInput instanceof HTMLInputElement)) throw new Error('Expected search input')
 		searchInput.value = 'second'
 		await act(() => {
