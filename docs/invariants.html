@@ -138,10 +138,10 @@
 							Economics
 						</text>
 						<text class="svg-small" x="798" y="134" text-anchor="middle">
-							bounded exposure
+							arbitrage incentives
 						</text>
 						<text class="svg-small" x="798" y="157" text-anchor="middle">
-							inclusion and incentives
+							inclusion assumptions
 						</text>
 						<text class="svg-note" x="460" y="225" text-anchor="middle">
 							Each layer depends on every invariant to its left.
@@ -151,8 +151,8 @@
 						<span class="figure-label">Invariant Dependency</span>Correct
 						callers are necessary but insufficient. Their actions must conserve
 						assets, every mandatory state transition must remain reachable, and
-						the resulting external exposure must stay within its economic
-						security.
+						the named participation and inclusion assumptions must hold where
+						the protocol deliberately relies on economic incentives.
 					</p>
 				</figure>
 			</header>
@@ -242,8 +242,9 @@
 									participation, liquidity, or transaction inclusion.
 								</td>
 								<td>
-									Bound the exposure, monitor the assumption, and document its
-									failure mode.
+									State and monitor the assumption, and document both its
+									failure mode and the guarantees deliberately excluded from
+									the protocol model.
 								</td>
 							</tr>
 							<tr>
@@ -636,9 +637,11 @@
 								<code>forkUniverse</code> accepts only a question that exists in
 								ZoltarQuestionData and whose end time has been reached
 								(<code>block.timestamp &gt;= endTime</code>). A pool may separately
-								require the fork question to equal its pool question.
+								require the fork question to equal its pool question. Zoltar
+								intentionally imposes no question-creation age, universe
+								registration, or pool-relevance condition.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> At exactly a known question's end time, a caller may fork a universe even when that question came from another universe; an unknown or still-open question is rejected.</p>
+							<p class="invariant-example"><strong>Example:</strong> At exactly a known question's end time, a caller may fork a universe even when that question came from another universe or was created with an already-past end time; an unknown or still-open question is rejected. Requiring a universe-relevant or sufficiently aged question is not a Zoltar invariant.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
@@ -1744,6 +1747,36 @@
 
 			<section id="oracle">
 				<h2>REP/ETH Oracle Operations</h2>
+				<div class="callout" id="oracle-accepted-non-invariants">
+					<p>
+						<strong>Accepted oracle design choices—not invariants.</strong>
+						Placeholder uses profitable correction, not operation-value
+						collateralization. Report liquidity is intentionally not required to
+						equal or bound the value of withdrawals, liquidations, allowance
+						changes, pool assets, or cumulative operations that use an accepted
+						price. The deployment assumption is <code>ORA-10</code>: at least one
+						adequately capitalized participant takes every profitable correction
+						and obtains inclusion before settlement.
+					</p>
+					<p>
+						The protocol also makes no bounded-liveness claim for a pending
+						sponsor lane. Every valid dispute restarts settlement, incurs
+						transaction execution, and must fund the contract-specified
+						replacement position. Under ordinary non-dust parameters, protocol
+						fees and the required position also accumulate; before the
+						escalation halt, integer flooring can leave dust-sized rounds
+						unchanged. A participant willing and able to keep submitting and
+						funding disputes may therefore delay unrelated users without a
+						coordinator-level deadline. This paid, capital-unbounded pause is
+						intentional and is not a violation of a Zoltar liveness invariant.
+					</p>
+					<p>
+						Security review should verify the correction-profit calculation,
+						report accounting, dispute access, and the stated inclusion
+						assumption. It should not introduce a report-notional bound or an
+						absolute pending-report duration as a required protocol property.
+					</p>
+				</div>
 				<div class="invariant-list">
 					<details class="invariant-entry">
 						<summary><code>ORA-01</code><span class="invariant-title">Authorized settlement callbacks</span></summary>
@@ -1880,30 +1913,6 @@
 						</div>
 					</details>
 					<details class="invariant-entry">
-						<summary><code>ORA-07</code><span class="invariant-title">Oracle collateralization limit</span></summary>
-						<div class="invariant-details">
-							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">
-								The oracle bond is not sized to the notional value protected by its
-								report. Its minimum WETH derives only from request-block gas costs
-								and configured correction profitability. Safety therefore depends
-								on <code>ORA-10</code>; if that assumption fails, protocol loss is
-								not bounded by report liquidity.
-							</div>
-							<p class="invariant-example"><strong>Example:</strong> A small WETH report may influence a vault worth far more than the report, so losing the report bond does not by itself cover a bad liquidation.</p>
-							<dl class="invariant-metadata">
-								<div><dt>Type</dt><dd>External assumption</dd></div>
-								<div><dt>Enforcement status</dt><dd>Economic or external assumption</dd></div>
-								<div><dt>Primary evidence</dt><dd>
-										<a
-										href="./open-oracle-integration.html#initial-report-estimator-example"
-										>Dynamic minimum report estimator</a
-										>
-								</dd></div>
-							</dl>
-						</div>
-					</details>
-					<details class="invariant-entry">
 						<summary><code>ORA-08</code><span class="invariant-title">Dispute and settlement boundary</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1926,32 +1935,9 @@
 						</div>
 					</details>
 					<details class="invariant-entry">
-						<summary><code>ORA-09</code><span class="invariant-title">Pending sponsor liveness</span></summary>
+						<summary><code>ORA-10</code><span class="invariant-title">Active arbitrager assumption</span></summary>
 						<div class="invariant-details">
-							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">
-								Liveness assumes that every pending sponsored report eventually
-								settles or is recovered. Without that assumption, sponsor
-								exclusivity can block other users from staging unrelated solvency
-								operations for an unbounded duration.
-							</div>
-							<p class="invariant-example"><strong>Example:</strong> Repeated disputes can keep Alice as the pending sponsor and prevent Bob from attaching a withdrawal until the report finally settles or is recovered.</p>
-							<dl class="invariant-metadata">
-								<div><dt>Type</dt><dd>External assumption</dd></div>
-								<div><dt>Enforcement status</dt><dd>Economic or external assumption</dd></div>
-								<div><dt>Primary evidence</dt><dd>
-										<a
-										href="./open-oracle-integration.html#rolling-dispute-exclusivity"
-										>Rolling dispute exclusivity</a
-										>
-								</dd></div>
-							</dl>
-						</div>
-					</details>
-					<details class="invariant-entry">
-						<summary><code>ORA-10</code><span class="invariant-title">Honest watcher assumption</span></summary>
-						<div class="invariant-details">
-							<p class="invariant-label">Required property</p>
+							<p class="invariant-label">Required deployment assumption</p>
 							<div class="invariant-property">
 								At least one independent, rational, adequately capitalized
 								participant continuously monitors pending reports, acts
