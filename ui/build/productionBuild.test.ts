@@ -19,6 +19,7 @@ const productionCssPath = path.join(distRootPath, 'css', 'index.css')
 const productionTokensCssPath = path.join(distRootPath, 'css', 'tokens.css')
 const productionFaviconPaths = [path.join(distRootPath, 'favicon.ico'), path.join(distRootPath, 'favicon.svg')]
 const CHROMIUM_STARTUP_TIMEOUT_MILLISECONDS = 30_000
+const CHROMIUM_DEVTOOLS_PROBE_TIMEOUT_MILLISECONDS = 1_000
 
 let server: Bun.Server | undefined
 
@@ -178,7 +179,7 @@ test('Chromium DevTools port discovery reports an early browser signal', async (
 	await expect(waitForDevToolsPort('/missing/chromium/DevToolsActivePort', { exitCode: null, signalCode: 'SIGTERM' }, 50)).rejects.toThrow('Chromium exited with signal SIGTERM before publishing its DevTools port')
 })
 
-async function waitForChromiumPageWebSocketUrl(port: number, timeoutMilliseconds = 5_000, browserProcess?: BrowserProcess) {
+async function waitForChromiumPageWebSocketUrl(port: number, timeoutMilliseconds = CHROMIUM_STARTUP_TIMEOUT_MILLISECONDS, browserProcess?: BrowserProcess) {
 	const deadline = Date.now() + timeoutMilliseconds
 	let lastObservedState = 'no response'
 
@@ -188,7 +189,7 @@ async function waitForChromiumPageWebSocketUrl(port: number, timeoutMilliseconds
 
 		try {
 			const remainingMilliseconds = deadline - Date.now()
-			const targetsRequest = fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(remainingMilliseconds) })
+			const targetsRequest = fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(Math.min(remainingMilliseconds, CHROMIUM_DEVTOOLS_PROBE_TIMEOUT_MILLISECONDS)) })
 			const targetsResponse = browserProcess === undefined ? await targetsRequest : await Promise.race([targetsRequest, rejectWhenBrowserExits(browserProcess, 'exposing a DevTools page target')])
 			if (!targetsResponse.ok) {
 				lastObservedState = `HTTP ${targetsResponse.status.toString()} ${targetsResponse.statusText}`.trim()
@@ -239,6 +240,45 @@ test('Chromium page target discovery tolerates an initially empty target list', 
 
 	try {
 		await expect(waitForChromiumPageWebSocketUrl(devToolsServer.port)).resolves.toBe(pageWebSocketUrl)
+		expect(requestCount).toBe(2)
+	} finally {
+		devToolsServer.stop(true)
+	}
+})
+
+test('Chromium page target discovery tolerates a delayed initial page target', async () => {
+	let firstRequestAt: number | undefined
+	const pageWebSocketUrl = 'ws://127.0.0.1/devtools/page/test'
+	const devToolsServer = Bun.serve({
+		fetch: () => {
+			const now = Date.now()
+			firstRequestAt ??= now
+			return Response.json(now - firstRequestAt < 5_250 ? [] : [{ type: 'page', webSocketDebuggerUrl: pageWebSocketUrl }])
+		},
+		port: 0,
+	})
+
+	try {
+		await expect(waitForChromiumPageWebSocketUrl(devToolsServer.port)).resolves.toBe(pageWebSocketUrl)
+	} finally {
+		devToolsServer.stop(true)
+	}
+})
+
+test('Chromium page target discovery retries after a stalled target response', async () => {
+	let requestCount = 0
+	const stalledResponse = new Promise<Response>(() => undefined)
+	const pageWebSocketUrl = 'ws://127.0.0.1/devtools/page/test'
+	const devToolsServer = Bun.serve({
+		fetch: () => {
+			requestCount += 1
+			return requestCount === 1 ? stalledResponse : Response.json([{ type: 'page', webSocketDebuggerUrl: pageWebSocketUrl }])
+		},
+		port: 0,
+	})
+
+	try {
+		await expect(waitForChromiumPageWebSocketUrl(devToolsServer.port, 2_500)).resolves.toBe(pageWebSocketUrl)
 		expect(requestCount).toBe(2)
 	} finally {
 		devToolsServer.stop(true)
@@ -445,7 +485,7 @@ async function loadProductionDocumentInChromium(pageUrl: string, viewport: { hei
 
 	try {
 		const port = await waitForDevToolsPort(path.join(profilePath, 'DevToolsActivePort'), browser)
-		socket = new WebSocket(await waitForChromiumPageWebSocketUrl(port, 5_000, browser))
+		socket = new WebSocket(await waitForChromiumPageWebSocketUrl(port, CHROMIUM_STARTUP_TIMEOUT_MILLISECONDS, browser))
 		await waitForChromiumWebSocketOpen(socket, browser)
 		devToolsConnected = true
 
