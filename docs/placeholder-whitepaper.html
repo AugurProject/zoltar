@@ -617,21 +617,6 @@
 						address stays stable across forked child pools for the same market
 						shape.
 					</p>
-					<div class="callout" id="pool-uniqueness-risk">
-						<strong>Required pool uniqueness is not enforced.</strong> A token id
-						contains the universe and outcome, but no pool identity. An origin
-						pool is deterministic for its universe, question, and multiplier,
-						while a child-pool address also depends on its parent. The current
-						factory can therefore authorize an origin pool and one or more child
-						pools with the same share token, universe, question, and multiplier.
-						Those pools keep independent collateral and
-						<code>shareTokenSupply</code> ledgers over fungible token ids.
-						Economic correctness requires at most one such authorized pool ledger
-						to be active for a tuple; the factory does not currently provide that
-						registry or guard. Without it, shares minted through one parallel
-						pool can be presented to another pool whose local collateral and
-						supply do not account for them.
-					</div>
 					<figure class="diagram" id="fig-placeholder-asset-flow">
 						<svg
 							viewBox="0 0 960 430"
@@ -1890,10 +1875,7 @@
 						<code>ShareToken</code> is an ERC-1155 contract. Each complete set
 						mints one <code>Invalid</code>, one <code>Yes</code>, and one
 						<code>No</code> share. The token id encodes the universe id and
-						outcome, making positions fork-aware. It does not encode a security
-						pool: the pool-uniqueness requirement described above is therefore
-						part of the economic meaning of every balance, not something the
-						ERC-1155 contract can infer.
+						outcome, making positions fork-aware.
 					</p>
 					<figure class="diagram" id="fig-placeholder-share-lifecycle">
 						<svg
@@ -2327,9 +2309,7 @@
 						<code>shareTokenSupply</code>. In the healthy case this corresponds to a
 						clean <code>1:1</code> redemption outcome against the economic
 						meaning of a complete-set claim, subject to collateral accounting
-						remaining intact through migration and any required auction repair,
-						and to there being no parallel authorized pool ledger for the same
-						share token and universe.
+						remaining intact through migration and any required auction repair.
 					</p>
 					<div class="equation" id="eq-placeholder-share-redemption">
 						<math
