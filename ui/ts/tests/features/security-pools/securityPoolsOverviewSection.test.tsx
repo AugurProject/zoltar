@@ -777,6 +777,9 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
+		const searchInput = documentQueries.getByLabelText('Search this page')
+		expect(searchInput.getAttribute('placeholder')).toBe('Address, question ID, or text')
+		expect(documentQueries.queryByText(/pools? match/)).toBeNull()
 		const systemStateSelect = documentQueries.getByLabelText('System State')
 		if (!(systemStateSelect instanceof window.HTMLSelectElement)) throw new Error('Expected system state filter')
 		systemStateSelect.value = 'ended'
@@ -786,6 +789,7 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		expect(documentQueries.queryByText('Operational pool')).toBeNull()
 		expect(documentQueries.getAllByText('Ended pool').length).toBeGreaterThan(0)
+		expect(documentQueries.getByText('1 of 2 pools matches.')).not.toBeNull()
 	})
 
 	test('clamps the current page when the loaded pool count shrinks', async () => {
@@ -954,6 +958,7 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		const poolCard = getSecurityPoolCard(previewPoolTitle)
 		const poolCardQueries = within(poolCard)
+		expect(poolCard.querySelector('.security-pool-browse-vaults-count')).toBeNull()
 		expect(poolCardQueries.queryByText('Open this pool to load 1 vault.')).toBeNull()
 		expect(poolCardQueries.queryByText('Pool Details')).toBeNull()
 		expect(poolCardQueries.getByRole('link', { name: '0x1' })).not.toBeNull()

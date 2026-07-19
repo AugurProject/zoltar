@@ -138,7 +138,6 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 											})()
 										})(),
 						}}
-						description={marketCopy.childUniverseDeploymentDescription}
 						idleLabel={marketCopy.deployUniverse}
 						isOpen={selectedChildUniverse !== undefined}
 						onClose={() => setSelectedChildOutcomeIndex(undefined)}

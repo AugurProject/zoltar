@@ -38,7 +38,7 @@ describe('DeploymentSection', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	test('marks already deployed steps as completed and disabled', async () => {
+	test('marks already deployed steps once without redundant detail or action', async () => {
 		let onDeployCalls = 0
 		const deploymentStep = createDeploymentStep({ id: 'proxyDeployer', deployed: true, label: 'Proxy Deployer' })
 		const rendered = await renderIntoDocument(
@@ -57,8 +57,8 @@ describe('DeploymentSection', () => {
 		cleanupRendered = rendered.cleanup
 
 		expect(rendered.container.querySelector('span.badge')?.textContent).toBe('Deployed')
-		expect(rendered.container.textContent).toContain('Code found at expected address.')
-		expectTransactionButtonDisabled(document.body, 'Deployed', 'Already deployed.')
+		expect(rendered.container.textContent).not.toContain('Code found at expected address.')
+		expect(rendered.container.querySelector('button')).toBeNull()
 		expect(onDeployCalls).toBe(0)
 	})
 

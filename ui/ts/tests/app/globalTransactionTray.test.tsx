@@ -96,6 +96,24 @@ describe('GlobalTransactionTray', () => {
 		expect(documentQueries.getByRole('link', { name: '0x2234000000000000000000000000000000000000000000000000000000000000' })).not.toBeNull()
 	})
 
+	test('renders a concise pending transaction when no extra explanation is needed', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<GlobalTransactionTray
+				transaction={{
+					hash: '0x2234000000000000000000000000000000000000000000000000000000000001',
+					title: 'Creating Question',
+					tone: 'pending',
+				}}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Creating Question')).not.toBeNull()
+		expect(documentQueries.getByText('Pending')).not.toBeNull()
+		expect(document.body.querySelector('.global-transaction-notice-detail')).toBeNull()
+	})
+
 	test('renders a wallet-awaiting transaction without a hash link or dismiss control', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<GlobalTransactionTray

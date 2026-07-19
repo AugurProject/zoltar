@@ -68,33 +68,38 @@ function ImportedForkSettlementSide({ activeReportingDetails, disabled, onDeposi
 						const selected = selectedDepositIndexes.includes(deposit.parentDepositIndex)
 						const claimAmount = getImportedEscalationDepositClaimAmount(activeReportingDetails, side.key, deposit)
 						return (
-							<label className='escalation-selection-item' key={deposit.parentDepositIndex.toString()}>
-								<input checked={selected} disabled={disabled} onChange={event => onDepositSelectionChange(side.key, deposit.parentDepositIndex, event.currentTarget.checked)} type='checkbox' />
-								<div className='escalation-selection-item-copy'>
-									<strong>
-										{forkAuctionCopy.parentDepositNumber}
-										{deposit.parentDepositIndex.toString()}
-									</strong>
-									<span>
-										{forkAuctionCopy.initiallyDepositedLead}
-										<CurrencyValue value={deposit.amount} suffix={commonCopy.rep} />
+							<div className='escalation-selection-item' key={deposit.parentDepositIndex.toString()}>
+								<label className='escalation-selection-control'>
+									<input checked={selected} disabled={disabled} onChange={event => onDepositSelectionChange(side.key, deposit.parentDepositIndex, event.currentTarget.checked)} type='checkbox' />
+									<span className='escalation-selection-item-copy'>
+										<strong>
+											{forkAuctionCopy.parentDepositNumber}
+											{deposit.parentDepositIndex.toString()}
+										</strong>
+										<span>
+											{forkAuctionCopy.initiallyDepositedLead}
+											<CurrencyValue value={deposit.amount} suffix={commonCopy.rep} />
+										</span>
+										<span>
+											{claimAmount === undefined ? (
+												forkAuctionCopy.worthNowPendingFinalSettlement
+											) : (
+												<>
+													{forkAuctionCopy.worthNowLead}
+													<CurrencyValue value={claimAmount} suffix={commonCopy.rep} />
+												</>
+											)}
+										</span>
 									</span>
-									<span>
-										{claimAmount === undefined ? (
-											forkAuctionCopy.worthNowPendingFinalSettlement
-										) : (
-											<>
-												{forkAuctionCopy.worthNowLead}
-												<CurrencyValue value={claimAmount} suffix={commonCopy.rep} />
-											</>
-										)}
-									</span>
+								</label>
+								<details className='escalation-selection-details'>
+									<summary>{commonCopy.technicalDetails}</summary>
 									<span>
 										{forkAuctionCopy.importedEntryDepthLead}
 										<CurrencyValue value={deposit.cumulativeAmount} suffix={commonCopy.rep} />
 									</span>
-								</div>
-							</label>
+								</details>
+							</div>
 						)
 					})}
 				</div>

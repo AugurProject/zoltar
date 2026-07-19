@@ -240,6 +240,12 @@ export function TradingSection({
 					{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={selectedPool.universeId} /> },
 					{ label: commonCopy.outcome, value: outcome },
 				]
+	const retentionFeeDisclosure = [
+		{
+			rows: [{ label: tradingCopy.retentionFee, value: tradingCopy.retentionFeeEstimateDetail }],
+			title: tradingCopy.estimateDetails,
+		},
+	]
 	useEffect(() => {
 		if (tradingResult === undefined) return
 		setActiveModal(currentModal => {
@@ -348,18 +354,6 @@ export function TradingSection({
 								]}
 							/>
 							<div className='trading-share-callouts'>
-								<div>
-									<span>{commonCopy.yes}</span>
-									<strong>{renderShareMetricValue(displayShareBalances?.yes)}</strong>
-								</div>
-								<div>
-									<span>{commonCopy.no}</span>
-									<strong>{renderShareMetricValue(displayShareBalances?.no)}</strong>
-								</div>
-								<div>
-									<span>{commonCopy.invalid}</span>
-									<strong>{renderShareMetricValue(displayShareBalances?.invalid)}</strong>
-								</div>
 								<div className='trading-share-callouts-total'>
 									<span>{tradingCopy.totalAcrossOutcomes}</span>
 									<strong>{renderShareMetricValue(totalShareCount)}</strong>
@@ -380,7 +374,7 @@ export function TradingSection({
 
 			<ErrorNotice message={tradingError} />
 
-			<OperationModal context={getTransactionContext('Complete set · Yes + No + Invalid')} description={tradingCopy.completeSetMintReviewDetail} isOpen={activeModal === 'mint'} onClose={() => setActiveModal(undefined)} title={tradingCopy.mintCompleteSets}>
+			<OperationModal context={getTransactionContext('Complete set · Yes + No + Invalid')} isOpen={activeModal === 'mint'} onClose={() => setActiveModal(undefined)} title={tradingCopy.mintCompleteSets}>
 				{selectedPool === undefined ? undefined : (
 					<MetricGrid>
 						<MetricField label={tradingCopy.bondAllowanceInUse}>
@@ -423,10 +417,8 @@ export function TradingSection({
 								),
 						},
 					]}
-					details={[
-						{ label: tradingCopy.retentionFeeAtExecution, value: tradingCopy.retentionFeeEstimateDetail },
-						{ label: transactionReviewCopy.resultingEthBalance, value: <CurrencyValue value={resultingEthBalance} suffix={commonCopy.eth} /> },
-					]}
+					disclosures={retentionFeeDisclosure}
+					details={[{ label: transactionReviewCopy.resultingEthBalance, value: <CurrencyValue value={resultingEthBalance} suffix={commonCopy.eth} /> }]}
 					risks={[tradingCopy.mintBalanceRisk]}
 					technicalDetails={[
 						{ label: transactionReviewCopy.contract, value: selectedPool === undefined ? commonCopy.unavailable : <AddressValue address={selectedPool.securityPoolAddress} /> },
@@ -444,7 +436,7 @@ export function TradingSection({
 				</div>
 			</OperationModal>
 
-			<OperationModal context={getTransactionContext('Complete set · Yes + No + Invalid')} description={tradingCopy.redeemCompleteSetsHelpText} isOpen={activeModal === 'redeem-complete-sets'} onClose={() => setActiveModal(undefined)} title={tradingCopy.redeemCompleteSets}>
+			<OperationModal context={getTransactionContext('Complete set · Yes + No + Invalid')} isOpen={activeModal === 'redeem-complete-sets'} onClose={() => setActiveModal(undefined)} title={tradingCopy.redeemCompleteSets}>
 				<label className='field'>
 					<span>{tradingCopy.redeemCompleteSetsAmount}</span>
 					<div className='field-inline'>
@@ -477,10 +469,8 @@ export function TradingSection({
 						},
 						{ label: tradingCopy.estimatedEthReceived, value: <CurrencyValue value={redeemAmount} suffix={commonCopy.eth} /> },
 					]}
-					details={[
-						{ label: tradingCopy.retentionFeeAtExecution, value: tradingCopy.retentionFeeEstimateDetail },
-						{ label: tradingCopy.estimatedResultingEthBalance, value: <CurrencyValue value={resultingRedeemEthBalance} suffix={commonCopy.eth} /> },
-					]}
+					disclosures={retentionFeeDisclosure}
+					details={[{ label: tradingCopy.estimatedResultingEthBalance, value: <CurrencyValue value={resultingRedeemEthBalance} suffix={commonCopy.eth} /> }]}
 					risks={[tradingCopy.redeemCompleteSetRisk]}
 					technicalDetails={[
 						{ label: transactionReviewCopy.contract, value: selectedPool === undefined ? commonCopy.unavailable : <AddressValue address={selectedPool.securityPoolAddress} /> },
@@ -499,7 +489,7 @@ export function TradingSection({
 				</div>
 			</OperationModal>
 
-			<OperationModal context={getTransactionContext(getReportingOutcomeLabel(tradingForm.selectedShareOutcome))} description={tradingCopy.shareMigrationReviewDetail} isOpen={activeModal === 'migrate-shares'} onClose={() => setActiveModal(undefined)} title={tradingCopy.migrateForkedSharesTitle}>
+			<OperationModal context={getTransactionContext(getReportingOutcomeLabel(tradingForm.selectedShareOutcome))} isOpen={activeModal === 'migrate-shares'} onClose={() => setActiveModal(undefined)} title={tradingCopy.migrateForkedSharesTitle}>
 				<label className='field'>
 					<span>{tradingCopy.shareOutcomeToMigrate}</span>
 					<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={tradingForm.selectedShareOutcome} onChange={selectedShareOutcome => onTradingFormChange({ selectedShareOutcome })} disabled={shareMigrationSelectionDisabled} />
@@ -550,7 +540,6 @@ export function TradingSection({
 
 			<OperationModal
 				context={getTransactionContext(selectedPool?.questionOutcome === undefined || selectedPool.questionOutcome === 'none' ? commonCopy.unavailable : getReportingOutcomeLabel(selectedPool.questionOutcome))}
-				description={tradingCopy.winningShareRedemptionDescription}
 				isOpen={activeModal === 'redeem-shares'}
 				onClose={() => setActiveModal(undefined)}
 				title={tradingCopy.redeemResolvedShares}
@@ -560,10 +549,8 @@ export function TradingSection({
 						{ label: tradingCopy.winningShares, value: <CurrencyValue value={resolvedWinningShareBalance} /> },
 						{ label: tradingCopy.estimatedEthReceived, value: <CurrencyValue value={resolvedWinningPayout} suffix={commonCopy.eth} /> },
 					]}
-					details={[
-						{ label: tradingCopy.retentionFeeAtExecution, value: tradingCopy.retentionFeeEstimateDetail },
-						{ label: tradingCopy.estimatedResultingEthBalance, value: <CurrencyValue value={resolvedWinningPayout === undefined || accountState.ethBalance === undefined ? undefined : accountState.ethBalance + resolvedWinningPayout} suffix={commonCopy.eth} /> },
-					]}
+					disclosures={retentionFeeDisclosure}
+					details={[{ label: tradingCopy.estimatedResultingEthBalance, value: <CurrencyValue value={resolvedWinningPayout === undefined || accountState.ethBalance === undefined ? undefined : accountState.ethBalance + resolvedWinningPayout} suffix={commonCopy.eth} /> }]}
 					risks={[tradingCopy.resolvedShareRisk]}
 					technicalDetails={[
 						{ label: transactionReviewCopy.contract, value: selectedPool === undefined ? commonCopy.unavailable : <AddressValue address={selectedPool.securityPoolAddress} /> },

@@ -113,7 +113,6 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 			/>
 			<ChildUniverseDeploymentModal
 				actionAvailability={{ disabled: !canDeployScalarChild || scalarDeployError !== undefined, reason: deployReason }}
-				description={marketCopy.scalarChildDeploymentDescription}
 				idleLabel={scalarOutcomeInvalid ? marketCopy.deployInvalidUniverse : marketCopy.deployUniverse}
 				isOpen={deployModalOpen}
 				onClose={() => setDeployModalOpen(false)}

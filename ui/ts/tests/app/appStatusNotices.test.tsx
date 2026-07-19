@@ -29,9 +29,7 @@ describe('AppStatusNotices', () => {
 				errorMessage: undefined,
 				readBackendMessage: undefined,
 				showAugurPlaceHolderDeploymentWarning: false,
-				showZoltarUniverseForkedWarning: false,
 				simulationBootstrapError: undefined,
-				zoltarUniverse: undefined,
 			}),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -47,9 +45,7 @@ describe('AppStatusNotices', () => {
 				errorMessage: undefined,
 				readBackendMessage: undefined,
 				showAugurPlaceHolderDeploymentWarning: false,
-				showZoltarUniverseForkedWarning: false,
 				simulationBootstrapError: undefined,
-				zoltarUniverse: undefined,
 			}),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -65,9 +61,7 @@ describe('AppStatusNotices', () => {
 				errorMessage: undefined,
 				readBackendMessage: undefined,
 				showAugurPlaceHolderDeploymentWarning: false,
-				showZoltarUniverseForkedWarning: false,
 				simulationBootstrapError: 'Anvil boot failed',
-				zoltarUniverse: undefined,
 			}),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -83,9 +77,7 @@ describe('AppStatusNotices', () => {
 				errorMessage: undefined,
 				readBackendMessage: 'Configured read RPC reports chain 11155111, but this app requires Ethereum Mainnet (1).',
 				showAugurPlaceHolderDeploymentWarning: false,
-				showZoltarUniverseForkedWarning: false,
 				simulationBootstrapError: undefined,
-				zoltarUniverse: undefined,
 			}),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -108,15 +100,15 @@ describe('AppStatusNotices', () => {
 					transportMode: 'rpc',
 				},
 				showAugurPlaceHolderDeploymentWarning: false,
-				showZoltarUniverseForkedWarning: false,
 				simulationBootstrapError: undefined,
-				zoltarUniverse: undefined,
 			}),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('URL-provided read RPC')).not.toBeNull()
+		expect(documentQueries.getByText('Custom read RPC active. Verify it before acting on displayed chain state.')).not.toBeNull()
+		expect(documentQueries.getByText('Technical details')).not.toBeNull()
 		expect(documentQueries.getByText('Active read RPC came from the page URL: https://query.example/path. Verify this endpoint before relying on displayed onchain state.')).not.toBeNull()
 	})
 
@@ -133,15 +125,14 @@ describe('AppStatusNotices', () => {
 					transportMode: 'rpc',
 				},
 				showAugurPlaceHolderDeploymentWarning: false,
-				showZoltarUniverseForkedWarning: false,
 				simulationBootstrapError: undefined,
-				zoltarUniverse: undefined,
 			}),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Read RPC override active')).not.toBeNull()
+		expect(documentQueries.getByText('Custom read RPC active. Verify it before acting on displayed chain state.')).not.toBeNull()
 		expect(documentQueries.getByText('Active read RPC came from local storage: https://storage.example/path. Verify this endpoint before relying on displayed onchain state.')).not.toBeNull()
 	})
 
@@ -163,15 +154,14 @@ describe('AppStatusNotices', () => {
 					transportMode: 'provider',
 				},
 				showAugurPlaceHolderDeploymentWarning: false,
-				showZoltarUniverseForkedWarning: false,
 				simulationBootstrapError: undefined,
-				zoltarUniverse: undefined,
 			}),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Read RPC override ignored')).not.toBeNull()
+		expect(documentQueries.getByText('A custom read RPC was ignored. The configured fallback is active.')).not.toBeNull()
 		expect(documentQueries.getByText('Ignored local storage RPC override (http://storage.example): RPC URL must use https:// unless it points to local loopback. Configured fallback read RPC is https://ethereum.dark.florist.')).not.toBeNull()
 	})
 
@@ -181,9 +171,7 @@ describe('AppStatusNotices', () => {
 				errorMessage: 'Top-level error',
 				readBackendMessage: undefined,
 				showAugurPlaceHolderDeploymentWarning: true,
-				showZoltarUniverseForkedWarning: false,
 				simulationBootstrapError: undefined,
-				zoltarUniverse: undefined,
 			}),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -194,34 +182,5 @@ describe('AppStatusNotices', () => {
 		expect(documentQueries.queryByText('Wrong network')).toBeNull()
 		expect(documentQueries.getByText('Error')).not.toBeNull()
 		expect(documentQueries.getByText('Top-level error')).not.toBeNull()
-	})
-
-	test('shows a fork warning when the current universe has forked', async () => {
-		const renderedComponent = await renderIntoDocument(
-			h(AppStatusNotices, {
-				errorMessage: undefined,
-				readBackendMessage: undefined,
-				showAugurPlaceHolderDeploymentWarning: false,
-				showZoltarUniverseForkedWarning: true,
-				simulationBootstrapError: undefined,
-				zoltarUniverse: {
-					childUniverses: [],
-					forkThreshold: 1000n,
-					forkQuestionDetails: undefined,
-					forkTime: 1_700_000n,
-					forkingOutcomeIndex: 0n,
-					hasForked: true,
-					parentUniverseId: 0n,
-					reputationToken: '0x0000000000000000000000000000000000000000',
-					totalTheoreticalSupply: 0n,
-					universeId: 3n,
-				},
-			}),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Universe forked')).not.toBeNull()
-		expect(documentQueries.getByText(/Universe 3 has forked on/)).not.toBeNull()
 	})
 })

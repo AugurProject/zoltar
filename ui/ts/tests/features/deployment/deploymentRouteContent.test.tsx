@@ -72,6 +72,9 @@ describe('DeploymentRouteContent', () => {
 		})
 		if (completedAccordion === undefined) throw new Error('Expected completed deployment group accordion')
 		expect(completedAccordion.hasAttribute('open')).toBe(false)
+		expect(within(completedAccordion).queryByRole('heading', { name: 'Utilities' })).toBeNull()
+		expect(within(completedAccordion).queryByText('Deployed')).toBeNull()
+		expect(within(completedAccordion).getByText('Proxy Deployer')).not.toBeNull()
 	})
 
 	test('disables deploy-next and blocked per-step actions until prerequisites are satisfied', async () => {
