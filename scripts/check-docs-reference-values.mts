@@ -239,7 +239,8 @@ function assertStartHereTimelines(): void {
 }
 
 function assertContractInteractionDistinctions(): void {
-	assert.match(invariantsHtml, /<code>SHARE-04<\/code>[\s\S]*maximum actual outcome supply[\s\S]*actual winning supply/)
+	assert.match(invariantsHtml, /<code>SHARE-04<\/code>[\s\S]*at most one authorized pool owns the collateral and[\s\S]*supply ledger for those fungible token ids[\s\S]*Open violation/)
+	assert.match(whitepaperPlaceholder, /Required pool uniqueness is not enforced[\s\S]*factory does not currently provide that[\s\S]*registry or guard/)
 	assert.match(contractInteractionReference, /getForkThreshold`, `getNonDecisionThreshold`, `getUniverseTheoreticalSupply`/)
 	assert.match(contractInteractionReference, /getQuestionResolution`, `getFinalQuestionResolution`, `fixedQuestionOutcome`/)
 	assert.match(contractInteractionReference, /startFromFork\(startBond, nonDecisionThreshold, elapsedAtFork, fixedQuestionOutcome\)[\s\S]*After the continuation deadline, `getFinalQuestionResolution` returns the fixed outcome/)

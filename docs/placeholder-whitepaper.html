@@ -105,9 +105,10 @@
 					</div>
 					<p class="lede">
 						Augur Placeholder is the market layer built on top of Zoltar. It
-						creates one security pool per question, lets traders mint and redeem
-						ETH-backed shares, lets REP vaults provide underwriting, and tries to
-						settle disputes locally before asking Zoltar to fork.
+						creates security pools scoped to individual questions, lets traders
+						mint and redeem ETH-backed shares, lets REP vaults provide
+						underwriting, and tries to settle disputes locally before asking
+						Zoltar to fork.
 					</p>
 					<p>
 						If a fork does happen, Placeholder migrates the market into child
@@ -160,18 +161,20 @@
 						<a href="./zoltar-whitepaper.html">zoltar-whitepaper.html</a>.
 					</p>
 						<p>
-							Placeholder's lifecycle starts by creating one pool for one
-							question, letting traders and REP vaults use that pool, trying to
-							resolve disputes locally, and only then turning to fork and
-							collateral-repair machinery. The overview sequence below follows
-							that same order.
+							Placeholder's lifecycle starts by creating a pool scoped to one
+							question and universe, letting traders and REP vaults use it,
+							trying to resolve disputes locally, and only then turning to fork
+							and collateral-repair machinery. The overview sequence below
+							follows that same order.
 						</p>
 						<p>
 							Placeholder also depends on two different oracle paths that answer
 							different questions. Zoltar represents unresolved market-truth
 							disputes by creating child universes. OpenOracle supplies only a
-							bounded REP/ETH solvency price for withdrawals, allowance updates,
-							and liquidations.
+							fresh, contestable REP/ETH solvency price for withdrawals,
+							allowance updates, and liquidations. Freshness is time-bounded,
+							but the accepted value and its deviation from an external market
+							price are not bounded onchain.
 						</p>
 					<ol>
 						<li>
@@ -576,8 +579,9 @@
 					</div>
 					<p class="lede">
 						A <code>SecurityPool</code> is the central Placeholder contract for
-						one question in one universe. Vault operators deposit REP, choose
-						bond allowance, and underwrite ETH-backed complete sets.
+						a question in a universe. Vault operators deposit REP, choose bond
+						allowance, and underwrite ETH-backed complete sets in that pool's
+						local accounting ledger.
 					</p>
 					<div class="callout">
 						<strong>Why a per-question pool?</strong> The contract keeps market
@@ -613,6 +617,21 @@
 						address stays stable across forked child pools for the same market
 						shape.
 					</p>
+					<div class="callout" id="pool-uniqueness-risk">
+						<strong>Required pool uniqueness is not enforced.</strong> A token id
+						contains the universe and outcome, but no pool identity. An origin
+						pool is deterministic for its universe, question, and multiplier,
+						while a child-pool address also depends on its parent. The current
+						factory can therefore authorize an origin pool and one or more child
+						pools with the same share token, universe, question, and multiplier.
+						Those pools keep independent collateral and
+						<code>shareTokenSupply</code> ledgers over fungible token ids.
+						Economic correctness requires at most one such authorized pool ledger
+						to be active for a tuple; the factory does not currently provide that
+						registry or guard. Without it, shares minted through one parallel
+						pool can be presented to another pool whose local collateral and
+						supply do not account for them.
+					</div>
 					<figure class="diagram" id="fig-placeholder-asset-flow">
 						<svg
 							viewBox="0 0 960 430"
@@ -1871,7 +1890,10 @@
 						<code>ShareToken</code> is an ERC-1155 contract. Each complete set
 						mints one <code>Invalid</code>, one <code>Yes</code>, and one
 						<code>No</code> share. The token id encodes the universe id and
-						outcome, making positions fork-aware.
+						outcome, making positions fork-aware. It does not encode a security
+						pool: the pool-uniqueness requirement described above is therefore
+						part of the economic meaning of every balance, not something the
+						ERC-1155 contract can infer.
 					</p>
 					<figure class="diagram" id="fig-placeholder-share-lifecycle">
 						<svg
@@ -2305,7 +2327,9 @@
 						<code>shareTokenSupply</code>. In the healthy case this corresponds to a
 						clean <code>1:1</code> redemption outcome against the economic
 						meaning of a complete-set claim, subject to collateral accounting
-						remaining intact through migration and any required auction repair.
+						remaining intact through migration and any required auction repair,
+						and to there being no parallel authorized pool ledger for the same
+						share token and universe.
 					</p>
 					<div class="equation" id="eq-placeholder-share-redemption">
 						<math
@@ -3895,6 +3919,15 @@
 						multi-way categorical outcomes when the universe fork used a
 						different Zoltar question.
 					</p>
+					<p id="fork-griefing-risk">
+						A caller can use any ended global Zoltar question to trigger a fork
+						in an unforked universe; it need not be the question used by a
+						Placeholder pool in that universe. A caller who can acquire and
+						commit the fork-threshold REP can therefore freeze globally guarded
+						operational flows for every pool in the universe. This creates a
+						fork-griefing incentive whenever the caller's fork cost is lower than
+						the disruption imposed on unrelated pools.
+					</p>
 					<div class="summary-grid">
 						<div class="summary-card">
 							<span>Fork branch role</span>
@@ -3906,8 +3939,8 @@
 						<div class="summary-card">
 							<span>Contract behavior</span>
 							<b
-								>Parent pools halt while child pools collect migrated vaults,
-								collateral, shares, and escalation state.</b
+								>Globally guarded parent flows halt while child pools collect
+								migrated vaults, collateral, shares, and escalation state.</b
 							>
 						</div>
 						<div class="summary-card">
@@ -3930,13 +3963,18 @@
 							<tr>
 								<td><code>Operational</code></td>
 								<td>
-									Normal pool operation outside the explicit fork lifecycle.
+									Stored state for normal operation outside the explicit fork
+									lifecycle. A late universe fork can still disable globally
+									guarded calls without changing this enum value.
 								</td>
 								<td>Local resolution or fork handling activation.</td>
 							</tr>
 							<tr>
 								<td><code>PoolForked</code></td>
-								<td>Parent pool has stopped normal operation after fork.</td>
+								<td>
+									Fork handling was activated for this parent pool, which has
+									stopped normal operation.
+								</td>
 								<td>Child pools begin migration setup.</td>
 							</tr>
 							<tr>
@@ -3960,7 +3998,13 @@
 					</table>
 					<p>
 						<code>SystemState</code> is primarily a fork-and-migration state
-						machine, not a generic question-resolution state machine.
+						machine, not a generic question-resolution state machine. A pool
+						finalized before a late, unrelated universe fork can retain
+						<code>SystemState.Operational</code>. Its
+						<code>isOperational</code>-guarded activity still freezes because
+						that modifier separately checks the universe fork time, while
+						finalized share, REP, and eligible escalation-deposit redemption
+						paths that check only the stored state remain callable.
 					</p>
 					<figure class="diagram" id="fig-placeholder-fork-state-machine">
 						<svg
@@ -4110,13 +4154,16 @@
 							</text>
 						</svg>
 						<p class="diagram-caption">
-							<span class="figure-label">Fork State Machine</span>The parent
-							stops mutating once forked; child pools do migration and optional
+							<span class="figure-label">Fork State Machine</span>When fork
+							handling is activated, the parent moves to
+							<code>PoolForked</code>; child pools do migration and optional
 							auction repair. Only a child whose legitimate routed collateral
 							plus an explicit repair contribution reaches the full snapshot
 							returns to operational mode. Forced ETH does not satisfy that
 							condition; an under-repaired finalization attempt reverts and
-							remains inactive in <code>ForkTruthAuction</code>.
+							remains inactive in <code>ForkTruthAuction</code>. A previously
+							finalized pool affected by a late unrelated fork is the separate
+							stored-state case described above.
 						</p>
 					</figure>
 					<ul>
@@ -4153,6 +4200,16 @@
 							<code>ShareToken.migrate</code>.
 						</li>
 					</ul>
+					<p id="branch-capital-reproduction-risk">
+						REP migration and share migration intentionally reproduce a source
+						position into every selected child branch. The original
+						parent-universe asset is consumed, and each child balance is colored
+						by a distinct universe, so this is not a same-universe double claim.
+						Integrations must nevertheless keep branch balance sheets separate:
+						summing child REP or shares as though all branches were
+						simultaneously redeemable in one economic universe overstates
+						capital.
+					</p>
 					<p>
 						The migration API is not a single generic “fork migrator” role.
 						Child creation is permissionless, <code>migrateVault</code> always
@@ -5032,6 +5089,12 @@
 						requiring other vaults to migrate. Before consuming a carried proof,
 						the direct-claim replay check walks the pool's parent lineage, so a
 						claim recorded by any ancestor also blocks that proof in descendants.
+					</p>
+					<p id="recursive-fork-depth-risk">
+						There is no explicit maximum recursive fork depth. Ancestor replay
+						checks, proof construction, and operational coordination grow with
+						that lineage; at sufficient depth they can become impractical even
+						when each individual recursion step remains logically valid.
 					</p>
 					<p>
 						For example, suppose Zoltar has two ended questions: “Did London record a
@@ -6352,6 +6415,13 @@
 						<li>Positive ticks mean a higher ETH-per-REP bid.</li>
 						<li>Negative ticks mean a lower ETH-per-REP bid.</li>
 					</ul>
+					<p id="same-tick-priority-risk">
+						At a funded marginal tick, bids fill in deterministic submission
+						order: earlier same-tick bids receive priority over later ones.
+						That makes transaction ordering economically material. A block
+						builder can front-run or reorder equal-price bids to choose who gets
+						the marginal fill.
+					</p>
 					<p>
 						The auction intentionally has no total bid cap and no active-tick
 						cap. Instead, it stores aggregate ETH by tick in an AVL tree. The
@@ -7135,7 +7205,10 @@
 						correction is profitable under the configured economics, and can
 						obtain inclusion before settlement. Failure of that monitoring or
 						inclusion assumption is outside the claimed security model; the
-						coordinator does not cap resulting loss by report liquidity.
+						coordinator does not cap resulting loss by report liquidity. One
+						accepted report can authorize sequential operations throughout the
+						freshness window, so a per-operation liquidation bound does not bound
+						cumulative extraction across all uses of that cached price.
 					</p>
 					<figure class="diagram" id="fig-placeholder-oracle-flow">
 						<svg
@@ -7381,6 +7454,15 @@
 						that grows. At or above the halt, each dispute requires one more
 						atomic WETH unit, while protocol fees and gas keep total cost growing
 						with duration.
+					</p>
+					<p id="oracle-last-mover-risk">
+						The dispute and settlement boundaries are known in advance, and the
+						deadline gives settlement the last move: disputes require a timestamp
+						strictly before it, while settlement is available at and after it. A
+						block builder can exclude a final correcting dispute or order
+						settlement together with price-sensitive operations. The monitoring
+						assumption therefore includes timely transaction inclusion and is not
+						only an assumption that someone notices a bad price.
 					</p>
 					<div class="equation" id="eq-placeholder-oracle-request-cost">
 						<math

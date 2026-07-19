@@ -291,20 +291,6 @@
 								</td>
 							</tr>
 							<tr>
-								<td><code>SHARE-04</code></td>
-								<td>
-									Complete-set collateral accounting and winning-share redemption
-									each use the supply denominator for the claims they settle.
-								</td>
-								<td>
-									Child setup uses the maximum actual outcome supply as its
-									collateral denominator. Unequal supplies block new complete-set
-									minting, while holders of all three outcomes retain proportional
-									complete-set redemption; winning redemption divides collateral by
-									the actual winning supply.
-								</td>
-							</tr>
-							<tr>
 								<td><code>BAL-02</code></td>
 								<td>
 									Unsolicited ETH cannot alter collateral accounting or block a
@@ -868,17 +854,25 @@
 									>
 								</td>
 							</tr>
-							<tr>
+							<tr id="share-04">
 								<td><code>SHARE-04</code></td>
 								<td>
-									The supply used to price a new complete set is economically
-									identical to the supply used to divide collateral after
-									resolution.
+									For one share-token address, universe, question, and security
+									multiplier, at most one authorized pool owns the collateral and
+									supply ledger for those fungible token ids. This uniqueness is
+									required for pool-local mint pricing and collateral division to
+									describe the same economic supply.
 								</td>
-								<td>Reviewed preservation</td>
+								<td>Open violation</td>
 								<td>
-									<a href="../solidity/contracts/peripherals/SecurityPool.sol"
-										><code>cashToShares</code> and <code>redeemShares</code></a
+									<a
+										href="../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol"
+										><code>deployOriginSecurityPool</code> and
+										<code>deployChildSecurityPool</code></a
+									>,
+									<a
+										href="../solidity/contracts/peripherals/tokens/ShareToken.sol"
+										>pool authorization and token-id construction</a
 									>
 								</td>
 							</tr>
@@ -951,12 +945,15 @@
 							</tr>
 						</thead>
 						<tbody>
-							<tr>
+							<tr id="fork-01">
 								<td><code>FORK-01</code></td>
 								<td>
-									Once the parent universe forks, parent operational flows
-									freeze and the parent pool never re-enters
-									<code>Operational</code>.
+									Once a pool's universe forks, calls guarded by
+									<code>isOperational</code> freeze. A pool finalized before a
+									late unrelated fork may retain
+									<code>SystemState.Operational</code>, while finalized
+									redemption paths that check only the stored state remain
+									callable.
 								</td>
 								<td>Contract guard</td>
 								<td>
