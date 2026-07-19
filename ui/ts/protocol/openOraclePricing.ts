@@ -3,9 +3,9 @@ import { isRepPricingEnabled, quoteBestExactInputWithSource, quoteBestV3ExactInp
 
 const OPEN_ORACLE_PRICE_PRECISION = 10n ** 30n
 
-export type OpenOracleInitialReportPriceSource = 'Uniswap V4' | 'Uniswap V3' | 'MOCK' | 'Manual override' | 'Unavailable'
+type OpenOracleInitialReportPriceSource = 'Uniswap V4' | 'Uniswap V3' | 'MOCK' | 'Manual override' | 'Unavailable'
 export type OpenOracleInitialReportQuoteSource = Exclude<OpenOracleInitialReportPriceSource, 'Manual override' | 'Unavailable'>
-export type OpenOracleInitialReportQuoteFailureKind = 'unsupported-pair' | 'quote-failed'
+type OpenOracleInitialReportQuoteFailureKind = 'unsupported-pair' | 'quote-failed'
 export type OpenOracleInitialReportPriceLoadResult =
 	| {
 			status: 'success'

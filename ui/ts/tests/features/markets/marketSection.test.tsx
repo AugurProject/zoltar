@@ -757,6 +757,37 @@ describe('MarketSection', () => {
 		expect(documentQueries.queryByText('Add resolution notes, evidence sources, and edge-case handling before users rely on this question.')).toBeNull()
 	})
 
+	test('uses a compact compatibility status beside disabled non-binary pool actions', async () => {
+		const question = {
+			...createBinaryForkQuestion(),
+			marketType: 'categorical' as const,
+			outcomeLabels: ['Alpha', 'Beta', 'Gamma'],
+		}
+		const renderedComponent = await renderIntoDocument(
+			h(
+				MarketSection,
+				createMarketSectionProps({
+					zoltarQuestionCount: 1n,
+					zoltarQuestionPage: {
+						pageIndex: 0,
+						pageSize: 10,
+						questionCount: 1n,
+						questions: [question],
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const createPoolButton = documentQueries.getByRole('button', { name: 'Create Pool From Question' })
+		if (!(createPoolButton instanceof HTMLButtonElement)) throw new Error('Expected create-pool button')
+		expect(createPoolButton.disabled).toBe(true)
+		expect(createPoolButton.title).toBe('Binary pools only')
+		expect(documentQueries.getByText('Binary pools only')).not.toBeNull()
+		expect(document.body.textContent).not.toContain('Non-binary questions are valid in Zoltar')
+	})
+
 	test('does not render redundant universe summary cards for questions view', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(

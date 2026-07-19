@@ -55,7 +55,7 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextM
 				<div className='workflow-stack'>
 					{deploymentSections.map(section => {
 						const allDeployed = section.steps.length > 0 && section.steps.every(step => step.deployed)
-						const sectionContent = <DeploymentSection title={section.title} steps={section.steps} allSteps={deploymentStatuses} accountAddress={accountAddress} isMainnet={isMainnet} busyStepId={busyStepId} onDeploy={onDeploy} />
+						const sectionContent = <DeploymentSection title={section.title} completedGroup={allDeployed} steps={section.steps} allSteps={deploymentStatuses} accountAddress={accountAddress} isMainnet={isMainnet} busyStepId={busyStepId} onDeploy={onDeploy} />
 
 						if (!allDeployed) return <div key={section.title}>{sectionContent}</div>
 

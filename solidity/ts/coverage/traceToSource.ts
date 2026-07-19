@@ -132,7 +132,7 @@ const readArtifactsMetadata = async (artifactsPath: string): Promise<{ contracts
 			if (!isRecord(sourceValue)) continue
 			const id = sourceValue['id']
 			if (typeof id !== 'number') continue
-			sourceFiles[id] = sourcePath
+			sourceFiles[id] = typeof sourceValue['sourcePath'] === 'string' ? sourceValue['sourcePath'] : sourcePath
 		}
 	}
 	return { contracts, sourceFiles }

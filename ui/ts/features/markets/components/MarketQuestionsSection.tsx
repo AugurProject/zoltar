@@ -166,14 +166,14 @@ export function MarketQuestionsSection({
 									>
 										{hasForked ? marketCopy.alreadyForked : marketCopy.useForFork}
 									</button>
-									<button className='secondary' onClick={() => onUseQuestionForPool(question.questionId)} disabled={question.marketType !== 'binary'}>
+									{question.marketType === 'binary' ? undefined : <Badge tone='muted'>{marketCopy.binaryPoolsOnly}</Badge>}
+									<button className='secondary' onClick={() => onUseQuestionForPool(question.questionId)} disabled={question.marketType !== 'binary'} title={question.marketType === 'binary' ? undefined : marketCopy.binaryPoolsOnly}>
 										{marketCopy.createPoolFromQuestion}
 									</button>
 								</div>
 							}
 						>
 							<Question question={question} showTitle={false} />
-							{question.marketType !== 'binary' ? <p className='detail'>{marketCopy.nonBinaryPoolCompatibilityDetail}</p> : undefined}
 							{(() => {
 								const linkedPools = securityPools.filter(pool => sameCaseInsensitiveText(pool.questionId, question.questionId))
 								const linkedPoolsContent = (() => {

@@ -13,6 +13,7 @@ import type {
 	MarketDetailsPage,
 	OpenOracleActionResult,
 	OpenOracleReportDetails,
+	OpenOracleWithdrawableBalances,
 	OracleManagerDetails,
 	ReadClient,
 	ReportingActionResult,
@@ -31,13 +32,12 @@ import type {
 import type { ActionAvailability, ReadinessAction } from '../types/components.js'
 import type { SecurityPoolLifecycleState } from './security-pools/lib/securityPoolState.js'
 import type { ForkAuctionStageView } from './truth-auctions/lib/forkAuction.js'
-import type { OpenOracleDisputeSubmissionDetails, OpenOracleInitialReportPriceSource, OpenOracleInitialReportSubmissionDetails } from './open-oracle/lib/openOracle.js'
+import type { OpenOracleDisputeSubmissionDetails } from './open-oracle/lib/openOracle.js'
 import type { LoadableValueState } from '../lib/loadState.js'
 import type { SecurityPoolStateModel } from './security-pools/lib/securityPoolState.js'
 import type { ForkWorkflowSelectionStage } from './security-pools/lib/securityPoolWorkflow.js'
 import type { TokenApprovalState } from '../lib/tokenApproval.js'
 import type { UserMessagePresentation } from '../lib/userCopy.js'
-import type { OpenOracleInitialReportQuoteFailureKind, OpenOracleInitialReportQuoteSource } from './open-oracle/lib/openOracle.js'
 import type { ReadBackendStatus } from '../lib/chainBackend.js'
 
 export type * from '../types/components.js'
@@ -112,6 +112,7 @@ export type VaultMetricGridProps = {
 
 export type DeploymentSectionProps = {
 	title: string
+	completedGroup?: boolean
 	steps: DeploymentStatus[]
 	allSteps: DeploymentStatus[]
 	accountAddress: Address | undefined
@@ -382,29 +383,15 @@ type OpenOracleRouteContentProps = {
 	onCreateOpenOracleGame: () => void
 	onDisputeReport: () => void
 	onLoadOracleReport: (reportId?: string) => void
-	onRefreshPrice: () => void
 	onOpenOracleFormChange: (update: Partial<OpenOracleFormState>) => void
 	onOpenOracleCreateFormChange: (update: Partial<OpenOracleCreateFormState>) => void
 	onSettleReport: () => void
-	onSubmitInitialReport: () => void
-	onWrapWethForInitialReport: () => void
+	onWithdrawOpenOracleBalance: (balance: keyof OpenOracleWithdrawableBalances) => void
 	loadingOpenOracleCreate: boolean
 	openOracleActiveAction: OpenOracleActionResult['action'] | undefined
+	openOracleActiveWithdrawalBalance: keyof OpenOracleWithdrawableBalances | undefined
 	openOracleError: string | undefined
-	openOracleInitialReportState: {
-		defaultPrice: string | undefined
-		defaultPriceError: string | undefined
-		defaultPriceSource: OpenOracleInitialReportPriceSource | undefined
-		defaultPriceSourceUrl: string | undefined
-		ethBalance: bigint | undefined
-		ethBalanceError: string | undefined
-		quoteBlockNumber?: bigint | undefined
-		quoteLoadedAtMs?: number | undefined
-		quoteStale?: boolean
-		quoteLoading: boolean
-		quoteAttemptedSources: OpenOracleInitialReportQuoteSource[] | undefined
-		quoteFailureKind: OpenOracleInitialReportQuoteFailureKind | undefined
-		quoteFailureReason: string | undefined
+	openOracleTokenAccessState: {
 		token1Approval: TokenApprovalState
 		token1Balance: bigint | undefined
 		token1BalanceError: string | undefined
@@ -417,12 +404,14 @@ type OpenOracleRouteContentProps = {
 		tokenAccessRefreshing: boolean
 	}
 	openOracleDisputeSubmission: OpenOracleDisputeSubmissionDetails | undefined
-	openOracleInitialReportSubmission: OpenOracleInitialReportSubmissionDetails | undefined
 	openOracleCreateForm: OpenOracleCreateFormState
 	openOracleForm: OpenOracleFormState
 	openOracleReportLookupState: OpenOracleReportLookupState
 	openOracleReportDetails: OpenOracleReportDetails | undefined
 	openOracleResult: OpenOracleActionResult | undefined
+	openOracleWithdrawableBalances: OpenOracleWithdrawableBalances | undefined
+	openOracleWithdrawableBalancesError: string | undefined
+	openOracleWithdrawableBalancesLoading: boolean
 }
 
 export type OpenOracleReportLookupState = 'unknown' | 'loading' | 'ready' | 'missing' | 'load-failed'
@@ -431,6 +420,7 @@ export type OpenOracleView = 'browse' | 'create' | 'selected-report'
 
 export type OpenOracleSectionProps = OpenOracleRouteContentProps & {
 	activeView: OpenOracleView
+	environmentReady: boolean
 	onActiveViewChange: (view: OpenOracleView) => void
 }
 

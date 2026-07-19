@@ -5,9 +5,10 @@ import { fireEvent, within } from '../../testUtils/queries'
 import { h } from 'preact'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { OpenOracleSection } from '../../../features/open-oracle/components/OpenOracleSection.js'
+import * as openOracleCopy from '../../../copy/openOracle.js'
 import { ChainBlockNumberContext, ChainTimestampContext } from '../../../lib/chainTimestamp.js'
 import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '../../../features/markets/lib/marketForm.js'
-import { deriveOpenOracleDisputeSubmissionDetails, deriveOpenOracleInitialReportSubmissionDetails } from '../../../features/open-oracle/lib/openOracle.js'
+import { deriveOpenOracleDisputeSubmissionDetails } from '../../../features/open-oracle/lib/openOracle.js'
 import type { AccountState } from '../../../types/app.js'
 import type { OpenOracleSectionProps } from '../../../features/types.js'
 import type { OpenOracleReportDetails } from '../../../types/contracts.js'
@@ -30,17 +31,7 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 function createOpenOracleSectionProps(overrides: Partial<OpenOracleSectionProps> = {}): OpenOracleSectionProps {
 	const openOracleCreateForm = overrides.openOracleCreateForm ?? getDefaultOpenOracleCreateFormState()
 	const openOracleForm = overrides.openOracleForm ?? getDefaultOpenOracleFormState()
-	const openOracleInitialReportState = overrides.openOracleInitialReportState ?? {
-		defaultPrice: undefined,
-		defaultPriceError: undefined,
-		defaultPriceSource: undefined,
-		defaultPriceSourceUrl: undefined,
-		ethBalance: undefined,
-		ethBalanceError: undefined,
-		quoteAttemptedSources: undefined,
-		quoteFailureKind: undefined,
-		quoteFailureReason: undefined,
-		quoteLoading: false,
+	const openOracleTokenAccessState = overrides.openOracleTokenAccessState ?? {
 		token1Approval: { error: undefined, loading: false, value: 0n },
 		token1Balance: undefined,
 		token1BalanceError: undefined,
@@ -53,55 +44,31 @@ function createOpenOracleSectionProps(overrides: Partial<OpenOracleSectionProps>
 		tokenAccessRefreshing: false,
 	}
 	const openOracleReportDetails = overrides.openOracleReportDetails
-	const openOracleInitialReportSubmission =
-		overrides.openOracleInitialReportSubmission ??
-		(openOracleReportDetails === undefined
-			? undefined
-			: deriveOpenOracleInitialReportSubmissionDetails({
-					approvedToken1Amount: openOracleInitialReportState.token1Approval.value,
-					approvedToken2Amount: openOracleInitialReportState.token2Approval.value,
-					defaultPrice: openOracleInitialReportState.defaultPrice,
-					defaultPriceError: openOracleInitialReportState.defaultPriceError,
-					defaultPriceSource: openOracleInitialReportState.defaultPriceSource,
-					defaultPriceSourceUrl: openOracleInitialReportState.defaultPriceSourceUrl,
-					priceInput: openOracleForm.price,
-					quoteAttemptedSources: openOracleInitialReportState.quoteAttemptedSources,
-					quoteFailureReason: openOracleInitialReportState.quoteFailureReason,
-					reportDetails: openOracleReportDetails,
-					token1AllowanceError: openOracleInitialReportState.token1Approval.error,
-					token1Balance: openOracleInitialReportState.token1Balance,
-					token1BalanceError: openOracleInitialReportState.token1BalanceError,
-					token1Decimals: openOracleInitialReportState.token1Decimals ?? openOracleReportDetails.token1Decimals,
-					token2AllowanceError: openOracleInitialReportState.token2Approval.error,
-					token2Balance: openOracleInitialReportState.token2Balance,
-					token2BalanceError: openOracleInitialReportState.token2BalanceError,
-					token2Decimals: openOracleInitialReportState.token2Decimals ?? openOracleReportDetails.token2Decimals,
-					walletEthBalance: openOracleInitialReportState.ethBalance,
-				}))
 	const openOracleDisputeSubmission =
 		overrides.openOracleDisputeSubmission ??
 		(openOracleReportDetails === undefined
 			? undefined
 			: deriveOpenOracleDisputeSubmissionDetails({
-					approvedToken1Amount: openOracleInitialReportState.token1Approval.value,
-					approvedToken2Amount: openOracleInitialReportState.token2Approval.value,
+					approvedToken1Amount: openOracleTokenAccessState.token1Approval.value,
+					approvedToken2Amount: openOracleTokenAccessState.token2Approval.value,
 					disputeNewAmount1Input: openOracleForm.disputeNewAmount1,
 					disputeNewAmount2Input: openOracleForm.disputeNewAmount2,
 					disputeTokenToSwap: openOracleForm.disputeTokenToSwap,
 					reportDetails: openOracleReportDetails,
-					token1AllowanceError: openOracleInitialReportState.token1Approval.error,
-					token1Balance: openOracleInitialReportState.token1Balance,
-					token1BalanceError: openOracleInitialReportState.token1BalanceError,
-					token1Decimals: openOracleInitialReportState.token1Decimals ?? openOracleReportDetails.token1Decimals,
-					token2AllowanceError: openOracleInitialReportState.token2Approval.error,
-					token2Balance: openOracleInitialReportState.token2Balance,
-					token2BalanceError: openOracleInitialReportState.token2BalanceError,
-					token2Decimals: openOracleInitialReportState.token2Decimals ?? openOracleReportDetails.token2Decimals,
+					token1AllowanceError: openOracleTokenAccessState.token1Approval.error,
+					token1Balance: openOracleTokenAccessState.token1Balance,
+					token1BalanceError: openOracleTokenAccessState.token1BalanceError,
+					token1Decimals: openOracleTokenAccessState.token1Decimals ?? openOracleReportDetails.token1Decimals,
+					token2AllowanceError: openOracleTokenAccessState.token2Approval.error,
+					token2Balance: openOracleTokenAccessState.token2Balance,
+					token2BalanceError: openOracleTokenAccessState.token2BalanceError,
+					token2Decimals: openOracleTokenAccessState.token2Decimals ?? openOracleReportDetails.token2Decimals,
 				}))
 
 	return {
 		activeView: 'create',
 		accountState: createAccountState(),
+		environmentReady: true,
 		loadingOpenOracleCreate: false,
 		onActiveViewChange: () => undefined,
 		onApproveToken1: () => undefined,
@@ -111,20 +78,21 @@ function createOpenOracleSectionProps(overrides: Partial<OpenOracleSectionProps>
 		onLoadOracleReport: () => undefined,
 		onOpenOracleCreateFormChange: () => undefined,
 		onOpenOracleFormChange: () => undefined,
-		onRefreshPrice: () => undefined,
 		onSettleReport: () => undefined,
-		onSubmitInitialReport: () => undefined,
-		onWrapWethForInitialReport: () => undefined,
+		onWithdrawOpenOracleBalance: () => undefined,
 		openOracleActiveAction: undefined,
+		openOracleActiveWithdrawalBalance: undefined,
 		openOracleCreateForm,
 		openOracleError: undefined,
 		openOracleForm,
 		openOracleDisputeSubmission,
-		openOracleInitialReportSubmission,
-		openOracleInitialReportState,
 		openOracleReportLookupState: 'unknown',
+		openOracleTokenAccessState,
 		openOracleReportDetails,
 		openOracleResult: undefined,
+		openOracleWithdrawableBalances: undefined,
+		openOracleWithdrawableBalancesError: undefined,
+		openOracleWithdrawableBalancesLoading: false,
 		...overrides,
 	}
 }
@@ -219,6 +187,7 @@ describe('OpenOracleSection route create view', () => {
 						escalationHalt: '0.5',
 						ethValue: '1',
 						exactToken1Report: '1',
+						initialToken2Amount: '1',
 						feePercentage: '0',
 						multiplier: '2',
 						protocolFee: '0',
@@ -226,10 +195,6 @@ describe('OpenOracleSection route create view', () => {
 						settlerReward: '0.1',
 						token1Address: '0x2000000000000000000000000000000000000000',
 						token2Address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
-					},
-					openOracleInitialReportState: {
-						...createOpenOracleSectionProps().openOracleInitialReportState,
-						ethBalance: 2n * ETH,
 					},
 				}),
 			),
@@ -365,46 +330,39 @@ describe('OpenOracleSection route create view', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('heading', { name: 'Report Actions' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Report Details' })).toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Settled' })).not.toBeNull()
+		expect(document.body.querySelector('.sticky-object-context .badge')?.textContent).toBe('Settled')
+		expect(document.body.querySelector('.lifecycle-stage-banner')).toBeNull()
 		expect(documentQueries.queryByText('This report is already settled and no further write actions are available.')).toBeNull()
 		expect(documentQueries.queryByText('This report is settled. No write actions are available.')).toBeNull()
+		for (const disclosureTitle of ['Status', 'Settlement', 'Callback / Extra']) {
+			const summary = documentQueries.getByText(disclosureTitle, { selector: 'summary' })
+			const disclosure = summary.closest('details')
+			if (!(disclosure instanceof HTMLElement)) throw new Error(`Expected ${disclosureTitle} disclosure`)
+			expect(within(disclosure).getAllByText(disclosureTitle)).toHaveLength(1)
+		}
 	})
 
-	test('keeps selected-report approvals disabled off mainnet and explains recovery', async () => {
+	test('keeps an action-stage banner when it adds timing context beyond status', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				OpenOracleSection,
 				createOpenOracleSectionProps({
-					accountState: createAccountState({ chainId: '0xaa36a7' }),
 					activeView: 'selected-report',
 					openOracleReportDetails: createOpenOracleReportDetails({
-						currentReporter: zeroAddress,
-						currentTime: 100n,
+						currentReporter: '0x3000000000000000000000000000000000000000',
+						currentTime: 120n,
 						disputeDelay: 10n,
-						reportTimestamp: 0n,
+						reportTimestamp: 100n,
 						settlementTime: 60n,
 					}),
-					openOracleInitialReportState: {
-						...createOpenOracleSectionProps().openOracleInitialReportState,
-						token1Approval: {
-							error: undefined,
-							loading: false,
-							value: 0n,
-						},
-					},
 				}),
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const documentQueries = within(document.body)
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Initial Report' }))
-		const approveButton = documentQueries.getAllByRole('button').find(button => button.textContent?.startsWith('Approve ') === true)
-		if (approveButton === undefined) throw new Error('Expected approval button')
-		expect(approveButton.hasAttribute('disabled')).toBe(true)
-		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
+		expect(document.body.querySelector('.sticky-object-context .badge')?.textContent).toBe('Pending')
+		expect(within(document.body).getByRole('heading', { name: 'Dispute Window Open' })).not.toBeNull()
 	})
-
 	test('disables create when the wallet lacks enough ETH for the attached value', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -434,12 +392,13 @@ describe('OpenOracleSection route create view', () => {
 						...getDefaultOpenOracleCreateFormState(),
 						disputeDelay: '10',
 						exactToken1Report: '1000000000',
+						initialToken2Amount: '1',
 						ethValue: '1',
 						feePercentage: '1',
 						multiplier: '100',
 						protocolFee: '1',
 						settlementTime: '60',
-						settlerReward: '0.1',
+						settlerReward: '1',
 						token1Address: '0x2000000000000000000000000000000000000000',
 						token2Address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
 					},
@@ -462,12 +421,13 @@ describe('OpenOracleSection route create view', () => {
 						disputeDelay: '10',
 						escalationHalt: '0.000000000000000000000000000000000001',
 						exactToken1Report: '0.000000000000000000000000000000000001',
+						initialToken2Amount: '1',
 						ethValue: '1',
 						feePercentage: '1',
 						multiplier: '100',
 						protocolFee: '1',
 						settlementTime: '60',
-						settlerReward: '0.1',
+						settlerReward: '1',
 						token1Address: '0x2000000000000000000000000000000000000000',
 						token2Address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
 					},
@@ -485,6 +445,7 @@ describe('OpenOracleSection route create view', () => {
 
 		const documentQueries = within(document.body)
 		const exactToken1ReportInput = documentQueries.getByLabelText('Exact Token1 Report')
+		const initialToken2AmountInput = documentQueries.getByLabelText('Initial Token2 Amount')
 		const settlerRewardInput = documentQueries.getByLabelText('Settler Reward')
 		const ethValueInput = documentQueries.getByLabelText('ETH Value To Send')
 		const baseTokenAddressInput = documentQueries.getByLabelText('Base Token Address')
@@ -496,6 +457,7 @@ describe('OpenOracleSection route create view', () => {
 		const protocolFeeInput = documentQueries.getByLabelText('Protocol Fee (%)')
 
 		expect(exactToken1ReportInput.getAttribute('aria-describedby')).toBe('open-oracle-exact-token1-report-help')
+		expect(initialToken2AmountInput.getAttribute('aria-describedby')).toBe('open-oracle-initial-token2-amount-help')
 		expect(settlerRewardInput.getAttribute('aria-describedby')).toBe('open-oracle-settler-reward-help')
 		expect(ethValueInput.getAttribute('aria-describedby')).toBe('open-oracle-eth-value-help')
 		expect(baseTokenAddressInput.hasAttribute('aria-describedby')).toBe(false)
@@ -506,6 +468,7 @@ describe('OpenOracleSection route create view', () => {
 		expect(disputeDelayInput.hasAttribute('aria-describedby')).toBe(false)
 		expect(protocolFeeInput.hasAttribute('aria-describedby')).toBe(false)
 		expect(exactToken1ReportInput.getAttribute('inputmode')).toBe('decimal')
+		expect(initialToken2AmountInput.getAttribute('inputmode')).toBe('decimal')
 		expect(settlerRewardInput.getAttribute('inputmode')).toBe('decimal')
 		expect(ethValueInput.getAttribute('inputmode')).toBe('decimal')
 		expect(feePercentageInput.getAttribute('inputmode')).toBe('decimal')
@@ -514,6 +477,7 @@ describe('OpenOracleSection route create view', () => {
 		expect(disputeDelayInput.getAttribute('inputmode')).toBe('numeric')
 		expect(protocolFeeInput.getAttribute('inputmode')).toBe('decimal')
 		expect(documentQueries.getByText('Base-token amount to report.')).not.toBeNull()
+		expect(documentQueries.getByText('Quote-token amount to report.')).not.toBeNull()
 		expect(documentQueries.getByText('ETH paid to the settler.')).not.toBeNull()
 		expect(documentQueries.getByText('ETH funding, including the settler reward.')).not.toBeNull()
 		expect(documentQueries.queryByText('Fee charged during dispute economics, entered as a percentage.')).toBeNull()
@@ -524,9 +488,9 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.queryByText('Protocol fee charged during disputes, entered as a percentage.')).toBeNull()
 	})
 
-	test('uses the shared live chain timestamp to switch a selected report into settle mode', async () => {
+	test('uses the exact shared live settlement timestamp to switch a selected report into settle mode', async () => {
 		const renderedComponent = await renderIntoDocument(
-			<ChainTimestampContext.Provider value={161n}>
+			<ChainTimestampContext.Provider value={160n}>
 				<OpenOracleSection
 					{...createOpenOracleSectionProps({
 						activeView: 'selected-report',
@@ -550,9 +514,9 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.getByRole('button', { name: 'Settle Report' })).not.toBeNull()
 	})
 
-	test('uses the shared live block number to switch a selected report into settle mode', async () => {
+	test('uses the exact shared live settlement block to switch a selected report into settle mode', async () => {
 		const renderedComponent = await renderIntoDocument(
-			<ChainBlockNumberContext.Provider value={161n}>
+			<ChainBlockNumberContext.Provider value={160n}>
 				<OpenOracleSection
 					{...createOpenOracleSectionProps({
 						activeView: 'selected-report',
@@ -574,5 +538,83 @@ describe('OpenOracleSection route create view', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('button', { name: 'Dispute & Swap' })).toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Settle Report' })).not.toBeNull()
+	})
+
+	test('shows independent credited-balance withdrawals after settlement', async () => {
+		const withdrawnBalances: string[] = []
+		const reportDetails = createOpenOracleReportDetails({
+			currentReporter: '0x3000000000000000000000000000000000000000',
+			isDistributed: true,
+			reportTimestamp: 100n,
+			settlementTimestamp: 160n,
+		})
+		const renderedComponent = await renderIntoDocument(
+			<OpenOracleSection
+				{...createOpenOracleSectionProps({
+					activeView: 'selected-report',
+					onWithdrawOpenOracleBalance: balance => withdrawnBalances.push(balance),
+					openOracleReportDetails: reportDetails,
+					openOracleWithdrawableBalances: { eth: 7n, token1: 100n, token2: 0n },
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Your Oracle Balances')).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Report Actions' })).toBeNull()
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Withdraw ETH' }))
+		fireEvent.click(documentQueries.getByRole('button', { name: `Withdraw ${reportDetails.token1Symbol}` }))
+		expect(documentQueries.queryByRole('button', { name: `Withdraw ${reportDetails.token2Symbol}` })).toBeNull()
+		expect(withdrawnBalances).toEqual(['eth', 'token1'])
+	})
+
+	test('shows pending copy only for the balance being withdrawn', async () => {
+		const reportDetails = createOpenOracleReportDetails({
+			currentReporter: '0x3000000000000000000000000000000000000000',
+			isDistributed: true,
+			reportTimestamp: 100n,
+			settlementTimestamp: 160n,
+		})
+		const renderedComponent = await renderIntoDocument(
+			<OpenOracleSection
+				{...createOpenOracleSectionProps({
+					activeView: 'selected-report',
+					openOracleActiveAction: 'withdrawBalance',
+					openOracleActiveWithdrawalBalance: 'eth',
+					openOracleReportDetails: reportDetails,
+					openOracleWithdrawableBalances: { eth: 7n, token1: 100n, token2: 0n },
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('button', { name: 'Withdrawing ETH…' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: `Withdraw ${reportDetails.token1Symbol}` })).not.toBeNull()
+		expectTransactionButtonDisabled(document.body, `Withdraw ${reportDetails.token1Symbol}`)
+	})
+
+	test('shows a terminal balance-load error without stale loading copy', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<OpenOracleSection
+				{...createOpenOracleSectionProps({
+					activeView: 'selected-report',
+					openOracleReportDetails: createOpenOracleReportDetails({
+						currentReporter: '0x3000000000000000000000000000000000000000',
+						initialReporter: '0x3000000000000000000000000000000000000000',
+						isDistributed: true,
+						reportTimestamp: 100n,
+						settlementTimestamp: 160n,
+					}),
+					openOracleWithdrawableBalancesError: 'Failed to load Open Oracle balances',
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Failed to load Open Oracle balances')).not.toBeNull()
+		expect(documentQueries.queryByText(openOracleCopy.loadingOracleBalances)).toBeNull()
 	})
 })

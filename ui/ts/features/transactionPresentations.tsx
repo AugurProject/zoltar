@@ -31,13 +31,11 @@ export function createDeploymentTransactionIntent(stepLabel: string) {
 		action: 'deploy',
 		source: 'deployment',
 		submittedTitle: transactionCopy.formatDeployingValue(stepLabel),
-		submittedDetail: transactionCopy.transactionConfirmationPendingDetail,
 	})
 }
 
 export function createDeploymentSuccessPresentation(stepLabel: string, hash: Hash) {
 	return buildPresentation({
-		detail: transactionCopy.formatValueWasDeployedSuccessfully(stepLabel),
 		hash,
 		title: transactionCopy.formatValueDeployed(stepLabel),
 		tone: 'success',
@@ -49,13 +47,11 @@ export function createMarketCreationTransactionIntent() {
 		action: 'createMarket',
 		source: 'zoltar',
 		submittedTitle: transactionCopy.creatingQuestion,
-		submittedDetail: transactionCopy.questionCreationSubmittedDetail,
 	})
 }
 
 export function createMarketCreationSuccessPresentation(result: MarketCreationResult) {
 	return buildPresentation({
-		detail: transactionCopy.questionCreatedDetail,
 		hash: result.createQuestionHash,
 		rows: [
 			{ label: commonCopy.questionId, value: <IdentifierValue value={result.questionId} /> },
@@ -75,15 +71,12 @@ export function createZoltarForkTransactionIntent(actionName: 'approve' | 'fork'
 		action: actionName,
 		source: 'zoltar',
 		submittedTitle: actionName === 'approve' ? transactionCopy.approvingForkRep : transactionCopy.forkingZoltar,
-		submittedDetail: actionName === 'approve' ? transactionCopy.repApprovalSubmittedDetail : transactionCopy.zoltarForkSubmittedDetail,
 	})
 }
 
 export function createZoltarForkSuccessPresentation(result: ZoltarForkActionResult) {
 	const title = result.action === 'approveForkRep' ? transactionCopy.forkRepApproved : transactionCopy.zoltarForkSubmitted
-	const detail = result.action === 'approveForkRep' ? transactionCopy.forkRepApprovalSuccessDetail : transactionCopy.universeForkSubmittedDetail
 	return buildPresentation({
-		detail,
 		hash: result.hash,
 		rows: [
 			{ label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
@@ -103,13 +96,11 @@ export function createChildUniverseTransactionIntent(source: 'fork-auction' | 'z
 		action: 'createChildUniverse',
 		source,
 		submittedTitle: transactionCopy.deployingChildUniverse,
-		submittedDetail: transactionCopy.childUniverseDeploymentSubmittedDetail,
 	})
 }
 
 export function createChildUniverseSuccessPresentation(result: ZoltarChildUniverseActionResult) {
 	return buildPresentation({
-		detail: transactionCopy.childUniverseDeployedDetail,
 		hash: result.hash,
 		rows: [
 			{ label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
@@ -129,7 +120,6 @@ export function createZoltarMigrationTransactionIntent(actionName: 'prepare' | '
 		action: actionName,
 		source: 'zoltar',
 		submittedTitle: actionName === 'prepare' ? transactionCopy.preparingRep : transactionCopy.splittingRep,
-		submittedDetail: actionName === 'prepare' ? transactionCopy.repPreparationSubmittedDetail : transactionCopy.repMigrationSubmittedDetail,
 	})
 }
 
@@ -156,7 +146,6 @@ export function createSecurityPoolCreationTransactionIntent() {
 		action: 'createSecurityPool',
 		source: 'security-pools',
 		submittedTitle: transactionCopy.creatingSecurityPool,
-		submittedDetail: transactionCopy.securityPoolDeploymentSubmittedDetail,
 	})
 }
 
@@ -184,7 +173,6 @@ export function createSecurityVaultTransactionIntent(actionName: SecurityVaultAc
 		action: actionName,
 		source: 'security-vault',
 		submittedTitle: humanizeAction(actionName),
-		submittedDetail: transactionCopy.formatTransactionSubmitted(humanizeAction(actionName)),
 	})
 }
 
@@ -194,9 +182,9 @@ export function createSecurityVaultSuccessPresentation(result: SecurityVaultActi
 		queuedOperationDetail = result.queuedOperation.isPendingSlot ? transactionCopy.formatQueuedOperationAutoExecutionDetail(result.queuedOperation.operationId.toString()) : transactionCopy.formatQueuedOperationManualExecutionDetail(result.queuedOperation.operationId.toString())
 	}
 	return buildPresentation({
-		detail: queuedOperationDetail ?? transactionCopy.formatCompletedSuccessfully(humanizeAction(result.action)),
+		...(queuedOperationDetail === undefined ? {} : { detail: queuedOperationDetail }),
 		hash: result.hash,
-		rows: [{ label: transactionCopy.action, value: humanizeAction(result.action) }, ...(result.queuedOperation === undefined ? [] : [{ label: commonCopy.stagedOperation, value: `#${result.queuedOperation.operationId.toString()}` }])],
+		...(result.queuedOperation === undefined ? {} : { rows: [{ label: commonCopy.stagedOperation, value: `#${result.queuedOperation.operationId.toString()}` }] }),
 		title: humanizeAction(result.action),
 		tone: 'success',
 	})
@@ -211,19 +199,18 @@ export function createTradingTransactionIntent(actionName: TradingActionResult['
 		action: actionName,
 		source: 'trading',
 		submittedTitle: humanizeAction(actionName),
-		submittedDetail: transactionCopy.formatTransactionSubmitted(humanizeAction(actionName)),
 	})
 }
 
 export function createTradingSuccessPresentation(result: TradingActionResult) {
 	const detail = (() => {
-		if (result.action === 'createCompleteSet') return transactionCopy.tradingCompleteSetCreatedDetail
+		if (result.action === 'createCompleteSet') return undefined
 		if (result.action === 'redeemCompleteSet') return transactionCopy.completeSetBurnSuccessDetail
 		if (result.action === 'migrateShares') return transactionCopy.parentPoolSharesMigratedDetail
-		return transactionCopy.shareRedemptionSuccessDetail
+		return undefined
 	})()
 	return buildPresentation({
-		detail,
+		...(detail === undefined ? {} : { detail }),
 		hash: result.hash,
 		rows: [
 			{ label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> },
@@ -245,7 +232,6 @@ export function createReportingTransactionIntent(actionName: ReportingActionResu
 		action: actionName,
 		source: 'reporting',
 		submittedTitle: humanizeAction(actionName),
-		submittedDetail: transactionCopy.formatTransactionSubmitted(humanizeAction(actionName)),
 	})
 }
 
@@ -273,7 +259,6 @@ export function createLiquidationTransactionIntent() {
 		action: 'queueLiquidation',
 		source: 'security-pools',
 		submittedTitle: transactionCopy.submittingLiquidation,
-		submittedDetail: transactionCopy.liquidationSubmittedDetail,
 	})
 }
 
@@ -307,30 +292,23 @@ export function createLiquidationWarningPresentation(result: SecurityPoolOvervie
 
 export function createPoolOracleTransactionIntent(actionName: 'executeStagedOperation' | 'requestPrice') {
 	let submittedTitle: string = transactionCopy.executingStagedOperation
-	let submittedDetail: string = transactionCopy.stagedOperationSubmittedDetail
 	if (actionName === 'requestPrice') {
 		submittedTitle = transactionCopy.requestingPrice
-		submittedDetail = transactionCopy.priceRequestSubmittedDetail
 	}
 	return buildIntent({
 		action: actionName,
 		source: 'pool-oracle',
 		submittedTitle,
-		submittedDetail,
 	})
 }
 
 export function createPoolOracleSuccessPresentation(result: OpenOracleActionResult) {
-	let detail: string = transactionCopy.stagedOracleOperationExecutedDetail
 	let title: string = transactionCopy.stagedOperationExecuted
 	if (result.action === 'requestPrice') {
-		detail = transactionCopy.priceRequestSuccessDetail
 		title = transactionCopy.priceRequested
 	}
 	return buildPresentation({
-		detail,
 		hash: result.hash,
-		rows: [{ label: transactionCopy.action, value: humanizeAction(result.action) }],
 		title,
 		tone: 'success',
 	})
@@ -345,15 +323,12 @@ export function createOpenOracleTransactionIntent(actionName: OpenOracleActionRe
 		action: actionName,
 		source: 'open-oracle',
 		submittedTitle: humanizeAction(actionName),
-		submittedDetail: transactionCopy.formatTransactionSubmitted(humanizeAction(actionName)),
 	})
 }
 
 export function createOpenOracleSuccessPresentation(result: OpenOracleActionResult) {
 	return buildPresentation({
-		detail: transactionCopy.formatCompletedSuccessfully(humanizeAction(result.action)),
 		hash: result.hash,
-		rows: [{ label: transactionCopy.action, value: humanizeAction(result.action) }],
 		title: humanizeAction(result.action),
 		tone: 'success',
 	})
@@ -369,7 +344,6 @@ export function createForkAuctionTransactionIntent(actionName: ForkAuctionAction
 		action: actionName,
 		source: 'fork-auction',
 		submittedTitle: resolvedSubmittedTitle,
-		submittedDetail: transactionCopy.formatTransactionSubmitted(String(resolvedSubmittedTitle)),
 	})
 }
 
@@ -410,11 +384,11 @@ export function createForkAuctionSuccessPresentation(result: ForkAuctionActionRe
 			case 'submitBid':
 				return transactionCopy.truthAuctionBidSuccessDetail
 			default:
-				return transactionCopy.formatCompletedSuccessfully(humanizeAction(result.action))
+				return undefined
 		}
 	})()
 	return buildPresentation({
-		detail,
+		...(detail === undefined ? {} : { detail }),
 		hash: result.hash,
 		rows: [
 			{ label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> },

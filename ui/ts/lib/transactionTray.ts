@@ -77,9 +77,9 @@ export function markTransactionSubmitted(state: TransactionTrayState, hash: Hash
 	return {
 		...state,
 		active: {
-			detail: pendingIntent.submittedDetail,
 			dismissKey: hash,
 			hash,
+			...(pendingIntent.submittedDetail === undefined ? {} : { detail: pendingIntent.submittedDetail }),
 			...(pendingIntent.rows === undefined ? {} : { rows: pendingIntent.rows }),
 			title: pendingIntent.submittedTitle,
 			tone: 'pending',

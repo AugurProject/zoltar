@@ -202,7 +202,6 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			reportOutcomeInSecurityPool: 0,
 			settleOracleReport: 0,
 			startTruthAuctionForSecurityPool: 0,
-			submitInitialOracleReport: 0,
 			submitTruthAuctionBid: 0,
 			writeContract: 0,
 			setSecurityPoolDeployCalls: 0,
@@ -540,10 +539,6 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				securityPoolAddress: primaryPoolAddress,
 				universeId: 1n,
 			} as never
-		}),
-		submitInitialOracleReport: mock(async () => {
-			state.callLog.submitInitialOracleReport += 1
-			return { action: 'submitInitialReport', hash: '0x01' } as never
 		}),
 		submitTruthAuctionBid: mock(async () => {
 			state.callLog.submitTruthAuctionBid += 1
@@ -1042,7 +1037,6 @@ describe('simulation bootstrap', () => {
 		expect(state.callLog.setSecurityPoolDeployCalls).toBe(1)
 		expect(state.callLog.loadAllSecurityPools).toBe(1)
 		expect(state.callLog.settleOracleReport).toBe(1)
-		expect(state.callLog.submitInitialOracleReport).toBe(0)
 		expect(state.callLog.writeContract).toBe(1)
 		expect(contractWriteCalls).toContainEqual(
 			expect.objectContaining({
@@ -1076,7 +1070,6 @@ describe('simulation bootstrap', () => {
 		expect(state.callLog.createMarket).toBe(2)
 		expect(state.callLog.createSecurityPool).toBe(2)
 		expect(state.callLog.settleOracleReport).toBe(4)
-		expect(state.callLog.submitInitialOracleReport).toBe(0)
 		expect(state.callLog.loadOpenOracleReportDetails).toBe(8)
 		expect(state.callLog.writeContract).toBe(4)
 		expect(state.callLog.queueOracleManagerOperation).toBe(4)

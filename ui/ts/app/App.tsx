@@ -197,21 +197,22 @@ export function App() {
 		loadOracleReport,
 		loadingOpenOracleCreate,
 		openOracleActiveAction,
+		openOracleActiveWithdrawalBalance,
 		openOracleCreateForm,
 		openOracleDisputeSubmission,
 		openOracleError,
 		openOracleForm,
-		openOracleInitialReportSubmission,
-		openOracleInitialReportState,
 		openOracleReportLookupState,
+		openOracleTokenAccessState,
 		openOracleReportDetails,
 		openOracleResult,
-		refreshPrice,
+		openOracleWithdrawableBalances,
+		openOracleWithdrawableBalancesError,
+		openOracleWithdrawableBalancesLoading,
 		setOpenOracleCreateForm,
 		setOpenOracleForm,
 		settleReport,
-		submitInitialReport,
-		wrapWethForInitialReport,
+		withdrawBalance,
 	} = useOpenOracleOperations({ ...walletScopedHookConfig, enabled: route === 'open-oracle' && canReadOnchainData })
 	const { loadingReportingDetails, loadReporting, onReportOutcome, reportingActiveAction, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations({ ...walletScopedHookConfig, selectedSecurityPoolAddress: securityPoolAddress })
 	const updateReportingForm = (update: Partial<ReportingFormState>) => {
@@ -308,7 +309,6 @@ export function App() {
 		value: zoltarUniverse,
 	})
 	const showZoltarUniverseWarning = canReadOnchainData && zoltarUniverseState === 'missing'
-	const showZoltarUniverseForkedWarning = zoltarUniverse?.hasForked === true
 	const disableRouteContent = route !== 'deploy' && (!readBackendReady || augurPlaceHolderDeploymentMissing || showZoltarUniverseWarning)
 	const isRouteContentDisabled = disableRouteContent
 	const universeLabel = formatUniverseCollectionLabel([activeUniverseId])
@@ -716,6 +716,7 @@ export function App() {
 	const openOracleRouteContentProps: OpenOracleSectionProps = {
 		activeView: activeOpenOracleView,
 		accountState,
+		environmentReady: canReadOnchainData,
 		onApproveToken1: amount => void approveToken1(amount),
 		onApproveToken2: amount => void approveToken2(amount),
 		onCreateOpenOracleGame: () => void createOpenOracleGame(),
@@ -724,24 +725,25 @@ export function App() {
 			if (reportId === undefined) return
 			void loadOracleReport(reportId)
 		},
-		onRefreshPrice: refreshPrice,
 		onActiveViewChange: view => setOpenOracleView(view),
 		onOpenOracleCreateFormChange: update => setOpenOracleCreateForm(current => ({ ...current, ...update })),
 		onOpenOracleFormChange: update => setOpenOracleForm(current => ({ ...current, ...update })),
 		onSettleReport: () => void settleReport(),
-		onSubmitInitialReport: () => void submitInitialReport(),
-		onWrapWethForInitialReport: () => void wrapWethForInitialReport(),
+		onWithdrawOpenOracleBalance: balance => void withdrawBalance(balance),
 		loadingOpenOracleCreate,
 		openOracleActiveAction,
+		openOracleActiveWithdrawalBalance,
 		openOracleError,
 		openOracleCreateForm,
 		openOracleDisputeSubmission,
 		openOracleForm,
-		openOracleInitialReportSubmission,
-		openOracleInitialReportState,
 		openOracleReportLookupState,
+		openOracleTokenAccessState,
 		openOracleReportDetails,
 		openOracleResult,
+		openOracleWithdrawableBalances,
+		openOracleWithdrawableBalancesError,
+		openOracleWithdrawableBalancesLoading,
 	}
 	let routeSubNavigation: ComponentChildren = undefined
 	if (route === 'zoltar') {
@@ -796,15 +798,7 @@ export function App() {
 			<ChainTimestampContext.Provider value={currentTimestamp}>
 				<main>
 					<AppPageHeading pageTitle={pageTitle} />
-					<AppStatusNotices
-						errorMessage={errorMessage}
-						readBackendMessage={readBackendMessage}
-						readBackendStatus={readBackendStatus}
-						simulationBootstrapError={environmentBootstrapError}
-						showAugurPlaceHolderDeploymentWarning={showAugurPlaceHolderDeploymentWarning}
-						showZoltarUniverseForkedWarning={showZoltarUniverseForkedWarning}
-						zoltarUniverse={zoltarUniverse}
-					/>
+					<AppStatusNotices errorMessage={errorMessage} readBackendMessage={readBackendMessage} readBackendStatus={readBackendStatus} simulationBootstrapError={environmentBootstrapError} showAugurPlaceHolderDeploymentWarning={showAugurPlaceHolderDeploymentWarning} />
 					<AppHeaderShell overview={overviewProps} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onEnvironmentChanged={refreshActiveEnvironment} onRefresh={refreshSimulationView} />
 					<GlobalTransactionTray transaction={transactionState.value.active} />
 

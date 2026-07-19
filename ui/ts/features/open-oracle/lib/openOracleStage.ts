@@ -4,14 +4,6 @@ import type { LifecycleStagePresentation } from '../../types.js'
 
 export function getOpenOracleStagePresentation(actionMode: OpenOracleSelectedReportActionMode): LifecycleStagePresentation {
 	switch (actionMode) {
-		case 'initial-report':
-			return {
-				availableActions: [],
-				blockedActions: [],
-				key: 'awaiting-initial-report',
-				label: 'Awaiting Initial Report',
-				tone: 'warning',
-			}
 		case 'dispute':
 			return {
 				availableActions: [],

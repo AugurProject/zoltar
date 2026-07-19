@@ -23,6 +23,7 @@ const uiDevelopmentEntrypointPath = path.join(repositoryRootPath, 'ui', 'ts', 'i
 const sharedBrowserArtifacts = sharedBrowserArtifactRelativePaths.map(relativePath => path.join(repositoryRootPath, relativePath))
 const developmentImportMapRegressionEntries: Record<string, string> = {
 	'@zoltar/shared/ethereum': '../shared/js/ethereum.js',
+	'@zoltar/shared/openOracle': '../shared/js/openOracle.js',
 	'@zoltar/shared/sortStringArrayByKeccak': '../shared/js/sortStringArrayByKeccak.js',
 	abitype: './vendor/abitype/exports/index.js',
 	'micro-eth-signer': './vendor/micro-eth-signer/index.js',
@@ -331,6 +332,7 @@ test('shared helper package imports resolve to browser-served shared outputs', (
 	expect(uiIndexHtml).toContain('"@zoltar/shared/escalationMath": "../shared/js/escalationMath.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/ethereum": "../shared/js/ethereum.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/liquidation": "../shared/js/liquidation.js"')
+	expect(uiIndexHtml).toContain('"@zoltar/shared/openOracle": "../shared/js/openOracle.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/oracleInitialReport": "../shared/js/oracleInitialReport.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/protocolConfig": "../shared/js/protocolConfig.js"')
 	expect(uiIndexHtml).toContain('"@zoltar/shared/sortStringArrayByKeccak": "../shared/js/sortStringArrayByKeccak.js"')

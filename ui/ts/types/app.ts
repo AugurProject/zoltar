@@ -66,13 +66,13 @@ export type OpenOracleFormState = {
 	disputeNewAmount2: string
 	disputeTokenToSwap: 'token1' | 'token2'
 	reportId: string
-	price: string
 	stateHash: string
 }
 
 export type OpenOracleCreateFormState = {
 	ethValue: string
 	exactToken1Report: string
+	initialToken2Amount: string
 	escalationHalt: string
 	feePercentage: string
 	multiplier: string

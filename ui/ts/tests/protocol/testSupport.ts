@@ -32,9 +32,10 @@ export function createMulticallStub(handler: MockLoaderMulticallHandler): MockLo
 	return async request => (await handler(request as MockLoaderMulticallRequest)) as never
 }
 
-export function createMockLoaderClient({ getBlock, multicall, readContract }: { getBlock: () => Promise<{ timestamp: bigint }>; multicall: MockLoaderMulticallHandler; readContract: MockReadContractHandler }): MockLoaderClient {
+export function createMockLoaderClient({ getBlock, getLogs = async () => [], multicall, readContract }: { getBlock: () => Promise<{ timestamp: bigint }>; getLogs?: () => Promise<readonly unknown[]>; multicall: MockLoaderMulticallHandler; readContract: MockReadContractHandler }): MockLoaderClient {
 	return {
 		getBlock,
+		getLogs,
 		multicall: createMulticallStub(multicall),
 		readContract: createReadContractStub(readContract),
 	} as unknown as MockLoaderClient

@@ -14,6 +14,7 @@ export type BadgeTone = 'blocked' | 'danger' | 'muted' | 'ok' | 'pending' | 'war
 export type NoticeItem = {
 	detail: ComponentChildren
 	id: string
+	technicalDetails?: ComponentChildren
 	title?: ComponentChildren
 	tone: NoticeTone
 }
@@ -30,12 +31,12 @@ export type TransactionIntent = {
 	requiresWalletConfirmation?: boolean | undefined
 	rows?: GlobalTransactionRow[]
 	source: string
-	submittedDetail: ComponentChildren
+	submittedDetail?: ComponentChildren
 	submittedTitle: ComponentChildren
 }
 
 export type GlobalTransactionPresentation = {
-	detail: ComponentChildren
+	detail?: ComponentChildren
 	dismissKey?: string
 	hash?: Hash
 	rows?: GlobalTransactionRow[]

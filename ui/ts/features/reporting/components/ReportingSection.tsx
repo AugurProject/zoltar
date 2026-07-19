@@ -639,6 +639,8 @@ export function ReportingSection({
 																	{reportingCopy.worthNow} <CurrencyValue value={claimAmount} suffix={commonCopy.rep} />
 																</>
 															),
+														],
+														secondaryDetails: [
 															`${reportingCopy.currentClaimType} ${claimLabel ?? reportingCopy.pendingFinalization}`,
 															<>
 																{reportingCopy.entryDepth} <CurrencyValue value={deposit.cumulativeAmount} suffix={commonCopy.rep} />

@@ -1,762 +1,663 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import { ReentrancyGuard } from '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
 import { IERC20 } from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import { SafeERC20 } from '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
-import { Math } from '@openzeppelin/contracts/utils/math/Math.sol';
+import { Errors } from './libraries/Errors.sol';
+import { ISignatureTransfer } from './interfaces/ISignatureTransfer.sol';
 
 /**
- * @title OpenOracle
- * @notice A trust-free price oracle that uses an escalating auction mechanism
- * @dev This contract enables price discovery through economic incentives where
- *      expiration serves as evidence of a good price with appropriate parameters.
- *      Participants are responsible for validating report instance parameters before participation
+ * @title openOracle
+ * @notice A trust-minimized token price oracle
+ * @dev A price report is two limit orders, a buy and a sell, at the same price.
+ *      The orders are locked until either the timer runs out or one is taken.
+ *      To take one of the limit orders, you replace them with larger ones at a new price.
+ *      When the timer runs out without a dispute, the price is settled. Any disputes reset the timer.
+ *
+ *      Participants are responsible for validating oracle game parameters before participation
  *      and unsafe parameter sets including but not limited to settlementTime too high and callbackGasLimit too high
  *      will result in lost funds.
+ *
+ *      Vanilla ERC20, USDC, and USDT-style return value tokens only.
+ *      Fee-on-transfer, rebasing tokens etc are explicitly not supported.
  * @author OpenOracle Team
- * @custom:version 0.1.6
+ * @custom:version 0.2.0
  * @custom:documentation https://docs.openoracle.org
  */
-
-contract OpenOracle is ReentrancyGuard {
+contract OpenOracle {
 	using SafeERC20 for IERC20;
 
-	// Custom errors for gas optimization
-	error TokensCannotBeSame();
-	error NoReportToDispute();
-	error EthTransferFailed();
-	error InvalidAmount1();
-	error InvalidAmount2();
-	error InvalidStateHash();
-	error InvalidGasLimit();
-	error SettleTooEarly();
-	error AlreadySettled();
-	error ExactToken1CannotBeZero();
-	error SettleVsDisputeDelayTiming();
-	error MsgValueTooLow();
-	error MsgValueTooHigh();
-	error FeesTooHigh();
-	error MultiplierTooLow();
-	error ReportAlreadySubmitted();
-	error InvalidReportId();
-	error AddressCannotBeZero();
-	error InvalidAmount2Expected();
-	error InvalidTokenToSwap();
-	error NoReportYet();
-	error EscalationHalted();
-	error AmountsCannotBeZero();
-	error DisputeTooLate();
-	error DisputeTooEarly();
-	error NewPriceInsideFeeBoundary();
-	error ReportNotSettled();
-
 	// Constants
-	uint256 public constant PRICE_PRECISION = 1e30;
-	uint256 public constant PERCENTAGE_PRECISION = 1e7;
-	uint256 public constant MULTIPLIER_PRECISION = 100;
+	uint256 internal constant PRICE_PRECISION = 1e30;
+	uint256 internal constant PERCENTAGE_PRECISION = 1e7;
+	uint256 internal constant MULTIPLIER_PRECISION = 100;
+	address internal constant ETH_SENTINEL = address(0);
+	address internal constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
+	uint8 internal constant FLAGS_MAX = 0x0F; // FLAG_TIME_TYPE | FLAG_TRACK_DISPUTES | FLAG_STORE_ALL | FLAG_STORE_PRICE
+
+	bytes32 internal constant WITNESS_TYPEHASH = keccak256(
+		'Witness(address beneficiary,address relayer,address swapper,bytes32 intent)'
+	);
+	string internal constant WITNESS_TYPE_STRING =
+		'Witness witness)TokenPermissions(address token,uint256 amount)Witness(address beneficiary,address relayer,address swapper,bytes32 intent)';
+
+	uint8 internal constant FLAG_TIME_TYPE = 1 << 0; // = 1
+	uint8 internal constant FLAG_TRACK_DISPUTES = 1 << 1; // = 2
+	uint8 internal constant FLAG_STORE_ALL = 1 << 2; // = 4
+	uint8 internal constant FLAG_STORE_PRICE = 1 << 3; // = 8
+
 	bytes4 internal constant CALLBACK_SELECTOR = bytes4(
 		keccak256('openOracleCallback(uint256,uint256,uint256,uint256,address,address)')
 	);
 
-	// State variables
 	uint256 public nextReportId = 1;
 
-	mapping(uint256 => ReportMeta) public reportMeta;
-	mapping(uint256 => ReportStatus) public reportStatus;
-	mapping(address => mapping(address => uint256)) public protocolFees;
-	mapping(address => uint256) public accruedProtocolFees;
-	mapping(uint256 => extraReportData) public extraData;
-	mapping(uint256 => mapping(uint256 => disputeRecord)) public disputeHistory;
+	mapping(uint256 => bytes32) public oracleGame; // reportId => state hash
+	mapping(uint256 => uint256) public finalPrice;
+	mapping(address => mapping(address => uint256)) public tokenHolder; // owner => token => amount
+	mapping(uint256 => mapping(uint256 => DisputeRecord)) public disputeHistory; // reportId => numReports => dispute data
+	mapping(uint256 => OracleGame) public finalizedGame; // reportId => optional storage
+	mapping(address => mapping(address => mapping(address => uint256))) public internalAllowance; // owner => spender => token => amount
 
-	struct disputeRecord {
+	struct DisputeRecord {
 		uint128 amount1;
 		uint128 amount2;
 		address tokenToSwap;
 		uint48 reportTimestamp;
 	}
 
-	struct extraReportData {
-		bytes32 stateHash;
-		address callbackContract;
-		uint32 numReports;
-		uint32 callbackGasLimit;
-		address protocolFeeRecipient;
-		bool trackDisputes;
-	}
-
-	struct ReportMeta {
-		uint128 exactToken1Report;
-		uint128 escalationHalt;
-		uint96 fee;
-		uint96 settlerReward;
+	struct OracleGame {
+		uint128 currentAmount1; // current amount of token1 in the report
+		uint128 currentAmount2; // current amount of token2 in the report
+		address currentReporter;
+		uint48 reportTimestamp; // time of last report or dispute. respects timeType
+		uint48 settlementTimestamp; // when the game settled. respects timeType
 		address token1;
-		uint48 settlementTime;
+		uint48 lastReportOppoTime; // opposite time. respects timeType
+		uint48 settlementTime; // per-round timer. respects timeType
+		uint128 escalationHalt; // point at which disputes can continue but amounts stop growing.
+		address protocolFeeRecipient; // receives per-round protocolFee
+		uint96 settlerReward; // wei paid to settler
 		address token2;
-		bool timeType;
-		uint24 feePercentage;
-		uint24 protocolFee;
-		uint16 multiplier;
-		uint24 disputeDelay;
+		uint24 numReports;
+		uint24 disputeDelay; // time after report where nobody can swap against the limit orders. respects timeType.
+		uint24 feePercentage; //1000 = 0.01%, portion per swap going to previous reporter
+		uint16 multiplier; // 140 = 1.4x, how much currentAmount1 must grow by each round
+		address callbackContract; // settlement callback calls into this address
+		uint32 callbackGasLimit; // Gas forwarded to settlement callback. Values above practical tx gas limits can make settlement impossible,
+		// leaving the current reporter's two-sided limit-order amounts locked. Every disputer inherits this parameter.
+		uint24 protocolFee; // 1000 = 0.01%, portion per swap going to protocolFeeRecipient
+		uint8 flags; // see flags above. timeType true means the game's clock uses timestamps, false, block numbers.
 	}
 
-	struct ReportStatus {
-		uint128 currentAmount1;
-		uint128 currentAmount2;
-		address payable currentReporter;
-		uint48 reportTimestamp;
-		uint48 settlementTimestamp;
-		address payable initialReporter;
-		uint48 lastReportOppoTime;
+	struct PreimageHelper {
+		uint256 reportId;
+		address creator;
+		uint256 blockTimestamp;
+		uint256 blockNumber;
 	}
 
-	struct CreateReportParams {
-		uint128 exactToken1Report; // initial oracle liquidity in token1
-		uint128 escalationHalt; // amount of token1 at which escalation stops but disputes can still happen
-		uint96 settlerReward; // eth paid to settler in wei
-		address token1Address; // address of token1 in the oracle report instance
-		uint48 settlementTime; // report instance can settle if no disputes within this timeframe
-		uint24 disputeDelay; // time disputes must wait after every new report
-		uint24 protocolFee; // fee paid to protocolFeeRecipient. 1000 = 0.01%
-		address token2Address; // address of token2 in the oracle report instance
-		uint32 callbackGasLimit; // gas the settlement callback must use
-		uint24 feePercentage; // fee paid to previous reporter. 1000 = 0.01%
-		uint16 multiplier; // amount by which newAmount1 must increase versus old amount1. 140 = 1.4x. 100 = no escalation.
-		bool timeType; // true for block timestamp, false for block number
-		bool trackDisputes; // true keeps a readable dispute history for smart contracts
-		address callbackContract; // contract address for settle to call back into
-		address protocolFeeRecipient; // address that receives protocol fees and initial reporter rewards if keepFee set to false
+	struct TimingBoundaries {
+		uint256 blockNumber;
+		uint256 blockNumberBound;
+		uint256 blockTimestamp;
+		uint256 blockTimestampBound;
 	}
 
 	// Events
-	event ReportInstanceCreated(
-		uint256 indexed reportId,
-		address indexed token1Address,
-		address indexed token2Address,
-		address creator,
-		address protocolFeeRecipient,
-		uint128 exactToken1Report,
-		uint128 escalationHalt,
-		uint96 settlerReward,
-		uint96 reporterFee,
-		uint48 settlementTime,
-		uint24 disputeDelay,
-		uint24 feePercentage,
-		uint24 protocolFee,
-		uint16 multiplier,
-		bool timeType,
-		bool trackDisputes,
-		address callbackContract,
-		uint32 callbackGasLimit,
-		bytes32 stateHash,
-		uint256 blockTimestamp
-	);
 
-	event InitialReportSubmitted(
-		uint256 indexed reportId,
-		address indexed reporter,
-		uint128 amount1,
-		uint128 amount2,
-		uint48 reportTimestamp
-	);
+	bytes32 private constant REPORT_SUBMITTED_SIG = keccak256('ReportSubmitted(uint256,bytes)');
+	bytes32 private constant REPORT_DISPUTED_SIG = keccak256('ReportDisputed(uint256,bytes)');
 
-	event ReportDisputed(
-		uint256 indexed reportId,
-		address indexed disputer,
-		address indexed tokenToSwap,
+	// Emitted via raw log2. `packed` is 235 raw bytes from _packMem,
+	// not ABI-encoded dynamic bytes.
+	event ReportSubmitted(uint256 indexed reportId, bytes packed);
+	event ReportDisputed(uint256 indexed reportId, bytes packed);
+	event ReportSettled(uint256 indexed reportId);
+	event InternalApproval(address indexed owner, address indexed spender, address indexed token, uint256 amount);
+
+	/**
+	 * @notice Creates a price report. Caller must pass reportTimestamp / lastReportOppoTime /
+	 *         settlementTimestamp / numReports as zero.
+	 * @dev Only the keccak256 state hash is stored on-chain. All future callers
+	 *      (dispute, settle) must supply the exact OracleGame + PreimageHelper that
+	 *      reconstructs the current hash; off-chain indexing of report state is the
+	 *      caller's responsibility (events + tx data, or via the FLAG_STORE_ALL opt-in).
+	 * @param params OracleGame to commit. currentReporter decides who receives the report tokens when the round completes
+	 * @param tryInternalBalance1 If true, fund token1 from params.currentReporter's internal balance first
+	 * @param tryInternalBalance2 If true, fund token2 from params.currentReporter's internal balance first
+	 * @param timing Optional timing bounds. If timing.blockTimestamp is zero, timing validation is skipped
+	 * @return reportId The unique identifier for the created report instance
+	 */
+	function report(
+		OracleGame calldata params,
+		bool tryInternalBalance1,
+		bool tryInternalBalance2,
+		TimingBoundaries calldata timing
+	) external payable returns (uint256 reportId) {
+		if (params.flags > FLAGS_MAX) revert Errors.InvalidMode();
+		bool timeType = _hasFlag(params.flags, FLAG_TIME_TYPE);
+		uint48 blockNumber = _getBlockNumber();
+		uint48 reportTimestamp = timeType ? uint48(block.timestamp) : blockNumber;
+		uint48 oppoTime = timeType ? blockNumber : uint48(block.timestamp);
+		address token1 = params.token1;
+		address token2 = params.token2;
+		address protocolFeeRecipient = params.protocolFeeRecipient;
+		uint128 amount1 = params.currentAmount1;
+		uint128 amount2 = params.currentAmount2;
+		address reporter = params.currentReporter;
+
+		if (amount1 == 0) revert Errors.InvalidAmount1();
+		if (token1 == token2) revert Errors.TokensCannotBeSame();
+		if (params.settlementTime <= params.disputeDelay) revert Errors.SettleVsDisputeDelayTiming();
+		if (params.feePercentage + params.protocolFee > 1e7) revert Errors.FeesTooHigh();
+		if (params.multiplier < MULTIPLIER_PRECISION) revert Errors.MultiplierTooLow();
+		if (timing.blockTimestamp > 0) _validateTiming(timing);
+		if (amount2 == 0) revert Errors.InvalidAmount2();
+		if (reporter == address(0)) revert Errors.AddressCannotBeZero();
+		if (msg.value > params.settlerReward && token1 != ETH_SENTINEL && token2 != ETH_SENTINEL) {
+			revert Errors.NeitherTokenIsETH();
+		}
+		if (params.settlementTimestamp != 0) revert Errors.TimestampsMustBeZero();
+		if (params.numReports != 0) revert Errors.NumReportsMustBeZero();
+		if (params.reportTimestamp != 0 || params.lastReportOppoTime != 0) revert Errors.TimestampsMustBeZero();
+
+		reportId = nextReportId++;
+
+		bool trackDisputes = _hasFlag(params.flags, FLAG_TRACK_DISPUTES);
+		if (trackDisputes) {
+			// Index 0 records the initial report, not a dispute; tokenToSwap is intentionally unset.
+			DisputeRecord storage initialRecord = disputeHistory[reportId][0];
+			initialRecord.amount1 = amount1;
+			initialRecord.amount2 = amount2;
+			initialRecord.reportTimestamp = reportTimestamp;
+		}
+
+		// Force typed calldata loads for fields only used by later dispute/settle paths.
+		// The raw calldata hash below relies on dirty-calldata regression tests for the
+		// exact deployment compiler/optimizer/EVM target.
+		uint128 escalationHalt = params.escalationHalt;
+		address callbackContract = params.callbackContract;
+		uint32 callbackGasLimit = params.callbackGasLimit;
+
+		PreimageHelper memory helper = PreimageHelper({
+			reportId: reportId,
+			creator: msg.sender,
+			blockTimestamp: block.timestamp,
+			blockNumber: blockNumber
+		});
+
+		// Hash via calldatacopy + override mstores + mcopy(helper). Layout matches abi.encode(OracleGame, PreimageHelper):
+		//   0x000..0x280  OracleGame (20 slots)        0x280..0x300  PreimageHelper (4 slots)
+		// Overrides (slot N at N*0x20): 0x060 reportTimestamp · 0x0C0 lastReportOppoTime · 0x180 numReports (if trackDisputes)
+		bytes32 stateHash;
+		uint256 stagedMem;
+		assembly ('memory-safe') {
+			let mem := mload(0x40)
+			calldatacopy(mem, params, 0x280)
+			pop(escalationHalt)
+			pop(callbackContract)
+			pop(callbackGasLimit)
+			mstore(add(mem, 0x60), reportTimestamp)
+			mstore(add(mem, 0xC0), oppoTime)
+			if trackDisputes {
+				mstore(add(mem, 0x180), 1)
+			}
+			mcopy(add(mem, 0x280), helper, 0x80)
+			stateHash := keccak256(mem, 0x300)
+			stagedMem := mem
+			mstore(0x40, add(mem, 0x300))
+		}
+
+		oracleGame[reportId] = stateHash;
+
+		if (params.protocolFee > 0 && protocolFeeRecipient != address(0)) {
+			_getDustAmounts(protocolFeeRecipient, token1, token2);
+		}
+
+		_getDustAmounts(reporter, token1, token2);
+
+		uint256 ethRequired = params.settlerReward;
+		ethRequired += _tryInternalBalanceFull(reporter, token1, amount1, tryInternalBalance1);
+		ethRequired += _tryInternalBalanceFull(reporter, token2, amount2, tryInternalBalance2);
+
+		if (msg.value < ethRequired) revert Errors.MsgValueTooLow();
+		uint256 excess = msg.value - ethRequired;
+		if (excess > 0) _credit(reporter, ETH_SENTINEL, excess);
+
+		uint256 packedLen = _packMem(stagedMem);
+		bytes32 sig = REPORT_SUBMITTED_SIG;
+		assembly ('memory-safe') {
+			log2(stagedMem, packedLen, sig, reportId)
+		}
+	}
+
+	/**
+	 * @notice Swaps against and replaces the current report with new amounts.
+	 * @dev For delegated disputes where msg.sender != disputer, set both tryInternalBalance flags
+	 *      true when the disputer is intended to fund via approveInternal; any false flag makes
+	 *      that token's required contribution come from msg.sender externally.
+	 * @param reportId The report instance to dispute
+	 * @param tokenToSwap Either token1 or token2; disputer is selling chosen token to previous reporter at the previously quoted exchange rate
+	 * @param newAmount1 New token1 amount; must equal oldAmount1 * multiplier / 100 unless at escalationHalt where it must equal oldAmount1 + 1
+	 * @param newAmount2 New token2 amount proposed by the disputer. Ratio of newAmount1 and newAmount2 is the new price disputer is quoting.
+	 * @param disputer Address recorded as the new currentReporter, credited for any ETH excess. Also receives tokens back when the round completes.
+	 * @param tryInternalBalance1 If true, draw token1 contributions from disputer's internal balance before pulling externally
+	 * @param tryInternalBalance2 If true, draw token2 contributions from disputer's internal balance before pulling externally
+	 * @param params OracleGame matching the current stored state hash
+	 * @param helper PreimageHelper matching the current stored state hash
+	 * @param timing Optional timing bounds; validation is skipped when timing.blockTimestamp is zero
+	 */
+	function dispute(
+		uint256 reportId,
+		address tokenToSwap,
 		uint128 newAmount1,
 		uint128 newAmount2,
-		uint48 reportTimestamp
-	);
+		address disputer,
+		bool tryInternalBalance1,
+		bool tryInternalBalance2,
+		OracleGame calldata params,
+		PreimageHelper calldata helper,
+		TimingBoundaries calldata timing
+	) external payable {
+		OracleGame memory oracle;
+		uint256 stagedMem;
+		bytes32 preStateHash;
+		assembly ('memory-safe') {
+			stagedMem := mload(0x40)
+			calldatacopy(stagedMem, params, 0x280)
+			calldatacopy(add(stagedMem, 0x280), helper, 0x80)
+			preStateHash := keccak256(stagedMem, 0x300)
+			oracle := stagedMem
+			mstore(0x40, add(stagedMem, 0x300))
+		}
 
-	event ReportSettled(
-		uint256 indexed reportId,
-		uint256 amount1,
-		uint256 amount2,
-		uint256 settlementTimestamp,
-		uint256 blockTimestamp
-	);
-	event SettlementCallbackExecuted(uint256 indexed reportId, address indexed callbackContract, bool success);
+		if (preStateHash != oracleGame[reportId]) revert Errors.InvalidStateHash();
 
-	constructor() ReentrancyGuard() {}
+		(uint256 oldAmount1, uint256 oldAmount2) = (oracle.currentAmount1, oracle.currentAmount2);
+		address token1 = oracle.token1;
+		address token2 = oracle.token2;
+		address previousReporter = oracle.currentReporter;
+		bool timeType = _hasFlag(oracle.flags, FLAG_TIME_TYPE);
+		uint48 blockNumber = _getBlockNumber();
+		uint48 currentTime = timeType ? uint48(block.timestamp) : blockNumber;
+		uint48 oppoTime = timeType ? blockNumber : uint48(block.timestamp);
+		bool isSelfDispute = (disputer == previousReporter && msg.sender == previousReporter);
 
-	/**
-	 * @notice Withdraws accumulated protocol fees for a specific token
-	 * @param tokenToGet The token address to withdraw fees for
-	 */
-	function getProtocolFees(address tokenToGet) external {
-		uint256 amount = protocolFees[msg.sender][tokenToGet];
-		if (amount > 0) {
-			protocolFees[msg.sender][tokenToGet] = 0;
-			_transferTokens(tokenToGet, address(this), msg.sender, amount);
+		{
+			uint48 prevReportTimestamp = oracle.reportTimestamp;
+			uint256 escalationHalt = oracle.escalationHalt;
+			uint256 expectedAmount1;
+			if (escalationHalt > oldAmount1) {
+				expectedAmount1 = (oldAmount1 * oracle.multiplier) / MULTIPLIER_PRECISION;
+				if (expectedAmount1 > escalationHalt) {
+					expectedAmount1 = escalationHalt;
+				}
+			} else {
+				expectedAmount1 = oldAmount1 + 1;
+			}
+
+			if (newAmount1 != expectedAmount1) {
+				if (escalationHalt <= oldAmount1) {
+					revert Errors.EscalationHalted();
+				} else {
+					revert Errors.InvalidAmount1();
+				}
+			}
+
+			if (newAmount1 == 0 || newAmount2 == 0) revert Errors.AmountsCannotBeZero();
+			if (previousReporter == address(0)) revert Errors.NoReportToDispute();
+			if (currentTime >= prevReportTimestamp + oracle.settlementTime) revert Errors.DisputeTooLate();
+			if (oracle.settlementTimestamp != 0) revert Errors.AlreadySettled();
+			if (tokenToSwap != token1 && tokenToSwap != token2) revert Errors.InvalidTokenToSwap();
+			if (currentTime < prevReportTimestamp + oracle.disputeDelay) revert Errors.DisputeTooEarly();
+			if (disputer == address(0)) revert Errors.AddressCannotBeZero();
+			if (timing.blockTimestamp > 0) _validateTiming(timing);
+			if (msg.value > 0 && token1 != ETH_SENTINEL && token2 != ETH_SENTINEL) revert Errors.NeitherTokenIsETH();
+		}
+
+		{
+			oracle.currentAmount1 = newAmount1;
+			oracle.currentAmount2 = newAmount2;
+			oracle.currentReporter = disputer;
+			oracle.reportTimestamp = currentTime;
+			oracle.lastReportOppoTime = oppoTime;
+
+			if (_hasFlag(oracle.flags, FLAG_TRACK_DISPUTES)) {
+				uint24 nextIndex = oracle.numReports;
+				DisputeRecord storage record = disputeHistory[reportId][nextIndex];
+				record.amount1 = newAmount1;
+				record.amount2 = newAmount2;
+				record.reportTimestamp = currentTime;
+				record.tokenToSwap = tokenToSwap;
+				if (nextIndex < type(uint24).max) oracle.numReports = nextIndex + 1;
+			}
+
+			bytes32 nextStateHash;
+			assembly ('memory-safe') {
+				nextStateHash := keccak256(stagedMem, 0x300)
+			}
+			oracleGame[reportId] = nextStateHash;
+		}
+
+		_getDustAmounts(disputer, token1, token2);
+
+		uint256 ethRequired = 0;
+
+		if (tokenToSwap == token1) {
+			uint256 fee = (oldAmount1 * oracle.feePercentage) / PERCENTAGE_PRECISION;
+			uint256 protocolFee = (oldAmount1 * oracle.protocolFee) / PERCENTAGE_PRECISION;
+			uint256 netToken2Contribution = newAmount2 >= oldAmount2 ? newAmount2 - oldAmount2 : 0;
+			uint256 netToken2Receive = newAmount2 < oldAmount2 ? oldAmount2 - newAmount2 : 0;
+
+			if (protocolFee > 0 && oracle.protocolFeeRecipient != address(0)) {
+				tokenHolder[oracle.protocolFeeRecipient][token1] += protocolFee;
+			}
+
+			if (netToken2Contribution > 0) {
+				ethRequired += _tryInternalBalanceFull(disputer, token2, netToken2Contribution, tryInternalBalance2);
+			}
+
+			if (netToken2Receive > 0) {
+				tokenHolder[disputer][token2] += netToken2Receive;
+			}
+
+			if (isSelfDispute) {
+				uint256 token1Contribution = newAmount1 - oldAmount1 + protocolFee;
+				ethRequired += _tryInternalBalanceFull(disputer, token1, token1Contribution, tryInternalBalance1);
+			} else {
+				ethRequired += _tryInternalBalanceFull(
+					disputer,
+					token1,
+					newAmount1 + oldAmount1 + fee + protocolFee,
+					tryInternalBalance1
+				);
+
+				tokenHolder[previousReporter][token1] += 2 * oldAmount1 + fee;
+			}
+		} else if (tokenToSwap == token2) {
+			uint256 fee = (oldAmount2 * oracle.feePercentage) / PERCENTAGE_PRECISION;
+			uint256 protocolFee = (oldAmount2 * oracle.protocolFee) / PERCENTAGE_PRECISION;
+			uint256 netToken1Contribution = newAmount1 > (oldAmount1) ? newAmount1 - oldAmount1 : 0;
+
+			if (protocolFee > 0 && oracle.protocolFeeRecipient != address(0)) {
+				tokenHolder[oracle.protocolFeeRecipient][token2] += protocolFee;
+			}
+
+			if (netToken1Contribution > 0) {
+				ethRequired += _tryInternalBalanceFull(disputer, token1, netToken1Contribution, tryInternalBalance1);
+			}
+
+			if (isSelfDispute) {
+				uint256 token2Needed = newAmount2 + protocolFee;
+
+				if (token2Needed >= oldAmount2) {
+					ethRequired += _tryInternalBalanceFull(
+						disputer,
+						token2,
+						token2Needed - oldAmount2,
+						tryInternalBalance2
+					);
+				} else {
+					tokenHolder[disputer][token2] += oldAmount2 - token2Needed;
+				}
+			} else {
+				ethRequired += _tryInternalBalanceFull(
+					disputer,
+					token2,
+					newAmount2 + oldAmount2 + fee + protocolFee,
+					tryInternalBalance2
+				);
+				tokenHolder[previousReporter][token2] += 2 * oldAmount2 + fee;
+			}
+		}
+
+		if (msg.value < ethRequired) revert Errors.MsgValueTooLow();
+		uint256 excess = msg.value - ethRequired;
+		if (excess > 0) _credit(disputer, ETH_SENTINEL, excess);
+
+		uint256 packedLen = _packMem(stagedMem);
+		bytes32 sig = REPORT_DISPUTED_SIG;
+		assembly ('memory-safe') {
+			log2(stagedMem, packedLen, sig, reportId)
 		}
 	}
 
 	/**
-	 * @notice Withdraws accumulated protocol fees in ETH
-	 */
-	function getETHProtocolFees() external nonReentrant returns (uint256) {
-		uint256 amount = accruedProtocolFees[msg.sender];
-		if (amount > 0) {
-			accruedProtocolFees[msg.sender] = 0;
-			(bool success, ) = payable(msg.sender).call{ value: amount }('');
-			if (!success) revert EthTransferFailed();
-			return amount;
-		}
-	}
-
-	/**
-	 * @notice Settles a report after the settlement time has elapsed
+	 * @notice Settles a report after settlementTime has elapsed
 	 * @param reportId The unique identifier for the report to settle
+	 * @param params OracleGame matching the current stored state hash
+	 * @param helper PreimageHelper matching the current stored state hash
 	 */
-	function settle(uint256 reportId) external nonReentrant {
-		ReportStatus storage status = reportStatus[reportId];
-		ReportMeta storage meta = reportMeta[reportId];
-
-		if (status.settlementTimestamp != 0) revert AlreadySettled();
-
-		if (meta.timeType) {
-			if (block.timestamp < status.reportTimestamp + meta.settlementTime) revert SettleTooEarly();
-		} else {
-			if (_getBlockNumber() < status.reportTimestamp + meta.settlementTime) revert SettleTooEarly();
+	function settle(uint256 reportId, OracleGame calldata params, PreimageHelper calldata helper) external {
+		OracleGame memory oracle;
+		uint256 stagedMem;
+		bytes32 preStateHash;
+		assembly ('memory-safe') {
+			stagedMem := mload(0x40)
+			calldatacopy(stagedMem, params, 0x280)
+			calldatacopy(add(stagedMem, 0x280), helper, 0x80)
+			preStateHash := keccak256(stagedMem, 0x300)
+			oracle := stagedMem
+			mstore(0x40, add(stagedMem, 0x300))
 		}
 
-		if (status.reportTimestamp == 0) revert NoReportYet();
+		if (preStateHash != oracleGame[reportId]) revert Errors.InvalidStateHash();
 
-		uint256 settlerReward = meta.settlerReward;
-		uint256 reporterReward = meta.fee;
-		uint128 currentAmount1 = status.currentAmount1;
-		uint128 currentAmount2 = status.currentAmount2;
-		address payable currentReporter = status.currentReporter;
-		address token1 = meta.token1;
-		address token2 = meta.token2;
+		uint256 settlementTimestamp = oracle.settlementTimestamp;
+		if (settlementTimestamp != 0) revert Errors.AlreadySettled();
 
-		status.settlementTimestamp = meta.timeType ? uint48(block.timestamp) : _getBlockNumber();
-		emit ReportSettled(reportId, currentAmount1, currentAmount2, status.settlementTimestamp, block.timestamp);
+		uint256 settlementTime = oracle.settlementTime;
+		uint256 reportTimestamp = oracle.reportTimestamp;
+		bool timeType = _hasFlag(oracle.flags, FLAG_TIME_TYPE);
+		uint256 currentTime = timeType ? block.timestamp : _getBlockNumber();
+		uint256 settlerReward = oracle.settlerReward;
+		uint128 currentAmount1 = oracle.currentAmount1;
+		uint128 currentAmount2 = oracle.currentAmount2;
+		address currentReporter = oracle.currentReporter;
+		address token1 = oracle.token1;
+		address token2 = oracle.token2;
+		address callbackContract = oracle.callbackContract;
+		uint32 callbackGasLimit = oracle.callbackGasLimit;
+		address sender = msg.sender;
+		bool hasCallback = callbackContract != address(0);
+		bool storePrice = _hasFlag(oracle.flags, FLAG_STORE_PRICE);
+		uint256 finalRatio;
+		if (storePrice) finalRatio = (currentAmount1 * PRICE_PRECISION) / currentAmount2;
 
-		extraReportData storage extra = extraData[reportId];
-		address callbackContract = extra.callbackContract;
-		uint32 callbackGasLimit = extra.callbackGasLimit;
+		if (currentTime < reportTimestamp + settlementTime) revert Errors.SettleTooEarly();
+		if (reportTimestamp == 0) revert Errors.NoReportYet();
 
-		_transferTokens(token1, address(this), currentReporter, currentAmount1);
-		_transferTokens(token2, address(this), currentReporter, currentAmount2);
+		oracle.settlementTimestamp = uint48(currentTime);
 
-		if (callbackContract != address(0)) {
-			// Prepare callback data
+		bytes32 nextStateHash;
+		assembly ('memory-safe') {
+			nextStateHash := keccak256(stagedMem, 0x300)
+		}
+		oracleGame[reportId] = nextStateHash;
+
+		if (storePrice) finalPrice[reportId] = finalRatio;
+		if (_hasFlag(oracle.flags, FLAG_STORE_ALL)) finalizedGame[reportId] = oracle;
+
+		tokenHolder[currentReporter][token1] += currentAmount1;
+		tokenHolder[currentReporter][token2] += currentAmount2;
+		if (settlerReward > 0) _credit(sender, ETH_SENTINEL, settlerReward);
+
+		if (hasCallback) {
 			bytes memory callbackData = abi.encodeWithSelector(
 				CALLBACK_SELECTOR,
 				reportId,
 				currentAmount1,
 				currentAmount2,
-				status.settlementTimestamp,
+				currentTime,
 				token1,
 				token2
 			);
 
 			// Execute callback with gas limit. Revert if not enough gas supplied to attempt callback fully.
-			// Using low-level call to handle failures gracefully
-
 			(bool success, ) = callbackContract.call{ gas: callbackGasLimit }(callbackData);
+			success; // silence unused-variable warning; callback success is intentionally ignored
 			if (gasleft() < callbackGasLimit / 63) {
-				revert InvalidGasLimit();
+				revert Errors.InvalidGasLimit();
 			}
-
-			// Emit event regardless of bool success
-			emit SettlementCallbackExecuted(reportId, callbackContract, success);
 		}
 
-		// other external calls below (check-effect-interaction pattern)
-		_sendEth(status.initialReporter, reporterReward);
-		_sendEth(payable(msg.sender), settlerReward);
+		emit ReportSettled(reportId);
+	}
+
+	function withdraw(address tokenToGet, uint256 amount) external returns (uint256 sent) {
+		return _withdraw(tokenToGet, amount, msg.sender);
+	}
+
+	function withdrawTo(address tokenToGet, uint256 amount, address to) external returns (uint256 sent) {
+		return _withdraw(tokenToGet, amount, to);
 	}
 
 	/**
-	 * @notice Gets the settlement data for a settled report
-	 * @param reportId The unique identifier for the report
-	 * @return price The settled price
-	 * @return settlementTimestamp The timestamp when the report was settled
+	 * @notice Withdraws held tokens to `to`, preserving the virtual 1-unit sentinel.
+	 *         If too high an amount is passed, sends available balance instead of reverting.
+	 * @param tokenToGet The token address to withdraw
+	 * @param amount Maximum amount to withdraw; if above available balance, withdraws available balance
+	 * @param to Recipient of the withdrawn tokens
 	 */
-	function getSettlementData(uint256 reportId) external view returns (uint256 price, uint256 settlementTimestamp) {
-		ReportStatus storage status = reportStatus[reportId];
-		if (status.settlementTimestamp == 0) revert ReportNotSettled();
-		return (Math.mulDiv(status.currentAmount1, PRICE_PRECISION, status.currentAmount2), status.settlementTimestamp);
-	}
+	function _withdraw(address tokenToGet, uint256 amount, address to) internal returns (uint256 sent) {
+		if (to == address(0)) revert Errors.AddressCannotBeZero();
+		uint256 balance = tokenHolder[msg.sender][tokenToGet];
+		if (balance <= 1 || amount == 0) return 0;
 
-	/**
-	 * @notice Creates a new report instance for price discovery. Hard-codes certain oracle parameters.
-	 * @param token1Address Address of the first token
-	 * @param token2Address Address of the second token
-	 * @param exactToken1Report Exact amount of token1 required for the initial report
-	 * @param feePercentage Fee in thousandths of basis points (3000 = 3bps)
-	 * @param multiplier Multiplier in percentage points (110 = 1.1x)
-	 * @param settlementTime Time in seconds before report can be settled
-	 * @param escalationHalt Threshold at which multiplier drops to 100
-	 * @param disputeDelay Delay in seconds before disputes are allowed
-	 * @param protocolFee Protocol fee in thousandths of basis points
-	 * @param settlerReward Reward for settling the report in wei
-	 * @return reportId The unique identifier for the created report instance
-	 */
-	function createReportInstance(
-		address token1Address,
-		address token2Address,
-		uint128 exactToken1Report,
-		uint24 feePercentage,
-		uint16 multiplier,
-		uint48 settlementTime,
-		uint128 escalationHalt,
-		uint24 disputeDelay,
-		uint24 protocolFee,
-		uint96 settlerReward
-	) external payable returns (uint256 reportId) {
-		CreateReportParams memory params = CreateReportParams({
-			token1Address: token1Address,
-			token2Address: token2Address,
-			exactToken1Report: exactToken1Report,
-			feePercentage: feePercentage,
-			multiplier: multiplier,
-			settlementTime: settlementTime,
-			escalationHalt: escalationHalt,
-			disputeDelay: disputeDelay,
-			protocolFee: protocolFee,
-			settlerReward: settlerReward,
-			timeType: true,
-			callbackContract: address(0),
-			trackDisputes: false,
-			callbackGasLimit: 0,
-			protocolFeeRecipient: msg.sender
-		});
-		return _createReportInstance(params);
-	}
+		if (amount > balance - 1) amount = balance - 1;
+		tokenHolder[msg.sender][tokenToGet] = balance - amount;
+		sent = amount;
 
-	/**
-	 * @notice Creates a new report instance for price discovery.
-	 * @param params Report creation parameters:
-	 *   - token1Address: Address of the first token
-	 *   - token2Address: Address of the second token
-	 *   - exactToken1Report: Exact amount of token1 required for the initial report.
-	 *   - feePercentage: Fee in thousandths of basis points (3000 = 0.03%)
-	 *   - multiplier: Dispute amount1 multiplier in percentage points (110 = 1.1x). newAmount1 = oldAmount1 * multipier / 100
-	 *   - settlementTime: Time before report can be settled
-	 *   - escalationHalt: Threshold at which multiplier disappears and newAmount1 = oldAmount1 + 1
-	 *   - disputeDelay: Delay in time before disputes are allowed
-	 *   - protocolFee: Protocol fee in thousandths of basis points (3000 = 0.03%)
-	 *   - settlerReward: Reward for settling the report in wei
-	 *   - timeType: If true: time in seconds, if false: blocks
-	 *   - callbackContract: Settle calls back into this address (callback signature is fixed: openOracleCallback(uint256 reportId, uint256 currentAmount1, uint256 currentAmount2, uint256 settlementTimestamp, address token1, address token2))
-	 *   - trackDisputes: Optional dispute tracking for smart contracts
-	 *   - callbackGasLimit: How much gas the callback must use. Must be safely < block gas limit or funds will be stuck
-	 *   - protocolFeeRecipient: Address that receives accrued protocol fees & initial reporter reward if keepFee false
-	 * @dev Initial reporter reward is msg.value in wei minus settlerReward
-	 * @return reportId The unique identifier for the created report instance
-	 */
-	function createReportInstance(CreateReportParams calldata params) external payable returns (uint256 reportId) {
-		return _createReportInstance(params);
-	}
-
-	function _createReportInstance(CreateReportParams memory params) internal returns (uint256 reportId) {
-		if (params.exactToken1Report == 0) revert ExactToken1CannotBeZero();
-		if (params.token1Address == params.token2Address) revert TokensCannotBeSame();
-		if (params.settlementTime < params.disputeDelay) revert SettleVsDisputeDelayTiming();
-
-		if (msg.value < params.settlerReward) revert MsgValueTooLow();
-		if (params.feePercentage + params.protocolFee > 1e7) revert FeesTooHigh();
-		if (params.multiplier < MULTIPLIER_PRECISION) revert MultiplierTooLow();
-
-		reportId = nextReportId++;
-
-		ReportMeta storage meta = reportMeta[reportId];
-		meta.token1 = params.token1Address;
-		meta.token2 = params.token2Address;
-		meta.exactToken1Report = params.exactToken1Report;
-
-		if (params.feePercentage > 0) meta.feePercentage = params.feePercentage;
-		meta.multiplier = params.multiplier;
-		meta.settlementTime = params.settlementTime;
-
-		uint96 reporterFee;
-		if (msg.value > params.settlerReward) {
-			if (msg.value > type(uint96).max) revert MsgValueTooHigh();
-			reporterFee = uint96(msg.value) - params.settlerReward;
-			meta.fee = reporterFee;
+		if (tokenToGet == ETH_SENTINEL) {
+			(bool success, ) = (to).call{ value: amount }('');
+			if (!success) {
+				revert Errors.EthTransferFailed();
+			}
+		} else {
+			_transferTokens(tokenToGet, address(this), to, amount);
 		}
-
-		meta.escalationHalt = params.escalationHalt;
-
-		if (params.disputeDelay > 0) meta.disputeDelay = params.disputeDelay;
-		if (params.protocolFee > 0) meta.protocolFee = params.protocolFee;
-		meta.settlerReward = params.settlerReward;
-		meta.timeType = params.timeType;
-
-		extraReportData storage extra = extraData[reportId];
-		extra.callbackContract = params.callbackContract;
-		if (params.trackDisputes == true) extra.trackDisputes = params.trackDisputes;
-		extra.callbackGasLimit = params.callbackGasLimit;
-		if (params.protocolFeeRecipient != address(0)) extra.protocolFeeRecipient = params.protocolFeeRecipient;
-
-		bytes32 stateHash = keccak256(
-			abi.encode(
-				params.timeType,
-				params.settlementTime,
-				params.disputeDelay,
-				params.callbackContract,
-				params.callbackGasLimit,
-				params.feePercentage,
-				params.protocolFee,
-				params.settlerReward,
-				reporterFee,
-				params.trackDisputes,
-				params.multiplier,
-				params.escalationHalt,
-				params.protocolFeeRecipient,
-				params.token1Address,
-				params.token2Address,
-				params.exactToken1Report,
-				msg.sender,
-				_getBlockNumber(),
-				uint48(block.timestamp)
-			)
-		);
-
-		extra.stateHash = stateHash;
-
-		emit ReportInstanceCreated(
-			reportId,
-			params.token1Address,
-			params.token2Address,
-			msg.sender,
-			params.protocolFeeRecipient,
-			params.exactToken1Report,
-			params.escalationHalt,
-			params.settlerReward,
-			reporterFee,
-			params.settlementTime,
-			params.disputeDelay,
-			params.feePercentage,
-			params.protocolFee,
-			params.multiplier,
-			params.timeType,
-			params.trackDisputes,
-			params.callbackContract,
-			params.callbackGasLimit,
-			stateHash,
-			block.timestamp
-		);
-
-		return reportId;
 	}
 
 	/**
-	 * @notice Submits the initial price report for a given report ID. Amounts use smallest unit for a given ERC-20.
-	 * @param reportId The unique identifier for the report
-	 * @param amount1 Amount of token1 (must equal exactToken1Report)
-	 * @param amount2 Choose the amount of token2 that equals amount1 in value
-	 * @dev Tokens are pulled from msg.sender and will be returned to msg.sender when settled or disputed
+	 * @notice Initializes virtual token balance sentinels for a token pair.
+	 * @dev Does not transfer tokens.
 	 */
-	function submitInitialReport(uint256 reportId, uint128 amount1, uint128 amount2, bytes32 stateHash) external {
-		_submitInitialReport(reportId, amount1, amount2, stateHash, msg.sender);
+	function dust(address token1, address token2) external {
+		_getDustAmounts(msg.sender, token1, token2);
+	}
+
+	function deposit(address token, uint128 amount, address beneficiary) external payable {
+		if (beneficiary == address(0)) revert Errors.AddressCannotBeZero();
+		if (token != ETH_SENTINEL && msg.value > 0) revert Errors.InvalidMsgValue();
+		_credit(beneficiary, token, amount);
+
+		if (token == ETH_SENTINEL) {
+			if (msg.value != amount) revert Errors.InvalidMsgValue();
+		} else {
+			IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
+		}
 	}
 
 	/**
-	 * @notice Submits the initial price report with a custom reporter address. Amounts use smallest unit for a given ERC-20.
-	 * @param reportId The unique identifier for the report
-	 * @param amount1 Amount of token1 (must equal exactToken1Report)
-	 * @param amount2 Choose the amount of token2 that equals amount1 in value
-	 * @param reporter The address that will receive tokens back when settled or disputed
-	 * @dev Tokens are pulled from msg.sender but will be returned to reporter address
-	 * @dev This overload enables contracts to submit reports on behalf of users
+	 * @notice Pulls `amount` of token from `from` via Permit2 (witness-bound) and credits `beneficiary`'s internal balance.
+	 * @dev Witness binds (beneficiary, relayer = msg.sender, swapper = from, intent). The signer's sig is
+	 *      only usable when the call is relayed by the intended relayer, credits the intended beneficiary,
+	 *      attributes to the intended swapper, and matches the intended per-protocol intent hash.
 	 */
-	function submitInitialReport(
-		uint256 reportId,
-		uint128 amount1,
-		uint128 amount2,
-		bytes32 stateHash,
-		address reporter
+	function depositFromPermit2(
+		uint128 amount,
+		address beneficiary,
+		address from,
+		bytes32 intent,
+		ISignatureTransfer.PermitTransferFrom calldata permit,
+		bytes calldata signature
 	) external {
-		_submitInitialReport(reportId, amount1, amount2, stateHash, reporter);
-	}
+		if (beneficiary == address(0)) revert Errors.AddressCannotBeZero();
+		if (permit.permitted.token == ETH_SENTINEL) revert Errors.InvalidToken();
+		if (permit.permitted.token.code.length == 0) revert Errors.InvalidToken();
+		if (permit.permitted.amount != amount) revert Errors.Permit2AmountMismatch();
 
-	function _submitInitialReport(
-		uint256 reportId,
-		uint128 amount1,
-		uint128 amount2,
-		bytes32 stateHash,
-		address reporter
-	) internal {
-		if (reportStatus[reportId].currentReporter != address(0)) {
-			revert ReportAlreadySubmitted();
-		}
+		bytes32 witness = keccak256(abi.encode(WITNESS_TYPEHASH, beneficiary, msg.sender, from, intent));
 
-		ReportMeta storage meta = reportMeta[reportId];
-		ReportStatus storage status = reportStatus[reportId];
-		extraReportData storage extra = extraData[reportId];
-		bool trackDisputes = extra.trackDisputes;
-
-		if (reportId >= nextReportId) revert InvalidReportId();
-		if (amount1 != meta.exactToken1Report) revert InvalidAmount1();
-		if (amount2 == 0) revert InvalidAmount2();
-		if (extra.stateHash != stateHash) revert InvalidStateHash();
-		if (reporter == address(0) || reporter == address(this)) revert AddressCannotBeZero();
-
-		_transferTokens(meta.token1, msg.sender, address(this), amount1);
-		_transferTokens(meta.token2, msg.sender, address(this), amount2);
-
-		uint48 reportTimestamp = meta.timeType ? uint48(block.timestamp) : _getBlockNumber();
-		status.currentAmount1 = amount1;
-		status.currentAmount2 = amount2;
-		status.currentReporter = payable(reporter);
-		status.initialReporter = payable(reporter);
-		status.reportTimestamp = reportTimestamp;
-		status.lastReportOppoTime = meta.timeType ? _getBlockNumber() : uint48(block.timestamp);
-
-		if (trackDisputes) {
-			disputeRecord storage initialRecord = disputeHistory[reportId][0];
-			initialRecord.amount1 = amount1;
-			initialRecord.amount2 = amount2;
-			initialRecord.reportTimestamp = reportTimestamp;
-			extra.numReports = 1;
-		}
-
-		emit InitialReportSubmitted(reportId, reporter, amount1, amount2, reportTimestamp);
-	}
-
-	/**
-	 * @notice Disputes an existing report. Amounts use smallest unit for a given ERC-20.
-	 * @param reportId The unique identifier for the report instance to dispute
-	 * @param tokenToSwap Token being swapped (token1 or token2). Disputer should choose token whose amount is lower valued
-	 * @param newAmount1 New amount of token1 after the dispute. Must respect contract escalation rules
-	 * @param newAmount2 New amount of token2 after the dispute. Choose the amount of token2 that equals newAmount1 in value
-	 * @param amt2Expected currentAmount2 of the report instance you are disputing (not newAmount2)
-	 * @param stateHash state hash of the report instance you are disputing
-	 * @dev Tokens are pulled from msg.sender and will be returned to msg.sender when settled or disputed
-	 */
-	function disputeAndSwap(
-		uint256 reportId,
-		address tokenToSwap,
-		uint128 newAmount1,
-		uint128 newAmount2,
-		uint128 amt2Expected,
-		bytes32 stateHash
-	) external nonReentrant {
-		_disputeAndSwap(reportId, tokenToSwap, newAmount1, newAmount2, msg.sender, amt2Expected, stateHash);
-	}
-
-	/**
-	 * @notice Disputes an existing report with a custom disputer address. Amounts use smallest unit for a given ERC-20.
-	 * @param reportId The unique identifier for the report instance to dispute
-	 * @param tokenToSwap Token being swapped (token1 or token2). Disputer should choose token whose amount is lower valued
-	 * @param newAmount1 New amount of token1 after the dispute. Must respect contract escalation rules
-	 * @param newAmount2 New amount of token2 after the dispute. Choose the amount of token2 that equals newAmount1 in value
-	 * @param disputer The address that will receive tokens back when settled or disputed
-	 * @param amt2Expected currentAmount2 of the report instance you are disputing (not newAmount2)
-	 * @param stateHash state hash of the report instance you are disputing
-	 * @dev Tokens are pulled from msg.sender but will be returned to disputer address
-	 * @dev This overload enables contracts to submit disputes on behalf of users
-	 */
-	function disputeAndSwap(
-		uint256 reportId,
-		address tokenToSwap,
-		uint128 newAmount1,
-		uint128 newAmount2,
-		address disputer,
-		uint128 amt2Expected,
-		bytes32 stateHash
-	) external nonReentrant {
-		_disputeAndSwap(reportId, tokenToSwap, newAmount1, newAmount2, disputer, amt2Expected, stateHash);
-	}
-
-	function _disputeAndSwap(
-		uint256 reportId,
-		address tokenToSwap,
-		uint128 newAmount1,
-		uint128 newAmount2,
-		address disputer,
-		uint128 amt2Expected,
-		bytes32 stateHash
-	) internal {
-		ReportMeta storage meta = reportMeta[reportId];
-		ReportStatus storage status = reportStatus[reportId];
-		extraReportData storage extra = extraData[reportId];
-
-		_preValidate(newAmount1, status.currentAmount1, meta.multiplier, meta.escalationHalt);
-
-		_validateDispute(reportId, tokenToSwap, newAmount1, newAmount2, meta, status);
-		if (status.currentAmount2 != amt2Expected) revert InvalidAmount2Expected();
-		if (stateHash != extra.stateHash) revert InvalidStateHash();
-		if (disputer == address(0) || disputer == address(this)) revert AddressCannotBeZero();
-
-		bool trackDisputes = extra.trackDisputes;
-		if (tokenToSwap == meta.token1) {
-			_handleToken1Swap(meta, status, newAmount2, disputer, extra.protocolFeeRecipient, newAmount1);
-		} else if (tokenToSwap == meta.token2) {
-			_handleToken2Swap(meta, status, newAmount2, extra.protocolFeeRecipient, newAmount1);
-		} else {
-			revert InvalidTokenToSwap();
-		}
-
-		// Update the report status after the dispute and swap
-		{
-			uint48 reportTimestamp = meta.timeType ? uint48(block.timestamp) : _getBlockNumber();
-			status.currentAmount1 = newAmount1;
-			status.currentAmount2 = newAmount2;
-			status.currentReporter = payable(disputer);
-			status.reportTimestamp = reportTimestamp;
-			status.lastReportOppoTime = meta.timeType ? _getBlockNumber() : uint48(block.timestamp);
-
-			if (trackDisputes) {
-				uint32 nextIndex = extra.numReports;
-				disputeRecord storage record = disputeHistory[reportId][nextIndex];
-				record.amount1 = newAmount1;
-				record.amount2 = newAmount2;
-				record.reportTimestamp = reportTimestamp;
-				record.tokenToSwap = tokenToSwap;
-				extra.numReports = nextIndex + 1;
-			}
-		}
-
-		emit ReportDisputed(reportId, disputer, tokenToSwap, newAmount1, newAmount2, status.reportTimestamp);
-	}
-
-	function _preValidate(
-		uint256 newAmount1,
-		uint256 oldAmount1,
-		uint256 multiplier,
-		uint256 escalationHalt
-	) internal pure {
-		uint256 expectedAmount1;
-
-		if (escalationHalt > oldAmount1) {
-			expectedAmount1 = (oldAmount1 * multiplier) / MULTIPLIER_PRECISION;
-			if (expectedAmount1 > escalationHalt) {
-				expectedAmount1 = escalationHalt;
-			}
-		} else {
-			expectedAmount1 = oldAmount1 + 1;
-		}
-
-		if (newAmount1 != expectedAmount1) {
-			if (escalationHalt <= oldAmount1) {
-				revert EscalationHalted();
-			} else {
-				revert InvalidAmount1();
-			}
-		}
-	}
-
-	/**
-	 * @dev Validates that a dispute is valid according to the oracle rules
-	 */
-	function _validateDispute(
-		uint256 reportId,
-		address tokenToSwap,
-		uint256 newAmount1,
-		uint256 newAmount2,
-		ReportMeta storage meta,
-		ReportStatus storage status
-	) internal view {
-		if (reportId >= nextReportId) revert InvalidReportId();
-		if (newAmount1 == 0 || newAmount2 == 0) revert AmountsCannotBeZero();
-		if (status.currentReporter == address(0)) revert NoReportToDispute();
-		if (meta.timeType) {
-			if (block.timestamp > status.reportTimestamp + meta.settlementTime) revert DisputeTooLate();
-		} else {
-			if (_getBlockNumber() > status.reportTimestamp + meta.settlementTime) revert DisputeTooLate();
-		}
-		if (status.settlementTimestamp != 0) revert AlreadySettled();
-		if (tokenToSwap != meta.token1 && tokenToSwap != meta.token2) revert InvalidTokenToSwap();
-		if (meta.timeType) {
-			if (block.timestamp < status.reportTimestamp + meta.disputeDelay) revert DisputeTooEarly();
-		} else {
-			if (_getBlockNumber() < status.reportTimestamp + meta.disputeDelay) revert DisputeTooEarly();
-		}
-
-		uint256 feeSum = uint256(meta.feePercentage) + uint256(meta.protocolFee);
-		if (feeSum > 0) {
-			uint256 oldAmount1 = status.currentAmount1;
-			uint256 oldPrice = Math.mulDiv(oldAmount1, PRICE_PRECISION, status.currentAmount2);
-			uint256 feeBoundary = Math.mulDiv(oldPrice, feeSum, PERCENTAGE_PRECISION);
-			uint256 lowerBoundary = Math.mulDiv(oldPrice, PERCENTAGE_PRECISION, PERCENTAGE_PRECISION + feeSum);
-			uint256 upperBoundary = oldPrice + feeBoundary;
-			uint256 newPrice = Math.mulDiv(newAmount1, PRICE_PRECISION, newAmount2);
-
-			if (newPrice >= lowerBoundary && newPrice <= upperBoundary) {
-				revert NewPriceInsideFeeBoundary();
-			}
-		}
-	}
-
-	/**
-	 * @dev Handles token swaps when token1 is being swapped during a dispute
-	 */
-	function _handleToken1Swap(
-		ReportMeta storage meta,
-		ReportStatus storage status,
-		uint256 newAmount2,
-		address disputer,
-		address protocolFeeRecipient,
-		uint256 newAmount1
-	) internal {
-		uint256 oldAmount1 = status.currentAmount1;
-		uint256 oldAmount2 = status.currentAmount2;
-		address token1 = meta.token1;
-		address token2 = meta.token2;
-		uint256 fee = (oldAmount1 * meta.feePercentage) / PERCENTAGE_PRECISION;
-		uint256 protocolFee = (oldAmount1 * meta.protocolFee) / PERCENTAGE_PRECISION;
-
-		if (protocolFee > 0) protocolFees[protocolFeeRecipient][token1] += protocolFee;
-
-		uint256 requiredToken1Contribution = newAmount1;
-
-		uint256 netToken2Contribution = newAmount2 >= oldAmount2 ? newAmount2 - oldAmount2 : 0;
-		uint256 netToken2Receive = newAmount2 < oldAmount2 ? oldAmount2 - newAmount2 : 0;
-
-		if (netToken2Contribution > 0) {
-			IERC20(token2).safeTransferFrom(msg.sender, address(this), netToken2Contribution);
-		}
-
-		if (netToken2Receive > 0) {
-			IERC20(token2).safeTransfer(disputer, netToken2Receive);
-		}
-
-		IERC20(token1).safeTransferFrom(
-			msg.sender,
-			address(this),
-			requiredToken1Contribution + oldAmount1 + fee + protocolFee
+		ISignatureTransfer(PERMIT2).permitWitnessTransferFrom(
+			permit,
+			ISignatureTransfer.SignatureTransferDetails({ to: address(this), requestedAmount: amount }),
+			from,
+			witness,
+			WITNESS_TYPE_STRING,
+			signature
 		);
 
-		_transferTokens(token1, address(this), status.currentReporter, 2 * oldAmount1 + fee);
+		_credit(beneficiary, permit.permitted.token, amount);
 	}
 
 	/**
-	 * @dev Handles token swaps when token2 is being swapped during a dispute
+	 * @notice Transfers `amount` of `token` from `from`'s internal balance to `to`'s internal balance.
+	 * @dev When `from == msg.sender`, no allowance is required. Otherwise, spends from
+	 *      `from`'s internal allowance to msg.sender. Preserves the 1-unit sentinel on `from`'s slot.
 	 */
-	function _handleToken2Swap(
-		ReportMeta storage meta,
-		ReportStatus storage status,
-		uint256 newAmount2,
-		address protocolFeeRecipient,
-		uint256 newAmount1
-	) internal {
-		uint256 oldAmount1 = status.currentAmount1;
-		uint256 oldAmount2 = status.currentAmount2;
-		address token1 = meta.token1;
-		address token2 = meta.token2;
-		uint256 fee = (oldAmount2 * meta.feePercentage) / PERCENTAGE_PRECISION;
-		uint256 protocolFee = (oldAmount2 * meta.protocolFee) / PERCENTAGE_PRECISION;
+	function internalTransferFrom(address from, address to, address token, uint128 amount) external {
+		if (to == address(0)) revert Errors.AddressCannotBeZero();
+		if (amount == 0) return;
 
-		if (protocolFee > 0) protocolFees[protocolFeeRecipient][token2] += protocolFee;
-
-		uint256 requiredToken1Contribution = newAmount1;
-
-		uint256 netToken1Contribution =
-			requiredToken1Contribution > (oldAmount1) ? requiredToken1Contribution - (oldAmount1) : 0;
-
-		if (netToken1Contribution > 0) {
-			IERC20(token1).safeTransferFrom(msg.sender, address(this), netToken1Contribution);
+		if (from != msg.sender) {
+			uint256 allowed = internalAllowance[from][msg.sender][token];
+			if (allowed < amount) revert Errors.InsufficientInternalAllowance();
+			if (allowed != type(uint256).max) {
+				internalAllowance[from][msg.sender][token] = allowed - amount;
+			}
 		}
 
-		IERC20(token2).safeTransferFrom(msg.sender, address(this), newAmount2 + oldAmount2 + fee + protocolFee);
+		uint256 bal = tokenHolder[from][token];
+		if (bal <= amount) revert Errors.InsufficientInternalBalance();
+		tokenHolder[from][token] = bal - amount;
+		_credit(to, token, amount);
+	}
 
-		_transferTokens(token2, address(this), status.currentReporter, 2 * oldAmount2 + fee);
+	/**
+	 * @notice Debits caller's internal balance and pushes `amount` of `token` externally to `to`.
+	 *         On push failure (ETH call revert / ERC20 non-standard return / ETH xfer OOG within 50k gas),
+	 *         falls back to crediting `to`'s internal balance instead.
+	 * @dev Caller's slot preserves the 1-unit sentinel.
+	 */
+	function pushOrCredit(address token, address to, uint128 amount) external {
+		if (to == address(0)) revert Errors.AddressCannotBeZero();
+		if (amount == 0) return;
+		uint256 bal = tokenHolder[msg.sender][token];
+		if (bal <= amount) revert Errors.InsufficientInternalBalance();
+		tokenHolder[msg.sender][token] = bal - amount;
+
+		if (token == ETH_SENTINEL) {
+			(bool ok, ) = to.call{ value: amount, gas: 50000 }('');
+			if (!ok) _credit(to, token, amount);
+		} else {
+			(bool success, bytes memory returndata) = token.call(
+				abi.encodeWithSelector(IERC20.transfer.selector, to, amount)
+			);
+			bool ok =
+				success &&
+					((returndata.length > 0 && abi.decode(returndata, (bool))) ||
+						(returndata.length == 0 && token.code.length > 0));
+			if (!ok) _credit(to, token, amount);
+		}
+	}
+
+	/**
+	 * @notice Approves `spender` to spend caller's internal balance of `token`.
+	 * @dev This allowance is only for balances tracked inside OpenOracle. `type(uint256).max`
+	 *      is treated as infinite allowance and is not decremented. Setting `amount` to zero revokes.
+	 *      A spender may use this through internalTransferFrom or delegated report/dispute
+	 *      funding when the corresponding tryInternalBalance flag is true.
+	 * @param spender Address allowed to spend caller's internal balance
+	 * @param token Token address, or address(0) for internal ETH balance
+	 * @param amount Allowance amount
+	 */
+	function approveInternal(address spender, address token, uint256 amount) external {
+		if (spender == address(0)) revert Errors.AddressCannotBeZero();
+		if (internalAllowance[msg.sender][spender][token] != 0 && amount != 0) revert Errors.NonZeroAllowance();
+		internalAllowance[msg.sender][spender][token] = amount;
+		emit InternalApproval(msg.sender, spender, token, amount);
 	}
 
 	/**
@@ -766,40 +667,149 @@ contract OpenOracle is ReentrancyGuard {
 		if (amount == 0) return; // Gas optimization: skip zero transfers
 
 		if (from == address(this)) {
-			(bool success, bytes memory returndata) = token.call(
-				abi.encodeWithSelector(IERC20.transfer.selector, to, amount)
-			);
-
-			if (
-				success &&
-				((returndata.length > 0 && abi.decode(returndata, (bool))) ||
-					(returndata.length == 0 && address(token).code.length > 0))
-			) {
-				return;
-			}
-
-			protocolFees[to][token] += amount;
+			IERC20(token).safeTransfer(to, amount);
 		} else {
 			IERC20(token).safeTransferFrom(from, to, amount);
 		}
 	}
 
-	/**
-	 * @dev Internal function to send ETH to a recipient
-	 */
-	function _sendEth(address payable recipient, uint256 amount) internal {
-		if (amount == 0) return; // Gas optimization: skip zero transfers
+	function _validateTiming(TimingBoundaries memory timing) internal view {
+		uint256 timestamp = timing.blockTimestamp;
+		uint256 timestampBound = timing.blockTimestampBound;
+		uint256 blockNumber = timing.blockNumber;
+		uint256 blockNumberBound = timing.blockNumberBound;
+		uint256 currentBlockNumber = _getBlockNumber();
+		if (block.timestamp + timestampBound < timestamp || block.timestamp > timestamp + timestampBound) {
+			revert Errors.InvalidTiming();
+		}
+		if (
+			currentBlockNumber + blockNumberBound < blockNumber || currentBlockNumber > blockNumber + blockNumberBound
+		) {
+			revert Errors.InvalidTiming();
+		}
+	}
 
-		(bool success, ) = recipient.call{ value: amount, gas: 40000 }('');
-		if (!success) {
-			accruedProtocolFees[recipient] += amount;
+	function _getDustAmounts(address reporter, address token1, address token2) internal {
+		_dust(reporter, token1);
+		_dust(reporter, token2);
+	}
+
+	function _dust(address user, address token) internal {
+		if (tokenHolder[user][token] == 0) {
+			tokenHolder[user][token] = 1;
 		}
 	}
 
 	/**
-	 * @dev Gets the current block number (returns L1 block number for L1 deployment)
+	 * @dev Credit assets to a recipient's internal balance, seeding the virtual
+	 *      sentinel on first credit.
 	 */
+	function _credit(address recipient, address token, uint256 amount) internal {
+		uint256 bal = tokenHolder[recipient][token];
+		tokenHolder[recipient][token] = bal == 0 ? amount + 1 : bal + amount;
+	}
+
+	function _tryInternalBalanceFull(
+		address owner,
+		address token,
+		uint256 amount,
+		bool tib
+	) internal returns (uint256 ethNeeded) {
+		uint256 fromInternal = 0;
+
+		if (tib) {
+			uint256 internalBalance = tokenHolder[owner][token];
+			uint256 allowed;
+
+			if (internalBalance > 1) {
+				uint256 available = internalBalance - 1;
+				fromInternal = available > amount ? amount : available;
+
+				bool isNotOwner = (owner != msg.sender);
+				if (isNotOwner) allowed = internalAllowance[owner][msg.sender][token];
+
+				if (isNotOwner) {
+					if (allowed < fromInternal) fromInternal = allowed;
+				}
+
+				if (fromInternal > 0) {
+					tokenHolder[owner][token] = internalBalance - fromInternal;
+					if (isNotOwner) {
+						if (allowed != type(uint256).max) {
+							internalAllowance[owner][msg.sender][token] = allowed - fromInternal;
+						}
+					}
+				}
+			}
+		}
+
+		// Strict delegation: if caller asked to fund from `owner`'s internal balance but the
+		// available balance + allowance falls short, revert.
+		if (tib && owner != msg.sender && fromInternal < amount) revert Errors.InsufficientInternalBalance();
+
+		uint256 fromExternal = amount - fromInternal;
+
+		if (token == ETH_SENTINEL) {
+			return fromExternal; // ETH needed from msg.value
+		}
+
+		if (fromExternal > 0) {
+			_transferTokens(token, msg.sender, address(this), fromExternal);
+		}
+		return 0;
+	}
+
 	function _getBlockNumber() internal view returns (uint48) {
 		return uint48(block.number);
+	}
+
+	function _hasFlag(uint8 flags, uint8 mask) internal pure returns (bool) {
+		return flags & mask != 0;
+	}
+	/**
+	 * @dev Packs the canonical (OracleGame, PreimageHelper) memory buffer at `mem`
+	 *      (laid out as abi.encode(OracleGame, PreimageHelper), 0x300 bytes) into a
+	 *      tight 235-byte blob in place. Returns the packed length.
+	 *
+	 *      Layout assumptions:
+	 *        mem[0x000 .. 0x280)  OracleGame  (20 slots)
+	 *        mem[0x280 .. 0x300)  PreimageHelper (4 slots)
+	 *
+	 *      Read-before-write ordering is enforced by processing fields left-to-right
+	 *      in slot order. For every packed offset P_N the corresponding source slot
+	 *      offset 32*N satisfies P_N + 32 ≤ 32*(N+1), so a 32-byte mstore at P_N
+	 *      cannot trample any unread source slot. The trailing bytes past the final
+	 *      packed offset (235) are scratch and ignored by the log2 length.
+	 */
+	function _packMem(uint256 mem) internal pure returns (uint256 packedLen) {
+		assembly ('memory-safe') {
+			// OracleGame (20 slots → 203 bytes)
+			mstore(mem, shl(128, mload(mem))) // currentAmount1   (W=16)
+			mstore(add(mem, 16), shl(128, mload(add(mem, 0x20)))) // currentAmount2   (W=16)
+			mstore(add(mem, 32), shl(96, mload(add(mem, 0x40)))) // currentReporter  (W=20)
+			mstore(add(mem, 52), shl(208, mload(add(mem, 0x60)))) // reportTimestamp  (W=6)
+			mstore(add(mem, 58), shl(208, mload(add(mem, 0x80)))) // settlementTimestamp (W=6)
+			mstore(add(mem, 64), shl(96, mload(add(mem, 0xa0)))) // token1           (W=20)
+			mstore(add(mem, 84), shl(208, mload(add(mem, 0xc0)))) // lastReportOppoTime  (W=6)
+			mstore(add(mem, 90), shl(208, mload(add(mem, 0xe0)))) // settlementTime   (W=6)
+			mstore(add(mem, 96), shl(128, mload(add(mem, 0x100)))) // escalationHalt   (W=16)
+			mstore(add(mem, 112), shl(96, mload(add(mem, 0x120)))) // protocolFeeRecipient (W=20)
+			mstore(add(mem, 132), shl(160, mload(add(mem, 0x140)))) // settlerReward    (W=12)
+			mstore(add(mem, 144), shl(96, mload(add(mem, 0x160)))) // token2           (W=20)
+			mstore(add(mem, 164), shl(232, mload(add(mem, 0x180)))) // numReports       (W=3)
+			mstore(add(mem, 167), shl(232, mload(add(mem, 0x1a0)))) // disputeDelay     (W=3)
+			mstore(add(mem, 170), shl(232, mload(add(mem, 0x1c0)))) // feePercentage    (W=3)
+			mstore(add(mem, 173), shl(240, mload(add(mem, 0x1e0)))) // multiplier       (W=2)
+			mstore(add(mem, 175), shl(96, mload(add(mem, 0x200)))) // callbackContract (W=20)
+			mstore(add(mem, 195), shl(224, mload(add(mem, 0x220)))) // callbackGasLimit (W=4)
+			mstore(add(mem, 199), shl(232, mload(add(mem, 0x240)))) // protocolFee      (W=3)
+			mstore8(add(mem, 202), byte(31, mload(add(mem, 0x260)))) // flags            (W=1)
+
+			// PreimageHelper (skip reportId at slot 20 — already topic1)
+			mstore(add(mem, 203), shl(96, mload(add(mem, 0x2a0)))) // creator          (W=20)
+			mstore(add(mem, 223), shl(208, mload(add(mem, 0x2c0)))) // blockTimestamp   (W=6 narrow)
+			mstore(add(mem, 229), shl(208, mload(add(mem, 0x2e0)))) // blockNumber      (W=6 narrow)
+		}
+		packedLen = 235;
 	}
 }

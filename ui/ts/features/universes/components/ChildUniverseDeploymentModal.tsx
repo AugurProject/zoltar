@@ -7,7 +7,7 @@ import type { ActionAvailability, ReadinessBlocker } from '../../types.js'
 type ChildUniverseDeploymentModalProps = {
 	actionAvailability: ActionAvailability
 	children?: ComponentChildren
-	description: ComponentChildren
+	description?: ComponentChildren
 	idleLabel: ComponentChildren
 	isOpen: boolean
 	onClose: () => void

@@ -89,16 +89,31 @@
 					<h2>OpenOracle Role</h2>
 					<p>
 						The generic oracle lifecycle comes first. Placeholder's coordinator
-						is only a consumer of the report that OpenOracle settles.
+						calls OpenOracle and becomes the initial reporter, then consumes the
+						settled result through OpenOracle's callback.
 					</p>
 				<p>
-					OpenOracle creates report instances for a token pair. Reporters submit
-					token amounts, later reporters can dispute by posting the
-					contract-required replacement amounts, and a report can settle after
-					its timing window. When a
+					OpenOracle atomically creates and funds a report for a token pair.
+					Only its state hash is stored for an active game; the full preimage is
+					emitted as packed report data. Later reporters can dispute by posting the
+					contract-required replacement amounts. A dispute is valid only while
+					<code>currentTime &lt; reportTimestamp + settlementTime</code>; settlement
+					becomes valid at equality, when a dispute is already too late. When a
 					<span class="term" tabindex="0">callback</span>
 					contract is configured, settlement calls that contract with the
 					settled amounts.
+				</p>
+				<p>
+					The submitted and disputed preimages use raw <code>log2</code> data:
+					topic 1 is the report ID and the log data is exactly 235 packed bytes,
+					not ABI-encoded dynamic bytes. Indexers filter the OpenOracle emitter and
+					lifecycle signature, apply each replacement chronologically, decode it
+					with <a href="../shared/ts/openOracle.ts"><code>shared/ts/openOracle.ts</code></a>,
+					and verify the resulting preimage hash. <code>ReportSettled</code> contains
+					only the report ID, so its block supplies the final settlement timestamp
+					or block number according to the report's <code>TIME_TYPE</code> flag. The
+					full indexing procedure is in the
+					<a href="./event-stream.md#openoracle-packed-state-reconstruction">event-stream reference</a>.
 				</p>
 				<p>
 					In this repository the pair is WETH as <code>token1</code> and REP as
@@ -282,16 +297,19 @@
 							height="86"
 							rx="8"
 						></rect>
-						<text class="svg-label" x="678" y="96" text-anchor="middle">
+						<text class="svg-label" x="678" y="90" text-anchor="middle">
 							OpenOracle
 						</text>
-						<text class="svg-small" x="678" y="119" text-anchor="middle">
-							sponsor posts initial report
+						<text class="svg-small" x="678" y="108" text-anchor="middle">
+							coordinator reports
 						</text>
-						<text class="svg-small" x="678" y="135" text-anchor="middle">
+						<text class="svg-small" x="678" y="123" text-anchor="middle">
+							sponsor funds
+						</text>
+						<text class="svg-small" x="678" y="138" text-anchor="middle">
 							disputer may replace
 						</text>
-						<text class="svg-small" x="678" y="151" text-anchor="middle">
+						<text class="svg-small" x="678" y="153" text-anchor="middle">
 							settler finalizes
 						</text>
 						<path
@@ -373,8 +391,8 @@
 					Report funding is caller supplied. The coordinator computes
 					<code>requestPriceEthCost</code>, the caller-funded
 					<span class="term" tabindex="0">request bounty</span>, from the
-					current base fee, the callback gas limit, and the gas the coordinator
-					expects to spend inside <code>openOracleReportPrice</code>:
+						current base fee, the callback gas limit, and the gas the coordinator
+						expects to spend on report submission and processing:
 				</p>
 				<figure class="equation" id="eq-openoracle-request-price-cost">
 					<math
@@ -417,8 +435,10 @@
 					OpenOracle and refunds any excess. That call also submits the initial
 					WETH/REP report inside the same transaction, so the refresh sponsor
 					funds the ETH bounty plus the initial OpenOracle position up front.
-					Disputes can still replace those amounts, and settlement returns the
-					final accepted amounts through the callback.
+					The coordinator, not the sponsor, is recorded as the initial reporter.
+					Disputes can replace that position. At settlement OpenOracle credits the
+					final position to the final reporter; the callback supplies the accepted
+					amounts to the coordinator but does not transfer them.
 				</p>
 				<p id="rolling-dispute-exclusivity">
 					The coordinator refuses <code>requestPrice(proposedRepPerEthPrice, requestedInitialWeth)</code> while its
@@ -436,10 +456,11 @@
 				</p>
 				<p>
 					The money flow is easiest to follow if each role is separated. The
-					triggering caller pays the ETH request bounty, posts the initial
-					WETH/REP report amounts, and becomes the queue owner for that stale
-					refresh window. The eventual settler still receives the settler
-					reward, and disputes can replace the initial report before
+					triggering caller pays the ETH request bounty, supplies the initial
+					WETH/REP, and becomes the queue owner for that stale refresh window.
+					The coordinator transfers and approves those assets, calls OpenOracle,
+					and becomes the initial reporter. The eventual settler still receives
+					the settler reward, and disputes can replace the initial report before
 					settlement.
 				</p>
 				<p>
@@ -561,7 +582,7 @@
 					</math>
 					<p class="equation-caption">
 						<span class="equation-label">Worked Initial Report Stake</span>The
-						refresh sponsor posts exactly
+						refresh sponsor supplies exactly
 						<code>0.005621086396153847 WETH</code> and approximately
 						<code>12.422600935500001870 REP</code>. Because this example requests
 						zero additional WETH, the selected amount equals the minimum computed
@@ -571,53 +592,20 @@
 					</p>
 				</figure>
 				<p>
-					If no dispute replaces the report, settlement returns the full REP and
-					WETH amounts to the current reporter. The ETH bounty is split between
-					the initial reporter reward and the settler reward:
+					If no dispute replaces the report, settlement credits the full REP and
+					WETH amounts to the coordinator as current reporter in OpenOracle's
+					internal balances.
+					The reporter withdraws those balances separately. The entire ETH request
+					bounty is configured as the settler reward and is likewise credited to
+					the settler's internal ETH balance; OpenOracle 0.2.0 has no separate
+					reporter ETH reward. For coordinator-created reports, the coordinator
+					is the initial reporter and forwards its withdrawable WETH and REP
+					balance to the request sponsor during the settlement callback. If a
+					disputer is the final reporter, that disputer receives the final position;
+					the coordinator instead forwards only the prior-reporter swap proceeds
+					credited to its own internal balances. The recovery path performs the
+					same coordinator-owned withdrawal if the callback failed.
 				</p>
-				<figure class="equation" id="eq-openoracle-payout-snapshot-example">
-					<math
-						display="block"
-						aria-label="Worked no-dispute payout split showing settler reward and reporter reward in wei"
-						data-source="settlerReward = 69,594,403 \cdot 2 \cdot 100,000 = 13,918,880,600,000 wei; reporterReward = 1,141,348,209,200,101 - 13,918,880,600,000 = 1,127,429,328,600,101 wei"
-					>
-						<mtable>
-							<mtr>
-								<mtd><mi>settlerReward</mi></mtd>
-								<mtd><mo>=</mo></mtd>
-								<mtd><mn>69,594,403</mn></mtd>
-								<mtd><mo>&#x22C5;</mo></mtd>
-								<mtd><mn>2</mn></mtd>
-								<mtd><mo>&#x22C5;</mo></mtd>
-								<mtd><mn>100,000</mn></mtd>
-								<mtd><mo>=</mo></mtd>
-								<mtd><mn>13,918,880,600,000</mn></mtd>
-								<mtd><mtext>&nbsp;wei</mtext></mtd>
-							</mtr>
-							<mtr>
-								<mtd><mi>reporterReward</mi></mtd>
-								<mtd><mo>=</mo></mtd>
-								<mtd><mn>1,141,348,209,200,101</mn></mtd>
-								<mtd><mo>-</mo></mtd>
-								<mtd><mn>13,918,880,600,000</mn></mtd>
-								<mtd><mo>=</mo></mtd>
-								<mtd><mn>1,127,429,328,600,101</mn></mtd>
-								<mtd><mtext>&nbsp;wei</mtext></mtd>
-							</mtr>
-						</mtable>
-					</math>
-					<p class="equation-caption">
-						<span class="equation-label">Worked No-Dispute Payout</span>If the
-						same account triggers the request, submits the initial report, and
-						settles it undisputed, that account gets back the full REP stake,
-						the full WETH stake, and the entire ETH bounty in two pieces:
-						<code>0.001127429328600101 ETH</code> as reporter reward and
-						<code>0.0000139188806 ETH</code> as settler reward. If different
-						accounts fill those roles, the WETH/REP principal goes to the
-						current reporter, the larger ETH reward goes to the initial
-						reporter, and the smaller ETH reward goes to the settler.
-					</p>
-				</figure>
 				<p>
 					Escalation-game REP deposits are the exception to the staged callback
 					path. When the pool has active security-bond allowance,
@@ -743,8 +731,7 @@
 					may pass zero to use that minimum or request a larger initial WETH amount.
 					The coordinator sets
 					<code>initialWethReport = max(minimumToken1Report(), requestedInitialWeth)</code>,
-					snapshots that selected amount into OpenOracle's
-					<code>exactToken1Report</code>, and derives
+					sets OpenOracle <code>currentAmount1</code> to that selected amount, and derives
 					<code>amount2 = ceil(initialWethReport * proposedRepPerEthPrice / 1e18)</code>
 					inside the same transaction. If that price is wrong
 					by at least the configured target error (initially five percent), the resulting correction opportunity is
@@ -879,10 +866,9 @@
 				</p>
 				<h2>Callback Rejection and Recovery</h2>
 				<p>
-					OpenOracle settles with a low-level callback and emits whether that
-					callback succeeded. It does not automatically undo settlement when the
-					callback returns
-					<code>false</code>. The coordinator accepts callbacks only from the
+					OpenOracle settles with a low-level callback whose success is intentionally
+					not stored or emitted. It does not automatically undo settlement when the
+					callback fails. The coordinator accepts callbacks only from the
 					configured <code>OpenOracle</code> and only for the current pending
 					report id. If those checks revert inside the low-level call, the
 					OpenOracle report can still be settled while the coordinator remains
@@ -1626,20 +1612,20 @@
 							</td>
 						</tr>
 						<tr>
-							<td>OpenOracle <code>exactToken1Report</code></td>
+							<td>OpenOracle initial <code>currentAmount1</code></td>
 							<td>
-								The greater of <code>minimumToken1Report()</code> and the caller's
+								The greater of <code>minimumToken1Report()</code> and the sponsor's
 								<code>requestedInitialWeth</code>
 							</td>
 							<td>
-								Snapshots the selected initial WETH amount for this report instance;
-								callers may voluntarily post more than the minimum.
+								The sponsor may request and fund more than the minimum; the coordinator
+								submits the selected amount as <code>currentAmount1</code>.
 							</td>
 						</tr>
 						<tr>
 							<td><code>escalationHalt</code></td>
 							<td>
-								<code>10x</code> the selected OpenOracle <code>exactToken1Report</code> in WETH
+								<code>10x</code> the selected OpenOracle initial <code>currentAmount1</code> in WETH
 							</td>
 							<td>
 								Stops multiplicative report-size escalation at <code>10x</code>;
@@ -1650,16 +1636,17 @@
 							<td><code>settlerReward</code></td>
 							<td>
 								<math
-									aria-label="block base fee times 2 times gas consumed open oracle report price"
-									data-source="block.basefee \cdot 2 \cdot gasConsumedOpenOracleReportPrice"
-									><mi>block.basefee</mi><mo>&#x22C5;</mo><mn>2</mn
-									><mo>&#x22C5;</mo
-									><mi>gasConsumedOpenOracleReportPrice</mi></math
+									aria-label="block base fee times 4 times the sum of callback gas limit and gas consumed open oracle report price, plus 101"
+									data-source="block.basefee \cdot 4 \cdot (callbackGasLimit + gasConsumedOpenOracleReportPrice) + 101"
+									><mi>block.basefee</mi><mo>&#x22C5;</mo><mn>4</mn
+									><mo>&#x22C5;</mo><mo>(</mo><mi>callbackGasLimit</mi
+									><mo>+</mo><mi>gasConsumedOpenOracleReportPrice</mi
+									><mo>)</mo><mo>+</mo><mn>101</mn></math
 								>
 							</td>
 							<td>
-								Pays the account that settles the report and triggers the
-								callback.
+									The full request bounty is assigned to the account that settles the
+									report and triggers the callback.
 							</td>
 						</tr>
 						<tr>
@@ -1677,8 +1664,9 @@
 							<td><code>disputeDelay</code></td>
 							<td><code>0</code></td>
 							<td>
-								Allows disputes immediately after each report; the dispute
-								opportunity still lasts until the settlement delay elapses.
+								Allows disputes immediately after each report and strictly before
+								its settlement deadline. At the deadline, settlement is valid and a
+								dispute is too late.
 							</td>
 						</tr>
 						<tr>

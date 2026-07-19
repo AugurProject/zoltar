@@ -13,6 +13,24 @@ uint256 constant PRICE_VALID_FOR_SECONDS = 5 minutes;
 uint256 constant PRICE_PRECISION = 1e18;
 uint256 constant MAX_OPERATION_VALID_FOR_SECONDS = 5 minutes;
 uint256 constant OPEN_ORACLE_PERCENTAGE_PRECISION = 1e7;
+uint8 constant OPEN_ORACLE_FLAG_TIME_TYPE = 1 << 0;
+uint8 constant OPEN_ORACLE_FLAG_TRACK_DISPUTES = 1 << 1;
+uint8 constant OPEN_ORACLE_FLAG_STORE_ALL = 1 << 2;
+
+interface IStoredOpenOracleGame {
+	function finalizedGame(
+		uint256 reportId
+	)
+		external
+		view
+		returns (
+			uint128 currentAmount1,
+			uint128 currentAmount2,
+			address currentReporter,
+			uint48 reportTimestamp,
+			uint48 settlementTimestamp
+		);
+}
 
 enum OperationType {
 	Liquidation,
@@ -235,9 +253,7 @@ contract OpenOraclePriceCoordinator {
 	}
 
 	function getRequestPriceEthCost() public view returns (uint256) {
-		uint256 ethCost =
-			block.basefee * 4 * (getSettlementCallbackGasLimit() + gasConsumedOpenOracleReportPrice) + 101;
-		return ethCost;
+		return block.basefee * 4 * (getSettlementCallbackGasLimit() + gasConsumedOpenOracleReportPrice) + 101;
 	}
 
 	function getQueuedOperationEthCost() public pure returns (uint256) {
@@ -292,46 +308,41 @@ contract OpenOraclePriceCoordinator {
 			escalationHaltMultiplierBps,
 			SecurityPoolUtils.BPS_DENOMINATOR
 		);
-		uint256 settlerReward = block.basefee * 2 * gasConsumedOpenOracleReportPrice;
+		uint256 settlerReward = ethCost;
 		require(initialWethReport <= type(uint128).max, 'Oracle initial WETH report amount exceeds uint128 maximum');
+		require(amount2 <= type(uint128).max, 'Oracle initial REP report amount exceeds uint128 maximum');
 		require(escalationHalt <= type(uint128).max, 'Oracle escalation halt amount exceeds uint128 maximum');
 		require(settlerReward <= type(uint96).max, 'Oracle settler reward exceeds uint96 maximum');
 		pendingReportMaxSettlementBaseFee =
 			(block.basefee * maxSettlementBaseFeeMultiplierBps) / SecurityPoolUtils.BPS_DENOMINATOR;
 
-		OpenOracle.CreateReportParams memory reportparams = OpenOracle.CreateReportParams({
-			exactToken1Report: uint128(initialWethReport),
-			escalationHalt: uint128(escalationHalt), // amount of token1 past which escalation stops but disputes can still happen
-			settlerReward: uint96(settlerReward), // eth paid to settler in wei
-			token1Address: address(weth), // exact WETH liquidity side of the oracle report instance
+		uint8 flags = OPEN_ORACLE_FLAG_STORE_ALL;
+		if (timeType) flags |= OPEN_ORACLE_FLAG_TIME_TYPE;
+		if (trackDisputes) flags |= OPEN_ORACLE_FLAG_TRACK_DISPUTES;
+		OpenOracle.OracleGame memory reportParams = OpenOracle.OracleGame({
+			currentAmount1: uint128(initialWethReport),
+			currentAmount2: uint128(amount2),
+			currentReporter: address(this),
+			reportTimestamp: 0,
+			settlementTimestamp: 0,
+			token1: address(weth),
+			lastReportOppoTime: 0,
 			settlementTime: settlementTime,
+			escalationHalt: uint128(escalationHalt),
+			protocolFeeRecipient: protocolFeeRecipient,
+			settlerReward: uint96(settlerReward),
+			token2: address(reputationToken),
+			numReports: 0,
 			disputeDelay: disputeDelay,
-			protocolFee: protocolFee,
-			token2Address: address(reputationToken), // REP amount expresses the proposed REP/ETH price
-			callbackGasLimit: getSettlementCallbackGasLimit(), // gas the settlement callback must use
 			feePercentage: feePercentage,
 			multiplier: multiplier,
-			timeType: timeType,
-			trackDisputes: trackDisputes,
-			callbackContract: address(this), // contract address for settle to call back into
-			protocolFeeRecipient: protocolFeeRecipient
+			callbackContract: address(this),
+			callbackGasLimit: getSettlementCallbackGasLimit(),
+			protocolFee: protocolFee,
+			flags: flags
 		});
 
 		pendingReportSponsor = sponsor;
-		pendingReportId = openOracle.createReportInstance{ value: ethCost }(reportparams);
-		_submitInitialReport(pendingReportId, sponsor, initialWethReport, amount2);
-		emit PriceRequested(pendingReportId, pendingReportMaxSettlementBaseFee);
-		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PriceRequested, pendingReportId, 0);
-	}
-
-	function _submitInitialReport(
-		uint256 reportId,
-		address sponsor,
-		uint256 initialWethReport,
-		uint256 amount2
-	) private {
-		require(amount2 <= type(uint128).max, 'Oracle initial REP report amount exceeds uint128 maximum');
-		(bytes32 stateHash, , , , , ) = openOracle.extraData(reportId);
 		require(
 			weth.transferFrom(sponsor, address(this), initialWethReport),
 			'WETH transfer for initial report failed'
@@ -342,13 +353,27 @@ contract OpenOraclePriceCoordinator {
 		);
 		require(weth.approve(address(openOracle), initialWethReport), 'WETH approval for initial report failed');
 		require(reputationToken.approve(address(openOracle), amount2), 'REP approval for initial report failed');
-		openOracle.submitInitialReport(reportId, uint128(initialWethReport), uint128(amount2), stateHash, sponsor);
+		pendingReportId = openOracle.report{ value: ethCost }(
+			reportParams,
+			false,
+			false,
+			OpenOracle.TimingBoundaries({
+				blockNumber: 0,
+				blockNumberBound: 0,
+				blockTimestamp: 0,
+				blockTimestampBound: 0
+			})
+		);
+		emit PriceRequested(pendingReportId, pendingReportMaxSettlementBaseFee);
+		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PriceRequested, pendingReportId, 0);
 	}
 
 	function recoverSettledPendingReport() public {
 		uint256 reportId = pendingReportId;
 		require(reportId != 0, 'No pending oracle price request can be recovered');
-		(, uint256 settlementTimestamp) = openOracle.getSettlementData(reportId);
+		(, , , , uint48 settlementTimestamp) = IStoredOpenOracleGame(address(openOracle)).finalizedGame(reportId);
+		require(settlementTimestamp != 0, 'Pending oracle report has not settled');
+		_withdrawOpenOracleReporterBalances(pendingReportSponsor);
 		pendingReportId = 0;
 		pendingReportSponsor = address(0);
 		pendingReportMaxSettlementBaseFee = 0;
@@ -384,6 +409,7 @@ contract OpenOraclePriceCoordinator {
 	) external {
 		require(msg.sender == address(openOracle), 'Only OpenOracle can call the security pool oracle callback');
 		require(reportId == pendingReportId, 'Oracle callback report id does not match the pending request');
+		_withdrawOpenOracleReporterBalances(pendingReportSponsor);
 		pendingReportId = 0;
 		pendingReportSponsor = address(0);
 		if (block.basefee > pendingReportMaxSettlementBaseFee) {
@@ -415,6 +441,11 @@ contract OpenOraclePriceCoordinator {
 			}
 		}
 		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PriceReported, reportId, 0);
+	}
+
+	function _withdrawOpenOracleReporterBalances(address sponsor) private {
+		openOracle.withdrawTo(address(weth), type(uint256).max, sponsor);
+		openOracle.withdrawTo(address(reputationToken), type(uint256).max, sponsor);
 	}
 
 	function _emitPriceReportRejected(uint256 reportId, string memory reason) private {
