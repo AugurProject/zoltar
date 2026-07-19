@@ -52,6 +52,7 @@ contract SecurityPool is ISecurityPool {
 	address public immutable securityPoolForker;
 	address public immutable truthAuction;
 	ISecurityPoolFactory public immutable securityPoolFactory;
+	bool private immutable hasInheritedForkOutcome;
 	SecurityPoolEventEmitter private immutable eventEmitter;
 
 	uint256 public totalSecurityBondAllowance;
@@ -179,6 +180,14 @@ contract SecurityPool is ISecurityPool {
 			systemState = SystemState.Operational;
 		} else {
 			systemState = SystemState.ForkMigration;
+			ISecurityPool ancestor = parent;
+			while (address(ancestor) != address(0x0)) {
+				if (zoltar.forkQuestionMatches(ancestor.universeId(), questionId)) {
+					hasInheritedForkOutcome = true;
+					break;
+				}
+				ancestor = ancestor.parent();
+			}
 		}
 		shareToken = _shareToken;
 		repToken = zoltar.getRepToken(universeId);
@@ -877,7 +886,8 @@ contract SecurityPool is ISecurityPool {
 		_syncActiveVault(beneficiaryVault);
 	}
 
-	function activateForkMode() external onlyForker {
+	function activateForkMode(bool forkQuestionMatchesPoolQuestion) external onlyForker {
+		require(!hasInheritedForkOutcome || forkQuestionMatchesPoolQuestion, 'Resolved');
 		systemState = SystemState.PoolForked;
 		updateCollateralAmount();
 		uint256 repTransferred = repToken.balanceOf(address(this));

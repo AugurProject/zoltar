@@ -215,7 +215,7 @@ interface ISecurityPool {
 	) external;
 	function resumeForkedEscalationGame() external;
 	function setAwaitingForkContinuation(bool shouldAwait) external;
-	function activateForkMode() external;
+	function activateForkMode(bool forkQuestionMatchesPoolQuestion) external;
 	function setSystemState(SystemState newState) external;
 	function configureVault(
 		address vault,
@@ -270,6 +270,11 @@ interface ISecurityPoolFactory {
 		uint256 questionId,
 		uint256 securityMultiplier
 	) external returns (ISecurityPool securityPool);
+	function getCanonicalSecurityPool(
+		uint248 universeId,
+		uint256 questionId,
+		uint256 securityMultiplier
+	) external view returns (ISecurityPool securityPool);
 	function securityPoolDeploymentCount() external view returns (uint256);
 	function securityPoolDeploymentsRange(
 		uint256 startIndex,

@@ -8,8 +8,7 @@ import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/de
 import { ensureZoltarDeployed, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
-import { addressString } from '../testSupport/simulator/utils/bigint'
-import { peripherals_tokens_ShareToken_ShareToken, test_peripherals_ERC1155ReceiverMock_ERC1155NonReceiver, test_peripherals_ERC1155ReceiverMock_ERC1155ReceiverMock } from '../types/contractArtifact'
+import { peripherals_tokens_ShareToken_ShareToken, test_peripherals_ERC1155ReceiverMock_ERC1155NonReceiver, test_peripherals_ERC1155ReceiverMock_ERC1155ReceiverMock, test_peripherals_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -139,22 +138,79 @@ describe('ERC1155 Compliance Test Suite', () => {
 		assert.strictEqual(constructorLog.args.actor, client.account.address)
 		assert.strictEqual(constructorLog.args.authorized, true)
 
+		const firstPool = await deployContract(
+			encodeDeployData({
+				abi: test_peripherals_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.abi,
+				bytecode: `0x${test_peripherals_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.evm.bytecode.object}`,
+				args: [shareTokenAddress, 0n],
+			}),
+		)
+		const chainedPool = await deployContract(
+			encodeDeployData({
+				abi: test_peripherals_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.abi,
+				bytecode: `0x${test_peripherals_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.evm.bytecode.object}`,
+				args: [shareTokenAddress, 1n],
+			}),
+		)
+		const collidingPool = await deployContract(
+			encodeDeployData({
+				abi: test_peripherals_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.abi,
+				bytecode: `0x${test_peripherals_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.evm.bytecode.object}`,
+				args: [shareTokenAddress, 0n],
+			}),
+		)
 		await writeContractAndWait(client, () =>
 			client.writeContract({
 				abi: peripherals_tokens_ShareToken_ShareToken.abi,
 				address: shareTokenAddress,
 				functionName: 'authorize',
-				args: [operatorClient.account.address],
+				args: [firstPool],
 			}),
 		)
-		const chainedAccount = TEST_ADDRESSES[2]
-		if (chainedAccount === undefined) throw new Error('chained authorization account missing')
-		const chainedHash = await writeContractAndWait(operatorClient, () =>
-			operatorClient.writeContract({
+		await assert.rejects(
+			writeContractAndWait(client, () =>
+				client.writeContract({
+					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					address: shareTokenAddress,
+					functionName: 'authorize',
+					args: [collidingPool],
+				}),
+			),
+			/ShareToken universe already has a canonical pool/,
+		)
+		assert.strictEqual(
+			await client.readContract({
 				abi: peripherals_tokens_ShareToken_ShareToken.abi,
 				address: shareTokenAddress,
-				functionName: 'authorize',
-				args: [addressString(chainedAccount)],
+				functionName: 'canonicalPoolByUniverse',
+				args: [0n],
+			}),
+			firstPool,
+		)
+		assert.strictEqual(
+			await client.readContract({
+				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				address: shareTokenAddress,
+				functionName: 'isAuthorized',
+				args: [firstPool],
+			}),
+			true,
+		)
+		assert.strictEqual(
+			await client.readContract({
+				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				address: shareTokenAddress,
+				functionName: 'isAuthorized',
+				args: [collidingPool],
+			}),
+			false,
+		)
+		const chainedHash = await writeContractAndWait(client, () =>
+			client.writeContract({
+				abi: test_peripherals_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock.abi,
+				address: firstPool,
+				functionName: 'authorizePool',
+				args: [chainedPool],
 			}),
 		)
 		const chainedReceipt = await client.waitForTransactionReceipt({ hash: chainedHash })
@@ -168,15 +224,15 @@ describe('ERC1155 Compliance Test Suite', () => {
 			)
 			.find(log => log.eventName === 'AuthorizationUpdated')
 		if (chainedLog === undefined) throw new Error('chained authorization log missing')
-		assert.strictEqual(chainedLog.args.account, addressString(chainedAccount))
-		assert.strictEqual(chainedLog.args.actor, operatorClient.account.address)
+		assert.strictEqual(chainedLog.args.account, chainedPool)
+		assert.strictEqual(chainedLog.args.actor, firstPool)
 		assert.strictEqual(chainedLog.args.authorized, true)
 		assert.strictEqual(
 			await client.readContract({
 				abi: peripherals_tokens_ShareToken_ShareToken.abi,
 				address: shareTokenAddress,
 				functionName: 'isAuthorized',
-				args: [addressString(chainedAccount)],
+				args: [chainedPool],
 			}),
 			true,
 		)

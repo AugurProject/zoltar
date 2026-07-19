@@ -947,6 +947,7 @@ describe('Peripherals invariant harness', () => {
 			await triggerExternalForkForSecurityPool(undefined, 'stateful lifecycle fork source')
 		}
 		strictEqualTypeSafe(await getSystemState(client, context.securityPool), SystemState.PoolForked, 'forking should freeze the parent pool')
+		await createChildUniverse(client, context.securityPool, QuestionOutcome.Yes)
 
 		const migrationActions = shuffle(['invalid-shares', 'yes-shares', 'no-shares', 'rep', 'vault'] as const, seed)
 		for (const action of migrationActions) {
