@@ -329,21 +329,6 @@
 								</td>
 							</tr>
 							<tr>
-								<td><code>ORA-07</code></td>
-								<td>
-									Initial-report funding follows request-block gas economics and
-									configured correction profitability rather than a fixed token
-									amount or protected-operation notional.
-								</td>
-								<td>
-									The coordinator derives a WETH minimum from the request
-									block's base fee and tunable gas, Open Oracle Security
-									multiplier, target-error, and fee parameters. The sponsor may
-									voluntarily fund more WETH; queued-operation value does not
-									enter the calculation.
-								</td>
-							</tr>
-							<tr>
 								<td><code>AUC-07</code></td>
 								<td>
 									REP ownership issued by recapitalization remains proportional
@@ -355,6 +340,43 @@
 									positive; a zero result refunds every bid. Any remaining repair
 									contribution issues no ownership or allowance, and a child
 									activates only at the complete repair target.
+								</td>
+							</tr>
+							<tr>
+								<td><code>ESC-12</code></td>
+								<td>
+									A child pool and its continuation game use the same canonical
+									question outcome for payout across direct and recursive forks.
+								</td>
+								<td>
+									A branch selected by a matching fork becomes the immutable
+									continuation outcome, unrelated forks preserve the previous fixed
+									outcome, and escalation-deposit withdrawal rejects a pool/game
+									mismatch.
+								</td>
+							</tr>
+							<tr>
+								<td><code>ESC-13</code></td>
+								<td>
+									Two outcomes cannot both reach non-decision with less REP than
+									the universe fork threshold.
+								</td>
+								<td>
+									The non-decision threshold is
+									<code>ceil(forkThreshold / 2)</code>, including odd fork
+									thresholds.
+								</td>
+							</tr>
+							<tr>
+								<td><code>AUC-10</code></td>
+								<td>
+									Deleting and later recreating an auction tick cannot corrupt a
+									later bid's cumulative position or make its ETH unclaimable.
+								</td>
+								<td>
+									Bid history remains append-only, cumulative ETH continues across
+									tick recreation, and the refund-prefix tree subtracts every
+									previously refunded bid.
 								</td>
 							</tr>
 						</tbody>
@@ -1294,6 +1316,52 @@
 									>
 								</td>
 							</tr>
+							<tr>
+								<td><code>ESC-12</code></td>
+								<td>
+									When a fork question matches the pool question, the selected
+									child branch is the continuation game's immutable payout
+									outcome. A later matching fork gives its newly deployed
+									descendant game a new fixed outcome, while an unrelated fork
+									carries the previous fixed outcome forward. Escalation-deposit
+									withdrawal rejects disagreement between the current pool and game.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/EscalationGameCalculations.sol"
+										><code>getQuestionResolution</code></a
+									>,
+									<a
+										href="../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol"
+										>fixed-outcome propagation</a
+									>, and
+									<a
+										href="../solidity/contracts/peripherals/EscalationGameSettlement.sol"
+										>pool/game payout check</a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>ESC-13</code></td>
+								<td>
+									For a positive fork threshold <code>F</code>, non-decision requires
+									<code>ceil(F / 2)</code> REP on two outcomes. Therefore the two
+									threshold balances total at least <code>F</code>, while one wei
+									less on both outcomes totals strictly less than <code>F</code>.
+								</td>
+								<td>Contract guard</td>
+								<td>
+									<a href="../solidity/contracts/Zoltar.sol"
+										><code>getNonDecisionThreshold</code></a
+									>
+									and
+									<a
+										href="../solidity/ts/tests/escalationGameForkThreshold.test.ts"
+										>even/odd boundary tests</a
+									>
+								</td>
+							</tr>
 						</tbody>
 					</table>
 				</div>
@@ -1409,11 +1477,13 @@
 							<tr>
 								<td><code>ORA-07</code></td>
 								<td>
-									The initial-report WETH minimum derives from request-block gas
-									economics and configured correction profitability, independently
-									of queued-operation or pool-value notional.
+									Oracle report security is not collateralized to protected
+									notional. The initial-report WETH minimum derives only from
+									request-block gas economics and configured correction
+									profitability, so safety depends on <code>ORA-10</code> and loss is
+									not bounded by report liquidity.
 								</td>
-								<td>Reviewed preservation</td>
+								<td>Economic or external assumption</td>
 								<td>
 									<a
 										href="./open-oracle-integration.html#initial-report-estimator-example"
@@ -1618,6 +1688,26 @@
 									<a
 										href="../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationDelegate.sol"
 										><code>finalizeTruthAuctionRepair</code></a
+									>
+								</td>
+							</tr>
+							<tr>
+								<td><code>AUC-10</code></td>
+								<td>
+									Bid cumulative ETH remains append-only for a tick even when
+									the active AVL node is deleted and later recreated. Refunded
+									history is subtracted exactly once, so every later accepted bid
+									retains a valid allocation or refund path.
+								</td>
+								<td>Reviewed preservation</td>
+								<td>
+									<a
+										href="../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"
+										><code>_appendBid</code> and refund-prefix accounting</a
+									>
+									and
+									<a href="../solidity/ts/tests/auction.test.ts"
+										>repeated tick deletion/recreation tests</a
 									>
 								</td>
 							</tr>
@@ -1863,6 +1953,13 @@
 									<a
 										href="../solidity/ts/tests/peripherals/escalationMigration.test.ts"
 										><code>escalationMigration.test.ts</code></a
+									>, plus direct and recursive fixed-outcome fork coverage in
+									<a href="../solidity/ts/tests/peripherals/forkMigration.test.ts"
+										><code>forkMigration.test.ts</code></a
+									>
+									and even/odd non-decision boundaries in
+									<a href="../solidity/ts/tests/escalationGameForkThreshold.test.ts"
+										><code>escalationGameForkThreshold.test.ts</code></a
 									>.
 								</td>
 								<td>
@@ -1900,7 +1997,8 @@
 										><code>truthAuction.test.ts</code></a
 									>, including repair-ratio, forced-balance finalization,
 									reserve-price, proportional underfunding, claim-order, and
-									tick-math coverage.
+									tick-math coverage, plus bid-history preservation across
+									repeated tick deletion and recreation.
 								</td>
 								<td>
 									Stateful bidder/order fuzzing and an explicit recovery policy
