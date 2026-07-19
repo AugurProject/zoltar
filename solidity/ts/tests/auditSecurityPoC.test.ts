@@ -1,36 +1,28 @@
 import { describe, test } from 'bun:test'
 import { usePeripheralsForkMigrationFixture } from './peripherals/fixture'
-import { addRepToMigrationBalance, splitMigrationRep } from '../testSupport/simulator/utils/contracts/zoltar'
 import { deployOriginSecurityPool } from '../testSupport/simulator/utils/contracts/deployPeripherals'
 
-describe('Solidity audit proof of concept', () => {
+describe('Solidity audit regressions', () => {
 	const fixture = usePeripheralsForkMigrationFixture()
 
-	test('a parallel origin pool can mint shared child shares and drain repaired fork collateral', async () => {
+	test('a parallel origin pool cannot mint shares against a canonical fork child', async () => {
 		const {
-			approveToken,
-			addressString,
-			balanceOfShares,
 			client,
 			createCompleteSet,
 			createWriteClient,
 			DAY,
 			depositRep,
 			finalizeTruthAuction,
-			GENESIS_REPUTATION_TOKEN,
 			genesisUniverse,
 			getChildUniverseId,
 			getCompleteSetCollateralAmount,
 			getEthRaiseCap,
-			getETHBalance,
 			getQuestionEndDate,
 			getRepToken,
-			getRepTokenAddress,
 			getSecurityPoolAddresses,
 			getShareTokenSupply,
 			getSystemState,
 			getTotalTheoreticalSupply,
-			getZoltarAddress,
 			manipulatePriceOracle,
 			manipulatePriceOracleAndPerformOperation,
 			migrateRepToZoltar,
@@ -40,7 +32,6 @@ describe('Solidity audit proof of concept', () => {
 			OperationType,
 			PRICE_PRECISION,
 			QuestionOutcome,
-			redeemCompleteSet,
 			securityMultiplier,
 			securityPoolAddresses,
 			startTruthAuction,
@@ -90,31 +81,12 @@ describe('Solidity audit proof of concept', () => {
 		fixture.assert.ok(forkChildCollateral > migratedCash, 'truth repair should leave the partial migrated supply backed above par')
 
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
-		await deployOriginSecurityPool(attacker, yesUniverse, questionId, securityMultiplier)
-		const parallelOrigin = getSecurityPoolAddresses(addressString(0n), yesUniverse, questionId, securityMultiplier)
-		strictEqualTypeSafe(parallelOrigin.shareToken, forkChild.shareToken, 'both pools should use the same ERC-1155 contract')
-
-		const attackerRep = 200n * 10n ** 18n
-		await approveToken(attacker, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
-		await addRepToMigrationBalance(attacker, genesisUniverse, attackerRep)
-		await splitMigrationRep(attacker, genesisUniverse, attackerRep, [QuestionOutcome.Yes])
-		await approveToken(attacker, getRepTokenAddress(yesUniverse), parallelOrigin.securityPool)
-		await depositRep(attacker, parallelOrigin.securityPool, attackerRep / 2n)
-		await manipulatePriceOracleAndPerformOperation(attacker, mockWindow, parallelOrigin.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, attacker.account.address, migratedCash)
-
-		const attackerBalanceBefore = await getETHBalance(client, attacker.account.address)
-		await createCompleteSet(attacker, parallelOrigin.securityPool, migratedCash)
-		const attackerShares = await balanceOfShares(attacker, forkChild.shareToken, yesUniverse, attacker.account.address)
-		strictEqualTypeSafe(attackerShares[0], forkChildSupply, 'parallel origin should mint a full fork-child supply of shared tokens')
-		await redeemCompleteSet(attacker, forkChild.securityPool, forkChildSupply)
-		const attackerProfit = (await getETHBalance(client, attacker.account.address)) - attackerBalanceBefore
-
-		strictEqualTypeSafe(attackerProfit, forkChildCollateral - migratedCash, 'attacker should extract every wei of fork collateral above the mint cost')
-		strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, forkChild.securityPool), 0n, 'fork child collateral should be drained')
-		strictEqualTypeSafe(await getShareTokenSupply(client, forkChild.securityPool), 0n, 'fork child internal share supply should be depleted')
+		await fixture.assert.rejects(deployOriginSecurityPool(attacker, yesUniverse, questionId, securityMultiplier), /canonical ancestor/i)
+		strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, forkChild.securityPool), forkChildCollateral, 'rejected parallel deployment must preserve fork-child collateral')
+		strictEqualTypeSafe(await getShareTokenSupply(client, forkChild.securityPool), forkChildSupply, 'rejected parallel deployment must preserve fork-child supply')
 	})
 
-	test('a late unrelated universe fork lets a finalized winner irreversibly migrate away redeemable shares', async () => {
+	test('a late unrelated universe fork preserves finalized winning shares and redemption', async () => {
 		const {
 			approveToken,
 			addressString,
@@ -167,20 +139,21 @@ describe('Solidity audit proof of concept', () => {
 		await forkUniverse(forkCaller, genesisUniverse, lateForkQuestionId)
 
 		strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.Operational, 'finalized parent remains operational')
-		await migrateShares(winner, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [QuestionOutcome.Yes])
+		const parentBalancesBeforeMigration = await balanceOfShares(winner, securityPoolAddresses.shareToken, genesisUniverse, winner.account.address)
+		await fixture.assert.rejects(migrateShares(winner, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [QuestionOutcome.Yes]), /Resolved/)
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const parentBalances = await balanceOfShares(winner, securityPoolAddresses.shareToken, genesisUniverse, winner.account.address)
 		const childBalances = await balanceOfShares(winner, securityPoolAddresses.shareToken, yesUniverse, winner.account.address)
-		strictEqualTypeSafe(parentBalances[1], 0n, 'migration should burn all redeemable parent winner shares')
-		strictEqualTypeSafe(childBalances[1], winningCash * 10n ** 18n, 'migration should mint child shares without a collateralized child pool')
+		strictEqualTypeSafe(parentBalances[1], parentBalancesBeforeMigration[1], 'rejected migration must preserve redeemable parent winner shares')
+		strictEqualTypeSafe(childBalances[1], 0n, 'rejected migration must not mint unbacked child shares')
 
 		await fixture.assert.rejects(initiateSecurityPoolFork(client, securityPoolAddresses.securityPool), /Resolved/)
 		const parentCollateralBefore = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
 		const winnerEthBefore = await getETHBalance(client, winner.account.address)
 		await redeemShares(winner, securityPoolAddresses.securityPool)
-		strictEqualTypeSafe(await getETHBalance(client, winner.account.address), winnerEthBefore, 'parent redemption should pay zero after migration')
-		const parentCollateralAfter = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
-		fixture.assert.ok(parentCollateralAfter > 0n && parentCollateralAfter <= parentCollateralBefore, 'unpaid ETH should remain in parent collateral after fee accrual')
-		strictEqualTypeSafe(await getShareTokenSupply(client, securityPoolAddresses.securityPool), 0n, 'a zero-balance redemption should collapse parent accounting to the migrated actual winner supply')
+		fixture.assert.ok((await getETHBalance(client, winner.account.address)) > winnerEthBefore, 'preserved parent winner shares should remain redeemable')
+		fixture.assert.ok(parentCollateralBefore > 0n, 'finalized parent should hold collateral before redemption')
+		strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool), 0n, 'winning redemption should consume parent collateral')
+		strictEqualTypeSafe(await getShareTokenSupply(client, securityPoolAddresses.securityPool), 0n, 'winning redemption should consume parent share supply')
 	})
 })
