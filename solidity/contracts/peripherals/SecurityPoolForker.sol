@@ -362,7 +362,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		uint248 universe = securityPool.universeId();
 		data.forkQuestionMatchesPoolQuestion = zoltar.forkQuestionMatches(universe, securityPool.questionId());
 		uint256 repBalanceBefore = rep.balanceOf(address(this));
-		securityPool.activateForkMode();
+		securityPool.activateForkMode(data.forkQuestionMatchesPoolQuestion);
 		data.collateralAtFork = securityPool.completeSetCollateralAmount();
 		data.migratedRepCollateralized = 0;
 		data.collateralTransferred = 0;
@@ -698,7 +698,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		ReputationToken rep = securityPool.repToken();
 		uint256 poolRepToFork = rep.balanceOf(address(securityPool));
 		uint256 repBalanceBefore = rep.balanceOf(address(this));
-		securityPool.activateForkMode();
+		securityPool.activateForkMode(true);
 		uint256 escalationRepToFork = escalationGame.drainAllRep(address(this));
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
 		data.ownFork = true;

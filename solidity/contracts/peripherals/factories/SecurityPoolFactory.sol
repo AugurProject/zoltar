@@ -29,6 +29,8 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	SecurityPoolDeployer immutable securityPoolDeployer;
 	uint256 public immutable initialEscalationGameDeposit;
 	SecurityPoolDeployment[] private securityPoolDeployments;
+	mapping(bytes32 => ISecurityPool) private canonicalSecurityPools;
+	mapping(bytes32 => bool) private canonicalSecurityPoolClaims;
 
 	event DeploySecurityPool(
 		ISecurityPool indexed securityPool,
@@ -71,6 +73,14 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		return securityPoolDeployments.length;
 	}
 
+	function getCanonicalSecurityPool(
+		uint248 universeId,
+		uint256 questionId,
+		uint256 securityMultiplier
+	) external view returns (ISecurityPool) {
+		return canonicalSecurityPools[_getCanonicalSecurityPoolKey(universeId, questionId, securityMultiplier)];
+	}
+
 	function securityPoolDeploymentsRange(
 		uint256 startIndex,
 		uint256 count
@@ -99,6 +109,16 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		uint256 completeSetCollateralAmount
 	) external returns (ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction) {
 		require(msg.sender == address(securityPoolForker), 'Only the security pool forker can deploy child pools');
+		require(
+			address(
+				canonicalSecurityPools[
+					_getCanonicalSecurityPoolKey(parent.universeId(), questionId, securityMultiplier)
+				]
+			) == address(parent),
+			'Security pool parent must be canonical'
+		);
+		require(address(parent.shareToken()) == address(shareToken), 'Security pool child must use parent share token');
+		bytes32 canonicalPoolKey = _reserveCanonicalSecurityPool(universeId, questionId, securityMultiplier);
 		bytes32 securityPoolSalt = keccak256(abi.encode(parent, universeId, questionId, securityMultiplier));
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
 		OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory
@@ -119,6 +139,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 			completeSetCollateralAmount,
 			address(truthAuction)
 		);
+		_setCanonicalSecurityPool(canonicalPoolKey, securityPool);
 		_recordSecurityPoolDeployment(
 			SecurityPoolDeployment(
 				securityPool,
@@ -160,6 +181,8 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
 		require(address(reputationToken) != address(0x0), 'Security pool universe is missing a REP token');
+		_requireNoCanonicalSecurityPoolAncestor(universeId, questionId, securityMultiplier);
+		bytes32 canonicalPoolKey = _reserveCanonicalSecurityPool(universeId, questionId, securityMultiplier);
 		bytes32 securityPoolSalt = keccak256(abi.encode(address(0x0), universeId, questionId, securityMultiplier));
 		OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory
 			.deployPriceOracleManagerAndOperatorQueuer(openOracle, reputationToken, securityPoolSalt);
@@ -180,6 +203,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 			address(0)
 		);
 
+		_setCanonicalSecurityPool(canonicalPoolKey, securityPool);
 		shareToken.authorize(securityPool);
 		_recordSecurityPoolDeployment(
 			SecurityPoolDeployment(
@@ -195,6 +219,46 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 				0
 			)
 		);
+	}
+
+	function _requireNoCanonicalSecurityPoolAncestor(
+		uint248 universeId,
+		uint256 questionId,
+		uint256 securityMultiplier
+	) private view {
+		while (universeId != 0) {
+			(, , , , universeId) = zoltar.universes(universeId);
+			require(
+				!canonicalSecurityPoolClaims[_getCanonicalSecurityPoolKey(universeId, questionId, securityMultiplier)],
+				'Security pool canonical ancestor requires child deployment'
+			);
+		}
+	}
+
+	function _getCanonicalSecurityPoolKey(
+		uint248 universeId,
+		uint256 questionId,
+		uint256 securityMultiplier
+	) private pure returns (bytes32) {
+		return keccak256(abi.encode(universeId, questionId, securityMultiplier));
+	}
+
+	function _reserveCanonicalSecurityPool(
+		uint248 universeId,
+		uint256 questionId,
+		uint256 securityMultiplier
+	) private returns (bytes32 canonicalPoolKey) {
+		canonicalPoolKey = _getCanonicalSecurityPoolKey(universeId, questionId, securityMultiplier);
+		require(!canonicalSecurityPoolClaims[canonicalPoolKey], 'Security pool canonical key already claimed');
+		canonicalSecurityPoolClaims[canonicalPoolKey] = true;
+	}
+
+	function _setCanonicalSecurityPool(bytes32 canonicalPoolKey, ISecurityPool securityPool) private {
+		require(
+			address(canonicalSecurityPools[canonicalPoolKey]) == address(0x0),
+			'Security pool canonical pool already set'
+		);
+		canonicalSecurityPools[canonicalPoolKey] = securityPool;
 	}
 
 	function _recordSecurityPoolDeployment(SecurityPoolDeployment memory deployment) private {

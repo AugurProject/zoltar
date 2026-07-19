@@ -11,6 +11,7 @@ interface IShareToken {
 
 	function authorize(ISecurityPool _securityPoolCandidate) external;
 	function isAuthorized(address account) external view returns (bool);
+	function canonicalPoolByUniverse(uint248 universeId) external view returns (ISecurityPool);
 	function mintCompleteSets(uint248 _universeId, address _account, uint256 _cashAmount) external;
 	function burnCompleteSets(uint248 _universeId, address _owner, uint256 _amount) external;
 	function burnTokenIdAndGetRemainingSupply(

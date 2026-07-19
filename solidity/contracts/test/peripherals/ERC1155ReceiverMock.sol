@@ -2,6 +2,8 @@
 pragma solidity 0.8.35;
 
 import '../../peripherals/interfaces/IERC1155Receiver.sol';
+import '../../peripherals/interfaces/ISecurityPool.sol';
+import '../../peripherals/interfaces/IShareToken.sol';
 
 contract ERC1155ReceiverMock is IERC1155Receiver {
 	bytes4 private constant ERC1155_RECEIVED_SELECTOR = 0xf23a6e61;
@@ -64,3 +66,17 @@ contract ERC1155ReceiverMock is IERC1155Receiver {
 }
 
 contract ERC1155NonReceiver {}
+
+contract ShareTokenAuthorizationPoolMock {
+	IShareToken public immutable shareToken;
+	uint248 public immutable universeId;
+
+	constructor(IShareToken _shareToken, uint248 _universeId) {
+		shareToken = _shareToken;
+		universeId = _universeId;
+	}
+
+	function authorizePool(ISecurityPool pool) external {
+		shareToken.authorize(pool);
+	}
+}

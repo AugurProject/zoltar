@@ -284,7 +284,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(escalationGameForker, /'Claim window closed'/)
 	assert.match(securityPool, /event SystemStateSet\(SystemState systemState\)/)
 	assert.match(securityPool, /require\(zoltar\.getForkTime\(universeId\) == 0, 'Forked'\)/)
-	assert.match(securityPool, /function activateForkMode\(\) external onlyForker/)
+	assert.match(securityPool, /function activateForkMode\(bool forkQuestionMatchesPoolQuestion\) external onlyForker/)
 	assert.match(securityPool, /systemState = SystemState\.PoolForked/)
 	assert.match(securityPool, /shareToken\.authorize\(pool\)/)
 	assert.match(securityPoolFactory, /shareToken\.authorize\(securityPool\)/)

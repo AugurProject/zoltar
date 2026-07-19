@@ -5,6 +5,7 @@ import '../../Constants.sol';
 import './TokenId.sol';
 import '../../Zoltar.sol';
 import '../interfaces/ISecurityPool.sol';
+import '../interfaces/ISecurityPoolForker.sol';
 import '../interfaces/IShareToken.sol';
 import '../BinaryOutcomes.sol';
 import '../SecurityPoolUtils.sol';
@@ -19,6 +20,7 @@ contract ShareToken is ERC1155, IShareToken {
 	string public symbol;
 	Zoltar public immutable zoltar;
 	mapping(address => bool) private authorized;
+	mapping(uint248 => ISecurityPool) public canonicalPoolByUniverse;
 	event Migrate(address indexed migrator, uint256 indexed fromId, uint256 indexed toId, uint256 fromIdBalance);
 
 	constructor(address owner, Zoltar _zoltar, uint256 questionId) {
@@ -51,7 +53,19 @@ contract ShareToken is ERC1155, IShareToken {
 
 	function authorize(ISecurityPool _securityPoolCandidate) external {
 		require(authorized[msg.sender], 'ShareToken caller is not authorized to add another authorized pool');
+		require(
+			address(_securityPoolCandidate.shareToken()) == address(this),
+			'ShareToken candidate must use this share token'
+		);
+		uint248 candidateUniverseId = _securityPoolCandidate.universeId();
+		ISecurityPool currentCanonicalPool = canonicalPoolByUniverse[candidateUniverseId];
+		require(
+			address(currentCanonicalPool) == address(0x0) ||
+				address(currentCanonicalPool) == address(_securityPoolCandidate),
+			'ShareToken universe already has a canonical pool'
+		);
 		if (authorized[address(_securityPoolCandidate)]) return;
+		canonicalPoolByUniverse[candidateUniverseId] = _securityPoolCandidate;
 		authorized[address(_securityPoolCandidate)] = true;
 		emit AuthorizationUpdated(address(_securityPoolCandidate), msg.sender, true);
 	}
@@ -188,9 +202,6 @@ contract ShareToken is ERC1155, IShareToken {
 		uint256 fromIdBalance = balanceOf(msg.sender, fromId);
 		require(fromIdBalance > 0, 'ShareToken holder has no balance to migrate from the source token id');
 
-		// Burn from the old token ID using the base ERC1155 _burn function
-		_burn(msg.sender, fromId, fromIdBalance);
-
 		(, uint256 questionId, , , ) = zoltar.universes(universeId);
 		uint256 targetOutcomeIndexesLength = targetOutcomeIndexes.length;
 		uint256 previousOutcomeIndex;
@@ -206,8 +217,36 @@ contract ShareToken is ERC1155, IShareToken {
 					'ShareToken target outcomes must be provided in strictly increasing order'
 				);
 			previousOutcomeIndex = outcomeIndex;
+		}
 
-			uint256 toId = getChildId(fromId, getChildUniverseId(universeId, outcomeIndex));
+		ISecurityPool sourcePool = canonicalPoolByUniverse[universeId];
+		require(address(sourcePool) != address(0x0), 'ShareToken source universe is missing a canonical pool');
+		ISecurityPoolForker forker = ISecurityPoolForker(sourcePool.securityPoolForker());
+		if (sourcePool.systemState() == SystemState.Operational) {
+			forker.initiateSecurityPoolFork(sourcePool);
+		}
+		require(sourcePool.systemState() == SystemState.PoolForked, 'ShareToken source pool cannot migrate');
+
+		uint248[] memory targetUniverseIds = new uint248[](targetOutcomeIndexesLength);
+		for (uint256 i = 0; i < targetOutcomeIndexesLength; i++) {
+			uint256 outcomeIndex = targetOutcomeIndexes[i];
+			uint248 targetUniverseId = getChildUniverseId(universeId, outcomeIndex);
+			ISecurityPool targetPool = canonicalPoolByUniverse[targetUniverseId];
+			if (address(targetPool) == address(0x0)) {
+				require(targetOutcomeIndexesLength == 1, 'ShareToken bulk migration requires canonical child pools');
+				forker.createChildUniverse(sourcePool, outcomeIndex);
+				targetPool = canonicalPoolByUniverse[targetUniverseId];
+			}
+			require(
+				address(targetPool) != address(0x0) && address(targetPool.parent()) == address(sourcePool),
+				'ShareToken destination is missing a canonical child pool'
+			);
+			targetUniverseIds[i] = targetUniverseId;
+		}
+
+		_burn(msg.sender, fromId, fromIdBalance);
+		for (uint256 i = 0; i < targetOutcomeIndexesLength; i++) {
+			uint256 toId = getChildId(fromId, targetUniverseIds[i]);
 			_mint(msg.sender, toId, fromIdBalance);
 			emit Migrate(msg.sender, fromId, toId, fromIdBalance);
 		}
