@@ -3711,16 +3711,23 @@ strong.metric-value-danger {
 
 .withdraw-deposit-option {
 	display: grid;
-	grid-template-columns: auto minmax(0, 1fr);
-	align-items: start;
-	gap: 0.8rem;
+	gap: 0.55rem;
 	padding: 0.9rem 1rem;
 	border: 1px solid var(--border-subtle);
 	border-radius: var(--radius-control);
 	background: var(--surface-inset);
 }
 
-.withdraw-deposit-option input {
+.withdraw-deposit-selection,
+.escalation-selection-control {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	align-items: start;
+	gap: 0.8rem;
+}
+
+.withdraw-deposit-selection input,
+.escalation-selection-control input {
 	margin: 0.2rem 0 0;
 }
 
@@ -3732,6 +3739,38 @@ strong.metric-value-danger {
 
 .withdraw-deposit-copy strong {
 	font-size: var(--font-body);
+}
+
+.withdraw-deposit-details,
+.escalation-selection-details {
+	margin-left: 1.65rem;
+}
+
+.withdraw-deposit-details > div,
+.escalation-selection-details > span {
+	display: grid;
+	gap: 0.2rem;
+	padding-top: 0.35rem;
+}
+
+.escalation-selection-list {
+	display: grid;
+	gap: 0.8rem;
+}
+
+.escalation-selection-item {
+	display: grid;
+	gap: 0.55rem;
+	padding: 0.9rem 1rem;
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--radius-control);
+	background: var(--surface-inset);
+}
+
+.escalation-selection-item-copy {
+	display: grid;
+	gap: 0.2rem;
+	min-width: 0;
 }
 
 .stage-list,
@@ -3749,6 +3788,7 @@ strong.metric-value-danger {
 
 .action-launcher-card {
 	display: grid;
+	align-content: start;
 	gap: 0.65rem;
 	padding: 0.75rem 0;
 	border-width: 0 0 1px;
@@ -3776,6 +3816,14 @@ strong.metric-value-danger {
 .action-launcher-card-actions {
 	display: flex;
 	justify-content: flex-start;
+}
+
+.action-launcher-card-actions > .tx-action {
+	width: 100%;
+}
+
+.action-launcher-card.compact {
+	padding-block: 0.55rem;
 }
 
 .warning-surface {
@@ -5700,13 +5748,6 @@ strong.metric-value-danger {
 .security-pool-browse-vaults-head h4 {
 	margin: 0;
 	font-size: var(--font-base);
-}
-
-.security-pool-browse-vaults-count {
-	font-size: var(--font-label);
-	letter-spacing: 0.14em;
-	text-transform: uppercase;
-	color: var(--muted);
 }
 
 .security-pool-browse-vaults .vault-position-list {

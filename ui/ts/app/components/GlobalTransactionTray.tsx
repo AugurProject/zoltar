@@ -61,7 +61,7 @@ export function GlobalTransactionTray({ transaction }: GlobalTransactionTrayProp
 						<Badge tone={badge.tone}>{badge.label}</Badge>
 						<strong>{transaction.title}</strong>
 					</div>
-					<div className='global-transaction-notice-detail'>{transaction.detail}</div>
+					{transaction.detail === undefined ? undefined : <div className='global-transaction-notice-detail'>{transaction.detail}</div>}
 					{rows.length === 0 ? undefined : (
 						<dl className='global-transaction-notice-rows'>
 							{rows.map((row, rowIndex) => (

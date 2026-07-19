@@ -321,7 +321,6 @@ export function renderSelectedReportActionSection({
 									{ label: openOracleCopy.currentReporter, value: openOracleReportDetails.currentReporter === zeroAddress ? commonCopy.none : <AddressValue address={openOracleReportDetails.currentReporter} /> },
 									{ label: openOracleCopy.settlementTimestamp, value: <TimestampValue currentTimestamp={openOracleReportDetails.currentTime} timestamp={openOracleReportDetails.settlementTimestamp} zeroText={openOracleCopy.notSettled} /> },
 								])}
-						<p className='detail'>{openOracleCopy.settlementConfirmationHelpText}</p>
 						<div className='actions'>
 							<TransactionActionButton
 								idleLabel={openOracleCopy.settleReport}
@@ -458,7 +457,7 @@ function renderReportDetailsCard(
 				]}
 			/>
 			{reportControls}
-			<LifecycleStageBanner stage={stage} />
+			{stage.label === status ? undefined : <LifecycleStageBanner stage={stage} />}
 			{readinessActions.length > 0 ? (
 				<SectionBlock title={openOracleCopy.reportActions}>
 					<div className='action-readiness-grid'>
@@ -544,7 +543,7 @@ function renderReportDetailsCard(
 				</ReadOnlyDetailAccordion>
 
 				<ReadOnlyDetailAccordion title={commonCopy.status}>
-					{renderReportSection(commonCopy.status, [
+					{renderReportFields([
 						{
 							label: openOracleCopy.reportTimestamp,
 							value: <TimestampValue currentTimestamp={openOracleReportDetails.currentTime} timestamp={openOracleReportDetails.reportTimestamp} />,
@@ -573,7 +572,7 @@ function renderReportDetailsCard(
 				</ReadOnlyDetailAccordion>
 
 				<ReadOnlyDetailAccordion title={commonCopy.settlement}>
-					{renderReportSection(commonCopy.settlement, [
+					{renderReportFields([
 						{
 							label: openOracleCopy.settlementTime,
 							value: openOracleCopy.formatTimingValue(openOracleReportDetails.settlementTime, openOracleReportDetails.timeType),
@@ -598,7 +597,7 @@ function renderReportDetailsCard(
 				</ReadOnlyDetailAccordion>
 
 				<ReadOnlyDetailAccordion title={openOracleCopy.callbackExtra}>
-					{renderReportSection(openOracleCopy.callbackExtra, [
+					{renderReportFields([
 						{
 							label: openOracleCopy.callbackContract,
 							value: openOracleReportDetails.callbackContract === zeroAddress ? commonCopy.none : <AddressValue address={openOracleReportDetails.callbackContract} />,
@@ -623,7 +622,7 @@ function renderReportDetailsCard(
 				</ReadOnlyDetailAccordion>
 			</div>
 
-			<OperationModal context={reportTransactionContext} isOpen={selectedReportModal === 'dispute'} onClose={() => onSelectedReportModalChange(undefined)} title={openOracleCopy.disputeAndSwap} description={openOracleCopy.replacementSwapAmountsHint}>
+			<OperationModal context={reportTransactionContext} isOpen={selectedReportModal === 'dispute'} onClose={() => onSelectedReportModalChange(undefined)} title={openOracleCopy.disputeAndSwap}>
 				{renderSelectedReportActionSection({
 					actionMode: 'dispute',
 					disputeSubmission: openOracleDisputeSubmission,
@@ -643,7 +642,7 @@ function renderReportDetailsCard(
 				})}
 			</OperationModal>
 
-			<OperationModal context={reportTransactionContext} isOpen={selectedReportModal === 'settle'} onClose={() => onSelectedReportModalChange(undefined)} title={openOracleCopy.settleReport} description={openOracleCopy.settlementConfirmationHint}>
+			<OperationModal context={reportTransactionContext} isOpen={selectedReportModal === 'settle'} onClose={() => onSelectedReportModalChange(undefined)} title={openOracleCopy.settleReport}>
 				{renderSelectedReportActionSection({
 					actionMode: 'settle',
 					disputeSubmission: openOracleDisputeSubmission,
@@ -818,7 +817,7 @@ export function OpenOracleSection({
 			{view === 'create' ? (
 				<div className='workflow-stack route-workflow-stack'>
 					{openOracleResult?.action !== 'createReportInstance' ? undefined : (
-						<SectionBlock title={openOracleCopy.createSuccess} description={openOracleCopy.reportCreatedDetail}>
+						<SectionBlock title={openOracleCopy.createSuccess}>
 							<div className='actions'>
 								<button className='primary' type='button' onClick={() => onActiveViewChange('browse')}>
 									{commonCopy.returnToBrowse}

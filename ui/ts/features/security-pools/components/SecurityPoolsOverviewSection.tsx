@@ -147,6 +147,7 @@ export function SecurityPoolsOverviewSection({
 		if (normalizedSearchText === '') return true
 		return pool.securityPoolAddress.toLowerCase().includes(normalizedSearchText) || pool.questionId.toLowerCase().includes(normalizedSearchText) || pool.marketDetails.title.toLowerCase().includes(normalizedSearchText) || pool.marketDetails.description.toLowerCase().includes(normalizedSearchText)
 	})
+	const hasActiveFilters = normalizedSearchText !== '' || systemStateFilter !== 'all' || vaultFilter !== 'all'
 	return (
 		<RouteWorkflowPanel showHeader={false} title={commonCopy.securityPools}>
 			<SectionBlock
@@ -178,7 +179,7 @@ export function SecurityPoolsOverviewSection({
 				<div className='filter-toolbar'>
 					<label className='field'>
 						<span>{securityPoolCopy.searchLoadedPage}</span>
-						<FormInput value={searchText} onInput={event => setSearchText(event.currentTarget.value)} placeholder={securityPoolCopy.poolSearchHelpText} />
+						<FormInput value={searchText} onInput={event => setSearchText(event.currentTarget.value)} placeholder={securityPoolCopy.poolSearchPlaceholder} />
 					</label>
 					<label className='field'>
 						<span>{securityPoolCopy.systemState}</span>
@@ -200,7 +201,7 @@ export function SecurityPoolsOverviewSection({
 						</select>
 					</label>
 				</div>
-				{pagedSecurityPools.length > 0 ? <p className='detail'>{securityPoolCopy.formatPoolPageSummary(pagedSecurityPools.length, filteredSecurityPools.length)}</p> : undefined}
+				{hasActiveFilters && pagedSecurityPools.length > 0 ? <p className='detail'>{securityPoolCopy.formatPoolPageSummary(filteredSecurityPools.length, pagedSecurityPools.length)}</p> : undefined}
 
 				{(() => {
 					if (pagedSecurityPools.length === 0) {
@@ -336,7 +337,6 @@ export function SecurityPoolsOverviewSection({
 											<div className='security-pool-browse-vaults'>
 												<div className='security-pool-browse-vaults-head'>
 													<h4>{securityPoolCopy.vaults}</h4>
-													<div className='security-pool-browse-vaults-count'>{securityPoolCopy.formatVaultCountLabel(pool.vaultCount.toString())}</div>
 												</div>
 												{pool.hasLoadedVaults === false ? (
 													<StateHint title={securityPoolCopy.previewDeferred} presentation={{ key: 'empty', badgeLabel: securityPoolCopy.previewDeferred, badgeTone: 'muted', detail: securityPoolCopy.formatVaultPreviewDeferred(pool.vaultCount.toString()) }} />

@@ -6,11 +6,11 @@ import { formatCurrencyBalance } from './formatters.js'
 import type { TransactionRequestPreview } from './chainBackend.js'
 import type { GlobalTransactionPresentation, GlobalTransactionRow, TransactionIntent } from '../types/components.js'
 
-export function buildPresentation({ detail, hash, rows, title, tone }: { detail: GlobalTransactionPresentation['detail']; hash: Hash; rows?: GlobalTransactionRow[]; title: GlobalTransactionPresentation['title']; tone: GlobalTransactionPresentation['tone'] }): GlobalTransactionPresentation {
+export function buildPresentation({ detail, hash, rows, title, tone }: { detail?: GlobalTransactionPresentation['detail']; hash: Hash; rows?: GlobalTransactionRow[]; title: GlobalTransactionPresentation['title']; tone: GlobalTransactionPresentation['tone'] }): GlobalTransactionPresentation {
 	return {
-		detail,
 		dismissKey: hash,
 		hash,
+		...(detail === undefined ? {} : { detail }),
 		...(rows === undefined ? {} : { rows }),
 		title,
 		tone,
@@ -27,12 +27,12 @@ function buildHashlessPresentation({ detail, dismissKey, rows, title, tone }: { 
 	}
 }
 
-export function buildIntent({ action, rows, source, submittedDetail, submittedTitle }: { action: string; rows?: GlobalTransactionRow[]; source: string; submittedDetail: TransactionIntent['submittedDetail']; submittedTitle: TransactionIntent['submittedTitle'] }): TransactionIntent {
+export function buildIntent({ action, rows, source, submittedDetail, submittedTitle }: { action: string; rows?: GlobalTransactionRow[]; source: string; submittedDetail?: TransactionIntent['submittedDetail']; submittedTitle: TransactionIntent['submittedTitle'] }): TransactionIntent {
 	return {
 		action,
 		...(rows === undefined ? {} : { rows }),
 		source,
-		submittedDetail,
+		...(submittedDetail === undefined ? {} : { submittedDetail }),
 		submittedTitle,
 	}
 }

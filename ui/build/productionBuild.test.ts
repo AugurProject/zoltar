@@ -432,6 +432,7 @@ type ProductionBrowserDriver = {
 	waitForButtonEnabled: (label: string, occurrence?: number) => Promise<void>
 	waitForBodyText: (text: string) => Promise<string>
 	waitForBodyWithoutText: (text: string) => Promise<string>
+	waitForTransactionStatus: (status: string, title: string) => Promise<string>
 }
 
 async function loadProductionDocumentInChromium(pageUrl: string, viewport: { height: number; width: number }, interact?: (driver: ProductionBrowserDriver) => Promise<void>) {
@@ -556,6 +557,14 @@ async function loadProductionDocumentInChromium(pageUrl: string, viewport: { hei
 			},
 			waitForBodyText: async text => await waitForBody(body => body.includes(text), JSON.stringify(text)),
 			waitForBodyWithoutText: async text => await waitForBody(body => !body.includes(text), `body to omit ${JSON.stringify(text)}`),
+			waitForTransactionStatus: async (status, title) => {
+				for (let attempt = 0; attempt < 2400; attempt += 1) {
+					const matches = await evaluate(`(() => { const notice = document.querySelector('.global-transaction-notice'); return notice?.querySelector('.badge')?.textContent?.trim() === ${JSON.stringify(status)} && notice?.querySelector('strong')?.textContent?.trim() === ${JSON.stringify(title)} })()`)
+					if (matches === true) return await readBody()
+					await Bun.sleep(50)
+				}
+				throw new Error(`Timed out waiting for ${status} transaction ${title}. Last body: ${await readBody()}`)
+			},
 		}
 		await interact?.(driver)
 		return readEvaluationString(
@@ -669,7 +678,7 @@ productionBrowserTest('production bundle executes deployment, reporting, fork mi
 			expect(failedBody).toContain('Deposit Rep')
 			await driver.waitForButtonEnabled('Deposit REP', 1)
 			await driver.clickButton('Deposit REP', 1)
-			const poolBody = await driver.waitForBodyText('Deposit Rep completed successfully.')
+			const poolBody = await driver.waitForTransactionStatus('Confirmed', 'Deposit Rep')
 			expect(poolBody).toContain('Manage Pool')
 
 			await driver.resize({ height: 900, width: 1440 })
@@ -695,7 +704,7 @@ productionBrowserTest('production bundle executes deployment, reporting, fork mi
 			}
 			expect(reportingDepositReady).toBe(true)
 			await driver.clickButton('Deposit REP', 1)
-			await driver.waitForBodyText('Deposit Rep completed successfully.')
+			await driver.waitForTransactionStatus('Confirmed', 'Deposit Rep')
 			await driver.clickButton('Open Oracle')
 			await driver.waitForButtonEnabled('Request New Price')
 			await driver.clickButton('Request New Price')
@@ -710,7 +719,7 @@ productionBrowserTest('production bundle executes deployment, reporting, fork mi
 			await driver.clickButton('Settle Report')
 			await driver.waitForButtonEnabled('Settle Report', 1)
 			await driver.clickButton('Settle Report', 1)
-			await driver.waitForBodyText('Settle completed successfully.')
+			await driver.waitForTransactionStatus('Confirmed', 'Settle')
 			const reportingPoolsOpened = await driver.evaluate(`(() => { const target = [...document.querySelectorAll('a, button')].find(candidate => candidate.textContent?.trim() === 'Security Pools'); if (!(target instanceof HTMLElement)) return false; target.click(); return true })()`)
 			expect(reportingPoolsOpened).toBe(true)
 			await driver.waitForButtonEnabled('Reporting')
@@ -791,7 +800,7 @@ productionBrowserTest('production bundle executes deployment, reporting, fork mi
 			expect(forkViewOpened).toBe(true)
 			await driver.waitForButtonEnabled('Finalize Truth Auction')
 			await driver.clickButton('Finalize Truth Auction')
-			const finalizedBody = await driver.waitForBodyText('Finalize Truth Auction completed successfully.')
+			const finalizedBody = await driver.waitForTransactionStatus('Confirmed', 'Finalize Truth Auction')
 			expect(finalizedBody).toContain('Truth Auction')
 		}),
 	)

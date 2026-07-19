@@ -139,8 +139,8 @@ export function MarketCreateQuestionSection({
 		tone: isInvalidOutcomeLabel(outcome) ? ('warning' as const) : ('default' as const),
 	}))
 	const normalizedDescription = marketForm.description.trim()
-	const draftDescription = normalizedDescription === '' ? marketCopy.missingResolutionNotesHelpText : marketForm.description
-	const draftTitle = marketForm.title.trim() === '' ? marketCopy.questionTitleRequired : marketForm.title
+	const draftDescription = normalizedDescription === '' ? undefined : marketForm.description
+	const draftTitle = marketForm.title.trim() === '' ? marketCopy.untitledQuestion : marketForm.title
 	const markFieldTouched = (field: MarketFormFieldName) => setTouchedFields(current => new Set([...current, field]))
 	const getVisibleFieldError = (field: MarketFormFieldName) => (touchedFields.has(field) ? marketFormValidation.fieldErrors[field] : undefined)
 	const canCreateQuestion = accountAddress !== undefined && isMainnet && !marketCreating && marketFormValidation.isValid
@@ -392,7 +392,7 @@ export function MarketCreateQuestionSection({
 								<div className='question-draft-preview-header'>
 									<div className='question-summary-heading'>
 										<strong>{draftTitle}</strong>
-										<p className='detail'>{draftDescription}</p>
+										{draftDescription === undefined ? undefined : <p className='detail'>{draftDescription}</p>}
 									</div>
 									<span className='question-draft-preview-chip'>{marketForm.marketType}</span>
 								</div>

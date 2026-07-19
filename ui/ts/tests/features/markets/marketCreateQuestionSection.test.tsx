@@ -128,7 +128,7 @@ describe('MarketCreateQuestionSection', () => {
 				isMainnet={true}
 				marketCreating={false}
 				marketError={undefined}
-				marketForm={createMarketForm({ title: '' })}
+				marketForm={createMarketForm({ description: '', title: '' })}
 				marketResult={undefined}
 				loadingZoltarQuestions={false}
 				onCreateMarket={() => undefined}
@@ -150,6 +150,11 @@ describe('MarketCreateQuestionSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Question Type Guidance' })).toBeNull()
 		expect(documentQueries.getAllByText('Ask a yes-or-no question that can be resolved from one public source of truth.')).toHaveLength(1)
 		expect(documentQueries.getByRole('heading', { name: 'Draft Preview' })).not.toBeNull()
+		const draftPreview = documentQueries.getByRole('heading', { name: 'Draft Preview' }).closest('section')
+		if (!(draftPreview instanceof HTMLElement)) throw new Error('Expected draft preview section')
+		expect(within(draftPreview).getByText('Untitled question')).not.toBeNull()
+		expect(within(draftPreview).queryByText('Add resolution notes, evidence sources, and edge-case handling so other users know how this question will settle.')).toBeNull()
+		expect(within(draftPreview).queryByText('Add a clear question title')).toBeNull()
 		expect(document.body.textContent?.includes('Placeholder origin security pools support this exact Yes / No question shape.')).toBe(false)
 		expect(documentQueries.queryByText('Context provided')).toBeNull()
 		expect(documentQueries.queryByText('Risk cue')).toBeNull()
