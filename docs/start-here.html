@@ -90,7 +90,8 @@
 							<td>A fresh REP/ETH price for withdrawals, allowance updates, and liquidations.</td>
 							<td>
 								REP backs ETH-denominated obligations, so solvency checks need a
-								bounded, contestable price.
+								fresh, contestable price. The current integration does not bound
+								accepted value or deviation onchain.
 							</td>
 							<td><code>OpenOraclePriceCoordinator</code>, <code>OpenOracle</code></td>
 						</tr>
