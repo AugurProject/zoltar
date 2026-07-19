@@ -1,13 +1,14 @@
 import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import assert from '../testSupport/simulator/utils/assert'
 import { decodeEventLog, encodeAbiParameters, encodeDeployData, keccak256, type Address, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
+import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
 import { DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, calculateOracleMinimumWethReport } from '@zoltar/shared/oracleInitialReport'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient } from '../testSupport/simulator/utils/clients'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, DAY, WETH_ADDRESS } from '../testSupport/simulator/utils/constants'
 import { addressString, dateToBigintSeconds } from '../testSupport/simulator/utils/bigint'
-import { approveToken, setupTestAccounts, getETHBalance } from '../testSupport/simulator/utils/utilities'
+import { approveToken, setupTestAccounts, getERC20Balance, getETHBalance } from '../testSupport/simulator/utils/utilities'
 import { approveAndDepositRep } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
 import { handleOracleReporting } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
 import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, applyLibraries, deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
@@ -23,6 +24,7 @@ import {
 	getOpenOracleExtraData,
 	getOpenOracleReportMeta,
 	getOpenOracleReportStatus,
+	loadOpenOracleEventState,
 	getPendingOperationSlotId,
 	getPendingReportId,
 	getPendingReportMaxSettlementBaseFee,
@@ -48,8 +50,7 @@ import { replayZoltarEvents, type ReplayLog } from './eventReplay/eventReplayMod
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
 type TransactionReceiptLogs = Awaited<ReturnType<WriteClient['waitForTransactionReceipt']>>['logs']
-const OPEN_ORACLE_EXTRA_DATA_MAPPING_SLOT = 6n
-const OPEN_ORACLE_REPORT_STATUS_MAPPING_SLOT = 3n
+const OPEN_ORACLE_GAME_MAPPING_SLOT = 1n
 
 const findExecutedStagedOperationLog = (logs: TransactionReceiptLogs) =>
 	logs
@@ -147,22 +148,6 @@ const findPriceReportRejectedLog = (logs: TransactionReceiptLogs) =>
 		})
 		.find(log => log?.eventName === 'PriceReportRejected')
 
-const findSettlementCallbackExecutedLog = (logs: TransactionReceiptLogs) =>
-	logs
-		.map(log => {
-			try {
-				return decodeEventLog({
-					abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-					data: log.data,
-					topics: log.topics,
-				})
-			} catch (error) {
-				if (!isIgnorableLogDecodeError(error)) throw error
-				return undefined
-			}
-		})
-		.find(log => log?.eventName === 'SettlementCallbackExecuted')
-
 type OracleCoordinatorConstructorArgs = [Address, Address, Address, bigint, number, bigint, bigint, bigint, number, number, number, number, number, boolean, boolean, Address, bigint, bigint, bigint]
 
 function encodeOracleCoordinatorDeployData(args: OracleCoordinatorConstructorArgs) {
@@ -181,9 +166,13 @@ function getMappingStorageSlot(key: bigint, mappingSlot: bigint) {
 	return BigInt(keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [key, mappingSlot])))
 }
 
-function packOpenOracleExtraCallbackSlot(callbackContract: Address, numReports: number, callbackGasLimit: number) {
-	return BigInt(callbackContract) | (BigInt(numReports) << 160n) | (BigInt(callbackGasLimit) << 192n)
-}
+const getOpenOracleHeldBalance = async (client: WriteClient, holder: Address, token: Address) =>
+	await client.readContract({
+		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+		functionName: 'tokenHolder',
+		address: getInfraContractAddresses().openOracle,
+		args: [holder, token],
+	})
 
 describe('Price Oracle Refund Security Tests', () => {
 	const DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS = 5n * 60n
@@ -245,31 +234,26 @@ describe('Price Oracle Refund Security Tests', () => {
 	const settlePendingReportWithFailedCallback = async (pendingReportId: bigint) => {
 		const openOracle = getInfraContractAddresses().openOracle
 		const reportMeta = await getOpenOracleReportMeta(client, pendingReportId)
-		const extraData = await getOpenOracleExtraData(client, pendingReportId)
-
-		const callbackSlot = getMappingStorageSlot(pendingReportId, OPEN_ORACLE_EXTRA_DATA_MAPPING_SLOT) + 1n
+		const eventState = await loadOpenOracleEventState(client, pendingReportId)
+		const overriddenPreimage: OpenOracleStatePreimage = {
+			...eventState.latest,
+			game: { ...eventState.latest.game, callbackGasLimit: 1n },
+		}
+		const gameSlot = getMappingStorageSlot(pendingReportId, OPEN_ORACLE_GAME_MAPPING_SLOT)
 		await mockWindow.addStateOverrides({
 			[openOracle]: {
 				stateDiff: {
-					[formatStorageSlot(callbackSlot)]: packOpenOracleExtraCallbackSlot(extraData.callbackContract, extraData.numReports, 1),
+					[formatStorageSlot(gameSlot)]: BigInt(hashOpenOracleStatePreimage(overriddenPreimage)),
 				},
 			},
 		})
-		const overriddenExtraData = await getOpenOracleExtraData(client, pendingReportId)
-		assert.strictEqual(overriddenExtraData.callbackGasLimit, 1, 'setup should force the settlement callback to fail')
 
 		await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)
-		await openOracleSettle(client, pendingReportId)
-	}
-
-	const forcePendingReportAmount2ToZero = async (reportId: bigint, amount1: bigint) => {
-		const statusAmountsSlot = getMappingStorageSlot(reportId, OPEN_ORACLE_REPORT_STATUS_MAPPING_SLOT)
-		await mockWindow.addStateOverrides({
-			[getInfraContractAddresses().openOracle]: {
-				stateDiff: {
-					[formatStorageSlot(statusAmountsSlot)]: amount1,
-				},
-			},
+		await client.writeContract({
+			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			address: openOracle,
+			functionName: 'settle',
+			args: [pendingReportId, getOpenOracleGameTuple(overriddenPreimage.game), getOpenOracleHelperTuple(overriddenPreimage.helper)],
 		})
 	}
 
@@ -471,6 +455,29 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(reportMeta.escalationHalt, requestedInitialWeth * 10n, 'the escalation halt should scale from the actual initial WETH amount')
 		assert.strictEqual(reportStatus.currentAmount1, requestedInitialWeth, 'the initial report should contain the caller-selected WETH amount')
 		assert.strictEqual(reportStatus.currentAmount2, requestedInitialWeth, 'the coordinator should derive matching REP from the selected WETH amount and proposed price')
+	})
+
+	test('coordinator settlement returns the undisputed report liquidity to the sponsor wallet', async () => {
+		const proposedRepPerEthPrice = 10n ** 18n
+		const requestedInitialWeth = 10n
+		await wrapWeth(client, requestedInitialWeth)
+		await approveToken(client, WETH_ADDRESS, priceOracle)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
+		const wethBalanceBeforeRequest = await getERC20Balance(client, WETH_ADDRESS, client.account.address)
+		const repBalanceBeforeRequest = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
+
+		await requestPriceWithValue(client, priceOracle, await getRequestPriceEthCost(client, priceOracle), proposedRepPerEthPrice, requestedInitialWeth)
+		const reportId = await getPendingReportId(client, priceOracle)
+		const reportMeta = await getOpenOracleReportMeta(client, reportId)
+		const reportStatus = await getOpenOracleReportStatus(client, reportId)
+		assert.strictEqual(reportStatus.currentReporter, priceOracle, 'the coordinator should own the initial reporter position until settlement')
+		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, client.account.address), wethBalanceBeforeRequest - requestedInitialWeth, 'the pending report should hold the sponsored WETH')
+		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), repBalanceBeforeRequest - requestedInitialWeth, 'the pending report should hold the sponsored REP')
+
+		await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)
+		await openOracleSettle(client, reportId)
+		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, client.account.address), wethBalanceBeforeRequest, 'settlement should return the coordinator reporter WETH to the sponsor')
+		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), repBalanceBeforeRequest, 'settlement should return the coordinator reporter REP to the sponsor')
 	})
 
 	test('request-block WETH sizing preserves the submitted REP per ETH price after basefee moves', async () => {
@@ -797,46 +804,6 @@ describe('Price Oracle Refund Security Tests', () => {
 		await assert.rejects(async () => await executeStagedOperation(client, priceOracle, 1n), /staged operation does not exist/i)
 	})
 
-	test('invalid settled oracle reports clear pending report without validating price or executing staged allowances', async () => {
-		const ethCost = await getRequestPriceEthCost(client, priceOracle)
-		const unsafeAllowance = repDeposit * 10n
-
-		const invalidInitialReportPrice = 1n
-		await mockWindow.setBalance(client.account.address, invalidInitialReportPrice + ethCost + 10n ** 18n)
-		await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, unsafeAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, invalidInitialReportPrice, ethCost)
-
-		const pendingReportId = await getPendingReportId(client, priceOracle)
-		assert.ok(pendingReportId > 0n, 'setup should leave a pending oracle report')
-
-		const reportMeta = await getOpenOracleReportMeta(client, pendingReportId)
-		await forcePendingReportAmount2ToZero(pendingReportId, reportMeta.exactToken1Report)
-		await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)
-		await openOracleSettle(client, pendingReportId)
-
-		const isPriceValid = await getIsPriceValid(client, priceOracle)
-		const pendingReportIdAfterSettlement = await getPendingReportId(client, priceOracle)
-		const pendingOperationSlotId = await getPendingOperationSlotId(client, priceOracle)
-		const vault = await getSecurityVault(client, securityPool, client.account.address)
-
-		assert.strictEqual(pendingReportIdAfterSettlement, 0n, 'invalid settled reports must clear the pending report so the oracle can be retried')
-		assert.strictEqual(pendingOperationSlotId, 1n, 'invalid settled reports should leave the staged operation pending for a later valid price')
-		assert.strictEqual(isPriceValid, false, 'invalid settled reports must not make the price valid')
-		assert.strictEqual(vault.securityBondAllowance, 0n, 'invalid oracle prices must not execute staged allowance updates')
-		const secondAllowance = repDeposit / 5n
-
-		const balanceBefore = await getETHBalance(client, client.account.address)
-		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, secondAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
-		const balanceAfter = await getETHBalance(client, client.account.address)
-		const pendingReportIdAfterSecondOperation = await getPendingReportId(client, priceOracle)
-
-		assert.strictEqual(balanceBefore - balanceAfter, 0n, 'unrelated staged operations should not be charged to retry an older pending operation')
-		assert.strictEqual(pendingReportIdAfterSecondOperation, 0n, 'unrelated staged operations should not request a report for an older pending slot')
-
-		await requestPrice(client, priceOracle)
-		const recoveryPendingReportId = await getPendingReportId(client, priceOracle)
-		assert.ok(recoveryPendingReportId > 0n, 'oracle state should recover after an invalid settled report clears the pending request')
-	})
-
 	test('only the pending report sponsor can queue more operations while settlement is pending', async () => {
 		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
@@ -891,17 +858,25 @@ describe('Price Oracle Refund Security Tests', () => {
 		const reportMeta = await getOpenOracleReportMeta(client, reportId)
 		const reportStatusBeforeDispute = await getOpenOracleReportStatus(client, reportId)
 		const extraDataBeforeDispute = await getOpenOracleExtraData(client, reportId)
+		const preimageBeforeDispute = (await loadOpenOracleEventState(client, reportId)).latest
 		const openOracle = getInfraContractAddresses().openOracle
+		const sponsorRepBalanceAfterRequest = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
+		const sponsorWethBalanceAfterRequest = await getERC20Balance(client, WETH_ADDRESS, client.account.address)
 		const disputedAmount1 = (reportStatusBeforeDispute.currentAmount1 * reportMeta.multiplier) / 100n
 		const disputedAmount2 = (reportStatusBeforeDispute.currentAmount2 * 8n) / 10n
+		const disputeFee = (reportStatusBeforeDispute.currentAmount2 * reportMeta.feePercentage) / 10_000_000n
+		const disputeProtocolFee = (reportStatusBeforeDispute.currentAmount2 * reportMeta.protocolFee) / 10_000_000n
+		const sponsorRepPayout = 2n * reportStatusBeforeDispute.currentAmount2 + disputeFee
 		await wrapWeth(counterpartyClient, reportStatusBeforeDispute.currentAmount1 * 3n)
 		await approveToken(counterpartyClient, addressString(GENESIS_REPUTATION_TOKEN), openOracle)
 		await approveToken(counterpartyClient, WETH_ADDRESS, openOracle)
+		const counterpartyRepBalanceBeforeDispute = await getERC20Balance(counterpartyClient, addressString(GENESIS_REPUTATION_TOKEN), counterpartyClient.account.address)
+		const counterpartyWethBalanceBeforeDispute = await getERC20Balance(counterpartyClient, WETH_ADDRESS, counterpartyClient.account.address)
 		const disputeHash = await counterpartyClient.writeContract({
 			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-			functionName: 'disputeAndSwap',
+			functionName: 'dispute',
 			address: openOracle,
-			args: [reportId, addressString(GENESIS_REPUTATION_TOKEN), disputedAmount1, disputedAmount2, counterpartyClient.account.address, reportStatusBeforeDispute.currentAmount2, extraDataBeforeDispute.stateHash],
+			args: [reportId, addressString(GENESIS_REPUTATION_TOKEN), disputedAmount1, disputedAmount2, counterpartyClient.account.address, false, false, getOpenOracleGameTuple(preimageBeforeDispute.game), getOpenOracleHelperTuple(preimageBeforeDispute.helper), [0n, 0n, 0n, 0n]],
 		})
 		await counterpartyClient.waitForTransactionReceipt({ hash: disputeHash })
 
@@ -913,6 +888,18 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual((await getOpenOracleExtraData(client, reportId)).numReports, extraDataBeforeDispute.numReports + 1, 'the dispute should append exactly one history entry')
 		assert.strictEqual(await getPendingReportId(client, priceOracle), reportId, 'the coordinator should keep tracking the disputed report')
 		assert.deepStrictEqual(await getPendingSettlementOperationIds(client, priceOracle), [1n], 'the sponsor queue should remain unchanged by a dispute')
+		assert.strictEqual(await getOpenOracleHeldBalance(client, priceOracle, addressString(GENESIS_REPUTATION_TOKEN)), sponsorRepPayout + 1n, 'the coordinator should hold the sponsor REP payout until settlement callback')
+		assert.strictEqual(await getOpenOracleHeldBalance(client, priceOracle, WETH_ADDRESS), 1n, 'the disputed sponsor WETH slot should retain only its sentinel')
+		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), sponsorRepBalanceAfterRequest, 'the sponsor payout should remain internal until settlement callback')
+		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, client.account.address), sponsorWethBalanceAfterRequest, 'the sponsor should not receive WETH when the disputer swaps REP')
+		assert.strictEqual(
+			await getERC20Balance(counterpartyClient, addressString(GENESIS_REPUTATION_TOKEN), counterpartyClient.account.address),
+			counterpartyRepBalanceBeforeDispute - disputedAmount2 - reportStatusBeforeDispute.currentAmount2 - disputeFee - disputeProtocolFee,
+			'the disputer should fund the replacement REP, swap principal, reporter fee, and protocol fee exactly',
+		)
+		assert.strictEqual(await getERC20Balance(counterpartyClient, WETH_ADDRESS, counterpartyClient.account.address), counterpartyWethBalanceBeforeDispute - (disputedAmount1 - reportStatusBeforeDispute.currentAmount1), 'the disputer should fund only the incremental WETH collateral before settlement')
+		assert.strictEqual(await getOpenOracleHeldBalance(client, counterpartyClient.account.address, addressString(GENESIS_REPUTATION_TOKEN)), 1n, 'the disputer REP slot should contain only its sentinel before settlement')
+		assert.strictEqual(await getOpenOracleHeldBalance(client, counterpartyClient.account.address, WETH_ADDRESS), 1n, 'the disputer WETH slot should contain only its sentinel before settlement')
 
 		await assert.rejects(
 			counterpartyClient.simulateContract({
@@ -932,6 +919,12 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(await getPendingReportId(client, priceOracle), 0n, 'settlement should clear the disputed pending report')
 		assert.deepStrictEqual(await getPendingSettlementOperationIds(client, priceOracle), [], 'settlement should consume the undamaged pending queue')
 		assert.strictEqual((await getSecurityVault(client, securityPool, client.account.address)).securityBondAllowance, sponsorAllowanceAfterDispute, 'queued sponsor operations should execute in order after the final settlement')
+		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), sponsorRepBalanceAfterRequest + sponsorRepPayout, 'settlement callback should pay the dispute proceeds to the original sponsor')
+		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, client.account.address), sponsorWethBalanceAfterRequest, 'settlement callback should not invent a sponsor WETH payout')
+		assert.strictEqual(await getOpenOracleHeldBalance(client, priceOracle, addressString(GENESIS_REPUTATION_TOKEN)), 1n, 'settlement callback should drain the coordinator REP credit to its sentinel')
+		assert.strictEqual(await getOpenOracleHeldBalance(client, priceOracle, WETH_ADDRESS), 1n, 'settlement callback should leave the coordinator WETH sentinel intact')
+		assert.strictEqual(await getOpenOracleHeldBalance(client, counterpartyClient.account.address, addressString(GENESIS_REPUTATION_TOKEN)), disputedAmount2 + 1n, 'settlement should credit the final REP collateral to the disputer')
+		assert.strictEqual(await getOpenOracleHeldBalance(client, counterpartyClient.account.address, WETH_ADDRESS), disputedAmount1 + 1n, 'settlement should credit the final WETH collateral to the disputer')
 	})
 
 	test('only the pending report sponsor can queue overflow operations while settlement is pending', async () => {
@@ -974,26 +967,19 @@ describe('Price Oracle Refund Security Tests', () => {
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
 		const unsafeAllowance = repDeposit * 10n
 
-		const invalidInitialReportPrice = 1n
-		await mockWindow.setBalance(client.account.address, invalidInitialReportPrice + ethCost + 10n ** 18n)
-		await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, unsafeAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, invalidInitialReportPrice, ethCost)
+		await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, unsafeAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 10n ** 18n, ethCost)
 
 		const pendingReportId = await getPendingReportId(client, priceOracle)
 		const reportMeta = await getOpenOracleReportMeta(client, pendingReportId)
-		await forcePendingReportAmount2ToZero(pendingReportId, reportMeta.exactToken1Report)
-		await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)
+		await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS + 1n)
 		await openOracleSettle(client, pendingReportId)
-		await mockWindow.advanceTime(DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS + 1n)
-
-		await requestPriceWithValue(client, priceOracle, ethCost)
-		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
 
 		const isPriceValid = await getIsPriceValid(client, priceOracle)
 		const pendingOperationSlotId = await getPendingOperationSlotId(client, priceOracle)
 		const stagedOperation = await getStagedOperation(client, priceOracle, 1n)
 		const vault = await getSecurityVault(client, securityPool, client.account.address)
 
-		assert.strictEqual(isPriceValid, true, 'valid reports should settle even when the pending auto-execute slot expired')
+		assert.strictEqual(isPriceValid, true, 'a valid report should settle even when its pending auto-execute slot expired')
 		assert.strictEqual(pendingOperationSlotId, 0n, 'expired pending auto-execute slots should be cleared during callback')
 		assert.strictEqual(stagedOperation[1], zeroAddress, 'expired pending auto-execute operations should be consumed')
 		assert.strictEqual(vault.securityBondAllowance, 0n, 'expired pending operations must not execute during later valid settlement')
@@ -1005,11 +991,18 @@ describe('Price Oracle Refund Security Tests', () => {
 
 		const pendingReportId = await getPendingReportId(client, priceOracle)
 		assert.ok(pendingReportId > 0n, 'setup should leave a pending oracle report')
+		const pendingState = (await loadOpenOracleEventState(client, pendingReportId)).latest
+		const sponsorRepBalanceAfterRequest = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
+		const sponsorWethBalanceAfterRequest = await getERC20Balance(client, WETH_ADDRESS, client.account.address)
 
 		await settlePendingReportWithFailedCallback(pendingReportId)
 
 		const pendingReportIdAfterSettlement = await getPendingReportId(client, priceOracle)
 		assert.strictEqual(pendingReportIdAfterSettlement, pendingReportId, 'failed callbacks should leave recovery work to the coordinator recovery function')
+		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), sponsorRepBalanceAfterRequest, 'failed callback settlement should not return REP before recovery')
+		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, client.account.address), sponsorWethBalanceAfterRequest, 'failed callback settlement should not return WETH before recovery')
+		assert.strictEqual(await getOpenOracleHeldBalance(client, priceOracle, addressString(GENESIS_REPUTATION_TOKEN)), pendingState.game.currentAmount2 + 1n, 'failed callback settlement should credit the coordinator REP balance')
+		assert.strictEqual(await getOpenOracleHeldBalance(client, priceOracle, WETH_ADDRESS), pendingState.game.currentAmount1 + 1n, 'failed callback settlement should credit the coordinator WETH balance')
 
 		const recoveryHash = await recoverSettledPendingReport(client, priceOracle)
 		const recoveryReceipt = await client.waitForTransactionReceipt({ hash: recoveryHash })
@@ -1034,6 +1027,10 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(recoveryLog.args.pendingReportMaxSettlementBaseFee, pendingMaxSettlementBaseFeeAfterRecovery, 'PendingReportRecovered should expose the cleared basefee guard')
 		assert.strictEqual(recoveryLog.args.lastPrice, lastPriceAfterRecovery, 'PendingReportRecovered should expose the unchanged last price')
 		assert.strictEqual(recoveryLog.args.lastSettlementTimestamp, lastSettlementTimestampAfterRecovery, 'PendingReportRecovered should expose the unchanged settlement timestamp')
+		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), sponsorRepBalanceAfterRequest + pendingState.game.currentAmount2, 'recovery should return the settled REP amount to the sponsor')
+		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, client.account.address), sponsorWethBalanceAfterRequest + pendingState.game.currentAmount1, 'recovery should return the settled WETH amount to the sponsor')
+		assert.strictEqual(await getOpenOracleHeldBalance(client, priceOracle, addressString(GENESIS_REPUTATION_TOKEN)), 1n, 'recovery should drain the coordinator REP credit to its sentinel')
+		assert.strictEqual(await getOpenOracleHeldBalance(client, priceOracle, WETH_ADDRESS), 1n, 'recovery should drain the coordinator WETH credit to its sentinel')
 
 		await requestPriceWithValue(client, priceOracle, ethCost)
 		const nextPendingReportId = await getPendingReportId(client, priceOracle)
@@ -1134,8 +1131,6 @@ describe('Price Oracle Refund Security Tests', () => {
 		await assertCoordinatorReplayMatchesStorage([...queuedOperationLogs, ...settleReceipt.logs], 'reported price and staged execution')
 		const priceReportedLog = findPriceReportedLog(settleReceipt.logs)
 		if (priceReportedLog === undefined) throw new Error('missing PriceReported log')
-		const callbackLog = findSettlementCallbackExecutedLog(settleReceipt.logs)
-		if (callbackLog === undefined) throw new Error('missing settlement callback execution event')
 		const lastPrice = await getLastPrice(client, priceOracle)
 		const lastSettlementTimestamp = await client.readContract({
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
@@ -1147,7 +1142,6 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(priceReportedLog.args.reportId, settledReportId, 'PriceReported should identify the settled report')
 		assert.strictEqual(priceReportedLog.args.price, lastPrice, 'PriceReported should expose the updated price')
 		assert.strictEqual(priceReportedLog.args.lastSettlementTimestamp, lastSettlementTimestamp, 'PriceReported should expose the updated settlement timestamp')
-		assert.strictEqual(callbackLog.args.success, true, 'bounded pending operation settlement callback should succeed')
 		const pendingOperationSlotIdAfterSettlement = await getPendingOperationSlotId(client, priceOracle)
 		const pendingSettlementOperationCountAfterSettlement = await getPendingSettlementOperationCount(client, priceOracle)
 		const updatedActiveStagedOperationCount = await getActiveStagedOperationCount(client, priceOracle)
@@ -1249,7 +1243,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		await mockWindow.advanceTime(DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS + 1n)
 
 		await requestPriceIfNeededAndStageOperationWithInitialReportPrice(liquidatorClient, priceOracle, OperationType.Liquidation, client.account.address, liquidationAmount, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, nearThresholdPrice, ethCost)
-		await handleOracleReporting(client, mockWindow, priceOracle, nearThresholdPrice, liquidatorClient.account.address)
+		await handleOracleReporting(client, mockWindow, priceOracle, nearThresholdPrice)
 
 		const targetVault = await getSecurityVault(client, securityPool, client.account.address)
 		const liquidatorVault = await getSecurityVault(client, securityPool, liquidatorClient.account.address)

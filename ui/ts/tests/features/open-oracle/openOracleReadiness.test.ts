@@ -4,33 +4,12 @@ import { describe, expect, test } from 'bun:test'
 import { getOpenOracleReadinessActions } from '../../../features/open-oracle/lib/openOracleReadiness.js'
 
 describe('open oracle readiness actions', () => {
-	test('blocks initial report until a report is loaded and uses the default title when no report id is present', () => {
-		expect(
-			getOpenOracleReadinessActions({
-				actionMode: 'initial-report',
-				disputeMessage: undefined,
-				hasReport: false,
-				reportId: '',
-				settleMessage: undefined,
-			}),
-		).toEqual([
-			{
-				actionLabel: 'Initial Report',
-				blocker: 'Load a report first.',
-				key: 'submit-initial-report',
-				readiness: 'blocked',
-				title: 'Submit Initial Report',
-			},
-		])
-	})
-
 	test('builds dispute-mode actions with independent dispute and settle blockers', () => {
 		expect(
 			getOpenOracleReadinessActions({
 				actionMode: 'dispute',
 				disputeMessage: undefined,
 				hasReport: true,
-				reportId: '7',
 				settleMessage: 'Wait until the dispute window closes.',
 			}),
 		).toEqual([
@@ -57,7 +36,6 @@ describe('open oracle readiness actions', () => {
 				actionMode: 'dispute',
 				disputeMessage: 'Need approval first.',
 				hasReport: false,
-				reportId: '4',
 				settleMessage: 'Still disputable.',
 			}),
 		).toEqual([
@@ -85,7 +63,6 @@ describe('open oracle readiness actions', () => {
 				actionMode: 'settle',
 				disputeMessage: undefined,
 				hasReport: true,
-				reportId: '12',
 				settleMessage: undefined,
 			}),
 		).toEqual([
@@ -102,7 +79,6 @@ describe('open oracle readiness actions', () => {
 				actionMode: 'read-only',
 				disputeMessage: undefined,
 				hasReport: true,
-				reportId: '12',
 				settleMessage: undefined,
 			}),
 		).toEqual([])

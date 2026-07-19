@@ -778,7 +778,7 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		const documentQueries = within(document.body)
 		const searchInput = documentQueries.getByLabelText('Search this page')
-		expect(searchInput.getAttribute('placeholder')).toBe('Pool address, question ID, or question text')
+		expect(searchInput.getAttribute('placeholder')).toBe('Address, question ID, or text')
 		expect(documentQueries.queryByText(/pools? match/)).toBeNull()
 		const systemStateSelect = documentQueries.getByLabelText('System State')
 		if (!(systemStateSelect instanceof window.HTMLSelectElement)) throw new Error('Expected system state filter')

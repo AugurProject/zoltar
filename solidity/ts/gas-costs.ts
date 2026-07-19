@@ -4,19 +4,7 @@ import { peripherals_openOracle_OpenOracle_OpenOracle, Zoltar_Zoltar } from './t
 import { createAnvilNodeForConnectionMode, getGasCostsAnvilConnectionMode } from './testSupport/simulator/anvilNode'
 import { submitBid, refundLosingBids } from './testSupport/simulator/utils/contracts/auction'
 import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from './testSupport/simulator/utils/contracts/deployPeripherals'
-import {
-	getOpenOracleExtraData,
-	getPendingReportId,
-	getRequestPriceEthCost,
-	migrateShares,
-	openOracleSettle,
-	openOracleSubmitInitialReport,
-	OperationType,
-	requestPrice,
-	requestPriceIfNeededAndStageOperation,
-	requestPriceIfNeededAndStageOperationWithInitialReportPrice,
-	wrapWeth,
-} from './testSupport/simulator/utils/contracts/peripherals'
+import { getPendingReportId, getRequestPriceEthCost, migrateShares, openOracleSettle, OperationType, requestPrice, requestPriceIfNeededAndStageOperation, requestPriceIfNeededAndStageOperationWithInitialReportPrice, wrapWeth } from './testSupport/simulator/utils/contracts/peripherals'
 import { manipulatePriceOracle, manipulatePriceOracleAndPerformOperation } from './testSupport/simulator/utils/contracts/peripheralsTestUtils'
 import { claimAuctionProceeds, claimForkedEscalationDeposits, createChildUniverse, finalizeTruthAuction, forkZoltarWithOwnEscalationGame, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault, startTruthAuction } from './testSupport/simulator/utils/contracts/securityPoolForker'
 import { createCompleteSet, depositRep, depositToEscalationGame, getRepToken, redeemCompleteSet, redeemFees, redeemRep, redeemShares, updateVaultFees, withdrawFromEscalationGame } from './testSupport/simulator/utils/contracts/securityPool'
@@ -246,27 +234,50 @@ const prepareDirectOpenOracleInitialReport = async () => {
 		functionName: 'nextReportId',
 		args: [],
 	})
-	await confirmTx(
-		alice,
-		writeContractAndWait(alice, () =>
-			alice.writeContract({
-				address: openOracleAddress,
-				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-				functionName: 'createReportInstance',
-				args: [addressString(GENESIS_REPUTATION_TOKEN), WETH_ADDRESS, reportBond, 0, 100, DAY, reportBond, 0, 0, 0],
-			}),
-		),
-	)
 	const amount1 = reportBond
 	const amount2 = reportBond
-	const stateHash = (await getOpenOracleExtraData(alice, reportId)).stateHash
 	await confirmTx(alice, approveToken(alice, addressString(GENESIS_REPUTATION_TOKEN), getInfraContractAddresses().openOracle))
 	await confirmTx(alice, approveToken(alice, WETH_ADDRESS, getInfraContractAddresses().openOracle))
 	const wethBalanceBefore = await getERC20Balance(alice, WETH_ADDRESS, alice.account.address)
 	await confirmTx(alice, wrapWeth(alice, amount2))
 	const wethBalanceAfter = await getERC20Balance(alice, WETH_ADDRESS, alice.account.address)
 	if (BigInt(wethBalanceAfter) - BigInt(wethBalanceBefore) !== amount2) throw new Error('Failed to wrap the expected amount of WETH')
-	return { reportId, amount1, amount2, stateHash }
+	const submit = () =>
+		writeContractAndWait(alice, () =>
+			alice.writeContract({
+				address: openOracleAddress,
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				functionName: 'report',
+				args: [
+					{
+						callbackContract: zeroAddress,
+						callbackGasLimit: 0,
+						currentAmount1: amount1,
+						currentAmount2: amount2,
+						currentReporter: alice.account.address,
+						disputeDelay: 0,
+						escalationHalt: reportBond,
+						feePercentage: 0,
+						flags: 13,
+						lastReportOppoTime: 0,
+						multiplier: 100,
+						numReports: 0,
+						protocolFee: 0,
+						protocolFeeRecipient: zeroAddress,
+						reportTimestamp: 0,
+						settlementTime: DAY,
+						settlementTimestamp: 0,
+						settlerReward: 0n,
+						token1: addressString(GENESIS_REPUTATION_TOKEN),
+						token2: WETH_ADDRESS,
+					},
+					false,
+					false,
+					[0n, 0n, 0n, 0n],
+				],
+			}),
+		)
+	return { reportId, submit }
 }
 
 const deployChildTx = async (universeId: bigint, outcomeIndex: bigint) =>
@@ -371,11 +382,11 @@ const scenarios: Scenario[] = [
 	},
 	{
 		section: '6. Open Oracle Operation',
-		label: 'submit initial OpenOracle report',
+		label: 'submit atomic OpenOracle report',
 		run: async () => {
 			await setupPool('Gas submit report')
 			const initialReport = await prepareDirectOpenOracleInitialReport()
-			return await waitForGas(alice, openOracleSubmitInitialReport(alice, initialReport.reportId, initialReport.amount1, initialReport.amount2, initialReport.stateHash))
+			return await waitForGas(alice, initialReport.submit())
 		},
 	},
 	{
@@ -384,7 +395,7 @@ const scenarios: Scenario[] = [
 		run: async () => {
 			await setupPool('Gas settle report')
 			const initialReport = await prepareDirectOpenOracleInitialReport()
-			await confirmTx(alice, openOracleSubmitInitialReport(alice, initialReport.reportId, initialReport.amount1, initialReport.amount2, initialReport.stateHash))
+			await confirmTx(alice, initialReport.submit())
 			await anvil.advanceTime(DAY)
 			return await waitForGas(alice, openOracleSettle(alice, initialReport.reportId))
 		},

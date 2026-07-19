@@ -1,8 +1,9 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData, getAddress, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { getOpenOracleAddress, loadOpenOracleReportDetails, loadOracleManagerDetails, loadOpenOracleReportSummaries, settleOracleReport } from '../../protocol/index.js'
+import { decodeFunctionData, getAddress, toHex, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { encodeOpenOracleStatePreimagePacked, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
+import { getOpenOracleAddress, loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, loadOracleManagerDetails, loadOpenOracleReportSummaries, settleOracleReport, withdrawOpenOracleBalance } from '../../protocol/index.js'
 import { peripherals_openOracle_OpenOracle_OpenOracle } from '../../contractArtifact.js'
 import { MAINNET_WETH_ADDRESS } from '../../lib/networkProfile.js'
 import { createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from './testSupport.js'
@@ -12,12 +13,55 @@ const alternateSecurityPoolAddress = getAddress('0x00000000000000000000000000000
 const token1Address = getAddress('0x00000000000000000000000000000000000000d1')
 const token2Address = getAddress('0x00000000000000000000000000000000000000d2')
 const wethAddress = getAddress(MAINNET_WETH_ADDRESS)
+const initialReporter = getAddress('0x00000000000000000000000000000000000000e1')
+
+function createOpenOraclePreimage(reportId = 1n): OpenOracleStatePreimage {
+	return {
+		game: {
+			callbackContract: zeroAddress,
+			callbackGasLimit: 0n,
+			currentAmount1: 100n,
+			currentAmount2: 10n,
+			currentReporter: initialReporter,
+			disputeDelay: 0n,
+			escalationHalt: 0n,
+			feePercentage: 0n,
+			flags: OPEN_ORACLE_FLAG_TIME_TYPE,
+			lastReportOppoTime: 1n,
+			multiplier: 100n,
+			numReports: 1n,
+			protocolFee: 0n,
+			protocolFeeRecipient: zeroAddress,
+			reportTimestamp: 1n,
+			settlementTime: 10n,
+			settlementTimestamp: 0n,
+			settlerReward: 0n,
+			token1: token1Address,
+			token2: token2Address,
+		},
+		helper: { blockNumber: 1n, blockTimestamp: 1n, creator: initialReporter, reportId },
+	}
+}
+
+function createOpenOracleStateLog(preimage: OpenOracleStatePreimage, topic = OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, logIndex = 0n) {
+	return {
+		address: getOpenOracleAddress(),
+		blockNumber: 1n,
+		data: encodeOpenOracleStatePreimagePacked(preimage),
+		logIndex,
+		removed: false,
+		topics: [topic, toHex(preimage.helper.reportId, { size: 32 })],
+		transactionIndex: 0n,
+	}
+}
 
 describe('openOracle protocol client', () => {
 	test('loadOpenOracleReportSummaries keeps reports disputed when dispute history returns to the initial reporter', async () => {
-		const initialReporter = getAddress('0x00000000000000000000000000000000000000e1')
+		const initial = createOpenOraclePreimage()
+		const disputed = { ...initial, game: { ...initial.game, numReports: 2n, reportTimestamp: 2n } }
 		const client = createMockLoaderClient({
 			getBlock: async () => ({ number: 1n, timestamp: 0n }),
+			getLogs: async () => [createOpenOracleStateLog(initial), createOpenOracleStateLog(disputed, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, 1n)],
 			multicall: async request => {
 				const contracts = request.contracts
 				const firstContract = contracts[0]
@@ -50,9 +94,10 @@ describe('openOracle protocol client', () => {
 	})
 
 	test('loadOpenOracleReportDetails rejects invalid token decimals', async () => {
-		const initialReporter = getAddress('0x00000000000000000000000000000000000000e1')
+		const preimage = createOpenOraclePreimage()
 		const client = createMockLoaderClient({
 			getBlock: async () => ({ number: 1n, timestamp: 0n }),
+			getLogs: async () => [createOpenOracleStateLog(preimage)],
 			multicall: async request => {
 				const firstFunctionName = getContractFunctionName(request.contracts[0])
 				if (firstFunctionName === 'reportMeta') {
@@ -66,6 +111,7 @@ describe('openOracle protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${firstFunctionName}`)
 			},
 			readContract: async request => {
+				if (request.functionName === 'oracleGame') return hashOpenOracleStatePreimage(preimage)
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
 		})
@@ -74,9 +120,10 @@ describe('openOracle protocol client', () => {
 	})
 
 	test('loadOpenOracleReportSummaries rejects empty token symbols', async () => {
-		const initialReporter = getAddress('0x00000000000000000000000000000000000000e1')
+		const preimage = createOpenOraclePreimage()
 		const client = createMockLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(0n),
+			getLogs: async () => [createOpenOracleStateLog(preimage)],
 			multicall: async request => {
 				const firstFunctionName = getContractFunctionName(request.contracts[0])
 				if (firstFunctionName === 'reportMeta') return [[100n, 0n, 0n, 0n, token1Address, 0, token2Address, true, 0, 0, 0, 0]]
@@ -96,9 +143,11 @@ describe('openOracle protocol client', () => {
 	})
 
 	test('loadOpenOracleReportSummaries rejects mismatched configured WETH metadata', async () => {
-		const initialReporter = getAddress('0x00000000000000000000000000000000000000e1')
+		const preimage = createOpenOraclePreimage()
+		preimage.game.token2 = wethAddress
 		const client = createMockLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(0n),
+			getLogs: async () => [createOpenOracleStateLog(preimage)],
 			multicall: async request => {
 				const firstFunctionName = getContractFunctionName(request.contracts[0])
 				if (firstFunctionName === 'reportMeta') return [[100n, 0n, 0n, 0n, token1Address, 0, wethAddress, true, 0, 0, 0, 0]]
@@ -186,6 +235,7 @@ describe('openOracle protocol client', () => {
 	})
 
 	test('settleOracleReport sends settle with an explicit gas limit', async () => {
+		const reporter = getAddress('0x00000000000000000000000000000000000000e1')
 		let capturedData: Hex | undefined
 		let capturedGas: bigint | undefined
 		let capturedTo: Address | null | undefined
@@ -195,7 +245,31 @@ describe('openOracle protocol client', () => {
 			capturedTo = request.to
 		})
 
-		await settleOracleReport(client, getOpenOracleAddress(), 7n)
+		await settleOracleReport(client, getOpenOracleAddress(), 7n, {
+			game: {
+				callbackContract: zeroAddress,
+				callbackGasLimit: 0n,
+				currentAmount1: 1n,
+				currentAmount2: 2n,
+				currentReporter: reporter,
+				disputeDelay: 0n,
+				escalationHalt: 0n,
+				feePercentage: 0n,
+				flags: 0n,
+				lastReportOppoTime: 1n,
+				multiplier: 100n,
+				numReports: 1n,
+				protocolFee: 0n,
+				protocolFeeRecipient: zeroAddress,
+				reportTimestamp: 1n,
+				settlementTime: 1n,
+				settlementTimestamp: 0n,
+				settlerReward: 0n,
+				token1: token1Address,
+				token2: token2Address,
+			},
+			helper: { blockNumber: 1n, blockTimestamp: 1n, creator: reporter, reportId: 7n },
+		})
 
 		expect(capturedTo).toBe(getOpenOracleAddress())
 		expect(capturedGas).toBe(5_000_000n)
@@ -205,6 +279,47 @@ describe('openOracle protocol client', () => {
 			data: capturedData ?? ('0x' satisfies Hex),
 		})
 		expect(decodedCall.functionName).toBe('settle')
-		expect(decodedCall.args).toEqual([7n])
+		expect(decodedCall.args?.[0]).toBe(7n)
+	})
+
+	test('loads sentinel-adjusted balances and keeps a failed withdrawal retryable', async () => {
+		const holder = getAddress('0x00000000000000000000000000000000000000f1')
+		const requestedTokens: Address[] = []
+		const readClient = createMockLoaderClient({
+			getBlock: async () => ({ timestamp: 0n }),
+			multicall: async () => [],
+			readContract: async request => {
+				if (request.functionName !== 'tokenHolder') throw new Error(`Unexpected read ${request.functionName}`)
+				const token = request.args?.[1]
+				if (typeof token !== 'string') throw new Error('Expected tokenHolder token')
+				requestedTokens.push(getAddress(token))
+				if (token === zeroAddress) return 6n
+				if (token === token1Address) return 8n
+				if (token === token2Address) return 10n
+				throw new Error(`Unexpected token ${token}`)
+			},
+		})
+
+		await expect(loadOpenOracleWithdrawableBalances(readClient, getOpenOracleAddress(), holder, token1Address, token2Address)).resolves.toEqual({
+			eth: 5n,
+			token1: 7n,
+			token2: 9n,
+		})
+		expect(requestedTokens).toEqual([zeroAddress, token1Address, token2Address])
+
+		let withdrawalAttempts = 0
+		const writeClient = createMockWriteClient(request => {
+			withdrawalAttempts += 1
+			if (withdrawalAttempts === 1) throw new Error('wallet rejected withdrawal')
+			const data = request.data
+			if (data === undefined) throw new Error('Expected withdrawal calldata')
+			const decodedCall = decodeFunctionData({ abi: peripherals_openOracle_OpenOracle_OpenOracle.abi, data })
+			expect(decodedCall.functionName).toBe('withdrawTo')
+			expect(decodedCall.args).toEqual([token1Address, 2n ** 256n - 1n, holder])
+		})
+
+		await expect(withdrawOpenOracleBalance(writeClient, getOpenOracleAddress(), token1Address, holder)).rejects.toThrow('wallet rejected withdrawal')
+		await expect(withdrawOpenOracleBalance(writeClient, getOpenOracleAddress(), token1Address, holder)).resolves.toMatchObject({ action: 'withdrawBalance' })
+		expect(withdrawalAttempts).toBe(2)
 	})
 })

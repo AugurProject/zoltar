@@ -35,6 +35,10 @@
 			"types": "./ts/oracleInitialReport.ts",
 			"default": "./js/oracleInitialReport.js"
 		},
+		"./openOracle": {
+			"types": "./ts/openOracle.ts",
+			"default": "./js/openOracle.js"
+		},
 		"./liquidation": {
 			"types": "./ts/liquidation.ts",
 			"default": "./js/liquidation.js"

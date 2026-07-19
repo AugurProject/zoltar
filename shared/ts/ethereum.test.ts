@@ -82,7 +82,7 @@ const SUBMIT_REPORT_ABI = [
 			{ name: 'amount2', type: 'uint128' },
 			{ name: 'stateHash', type: 'bytes32' },
 		],
-		name: 'submitInitialReport',
+		name: 'submitReport',
 		type: 'function',
 	},
 	{
@@ -93,7 +93,7 @@ const SUBMIT_REPORT_ABI = [
 			{ name: 'stateHash', type: 'bytes32' },
 			{ name: 'reporter', type: 'address' },
 		],
-		name: 'submitInitialReport',
+		name: 'submitReport',
 		type: 'function',
 	},
 ]
@@ -408,12 +408,12 @@ describe('shared ethereum compatibility layer', () => {
 		const stateHash = `0x${'55'.repeat(32)}` satisfies Hex
 		const fourArgumentCall = encodeFunctionData({
 			abi: SUBMIT_REPORT_ABI,
-			functionName: 'submitInitialReport',
+			functionName: 'submitReport',
 			args: [7n, 8n, 9n, stateHash],
 		})
 		const fiveArgumentCall = encodeFunctionData({
 			abi: SUBMIT_REPORT_ABI,
-			functionName: 'submitInitialReport',
+			functionName: 'submitReport',
 			args: [7n, 8n, 9n, stateHash, OWNER_ADDRESS],
 		})
 
@@ -789,6 +789,22 @@ describe('shared ethereum compatibility layer', () => {
 		expect(getDecodedEntry(logArgs, 0, 'from', 'decoded log args')).toBe(getAddress(OWNER_ADDRESS))
 		expect(getDecodedEntry(logArgs, 1, 'to', 'decoded log args')).toBe(getAddress(RECIPIENT_ADDRESS))
 		expect(getDecodedEntry(logArgs, 2, 'value', 'decoded log args')).toBe(5n)
+		const signatureTopic = transferTopics[0]
+		const ownerTopic = transferTopics[1]
+		if (signatureTopic === undefined || ownerTopic === undefined) throw new Error('transfer topics missing')
+		const rawTopicFilter = [[signatureTopic], ownerTopic] as const
+		const rawLogs = await client.getLogs({
+			address: TOKEN_ADDRESS,
+			fromBlock: 1n,
+			toBlock: 1n,
+			topics: rawTopicFilter,
+		})
+		expect(rawLogs).toHaveLength(1)
+		expect(rawLogs[0]?.topics).toEqual(transferTopics)
+		const rawLogsCall = calls.filter(call => call.method === 'eth_getLogs').at(-1)
+		const rawLogsFilter = getArrayEntry(rawLogsCall?.params, 0, 'raw eth_getLogs params')
+		expect(getObjectEntry(rawLogsFilter, 'topics', 'raw eth_getLogs filter')).toEqual(rawTopicFilter)
+		await expect(client.getLogs({ address: TOKEN_ADDRESS, event: transferEvent, topics: rawTopicFilter })).rejects.toThrow('getLogs accepts either an event or raw topics, not both')
 
 		const receipt = await client.waitForTransactionReceipt({
 			hash: RECEIPT_HASH,

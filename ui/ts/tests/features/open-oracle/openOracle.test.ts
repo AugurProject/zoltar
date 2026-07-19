@@ -8,26 +8,22 @@ import {
 	getOpenOracleAddress,
 	loadCoordinatorInitialReportFundingRequirement,
 	loadErc20Balance,
+	loadOpenOracleWithdrawableBalances,
 	loadOpenOracleReportDetails,
 	loadOpenOracleReportSummaries,
 	loadOracleManagerDetails,
 	queueOracleManagerOperation,
 	requestOraclePrice,
 	settleOracleReport,
-	submitInitialOracleReport,
+	withdrawOpenOracleBalance,
 	wrapWeth as wrapUiWeth,
 } from '../../../protocol/index.js'
 import {
 	addOpenOracleBountyBuffer,
 	deriveOpenOracleDisputeSubmissionDetails,
-	deriveOpenOracleInitialReportSubmissionDetails,
 	formatOpenOracleDisputeWriteErrorMessage,
 	formatOpenOracleFeePercentage,
 	formatOpenOracleFeePercentageInput,
-	formatOpenOracleInitialReportApprovalStatusUnavailableMessage,
-	formatOpenOracleInitialReportBalanceStatusUnavailableMessage,
-	formatOpenOracleInitialReportPriceUnavailableMessage,
-	formatOpenOracleInitialReportWriteErrorMessage,
 	formatOpenOracleMultiplier,
 	formatOpenOracleSettleWriteErrorMessage,
 	getOpenOracleCreateValidationMessage,
@@ -35,27 +31,27 @@ import {
 	getOpenOracleReportStatus,
 	getOpenOracleSelectedReportActionMode,
 	getOpenOracleSettleAvailability,
-	loadOpenOracleInitialReportPrice,
-	loadOpenOracleInitialReportPriceResult,
 	parseOpenOracleCreateFormSubmission,
 	parseOpenOracleFeePercentageInput,
 } from '../../../features/open-oracle/lib/openOracle.js'
+import { loadOpenOracleInitialReportPrice, loadOpenOracleInitialReportPriceResult } from '../../../protocol/openOraclePricing.js'
 import { getDefaultOpenOracleCreateFormState } from '../../../features/markets/lib/marketForm.js'
 import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../../../features/security-pools/lib/securityVault.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../../../lib/clients.js'
 import { ETH_ADDRESS, REP_ADDRESS, USDC_ADDRESS } from '../../../protocol/uniswapQuoter.js'
+import { peripherals_openOracle_OpenOracle_OpenOracle } from '../../../contractArtifact.js'
 import type { InjectedEthereum } from '../../../injectedEthereum.js'
 import type { WriteContractClient } from '../../../protocol/core.js'
 import { DAY, GENESIS_REPUTATION_TOKEN, WETH_ADDRESS, TEST_ADDRESSES } from '../../../../../solidity/ts/testSupport/simulator/utils/constants'
 import { addressString } from '../../../../../solidity/ts/testSupport/simulator/utils/bigint'
-import { approveToken, setupTestAccounts, ensureProxyDeployerDeployed } from '../../../../../solidity/ts/testSupport/simulator/utils/utilities'
+import { setupTestAccounts, ensureProxyDeployerDeployed } from '../../../../../solidity/ts/testSupport/simulator/utils/utilities'
 import { AnvilWindowEthereum } from '../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient } from '../../../../../solidity/ts/testSupport/simulator/utils/clients'
 import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployPeripherals'
 import { ensureZoltarDeployed } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { getOpenOracleExtraData, getRequestPriceEthCost, OperationType, requestPriceIfNeededAndStageOperation, requestPriceWithValue, wrapWeth as wrapWethTestHelper } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/peripherals'
+import { getOpenOracleExtraData, getRequestPriceEthCost, OperationType, requestPriceIfNeededAndStageOperation, requestPriceWithValue } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/peripherals'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -112,41 +108,6 @@ function createFailingQuoteClient(message: string): Parameters<typeof loadOpenOr
 	}
 	client.simulateContract = simulateContract
 	return client
-}
-
-function createInitialReportSubmissionPreview(overrides: Partial<Parameters<typeof deriveOpenOracleInitialReportSubmissionDetails>[0]> = {}) {
-	return deriveOpenOracleInitialReportSubmissionDetails({
-		approvedToken1Amount: 100n,
-		approvedToken2Amount: 25n,
-		defaultPrice: '4.0',
-		defaultPriceError: undefined,
-		defaultPriceSource: 'Uniswap V4',
-		defaultPriceSourceUrl: 'https://app.uniswap.org/explore/pools/ethereum/0xpool',
-		priceInput: '',
-		quoteAttemptedSources: undefined,
-		quoteFailureReason: undefined,
-		reportDetails: {
-			currentReporter: zeroAddress,
-			disputeOccurred: false,
-			exactToken1Report: 100n,
-			isDistributed: false,
-			reportTimestamp: 0n,
-			token1: REP_ADDRESS,
-			token1Symbol: 'REP',
-			token2: WETH_ADDRESS,
-			token2Symbol: 'WETH',
-		},
-		token1AllowanceError: undefined,
-		token1Balance: 100n,
-		token1BalanceError: undefined,
-		token1Decimals: 0,
-		token2AllowanceError: undefined,
-		token2Balance: 25n,
-		token2BalanceError: undefined,
-		token2Decimals: 0,
-		walletEthBalance: 10n,
-		...overrides,
-	})
 }
 
 function createOpenOracleLifecycleReport(
@@ -296,7 +257,8 @@ describe('Open Oracle helpers', () => {
 			disputeDelay: 10,
 			escalationHalt: 0n,
 			exactToken1Report: 1n,
-			ethValue: 1_100n,
+			initialToken2Amount: 1n,
+			ethValue: 1_000n,
 			feePercentage: 100,
 			multiplier: 100,
 			protocolFee: 100,
@@ -311,7 +273,8 @@ describe('Open Oracle helpers', () => {
 			disputeDelay: 10,
 			escalationHalt: 0n,
 			exactToken1Report: 2n,
-			ethValue: 1_200n,
+			initialToken2Amount: 2n,
+			ethValue: 1_100n,
 			feePercentage: 100,
 			multiplier: 100,
 			protocolFee: 100,
@@ -328,11 +291,75 @@ describe('Open Oracle helpers', () => {
 		const newestReport = page.reports[0]
 		if (newestReport === undefined) throw new Error('Expected a newest report summary')
 		expect(newestReport.reportId).toBe(2n)
-		expect(getOpenOracleReportStatus(newestReport)).toBe('Awaiting Initial Report')
+		expect(getOpenOracleReportStatus(newestReport)).toBe('Pending')
 
 		const firstPage = await loadOpenOracleReportSummaries(uiReadClient, 0, 10)
 		expect(firstPage.reports.map(report => report.reportId)).toEqual([2n, 1n])
-		expect(firstPage.reports.map(report => report.price)).toEqual([0n, 0n])
+		expect(firstPage.reports.map(report => report.price)).toEqual([10n ** 30n, 10n ** 30n])
+	})
+
+	test('settlement stays successful while reporter liquidity and a third-party settler reward remain independently withdrawable', async () => {
+		const reporter = uiWriteClient.account.address
+		const settler = getAddress(addressString(TEST_ADDRESSES[1]))
+		const token1Amount = 3n
+		const token2Amount = 4n
+		await wrapUiWeth(uiWriteClient, token2Amount)
+		const repBalanceBeforeReport = await loadErc20Balance(uiReadClient, addressString(GENESIS_REPUTATION_TOKEN), reporter)
+		const wethBalanceBeforeReport = await loadErc20Balance(uiReadClient, WETH_ADDRESS, reporter)
+
+		await createOpenOracleReportInstance(uiWriteClient, {
+			disputeDelay: 10,
+			escalationHalt: 0n,
+			exactToken1Report: token1Amount,
+			initialToken2Amount: token2Amount,
+			ethValue: 1_000n,
+			feePercentage: 100,
+			multiplier: 100,
+			protocolFee: 100,
+			settlementTime: 60,
+			settlerReward: 1_000n,
+			token1Address: addressString(GENESIS_REPUTATION_TOKEN),
+			token2Address: WETH_ADDRESS,
+		})
+		const report = (await loadOpenOracleReportSummaries(uiReadClient, 0, 1)).reports[0]
+		if (report === undefined) throw new Error('Expected a standalone report')
+		expect(await loadErc20Balance(uiReadClient, addressString(GENESIS_REPUTATION_TOKEN), reporter)).toBe(repBalanceBeforeReport - token1Amount)
+		expect(await loadErc20Balance(uiReadClient, WETH_ADDRESS, reporter)).toBe(wethBalanceBeforeReport - token2Amount)
+
+		await mockWindow.advanceTime(61n)
+		installInjectedEthereum(mockWindow, settler)
+		const settlerWriteClient = createWalletWriteClient(settler)
+		const settlement = await settleOracleReport(settlerWriteClient, getOpenOracleAddress(), report.reportId)
+		expect(settlement.action).toBe('settle')
+		expect(await loadErc20Balance(uiReadClient, addressString(GENESIS_REPUTATION_TOKEN), reporter)).toBe(repBalanceBeforeReport - token1Amount)
+		expect(await loadErc20Balance(uiReadClient, WETH_ADDRESS, reporter)).toBe(wethBalanceBeforeReport - token2Amount)
+
+		const reporterWithdrawable = await loadOpenOracleWithdrawableBalances(uiReadClient, getOpenOracleAddress(), reporter, getAddress(addressString(GENESIS_REPUTATION_TOKEN)), getAddress(WETH_ADDRESS))
+		const settlerWithdrawable = await loadOpenOracleWithdrawableBalances(uiReadClient, getOpenOracleAddress(), settler, getAddress(addressString(GENESIS_REPUTATION_TOKEN)), getAddress(WETH_ADDRESS))
+		expect(reporterWithdrawable).toEqual({ eth: 0n, token1: token1Amount, token2: token2Amount })
+		expect(settlerWithdrawable).toEqual({ eth: 1_000n, token1: 0n, token2: 0n })
+
+		installInjectedEthereum(mockWindow, reporter)
+		await withdrawOpenOracleBalance(uiWriteClient, getOpenOracleAddress(), getAddress(addressString(GENESIS_REPUTATION_TOKEN)), reporter)
+		await withdrawOpenOracleBalance(uiWriteClient, getOpenOracleAddress(), getAddress(WETH_ADDRESS), reporter)
+		installInjectedEthereum(mockWindow, settler)
+		await withdrawOpenOracleBalance(settlerWriteClient, getOpenOracleAddress(), zeroAddress, settler)
+		expect(await loadErc20Balance(uiReadClient, addressString(GENESIS_REPUTATION_TOKEN), reporter)).toBe(repBalanceBeforeReport)
+		expect(await loadErc20Balance(uiReadClient, WETH_ADDRESS, reporter)).toBe(wethBalanceBeforeReport)
+		for (const [holder, token] of [
+			[reporter, getAddress(addressString(GENESIS_REPUTATION_TOKEN))],
+			[reporter, getAddress(WETH_ADDRESS)],
+			[settler, zeroAddress],
+		] as const) {
+			expect(
+				await client.readContract({
+					abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+					address: getOpenOracleAddress(),
+					functionName: 'tokenHolder',
+					args: [holder, token],
+				}),
+			).toBe(1n)
+		}
 	})
 
 	test('createOpenOracleReportInstance rejects numeric parameters above Number.MAX_SAFE_INTEGER', async () => {
@@ -341,7 +368,8 @@ describe('Open Oracle helpers', () => {
 				disputeDelay: Number.MAX_SAFE_INTEGER + 1,
 				escalationHalt: 0n,
 				exactToken1Report: 1n,
-				ethValue: 1_100n,
+				initialToken2Amount: 1n,
+				ethValue: 1_000n,
 				feePercentage: 100,
 				multiplier: 100,
 				protocolFee: 100,
@@ -366,7 +394,8 @@ describe('Open Oracle helpers', () => {
 				disputeDelay: 10,
 				escalationHalt: 0n,
 				exactToken1Report: 1n,
-				ethValue: 1_100n,
+				initialToken2Amount: 1n,
+				ethValue: 1_000n,
 				feePercentage: 100,
 				multiplier: 65_536,
 				protocolFee: 100,
@@ -445,24 +474,6 @@ describe('Open Oracle helpers', () => {
 		})
 	})
 
-	test('initial report submission helper computes preview amounts and approval gating', () => {
-		const preview = createInitialReportSubmissionPreview({
-			approvedToken2Amount: 24n,
-		})
-
-		expect(preview.priceSource).toBe('Uniswap V4')
-		expect(preview.priceSourceUrl).toBe('https://app.uniswap.org/explore/pools/ethereum/0xpool')
-		expect(preview.price).toBe(4_000_000_000_000_000_000_000_000_000_000n)
-		expect(preview.amount1).toBe(100n)
-		expect(preview.amount2).toBe(25n)
-		expect(preview.token2Approval.neededAmount).toBe(1n)
-		expect(preview.canSubmit).toBe(false)
-		expect(preview.blockMessage).toEqual({
-			kind: 'visible',
-			message: 'WETH approval required',
-		})
-	})
-
 	test('dispute submission helper computes token contributions across both swap directions', () => {
 		const cases = [
 			{ disputeTokenToSwap: 'token1' as const, expectedToken1Contribution: 315n, expectedToken2Contribution: 30n },
@@ -501,421 +512,36 @@ describe('Open Oracle helpers', () => {
 		}
 	})
 
-	test('initial report submission helper hides the automatic quote loading state', () => {
-		const preview = createInitialReportSubmissionPreview({
-			defaultPrice: undefined,
-			defaultPriceError: undefined,
-			defaultPriceSource: undefined,
-			defaultPriceSourceUrl: undefined,
-			priceInput: '',
-			quoteAttemptedSources: undefined,
-			quoteFailureReason: undefined,
-		})
+	test('dispute submission helper uses the reduced self-dispute contribution in both swap directions', () => {
+		const currentReporter = getAddress(addressString(TEST_ADDRESSES[1]))
+		const cases = [
+			{ disputeTokenToSwap: 'token1' as const, expectedToken1Contribution: 105n, expectedToken2Contribution: 30n, token1Balance: 105n, token2Balance: 30n },
+			{ disputeTokenToSwap: 'token2' as const, expectedToken1Contribution: 100n, expectedToken2Contribution: 32n, token1Balance: 100n, token2Balance: 32n },
+		]
 
-		expect(preview.canSubmit).toBe(false)
-		expect(preview.blockMessage).toEqual({
-			kind: 'hidden-loading',
-			message: 'Loading automatic price quote.',
-		})
-	})
+		for (const testCase of cases) {
+			const selfDisputePreview = createDisputeSubmissionPreview({
+				accountAddress: currentReporter,
+				approvedToken1Amount: testCase.token1Balance,
+				approvedToken2Amount: testCase.token2Balance,
+				disputeTokenToSwap: testCase.disputeTokenToSwap,
+				token1Balance: testCase.token1Balance,
+				token2Balance: testCase.token2Balance,
+			})
+			const thirdPartyPreview = createDisputeSubmissionPreview({
+				accountAddress: getAddress(addressString(TEST_ADDRESSES[2])),
+				approvedToken1Amount: testCase.token1Balance,
+				approvedToken2Amount: testCase.token2Balance,
+				disputeTokenToSwap: testCase.disputeTokenToSwap,
+				token1Balance: testCase.token1Balance,
+				token2Balance: testCase.token2Balance,
+			})
 
-	test('initial report submission helper explains exhausted quote paths with a short reason', () => {
-		const preview = createInitialReportSubmissionPreview({
-			approvedToken2Amount: 100n,
-			defaultPrice: undefined,
-			defaultPriceError: undefined,
-			defaultPriceSource: undefined,
-			defaultPriceSourceUrl: undefined,
-			priceInput: '',
-			quoteAttemptedSources: ['Uniswap V4', 'Uniswap V3'],
-			quoteFailureReason: 'Failed to fetch price from Uniswap. Uniswap V4 quote failed: execution reverted for an unknown reason. Uniswap V3 quote failed: no pool',
-			reportDetails: {
-				currentReporter: zeroAddress,
-				disputeOccurred: false,
-				exactToken1Report: 100n,
-				isDistributed: false,
-				reportTimestamp: 0n,
-				token1: REP_ADDRESS,
-				token1Symbol: 'REP',
-				token2: ETH_ADDRESS,
-				token2Symbol: 'ETH',
-			},
-		})
-
-		expect(preview.canSubmit).toBe(false)
-		expect(preview.blockMessage).toEqual({
-			kind: 'visible',
-			message: 'Automatic price quote unavailable for REP / ETH. Tried: Uniswap V4, then Uniswap V3. Reason: Uniswap V4 quote failed: execution reverted for an unknown reason. Uniswap V3 quote failed: no pool. Enter a price manually to submit the initial report.',
-		})
-	})
-
-	test('manual price entry overrides automatic quote unavailability', () => {
-		const preview = createInitialReportSubmissionPreview({
-			approvedToken2Amount: 24n,
-			defaultPrice: undefined,
-			defaultPriceError: undefined,
-			defaultPriceSource: undefined,
-			defaultPriceSourceUrl: undefined,
-			priceInput: '4.0',
-			quoteAttemptedSources: ['Uniswap V4'],
-			quoteFailureReason: 'no pool',
-			reportDetails: {
-				currentReporter: zeroAddress,
-				disputeOccurred: false,
-				exactToken1Report: 100n,
-				isDistributed: false,
-				reportTimestamp: 0n,
-				token1: getAddress('0x00000000000000000000000000000000000000a1'),
-				token1Symbol: 'ABC',
-				token2: getAddress('0x00000000000000000000000000000000000000a2'),
-				token2Symbol: 'XYZ',
-			},
-		})
-
-		expect(preview.priceSource).toBe('Manual override')
-		expect(preview.price).toBe(4_000_000_000_000_000_000_000_000_000_000n)
-		expect(preview.blockMessage).toEqual({
-			kind: 'visible',
-			message: 'XYZ approval required',
-		})
-	})
-
-	test('initial report submission helper surfaces the fetch price failure reason when no default price is available', () => {
-		const preview = createInitialReportSubmissionPreview({
-			approvedToken2Amount: 100n,
-			defaultPrice: undefined,
-			defaultPriceError: 'Failed to fetch price from Uniswap. Uniswap V4 quote failed: no v3 pool. Uniswap V3 quote failed: no v3 pool',
-			defaultPriceSource: undefined,
-			defaultPriceSourceUrl: undefined,
-			priceInput: '',
-			quoteAttemptedSources: ['Uniswap V4', 'Uniswap V3'],
-			quoteFailureReason: 'Failed to fetch price from Uniswap. Uniswap V4 quote failed: no v3 pool. Uniswap V3 quote failed: no v3 pool',
-		})
-
-		expect(preview.canSubmit).toBe(false)
-		expect(preview.blockMessage).toEqual({
-			kind: 'visible',
-			message: 'Failed to fetch price from Uniswap. Uniswap V4 quote failed: no v3 pool. Uniswap V3 quote failed: no v3 pool',
-		})
-	})
-
-	test('formats unavailable price messages with sanitized reasons and address fallback labels', () => {
-		expect(
-			formatOpenOracleInitialReportPriceUnavailableMessage({
-				attemptedSources: ['Uniswap V4'],
-				reason: 'Failed to load automatic price: execution reverted: pool not found',
-				token1Label: undefined,
-				token2Label: '0x00000000000000000000000000000000000000a2',
-			}),
-		).toBe('Automatic price quote unavailable for Token1 / 0x00000000000000000000000000000000000000a2. Tried: Uniswap V4. Reason: pool not found. Enter a price manually to submit the initial report.')
-	})
-
-	test('initial report submission helper surfaces allowance read failures separately from approval gating', () => {
-		const preview = createInitialReportSubmissionPreview({
-			approvedToken1Amount: undefined,
-			token1AllowanceError: 'Failed to load token approval: request timed out',
-		})
-
-		expect(preview.canSubmit).toBe(false)
-		expect(preview.blockMessage).toEqual({
-			kind: 'visible',
-			message: 'Unable to verify REP approval before submitting the initial report. Reason: request timed out. Retry loading the approval status before continuing.',
-		})
-	})
-
-	test('initial report submission helper surfaces balance read failures separately from approval gating', () => {
-		const preview = createInitialReportSubmissionPreview({
-			token2Balance: undefined,
-			token2BalanceError: 'Failed to load token balance: request timed out',
-		})
-
-		expect(preview.canSubmit).toBe(false)
-		expect(preview.blockMessage).toEqual({
-			kind: 'visible',
-			message: 'Unable to verify WETH balance for this report. Reason: request timed out. Retry loading the report or balance status before submitting the initial report.',
-		})
-	})
-
-	test('initial report submission helper hides token balance loading states such as REPv2 balance refresh', () => {
-		const preview = createInitialReportSubmissionPreview({
-			reportDetails: {
-				currentReporter: zeroAddress,
-				disputeOccurred: false,
-				exactToken1Report: 100n,
-				isDistributed: false,
-				reportTimestamp: 0n,
-				token1: REP_ADDRESS,
-				token1Symbol: 'REPv2',
-				token2: WETH_ADDRESS,
-				token2Symbol: 'WETH',
-			},
-			token1Balance: undefined,
-		})
-
-		expect(preview.canSubmit).toBe(false)
-		expect(preview.blockMessage).toEqual({
-			kind: 'hidden-loading',
-			message: 'Loading current REPv2 balance.',
-		})
-	})
-
-	test('initial report submission helper hides token approval loading states', () => {
-		const preview = createInitialReportSubmissionPreview({
-			approvedToken1Amount: undefined,
-			token1AllowanceError: undefined,
-		})
-
-		expect(preview.canSubmit).toBe(false)
-		expect(preview.blockMessage).toEqual({
-			kind: 'hidden-loading',
-			message: 'Loading current REP approval.',
-		})
-	})
-
-	test('initial report submission helper surfaces token-specific insufficient token1 balances', () => {
-		const preview = createInitialReportSubmissionPreview({
-			token1Balance: 99n,
-		})
-
-		expect(preview.canSubmit).toBe(false)
-		expect(preview.blockMessage).toEqual({
-			kind: 'visible',
-			message: 'Insufficient REP balance for this report. Need 100, wallet has 99.',
-		})
-	})
-
-	test('initial report submission helper disables submit for tiny insufficient REP balances', () => {
-		const preview = createInitialReportSubmissionPreview({
-			approvedToken1Amount: 11_000_000n,
-			approvedToken2Amount: 11_000_000n,
-			defaultPrice: '1',
-			reportDetails: {
-				currentReporter: zeroAddress,
-				disputeOccurred: false,
-				exactToken1Report: 11_000_000n,
-				isDistributed: false,
-				reportTimestamp: 0n,
-				token1: REP_ADDRESS,
-				token1Symbol: 'REP',
-				token2: WETH_ADDRESS,
-				token2Symbol: 'WETH',
-			},
-			token1Balance: 10_000_000n,
-			token1Decimals: 18,
-			token2Balance: 11_000_000n,
-			token2Decimals: 18,
-			walletEthBalance: 0n,
-		})
-
-		expect(preview.amount1).toBe(11_000_000n)
-		expect(preview.canSubmit).toBe(false)
-		expect(preview.blockMessage).toEqual({
-			kind: 'visible',
-			message: 'Insufficient REP balance for this report. Need 0.000000000011, wallet has 0.00000000001.',
-		})
-	})
-
-	test('initial report submission helper surfaces insufficient WETH balances and exposes wrap details', () => {
-		const preview = createInitialReportSubmissionPreview({
-			token2Balance: 24n,
-			walletEthBalance: 10n,
-		})
-
-		expect(preview.canSubmit).toBe(false)
-		expect(preview.blockMessage).toEqual({
-			kind: 'visible',
-			message: 'Insufficient WETH balance for this report. Need 25, wallet has 24. Wrap ETH into WETH first.',
-		})
-		expect(preview.hasWethWrapAction).toBe(true)
-		expect(preview.requiredWethWrapAmount).toBe(1n)
-		expect(preview.canWrapRequiredWeth).toBe(true)
-		expect(preview.wrapRequiredWethMessage).toBeUndefined()
-	})
-
-	test('initial report submission helper disables submit for tiny insufficient WETH balances', () => {
-		const preview = createInitialReportSubmissionPreview({
-			approvedToken1Amount: 11_000_000n,
-			approvedToken2Amount: 11_000_000n,
-			defaultPrice: '1',
-			reportDetails: {
-				currentReporter: zeroAddress,
-				disputeOccurred: false,
-				exactToken1Report: 11_000_000n,
-				isDistributed: false,
-				reportTimestamp: 0n,
-				token1: REP_ADDRESS,
-				token1Symbol: 'REP',
-				token2: WETH_ADDRESS,
-				token2Symbol: 'WETH',
-			},
-			token1Balance: 11_000_000n,
-			token1Decimals: 18,
-			token2Balance: 10_000_000n,
-			token2Decimals: 18,
-			walletEthBalance: 1_000_000n,
-		})
-
-		expect(preview.amount2).toBe(11_000_000n)
-		expect(preview.canSubmit).toBe(false)
-		expect(preview.blockMessage).toEqual({
-			kind: 'visible',
-			message: 'Insufficient WETH balance for this report. Need 0.000000000011, wallet has 0.00000000001. Wrap ETH into WETH first.',
-		})
-		expect(preview.requiredWethWrapAmount).toBe(1_000_000n)
-		expect(preview.canWrapRequiredWeth).toBe(true)
-	})
-
-	test('initial report submission helper reports when wallet ETH is insufficient to wrap the required WETH', () => {
-		const preview = createInitialReportSubmissionPreview({
-			token2Balance: 24n,
-			walletEthBalance: 0n,
-		})
-
-		expect(preview.requiredWethWrapAmount).toBe(1n)
-		expect(preview.canWrapRequiredWeth).toBe(false)
-		expect(preview.wrapRequiredWethMessage).toEqual({
-			kind: 'visible',
-			message: 'Wallet has 0 ETH, need 0.000000000000000001 ETH to wrap the required WETH.',
-		})
-	})
-
-	test('initial report submission helper reports when wallet ETH balance is still loading for WETH wrap', () => {
-		const preview = createInitialReportSubmissionPreview({
-			token2Balance: 24n,
-			walletEthBalance: undefined,
-		})
-
-		expect(preview.requiredWethWrapAmount).toBe(1n)
-		expect(preview.canWrapRequiredWeth).toBe(false)
-		expect(preview.wrapRequiredWethMessage).toEqual({
-			kind: 'hidden-loading',
-			message: 'Loading wallet ETH balance.',
-		})
-	})
-
-	test('initial report submission helper keeps the WETH wrap action visible when no top-up is needed', () => {
-		const preview = createInitialReportSubmissionPreview()
-
-		expect(preview.hasWethWrapAction).toBe(true)
-		expect(preview.requiredWethWrapAmount).toBeUndefined()
-		expect(preview.canWrapRequiredWeth).toBe(false)
-		expect(preview.wrapRequiredWethMessage).toBeUndefined()
-	})
-
-	test('initial report submission helper explains that a price is needed before determining a WETH wrap amount', () => {
-		const preview = createInitialReportSubmissionPreview({
-			defaultPrice: undefined,
-			defaultPriceError: undefined,
-			defaultPriceSource: undefined,
-			defaultPriceSourceUrl: undefined,
-			priceInput: '',
-			quoteAttemptedSources: ['Uniswap V4'],
-			quoteFailureReason: 'no pool',
-		})
-
-		expect(preview.hasWethWrapAction).toBe(true)
-		expect(preview.requiredWethWrapAmount).toBeUndefined()
-		expect(preview.canWrapRequiredWeth).toBe(false)
-		expect(preview.wrapRequiredWethMessage).toBeUndefined()
-	})
-
-	test('initial report submission helper allows submit when balances and approvals are sufficient', () => {
-		const preview = createInitialReportSubmissionPreview()
-
-		expect(preview.canSubmit).toBe(true)
-		expect(preview.blockMessage).toBeUndefined()
-	})
-
-	test('initial report submission helper blocks reports that already moved past initial reporting', () => {
-		const reporter = getAddress(addressString(TEST_ADDRESSES[1]))
-
-		const pendingPreview = createInitialReportSubmissionPreview({
-			reportDetails: {
-				currentReporter: reporter,
-				disputeOccurred: false,
-				exactToken1Report: 100n,
-				isDistributed: false,
-				reportTimestamp: 1n,
-				token1: REP_ADDRESS,
-				token1Symbol: 'REP',
-				token2: WETH_ADDRESS,
-				token2Symbol: 'WETH',
-			},
-		})
-		expect(pendingPreview.canSubmit).toBe(false)
-		expect(pendingPreview.blockMessage).toEqual({
-			kind: 'visible',
-			message: 'This report already has an initial report.',
-		})
-
-		const disputedPreview = createInitialReportSubmissionPreview({
-			reportDetails: {
-				currentReporter: reporter,
-				disputeOccurred: true,
-				exactToken1Report: 100n,
-				isDistributed: false,
-				reportTimestamp: 1n,
-				token1: REP_ADDRESS,
-				token1Symbol: 'REP',
-				token2: WETH_ADDRESS,
-				token2Symbol: 'WETH',
-			},
-		})
-		expect(disputedPreview.canSubmit).toBe(false)
-		expect(disputedPreview.blockMessage).toEqual({
-			kind: 'visible',
-			message: 'This report already has an initial report.',
-		})
-
-		const settledPreview = createInitialReportSubmissionPreview({
-			reportDetails: {
-				currentReporter: reporter,
-				disputeOccurred: false,
-				exactToken1Report: 100n,
-				isDistributed: true,
-				reportTimestamp: 1n,
-				token1: REP_ADDRESS,
-				token1Symbol: 'REP',
-				token2: WETH_ADDRESS,
-				token2Symbol: 'WETH',
-			},
-		})
-		expect(settledPreview.canSubmit).toBe(false)
-		expect(settledPreview.blockMessage).toEqual({
-			kind: 'visible',
-			message: 'This report is already settled and can no longer accept an initial report.',
-		})
-	})
-
-	test('maps initial report write failures into friendly guidance', () => {
-		expect(formatOpenOracleInitialReportWriteErrorMessage(new Error('execution reverted: report submitted'))).toBe('This report already has an initial report.')
-		expect(formatOpenOracleInitialReportWriteErrorMessage(new Error('execution reverted: report id'))).toBe('This report is no longer valid. Reload it before submitting the initial report again.')
-		expect(formatOpenOracleInitialReportWriteErrorMessage(new Error('execution reverted: token1 amount'))).toBe('The required token1 amount changed on-chain. Reload the report before submitting the initial report again.')
-		expect(formatOpenOracleInitialReportWriteErrorMessage(new Error('execution reverted: token2 amount'))).toBe('The selected price produces an invalid token2 amount for the initial report.')
-		expect(formatOpenOracleInitialReportWriteErrorMessage(new Error('execution reverted: state hash'))).toBe('This report changed on-chain. Reload the report before submitting the initial report again.')
-		expect(formatOpenOracleInitialReportWriteErrorMessage(new Error('ERC20: transfer amount exceeds allowance'))).toBe(
-			'Transaction failed while submitting the initial report. Wallet balance or token approval changed since the last refresh. Reload the report and verify both token balances and approvals before submitting the initial report again.',
-		)
-		expect(formatOpenOracleInitialReportWriteErrorMessage(new Error('execution reverted'))).toBe('Transaction failed while submitting the initial report. Reload the report and try again.')
-		expect(formatOpenOracleInitialReportWriteErrorMessage(new Error('execution reverted: pool not found'))).toBe('Transaction failed while submitting the initial report. Reason: pool not found')
-	})
-
-	test('formats unavailable approval status messages with sanitized reasons', () => {
-		expect(
-			formatOpenOracleInitialReportApprovalStatusUnavailableMessage({
-				reason: 'Failed to load token approval: execution reverted',
-				tokenLabel: 'WETH',
-			}),
-		).toBe('Unable to verify WETH approval before submitting the initial report. Retry loading the approval status before continuing.')
-	})
-
-	test('formats unavailable balance status messages with sanitized reasons', () => {
-		expect(
-			formatOpenOracleInitialReportBalanceStatusUnavailableMessage({
-				reason: 'Failed to load token balance: execution reverted',
-				tokenLabel: 'WETH',
-			}),
-		).toBe('Unable to verify WETH balance for this report. Retry loading the report or balance status before submitting the initial report.')
+			expect(selfDisputePreview.token1ContributionAmount).toBe(testCase.expectedToken1Contribution)
+			expect(selfDisputePreview.token2ContributionAmount).toBe(testCase.expectedToken2Contribution)
+			expect(selfDisputePreview.canSubmit).toBe(true)
+			expect(thirdPartyPreview.canSubmit).toBe(false)
+		}
 	})
 
 	test('open oracle fee and multiplier formatters render human values', () => {
@@ -942,7 +568,8 @@ describe('Open Oracle helpers', () => {
 				disputeDelay: '10',
 				escalationHalt: '2.5',
 				exactToken1Report: '1.25',
-				ethValue: '0.0000000000000011',
+				initialToken2Amount: '2',
+				ethValue: '0.000000000000001',
 				feePercentage: '0.001',
 				multiplier: '100',
 				protocolFee: '0.002',
@@ -952,13 +579,15 @@ describe('Open Oracle helpers', () => {
 				token2Address: WETH_ADDRESS,
 			},
 			token1Decimals: 6,
+			token2Decimals: 18,
 		})
 
 		expect(parsed).toEqual({
 			disputeDelay: 10,
 			escalationHalt: 2_500_000n,
 			exactToken1Report: 1_250_000n,
-			ethValue: 1100n,
+			initialToken2Amount: 2_000_000_000_000_000_000n,
+			ethValue: 1000n,
 			feePercentage: 100,
 			multiplier: 100,
 			protocolFee: 200,
@@ -976,19 +605,20 @@ describe('Open Oracle helpers', () => {
 			...getDefaultOpenOracleCreateFormState(),
 			disputeDelay: '10',
 			exactToken1Report: '1',
+			initialToken2Amount: '1',
 			ethValue: '1',
 			feePercentage: '1',
 			multiplier: '100',
 			protocolFee: '1',
 			settlementTime: '60',
-			settlerReward: '0.1',
+			settlerReward: '1',
 			token1Address,
 			token2Address: WETH_ADDRESS,
 		}
 
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: '0' } })).toBe('Exact token1 report must be greater than zero.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, token2Address: token1Address } })).toBe('Token1 and token2 must be different addresses.')
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, settlementTime: '9' } })).toBe('Settlement time must be greater than or equal to dispute delay.')
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, settlementTime: '9' } })).toBe('Settlement time must be greater than dispute delay.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, feePercentage: '60', protocolFee: '50.00001' } })).toBe('Fee percentage plus protocol fee must not exceed 100%.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, multiplier: '99' } })).toBe('Multiplier must be at least 1.00x.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: '1000000000' } })).toBeUndefined()
@@ -1015,16 +645,18 @@ describe('Open Oracle helpers', () => {
 				disputeDelay: '10',
 				escalationHalt: '0.000000000000000000000000000000000001',
 				exactToken1Report: '0.000000000000000000000000000000000001',
+				initialToken2Amount: '1',
 				ethValue: '1',
 				feePercentage: '1',
 				multiplier: '100',
 				protocolFee: '1',
 				settlementTime: '60',
-				settlerReward: '0.1',
+				settlerReward: '1',
 				token1Address: addressString(GENESIS_REPUTATION_TOKEN),
 				token2Address: WETH_ADDRESS,
 			},
 			token1Decimals: 36,
+			token2Decimals: 18,
 		})
 
 		expect(parsed.exactToken1Report).toBe(1n)
@@ -1038,16 +670,18 @@ describe('Open Oracle helpers', () => {
 					...getDefaultOpenOracleCreateFormState(),
 					disputeDelay: '10',
 					exactToken1Report: '1',
+					initialToken2Amount: '1',
 					ethValue: '1',
 					feePercentage: '60',
 					multiplier: '100',
 					protocolFee: '50.00001',
 					settlementTime: '60',
-					settlerReward: '0.1',
+					settlerReward: '1',
 					token1Address: addressString(GENESIS_REPUTATION_TOKEN),
 					token2Address: WETH_ADDRESS,
 				},
 				token1Decimals: 18,
+				token2Decimals: 18,
 			}),
 		).toThrow('Fee percentage plus protocol fee must not exceed 100%.')
 		expect(() =>
@@ -1056,16 +690,18 @@ describe('Open Oracle helpers', () => {
 					...getDefaultOpenOracleCreateFormState(),
 					disputeDelay: '10',
 					exactToken1Report: '1',
+					initialToken2Amount: '1',
 					ethValue: '1',
 					feePercentage: '1',
 					multiplier: (1n << 16n).toString(),
 					protocolFee: '1',
 					settlementTime: '60',
-					settlerReward: '0.1',
+					settlerReward: '1',
 					token1Address: addressString(GENESIS_REPUTATION_TOKEN),
 					token2Address: WETH_ADDRESS,
 				},
 				token1Decimals: 18,
+				token2Decimals: 18,
 			}),
 		).toThrow('Multiplier exceeds the contract maximum.')
 	})
@@ -1076,7 +712,7 @@ describe('Open Oracle helpers', () => {
 	})
 
 	test('selected report action mode follows the report lifecycle', () => {
-		expect(getOpenOracleSelectedReportActionMode(createOpenOracleLifecycleReport({ currentReporter: zeroAddress, reportTimestamp: 0n }))).toBe('initial-report')
+		expect(() => getOpenOracleSelectedReportActionMode(createOpenOracleLifecycleReport({ currentReporter: zeroAddress, reportTimestamp: 0n }))).toThrow('Open Oracle report is missing its atomic initial report')
 		expect(getOpenOracleSelectedReportActionMode(createOpenOracleLifecycleReport({ currentTime: 110n }))).toBe('dispute')
 		expect(getOpenOracleSelectedReportActionMode(createOpenOracleLifecycleReport({ currentTime: 110n, disputeOccurred: true }))).toBe('dispute')
 		expect(getOpenOracleSelectedReportActionMode(createOpenOracleLifecycleReport({ currentTime: 161n }))).toBe('settle')
@@ -1094,7 +730,7 @@ describe('Open Oracle helpers', () => {
 			message: 'This report can be settled in less than a minute if no disputes occur.',
 		})
 
-		const insideDisputeWindow = createOpenOracleLifecycleReport({ currentTime: 110n })
+		const insideDisputeWindow = createOpenOracleLifecycleReport({ currentTime: 159n })
 		expect(getOpenOracleDisputeAvailability(insideDisputeWindow)).toEqual({
 			canAct: true,
 			message: undefined,
@@ -1106,13 +742,14 @@ describe('Open Oracle helpers', () => {
 
 		const exactSettlementBoundary = createOpenOracleLifecycleReport({ currentTime: 160n })
 		expect(getOpenOracleDisputeAvailability(exactSettlementBoundary)).toEqual({
-			canAct: true,
-			message: undefined,
+			canAct: false,
+			message: 'Dispute window closed. Settle Report instead.',
 		})
 		expect(getOpenOracleSettleAvailability(exactSettlementBoundary)).toEqual({
 			canAct: true,
 			message: undefined,
 		})
+		expect(getOpenOracleSelectedReportActionMode(exactSettlementBoundary)).toBe('settle')
 
 		const afterSettlementWindow = createOpenOracleLifecycleReport({ currentTime: 161n })
 		expect(getOpenOracleDisputeAvailability(afterSettlementWindow)).toEqual({
@@ -1126,34 +763,35 @@ describe('Open Oracle helpers', () => {
 	})
 
 	test('dispute and settle availability use current block number for block-based reports', () => {
-		const blockBasedReport = createOpenOracleLifecycleReport({
-			currentBlockNumber: 111n,
-			currentTime: 1n,
-			timeType: false,
-		})
+		const cases = [
+			{ currentBlockNumber: 159n, disputeCanAct: true, settleCanAct: false },
+			{ currentBlockNumber: 160n, disputeCanAct: false, settleCanAct: true },
+			{ currentBlockNumber: 161n, disputeCanAct: false, settleCanAct: true },
+		]
 
-		expect(getOpenOracleDisputeAvailability(blockBasedReport)).toEqual({
-			canAct: true,
-			message: undefined,
-		})
-		expect(getOpenOracleSettleAvailability(blockBasedReport)).toEqual({
-			canAct: false,
-			message: 'This report can be settled in 49 blocks if no disputes occur.',
-		})
+		for (const testCase of cases) {
+			const blockBasedReport = createOpenOracleLifecycleReport({
+				currentBlockNumber: testCase.currentBlockNumber,
+				currentTime: 1n,
+				timeType: false,
+			})
+			expect(getOpenOracleDisputeAvailability(blockBasedReport).canAct).toBe(testCase.disputeCanAct)
+			expect(getOpenOracleSettleAvailability(blockBasedReport).canAct).toBe(testCase.settleCanAct)
+		}
 	})
 
-	test('dispute and settle availability block reports without an initial report or already-settled reports', () => {
+	test('dispute and settle availability reject invalid atomic reports or already-settled reports', () => {
 		const noInitialReport = createOpenOracleLifecycleReport({
 			currentReporter: zeroAddress,
 			reportTimestamp: 0n,
 		})
 		expect(getOpenOracleDisputeAvailability(noInitialReport)).toEqual({
 			canAct: false,
-			message: 'Submit an initial report before disputing this report.',
+			message: 'This report is invalid because its atomic initial report is missing.',
 		})
 		expect(getOpenOracleSettleAvailability(noInitialReport)).toEqual({
 			canAct: false,
-			message: 'Submit an initial report before settling this report.',
+			message: 'This report is invalid because its atomic initial report is missing.',
 		})
 
 		const settledReport = createOpenOracleLifecycleReport({
@@ -1173,7 +811,7 @@ describe('Open Oracle helpers', () => {
 	test('maps dispute and settle write failures into friendly guidance', () => {
 		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: 0x98bdb2e0'))).toBe('This report requires a higher settlement gas limit because it executes a callback on settlement. Retry with the updated UI.')
 		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: settlement'))).toBe('This report is not ready to settle.')
-		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: no initial report'))).toBe('Submit an initial report before settling this report.')
+		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: no initial report'))).toBe('This report is invalid because its atomic initial report is missing.')
 		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: dispute too early'))).toBe('This report is not ready to dispute.')
 		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: dispute period expired'))).toBe('Dispute window closed. Settle Report instead.')
 		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: report settled'))).toBe('This report is already settled.')
@@ -1547,59 +1185,6 @@ describe('Open Oracle helpers', () => {
 		expect(managerDetails.lastSettlementTimestamp).toBeGreaterThan(0n)
 		expect(managerDetails.isPriceValid).toBe(true)
 		expect(managerDetails.priceValidUntilTimestamp).toBe(managerDetails.lastSettlementTimestamp + ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS)
-	})
-
-	test('submitInitialOracleReport rejects a second initial report for the same report', async () => {
-		const minimumToken1Report = await client.readContract({
-			address: managerAddress,
-			abi: [{ type: 'function', name: 'minimumToken1Report', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256' }] }],
-			functionName: 'minimumToken1Report',
-			args: [],
-		})
-		if (typeof minimumToken1Report !== 'bigint') throw new Error('expected bigint minimumToken1Report')
-		await requestOraclePrice(uiWriteClient, managerAddress, minimumToken1Report)
-
-		const reportId = (await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId
-		const { exactToken1Report: reportExactToken1Report } = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
-		const amount1 = reportExactToken1Report
-
-		const openOracleAddress = getOpenOracleAddress()
-		const stateHash = (await getOpenOracleExtraData(client, reportId)).stateHash
-		await expect(submitInitialOracleReport(uiWriteClient, openOracleAddress, reportId, amount1, amount1, stateHash)).rejects.toThrow(/0xcc0220a9|reportalreadysubmitted|custom error/i)
-	})
-
-	test('submitInitialOracleReport rejects an invalid state hash', async () => {
-		await createOpenOracleReportInstance(uiWriteClient, {
-			disputeDelay: 10,
-			escalationHalt: 0n,
-			exactToken1Report: 1n,
-			ethValue: 1_100n,
-			feePercentage: 100,
-			multiplier: 100,
-			protocolFee: 100,
-			settlementTime: 60,
-			settlerReward: 1_000n,
-			token1Address: addressString(GENESIS_REPUTATION_TOKEN),
-			token2Address: WETH_ADDRESS,
-		})
-
-		const latestReports = await loadOpenOracleReportSummaries(uiReadClient, 0, 1)
-		const latestReport = latestReports.reports[0]
-		if (latestReport === undefined) throw new Error('Expected a direct OpenOracle report')
-		const reportId = latestReport.reportId
-		const amount1 = 1n
-		const amount2 = 1n
-
-		const openOracleAddress = getOpenOracleAddress()
-		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), openOracleAddress)
-		await approveToken(client, WETH_ADDRESS, openOracleAddress)
-		await mockWindow.setBalance(client.account.address, amount2 + 10n ** 18n)
-		await wrapWethTestHelper(client, amount2)
-
-		const stateHash = (await getOpenOracleExtraData(client, reportId)).stateHash
-		const invalidStateHash = stateHash === '0x0000000000000000000000000000000000000000000000000000000000000000' ? '0x0000000000000000000000000000000000000000000000000000000000000001' : '0x0000000000000000000000000000000000000000000000000000000000000000'
-
-		await expect(submitInitialOracleReport(uiWriteClient, openOracleAddress, reportId, amount1, amount2, invalidStateHash)).rejects.toThrow(/0x937d7862|invalidstatehash/i)
 	})
 
 	test('ui wrapWeth helper deposits ETH into WETH and reports the wrap action', async () => {

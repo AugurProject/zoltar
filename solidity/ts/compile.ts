@@ -2,6 +2,7 @@ import { createHash } from 'crypto'
 import { promises as fs } from 'fs'
 import * as path from 'path'
 import solc from 'solc'
+import openOracleSolc from 'solc-0-8-28'
 import * as funtypes from 'funtypes'
 import * as url from 'url'
 
@@ -11,11 +12,15 @@ const HASH_CACHE_PATH = path.join(process.cwd(), '.contract-hash.json')
 const ARTIFACTS_DIR = path.join(process.cwd(), 'artifacts')
 const ARTIFACTS_JSON = path.join(ARTIFACTS_DIR, 'Contracts.json')
 const OPEN_ORACLE_LOCAL_PATH = 'contracts/peripherals/openOracle/OpenOracle.sol'
+const OPEN_ORACLE_LOCAL_PREFIX = 'contracts/peripherals/openOracle/'
 const OPEN_ORACLE_LOCAL_VENDOR_PREFIX = 'contracts/peripherals/openOracle/openzeppelin/contracts/'
-const OPEN_ORACLE_UPSTREAM_PATH = 'src/OpenOracleL1.sol'
+const OPEN_ORACLE_UPSTREAM_PATH = 'src/OpenOracleSlim.sol'
+const OPEN_ORACLE_UPSTREAM_PREFIX = 'src/'
 const OPEN_ORACLE_IMPORT_PREFIX = '@openzeppelin/contracts/'
+const MAIN_COMPILER_PROFILE_PREFIX = 'compiler-profiles/main/'
+const OPEN_ORACLE_COMPILER_PROFILE_PREFIX = 'compiler-profiles/open-oracle/'
 const OPEN_ORACLE_EXACT_PRAGMA = 'pragma solidity 0.8.28;'
-const OPEN_ORACLE_MAIN_PASS_PRAGMA = 'pragma solidity >=0.8.28 <0.9.0;'
+const OPEN_ORACLE_MAIN_PASS_PRAGMA = 'pragma solidity 0.8.35;'
 const allowedImmutableContractWarnings = [
 	{
 		sourcePath: 'contracts/peripherals/Multicall3.sol',
@@ -106,11 +111,11 @@ const mainCompilerSettings = {
 	},
 }
 
-const openOracleCompilerSettings = {
+export const openOracleCompilerSettings = {
 	viaIR: true,
 	optimizer: {
 		enabled: true,
-		runs: 50000,
+		runs: 190,
 	},
 	outputSelection: mainCompilerSettings.outputSelection,
 	evmVersion: 'cancun',
@@ -172,12 +177,10 @@ function getCompilerVersion(compiler: SolcCompiler): string {
 	return compiler.version()
 }
 
-async function loadOpenOracleCompiler(): Promise<SolcCompiler> {
+export async function loadOpenOracleCompiler(): Promise<SolcCompiler> {
 	if (openOracleCompilerPromise) return openOracleCompilerPromise
 
-	// Use the locally installed compiler to avoid remote compiler loading behavior that is
-	// incompatible with Bun in this environment.
-	openOracleCompilerPromise = Promise.resolve(solc)
+	openOracleCompilerPromise = Promise.resolve(openOracleSolc)
 
 	return openOracleCompilerPromise
 }
@@ -191,11 +194,14 @@ async function computeContractHash(sourceFiles: Map<string, string>, openOracleC
 	hasher.update('\n')
 	hasher.update(
 		JSON.stringify({
+			artifactMergeVersion: 2,
 			mainCompilerSettings,
 			openOracleCompilerSettings,
 			openOracleLocalPath: OPEN_ORACLE_LOCAL_PATH,
+			openOracleLocalPrefix: OPEN_ORACLE_LOCAL_PREFIX,
 			openOracleLocalVendorPrefix: OPEN_ORACLE_LOCAL_VENDOR_PREFIX,
 			openOracleUpstreamPath: OPEN_ORACLE_UPSTREAM_PATH,
+			openOracleUpstreamPrefix: OPEN_ORACLE_UPSTREAM_PREFIX,
 			openOracleImportPrefix: OPEN_ORACLE_IMPORT_PREFIX,
 			openOracleMainPassPragma: OPEN_ORACLE_MAIN_PASS_PRAGMA,
 		}),
@@ -307,22 +313,27 @@ function createMainCompilerSources(sourceFiles: Map<string, string>) {
 	const openOracleSource = sourceFiles.get(OPEN_ORACLE_LOCAL_PATH)
 	if (openOracleSource === undefined) throw new Error(`Missing ${OPEN_ORACLE_LOCAL_PATH}`)
 	if (!openOracleSource.includes(OPEN_ORACLE_EXACT_PRAGMA)) throw new Error(`Expected ${OPEN_ORACLE_LOCAL_PATH} to include ${OPEN_ORACLE_EXACT_PRAGMA}`)
-	mainSources.set(OPEN_ORACLE_LOCAL_PATH, openOracleSource.replace(OPEN_ORACLE_EXACT_PRAGMA, OPEN_ORACLE_MAIN_PASS_PRAGMA))
+	for (const [sourcePath, content] of sourceFiles) {
+		if (!sourcePath.startsWith(OPEN_ORACLE_LOCAL_PREFIX) || !content.includes(OPEN_ORACLE_EXACT_PRAGMA)) continue
+		mainSources.set(sourcePath, content.replace(OPEN_ORACLE_EXACT_PRAGMA, OPEN_ORACLE_MAIN_PASS_PRAGMA))
+	}
 	addOpenOracleImportAliases(mainSources, sourceFiles)
 	return mainSources
 }
 
-function createOpenOracleCompilerSources(sourceFiles: Map<string, string>) {
+export function createOpenOracleCompilerSources(sourceFiles: Map<string, string>) {
 	const openOracleSource = sourceFiles.get(OPEN_ORACLE_LOCAL_PATH)
 	if (openOracleSource === undefined) throw new Error(`Missing ${OPEN_ORACLE_LOCAL_PATH}`)
-	let normalizedOpenOracleSource = openOracleSource
-	if (openOracleSource.includes(OPEN_ORACLE_EXACT_PRAGMA)) {
-		normalizedOpenOracleSource = openOracleSource.replace(OPEN_ORACLE_EXACT_PRAGMA, OPEN_ORACLE_MAIN_PASS_PRAGMA)
-	}
-	const openOracleSources = new Map<string, string>([[OPEN_ORACLE_UPSTREAM_PATH, normalizedOpenOracleSource]])
+	if (!openOracleSource.includes(OPEN_ORACLE_EXACT_PRAGMA)) throw new Error(`Expected ${OPEN_ORACLE_LOCAL_PATH} to include ${OPEN_ORACLE_EXACT_PRAGMA}`)
+	const openOracleSources = new Map<string, string>([[OPEN_ORACLE_UPSTREAM_PATH, openOracleSource]])
 	for (const [sourcePath, content] of sourceFiles) {
-		if (!sourcePath.startsWith(OPEN_ORACLE_LOCAL_VENDOR_PREFIX)) continue
-		const remappedPath = `${OPEN_ORACLE_IMPORT_PREFIX}${sourcePath.slice(OPEN_ORACLE_LOCAL_VENDOR_PREFIX.length)}`
+		if (sourcePath.startsWith(OPEN_ORACLE_LOCAL_VENDOR_PREFIX)) {
+			const remappedPath = `${OPEN_ORACLE_IMPORT_PREFIX}${sourcePath.slice(OPEN_ORACLE_LOCAL_VENDOR_PREFIX.length)}`
+			openOracleSources.set(remappedPath, content)
+			continue
+		}
+		if (sourcePath === OPEN_ORACLE_LOCAL_PATH || !sourcePath.startsWith(OPEN_ORACLE_LOCAL_PREFIX)) continue
+		const remappedPath = `${OPEN_ORACLE_UPSTREAM_PREFIX}${sourcePath.slice(OPEN_ORACLE_LOCAL_PREFIX.length)}`
 		openOracleSources.set(remappedPath, content)
 	}
 	return openOracleSources
@@ -359,20 +370,64 @@ function isTemporaryCompilerSourcePath(sourcePath: string) {
 }
 
 function isReplacedLocalOracleSourcePath(sourcePath: string) {
-	return sourcePath === OPEN_ORACLE_LOCAL_PATH || sourcePath.startsWith(OPEN_ORACLE_LOCAL_VENDOR_PREFIX)
+	return sourcePath.startsWith(OPEN_ORACLE_LOCAL_PREFIX)
 }
 
 function remapOpenOracleSourcePath(sourcePath: string): string | undefined {
 	if (sourcePath === OPEN_ORACLE_UPSTREAM_PATH) return OPEN_ORACLE_LOCAL_PATH
+	if (sourcePath.startsWith(OPEN_ORACLE_UPSTREAM_PREFIX)) return `${OPEN_ORACLE_LOCAL_PREFIX}${sourcePath.slice(OPEN_ORACLE_UPSTREAM_PREFIX.length)}`
+	if (sourcePath.startsWith(OPEN_ORACLE_IMPORT_PREFIX)) return `${OPEN_ORACLE_LOCAL_VENDOR_PREFIX}${sourcePath.slice(OPEN_ORACLE_IMPORT_PREFIX.length)}`
 	return undefined
 }
 
-function mergeCompileSources(mainSources: unknown, openOracleSources: unknown) {
+function getOpenOracleSourceIdOffset(mainSources: unknown) {
+	let maximumSourceId = -1
+	if (!isObjectRecord(mainSources)) return 0
+	for (const [sourcePath, sourceData] of Object.entries(mainSources)) {
+		if (!isObjectRecord(sourceData) || typeof sourceData['id'] !== 'number') throw new Error(`Invalid source metadata for ${sourcePath}`)
+		maximumSourceId = Math.max(maximumSourceId, sourceData['id'])
+	}
+	return maximumSourceId + 1
+}
+
+function remapCompilerSourceMap(sourceMap: string, sourceIdOffset: number) {
+	return sourceMap
+		.split(';')
+		.map(segment => {
+			const fields = segment.split(':')
+			const sourceIdField = fields[2]
+			if (sourceIdField === undefined || sourceIdField === '' || sourceIdField === '-1') return segment
+			if (!/^[0-9]+$/.test(sourceIdField)) throw new Error(`Invalid Solidity source-map id ${sourceIdField}`)
+			fields[2] = (Number.parseInt(sourceIdField, 10) + sourceIdOffset).toString()
+			return fields.join(':')
+		})
+		.join(';')
+}
+
+function remapContractSourceMaps(contractData: unknown, sourceIdOffset: number) {
+	if (!isObjectRecord(contractData)) throw new Error('Invalid OpenOracle contract output')
+	if (!isObjectRecord(contractData['evm'])) return contractData
+	const evm = { ...contractData['evm'] }
+	for (const sectionName of ['bytecode', 'deployedBytecode']) {
+		const section = evm[sectionName]
+		if (!isObjectRecord(section) || typeof section['sourceMap'] !== 'string') continue
+		evm[sectionName] = { ...section, sourceMap: remapCompilerSourceMap(section['sourceMap'], sourceIdOffset) }
+	}
+	return { ...contractData, evm }
+}
+
+function mergeCompileSources(mainSources: unknown, openOracleSources: unknown, sourceIdOffset: number) {
 	const mergedSources: Record<string, unknown> = {}
 
 	if (isObjectRecord(mainSources)) {
 		for (const [sourcePath, sourceData] of Object.entries(mainSources)) {
-			if (isTemporaryCompilerSourcePath(sourcePath) || isReplacedLocalOracleSourcePath(sourcePath)) continue
+			if (!isObjectRecord(sourceData) || typeof sourceData['id'] !== 'number') throw new Error(`Invalid source metadata for ${sourcePath}`)
+			if (sourcePath.startsWith(OPEN_ORACLE_IMPORT_PREFIX)) {
+				const localSourcePath = remapOpenOracleSourcePath(sourcePath)
+				if (localSourcePath === undefined) throw new Error(`Cannot remap main compiler source ${sourcePath}`)
+				mergedSources[`${MAIN_COMPILER_PROFILE_PREFIX}${sourcePath}`] = { ...sourceData, sourcePath: localSourcePath }
+				continue
+			}
 			mergedSources[sourcePath] = sourceData
 		}
 	}
@@ -380,8 +435,9 @@ function mergeCompileSources(mainSources: unknown, openOracleSources: unknown) {
 	if (isObjectRecord(openOracleSources)) {
 		for (const [sourcePath, sourceData] of Object.entries(openOracleSources)) {
 			const remappedPath = remapOpenOracleSourcePath(sourcePath)
-			if (remappedPath === undefined) continue
-			mergedSources[remappedPath] = sourceData
+			if (remappedPath === undefined) throw new Error(`Cannot remap OpenOracle compiler source ${sourcePath}`)
+			if (!isObjectRecord(sourceData) || typeof sourceData['id'] !== 'number') throw new Error(`Invalid OpenOracle source metadata for ${sourcePath}`)
+			mergedSources[`${OPEN_ORACLE_COMPILER_PROFILE_PREFIX}${sourcePath}`] = { ...sourceData, id: sourceData['id'] + sourceIdOffset, sourcePath: remappedPath }
 		}
 	}
 
@@ -390,6 +446,7 @@ function mergeCompileSources(mainSources: unknown, openOracleSources: unknown) {
 
 function mergeCompileResults(mainResult: funtypes.Static<typeof CompileResult>, openOracleResult: funtypes.Static<typeof CompileResult>) {
 	const mergedContracts: Record<string, Record<string, unknown>> = {}
+	const openOracleSourceIdOffset = getOpenOracleSourceIdOffset(mainResult.sources)
 
 	if (mainResult.contracts) {
 		for (const [sourcePath, contractFile] of Object.entries(mainResult.contracts)) {
@@ -401,16 +458,17 @@ function mergeCompileResults(mainResult: funtypes.Static<typeof CompileResult>, 
 
 	if (openOracleResult.contracts) {
 		for (const [sourcePath, contractFile] of Object.entries(openOracleResult.contracts)) {
+			if (sourcePath.startsWith(OPEN_ORACLE_IMPORT_PREFIX)) continue
 			const remappedPath = remapOpenOracleSourcePath(sourcePath)
 			if (remappedPath === undefined) continue
 			if (!isObjectRecord(contractFile)) throw new Error(`Invalid contract output for ${sourcePath}`)
-			mergedContracts[remappedPath] = contractFile
+			mergedContracts[remappedPath] = Object.fromEntries(Object.entries(contractFile).map(([contractName, contractData]) => [contractName, remapContractSourceMaps(contractData, openOracleSourceIdOffset)]))
 		}
 	}
 
 	return {
 		contracts: mergedContracts,
-		sources: mergeCompileSources(mainResult.sources, openOracleResult.sources),
+		sources: mergeCompileSources(mainResult.sources, openOracleResult.sources, openOracleSourceIdOffset),
 	}
 }
 
@@ -457,11 +515,13 @@ const compileContracts = async () => {
 	console.log('TypeScript artifact generated.')
 }
 
-compileContracts().catch((error: unknown) => {
-	if (error instanceof CompilationError) {
-		console.error(error.toString())
-	} else {
-		console.error(error)
-	}
-	process.exit(1)
-})
+if (import.meta.main) {
+	compileContracts().catch((error: unknown) => {
+		if (error instanceof CompilationError) {
+			console.error(error.toString())
+		} else {
+			console.error(error)
+		}
+		process.exit(1)
+	})
+}
