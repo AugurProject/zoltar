@@ -1,7 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import assert from '../testSupport/simulator/utils/assert'
 import type { Address } from '@zoltar/shared/ethereum'
-import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient } from '../testSupport/simulator/utils/clients'
@@ -70,6 +69,7 @@ import { ensureDefined, strictEqualTypeSafe } from '../testSupport/simulator/uti
 import { computeClearing, deployUniformPriceDualCapBatchAuction, finalize as finalizeAuction, getEthRaised, getTotalRepPurchased, simulateWithdrawBids, startAuction, submitBid, withdrawBids } from '../testSupport/simulator/utils/contracts/auction'
 import { getUniformPriceDualCapBatchAuctionAddress } from '../testSupport/simulator/utils/contracts/deployments'
 import { priceToClosestTick, tickToPrice } from '../testSupport/simulator/utils/tickMath'
+import { peripherals_EscalationGame_EscalationGame } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -539,14 +539,28 @@ describe('Peripherals invariant harness', () => {
 			strictEqualTypeSafe((await getSecurityVault(client, firstPoolAddresses.securityPool, actorB.account.address)).repInEscalationGame, 0n, 'actor B parent escrow entitlement should be consumed exactly once')
 			const actorAChildEscrow = (await getSecurityVault(client, firstYesPool, actorA.account.address)).repInEscalationGame
 			const actorBChildEscrow = (await getSecurityVault(client, firstYesPool, actorB.account.address)).repInEscalationGame
-			assert.ok(actorAChildEscrow > 0n, 'actor A unresolved escrow should continue in the child')
-			assert.ok(actorBChildEscrow > 0n, 'actor B unresolved escrow should continue in the child')
+			strictEqualTypeSafe(actorAChildEscrow, 0n, 'actor A should not need a per-vault child escrow lock')
+			strictEqualTypeSafe(actorBChildEscrow, 0n, 'actor B should not need a per-vault child escrow lock')
 			const actorAChildSourcePrincipal = await getForkedEscrowPrincipalByOutcomeAndVault(client, firstYesPool, QuestionOutcome.Yes, actorA.account.address)
 			const actorBChildSourcePrincipal = await getForkedEscrowPrincipalByOutcomeAndVault(client, firstYesPool, QuestionOutcome.No, actorB.account.address)
-			strictEqualTypeSafe(await getForkedEscrowChildRepByOutcomeAndVault(client, firstYesPool, QuestionOutcome.Yes, actorA.account.address), actorAChildEscrow, 'actor A child REP backing should equal its child vault lock')
-			strictEqualTypeSafe(await getForkedEscrowChildRepByOutcomeAndVault(client, firstYesPool, QuestionOutcome.No, actorB.account.address), actorBChildEscrow, 'actor B child REP backing should equal its child vault lock')
-			assertEscrowMigrationConservation({ childSourcePrincipal: actorAChildSourcePrincipal, parentRemainingPrincipal: 0n, sourcePrincipalAtFork: actorAEscrowAtFork }, 'actor A exported escalation')
-			assertEscrowMigrationConservation({ childSourcePrincipal: actorBChildSourcePrincipal, parentRemainingPrincipal: 0n, sourcePrincipalAtFork: actorBEscrowAtFork }, 'actor B exported escalation')
+			strictEqualTypeSafe(actorAChildSourcePrincipal, 0n, 'actor A principal should remain in aggregate carry rather than per-vault escrow')
+			strictEqualTypeSafe(actorBChildSourcePrincipal, 0n, 'actor B principal should remain in aggregate carry rather than per-vault escrow')
+			strictEqualTypeSafe(await getForkedEscrowChildRepByOutcomeAndVault(client, firstYesPool, QuestionOutcome.Yes, actorA.account.address), 0n, 'actor A should not receive separate child REP backing')
+			strictEqualTypeSafe(await getForkedEscrowChildRepByOutcomeAndVault(client, firstYesPool, QuestionOutcome.No, actorB.account.address), 0n, 'actor B should not receive separate child REP backing')
+			const childYesState = await client.readContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: firstYesPoolAddresses.escalationGame,
+				functionName: 'getOutcomeState',
+				args: [QuestionOutcome.Yes],
+			})
+			const childNoState = await client.readContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: firstYesPoolAddresses.escalationGame,
+				functionName: 'getOutcomeState',
+				args: [QuestionOutcome.No],
+			})
+			assert.ok(childYesState.currentCarryTotal >= actorAEscrowAtFork, 'aggregate Yes carry should preserve actor A fork-time principal')
+			assert.ok(childNoState.currentCarryTotal >= actorBEscrowAtFork, 'aggregate No carry should preserve actor B fork-time principal')
 			assert.deepStrictEqual(await getEscalationGameDeposits(client, firstPoolAddresses.escalationGame, QuestionOutcome.Yes), parentYesDepositsAtFork, 'exported parent Yes deposits should remain in the immutable proof commitment')
 			assert.deepStrictEqual(await getEscalationGameDeposits(client, firstPoolAddresses.escalationGame, QuestionOutcome.No), parentNoDepositsAtFork, 'exported parent No deposits should remain in the immutable proof commitment')
 			strictEqualTypeSafe((await getEscalationGameDeposits(client, firstYesPoolAddresses.escalationGame, QuestionOutcome.Yes)).length, 0, 'child escalation should carry parent Yes escrow without replaying local deposits')
@@ -882,12 +896,19 @@ describe('Peripherals invariant harness', () => {
 			const firstYesPool = firstYesPoolAddresses.securityPool
 			assert.ok((await getSecurityVault(client, firstYesPool, client.account.address)).repDepositShare > 0n, 'creator ownership should migrate to own-fork child')
 			const actorAChildVault = await getSecurityVault(client, firstYesPool, actorA.account.address)
-			assert.ok(actorAChildVault.repInEscalationGame > 0n, 'actor A unresolved escrow should continue in own-fork child')
+			strictEqualTypeSafe(actorAChildVault.repInEscalationGame, 0n, 'actor A should not need a per-vault own-fork child escrow lock')
 			strictEqualTypeSafe((await getSecurityVault(client, firstPool.securityPool, actorA.account.address)).repInEscalationGame, 0n, 'actor A source escrow should be consumed from the parent exactly once')
 			const actorAChildSourcePrincipal = await getForkedEscrowPrincipalByOutcomeAndVault(client, firstYesPool, QuestionOutcome.Yes, actorA.account.address)
 			const actorAChildRep = await getForkedEscrowChildRepByOutcomeAndVault(client, firstYesPool, QuestionOutcome.Yes, actorA.account.address)
-			assertEscrowMigrationConservation({ childSourcePrincipal: actorAChildSourcePrincipal, parentRemainingPrincipal: 0n, sourcePrincipalAtFork: actorAFirstEscrowSourceAtFork }, 'handler actor A exported escalation')
-			strictEqualTypeSafe(actorAChildRep, actorAChildVault.repInEscalationGame, 'handler child REP backing should equal the migrated child vault lock')
+			strictEqualTypeSafe(actorAChildSourcePrincipal, 0n, 'handler should retain actor A principal in aggregate carry')
+			strictEqualTypeSafe(actorAChildRep, 0n, 'handler should not create separate actor A child REP backing')
+			const actorACarryState = await client.readContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: firstYesPoolAddresses.escalationGame,
+				functionName: 'getOutcomeState',
+				args: [QuestionOutcome.Yes],
+			})
+			assert.ok(actorACarryState.currentCarryTotal >= actorAFirstEscrowSourceAtFork, 'handler aggregate carry should preserve actor A fork-time principal')
 			const actorAParentYesDeposits = (await getEscalationGameDeposits(client, firstPool.escalationGame, QuestionOutcome.Yes)).filter(deposit => deposit.depositor === actorA.account.address)
 			strictEqualTypeSafe(actorAParentYesDeposits.length, 1, 'handler should preserve one immutable parent Yes deposit commitment for actor A')
 			strictEqualTypeSafe(ensureDefined(actorAParentYesDeposits[0], 'handler parent Yes deposit is missing').amount, actorAFirstEscrowSourceAtFork, 'handler parent deposit commitment should preserve the exact source principal')
@@ -997,8 +1018,7 @@ describe('Peripherals invariant harness', () => {
 		const parentSupplyBeforeFork = await getTotalTheoreticalSupply(client, parentRepToken)
 		const burnAddressBalanceBeforeFork = await getERC20Balance(client, parentRepToken, addressString(BURN_ADDRESS))
 		const forkThreshold = await getZoltarForkThreshold(client, genesisUniverse)
-		const permanentHaircut = forkThreshold / DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor
-		const expectedChildSupplySnapshot = parentSupplyBeforeFork - permanentHaircut
+		const expectedChildSupplySnapshot = parentSupplyBeforeFork - forkThreshold / 5n
 		const branchOrder = shuffle([QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No], 0xdecafbadn)
 		const attackerClient = createClient(1)
 		await approveAndDepositRep(attackerClient, repDeposit, context.questionId)
@@ -1023,7 +1043,7 @@ describe('Peripherals invariant harness', () => {
 			strictEqualTypeSafe(childUniverse.forkingOutcomeIndex, BigInt(outcome), 'child should retain its outcome index')
 			const childUniverseSupply = await getUniverseTheoreticalSupply(client, childUniverseId)
 			assert.ok(childUniverseSupply > 0n, 'child universe supply should stay positive')
-			strictEqualTypeSafe(childUniverseSupply, expectedChildSupplySnapshot, 'child universe supply should subtract only the permanent fork haircut')
+			strictEqualTypeSafe(childUniverseSupply, expectedChildSupplySnapshot, 'child universe supply should exclude the fork admission haircut')
 		}
 
 		const childUniverseIds = branchOrder.map(outcome => getChildUniverseIdForOutcome(outcome))

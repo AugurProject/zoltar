@@ -62,7 +62,6 @@ window.protocolTermDefinitions = Object.freeze({
 	'fork outcome': 'The outcome index or answer encoding represented by a child universe after a fork.',
 	'fork question': 'The question that defines the child branches for a universe fork.',
 	'fork threshold': 'The amount of REP required to start a universe fork.',
-	forkBurnDivisor: 'The Zoltar constructor immutable that determines the uncredited haircut between the full parent-REP fork burn and the initiator migration balance.',
 	forkThresholdDivisor: 'The Zoltar constructor immutable that computes the fork threshold from theoretical REP supply.',
 	'fork truth auction': 'A truth auction associated with repairing collateral after a fork.',
 	fork: 'A branch point for unresolved truth disagreement. A fork creates child universes instead of forcing one global answer.',

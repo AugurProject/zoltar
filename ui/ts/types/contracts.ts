@@ -27,7 +27,7 @@ export type ForkAuctionAction =
 	| 'createChildUniverse'
 	| 'migrateRepToZoltar'
 	| 'migrateVault'
-	| 'migrateEscalationDeposits'
+	| 'claimParentEscalationDeposits'
 	| 'migrateUnresolvedEscalation'
 	| 'startTruthAuction'
 	| 'submitBid'

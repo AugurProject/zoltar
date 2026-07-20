@@ -253,6 +253,11 @@ contract SecurityPool is ISecurityPool {
 		return ISecurityPoolForker(securityPoolForker).getQuestionOutcome(this) != BinaryOutcomes.BinaryOutcome.None;
 	}
 
+	function burnEscalationWinnerHaircut(uint256 amount) external {
+		if (msg.sender != address(escalationGame)) revert();
+		zoltar.burnRep(universeId, amount);
+	}
+
 	function setStartingParams(uint256 _currentRetentionRate, uint256 _completeSetCollateralAmount) external {
 		require(msg.sender == address(securityPoolFactory), 'Only factory');
 		lastUpdatedFeeAccumulator = block.timestamp;

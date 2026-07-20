@@ -453,7 +453,7 @@ describe('useReportingOperations', () => {
 		expect(loadReportingDetails).toHaveBeenCalledTimes(1)
 		expect(withdrawEscalationFromSecurityPool).toHaveBeenCalledTimes(0)
 		expect(requireHookState(hookState).reportingResult).toBeUndefined()
-		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('The migration window for these unresolved escalation deposits has closed')
+		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('Settle winning carried proofs in the finalized child; the optional parent-lock cleanup window has closed')
 	})
 
 	test('withdrawEscalation prunes selections per side after a successful refresh', async () => {

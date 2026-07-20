@@ -32,8 +32,17 @@ describe('transaction presentations', () => {
 		expect(intent.submittedDetail).toBeUndefined()
 	})
 
-	test('keeps unresolved escalation entitlement reuse explicit after one child materializes', () => {
+	test('describes unresolved escalation migration as optional parent-lock cleanup', () => {
 		const presentation = createForkAuctionSuccessPresentation(createForkAuctionResult('migrateUnresolvedEscalation'))
-		expect(presentation.detail).toBe('The wallet’s aggregate escalation entitlement was captured and materialized in the chosen child universe. It remains available for other unselected child outcomes until the migration deadline.')
+		expect(presentation.title).toBe('Clear Parent Escalation Locks')
+		expect(presentation.detail).toBe('The wallet’s parent escalation-lock accounting was cleared in constant-size work. Child backing and proof eligibility were already available and are unchanged.')
+	})
+
+	test('describes direct parent escalation claims without calling them migration', () => {
+		const intent = createForkAuctionTransactionIntent('claimParentEscalationDeposits')
+		const presentation = createForkAuctionSuccessPresentation(createForkAuctionResult('claimParentEscalationDeposits'))
+		expect(intent.submittedTitle).toBe('Claim Parent Escalation Deposits')
+		expect(presentation.title).toBe('Claim Parent Escalation Deposits')
+		expect(presentation.detail).toBe('Selected winning parent deposits were paid directly in child REP. Their carried proofs are now spent in current and later descendants.')
 	})
 })

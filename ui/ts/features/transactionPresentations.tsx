@@ -339,7 +339,16 @@ export function createOpenOracleWarningPresentation(result: OpenOracleActionResu
 }
 
 export function createForkAuctionTransactionIntent(actionName: ForkAuctionActionResult['action'], { submittedTitle }: { submittedTitle?: TransactionIntent['submittedTitle'] } = {}) {
-	const resolvedSubmittedTitle = submittedTitle ?? humanizeAction(actionName)
+	let resolvedSubmittedTitle = submittedTitle
+	if (resolvedSubmittedTitle === undefined) {
+		if (actionName === 'migrateUnresolvedEscalation') {
+			resolvedSubmittedTitle = transactionCopy.clearParentEscalationLocks
+		} else if (actionName === 'claimParentEscalationDeposits') {
+			resolvedSubmittedTitle = transactionCopy.claimParentEscalationDeposits
+		} else {
+			resolvedSubmittedTitle = humanizeAction(actionName)
+		}
+	}
 	return buildIntent({
 		action: actionName,
 		source: 'fork-auction',
@@ -348,7 +357,14 @@ export function createForkAuctionTransactionIntent(actionName: ForkAuctionAction
 }
 
 export function createForkAuctionSuccessPresentation(result: ForkAuctionActionResult) {
-	const title = result.action === 'claimAuctionProceeds' && result.settlementMode === 'refund' ? transactionCopy.settleFinalizedRefunds : humanizeAction(result.action)
+	let title = humanizeAction(result.action)
+	if (result.action === 'claimAuctionProceeds' && result.settlementMode === 'refund') {
+		title = transactionCopy.settleFinalizedRefunds
+	} else if (result.action === 'migrateUnresolvedEscalation') {
+		title = transactionCopy.clearParentEscalationLocks
+	} else if (result.action === 'claimParentEscalationDeposits') {
+		title = transactionCopy.claimParentEscalationDeposits
+	}
 	const detail = (() => {
 		switch (result.action) {
 			case 'claimAuctionProceeds':
@@ -367,8 +383,8 @@ export function createForkAuctionSuccessPresentation(result: ForkAuctionActionRe
 				return transactionCopy.zoltarUniverseForkSubmittedDetail
 			case 'initiateFork':
 				return transactionCopy.poolReadyForForkMigrationDetail
-			case 'migrateEscalationDeposits':
-				return transactionCopy.escalationDepositsMigratedDetail
+			case 'claimParentEscalationDeposits':
+				return transactionCopy.parentEscalationDepositsClaimedDetail
 			case 'migrateRepToZoltar':
 				return transactionCopy.poolRepMigrationSuccessDetail
 			case 'migrateUnresolvedEscalation':

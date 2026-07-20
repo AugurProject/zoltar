@@ -116,6 +116,11 @@ interface ISecurityPoolForker is ISecurityPoolForkerEvents {
 		BinaryOutcomes.BinaryOutcome outcomeIndex,
 		uint256 parentDepositIndex
 	) external view returns (bool);
+	function getDirectlyClaimedEscalationPrincipal(
+		ISecurityPool securityPool,
+		BinaryOutcomes.BinaryOutcome outcomeIndex
+	) external view returns (uint256);
+	function isEscalationWinnerHaircutPaidByFork(ISecurityPool securityPool) external view returns (bool);
 	function startTruthAuction(ISecurityPool securityPool) external;
 	function finalizeTruthAuction(ISecurityPool securityPool) external payable;
 	function forkZoltarWithOwnEscalationGame(ISecurityPool securityPool) external;

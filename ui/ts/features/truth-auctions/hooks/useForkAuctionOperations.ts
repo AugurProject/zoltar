@@ -11,7 +11,7 @@ import {
 	forkZoltarWithOwnEscalation,
 	initiateSecurityPoolFork,
 	loadForkAuctionDetails,
-	migrateEscalationDeposits,
+	claimParentEscalationDeposits,
 	migrateVaultWithUnresolvedEscalation,
 	migrateRepToZoltarFromSecurityPool,
 	migrateSecurityVault,
@@ -60,7 +60,7 @@ export type UseForkAuctionOperationsDependencies<TWriteClient = ForkAuctionProdu
 	forkZoltarWithOwnEscalation: (client: TWriteClient, securityPoolAddress: Address, universeId: bigint) => Promise<ForkAuctionActionResult>
 	initiateSecurityPoolFork: (client: TWriteClient, securityPoolAddress: Address, universeId: bigint) => Promise<ForkAuctionActionResult>
 	loadForkAuctionDetails: (securityPoolAddress: Address) => Promise<ForkAuctionDetails>
-	migrateEscalationDeposits: (client: TWriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, outcome: ReportingOutcomeKey, depositIndexes: bigint[]) => Promise<ForkAuctionActionResult>
+	claimParentEscalationDeposits: (client: TWriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, outcome: ReportingOutcomeKey, depositIndexes: bigint[]) => Promise<ForkAuctionActionResult>
 	migrateRepToZoltarFromSecurityPool: (client: TWriteClient, securityPoolAddress: Address, universeId: bigint, outcomes: ReportingOutcomeKey[]) => Promise<ForkAuctionActionResult>
 	migrateSecurityVault: (client: TWriteClient, securityPoolAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) => Promise<ForkAuctionActionResult>
 	migrateVaultWithUnresolvedEscalation: (client: TWriteClient, securityPoolAddress: Address, vaultAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) => Promise<ForkAuctionActionResult>
@@ -81,7 +81,7 @@ const defaultUseForkAuctionOperationsDependencies: UseForkAuctionOperationsDepen
 	forkZoltarWithOwnEscalation: async (client, securityPoolAddress, universeId) => await forkZoltarWithOwnEscalation(client, securityPoolAddress, universeId),
 	initiateSecurityPoolFork: async (client, securityPoolAddress, universeId) => await initiateSecurityPoolFork(client, securityPoolAddress, universeId),
 	loadForkAuctionDetails: async securityPoolAddress => await loadForkAuctionDetails(createConnectedReadClient(), securityPoolAddress),
-	migrateEscalationDeposits: async (client, securityPoolAddress, universeId, vaultAddress, outcome, depositIndexes) => await migrateEscalationDeposits(client, securityPoolAddress, universeId, vaultAddress, outcome, depositIndexes),
+	claimParentEscalationDeposits: async (client, securityPoolAddress, universeId, vaultAddress, outcome, depositIndexes) => await claimParentEscalationDeposits(client, securityPoolAddress, universeId, vaultAddress, outcome, depositIndexes),
 	migrateRepToZoltarFromSecurityPool: async (client, securityPoolAddress, universeId, outcomes) => await migrateRepToZoltarFromSecurityPool(client, securityPoolAddress, universeId, outcomes),
 	migrateSecurityVault: async (client, securityPoolAddress, universeId, outcome) => await migrateSecurityVault(client, securityPoolAddress, universeId, outcome),
 	migrateVaultWithUnresolvedEscalation: async (client, securityPoolAddress, vaultAddress, universeId, outcome) => await migrateVaultWithUnresolvedEscalation(client, securityPoolAddress, vaultAddress, universeId, outcome),
@@ -272,17 +272,17 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 			)
 		})()
 
-	const migrateEscalation = async ({ depositIndexes, outcome, vaultAddress }: { depositIndexes?: bigint[]; outcome?: ReportingOutcomeKey; vaultAddress?: Address } = {}) =>
+	const claimParentEscalation = async ({ depositIndexes, outcome, vaultAddress }: { depositIndexes?: bigint[]; outcome?: ReportingOutcomeKey; vaultAddress?: Address } = {}) =>
 		await (() => {
 			const submittedVaultAddress = forkAuctionForm.value.vaultAddress
 			const submittedSelectedOutcome = forkAuctionForm.value.selectedOutcome
 			const submittedDepositIndexes = forkAuctionForm.value.depositIndexes
 			return runForkAuctionAction(
-				'migrateEscalationDeposits',
+				'claimParentEscalationDeposits',
 				async (walletAddress, details, isCurrentSelection) => {
 					const resolvedVaultAddress = vaultAddress ?? resolveOptionalAddressInput(submittedVaultAddress, walletAddress, 'Vault address')
 					if (!isCurrentSelection()) return undefined
-					return await dependencies.migrateEscalationDeposits(
+					return await dependencies.claimParentEscalationDeposits(
 						dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }),
 						details.securityPoolAddress,
 						details.universeId,
@@ -291,7 +291,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 						depositIndexes ?? parseBigIntListInput(submittedDepositIndexes, 'Deposit indexes'),
 					)
 				},
-				'Failed to migrate escalation deposits',
+				'Failed to claim parent escalation deposits',
 			)
 		})()
 
@@ -302,7 +302,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 				if (!isCurrentSelection()) return undefined
 				return await dependencies.migrateVaultWithUnresolvedEscalation(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), details.securityPoolAddress, walletAddress, details.universeId, selectedChildOutcome)
 			},
-			'Failed to migrate unresolved escalation deposits',
+			'Failed to clear parent escalation locks',
 		)
 
 	const startTruthAuction = async (securityPoolAddressOverride?: Address) =>
@@ -452,7 +452,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 		initiateFork,
 		loadForkAuction,
 		loadingForkAuctionDetails: forkAuctionLoad.isLoading.value,
-		migrateEscalation: migrateEscalation,
+		claimParentEscalation,
 		migrateUnresolvedEscalation,
 		migrateRepToZoltar,
 		migrateVault,

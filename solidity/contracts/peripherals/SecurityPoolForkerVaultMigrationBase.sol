@@ -164,17 +164,6 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		);
 	}
 
-	function _previewOwnForkEscalationRep(
-		ISecurityPool parent,
-		uint256 sourceRepAmount
-	) internal view returns (uint256 childRepAmount) {
-		if (sourceRepAmount == 0) return 0;
-		SecurityPoolForkerForkData storage repBuckets = forkDataByPool[parent];
-		uint256 escalationSourceRepAtFork = repBuckets.escalationSourceRepAtFork;
-		require(escalationSourceRepAtFork > 0, 'Own-fork source low');
-		return (sourceRepAmount * repBuckets.escalationChildRepAtFork) / escalationSourceRepAtFork;
-	}
-
 	function _transferForkMigratedCollateralToChild(
 		ISecurityPool parent,
 		ISecurityPool child,

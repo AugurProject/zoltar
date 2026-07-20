@@ -398,7 +398,7 @@ export function ForkAuctionSection({
 	onFinalizeTruthAuction,
 	onForkAuctionFormChange,
 	onMigrateRepToZoltar,
-	onMigrateEscalationDeposits,
+	onClaimParentEscalationDeposits,
 	onMigrateUnresolvedEscalation,
 	onMigrateVault,
 	onRefundLosingBids,
@@ -497,7 +497,7 @@ export function ForkAuctionSection({
 	let effectiveTruthAuctionStartedAt = optimisticTruthAuctionStartedAt
 	if (auctionHasStartedAtValue > 0n) effectiveTruthAuctionStartedAt = auctionHasStartedAtValue
 	const hasStartedTruthAuction = effectiveTruthAuctionStartedAt !== undefined && effectiveTruthAuctionStartedAt > 0n
-	const { beginStartTruthAuctionProgress, beginVaultMigrationProgress, hasCompletedVaultMigration, isStartTruthAuctionInProgressState, isVaultMigrationPending, optimisticMigratedEscalationRep, setPendingEscalationMigrationSelection } = useForkAuctionInteractionState({
+	const { beginStartTruthAuctionProgress, beginVaultMigrationProgress, hasCompletedVaultMigration, isStartTruthAuctionInProgressState, isVaultMigrationPending, optimisticClaimedParentEscalationRep, setPendingParentEscalationClaimSelection } = useForkAuctionInteractionState({
 		accountAddress: accountState.address,
 		connectedWalletEscrowedRep: connectedWalletVaultSummary?.escalationEscrowedRep,
 		forkAuctionActiveAction,
@@ -509,8 +509,8 @@ export function ForkAuctionSection({
 	})
 	const effectiveEscrowedRepInEscalationGame = (() => {
 		if (connectedWalletVaultSummary === undefined) return undefined
-		if (connectedWalletVaultSummary.escalationEscrowedRep > optimisticMigratedEscalationRep) {
-			return connectedWalletVaultSummary.escalationEscrowedRep - optimisticMigratedEscalationRep
+		if (connectedWalletVaultSummary.escalationEscrowedRep > optimisticClaimedParentEscalationRep) {
+			return connectedWalletVaultSummary.escalationEscrowedRep - optimisticClaimedParentEscalationRep
 		}
 		return 0n
 	})()
@@ -521,11 +521,11 @@ export function ForkAuctionSection({
 	const hasStoredEscalationMigrationEntitlement = escalationMigrationEntitlement?.initialized === true
 	const selectedOutcomeEscalationEntitlementMaterialized = escalationMigrationEntitlement?.materializedByOutcome[forkAuctionForm.selectedOutcome] === true
 	const hasUnresolvedMigrationState = isMigrationRequired || isMigrationExpired || hasStoredEscalationMigrationEntitlement
-	const selectedEscalationMigrationSide = reportingDetails?.status !== 'active' ? undefined : reportingDetails.sides.find(side => side.key === forkAuctionForm.selectedOutcome)
-	const selectedEscalationMigrationDeposits = selectedEscalationMigrationSide?.userDeposits ?? []
-	const selectedEscalationMigrationDepositIndexes = reportingForm?.selectedWithdrawDepositIndexesByOutcome[forkAuctionForm.selectedOutcome] ?? []
-	const showSelectedEscalationMigrationDeposits = !loadingReportingDetails && reportingDetails?.status === 'active'
-	const hasSelectedEscalationMigrationDeposits = selectedEscalationMigrationDeposits.length > 0
+	const selectedParentEscalationClaimSide = reportingDetails?.status !== 'active' ? undefined : reportingDetails.sides.find(side => side.key === forkAuctionForm.selectedOutcome)
+	const selectedParentEscalationClaimDeposits = selectedParentEscalationClaimSide?.userDeposits ?? []
+	const selectedParentEscalationClaimDepositIndexes = reportingForm?.selectedWithdrawDepositIndexesByOutcome[forkAuctionForm.selectedOutcome] ?? []
+	const showSelectedParentEscalationClaimDeposits = !loadingReportingDetails && reportingDetails?.status === 'active'
+	const hasSelectedParentEscalationClaimDeposits = selectedParentEscalationClaimDeposits.length > 0
 	const unresolvedMigrationSides = activeReportingDetails?.sides ?? []
 	const [selectedImportedForkDepositIndexesByOutcome, setSelectedImportedForkDepositIndexesByOutcome] = useState<Record<ReportingOutcomeKey, bigint[]>>({
 		invalid: [],
@@ -581,9 +581,9 @@ export function ForkAuctionSection({
 		)
 	})()
 	const hasWalletVaultMigrationBalance = connectedWalletVaultSummary !== undefined && (connectedWalletVaultSummary.repDepositShare > 0n || connectedWalletVaultSummary.securityBondAllowance > 0n)
-	const hasWalletEscalationMigrationBalance = effectiveEscrowedRepInEscalationGame !== undefined && effectiveEscrowedRepInEscalationGame > 0n
+	const hasWalletParentEscalationClaimBalance = effectiveEscrowedRepInEscalationGame !== undefined && effectiveEscrowedRepInEscalationGame > 0n
 	const migrateVaultBalanceGuardMessage = connectedWalletVaultSummary !== undefined && !hasWalletVaultMigrationBalance ? forkAuctionCopy.poolMigrationCapacityEmpty : undefined
-	const migrateEscalationBalanceGuardMessage = connectedWalletVaultSummary !== undefined && !hasWalletEscalationMigrationBalance ? forkAuctionCopy.walletEscrowedRepEmpty : undefined
+	const claimParentEscalationBalanceGuardMessage = connectedWalletVaultSummary !== undefined && !hasWalletParentEscalationClaimBalance ? forkAuctionCopy.walletEscrowedRepEmpty : undefined
 	const totalUnresolvedMigrationDepositCount = unresolvedMigrationSides.reduce((count, side) => count + side.userDeposits.length, 0)
 	const hasUnresolvedMigrationDeposits = totalUnresolvedMigrationDepositCount > 0
 	const importedForkSettlementSides = activeReportingDetails?.sides.filter(side => side.importedUserDeposits.length > 0) ?? []
@@ -847,7 +847,7 @@ export function ForkAuctionSection({
 		if (isStartTruthAuctionInProgress) return forkAuctionCopy.startingTruthAuction
 		return startTruthAuctionGuardMessage
 	})()
-	const setSelectedEscalationMigrationDepositIndexes = (nextSelectedDepositIndexes: bigint[]) => {
+	const setSelectedParentEscalationClaimDepositIndexes = (nextSelectedDepositIndexes: bigint[]) => {
 		if (onReportingFormChange === undefined || reportingForm === undefined) return
 		onReportingFormChange({
 			selectedWithdrawDepositIndexesByOutcome: {
@@ -856,15 +856,15 @@ export function ForkAuctionSection({
 			},
 		})
 	}
-	const migrateSelectedEscalationDepositsGuardMessage = (() => {
-		if (migrateEscalationBalanceGuardMessage !== undefined) return migrateEscalationBalanceGuardMessage
+	const claimSelectedParentEscalationDepositsGuardMessage = (() => {
+		if (claimParentEscalationBalanceGuardMessage !== undefined) return claimParentEscalationBalanceGuardMessage
 		if (loadingReportingDetails) return forkAuctionCopy.eligibleDepositsLoading
 		if (reportingDetails?.status !== 'active') return forkAuctionCopy.escalationDepositDetailsUnavailable
 		if (isMigrationRequired) return forkAuctionCopy.useUnresolvedMigrationReason
 		if (isMigrationExpired) return forkAuctionCopy.unresolvedMigrationExpiredReason
-		if (selectedEscalationMigrationDeposits.length === 0) return forkAuctionCopy.formatNoMigratableEscalationDeposits(selectedOutcomeLabel)
-		if (selectedEscalationMigrationDepositIndexes.length > 0) return undefined
-		return forkAuctionCopy.migrationDepositSelectionRequired
+		if (selectedParentEscalationClaimDeposits.length === 0) return forkAuctionCopy.formatNoClaimableParentEscalationDeposits(selectedOutcomeLabel)
+		if (selectedParentEscalationClaimDepositIndexes.length > 0) return undefined
+		return forkAuctionCopy.parentEscalationClaimSelectionRequired
 	})()
 	const migrationWindowClosedGuardMessage = getMigrationWindowClosedGuardMessage({
 		currentTimestamp: effectiveCurrentTimestamp,
@@ -939,15 +939,15 @@ export function ForkAuctionSection({
 	const onMigrateSelectedOutcomeRepToZoltar = () => {
 		onMigrateRepToZoltar([forkAuctionForm.selectedOutcome])
 	}
-	const onMigrateSelectedEscalationDeposits = () => {
-		setPendingEscalationMigrationSelection({
-			depositIndexes: selectedEscalationMigrationDepositIndexes,
+	const onClaimSelectedParentEscalationDeposits = () => {
+		setPendingParentEscalationClaimSelection({
+			depositIndexes: selectedParentEscalationClaimDepositIndexes,
 			outcome: forkAuctionForm.selectedOutcome,
 		})
-		onMigrateEscalationDeposits(forkAuctionForm.selectedOutcome, selectedEscalationMigrationDepositIndexes)
+		onClaimParentEscalationDeposits(forkAuctionForm.selectedOutcome, selectedParentEscalationClaimDepositIndexes)
 	}
 	const onMigrateUnresolvedEscalationSubmit = () => {
-		setPendingEscalationMigrationSelection(undefined)
+		setPendingParentEscalationClaimSelection(undefined)
 		beginVaultMigrationProgress()
 		onMigrateUnresolvedEscalation(forkAuctionForm.selectedOutcome)
 	}
@@ -1342,6 +1342,7 @@ export function ForkAuctionSection({
 				resolved={importedForkSettlementResolved}
 				selectedDepositIndexesByOutcome={selectedImportedForkDepositIndexesByOutcome}
 				sides={importedForkSettlementSides}
+				winningOutcome={activeReportingDetails?.questionOutcome === 'none' ? undefined : activeReportingDetails?.questionOutcome}
 			/>
 		)
 	})()
@@ -1497,18 +1498,18 @@ export function ForkAuctionSection({
 										)}
 									</SectionBlock>
 								) : (
-									<SectionBlock density='compact' headingLevel={4} title={forkAuctionCopy.migrateResolvedEscalationDeposits} variant='embedded'>
-										<p className='detail'>{forkAuctionCopy.resolvedDepositMigrationDetail}</p>
-										{connectedWalletVaultSummary !== undefined && !hasWalletEscalationMigrationBalance ? <p className='detail'>{forkAuctionCopy.escalationMigrationEmptyEscrowDetail}</p> : undefined}
+									<SectionBlock density='compact' headingLevel={4} title={forkAuctionCopy.claimResolvedParentEscalationDeposits} variant='embedded'>
+										<p className='detail'>{forkAuctionCopy.resolvedParentDepositClaimDetail}</p>
+										{connectedWalletVaultSummary !== undefined && !hasWalletParentEscalationClaimBalance ? <p className='detail'>{forkAuctionCopy.parentEscalationClaimEmptyEscrowDetail}</p> : undefined}
 										{loadingReportingDetails ? <p className='detail'>{forkAuctionCopy.walletEscalationDepositsLoading}</p> : undefined}
 										{loadingReportingDetails || reportingDetails?.status === 'active' ? undefined : <p className='detail'>{forkAuctionCopy.escalationDepositDetailsUnavailable}</p>}
-										{showSelectedEscalationMigrationDeposits && !hasSelectedEscalationMigrationDeposits ? <p className='detail'>{forkAuctionCopy.formatNoMigratableEscalationDeposits(selectedOutcomeLabel)}</p> : undefined}
-										{showSelectedEscalationMigrationDeposits && hasSelectedEscalationMigrationDeposits ? (
+										{showSelectedParentEscalationClaimDeposits && !hasSelectedParentEscalationClaimDeposits ? <p className='detail'>{forkAuctionCopy.formatNoClaimableParentEscalationDeposits(selectedOutcomeLabel)}</p> : undefined}
+										{showSelectedParentEscalationClaimDeposits && hasSelectedParentEscalationClaimDeposits ? (
 											<div className='field'>
-												<span>{forkAuctionCopy.chooseDepositsToMigrate}</span>
+												<span>{forkAuctionCopy.chooseParentDepositsToClaim}</span>
 												<EscalationDepositSelectionList
-													disabled={forkAuctionActiveAction === 'migrateEscalationDeposits'}
-													items={selectedEscalationMigrationDeposits.map(deposit => {
+													disabled={forkAuctionActiveAction === 'claimParentEscalationDeposits'}
+													items={selectedParentEscalationClaimDeposits.map(deposit => {
 														const claimAmount = getEscalationDepositClaimAmount(reportingDetails, forkAuctionForm.selectedOutcome, deposit)
 														return {
 															deposit,
@@ -1518,7 +1519,7 @@ export function ForkAuctionSection({
 																	<CurrencyValue value={deposit.amount} suffix={commonCopy.rep} />
 																</>,
 																claimAmount === undefined ? (
-																	forkAuctionCopy.worthNowPendingMigrationFinalization
+																	forkAuctionCopy.worthNowPendingClaimFinalization
 																) : (
 																	<>
 																		{forkAuctionCopy.worthNowLead}
@@ -1534,18 +1535,18 @@ export function ForkAuctionSection({
 															],
 														}
 													})}
-													onSelectionChange={setSelectedEscalationMigrationDepositIndexes}
-													selectedDepositIndexes={selectedEscalationMigrationDepositIndexes}
+													onSelectionChange={setSelectedParentEscalationClaimDepositIndexes}
+													selectedDepositIndexes={selectedParentEscalationClaimDepositIndexes}
 												/>
 											</div>
 										) : undefined}
 										<div className='actions'>
 											{renderStageActionButton({
-												action: 'migrateEscalationDeposits',
-												availability: createActionAvailability(migrateSelectedEscalationDepositsGuardMessage),
-												idleLabel: forkAuctionCopy.formatMigrateSelectedValueDeposits(selectedOutcomeLabel),
-												onClick: onMigrateSelectedEscalationDeposits,
-												pendingLabel: forkAuctionCopy.migratingEscalationDepositsTruncated,
+												action: 'claimParentEscalationDeposits',
+												availability: createActionAvailability(claimSelectedParentEscalationDepositsGuardMessage),
+												idleLabel: forkAuctionCopy.formatClaimSelectedValueParentDeposits(selectedOutcomeLabel),
+												onClick: onClaimSelectedParentEscalationDeposits,
+												pendingLabel: forkAuctionCopy.claimingParentEscalationDepositsTruncated,
 											})}
 										</div>
 									</SectionBlock>

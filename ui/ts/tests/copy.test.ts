@@ -6,7 +6,9 @@ import * as securityPoolCopy from '../copy/securityPool.js'
 
 test('fork migration empty states are complete templates', () => {
 	expect(forkAuctionCopy.formatNoUnresolvedDeposits('YES')).toBe('No yes unresolved deposits remain for this wallet.')
-	expect(forkAuctionCopy.formatNoMigratableEscalationDeposits('Yes')).toBe('No Yes escalation deposits are currently available to migrate for this wallet.')
+	expect(forkAuctionCopy.formatNoClaimableParentEscalationDeposits('Yes')).toBe('No Yes parent escalation deposits are currently available for a direct claim by this wallet.')
+	expect(forkAuctionCopy.parentEscalationClaimEmptyEscrowDetail).toBe('No parent escrowed REP is currently visible for a direct claim by the connected wallet.')
+	expect(forkAuctionCopy.parentEscalationClaimEmptyEscrowDetail).not.toMatch(/migrat/i)
 })
 
 test('security-pool count summaries own their complete prose', () => {

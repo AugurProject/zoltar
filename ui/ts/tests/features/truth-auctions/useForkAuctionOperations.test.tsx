@@ -137,8 +137,8 @@ function createForkAuctionOperationsDependencies(overrides: Partial<UseForkAucti
 			throw new Error('initiateSecurityPoolFork should not be called in this test')
 		},
 		loadForkAuctionDetails: mock(async () => createForkAuctionDetails()),
-		migrateEscalationDeposits: async () => {
-			throw new Error('migrateEscalationDeposits should not be called in this test')
+		claimParentEscalationDeposits: async () => {
+			throw new Error('claimParentEscalationDeposits should not be called in this test')
 		},
 		migrateRepToZoltarFromSecurityPool: async () => {
 			throw new Error('migrateRepToZoltarFromSecurityPool should not be called in this test')
@@ -736,24 +736,24 @@ describe('useForkAuctionOperations', () => {
 		expect(onTransactionFailed).not.toHaveBeenCalled()
 	})
 
-	test('migrateEscalation snapshots the submitted form values before details reload resolves', async () => {
+	test('claimParentEscalation snapshots the submitted form values before details reload resolves', async () => {
 		const firstPoolAddress = getAddress('0x00000000000000000000000000000000000000fb')
 		const initialVaultAddress = getAddress('0x00000000000000000000000000000000000000f1')
 		const editedVaultAddress = getAddress('0x00000000000000000000000000000000000000f2')
 		const detailsReload = createDeferred<ForkAuctionDetails>()
 		const onTransactionFailed = mock(() => undefined)
 		const loadForkAuctionDetails = mock(async () => await detailsReload.promise)
-		const migrateEscalationDeposits = mock(async (_client: unknown, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, outcome: string, depositIndexes: bigint[]) => {
+		const claimParentEscalationDeposits = mock(async (_client: unknown, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, outcome: string, depositIndexes: bigint[]) => {
 			expect(securityPoolAddress).toBe(firstPoolAddress)
 			expect(universeId).toBe(1n)
 			expect(vaultAddress).toBe(initialVaultAddress)
 			expect(outcome).toBe('yes')
 			expect(depositIndexes).toEqual([1n, 3n])
-			return createForkAuctionResult('migrateEscalationDeposits')
+			return createForkAuctionResult('claimParentEscalationDeposits')
 		})
 		const dependencies = createForkAuctionOperationsDependencies({
 			loadForkAuctionDetails,
-			migrateEscalationDeposits,
+			claimParentEscalationDeposits,
 		})
 
 		let hookState: UseForkAuctionOperationsState | undefined
@@ -788,9 +788,9 @@ describe('useForkAuctionOperations', () => {
 			}))
 		})
 
-		let migratePromise = Promise.resolve()
+		let claimPromise = Promise.resolve()
 		await act(() => {
-			migratePromise = requireHookState(hookState).migrateEscalation()
+			claimPromise = requireHookState(hookState).claimParentEscalation()
 		})
 
 		await waitFor(() => expect(loadForkAuctionDetails).toHaveBeenCalledTimes(1))
@@ -806,11 +806,11 @@ describe('useForkAuctionOperations', () => {
 
 		await act(async () => {
 			detailsReload.resolve(createForkAuctionDetails({ securityPoolAddress: firstPoolAddress }))
-			await migratePromise
+			await claimPromise
 		})
 
-		expect(migrateEscalationDeposits).toHaveBeenCalledTimes(1)
-		expect(requireHookState(hookState).forkAuctionResult?.action).toBe('migrateEscalationDeposits')
+		expect(claimParentEscalationDeposits).toHaveBeenCalledTimes(1)
+		expect(requireHookState(hookState).forkAuctionResult?.action).toBe('claimParentEscalationDeposits')
 		expect(onTransactionFailed).not.toHaveBeenCalled()
 	})
 

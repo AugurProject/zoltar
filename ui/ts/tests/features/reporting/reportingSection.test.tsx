@@ -1441,7 +1441,7 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes('The migration window for these unresolved escalation deposits has closed.')).toBe(true)
+		expect(document.body.textContent?.includes('The optional parent-lock cleanup window has closed. Child proof eligibility is unchanged.')).toBe(true)
 		expect(document.body.textContent?.includes('must migrate in Fork & Migration')).toBe(false)
 		expect(document.body.textContent?.includes('Connected wallet has no unsettled escalation deposits.')).toBe(false)
 	})
