@@ -129,6 +129,10 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		return directlyClaimedEscalationPrincipalByPoolAndOutcome[securityPool][uint8(outcomeIndex)];
 	}
 
+	function isEscalationWinnerHaircutPaidByFork(ISecurityPool securityPool) external view returns (bool) {
+		return forkDataByPool[securityPool].ownFork;
+	}
+
 	function getEscalationMigrationEntitlementStatus(
 		ISecurityPool securityPool,
 		address vault
@@ -732,8 +736,10 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			address(migrationProxy),
 			securityPool.universeId()
 		);
-		uint256 vaultRepAtFork = auctionableRepAtFork - escalationRepToFork;
-		_initializeOwnForkRepBuckets(securityPool, vaultRepAtFork, escalationRepToFork, escalationRepToFork);
+		uint256 forkHaircut = forkThreshold / zoltar.forkBurnDivisor();
+		uint256 escalationChildRepAtFork = escalationRepToFork - forkHaircut;
+		uint256 vaultRepAtFork = auctionableRepAtFork - escalationChildRepAtFork;
+		_initializeOwnForkRepBuckets(securityPool, vaultRepAtFork, escalationChildRepAtFork, escalationRepToFork);
 		data.auctionableRepAtFork = auctionableRepAtFork;
 		data.collateralAtFork = securityPool.completeSetCollateralAmount();
 		data.migratedRepCollateralized = 0;

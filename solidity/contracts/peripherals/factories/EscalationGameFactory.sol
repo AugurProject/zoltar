@@ -5,6 +5,7 @@ import { ISecurityPool } from '../interfaces/ISecurityPool.sol';
 import { EscalationGame } from '../EscalationGame.sol';
 import { EscalationGameProofVerifier } from '../EscalationGameProofVerifier.sol';
 import { BinaryOutcomes } from '../BinaryOutcomes.sol';
+import { ISecurityPoolForker } from '../interfaces/ISecurityPoolForker.sol';
 
 contract EscalationGameFactory {
 	EscalationGameProofVerifier public immutable proofVerifier;
@@ -27,8 +28,26 @@ contract EscalationGameFactory {
 		uint256 elapsedAtFork,
 		BinaryOutcomes.BinaryOutcome fixedQuestionOutcome
 	) external returns (EscalationGame) {
+		ISecurityPool child = ISecurityPool(payable(msg.sender));
+		ISecurityPool parent = child.parent();
+		bool winnerHaircutPaidByFork =
+			address(parent) != address(0x0) &&
+				ISecurityPoolForker(child.securityPoolForker()).isEscalationWinnerHaircutPaidByFork(parent);
+		uint256 forkCarryInitialBacking;
+		if (winnerHaircutPaidByFork) {
+			(, forkCarryInitialBacking, ) = ISecurityPoolForker(child.securityPoolForker()).getOwnForkRepBuckets(
+				parent
+			);
+		}
 		EscalationGame gameImplementation = _deployEscalationGame();
-		gameImplementation.startFromFork(startBond, nonDecisionThreshold, elapsedAtFork, fixedQuestionOutcome);
+		gameImplementation.startFromFork(
+			startBond,
+			nonDecisionThreshold,
+			elapsedAtFork,
+			fixedQuestionOutcome,
+			winnerHaircutPaidByFork,
+			forkCarryInitialBacking
+		);
 		return gameImplementation;
 	}
 

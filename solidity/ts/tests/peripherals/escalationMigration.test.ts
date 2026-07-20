@@ -424,6 +424,74 @@ describe('Peripherals: escalation migration', () => {
 		strictEqualTypeSafe(childEscrowChildRep, 0n, 'non-own continuation should not create per-vault child REP accounting')
 	})
 
+	test('an unrelated fork carries escalation REP 1:1 and burns the winner haircut only when the child settles', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		const losingClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveAndDepositRep(losingClient, repDeposit, questionId)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, 2n * reportBond)
+		await depositToEscalationGame(losingClient, securityPoolAddresses.securityPool, QuestionOutcome.No, reportBond)
+
+		const externalForkQuestionData = {
+			...questionData,
+			title: 'unrelated fork preserves escalation principal',
+			endTime: (await mockWindow.getTime()) + DAY,
+		}
+		const externalForkQuestionId = getQuestionId(externalForkQuestionData, outcomes)
+		await createQuestion(losingClient, externalForkQuestionData, outcomes)
+		await mockWindow.setTime(externalForkQuestionData.endTime + 1n)
+		await approveToken(losingClient, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(losingClient, genesisUniverse, externalForkQuestionId)
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+
+		const escalationRepBuckets = await client.readContract({
+			address: getInfraContractAddresses().securityPoolForker,
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'getOwnForkRepBuckets',
+			args: [securityPoolAddresses.securityPool],
+		})
+		strictEqualTypeSafe(escalationRepBuckets[2], 3n * reportBond, 'the unrelated fork should snapshot all escalation REP')
+		strictEqualTypeSafe(escalationRepBuckets[1], escalationRepBuckets[2], 'unrelated escalation carry should remain exactly 1:1')
+
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const yesGame = await getSecurityPoolsEscalationGame(client, yesPool.securityPool)
+
+		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+		await startTruthAuction(client, yesPool.securityPool)
+		if ((await getSystemState(client, yesPool.securityPool)) === SystemState.ForkTruthAuction) {
+			await finalizeTruthAuction(client, yesPool.securityPool)
+		}
+		const escalationEndDate = await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			address: yesGame,
+			functionName: 'getEscalationGameEndDate',
+		})
+		await mockWindow.setTime(escalationEndDate + 1n)
+		strictEqualTypeSafe(await getQuestionResolution(client, yesGame), QuestionOutcome.Yes, 'the unrelated continuation should resolve from its escalation deposits')
+
+		const winningProof = await createCarryProof(client, securityPoolAddresses.escalationGame, {
+			expectedOutcome: QuestionOutcome.Yes,
+			parentDepositIndex: 0n,
+			leafIndex: 0n,
+			merkleMountainRangePeakIndex: 0n,
+			merkleMountainRangeSiblings: [],
+			nullifierSiblings: new SparseNullifierTree().getProof(0n),
+		})
+		const childRepToken = getRepTokenAddress(yesUniverse)
+		const theoreticalSupplyBeforeClaim = await getTotalTheoreticalSupply(client, childRepToken)
+		const hash = await client.writeContract({
+			abi: peripherals_SecurityPool_SecurityPool.abi,
+			address: yesPool.securityPool,
+			functionName: 'withdrawForkedEscalationDeposits',
+			args: [QuestionOutcome.Yes, [winningProof]],
+		})
+		await client.waitForTransactionReceipt({ hash })
+		strictEqualTypeSafe(theoreticalSupplyBeforeClaim - (await getTotalTheoreticalSupply(client, childRepToken)), (reportBond * 2n) / 5n, 'the unrelated continuation should burn the winner haircut at settlement')
+	})
+
 	test('each lazily created continuation starts from the complete parent escalation totals', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
@@ -850,7 +918,18 @@ describe('Peripherals: escalation migration', () => {
 		await approveAndDepositRep(losingClient, forkThreshold, questionId)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, forkThreshold)
 		await depositToEscalationGame(losingClient, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThreshold)
+		const ownForkThreshold = await getZoltarForkThreshold(client, genesisUniverse)
+		const parentPoolRepBeforeFork = await getERC20Balance(client, await getRepToken(client, securityPoolAddresses.securityPool), securityPoolAddresses.securityPool)
 		await forkZoltarWithOwnEscalationGame(client, securityPoolAddresses.securityPool)
+		const ownForkBuckets = await client.readContract({
+			address: getInfraContractAddresses().securityPoolForker,
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'getOwnForkRepBuckets',
+			args: [securityPoolAddresses.securityPool],
+		})
+		const ownForkHaircut = ownForkThreshold / 5n
+		strictEqualTypeSafe(ownForkBuckets[0], parentPoolRepBeforeFork, 'an escalation-triggered fork should preserve ordinary pool REP 1:1')
+		strictEqualTypeSafe(ownForkBuckets[2] - ownForkBuckets[1], ownForkHaircut, 'the escalation escrow should pay the own-question fork haircut exactly once')
 		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
@@ -900,6 +979,7 @@ describe('Peripherals: escalation migration', () => {
 			nullifierSiblings: new SparseNullifierTree().getProof(0n),
 		})
 		const childRepToken = getRepTokenAddress(yesUniverse)
+		const theoreticalSupplyBeforeClaim = await getTotalTheoreticalSupply(client, childRepToken)
 		const winnerBalanceBefore = await getERC20Balance(client, childRepToken, client.account.address)
 		const hash = await client.writeContract({
 			abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -909,6 +989,7 @@ describe('Peripherals: escalation migration', () => {
 		})
 		await client.waitForTransactionReceipt({ hash })
 		assert.ok((await getERC20Balance(client, childRepToken, client.account.address)) - winnerBalanceBefore > forkThreshold, 'the migrated winner should receive principal plus its preserved reward without the losing vault migrating')
+		strictEqualTypeSafe(await getTotalTheoreticalSupply(client, childRepToken), theoreticalSupplyBeforeClaim, 'settlement must not burn a second haircut after the own-question fork paid it')
 	})
 
 	test('multiple migrated winners settle in reverse order without using another vaults logical entitlement', async () => {

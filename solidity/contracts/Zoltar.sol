@@ -71,14 +71,23 @@ contract Zoltar {
 		uint248 indexed parentUniverseId,
 		uint256 universeTheoreticalSupply
 	);
+	event RepBurned(
+		address indexed burner,
+		uint248 indexed universeId,
+		uint256 amount,
+		uint256 universeTheoreticalSupply
+	);
 
 	uint256 public immutable forkThresholdDivisor;
+	uint256 public immutable forkBurnDivisor;
 	ZoltarQuestionData public immutable zoltarQuestionData;
 
-	constructor(ZoltarQuestionData _zoltarQuestionData, uint256 _forkThresholdDivisor) {
+	constructor(ZoltarQuestionData _zoltarQuestionData, uint256 _forkThresholdDivisor, uint256 _forkBurnDivisor) {
 		require(_forkThresholdDivisor > 1, 'Zoltar fork threshold divisor must be greater than one');
+		require(_forkBurnDivisor > 1, 'Zoltar fork burn divisor must be greater than one');
 		zoltarQuestionData = _zoltarQuestionData;
 		forkThresholdDivisor = _forkThresholdDivisor;
+		forkBurnDivisor = _forkBurnDivisor;
 		universes[0] = Universe(0, 0, 0, ReputationToken(Constants.GENESIS_REPUTATION_TOKEN), 0);
 		require(Constants.GENESIS_REPUTATION_TOKEN.code.length != 0, 'Genesis REP token address must contain code');
 		// The configured genesis token must expose `getTotalTheoreticalSupply()`.
@@ -136,11 +145,11 @@ contract Zoltar {
 		universes[universeId].forkTime = block.timestamp;
 		universes[universeId].forkQuestionId = questionId;
 		uint256 forkThreshold = getForkThreshold(universeId);
-		burnRep(universes[universeId].reputationToken, msg.sender, forkThreshold);
+		_burnRep(universes[universeId].reputationToken, msg.sender, forkThreshold);
 		universeTheoreticalSupplies[universeId] -= forkThreshold;
-		uint256 migrationRepBalance = forkThreshold;
-		// Fork initiation and later migration use the same 1:1 REP conversion. The
-		// threshold leaves the parent universe and is fully represented in each child.
+		uint256 migrationRepBalance = forkThreshold - forkThreshold / forkBurnDivisor;
+		// The initiator's uncredited admission haircut is permanently absent from
+		// every child. Later REP added to the migration balance still converts 1:1.
 		childUniverseTheoreticalSupplySnapshots[universeId] =
 			universeTheoreticalSupplies[universeId] + migrationRepBalance;
 		migrationRepBalances[msg.sender][universeId].migrationRepBalance = migrationRepBalance;
@@ -155,7 +164,20 @@ contract Zoltar {
 		);
 	}
 
-	function burnRep(ReputationToken reputationToken, address migrator, uint256 amount) private {
+	// Burns REP without creating migration credit. Escalation games use this path
+	// when their question resolves without paying the winner haircut through an
+	// own-question universe fork.
+	function burnRep(uint248 universeId, uint256 amount) external {
+		require(amount > 0, 'Burn amount zero');
+		Universe memory universe = universes[universeId];
+		require(address(universe.reputationToken) != address(0x0), 'Universe not initialized with a REP token');
+		require(universeTheoreticalSupplies[universeId] >= amount, 'Burn exceeds theoretical supply');
+		_burnRep(universe.reputationToken, msg.sender, amount);
+		universeTheoreticalSupplies[universeId] -= amount;
+		emit RepBurned(msg.sender, universeId, amount, universeTheoreticalSupplies[universeId]);
+	}
+
+	function _burnRep(ReputationToken reputationToken, address migrator, uint256 amount) private {
 		// Genesis is using REPv2 which we cannot actually burn
 		if (address(reputationToken) == Constants.GENESIS_REPUTATION_TOKEN) {
 			if (migrator == address(this)) {
@@ -245,7 +267,7 @@ contract Zoltar {
 	function addRepToMigrationBalance(uint248 universeId, uint256 amount) public {
 		Universe memory universe = universes[universeId];
 		require(universe.forkTime != 0, 'Universe has not forked, so migration balance cannot be added');
-		burnRep(universe.reputationToken, msg.sender, amount);
+		_burnRep(universe.reputationToken, msg.sender, amount);
 		universeTheoreticalSupplies[universeId] -= amount;
 		migrationRepBalances[msg.sender][universeId].migrationRepBalance += amount;
 		emit MigrationRepAdded(

@@ -82,6 +82,7 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		if (amountToWithdraw > 0) {
 			_safeTransferRep(depositor, amountToWithdraw);
 		}
+		_burnWinningHaircut(burnAmount, winnerHaircutPaidByFork);
 		emit ClaimDeposit(
 			depositor,
 			outcome,
@@ -206,6 +207,7 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 			deposit.cumulativeAmount
 		);
 		_consumeEscrowedRepForVault(depositor, originalDepositAmount);
+		if (transferredRep) _burnWinningHaircut(burnAmount, false);
 		emit ClaimDeposit(
 			depositor,
 			outcome,
@@ -215,5 +217,12 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 			burnAmount,
 			transferredRep
 		);
+	}
+
+	function _burnWinningHaircut(uint256 burnAmount, bool haircutPaidByFork) private {
+		if (burnAmount == 0) return;
+		if (haircutPaidByFork) return;
+		_safeTransferRep(address(securityPool), burnAmount);
+		securityPool.burnEscalationWinnerHaircut(burnAmount);
 	}
 }

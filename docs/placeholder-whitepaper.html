@@ -3377,17 +3377,18 @@
 						<p class="equation-caption">
 							<span class="equation-label">Winning Payout</span>Reward-eligible
 							winning principal shares the 60% bonus pool pro rata, while a 40%
-							haircut amount is burned or retained by the game accounting; low
-							fork thresholds scale the payout down. All amounts are atomic REP,
-							and every Solidity division floors before the next step.
+							haircut is charged exactly once. If the escalation itself triggers
+							the universe fork, Zoltar collects that haircut from the aggregate
+							escalation backing; otherwise settlement burns it directly. Low fork
+							thresholds scale the payout down. All amounts are atomic REP, and
+							every Solidity division floors before the next step.
 						</p>
 					</div>
 					<ul>
 						<li>The binding-capital region defines a fixed reward pool.</li>
 						<li>
-							<code>40%</code> of that binding-capital region is burned or
-							retained, so the remaining <code>60%</code> becomes the reward
-							pool.
+							<code>40%</code> of that binding-capital region is the winner
+							haircut, so the remaining <code>60%</code> becomes the reward pool.
 						</li>
 						<li>
 							The reward-eligible cap is
@@ -3658,8 +3659,8 @@
 									<td>
 										Winning parent deposit indexes; own-fork claims pay the
 										ordinary winning reward in child REP to the vault wallet. The
-										1:1 rule applies to fork conversion and aggregate backing, not
-										to the reward formula.
+										escalation's own fork has already removed the winner haircut from
+										aggregate backing, so the claim does not burn it again.
 									</td>
 								</tr>
 								<tr>
@@ -3725,9 +3726,10 @@
 					</p>
 					<p>
 						If a fork interrupts an unresolved game, fork initialization stores one
-						canonical proof snapshot and locks the game's complete REP once. Every selected
-						child receives that aggregate backing at 1:1, independently of depositor
-						transactions. After resolution, anyone may relay a winning proof; the proof
+						canonical proof snapshot and locks the game's REP once. An unrelated fork
+						reproduces that backing 1:1; the escalation's own fork supplies post-haircut
+						backing because Zoltar has already collected the winner haircut. This is
+						independent of depositor transactions. After resolution, anyone may relay a winning proof; the proof
 						authenticates the depositor, consumes the leaf, and pays that depositor from the
 						aggregate backing. Inherited losing outcomes retire from effective unresolved
 						principal in constant-size work and need no proof calls. Locally created losing
@@ -3822,7 +3824,7 @@
 								<tr>
 									<td>Lock aggregate backing</td>
 									<td><code>SecurityPoolForker.initiateSecurityPoolFork</code> or <code>forkZoltarWithOwnEscalationGame</code></td>
-									<td>Both paths reserve the drained game's complete REP at 1:1. An own fork combines pool and game REP for the fork, then assigns the complete <code>escalationRepToFork</code> amount to <code>escalationChildRepAtFork</code>.</td>
+									<td>An unrelated fork reserves the drained game's complete REP at 1:1. The escalation's own fork subtracts <code>floor(forkThreshold / forkBurnDivisor)</code> from escalation backing; ordinary pool REP remains in the vault bucket at 1:1.</td>
 									<td>No later vault call transfers or locks another vault's tokens.</td>
 								</tr>
 								<tr>
@@ -3891,11 +3893,12 @@
 					<p id="fork-griefing-risk">
 						A caller can use any ended global Zoltar question to trigger a fork
 						in an unforked universe; it need not be the question used by a
-						Placeholder pool in that universe. A caller who can acquire and
-						commit the fork-threshold REP can therefore freeze globally guarded
-						operational flows for every pool in the universe. This creates a
-						fork-griefing incentive whenever the caller's fork cost is lower than
-						the disruption imposed on unrelated pools.
+						Placeholder pool in that universe. The fork-threshold REP commitment
+						and configured haircut are the protocol's admission mechanism. The
+						permanent haircut matters because an unnecessary fork delays every
+						pool in the universe; without it, a griefer could recycle the full
+						threshold into child REP while imposing disproportionate migration
+						latency on unrelated markets.
 					</p>
 					<div class="summary-grid">
 						<div class="summary-card">
@@ -4149,8 +4152,10 @@
 						</li>
 						<li>
 							A forked unresolved game initializes each selected child with one
-							canonical carry snapshot and one aggregate 1:1 backing transfer. No
-							vault migration call is required to fund or authorize claims.
+							canonical carry snapshot and one aggregate backing transfer. Unrelated
+							forks carry the game REP 1:1; the escalation's own fork carries it after the
+							single winner haircut. No vault migration call is required to fund or
+							authorize claims.
 						</li>
 						<li>
 							After final resolution, anyone may relay winning inherited proofs; the
@@ -4477,7 +4482,9 @@
 					</figure>
 					<div class="callout">
 						Every selected continuation receives the complete parent game snapshot.
-						It also receives the game's complete aggregate backing at 1:1 once. A
+						It also receives the applicable aggregate backing once: complete game REP
+						for an unrelated fork, or post-haircut game REP when the escalation paid
+						for its own fork. A
 						winning carry proof authorizes its own claim and pays the authenticated
 						depositor. The child resumes when its pool becomes operational; it does not
 						wait for vault migration or cleanup calls.
@@ -4761,8 +4768,8 @@
 							</title>
 							<desc id="own-fork-buckets-desc">
 								Pool REP and unresolved escalation REP enter one Zoltar fork
-								balance. The complete escalation REP amount is reserved 1:1 as aggregate
-								backing, and the remaining migration credit becomes the vault bucket.
+								balance. Ordinary pool REP remains in the vault bucket at 1:1,
+								while the fork haircut is deducted from escalation aggregate backing.
 							</desc>
 							<defs>
 								<marker
@@ -4865,22 +4872,28 @@
 								Escalation Backing
 							</text>
 							<text class="svg-small" x="830" y="257" text-anchor="middle">
-								complete 1:1 game REP
+								game REP minus haircut
 							</text>
 						</svg>
 						<p class="diagram-caption">
 							<span class="figure-label">Own-Fork REP Buckets</span>In an own
-							fork, the complete drained escalation-game REP becomes aggregate child
-							backing at 1:1. The remaining migration credit forms the vault bucket.
+							fork, the drained escalation-game REP pays the fork haircut and the
+							remainder becomes aggregate child backing. Ordinary pool REP forms the
+							vault bucket without a haircut.
 						</p>
 					</figure>
 					<div class="equation" id="eq-placeholder-own-fork-rep-buckets">
 						<math
 							display="block"
-							aria-label="escalation child REP at fork equals escalation REP to fork, vault REP at fork equals auctionable REP at fork minus escalation REP to fork, and selected child escalation backing equals escalation REP to fork"
-							data-source="escalationChildRepAtFork = escalationRepToFork; vaultRepAtFork = auctionableRepAtFork - escalationRepToFork; selectedChildEscalationBacking = escalationRepToFork"
+							aria-label="fork haircut equals fork threshold divided by fork burn divisor, escalation child REP equals escalation REP minus the haircut, vault REP equals auctionable REP minus escalation child REP, and selected child backing equals escalation child REP"
+							data-source="forkHaircut = floor(forkThreshold / forkBurnDivisor); escalationChildRepAtFork = escalationRepToFork - forkHaircut; vaultRepAtFork = auctionableRepAtFork - escalationChildRepAtFork; selectedChildEscalationBacking = escalationChildRepAtFork"
 						>
 							<mtable>
+								<mtr>
+									<mtd><mi>forkHaircut</mi></mtd>
+									<mtd><mo>=</mo></mtd>
+									<mtd><mi>floor</mi><mo>(</mo><mfrac><mi>forkThreshold</mi><mi>forkBurnDivisor</mi></mfrac><mo>)</mo></mtd>
+								</mtr>
 								<mtr>
 									<mtd>
 										<mi>escalationChildRepAtFork</mi>
@@ -4890,6 +4903,8 @@
 									</mtd>
 									<mtd>
 										<mi>escalationRepToFork</mi>
+										<mo>-</mo>
+										<mi>forkHaircut</mi>
 									</mtd>
 								</mtr>
 								<mtr>
@@ -4902,7 +4917,7 @@
 									<mtd>
 										<mi>auctionableRepAtFork</mi>
 										<mo>-</mo>
-										<mi>escalationRepToFork</mi>
+										<mi>escalationChildRepAtFork</mi>
 									</mtd>
 								</mtr>
 								<mtr>
@@ -4913,16 +4928,16 @@
 									<mo>=</mo>
 								</mtd>
 								<mtd>
-									<mi>escalationRepToFork</mi>
+									<mi>escalationChildRepAtFork</mi>
 								</mtd>
 							</mtr>
 							</mtable>
 						</math>
 						<p class="equation-caption">
-							<span class="equation-label">Own-Fork Bucket Allocation</span>The complete
-							escalation-game REP is reserved at 1:1. The vault bucket receives the
-							remainder, and each selected child receives the same complete aggregate
-							escalation backing once.
+							<span class="equation-label">Own-Fork Bucket Allocation</span>The
+							escalation bucket pays the configured fork haircut exactly once. The vault
+							bucket preserves ordinary pool REP 1:1, and each selected child receives
+							the same post-haircut aggregate escalation backing once.
 						</p>
 					</div>
 					<p>
@@ -4930,8 +4945,9 @@
 						parent forker snapshots the unresolved game’s
 						<code>startBond</code>, <code>nonDecisionThreshold</code>, elapsed
 						escalation time, actual per-outcome balances, carry totals, peaks, leaf
-						counts, and nullifier roots. Both external and own forks reserve the
-						drained game's complete REP at 1:1. Each selected child
+						counts, and nullifier roots. External unrelated forks reserve the
+						drained game's complete REP at 1:1. The escalation's own fork reserves it after
+						the winner haircut has been paid through Zoltar. Each selected child
 						pool can initialize its own paused fork-continuation escalation game
 						from that canonical snapshot and receives the complete aggregate game
 						backing once. The continuation preserves the parent live
@@ -8108,8 +8124,9 @@
 						</li>
 						<li>
 							Zoltar's fork threshold is constructor-configured; the default deployment
-							uses <code>forkThresholdDivisor = 20</code>, and committed REP receives
-							migration credit at a 1:1 ratio.
+							uses <code>forkThresholdDivisor = 20</code> and
+							<code>forkBurnDivisor = 5</code>. The initiator receives the threshold
+							minus the floored one-fifth admission haircut as migration credit.
 						</li>
 						<li>
 							The escalation-game initial deposit is deployment-configured, with

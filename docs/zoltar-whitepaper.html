@@ -378,24 +378,44 @@
 							default divisor, that is 5% of the universe's theoretical supply before
 							integer flooring. The full threshold deposit leaves the parent universe:
 							<code>forkUniverse</code> burns or transfers that entire parent-REP amount and
-							reduces the parent theoretical supply by the full threshold. It credits the
-							initiator with the same amount of migration REP, so fork initiation and later
-							migration both convert parent REP into child REP at exactly 1:1.
+							reduces the parent theoretical supply by the full threshold. The burn divisor
+							then controls how much child-REP minting credit the initiator receives. Under
+							the current deployment default <code>forkBurnDivisor = 5</code>, one fifth of
+							the threshold is an uncredited haircut and the remaining four fifths becomes
+							the initiator's migration balance.
 						</p>
+						<div class="equation" id="eq-zoltar-fork-burn">
+							<math display="block" aria-label="uncredited fork haircut equals floor fork threshold divided by fork burn divisor" data-source="uncreditedForkHaircut = floor(forkThreshold / forkBurnDivisor)">
+								<mrow>
+									<mi>uncreditedForkHaircut</mi>
+									<mo>=</mo>
+									<mi>floor</mi>
+									<mo>(</mo>
+									<mfrac>
+										<mi>forkThreshold</mi>
+										<mi>forkBurnDivisor</mi>
+									</mfrac>
+									<mo>)</mo>
+								</mrow>
+							</math>
+							<p class="equation-caption"><span class="equation-label">Fork Haircut</span>The default uncredited share is one fifth of the threshold deposit, rounded down; the full parent-REP threshold is still removed from the parent universe.</p>
+						</div>
 						<div class="equation" id="eq-zoltar-initiator-migration-balance">
-							<math display="block" aria-label="fork initiator migration balance equals fork threshold" data-source="forkInitiatorMigrationBalance = forkThreshold">
+							<math display="block" aria-label="fork initiator migration balance equals fork threshold minus uncredited fork haircut" data-source="forkInitiatorMigrationBalance = forkThreshold - uncreditedForkHaircut">
 								<mrow>
 									<mi>forkInitiatorMigrationBalance</mi>
 									<mo>=</mo>
 									<mi>forkThreshold</mi>
+									<mo>-</mo>
+									<mi>uncreditedForkHaircut</mi>
 							</mrow>
 						</math>
-						<p class="equation-caption"><span class="equation-label">Initiator Migration Balance</span>Every REP unit committed to the fork threshold becomes one unit of migration credit.</p>
+						<p class="equation-caption"><span class="equation-label">Initiator Migration Balance</span>With the default burn divisor of <code>5</code>, the initiator receives the threshold minus the floored one-fifth haircut.</p>
 					</div>
 					<div class="implementation-grid">
 							<div class="implementation-note">
 								<b>Implementation entry points</b>
-								<p><a href="../solidity/contracts/Zoltar.sol"><code>forkUniverse</code></a> applies the threshold, burns or transfers the full parent-REP threshold out of the parent universe, reduces parent theoretical supply by that amount, and credits the same 1:1 migration balance to the initiator.</p>
+								<p><a href="../solidity/contracts/Zoltar.sol"><code>forkUniverse</code></a> applies the threshold, removes the full parent-REP threshold, reduces parent theoretical supply by that amount, and credits only the post-haircut migration balance to the initiator.</p>
 							</div>
 						<div class="implementation-note">
 							<b>Genesis token exception</b>
@@ -404,8 +424,8 @@
 					</div>
 
 					<figure class="diagram" id="fig-zoltar-threshold-deposit" aria-labelledby="deposit-diagram-title">
-						<p class="diagram-title" id="deposit-diagram-title">Threshold Deposit Migration</p>
-							<svg viewBox="0 0 860 360" role="img" aria-label="Fork threshold REP leaves the parent universe and creates an equal migration balance.">
+						<p class="diagram-title" id="deposit-diagram-title">Threshold Deposit Split</p>
+							<svg viewBox="0 0 860 360" role="img" aria-label="Fork threshold deposit leaves the parent universe, with 20 percent uncredited haircut and 80 percent migration balance.">
 							<defs>
 								<marker id="arrow-deposit" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 									<path d="M 0 0 L 10 5 L 0 10 z" fill="#615642"></path>
@@ -422,17 +442,17 @@
 							<path class="svg-line" marker-end="url(#arrow-deposit)" d="M 610 222 V 260"></path>
 							<rect class="svg-red" x="134" y="264" width="232" height="58" rx="10"></rect>
 							<rect class="svg-teal" x="494" y="264" width="232" height="58" rx="10"></rect>
-								<text class="svg-label" x="250" y="292" text-anchor="middle">Parent REP removed</text>
-								<text class="svg-small" x="250" y="313" text-anchor="middle">full threshold</text>
-								<text class="svg-label" x="610" y="291" text-anchor="middle">100% migration</text>
+								<text class="svg-label" x="250" y="292" text-anchor="middle">20% uncredited</text>
+								<text class="svg-small" x="250" y="313" text-anchor="middle">haircut</text>
+								<text class="svg-label" x="610" y="291" text-anchor="middle">80% migration</text>
 								<text class="svg-small" x="610" y="313" text-anchor="middle">balance</text>
 						</svg>
 						<div class="legend" aria-label="Deposit diagram legend">
 							<span class="legend-item"><span class="legend-swatch gold"></span>Required fork deposit</span>
-								<span class="legend-item"><span class="legend-swatch red"></span>Parent REP removed</span>
+								<span class="legend-item"><span class="legend-swatch red"></span>Uncredited migration haircut</span>
 							<span class="legend-item"><span class="legend-swatch teal"></span>Migration balance</span>
 						</div>
-							<p class="diagram-caption"><span class="figure-label">Threshold Deposit Migration</span>The full parent-REP threshold leaves parent supply and the same amount is re-expressed as migratable child-REP credit.</p>
+							<p class="diagram-caption"><span class="figure-label">Threshold Deposit Split</span>The full parent-REP threshold leaves parent supply. Most is re-expressed as migratable child-REP credit; the haircut is not credited.</p>
 					</figure>
 
 					<p>
@@ -443,23 +463,23 @@
 					</p>
 					<p>
 						A child's theoretical supply is a maximum for REP that can be minted in that
-						branch. Because the threshold converts 1:1, it starts from the parent's complete
-						pre-fork theoretical supply. The threshold first leaves the parent and then
-						returns as migration credit in every possible child branch.
+						branch. It starts from the parent's pre-fork theoretical supply and subtracts
+						only the uncredited haircut. Later REP added to a migration balance converts
+						1:1; only fork initiation pays this admission cost.
 					</p>
 
-					<h3>Repeated-fork threshold stability</h3>
+					<h3>Repeated-fork threshold decay</h3>
 					<p>
-						Along one lineage, each child inherits the parent's full pre-fork theoretical
-						supply. The fork threshold therefore remains
-						<code>floor(theoreticalSupply / 20)</code> at every recursive depth unless an
-						independent mechanism changes the universe supply before a later fork.
+						Along one lineage, each fork subtracts its floored haircut from child
+						theoretical supply. With threshold divisor <code>20</code> and burn divisor
+						<code>5</code>, supply is close to 99% of the previous generation, subject to
+						Solidity integer flooring.
 					</p>
 					<div class="callout">
-						<strong>No recursive conversion decay</strong>
-						A recursive fork does not make later fork thresholds or escalation parameters
-						progressively smaller. This avoids a depth-dependent incompatibility between
-						the non-decision threshold and the escalation starting bond.
+						<strong>Permanent admission cost</strong>
+						The REP threshold and haircut are the intended admission cost. They deter
+						unnecessary forks that would otherwise impose migration latency on every pool
+						in the universe.
 					</div>
 
 					<div class="table-wrap">
@@ -481,6 +501,11 @@
 									<td><code>BURN_ADDRESS</code></td>
 									<td><code>0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF</code></td>
 									<td>Burn sink used for genesis REP</td>
+								</tr>
+								<tr>
+									<td><code>forkBurnDivisor</code></td>
+									<td><code>5</code></td>
+									<td>Constructor immutable. The initiator receives the threshold minus <code>floor(forkThreshold / forkBurnDivisor)</code> as migration credit.</td>
 								</tr>
 								<tr>
 									<td><code>forkThresholdDivisor</code></td>
@@ -631,14 +656,11 @@
 					</p>
 					<p>
 						A caller cannot trigger that transition for free under normal parameters. The
-						caller supplies the full fork threshold in parent REP. That REP leaves the
-						parent universe and becomes an equal migration credit, so every selected child
-						can receive the same amount at a strict 1:1 conversion. Consequently, an
+						caller supplies the full fork threshold in parent REP, loses the uncredited
+						haircut, and receives migration credit for only the remainder. Consequently, an
 						unrelated fork is economically evaluated as a costly forced migration: its risk
-						is operational migration latency and coordination burden, while its deterrents
-						are the threshold-sized capital commitment, transaction costs, and the need to
-						coordinate economic activity in a child branch. The conversion itself does not
-						burn value or shrink REP through repeated forks.
+						is operational migration latency and coordination burden, while its deterrent is
+						the initiator's threshold commitment and permanent haircut.
 					</p>
 					<p>
 						Likewise, a question with many valid outcomes creates more possible children,

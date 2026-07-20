@@ -112,6 +112,12 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 			requiredRep +=
 				_getEffectiveInheritedUnresolvedTotal(outcomeIndex) + outcomeState[outcomeIndex].localUnresolvedTotal;
 		}
+		if (winnerHaircutPaidByFork) {
+			// forkBurnDivisor is always greater than one, so a valid fork haircut
+			// can never remove more than half of the carried source principal.
+			if (forkCarryInitialBacking < requiredRep - requiredRep / 2) return false;
+			requiredRep = forkCarryInitialBacking;
+		}
 		return repToken.balanceOf(address(this)) >= requiredRep;
 	}
 

@@ -64,6 +64,7 @@ const eventSourceByName: Record<string, string> = {
 	PriceReported: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	PriceRequested: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	RedeemRep: 'solidity/contracts/peripherals/SecurityPool.sol',
+	RepBurned: 'solidity/contracts/Zoltar.sol',
 	RepEthPriceSet: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	ResidualRepSweptToSecurityPool: 'solidity/contracts/peripherals/EscalationGameState.sol',
 	SecurityPoolSet: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
@@ -82,6 +83,7 @@ const eventSourceByName: Record<string, string> = {
 const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	'solidity/contracts/Zoltar.sol': {
 		addRepToMigrationBalance: ['public(uint248,uint256)'],
+		burnRep: ['external(uint248,uint256)'],
 		deployChild: ['public(uint248,uint256)'],
 		forkUniverse: ['public(uint248,uint256)'],
 		splitMigrationRep: ['public(uint248,uint256,uint256[])'],
@@ -90,7 +92,7 @@ const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 		recordDepositFromSecurityPool: ['external(address,BinaryOutcomes.BinaryOutcome,uint256,uint256)'],
 		resumeFromFork: ['external()'],
 		start: ['external(uint256,uint256)'],
-		startFromFork: ['external(uint256,uint256,uint256,BinaryOutcomes.BinaryOutcome)'],
+		startFromFork: ['external(uint256,uint256,uint256,BinaryOutcomes.BinaryOutcome,bool,uint256)'],
 	},
 	'solidity/contracts/peripherals/EscalationGameCarry.sol': {
 		initializeForkCarrySnapshotWithResolutionBalances: ['external(address,bytes32,bytes32[MERKLE_MOUNTAIN_RANGE_MAX_PEAKS][3],uint256[3],uint256[3],uint256[3],bytes32[3])'],
@@ -186,17 +188,25 @@ assertDeclarationCheckerRegression()
 const contractReferences: ContractReference[] = [
 	{
 		name: 'Zoltar',
-		purpose: 'Registers universe forks and converts committed parent REP into branch-specific child REP at 1:1.',
-		readSurface: 'Use `universes`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThreshold`, `getNonDecisionThreshold`, `getUniverseTheoreticalSupply`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalance` to reconstruct universe and migration state.',
+		purpose: 'Registers universe forks, charges the fork admission haircut, and mints branch-specific child REP.',
+		readSurface: 'Use `universes`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `forkBurnDivisor`, `getForkThreshold`, `getNonDecisionThreshold`, `getUniverseTheoreticalSupply`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalance` to reconstruct universe and migration state.',
 		sourcePath: 'solidity/contracts/Zoltar.sol',
 		interactions: [
 			{
 				call: '`forkUniverse(universeId, questionId)`',
 				caller: 'Any address able to fund the current fork threshold',
-				effect: 'Records the fork, removes threshold REP from the parent universe, and credits the caller with the same amount as a 1:1 migration balance.',
+				effect: 'Records the fork, removes threshold REP from the parent universe, and credits the caller with the threshold minus the configured uncredited haircut.',
 				declarations: [{ name: 'forkUniverse' }],
 				preconditions: 'Initialized and unforked universe; existing ended question; sufficient caller REP. Genesis REP requires allowance; child REP is burned directly without allowance.',
 				signals: '`UniverseForked`',
+			},
+			{
+				call: '`burnRep(universeId, amount)`',
+				caller: 'Any REP holder; the caller can burn only its own balance',
+				effect: 'Permanently removes REP without creating migration credit; escalation settlement uses this when the haircut was not paid through its own fork.',
+				declarations: [{ name: 'burnRep' }],
+				preconditions: 'Initialized universe; positive amount; sufficient caller REP and theoretical supply. Genesis REP requires allowance.',
+				signals: '`RepBurned` and the token burn or transfer event',
 			},
 			{
 				call: '`deployChild(universeId, outcomeIndex)`',
@@ -473,9 +483,10 @@ const contractReferences: ContractReference[] = [
 				signals: '`GameStarted`',
 			},
 			{
-				call: '`startFromFork(startBond, nonDecisionThreshold, elapsedAtFork, fixedQuestionOutcome)` and `resumeFromFork()`',
+				call: '`startFromFork(startBond, nonDecisionThreshold, elapsedAtFork, fixedQuestionOutcome, winnerHaircutPaidByFork, forkCarryInitialBacking)` and `resumeFromFork()`',
 				caller: 'Factory owner starts; owner or security pool resumes',
-				effect: 'Initializes a paused continuation with inherited elapsed time and an optional fixed matching-question child outcome, then resumes its remaining escalation clock. After the continuation deadline, `getFinalQuestionResolution` returns the fixed outcome when one is present.',
+				effect:
+					'Initializes a paused continuation with inherited elapsed time, an optional fixed matching child outcome, and immutable fork-time haircut accounting, then resumes its remaining escalation clock. After the continuation deadline, `getFinalQuestionResolution` returns the fixed outcome when one is present.',
 				declarations: [{ name: 'startFromFork' }, { name: 'resumeFromFork' }],
 				preconditions: 'Valid start parameters and inherited elapsed time no greater than seven weeks; continuation resumes once.',
 				signals: '`GameContinuedFromFork`, `ForkContinuationResumed`',

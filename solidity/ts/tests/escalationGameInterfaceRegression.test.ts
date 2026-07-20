@@ -186,7 +186,9 @@ test('EscalationGame storage layout keeps inherited state slots stable', () => {
 				type: 'mapping(address => mapping(uint8 => struct ForkedEscrowState))',
 			},
 			{ label: 'forkCarrySnapshotRequiresForkedEscrow', slot: '437', offset: 0, type: 'bool' },
-			{ label: 'fixedQuestionOutcome', slot: '437', offset: 1, type: 'enum BinaryOutcomes.BinaryOutcome' },
+			{ label: 'winnerHaircutPaidByFork', slot: '437', offset: 1, type: 'bool' },
+			{ label: 'forkCarryInitialBacking', slot: '438', offset: 0, type: 'uint256' },
+			{ label: 'fixedQuestionOutcome', slot: '439', offset: 0, type: 'enum BinaryOutcomes.BinaryOutcome' },
 		],
 	)
 

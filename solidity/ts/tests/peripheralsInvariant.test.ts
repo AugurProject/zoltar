@@ -1018,7 +1018,7 @@ describe('Peripherals invariant harness', () => {
 		const parentSupplyBeforeFork = await getTotalTheoreticalSupply(client, parentRepToken)
 		const burnAddressBalanceBeforeFork = await getERC20Balance(client, parentRepToken, addressString(BURN_ADDRESS))
 		const forkThreshold = await getZoltarForkThreshold(client, genesisUniverse)
-		const expectedChildSupplySnapshot = parentSupplyBeforeFork
+		const expectedChildSupplySnapshot = parentSupplyBeforeFork - forkThreshold / 5n
 		const branchOrder = shuffle([QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No], 0xdecafbadn)
 		const attackerClient = createClient(1)
 		await approveAndDepositRep(attackerClient, repDeposit, context.questionId)
@@ -1043,7 +1043,7 @@ describe('Peripherals invariant harness', () => {
 			strictEqualTypeSafe(childUniverse.forkingOutcomeIndex, BigInt(outcome), 'child should retain its outcome index')
 			const childUniverseSupply = await getUniverseTheoreticalSupply(client, childUniverseId)
 			assert.ok(childUniverseSupply > 0n, 'child universe supply should stay positive')
-			strictEqualTypeSafe(childUniverseSupply, expectedChildSupplySnapshot, 'child universe supply should preserve parent REP under 1:1 migration')
+			strictEqualTypeSafe(childUniverseSupply, expectedChildSupplySnapshot, 'child universe supply should exclude the fork admission haircut')
 		}
 
 		const childUniverseIds = branchOrder.map(outcome => getChildUniverseIdForOutcome(outcome))

@@ -245,11 +245,11 @@
 						</tr>
 						<tr>
 							<td>Winning carried proof</td>
-							<td>A valid proof for the final winning outcome advances the nullifier, reduces effective carry, and pays the authenticated depositor from aggregate child-game REP. A losing carried proof cannot receive or consume REP.</td>
+							<td>A valid proof for the final winning outcome advances the nullifier, reduces effective carry, and pays the authenticated depositor from aggregate child-game REP. Settlement burns the winner haircut unless the escalation's own fork already paid it through Zoltar. A losing carried proof cannot receive or consume REP.</td>
 						</tr>
 						<tr>
 							<td>Continuation funding</td>
-							<td>Fork materialization converts source REP to child REP one-to-one and transfers it once to the child game. Funding completeness compares aggregate game REP with effective inherited plus local principal; it does not scale or release per-vault child escrow.</td>
+							<td>An unrelated fork converts escalation source REP to child REP one-to-one. The escalation's own fork transfers post-haircut aggregate backing instead, while ordinary pool REP remains one-to-one. Funding completeness checks the applicable aggregate backing without scaling or releasing per-vault child escrow.</td>
 						</tr>
 						<tr>
 							<td>Inherited losing outcome</td>
@@ -330,19 +330,19 @@
 					<tbody>
 						<tr>
 							<td>Creation bytecode</td>
-							<td><code>31,712</code> bytes</td>
+							<td><code>32,012</code> bytes</td>
 						</tr>
 						<tr>
 							<td>Deployed bytecode</td>
-							<td><code>23,833</code> bytes</td>
+							<td><code>24,122</code> bytes</td>
 						</tr>
 						<tr>
 							<td>Project deployed-bytecode budget headroom</td>
-							<td><code>743</code> bytes below <code>24,576</code></td>
+							<td><code>454</code> bytes below <code>24,576</code></td>
 						</tr>
 						<tr>
 							<td>EIP-170 headroom</td>
-							<td><code>743</code> bytes below <code>24,576</code></td>
+							<td><code>454</code> bytes below <code>24,576</code></td>
 						</tr>
 					</tbody>
 				</table>

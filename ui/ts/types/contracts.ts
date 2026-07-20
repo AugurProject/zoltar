@@ -82,6 +82,7 @@ export type ZoltarChildUniverseSummary = {
 
 export type ZoltarUniverseSummary = {
 	childUniverses: ZoltarChildUniverseSummary[]
+	forkBurnDivisor?: bigint
 	forkThreshold: bigint
 	forkQuestionDetails: MarketDetails | undefined
 	forkTime: bigint

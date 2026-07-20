@@ -69,9 +69,9 @@ function assertAggregateEscalationContinuationDocs(): void {
 			assert.ok(contents.toLowerCase().includes(documentedClaim), `${documentName} must explain aggregate winner-only continuation semantics: ${documentedClaim}`)
 		}
 	}
-	for (const forbiddenClaim of ['post-haircut', 'uncredited haircut', 'permanent haircut', 'forkBurnDivisor']) {
-		assert.ok(!normalizedZoltarWhitepaper.includes(forbiddenClaim), `Zoltar whitepaper retains obsolete fork conversion claim: ${forbiddenClaim}`)
-		assert.ok(!normalizedContractReference.includes(forbiddenClaim), `Contract interaction reference retains obsolete fork conversion claim: ${forbiddenClaim}`)
+	for (const documentedClaim of ['uncredited haircut', 'forkBurnDivisor']) {
+		assert.ok(normalizedZoltarWhitepaper.includes(documentedClaim), `Zoltar whitepaper must document fork admission economics: ${documentedClaim}`)
+		assert.ok(normalizedContractReference.includes(documentedClaim), `Contract interaction reference must document fork admission economics: ${documentedClaim}`)
 	}
 	for (const forbiddenClaim of ['vaultEscrowChildRep', 'forked-escrow-scaling', 'forked-escrow-example', 'only selected vault escrow authorizes inherited proofs', 'vault migration grants only logical authorization', 'only materialized vault escrow authorizes proofs']) {
 		assert.ok(!normalizedPlaceholder.includes(forbiddenClaim), `Placeholder whitepaper retains obsolete per-vault continuation claim: ${forbiddenClaim}`)
@@ -121,9 +121,10 @@ function assertEventStreamSemantics(): void {
 function assertZoltarForkDepths(): void {
 	const protocolConfig = getMainnetProtocolConfig()
 	assert.equal(protocolConfig.forkThresholdDivisor, 20n, 'Zoltar fork threshold divisor changed')
+	assert.equal(protocolConfig.forkBurnDivisor, 5n, 'Zoltar fork burn divisor changed')
 	const normalizedWhitepaper = zoltarWhitepaper.replaceAll(/\s+/g, ' ')
-	for (const documentedClaim of ['fork initiation and later migration both convert parent REP into child REP at exactly 1:1', 'A recursive fork does not make later fork thresholds or escalation parameters progressively smaller']) {
-		assert.ok(normalizedWhitepaper.includes(documentedClaim), `Missing Zoltar 1:1 migration claim: ${documentedClaim}`)
+	for (const documentedClaim of ['one fifth of the threshold is an uncredited haircut', 'Later REP added to a migration balance converts 1:1', 'Permanent admission cost']) {
+		assert.ok(normalizedWhitepaper.includes(documentedClaim), `Missing Zoltar fork haircut claim: ${documentedClaim}`)
 	}
 }
 
@@ -253,7 +254,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(invariantsHtml, /<code>SHARE-04<\/code>[\s\S]*maximum actual outcome supply[\s\S]*actual winning supply/)
 	assert.match(contractInteractionReference, /getForkThreshold`, `getNonDecisionThreshold`, `getUniverseTheoreticalSupply`/)
 	assert.match(contractInteractionReference, /getQuestionResolution`, `getFinalQuestionResolution`, `fixedQuestionOutcome`/)
-	assert.match(contractInteractionReference, /startFromFork\(startBond, nonDecisionThreshold, elapsedAtFork, fixedQuestionOutcome\)[\s\S]*After the continuation deadline, `getFinalQuestionResolution` returns the fixed outcome/)
+	assert.match(contractInteractionReference, /startFromFork\(startBond, nonDecisionThreshold, elapsedAtFork, fixedQuestionOutcome, winnerHaircutPaidByFork, forkCarryInitialBacking\)[\s\S]*After the continuation deadline, `getFinalQuestionResolution` returns the fixed outcome/)
 	assert.match(contractInteractionReference, /currently unlocked REP ownership/)
 	assert.match(contractInteractionReference, /optional unresolved-lock cleanup wrapper calls this function first to migrate any unlocked state/)
 	assert.match(contractInteractionReference, /migrateVaultWithUnresolvedEscalation[\s\S]*First runs ordinary migration for the same vault[\s\S]*cleanup neither funds escalation backing nor authorizes carried proofs/)

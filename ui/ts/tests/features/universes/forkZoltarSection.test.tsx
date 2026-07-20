@@ -142,7 +142,7 @@ describe('ForkZoltarSection', () => {
 		expect(approveButton.hasAttribute('disabled')).toBe(false)
 	})
 
-	test('shows 1:1 fork migration credit and the Zoltar target before submission', async () => {
+	test('shows the permanent fork burn, migration credit, and Zoltar target before submission', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(ForkZoltarSection, {
 				accountAddress: zeroAddress,
@@ -160,7 +160,7 @@ describe('ForkZoltarSection', () => {
 				zoltarForkQuestionId: '0x01',
 				zoltarForkRepBalance: 1000n * REP,
 				zoltarQuestions: [createQuestion()],
-				zoltarUniverse: createUniverse({ forkThreshold: 100n * REP, zoltarAddress: ZOLTAR_ADDRESS }),
+				zoltarUniverse: createUniverse({ forkBurnDivisor: 5n, forkThreshold: 100n * REP, zoltarAddress: ZOLTAR_ADDRESS }),
 				zoltarUniverseState: 'ready',
 			}),
 		)
@@ -168,8 +168,8 @@ describe('ForkZoltarSection', () => {
 
 		const review = within(document.body).getByRole('heading', { name: 'Transaction Review' }).closest('section')
 		if (review === null) throw new Error('Expected transaction review')
-		expect(review.textContent).toContain('Migration Custody Credit≈ 100.00 REP')
-		expect(review.textContent).toContain('Permanent REP Burn≈ 0.00 REP')
+		expect(review.textContent).toContain('Migration Custody Credit≈ 80.00 REP')
+		expect(review.textContent).toContain('Permanent REP Burn≈ 20.00 REP')
 		expect(review.textContent).toContain('Zoltar Contract')
 		expect(review.textContent).toContain(ZOLTAR_ADDRESS)
 		expect(review.textContent).not.toContain('Protocol FeeNone')
@@ -194,7 +194,7 @@ describe('ForkZoltarSection', () => {
 				zoltarForkQuestionId: '0x01',
 				zoltarForkRepBalance: 1000n * REP,
 				zoltarQuestions: [createQuestion()],
-				zoltarUniverse: createUniverse({ forkThreshold: 100n * REP, zoltarAddress: ZOLTAR_ADDRESS }),
+				zoltarUniverse: createUniverse({ forkBurnDivisor: 5n, forkThreshold: 100n * REP, zoltarAddress: ZOLTAR_ADDRESS }),
 				zoltarUniverseState: 'ready',
 			}),
 		)
@@ -235,7 +235,7 @@ describe('ForkZoltarSection', () => {
 					title: 'Second fork question title',
 				},
 			],
-			zoltarUniverse: createUniverse({ forkThreshold: 100n * REP, zoltarAddress: ZOLTAR_ADDRESS }),
+			zoltarUniverse: createUniverse({ forkBurnDivisor: 5n, forkThreshold: 100n * REP, zoltarAddress: ZOLTAR_ADDRESS }),
 			zoltarUniverseState: 'ready' as const,
 		})
 		const renderedComponent = await renderIntoDocument(h(ForkZoltarSection, createProps('0x01')))

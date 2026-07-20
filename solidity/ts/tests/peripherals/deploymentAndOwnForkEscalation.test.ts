@@ -523,17 +523,17 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		const parentRepAtFork = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, parentVaultBeforeFork.repDepositShare)
 		strictEqualTypeSafe(parentRepAtFork, 0n, 'all parent vault REP should be escrowed before own fork')
 
+		const ownForkThreshold = await getZoltarForkThreshold(client, genesisUniverse)
 		await forkZoltarWithOwnEscalationGame(client, securityPoolAddresses.securityPool)
 		const ownForkRepBuckets = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
 		assert.strictEqual(ownForkRepBuckets.vaultRepAtFork, 0n, 'all-rep-in-escalation scenario should have zero vaultRepAtFork')
-		strictEqualTypeSafe(ownForkRepBuckets.escalationChildRepPerSelectedOutcome, ownForkRepBuckets.escrowSourceRepAtFork, 'own-fork escalation backing should convert every source REP 1:1 even when all parent REP is escrowed')
+		strictEqualTypeSafe(ownForkRepBuckets.escrowSourceRepAtFork - ownForkRepBuckets.escalationChildRepPerSelectedOutcome, ownForkThreshold / 5n, 'own-fork escalation backing should exclude exactly one fork admission haircut')
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		const yesChildEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
-		const childCarryTotal = (await Promise.all([QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No].map(outcome => getEscalationGameOutcomeState(client, yesChildEscalationGame, outcome)))).reduce((total, state) => total + state.currentCarryTotal, 0n)
-		strictEqualTypeSafe(await getERC20Balance(client, getRepTokenAddress(yesUniverse), yesChildEscalationGame), childCarryTotal, 'the child escalation game should receive its complete aggregate carry backing before claims')
+		strictEqualTypeSafe(await getERC20Balance(client, getRepTokenAddress(yesUniverse), yesChildEscalationGame), ownForkRepBuckets.escalationChildRepPerSelectedOutcome, 'the child escalation game should receive the post-haircut aggregate backing before claims')
 		strictEqualTypeSafe(
 			await client.readContract({
 				abi: peripherals_EscalationGame_EscalationGame.abi,
@@ -671,7 +671,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 			args: [client.account.address, QuestionOutcome.Yes],
 		})
 		const winningPayout = (await getERC20Balance(client, childRepToken, client.account.address)) - walletRepBeforeClaim
-		assert.ok(winningPayout > winningProof.amount, 'aggregate 1:1 backing should support a winning payout greater than the proof principal')
+		assert.ok(winningPayout > winningProof.amount, 'aggregate post-haircut backing should support the configured winning reward')
 		strictEqualTypeSafe(childYesEscrow[3], childYesEscrow[2], 'own-fork carried winning proof should claim its child escrow')
 	})
 

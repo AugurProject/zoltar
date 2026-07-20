@@ -3,7 +3,7 @@ import { decodeEventLog, encodeDeployData, encodeFunctionData, type Abi, type Ad
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
-import { DAY, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import { BURN_ADDRESS, DAY, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import { contractExists, requireAddress, requireArray, requireBigInt, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
@@ -261,7 +261,7 @@ describe('Escalation Game Test Suite', () => {
 					abi: peripherals_EscalationGame_EscalationGame.abi,
 					address: escalationGameAddress,
 					functionName: 'startFromFork',
-					args: [startBond, nonDecisionThreshold, elapsedAtFork, fixedQuestionOutcome],
+					args: [startBond, nonDecisionThreshold, elapsedAtFork, fixedQuestionOutcome, false, 0n],
 				}),
 		)
 
@@ -1852,14 +1852,17 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual(await readCarryTotal(child.escalationGameAddress, QuestionOutcome.Yes), 0n, 'the winning proof should consume its liability')
 		assert.strictEqual(await readCarryTotal(child.escalationGameAddress, QuestionOutcome.No), 0n, 'the losing outcome should terminate without per-leaf proofs')
 
-		await writeContractAndWait(client, async () =>
-			client.writeContract({
-				abi: peripherals_EscalationGame_EscalationGame.abi,
-				address: child.escalationGameAddress,
-				functionName: 'sweepResidualRepToSecurityPool',
-				args: [],
-			}),
-		)
+		const residualRep = await getERC20Balance(client, getRepTokenAddress(0n), child.escalationGameAddress)
+		if (residualRep > 0n) {
+			await writeContractAndWait(client, async () =>
+				client.writeContract({
+					abi: peripherals_EscalationGame_EscalationGame.abi,
+					address: child.escalationGameAddress,
+					functionName: 'sweepResidualRepToSecurityPool',
+					args: [],
+				}),
+			)
+		}
 	})
 
 	test('losing carried proofs are unnecessary and cannot drain aggregate backing', async () => {
@@ -2352,6 +2355,7 @@ describe('Escalation Game Test Suite', () => {
 		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
 
 		assert.strictEqual(await getQuestionResolution(client, escalationGameAddress), QuestionOutcome.Yes, 'Resolution should be Yes')
+		const burnBalanceBeforeClaim = await getERC20Balance(client, getRepTokenAddress(0n), addressString(BURN_ADDRESS))
 		const claimLog = await claimWinningDepositAndReadClaimLog(testSecurityPoolAddress, 0n, QuestionOutcome.Yes)
 		assert.strictEqual(await readBindingCapital(escalationGameAddress), losingDeposit, 'Binding capital should be the losing-side 10 REP depth')
 		assert.strictEqual(claimLog.args.depositor, winningDepositorAddress, 'claim event should identify the winning depositor')
@@ -2359,6 +2363,8 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual(claimLog.args.parentDepositIndex, 0n, 'claim event should identify the stable parent deposit index')
 		assert.strictEqual(claimLog.args.originalDepositAmount, firstWinningDeposit, 'claim event should include the original winning principal')
 		assert.strictEqual(claimLog.args.amountToWithdraw, 7n * 10n ** 18n, 'The first 5 REP winning deposit should receive its 2 REP pro-rata reward share')
+		assert.ok(claimLog.args.burnAmount > 0n, 'a winning escalation claim should charge a positive deterrence haircut')
+		assert.strictEqual((await getERC20Balance(client, getRepTokenAddress(0n), addressString(BURN_ADDRESS))) - burnBalanceBeforeClaim, claimLog.args.burnAmount, 'a non-forking escalation game should burn the winner haircut outside fork migration')
 		assert.strictEqual(claimLog.args.transferredRep, true, 'direct winning claims should transfer REP to the depositor')
 	})
 

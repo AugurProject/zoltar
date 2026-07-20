@@ -662,9 +662,10 @@
 								<code>floor(parent theoretical supply / forkThresholdDivisor)</code>.
 								Starting a fork burns that amount of the initiator's parent REP,
 								reduces the parent theoretical supply by the same amount, and
-								credits the full threshold 1:1 for migration.
+								credits the threshold minus
+								<code>floor(threshold / forkBurnDivisor)</code> for migration.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> With a 1,000 REP theoretical supply and divisor 20, the initiator commits 50 parent REP and receives 50 REP of migration credit.</p>
+							<p class="invariant-example"><strong>Example:</strong> With a 1,000 REP theoretical supply, threshold divisor 20, and burn divisor 5, the initiator commits 50 parent REP, pays a 10 REP haircut, and receives 40 REP of migration credit.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
@@ -771,10 +772,10 @@
 							<div class="invariant-property">
 								The child theoretical-supply snapshot equals the parent's
 								theoretical supply after the threshold burn plus the initiator's
-								credited migration amount, which equals the full threshold. Each child
-								therefore preserves the parent's pre-fork theoretical supply.
+								post-haircut migration credit. Each child therefore excludes the
+								uncredited fork haircut.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> If a fork removes 50 parent REP and credits 50 migration REP, each child's theoretical snapshot equals the pre-fork supply.</p>
+							<p class="invariant-example"><strong>Example:</strong> If a fork removes 50 parent REP and credits 40 migration REP, each child's theoretical snapshot is 10 REP below the pre-fork supply.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>

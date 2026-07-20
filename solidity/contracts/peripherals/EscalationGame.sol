@@ -32,13 +32,17 @@ contract EscalationGame is EscalationGameSettlement {
 		uint256 _startBond,
 		uint256 _nonDecisionThreshold,
 		uint256 elapsedAtFork,
-		BinaryOutcomes.BinaryOutcome _fixedQuestionOutcome
+		BinaryOutcomes.BinaryOutcome _fixedQuestionOutcome,
+		bool _winnerHaircutPaidByFork,
+		uint256 _forkCarryInitialBacking
 	) external {
 		_initializeStartParams(_startBond, _nonDecisionThreshold);
 		require(elapsedAtFork <= ESCALATION_TIME_LENGTH, 'Fork time too high');
 		forkContinuation = true;
 		forkElapsedAtStart = elapsedAtFork;
 		fixedQuestionOutcome = _fixedQuestionOutcome;
+		winnerHaircutPaidByFork = _winnerHaircutPaidByFork;
+		forkCarryInitialBacking = _forkCarryInitialBacking;
 		emit GameContinuedFromFork(startBond, nonDecisionThreshold, elapsedAtFork);
 	}
 

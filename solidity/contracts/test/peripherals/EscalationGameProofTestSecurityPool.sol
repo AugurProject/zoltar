@@ -17,6 +17,7 @@ contract EscalationGameProofTestSecurityPool {
 		zoltar = zoltarAddress;
 		universeId = configuredUniverseId;
 		configuredSecurityPoolForker = _configuredSecurityPoolForker;
+		zoltarAddress.getRepToken(configuredUniverseId).approve(address(zoltarAddress), type(uint256).max);
 	}
 
 	function securityPoolForker() external view returns (address) {
@@ -47,6 +48,11 @@ contract EscalationGameProofTestSecurityPool {
 
 	function repToken() external view returns (ReputationToken) {
 		return zoltar.getRepToken(universeId);
+	}
+
+	function burnEscalationWinnerHaircut(uint256 amount) external {
+		require(msg.sender == address(escalationGame), 'Only game');
+		zoltar.burnRep(universeId, amount);
 	}
 
 	function depositOnOutcome(
