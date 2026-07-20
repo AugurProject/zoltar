@@ -9,7 +9,6 @@ import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { SecurityPoolForkerBase } from './SecurityPoolForkerBase.sol';
 import { SecurityPoolForkerForkData } from './SecurityPoolForkerTypes.sol';
 import { SecurityPoolForkerVaultMigrationBase } from './SecurityPoolForkerVaultMigrationBase.sol';
-import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 
 contract SecurityPoolForkerVaultMigrationDelegate is SecurityPoolForkerVaultMigrationBase {
 	constructor(Zoltar _zoltar) SecurityPoolForkerBase(_zoltar) {}
@@ -44,26 +43,14 @@ contract SecurityPoolForkerVaultMigrationDelegate is SecurityPoolForkerVaultMigr
 		uint256 auctionEthReceived,
 		uint256 parentCollateralAtFork
 	) public payable {
-		if (msg.value > 0) {
-			(bool sent, ) = payable(address(securityPool)).call{ value: msg.value }('');
-			require(sent, 'ETH');
-		}
+		require(msg.value == 0, 'Auction finalization does not accept repair contributions');
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
-		uint256 collateralAmount = data.forkCollateralReceived + auctionEthReceived + msg.value;
-		uint256 wholeRepairUnits = parentCollateralAtFork / SecurityPoolUtils.BPS_DENOMINATOR;
-		uint256 remainingCollateral = parentCollateralAtFork % SecurityPoolUtils.BPS_DENOMINATOR;
-		uint256 minimumRepair =
-			wholeRepairUnits * SecurityPoolUtils.MIN_TRUTH_AUCTION_REPAIR_BPS +
-				(remainingCollateral * SecurityPoolUtils.MIN_TRUTH_AUCTION_REPAIR_BPS +
-					SecurityPoolUtils.BPS_DENOMINATOR -
-					1) /
-					SecurityPoolUtils.BPS_DENOMINATOR;
-		require(collateralAmount >= minimumRepair && collateralAmount <= parentCollateralAtFork, 'Repair');
+		uint256 collateralAmount = data.forkCollateralReceived + auctionEthReceived;
+		require(collateralAmount <= parentCollateralAtFork, 'Repair');
 		uint256 parentTotalSecurityBondAllowance = securityPool.parent().totalSecurityBondAllowance();
 		uint256 unmigratedSecurityBondAllowance = parentTotalSecurityBondAllowance - data.migratedSecurityBondAllowance;
-		uint256 ethRaiseCap = data.truthAuction.ethRaiseCap();
-		data.auctionedSecurityBondAllowance =
-			ethRaiseCap == 0 ? 0 : Math.mulDiv(unmigratedSecurityBondAllowance, auctionEthReceived, ethRaiseCap);
+		uint256 totalRepPurchased = data.truthAuction.totalRepPurchased();
+		data.auctionedSecurityBondAllowance = totalRepPurchased == 0 ? 0 : unmigratedSecurityBondAllowance;
 		securityPool.setPoolFinancials(
 			collateralAmount,
 			parentTotalSecurityBondAllowance,

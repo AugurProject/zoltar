@@ -406,8 +406,9 @@
 						although the fork already blocks <code>isOperational</code>-guarded calls.
 						Pool fork initiation calls <code>activateForkMode</code>. After the
 						eight-week migration window, <code>startTruthAuction</code> always moves
-						the child into <code>ForkTruthAuction</code>; a fully repaired child
-						finalizes back to <code>Operational</code> in the same transaction.
+						the child into <code>ForkTruthAuction</code>; a child that needs no
+						auction finalizes immediately, while an auctioned child returns to
+						<code>Operational</code> after its deadline and value-free finalization.
 					</p>
 				</figure>
 				<p>

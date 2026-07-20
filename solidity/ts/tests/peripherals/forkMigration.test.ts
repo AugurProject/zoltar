@@ -1453,9 +1453,8 @@ describe('Peripherals: fork migration', () => {
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 			if ((await getSystemState(client, yesSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
-				const repairContribution = await getEthRaiseCap(client, yesSecurityPool.truthAuction)
 				await mockWindow.advanceTime(7n * DAY + DAY)
-				await finalizeTruthAuction(client, yesSecurityPool.securityPool, repairContribution)
+				await finalizeTruthAuction(client, yesSecurityPool.securityPool)
 			}
 
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'child pool should become operational after migration accounting settles')
@@ -2130,9 +2129,8 @@ describe('Peripherals: fork migration', () => {
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 			if ((await getSystemState(client, yesSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
-				const repairContribution = await getEthRaiseCap(client, yesSecurityPool.truthAuction)
 				await mockWindow.advanceTime(7n * DAY + DAY)
-				await finalizeTruthAuction(client, yesSecurityPool.securityPool, repairContribution)
+				await finalizeTruthAuction(client, yesSecurityPool.securityPool)
 			}
 
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'child pool should be operational after fork accounting settles')
@@ -2184,9 +2182,8 @@ describe('Peripherals: fork migration', () => {
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 			if ((await getSystemState(client, yesSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
-				const repairContribution = await getEthRaiseCap(client, yesSecurityPool.truthAuction)
 				await mockWindow.advanceTime(7n * DAY + DAY)
-				await finalizeTruthAuction(client, yesSecurityPool.securityPool, repairContribution)
+				await finalizeTruthAuction(client, yesSecurityPool.securityPool)
 			}
 
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'child pool should be operational after fork accounting settles')
@@ -2201,7 +2198,7 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(await getShareTokenSupply(client, yesSecurityPool.securityPool), 0n, 'rejected mint should preserve zero reconciled supply')
 		})
 
-		test('child pool with migrated shares but no collateral remains inactive before complete-set minting', async () => {
+		test('child pool with migrated shares but no collateral activates after settlement while still rejecting complete-set minting', async () => {
 			const parentAllowance = repDeposit / 4n
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, parentAllowance)
 
@@ -2228,8 +2225,8 @@ describe('Peripherals: fork migration', () => {
 			assert.deepStrictEqual(await getOutcomeShareSupplies(yesSecurityPool.shareToken, yesUniverse), [parentMintAmount * PRICE_PRECISION, parentMintAmount * PRICE_PRECISION, parentMintAmount * PRICE_PRECISION], 'balanced migrated shares should match nominal supply even when collateral is still zero')
 			strictEqualTypeSafe(await getTotalSecurityBondAllowance(client, yesSecurityPool.securityPool), 0n, 'inactive child financials must not expose parent mint capacity before repair')
 			await mockWindow.advanceTime(7n * DAY + DAY)
-			await assert.rejects(finalizeTruthAuction(client, yesSecurityPool.securityPool), /Repair/)
-			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'failed repair must not reactivate an uncollateralized child')
+			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'ended settlement must release the child from truth-auction state even with no accepted bid ETH')
 
 			const newMinter = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
 			const childCollateralBeforeFailedMint = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
@@ -2675,9 +2672,11 @@ describe('Peripherals: fork migration', () => {
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, fixedChildPool.securityPool)
 			if ((await getSystemState(client, fixedChildPool.securityPool)) === SystemState.ForkTruthAuction) {
-				const repairContribution = await getEthRaiseCap(client, fixedChildPool.truthAuction)
+				const repairTarget = await getEthRaiseCap(client, fixedChildPool.truthAuction)
+				const parentForkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
+				await participateAuction(client, fixedChildPool.truthAuction, parentForkData.auctionableRepAtFork / 4n, repairTarget)
 				await mockWindow.advanceTime(7n * DAY + DAY)
-				await finalizeTruthAuction(client, fixedChildPool.securityPool, repairContribution)
+				await finalizeTruthAuction(client, fixedChildPool.securityPool)
 			}
 			strictEqualTypeSafe(await getSystemState(client, fixedChildPool.securityPool), SystemState.Operational, 'fixed child should be operational before the unrelated recursive fork')
 			strictEqualTypeSafe(await getQuestionOutcome(client, fixedChildPool.securityPool), QuestionOutcome.Yes, 'matching first fork should fix the child outcome to yes')

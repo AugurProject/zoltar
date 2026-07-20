@@ -46,7 +46,6 @@ assertOpenOracleVendorAndEventDocs()
 assertLiquidationFullCloseDocs()
 assertStartHereTimelines()
 assertContractInteractionDistinctions()
-assertTruthAuctionRepairParameter()
 
 function assertContinuationIdentifierExplanation(): void {
 	assert.ok(html.includes('uint256(keccak256(abi.encode(address(this), outcomeIndex, depositIndex)))'), 'docs/escalation-game-architecture.html must explain the fork-continuation stable parent deposit identifier formula')
@@ -243,7 +242,8 @@ function assertStartHereTimelines(): void {
 	assert.match(startHere, /A universe\s+fork alone leaves <code>systemState<\/code> as <code>Operational<\/code>/)
 	assert.match(startHere, /Pool fork initiation calls <code>activateForkMode<\/code>/)
 	assert.match(startHere, /<code>startTruthAuction<\/code> always moves\s+the child into <code>ForkTruthAuction<\/code>/)
-	assert.match(startHere, /finalizes back to <code>Operational<\/code> in the same transaction/)
+	assert.match(startHere, /a child that needs no\s+auction finalizes immediately/)
+	assert.match(startHere, /an auctioned child returns to\s+<code>Operational<\/code> after its deadline and value-free finalization/)
 	assert.match(startHere, /d="M 555 82 C 555 120 215 120 215 146"/, 'Start Here deployment arrow must end at the ForkMigration child state')
 	assert.doesNotMatch(startHere, /d="M 555 82 V 146"/, 'Start Here deployment arrow must not point into ForkTruthAuction')
 	assert.doesNotMatch(startHere, /d="M 340 222 C 450 270 650 270 710 218"/)
@@ -281,7 +281,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /`burnCompleteSets\(universeId, account, amount\)` \| An authorized `SecurityPool`/)
 	assert.match(contractInteractionReference, /`burnTokenIdAndGetRemainingSupply\(tokenId, account\)` \| An authorized `SecurityPool`/)
 	assert.match(contractInteractionReference, /Fixes the clearing mode, clearing tick, ETH totals, and aggregate REP allocation/)
-	assert.match(contractInteractionReference, /Withdrawal-time allocation assigns division dust from deterministic cumulative ETH positions, making payout independent of claim order/)
+	assert.match(contractInteractionReference, /Withdrawal-time allocation assigns division dust from deterministic cumulative ETH positions, making each payout independent of claim order/)
 	assert.match(contractInteractionReference, /addFeeEligibleSecurityBondAllowance\(vault, amount\)[\s\S]*Finalized truth-auction settlement[\s\S]*newly auction-claimed security-bond allowance to the live fee denominator/)
 	assert.match(contractInteractionReference, /`SystemStateSet`/)
 	assert.match(securityPoolForker, /Before finalization, only refundable bids can be settled/)
@@ -307,21 +307,22 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(securityPoolForker, /'Resolved'/)
 	assert.match(securityPoolForker, /securityPool\.setSystemState\(SystemState\.ForkTruthAuction\)/)
 	assert.match(securityPoolForker, /securityPool\.addFeeEligibleSecurityBondAllowance\(vault, newSecurityBondAllowance\)/)
-	assert.match(truthAuction, /function _allocateRepFromCumulativePosition\(/)
-	assert.match(truthAuction, /return cumulativeRepAfter - cumulativeRepBefore/)
+	assert.match(truthAuction, /function _allocateFromCumulativePosition\(/)
+	assert.match(invariantsHtml, /FORK-12[\s\S]*activates after value-free finalization with 9 ETH of tracked collateral/)
+	assert.doesNotMatch(invariantsHtml, /remains inactive until repair/)
+	assert.match(invariantsHtml, /AUC-06[\s\S]*complete unmigrated allowance[\s\S]*independent of claim order/)
+	assert.match(invariantsHtml, /AUC-06[\s\S]*REP allocation rounds to zero[\s\S]*claiming that bid alone still credits the allowance/)
+	assert.match(invariantsHtml, /AUC-07[\s\S]*aggregate[\s\S]*underfundedWinningEth \/ maxRepBeingSold[\s\S]*dust winner can round to zero REP/)
+	assert.doesNotMatch(invariantsHtml, /fraction funded by the bid's retained ETH/)
+	assert.match(contractInteractionReference, /winning dust bid can receive positive allowance when its REP share rounds to zero/)
+	assert.match(contractInteractionReference, /`ClaimAuctionProceeds` when REP or allowance is credited/)
+	assert.match(truthAuction, /return cumulativeAllocationAfter - cumulativeAllocationBefore/)
 	assert.match(truthAuction, /require\(msg\.sender == owner, 'Only the auction owner can refund losing bids on behalf of bidders'\)/)
 	assert.match(zoltar, /safeTransferFrom\(migrator, Constants\.BURN_ADDRESS, amount\)/)
 	assert.match(zoltar, /ReputationToken\(address\(reputationToken\)\)\.burn\(migrator, amount\)/)
 	for (const integrationSource of ['libraries/Errors.sol', 'interfaces/ISignatureTransfer.sol', 'openzeppelin/contracts/token/ERC20/IERC20.sol', 'openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol']) {
 		assert.ok(operatorReference.includes(`openOracle/${integrationSource}`), `Operator Reference must directly link ${integrationSource}`)
 	}
-}
-
-function assertTruthAuctionRepairParameter(): void {
-	const repairBpsMatch = securityPoolUtils.match(/uint256 constant MIN_TRUTH_AUCTION_REPAIR_BPS = BPS_DENOMINATOR/)
-	assert.ok(repairBpsMatch, 'SecurityPoolUtils must keep the truth-auction repair floor tied to BPS_DENOMINATOR')
-	const normalizedPlaceholder = whitepaperPlaceholder.replaceAll(/\s+/g, ' ')
-	assert.match(normalizedPlaceholder, /<code>MIN_TRUTH_AUCTION_REPAIR_BPS<\/code>[\s\S]*?<code>10000 bps \(100%\)<\/code>/, 'whitepaper parameter table must document the exact 100% truth-auction repair floor')
 }
 
 function assertSimpleByteRow(label: string, expectedValue: string): void {

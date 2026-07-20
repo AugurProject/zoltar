@@ -390,15 +390,13 @@
 							<tr>
 								<td><a href="#auctions"><code>AUC-07</code></a></td>
 								<td>
-									REP ownership issued by recapitalization remains proportional
-									to qualifying ETH repair achieved.
+									Weak-demand winners receive the complete REP sale cap at one
+									effective price, while every other bid refunds.
 								</td>
 								<td>
-									Underfunded demand buys REP at the cap-implied reserve in
-									proportion to qualifying ETH when the aggregate REP result is
-									positive; a zero result refunds every bid. Any remaining repair
-									contribution issues no ownership or allowance, and a child
-									activates only at the complete repair target.
+									Qualifying underfunded demand shares <code>maxRepBeingSold</code>
+									in proportion to retained ETH. With no qualifying demand, every
+									bid refunds after value-free finalization.
 								</td>
 							</tr>
 							<tr>
@@ -1437,16 +1435,17 @@
 						</div>
 					</details>
 					<details class="invariant-entry">
-						<summary><code>FORK-12</code><span class="invariant-title">Child activation after repair</span></summary>
+						<summary><code>FORK-12</code><span class="invariant-title">Child activation after settlement</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								A child becomes operational only after tracked collateral
-								reaches the parent fork snapshot. Separate guards keep
+								Value-free truth-auction settlement activates a child with its
+								tracked migrated collateral plus retained auction ETH, which cannot
+								exceed the parent fork snapshot. Separate guards keep
 								new complete-set minting blocked when migrated share supplies
 								are inconsistent without blocking proportional burns.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> A child with 9 ETH against a 10 ETH fork snapshot remains inactive until repair supplies the missing 1 ETH.</p>
+							<p class="invariant-example"><strong>Example:</strong> A child with 9 ETH against a 10 ETH fork snapshot activates after value-free finalization with 9 ETH of tracked collateral; its later operations remain subject to the ordinary share-supply and minting guards.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
@@ -2067,17 +2066,17 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								Cumulative allocation math makes aggregate REP and refund
-								results independent of post-finalization claim order.
+								Cumulative allocation math makes per-bid REP, refund, and
+								security-bond allowance results independent of post-finalization claim order.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> Alice claiming before Bob produces the same total REP allocation and ETH refund as Bob claiming before Alice.</p>
+							<p class="invariant-example"><strong>Example:</strong> Alice claiming before Bob gives each vault the same REP, ETH refund, and allowance as Bob claiming before Alice.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
 										href="../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"
-										><code>_allocateRepFromCumulativePosition</code></a
+										><code>_allocateFromCumulativePosition</code></a
 										>
 								</dd></div>
 							</dl>
@@ -2109,12 +2108,14 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								A bid claim credits purchased REP, pool ownership, and funded
-								allowance to the bid's recorded vault. These credits add to rather
-								than replace that vault's migrated position, and allowance cannot
-								exceed the fraction funded by the bid's retained ETH.
+								A bid claim credits purchased REP, pool ownership, and its fixed-position
+								share of the complete unmigrated allowance to the bid's recorded vault.
+								These credits add to rather than replace that vault's migrated position,
+								and cumulative allocation keeps allowance rounding independent of claim order.
+								A winning dust bid still receives a positive fixed-position allowance
+								share when its REP allocation rounds to zero.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> A vault with migrated ownership keeps it when claiming auction REP; the claim adds only the ownership and allowance paid for by that vault's winning bid.</p>
+							<p class="invariant-example"><strong>Example:</strong> A vault with migrated ownership keeps it when claiming auction REP; the claim adds the ownership and deterministic allowance share assigned to that winning bid. If a dust bid's REP share is zero but its allowance share is positive, claiming that bid alone still credits the allowance.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
@@ -2128,16 +2129,19 @@
 						</div>
 					</details>
 					<details class="invariant-entry">
-						<summary><code>AUC-07</code><span class="invariant-title">Proportional repair allocation</span></summary>
+						<summary><code>AUC-07</code><span class="invariant-title">Uniform weak-demand allocation</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
 								Qualifying ETH is retained bid ETH offered at or above the
-								cap-implied reserve price. Repair REP ownership is allocated in
-								proportion to that ETH. If the aggregate proportional allocation
-								rounds to zero REP, the auction retains no ETH and refunds every bid.
+								cap-implied reserve price. Qualifying bidders collectively receive
+								<code>maxRepBeingSold</code> in proportion to that ETH at the aggregate
+								effective price <code>underfundedWinningEth / maxRepBeingSold</code>.
+								Per-bid cumulative floors then assign indivisible atomic units, so a
+								dust winner can round to zero REP without changing the aggregate price.
+								With no qualifying ETH, every bid refunds.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> If Alice supplies 60% and Bob 40% of qualifying ETH, they receive those proportions of repair REP subject to deterministic atomic-unit rounding, unless the aggregate rounds to zero and both are fully refunded.</p>
+							<p class="invariant-example"><strong>Example:</strong> If Alice supplies 60% and Bob 40% of qualifying ETH, they receive 60% and 40% of the complete REP sale cap subject to deterministic atomic-unit rounding.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
@@ -2157,7 +2161,7 @@
 								Auction finalization succeeds regardless of unsolicited ETH
 								already present in the child pool or forker.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> One wei forced into the child before finalization remains surplus and does not make the exact repair calculation revert.</p>
+							<p class="invariant-example"><strong>Example:</strong> One wei forced into the child before finalization remains surplus and does not change protocol-accounted collateral.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Liveness</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
@@ -2171,19 +2175,17 @@
 						</div>
 					</details>
 					<details class="invariant-entry">
-						<summary><code>AUC-09</code><span class="invariant-title">Exact weak-demand repair</span></summary>
+						<summary><code>AUC-09</code><span class="invariant-title">Bounded bid settlement</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								When auction demand is below the repair target, REP and allowance
-								are assigned only for qualifying retained auction ETH. The
-								finalizer must send exactly
-								<code>repair target − migration-routed collateral − retained auction ETH</code>;
-								any other amount reverts and leaves the child inactive.
+								After the auction deadline, value-free finalization succeeds using
+								migration-routed collateral plus retained auction ETH. Qualifying bids
+								settle for REP, non-qualifying bids refund, and nonzero finalizer ETH reverts.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> For a 10 ETH target with 6 ETH migrated and 3 ETH retained from bids, finalization requires exactly 1 ETH from the caller.</p>
+							<p class="invariant-example"><strong>Example:</strong> For a 10 ETH target with 6 ETH migrated and 3 ETH retained from bids, the child activates with 9 ETH of accounted collateral and every bid can then settle.</p>
 							<dl class="invariant-metadata">
-								<div><dt>Type</dt><dd>Safety</dd></div>
+								<div><dt>Type</dt><dd>Liveness</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a href="./auction-design.html">Weak-demand behavior</a>,
@@ -2563,14 +2565,14 @@
 									<a
 										href="../solidity/ts/tests/peripherals/truthAuction.test.ts"
 										><code>truthAuction.test.ts</code></a
-									>, including repair-ratio, forced-balance finalization,
-									reserve-price, proportional underfunding, claim-order, and
+									>, including value-free weak-demand finalization, forced-balance
+									isolation, reserve qualification, uniform pricing, claim-order, and
 									tick-math coverage, plus bid-history preservation across
 									repeated tick deletion and recreation.
 								</td>
 								<td>
-									Stateful bidder/order fuzzing and an explicit recovery policy
-									for a child left inactive by weak auction demand.
+									Stateful bidder/order fuzzing across weak-demand finalization and
+									post-finalization refunds.
 								</td>
 							</tr>
 							<tr>

@@ -35,9 +35,8 @@
 					truth auction, using the proceeds to raise as much repair ETH as market
 					demand supports. Strong demand can fully restore the collateral shortfall;
 					when demand is weak, only bids at or above the cap-implied reserve buy
-					REP, in proportion to the ETH that would otherwise be retained. With no
-					qualifying bids, or when the proportional aggregate rounds to zero REP,
-					every bid refunds. The auction
+					the complete REP sale cap for their retained ETH at one effective price.
+					With no qualifying bids, every bid refunds after finalization. The auction
 					discovers that repair price; it does not determine which branch is true.
 				</p>
 
@@ -47,10 +46,9 @@
 					sell more than a fixed amount of child-universe REP. Strong demand
 					can hit the ETH target first, or it can bind the REP sale cap first.
 					When neither cap binds, the auction derives a reserve from both caps,
-					selects bids at or above that reserve's ceiling tick, and calculates the
-					proportional REP those bids fund. Lower bids refund; if that aggregate REP
-					rounds to zero, every bid refunds. This prevents a lone
-					minimum bidder from extracting the full REP inventory. Placeholder runs this process through
+					selects bids at or above that reserve's ceiling tick, and allocates the
+					complete REP sale cap among them in proportion to retained ETH. Lower bids
+					refund. Placeholder runs this process through
 					the <code>UniformPriceDualCapBatchAuction</code> contract, then
 					writes winning claims back into vault state rather than paying out
 					simple token transfers, so bidders buy into the child pool
@@ -83,10 +81,9 @@
 				When bidding ends, anyone may call <code>finalizeTruthAuction</code>.
 				Finalization clears the batch auction, sends the raised ETH into the
 				repair path, and computes the accounting rates used to settle bidders.
-				If legitimate migration collateral plus retained auction ETH is short of
-				the full fork snapshot, the caller must supply the exact remaining repair
-				contribution. Forced ETH does not count, and an under-repaired attempt
-				reverts with the child still inactive in <code>ForkTruthAuction</code>.
+				The child activates with legitimate migration collateral plus retained bid
+				ETH, even when that total is below the original fork snapshot. Finalization
+				rejects caller contribution ETH, and forced ETH remains unaccounted surplus.
 			</p>
 
 			<p>
@@ -123,14 +120,14 @@
 
 					<rect class="svg-green" x="650" y="50" width="190" height="70" rx="8"></rect>
 					<text class="svg-label" x="745" y="80" text-anchor="middle">Settle</text>
-					<text class="svg-small" x="745" y="103" text-anchor="middle">full repair → operational</text>
+					<text class="svg-small" x="745" y="103" text-anchor="middle">bids settle → operational</text>
 				</svg>
 
 				<p class="diagram-caption">
 					<span class="figure-label">Auction Lifecycle</span>
 					After migration closes, a child-pool shortfall can be repaired through auction. ETH bids restore collateral, while winning
-					claims are settled into vault accounting. REP doesn't leave the system. If retained ETH is insufficient, finalization requires
-					the exact remaining contribution; contribution-only ETH creates no bidder rights.
+					claims are settled into vault accounting. REP doesn't leave the system. Finalization accounts the ETH actually raised and
+					rejects contribution-only ETH, so bidder settlement never depends on a donor.
 				</p>
 			</figure>
 
@@ -171,7 +168,7 @@
 							Supplies ETH demand for the repair. The minimum bid is
 							<code>max(ethRaiseCap / 100000, 1 wei)</code>. Under weak demand,
 							bids below the cap-implied reserve refund, while qualifying bids buy
-							REP in proportion to retained ETH.
+							the complete REP sale cap at one effective price.
 						</td>
 					</tr>
 
@@ -275,15 +272,15 @@
 					<code>underfundedThreshold = ceil(ethRaiseCap · 1e18 /
 					maxRepBeingSold)</code>, stores the lowest tick whose price reaches that
 					reserve as <code>clearingTick</code>, retains ETH at or above that tick,
-					and refunds lower ticks when the resulting proportional REP is positive.
-					Purchased REP is the sale cap multiplied by the fraction of the ETH target
-					represented by qualifying bids. If that aggregate floors to zero, the
-					contract resets retained ETH to zero and every bid refunds.
+					and refunds lower ticks. Qualifying bidders collectively purchase
+					<code>maxRepBeingSold</code> for <code>underfundedWinningEth</code>, so
+					the common effective price is their retained ETH divided by the REP cap.
+					If no ETH qualifies, every bid refunds.
 				</p>
 				<figure class="diagram diagram-wide" id="fig-auction-clearing-ladder">
 					<svg viewBox="0 0 980 360" role="img" aria-labelledby="auction-clearing-title auction-clearing-desc">
 						<title id="auction-clearing-title">Auction demand is evaluated from high ticks to low ticks before uniform or underfunded clearing</title>
-						<desc id="auction-clearing-desc">High-price bids are considered first. If cumulative demand reaches the ETH raise cap or REP sale cap, the first binding tick sets normal uniform clearing. If neither cap is reached, finalization selects bids at or above the cap-implied reserve tick and allocates REP proportionally, unless the aggregate rounds to zero and every bid refunds.</desc>
+						<desc id="auction-clearing-desc">High-price bids are considered first. If cumulative demand reaches the ETH raise cap or REP sale cap, the first binding tick sets normal uniform clearing. If neither cap is reached, finalization selects bids at or above the cap-implied reserve tick and allocates the complete REP sale cap among them at one effective price. With no qualifying bids, every bid refunds.</desc>
 						<defs>
 							<marker id="auction-clearing-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 								<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
@@ -315,13 +312,13 @@
 						<rect class="svg-gold" x="700" y="198" width="240" height="108" rx="8"></rect>
 						<text class="svg-label" x="820" y="232" text-anchor="middle">Underfunded clearing</text>
 						<text class="svg-small" x="820" y="258" text-anchor="middle">cap-implied reserve tick</text>
-						<text class="svg-small" x="820" y="280" text-anchor="middle">proportional REP purchase</text>
+						<text class="svg-small" x="820" y="280" text-anchor="middle">complete REP cap shared pro rata</text>
 					</svg>
 					<p class="diagram-caption">
 						<span class="figure-label">Clearing Price Ladder</span>The contract always
 						walks demand from expensive REP to cheap REP. What changes is the stopping
 						rule: a binding cap gives normal uniform clearing, while weak demand uses
-						the cap-implied reserve and proportional REP allocation.
+						the cap-implied reserve and a uniform weak-demand allocation of the REP cap.
 					</p>
 				</figure>
 				<p>
@@ -334,15 +331,14 @@
 				</p>
 				<p>
 					Under weak demand, the auction selects only demand willing to pay the
-					reserve implied by the ETH and REP caps. It retains that ETH and sells
-					proportional REP only when the aggregate REP result is positive; otherwise
-					every bid refunds. If cumulative demand instead reaches either cap at an
+					reserve implied by the ETH and REP caps. It retains that ETH and sells the
+					complete REP cap among qualifying bids in proportion to their ETH; if no
+					bid qualifies, every bid refunds. If cumulative demand instead reaches either cap at an
 					active tick, the normal funded-clearing branch applies.
 				</p>
 				<p>
 					A lone minimum bidder below reserve receives a refund and no REP. A lone
-					bidder at or above reserve receives only the proportional REP purchased
-					by its ETH, unless that aggregate floors to zero and the bid refunds.
+					bidder at or above reserve receives the complete REP sale cap for its bid ETH.
 					<code>SecurityPoolForker.claimAuctionProceeds</code> maps
 					that purchased REP into the corresponding pool-ownership credit and
 					auctioned allowance share for the child branch.
@@ -359,12 +355,12 @@
 						<tr>
 							<td>Above the binding level</td>
 							<td>Wins in full at the uniform clearing price.</td>
-							<td>Qualifies only if its tick is at or above the cap-implied reserve <code>clearingTick</code>; every bid still refunds if aggregate REP rounds to zero.</td>
+							<td>Qualifies only if its tick is at or above the cap-implied reserve <code>clearingTick</code>; qualifying bids share the complete REP sale cap.</td>
 						</tr>
 						<tr>
 							<td>At the binding level</td>
 							<td>Shares the marginal fill FIFO inside that tick.</td>
-							<td>Qualifies at the reserve boundary, then shares a positive cap-ratio REP allocation by retained ETH; a zero aggregate refunds all bids.</td>
+							<td>Qualifies at the reserve boundary, then shares the complete REP sale cap by retained ETH.</td>
 						</tr>
 						<tr>
 							<td>Below the binding level</td>
@@ -379,8 +375,8 @@
 						<code>ethRaiseCap = 20 ETH</code>, producing a reserve of
 						<code>2 ETH/REP</code>. The ceiling tick for that reserve is only the
 						eligibility boundary; bids below it refund. Qualifying ETH receives
-						the cap-ratio REP allocation. The figures below use human-unit
-						approximations, while the contract floors aggregate and per-bid
+						the complete REP cap in pro-rata shares at one effective price. The
+						figures below use human-unit approximations, while the contract floors per-bid
 						allocations in atomic units.
 					</p>
 					<table>
@@ -412,11 +408,11 @@
 								<td>
 									The system keeps <code>10 ETH</code>.
 									<br />
-									Bob and Alice purchase approximately <code>5 REP</code> pro rata by
+									Bob and Alice purchase <code>10 REP</code> pro rata by
 									winning ETH.
 									<br />
-									Bob receives approximately <code>3 REP</code> and Alice receives
-									approximately <code>2 REP</code>.
+									Bob receives <code>6 REP</code> and Alice receives <code>4 REP</code>,
+									both at an effective price of <code>1 ETH/REP</code>.
 								</td>
 							</tr>
 							<tr>
@@ -442,11 +438,11 @@
 								<td>
 									The system keeps <code>10 ETH</code>.
 									<br />
-									Alice, Bob, and Carol share approximately <code>5 REP</code> pro rata
+									Alice, Bob, and Carol share <code>10 REP</code> pro rata
 									by winning ETH.
 									<br />
-									Alice receives approximately <code>2.5 REP</code>, Bob approximately
-									<code>1.5 REP</code>, and Carol approximately <code>1 REP</code>.
+									Alice receives <code>5 REP</code>, Bob <code>3 REP</code>, and Carol
+									<code>2 REP</code>, all at <code>1 ETH/REP</code>.
 								</td>
 							</tr>
 							<tr>
@@ -530,11 +526,10 @@
 					In the underfunded branch, finalization computes
 					<code>underfundedThreshold</code> from the two auction caps. The
 					stored <code>clearingTick</code> is the lowest supported tick at or
-					above that reserve. If qualifying bids produce positive
-					<code>totalRepPurchased</code>, withdrawals retain bids at ticks
-					<code>&gt;= clearingTick</code>. If no bid qualifies or the proportional
-					aggregate floors to zero, <code>underfundedWinningEth</code> is reset to
-					zero and every bid refunds. The stored threshold remains the cap-implied
+					above that reserve. If any bid qualifies, <code>totalRepPurchased</code>
+					equals <code>maxRepBeingSold</code>, and withdrawals retain bids at ticks
+					<code>&gt;= clearingTick</code>. If no bid qualifies,
+					<code>underfundedWinningEth</code> is zero and every bid refunds. The stored threshold remains the cap-implied
 					reserve.
 					Both <code>ethRaised</code> and
 					<code>underfundedWinningEth</code> exclude below-reserve demand.
@@ -566,11 +561,11 @@
 						><code>PRICE_PRECISION = 1e18</code>.
 						<code>tickToPrice(clearingTick)</code> is the first supported tick at
 						or above this reserve and acts only as the bid-eligibility boundary.
-						Aggregate purchased REP is determined independently by
-						<code>floor(maxRepBeingSold * underfundedWinningEth / ethRaiseCap)</code>,
-						and winners at or above that tick share it pro rata by retained ETH
-						when the result is positive. A zero result resets retained ETH to zero
-						and refunds every bid. Solidity
+						When any ETH qualifies, aggregate purchased REP equals
+						<code>maxRepBeingSold</code>, and winners at or above that tick share it
+						pro rata by retained ETH at the common effective price
+						<code>underfundedWinningEth / maxRepBeingSold</code>. With no qualifying
+						ETH, every bid refunds. Solidity
 						differences cumulative floor allocations at fixed bid positions, so
 						paged withdrawals reconcile independently of claim order.
 					</p>
@@ -601,8 +596,8 @@
 						</tr>
 						<tr>
 							<td>Underfunded winning ticks</td>
-							<td>Ticks at or above <code>clearingTick</code> share positive proportional <code>totalRepPurchased</code> by retained ETH; if the aggregate is zero, all bids refund.</td>
-							<td>The cap-implied reserve prevents REP issuance from exceeding qualifying ETH demand.</td>
+							<td>Ticks at or above <code>clearingTick</code> share <code>maxRepBeingSold</code> by retained ETH; with no qualifying ETH, all bids refund.</td>
+							<td>Every accepted winner pays the same effective price, and every other bidder gets a full refund.</td>
 						</tr>
 					</tbody>
 				</table>
@@ -611,9 +606,15 @@
 					The forker withdraws finalized bid results, converts purchased REP into
 					pool ownership with <code>auctionPoolOwnershipPerRep</code>, and adds
 					the matching slice of <code>auctionedSecurityBondAllowance</code> to
-					the bidder's vault. That allowance pool is itself scaled by retained
-					auction ETH divided by <code>ethRaiseCap</code>; explicit repair
-					contributions create neither allowance nor ownership. In other words,
+					the bidder's vault. Any auction that purchases REP assigns the complete
+					unmigrated allowance among its winners; a zero-REP auction assigns none.
+					Allowance uses the same fixed cumulative retained-ETH ordering, so its
+					integer remainder also has a deterministic recipient independent of claim order.
+					Because REP and allowance use independent integer numerators, a winning
+					dust bid whose REP share rounds to zero can still receive a positive
+					allowance share; settlement credits that allowance without requiring
+					positive REP in the same claim.
+					Finalization rejects explicit repair contributions. In other words,
 					the bidder is buying a share of the
 					repaired child-pool vault state, including the debt-bearing allowance
 					that still has to be backed.
@@ -626,9 +627,10 @@
 				<p>
 					Both finalized allocation paths derive each bid's REP from its fixed
 					cumulative winning-ETH position. The bid receives the difference
-					between rounded cumulative REP after and before that position. This
-					reconciles paged withdrawals to the aggregate allocation while making
-					rounding independent of claim order.
+					between rounded cumulative REP after and before that position. The
+					companion allowance allocation differences cumulative floors over the
+					same position. This reconciles paged withdrawals to both aggregate
+					allocations while making rounding independent of claim order.
 				</p>
 			</section>
 
@@ -750,16 +752,20 @@
 							>
 						</div>
 						<div>
-							<span>Alice REP</span
+							<span>Approximate Alice REP</span
 							><output data-example-output="aliceReceives">1.00 REP</output>
 						</div>
 						<div>
-							<span>Bob REP</span
+							<span>Approximate Bob REP</span
 							><output data-example-output="bobReceives">1.33 REP</output>
 						</div>
 						<div>
-							<span>Carol REP</span
+							<span>Approximate Carol REP</span
 							><output data-example-output="carolReceives">1.67 REP</output>
+						</div>
+						<div>
+							<span>Total REP allocated</span
+							><output data-example-output="totalRepAllocated">4 REP</output>
 						</div>
 						<div>
 							<span>Refunds</span
@@ -920,8 +926,14 @@
 						for (const bid of activeBids) {
 							if (bid.price >= threshold) {
 								winningEth += bid.eth;
-								repResults[bid.key] = bid.eth / threshold;
 							} else refunds += bid.eth;
+						}
+						if (winningEth > 0) {
+							for (const bid of activeBids) {
+								if (bid.price >= threshold) {
+									repResults[bid.key] = (bid.eth * repInventory) / winningEth;
+								}
+							}
 						}
 						accumulatedEth = winningEth;
 						write("clearingMode", "underfunded reserve clearing");
@@ -936,6 +948,10 @@
 					write("aliceReceives", formatRep(repResults.alice));
 					write("bobReceives", formatRep(repResults.bob));
 					write("carolReceives", formatRep(repResults.carol));
+					write(
+						"totalRepAllocated",
+						formatRep(Object.values(repResults).reduce((sum, repAmount) => sum + repAmount, 0)),
+					);
 					write("refunds", formatEth(refunds));
 				};
 				for (const input of Object.values(inputs)) {

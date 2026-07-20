@@ -1355,12 +1355,12 @@ describe('Peripherals invariant harness', () => {
 		strictEqualTypeSafe(underfundedClearing.hitCap, false, 'accepted low-price bid should leave this auction underfunded')
 		await mockWindow.advanceTime(AUCTION_TIME + 1n)
 		await finalizeAuction(client, underfundedAuctionAddress)
-		const underfundedExpectedRep = (underfundedMaxRepBeingSold * lowPriceBid) / (1000n * 10n ** 18n)
-		strictEqualTypeSafe(await getTotalRepPurchased(client, underfundedAuctionAddress), underfundedExpectedRep, 'underfunded winning bids should receive REP in proportion to ETH raised')
+		const underfundedExpectedRep = underfundedMaxRepBeingSold
+		strictEqualTypeSafe(await getTotalRepPurchased(client, underfundedAuctionAddress), underfundedExpectedRep, 'underfunded qualifying bids should receive the complete REP sale cap')
 		strictEqualTypeSafe(await getEthRaised(client, underfundedAuctionAddress), lowPriceBid, 'underfunded accounting should record the submitted ETH')
 
 		const underfundedResult = await simulateWithdrawBids(client, underfundedAuctionAddress, underfundedBidder.account.address, [{ tick: lowPriceTick, bidIndex: 0n }])
-		strictEqualTypeSafe(underfundedResult.totalFilledRep, underfundedExpectedRep, 'underfunded winner should fill only the REP backed by raised ETH')
+		strictEqualTypeSafe(underfundedResult.totalFilledRep, underfundedExpectedRep, 'the only underfunded winner should fill the complete REP sale cap')
 		strictEqualTypeSafe(underfundedResult.totalEthRefund, 0n, 'low-price underfunded winner should not receive an ETH refund')
 
 		const refundAuctionOwner = createClient(3)
