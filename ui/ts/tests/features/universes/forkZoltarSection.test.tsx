@@ -97,6 +97,36 @@ describe('ForkZoltarSection', () => {
 		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
 	})
 
+	test('describes automatically loading fork data without asking for a manual refresh', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(ForkZoltarSection, {
+				accountAddress: zeroAddress,
+				hasLoadedZoltarQuestions: false,
+				isMainnet: true,
+				loadingZoltarForkAccess: true,
+				loadingZoltarQuestions: false,
+				onApproveZoltarForkRep: () => undefined,
+				onForkZoltar: () => undefined,
+				onZoltarForkQuestionIdChange: () => undefined,
+				zoltarForkActiveAction: undefined,
+				zoltarForkApproval: { error: undefined, loading: false, value: undefined },
+				zoltarForkError: undefined,
+				zoltarForkPending: false,
+				zoltarForkQuestionId: '',
+				zoltarForkRepBalance: undefined,
+				zoltarQuestions: [],
+				zoltarUniverse: undefined,
+				zoltarUniverseState: 'loading',
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const forkButton = within(document.body).getByRole('button', { name: 'Fork Zoltar' })
+		expect(forkButton.hasAttribute('disabled')).toBe(true)
+		expect(document.body.textContent).toContain('Loading universe details.')
+		expect(document.body.textContent).not.toContain('Refresh universe data')
+	})
+
 	test('requires a valid fork question before REP approval', async () => {
 		const createProps = (questionId: string) => ({
 			accountAddress: zeroAddress,
@@ -125,11 +155,11 @@ describe('ForkZoltarSection', () => {
 				.find(button => button.textContent?.startsWith('Approve ') === true)
 			if (approveButton === undefined) throw new Error('Expected approval button')
 			expect(approveButton.hasAttribute('disabled')).toBe(true)
-			expect(renderedComponent.container.textContent).toContain('Select a valid fork question before approving REP or forking Zoltar.')
+			expect(renderedComponent.container.textContent).toContain('Select a valid fork question to continue.')
 			const review = within(renderedComponent.container).getByRole('heading', { name: 'Transaction Review' }).closest('section')
 			if (review === null) throw new Error('Expected transaction review')
 			expect(review.textContent).not.toContain('Selected Fork Question')
-			expect(review.textContent).not.toContain('Select a valid fork question before approving REP or forking Zoltar.')
+			expect(review.textContent).not.toContain('Select a valid fork question to continue.')
 			await renderedComponent.cleanup()
 		}
 
