@@ -171,6 +171,7 @@ interface ISecurityPool {
 	function getTotalRepBalance() external view returns (uint256);
 	function isEscalationResolved() external view returns (bool);
 	function initialEscalationGameDeposit() external view returns (uint256);
+	function burnEscalationWinnerHaircut(uint256 amount) external;
 
 	function setStartingParams(uint256 currentRetentionRate, uint256 completeSetCollateralAmount) external;
 

@@ -274,7 +274,7 @@ export function App() {
 		initiateFork,
 		loadForkAuction,
 		loadingForkAuctionDetails,
-		migrateEscalation,
+		claimParentEscalation,
 		migrateUnresolvedEscalation,
 		migrateRepToZoltar,
 		migrateVault,
@@ -587,8 +587,8 @@ export function App() {
 				onForkWithOwnEscalation: () => void forkWithOwnEscalation(),
 				onInitiateFork: () => void initiateFork(),
 				onLoadForkAuction: securityPoolAddressOverride => void loadForkAuction(securityPoolAddressOverride),
-				onMigrateEscalationDeposits: (outcome, depositIndexes) =>
-					void migrateEscalation({
+				onClaimParentEscalationDeposits: (outcome, depositIndexes) =>
+					void claimParentEscalation({
 						outcome,
 						...(depositIndexes === undefined ? {} : { depositIndexes }),
 					}),

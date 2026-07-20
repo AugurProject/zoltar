@@ -37,6 +37,7 @@ assertSimpleByteRow('Deployed bytecode', formatNumber(bytecodeSnapshot.deployedB
 assertBudgetHeadroomRow('Project deployed-bytecode budget headroom', formatNumber(expectedProjectBudget - bytecodeSnapshot.deployedBytes), formatNumber(expectedProjectBudget))
 assertBudgetHeadroomRow('EIP-170 headroom', formatNumber(expectedEip170Budget - bytecodeSnapshot.deployedBytes), formatNumber(expectedEip170Budget))
 assertContinuationIdentifierExplanation()
+assertAggregateEscalationContinuationDocs()
 assertEventStreamSemantics()
 assertZoltarForkDepths()
 assertCoordinatorRecoveryBranch()
@@ -52,6 +53,43 @@ function assertContinuationIdentifierExplanation(): void {
 	assert.ok(html.includes('consumedParentDepositIndexes'), 'docs/escalation-game-architecture.html must connect the continuation identifier to consumedParentDepositIndexes')
 	assert.ok(html.includes('LocalDepositAppended') && html.includes('CarryDepositConsumed') && html.includes('ClaimDeposit') && html.includes('exportUnresolvedDeposit'), 'docs/escalation-game-architecture.html must name the exact event and export surfaces that expose the continuation identifier')
 	assert.ok(!html.includes('CarriedDepositClaimed'), 'docs/escalation-game-architecture.html must not reference the removed CarriedDepositClaimed event')
+}
+
+function assertAggregateEscalationContinuationDocs(): void {
+	const normalizedPlaceholder = whitepaperPlaceholder.replaceAll(/\s+/g, ' ')
+	const normalizedOperatorReference = operatorReference.replaceAll(/\s+/g, ' ')
+	const normalizedContractReference = contractInteractionReference.replaceAll(/\s+/g, ' ')
+	const normalizedZoltarWhitepaper = zoltarWhitepaper.replaceAll(/\s+/g, ' ')
+	const normalizedInvariants = invariantsHtml.replaceAll(/\s+/g, ' ')
+	for (const [documentName, contents] of [
+		['Placeholder whitepaper', normalizedPlaceholder],
+		['Operator reference', normalizedOperatorReference],
+	] as const) {
+		for (const documentedClaim of ['aggregate backing', 'winning proof', 'recorded depositor', 'inherited losers', 'optional parent']) {
+			assert.ok(contents.toLowerCase().includes(documentedClaim), `${documentName} must explain aggregate winner-only continuation semantics: ${documentedClaim}`)
+		}
+	}
+	for (const documentedClaim of ['uncredited haircut', 'forkBurnDivisor']) {
+		assert.ok(normalizedZoltarWhitepaper.includes(documentedClaim), `Zoltar whitepaper must document fork admission economics: ${documentedClaim}`)
+		assert.ok(normalizedContractReference.includes(documentedClaim), `Contract interaction reference must document fork admission economics: ${documentedClaim}`)
+	}
+	for (const forbiddenClaim of ['vaultEscrowChildRep', 'forked-escrow-scaling', 'forked-escrow-example', 'only selected vault escrow authorizes inherited proofs', 'vault migration grants only logical authorization', 'only materialized vault escrow authorizes proofs']) {
+		assert.ok(!normalizedPlaceholder.includes(forbiddenClaim), `Placeholder whitepaper retains obsolete per-vault continuation claim: ${forbiddenClaim}`)
+	}
+	assert.match(normalizedContractReference, /cleanup neither funds escalation backing nor authorizes carried proofs/)
+	assert.match(normalizedOperatorReference, /Child funding, continuation progress, and proof eligibility do not require cleanup/)
+	for (const documentedClaim of [
+		'complete aggregate continuation backing at most once',
+		'Optional vault cleanup only clears parent locks',
+		'currentCarryTotal</code> equals effective inherited unresolved principal plus unresolved local deposits',
+		'a direct ancestor claim invalidates the matching proof in every descendant',
+		'Inherited losing principal retires at finalization without a proof',
+	]) {
+		assert.ok(normalizedInvariants.includes(documentedClaim), `Invariant catalog must explain aggregate winner-only continuation semantics: ${documentedClaim}`)
+	}
+	for (const forbiddenClaim of ['credited to child escrow', 'forked child REP backing', 'Forked escrow claims never exceed']) {
+		assert.ok(!normalizedInvariants.includes(forbiddenClaim), `Invariant catalog retains obsolete per-vault continuation claim: ${forbiddenClaim}`)
+	}
 }
 
 function assertEventStreamSemantics(): void {
@@ -81,38 +119,12 @@ function assertEventStreamSemantics(): void {
 }
 
 function assertZoltarForkDepths(): void {
-	const initialSupply = 7_825_488_326_666_847_200_078_019n
-	const oneRep = 10n ** 18n
 	const protocolConfig = getMainnetProtocolConfig()
-	let supply = initialSupply
-	let escalationBoundary: number | undefined
-	let subOneRepBoundary: number | undefined
-	let zeroHaircutBoundary: number | undefined
-
-	for (let depth = 0; zeroHaircutBoundary === undefined; depth += 1) {
-		const threshold = supply / protocolConfig.forkThresholdDivisor
-		const haircut = threshold / protocolConfig.forkBurnDivisor
-		if (escalationBoundary === undefined && threshold / 2n <= oneRep) escalationBoundary = depth
-		if (subOneRepBoundary === undefined && threshold < oneRep) subOneRepBoundary = depth
-		if (haircut === 0n) {
-			zeroHaircutBoundary = depth
-			break
-		}
-		supply -= haircut
-	}
-
-	assert.equal(escalationBoundary, 1_213, 'Zoltar escalation boundary depth changed')
-	assert.equal(subOneRepBoundary, 1_282, 'Zoltar sub-1-REP threshold depth changed')
-	assert.equal(zeroHaircutBoundary, 5_303, 'Zoltar zero-haircut boundary depth changed')
-	assert.equal(supply, 99n, 'Zoltar zero-haircut fixed-point supply changed')
-	assert.equal(supply / protocolConfig.forkThresholdDivisor, 4n, 'Zoltar zero-haircut fixed-point threshold changed')
+	assert.equal(protocolConfig.forkThresholdDivisor, 20n, 'Zoltar fork threshold divisor changed')
+	assert.equal(protocolConfig.forkBurnDivisor, 5n, 'Zoltar fork burn divisor changed')
 	const normalizedWhitepaper = zoltarWhitepaper.replaceAll(/\s+/g, ' ')
-	for (const documentedClaim of [
-		'at child depth <code>1,213</code>, the fork threshold is approximately <code>1.986 REP</code>',
-		'at depth <code>1,282</code>, the fork threshold is below <code>1 REP</code>',
-		'at depth <code>5,303</code>, theoretical supply is <code>99 wei</code>, the fork threshold is <code>4 wei</code>, and the haircut floors to zero',
-	]) {
-		assert.ok(normalizedWhitepaper.includes(documentedClaim), `Missing Zoltar fork-depth claim: ${documentedClaim}`)
+	for (const documentedClaim of ['one fifth of the threshold is an uncredited haircut', 'Later REP added to a migration balance converts 1:1', 'Permanent admission cost']) {
+		assert.ok(normalizedWhitepaper.includes(documentedClaim), `Missing Zoltar fork haircut claim: ${documentedClaim}`)
 	}
 }
 
@@ -242,9 +254,12 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(invariantsHtml, /<code>SHARE-04<\/code>[\s\S]*maximum actual outcome supply[\s\S]*actual winning supply/)
 	assert.match(contractInteractionReference, /getForkThreshold`, `getNonDecisionThreshold`, `getUniverseTheoreticalSupply`/)
 	assert.match(contractInteractionReference, /getQuestionResolution`, `getFinalQuestionResolution`, `fixedQuestionOutcome`/)
-	assert.match(contractInteractionReference, /startFromFork\(startBond, nonDecisionThreshold, elapsedAtFork, fixedQuestionOutcome\)[\s\S]*After the continuation deadline, `getFinalQuestionResolution` returns the fixed outcome/)
+	assert.match(contractInteractionReference, /startFromFork\(startBond, nonDecisionThreshold, elapsedAtFork, fixedQuestionOutcome, winnerHaircutPaidByFork, forkCarryInitialBacking\)[\s\S]*After the continuation deadline, `getFinalQuestionResolution` returns the fixed outcome/)
 	assert.match(contractInteractionReference, /currently unlocked REP ownership/)
-	assert.match(contractInteractionReference, /aggregate-entitlement wrapper calls this function first to migrate unlocked state/)
+	assert.match(contractInteractionReference, /optional unresolved-lock cleanup wrapper calls this function first to migrate any unlocked state/)
+	assert.match(contractInteractionReference, /migrateVaultWithUnresolvedEscalation[\s\S]*First runs ordinary migration for the same vault[\s\S]*cleanup neither funds escalation backing nor authorizes carried proofs/)
+	assert.match(contractInteractionReference, /external fork interrupted the game[\s\S]*winners settle in the child by carried proof[\s\S]*parent-lock cleanup is optional/)
+	assert.doesNotMatch(contractInteractionReference, /external-fork timing may require migration instead/)
 	assert.match(contractInteractionReference, /Before finalization, refunds only provably losing bids/)
 	assert.match(contractInteractionReference, /Auction owner \(`SecurityPoolForker`\) only; public callers use `settleAuctionBids`/)
 	assert.match(contractInteractionReference, /eight-week migration window is open and every existing selected child remains in `ForkMigration`/)

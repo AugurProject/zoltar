@@ -410,7 +410,7 @@
 									<mo>)</mo>
 								</mrow>
 							</math>
-							<p class="equation-caption"><span class="equation-label">Fork Haircut</span>The default uncredited share is one fifth of the threshold deposit, rounded down; the full parent-REP threshold is still burned or transferred out of the parent universe.</p>
+							<p class="equation-caption"><span class="equation-label">Fork Haircut</span>The default uncredited share is one fifth of the threshold deposit, rounded down; the full parent-REP threshold is still removed from the parent universe.</p>
 						</div>
 						<div class="equation" id="eq-zoltar-initiator-migration-balance">
 							<math display="block" aria-label="fork initiator migration balance equals fork threshold minus uncredited fork haircut" data-source="forkInitiatorMigrationBalance = forkThreshold - uncreditedForkHaircut">
@@ -427,7 +427,7 @@
 					<div class="implementation-grid">
 							<div class="implementation-note">
 								<b>Implementation entry points</b>
-								<p><a href="../solidity/contracts/Zoltar.sol"><code>forkUniverse</code></a> applies the threshold, burns or transfers the full parent-REP threshold out of the parent universe, reduces parent theoretical supply by that full amount, and credits only the post-haircut migration balance to the initiator.</p>
+								<p><a href="../solidity/contracts/Zoltar.sol"><code>forkUniverse</code></a> applies the threshold, removes the full parent-REP threshold, reduces parent theoretical supply by that amount, and credits only the post-haircut migration balance to the initiator.</p>
 							</div>
 						<div class="implementation-note">
 							<b>Genesis token exception</b>
@@ -464,7 +464,7 @@
 								<span class="legend-item"><span class="legend-swatch red"></span>Uncredited migration haircut</span>
 							<span class="legend-item"><span class="legend-swatch teal"></span>Migration balance</span>
 						</div>
-							<p class="diagram-caption"><span class="figure-label">Threshold Deposit Split</span>The full parent-REP threshold leaves parent supply. Most of that amount is re-expressed as migratable child-REP credit, while the haircut is not credited to the initiator.</p>
+							<p class="diagram-caption"><span class="figure-label">Threshold Deposit Split</span>The full parent-REP threshold leaves parent supply. Most is re-expressed as migratable child-REP credit; the haircut is not credited.</p>
 					</figure>
 
 					<p>
@@ -476,50 +476,23 @@
 					<p>
 						A child's theoretical supply is a maximum for REP that can be minted in that
 						branch. It starts from the parent's pre-fork theoretical supply and subtracts
-						only the uncredited haircut. The initiator's remaining threshold deposit is
-						migration credit, so it remains part of the maximum amount that could be minted
-						in each child.
+						only the uncredited haircut. Later REP added to a migration balance converts
+						1:1; only fork initiation pays this admission cost.
 					</p>
 
 					<h3>Repeated-fork threshold decay</h3>
 					<p>
-						Along one lineage, let <code>theoreticalSupplyBeforeForkₙ</code> be the
-						theoretical supply before fork <code>n</code>. With the mainnet threshold divisor
-						of <code>20</code> and burn divisor of <code>5</code>, the exact integer recurrence is
-						<code>forkThresholdₙ = floor(theoreticalSupplyBeforeForkₙ / 20)</code>,
-						<code>haircutₙ = floor(forkThresholdₙ / 5)</code>, and
-						<code>theoreticalSupplyBeforeForkₙ₊₁ = theoreticalSupplyBeforeForkₙ - haircutₙ</code>.
-						This is close to multiplying supply by <code>0.99</code> at each generation,
-						but both Solidity flooring operations matter once supply becomes small.
+						Along one lineage, each fork subtracts its floored haircut from child
+						theoretical supply. With threshold divisor <code>20</code> and burn divisor
+						<code>5</code>, supply is close to 99% of the previous generation, subject to
+						Solidity integer flooring.
 					</p>
 					<div class="callout">
-						<strong>Launch-supply-dependent limit</strong>
-						The number of generations is not a universal constant because the genesis
-						supply snapshot is read when Zoltar is deployed. At Ethereum block
-						<code>25,501,749</code> on July 10, 2026, calling
-						<code>getTotalTheoreticalSupply()</code> on REPv2 at
-						<code>0x221657776846890989a759BA2973e427DfF5C9bB</code> returned
-						<code>7,825,488.326666847200078019 REP</code>. Starting from that value, the
-						default recurrence reaches three relevant boundaries: at child depth
-						<code>1,213</code>, the fork threshold is approximately <code>1.986 REP</code>, so
-						half of it no longer exceeds the configured <code>1 REP</code> escalation
-						starting bond; at depth <code>1,282</code>, the fork threshold is below
-						<code>1 REP</code>; and at depth <code>5,303</code>, theoretical supply is
-						<code>99 wei</code>, the fork threshold is <code>4 wei</code>, and the haircut
-						floors to zero. Supply then stops decreasing along further descendants rather
-						than reaching a zero fork threshold.
+						<strong>Permanent admission cost</strong>
+						The REP threshold and haircut are the intended admission cost. They deter
+						unnecessary forks that would otherwise impose migration latency on every pool
+						in the universe.
 					</div>
-					<p>
-						These depths require more than a thousand consecutive forks along the same
-						surviving branch before escalation parameters become incompatible. They are
-						therefore remote limits rather than near-term fork incentives. Implementers
-						should nevertheless treat the first boundary as an explicit parameter limit:
-						<code>SecurityPool</code> initializes an escalation game's non-decision threshold
-						as the ceiling of half the current fork threshold, while <code>EscalationGame</code> requires that
-						value to be strictly greater than its starting bond. A deployment expected to
-						survive thousands of recursive forks needs either a minimum fork threshold or
-						a compatible rule for scaling escalation parameters.
-					</p>
 
 					<div class="table-wrap">
 						<table>
@@ -542,15 +515,15 @@
 									<td>Burn sink used for genesis REP</td>
 								</tr>
 								<tr>
+									<td><code>forkBurnDivisor</code></td>
+									<td><code>5</code></td>
+									<td>Constructor immutable. The initiator receives the threshold minus <code>floor(forkThreshold / forkBurnDivisor)</code> as migration credit.</td>
+								</tr>
+								<tr>
 									<td><code>forkThresholdDivisor</code></td>
 									<td><code>20</code></td>
 									<td>Constructor immutable. Fork threshold is <code>floor(totalTheoreticalRepSupply / forkThresholdDivisor)</code>; the default deployment value makes it about 5% of supply.</td>
 								</tr>
-									<tr>
-										<td><code>forkBurnDivisor</code></td>
-										<td><code>5</code></td>
-										<td>Constructor immutable. The uncredited migration haircut is <code>floor(forkThreshold / forkBurnDivisor)</code>; the full threshold parent-REP amount still leaves parent supply.</td>
-									</tr>
 							</tbody>
 						</table>
 					</div>
@@ -696,11 +669,9 @@
 					<p>
 						A caller cannot trigger that transition for free under normal parameters. The
 						caller supplies the full fork threshold in parent REP, loses the uncredited
-						haircut, and receives migration credit for only the remainder. Existing REP
-						holders can migrate their own positions and benefit from the reduced supply in
-						the branches where economic activity continues. Consequently, an unrelated
-						fork is economically evaluated as a costly forced migration: its risk is
-						operational migration latency and coordination burden, while its deterrent is
+						haircut, and receives migration credit for only the remainder. Consequently, an
+						unrelated fork is economically evaluated as a costly forced migration: its risk
+						is operational migration latency and coordination burden, while its deterrent is
 						the initiator's threshold commitment and permanent haircut.
 					</p>
 					<p>

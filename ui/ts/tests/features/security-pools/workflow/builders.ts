@@ -193,7 +193,7 @@ export function createForkAuctionProps(overrides: Partial<ForkAuctionRouteConten
 		onForkWithOwnEscalation: () => undefined,
 		onInitiateFork: () => undefined,
 		onLoadForkAuction: () => undefined,
-		onMigrateEscalationDeposits: (_outcome, _depositIndexes) => undefined,
+		onClaimParentEscalationDeposits: (_outcome, _depositIndexes) => undefined,
 		onMigrateUnresolvedEscalation: _selectedChildOutcome => undefined,
 		onMigrateRepToZoltar: _outcomes => undefined,
 		onMigrateVault: () => undefined,

@@ -2,43 +2,6 @@
 pragma solidity 0.8.35;
 
 contract OwnForkEscalationClaimHarness {
-	struct RepBuckets {
-		uint256 unallocatedEscrowChildRep;
-		uint256 unallocatedEscrowSourceRep;
-	}
-
-	mapping(address => RepBuckets) private repBucketsByParent;
-
-	function setOwnForkRepBuckets(
-		address parent,
-		uint256 escalationChildRepAtFork,
-		uint256 escalationSourceRep
-	) external {
-		repBucketsByParent[parent] = RepBuckets({
-			unallocatedEscrowChildRep: escalationChildRepAtFork,
-			unallocatedEscrowSourceRep: escalationSourceRep
-		});
-	}
-
-	function previewOwnForkEscalationClaim(
-		address parent,
-		uint256 sourceRepAmount
-	) external returns (uint256 childRepAmount) {
-		RepBuckets storage repBuckets = repBucketsByParent[parent];
-		uint256 unallocatedEscrowSourceRep = repBuckets.unallocatedEscrowSourceRep;
-		uint256 unallocatedEscrowChildRep = repBuckets.unallocatedEscrowChildRep;
-		require(unallocatedEscrowSourceRep >= sourceRepAmount, 'Own-fork escalation source REP bucket is exhausted');
-		if (sourceRepAmount == unallocatedEscrowSourceRep) {
-			childRepAmount = unallocatedEscrowChildRep;
-		} else {
-			childRepAmount =
-				(sourceRepAmount * unallocatedEscrowChildRep + unallocatedEscrowSourceRep - 1) /
-				unallocatedEscrowSourceRep;
-		}
-		repBuckets.unallocatedEscrowSourceRep = unallocatedEscrowSourceRep - sourceRepAmount;
-		repBuckets.unallocatedEscrowChildRep = unallocatedEscrowChildRep - childRepAmount;
-	}
-
 	function previewOwnForkEscalationOwnershipToCredit(
 		uint256 childRepAmount,
 		uint256 childOwnershipDenominator,
@@ -89,33 +52,5 @@ contract OwnForkEscalationClaimHarness {
 			collateralTransferred = nextCollateralTransferred;
 		}
 		totalCollateralTransferred = collateralTransferred;
-	}
-
-	function previewOwnForkUnresolvedEscalationAllocation(
-		address[] calldata vaults,
-		uint256[] calldata sourceAmounts,
-		uint256 childRepAtFork
-	) external pure returns (uint256[] memory childAmounts) {
-		require(vaults.length == sourceAmounts.length, 'Vault and source amount arrays must have the same length');
-		uint256 vaultCount = vaults.length;
-		uint256 totalSourceRep = 0;
-		for (uint256 index = 0; index < vaultCount; index++) {
-			totalSourceRep += sourceAmounts[index];
-		}
-		childAmounts = new uint256[](vaultCount);
-		for (uint256 index = 0; index < vaultCount; index++) {
-			childAmounts[index] = (sourceAmounts[index] * childRepAtFork) / totalSourceRep;
-		}
-	}
-
-	function previewOwnForkUnresolvedEscalationNoop(
-		uint256[] calldata exportedAmounts,
-		uint256 childRepAmount
-	) external pure returns (uint256[] memory returnedAmounts) {
-		returnedAmounts = new uint256[](exportedAmounts.length);
-		for (uint256 index = 0; index < exportedAmounts.length; index++) {
-			returnedAmounts[index] = exportedAmounts[index];
-		}
-		if (childRepAmount == 0) return returnedAmounts;
 	}
 }

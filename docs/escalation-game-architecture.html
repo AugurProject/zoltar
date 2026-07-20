@@ -91,16 +91,16 @@
 					<p class="diagram-caption"><span class="figure-label">Mutable Stack Boundary</span>The inherited stack and the layout-compatible deposit delegate mutate the game's shared storage. Shared types provide definitions, while the external proof verifier returns derived values without acquiring storage authority.</p>
 				</figure>
 				<div class="equation" id="eq-escalation-game-outcome-carry">
-					<math display="block" aria-label="Current carry total equals inherited unresolved total plus local unresolved total" data-source="currentCarryTotal = inheritedUnresolvedTotal + localUnresolvedTotal">
+					<math display="block" aria-label="Current carry total equals effective inherited unresolved total plus local unresolved total" data-source="currentCarryTotal = effectiveInheritedUnresolvedTotal + localUnresolvedTotal">
 						<mrow>
 							<mi>currentCarryTotal</mi>
 							<mo>=</mo>
-							<mi>inheritedUnresolvedTotal</mi>
+							<mi>effectiveInheritedUnresolvedTotal</mi>
 							<mo>+</mo>
 							<mi>localUnresolvedTotal</mi>
 						</mrow>
 					</math>
-					<p class="equation-caption"><span class="equation-label">Carry Ownership Boundary</span>The split only stays safe while every module preserves the rule that an outcome's live carry equals inherited unresolved exposure plus unresolved local exposure.</p>
+					<p class="equation-caption"><span class="equation-label">Carry Ownership Boundary</span>Effective inherited principal starts from the stored inherited unresolved total, which carried-proof consumption decrements, and subtracts cumulative principal claimed directly in the immediate parent. After final resolution it is also zero for every inherited losing outcome. Local losing deposits are not part of that shortcut and retain their normal local settlement path.</p>
 				</div>
 				<table>
 					<thead>
@@ -138,8 +138,8 @@
 						</tr>
 						<tr>
 							<td><code>EscalationGameEscrow.sol</code></td>
-							<td>Forked escrow records, per-vault aggregate outcome totals, one-time export state, and child REP accounting.</td>
-							<td>Escrow export stays constant-size because it returns three logical outcome totals without moving tokens or scanning deposit history; aggregate physical REP was locked at fork initialization.</td>
+							<td>Local and direct-claim escrow records, per-vault aggregate outcome totals, one-time export state, and residual-sweep guards.</td>
+							<td>Optional parent-vault cleanup stays constant-size because it clears three outcome totals without scanning deposit history. Child continuation claims use aggregate game backing rather than copied per-vault escrow.</td>
 						</tr>
 						<tr>
 							<td><code>EscalationGameSettlement.sol</code></td>
@@ -182,9 +182,20 @@
 					Safe refactors keep the local REP and unresolved-deposit counters in
 					sync. Before aggregate export, every active vault lock appears in both
 					its vault-local counter and the corresponding global total. Aggregate
-					export clears those counters and the parent vault's escrow, while the
+					export is optional cleanup: it clears those counters and the parent
+					vault's escrow, while the
 					individual deposit rows remain only as canonical proof material and no
 					longer represent parent logical authorization or physical escrow.
+				</p>
+				<p>
+					Child initialization copies the authenticated carry totals and funds the
+					child game once at one child REP per source REP. It does not allocate
+					that backing among vaults. After the child resolves, only proofs for
+					winning deposits may settle. Any caller may relay a proof through the
+					pool, while the authenticated depositor always receives the normal
+					winning payout from the aggregate game balance. Inherited losing
+					principal becomes terminal without a per-leaf transaction; local losing
+					deposits still follow the ordinary local settlement rules.
 				</p>
 				<p>
 					The stable parent deposit identifier has two domains. In ordinary
@@ -218,7 +229,7 @@
 						</tr>
 						<tr>
 							<td>Outcome carry</td>
-							<td>For each outcome, <code>currentCarryTotal == inheritedUnresolvedTotal + localUnresolvedTotal</code>.</td>
+							<td>For each outcome, <code>currentCarryTotal == effectiveInheritedUnresolvedTotal + localUnresolvedTotal</code>. Effective inherited principal excludes direct parent claims and is zero for inherited losing outcomes after final resolution.</td>
 						</tr>
 						<tr>
 							<td>Active local deposit</td>
@@ -230,19 +241,23 @@
 						</tr>
 						<tr>
 							<td>Aggregate vault export</td>
-							<td>The fixed-cost migration export clears only the vault's three outcome aggregates and escrow counters. It preserves individual deposit rows and the canonical carry commitment for proof verification in selected children.</td>
+							<td>The optional fixed-cost parent cleanup clears only the vault's three outcome aggregates and escrow counters. It preserves individual deposit rows and the canonical carry commitment, and child funding or proof claims do not depend on calling it.</td>
 						</tr>
 						<tr>
-							<td>Inherited settlement order</td>
-							<td>Proof-backed settlement consumes <code>inheritedUnresolvedTotal</code> first and only then uses local unresolved total for any remainder.</td>
+							<td>Winning carried proof</td>
+							<td>A valid proof for the final winning outcome advances the nullifier, reduces effective carry, and pays the authenticated depositor from aggregate child-game REP. Settlement burns the winner haircut unless the escalation's own fork already paid it through Zoltar. A losing carried proof cannot receive or consume REP.</td>
 						</tr>
 						<tr>
-							<td>Forked escrow bounds</td>
-							<td>Forked escrow settlement releases child REP proportionally against source principal, and claimed counters never exceed recorded principal or child REP.</td>
+							<td>Continuation funding</td>
+							<td>An unrelated fork converts escalation source REP to child REP one-to-one. The escalation's own fork transfers post-haircut aggregate backing instead, while ordinary pool REP remains one-to-one. Funding completeness checks the applicable aggregate backing without scaling or releasing per-vault child escrow.</td>
+						</tr>
+						<tr>
+							<td>Inherited losing outcome</td>
+							<td>After final resolution, inherited principal on every losing outcome contributes zero to live carry and the residual-sweep guard. No losing depositor or third party must submit its leaf.</td>
 						</tr>
 						<tr>
 							<td>Direct parent claim identity</td>
-							<td>A direct own-fork claim records its stable parent deposit index in the shared forker. Every child checks that record before consuming its own carry nullifier, including children created after the claim.</td>
+							<td>A direct own-fork claim records its stable parent deposit index and principal by outcome in the shared forker. Every child rejects the index before consuming its nullifier and subtracts that principal from effective inherited carry, including children created after the claim.</td>
 						</tr>
 					</tbody>
 				</table>
@@ -315,19 +330,19 @@
 					<tbody>
 						<tr>
 							<td>Creation bytecode</td>
-							<td><code>31,520</code> bytes</td>
+							<td><code>32,012</code> bytes</td>
 						</tr>
 						<tr>
 							<td>Deployed bytecode</td>
-							<td><code>23,648</code> bytes</td>
+							<td><code>24,122</code> bytes</td>
 						</tr>
 						<tr>
 							<td>Project deployed-bytecode budget headroom</td>
-							<td><code>928</code> bytes below <code>24,576</code></td>
+							<td><code>454</code> bytes below <code>24,576</code></td>
 						</tr>
 						<tr>
 							<td>EIP-170 headroom</td>
-							<td><code>928</code> bytes below <code>24,576</code></td>
+							<td><code>454</code> bytes below <code>24,576</code></td>
 						</tr>
 					</tbody>
 				</table>

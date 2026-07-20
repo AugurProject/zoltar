@@ -432,9 +432,9 @@ export async function migrateSecurityVault(client: WriteClient, securityPoolAddr
 			})),
 	)
 }
-export async function migrateEscalationDeposits(client: WriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, outcome: ReportingOutcomeKey, depositIndexes: bigint[]) {
+export async function claimParentEscalationDeposits(client: WriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, outcome: ReportingOutcomeKey, depositIndexes: bigint[]) {
 	const outcomeIndex = getReportingOutcomeValue(outcome)
-	return await executeForkAuctionAction(client, 'migrateEscalationDeposits', securityPoolAddress, universeId, async () => {
+	return await executeForkAuctionAction(client, 'claimParentEscalationDeposits', securityPoolAddress, universeId, async () => {
 		return await writeContractAndWait(client, () => ({
 			address: getInfraContractAddresses().securityPoolForker,
 			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,

@@ -8,8 +8,8 @@ export type ProtocolConfigInput = Partial<{
 	[key in keyof ProtocolConfig]: bigint | number | string | undefined
 }>
 
-export const DEFAULT_FORK_THRESHOLD_DIVISOR = 20n
 export const DEFAULT_FORK_BURN_DIVISOR = 5n
+export const DEFAULT_FORK_THRESHOLD_DIVISOR = 20n
 export const DEFAULT_INITIAL_ESCALATION_GAME_DEPOSIT = 10n ** 18n
 
 export const DEFAULT_PROTOCOL_CONFIG: ProtocolConfig = {

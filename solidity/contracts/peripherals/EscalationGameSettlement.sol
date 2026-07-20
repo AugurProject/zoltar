@@ -4,7 +4,6 @@ pragma solidity 0.8.35;
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameEscrow } from './EscalationGameEscrow.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
-import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { CarriedDepositProof, Deposit } from './EscalationGameTypes.sol';
 import { CarryConsumptionReason } from './interfaces/IEscalationGame.sol';
 
@@ -68,75 +67,31 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 			),
 			'Parent deposit claimed'
 		);
+		require(outcome == questionResolution, 'Not winning outcome');
 		_verifyAndConsumeCarriedDepositProof(outcomeIndex, proof);
-		(
-			uint256 forkedEscrowPrincipal,
-			uint256 forkedEscrowChildRep,
-			uint256 forkedEscrowChildRepToRelease
-		) = _consumeForkedEscrow(depositor, outcome, originalDepositAmount);
-		CarryConsumptionReason consumptionReason =
-			outcome == questionResolution
-				? CarryConsumptionReason.WinningClaim
-				: CarryConsumptionReason.LosingSettlement;
-		if (forkedEscrowPrincipal > 0) consumptionReason = CarryConsumptionReason.ForkedEscrowClaim;
 		_emitCarryDepositConsumed(
 			outcomeIndex,
 			proof.depositor,
 			proof.amount,
 			proof.parentDepositIndex,
 			proof.sourceNodeId,
-			consumptionReason
+			CarryConsumptionReason.WinningClaim
 		);
-		if (forkedEscrowPrincipal > 0) {
-			_consumeEscrowedRepForVault(depositor, forkedEscrowChildRepToRelease);
-			if (outcome == questionResolution) {
-				uint256 burnAmount;
-				(amountToWithdraw, burnAmount) = _computeWinningWithdrawal(
-					outcomeIndex,
-					proof.amount,
-					proof.cumulativeAmount
-				);
-				amountToWithdraw = _scaleForkedEscrowAmount(
-					amountToWithdraw,
-					forkedEscrowChildRep,
-					forkedEscrowPrincipal
-				);
-				_safeTransferRep(depositor, amountToWithdraw);
-				emit ClaimDeposit(
-					depositor,
-					outcome,
-					proof.parentDepositIndex,
-					originalDepositAmount,
-					amountToWithdraw,
-					Math.ceilDiv(burnAmount * forkedEscrowChildRep, forkedEscrowPrincipal),
-					true
-				);
-				return (depositor, amountToWithdraw, originalDepositAmount);
-			}
-			return (depositor, 0, originalDepositAmount);
+		uint256 burnAmount;
+		(amountToWithdraw, burnAmount) = _computeWinningWithdrawal(outcomeIndex, proof.amount, proof.cumulativeAmount);
+		if (amountToWithdraw > 0) {
+			_safeTransferRep(depositor, amountToWithdraw);
 		}
-		require(!forkCarrySnapshotRequiresForkedEscrow, 'Forked escrow missing');
-		if (outcome == questionResolution) {
-			uint256 burnAmount;
-			(amountToWithdraw, burnAmount) = _computeWinningWithdrawal(
-				outcomeIndex,
-				proof.amount,
-				proof.cumulativeAmount
-			);
-			if (amountToWithdraw > 0) {
-				_safeTransferRep(depositor, amountToWithdraw);
-			}
-			emit ClaimDeposit(
-				depositor,
-				outcome,
-				proof.parentDepositIndex,
-				originalDepositAmount,
-				amountToWithdraw,
-				burnAmount,
-				true
-			);
-			return (depositor, amountToWithdraw, originalDepositAmount);
-		}
+		_burnWinningHaircut(burnAmount, winnerHaircutPaidByFork);
+		emit ClaimDeposit(
+			depositor,
+			outcome,
+			proof.parentDepositIndex,
+			originalDepositAmount,
+			amountToWithdraw,
+			burnAmount,
+			true
+		);
 	}
 
 	function exportUnresolvedDeposit(
@@ -252,6 +207,7 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 			deposit.cumulativeAmount
 		);
 		_consumeEscrowedRepForVault(depositor, originalDepositAmount);
+		if (transferredRep) _burnWinningHaircut(burnAmount, false);
 		emit ClaimDeposit(
 			depositor,
 			outcome,
@@ -261,5 +217,12 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 			burnAmount,
 			transferredRep
 		);
+	}
+
+	function _burnWinningHaircut(uint256 burnAmount, bool haircutPaidByFork) private {
+		if (burnAmount == 0) return;
+		if (haircutPaidByFork) return;
+		_safeTransferRep(address(securityPool), burnAmount);
+		securityPool.burnEscalationWinnerHaircut(burnAmount);
 	}
 }

@@ -88,6 +88,10 @@ contract EscalationGameFactoryCoverageSecurityPool {
 		repToken = configuredRepToken;
 	}
 
+	function parent() external pure returns (address) {
+		return address(0);
+	}
+
 	function deployStartedGame(
 		EscalationGameFactory factory,
 		uint256 startBond,

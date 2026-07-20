@@ -89,7 +89,11 @@ void describe('fork auction helpers', () => {
 	void test('describes each fork stage from system state', () => {
 		expect(getForkStageDescriptionForState('operational')).toContain('operational')
 		expect(getForkStageDescriptionForState('poolForked')).toContain('Child universes')
-		expect(getForkStageDescriptionForState('forkMigration')).toContain('Migration is active')
+		const migrationDescription = getForkStageDescriptionForState('forkMigration')
+		expect(migrationDescription).toContain('Migration is active')
+		expect(migrationDescription).toContain('child snapshot and aggregate backing')
+		expect(migrationDescription).toContain('winning parent deposits may instead be claimed directly')
+		expect(migrationDescription).not.toMatch(/escalation deposits[^.]*\b(?:move|migrat)/i)
 		expect(getForkStageDescriptionForState('forkTruthAuction')).toContain('Truth auction is active')
 		expect(getForkStageDescriptionForState('forkTruthAuction')).toContain('open-interest debt')
 	})

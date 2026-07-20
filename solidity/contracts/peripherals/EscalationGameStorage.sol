@@ -24,5 +24,7 @@ abstract contract EscalationGameStorage {
 	mapping(address => bool) internal localUnresolvedTotalsExportedByVault;
 	mapping(address => mapping(uint8 => ForkedEscrowState)) internal forkedEscrowByVaultAndOutcome;
 	bool internal forkCarrySnapshotRequiresForkedEscrow;
+	bool internal winnerHaircutPaidByFork;
+	uint256 internal forkCarryInitialBacking;
 	BinaryOutcomes.BinaryOutcome public fixedQuestionOutcome;
 }

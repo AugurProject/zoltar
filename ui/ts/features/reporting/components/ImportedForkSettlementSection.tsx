@@ -25,6 +25,7 @@ type ImportedForkSettlementSectionProps = {
 	resolved: boolean
 	selectedDepositIndexesByOutcome: Record<ReportingOutcomeKey, bigint[]>
 	sides: Pick<EscalationSide, 'importedUserDeposits' | 'key' | 'label'>[]
+	winningOutcome: ReportingOutcomeKey | undefined
 }
 
 type ImportedForkSettlementSideProps = {
@@ -126,14 +127,15 @@ function ImportedForkSettlementSide({ activeReportingDetails, disabled, onDeposi
 	)
 }
 
-export function ImportedForkSettlementSection({ activeReportingDetails, disabled, onDepositSelectionChange, renderSettlementAction, resolved, selectedDepositIndexesByOutcome, sides }: ImportedForkSettlementSectionProps) {
-	if (sides.length === 0) return undefined
+export function ImportedForkSettlementSection({ activeReportingDetails, disabled, onDepositSelectionChange, renderSettlementAction, resolved, selectedDepositIndexesByOutcome, sides, winningOutcome }: ImportedForkSettlementSectionProps) {
+	const settleableSides = resolved && winningOutcome !== undefined ? sides.filter(side => side.key === winningOutcome) : sides
+	if (settleableSides.length === 0) return undefined
 
 	return (
 		<SectionBlock density='compact' title={forkAuctionCopy.settleForkCarriedEscalationDeposits}>
 			<p className='detail'>{forkAuctionCopy.importedDepositSettlementDetail}</p>
 			{resolved ? undefined : <p className='detail'>{forkAuctionCopy.forkDepositSettlementAvailabilityDetail}</p>}
-			{sides.map(side => (
+			{settleableSides.map(side => (
 				<ImportedForkSettlementSide activeReportingDetails={activeReportingDetails} disabled={disabled} key={side.key} onDepositSelectionChange={onDepositSelectionChange} renderSettlementAction={renderSettlementAction} resolved={resolved} selectedDepositIndexes={selectedDepositIndexesByOutcome[side.key]} side={side} />
 			))}
 		</SectionBlock>
