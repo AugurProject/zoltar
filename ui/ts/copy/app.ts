@@ -9,11 +9,9 @@ export const addressCopied = 'Address Copied'
 export const switchToEthereumMainnet = 'Switch to Ethereum Mainnet'
 export const ethereumMainnet = 'Ethereum Mainnet'
 export const managingWallet = 'Updating wallet…'
-export const formatWalletNetwork = (chainId: string | undefined) => {
-	if (chainId === undefined) return 'Unknown network'
-	if (chainId === '0xaa36a7') return 'Sepolia (11155111)'
-	return `Chain ${chainId}`
-}
+export const unknownNetwork = 'Unknown network'
+export const sepoliaNetwork = 'Sepolia (11155111)'
+export const formatChainNetwork = (chainId: string) => `Chain ${chainId}`
 export const oracleReports = 'Oracle Reports'
 export const questionsAndMarkets = 'Questions & Markets'
 export const refreshRepPrices = 'Refresh REP prices'

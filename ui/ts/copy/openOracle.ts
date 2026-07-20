@@ -1,4 +1,3 @@
-import * as commonCopy from './common.js'
 import type { CopyTemplateValue } from './types.js'
 
 export const settleReport = 'Settle Report'
@@ -25,8 +24,8 @@ export const callbackExtra = 'Callback / Extra'
 export const callbackGasLimit = 'Callback Gas Limit'
 export const formatCurrentAmount1Label = (tokenSymbol: string) => `Current Amount 1 (${tokenSymbol})`
 export const formatCurrentAmount2Label = (tokenSymbol: string) => `Current Amount 2 (${tokenSymbol})`
-export const formatTokenPairSuffix = (token1Symbol: string, token2Symbol: string) => commonCopy.formatPairSlash(token1Symbol, token2Symbol)
-export const formatReportBrowseTitle = (token1Symbol: string, token2Symbol: string, reportId: string) => `${formatTokenPairSuffix(token1Symbol, token2Symbol)} · ${formatReportNumberTitle(reportId)}`
+export const formatTokenPairSuffix = (token1Symbol: string, token2Symbol: string) => `${token1Symbol} / ${token2Symbol}`
+export const formatReportBrowseTitle = (token1Symbol: string, token2Symbol: string, reportId: string) => `${token1Symbol} / ${token2Symbol} · Report #${reportId}`
 export const createAnother = 'Create Another'
 export const createStandaloneOracleGame = 'Create Standalone Oracle Game'
 export const creating = 'Creating…'
@@ -70,7 +69,7 @@ export const openReport = 'Open report'
 export const oracleAddress = 'Oracle Address'
 export const protocolFeeRecipient = 'Protocol Fee Recipient'
 export const report = 'Report'
-export const formatReportNumberTitle = (reportId: string) => commonCopy.formatReportNumberLabel(reportId)
+export const formatReportNumberTitle = (reportId: string) => `Report #${reportId}`
 export const reportTimestamp = 'Report Timestamp'
 export const reportActions = 'Report Actions'
 export const searchReports = 'Search Reports'
@@ -90,7 +89,9 @@ export const reportAmounts = 'Report Amounts'
 export const openOracleReportDetails = 'Open Oracle Report Details'
 export const searchByReportIdTokenSymbolOrTokenAddress = 'Search by report ID, token symbol, or token address'
 export const standaloneOracleWarningDetail = 'Standalone only. Start pool-managed requests from a security pool.'
-export const formatTimingValue = (timingAmount: CopyTemplateValue, usesSeconds: boolean) => `${timingAmount} ${usesSeconds ? 's' : 'blocks'}`
+export const secondsAbbreviation = 's'
+export const blocks = 'blocks'
+export const formatTimingValue = (timingAmount: CopyTemplateValue, unit: CopyTemplateValue) => `${timingAmount} ${unit}`
 export const timing = 'Timing'
 export const token1Address = 'Base Token Address'
 export const formatTokenApprovalTitle = (tokenSymbol: string) => `${tokenSymbol} Approval`

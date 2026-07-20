@@ -40,7 +40,6 @@ export const outcome = 'Outcome'
 export const outcomeIndex = 'Outcome Index'
 export const pending = 'Pending'
 export const percent = '%'
-export const pluralSuffix = 's'
 export const question = 'Question'
 export const questionId = 'Question ID'
 export const rep = 'REP'
@@ -84,7 +83,6 @@ export const transactionStateUnavailableDetail = 'The transaction succeeded, but
 export const manualQueuedOperationDetail = 'The settlement auto-execute list is full. Execute this staged operation manually with its id after a valid oracle price is available.'
 export const formatLabelValue = (label: CopyTemplateValue, value: CopyTemplateValue) => `${label}: ${value}`
 export const formatPairSlash = (leftValue: CopyTemplateValue, rightValue: CopyTemplateValue) => `${leftValue} / ${rightValue}`
-export const formatReportNumberLabel = (reportId: CopyTemplateValue) => `Report #${reportId}`
 export const dismissErrorActionLabel = 'Dismiss error'
 export const dropdownOptions = 'Dropdown options'
 export const unknown = 'Unknown'
@@ -97,7 +95,7 @@ export const loadMore = 'Load More'
 export const nextPage = 'Next Page'
 export const previousPage = 'Previous Page'
 export const formatDecimalNumberRequiredError = (fieldLabel: CopyTemplateValue) => `${fieldLabel} must be a decimal number.`
-export const approvalAmountInvalidError = formatDecimalNumberRequiredError('Approval amount')
+export const approvalAmountInvalidError = 'Approval amount must be a decimal number.'
 export const approvalAmount = 'Approval amount'
 export const formatApproveValue = (tokenLabel: CopyTemplateValue) => `Approve ${tokenLabel}`
 export const approvalSatisfied = 'Approval Satisfied'
@@ -114,5 +112,5 @@ export const noneSelected = 'None selected'
 export const exists = 'Exists'
 export const notDeployed = 'Not deployed'
 export const working = 'Working…'
-export const formatSelectedTickLabel = (selectedTick: string, totalTicks: string) => formatPairSlash(selectedTick, totalTicks)
+export const formatSelectedTickLabel = (selectedTick: string, totalTicks: string) => `${selectedTick} / ${totalTicks}`
 export const mainnetRequiredReason = 'Switch to Ethereum mainnet.'

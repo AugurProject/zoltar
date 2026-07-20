@@ -562,7 +562,7 @@ function renderReportDetailsCard(
 						},
 						{
 							label: openOracleCopy.lastReportOpportunity,
-							value: openOracleReportDetails.lastReportOppoTime === 0n ? commonCopy.none : openOracleCopy.formatTimingValue(openOracleReportDetails.lastReportOppoTime, openOracleReportDetails.timeType),
+							value: openOracleReportDetails.lastReportOppoTime === 0n ? commonCopy.none : openOracleCopy.formatTimingValue(openOracleReportDetails.lastReportOppoTime, openOracleReportDetails.timeType ? openOracleCopy.secondsAbbreviation : openOracleCopy.blocks),
 						},
 						{
 							label: openOracleCopy.stateHash,
@@ -575,11 +575,11 @@ function renderReportDetailsCard(
 					{renderReportFields([
 						{
 							label: openOracleCopy.settlementTime,
-							value: openOracleCopy.formatTimingValue(openOracleReportDetails.settlementTime, openOracleReportDetails.timeType),
+							value: openOracleCopy.formatTimingValue(openOracleReportDetails.settlementTime, openOracleReportDetails.timeType ? openOracleCopy.secondsAbbreviation : openOracleCopy.blocks),
 						},
 						{
 							label: openOracleCopy.disputeDelay,
-							value: openOracleCopy.formatTimingValue(openOracleReportDetails.disputeDelay, openOracleReportDetails.timeType),
+							value: openOracleCopy.formatTimingValue(openOracleReportDetails.disputeDelay, openOracleReportDetails.timeType ? openOracleCopy.secondsAbbreviation : openOracleCopy.blocks),
 						},
 						{
 							label: openOracleCopy.feePercentage,

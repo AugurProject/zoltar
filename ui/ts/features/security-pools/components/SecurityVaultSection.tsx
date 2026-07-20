@@ -34,6 +34,7 @@ import { isMainnetChain } from '../../../lib/network.js'
 import { resolveOracleOperationEthFunding } from '../../open-oracle/lib/oracleRequestEth.js'
 import { getWalletMainnetGuardState } from '../../../lib/actionGuards.js'
 import { getSecurityPoolVaultReadinessActions } from '../lib/securityPoolReadiness.js'
+import { getVaultLauncherOwnershipReason, getVaultLauncherWalletReason } from '../lib/securityPoolLabels.js'
 import { getVaultDepositGuardMessage, getVaultRedeemRepGuardMessage, getVaultSetSecurityBondAllowanceGuardMessage, getVaultWithdrawGuardMessage } from '../lib/securityVaultGuards.js'
 import { deriveTokenApprovalRequirement } from '../../../lib/tokenApproval.js'
 import {
@@ -63,12 +64,6 @@ type QueuedVaultOperationView = {
 	amount: bigint | undefined
 	isPendingSlot: boolean
 	operationId: bigint
-}
-function getVaultLauncherWalletReason(action: 'claim-fees' | 'deposit-rep' | 'rep-exit' | 'set-bond-allowance', repExitMode: 'redeem' | 'withdraw') {
-	if (action === 'claim-fees') return securityPoolCopy.formatVaultLauncherBlockerReason('claim-fees', 'connect-wallet')
-	if (action === 'deposit-rep') return securityPoolCopy.formatVaultLauncherBlockerReason('deposit-rep', 'connect-wallet')
-	if (action === 'rep-exit') return repExitMode === 'redeem' ? securityPoolCopy.formatVaultLauncherBlockerReason('rep-exit-redeem', 'connect-wallet') : securityPoolCopy.formatVaultLauncherBlockerReason('rep-exit-withdraw', 'connect-wallet')
-	return securityPoolCopy.formatVaultLauncherBlockerReason('set-bond-allowance', 'connect-wallet')
 }
 export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, repPerEthSourceUrl, securityBondAllowance, securityVaultDetails, selectedPoolSecurityMultiplier, selectedVaultIsOwnedByAccount, variant = 'record' }: SelectedVaultSummarySectionProps) {
 	const collateralizationPercent = getVaultCollateralizationPercent(securityVaultDetails.repDepositShare, securityBondAllowance, repPerEthPrice)
@@ -470,12 +465,7 @@ export function SecurityVaultSection({
 			walletRequiredReason: getVaultLauncherWalletReason(action, effectiveRepExitMode),
 		})
 		if (walletGuardState.blocked) return walletGuardState.reason
-		if (!selectedVaultIsOwnedByAccount) {
-			if (action === 'claim-fees') return securityPoolCopy.formatVaultLauncherBlockerReason('claim-fees', 'select-own-vault')
-			if (action === 'deposit-rep') return securityPoolCopy.formatVaultLauncherBlockerReason('deposit-rep', 'select-own-vault')
-			if (action === 'rep-exit') return effectiveRepExitMode === 'redeem' ? securityPoolCopy.formatVaultLauncherBlockerReason('rep-exit-redeem', 'select-own-vault') : securityPoolCopy.formatVaultLauncherBlockerReason('rep-exit-withdraw', 'select-own-vault')
-			return securityPoolCopy.formatVaultLauncherBlockerReason('set-bond-allowance', 'select-own-vault')
-		}
+		if (!selectedVaultIsOwnedByAccount) return getVaultLauncherOwnershipReason(action, effectiveRepExitMode)
 		if (!hasLoadedSelectedVaultDetails) return securityPoolCopy.refreshVaultActionsDetail
 		if (action === 'deposit-rep') return undefined
 		return loadedVaultMissingBlocker

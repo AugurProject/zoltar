@@ -162,7 +162,7 @@ export const unresolvedEscalationMigrationWithVaultDetail =
 export const walletUnresolvedDepositsLoading = 'Loading parent escalation locks for the connected wallet…'
 export const capturedEntitlementDetail = 'Parent lock accounting was already cleared. Child proof eligibility is unchanged.'
 export const formatEntitlementAlreadyMaterialized = (outcomeLabel: CopyTemplateValue) => `This wallet’s optional parent-lock cleanup is already recorded for the ${outcomeLabel} child universe.`
-export const formatNoUnresolvedDeposits = (outcomeLabel: string) => `No ${outcomeLabel.toLowerCase()} unresolved deposits remain for this wallet.`
+export const formatNoUnresolvedDeposits = (outcomeLabel: string) => `No ${outcomeLabel} unresolved deposits remain for this wallet.`
 export const formatMigrateUnresolvedEscalationToValue = (outcomeLabel: CopyTemplateValue) => `Clear Parent Locks for ${outcomeLabel}`
 export const migratingUnresolvedEscalationTruncated = 'Clearing parent escalation locks…'
 export const claimResolvedParentEscalationDeposits = 'Optional: Claim Parent Escalation Deposits'

@@ -289,17 +289,23 @@
 				</dl>
 				<ul>
 					<li><a href="#launch-remediations">Remediated launch findings</a></li>
-					<li><a href="#authority">Authority and deployment identity</a></li>
-					<li><a href="#universes">Universes, REP supply, and migration</a></li>
 					<li>
-						<a href="#pool-accounting">Pool assets, shares, and vaults</a>
+						<a href="#zoltar-invariants">Zoltar invariants</a>
+						<ul>
+							<li><a href="#universes">Universes, REP supply, and migration</a></li>
+						</ul>
 					</li>
-					<li><a href="#forks">Forks and child isolation</a></li>
-					<li><a href="#escalation">Escalation games and carried claims</a></li>
-					<li><a href="#oracle">REP/ETH oracle operations</a></li>
-					<li><a href="#auctions">Truth auctions</a></li>
 					<li>
-						<a href="#lifecycle">Lifecycle, liveness, and external calls</a>
+						<a href="#placeholder-invariants">Augur Placeholder invariants</a>
+						<ul>
+							<li><a href="#authority">Authority and deployment identity</a></li>
+							<li><a href="#pool-accounting">Pool assets, shares, and vaults</a></li>
+							<li><a href="#forks">Forks and child isolation</a></li>
+							<li><a href="#escalation">Escalation games and carried claims</a></li>
+							<li><a href="#oracle">REP/ETH oracle operations</a></li>
+							<li><a href="#auctions">Truth auctions</a></li>
+							<li><a href="#lifecycle">Lifecycle, liveness, and external calls</a></li>
+						</ul>
 					</li>
 					<li><a href="#verification">Verification obligations</a></li>
 				</ul>
@@ -435,173 +441,12 @@
 				</div>
 			</section>
 
-			<section id="authority">
-				<h2>Authority and Deployment Identity</h2>
-				<div class="invariant-list">
-					<details class="invariant-entry">
-						<summary><code>AUTH-01</code><span class="invariant-title">Coordinator and forker-only operations</span></summary>
-						<div class="invariant-details">
-							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">
-								Only the immutable coordinator may execute price-sensitive
-								pool operations, and only the immutable forker may mutate fork
-								accounting or transfer migration assets.
-							</div>
-							<p class="invariant-example"><strong>Example:</strong> A wallet calling <code>performWithdrawRep</code> directly is rejected because only the coordinator may call it.</p>
-							<dl class="invariant-metadata">
-								<div><dt>Type</dt><dd>Safety</dd></div>
-								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
-								<div><dt>Primary evidence</dt><dd>
-										<a href="../solidity/contracts/peripherals/SecurityPool.sol"
-										><code>SecurityPool.onlyValidOracle</code> and
-										<code>onlyForker</code></a
-										>
-								</dd></div>
-							</dl>
-						</div>
-					</details>
-					<details class="invariant-entry">
-						<summary><code>AUTH-02</code><span class="invariant-title">Atomic pool and coordinator binding</span></summary>
-						<div class="invariant-details">
-							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">
-								The pool and its coordinator bind once during atomic factory
-								deployment; no external caller gets a transaction boundary in
-								which it can install a substitute pool.
-							</div>
-							<p class="invariant-example"><strong>Example:</strong> A caller cannot front-run factory deployment and make the coordinator point to an attacker-controlled pool.</p>
-							<dl class="invariant-metadata">
-								<div><dt>Type</dt><dd>Safety</dd></div>
-								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
-								<div><dt>Primary evidence</dt><dd>
-										<a
-										href="../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol"
-										><code>SecurityPoolFactory</code></a
-										>,
-										<a
-										href="../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
-										><code>setSecurityPool</code></a
-										>
-								</dd></div>
-							</dl>
-						</div>
-					</details>
-					<details class="invariant-entry">
-						<summary><code>AUTH-03</code><span class="invariant-title">Immutable protocol logic</span></summary>
-						<div class="invariant-details">
-							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">
-								No mutable owner, governance address, upgrade implementation,
-								or emergency operator can replace protocol logic after
-								deployment.
-							</div>
-							<p class="invariant-example"><strong>Example:</strong> After deployment, no administrator can point a pool proxy at different bytecode because the pool has no upgrade slot.</p>
-							<dl class="invariant-metadata">
-								<div><dt>Type</dt><dd>Safety</dd></div>
-								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
-								<div><dt>Primary evidence</dt><dd>
-										<a
-										href="./operator-reference.md#immutable-protocol-release-posture"
-										>Immutable release posture</a
-										>
-								</dd></div>
-							</dl>
-						</div>
-					</details>
-					<details class="invariant-entry">
-						<summary><code>AUTH-04</code><span class="invariant-title">Deterministic deployment identity</span></summary>
-						<div class="invariant-details">
-							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">
-								Every canonical CREATE2 address commits to the correct
-								factory, salt, constructor arguments, parent identity,
-								universe, question, and multiplier.
-							</div>
-							<p class="invariant-example"><strong>Example:</strong> Changing a child's question ID changes its derived address instead of deploying different semantics at the expected address.</p>
-							<dl class="invariant-metadata">
-								<div><dt>Type</dt><dd>Safety</dd></div>
-								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
-								<div><dt>Primary evidence</dt><dd>
-										<a
-										href="../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol"
-										><code>SecurityPoolFactory</code></a
-										>,
-										<a href="../shared/ts/addressDerivation.ts"
-										><code>addressDerivation.ts</code></a
-										>
-								</dd></div>
-							</dl>
-						</div>
-					</details>
-					<details class="invariant-entry">
-						<summary><code>AUTH-05</code><span class="invariant-title">Delegate storage compatibility</span></summary>
-						<div class="invariant-details">
-							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">
-								Delegatecall targets are constructor-installed protocol
-								modules, and every target interprets the forker's storage with
-								the same layout.
-							</div>
-							<p class="invariant-example"><strong>Example:</strong> The vault-migration delegate reads <code>forkDataByPool</code> from the same slot used by the forker rather than corrupting adjacent state.</p>
-							<dl class="invariant-metadata">
-								<div><dt>Type</dt><dd>Safety</dd></div>
-								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
-								<div><dt>Primary evidence</dt><dd>
-										<a
-										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
-										><code>SecurityPoolForker</code></a
-										>, interface and storage-layout regression tests
-								</dd></div>
-							</dl>
-						</div>
-					</details>
-					<details class="invariant-entry">
-						<summary><code>AUTH-06</code><span class="invariant-title">Permissionless settlement beneficiaries</span></summary>
-						<div class="invariant-details">
-							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">
-								Anyone may trigger permissionless settlement, but the caller
-								cannot choose its beneficiary. Each transfer or ownership credit
-								goes only to the vault, bidder, depositor, or share holder recorded
-								for that claim.
-							</div>
-							<p class="invariant-example"><strong>Example:</strong> Alice may settle Bob's auction bid, but the purchased REP and ownership are credited to Bob's vault.</p>
-							<dl class="invariant-metadata">
-								<div><dt>Type</dt><dd>Safety</dd></div>
-								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
-								<div><dt>Primary evidence</dt><dd>
-										<a href="./contract-interaction-reference.md"
-										>Contract interaction reference</a
-										>
-								</dd></div>
-							</dl>
-						</div>
-					</details>
-					<details class="invariant-entry">
-						<summary><code>AUTH-07</code><span class="invariant-title">Published deployment verification</span></summary>
-						<div class="invariant-details">
-							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">
-								For every published deployment address, the runtime-bytecode hash
-								and constructor-installed dependencies must match the reviewed
-								release manifest.
-							</div>
-							<p class="invariant-example"><strong>Example:</strong> A manifest check fails when the published coordinator address contains code built with a different OpenOracle dependency.</p>
-							<dl class="invariant-metadata">
-								<div><dt>Type</dt><dd>Safety</dd></div>
-								<div><dt>Enforcement status</dt><dd>Proposed guard</dd></div>
-								<div><dt>Primary evidence</dt><dd>
-										<a href="./deployment-status.html"
-										>Deployment Status Oracle limits</a
-										>,
-										<a href="./mainnet-deployment-addresses.json"
-										>mainnet manifest</a
-										>
-								</dd></div>
-							</dl>
-						</div>
-					</details>
-				</div>
+			<section class="callout" id="zoltar-invariants">
+				<h2>Zoltar Invariants</h2>
+				<p>
+					These properties govern core universe creation, REP supply, universe
+					forks, deterministic child identities, and branch-specific REP migration.
+				</p>
 			</section>
 
 			<section id="universes">
@@ -783,6 +628,184 @@
 								<div><dt>Primary evidence</dt><dd>
 										<a href="../solidity/contracts/Zoltar.sol"
 										><code>childUniverseTheoreticalSupplySnapshots</code></a
+										>
+								</dd></div>
+							</dl>
+						</div>
+					</details>
+				</div>
+			</section>
+
+			<section class="callout" id="placeholder-invariants">
+				<h2>Augur Placeholder Invariants</h2>
+				<p>
+					These properties govern Placeholder deployment, SecurityPool accounting,
+					fork migration, escalation, oracle operations, truth auctions, and the
+					cross-contract lifecycle built on Zoltar universes.
+				</p>
+			</section>
+
+			<section id="authority">
+				<h2>Authority and Deployment Identity</h2>
+				<div class="invariant-list">
+					<details class="invariant-entry">
+						<summary><code>AUTH-01</code><span class="invariant-title">Coordinator and forker-only operations</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">
+								Only the immutable coordinator may execute price-sensitive
+								pool operations, and only the immutable forker may mutate fork
+								accounting or transfer migration assets.
+							</div>
+							<p class="invariant-example"><strong>Example:</strong> A wallet calling <code>performWithdrawRep</code> directly is rejected because only the coordinator may call it.</p>
+							<dl class="invariant-metadata">
+								<div><dt>Type</dt><dd>Safety</dd></div>
+								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
+								<div><dt>Primary evidence</dt><dd>
+										<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										><code>SecurityPool.onlyValidOracle</code> and
+										<code>onlyForker</code></a
+										>
+								</dd></div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry">
+						<summary><code>AUTH-02</code><span class="invariant-title">Atomic pool and coordinator binding</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">
+								The pool and its coordinator bind once during atomic factory
+								deployment; no external caller gets a transaction boundary in
+								which it can install a substitute pool.
+							</div>
+							<p class="invariant-example"><strong>Example:</strong> A caller cannot front-run factory deployment and make the coordinator point to an attacker-controlled pool.</p>
+							<dl class="invariant-metadata">
+								<div><dt>Type</dt><dd>Safety</dd></div>
+								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
+								<div><dt>Primary evidence</dt><dd>
+										<a
+										href="../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol"
+										><code>SecurityPoolFactory</code></a
+										>,
+										<a
+										href="../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
+										><code>setSecurityPool</code></a
+										>
+								</dd></div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry">
+						<summary><code>AUTH-03</code><span class="invariant-title">Immutable protocol logic</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">
+								No mutable owner, governance address, upgrade implementation,
+								or emergency operator can replace protocol logic after
+								deployment.
+							</div>
+							<p class="invariant-example"><strong>Example:</strong> After deployment, no administrator can point a pool proxy at different bytecode because the pool has no upgrade slot.</p>
+							<dl class="invariant-metadata">
+								<div><dt>Type</dt><dd>Safety</dd></div>
+								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
+								<div><dt>Primary evidence</dt><dd>
+										<a
+										href="./operator-reference.md#immutable-protocol-release-posture"
+										>Immutable release posture</a
+										>
+								</dd></div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry">
+						<summary><code>AUTH-04</code><span class="invariant-title">Deterministic deployment identity</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">
+								Every canonical CREATE2 address commits to the correct
+								factory, salt, constructor arguments, parent identity,
+								universe, question, and multiplier.
+							</div>
+							<p class="invariant-example"><strong>Example:</strong> Changing a child's question ID changes its derived address instead of deploying different semantics at the expected address.</p>
+							<dl class="invariant-metadata">
+								<div><dt>Type</dt><dd>Safety</dd></div>
+								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
+								<div><dt>Primary evidence</dt><dd>
+										<a
+										href="../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol"
+										><code>SecurityPoolFactory</code></a
+										>,
+										<a href="../shared/ts/addressDerivation.ts"
+										><code>addressDerivation.ts</code></a
+										>
+								</dd></div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry">
+						<summary><code>AUTH-05</code><span class="invariant-title">Delegate storage compatibility</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">
+								Delegatecall targets are constructor-installed protocol
+								modules, and every target interprets the forker's storage with
+								the same layout.
+							</div>
+							<p class="invariant-example"><strong>Example:</strong> The vault-migration delegate reads <code>forkDataByPool</code> from the same slot used by the forker rather than corrupting adjacent state.</p>
+							<dl class="invariant-metadata">
+								<div><dt>Type</dt><dd>Safety</dd></div>
+								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
+								<div><dt>Primary evidence</dt><dd>
+										<a
+										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
+										><code>SecurityPoolForker</code></a
+										>, interface and storage-layout regression tests
+								</dd></div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry">
+						<summary><code>AUTH-06</code><span class="invariant-title">Permissionless settlement beneficiaries</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">
+								Anyone may trigger permissionless settlement, but the caller
+								cannot choose its beneficiary. Each transfer or ownership credit
+								goes only to the vault, bidder, depositor, or share holder recorded
+								for that claim.
+							</div>
+							<p class="invariant-example"><strong>Example:</strong> Alice may settle Bob's auction bid, but the purchased REP and ownership are credited to Bob's vault.</p>
+							<dl class="invariant-metadata">
+								<div><dt>Type</dt><dd>Safety</dd></div>
+								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
+								<div><dt>Primary evidence</dt><dd>
+										<a href="./contract-interaction-reference.md"
+										>Contract interaction reference</a
+										>
+								</dd></div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry">
+						<summary><code>AUTH-07</code><span class="invariant-title">Published deployment verification</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">
+								For every published deployment address, the runtime-bytecode hash
+								and constructor-installed dependencies must match the reviewed
+								release manifest.
+							</div>
+							<p class="invariant-example"><strong>Example:</strong> A manifest check fails when the published coordinator address contains code built with a different OpenOracle dependency.</p>
+							<dl class="invariant-metadata">
+								<div><dt>Type</dt><dd>Safety</dd></div>
+								<div><dt>Enforcement status</dt><dd>Proposed guard</dd></div>
+								<div><dt>Primary evidence</dt><dd>
+										<a href="./deployment-status.html"
+										>Deployment Status Oracle limits</a
+										>,
+										<a href="./mainnet-deployment-addresses.json"
+										>mainnet manifest</a
 										>
 								</dd></div>
 							</dl>

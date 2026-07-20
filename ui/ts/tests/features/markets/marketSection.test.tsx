@@ -830,7 +830,7 @@ describe('MarketSection', () => {
 		expect(documentQueries.getAllByText('Fork Zoltar').length > 0).toBe(true)
 		expect(within(modal as HTMLElement).getByText('Confirm transaction context')).not.toBeNull()
 		expect(modal.textContent).toContain('QuestionNone selected')
-		expectTransactionButtonDisabled(modal as HTMLElement, 'Fork Zoltar', 'Select a valid fork question before approving REP or forking Zoltar.')
+		expectTransactionButtonDisabled(modal as HTMLElement, 'Fork Zoltar', 'Select a valid fork question to continue.')
 	})
 
 	test('opens root-universe child-universe deployment in a modal', async () => {

@@ -1459,7 +1459,7 @@ export function ForkAuctionSection({
 													<div className='field' key={side.key}>
 														<span>{side.label}</span>
 														{side.userDeposits.length === 0 ? (
-															<p className='detail'>{forkAuctionCopy.formatNoUnresolvedDeposits(side.label)}</p>
+															<p className='detail'>{forkAuctionCopy.formatNoUnresolvedDeposits(side.label.toLowerCase())}</p>
 														) : (
 															<EscalationDepositSelectionList
 																disabled
