@@ -53,6 +53,17 @@
 							inclusion fails for the full settlement window, the integration
 							does not bound downstream loss by report liquidity.
 						</p>
+						<p>
+							<strong>Non-invariant boundary.</strong> The protocol does not
+							require report liquidity to equal or bound downstream operation
+							value. Its specified security mechanism is the profitable,
+							included correction described above, not reimbursement of the
+							largest operation that may use an accepted price. A security
+							review should challenge the correction economics or inclusion
+							assumption when evidence supports that concern, but a missing
+							notional collateralization rule is not by itself a protocol
+							invariant violation.
+						</p>
 					</div>
 					<p>
 						The contract and research context lives in:
@@ -450,9 +461,14 @@
 					additional ETH join fee, and other callers must wait for settlement
 					before staging their own operations. Every successful dispute replaces
 					the current report and restarts its settlement window, so repeated
-					disputes can extend this exclusivity. Liveness therefore assumes that
-					economically rational disputes eventually stop or that a future
-					protocol guard bounds the extension.
+					disputes can extend this exclusivity. This is an intentional paid pause:
+					each extension incurs transaction execution and must fund the
+					contract-specified replacement position. Under ordinary non-dust
+					parameters, protocol fees and the required position also accumulate;
+					integer flooring can leave dust-sized rounds unchanged before the
+					escalation halt. The coordinator deliberately has no absolute deadline
+					and makes no liveness guarantee against a participant willing and able
+					to keep submitting and funding disputes indefinitely.
 				</p>
 				<p>
 					The money flow is easiest to follow if each role is separated. The
@@ -929,8 +945,15 @@
 					The stale-price refresh sponsor retains the staging lane while its
 					report is pending. A timely valid dispute replaces the reporter and
 					restarts OpenOracle's settlement clock, so repeated disputes can delay
-					settlement. That availability behavior is separate from the dynamic
-					initial WETH sizing rule.
+					settlement. Each extension incurs transaction execution and must fund
+					the contract-specified replacement position. Under ordinary non-dust
+					parameters, protocol fees and the required position also accumulate;
+					integer flooring can leave dust-sized rounds unchanged before the
+					escalation halt. There is intentionally no absolute coordinator
+					deadline: the protocol does not claim liveness against a participant
+					with unbounded capital who is willing to keep submitting and funding
+					disputes. That availability model is separate from the dynamic initial
+					WETH sizing rule and is not a bounded-liveness invariant.
 				</p>
 			</section>
 
