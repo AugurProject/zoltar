@@ -1550,11 +1550,22 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(await getQuestionOutcome(client, securityPoolAddresses.securityPool), QuestionOutcome.Yes, 'late unrelated fork should not erase finalized market outcome')
 			strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.Operational, 'late unrelated Zoltar fork should not initiate this security pool fork')
 			const sourceBalancesBeforeRejectedMigration = await balanceOfShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, openInterestHolder.account.address)
-			for (const sourceOutcome of [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No]) {
-				await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, sourceOutcome, [QuestionOutcome.Yes]), /Resolved|resolved before fork/i)
+			const assertFinalizedMarketMigrationRejected = async (boundary: string, rejection: RegExp) => {
+				for (const sourceOutcome of [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No]) {
+					await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, sourceOutcome, [QuestionOutcome.Yes]), rejection, `${boundary}: finalized source outcome ${sourceOutcome.toString()} must not migrate`)
+				}
+				await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No]), rejection, `${boundary}: finalized winning shares must not split across child outcomes`)
+				assert.deepStrictEqual(await balanceOfShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, openInterestHolder.account.address), sourceBalancesBeforeRejectedMigration, `${boundary}: rejected migration must preserve every funded source outcome balance`)
 			}
-			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No]), /Resolved|resolved before fork/i)
-			assert.deepStrictEqual(await balanceOfShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, openInterestHolder.account.address), sourceBalancesBeforeRejectedMigration, 'rejected migration must preserve every funded source outcome balance')
+
+			await assertFinalizedMarketMigrationRejected('immediately after the unrelated fork', /Resolved|resolved before fork/i)
+			const { forkTime } = await getUniverseData(client, genesisUniverse)
+			const migrationDeadline = forkTime + 8n * 7n * DAY
+			await mockWindow.setTime(migrationDeadline - 1n)
+			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [QuestionOutcome.Yes]), /Resolved|resolved before fork/i, 'at the migration deadline: funded finalized winning shares must not migrate')
+			assert.deepStrictEqual(await balanceOfShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, openInterestHolder.account.address), sourceBalancesBeforeRejectedMigration, 'at the migration deadline: rejected migration must preserve every funded source outcome balance')
+			await mockWindow.setTime(migrationDeadline)
+			await assertFinalizedMarketMigrationRejected('after the migration deadline', /migration window closed/i)
 			const walletRepBeforeClaims = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 			await redeemShares(openInterestHolder, securityPoolAddresses.securityPool)
 			strictEqualTypeSafe(await getShareTokenSupply(client, securityPoolAddresses.securityPool), 0n, 'winning redemption should still complete after the unrelated fork')

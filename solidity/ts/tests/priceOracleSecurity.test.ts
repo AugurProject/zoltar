@@ -1174,6 +1174,43 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(finalVault.securityBondAllowance, fifthAllowance, 'manual overflow execution should apply the final allowance update')
 	})
 
+	test('many immediate operations reuse one cached price without opening additional reports', async () => {
+		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		const initialAllowance = repDeposit / 4n
+		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, initialAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, ethCost)
+		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
+
+		const settledPrice = await getLastPrice(client, priceOracle)
+		const settlementTimestamp = await client.readContract({
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'lastSettlementTimestamp',
+			address: priceOracle,
+			args: [],
+		})
+		const immediateAllowances = Array.from({ length: 12 }, (_, index) => repDeposit / BigInt(index + 5))
+
+		for (const allowance of immediateAllowances) {
+			await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, allowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+			const vaultAfterOperation = await getSecurityVault(client, securityPool, client.account.address)
+			assert.strictEqual(vaultAfterOperation.securityBondAllowance, allowance, 'each immediate operation should execute in transaction order against the cached price')
+			assert.strictEqual(await getPendingReportId(client, priceOracle), 0n, 'a valid cached price should execute immediately without opening another report')
+			assert.strictEqual(await getActiveStagedOperationCount(client, priceOracle), 0n, 'each immediate operation should be consumed in its transaction')
+		}
+
+		const finalAllowance = immediateAllowances.at(-1)
+		if (finalAllowance === undefined) throw new Error('immediate allowance sequence must not be empty')
+		const finalVault = await getSecurityVault(client, securityPool, client.account.address)
+		const finalSettlementTimestamp = await client.readContract({
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'lastSettlementTimestamp',
+			address: priceOracle,
+			args: [],
+		})
+		assert.strictEqual(finalVault.securityBondAllowance, finalAllowance, 'immediate operations should execute in transaction order against the cached price')
+		assert.strictEqual(await getLastPrice(client, priceOracle), settledPrice, 'immediate operations should not mutate the accepted cached price')
+		assert.strictEqual(finalSettlementTimestamp, settlementTimestamp, 'immediate operations should not manufacture additional oracle settlements')
+	})
+
 	test('empty-vault withdrawals cannot occupy pending oracle settlement slots', async () => {
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const ethCost = await getRequestPriceEthCost(attackerClient, priceOracle)
