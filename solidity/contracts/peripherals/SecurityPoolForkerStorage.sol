@@ -27,4 +27,5 @@ abstract contract SecurityPoolForkerStorage {
 	mapping(address => bool) internal trustedAuctionAddresses;
 	mapping(ISecurityPool => mapping(uint8 => mapping(uint256 => bool)))
 		internal directlyClaimedEscalationDepositByPoolOutcomeAndIndex;
+	mapping(ISecurityPool => mapping(uint8 => uint256)) internal directlyClaimedEscalationPrincipalByPoolAndOutcome;
 }

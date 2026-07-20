@@ -47,7 +47,7 @@ export function getForkStageDescriptionForState(state: SecurityPoolSystemState) 
 		case 'poolForked':
 			return 'The parent pool has forked. Child universes can now be created and REP can migrate.'
 		case 'forkMigration':
-			return 'Migration is active. Vaults, escalation deposits, and REP can be moved into a child universe before the truth auction starts.'
+			return 'Migration is active. Vault state and REP can move into child universes before the truth auction starts. Unresolved escalation is already represented by each child snapshot and aggregate backing; winning parent deposits may instead be claimed directly.'
 		case 'forkTruthAuction':
 			return `Truth auction is active. Winning bidders later claim child-pool REP plus a pro-rata share of the ${AUCTIONED_BOND_ALLOWANCE_LABEL}, which is the remaining open-interest debt carried into the child pool.`
 		default:

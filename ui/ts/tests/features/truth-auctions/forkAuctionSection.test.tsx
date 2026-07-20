@@ -216,7 +216,7 @@ function createProps(overrides: Partial<ForkAuctionSectionProps> = {}): ForkAuct
 		onForkWithOwnEscalation: () => undefined,
 		onInitiateFork: () => undefined,
 		onLoadForkAuction: () => undefined,
-		onMigrateEscalationDeposits: () => undefined,
+		onClaimParentEscalationDeposits: () => undefined,
 		onMigrateUnresolvedEscalation: _selectedChildOutcome => undefined,
 		onMigrateRepToZoltar: () => undefined,
 		onMigrateVault: () => undefined,
@@ -420,7 +420,7 @@ describe('ForkAuctionSection', () => {
 		}
 	})
 
-	test('shows only the selected-deposit migration action in the migration panel', async () => {
+	test('shows only the direct parent-deposit claim action in the migration panel', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ForkAuctionSection,
@@ -444,7 +444,11 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('button', { name: 'Migrate Selected Yes Deposits' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Optional: Claim Parent Escalation Deposits' })).not.toBeNull()
+		expect(documentQueries.getByText('This fast path pays selected winning parent deposits directly in child REP and marks their carried proofs spent. Unclaimed winners can instead settle from aggregate child backing with a proof.')).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Claim Selected Yes Deposits' })).not.toBeNull()
+		expect(documentQueries.queryByText('Selected deposits leave the parent pool and reappear on the chosen child universe for later settlement.')).toBeNull()
+		expect(documentQueries.queryByText(/migratable escalation deposits/i)).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Migrate All Yes Deposits' })).toBeNull()
 		expect(documentQueries.getByText('Open')).not.toBeNull()
 	})
@@ -553,7 +557,12 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const button = documentQueries.getByRole('button', { name: 'Migrate Unresolved Escalation To Yes' })
+		expect(
+			documentQueries.getByText(
+				'First migrates this wallet’s unlocked vault ownership, allowance, fees, and collateral to the selected child, then clears its three parent outcome totals in constant-size work. This is not required to fund escalation backing or claim a winning carried proof; inherited losers require no claim transaction.',
+			),
+		).not.toBeNull()
+		const button = documentQueries.getByRole('button', { name: 'Clear Parent Locks for Yes' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected unresolved migration action button')
 		expect(button.disabled).toBe(true)
 		expect(button.getAttribute('title')).toBe('Migration window has closed for this parent pool.')
@@ -622,16 +631,16 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Entitlement captured; select a child outcome that has not received it yet.')).not.toBeNull()
+		expect(documentQueries.getByText('Parent lock accounting was already cleared. Child proof eligibility is unchanged.')).not.toBeNull()
 		expect(documentQueries.queryByText('Current path: Must migrate into the selected child universe')).toBeNull()
-		const button = documentQueries.getByRole('button', { name: 'Migrate Unresolved Escalation To No' })
+		const button = documentQueries.getByRole('button', { name: 'Clear Parent Locks for No' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected unresolved migration action button')
 		expect(button.disabled).toBe(false)
 		fireEvent.click(button)
 		expect(onMigrateUnresolvedEscalation).toHaveBeenLastCalledWith('no')
 	})
 
-	test('does not fall back to resolved-deposit migration after unresolved escalation migration expires', async () => {
+	test('does not fall back to direct parent-deposit claims after unresolved escalation cleanup expires', async () => {
 		const walletAddress = getAddress('0x00000000000000000000000000000000000000ae')
 		const unresolvedDeposit = createReportingDeposit({
 			amount: 12n,
@@ -670,11 +679,11 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('The migration window for these unresolved parent escalation deposits has closed.')).not.toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Migrate Unresolved Escalation Locks' })).not.toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Migrate Resolved Escalation Deposits' })).toBeNull()
-		expect(documentQueries.queryByRole('button', { name: 'Migrate Unresolved Escalation To Yes' })).toBeNull()
-		expect(documentQueries.queryByRole('button', { name: 'Migrate Selected Yes Deposits' })).toBeNull()
+		expect(documentQueries.getByText('The optional parent-lock cleanup window has closed. Child backing and winning-proof eligibility are unchanged.')).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Optional: Clear Parent Escalation Locks' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Optional: Claim Parent Escalation Deposits' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Clear Parent Locks for Yes' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Claim Selected Yes Deposits' })).toBeNull()
 	})
 
 	test('disables vault migration after the migration window closes', async () => {
@@ -758,7 +767,7 @@ describe('ForkAuctionSection', () => {
 		const button = documentQueries.getByRole('button', { name: 'Settle Selected Yes Fork-Carried Deposits' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected fork-carried settlement action button')
 		expect(button.disabled).toBe(true)
-		expect(button.getAttribute('title')).toBe('Fork-carried escalation deposits can be settled after this child pool finalizes.')
+		expect(button.getAttribute('title')).toBe('Winning fork-carried escalation deposits can be settled after this child pool finalizes.')
 	})
 
 	test('keeps fork-carried settlement disabled when the child outcome is known before the pool becomes operational', async () => {
@@ -803,7 +812,7 @@ describe('ForkAuctionSection', () => {
 		const button = documentQueries.getByRole('button', { name: 'Settle Selected Yes Fork-Carried Deposits' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected fork-carried settlement action button')
 		expect(button.disabled).toBe(true)
-		expect(button.getAttribute('title')).toBe('Fork-carried escalation deposits can be settled after this child pool finalizes.')
+		expect(button.getAttribute('title')).toBe('Winning fork-carried escalation deposits can be settled after this child pool finalizes.')
 	})
 
 	test('does not show the empty child-pools notice when a selected child pool is already known', async () => {

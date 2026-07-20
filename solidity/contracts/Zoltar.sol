@@ -73,15 +73,12 @@ contract Zoltar {
 	);
 
 	uint256 public immutable forkThresholdDivisor;
-	uint256 public immutable forkBurnDivisor;
 	ZoltarQuestionData public immutable zoltarQuestionData;
 
-	constructor(ZoltarQuestionData _zoltarQuestionData, uint256 _forkThresholdDivisor, uint256 _forkBurnDivisor) {
+	constructor(ZoltarQuestionData _zoltarQuestionData, uint256 _forkThresholdDivisor) {
 		require(_forkThresholdDivisor > 1, 'Zoltar fork threshold divisor must be greater than one');
-		require(_forkBurnDivisor > 1, 'Zoltar fork burn divisor must be greater than one');
 		zoltarQuestionData = _zoltarQuestionData;
 		forkThresholdDivisor = _forkThresholdDivisor;
-		forkBurnDivisor = _forkBurnDivisor;
 		universes[0] = Universe(0, 0, 0, ReputationToken(Constants.GENESIS_REPUTATION_TOKEN), 0);
 		require(Constants.GENESIS_REPUTATION_TOKEN.code.length != 0, 'Genesis REP token address must contain code');
 		// The configured genesis token must expose `getTotalTheoreticalSupply()`.
@@ -141,9 +138,9 @@ contract Zoltar {
 		uint256 forkThreshold = getForkThreshold(universeId);
 		burnRep(universes[universeId].reputationToken, msg.sender, forkThreshold);
 		universeTheoreticalSupplies[universeId] -= forkThreshold;
-		uint256 migrationRepBalance = forkThreshold - forkThreshold / forkBurnDivisor;
-		// The child maximum retains the initiator's credited migration REP. Only the
-		// uncredited haircut is permanently absent from every child universe.
+		uint256 migrationRepBalance = forkThreshold;
+		// Fork initiation and later migration use the same 1:1 REP conversion. The
+		// threshold leaves the parent universe and is fully represented in each child.
 		childUniverseTheoreticalSupplySnapshots[universeId] =
 			universeTheoreticalSupplies[universeId] + migrationRepBalance;
 		migrationRepBalances[msg.sender][universeId].migrationRepBalance = migrationRepBalance;

@@ -161,7 +161,7 @@ const getZoltarInitCode = (zoltarQuestionDataAddress: Address): Hex =>
 		return encodeDeployData({
 			abi: Zoltar_Zoltar.abi,
 			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-			args: [zoltarQuestionDataAddress, DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
+			args: [zoltarQuestionDataAddress, DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor],
 		})
 	})()
 
@@ -370,7 +370,7 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 		const initCode = encodeDeployData({
 			abi: Zoltar_Zoltar.abi,
 			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-			args: [contractAddresses.zoltarQuestionData, DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
+			args: [contractAddresses.zoltarQuestionData, DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor],
 		})
 		await deployBytecode('zoltar', initCode)
 	}

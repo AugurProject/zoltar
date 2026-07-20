@@ -153,18 +153,6 @@ test('coverage classifier keeps known untraceable source-map lines from manifest
 			source: ['contract EscalationGameSettlement {', '    function withdrawDeposit(', '        uint256 claimIndex,', '        BinaryOutcomes.BinaryOutcome selectedOutcome', '    ) public {', "        require(selectedOutcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');", '    }', '}'],
 		},
 		{
-			sourcePath: '/tmp/solidity/contracts/peripherals/EscalationGameEscrow.sol',
-			source: [
-				'contract EscalationGameEscrow {',
-				'    function claim(ForkedEscrowState storage state, uint256 principalToClaim) internal {',
-				'        uint256 nextPrincipalClaimed = state.sourcePrincipalClaimed + principalToClaim;',
-				'        state.sourcePrincipalClaimed = nextPrincipalClaimed;',
-				'        state.childRepClaimed = nextRepClaimed;',
-				'    }',
-				'}',
-			],
-		},
-		{
 			sourcePath: '/tmp/solidity/contracts/peripherals/EscalationGameCarry.sol',
 			source: [
 				'contract EscalationGameCarry {',

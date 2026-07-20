@@ -27,7 +27,7 @@ export type ForkAuctionAction =
 	| 'createChildUniverse'
 	| 'migrateRepToZoltar'
 	| 'migrateVault'
-	| 'migrateEscalationDeposits'
+	| 'claimParentEscalationDeposits'
 	| 'migrateUnresolvedEscalation'
 	| 'startTruthAuction'
 	| 'submitBid'
@@ -82,7 +82,6 @@ export type ZoltarChildUniverseSummary = {
 
 export type ZoltarUniverseSummary = {
 	childUniverses: ZoltarChildUniverseSummary[]
-	forkBurnDivisor?: bigint
 	forkThreshold: bigint
 	forkQuestionDetails: MarketDetails | undefined
 	forkTime: bigint

@@ -594,7 +594,7 @@ export function SecurityPoolWorkflowSection({
 			showSelectedPoolWorkflowDetails &&
 			hasLoadedCurrentVault &&
 			(nextForkAuctionResult.action === 'claimAuctionProceeds' ||
-				nextForkAuctionResult.action === 'migrateEscalationDeposits' ||
+				nextForkAuctionResult.action === 'claimParentEscalationDeposits' ||
 				nextForkAuctionResult.action === 'migrateUnresolvedEscalation' ||
 				nextForkAuctionResult.action === 'migrateVault' ||
 				nextForkAuctionResult.action === 'settleForkedEscalation' ||
@@ -604,7 +604,7 @@ export function SecurityPoolWorkflowSection({
 		}
 		if (
 			shouldRefreshSelectedPoolReporting &&
-			(nextForkAuctionResult.action === 'migrateEscalationDeposits' || nextForkAuctionResult.action === 'migrateUnresolvedEscalation' || nextForkAuctionResult.action === 'forkWithOwnEscalation' || nextForkAuctionResult.action === 'settleForkedEscalation' || nextForkAuctionResult.action === 'startTruthAuction')
+			(nextForkAuctionResult.action === 'claimParentEscalationDeposits' || nextForkAuctionResult.action === 'migrateUnresolvedEscalation' || nextForkAuctionResult.action === 'forkWithOwnEscalation' || nextForkAuctionResult.action === 'settleForkedEscalation' || nextForkAuctionResult.action === 'startTruthAuction')
 		) {
 			void reporting.onLoadReporting()
 		}

@@ -186,14 +186,14 @@ assertDeclarationCheckerRegression()
 const contractReferences: ContractReference[] = [
 	{
 		name: 'Zoltar',
-		purpose: 'Registers universe forks and turns burned parent REP into branch-specific child REP.',
+		purpose: 'Registers universe forks and converts committed parent REP into branch-specific child REP at 1:1.',
 		readSurface: 'Use `universes`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThreshold`, `getNonDecisionThreshold`, `getUniverseTheoreticalSupply`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalance` to reconstruct universe and migration state.',
 		sourcePath: 'solidity/contracts/Zoltar.sol',
 		interactions: [
 			{
 				call: '`forkUniverse(universeId, questionId)`',
 				caller: 'Any address able to fund the current fork threshold',
-				effect: 'Records the fork, removes threshold REP from the parent universe, and credits the caller with the post-haircut migration balance.',
+				effect: 'Records the fork, removes threshold REP from the parent universe, and credits the caller with the same amount as a 1:1 migration balance.',
 				declarations: [{ name: 'forkUniverse' }],
 				preconditions: 'Initialized and unforked universe; existing ended question; sufficient caller REP. Genesis REP requires allowance; child REP is burned directly without allowance.',
 				signals: '`UniverseForked`',
@@ -291,7 +291,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'Anyone; all selected deposits must belong to one beneficiary vault',
 				effect: 'Settles local deposits and routes any winning REP to their recorded depositor.',
 				declarations: [{ name: 'withdrawFromEscalationGame' }],
-				preconditions: 'Operational pool and final outcome; external-fork timing may require migration instead.',
+				preconditions: 'Operational pool and final outcome. If an external fork interrupted the game, parent withdrawal stays locked: winners settle in the child by carried proof, inherited losers require no transaction, and parent-lock cleanup is optional.',
 				signals: 'Escalation-game `CarryDepositConsumed`; additionally `ClaimDeposit` for a winning payout',
 			},
 			{
@@ -403,16 +403,17 @@ const contractReferences: ContractReference[] = [
 				caller: 'Vault owner for its unlocked position',
 				declarations: [{ name: 'migrateVault' }],
 				effect: "Moves the caller's currently unlocked REP ownership, allowance, fees, and collateral into one child pool. Repeat calls can have no additional unlocked state to move.",
-				preconditions: 'Migration window open. Unresolved escalation escrow is handled separately; the aggregate-entitlement wrapper calls this function first to migrate unlocked state.',
+				preconditions: 'Migration window open. The optional unresolved-lock cleanup wrapper calls this function first to migrate any unlocked state.',
 				signals: '`VaultMigrationCheckpoint`',
 			},
 			{
 				call: '`migrateVaultWithUnresolvedEscalation(securityPool, vault, childOutcomeIndex)`',
 				caller: 'The named vault',
-				effect: "Captures the vault's three unresolved outcome totals once and materializes its entitlement in one selected child.",
+				effect:
+					"First runs ordinary migration for the same vault, which may move its unlocked ownership, allowance, fees, and collateral to the selected child. Then clears that vault's parent unresolved-lock accounting in constant-size work and records the cleanup; the cleanup neither funds escalation backing nor authorizes carried proofs.",
 				declarations: [{ name: 'migrateVaultWithUnresolvedEscalation' }],
-				preconditions: 'Migration window open; caller equals `vault`; selected child not already materialized for the entitlement.',
-				signals: 'Vault migration and forked-escrow events',
+				preconditions: 'Migration window open; caller equals `vault`; selected child not already recorded for this optional cleanup.',
+				signals: 'Vault migration and escalation-entitlement cleanup events',
 			},
 			{
 				call: '`claimForkedEscalationDeposits(...)`',
@@ -488,7 +489,7 @@ const contractReferences: ContractReference[] = [
 				signals: '`LocalDepositAppended`, `DepositOnOutcome`, optionally `NonDecisionReached`',
 			},
 			{
-				call: 'Claim, withdrawal, export, carry initialization, and forked-escrow entrypoints',
+				call: 'Claim, withdrawal, export, carry initialization, and escrow-cleanup entrypoints',
 				caller: 'Owning pool or `SecurityPoolForker`, depending on the function',
 				declarations: [
 					{ name: 'claimDepositForWinning', sourcePath: 'solidity/contracts/peripherals/EscalationGameSettlement.sol' },
@@ -503,7 +504,7 @@ const contractReferences: ContractReference[] = [
 					{ name: 'exportForkedEscrowByOutcome', sourcePath: 'solidity/contracts/peripherals/EscalationGameEscrow.sol' },
 					{ name: 'exportForkedEscrowByOutcomeWithoutTransfer', sourcePath: 'solidity/contracts/peripherals/EscalationGameEscrow.sol' },
 				],
-				effect: 'Settles local or carried deposits, initializes canonical continuation proofs, or exports unresolved vault aggregates during migration.',
+				effect: 'Settles local deposits, pays authenticated winning carried proofs from aggregate backing, initializes canonical continuation proofs, or performs optional unresolved-lock cleanup.',
 				preconditions: 'Caller authority plus final-resolution, proof, nullifier, escrow, and lifecycle guards for the selected path.',
 				signals: 'Claim, withdrawal, carry, export, escrow, and nullifier events',
 			},

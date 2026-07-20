@@ -3,7 +3,6 @@ pragma solidity 0.8.35;
 
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameCarry } from './EscalationGameCarry.sol';
-import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { ForkedEscrowState, OutcomeState } from './EscalationGameTypes.sol';
 
 abstract contract EscalationGameEscrow is EscalationGameCarry {
@@ -27,9 +26,6 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		require(sourcePrincipal > 0, 'Escrow principal missing');
 		ForkedEscrowState storage state = _recordForkedEscrow(depositor, outcome, sourcePrincipal, childRepAmount);
 		OutcomeState storage outcomeStateForEscrow = outcomeState[uint8(outcome)];
-		if (forkCarrySnapshotRequiresForkedEscrow) {
-			outcomeStateForEscrow.forkedEscrowSourcePrincipalTotal += sourcePrincipal;
-		}
 		uint256 outcomeBalance = outcomeStateForEscrow.balance;
 		emit ForkedEscrowRecorded(
 			depositor,
@@ -90,41 +86,10 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		return _exportForkedEscrowByOutcome(vault, address(0x0), false);
 	}
 
-	function _consumeForkedEscrow(
-		address vault,
-		BinaryOutcomes.BinaryOutcome outcome,
-		uint256 sourcePrincipalToClaim
-	) internal returns (uint256 forkedEscrowPrincipal, uint256 forkedEscrowChildRep, uint256 childRepToRelease) {
-		if (sourcePrincipalToClaim == 0) return (0, 0, 0);
-		ForkedEscrowState storage state = forkedEscrowByVaultAndOutcome[vault][uint8(outcome)];
-		forkedEscrowPrincipal = state.sourcePrincipal;
-		if (forkedEscrowPrincipal == 0) return (0, 0, 0);
-		forkedEscrowChildRep = state.childRep;
-		uint256 nextSourcePrincipalClaimed = state.sourcePrincipalClaimed + sourcePrincipalToClaim;
-		require(nextSourcePrincipalClaimed <= forkedEscrowPrincipal, 'Escrow claim exceeds principal');
-		uint256 nextChildRepClaimed = Math.ceilDiv(
-			nextSourcePrincipalClaimed * forkedEscrowChildRep,
-			forkedEscrowPrincipal
-		);
-		childRepToRelease = nextChildRepClaimed - state.childRepClaimed;
-		state.sourcePrincipalClaimed = nextSourcePrincipalClaimed;
-		state.childRepClaimed = nextChildRepClaimed;
-		emit ForkedEscrowClaimed(vault, outcome, state.sourcePrincipalClaimed, state.childRepClaimed);
-	}
-
-	function _scaleForkedEscrowAmount(
-		uint256 sourceAmount,
-		uint256 forkedEscrowChildRep,
-		uint256 forkedEscrowPrincipal
-	) internal pure returns (uint256) {
-		if (sourceAmount == 0) return 0;
-		return Math.ceilDiv(sourceAmount * forkedEscrowChildRep, forkedEscrowPrincipal);
-	}
-
 	function _totalUnresolvedPrincipal() internal view returns (uint256 unresolvedPrincipal) {
 		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
 			unresolvedPrincipal +=
-				outcomeState[outcomeIndex].inheritedUnresolvedTotal + outcomeState[outcomeIndex].localUnresolvedTotal;
+				_getEffectiveInheritedUnresolvedTotal(outcomeIndex) + outcomeState[outcomeIndex].localUnresolvedTotal;
 		}
 	}
 

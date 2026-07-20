@@ -15,6 +15,7 @@ import {
 	OutcomeStateView
 } from './EscalationGameTypes.sol';
 import { CarryConsumptionReason } from './interfaces/IEscalationGame.sol';
+import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 
 abstract contract EscalationGameCarry is EscalationGameCalculations {
 	bytes32 private constant FORK_CARRY_CHECKPOINT_SIGNATURE = keccak256(
@@ -67,7 +68,7 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		stateView.balance = state.balance;
 		stateView.snapshotLeafCount = state.snapshotLeafCount;
 		stateView.snapshotPeaks = state.snapshotPeaks;
-		stateView.inheritedUnresolvedTotal = state.inheritedUnresolvedTotal;
+		stateView.inheritedUnresolvedTotal = _getEffectiveInheritedUnresolvedTotal(outcomeIndex);
 		stateView.currentNullifierRoot = _getCurrentNullifierRoot(outcomeIndex);
 		stateView.localHeadNodeId = state.localHeadNodeId;
 		stateView.currentLeafCount = currentLeafCount;
@@ -91,7 +92,8 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 			OutcomeState storage state = outcomeState[outcomeIndex];
 			carryPeaks[outcomeIndex] = state.currentPeaks;
 			carryLeafCounts[outcomeIndex] = state.currentLeafCount;
-			carryTotals[outcomeIndex] = state.inheritedUnresolvedTotal + state.localUnresolvedTotal;
+			carryTotals[outcomeIndex] =
+				_getEffectiveInheritedUnresolvedTotal(outcomeIndex) + state.localUnresolvedTotal;
 			nullifierRoots[outcomeIndex] = _getCurrentNullifierRoot(outcomeIndex);
 		}
 	}
@@ -105,12 +107,12 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 
 	function isForkCarryFundingComplete() external view returns (bool) {
 		if (!forkCarrySnapshotRequiresForkedEscrow) return true;
-		if (totalEscrowedRep == 0) return false;
+		uint256 requiredRep;
 		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
-			OutcomeState storage state = outcomeState[outcomeIndex];
-			if (state.forkedEscrowSourcePrincipalTotal < state.inheritedUnresolvedTotal) return false;
+			requiredRep +=
+				_getEffectiveInheritedUnresolvedTotal(outcomeIndex) + outcomeState[outcomeIndex].localUnresolvedTotal;
 		}
-		return true;
+		return repToken.balanceOf(address(this)) >= requiredRep;
 	}
 
 	// Pages unresolved local carry leaves only, in newest-first local linked-list order.
@@ -457,7 +459,10 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 	function _consumeCarriedDeposit(uint8 outcomeIndex, uint256 parentDepositIndex, uint256 amount) private {
 		require(!_isCarriedDepositConsumed(outcomeIndex, parentDepositIndex), 'Deposit settled');
 		OutcomeState storage state = outcomeState[outcomeIndex];
-		require(state.inheritedUnresolvedTotal + state.localUnresolvedTotal >= amount, 'Carried REP low');
+		require(
+			_getEffectiveInheritedUnresolvedTotal(outcomeIndex) + state.localUnresolvedTotal >= amount,
+			'Carried REP low'
+		);
 		state.consumedParentDepositIndexes[parentDepositIndex] = true;
 		uint256 inheritedAmountToConsume =
 			amount > state.inheritedUnresolvedTotal ? state.inheritedUnresolvedTotal : amount;
@@ -487,6 +492,26 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		currentPeaks = state.currentPeaks;
 		currentLeafCount = state.currentLeafCount;
 		currentCarryRoot = proofVerifier.bagCarryPeaks(currentPeaks, currentLeafCount);
-		currentCarryTotal = state.inheritedUnresolvedTotal + state.localUnresolvedTotal;
+		currentCarryTotal = _getEffectiveInheritedUnresolvedTotal(outcomeIndex) + state.localUnresolvedTotal;
+	}
+
+	function _getEffectiveInheritedUnresolvedTotal(uint8 outcomeIndex) internal view returns (uint256) {
+		OutcomeState storage state = outcomeState[outcomeIndex];
+		uint256 inheritedUnresolvedTotal = state.inheritedUnresolvedTotal;
+		if (forkContinuation) {
+			address parentPoolAddress = address(securityPool.parent());
+			if (parentPoolAddress != address(0x0)) {
+				uint256 directlyClaimedPrincipal = ISecurityPoolForker(securityPool.securityPoolForker())
+					.getDirectlyClaimedEscalationPrincipal(
+						securityPool.parent(),
+						BinaryOutcomes.BinaryOutcome(outcomeIndex)
+					);
+				require(directlyClaimedPrincipal <= inheritedUnresolvedTotal, 'Direct principal high');
+				inheritedUnresolvedTotal -= directlyClaimedPrincipal;
+			}
+		}
+		BinaryOutcomes.BinaryOutcome finalResolution = getFinalQuestionResolution();
+		if (finalResolution != BinaryOutcomes.BinaryOutcome.None && uint8(finalResolution) != outcomeIndex) return 0;
+		return inheritedUnresolvedTotal;
 	}
 }

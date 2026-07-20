@@ -20,7 +20,6 @@ import {
 	getUniverseData,
 	getUniverseTheoreticalSupply,
 	getZoltarAddress,
-	getZoltarForkBurnDivisor,
 	getZoltarForkThreshold,
 	getZoltarForkThresholdDivisor,
 	isZoltarDeployed,
@@ -31,7 +30,7 @@ import { ensureDefined, strictEqualTypeSafe } from '../testSupport/simulator/uti
 import { ReputationToken_ReputationToken, test_peripherals_FalseReturningERC20_FalseReturningERC20, Zoltar_Zoltar } from '../types/contractArtifact'
 import { formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../testSupport/simulator/utils/contracts/scalarOutcome'
 
-// Forker deposit fractions: deposit is 5% of total supply (1/20), and 20% of that deposit is burned (1/5 of deposit)
+// Forker deposit fraction: the deposit is 5% of total supply (1/20).
 const FORKER_DEPOSIT_FRACTION = 20n
 const MAX_UINT256 = 2n ** 256n - 1n
 const SCALAR_RESERVED_BITS_MASK = ((1n << 15n) - 1n) << 240n
@@ -69,10 +68,9 @@ describe('Contract Test Suite', () => {
 
 	test('exposes configured fork economics', async () => {
 		assert.strictEqual(await getZoltarForkThresholdDivisor(client), DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, 'fork threshold divisor mismatch')
-		assert.strictEqual(await getZoltarForkBurnDivisor(client), DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor, 'fork burn divisor mismatch')
 	})
 
-	test('child theoretical supply subtracts only the permanent fork haircut', async () => {
+	test('fork initiation migrates REP 1:1 into the child theoretical supply', async () => {
 		const zoltar = getZoltarAddress()
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), zoltar)
 
@@ -91,18 +89,18 @@ describe('Contract Test Suite', () => {
 
 		const parentSupplyBeforeFork = await getUniverseTheoreticalSupply(client, genesisUniverse)
 		const forkThreshold = parentSupplyBeforeFork / DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
-		const permanentHaircut = forkThreshold / DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor
 		await forkUniverse(client, genesisUniverse, getQuestionId(questionData, outcomes))
+		assert.strictEqual(await getMigrationRepBalance(client, genesisUniverse, client.account.address), forkThreshold, 'fork initiator migration credit should equal the full fork threshold')
 
 		const outcomeIndex = 1n
 		await deployChild(client, genesisUniverse, outcomeIndex)
 		const childUniverseId = getChildUniverseId(genesisUniverse, outcomeIndex)
-		const expectedMaximumSupply = parentSupplyBeforeFork - permanentHaircut
-		assert.strictEqual(await getUniverseTheoreticalSupply(client, childUniverseId), expectedMaximumSupply, 'child theoretical maximum should retain the initiator migration credit and subtract only the permanent haircut')
+		const expectedMaximumSupply = parentSupplyBeforeFork
+		assert.strictEqual(await getUniverseTheoreticalSupply(client, childUniverseId), expectedMaximumSupply, 'child theoretical maximum should preserve all parent REP under 1:1 migration')
 		assert.strictEqual(await getTotalTheoreticalSupply(client, getRepTokenAddress(childUniverseId)), expectedMaximumSupply, 'child REP token maximum should match the child universe theoretical supply')
 	})
 
-	test('constructor rejects invalid fork divisors', async () => {
+	test('constructor rejects an invalid fork threshold divisor', async () => {
 		const zoltarQuestionDataAddress = await client.readContract({
 			abi: Zoltar_Zoltar.abi,
 			functionName: 'zoltarQuestionData',
@@ -112,21 +110,12 @@ describe('Contract Test Suite', () => {
 		const invalidThresholdDeployment = encodeDeployData({
 			abi: Zoltar_Zoltar.abi,
 			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-			args: [zoltarQuestionDataAddress, 1n, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
-		})
-		const invalidBurnDeployment = encodeDeployData({
-			abi: Zoltar_Zoltar.abi,
-			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-			args: [zoltarQuestionDataAddress, DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, 1n],
+			args: [zoltarQuestionDataAddress, 1n],
 		})
 
 		await assert.rejects(
 			writeContractAndWait(client, () => client.sendTransaction({ data: invalidThresholdDeployment })),
 			/fork threshold divisor/i,
-		)
-		await assert.rejects(
-			writeContractAndWait(client, () => client.sendTransaction({ data: invalidBurnDeployment })),
-			/fork burn divisor/i,
 		)
 	})
 
@@ -166,7 +155,7 @@ describe('Contract Test Suite', () => {
 		const deployment = encodeDeployData({
 			abi: Zoltar_Zoltar.abi,
 			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-			args: [zoltarQuestionDataAddress, DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
+			args: [zoltarQuestionDataAddress, DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor],
 		})
 
 		await mockWindow.addStateOverrides({
@@ -191,7 +180,7 @@ describe('Contract Test Suite', () => {
 		const deployment = encodeDeployData({
 			abi: Zoltar_Zoltar.abi,
 			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-			args: [zoltarQuestionDataAddress, DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
+			args: [zoltarQuestionDataAddress, DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor],
 		})
 
 		await mockWindow.addStateOverrides({

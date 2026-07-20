@@ -21,7 +21,7 @@ describe('security pool action matrix data', () => {
 		expectActionSet(ENABLED_ACTIONS_BY_REPORTING_STAGE.activeWithdrawable, ['reportOutcome', 'withdrawEscalation'])
 		expectActionSet(ENABLED_ACTIONS_BY_REPORTING_STAGE.resolved, ['withdrawEscalation'])
 		expectActionSet(ENABLED_ACTIONS_BY_FORK_STAGE.initiate, ['forkWithOwnEscalation', 'initiateFork', 'forkUniverse'])
-		expectActionSet(ENABLED_ACTIONS_BY_FORK_STAGE.migration, ['createChildUniverse', 'migrateRepToZoltar', 'migrateVault', 'migrateEscalationDeposits', 'migrateUnresolvedEscalation', 'startTruthAuction'])
+		expectActionSet(ENABLED_ACTIONS_BY_FORK_STAGE.migration, ['createChildUniverse', 'migrateRepToZoltar', 'migrateVault', 'claimParentEscalationDeposits', 'migrateUnresolvedEscalation', 'startTruthAuction'])
 		expectActionSet(ENABLED_ACTIONS_BY_FORK_STAGE.auction, ['submitBid', 'finalizeTruthAuction', 'refundLosingBids'])
 		expectActionSet(ENABLED_ACTIONS_BY_FORK_STAGE.settlement, ['claimAuctionProceeds', 'settleForkedEscalation'])
 		expectActionSet(UNIVERSE_FORKED_ENABLE, ['migrateShares'])

@@ -4,7 +4,6 @@ import * as process from 'node:process'
 import * as url from 'node:url'
 
 type ManifestProtocolConfig = {
-	forkBurnDivisor: string
 	forkThresholdDivisor: string
 	initialEscalationGameDeposit: string
 }
@@ -44,14 +43,11 @@ function readStringField(source: unknown, field: string, label = field): string 
 
 function readProtocolConfig(source: unknown): ManifestProtocolConfig {
 	if (!isRecord(source)) throw new Error('Mainnet protocol config did not load as an object')
-	const forkBurnDivisor = Reflect.get(source, 'forkBurnDivisor')
 	const forkThresholdDivisor = Reflect.get(source, 'forkThresholdDivisor')
 	const initialEscalationGameDeposit = Reflect.get(source, 'initialEscalationGameDeposit')
-	if (typeof forkBurnDivisor !== 'bigint') throw new Error('Mainnet protocol config forkBurnDivisor must be a bigint')
 	if (typeof forkThresholdDivisor !== 'bigint') throw new Error('Mainnet protocol config forkThresholdDivisor must be a bigint')
 	if (typeof initialEscalationGameDeposit !== 'bigint') throw new Error('Mainnet protocol config initialEscalationGameDeposit must be a bigint')
 	return {
-		forkBurnDivisor: forkBurnDivisor.toString(),
 		forkThresholdDivisor: forkThresholdDivisor.toString(),
 		initialEscalationGameDeposit: initialEscalationGameDeposit.toString(),
 	}
@@ -116,7 +112,6 @@ async function readManifest(): Promise<MainnetDeploymentManifest> {
 	if (!isRecord(protocolConfig)) throw new Error('Mainnet deployment manifest protocolConfig must be an object')
 	return {
 		protocolConfig: {
-			forkBurnDivisor: readStringField(protocolConfig, 'forkBurnDivisor', 'protocolConfig.forkBurnDivisor'),
 			forkThresholdDivisor: readStringField(protocolConfig, 'forkThresholdDivisor', 'protocolConfig.forkThresholdDivisor'),
 			initialEscalationGameDeposit: readStringField(protocolConfig, 'initialEscalationGameDeposit', 'protocolConfig.initialEscalationGameDeposit'),
 		},

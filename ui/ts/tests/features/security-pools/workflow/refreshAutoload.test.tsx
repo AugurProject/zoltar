@@ -306,7 +306,7 @@ describe('SecurityPoolWorkflowSection: refresh and autoload', () => {
 		expect(loadedForkAuctionAddresses).toContain(selectedPoolAddress)
 	})
 
-	test('reloads reporting after migrating escalation deposits in the fork workflow', async () => {
+	test('reloads reporting after claiming parent escalation deposits in the fork workflow', async () => {
 		const selectedPoolAddress = zeroAddress
 		let reportingLoadCalls = 0
 		let refreshedPoolAddress: string | undefined
@@ -317,7 +317,7 @@ describe('SecurityPoolWorkflowSection: refresh and autoload', () => {
 						checkedSecurityPoolAddress: selectedPoolAddress,
 						forkAuction: createForkAuctionProps({
 							forkAuctionResult: {
-								action: 'migrateEscalationDeposits',
+								action: 'claimParentEscalationDeposits',
 								hash: '0x00000000000000000000000000000000000000000000000000000000000000cb',
 								securityPoolAddress: selectedPoolAddress,
 								universeId: 1n,

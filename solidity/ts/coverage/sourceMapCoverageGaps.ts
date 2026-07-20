@@ -41,14 +41,6 @@ export const knownSourceMapCoverageGaps = [
 		],
 	},
 	{
-		sourcePath: 'solidity/contracts/peripherals/EscalationGameEscrow.sol',
-		lineRules: [
-			{ currentSourceMatches: 1, linePattern: /^uint256\s+[A-Za-z_][A-Za-z0-9_]*\s*=\s*state\.sourcePrincipalClaimed\s*\+\s*[A-Za-z_][A-Za-z0-9_]*;$/ },
-			{ currentSourceMatches: 1, linePattern: /^state\.sourcePrincipalClaimed\s*=\s*next[A-Za-z_][A-Za-z0-9_]*;$/ },
-			{ currentSourceMatches: 1, linePattern: /^state\.childRepClaimed\s*=\s*next[A-Za-z_][A-Za-z0-9_]*;$/ },
-		],
-	},
-	{
 		sourcePath: 'solidity/contracts/peripherals/EscalationGameCarry.sol',
 		lineRules: [
 			{ currentSourceMatches: 1, linePattern: /^if\s*\([A-Za-z_][A-Za-z0-9_]*\s*!=\s*bytes32\(0\)\)\s*return\s+[A-Za-z_][A-Za-z0-9_]*;$/ },

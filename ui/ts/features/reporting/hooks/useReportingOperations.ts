@@ -213,8 +213,8 @@ export function useReportingOperations(
 				}
 				const availableDepositIndexes = selectedSide?.userDeposits.map(deposit => deposit.depositIndex) ?? []
 
-				if (latestDetails.settlementState === 'migration-required') throw new Error('Unresolved escalation deposits must migrate in Fork & Migration.')
-				if (latestDetails.settlementState === 'migration-expired') throw new Error('The migration window for these unresolved escalation deposits has closed.')
+				if (latestDetails.settlementState === 'migration-required') throw new Error('Settle winning carried proofs in the child continuation after it finalizes; parent deposits do not need migration.')
+				if (latestDetails.settlementState === 'migration-expired') throw new Error('Settle winning carried proofs in the finalized child; the optional parent-lock cleanup window has closed.')
 				if (!latestDetails.parentWithdrawalEnabled) throw new Error('Escalation deposits cannot be settled until the question is finalized.')
 
 				const requestedDepositIndexes = depositIndexesOverride ?? currentForm.selectedWithdrawDepositIndexesByOutcome[outcome]

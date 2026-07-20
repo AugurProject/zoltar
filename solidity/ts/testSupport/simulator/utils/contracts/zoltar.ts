@@ -23,7 +23,7 @@ function getZoltarInitCode(zoltarQuestionDataAddress: Address): Hex {
 	return encodeDeployData({
 		abi: Zoltar_Zoltar.abi,
 		bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-		args: [zoltarQuestionDataAddress, protocolConfig.forkThresholdDivisor, protocolConfig.forkBurnDivisor],
+		args: [zoltarQuestionDataAddress, protocolConfig.forkThresholdDivisor],
 	})
 }
 
@@ -182,17 +182,6 @@ export const getZoltarForkThresholdDivisor = async (client: ReadClient): Promise
 			args: [],
 		}),
 		'Zoltar fork threshold divisor',
-	)
-
-export const getZoltarForkBurnDivisor = async (client: ReadClient): Promise<bigint> =>
-	requireBigInt(
-		await client.readContract({
-			abi: Zoltar_Zoltar.abi,
-			functionName: 'forkBurnDivisor',
-			address: getZoltarAddress(),
-			args: [],
-		}),
-		'Zoltar fork burn divisor',
 	)
 
 export const deployChild = async (client: WriteClient, universeId: bigint, outcomeIndex: bigint) =>

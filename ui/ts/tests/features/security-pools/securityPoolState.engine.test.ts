@@ -45,7 +45,7 @@ describe('security pool state engine', () => {
 				'createChildUniverse',
 				'migrateRepToZoltar',
 				'migrateVault',
-				'migrateEscalationDeposits',
+				'claimParentEscalationDeposits',
 				'migrateUnresolvedEscalation',
 				'startTruthAuction',
 				'submitBid',

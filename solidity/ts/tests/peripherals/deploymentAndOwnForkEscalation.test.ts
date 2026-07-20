@@ -1,6 +1,6 @@
 import { beforeEach, describe, test } from 'bun:test'
 import { usePeripheralsDeploymentAndOwnForkEscalationFixture, type PeripheralsDeploymentAndOwnForkEscalationFixture } from './fixture'
-import type { Abi, Address } from '@zoltar/shared/ethereum'
+import type { Address } from '@zoltar/shared/ethereum'
 import type { WriteClient } from '../../testSupport/simulator/utils/clients'
 import { peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken } from '../../types/contractArtifact'
 import { getQuestionResolution as readQuestionResolution } from '../../testSupport/simulator/utils/contracts/escalationGame'
@@ -526,10 +526,23 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		await forkZoltarWithOwnEscalationGame(client, securityPoolAddresses.securityPool)
 		const ownForkRepBuckets = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
 		assert.strictEqual(ownForkRepBuckets.vaultRepAtFork, 0n, 'all-rep-in-escalation scenario should have zero vaultRepAtFork')
+		strictEqualTypeSafe(ownForkRepBuckets.escalationChildRepPerSelectedOutcome, ownForkRepBuckets.escrowSourceRepAtFork, 'own-fork escalation backing should convert every source REP 1:1 even when all parent REP is escrowed')
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		const yesChildEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
+		const childCarryTotal = (await Promise.all([QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No].map(outcome => getEscalationGameOutcomeState(client, yesChildEscalationGame, outcome)))).reduce((total, state) => total + state.currentCarryTotal, 0n)
+		strictEqualTypeSafe(await getERC20Balance(client, getRepTokenAddress(yesUniverse), yesChildEscalationGame), childCarryTotal, 'the child escalation game should receive its complete aggregate carry backing before claims')
+		strictEqualTypeSafe(
+			await client.readContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: yesChildEscalationGame,
+				functionName: 'isForkCarryFundingComplete',
+			}),
+			true,
+			'aggregate own-fork carry should be fully funded before any depositor claims',
+		)
 		const walletChildRepBeforeClaim = await getERC20Balance(client, getRepTokenAddress(yesUniverse), client.account.address)
 		await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
 
@@ -571,7 +584,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		assert.ok(walletChildRepAfterClaim > walletChildRepBeforeClaim, 'own-fork claim should pay child REP without an explicit preparation transaction')
 	})
 
-	test('own-fork unresolved escalation migration does not contribute to child migrated REP accounting', async () => {
+	test('optional own-fork vault migration does not duplicate aggregate escalation backing', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10n * DAY)
 
@@ -603,7 +616,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		const migratedRepAfter = await getMigratedRep(client, yesChildPool)
 		const childEscrow = await getForkedEscrowChildRepByOutcomeAndVault(client, yesChildPool, QuestionOutcome.Yes, client.account.address)
 		strictEqualTypeSafe(migratedRepAfter - migratedRepBefore, expectedUnlockedMigratedRep, 'own-fork unresolved migration should count only unlocked pool REP as migrated REP')
-		assert.ok(childEscrow > 0n, 'own-fork unresolved migration should record child escalation escrow without preparation')
+		strictEqualTypeSafe(childEscrow, 0n, 'optional vault migration should not create per-vault child escalation escrow')
 	})
 
 	test('own-fork unresolved escalation resolves to the selected child outcome after maximum escalation time', async () => {
@@ -657,11 +670,12 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 			address: childEscalationGame,
 			args: [client.account.address, QuestionOutcome.Yes],
 		})
-		assert.ok((await getERC20Balance(client, childRepToken, client.account.address)) > walletRepBeforeClaim, 'own-fork carried winning proof should pay the selected child outcome')
+		const winningPayout = (await getERC20Balance(client, childRepToken, client.account.address)) - walletRepBeforeClaim
+		assert.ok(winningPayout > winningProof.amount, 'aggregate 1:1 backing should support a winning payout greater than the proof principal')
 		strictEqualTypeSafe(childYesEscrow[3], childYesEscrow[2], 'own-fork carried winning proof should claim its child escrow')
 	})
 
-	test('own-fork unresolved migration still works after a prior own-fork claim reduces parent escrow', async () => {
+	test('optional vault cleanup still works after a prior own-fork claim reduces parent escrow', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10n * DAY)
 		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
@@ -675,7 +689,9 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier).securityPool
 		const migratedEscrow = await getForkedEscrowChildRepByOutcomeAndVault(client, yesChildPool, QuestionOutcome.No, client.account.address)
-		assert.ok(migratedEscrow > 0n, 'remaining unresolved own-fork escrow should still migrate after an earlier own-fork claim')
+		const parentVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		strictEqualTypeSafe(migratedEscrow, 0n, 'optional vault cleanup should not duplicate aggregate child backing')
+		strictEqualTypeSafe(parentVault.repInEscalationGame, 0n, 'optional vault cleanup should clear the remaining parent lock after a direct claim')
 	})
 
 	test('own-fork claim plus unresolved migration partitions the source escrow without replaying the claimed side', async () => {
@@ -752,11 +768,11 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		strictEqualTypeSafe(exportLog.args.transferredRep, false, 'own-fork unresolved migration should not repeat the aggregate fork-time REP transfer')
 		assert.ok(claimLog.args.sourceRepClaimed > forkThreshold, 'the winning claim should pay out more than principal when it consumes the losing-side escrow')
 		strictEqualTypeSafe(childYesEscrowState[3], childYesEscrow, 'the direct yes-side claim should leave its child escrow history fully claimed')
-		assert.ok(childNoEscrow > 0n, 'the remaining no-side deposit should still migrate into child escrow')
+		strictEqualTypeSafe(childNoEscrow, 0n, 'the remaining no-side deposit should remain represented only by aggregate carry backing')
 		strictEqualTypeSafe(parentVaultAfterMigration.repInEscalationGame, 0n, 'mixed own-fork claim and unresolved migration should clear the parent vault escalation lock')
 	})
 
-	test('direct own-fork unresolved migration allows arbitrary vault order without preparation', async () => {
+	test('optional own-fork vault cleanup allows arbitrary vault order without preparation', async () => {
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10n * DAY)
@@ -778,11 +794,15 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		const yesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier).securityPool
 		const clientEscrow = await getForkedEscrowChildRepByOutcomeAndVault(client, yesChildPool, QuestionOutcome.Yes, client.account.address)
 		const attackerEscrow = await getForkedEscrowChildRepByOutcomeAndVault(client, yesChildPool, QuestionOutcome.Yes, attackerClient.account.address)
-		assert.ok(clientEscrow > 0n, 'direct migration should allow the client vault to migrate')
-		assert.ok(attackerEscrow > 0n, 'direct migration should allow the attacker vault to migrate')
+		const clientParentVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const attackerParentVault = await getSecurityVault(client, securityPoolAddresses.securityPool, attackerClient.account.address)
+		strictEqualTypeSafe(clientEscrow, 0n, 'client cleanup should not create per-vault child escrow')
+		strictEqualTypeSafe(attackerEscrow, 0n, 'attacker cleanup should not create per-vault child escrow')
+		strictEqualTypeSafe(clientParentVault.repInEscalationGame, 0n, 'client cleanup should clear its parent lock')
+		strictEqualTypeSafe(attackerParentVault.repInEscalationGame, 0n, 'attacker cleanup should clear its parent lock')
 	})
 
-	test('own-fork unresolved migration can migrate to the invalid child branch without preparation', async () => {
+	test('optional own-fork vault cleanup works for the invalid child branch without preparation', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10n * DAY)
 		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
@@ -812,77 +832,10 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		const childNoEscrowByOriginalDepositOutcome = await getForkedEscrowChildRepByOutcomeAndVault(client, invalidSecurityPool.securityPool, QuestionOutcome.No, client.account.address)
 		const childEscrowByOriginalDepositOutcome = childYesEscrowByOriginalDepositOutcome + childNoEscrowByOriginalDepositOutcome
 		strictEqualTypeSafe(childEscrow, 0n, 'invalid child migration should not record forked escrow against the child branch outcome')
-		assert.ok(childEscrowByOriginalDepositOutcome > 0n, 'invalid child migration should record forked escrow against the original deposit outcome')
+		strictEqualTypeSafe(childEscrowByOriginalDepositOutcome, 0n, 'invalid child cleanup should not create per-vault escrow for original outcomes')
 		strictEqualTypeSafe(invalidOutcomeState.balance, parentInvalidOutcomeState.balance, 'invalid child continuation should preserve the parent invalid balance')
 		strictEqualTypeSafe(yesOutcomeState.balance, parentYesOutcomeState.balance, 'invalid child continuation should preserve the parent yes balance')
 		strictEqualTypeSafe(noOutcomeState.balance, parentNoOutcomeState.balance, 'invalid child continuation should preserve the parent no balance')
-	})
-
-	test('own-fork escalation claim zero child allocation does not revert', async () => {
-		const harnessAddress = await deployOwnForkEscalationClaimHarness()
-		const parent = securityPoolAddresses.securityPool
-
-		await client.writeContract({
-			abi: test_peripherals_OwnForkEscalationClaimHarness_OwnForkEscalationClaimHarness.abi,
-			address: harnessAddress,
-			functionName: 'setOwnForkRepBuckets',
-			args: [parent, 1n, 2n],
-		})
-
-		const claimHash = await client.writeContract({
-			abi: test_peripherals_OwnForkEscalationClaimHarness_OwnForkEscalationClaimHarness.abi,
-			address: harnessAddress,
-			functionName: 'previewOwnForkEscalationClaim',
-			args: [parent, 1n],
-		})
-		await client.waitForTransactionReceipt({ hash: claimHash })
-	})
-
-	test('own-fork escalation claim rounds positive source claims up to non-zero child REP', async () => {
-		const harnessAddress = await deployOwnForkEscalationClaimHarness()
-		const parent = securityPoolAddresses.securityPool
-		const previewOwnForkEscalationClaimAbi = [
-			{
-				inputs: [
-					{
-						internalType: 'address',
-						name: 'parent',
-						type: 'address',
-					},
-					{
-						internalType: 'uint256',
-						name: 'sourceRepAmount',
-						type: 'uint256',
-					},
-				],
-				name: 'previewOwnForkEscalationClaim',
-				outputs: [
-					{
-						internalType: 'uint256',
-						name: 'childRepAmount',
-						type: 'uint256',
-					},
-				],
-				stateMutability: 'view',
-				type: 'function',
-			},
-		] as const satisfies Abi
-
-		await client.writeContract({
-			abi: test_peripherals_OwnForkEscalationClaimHarness_OwnForkEscalationClaimHarness.abi,
-			address: harnessAddress,
-			functionName: 'setOwnForkRepBuckets',
-			args: [parent, 1n, 2n],
-		})
-
-		const childRepAmount = await client.readContract({
-			abi: previewOwnForkEscalationClaimAbi,
-			address: harnessAddress,
-			functionName: 'previewOwnForkEscalationClaim',
-			args: [parent, 1n],
-		})
-
-		strictEqualTypeSafe(childRepAmount, 1n, 'a positive own-fork claim should round up to non-zero child REP')
 	})
 
 	test('own-fork escalation ownership credit rounds up small positive claims', async () => {
@@ -922,49 +875,6 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 
 		assert.deepStrictEqual(collateralTransfers, [2n, 1n], 'split own-fork claims should transfer collateral from the fixed fork snapshot, not from the shrinking remainder')
 		strictEqualTypeSafe(totalCollateralTransferred, 3n, 'split own-fork claims should transfer the same total collateral as a single combined claim')
-	})
-
-	test('own-fork escalation claim zero child allocation returns without moving child balance', async () => {
-		const endTime = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(endTime + 10n * DAY)
-		const parent = securityPoolAddresses.securityPool
-		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, parent))) / 20n / securityMultiplier
-		let vault = await getSecurityVault(client, parent, client.account.address)
-		let vaultRep = await poolOwnershipToRep(client, parent, vault.repDepositShare)
-		const vaultRepNeeded = vaultRep < 2n * forkThreshold ? 2n * forkThreshold - vaultRep : 0n
-		if (vaultRepNeeded > 0n) {
-			await approveAndDepositRep(client, vaultRepNeeded, questionId)
-			vault = await getSecurityVault(client, parent, client.account.address)
-			vaultRep = await poolOwnershipToRep(client, parent, vault.repDepositShare)
-		}
-		assert.ok(vaultRep >= 2n * forkThreshold, 'test setup needs enough REP to trigger own fork')
-		await triggerOwnGameFork(client, parent)
-
-		const childRepAtForkSlot = getMappingStorageSlot(parent, 0n)
-		const escalationChildRepAtForkSlot = formatStorageSlot(childRepAtForkSlot + 11n)
-		await mockWindow.addStateOverrides({
-			[getInfraContractAddresses().securityPoolForker]: {
-				stateDiff: {
-					[escalationChildRepAtForkSlot]: 0n,
-				},
-			},
-		})
-
-		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(parent, yesUniverse, questionId, securityMultiplier)
-		const parentVaultBefore = await getSecurityVault(client, parent, client.account.address)
-		const yesRepTokenAddress = getRepTokenAddress(yesUniverse)
-		const childBalanceBefore = (await contractExists(client, yesRepTokenAddress)) ? await getERC20Balance(client, yesRepTokenAddress, yesSecurityPool.securityPool) : 0n
-
-		await claimForkedEscalationDeposits(client, parent, client.account.address, QuestionOutcome.Yes, [0n])
-
-		const parentVaultAfter = await getSecurityVault(client, parent, client.account.address)
-		const childBalanceAfter = (await contractExists(client, yesRepTokenAddress)) ? await getERC20Balance(client, yesRepTokenAddress, yesSecurityPool.securityPool) : 0n
-		const childVaultAfter = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
-
-		strictEqualTypeSafe(childBalanceAfter, childBalanceBefore, 'zero-child own-fork settlement should not move REP into the child pool')
-		strictEqualTypeSafe(childVaultAfter.repDepositShare, 0n, 'zero-child own-fork settlement should not credit child ownership')
-		assert.ok(parentVaultAfter.repInEscalationGame < parentVaultBefore.repInEscalationGame, 'zero-child own-fork settlement should consume the claimed parent escalation position')
 	})
 
 	test('own-fork escalation claim settlement is order independent across claims', async () => {
@@ -1011,49 +921,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		strictEqualTypeSafe(childBalanceAfterClientFirst, childBalanceAfterAttackerFirst, 'child REP balance should not depend on claim order')
 	})
 
-	test('own-fork unresolved escalation allocation stays per-vault stable across input order', async () => {
-		const harnessAddress = await deployOwnForkEscalationClaimHarness()
-		const childRepAtFork = 7n * 10n ** 18n
-		const vaults: Address[] = [client.account.address, addressString(TEST_ADDRESSES[1]), addressString(TEST_ADDRESSES[2])]
-		const sourceAmounts: bigint[] = [10n * 10n ** 18n, 11n * 10n ** 18n, 13n * 10n ** 18n]
-		const reversedVaults: Address[] = [vaults[2], vaults[1], vaults[0]]
-		const reversedSourceAmounts: bigint[] = [sourceAmounts[2], sourceAmounts[1], sourceAmounts[0]]
-
-		const allocationsInInputOrder = await client.readContract({
-			abi: test_peripherals_OwnForkEscalationClaimHarness_OwnForkEscalationClaimHarness.abi,
-			address: harnessAddress,
-			functionName: 'previewOwnForkUnresolvedEscalationAllocation',
-			args: [vaults, sourceAmounts, childRepAtFork],
-		})
-		const allocationsInReversedOrder = await client.readContract({
-			abi: test_peripherals_OwnForkEscalationClaimHarness_OwnForkEscalationClaimHarness.abi,
-			address: harnessAddress,
-			functionName: 'previewOwnForkUnresolvedEscalationAllocation',
-			args: [reversedVaults, reversedSourceAmounts, childRepAtFork],
-		})
-
-		const allocationByVault = new Map<Address, bigint>()
-		for (let index = 0; index < vaults.length; index++) allocationByVault.set(vaults[index], allocationsInInputOrder[index])
-		for (let index = 0; index < reversedVaults.length; index++) strictEqualTypeSafe(allocationsInReversedOrder[index], allocationByVault.get(reversedVaults[index]) ?? 0n, 'each vault should keep the same fixed-rate allocation regardless of batch order')
-	})
-
-	test('own-fork unresolved escalation allocation uses a fixed per-vault rate and leaves residual dust', async () => {
-		const harnessAddress = await deployOwnForkEscalationClaimHarness()
-		const vaults: Address[] = [client.account.address, addressString(TEST_ADDRESSES[1])]
-		const sourceAmounts: bigint[] = [1n, 1n]
-		const childRepAtFork = 1n
-		const childAmounts = await client.readContract({
-			abi: test_peripherals_OwnForkEscalationClaimHarness_OwnForkEscalationClaimHarness.abi,
-			address: harnessAddress,
-			functionName: 'previewOwnForkUnresolvedEscalationAllocation',
-			args: [vaults, sourceAmounts, childRepAtFork],
-		})
-
-		assert.deepStrictEqual(childAmounts, [0n, 0n], 'each vault should receive its independently rounded-down fixed-rate share')
-		strictEqualTypeSafe(childAmounts[0] + childAmounts[1], 0n, 'fixed-rate unresolved migration should be allowed to leave residual child REP dust unallocated')
-	})
-
-	test('own-fork unresolved escalation allocation stays stable across pools with different vault creation order', async () => {
+	test('optional own-fork cleanup creates no child escrow regardless of vault creation order', async () => {
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const baseSnapshot = await mockWindow.anvilSnapshot()
 		const runScenario = async (questionTitleSuffix: string, vaultCreationOrder: Address[]) => {
@@ -1124,21 +992,9 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		await mockWindow.anvilRevert(baseSnapshot)
 		const secondScenario = await runScenario('creation order attacker-first', [attackerClient.account.address, client.account.address])
 
-		strictEqualTypeSafe(firstScenario.clientEscrow, secondScenario.clientEscrow, 'client child escrow allocation should not depend on parent vault creation order')
-		strictEqualTypeSafe(firstScenario.attackerEscrow, secondScenario.attackerEscrow, 'attacker child escrow allocation should not depend on parent vault creation order')
-	})
-
-	test('own-fork unresolved escalation zero child allocation is a no-op', async () => {
-		const harnessAddress = await deployOwnForkEscalationClaimHarness()
-		const exportedAmounts: bigint[] = [3n * reportBond, 5n * reportBond, 7n * reportBond]
-
-		const returnedAmounts = await client.readContract({
-			abi: test_peripherals_OwnForkEscalationClaimHarness_OwnForkEscalationClaimHarness.abi,
-			address: harnessAddress,
-			functionName: 'previewOwnForkUnresolvedEscalationNoop',
-			args: [exportedAmounts, 0n],
-		})
-
-		assert.deepStrictEqual(returnedAmounts, exportedAmounts, 'zero child allocation should preserve exported unresolved deposits')
+		strictEqualTypeSafe(firstScenario.clientEscrow, 0n, 'client cleanup should not create per-vault child escrow')
+		strictEqualTypeSafe(firstScenario.attackerEscrow, 0n, 'attacker cleanup should not create per-vault child escrow')
+		strictEqualTypeSafe(secondScenario.clientEscrow, 0n, 'reordered client cleanup should not create per-vault child escrow')
+		strictEqualTypeSafe(secondScenario.attackerEscrow, 0n, 'reordered attacker cleanup should not create per-vault child escrow')
 	})
 })

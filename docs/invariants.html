@@ -662,9 +662,9 @@
 								<code>floor(parent theoretical supply / forkThresholdDivisor)</code>.
 								Starting a fork burns that amount of the initiator's parent REP,
 								reduces the parent theoretical supply by the same amount, and
-								credits only the threshold minus its configured haircut for migration.
+								credits the full threshold 1:1 for migration.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> With a 1,000 REP theoretical supply and divisor 20, the initiator burns 50 REP and receives less than 50 REP of migration credit when a haircut applies.</p>
+							<p class="invariant-example"><strong>Example:</strong> With a 1,000 REP theoretical supply and divisor 20, the initiator commits 50 parent REP and receives 50 REP of migration credit.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
@@ -771,10 +771,10 @@
 							<div class="invariant-property">
 								The child theoretical-supply snapshot equals the parent's
 								theoretical supply after the threshold burn plus the initiator's
-								credited migration amount. The uncredited haircut is excluded from
-								every child.
+								credited migration amount, which equals the full threshold. Each child
+								therefore preserves the parent's pre-fork theoretical supply.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> If a fork burns 50 REP and credits 45 REP, each child's theoretical snapshot is the pre-fork supply minus the 5 REP haircut.</p>
+							<p class="invariant-example"><strong>Example:</strong> If a fork removes 50 parent REP and credits 50 migration REP, each child's theoretical snapshot equals the pre-fork supply.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
@@ -1315,22 +1315,23 @@
 						</div>
 					</details>
 					<details class="invariant-entry">
-						<summary><code>FORK-08</code><span class="invariant-title">Per-child carried entitlement</span></summary>
+						<summary><code>FORK-08</code><span class="invariant-title">One-time aggregate continuation backing</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								A vault's aggregate unresolved escalation entitlement is captured
-								once. In each child branch selected by that vault, the entitlement
-								may be credited to child escrow at most once.
+								Each selected child initializes the canonical carry snapshot and
+								receives the complete aggregate continuation backing at most once.
+								Optional vault cleanup only clears parent locks; it creates no child
+								escrow and cannot change carried-proof eligibility.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> Alice may create one escrowed copy of her carried claim in both selected Yes and No children, but cannot create two copies in the Yes child.</p>
+							<p class="invariant-example"><strong>Example:</strong> Creating the Yes child installs its snapshot and aggregate backing before Alice acts. Alice may later clear her parent lock, but that cleanup neither funds the child nor enables or disables her winning proof.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/EscalationGameForker.sol"
-										>Escalation migration</a
+										href="../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol"
+										><code>_ensureChildEscalationBacking</code></a
 										>
 								</dd></div>
 							</dl>
@@ -1442,10 +1443,11 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								<code>totalEscrowedRep</code> equals the sum of live vault
-								escrow and forked child REP backing.
+								<code>totalEscrowedRep</code> equals the sum of live
+								vault-denominated escrow records. Aggregate continuation backing is
+								held by the child game but is not assigned to any vault escrow.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> If two vaults lock 4 and 6 REP and no forked backing exists, <code>totalEscrowedRep</code> is 10 REP.</p>
+							<p class="invariant-example"><strong>Example:</strong> If two vaults have live escrow records of 4 and 6 REP, <code>totalEscrowedRep</code> is 10 REP even when the game also holds aggregate REP backing for carried proofs.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
@@ -1485,10 +1487,13 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								For each outcome, current unresolved carry equals inherited
-								unresolved carry plus unresolved local deposits.
+								For each outcome, <code>currentCarryTotal</code> equals effective
+								inherited unresolved principal plus unresolved local deposits.
+								Effective inherited principal subtracts immediate-parent direct
+								claims and becomes zero for an inherited losing outcome after
+								finalization.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> A child inheriting 7 Yes REP and receiving a new unresolved 2 REP Yes deposit reports 9 REP of current Yes carry.</p>
+							<p class="invariant-example"><strong>Example:</strong> A child snapshots 7 Yes REP, the parent directly claims 2 REP, and the child receives a new unresolved 2 REP Yes deposit. Its current Yes carry is <code>(7 - 2) + 2 = 7 REP</code>.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
@@ -1532,10 +1537,12 @@
 							<div class="invariant-property">
 								Along any single root-to-descendant fork path, each local or
 								inherited deposit may be claimed, settled, refunded, or exported
-								at most once. Selected sibling branches maintain separate claim
-								authorization.
+								at most once. Child nullifiers are branch-local, but a direct
+								ancestor claim invalidates the matching proof in every descendant
+								and reduces their effective inherited principal. Otherwise,
+								selected sibling branches maintain separate claim authorization.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> Consuming a carried proof in a Yes grandchild prevents replay farther down that branch, while a separately selected No sibling may still hold its own authorized copy.</p>
+							<p class="invariant-example"><strong>Example:</strong> Consuming a carried proof in a Yes grandchild prevents replay farther down that branch while a sibling remains independent. If the deposit was instead claimed directly from their ancestor, both descendants reject it.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
@@ -1564,29 +1571,31 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/EscalationGameSettlement.sol"
-										>Export functions</a
+										href="../solidity/contracts/peripherals/EscalationGameEscrow.sol"
+										><code>exportVaultUnresolvedTotalsWithoutTransfer</code></a
 										>
 								</dd></div>
 							</dl>
 						</div>
 					</details>
 					<details class="invariant-entry">
-						<summary><code>ESC-07</code><span class="invariant-title">Forked escrow payout bounds</span></summary>
+						<summary><code>ESC-07</code><span class="invariant-title">Authenticated carried winner payout</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								Forked escrow claims never exceed either recorded source
-								principal or child REP backing for the outcome.
+								A carried claim must authenticate an unconsumed proof for the final
+								winning outcome. The proof fixes the depositor who receives the
+								normal winning payout from aggregate game backing, even when another
+								account relays the transaction.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> A claim with 10 REP of source principal but only 8 REP of child backing can pay at most 8 child REP.</p>
+							<p class="invariant-example"><strong>Example:</strong> Bob may relay Alice's valid winning proof, but the contract pays Alice. A losing proof cannot consume backing, and reward math may make a winning payout greater than its principal.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
-										href="../solidity/contracts/peripherals/EscalationGameEscrow.sol"
-										>Forked escrow accounting</a
+										href="../solidity/contracts/peripherals/EscalationGameSettlement.sol"
+										><code>withdrawDeposit</code></a
 										>
 								</dd></div>
 							</dl>
@@ -1663,10 +1672,13 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								Residual REP cannot be swept to the pool while any local or
-								forked escrow remains unsettled.
+								Residual REP cannot be swept until effective unresolved principal
+								is zero for every outcome and <code>totalEscrowedRep</code> is zero.
+								Inherited losing principal retires at finalization without a proof;
+								winning inherited proofs and every local unresolved deposit still
+								require their applicable terminal transition.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> A sweep reverts while Bob still has one unclaimed forked deposit, even if every local deposit is settled.</p>
+							<p class="invariant-example"><strong>Example:</strong> After Yes finalizes, an unclaimed inherited No leaf does not block sweeping. An unclaimed inherited Yes proof, an unsettled local deposit, or a live vault escrow record still does.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>

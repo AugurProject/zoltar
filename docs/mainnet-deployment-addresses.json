@@ -1,6 +1,5 @@
 {
 	"protocolConfig": {
-		"forkBurnDivisor": "5",
 		"forkThresholdDivisor": "20",
 		"initialEscalationGameDeposit": "1000000000000000000"
 	},

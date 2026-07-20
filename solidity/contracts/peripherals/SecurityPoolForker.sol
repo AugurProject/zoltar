@@ -122,6 +122,13 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		return false;
 	}
 
+	function getDirectlyClaimedEscalationPrincipal(
+		ISecurityPool securityPool,
+		BinaryOutcomes.BinaryOutcome outcomeIndex
+	) external view returns (uint256) {
+		return directlyClaimedEscalationPrincipalByPoolAndOutcome[securityPool][uint8(outcomeIndex)];
+	}
+
 	function getEscalationMigrationEntitlementStatus(
 		ISecurityPool securityPool,
 		address vault
@@ -725,15 +732,8 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			address(migrationProxy),
 			securityPool.universeId()
 		);
-		uint256 totalRepBeforeBurn = poolRepToFork + escalationRepToFork;
-		uint256 vaultRepAtFork =
-			totalRepBeforeBurn == 0 ? 0 : (poolRepToFork * auctionableRepAtFork) / totalRepBeforeBurn;
-		_initializeOwnForkRepBuckets(
-			securityPool,
-			vaultRepAtFork,
-			auctionableRepAtFork - vaultRepAtFork,
-			escalationRepToFork
-		);
+		uint256 vaultRepAtFork = auctionableRepAtFork - escalationRepToFork;
+		_initializeOwnForkRepBuckets(securityPool, vaultRepAtFork, escalationRepToFork, escalationRepToFork);
 		data.auctionableRepAtFork = auctionableRepAtFork;
 		data.collateralAtFork = securityPool.completeSetCollateralAmount();
 		data.migratedRepCollateralized = 0;

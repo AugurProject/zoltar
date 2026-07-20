@@ -108,7 +108,7 @@ describe('Peripherals: escalation migration', () => {
 		questionId = fixture.questionId
 	})
 
-	test('migrateVaultWithUnresolvedEscalation atomically moves unresolved parent locks into the child branch', async () => {
+	test('optional vault migration clears the dead parent lock without creating child escrow', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		const securityPoolAllowance = reportBond * 2n
@@ -162,8 +162,7 @@ describe('Peripherals: escalation migration', () => {
 
 		strictEqualTypeSafe(parentVaultBeforeMigration.repInEscalationGame, unresolvedDeposit, 'the parent lock should equal the unresolved principal before migration')
 		strictEqualTypeSafe(parentVaultAfterMigration.repInEscalationGame, 0n, 'atomic unresolved migration should clear the parent lock')
-		assert.ok(childVaultAfterMigration.repInEscalationGame > 0n, 'the child vault should inherit unresolved escrow in the child token')
-		strictEqualTypeSafe(childVaultAfterMigration.repInEscalationGame, unresolvedDeposit, 'the child vault should receive its logical unresolved entitlement')
+		strictEqualTypeSafe(childVaultAfterMigration.repInEscalationGame, 0n, 'the aggregate-funded child should not create a per-vault escalation lock')
 		strictEqualTypeSafe(childForkData.migratedRep, childForkDataBeforeMigration.migratedRep, 'unresolved migration should not change child migrated REP accounting')
 		strictEqualTypeSafe(childEscalationBalanceAfterMigration, childEscalationBalanceBeforeMigration, 'vault materialization should reuse the aggregate backing placed in the selected child at creation')
 		strictEqualTypeSafe(childForkSnapshotInitialized, true, 'the child continuation game should inherit the fork carry snapshot')
@@ -173,7 +172,7 @@ describe('Peripherals: escalation migration', () => {
 		strictEqualTypeSafe(childOutcomeState.currentCarryTotal, unresolvedDeposit, 'the child continuation game should track the migrated unresolved principal')
 	})
 
-	test('migrateVaultWithUnresolvedEscalation moves aggregate vault totals in one call regardless of deposit count', async () => {
+	test('optional vault migration clears aggregate parent totals without copying them into child vault state', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		const depositCount = 65
@@ -215,7 +214,7 @@ describe('Peripherals: escalation migration', () => {
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 		strictEqualTypeSafe(parentVaultAfterMigration.repInEscalationGame, 0n, 'aggregate migration should clear all parent unresolved escrow')
-		strictEqualTypeSafe(await getForkedEscrowPrincipalByOutcomeAndVault(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, client.account.address), totalUnresolvedDeposit, 'the selected child should receive the complete aggregate vault principal')
+		strictEqualTypeSafe(await getForkedEscrowPrincipalByOutcomeAndVault(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, client.account.address), 0n, 'the child should rely on its aggregate carry snapshot rather than per-vault escrow')
 	})
 
 	test('own-fork unresolved migration rejects after the child branch is already priced', async () => {
@@ -385,7 +384,7 @@ describe('Peripherals: escalation migration', () => {
 		strictEqualTypeSafe(childVaultAfterMigration?.repInEscalationGame ?? 0n, 0n, 'zero child allocation should not create child escrow')
 	})
 
-	test('migrateVaultWithUnresolvedEscalation in non-own fork carries escrow through the continuation snapshot without replaying local deposits', async () => {
+	test('non-own fork claims rely on the continuation snapshot without replaying local deposits or vault escrow', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 
@@ -420,8 +419,9 @@ describe('Peripherals: escalation migration', () => {
 
 		strictEqualTypeSafe(yesDepositsAfterMigration.length, 0, 'non-own unresolved migration should not replay parent local deposits in the child game')
 		strictEqualTypeSafe(yesOutcomeState.balance, unresolvedDeposit, 'non-own continuation should keep inherited resolution balances 1:1 with source REP')
-		strictEqualTypeSafe(childEscrowPrincipal, unresolvedDeposit, 'non-own continuation should retain the original unresolved principal for proof settlement')
-		strictEqualTypeSafe(childEscrowChildRep, unresolvedDeposit, 'non-own continuation should back the carried escrow 1:1 in child REP')
+		strictEqualTypeSafe(yesOutcomeState.currentCarryTotal, unresolvedDeposit, 'the aggregate snapshot should retain the unresolved principal for proof settlement')
+		strictEqualTypeSafe(childEscrowPrincipal, 0n, 'non-own continuation should not create per-vault principal accounting')
+		strictEqualTypeSafe(childEscrowChildRep, 0n, 'non-own continuation should not create per-vault child REP accounting')
 	})
 
 	test('each lazily created continuation starts from the complete parent escalation totals', async () => {
@@ -486,12 +486,14 @@ describe('Peripherals: escalation migration', () => {
 		const forkSnapshotBeforeClaim = await Promise.all([QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No].map(async outcome => await getEscalationGameOutcomeState(client, invalidGame, outcome)))
 
 		await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
+		const effectiveSnapshotAfterClaim = await Promise.all([QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No].map(async outcome => await getEscalationGameOutcomeState(client, invalidGame, outcome)))
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.No)
 		const noPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, getChildUniverseId(genesisUniverse, QuestionOutcome.No), questionId, securityMultiplier)
 		const noGame = await getSecurityPoolsEscalationGame(client, noPool.securityPool)
 		const lateForkSnapshot = await Promise.all([QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No].map(async outcome => await getEscalationGameOutcomeState(client, noGame, outcome)))
 
-		assert.deepStrictEqual(lateForkSnapshot, forkSnapshotBeforeClaim, 'every late child must inherit the same fork-time balances, carry peaks, leaf counts, totals, and nullifier roots after parent claims')
+		assert.ok(effectiveSnapshotAfterClaim[QuestionOutcome.Yes].currentCarryTotal < forkSnapshotBeforeClaim[QuestionOutcome.Yes].currentCarryTotal, 'the direct claim should remove its effective inherited principal without rewriting the carry tree')
+		assert.deepStrictEqual(lateForkSnapshot, effectiveSnapshotAfterClaim, 'current and late children must expose the same immutable carry tree with the same direct-claim liability adjustment')
 	})
 
 	test('a vault materializes its entitlement only in child universes it selects', async () => {
@@ -646,7 +648,7 @@ describe('Peripherals: escalation migration', () => {
 		await assert.rejects(claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n]), /Non-decision required/)
 	})
 
-	test('migrateVaultWithUnresolvedEscalation scales child escrow when the child branch has less REP than the parent principal', async () => {
+	test('an underfunded child remains incomplete instead of scaling per-vault escalation claims', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 
@@ -697,12 +699,13 @@ describe('Peripherals: escalation migration', () => {
 
 		strictEqualTypeSafe(parentVaultAfterMigration.repInEscalationGame, 0n, 'an underfunded child branch should still clear the parent unresolved REP lock after the migration succeeds')
 		strictEqualTypeSafe(childPoolExists, true, 'an underfunded child branch should deploy the child pool')
-		strictEqualTypeSafe(childVaultAfterMigration.repInEscalationGame, childEscrowChildRep, 'the child vault escrow should match the child REP actually transferred into the continuation game')
+		strictEqualTypeSafe(childVaultAfterMigration.repInEscalationGame, 0n, 'underfunding should not create scaled vault escrow')
 		strictEqualTypeSafe(invalidOutcomeState.balance, parentInvalidOutcomeState.balance, 'the child invalid balance should stay aligned with the parent snapshot')
 		strictEqualTypeSafe(yesOutcomeState.balance, parentYesOutcomeState.balance, 'the child yes balance should preserve the parent snapshot even when child REP backing is smaller')
 		strictEqualTypeSafe(noOutcomeState.balance, parentNoOutcomeState.balance, 'the child no balance should stay aligned with the parent snapshot')
-		assert.ok(childEscrowPrincipal > childEscrowChildRep, 'the child continuation game should retain more parent principal than child REP backing')
-		strictEqualTypeSafe(childEscrowChildRep, 1n, 'the child continuation game should retain only the scaled child REP backing')
+		strictEqualTypeSafe(childEscrowPrincipal, 0n, 'the child should not allocate inherited principal per vault')
+		strictEqualTypeSafe(childEscrowChildRep, 0n, 'the child should not scale inherited REP into per-vault escrow')
+		strictEqualTypeSafe(await client.readContract({ abi: peripherals_EscalationGame_EscalationGame.abi, address: childEscalationGame, functionName: 'isForkCarryFundingComplete', args: [] }), false, 'one wei of child REP must not fund a larger inherited carry')
 	})
 
 	test('large unresolved continuation migration snapshots carry totals without replaying imported deposit indexes', async () => {
@@ -886,7 +889,7 @@ describe('Peripherals: escalation migration', () => {
 				functionName: 'withdrawForkedEscalationDeposits',
 				args: [QuestionOutcome.No, [losingProof]],
 			}),
-			/Forked escrow missing/,
+			/Not winning outcome/,
 		)
 		const winningProof = await createCarryProof(client, securityPoolAddresses.escalationGame, {
 			expectedOutcome: QuestionOutcome.Yes,
@@ -1003,8 +1006,7 @@ describe('Peripherals: escalation migration', () => {
 		await forkZoltarWithOwnEscalationGame(client, securityPoolAddresses.securityPool)
 
 		await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
-		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
-		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.No)
+		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.No)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const yesPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
@@ -1077,6 +1079,16 @@ describe('Peripherals: escalation migration', () => {
 		const secondClaimReceipt = await client.waitForTransactionReceipt({ hash: secondClaimHash })
 		assert.ok(secondClaimReceipt.gasUsed < CARRY_PROOF_GAS_LIMIT, `carry-proof verification used ${secondClaimReceipt.gasUsed.toString()} gas, above the ${CARRY_PROOF_GAS_LIMIT.toString()} ceiling`)
 		assert.ok((await getERC20Balance(client, getRepTokenAddress(yesUniverse), client.account.address)) > walletRepBeforeSecondClaim, 'the untouched same-outcome deposit should remain claimable')
+		strictEqualTypeSafe((await getEscalationGameOutcomeState(client, yesGame, QuestionOutcome.Yes)).currentCarryTotal, 0n, 'the direct claim and the remaining winning proof should retire all winning principal without vault migration')
+		const yesPoolRepBeforeSweep = await getERC20Balance(client, getRepTokenAddress(yesUniverse), yesPool.securityPool)
+		const sweepHash = await client.writeContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			address: yesGame,
+			functionName: 'sweepResidualRepToSecurityPool',
+			args: [],
+		})
+		await client.waitForTransactionReceipt({ hash: sweepHash })
+		assert.ok((await getERC20Balance(client, getRepTokenAddress(yesUniverse), yesPool.securityPool)) > yesPoolRepBeforeSweep, 'the child should sweep residual REP after only winners claim')
 		await assert.rejects(
 			client.writeContract({
 				abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -1116,7 +1128,7 @@ describe('Peripherals: escalation migration', () => {
 		const childEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
 		const childVaultAfterFirstMigration = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 		strictEqualTypeSafe((await getEscalationGameOutcomeState(client, childEscalationGame, QuestionOutcome.Yes)).currentCarryTotal, recursiveDeposit, 'the child continuation snapshot should carry the unresolved yes-side total before the second fork')
-		strictEqualTypeSafe(childVaultAfterFirstMigration.repInEscalationGame, recursiveDeposit, 'the first migration should seed the child continuation vault escrow')
+		strictEqualTypeSafe(childVaultAfterFirstMigration.repInEscalationGame, 0n, 'recursive carry should remain aggregate-backed instead of seeding child vault escrow')
 
 		const secondForkQuestionData = {
 			...questionData,
@@ -1158,7 +1170,7 @@ describe('Peripherals: escalation migration', () => {
 		const grandchildOutcomeState = await getEscalationGameOutcomeState(client, grandchildEscalationGame, QuestionOutcome.Yes)
 
 		strictEqualTypeSafe(childVaultAfterMigration.repInEscalationGame, 0n, 'the second migration should clear the carried lock from the child continuation vault')
-		strictEqualTypeSafe(grandchildVault.repInEscalationGame, recursiveDeposit, 'the carried unresolved principal should survive into the grandchild continuation vault')
+		strictEqualTypeSafe(grandchildVault.repInEscalationGame, 0n, 'the grandchild should keep recursive carry in aggregate state rather than vault escrow')
 		strictEqualTypeSafe(grandchildOutcomeState.currentCarryTotal, recursiveDeposit, 'the recursive continuation migration should preserve the carried unresolved total by snapshot')
 	})
 
@@ -1222,7 +1234,9 @@ describe('Peripherals: escalation migration', () => {
 		const grandchildUniverse = getChildUniverseId(yesUniverse, QuestionOutcome.Yes)
 		const grandchildSecurityPool = getSecurityPoolAddresses(yesSecurityPool.securityPool, grandchildUniverse, questionId, securityMultiplier)
 		const grandchildVault = await getSecurityVault(client, grandchildSecurityPool.securityPool, client.account.address)
-		assert.ok(grandchildVault.repInEscalationGame > 0n, 'own-fork unresolved migration on a continuation child should include inherited carried escrow')
+		const grandchildEscalationGame = await getSecurityPoolsEscalationGame(client, grandchildSecurityPool.securityPool)
+		strictEqualTypeSafe(grandchildVault.repInEscalationGame, 0n, 'recursive inherited carry should not create grandchild vault escrow')
+		assert.ok((await getEscalationGameOutcomeState(client, grandchildEscalationGame, QuestionOutcome.Yes)).currentCarryTotal > 0n, 'the grandchild aggregate snapshot should retain inherited carry')
 	})
 
 	test('many unresolved continuation deposits survive multiple unrelated forks recursively', async () => {

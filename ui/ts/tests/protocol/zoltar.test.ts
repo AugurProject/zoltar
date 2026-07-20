@@ -97,7 +97,7 @@ describe('zoltar contract helpers', () => {
 	test('loadZoltarUniverseSummary returns a non-forked universe summary for an active universe', async () => {
 		const client = createReadClient({
 			multicallResponses: [
-				[REP_TOKEN, [0n, 9n, 0n, getAddress('0x00000000000000000000000000000000000000ff'), 123n], 0n, 999n, 5n],
+				[REP_TOKEN, [0n, 9n, 0n, getAddress('0x00000000000000000000000000000000000000ff'), 123n], 0n, 999n],
 				[QUESTION_TUPLE_BINARY, 0n],
 			],
 			readContractHandlers: {
@@ -113,7 +113,6 @@ describe('zoltar contract helpers', () => {
 		expect(summary?.forkQuestionDetails).toBeUndefined()
 		expect(summary?.childUniverses).toEqual([])
 		expect(summary?.totalTheoreticalSupply).toBe(111n)
-		expect(summary?.forkBurnDivisor).toBe(5n)
 		expect(summary?.zoltarAddress).toBeDefined()
 	})
 

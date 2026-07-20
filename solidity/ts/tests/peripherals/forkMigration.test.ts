@@ -221,7 +221,7 @@ describe('Peripherals: fork migration', () => {
 
 			strictEqualTypeSafe(prefunded.forkData.auctionableRepAtFork, baseline.forkData.auctionableRepAtFork, 'unsolicited REP must not increase own-fork auctionable REP')
 			strictEqualTypeSafe(prefunded.ownForkRepBuckets.vaultRepAtFork, baseline.ownForkRepBuckets.vaultRepAtFork, 'unsolicited REP must not increase vault migration backing')
-			strictEqualTypeSafe(prefunded.ownForkRepBuckets.escalationChildRepPerSelectedOutcome, baseline.ownForkRepBuckets.escalationChildRepPerSelectedOutcome, 'unsolicited REP must not increase escalation migration backing')
+			strictEqualTypeSafe(prefunded.ownForkRepBuckets.escalationChildRepPerSelectedOutcome, baseline.ownForkRepBuckets.escalationChildRepPerSelectedOutcome, 'unsolicited REP must not increase aggregate escalation carry backing')
 			strictEqualTypeSafe(await getERC20Balance(client, getRepTokenAddress(genesisUniverse), migrationProxyAddress), prefundedRep, 'unsolicited REP should remain isolated as proxy surplus after the own fork')
 			strictEqualTypeSafe(await getMigrationRepBalance(client, genesisUniverse, migrationProxyAddress), prefunded.forkData.auctionableRepAtFork, 'unsolicited REP must not enter the own-fork migration ledger')
 		})
@@ -263,7 +263,14 @@ describe('Peripherals: fork migration', () => {
 			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'delayed initialization should leave the child migration recoverable')
 			strictEqualTypeSafe((await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).repInEscalationGame, 0n, 'unresolved migration should clear the parent escrow lock')
-			assert.ok((await getForkedEscrowChildRepByOutcomeAndVault(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, client.account.address)) > 0n, 'unresolved migration should carry the escrow into the child continuation')
+			strictEqualTypeSafe(await getForkedEscrowChildRepByOutcomeAndVault(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, client.account.address), 0n, 'optional vault cleanup should not create per-vault child escrow')
+			const childYesState = await client.readContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: yesSecurityPool.escalationGame,
+				functionName: 'getOutcomeState',
+				args: [QuestionOutcome.Yes],
+			})
+			strictEqualTypeSafe(childYesState.currentCarryTotal, reportBond, 'delayed initialization should preserve the unresolved principal in aggregate carry')
 		})
 
 		test('rejects delayed fork initialization for an escalation game resolved before the universe fork', async () => {
@@ -2237,7 +2244,7 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(await getShareTokenSupply(client, yesSecurityPool.securityPool), childShareSupplyBeforeFailedMint, 'failed child mint should not mint shares')
 		})
 
-		test('can migrate escalation deposits before migrateVault', async () => {
+		test('can claim parent escalation deposits before migrateVault', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 			const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
@@ -2245,27 +2252,27 @@ describe('Peripherals: fork migration', () => {
 
 			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
-			const parentVaultBeforeEscalationMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+			const parentVaultBeforeEscalationClaim = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 			const yesChildRepToken = getRepTokenAddress(yesUniverse)
-			const walletRepBeforeEscalationMigration = await getERC20Balance(client, yesChildRepToken, client.account.address)
+			const walletRepBeforeEscalationClaim = await getERC20Balance(client, yesChildRepToken, client.account.address)
 			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 			const migratedRepBeforeEscalation = await getMigratedRep(client, yesSecurityPool.securityPool)
 			await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 			const yesVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
-			const yesVaultRepAfterEscalationMigration = await poolOwnershipToRep(client, yesSecurityPool.securityPool, yesVault.repDepositShare)
+			const yesVaultRepAfterEscalationClaim = await poolOwnershipToRep(client, yesSecurityPool.securityPool, yesVault.repDepositShare)
 			const migratedRep = await getMigratedRep(client, yesSecurityPool.securityPool)
 			const parentVaultAfterMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-			const walletRepAfterEscalationMigration = await getERC20Balance(client, yesChildRepToken, client.account.address)
+			const walletRepAfterEscalationClaim = await getERC20Balance(client, yesChildRepToken, client.account.address)
 
 			assert.ok(migratedRep > 0n, 'some REP should be tracked as migrated')
 			assert.ok(migratedRep >= migratedRepBeforeEscalation, 'later vault migration should not reduce child migrated REP accounting')
-			assert.ok(walletRepAfterEscalationMigration > walletRepBeforeEscalationMigration, 'own-fork escalation migration should pay child REP directly to the wallet')
-			assert.ok(parentVaultAfterMigration.repInEscalationGame < parentVaultBeforeEscalationMigration.repInEscalationGame, 'migrating a winning escalation deposit should reduce the parent escalation escrow')
+			assert.ok(walletRepAfterEscalationClaim > walletRepBeforeEscalationClaim, 'claiming an own-fork escalation deposit should pay child REP directly to the wallet')
+			assert.ok(parentVaultAfterMigration.repInEscalationGame < parentVaultBeforeEscalationClaim.repInEscalationGame, 'claiming a winning parent escalation deposit should reduce the parent escalation escrow')
 			assert.ok(yesVault.repDepositShare > 0n, 'vault migration should still create child ownership for the unlocked pool REP')
-			assert.ok(yesVaultRepAfterEscalationMigration > 0n, 'vault migration should create a child-pool claim from unlocked pool REP')
+			assert.ok(yesVaultRepAfterEscalationClaim > 0n, 'vault migration should create a child-pool claim from unlocked pool REP')
 			strictEqualTypeSafe((await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).repDepositShare, 0n, 'parent vault should be emptied after migration')
 		})
 	})
@@ -2436,7 +2443,7 @@ describe('Peripherals: fork migration', () => {
 			await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes]), /Child closed/)
 		})
 
-		test('migrateVault preserves escalation migration state', async () => {
+		test('migrateVault preserves parent escalation claim state', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolAllowance = repDeposit / 4n
@@ -2454,9 +2461,9 @@ describe('Peripherals: fork migration', () => {
 			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 
 			await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n, 1n])
-			const vaultAfterEscalationMigration = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
-			strictEqualTypeSafe(vaultAfterEscalationMigration.repDepositShare, 0n, 'own-fork escalation claims should not mint child ownership')
-			strictEqualTypeSafe(vaultAfterEscalationMigration.securityBondAllowance, 0n, 'claiming own-fork escalation should not migrate the parent bond allowance')
+			const vaultAfterEscalationClaim = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+			strictEqualTypeSafe(vaultAfterEscalationClaim.repDepositShare, 0n, 'own-fork escalation claims should not mint child ownership')
+			strictEqualTypeSafe(vaultAfterEscalationClaim.securityBondAllowance, 0n, 'claiming own-fork escalation should not migrate the parent bond allowance')
 
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			const vaultAfterVaultMigration = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
@@ -2816,7 +2823,7 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(await getQuestionResolution(client, secondChildGame), expectedOutcome, 'recursive continuation game should settle against the same canonical outcome')
 		})
 
-		test('a direct same-question fork settles carried deposits against the selected child branch', async () => {
+		test('a direct same-question fork rejects carried deposits that lose in the selected child branch', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, reportBond)
@@ -2858,7 +2865,7 @@ describe('Peripherals: fork migration', () => {
 			await mockWindow.addStateOverrides({
 				[yesEscalationGame]: {
 					stateDiff: {
-						[formatStorageSlot(440n)]: 1n | (BigInt(QuestionOutcome.No) << 8n),
+						[formatStorageSlot(437n)]: 1n | (BigInt(QuestionOutcome.No) << 8n),
 					},
 				},
 			})
@@ -2878,13 +2885,15 @@ describe('Peripherals: fork migration', () => {
 
 			const childRepToken = getRepTokenAddress(yesUniverse)
 			const walletRepBeforeClaim = await getERC20Balance(client, childRepToken, client.account.address)
-			const hash = await client.writeContract({
-				abi: peripherals_SecurityPool_SecurityPool.abi,
-				address: yesSecurityPool.securityPool,
-				functionName: 'withdrawForkedEscalationDeposits',
-				args: [QuestionOutcome.No, [noProof]],
-			})
-			await client.waitForTransactionReceipt({ hash })
+			await assert.rejects(
+				client.writeContract({
+					abi: peripherals_SecurityPool_SecurityPool.abi,
+					address: yesSecurityPool.securityPool,
+					functionName: 'withdrawForkedEscalationDeposits',
+					args: [QuestionOutcome.No, [noProof]],
+				}),
+				/Not winning outcome/,
+			)
 			strictEqualTypeSafe(await getERC20Balance(client, childRepToken, client.account.address), walletRepBeforeClaim, 'a carried no deposit must not win from a yes child')
 		})
 

@@ -69,7 +69,7 @@ export function ForkZoltarSection({
 	const hasEnoughRep = rootUniverse !== undefined && zoltarForkRepBalance !== undefined && zoltarForkRepBalance >= rootUniverse.forkThreshold
 	const approvalRequirement = deriveTokenApprovalRequirement(rootUniverse?.forkThreshold, zoltarForkApproval.value)
 	const hasEnoughApproval = rootUniverse !== undefined && approvalRequirement.hasSufficientApproval
-	const hasForkEconomics = rootUniverse?.forkBurnDivisor !== undefined && rootUniverse.forkBurnDivisor > 1n && rootUniverse.zoltarAddress !== undefined
+	const hasForkEconomics = rootUniverse?.zoltarAddress !== undefined
 	const selectedQuestionId = zoltarForkQuestionId.trim()
 	const hasSelectedQuestionId = selectedQuestionId !== ''
 	const confirmationValue = forkConfirmation.questionId === selectedQuestionId ? forkConfirmation.value : ''
@@ -83,8 +83,8 @@ export function ForkZoltarSection({
 	const selectedQuestionPresentation = hasSelectedQuestionId && selectedQuestionLookupState !== 'ready' ? getReportPresentation({ kind: 'question', state: selectedQuestionLookupState }) : undefined
 	const canFork = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && !hasForked && !zoltarForkPending && selectedQuestion !== undefined && hasEnoughRep && hasEnoughApproval && hasForkEconomics && hasConfirmedFork
 	const resultingRepBalance = rootUniverse === undefined || zoltarForkRepBalance === undefined || zoltarForkRepBalance < rootUniverse.forkThreshold ? undefined : zoltarForkRepBalance - rootUniverse.forkThreshold
-	const permanentRepBurn = rootUniverse?.forkBurnDivisor === undefined || rootUniverse.forkBurnDivisor <= 1n ? undefined : rootUniverse.forkThreshold / rootUniverse.forkBurnDivisor
-	const migrationCustodyCredit = rootUniverse === undefined || permanentRepBurn === undefined ? undefined : rootUniverse.forkThreshold - permanentRepBurn
+	const permanentRepBurn = rootUniverse === undefined ? undefined : 0n
+	const migrationCustodyCredit = rootUniverse?.forkThreshold
 	const approvalGuardMessage = (() => {
 		const walletPresentation = getWalletPresentation({ accountAddress, isMainnet })
 		if (walletPresentation !== undefined) return walletPresentation.detail

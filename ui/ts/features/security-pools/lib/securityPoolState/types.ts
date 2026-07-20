@@ -26,7 +26,7 @@ export type SecurityPoolActionId =
 	| 'createChildUniverse'
 	| 'migrateRepToZoltar'
 	| 'migrateVault'
-	| 'migrateEscalationDeposits'
+	| 'claimParentEscalationDeposits'
 	| 'migrateUnresolvedEscalation'
 	| 'startTruthAuction'
 	| 'submitBid'
