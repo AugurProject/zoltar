@@ -93,27 +93,21 @@ export function ForkZoltarSection({
 		if (selectedQuestion === undefined) return zoltarCopy.forkQuestionRequiredReason
 		return undefined
 	})()
-	const forkGuardMessage =
-		accountAddress === undefined
-			? zoltarCopy.forkWalletRequiredReason
-			: (() => {
-					if (!isMainnet) return commonCopy.mainnetRequiredReason
-					if (rootUniverse === undefined) return zoltarCopy.forkDataRequiredReason
+	const forkGuardMessage = (() => {
+		const walletPresentation = getWalletPresentation({ accountAddress, isMainnet })
+		if (walletPresentation !== undefined) return walletPresentation.detail
+		if (rootUniverse === undefined) return getUniversePresentation(zoltarUniverseState)?.detail
 
-					return (() => {
-						if (hasForked) return zoltarCopy.alreadyForkedReason
-						if (selectedQuestion === undefined) return zoltarCopy.forkQuestionRequiredReason
-						if (!hasForkEconomics) return zoltarCopy.forkEconomicsRequiredReason
+		if (hasForked) return zoltarCopy.alreadyForkedReason
+		if (selectedQuestion === undefined) return zoltarCopy.forkQuestionRequiredReason
+		if (!hasForkEconomics) return zoltarCopy.forkEconomicsUnavailableReason
 
-						return (() => {
-							if (!hasEnoughRep) return zoltarCopy.forkRepInsufficientReason
-							if (!hasEnoughApproval) return zoltarCopy.forkRepApprovalRequiredReason
-							if (!hasConfirmedFork) return zoltarCopy.forkConfirmationRequiredReason
+		if (!hasEnoughRep) return zoltarCopy.forkRepInsufficientReason
+		if (!hasEnoughApproval) return zoltarCopy.forkRepApprovalRequiredReason
+		if (!hasConfirmedFork) return zoltarCopy.forkConfirmationRequiredReason
 
-							return undefined
-						})()
-					})()
-				})()
+		return undefined
+	})()
 
 	if (universeMissing) {
 		const presentation = getUniversePresentation(zoltarUniverseState)
