@@ -26,7 +26,7 @@ import { sameAddress } from '../../../lib/address.js'
 import { getWalletScopedAccountAddress, isMainnetChain } from '../../../lib/network.js'
 import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, resolvePaginationPageIndex, SECURITY_POOL_PAGE_SIZE } from '../../../lib/pagination.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
-import { getSecurityPoolStatusBadgeLabel } from '../lib/securityPoolLabels.js'
+import { formatSecurityPoolPageSummary, formatSecurityVaultPreviewDeferred, getSecurityPoolStatusBadgeLabel } from '../lib/securityPoolLabels.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { getPoolCollateralizationPercent, getVaultCollateralizationPercent } from '../../markets/lib/trading.js'
 import { getPoolRegistryPresentation } from '../../../lib/userCopy.js'
@@ -201,7 +201,7 @@ export function SecurityPoolsOverviewSection({
 						</select>
 					</label>
 				</div>
-				{hasActiveFilters && pagedSecurityPools.length > 0 ? <p className='detail'>{securityPoolCopy.formatPoolPageSummary(filteredSecurityPools.length, pagedSecurityPools.length)}</p> : undefined}
+				{hasActiveFilters && pagedSecurityPools.length > 0 ? <p className='detail'>{formatSecurityPoolPageSummary(filteredSecurityPools.length, pagedSecurityPools.length)}</p> : undefined}
 
 				{(() => {
 					if (pagedSecurityPools.length === 0) {
@@ -339,7 +339,7 @@ export function SecurityPoolsOverviewSection({
 													<h4>{securityPoolCopy.vaults}</h4>
 												</div>
 												{pool.hasLoadedVaults === false ? (
-													<StateHint title={securityPoolCopy.previewDeferred} presentation={{ key: 'empty', badgeLabel: securityPoolCopy.previewDeferred, badgeTone: 'muted', detail: securityPoolCopy.formatVaultPreviewDeferred(pool.vaultCount.toString()) }} />
+													<StateHint title={securityPoolCopy.previewDeferred} presentation={{ key: 'empty', badgeLabel: securityPoolCopy.previewDeferred, badgeTone: 'muted', detail: formatSecurityVaultPreviewDeferred(pool.vaultCount) }} />
 												) : (
 													<div className='security-pool-browse-vault-list'>
 														{pool.vaults.length === 0 ? (

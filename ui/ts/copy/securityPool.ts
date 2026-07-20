@@ -1,4 +1,3 @@
-import * as commonCopy from './common.js'
 import type { CopyTemplateValue } from './types.js'
 
 export const annualFee = 'Annual Fee'
@@ -41,13 +40,21 @@ export const vaultCoverage = 'Vault Coverage'
 export const allPools = 'All pools'
 export const hasVaults = 'Has vaults'
 export const noVaults = 'No vaults'
-export const formatPoolPageSummary = (matchingPoolCount: CopyTemplateValue, loadedPoolCount: CopyTemplateValue) => `${matchingPoolCount} of ${loadedPoolCount} pool${Number(loadedPoolCount) === 1 ? '' : commonCopy.pluralSuffix} ${Number(matchingPoolCount) === 1 ? 'matches' : 'match'}.`
+export const poolCountSingular = 'pool'
+export const poolCountPlural = 'pools'
+export const poolSummarySingularVerb = 'matches'
+export const poolSummaryPluralVerb = 'match'
+export const formatPoolPageSummary = (matchingPoolCount: CopyTemplateValue, loadedPoolCount: CopyTemplateValue, poolLabel: CopyTemplateValue, matchVerb: CopyTemplateValue) => `${matchingPoolCount} of ${loadedPoolCount} ${poolLabel} ${matchVerb}.`
 export const loadSecurityPools = 'Load Security Pools'
 export const noSecurityPools = 'No security pools'
 export const poolFiltersEmpty = 'No pools match the current search and filter settings.'
 export const managerAddress = 'Manager Address'
 export const previewDeferred = 'Preview deferred'
-export const formatVaultPreviewDeferred = (vaultCount: CopyTemplateValue) => `${vaultCount} vault${Number(vaultCount) === 1 ? '' : commonCopy.pluralSuffix} ${Number(vaultCount) === 1 ? 'is' : 'are'} registered. Open the pool to load individual vault details.`
+export const vaultCountSingular = 'vault'
+export const vaultCountPlural = 'vaults'
+export const vaultSummarySingularVerb = 'is'
+export const vaultSummaryPluralVerb = 'are'
+export const formatVaultPreviewDeferred = (vaultCount: CopyTemplateValue, vaultLabel: CopyTemplateValue, registeredVerb: CopyTemplateValue) => `${vaultCount} ${vaultLabel} ${registeredVerb} registered. Open the pool to load individual vault details.`
 export const liquidationReviewHint = 'Review liquidation details for this vault before queueing the action.'
 export const formatVaultPreviewSummary = (loadedVaultCount: CopyTemplateValue, totalVaultCount: CopyTemplateValue) => `Showing ${loadedVaultCount} of ${totalVaultCount} active vaults in this preview, newest activity first.`
 export const formatVaultDirectorySummary = (loadedVaultCount: CopyTemplateValue, totalVaultCount: CopyTemplateValue) => `Showing ${loadedVaultCount} of ${totalVaultCount} active vaults, newest activity first. Enter a vault address above to inspect any specific vault.`
@@ -64,7 +71,7 @@ export const manualExecution = 'Manual execution'
 export const stagedOperationsEmpty = 'No staged operations are currently queued for this pool.'
 export const noneQueued = 'None queued'
 export const liquidation = 'Liquidation'
-export const formatPendingReportLabel = (reportId: string) => commonCopy.formatReportNumberLabel(reportId)
+export const formatPendingReportLabel = (reportId: string) => `Report #${reportId}`
 export const primaryPoolActions = 'Primary pool actions'
 export const poolNotFound = 'Pool not found'
 export const refreshOracle = 'Refresh Oracle'
@@ -146,23 +153,16 @@ export const depositRepPendingLabel = 'Depositing REP…'
 export const firstDepositTail = 'in the first deposit.'
 export const newVaultsRequireAtLeast = 'New vaults require at least'
 export const formatInsufficientRepBalanceDetail = (amount: string) => `Insufficient REP balance. Deposit amount exceeds your wallet balance by ${amount} REP.`
-export const formatVaultLauncherBlockerReason = (action: 'claim-fees' | 'deposit-rep' | 'rep-exit-redeem' | 'rep-exit-withdraw' | 'set-bond-allowance', blocker: 'connect-wallet' | 'missing-vault' | 'select-own-vault') => {
-	if (blocker === 'missing-vault') return missingVaultDetail
-
-	if (blocker === 'connect-wallet') {
-		if (action === 'claim-fees') return 'Connect a wallet before claiming fees.'
-		if (action === 'deposit-rep') return 'Connect a wallet before depositing REP.'
-		if (action === 'rep-exit-redeem') return 'Connect a wallet before redeeming REP.'
-		if (action === 'rep-exit-withdraw') return 'Connect a wallet before withdrawing REP.'
-		return 'Connect a wallet before setting the security bond allowance.'
-	}
-
-	if (action === 'claim-fees') return 'Select your own vault to claim fees.'
-	if (action === 'deposit-rep') return 'Select your own vault to deposit REP.'
-	if (action === 'rep-exit-redeem') return 'Select your own vault to redeem REP.'
-	if (action === 'rep-exit-withdraw') return 'Select your own vault to withdraw REP.'
-	return 'Select your own vault to set the security bond allowance.'
-}
+export const connectWalletBeforeClaimingFees = 'Connect a wallet before claiming fees.'
+export const connectWalletBeforeDepositingRep = 'Connect a wallet before depositing REP.'
+export const connectWalletBeforeRedeemingRep = 'Connect a wallet before redeeming REP.'
+export const connectWalletBeforeWithdrawingRep = 'Connect a wallet before withdrawing REP.'
+export const connectWalletBeforeSettingBondAllowance = 'Connect a wallet before setting the security bond allowance.'
+export const selectOwnVaultToClaimFees = 'Select your own vault to claim fees.'
+export const selectOwnVaultToDepositRep = 'Select your own vault to deposit REP.'
+export const selectOwnVaultToRedeemRep = 'Select your own vault to redeem REP.'
+export const selectOwnVaultToWithdrawRep = 'Select your own vault to withdraw REP.'
+export const selectOwnVaultToSetBondAllowance = 'Select your own vault to set the security bond allowance.'
 export const selfServiceExecutionTimeoutHelpText = 'Whole minutes; expires after oracle settlement.'
 export const formatManualExecutionTimeoutResolvedDetail = (duration: string) => `This queued self-service operation will expire ${duration} after the oracle settlement window completes.`
 export const owned = 'Owned'

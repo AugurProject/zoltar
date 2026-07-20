@@ -15,6 +15,13 @@ import { UniverseLink } from '../../features/universes/components/UniverseLink.j
 import { isMainnetChain } from '../../lib/network.js'
 import { renderRepPriceSourceLabel } from '../../features/open-oracle/lib/repPriceSource.js'
 import type { OverviewPanelsProps } from '../../features/types.js'
+
+function getWalletNetworkLabel(chainId: string | undefined) {
+	if (chainId === undefined) return appCopy.unknownNetwork
+	if (chainId === '0xaa36a7') return appCopy.sepoliaNetwork
+	return appCopy.formatChainNetwork(chainId)
+}
+
 export function OverviewPanels({
 	activeUniverseId,
 	accountState,
@@ -71,7 +78,7 @@ export function OverviewPanels({
 		if (isBrowserSimulationReadBackend) return appCopy.simulationNetworkDisclaimer
 		return undefined
 	})()
-	const walletNetworkLabel = walletOnMainnet ? appCopy.ethereumMainnet : appCopy.formatWalletNetwork(accountState.chainId)
+	const walletNetworkLabel = walletOnMainnet ? appCopy.ethereumMainnet : getWalletNetworkLabel(accountState.chainId)
 	const accountActions = (() => {
 		if (accountState.address === undefined)
 			return (
