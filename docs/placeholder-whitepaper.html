@@ -3891,14 +3891,21 @@
 						different Zoltar question.
 					</p>
 					<p id="fork-griefing-risk">
-						A caller can use any ended global Zoltar question to trigger a fork
-						in an unforked universe; it need not be the question used by a
-						Placeholder pool in that universe. The fork-threshold REP commitment
-						and configured haircut are the protocol's admission mechanism. The
-						permanent haircut matters because an unnecessary fork delays every
-						pool in the universe; without it, a griefer could recycle the full
-						threshold into child REP while imposing disproportionate migration
-						latency on unrelated markets.
+						<strong>Accepted global-fork design.</strong> A caller can use any
+						existing ended global Zoltar question to trigger a fork in an
+						unforked universe; it need not be the question used by a Placeholder
+						pool in that universe, and Zoltar imposes no separate creation-age,
+						universe-registration, or pool-relevance requirement. A caller who
+						acquires and commits the fork-threshold REP can therefore halt
+						globally guarded operational flows for every pool in the universe.
+						The fork-threshold REP commitment and configured haircut are the
+						intended admission cost. The permanent haircut matters because an
+						unnecessary fork delays every pool in the universe; without it, a
+						griefer could recycle the full threshold into child REP while
+						imposing disproportionate migration latency on unrelated markets.
+						Requiring a universe-relevant, sufficiently aged, or
+						pool-economics-justified question is not a protocol invariant and
+						should not be inferred as a missing authorization check.
 					</p>
 					<div class="summary-grid">
 						<div class="summary-card">
@@ -6870,7 +6877,9 @@
 						coordinator does not cap resulting loss by report liquidity. One
 						accepted report can authorize sequential operations throughout the
 						freshness window, so a per-operation liquidation bound does not bound
-						cumulative extraction across all uses of that cached price.
+						cumulative extraction across all uses of that cached price. This is
+						the specified arbitrage-security model, not a missing invariant that
+						report liquidity must collateralize downstream notional.
 					</p>
 					<figure class="diagram" id="fig-placeholder-oracle-flow">
 						<svg
@@ -7021,12 +7030,14 @@
 								or executed
 							</text>
 						</svg>
-						<p class="diagram-caption">
-							<span class="figure-label">REP/ETH Oracle Flow</span>The
-							coordinator is a queue plus cache. A fresh price can execute
-							immediately; a stale price moves operations into a bounded
-							pending-settlement path.
-						</p>
+							<p class="diagram-caption">
+								<span class="figure-label">REP/ETH Oracle Flow</span>The
+								coordinator is a queue plus cache. A fresh price can execute
+								immediately; a stale price moves operations into a
+								pending-settlement path whose callback batch is capped at four
+								operations but whose duration is unbounded under paid rolling
+								disputes.
+							</p>
 					</figure>
 					<h3>Oracle-Staged Operation Trace</h3>
 					<div class="table-wrap">
@@ -7107,15 +7118,22 @@
 						their own operations. Sponsor exclusivity is intentional, and every
 						dispute resets the OpenOracle settlement clock. Timely rolling disputes
 						can therefore extend the exclusive lane without a coordinator-level
-						absolute deadline. Before the escalation halt, required WETH is
+						absolute deadline. Each extension incurs transaction execution and
+						must fund the contract-specified replacement position. Under ordinary
+						non-dust parameters, protocol fees and the required position also
+						accumulate; integer flooring can leave dust-sized rounds unchanged
+						before the escalation halt. The protocol intentionally makes no
+						bounded-liveness claim against a participant able and willing to keep
+						submitting and funding disputes indefinitely. Before the escalation
+						halt, required WETH is
 						<code
 							>min(floor(oldAmount1 × multiplier / 100),
 							escalationHalt)</code
 						>. With multiplier <code>115</code>, integer flooring leaves
 						one-through-six-wei amounts unchanged; seven wei is the first amount
 						that grows. At or above the halt, each dispute requires one more
-						atomic WETH unit, while protocol fees and gas keep total cost growing
-						with duration.
+						atomic WETH unit; prevailing transaction costs and any nonzero
+						protocol fees add to the recurring burden.
 					</p>
 					<p id="oracle-last-mover-risk">
 						The dispute and settlement boundaries are known in advance, and the
