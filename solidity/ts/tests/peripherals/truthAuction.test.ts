@@ -1,11 +1,17 @@
 import { beforeEach, describe, test } from 'bun:test'
-import { encodeFunctionData } from '@zoltar/shared/ethereum'
-import { peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../../types/contractArtifact'
+import { encodeDeployData, encodeFunctionData } from '@zoltar/shared/ethereum'
+import {
+	peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
+	peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction,
+	test_peripherals_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness,
+	test_peripherals_SecurityPoolForkerAuctionSettlementHarness_SecurityPoolForkerAuctionSettlementHarness,
+} from '../../types/contractArtifact'
 import { usePeripheralsTruthAuctionFixture, type PeripheralsTruthAuctionFixture } from './fixture'
 import { getExpectedLiquidationRepMove } from './liquidationTestHelpers'
 import { getMaxRepBeingSold, getMinBidSize, isFinalized, submitBid } from '../../testSupport/simulator/utils/contracts/auction'
 import { getLastPrice, queueLiquidationAtForcedPrice } from '../../testSupport/simulator/utils/contracts/peripherals'
 import { getUniverseData } from '../../testSupport/simulator/utils/contracts/zoltar'
+import { applyLibraries } from '../../testSupport/simulator/utils/contracts/deployPeripherals'
 
 describe('Peripherals: truth auction', () => {
 	const fixture = usePeripheralsTruthAuctionFixture()
@@ -351,7 +357,7 @@ describe('Peripherals: truth auction', () => {
 		})
 
 		test('finalizeTruthAuction keeps the auction active at the exact end and finalizes one second later', async () => {
-			const { expectedEthToBuy, yesSecurityPool } = await setupStartedTruthAuction('truth auction finalization deadline source')
+			const { yesSecurityPool } = await setupStartedTruthAuction('truth auction finalization deadline source')
 			const { truthAuctionStarted } = await getSecurityPoolForkerForkData(client, yesSecurityPool.securityPool)
 			const auctionDeadline = truthAuctionStarted + 7n * DAY
 
@@ -360,37 +366,29 @@ describe('Peripherals: truth auction', () => {
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'child pool should remain in truth auction at the exact finalization deadline')
 
 			await mockWindow.setTime(auctionDeadline)
-			await finalizeTruthAuction(client, yesSecurityPool.securityPool, expectedEthToBuy)
+			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'child pool should become operational after the truth auction end boundary passes')
 		})
 
-		test('an under-repaired child cannot become operational after an unfunded truth auction', async () => {
-			const { expectedEthToBuy, yesSecurityPool } = await setupStartedTruthAuction('under-repaired child fork source')
+		test('an ended truth auction finalizes and refunds non-qualifying demand without accepting a repair donation', async () => {
+			const { repAtFork, yesSecurityPool } = await setupStartedTruthAuction('under-repaired child fork source')
 			const migratedCollateral = await getETHBalance(client, yesSecurityPool.securityPool)
+			const losingBidder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+			const losingBid = await getMinBidSize(client, yesSecurityPool.truthAuction)
+			const losingTick = await participateAuction(losingBidder, yesSecurityPool.truthAuction, repAtFork, losingBid)
 			await mockWindow.advanceTime(7n * DAY + DAY)
 
-			await assert.rejects(finalizeTruthAuction(client, yesSecurityPool.securityPool), /Repair/)
+			await assert.rejects(finalizeTruthAuction(client, yesSecurityPool.securityPool, 1n), /does not accept repair contributions/)
+			strictEqualTypeSafe(await isFinalized(client, yesSecurityPool.truthAuction), false, 'rejected contribution must leave the auction available for value-free finalization')
 
-			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'failed repair validation must leave the child inactive')
+			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'an ended auction must activate the child without relying on an uncompensated contribution')
+			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), migratedCollateral, 'only migrated collateral and accepted bid ETH may become child collateral')
+			strictEqualTypeSafe(await getTotalRepPurchased(client, yesSecurityPool.truthAuction), 0n, 'non-qualifying demand must not purchase auction REP')
 
-			const childBalanceBeforeOverRepair = await getETHBalance(client, yesSecurityPool.securityPool)
-			const forkerBalanceBeforeOverRepair = await getETHBalance(client, getInfraContractAddresses().securityPoolForker)
-			const auctionBalanceBeforeOverRepair = await getETHBalance(client, yesSecurityPool.truthAuction)
-			const collateralBeforeOverRepair = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
-			await assert.rejects(finalizeTruthAuction(client, yesSecurityPool.securityPool, expectedEthToBuy + 1n), /Repair/)
-
-			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'over-repair rejection must leave the child in truth auction')
-			strictEqualTypeSafe(await isFinalized(client, yesSecurityPool.truthAuction), false, 'over-repair rejection must roll back auction finalization')
-			strictEqualTypeSafe(await getETHBalance(client, yesSecurityPool.securityPool), childBalanceBeforeOverRepair, 'over-repair rejection must not move ETH into the child')
-			strictEqualTypeSafe(await getETHBalance(client, getInfraContractAddresses().securityPoolForker), forkerBalanceBeforeOverRepair, 'over-repair rejection must not strand ETH in the forker')
-			strictEqualTypeSafe(await getETHBalance(client, yesSecurityPool.truthAuction), auctionBalanceBeforeOverRepair, 'over-repair rejection must preserve auction ETH')
-			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), collateralBeforeOverRepair, 'over-repair rejection must preserve tracked collateral')
-			strictEqualTypeSafe(await getTotalRepPurchased(client, yesSecurityPool.truthAuction), 0n, 'over-repair rejection must preserve auction REP accounting')
-
-			await finalizeTruthAuction(client, yesSecurityPool.securityPool, expectedEthToBuy)
-			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'an explicit contribution that completes the configured repair may activate the child')
-			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), migratedCollateral + expectedEthToBuy, 'operational child collateral must meet the full configured repair ratio')
-			strictEqualTypeSafe(await getTotalRepPurchased(client, yesSecurityPool.truthAuction), 0n, 'a repair contribution without a bid must not issue auction REP ownership')
+			const bidderBalanceBeforeRefund = await getETHBalance(client, losingBidder.account.address)
+			await claimAuctionProceeds(client, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }])
+			strictEqualTypeSafe((await getETHBalance(client, losingBidder.account.address)) - bidderBalanceBeforeRefund, losingBid, 'the non-qualifying bidder must recover all bid ETH after the deadline')
 		})
 
 		test('bid and finalization competitors use exact block timestamps at deadline - 1, deadline, and deadline + 1', async () => {
@@ -464,21 +462,21 @@ describe('Peripherals: truth auction', () => {
 		]
 
 		test.each(forcedBalanceCases)('forced ETH at $name after the deadline cannot contaminate or block finalization', async ({ name, surplusAboveAllowance }) => {
-			const { expectedEthToBuy, yesSecurityPool } = await setupStartedTruthAuction(`forced ETH ${name} finalization source`)
+			const { yesSecurityPool } = await setupStartedTruthAuction(`forced ETH ${name} finalization source`)
 			const legitimateCollateral = await getETHBalance(client, yesSecurityPool.securityPool)
 			const parentAllowance = await getTotalSecurityBondAllowance(client, securityPoolAddresses.securityPool)
 			const forcedBalance = parentAllowance + surplusAboveAllowance
 
 			await mockWindow.advanceTime(7n * DAY + DAY)
 			await mockWindow.setBalance(yesSecurityPool.securityPool, forcedBalance)
-			await finalizeTruthAuction(client, yesSecurityPool.securityPool, expectedEthToBuy)
+			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
 
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'surplus ETH must not keep the child in truth-auction state')
-			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), legitimateCollateral + expectedEthToBuy, 'collateral must include the explicit repair while excluding forced ETH')
-			strictEqualTypeSafe(await getETHBalance(client, yesSecurityPool.securityPool), forcedBalance + expectedEthToBuy, 'forced ETH should remain an unaccounted pool surplus alongside the explicit repair')
+			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), legitimateCollateral, 'forced ETH must remain outside protocol-accounted collateral')
+			strictEqualTypeSafe(await getETHBalance(client, yesSecurityPool.securityPool), forcedBalance, 'forced ETH should remain an unaccounted pool surplus')
 
 			await redeemFees(client, yesSecurityPool.securityPool, addressString(TEST_ADDRESSES[6]))
-			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), legitimateCollateral + expectedEthToBuy, 'zero-fee redemption must not reclassify forced ETH as collateral')
+			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), legitimateCollateral, 'zero-fee redemption must not reclassify forced ETH as collateral')
 		})
 
 		test('forced ETH during bidding stays outside collateral while auction proceeds remain accounted', async () => {
@@ -1407,7 +1405,7 @@ describe('Peripherals: truth auction', () => {
 			strictEqualTypeSafe(vaultCountAfterClaim, vaultCountBeforeClaim, 'zero-REP finalized claim should not create a new vault')
 		})
 
-		test('minimum-bid underfunded winner receives REP only in proportion to ETH raised', async () => {
+		test('minimum-bid underfunded winner receives the full auction REP without an uncompensated repair contribution', async () => {
 			const unmigratedAllowanceHolder = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
 			await approveAndDepositRep(unmigratedAllowanceHolder, repDeposit, questionId)
 			await manipulatePriceOracleAndPerformOperation(unmigratedAllowanceHolder, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, unmigratedAllowanceHolder.account.address, repDeposit / 8n)
@@ -1421,24 +1419,24 @@ describe('Peripherals: truth auction', () => {
 			const parentAllowance = await getTotalSecurityBondAllowance(client, securityPoolAddresses.securityPool)
 
 			await mockWindow.advanceTime(7n * DAY + DAY)
-			await finalizeTruthAuction(client, yesSecurityPool.securityPool, expectedEthToBuy - minBidSize)
+			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
 
-			const expectedAttackerRep = (auctionCap * minBidSize) / expectedEthToBuy
-			strictEqualTypeSafe(await getTotalRepPurchased(client, yesSecurityPool.truthAuction), expectedAttackerRep, 'one minimum bid should buy only its proportional share of the underfunded auction REP cap')
+			const expectedAttackerRep = auctionCap
+			strictEqualTypeSafe(await getTotalRepPurchased(client, yesSecurityPool.truthAuction), expectedAttackerRep, 'one qualifying minimum bid should buy the complete auction REP cap at the weak-demand clearing price')
 			const forkData = await getSecurityPoolForkerForkData(client, yesSecurityPool.securityPool)
 			const unmigratedAllowance = parentAllowance - finalizerVaultBefore.securityBondAllowance
-			const expectedAuctionedAllowance = (unmigratedAllowance * minBidSize) / expectedEthToBuy
-			strictEqualTypeSafe(forkData.auctionedSecurityBondAllowance, expectedAuctionedAllowance, 'claimable allowance should scale only with auction ETH retained, excluding explicit repair contributions')
+			const expectedAuctionedAllowance = unmigratedAllowance
+			strictEqualTypeSafe(forkData.auctionedSecurityBondAllowance, expectedAuctionedAllowance, 'selling the complete auction REP cap should assign the complete unmigrated allowance to auction winners')
 			const finalizerVaultAfter = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
-			strictEqualTypeSafe(finalizerVaultAfter.repDepositShare, finalizerVaultBefore.repDepositShare, 'contribution-only ETH must not issue pool ownership to the finalizer')
-			strictEqualTypeSafe(finalizerVaultAfter.securityBondAllowance, finalizerVaultBefore.securityBondAllowance, 'contribution-only ETH must not assign security bond allowance to the finalizer')
+			strictEqualTypeSafe(finalizerVaultAfter.repDepositShare, finalizerVaultBefore.repDepositShare, 'finalizing an underfunded auction must not issue pool ownership to the finalizer')
+			strictEqualTypeSafe(finalizerVaultAfter.securityBondAllowance, finalizerVaultBefore.securityBondAllowance, 'finalizing an underfunded auction must not assign security bond allowance to the finalizer')
 
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, attacker.account.address, [{ tick: attackerTick, bidIndex: 0n }])
 
 			const attackerVault = await getSecurityVault(client, yesSecurityPool.securityPool, attacker.account.address)
 			const attackerRepClaim = await poolOwnershipToRep(client, yesSecurityPool.securityPool, attackerVault.repDepositShare)
-			strictEqualTypeSafe(attackerRepClaim, expectedAttackerRep, 'settling the minimum bid should credit only REP backed by the bidder ETH')
-			strictEqualTypeSafe(attackerVault.securityBondAllowance, expectedAuctionedAllowance, 'settling the minimum bid should credit only the allowance fraction backed by bidder ETH')
+			strictEqualTypeSafe(attackerRepClaim, expectedAttackerRep, 'settling the only qualifying bid should credit the complete auction REP cap')
+			strictEqualTypeSafe(attackerVault.securityBondAllowance, expectedAuctionedAllowance, 'settling the only qualifying bid should credit the complete auction allowance')
 		})
 
 		test('settleAuctionBids can refund a losing bid before truth auction finalization', async () => {
@@ -1872,17 +1870,18 @@ describe('Peripherals: truth auction', () => {
 			assert.ok(repAfterSecondClaim > repAfterFirstClaim, 'second claim should be able to add the remaining winning bid')
 		})
 
-		test('claimAuctionProceeds assigns the full auctioned allowance across split claims without leaving rounding residue', async () => {
+		test('claimAuctionProceeds assigns auctioned allowance by fixed bid position independent of claim order', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 
-			const securityPoolAllowance = repDeposit / 4n
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+			const baseSecurityPoolAllowance = repDeposit / 4n
+			const securityPoolAllowance = baseSecurityPoolAllowance - (baseSecurityPoolAllowance % 3n) + 1n
 
 			const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 			await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
 			await approveAndDepositRep(passiveRepHolder, 2n * forkThreshold, questionId)
+			await manipulatePriceOracleAndPerformOperation(passiveRepHolder, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, passiveRepHolder.account.address, securityPoolAllowance)
 
 			const openInterestAmount = 10n * 10n ** 18n
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
@@ -1909,15 +1908,92 @@ describe('Peripherals: truth auction', () => {
 			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
 
 			const forkDataBeforeClaims = await getSecurityPoolForkerForkData(client, yesSecurityPool.securityPool)
+			const claimsSnapshot = await mockWindow.anvilSnapshot()
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, firstBidder.account.address, [{ tick: firstAuctionTick, bidIndex: 0n }])
 			const secondBidIndex = secondAuctionTick === firstAuctionTick ? 1n : 0n
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, secondBidder.account.address, [{ tick: secondAuctionTick, bidIndex: secondBidIndex }])
 
-			const firstVault = await getSecurityVault(client, yesSecurityPool.securityPool, firstBidder.account.address)
-			const secondVault = await getSecurityVault(client, yesSecurityPool.securityPool, secondBidder.account.address)
-			const claimantAllowanceTotal = firstVault.securityBondAllowance + secondVault.securityBondAllowance
+			const firstVaultFirstOrder = await getSecurityVault(client, yesSecurityPool.securityPool, firstBidder.account.address)
+			const secondVaultFirstOrder = await getSecurityVault(client, yesSecurityPool.securityPool, secondBidder.account.address)
+			const firstOrderAllowanceTotal = firstVaultFirstOrder.securityBondAllowance + secondVaultFirstOrder.securityBondAllowance
 
-			strictEqualTypeSafe(claimantAllowanceTotal, forkDataBeforeClaims.auctionedSecurityBondAllowance, 'split auction claims should assign the full auctioned allowance without losing rounding residue')
+			await mockWindow.anvilRevert(claimsSnapshot)
+			await claimAuctionProceeds(client, yesSecurityPool.securityPool, secondBidder.account.address, [{ tick: secondAuctionTick, bidIndex: secondBidIndex }])
+			await claimAuctionProceeds(client, yesSecurityPool.securityPool, firstBidder.account.address, [{ tick: firstAuctionTick, bidIndex: 0n }])
+
+			const firstVaultReverseOrder = await getSecurityVault(client, yesSecurityPool.securityPool, firstBidder.account.address)
+			const secondVaultReverseOrder = await getSecurityVault(client, yesSecurityPool.securityPool, secondBidder.account.address)
+			const reverseOrderAllowanceTotal = firstVaultReverseOrder.securityBondAllowance + secondVaultReverseOrder.securityBondAllowance
+
+			strictEqualTypeSafe(firstOrderAllowanceTotal, forkDataBeforeClaims.auctionedSecurityBondAllowance, 'split auction claims should assign the full auctioned allowance without losing rounding residue')
+			strictEqualTypeSafe(reverseOrderAllowanceTotal, forkDataBeforeClaims.auctionedSecurityBondAllowance, 'reverse-order auction claims should assign the full auctioned allowance without losing rounding residue')
+			strictEqualTypeSafe(firstVaultReverseOrder.securityBondAllowance, firstVaultFirstOrder.securityBondAllowance, 'the first bidder allowance should not depend on chronological claim order')
+			strictEqualTypeSafe(secondVaultReverseOrder.securityBondAllowance, secondVaultFirstOrder.securityBondAllowance, 'the second bidder allowance should not depend on chronological claim order')
+		})
+
+		test('allowance-only auction proceeds credit vault state independently of claim order', async () => {
+			const poolDeploymentHash = await client.sendTransaction({
+				data: `0x${test_peripherals_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.evm.bytecode.object}`,
+			})
+			const poolReceipt = await client.waitForTransactionReceipt({ hash: poolDeploymentHash })
+			const poolAddress = poolReceipt.contractAddress
+			if (poolAddress === undefined || poolAddress === null) throw new Error('auction settlement pool harness deployment address missing')
+
+			const forkerDeploymentHash = await client.sendTransaction({
+				data: encodeDeployData({
+					abi: test_peripherals_SecurityPoolForkerAuctionSettlementHarness_SecurityPoolForkerAuctionSettlementHarness.abi,
+					bytecode: applyLibraries(test_peripherals_SecurityPoolForkerAuctionSettlementHarness_SecurityPoolForkerAuctionSettlementHarness.evm.bytecode.object),
+					args: [getZoltarAddress()],
+				}),
+			})
+			const forkerReceipt = await client.waitForTransactionReceipt({ hash: forkerDeploymentHash })
+			const forkerAddress = forkerReceipt.contractAddress
+			if (forkerAddress === undefined || forkerAddress === null) throw new Error('auction settlement forker harness deployment address missing')
+
+			const zeroRepVault = addressString(TEST_ADDRESSES[1])
+			const positiveRepVault = addressString(TEST_ADDRESSES[2])
+			const credit = async (vault: typeof zeroRepVault, repAmount: bigint, allowanceAmount: bigint) => {
+				const hash = await client.writeContract({
+					address: forkerAddress,
+					abi: test_peripherals_SecurityPoolForkerAuctionSettlementHarness_SecurityPoolForkerAuctionSettlementHarness.abi,
+					functionName: 'creditAuctionProceeds',
+					args: [poolAddress, vault, repAmount, allowanceAmount, 10n, 1n, 3n],
+				})
+				await client.waitForTransactionReceipt({ hash })
+			}
+			const readVault = async (vault: typeof zeroRepVault) =>
+				await client.readContract({
+					address: poolAddress,
+					abi: test_peripherals_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi,
+					functionName: 'securityVaults',
+					args: [vault],
+				})
+
+			const settlementSnapshot = await mockWindow.anvilSnapshot()
+			await credit(zeroRepVault, 0n, 1n)
+			await credit(positiveRepVault, 1n, 2n)
+			const zeroRepForward = await readVault(zeroRepVault)
+			const positiveRepForward = await readVault(positiveRepVault)
+			strictEqualTypeSafe(zeroRepForward[0], 0n, 'allowance-only settlement must not create pool ownership')
+			strictEqualTypeSafe(zeroRepForward[1], 1n, 'a separately settled zero-REP winner must retain its positional allowance')
+			strictEqualTypeSafe(positiveRepForward[0], 10n, 'positive REP settlement should create ownership at the configured rate')
+			strictEqualTypeSafe(positiveRepForward[1], 2n, 'positive REP settlement should receive its remaining positional allowance')
+
+			await mockWindow.anvilRevert(settlementSnapshot)
+			await credit(positiveRepVault, 1n, 2n)
+			await credit(zeroRepVault, 0n, 1n)
+			const zeroRepReverse = await readVault(zeroRepVault)
+			const positiveRepReverse = await readVault(positiveRepVault)
+			strictEqualTypeSafe(zeroRepReverse[1], zeroRepForward[1], 'allowance-only vault credit must not depend on claim order')
+			strictEqualTypeSafe(positiveRepReverse[1], positiveRepForward[1], 'positive-REP vault allowance must not depend on claim order')
+
+			const totalEligibleAllowance = await client.readContract({
+				address: poolAddress,
+				abi: test_peripherals_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness.abi,
+				functionName: 'feeEligibleSecurityBondAllowance',
+				args: [],
+			})
+			strictEqualTypeSafe(totalEligibleAllowance, 3n, 'separate claims should credit the complete auctioned allowance')
 		})
 	})
 })

@@ -112,24 +112,24 @@ export const refundLosingBids = async (client: WriteClient, auctionAddress: Addr
 		}),
 	)
 
-export const withdrawBids = async (client: WriteClient, auctionAddress: Address, withdrawFor: Address, tickIndex: readonly { tick: bigint; bidIndex: bigint }[]) =>
+export const withdrawBids = async (client: WriteClient, auctionAddress: Address, withdrawFor: Address, tickIndex: readonly { tick: bigint; bidIndex: bigint }[], proRataTotal = 0n) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'withdrawBids',
 			address: auctionAddress,
-			args: [withdrawFor, tickIndex],
+			args: [withdrawFor, tickIndex, proRataTotal],
 		}),
 	)
 
-export const simulateWithdrawBids = async (client: ReadClient, auctionAddress: Address, withdrawFor: Address, tickIndex: readonly { tick: bigint; bidIndex: bigint }[]) => {
+export const simulateWithdrawBids = async (client: ReadClient, auctionAddress: Address, withdrawFor: Address, tickIndex: readonly { tick: bigint; bidIndex: bigint }[], proRataTotal = 0n) => {
 	const result = requireArray(
 		(
 			await client.simulateContract({
 				abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 				functionName: 'withdrawBids',
 				address: auctionAddress,
-				args: [withdrawFor, tickIndex],
+				args: [withdrawFor, tickIndex, proRataTotal],
 			})
 		).result,
 		'Auction withdraw simulation',
@@ -137,6 +137,7 @@ export const simulateWithdrawBids = async (client: ReadClient, auctionAddress: A
 	return {
 		totalFilledRep: requireBigInt(result[0], 'Auction withdraw simulation filled REP'),
 		totalEthRefund: requireBigInt(result[1], 'Auction withdraw simulation ETH refund'),
+		totalProRataAllocation: requireBigInt(result[2], 'Auction withdraw simulation pro-rata allocation'),
 	}
 }
 

@@ -279,5 +279,7 @@ assert.match(protocolTerms, /A delayed action that cannot run until the coordina
 assert.match(protocolTerms, /'bond allowance': 'The amount of REP-backed security-bond exposure a vault currently permits\.'/)
 assert.match(protocolTerms, /'security-bond allowance': 'The current amount of REP-backed exposure a vault allows the pool or coordinator to use\.'/)
 assert.match(protocolTerms, /'split migration rep': 'The action that mints a chosen amount of child REP in each selected child universe, capped per child by the caller migration balance\. This is reproduction, not pro-rata splitting\.'/)
+assert.match(protocolTerms, /When any ETH qualifies, those bidders collectively buy the complete maxRepBeingSold for their retained ETH at one effective price/)
+assert.doesNotMatch(protocolTerms, /floor\(maxRepBeingSold times underfundedWinningEth divided by ethRaiseCap\)/)
 assert.match(protocolTerms, /repPerEthPrice: repEthPriceDefinition/)
 assert.match(protocolTerms, /'rep\/eth price': repEthPriceDefinition/)

@@ -694,6 +694,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	}
 
 	function finalizeTruthAuction(ISecurityPool securityPool) external payable {
+		require(msg.value == 0, 'Auction finalization does not accept repair contributions');
 		require(
 			block.timestamp > _getForkData(securityPool).truthAuctionStarted + SecurityPoolUtils.AUCTION_TIME,
 			'Auction open'
@@ -802,19 +803,40 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	) private {
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
 		require(data.truthAuction.finalized(), 'Not final');
-		(uint256 amount, ) = data.truthAuction.withdrawBids(vault, tickIndices);
-		if (amount == 0) return;
+		(uint256 amount, , uint256 newSecurityBondAllowance) = data.truthAuction.withdrawBids(
+			vault,
+			tickIndices,
+			data.auctionedSecurityBondAllowance
+		);
+		_creditAuctionProceeds(
+			securityPool,
+			vault,
+			data,
+			amount,
+			newSecurityBondAllowance,
+			data.truthAuction.totalRepPurchased()
+		);
+	}
+
+	function _creditAuctionProceeds(
+		ISecurityPool securityPool,
+		address vault,
+		SecurityPoolForkerForkData storage data,
+		uint256 amount,
+		uint256 newSecurityBondAllowance,
+		uint256 totalRepPurchased
+	) internal {
+		if (amount == 0 && newSecurityBondAllowance == 0) return;
 		uint256 auctionPoolOwnershipPerRep = data.auctionPoolOwnershipPerRep;
-		require(auctionPoolOwnershipPerRep > 0, 'Rate');
+		if (amount > 0) require(auctionPoolOwnershipPerRep > 0, 'Rate');
 		uint256 poolOwnershipAmount = amount * auctionPoolOwnershipPerRep;
 		uint256 nextClaimedAuctionPoolOwnership = data.claimedAuctionPoolOwnership + poolOwnershipAmount;
-		require(
-			nextClaimedAuctionPoolOwnership <= data.truthAuction.totalRepPurchased() * auctionPoolOwnershipPerRep,
-			'REP'
-		);
-		uint256 newSecurityBondAllowance = _calculateAuctionedSecurityBondAllowance(data, amount);
+		require(nextClaimedAuctionPoolOwnership <= totalRepPurchased * auctionPoolOwnershipPerRep, 'REP');
+		uint256 nextClaimedAuctionedSecurityBondAllowance =
+			data.claimedAuctionedSecurityBondAllowance + newSecurityBondAllowance;
+		require(nextClaimedAuctionedSecurityBondAllowance <= data.auctionedSecurityBondAllowance, 'Allowance');
 		data.claimedAuctionRepPurchased += amount;
-		data.claimedAuctionedSecurityBondAllowance += newSecurityBondAllowance;
+		data.claimedAuctionedSecurityBondAllowance = nextClaimedAuctionedSecurityBondAllowance;
 		data.claimedAuctionPoolOwnership = nextClaimedAuctionPoolOwnership;
 		securityPool.updateVaultFees(vault);
 		(uint256 poolOwnership, uint256 currentSecurityBondAllowance, , uint256 currentFeeIndex) = securityPool
@@ -835,18 +857,6 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			data.claimedAuctionRepPurchased,
 			data.claimedAuctionedSecurityBondAllowance
 		);
-	}
-
-	function _calculateAuctionedSecurityBondAllowance(
-		SecurityPoolForkerForkData storage data,
-		uint256 amount
-	) private view returns (uint256 newSecurityBondAllowance) {
-		uint256 totalRepPurchased = data.truthAuction.totalRepPurchased();
-		if (data.claimedAuctionRepPurchased + amount == totalRepPurchased) {
-			newSecurityBondAllowance = data.auctionedSecurityBondAllowance - data.claimedAuctionedSecurityBondAllowance;
-		} else {
-			newSecurityBondAllowance = (data.auctionedSecurityBondAllowance * amount) / totalRepPurchased;
-		}
 	}
 
 	function _refundLosingAuctionBidsForSettlement(

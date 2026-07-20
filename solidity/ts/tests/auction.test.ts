@@ -271,7 +271,7 @@ describe('Auction', () => {
 			abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 			functionName: 'withdrawBids',
 			address: localAuctionAddress,
-			args: [ownerClient.account.address, [{ bidIndex: bidCount - 1n, tick: sameTick }]],
+			args: [ownerClient.account.address, [{ bidIndex: bidCount - 1n, tick: sameTick }], 0n],
 		})
 	}
 
@@ -979,7 +979,7 @@ describe('Auction', () => {
 			await assertContractEmpty(client, auctionAddress)
 		})
 
-		test('underfunded auction sells REP proportionally at the cap-implied reserve', async () => {
+		test('underfunded auction sells the complete REP cap at one weak-demand price', async () => {
 			const ethRaiseCap = 20n * 10n ** 18n
 			const maxRepBeingSold = 10n * 10n ** 18n
 			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
@@ -1002,9 +1002,9 @@ describe('Auction', () => {
 			strictEqualTypeSafe(clearingPre.hitCap, false, 'hitCap should be false (underfunded)')
 			const [previewEthToSend, previewRepPurchased] = await previewFinalization(client, auctionAddress)
 			const expectedWinningEth = aliceEth + bobEth
-			const expectedRepPurchased = (maxRepBeingSold * expectedWinningEth) / ethRaiseCap
+			const expectedRepPurchased = maxRepBeingSold
 			strictEqualTypeSafe(previewEthToSend, expectedWinningEth, 'underfunded preview should return qualifying ETH')
-			strictEqualTypeSafe(previewRepPurchased, expectedRepPurchased, 'underfunded preview should return proportional REP')
+			strictEqualTypeSafe(previewRepPurchased, expectedRepPurchased, 'underfunded preview should sell the complete REP cap')
 
 			// Finalize the auction
 			await mockWindow.advanceTime(AUCTION_TIME + 1n)
@@ -1012,7 +1012,7 @@ describe('Auction', () => {
 
 			const totalRep = await getTotalRepPurchased(client, auctionAddress)
 			strictEqualTypeSafe(totalRep, previewRepPurchased, 'finalization should use the previewed REP amount')
-			assert.ok(totalRep > 0n && totalRep < maxRepBeingSold, 'underfunded demand should buy a positive amount below the REP cap')
+			strictEqualTypeSafe(totalRep, maxRepBeingSold, 'underfunded qualifying demand should buy the complete REP cap')
 			const expectedBobRep = (bobEth * totalRep) / (aliceEth + bobEth)
 			const expectedAliceRep = totalRep - expectedBobRep
 
@@ -1088,7 +1088,7 @@ describe('Auction', () => {
 			await finalize(client, auctionAddress)
 
 			const expectedTotalRep = await getTotalRepPurchased(client, auctionAddress)
-			assert.ok(expectedTotalRep > 0n && expectedTotalRep < maxRepBeingSold, 'underfunded demand should purchase a proportional amount below the REP cap')
+			strictEqualTypeSafe(expectedTotalRep, maxRepBeingSold, 'underfunded demand should purchase the complete REP cap')
 
 			const settlementSnapshot = await mockWindow.anvilSnapshot()
 			const winningBids = [
@@ -1154,6 +1154,37 @@ describe('Auction', () => {
 			strictEqualTypeSafe(aliceReverse.totalFilledRep + bobReverse.totalFilledRep, expectedTotalRep, 'reverse withdrawals should reconcile to proportional REP purchased')
 		})
 
+		test('companion allocation remains claimable when a winning bid rounds to zero REP', async () => {
+			const alice = createTestClient(0)
+			const bob = createTestClient(1)
+			const aliceTick = tickForPrice(5n * PRICE_PRECISION)
+			const bobTick = tickForPrice(4n * PRICE_PRECISION)
+
+			await startAuction(client, auctionAddress, 4n, 1n)
+			await submitBid(alice, auctionAddress, aliceTick, 1n)
+			await submitBid(bob, auctionAddress, bobTick, 1n)
+			await mockWindow.advanceTime(AUCTION_TIME + 1n)
+			await finalize(client, auctionAddress)
+
+			const settlementSnapshot = await mockWindow.anvilSnapshot()
+			const aliceForward = await simulateWithdrawBids(client, auctionAddress, alice.account.address, [{ tick: aliceTick, bidIndex: 0n }], 3n)
+			strictEqualTypeSafe(aliceForward.totalFilledRep, 0n, 'the first winning bid should exercise zero REP rounding')
+			strictEqualTypeSafe(aliceForward.totalProRataAllocation, 1n, 'zero REP rounding must not discard the bid positional companion allocation')
+			await withdrawBids(client, auctionAddress, alice.account.address, [{ tick: aliceTick, bidIndex: 0n }], 3n)
+			const bobForward = await simulateWithdrawBids(client, auctionAddress, bob.account.address, [{ tick: bobTick, bidIndex: 0n }], 3n)
+			strictEqualTypeSafe(bobForward.totalFilledRep, 1n, 'the final winning bid should receive the REP rounding unit')
+			strictEqualTypeSafe(bobForward.totalProRataAllocation, 2n, 'the final winning bid should receive the remaining companion allocation')
+
+			await mockWindow.anvilRevert(settlementSnapshot)
+			const bobReverse = await simulateWithdrawBids(client, auctionAddress, bob.account.address, [{ tick: bobTick, bidIndex: 0n }], 3n)
+			await withdrawBids(client, auctionAddress, bob.account.address, [{ tick: bobTick, bidIndex: 0n }], 3n)
+			const aliceReverse = await simulateWithdrawBids(client, auctionAddress, alice.account.address, [{ tick: aliceTick, bidIndex: 0n }], 3n)
+
+			strictEqualTypeSafe(aliceReverse.totalProRataAllocation, aliceForward.totalProRataAllocation, 'zero-REP companion allocation must not depend on withdrawal order')
+			strictEqualTypeSafe(bobReverse.totalProRataAllocation, bobForward.totalProRataAllocation, 'positive-REP companion allocation must not depend on withdrawal order')
+			strictEqualTypeSafe(aliceReverse.totalProRataAllocation + bobReverse.totalProRataAllocation, 3n, 'all companion allocation units should reconcile across separately settled bids')
+		})
+
 		test('rounded intermediate prefixes do not hide a later valid underfunded prefix', async () => {
 			const highBidder = createTestClient(0)
 			const mediumBidder = createTestClient(1)
@@ -1171,12 +1202,12 @@ describe('Auction', () => {
 			strictEqualTypeSafe(clearingPre.hitCap, false, 'the below-reserve low tick should leave the auction underfunded')
 			await finalizeAndVerify(client, auctionAddress)
 
-			strictEqualTypeSafe(await getTotalRepPurchased(client, auctionAddress), 1n, 'two qualifying wei should purchase one proportional REP wei')
+			strictEqualTypeSafe(await getTotalRepPurchased(client, auctionAddress), 2n, 'qualifying demand should purchase the complete two-wei REP cap')
 
 			const highResult = await simulateWithdrawBids(client, auctionAddress, highBidder.account.address, [{ tick: highTick, bidIndex: 0n }])
 			const mediumResult = await simulateWithdrawBids(client, auctionAddress, mediumBidder.account.address, [{ tick: mediumTick, bidIndex: 0n }])
 			const lowResult = await simulateWithdrawBids(client, auctionAddress, lowBidder.account.address, [{ tick: lowTick, bidIndex: 0n }])
-			strictEqualTypeSafe(highResult.totalFilledRep + mediumResult.totalFilledRep, 1n, 'the valid winning prefix should reconcile to its one-wei REP allocation')
+			strictEqualTypeSafe(highResult.totalFilledRep + mediumResult.totalFilledRep, 2n, 'the valid winning prefix should reconcile to the complete REP cap')
 			strictEqualTypeSafe(highResult.totalEthRefund + mediumResult.totalEthRefund, 0n, 'the qualifying high-and-medium bids should retain their ETH')
 			strictEqualTypeSafe(lowResult.totalFilledRep, 0n, 'the below-reserve low bid should receive no REP')
 			strictEqualTypeSafe(lowResult.totalEthRefund, 1n, 'the below-reserve low bid should refund in full')
@@ -1197,11 +1228,11 @@ describe('Auction', () => {
 			await finalize(client, auctionAddress)
 
 			const totalRep = await getTotalRepPurchased(client, auctionAddress)
-			assert.ok(totalRep > 0n && totalRep < maxRepBeingSold, 'reserve-price demand below the ETH cap should buy proportional REP')
+			strictEqualTypeSafe(totalRep, maxRepBeingSold, 'reserve-price demand below the ETH cap should buy the complete REP cap')
 
 			const withdrawal = await simulateWithdrawBids(client, auctionAddress, alice.account.address, [{ tick: thresholdTick, bidIndex: 0n }])
 			strictEqualTypeSafe(withdrawal.totalEthRefund, 0n, 'threshold-clearing winner should not receive an ETH refund')
-			strictEqualTypeSafe(withdrawal.totalFilledRep, totalRep, 'reserve-price winner should receive the proportional REP allocation')
+			strictEqualTypeSafe(withdrawal.totalFilledRep, totalRep, 'reserve-price winner should receive the complete REP cap')
 		})
 
 		test('underfunded winning prefixes can end at tick 0', async () => {
@@ -1229,7 +1260,7 @@ describe('Auction', () => {
 
 			strictEqualTypeSafe(await getClearingTick(client, auctionAddress), boundaryWinningTick, 'the winning prefix boundary should be tick 0')
 			const totalRepPurchased = await getTotalRepPurchased(client, auctionAddress)
-			assert.ok(totalRepPurchased > 0n && totalRepPurchased < maxRepBeingSold, 'the underfunded winning prefix should receive proportional REP')
+			strictEqualTypeSafe(totalRepPurchased, maxRepBeingSold, 'the underfunded winning prefix should receive the complete REP cap')
 			strictEqualTypeSafe(await getEthRaised(client, auctionAddress), 3n * bidAmount, 'ethRaised should continue to track submitted ETH')
 
 			let totalWinningRep = 0n
@@ -1245,7 +1276,7 @@ describe('Auction', () => {
 				await withdrawBids(client, auctionAddress, withdrawFor, [{ tick, bidIndex: 0n }])
 			}
 
-			strictEqualTypeSafe(totalWinningRep, totalRepPurchased, 'winning-prefix withdrawals should reconcile to proportional REP purchased')
+			strictEqualTypeSafe(totalWinningRep, totalRepPurchased, 'winning-prefix withdrawals should reconcile to the complete REP cap')
 
 			await assertContractEmpty(client, auctionAddress)
 		})

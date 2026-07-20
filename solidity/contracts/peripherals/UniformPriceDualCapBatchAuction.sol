@@ -166,8 +166,10 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 			return (foundTick, 0, finalRepPurchased, accumulatedEth);
 		}
 
-		// Underfunded bids buy REP only at or above the auction reserve implied by
-		// both caps. This keeps REP issued proportional to ETH actually raised.
+		// Underfunded bids qualify only at or above the reserve implied by both caps.
+		// Qualifying bidders collectively buy the complete REP sale cap for the ETH
+		// they submitted, so every winner receives the same effective ETH/REP price.
+		// Bids below the reserve remain refundable.
 		if (accumulatedEth == 0 || maxRepBeingSold == 0) return (0, 0, 0, 0);
 		finalClearingTick = _priceToCeilingTick(underfundedThreshold);
 		uint256 clearingPrice = tickToPrice(finalClearingTick);
@@ -175,8 +177,8 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 
 		finalUnderfundedWinningEth =
 			_getActiveEthAboveTick(root, finalClearingTick) + _getEthAtTick(root, finalClearingTick);
-		finalRepPurchased = Math.mulDiv(maxRepBeingSold, finalUnderfundedWinningEth, ethRaiseCap);
-		if (finalRepPurchased == 0) return (finalClearingTick, 0, 0, 0);
+		if (finalUnderfundedWinningEth == 0) return (finalClearingTick, 0, 0, 0);
+		finalRepPurchased = maxRepBeingSold;
 		return (finalClearingTick, finalUnderfundedWinningEth, finalRepPurchased, finalUnderfundedWinningEth);
 	}
 
@@ -190,8 +192,9 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 
 	function withdrawBids(
 		address withdrawFor,
-		IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices
-	) external returns (uint256 totalFilledRep, uint256 totalEthRefund) {
+		IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices,
+		uint256 proRataTotal
+	) external returns (uint256 totalFilledRep, uint256 totalEthRefund, uint256 totalProRataAllocation) {
 		require(finalized, 'Auction must be finalized before withdrawing bids');
 		// The owner is expected to be the coordinating forker contract for truth auctions,
 		// not the bidder directly. That contract calls this and then accounts the returned
@@ -218,7 +221,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 			if (underfunded) {
 				if (underfundedWinningEth > 0 && tick >= clearingTick) {
 					ethUsed = bid.ethAmount;
-					repFilled = _allocateRepFromCumulativePosition(
+					repFilled = _allocateFromCumulativePosition(
 						cumulativeWinningEthBeforeBid,
 						bid.ethAmount,
 						totalRepPurchased,
@@ -235,7 +238,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 					status = BidSettlementStatus.Losing;
 				} else if (tick > clearingTick) {
 					ethUsed = bid.ethAmount;
-					repFilled = _allocateRepFromCumulativePosition(
+					repFilled = _allocateFromCumulativePosition(
 						cumulativeWinningEthBeforeBid,
 						bid.ethAmount,
 						PRICE_PRECISION,
@@ -253,7 +256,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 						ethUsed = ethFilledAtClearing - previousCumulativeEth;
 					}
 					if (ethUsed > bid.ethAmount) ethUsed = bid.ethAmount;
-					repFilled = _allocateRepFromCumulativePosition(
+					repFilled = _allocateFromCumulativePosition(
 						cumulativeWinningEthBeforeBid,
 						ethUsed,
 						PRICE_PRECISION,
@@ -270,6 +273,12 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 				}
 			}
 			totalFilledRep += repFilled;
+			totalProRataAllocation += _allocateFromCumulativePosition(
+				cumulativeWinningEthBeforeBid,
+				ethUsed,
+				proRataTotal,
+				ethRaised
+			);
 			totalEthRefund += ethRefund;
 			bid.claimed = true;
 			emit BidSettled(withdrawFor, tick, index, bid.ethAmount, ethUsed, repFilled, ethRefund, status);
@@ -491,16 +500,20 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 			});
 	}
 
-	function _allocateRepFromCumulativePosition(
-		uint256 cumulativeEthBefore,
-		uint256 ethUsed,
-		uint256 repNumerator,
+	function _allocateFromCumulativePosition(
+		uint256 cumulativeAmountBefore,
+		uint256 amountUsed,
+		uint256 allocationNumerator,
 		uint256 denominator
-	) private pure returns (uint256 repShare) {
-		if (ethUsed == 0 || repNumerator == 0 || denominator == 0) return 0;
-		uint256 cumulativeRepBefore = Math.mulDiv(cumulativeEthBefore, repNumerator, denominator);
-		uint256 cumulativeRepAfter = Math.mulDiv(cumulativeEthBefore + ethUsed, repNumerator, denominator);
-		return cumulativeRepAfter - cumulativeRepBefore;
+	) private pure returns (uint256 allocation) {
+		if (amountUsed == 0 || allocationNumerator == 0 || denominator == 0) return 0;
+		uint256 cumulativeAllocationBefore = Math.mulDiv(cumulativeAmountBefore, allocationNumerator, denominator);
+		uint256 cumulativeAllocationAfter = Math.mulDiv(
+			cumulativeAmountBefore + amountUsed,
+			allocationNumerator,
+			denominator
+		);
+		return cumulativeAllocationAfter - cumulativeAllocationBefore;
 	}
 
 	function _getActiveEthAboveTick(uint256 nodeId, int256 tick) private view returns (uint256 ethAbove) {
