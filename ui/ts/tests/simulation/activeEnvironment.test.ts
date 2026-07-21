@@ -3,7 +3,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/shared/ethereum'
 import { loadDeploymentStatusOracleSnapshot, loadErc20Balance } from '../../protocol/index.js'
-import { getWalletScopedAccountAddress, getWrongNetworkMessage, isSupportedAppChain } from '../../lib/network.js'
+import { getChainDisplayLabel, getWalletScopedAccountAddress, getWrongNetworkMessage, isSupportedAppChain } from '../../lib/network.js'
 import { getActiveBackend, initializeActiveEnvironment, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting, shouldUseSimulationLocation } from '../../lib/activeEnvironment.js'
 import { SIMULATION_BLOCK_INTERVAL_SECONDS, SIMULATION_INITIAL_TIMESTAMP } from '../../simulation/clock.js'
 import { parseSavedSimulationStateEnvelope, persistSavedSimulationState, serializeSavedSimulationStateEnvelope } from '../../simulation/savedStates.js'
@@ -48,6 +48,34 @@ void describe('active environment', () => {
 		expect(isSupportedAppChain('0x539')).toBe(true)
 		expect(getWrongNetworkMessage()).toBeUndefined()
 		resetEnvironment()
+	})
+
+	void test('labels 20 common EVM chains and falls back to a decimal chain ID', () => {
+		const commonChains = [
+			['0x1', 'Ethereum'],
+			['0xa', 'Optimism'],
+			['0x19', 'Cronos'],
+			['0x38', 'BNB Smart Chain'],
+			['0x64', 'Gnosis'],
+			['0x89', 'Polygon'],
+			['0xa9', 'Manta Pacific'],
+			['0xfa', 'Fantom'],
+			['0x144', 'zkSync Era'],
+			['0x44d', 'Polygon zkEVM'],
+			['0x504', 'Moonbeam'],
+			['0x1388', 'Mantle'],
+			['0x2105', 'Base'],
+			['0xa4b1', 'Arbitrum One'],
+			['0xa4ba', 'Arbitrum Nova'],
+			['0xa4ec', 'Celo'],
+			['0xa86a', 'Avalanche'],
+			['0xe708', 'Linea'],
+			['0x13e31', 'Blast'],
+			['0x82750', 'Scroll'],
+		] as const
+
+		expect(commonChains.map(([chainId, _name]) => getChainDisplayLabel(chainId))).toEqual(commonChains.map(([_chainId, name]) => name))
+		expect(getChainDisplayLabel('0xcc6b')).toBe('52331')
 	})
 
 	void test('clears wallet-scoped account access when the connected wallet is on the wrong network', () => {
