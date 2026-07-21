@@ -1110,6 +1110,38 @@ button.currency-value.copyable:hover:not(:disabled) {
 	margin-top: 0.65rem;
 }
 
+.simulation-banner-details > summary {
+	display: none;
+}
+
+.simulation-banner-compact-summary,
+.simulation-banner-compact-state {
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.simulation-banner-compact-summary {
+	display: flex;
+	justify-content: space-between;
+}
+
+.simulation-banner-compact-state {
+	display: flex;
+	min-width: 0;
+	flex-wrap: wrap;
+}
+
+.simulation-banner-compact-account {
+	white-space: nowrap;
+}
+
+.simulation-banner-compact-action {
+	color: var(--simulation-text-secondary);
+	font-size: var(--font-caption);
+	font-weight: 700;
+	white-space: nowrap;
+}
+
 .simulation-banner-row {
 	border-top-color: rgba(255, 221, 122, 0.18);
 	padding: 0.5rem 0;
@@ -7171,6 +7203,27 @@ main.global-transaction-tray-open {
 	.simulation-banner > .contract-panel-header:first-child {
 		margin: -0.55rem -0.55rem 0;
 		padding: 0.55rem 0.55rem 0;
+	}
+
+	.simulation-banner-details > summary {
+		display: block;
+		cursor: pointer;
+		padding: 0.6rem 0.15rem 0.1rem;
+		color: var(--simulation-text);
+	}
+
+	.simulation-banner-details > summary:focus-visible {
+		border-radius: var(--radius-control);
+		outline: 2px solid var(--focus);
+		outline-offset: 3px;
+	}
+
+	.simulation-banner-details:not([open]) > .simulation-banner-list {
+		display: none;
+	}
+
+	.simulation-banner-details[open] > summary {
+		margin-bottom: 0.35rem;
 	}
 
 	.simulation-banner-row {

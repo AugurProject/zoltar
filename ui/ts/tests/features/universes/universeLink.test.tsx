@@ -42,7 +42,7 @@ describe('UniverseLink', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const link = documentQueries.getByRole('link', { name: 'Universe 10' }) as HTMLAnchorElement
+		const link = documentQueries.getByRole('link', { name: 'Universe 0xa' }) as HTMLAnchorElement
 		const expectedHref = getUniverseLinkHref(10n)
 		expect(link.getAttribute('href')).toBe(expectedHref)
 		let popstateCount = 0

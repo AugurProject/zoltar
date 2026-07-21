@@ -317,7 +317,7 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes('Settle Escalation Deposits')).toBe(true)
 		const transactionContext = document.body.querySelector('.transaction-object-context')
 		if (!(transactionContext instanceof HTMLElement)) throw new Error('Expected reporting transaction context')
-		expect(transactionContext.textContent?.includes('Universe 1')).toBe(true)
+		expect(transactionContext.textContent?.includes('Universe 0x1')).toBe(true)
 		expect(transactionContext.textContent?.includes('Source Vault')).toBe(false)
 		expect(transactionContext.textContent?.includes(zeroAddress)).toBe(false)
 	})

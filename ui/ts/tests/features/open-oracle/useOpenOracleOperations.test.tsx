@@ -344,6 +344,35 @@ describe('useOpenOracleOperations', () => {
 		expect(tokenAccessLoadCount).toBe(1)
 	})
 
+	test('approval failures use base and quote token terminology', async () => {
+		const dependencies = createOpenOracleOperationsDependencies({
+			loadOpenOracleReportDetails: mock(async () =>
+				createOpenOracleReportDetails({
+					currentReporter: getAddress('0x00000000000000000000000000000000000000dd'),
+					reportTimestamp: 1n,
+					settlementTime: 100n,
+				}),
+			),
+		})
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+			await requireHookState(hookState).approveToken1(1n)
+		})
+		expect(requireHookState(hookState).openOracleFeedback?.status.title).toBe('Base token approval failed')
+
+		await act(async () => {
+			await requireHookState(hookState).approveToken2(1n)
+		})
+		expect(requireHookState(hookState).openOracleFeedback?.status.title).toBe('Quote token approval failed')
+	})
+
 	test('settleReport ignores a stale post-success refresh after the selected report changes', async () => {
 		const secondReportId = 2n
 		const firstReportDetails = createOpenOracleReportDetails({
@@ -786,6 +815,37 @@ describe('useOpenOracleOperations', () => {
 
 		expect(createOpenOracleReportInstance).toHaveBeenCalledTimes(1)
 		expect(requireHookState(hookState).openOracleFeedback?.status.tone).toBe('success')
+	})
+
+	test('createOpenOracleGame reports invalid decimals with user-facing token terminology', async () => {
+		const dependencies = createOpenOracleOperationsDependencies({
+			createConnectedReadClient: mock(() => ({
+				getBalance: mock(async () => 5n * 10n ** 18n),
+				getBlockNumber: mock(async () => 123n),
+				readContract: mock(async () => 256),
+			})),
+		})
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			requireHookState(hookState).setOpenOracleCreateForm(current => ({
+				...current,
+				exactToken1Report: '10',
+				initialToken2Amount: '5',
+				settlementTime: '1',
+				token1Address: TOKEN1_ADDRESS,
+				token2Address: TOKEN2_ADDRESS,
+			}))
+			await requireHookState(hookState).createOpenOracleGame()
+		})
+
+		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('Unexpected Base token decimals response')
+		expect(requireHookState(hookState).openOracleFeedback?.status.title).toBe('Report creation failed')
 	})
 
 	test('disputeReport snapshots the submitted dispute inputs before token access refresh resolves', async () => {

@@ -103,7 +103,7 @@ export function MarketSection({
 					<DataGrid columns='auto'>
 						<div>
 							<p className='detail'>{commonCopy.universe}</p>
-							<strong>{zoltarUniverse?.universeId.toString() ?? commonCopy.loadingWithEllipsis}</strong>
+							<strong>{zoltarUniverse === undefined ? commonCopy.loadingWithEllipsis : <TransactionUniverseValue universeId={zoltarUniverse.universeId} />}</strong>
 						</div>
 						<div>
 							<p className='detail'>{commonCopy.status}</p>

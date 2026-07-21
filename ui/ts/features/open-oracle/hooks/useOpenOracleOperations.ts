@@ -174,11 +174,11 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 	const getPendingTitle = (actionName: OpenOracleActionResult['action']) => {
 		switch (actionName) {
 			case 'approveToken1':
-				return 'Approving token1'
+				return 'Approving base token'
 			case 'approveToken2':
-				return 'Approving token2'
+				return 'Approving quote token'
 			case 'createReportInstance':
-				return 'Creating report instance'
+				return 'Creating standalone oracle report'
 			case 'dispute':
 				return 'Submitting dispute'
 			case 'executeStagedOperation':
@@ -200,11 +200,11 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 	const getSuccessTitle = (actionName: OpenOracleActionResult['action']) => {
 		switch (actionName) {
 			case 'approveToken1':
-				return 'Token1 approved'
+				return 'Base token approved'
 			case 'approveToken2':
-				return 'Token2 approved'
+				return 'Quote token approved'
 			case 'createReportInstance':
-				return 'Report instance created'
+				return 'Standalone oracle report created'
 			case 'dispute':
 				return 'Dispute submitted'
 			case 'executeStagedOperation':
@@ -226,9 +226,9 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 	const getFailureTitle = (actionName: OpenOracleActionResult['action']) => {
 		switch (actionName) {
 			case 'approveToken1':
-				return 'Token1 approval failed'
+				return 'Base token approval failed'
 			case 'approveToken2':
-				return 'Token2 approval failed'
+				return 'Quote token approval failed'
 			case 'createReportInstance':
 				return 'Report creation failed'
 			case 'dispute':
@@ -610,10 +610,10 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 					if (getOpenOracleSelectedReportActionMode(reportDetails) !== 'dispute') throw new Error('Token approvals are only available while disputing a report')
 					const disputeSubmission = getDisputeSubmission(reportDetails, submittedOpenOracleForm)
 					const approvalAmount = amount ?? disputeSubmission.token1Approval.targetAmount ?? disputeSubmission.token1ContributionAmount
-					if (approvalAmount === undefined) throw new Error('No token1 approval amount is required for the selected report')
+					if (approvalAmount === undefined) throw new Error('No base token approval amount is required for the selected report')
 					return await dependencies.approveErc20(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), reportDetails.token1, getOpenOracleAddress(), approvalAmount, 'approveToken1')
 				},
-				'Failed to approve token1',
+				'Failed to approve base token',
 				{ refreshTokenAccessOnSuccess: true },
 			)
 		})()
@@ -630,10 +630,10 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 					if (getOpenOracleSelectedReportActionMode(reportDetails) !== 'dispute') throw new Error('Token approvals are only available while disputing a report')
 					const disputeSubmission = getDisputeSubmission(reportDetails, submittedOpenOracleForm)
 					const approvalAmount = amount ?? disputeSubmission.token2Approval.targetAmount ?? disputeSubmission.token2ContributionAmount
-					if (approvalAmount === undefined) throw new Error('No token2 approval amount is required for the selected report')
+					if (approvalAmount === undefined) throw new Error('No quote token approval amount is required for the selected report')
 					return await dependencies.approveErc20(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), reportDetails.token2, getOpenOracleAddress(), approvalAmount, 'approveToken2')
 				},
-				'Failed to approve token2',
+				'Failed to approve quote token',
 				{ refreshTokenAccessOnSuccess: true },
 			)
 		})()
@@ -657,18 +657,18 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 					if (createGuardMessage !== undefined) throw new Error(createGuardMessage)
 					const createValidationMessage = getOpenOracleCreateValidationMessage({ form: submittedOpenOracleCreateForm })
 					if (createValidationMessage !== undefined) throw new Error(createValidationMessage)
-					const token1Address = parseAddressInput(submittedOpenOracleCreateForm.token1Address, 'Token1 address')
-					const token2Address = parseAddressInput(submittedOpenOracleCreateForm.token2Address, 'Token2 address')
+					const token1Address = parseAddressInput(submittedOpenOracleCreateForm.token1Address, 'Base token address')
+					const token2Address = parseAddressInput(submittedOpenOracleCreateForm.token2Address, 'Quote token address')
 					const [token1Decimals, token2Decimals] = await Promise.all([
-						readClient.readContract({ abi: ABIS.mainnet.erc20, address: token1Address, args: [], functionName: 'decimals' }).then(value => requireTokenDecimals(value, 'token1')),
-						readClient.readContract({ abi: ABIS.mainnet.erc20, address: token2Address, args: [], functionName: 'decimals' }).then(value => requireTokenDecimals(value, 'token2')),
+						readClient.readContract({ abi: ABIS.mainnet.erc20, address: token1Address, args: [], functionName: 'decimals' }).then(value => requireTokenDecimals(value, 'Base token')),
+						readClient.readContract({ abi: ABIS.mainnet.erc20, address: token2Address, args: [], functionName: 'decimals' }).then(value => requireTokenDecimals(value, 'Quote token')),
 					])
 					const preciseCreateValidationMessage = getOpenOracleCreateValidationMessage({ form: submittedOpenOracleCreateForm, token1Decimals, token2Decimals })
 					if (preciseCreateValidationMessage !== undefined) throw new Error(preciseCreateValidationMessage)
 
 					return await dependencies.createOpenOracleReportInstance(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), parseOpenOracleCreateFormSubmission({ form: submittedOpenOracleCreateForm, token1Decimals, token2Decimals }))
 				},
-				'Failed to create Open Oracle game',
+				'Failed to create standalone Open Oracle report',
 			)
 		} finally {
 			loadingOpenOracleCreate.value = false
@@ -730,8 +730,8 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 						getOpenOracleAddress(),
 						details.reportId,
 						tokenToSwap,
-						parseBigIntInput(submittedOpenOracleForm.disputeNewAmount1, 'New token1 amount'),
-						parseBigIntInput(submittedOpenOracleForm.disputeNewAmount2, 'New token2 amount'),
+						parseBigIntInput(submittedOpenOracleForm.disputeNewAmount1, 'New base token amount'),
+						parseBigIntInput(submittedOpenOracleForm.disputeNewAmount2, 'New quote token amount'),
 						details.currentAmount2,
 						parseBytes32Input(submittedOpenOracleForm.stateHash, 'State hash'),
 					)

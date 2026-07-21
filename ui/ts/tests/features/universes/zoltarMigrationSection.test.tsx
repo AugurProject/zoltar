@@ -212,7 +212,7 @@ describe('ZoltarMigrationSection', () => {
 
 		const review = within(document.body).getByRole('heading', { name: 'Transaction Review' }).closest('section')
 		if (review === null) throw new Error('Expected transaction review')
-		expect(review.textContent).toContain('Yes · Universe 2')
+		expect(review.textContent).toContain('Yes · Universe 0x2')
 		expect(review.textContent).toContain('Child-Universe REP Received')
 		expect(review.textContent).toContain(ZOLTAR_ADDRESS)
 		expect(review.textContent?.match(/Selected Destinations/g)).toHaveLength(1)

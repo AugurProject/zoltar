@@ -107,6 +107,26 @@ describe('SimulationBanner', () => {
 		}
 	})
 
+	test('puts the full simulation controls behind a compact disclosure', async () => {
+		const domEnvironment = installDomEnvironment()
+		const controller = createSimulationController({ currentScenario: 'security-pool' })
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={async () => undefined} />)
+
+		try {
+			const disclosure = renderedComponent.container.querySelector('.simulation-banner-details')
+			if (!(disclosure instanceof HTMLElement) || disclosure.tagName !== 'DETAILS') throw new Error('Expected simulation banner disclosure')
+			expect(disclosure.hasAttribute('open')).toBe(true)
+			const summary = disclosure.querySelector('summary')
+			if (!(summary instanceof HTMLElement)) throw new Error('Expected simulation banner disclosure summary')
+			expect(summary.textContent).toContain('Ready')
+			expect(summary.textContent).toContain('Security pool')
+			expect(summary.textContent).toContain('QA account 1')
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
 	test('does not repeat generic framing inside advanced controls', async () => {
 		const domEnvironment = installDomEnvironment()
 		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={createSimulationController()} onRefresh={async () => undefined} />)

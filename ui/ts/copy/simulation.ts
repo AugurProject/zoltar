@@ -17,6 +17,8 @@ export const ready = 'Ready'
 export const bootstrapping = 'Bootstrapping'
 export const formatSavedStateDetail = (stateName: CopyTemplateValue, scenarioLabel: CopyTemplateValue, savedAt: CopyTemplateValue) => `Custom state "${stateName}" based on ${scenarioLabel}. Saved ${savedAt}.`
 export const browserSimulation = 'Browser Simulation'
+export const showSimulationDetails = 'Show details'
+export const hideSimulationDetails = 'Hide details'
 export const scenario = 'Scenario'
 export const scenarioPreparationDetail = 'Preparing the selected simulation scenario in the background.'
 export const simulationScenario = 'Simulation scenario'
