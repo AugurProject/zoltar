@@ -2,12 +2,14 @@ import { encodeFunctionData, RpcError, type Abi, type Account, type Address, typ
 import { getMulticall3Address } from './deploymentHelpers.js'
 import type { ReadClient, WriteClient } from '../types/contracts.js'
 import type { TransactionRequestPreview } from '../lib/chainBackend.js'
+import { getContractLabel } from './contractLabels.js'
 
 export type ContractRevertReasonParams = {
 	account?: Account | Address | undefined | null
 	abi: Abi | readonly unknown[]
 	address: Address
 	args?: readonly unknown[]
+	contractLabel?: string
 	functionName: string
 	gas?: bigint
 	value?: bigint
@@ -125,6 +127,7 @@ export async function writeContractAndWaitForReceipt<TCallParams extends Contrac
 			args: callParams.args,
 			chainName: client.chain?.name,
 			contractAddress: callParams.address,
+			contractLabel: callParams.contractLabel ?? getContractLabel(callParams.abi, callParams.functionName),
 			data,
 			functionName: callParams.functionName,
 			requiresWalletConfirmation: client.requiresWalletConfirmation,

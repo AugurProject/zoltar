@@ -12,7 +12,9 @@ type GlobalTransactionTrayProps = {
 const dismissedKeys = new Set<string>()
 
 function getDismissKey(transaction: GlobalTransactionPresentation | undefined) {
-	return transaction?.dismissKey ?? transaction?.hash
+	const baseKey = transaction?.dismissKey ?? transaction?.hash
+	if (baseKey === undefined || transaction === undefined) return undefined
+	return `${transaction.tone}:${baseKey}`
 }
 
 function getTransactionBadge(tone: GlobalTransactionPresentation['tone']): { label: string; tone: BadgeTone } {
@@ -31,6 +33,7 @@ export function GlobalTransactionTray({ transaction }: GlobalTransactionTrayProp
 		return transactionDismissKey
 	})
 	const dismissKeyRef = useRef(getDismissKey(transaction))
+	const noticeRef = useRef<HTMLDivElement>(null)
 
 	useEffect(() => {
 		const nextDismissKey = getDismissKey(transaction)
@@ -43,6 +46,25 @@ export function GlobalTransactionTray({ transaction }: GlobalTransactionTrayProp
 		setDismissedKey(nextDismissKey)
 	}, [transaction])
 
+	useEffect(() => {
+		const notice = noticeRef.current
+		if (notice === null) return
+		const main = notice.closest('main')
+		if (!(main instanceof HTMLElement) || transaction === undefined) return
+		const updateReservedSpace = () => {
+			main.style.setProperty('--global-transaction-tray-height', `${notice.getBoundingClientRect().height.toString()}px`)
+		}
+		main.classList.add('global-transaction-tray-open')
+		updateReservedSpace()
+		const resizeObserver = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(updateReservedSpace)
+		resizeObserver?.observe(notice)
+		return () => {
+			resizeObserver?.disconnect()
+			main.classList.remove('global-transaction-tray-open')
+			main.style.removeProperty('--global-transaction-tray-height')
+		}
+	}, [transaction, dismissedKey])
+
 	if (transaction === undefined) return undefined
 
 	const transactionDismissKey = getDismissKey(transaction)
@@ -52,13 +74,24 @@ export function GlobalTransactionTray({ transaction }: GlobalTransactionTrayProp
 	const transactionHash = transaction.hash
 	const showHash = transactionHash !== undefined
 	const rows = transaction.rows ?? []
+	const dismiss = () => {
+		if (transactionDismissKey === undefined) return
+		dismissedKeys.add(transactionDismissKey)
+		setDismissedKey(transactionDismissKey)
+	}
 
 	return (
 		<div className='global-transaction-tray'>
-			<div className='global-transaction-notice' role='status' aria-live='polite'>
+			<div ref={noticeRef} className='global-transaction-notice' role='status' aria-live='polite'>
+				{transactionDismissKey === undefined ? undefined : (
+					<button className='quiet global-transaction-close' type='button' aria-label={transactionCopy.closeStatus} onClick={dismiss}>
+						<span aria-hidden='true'>×</span>
+					</button>
+				)}
 				<div className='global-transaction-notice-copy'>
 					<div className='global-transaction-notice-header'>
 						<Badge tone={badge.tone}>{badge.label}</Badge>
+						{transaction.tone === 'awaiting-wallet' ? <span className='spinner global-transaction-spinner' aria-hidden='true' /> : undefined}
 						<strong>{transaction.title}</strong>
 					</div>
 					{transaction.detail === undefined ? undefined : <div className='global-transaction-notice-detail'>{transaction.detail}</div>}
@@ -75,16 +108,11 @@ export function GlobalTransactionTray({ transaction }: GlobalTransactionTrayProp
 					{!showHash ? undefined : <TransactionHashLink hash={transactionHash} />}
 				</div>
 				{!canDismiss ? undefined : (
-					<button
-						className='quiet global-transaction-dismiss'
-						type='button'
-						onClick={() => {
-							dismissedKeys.add(transactionDismissKey)
-							setDismissedKey(transactionDismissKey)
-						}}
-					>
-						{transactionCopy.dismiss}
-					</button>
+					<div className='global-transaction-actions'>
+						<button className='secondary global-transaction-dismiss' type='button' onClick={dismiss}>
+							{transactionCopy.dismiss}
+						</button>
+					</div>
 				)}
 			</div>
 		</div>
