@@ -24,6 +24,7 @@
 		"tevm": "1.0.0-rc.151"
 	},
 	"overrides": {
+		"brace-expansion": "5.0.7",
 		"tmp": "0.2.7",
 		"ws": "8.21.0"
 	},
