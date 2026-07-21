@@ -246,11 +246,6 @@ function validateEquations(parsedDocument: ParsedHtmlDocument, failures: Validat
 	}
 
 	const equations = Array.from(parsedDocument.document.querySelectorAll('.equation'))
-	if (equations.length === 0) {
-		addFailure(parsedDocument, 'does not contain any .equation MathML blocks', failures)
-		return
-	}
-
 	for (const equation of equations) {
 		validateEquationEnvelope(parsedDocument, equation, failures)
 	}

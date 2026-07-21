@@ -24,6 +24,16 @@ Classify each changed page as one or more of:
 
 Use that classification to set expectations. A focused reference page may link to a good overview; a conceptual page need not contain exhaustive parameter tables. Mixed-purpose pages need progressive disclosure and clear section boundaries.
 
+Duplication and canonical ownership:
+
+- For every added or materially rewritten claim, search the changed document and the rest of `docs/` for the same fact, rule, formula, parameter, warning, example, or close paraphrase. Search by distinctive domain terms as well as exact wording.
+- Review additions as concepts, not only lines. When a change adds several paragraphs, tables, callouts, diagrams, or examples, inventory the claims they introduce and check whether each claim already has a canonical owner elsewhere.
+- Check for duplication within the changed document as well as across documents. Include prose, table rows, figure captions, MathML `data-source` formulas, parameter values, security assumptions, and operational guardrails.
+- Prefer one canonical explanation with stable anchor links. A non-canonical page may retain the shortest summary needed for its reader journey, but it should link to the owner instead of reproducing derivations, parameter tables, edge-case catalogs, or worked examples.
+- Treat repeated normative security assumptions, current parameter values, formulas, and contract edge cases as elevated drift risks. Identify which page should own the claim based on the page classifications above.
+- Do not flag purposeful representations merely because they share a fact. Formal invariants may state a property, generated interaction references may map an entrypoint, and event-stream documentation may describe replay semantics while linking to the conceptual owner. Flag them when they also reproduce explanation that belongs elsewhere.
+- For each duplication finding, cite every relevant location, name the recommended canonical owner, and prescribe which copy should be replaced by a link or shortened summary.
+
 Reader journey:
 
 - Prefer a learnable sequence: problem and motivation, actors, happy path, lifecycle, guardrails, failure modes, economics or security assumptions, then reference detail.
@@ -70,4 +80,5 @@ Return the exact core sections required by `.codex/review-contract.md`, followed
 - `Story arc`
 - `What works well`
 - `Contract sync assessment`
+- `Duplication and canonical ownership assessment`
 """

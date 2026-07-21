@@ -136,7 +136,7 @@
 								<td>Incorrect sizing or settlement math; a bypass of public dispute access; cache use outside the documented window; or concrete launch parameters under which a material false report cannot be corrected profitably and in time.</td>
 							</tr>
 							<tr>
-								<td><strong>A caller may use any existing ended global question to fork any eligible universe.</strong> Zoltar does not require the question to belong to a market or pool in that universe.</td>
+							<td><strong>A caller may use any existing ended global question to fork any eligible universe.</strong> See the canonical <a href="./zoltar-whitepaper.html#global-question-scope">global-question mechanics</a>.</td>
 								<td>Permissionless fork admission is economic: the initiator commits the computed fork threshold in parent REP and receives migration credit only after the computed, floored haircut. Either value can floor to zero at dust supply. Applications may impose stricter question relevance above Zoltar.</td>
 								<td>A fork before the question ends; failure to collect or account for a nonzero computed threshold or haircut; recovery or duplication of a nonzero haircut; bypass of one-fork-per-parent state; malformed branches; or an application claiming stricter eligibility without enforcing it.</td>
 							</tr>
@@ -150,37 +150,28 @@
 				</div>
 				<div class="callout">
 					<p>
-						<strong>Cost examples under current defaults.</strong> A fork threshold
-						is approximately 5% of theoretical REP supply. With the default burn
-						divisor of <code>5</code>, one fifth of that threshold—approximately
-						1% of theoretical supply—is permanently uncredited, while the other
-						four fifths becomes migration credit. Integer division floors a
-						threshold to zero below <code>20</code> atomic units of theoretical
-						supply and floors the haircut to zero when a nonzero threshold is
-						below <code>5</code> atomic units. A deployment cannot claim a
-						meaningful fork admission cost beyond the supported depth validated
-						under <code>EXT-05</code>. For rolling disputes, the configured
-						protocol fee is 1% of the current side being swapped and is credited
-						inside OpenOracle to the fee sink
-						<code>0x000000000000000000000000000000000000dEaD</code>;
-						for example, a token1-side self-dispute against <code>24 WETH</code>
-						incurs a <code>0.24 WETH</code> protocol fee in addition to the
-						replacement-position change and transaction cost. Integer flooring
-						can make the fee zero for dust-sized sides, but it does not remove
-						the replacement-position requirement. This internal fee balance is
-						economically inaccessible at that address; crediting it does not
-						reduce ERC-20 total supply and is distinct from Zoltar's configured
-						genesis-REP burn sink.
+						<strong>Cost boundaries depend on configured parameters.</strong> Fork
+						admission uses a computed, floored threshold and haircut, so its
+						strength depends on supply along the recursive lineage. The
+						<a href="./zoltar-whitepaper.html#economics">Zoltar economics section</a>
+						owns current defaults, flooring boundaries, and worked values. Each valid rolling
+						dispute must fund a replacement position and the configured protocol
+						fee. Dust flooring can reduce that fee but not the replacement-position
+						requirement. Crediting an economically inaccessible internal fee balance
+						is not an ERC-20 supply burn. See the
+						<a href="./open-oracle-integration.html#rolling-dispute-security-classification">OpenOracle security classification</a>
+						and <a href="./open-oracle-integration.html#parameters">parameter table</a>
+						for current values and numerical examples.
 					</p>
 				</div>
 				<div class="callout" id="recursive-fork-depth-status">
 					<p>
-						<strong>Not an accepted property: recursive fork gas depth.</strong>
-						The contracts currently impose no explicit maximum recursive fork
-						depth. The resulting ancestor-dependent gas path remains the open
-						pre-deployment requirement <a href="./invariants.html#ext-05"><code>EXT-05</code></a>.
-						It must be bounded and validated before deployment; it must not be
-						closed as intentional merely because each individual fork is paid.
+						<strong>Recursive fork gas.</strong> The invariant catalog's
+						<a href="./invariants.html#ext-05"><code>EXT-05</code></a> entry is the
+						canonical source for the requirement, current enforcement status,
+						and depth-independence evidence. Reviewers should use that entry
+						rather than infer gas behavior from the economic cost of an
+						individual fork.
 					</p>
 				</div>
 			</section>
@@ -247,7 +238,7 @@
 					<a href="../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"><code>OpenOraclePriceCoordinator.sol</code></a>,
 					<a href="../solidity/ts/tests/priceOracleSecurity.test.ts"><code>priceOracleSecurity.test.ts</code></a>
 					(dynamic minimum sizing and repeated cached-price use), and
-					<a href="./open-oracle-integration.html#active-arbitrager-assumption">the full integration threat model</a>.
+						<a href="./open-oracle-integration.html#attack-model">the full integration threat model</a>.
 				</p>
 			</section>
 
@@ -272,34 +263,11 @@
 					the qualification threshold. Bids below the threshold refund. If no bid
 					qualifies, all bids refund and no REP is sold.
 				</p>
-				<div class="equation" id="eq-auction-qualification-threshold">
-					<math
-						display="block"
-						aria-label="underfunded qualification threshold equals the ceiling of the ETH repair target times price precision divided by the REP sale cap"
-						data-source="underfundedThreshold = ceil(ethRaiseCap * PRICE_PRECISION / maxRepBeingSold)"
-					>
-						<mrow>
-							<mi>underfundedThreshold</mi>
-							<mo>=</mo>
-							<mi>ceil</mi>
-							<mo>(</mo>
-							<mfrac>
-								<mrow>
-									<mi>ethRaiseCap</mi>
-									<mo>&#x22C5;</mo>
-									<mi>PRICE_PRECISION</mi>
-								</mrow>
-								<mi>maxRepBeingSold</mi>
-							</mfrac>
-							<mo>)</mo>
-						</mrow>
-					</math>
-					<p class="equation-caption">
-						<span class="equation-label">Qualification, Not Execution</span>The
-						caps determine the lowest qualifying bid tick. Retained ETH determines
-						the lower effective execution price whenever demand is underfunded.
-					</p>
-				</div>
+				<p>
+					The <a href="./auction-design.html#clearing">auction clearing design</a>
+					owns the qualification formula, tick rounding, worked examples, and
+					per-bid allocation rules.
+				</p>
 				<p>
 					The child activates with the ETH actually routed during migration plus
 					the ETH actually retained by the auction. It may remain
@@ -310,25 +278,13 @@
 					impairment.
 				</p>
 				<p>
-					For example, if the repair target is <code>20 ETH</code> and the REP
-					sale cap is <code>10 REP</code>, the human-unit qualification threshold
-					is <code>2 ETH/REP</code>. The contract rounds that value up to the first
-					supported tick, approximately <code>2.0000363 ETH/REP</code>. A lone
-					<code>2 ETH</code> bid at that ceiling tick can qualify without reaching
-					either cap. The bidder then receives all
-					<code>10 REP</code> for an effective <code>0.2 ETH/REP</code>, and the
-					child remains <code>18 ETH</code> short of the target. This result is
-					conforming behavior, not a promise that the threshold will be the sale
-					price.
-				</p>
-				<p>
 					Implementation and test evidence:
 					<a href="../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"><code>UniformPriceDualCapBatchAuction.sol</code></a>,
 					<a href="../solidity/contracts/peripherals/SecurityPoolForker.sol"><code>SecurityPoolForker.sol</code></a>,
 					<a href="../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationDelegate.sol"><code>SecurityPoolForkerVaultMigrationDelegate.sol</code></a>,
 					<a href="../solidity/ts/tests/peripherals/truthAuction.test.ts"><code>truthAuction.test.ts</code></a>
 					(the minimum-bid underfunded-winner test), and
-					<a href="./auction-design.html#settlement">the full settlement design</a>.
+						<a href="./auction-design.html#clearing">the full clearing design</a>.
 				</p>
 			</section>
 

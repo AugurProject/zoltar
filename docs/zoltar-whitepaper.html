@@ -310,7 +310,7 @@
 						Zoltar defines the branch set. It does not select one canonical child universe
 						or delete the others.
 					</div>
-					<h3>Global Question Scope</h3>
+					<h3 id="global-question-scope">Global Question Scope</h3>
 					<p>
 						Questions are global protocol objects in Zoltar. <code>forkUniverse</code> checks
 						that the target universe exists, still has supply, has not already forked, and
@@ -507,9 +507,10 @@
 						At the opposite boundary, integer division makes the threshold zero
 						below <code>20</code> atomic units of theoretical supply and makes the
 						haircut zero when a nonzero threshold is below <code>5</code> atomic
-						units. The protocol must not rely on a meaningful admission cost beyond
-						the maximum supported recursive depth established under
-						<a href="./invariants.html#ext-05"><code>EXT-05</code></a>.
+						units. The protocol must not treat admission cost as meaningful once
+						flooring makes the threshold or haircut zero. The separate
+						<a href="./invariants.html#ext-05"><code>EXT-05</code></a> entry owns the
+						recursive-fork gas requirement, status, and evidence.
 					</div>
 
 					<div class="table-wrap">
@@ -670,11 +671,10 @@
 						REP in an abandoned branch may keep existing, but it is expected to have little
 						long-term value compared with REP in the branch that markets keep using.
 					</p>
-					<h3>Global forks are migrations, not permanent shutdowns</h3>
+					<h3>Forks initiate migrations, not permanent shutdowns</h3>
 					<p>
-						Zoltar questions are global protocol objects: any existing question whose end
-						time has passed can identify the branches of any still-unforked universe.
-						Recording the fork stops new operational changes in parent-universe pools so
+						After admission under the <a href="#global-question-scope">global-question rules</a>,
+						recording a fork stops new operational changes in parent-universe pools so
 						that their accounting cannot move while it is being snapshotted. Placeholder
 						provides permissionless, user-driven paths to migrate REP, shares, vault
 						positions, collateral, and unresolved escalation state into child-universe
