@@ -1,5 +1,6 @@
 import * as appCopy from '../copy/app.js'
 import * as commonCopy from '../copy/common.js'
+import * as marketCopy from '../copy/market.js'
 import * as zoltarCopy from '../copy/zoltar.js'
 import { useSignal } from '@preact/signals'
 import type { ComponentChildren } from 'preact'
@@ -720,11 +721,11 @@ export function App() {
 	if (route === 'zoltar') {
 		routeSubNavigation = (
 			<RouteSubNavigation
-				ariaLabel={appCopy.marketViews}
+				ariaLabel={appCopy.zoltarViews}
 				value={activeZoltarView}
 				onChange={view => setZoltarView(view)}
 				options={[
-					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'questions')), label: appCopy.questionsAndMarkets, value: 'questions' },
+					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'questions')), label: marketCopy.questions, value: 'questions' },
 					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'create')), label: commonCopy.createQuestion, value: 'create' },
 					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'fork')), label: zoltarCopy.forkZoltar, value: 'fork' },
 					{

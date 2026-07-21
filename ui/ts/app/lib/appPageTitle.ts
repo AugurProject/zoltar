@@ -1,5 +1,6 @@
 import * as appCopy from '../../copy/app.js'
 import * as commonCopy from '../../copy/common.js'
+import * as marketCopy from '../../copy/market.js'
 import * as zoltarCopy from '../../copy/zoltar.js'
 import type { Route } from '../../types/app.js'
 import type { OpenOracleView, SecurityPoolsView, ZoltarView } from '../../features/types.js'
@@ -17,7 +18,7 @@ export function getAppPageTitle({ activeOpenOracleView, activeSecurityPoolsView,
 		if (activeZoltarView === 'create') return commonCopy.createQuestion
 		if (activeZoltarView === 'fork') return zoltarCopy.forkZoltar
 		if (activeZoltarView === 'migrate') return zoltarCopy.migrateRep
-		return appCopy.questionsAndMarkets
+		return marketCopy.questions
 	}
 	if (route === 'security-pools') {
 		if (activeSecurityPoolsView === 'create') return commonCopy.createSecurityPool

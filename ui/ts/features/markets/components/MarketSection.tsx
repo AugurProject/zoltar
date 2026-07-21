@@ -87,7 +87,7 @@ export function MarketSection({
 
 	return (
 		<div className='route-view-flow'>
-			<SectionBlock density='compact' title={commonCopy.markets} variant='plain'>
+			<SectionBlock density='compact' title={commonCopy.zoltar} variant='plain'>
 				{showUniverseSummary ? (
 					<MarketOverviewSection
 						accountAddress={accountState.address}
