@@ -291,7 +291,7 @@ describe('security regression coverage', () => {
 			answerUnit: '',
 		}
 		const squattedQuestionId = getQuestionId(squattedQuestionData, outcomes)
-		const shareTokenSalt = keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [securityMultiplier, squattedQuestionId]))
+		const shareTokenSalt = keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint248' }], [squattedQuestionId, securityMultiplier, genesisUniverse]))
 		const expectedAddresses = getSecurityPoolAddresses(zeroAddress, genesisUniverse, squattedQuestionId, securityMultiplier)
 		const squatterShareTokenAddress = getCreate2Address({
 			bytecode: encodeDeployData({

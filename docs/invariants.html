@@ -2433,17 +2433,18 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								Before launch, the protocol must set a maximum supported recursive
-								fork depth and show that proof verification, claim settlement, and
-								ancestor replay checks at that depth fit the deployment gas budget.
+								Origin registration, inherited-fork detection during child construction,
+								and direct-claim replay checks must not traverse universe or pool ancestry.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> If the supported depth is set to 32, a worst-case claim with 32 ancestor checks must complete within the configured transaction gas limit.</p>
+							<p class="invariant-example"><strong>Example:</strong> At lineage depths 1 and 32, a replay query for the same global deposit id performs the same lineage-registry and claimed-id lookups rather than 1 or 32 parent calls.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Liveness</dd></div>
-								<div><dt>Enforcement status</dt><dd>Proposed guard</dd></div>
+								<div><dt>Enforcement status</dt><dd>Enforced</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										Recursive escalation and fork tests; no explicit maximum
-										currently exists
+										<code>SecurityPoolFactory.getOriginId</code> and
+										<code>getPoolId</code>, cached inherited-fork registry tests,
+										<code>SecurityPoolForker.getEscalationDepositId</code>, and
+										depth-independent replay gas tests
 								</dd></div>
 							</dl>
 						</div>
@@ -2538,11 +2539,12 @@
 									and even/odd non-decision boundaries in
 									<a href="../solidity/ts/tests/escalationGameForkThreshold.test.ts"
 										><code>escalationGameForkThreshold.test.ts</code></a
-									>.
+									>. The escalation-game suite also compares direct-claim replay gas
+									at lineage depths 1 and 32.
 								</td>
 								<td>
-									Explicit gas bounds for maximum supported lineage depth and
-									proof history.
+									Extend depth-independent gas regressions whenever a new
+									lineage-sensitive settlement or deployment path is added.
 								</td>
 							</tr>
 							<tr>
