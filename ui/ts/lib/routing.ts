@@ -12,6 +12,13 @@ const ROUTE_HASHES: Record<Exclude<Route, 'not-found'>, string> = {
 	'security-pools': SECURITY_POOLS_ROUTE,
 	'open-oracle': OPEN_ORACLE_ROUTE,
 }
+const SHARED_ROUTE_QUERY_PARAMETERS = new Set(['simScenario', 'simState', 'simulate', 'universe'])
+const ROUTE_QUERY_PARAMETERS: Record<Exclude<Route, 'not-found'>, ReadonlySet<string>> = {
+	deploy: new Set(),
+	zoltar: new Set(['zoltarView']),
+	'security-pools': new Set(['securityPool', 'securityPoolsView', 'selectedPoolView']),
+	'open-oracle': new Set(['openOracleReportId', 'openOracleView']),
+}
 
 const ROUTE_BY_HASH = ROUTE_NAMES.reduce<Partial<Record<string, Route>>>((routeByHash, route) => {
 	routeByHash[ROUTE_HASHES[route]] = route
@@ -47,6 +54,17 @@ export function getRouteHash(route: Exclude<Route, 'not-found'>) {
 
 export function getRouteHashSearch(hash = window.location.hash) {
 	return splitRouteHash(hash).search
+}
+
+export function getTopLevelRouteSearch(nextRoute: Exclude<Route, 'not-found'>, search = getRouteHashSearch(), preservedParameters: ReadonlySet<string> = new Set()) {
+	const destinationParameters = ROUTE_QUERY_PARAMETERS[nextRoute]
+	const sourceParameters = new URLSearchParams(search)
+	const destinationSearch = new URLSearchParams()
+	for (const [key, value] of sourceParameters) {
+		if (SHARED_ROUTE_QUERY_PARAMETERS.has(key) || destinationParameters.has(key) || preservedParameters.has(key)) destinationSearch.append(key, value)
+	}
+	const serializedSearch = destinationSearch.toString()
+	return serializedSearch === '' ? '' : `?${serializedSearch}`
 }
 
 export function getCurrentRouteHash() {

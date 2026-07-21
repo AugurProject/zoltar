@@ -85,6 +85,7 @@ export function getVaultRequestPriceGuardMessage({
 	hasLoadedSelectedPool,
 	bufferRequiredEthCost = true,
 	isMainnet,
+	isPriceValid,
 	pendingReportId,
 	requiredEthCost,
 	walletEthBalance,
@@ -93,6 +94,7 @@ export function getVaultRequestPriceGuardMessage({
 	hasLoadedSelectedPool: boolean
 	bufferRequiredEthCost?: boolean | undefined
 	isMainnet: boolean
+	isPriceValid: boolean | undefined
 	pendingReportId: bigint | undefined
 	requiredEthCost: bigint | undefined
 	walletEthBalance: bigint | undefined
@@ -101,6 +103,7 @@ export function getVaultRequestPriceGuardMessage({
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (!hasLoadedSelectedPool) return 'Load a security pool before requesting a new price.'
 	if (pendingReportId !== undefined && pendingReportId > 0n) return 'A pending price report already exists for this pool.'
+	if (isPriceValid === true) return 'The current oracle price is still valid.'
 	const ethGuardMessage = getOracleRequestEthGuardMessage({
 		actionLabel: 'request a new price',
 		includeBuffer: bufferRequiredEthCost,

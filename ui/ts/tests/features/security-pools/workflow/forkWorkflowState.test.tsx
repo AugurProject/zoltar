@@ -168,6 +168,7 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 
 		test('defaults the fork workflow to the current stage on first render', async () => {
 			const selectedPoolAddress = zeroAddress
+			const selectedViews: string[] = []
 			const renderedComponent = await renderIntoDocument(
 				<SecurityPoolWorkflowSection
 					{...createSecurityPoolWorkflowProps({
@@ -182,6 +183,9 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 							}),
 						}),
 						securityPoolAddress: selectedPoolAddress,
+						onSelectedPoolViewChange: view => {
+							selectedViews.push(view ?? '')
+						},
 						securityPools: [
 							createSelectedPool({
 								forkOutcome: 'yes',
@@ -202,6 +206,12 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 			expect(documentQueries.getByRole('heading', { name: 'Truth Auction Status' })).not.toBeNull()
 			expect(documentQueries.queryByRole('heading', { name: 'Fork Triggered' })).toBeNull()
 			expect(documentQueries.getByRole('tab', { name: 'Truth Auction' }).className.includes('is-selected')).toBe(true)
+
+			await act(() => {
+				fireEvent.click(documentQueries.getByRole('tab', { name: 'Migration' }))
+			})
+
+			expect(selectedViews).toEqual(['fork-migration'])
 		})
 
 		test('opens the migration step for root-universe pools that present as Fork Migration after universe fork', async () => {

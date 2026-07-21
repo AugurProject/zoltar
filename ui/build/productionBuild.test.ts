@@ -813,6 +813,10 @@ productionBrowserTest('production bundle executes deployment, reporting, fork mi
 
 			const poolsOpened = await driver.evaluate(`(() => { const target = [...document.querySelectorAll('a, button')].find(candidate => candidate.textContent?.trim() === 'Security Pools'); if (!(target instanceof HTMLElement)) return false; target.click(); return true })()`)
 			expect(poolsOpened).toBe(true)
+			await driver.waitForButtonEnabled('Open Pool')
+			await driver.clickButton('Open Pool')
+			await driver.waitForButtonEnabled('Fork & Migration')
+			await driver.clickButton('Fork & Migration')
 			await driver.waitForButtonEnabled('Migrate Pool To Yes Universe')
 			await driver.clickButton('Migrate Pool To Yes Universe')
 			await driver.waitForBodyText('Pool-level REP was migrated into the selected child universe.')

@@ -65,7 +65,7 @@ export function getOpenOracleCreateGuardMessage({ ethValueInput, isMainnet, sett
 	const walletGuardState = getWalletConnectionMainnetGuardState({
 		isMainnet,
 		walletConnected,
-		walletRequiredReason: 'Connect a wallet before creating a standalone Open Oracle game.',
+		walletRequiredReason: 'Connect a wallet before creating a standalone Open Oracle report.',
 	})
 	if (walletGuardState.blocked) return walletGuardState.reason
 	const ethValue = tryParseDecimalInput(ethValueInput)
@@ -74,7 +74,7 @@ export function getOpenOracleCreateGuardMessage({ ethValueInput, isMainnet, sett
 	if (settlerReward === undefined) return 'Enter a valid settler reward.'
 	if (ethValue < settlerReward) return 'ETH value to send must be at least the settler reward.'
 	if (walletEthBalance === undefined) return 'Loading wallet ETH balance.'
-	if (ethValue > walletEthBalance) return `Need ${formatCurrencyBalance(ethValue - walletEthBalance)} more ETH in this wallet to create the selected standalone Open Oracle game.`
+	if (ethValue > walletEthBalance) return `Need ${formatCurrencyBalance(ethValue - walletEthBalance)} more ETH in this wallet to create the selected standalone Open Oracle report.`
 	return undefined
 }
 
@@ -105,41 +105,41 @@ function getOpenOracleUnknownScaleDecimalValidationMessage({ allowZero = true, i
 
 export function getOpenOracleCreateValidationMessage({ form, token1Decimals, token2Decimals }: { form: OpenOracleCreateFormState; token1Decimals?: number; token2Decimals?: number }) {
 	const token1Address = tryParseAddressInput(form.token1Address)
-	if (token1Address === undefined) return 'Enter a valid token1 address.'
+	if (token1Address === undefined) return 'Enter a valid base token address.'
 	const token2Address = tryParseAddressInput(form.token2Address)
-	if (token2Address === undefined) return 'Enter a valid token2 address.'
+	if (token2Address === undefined) return 'Enter a valid quote token address.'
 	const exactToken1Report =
 		token1Decimals === undefined
 			? (() => {
 					const validationMessage = getOpenOracleUnknownScaleDecimalValidationMessage({
 						allowZero: false,
 						input: form.exactToken1Report,
-						invalidMessage: 'Enter a valid exact token1 report.',
-						negativeMessage: 'Exact token1 report must be greater than zero.',
-						zeroMessage: 'Exact token1 report must be greater than zero.',
+						invalidMessage: 'Enter a valid base token amount.',
+						negativeMessage: 'Base token amount must be greater than zero.',
+						zeroMessage: 'Base token amount must be greater than zero.',
 					})
 					if (validationMessage !== undefined) return validationMessage
 					return 1n
 				})()
 			: tryParseDecimalInput(form.exactToken1Report, token1Decimals)
 	if (typeof exactToken1Report === 'string') return exactToken1Report
-	if (exactToken1Report === undefined) return 'Enter a valid exact token1 report.'
+	if (exactToken1Report === undefined) return 'Enter a valid base token amount.'
 	const initialToken2Amount =
 		token2Decimals === undefined
 			? (() => {
 					const validationMessage = getOpenOracleUnknownScaleDecimalValidationMessage({
 						allowZero: false,
 						input: form.initialToken2Amount,
-						invalidMessage: 'Enter a valid initial token2 amount.',
-						negativeMessage: 'Initial token2 amount must be greater than zero.',
-						zeroMessage: 'Initial token2 amount must be greater than zero.',
+						invalidMessage: 'Enter a valid quote token amount.',
+						negativeMessage: 'Quote token amount must be greater than zero.',
+						zeroMessage: 'Quote token amount must be greater than zero.',
 					})
 					if (validationMessage !== undefined) return validationMessage
 					return 1n
 				})()
 			: tryParseDecimalInput(form.initialToken2Amount, token2Decimals)
 	if (typeof initialToken2Amount === 'string') return initialToken2Amount
-	if (initialToken2Amount === undefined) return 'Enter a valid initial token2 amount.'
+	if (initialToken2Amount === undefined) return 'Enter a valid quote token amount.'
 
 	const escalationHalt =
 		token1Decimals === undefined
@@ -338,16 +338,16 @@ export function parseOpenOracleCreateFormSubmission({ form, token1Decimals, toke
 	return {
 		disputeDelay: Number(parseBigIntInput(form.disputeDelay, 'Dispute delay')),
 		escalationHalt: parseDecimalInput(form.escalationHalt, 'Escalation halt', token1Decimals),
-		exactToken1Report: parseDecimalInput(form.exactToken1Report, 'Exact token1 report', token1Decimals),
-		initialToken2Amount: parseDecimalInput(form.initialToken2Amount, 'Initial token2 amount', token2Decimals),
+		exactToken1Report: parseDecimalInput(form.exactToken1Report, 'Base token amount', token1Decimals),
+		initialToken2Amount: parseDecimalInput(form.initialToken2Amount, 'Quote token amount', token2Decimals),
 		ethValue: parseDecimalInput(form.ethValue, 'ETH value'),
 		feePercentage: parseOpenOracleFeePercentageInput(form.feePercentage, 'Fee percentage'),
 		multiplier: Number(parseBigIntInput(form.multiplier, 'Multiplier')),
 		protocolFee: parseOpenOracleFeePercentageInput(form.protocolFee, 'Protocol fee'),
 		settlementTime: Number(parseBigIntInput(form.settlementTime, 'Settlement time')),
 		settlerReward: parseDecimalInput(form.settlerReward, 'Settler reward'),
-		token1Address: parseAddressInput(form.token1Address, 'Token1 address'),
-		token2Address: parseAddressInput(form.token2Address, 'Token2 address'),
+		token1Address: parseAddressInput(form.token1Address, 'Base token address'),
+		token2Address: parseAddressInput(form.token2Address, 'Quote token address'),
 	}
 }
 export function formatOpenOracleMultiplier(multiplier: bigint | undefined) {
@@ -494,13 +494,13 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 		if (!disputeAvailability.canAct) {
 			blockMessage = createVisibleGateMessage(disputeAvailability.message ?? 'This report is not ready to dispute.')
 		} else if (newAmount1 === undefined) {
-			blockMessage = createVisibleGateMessage('Enter a valid new token1 amount.')
+			blockMessage = createVisibleGateMessage('Enter a valid new base token amount.')
 		} else if (newAmount2 === undefined || newAmount2 <= 0n) {
-			blockMessage = createVisibleGateMessage('Enter a valid new token2 amount greater than zero.')
+			blockMessage = createVisibleGateMessage('Enter a valid new quote token amount greater than zero.')
 		} else if (expectedNewAmount1 === undefined) {
-			blockMessage = createVisibleGateMessage('Unable to determine the required new token1 amount.')
+			blockMessage = createVisibleGateMessage('Unable to determine the required new base token amount.')
 		} else if (newAmount1 !== expectedNewAmount1) {
-			blockMessage = createVisibleGateMessage(`New token1 amount must be exactly ${expectedNewAmount1.toString()} for this dispute.`)
+			blockMessage = createVisibleGateMessage(`New base token amount must be exactly ${expectedNewAmount1.toString()} for this dispute.`)
 		} else if (approvedToken1Amount === undefined && token1AllowanceError !== undefined) {
 			blockMessage = createVisibleGateMessage(
 				formatOpenOracleDisputeApprovalStatusUnavailableMessage({

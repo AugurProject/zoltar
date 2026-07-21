@@ -427,6 +427,10 @@ button.quiet:disabled {
 	position: relative;
 }
 
+.account-menu[open] {
+	z-index: 30;
+}
+
 .account-menu > summary {
 	display: inline-flex;
 	align-items: center;
@@ -462,7 +466,7 @@ button.quiet:disabled {
 	padding: 0.75rem;
 	border: 1px solid var(--border-strong);
 	border-radius: 0.75rem;
-	background: var(--surface-raised);
+	background: var(--bg);
 	box-shadow: 0 16px 36px rgba(0, 0, 0, 0.32);
 }
 
@@ -1106,6 +1110,38 @@ button.currency-value.copyable:hover:not(:disabled) {
 	margin-top: 0.65rem;
 }
 
+.simulation-banner-details > summary {
+	display: none;
+}
+
+.simulation-banner-compact-summary,
+.simulation-banner-compact-state {
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.simulation-banner-compact-summary {
+	display: flex;
+	justify-content: space-between;
+}
+
+.simulation-banner-compact-state {
+	display: flex;
+	min-width: 0;
+	flex-wrap: wrap;
+}
+
+.simulation-banner-compact-account {
+	white-space: nowrap;
+}
+
+.simulation-banner-compact-action {
+	color: var(--simulation-text-secondary);
+	font-size: var(--font-caption);
+	font-weight: 700;
+	white-space: nowrap;
+}
+
 .simulation-banner-row {
 	border-top-color: rgba(255, 221, 122, 0.18);
 	padding: 0.5rem 0;
@@ -1389,6 +1425,10 @@ button.currency-value.copyable:hover:not(:disabled) {
 	border-top: 1px solid var(--border-subtle);
 	background: transparent;
 	border-radius: 0;
+}
+
+.contract-panel .contract-row {
+	grid-template-columns: minmax(0, 1fr) 19rem;
 }
 
 .contract-row:first-child {
@@ -3497,11 +3537,13 @@ strong.metric-value-danger {
 }
 
 .global-transaction-notice {
-	display: flex;
-	align-items: center;
+	position: relative;
+	display: grid;
 	gap: 0.8rem;
-	width: min(30rem, 100%);
-	padding: 0.75rem 0.9rem;
+	width: min(48rem, 100%);
+	max-height: calc(100vh - 2rem - env(safe-area-inset-bottom, 0rem));
+	padding: 1rem;
+	overflow-y: auto;
 	border: 1px solid var(--border-strong);
 	border-radius: 1rem;
 	border-color: var(--border-strong);
@@ -3515,6 +3557,10 @@ strong.metric-value-danger {
 	flex: 1;
 	min-width: 0;
 	gap: 0.32rem;
+}
+
+main.global-transaction-tray-open {
+	padding-bottom: max(4rem, calc(var(--global-transaction-tray-height) + 2rem + env(safe-area-inset-bottom, 0rem)));
 }
 
 .global-transaction-notice-header {
@@ -3577,7 +3623,36 @@ strong.metric-value-danger {
 }
 
 .global-transaction-dismiss {
-	flex: 0 0 auto;
+	min-width: 7rem;
+}
+
+.global-transaction-actions {
+	display: flex;
+	justify-content: flex-end;
+	padding-top: 0.2rem;
+	border-top: 1px solid var(--divider-strong);
+}
+
+.global-transaction-close {
+	position: absolute;
+	top: 0.65rem;
+	right: 0.65rem;
+	z-index: 1;
+	width: var(--touch-target-min);
+	min-width: var(--touch-target-min);
+	min-height: var(--touch-target-min);
+	padding: 0;
+	border-radius: 999px;
+	font-size: 1.35rem;
+	line-height: 1;
+}
+
+.global-transaction-notice-copy:first-of-type {
+	padding-right: 2.7rem;
+}
+
+.global-transaction-spinner {
+	margin-right: 0;
 }
 
 .workflow-status-item {
@@ -7107,6 +7182,15 @@ strong.metric-value-danger {
 		align-items: stretch;
 	}
 
+	.contract-panel .contract-row {
+		grid-template-columns: 1fr;
+	}
+
+	.account-menu-popover {
+		right: auto;
+		left: 0;
+	}
+
 	.simulation-banner-stats,
 	.simulation-delay-grid {
 		grid-template-columns: 1fr;
@@ -7119,6 +7203,27 @@ strong.metric-value-danger {
 	.simulation-banner > .contract-panel-header:first-child {
 		margin: -0.55rem -0.55rem 0;
 		padding: 0.55rem 0.55rem 0;
+	}
+
+	.simulation-banner-details > summary {
+		display: block;
+		cursor: pointer;
+		padding: 0.6rem 0.15rem 0.1rem;
+		color: var(--simulation-text);
+	}
+
+	.simulation-banner-details > summary:focus-visible {
+		border-radius: var(--radius-control);
+		outline: 2px solid var(--focus);
+		outline-offset: 3px;
+	}
+
+	.simulation-banner-details:not([open]) > .simulation-banner-list {
+		display: none;
+	}
+
+	.simulation-banner-details[open] > summary {
+		margin-bottom: 0.35rem;
 	}
 
 	.simulation-banner-row {

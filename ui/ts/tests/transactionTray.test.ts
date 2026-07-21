@@ -113,6 +113,8 @@ describe('transactionTray', () => {
 		expect(prepared.active?.detail).toBe('Review the prepared transaction, then confirm it in your wallet.')
 		expect(prepared.active?.rows?.some(row => row.label === 'Function' && row.value === 'createQuestion')).toBe(true)
 		expect(prepared.active?.rows?.some(row => row.label === 'Arguments' && row.value === '1, {title: Will this resolve?}, [yes, no]')).toBe(true)
+		expect(prepared.active?.rows?.some(row => row.label === 'Sender')).toBe(false)
+		expect(prepared.active?.rows?.some(row => row.label === 'Chain')).toBe(false)
 		expect(prepared.active?.rows?.some(row => String(row.value).includes('[object Object]'))).toBe(false)
 		expect(submitted.active?.rows?.some(row => row.label === 'Contract' && row.value === '0x00000000000000000000000000000000000000b2')).toBe(true)
 	})
@@ -156,13 +158,17 @@ describe('transactionTray', () => {
 			dataLabel: 'Raw transaction',
 			functionName: 'Broadcast deterministic proxy deployer transaction',
 			requiresWalletConfirmation: false,
+			to: '0x00000000000000000000000000000000000000d4',
+			toLabel: 'Proxy deployer',
 			value: undefined,
 		})
 
 		expect(prepared.active?.tone).toBe('preparing')
 		expect(prepared.active?.detail).toBe('Review the prepared transaction before it is submitted.')
-		expect(prepared.active?.rows?.some(row => row.label === 'Sender' && row.value === '0x00000000000000000000000000000000000000c3')).toBe(true)
-		expect(prepared.active?.rows?.some(row => row.label === 'Raw transaction' && row.value === '0x1234')).toBe(true)
+		expect(prepared.active?.rows?.some(row => row.label === 'Sender')).toBe(false)
+		expect(prepared.active?.rows?.some(row => row.label === 'Chain')).toBe(false)
+		expect(prepared.active?.rows?.some(row => row.label === 'Raw transaction')).toBe(false)
+		expect(prepared.active?.rows?.some(row => row.label === 'To' && row.value === 'Proxy deployer (0x00000000000000000000000000000000000000d4)')).toBe(true)
 	})
 
 	test('uses preparing copy for requested simulation transactions', () => {

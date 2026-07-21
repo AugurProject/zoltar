@@ -1790,7 +1790,7 @@
 				<h2>REP/ETH Oracle Operations</h2>
 				<div class="callout" id="oracle-accepted-non-invariants">
 					<p>
-						<strong>Accepted oracle design choices—not invariants.</strong>
+						<strong>Accepted oracle design properties—not security findings.</strong>
 						Placeholder uses profitable correction, not operation-value
 						collateralization. Report liquidity is intentionally not required to
 						equal or bound the value of withdrawals, liquidations, allowance
@@ -1815,8 +1815,11 @@
 					<p>
 						Security review should verify the correction-profit calculation,
 						report accounting, dispute access, and the stated inclusion
-						assumption. It should not introduce a report-notional bound or an
-						absolute pending-report duration as a required protocol property.
+						assumption. A concrete bypass of the required position or fee,
+						capital reuse, invalid deadline transition, or cache-conformance
+						failure remains a finding. The mere absence of a report-notional
+						bound or absolute pending-report duration does not. See the
+						<a href="./security-model.html#accepted-design-properties">normative review classification</a>.
 					</p>
 				</div>
 				<div class="invariant-list">
@@ -2428,7 +2431,7 @@
 							</dl>
 						</div>
 					</details>
-					<details class="invariant-entry">
+					<details class="invariant-entry" id="ext-05">
 						<summary><code>EXT-05</code><span class="invariant-title">Recursive fork gas bound</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>

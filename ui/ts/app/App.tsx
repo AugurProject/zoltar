@@ -631,7 +631,7 @@ export function App() {
 			onViewPendingReport: reportId => {
 				setOpenOracleView('selected-report')
 				setOpenOracleForm(current => ({ ...current, reportId: reportId.toString() }))
-				navigate('open-oracle')
+				navigate('open-oracle', new Set(['securityPool', 'securityPoolsView', 'selectedPoolView']))
 				void loadOracleReport(reportId.toString())
 			},
 			securityPoolOverviewActiveAction,

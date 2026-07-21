@@ -18,7 +18,15 @@ Inside `ui/ts`, route-specific code belongs under `features/<domain>`, cross-fea
 Protocol documentation lives in `docs/`:
 
 - [Security model](https://augurproject.github.io/zoltar/docs/security-model.html) — normative guarantees, accepted economic assumptions, loss-allocation policies, and residual risks
+- [Security-review classification](https://augurproject.github.io/zoltar/docs/security-model.html#accepted-design-properties) — audit orientation for intentionally unbounded oracle notional, permissionless paid forks, and paid rolling disputes
 - [Start here guide](https://augurproject.github.io/zoltar/docs/start-here.html)
+
+The security-review classification distinguishes excluded guarantees from
+vulnerabilities. It also identifies the
+conditions that would turn each accepted design property into an implementation
+defect or a deployment-blocking economic risk. The unbounded recursive-fork gas
+path is separately tracked as an open pre-deployment requirement, not as an
+accepted design property.
 
 Deterministic deployment outputs live in
 [`docs/mainnet-deployment-addresses.json`](./docs/mainnet-deployment-addresses.json).

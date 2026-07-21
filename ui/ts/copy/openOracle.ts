@@ -15,7 +15,7 @@ export const settlementTime = 'Settlement Time'
 export const settlementDelaySeconds = 'Settlement Delay (seconds)'
 export const settlerReward = 'Settler Reward'
 export const tokenPair = 'Token Pair'
-export const openOracleGame = 'Open Oracle Game'
+export const openOracleGame = 'Standalone Oracle Report'
 export const formatApprovingTokenPendingLabel = (tokenSymbol: string) => `Approving ${tokenSymbol}…`
 export const browseReports = 'Browse Reports'
 export const formatBrowseShownCountSummary = (shownCount: string, pageCount: string) => `${shownCount} of ${pageCount} reports shown on this page.`
@@ -27,7 +27,7 @@ export const formatCurrentAmount2Label = (tokenSymbol: string) => `Current Amoun
 export const formatTokenPairSuffix = (token1Symbol: string, token2Symbol: string) => `${token1Symbol} / ${token2Symbol}`
 export const formatReportBrowseTitle = (token1Symbol: string, token2Symbol: string, reportId: string) => `${token1Symbol} / ${token2Symbol} · Report #${reportId}`
 export const createAnother = 'Create Another'
-export const createStandaloneOracleGame = 'Create Standalone Oracle Game'
+export const createStandaloneOracleGame = 'Create Standalone Oracle Report'
 export const creating = 'Creating…'
 export const createSuccess = 'Report created'
 export const currentPrice = 'Current Price'
@@ -46,8 +46,8 @@ export const creationFundingRequirementHelpText = 'ETH funding, including the se
 export const ethValueToSend = 'ETH Value To Send'
 export const formatExactTokenRequiredLabel = (tokenSymbol: string) => `Exact ${tokenSymbol} Required`
 export const initialToken1AmountHelpText = 'Base-token amount to report.'
-export const exactToken1Report = 'Exact Token1 Report'
-export const initialToken2Amount = 'Initial Token2 Amount'
+export const exactToken1Report = 'Base Token Amount'
+export const initialToken2Amount = 'Quote Token Amount'
 export const initialToken2AmountHelpText = 'Quote-token amount to report.'
 export const fee = 'Fee'
 export const identity = 'Identity'
@@ -81,7 +81,7 @@ export const notSettled = 'Not settled'
 export const stateHash = 'State Hash'
 export const allStatuses = 'All statuses'
 export const disputed = 'Disputed'
-export const oracleGamesEmpty = 'No Open Oracle games found.'
+export const oracleGamesEmpty = 'No Open Oracle reports found.'
 export const reportFiltersEmpty = 'No reports match the current search and status filters.'
 export const reportSummariesRefreshingDetail = 'Refreshing report summaries.'
 export const refreshReport = 'Refresh report'

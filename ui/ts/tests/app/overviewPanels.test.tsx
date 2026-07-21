@@ -170,6 +170,8 @@ describe('OverviewPanels', () => {
 
 		fireEvent.click(documentQueries.getByText('Account Menu'))
 		expect(documentQueries.getByText('Sepolia (11155111)')).not.toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Copy Address' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Address Copied' })).toBeNull()
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Change Wallet' }))
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Switch to Ethereum Mainnet' }))
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Disconnect' }))
@@ -177,6 +179,34 @@ describe('OverviewPanels', () => {
 		expect(onChangeWallet).toHaveBeenCalledTimes(1)
 		expect(onSwitchNetwork).toHaveBeenCalledTimes(1)
 		expect(onDisconnectWallet).toHaveBeenCalledTimes(1)
+	})
+
+	test('identifies recognized and unknown wrong networks in the environment badge', async () => {
+		let documentQueries = await renderOverviewPanels({
+			accountState: {
+				address: '0x1234567890123456789012345678901234567890',
+				chainId: '0x2105',
+				ethBalance: undefined,
+				wethBalance: undefined,
+			},
+		})
+
+		expect(documentQueries.getByText('Wrong Network (Base)')).not.toBeNull()
+
+		await cleanupRenderedComponent?.()
+		cleanupRenderedComponent = undefined
+		documentQueries = await renderOverviewPanels({
+			accountState: {
+				address: '0x1234567890123456789012345678901234567890',
+				chainId: '0xcc6b',
+				ethBalance: undefined,
+				wethBalance: undefined,
+			},
+		})
+
+		expect(documentQueries.getByText('Wrong Network (52331)')).not.toBeNull()
+		fireEvent.click(documentQueries.getByText('Account Menu'))
+		expect(document.body.querySelector('.account-menu-network strong')?.textContent).toBe('52331')
 	})
 
 	test('keeps the connect wallet button idle during bootstrap-only loading', async () => {
@@ -296,7 +326,7 @@ describe('OverviewPanels', () => {
 			universeLabel: 'Universe 11',
 		})
 
-		const parentUniverseLink = documentQueries.getByRole('link', { name: 'Universe 3' })
+		const parentUniverseLink = documentQueries.getByRole('link', { name: 'Universe 0x3' })
 		expect(parentUniverseLink).toBeDefined()
 		expect(document.body.textContent?.includes('Parent Universe')).toBe(true)
 	})
