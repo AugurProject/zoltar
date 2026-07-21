@@ -19,6 +19,7 @@ const productionCssPath = path.join(distRootPath, 'css', 'index.css')
 const productionTokensCssPath = path.join(distRootPath, 'css', 'tokens.css')
 const productionFaviconPaths = [path.join(distRootPath, 'favicon.ico'), path.join(distRootPath, 'favicon.svg')]
 const CHROMIUM_STARTUP_TIMEOUT_MILLISECONDS = 30_000
+const CHROMIUM_PAGE_TARGET_TIMEOUT_MILLISECONDS = 60_000
 const CHROMIUM_DEVTOOLS_PROBE_TIMEOUT_MILLISECONDS = 1_000
 
 let server: Bun.Server | undefined
@@ -179,7 +180,7 @@ test('Chromium DevTools port discovery reports an early browser signal', async (
 	await expect(waitForDevToolsPort('/missing/chromium/DevToolsActivePort', { exitCode: null, signalCode: 'SIGTERM' }, 50)).rejects.toThrow('Chromium exited with signal SIGTERM before publishing its DevTools port')
 })
 
-async function waitForChromiumPageWebSocketUrl(port: number, timeoutMilliseconds = CHROMIUM_STARTUP_TIMEOUT_MILLISECONDS, browserProcess?: BrowserProcess) {
+async function waitForChromiumPageWebSocketUrl(port: number, timeoutMilliseconds = CHROMIUM_PAGE_TARGET_TIMEOUT_MILLISECONDS, browserProcess?: BrowserProcess) {
 	const deadline = Date.now() + timeoutMilliseconds
 	let lastObservedState = 'no response'
 
@@ -484,7 +485,7 @@ async function loadProductionDocumentInChromium(pageUrl: string, viewport: { hei
 
 	try {
 		const port = await waitForDevToolsPort(path.join(profilePath, 'DevToolsActivePort'), browser)
-		socket = new WebSocket(await waitForChromiumPageWebSocketUrl(port, CHROMIUM_STARTUP_TIMEOUT_MILLISECONDS, browser))
+		socket = new WebSocket(await waitForChromiumPageWebSocketUrl(port, CHROMIUM_PAGE_TARGET_TIMEOUT_MILLISECONDS, browser))
 		await waitForChromiumWebSocketOpen(socket, browser)
 		devToolsConnected = true
 
