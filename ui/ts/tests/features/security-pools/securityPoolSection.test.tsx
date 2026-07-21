@@ -269,7 +269,7 @@ describe('SecurityPoolSection', () => {
 		)
 		cleanupRenderedComponent = duplicateRender.cleanup
 		expectTransactionButtonDisabled(document.body, 'Pool Already Exists', 'A pool for this question and security multiplier already exists.')
-		expect(within(document.body).getByText('A pool for this question and security multiplier already exists. Origin pool deployment is deterministic for that pair, so change the security multiplier to create a different pool.')).not.toBeNull()
+		expect(within(document.body).getByText('Origin pool deployment is deterministic for each question and multiplier pair. Change the multiplier to create a different pool.')).not.toBeNull()
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
 
