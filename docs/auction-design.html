@@ -34,7 +34,7 @@
 					When that happens, the protocol sells child-universe REP for ETH through a
 					truth auction, using the proceeds to raise as much repair ETH as market
 					demand supports. Strong demand can fully restore the collateral shortfall;
-					when demand is weak, only bids at or above the cap-implied reserve buy
+					when demand is weak, only bids at or above the cap-implied qualification threshold buy
 					the complete REP sale cap for their retained ETH at one effective price.
 					With no qualifying bids, every bid refunds after finalization. The auction
 					discovers that repair price; it does not determine which branch is true.
@@ -45,8 +45,8 @@
 					it is trying to raise a fixed amount of ETH, and it is not allowed to
 					sell more than a fixed amount of child-universe REP. Strong demand
 					can hit the ETH target first, or it can bind the REP sale cap first.
-					When neither cap binds, the auction derives a reserve from both caps,
-					selects bids at or above that reserve's ceiling tick, and allocates the
+					When neither cap binds, the auction derives a qualification threshold from both caps,
+					selects bids at or above that threshold's ceiling tick, and allocates the
 					complete REP sale cap among them in proportion to retained ETH. Lower bids
 					refund. Placeholder runs this process through
 					the <code>UniformPriceDualCapBatchAuction</code> contract, then
@@ -55,6 +55,19 @@
 					and its matching security-bond allowance instead of merely receiving
 					REP.
 				</p>
+				<div class="callout" id="punitive-underfunded-clearing">
+					<p>
+						<strong><code>AUCTION-A1</code> — punitive underfunded clearing.</strong>
+						The cap-implied threshold determines which bids qualify; it is not an
+						execution-price floor. When any underfunded demand qualifies, the
+						complete REP sale cap and unmigrated security-bond allowance go to
+						those bidders for the ETH actually retained. The child may activate
+						without fully repairing open interest. This deliberately punishes
+						non-migrating security capital instead of guaranteeing a minimum sale
+						price or making open-interest holders whole. See the
+						<a href="./security-model.html#auction-a1">normative security model</a>.
+					</p>
+				</div>
 
 			</header>
 
@@ -82,7 +95,9 @@
 				Finalization clears the batch auction, sends the raised ETH into the
 				repair path, and computes the accounting rates used to settle bidders.
 				The child activates with legitimate migration collateral plus retained bid
-				ETH, even when that total is below the original fork snapshot. Finalization
+				ETH, even when that total is below the original fork snapshot. Full repair
+				is not guaranteed, and the remaining impairment is borne by the affected
+				child's open-interest holders. Finalization
 				rejects caller contribution ETH, and forced ETH remains unaccounted surplus.
 			</p>
 
@@ -167,7 +182,7 @@
 						<td>
 							Supplies ETH demand for the repair. The minimum bid is
 							<code>max(ethRaiseCap / 100000, 1 wei)</code>. Under weak demand,
-							bids below the cap-implied reserve refund, while qualifying bids buy
+							bids below the cap-implied qualification threshold refund, while qualifying bids buy
 							the complete REP sale cap at one effective price.
 						</td>
 					</tr>
@@ -271,16 +286,18 @@
 					into the underfunded branch. Finalization computes
 					<code>underfundedThreshold = ceil(ethRaiseCap · 1e18 /
 					maxRepBeingSold)</code>, stores the lowest tick whose price reaches that
-					reserve as <code>clearingTick</code>, retains ETH at or above that tick,
+					qualification threshold as <code>clearingTick</code>, retains ETH at or above that tick,
 					and refunds lower ticks. Qualifying bidders collectively purchase
 					<code>maxRepBeingSold</code> for <code>underfundedWinningEth</code>, so
 					the common effective price is their retained ETH divided by the REP cap.
-					If no ETH qualifies, every bid refunds.
+					That effective price can be lower than the qualification threshold;
+					the threshold is not an execution-price floor. If no ETH qualifies,
+					every bid refunds.
 				</p>
 				<figure class="diagram diagram-wide" id="fig-auction-clearing-ladder">
 					<svg viewBox="0 0 980 360" role="img" aria-labelledby="auction-clearing-title auction-clearing-desc">
 						<title id="auction-clearing-title">Auction demand is evaluated from high ticks to low ticks before uniform or underfunded clearing</title>
-						<desc id="auction-clearing-desc">High-price bids are considered first. If cumulative demand reaches the ETH raise cap or REP sale cap, the first binding tick sets normal uniform clearing. If neither cap is reached, finalization selects bids at or above the cap-implied reserve tick and allocates the complete REP sale cap among them at one effective price. With no qualifying bids, every bid refunds.</desc>
+						<desc id="auction-clearing-desc">High-price bids are considered first. If cumulative demand reaches the ETH raise cap or REP sale cap, the first binding tick sets normal uniform clearing. If neither cap is reached, finalization selects bids at or above the cap-implied qualification tick and allocates the complete REP sale cap among them at one effective price. With no qualifying bids, every bid refunds.</desc>
 						<defs>
 							<marker id="auction-clearing-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 								<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
@@ -311,14 +328,14 @@
 						<text class="svg-small" x="820" y="124" text-anchor="middle">first ETH or REP cap reached</text>
 						<rect class="svg-gold" x="700" y="198" width="240" height="108" rx="8"></rect>
 						<text class="svg-label" x="820" y="232" text-anchor="middle">Underfunded clearing</text>
-						<text class="svg-small" x="820" y="258" text-anchor="middle">cap-implied reserve tick</text>
+						<text class="svg-small" x="820" y="258" text-anchor="middle">cap-implied qualification tick</text>
 						<text class="svg-small" x="820" y="280" text-anchor="middle">complete REP cap shared pro rata</text>
 					</svg>
 					<p class="diagram-caption">
 						<span class="figure-label">Clearing Price Ladder</span>The contract always
 						walks demand from expensive REP to cheap REP. What changes is the stopping
 						rule: a binding cap gives normal uniform clearing, while weak demand uses
-						the cap-implied reserve and a uniform weak-demand allocation of the REP cap.
+						the cap-implied qualification threshold and a uniform weak-demand allocation of the REP cap.
 					</p>
 				</figure>
 				<p>
@@ -330,15 +347,16 @@
 					weak-demand path.
 				</p>
 				<p>
-					Under weak demand, the auction selects only demand willing to pay the
-					reserve implied by the ETH and REP caps. It retains that ETH and sells the
+					Under weak demand, the auction selects only demand whose bid limit meets the
+					qualification threshold implied by the ETH and REP caps. It retains that ETH and sells the
 					complete REP cap among qualifying bids in proportion to their ETH; if no
 					bid qualifies, every bid refunds. If cumulative demand instead reaches either cap at an
 					active tick, the normal funded-clearing branch applies.
 				</p>
 				<p>
-					A lone minimum bidder below reserve receives a refund and no REP. A lone
-					bidder at or above reserve receives the complete REP sale cap for its bid ETH.
+					A lone minimum bidder below the threshold receives a refund and no REP. A lone
+					bidder at or above the threshold receives the complete REP sale cap for its bid ETH,
+					even when that produces an effective execution price below the threshold.
 					<code>SecurityPoolForker.claimAuctionProceeds</code> maps
 					that purchased REP into the corresponding pool-ownership credit and
 					auctioned allowance share for the child branch.
@@ -355,12 +373,12 @@
 						<tr>
 							<td>Above the binding level</td>
 							<td>Wins in full at the uniform clearing price.</td>
-							<td>Qualifies only if its tick is at or above the cap-implied reserve <code>clearingTick</code>; qualifying bids share the complete REP sale cap.</td>
+							<td>Qualifies only if its tick is at or above the cap-implied qualification <code>clearingTick</code>; qualifying bids share the complete REP sale cap.</td>
 						</tr>
 						<tr>
 							<td>At the binding level</td>
 							<td>Shares the marginal fill FIFO inside that tick.</td>
-							<td>Qualifies at the reserve boundary, then shares the complete REP sale cap by retained ETH.</td>
+							<td>Qualifies at the threshold boundary, then shares the complete REP sale cap by retained ETH.</td>
 						</tr>
 						<tr>
 							<td>Below the binding level</td>
@@ -372,9 +390,9 @@
 					<h3>Worked Underfunded Examples</h3>
 					<p>
 						The examples below use <code>maxRepBeingSold = 10 REP</code> and
-						<code>ethRaiseCap = 20 ETH</code>, producing a reserve of
-						<code>2 ETH/REP</code>. The ceiling tick for that reserve is only the
-						eligibility boundary; bids below it refund. Qualifying ETH receives
+						<code>ethRaiseCap = 20 ETH</code>, producing a qualification threshold of
+						<code>2 ETH/REP</code>. The ceiling tick for that threshold is only the
+						eligibility boundary, not an execution-price floor; bids below it refund. Qualifying ETH receives
 						the complete REP cap in pro-rata shares at one effective price. The
 						figures below use human-unit approximations, while the contract floors per-bid
 						allocations in atomic units.
@@ -384,7 +402,7 @@
 							<tr>
 								<th>Example</th>
 								<th>Bid ladder</th>
-								<th>Reserve qualification</th>
+								<th>Threshold qualification</th>
 								<th>Outcome</th>
 							</tr>
 						</thead>
@@ -403,7 +421,7 @@
 									At Alice's lower tick, cumulative demand is
 									<code>10 / 2 = 5 REP</code>, so funded clearing still fails.
 									<br />
-									Both limits meet the <code>2 ETH/REP</code> reserve.
+									Both limits meet the <code>2 ETH/REP</code> qualification threshold.
 								</td>
 								<td>
 									The system keeps <code>10 ETH</code>.
@@ -433,7 +451,7 @@
 									All of those remain below the <code>10 REP</code> cap, so
 									the funded branch never triggers.
 									<br />
-									All three bid limits meet the <code>2 ETH/REP</code> reserve.
+									All three bid limits meet the <code>2 ETH/REP</code> qualification threshold.
 								</td>
 								<td>
 									The system keeps <code>10 ETH</code>.
@@ -458,7 +476,7 @@
 					remains below the <code>10 REP</code> cap and fails.
 									<br />
 					Alice's <code>0.11 ETH/REP</code> limit is below the
-									<code>2 ETH/REP</code> reserve.
+									<code>2 ETH/REP</code> qualification threshold.
 								</td>
 								<td>
 									The system refunds <code>1 ETH</code>.
@@ -526,13 +544,13 @@
 					In the underfunded branch, finalization computes
 					<code>underfundedThreshold</code> from the two auction caps. The
 					stored <code>clearingTick</code> is the lowest supported tick at or
-					above that reserve. If any bid qualifies, <code>totalRepPurchased</code>
+					above that qualification threshold. If any bid qualifies, <code>totalRepPurchased</code>
 					equals <code>maxRepBeingSold</code>, and withdrawals retain bids at ticks
 					<code>&gt;= clearingTick</code>. If no bid qualifies,
 					<code>underfundedWinningEth</code> is zero and every bid refunds. The stored threshold remains the cap-implied
-					reserve.
+					qualification boundary.
 					Both <code>ethRaised</code> and
-					<code>underfundedWinningEth</code> exclude below-reserve demand.
+					<code>underfundedWinningEth</code> exclude below-threshold demand.
 				</p>
 				<div class="equation" id="eq-auction-underfunded-threshold">
 					<math
@@ -560,7 +578,8 @@
 						<span class="equation-label">Underfunded Threshold</span
 						><code>PRICE_PRECISION = 1e18</code>.
 						<code>tickToPrice(clearingTick)</code> is the first supported tick at
-						or above this reserve and acts only as the bid-eligibility boundary.
+						or above this threshold and acts only as the bid-eligibility boundary,
+						not as an execution-price floor.
 						When any ETH qualifies, aggregate purchased REP equals
 						<code>maxRepBeingSold</code>, and winners at or above that tick share it
 						pro rata by retained ETH at the common effective price
@@ -647,8 +666,8 @@
 							The simplified calculator uses three fixed price levels to show
 							the same two high-level outcomes as the contract: strong demand
 							clears at a uniform price, while weak demand settles only bids at or
-							above the cap-implied reserve. It uses real-number arithmetic for
-							readability; the contract ceilings the underfunded reserve to a tick and computes each allocation by
+							above the cap-implied qualification threshold. It uses real-number arithmetic for
+							readability; the contract ceilings the underfunded threshold to a tick and computes each allocation by
 							differencing cumulative floors at the bid's fixed
 							descending-tick/submission position.
 						</p>
@@ -936,7 +955,7 @@
 							}
 						}
 						accumulatedEth = winningEth;
-						write("clearingMode", "underfunded reserve clearing");
+						write("clearingMode", "underfunded qualification clearing");
 						write("bindingCondition", "underfunded");
 						write("thresholdInputEth", formatEth(winningEth));
 						write(

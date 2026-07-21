@@ -28,6 +28,12 @@
 					<a href="./start-here.html">Start Here</a> before using this catalog
 					as a contract or test reference.
 				</p>
+				<p>
+					The <a href="./security-model.html">Protocol Security Model</a>
+					is normative for the accepted oracle assumption and truth-auction policy,
+					the guarantees they exclude, and the residual loss allocation when
+					they fail.
+				</p>
 				<figure
 					class="diagram diagram-wide"
 					id="fig-invariant-layers"
@@ -1789,7 +1795,8 @@
 						collateralization. Report liquidity is intentionally not required to
 						equal or bound the value of withdrawals, liquidations, allowance
 						changes, pool assets, or cumulative operations that use an accepted
-						price. The deployment assumption is <code>ORA-10</code>: at least one
+						price. The deployment assumption is <code>ORACLE-A1</code>, cataloged
+						here as <code>ORA-10</code>: at least one
 						adequately capitalized participant takes every profitable correction
 						and obtains inclusion before settlement.
 					</p>
@@ -1984,8 +1991,8 @@
 								<div><dt>Type</dt><dd>External assumption</dd></div>
 								<div><dt>Enforcement status</dt><dd>Economic or external assumption</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="./open-oracle-integration.html#security-guarantee"
-										>OpenOracle security model</a
+									<a href="./security-model.html#oracle-a1"
+										><code>ORACLE-A1</code> security model</a
 										>
 								</dd></div>
 							</dl>
@@ -2133,8 +2140,9 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								Qualifying ETH is retained bid ETH offered at or above the
-								cap-implied reserve price. Qualifying bidders collectively receive
+								Under <code>AUCTION-A1</code>, qualifying ETH is retained bid ETH
+								offered at or above the cap-implied qualification threshold. The
+								threshold is not an execution-price floor. Qualifying bidders collectively receive
 								<code>maxRepBeingSold</code> in proportion to that ETH at the aggregate
 								effective price <code>underfundedWinningEth / maxRepBeingSold</code>.
 								Per-bid cumulative floors then assign indivisible atomic units, so a
@@ -2146,8 +2154,8 @@
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a href="./auction-design.html"
-										>Reserve-priced underfunded clearing</a
+									<a href="./security-model.html#auction-a1"
+										><code>AUCTION-A1</code> punitive underfunded clearing</a
 										>
 								</dd></div>
 							</dl>
@@ -2566,7 +2574,7 @@
 										href="../solidity/ts/tests/peripherals/truthAuction.test.ts"
 										><code>truthAuction.test.ts</code></a
 									>, including value-free weak-demand finalization, forced-balance
-									isolation, reserve qualification, uniform pricing, claim-order, and
+									isolation, underfunded-threshold qualification, uniform pricing, claim-order, and
 									tick-math coverage, plus bid-history preservation across
 									repeated tick deletion and recreation.
 								</td>
