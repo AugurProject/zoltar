@@ -180,14 +180,9 @@ contract SecurityPool is ISecurityPool {
 			systemState = SystemState.Operational;
 		} else {
 			systemState = SystemState.ForkMigration;
-			ISecurityPool ancestor = parent;
-			while (address(ancestor) != address(0x0)) {
-				if (zoltar.forkQuestionMatches(ancestor.universeId(), questionId)) {
-					hasInheritedForkOutcome = true;
-					break;
-				}
-				ancestor = ancestor.parent();
-			}
+			hasInheritedForkOutcome =
+				securityPoolFactory.getSecurityPoolHasInheritedForkOutcome(parent) ||
+				zoltar.forkQuestionMatches(parent.universeId(), questionId);
 		}
 		shareToken = _shareToken;
 		repToken = zoltar.getRepToken(universeId);

@@ -16,6 +16,15 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage, ISecurity
 		zoltar = _zoltar;
 	}
 
+	function _getEscalationDepositId(
+		ISecurityPool securityPool,
+		uint8 outcomeIndex,
+		uint256 parentDepositIndex
+	) internal view returns (bytes32) {
+		bytes32 originId = securityPool.securityPoolFactory().getSecurityPoolOriginId(securityPool);
+		return keccak256(abi.encode(originId, outcomeIndex, parentDepositIndex));
+	}
+
 	function repToPoolOwnership(ISecurityPool securityPool, uint256 repAmount) public view returns (uint256) {
 		uint256 poolOwnershipDenominator = securityPool.poolOwnershipDenominator();
 		uint256 childRepBalance = securityPool.repToken().balanceOf(address(securityPool));

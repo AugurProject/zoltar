@@ -257,7 +257,7 @@
 						</tr>
 						<tr>
 							<td>Direct parent claim identity</td>
-							<td>A direct own-fork claim records its stable parent deposit index and principal by outcome in the shared forker. Every child rejects the index before consuming its nullifier and subtracts that principal from effective inherited carry, including children created after the claim.</td>
+							<td>The stable parent deposit index remains in the carry leaf and nullifier proof. A direct own-fork claim combines that index with the origin id and outcome to record one global claimed-deposit id in the shared forker. Every child checks the same id before consuming its local nullifier and subtracts the claimed principal from effective inherited carry, including children created after the claim.</td>
 						</tr>
 					</tbody>
 				</table>

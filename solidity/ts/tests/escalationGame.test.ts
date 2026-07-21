@@ -1207,13 +1207,24 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual(grandchildRoot, hashParent(parentLeafHash, childLocalLeafHash), 'grandchild should snapshot the recursive child carry set as a true two-leaf Merkle Mountain Range')
 	})
 
-	test('recursive security-pool ancestor checks stay within an explicit gas bound', async () => {
-		let deepestAncestor = zeroAddress
+	test('direct-claim replay lookup gas does not grow with security-pool ancestry', async () => {
+		const shallowAncestor = await deploySecurityPoolAncestorNode(zeroAddress)
+		let deepestAncestor = shallowAncestor
 		const ancestorDepth = 32
-		for (let depth = 0; depth < ancestorDepth; depth++) deepestAncestor = await deploySecurityPoolAncestorNode(deepestAncestor)
+		for (let depth = 1; depth < ancestorDepth; depth++) deepestAncestor = await deploySecurityPoolAncestorNode(deepestAncestor)
 
 		const forkerAddress = getInfraContractAddresses().securityPoolForker
-		const checkHash = await client.sendTransaction({
+		const shallowCheckHash = await client.sendTransaction({
+			to: forkerAddress,
+			data: encodeFunctionData({
+				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+				functionName: 'isEscalationDepositClaimedDirectly',
+				args: [shallowAncestor, QuestionOutcome.Yes, 0n],
+			}),
+			gas: 2_000_000n,
+		})
+		const shallowCheckReceipt = await client.waitForTransactionReceipt({ hash: shallowCheckHash })
+		const deepCheckHash = await client.sendTransaction({
 			to: forkerAddress,
 			data: encodeFunctionData({
 				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
@@ -1222,10 +1233,10 @@ describe('Escalation Game Test Suite', () => {
 			}),
 			gas: 2_000_000n,
 		})
-		const checkReceipt = await client.waitForTransactionReceipt({ hash: checkHash })
+		const deepCheckReceipt = await client.waitForTransactionReceipt({ hash: deepCheckHash })
 
-		assert.strictEqual(checkReceipt.status, 'success', 'the 32-level ancestor check should complete successfully')
-		assert.ok(checkReceipt.gasUsed < 500_000n, `the 32-level ancestor check must stay below the 500,000 gas bound; used ${checkReceipt.gasUsed}`)
+		assert.strictEqual(deepCheckReceipt.status, 'success', 'the 32-level replay lookup should complete successfully')
+		assert.ok(deepCheckReceipt.gasUsed <= shallowCheckReceipt.gasUsed + 10_000n, `replay lookup should be depth-independent; shallow used ${shallowCheckReceipt.gasUsed}, deep used ${deepCheckReceipt.gasUsed}`)
 	})
 
 	test('fork carry grandchild instances reject child-local leaves that were already settled before the recursive fork', async () => {

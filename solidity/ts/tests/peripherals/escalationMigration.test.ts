@@ -1094,6 +1094,19 @@ describe('Peripherals: escalation migration', () => {
 		const noPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, getChildUniverseId(genesisUniverse, QuestionOutcome.No), questionId, securityMultiplier)
 		const yesGame = await getSecurityPoolsEscalationGame(client, yesPool.securityPool)
 		const noGame = await getSecurityPoolsEscalationGame(client, noPool.securityPool)
+		const depositIds = await Promise.all(
+			[securityPoolAddresses.securityPool, yesPool.securityPool, noPool.securityPool].map(
+				async securityPool =>
+					await client.readContract({
+						address: getInfraContractAddresses().securityPoolForker,
+						abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+						functionName: 'getEscalationDepositId',
+						args: [securityPool, QuestionOutcome.Yes, 0n],
+					}),
+			),
+		)
+		strictEqualTypeSafe(depositIds[0], depositIds[1], 'a carried deposit should retain its global id in the matching child')
+		strictEqualTypeSafe(depositIds[0], depositIds[2], 'a carried deposit should retain its global id in every sibling child')
 		strictEqualTypeSafe(
 			await client.readContract({
 				address: getInfraContractAddresses().securityPoolForker,

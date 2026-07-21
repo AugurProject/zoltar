@@ -117,9 +117,12 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 					keccak256(abi.encode(address(escalationGame), uint8(outcomeIndex), depositIndex))
 				);
 			}
-			directlyClaimedEscalationDepositByPoolOutcomeAndIndex[escalationGame.securityPool()][uint8(outcomeIndex)][
+			bytes32 depositId = _getEscalationDepositId(
+				escalationGame.securityPool(),
+				uint8(outcomeIndex),
 				stableParentDepositIndex
-			] = true;
+			);
+			directlyClaimedEscalationDepositById[depositId] = true;
 			totalRepMigrated += amountToWithdraw;
 			totalSourcePrincipal += sourcePrincipal;
 		}

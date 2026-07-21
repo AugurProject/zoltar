@@ -237,6 +237,21 @@ function usePeripheralsTestFixture() {
 		questionId = getQuestionId(questionData, outcomes)
 		await createQuestion(client, questionData, outcomes)
 		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier)
+		const factory = getInfraContractAddresses().securityPoolFactory
+		const originId = await client.readContract({
+			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+			functionName: 'getOriginId',
+			address: factory,
+			args: [genesisUniverse, questionId, securityMultiplier],
+		})
+		const registeredPool = await client.readContract({
+			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+			functionName: 'getSecurityPool',
+			address: factory,
+			args: [originId, genesisUniverse],
+		})
+		const expectedPool = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, securityMultiplier).securityPool
+		assert.strictEqual(registeredPool, expectedPool, 'origin security pool address derivation should match the lineage registry')
 		await approveAndDepositRep(client, repDeposit, questionId)
 		securityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)
 	}

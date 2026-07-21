@@ -117,6 +117,11 @@ interface ISecurityPoolForker is ISecurityPoolForkerEvents {
 		BinaryOutcomes.BinaryOutcome outcomeIndex,
 		uint256 parentDepositIndex
 	) external view returns (bool);
+	function getEscalationDepositId(
+		ISecurityPool securityPool,
+		BinaryOutcomes.BinaryOutcome outcomeIndex,
+		uint256 parentDepositIndex
+	) external view returns (bytes32);
 	function getDirectlyClaimedEscalationPrincipal(
 		ISecurityPool securityPool,
 		BinaryOutcomes.BinaryOutcome outcomeIndex
