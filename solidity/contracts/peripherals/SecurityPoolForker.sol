@@ -114,16 +114,18 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		BinaryOutcomes.BinaryOutcome outcomeIndex,
 		uint256 parentDepositIndex
 	) external view returns (bool) {
-		ISecurityPool ancestorPool = securityPool;
-		while (address(ancestorPool) != address(0x0)) {
-			if (
-				directlyClaimedEscalationDepositByPoolOutcomeAndIndex[ancestorPool][uint8(outcomeIndex)][
-					parentDepositIndex
-				]
-			) return true;
-			ancestorPool = ancestorPool.parent();
-		}
-		return false;
+		return
+			directlyClaimedEscalationDepositById[
+				_getEscalationDepositId(securityPool, uint8(outcomeIndex), parentDepositIndex)
+			];
+	}
+
+	function getEscalationDepositId(
+		ISecurityPool securityPool,
+		BinaryOutcomes.BinaryOutcome outcomeIndex,
+		uint256 parentDepositIndex
+	) external view returns (bytes32) {
+		return _getEscalationDepositId(securityPool, uint8(outcomeIndex), parentDepositIndex);
 	}
 
 	function getDirectlyClaimedEscalationPrincipal(

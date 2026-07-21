@@ -78,7 +78,7 @@ function getSecurityPoolAddressFromReceipt(receipt: TransactionReceipt) {
 }
 
 function getOriginSecurityPoolShareTokenSalt(questionId: bigint, securityMultiplier: bigint) {
-	return keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [securityMultiplier, questionId]))
+	return keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint248' }], [questionId, securityMultiplier, 0n]))
 }
 
 function getOriginSecurityPoolShareTokenAddress(questionId: bigint, securityMultiplier: bigint) {

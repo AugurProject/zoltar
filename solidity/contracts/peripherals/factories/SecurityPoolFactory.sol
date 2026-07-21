@@ -29,8 +29,10 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	SecurityPoolDeployer immutable securityPoolDeployer;
 	uint256 public immutable initialEscalationGameDeposit;
 	SecurityPoolDeployment[] private securityPoolDeployments;
-	mapping(bytes32 => ISecurityPool) private canonicalSecurityPools;
-	mapping(bytes32 => bool) private canonicalSecurityPoolClaims;
+	mapping(bytes32 => ISecurityPool) private securityPoolsById;
+	mapping(bytes32 => bool) private securityPoolIdClaims;
+	mapping(ISecurityPool => bytes32) private securityPoolOriginIds;
+	mapping(ISecurityPool => bool) private securityPoolHasInheritedForkOutcome;
 
 	event DeploySecurityPool(
 		ISecurityPool indexed securityPool,
@@ -43,6 +45,12 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		uint256 securityMultiplier,
 		uint256 currentRetentionRate,
 		uint256 completeSetCollateralAmount
+	);
+	event SecurityPoolRegistered(
+		bytes32 indexed originId,
+		bytes32 indexed poolId,
+		uint248 indexed universeId,
+		ISecurityPool securityPool
 	);
 
 	constructor(
@@ -73,12 +81,28 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		return securityPoolDeployments.length;
 	}
 
-	function getCanonicalSecurityPool(
-		uint248 universeId,
+	function getSecurityPool(bytes32 originId, uint248 universeId) external view returns (ISecurityPool) {
+		return securityPoolsById[getPoolId(originId, universeId)];
+	}
+
+	function getSecurityPoolOriginId(ISecurityPool securityPool) external view returns (bytes32) {
+		return securityPoolOriginIds[securityPool];
+	}
+
+	function getSecurityPoolHasInheritedForkOutcome(ISecurityPool securityPool) external view returns (bool) {
+		return securityPoolHasInheritedForkOutcome[securityPool];
+	}
+
+	function getOriginId(
+		uint248 originUniverseId,
 		uint256 questionId,
 		uint256 securityMultiplier
-	) external view returns (ISecurityPool) {
-		return canonicalSecurityPools[_getCanonicalSecurityPoolKey(universeId, questionId, securityMultiplier)];
+	) public pure returns (bytes32) {
+		return keccak256(abi.encode(questionId, securityMultiplier, originUniverseId));
+	}
+
+	function getPoolId(bytes32 originId, uint248 universeId) public pure returns (bytes32) {
+		return keccak256(abi.encode(originId, universeId));
 	}
 
 	function securityPoolDeploymentsRange(
@@ -109,16 +133,15 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		uint256 completeSetCollateralAmount
 	) external returns (ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction) {
 		require(msg.sender == address(securityPoolForker), 'Only the security pool forker can deploy child pools');
+		bytes32 originId = securityPoolOriginIds[parent];
 		require(
-			address(
-				canonicalSecurityPools[
-					_getCanonicalSecurityPoolKey(parent.universeId(), questionId, securityMultiplier)
-				]
-			) == address(parent),
+			address(securityPoolsById[getPoolId(originId, parent.universeId())]) == address(parent),
 			'Security pool parent must be canonical'
 		);
+		bool hasInheritedForkOutcome =
+			securityPoolHasInheritedForkOutcome[parent] || zoltar.forkQuestionMatches(parent.universeId(), questionId);
 		require(address(parent.shareToken()) == address(shareToken), 'Security pool child must use parent share token');
-		bytes32 canonicalPoolKey = _reserveCanonicalSecurityPool(universeId, questionId, securityMultiplier);
+		_reserveSecurityPool(originId, universeId);
 		bytes32 securityPoolSalt = keccak256(abi.encode(parent, universeId, questionId, securityMultiplier));
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
 		OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory
@@ -139,7 +162,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 			completeSetCollateralAmount,
 			address(truthAuction)
 		);
-		_setCanonicalSecurityPool(canonicalPoolKey, securityPool);
+		_registerSecurityPool(originId, universeId, securityPool, hasInheritedForkOutcome);
 		_recordSecurityPoolDeployment(
 			SecurityPoolDeployment(
 				securityPool,
@@ -181,15 +204,14 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
 		require(address(reputationToken) != address(0x0), 'Security pool universe is missing a REP token');
-		_requireNoCanonicalSecurityPoolAncestor(universeId, questionId, securityMultiplier);
-		bytes32 canonicalPoolKey = _reserveCanonicalSecurityPool(universeId, questionId, securityMultiplier);
+		bytes32 originId = getOriginId(universeId, questionId, securityMultiplier);
+		_reserveSecurityPool(originId, universeId);
 		bytes32 securityPoolSalt = keccak256(abi.encode(address(0x0), universeId, questionId, securityMultiplier));
 		OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory
 			.deployPriceOracleManagerAndOperatorQueuer(openOracle, reputationToken, securityPoolSalt);
 
-		// sharetoken has different salt as sharetoken address does not change in forks
-		bytes32 shareTokenSalt = keccak256(abi.encode(securityMultiplier, questionId));
-		IShareToken shareToken = shareTokenFactory.deployShareToken(shareTokenSalt, questionId);
+		// Each origin lineage has its own share token, which is reused by all migrated children.
+		IShareToken shareToken = shareTokenFactory.deployShareToken(originId, questionId);
 		uint256 initialRetentionRate = SecurityPoolUtils.calculateRetentionRate(0, 0);
 		securityPool = deploySecurityPool(
 			shareToken,
@@ -203,7 +225,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 			address(0)
 		);
 
-		_setCanonicalSecurityPool(canonicalPoolKey, securityPool);
+		_registerSecurityPool(originId, universeId, securityPool, false);
 		shareToken.authorize(securityPool);
 		_recordSecurityPoolDeployment(
 			SecurityPoolDeployment(
@@ -221,44 +243,27 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		);
 	}
 
-	function _requireNoCanonicalSecurityPoolAncestor(
-		uint248 universeId,
-		uint256 questionId,
-		uint256 securityMultiplier
-	) private view {
-		while (universeId != 0) {
-			(, , , , universeId) = zoltar.universes(universeId);
-			require(
-				!canonicalSecurityPoolClaims[_getCanonicalSecurityPoolKey(universeId, questionId, securityMultiplier)],
-				'Security pool canonical ancestor requires child deployment'
-			);
-		}
+	function _reserveSecurityPool(bytes32 originId, uint248 universeId) private {
+		bytes32 poolId = getPoolId(originId, universeId);
+		require(!securityPoolIdClaims[poolId], 'Security pool origin and universe already claimed');
+		securityPoolIdClaims[poolId] = true;
 	}
 
-	function _getCanonicalSecurityPoolKey(
+	function _registerSecurityPool(
+		bytes32 originId,
 		uint248 universeId,
-		uint256 questionId,
-		uint256 securityMultiplier
-	) private pure returns (bytes32) {
-		return keccak256(abi.encode(universeId, questionId, securityMultiplier));
-	}
-
-	function _reserveCanonicalSecurityPool(
-		uint248 universeId,
-		uint256 questionId,
-		uint256 securityMultiplier
-	) private returns (bytes32 canonicalPoolKey) {
-		canonicalPoolKey = _getCanonicalSecurityPoolKey(universeId, questionId, securityMultiplier);
-		require(!canonicalSecurityPoolClaims[canonicalPoolKey], 'Security pool canonical key already claimed');
-		canonicalSecurityPoolClaims[canonicalPoolKey] = true;
-	}
-
-	function _setCanonicalSecurityPool(bytes32 canonicalPoolKey, ISecurityPool securityPool) private {
+		ISecurityPool securityPool,
+		bool hasInheritedForkOutcome
+	) private {
+		bytes32 poolId = getPoolId(originId, universeId);
 		require(
-			address(canonicalSecurityPools[canonicalPoolKey]) == address(0x0),
-			'Security pool canonical pool already set'
+			address(securityPoolsById[poolId]) == address(0x0),
+			'Security pool origin and universe already registered'
 		);
-		canonicalSecurityPools[canonicalPoolKey] = securityPool;
+		securityPoolsById[poolId] = securityPool;
+		securityPoolOriginIds[securityPool] = originId;
+		securityPoolHasInheritedForkOutcome[securityPool] = hasInheritedForkOutcome;
+		emit SecurityPoolRegistered(originId, poolId, universeId, securityPool);
 	}
 
 	function _recordSecurityPoolDeployment(SecurityPoolDeployment memory deployment) private {

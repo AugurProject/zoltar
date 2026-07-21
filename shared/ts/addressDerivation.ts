@@ -57,8 +57,8 @@ function getSecurityPoolSalt(parent: Address, universeId: bigint, questionId: bi
 	return keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint248' }, { type: 'uint256' }, { type: 'uint256' }], [parent, universeId, questionId, securityMultiplier]))
 }
 
-function getShareTokenSalt(questionId: bigint, securityMultiplier: bigint) {
-	return keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [securityMultiplier, questionId]))
+export function getSecurityPoolOriginId(originUniverseId: bigint, questionId: bigint, securityMultiplier: bigint) {
+	return keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint248' }], [questionId, securityMultiplier, originUniverseId]))
 }
 
 export function getCallerScopedSalt(caller: Address, salt: Hex) {
@@ -91,7 +91,7 @@ export function createRepTokenAddressHelper(config: RepTokenAddressConfig) {
 }
 
 export function createSecurityPoolAddressHelper(config: SecurityPoolAddressConfig) {
-	const getSecurityPoolAddresses = (parent: Address, universeId: bigint, questionId: bigint, securityMultiplier: bigint) => {
+	const getSecurityPoolAddresses = (parent: Address, universeId: bigint, questionId: bigint, securityMultiplier: bigint, originUniverseId = 0n) => {
 		const infraContracts = config.getInfraContracts()
 		const securityPoolSalt = getSecurityPoolSalt(parent, universeId, questionId, securityMultiplier)
 		const securityPoolSaltWithMsgSender = getCallerScopedSalt(infraContracts.securityPoolFactory, securityPoolSalt)
@@ -105,7 +105,7 @@ export function createSecurityPoolAddressHelper(config: SecurityPoolAddressConfi
 		const shareToken = getCreate2Address({
 			bytecode: config.getShareTokenInitCode(infraContracts.securityPoolFactory, infraContracts.zoltar, questionId),
 			from: infraContracts.shareTokenFactory,
-			salt: getShareTokenSalt(questionId, securityMultiplier),
+			salt: getSecurityPoolOriginId(originUniverseId, questionId, securityMultiplier),
 		})
 		const truthAuction =
 			parent === zeroAddress

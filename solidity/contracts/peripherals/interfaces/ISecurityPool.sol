@@ -271,11 +271,15 @@ interface ISecurityPoolFactory {
 		uint256 questionId,
 		uint256 securityMultiplier
 	) external returns (ISecurityPool securityPool);
-	function getCanonicalSecurityPool(
-		uint248 universeId,
+	function getOriginId(
+		uint248 originUniverseId,
 		uint256 questionId,
 		uint256 securityMultiplier
-	) external view returns (ISecurityPool securityPool);
+	) external pure returns (bytes32 originId);
+	function getPoolId(bytes32 originId, uint248 universeId) external pure returns (bytes32 poolId);
+	function getSecurityPool(bytes32 originId, uint248 universeId) external view returns (ISecurityPool securityPool);
+	function getSecurityPoolOriginId(ISecurityPool securityPool) external view returns (bytes32 originId);
+	function getSecurityPoolHasInheritedForkOutcome(ISecurityPool securityPool) external view returns (bool);
 	function securityPoolDeploymentCount() external view returns (uint256);
 	function securityPoolDeploymentsRange(
 		uint256 startIndex,

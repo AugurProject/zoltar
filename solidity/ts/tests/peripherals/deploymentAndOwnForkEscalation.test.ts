@@ -159,7 +159,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		await assert.rejects(deployOriginSecurityPool(client, missingUniverseId, questionId, securityMultiplier), /universe is missing/)
 	})
 
-	test('rejects a parallel origin pool before deploying the canonical fork child', async () => {
+	test('allows an independent descendant origin alongside the inherited child pool', async () => {
 		const forkQuestionData = {
 			...questionData,
 			title: `parallel origin fork source ${await mockWindow.getTime()}`,
@@ -173,21 +173,82 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		await deployChild(client, genesisUniverse, BigInt(QuestionOutcome.Yes))
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		await assert.rejects(deployOriginSecurityPool(client, yesUniverse, questionId, securityMultiplier), /canonical ancestor/i)
+		await deployOriginSecurityPool(client, yesUniverse, questionId, securityMultiplier)
+		const independentOrigin = getSecurityPoolAddresses(addressString(0n), yesUniverse, questionId, securityMultiplier, yesUniverse)
+		assert.ok(await contractExists(client, independentOrigin.securityPool), 'the descendant origin pool should deploy in its own lineage')
 
 		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
-		assert.ok(await contractExists(client, yesSecurityPool.securityPool), 'canonical child pool should remain deployable after the rejected origin attempt')
+		assert.ok(await contractExists(client, yesSecurityPool.securityPool), 'the inherited child pool should remain deployable beside the independent origin')
+		assert.notStrictEqual(independentOrigin.securityPool, yesSecurityPool.securityPool, 'the independent origin and inherited child must have different pool addresses')
+		assert.notStrictEqual(independentOrigin.shareToken, yesSecurityPool.shareToken, 'each origin lineage must use a separate collateral token namespace')
+		const factory = getInfraContractAddresses().securityPoolFactory
+		const inheritedOriginId = await client.readContract({
+			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+			functionName: 'getSecurityPoolOriginId',
+			address: factory,
+			args: [securityPoolAddresses.securityPool],
+		})
+		const independentOriginId = await client.readContract({
+			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+			functionName: 'getSecurityPoolOriginId',
+			address: factory,
+			args: [independentOrigin.securityPool],
+		})
+		strictEqualTypeSafe(
+			inheritedOriginId,
+			await client.readContract({
+				abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+				functionName: 'getOriginId',
+				address: factory,
+				args: [genesisUniverse, questionId, securityMultiplier],
+			}),
+			'the inherited pool family should retain the Genesis origin hash',
+		)
+		strictEqualTypeSafe(
+			independentOriginId,
+			await client.readContract({
+				abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+				functionName: 'getOriginId',
+				address: factory,
+				args: [yesUniverse, questionId, securityMultiplier],
+			}),
+			'the descendant origin should hash its own universe into a distinct family id',
+		)
+		assert.notStrictEqual(inheritedOriginId, independentOriginId, 'independent origins must create distinct lineage identifiers')
+		const inheritedDepositId = await client.readContract({
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'getEscalationDepositId',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [yesSecurityPool.securityPool, QuestionOutcome.Yes, 0n],
+		})
+		const independentDepositId = await client.readContract({
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'getEscalationDepositId',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [independentOrigin.securityPool, QuestionOutcome.Yes, 0n],
+		})
+		assert.notStrictEqual(inheritedDepositId, independentDepositId, 'the same local deposit index in independent origins must have different global ids')
 		strictEqualTypeSafe(
 			await client.readContract({
 				abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
-				functionName: 'getCanonicalSecurityPool',
-				address: getInfraContractAddresses().securityPoolFactory,
-				args: [yesUniverse, questionId, securityMultiplier],
+				functionName: 'getSecurityPool',
+				address: factory,
+				args: [inheritedOriginId, yesUniverse],
 			}),
 			yesSecurityPool.securityPool,
-			'factory registry should point the child namespace to the canonical fork child',
+			'factory registry should retain the inherited child under its origin lineage',
+		)
+		strictEqualTypeSafe(
+			await client.readContract({
+				abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+				functionName: 'getSecurityPool',
+				address: factory,
+				args: [independentOriginId, yesUniverse],
+			}),
+			independentOrigin.securityPool,
+			'factory registry should retain the independent descendant origin separately',
 		)
 		strictEqualTypeSafe(
 			await client.readContract({
@@ -199,10 +260,10 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 			yesSecurityPool.securityPool,
 			'share token should authorize exactly the canonical fork child for the child universe',
 		)
-		await assert.rejects(deployOriginSecurityPool(client, yesUniverse, questionId, securityMultiplier), /canonical ancestor|canonical key/i)
+		await assert.rejects(deployOriginSecurityPool(client, yesUniverse, questionId, securityMultiplier), /origin and universe already claimed/i)
 	})
 
-	test('rejects a parallel origin pool when only a higher canonical ancestor exists', async () => {
+	test('deploys a new origin without scanning higher security-pool ancestors', async () => {
 		const firstForkQuestionData = {
 			...questionData,
 			title: `recursive origin first fork ${await mockWindow.getTime()}`,
@@ -240,7 +301,9 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		await deployChild(client, firstChildUniverse, BigInt(QuestionOutcome.No))
 
 		const grandchildUniverse = getChildUniverseId(firstChildUniverse, QuestionOutcome.No)
-		await assert.rejects(deployOriginSecurityPool(client, grandchildUniverse, questionId, securityMultiplier), /canonical ancestor/i)
+		await deployOriginSecurityPool(client, grandchildUniverse, questionId, securityMultiplier)
+		const grandchildOrigin = getSecurityPoolAddresses(addressString(0n), grandchildUniverse, questionId, securityMultiplier, grandchildUniverse)
+		assert.ok(await contractExists(client, grandchildOrigin.securityPool), 'a deep descendant should create an independent origin without an ancestor walk')
 
 		const unrelatedQuestionData = {
 			...questionData,
@@ -250,7 +313,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		const unrelatedQuestionId = getQuestionId(unrelatedQuestionData, outcomes)
 		await createQuestion(client, unrelatedQuestionData, outcomes)
 		await deployOriginSecurityPool(client, grandchildUniverse, unrelatedQuestionId, securityMultiplier)
-		const unrelatedPool = getSecurityPoolAddresses(addressString(0n), grandchildUniverse, unrelatedQuestionId, securityMultiplier)
+		const unrelatedPool = getSecurityPoolAddresses(addressString(0n), grandchildUniverse, unrelatedQuestionId, securityMultiplier, grandchildUniverse)
 		assert.ok(await contractExists(client, unrelatedPool.securityPool), 'a genuinely unrelated grandchild market should remain deployable')
 	})
 
@@ -283,17 +346,23 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 			shuffledOutcomes[index] = swapOutcome
 			shuffledOutcomes[swapIndex] = currentOutcome
 		}
+		const factory = getInfraContractAddresses().securityPoolFactory
+		const inheritedOriginId = await client.readContract({
+			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+			functionName: 'getSecurityPoolOriginId',
+			address: factory,
+			args: [securityPoolAddresses.securityPool],
+		})
 
 		for (const outcome of shuffledOutcomes) {
 			const childUniverse = getChildUniverseId(genesisUniverse, outcome)
-			await assert.rejects(deployOriginSecurityPool(client, childUniverse, questionId, securityMultiplier), /canonical ancestor/i)
 			await createChildUniverse(client, securityPoolAddresses.securityPool, outcome)
 			const childPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, childUniverse, questionId, securityMultiplier).securityPool
 			const factoryCanonicalPool = await client.readContract({
 				abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
-				functionName: 'getCanonicalSecurityPool',
-				address: getInfraContractAddresses().securityPoolFactory,
-				args: [childUniverse, questionId, securityMultiplier],
+				functionName: 'getSecurityPool',
+				address: factory,
+				args: [inheritedOriginId, childUniverse],
 			})
 			const tokenCanonicalPool = await client.readContract({
 				abi: peripherals_tokens_ShareToken_ShareToken.abi,
@@ -303,11 +372,14 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 			})
 			strictEqualTypeSafe(factoryCanonicalPool, childPool, 'factory should retain one canonical child collateral ledger')
 			strictEqualTypeSafe(tokenCanonicalPool, childPool, 'share token namespace should retain the same canonical child ledger')
-			await assert.rejects(deployOriginSecurityPool(client, childUniverse, questionId, securityMultiplier), /canonical ancestor|canonical key/i)
+			await deployOriginSecurityPool(client, childUniverse, questionId, securityMultiplier)
+			const independentOrigin = getSecurityPoolAddresses(addressString(0n), childUniverse, questionId, securityMultiplier, childUniverse)
+			assert.notStrictEqual(independentOrigin.securityPool, childPool, 'an independent origin should not replace the inherited child')
+			await assert.rejects(deployOriginSecurityPool(client, childUniverse, questionId, securityMultiplier), /origin and universe already claimed/i)
 		}
 	})
 
-	test('reuses and authorizes the share token when sibling universes deploy the same market', async () => {
+	test('isolates share-token collateral when sibling universes deploy independent origins for the same market', async () => {
 		const siblingMarketQuestionData = {
 			...questionData,
 			title: `sibling market ${await mockWindow.getTime()}`,
@@ -333,16 +405,16 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		await deployOriginSecurityPool(client, yesUniverse, siblingMarketQuestionId, securityMultiplier)
 		await deployOriginSecurityPool(client, noUniverse, siblingMarketQuestionId, securityMultiplier)
 
-		const yesPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), yesUniverse, siblingMarketQuestionId, securityMultiplier)
-		const noPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), noUniverse, siblingMarketQuestionId, securityMultiplier)
-		strictEqualTypeSafe(yesPoolAddresses.shareToken, noPoolAddresses.shareToken, 'sibling markets should reuse their share token')
-		for (const [securityPool, universe] of [
-			[yesPoolAddresses.securityPool, yesUniverse],
-			[noPoolAddresses.securityPool, noUniverse],
+		const yesPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), yesUniverse, siblingMarketQuestionId, securityMultiplier, yesUniverse)
+		const noPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), noUniverse, siblingMarketQuestionId, securityMultiplier, noUniverse)
+		assert.notStrictEqual(yesPoolAddresses.shareToken, noPoolAddresses.shareToken, 'independent sibling origins must not share collateral tokens')
+		for (const [securityPool, shareToken, universe] of [
+			[yesPoolAddresses.securityPool, yesPoolAddresses.shareToken, yesUniverse],
+			[noPoolAddresses.securityPool, noPoolAddresses.shareToken, noUniverse],
 		] as const) {
 			await client.simulateContract({
 				abi: peripherals_tokens_ShareToken_ShareToken.abi,
-				address: yesPoolAddresses.shareToken,
+				address: shareToken,
 				functionName: 'mintCompleteSets',
 				args: [universe, client.account.address, 1n],
 				account: securityPool,
@@ -572,6 +644,17 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+		const yesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier).securityPool
+		strictEqualTypeSafe(
+			await client.readContract({
+				abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+				address: getInfraContractAddresses().securityPoolFactory,
+				functionName: 'getSecurityPoolHasInheritedForkOutcome',
+				args: [yesChildPool],
+			}),
+			true,
+			'a child should cache that its question was fixed by the parent universe fork',
+		)
 		const walletChildRepBeforeClaim = await getERC20Balance(client, getRepTokenAddress(yesUniverse), client.account.address)
 		const hash = await client.writeContract({
 			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
