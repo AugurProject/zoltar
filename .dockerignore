@@ -10,6 +10,7 @@ solidity/coverage
 solidity/js
 solidity/ts/**/*.d.ts
 solidity/ts/**/*.d.ts.map
+!solidity/ts/types/index.d.ts
 solidity/ts/**/*.js
 solidity/ts/**/*.js.map
 solidity/ts/types/contractArtifact.ts
