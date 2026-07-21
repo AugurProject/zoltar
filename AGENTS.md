@@ -181,6 +181,13 @@ If the count is `0`, record that the branch is current. If it is nonzero, merge 
 
 Skip this gate for read-only analysis, exploration, or when the user asks not to fetch or merge.
 
+## Pull requests
+
+When creating a pull request:
+
+- Write a pull request description that explains what changed and why.
+- For UI changes, include images that show the resulting UI. Do not commit these images to the repository; upload them to GitHub and embed or link them in the pull request description instead.
+
 ## Review gates
 
 `.codex/review-contract.md` is the canonical review handoff, severity, output, scoring, and closure policy.
