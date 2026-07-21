@@ -690,7 +690,7 @@ void describe('SecurityPoolsSection', () => {
 		expect(lookupPosition < summaryPosition).toBe(true)
 	})
 
-	void test('shows liquidation successful in browse mode after an immediate execution', async () => {
+	void test('keeps immediate liquidation results out of browse mode', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				SecurityPoolsSection,
@@ -715,13 +715,12 @@ void describe('SecurityPoolsSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const dialog = within(document.body).getByRole('dialog', { name: 'Execute Vault Liquidation' })
-		const dialogQueries = within(dialog)
-		expect(dialogQueries.getByRole('heading', { name: 'Liquidation Executed' })).not.toBeNull()
-		expect(dialogQueries.getByText('A valid oracle price was already available, so the liquidation executed immediately and no staged operation was created.')).not.toBeNull()
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByRole('dialog', { name: 'Execute Vault Liquidation' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Liquidation Executed' })).toBeNull()
 	})
 
-	void test('shows liquidation queued in browse mode when the refreshed manager reports a pending liquidation', async () => {
+	void test('keeps queued liquidation results out of browse mode', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				SecurityPoolsSection,
@@ -754,10 +753,10 @@ void describe('SecurityPoolsSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(within(document.body).getByText('Liquidation Queued')).not.toBeNull()
+		expect(within(document.body).queryByText('Liquidation Queued')).toBeNull()
 	})
 
-	void test('shows liquidation failed in browse mode with the revert detail', async () => {
+	void test('keeps failed liquidation results out of browse mode', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				SecurityPoolsSection,
@@ -788,10 +787,10 @@ void describe('SecurityPoolsSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const dialog = within(document.body).getByRole('dialog', { name: 'Execute Vault Liquidation' })
-		const dialogQueries = within(dialog)
-		expect(dialogQueries.getByRole('heading', { name: 'Liquidation Failed' })).not.toBeNull()
-		expect(dialogQueries.getByText('Local Security Bond Allowance broken')).not.toBeNull()
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByRole('dialog', { name: 'Execute Vault Liquidation' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Liquidation Failed' })).toBeNull()
+		expect(documentQueries.queryByText('Local Security Bond Allowance broken')).toBeNull()
 	})
 
 	void test('keeps the route summary hidden in operate mode until the selected pool resolves', async () => {

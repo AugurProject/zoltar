@@ -13,12 +13,6 @@ export function formatSecurityPoolPageSummary(matchingPoolCount: number, loadedP
 	return securityPoolCopy.formatPoolPageSummary(matchingPoolCount, loadedPoolCount, poolLabel, matchVerb)
 }
 
-export function formatSecurityVaultPreviewDeferred(vaultCount: bigint) {
-	const vaultLabel = vaultCount === 1n ? securityPoolCopy.vaultCountSingular : securityPoolCopy.vaultCountPlural
-	const registeredVerb = vaultCount === 1n ? securityPoolCopy.vaultSummarySingularVerb : securityPoolCopy.vaultSummaryPluralVerb
-	return securityPoolCopy.formatVaultPreviewDeferred(vaultCount, vaultLabel, registeredVerb)
-}
-
 export function getVaultLauncherWalletReason(action: VaultLauncherAction, repExitMode: RepExitMode) {
 	if (action === 'claim-fees') return securityPoolCopy.connectWalletBeforeClaimingFees
 	if (action === 'deposit-rep') return securityPoolCopy.connectWalletBeforeDepositingRep

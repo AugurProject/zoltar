@@ -531,7 +531,7 @@ export function SecurityVaultSection({
 	] satisfies ReadinessAction[])
 	const actionSections = modalFirst ? (
 		<>
-			<SectionBlock title={securityPoolCopy.vaultActions}>
+			<SectionBlock title={securityPoolCopy.vaultActions} variant='plain'>
 				{showMissingVaultNotice ? <StateHint presentation={{ key: 'not_found', badgeLabel: securityPoolCopy.vaultMissing, badgeTone: 'muted', detail: securityPoolCopy.missingVaultDepositDetail }} /> : undefined}
 				{showSharedRefreshVaultBlocker ? (
 					<p className='detail' id={refreshVaultActionsDescriptionId}>

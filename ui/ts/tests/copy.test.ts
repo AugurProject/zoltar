@@ -13,7 +13,6 @@ test('fork migration empty states are complete templates', () => {
 
 test('security-pool count summaries own their complete prose', () => {
 	expect(securityPoolCopy.formatVaultDirectorySummary(3n, 8n)).toBe('Showing 3 of 8 active vaults, newest activity first. Enter a vault address above to inspect any specific vault.')
-	expect(securityPoolCopy.formatVaultPreviewSummary(3, 8n)).toBe('Showing 3 of 8 active vaults in this preview, newest activity first.')
 })
 
 test('market and Open Oracle values own their complete spacing and units', () => {

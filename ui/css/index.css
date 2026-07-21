@@ -3829,6 +3829,10 @@ main.global-transaction-tray-open {
 	grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
 }
 
+.vault-action-launcher-grid {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .action-launcher-card {
 	display: grid;
 	align-content: start;
@@ -5711,6 +5715,14 @@ main.global-transaction-tray-open {
 	display: none;
 }
 
+.security-pool-strip-question .question-preview-timeline-item {
+	padding: 0.6rem 0 0;
+	border: 0;
+	border-top: 1px solid var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
+}
+
 .security-pool-strip-stats {
 	grid-template-columns: repeat(3, minmax(0, 1fr));
 	padding-top: 0.15rem;
@@ -5740,22 +5752,6 @@ main.global-transaction-tray-open {
 	background: transparent;
 }
 
-.security-pool-strip-vaults {
-	padding-top: 0.35rem;
-	border-top: 1px solid var(--color-white-08);
-}
-
-.security-pool-strip-ranked-list .ranked-bar-item {
-	padding: 0.55rem 0;
-	border-width: 0 0 1px;
-	border-radius: 0;
-	background: transparent;
-}
-
-.security-pool-strip-ranked-list .ranked-bar-item:last-child {
-	border-bottom: 0;
-}
-
 .security-pool-detail-rail {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
@@ -5771,30 +5767,16 @@ main.global-transaction-tray-open {
 	border-top: 1px solid var(--color-white-08);
 }
 
-.security-pool-card-vault-preview {
-	display: grid;
-	gap: 0.8rem;
+.security-pool-card .read-only-detail-accordion {
+	padding: 0;
+	border: 0;
+	border-top: 1px solid var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
 }
 
-.security-pool-browse-vaults {
-	display: grid;
-	gap: 0.75rem;
-}
-
-.security-pool-browse-vaults-head {
-	display: flex;
-	gap: 0.75rem;
-	align-items: baseline;
-	justify-content: space-between;
-}
-
-.security-pool-browse-vaults-head h4 {
-	margin: 0;
-	font-size: var(--font-base);
-}
-
-.security-pool-browse-vaults .vault-position-list {
-	gap: 0.55rem;
+.security-pool-card .read-only-detail-accordion-content .security-pool-card-inline-details {
+	border-top: 0;
 }
 
 .security-pool-browse-vault-list {
@@ -5814,14 +5796,7 @@ main.global-transaction-tray-open {
 	padding-bottom: 0;
 }
 
-.security-pool-browse-vault-row-head {
-	display: grid;
-	gap: 0.45rem;
-}
-
-.security-pool-browse-vault-row-top,
-.security-pool-browse-vault-row-meter,
-.security-pool-browse-vault-row-actions {
+.security-pool-browse-vault-row-top {
 	display: grid;
 	grid-template-columns: minmax(0, 1.35fr) minmax(10.5rem, 0.72fr) minmax(10.5rem, 0.72fr) minmax(8.3rem, 0.52fr);
 	gap: 0.7rem;
@@ -5859,63 +5834,6 @@ main.global-transaction-tray-open {
 .security-pool-browse-vault-row-id strong {
 	display: block;
 	min-width: 0;
-}
-
-.security-pool-browse-vault-row-liquidate {
-	justify-self: end;
-	min-width: 0;
-	padding-top: 0.35rem;
-	padding-bottom: 0.35rem;
-}
-
-.security-pool-browse-vault-row-meter .progress-meter {
-	padding: 0.18rem 0;
-	border: 0;
-	background: transparent;
-}
-
-.security-pool-browse-vault-row-meter-widget.progress-meter {
-	background: transparent;
-}
-
-.security-pool-browse-vault-row-meter {
-	grid-template-columns: 1fr;
-}
-
-.security-pool-browse-vault-row-meter .progress-meter-header {
-	gap: 0.2rem;
-}
-
-.security-pool-browse-vault-row-meter .progress-meter-track {
-	height: 0.48rem;
-}
-
-.security-pool-browse-vault-row-meter .progress-meter-label {
-	letter-spacing: 0.08em;
-	font-size: var(--font-label);
-}
-
-.security-pool-browse-vault-row-meter .progress-meter-value {
-	font-size: var(--font-value);
-}
-
-.security-pool-browse-vault-row-actions > button {
-	justify-self: end;
-	padding-top: 0.36rem;
-	padding-bottom: 0.36rem;
-	min-width: 8.2rem;
-}
-
-.security-pool-card-vault-header {
-	display: flex;
-	align-items: baseline;
-	justify-content: space-between;
-	gap: 1rem;
-}
-
-.security-pool-card-vault-header h4 {
-	margin: 0;
-	font-size: var(--font-h4);
 }
 
 .security-pool-hero-metrics,
@@ -6088,27 +6006,19 @@ main.global-transaction-tray-open {
 }
 
 .vault-position-strip {
-	position: relative;
 	display: grid;
 	gap: 0.9rem;
-	padding: 0.95rem 1rem;
-	border: 1px solid var(--border-subtle);
-	border-left: 3px solid rgba(56, 213, 255, 0.26);
-	border-radius: 0.9rem;
-	background: linear-gradient(180deg, rgba(7, 15, 27, 0.32), rgba(6, 14, 22, 0.2));
+	padding: 0.95rem 0;
+	border-bottom: 1px solid var(--divider-subtle);
 }
 
-.vault-position-strip::before {
-	content: "";
-	position: absolute;
-	inset: 0;
-	pointer-events: none;
-	background: radial-gradient(circle at top right, var(--accent-faint), transparent 45%);
-	opacity: 0.7;
+.vault-position-strip:first-child {
+	padding-top: 0;
 }
 
-.vault-position-strip > * {
-	position: relative;
+.vault-position-strip:last-child {
+	padding-bottom: 0;
+	border-bottom: 0;
 }
 
 .vault-position-strip-head {
@@ -6283,6 +6193,10 @@ main.global-transaction-tray-open {
 }
 
 @media (max-width: 640px) {
+	.vault-action-launcher-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
 	.metric-tile-grid[data-columns="4"],
 	.metric-tile-grid[data-columns="3"],
 	.question-draft-preview-meta,
@@ -7427,9 +7341,7 @@ main.global-transaction-tray-open {
 
 	.security-pool-detail-rail,
 	.security-pool-browse-vault-row-top,
-	.security-pool-browse-vault-row-top-compact,
-	.security-pool-browse-vault-row-meter,
-	.security-pool-browse-vault-row-actions {
+	.security-pool-browse-vault-row-top-compact {
 		grid-template-columns: minmax(0, 1fr);
 	}
 
@@ -7450,13 +7362,6 @@ main.global-transaction-tray-open {
 	.security-pool-browse-vault-row-title .security-pool-browse-vault-row-id {
 		align-self: stretch;
 		width: 100%;
-	}
-
-	.security-pool-browse-vault-row-liquidate,
-	.security-pool-browse-vault-row-actions > button {
-		justify-self: stretch;
-		width: 100%;
-		min-width: 0;
 	}
 
 	.security-pool-browse-vault-row-id .address-value.copyable {

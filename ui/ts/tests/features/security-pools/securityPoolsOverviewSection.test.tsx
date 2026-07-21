@@ -893,7 +893,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		})
 	})
 
-	test('shows a deferred vault placeholder when browse mode has not loaded vault details yet', async () => {
+	test('shows only the aggregate vault count when browse mode has not loaded vault details yet', async () => {
 		const deferredPoolTitle = 'Deferred vault pool'
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
@@ -914,26 +914,18 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		const poolCard = getSecurityPoolCard(deferredPoolTitle)
 		const poolCardQueries = within(poolCard)
-		expect(poolCardQueries.getByText('Preview deferred')).not.toBeNull()
-		expect(poolCardQueries.getByText('2 vaults are registered. Open the pool to load individual vault details.')).not.toBeNull()
+		expect(poolCardQueries.queryByText('Preview deferred')).toBeNull()
+		expect(poolCardQueries.queryByText('2 vaults are registered. Open the pool to load individual vault details.')).toBeNull()
 		expect(poolCardQueries.queryByText('Vault preview unavailable.')).toBeNull()
 		expect(poolCardQueries.queryByText('No vaults in this pool yet.')).toBeNull()
+		expect(poolCard.querySelector('.security-pool-strip-stats')?.textContent).toContain('Vaults2')
 	})
 
-	test('renders browse-mode vault previews and opens liquidation review for a vault', async () => {
+	test('keeps browse pool cards focused on pool-level information', async () => {
 		const previewPoolTitle = 'Pool with preview vaults'
-		let liquidationRequest: { managerAddress: string; securityPoolAddress: string; vaultAddress: string; maxAmount: bigint | undefined } | undefined
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
-					onOpenLiquidationModal: (managerAddress, securityPoolAddress, vaultAddress, maxAmount) => {
-						liquidationRequest = {
-							managerAddress,
-							securityPoolAddress,
-							vaultAddress,
-							maxAmount,
-						}
-					},
 					securityPools: [
 						createSecurityPool({
 							managerAddress: '0x0000000000000000000000000000000000000502',
@@ -958,27 +950,17 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		const poolCard = getSecurityPoolCard(previewPoolTitle)
 		const poolCardQueries = within(poolCard)
-		expect(poolCard.querySelector('.security-pool-browse-vaults-count')).toBeNull()
-		expect(poolCardQueries.queryByText('Open this pool to load 1 vault.')).toBeNull()
-		expect(poolCardQueries.queryByText('Pool Details')).toBeNull()
 		expect(poolCardQueries.getByRole('link', { name: '0x1' })).not.toBeNull()
-		expect(poolCardQueries.getAllByRole('button', { name: 'Copy address 0x0000000000000000000000000000000000000501' }).length).toBeGreaterThan(0)
-		const liquidationReviewButton = poolCardQueries.getByRole('button', { name: 'Review Liquidation' })
-		expect(liquidationReviewButton).not.toBeNull()
-		await act(() => {
-			fireEvent.click(liquidationReviewButton)
-		})
-		expect(liquidationRequest).toEqual({
-			managerAddress: '0x0000000000000000000000000000000000000502',
-			securityPoolAddress: '0x0000000000000000000000000000000000000500',
-			vaultAddress: '0x0000000000000000000000000000000000000501',
-			maxAmount: 5n,
-		})
-		expect(poolCardQueries.getByText('Showing 1 of 5 active vaults in this preview, newest activity first.')).not.toBeNull()
-		expect(poolCardQueries.queryByText('+4 more vaults')).toBeNull()
+		expect(poolCardQueries.queryByRole('button', { name: 'Copy address 0x0000000000000000000000000000000000000501' })).toBeNull()
+		expect(poolCardQueries.queryByRole('button', { name: 'Review Liquidation' })).toBeNull()
+		expect(poolCard.querySelector('.security-pool-browse-vault-row')).toBeNull()
+		const browseSection = poolCard.closest('.section-block')
+		if (!(browseSection instanceof HTMLElement)) throw new Error('Expected browse section')
+		expect(browseSection.classList.contains('plain')).toBe(true)
+		expect(browseSection.classList.contains('surface')).toBe(false)
 	})
 
-	test('preserves the loader-provided vault preview order instead of re-ranking by allowance', async () => {
+	test('does not render loader-provided vault previews inside pool cards', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
@@ -1019,16 +1001,13 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		const poolCard = getSecurityPoolCard('Ordered vault preview pool')
 		const previewRows = Array.from(poolCard.querySelectorAll('.security-pool-browse-vault-row'))
-		expect(previewRows).toHaveLength(3)
-		const previewAddresses = previewRows.map(row => {
-			if (!(row instanceof HTMLElement)) throw new Error('Expected vault preview row element')
-			const copyButton = within(row).getByRole('button', { name: /Copy address / })
-			return copyButton.getAttribute('aria-label')?.replace('Copy address ', '')
-		})
-		expect(previewAddresses).toEqual(['0x0000000000000000000000000000000000000701', '0x0000000000000000000000000000000000000702', '0x0000000000000000000000000000000000000703'])
+		expect(previewRows).toHaveLength(0)
+		for (const vaultAddress of ['0x0000000000000000000000000000000000000701', '0x0000000000000000000000000000000000000702', '0x0000000000000000000000000000000000000703']) {
+			expect(within(poolCard).queryByRole('button', { name: `Copy address ${vaultAddress}` })).toBeNull()
+		}
 	})
 
-	test('keeps the connected wallet vault visible when it is appended outside the top browse preview', async () => {
+	test('keeps connected-wallet vault details out of browse pool cards', async () => {
 		const viewerVaultAddress = '0x0000000000000000000000000000000000000604'
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
@@ -1078,8 +1057,7 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		const poolCard = getSecurityPoolCard('Viewer vault preview pool')
 		const poolCardQueries = within(poolCard)
-		expect(poolCardQueries.getAllByRole('button', { name: `Copy address ${viewerVaultAddress}` }).length).toBeGreaterThan(0)
-		expect(poolCardQueries.getByText('Showing 4 of 6 active vaults in this preview, newest activity first.')).not.toBeNull()
-		expect(poolCardQueries.queryByText('+2 more vaults')).toBeNull()
+		expect(poolCardQueries.queryByRole('button', { name: `Copy address ${viewerVaultAddress}` })).toBeNull()
+		expect(poolCard.querySelector('.security-pool-browse-vault-row')).toBeNull()
 	})
 })

@@ -54,11 +54,13 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(contextDetails.querySelector('summary')?.textContent).toBe('Pool context and metrics')
 		expect(document.body.querySelectorAll('.selected-pool-workflow-content > .section-block.default')).toHaveLength(0)
 		expectSectionVariant('Vault Operations', 'plain')
+		expectSectionVariant('Vault Actions', 'plain')
 
 		await act(() => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Directory' }))
 		})
 		expectSectionVariant('Vault Directory', 'embedded')
+		expect(document.body.querySelector('.vault-position-strip .entity-card')).toBeNull()
 	})
 
 	test('renders staged operations as an unframed selected-pool workflow section', async () => {
