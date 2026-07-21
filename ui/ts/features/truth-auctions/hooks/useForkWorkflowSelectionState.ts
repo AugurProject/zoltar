@@ -5,11 +5,12 @@ import type { ForkWorkflowSelectionStage, SelectedPoolView } from '../../securit
 type UseForkWorkflowSelectionStateParameters = {
 	currentForkWorkflowSelectionStage: ForkWorkflowSelectionStage
 	legacyForkWorkflowSelectionStage: ForkWorkflowSelectionStage | undefined
+	onSelectedStageViewChange: (stage: ForkWorkflowSelectionStage) => void
 	selectedPoolAddress: string | undefined
 	view: SelectedPoolView
 }
 
-export function useForkWorkflowSelectionState({ currentForkWorkflowSelectionStage, legacyForkWorkflowSelectionStage, selectedPoolAddress, view }: UseForkWorkflowSelectionStateParameters) {
+export function useForkWorkflowSelectionState({ currentForkWorkflowSelectionStage, legacyForkWorkflowSelectionStage, onSelectedStageViewChange, selectedPoolAddress, view }: UseForkWorkflowSelectionStateParameters) {
 	const previousSelectedPoolViewRef = useRef<SelectedPoolView | undefined>(undefined)
 	const previousForkWorkflowPoolKeyRef = useRef<string | undefined>(undefined)
 	const pendingLegacyForkWorkflowSelectionStageRef = useRef<ForkWorkflowSelectionStage | undefined>(legacyForkWorkflowSelectionStage)
@@ -62,6 +63,7 @@ export function useForkWorkflowSelectionState({ currentForkWorkflowSelectionStag
 		onForkWorkflowSelectionStageChange: (stage: ForkWorkflowSelectionStage) => {
 			hasManualForkWorkflowSelectionRef.current = true
 			setForkWorkflowSelectionStage(stage)
+			onSelectedStageViewChange(stage)
 		},
 	}
 }

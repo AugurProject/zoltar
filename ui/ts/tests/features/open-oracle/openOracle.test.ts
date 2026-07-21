@@ -544,6 +544,12 @@ describe('Open Oracle helpers', () => {
 		}
 	})
 
+	test('dispute submission blockers use base and quote token terminology', () => {
+		expect(createDisputeSubmissionPreview({ disputeNewAmount1Input: '' }).blockMessage?.message).toBe('Enter a valid new base token amount.')
+		expect(createDisputeSubmissionPreview({ disputeNewAmount2Input: '0' }).blockMessage?.message).toBe('Enter a valid new quote token amount greater than zero.')
+		expect(createDisputeSubmissionPreview({ disputeNewAmount1Input: '201' }).blockMessage?.message).toBe('New base token amount must be exactly 200 for this dispute.')
+	})
+
 	test('open oracle fee and multiplier formatters render human values', () => {
 		expect(formatOpenOracleFeePercentage(10_000n)).toBe('0.1%')
 		expect(formatOpenOracleFeePercentageInput(100n)).toBe('0.001')
@@ -616,8 +622,8 @@ describe('Open Oracle helpers', () => {
 			token2Address: WETH_ADDRESS,
 		}
 
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: '0' } })).toBe('Exact token1 report must be greater than zero.')
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, token2Address: token1Address } })).toBe('Token1 and token2 must be different addresses.')
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: '0' } })).toBe('Base token amount must be greater than zero.')
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, token2Address: token1Address } })).toBe('Base and quote tokens must use different addresses.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, settlementTime: '9' } })).toBe('Settlement time must be greater than dispute delay.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, feePercentage: '60', protocolFee: '50.00001' } })).toBe('Fee percentage plus protocol fee must not exceed 100%.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, multiplier: '99' } })).toBe('Multiplier must be at least 1.00x.')
@@ -625,14 +631,14 @@ describe('Open Oracle helpers', () => {
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: '1000000000' }, token1Decimals: 18 })).toBeUndefined()
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: highPrecisionToken1Amount, escalationHalt: highPrecisionToken1Amount } })).toBeUndefined()
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: highPrecisionToken1Amount, escalationHalt: highPrecisionToken1Amount }, token1Decimals: 36 })).toBeUndefined()
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: '.' } })).toBe('Enter a valid exact token1 report.')
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: '-.' } })).toBe('Enter a valid exact token1 report.')
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: '.' } })).toBe('Enter a valid base token amount.')
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: '-.' } })).toBe('Enter a valid base token amount.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, escalationHalt: '.' } })).toBe('Enter a valid escalation halt.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, escalationHalt: '-.' } })).toBe('Enter a valid escalation halt.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, multiplier: (1n << 16n).toString() } })).toBe('Multiplier exceeds the contract maximum.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, disputeDelay: (1n << 24n).toString() } })).toBe('Dispute delay exceeds the contract maximum.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, settlementTime: (1n << 48n).toString() } })).toBe('Settlement time exceeds the contract maximum.')
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: (1n << 128n).toString() }, token1Decimals: 18 })).toBe('Exact token1 report exceeds the contract maximum.')
+		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: (1n << 128n).toString() }, token1Decimals: 18 })).toBe('Base token amount exceeds the contract maximum.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, escalationHalt: (1n << 128n).toString() }, token1Decimals: 18 })).toBe('Escalation halt exceeds the contract maximum.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, settlerReward: (1n << 96n).toString() } })).toBe('Settler reward exceeds the contract maximum.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, ethValue: (1n << 96n).toString() } })).toBe('ETH value to send exceeds the contract maximum.')

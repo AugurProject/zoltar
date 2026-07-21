@@ -467,7 +467,10 @@ export function SecurityVaultSection({
 		if (walletGuardState.blocked) return walletGuardState.reason
 		if (!selectedVaultIsOwnedByAccount) return getVaultLauncherOwnershipReason(action, effectiveRepExitMode)
 		if (!hasLoadedSelectedVaultDetails) return securityPoolCopy.refreshVaultActionsDetail
-		if (action === 'deposit-rep') return undefined
+		if (action === 'deposit-rep') {
+			if (!vaultExistsOnchain && securityVaultRepBalance !== undefined && securityVaultRepBalance <= 0n) return securityPoolCopy.missingVaultRepBalanceReason
+			return undefined
+		}
 		return loadedVaultMissingBlocker
 	}
 	const depositLauncherBlocker = getVaultLauncherBlocker('deposit-rep')

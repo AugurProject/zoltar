@@ -14,6 +14,7 @@ import {
 	getSelectedPoolForkWorkflowView,
 	getForkWorkflowStageSelection,
 	getSelectedPoolOracleMetricValues,
+	getSelectedPoolViewForForkWorkflowSelectionStage,
 	getSelectedPoolViewForForkStage,
 	getSelectedPoolWorkflowGuardMessage,
 	getSelectedPoolWorkflowLockedPresentation,
@@ -56,6 +57,10 @@ void describe('selected pool workflow lookup state', () => {
 		expect(resolveForkWorkflowSelectionStage('fork-migration')).toBe('migration')
 		expect(resolveForkWorkflowSelectionStage('fork-auction')).toBe('auction')
 		expect(resolveForkWorkflowSelectionStage('fork-settlement')).toBe('settlement')
+		expect(getSelectedPoolViewForForkWorkflowSelectionStage('fork-triggered')).toBe('fork-workflow')
+		expect(getSelectedPoolViewForForkWorkflowSelectionStage('migration')).toBe('fork-migration')
+		expect(getSelectedPoolViewForForkWorkflowSelectionStage('auction')).toBe('fork-auction')
+		expect(getSelectedPoolViewForForkWorkflowSelectionStage('settlement')).toBe('fork-settlement')
 		expect(normalizeForkWorkflowSelectionStage('initiate')).toBe('fork-triggered')
 	})
 
