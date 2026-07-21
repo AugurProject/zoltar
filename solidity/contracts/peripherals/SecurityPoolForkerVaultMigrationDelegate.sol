@@ -27,7 +27,7 @@ contract SecurityPoolForkerVaultMigrationDelegate is SecurityPoolForkerVaultMigr
 
 	function migrateVault(ISecurityPool parent, uint256 outcomeIndex) public {
 		require(
-			block.timestamp <= zoltar.getForkTime(parent.universeId()) + SecurityPoolUtils.MIGRATION_TIME,
+			block.timestamp <= forkDataByPool[parent].forkActivationTime + SecurityPoolUtils.MIGRATION_TIME,
 			'Migration window closed'
 		);
 		ISecurityPool child = _getOrDeployChildPool(parent, outcomeIndex);

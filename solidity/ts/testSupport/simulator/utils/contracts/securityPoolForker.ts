@@ -176,6 +176,17 @@ export const getMigratedRep = async (client: ReadClient, securityPoolAddress: Ad
 		'Migrated REP',
 	)
 
+export const getForkActivationTime = async (client: ReadClient, securityPoolAddress: Address): Promise<bigint> =>
+	requireBigInt(
+		await client.readContract({
+			abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'getForkActivationTime',
+			address: getInfraContractAddresses().securityPoolForker,
+			args: [securityPoolAddress],
+		}),
+		'Fork activation time',
+	)
+
 export const getQuestionOutcome = async (client: ReadClient, securityPoolAddress: Address): Promise<QuestionOutcome> => {
 	if (!(await contractExists(client, securityPoolAddress))) return QuestionOutcome.None
 	return requireQuestionOutcome(

@@ -10,8 +10,8 @@ import { usePeripheralsTruthAuctionFixture, type PeripheralsTruthAuctionFixture 
 import { getExpectedLiquidationRepMove } from './liquidationTestHelpers'
 import { getMaxRepBeingSold, getMinBidSize, isFinalized, submitBid } from '../../testSupport/simulator/utils/contracts/auction'
 import { getLastPrice, queueLiquidationAtForcedPrice } from '../../testSupport/simulator/utils/contracts/peripherals'
-import { getUniverseData } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { applyLibraries } from '../../testSupport/simulator/utils/contracts/deployPeripherals'
+import { getForkActivationTime } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
 
 describe('Peripherals: truth auction', () => {
 	const fixture = usePeripheralsTruthAuctionFixture()
@@ -255,8 +255,7 @@ describe('Peripherals: truth auction', () => {
 
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
-			const { forkTime } = await getUniverseData(client, genesisUniverse)
-			const migrationDeadline = forkTime + 8n * 7n * DAY
+			const migrationDeadline = (await getForkActivationTime(client, securityPoolAddresses.securityPool)) + 8n * 7n * DAY
 
 			await mockWindow.setTime(migrationDeadline - 1n)
 			// The transaction mines at the exact deadline. On slower runners the receipt
@@ -277,8 +276,7 @@ describe('Peripherals: truth auction', () => {
 
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
-			const { forkTime } = await getUniverseData(client, genesisUniverse)
-			const migrationDeadline = forkTime + 8n * 7n * DAY
+			const migrationDeadline = (await getForkActivationTime(client, securityPoolAddresses.securityPool)) + 8n * 7n * DAY
 			let boundarySnapshot = await mockWindow.anvilSnapshot()
 			const forkerAddress = getInfraContractAddresses().securityPoolForker
 

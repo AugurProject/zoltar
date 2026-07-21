@@ -194,9 +194,7 @@ contract ShareToken is ERC1155, IShareToken {
 
 	function migrate(uint256 fromId, uint256[] calldata targetOutcomeIndexes) external {
 		uint248 universeId = getUniverseId(fromId);
-		uint256 forkTime = zoltar.getForkTime(universeId);
-		require(forkTime > 0, 'ShareToken universe has not forked, so shares cannot migrate');
-		require(block.timestamp <= forkTime + SecurityPoolUtils.MIGRATION_TIME, 'ShareToken migration window closed');
+		require(zoltar.getForkTime(universeId) > 0, 'ShareToken universe has not forked, so shares cannot migrate');
 		require(targetOutcomeIndexes.length > 0, 'ShareToken migration requires at least one target outcome');
 
 		uint256 fromIdBalance = balanceOf(msg.sender, fromId);
@@ -226,6 +224,10 @@ contract ShareToken is ERC1155, IShareToken {
 			forker.initiateSecurityPoolFork(sourcePool);
 		}
 		require(sourcePool.systemState() == SystemState.PoolForked, 'ShareToken source pool cannot migrate');
+		require(
+			block.timestamp <= forker.getForkActivationTime(sourcePool) + SecurityPoolUtils.MIGRATION_TIME,
+			'ShareToken migration window closed'
+		);
 
 		uint248[] memory targetUniverseIds = new uint248[](targetOutcomeIndexesLength);
 		for (uint256 i = 0; i < targetOutcomeIndexesLength; i++) {

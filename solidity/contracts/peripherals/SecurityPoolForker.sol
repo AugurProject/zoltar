@@ -105,6 +105,10 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		return forkDataByPool[securityPool].migratedRep;
 	}
 
+	function getForkActivationTime(ISecurityPool securityPool) external view returns (uint256) {
+		return forkDataByPool[securityPool].forkActivationTime;
+	}
+
 	function isEscalationDepositClaimedDirectly(
 		ISecurityPool securityPool,
 		BinaryOutcomes.BinaryOutcome outcomeIndex,
@@ -374,6 +378,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		data.forkQuestionMatchesPoolQuestion = zoltar.forkQuestionMatches(universe, securityPool.questionId());
 		uint256 repBalanceBefore = rep.balanceOf(address(this));
 		securityPool.activateForkMode(data.forkQuestionMatchesPoolQuestion);
+		data.forkActivationTime = block.timestamp;
 		data.collateralAtFork = securityPool.completeSetCollateralAmount();
 		data.migratedRepCollateralized = 0;
 		data.collateralTransferred = 0;
@@ -421,10 +426,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 				if (address(child) != address(0x0)) {
 					require(child.systemState() == SystemState.ForkMigration, 'Child closed');
 				}
-				require(
-					block.timestamp <= zoltar.getForkTime(securityPool.universeId()) + SecurityPoolUtils.MIGRATION_TIME,
-					'Closed'
-				);
+				require(block.timestamp <= data.forkActivationTime + SecurityPoolUtils.MIGRATION_TIME, 'Closed');
 				_delegateEnsureChildPoolRepSplit(securityPool, outcomeIndex, migrationAmount);
 			}
 		}
@@ -487,7 +489,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	) external {
 		if (
 			msg.sender == vault &&
-			block.timestamp <= zoltar.getForkTime(securityPool.universeId()) + SecurityPoolUtils.MIGRATION_TIME
+			block.timestamp <= forkDataByPool[securityPool].forkActivationTime + SecurityPoolUtils.MIGRATION_TIME
 		) {
 			migrateVault(securityPool, childOutcomeIndex);
 		}
@@ -524,11 +526,13 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	{
 		require(securityPool.systemState() == SystemState.ForkMigration, 'Not mig');
 		parent = securityPool.parent();
-		// The truth auction ends the parent's migration phase for this child branch.
-		// A child universe has no fork time until it forks again, so using the child
-		// universe timestamp would let auctions start immediately on normal chains.
-		uint256 parentForkTime = zoltar.getForkTime(parent.universeId());
-		require(parentForkTime > 0 && block.timestamp > parentForkTime + SecurityPoolUtils.MIGRATION_TIME, 'Active');
+		// The truth auction ends the parent's pool-specific migration phase for this child branch.
+		uint256 parentForkActivationTime = forkDataByPool[parent].forkActivationTime;
+		require(
+			parentForkActivationTime > 0 &&
+				block.timestamp > parentForkActivationTime + SecurityPoolUtils.MIGRATION_TIME,
+			'Active'
+		);
 		data = _getForkData(securityPool);
 		parentData = _getForkData(parent);
 		uint256 requiredRep = _getPoolAuctionableRepAtFork(parentData);
@@ -713,6 +717,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		securityPool.activateForkMode(true);
 		uint256 escalationRepToFork = escalationGame.drainAllRep(address(this));
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
+		data.forkActivationTime = block.timestamp;
 		data.ownFork = true;
 		data.forkQuestionMatchesPoolQuestion = true;
 		SecurityPoolMigrationProxy migrationProxy = _getOrDeployMigrationProxy(securityPool);
