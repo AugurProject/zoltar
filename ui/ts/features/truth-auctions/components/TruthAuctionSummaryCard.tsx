@@ -24,7 +24,7 @@ type TruthAuctionSummaryCardProps = {
 
 export function TruthAuctionSummaryCard({ auctionedBondAllowanceDisplay, badge, clearingPriceDisplay, displayedEthRaised, displayedRepSold, endsDisplay, ethRaiseCap, ethRaisedProgress, maxRepBeingSold, minBidSize, repSoldProgress, startedDisplay, winningThresholdPriceDisplay }: TruthAuctionSummaryCardProps) {
 	return (
-		<SectionBlock badge={badge} className='fork-workflow-summary-card truth-auction-summary-card' title={commonCopy.truthAuction}>
+		<SectionBlock badge={badge} className='fork-workflow-summary-card truth-auction-summary-card' title={commonCopy.truthAuction} variant='embedded'>
 			<div className='fork-workflow-summary'>
 				<div className='fork-workflow-summary-primary truth-auction-summary-primary'>
 					<div className='fork-workflow-summary-stat-group truth-auction-progress-group'>

@@ -53,6 +53,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(contextDetails.hasAttribute('open')).toBe(false)
 		expect(contextDetails.querySelector('summary')?.textContent).toBe('Pool context and metrics')
 		expect(document.body.querySelectorAll('.selected-pool-workflow-content > .section-block.default')).toHaveLength(0)
+		expect(routeSurface.querySelectorAll('.section-block.default')).toHaveLength(0)
 		expectSectionVariant('Vault Operations', 'plain')
 		expectSectionVariant('Vault Actions', 'plain')
 

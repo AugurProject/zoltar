@@ -69,6 +69,7 @@ export function SecurityPoolSection({
 	const createdPoolResult =
 		securityPoolResult === undefined ? undefined : (
 			<EntityCard
+				surface='flat'
 				title={securityPoolCopy.poolCreated}
 				variant='record'
 				actions={

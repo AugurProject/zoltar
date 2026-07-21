@@ -71,4 +71,11 @@ describe('TransactionStatusCard', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('button', { name: 'View In Staged Operations' })).not.toBeNull()
 	})
+
+	test('uses a flat surface when composed inside a dialog or workflow card', async () => {
+		const renderedComponent = await renderIntoDocument(<TransactionStatusCard badge={<Badge tone='warning'>Check State</Badge>} surface='flat' title='Liquidation Submitted' detail='Refresh staged operations.' />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.querySelector('.transaction-status-card.flat')).not.toBeNull()
+	})
 })

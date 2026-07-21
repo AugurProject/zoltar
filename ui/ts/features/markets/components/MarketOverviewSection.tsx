@@ -151,7 +151,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 						title={marketCopy.createChildUniverseTitle}
 					>
 						{selectedChildUniverse === undefined ? undefined : (
-							<EntityCard className='compact' title={marketCopy.selectedChildUniverse} variant='compact'>
+							<EntityCard className='compact' surface='flat' title={marketCopy.selectedChildUniverse} variant='compact'>
 								<ChildUniverseDetails child={selectedChildUniverse} />
 							</EntityCard>
 						)}

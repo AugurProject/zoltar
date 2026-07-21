@@ -1156,10 +1156,11 @@ button.currency-value.copyable:hover:not(:disabled) {
 .simulation-stat-card {
 	display: grid;
 	gap: 0.2rem;
-	padding: 0.5rem 0.65rem;
-	border: 1px solid rgba(255, 227, 145, 0.28);
-	border-radius: 0.75rem;
-	background: rgba(255, 244, 214, 0.08);
+	padding: 0.5rem 0;
+	border: 0;
+	border-top: 1px solid rgba(255, 227, 145, 0.28);
+	border-radius: 0;
+	background: transparent;
 }
 
 .simulation-stat-card strong {
@@ -1213,10 +1214,11 @@ button.currency-value.copyable:hover:not(:disabled) {
 	grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem);
 	gap: 1rem;
 	align-items: start;
-	padding: 1rem;
-	border: 1px dashed rgba(255, 227, 145, 0.42);
-	border-radius: 1rem;
-	background: rgba(255, 214, 102, 0.12);
+	padding: 1rem 0 0;
+	border: 0;
+	border-top: 1px solid rgba(255, 227, 145, 0.42);
+	border-radius: 0;
+	background: transparent;
 }
 
 .simulation-delay-grid {
@@ -1239,10 +1241,11 @@ button.currency-value.copyable:hover:not(:disabled) {
 .simulation-control-group {
 	display: grid;
 	gap: 0.45rem;
-	padding: 0.85rem;
-	border: 1px solid rgba(255, 227, 145, 0.24);
-	border-radius: 0.85rem;
-	background: rgba(56, 40, 7, 0.24);
+	padding: 0.85rem 0 0;
+	border: 0;
+	border-top: 1px solid rgba(255, 227, 145, 0.24);
+	border-radius: 0;
+	background: transparent;
 }
 
 .simulation-control-group-label {
@@ -2131,10 +2134,15 @@ button.currency-value.copyable:hover:not(:disabled) {
 	grid-template-columns: minmax(0, 1fr) minmax(12rem, 0.8fr) auto;
 	align-items: center;
 	gap: 1rem;
-	padding: 0.75rem;
-	border: 1px solid var(--border-default);
-	border-radius: var(--radius-control);
-	background: var(--surface-inset);
+	padding: 0.75rem 0;
+	border: 0;
+	border-bottom: 1px solid var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
+}
+
+.market-linked-pool:last-child {
+	border-bottom: 0;
 }
 
 .market-linked-pool-summary {
@@ -2375,6 +2383,23 @@ strong.metric-value-danger {
 	padding: 0.85rem 0.9rem;
 }
 
+.entity-card.flat {
+	padding: 0.85rem 0;
+	border: 0;
+	border-bottom: 1px solid var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+}
+
+.entity-card.flat::before {
+	display: none;
+}
+
+.entity-card.flat:last-child {
+	border-bottom: 0;
+}
+
 .entity-card.compact .entity-card-body {
 	gap: 0.7rem;
 }
@@ -2454,12 +2479,11 @@ strong.metric-value-danger {
 .fork-stage-panel .entity-card-subsection {
 	gap: 0.95rem;
 	margin: 0;
-	padding: 0.95rem 1rem 1rem;
-	border: 1px solid var(--border-default);
-	background: linear-gradient(180deg, var(--surface-raised) 0%, var(--surface-card-end) 100%);
-	box-shadow:
-		var(--glow-inset-subtle),
-		0 10px 30px var(--shadow-color-soft);
+	padding: 0.95rem 0 1rem;
+	border: 0;
+	border-bottom: 1px solid var(--divider-subtle);
+	background: transparent;
+	box-shadow: none;
 }
 
 .fork-stage-panel .entity-card-subsection-header {
@@ -2494,12 +2518,10 @@ strong.metric-value-danger {
 
 .fork-workflow-summary-primary,
 .truth-auction-panel {
-	padding: 1rem;
-	border: 1px solid var(--border-default);
-	background: linear-gradient(180deg, var(--surface-raised) 0%, var(--surface-card-end) 100%);
-	box-shadow:
-		var(--glow-inset-subtle),
-		0 12px 28px var(--shadow-color-soft);
+	padding: 0;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
 }
 
 .fork-workflow-summary-primary,
@@ -2687,8 +2709,9 @@ strong.metric-value-danger {
 .truth-auction-depth-chart {
 	position: relative;
 	min-height: 13rem;
-	border: 1px solid var(--border-default);
-	border-radius: 1rem;
+	border: 0;
+	border-block: 1px solid var(--divider-subtle);
+	border-radius: 0;
 	background: linear-gradient(180deg, rgba(232, 166, 68, 0.04), rgba(62, 159, 120, 0.04)), color-mix(in srgb, var(--surface-card-end) 82%, var(--truth-auction-track) 18%);
 	overflow: hidden;
 }
@@ -3450,6 +3473,15 @@ strong.metric-value-danger {
 	padding: 1rem 1.1rem;
 }
 
+.workflow-summary-strip {
+	padding: 1rem 0;
+	border-width: 1px 0;
+	border-color: var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+}
+
 .environment-gate.critical,
 .lifecycle-stage-banner.critical {
 	border-color: var(--danger-border);
@@ -3697,10 +3729,11 @@ main.global-transaction-tray-open {
 
 .sticky-object-context-item,
 .action-launcher-card {
-	border: 1px solid var(--border-subtle);
-	border-radius: var(--radius-control);
-	background: var(--surface-inset);
-	padding: 0.8rem 0.9rem;
+	border: 0;
+	border-top: 1px solid var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
+	padding: 0.8rem 0;
 }
 
 .sticky-object-context-item {
@@ -3937,16 +3970,31 @@ main.global-transaction-tray-open {
 	border-radius: var(--radius-record);
 }
 
+.warning-surface.flat,
+.lifecycle-stage-banner.flat {
+	padding: 0.8rem 0 0.8rem 0.9rem;
+	border: 0;
+	border-left: 3px solid var(--warning-border-strong);
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+}
+
+.warning-surface.flat::before {
+	display: none;
+}
+
 .warning-surface a {
 	color: inherit;
 	text-decoration-thickness: 0.08em;
 }
 
 .read-only-detail-accordion {
-	border: 1px solid var(--border-subtle);
-	border-radius: var(--radius-control);
-	background: rgba(9, 18, 31, 0.5);
-	padding: 0.1rem 0.9rem;
+	border: 0;
+	border-top: 1px solid var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
+	padding: 0.1rem 0;
 }
 
 .read-only-detail-accordion summary {
@@ -4972,6 +5020,14 @@ main.global-transaction-tray-open {
 	background: linear-gradient(180deg, rgba(59, 14, 24, 0.76) 0%, rgba(41, 10, 18, 0.82) 100%);
 }
 
+.section-block.embedded.tone-critical {
+	padding-left: var(--space-3);
+	border: 0;
+	border-left: 3px solid var(--danger-border);
+	border-radius: 0;
+	background: transparent;
+}
+
 .section-block-body {
 	display: grid;
 	gap: var(--space-5);
@@ -5875,10 +5931,10 @@ main.global-transaction-tray-open {
 }
 
 .selected-pool-context-summary-hero {
-	padding: 0.55rem 0.9rem;
-	border: 1px solid rgba(56, 213, 255, 0.14);
-	border-radius: 1.2rem;
-	background: radial-gradient(circle at top left, var(--accent-soft), transparent 32%), linear-gradient(180deg, rgba(10, 18, 31, 0.96), rgba(9, 16, 27, 0.92));
+	padding: 0.55rem 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
 }
 
 .selected-pool-context-summary-hero-compact {
@@ -5937,10 +5993,11 @@ main.global-transaction-tray-open {
 .security-pool-ribbon-stat {
 	display: grid;
 	gap: 0.35rem;
-	padding: 0.8rem 0.9rem;
-	border: 1px solid var(--color-white-08);
-	border-radius: 1rem;
-	background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015));
+	padding: 0.8rem 0;
+	border: 0;
+	border-top: 1px solid var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
 }
 
 .security-pool-ribbon-stat-label {
@@ -6763,10 +6820,11 @@ main.global-transaction-tray-open {
 .fork-workflow-child-pool-card {
 	display: grid;
 	gap: var(--space-2);
-	padding: 0.9rem 1rem;
-	border: 1px solid var(--divider-subtle);
-	border-radius: var(--radius-panel);
-	background: rgba(10, 20, 36, 0.22);
+	padding: 0.9rem 0;
+	border: 0;
+	border-bottom: 1px solid var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
 }
 
 .fork-workflow-child-pool-card-copy,
@@ -6854,10 +6912,19 @@ main.global-transaction-tray-open {
 	display: grid;
 	gap: 0.35rem;
 	min-width: 0;
-	padding: 0.8rem 0.9rem;
-	border: 1px solid var(--border-subtle);
-	border-radius: var(--radius-control);
-	background: rgba(255, 255, 255, 0.03);
+	padding: 0.8rem 0;
+	border: 0;
+	border-top: 1px solid var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
+}
+
+.selected-pool-hero-question .question-preview-timeline-item {
+	padding: 0.8rem 0 0;
+	border: 0;
+	border-top: 1px solid var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
 }
 
 .selected-pool-context-grid .metric-field-value {

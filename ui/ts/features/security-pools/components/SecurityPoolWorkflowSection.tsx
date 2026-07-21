@@ -725,7 +725,7 @@ export function SecurityPoolWorkflowSection({
 			<ErrorNotice message={securityPoolOverviewError} />
 
 			{selectedPool === undefined || !selectedPoolUniverseMismatch ? undefined : (
-				<SectionBlock title={securityPoolCopy.universeMismatch} tone='critical'>
+				<SectionBlock title={securityPoolCopy.universeMismatch} tone='critical' variant='embedded'>
 					<p className='detail'>
 						<span>{securityPoolCopy.poolUniverseLead}</span> <UniverseLink format='hex' universeId={selectedPool.universeId} /> <span>{securityPoolCopy.activeUniverseSeparator}</span> <span>{formatUniverseIdHex(activeUniverseId)}</span>. <span>{securityPoolCopy.missingPoolDetail}</span>
 					</p>
@@ -944,7 +944,7 @@ export function SecurityPoolWorkflowSection({
 										<ErrorNotice message={poolOracleManagerError} />
 										<SectionBlock density='compact' variant='embedded'>
 											{stagedOperations.map(operation => (
-												<WarningSurface key={operation.operationId.toString()} as='article' className='warning-entity-card' variant='compact'>
+												<WarningSurface key={operation.operationId.toString()} as='article' className='warning-entity-card' surface='flat' variant='compact'>
 													<div className='entity-card-header'>
 														<div className='entity-card-copy'>
 															<h3>{getPendingOperationLabel(operation.operation)}</h3>

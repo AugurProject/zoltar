@@ -132,7 +132,7 @@ export function ImportedForkSettlementSection({ activeReportingDetails, disabled
 	if (settleableSides.length === 0) return undefined
 
 	return (
-		<SectionBlock density='compact' title={forkAuctionCopy.settleForkCarriedEscalationDeposits}>
+		<SectionBlock density='compact' title={forkAuctionCopy.settleForkCarriedEscalationDeposits} variant='embedded'>
 			<p className='detail'>{forkAuctionCopy.importedDepositSettlementDetail}</p>
 			{resolved ? undefined : <p className='detail'>{forkAuctionCopy.forkDepositSettlementAvailabilityDetail}</p>}
 			{settleableSides.map(side => (

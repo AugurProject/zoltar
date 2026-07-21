@@ -143,7 +143,7 @@ function renderTimestamp({ displayTimestamp, fallbackText }: { displayTimestamp:
 function renderTruthAuctionDebtNotice(showRefundOnlySettlementCopy = false) {
 	if (showRefundOnlySettlementCopy) {
 		return (
-			<WarningSurface as='section' variant='compact'>
+			<WarningSurface as='section' surface='flat' variant='compact'>
 				<p className='detail'>
 					<strong>{forkAuctionCopy.refundSettlementDetail}</strong> {forkAuctionCopy.formatFinalizedRefundOnlySettlementNotice(AUCTIONED_BOND_ALLOWANCE_LABEL)}
 				</p>
@@ -152,7 +152,7 @@ function renderTruthAuctionDebtNotice(showRefundOnlySettlementCopy = false) {
 	}
 
 	return (
-		<WarningSurface as='section' variant='compact'>
+		<WarningSurface as='section' surface='flat' variant='compact'>
 			<p className='detail'>
 				<strong>{forkAuctionCopy.formatWinningClaimAllowanceHeadline(AUCTIONED_BOND_ALLOWANCE_LABEL)}</strong> {forkAuctionCopy.formatWinningClaimSettlementNotice(AUCTIONED_BOND_ALLOWANCE_LABEL)}
 			</p>
@@ -198,7 +198,7 @@ function renderTruthAuctionSettlementSelectionSummary({
 	}
 
 	return (
-		<WarningSurface as='section' variant='compact'>
+		<WarningSurface as='section' surface='flat' variant='compact'>
 			<p className='detail'>
 				<strong>{forkAuctionCopy.selectedBidSettlementPreview}</strong> {summaryDescription}
 			</p>
@@ -1202,7 +1202,7 @@ export function ForkAuctionSection({
 		)
 	})()
 	const migrationSummaryCard = (
-		<SectionBlock badge={migrationStatusBadge} className='fork-workflow-summary-card migration-summary-card' title={forkAuctionCopy.migrationStatus}>
+		<SectionBlock badge={migrationStatusBadge} className='fork-workflow-summary-card migration-summary-card' title={forkAuctionCopy.migrationStatus} variant='embedded'>
 			<div className='fork-workflow-summary'>
 				<div className='fork-workflow-summary-primary migration-summary-primary'>
 					<div className='fork-workflow-summary-stat-group'>

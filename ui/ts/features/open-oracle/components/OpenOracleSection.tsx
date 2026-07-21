@@ -782,6 +782,7 @@ export function OpenOracleSection({
 						}
 						density='compact'
 						title={openOracleCopy.browseReports}
+						variant='plain'
 					>
 						<ErrorNotice message={browseError} />
 						<div className='filter-toolbar'>

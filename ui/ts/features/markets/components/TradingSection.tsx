@@ -312,7 +312,7 @@ export function TradingSection({
 	const sections = (
 		<>
 			{!showSecurityPoolAddressInput ? undefined : (
-				<SectionBlock density='compact'>
+				<SectionBlock density='compact' variant='embedded'>
 					<label className='field'>
 						<span>{commonCopy.securityPoolAddress}</span>
 						<FormInput value={tradingForm.securityPoolAddress} onInput={event => onTradingFormChange({ securityPoolAddress: event.currentTarget.value })} placeholder={commonCopy.hexValuePlaceholder} />
@@ -321,7 +321,7 @@ export function TradingSection({
 			)}
 
 			{selectedPool === undefined ? undefined : (
-				<SectionBlock title={tradingCopy.yourHoldings}>
+				<SectionBlock title={tradingCopy.yourHoldings} variant='embedded'>
 					<div className='trading-holdings-stage'>
 						<div className='trading-holdings-hero'>
 							<span>{tradingCopy.redeemableCompleteSets}</span>
@@ -364,7 +364,7 @@ export function TradingSection({
 				</SectionBlock>
 			)}
 
-			<SectionBlock title={tradingCopy.shares}>
+			<SectionBlock title={tradingCopy.shares} variant='embedded'>
 				<div className='vault-action-launcher-grid'>
 					{tradingLaunchers.map(action => (
 						<ActionLauncherCard key={action.key} action={action} />

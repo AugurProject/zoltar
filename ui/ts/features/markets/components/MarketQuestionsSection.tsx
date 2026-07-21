@@ -108,6 +108,7 @@ export function MarketQuestionsSection({
 		<SectionBlock
 			density='compact'
 			title={marketCopy.questions}
+			variant='plain'
 			actions={
 				<PaginationControls
 					hasNextPage={hasNextPage}
