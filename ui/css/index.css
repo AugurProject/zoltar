@@ -3974,10 +3974,29 @@ main.global-transaction-tray-open {
 .lifecycle-stage-banner.flat {
 	padding: 0.8rem 0 0.8rem 0.9rem;
 	border: 0;
-	border-left: 3px solid var(--warning-border-strong);
 	border-radius: 0;
 	background: transparent;
 	box-shadow: none;
+}
+
+.warning-surface.flat {
+	border-left: 3px solid var(--warning-border-strong);
+}
+
+.lifecycle-stage-banner.flat {
+	border-left: 3px solid var(--border-default);
+}
+
+.warning-surface.lifecycle-stage-banner.flat {
+	border-left-color: var(--warning-border-strong);
+}
+
+.lifecycle-stage-banner.flat.critical {
+	border-left-color: var(--danger-border);
+}
+
+.lifecycle-stage-banner.flat.success {
+	border-left-color: var(--success-border);
 }
 
 .warning-surface.flat::before {
