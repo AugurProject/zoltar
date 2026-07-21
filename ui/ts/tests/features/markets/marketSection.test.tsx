@@ -191,6 +191,22 @@ describe('MarketSection', () => {
 		expect(sectionHeader.querySelector('[role="tablist"][aria-label="Market views"]')).toBeNull()
 	})
 
+	test('renders the active universe as a deterministic hex identifier outside the questions view', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				MarketSection,
+				createMarketSectionProps({
+					activeUniverseId: 10n,
+					activeView: 'create',
+					zoltarUniverse: createZoltarUniverse({ universeId: 10n }),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(within(document.body).getByText('Universe 0xa')).not.toBeNull()
+	})
+
 	test('links a question directly to its child-universe shares and reporting workflows', async () => {
 		const question = createBinaryForkQuestion()
 		const renderedComponent = await renderIntoDocument(

@@ -5,7 +5,7 @@ import { getGenesisReputationTokenAddress } from '../../../protocol/activeProtoc
 export { getGenesisReputationTokenAddress }
 
 export function formatUniverseLabel(universeId: bigint) {
-	return universeId === 0n ? 'Genesis (0)' : `Universe ${universeId.toString()}`
+	return universeId === 0n ? `Genesis (${formatUniverseIdHex(universeId)})` : `Universe ${formatUniverseIdHex(universeId)}`
 }
 
 export function formatUniverseIdHex(universeId: bigint) {
@@ -33,5 +33,5 @@ export function formatUniverseCollectionLabel(universeIds: bigint[]) {
 		if (universeId === undefined) return formatUniverseLabel(0n)
 		return formatUniverseLabel(universeId)
 	}
-	return `Multiple (${uniqueUniverseIds.map(universeId => universeId.toString()).join(', ')})`
+	return `Multiple (${uniqueUniverseIds.map(formatUniverseIdHex).join(', ')})`
 }

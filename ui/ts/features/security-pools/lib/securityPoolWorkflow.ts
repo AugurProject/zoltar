@@ -80,6 +80,21 @@ export function resolveForkWorkflowSelectionStage(value: string | undefined): Fo
 	}
 }
 
+export function getSelectedPoolViewForForkWorkflowSelectionStage(stage: ForkWorkflowSelectionStage) {
+	switch (stage) {
+		case 'fork-triggered':
+			return 'fork-workflow'
+		case 'migration':
+			return 'fork-migration'
+		case 'auction':
+			return 'fork-auction'
+		case 'settlement':
+			return 'fork-settlement'
+		default:
+			return assertNever(stage)
+	}
+}
+
 export function normalizeForkWorkflowSelectionStage(stage: ForkAuctionStageView): ForkWorkflowSelectionStage {
 	return stage === 'initiate' ? 'fork-triggered' : stage
 }

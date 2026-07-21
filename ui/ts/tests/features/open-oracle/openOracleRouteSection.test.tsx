@@ -201,7 +201,7 @@ describe('OpenOracleSection route create view', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Create Standalone Oracle Game')
+		expectTransactionButtonDisabled(document.body, 'Create Standalone Oracle Report')
 		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
 	})
 
@@ -379,7 +379,7 @@ describe('OpenOracleSection route create view', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Create Standalone Oracle Game', 'Need 100 more ETH in this wallet to create the selected standalone Open Oracle game.')
+		expectTransactionButtonDisabled(document.body, 'Create Standalone Oracle Report', 'Need 100 more ETH in this wallet to create the selected standalone Open Oracle report.')
 	})
 
 	test('does not disable create before token decimals are loaded for large but valid token1 amounts', async () => {
@@ -407,7 +407,7 @@ describe('OpenOracleSection route create view', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonEnabled(document.body, 'Create Standalone Oracle Game')
+		expectTransactionButtonEnabled(document.body, 'Create Standalone Oracle Report')
 	})
 
 	test('does not disable create before token decimals are loaded for high-decimal token1 amounts', async () => {
@@ -436,7 +436,7 @@ describe('OpenOracleSection route create view', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonEnabled(document.body, 'Create Standalone Oracle Game')
+		expectTransactionButtonEnabled(document.body, 'Create Standalone Oracle Report')
 	})
 
 	test('describes advanced create fields with user-facing units and input modes', async () => {
@@ -444,8 +444,8 @@ describe('OpenOracleSection route create view', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const exactToken1ReportInput = documentQueries.getByLabelText('Exact Token1 Report')
-		const initialToken2AmountInput = documentQueries.getByLabelText('Initial Token2 Amount')
+		const exactToken1ReportInput = documentQueries.getByLabelText('Base Token Amount')
+		const initialToken2AmountInput = documentQueries.getByLabelText('Quote Token Amount')
 		const settlerRewardInput = documentQueries.getByLabelText('Settler Reward')
 		const ethValueInput = documentQueries.getByLabelText('ETH Value To Send')
 		const baseTokenAddressInput = documentQueries.getByLabelText('Base Token Address')

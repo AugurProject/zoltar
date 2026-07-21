@@ -28,12 +28,12 @@ export function getOpenOracleCreateParameterValidationMessage(
 	{ disputeDelay, escalationHalt, exactToken1Report, initialToken2Amount, ethValue, feePercentage, multiplier, protocolFee, settlementTime, settlerReward, token1Address, token2Address }: OpenOracleCreateValidationParameters,
 	{ skipToken1MagnitudeValidation = false }: { skipToken1MagnitudeValidation?: boolean } = {},
 ) {
-	if (sameAddress(token1Address, token2Address)) return 'Token1 and token2 must be different addresses.'
+	if (sameAddress(token1Address, token2Address)) return 'Base and quote tokens must use different addresses.'
 	if (sameAddress(token1Address, zeroAddress) || sameAddress(token2Address, zeroAddress)) return 'Direct Open Oracle reports currently require two ERC-20 token addresses.'
-	if (exactToken1Report <= 0n) return 'Exact token1 report must be greater than zero.'
-	if (!skipToken1MagnitudeValidation && exactToken1Report > OPEN_ORACLE_UINT128_MAX) return 'Exact token1 report exceeds the contract maximum.'
-	if (initialToken2Amount <= 0n) return 'Initial token2 amount must be greater than zero.'
-	if (initialToken2Amount > OPEN_ORACLE_UINT128_MAX) return 'Initial token2 amount exceeds the contract maximum.'
+	if (exactToken1Report <= 0n) return 'Base token amount must be greater than zero.'
+	if (!skipToken1MagnitudeValidation && exactToken1Report > OPEN_ORACLE_UINT128_MAX) return 'Base token amount exceeds the contract maximum.'
+	if (initialToken2Amount <= 0n) return 'Quote token amount must be greater than zero.'
+	if (initialToken2Amount > OPEN_ORACLE_UINT128_MAX) return 'Quote token amount exceeds the contract maximum.'
 	if (escalationHalt < 0n) return 'Escalation halt must be non-negative.'
 	if (!skipToken1MagnitudeValidation && escalationHalt > OPEN_ORACLE_UINT128_MAX) return 'Escalation halt exceeds the contract maximum.'
 	if (ethValue < 0n) return 'ETH value to send must be non-negative.'

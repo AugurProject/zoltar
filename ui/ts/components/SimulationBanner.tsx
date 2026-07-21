@@ -113,6 +113,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 	const exportStateText = useSignal('')
 	const importStateText = useSignal('')
 	const selectedAccount = useSignal(controller.selectedAccount)
+	const simulationDetailsOpen = useSignal(typeof window.matchMedia !== 'function' || !window.matchMedia('(max-width: 800px)').matches || !controller.isBootstrapped)
 	const bootstrapError = useSignal(controller.bootstrapError)
 	const bootstrapLabel = useSignal(controller.bootstrapLabel)
 	const bootstrapProgress = useSignal(controller.bootstrapProgress)
@@ -147,6 +148,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 	useEffect(
 		() =>
 			controller.subscribe(() => {
+				const wasBootstrapped = isBootstrapped.value
 				blockCountSinceReset.value = controller.blockCountSinceReset
 				bootstrapError.value = controller.bootstrapError
 				bootstrapLabel.value = controller.bootstrapLabel
@@ -155,6 +157,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 				currentScenario.value = controller.currentScenario
 				currentSource.value = controller.simulationSource
 				isBootstrapped.value = controller.isBootstrapped
+				if (!wasBootstrapped && controller.isBootstrapped && typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 800px)').matches) simulationDetailsOpen.value = false
 				isBootstrapping.value = controller.isBootstrapping
 				queryDelayMilliseconds.value = controller.queryDelayMilliseconds.toString()
 				repPerEthPrice.value = formatCurrencyInputBalance(controller.repPerEthPrice)
@@ -165,6 +168,15 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 			}),
 		[controller],
 	)
+	useEffect(() => {
+		if (typeof window.matchMedia !== 'function') return
+		const mediaQuery = window.matchMedia('(max-width: 800px)')
+		const onViewportChange = () => {
+			simulationDetailsOpen.value = !mediaQuery.matches || !isBootstrapped.value
+		}
+		mediaQuery.addEventListener('change', onViewportChange)
+		return () => mediaQuery.removeEventListener('change', onViewportChange)
+	}, [])
 	const runControl = async (work: () => Promise<void>) => {
 		if (busy.value) return
 		busy.value = true
@@ -223,6 +235,8 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 		bootstrapError: bootstrapError.value,
 		isBootstrapped: isBootstrapped.value,
 	})
+	const selectedAccountIndex = controller.accounts.findIndex(account => account === selectedAccount.value)
+	const selectedAccountLabel = getSimulationAccountOptionLabel(selectedAccountIndex < 0 ? 0 : selectedAccountIndex)
 
 	return (
 		<section className='panel contract-panel simulation-banner'>
@@ -231,275 +245,296 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 					<h2>{simulationCopy.browserSimulation}</h2>
 				</div>
 			</div>
-			<div className='contract-list simulation-banner-list'>
-				<div className='contract-row simulation-banner-row'>
-					<div className='contract-copy'>
-						<div className='contract-topline'>
+			<details
+				className='simulation-banner-details'
+				open={simulationDetailsOpen.value}
+				onToggle={event => {
+					simulationDetailsOpen.value = event.currentTarget.open
+				}}
+			>
+				<summary>
+					<span className='simulation-banner-compact-summary'>
+						<span className='simulation-banner-compact-state'>
 							<Badge tone={scenarioStatus.badgeTone}>{scenarioStatus.label}</Badge>
-							<h3>{simulationCopy.scenario}</h3>
-						</div>
-						<p className='detail'>{scenarioDetail}</p>
-						{savedStateStorageWarning.value === undefined ? undefined : <p className='detail'>{savedStateStorageWarning.value}</p>}
-						{bootstrapError.value === undefined && isBootstrapping.value ? (
-							<p className='detail'>
-								<span className='spinner' aria-hidden='true' />
-								{bootstrapLabel.value ?? simulationCopy.scenarioPreparationDetail}
-							</p>
-						) : undefined}
-						{isBootstrapping.value ? (
-							<div className='notice-progress-track simulation-progress-track' aria-hidden='true'>
-								<div className='notice-progress-fill simulation-progress-fill' style={{ width: `${Math.round((bootstrapProgress.value ?? 0.08) * 100)}%` }} />
+							<strong>{getSimulationScenarioLabel(currentScenario.value)}</strong>
+							<span className='simulation-banner-compact-account'>
+								<span aria-hidden='true'>· </span>
+								{selectedAccountLabel}
+							</span>
+						</span>
+						<span className='simulation-banner-compact-action'>{simulationDetailsOpen.value ? simulationCopy.hideSimulationDetails : simulationCopy.showSimulationDetails}</span>
+					</span>
+				</summary>
+				<div className='contract-list simulation-banner-list'>
+					<div className='contract-row simulation-banner-row'>
+						<div className='contract-copy'>
+							<div className='contract-topline'>
+								<Badge tone={scenarioStatus.badgeTone}>{scenarioStatus.label}</Badge>
+								<h3>{simulationCopy.scenario}</h3>
 							</div>
-						) : undefined}
-					</div>
-					<select
-						className='simulation-control-select'
-						aria-label={simulationCopy.simulationScenario}
-						value={currentSource.value.kind === 'saved-state' ? `saved:${currentSource.value.stateId}` : `scenario:${currentScenario.value}`}
-						disabled={busy.value || isBootstrapping.value}
-						onChange={event => {
-							const nextSelection = event.currentTarget.value
-							if (nextSelection.startsWith('saved:')) {
+							<p className='detail'>{scenarioDetail}</p>
+							{savedStateStorageWarning.value === undefined ? undefined : <p className='detail'>{savedStateStorageWarning.value}</p>}
+							{bootstrapError.value === undefined && isBootstrapping.value ? (
+								<p className='detail'>
+									<span className='spinner' aria-hidden='true' />
+									{bootstrapLabel.value ?? simulationCopy.scenarioPreparationDetail}
+								</p>
+							) : undefined}
+							{isBootstrapping.value ? (
+								<div className='notice-progress-track simulation-progress-track' aria-hidden='true'>
+									<div className='notice-progress-fill simulation-progress-fill' style={{ width: `${Math.round((bootstrapProgress.value ?? 0.08) * 100)}%` }} />
+								</div>
+							) : undefined}
+						</div>
+						<select
+							className='simulation-control-select'
+							aria-label={simulationCopy.simulationScenario}
+							value={currentSource.value.kind === 'saved-state' ? `saved:${currentSource.value.stateId}` : `scenario:${currentScenario.value}`}
+							disabled={busy.value || isBootstrapping.value}
+							onChange={event => {
+								const nextSelection = event.currentTarget.value
+								if (nextSelection.startsWith('saved:')) {
+									void navigateAndRefreshEnvironment(() => {
+										navigateToSavedSimulationState(nextSelection.slice('saved:'.length))
+									})
+									return
+								}
 								void navigateAndRefreshEnvironment(() => {
-									navigateToSavedSimulationState(nextSelection.slice('saved:'.length))
+									navigateToBuiltInScenario(nextSelection.slice('scenario:'.length))
 								})
-								return
-							}
-							void navigateAndRefreshEnvironment(() => {
-								navigateToBuiltInScenario(nextSelection.slice('scenario:'.length))
-							})
-						}}
-					>
-						<optgroup label={simulationCopy.builtInScenarios}>
-							{SIMULATION_SCENARIOS.map(scenario => (
-								<option key={scenario} value={`scenario:${scenario}`}>
-									{getSimulationScenarioLabel(scenario)}
-								</option>
-							))}
-						</optgroup>
-						{savedStateRecords.value.length === 0 ? undefined : (
-							<optgroup label={simulationCopy.savedStates}>
-								{savedStateRecords.value.map(record => (
-									<option key={record.id} value={`saved:${record.id}`}>
-										{record.name}
+							}}
+						>
+							<optgroup label={simulationCopy.builtInScenarios}>
+								{SIMULATION_SCENARIOS.map(scenario => (
+									<option key={scenario} value={`scenario:${scenario}`}>
+										{getSimulationScenarioLabel(scenario)}
 									</option>
 								))}
 							</optgroup>
-						)}
-					</select>
-				</div>
-				<div className='contract-row simulation-banner-row'>
-					<div className='contract-copy'>
-						<div className='contract-topline'>
-							<Badge tone='ok'>{commonCopy.active}</Badge>
-							<h3>{simulationCopy.qaAccount}</h3>
-						</div>
-						<AddressValue address={selectedAccount.value} />
-					</div>
-					<select
-						className='simulation-control-select'
-						aria-label={simulationCopy.simulationQaAccount}
-						value={selectedAccount.value}
-						disabled={busy.value || !isBootstrapped.value}
-						onChange={event => {
-							const nextAccount = controller.accounts.find(account => account === event.currentTarget.value)
-							if (nextAccount === undefined) return
-							void runControl(async () => {
-								await controller.selectAccount(nextAccount)
-							})
-						}}
-					>
-						{controller.accounts.map((account, accountIndex) => (
-							<option key={account} value={account}>
-								{getSimulationAccountOptionLabel(accountIndex)}
-							</option>
-						))}
-					</select>
-				</div>
-				<div className='simulation-banner-stats'>
-					<div className='simulation-stat-card'>
-						<span className='simulation-stat-label'>{simulationCopy.blocks}</span>
-						<strong>{blockCountSinceReset.value.toString()}</strong>
-					</div>
-					<div className='simulation-stat-card'>
-						<span className='simulation-stat-label'>{simulationCopy.transactions}</span>
-						<strong>{transactionCountSinceReset.value.toString()}</strong>
-					</div>
-					<div className='simulation-stat-card simulation-stat-card-wide'>
-						<span className='simulation-stat-label'>{simulationCopy.blockchainTime}</span>
-						<strong>
-							<TimestampValue currentTimestamp={currentTimestamp.value} timestamp={currentTimestamp.value} />
-						</strong>
-					</div>
-				</div>
-				<details className='simulation-advanced-controls'>
-					<summary>{simulationCopy.qaControlsPricesAndTimeTravel}</summary>
-					<div className='simulation-banner-controls'>
-						<div className='contract-copy'>
-							<div className='simulation-delay-grid'>
-								<label className='simulation-delay-field'>
-									<span className='simulation-delay-label'>{simulationCopy.queryDelayMs}</span>
-									<input
-										className='simulation-control-input'
-										type='number'
-										min='0'
-										step='100'
-										inputMode='numeric'
-										value={queryDelayMilliseconds.value}
-										disabled={busy.value}
-										onInput={event => {
-											queryDelayMilliseconds.value = event.currentTarget.value
-										}}
-										onChange={event => {
-											controller.setQueryDelayMilliseconds(Number(event.currentTarget.value))
-										}}
-									/>
-								</label>
-								<label className='simulation-delay-field'>
-									<span className='simulation-delay-label'>{simulationCopy.repEthMockPrice}</span>
-									<input
-										className='simulation-control-input'
-										type='text'
-										inputMode='decimal'
-										value={repPerEthPrice.value}
-										disabled={busy.value}
-										onInput={event => {
-											repPerEthPrice.value = event.currentTarget.value
-										}}
-										onChange={event => {
-											const parsedPrice = tryParseDecimalInput(event.currentTarget.value)
-											if (parsedPrice === undefined) {
-												resetRepPerEthPriceInput()
-												return
-											}
-											void runControl(async () => {
-												controller.setRepPerEthPrice(parsedPrice)
-											})
-										}}
-									/>
-								</label>
-								<label className='simulation-delay-field'>
-									<span className='simulation-delay-label'>{simulationCopy.repUsdcMockPrice}</span>
-									<input
-										className='simulation-control-input'
-										type='text'
-										inputMode='decimal'
-										value={repPerUsdcPrice.value}
-										disabled={busy.value}
-										onInput={event => {
-											repPerUsdcPrice.value = event.currentTarget.value
-										}}
-										onChange={event => {
-											const parsedPrice = tryParseDecimalInput(event.currentTarget.value, 6)
-											if (parsedPrice === undefined) {
-												resetRepPerUsdcPriceInput()
-												return
-											}
-											void runControl(async () => {
-												controller.setRepPerUsdcPrice(parsedPrice)
-											})
-										}}
-									/>
-								</label>
-								<label className='simulation-delay-field'>
-									<span className='simulation-delay-label'>{simulationCopy.transactionReceiptDelayMs}</span>
-									<input
-										className='simulation-control-input'
-										type='number'
-										min='0'
-										step='100'
-										inputMode='numeric'
-										value={transactionDelayMilliseconds.value}
-										disabled={busy.value}
-										onInput={event => {
-											transactionDelayMilliseconds.value = event.currentTarget.value
-										}}
-										onChange={event => {
-											controller.setTransactionDelayMilliseconds(Number(event.currentTarget.value))
-										}}
-									/>
-								</label>
-							</div>
-							<p className='detail'>{simulationCopy.simulationControlHelpText}</p>
-						</div>
-						<div className='simulation-control-groups'>
-							<div className='simulation-control-group'>
-								<span className='simulation-control-group-label'>{simulationCopy.actions}</span>
-								<div className='button-row simulation-button-row'>
-									<button className='secondary' onClick={() => void runControl(async () => await controller.reset())} disabled={busy.value || !isBootstrapped.value}>
-										{simulationCopy.resetScenario}
-									</button>
-									<button className='secondary' onClick={() => void runControl(async () => await controller.mineBlock())} disabled={busy.value || !isBootstrapped.value}>
-										{simulationCopy.mineBlock}
-									</button>
-									<button className='secondary' onClick={() => void runControl(async () => await controller.mintRep(SIMULATION_REP_MINT_AMOUNT))} disabled={busy.value || !isBootstrapped.value}>
-										{simulationCopy.mint1MillionRep}
-									</button>
-									<button
-										className='secondary'
-										onClick={() => {
-											saveName.value = getDefaultSavedStateName()
-											savedStateError.value = undefined
-											modal.value = 'save'
-										}}
-										disabled={busy.value || !isBootstrapped.value}
-									>
-										{simulationCopy.saveState}
-									</button>
-									<button className='secondary' onClick={() => void showExportModal()} disabled={busy.value || !isBootstrapped.value}>
-										{simulationCopy.exportState}
-									</button>
-									<button
-										className='secondary'
-										onClick={() => {
-											importStateText.value = ''
-											savedStateError.value = undefined
-											modal.value = 'import'
-										}}
-										disabled={busy.value}
-									>
-										{simulationCopy.importState}
-									</button>
-									{savedStateStorageWarning.value === undefined ? undefined : (
-										<button
-											className='destructive'
-											onClick={() => {
-												savedStateError.value = undefined
-												modal.value = 'cleanup'
-											}}
-											disabled={busy.value}
-										>
-											{simulationCopy.removeCorruptedSaves}
-										</button>
-									)}
-									{currentSource.value.kind !== 'saved-state' ? undefined : (
-										<button
-											className='destructive'
-											onClick={() => {
-												savedStateError.value = undefined
-												modal.value = 'delete'
-											}}
-											disabled={busy.value}
-										>
-											{simulationCopy.deleteSave}
-										</button>
-									)}
-								</div>
-							</div>
-							<div className='simulation-control-group'>
-								<span className='simulation-control-group-label'>{simulationCopy.timeTravel}</span>
-								<div className='button-row simulation-button-row simulation-time-travel-row'>
-									{SIMULATION_TIME_PRESETS.map(preset => (
-										<button key={preset.label} className='secondary' onClick={() => void runControl(async () => await controller.advanceTime(preset.seconds))} disabled={busy.value || !isBootstrapped.value}>
-											{preset.label}
-										</button>
+							{savedStateRecords.value.length === 0 ? undefined : (
+								<optgroup label={simulationCopy.savedStates}>
+									{savedStateRecords.value.map(record => (
+										<option key={record.id} value={`saved:${record.id}`}>
+											{record.name}
+										</option>
 									))}
+								</optgroup>
+							)}
+						</select>
+					</div>
+					<div className='contract-row simulation-banner-row'>
+						<div className='contract-copy'>
+							<div className='contract-topline'>
+								<Badge tone='ok'>{commonCopy.active}</Badge>
+								<h3>{simulationCopy.qaAccount}</h3>
+							</div>
+							<AddressValue address={selectedAccount.value} />
+						</div>
+						<select
+							className='simulation-control-select'
+							aria-label={simulationCopy.simulationQaAccount}
+							value={selectedAccount.value}
+							disabled={busy.value || !isBootstrapped.value}
+							onChange={event => {
+								const nextAccount = controller.accounts.find(account => account === event.currentTarget.value)
+								if (nextAccount === undefined) return
+								void runControl(async () => {
+									await controller.selectAccount(nextAccount)
+								})
+							}}
+						>
+							{controller.accounts.map((account, accountIndex) => (
+								<option key={account} value={account}>
+									{getSimulationAccountOptionLabel(accountIndex)}
+								</option>
+							))}
+						</select>
+					</div>
+					<div className='simulation-banner-stats'>
+						<div className='simulation-stat-card'>
+							<span className='simulation-stat-label'>{simulationCopy.blocks}</span>
+							<strong>{blockCountSinceReset.value.toString()}</strong>
+						</div>
+						<div className='simulation-stat-card'>
+							<span className='simulation-stat-label'>{simulationCopy.transactions}</span>
+							<strong>{transactionCountSinceReset.value.toString()}</strong>
+						</div>
+						<div className='simulation-stat-card simulation-stat-card-wide'>
+							<span className='simulation-stat-label'>{simulationCopy.blockchainTime}</span>
+							<strong>
+								<TimestampValue currentTimestamp={currentTimestamp.value} timestamp={currentTimestamp.value} />
+							</strong>
+						</div>
+					</div>
+					<details className='simulation-advanced-controls'>
+						<summary>{simulationCopy.qaControlsPricesAndTimeTravel}</summary>
+						<div className='simulation-banner-controls'>
+							<div className='contract-copy'>
+								<div className='simulation-delay-grid'>
+									<label className='simulation-delay-field'>
+										<span className='simulation-delay-label'>{simulationCopy.queryDelayMs}</span>
+										<input
+											className='simulation-control-input'
+											type='number'
+											min='0'
+											step='100'
+											inputMode='numeric'
+											value={queryDelayMilliseconds.value}
+											disabled={busy.value}
+											onInput={event => {
+												queryDelayMilliseconds.value = event.currentTarget.value
+											}}
+											onChange={event => {
+												controller.setQueryDelayMilliseconds(Number(event.currentTarget.value))
+											}}
+										/>
+									</label>
+									<label className='simulation-delay-field'>
+										<span className='simulation-delay-label'>{simulationCopy.repEthMockPrice}</span>
+										<input
+											className='simulation-control-input'
+											type='text'
+											inputMode='decimal'
+											value={repPerEthPrice.value}
+											disabled={busy.value}
+											onInput={event => {
+												repPerEthPrice.value = event.currentTarget.value
+											}}
+											onChange={event => {
+												const parsedPrice = tryParseDecimalInput(event.currentTarget.value)
+												if (parsedPrice === undefined) {
+													resetRepPerEthPriceInput()
+													return
+												}
+												void runControl(async () => {
+													controller.setRepPerEthPrice(parsedPrice)
+												})
+											}}
+										/>
+									</label>
+									<label className='simulation-delay-field'>
+										<span className='simulation-delay-label'>{simulationCopy.repUsdcMockPrice}</span>
+										<input
+											className='simulation-control-input'
+											type='text'
+											inputMode='decimal'
+											value={repPerUsdcPrice.value}
+											disabled={busy.value}
+											onInput={event => {
+												repPerUsdcPrice.value = event.currentTarget.value
+											}}
+											onChange={event => {
+												const parsedPrice = tryParseDecimalInput(event.currentTarget.value, 6)
+												if (parsedPrice === undefined) {
+													resetRepPerUsdcPriceInput()
+													return
+												}
+												void runControl(async () => {
+													controller.setRepPerUsdcPrice(parsedPrice)
+												})
+											}}
+										/>
+									</label>
+									<label className='simulation-delay-field'>
+										<span className='simulation-delay-label'>{simulationCopy.transactionReceiptDelayMs}</span>
+										<input
+											className='simulation-control-input'
+											type='number'
+											min='0'
+											step='100'
+											inputMode='numeric'
+											value={transactionDelayMilliseconds.value}
+											disabled={busy.value}
+											onInput={event => {
+												transactionDelayMilliseconds.value = event.currentTarget.value
+											}}
+											onChange={event => {
+												controller.setTransactionDelayMilliseconds(Number(event.currentTarget.value))
+											}}
+										/>
+									</label>
+								</div>
+								<p className='detail'>{simulationCopy.simulationControlHelpText}</p>
+							</div>
+							<div className='simulation-control-groups'>
+								<div className='simulation-control-group'>
+									<span className='simulation-control-group-label'>{simulationCopy.actions}</span>
+									<div className='button-row simulation-button-row'>
+										<button className='secondary' onClick={() => void runControl(async () => await controller.reset())} disabled={busy.value || !isBootstrapped.value}>
+											{simulationCopy.resetScenario}
+										</button>
+										<button className='secondary' onClick={() => void runControl(async () => await controller.mineBlock())} disabled={busy.value || !isBootstrapped.value}>
+											{simulationCopy.mineBlock}
+										</button>
+										<button className='secondary' onClick={() => void runControl(async () => await controller.mintRep(SIMULATION_REP_MINT_AMOUNT))} disabled={busy.value || !isBootstrapped.value}>
+											{simulationCopy.mint1MillionRep}
+										</button>
+										<button
+											className='secondary'
+											onClick={() => {
+												saveName.value = getDefaultSavedStateName()
+												savedStateError.value = undefined
+												modal.value = 'save'
+											}}
+											disabled={busy.value || !isBootstrapped.value}
+										>
+											{simulationCopy.saveState}
+										</button>
+										<button className='secondary' onClick={() => void showExportModal()} disabled={busy.value || !isBootstrapped.value}>
+											{simulationCopy.exportState}
+										</button>
+										<button
+											className='secondary'
+											onClick={() => {
+												importStateText.value = ''
+												savedStateError.value = undefined
+												modal.value = 'import'
+											}}
+											disabled={busy.value}
+										>
+											{simulationCopy.importState}
+										</button>
+										{savedStateStorageWarning.value === undefined ? undefined : (
+											<button
+												className='destructive'
+												onClick={() => {
+													savedStateError.value = undefined
+													modal.value = 'cleanup'
+												}}
+												disabled={busy.value}
+											>
+												{simulationCopy.removeCorruptedSaves}
+											</button>
+										)}
+										{currentSource.value.kind !== 'saved-state' ? undefined : (
+											<button
+												className='destructive'
+												onClick={() => {
+													savedStateError.value = undefined
+													modal.value = 'delete'
+												}}
+												disabled={busy.value}
+											>
+												{simulationCopy.deleteSave}
+											</button>
+										)}
+									</div>
+								</div>
+								<div className='simulation-control-group'>
+									<span className='simulation-control-group-label'>{simulationCopy.timeTravel}</span>
+									<div className='button-row simulation-button-row simulation-time-travel-row'>
+										{SIMULATION_TIME_PRESETS.map(preset => (
+											<button key={preset.label} className='secondary' onClick={() => void runControl(async () => await controller.advanceTime(preset.seconds))} disabled={busy.value || !isBootstrapped.value}>
+												{preset.label}
+											</button>
+										))}
+									</div>
 								</div>
 							</div>
 						</div>
-					</div>
-				</details>
-			</div>
+					</details>
+				</div>
+			</details>
 			<OperationModal isOpen={modal.value === 'save'} onClose={closeModal} title={simulationCopy.saveSimulationState}>
 				<div className='field'>
 					<label htmlFor='simulation-save-name'>{simulationCopy.stateName}</label>
