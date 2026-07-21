@@ -95,8 +95,9 @@ describe('DeploymentSection', () => {
 		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[dependent]} allSteps={[prerequisite, dependent]} accountAddress={zeroAddress} busyStepId={undefined} isMainnet={true} onDeploy={async () => undefined} />)
 		cleanupRendered = rendered.cleanup
 
-		expect(rendered.container.textContent).toContain('Waiting for Proxy Deployer.')
-		expectTransactionButtonDisabled(document.body, 'Deploy', 'Waiting for Proxy Deployer.')
+		expect(rendered.container.textContent).toContain('Requires Proxy Deployer')
+		expect(rendered.container.textContent?.match(/Requires Proxy Deployer/g) ?? []).toHaveLength(1)
+		expectTransactionButtonDisabled(document.body, 'Deploy', 'Requires Proxy Deployer')
 		expect(rendered.container.textContent).toContain('Waiting')
 		expect(rendered.container.textContent).not.toContain('Blocked')
 		expect(rendered.container.textContent).toContain('Deployment Status Oracle')

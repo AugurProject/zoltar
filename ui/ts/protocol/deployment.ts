@@ -28,7 +28,7 @@ const FUND_PROXY_DEPLOYER_SIGNER_AMOUNT = 10000000000000000n
 
 function markDeploymentTransactionPrepared(
 	client: WriteClient,
-	{ account = client.account, data, dataLabel, functionName, requiresWalletConfirmation, to, value }: { account?: TransactionRequestPreview['account']; data?: Hex; dataLabel?: string; functionName: string; requiresWalletConfirmation?: boolean; to?: Address; value?: bigint },
+	{ account = client.account, data, dataLabel, functionName, requiresWalletConfirmation, to, toLabel, value }: { account?: TransactionRequestPreview['account']; data?: Hex; dataLabel?: string; functionName: string; requiresWalletConfirmation?: boolean; to?: Address; toLabel?: string; value?: bigint },
 ) {
 	client.onTransactionPrepared?.({
 		account,
@@ -39,6 +39,7 @@ function markDeploymentTransactionPrepared(
 		functionName,
 		requiresWalletConfirmation: requiresWalletConfirmation ?? client.requiresWalletConfirmation,
 		to,
+		toLabel,
 		value,
 	})
 }
@@ -104,6 +105,7 @@ async function deployViaProxy(client: WriteClient, bytecode: Hex) {
 		data: bytecode,
 		functionName: 'Deploy contract through deterministic proxy',
 		to: PROXY_DEPLOYER_ADDRESS,
+		toLabel: 'Proxy deployer',
 	})
 	const hash = await client.sendTransaction({
 		to: PROXY_DEPLOYER_ADDRESS,
@@ -127,6 +129,7 @@ async function ensureProxyDeployerDeployed(client: WriteClient) {
 	markDeploymentTransactionPrepared(client, {
 		functionName: 'Fund deterministic proxy deployer signer',
 		to: PROXY_DEPLOYER_SIGNER,
+		toLabel: 'Proxy deployer signer',
 		value: FUND_PROXY_DEPLOYER_SIGNER_AMOUNT,
 	})
 	const fundHash = await client.sendTransaction({

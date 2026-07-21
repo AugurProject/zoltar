@@ -2,8 +2,11 @@
 
 import { describe, expect, mock, test } from 'bun:test'
 import { encodeFunctionData, getAddress, type Hash, type TransactionReceipt } from '@zoltar/shared/ethereum'
+import { ABIS } from '../../abis.js'
 import { getMulticall3Address } from '../../protocol/deploymentHelpers.js'
 import { readOptionalMulticall, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from '../../protocol/core.js'
+import { buildIntent, createPreparedWalletPresentation } from '../../lib/transactionPresentations.js'
+import type { GlobalTransactionPresentation } from '../../types/components.js'
 import type { ReadClient, WriteClient } from '../../types/contracts.js'
 
 type MulticallRequest = Parameters<ReadClient['multicall']>[0]
@@ -122,6 +125,30 @@ describe('contract core helpers', () => {
 
 		expect(preparedData).toBe(encodedData)
 		expect(sentData).toBe(encodedData)
+	})
+
+	test('writeContractAndWaitForReceipt gives standard contract writes a friendly prepared destination', async () => {
+		const hash = `0x${'e'.repeat(64)}` as Hash
+		const tokenAddress = getAddress('0x5555555555555555555555555555555555555555')
+		const spenderAddress = getAddress('0x6666666666666666666666666666666666666666')
+		const intent = buildIntent({ action: 'approve', source: 'token', submittedTitle: 'Approving Token' })
+		let presentation: GlobalTransactionPresentation | undefined
+		const contractCall: WriteContractClient = {
+			onTransactionPrepared: preview => {
+				presentation = createPreparedWalletPresentation(intent, preview, 'approve-token')
+			},
+			sendTransaction: async () => hash,
+			waitForTransactionReceipt: async () => hashReceipt('success'),
+		}
+
+		await writeContractAndWaitForReceipt(contractCall, () => ({
+			abi: ABIS.mainnet.erc20,
+			address: tokenAddress,
+			args: [spenderAddress, 1n],
+			functionName: 'approve',
+		}))
+
+		expect(presentation?.rows?.some(row => row.label === 'Contract' && row.value === `ERC-20 Token (${tokenAddress})`)).toBe(true)
 	})
 
 	test('writeContractAndWaitForReceipt maps transaction revert and fallback error messages', async () => {

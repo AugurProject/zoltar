@@ -1,3 +1,4 @@
+import * as deploymentCopy from '../../../copy/deployment.js'
 import { getWalletMainnetActionAvailability } from '../../../lib/actionGuards.js'
 import type { ActionAvailability } from '../../types.js'
 import type { DeploymentStatus } from '../../../types/contracts.js'
@@ -58,7 +59,7 @@ export function getDeploymentStepAvailability({
 	if (busyStepId !== undefined) return { disabled: true, reason: busyStepId === step.id ? 'Deployment in progress.' : 'Another deployment is already in progress.' }
 	const walletAvailability = getWalletMainnetActionAvailability({ accountAddress, isMainnet, walletRequiredReason: 'Connect wallet to deploy this contract.' })
 	if (walletAvailability !== undefined) return walletAvailability
-	if (prerequisiteLabel !== undefined) return { disabled: true, reason: `Waiting for ${prerequisiteLabel}.` }
+	if (prerequisiteLabel !== undefined) return { disabled: true, reason: deploymentCopy.formatPrerequisiteDetail(prerequisiteLabel) }
 	return { disabled: false, reason: undefined }
 }
 
