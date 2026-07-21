@@ -12,6 +12,29 @@ const shareTokenAddress = getAddress('0x00000000000000000000000000000000000000b2
 const defaultForkData = [0n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, false, false, 0n] as const
 
 describe('securityPools protocol client', () => {
+	test('loadSecurityPoolPage preserves exact offsets above the safe multiplication range', async () => {
+		const pageIndex = Number.MAX_SAFE_INTEGER
+		const pageSize = 3
+		const expectedStartIndex = BigInt(pageIndex) * BigInt(pageSize)
+		const deploymentRangeCalls: unknown[][] = []
+		const client = createMockLoaderClient({
+			getBlock: async () => createBlockWithTimestamp(0n),
+			multicall: async () => [],
+			readContract: async request => {
+				if (request.functionName === 'securityPoolDeploymentCount') return expectedStartIndex + 1n
+				if (request.functionName === 'securityPoolDeploymentsRange') {
+					deploymentRangeCalls.push(Array.isArray(request.args) ? [...request.args] : [])
+					return []
+				}
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		})
+
+		await loadSecurityPoolPage(client, pageIndex, pageSize)
+
+		expect(deploymentRangeCalls).toEqual([[expectedStartIndex, 1n]])
+	})
+
 	test('loadAllSecurityPools keeps the default root-pool fork outcome unset and inactive', async () => {
 		const questionId = 1n
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const

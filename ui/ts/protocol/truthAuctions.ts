@@ -2,12 +2,7 @@ import type { Address } from '@zoltar/shared/ethereum'
 import { peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../contractArtifact.js'
 import type { ReadClient, TruthAuctionBidView, TruthAuctionBidderBidPage, TruthAuctionTickBidPage, TruthAuctionTickPage, TruthAuctionTickSummary } from '../types/contracts.js'
 import { requireAddressValue, requireArrayValue, requireBigintValue, requireBooleanValue, requireObjectValue } from './decoders.js'
-
-function getTruthAuctionPageOffset(pageIndex: number, pageSize: number) {
-	if (!Number.isInteger(pageIndex) || pageIndex < 0) throw new Error('Page index must be a non-negative integer')
-	if (!Number.isInteger(pageSize) || pageSize <= 0) throw new Error('Page size must be a positive integer')
-	return BigInt(pageIndex) * BigInt(pageSize)
-}
+import { getProtocolPageOffset } from './helpers.js'
 
 function requireTruthAuctionTickSummary(value: unknown, context: string): TruthAuctionTickSummary {
 	const summary = requireObjectValue(value, context)
@@ -59,7 +54,7 @@ export async function loadTruthAuctionTickSummary(client: Pick<ReadClient, 'read
 }
 
 export async function loadTruthAuctionTickPage(client: Pick<ReadClient, 'readContract'>, truthAuctionAddress: Address, pageIndex: number, pageSize: number): Promise<TruthAuctionTickPage> {
-	const offset = getTruthAuctionPageOffset(pageIndex, pageSize)
+	const offset = getProtocolPageOffset(pageIndex, pageSize)
 	const tickCount = await client.readContract({
 		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 		functionName: 'getTickCount',
@@ -84,7 +79,7 @@ export async function loadTruthAuctionTickPage(client: Pick<ReadClient, 'readCon
 }
 
 export async function loadTruthAuctionActiveTickPage(client: Pick<ReadClient, 'readContract'>, truthAuctionAddress: Address, pageIndex: number, pageSize: number): Promise<TruthAuctionTickPage> {
-	const offset = getTruthAuctionPageOffset(pageIndex, pageSize)
+	const offset = getProtocolPageOffset(pageIndex, pageSize)
 	const tickCount = await client.readContract({
 		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 		functionName: 'activeTickCount',
@@ -109,7 +104,7 @@ export async function loadTruthAuctionActiveTickPage(client: Pick<ReadClient, 'r
 }
 
 export async function loadTruthAuctionTickBidPage(client: Pick<ReadClient, 'readContract'>, truthAuctionAddress: Address, tick: bigint, pageIndex: number, pageSize: number): Promise<TruthAuctionTickBidPage> {
-	const offset = getTruthAuctionPageOffset(pageIndex, pageSize)
+	const offset = getProtocolPageOffset(pageIndex, pageSize)
 	const bidCount = await client.readContract({
 		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 		functionName: 'getBidCountAtTick',
@@ -135,7 +130,7 @@ export async function loadTruthAuctionTickBidPage(client: Pick<ReadClient, 'read
 }
 
 export async function loadTruthAuctionBidderBidPage(client: Pick<ReadClient, 'readContract'>, truthAuctionAddress: Address, bidder: Address, pageIndex: number, pageSize: number): Promise<TruthAuctionBidderBidPage> {
-	const offset = getTruthAuctionPageOffset(pageIndex, pageSize)
+	const offset = getProtocolPageOffset(pageIndex, pageSize)
 	const bidCount = await client.readContract({
 		abi: peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
 		functionName: 'getBidderBidCount',

@@ -2,7 +2,7 @@ import { zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import { ReputationToken_ReputationToken, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '../contractArtifact.js'
 import type { MarketCreationResult, MarketDetails, MarketDetailsPage, MarketType, QuestionData, ReadClient, WriteClient, ZoltarUniverseSummary } from '../types/contracts.js'
 import { readRequiredMulticall, writeContractAndWait } from './core.js'
-import { getMarketType, getQuestionId, getQuestionIdHex, isStringArray, requireDeployedChildUniverseTupleArray, requireUniverseTupleArray, type UniverseTuple } from './helpers.js'
+import { getMarketType, getProtocolPageOffset, getQuestionId, getQuestionIdHex, isStringArray, requireDeployedChildUniverseTupleArray, requireUniverseTupleArray, type UniverseTuple } from './helpers.js'
 import { getDeploymentSteps } from './deployment.js'
 
 const CONTRACT_PAGE_SIZE = 30n
@@ -154,10 +154,8 @@ export async function loadZoltarQuestionCount(client: ReadClient) {
 }
 
 export async function loadZoltarQuestionPage(client: ReadClient, pageIndex: number, pageSize: number): Promise<MarketDetailsPage> {
-	if (!Number.isInteger(pageIndex) || pageIndex < 0) throw new Error('Question page index must be a non-negative integer')
-	if (!Number.isInteger(pageSize) || pageSize <= 0) throw new Error('Question page size must be a positive integer')
+	const startIndex = getProtocolPageOffset(pageIndex, pageSize)
 	const questionCount = await loadZoltarQuestionCount(client)
-	const startIndex = BigInt(pageIndex * pageSize)
 	if (startIndex >= questionCount) {
 		return {
 			pageIndex,

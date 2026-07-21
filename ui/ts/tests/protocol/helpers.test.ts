@@ -9,6 +9,7 @@ import {
 	getForkOutcomeKey,
 	getMarketType,
 	getMinBigintValue,
+	getProtocolPageOffset,
 	getQuestionId,
 	getQuestionIdHex,
 	getReportingOutcomeKey,
@@ -50,6 +51,12 @@ describe('contracts helpers', () => {
 	test('getMinBigintValue handles empty and non-empty slices', () => {
 		expect(getMinBigintValue([])).toBe(undefined)
 		expect(getMinBigintValue([7n, 5n, 9n])).toBe(5n)
+	})
+
+	test('protocol pagination preserves exact offsets and rejects unsafe numeric inputs', () => {
+		expect(getProtocolPageOffset(Number.MAX_SAFE_INTEGER, 3)).toBe(BigInt(Number.MAX_SAFE_INTEGER) * 3n)
+		expect(() => getProtocolPageOffset(Number.MAX_SAFE_INTEGER + 1, 1)).toThrow('Page index must be a non-negative integer within the safe range')
+		expect(() => getProtocolPageOffset(0, Number.MAX_SAFE_INTEGER + 1)).toThrow('Page size must be a positive integer within the safe range')
 	})
 
 	test('timestamp predicates validate required keys', () => {
