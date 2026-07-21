@@ -27,6 +27,14 @@
 						documented residual risk if the oracle assumption fails or auction
 						demand is weak.
 					</p>
+					<p>
+						The <a href="#accepted-design-properties">accepted design
+						properties</a> below are also normative review boundaries. The mere
+						absence of a downstream-notional cap, question-to-universe binding,
+						or absolute pending-report deadline is not a vulnerability claim
+						against this design. Reviewers should instead test the stated costs,
+						guards, accounting, and economic assumptions.
+					</p>
 				</div>
 				<p>
 					Contract-level invariants remain cataloged in
@@ -101,6 +109,81 @@
 					</p>
 				</figure>
 			</header>
+
+			<section id="accepted-design-properties">
+				<h2>Accepted Design Properties for Security Review</h2>
+				<p>
+					The following behaviors are deliberate protocol choices. A report
+					that only restates one of them has not demonstrated a vulnerability.
+					A valid finding must instead show that the implementation departs
+					from the documented mechanics, that an advertised cost can be
+					bypassed or recovered, or that the required launch assumption is not
+					credible under concrete parameters.
+				</p>
+				<div class="table-scroll" role="region" aria-label="Accepted design properties and finding boundaries" tabindex="0">
+					<table>
+						<thead>
+							<tr>
+								<th>Accepted property</th>
+								<th>Intended security mechanism</th>
+								<th>What would be a finding</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td><strong>Oracle security is not bounded by downstream value.</strong> Report liquidity need not equal the value of one operation or all operations using the cached price.</td>
+								<td><code>ORACLE-A1</code>: independent, profit-driven arbitragers monitor every pending report, correct profitable errors, and obtain inclusion before settlement. The position is an incentive for correction, not loss collateral.</td>
+								<td>Incorrect sizing or settlement math; a bypass of public dispute access; cache use outside the documented window; or concrete launch parameters under which a material false report cannot be corrected profitably and in time.</td>
+							</tr>
+							<tr>
+								<td><strong>A caller may use any existing ended global question to fork any eligible universe.</strong> Zoltar does not require the question to belong to a market or pool in that universe.</td>
+								<td>Permissionless fork admission is economic: the initiator commits the computed fork threshold in parent REP and receives migration credit only after the computed, floored haircut. Either value can floor to zero at dust supply. Applications may impose stricter question relevance above Zoltar.</td>
+								<td>A fork before the question ends; failure to collect or account for a nonzero computed threshold or haircut; recovery or duplication of a nonzero haircut; bypass of one-fork-per-parent state; malformed branches; or an application claiming stricter eligibility without enforcing it.</td>
+							</tr>
+							<tr>
+								<td><strong>Valid rolling disputes may extend the pending oracle lane indefinitely.</strong> The coordinator has no absolute settlement deadline while disputes continue.</td>
+								<td>Every extension executes a valid OpenOracle replacement, restarts settlement, requires the replacement position, and charges the computed protocol fee. The deployment configures an unrecoverable OpenOracle fee sink. Availability against an indefinitely funded participant is excluded.</td>
+								<td>A free or underfunded reset; fee avoidance or refund; unauthorized queue use; invalid deadline transition; accounting that lets capital be reused simultaneously; or documentation or UI that promises bounded completion.</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<div class="callout">
+					<p>
+						<strong>Cost examples under current defaults.</strong> A fork threshold
+						is approximately 5% of theoretical REP supply. With the default burn
+						divisor of <code>5</code>, one fifth of that threshold—approximately
+						1% of theoretical supply—is permanently uncredited, while the other
+						four fifths becomes migration credit. Integer division floors a
+						threshold to zero below <code>20</code> atomic units of theoretical
+						supply and floors the haircut to zero when a nonzero threshold is
+						below <code>5</code> atomic units. A deployment cannot claim a
+						meaningful fork admission cost beyond the supported depth validated
+						under <code>EXT-05</code>. For rolling disputes, the configured
+						protocol fee is 1% of the current side being swapped and is credited
+						inside OpenOracle to the fee sink
+						<code>0x000000000000000000000000000000000000dEaD</code>;
+						for example, a token1-side self-dispute against <code>24 WETH</code>
+						incurs a <code>0.24 WETH</code> protocol fee in addition to the
+						replacement-position change and transaction cost. Integer flooring
+						can make the fee zero for dust-sized sides, but it does not remove
+						the replacement-position requirement. This internal fee balance is
+						economically inaccessible at that address; crediting it does not
+						reduce ERC-20 total supply and is distinct from Zoltar's configured
+						genesis-REP burn sink.
+					</p>
+				</div>
+				<div class="callout" id="recursive-fork-depth-status">
+					<p>
+						<strong>Not an accepted property: recursive fork gas depth.</strong>
+						The contracts currently impose no explicit maximum recursive fork
+						depth. The resulting ancestor-dependent gas path remains the open
+						pre-deployment requirement <a href="./invariants.html#ext-05"><code>EXT-05</code></a>.
+						It must be bounded and validated before deployment; it must not be
+						closed as intentional merely because each individual fork is paid.
+					</p>
+				</div>
+			</section>
 
 			<section id="claims">
 				<h2>Guarantees and Excluded Guarantees</h2>
@@ -252,7 +335,8 @@
 			<section id="review-classification">
 				<h2>Review and Deployment Classification</h2>
 				<p>
-					The accepted assumption and loss-allocation policy do not remove these paths from security review.
+					The accepted assumption, design properties, and loss-allocation
+					policy do not remove these paths from security review.
 					They change the question from “does Solidity enforce an excluded
 					property?” to “does the implementation conform, and is the external
 					assumption credible for deployment?”

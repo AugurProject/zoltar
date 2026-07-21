@@ -3,7 +3,7 @@ export const deploymentReadyStatus = 'Can deploy now.'
 export const deploymentRunningStatus = 'Deployment in progress.'
 export const notDeployedBadgeLabel = 'Not Deployed'
 export const waiting = 'Waiting'
-export const formatWaitingForPrerequisiteDetail = (prerequisiteLabel: string) => `Waiting for ${prerequisiteLabel}.`
+export const formatPrerequisiteDetail = (prerequisiteLabel: string) => `Requires ${prerequisiteLabel}`
 export const allDeployed = 'All deployed'
 export const formatCompletedSectionTitle = (sectionTitle: string) => `${sectionTitle} (Completed)`
 export const contractsDeployed = 'Contracts deployed'

@@ -53,7 +53,7 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 
 	return {
 		badgeTone: 'blocked',
-		detail: deploymentCopy.formatWaitingForPrerequisiteDetail(prerequisiteLabel),
+		detail: deploymentCopy.formatPrerequisiteDetail(prerequisiteLabel),
 		label: deploymentCopy.waiting,
 		buttonLabel: commonCopy.deploy,
 	}
@@ -86,7 +86,7 @@ export function DeploymentSection({ title, completedGroup = false, steps, allSte
 								<p className='address'>{step.address}</p>
 								{stepStatus.detail === undefined ? undefined : <p className='detail'>{stepStatus.detail}</p>}
 							</div>
-							{step.deployed ? undefined : <TransactionActionButton idleLabel={stepStatus.buttonLabel} pendingLabel={deploymentCopy.deploying} onClick={() => void onDeploy(step.id)} pending={isBusy} availability={availability} />}
+							{step.deployed ? undefined : <TransactionActionButton idleLabel={stepStatus.buttonLabel} pendingLabel={deploymentCopy.deploying} onClick={() => void onDeploy(step.id)} pending={isBusy} availability={availability} showDisabledReason={prerequisiteLabel === undefined} />}
 						</div>
 					)
 				})}
