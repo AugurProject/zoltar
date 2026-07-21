@@ -122,36 +122,12 @@ function createProps(overrides: SecurityPoolsOverviewSectionTestOverrides = {}):
 				}
 	return {
 		accountState,
-		checkedSecurityPoolAddress: undefined,
-		closeLiquidationModal: () => undefined,
-		hasLoadedSecurityPools: true,
 		hasLoadedSecurityPoolPage: true,
-		liquidationAmount: '',
-		liquidationMaxAmount: undefined,
-		liquidationManagerAddress: undefined,
-		liquidationModalOpen: false,
-		liquidationSecurityPoolAddress: undefined,
-		liquidationTargetVault: '',
-		liquidationTimeoutMinutes: '5',
-		loadingPoolOracleManager: false,
 		loadingSecurityPoolPage: false,
-		loadingSecurityPools: false,
-		onLiquidationAmountChange: () => undefined,
-		onLiquidationTimeoutMinutesChange: () => undefined,
-		onLoadPoolOracleManager: () => undefined,
 		onLoadSecurityPoolPage: () => undefined,
-		onLoadSecurityPools: () => undefined,
-		onOpenLiquidationModal: () => undefined,
-		onQueueLiquidation: () => undefined,
 		onSelectSecurityPool: () => undefined,
-		poolOracleManagerDetails: undefined,
 		repPerEthPrice: undefined,
-		repPerEthSource: undefined,
-		repPerEthSourceUrl: undefined,
-		securityPoolOverviewActiveAction: undefined,
 		securityPoolOverviewError: undefined,
-		securityPoolLiquidationError: undefined,
-		securityPoolOverviewResult: undefined,
 		...overrides,
 		environmentRefreshKey,
 		securityPoolBrowseCount: securityPoolPage?.poolCount,
@@ -218,26 +194,6 @@ describe('SecurityPoolsOverviewSection', () => {
 		})
 
 		expect(onSelectSecurityPool).toHaveBeenCalledWith(pool.securityPoolAddress, 11n)
-	})
-
-	test('does not render a local liquidation transaction notice', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<SecurityPoolsOverviewSection
-				{...createProps({
-					securityPoolOverviewResult: {
-						action: 'queueLiquidation',
-						hash: '0x1234000000000000000000000000000000000000000000000000000000000000',
-						securityPoolAddress: zeroAddress,
-					},
-				})}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		expect(documentQueries.queryByRole('heading', { name: 'Liquidation Submitted' })).toBeNull()
-		expect(documentQueries.queryByText('Check State')).toBeNull()
-		expect(documentQueries.queryByText('0x1234000000000000000000000000000000000000000000000000000000000000')).toBeNull()
 	})
 
 	test('reloads the current browse page when the environment refresh key changes', async () => {
@@ -611,7 +567,6 @@ describe('SecurityPoolsOverviewSection', () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
-					hasLoadedSecurityPools: true,
 					securityPools: [],
 				})}
 			/>,
@@ -628,7 +583,6 @@ describe('SecurityPoolsOverviewSection', () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
-					hasLoadedSecurityPools: true,
 					onCreateSecurityPool: () => {
 						createSecurityPoolClicks += 1
 					},
