@@ -3895,7 +3895,18 @@ main.global-transaction-tray-open {
 }
 
 .vault-action-launcher-grid {
-	grid-template-columns: repeat(2, minmax(0, 1fr));
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.vault-action-launcher-grid .action-launcher-card {
+	grid-template-columns: minmax(0, 1fr) minmax(15rem, 22rem);
+	align-items: center;
+	gap: 1.25rem;
+}
+
+.vault-action-launcher-grid .action-launcher-card.compact {
+	grid-template-columns: minmax(15rem, 22rem);
+	justify-content: end;
 }
 
 .action-launcher-card {
@@ -6234,7 +6245,7 @@ main.global-transaction-tray-open {
 }
 
 .trading-holdings-layout {
-	grid-template-columns: minmax(0, 1.3fr) minmax(14rem, 0.7fr);
+	grid-template-columns: minmax(0, 1fr);
 	align-items: start;
 }
 
@@ -6263,9 +6274,23 @@ main.global-transaction-tray-open {
 }
 
 .trading-share-callouts-total {
-	margin-top: 0.5rem;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: baseline;
+	gap: 1rem;
+	margin-top: 0;
 	padding-top: 0.5rem;
 	border-top: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.trading-share-distribution .ranked-bar-item-value,
+.trading-share-callouts-total strong {
+	white-space: nowrap;
+}
+
+.trading-share-distribution .ranked-bar-item-value button.currency-value.copyable,
+.trading-share-callouts-total strong button.currency-value.copyable {
+	white-space: nowrap;
 }
 
 .security-pool-strip-meter {
@@ -6306,6 +6331,12 @@ main.global-transaction-tray-open {
 @media (max-width: 640px) {
 	.vault-action-launcher-grid {
 		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.vault-action-launcher-grid .action-launcher-card,
+	.vault-action-launcher-grid .action-launcher-card.compact {
+		grid-template-columns: minmax(0, 1fr);
+		justify-content: stretch;
 	}
 
 	.metric-tile-grid[data-columns="4"],

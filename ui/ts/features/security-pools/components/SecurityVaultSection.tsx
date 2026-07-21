@@ -494,6 +494,7 @@ export function SecurityVaultSection({
 	const vaultReadinessActions = getSecurityPoolVaultReadinessActions([
 		{
 			actionLabel: securityPoolCopy.depositRep,
+			description: securityPoolCopy.depositRepDescription,
 			key: 'deposit-rep',
 			...(depositRepEnabled && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('deposit-rep') } : {}),
 			readiness: depositRepEnabled && canUseLoadedVaultActions ? 'ready' : 'blocked',
@@ -523,6 +524,7 @@ export function SecurityVaultSection({
 		},
 		{
 			actionLabel: securityPoolCopy.claimFees,
+			description: securityPoolCopy.claimFeesDescription,
 			key: 'claim-fees',
 			...(claimFeesEnabled && hasClaimableFees && claimFeesLauncherBlocker === undefined && vaultExistsOnchain && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('claim-fees') } : {}),
 			readiness: claimFeesEnabled && hasClaimableFees && claimFeesLauncherBlocker === undefined && vaultExistsOnchain && canUseLoadedVaultActions ? 'ready' : 'blocked',
