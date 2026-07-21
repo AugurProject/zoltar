@@ -74,6 +74,7 @@ interface ISecurityPoolForkerEvents {
 }
 
 interface ISecurityPoolForker is ISecurityPoolForkerEvents {
+	function getForkActivationTime(ISecurityPool securityPool) external view returns (uint256);
 	function getOwnForkRepBuckets(
 		ISecurityPool securityPool
 	)

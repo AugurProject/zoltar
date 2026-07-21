@@ -6,6 +6,7 @@ import { createCarryProof, SparseNullifierTree } from '../carryProofHelpers'
 import { addRepToMigrationBalance, getMigrationRepBalance, getUniverseData, splitMigrationRep } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { queueLiquidationAtForcedPrice } from '../../testSupport/simulator/utils/contracts/peripherals'
 import { getQuestionResolution } from '../../testSupport/simulator/utils/contracts/escalationGame'
+import { getForkActivationTime } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
 import { peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken } from '../../types/contractArtifact'
 import { test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackFactoryMock, test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackParentMock } from '../../types/contractArtifact'
 
@@ -439,7 +440,7 @@ describe('Peripherals: fork migration', () => {
 			const fakeParentAddress = fakeParentReceipt.contractAddress
 			if (fakeParentAddress === undefined || fakeParentAddress === null) throw new Error('fake parent address missing')
 
-			await assert.rejects(createChildUniverse(client, fakeParentAddress, QuestionOutcome.Yes), /Invalid child deployment/)
+			await assert.rejects(createChildUniverse(client, fakeParentAddress, QuestionOutcome.Yes), /Migration closed|Invalid child deployment/)
 
 			strictEqualTypeSafe(await getPoolOwnershipDenominator(client, targetPool), denominatorBeforeAttack, 'attack should not change the legitimate pool ownership denominator')
 			strictEqualTypeSafe((await getSecurityPoolForkerForkData(client, targetPool)).truthAuction, targetForkDataBeforeAttack.truthAuction, 'attack should not overwrite the legitimate pool fork metadata')
@@ -1571,7 +1572,7 @@ describe('Peripherals: fork migration', () => {
 			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [QuestionOutcome.Yes]), /Resolved|resolved before fork/i, 'at the migration deadline: funded finalized winning shares must not migrate')
 			assert.deepStrictEqual(await balanceOfShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, openInterestHolder.account.address), sourceBalancesBeforeRejectedMigration, 'at the migration deadline: rejected migration must preserve every funded source outcome balance')
 			await mockWindow.setTime(migrationDeadline)
-			await assertFinalizedMarketMigrationRejected('after the migration deadline', /migration window closed/i)
+			await assertFinalizedMarketMigrationRejected('after the universe-level migration period', /Resolved|resolved before fork/i)
 			const walletRepBeforeClaims = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 			await redeemShares(openInterestHolder, securityPoolAddresses.securityPool)
 			strictEqualTypeSafe(await getShareTokenSupply(client, securityPoolAddresses.securityPool), 0n, 'winning redemption should still complete after the unrelated fork')
@@ -2323,8 +2324,7 @@ describe('Peripherals: fork migration', () => {
 
 		test('createChildUniverse allows the exact external-fork migration deadline and rejects one second later', async () => {
 			await triggerExternalForkForSecurityPool(undefined, 'external child creation deadline source')
-			const { forkTime } = await getUniverseData(client, genesisUniverse)
-			const migrationDeadline = forkTime + 8n * 7n * DAY
+			const migrationDeadline = (await getForkActivationTime(client, securityPoolAddresses.securityPool)) + 8n * 7n * DAY
 			await mockWindow.setTime(migrationDeadline - 1n)
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
@@ -2332,7 +2332,7 @@ describe('Peripherals: fork migration', () => {
 			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 			strictEqualTypeSafe(await getRepToken(client, yesSecurityPool.securityPool), getRepTokenAddress(yesUniverse), 'createChildUniverse should still deploy the requested child branch at the inclusive external-fork deadline')
 
-			// Child creation mines at the inclusive deadline; the next transaction is one second later.
+			await mockWindow.setTime(migrationDeadline + 1n)
 			await assert.rejects(createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.No), /(Migration closed|Own-fork window closed)/i)
 		})
 
@@ -2362,8 +2362,7 @@ describe('Peripherals: fork migration', () => {
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, openInterestAmount)
 			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 			await triggerExternalForkForSecurityPool(undefined, 'share migration deadline source')
-			const { forkTime } = await getUniverseData(client, genesisUniverse)
-			const migrationDeadline = forkTime + 8n * 7n * DAY
+			const migrationDeadline = (await getForkActivationTime(client, securityPoolAddresses.securityPool)) + 8n * 7n * DAY
 
 			await mockWindow.setTime(migrationDeadline - 1n)
 			await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [QuestionOutcome.Yes])
@@ -2372,7 +2371,7 @@ describe('Peripherals: fork migration', () => {
 			const migratedYesBalances = await balanceOfShares(client, securityPoolAddresses.shareToken, migratedYesUniverse, openInterestHolder.account.address)
 			assert.ok(ensureDefined(migratedYesBalances[1], 'migrated yes balance missing') > 0n, 'share migration should still succeed at the inclusive deadline')
 
-			await mockWindow.setTime(migrationDeadline)
+			await mockWindow.setTime(migrationDeadline + 1n)
 
 			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.No, [QuestionOutcome.No]), /migration window closed/i)
 		})
@@ -2505,8 +2504,7 @@ describe('Peripherals: fork migration', () => {
 			assert.ok(parentVaultBeforeFork.repDepositShare > 0n, 'test setup should leave unlocked parent vault ownership before the external fork')
 			await triggerExternalForkForSecurityPool(undefined, 'external vault migration deadline source')
 
-			const { forkTime } = await getUniverseData(client, genesisUniverse)
-			const migrationDeadline = forkTime + 8n * 7n * DAY
+			const migrationDeadline = (await getForkActivationTime(client, securityPoolAddresses.securityPool)) + 8n * 7n * DAY
 			await mockWindow.setTime(migrationDeadline - 1n)
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 

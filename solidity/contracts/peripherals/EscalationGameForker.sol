@@ -52,7 +52,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 		ISecurityPool child = _getOrDeployChildPool(parent, uint8(outcomeIndex));
 		require(child.systemState() == SystemState.ForkMigration, 'Child not migrating');
 		require(
-			block.timestamp <= zoltar.getForkTime(parent.universeId()) + SecurityPoolUtils.MIGRATION_TIME,
+			block.timestamp <= forkDataByPool[parent].forkActivationTime + SecurityPoolUtils.MIGRATION_TIME,
 			'Claim window closed'
 		);
 		EscalationGame childEscalationGame = child.escalationGame();
@@ -132,7 +132,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 	) public {
 		require(msg.sender == vault, 'Only vault');
 		require(
-			block.timestamp <= zoltar.getForkTime(parent.universeId()) + SecurityPoolUtils.MIGRATION_TIME,
+			block.timestamp <= forkDataByPool[parent].forkActivationTime + SecurityPoolUtils.MIGRATION_TIME,
 			'Migration closed'
 		);
 		SecurityPoolForkerForkData storage parentForkData = forkDataByPool[parent];
