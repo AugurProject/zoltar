@@ -65,4 +65,15 @@ describe('flat nested surfaces', () => {
 		expect(criticalFlatRuleIndex).toBeGreaterThan(warningFlatRuleIndex)
 		expect(successFlatRuleIndex).toBeGreaterThan(criticalFlatRuleIndex)
 	})
+
+	test('keeps loaded question previews and timeline rows flat', () => {
+		const cssSource = readFileSync('ui/css/index.css', 'utf8')
+		const loadedPreviewRule = cssSource.slice(cssSource.indexOf('.loaded-question-preview {'), cssSource.indexOf('.field-inline {'))
+		const timelineItemRule = cssSource.slice(cssSource.indexOf('.question-preview-timeline-item {'), cssSource.indexOf('.question-preview-timeline-label,'))
+
+		expect(loadedPreviewRule).toContain('border-radius: 0')
+		expect(loadedPreviewRule).toContain('background: transparent')
+		expect(timelineItemRule).toContain('border-radius: 0')
+		expect(timelineItemRule).toContain('background: transparent')
+	})
 })

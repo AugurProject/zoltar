@@ -4178,10 +4178,12 @@ main.global-transaction-tray-open {
 }
 
 .loaded-question-preview {
-	padding: 1rem;
-	border: 1px solid var(--border-strong);
-	border-radius: var(--radius-control);
-	background: rgba(9, 18, 31, 0.46);
+	padding: 1rem 0;
+	border: 0;
+	border-top: 1px solid var(--divider-subtle);
+	border-bottom: 1px solid var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
 }
 
 .field-inline {
@@ -5689,10 +5691,11 @@ main.global-transaction-tray-open {
 .question-preview-timeline-item {
 	display: grid;
 	gap: 0.35rem;
-	padding: 0.8rem 0.9rem;
-	border: 1px solid var(--color-white-08);
-	border-radius: 0.95rem;
-	background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015));
+	padding: 0.2rem 0 0.2rem 0.8rem;
+	border: 0;
+	border-left: 2px solid var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
 }
 
 .question-preview-timeline-label,

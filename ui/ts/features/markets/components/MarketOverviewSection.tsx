@@ -74,7 +74,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 					</DataGrid>
 					{hasForked ? (
 						<WorkflowSubsection title={marketCopy.forkQuestion}>
-							<EntityCard title={marketCopy.selectedForkQuestion} variant='record'>
+							<EntityCard surface='flat' title={marketCopy.selectedForkQuestion} variant='record'>
 								<Question question={rootUniverse.forkQuestionDetails} loading={rootUniverse.forkQuestionDetails === undefined} />
 							</EntityCard>
 						</WorkflowSubsection>
@@ -118,6 +118,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 							})}
 							renderBadge={child => <ChildUniverseStatusBadge child={child} />}
 							renderBody={child => <ChildUniverseDetails child={child} />}
+							surface='flat'
 						/>
 					)}
 					<ChildUniverseDeploymentModal

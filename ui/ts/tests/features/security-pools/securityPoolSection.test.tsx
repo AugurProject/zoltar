@@ -184,6 +184,8 @@ describe('SecurityPoolSection', () => {
 		expect(documentQueries.getByText('Question ready for a pool')).not.toBeNull()
 		expect(documentQueries.getByText('Previewed binary question')).not.toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Load Question' })).toBeNull()
+		expect(document.body.querySelector('.loaded-question-preview')).not.toBeNull()
+		expect(document.body.querySelector('.section-block.surface .record-card:not(.flat)')).toBeNull()
 	})
 
 	test('omits missing-context helper copy when a loaded question lacks description details', async () => {
@@ -226,6 +228,7 @@ describe('SecurityPoolSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Pool Created' })).not.toBeNull()
 		expect(document.body.querySelector('.workflow-transaction-status')).toBeNull()
+		expect(document.body.querySelector('.section-block.surface .entity-card.flat')).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: `Copy address ${poolAddress}` })).not.toBeNull()
 	})
 
