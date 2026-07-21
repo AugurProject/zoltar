@@ -23,6 +23,10 @@
 						<span>Entry overview</span>
 						<b>Start Here Guide</b>
 					</a>
+					<a class="sidebar-companion" href="./security-model.html">
+						<span>Security boundaries</span>
+						<b>Protocol Security Model</b>
+					</a>
 					<nav aria-label="Document sections">
 					<a href="#abstract" aria-current="location">Abstract</a>
 					<a href="#overview">System Overview</a>
@@ -5801,7 +5805,7 @@
 						<div class="summary-card">
 							<span>Edge cases</span>
 							<b
-									>If demand is weak, bids at or above the cap-implied reserve buy
+									>If demand is weak, bids at or above the cap-implied qualification threshold buy
 									the complete REP sale cap at one effective price. Lower bids refund.
 									Value-free finalization activates the child with the collateral
 									actually migrated and raised.</b
@@ -6245,14 +6249,16 @@
 						aggregate REP allocation.
 					</p>
 					<p>
-						For underfunded clearing, the contract derives
+					For underfunded clearing, the contract derives
 						<code>underfundedThreshold</code> from <code>ethRaiseCap</code> and
 						<code>maxRepBeingSold</code>, then uses the first supported tick at
-						or above that reserve as <code>clearingTick</code>.
+						or above that qualification threshold as <code>clearingTick</code>.
 						<code>underfundedWinningEth</code> records ETH at or above that tick;
 						lower bids refund. When any ETH qualifies,
 						<code>totalRepPurchased = maxRepBeingSold</code>, and winners share that
-						REP in proportion to retained ETH at one effective price. If no ETH
+						REP in proportion to retained ETH at one effective price. The threshold
+						is not an execution-price floor, so that effective price can be lower.
+						If no ETH
 						qualifies, every bid refunds.
 					</p>
 					<div class="equation" id="eq-placeholder-auction-fill-math">
@@ -6298,28 +6304,28 @@
 						<p class="equation-caption">
 							<span class="equation-label">Auction Fill Math</span>Uniform
 							clearing converts filled ETH at the uniform clearing price;
-							underfunded clearing sets a reserve from both caps and distributes
+							underfunded clearing sets a qualification threshold from both caps and distributes
 							the complete REP sale cap among qualifying bids.
 							The stored <code>clearingTick</code> marks the lowest winning
 							tick, and bids at ticks <code>&gt;= clearingTick</code> share the
 							complete aggregate allocation at the common effective price
 							<code>underfundedWinningEth / maxRepBeingSold</code>. If no ETH qualifies,
 							no REP is allocated and every bid refunds. The stored threshold remains the cap-implied
-							reserve even when no ETH qualifies. <code>ethBefore</code> is fixed by descending
+							qualification boundary even when no ETH qualifies. <code>ethBefore</code> is fixed by descending
 							price and submission order, so withdrawals cannot redirect rounding
 							units between bidders.
 						</p>
 					</div>
 					<details class="interactive-example" id="underfunded-auction-example">
-						<summary>Adjust an underfunded reserve-price example</summary>
+						<summary>Adjust an underfunded qualification-threshold example</summary>
 						<p>
 							The widget assumes the bid is already inside the finalized
-							reserve winner set. It is a human-unit real-number approximation: the
-							ETH raise cap and REP sale cap determine the reserve, while qualifying
+							qualifying winner set. It is a human-unit real-number approximation: the
+							ETH raise cap and REP sale cap determine the qualification threshold, while qualifying
 							ETH determines each bidder's pro-rata share of the complete REP cap. The contract's exact
 							wei allocation also depends on <code>ethBefore</code> and cumulative
 							integer floors. The tick price input is only a consistency check: if
-							the cap-implied reserve is above the tick limit, that bid is refunded.
+							the cap-implied qualification threshold is above the tick limit, that bid is refunded.
 						</p>
 						<div class="example-grid">
 							<label>
@@ -6381,9 +6387,9 @@
 								>
 							</li>
 							<li>
-								Reserve note:
+								Qualification note:
 								<output data-example-output="tickStatus"
-									>tick meets the cap-implied reserve</output
+									>tick meets the cap-implied qualification threshold</output
 								>
 							</li>
 							<li>
@@ -6566,7 +6572,7 @@
 							In an underfunded auction, the contract computes
 							<code>underfundedThreshold = ceil(ethRaiseCap · PRICE_PRECISION /
 							maxRepBeingSold)</code> and selects the first supported tick at or
-							above that reserve.
+							above that qualification threshold.
 						</li>
 						<li>
 							Bids at ticks <code>&gt;= clearingTick</code> retain their ETH and
@@ -6574,8 +6580,8 @@
 							qualifies, the contract retains no ETH, sells no REP, and refunds every bid.
 						</li>
 						<li>
-							A lone minimum bid below reserve receives a full refund. A lone bid
-							at or above reserve receives the complete REP sale cap, and the
+							A lone minimum bid below the threshold receives a full refund. A lone bid
+							at or above the threshold receives the complete REP sale cap, and the
 							forker maps that amount into pool ownership and auctioned allowance.
 						</li>
 						<li>
@@ -6594,11 +6600,14 @@
 						</li>
 					</ul>
 					<div class="callout">
-						Underfunded intuition: both caps imply a reserve price. Bids below its
+						<strong><code>AUCTION-A1</code> — punitive underfunded clearing.</strong>
+						Both caps imply a qualification threshold, not an execution-price floor. Bids below its
 						ceiling tick refund, while qualifying bids collectively buy the complete
 						REP sale cap for their retained ETH. Their common effective price is
 						<code>underfundedWinningEth / maxRepBeingSold</code>. If no bid qualifies,
-						no ETH is retained and all bids refund.
+						no ETH is retained and all bids refund. Full repair and make-whole
+						outcomes are deliberately not guaranteed; see the
+						<a href="./security-model.html#auction-a1">normative security model</a>.
 					</div>
 					<p>
 						The <code>Binding condition</code> output reports one of four
@@ -6617,7 +6626,7 @@
 							tick. This example uses a three-level tick-derived ladder displayed near
 							<code>5</code>, <code>4</code>, and <code>3 ETH/REP</code> to keep
 							the arithmetic readable. If qualifying demand is below both caps,
-							only bids at or above the cap-implied reserve are retained and their
+							only bids at or above the cap-implied qualification threshold are retained and their
 							ETH buys the complete REP sale cap at one effective price. With no
 							qualifying bid, every bid refunds. The calculator shows
 							human-unit allocations; exact withdrawals use integer REP-wei
@@ -6872,6 +6881,7 @@
 						collateral.
 					</p>
 					<p id="oracle-economic-security-assumption">
+						<strong><code>ORACLE-A1</code> — always-available profitable arbitrager.</strong>
 						When the coordinator accepts a settled REP/ETH price, that price is
 						reusable only inside its freshness window. It does not authorize a
 						fixed amount of operation exposure. The minimum WETH side of the
@@ -6879,7 +6889,8 @@
 						block's base fee so a price wrong by the configured target error
 						(initially five percent) is profitable to
 						challenge after fees with the configured gas-cost buffer. This is an
-						intentional tradeoff: one contestable price is amortized across every
+						intentional tradeoff: report liquidity is a correction incentive, not
+						collateral for downstream operation value. One contestable price is amortized across every
 						otherwise-valid operation in the five-minute cache rather than bonded
 						one-for-one against outside value. No queued-operation or pool-value
 						notional enters the WETH calculation. The protocol therefore assumes
@@ -6893,7 +6904,9 @@
 						freshness window, so a per-operation liquidation bound does not bound
 						cumulative extraction across all uses of that cached price. This is
 						the specified arbitrage-security model, not a missing invariant that
-						report liquidity must collateralize downstream notional.
+						report liquidity must collateralize downstream notional. The
+						<a href="./security-model.html#oracle-a1">normative security model</a>
+						defines the assumption, excluded guarantee, and residual loss boundary.
 					</p>
 					<figure class="diagram" id="fig-placeholder-oracle-flow">
 						<svg
@@ -7410,6 +7423,12 @@
 							>#</a
 						>
 					</div>
+					<p>
+						The <a href="./security-model.html">Protocol Security Model</a> is
+						normative for <code>ORACLE-A1</code>, <code>AUCTION-A1</code>, their
+						excluded guarantees, and the resulting loss allocation. The summary
+						below provides the broader economic context.
+					</p>
 					<div class="equation" id="eq-placeholder-security-assumption">
 						<math
 							display="block"
@@ -7443,14 +7462,15 @@
 					<h3>Market and Liquidity Assumptions</h3>
 					<ul>
 						<li>
-							The child-universe truth auction can attract enough demand for
-							child-universe REP to repair missing ETH collateral when repair is
-							needed.
+							<code>AUCTION-A1</code> does not assume a minimum number of REP buyers
+							or enough demand to repair missing ETH collateral. Actual demand sets
+							the repair amount; insufficient demand invokes the punitive
+							underfunded allocation and may leave the child impaired.
 						</li>
 						<li>
-							REP and ETH can be exchanged with sufficient liquidity and price
-							discovery that collateral repair and solvency operations do not
-							fail purely because markets are too thin.
+							<code>ORACLE-A1</code> assumes at least one independent arbitrager can
+							obtain and deploy the capital needed for every profitable REP/ETH
+							correction before settlement.
 						</li>
 					</ul>
 					<h3>Coordination Assumption</h3>
@@ -7466,10 +7486,13 @@
 							If truth-auction demand is weak, the child activates with less
 							collateral than the original fork snapshot; share redemption and new
 							minting therefore use or validate against that reduced collateral base.
+							Non-migrating security positions surrender the auctioned REP and allowance
+							value, while open-interest holders bear any remaining impairment.
 						</li>
 						<li>
-							If REP/ETH liquidity is thin or price discovery is poor,
-							solvency-sensitive operations become less trustworthy.
+							If no profitable arbitrager can monitor, fund, and include a correction,
+							a false REP/ETH price can be accepted. Report liquidity does not cap the
+							resulting downstream or cumulative operation loss.
 						</li>
 						<li>
 							If users and capital split across multiple child universes, no
@@ -8721,7 +8744,7 @@
 						}
 					}
 					ethRaised = winningEth;
-					context.write("clearingMode", "underfunded reserve clearing");
+					context.write("clearingMode", "underfunded qualification clearing");
 					context.write("bindingCondition", "underfunded");
 					context.write("thresholdInputEth", formatEth(winningEth));
 					context.write(
@@ -8881,11 +8904,11 @@
 						: "inputs are consistent";
 					if (winningPrefixConsistent) {
 						exampleOutputs.tickStatus.value =
-							"tick meets the cap-implied reserve";
+							"tick meets the cap-implied qualification threshold";
 						exampleOutputs.underfundedThreshold.value = formatPrice(underfundedThreshold);
 					} else {
 						exampleOutputs.tickStatus.value =
-							"tick is below the cap-implied reserve";
+							"tick is below the cap-implied qualification threshold";
 						exampleOutputs.underfundedThreshold.value = formatPrice(underfundedThreshold);
 					}
 					exampleOutputs.underfundedRepShare.value =

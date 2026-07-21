@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Zoltar Protocol Security Model</title>
+		<link rel="stylesheet" href="./shared-docs.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main>
+			<header>
+				<h1>Zoltar Protocol Security Model</h1>
+				<p>
+					Zoltar and Placeholder combine contract-enforced rules with an explicit
+					economic assumption and an intentional loss-allocation policy. The
+					failure modes and allocation boundaries below are parts of the protocol
+					design, not omitted contract guarantees.
+				</p>
+				<div class="callout" id="normative-scope">
+					<p>
+						<strong>Normative scope.</strong> <code>ORACLE-A1</code> and
+						<code>AUCTION-A1</code> define a launch assumption and a conformance
+						policy, respectively. A deployment that cannot substantiate
+						<code>ORACLE-A1</code> is outside the claimed security model. Code that
+						deviates from the contract behavior stated under either identifier is a
+						protocol defect. A conforming implementation still carries the
+						documented residual risk if the oracle assumption fails or auction
+						demand is weak.
+					</p>
+				</div>
+				<p>
+					Contract-level invariants remain cataloged in
+					<a href="./invariants.html">Protocol Invariants</a>. The
+					<a href="./open-oracle-integration.html">OpenOracle integration</a>
+					and <a href="./auction-design.html">truth-auction design</a> provide
+					the full mechanics behind both boundaries.
+				</p>
+				<figure
+					class="diagram diagram-wide"
+					id="fig-security-claim-boundary"
+					role="region"
+					aria-labelledby="security-claim-boundary-title"
+					tabindex="0"
+				>
+					<svg
+						viewBox="0 0 980 320"
+						role="img"
+						aria-labelledby="security-claim-boundary-title security-claim-boundary-desc"
+					>
+						<title id="security-claim-boundary-title">
+							Contract guarantees and accepted economic boundaries
+						</title>
+						<desc id="security-claim-boundary-desc">
+							Contract rules deterministically size and settle oracle reports and
+							truth auctions. Oracle correctness additionally depends on profitable
+							arbitrage and inclusion. Auction repair depends on buyer demand, with
+							weak demand allocating losses to the affected child pool and
+							non-migrating security positions.
+						</desc>
+						<defs>
+							<marker
+								id="security-boundary-arrow"
+								viewBox="0 0 10 10"
+								refX="8"
+								refY="5"
+								markerWidth="7"
+								markerHeight="7"
+								orient="auto-start-reverse"
+							>
+								<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+							</marker>
+						</defs>
+						<rect class="svg-blue" x="25" y="95" width="235" height="120" rx="10"></rect>
+						<text class="svg-label" x="143" y="130" text-anchor="middle">Contract rules</text>
+						<text class="svg-small" x="143" y="160" text-anchor="middle">deterministic sizing, clearing,</text>
+						<text class="svg-small" x="143" y="183" text-anchor="middle">accounting, and settlement</text>
+						<path class="svg-line" marker-end="url(#security-boundary-arrow)" d="M 260 155 H 300 V 90 H 340"></path>
+						<path class="svg-line" marker-end="url(#security-boundary-arrow)" d="M 300 155 V 230 H 340"></path>
+						<rect class="svg-gold" x="340" y="38" width="265" height="105" rx="10"></rect>
+						<text class="svg-label" x="473" y="72" text-anchor="middle">ORACLE-A1</text>
+						<text class="svg-small" x="473" y="101" text-anchor="middle">profitable correction plus</text>
+						<text class="svg-small" x="473" y="123" text-anchor="middle">timely transaction inclusion</text>
+						<rect class="svg-gold" x="340" y="178" width="265" height="105" rx="10"></rect>
+						<text class="svg-label" x="473" y="212" text-anchor="middle">AUCTION-A1</text>
+						<text class="svg-small" x="473" y="241" text-anchor="middle">actual buyer demand determines</text>
+						<text class="svg-small" x="473" y="263" text-anchor="middle">repair, punishment, and recovery</text>
+						<path class="svg-line" marker-end="url(#security-boundary-arrow)" d="M 605 90 H 685"></path>
+						<path class="svg-line" marker-end="url(#security-boundary-arrow)" d="M 605 230 H 685"></path>
+						<rect class="svg-red" x="685" y="72" width="270" height="175" rx="10"></rect>
+						<text class="svg-label" x="820" y="108" text-anchor="middle">Residual-risk state</text>
+						<text class="svg-small" x="820" y="140" text-anchor="middle">oracle loss is not bounded by report liquidity</text>
+						<text class="svg-small" x="820" y="168" text-anchor="middle">auction repair may remain incomplete</text>
+						<text class="svg-small" x="820" y="196" text-anchor="middle">affected users and security positions</text>
+						<text class="svg-small" x="820" y="219" text-anchor="middle">bear the documented residual loss</text>
+					</svg>
+					<p class="diagram-caption">
+						<span class="figure-label">Security Claim Boundary</span>Contract
+						conformance is necessary but does not make external participation or
+						liquidity endogenous. Each boundary names the excluded guarantee and
+						the party exposed when outside conditions do not provide protection.
+					</p>
+				</figure>
+			</header>
+
+			<section id="claims">
+				<h2>Guarantees and Excluded Guarantees</h2>
+				<div class="table-scroll" role="region" aria-label="Protocol security claim boundaries" tabindex="0">
+					<table>
+						<thead>
+							<tr>
+								<th>Mechanism</th>
+								<th>Contract-enforced behavior</th>
+								<th>External condition or policy</th>
+								<th>Deliberately excluded guarantee</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td><code>ORACLE-A1</code></td>
+								<td>Reports are sized from configured gas, fee, and target-error parameters to target profitable correction; accepted prices expire after the cache window.</td>
+								<td>An independent funded arbitrager monitors, acts, and obtains inclusion before settlement.</td>
+								<td>Report liquidity does not collateralize or cap downstream or cumulative operation value.</td>
+							</tr>
+							<tr>
+								<td><code>AUCTION-A1</code></td>
+								<td>Qualifying underfunded bids receive the full REP sale cap for retained ETH, and the child activates with collateral actually migrated and raised.</td>
+								<td>No minimum demand is assumed; actual buyer demand determines how much ETH repair is available.</td>
+								<td>The auction does not guarantee a minimum execution price, full repair, or that open-interest holders are made whole.</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</section>
+
+			<section id="oracle-a1">
+				<h2>ORACLE-A1 — Always-Available Profitable Arbitrager</h2>
+				<div class="callout">
+					<p>
+						<strong>Required deployment assumption.</strong> At least one
+						independent, rational, adequately capitalized OpenOracle participant
+						continuously monitors pending REP/ETH reports, corrects every report
+						for which correction is profitable under the configured economics, and
+						can obtain transaction inclusion before settlement.
+					</p>
+				</div>
+				<p>
+					Report liquidity is a correction incentive, not collateral for the
+					assets whose solvency checks consume the resulting price. The
+					coordinator intentionally imposes no downstream-notional or cumulative
+					cache-usage cap. One accepted price may support multiple otherwise-valid
+					withdrawals, liquidations, allowance updates, or escalation deposits
+					while it is fresh.
+				</p>
+				<p>
+					If monitoring, capital, or timely inclusion fails, the protocol places no
+					onchain upper bound on loss based on the report position. For example, a
+					report funded with a few WETH can still be consumed by operations whose
+					combined external value is hundreds of ETH. That mismatch is expected:
+					the claimed defense is profitable correction before settlement, not
+					reimbursement after a false price is accepted.
+				</p>
+				<p>
+					Implementation and test evidence:
+					<a href="../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"><code>OpenOraclePriceCoordinator.sol</code></a>,
+					<a href="../solidity/ts/tests/priceOracleSecurity.test.ts"><code>priceOracleSecurity.test.ts</code></a>
+					(dynamic minimum sizing and repeated cached-price use), and
+					<a href="./open-oracle-integration.html#active-arbitrager-assumption">the full integration threat model</a>.
+				</p>
+			</section>
+
+			<section id="auction-a1">
+				<h2>AUCTION-A1 — Punitive Underfunded Clearing</h2>
+				<div class="callout">
+					<p>
+						<strong>Intentional loss-allocation rule.</strong> A truth auction is
+						both a collateral-repair mechanism and a penalty for security capital
+						that does not migrate into the child. The cap-implied
+						<code>underfundedThreshold</code> is a bid-qualification threshold. It
+						is not an execution-price floor.
+					</p>
+				</div>
+				<p>
+					When ordinary clearing reaches neither auction cap, bids at or above the
+					qualifying tick are retained. If any ETH qualifies, those bidders
+					collectively receive <code>maxRepBeingSold</code> for their actual
+					retained ETH and share the complete unmigrated security-bond allowance.
+					The common effective price is therefore
+					<code>underfundedWinningEth / maxRepBeingSold</code>, which can be below
+					the qualification threshold. Bids below the threshold refund. If no bid
+					qualifies, all bids refund and no REP is sold.
+				</p>
+				<div class="equation" id="eq-auction-qualification-threshold">
+					<math
+						display="block"
+						aria-label="underfunded qualification threshold equals the ceiling of the ETH repair target times price precision divided by the REP sale cap"
+						data-source="underfundedThreshold = ceil(ethRaiseCap * PRICE_PRECISION / maxRepBeingSold)"
+					>
+						<mrow>
+							<mi>underfundedThreshold</mi>
+							<mo>=</mo>
+							<mi>ceil</mi>
+							<mo>(</mo>
+							<mfrac>
+								<mrow>
+									<mi>ethRaiseCap</mi>
+									<mo>&#x22C5;</mo>
+									<mi>PRICE_PRECISION</mi>
+								</mrow>
+								<mi>maxRepBeingSold</mi>
+							</mfrac>
+							<mo>)</mo>
+						</mrow>
+					</math>
+					<p class="equation-caption">
+						<span class="equation-label">Qualification, Not Execution</span>The
+						caps determine the lowest qualifying bid tick. Retained ETH determines
+						the lower effective execution price whenever demand is underfunded.
+					</p>
+				</div>
+				<p>
+					The child activates with the ETH actually routed during migration plus
+					the ETH actually retained by the auction. It may remain
+					undercollateralized, and open-interest holders are not guaranteed to be
+					made whole. That shortfall is the intended consequence of insufficient
+					demand: non-migrating security positions lose the auctioned economic
+					value, while users of the affected child bear any remaining collateral
+					impairment.
+				</p>
+				<p>
+					For example, if the repair target is <code>20 ETH</code> and the REP
+					sale cap is <code>10 REP</code>, the human-unit qualification threshold
+					is <code>2 ETH/REP</code>. The contract rounds that value up to the first
+					supported tick, approximately <code>2.0000363 ETH/REP</code>. A lone
+					<code>2 ETH</code> bid at that ceiling tick can qualify without reaching
+					either cap. The bidder then receives all
+					<code>10 REP</code> for an effective <code>0.2 ETH/REP</code>, and the
+					child remains <code>18 ETH</code> short of the target. This result is
+					conforming behavior, not a promise that the threshold will be the sale
+					price.
+				</p>
+				<p>
+					Implementation and test evidence:
+					<a href="../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"><code>UniformPriceDualCapBatchAuction.sol</code></a>,
+					<a href="../solidity/contracts/peripherals/SecurityPoolForker.sol"><code>SecurityPoolForker.sol</code></a>,
+					<a href="../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationDelegate.sol"><code>SecurityPoolForkerVaultMigrationDelegate.sol</code></a>,
+					<a href="../solidity/ts/tests/peripherals/truthAuction.test.ts"><code>truthAuction.test.ts</code></a>
+					(the minimum-bid underfunded-winner test), and
+					<a href="./auction-design.html#settlement">the full settlement design</a>.
+				</p>
+			</section>
+
+			<section id="review-classification">
+				<h2>Review and Deployment Classification</h2>
+				<p>
+					The accepted assumption and loss-allocation policy do not remove these paths from security review.
+					They change the question from “does Solidity enforce an excluded
+					property?” to “does the implementation conform, and is the external
+					assumption credible for deployment?”
+				</p>
+				<div class="table-scroll" role="region" aria-label="Security review classification guidance" tabindex="0">
+					<table>
+						<thead>
+							<tr>
+								<th>Review result</th>
+								<th>Classification</th>
+								<th>Required response</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>Code deviates from the sizing, qualification, allocation, refund, activation, or accounting behavior defined above.</td>
+								<td>Implementation vulnerability, with severity based on impact.</td>
+								<td>Fix the contracts and add a regression test.</td>
+							</tr>
+							<tr>
+								<td>Code conforms, but the review demonstrates that profitable correction or timely inclusion is not credible under launch parameters.</td>
+								<td>Deployment-blocking economic risk.</td>
+								<td>Change parameters or design, or explicitly accept the quantified risk.</td>
+							</tr>
+							<tr>
+								<td>Code conforms and the concern is only that report liquidity does not bound downstream notional, or that weak demand may leave the child under-repaired.</td>
+								<td>Documented residual risk, normally informational rather than a new vulnerability.</td>
+								<td>Confirm the assumption or policy remains an explicit launch decision.</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<p>
+					Launch monitoring should track OpenOracle report visibility, correction
+					profit after current gas and fees, practical inclusion latency, truth-auction
+					participation, and the collateral deficit remaining after each auction.
+					Monitoring detects oracle-assumption or auction-demand deterioration; it does not add an onchain
+					guarantee or an emergency control.
+				</p>
+			</section>
+		</main>
+	</body>
+</html>

@@ -17,6 +17,7 @@ Inside `ui/ts`, route-specific code belongs under `features/<domain>`, cross-fea
 
 Protocol documentation lives in `docs/`:
 
+- [Security model](https://augurproject.github.io/zoltar/docs/security-model.html) — normative guarantees, accepted economic assumptions, loss-allocation policies, and residual risks
 - [Start here guide](https://augurproject.github.io/zoltar/docs/start-here.html)
 
 Deterministic deployment outputs live in

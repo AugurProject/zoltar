@@ -37,14 +37,14 @@
 					</p>
 					<div class="callout" id="active-arbitrager-assumption">
 						<p>
-							<strong>Economic security assumption.</strong> Placeholder assumes
+							<strong><code>ORACLE-A1</code> — always-available profitable arbitrager.</strong> Placeholder assumes
 							at least one independent, rational, adequately capitalized
 							OpenOracle participant continuously monitors pending REP/ETH
 							reports, acts whenever correction is profitable under the
 							configured economics, and can get that transaction included
 							before the report settles. The report minimum makes a target-size
-							correction profitable after modeled gas and fees. It is not
-							collateral sized to the value of withdrawals, liquidations, or
+							correction profitable after modeled gas and fees. Report liquidity is
+							a correction incentive, not collateral sized to the value of withdrawals, liquidations, or
 							allowance changes that may use the resulting price.
 						</p>
 						<p>
@@ -63,6 +63,11 @@
 							assumption when evidence supports that concern, but a missing
 							notional collateralization rule is not by itself a protocol
 							invariant violation.
+						</p>
+						<p>
+							The normative definition, excluded guarantees, residual loss
+							allocation, and review classification are in the
+							<a href="./security-model.html#oracle-a1">Protocol Security Model</a>.
 						</p>
 					</div>
 					<p>
@@ -638,7 +643,7 @@
 				<p>
 					Placeholder uses the oracle to preserve solvency accounting around ETH
 					obligations backed by REP. Its economic security depends on the
-					<a href="#active-arbitrager-assumption">active-arbitrager assumption</a>:
+					<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a>:
 					a report wrong by enough to offer the configured correction profit is
 					corrected because at least one participant can and will act before
 					settlement. Separately, operations that can change REP backing or
