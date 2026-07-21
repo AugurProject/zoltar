@@ -149,12 +149,22 @@ jobs:
           name: production-ui
           path: ui/dist
 
+      - name: Restore historical test timings
+        uses: actions/cache/restore@v5
+        with:
+          path: .ci/test-timings.json
+          key: ${{ runner.os }}-test-timings-v1-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-test-timings-v1-
+
       - name: Run balanced test shard
         shell: bash
         env:
           SHARD: ${{ matrix.shard }}
           SHARD_COUNT: ${{ strategy.job-total }}
           ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: "1"
+          ZOLTAR_TEST_TIMING_HISTORY: .ci/test-timings.json
+          ZOLTAR_TEST_TIMING_OUTPUT: test-results/shard-${{ matrix.shard }}.timing.json
         run: |
           started_at="${SECONDS}"
           set +e
@@ -166,6 +176,53 @@ jobs:
           echo "" >> "${GITHUB_STEP_SUMMARY}"
           echo "Elapsed: ${duration}s" >> "${GITHUB_STEP_SUMMARY}"
           exit "${status}"
+
+      - name: Upload test timing observation
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-timing-${{ matrix.shard }}
+          path: test-results/shard-${{ matrix.shard }}.timing.json
+          if-no-files-found: error
+          retention-days: 1
+
+  test-timings:
+    name: Update test timing history
+    needs: [changes, tests]
+    if: needs.changes.outputs.heavy == 'true' && needs.tests.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Restore historical test timings
+        uses: actions/cache/restore@v5
+        with:
+          path: .ci/test-timings.json
+          key: ${{ runner.os }}-test-timings-v1-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-test-timings-v1-
+
+      - name: Download test timing observations
+        uses: actions/download-artifact@v5
+        with:
+          pattern: test-timing-*
+          path: test-results
+          merge-multiple: true
+
+      - name: Merge test timing history
+        run: bun ./scripts/merge-test-timings.mts --observations test-results --history .ci/test-timings.json
+
+      - name: Save test timing history
+        uses: actions/cache/save@v5
+        with:
+          path: .ci/test-timings.json
+          key: ${{ runner.os }}-test-timings-v1-${{ github.sha }}
 
   checks:
     name: Repository checks
@@ -220,7 +277,7 @@ jobs:
   required:
     name: Required
     if: ${{ always() }}
-    needs: [changes, prepare, tests, checks, knip, audit]
+    needs: [changes, prepare, tests, test-timings, checks, knip, audit]
     runs-on: ubuntu-latest
     steps:
       - name: Verify required jobs
@@ -229,6 +286,7 @@ jobs:
           CHANGES_RESULT: ${{ needs.changes.result }}
           PREPARE_RESULT: ${{ needs.prepare.result }}
           TESTS_RESULT: ${{ needs.tests.result }}
+          TEST_TIMINGS_RESULT: ${{ needs.test-timings.result }}
           CHECKS_RESULT: ${{ needs.checks.result }}
           KNIP_RESULT: ${{ needs.knip.result }}
           AUDIT_RESULT: ${{ needs.audit.result }}
@@ -238,8 +296,8 @@ jobs:
             exit 1
           fi
 
-          if [[ "${HEAVY}" == "true" && ( "${TESTS_RESULT}" != "success" || "${KNIP_RESULT}" != "success" || "${AUDIT_RESULT}" != "success" ) ]]; then
-            echo "Required full-suite job failed: tests=${TESTS_RESULT}, knip=${KNIP_RESULT}, audit=${AUDIT_RESULT}."
+          if [[ "${HEAVY}" == "true" && ( "${TESTS_RESULT}" != "success" || "${TEST_TIMINGS_RESULT}" != "success" || "${KNIP_RESULT}" != "success" || "${AUDIT_RESULT}" != "success" ) ]]; then
+            echo "Required full-suite job failed: tests=${TESTS_RESULT}, test-timings=${TEST_TIMINGS_RESULT}, knip=${KNIP_RESULT}, audit=${AUDIT_RESULT}."
             exit 1
           fi
 
