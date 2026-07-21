@@ -83,6 +83,7 @@ describe('flat nested surfaces', () => {
 
 		expect(cssSource).toContain('.vault-action-launcher-grid {\n\tgrid-template-columns: minmax(0, 1fr)')
 		expect(cssSource).toContain('.vault-action-launcher-grid .action-launcher-card {')
+		expect(cssSource).toContain('.security-pool-strip-stats button.currency-value.copyable')
 		expect(cssSource).toContain('.trading-holdings-layout {\n\tgrid-template-columns: minmax(0, 1fr)')
 		expect(totalRule).toContain('grid-template-columns: minmax(0, 1fr) auto')
 		expect(totalRule).toContain('.trading-share-distribution .ranked-bar-item-value button.currency-value.copyable')

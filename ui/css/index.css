@@ -5851,6 +5851,11 @@ main.global-transaction-tray-open {
 	border-top: 1px solid var(--color-white-08);
 }
 
+.security-pool-strip-stats button.currency-value.copyable,
+.security-pool-card-progress button.currency-value.copyable {
+	white-space: nowrap;
+}
+
 .security-pool-strip-price,
 .security-pool-hero-oracle,
 .trading-holdings-hero {
