@@ -86,6 +86,7 @@ describe('contract deployment internals', () => {
 				preparedFunctions.push(preview.functionName)
 				expect(preview.data).toBeDefined()
 				expect(preview.to).toBeDefined()
+				expect(preview.toLabel).toBe('Proxy deployer')
 			},
 			sendTransaction: async request => {
 				if (capturedProxyDeployData === undefined) {
@@ -304,6 +305,7 @@ describe('contract deployment internals', () => {
 		expect(seen[0]).toBe(getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1'))
 		expect(seen[1]).toBe('0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222')
 		expect(preparedPreviews.map(preview => preview.functionName)).toEqual(['Fund deterministic proxy deployer signer', 'Broadcast deterministic proxy deployer transaction'])
+		expect(preparedPreviews[0]?.toLabel).toBe('Proxy deployer signer')
 		const rawBroadcastPreview = preparedPreviews[1]
 		if (rawBroadcastPreview === undefined) throw new Error('Expected raw broadcast preview')
 		expect(rawBroadcastPreview.account).toBe(getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1'))

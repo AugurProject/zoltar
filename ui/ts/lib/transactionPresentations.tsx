@@ -1,7 +1,7 @@
 import * as commonCopy from '../copy/common.js'
 import * as transactionCopy from '../copy/transaction.js'
 import type { ComponentChildren } from 'preact'
-import type { Account, Hash } from '@zoltar/shared/ethereum'
+import type { Hash } from '@zoltar/shared/ethereum'
 import { formatCurrencyBalance } from './formatters.js'
 import type { TransactionRequestPreview } from './chainBackend.js'
 import type { GlobalTransactionPresentation, GlobalTransactionRow, TransactionIntent } from '../types/components.js'
@@ -45,11 +45,6 @@ export function withWarning(base: GlobalTransactionPresentation, detail: string)
 	}
 }
 
-function getPreviewAccountAddress(account: Account | string | undefined) {
-	if (account === undefined) return undefined
-	return typeof account === 'string' ? account : account.address
-}
-
 function formatPreviewArgument(value: unknown, seenObjects: Set<object> = new Set()): string {
 	if (typeof value === 'bigint') return value.toString()
 	if (value === undefined) return transactionCopy.undefinedValue
@@ -68,23 +63,17 @@ function formatPreviewArgument(value: unknown, seenObjects: Set<object> = new Se
 	return String(value)
 }
 
-function formatPreviewData(data: string) {
-	const byteLength = Math.max(0, (data.length - 2) / 2)
-	if (data.length <= 74) return data
-	return transactionCopy.formatValueTruncatedValueBytes(data.slice(0, 66), byteLength.toString())
+function formatRecipient(label: string | undefined, address: string) {
+	return label === undefined ? address : `${label} (${address})`
 }
 
 function getPreparedTransactionRows(intent: TransactionIntent, preview: TransactionRequestPreview): GlobalTransactionRow[] {
-	const senderAddress = getPreviewAccountAddress(preview.account)
 	return [
 		...(intent.rows ?? []),
-		...(senderAddress === undefined ? [] : [{ label: transactionCopy.sender, value: senderAddress }]),
-		...(preview.chainName === undefined ? [] : [{ label: transactionCopy.chain, value: preview.chainName }]),
-		...(preview.contractAddress === undefined ? [] : [{ label: transactionCopy.contract, value: preview.contractAddress }]),
-		...(preview.to === undefined ? [] : [{ label: transactionCopy.to, value: preview.to }]),
+		...(preview.contractAddress === undefined ? [] : [{ label: transactionCopy.contract, value: formatRecipient(preview.contractLabel, preview.contractAddress) }]),
+		...(preview.to === undefined ? [] : [{ label: transactionCopy.to, value: formatRecipient(preview.toLabel, preview.to) }]),
 		{ label: transactionCopy.functionLabel, value: preview.functionName },
 		...(preview.value === undefined || preview.value === 0n ? [] : [{ label: transactionCopy.ethValue, value: `${formatCurrencyBalance(preview.value)} ${commonCopy.eth}` }]),
-		...(preview.data === undefined ? [] : [{ label: preview.dataLabel ?? transactionCopy.calldata, value: formatPreviewData(preview.data) }]),
 		...(preview.args === undefined || preview.args.length === 0 ? [] : [{ label: transactionCopy.argumentListLabel, value: preview.args.map(argument => formatPreviewArgument(argument)).join(', ') }]),
 	]
 }

@@ -102,7 +102,7 @@ void describe('deployment helpers', () => {
 				prerequisiteLabel: 'Scalar Outcomes',
 				step: blockedStep,
 			}),
-		).toEqual({ disabled: true, reason: 'Waiting for Scalar Outcomes.' })
+		).toEqual({ disabled: true, reason: 'Requires Scalar Outcomes' })
 
 		const readyStep = createStep('scalarOutcomes', false)
 		expect(

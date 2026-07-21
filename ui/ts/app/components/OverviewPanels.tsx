@@ -1,7 +1,6 @@
 import * as appCopy from '../../copy/app.js'
 import * as commonCopy from '../../copy/common.js'
 import { useState } from 'preact/hooks'
-import { useCopyToClipboard } from '../../hooks/useCopyToClipboard.js'
 import { RouteHeader } from '../../components/RouteHeader.js'
 import { AddressValue } from '../../components/AddressValue.js'
 import { Badge } from '../../components/Badge.js'
@@ -12,14 +11,19 @@ import { LoadingText } from '../../components/LoadingText.js'
 import { StateHint } from '../../components/StateHint.js'
 import { TimestampValue } from '../../components/TimestampValue.js'
 import { UniverseLink } from '../../features/universes/components/UniverseLink.js'
-import { isMainnetChain } from '../../lib/network.js'
+import { getChainDisplayLabel, getChainIdDecimalLabel, getKnownChainName, isMainnetChain } from '../../lib/network.js'
 import { renderRepPriceSourceLabel } from '../../features/open-oracle/lib/repPriceSource.js'
 import type { OverviewPanelsProps } from '../../features/types.js'
 
 function getWalletNetworkLabel(chainId: string | undefined) {
 	if (chainId === undefined) return appCopy.unknownNetwork
 	if (chainId === '0xaa36a7') return appCopy.sepoliaNetwork
-	return appCopy.formatChainNetwork(chainId)
+	const chainLabel = getChainDisplayLabel(chainId)
+	if (chainLabel === undefined) return appCopy.unknownNetwork
+	const chainName = getKnownChainName(chainId)
+	if (chainName === undefined) return chainLabel
+	const decimalChainId = getChainIdDecimalLabel(chainId)
+	return decimalChainId === undefined ? chainName : appCopy.formatNetworkWithChainId(chainName, decimalChainId)
 }
 
 export function OverviewPanels({
@@ -53,7 +57,6 @@ export function OverviewPanels({
 	walletBootstrapComplete,
 }: OverviewPanelsProps) {
 	const [showEnvironmentDetails, setShowEnvironmentDetails] = useState(false)
-	const { copied: addressCopied, copyText } = useCopyToClipboard()
 	const effectiveReadBackendStatus = readBackendStatus ?? {
 		blockNumber: undefined,
 		blockTimestamp: undefined,
@@ -70,7 +73,7 @@ export function OverviewPanels({
 	const showAccountBalances = walletBootstrapComplete && accountState.address !== undefined && !hasWrongWalletNetwork
 	const environmentBadge = (() => {
 		if (isBrowserSimulationReadBackend) return <Badge tone='warning'>{appCopy.simulation}</Badge>
-		if (hasWrongWalletNetwork) return <Badge tone='danger'>{appCopy.wrongNetworkBadgeLabel}</Badge>
+		if (hasWrongWalletNetwork) return <Badge tone='danger'>{appCopy.formatWrongNetworkBadgeLabel(getChainDisplayLabel(accountState.chainId) ?? appCopy.unknownNetwork)}</Badge>
 		if (accountState.address === undefined) return <Badge tone='pending'>{appCopy.readOnly}</Badge>
 		return <Badge tone='ok'>{appCopy.connected}</Badge>
 	})()
@@ -97,9 +100,6 @@ export function OverviewPanels({
 					</p>
 					<button className='secondary' type='button' onClick={onChangeWallet} disabled={isManagingWallet}>
 						{appCopy.changeWallet}
-					</button>
-					<button className='secondary' type='button' onClick={() => void copyText(accountState.address ?? '')} disabled={isManagingWallet}>
-						{addressCopied ? appCopy.addressCopied : appCopy.copyAddress}
 					</button>
 					{hasWrongWalletNetwork ? (
 						<button className='primary' type='button' onClick={onSwitchNetwork} disabled={isManagingWallet}>
