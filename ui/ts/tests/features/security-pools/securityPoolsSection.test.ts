@@ -9,7 +9,7 @@ import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/shared/
 import { SecurityPoolsSection, shouldRefreshSelectedPoolDataOnViewOpen } from '../../../features/security-pools/components/SecurityPoolsSection.js'
 import { deriveHasForkActivity } from '../../../features/truth-auctions/lib/forkAuction.js'
 import type { AccountState } from '../../../types/app.js'
-import type { ListedSecurityPool, MarketDetails, OracleManagerDetails, SecurityPoolBrowsePage, SecurityPoolPage } from '../../../types/contracts.js'
+import type { ListedSecurityPool, MarketDetails, SecurityPoolBrowsePage, SecurityPoolPage } from '../../../types/contracts.js'
 import type { ForkAuctionRouteContentProps, ReportingRouteContentProps, SecurityPoolRouteContentProps, SecurityPoolsOverviewRouteContentProps, SecurityPoolsSectionProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '../../../features/types.js'
 import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
@@ -217,30 +217,6 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 	}
 }
 
-function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {}): OracleManagerDetails {
-	const details = {
-		callbackStateHash: undefined,
-		exactToken1Report: undefined,
-		isPriceValid: true,
-		lastPrice: 1n,
-		lastSettlementTimestamp: 1n,
-		managerAddress: zeroAddress,
-		openOracleAddress: zeroAddress,
-		pendingOperation: undefined,
-		pendingOperationSlotId: 0n,
-		pendingSettlementOperationIds: [],
-		pendingSettlementQueueCapacity: 4n,
-		pendingReportId: 0n,
-		priceValidUntilTimestamp: 1000n,
-		queuedOperationEthCost: 1n,
-		requestPriceEthCost: 1n,
-		token1: zeroAddress,
-		token2: zeroAddress,
-		...overrides,
-	}
-	return details
-}
-
 function createWorkflowProps(overrides: Partial<SecurityPoolWorkflowRouteContentProps> = {}): SecurityPoolWorkflowRouteContentProps {
 	return {
 		accountState: createAccountState(),
@@ -324,35 +300,11 @@ function createOverviewProps(overrides: SecurityPoolsOverviewRouteTestOverrides 
 				}
 	return {
 		accountState,
-		checkedSecurityPoolAddress: undefined,
-		closeLiquidationModal: () => undefined,
-		hasLoadedSecurityPools: false,
 		hasLoadedSecurityPoolPage: securityPoolPage !== undefined,
-		liquidationAmount: '',
-		liquidationMaxAmount: undefined,
-		liquidationManagerAddress: undefined,
-		liquidationModalOpen: false,
-		liquidationSecurityPoolAddress: undefined,
-		liquidationTargetVault: '',
-		liquidationTimeoutMinutes: '5',
-		loadingPoolOracleManager: false,
 		loadingSecurityPoolPage: false,
-		loadingSecurityPools: false,
-		onLiquidationAmountChange: () => undefined,
-		onLiquidationTimeoutMinutesChange: () => undefined,
-		onLoadPoolOracleManager: () => undefined,
 		onLoadSecurityPoolPage: () => undefined,
-		onLoadSecurityPools: () => undefined,
-		onOpenLiquidationModal: () => undefined,
-		onQueueLiquidation: () => undefined,
-		poolOracleManagerDetails: undefined,
 		repPerEthPrice: undefined,
-		repPerEthSource: undefined,
-		repPerEthSourceUrl: undefined,
-		securityPoolOverviewActiveAction: undefined,
 		securityPoolOverviewError: undefined,
-		securityPoolLiquidationError: undefined,
-		securityPoolOverviewResult: undefined,
 		...overrides,
 		environmentRefreshKey,
 		securityPoolBrowseCount: securityPoolPage?.poolCount,
@@ -690,109 +642,6 @@ void describe('SecurityPoolsSection', () => {
 		expect(lookupPosition < summaryPosition).toBe(true)
 	})
 
-	void test('keeps immediate liquidation results out of browse mode', async () => {
-		const renderedComponent = await renderIntoDocument(
-			h(
-				SecurityPoolsSection,
-				createSecurityPoolsSectionProps({
-					overview: createOverviewProps({
-						liquidationManagerAddress: zeroAddress,
-						liquidationSecurityPoolAddress: zeroAddress,
-						liquidationTargetVault: zeroAddress,
-						poolOracleManagerDetails: createOracleManagerDetails({
-							isPriceValid: true,
-							managerAddress: zeroAddress,
-						}),
-						securityPoolOverviewResult: {
-							action: 'queueLiquidation',
-							hash: '0x00000000000000000000000000000000000000000000000000000000000000aa',
-							securityPoolAddress: zeroAddress,
-						},
-						securityPools: [createSelectedPool()],
-					}),
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		expect(documentQueries.queryByRole('dialog', { name: 'Execute Vault Liquidation' })).toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Liquidation Executed' })).toBeNull()
-	})
-
-	void test('keeps queued liquidation results out of browse mode', async () => {
-		const renderedComponent = await renderIntoDocument(
-			h(
-				SecurityPoolsSection,
-				createSecurityPoolsSectionProps({
-					overview: createOverviewProps({
-						liquidationManagerAddress: zeroAddress,
-						liquidationSecurityPoolAddress: zeroAddress,
-						liquidationTargetVault: zeroAddress,
-						poolOracleManagerDetails: createOracleManagerDetails({
-							isPriceValid: false,
-							managerAddress: zeroAddress,
-							pendingOperation: {
-								amount: 1n,
-								initiatorVault: zeroAddress,
-								operation: 'liquidation',
-								operationId: 4n,
-								targetVault: zeroAddress,
-							},
-							pendingOperationSlotId: 4n,
-						}),
-						securityPoolOverviewResult: {
-							action: 'queueLiquidation',
-							hash: '0x00000000000000000000000000000000000000000000000000000000000000ab',
-							securityPoolAddress: zeroAddress,
-						},
-						securityPools: [createSelectedPool()],
-					}),
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		expect(within(document.body).queryByText('Liquidation Queued')).toBeNull()
-	})
-
-	void test('keeps failed liquidation results out of browse mode', async () => {
-		const renderedComponent = await renderIntoDocument(
-			h(
-				SecurityPoolsSection,
-				createSecurityPoolsSectionProps({
-					overview: createOverviewProps({
-						liquidationManagerAddress: zeroAddress,
-						liquidationSecurityPoolAddress: zeroAddress,
-						liquidationTargetVault: zeroAddress,
-						poolOracleManagerDetails: createOracleManagerDetails({
-							isPriceValid: true,
-							managerAddress: zeroAddress,
-						}),
-						securityPoolOverviewResult: {
-							action: 'queueLiquidation',
-							hash: '0x00000000000000000000000000000000000000000000000000000000000000ac',
-							securityPoolAddress: zeroAddress,
-							stagedExecution: {
-								errorMessage: 'Local Security Bond Allowance broken',
-								operation: 'liquidation',
-								operationId: 9n,
-								success: false,
-							},
-						},
-						securityPools: [createSelectedPool()],
-					}),
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		expect(documentQueries.queryByRole('dialog', { name: 'Execute Vault Liquidation' })).toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Liquidation Failed' })).toBeNull()
-		expect(documentQueries.queryByText('Local Security Bond Allowance broken')).toBeNull()
-	})
-
 	void test('keeps the route summary hidden in operate mode until the selected pool resolves', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -816,7 +665,6 @@ void describe('SecurityPoolsSection', () => {
 				SecurityPoolsSection,
 				createSecurityPoolsSectionProps({
 					overview: createOverviewProps({
-						hasLoadedSecurityPools: true,
 						securityPools: [createSelectedPool()],
 					}),
 				}),
@@ -849,7 +697,6 @@ void describe('SecurityPoolsSection', () => {
 				SecurityPoolsSection,
 				createSecurityPoolsSectionProps({
 					overview: createOverviewProps({
-						hasLoadedSecurityPools: true,
 						securityPools: [operationalPool, endedPool],
 					}),
 				}),
