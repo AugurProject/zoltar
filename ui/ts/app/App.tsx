@@ -1,5 +1,6 @@
 import * as appCopy from '../copy/app.js'
 import * as commonCopy from '../copy/common.js'
+import * as marketCopy from '../copy/market.js'
 import * as zoltarCopy from '../copy/zoltar.js'
 import { useSignal } from '@preact/signals'
 import type { ComponentChildren } from 'preact'
@@ -222,7 +223,6 @@ export function App() {
 	const {
 		checkedSecurityPoolAddress,
 		closeLiquidationModal,
-		hasLoadedSecurityPools,
 		hasLoadedSecurityPoolPage,
 		liquidationAmount,
 		liquidationMaxAmount,
@@ -527,44 +527,16 @@ export function App() {
 		onActiveViewChange: view => setSecurityPoolsView(view),
 		overview: {
 			accountState,
-			checkedSecurityPoolAddress,
-			closeLiquidationModal: () => closeLiquidationModal(),
 			environmentRefreshKey: activeEnvironmentNonce,
-			hasLoadedSecurityPools,
 			hasLoadedSecurityPoolPage,
-			liquidationAmount,
-			liquidationMaxAmount,
-			liquidationManagerAddress,
-			liquidationFundingPreview,
-			liquidationFundingPreviewError,
-			liquidationModalOpen,
-			liquidationSecurityPoolAddress,
-			liquidationTargetVault,
-			liquidationTimeoutMinutes,
-			loadingPoolOracleManager,
-			loadingLiquidationFundingPreview,
 			loadingSecurityPoolPage,
-			loadingSecurityPools,
 			onLoadSecurityPoolPage: (pageIndex: number, pageSize: number, requestKey: string) => void loadBrowseSecurityPoolPage(pageIndex, pageSize, requestKey),
-			onLiquidationAmountChange: setLiquidationAmount,
-			onLiquidationTimeoutMinutesChange: setLiquidationTimeoutMinutes,
-			onLoadPoolOracleManager: (managerAddress: Address) => void loadPoolOracleManager(managerAddress),
-			onLoadLiquidationFundingPreview: (managerAddress: Address) => void loadLiquidationFundingPreview(managerAddress),
-			onLoadSecurityPools: () => void loadSecurityPools(),
 			onCreateSecurityPool: () => setSecurityPoolsView('create'),
-			onOpenLiquidationModal: (managerAddress: Address, selectedSecurityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => openLiquidationModal(managerAddress, selectedSecurityPoolAddress, vaultAddress, maxAmount),
-			onQueueLiquidation: (managerAddress: Address, selectedSecurityPoolAddress: Address) => void queueLiquidation(managerAddress, selectedSecurityPoolAddress),
-			poolOracleManagerDetails,
 			securityPoolBrowseCount,
 			securityPoolPage,
-			securityPoolOverviewActiveAction,
 			securityPoolOverviewError,
-			securityPoolLiquidationError,
-			securityPoolOverviewResult,
 			securityPools,
 			repPerEthPrice,
-			repPerEthSource,
-			repPerEthSourceUrl,
 		},
 		workflow: {
 			accountState,
@@ -749,11 +721,11 @@ export function App() {
 	if (route === 'zoltar') {
 		routeSubNavigation = (
 			<RouteSubNavigation
-				ariaLabel={appCopy.marketViews}
+				ariaLabel={appCopy.zoltarViews}
 				value={activeZoltarView}
 				onChange={view => setZoltarView(view)}
 				options={[
-					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'questions')), label: appCopy.questionsAndMarkets, value: 'questions' },
+					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'questions')), label: marketCopy.questions, value: 'questions' },
 					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'create')), label: commonCopy.createQuestion, value: 'create' },
 					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'fork')), label: zoltarCopy.forkZoltar, value: 'fork' },
 					{

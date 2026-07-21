@@ -67,7 +67,7 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 	}, [questionDetails.numTicks, scalarOutcomeTick, selectedScalarTick])
 	return (
 		<WorkflowSubsection badge={<span className='detail'>{marketCopy.scalarChildDeploymentHint}</span>} title={marketCopy.childUniverses}>
-			<ChildUniversesSection childUniverses={childUniverses} emptyMessage={marketCopy.deployedChildUniversesEmpty} headerTitle={marketCopy.existingChildUniverses} renderBadge={child => <ChildUniverseStatusBadge child={child} />} renderBody={child => <ChildUniverseDetails child={child} />} />
+			<ChildUniversesSection childUniverses={childUniverses} emptyMessage={marketCopy.deployedChildUniversesEmpty} headerTitle={marketCopy.existingChildUniverses} renderBadge={child => <ChildUniverseStatusBadge child={child} />} renderBody={child => <ChildUniverseDetails child={child} />} surface='flat' />
 			<ScalarOutcomePicker
 				action={
 					<ActionLauncherButton
@@ -123,7 +123,7 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 				title={marketCopy.createChildUniverseTitle}
 			>
 				{selectedScalarChild === undefined ? undefined : (
-					<ChildUniversesSection childUniverses={[selectedScalarChild]} emptyMessage={marketCopy.childUniverseSelectionEmpty} headerTitle={marketCopy.selectedChildUniverse} renderBadge={child => <ChildUniverseStatusBadge child={child} />} renderBody={child => <ChildUniverseDetails child={child} />} />
+					<ChildUniversesSection childUniverses={[selectedScalarChild]} emptyMessage={marketCopy.childUniverseSelectionEmpty} headerTitle={marketCopy.selectedChildUniverse} renderBadge={child => <ChildUniverseStatusBadge child={child} />} renderBody={child => <ChildUniverseDetails child={child} />} surface='flat' />
 				)}
 			</ChildUniverseDeploymentModal>
 			<ErrorNotice message={scalarDeployError} />

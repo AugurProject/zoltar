@@ -120,6 +120,7 @@ function renderQueuedLiquidationStatusCard({
 		if (queuedLiquidationOperation === undefined) return null
 		return (
 			<TransactionStatusCard
+				surface='flat'
 				title={liquidationCopy.liquidationQueued}
 				badge={<Badge tone='warning'>{liquidationCopy.queued}</Badge>}
 				metrics={
@@ -144,15 +145,16 @@ function renderQueuedLiquidationStatusCard({
 	if (queuedLiquidationStatus === 'failed')
 		return (
 			<TransactionStatusCard
+				surface='flat'
 				title={commonCopy.liquidationFailed}
 				badge={<Badge tone='blocked'>{commonCopy.failed}</Badge>}
 				detail={getLiquidationExecutionFailureDetail(securityPoolOverviewResult?.stagedExecution?.errorMessage) ?? liquidationCopy.immediateLiquidationRejectedDetail}
 				secondaryDetail={commonCopy.stagedOperationRetryDetail}
 			/>
 		)
-	if (queuedLiquidationStatus === 'executed') return <TransactionStatusCard title={commonCopy.liquidationExecuted} badge={<Badge tone='ok'>{commonCopy.executed}</Badge>} detail={liquidationCopy.immediateLiquidationSuccessDetail} />
-	if (queuedLiquidationStatus === 'missing') return <TransactionStatusCard title={commonCopy.liquidationSubmitted} badge={<Badge tone='warning'>{liquidationCopy.checkState}</Badge>} detail={commonCopy.transactionStateUnavailableDetail} />
-	return <TransactionStatusCard title={liquidationCopy.refreshingLiquidationStateTitle} badge={<Badge tone='muted'>{commonCopy.refreshingWithoutEllipsis}</Badge>} detail={liquidationCopy.refreshingLiquidationState} />
+	if (queuedLiquidationStatus === 'executed') return <TransactionStatusCard surface='flat' title={commonCopy.liquidationExecuted} badge={<Badge tone='ok'>{commonCopy.executed}</Badge>} detail={liquidationCopy.immediateLiquidationSuccessDetail} />
+	if (queuedLiquidationStatus === 'missing') return <TransactionStatusCard surface='flat' title={commonCopy.liquidationSubmitted} badge={<Badge tone='warning'>{liquidationCopy.checkState}</Badge>} detail={commonCopy.transactionStateUnavailableDetail} />
+	return <TransactionStatusCard surface='flat' title={liquidationCopy.refreshingLiquidationStateTitle} badge={<Badge tone='muted'>{commonCopy.refreshingWithoutEllipsis}</Badge>} detail={liquidationCopy.refreshingLiquidationState} />
 }
 export function LiquidationModal({
 	accountAddress,
@@ -407,7 +409,7 @@ export function LiquidationModal({
 					)}
 				</DataGrid>
 				{sameVaultWarning === undefined ? null : (
-					<WarningSurface as='section' variant='compact'>
+					<WarningSurface as='section' surface='flat' variant='compact'>
 						<div className='entity-card-header'>
 							<div>
 								<h4>{liquidationCopy.invalidLiquidationPair}</h4>

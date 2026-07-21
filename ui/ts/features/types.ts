@@ -271,24 +271,18 @@ type LiquidationModalStateProps = {
 
 export type SecurityPoolsOverviewRouteContentProps = {
 	accountState: AccountState
-	checkedSecurityPoolAddress: string | undefined
 	environmentRefreshKey: number
-	hasLoadedSecurityPools: boolean
 	hasLoadedSecurityPoolPage: boolean
 	loadingSecurityPoolPage: boolean
-	loadingSecurityPools: boolean
 	onCreateSecurityPool?: () => void
 	onLoadSecurityPoolPage: (pageIndex: number, pageSize: number, requestKey: string) => void
-	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => void
 	onSelectSecurityPool?: (securityPoolAddress: string, universeId: bigint) => void
-	onLoadSecurityPools: () => void
+	repPerEthPrice: bigint | undefined
 	securityPoolOverviewError: string | undefined
-	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
 	securityPoolBrowseCount: bigint | undefined
 	securityPoolPage: SecurityPoolBrowsePage | undefined
 	securityPools: ListedSecurityPool[]
-} & LiquidationModalStateProps &
-	RepPerEthPriceProps
+}
 
 export type SecurityPoolsOverviewSectionProps = SecurityPoolsOverviewRouteContentProps
 

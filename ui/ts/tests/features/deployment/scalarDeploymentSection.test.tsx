@@ -157,4 +157,30 @@ describe('ScalarDeploymentSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Deployed', 'Child universe already deployed.')
 		expect(within(document.body).queryByRole('button', { name: 'Deployed' })).not.toBeNull()
 	})
+
+	test('renders selected child universe records as flat inside the deployment modal', async () => {
+		const question = createQuestionDetails()
+		const selectedOutcome = getScalarOutcomeIndex(question, 0n)
+		const renderedComponent = await renderIntoDocument(
+			<ScalarDeploymentSection
+				accountAddress={zeroAddress}
+				childUniverses={[createChildUniverse({ outcomeIndex: selectedOutcome })]}
+				hasForked={true}
+				isMainnet={true}
+				onCreateChildUniverseForOutcomeIndex={() => undefined}
+				questionDetails={question}
+				zoltarChildUniverseError={undefined}
+				zoltarChildUniversePendingOutcomeIndex={undefined}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Create child universe' }))
+		})
+
+		const dialog = within(document.body).getByRole('dialog')
+		expect(dialog.querySelector('.entity-card.flat')).not.toBeNull()
+		expect(dialog.querySelector('.entity-card:not(.flat)')).toBeNull()
+	})
 })

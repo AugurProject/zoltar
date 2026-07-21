@@ -435,7 +435,7 @@ export function ReportingSection({
 							}
 						/>
 					) : undefined}
-					{reportingOpenNotice === undefined ? <LifecycleStageBanner stage={reportingStageBanner} /> : <p className='notice success'>{reportingOpenNotice}</p>}
+					{reportingOpenNotice === undefined ? <LifecycleStageBanner flat stage={reportingStageBanner} /> : <p className='notice success'>{reportingOpenNotice}</p>}
 				</div>
 			) : undefined}
 

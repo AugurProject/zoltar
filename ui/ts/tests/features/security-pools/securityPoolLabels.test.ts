@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { describe, expect, test } from 'bun:test'
-import { formatSecurityPoolPageSummary, formatSecurityVaultPreviewDeferred, getSecurityPoolLifecycleLabel, getSecurityPoolStatusBadgeLabel, getVaultLauncherOwnershipReason, getVaultLauncherWalletReason } from '../../../features/security-pools/lib/securityPoolLabels.js'
+import { formatSecurityPoolPageSummary, getSecurityPoolLifecycleLabel, getSecurityPoolStatusBadgeLabel, getVaultLauncherOwnershipReason, getVaultLauncherWalletReason } from '../../../features/security-pools/lib/securityPoolLabels.js'
 
 void describe('security pool lifecycle label', () => {
 	void test('maps each known lifecycle state and undefined', () => {
@@ -43,7 +43,5 @@ void describe('security pool lifecycle label', () => {
 		expect(formatSecurityPoolPageSummary(1, 2)).toBe('1 of 2 pools matches.')
 		expect(formatSecurityPoolPageSummary(2, 2)).toBe('2 of 2 pools match.')
 		expect(formatSecurityPoolPageSummary(1, 1)).toBe('1 of 1 pool matches.')
-		expect(formatSecurityVaultPreviewDeferred(1n)).toBe('1 vault is registered. Open the pool to load individual vault details.')
-		expect(formatSecurityVaultPreviewDeferred(2n)).toBe('2 vaults are registered. Open the pool to load individual vault details.')
 	})
 })

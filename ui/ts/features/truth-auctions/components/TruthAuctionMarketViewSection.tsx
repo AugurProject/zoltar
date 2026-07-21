@@ -27,7 +27,7 @@ function clampPercentage(value: bigint, maxValue: bigint) {
 
 export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummaries, loadingTruthAuctionBook, maxTickEth, onLoadNextTickPage, onSelectTick, renderPriceValue, showDepthClearingTick, truthAuctionBookError, truthAuctionDepthPoints }: TruthAuctionMarketViewSectionProps) {
 	return (
-		<SectionBlock title={forkAuctionCopy.marketView}>
+		<SectionBlock title={forkAuctionCopy.marketView} variant='embedded'>
 			{truthAuctionBookError === undefined ? undefined : <p className='detail truth-auction-book-error'>{truthAuctionBookError}</p>}
 			<div className='truth-auction-market-board'>
 				<div className='truth-auction-market-section truth-auction-depth-panel'>

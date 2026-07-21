@@ -640,7 +640,7 @@ const productionBrowserScenarios = [
 	},
 	{
 		hash: '#/zoltar?simulate=1&simScenario=deployed',
-		expected: 'Questions & Markets',
+		expected: 'Questions',
 		name: 'deployed protocol',
 		viewport: { height: 900, width: 1440 },
 	},
@@ -794,8 +794,8 @@ productionBrowserTest('production bundle executes deployment, reporting, fork mi
 			await driver.clickButton('Open Fork & Migration')
 			await driver.waitForBodyText('Fork & Migration')
 
-			const marketsOpened = await driver.evaluate(`(() => { const target = [...document.querySelectorAll('a, button')].find(candidate => candidate.textContent?.trim() === 'Markets'); if (!(target instanceof HTMLElement)) return false; target.click(); return true })()`)
-			expect(marketsOpened).toBe(true)
+			const zoltarOpened = await driver.evaluate(`(() => { const target = [...document.querySelectorAll('a, button')].find(candidate => candidate.textContent?.trim() === 'Zoltar'); if (!(target instanceof HTMLElement)) return false; target.click(); return true })()`)
+			expect(zoltarOpened).toBe(true)
 			const missingUniverseOpened = await driver.evaluate(
 				`(() => { const [route, search = ''] = window.location.hash.split('?'); const params = new URLSearchParams(search); params.set('universe', '999999'); window.history.pushState({}, '', route + '?' + params.toString()); window.dispatchEvent(new PopStateEvent('popstate')); return true })()`,
 			)

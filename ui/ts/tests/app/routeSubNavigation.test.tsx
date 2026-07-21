@@ -27,12 +27,12 @@ describe('RouteSubNavigation', () => {
 		const routeChanges: string[] = []
 		const renderedComponent = await renderIntoDocument(
 			h(RouteSubNavigation, {
-				ariaLabel: 'Market views',
+				ariaLabel: 'Zoltar views',
 				onChange: value => {
 					routeChanges.push(value)
 				},
 				options: [
-					{ href: '#/zoltar?zoltarView=questions', label: 'Questions & Markets', value: 'questions' },
+					{ href: '#/zoltar?zoltarView=questions', label: 'Questions', value: 'questions' },
 					{ href: '#/zoltar?zoltarView=create', label: 'Create Question', value: 'create' },
 					{ disabled: true, label: 'Migrate REP', reason: 'REP migration is unavailable because this universe has not forked.', value: 'migrate' },
 				],
@@ -42,12 +42,12 @@ describe('RouteSubNavigation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.queryByText('Zoltar > Questions & Markets')).toBeNull()
+		expect(documentQueries.queryByText('Zoltar > Questions')).toBeNull()
 		expect(document.body.querySelector('.route-subnav-shell')).not.toBeNull()
 		expect(document.body.querySelector('.route-subtab-nav')).not.toBeNull()
-		expect(documentQueries.getByRole('navigation', { name: 'Market views' })).not.toBeNull()
+		expect(documentQueries.getByRole('navigation', { name: 'Zoltar views' })).not.toBeNull()
 
-		const questionsTab = documentQueries.getByRole('link', { name: 'Questions & Markets' }) as HTMLAnchorElement
+		const questionsTab = documentQueries.getByRole('link', { name: 'Questions' }) as HTMLAnchorElement
 		expect(questionsTab.tagName).toBe('A')
 		expect(questionsTab.getAttribute('href')).toBe('#/zoltar?zoltarView=questions')
 		expect(questionsTab.getAttribute('aria-current')).toBe('page')

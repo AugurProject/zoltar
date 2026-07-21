@@ -30,7 +30,7 @@ describe('NotFoundSection', () => {
 		expect(documentQueries.getAllByRole('heading')).toHaveLength(1)
 		expect(documentQueries.getByRole('heading', { name: 'Page Not Found' })).not.toBeNull()
 		expect(documentQueries.getByRole('link', { name: 'Deploy' }).getAttribute('href')).toBe('#/deploy')
-		expect(documentQueries.getByRole('link', { name: 'Markets' }).getAttribute('href')).toBe('#/zoltar')
+		expect(documentQueries.getByRole('link', { name: 'Zoltar' }).getAttribute('href')).toBe('#/zoltar')
 		expect(documentQueries.getByRole('link', { name: 'Security Pools' }).getAttribute('href')).toBe('#/security-pools')
 	})
 })

@@ -33,7 +33,7 @@ describe('app page titles', () => {
 	test('maps routes and active views to user-facing page titles', () => {
 		const cases: Array<{ input: AppPageTitleInput; title: ReturnType<typeof getAppPageTitle> }> = [
 			{ input: { ...baseInput, route: 'deploy' }, title: 'Deploy Contracts' },
-			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'questions' }, title: 'Questions & Markets' },
+			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'questions' }, title: 'Questions' },
 			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'create' }, title: 'Create Question' },
 			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'fork' }, title: 'Fork Zoltar' },
 			{ input: { ...baseInput, route: 'zoltar', activeZoltarView: 'migrate' }, title: 'Migrate REP' },

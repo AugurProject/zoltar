@@ -88,6 +88,7 @@ export type TransactionStatusCardProps = {
 	detail?: ComponentChildren
 	metrics?: ComponentChildren
 	secondaryDetail?: ComponentChildren
+	surface?: 'card' | 'flat'
 	title: ComponentChildren
 }
 
