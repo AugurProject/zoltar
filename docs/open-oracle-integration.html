@@ -475,6 +475,24 @@
 					and makes no liveness guarantee against a participant willing and able
 					to keep submitting and funding disputes indefinitely.
 				</p>
+				<div class="callout">
+					<p>
+						<strong>Security-review classification.</strong> Indefinite paid
+						resetting is an accepted design property, not a bounded-liveness
+						bug by itself. With the current 1% protocol fee, a token1-side
+						self-dispute against <code>24 WETH</code> credits
+						<code>0.24 WETH</code> inside OpenOracle to the configured
+						<code>0x000000000000000000000000000000000000dEaD</code> fee sink
+						in addition to requiring the replacement-position change and
+						transaction cost. That economically inaccessible internal balance
+						does not reduce WETH total supply and is distinct from Zoltar's
+						genesis-REP burn sink. A valid finding would instead demonstrate a
+						free or underfunded reset, fee recovery, simultaneous reuse of the
+						required capital, an invalid deadline transition, or unauthorized
+						use of the sponsor queue. See the
+						<a href="./security-model.html#accepted-design-properties">normative review boundary</a>.
+					</p>
+				</div>
 				<p>
 					The money flow is easiest to follow if each role is separated. The
 					triggering caller pays the ETH request bounty, supplies the initial

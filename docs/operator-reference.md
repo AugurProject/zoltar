@@ -22,6 +22,24 @@ accepted oracle assumption, the truth-auction loss-allocation policy,
 deliberately excluded guarantees, and residual risks. In particular, it defines
 `ORACLE-A1` and `AUCTION-A1`.
 
+## Security Review Orientation
+
+Before classifying an economic or liveness concern, consult the security
+model's [accepted design properties](./security-model.html#accepted-design-properties).
+The following behaviors are intentional and are not findings by themselves:
+
+| Behavior | Review boundary |
+| --- | --- |
+| Oracle report liquidity does not bound downstream or cumulative value | Security depends on `ORACLE-A1`: profit-driven independent arbitragers monitor, correct every profitable error, and obtain timely inclusion. Review sizing, dispute access, inclusion credibility, and cache conformance instead of requiring notional collateralization. |
+| A caller may use any existing ended global question to fork any eligible universe | The computed fork-threshold REP commitment and computed, floored uncredited haircut are the admission cost. Either can floor to zero at dust supply, so review the supported-depth assumption as well as threshold payment, haircut conservation, fork lifecycle guards, and any stricter application-level eligibility claim. |
+| Paid rolling disputes can keep the pending oracle lane exclusive indefinitely | Each reset requires a valid replacement position and charges the computed protocol fee. The fee is an OpenOracle internal-balance credit to the configured `0x000000000000000000000000000000000000dEaD` fee sink; it does not reduce token total supply and is distinct from Zoltar's genesis-REP burn sink. Review fee and position accounting, deadline transitions, and queue authorization; the protocol does not promise bounded completion against indefinitely funded resets. |
+
+These classifications do not excuse an implementation deviation or an
+unsubstantiated launch assumption. They also do not apply to
+[`EXT-05`](./invariants.html#ext-05): recursive ancestor-dependent gas remains
+an open pre-deployment requirement because no explicit maximum supported fork
+depth currently exists.
+
 ## Immutable Protocol Release Posture
 
 Zoltar and Placeholder are intended to launch as immutable, permissionless

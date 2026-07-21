@@ -329,6 +329,14 @@
 							protocol's admission mechanism. A stricter relevance, aging, or
 							cost-benefit rule is not a Zoltar invariant.
 						</p>
+						<p>
+							For security review, the resulting ability to force a
+							universe-wide fork with an arbitrary ended question is not a
+							vulnerability by itself. A finding must show a bypass or recovery
+							of the threshold or haircut, an invalid lifecycle transition, or a
+							failure in fork isolation or accounting. See the
+							<a href="./security-model.html#accepted-design-properties">normative review classification</a>.
+						</p>
 					</div>
 					<figure class="diagram" id="fig-zoltar-question-registry-boundary" aria-labelledby="global-question-title">
 						<p class="diagram-title" id="global-question-title">Question Registry vs Application Binding</p>
@@ -489,9 +497,19 @@
 					</p>
 					<div class="callout">
 						<strong>Permanent admission cost</strong>
-						The REP threshold and haircut are the intended admission cost. They deter
-						unnecessary forks that would otherwise impose migration latency on every pool
-						in the universe.
+						The REP threshold and haircut are the intended admission cost. Both are
+						computed with integer flooring; at ordinary supply they deter unnecessary forks
+						that would otherwise impose migration latency on every pool
+						in the universe. For a theoretical supply of <code>100 million REP</code>
+						under current defaults, initiation commits <code>5 million REP</code>;
+						<code>1 million REP</code> is permanently uncredited and
+						<code>4 million REP</code> becomes the initiator's migration balance.
+						At the opposite boundary, integer division makes the threshold zero
+						below <code>20</code> atomic units of theoretical supply and makes the
+						haircut zero when a nonzero threshold is below <code>5</code> atomic
+						units. The protocol must not rely on a meaningful admission cost beyond
+						the maximum supported recursive depth established under
+						<a href="./invariants.html#ext-05"><code>EXT-05</code></a>.
 					</div>
 
 					<div class="table-wrap">
