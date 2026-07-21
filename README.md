@@ -24,9 +24,9 @@ Protocol documentation lives in `docs/`:
 The security-review classification distinguishes excluded guarantees from
 vulnerabilities. It also identifies the
 conditions that would turn each accepted design property into an implementation
-defect or a deployment-blocking economic risk. The unbounded recursive-fork gas
-path is separately tracked as an open pre-deployment requirement, not as an
-accepted design property.
+defect or a deployment-blocking economic risk. The invariant catalog owns the
+current requirement, status, and evidence for
+[`EXT-05` recursive-fork gas behavior](https://augurproject.github.io/zoltar/docs/invariants.html#ext-05).
 
 Deterministic deployment outputs live in
 [`docs/mainnet-deployment-addresses.json`](./docs/mainnet-deployment-addresses.json).
@@ -66,10 +66,9 @@ Important:
 
 ## Local Development
 
-Start a local chain with `anvil`, then run the setup step once and launch the app:
+After completing [Setup](#setup), start a local chain and launch the app:
 
 1. Start `anvil`
-1. Run `bun run setup`
 1. Run `bun run app:serve`
 
 If you are iterating on the app and want rebuilds, use:
@@ -90,8 +89,8 @@ The UI read backend defaults to `https://ethereum.dark.florist`, but you can ove
 ## Browser Simulation
 
 The UI also supports a walletless browser-local simulation mode for manual QA.
+After completing [Setup](#setup):
 
-1. Run `bun run setup`
 1. Run `bun run app:serve`
 1. Open `http://localhost:12345/?simulate=1`
 
@@ -223,8 +222,6 @@ Use `ANVIL_RPC=http://host.docker.internal:8545 bun run gas-costs` when the comm
 
 ## Notes
 
-- `bun run setup` is the quickest way to bootstrap a fresh checkout.
-- `bun install --frozen-lockfile` must be run before standalone commands like `bun run tsc` on a fresh checkout.
 - `bun run tsc` is a pure typecheck for the app TypeScript, the Solidity-side TypeScript utilities, and the Bun build/dev scripts. It does not regenerate shared assets or vendor output.
 - `bun run test` runs the TypeScript check first, then executes the test suite.
 - `bun run test:launch-invariants` is the targeted pre-release gate for adversarial fork, truth-auction, unresolved escalation carry, and auction edge-case invariants.

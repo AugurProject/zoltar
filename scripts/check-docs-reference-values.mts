@@ -2,10 +2,12 @@ import { readFile } from 'node:fs/promises'
 import assert from 'node:assert/strict'
 import { getMainnetProtocolConfig } from '../shared/ts/protocolConfig'
 
+const readme = await readFile('README.md', 'utf8')
 const html = await readFile('docs/escalation-game-architecture.html', 'utf8')
 const invariantsHtml = await readFile('docs/invariants.html', 'utf8')
 const liquidationHtml = await readFile('docs/liquidation.html', 'utf8')
 const openOracleIntegration = await readFile('docs/open-oracle-integration.html', 'utf8')
+const securityModel = await readFile('docs/security-model.html', 'utf8')
 const zoltarWhitepaper = await readFile('docs/zoltar-whitepaper.html', 'utf8')
 const whitepaperPlaceholder = await readFile('docs/placeholder-whitepaper.html', 'utf8')
 const startHere = await readFile('docs/start-here.html', 'utf8')
@@ -40,6 +42,7 @@ assertContinuationIdentifierExplanation()
 assertAggregateEscalationContinuationDocs()
 assertEventStreamSemantics()
 assertZoltarForkDepths()
+assertRecursiveForkGasStatusDocs()
 assertCoordinatorRecoveryBranch()
 assertCoordinatorSettlementEconomics()
 assertOpenOracleVendorAndEventDocs()
@@ -76,7 +79,7 @@ function assertAggregateEscalationContinuationDocs(): void {
 		assert.ok(!normalizedPlaceholder.includes(forbiddenClaim), `Placeholder whitepaper retains obsolete per-vault continuation claim: ${forbiddenClaim}`)
 	}
 	assert.match(normalizedContractReference, /cleanup neither funds escalation backing nor authorizes carried proofs/)
-	assert.match(normalizedOperatorReference, /Child funding, continuation progress, and proof eligibility do not require cleanup/)
+	assert.match(normalizedOperatorReference, /Child creation initializes the canonical carry and aggregate backing without waiting for vault transactions/)
 	for (const documentedClaim of [
 		'complete aggregate continuation backing at most once',
 		'Optional vault cleanup only clears parent locks',
@@ -127,14 +130,33 @@ function assertZoltarForkDepths(): void {
 	}
 }
 
+function assertRecursiveForkGasStatusDocs(): void {
+	assert.match(invariantsHtml, /id="ext-05"[\s\S]*Recursive fork gas bound[\s\S]*Enforcement status<\/dt><dd>Enforced/)
+	for (const [documentName, contents] of [
+		['README', readme],
+		['Operator reference', operatorReference],
+		['Security model', securityModel],
+		['Zoltar whitepaper', zoltarWhitepaper],
+		['Placeholder whitepaper', whitepaperPlaceholder],
+	] as const) {
+		assert.match(contents, /invariants\.html#ext-05/, `${documentName} must route recursive-fork gas status to EXT-05`)
+		assert.doesNotMatch(
+			contents,
+			/open pre-deployment requirement|open recursive-depth requirement|must be bounded and validated before deployment|maximum supported recursive depth established under|there is no explicit maximum recursive fork depth|origin registration is keyed by origin id and universe|does not traverse(?:s)? the pool or universe ancestry|gas does not grow with recursive lineage depth/i,
+			`${documentName} must not duplicate EXT-05 status or implementation evidence`,
+		)
+	}
+}
+
 function assertCoordinatorRecoveryBranch(): void {
-	const normalizedPlaceholder = whitepaperPlaceholder.replaceAll(/\s+/g, ' ')
+	const normalizedIntegration = openOracleIntegration.replaceAll(/\s+/g, ' ')
 	for (const documentedClaim of [
 		'If the pending settlement list is empty, another staged request can fund a replacement report.',
 		'If pending settlement operation IDs still remain, an operator or user must call direct <code>requestPrice(proposedRepPerEthPrice, requestedInitialWeth)</code> with the ETH bounty and initial-report funding, then let that replacement report settle.',
 	]) {
-		assert.ok(normalizedPlaceholder.includes(documentedClaim), `Missing coordinator recovery-branch claim: ${documentedClaim}`)
+		assert.ok(normalizedIntegration.includes(documentedClaim), `Missing coordinator recovery-branch claim: ${documentedClaim}`)
 	}
+	assert.match(whitepaperPlaceholder, /open-oracle-integration\.html#placeholder-integration/, 'whitepaper should route recovery details to the OpenOracle integration')
 }
 
 function assertCoordinatorSettlementEconomics(): void {
@@ -145,7 +167,7 @@ function assertCoordinatorSettlementEconomics(): void {
 		'That relationship is a deployment assumption, not a constructor invariant',
 		"the constructor checks each multiplier's lower bound but does not require the settlement cap to remain below the Open Oracle Security multiplier.",
 		'the callback does not recompute <code>minimumToken1Report()</code> from settlement base fee and does not compare the final price with an external truth source.',
-		'The cap is a rejection boundary, not operation-value insurance or proof that an accepted price is externally correct.',
+		'The cap is a rejection boundary, not proof that an accepted price is externally correct;',
 	]) {
 		assert.ok(normalizedIntegration.includes(documentedClaim), `Missing coordinator settlement-economics claim: ${documentedClaim}`)
 	}
@@ -155,9 +177,9 @@ function assertCoordinatorSettlementEconomics(): void {
 	assert.match(priceCoordinator, /uint256 ethCost = getRequestPriceEthCost\(\)/, 'coordinator must derive the request bounty from getRequestPriceEthCost')
 	assert.match(priceCoordinator, /uint256 settlerReward = ethCost/, 'coordinator must assign the entire request bounty to the OpenOracle settler reward')
 	assert.match(priceCoordinator, /settlerReward: uint96\(settlerReward\)/, 'coordinator report creation must forward the full request bounty as settler reward')
-	const requestBountyFormula = 'data-source="block.basefee \\cdot 4 \\cdot (callbackGasLimit + gasConsumedOpenOracleReportPrice) + 101"'
-	assert.ok(openOracleIntegration.includes(requestBountyFormula), 'OpenOracle integration parameter table must use the current full request-bounty settler reward')
-	assert.ok(whitepaperPlaceholder.includes(requestBountyFormula), 'whitepaper OpenOracle parameter table must use the current full request-bounty settler reward')
+	const requestBountyFormula = 'data-source="requestPriceEthCost = block.basefee \\cdot 4 \\cdot (callbackGasLimit + gasConsumedOpenOracleReportPrice) + 101"'
+	assert.ok(openOracleIntegration.includes(requestBountyFormula), 'OpenOracle request-cost section must retain the current full request-bounty formula')
+	assert.ok(!whitepaperPlaceholder.includes(requestBountyFormula), 'whitepaper must link to the canonical request-bounty formula instead of copying it')
 	assert.doesNotMatch(whitepaperPlaceholder, /disputers can replace a bad\s+report with a larger one/, 'whitepaper must not claim every dispute strictly increases the report after integer flooring')
 }
 
@@ -172,21 +194,15 @@ function assertOpenOracleVendorAndEventDocs(): void {
 	assert.match(openOracleState, /if \(bytes\.length !== 235\)/, 'shared OpenOracle decoder must reject non-canonical packed lengths')
 	assert.doesNotMatch(whitepaperPlaceholder, /sponsor posts initial report/, 'whitepaper diagrams must not identify the funding sponsor as the on-chain reporter')
 	assert.match(whitepaperPlaceholder, /coordinator reports\s*<\/text>\s*<text[^>]+>\s*sponsor funds/, 'whitepaper oracle flow must distinguish the coordinator reporter from the funding sponsor')
-	for (const [documentName, contents] of [
-		['OpenOracle integration', openOracleIntegration],
-		['whitepaper', whitepaperPlaceholder],
-	] as const) {
-		assert.doesNotMatch(contents, /\b(?:sponsor|caller)s?\s+(?:may\s+)?(?:voluntarily\s+)?post(?:s|ed|ing)?\b/i, `${documentName} must not describe the funding sponsor as posting the report`)
-		const normalizedContents = contents.replaceAll(/\s+/g, ' ')
-		assert.ok(normalizedContents.includes('The sponsor may request and fund more than the minimum; the coordinator submits the selected amount as <code>currentAmount1</code>.'), `${documentName} must distinguish sponsor funding from coordinator submission`)
-	}
+	assert.doesNotMatch(openOracleIntegration, /\b(?:sponsor|caller)s?\s+(?:may\s+)?(?:voluntarily\s+)?post(?:s|ed|ing)?\b/i, 'OpenOracle integration must not describe the funding sponsor as posting the report')
+	const normalizedIntegration = openOracleIntegration.replaceAll(/\s+/g, ' ')
+	assert.ok(normalizedIntegration.includes('The sponsor may request and fund more than the minimum; the coordinator submits the selected amount as <code>currentAmount1</code>.'), 'OpenOracle integration must distinguish sponsor funding from coordinator submission')
 	assert.doesNotMatch(openOracleIntegration, /<code>openOracleReportPrice<\/code>/, 'OpenOracle integration must not name the removed openOracleReportPrice function')
 	assert.doesNotMatch(invariantsHtml, /<\/a\s*>\s*>\s*and\s*<a href="\.\.\/solidity\/ts\/tests\/openOracleDispute\.test\.ts"/, 'oracle verification row must not render a stray greater-than marker between test links')
 }
 
 function assertLiquidationFullCloseDocs(): void {
 	const normalizedLiquidation = liquidationHtml.replaceAll(/\s+/g, ' ')
-	const normalizedPlaceholder = whitepaperPlaceholder.replaceAll(/\s+/g, ' ')
 
 	for (const documentedClaim of [
 		'repBoundDebt = snapshotTargetUnlockedRep > MIN_REP_DEPOSIT ? floor((snapshotTargetUnlockedRep - MIN_REP_DEPOSIT) * PRICE_PRECISION * BPS_DENOMINATOR / (currentRepPerEthPrice * (BPS_DENOMINATOR + liquidationRepBonusBps))) : 0',
@@ -201,13 +217,8 @@ function assertLiquidationFullCloseDocs(): void {
 		assert.ok(liquidationHtml.includes(marker), `Missing liquidation documentation marker: ${marker}`)
 	}
 
-	for (const documentedClaim of ["When a liquidation clears the target's full staged allowance", 'would consume all current unlocked REP or leave less than <code>MIN_REP_DEPOSIT</code>', "the contract instead seizes the target's full current unlocked REP and force-closes the vault."]) {
-		assert.ok(normalizedPlaceholder.includes(documentedClaim), `Missing whitepaper liquidation full-close documentation claim: ${documentedClaim}`)
-	}
-	assert.ok(
-		normalizedPlaceholder.includes('computedRepToMove = ceil(debtToMove \\cdot currentPrice \\cdot (BPS_DENOMINATOR + liquidationRepBonusBps) / (PRICE_PRECISION \\cdot BPS_DENOMINATOR)); repToMove = currentTargetUnlockedRep on the full-close dust override branch; otherwise computedRepToMove'),
-		'whitepaper placeholder liquidation equation must mention the full-close override',
-	)
+	assert.match(whitepaperPlaceholder, /href="\.\/liquidation\.html"/, 'whitepaper should route liquidation math and examples to the canonical design')
+	assert.doesNotMatch(whitepaperPlaceholder, /id="eq-placeholder-liquidation-transfer"/, 'whitepaper must not duplicate the canonical liquidation equation')
 	assert.ok(liquidationHtml.includes('data-liquidation-summary="normal-plus-full-close"'), 'canonical liquidation diagram caption must be tagged for the normal-path plus full-close summary')
 	const computeCandidateIndex = liquidationHtml.indexOf('Compute debt and REP candidate')
 	const fullCloseDecisionIndex = liquidationHtml.indexOf('Full-close sweep required?')
@@ -218,7 +229,7 @@ function assertLiquidationFullCloseDocs(): void {
 	assert.ok(poolValidationIndex < completedTransferIndex, 'liquidation diagram must show pool validation before a completed transfer')
 	assert.doesNotMatch(liquidationHtml, /Pool execution succeeds\?/, 'liquidation diagram must not imply success before full-close candidate selection')
 	assert.doesNotMatch(whitepaperPlaceholder, /id="fig-placeholder-auction-clearing"/, 'whitepaper must delegate auction clearing to the canonical focused diagram')
-	assert.match(whitepaperPlaceholder, /auction-design\.html#fig-auction-clearing-ladder/)
+	assert.match(whitepaperPlaceholder, /auction-design\.html#clearing/)
 }
 
 function assertStartHereTimelines(): void {
@@ -235,9 +246,8 @@ function assertStartHereTimelines(): void {
 	assert.match(startHere, /resumes\s+from its inherited elapsed time without a new activation delay/)
 	assert.match(startHere, /d="M 800 103 C 810 103 810 59 820 59"/)
 	assert.match(startHere, /d="M 800 103 C 810 103 810 151 820 151"/)
-	assert.match(startHere, /If an unrelated market caused the first fork/)
-	assert.match(startHere, /the first fork's branches\s+represent the unrelated question, while the recursive branches represent\s+the original one/)
-	assert.match(startHere, /placeholder-whitepaper\.html#fig-placeholder-recursive-continuation/)
+	assert.match(startHere, /placeholder-whitepaper\.html#migration/)
+	assert.match(startHere, /merkle-mountain-range\.html/)
 	assert.match(startHere, />activateForkMode</)
 	assert.match(startHere, /A universe\s+fork alone leaves <code>systemState<\/code> as <code>Operational<\/code>/)
 	assert.match(startHere, /Pool fork initiation calls <code>activateForkMode<\/code>/)

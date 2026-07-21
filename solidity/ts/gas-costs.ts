@@ -175,6 +175,7 @@ const prepareEscalationFork = async (context: PoolContext) => {
 	const repToken = await getRepToken(alice, context.addresses.securityPool)
 	const forkThreshold = (await getTotalTheoreticalSupply(alice, repToken)) / 20n
 	await anvil.setTime(context.questionData.endTime + 10_000n)
+	await manipulatePriceOracle(alice, anvil, context.addresses.priceOracleManagerAndOperatorQueuer)
 	await confirmTx(alice, approveToken(alice, addressString(GENESIS_REPUTATION_TOKEN), context.addresses.securityPool))
 	await confirmTx(alice, depositRep(alice, context.addresses.securityPool, 2n * forkThreshold))
 	await confirmTx(alice, depositToEscalationGame(alice, context.addresses.securityPool, QuestionOutcome.Yes, forkThreshold))
@@ -196,7 +197,7 @@ const prepareExternalZoltarFork = async (context: PoolContext, titlePrefix: stri
 	await confirmTx(alice, forkUniverse(alice, genesisUniverse, forkQuestionId))
 }
 
-const prepareYesChildForAuction = async () => {
+const prepareYesChildForAuction = async (migrateOpenInterestShares = false) => {
 	const context = await setupPool('Gas auction question')
 	await confirmTx(alice, approveToken(alice, addressString(GENESIS_REPUTATION_TOKEN), context.addresses.securityPool))
 	await confirmTx(alice, depositRep(alice, context.addresses.securityPool, repDepositAmount))
@@ -213,12 +214,18 @@ const prepareYesChildForAuction = async () => {
 	const yesPool = getSecurityPoolAddresses(context.addresses.securityPool, yesUniverse, context.questionId, securityMultiplier)
 	const forkData = await getSecurityPoolForkerForkData(alice, context.addresses.securityPool)
 	const ethRaiseCap = openInterestAmount - (openInterestAmount * forkData.migratedRep) / forkData.auctionableRepAtFork
+	if (migrateOpenInterestShares) {
+		const winningChildTarget = [QuestionOutcome.Yes]
+		await confirmTx(carol, migrateShares(carol, context.addresses.shareToken, genesisUniverse, QuestionOutcome.Invalid, winningChildTarget))
+		await confirmTx(carol, migrateShares(carol, context.addresses.shareToken, genesisUniverse, QuestionOutcome.Yes, winningChildTarget))
+		await confirmTx(carol, migrateShares(carol, context.addresses.shareToken, genesisUniverse, QuestionOutcome.No, winningChildTarget))
+	}
 	await anvil.advanceTime(8n * 7n * DAY + DAY)
 	return { context, yesPool, ethRaiseCap }
 }
 
-const prepareYesChildFinalized = async () => {
-	const { context, yesPool, ethRaiseCap } = await prepareYesChildForAuction()
+const prepareYesChildFinalized = async (migrateOpenInterestShares = false) => {
+	const { context, yesPool, ethRaiseCap } = await prepareYesChildForAuction(migrateOpenInterestShares)
 	await confirmTx(alice, startTruthAuction(alice, yesPool.securityPool))
 	await confirmTx(dave, submitBid(dave, yesPool.truthAuction, 0n, ethRaiseCap))
 	await anvil.advanceTime(8n * DAY)
@@ -690,12 +697,8 @@ const scenarios: Scenario[] = [
 		section: '16. Migration',
 		label: 'redeem winning shares after migration to child',
 		run: async () => {
-			const prepared = await prepareYesChildFinalized()
+			const prepared = await prepareYesChildFinalized(true)
 			await confirmTx(alice, claimAuctionProceeds(alice, prepared.yesPool.securityPool, dave.account.address, [{ tick: 0n, bidIndex: 0n }]))
-			const binaryTargetOutcomes = [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No]
-			await confirmTx(carol, migrateShares(carol, prepared.context.addresses.shareToken, genesisUniverse, QuestionOutcome.Invalid, binaryTargetOutcomes))
-			await confirmTx(carol, migrateShares(carol, prepared.context.addresses.shareToken, genesisUniverse, QuestionOutcome.Yes, binaryTargetOutcomes))
-			await confirmTx(carol, migrateShares(carol, prepared.context.addresses.shareToken, genesisUniverse, QuestionOutcome.No, binaryTargetOutcomes))
 			return await waitForGas(carol, redeemShares(carol, prepared.yesPool.securityPool))
 		},
 	},

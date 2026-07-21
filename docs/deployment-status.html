@@ -133,9 +133,11 @@
 					out-of-band and starts consuming mask bits from the remaining addresses.
 				</p>
 				<p>
-					With the current mainnet manifest, the low-order mask mapping therefore begins:
+					The table below renders the complete bit mapping directly from the canonical
+					<a href="./mainnet-deployment-addresses.json">mainnet deployment manifest</a>,
+					excluding <code>deploymentStatusOracle</code>.
 				</p>
-				<table>
+				<table aria-label="Current mainnet deployment-status bit mapping">
 					<thead>
 						<tr>
 							<th>Bit</th>
@@ -143,42 +145,15 @@
 							<th>Label</th>
 						</tr>
 					</thead>
-					<tbody>
+					<tbody id="deployment-status-bit-mapping" aria-live="polite" aria-atomic="true" aria-busy="true">
 						<tr>
-							<td><code>0</code></td>
-							<td><code>proxyDeployer</code></td>
-							<td>Proxy Deployer</td>
-						</tr>
-						<tr>
-							<td><code>1</code></td>
-							<td><code>multicall3</code></td>
-							<td>Multicall3</td>
-						</tr>
-						<tr>
-							<td><code>2</code></td>
-							<td><code>uniformPriceDualCapBatchAuctionFactory</code></td>
-							<td>Uniform Price Dual Cap Batch Auction Factory</td>
-						</tr>
-						<tr>
-							<td><code>3</code></td>
-							<td><code>scalarOutcomes</code></td>
-							<td>Scalar Outcomes</td>
-						</tr>
-						<tr>
-							<td><code>4</code></td>
-							<td><code>securityPoolUtils</code></td>
-							<td>Security Pool Utils</td>
+							<td colspan="3">Loading the canonical manifest…</td>
 						</tr>
 					</tbody>
 				</table>
 				<p>
-					The same pattern continues through the remaining deployment-status step addresses:
-					<code>openOracle</code>, <code>zoltarQuestionData</code>, <code>zoltar</code>,
-					<code>shareTokenFactory</code>,
-					<code>priceOracleManagerAndOperatorQueuerFactory</code>,
-					<code>securityPoolForker</code>, <code>escalationGameFactory</code>, and
-					<code>securityPoolFactory</code>. If that constructor order changes, the bit meanings
-					change with it.
+					If the manifest's constructor order changes, the rendered bit meanings change
+					with it; this page does not maintain a second list.
 				</p>
 				<p>
 					The manifest's <code>derivedContracts</code> list is separate. Those addresses are
@@ -211,5 +186,69 @@
 				</ul>
 			</section>
 		</main>
+		<script type="module">
+			const mappingBody = document.querySelector('#deployment-status-bit-mapping')
+			if (!(mappingBody instanceof HTMLTableSectionElement)) {
+				throw new Error('Missing deployment-status mapping tbody')
+			}
+
+			const manifestUrl = './mainnet-deployment-addresses.json'
+			try {
+				const response = await fetch(manifestUrl)
+				if (!response.ok) {
+					throw new Error(`Could not load deployment manifest: ${response.status}`)
+				}
+				const manifest = await response.json()
+				if (!manifest || !Array.isArray(manifest.deploymentSteps)) {
+					throw new Error('Deployment manifest has no deploymentSteps array')
+				}
+				for (const step of manifest.deploymentSteps) {
+					if (!step || typeof step.id !== 'string' || step.id.length === 0 || typeof step.label !== 'string' || step.label.length === 0) {
+						throw new Error('Deployment manifest step has an invalid id or label')
+					}
+				}
+				const stepIds = manifest.deploymentSteps.map((step) => step.id)
+				if (new Set(stepIds).size !== stepIds.length) {
+					throw new Error('Deployment manifest has duplicate step ids')
+				}
+				if (stepIds.filter((id) => id === 'deploymentStatusOracle').length !== 1) {
+					throw new Error('Deployment manifest must contain exactly one deploymentStatusOracle step')
+				}
+				const trackedSteps = manifest.deploymentSteps.filter((step) => step.id !== 'deploymentStatusOracle')
+				if (trackedSteps.length === 0 || trackedSteps.length > 256) {
+					throw new Error('Deployment manifest must contain between 1 and 256 tracked steps')
+				}
+				const rows = trackedSteps.map((step, bit) => {
+					const row = document.createElement('tr')
+					for (const value of [String(bit), step.id, step.label]) {
+						const cell = document.createElement('td')
+						if (value === step.label) {
+							cell.textContent = value
+						} else {
+							const code = document.createElement('code')
+							code.textContent = value
+							cell.append(code)
+						}
+						row.append(cell)
+					}
+					return row
+				})
+				mappingBody.replaceChildren(...rows)
+			} catch {
+				const row = document.createElement('tr')
+				const cell = document.createElement('td')
+				cell.colSpan = 3
+				cell.append('Unable to load the deployment mapping. ')
+				cell.append(document.createElement('br'))
+				const link = document.createElement('a')
+				link.href = manifestUrl
+				link.textContent = 'Open the canonical manifest.'
+				cell.append(link)
+				row.append(cell)
+				mappingBody.replaceChildren(row)
+			} finally {
+				mappingBody.setAttribute('aria-busy', 'false')
+			}
+		</script>
 	</body>
 </html>

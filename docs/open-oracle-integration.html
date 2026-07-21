@@ -37,37 +37,10 @@
 					</p>
 					<div class="callout" id="active-arbitrager-assumption">
 						<p>
-							<strong><code>ORACLE-A1</code> — always-available profitable arbitrager.</strong> Placeholder assumes
-							at least one independent, rational, adequately capitalized
-							OpenOracle participant continuously monitors pending REP/ETH
-							reports, acts whenever correction is profitable under the
-							configured economics, and can get that transaction included
-							before the report settles. The report minimum makes a target-size
-							correction profitable after modeled gas and fees. Report liquidity is
-							a correction incentive, not collateral sized to the value of withdrawals, liquidations, or
-							allowance changes that may use the resulting price.
-						</p>
-						<p>
-							This is a required deployment assumption, not a condition the
-							coordinator verifies onchain. If monitoring or timely transaction
-							inclusion fails for the full settlement window, the integration
-							does not bound downstream loss by report liquidity.
-						</p>
-						<p>
-							<strong>Non-invariant boundary.</strong> The protocol does not
-							require report liquidity to equal or bound downstream operation
-							value. Its specified security mechanism is the profitable,
-							included correction described above, not reimbursement of the
-							largest operation that may use an accepted price. A security
-							review should challenge the correction economics or inclusion
-							assumption when evidence supports that concern, but a missing
-							notional collateralization rule is not by itself a protocol
-							invariant violation.
-						</p>
-						<p>
-							The normative definition, excluded guarantees, residual loss
-							allocation, and review classification are in the
-							<a href="./security-model.html#oracle-a1">Protocol Security Model</a>.
+							<strong><code>ORACLE-A1</code> is a deployment assumption.</strong> The
+							<a href="./security-model.html#oracle-a1">Protocol Security Model</a>
+							owns its definition, excluded guarantees, residual loss allocation,
+							and review classification. This page owns integration mechanics.
 						</p>
 					</div>
 					<p>
@@ -120,16 +93,9 @@
 					settled amounts.
 				</p>
 				<p>
-					The submitted and disputed preimages use raw <code>log2</code> data:
-					topic 1 is the report ID and the log data is exactly 235 packed bytes,
-					not ABI-encoded dynamic bytes. Indexers filter the OpenOracle emitter and
-					lifecycle signature, apply each replacement chronologically, decode it
-					with <a href="../shared/ts/openOracle.ts"><code>shared/ts/openOracle.ts</code></a>,
-					and verify the resulting preimage hash. <code>ReportSettled</code> contains
-					only the report ID, so its block supplies the final settlement timestamp
-					or block number according to the report's <code>TIME_TYPE</code> flag. The
-					full indexing procedure is in the
-					<a href="./event-stream.md#openoracle-packed-state-reconstruction">event-stream reference</a>.
+					The <a href="./event-stream.md#openoracle-packed-state-reconstruction">event-stream reference</a>
+					owns packed-log decoding, chronological replacement, hash verification,
+					and settlement-block reconstruction.
 				</p>
 				<p>
 					In this repository the pair is WETH as <code>token1</code> and REP as
@@ -197,13 +163,11 @@
 				<p>
 					OpenOracle disputes scale with
 					<span class="term" tabindex="0">report liquidity</span>. The
-					coordinator computes a minimum WETH side from the current block base
-					fee and deployment-configured protocol parameters. The sponsor may request
-					a larger initial WETH position and proposes a REP/ETH price; the
-					coordinator derives the matching REP side in the same request block.
-					This minimum report size is an
-					arbitrage-profitability floor, not a bond against the amount of
-					outside value protected by the price.
+					coordinator computes the initial WETH side from request-time inputs,
+					and the sponsor may request more. The
+					<a href="#security-guarantee">sizing section</a> owns the derivation;
+					<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a> owns
+					the security boundary.
 				</p>
 			</section>
 
@@ -465,17 +429,11 @@
 					against that in-flight settlement. Those follow-up queues pay no
 					additional ETH join fee, and other callers must wait for settlement
 					before staging their own operations. Every successful dispute replaces
-					the current report and restarts its settlement window, so repeated
-					disputes can extend this exclusivity. This is an intentional paid pause:
-					each extension incurs transaction execution and must fund the
-					contract-specified replacement position. Under ordinary non-dust
-					parameters, protocol fees and the required position also accumulate;
-					integer flooring can leave dust-sized rounds unchanged before the
-					escalation halt. The coordinator deliberately has no absolute deadline
-					and makes no liveness guarantee against a participant willing and able
-					to keep submitting and funding disputes indefinitely.
+					the current report and restarts its settlement window. The
+					<a href="#intentional-economic-tradeoffs">economic tradeoffs</a>
+					section owns the resulting cost and liveness analysis.
 				</p>
-				<div class="callout">
+				<div class="callout" id="rolling-dispute-security-classification">
 					<p>
 						<strong>Security-review classification.</strong> Indefinite paid
 						resetting is an accepted design property, not a bounded-liveness
@@ -660,11 +618,9 @@
 				<h2>Security Model and Guardrails</h2>
 				<p>
 					Placeholder uses the oracle to preserve solvency accounting around ETH
-					obligations backed by REP. Its economic security depends on the
-					<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a>:
-					a report wrong by enough to offer the configured correction profit is
-					corrected because at least one participant can and will act before
-					settlement. Separately, operations that can change REP backing or
+					obligations backed by REP. The
+					<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a>
+					section owns the required economic assumption. Locally, operations that can change REP backing or
 					security-bond exposure must use a fresh, economically contestable
 					REP/ETH price and pass local coordinator checks before they can affect
 					the pool.
@@ -675,9 +631,8 @@
 						five-minute cache window.
 					</li>
 					<li>
-						The initial report is sized so an honest disputer can profitably
-						challenge a wrong price at the target error, independent of outside
-						funds protected by the price.
+						The initial report targets a configured correction profit after
+						modeled gas and fees.
 					</li>
 					<li>
 						Pool execution functions reject direct user calls: withdrawals,
@@ -923,12 +878,13 @@
 					zero amounts, or a computed zero price clears the pending id, emits
 					<code>PriceReportRejected</code>, and does not update the price cache
 					or replay pending operations. Those pending settlement operations
-					remain queued for a later valid price report, but a later call to
-					stage another operation will not automatically fund a retry while that
-					pending settlement list is still non-empty; an operator or user may
-					need to call <code>requestPrice(proposedRepPerEthPrice, requestedInitialWeth)</code> directly with the ETH
-					bounty plus the WETH/REP funding and approvals needed for the atomic
-					initial report. When OpenOracle has already settled but the coordinator is still pending because the
+					remain queued for a later valid price report. If the pending settlement
+					list is empty, another staged request can fund a replacement report.
+					If pending settlement operation IDs still remain, an operator or user
+					must call direct
+					<code>requestPrice(proposedRepPerEthPrice, requestedInitialWeth)</code>
+					with the ETH bounty and initial-report funding, then let that
+					replacement report settle. When OpenOracle has already settled but the coordinator is still pending because the
 					low-level callback did not complete, anyone can call
 					<code>recoverSettledPendingReport</code>. Recovery clears the pending
 					report, resets the settlement base-fee cap, and consumes only
@@ -944,25 +900,10 @@
 			<section id="intentional-economic-tradeoffs">
 				<h2>Intentional Economic Tradeoffs</h2>
 				<p>
-					This integration uses incentive compatibility, not operation-value
-					insurance. The minimum WETH side is large enough for a configured
-					target-error correction (initially five percent) to cover the modeled
-					dispute gas cost with the configured profit buffer. Under the
-					active-arbitrager assumption, that profitable correction is the security
-					mechanism. The minimum intentionally does not increase with a queued
-					withdrawal, liquidation, allowance, total pool value, or any other
-					reserved operation exposure.
-				</p>
-				<p>
-					One accepted price can therefore authorize every otherwise-valid
-					operation that executes during the five-minute freshness window. The
-					coordinator does not debit a notional exposure budget and does not
-					claim that the oracle report can reimburse losses caused by an accepted
-					wrong price. Increasing protected value without increasing report
-					liquidity is consequently consistent with the intended model: security
-					comes from the assumed presence and timely inclusion of a participant
-					taking the targeted WETH-denominated correction profit, not from
-					matching the report stake to the largest downstream payoff.
+					The <a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a>
+					section owns the normative notional boundary and loss allocation.
+					Operationally, the coordinator maintains no notional exposure budget:
+					one fresh price may authorize multiple otherwise-valid operations.
 				</p>
 				<p>
 					The stale-price refresh sponsor retains the staging lane while its
@@ -983,16 +924,11 @@
 			<section id="attack-model">
 				<h2>Assumption Boundary and Attack Model</h2>
 				<p>
-					The protocol model assumes that a profitable honest correction is
-					included before a wrong report settles. Under that assumption,
-					Placeholder does not use an operation's outside value to size the
-					report. The analysis below describes the boundary of that assumption:
-					if an attacker can keep every correcting transaction out for the
-					settlement window, the attacker may force Placeholder to use a bad
-					REP/ETH price long enough for a solvency-sensitive operation to execute.
-					The comparison between outside payoff, report liquidity, delay, and
-					censorship cost is therefore a stress test of the deployment assumption,
-					not a contract-enforced exposure cap.
+					The equations below stress-test failure of
+					<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a>:
+					an attacker excludes correcting transactions until a bad REP/ETH report
+					can settle and enable an outside payoff. They are not a contract-enforced
+					exposure cap.
 				</p>
 				<p>
 					OpenOracle's inclusion analysis models an attacker who posts a wrong
@@ -1527,21 +1463,15 @@
 					</ul>
 				</details>
 				<p>
-					Placeholder defends this model by making wrong reports profitable to
-					dispute at the target error, forcing liquidations to be meaningfully
-					past threshold, and rejecting bad settlement environments. The protocol
-					then assumes active honest arbitragers monitor the REP/ETH price and can
-					obtain transaction inclusion before settlement. Failure of that
-					assumption is outside the claimed security model; the report size is not
-					scaled by the outside payoff protected by the price.
+					The controls below parameterize this stress test; they do not replace
+					<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a>.
 				</p>
 				<ul>
 					<li>
 						<strong>Censorship and delay:</strong>
-						<code>settlementTime</code> gives reporters time to dispute, and the
-						initial WETH side is chosen so a price wrong by the configured target
-						error (initially five percent) leaves an honest disputer enough correction profit to cover modeled base-fee
-						gas with the configured buffer after fees.
+						<code>settlementTime</code> sets the correction window; the
+						<a href="#security-guarantee">sizing section</a> owns initial-position
+						profitability.
 					</li>
 					<li>
 						<strong>Binary threshold attacks:</strong> staged liquidations must
@@ -1578,10 +1508,9 @@
 						and does not compare the final price with an external truth source. It
 						checks the request-time base-fee cap, requires nonzero final WETH and
 						REP amounts and a nonzero integer REP/ETH ratio, then records that
-						ratio. Honest arbitrage monitoring, transaction inclusion, and
-						transient base-fee behavior therefore remain assumptions. The cap is
-						a rejection boundary, not operation-value insurance or proof that an
-						accepted price is externally correct.
+						ratio. The cap is a rejection boundary, not proof that an accepted price
+						is externally correct; <a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a>
+						owns the remaining assumption.
 					</li>
 					<li>
 						<strong>Callback scope:</strong> only up to four operations are
@@ -1622,13 +1551,11 @@
 			<section id="parameters">
 				<h2>OpenOracle Parameters Used</h2>
 				<p>
-					The integration depends on the OpenOracle fields below. The canonical
-					exhaustive current-value table remains the
-					Placeholder whitepaper's
-					<a href="./placeholder-whitepaper.html#parameters"
-						>Current Parameters</a
-					>
-					section.
+					The integration depends on the OpenOracle fields below. This is the
+					canonical current-value table for coordinator and OpenOracle
+					parameters; the
+					<a href="./placeholder-whitepaper.html#parameters">Placeholder whitepaper</a>
+					routes readers here instead of maintaining a second copy.
 				</p>
 				<table>
 					<thead>
@@ -1650,8 +1577,8 @@
 						<tr>
 							<td><code>minimumToken1Report()</code></td>
 							<td>
-								Dynamic WETH amount computed from <code>block.basefee</code>;
-								<code>2.423076923076923077 WETH</code> at <code>30 gwei</code>
+								Dynamic; see <a href="#eq-openoracle-initial-report-size">Dynamic Minimum WETH Report</a>
+								and the <a href="#initial-report-estimator-example">estimator</a>.
 							</td>
 							<td>
 								Sets the minimum WETH side required for correction profitability.
@@ -1681,14 +1608,8 @@
 						<tr>
 							<td><code>settlerReward</code></td>
 							<td>
-								<math
-									aria-label="block base fee times 4 times the sum of callback gas limit and gas consumed open oracle report price, plus 101"
-									data-source="block.basefee \cdot 4 \cdot (callbackGasLimit + gasConsumedOpenOracleReportPrice) + 101"
-									><mi>block.basefee</mi><mo>&#x22C5;</mo><mn>4</mn
-									><mo>&#x22C5;</mo><mo>(</mo><mi>callbackGasLimit</mi
-									><mo>+</mo><mi>gasConsumedOpenOracleReportPrice</mi
-									><mo>)</mo><mo>+</mo><mn>101</mn></math
-								>
+								Dynamic; see
+								<a href="#eq-openoracle-request-price-cost">Oracle Request Cost</a>.
 							</td>
 							<td>
 									The full request bounty is assigned to the account that settles the
@@ -1718,12 +1639,8 @@
 						<tr>
 							<td><code>callbackGasLimit</code></td>
 							<td>
-								<math
-									aria-label="gas consumed settlement times 4"
-									data-source="gasConsumedSettlement \cdot 4"
-									><mi>gasConsumedSettlement</mi><mo>&#x22C5;</mo
-									><mn>4</mn></math
-								>
+								Derived from settlement gas and the maximum callback batch; see
+								<a href="#eq-openoracle-request-price-worked-example">Callback Gas Limit</a>.
 							</td>
 							<td>
 								Sets the callback gas limit for up to
