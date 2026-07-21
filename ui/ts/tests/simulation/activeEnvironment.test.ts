@@ -3,7 +3,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/shared/ethereum'
 import { loadDeploymentStatusOracleSnapshot, loadErc20Balance } from '../../protocol/index.js'
-import { getChainDisplayLabel, getWalletScopedAccountAddress, getWrongNetworkMessage, isSupportedAppChain } from '../../lib/network.js'
+import { getChainDisplayLabel, getChainIdDecimalLabel, getWalletScopedAccountAddress, getWrongNetworkMessage, isSupportedAppChain } from '../../lib/network.js'
 import { getActiveBackend, initializeActiveEnvironment, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting, shouldUseSimulationLocation } from '../../lib/activeEnvironment.js'
 import { SIMULATION_BLOCK_INTERVAL_SECONDS, SIMULATION_INITIAL_TIMESTAMP } from '../../simulation/clock.js'
 import { parseSavedSimulationStateEnvelope, persistSavedSimulationState, serializeSavedSimulationStateEnvelope } from '../../simulation/savedStates.js'
@@ -76,6 +76,8 @@ void describe('active environment', () => {
 
 		expect(commonChains.map(([chainId, _name]) => getChainDisplayLabel(chainId))).toEqual(commonChains.map(([_chainId, name]) => name))
 		expect(getChainDisplayLabel('0xcc6b')).toBe('52331')
+		expect(getChainIdDecimalLabel('0x2105')).toBe('8453')
+		expect(getChainIdDecimalLabel('invalid-chain')).toBeUndefined()
 	})
 
 	void test('clears wallet-scoped account access when the connected wallet is on the wrong network', () => {

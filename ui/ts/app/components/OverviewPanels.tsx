@@ -11,7 +11,7 @@ import { LoadingText } from '../../components/LoadingText.js'
 import { StateHint } from '../../components/StateHint.js'
 import { TimestampValue } from '../../components/TimestampValue.js'
 import { UniverseLink } from '../../features/universes/components/UniverseLink.js'
-import { getChainDisplayLabel, getKnownChainName, isMainnetChain } from '../../lib/network.js'
+import { getChainDisplayLabel, getChainIdDecimalLabel, getKnownChainName, isMainnetChain } from '../../lib/network.js'
 import { renderRepPriceSourceLabel } from '../../features/open-oracle/lib/repPriceSource.js'
 import type { OverviewPanelsProps } from '../../features/types.js'
 
@@ -22,11 +22,8 @@ function getWalletNetworkLabel(chainId: string | undefined) {
 	if (chainLabel === undefined) return appCopy.unknownNetwork
 	const chainName = getKnownChainName(chainId)
 	if (chainName === undefined) return chainLabel
-	try {
-		return appCopy.formatNetworkWithChainId(chainName, BigInt(chainId).toString())
-	} catch {
-		return chainName
-	}
+	const decimalChainId = getChainIdDecimalLabel(chainId)
+	return decimalChainId === undefined ? chainName : appCopy.formatNetworkWithChainId(chainName, decimalChainId)
 }
 
 export function OverviewPanels({

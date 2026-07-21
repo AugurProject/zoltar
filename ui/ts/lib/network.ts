@@ -28,9 +28,15 @@ const COMMON_CHAIN_NAMES = new Map<bigint, string>([
 function parseChainId(chainId: string) {
 	try {
 		return BigInt(chainId)
-	} catch {
-		return undefined
+	} catch (error) {
+		if (error instanceof SyntaxError) return undefined
+		throw error
 	}
+}
+
+export function getChainIdDecimalLabel(chainId: string | undefined) {
+	if (chainId === undefined) return undefined
+	return parseChainId(chainId)?.toString()
 }
 
 export function getChainDisplayLabel(chainId: string | undefined) {
