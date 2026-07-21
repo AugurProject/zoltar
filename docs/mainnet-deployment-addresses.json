@@ -13,7 +13,7 @@
 		{
 			"id": "deploymentStatusOracle",
 			"label": "Deployment Status Oracle",
-			"address": "0x1d3615F8acB26A117F1C5dBa2A1caF049B802c09"
+			"address": "0xA4650AF4AF9d7240DFc2Ca4995E58B5163AE1EaF"
 		},
 		{
 			"id": "multicall3",
@@ -23,7 +23,7 @@
 		{
 			"id": "uniformPriceDualCapBatchAuctionFactory",
 			"label": "UniformPriceDualCapBatchAuctionFactory",
-			"address": "0x330a2A568F875B5BC3fD8FA368050d4f414c05FA"
+			"address": "0x54E477cb424C9123d6869f0d89E404086bCD644D"
 		},
 		{
 			"id": "scalarOutcomes",
@@ -33,7 +33,7 @@
 		{
 			"id": "securityPoolUtils",
 			"label": "SecurityPoolUtils",
-			"address": "0x10293D04A06C49E2BFFD84c1A1739b2A59EB9A69"
+			"address": "0xfA24d690774E8Dc654E38372e7aD1d55D940aFd3"
 		},
 		{
 			"id": "openOracle",
@@ -53,34 +53,34 @@
 		{
 			"id": "shareTokenFactory",
 			"label": "ShareTokenFactory",
-			"address": "0x63425911EECa54423d57bE5D576c2e1a19ab3e55"
+			"address": "0xEA7C84334060d1E708cdd1f9C2AAa65f07d66555"
 		},
 		{
 			"id": "priceOracleManagerAndOperatorQueuerFactory",
 			"label": "OpenOracle Price Coordinator Factory",
-			"address": "0x214764d43841141dB60C84b59EAbdA877aC4f116"
+			"address": "0x0425CB20530d26C720FbB2713ff7eFefFEd9893B"
 		},
 		{
 			"id": "securityPoolForker",
 			"label": "Security Pool Forker",
-			"address": "0x7A81c01BA213FEFbD349E30a959fba74231E4149"
+			"address": "0x7eb818176CeDD11dC5063FB90cBc94AD4Bf00383"
 		},
 		{
 			"id": "escalationGameFactory",
 			"label": "Escalation Game Factory",
-			"address": "0xdF909711df244796C9e61F37aa4E183769378A90"
+			"address": "0x78B32B5C65C8c1275c9f087f53F9b73fBD9EA398"
 		},
 		{
 			"id": "securityPoolFactory",
 			"label": "Security Pool Factory",
-			"address": "0x1Aa25f25c47d7a881524FE513808a50a69BeD2b0"
+			"address": "0x3b1e9D4F06bBD4D76A1544aBaD0B66B81B7ce322"
 		}
 	],
 	"derivedContracts": [
 		{
 			"id": "escalationGameProofVerifier",
 			"label": "Escalation Game Proof Verifier",
-			"address": "0x47bDe81Be54B358E6C5CCd8637D25444beE7B8c3"
+			"address": "0xbef5755686C16793FbED23e27539Ad34807d915F"
 		}
 	]
 }
