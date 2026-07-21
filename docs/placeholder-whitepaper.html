@@ -584,8 +584,8 @@
 						>
 					</div>
 					<p class="lede">
-						A <code>SecurityPool</code> is the central Placeholder contract for
-						a question in a universe. Vault operators deposit REP, choose bond
+						A <code>SecurityPool</code> is a lineage-specific Placeholder contract
+						for a question in a universe. Vault operators deposit REP, choose bond
 						allowance, and underwrite ETH-backed complete sets in that pool's
 						local accounting ledger.
 					</p>
@@ -618,10 +618,22 @@
 						deployment salts include the zero parent address, universe id,
 						question id, and
 						<code>securityMultiplier</code>; child-pool salts include the parent
-						pool address as well. The share token uses a separate salt based on
-						<code>securityMultiplier</code> and question id so the share-token
-						address stays stable across forked child pools for the same market
-						shape.
+						pool address as well. Each origin receives
+						<code>originId = keccak256(abi.encode(questionId, securityMultiplier, originUniverseId))</code>.
+						Migrated children retain that origin id and register with
+						<code>poolId = keccak256(abi.encode(originId, childUniverseId))</code>. The origin id
+						is also the share-token salt, so every lineage has a separate
+						share-token contract and position namespace while all children of that
+						lineage reuse the same contract.
+					</p>
+					<p>
+						An inherited child and a newly created origin may coexist for the same
+						question, multiplier, and universe. This is intentional: their origin
+						ids, pool addresses, share tokens, collateral ledgers, and migration
+						paths are distinct. A caller selecting a pool therefore selects an
+						origin lineage, not merely a question and universe. Because a fresh
+						origin cannot occupy an inherited lineage's registry entry, origin
+						deployment does not scan universe ancestors.
 					</p>
 					<figure class="diagram" id="fig-placeholder-asset-flow">
 						<svg
@@ -3719,10 +3731,12 @@
 						Continuation withdrawals use Merkle Mountain Range proofs against
 						the inherited carry snapshot. Each accepted proof advances the
 						nullifier root, so a carried parent deposit cannot be replayed in
-						the child. A direct own-fork parent claim also records the deposit's
-						stable parent index in the forker before paying the wallet. Every
-						current or later-created child checks that parent-wide record before
-						accepting the inherited proof. The forker also records the directly claimed
+						the child. The stable parent index remains part of the carry leaf and
+						nullifier proof. Separately, a direct own-fork claim derives the
+						origin-scoped global deposit id from that index and records the id in
+						the forker before paying the wallet. Every current or later-created
+						child derives and checks the same id before accepting the inherited
+						proof. The forker also records the directly claimed
 						principal by outcome, which the child's effective carry total subtracts so a
 						paid leaf cannot strand unresolved principal. The exact leaf fields, peak bagging order, proof-length
 						rules, and 64-peak bound are documented in
@@ -5007,14 +5021,19 @@
 						backing once; winning proofs remain their own authorization. Escalation can therefore branch
 						recursively with Zoltar universes without replaying spent proofs or
 						requiring other vaults to migrate. Before consuming a carried proof,
-						the direct-claim replay check walks the pool's parent lineage, so a
-						claim recorded by any ancestor also blocks that proof in descendants.
+						the forker derives a stable global deposit id as
+						<code>keccak256(abi.encode(originId, uint8(outcomeIndex), parentDepositIndex))</code>.
+						A direct claim recorded anywhere in that origin lineage therefore
+						blocks the corresponding descendant proof with one mapping lookup.
 					</p>
 					<p id="recursive-fork-depth-risk">
-						There is no explicit maximum recursive fork depth. Ancestor replay
-						checks, proof construction, and operational coordination grow with
-						that lineage; at sufficient depth they can become impractical even
-						when each individual recursion step remains logically valid.
+						There is no explicit maximum recursive fork depth. Origin registration
+						is keyed by origin id and universe, child construction extends the
+						factory's cached inherited-fork flag from the immediate parent, and
+						direct-claim replay uses the global deposit id. None of these operations
+						traverses the pool or universe ancestry, so their gas does not grow with
+						recursive lineage depth. Total historical data and offchain proof
+						coordination can still grow as more forks occur.
 					</p>
 					<p>
 						For example, suppose Zoltar has two ended questions: “Did London record a
