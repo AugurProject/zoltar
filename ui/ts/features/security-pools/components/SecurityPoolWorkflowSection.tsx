@@ -46,6 +46,7 @@ import {
 	hasCurrentSelectedPoolForkActivity,
 	getSelectedPoolCardTitle,
 	getSelectedPoolOracleMetricValues,
+	getSelectedPoolViewForForkWorkflowSelectionStage,
 	getSelectedPoolViewLabel,
 	getSelectedPoolWorkflowGuardMessage,
 	getSelectedPoolWorkflowLockedPresentation,
@@ -285,6 +286,7 @@ export function SecurityPoolWorkflowSection({
 	const { forkWorkflowSelectionStage, onForkWorkflowSelectionStageChange } = useForkWorkflowSelectionState({
 		currentForkWorkflowSelectionStage,
 		legacyForkWorkflowSelectionStage,
+		onSelectedStageViewChange: stage => onSelectedPoolViewChange(getSelectedPoolViewForForkWorkflowSelectionStage(stage)),
 		selectedPoolAddress: selectedPool?.securityPoolAddress,
 		view,
 	})
@@ -373,6 +375,7 @@ export function SecurityPoolWorkflowSection({
 		accountAddress: accountState.address,
 		hasLoadedSelectedPool: loadedSelectedPool !== undefined,
 		isMainnet,
+		isPriceValid: currentPoolOracleManagerDetails?.isPriceValid,
 		pendingReportId: currentPoolOracleManagerDetails?.pendingReportId,
 		requiredEthCost: currentPoolOracleManagerDetails?.requestPriceEthCost,
 		walletEthBalance: accountState.ethBalance,

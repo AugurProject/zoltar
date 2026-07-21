@@ -429,6 +429,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 					accountState: createAccountState({ ethBalance: 5n * 10n ** 18n }),
 					checkedSecurityPoolAddress: zeroAddress,
 					poolOracleManagerDetails: createOracleManagerDetails({
+						isPriceValid: false,
 						pendingReportId: 0n,
 						requestPriceEthCost: 10n * 10n ** 18n,
 					}),
@@ -442,6 +443,27 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		setCleanup(renderedComponent.cleanup)
 
 		expectTransactionButtonDisabled(document.body, 'Request New Price', 'Need 7 more ETH in this wallet to request a new price.')
+	})
+
+	test('disables Request New Price while the current oracle price remains valid', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: zeroAddress,
+					poolOracleManagerDetails: createOracleManagerDetails({
+						isPriceValid: true,
+						pendingReportId: 0n,
+					}),
+					securityPoolAddress: zeroAddress,
+					securityPools: [createSelectedPool()],
+					selectedPoolView: 'price-oracle',
+				})}
+				showHeader={false}
+			/>,
+		)
+		setCleanup(renderedComponent.cleanup)
+
+		expectTransactionButtonDisabled(document.body, 'Request New Price', 'The current oracle price is still valid.')
 	})
 
 	test('uses the lifted selected pool view state and reports tab changes through the shared setter', async () => {

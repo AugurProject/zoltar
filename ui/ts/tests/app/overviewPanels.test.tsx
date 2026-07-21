@@ -296,7 +296,7 @@ describe('OverviewPanels', () => {
 			universeLabel: 'Universe 11',
 		})
 
-		const parentUniverseLink = documentQueries.getByRole('link', { name: 'Universe 3' })
+		const parentUniverseLink = documentQueries.getByRole('link', { name: 'Universe 0x3' })
 		expect(parentUniverseLink).toBeDefined()
 		expect(document.body.textContent?.includes('Parent Universe')).toBe(true)
 	})

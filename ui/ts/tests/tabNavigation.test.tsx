@@ -27,7 +27,7 @@ describe('TabNavigation', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
 	beforeEach(() => {
-		cleanupDom = installDomEnvironment('http://localhost/#/zoltar?universe=7&simulate=1').cleanup
+		cleanupDom = installDomEnvironment('http://localhost/#/zoltar?universe=7&zoltarView=create&simulate=1').cleanup
 	})
 
 	afterEach(async () => {
@@ -44,7 +44,7 @@ describe('TabNavigation', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('navigation', { name: 'Application sections' })).not.toBeNull()
 		expect(documentQueries.getByRole('link', { name: 'Deploy' }).getAttribute('href')).toBe('#/deploy?universe=7&simulate=1')
-		expect(documentQueries.getByRole('link', { name: 'Markets' }).getAttribute('href')).toBe('#/zoltar?universe=7&simulate=1')
+		expect(documentQueries.getByRole('link', { name: 'Markets' }).getAttribute('href')).toBe('#/zoltar?universe=7&zoltarView=create&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Markets' }).getAttribute('aria-current')).toBe('page')
 		expect(documentQueries.getByRole('link', { name: 'Security Pools' }).getAttribute('href')).toBe('#/security-pools?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Oracle Reports' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1')
@@ -95,13 +95,13 @@ describe('TabNavigation', () => {
 		expect(routeChanges).toEqual([])
 	})
 
-	test('preserves the current hash query state in top-level tab hrefs', async () => {
+	test('keeps shared and destination-owned query state in top-level tab hrefs', async () => {
 		const rendered = await renderIntoDocument(h(TabNavigation, createProps()))
 		cleanupRenderedComponent = rendered.cleanup
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('link', { name: 'Deploy' }).getAttribute('href')).toBe('#/deploy?universe=7&simulate=1')
-		expect(documentQueries.getByRole('link', { name: 'Markets' }).getAttribute('href')).toBe('#/zoltar?universe=7&simulate=1')
+		expect(documentQueries.getByRole('link', { name: 'Markets' }).getAttribute('href')).toBe('#/zoltar?universe=7&zoltarView=create&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Security Pools' }).getAttribute('href')).toBe('#/security-pools?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Oracle Reports' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1')
 	})

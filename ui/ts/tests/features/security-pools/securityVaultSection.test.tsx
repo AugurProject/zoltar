@@ -386,6 +386,29 @@ describe('SecurityVaultSection', () => {
 		expect(getTransactionButtonState(document.body, 'Claim Fees')).toEqual({ disabled: true, reason: 'Select your own vault to claim fees.' })
 	})
 
+	test('explains how to recover when no REP is available to create the selected vault', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					modalFirst: true,
+					securityVaultDetails: createSecurityVaultDetails({
+						escalationEscrowedRep: 0n,
+						repDepositShare: 0n,
+						securityBondAllowance: 0n,
+						unpaidEthFees: 0n,
+					}),
+					securityVaultRepBalance: 0n,
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(getTransactionButtonState(document.body, 'Deposit REP')).toEqual({
+			disabled: true,
+			reason: 'No REP is available in the active universe. Obtain or migrate REP into this universe before creating a vault.',
+		})
+	})
+
 	test('keeps the deposit modal in create-vault mode for an empty selected vault', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection
@@ -412,7 +435,7 @@ describe('SecurityVaultSection', () => {
 		expect(depositDialogQueries.queryByRole('heading', { name: 'Vault Summary' })).toBeNull()
 		expect(depositDialogQueries.getByText('This vault does not exist. Deposit REP to create it.')).not.toBeNull()
 		expect(depositDialogQueries.getByText('REP Collateral Amount')).not.toBeNull()
-		expect(transactionContext.textContent?.includes('Universe 1')).toBe(true)
+		expect(transactionContext.textContent?.includes('Universe 0x1')).toBe(true)
 		expect(transactionContext.textContent?.includes('Ethereum Mainnet')).toBe(true)
 		expect(
 			within(transactionContext)

@@ -158,8 +158,8 @@ async function clickElement(element: HTMLElement) {
 async function fillOpenOracleCreateForm() {
 	await setInputValue('Base Token Address', openOracleCreateParameters.token1Address)
 	await setInputValue('Quote Token Address', openOracleCreateParameters.token2Address)
-	await setInputValue('Exact Token1 Report', formatCurrencyInputBalance(openOracleCreateParameters.exactToken1Report))
-	await setInputValue('Initial Token2 Amount', formatCurrencyInputBalance(openOracleCreateParameters.initialToken2Amount))
+	await setInputValue('Base Token Amount', formatCurrencyInputBalance(openOracleCreateParameters.exactToken1Report))
+	await setInputValue('Quote Token Amount', formatCurrencyInputBalance(openOracleCreateParameters.initialToken2Amount))
 	await setInputValue('Settler Reward', formatCurrencyInputBalance(openOracleCreateParameters.settlerReward))
 	await setInputValue('ETH Value To Send', formatCurrencyInputBalance(openOracleCreateParameters.ethValue))
 	await setInputValue('Dispute Fee (%)', formatOpenOracleFeePercentageInput(BigInt(openOracleCreateParameters.feePercentage)))
@@ -246,7 +246,7 @@ describe.serial('OpenOracleSection integration', () => {
 
 		await fillOpenOracleCreateForm()
 
-		await clickElement(within(document.body).getByRole('button', { name: 'Create Standalone Oracle Game' }))
+		await clickElement(within(document.body).getByRole('button', { name: 'Create Standalone Oracle Report' }))
 
 		await waitForLatestAction('createReportInstance')
 		await waitFor(async () => {

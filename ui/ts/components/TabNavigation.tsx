@@ -1,32 +1,31 @@
 import * as appCopy from '../copy/app.js'
 import * as commonCopy from '../copy/common.js'
 import { ViewTabs } from './ViewTabs.js'
-import { buildRouteHref, getRouteHashSearch } from '../lib/routing.js'
+import { buildRouteHref, getTopLevelRouteSearch } from '../lib/routing.js'
 import type { TabNavigationProps } from '../types/components.js'
 
 export function TabNavigation({ route, showDeployTab = true, augurPlaceHolderDeployed, deployRoute, marketRoute, openOracleRoute, securityPoolsRoute, onRouteChange }: TabNavigationProps) {
 	const disabledTabReason = appCopy.deploymentRequiredDetail
 	const options: Array<{ disabled?: boolean; href: string; label: string; reason?: string; value: Exclude<TabNavigationProps['route'], 'not-found'> }> = []
-	const currentRouteSearch = getRouteHashSearch()
-	if (showDeployTab) options.push({ value: 'deploy', label: commonCopy.deploy, href: buildRouteHref(deployRoute, currentRouteSearch) })
+	if (showDeployTab) options.push({ value: 'deploy', label: commonCopy.deploy, href: buildRouteHref(deployRoute, getTopLevelRouteSearch('deploy')) })
 	options.push({
 		value: 'zoltar',
 		label: commonCopy.markets,
-		href: buildRouteHref(marketRoute, currentRouteSearch),
+		href: buildRouteHref(marketRoute, getTopLevelRouteSearch('zoltar')),
 		disabled: !augurPlaceHolderDeployed,
 		...(!augurPlaceHolderDeployed ? { reason: disabledTabReason } : {}),
 	})
 	options.push({
 		value: 'security-pools',
 		label: commonCopy.securityPools,
-		href: buildRouteHref(securityPoolsRoute, currentRouteSearch),
+		href: buildRouteHref(securityPoolsRoute, getTopLevelRouteSearch('security-pools')),
 		disabled: !augurPlaceHolderDeployed,
 		...(!augurPlaceHolderDeployed ? { reason: disabledTabReason } : {}),
 	})
 	options.push({
 		value: 'open-oracle',
 		label: appCopy.oracleReports,
-		href: buildRouteHref(openOracleRoute, currentRouteSearch),
+		href: buildRouteHref(openOracleRoute, getTopLevelRouteSearch('open-oracle')),
 		disabled: !augurPlaceHolderDeployed,
 		...(!augurPlaceHolderDeployed ? { reason: disabledTabReason } : {}),
 	})

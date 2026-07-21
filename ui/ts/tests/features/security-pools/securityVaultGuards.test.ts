@@ -131,6 +131,7 @@ describe('security vault guards', () => {
 			getVaultRequestPriceGuardMessage({
 				accountAddress: zeroAddress,
 				hasLoadedSelectedPool: true,
+				isPriceValid: false,
 				isMainnet: false,
 				pendingReportId: 0n,
 				requiredEthCost: 1n,
@@ -142,12 +143,25 @@ describe('security vault guards', () => {
 			getVaultRequestPriceGuardMessage({
 				accountAddress: zeroAddress,
 				hasLoadedSelectedPool: true,
+				isPriceValid: false,
 				isMainnet: true,
 				pendingReportId: 9n,
 				requiredEthCost: 1n,
 				walletEthBalance: 1n,
 			}),
 		).toBe('A pending price report already exists for this pool.')
+
+		expect(
+			getVaultRequestPriceGuardMessage({
+				accountAddress: zeroAddress,
+				hasLoadedSelectedPool: true,
+				isMainnet: true,
+				isPriceValid: true,
+				pendingReportId: 0n,
+				requiredEthCost: 1n,
+				walletEthBalance: 1n,
+			}),
+		).toBe('The current oracle price is still valid.')
 
 		expect(
 			getVaultExecutePendingOperationGuardMessage({
@@ -185,6 +199,7 @@ describe('security vault guards', () => {
 			getVaultRequestPriceGuardMessage({
 				accountAddress: zeroAddress,
 				hasLoadedSelectedPool: true,
+				isPriceValid: false,
 				isMainnet: true,
 				pendingReportId: 0n,
 				requiredEthCost: 10n * ETH,
