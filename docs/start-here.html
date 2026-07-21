@@ -412,27 +412,12 @@
 					</p>
 				</figure>
 				<p>
-					An interrupted unresolved game follows the advanced continuation path.
-					A selected continuation can start without waiting for inactive vaults. It copies
-					the complete parent escalation totals. External forks reproduce the drained
-					game REP one-for-one; the escalation's own fork deducts the winner haircut from
-					escalation backing while preserving ordinary pool REP one-for-one. After
-					resolution, anyone may relay a winning inherited proof and
-					the authenticated depositor receives the payout from aggregate backing.
-					Inherited losing outcomes need no proof calls. The
-					<a href="./placeholder-whitepaper.html#fig-placeholder-unresolved-migration">migration accounting diagram</a>
-					separates the canonical snapshot, aggregate REP backing, and proof-authorized
-					payout involved in that path.
-				</p>
-				<p>
-					If an unrelated market caused the first fork, a selected continuation
-					can resume in that fork's child universe and later reach non-decision
-					on the original market question. The resulting recursive fork splits
-					that child universe on the original question: the first fork's branches
-					represent the unrelated question, while the recursive branches represent
-					the original one. The
-					<a href="./placeholder-whitepaper.html#fig-placeholder-recursive-continuation">recursive continuation diagram</a>
-					shows both fork depths.
+					Unresolved games can continue in selected child pools, including after
+					an unrelated fork. The
+					<a href="./placeholder-whitepaper.html#migration">Placeholder migration flow</a>
+					owns that lifecycle, while
+					<a href="./merkle-mountain-range.html">Merkle Mountain Range carry proofs</a>
+					owns proof and replay-protection details.
 				</p>
 				<p>
 					No contract declares one branch canonical. The system creates the
