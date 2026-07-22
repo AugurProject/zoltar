@@ -95,6 +95,23 @@ describe('saved simulation states', () => {
 		).toThrow('Saved simulation state is missing a valid savedAt timestamp')
 	})
 
+	test('rejects array-shaped TEVM snapshots before they can corrupt a saved environment', () => {
+		const malformedEnvelope: unknown = JSON.parse(
+			createSerializedSavedState({
+				name: 'Malformed snapshot',
+				savedAt: '2026-06-02T12:34:56.000Z',
+			}),
+		)
+		if (typeof malformedEnvelope !== 'object' || malformedEnvelope === null || Array.isArray(malformedEnvelope)) throw new Error('Expected an object-shaped saved state fixture')
+		const state = Reflect.get(malformedEnvelope, 'state')
+		if (typeof state !== 'object' || state === null || Array.isArray(state)) throw new Error('Expected an object-shaped saved state payload')
+		Reflect.set(state, 'snapshot', [])
+		const malformedSerialized = JSON.stringify(malformedEnvelope)
+		if (malformedSerialized === undefined) throw new Error('Expected the malformed fixture to serialize')
+
+		expect(() => parseSavedSimulationStateEnvelope(malformedSerialized)).toThrow('Saved simulation state is missing a valid TEVM snapshot')
+	})
+
 	test('persists, lists, and deletes saved states from local storage', () => {
 		const domEnvironment = installDomEnvironment()
 

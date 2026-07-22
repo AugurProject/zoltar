@@ -96,7 +96,7 @@ class SavedSimulationStateError extends Error {
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null
+	return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function isTaggedBigIntValue(value: unknown): value is Record<typeof BIGINT_VALUE_TAG, string> {
