@@ -13,15 +13,13 @@ type Props = {
 	loadOracleReport: (reportId: string) => Promise<void>
 	loadSecurityPools: (securityPoolAddress?: string) => Promise<boolean | void>
 	navigate: (route: 'deploy' | 'open-oracle' | 'security-pools' | 'zoltar') => void
-	openOracleFormReportId: string
-	openOracleReportDetailsReportId: bigint | undefined
 	route: AppRoute
 	securityPoolAddress: string
 	securityPoolQuestionId: string
 	securityPoolResultHash: string | undefined
 	selectedPoolSecurityPoolAddress: string | undefined
 	setForkAuctionFormSecurityPoolAddress: (securityPoolAddress: string) => void
-	setOpenOracleReport: (reportId: string | undefined) => void
+	setOpenOracleFormReportId: (reportId: string) => void
 	setReportingFormSecurityPoolAddress: (securityPoolAddress: string) => void
 	setSecurityVaultFormSelectedVaultAddress: (selectedVaultAddress: string) => void
 	setSecurityVaultFormSecurityPoolAddress: (securityPoolAddress: string) => void
@@ -78,15 +76,13 @@ export function useAppRouteEffects({
 	loadOracleReport,
 	loadSecurityPools,
 	navigate,
-	openOracleFormReportId,
-	openOracleReportDetailsReportId,
 	route,
 	securityPoolAddress,
 	securityPoolQuestionId,
 	securityPoolResultHash,
 	selectedPoolSecurityPoolAddress,
 	setForkAuctionFormSecurityPoolAddress,
-	setOpenOracleReport,
+	setOpenOracleFormReportId,
 	setReportingFormSecurityPoolAddress,
 	setSecurityVaultFormSelectedVaultAddress,
 	setSecurityVaultFormSecurityPoolAddress,
@@ -104,8 +100,7 @@ export function useAppRouteEffects({
 	const lastRequestedSecurityPoolAddress = useRef<string | undefined>(undefined)
 	const lastSelectedPoolEnvironmentNonce = useRef<number | undefined>(undefined)
 	const lastSelectedSecurityPoolAddress = useRef<string | undefined>(undefined)
-	const lastObservedOpenOracleReportId = useRef<string | undefined>(undefined)
-	const lastObservedOpenOracleSelection = useRef<string | undefined>(undefined)
+	const lastSyncedOpenOracleReportId = useRef<string | undefined>(undefined)
 
 	loadOracleReportRef.current = loadOracleReport
 	loadSecurityPoolsRef.current = loadSecurityPools
@@ -125,6 +120,17 @@ export function useAppRouteEffects({
 	}, [accountAddress, activeEnvironmentNonce, activeZoltarView, environmentReady, route, walletBootstrapComplete])
 
 	useEffect(() => {
+		if (route !== 'open-oracle') {
+			lastSyncedOpenOracleReportId.current = undefined
+			return
+		}
+		const normalizedReportId = urlOpenOracleReportId.trim()
+		if (lastSyncedOpenOracleReportId.current === normalizedReportId) return
+		lastSyncedOpenOracleReportId.current = normalizedReportId
+		setOpenOracleFormReportId(normalizedReportId)
+	}, [route, setOpenOracleFormReportId, urlOpenOracleReportId])
+
+	useEffect(() => {
 		const shouldLoadReport = shouldLoadOpenOracleReportFromUrl({ environmentReady, route, urlOpenOracleReportId })
 		if (!shouldLoadReport) {
 			lastRequestedOpenOracleReportId.current = undefined
@@ -135,19 +141,6 @@ export function useAppRouteEffects({
 		lastRequestedOpenOracleReportId.current = requestKey
 		void loadOracleReportRef.current(urlOpenOracleReportId)
 	}, [activeEnvironmentNonce, environmentReady, route, urlOpenOracleReportId])
-
-	useEffect(() => {
-		const normalizedUrlReportId = urlOpenOracleReportId.trim()
-		const normalizedInternalSelection = openOracleFormReportId.trim() || openOracleReportDetailsReportId?.toString() || ''
-		const initialObservation = lastObservedOpenOracleReportId.current === undefined
-		const urlSelectionChanged = !initialObservation && lastObservedOpenOracleReportId.current !== normalizedUrlReportId
-		const internalSelectionChanged = lastObservedOpenOracleSelection.current !== normalizedInternalSelection
-		lastObservedOpenOracleReportId.current = normalizedUrlReportId
-		lastObservedOpenOracleSelection.current = normalizedInternalSelection
-
-		if ((initialObservation && normalizedUrlReportId !== '') || urlSelectionChanged || !internalSelectionChanged) return
-		setOpenOracleReport(normalizedInternalSelection === '' ? undefined : normalizedInternalSelection)
-	}, [openOracleFormReportId, openOracleReportDetailsReportId, setOpenOracleReport, urlOpenOracleReportId])
 
 	useEffect(() => {
 		if (route !== 'security-pools') return

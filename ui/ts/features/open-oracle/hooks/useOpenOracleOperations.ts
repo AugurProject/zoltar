@@ -439,10 +439,25 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 	}
 
 	const loadOracleReportById = async (reportId: bigint) => await dependencies.loadOpenOracleReportDetails(getOpenOracleAddress(), reportId)
+	const setOpenOracleForm = (updater: (current: OpenOracleFormState) => OpenOracleFormState) => {
+		setOpenOracleFormState(current => {
+			const next = updater(current)
+			const nextReportId = next.reportId.trim()
+			if (nextReportId === current.reportId.trim()) return next
+
+			currentSelectedReportIdRef.current = nextReportId
+			openOracleReportLookupState.value = 'unknown'
+			openOracleReportDetails.value = undefined
+			loadedOpenOracleReportId.value = undefined
+			openOracleError.value = undefined
+			resetOpenOracleTokenAccessState(false)
+			return { ...getDefaultOpenOracleFormState(), reportId: next.reportId }
+		})
+	}
 
 	const loadOracleReport = async (reportIdInput?: string) => {
 		const requestedReportIdInput = reportIdInput?.trim() ?? currentSelectedReportIdInput
-		if (reportIdInput !== undefined) currentSelectedReportIdRef.current = requestedReportIdInput
+		if (reportIdInput !== undefined) setOpenOracleForm(current => ({ ...current, reportId: requestedReportIdInput }))
 		const isCurrentLoad = nextOracleReportLoad()
 		await oracleReportLoad.run({
 			onStart: () => {
@@ -452,11 +467,6 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			load: async () => {
 				const reportIdValue = reportIdInput?.trim() ?? openOracleForm.value.reportId
 				const reportId = parseReportIdInput(reportIdValue)
-				if (reportIdInput !== undefined)
-					openOracleForm.value = {
-						...openOracleForm.value,
-						reportId: reportIdValue,
-					}
 				const details = await loadOracleReportById(reportId)
 				if (!isCurrentLoad() || !isSelectedReportCurrent(requestedReportIdInput)) throw new Error('Stale oracle report load')
 				return { details, reportId } satisfies LoadedOracleReportResult
@@ -477,22 +487,6 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			},
 		})
 	}
-	const setOpenOracleForm = (updater: (current: OpenOracleFormState) => OpenOracleFormState) => {
-		setOpenOracleFormState(current => {
-			const next = updater(current)
-			const nextReportId = next.reportId.trim()
-			if (nextReportId === current.reportId.trim()) return next
-
-			currentSelectedReportIdRef.current = nextReportId
-			openOracleReportLookupState.value = 'unknown'
-			openOracleReportDetails.value = undefined
-			loadedOpenOracleReportId.value = undefined
-			openOracleError.value = undefined
-			resetOpenOracleTokenAccessState(false)
-			return { ...getDefaultOpenOracleFormState(), reportId: next.reportId }
-		})
-	}
-
 	const ensureLoadedSelectedReport = async ({ forceReload = false, reportIdInput, requireCurrentSelection = false }: { forceReload?: boolean; reportIdInput?: string; requireCurrentSelection?: boolean } = {}) => {
 		const selectedReportIdInput = reportIdInput?.trim() ?? currentSelectedReportIdInput
 		const reportId = parseReportIdInput(selectedReportIdInput)
