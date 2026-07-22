@@ -447,19 +447,38 @@
 				</p>
 				<div class="callout" id="rolling-dispute-security-classification">
 					<p>
-						<strong>Security-review classification.</strong> Indefinite paid
-						resetting is an accepted design property, not a bounded-liveness
-						bug by itself. With the current 1% protocol fee, a token1-side
-						self-dispute against <code>24 WETH</code> credits
-						<code>0.24 WETH</code> inside OpenOracle to the configured
-						<code>0x000000000000000000000000000000000000dEaD</code> fee sink
-						in addition to requiring the replacement-position change and
-						transaction cost. That economically inaccessible internal balance
-						does not reduce WETH total supply and is distinct from Zoltar's
-						genesis-REP burn sink. A valid finding would instead demonstrate a
-						free or underfunded reset, fee recovery, simultaneous reuse of the
-						required capital, an invalid deadline transition, or unauthorized
-						use of the sponsor queue. See the
+						<strong>Dust self-dispute attempt.</strong> A reporter can choose
+						<code>amount2 = 1</code>, meaning one atomic REP unit. On a token2-side
+						self-dispute, the 1% protocol fee then floors to zero. After
+						<code>amount1</code> reaches <code>escalationHalt</code>, each replacement
+						requires only <code>oldAmount1 + 1</code>, so the reporter can mechanically
+						reset the settlement clock with one additional WETH wei plus transaction
+						gas. The coordinator makes that halt at least one percent of pool open
+						interest, raising the capital needed to enter this post-halt regime but
+						not changing its one-wei marginal step.
+					</p>
+					<p>
+						That sequence is not a cheap permissionless lock under
+						<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a>.
+						An OpenOracle dispute executes one of the current reporter's limit
+						orders as it installs the replacement. Against a report holding
+						<code>H WETH</code> and one atomic REP unit, an independent token2-side
+						disputer can install a sensible REP amount, become current reporter,
+						and inherit the posted <code>H WETH</code> position while the dust reporter
+						receives only the dust-side swap proceeds. The configured
+						<code>disputeDelay</code> is zero, so this correction is immediately
+						available. The dust reporter must therefore censor or continually
+						front-run every profitable correction, whose inclusion bid can be funded
+						by the exposed WETH value; inclusion only before each settlement deadline
+						is insufficient.
+					</p>
+					<p>
+						<strong>Security-review classification.</strong> Indefinite funded
+						resetting remains an accepted design property, not a bounded-liveness
+						guarantee. A valid finding must account for the executable replacement
+						position and demonstrate a free or underfunded reset despite profitable
+						correction, fee recovery, simultaneous reuse of required capital, an
+						invalid deadline transition, or unauthorized sponsor-queue use. See the
 						<a href="./security-model.html#accepted-design-properties">normative review boundary</a>.
 					</p>
 				</div>
@@ -565,8 +584,9 @@
 				</figure>
 				<p>
 					The refresh sponsor's coordinator call supplies a proposed REP/ETH price
-					and passes <code>requestedInitialWeth = 0</code>, so the coordinator
-					atomically computes and posts the dynamic minimum WETH amount and its
+					and passes <code>requestedInitialWeth = 0</code>. For this worked example,
+					the pool has no open interest, so the coordinator atomically computes
+					and posts the gas-based minimum WETH amount and its
 					matching REP <code>amount2</code>. At the snapshot base fee of
 					<code>69,594,403 wei</code>, the minimum side is
 					<code>0.005621086396153847 WETH</code>. Using the snapshot price of
@@ -594,8 +614,9 @@
 						refresh sponsor supplies exactly
 						<code>0.005621086396153847 WETH</code> and approximately
 						<code>12.422600935500001870 REP</code>. Because this example requests
-						zero additional WETH, the selected amount equals the minimum computed
-						from the onchain base fee and coordinator parameters. The coordinator
+						zero additional WETH and the example has no open interest, the selected
+						amount equals the minimum computed from the onchain base fee and
+						coordinator parameters. The coordinator
 						derives the REP amount from that selected WETH amount and the sponsor's
 						proposed price.
 					</p>
@@ -679,61 +700,56 @@
 				<div class="equation" id="eq-openoracle-initial-report-size">
 					<math
 						display="block"
-						aria-label="minimum WETH report equals at least one wei or the ceiling of block base fee times dispute gas units times Open Oracle Security multiplier basis points times one plus target error divided by ten thousand times target error minus protocol and reporter fees"
-						data-source="minimumWethReport = max(1, ceil(block.basefee \cdot gasUnitsForOneDispute \cdot openOracleSecurityMultiplierBps \cdot (percentagePrecision + targetPriceErrorForDispute) / (10000 \cdot (targetPriceErrorForDispute - protocolFee - reporterFee))))"
+						aria-label="minimum token one report is the gas based correction incentive floor; open interest halt is the ceiling of pool collateral divided by one hundred; escalation halt is the greater of that open interest halt and the initial report times the halt multiplier"
+						data-source="minimumToken1Report = max(1, ceil(block.basefee \cdot gasUnitsForOneDispute \cdot openOracleSecurityMultiplierBps \cdot (percentagePrecision + targetPriceErrorForDispute) / (10000 \cdot (targetPriceErrorForDispute - protocolFee - reporterFee)))); openInterestHalt = ceil(completeSetCollateralAmount / 100); escalationHalt = max(floor(initialWethReport \cdot escalationHaltMultiplierBps / 10000), openInterestHalt)"
 					>
-						<mrow>
-							<mi>minimumWethReport</mi>
-							<mo>=</mo>
-							<mi>max</mi>
-							<mo>(</mo>
-							<mn>1</mn>
-							<mo>,</mo>
-							<mi>ceil</mi>
-							<mo>(</mo>
-							<mfrac>
-								<mrow>
-									<mi>block.basefee</mi>
-									<mo>&#x22C5;</mo>
-									<mi>gasUnitsForOneDispute</mi>
-									<mo>&#x22C5;</mo>
-									<mi>openOracleSecurityMultiplierBps</mi>
-									<mo>&#x22C5;</mo>
-									<mo>(</mo>
-									<mi>percentagePrecision</mi>
-									<mo>+</mo>
-									<mi>targetPriceErrorForDispute</mi>
-									<mo>)</mo>
-								</mrow>
-								<mrow>
-									<mn>10000</mn>
-									<mo>&#x22C5;</mo>
-									<mo>(</mo>
-									<mi>targetPriceErrorForDispute</mi>
-									<mo>-</mo>
-									<mi>protocolFee</mi>
-									<mo>-</mo>
-									<mi>reporterFee</mi>
-									<mo>)</mo>
-								</mrow>
-							</mfrac>
-							<mo>)</mo>
-							<mo>)</mo>
-						</mrow>
+						<mtable>
+							<mtr>
+								<mtd><mi>minimumToken1Report</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd>
+									<mi>max</mi><mo>(</mo><mn>1</mn><mo>,</mo><mi>ceil</mi><mo>(</mo>
+									<mfrac>
+										<mrow>
+											<mi>block.basefee</mi><mo>&#x22C5;</mo><mi>gasUnitsForOneDispute</mi><mo>&#x22C5;</mo><mi>openOracleSecurityMultiplierBps</mi>
+											<mo>&#x22C5;</mo><mo>(</mo><mi>percentagePrecision</mi><mo>+</mo><mi>targetPriceErrorForDispute</mi><mo>)</mo>
+										</mrow>
+										<mrow>
+											<mn>10000</mn><mo>&#x22C5;</mo><mo>(</mo><mi>targetPriceErrorForDispute</mi><mo>-</mo><mi>protocolFee</mi><mo>-</mo><mi>reporterFee</mi><mo>)</mo>
+										</mrow>
+									</mfrac>
+									<mo>)</mo><mo>)</mo>
+								</mtd>
+							</mtr>
+							<mtr>
+								<mtd><mi>openInterestHalt</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><mi>ceil</mi><mo>(</mo><mfrac><mi>completeSetCollateralAmount</mi><mn>100</mn></mfrac><mo>)</mo></mtd>
+							</mtr>
+							<mtr>
+								<mtd><mi>escalationHalt</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd><mi>max</mi><mo>(</mo><mi>floor</mi><mo>(</mo><mfrac><mrow><mi>initialWethReport</mi><mo>&#x22C5;</mo><mi>escalationHaltMultiplierBps</mi></mrow><mn>10000</mn></mfrac><mo>)</mo><mo>,</mo><mi>openInterestHalt</mi><mo>)</mo></mtd>
+							</mtr>
+						</mtable>
 					</math>
 					<p class="equation-caption">
-						<span class="equation-label">Dynamic Minimum WETH Report</span>The
-						minimum is calculated inside <code>requestPrice</code> from that
-						transaction's <code>block.basefee</code>. Integer division rounds up.
-						A zero-base-fee block uses one wei because OpenOracle rejects a zero
-						report minimum. That one-wei value is a nonzero sentinel, not a
-						monotonic escalation guarantee: OpenOracle's later multiplier
-						calculation floors to an integer.
+						<span class="equation-label">Dynamic Report and Escalation Threshold</span>The
+						initial-report minimum is calculated from the request transaction's
+						<code>block.basefee</code>. A zero-base-fee block uses one WETH wei
+						because OpenOracle rejects a zero report amount. The multiplicative-escalation halt is
+						the greater of the selected initial report times the configured halt
+						multiplier and one percent of the pool's stored ETH collateral backing
+						complete sets. The open-interest division rounds up.
 					</p>
 				</div>
 				<p>
-					No REP price, assumed gas price, expected REP price movement, or
-					protected-operation notional enters the minimum WETH calculation. The sponsor
+					No REP price, assumed gas price, expected REP price movement, pool open
+					interest, or individual protected-operation notional enters the minimum
+					initial WETH calculation. Pool open interest instead raises
+					<code>escalationHalt</code> through
+					<code>ceil(completeSetCollateralAmount / OPEN_INTEREST_DIVIDER)</code>, with
+					<code>OPEN_INTEREST_DIVIDER = 100</code>. The sponsor
 					may pass zero to use that minimum or request a larger initial WETH amount.
 					The coordinator sets
 					<code>initialWethReport = max(minimumToken1Report(), requestedInitialWeth)</code>,
@@ -758,6 +774,16 @@
 							<td><code>block.basefee</code></td>
 							<td>Current request block</td>
 							<td>EVM block context</td>
+						</tr>
+						<tr>
+							<td><code>completeSetCollateralAmount</code></td>
+							<td>Current pool open interest in ETH units</td>
+							<td>Configured security pool</td>
+						</tr>
+						<tr>
+							<td><code>OPEN_INTEREST_DIVIDER</code></td>
+							<td><code>100</code> (a <code>1%</code> floor)</td>
+							<td>Coordinator constant</td>
 						</tr>
 						<tr>
 							<td><code>gasUnitsForOneDispute</code></td>
@@ -801,22 +827,29 @@
 					At <code>30 gwei</code>, the modeled gas cost is
 					<code>0.009 ETH</code>. After the <code>10x</code> Open Oracle Security multiplier and the
 					worst-direction five-percent correction fraction after fees, the minimum
-					report is <code>2.423076923076923077 WETH</code>. The value changes
-					linearly with the request block's base fee.
+					gas-based report is <code>2.423076923076923077 WETH</code>, producing an
+					initial-report-derived halt of <code>24.230769230769230770 WETH</code> at
+					the configured <code>10x</code> halt multiplier. One percent of pool open
+					interest replaces that halt only when it is larger.
 				</p>
 				<details class="interactive-example" id="initial-report-estimator-example" open>
 					<summary>Dynamic WETH report estimator</summary>
 					<p>
 						This calculator mirrors the onchain formula. The deployment
 						parameters and caller-selected amount are shown as adjustable inputs to
-						make their effect explicit; only the base fee changes from one request
-						block to another for a deployed coordinator.
+						make their effect explicit. For a deployed coordinator, the base fee and
+						pool open interest can change from one request block to another.
 					</p>
 					<div class="example-grid">
 						<label>
 							Block base fee
 							<input type="range" min="0" max="200" step="1" value="30" data-example-input="blockBaseFeeGwei" />
 							<span class="example-value" data-example-value="blockBaseFeeGwei">30 gwei</span>
+						</label>
+						<label>
+							Pool open interest
+							<input type="range" min="0" max="10000" step="100" value="100" data-example-input="openInterestWeth" />
+							<span class="example-value" data-example-value="openInterestWeth">100 WETH</span>
 						</label>
 						<label>
 							Gas units for one dispute
@@ -855,6 +888,8 @@
 						</label>
 					</div>
 					<div class="example-output-grid">
+						<div><span>Initial-derived halt</span><output data-example-output="initialReportEscalationHalt">24.230769230769230770 WETH</output></div>
+						<div><span>Open-interest halt floor</span><output data-example-output="openInterestEscalationHalt">1.000000000000000000 WETH</output></div>
 						<div><span>Minimum token1 report</span><output data-example-output="estimatedMinimumWethReport">2.423076923076923077 WETH</output></div>
 						<div><span>Selected initial WETH</span><output data-example-output="selectedInitialWethReport">2.423076923076923077 WETH</output></div>
 						<div><span>Escalation halt</span><output data-example-output="selectedEscalationHalt">24.230769230769230770 WETH</output></div>
@@ -1556,7 +1591,10 @@
 					<code>oldAmount1 + 1</code>, adding one atomic WETH unit. The selected
 					initial amount is
 					<code>max(minimumToken1Report(), requestedInitialWeth)</code>, and the
-					halt scales from that selected request-block snapshot.
+					selected initial amount determines one halt candidate. The other is
+					<code>ceil(completeSetCollateralAmount / OPEN_INTEREST_DIVIDER)</code>,
+					and <code>escalationHalt</code> takes their maximum. See
+					<a href="#eq-openoracle-initial-report-size">Dynamic Report and Escalation Threshold</a>.
 				</p>
 			</section>
 
@@ -1593,7 +1631,15 @@
 								and the <a href="#initial-report-estimator-example">estimator</a>.
 							</td>
 							<td>
-								Sets the minimum WETH side required for correction profitability.
+								Sets the gas-based initial WETH correction floor.
+							</td>
+						</tr>
+						<tr>
+							<td><code>OPEN_INTEREST_DIVIDER</code></td>
+							<td><code>100</code></td>
+							<td>
+								Makes one percent of <code>completeSetCollateralAmount</code> the
+								open-interest-derived <code>escalationHalt</code> floor.
 							</td>
 						</tr>
 						<tr>
@@ -1610,10 +1656,11 @@
 						<tr>
 							<td><code>escalationHalt</code></td>
 							<td>
-								<code>10x</code> the selected OpenOracle initial <code>currentAmount1</code> in WETH
+								The greater of <code>10x</code> the selected initial
+								<code>currentAmount1</code> and 1% of pool open interest
 							</td>
 							<td>
-								Stops multiplicative report-size escalation at <code>10x</code>;
+								Raises the multiplicative-escalation threshold with pool exposure and stops multiplicative report-size escalation there;
 								later disputes add one atomic WETH unit at a time.
 							</td>
 						</tr>
@@ -1831,7 +1878,7 @@
 				const bufferedGasCostEth =
 					disputeGasCostEth * parameters.openOracleSecurityMultiplier;
 				const correctionProfitUnits = targetErrorUnits - feeUnits;
-				let minimumWethReportWei;
+				let gasBasedMinimumWethReportWei;
 				if (correctionProfitUnits > 0n) {
 					const numerator =
 						BigInt(Math.round(parameters.blockBaseFeeGwei * 1e9)) *
@@ -1841,8 +1888,15 @@
 					const denominator = 10_000n * correctionProfitUnits;
 					const calculatedReport =
 						(numerator + denominator - 1n) / denominator;
-					minimumWethReportWei = calculatedReport > 0n ? calculatedReport : 1n;
+					gasBasedMinimumWethReportWei =
+						calculatedReport > 0n ? calculatedReport : 1n;
 				}
+				const openInterestWethWei = BigInt(
+					Math.round(parameters.openInterestWeth),
+				) * 10n ** 18n;
+				const openInterestEscalationHaltWei =
+					(openInterestWethWei + 99n) / 100n;
+				const minimumWethReportWei = gasBasedMinimumWethReportWei;
 				const requestedInitialWethWei = BigInt(
 					Math.round(parameters.requestedInitialWeth * 1e18),
 				);
@@ -1853,17 +1907,26 @@
 							? requestedInitialWethWei
 							: minimumWethReportWei;
 				}
-				const selectedEscalationHaltWei =
+				const initialReportEscalationHaltWei =
 					selectedInitialWethReportWei === undefined
 						? undefined
 						: (selectedInitialWethReportWei *
 								BigInt(Math.round(parameters.escalationHaltMultiplier * 10_000))) /
 							10_000n;
+				let selectedEscalationHaltWei;
+				if (initialReportEscalationHaltWei !== undefined) {
+					selectedEscalationHaltWei =
+						initialReportEscalationHaltWei > openInterestEscalationHaltWei
+							? initialReportEscalationHaltWei
+							: openInterestEscalationHaltWei;
+				}
 				return {
 					bufferedGasCostEth,
 					correctionProfitFraction,
 					disputeGasCostEth,
+					initialReportEscalationHaltWei,
 					minimumWethReportWei,
+					openInterestEscalationHaltWei,
 					selectedEscalationHaltWei,
 					selectedInitialWethReportWei,
 				};
@@ -1878,6 +1941,7 @@
 				const parameters = {
 					blockBaseFeeGwei: context.read("blockBaseFeeGwei"),
 					gasUnitsForOneDispute: context.read("gasUnitsForOneDispute"),
+					openInterestWeth: context.read("openInterestWeth"),
 					openOracleProtocolFee: context.read("openOracleProtocolFee"),
 					openOracleReporterFee: context.read("openOracleReporterFee"),
 					openOracleSecurityMultiplier: context.read(
@@ -1895,6 +1959,10 @@
 				context.writeValue(
 					"blockBaseFeeGwei",
 					parameters.blockBaseFeeGwei.toFixed(0) + " gwei",
+				);
+				context.writeValue(
+					"openInterestWeth",
+					parameters.openInterestWeth.toFixed(0) + " WETH",
 				);
 				context.writeValue(
 					"gasUnitsForOneDispute",
@@ -1936,6 +2004,18 @@
 					estimate.selectedEscalationHaltWei === undefined
 						? "unsafe: fees meet or exceed target error"
 						: formatAtomicWeth(estimate.selectedEscalationHaltWei);
+				const initialReportEscalationHaltText =
+					estimate.initialReportEscalationHaltWei === undefined
+						? "unsafe: fees meet or exceed target error"
+						: formatAtomicWeth(estimate.initialReportEscalationHaltWei);
+				context.writeOutput(
+					"initialReportEscalationHalt",
+					initialReportEscalationHaltText,
+				);
+				context.writeOutput(
+					"openInterestEscalationHalt",
+					formatAtomicWeth(estimate.openInterestEscalationHaltWei),
+				);
 				context.writeOutput("estimatedMinimumWethReport", minimumWethText);
 				context.writeOutput("selectedInitialWethReport", selectedInitialWethText);
 				context.writeOutput("selectedEscalationHalt", selectedEscalationHaltText);

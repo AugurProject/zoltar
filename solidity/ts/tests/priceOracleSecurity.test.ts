@@ -42,7 +42,7 @@ import {
 	requestPriceWithValue,
 	wrapWeth,
 } from '../testSupport/simulator/utils/contracts/peripherals'
-import { depositRep, getSecurityVault } from '../testSupport/simulator/utils/contracts/securityPool'
+import { createCompleteSet, depositRep, getSecurityVault } from '../testSupport/simulator/utils/contracts/securityPool'
 import { peripherals_openOracle_OpenOracle_OpenOracle, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '../types/contractArtifact'
 import { isIgnorableLogDecodeError } from './logDecodeErrors'
 import { replayZoltarEvents, type ReplayLog } from './eventReplay/eventReplayModel'
@@ -417,6 +417,29 @@ describe('Price Oracle Refund Security Tests', () => {
 			args: [],
 		})
 		assert.strictEqual(sizedForBaseFee, calculateOracleMinimumWethReport({ ...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, baseFeeWeiPerGas }), 'the on-chain WETH calculation should match the shared integer formula')
+	})
+
+	test('coordinator sizes the game escalation halt to one percent of pool open interest when larger than the initial-report-derived halt', async () => {
+		const openInterest = 100n * 10n ** 18n + 1n
+		const expectedOpenInterestMinimum = (openInterest + 99n) / 100n
+		const ethCost = await getRequestPriceEthCost(client, priceOracle)
+		await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, openInterest, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 10n ** 18n, ethCost)
+		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
+		await createCompleteSet(client, securityPool, openInterest)
+
+		const minimumToken1Report = await client.readContract({
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'minimumToken1Report',
+			address: priceOracle,
+			args: [],
+		})
+
+		assert.strictEqual(minimumToken1Report, 1n, 'pool open interest should not increase the gas-based initial WETH report minimum')
+		await mockWindow.advanceTime(5n * 60n + 1n)
+		await requestPrice(client, priceOracle)
+		const reportMeta = await getOpenOracleReportMeta(client, await getPendingReportId(client, priceOracle))
+		assert.strictEqual(reportMeta.exactToken1Report, 1n, 'the pending game should retain the gas-based initial WETH amount')
+		assert.strictEqual(reportMeta.escalationHalt, expectedOpenInterestMinimum, 'one percent of pool open interest should override the lower initial-report-derived escalation halt')
 	})
 
 	test('caller can voluntarily fund initial WETH above the coordinator minimum', async () => {

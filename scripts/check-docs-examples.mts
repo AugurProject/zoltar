@@ -430,6 +430,8 @@ async function checkDynamicWethReportExample(): Promise<void> {
 	const example = await loadInteractiveExample('docs/open-oracle-integration.html', 'initial-report-estimator-example')
 
 	try {
+		assertEqual(example.output('initialReportEscalationHalt'), '24.230769230769230770 WETH', 'dynamic report default initial-derived escalation halt')
+		assertEqual(example.output('openInterestEscalationHalt'), '1.000000000000000000 WETH', 'dynamic report default open-interest escalation halt floor')
 		assertEqual(example.output('estimatedMinimumWethReport'), '2.423076923076923077 WETH', 'dynamic report default minimum WETH')
 		assertEqual(example.output('selectedInitialWethReport'), '2.423076923076923077 WETH', 'dynamic report default selected WETH')
 		assertEqual(example.output('selectedEscalationHalt'), '24.230769230769230770 WETH', 'dynamic report default escalation halt')
@@ -447,10 +449,16 @@ async function checkDynamicWethReportExample(): Promise<void> {
 		assertEqual(example.output('selectedEscalationHalt'), '60.000000000000000000 WETH', 'escalation halt should scale from selected initial WETH')
 
 		example.setInput('blockBaseFeeGwei', 0)
+		example.setInput('openInterestWeth', 0)
 		example.setInput('requestedInitialWeth', 0)
 		assertEqual(example.output('estimatedMinimumWethReport'), '0.000000000000000001 WETH', 'zero base fee should retain the OpenOracle one-wei minimum')
 
 		example.setInput('blockBaseFeeGwei', 30)
+		example.setInput('openInterestWeth', 10000)
+		assertEqual(example.output('openInterestEscalationHalt'), '100.000000000000000000 WETH', 'one percent of open interest should set the open-interest halt floor')
+		assertEqual(example.output('estimatedMinimumWethReport'), '2.423076923076923077 WETH', 'open interest should not change the gas-based initial report minimum')
+		assertEqual(example.output('selectedEscalationHalt'), '100.000000000000000000 WETH', 'open-interest halt floor should override the lower initial-report-derived halt')
+
 		example.setInput('openOracleProtocolFee', 5)
 		example.setInput('openOracleReporterFee', 2)
 		assertEqual(example.output('estimatedMinimumWethReport'), 'unsafe: fees meet or exceed target error', 'fees at or above the target error should be rejected')
