@@ -9,6 +9,7 @@ type InteractiveExampleHarness = {
 	labelFor: (name: string) => string
 	output: (name: string) => string
 	setInput: (name: string, value: number) => void
+	textPosition: (name: string) => { x: number; y: number }
 }
 
 type AuctionExampleScenario = {
@@ -80,11 +81,23 @@ async function loadInteractiveExample(filePath: string, exampleId: string): Prom
 		return label.textContent.trim()
 	}
 
+	const textPosition = (name: string) => {
+		const element = example.querySelector(`[data-example-text="${name}"]`)
+		if (!(element instanceof window.SVGTextElement)) {
+			throw new Error(`Missing auction example text: ${name}`)
+		}
+		return {
+			x: Number(element.getAttribute('x')),
+			y: Number(element.getAttribute('y')),
+		}
+	}
+
 	return {
 		close: () => window.close(),
 		labelFor,
 		output,
 		setInput,
+		textPosition,
 	}
 }
 
@@ -389,6 +402,16 @@ async function checkPayoutRegionExample(): Promise<void> {
 	try {
 		assertEqual(example.output('payoutState'), 'reachable ordinary winner state', 'payout region example default state')
 		assertEqual(example.output('scaledWithdrawal'), '7 REP', 'payout region example default scaled withdrawal')
+		const defaultBindingMarker = example.textPosition('bindingMarker')
+		assert.equal(defaultBindingMarker.y, 145)
+		assert.ok(Math.abs(defaultBindingMarker.x - (80 + (10 * 600) / 18)) < 1e-9)
+		assert.deepEqual(example.textPosition('capMarker'), { x: 580, y: 162 })
+		assert.deepEqual(example.textPosition('winningMarker'), { x: 680, y: 179 })
+
+		example.setInput('bindingCapital', 10)
+		example.setInput('winningPrincipal', 15)
+		assert.deepEqual(example.textPosition('capMarker'), { x: 680, y: 162 })
+		assert.deepEqual(example.textPosition('winningMarker'), { x: 680, y: 179 })
 
 		example.setInput('bindingCapital', 20)
 		example.setInput('winningPrincipal', 15)
@@ -531,6 +554,30 @@ assert.match(operatorReferenceMarkdown, /each claimed auction allowance joins in
 assert.match(operatorReferenceMarkdown, /## Security Pool Guardrails[\s\S]*totalFeesOwedToVaults[\s\S]*totalAccruedFees\(\)[\s\S]*## Share Migration/i, 'operator reference security-pool guardrails should define assigned and aggregate fee accounting')
 
 const placeholderHtml = await readFile('docs/placeholder-whitepaper.html', 'utf8')
+const escalationCurvePath = placeholderHtml.match(/data-source="normalizedCost\(t\) = \(exp\(2\.4 \* t\) - 1\) \/ \(exp\(2\.4\) - 1\)"\s+d="([^"]+)"/)
+const escalationCurvePathData = escalationCurvePath?.[1]
+if (escalationCurvePathData === undefined) {
+	throw new Error('whitepaper escalation chart should expose its normalized exponential sample')
+}
+const escalationCurveY = [...escalationCurvePathData.matchAll(/[ML] \d+ (\d+)/g)].map(match => Number(match[1]))
+assert.ok(escalationCurveY.length >= 5, 'whitepaper escalation chart should contain enough samples to show curvature')
+const escalationCurveRises: number[] = []
+for (let index = 1; index < escalationCurveY.length; index += 1) {
+	const previous = escalationCurveY[index - 1]
+	const current = escalationCurveY[index]
+	if (previous === undefined || current === undefined) {
+		throw new Error('whitepaper escalation chart samples should be defined')
+	}
+	escalationCurveRises.push(previous - current)
+}
+for (let index = 1; index < escalationCurveRises.length; index += 1) {
+	const previous = escalationCurveRises[index - 1]
+	const current = escalationCurveRises[index]
+	if (previous === undefined || current === undefined) {
+		throw new Error('whitepaper escalation chart rises should be defined')
+	}
+	assert.ok(current >= previous, 'whitepaper escalation chart should steepen monotonically toward the non-decision threshold')
+}
 assert.match(placeholderHtml, /activateForkMode[\s\S]*fork-time checkpoint[\s\S]*collateralAtFork/i, 'whitepaper should own the ordered own-fork collateral checkpoint lifecycle')
 assert.match(placeholderHtml, /Truth-auction repair subtracts the child's actual cumulative routed[\s\S]*collateral from that snapshot/i, 'whitepaper should own snapshot-based collateral repair')
 const invariantsHtml = await readFile('docs/invariants.html', 'utf8')

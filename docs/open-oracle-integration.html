@@ -180,9 +180,11 @@
 				</p>
 				<p>
 					<code>OpenOraclePriceCoordinator</code> is deployed with an
-					immutable <code>OpenOracle</code> address. A security pool stages
+					immutable <code>OpenOracle</code> address. Users request or execute
 					liquidation, REP-withdrawal, and security-bond-allowance operations
-					through the coordinator when a fresh REP/ETH price is needed.
+					through the coordinator. When a fresh REP/ETH price is needed, the
+					coordinator stages the requested operation and later calls the
+					configured security pool to perform it.
 				</p>
 				<p>
 					Deployment is per pool. <code>SecurityPoolFactory</code> asks
@@ -191,10 +193,13 @@
 					shared <code>OpenOracle</code>, shared WETH, and that universe's REP
 					token. <code>SecurityPoolDeployer</code> passes the coordinator into
 					the pool, and the factory then calls
-					<code>setSecurityPool</code> once with that nonzero pool so only it can seed
-					and execute through the coordinator. Child pools inherit the parent's
-					last price as a starting value, but freshness is still controlled by
-					the coordinator's settlement timestamp and validity window.
+					<code>setSecurityPool</code> once with that nonzero pool. Only the
+					configured pool may seed the coordinator's inherited
+					<code>lastPrice</code>; execution instead starts from a user call to the
+					coordinator, which targets that configured pool's operation methods.
+					Child pools inherit the parent's last price as a starting value, but
+					freshness is still controlled by the coordinator's settlement
+					timestamp and validity window.
 				</p>
 				<p>
 					The factory contract still uses its older internal name, but it is the

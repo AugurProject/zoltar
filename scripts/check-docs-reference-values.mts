@@ -311,7 +311,7 @@ function assertStartHereTimelines(): void {
 function assertContractInteractionDistinctions(): void {
 	assert.match(contractReferenceGenerator, /interaction\.declarations\.length, 1,[\s\S]*interaction rows must describe exactly one entrypoint name; split materially different guards, effects, and signals into separate rows/, 'generated interaction rows must remain limited to one entrypoint name')
 	assert.match(invariantsHtml, /<code>SHARE-04<\/code>[\s\S]*maximum actual outcome supply[\s\S]*Complete-set issuance and redemption[\s\S]*actual remaining winning supply/)
-	assert.match(invariantsHtml, /<code>FORK-11<\/code>[\s\S]*Truth-auction preparation seeds the child's stored[\s\S]*<code>shareTokenSupply<\/code>[\s\S]*Complete-set redemption uses and decrements the current[\s\S]*winning-share redemption replaces it with the[\s\S]*remaining winning supply/)
+	assert.match(invariantsHtml, /<code>FORK-11<\/code>[\s\S]*Fork migration and truth-auction preparation may leave a child with[\s\S]*unequal Invalid, Yes, and No supplies[\s\S]*blocks new[\s\S]*complete-set minting[\s\S]*does not block[\s\S]*burning all[\s\S]*href="#share-04"><code>SHARE-04<\/code>/)
 	assert.match(contractInteractionReference, /getForkThreshold`, `getNonDecisionThreshold`, `getUniverseTheoreticalSupply`/)
 	assert.match(contractInteractionReference, /getQuestionResolution`, `getFinalQuestionResolution`/)
 	assert.match(contractInteractionReference, /`fixedQuestionOutcome`/)

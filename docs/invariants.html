@@ -1087,7 +1087,7 @@
 							</dl>
 						</div>
 					</details>
-					<details class="invariant-entry">
+					<details class="invariant-entry" id="share-04">
 						<summary><code>SHARE-04</code><span class="invariant-title">Child supply denominators</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1420,15 +1420,14 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								Truth-auction preparation seeds the child's stored
-								<code>shareTokenSupply</code> from the maximum actual Invalid, Yes,
-								or No supply. Complete-set redemption uses and decrements the current
-								stored denominator; winning-share redemption replaces it with the
-								remaining winning supply. Unequal outcome supplies block new
-								complete-set minting but do not block a holder from burning all three
-								outcomes for its proportional share at that current denominator.
+								Fork migration and truth-auction preparation may leave a child with
+								unequal Invalid, Yes, and No supplies. That state blocks new
+								complete-set minting, but it does not block a holder from burning all
+								three outcomes for a proportional exit. The stored-denominator
+								lifecycle and payout mechanics are owned by
+								<a href="#share-04"><code>SHARE-04</code></a>.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> Supplies of 12, 10, and 8 seed <code>shareTokenSupply</code> at 12. Before a winning-share redemption changes that stored value, a holder burning one of each outcome receives one-twelfth of collateral and leaves the stored denominator at 11.</p>
+							<p class="invariant-example"><strong>Example:</strong> Child supplies of 12, 10, and 8 block another complete-set mint, while a holder that already owns one of each outcome can still burn that complete set for its proportional collateral exit.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>

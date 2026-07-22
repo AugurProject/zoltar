@@ -2447,7 +2447,8 @@
 							<line class="svg-line" x1="90" y1="230" x2="90" y2="50"></line>
 							<path
 								class="svg-line"
-								d="M 90 212 C 210 205 310 186 420 150 C 540 111 650 78 780 50"
+								data-source="normalizedCost(t) = (exp(2.4 * t) - 1) / (exp(2.4) - 1)"
+								d="M 90 212 L 159 208 L 228 202 L 297 195 L 366 186 L 435 175 L 504 160 L 573 141 L 642 118 L 711 88 L 780 50"
 							></path>
 							<circle class="svg-green" cx="90" cy="212" r="8"></circle>
 							<circle class="svg-red" cx="780" cy="50" r="8"></circle>
@@ -3540,7 +3541,7 @@
 								<text
 									class="svg-small"
 									x="580"
-									y="145"
+									y="162"
 									text-anchor="middle"
 									data-example-text="capMarker"
 								>
@@ -3549,8 +3550,8 @@
 								<text
 									class="svg-small"
 									x="680"
-									y="145"
-									text-anchor="end"
+									y="179"
+									text-anchor="middle"
 									data-example-text="winningMarker"
 								>
 									winning 18
@@ -6274,6 +6275,13 @@
 						rectElement.setAttribute("x", String(rectX));
 					}
 				};
+				const setTextPosition = (textName, x, y) => {
+					const textElement = texts[textName];
+					if (textElement !== undefined) {
+						textElement.setAttribute("x", String(x));
+						textElement.setAttribute("y", String(y));
+					}
+				};
 				return {
 					inputs,
 					read,
@@ -6282,6 +6290,7 @@
 					writeText,
 					setRectWidth,
 					setRectX,
+					setTextPosition,
 				};
 			};
 			const bindExample = (exampleId, update) => {
@@ -6546,6 +6555,21 @@
 				context.writeText(
 					"winningMarker",
 					`winning ${formatFixed(winningPrincipal, 0)}`,
+				);
+				context.setTextPosition(
+					"bindingMarker",
+					80 + Math.min(bindingCapital * visualScale, 600),
+					145,
+				);
+				context.setTextPosition(
+					"capMarker",
+					80 + Math.min(rewardCap * visualScale, 600),
+					162,
+				);
+				context.setTextPosition(
+					"winningMarker",
+					80 + Math.min(winningPrincipal * visualScale, 600),
+					179,
 				);
 				context.write("rewardCap", formatRep(rewardCap));
 				context.write("rewardPool", formatRep(rewardPool));
