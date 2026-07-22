@@ -191,7 +191,7 @@
 					shared <code>OpenOracle</code>, shared WETH, and that universe's REP
 					token. <code>SecurityPoolDeployer</code> passes the coordinator into
 					the pool, and the factory then calls
-					<code>setSecurityPool</code> exactly once so only that pool can seed
+					<code>setSecurityPool</code> once with that nonzero pool so only it can seed
 					and execute through the coordinator. Child pools inherit the parent's
 					last price as a starting value, but freshness is still controlled by
 					the coordinator's settlement timestamp and validity window.
@@ -407,7 +407,7 @@
 						positive buffer instead of landing exactly on the boundary.
 					</p>
 				</figure>
-				<p>
+				<p id="refund-callback">
 					If a cached price is usable, the staged operation pays no oracle
 					request cost and unused ETH is refunded. If a new report is needed,
 					only the first pending settlement slot retains the request cost;
@@ -419,6 +419,13 @@
 					Disputes can replace that position. At settlement OpenOracle credits the
 					final position to the final reporter; the callback supplies the accepted
 					amounts to the coordinator but does not transfer them.
+				</p>
+				<p>
+					Both public request paths refund only a positive unused or excess ETH
+					amount, using a low-level call to the caller. A contract caller must
+					accept that callback. If it rejects the refund, the entire transaction
+					reverts: operation staging or immediate execution and any newly opened
+					report roll back together with the refund.
 				</p>
 				<p id="rolling-dispute-exclusivity">
 					The coordinator refuses <code>requestPrice(proposedRepPerEthPrice, requestedInitialWeth)</code> while its

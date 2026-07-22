@@ -614,11 +614,18 @@
 						implementation.
 					</div>
 					<p>
-						Pool-related addresses are also deterministic. Origin-pool
-						deployment salts include the zero parent address, universe id,
-						question id, and
-						<code>securityMultiplier</code>; child-pool salts include the parent
-						pool address as well. Each origin receives
+						Pool-related addresses are also deterministic. The
+						<code>SecurityPoolFactory</code> derives a factory-level
+						<code>securityPoolSalt</code> seed from the parent address, universe
+						id, question id, and <code>securityMultiplier</code>, using a zero
+						parent for an origin. The pool deployment worker's raw CREATE2 salt
+						is zero; constructor init code commits the pool wiring. Coordinator
+						and auction factories derive their own caller-scoped salts from the
+						factory seed. See the
+						<a href="./operator-reference.md#security-pool-guardrails"
+							>Operator Reference</a
+						>
+						for the exact address derivations. Each origin receives
 						<code>originId = keccak256(abi.encode(questionId, securityMultiplier, originUniverseId))</code>.
 						Migrated children retain that origin id and register with
 						<code>poolId = keccak256(abi.encode(originId, childUniverseId))</code>. The origin id
@@ -936,9 +943,13 @@
 						<li>
 							While the pool is operational, a full complete set can be burned
 							with <code>redeemCompleteSet</code> to recover its pro rata share
-							of collateral. After one-sided child migration, this payout uses
-							the maximum outcome supply as its denominator, so balanced holders
-							retain an exit even though unequal supplies still disable minting.
+							of collateral. The payout uses the pool's current stored
+							<code>shareTokenSupply</code> denominator. Child truth-auction setup
+							seeds that value from the maximum outcome supply; complete-set
+							issuance and redemption then update it, and each winning-share
+							redemption replaces it with the remaining winning supply. Balanced
+							holders therefore retain an exit even though unequal supplies still
+							disable minting.
 						</li>
 						<li>
 							After the fork route finalizes an outcome, users can redeem

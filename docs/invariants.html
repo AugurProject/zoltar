@@ -362,11 +362,12 @@
 									each use the supply denominator for the claims they settle.
 								</td>
 								<td>
-									Child setup uses the maximum actual outcome supply as its
-									collateral denominator. Unequal supplies block new complete-set
-									minting, while holders of all three outcomes retain proportional
-									complete-set redemption; winning redemption divides collateral by
-									the actual winning supply.
+									Child setup seeds the stored collateral denominator from the
+									maximum actual outcome supply. Complete-set issuance and redemption
+									then update that stored value; winning-share redemption replaces it
+									with the actual remaining winning supply. Unequal supplies block new
+									complete-set minting, while holders of all three outcomes retain a
+									proportional exit at the current stored denominator.
 								</td>
 							</tr>
 							<tr>
@@ -1092,10 +1093,12 @@
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
 								Child setup records the maximum actual Invalid, Yes, or No supply
-								as its collateral denominator. Unequal outcome supplies block new
-								complete-set mints but not proportional complete-set burns. After
-								resolution, winning-share redemption divides remaining collateral
-								by the actual remaining winning supply.
+								in <code>shareTokenSupply</code>. Complete-set issuance increments
+								and complete-set redemption decrements that stored denominator.
+								Unequal outcome supplies block new complete-set mints but not
+								proportional complete-set burns. Each winning-share redemption uses
+								the pre-burn winning supply and replaces <code>shareTokenSupply</code>
+								with the actual remaining winning supply.
 							</div>
 							<p class="invariant-example"><strong>Example:</strong> If migrated supplies are Invalid 10, Yes 8, and No 6, setup records 10; new complete-set minting is blocked, while a Yes resolution pays the eight Yes shares from the remaining collateral.</p>
 							<dl class="invariant-metadata">
@@ -1417,21 +1420,28 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								Child pricing supply equals the maximum actual Invalid, Yes, or
-								No supply. When outcome supplies differ, complete-set minting is
-								blocked, but a holder with all three outcomes can burn them for a
-								proportional share of collateral using that maximum denominator.
+								Truth-auction preparation seeds the child's stored
+								<code>shareTokenSupply</code> from the maximum actual Invalid, Yes,
+								or No supply. Complete-set redemption uses and decrements the current
+								stored denominator; winning-share redemption replaces it with the
+								remaining winning supply. Unequal outcome supplies block new
+								complete-set minting but do not block a holder from burning all three
+								outcomes for its proportional share at that current denominator.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> Supplies of 12, 10, and 8 produce a pricing supply of 12; minting is blocked, but a holder burning one of each outcome receives one-twelfth of collateral.</p>
+							<p class="invariant-example"><strong>Example:</strong> Supplies of 12, 10, and 8 seed <code>shareTokenSupply</code> at 12. Before a winning-share redemption changes that stored value, a holder burning one of each outcome receives one-twelfth of collateral and leaves the stored denominator at 11.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a
+									<a
 										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
 										><code>setTotalShares</code> during auction preparation</a
-										>,
-										<a
+									>,
+									<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										><code>sharesToCash</code>, <code>redeemCompleteSet</code>,
+										and <code>redeemShares</code></a
+									>,
+									<a
 										href="../solidity/contracts/peripherals/tokens/ShareToken.sol"
 										><code>maximumOutcomeSupply</code> and complete-set mint/burn
 										guards</a
