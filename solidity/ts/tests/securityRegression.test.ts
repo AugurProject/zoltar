@@ -238,7 +238,7 @@ describe('security regression coverage', () => {
 		assert.ok(nonDecisionTimestamp > 0n, 'final dust fill should trigger non-decision')
 	})
 
-	test('external scalar Zoltar forks allow Placeholder REP migration to the scalar child branch', async () => {
+	test('external scalar Zoltar forks allow Statoblast REP migration to the scalar child branch', async () => {
 		const mockWindow = getAnvilWindowEthereum()
 		const scalarQuestionData = {
 			title: `external scalar fork ${await mockWindow.getTime()}`,

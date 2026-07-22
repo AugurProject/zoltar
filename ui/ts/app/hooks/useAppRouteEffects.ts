@@ -7,7 +7,7 @@ type AppRoute = 'deploy' | 'not-found' | 'open-oracle' | 'security-pools' | 'zol
 type Props = {
 	accountAddress: Address | undefined
 	activeZoltarView: 'create' | 'fork' | 'migrate' | 'questions'
-	augurPlaceHolderDeploymentMissing: boolean
+	augurStatoblastDeploymentMissing: boolean
 	activeEnvironmentNonce: number
 	environmentReady: boolean
 	loadOracleReport: (reportId: string) => Promise<void>
@@ -70,7 +70,7 @@ export function getSelectedVaultAddressForRoutePoolChange({ accountAddress, last
 export function useAppRouteEffects({
 	accountAddress,
 	activeZoltarView,
-	augurPlaceHolderDeploymentMissing,
+	augurStatoblastDeploymentMissing,
 	activeEnvironmentNonce,
 	environmentReady,
 	loadOracleReport,
@@ -205,8 +205,8 @@ export function useAppRouteEffects({
 	}, [environmentReady, route, securityPoolAddress, tradingResultHash])
 
 	useEffect(() => {
-		if (!augurPlaceHolderDeploymentMissing) return
+		if (!augurStatoblastDeploymentMissing) return
 		if (route === 'deploy') return
 		navigateRef.current('deploy')
-	}, [augurPlaceHolderDeploymentMissing, route])
+	}, [augurStatoblastDeploymentMissing, route])
 }

@@ -10,7 +10,7 @@ import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 function createProps(overrides: Partial<Parameters<typeof TabNavigation>[0]> = {}): Parameters<typeof TabNavigation>[0] {
 	return {
-		augurPlaceHolderDeployed: true,
+		augurStatoblastDeployed: true,
 		deployRoute: DEPLOY_ROUTE,
 		marketRoute: ZOLTAR_ROUTE,
 		onRouteChange: () => undefined,
@@ -77,7 +77,7 @@ describe('TabNavigation', () => {
 			h(
 				TabNavigation,
 				createProps({
-					augurPlaceHolderDeployed: false,
+					augurStatoblastDeployed: false,
 					onRouteChange: route => {
 						routeChanges.push(route)
 					},

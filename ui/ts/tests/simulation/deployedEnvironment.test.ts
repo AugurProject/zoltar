@@ -51,7 +51,7 @@ void describe('deployed simulation backend', () => {
 		const deploymentSnapshot = await loadDeploymentStatusOracleSnapshot(deployedBackend.createReadClient())
 
 		expect(deployedBackend.currentScenario).toBe('deployed')
-		expect(deploymentSnapshot.augurPlaceHolderDeployed).toBe(true)
+		expect(deploymentSnapshot.augurStatoblastDeployed).toBe(true)
 		expect(deploymentSnapshot.deploymentStatuses.every(step => step.deployed)).toBe(true)
 	}, 30_000)
 })

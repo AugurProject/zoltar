@@ -306,7 +306,7 @@ void describe('simulation backend', () => {
 		expect(wethCode).not.toBe('0x')
 		expect(repBalance > 0n).toBe(true)
 		expect(wethBalance > 0n).toBe(true)
-		expect(deploymentSnapshot.augurPlaceHolderDeployed).toBe(false)
+		expect(deploymentSnapshot.augurStatoblastDeployed).toBe(false)
 		expect(deploymentSnapshot.deploymentStatuses.every(step => step.deployed === false)).toBe(true)
 	}, 30_000)
 

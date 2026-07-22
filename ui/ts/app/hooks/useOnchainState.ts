@@ -186,7 +186,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 	const walletStateLoad = useLoadController()
 	const deploymentStatusLoad = useLoadController()
 	const deploymentStatusesLoaded = useSignal(false)
-	const augurPlaceHolderDeployed = useSignal<boolean | undefined>(undefined)
+	const augurStatoblastDeployed = useSignal<boolean | undefined>(undefined)
 	const currentTimestamp = useSignal<bigint | undefined>(getActiveBackend().currentTimestamp)
 	const currentBlockNumber = useSignal<bigint | undefined>(undefined)
 	const environmentBootstrapError = useSignal<string | undefined>(undefined)
@@ -218,7 +218,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 	const setDeploymentStatuses = (update: (current: DeploymentStatus[]) => DeploymentStatus[]) => {
 		const updated = update(deploymentStatuses.value)
 		deploymentStatuses.value = updated
-		if (updated.every(step => step.deployed)) augurPlaceHolderDeployed.value = true
+		if (updated.every(step => step.deployed)) augurStatoblastDeployed.value = true
 	}
 	const refreshChainClock = async (backend: ChainBackend) => {
 		const isCurrent = nextChainClockRefresh()
@@ -288,7 +288,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 
 		if (backend.isBootstrapped === false) {
 			deploymentStatusesLoaded.value = false
-			augurPlaceHolderDeployed.value = undefined
+			augurStatoblastDeployed.value = undefined
 			environmentBootstrapLabel.value = backend.bootstrapLabel
 			environmentBootstrapProgress.value = backend.bootstrapProgress
 			environmentReady.value = false
@@ -300,7 +300,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 				try {
 					const snapshot = await dependencies.loadDeploymentStatusOracleSnapshot(backend.createReadClient())
 					if (!isCurrent()) return
-					augurPlaceHolderDeployed.value = snapshot.augurPlaceHolderDeployed
+					augurStatoblastDeployed.value = snapshot.augurStatoblastDeployed
 					deploymentStatuses.value = snapshot.deploymentStatuses
 					deploymentStatusesLoaded.value = true
 				} catch (error) {
@@ -505,7 +505,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		isManagingWallet: isManagingWallet.value,
 		isLoadingDeploymentStatuses: deploymentStatusLoad.isLoading.value,
 		isRefreshing: walletStateLoad.isLoading.value,
-		augurPlaceHolderDeployed: augurPlaceHolderDeployed.value,
+		augurStatoblastDeployed: augurStatoblastDeployed.value,
 		refreshState,
 		setDeploymentStatuses,
 		disconnectWallet,

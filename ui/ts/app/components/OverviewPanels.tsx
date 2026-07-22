@@ -144,7 +144,7 @@ export function OverviewPanels({
 					}
 					description={operationsHeaderDescription}
 					eyebrow={appCopy.operations}
-					title={appCopy.augurPlaceholderTitle}
+					title={appCopy.augurStatoblastTitle}
 				/>
 				<DataGrid className={`overview-inline-metrics ${showEnvironmentDetails ? 'mobile-expanded' : ''}`.trim()} columns='auto'>
 					<MetricField className='overview-address-metric' label={appCopy.address}>

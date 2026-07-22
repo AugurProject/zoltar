@@ -1,6 +1,6 @@
 # UI Protocol Client
 
-This directory owns typed reads and writes against Zoltar and Placeholder contracts. `index.ts` is the compatibility entrypoint; implementations belong in domain modules instead of the barrel.
+This directory owns typed reads and writes against Zoltar and Statoblast contracts. `index.ts` is the compatibility entrypoint; implementations belong in domain modules instead of the barrel.
 
 UI components, hooks, and feature libraries may consume the protocol client. Dependencies must not point in the other direction: protocol modules never import from `ui/ts/features`.
 

@@ -108,7 +108,7 @@ export type DeploymentStatus = DeploymentStep & {
 }
 
 export type DeploymentStatusSnapshot = {
-	augurPlaceHolderDeployed: boolean
+	augurStatoblastDeployed: boolean
 	deploymentStatuses: DeploymentStatus[]
 }
 

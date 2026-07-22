@@ -137,7 +137,7 @@ function createOnchainStateDependencies(overrides: Partial<UseOnchainStateDepend
 	return {
 		getDeploymentSteps,
 		loadDeploymentStatusOracleSnapshot: mock(async () => ({
-			augurPlaceHolderDeployed: false,
+			augurStatoblastDeployed: false,
 			deploymentStatuses: getDeploymentSteps().map(step => ({
 				...step,
 				deployed: false,
@@ -230,7 +230,7 @@ describe('useOnchainState (integration)', () => {
 			readClient: createReadClient({ ethBalance: 123n, blockNumber: 100n, blockTimestamp: 200n }),
 		})
 		const loadDeploymentStatusOracleSnapshot = mock(async () => ({
-			augurPlaceHolderDeployed: false,
+			augurStatoblastDeployed: false,
 			deploymentStatuses,
 		}))
 		const loadErc20Balance = mock(async () => 555n)
@@ -278,7 +278,7 @@ describe('useOnchainState (integration)', () => {
 			readClient: createReadClient({ blockNumber: 300n, blockTimestamp: 400n }),
 		})
 		const loadDeploymentStatusOracleSnapshot = mock(async () => ({
-			augurPlaceHolderDeployed: false,
+			augurStatoblastDeployed: false,
 			deploymentStatuses,
 		}))
 		const loadErc20Balance = mock(async () => 0n)
@@ -358,7 +358,7 @@ describe('useOnchainState (integration)', () => {
 		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot: mock(async () => ({
-				augurPlaceHolderDeployed: false,
+				augurStatoblastDeployed: false,
 				deploymentStatuses,
 			})),
 			loadErc20Balance: mock(async () => 0n),
@@ -412,7 +412,7 @@ describe('useOnchainState (integration)', () => {
 
 	test('surfaces a blocking error when the configured read RPC is on the wrong chain', async () => {
 		const loadDeploymentStatusOracleSnapshot = mock(async () => ({
-			augurPlaceHolderDeployed: false,
+			augurStatoblastDeployed: false,
 			deploymentStatuses,
 		}))
 		const dependencies = createOnchainStateDependencies({
@@ -452,7 +452,7 @@ describe('useOnchainState (integration)', () => {
 	test('keeps RPC-backed reads active when a connected wallet is on the wrong chain', async () => {
 		const account = getAddress('0x00000000000000000000000000000000000000a3')
 		const loadDeploymentStatusOracleSnapshot = mock(async () => ({
-			augurPlaceHolderDeployed: false,
+			augurStatoblastDeployed: false,
 			deploymentStatuses,
 		}))
 		const loadErc20Balance = mock(async () => 777n)
@@ -500,7 +500,7 @@ describe('useOnchainState (integration)', () => {
 
 	test('uses the active backend label when surfacing a read-RPC chain mismatch', async () => {
 		const loadDeploymentStatusOracleSnapshot = mock(async () => ({
-			augurPlaceHolderDeployed: false,
+			augurStatoblastDeployed: false,
 			deploymentStatuses,
 		}))
 		const dependencies = createOnchainStateDependencies({
@@ -566,7 +566,7 @@ describe('useOnchainState (integration)', () => {
 		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot: mock(async () => ({
-				augurPlaceHolderDeployed: true,
+				augurStatoblastDeployed: true,
 				deploymentStatuses,
 			})),
 			loadErc20Balance: mock(async () => 0n),
@@ -591,7 +591,7 @@ describe('useOnchainState (integration)', () => {
 		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot: mock(async () => ({
-				augurPlaceHolderDeployed: false,
+				augurStatoblastDeployed: false,
 				deploymentStatuses,
 			})),
 			loadErc20Balance: mock(async () => 0n),
@@ -633,7 +633,7 @@ describe('useOnchainState (integration)', () => {
 		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot: mock(async () => ({
-				augurPlaceHolderDeployed: false,
+				augurStatoblastDeployed: false,
 				deploymentStatuses,
 			})),
 			loadErc20Balance: mock(async () => 222n),
@@ -671,7 +671,7 @@ describe('useOnchainState (integration)', () => {
 		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot: mock(async () => ({
-				augurPlaceHolderDeployed: false,
+				augurStatoblastDeployed: false,
 				deploymentStatuses,
 			})),
 			loadErc20Balance: mock(async () => 333n),
@@ -720,7 +720,7 @@ describe('useOnchainState (integration)', () => {
 		})
 
 		const loadDeploymentStatusOracleSnapshot = mock(async () => ({
-			augurPlaceHolderDeployed: false,
+			augurStatoblastDeployed: false,
 			deploymentStatuses,
 		}))
 		const loadErc20Balance = mock(async () => 0n)
@@ -765,7 +765,7 @@ describe('useOnchainState (integration)', () => {
 		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot: mock(async () => ({
-				augurPlaceHolderDeployed: false,
+				augurStatoblastDeployed: false,
 				deploymentStatuses,
 			})),
 			loadErc20Balance: mock(async () => 0n),
@@ -803,7 +803,7 @@ describe('useOnchainState (integration)', () => {
 		let dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot: mock(async () => ({
-				augurPlaceHolderDeployed: false,
+				augurStatoblastDeployed: false,
 				deploymentStatuses,
 			})),
 			loadErc20Balance: mock(async () => 0n),
@@ -840,7 +840,7 @@ describe('useOnchainState (integration)', () => {
 		dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot: mock(async () => ({
-				augurPlaceHolderDeployed: false,
+				augurStatoblastDeployed: false,
 				deploymentStatuses,
 			})),
 			loadErc20Balance: mock(async () => 0n),
@@ -871,7 +871,7 @@ describe('useOnchainState (integration)', () => {
 			getAccounts,
 		})
 		const loadDeploymentStatusOracleSnapshot = mock(async () => ({
-			augurPlaceHolderDeployed: false,
+			augurStatoblastDeployed: false,
 			deploymentStatuses,
 		}))
 		const loadErc20Balance = mock(async () => 0n)
@@ -928,7 +928,7 @@ describe('useOnchainState (integration)', () => {
 			readClient,
 		})
 		const loadDeploymentStatusOracleSnapshot = mock(async () => ({
-			augurPlaceHolderDeployed: false,
+			augurStatoblastDeployed: false,
 			deploymentStatuses,
 		}))
 		const loadErc20Balance = mock(async () => wethBalance)
@@ -985,7 +985,7 @@ describe('useOnchainState (integration)', () => {
 		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot: mock(async () => ({
-				augurPlaceHolderDeployed: false,
+				augurStatoblastDeployed: false,
 				deploymentStatuses,
 			})),
 			loadErc20Balance: mock(async () => 0n),
@@ -1013,14 +1013,14 @@ describe('useOnchainState (integration)', () => {
 		resetEnvironment()
 	})
 
-	test('updates placeholder state when all deployment statuses are marked deployed', async () => {
+	test('updates Statoblast deployment state when all deployment statuses are marked deployed', async () => {
 		const { backend } = createBackend({
 			readClient: createReadClient({ ethBalance: 4n }),
 		})
 		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps: () => deploymentStatuses,
 			loadDeploymentStatusOracleSnapshot: mock(async () => ({
-				augurPlaceHolderDeployed: false,
+				augurStatoblastDeployed: false,
 				deploymentStatuses,
 			})),
 			loadErc20Balance: mock(async () => 0n),
@@ -1033,13 +1033,13 @@ describe('useOnchainState (integration)', () => {
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		await waitFor(() => expect(requireHookState(hookState).augurPlaceHolderDeployed).toBe(false))
+		await waitFor(() => expect(requireHookState(hookState).augurStatoblastDeployed).toBe(false))
 		const deployButton = within(document.body).getByRole('button', { name: 'Mark deployments deployed' })
 		await act(async () => {
 			fireEvent.click(deployButton)
 		})
 
-		await waitFor(() => expect(requireHookState(hookState).augurPlaceHolderDeployed).toBe(true))
+		await waitFor(() => expect(requireHookState(hookState).augurStatoblastDeployed).toBe(true))
 		expect(requireHookState(hookState).environmentReady).toBe(true)
 		resetEnvironment()
 	})
@@ -1056,7 +1056,7 @@ describe('useOnchainState (integration)', () => {
 		const dependencies = createOnchainStateDependencies({
 			getDeploymentSteps,
 			loadDeploymentStatusOracleSnapshot: mock(async () => ({
-				augurPlaceHolderDeployed: false,
+				augurStatoblastDeployed: false,
 				deploymentStatuses,
 			})),
 			loadErc20Balance: mock(async () => 0n),
@@ -1098,7 +1098,7 @@ describe('useOnchainState (integration)', () => {
 			readClient,
 		})
 		const loadDeploymentStatusOracleSnapshot = mock(async () => ({
-			augurPlaceHolderDeployed: false,
+			augurStatoblastDeployed: false,
 			deploymentStatuses,
 		}))
 		const loadErc20Balance = mock(async () => 654n)

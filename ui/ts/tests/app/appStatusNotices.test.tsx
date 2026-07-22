@@ -28,7 +28,7 @@ describe('AppStatusNotices', () => {
 			h(AppStatusNotices, {
 				errorMessage: undefined,
 				readBackendMessage: undefined,
-				showAugurPlaceHolderDeploymentWarning: false,
+				showAugurStatoblastDeploymentWarning: false,
 				simulationBootstrapError: undefined,
 			}),
 		)
@@ -44,7 +44,7 @@ describe('AppStatusNotices', () => {
 			h(AppStatusNotices, {
 				errorMessage: undefined,
 				readBackendMessage: undefined,
-				showAugurPlaceHolderDeploymentWarning: false,
+				showAugurStatoblastDeploymentWarning: false,
 				simulationBootstrapError: undefined,
 			}),
 		)
@@ -60,7 +60,7 @@ describe('AppStatusNotices', () => {
 			h(AppStatusNotices, {
 				errorMessage: undefined,
 				readBackendMessage: undefined,
-				showAugurPlaceHolderDeploymentWarning: false,
+				showAugurStatoblastDeploymentWarning: false,
 				simulationBootstrapError: 'Anvil boot failed',
 			}),
 		)
@@ -76,7 +76,7 @@ describe('AppStatusNotices', () => {
 			h(AppStatusNotices, {
 				errorMessage: undefined,
 				readBackendMessage: 'Configured read RPC reports chain 11155111, but this app requires Ethereum Mainnet (1).',
-				showAugurPlaceHolderDeploymentWarning: false,
+				showAugurStatoblastDeploymentWarning: false,
 				simulationBootstrapError: undefined,
 			}),
 		)
@@ -99,7 +99,7 @@ describe('AppStatusNotices', () => {
 					rpcUrl: 'https://query.example/path',
 					transportMode: 'rpc',
 				},
-				showAugurPlaceHolderDeploymentWarning: false,
+				showAugurStatoblastDeploymentWarning: false,
 				simulationBootstrapError: undefined,
 			}),
 		)
@@ -124,7 +124,7 @@ describe('AppStatusNotices', () => {
 					rpcUrl: 'https://storage.example/path',
 					transportMode: 'rpc',
 				},
-				showAugurPlaceHolderDeploymentWarning: false,
+				showAugurStatoblastDeploymentWarning: false,
 				simulationBootstrapError: undefined,
 			}),
 		)
@@ -153,7 +153,7 @@ describe('AppStatusNotices', () => {
 					rpcUrl: 'https://ethereum.dark.florist',
 					transportMode: 'provider',
 				},
-				showAugurPlaceHolderDeploymentWarning: false,
+				showAugurStatoblastDeploymentWarning: false,
 				simulationBootstrapError: undefined,
 			}),
 		)
@@ -170,7 +170,7 @@ describe('AppStatusNotices', () => {
 			h(AppStatusNotices, {
 				errorMessage: 'Top-level error',
 				readBackendMessage: undefined,
-				showAugurPlaceHolderDeploymentWarning: true,
+				showAugurStatoblastDeploymentWarning: true,
 				simulationBootstrapError: undefined,
 			}),
 		)

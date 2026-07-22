@@ -1,9 +1,9 @@
-# Zoltar + Augur Placeholder
+# Zoltar + Augur Statoblast
 
 This repository contains two protocol layers:
 
 - `Zoltar`: the forkable oracle base layer
-- `Augur Placeholder`: the prediction-market application layer built on top of Zoltar
+- `Augur Statoblast`: the prediction-market application layer built on top of Zoltar
 
 The codebase is split into these main areas:
 

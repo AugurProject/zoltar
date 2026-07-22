@@ -11,11 +11,11 @@
 			<header>
 				<h1>Truth Auction</h1>
 				<p>
-					When Zoltar forks, Placeholder evaluates each resulting child universe
+					When Zoltar forks, Statoblast evaluates each resulting child universe
 					after migration. If a child pool lacks the ETH needed to fully collateralize
-					its open interest, Placeholder initiates a truth auction for that pool. The
+					its open interest, Statoblast initiates a truth auction for that pool. The
 					fork may have been triggered either by a direct Zoltar fork or by the
-					Placeholder Escalation Game.
+					Statoblast Escalation Game.
 				</p>
 
 				<p>
@@ -38,7 +38,7 @@
 
 				<p>
 					The auction has an ETH raise target and a child-universe REP sale cap.
-					Placeholder runs the resulting dual-cap process through
+					Statoblast runs the resulting dual-cap process through
 					the <code>UniformPriceDualCapBatchAuction</code> contract, then
 					writes winning claims back into vault state rather than paying out
 					simple token transfers, so bidders buy into the child pool
