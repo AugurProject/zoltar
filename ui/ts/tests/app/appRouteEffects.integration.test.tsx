@@ -3,6 +3,7 @@
 import { describe, expect, test } from 'bun:test'
 import { fireEvent, within } from '../testUtils/queries'
 import { render } from 'preact'
+import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { useAppRouteEffects } from '../../app/hooks/useAppRouteEffects.js'
 import { useUrlState } from '../../app/hooks/useUrlState.js'
@@ -25,6 +26,7 @@ function createDefaultProps(overrides: Partial<RouteEffectsProps> = {}): RouteEf
 		openOracleReportDetailsReportId: undefined,
 		route: 'zoltar',
 		securityPoolAddress: '',
+		securityPoolQuestionId: '',
 		securityPoolResultHash: undefined,
 		selectedPoolSecurityPoolAddress: undefined,
 		setForkAuctionFormSecurityPoolAddress: () => undefined,
@@ -32,6 +34,7 @@ function createDefaultProps(overrides: Partial<RouteEffectsProps> = {}): RouteEf
 		setReportingFormSecurityPoolAddress: () => undefined,
 		setSecurityVaultFormSelectedVaultAddress: () => undefined,
 		setSecurityVaultFormSecurityPoolAddress: () => undefined,
+		setSecurityPoolFormMarketId: () => undefined,
 		setTradingFormSecurityPoolAddress: () => undefined,
 		tradingResultHash: undefined,
 		urlOpenOracleReportId: '',
@@ -52,6 +55,19 @@ function RouteEffectsWithUrlStateHarness(props: Omit<RouteEffectsProps, 'setOpen
 		setOpenOracleReport,
 	})
 	return null
+}
+
+function SecurityPoolQuestionRouteHarness() {
+	const { securityPoolQuestionId } = useUrlState()
+	const [marketId, setMarketId] = useState('stale-question')
+	useAppRouteEffects(
+		createDefaultProps({
+			route: 'security-pools',
+			securityPoolQuestionId,
+			setSecurityPoolFormMarketId: setMarketId,
+		}),
+	)
+	return <div id='market-id'>{marketId}</div>
 }
 
 function UrlStateHarness() {
@@ -142,6 +158,49 @@ describe('app route effects integration', () => {
 
 		const { cleanup } = await renderIntoDocument(<RouteEffectsWithUrlStateHarness {...initialProps} />)
 		expect(window.location.hash).toContain('openOracleReportId=2')
+
+		await cleanup()
+		dom.cleanup()
+	})
+
+	test('keeps a changed route-selected oracle report authoritative over stale loaded details', async () => {
+		const dom = installDomEnvironment('http://localhost/#/open-oracle?openOracleView=selected-report&openOracleReportId=2')
+		const calls: string[] = []
+		const initialProps = createDefaultProps({
+			loadOracleReport: async reportId => {
+				calls.push(reportId)
+			},
+			openOracleFormReportId: '1',
+			openOracleReportDetailsReportId: 1n,
+			route: 'open-oracle',
+			urlOpenOracleReportId: '2',
+		})
+
+		const { cleanup } = await renderIntoDocument(<RouteEffectsWithUrlStateHarness {...initialProps} />)
+		expect(calls).toEqual(['2'])
+		expect(window.location.hash).toContain('openOracleReportId=2')
+		expect(window.location.hash).not.toContain('openOracleReportId=1')
+
+		await cleanup()
+		dom.cleanup()
+	})
+
+	test('restores and clears the route-backed security pool question across history events', async () => {
+		const dom = installDomEnvironment('http://localhost/#/security-pools?securityPoolsView=create&questionId=question-1')
+		const { cleanup, container } = await renderIntoDocument(<SecurityPoolQuestionRouteHarness />)
+		expect(container.querySelector('#market-id')?.textContent).toBe('question-1')
+
+		await act(() => {
+			window.history.pushState({}, '', '#/security-pools?securityPoolsView=create')
+			window.dispatchEvent(new Event('popstate'))
+		})
+		expect(container.querySelector('#market-id')?.textContent).toBe('')
+
+		await act(() => {
+			window.history.pushState({}, '', '#/security-pools?securityPoolsView=create&questionId=question-2')
+			window.dispatchEvent(new Event('popstate'))
+		})
+		expect(container.querySelector('#market-id')?.textContent).toBe('question-2')
 
 		await cleanup()
 		dom.cleanup()

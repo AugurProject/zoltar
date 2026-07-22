@@ -188,10 +188,6 @@ export function App() {
 		enabled: route === 'security-pools' && canReadOnchainData,
 		zoltarUniverseHasForked,
 	})
-	useEffect(() => {
-		if (route !== 'security-pools' || securityPoolQuestionId === '') return
-		setSecurityPoolForm(current => (current.marketId === securityPoolQuestionId ? current : { ...current, marketId: securityPoolQuestionId }))
-	}, [route, securityPoolQuestionId, setSecurityPoolForm])
 	const {
 		approveRep,
 		depositRep,
@@ -443,6 +439,7 @@ export function App() {
 		openOracleReportDetailsReportId: openOracleReportDetails?.reportId,
 		route,
 		securityPoolAddress,
+		securityPoolQuestionId,
 		securityPoolResultHash: securityPoolResult?.deployPoolHash,
 		selectedPoolSecurityPoolAddress: selectedPool?.securityPoolAddress,
 		setForkAuctionFormSecurityPoolAddress: nextSecurityPoolAddress => setForkAuctionForm(current => (current.securityPoolAddress === nextSecurityPoolAddress ? current : { ...current, securityPoolAddress: nextSecurityPoolAddress })),
@@ -450,6 +447,7 @@ export function App() {
 		setReportingFormSecurityPoolAddress: nextSecurityPoolAddress => updateReportingForm({ securityPoolAddress: nextSecurityPoolAddress }),
 		setSecurityVaultFormSelectedVaultAddress: nextSelectedVaultAddress => setSecurityVaultForm(current => (current.selectedVaultAddress === nextSelectedVaultAddress ? current : { ...current, selectedVaultAddress: nextSelectedVaultAddress })),
 		setSecurityVaultFormSecurityPoolAddress: nextSecurityPoolAddress => setSecurityVaultForm(current => (current.securityPoolAddress === nextSecurityPoolAddress ? current : { ...current, securityPoolAddress: nextSecurityPoolAddress })),
+		setSecurityPoolFormMarketId: marketId => setSecurityPoolForm(current => (current.marketId === marketId ? current : { ...current, marketId })),
 		setTradingFormSecurityPoolAddress: nextSecurityPoolAddress => setTradingForm(current => (current.securityPoolAddress === nextSecurityPoolAddress ? current : { ...current, securityPoolAddress: nextSecurityPoolAddress })),
 		tradingResultHash: tradingResult?.hash,
 		urlOpenOracleReportId,
@@ -623,7 +621,7 @@ export function App() {
 			onRefreshSelectedPoolData: refreshSelectedPoolData,
 			onSelectedPoolViewChange: setSelectedPoolView,
 			onViewPendingReport: reportId => {
-				setOpenOracleView('selected-report')
+				setOpenOracleReport(reportId.toString())
 				setOpenOracleForm(current => ({ ...current, reportId: reportId.toString() }))
 				navigate('open-oracle', new Set(['securityPool', 'securityPoolsView', 'selectedPoolView']))
 				void loadOracleReport(reportId.toString())
@@ -721,7 +719,10 @@ export function App() {
 		},
 		onActiveViewChange: view => setOpenOracleView(view),
 		onOpenOracleCreateFormChange: update => setOpenOracleCreateForm(current => ({ ...current, ...update })),
-		onOpenOracleFormChange: update => setOpenOracleForm(current => ({ ...current, ...update })),
+		onOpenOracleFormChange: update => {
+			setOpenOracleForm(current => ({ ...current, ...update }))
+			if (update.reportId !== undefined) setOpenOracleReport(update.reportId)
+		},
 		onSettleReport: () => void settleReport(),
 		onWithdrawOpenOracleBalance: balance => void withdrawBalance(balance),
 		loadingOpenOracleCreate,
