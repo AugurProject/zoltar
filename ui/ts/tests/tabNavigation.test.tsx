@@ -47,11 +47,11 @@ describe('TabNavigation', () => {
 		expect(documentQueries.getByRole('link', { name: 'Zoltar' }).getAttribute('href')).toBe('#/zoltar?universe=7&zoltarView=create&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Zoltar' }).getAttribute('aria-current')).toBe('page')
 		expect(documentQueries.getByRole('link', { name: 'Security Pools' }).getAttribute('href')).toBe('#/security-pools?universe=7&simulate=1')
-		expect(documentQueries.getByRole('link', { name: 'Oracle Reports' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1')
+		expect(documentQueries.getByRole('link', { name: 'Open Oracle' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1')
 		expect(documentQueries.getByRole('combobox', { name: 'Current application section' })).not.toBeNull()
 		expect(documentQueries.getByRole('link', { name: 'Protocol Guide' }).getAttribute('href')).toBe('https://augurproject.github.io/zoltar/docs/start-here.html')
 		expect(documentQueries.queryByRole('link', { name: 'Markets' })).toBeNull()
-		expect(documentQueries.queryByRole('link', { name: 'Open Oracle' })).toBeNull()
+		expect(documentQueries.queryByRole('link', { name: 'Oracle Reports' })).toBeNull()
 	})
 
 	test('changes routes from the compact route selector', async () => {
@@ -103,7 +103,7 @@ describe('TabNavigation', () => {
 		expect(documentQueries.getByRole('link', { name: 'Deploy' }).getAttribute('href')).toBe('#/deploy?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Zoltar' }).getAttribute('href')).toBe('#/zoltar?universe=7&zoltarView=create&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Security Pools' }).getAttribute('href')).toBe('#/security-pools?universe=7&simulate=1')
-		expect(documentQueries.getByRole('link', { name: 'Oracle Reports' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1')
+		expect(documentQueries.getByRole('link', { name: 'Open Oracle' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1')
 	})
 
 	test('preserves the current route for modified and auxiliary link clicks', async () => {

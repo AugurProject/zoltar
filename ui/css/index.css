@@ -805,7 +805,7 @@ button.currency-value.copyable:hover:not(:disabled) {
 	color: var(--danger);
 }
 
-.currency-value-measure {
+.currency-value.currency-value-measure {
 	position: absolute;
 	top: 0;
 	left: 0;
@@ -1128,10 +1128,14 @@ button.currency-value.copyable:hover:not(:disabled) {
 }
 
 .simulation-banner-details > summary {
-	display: none;
+	display: block;
+	cursor: pointer;
+	padding: 0.25rem 0.15rem;
+	color: var(--simulation-text);
 }
 
 .simulation-banner-compact-summary,
+.simulation-banner-compact-heading,
 .simulation-banner-compact-state {
 	align-items: center;
 	gap: 0.5rem;
@@ -1140,6 +1144,16 @@ button.currency-value.copyable:hover:not(:disabled) {
 .simulation-banner-compact-summary {
 	display: flex;
 	justify-content: space-between;
+}
+
+.simulation-banner-compact-heading {
+	display: flex;
+	min-width: 0;
+	flex-wrap: wrap;
+}
+
+.simulation-banner-compact-heading h2 {
+	font-size: var(--font-h2-panel);
 }
 
 .simulation-banner-compact-state {
@@ -2167,6 +2181,10 @@ button.currency-value.copyable:hover:not(:disabled) {
 	align-items: center;
 	flex-wrap: wrap;
 	gap: 0.55rem 0.9rem;
+}
+
+.market-linked-pool-share-supply {
+	max-width: 9rem;
 }
 
 .market-linked-pool-participation {
@@ -3610,6 +3628,10 @@ strong.metric-value-danger {
 
 main.global-transaction-tray-open {
 	padding-bottom: max(4rem, calc(var(--global-transaction-tray-height) + 2rem + env(safe-area-inset-bottom, 0rem)));
+}
+
+main.global-transaction-tray-open :is(a, button, input, select, summary, textarea) {
+	scroll-margin-bottom: calc(var(--global-transaction-tray-height) + 2rem + env(safe-area-inset-bottom, 0rem));
 }
 
 .global-transaction-notice-header {
@@ -6404,18 +6426,18 @@ main.global-transaction-tray-open {
 }
 
 .view-tabs[data-orientation="horizontal"].has-overflow-end:not(.has-overflow-start) {
-	-webkit-mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent 100%);
-	mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent 100%);
+	-webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1rem), transparent 100%);
+	mask-image: linear-gradient(to right, #000 calc(100% - 1rem), transparent 100%);
 }
 
 .view-tabs[data-orientation="horizontal"].has-overflow-start:not(.has-overflow-end) {
-	-webkit-mask-image: linear-gradient(to right, transparent 0, #000 2.5rem);
-	mask-image: linear-gradient(to right, transparent 0, #000 2.5rem);
+	-webkit-mask-image: linear-gradient(to right, transparent 0, #000 1rem);
+	mask-image: linear-gradient(to right, transparent 0, #000 1rem);
 }
 
 .view-tabs[data-orientation="horizontal"].has-overflow-start.has-overflow-end {
-	-webkit-mask-image: linear-gradient(to right, transparent 0, #000 2.5rem, #000 calc(100% - 2.5rem), transparent 100%);
-	mask-image: linear-gradient(to right, transparent 0, #000 2.5rem, #000 calc(100% - 2.5rem), transparent 100%);
+	-webkit-mask-image: linear-gradient(to right, transparent 0, #000 1rem, #000 calc(100% - 1rem), transparent 100%);
+	mask-image: linear-gradient(to right, transparent 0, #000 1rem, #000 calc(100% - 1rem), transparent 100%);
 }
 
 .view-tabs.route {

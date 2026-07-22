@@ -107,7 +107,7 @@ describe('SimulationBanner', () => {
 		}
 	})
 
-	test('puts the full simulation controls behind a compact disclosure', async () => {
+	test('keeps a bootstrapped simulation compact until details are requested', async () => {
 		const domEnvironment = installDomEnvironment()
 		const controller = createSimulationController({ currentScenario: 'security-pool' })
 		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={async () => undefined} />)
@@ -115,7 +115,7 @@ describe('SimulationBanner', () => {
 		try {
 			const disclosure = renderedComponent.container.querySelector('.simulation-banner-details')
 			if (!(disclosure instanceof HTMLElement) || disclosure.tagName !== 'DETAILS') throw new Error('Expected simulation banner disclosure')
-			expect(disclosure.hasAttribute('open')).toBe(true)
+			expect(disclosure.hasAttribute('open')).toBe(false)
 			const summary = disclosure.querySelector('summary')
 			if (!(summary instanceof HTMLElement)) throw new Error('Expected simulation banner disclosure summary')
 			expect(summary.textContent).toContain('Ready')

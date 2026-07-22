@@ -56,6 +56,21 @@ describe('GlobalTransactionTray', () => {
 		expect(documentQueries.getByRole('button', { name: 'Dismiss' })).not.toBeNull()
 	})
 
+	test('reserves the transaction tray height in the viewport scroll area', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<main>
+				<GlobalTransactionTray transaction={{ dismissKey: 'reserved-space', title: 'Question Created', tone: 'success' }} />
+			</main>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.documentElement.style.scrollPaddingBottom).not.toBe('')
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Dismiss' }))
+		})
+		expect(document.documentElement.style.scrollPaddingBottom).toBe('')
+	})
+
 	test('keeps semantic object context visible and call data in a technical disclosure after completion', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<GlobalTransactionTray

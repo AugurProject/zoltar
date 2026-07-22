@@ -236,6 +236,9 @@ describe('MarketSection', () => {
 		expect(document.body.textContent?.includes('Mint or redeem matching Yes, No, and Invalid shares.')).toBe(false)
 		expect(documentQueries.getByText('Open Interest')).not.toBeNull()
 		expect(documentQueries.getByText('Share Supply')).not.toBeNull()
+		const shareSupply = document.body.querySelector('.market-linked-pool-share-supply')
+		if (!(shareSupply instanceof HTMLElement)) throw new Error('Expected a compact linked-pool share supply value')
+		expect(shareSupply.title).toBe('0.000000000000000004')
 	})
 
 	test('distinguishes linked-pool loading, failure recovery, and a confirmed empty result', async () => {
