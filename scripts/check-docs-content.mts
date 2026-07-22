@@ -309,7 +309,7 @@ const discouragedPatternFixtures = [
 	{ expected: 'wrong question lifecycle actor', text: 'question is forked' },
 	{ expected: 'wrong question lifecycle actor', text: 'the question cannot settle locally' },
 	{ expected: 'wrong question lifecycle actor', text: '<p><code>forkQuestion</code> triggered a fork.</p>', path: 'docs/example.html' },
-	{ expected: 'exhaustive child-pool creation', text: 'Placeholder creates one child pool for each fork branch.' },
+	{ expected: 'exhaustive child-pool creation', text: 'Statoblast creates one child pool for each fork branch.' },
 	{ expected: 'passive migration-balance grant', text: '<p>After a fork, a holder receives a <em>migration balance</em>.</p>', path: 'docs/example.html' },
 ]
 

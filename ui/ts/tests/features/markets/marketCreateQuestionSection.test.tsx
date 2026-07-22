@@ -160,7 +160,7 @@ describe('MarketCreateQuestionSection', () => {
 		expect(within(draftPreview).queryByText('binary')).toBeNull()
 		expect(within(draftPreview).queryByText('Add resolution notes, evidence sources, and edge-case handling so other users know how this question will settle.')).toBeNull()
 		expect(within(draftPreview).queryByText('Add a clear question title')).toBeNull()
-		expect(document.body.textContent?.includes('Placeholder origin security pools support this exact Yes / No question shape.')).toBe(false)
+		expect(document.body.textContent?.includes('Statoblast origin security pools support this exact Yes / No question shape.')).toBe(false)
 		expect(documentQueries.queryByText('Context provided')).toBeNull()
 		expect(documentQueries.queryByText('Risk cue')).toBeNull()
 		expect(documentQueries.queryByText('Title is required')).toBeNull()
@@ -176,7 +176,7 @@ describe('MarketCreateQuestionSection', () => {
 		expect(titleInput.getAttribute('aria-describedby')).toBe('market-create-title-error')
 	})
 
-	test('uses normalized market type and Augur Placeholder terminology for categorical questions', async () => {
+	test('uses normalized market type and Augur Statoblast terminology for categorical questions', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<MarketCreateQuestionSection
 				accountAddress={zeroAddress}
@@ -202,7 +202,7 @@ describe('MarketCreateQuestionSection', () => {
 		const draftPreview = documentQueries.getByRole('heading', { name: 'Draft Preview' }).closest('section')
 		if (!(draftPreview instanceof HTMLElement)) throw new Error('Expected draft preview section')
 		expect(within(draftPreview).getByText('Categorical')).not.toBeNull()
-		expect(documentQueries.getByText(/Augur Placeholder origin security pools/)).not.toBeNull()
+		expect(documentQueries.getByText(/Augur Statoblast origin security pools/)).not.toBeNull()
 	})
 
 	test('renders selected market details and triggers selection callbacks', async () => {

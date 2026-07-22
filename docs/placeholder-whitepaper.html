@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Augur Placeholder White Paper</title>
+		<title>Augur Statoblast White Paper</title>
 		<link rel="stylesheet" href="./shared-docs.css" />
 	</head>
 	<body class="paper-page paper-placeholder">
@@ -12,7 +12,7 @@
 			<aside class="sidebar" aria-label="Table of contents">
 				<div class="sidebar-header">
 					<span class="sidebar-series">Augur / Zoltar</span>
-					<strong>Placeholder</strong>
+					<strong>Statoblast</strong>
 					<p>Prediction market layer built on the Zoltar oracle layer.</p>
 				</div>
 					<a class="sidebar-companion" href="./zoltar-whitepaper.html">
@@ -76,7 +76,7 @@
 							Protocol draft • Application layer built on Zoltar
 						</p>
 					</div>
-					<h1>Augur Placeholder White Paper</h1>
+					<h1>Augur Statoblast White Paper</h1>
 					<p class="subtitle">
 						A visual guide to the market, underwriting, escalation, fork
 						migration, and collateral-repair system built on top of Zoltar.
@@ -108,14 +108,14 @@
 						>
 					</div>
 					<p class="lede">
-						Augur Placeholder is the market layer built on top of Zoltar. It
+						Augur Statoblast is the market layer built on top of Zoltar. It
 						creates security pools scoped to individual questions, lets traders
 						mint and redeem ETH-backed shares, lets REP vaults provide
 						underwriting, and tries to settle disputes locally before asking
 						Zoltar to fork.
 					</p>
 					<p>
-						If a fork does happen, Placeholder migrates the market into child
+						If a fork does happen, Statoblast migrates the market into child
 						pools and can repair missing child-pool ETH collateral through a
 						truth auction. Despite the name, that auction repairs collateral; it
 						does not choose the truthful branch.
@@ -158,21 +158,21 @@
 						<p>
 							The stack has two protocol identities. <code>Zoltar</code> is the
 						base truth/forking oracle layer for universes, questions, scalar
-						math, and REP branching. <code>Augur Placeholder</code> is the
+						math, and REP branching. <code>Augur Statoblast</code> is the
 						application layer that adds market collateral, underwriting, local
 						disputes, migration, and collateral repair. For the base oracle
 						layer, see
 						<a href="./zoltar-whitepaper.html">zoltar-whitepaper.html</a>.
 					</p>
 						<p>
-							Placeholder's lifecycle starts by creating a pool scoped to one
+							Statoblast's lifecycle starts by creating a pool scoped to one
 							question and universe, letting traders and REP vaults use it,
 							trying to resolve disputes locally, and only then turning to fork
 							and collateral-repair machinery. The overview sequence below
 							follows that same order.
 						</p>
 						<p>
-							Placeholder also depends on two different oracle paths that answer
+							Statoblast also depends on two different oracle paths that answer
 							different questions. Zoltar represents unresolved market-truth
 							disputes by creating child universes. OpenOracle supplies only a
 							fresh, contestable REP/ETH solvency price for withdrawals,
@@ -182,7 +182,7 @@
 						</p>
 					<ol>
 						<li>
-							A question is registered in Zoltar and a Placeholder security pool
+							A question is registered in Zoltar and a Statoblast security pool
 							is deployed for that question in one universe.
 						</li>
 						<li>
@@ -195,7 +195,7 @@
 						</li>
 						<li>
 							If local resolution fails and the system reaches non-decision,
-							Zoltar forks and Placeholder migrates pool state into child
+							Zoltar forks and Statoblast migrates pool state into child
 							universes.
 						</li>
 						<li>
@@ -473,7 +473,7 @@
 						</p>
 					</figure>
 					<p>
-						Placeholder is not an exchange venue. It issues transferable
+						Statoblast is not an exchange venue. It issues transferable
 						ERC-1155 outcome shares and manages redemption, migration, and
 						collateral accounting; secondary market trading sits outside this
 						protocol.
@@ -535,7 +535,7 @@
 					<ul>
 						<li>
 							Question creators register questions in Zoltar question data,
-							creating the objects around which Placeholder markets can be
+							creating the objects around which Statoblast markets can be
 							built.
 						</li>
 						<li>
@@ -584,7 +584,7 @@
 						>
 					</div>
 					<p class="lede">
-						A <code>SecurityPool</code> is a lineage-specific Placeholder contract
+						A <code>SecurityPool</code> is a lineage-specific Statoblast contract
 						for a question in a universe. Vault operators deposit REP, choose bond
 						allowance, and underwrite ETH-backed complete sets in that pool's
 						local accounting ledger.
@@ -601,7 +601,7 @@
 						The factory requires the question to exist, the universe to be
 						unforked, the universe REP token to be present, and the question to
 						have exactly two categorical labels in this order: <code>Yes</code>,
-						then <code>No</code>. <code>Invalid</code> is added by Placeholder
+						then <code>No</code>. <code>Invalid</code> is added by Statoblast
 						as the third trading and resolution outcome; it is not one of the
 						two origin-pool labels checked by the factory. The factory also
 						records each deployment and exposes paged deployment-history reads
@@ -609,7 +609,7 @@
 					</p>
 					<div class="callout">
 						Origin pool validation intentionally lives above Zoltar. Zoltar
-						accepts global questions; Placeholder's factory decides which
+						accepts global questions; Statoblast's factory decides which
 						question shape is eligible for the current security-pool
 						implementation.
 					</div>
@@ -2345,7 +2345,7 @@
 						>
 					</div>
 					<p class="lede">
-						Placeholder tries local resolution before asking Zoltar to fork.
+						Statoblast tries local resolution before asking Zoltar to fork.
 						Vault operators move REP out of their security-pool position and
 						behind
 						<code>Invalid</code>, <code>Yes</code>, or <code>No</code>. The
@@ -2378,7 +2378,7 @@
 					</div>
 					<div class="callout">
 						<strong>Why not fork immediately?</strong> A fork asks the whole
-						universe to branch, so Placeholder first gives vault-backed REP a
+						universe to branch, so Statoblast first gives vault-backed REP a
 						local path to settle the question. The rising cost curve makes late
 						disagreement increasingly expensive, while the non-decision threshold
 						keeps the fork path available when competing outcomes remain
@@ -3720,14 +3720,14 @@
 					</div>
 					<p>
 						Fork handling spans both layers. Zoltar creates child universes and
-						handles REP splitting. Placeholder separately moves vault state,
+						handles REP splitting. Statoblast separately moves vault state,
 						proportional collateral, and share positions into child pools, while
 						child creation reproduces unresolved escalation state from one
 						canonical snapshot and aggregate backing transfer.
 					</p>
 					<p>
 						The child-pool selector comes from the universe’s fork question, not
-						from Placeholder’s binary market shape. A binary Placeholder pool
+						from Statoblast’s binary market shape. A binary Statoblast pool
 						can therefore spawn child pools keyed to scalar encodings or
 						multi-way categorical outcomes when the universe fork used a
 						different Zoltar question.
@@ -3735,7 +3735,7 @@
 					<p id="fork-griefing-risk">
 						<strong>Accepted global-fork consequence.</strong> Zoltar's
 						<a href="./zoltar-whitepaper.html#global-question-scope">global-question scope</a>
-						owns admission rules and their security classification. For Placeholder,
+						owns admission rules and their security classification. For Statoblast,
 						the consequence is universe-wide: an admitted fork pauses globally guarded
 						parent flows for every pool while migration proceeds.
 					</p>
@@ -3743,7 +3743,7 @@
 						<div class="summary-card">
 							<span>Fork branch role</span>
 							<b
-								>A Zoltar fork creates branches; Placeholder decides what pool
+								>A Zoltar fork creates branches; Statoblast decides what pool
 								state follows each branch.</b
 							>
 						</div>
@@ -4095,7 +4095,7 @@
 								Fork migration responsibilities
 							</title>
 							<desc id="migration-desc">
-								After a Zoltar fork, Placeholder migrates vaults, collateral, and
+								After a Zoltar fork, Statoblast migrates vaults, collateral, and
 								shares. Child creation separately reproduces unresolved escalation
 								state and aggregate backing once.
 							</desc>
@@ -4205,13 +4205,13 @@
 						</svg>
 						<p class="diagram-caption">
 							<span class="figure-label">Pool Migration Flow</span>The Zoltar
-							fork and Placeholder pool migration are related, but they are not
+							fork and Statoblast pool migration are related, but they are not
 							the same contract step.
 						</p>
 					</figure>
 					<h3>Migration Proxy Identity</h3>
 					<p>
-						Placeholder does not send every pool migration call to Zoltar
+						Statoblast does not send every pool migration call to Zoltar
 						directly from the forker. Instead,
 						<code>SecurityPoolForker</code> lazily deploys one deterministic
 						<code>SecurityPoolMigrationProxy</code> per parent pool. That proxy
@@ -4592,7 +4592,7 @@
 						Own-fork migration has one extra accounting split. The pool and its
 						active escalation game both contribute REP to the fork, but the
 						child-universe REP returning from Zoltar is a single auctionable
-						migration balance. Placeholder splits that balance into a vault
+						migration balance. Statoblast splits that balance into a vault
 						bucket and an escalation bucket before child migration resumes.
 					</p>
 					<figure class="diagram" id="fig-placeholder-own-fork-rep-buckets">
@@ -6113,7 +6113,7 @@
 						<li>Usable value depends on users and capital coordinating on the branches they continue to support.</li>
 					</ul>
 					<p>
-						Zoltar forks only create child universes, and Placeholder carries
+						Zoltar forks only create child universes, and Statoblast carries
 						underwriting state, collateral state, and outcome shares into them.
 						If users and bidders coordinate on the child universe they expect to
 						keep using, REP migration, proportional collateral migration, and
@@ -6164,7 +6164,7 @@
 							outcome.
 						</li>
 						<li>
-							Placeholder issues transferable shares and manages redemption and
+							Statoblast issues transferable shares and manages redemption and
 							migration, but does not provide secondary-market trading.
 						</li>
 						<li>

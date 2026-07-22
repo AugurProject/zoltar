@@ -13,11 +13,11 @@
 				<div class="sidebar-header">
 					<span class="sidebar-series">Augur / Zoltar</span>
 					<strong>Zoltar</strong>
-					<p>Branching truth-oracle layer used by the Placeholder market layer.</p>
+					<p>Branching truth-oracle layer used by the Statoblast market layer.</p>
 				</div>
 				<a class="sidebar-companion" href="./placeholder-whitepaper.html">
 					<span>Companion paper</span>
-					<b>Placeholder Market Layer</b>
+					<b>Statoblast Market Layer</b>
 				</a>
 				<a class="sidebar-companion" href="./start-here.html">
 					<span>Entry overview</span>
@@ -59,7 +59,7 @@
 					</div>
 					<div class="hero-label-row">
 						<p class="kicker"><span class="layer-dot" aria-hidden="true"></span>Branching Oracle Layer</p>
-						<p class="paper-status">Protocol draft • Base layer for Placeholder</p>
+						<p class="paper-status">Protocol draft • Base layer for Statoblast</p>
 					</div>
 					<h1>Zoltar White Paper</h1>
 					<p class="subtitle">
@@ -201,7 +201,7 @@
 							<p><a href="../solidity/contracts/Zoltar.sol"><code>Zoltar</code></a> owns universe branching and <code>splitMigrationRep</code>; <a href="../solidity/contracts/ZoltarQuestionData.sol"><code>ZoltarQuestionData</code></a> owns question validity.</p>
 						</div>
 						<div class="implementation-note">
-							<b>Boundary to Placeholder</b>
+							<b>Boundary to Statoblast</b>
 							<p>The market, vault, collateral, and auction systems live above this layer and are intentionally not encoded into Zoltar.</p>
 						</div>
 					</div>
@@ -675,7 +675,7 @@
 					<p>
 						After admission under the <a href="#global-question-scope">global-question rules</a>,
 						recording a fork stops new operational changes in parent-universe pools so
-						that their accounting cannot move while it is being snapshotted. Placeholder
+						that their accounting cannot move while it is being snapshotted. Statoblast
 						provides permissionless, user-driven paths to migrate REP, shares, vault
 						positions, collateral, and unresolved escalation state into child-universe
 						pools. A child pool can return to the operational state once the migration

@@ -1,4 +1,4 @@
-# Placeholder Operator Reference
+# Statoblast Operator Reference
 
 Operators, indexers, reviewers, and UI maintainers consult this reference for
 contract-accurate guardrails, launch procedures, and edge-case behavior in one
@@ -33,7 +33,7 @@ catalog owns the current requirement, status, and evidence for
 
 ## Immutable Protocol Release Posture
 
-Zoltar and Placeholder are intended to launch as immutable, permissionless
+Zoltar and Statoblast are intended to launch as immutable, permissionless
 contracts. Launch documentation should not assume an operator can pause,
 upgrade, roll back, or disable protocol behavior after deployment. Release work
 should instead publish verifiable provenance: final commit and tag,
@@ -66,7 +66,7 @@ contract-first form.
 
 | Area | Implementation behavior | Source |
 | --- | --- | --- |
-| Origin pool shape | Origin pools require an existing question, an unforked universe, a present universe REP token, and exactly two categorical labels in this order: `Yes`, then `No`. Placeholder adds `Invalid` as the third trading and resolution outcome. | [SecurityPoolFactory.sol](../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol), [ShareToken.sol](../solidity/contracts/peripherals/tokens/ShareToken.sol), [BinaryOutcomes.sol](../solidity/contracts/peripherals/BinaryOutcomes.sol) |
+| Origin pool shape | Origin pools require an existing question, an unforked universe, a present universe REP token, and exactly two categorical labels in this order: `Yes`, then `No`. Statoblast adds `Invalid` as the third trading and resolution outcome. | [SecurityPoolFactory.sol](../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol), [ShareToken.sol](../solidity/contracts/peripherals/tokens/ShareToken.sol), [BinaryOutcomes.sol](../solidity/contracts/peripherals/BinaryOutcomes.sol) |
 | Deployment history | The factory records security-pool deployments and exposes paged deployment-history reads for indexers and UIs. | [SecurityPoolFactory.sol](../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol) |
 | Deterministic addresses | `SecurityPoolFactory` derives `securityPoolSalt = keccak256(abi.encode(parent, universeId, questionId, securityMultiplier))`, using a zero parent for an origin. The coordinator and child truth-auction factories each hash that value again with their caller (`SecurityPoolFactory`) for their CREATE2 salt. The pool deployment worker instead uses literal CREATE2 salt zero; its address varies through the full constructor init-code hash, which contains the pool wiring. An origin share token uses `originId = keccak256(abi.encode(questionId, securityMultiplier, originUniverseId))` directly as its CREATE2 salt, while factory ownership, Zoltar, and question ID remain in its init code; children reuse that lineage token. | [SecurityPoolFactory.sol](../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol), [SecurityPoolDeployer.sol](../solidity/contracts/peripherals/factories/SecurityPoolDeployer.sol), [PriceOracleManagerAndOperatorQueuerFactory.sol](../solidity/contracts/peripherals/factories/PriceOracleManagerAndOperatorQueuerFactory.sol), [UniformPriceDualCapBatchAuctionFactory.sol](../solidity/contracts/peripherals/factories/UniformPriceDualCapBatchAuctionFactory.sol), [ShareTokenFactory.sol](../solidity/contracts/peripherals/factories/ShareTokenFactory.sol) |
 | Share-token salt squatting | Direct `ShareTokenFactory` callers cannot reserve the canonical origin-pool share-token address. `CREATE2` includes constructor arguments in the init-code hash, and the share token owner is `msg.sender`, so a direct caller using the canonical salt deploys a caller-owned token at a different address than the `SecurityPoolFactory` deployment. | [ShareTokenFactory.sol](../solidity/contracts/peripherals/factories/ShareTokenFactory.sol), [ShareToken.sol](../solidity/contracts/peripherals/tokens/ShareToken.sol) |

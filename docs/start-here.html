@@ -3,15 +3,15 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Placeholder and Zoltar Start Here</title>
+		<title>Statoblast and Zoltar Start Here</title>
 		<link rel="stylesheet" href="./shared-docs.css" />
 	</head>
 	<body class="doc-openoracle">
 		<main>
 				<header>
-					<h1>Placeholder and Zoltar Start Here</h1>
+					<h1>Statoblast and Zoltar Start Here</h1>
 					<p>
-						Placeholder is the market layer. Zoltar is the forkable oracle layer
+						Statoblast is the market layer. Zoltar is the forkable oracle layer
 						underneath it. A normal market stays inside one security pool:
 						Traders mint ETH-backed shares, REP vaults provide backing, and
 						local escalation tries to settle disputes without forking the wider
@@ -28,7 +28,7 @@
 					</p>
 					<p>
 						Keep one distinction in mind throughout: Zoltar decides how
-						disagreement is represented, while Placeholder decides how a market
+						disagreement is represented, while Statoblast decides how a market
 						is collateralized, disputed, migrated, and repaired around that
 						oracle layer.
 					</p>
@@ -38,7 +38,7 @@
 				<h2>Mental Model</h2>
 				<p>
 					The stack has four layers. Zoltar defines the question and the
-					possible branches of truth. Placeholder runs the market inside one
+					possible branches of truth. Statoblast runs the market inside one
 					branch until disagreement becomes strong enough that the branch itself
 					has to split.
 				</p>
@@ -65,7 +65,7 @@
 							</td>
 						</tr>
 						<tr>
-							<td>Placeholder market layer</td>
+							<td>Statoblast market layer</td>
 							<td>Security pools, shares, vault accounting, and local disputes.</td>
 							<td>
 								Most markets should settle locally; forks are the recovery path
@@ -307,7 +307,7 @@
 				</figure>
 				<ol>
 					<li>A question is registered in <code>ZoltarQuestionData</code>.</li>
-					<li>A Placeholder origin pool is deployed for a binary question in an unforked universe.</li>
+					<li>A Statoblast origin pool is deployed for a binary question in an unforked universe.</li>
 					<li>Vaults deposit REP into <code>SecurityPool</code> and set security-bond allowance.</li>
 					<li>Traders mint complete sets with ETH and later redeem finalized winning shares.</li>
 					<li>
@@ -342,7 +342,7 @@
 				<p>
 					Child universes materialize only when migration or
 					<code>deployChild</code> first uses one of their branches, and
-					Placeholder creates child pools only in branches users choose. A REP
+					Statoblast creates child pools only in branches users choose. A REP
 					holder builds <em>migration balance</em> by initiating the fork or
 					adding parent REP afterward. Calling <code>splitMigrationRep</code>
 					mints <em>child REP</em> in each selected branch, with each branch
@@ -414,7 +414,7 @@
 				<p>
 					Unresolved games can continue in selected child pools, including after
 					an unrelated fork. The
-					<a href="./placeholder-whitepaper.html#migration">Placeholder migration flow</a>
+					<a href="./placeholder-whitepaper.html#migration">Statoblast migration flow</a>
 					owns that lifecycle, while
 					<a href="./merkle-mountain-range.html">Merkle Mountain Range carry proofs</a>
 					owns proof and replay-protection details.
@@ -463,7 +463,7 @@
 						</tr>
 						<tr>
 							<td>Understand the application layer from end to end.</td>
-							<td><a href="./placeholder-whitepaper.html">Placeholder whitepaper</a></td>
+							<td><a href="./placeholder-whitepaper.html">Statoblast whitepaper</a></td>
 						</tr>
 						<tr>
 							<td>Understand universes, question encoding, forks, and REP splitting.</td>

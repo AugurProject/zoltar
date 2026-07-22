@@ -83,7 +83,7 @@ function assertAggregateEscalationContinuationDocs(): void {
 	const normalizedZoltarWhitepaper = zoltarWhitepaper.replaceAll(/\s+/g, ' ')
 	const normalizedInvariants = invariantsHtml.replaceAll(/\s+/g, ' ')
 	for (const [documentName, contents] of [
-		['Placeholder whitepaper', normalizedPlaceholder],
+		['Statoblast whitepaper', normalizedPlaceholder],
 		['Operator reference', normalizedOperatorReference],
 	] as const) {
 		for (const documentedClaim of ['aggregate backing', 'winning proof', 'recorded depositor', 'inherited losers', 'optional parent']) {
@@ -95,7 +95,7 @@ function assertAggregateEscalationContinuationDocs(): void {
 		assert.ok(normalizedContractReference.includes(documentedClaim), `Contract interaction reference must document fork admission economics: ${documentedClaim}`)
 	}
 	for (const forbiddenClaim of ['vaultEscrowChildRep', 'forked-escrow-scaling', 'forked-escrow-example', 'only selected vault escrow authorizes inherited proofs', 'vault migration grants only logical authorization', 'only materialized vault escrow authorizes proofs']) {
-		assert.ok(!normalizedPlaceholder.includes(forbiddenClaim), `Placeholder whitepaper retains obsolete per-vault continuation claim: ${forbiddenClaim}`)
+		assert.ok(!normalizedPlaceholder.includes(forbiddenClaim), `Statoblast whitepaper retains obsolete per-vault continuation claim: ${forbiddenClaim}`)
 	}
 	assert.match(normalizedContractReference, /cleanup neither funds escalation backing nor authorizes carried proofs/)
 	assert.match(normalizedOperatorReference, /Child creation initializes the canonical carry and aggregate backing without waiting for vault transactions/)
@@ -186,7 +186,7 @@ function assertRecursiveForkGasStatusDocs(): void {
 		['Operator reference', operatorReference],
 		['Security model', securityModel],
 		['Zoltar whitepaper', zoltarWhitepaper],
-		['Placeholder whitepaper', whitepaperPlaceholder],
+		['Statoblast whitepaper', whitepaperPlaceholder],
 	] as const) {
 		assert.match(contents, /invariants\.html#ext-05/, `${documentName} must route recursive-fork gas status to EXT-05`)
 		assert.doesNotMatch(
