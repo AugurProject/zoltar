@@ -43,7 +43,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/contract-interaction-reference.md'
-const expectedProductionSoliditySourceFingerprint = '2bfd8d8aa22e8fe85ca42a00a76ec74abef8ed4db2625da88550114c50f09341'
+const expectedProductionSoliditySourceFingerprint = '5f2fb09e7f9b533ba4ed2a7382637ee04274297847bfbfc1ce66ce8341889798'
 
 const eventSourceByName: Record<string, string> = {
 	Approval: 'solidity/contracts/IERC20.sol',
@@ -1310,12 +1310,12 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '574347365b71cf35cea991891ff2f3b2db85dcf93d0f43acd7644f6c3aef347b',
+		compiledAbiFingerprint: '77123164dedd551357fc458328598db7d57ffedf791db0943c040894b395cd83',
 		name: 'OpenOraclePriceCoordinator',
 		purpose: 'Obtains a fresh REP-per-ETH price and gates withdrawal, allowance, and liquidation operations behind it.',
-		readAbiFingerprint: '124c91f4adc55b6dd1a579822253975927b8e76f8eff2b75aa3ee88ec112e2b5',
+		readAbiFingerprint: 'f86d47172374a06e4f6a9eb2e47f8cca1d7c314b30183bd1c4e3d0495e5d6ce4',
 		readSurface:
-			'Configuration getters are `MAX_PENDING_SETTLEMENT_OPERATIONS`, `reputationToken`, `securityPool`, `openOracle`, `weth`, `gasConsumedOpenOracleReportPrice`, `gasConsumedSettlement`, `gasUnitsForOneDispute`, `targetPriceErrorForDispute`, `openOracleSecurityMultiplierBps`, `settlementTime`, `disputeDelay`, `protocolFee`, `feePercentage`, `multiplier`, `timeType`, `trackDisputes`, `protocolFeeRecipient`, `escalationHaltMultiplierBps`, `maxSettlementBaseFeeMultiplierBps`, and `minLiquidationPriceDistanceBps`. Current report and operation getters are `pendingReportId`, `pendingReportSponsor`, `pendingOperationSlotId`, `lastSettlementTimestamp`, `lastPrice`, `pendingReportMaxSettlementBaseFee`, `stagedOperationCounter`, and `stagedOperations`. Use `isPriceValid`, `minimumToken1Report`, `getRequestPriceEthCost`, `getQueuedOperationEthCost`, `getSettlementCallbackGasLimit`, `getPendingOperationSlot`, `getActiveStagedOperationCount`, `getActiveStagedOperations`, `getPendingSettlementOperationCount`, and `getPendingSettlementOperationIds` for derived or paged state.',
+			'Configuration getters are `MAX_PENDING_SETTLEMENT_OPERATIONS`, `OPEN_INTEREST_DIVIDER`, `reputationToken`, `securityPool`, `openOracle`, `weth`, `gasConsumedOpenOracleReportPrice`, `gasConsumedSettlement`, `gasUnitsForOneDispute`, `targetPriceErrorForDispute`, `openOracleSecurityMultiplierBps`, `settlementTime`, `disputeDelay`, `protocolFee`, `feePercentage`, `multiplier`, `timeType`, `trackDisputes`, `protocolFeeRecipient`, `escalationHaltMultiplierBps`, `maxSettlementBaseFeeMultiplierBps`, and `minLiquidationPriceDistanceBps`. Current report and operation getters are `pendingReportId`, `pendingReportSponsor`, `pendingOperationSlotId`, `lastSettlementTimestamp`, `lastPrice`, `pendingReportMaxSettlementBaseFee`, `stagedOperationCounter`, and `stagedOperations`. Use `isPriceValid`, `minimumToken1Report`, `getRequestPriceEthCost`, `getQueuedOperationEthCost`, `getSettlementCallbackGasLimit`, `getPendingOperationSlot`, `getActiveStagedOperationCount`, `getActiveStagedOperations`, `getPendingSettlementOperationCount`, and `getPendingSettlementOperationIds` for derived or paged state.',
 		readDeclarations: [
 			{ name: 'isPriceValid' },
 			{ name: 'minimumToken1Report' },
@@ -1330,6 +1330,7 @@ const contractReferences: ContractReference[] = [
 		],
 		readStorageDeclarations: [
 			{ name: 'MAX_PENDING_SETTLEMENT_OPERATIONS' },
+			{ name: 'OPEN_INTEREST_DIVIDER' },
 			{ name: 'pendingReportId' },
 			{ name: 'pendingReportSponsor' },
 			{ name: 'pendingOperationSlotId' },
