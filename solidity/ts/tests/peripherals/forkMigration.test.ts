@@ -12,6 +12,8 @@ import { peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_Sh
 import {
 	test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackFactoryMock,
 	test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackParentMock,
+	test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAlternatingChildGameMock,
+	test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerChildGameValidationHarness,
 	test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackChildMock,
 	test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackFactoryMock,
 	test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackGameMock,
@@ -640,11 +642,84 @@ describe('Peripherals: fork migration', () => {
 			)
 
 			const attackerChildRepBefore = await getERC20Balance(client, childRep, client.account.address)
-			await assert.rejects(claimForkedEscalationDeposits(client, fakeParent, client.account.address, QuestionOutcome.Yes, [0n]), /Child game pool/)
+			await assert.rejects(claimForkedEscalationDeposits(client, fakeParent, client.account.address, QuestionOutcome.Yes, [0n]), /Child game/)
 
 			strictEqualTypeSafe(await getERC20Balance(client, childRep, client.account.address), attackerChildRepBefore, 'rejected forged claim must not transfer child REP to the attacker')
 			strictEqualTypeSafe(await getERC20Balance(client, childRep, targetGame), victimDeposit, 'rejected forged claim must leave the canonical target game funded')
 			strictEqualTypeSafe((await getSecurityVault(client, targetPool.securityPool, victimClient.account.address)).repInEscalationGame, victimDeposit, 'rejected forged claim must leave canonical victim escrow accounting backed')
+
+			const deployAlternatingChildGame = async (forkResumedAt: bigint) => {
+				const deploymentHash = await client.sendTransaction({
+					data: encodeDeployData({
+						abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAlternatingChildGameMock.abi,
+						bytecode: `0x${test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAlternatingChildGameMock.evm.bytecode.object}`,
+						args: [fakeChild, forkResumedAt],
+					}),
+				})
+				const receipt = await client.waitForTransactionReceipt({ hash: deploymentHash })
+				const game = receipt.contractAddress
+				if (game === undefined || game === null) throw new Error('alternating child game address missing')
+				return game
+			}
+			const firstChildGame = await deployAlternatingChildGame(1n)
+			const secondChildGame = await deployAlternatingChildGame(0n)
+			const validationHarnessDeploymentHash = await client.sendTransaction({
+				data: encodeDeployData({
+					abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerChildGameValidationHarness.abi,
+					bytecode: `0x${test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerChildGameValidationHarness.evm.bytecode.object}`,
+					args: [getZoltarAddress()],
+				}),
+			})
+			const validationHarnessReceipt = await client.waitForTransactionReceipt({ hash: validationHarnessDeploymentHash })
+			const validationHarness = validationHarnessReceipt.contractAddress
+			if (validationHarness === undefined || validationHarness === null) throw new Error('child game validation harness address missing')
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackChildMock.abi,
+					address: fakeChild,
+					functionName: 'configureOperationalEscalationGames',
+					args: [targetGame, firstChildGame],
+				}),
+			)
+			await assert.rejects(
+				writeContractAndWait(client, () =>
+					client.writeContract({
+						abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerChildGameValidationHarness.abi,
+						address: validationHarness,
+						functionName: 'finalizeEscalationStateAfterAuction',
+						args: [fakeChild],
+					}),
+				),
+				/Child game/,
+			)
+			strictEqualTypeSafe(
+				await client.readContract({
+					abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackChildMock.abi,
+					address: fakeChild,
+					functionName: 'forkResumeCount',
+				}),
+				0n,
+				'auction finalization must reject a child that switches to a game bound to another pool',
+			)
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackChildMock.abi,
+					address: fakeChild,
+					functionName: 'configureOperationalEscalationGames',
+					args: [firstChildGame, secondChildGame],
+				}),
+			)
+
+			await migrateVaultWithUnresolvedEscalation(client, fakeParent, client.account.address, QuestionOutcome.Yes)
+			strictEqualTypeSafe(
+				await client.readContract({
+					abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackChildMock.abi,
+					address: fakeChild,
+					functionName: 'forkResumeCount',
+				}),
+				0n,
+				'combined migration must use the first validated child game after the child changes its getter',
+			)
 		})
 	})
 

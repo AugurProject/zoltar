@@ -362,10 +362,15 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		migrationProxyByPool[securityPool] = migrationProxy;
 	}
 
-	function _initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child) internal override {
+	function _initializeChildForkedEscalationGameIfNeeded(
+		ISecurityPool parent,
+		ISecurityPool child,
+		EscalationGame childEscalationGame
+	) internal override returns (EscalationGame) {
+		_validateChildEscalationGame(child, childEscalationGame);
 		SecurityPoolForkerForkData storage parentForkData = forkDataByPool[parent];
-		if (!parentForkData.unresolvedEscalationAtFork) return;
-		if (address(child.escalationGame()) == address(0x0)) {
+		if (!parentForkData.unresolvedEscalationAtFork) return childEscalationGame;
+		if (address(childEscalationGame) == address(0x0)) {
 			SecurityPoolForkerForkData storage childForkData = forkDataByPool[child];
 			child.initializeForkedEscalationGame(
 				parentForkData.escalationStartBondAtFork,
@@ -375,13 +380,19 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 					? BinaryOutcomes.BinaryOutcome.None
 					: BinaryOutcomes.BinaryOutcome(childForkData.fixedQuestionOutcomePlusOne - 1)
 			);
+			childEscalationGame = child.escalationGame();
+			_validateChildEscalationGame(child, childEscalationGame);
 		}
-		super._initializeChildForkedEscalationGameIfNeeded(parent, child);
+		return super._initializeChildForkedEscalationGameIfNeeded(parent, child, childEscalationGame);
 	}
 
-	function initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child) external {
+	function initializeChildForkedEscalationGameIfNeeded(
+		ISecurityPool parent,
+		ISecurityPool child,
+		EscalationGame childEscalationGame
+	) external returns (EscalationGame) {
 		require(msg.sender == address(this), 'Forker');
-		_initializeChildForkedEscalationGameIfNeeded(parent, child);
+		return _initializeChildForkedEscalationGameIfNeeded(parent, child, childEscalationGame);
 	}
 
 	function initiateSecurityPoolFork(ISecurityPool securityPool) external {
@@ -455,13 +466,14 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		);
 	}
 
-	function _delegateMigrationCall(address delegate, bytes memory callData) private {
-		(bool success, bytes memory data) = delegate.delegatecall(callData);
+	function _delegateMigrationCall(address delegate, bytes memory callData) private returns (bytes memory data) {
+		(bool success, bytes memory returnData) = delegate.delegatecall(callData);
 		if (!success) {
 			assembly ('memory-safe') {
-				revert(add(data, 0x20), mload(data))
+				revert(add(returnData, 0x20), mload(returnData))
 			}
 		}
+		return returnData;
 	}
 
 	function createChildUniverse(ISecurityPool securityPool, uint256 outcomeIndex) external {
@@ -489,10 +501,18 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 
 	// migrates vault into outcome universe after fork
 	function migrateVault(ISecurityPool securityPool, uint256 outcomeIndex) public {
-		_delegateMigrationCall(
+		_migrateVaultAndReturnChild(securityPool, outcomeIndex);
+	}
+
+	function _migrateVaultAndReturnChild(
+		ISecurityPool securityPool,
+		uint256 outcomeIndex
+	) private returns (ISecurityPool child, EscalationGame childEscalationGame) {
+		bytes memory returnData = _delegateMigrationCall(
 			vaultMigrationDelegate,
 			abi.encodeCall(SecurityPoolForkerVaultMigrationDelegate.migrateVault, (securityPool, outcomeIndex))
 		);
+		return abi.decode(returnData, (ISecurityPool, EscalationGame));
 	}
 
 	function migrateVaultWithUnresolvedEscalation(
@@ -500,17 +520,19 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		address vault,
 		uint256 childOutcomeIndex
 	) external {
+		ISecurityPool child;
+		EscalationGame childEscalationGame;
 		if (
 			msg.sender == vault &&
 			block.timestamp <= forkDataByPool[securityPool].forkActivationTime + SecurityPoolUtils.MIGRATION_TIME
 		) {
-			migrateVault(securityPool, childOutcomeIndex);
+			(child, childEscalationGame) = _migrateVaultAndReturnChild(securityPool, childOutcomeIndex);
 		}
 		_delegateMigrationCall(
 			escalationGameForkerDelegate,
 			abi.encodeCall(
 				EscalationGameForker.migrateVaultWithUnresolvedEscalation,
-				(securityPool, vault, childOutcomeIndex)
+				(securityPool, vault, childOutcomeIndex, child, childEscalationGame)
 			)
 		);
 	}
@@ -637,7 +659,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			)
 		);
 		_finalizeOwnershipAfterAuction(securityPool, data, parentData, repPurchased);
-		_finalizeEscalationStateAfterAuction(securityPool, parentData);
+		_finalizeEscalationStateAfterAuction(securityPool, parentData.unresolvedEscalationAtFork);
 		emit TruthAuctionFinalized(securityPool);
 		securityPool.updateRetentionRate();
 	}
@@ -701,16 +723,6 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		}
 		if (currentOwnershipDenominator == 0) return SecurityPoolUtils.PRICE_PRECISION;
 		return (currentOwnershipDenominator - 1) / unsoldRep + 1;
-	}
-
-	function _finalizeEscalationStateAfterAuction(
-		ISecurityPool securityPool,
-		SecurityPoolForkerForkData storage parentData
-	) private {
-		if (!parentData.unresolvedEscalationAtFork) return;
-		EscalationGame childEscalationGame = securityPool.escalationGame();
-		if (address(childEscalationGame) == address(0x0)) return;
-		_finalizeAwaitingForkContinuationIfReady(securityPool, childEscalationGame);
 	}
 
 	function finalizeTruthAuction(ISecurityPool securityPool) external payable {

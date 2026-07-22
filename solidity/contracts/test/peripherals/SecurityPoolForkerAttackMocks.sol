@@ -6,6 +6,16 @@ import { ISecurityPool, ISecurityPoolFactory, SystemState } from '../../peripher
 import { IShareToken } from '../../peripherals/interfaces/IShareToken.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
 import { BinaryOutcomes } from '../../peripherals/BinaryOutcomes.sol';
+import { SecurityPoolForkerBase } from '../../peripherals/SecurityPoolForkerBase.sol';
+import { Zoltar } from '../../Zoltar.sol';
+
+contract SecurityPoolForkerChildGameValidationHarness is SecurityPoolForkerBase {
+	constructor(Zoltar zoltar) SecurityPoolForkerBase(zoltar) {}
+
+	function finalizeEscalationStateAfterAuction(ISecurityPool child) external {
+		_finalizeEscalationStateAfterAuction(child, true);
+	}
+}
 
 contract SecurityPoolForkerMaliciousEventEmitter {
 	ISecurityPool private immutable targetPool;
@@ -260,6 +270,8 @@ contract SecurityPoolForkerEscrowAttackGameMock {
 		return false;
 	}
 
+	function exportVaultUnresolvedTotalsWithoutTransfer(address) external pure returns (uint256[3] memory) {}
+
 	function activationTime() external pure returns (uint256) {
 		return 1;
 	}
@@ -369,6 +381,45 @@ contract SecurityPoolForkerEscrowAttackParentMock {
 	}
 
 	function authorizeChildPool(ISecurityPool) external pure {}
+
+	function updateVaultFees(address) external pure {}
+
+	function securityVaults(
+		address
+	)
+		external
+		pure
+		returns (
+			uint256 poolOwnership,
+			uint256 securityBondAllowance,
+			uint256 repInEscalationGame,
+			uint256 lastUpdatedFeeAccumulator
+		)
+	{}
+
+	function configureVault(address, uint256, uint256, uint256) external pure {}
+}
+
+contract SecurityPoolForkerAlternatingChildGameMock {
+	ISecurityPool private immutable configuredSecurityPool;
+	uint256 private immutable configuredForkResumedAt;
+
+	constructor(ISecurityPool securityPoolAddress, uint256 forkResumedAtValue) {
+		configuredSecurityPool = securityPoolAddress;
+		configuredForkResumedAt = forkResumedAtValue;
+	}
+
+	function securityPool() external view returns (ISecurityPool) {
+		return configuredSecurityPool;
+	}
+
+	function forkCarrySnapshotInitialized() external pure returns (bool) {
+		return true;
+	}
+
+	function forkResumedAt() external view returns (uint256) {
+		return configuredForkResumedAt;
+	}
 }
 
 contract SecurityPoolForkerEscrowAttackChildMock {
@@ -379,6 +430,12 @@ contract SecurityPoolForkerEscrowAttackChildMock {
 	address private immutable configuredTruthAuction;
 	address private immutable configuredEscalationGame;
 	uint248 private immutable configuredUniverse;
+	address private firstOperationalEscalationGame;
+	address private secondOperationalEscalationGame;
+	bool private operationalMode;
+	bool private useSecondOperationalEscalationGame;
+	bool private awaitingContinuation;
+	uint256 public forkResumeCount;
 
 	constructor(
 		ISecurityPool parentPool,
@@ -402,8 +459,8 @@ contract SecurityPoolForkerEscrowAttackChildMock {
 		return configuredParent;
 	}
 
-	function systemState() external pure returns (SystemState) {
-		return SystemState.ForkMigration;
+	function systemState() external view returns (SystemState) {
+		return operationalMode ? SystemState.Operational : SystemState.ForkMigration;
 	}
 
 	function universeId() external view returns (uint248) {
@@ -423,7 +480,18 @@ contract SecurityPoolForkerEscrowAttackChildMock {
 	}
 
 	function escalationGame() external view returns (address) {
+		if (operationalMode) {
+			return
+				useSecondOperationalEscalationGame ? secondOperationalEscalationGame : firstOperationalEscalationGame;
+		}
 		return configuredEscalationGame;
+	}
+
+	function configureOperationalEscalationGames(address firstGame, address secondGame) external {
+		firstOperationalEscalationGame = firstGame;
+		secondOperationalEscalationGame = secondGame;
+		operationalMode = true;
+		awaitingContinuation = true;
 	}
 
 	function repToken() external view returns (ReputationToken) {
@@ -432,7 +500,17 @@ contract SecurityPoolForkerEscrowAttackChildMock {
 
 	function setOwnershipDenominator(uint256) external pure {}
 
-	function setAwaitingForkContinuation(bool) external pure {}
+	function awaitingForkContinuation() external view returns (bool) {
+		return awaitingContinuation;
+	}
+
+	function setAwaitingForkContinuation(bool shouldAwait) external {
+		awaitingContinuation = shouldAwait;
+	}
+
+	function resumeForkedEscalationGame() external {
+		forkResumeCount++;
+	}
 
 	function initializeForkCarrySnapshotWithResolutionBalances(
 		address,
@@ -443,4 +521,35 @@ contract SecurityPoolForkerEscrowAttackChildMock {
 		uint256[3] memory,
 		bytes32[3] memory
 	) external pure {}
+
+	function updateVaultFees(address) external pure {}
+
+	function securityVaults(
+		address
+	)
+		external
+		pure
+		returns (
+			uint256 poolOwnership,
+			uint256 securityBondAllowance,
+			uint256 repInEscalationGame,
+			uint256 lastUpdatedFeeAccumulator
+		)
+	{}
+
+	function feeIndex() external pure returns (uint256) {
+		return 0;
+	}
+
+	function configureVault(address, uint256, uint256, uint256) external {
+		if (operationalMode) useSecondOperationalEscalationGame = true;
+	}
+
+	function poolOwnershipDenominator() external pure returns (uint256) {
+		return 0;
+	}
+
+	function totalSecurityBondAllowance() external pure returns (uint256) {
+		return 0;
+	}
 }

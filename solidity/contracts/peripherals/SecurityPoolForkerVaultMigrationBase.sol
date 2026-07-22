@@ -118,13 +118,10 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 			}
 		}
 
-		_initializeChildForkedEscalationGameIfNeeded(parent, child);
 		childEscalationGame = child.escalationGame();
-		require(
-			address(childEscalationGame) == address(0x0) ||
-				address(childEscalationGame.securityPool()) == address(child),
-			'Child game pool'
-		);
+		_validateChildEscalationGame(child, childEscalationGame);
+		childEscalationGame = _initializeChildForkedEscalationGameIfNeeded(parent, child, childEscalationGame);
+		_validateChildEscalationGame(child, childEscalationGame);
 		_ensureChildEscalationBacking(parent, outcomeIndex, child, childEscalationGame);
 		_sweepChildRepToPool(parent, outcomeIndex);
 	}

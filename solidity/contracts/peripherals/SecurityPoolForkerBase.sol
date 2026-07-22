@@ -38,6 +38,14 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage, ISecurity
 			securityPool.poolOwnershipDenominator();
 	}
 
+	function _validateChildEscalationGame(ISecurityPool child, EscalationGame childEscalationGame) internal view {
+		require(
+			address(childEscalationGame) == address(0x0) ||
+				address(childEscalationGame.securityPool()) == address(child),
+			'Child game'
+		);
+	}
+
 	function _finalizeAwaitingForkContinuationIfReady(
 		ISecurityPool child,
 		EscalationGame childEscalationGame
@@ -53,9 +61,21 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage, ISecurity
 		child.resumeForkedEscalationGame();
 	}
 
-	function _initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child) internal virtual {
-		EscalationGame parentEscalationGame = parent.escalationGame();
+	function _finalizeEscalationStateAfterAuction(ISecurityPool child, bool unresolvedEscalationAtFork) internal {
+		if (!unresolvedEscalationAtFork) return;
 		EscalationGame childEscalationGame = child.escalationGame();
+		_validateChildEscalationGame(child, childEscalationGame);
+		if (address(childEscalationGame) == address(0x0)) return;
+		_finalizeAwaitingForkContinuationIfReady(child, childEscalationGame);
+	}
+
+	function _initializeChildForkedEscalationGameIfNeeded(
+		ISecurityPool parent,
+		ISecurityPool child,
+		EscalationGame childEscalationGame
+	) internal virtual returns (EscalationGame) {
+		_validateChildEscalationGame(child, childEscalationGame);
+		EscalationGame parentEscalationGame = parent.escalationGame();
 		if (
 			forkDataByPool[parent].unresolvedEscalationAtFork &&
 			address(parentEscalationGame) != address(0x0) &&
@@ -75,6 +95,7 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage, ISecurity
 			);
 		}
 		_finalizeAwaitingForkContinuationIfReady(child, childEscalationGame);
+		return childEscalationGame;
 	}
 
 	function _initializeOwnForkRepBuckets(
