@@ -26,6 +26,7 @@ import { StateHint } from '../../../components/StateHint.js'
 import { TokenApprovalControl } from '../../../components/TokenApprovalControl.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
 import { TransactionNetworkValue } from '../../../components/TransactionNetworkValue.js'
+import { TransactionReview } from '../../../components/TransactionReview.js'
 import { TimestampValue } from '../../../components/TimestampValue.js'
 import { useLoadController } from '../../../hooks/useLoadController.js'
 import { assertNever } from '../../../lib/assert.js'
@@ -349,6 +350,7 @@ function renderReportDetailsCard(
 	openOracleDisputeSubmission: OpenOracleSectionProps['openOracleDisputeSubmission'],
 	openOracleActiveAction: OpenOracleSectionProps['openOracleActiveAction'],
 	openOracleActiveWithdrawalBalance: OpenOracleSectionProps['openOracleActiveWithdrawalBalance'],
+	openOracleResult: OpenOracleSectionProps['openOracleResult'],
 	openOracleReportLookupState: OpenOracleSectionProps['openOracleReportLookupState'],
 	isConnected: boolean,
 	isMainnet: boolean,
@@ -642,7 +644,7 @@ function renderReportDetailsCard(
 				})}
 			</OperationModal>
 
-			<OperationModal context={reportTransactionContext} isOpen={selectedReportModal === 'settle'} onClose={() => onSelectedReportModalChange(undefined)} title={openOracleCopy.settleReport}>
+			<OperationModal closeOnSuccessKey={openOracleResult?.action === 'settle' ? openOracleResult.hash : undefined} context={reportTransactionContext} isOpen={selectedReportModal === 'settle'} onClose={() => onSelectedReportModalChange(undefined)} title={openOracleCopy.settleReport}>
 				{renderSelectedReportActionSection({
 					actionMode: 'settle',
 					disputeSubmission: openOracleDisputeSubmission,
@@ -831,6 +833,7 @@ export function OpenOracleSection({
 					)}
 					<SectionBlock title={openOracleCopy.openOracleGame} variant='plain'>
 						<p className='notice warning'>{openOracleCopy.standaloneOracleWarningDetail}</p>
+						<p className='detail'>{openOracleCopy.standaloneOracleIntroduction}</p>
 						<div className='form-grid'>
 							<SectionBlock headingLevel={4} title={openOracleCopy.tokenPair} variant='embedded'>
 								<div className='field-row'>
@@ -876,6 +879,10 @@ export function OpenOracleSection({
 										{openOracleCopy.creationFundingRequirementHelpText}
 									</p>
 								</label>
+							</SectionBlock>
+
+							<ReadOnlyDetailAccordion title={openOracleCopy.advancedDisputeAndTimingSettings}>
+								<p className='detail'>{openOracleCopy.advancedDisputeAndTimingSettingsDetail}</p>
 								<div className='field-row'>
 									<label className='field'>
 										<span>{openOracleCopy.disputeFeePercentage}</span>
@@ -889,36 +896,51 @@ export function OpenOracleSection({
 										</p>
 									</label>
 								</div>
-							</SectionBlock>
-
-							<SectionBlock headingLevel={4} title={openOracleCopy.timing} variant='embedded'>
-								<div className='field-row'>
-									<label className='field'>
-										<span>{openOracleCopy.settlementDelaySeconds}</span>
-										<FormInput value={openOracleCreateForm.settlementTime} inputMode='numeric' onInput={event => onOpenOracleCreateFormChange({ settlementTime: event.currentTarget.value })} aria-label={openOracleCopy.settlementDelaySeconds} />
-									</label>
-									<label className='field'>
-										<span>{openOracleCopy.escalationHalt}</span>
-										<FormInput value={openOracleCreateForm.escalationHalt} inputMode='decimal' onInput={event => onOpenOracleCreateFormChange({ escalationHalt: event.currentTarget.value })} aria-label={openOracleCopy.escalationHalt} aria-describedby='open-oracle-escalation-halt-help' />
-										<p id='open-oracle-escalation-halt-help' className='field-help'>
-											{openOracleCopy.disputeEscalationStopAmountHelpText}
-										</p>
-									</label>
-								</div>
-								<div className='field-row'>
-									<label className='field'>
-										<span>{openOracleCopy.disputeDelaySeconds}</span>
-										<FormInput value={openOracleCreateForm.disputeDelay} inputMode='numeric' onInput={event => onOpenOracleCreateFormChange({ disputeDelay: event.currentTarget.value })} aria-label={openOracleCopy.disputeDelaySeconds} />
-									</label>
-									<label className='field'>
-										<span>{openOracleCopy.protocolFeePercentage}</span>
-										<FormInput value={openOracleCreateForm.protocolFee} inputMode='decimal' onInput={event => onOpenOracleCreateFormChange({ protocolFee: event.currentTarget.value })} aria-label={openOracleCopy.protocolFeePercentage} />
-									</label>
-								</div>
-							</SectionBlock>
-							<ReadOnlyDetailAccordion title={openOracleCopy.parameterDetails}>
+								<SectionBlock headingLevel={4} title={openOracleCopy.timing} variant='embedded'>
+									<div className='field-row'>
+										<label className='field'>
+											<span>{openOracleCopy.settlementDelaySeconds}</span>
+											<FormInput value={openOracleCreateForm.settlementTime} inputMode='numeric' onInput={event => onOpenOracleCreateFormChange({ settlementTime: event.currentTarget.value })} aria-label={openOracleCopy.settlementDelaySeconds} />
+										</label>
+										<label className='field'>
+											<span>{openOracleCopy.escalationHalt}</span>
+											<FormInput value={openOracleCreateForm.escalationHalt} inputMode='decimal' onInput={event => onOpenOracleCreateFormChange({ escalationHalt: event.currentTarget.value })} aria-label={openOracleCopy.escalationHalt} aria-describedby='open-oracle-escalation-halt-help' />
+											<p id='open-oracle-escalation-halt-help' className='field-help'>
+												{openOracleCopy.disputeEscalationStopAmountHelpText}
+											</p>
+										</label>
+									</div>
+									<div className='field-row'>
+										<label className='field'>
+											<span>{openOracleCopy.disputeDelaySeconds}</span>
+											<FormInput value={openOracleCreateForm.disputeDelay} inputMode='numeric' onInput={event => onOpenOracleCreateFormChange({ disputeDelay: event.currentTarget.value })} aria-label={openOracleCopy.disputeDelaySeconds} />
+										</label>
+										<label className='field'>
+											<span>{openOracleCopy.protocolFeePercentage}</span>
+											<FormInput value={openOracleCreateForm.protocolFee} inputMode='decimal' onInput={event => onOpenOracleCreateFormChange({ protocolFee: event.currentTarget.value })} aria-label={openOracleCopy.protocolFeePercentage} />
+										</label>
+									</div>
+								</SectionBlock>
+								<h4>{openOracleCopy.parameterDetails}</h4>
 								<p className='detail'>{openOracleCopy.standaloneParameterDetails}</p>
 							</ReadOnlyDetailAccordion>
+
+							<TransactionReview
+								context={[
+									{ label: openOracleCopy.token1Address, value: <AddressValue address={openOracleCreateForm.token1Address.trim() === '' ? undefined : openOracleCreateForm.token1Address} /> },
+									{ label: openOracleCopy.token2Address, value: <AddressValue address={openOracleCreateForm.token2Address.trim() === '' ? undefined : openOracleCreateForm.token2Address} /> },
+									{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
+								]}
+								primary={[
+									{ label: transactionReviewCopy.youPay, value: `${openOracleCreateForm.ethValue || commonCopy.metricUnavailablePlaceholder} ${commonCopy.eth}` },
+									{ label: openOracleCopy.reportAmounts, value: `${openOracleCreateForm.exactToken1Report || commonCopy.metricUnavailablePlaceholder} / ${openOracleCreateForm.initialToken2Amount || commonCopy.metricUnavailablePlaceholder}` },
+								]}
+								details={[
+									{ label: openOracleCopy.settlerReward, value: `${openOracleCreateForm.settlerReward || commonCopy.metricUnavailablePlaceholder} ${commonCopy.eth}` },
+									{ label: openOracleCopy.settlementDelaySeconds, value: openOracleCreateForm.settlementTime || commonCopy.metricUnavailablePlaceholder },
+								]}
+								risks={[openOracleCopy.standaloneFundingRisk, openOracleCopy.standaloneDisputeSettingsRisk]}
+							/>
 
 							<div className='actions'>
 								<TransactionActionButton
@@ -944,6 +966,7 @@ export function OpenOracleSection({
 						openOracleDisputeSubmission,
 						openOracleActiveAction,
 						openOracleActiveWithdrawalBalance,
+						openOracleResult,
 						openOracleReportLookupState,
 						isConnected,
 						isMainnet,

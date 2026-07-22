@@ -616,7 +616,7 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Liquidation Queued' })).not.toBeNull()
 		expect(documentQueries.getByText('#10')).not.toBeNull()
-		expect(documentQueries.getByText('The settlement auto-execute list is full. Execute this staged operation manually with its id after a valid oracle price is available.')).not.toBeNull()
+		expect(documentQueries.getByText('The settlement auto-execute list is full. Execute this staged operation manually with its ID after a valid oracle price is available.')).not.toBeNull()
 	})
 
 	test('shows immediate execution when liquidation uses an already valid oracle price', async () => {
@@ -1225,8 +1225,8 @@ describe('LiquidationModal', () => {
 		if (!(maxButton instanceof HTMLButtonElement)) throw new Error('Expected liquidation Max button')
 		expect(maxButton.disabled).toBe(true)
 
-		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'Rep Moved')
-		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected Rep Moved label')
+		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'REP Moved')
+		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected REP Moved label')
 		const repMovedValue = repMovedLabel.nextElementSibling
 		if (!(repMovedValue instanceof HTMLElement)) throw new Error('Expected Rep Moved value')
 		expect(repMovedValue.textContent).toBe('≈ 0.00 REP')
@@ -1451,7 +1451,7 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Caller Vault After Liquidation' })).toBeNull()
 		expect(documentQueries.getByText('Your REP After')).not.toBeNull()
 		expect(documentQueries.getByText('Your Bond Allowance After')).not.toBeNull()
-		expect(documentQueries.getByText('Rep Moved')).not.toBeNull()
+		expect(documentQueries.getByText('REP Moved')).not.toBeNull()
 	})
 
 	test('shows zero REP moved when no punitive liquidation amount is executable', async () => {
@@ -1478,8 +1478,8 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'Rep Moved')
-		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected Rep Moved label')
+		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'REP Moved')
+		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected REP Moved label')
 		const repMovedValue = repMovedLabel.nextElementSibling
 		if (!(repMovedValue instanceof HTMLElement)) throw new Error('Expected Rep Moved value')
 
@@ -1608,8 +1608,8 @@ describe('LiquidationModal', () => {
 		expect(executeButton.disabled).toBe(false)
 		expect(documentQueries.getByText(/Simulation REP \/ ETH/)).not.toBeNull()
 		expect(documentQueries.getByText(/Target Collateralization @ Simulation Price/)).not.toBeNull()
-		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'Rep Moved')
-		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected Rep Moved label')
+		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span')).find(element => element.textContent === 'REP Moved')
+		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected REP Moved label')
 		const repMovedValueBefore = repMovedLabel.nextElementSibling
 		if (!(repMovedValueBefore instanceof HTMLElement)) throw new Error('Expected Rep Moved value')
 		const clampedPreviewText = repMovedValueBefore.textContent

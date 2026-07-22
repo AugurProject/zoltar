@@ -148,7 +148,7 @@ describe('contract core helpers', () => {
 			functionName: 'approve',
 		}))
 
-		expect(presentation?.rows?.some(row => row.label === 'Contract' && row.value === `ERC-20 Token (${tokenAddress})`)).toBe(true)
+		expect(presentation?.technicalRows?.some(row => row.label === 'Contract' && row.value === `ERC-20 Token (${tokenAddress})`)).toBe(true)
 	})
 
 	test('writeContractAndWaitForReceipt maps transaction revert and fallback error messages', async () => {

@@ -878,6 +878,34 @@ describe('Open Oracle helpers', () => {
 		expect(reportDetails.stateHash).toBe((await getOpenOracleExtraData(client, reportId)).stateHash)
 	})
 
+	test('requestOraclePrice submits the reviewed ETH value after the live request cost changes', async () => {
+		const minimumToken1Report = await client.readContract({
+			address: managerAddress,
+			abi: [{ type: 'function', name: 'minimumToken1Report', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256' }] }],
+			functionName: 'minimumToken1Report',
+			args: [],
+		})
+		if (typeof minimumToken1Report !== 'bigint') throw new Error('expected bigint minimumToken1Report')
+		const reviewBaseFeeWeiPerGas = 1n * 10n ** 9n
+		await mockWindow.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [`0x${reviewBaseFeeWeiPerGas.toString(16)}`] })
+		await mockWindow.request({ method: 'evm_mine', params: [] })
+		const reviewedBaseCost = await getRequestPriceEthCost(client, managerAddress)
+		const reviewedRequestEthValue = addOpenOracleBountyBuffer(reviewedBaseCost)
+		await mockWindow.setNextBlockBaseFeePerGasToZero()
+		await mockWindow.request({ method: 'evm_mine', params: [] })
+		expect(await getRequestPriceEthCost(client, managerAddress)).not.toBe(reviewedBaseCost)
+
+		let submittedRequestEthValue: bigint | undefined
+		const writeClientWithPrepareSpy = createWalletWriteClient(addressString(TEST_ADDRESSES[0]), {
+			onTransactionPrepared: preview => {
+				if (preview.functionName === 'requestPrice') submittedRequestEthValue = preview.value
+			},
+		})
+		await requestOraclePrice(writeClientWithPrepareSpy, managerAddress, minimumToken1Report, 0n, reviewedRequestEthValue)
+
+		expect(submittedRequestEthValue).toBe(reviewedRequestEthValue)
+	})
+
 	test('requestOraclePrice accepts caller-selected WETH above the coordinator minimum', async () => {
 		const minimumToken1Report = await client.readContract({
 			address: managerAddress,

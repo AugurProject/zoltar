@@ -471,6 +471,7 @@ export function ForkAuctionSection({
 		universeId,
 	})
 	const selectedAuctionPoolAddress = selectedAuctionChildPool?.securityPoolAddress
+	const selectedAuctionUniverseId = selectedAuctionChildPool?.universeId
 	const currentRootAuctionDetails = getCurrentSelectedPoolForkAuctionDetails({
 		forkAuctionDetails: forkAuctionDetails?.securityPoolAddress !== undefined && selectedAuctionPoolAddress !== undefined && sameAddress(forkAuctionDetails.securityPoolAddress, selectedAuctionPoolAddress) ? forkAuctionDetails : undefined,
 		selectedPool: selectedAuctionChildPool,
@@ -709,6 +710,7 @@ export function ForkAuctionSection({
 		onClaimAuctionProceeds,
 		onRefundLosingBids,
 		selectedAuctionPoolAddress,
+		selectedAuctionUniverseId,
 		selectedStage,
 		settlementBidRows,
 		truthAuctionFinalized: truthAuctionStatus?.finalized === true,
@@ -905,13 +907,13 @@ export function ForkAuctionSection({
 	const migrationStatusBadge = <Badge tone={migrationStateBadge.tone}>{migrationStateBadge.label}</Badge>
 	const onStartTruthAuctionSubmit = () => {
 		beginStartTruthAuctionProgress()
-		onStartTruthAuction(selectedAuctionPoolAddress)
+		onStartTruthAuction(selectedAuctionPoolAddress, selectedAuctionUniverseId)
 	}
 	const onSubmitBidForSelectedAuction = () => {
-		onSubmitBid(selectedAuctionPoolAddress)
+		onSubmitBid(selectedAuctionPoolAddress, selectedAuctionUniverseId)
 	}
 	function onFinalizeTruthAuctionForSelectedAuction() {
-		onFinalizeTruthAuction(selectedAuctionPoolAddress)
+		onFinalizeTruthAuction(selectedAuctionPoolAddress, selectedAuctionUniverseId)
 	}
 	const settlementActionAvailabilityMessage = getTruthAuctionSettlementActionAvailabilityMessage({
 		claimingAvailable: selectedAuctionContext?.claimingAvailable,

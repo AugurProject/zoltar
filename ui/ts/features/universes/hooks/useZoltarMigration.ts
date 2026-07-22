@@ -18,6 +18,7 @@ import type { ZoltarMigrationActionResult, ZoltarUniverseSummary } from '../../.
 
 type UseZoltarMigrationParameters = {
 	accountAddress: Address | undefined
+	activeUniverseId: bigint
 	ensureZoltarUniverse: () => Promise<ZoltarUniverseSummary>
 	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
 	onTransactionFinished: () => void
@@ -52,6 +53,7 @@ function resolvePrepareMigrationAmount(amount: bigint, preparedRepBalance: bigin
 
 export function useZoltarMigration({
 	accountAddress,
+	activeUniverseId,
 	ensureZoltarUniverse,
 	onTransactionFailed,
 	onTransactionFinished,
@@ -99,7 +101,13 @@ export function useZoltarMigration({
 
 			try {
 				await assertActiveWallet(accountAddress)
-				onTransactionRequested(createZoltarMigrationTransactionIntent(actionName))
+				onTransactionRequested(
+					createZoltarMigrationTransactionIntent(actionName, {
+						amount: submittedForm.amount,
+						outcomeIndexes: actionName === 'split' ? submittedForm.outcomeIndexes : undefined,
+						universeId: activeUniverseId,
+					}),
+				)
 				const universe = await ensureZoltarUniverse()
 				if (!universe.hasForked) throw new Error('Migration is unavailable because this universe has not forked.')
 				const amount = parseRepAmountInput(submittedForm.amount, 'Migration amount')

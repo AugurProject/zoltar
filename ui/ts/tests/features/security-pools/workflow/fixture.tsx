@@ -103,7 +103,10 @@ export function createRefreshAutoloadFixture() {
 export function createReportingAndOracleFixture() {
 	const fixture = createSecurityPoolWorkflowSectionFixture()
 	return pickFixtureProperties(fixture, [
+		'fireEvent',
 		'within',
+		'render',
+		'act',
 		'getAddress',
 		'zeroAddress',
 		'SecurityPoolWorkflowSection',

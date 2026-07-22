@@ -317,8 +317,8 @@ export function getCurrentSelectedPoolReportingDetails({ reportingDetails, selec
 export function shouldShowSelectedPoolWorkflowDetails({ hasSelectedPoolAddress, selectedPoolExists, selectedPoolUniverseMismatch }: { hasSelectedPoolAddress: boolean; selectedPoolExists: boolean; selectedPoolUniverseMismatch: boolean }) {
 	return hasSelectedPoolAddress && selectedPoolExists && !selectedPoolUniverseMismatch
 }
-export function getSelectedPoolCardTitle() {
-	return 'Manage Pool'
+export function getSelectedPoolCardTitle(questionTitle?: string) {
+	return questionTitle?.trim() === '' || questionTitle === undefined ? 'Manage Pool' : questionTitle
 }
 export function applySelectedPoolWorkflowState(
 	pool: ListedSecurityPool | undefined,

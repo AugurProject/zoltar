@@ -46,6 +46,8 @@ describe('RouteSubNavigation', () => {
 		expect(document.body.querySelector('.route-subnav-shell')).not.toBeNull()
 		expect(document.body.querySelector('.route-subtab-nav')).not.toBeNull()
 		expect(documentQueries.getByRole('navigation', { name: 'Zoltar views' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Show earlier Zoltar views' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Show later Zoltar views' })).not.toBeNull()
 
 		const questionsTab = documentQueries.getByRole('link', { name: 'Questions' }) as HTMLAnchorElement
 		expect(questionsTab.tagName).toBe('A')

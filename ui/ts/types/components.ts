@@ -30,6 +30,7 @@ export type TransactionIntent = {
 	action: string
 	requiresWalletConfirmation?: boolean | undefined
 	rows?: GlobalTransactionRow[]
+	technicalRows?: GlobalTransactionRow[]
 	source: string
 	submittedDetail?: ComponentChildren
 	submittedTitle: ComponentChildren
@@ -40,6 +41,7 @@ export type GlobalTransactionPresentation = {
 	dismissKey?: string
 	hash?: Hash
 	rows?: GlobalTransactionRow[]
+	technicalRows?: GlobalTransactionRow[]
 	title: ComponentChildren
 	tone: GlobalTransactionTone
 }
@@ -206,6 +208,7 @@ export type TransactionActionButtonProps = {
 
 export type OperationModalProps = {
 	children: ComponentChildren
+	closeOnSuccessKey?: string | undefined
 	context?: TransactionContextItem[]
 	description?: ComponentChildren
 	isOpen: boolean

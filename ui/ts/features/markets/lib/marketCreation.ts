@@ -52,9 +52,17 @@ function createQuestionData(form: MarketFormState): QuestionData {
 function normalizeOutcomeLabel(label: string) {
 	return label.trim()
 }
+function getMissingRequiredCategoricalOutcomeLabels(form: MarketFormState) {
+	return [0, 1].filter(index => normalizeOutcomeLabel(form.categoricalOutcomes[index] ?? '') === '').map(index => `Outcome ${index + 1}`)
+}
+function getRequiredCategoricalOutcomeMessage(missingOutcomeLabels: string[]) {
+	if (missingOutcomeLabels.length === 1) return `${missingOutcomeLabels[0]} is required`
+	return `${missingOutcomeLabels.join(' and ')} are required`
+}
 function getCategoricalOutcomeLabels(form: MarketFormState) {
+	const missingRequiredOutcomeLabels = getMissingRequiredCategoricalOutcomeLabels(form)
+	if (missingRequiredOutcomeLabels.length > 0) throw new Error(getRequiredCategoricalOutcomeMessage(missingRequiredOutcomeLabels))
 	const outcomeLabels = form.categoricalOutcomes.map(normalizeOutcomeLabel).filter(label => label !== '')
-	if (outcomeLabels.length < 2) throw new Error('Categorical markets require at least 2 outcomes')
 	if (new Set(outcomeLabels).size !== outcomeLabels.length) throw new Error('Outcomes must be unique')
 	return sortStringArrayByKeccak(outcomeLabels)
 }
@@ -120,10 +128,10 @@ export function validateMarketForm(form: MarketFormState): MarketFormValidation 
 		invalidMessages.push(message)
 	}
 	if (form.marketType === 'categorical') {
-		const normalizedOutcomeLabels = form.categoricalOutcomes.map(normalizeOutcomeLabel).filter(label => label !== '')
-		if (normalizedOutcomeLabels.length === 0) {
-			setFieldError(fieldErrors, 'categoricalOutcomes', 'Outcomes are required')
-			missingFields.push('Outcomes')
+		const missingRequiredOutcomeLabels = getMissingRequiredCategoricalOutcomeLabels(form)
+		if (missingRequiredOutcomeLabels.length > 0) {
+			setFieldError(fieldErrors, 'categoricalOutcomes', getRequiredCategoricalOutcomeMessage(missingRequiredOutcomeLabels))
+			missingFields.push(...missingRequiredOutcomeLabels)
 		} else {
 			try {
 				getCategoricalOutcomeLabels(form)

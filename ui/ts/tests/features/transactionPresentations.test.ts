@@ -1,7 +1,18 @@
 /// <reference types='bun-types' />
 
 import { describe, expect, test } from 'bun:test'
-import { createForkAuctionSuccessPresentation, createForkAuctionTransactionIntent } from '../../features/transactionPresentations.js'
+import {
+	createForkAuctionSuccessPresentation,
+	createForkAuctionTransactionIntent,
+	createLiquidationSuccessPresentation,
+	createLiquidationTransactionIntent,
+	createMarketCreationSuccessPresentation,
+	createReportingSuccessPresentation,
+	createReportingTransactionIntent,
+	createSecurityVaultTransactionIntent,
+	createTradingSuccessPresentation,
+	createTradingTransactionIntent,
+} from '../../features/transactionPresentations.js'
 import type { ForkAuctionActionResult } from '../../types/contracts.js'
 
 function createForkAuctionResult(action: ForkAuctionActionResult['action'], overrides: Partial<ForkAuctionActionResult> = {}): ForkAuctionActionResult {
@@ -15,6 +26,78 @@ function createForkAuctionResult(action: ForkAuctionActionResult['action'], over
 }
 
 describe('transaction presentations', () => {
+	test('preserves protocol acronym casing and question terminology', () => {
+		expect(createSecurityVaultTransactionIntent('depositRep').submittedTitle).toBe('Deposit REP')
+		for (const [marketType, expectedLabel] of [
+			['binary', 'Binary'],
+			['categorical', 'Categorical'],
+			['scalar', 'Scalar'],
+		] as const) {
+			const questionTypeRow = createMarketCreationSuccessPresentation({ createQuestionHash: '0x1234', marketType, questionId: '0x01' }).rows?.find(row => row.label === 'Question Type')
+			expect(questionTypeRow?.value).toBe(expectedLabel)
+		}
+	})
+
+	test('keeps vault identity in transaction intent rows', () => {
+		const intent = createSecurityVaultTransactionIntent('depositRep', {
+			securityPoolAddress: '0x0000000000000000000000000000000000000001',
+			vaultAddress: '0x0000000000000000000000000000000000000002',
+		})
+		expect(intent.rows?.map(row => row.label)).toEqual(['Security Pool Address', 'Vault'])
+	})
+
+	test('keeps pool, universe, and action context in trading and reporting intents', () => {
+		const context = {
+			securityPoolAddress: '0x0000000000000000000000000000000000000001',
+			universeId: 7n,
+		}
+		const tradingIntent = createTradingTransactionIntent('migrateShares', { ...context, shareOutcome: 'yes' })
+		const reportingIntent = createReportingTransactionIntent('reportOutcome', { ...context, outcome: 'no' })
+
+		expect(tradingIntent.rows?.map(row => row.label)).toEqual(['Pool', 'Universe', 'Share Outcome'])
+		expect(reportingIntent.rows?.map(row => row.label)).toEqual(['Pool', 'Universe', 'Outcome'])
+	})
+
+	test('reuses liquidation identity and submitted values in completion presentations', () => {
+		const context = {
+			amount: '4.5',
+			securityPoolAddress: '0x0000000000000000000000000000000000000001' as const,
+			targetVault: '0x0000000000000000000000000000000000000002' as const,
+			universeId: 7n,
+		}
+		const intent = createLiquidationTransactionIntent(context)
+		const presentation = createLiquidationSuccessPresentation(
+			{
+				action: 'queueLiquidation',
+				hash: '0x1234',
+				securityPoolAddress: context.securityPoolAddress,
+			},
+			context,
+		)
+
+		expect(intent.rows?.map(row => row.label)).toEqual(['Pool', 'Universe', 'Target Vault', 'Amount'])
+		expect(presentation.rows?.map(row => row.label)).toEqual(['Pool', 'Universe', 'Target Vault', 'Amount'])
+	})
+
+	test('uses the same pool and universe grammar in intent and success presentations', () => {
+		const securityPoolAddress = '0x0000000000000000000000000000000000000001'
+		const context = { securityPoolAddress, universeId: 7n }
+		const cases = [
+			{
+				intent: createTradingTransactionIntent('createCompleteSet', context),
+				presentation: createTradingSuccessPresentation({ action: 'createCompleteSet', hash: '0x1234', securityPoolAddress, universeId: 7n }),
+			},
+			{
+				intent: createReportingTransactionIntent('reportOutcome', { ...context, outcome: 'yes' }),
+				presentation: createReportingSuccessPresentation({ action: 'reportOutcome', hash: '0x1234', outcome: 'yes', securityPoolAddress, universeId: 7n }),
+			},
+		]
+
+		for (const { intent, presentation } of cases) {
+			expect(intent.rows?.slice(0, 2).map(row => row.label)).toEqual(['Pool', 'Universe'])
+			expect(presentation.rows?.slice(0, 2).map(row => row.label)).toEqual(['Pool', 'Universe'])
+		}
+	})
 	test('describes truth-auction claim settlement as REP plus auctioned bond allowance', () => {
 		const presentation = createForkAuctionSuccessPresentation(createForkAuctionResult('claimAuctionProceeds'))
 		expect(presentation.detail).toBe('Selected truth-auction bids were settled. Winning bids received child-pool REP plus Auctioned Bond Allowance (OI Debt), assigning the remaining open-interest debt; refund-only rows returned locked ETH.')

@@ -550,7 +550,7 @@ export function SecurityVaultSection({
 				</div>
 			</SectionBlock>
 			<ErrorNotice message={securityVaultError} />
-			<OperationModal context={vaultTransactionContext} isOpen={vaultActionModal === 'deposit-rep'} onClose={() => setVaultActionModal(undefined)} title={securityPoolCopy.depositRep}>
+			<OperationModal closeOnSuccessKey={securityVaultResult?.action === 'depositRep' ? securityVaultResult.hash : undefined} context={vaultTransactionContext} isOpen={vaultActionModal === 'deposit-rep'} onClose={() => setVaultActionModal(undefined)} title={securityPoolCopy.depositRep}>
 				{currentSelectedVaultDetails === undefined ? <p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
