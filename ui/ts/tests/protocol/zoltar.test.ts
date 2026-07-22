@@ -10,8 +10,9 @@ const EMPTY_QUESTION = ['', '', 0n, 0n, 0n, 0n, 0n, '']
 const REP_TOKEN = getAddress('0x00000000000000000000000000000000000000f1')
 
 type MockReadClient = Parameters<typeof loadMarketDetails>[0]
+type MockReadContractRequest = Parameters<MockReadClient['readContract']>[0]
 
-function createReadClient({ multicallResponses, readContractHandlers }: { multicallResponses: unknown[]; readContractHandlers: Record<string, () => Promise<unknown>> }): MockReadClient {
+function createReadClient({ multicallResponses, readContractHandlers }: { multicallResponses: unknown[]; readContractHandlers: Record<string, (request: MockReadContractRequest) => Promise<unknown>> }): MockReadClient {
 	let callIndex = 0
 
 	return {
@@ -25,7 +26,7 @@ function createReadClient({ multicallResponses, readContractHandlers }: { multic
 			if (typeof request.functionName !== 'string') throw new Error('Expected function name')
 			const handler = readContractHandlers[request.functionName]
 			if (handler === undefined) throw new Error(`Unexpected readContract function: ${request.functionName}`)
-			return await handler()
+			return await handler(request)
 		},
 	} as unknown as MockReadClient
 }
@@ -92,6 +93,27 @@ describe('zoltar contract helpers', () => {
 		expect(page.pageIndex).toBe(1)
 		expect(page.pageSize).toBe(2)
 		expect(page.questions.map(question => question.questionId)).toEqual(['0x65', '0x66'])
+	})
+
+	test('loadZoltarQuestionPage preserves exact offsets above the safe multiplication range', async () => {
+		const pageIndex = Number.MAX_SAFE_INTEGER
+		const pageSize = 3
+		const expectedStartIndex = BigInt(pageIndex) * BigInt(pageSize)
+		const questionPageCalls: unknown[][] = []
+		const client = createReadClient({
+			multicallResponses: [],
+			readContractHandlers: {
+				getQuestionCount: async () => expectedStartIndex + 1n,
+				getQuestions: async request => {
+					questionPageCalls.push(Array.isArray(request.args) ? [...request.args] : [])
+					return []
+				},
+			},
+		})
+
+		await loadZoltarQuestionPage(client, pageIndex, pageSize)
+
+		expect(questionPageCalls).toEqual([[expectedStartIndex, 1n]])
 	})
 
 	test('loadZoltarUniverseSummary returns a non-forked universe summary for an active universe', async () => {

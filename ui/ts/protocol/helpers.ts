@@ -61,6 +61,12 @@ export function getMinBigintValue(values: bigint[]) {
 	return minValue
 }
 
+export function getProtocolPageOffset(pageIndex: number, pageSize: number) {
+	if (!Number.isSafeInteger(pageIndex) || pageIndex < 0) throw new Error('Page index must be a non-negative integer within the safe range')
+	if (!Number.isSafeInteger(pageSize) || pageSize <= 0) throw new Error('Page size must be a positive integer within the safe range')
+	return BigInt(pageIndex) * BigInt(pageSize)
+}
+
 export function hasTimestamp(value: unknown): value is { timestamp: bigint } {
 	return isObjectRecord(value) && typeof value['timestamp'] === 'bigint'
 }

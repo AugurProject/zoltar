@@ -12,7 +12,7 @@ import { decodeOracleQueueOperation, encodeOracleQueueOperation } from './oracle
 import { getWethAddress } from './uniswapQuoter.js'
 import { peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
 import type { OpenOracleActionResult, OpenOracleWithdrawableBalances, OracleManagerDetails, OracleQueueOperation, ReadClient, OpenOracleReportSummary, OpenOracleReportSummaryPage, StagedOracleExecutionResult, StagedOracleQueuedResult, WriteClient } from '../types/contracts.js'
-import { hasTimestampAndNumber, requireStagedOperationTupleArray } from './helpers.js'
+import { getProtocolPageOffset, hasTimestampAndNumber, requireStagedOperationTupleArray } from './helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from './core.js'
 import { getInfraContractAddresses, getOpenOracleAddress } from './deploymentHelpers.js'
 import { loadOpenOracleEventState, loadOpenOracleEventStates } from './openOracleState.js'
@@ -361,8 +361,7 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 	}
 }
 export async function loadOpenOracleReportSummaries(client: ReadClient, pageIndex: number, pageSize: number): Promise<OpenOracleReportSummaryPage> {
-	if (!Number.isInteger(pageIndex) || pageIndex < 0) throw new Error('Page index must be a non-negative integer')
-	if (!Number.isInteger(pageSize) || pageSize <= 0) throw new Error('Page size must be a positive integer')
+	const pageOffset = getProtocolPageOffset(pageIndex, pageSize)
 	const openOracleAddress = getOpenOracleAddress()
 	const nextReportId = await client.readContract({
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
@@ -380,8 +379,7 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 			reports: [],
 		}
 	const pageSizeBigInt = BigInt(pageSize)
-	const pageIndexBigInt = BigInt(pageIndex)
-	const pageEndId = reportCount - pageIndexBigInt * pageSizeBigInt
+	const pageEndId = reportCount - pageOffset
 	if (pageEndId <= 0n)
 		return {
 			nextReportId,

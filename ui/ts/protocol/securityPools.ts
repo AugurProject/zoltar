@@ -14,7 +14,7 @@ import { sameAddress } from '../lib/address.js'
 import type { ListedSecurityPool, SecurityPoolCreationResult, SecurityPoolPage, SecurityVaultDetails, WriteClient, ReadClient } from '../types/contracts.js'
 import { readRequiredMulticall, writeContractAndWaitForReceipt } from './core.js'
 import { requireForkDataView } from './forkData.js'
-import { getForkOutcomeKey, getQuestionIdHex, getReportingOutcomeKey, getSecurityPoolSystemState, requireSecurityPoolDeploymentTupleArray, requireSecurityVaultTupleArray } from './helpers.js'
+import { getForkOutcomeKey, getProtocolPageOffset, getQuestionIdHex, getReportingOutcomeKey, getSecurityPoolSystemState, requireSecurityPoolDeploymentTupleArray, requireSecurityVaultTupleArray } from './helpers.js'
 import { getDeploymentSteps } from './deployment.js'
 import { getInfraContractAddresses, getZoltarAddress } from './deploymentHelpers.js'
 import { loadMarketDetails } from './zoltar.js'
@@ -455,15 +455,13 @@ export async function originSecurityPoolExists(client: Pick<ReadClient, 'getCode
 }
 
 export async function loadSecurityPoolPage(client: ReadClient, pageIndex: number, pageSize: number, accountAddress?: Address): Promise<SecurityPoolPage> {
-	if (!Number.isInteger(pageIndex) || pageIndex < 0) throw new Error('Security pool page index must be a non-negative integer')
-	if (!Number.isInteger(pageSize) || pageSize <= 0) throw new Error('Security pool page size must be a positive integer')
+	const startIndex = getProtocolPageOffset(pageIndex, pageSize)
 	const poolCount = await client.readContract({
 		address: getInfraContractAddresses().securityPoolFactory,
 		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 		functionName: 'securityPoolDeploymentCount',
 		args: [],
 	})
-	const startIndex = BigInt(pageIndex * pageSize)
 	if (startIndex >= poolCount) {
 		return {
 			pageIndex,
