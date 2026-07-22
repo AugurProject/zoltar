@@ -62,10 +62,15 @@
 			<p>
 				For any child pool with a collateral shortfall, the truth auction can
 				only begin after fork migration has closed. The migration window lasts
-				<code>SecurityPoolUtils.MIGRATION_TIME</code> - 8 weeks from the parent
-				universe fork time. Until that window ends, vault holders can still choose
-				which child universe to support, so the protocol cannot know the final
-				collateral shortfall.
+				through
+				<code>forkActivationTime + SecurityPoolUtils.MIGRATION_TIME</code>,
+				inclusive. <code>forkActivationTime</code> is recorded when this parent
+				pool enters <code>PoolForked</code>; it is pool-local and can be later
+				than Zoltar's universe <code>forkTime</code>. Until that window ends,
+				vault holders can still choose which child universe to support, so the
+				protocol cannot know the final collateral shortfall. See
+				<a href="./invariants.html#fork-05"><code>FORK-05</code></a> for the
+				normative boundary and the timeless share-materialization exception.
 			</p>
 
 			<p>

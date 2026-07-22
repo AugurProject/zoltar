@@ -88,9 +88,11 @@ migration.
 
 | Area | Implementation behavior | Source |
 | --- | --- | --- |
-| Full-balance burn | `ShareToken.migrate` burns the caller's entire balance of the parent token id; callers cannot migrate only part of that token id. | [ShareToken.sol](../solidity/contracts/peripherals/tokens/ShareToken.sol) |
+| Persistent entitlement | `ShareToken.migrate` preserves the caller's parent token balance as a branch-independent entitlement. After its first use that source balance is transfer-locked, preventing a seller and buyer from materializing the same claim. | [ShareToken.sol](../solidity/contracts/peripherals/tokens/ShareToken.sol) |
 | Target list | The target outcome list must be non-empty, valid for the fork question, and strictly increasing. | [ShareToken.sol](../solidity/contracts/peripherals/tokens/ShareToken.sol) |
-| Balance reproduction | The full burned source balance is minted into each selected child token id, so migration is reproduction across selected branches rather than a pro-rata split. | [ShareToken.sol](../solidity/contracts/peripherals/tokens/ShareToken.sol) |
+| Independent materialization | Each selected child token id is minted up to the current source balance. A later call can select another existing child, and source shares added through an ancestor migration materialize only their previously unminted delta. | [ShareToken.sol](../solidity/contracts/peripherals/tokens/ShareToken.sol) |
+| Economic denominator | Child setup copies the frozen parent's remaining economic claim supply rather than its currently materialized ERC-1155 supply. Complete-set minting and redemption update that denominator; share migration does not because its claims were reserved at fork time. | [SecurityPoolForker.sol](../solidity/contracts/peripherals/SecurityPoolForker.sol), [SecurityPool.sol](../solidity/contracts/peripherals/SecurityPool.sol) |
+| Timing | The eight-week window still bounds child creation and vault/REP migration. Shares can materialize indefinitely in an already-created child. | [ShareToken.sol](../solidity/contracts/peripherals/tokens/ShareToken.sol), [SecurityPoolForkerVaultMigrationBase.sol](../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol) |
 | Malformed outcomes | Malformed fork outcomes are rejected using Zoltar question-data validation. | [ZoltarQuestionData.sol](../solidity/contracts/ZoltarQuestionData.sol) |
 
 ## Escalation Resolution and Deposits
