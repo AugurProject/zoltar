@@ -4,7 +4,6 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import { createInitialTransactionTrayState, getTransactionActionLockReason, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionPresented, markTransactionRequested, markTransactionSubmitted, TRANSACTION_ACTION_LOCK_REASON } from '../lib/transactionTray.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
-import { createLiquidationTransactionIntent, createReportingTransactionIntent, createTradingTransactionIntent } from '../features/transactionPresentations.js'
 
 const transactionHash = '0x1234000000000000000000000000000000000000000000000000000000000000'
 
@@ -183,37 +182,6 @@ describe('transactionTray', () => {
 		expect(requestSucceeded.active?.hash).toBe(requestHash)
 		expect(finished.pendingIntent).toBeUndefined()
 		expect(finished.pendingRequestKey).toBeUndefined()
-	})
-
-	test('preserves representative workflow context through prepare, pending, and failure states', () => {
-		const securityPoolAddress = '0x0000000000000000000000000000000000000001'
-		const intents = [
-			createTradingTransactionIntent('migrateShares', { securityPoolAddress, shareOutcome: 'yes', universeId: 7n }),
-			createReportingTransactionIntent('reportOutcome', { outcome: 'no', securityPoolAddress, universeId: 7n }),
-			createLiquidationTransactionIntent({ amount: '2', securityPoolAddress, targetVault: '0x0000000000000000000000000000000000000002', universeId: 7n }),
-		]
-
-		for (const intent of intents) {
-			const requested = markTransactionRequested(createInitialTransactionTrayState(), intent)
-			const prepared = markTransactionPrepared(requested, {
-				account: '0x0000000000000000000000000000000000000003',
-				args: [],
-				chainName: 'Ethereum',
-				contractAddress: securityPoolAddress,
-				functionName: intent.action,
-				value: 0n,
-			})
-			const submitted = markTransactionSubmitted(prepared, transactionHash)
-			const failed = markTransactionFailed(submitted, 'Transaction reverted')
-
-			for (const state of [requested, prepared, submitted, failed]) {
-				expect(state.active?.rows?.map(row => row.label)).toContain('Pool')
-				expect(state.active?.rows?.map(row => row.label)).toContain('Universe')
-			}
-			expect(prepared.active?.technicalRows?.map(row => row.label)).toContain('Function')
-			expect(submitted.active?.technicalRows?.map(row => row.label)).toContain('Function')
-			expect(failed.active?.technicalRows?.map(row => row.label)).toContain('Function')
-		}
 	})
 
 	test('formats self-referential arrays and mixed object-array cycles safely', () => {

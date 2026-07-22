@@ -14,6 +14,9 @@ import {
 	createTradingTransactionIntent,
 } from '../../features/transactionPresentations.js'
 import type { ForkAuctionActionResult } from '../../types/contracts.js'
+import { createInitialTransactionTrayState, markTransactionFailed, markTransactionPrepared, markTransactionRequested, markTransactionSubmitted } from '../../lib/transactionTray.js'
+
+const transactionHash = '0x1234000000000000000000000000000000000000000000000000000000000000'
 
 function createForkAuctionResult(action: ForkAuctionActionResult['action'], overrides: Partial<ForkAuctionActionResult> = {}): ForkAuctionActionResult {
 	return {
@@ -98,6 +101,38 @@ describe('transaction presentations', () => {
 			expect(presentation.rows?.slice(0, 2).map(row => row.label)).toEqual(['Pool', 'Universe'])
 		}
 	})
+
+	test('preserves representative workflow context through prepare, pending, and failure states', () => {
+		const securityPoolAddress = '0x0000000000000000000000000000000000000001'
+		const intents = [
+			createTradingTransactionIntent('migrateShares', { securityPoolAddress, shareOutcome: 'yes', universeId: 7n }),
+			createReportingTransactionIntent('reportOutcome', { outcome: 'no', securityPoolAddress, universeId: 7n }),
+			createLiquidationTransactionIntent({ amount: '2', securityPoolAddress, targetVault: '0x0000000000000000000000000000000000000002', universeId: 7n }),
+		]
+
+		for (const intent of intents) {
+			const requested = markTransactionRequested(createInitialTransactionTrayState(), intent)
+			const prepared = markTransactionPrepared(requested, {
+				account: '0x0000000000000000000000000000000000000003',
+				args: [],
+				chainName: 'Ethereum',
+				contractAddress: securityPoolAddress,
+				functionName: intent.action,
+				value: 0n,
+			})
+			const submitted = markTransactionSubmitted(prepared, transactionHash)
+			const failed = markTransactionFailed(submitted, 'Transaction reverted')
+
+			for (const state of [requested, prepared, submitted, failed]) {
+				expect(state.active?.rows?.map(row => row.label)).toContain('Pool')
+				expect(state.active?.rows?.map(row => row.label)).toContain('Universe')
+			}
+			expect(prepared.active?.technicalRows?.map(row => row.label)).toContain('Function')
+			expect(submitted.active?.technicalRows?.map(row => row.label)).toContain('Function')
+			expect(failed.active?.technicalRows?.map(row => row.label)).toContain('Function')
+		}
+	})
+
 	test('describes truth-auction claim settlement as REP plus auctioned bond allowance', () => {
 		const presentation = createForkAuctionSuccessPresentation(createForkAuctionResult('claimAuctionProceeds'))
 		expect(presentation.detail).toBe('Selected truth-auction bids were settled. Winning bids received child-pool REP plus Auctioned Bond Allowance (OI Debt), assigning the remaining open-interest debt; refund-only rows returned locked ETH.')
