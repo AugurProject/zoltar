@@ -61,13 +61,15 @@ The emitting address identifies the current pool, game, auction, token, or coord
 
 Use protocol events, not transfer inference, to discover relationships:
 
+Fork snapshot events require two-part provenance. First require the configured `SecurityPoolForker` as emitter. Then require the indexed parent to have been established by an earlier `SecurityPoolRegistered` event from the configured `SecurityPoolFactory`. The forker emitter alone is insufficient because its permissionless fork entrypoints accept any interface-compatible pool address. During recovery or a post-replay audit, the equivalent storage check loads `originId = getSecurityPoolOriginId(parent)` and requires `getSecurityPool(originId, parent.universeId()) == parent`.
+
 | Relationship or state | Canonical events |
 | --- | --- |
 | Question, root universe, and universe fork | `QuestionCreated`, `UniverseInitialized`, `UniverseForked` |
 | Child universe and child REP | `DeployChild`, `MigrationRepAdded`, `MigrationRepSplit` |
 | Pool, share token, auction, and coordinator | `SecurityPoolRegistered`, `DeploySecurityPool`, and constructor/deployment events |
 | Share-token permissions | `AuthorizationUpdated` |
-| Parent pool fork state | `SecurityPoolForkSnapshot`, `ParentRepLocked`, `EscalationRepDrainedAtFork` |
+| Parent pool fork state | `SecurityPoolForkSnapshot`, `ParentRepLocked`, `EscalationRepDrainedAtFork`, accepted only after the forker-emitter and factory-registration checks above |
 | Child pool and migrated vault | `ChildPoolLinked`, `ChildRepSplit`, `ChildPoolRepSwept`, `ChildEscalationRepMaterialized`, `VaultMigrationCheckpoint` |
 | Vault escalation entitlement | `EscalationMigrationEntitlementInitialized`, `EscalationMigrationEntitlementMaterialized` |
 | Remaining share economic-claim supply | `ShareTokenSupplySet`; then the `resultingShareTokenSupply` field on complete-set and winning-share action events |
@@ -131,7 +133,7 @@ Token events do not establish protocol cause. Attribute minting, migration, escr
 1. Pre-discover the origin pool, share token, auction, and coordinator from the configured factory's `DeploySecurityPool`, then replay the complete deployment receipt in canonical order. This retains the share token's earlier constructor `AuthorizationUpdated` and the initial coordinator and pool checkpoints.
 2. Apply `DepositRep`, its vault checkpoint, `CompleteSetCreated`, and its pool checkpoint. Token transfer events update balances; the Zoltar events explain why they moved.
 3. Pre-discover each game from its pool's `EscalationGameSet`, then append local escalation deposits and their stable leaf identities until the game resolves or reaches non-decision.
-4. On a universe or own-game fork, freeze the parent from `SecurityPoolForkSnapshot`; apply the cause-specific REP locking and draining events.
+4. On a universe or own-game fork, first verify both the forker emitter and the indexed parent's factory registration, then freeze the parent from `SecurityPoolForkSnapshot` and apply the cause-specific REP locking and draining events.
 5. Discover two parallel child universes and pools independently. Initialize each continuation from its `ForkCarryCheckpoint`; never treat one child's consumption as the other's.
 6. Apply every `VaultMigrationCheckpoint`, including zero-collateral migrations, using its deltas and resulting parent/child totals.
 7. On every `startTruthAuction`, initialize the child's remaining economic claim supply from `ShareTokenSupplySet`. If `AuctionStarted` follows, replay every indexed bid and per-bid settlement and apply auction-claim pool checkpoints to fee eligibility. On the immediate no-auction path, apply `TruthAuctionFinalized` and its pool checkpoints without expecting bids.

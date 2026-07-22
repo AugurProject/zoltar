@@ -16,6 +16,7 @@ import { SecurityPoolMigrationProxy } from './SecurityPoolMigrationProxy.sol';
 import { SecurityPoolForkerVaultMigrationDelegate } from './SecurityPoolForkerVaultMigrationDelegate.sol';
 import { EscalationGameForker } from './EscalationGameForker.sol';
 import { SecurityPoolForkerBase } from './SecurityPoolForkerBase.sol';
+import { SecurityPoolEventEmitter } from './SecurityPoolEventEmitter.sol';
 import {
 	EscalationForkSnapshot,
 	EscalationMigrationEntitlement,
@@ -28,6 +29,8 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	// sharing the same storage layout defined by `SecurityPoolForkerBase` and `SecurityPoolForkerStorage`.
 	address private immutable vaultMigrationDelegate;
 	address private immutable escalationGameForkerDelegate;
+	// Never delegate through a module address supplied by an external pool.
+	address private immutable forkEventEmitter;
 
 	event ChildPoolLinked(
 		ISecurityPool indexed parent,
@@ -191,6 +194,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	constructor(Zoltar _zoltar) SecurityPoolForkerBase(_zoltar) {
 		vaultMigrationDelegate = address(new SecurityPoolForkerVaultMigrationDelegate(_zoltar));
 		escalationGameForkerDelegate = address(new EscalationGameForker(_zoltar));
+		forkEventEmitter = address(new SecurityPoolEventEmitter());
 	}
 
 	function _emitForkSnapshotEvents(
@@ -201,7 +205,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		uint256 escalationRepAtFork,
 		uint256 resultingLockedRep
 	) private {
-		address eventEmitter = parent.securityPoolEventEmitter();
+		address eventEmitter = forkEventEmitter;
 		assembly ('memory-safe') {
 			let pointer := mload(0x40)
 			mstore(pointer, shl(224, 0x408d33da))

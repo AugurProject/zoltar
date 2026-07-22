@@ -43,7 +43,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/contract-interaction-reference.md'
-const expectedProductionSoliditySourceFingerprint = '2bfd8d8aa22e8fe85ca42a00a76ec74abef8ed4db2625da88550114c50f09341'
+const expectedProductionSoliditySourceFingerprint = 'fa7b2ca655525640f4d796e4c727aea2627742fc330be468894037c1b3445b0d'
 
 const eventSourceByName: Record<string, string> = {
 	Approval: 'solidity/contracts/IERC20.sol',
@@ -1014,17 +1014,17 @@ const contractReferences: ContractReference[] = [
 			{
 				call: '`initiateSecurityPoolFork(securityPool)`',
 				caller: 'Anyone',
-				effect: 'Freezes the parent pool after an external universe fork, drains pool and game REP, and records the canonical migration snapshot.',
+				effect: 'Freezes the supplied pool after an external universe fork, drains its pool and game REP, and records a migration snapshot keyed by that address. The snapshot is canonical only when the supplied pool is already registered by the configured `SecurityPoolFactory`.',
 				declarations: [{ name: 'initiateSecurityPoolFork' }],
-				preconditions: 'Pool operational; its universe already forked; fork state not initialized; if an escalation game exists, the universe fork occurred before that game settled.',
+				preconditions: 'Pool operational; its universe already forked; fork state not initialized; if an escalation game exists, the universe fork occurred before that game settled. This entrypoint does not authenticate the supplied address against a pool factory.',
 				signals: '`SecurityPoolForkSnapshot` and `ParentRepLocked`; additionally `EscalationRepDrainedAtFork` when unresolved escalation exists',
 			},
 			{
 				call: '`forkZoltarWithOwnEscalationGame(securityPool)`',
 				caller: 'Anyone',
-				effect: 'Uses a game non-decision to fork Zoltar, freezes the pool, and records own-fork REP buckets and snapshot state.',
+				effect: "Uses the supplied pool game's non-decision to fork Zoltar, freezes that pool, and records own-fork REP buckets and snapshot state keyed by its address. The snapshot is canonical only when the supplied pool is already registered by the configured `SecurityPoolFactory`.",
 				declarations: [{ name: 'forkZoltarWithOwnEscalationGame' }],
-				preconditions: 'Pool operational; escalation reached non-decision; universe not already forked.',
+				preconditions: 'Pool operational; escalation reached non-decision; universe not already forked. This entrypoint does not authenticate the supplied address against a pool factory.',
 				signals: '`SecurityPoolForkSnapshot`, `ParentRepLocked`, and Zoltar fork events; additionally `EscalationRepDrainedAtFork` when unresolved escalation exists',
 			},
 			{

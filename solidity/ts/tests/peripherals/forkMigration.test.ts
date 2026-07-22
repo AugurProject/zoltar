@@ -8,7 +8,12 @@ import { queueLiquidationAtForcedPrice } from '../../testSupport/simulator/utils
 import { getQuestionResolution } from '../../testSupport/simulator/utils/contracts/escalationGame'
 import { getForkActivationTime } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
 import { peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken } from '../../types/contractArtifact'
-import { test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackFactoryMock, test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackParentMock } from '../../types/contractArtifact'
+import {
+	test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackFactoryMock,
+	test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackParentMock,
+	test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerFakePoolMock,
+	test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerMaliciousEventEmitter,
+} from '../../types/contractArtifact'
 
 describe('Peripherals: fork migration', () => {
 	const fixture = usePeripheralsForkMigrationFixture()
@@ -407,6 +412,43 @@ describe('Peripherals: fork migration', () => {
 			const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
 			strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 're-initiating after the own-game fork should leave the parent pool in PoolForked')
 			strictEqualTypeSafe(forkData.auctionableRepAtFork, forkDataBeforeStrayRep.auctionableRepAtFork, 'repAtFork should ignore unrelated REP transferred to the forker after the own-game fork')
+		})
+
+		test('initiateSecurityPoolFork ignores a pool-supplied delegate target before it can drain canonical collateral', async () => {
+			const collateral = 5n * 10n ** 18n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, repDeposit / 4n)
+			await createCompleteSet(client, securityPoolAddresses.securityPool, collateral)
+			await triggerExternalForkForSecurityPool(undefined, 'untrusted fork event emitter attack')
+
+			const maliciousEmitterDeploymentHash = await client.sendTransaction({
+				data: encodeDeployData({
+					abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerMaliciousEventEmitter.abi,
+					bytecode: `0x${test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerMaliciousEventEmitter.evm.bytecode.object}`,
+					args: [securityPoolAddresses.securityPool, addressString(TEST_ADDRESSES[1])],
+				}),
+			})
+			const maliciousEmitterReceipt = await client.waitForTransactionReceipt({ hash: maliciousEmitterDeploymentHash })
+			const maliciousEmitter = maliciousEmitterReceipt.contractAddress
+			if (maliciousEmitter === undefined || maliciousEmitter === null) throw new Error('malicious event emitter address missing')
+
+			const fakePoolDeploymentHash = await client.sendTransaction({
+				data: encodeDeployData({
+					abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerFakePoolMock.abi,
+					bytecode: `0x${test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerFakePoolMock.evm.bytecode.object}`,
+					args: [genesisUniverse, addressString(GENESIS_REPUTATION_TOKEN), questionId, maliciousEmitter],
+				}),
+			})
+			const fakePoolReceipt = await client.waitForTransactionReceipt({ hash: fakePoolDeploymentHash })
+			const fakePool = fakePoolReceipt.contractAddress
+			if (fakePool === undefined || fakePool === null) throw new Error('fake pool address missing')
+			const targetBalanceBeforeAttack = await getETHBalance(client, securityPoolAddresses.securityPool)
+			const targetCollateralBeforeAttack = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
+			assert.ok(targetCollateralBeforeAttack > 0n, 'attack target should hold tracked complete-set collateral')
+
+			await initiateSecurityPoolFork(client, fakePool)
+
+			strictEqualTypeSafe(await getETHBalance(client, securityPoolAddresses.securityPool), targetBalanceBeforeAttack, 'untrusted delegate target must not drain canonical pool ETH')
+			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool), targetCollateralBeforeAttack, 'untrusted delegate target must not change canonical collateral accounting')
 		})
 
 		test('createChildUniverse rejects fake parents that try to reuse a legitimate pool as the child', async () => {
