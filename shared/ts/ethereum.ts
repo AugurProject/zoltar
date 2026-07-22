@@ -374,7 +374,7 @@ export const zeroAddress = getAddress('0x000000000000000000000000000000000000000
 export const zeroHash = `0x${'00'.repeat(32)}` satisfies Hash
 export const maxUint256 = amounts.maxUint256
 
-type ClientRequestParameters = {
+export type ClientRequestParameters = {
 	method: string
 	params?: unknown
 }
@@ -395,6 +395,7 @@ type PublicClientShape<TTransport extends Transport, TChain extends Chain | unde
 	getTransaction: (parameters: { hash: Hash }) => Promise<BlockTransaction>
 	getTransactionReceipt: (parameters: { hash: Hash }) => Promise<TransactionReceipt>
 	multicall: <TContracts extends readonly ContractFunctionParameters[], TAllowFailure extends boolean>(parameters: { allowFailure: TAllowFailure; contracts: TContracts; multicallAddress: Address }) => Promise<MulticallReturnType<TContracts, TAllowFailure>>
+	request: <TValue = unknown>(parameters: ClientRequestParameters) => Promise<TValue>
 	readContract: <TAbi extends Abi, TFunctionName extends string>(parameters: ContractFunctionParameters<TAbi, TFunctionName>) => Promise<ContractFunctionResult<TAbi, TFunctionName>>
 	simulateContract: <TAbi extends Abi, TFunctionName extends string>(parameters: ContractSimulateParameters<TAbi, TFunctionName>) => Promise<{ result: ContractFunctionResult<TAbi, TFunctionName> }>
 	transport: TTransport
@@ -1235,6 +1236,7 @@ async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(t
 
 function buildPublicClientActions<TTransport extends Transport, TChain extends Chain | undefined>({ chain, transport }: { chain: TChain; transport: TTransport }): Omit<PublicClientShape<TTransport, TChain>, 'chain' | 'extend' | 'transport'> {
 	return {
+		request: async <TValue = unknown>(parameters: ClientRequestParameters) => await requestTransport<TValue>(transport, parameters),
 		estimateContractGas: async <TAbi extends Abi, TFunctionName extends string>(parameters: EstimateContractGasParameters<TAbi, TFunctionName>) =>
 			normalizeRpcBigInt(
 				await requestTransport<string>(transport, {

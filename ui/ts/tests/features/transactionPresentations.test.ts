@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { describe, expect, test } from 'bun:test'
-import { createForkAuctionSuccessPresentation, createForkAuctionTransactionIntent } from '../../features/transactionPresentations.js'
+import { createForkAuctionSuccessPresentation, createForkAuctionTransactionIntent, createPoolOracleSuccessPresentation } from '../../features/transactionPresentations.js'
 import type { ForkAuctionActionResult } from '../../types/contracts.js'
 
 function createForkAuctionResult(action: ForkAuctionActionResult['action'], overrides: Partial<ForkAuctionActionResult> = {}): ForkAuctionActionResult {
@@ -44,5 +44,23 @@ describe('transaction presentations', () => {
 		expect(intent.submittedTitle).toBe('Claim Parent Escalation Deposits')
 		expect(presentation.title).toBe('Claim Parent Escalation Deposits')
 		expect(presentation.detail).toBe('Selected winning parent deposits were paid directly in child REP. Their carried proofs are now spent in current and later descendants.')
+	})
+
+	test('distinguishes accepted and economically rejected price candidate finalizations', () => {
+		const accepted = createPoolOracleSuccessPresentation({ action: 'finalizeSettledPrice', hash: '0x1234', priceCandidateAccepted: true, priceCandidateRejectionReason: undefined })
+		const rejected = createPoolOracleSuccessPresentation({ action: 'finalizeSettledPrice', hash: '0x1234', priceCandidateAccepted: false, priceCandidateRejectionReason: 'Insufficient dispute economics' })
+
+		expect(accepted.title).toBe('Price Candidate Accepted')
+		expect(accepted.tone).toBe('success')
+		expect(rejected.title).toBe('Price Candidate Rejected')
+		expect(rejected.detail).toBe('The candidate did not provide enough correction profit for the proved dispute-opportunity blocks. No price was activated.')
+		expect(rejected.tone).toBe('warning')
+	})
+
+	test('distinguishes expired price candidates from economic rejection', () => {
+		const expired = createPoolOracleSuccessPresentation({ action: 'finalizeSettledPrice', hash: '0x1234', priceCandidateAccepted: false, priceCandidateRejectionReason: 'Candidate price expired' })
+		expect(expired.title).toBe('Price Candidate Expired')
+		expect(expired.detail).toBe('The candidate expired before its historical-header proof was finalized. No price was activated.')
+		expect(expired.tone).toBe('warning')
 	})
 })

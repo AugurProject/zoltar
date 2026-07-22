@@ -7,6 +7,7 @@ import { ReputationToken } from '../ReputationToken.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
+import { OpenOraclePriceCandidateVerifier } from './OpenOraclePriceCandidateVerifier.sol';
 
 // price oracle
 uint256 constant PRICE_VALID_FOR_SECONDS = 5 minutes;
@@ -28,7 +29,10 @@ interface IStoredOpenOracleGame {
 			uint128 currentAmount2,
 			address currentReporter,
 			uint48 reportTimestamp,
-			uint48 settlementTimestamp
+			uint48 settlementTimestamp,
+			address token1,
+			uint48 lastReportOppoTime,
+			uint48 settlementTime
 		);
 }
 
@@ -46,7 +50,18 @@ enum CoordinatorCheckpointReason {
 	PriceRejected,
 	PendingReportRecovered,
 	OperationQueued,
-	OperationExecuted
+	OperationExecuted,
+	CandidateStaged
+}
+
+struct SettledPriceCandidate {
+	uint256 reportId;
+	uint128 amount1;
+	uint128 amount2;
+	uint48 reportTimestamp;
+	uint48 settlementTimestamp;
+	uint48 lastReportBlock;
+	uint48 settlementTime;
 }
 
 struct StagedOperation {
@@ -63,12 +78,13 @@ struct StagedOperation {
 }
 
 contract OpenOraclePriceCoordinator {
-	uint256 public constant MAX_PENDING_SETTLEMENT_OPERATIONS = 4;
+	uint256 public constant MAX_PENDING_SETTLEMENT_OPERATIONS = 1;
 	string private constant STAGED_OPERATION_EXECUTION_OK = '';
 	string private constant STAGED_OPERATION_ERROR_EXPIRED = 'staged operation expired';
 	string private constant STAGED_OPERATION_ERROR_STALE_LIQUIDATION = 'stale liquidation';
 	string private constant STAGED_OPERATION_ERROR_ZERO_WITHDRAW = 'withdraw amount has no effect';
 	string private constant STAGED_OPERATION_ERROR_MIN_LIQUIDATION_DISTANCE = 'liquidation too close to threshold';
+	string private constant STAGED_OPERATION_ERROR_REPORT_SECURITY = 'operation exposure exceeds report security';
 	string private constant STAGED_OPERATION_ERROR_PANIC = 'Panic';
 	string private constant STAGED_OPERATION_ERROR_UNKNOWN = 'Unknown error';
 	uint256 public pendingReportId;
@@ -79,6 +95,7 @@ contract OpenOraclePriceCoordinator {
 	ReputationToken public immutable reputationToken;
 	ISecurityPool public securityPool;
 	OpenOracle public immutable openOracle;
+	OpenOraclePriceCandidateVerifier public immutable candidateVerifier;
 	IWeth9 public immutable weth;
 	uint256 public immutable gasConsumedOpenOracleReportPrice;
 	uint32 public immutable gasConsumedSettlement;
@@ -94,27 +111,53 @@ contract OpenOraclePriceCoordinator {
 	bool public immutable trackDisputes;
 	address public immutable protocolFeeRecipient;
 	uint256 public immutable escalationHaltMultiplierBps;
-	uint256 public immutable maxSettlementBaseFeeMultiplierBps;
 	uint256 public immutable minLiquidationPriceDistanceBps;
-	uint256 public pendingReportMaxSettlementBaseFee;
+	uint256 public immutable minimumTotalGasPriceWei;
+	uint256 public immutable minimumPriorityFeeWei;
+	uint256 public immutable absoluteInclusionPremiumWei;
+	uint256 public immutable absoluteMinimumWethReport;
+	uint256 public immutable economicOpportunityBlockCount;
+	uint256 public immutable candidateProofWindowBlocks;
+	uint256 public immutable gasUnitsForPriceFinalization;
+	SettledPriceCandidate public settledPriceCandidate;
+	uint256 public candidateFinalizerReward;
+	uint256 public availableWethExposure;
+	uint256 public availableRepExposure;
+	uint256 public lastAcceptedReportId;
 
 	event SecurityPoolSet(ISecurityPool indexed securityPool);
 	event RepEthPriceSet(uint256 price);
-	event PriceRequested(uint256 indexed reportId, uint256 pendingReportMaxSettlementBaseFee);
+	event PriceRequested(uint256 indexed reportId);
 	event PriceReportRejected(
 		uint256 indexed reportId,
 		string reason,
 		uint256 pendingReportId,
-		uint256 pendingReportMaxSettlementBaseFee,
 		uint256 lastPrice,
 		uint256 lastSettlementTimestamp
 	);
 	event PriceReported(uint256 indexed reportId, uint256 price, uint256 lastSettlementTimestamp);
+	event PriceCandidateStaged(
+		uint256 indexed reportId,
+		uint256 amount1,
+		uint256 amount2,
+		uint256 reportTimestamp,
+		uint256 settlementTimestamp,
+		uint256 lastReportBlock,
+		uint256 settlementTime,
+		uint256 finalizerReward
+	);
+	event PriceCandidateFinalized(
+		uint256 indexed reportId,
+		bool accepted,
+		uint256 availableCorrectionProfitWeth,
+		uint256 requiredCorrectionProfitWeth,
+		string rejectionReason
+	);
+	event PriceConsumed(uint256 indexed reportId, uint256 wethCapacity, uint256 repCapacity);
 	event PendingReportRecovered(
 		uint256 indexed reportId,
 		uint256 settlementTimestamp,
 		uint256 pendingReportId,
-		uint256 pendingReportMaxSettlementBaseFee,
 		uint256 lastPrice,
 		uint256 lastSettlementTimestamp
 	);
@@ -140,24 +183,27 @@ contract OpenOraclePriceCoordinator {
 		string errorMessage
 	);
 	/// @notice Authoritative operation-governing and report state after a coordinator mutation.
-	/// REP/ETH prices use 1e18 precision. The base-fee field uses wei.
+	/// REP/ETH prices use 1e18 precision.
 	event CoordinatorStateCheckpoint(
 		CoordinatorCheckpointReason reason,
 		uint256 indexed reportId,
 		uint256 indexed operationId,
 		uint256 pendingReportId,
+		uint256 candidateReportId,
 		address pendingReportSponsor,
 		uint256 pendingOperationSlotId,
-		uint256 pendingReportMaxSettlementBaseFee,
 		uint256 lastPrice,
 		uint256 lastSettlementTimestamp,
+		uint256 lastAcceptedReportId,
+		uint256 availableWethExposure,
+		uint256 availableRepExposure,
 		uint256 stagedOperationCounter,
 		uint256 activeStagedOperationCount,
 		uint256 pendingSettlementOperationCount
 	);
 
 	// This is not a FIFO queue. We keep append-only operation records plus a bounded
-	// pending settlement list that auto-executes once a fresh oracle price arrives.
+	// pending settlement list whose operation can execute after candidate finalization.
 	// Active-operation paging is newest-first so UI previews remain stable after
 	// execution removes older entries from the set.
 	uint256 public stagedOperationCounter;
@@ -173,6 +219,7 @@ contract OpenOraclePriceCoordinator {
 		OpenOracle _openOracle,
 		ReputationToken _reputationToken,
 		IWeth9 _weth,
+		OpenOraclePriceCandidateVerifier _candidateVerifier,
 		uint256 _gasConsumedOpenOracleReportPrice,
 		uint32 _gasConsumedSettlement,
 		uint256 _gasUnitsForOneDispute,
@@ -187,32 +234,21 @@ contract OpenOraclePriceCoordinator {
 		bool _trackDisputes,
 		address _protocolFeeRecipient,
 		uint256 _escalationHaltMultiplierBps,
-		uint256 _maxSettlementBaseFeeMultiplierBps,
-		uint256 _minLiquidationPriceDistanceBps
+		uint256 _minLiquidationPriceDistanceBps,
+		uint256 _minimumTotalGasPriceWei,
+		uint256 _minimumPriorityFeeWei,
+		uint256 _absoluteInclusionPremiumWei,
+		uint256 _absoluteMinimumWethReport,
+		uint256 _economicOpportunityBlockCount,
+		uint256 _candidateProofWindowBlocks,
+		uint256 _gasUnitsForPriceFinalization
 	) {
 		reputationToken = _reputationToken;
 		openOracle = _openOracle;
 		weth = _weth;
+		candidateVerifier = _candidateVerifier;
 		gasConsumedOpenOracleReportPrice = _gasConsumedOpenOracleReportPrice;
 		gasConsumedSettlement = _gasConsumedSettlement;
-		require(_gasUnitsForOneDispute > 0, 'Dispute gas units must be greater than zero');
-		require(
-			_targetPriceErrorForDispute <= OPEN_ORACLE_PERCENTAGE_PRECISION,
-			'Target price error cannot exceed one hundred percent'
-		);
-		require(
-			_openOracleSecurityMultiplierBps >= SecurityPoolUtils.BPS_DENOMINATOR,
-			'Open Oracle Security multiplier must be at least one hundred percent'
-		);
-		require(
-			uint256(_protocolFee) + uint256(_feePercentage) < _targetPriceErrorForDispute,
-			'Oracle fees must be below the target price error'
-		);
-		require(
-			_openOracleSecurityMultiplierBps <=
-				type(uint256).max / (OPEN_ORACLE_PERCENTAGE_PRECISION + _targetPriceErrorForDispute),
-			'Open Oracle Security multiplier is too large'
-		);
 		gasUnitsForOneDispute = _gasUnitsForOneDispute;
 		targetPriceErrorForDispute = _targetPriceErrorForDispute;
 		openOracleSecurityMultiplierBps = _openOracleSecurityMultiplierBps;
@@ -224,36 +260,37 @@ contract OpenOraclePriceCoordinator {
 		timeType = _timeType;
 		trackDisputes = _trackDisputes;
 		protocolFeeRecipient = _protocolFeeRecipient;
-		require(_escalationHaltMultiplierBps > 0, 'Escalation halt multiplier must be greater than zero');
 		escalationHaltMultiplierBps = _escalationHaltMultiplierBps;
-		require(
-			_maxSettlementBaseFeeMultiplierBps >= SecurityPoolUtils.BPS_DENOMINATOR,
-			'Max settlement base fee multiplier must be at least one hundred percent'
-		);
-		require(
-			_minLiquidationPriceDistanceBps <= SecurityPoolUtils.BPS_DENOMINATOR,
-			'Minimum liquidation price distance cannot exceed one hundred percent'
-		);
-		maxSettlementBaseFeeMultiplierBps = _maxSettlementBaseFeeMultiplierBps;
 		minLiquidationPriceDistanceBps = _minLiquidationPriceDistanceBps;
+		minimumTotalGasPriceWei = _minimumTotalGasPriceWei;
+		minimumPriorityFeeWei = _minimumPriorityFeeWei;
+		absoluteInclusionPremiumWei = _absoluteInclusionPremiumWei;
+		absoluteMinimumWethReport = _absoluteMinimumWethReport;
+		economicOpportunityBlockCount = _economicOpportunityBlockCount;
+		candidateProofWindowBlocks = _candidateProofWindowBlocks;
+		gasUnitsForPriceFinalization = _gasUnitsForPriceFinalization;
+	}
+
+	function candidateReportId() public view returns (uint256) {
+		return settledPriceCandidate.reportId;
 	}
 
 	function setSecurityPool(ISecurityPool _securityPool) public {
-		require(address(securityPool) == address(0x0), 'Security pool has already been set on the oracle coordinator');
+		require(address(securityPool) == address(0x0), 'Security pool already set');
 		securityPool = _securityPool;
 		emit SecurityPoolSet(securityPool);
 		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.SecurityPoolSetup, 0, 0);
 	}
 
 	function setRepEthPrice(uint256 _lastPrice) public {
-		require(msg.sender == address(securityPool), 'Only the security pool can seed the REP/ETH price');
+		require(msg.sender == address(securityPool), 'Security pool only');
 		lastPrice = _lastPrice;
 		emit RepEthPriceSet(lastPrice);
 		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PriceSeeded, 0, 0);
 	}
 
 	function getRequestPriceEthCost() public view returns (uint256) {
-		return block.basefee * 4 * (getSettlementCallbackGasLimit() + gasConsumedOpenOracleReportPrice) + 101;
+		return _getOpenOracleSettlerReward(block.basefee) + _getPriceFinalizerReward(block.basefee);
 	}
 
 	function getQueuedOperationEthCost() public pure returns (uint256) {
@@ -262,33 +299,57 @@ contract OpenOraclePriceCoordinator {
 
 	function getSettlementCallbackGasLimit() public view returns (uint32) {
 		uint256 callbackGasLimit = uint256(gasConsumedSettlement) * MAX_PENDING_SETTLEMENT_OPERATIONS;
-		require(callbackGasLimit <= type(uint32).max, 'Settlement callback gas limit exceeds uint32 maximum');
+		require(callbackGasLimit <= type(uint32).max, 'Callback gas limit too high');
 		return uint32(callbackGasLimit);
 	}
 
 	function minimumToken1Report() public view returns (uint256) {
-		uint256 disputeGasCost = Math.mulDiv(block.basefee, gasUnitsForOneDispute, 1);
-		if (disputeGasCost == 0) return 1;
+		uint256 disputeGasCost = _modeledInclusionCost(block.basefee, gasUnitsForOneDispute);
 		uint256 correctionProfitNumerator = targetPriceErrorForDispute - uint256(protocolFee) - uint256(feePercentage);
+		uint256 calculatedMinimum = Math.mulDiv(
+			disputeGasCost,
+			openOracleSecurityMultiplierBps * (OPEN_ORACLE_PERCENTAGE_PRECISION + targetPriceErrorForDispute),
+			SecurityPoolUtils.BPS_DENOMINATOR * correctionProfitNumerator,
+			Math.Rounding.Ceil
+		);
+		return calculatedMinimum > absoluteMinimumWethReport ? calculatedMinimum : absoluteMinimumWethReport;
+	}
+
+	function _modeledGasPrice(uint256 baseFee) private view returns (uint256) {
+		uint256 baseFeePlusPriority = baseFee + minimumPriorityFeeWei;
+		return baseFeePlusPriority > minimumTotalGasPriceWei ? baseFeePlusPriority : minimumTotalGasPriceWei;
+	}
+
+	function _modeledInclusionCost(uint256 baseFee, uint256 gasUnits) private view returns (uint256) {
+		return Math.mulDiv(_modeledGasPrice(baseFee), gasUnits, 1) + absoluteInclusionPremiumWei;
+	}
+
+	function _getOpenOracleSettlerReward(uint256 baseFee) private view returns (uint256) {
 		return
 			Math.mulDiv(
-				disputeGasCost,
-				openOracleSecurityMultiplierBps * (OPEN_ORACLE_PERCENTAGE_PRECISION + targetPriceErrorForDispute),
-				SecurityPoolUtils.BPS_DENOMINATOR * correctionProfitNumerator,
-				Math.Rounding.Ceil
-			);
+				_modeledGasPrice(baseFee),
+				4 * (uint256(getSettlementCallbackGasLimit()) + gasConsumedOpenOracleReportPrice),
+				1
+			) +
+			absoluteInclusionPremiumWei +
+			101;
+	}
+
+	function _getPriceFinalizerReward(uint256 baseFee) private view returns (uint256) {
+		return _modeledInclusionCost(baseFee, gasUnitsForPriceFinalization);
 	}
 
 	function requestPrice(uint256 proposedRepPerEthPrice, uint256 requestedInitialWeth) public payable {
 		uint256 ethCost = getRequestPriceEthCost();
-		require(msg.value >= ethCost, 'ETH bounty is too small to request a fresh oracle price');
-		require(!isPriceValid(), 'A fresh oracle price is already available');
+		require(msg.value >= ethCost, 'ETH bounty below request cost');
+		require(!isPriceUsable(), 'Fresh oracle price exists');
+		require(candidateReportId() == 0, 'Price candidate awaiting validation');
 		_requestPrice(msg.sender, ethCost, proposedRepPerEthPrice, requestedInitialWeth);
 
 		uint256 excess = msg.value - ethCost;
 		if (excess > 0) {
 			(bool sent, ) = payable(msg.sender).call{ value: excess }('');
-			require(sent, 'Oracle coordinator failed to refund excess ETH bounty');
+			require(sent, 'Excess ETH refund failed');
 		}
 	}
 
@@ -298,8 +359,9 @@ contract OpenOraclePriceCoordinator {
 		uint256 proposedRepPerEthPrice,
 		uint256 requestedInitialWeth
 	) private {
-		require(pendingReportId == 0, 'Oracle price request is already pending');
-		require(proposedRepPerEthPrice > 0, 'Initial oracle REP per ETH price must be non-zero');
+		require(pendingReportId == 0, 'Price request already pending');
+		require(candidateReportId() == 0, 'Price candidate awaiting validation');
+		require(proposedRepPerEthPrice > 0, 'Proposed REP/ETH price is zero');
 		uint256 minimumWethReport = minimumToken1Report();
 		uint256 initialWethReport = requestedInitialWeth > minimumWethReport ? requestedInitialWeth : minimumWethReport;
 		uint256 amount2 = Math.mulDiv(initialWethReport, proposedRepPerEthPrice, PRICE_PRECISION, Math.Rounding.Ceil);
@@ -308,14 +370,12 @@ contract OpenOraclePriceCoordinator {
 			escalationHaltMultiplierBps,
 			SecurityPoolUtils.BPS_DENOMINATOR
 		);
-		uint256 settlerReward = ethCost;
-		require(initialWethReport <= type(uint128).max, 'Oracle initial WETH report amount exceeds uint128 maximum');
-		require(amount2 <= type(uint128).max, 'Oracle initial REP report amount exceeds uint128 maximum');
-		require(escalationHalt <= type(uint128).max, 'Oracle escalation halt amount exceeds uint128 maximum');
-		require(settlerReward <= type(uint96).max, 'Oracle settler reward exceeds uint96 maximum');
-		pendingReportMaxSettlementBaseFee =
-			(block.basefee * maxSettlementBaseFeeMultiplierBps) / SecurityPoolUtils.BPS_DENOMINATOR;
-
+		uint256 finalizerReward = _getPriceFinalizerReward(block.basefee);
+		uint256 settlerReward = ethCost - finalizerReward;
+		require(initialWethReport <= type(uint128).max, 'Initial WETH exceeds uint128');
+		require(amount2 <= type(uint128).max, 'Initial REP exceeds uint128');
+		require(escalationHalt <= type(uint128).max, 'Escalation halt exceeds uint128');
+		require(settlerReward <= type(uint96).max, 'Settler reward exceeds uint96');
 		uint8 flags = OPEN_ORACLE_FLAG_STORE_ALL;
 		if (timeType) flags |= OPEN_ORACLE_FLAG_TIME_TYPE;
 		if (trackDisputes) flags |= OPEN_ORACLE_FLAG_TRACK_DISPUTES;
@@ -343,17 +403,12 @@ contract OpenOraclePriceCoordinator {
 		});
 
 		pendingReportSponsor = sponsor;
-		require(
-			weth.transferFrom(sponsor, address(this), initialWethReport),
-			'WETH transfer for initial report failed'
-		);
-		require(
-			reputationToken.transferFrom(sponsor, address(this), amount2),
-			'REP transfer for initial report failed'
-		);
-		require(weth.approve(address(openOracle), initialWethReport), 'WETH approval for initial report failed');
-		require(reputationToken.approve(address(openOracle), amount2), 'REP approval for initial report failed');
-		pendingReportId = openOracle.report{ value: ethCost }(
+		candidateFinalizerReward = finalizerReward;
+		require(weth.transferFrom(sponsor, address(this), initialWethReport), 'Initial WETH transfer failed');
+		require(reputationToken.transferFrom(sponsor, address(this), amount2), 'Initial REP transfer failed');
+		require(weth.approve(address(openOracle), initialWethReport), 'Initial WETH approval failed');
+		require(reputationToken.approve(address(openOracle), amount2), 'Initial REP approval failed');
+		pendingReportId = openOracle.report{ value: settlerReward }(
 			reportParams,
 			false,
 			false,
@@ -364,83 +419,188 @@ contract OpenOraclePriceCoordinator {
 				blockTimestampBound: 0
 			})
 		);
-		emit PriceRequested(pendingReportId, pendingReportMaxSettlementBaseFee);
+		emit PriceRequested(pendingReportId);
 		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PriceRequested, pendingReportId, 0);
 	}
 
 	function recoverSettledPendingReport() public {
 		uint256 reportId = pendingReportId;
-		require(reportId != 0, 'No pending oracle price request can be recovered');
-		(, , , , uint48 settlementTimestamp) = IStoredOpenOracleGame(address(openOracle)).finalizedGame(reportId);
-		require(settlementTimestamp != 0, 'Pending oracle report has not settled');
-		_withdrawOpenOracleReporterBalances(pendingReportSponsor);
-		pendingReportId = 0;
-		pendingReportSponsor = address(0);
-		pendingReportMaxSettlementBaseFee = 0;
-		_consumeRecoveredPendingOperation();
-		emit PendingReportRecovered(
+		require(reportId != 0, 'No pending report to recover');
+		(
+			uint128 amount1,
+			uint128 amount2,
+			,
+			uint48 reportTimestamp,
+			uint48 settlementTimestamp,
+			,
+			uint48 lastReportBlock,
+			uint48 gameSettlementTime
+		) = IStoredOpenOracleGame(address(openOracle)).finalizedGame(reportId);
+		require(settlementTimestamp != 0, 'Pending report not settled');
+		_stageSettledCandidate(
 			reportId,
+			amount1,
+			amount2,
+			reportTimestamp,
 			settlementTimestamp,
-			pendingReportId,
-			pendingReportMaxSettlementBaseFee,
-			lastPrice,
-			lastSettlementTimestamp
+			lastReportBlock,
+			gameSettlementTime
 		);
+		emit PendingReportRecovered(reportId, settlementTimestamp, pendingReportId, lastPrice, lastSettlementTimestamp);
 		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PendingReportRecovered, reportId, 0);
-	}
-
-	function _consumeRecoveredPendingOperation() private {
-		uint256 operationId = pendingOperationSlotId;
-		if (operationId == 0) return;
-		pendingOperationSlotId = 0;
-		StagedOperation memory stagedOperation = stagedOperations[operationId];
-		if (stagedOperation.initiatorVault == address(0)) return;
-		_consumeStagedOperation(operationId);
-		emit PendingOperationRecoveryConsumed(operationId, stagedOperation.operation);
 	}
 
 	function openOracleCallback(
 		uint256 reportId,
 		uint256 amount1,
 		uint256 amount2,
-		uint256,
+		uint256 settlementTimestamp,
 		address,
 		address
 	) external {
-		require(msg.sender == address(openOracle), 'Only OpenOracle can call the security pool oracle callback');
-		require(reportId == pendingReportId, 'Oracle callback report id does not match the pending request');
+		require(msg.sender == address(openOracle), 'OpenOracle callback only');
+		require(reportId == pendingReportId, 'Callback report ID mismatch');
+		(
+			uint128 storedAmount1,
+			uint128 storedAmount2,
+			,
+			uint48 reportTimestamp,
+			uint48 storedSettlementTimestamp,
+			,
+			uint48 lastReportBlock,
+			uint48 gameSettlementTime
+		) = IStoredOpenOracleGame(address(openOracle)).finalizedGame(reportId);
+		require(amount1 == storedAmount1 && amount2 == storedAmount2, 'Callback amounts mismatch');
+		require(settlementTimestamp == storedSettlementTimestamp, 'Callback settlement time mismatch');
+		_stageSettledCandidate(
+			reportId,
+			storedAmount1,
+			storedAmount2,
+			reportTimestamp,
+			storedSettlementTimestamp,
+			lastReportBlock,
+			gameSettlementTime
+		);
+	}
+
+	function _stageSettledCandidate(
+		uint256 reportId,
+		uint128 amount1,
+		uint128 amount2,
+		uint48 reportTimestamp,
+		uint48 settlementTimestamp,
+		uint48 lastReportBlock,
+		uint48 gameSettlementTime
+	) private {
+		require(candidateReportId() == 0, 'Price candidate already pending');
+		require(reportId == pendingReportId, 'Candidate report ID mismatch');
 		_withdrawOpenOracleReporterBalances(pendingReportSponsor);
 		pendingReportId = 0;
 		pendingReportSponsor = address(0);
-		if (block.basefee > pendingReportMaxSettlementBaseFee) {
-			pendingReportMaxSettlementBaseFee = 0;
-			_emitPriceReportRejected(reportId, 'Base fee too high');
-			return;
+		settledPriceCandidate = SettledPriceCandidate({
+			reportId: reportId,
+			amount1: amount1,
+			amount2: amount2,
+			reportTimestamp: reportTimestamp,
+			settlementTimestamp: settlementTimestamp,
+			lastReportBlock: lastReportBlock,
+			settlementTime: gameSettlementTime
+		});
+		emit PriceCandidateStaged(
+			reportId,
+			amount1,
+			amount2,
+			reportTimestamp,
+			settlementTimestamp,
+			lastReportBlock,
+			gameSettlementTime,
+			candidateFinalizerReward
+		);
+		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.CandidateStaged, reportId, 0);
+	}
+
+	function finalizeSettledPrice(bytes[] calldata opportunityHeaders, bytes calldata firstClosedHeader) external {
+		SettledPriceCandidate memory candidate = settledPriceCandidate;
+		require(candidate.reportId != 0, 'No price candidate to finalize');
+		(
+			uint256 availableWeth,
+			uint256 availableRep,
+			uint256 maximumRequiredProfit,
+			bool sufficientEconomics
+		) = candidateVerifier.verify(
+				OpenOraclePriceCandidateVerifier.Candidate({
+					amount1: candidate.amount1,
+					amount2: candidate.amount2,
+					reportTimestamp: candidate.reportTimestamp,
+					settlementTimestamp: candidate.settlementTimestamp,
+					lastReportBlock: candidate.lastReportBlock,
+					settlementTime: candidate.settlementTime
+				}),
+				OpenOraclePriceCandidateVerifier.Configuration({
+					disputeDelay: disputeDelay,
+					opportunityBlockCount: economicOpportunityBlockCount,
+					gasUnitsForOneDispute: gasUnitsForOneDispute,
+					targetPriceError: targetPriceErrorForDispute,
+					protocolFee: protocolFee,
+					reporterFee: feePercentage,
+					percentagePrecision: OPEN_ORACLE_PERCENTAGE_PRECISION,
+					securityMultiplierBps: openOracleSecurityMultiplierBps,
+					minimumTotalGasPriceWei: minimumTotalGasPriceWei,
+					minimumPriorityFeeWei: minimumPriorityFeeWei,
+					absoluteInclusionPremiumWei: absoluteInclusionPremiumWei
+				}),
+				opportunityHeaders,
+				firstClosedHeader
+			);
+		uint256 candidatePrice =
+			candidate.amount1 == 0 ? 0 : Math.mulDiv(candidate.amount2, PRICE_PRECISION, candidate.amount1);
+		string memory rejectionReason;
+		if (candidate.amount1 == 0 || candidate.amount2 == 0 || candidatePrice == 0) {
+			rejectionReason = 'Invalid candidate price';
+		} else if (uint256(candidate.settlementTimestamp) + PRICE_VALID_FOR_SECONDS <= block.timestamp) {
+			rejectionReason = 'Candidate price expired';
+		} else if (!sufficientEconomics) {
+			rejectionReason = 'Insufficient dispute economics';
 		}
-		pendingReportMaxSettlementBaseFee = 0;
-		if (amount1 == 0 || amount2 == 0) {
-			_emitPriceReportRejected(reportId, 'Empty oracle settlement');
-			return;
+		bool accepted = bytes(rejectionReason).length == 0;
+		uint256 reportId = candidate.reportId;
+		delete settledPriceCandidate;
+		uint256 finalizerReward = candidateFinalizerReward;
+		candidateFinalizerReward = 0;
+		if (accepted) {
+			lastAcceptedReportId = reportId;
+			lastSettlementTimestamp = candidate.settlementTimestamp;
+			lastPrice = candidatePrice;
+			availableWethExposure = availableWeth;
+			availableRepExposure = availableRep;
+			emit PriceReported(reportId, lastPrice, lastSettlementTimestamp);
+		} else {
+			_emitPriceReportRejected(reportId, rejectionReason);
 		}
-		uint256 price = Math.mulDiv(amount2, PRICE_PRECISION, amount1);
-		if (price == 0) {
-			_emitPriceReportRejected(reportId, 'Oracle price is zero');
-			return;
-		}
-		lastSettlementTimestamp = block.timestamp;
-		lastPrice = price;
-		emit PriceReported(reportId, lastPrice, lastSettlementTimestamp);
-		if (pendingSettlementOperationIds.length != 0) {
-			uint256[] memory operationIds = pendingSettlementOperationIds;
-			delete pendingSettlementOperationIds;
-			pendingOperationSlotId = 0;
-			for (uint256 index = 0; index < operationIds.length; index++) {
-				if (stagedOperations[operationIds[index]].initiatorVault != address(0)) {
-					executeStagedOperation(operationIds[index]);
-				}
-			}
-		}
-		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PriceReported, reportId, 0);
+		emit PriceCandidateFinalized(reportId, accepted, availableWeth, maximumRequiredProfit, rejectionReason);
+		_payFinalizer(msg.sender, finalizerReward);
+		if (accepted) _emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PriceReported, reportId, 0);
+	}
+
+	function rejectExpiredPriceCandidate() external {
+		SettledPriceCandidate memory candidate = settledPriceCandidate;
+		require(candidate.reportId != 0, 'No price candidate to reject');
+		require(
+			block.number > uint256(candidate.lastReportBlock) + candidateProofWindowBlocks ||
+				block.timestamp >= uint256(candidate.settlementTimestamp) + PRICE_VALID_FOR_SECONDS,
+			'Candidate proof window open'
+		);
+		delete settledPriceCandidate;
+		uint256 finalizerReward = candidateFinalizerReward;
+		candidateFinalizerReward = 0;
+		_emitPriceReportRejected(candidate.reportId, 'Candidate proof window expired');
+		_payFinalizer(msg.sender, finalizerReward);
+	}
+
+	function _payFinalizer(address recipient, uint256 amount) private {
+		if (amount == 0) return;
+		(bool sent, ) = payable(recipient).call{ value: amount }('');
+		require(sent, 'Finalizer payment failed');
 	}
 
 	function _withdrawOpenOracleReporterBalances(address sponsor) private {
@@ -449,14 +609,7 @@ contract OpenOraclePriceCoordinator {
 	}
 
 	function _emitPriceReportRejected(uint256 reportId, string memory reason) private {
-		emit PriceReportRejected(
-			reportId,
-			reason,
-			pendingReportId,
-			pendingReportMaxSettlementBaseFee,
-			lastPrice,
-			lastSettlementTimestamp
-		);
+		emit PriceReportRejected(reportId, reason, pendingReportId, lastPrice, lastSettlementTimestamp);
 		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PriceRejected, reportId, 0);
 	}
 
@@ -465,6 +618,10 @@ contract OpenOraclePriceCoordinator {
 			lastPrice > 0 &&
 			lastSettlementTimestamp != 0 &&
 			lastSettlementTimestamp + PRICE_VALID_FOR_SECONDS > block.timestamp;
+	}
+
+	function isPriceUsable() public view returns (bool) {
+		return isPriceValid() && (availableWethExposure > 0 || availableRepExposure > 0);
 	}
 
 	function requestPriceIfNeededAndStageOperation(
@@ -476,27 +633,18 @@ contract OpenOraclePriceCoordinator {
 		uint256 requestedInitialWeth
 	) public payable {
 		if (operation != OperationType.SetSecurityBondsAllowance) {
-			require(amount > 0, 'Staged operation amount must be non-zero');
+			require(amount > 0, 'Staged amount is zero');
 		}
-		require(validForSeconds > 0, 'Staged operation timeout must be positive');
-		require(
-			validForSeconds <= MAX_OPERATION_VALID_FOR_SECONDS,
-			'Staged operation timeout exceeds the maximum allowed'
-		);
+		require(validForSeconds > 0, 'Staged timeout is zero');
+		require(validForSeconds <= MAX_OPERATION_VALID_FOR_SECONDS, 'Staged timeout too long');
 		if (operation != OperationType.Liquidation) {
-			require(targetVault == msg.sender, 'Self-targeted staged operation target must match the initiator vault');
+			require(targetVault == msg.sender, 'Self operation target mismatch');
 		} else {
 			require(targetVault != msg.sender, 'Caller bad');
 		}
-		require(
-			!securityPool.isEscalationResolved(),
-			'question already resolved, so staged operations are unavailable'
-		);
+		require(!securityPool.isEscalationResolved(), 'Question already resolved');
 		if (pendingReportId != 0) {
-			require(
-				msg.sender == pendingReportSponsor,
-				'Only the pending report sponsor can queue more operations until settlement'
-			);
+			require(msg.sender == pendingReportSponsor, 'Pending report sponsor only');
 		}
 		if (operation == OperationType.WithdrawRep) {
 			(, uint256 withdrawRepAmount) = _previewWithdrawRep(msg.sender, amount);
@@ -507,8 +655,7 @@ contract OpenOraclePriceCoordinator {
 		// Capture the target vault state at queue time. Liquidation may still execute if
 		// the target deposits more REP after staging, but allowance changes or ownership
 		// decreases make a liquidation snapshot stale. Non-liquidation operations keep
-		// the snapshot for history and execution-event context, but price validity no
-		// longer meters operations by snapshot or live external-value exposure.
+		// the snapshot for history, exposure calculation, and execution-event context.
 		// Liquidation should value the vault's full collateral claim. That means using the
 		// pool's total REP balance here rather than only the currently withdrawable balance.
 		(uint256 snapshotTargetOwnership, uint256 snapshotTargetAllowance, , ) = securityPool.securityVaults(
@@ -532,17 +679,18 @@ contract OpenOraclePriceCoordinator {
 
 		uint256 retained = 0; // amount to retain from msg.value (cost incurred)
 
-		if (isPriceValid()) {
+		if (isPriceUsable()) {
 			_emitStagedOperationQueued(operationId, false);
 			executeStagedOperation(operationId);
 			// no cost when price is valid
 		} else {
-			bool shouldRequestPrice = pendingReportId == 0 && pendingSettlementOperationIds.length == 0;
+			bool shouldRequestPrice =
+				pendingReportId == 0 && candidateReportId() == 0 && pendingSettlementOperationIds.length == 0;
 			bool isPendingSettlementOperationId = _trackPendingSettlementOperation(operationId);
 			_emitStagedOperationQueued(operationId, isPendingSettlementOperationId);
 			if (shouldRequestPrice && isPendingSettlementOperationId) {
 				uint256 ethCost = getRequestPriceEthCost();
-				require(msg.value >= ethCost, 'Not enough ETH was provided to request a fresh oracle price');
+				require(msg.value >= ethCost, 'ETH bounty below request cost');
 				retained += ethCost;
 				_requestPrice(msg.sender, ethCost, proposedRepPerEthPrice, requestedInitialWeth);
 			}
@@ -552,17 +700,14 @@ contract OpenOraclePriceCoordinator {
 		uint256 refund = msg.value - retained;
 		if (refund > 0) {
 			(bool sent, ) = payable(msg.sender).call{ value: refund }('');
-			require(sent, 'Oracle coordinator failed to return unused ETH');
+			require(sent, 'Unused ETH refund failed');
 		}
 	}
 
 	function executeStagedOperation(uint256 operationId) public {
 		StagedOperation memory stagedOperation = stagedOperations[operationId];
-		require(
-			stagedOperation.initiatorVault != address(0),
-			'Staged operation does not exist or was already consumed'
-		);
-		require(isPriceValid(), 'A valid oracle price is required before executing staged operations');
+		require(stagedOperation.initiatorVault != address(0), 'Staged operation unavailable');
+		require(isPriceUsable(), 'Fresh oracle price required');
 		if (block.timestamp > stagedOperation.queuedAt + settlementTime + stagedOperation.validForSeconds) {
 			_consumeAndEmitExecutedStagedOperation(
 				operationId,
@@ -608,6 +753,17 @@ contract OpenOraclePriceCoordinator {
 				);
 				return;
 			}
+		}
+		if (!_isOperationWithinReportSecurity(stagedOperation)) {
+			_consumeAndEmitExecutedStagedOperation(
+				operationId,
+				stagedOperation.operation,
+				false,
+				STAGED_OPERATION_ERROR_REPORT_SECURITY
+			);
+			return;
+		}
+		if (stagedOperation.operation == OperationType.Liquidation) {
 			_executeLiquidationStagedOperation(operationId, stagedOperation);
 		} else if (stagedOperation.operation == OperationType.WithdrawRep) {
 			_executeWithdrawRepStagedOperation(operationId, stagedOperation);
@@ -637,7 +793,29 @@ contract OpenOraclePriceCoordinator {
 	}
 
 	function _completeExecutedStagedOperation(uint256 operationId, OperationType operation) private {
+		_consumeAcceptedPrice();
 		_emitExecutedStagedOperation(operationId, operation, true, STAGED_OPERATION_EXECUTION_OK);
+	}
+
+	function _isOperationWithinReportSecurity(StagedOperation memory stagedOperation) private view returns (bool) {
+		uint256 wethExposure;
+		uint256 repExposure;
+		if (stagedOperation.operation == OperationType.SetSecurityBondsAllowance) {
+			if (stagedOperation.amount > stagedOperation.snapshotTargetAllowance) {
+				wethExposure = stagedOperation.amount - stagedOperation.snapshotTargetAllowance;
+			}
+		} else if (stagedOperation.operation == OperationType.WithdrawRep) {
+			(, repExposure) = _previewWithdrawRep(stagedOperation.initiatorVault, stagedOperation.amount);
+		} else {
+			wethExposure = stagedOperation.amount;
+		}
+		return wethExposure <= availableWethExposure && repExposure <= availableRepExposure;
+	}
+
+	function _consumeAcceptedPrice() private {
+		emit PriceConsumed(lastAcceptedReportId, availableWethExposure, availableRepExposure);
+		availableWethExposure = 0;
+		availableRepExposure = 0;
 	}
 
 	function _emitExecutedStagedOperationFailure(
@@ -729,11 +907,14 @@ contract OpenOraclePriceCoordinator {
 			reportId,
 			operationId,
 			pendingReportId,
+			candidateReportId(),
 			pendingReportSponsor,
 			pendingOperationSlotId,
-			pendingReportMaxSettlementBaseFee,
 			lastPrice,
 			lastSettlementTimestamp,
+			lastAcceptedReportId,
+			availableWethExposure,
+			availableRepExposure,
 			stagedOperationCounter,
 			activeStagedOperationCount,
 			pendingSettlementOperationIds.length

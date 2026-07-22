@@ -1,7 +1,21 @@
 import { concatHex, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, type Address, type Hex, toHex } from '@zoltar/shared/ethereum'
 import { createSecurityPoolAddressHelper } from '@zoltar/shared/addressDerivation'
 import { createApplyLinkedLibrariesHelper, createDeploymentStatusOracleAddressHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from '@zoltar/shared/deploymentAddresses'
-import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_FEE_PERCENTAGE, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_MULTIPLIER, ORACLE_PROTOCOL_FEE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/shared/oracleInitialReport'
+import {
+	OPEN_ORACLE_SECURITY_MULTIPLIER_BPS,
+	ORACLE_ABSOLUTE_INCLUSION_PREMIUM_WEI,
+	ORACLE_ABSOLUTE_MINIMUM_WETH_REPORT,
+	ORACLE_CANDIDATE_PROOF_WINDOW_BLOCKS,
+	ORACLE_ECONOMIC_OPPORTUNITY_BLOCK_COUNT,
+	ORACLE_FEE_PERCENTAGE,
+	ORACLE_GAS_UNITS_FOR_ONE_DISPUTE,
+	ORACLE_GAS_UNITS_FOR_PRICE_FINALIZATION,
+	ORACLE_MINIMUM_PRIORITY_FEE_WEI,
+	ORACLE_MINIMUM_TOTAL_GAS_PRICE_WEI,
+	ORACLE_MULTIPLIER,
+	ORACLE_PROTOCOL_FEE,
+	ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE,
+} from '@zoltar/shared/oracleInitialReport'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
 import { WriteClient, writeContractAndWait } from '../clients'
 import { PROXY_DEPLOYER_ADDRESS } from '../constants'
@@ -44,7 +58,6 @@ const ORACLE_TIME_TYPE = true
 const ORACLE_TRACK_DISPUTES = true
 const ORACLE_PROTOCOL_FEE_RECIPIENT = ORACLE_FEE_SINK_ADDRESS
 const ORACLE_ESCALATION_HALT_MULTIPLIER_BPS = 100000n
-const ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS = 30000n
 const ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS = 1000n
 
 const getSecurityPoolUtilsAddress = () => getCreate2Address({ bytecode: `0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: ZERO_SALT })
@@ -85,6 +98,12 @@ function getPriceOracleManagerAndOperatorQueuerFactoryByteCode(): Hex {
 				{ type: 'uint256' },
 				{ type: 'uint256' },
 				{ type: 'uint256' },
+				{ type: 'uint256' },
+				{ type: 'uint256' },
+				{ type: 'uint256' },
+				{ type: 'uint256' },
+				{ type: 'uint256' },
+				{ type: 'uint256' },
 			],
 			[
 				MAINNET_WETH_ADDRESS,
@@ -102,8 +121,14 @@ function getPriceOracleManagerAndOperatorQueuerFactoryByteCode(): Hex {
 				ORACLE_TRACK_DISPUTES,
 				ORACLE_PROTOCOL_FEE_RECIPIENT,
 				ORACLE_ESCALATION_HALT_MULTIPLIER_BPS,
-				ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS,
 				ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS,
+				ORACLE_MINIMUM_TOTAL_GAS_PRICE_WEI,
+				ORACLE_MINIMUM_PRIORITY_FEE_WEI,
+				ORACLE_ABSOLUTE_INCLUSION_PREMIUM_WEI,
+				ORACLE_ABSOLUTE_MINIMUM_WETH_REPORT,
+				ORACLE_ECONOMIC_OPPORTUNITY_BLOCK_COUNT,
+				ORACLE_CANDIDATE_PROOF_WINDOW_BLOCKS,
+				ORACLE_GAS_UNITS_FOR_PRICE_FINALIZATION,
 			],
 		),
 	])
@@ -214,11 +239,12 @@ export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 			args: [securityPool, repToken, proofVerifier],
 		}),
 	getInfraContracts: () => getInfraContractAddresses(),
-	getPriceOracleManagerAndOperatorQueuerInitCode: (openOracle, repToken) =>
+	getPriceOracleManagerAndOperatorQueuerInitCode: (openOracle, repToken, candidateVerifier) =>
 		concatHex([
 			applyLibraries(peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.evm.bytecode.object),
 			encodeAbiParameters(
 				[
+					{ type: 'address' },
 					{ type: 'address' },
 					{ type: 'address' },
 					{ type: 'address' },
@@ -238,11 +264,18 @@ export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 					{ type: 'uint256' },
 					{ type: 'uint256' },
 					{ type: 'uint256' },
+					{ type: 'uint256' },
+					{ type: 'uint256' },
+					{ type: 'uint256' },
+					{ type: 'uint256' },
+					{ type: 'uint256' },
+					{ type: 'uint256' },
 				],
 				[
 					openOracle,
 					repToken,
 					MAINNET_WETH_ADDRESS,
+					candidateVerifier,
 					ORACLE_REPORT_GAS,
 					ORACLE_SETTLEMENT_GAS,
 					ORACLE_GAS_UNITS_FOR_ONE_DISPUTE,
@@ -257,8 +290,14 @@ export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 					ORACLE_TRACK_DISPUTES,
 					ORACLE_PROTOCOL_FEE_RECIPIENT,
 					ORACLE_ESCALATION_HALT_MULTIPLIER_BPS,
-					ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS,
 					ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS,
+					ORACLE_MINIMUM_TOTAL_GAS_PRICE_WEI,
+					ORACLE_MINIMUM_PRIORITY_FEE_WEI,
+					ORACLE_ABSOLUTE_INCLUSION_PREMIUM_WEI,
+					ORACLE_ABSOLUTE_MINIMUM_WETH_REPORT,
+					ORACLE_ECONOMIC_OPPORTUNITY_BLOCK_COUNT,
+					ORACLE_CANDIDATE_PROOF_WINDOW_BLOCKS,
+					ORACLE_GAS_UNITS_FOR_PRICE_FINALIZATION,
 				],
 			),
 		]),
@@ -339,6 +378,8 @@ async function getInfraDeployedInformation(client: WriteClient): Promise<{ [key 
 		zoltar: isDeploymentStatusOracleStepDeployed(deploymentMask, 'zoltar'),
 		shareTokenFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'shareTokenFactory'),
 		priceOracleManagerAndOperatorQueuerFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'priceOracleManagerAndOperatorQueuerFactory'),
+		openOraclePriceCandidateVerifier: isDeploymentStatusOracleStepDeployed(deploymentMask, 'priceOracleManagerAndOperatorQueuerFactory'),
+		priceOracleCoordinatorDeploymentWorker: isDeploymentStatusOracleStepDeployed(deploymentMask, 'priceOracleManagerAndOperatorQueuerFactory'),
 		securityPoolForker: isDeploymentStatusOracleStepDeployed(deploymentMask, 'securityPoolForker'),
 		escalationGameFactory: isDeploymentStatusOracleStepDeployed(deploymentMask, 'escalationGameFactory'),
 		escalationGameProofVerifier: isDeploymentStatusOracleStepDeployed(deploymentMask, 'escalationGameFactory'),

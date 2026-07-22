@@ -51,7 +51,7 @@ import { createWriteClient, type WriteClient } from '../../../../../solidity/ts/
 import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployPeripherals'
 import { ensureZoltarDeployed } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { getOpenOracleExtraData, getRequestPriceEthCost, OperationType, requestPriceIfNeededAndStageOperation, requestPriceWithValue } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/peripherals'
+import { getOpenOracleExtraData, getRequestPriceEthCost, OperationType, requestPriceIfNeededAndStageOperation, requestPriceWithValue, settleAndFinalizeCoordinatorPrice } from '../../../../../solidity/ts/testSupport/simulator/utils/contracts/peripherals'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -919,8 +919,7 @@ describe('Open Oracle helpers', () => {
 
 		await requestPriceWithValue(client, managerAddress, seededRequestEthCost, seededRepEthPrice)
 		const seededReportId = (await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId
-		await mockWindow.advanceTime(DAY)
-		await settleOracleReport(uiWriteClient, getOpenOracleAddress(), seededReportId)
+		await settleAndFinalizeCoordinatorPrice(client, mockWindow, managerAddress, seededReportId)
 		await mockWindow.advanceTime(ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS + 1n)
 
 		await requestOraclePrice(uiWriteClient, managerAddress)
@@ -950,8 +949,7 @@ describe('Open Oracle helpers', () => {
 		if (typeof minimumToken1Report !== 'bigint') throw new Error('expected bigint minimumToken1Report')
 		await requestOraclePrice(uiWriteClient, managerAddress, minimumToken1Report)
 		const reportId = (await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId
-		await mockWindow.advanceTime(DAY)
-		await settleOracleReport(uiWriteClient, getOpenOracleAddress(), reportId)
+		await settleAndFinalizeCoordinatorPrice(client, mockWindow, managerAddress, reportId)
 		const wethBalanceAfterSettlement = await loadErc20Balance(uiReadClient, WETH_ADDRESS, uiWriteClient.account.address)
 
 		await expect(requestOraclePrice(uiWriteClient, managerAddress)).rejects.toThrow('A fresh oracle price is already available')
@@ -1104,7 +1102,7 @@ describe('Open Oracle helpers', () => {
 		expect(result.stagedExecution).toBeUndefined()
 	})
 
-	test('queueOracleManagerOperation preserves incremental ids when adding to the pending settlement list', async () => {
+	test('queueOracleManagerOperation preserves incremental ids when the pending settlement list is full', async () => {
 		const minimumToken1Report = await client.readContract({
 			address: managerAddress,
 			abi: [{ type: 'function', name: 'minimumToken1Report', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256' }] }],
@@ -1122,10 +1120,11 @@ describe('Open Oracle helpers', () => {
 
 		expect(firstResult.queuedOperation?.isPendingSlot).toBe(true)
 		expect(secondResult.queuedOperation).toBeDefined()
-		expect(secondResult.queuedOperation?.isPendingSlot).toBe(true)
+		expect(secondResult.queuedOperation?.isPendingSlot).toBe(false)
 		expect(secondResult.queuedOperation?.operationId).toBeGreaterThan(firstOperationId)
 		expect(details.activeStagedOperationCount).toBe(2n)
 		expect(details.pendingOperationSlotId).toBe(firstOperationId)
+		expect(details.pendingSettlementOperationIds).toEqual([firstOperationId])
 		expect(details.pendingOperation?.operationId).toBe(firstOperationId)
 		expect(details.stagedOperations?.map(operation => operation.operationId)).toEqual([secondOperationId, firstOperationId])
 		expect(details.stagedOperations?.map(operation => operation.operation)).toEqual(['liquidation', 'setSecurityBondsAllowance'])
@@ -1150,12 +1149,12 @@ describe('Open Oracle helpers', () => {
 		await mockWindow.setNextBlockBaseFeePerGasToZero()
 		installInjectedEthereum(mockWindow, secondAddress)
 		const secondUiWriteClient = createWalletWriteClient(secondAddress)
-		await expect(queueOracleManagerOperation(secondUiWriteClient, managerAddress, 'setSecurityBondsAllowance', secondAddress, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, minimumToken1Report)).rejects.toThrow('Only the pending report sponsor can queue more operations until settlement')
+		await expect(queueOracleManagerOperation(secondUiWriteClient, managerAddress, 'setSecurityBondsAllowance', secondAddress, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, minimumToken1Report)).rejects.toThrow('Pending report sponsor only')
 		const queuedResult = await queueOracleManagerOperation(uiWriteClient, managerAddress, 'setSecurityBondsAllowance', client.account.address, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS)
 
 		expect(queuedResult.queuedOperation).toBeDefined()
-		expect(queuedResult.queuedOperation?.isPendingSlot).toBe(true)
-		expect((await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingSettlementOperationIds.length).toBe(2)
+		expect(queuedResult.queuedOperation?.isPendingSlot).toBe(false)
+		expect((await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingSettlementOperationIds.length).toBe(1)
 	})
 
 	test('submitted and settled reports are tracked in loadOpenOracleReportDetails', async () => {
@@ -1174,8 +1173,9 @@ describe('Open Oracle helpers', () => {
 		const openOracleAddress = getOpenOracleAddress()
 
 		let reportDetails = await loadOpenOracleReportDetails(uiReadClient, openOracleAddress, reportId)
+		const amount2 = reportDetails.currentAmount2
 		expect(reportDetails.currentAmount1).toBe(amount1)
-		expect(reportDetails.currentAmount2).toBe(amount1)
+		expect(amount2).toBeGreaterThan(0n)
 		expect(reportDetails.settlementTimestamp).toBe(0n)
 		expect(getOpenOracleReportStatus(reportDetails)).toBe('Pending')
 
@@ -1183,14 +1183,17 @@ describe('Open Oracle helpers', () => {
 		await settleOracleReport(uiWriteClient, openOracleAddress, reportId)
 
 		reportDetails = await loadOpenOracleReportDetails(uiReadClient, openOracleAddress, reportId)
+		expect(reportDetails.currentAmount1).toBe(amount1)
+		expect(reportDetails.currentAmount2).toBe(amount2)
 		expect(reportDetails.settlementTimestamp).toBeGreaterThan(0n)
 		expect(getOpenOracleReportStatus(reportDetails)).toBe('Settled')
 
 		const managerDetails = await loadOracleManagerDetails(uiReadClient, managerAddress)
 		expect(managerDetails.pendingReportId).toBe(0n)
-		expect(managerDetails.lastSettlementTimestamp).toBeGreaterThan(0n)
-		expect(managerDetails.isPriceValid).toBe(true)
-		expect(managerDetails.priceValidUntilTimestamp).toBe(managerDetails.lastSettlementTimestamp + ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS)
+		expect(managerDetails.candidateReportId).toBe(reportId)
+		expect(managerDetails.lastSettlementTimestamp).toBe(0n)
+		expect(managerDetails.isPriceValid).toBe(false)
+		expect(managerDetails.priceValidUntilTimestamp).toBeUndefined()
 	})
 
 	test('ui wrapWeth helper deposits ETH into WETH and reports the wrap action', async () => {

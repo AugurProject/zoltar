@@ -224,7 +224,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 						pendingOperation: undefined,
 						pendingOperationSlotId: 0n,
 						pendingSettlementOperationIds: [],
-						pendingSettlementQueueCapacity: 4n,
+						pendingSettlementQueueCapacity: 1n,
 						pendingReportId: 0n,
 						priceValidUntilTimestamp: 1000n,
 						queuedOperationEthCost: 1n,
@@ -273,7 +273,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 						},
 						pendingOperationSlotId: 7n,
 						pendingSettlementOperationIds: [7n],
-						pendingSettlementQueueCapacity: 4n,
+						pendingSettlementQueueCapacity: 1n,
 						pendingReportId: 12n,
 						priceValidUntilTimestamp: 1000n,
 						queuedOperationEthCost: 1n,
@@ -351,7 +351,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 						},
 						pendingOperationSlotId: 7n,
 						pendingSettlementOperationIds: [7n],
-						pendingSettlementQueueCapacity: 4n,
+						pendingSettlementQueueCapacity: 1n,
 						pendingReportId: 0n,
 						priceValidUntilTimestamp: 1000n,
 						queuedOperationEthCost: 1n,
@@ -391,7 +391,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 						pendingOperation: undefined,
 						pendingOperationSlotId: 0n,
 						pendingSettlementOperationIds: [],
-						pendingSettlementQueueCapacity: 4n,
+						pendingSettlementQueueCapacity: 1n,
 						pendingReportId: 12n,
 						priceValidUntilTimestamp: 1000n,
 						queuedOperationEthCost: 1n,
@@ -420,6 +420,28 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(documentQueries.getByRole('button', { name: 'Request New Price' })).not.toBeNull()
 		expect(sectionQueries.getByText('Pending Request')).not.toBeNull()
 		expect(sectionQueries.getByRole('button', { name: /Report #\s*12/ })).not.toBeNull()
+	})
+
+	test.each([
+		{ accountState: createAccountState({ address: undefined }), reason: 'Connect wallet to continue.' },
+		{ accountState: createAccountState({ chainId: '0x2' }), reason: 'Switch to Ethereum mainnet.' },
+	])('explains why price candidate finalization is unavailable: $reason', async ({ accountState, reason }) => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					accountState,
+					checkedSecurityPoolAddress: zeroAddress,
+					poolOracleManagerDetails: createOracleManagerDetails({ candidateReportId: 7n }),
+					securityPoolAddress: zeroAddress,
+					securityPools: [createSelectedPool()],
+					selectedPoolView: 'price-oracle',
+				})}
+				showHeader={false}
+			/>,
+		)
+		setCleanup(renderedComponent.cleanup)
+
+		expectTransactionButtonDisabled(document.body, 'Finalize Price Candidate', reason)
 	})
 
 	test('disables Request New Price when the wallet lacks the buffered oracle bounty ETH', async () => {

@@ -4,6 +4,8 @@ type SecurityPoolCoreAddresses = {
 	escalationGameFactory: Address
 	escalationGameProofVerifier: Address
 	openOracle: Address
+	openOraclePriceCandidateVerifier: Address
+	priceOracleCoordinatorDeploymentWorker: Address
 	priceOracleManagerAndOperatorQueuerFactory: Address
 	securityPoolFactory: Address
 	securityPoolForker: Address
@@ -22,7 +24,7 @@ type RepTokenAddressConfig = {
 type SecurityPoolAddressConfig = {
 	getEscalationGameInitCode: (securityPool: Address, repToken: Address, proofVerifier: Address) => Hex
 	getInfraContracts: () => SecurityPoolCoreAddresses
-	getPriceOracleManagerAndOperatorQueuerInitCode: (openOracle: Address, repToken: Address) => Hex
+	getPriceOracleManagerAndOperatorQueuerInitCode: (openOracle: Address, repToken: Address, candidateVerifier: Address) => Hex
 	getRepTokenAddress: (universeId: bigint) => Address
 	getSecurityPoolInitCode: (inputs: {
 		escalationGameFactory: Address
@@ -98,8 +100,8 @@ export function createSecurityPoolAddressHelper(config: SecurityPoolAddressConfi
 
 		const repToken = config.getRepTokenAddress(universeId)
 		const priceOracleManagerAndOperatorQueuer = getCreate2Address({
-			bytecode: config.getPriceOracleManagerAndOperatorQueuerInitCode(infraContracts.openOracle, repToken),
-			from: infraContracts.priceOracleManagerAndOperatorQueuerFactory,
+			bytecode: config.getPriceOracleManagerAndOperatorQueuerInitCode(infraContracts.openOracle, repToken, infraContracts.openOraclePriceCandidateVerifier),
+			from: infraContracts.priceOracleCoordinatorDeploymentWorker,
 			salt: securityPoolSaltWithMsgSender,
 		})
 		const shareToken = getCreate2Address({

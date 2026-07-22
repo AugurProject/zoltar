@@ -8,6 +8,12 @@ export function resolveOracleOperationEthFunding({ managerDetails }: { managerDe
 			includeBuffer: false,
 		}
 	}
+	if ((managerDetails.candidateReportId ?? 0n) !== 0n) {
+		return {
+			ethCost: 0n,
+			includeBuffer: false,
+		}
+	}
 	const pendingSettlementQueueCapacity = managerDetails.pendingSettlementQueueCapacity
 	if (managerDetails.pendingReportId !== 0n && pendingSettlementQueueCapacity > 0n && BigInt(managerDetails.pendingSettlementOperationIds.length) < pendingSettlementQueueCapacity) {
 		return {

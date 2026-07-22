@@ -241,6 +241,7 @@ function createWorkflowProps(overrides: Partial<SecurityPoolWorkflowRouteContent
 		onExecutePendingPoolOperation: () => undefined,
 		onRefreshSelectedPoolData: () => undefined,
 		onRequestPoolPrice: () => undefined,
+		onFinalizePoolPriceCandidate: () => undefined,
 		onSelectedPoolViewChange: () => undefined,
 		onSecurityPoolAddressChange: () => undefined,
 		selectedPoolRefreshNonce: 0,

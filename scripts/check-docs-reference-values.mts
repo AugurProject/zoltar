@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import assert from 'node:assert/strict'
 import { getMainnetProtocolConfig } from '../shared/ts/protocolConfig'
+import { ORACLE_CANDIDATE_PROOF_WINDOW_BLOCKS, ORACLE_ECONOMIC_OPPORTUNITY_BLOCK_COUNT, ORACLE_GAS_UNITS_FOR_PRICE_FINALIZATION } from '../shared/ts/oracleInitialReport'
 
 const readme = await readFile('README.md', 'utf8')
 const html = await readFile('docs/escalation-game-architecture.html', 'utf8')
@@ -18,6 +19,8 @@ const escalationGameState = await readFile('solidity/contracts/peripherals/Escal
 const escalationGameTypes = await readFile('solidity/contracts/peripherals/EscalationGameTypes.sol', 'utf8')
 const escalationGameForker = await readFile('solidity/contracts/peripherals/EscalationGameForker.sol', 'utf8')
 const priceCoordinator = await readFile('solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol', 'utf8')
+const priceCandidateVerifier = await readFile('solidity/contracts/peripherals/OpenOraclePriceCandidateVerifier.sol', 'utf8')
+const executionBlockHeaderProof = await readFile('solidity/contracts/peripherals/ExecutionBlockHeaderProof.sol', 'utf8')
 const openOracleProvenance = await readFile('solidity/contracts/peripherals/openOracle/UPSTREAM.md', 'utf8')
 const openOracleState = await readFile('shared/ts/openOracle.ts', 'utf8')
 const securityPool = await readFile('solidity/contracts/peripherals/SecurityPool.sol', 'utf8')
@@ -151,8 +154,9 @@ function assertRecursiveForkGasStatusDocs(): void {
 function assertCoordinatorRecoveryBranch(): void {
 	const normalizedIntegration = openOracleIntegration.replaceAll(/\s+/g, ' ')
 	for (const documentedClaim of [
-		'If the pending settlement list is empty, another staged request can fund a replacement report.',
-		'If pending settlement operation IDs still remain, an operator or user must call direct <code>requestPrice(proposedRepPerEthPrice, requestedInitialWeth)</code> with the ETH bounty and initial-report funding, then let that replacement report settle.',
+		'A successful callback withdraws the coordinator reporter balances back to the sponsor and stores a <code>SettledPriceCandidate</code>.',
+		"If OpenOracle's low-level callback failed, <code>recoverSettledPendingReport</code> reconstructs and stages the same candidate from OpenOracle's stored finalized game.",
+		'Recovery never accepts a price or consumes the queued operation.',
 	]) {
 		assert.ok(normalizedIntegration.includes(documentedClaim), `Missing coordinator recovery-branch claim: ${documentedClaim}`)
 	}
@@ -161,26 +165,48 @@ function assertCoordinatorRecoveryBranch(): void {
 
 function assertCoordinatorSettlementEconomics(): void {
 	const normalizedIntegration = openOracleIntegration.replaceAll(/\s+/g, ' ')
-	for (const documentedClaim of [
-		'Equality is accepted.',
-		'correction profit at the configured target error remains <code>10 / 3</code> times the one-dispute gas cost at the largest admitted settlement base fee.',
-		'That relationship is a deployment assumption, not a constructor invariant',
-		"the constructor checks each multiplier's lower bound but does not require the settlement cap to remain below the Open Oracle Security multiplier.",
-		'the callback does not recompute <code>minimumToken1Report()</code> from settlement base fee and does not compare the final price with an external truth source.',
-		'The cap is a rejection boundary, not proof that an accepted price is externally correct;',
-	]) {
+	const normalizedSecurityModel = securityModel.replaceAll(/\s+/g, ' ')
+	const normalizedInvariants = invariantsHtml.replaceAll(/\s+/g, ' ')
+	const normalizedWhitepaper = whitepaperPlaceholder.replaceAll(/\s+/g, ' ')
+	for (const documentedClaim of ['Settlement creates a candidate, not a usable price.', 'A valid proof with insufficient economics rejects and clears the candidate;', 'Accepted prices retain the original OpenOracle settlement timestamp', 'One accepted price may authorize only one successful staged operation.']) {
 		assert.ok(normalizedIntegration.includes(documentedClaim), `Missing coordinator settlement-economics claim: ${documentedClaim}`)
 	}
-	assert.match(priceCoordinator, /if \(block\.basefee > pendingReportMaxSettlementBaseFee\)/, 'coordinator must accept settlement base fee equal to the request-time cap')
-	assert.match(priceCoordinator, /if \(amount1 == 0 \|\| amount2 == 0\)/, 'coordinator must reject empty settled token amounts')
-	assert.match(priceCoordinator, /uint256 price = Math\.mulDiv\(amount2, PRICE_PRECISION, amount1\)/, 'coordinator must derive the settled REP/ETH ratio from final token amounts')
+	assert.match(priceCoordinator, /candidateVerifier\.verify\(/, 'coordinator must validate settled candidates through the historical-header verifier')
+	assert.match(priceCoordinator, /lastSettlementTimestamp = candidate\.settlementTimestamp/, 'accepted prices must preserve the OpenOracle settlement timestamp')
+	assert.match(priceCoordinator, /_consumeAcceptedPrice\(\)/, 'successful staged operations must consume the accepted price')
+	assert.match(priceCandidateVerifier, /availableWeth >= maximumRequiredProfit/, 'candidate verifier must compare final report profit with the largest modeled dispute cost')
+	for (const formulaFragment of [
+		'maximumRequiredProfit = max(requiredProfit(block) for each proved opportunity block)',
+		'availableWeth = floor(amount1 * (targetError - protocolFee - reporterFee)',
+		'availableRep = floor(amount2 * (targetError - protocolFee - reporterFee)',
+		'accept = everyBlockHadDisputeCapacity &amp;&amp; availableWeth &gt;= maximumRequiredProfit',
+	]) {
+		assert.ok(normalizedIntegration.includes(formulaFragment), `OpenOracle integration is missing candidate-finalization formula: ${formulaFragment}`)
+	}
+	assert.match(normalizedIntegration, /report is too low[\s\S]*profit is WETH-denominated[\s\S]*report is too high[\s\S]*profit is REP-denominated/, 'OpenOracle integration must explain both wrong-price correction directions')
+	assert.match(normalizedIntegration, /allowance increase[\s\S]*availableWeth[\s\S]*manufactured liquidation eligibility[\s\S]*availableWeth[\s\S]*REP withdrawal[\s\S]*availableRep/, 'OpenOracle integration must map each protected operation to its native capacity')
+	assert.match(priceCandidateVerifier, /header\.gasLimit - header\.gasUsed < configuration\.gasUnitsForOneDispute/, 'candidate verifier must reject opportunity windows without dispute gas capacity')
+	assert.match(executionBlockHeaderProof, /blockhash\(header\.number\) == keccak256\(encodedHeader\)/, 'execution headers must be authenticated against canonical block hashes')
 	assert.match(priceCoordinator, /uint256 ethCost = getRequestPriceEthCost\(\)/, 'coordinator must derive the request bounty from getRequestPriceEthCost')
-	assert.match(priceCoordinator, /uint256 settlerReward = ethCost/, 'coordinator must assign the entire request bounty to the OpenOracle settler reward')
-	assert.match(priceCoordinator, /settlerReward: uint96\(settlerReward\)/, 'coordinator report creation must forward the full request bounty as settler reward')
-	const requestBountyFormula = 'data-source="requestPriceEthCost = block.basefee \\cdot 4 \\cdot (callbackGasLimit + gasConsumedOpenOracleReportPrice) + 101"'
+	assert.match(priceCoordinator, /uint256 settlerReward = ethCost - finalizerReward/, 'coordinator must retain the candidate finalizer reward from the request bounty')
+	assert.match(priceCoordinator, /settlerReward: uint96\(settlerReward\)/, 'coordinator report creation must forward the settler share as the OpenOracle reward')
+	const requestBountyFormula = 'data-source="requestPriceEthCost = openOracleSettlerReward + candidateFinalizerReward"'
 	assert.ok(openOracleIntegration.includes(requestBountyFormula), 'OpenOracle request-cost section must retain the current full request-bounty formula')
 	assert.ok(!whitepaperPlaceholder.includes(requestBountyFormula), 'whitepaper must link to the canonical request-bounty formula instead of copying it')
 	assert.doesNotMatch(whitepaperPlaceholder, /disputers can replace a bad\s+report with a larger one/, 'whitepaper must not claim every dispute strictly increases the report after integer flooring')
+	assert.doesNotMatch(normalizedSecurityModel, /no downstream-notional or cumulative cache-usage cap|Report liquidity need not equal the value of one operation or all operations using the cached price/i, 'security model retains the superseded uncapped cached-price classification')
+	assert.doesNotMatch(normalizedInvariants, /not required to equal or bound the value of withdrawals, liquidations, allowance changes|cumulative operations that use an accepted price/i, 'invariants retain the superseded uncapped cached-price classification')
+	assert.doesNotMatch(normalizedWhitepaper, /callback replays up to 4|callback batch is capped at four|coordinator then replays the pending operation/i, 'whitepaper retains the superseded callback-execution lifecycle')
+	assert.match(normalizedWhitepaper, /settlement stages a candidate[\s\S]*canonical-header proof accepts or rejects it before at most one successful operation/i, 'whitepaper must summarize candidate validation and single-use execution')
+	assert.match(normalizedInvariants, /ORA-07[\s\S]*Candidate-only settlement and canonical proof[\s\S]*ORA-09[\s\S]*Single-use native operation capacities/, 'invariants must catalog candidate proof and single-use native capacities')
+	for (const [parameterName, parameterValue] of [
+		['economicOpportunityBlockCount', ORACLE_ECONOMIC_OPPORTUNITY_BLOCK_COUNT],
+		['candidateProofWindowBlocks', ORACLE_CANDIDATE_PROOF_WINDOW_BLOCKS],
+		['gasUnitsForPriceFinalization', ORACLE_GAS_UNITS_FOR_PRICE_FINALIZATION],
+	] as const) {
+		assert.match(normalizedIntegration, new RegExp(`${parameterName}[^<]*<\\/code>.*?<td><code>${parameterValue.toString().replace(/000$/, ',000')}`), `OpenOracle parameter table must document ${parameterName}`)
+	}
+	assert.match(operatorReference, /earliest of the five-minute accepted-price expiry and the configured 200-block candidate rejection boundary[\s\S]*256-block `blockhash` history is only a later hard ceiling/, 'operator workflow must state the effective candidate proof deadline')
 }
 
 function assertOpenOracleVendorAndEventDocs(): void {
@@ -275,7 +301,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /eight-week migration window is open and every existing selected child remains in `ForkMigration`/)
 	assert.match(contractInteractionReference, /child pool is not already deployed/)
 	assert.match(contractInteractionReference, /eight-week claim window open; selected child remains in `ForkMigration`/)
-	assert.match(contractInteractionReference, /rejected settlement clears pending-report state but leaves staged operations queued for a later valid price path/)
+	assert.match(contractInteractionReference, /stages a `SettledPriceCandidate`[\s\S]*does not activate a price or execute an operation/)
 	assert.match(contractInteractionReference, /While a report is pending, only that report sponsor may stage more operations/)
 	assert.match(contractInteractionReference, /required only when this call opens a new report/)
 	assert.match(contractInteractionReference, /Genesis REP requires allowance; child REP is burned directly without allowance/)
@@ -298,11 +324,14 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(securityPoolForker, /require\(claimTickIndices\.length == 0, 'Not final'\)/)
 	assert.match(securityPoolForker, /block\.timestamp <= data\.forkActivationTime \+ SecurityPoolUtils\.MIGRATION_TIME/)
 	assert.match(securityPoolForkerVaultMigrationDelegate, /require\(address\(childrenByPoolAndOutcome\[parent\]\[outcomeIndex\]\) == address\(0x0\), 'Child pool exists'\)/)
-	assert.match(priceCoordinator, /_emitPriceReportRejected\(reportId, 'Base fee too high'\);\s*return;/)
-	assert.match(priceCoordinator, /_emitPriceReportRejected\(reportId, 'Empty oracle settlement'\);\s*return;/)
-	assert.match(priceCoordinator, /_emitPriceReportRejected\(reportId, 'Oracle price is zero'\);\s*return;/)
-	assert.match(priceCoordinator, /require\(\s*msg\.sender == pendingReportSponsor,\s*'Only the pending report sponsor can queue more operations until settlement'/)
-	assert.match(priceCoordinator, /bool shouldRequestPrice = pendingReportId == 0 && pendingSettlementOperationIds\.length == 0/)
+	assert.match(priceCoordinator, /candidate\.amount1 == 0 \|\| candidate\.amount2 == 0 \|\| candidatePrice == 0/)
+	assert.match(priceCoordinator, /rejectionReason = 'Candidate price expired'/)
+	assert.match(priceCoordinator, /rejectionReason = 'Insufficient dispute economics'/)
+	assert.match(priceCoordinator, /sufficientEconomics/)
+	assert.match(priceCoordinator, /require\(msg\.sender == pendingReportSponsor, 'Pending report sponsor only'\)/)
+	assert.match(priceCoordinator, /require\(!isPriceUsable\(\), 'Fresh oracle price exists'\)/)
+	assert.match(contractInteractionReference, /`isPriceUsable\(\)` is false[\s\S]*timestamp-valid price whose operation capacity was consumed is replaceable/)
+	assert.match(priceCoordinator, /bool shouldRequestPrice =\s*pendingReportId == 0 && candidateReportId\(\) == 0 && pendingSettlementOperationIds\.length == 0/)
 	assert.match(priceCoordinator, /if \(shouldRequestPrice && isPendingSettlementOperationId\)/)
 	assert.match(escalationGameForker, /require\(child\.systemState\(\) == SystemState\.ForkMigration, 'Child not migrating'\)/)
 	assert.match(escalationGameForker, /block\.timestamp <= forkDataByPool\[parent\]\.forkActivationTime \+ SecurityPoolUtils\.MIGRATION_TIME/)

@@ -72,7 +72,7 @@ Use protocol events, not transfer inference, to discover relationships:
 | Escalation continuation | `ForkCarryCheckpoint`, `CarryDepositConsumed` |
 | Pool and vault accounting | `PoolAccountingCheckpoint`, `VaultAccountingCheckpoint` |
 | Auction demand and settlement | `AuctionStarted`, `BidSubmitted`, `AuctionFinalized`, `BidSettled` |
-| Coordinator operations | `StagedOperationQueued`, `ExecutedStagedOperation`, terminal report events, `CoordinatorStateCheckpoint` |
+| Coordinator operations | `StagedOperationQueued`, `ExecutedStagedOperation`, candidate/report lifecycle events, `PriceConsumed`, `CoordinatorStateCheckpoint` |
 
 Protocol-global identifiers are universe and question IDs, contract addresses, and escalation snapshot IDs. Contract-local counters are stable only as composite keys: use `(game or snapshot lineage, outcome, parentDepositIndex)`, `(sourceGame, outcome, sourceNodeId)`, `(auction emitter, tick, bidIndex)`, and `(coordinator emitter, operationId)`. Mutable labels are not identifiers.
 
@@ -80,7 +80,7 @@ Protocol-global identifiers are universe and question IDs, contract addresses, a
 
 Pool accounting is checkpoint based. Replace all eleven fields whenever `PoolAccountingCheckpoint` is observed. Replace the named vault record, including `vaultFeeRemainder`, and its global denominators on `VaultAccountingCheckpoint`. Action events explain cause; checkpoint values are authoritative when both appear.
 
-For the Zoltar-owned oracle coordinator, replace pending report ID and sponsor, pending operation slot and counts, base-fee guard, and latest price and settlement time whenever `CoordinatorStateCheckpoint` is observed. The associated report and operation IDs identify the cause; zero means that cause has no corresponding ID. Report and operation action events retain lifecycle history, while the checkpoint is the authoritative resulting state. Open Oracle's internal payouts and liabilities remain outside this contract.
+For the Zoltar-owned oracle coordinator, replace pending and candidate report IDs, pending report sponsor, pending operation slot and counts, latest price and settlement time, last accepted report ID, and remaining WETH/REP exposure capacities whenever `CoordinatorStateCheckpoint` is observed. The associated report and operation IDs identify the cause; zero means that cause has no corresponding ID. Candidate, report, consumption, and operation action events retain lifecycle history, while the checkpoint is the authoritative resulting state. Open Oracle's internal payouts and liabilities remain outside this contract.
 
 For escalation, append each `LocalDepositAppended` leaf under its stable deposit index and retain the live event-derived MMR peaks and leaves for every game. When `SecurityPoolForkSnapshot` records an unresolved escalation, resolve its source game from the pool relationship and `EscalationRepDrainedAtFork`, then preserve an immutable copy of the current roots, counts, peaks, and leaves under `escalationSnapshotId`; later source consumption updates only the live version. On `ForkCarryCheckpoint`, select that historical version by `snapshotId`, verify its source game and each checkpoint count/root, then clone the frozen peaks and leaves into the child before applying child-local deposits. The checkpoint fixes the roots, counts, unresolved totals, and resolution balances written to that child. Apply each `CarryDepositConsumed` by its explicit reason and resulting roots/totals. Reconstruct and maintain peaks from events; never read them from contract storage.
 

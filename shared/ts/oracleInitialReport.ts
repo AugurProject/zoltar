@@ -5,6 +5,13 @@ export const ORACLE_MULTIPLIER = 115
 export const ORACLE_GAS_UNITS_FOR_ONE_DISPUTE = 300000n
 export const OPEN_ORACLE_SECURITY_MULTIPLIER_BPS = 100000n
 export const ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE = 500000n
+export const ORACLE_MINIMUM_TOTAL_GAS_PRICE_WEI = 10n * 10n ** 9n
+export const ORACLE_MINIMUM_PRIORITY_FEE_WEI = 2n * 10n ** 9n
+export const ORACLE_ABSOLUTE_INCLUSION_PREMIUM_WEI = 10n ** 15n
+export const ORACLE_ABSOLUTE_MINIMUM_WETH_REPORT = 10n ** 18n
+export const ORACLE_ECONOMIC_OPPORTUNITY_BLOCK_COUNT = 3n
+export const ORACLE_CANDIDATE_PROOF_WINDOW_BLOCKS = 200n
+export const ORACLE_GAS_UNITS_FOR_PRICE_FINALIZATION = 300000n
 
 const BPS_DENOMINATOR = 10000n
 
@@ -15,6 +22,10 @@ export type OracleMinimumWethReportParameters = {
 	targetPriceErrorForDispute: bigint
 	openOracleProtocolFee: number
 	openOracleReporterFee: number
+	minimumTotalGasPriceWei?: bigint
+	minimumPriorityFeeWei?: bigint
+	absoluteInclusionPremiumWei?: bigint
+	absoluteMinimumWethReport?: bigint
 }
 
 export const DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS = {
@@ -24,6 +35,10 @@ export const DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS = {
 	openOracleReporterFee: ORACLE_FEE_PERCENTAGE,
 	openOracleSecurityMultiplierBps: OPEN_ORACLE_SECURITY_MULTIPLIER_BPS,
 	targetPriceErrorForDispute: ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE,
+	minimumTotalGasPriceWei: ORACLE_MINIMUM_TOTAL_GAS_PRICE_WEI,
+	minimumPriorityFeeWei: ORACLE_MINIMUM_PRIORITY_FEE_WEI,
+	absoluteInclusionPremiumWei: ORACLE_ABSOLUTE_INCLUSION_PREMIUM_WEI,
+	absoluteMinimumWethReport: ORACLE_ABSOLUTE_MINIMUM_WETH_REPORT,
 } satisfies OracleMinimumWethReportParameters
 
 function ceilDivide(numerator: bigint, denominator: bigint) {
@@ -34,9 +49,14 @@ function ceilDivide(numerator: bigint, denominator: bigint) {
 export function calculateOracleMinimumWethReport(parameters: OracleMinimumWethReportParameters = DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS) {
 	const feeSum = BigInt(parameters.openOracleProtocolFee + parameters.openOracleReporterFee)
 	const correctionProfitNumerator = parameters.targetPriceErrorForDispute - feeSum
-	const disputeGasCostWei = parameters.gasUnitsForOneDispute * parameters.baseFeeWeiPerGas
+	const minimumTotalGasPriceWei = parameters.minimumTotalGasPriceWei ?? ORACLE_MINIMUM_TOTAL_GAS_PRICE_WEI
+	const minimumPriorityFeeWei = parameters.minimumPriorityFeeWei ?? ORACLE_MINIMUM_PRIORITY_FEE_WEI
+	const absoluteInclusionPremiumWei = parameters.absoluteInclusionPremiumWei ?? ORACLE_ABSOLUTE_INCLUSION_PREMIUM_WEI
+	const absoluteMinimumWethReport = parameters.absoluteMinimumWethReport ?? ORACLE_ABSOLUTE_MINIMUM_WETH_REPORT
+	const modeledGasPrice = parameters.baseFeeWeiPerGas + minimumPriorityFeeWei > minimumTotalGasPriceWei ? parameters.baseFeeWeiPerGas + minimumPriorityFeeWei : minimumTotalGasPriceWei
+	const disputeGasCostWei = parameters.gasUnitsForOneDispute * modeledGasPrice + absoluteInclusionPremiumWei
 	const numerator = disputeGasCostWei * parameters.openOracleSecurityMultiplierBps * (ORACLE_PERCENTAGE_PRECISION + parameters.targetPriceErrorForDispute)
 	const denominator = BPS_DENOMINATOR * correctionProfitNumerator
 	const calculatedReport = ceilDivide(numerator, denominator)
-	return calculatedReport > 0n ? calculatedReport : 1n
+	return calculatedReport > absoluteMinimumWethReport ? calculatedReport : absoluteMinimumWethReport
 }

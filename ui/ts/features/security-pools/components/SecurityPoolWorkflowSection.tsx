@@ -143,6 +143,7 @@ export function SecurityPoolWorkflowSection({
 	onSwitchToPoolUniverse,
 	onQueueLiquidation,
 	onExecutePendingPoolOperation,
+	onFinalizePoolPriceCandidate,
 	onRefreshSelectedPoolData,
 	onRequestPoolPrice,
 	onViewPendingReport,
@@ -398,6 +399,11 @@ export function SecurityPoolWorkflowSection({
 	})
 	const pendingOperation = currentPoolOracleManagerDetails?.pendingOperation
 	const canUseOracleActions = accountState.address !== undefined && isMainnet
+	const finalizeCandidateAvailabilityReason = (() => {
+		if (accountState.address === undefined) return commonCopy.walletConnectionRequired
+		if (!isMainnet) return commonCopy.mainnetRequiredReason
+		return undefined
+	})()
 	const stagedOperations = currentPoolOracleManagerDetails?.stagedOperations ?? (pendingOperation === undefined ? [] : [pendingOperation])
 	const pendingSettlementOperationIds = currentPoolOracleManagerDetails?.pendingSettlementOperationIds ?? []
 	const activeStagedOperationCount = currentPoolOracleManagerDetails?.activeStagedOperationCount ?? BigInt(stagedOperations.length)
@@ -1028,6 +1034,7 @@ export function SecurityPoolWorkflowSection({
 											)}
 										</MetricGrid>
 										<ErrorNotice message={poolOracleManagerError} />
+										{(currentPoolOracleManagerDetails?.candidateReportId ?? 0n) > 0n ? <p className='detail'>{securityPoolCopy.candidateAwaitingProof}</p> : undefined}
 										<div className='actions'>
 											<button className='secondary' onClick={() => onLoadPoolOracleManager(loadedSelectedPool.managerAddress)} disabled={loadingPoolOracleManager}>
 												{loadingPoolOracleManager ? <LoadingText>{securityPoolCopy.refreshingOracle}</LoadingText> : securityPoolCopy.refreshOracle}
@@ -1043,6 +1050,16 @@ export function SecurityPoolWorkflowSection({
 													reason: selectedPoolStateModel.actions.requestPrice.enabled ? requestPriceGuardMessage : undefined,
 												}}
 											/>
+											{(currentPoolOracleManagerDetails?.candidateReportId ?? 0n) > 0n ? (
+												<TransactionActionButton
+													idleLabel={securityPoolCopy.finalizePriceCandidate}
+													pendingLabel={securityPoolCopy.finalizingPriceCandidate}
+													onClick={() => onFinalizePoolPriceCandidate(loadedSelectedPool.managerAddress)}
+													pending={poolOracleActiveAction === 'finalizeSettledPrice'}
+													tone='primary'
+													availability={{ disabled: !canUseOracleActions, reason: finalizeCandidateAvailabilityReason }}
+												/>
+											) : undefined}
 										</div>
 									</SectionBlock>
 								) : undefined}

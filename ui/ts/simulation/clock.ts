@@ -1,5 +1,5 @@
 import { createMemoryClient } from 'tevm'
-import { bytesToHex, hexToBytes, type Hash } from '@zoltar/shared/ethereum'
+import { bytesToHex, hexToBytes, keccak256, type Hash, type Hex } from '@zoltar/shared/ethereum'
 
 export const SIMULATION_INITIAL_TIMESTAMP = 1_735_689_600n
 export const SIMULATION_BLOCK_INTERVAL_SECONDS = 1n
@@ -11,10 +11,12 @@ type SimulationBlock = {
 		calcNextBaseFee(): bigint
 		gasLimit: bigint
 		number: bigint
+		serialize(): Uint8Array
 		stateRoot: Uint8Array
 	}
 }
 type SimulationBlockchain = {
+	getBlock(blockNumber: bigint): Promise<SimulationBlock>
 	getCanonicalHeadBlock(): Promise<SimulationBlock>
 	putBlock(block: SimulationBlock): Promise<void>
 }
@@ -113,6 +115,23 @@ async function syncSimulationVmState({ block, memoryClient, receiptsManager, vm 
 export async function getSimulationChainTimestamp(memoryClient: TevmLikeClient) {
 	const block = await memoryClient.getBlock()
 	return requireSimulationTimestamp(block.timestamp)
+}
+
+export async function getSimulationExecutionBlockHeaderRlp(memoryClient: TevmLikeClient, blockNumber: bigint): Promise<Hex> {
+	const simulationNode = getSimulationNode(memoryClient)
+	const vm = await simulationNode.getVm()
+	const block = await vm.blockchain.getBlock(blockNumber)
+	const encodedHeader = bytesToHex(block.header.serialize())
+	if (keccak256(encodedHeader) !== bytesToHex(block.hash())) {
+		throw new Error(`Serialized simulation header does not match block ${blockNumber.toString()}`)
+	}
+	return encodedHeader
+}
+
+export async function getSimulationChainBlockNumber(memoryClient: TevmLikeClient) {
+	const simulationNode = getSimulationNode(memoryClient)
+	const vm = await simulationNode.getVm()
+	return (await vm.blockchain.getCanonicalHeadBlock()).header.number
 }
 
 export function getNextSimulationTimestamp(currentTimestamp: bigint) {

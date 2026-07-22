@@ -1,4 +1,5 @@
 import type { Address, Hex, TransactionLog } from '@zoltar/shared/ethereum'
+import { ORACLE_FEE_PERCENTAGE, ORACLE_PROTOCOL_FEE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, ORACLE_PERCENTAGE_PRECISION } from '@zoltar/shared/oracleInitialReport'
 import {
 	decodeOpenOracleStatePreimage,
 	getOpenOracleGameTuple,
@@ -18,6 +19,7 @@ import {
 	peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction,
 	peripherals_openOracle_OpenOracle_OpenOracle,
 	peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
+	peripherals_SecurityPool_SecurityPool,
 	peripherals_tokens_ShareToken_ShareToken,
 	ZoltarQuestionData_ZoltarQuestionData,
 } from '../../../../types/contractArtifact'
@@ -27,6 +29,8 @@ import { threeShareArrayToCash } from './securityPool'
 import { priceToClosestTick, tickToPrice } from '../tickMath'
 import { HIGH_GAS_SIMULATOR_WRITE_GAS } from '../constants'
 import { requireAddress } from '../utilities'
+import type { AnvilWindowEthereum } from '../../AnvilWindowEthereum'
+import { getExecutionBlockHeaderRlp } from '../executionBlockHeader'
 
 export enum OperationType {
 	Liquidation = 0,
@@ -118,15 +122,27 @@ export const requestPriceIfNeededAndStageOperationWithValue = async (client: Wri
 
 export const requestPriceIfNeededAndStageOperationWithInitialReportPrice = async (client: WriteClient, priceOracleManagerAndOperatorQueuer: Address, operation: OperationType, targetVault: Address, amount: bigint, validForSeconds: bigint, proposedRepPerEthPrice: bigint, value: bigint, requestedInitialWeth = 0n) => {
 	const shouldRequestPrice = !(await getIsPriceValid(client, priceOracleManagerAndOperatorQueuer)) && (await getPendingReportId(client, priceOracleManagerAndOperatorQueuer)) === 0n && (await getPendingSettlementOperationCount(client, priceOracleManagerAndOperatorQueuer)) === 0n
+	let securedInitialWeth = requestedInitialWeth
 	if (shouldRequestPrice) {
-		await fundCoordinatorInitialReport(client, priceOracleManagerAndOperatorQueuer, proposedRepPerEthPrice, requestedInitialWeth)
+		let securedExposure = amount
+		if (operation === OperationType.WithdrawRep) {
+			const securityPool = await client.readContract({ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'securityPool', address: priceOracleManagerAndOperatorQueuer, args: [] })
+			const vault = await client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'securityVaults', address: securityPool, args: [client.account.address] })
+			const availableRep = await client.readContract({ abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'poolOwnershipToRep', address: securityPool, args: [vault[0]] })
+			if (availableRep < securedExposure) securedExposure = availableRep
+		}
+		const correctionProfitNumerator = ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE - BigInt(ORACLE_PROTOCOL_FEE + ORACLE_FEE_PERCENTAGE)
+		const reportAmountForExposure = (securedExposure * (ORACLE_PERCENTAGE_PRECISION + ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE) + correctionProfitNumerator - 1n) / correctionProfitNumerator
+		const operationMinimumWeth = operation === OperationType.WithdrawRep ? (reportAmountForExposure * PRICE_PRECISION + proposedRepPerEthPrice - 1n) / proposedRepPerEthPrice : reportAmountForExposure
+		if (operationMinimumWeth > securedInitialWeth) securedInitialWeth = operationMinimumWeth
+		await fundCoordinatorInitialReport(client, priceOracleManagerAndOperatorQueuer, proposedRepPerEthPrice, securedInitialWeth)
 	}
 	return await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'requestPriceIfNeededAndStageOperation',
 			address: priceOracleManagerAndOperatorQueuer,
-			args: [operation, targetVault, amount, validForSeconds, proposedRepPerEthPrice, requestedInitialWeth],
+			args: [operation, targetVault, amount, validForSeconds, proposedRepPerEthPrice, securedInitialWeth],
 			value,
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
 		}),
@@ -193,14 +209,6 @@ export const getPendingReportId = async (client: ReadClient, priceOracleManagerA
 		args: [],
 	})
 
-export const getPendingReportMaxSettlementBaseFee = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
-	await client.readContract({
-		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-		functionName: 'pendingReportMaxSettlementBaseFee',
-		address: priceOracleManagerAndOperatorQueuer,
-		args: [],
-	})
-
 export const getPendingOperationSlotId = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
 	await client.readContract({
 		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
@@ -228,7 +236,7 @@ export const getPendingSettlementOperationIds = async (client: ReadClient, price
 export const getIsPriceValid = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>
 	await client.readContract({
 		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-		functionName: 'isPriceValid',
+		functionName: 'isPriceUsable',
 		address: priceOracleManagerAndOperatorQueuer,
 		args: [],
 	})
@@ -369,18 +377,80 @@ export const openOracleSettle = async (client: WriteClient, reportId: bigint) =>
 	)
 }
 
-export const openOracleSettleWithGasPrice = async (client: WriteClient, reportId: bigint, gasPrice: bigint) => {
+type SettleAndFinalizeCoordinatorPriceOptions = {
+	closedHeaderStillOpen?: boolean
+	delayBeforeFinalizeSeconds?: bigint
+	duplicateFirstOpportunityHeader?: boolean
+	finalizeAtBlockNumber?: bigint
+	opportunityBaseFees?: readonly bigint[]
+	opportunityGasLimit?: bigint
+	tamperFirstOpportunityHeader?: boolean
+}
+
+export const settleAndFinalizeCoordinatorPrice = async (
+	client: WriteClient,
+	ethereum: AnvilWindowEthereum,
+	priceOracleManagerAndOperatorQueuer: Address,
+	reportId: bigint,
+	options: SettleAndFinalizeCoordinatorPriceOptions = {},
+) => {
+	const { closedHeaderStillOpen = false, delayBeforeFinalizeSeconds = 0n, duplicateFirstOpportunityHeader = false, finalizeAtBlockNumber, opportunityBaseFees, opportunityGasLimit, tamperFirstOpportunityHeader = false } = options
 	const state = await loadOpenOracleEventState(client, reportId)
-	return await writeContractAndWait(client, () =>
+	const opportunityBlockCount = await client.readContract({
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+		functionName: 'economicOpportunityBlockCount',
+		address: priceOracleManagerAndOperatorQueuer,
+		args: [],
+	})
+	const deadline = state.latest.game.reportTimestamp + state.latest.game.settlementTime
+	if (opportunityBaseFees !== undefined && BigInt(opportunityBaseFees.length) !== opportunityBlockCount) throw new Error('Opportunity base-fee count does not match the coordinator requirement')
+	const originalGasLimit = (await client.getBlock()).gasLimit
+	if (opportunityGasLimit !== undefined) await ethereum.requestRaw({ method: 'evm_setBlockGasLimit', params: [`0x${opportunityGasLimit.toString(16)}`] })
+	const opportunityBlockNumbers: bigint[] = []
+	for (let index = opportunityBlockCount; index > 0n; index--) {
+		const baseFee = opportunityBaseFees?.[Number(opportunityBlockCount - index)]
+		if (baseFee !== undefined) await ethereum.request({ method: 'anvil_setNextBlockBaseFeePerGas', params: [`0x${baseFee.toString(16)}`] })
+		await ethereum.setTime(deadline - index - (closedHeaderStillOpen ? 1n : 0n))
+		const block = await client.getBlock()
+		if (block.number === undefined) throw new Error('Mined opportunity block number is unavailable')
+		opportunityBlockNumbers.push(block.number)
+	}
+	let firstClosedBlockNumber: bigint | undefined
+	if (closedHeaderStillOpen) {
+		await ethereum.setTime(deadline - 1n)
+		firstClosedBlockNumber = await client.getBlockNumber()
+	}
+	if (opportunityGasLimit !== undefined) await ethereum.requestRaw({ method: 'evm_setBlockGasLimit', params: [`0x${originalGasLimit.toString(16)}`] })
+	if (opportunityBaseFees !== undefined) await ethereum.setNextBlockBaseFeePerGasToZero()
+	const settleHash = await openOracleSettle(client, reportId)
+	const settleReceipt = await client.waitForTransactionReceipt({ hash: settleHash })
+	const opportunityHeaders = await Promise.all(opportunityBlockNumbers.map(async blockNumber => await getExecutionBlockHeaderRlp(ethereum, blockNumber)))
+	if (duplicateFirstOpportunityHeader && opportunityHeaders.length > 1) {
+		const firstHeader = opportunityHeaders[0]
+		if (firstHeader === undefined) throw new Error('First opportunity header is unavailable')
+		opportunityHeaders[1] = firstHeader
+	}
+	if (tamperFirstOpportunityHeader && opportunityHeaders.length > 0) opportunityHeaders[0] = '0xc0'
+	const firstClosedHeader = await getExecutionBlockHeaderRlp(ethereum, firstClosedBlockNumber ?? settleReceipt.blockNumber)
+	if (delayBeforeFinalizeSeconds > 0n) await ethereum.advanceTime(delayBeforeFinalizeSeconds)
+	if (finalizeAtBlockNumber !== undefined) {
+		const latestBlockNumber = await client.getBlockNumber()
+		if (latestBlockNumber >= finalizeAtBlockNumber) throw new Error('Requested finalization block is not in the future')
+		for (let blockNumber = latestBlockNumber + 1n; blockNumber < finalizeAtBlockNumber; blockNumber++) {
+			await ethereum.request({ method: 'evm_mine', params: [] })
+		}
+	}
+	const finalizeHash = await writeContractAndWait(client, () =>
 		client.writeContract({
-			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
-			functionName: 'settle',
-			address: getInfraContractAddresses().openOracle,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'finalizeSettledPrice',
+			address: priceOracleManagerAndOperatorQueuer,
+			args: [opportunityHeaders, firstClosedHeader],
 			gas: HIGH_GAS_SIMULATOR_WRITE_GAS,
-			gasPrice,
-			args: [reportId, getOpenOracleGameTuple(state.latest.game), getOpenOracleHelperTuple(state.latest.helper)],
 		}),
 	)
+	const finalizeReceipt = await client.waitForTransactionReceipt({ hash: finalizeHash })
+	return { settleHash, settleReceipt, finalizeHash, finalizeReceipt }
 }
 
 export const getRequestPriceEthCost = async (client: ReadClient, priceOracleManagerAndOperatorQueuer: Address) =>

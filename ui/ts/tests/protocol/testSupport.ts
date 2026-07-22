@@ -10,7 +10,7 @@ export type MockLoaderMulticallHandler = (request: MockLoaderMulticallRequest) =
 export type MockWriteClient = {
 	readContract: ReadClient['readContract']
 	sendTransaction: WriteClient['sendTransaction']
-	waitForTransactionReceipt: (_request: { hash: Hash }) => Promise<Pick<TransactionReceipt, 'status'>>
+	waitForTransactionReceipt: (_request: { hash: Hash }) => Promise<Pick<TransactionReceipt, 'logs' | 'status'>>
 }
 
 export function getContractFunctionName(contract: unknown) {
@@ -52,6 +52,7 @@ export function createMockWriteClient(
 	readContract: MockReadContractHandler = async request => {
 		throw new Error(`Unexpected readContract function: ${request.functionName}`)
 	},
+	logs: TransactionReceipt['logs'] = [],
 ): MockWriteClient {
 	return {
 		readContract: createReadContractStub(readContract),
@@ -59,7 +60,7 @@ export function createMockWriteClient(
 			onSendTransaction(request)
 			return mockTransactionHash
 		},
-		waitForTransactionReceipt: async () => ({ status: 'success' }),
+		waitForTransactionReceipt: async () => ({ logs, status: 'success' }),
 	}
 }
 

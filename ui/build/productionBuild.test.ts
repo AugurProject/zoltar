@@ -512,7 +512,7 @@ async function loadProductionDocumentInChromium(pageUrl: string, viewport: { hei
 			return await result
 		}
 		const evaluate = async (expression: string) => {
-			const response = await send('Runtime.evaluate', { expression, returnByValue: true })
+			const response = await send('Runtime.evaluate', { awaitPromise: true, expression, returnByValue: true })
 			if (typeof response !== 'object' || response === null || !('result' in response)) throw new Error('Chromium evaluation result was missing')
 			const result = response.result
 			if (typeof result !== 'object' || result === null) throw new Error('Chromium evaluation result was invalid')
@@ -749,7 +749,29 @@ productionBrowserTest('production bundle executes deployment, reporting, fork mi
 			await driver.waitForButtonEnabled('Request New Price')
 			await driver.clickButton('Request New Price')
 			await driver.waitForBodyText('Price Requested')
-			await driver.clickButton('+1 day')
+			const advancedThroughContestableBlocks = await driver.evaluate(`(async () => {
+				const worker = window.__zoltarProductionWorkers?.at(-1)
+				if (!(worker instanceof Worker)) return false
+				let id = 900000
+				const call = (method, params) => new Promise((resolve, reject) => {
+					id += 1
+					const requestId = id
+					const onMessage = event => {
+						if (event.data?.id !== requestId) return
+						worker.removeEventListener('message', onMessage)
+						if (event.data.type === 'error') reject(new Error(event.data.message))
+						else resolve(event.data.value)
+					}
+					worker.addEventListener('message', onMessage)
+					worker.postMessage({ id: requestId, method, params, type: 'call' })
+				})
+				await call('advanceTime', { seconds: 477n })
+				await call('mineBlock')
+				await call('mineBlock')
+				await call('mineBlock')
+				return true
+			})()`)
+			expect(advancedThroughContestableBlocks).toBe(true)
 			await driver.waitForButtonEnabled('Refresh Oracle')
 			await driver.clickButton('Refresh Oracle')
 			await driver.waitForBodyText('PENDING REQUEST')
@@ -762,6 +784,11 @@ productionBrowserTest('production bundle executes deployment, reporting, fork mi
 			await driver.waitForTransactionStatus('Confirmed', 'Settle')
 			const reportingPoolsOpened = await driver.evaluate(`(() => { const target = [...document.querySelectorAll('a, button')].find(candidate => candidate.textContent?.trim() === 'Security Pools'); if (!(target instanceof HTMLElement)) return false; target.click(); return true })()`)
 			expect(reportingPoolsOpened).toBe(true)
+			await driver.waitForButtonEnabled('Refresh Oracle')
+			await driver.clickButton('Refresh Oracle')
+			await driver.waitForButtonEnabled('Finalize Price Candidate')
+			await driver.clickButton('Finalize Price Candidate')
+			await driver.waitForTransactionStatus('Confirmed', 'Price Candidate Accepted')
 			await driver.waitForButtonEnabled('Reporting')
 			await driver.clickButton('Reporting')
 			await driver.waitForBodyText('Report Outcome')

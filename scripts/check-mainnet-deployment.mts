@@ -93,6 +93,16 @@ async function loadComputedManifest(): Promise<MainnetDeploymentManifest> {
 					label: 'Escalation Game Proof Verifier',
 					address: readStringField(infraContractAddresses, 'escalationGameProofVerifier', 'infraContractAddresses.escalationGameProofVerifier'),
 				},
+				{
+					id: 'openOraclePriceCandidateVerifier',
+					label: 'OpenOracle Price Candidate Verifier',
+					address: readStringField(infraContractAddresses, 'openOraclePriceCandidateVerifier', 'infraContractAddresses.openOraclePriceCandidateVerifier'),
+				},
+				{
+					id: 'priceOracleCoordinatorDeploymentWorker',
+					label: 'OpenOracle Price Coordinator Deployment Worker',
+					address: readStringField(infraContractAddresses, 'priceOracleCoordinatorDeploymentWorker', 'infraContractAddresses.priceOracleCoordinatorDeploymentWorker'),
+				},
 			],
 		}
 	} catch (error) {

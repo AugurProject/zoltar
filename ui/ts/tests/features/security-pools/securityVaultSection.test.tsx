@@ -93,7 +93,7 @@ function createOracleManagerDetails(overrides: Partial<NonNullable<SecurityVault
 		pendingOperation: undefined,
 		pendingOperationSlotId: 0n,
 		pendingSettlementOperationIds: [],
-		pendingSettlementQueueCapacity: 4n,
+		pendingSettlementQueueCapacity: 1n,
 		pendingReportId: 0n,
 		priceValidUntilTimestamp: 10n,
 		queuedOperationEthCost: 0n,

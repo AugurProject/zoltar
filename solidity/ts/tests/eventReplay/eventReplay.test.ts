@@ -158,11 +158,14 @@ describe('event-only replay', () => {
 					reportId: 9n,
 					operationId: 4n,
 					pendingReportId: 9n,
+					candidateReportId: 0n,
 					pendingReportSponsor: sponsor,
 					pendingOperationSlotId: 4n,
-					pendingReportMaxSettlementBaseFee: 100n,
 					lastPrice: 12n,
 					lastSettlementTimestamp: 20n,
+					lastAcceptedReportId: 9n,
+					availableWethExposure: 13n,
+					availableRepExposure: 14n,
 					stagedOperationCounter: 4n,
 					activeStagedOperationCount: 2n,
 					pendingSettlementOperationCount: 1n,
@@ -172,6 +175,7 @@ describe('event-only replay', () => {
 		const replayedCoordinator = replayed.coordinators.get(coordinator)
 		if (replayedCoordinator?.pendingReportSponsor !== sponsor) throw new Error('pending report sponsor was not replayed')
 		if (replayedCoordinator.activeStagedOperationCount !== 2n) throw new Error('active operation count was not replayed')
+		if (replayedCoordinator.availableWethExposure !== 13n || replayedCoordinator.availableRepExposure !== 14n) throw new Error('report exposure capacity was not replayed')
 	})
 
 	test('REP discovery replays genesis token history before the ZoltarQuestionData event anchor', () => {
@@ -261,11 +265,14 @@ describe('event-only replay', () => {
 					reportId: 0n,
 					operationId: 0n,
 					pendingReportId: 0n,
+					candidateReportId: 0n,
 					pendingReportSponsor: zeroAddress,
 					pendingOperationSlotId: 0n,
-					pendingReportMaxSettlementBaseFee: 0n,
 					lastPrice: 0n,
 					lastSettlementTimestamp: 0n,
+					lastAcceptedReportId: 0n,
+					availableWethExposure: 0n,
+					availableRepExposure: 0n,
 					stagedOperationCounter: 0n,
 					activeStagedOperationCount: 0n,
 					pendingSettlementOperationCount: 0n,
@@ -395,7 +402,7 @@ describe('event-only replay', () => {
 				emitter: coordinator,
 				eventName: 'PriceRequested',
 				logIndex: 5,
-				args: { reportId: 1n, pendingReportMaxSettlementBaseFee: 100n },
+				args: { reportId: 1n },
 			}),
 			createReplayLog({
 				emitter: coordinator,
@@ -403,9 +410,8 @@ describe('event-only replay', () => {
 				logIndex: 6,
 				args: {
 					reportId: 1n,
-					reason: 'Base fee too high',
+					reason: 'Insufficient final dispute economics',
 					pendingReportId: 0n,
-					pendingReportMaxSettlementBaseFee: 0n,
 					lastPrice: 12n,
 					lastSettlementTimestamp: 20n,
 				},
@@ -414,7 +420,7 @@ describe('event-only replay', () => {
 				emitter: coordinator,
 				eventName: 'PriceRequested',
 				logIndex: 7,
-				args: { reportId: 2n, pendingReportMaxSettlementBaseFee: 101n },
+				args: { reportId: 2n },
 			}),
 			createReplayLog({
 				emitter: coordinator,
@@ -426,7 +432,7 @@ describe('event-only replay', () => {
 				emitter: coordinator,
 				eventName: 'PriceRequested',
 				logIndex: 9,
-				args: { reportId: 3n, pendingReportMaxSettlementBaseFee: 102n },
+				args: { reportId: 3n },
 			}),
 			createReplayLog({
 				emitter: coordinator,
@@ -436,7 +442,6 @@ describe('event-only replay', () => {
 					reportId: 3n,
 					settlementTimestamp: 26n,
 					pendingReportId: 0n,
-					pendingReportMaxSettlementBaseFee: 0n,
 					lastPrice: 15n,
 					lastSettlementTimestamp: 25n,
 				},

@@ -131,9 +131,9 @@
 						</thead>
 						<tbody>
 							<tr>
-								<td><strong>Oracle security is not bounded by downstream value.</strong> Report liquidity need not equal the value of one operation or all operations using the cached price.</td>
-								<td><code>ORACLE-A1</code>: independent, profit-driven arbitragers monitor every pending report, correct profitable errors, and obtain inclusion before settlement. The position is an incentive for correction, not loss collateral.</td>
-								<td>Incorrect sizing or settlement math; a bypass of public dispute access; cache use outside the documented window; or concrete launch parameters under which a material false report cannot be corrected profitably and in time.</td>
+								<td><strong>Report liquidity is an incentive, not reimbursement collateral or a cross-token external-value guarantee.</strong> The coordinator nevertheless enforces one-operation native-unit exposure bounds.</td>
+								<td><code>ORACLE-A1</code>: independent, profit-driven arbitragers monitor every pending report, correct profitable errors, and obtain inclusion before settlement. Candidate acceptance proves a conservative public inclusion budget, and one successful operation consumes the accepted WETH and REP capacities.</td>
+								<td>Incorrect sizing, header, or settlement math; a bypass of public dispute access; an operation above its native capacity; reuse after successful consumption; or concrete launch parameters under which a material false report cannot be corrected profitably and in time.</td>
 							</tr>
 							<tr>
 							<td><strong>A caller may use any existing ended global question to fork any eligible universe.</strong> See the canonical <a href="./zoltar-whitepaper.html#global-question-scope">global-question mechanics</a>.</td>
@@ -191,9 +191,9 @@
 						<tbody>
 							<tr>
 								<td><code>ORACLE-A1</code></td>
-								<td>Reports are sized from configured gas, fee, and target-error parameters to target profitable correction; accepted prices expire after the cache window.</td>
+								<td>Settlement stages a candidate. Canonical recent-block headers must prove sufficient correction profit under configured total-gas-price, priority-fee, inclusion-premium, fee, and target-error parameters. Accepted report security authorizes one successful positive-exposure vault operation and is capped in WETH or REP.</td>
 								<td>An independent funded arbitrager monitors, acts, and obtains inclusion before settlement.</td>
-								<td>Report liquidity does not collateralize or cap downstream or cumulative operation value.</td>
+								<td>No contract can observe private builder payments, guarantee inclusion, or certify external REP/ETH truth.</td>
 							</tr>
 							<tr>
 								<td><code>AUCTION-A1</code></td>
@@ -218,26 +218,28 @@
 					</p>
 				</div>
 				<p>
-					Report liquidity is a correction incentive, not collateral for the
-					assets whose solvency checks consume the resulting price. The
-					coordinator intentionally imposes no downstream-notional or cumulative
-					cache-usage cap. One accepted price may support multiple otherwise-valid
-					withdrawals, liquidations, allowance updates, or escalation deposits
-					while it is fresh.
+					Report liquidity remains a correction incentive rather than reimbursement
+					collateral, but the coordinator now binds its use. Settlement alone cannot
+					activate a price. A canonical-header proof must show sufficient modeled
+					correction profit and dispute-gas capacity in the final opportunity blocks,
+					and one accepted report's operation security may support only one successful
+					staged operation within its native WETH or REP correction-profit capacity.
+					Successful execution zeros both capacities and makes <code>isPriceUsable()</code>
+					false. The separate <code>isPriceValid()</code> timestamp state retained for resolution-security
+					checks does not let another positive-exposure vault operation execute.
 				</p>
 				<p>
-					If monitoring, capital, or timely inclusion fails, the protocol places no
-					onchain upper bound on loss based on the report position. For example, a
-					report funded with a few WETH can still be consumed by operations whose
-					combined external value is hundreds of ETH. That mismatch is expected:
-					the claimed defense is profitable correction before settlement, not
-					reimbursement after a false price is accepted.
+					The proof deliberately avoids unknown ETH/USD and REP/USD prices by keeping
+					separate WETH and REP capacities. It still cannot prove external truth or
+					observe offchain builder payments. If independent monitoring or inclusion
+					fails despite the configured public-cost margin, <code>ORACLE-A1</code>
+					remains violated; the position is not an insurance fund.
 				</p>
 				<p>
 					Implementation and test evidence:
 					<a href="../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"><code>OpenOraclePriceCoordinator.sol</code></a>,
 					<a href="../solidity/ts/tests/priceOracleSecurity.test.ts"><code>priceOracleSecurity.test.ts</code></a>
-					(dynamic minimum sizing and repeated cached-price use), and
+					(dynamic minimum sizing, historical-header validation, and single-use exposure bounds), and
 						<a href="./open-oracle-integration.html#attack-model">the full integration threat model</a>.
 				</p>
 			</section>
@@ -318,7 +320,7 @@
 								<td>Change parameters or design, or explicitly accept the quantified risk.</td>
 							</tr>
 							<tr>
-								<td>Code conforms and the concern is only that report liquidity does not bound downstream notional, or that weak demand may leave the child under-repaired.</td>
+								<td>Code conforms and the concern is only that report liquidity is not reimbursement collateral, does not provide a cross-token external-value guarantee, or that weak demand may leave the child under-repaired. One-operation WETH and REP capacities still must be enforced.</td>
 								<td>Documented residual risk, normally informational rather than a new vulnerability.</td>
 								<td>Confirm the assumption or policy remains an explicit launch decision.</td>
 							</tr>

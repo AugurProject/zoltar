@@ -5848,8 +5848,11 @@
 							amounts strictly before the settlement deadline, and a settler can
 							finalize the report at or after that deadline.
 							OpenOracle credits the final position to the final reporter. Its callback
-							supplies the accepted amounts to the coordinator, which withdraws only
-							its own internal WETH/REP balances back to the sponsor.
+							authenticates the stored result, returns the coordinator's own internal
+							WETH/REP balances to the sponsor, and stages a candidate. Settlement does
+							not activate a price. Anyone must next prove canonical execution headers
+							for the final dispute-opportunity blocks and first closed block; the
+							coordinator then accepts or rejects the candidate's economics.
 						Request, dispute, settlement, and callback safety checks are
 						detailed in the dedicated
 						<a href="./open-oracle-integration.html">OpenOracle integration</a>
@@ -5857,17 +5860,20 @@
 					</p>
 					<p>
 						If the last price is stale, solvency-sensitive operations can be
-						queued until a valid report is settled. The coordinator then replays
-						the pending operation against the fresh price. Escalation deposits
+						queued until a report settles and its candidate passes historical-header
+						validation. Anyone may then execute the one report-bound operation against
+						the accepted price and native capacity; successful execution consumes both
+						capacities. Escalation deposits
 						are the exception: they require a fresh price when bond allowance is
-						outstanding, but they revert instead of entering the staged callback
-						queue. This price path is only for security backing against ETH
+						outstanding, but they revert instead of entering the staged oracle-operation
+						path. This price path is only for security backing against ETH
 						collateral.
 					</p>
 					<p id="oracle-economic-security-assumption">
 						<strong><code>ORACLE-A1</code> — always-available profitable arbitrager.</strong>
-						Security depends on profitable corrections receiving timely inclusion;
-						report liquidity does not collateralize downstream operation value. The
+						Security depends on profitable corrections receiving timely inclusion.
+						Report liquidity is not reimbursement collateral or a cross-token external-value
+						guarantee, while the coordinator does enforce one-operation native WETH/REP caps. The
 						<a href="./security-model.html#oracle-a1">normative security model</a>
 						owns the full assumption, excluded guarantee, and residual loss boundary.
 					</p>
@@ -5881,9 +5887,9 @@
 								Queued REP/ETH oracle operation flow
 							</title>
 							<desc id="oracle-flow-desc">
-								A solvency-sensitive operation either executes immediately with
-								a valid cached price or stages behind a pending OpenOracle
-								report.
+								A solvency-sensitive operation either executes with an accepted,
+								unconsumed price or stages behind an OpenOracle report whose settled
+								candidate must pass canonical-header validation.
 							</desc>
 							<defs>
 								<marker
@@ -5929,10 +5935,10 @@
 								rx="10"
 							></rect>
 							<text class="svg-label" x="470" y="88" text-anchor="middle">
-								Valid Price?
+								isPriceUsable?
 							</text>
 							<text class="svg-small" x="470" y="113" text-anchor="middle">
-								5-minute freshness window
+								valid timestamp + native capacity
 							</text>
 							<path
 								class="svg-line"
@@ -5970,7 +5976,7 @@
 								Stage Operation
 							</text>
 							<text class="svg-small" x="470" y="252" text-anchor="middle">
-								one callback replays up to 4
+								one operation owns the report slot
 							</text>
 							<path
 								class="svg-line"
@@ -5995,7 +6001,7 @@
 								sponsor funds
 							</text>
 							<text class="svg-small" x="793" y="271" text-anchor="middle">
-								dispute or settle
+									dispute; settlement stages candidate
 							</text>
 							<path
 								class="svg-line"
@@ -6011,29 +6017,28 @@
 								rx="10"
 							></rect>
 							<text class="svg-label" x="202" y="227" text-anchor="middle">
-								Consume or Replay
+								Prove + Execute
 							</text>
 							<text class="svg-small" x="202" y="247" text-anchor="middle">
-								expired, stale, failed local checks,
+								canonical headers; accepted capacity;
 							</text>
 							<text class="svg-small" x="202" y="263" text-anchor="middle">
-								or executed
+								one success consumes both capacities
 							</text>
 						</svg>
 							<p class="diagram-caption">
 								<span class="figure-label">REP/ETH Oracle Flow</span>The
-								coordinator is a queue plus cache. A fresh price can execute
-								immediately; a stale price moves operations into a
-								pending-settlement path whose callback batch is capped at four
-								operations but whose duration is unbounded under paid rolling
-								disputes.
+								coordinator separates timestamp validity from single-use operation
+								capacity. Settlement stages a candidate; a permissionless canonical-header
+								proof accepts or rejects it before at most one successful operation.
+								Paid rolling disputes can still extend the pending lane.
 							</p>
 					</figure>
 					<h3>Staging and Recovery</h3>
 					<p>
 						The <a href="./open-oracle-integration.html#placeholder-integration">OpenOracle integration</a>
-						owns request funding, staged-operation ordering, settlement
-						callbacks, rejected-price handling, recovery, report sizing, and
+						owns request funding, staged-operation ordering, candidate staging,
+						historical-header finalization, rejected-price handling, recovery, report sizing, and
 						current parameters. The application-level distinction is that a
 						fresh price executes an eligible operation immediately, while a
 						stale price routes it through that contestable path.

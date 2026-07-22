@@ -1,5 +1,19 @@
 import { concatHex, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, toHex, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_FEE_PERCENTAGE, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_MULTIPLIER, ORACLE_PROTOCOL_FEE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/shared/oracleInitialReport'
+import {
+	OPEN_ORACLE_SECURITY_MULTIPLIER_BPS,
+	ORACLE_ABSOLUTE_INCLUSION_PREMIUM_WEI,
+	ORACLE_ABSOLUTE_MINIMUM_WETH_REPORT,
+	ORACLE_CANDIDATE_PROOF_WINDOW_BLOCKS,
+	ORACLE_ECONOMIC_OPPORTUNITY_BLOCK_COUNT,
+	ORACLE_FEE_PERCENTAGE,
+	ORACLE_GAS_UNITS_FOR_ONE_DISPUTE,
+	ORACLE_GAS_UNITS_FOR_PRICE_FINALIZATION,
+	ORACLE_MINIMUM_PRIORITY_FEE_WEI,
+	ORACLE_MINIMUM_TOTAL_GAS_PRICE_WEI,
+	ORACLE_MULTIPLIER,
+	ORACLE_PROTOCOL_FEE,
+	ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE,
+} from '@zoltar/shared/oracleInitialReport'
 import { createApplyLinkedLibrariesHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from '@zoltar/shared/deploymentAddresses'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
 import { bigintToAddress } from './helpers.js'
@@ -33,7 +47,6 @@ const ORACLE_TIME_TYPE = true
 const ORACLE_TRACK_DISPUTES = true
 const ORACLE_PROTOCOL_FEE_RECIPIENT = ORACLE_FEE_SINK_ADDRESS
 const ORACLE_ESCALATION_HALT_MULTIPLIER_BPS = 100000n
-const ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS = 30000n
 const ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS = 1000n
 
 const getSecurityPoolUtilsAddress = () =>
@@ -96,6 +109,12 @@ export const getPriceOracleManagerAndOperatorQueuerFactoryByteCode = () =>
 				{ type: 'uint256' },
 				{ type: 'uint256' },
 				{ type: 'uint256' },
+				{ type: 'uint256' },
+				{ type: 'uint256' },
+				{ type: 'uint256' },
+				{ type: 'uint256' },
+				{ type: 'uint256' },
+				{ type: 'uint256' },
 			],
 			[
 				MAINNET_WETH_ADDRESS,
@@ -113,8 +132,14 @@ export const getPriceOracleManagerAndOperatorQueuerFactoryByteCode = () =>
 				ORACLE_TRACK_DISPUTES,
 				ORACLE_PROTOCOL_FEE_RECIPIENT,
 				ORACLE_ESCALATION_HALT_MULTIPLIER_BPS,
-				ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS,
 				ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS,
+				ORACLE_MINIMUM_TOTAL_GAS_PRICE_WEI,
+				ORACLE_MINIMUM_PRIORITY_FEE_WEI,
+				ORACLE_ABSOLUTE_INCLUSION_PREMIUM_WEI,
+				ORACLE_ABSOLUTE_MINIMUM_WETH_REPORT,
+				ORACLE_ECONOMIC_OPPORTUNITY_BLOCK_COUNT,
+				ORACLE_CANDIDATE_PROOF_WINDOW_BLOCKS,
+				ORACLE_GAS_UNITS_FOR_PRICE_FINALIZATION,
 			],
 		),
 	])

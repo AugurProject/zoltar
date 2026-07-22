@@ -183,6 +183,8 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 				return 'Submitting dispute'
 			case 'executeStagedOperation':
 				return 'Executing staged operation'
+			case 'finalizeSettledPrice':
+				return 'Finalizing price candidate'
 			case 'queueOperation':
 				return 'Queueing operation'
 			case 'requestPrice':
@@ -209,6 +211,8 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 				return 'Dispute submitted'
 			case 'executeStagedOperation':
 				return 'Staged operation executed'
+			case 'finalizeSettledPrice':
+				return 'Price candidate finalized'
 			case 'queueOperation':
 				return 'Operation queued'
 			case 'requestPrice':
@@ -235,6 +239,8 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 				return 'Dispute failed'
 			case 'executeStagedOperation':
 				return 'Staged operation failed'
+			case 'finalizeSettledPrice':
+				return 'Price candidate finalization failed'
 			case 'queueOperation':
 				return 'Queue operation failed'
 			case 'requestPrice':

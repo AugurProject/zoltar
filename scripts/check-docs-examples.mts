@@ -407,25 +407,25 @@ async function checkDynamicWethReportExample(): Promise<void> {
 	const example = await loadInteractiveExample('docs/open-oracle-integration.html', 'initial-report-estimator-example')
 
 	try {
-		assertEqual(example.output('estimatedMinimumWethReport'), '2.423076923076923077 WETH', 'dynamic report default minimum WETH')
-		assertEqual(example.output('selectedInitialWethReport'), '2.423076923076923077 WETH', 'dynamic report default selected WETH')
-		assertEqual(example.output('selectedEscalationHalt'), '24.230769230769230770 WETH', 'dynamic report default escalation halt')
-		assertEqual(example.output('disputeGasCost'), '0.009000 ETH', 'dynamic report default dispute gas cost')
-		assertEqual(example.output('bufferedGasCost'), '0.090000 ETH', 'dynamic report default buffered gas cost')
+		assertEqual(example.output('estimatedMinimumWethReport'), '2.853846153846153847 WETH', 'dynamic report default minimum WETH')
+		assertEqual(example.output('selectedInitialWethReport'), '2.853846153846153847 WETH', 'dynamic report default selected WETH')
+		assertEqual(example.output('selectedEscalationHalt'), '28.538461538461538470 WETH', 'dynamic report default escalation halt')
+		assertEqual(example.output('disputeGasCost'), '0.010600 ETH', 'dynamic report default dispute gas cost')
+		assertEqual(example.output('bufferedGasCost'), '0.106000 ETH', 'dynamic report default buffered gas cost')
 		assertEqual(example.output('correctionProfitFraction'), '3.7143%', 'dynamic report default correction profit fraction')
 		assertEqual(example.output('estimatorSafetyState'), 'fees below target error', 'dynamic report default safety state')
 
 		example.setInput('blockBaseFeeGwei', 60)
-		assertEqual(example.output('estimatedMinimumWethReport'), '4.846153846153846154 WETH', 'dynamic report minimum should scale linearly with base fee')
+		assertEqual(example.output('estimatedMinimumWethReport'), '5.276923076923076924 WETH', 'dynamic report minimum should include the priority floor and absolute premium')
 
 		example.setInput('requestedInitialWeth', 6)
-		assertEqual(example.output('estimatedMinimumWethReport'), '4.846153846153846154 WETH', 'caller-selected WETH should not change the computed minimum')
+		assertEqual(example.output('estimatedMinimumWethReport'), '5.276923076923076924 WETH', 'caller-selected WETH should not change the computed minimum')
 		assertEqual(example.output('selectedInitialWethReport'), '6.000000000000000000 WETH', 'caller can select WETH above the computed minimum')
 		assertEqual(example.output('selectedEscalationHalt'), '60.000000000000000000 WETH', 'escalation halt should scale from selected initial WETH')
 
 		example.setInput('blockBaseFeeGwei', 0)
 		example.setInput('requestedInitialWeth', 0)
-		assertEqual(example.output('estimatedMinimumWethReport'), '0.000000000000000001 WETH', 'zero base fee should retain the OpenOracle one-wei minimum')
+		assertEqual(example.output('estimatedMinimumWethReport'), '1.076923076923076924 WETH', 'zero base fee should retain meaningful configured inclusion-cost security')
 
 		example.setInput('blockBaseFeeGwei', 30)
 		example.setInput('openOracleProtocolFee', 5)

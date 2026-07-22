@@ -1791,14 +1791,13 @@
 				<div class="callout" id="oracle-accepted-non-invariants">
 					<p>
 						<strong>Accepted oracle design properties—not security findings.</strong>
-						Placeholder uses profitable correction, not operation-value
-						collateralization. Report liquidity is intentionally not required to
-						equal or bound the value of withdrawals, liquidations, allowance
-						changes, pool assets, or cumulative operations that use an accepted
-						price. The deployment assumption is <code>ORACLE-A1</code>, cataloged
-						here as <code>ORA-10</code>: at least one
-						adequately capitalized participant takes every profitable correction
-						and obtains inclusion before settlement.
+						Placeholder uses profitable correction, not reimbursement collateral
+						or a cross-token external-value guarantee. The coordinator nevertheless
+						requires historical-header evidence and bounds one successful operation
+						by separate native WETH and REP correction-profit capacities. The
+						normative deployment assumption and review classification live in
+						<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a>;
+						this catalog records the enforceable contract properties.
 					</p>
 					<p>
 						The protocol also makes no bounded-liveness claim for a pending
@@ -1817,8 +1816,9 @@
 						report accounting, dispute access, and the stated inclusion
 						assumption. A concrete bypass of the required position or fee,
 						capital reuse, invalid deadline transition, or cache-conformance
-						failure remains a finding. The mere absence of a report-notional
-						bound or absolute pending-report duration does not. See the
+						failure remains a finding. The absence of reimbursement collateral,
+						a cross-token external-value guarantee, or an absolute pending-report
+						duration does not remove the native one-operation bounds. See the
 						<a href="./security-model.html#accepted-design-properties">normative review classification</a>.
 					</p>
 				</div>
@@ -1832,7 +1832,7 @@
 								callback, and its report identifier must equal the
 								coordinator's pending report.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> A callback from another contract or for an older report ID cannot update the cached REP/ETH price.</p>
+							<p class="invariant-example"><strong>Example:</strong> A callback from another contract or for an older report ID cannot stage a settled-price candidate.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
@@ -1861,7 +1861,7 @@
 								<div><dt>Primary evidence</dt><dd>
 										<a
 										href="../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
-										><code>openOracleCallback</code></a
+										><code>finalizeSettledPrice</code></a
 										>,
 										<a href="./open-oracle-integration.html">ratio direction</a>
 								</dd></div>
@@ -1873,10 +1873,11 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								A cached price is usable only while nonzero and strictly
-								younger than the five-minute validity window.
+								<code>isPriceValid()</code> is a timestamp-only check: the cached
+								price and settlement timestamp must be nonzero, and the settlement
+								must be strictly younger than the five-minute validity window.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> A price settled exactly five minutes ago is stale; one settled four minutes and 59 seconds ago remains usable.</p>
+							<p class="invariant-example"><strong>Example:</strong> A price settled exactly five minutes ago is stale; one settled four minutes and 59 seconds ago remains timestamp-valid. Operation usability additionally requires unconsumed capacity under <a href="#ora-09"><code>ORA-09</code></a>.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
@@ -1958,6 +1959,24 @@
 						</div>
 					</details>
 					<details class="invariant-entry">
+						<summary><code>ORA-07</code><span class="invariant-title">Candidate-only settlement and canonical proof</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">
+								OpenOracle settlement and recovery may only stage a candidate. Price
+								activation requires recent canonical headers for the configured final
+								consecutive dispute-opportunity blocks and their immediately following
+								first closed block, authenticated with <code>blockhash</code>.
+							</div>
+							<p class="invariant-example"><strong>Example:</strong> A forged, nonconsecutive, stale, or wrong-boundary header proof reverts without consuming the pending candidate.</p>
+							<dl class="invariant-metadata">
+								<div><dt>Type</dt><dd>Safety</dd></div>
+								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
+								<div><dt>Primary evidence</dt><dd><a href="../solidity/contracts/peripherals/OpenOraclePriceCandidateVerifier.sol"><code>OpenOraclePriceCandidateVerifier</code></a> and <a href="../solidity/contracts/peripherals/ExecutionBlockHeaderProof.sol"><code>ExecutionBlockHeaderProof</code></a></dd></div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry">
 						<summary><code>ORA-08</code><span class="invariant-title">Dispute and settlement boundary</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1976,6 +1995,24 @@
 										><code>settle</code> and dispute validation</a
 										>
 								</dd></div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="ora-09">
+						<summary><code>ORA-09</code><span class="invariant-title">Single-use native operation capacities</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">
+								Allowance increases and liquidations cannot exceed accepted WETH
+								capacity; actual REP withdrawals cannot exceed accepted REP capacity.
+								One successful positive-exposure operation zeros both capacities, so a
+								timestamp-valid price cannot secure another vault operation.
+							</div>
+							<p class="invariant-example"><strong>Example:</strong> After one bounded allowance increase succeeds, <code>isPriceValid()</code> can remain true for resolution checks while <code>isPriceUsable()</code> is false for another withdrawal or liquidation.</p>
+							<dl class="invariant-metadata">
+								<div><dt>Type</dt><dd>Safety</dd></div>
+								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
+								<div><dt>Primary evidence</dt><dd><a href="../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"><code>_isOperationWithinReportSecurity</code> and <code>_consumeAcceptedPrice</code></a></dd></div>
 							</dl>
 						</div>
 					</details>

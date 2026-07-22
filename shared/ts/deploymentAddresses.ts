@@ -51,6 +51,8 @@ type InfraContractAddresses = {
 	escalationGameProofVerifier: Address
 	multicall3: Address
 	openOracle: Address
+	openOraclePriceCandidateVerifier: Address
+	priceOracleCoordinatorDeploymentWorker: Address
 	priceOracleManagerAndOperatorQueuerFactory: Address
 	scalarOutcomes: Address
 	securityPoolFactory: Address
@@ -116,10 +118,20 @@ export function createInfraContractAddressHelper(config: InfraContractAddressCon
 			from: addresses.escalationGameFactory,
 			nonce: 1n,
 		})
+		const priceOracleCoordinatorDeploymentWorker = getCreateAddress({
+			from: addresses.priceOracleManagerAndOperatorQueuerFactory,
+			nonce: 1n,
+		})
+		const openOraclePriceCandidateVerifier = getCreateAddress({
+			from: addresses.priceOracleManagerAndOperatorQueuerFactory,
+			nonce: 2n,
+		})
 
 		return {
 			...addresses,
 			escalationGameProofVerifier,
+			openOraclePriceCandidateVerifier,
+			priceOracleCoordinatorDeploymentWorker,
 			securityPoolFactory: getProxyDeployerCreate2Address(
 				config.proxyDeployerAddress,
 				config.zeroSalt,

@@ -1101,7 +1101,7 @@ describe('Peripherals: truth auction', () => {
 			await mockWindow.addStateOverrides({
 				[childRepToken]: {
 					stateDiff: {
-						[clientChildRepBalanceSlot]: repDeposit,
+						[clientChildRepBalanceSlot]: repDeposit * 100n,
 					},
 				},
 			})
@@ -1575,7 +1575,7 @@ describe('Peripherals: truth auction', () => {
 				await mockWindow.addStateOverrides({
 					[childRepToken]: {
 						stateDiff: {
-							[liquidatorChildRepBalanceSlot]: repDeposit,
+							[liquidatorChildRepBalanceSlot]: repDeposit * 1_000_000n,
 						},
 					},
 				})

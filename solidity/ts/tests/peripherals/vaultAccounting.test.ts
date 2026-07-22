@@ -625,7 +625,7 @@ describe('Peripherals: vault accounting', () => {
 	test('oracle-staged collateral operations are rejected once escalation resolves', async () => {
 		await finalizeQuestionAsYesWithoutFork()
 
-		await assert.rejects(requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, 1n), /question already resolved, so staged operations are unavailable/)
+		await assert.rejects(requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, 1n), /Question already resolved/)
 	})
 
 	test('oracle-staged security bond allowance updates can clear the allowance to zero', async () => {

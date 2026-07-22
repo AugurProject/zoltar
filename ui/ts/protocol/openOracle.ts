@@ -16,6 +16,8 @@ import { hasTimestampAndNumber, requireStagedOperationTupleArray } from './helpe
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from './core.js'
 import { getInfraContractAddresses, getOpenOracleAddress } from './deploymentHelpers.js'
 import { loadOpenOracleEventState, loadOpenOracleEventStates } from './openOracleState.js'
+import { ORACLE_PERCENTAGE_PRECISION } from '@zoltar/shared/oracleInitialReport'
+import { encodeExecutionBlockHeaderRlp } from '@zoltar/shared/executionBlockHeader'
 
 type CoordinatorInitialReportClient = Parameters<typeof loadOpenOracleInitialReportPrice>[0]
 const OPEN_ORACLE_PRICE_UNITS = 30n
@@ -69,6 +71,28 @@ function getStagedOracleExecutionResult(receipt: TransactionReceipt, managerAddr
 	return undefined
 }
 
+function getPriceCandidateFinalizationOutcome(receipt: TransactionReceipt, managerAddress: Address) {
+	for (const log of receipt.logs) {
+		if (!sameAddress(log.address, managerAddress)) continue
+		try {
+			const decodedLog = decodeEventLog({
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				data: log.data,
+				topics: log.topics,
+			})
+			if (decodedLog.eventName === 'PriceCandidateFinalized') {
+				return {
+					accepted: decodedLog.args.accepted,
+					rejectionReason: decodedLog.args.rejectionReason === '' ? undefined : decodedLog.args.rejectionReason,
+				}
+			}
+		} catch (error) {
+			if (!isIgnorableLogDecodeError(error)) throw error
+		}
+	}
+	throw new Error('Price candidate finalization receipt is missing its outcome event')
+}
+
 function getStagedOracleQueuedResult(receipt: TransactionReceipt, managerAddress: Address, expectedOperation: OracleQueueOperation): StagedOracleQueuedResult | undefined {
 	for (const log of receipt.logs) {
 		if (!sameAddress(log.address, managerAddress)) continue
@@ -109,8 +133,20 @@ function requireBigintArray(value: unknown, context: string) {
 	return result
 }
 
+function requireSettledPriceCandidate(value: unknown) {
+	if (!Array.isArray(value) || value.length !== 7) throw new Error('Unexpected settled price candidate response')
+	const reportId = requireBigintValue(value[0], 'settled price candidate report id')
+	const amount1 = requireBigintValue(value[1], 'settled price candidate amount1')
+	const amount2 = requireBigintValue(value[2], 'settled price candidate amount2')
+	const reportTimestamp = requireBigintValue(value[3], 'settled price candidate report timestamp')
+	const settlementTimestamp = requireBigintValue(value[4], 'settled price candidate settlement timestamp')
+	const lastReportBlock = requireBigintValue(value[5], 'settled price candidate last report block')
+	const settlementTime = requireBigintValue(value[6], 'settled price candidate settlement time')
+	return { amount1, amount2, lastReportBlock, reportId, reportTimestamp, settlementTime, settlementTimestamp }
+}
+
 export async function loadOracleManagerDetails(client: ReadClient, managerAddress: Address, openOracleAddress?: Address): Promise<OracleManagerDetails> {
-	const [lastPrice, pendingOperationSlotId, pendingSettlementOperationIds, pendingSettlementQueueCapacity, pendingReportId, queuedOperationEthCost, requestPriceEthCost, rawIsPriceValid, lastSettlementTimestamp, activeStagedOperationCount] = await readRequiredMulticall(client, [
+	const [lastPrice, pendingOperationSlotId, pendingSettlementOperationIds, pendingSettlementQueueCapacity, pendingReportId, candidateReportId, queuedOperationEthCost, requestPriceEthCost, rawIsPriceValid, lastSettlementTimestamp, activeStagedOperationCount] = await readRequiredMulticall(client, [
 		{
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'lastPrice',
@@ -143,6 +179,12 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		},
 		{
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'candidateReportId',
+			address: managerAddress,
+			args: [],
+		},
+		{
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'getQueuedOperationEthCost',
 			address: managerAddress,
 			args: [],
@@ -155,7 +197,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		},
 		{
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'isPriceValid',
+			functionName: 'isPriceUsable',
 			address: managerAddress,
 			args: [],
 		},
@@ -244,6 +286,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 	}
 	return {
 		activeStagedOperationCount,
+		candidateReportId,
 		callbackStateHash,
 		exactToken1Report,
 		isPriceValid: lastSettlementTimestamp > 0n && rawIsPriceValid,
@@ -586,7 +629,7 @@ async function loadBufferedOracleRequestEthCost(client: WriteClient, managerAddr
 }
 
 export async function loadOracleManagerQueueOperationEthValue(client: Pick<WriteClient, 'readContract'>, managerAddress: Address) {
-	const [lastPrice, pendingSettlementOperationIds, pendingSettlementQueueCapacity, pendingReportId, queuedOperationEthCost, requestPriceEthCost, rawIsPriceValid] = await Promise.all([
+	const [lastPrice, pendingSettlementOperationIds, pendingSettlementQueueCapacity, pendingReportId, candidateReportId, queuedOperationEthCost, requestPriceEthCost, rawIsPriceValid] = await Promise.all([
 		client.readContract({
 			address: managerAddress,
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
@@ -614,6 +657,12 @@ export async function loadOracleManagerQueueOperationEthValue(client: Pick<Write
 		client.readContract({
 			address: managerAddress,
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'candidateReportId',
+			args: [],
+		}),
+		client.readContract({
+			address: managerAddress,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'getQueuedOperationEthCost',
 			args: [],
 		}),
@@ -626,7 +675,7 @@ export async function loadOracleManagerQueueOperationEthValue(client: Pick<Write
 		client.readContract({
 			address: managerAddress,
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'isPriceValid',
+			functionName: 'isPriceUsable',
 			args: [],
 		}),
 	])
@@ -634,6 +683,7 @@ export async function loadOracleManagerQueueOperationEthValue(client: Pick<Write
 	const normalizedRequestPriceEthCost = requireBigintValue(requestPriceEthCost, 'request price ETH cost')
 	const managerDetails: OracleManagerDetails = {
 		callbackStateHash: undefined,
+		candidateReportId,
 		exactToken1Report: undefined,
 		isPriceValid: rawIsPriceValid,
 		lastPrice,
@@ -738,7 +788,7 @@ async function assertCoordinatorRequestPriceAllowed(client: Pick<WriteClient, 'r
 		client.readContract({
 			address: managerAddress,
 			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'isPriceValid',
+			functionName: 'isPriceUsable',
 			args: [],
 		}),
 		client.readContract({
@@ -773,6 +823,19 @@ async function fundCoordinatorInitialReport(client: WriteClient, managerAddress:
 	return fundingRequirement
 }
 
+async function getOperationSecuredInitialWeth(client: Pick<ReadClient, 'readContract'>, managerAddress: Address, operation: OracleQueueOperation, amount: bigint, proposedRepPerEthPrice: bigint, requestedInitialWeth: bigint) {
+	const [targetPriceErrorForDispute, protocolFee, reporterFee] = await Promise.all([
+		client.readContract({ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'targetPriceErrorForDispute', address: managerAddress, args: [] }),
+		client.readContract({ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'protocolFee', address: managerAddress, args: [] }),
+		client.readContract({ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'feePercentage', address: managerAddress, args: [] }),
+	])
+	const correctionProfitNumerator = targetPriceErrorForDispute - BigInt(protocolFee + reporterFee)
+	if (correctionProfitNumerator <= 0n) throw new Error('Coordinator oracle fees eliminate the configured correction profit')
+	const reportAmountForExposure = (amount * (ORACLE_PERCENTAGE_PRECISION + targetPriceErrorForDispute) + correctionProfitNumerator - 1n) / correctionProfitNumerator
+	const operationMinimumWeth = operation === 'withdrawRep' ? (reportAmountForExposure * COORDINATOR_PRICE_PRECISION + proposedRepPerEthPrice - 1n) / proposedRepPerEthPrice : reportAmountForExposure
+	return operationMinimumWeth > requestedInitialWeth ? operationMinimumWeth : requestedInitialWeth
+}
+
 export async function requestOraclePrice(client: WriteClient, managerAddress: Address, proposedRepPerEthPrice?: bigint, requestedInitialWeth = 0n) {
 	await assertCoordinatorRequestPriceAllowed(client, managerAddress)
 	const resolvedInitialReportPrice = proposedRepPerEthPrice ?? (await getCoordinatorInitialReportPrice(client, managerAddress))
@@ -805,6 +868,82 @@ export async function executeOracleManagerStagedOperation(client: WriteContractC
 		...(stagedExecution === undefined ? {} : { stagedExecution }),
 	} satisfies OpenOracleActionResult
 }
+
+export async function finalizeCoordinatorPriceCandidate(client: WriteContractClient, managerAddress: Address, opportunityHeaders: readonly Hex[], firstClosedHeader: Hex) {
+	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => ({
+		address: managerAddress,
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+		functionName: 'finalizeSettledPrice',
+		args: [[...opportunityHeaders], firstClosedHeader],
+		gas: 5_000_000n,
+	}))
+	const outcome = getPriceCandidateFinalizationOutcome(receipt, managerAddress)
+	return {
+		action: 'finalizeSettledPrice',
+		hash,
+		priceCandidateAccepted: outcome.accepted,
+		priceCandidateRejectionReason: outcome.rejectionReason,
+	} satisfies OpenOracleActionResult
+}
+
+async function getRawExecutionBlock(client: Pick<ReadClient, 'request'>, blockNumber: bigint) {
+	return await client.request({
+		method: 'eth_getBlockByNumber',
+		params: [`0x${blockNumber.toString(16)}`, false],
+	})
+}
+
+async function buildCoordinatorPriceCandidateProof(client: Pick<ReadClient, 'getBlock' | 'getBlockNumber' | 'readContract' | 'request'>, managerAddress: Address) {
+	const [rawCandidate, opportunityBlockCount, latestBlockNumber] = await Promise.all([
+		client.readContract({
+			address: managerAddress,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'settledPriceCandidate',
+			args: [],
+		}),
+		client.readContract({
+			address: managerAddress,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'economicOpportunityBlockCount',
+			args: [],
+		}),
+		client.getBlockNumber(),
+	])
+	const candidate = requireSettledPriceCandidate(rawCandidate)
+	if (candidate.reportId === 0n) throw new Error('No settled price candidate is awaiting finalization')
+	const requiredOpportunityBlocks = requireBigintValue(opportunityBlockCount, 'economic opportunity block count')
+	if (requiredOpportunityBlocks === 0n) throw new Error('Economic opportunity block count is zero')
+	const disputeDeadline = candidate.reportTimestamp + candidate.settlementTime
+	const oldestAvailableBlock = latestBlockNumber > 255n ? latestBlockNumber - 255n : 0n
+	let firstClosedBlockNumber: bigint | undefined
+	for (let blockNumber = latestBlockNumber; blockNumber > oldestAvailableBlock && blockNumber > candidate.lastReportBlock; blockNumber -= 1n) {
+		const [currentBlock, previousBlock] = await Promise.all([client.getBlock({ blockNumber }), client.getBlock({ blockNumber: blockNumber - 1n })])
+		if (currentBlock.timestamp >= disputeDeadline && previousBlock.timestamp < disputeDeadline) {
+			firstClosedBlockNumber = blockNumber
+			break
+		}
+	}
+	if (firstClosedBlockNumber === undefined) throw new Error('The final dispute-opportunity boundary is unavailable in recent block history')
+	if (firstClosedBlockNumber < requiredOpportunityBlocks) throw new Error('The dispute-opportunity proof predates genesis')
+	const firstOpportunityBlockNumber = firstClosedBlockNumber - requiredOpportunityBlocks
+	if (firstOpportunityBlockNumber < candidate.lastReportBlock) throw new Error('Not enough post-report blocks were available before the dispute deadline')
+	const opportunityBlockNumbers = Array.from({ length: Number(requiredOpportunityBlocks) }, (_, index) => firstOpportunityBlockNumber + BigInt(index))
+	const [rawOpportunityBlocks, rawFirstClosedBlock] = await Promise.all([Promise.all(opportunityBlockNumbers.map(async blockNumber => await getRawExecutionBlock(client, blockNumber))), getRawExecutionBlock(client, firstClosedBlockNumber)])
+	return {
+		firstClosedHeader: encodeExecutionBlockHeaderRlp(rawFirstClosedBlock, firstClosedBlockNumber),
+		opportunityHeaders: rawOpportunityBlocks.map((rawBlock, index) => {
+			const blockNumber = opportunityBlockNumbers[index]
+			if (blockNumber === undefined) throw new Error('Missing opportunity block number')
+			return encodeExecutionBlockHeaderRlp(rawBlock, blockNumber)
+		}),
+	}
+}
+
+export async function finalizeCoordinatorPriceCandidateFromChain(readClient: ReadClient, writeClient: WriteClient, managerAddress: Address) {
+	const proof = await buildCoordinatorPriceCandidateProof(readClient, managerAddress)
+	return await finalizeCoordinatorPriceCandidate(writeClient, managerAddress, proof.opportunityHeaders, proof.firstClosedHeader)
+}
+
 export async function wrapWeth(client: WriteClient, amount: bigint) {
 	const hash = await writeContractAndWait(client, () => ({
 		address: getWethAddress(),
@@ -895,14 +1034,15 @@ export async function disputeOracleReport(client: WriteClient, openOracleAddress
 export async function queueSecurityPoolLiquidation(client: WriteClient, managerAddress: Address, targetVault: Address, amount: bigint, validForSeconds: bigint, requestedInitialWeth = 0n) {
 	const queueOperationEthValue = await loadOracleManagerQueueOperationEthValue(client, managerAddress)
 	const proposedRepPerEthPrice = queueOperationEthValue > 0n ? await getCoordinatorInitialReportPrice(client, managerAddress) : 0n
+	const securedInitialWeth = queueOperationEthValue > 0n ? await getOperationSecuredInitialWeth(client, managerAddress, 'liquidation', amount, proposedRepPerEthPrice, requestedInitialWeth) : requestedInitialWeth
 	if (queueOperationEthValue > 0n) {
-		await fundCoordinatorInitialReport(client, managerAddress, proposedRepPerEthPrice, requestedInitialWeth)
+		await fundCoordinatorInitialReport(client, managerAddress, proposedRepPerEthPrice, securedInitialWeth)
 	}
 	const callParams = {
 		address: managerAddress,
 		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'requestPriceIfNeededAndStageOperation',
-		args: [encodeOracleQueueOperation('liquidation'), targetVault, amount, validForSeconds, proposedRepPerEthPrice, requestedInitialWeth],
+		args: [encodeOracleQueueOperation('liquidation'), targetVault, amount, validForSeconds, proposedRepPerEthPrice, securedInitialWeth],
 		value: queueOperationEthValue,
 	}
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)
@@ -917,14 +1057,15 @@ export async function queueSecurityPoolLiquidation(client: WriteClient, managerA
 export async function queueOracleManagerOperation(client: WriteClient, managerAddress: Address, operation: OracleQueueOperation, targetVault: Address, amount: bigint, validForSeconds: bigint, proposedRepPerEthPrice?: bigint, requestedInitialWeth = 0n) {
 	const queueOperationEthValue = await loadOracleManagerQueueOperationEthValue(client, managerAddress)
 	const resolvedInitialReportPrice = queueOperationEthValue > 0n ? (proposedRepPerEthPrice ?? (await getCoordinatorInitialReportPrice(client, managerAddress))) : (proposedRepPerEthPrice ?? 0n)
+	const securedInitialWeth = queueOperationEthValue > 0n ? await getOperationSecuredInitialWeth(client, managerAddress, operation, amount, resolvedInitialReportPrice, requestedInitialWeth) : requestedInitialWeth
 	if (queueOperationEthValue > 0n) {
-		await fundCoordinatorInitialReport(client, managerAddress, resolvedInitialReportPrice, requestedInitialWeth)
+		await fundCoordinatorInitialReport(client, managerAddress, resolvedInitialReportPrice, securedInitialWeth)
 	}
 	const callParams = {
 		address: managerAddress,
 		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'requestPriceIfNeededAndStageOperation',
-		args: [encodeOracleQueueOperation(operation), targetVault, amount, validForSeconds, resolvedInitialReportPrice, requestedInitialWeth],
+		args: [encodeOracleQueueOperation(operation), targetVault, amount, validForSeconds, resolvedInitialReportPrice, securedInitialWeth],
 		value: queueOperationEthValue,
 	}
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)

@@ -195,6 +195,7 @@ export type SecurityVaultActionResult = ActionResult & {
 
 export type OracleManagerDetails = {
 	activeStagedOperationCount?: bigint
+	candidateReportId?: bigint
 	callbackStateHash: Hex | undefined
 	exactToken1Report: bigint | undefined
 	isPriceValid: boolean
@@ -215,11 +216,12 @@ export type OracleManagerDetails = {
 	token2: Address | undefined
 }
 
+type OpenOracleNonFinalizationAction = 'approveToken1' | 'approveToken2' | 'createReportInstance' | 'dispute' | 'executeStagedOperation' | 'queueOperation' | 'requestPrice' | 'settle' | 'withdrawBalance' | 'wrapWeth'
+
 export type OpenOracleActionResult = ActionResult & {
-	action: 'approveToken1' | 'approveToken2' | 'createReportInstance' | 'dispute' | 'executeStagedOperation' | 'queueOperation' | 'requestPrice' | 'settle' | 'withdrawBalance' | 'wrapWeth'
 	queuedOperation?: StagedOracleQueuedResult
 	stagedExecution?: StagedOracleExecutionResult
-}
+} & ({ action: 'finalizeSettledPrice'; priceCandidateAccepted: boolean; priceCandidateRejectionReason: string | undefined } | { action: OpenOracleNonFinalizationAction })
 
 export type OpenOracleWithdrawableBalances = {
 	eth: bigint

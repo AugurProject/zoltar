@@ -27,6 +27,10 @@
 			"types": "./ts/ethereum.ts",
 			"default": "./js/ethereum.js"
 		},
+		"./executionBlockHeader": {
+			"types": "./ts/executionBlockHeader.ts",
+			"default": "./js/executionBlockHeader.js"
+		},
 		"./protocolConfig": {
 			"types": "./ts/protocolConfig.ts",
 			"default": "./js/protocolConfig.js"

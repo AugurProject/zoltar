@@ -1259,7 +1259,7 @@ describe('Peripherals invariant harness', () => {
 		await assert.rejects(redeemRep(client, yesSecurityPool, client.account.address), /No redeemable REP/)
 	})
 
-	test('oracle-staged operations cannot be overwritten or executed twice', async () => {
+	test('oracle-staged operations cannot be overwritten or share one report-security budget', async () => {
 		const priceOracle = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, securityMultiplier).priceOracleManagerAndOperatorQueuer
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
 		const queuedOperationEthCost = await getQueuedOperationEthCost(client, priceOracle)
@@ -1276,8 +1276,8 @@ describe('Peripherals invariant harness', () => {
 		}
 
 		strictEqualTypeSafe(await getStagedOperationCounter(client, priceOracle), 5n, 'queued operations should use append-only ids')
-		strictEqualTypeSafe(await getPendingSettlementOperationCount(client, priceOracle), 4n, 'oracle settlement should auto-execute only the bounded pending list')
-		assert.deepStrictEqual(Array.from(await getPendingSettlementOperationIds(client, priceOracle)), [1n, 2n, 3n, 4n], 'pending settlement operations should remain in queue order')
+		strictEqualTypeSafe(await getPendingSettlementOperationCount(client, priceOracle), 1n, 'only one operation may consume a report-security budget')
+		assert.deepStrictEqual(Array.from(await getPendingSettlementOperationIds(client, priceOracle)), [1n], 'the first staged operation should own the pending settlement slot')
 		strictEqualTypeSafe(await getActiveStagedOperationCount(client, priceOracle), 5n, 'active operation count should include pending and manual operations')
 		const [activeOperationIds, activeOperations] = await getActiveStagedOperations(client, priceOracle, 0n, 5n)
 		assert.deepStrictEqual(Array.from(activeOperationIds), [5n, 4n, 3n, 2n, 1n], 'active staged operations should page newest first')
@@ -1286,20 +1286,19 @@ describe('Peripherals invariant harness', () => {
 
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
 
-		for (const consumedOperationId of [1n, 2n, 3n, 4n]) {
-			const stagedOperation = await getStagedOperation(client, priceOracle, consumedOperationId)
-			strictEqualTypeSafe(stagedOperation[1], addressString(0x0n), `operation ${consumedOperationId.toString()} should be consumed exactly once`)
+		const consumedOperation = await getStagedOperation(client, priceOracle, 1n)
+		strictEqualTypeSafe(consumedOperation[1], addressString(0x0n), 'the report-bound operation should be consumed exactly once')
+		for (const unconsumedOperationId of [2n, 3n, 4n, 5n]) {
+			const stagedOperation = await getStagedOperation(client, priceOracle, unconsumedOperationId)
+			strictEqualTypeSafe(stagedOperation[1], client.account.address, `operation ${unconsumedOperationId.toString()} should remain staged after the report budget is consumed`)
 		}
-		const overflowOperation = await getStagedOperation(client, priceOracle, 5n)
-		strictEqualTypeSafe(overflowOperation[1], client.account.address, 'manual overflow operation should remain active after settlement')
-		strictEqualTypeSafe(await getActiveStagedOperationCount(client, priceOracle), 1n, 'only the overflow operation should remain active after settlement')
+		strictEqualTypeSafe(await getActiveStagedOperationCount(client, priceOracle), 4n, 'the operations that do not own the report budget should remain active')
 
-		await executeStagedOperation(client, priceOracle, 5n)
+		await assert.rejects(executeStagedOperation(client, priceOracle, 5n), /Fresh oracle price required/i)
 		const finalVault = await getSecurityVault(client, context.securityPool, client.account.address)
-		strictEqualTypeSafe(finalVault.securityBondAllowance, allowances[4], 'manual overflow execution should apply the final staged allowance')
-		strictEqualTypeSafe(await getActiveStagedOperationCount(client, priceOracle), 0n, 'manual execution should consume the final active operation')
+		strictEqualTypeSafe(finalVault.securityBondAllowance, allowances[0], 'the first operation should be the only allowance update backed by this report')
+		strictEqualTypeSafe(await getActiveStagedOperationCount(client, priceOracle), 4n, 'rejected execution must not consume an operation without a usable price')
 		strictEqualTypeSafe(await getStagedOperationCounter(client, priceOracle), 5n, 'executing staged operations must not rewrite the append-only counter')
-		await assert.rejects(executeStagedOperation(client, priceOracle, 5n), /staged operation does not exist/i)
 	})
 
 	test('active vault pagination stays unique under deposit, allowance, and exit churn', async () => {

@@ -290,10 +290,12 @@ export function createLiquidationWarningPresentation(result: SecurityPoolOvervie
 	return withWarning(createLiquidationSuccessPresentation(result), message)
 }
 
-export function createPoolOracleTransactionIntent(actionName: 'executeStagedOperation' | 'requestPrice') {
+export function createPoolOracleTransactionIntent(actionName: 'executeStagedOperation' | 'finalizeSettledPrice' | 'requestPrice') {
 	let submittedTitle: string = transactionCopy.executingStagedOperation
 	if (actionName === 'requestPrice') {
 		submittedTitle = transactionCopy.requestingPrice
+	} else if (actionName === 'finalizeSettledPrice') {
+		submittedTitle = transactionCopy.finalizingPriceCandidate
 	}
 	return buildIntent({
 		action: actionName,
@@ -304,13 +306,30 @@ export function createPoolOracleTransactionIntent(actionName: 'executeStagedOper
 
 export function createPoolOracleSuccessPresentation(result: OpenOracleActionResult) {
 	let title: string = transactionCopy.stagedOperationExecuted
+	let detail: string | undefined
+	let tone: 'success' | 'warning' = 'success'
 	if (result.action === 'requestPrice') {
 		title = transactionCopy.priceRequested
+	} else if (result.action === 'finalizeSettledPrice') {
+		if (result.priceCandidateAccepted === true) {
+			title = transactionCopy.priceCandidateAccepted
+		} else {
+			const expired = result.priceCandidateRejectionReason === 'Candidate price expired'
+			if (expired) {
+				title = transactionCopy.priceCandidateExpired
+				detail = transactionCopy.priceCandidateExpiredDetail
+			} else {
+				title = transactionCopy.priceCandidateRejected
+				detail = result.priceCandidateRejectionReason === 'Invalid candidate price' ? transactionCopy.priceCandidateInvalidDetail : transactionCopy.priceCandidateRejectedDetail
+			}
+			tone = 'warning'
+		}
 	}
 	return buildPresentation({
+		detail,
 		hash: result.hash,
 		title,
-		tone: 'success',
+		tone,
 	})
 }
 

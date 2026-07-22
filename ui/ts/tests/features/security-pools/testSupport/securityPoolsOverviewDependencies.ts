@@ -17,7 +17,7 @@ export function createSecurityPoolsOverviewDependencies(overrides: Partial<UseSe
 		pendingOperation: undefined,
 		pendingOperationSlotId: 0n,
 		pendingSettlementOperationIds: [],
-		pendingSettlementQueueCapacity: 4n,
+		pendingSettlementQueueCapacity: 1n,
 		pendingReportId: 0n,
 		priceValidUntilTimestamp: undefined,
 		queuedOperationEthCost: 0n,

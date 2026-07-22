@@ -3,6 +3,7 @@ import { beforeEach, describe, setDefaultTimeout, test } from 'bun:test'
 import assert from '../testSupport/simulator/utils/assert'
 import { encodeDeployData, encodeFunctionData, type Address, type Hash, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
 import { privateKeyToAccount } from '@zoltar/shared/ethereum'
+import { ORACLE_ABSOLUTE_INCLUSION_PREMIUM_WEI, ORACLE_ABSOLUTE_MINIMUM_WETH_REPORT, ORACLE_CANDIDATE_PROOF_WINDOW_BLOCKS, ORACLE_ECONOMIC_OPPORTUNITY_BLOCK_COUNT, ORACLE_GAS_UNITS_FOR_PRICE_FINALIZATION, ORACLE_MINIMUM_PRIORITY_FEE_WEI, ORACLE_MINIMUM_TOTAL_GAS_PRICE_WEI } from '@zoltar/shared/oracleInitialReport'
 import { knownSourceMapCoverageGaps } from '../coverage/sourceMapCoverageGaps'
 import {
 	collectBytecodeCoverageForCall,
@@ -986,7 +987,31 @@ describe('Solidity bytecode coverage helpers', () => {
 			encodeDeployData({
 				abi: peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.abi,
 				bytecode: applyLibraries(peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object),
-				args: [zeroAddress, 100000n, 1000000, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, 480, 0, 100000, 10000, 115, true, true, client.account.address, 100000n, 30000n, 1000n],
+				args: [
+					zeroAddress,
+					100000n,
+					1000000,
+					ORACLE_GAS_UNITS_FOR_ONE_DISPUTE,
+					ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE,
+					OPEN_ORACLE_SECURITY_MULTIPLIER_BPS,
+					480,
+					0,
+					100000,
+					10000,
+					115,
+					true,
+					true,
+					client.account.address,
+					100000n,
+					1000n,
+					ORACLE_MINIMUM_TOTAL_GAS_PRICE_WEI,
+					ORACLE_MINIMUM_PRIORITY_FEE_WEI,
+					ORACLE_ABSOLUTE_INCLUSION_PREMIUM_WEI,
+					ORACLE_ABSOLUTE_MINIMUM_WETH_REPORT,
+					ORACLE_ECONOMIC_OPPORTUNITY_BLOCK_COUNT,
+					ORACLE_CANDIDATE_PROOF_WINDOW_BLOCKS,
+					ORACLE_GAS_UNITS_FOR_PRICE_FINALIZATION,
+				],
 			}),
 		)
 		await transact(

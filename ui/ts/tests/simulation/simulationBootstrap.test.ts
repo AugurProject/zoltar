@@ -417,7 +417,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 					: undefined,
 				pendingOperationSlotId: pendingOperation === undefined ? 0n : 1n,
 				pendingSettlementOperationIds: pendingOperation === undefined ? [] : [1n],
-				pendingSettlementQueueCapacity: 4n,
+				pendingSettlementQueueCapacity: 1n,
 				pendingReportId: pendingReportIds[managerAddress] ?? 0n,
 				priceValidUntilTimestamp: 0n,
 				queuedOperationEthCost: 0n,

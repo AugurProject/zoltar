@@ -767,9 +767,7 @@ describe('Peripherals: fork migration', () => {
 			const minimumAllowance = 1n * 10n ** 18n
 			const allowanceCreationPrice = 6n * 10n ** 18n
 			const liquidationPrice = 61n * 10n ** 17n
-			// A zero-basefee request has a one-wei minimum WETH side, so ceiling the
-			// proposed 6.1 REP/ETH price produces a settled price of 7 REP/ETH.
-			// Top up past that rounded liquidation boundary.
+			// Top up past the liquidation boundary implied by the accepted 6.1 REP/ETH quote.
 			const extraRepAmount = 5n * 10n ** 18n
 
 			await approveToken(targetClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
@@ -844,7 +842,7 @@ describe('Peripherals: fork migration', () => {
 			const roundingSensitivePrice = (PRICE_PRECISION * 4n) / 10n
 			const tinyLiquidationAmount = 1n
 
-			await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, tinyLiquidationAmount)
+			await queueLiquidationAtForcedPrice(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, tinyLiquidationAmount, roundingSensitivePrice)
 			await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, roundingSensitivePrice)
 
 			const targetVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -880,8 +878,9 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(targetClaimAfterLock, repDeposit - lockedDeposit, 'locking REP should move the committed principal out of the vault claim')
 			strictEqualTypeSafe(canLiquidate(PRICE_PRECISION, securityPoolAllowance, targetClaimAfterLock, 2n), true, 'the vault should become liquidatable once its unlocked vault REP falls below the required backing')
 
-			await manipulatePriceOracle(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
-			await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, securityPoolAllowance)
+			await mockWindow.advanceTime(5n * 60n + 1n)
+			await queueLiquidationAtForcedPrice(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolAllowance, PRICE_PRECISION)
+			await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, PRICE_PRECISION)
 
 			const targetVaultAfterLiquidation = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const liquidatorVaultAfterLiquidation = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)

@@ -7,8 +7,8 @@ import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/si
 import { deployUniformPriceDualCapBatchAuction } from '../testSupport/simulator/utils/contracts/auction'
 import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
 import { depositOnOutcome, deployEscalationGame, getEscalationGameOutcomeState } from '../testSupport/simulator/utils/contracts/escalationGame'
-import { executeStagedOperation, getEthRaiseCap, getIsPriceValid, getRequestPriceEthCost, getStagedOperation, getStagedOperationCounter, OperationType, requestPriceIfNeededAndStageOperation, requestPriceIfNeededAndStageOperationWithInitialReportPrice } from '../testSupport/simulator/utils/contracts/peripherals'
-import { approveAndDepositRep, handleOracleReporting, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
+import { executeStagedOperation, getEthRaiseCap, getIsPriceValid, getPendingReportId, getStagedOperation, getStagedOperationCounter, OperationType, requestPrice, requestPriceIfNeededAndStageOperation, settleAndFinalizeCoordinatorPrice } from '../testSupport/simulator/utils/contracts/peripherals'
+import { approveAndDepositRep, manipulatePriceOracleAndPerformOperation, triggerOwnGameFork } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
 import { depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getRepToken, getSecurityVault, getTotalSecurityBondAllowance } from '../testSupport/simulator/utils/contracts/securityPool'
 import { createChildUniverse, getMigratedRep, getOwnForkRepBuckets, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault } from '../testSupport/simulator/utils/contracts/securityPoolForker'
 import { getScalarOutcomeIndex } from '../testSupport/simulator/utils/contracts/scalarOutcome'
@@ -326,31 +326,23 @@ describe('security regression coverage', () => {
 		const mockWindow = getAnvilWindowEthereum()
 		await mockWindow.setTime(questionEndDate + 10n * DAY)
 		const targetAllowance = repDeposit / 4n
-		const forcedLiquidationPrice = 10n * 10n ** 18n
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, targetAllowance)
 
 		const liquidator = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRep(liquidator, repDeposit * 10n, questionId)
 		await mockWindow.advanceTime(2n * 60n * 60n)
 
-		await requestPriceIfNeededAndStageOperationWithInitialReportPrice(
-			liquidator,
-			securityPoolAddresses.priceOracleManagerAndOperatorQueuer,
-			OperationType.SetSecurityBondsAllowance,
-			liquidator.account.address,
-			1n,
-			5n * 60n,
-			forcedLiquidationPrice,
-			await getRequestPriceEthCost(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer),
-		)
-		for (let index = 1; index < 4; index++) {
-			await requestPriceIfNeededAndStageOperation(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, liquidator.account.address, BigInt(index + 1))
-		}
+		await requestPrice(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await mockWindow.advanceTime(5n * 60n)
 		await requestPriceIfNeededAndStageOperation(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, targetAllowance)
 		const liquidationOperationId = await getStagedOperationCounter(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 
-		await handleOracleReporting(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, forcedLiquidationPrice)
+		const liquidationReportId = await getPendingReportId(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await settleAndFinalizeCoordinatorPrice(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, liquidationReportId)
 		await requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, 0n)
+		await requestPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		const replacementReportId = await getPendingReportId(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await settleAndFinalizeCoordinatorPrice(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, replacementReportId)
 		const staleExecutionHash = await executeStagedOperation(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, liquidationOperationId)
 
 		const targetVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -388,7 +380,7 @@ describe('security regression coverage', () => {
 		const mockWindow = getAnvilWindowEthereum()
 		const securityBondAllowance = 100n * 10n ** 18n
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityBondAllowance)
-		assert.equal(await getIsPriceValid(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), true)
+		assert.equal(await client.readContract({ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'isPriceValid', address: securityPoolAddresses.priceOracleManagerAndOperatorQueuer, args: [] }), true)
 
 		await mockWindow.setTime(questionEndDate + 1n)
 		assert.equal(await getIsPriceValid(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), false)
@@ -400,7 +392,7 @@ describe('security regression coverage', () => {
 		const mockWindow = getAnvilWindowEthereum()
 		const securityBondAllowance = 100n * 10n ** 18n
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityBondAllowance)
-		assert.equal(await getIsPriceValid(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), true)
+		assert.equal(await client.readContract({ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'isPriceValid', address: securityPoolAddresses.priceOracleManagerAndOperatorQueuer, args: [] }), true)
 
 		await mockWindow.setTime(questionEndDate + 1n)
 		assert.equal(await getIsPriceValid(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), false)

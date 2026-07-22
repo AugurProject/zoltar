@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals'
 import type { Address, Hash } from '@zoltar/shared/ethereum'
-import { executeOracleManagerStagedOperation, loadCoordinatorInitialReportFundingRequirement, loadOracleManagerDetails, requestOraclePrice } from '../../../protocol/index.js'
+import { executeOracleManagerStagedOperation, finalizeCoordinatorPriceCandidateFromChain, loadCoordinatorInitialReportFundingRequirement, loadOracleManagerDetails, requestOraclePrice } from '../../../protocol/index.js'
 import { useLoadController } from '../../../hooks/useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../../../lib/clients.js'
 import { sameAddress } from '../../../lib/address.js'
@@ -38,14 +38,21 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 	const nextPoolOracleManagerLoad = useRequestGuard()
 	const getPendingTitle = (actionName: OpenOracleActionResult['action']) => {
 		if (actionName === 'requestPrice') return 'Requesting price'
+		if (actionName === 'finalizeSettledPrice') return 'Finalizing price candidate'
 		return 'Executing staged operation'
 	}
-	const getSuccessTitle = (actionName: OpenOracleActionResult['action']) => {
+	const getSuccessTitle = (actionName: OpenOracleActionResult['action'], priceCandidateAccepted?: boolean, priceCandidateRejectionReason?: string) => {
 		if (actionName === 'requestPrice') return 'Price requested'
+		if (actionName === 'finalizeSettledPrice') {
+			if (priceCandidateAccepted === true) return 'Price candidate accepted'
+			if (priceCandidateRejectionReason === 'Candidate price expired') return 'Price candidate expired'
+			return 'Price candidate rejected'
+		}
 		return 'Staged operation executed'
 	}
 	const getFailureTitle = (actionName: OpenOracleActionResult['action']) => {
 		if (actionName === 'requestPrice') return 'Price request failed'
+		if (actionName === 'finalizeSettledPrice') return 'Price candidate finalization failed'
 		return 'Staged operation failed'
 	}
 
@@ -174,8 +181,58 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 		}
 	}
 
+	const finalizePoolPriceCandidate = async (managerAddress: Address) => {
+		poolPriceOracleResult.value = undefined
+		try {
+			poolOracleActiveAction.value = 'finalizeSettledPrice'
+			poolOracleFeedback.value = createPendingActionFeedback('finalizeSettledPrice', getPendingTitle('finalizeSettledPrice'))
+			await runWriteAction(
+				{
+					accountAddress,
+					missingWalletMessage: 'Connect a wallet before finalizing a price candidate',
+					onRefreshError: (message, hash) => {
+						const result = poolPriceOracleResult.value
+						const priceCandidateAccepted = result?.action === 'finalizeSettledPrice' ? result.priceCandidateAccepted : undefined
+						const rejectionReason = result?.action === 'finalizeSettledPrice' ? result.priceCandidateRejectionReason : undefined
+						poolOracleFeedback.value = createWarningActionFeedback('finalizeSettledPrice', getSuccessTitle('finalizeSettledPrice', priceCandidateAccepted, rejectionReason), message, hash)
+						if (result !== undefined) onTransactionPresented(createPoolOracleWarningPresentation(result, message))
+					},
+					onTransactionFailed,
+					onTransactionFinished,
+					onTransactionRequested: () => onTransactionRequested(createPoolOracleTransactionIntent('finalizeSettledPrice')),
+					onWriteError: message => {
+						poolOracleFeedback.value = createErrorActionFeedback('finalizeSettledPrice', getFailureTitle('finalizeSettledPrice'), message)
+					},
+					refreshErrorFallback: 'Price candidate finalized, but refreshing price oracle details failed',
+					refreshState: async () => {
+						await refreshWalletStateOnly(refreshState)
+						await loadPoolOracleManager(managerAddress)
+					},
+					setErrorMessage: message => {
+						poolOracleManagerError.value = message
+					},
+				},
+				async walletAddress => await finalizeCoordinatorPriceCandidateFromChain(createConnectedReadClient(), createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), managerAddress),
+				'Failed to finalize price candidate',
+				result => {
+					poolPriceOracleResult.value = result
+					if (result.priceCandidateAccepted === true) {
+						poolOracleFeedback.value = createSuccessActionFeedback('finalizeSettledPrice', getSuccessTitle('finalizeSettledPrice', true), result.hash)
+					} else {
+						const detail = result.priceCandidateRejectionReason === 'Candidate price expired' ? 'The candidate expired before finalization, so no price was activated.' : 'The candidate was rejected, so no price was activated.'
+						poolOracleFeedback.value = createWarningActionFeedback('finalizeSettledPrice', getSuccessTitle('finalizeSettledPrice', false, result.priceCandidateRejectionReason), detail, result.hash)
+					}
+					onTransactionPresented(createPoolOracleSuccessPresentation(result))
+				},
+			)
+		} finally {
+			poolOracleActiveAction.value = undefined
+		}
+	}
+
 	return {
 		executePendingPoolOperation,
+		finalizePoolPriceCandidate,
 		loadingPoolOracleManager: poolOracleManagerLoad.isLoading.value,
 		loadPoolOracleManager,
 		poolOracleActiveAction: poolOracleActiveAction.value,

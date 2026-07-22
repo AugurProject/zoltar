@@ -9,6 +9,7 @@ import {
 	createSecurityPool,
 	depositRepToSecurityPool,
 	executeOracleManagerStagedOperation,
+	finalizeCoordinatorPriceCandidate,
 	forkZoltarWithOwnEscalation,
 	getDeploymentSteps,
 	loadAllSecurityPools,
@@ -26,13 +27,13 @@ import {
 	startTruthAuctionForSecurityPool,
 	submitTruthAuctionBid,
 } from '../protocol/index.js'
-import { ReputationToken_ReputationToken, Zoltar_Zoltar, peripherals_WETH9_WETH9 } from '../contractArtifact.js'
+import { ReputationToken_ReputationToken, Zoltar_Zoltar, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_WETH9_WETH9 } from '../contractArtifact.js'
 import { assertNever } from '../lib/assert.js'
 import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../protocol/truthAuctionMath.js'
 import type { ReadClient, WriteClient } from '../lib/chainBackend.js'
 import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, type NetworkProfile } from '../lib/networkProfile.js'
 import type { ListedSecurityPool, QuestionData } from '../types/contracts.js'
-import { advanceSimulationTime, getSimulationChainTimestamp, initializeSimulationClock } from './clock.js'
+import { advanceSimulationTime, getSimulationChainBlockNumber, getSimulationChainTimestamp, getSimulationExecutionBlockHeaderRlp, initializeSimulationClock } from './clock.js'
 import type { SimulationScenario } from './scenarios.js'
 
 type TevmLikeClient = ReturnType<typeof createMemoryClient>
@@ -566,10 +567,15 @@ async function ensureSecurityBondAllowanceConfigured({
 			if (reportDetails.reportTimestamp === 0n || reportDetails.currentReporter === zeroAddress) {
 				throw new Error(`Expected the coordinator request to submit the initial report for ${accountAddress}`)
 			}
-			if (!reportDetails.isDistributed) {
-				await advanceSimulationTime(memoryClient, reportDetails.settlementTime + 1n)
-				await settleOracleReport(writeClient, managerDetails.openOracleAddress, managerDetails.pendingReportId)
-			}
+			await settleOracleReportIfNeeded({
+				managerAddress,
+				memoryClient,
+				openOracleAddress: managerDetails.openOracleAddress,
+				pendingReportId: managerDetails.pendingReportId,
+				readClient,
+				seededReport: reportDetails,
+				writeClient,
+			})
 		}
 
 		const refreshedManagerDetails = await loadOracleManagerDetails(readClient, managerAddress)
@@ -656,19 +662,63 @@ async function settleSeededOracleReport({
 	}
 }
 
-async function settleOracleReportIfNeeded({ memoryClient, readClient, writeClient, openOracleAddress, pendingReportId }: { memoryClient: TevmLikeClient; readClient: ReadClient; writeClient: WriteClient; openOracleAddress: Address; pendingReportId: bigint }) {
-	const seededReport = await loadOpenOracleReportDetails(readClient, openOracleAddress, pendingReportId)
+async function settleOracleReportIfNeeded({
+	managerAddress,
+	memoryClient,
+	readClient,
+	writeClient,
+	openOracleAddress,
+	pendingReportId,
+	seededReport: knownSeededReport,
+}: {
+	managerAddress: Address
+	memoryClient: TevmLikeClient
+	readClient: ReadClient
+	writeClient: WriteClient
+	openOracleAddress: Address
+	pendingReportId: bigint
+	seededReport?: Awaited<ReturnType<typeof loadOpenOracleReportDetails>>
+}) {
+	const seededReport = knownSeededReport ?? (await loadOpenOracleReportDetails(readClient, openOracleAddress, pendingReportId))
 	if (seededReport.isDistributed) return
+	const managerDetails = await loadOracleManagerDetails(readClient, managerAddress)
 	const reportTimestamp = getSimulationReportTiming(seededReport.reportTimestamp)
 	const settlementTime = getSimulationReportTiming(seededReport.settlementTime)
-	if (reportTimestamp !== undefined && settlementTime !== undefined) {
-		const settlementReadyTimestamp = reportTimestamp + settlementTime + 1n
-		const currentTimestamp = await getSimulationChainTimestamp(memoryClient)
-		if (currentTimestamp < settlementReadyTimestamp) {
-			await advanceSimulationTime(memoryClient, settlementReadyTimestamp - currentTimestamp)
+	if (managerDetails.candidateReportId === undefined) {
+		if (reportTimestamp !== undefined && settlementTime !== undefined) {
+			const settlementReadyTimestamp = reportTimestamp + settlementTime + 1n
+			const currentTimestamp = await getSimulationChainTimestamp(memoryClient)
+			if (currentTimestamp < settlementReadyTimestamp) {
+				await advanceSimulationTime(memoryClient, settlementReadyTimestamp - currentTimestamp)
+			}
 		}
+		await settleOracleReport(writeClient, openOracleAddress, pendingReportId)
+		return
 	}
+	if (reportTimestamp === undefined || settlementTime === undefined) {
+		throw new Error(`Expected timestamp-based report timing for ${managerAddress}`)
+	}
+	const opportunityBlockCount = await readClient.readContract({
+		address: managerAddress,
+		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+		functionName: 'economicOpportunityBlockCount',
+		args: [],
+	})
+	const deadline = reportTimestamp + settlementTime
+	const opportunityBlockNumbers: bigint[] = []
+	for (let remaining = opportunityBlockCount; remaining > 0n; remaining -= 1n) {
+		const targetTimestamp = deadline - remaining
+		const currentTimestamp = await getSimulationChainTimestamp(memoryClient)
+		if (currentTimestamp >= targetTimestamp) throw new Error(`Simulation cannot reconstruct the final dispute-opportunity window for ${managerAddress}`)
+		await advanceSimulationTime(memoryClient, targetTimestamp - currentTimestamp)
+		opportunityBlockNumbers.push(await getSimulationChainBlockNumber(memoryClient))
+	}
+	await advanceSimulationTime(memoryClient, 1n)
+	const firstClosedBlockNumber = await getSimulationChainBlockNumber(memoryClient)
 	await settleOracleReport(writeClient, openOracleAddress, pendingReportId)
+	const opportunityHeaders = await Promise.all(opportunityBlockNumbers.map(async blockNumber => await getSimulationExecutionBlockHeaderRlp(memoryClient, blockNumber)))
+	const firstClosedHeader = await getSimulationExecutionBlockHeaderRlp(memoryClient, firstClosedBlockNumber)
+	await finalizeCoordinatorPriceCandidate(writeClient, managerAddress, opportunityHeaders, firstClosedHeader)
 }
 
 async function refreshSeededOraclePrice({ accountAddress, createWriteClient, managerAddress, memoryClient, readClient }: { accountAddress: Address; createWriteClient: (accountAddress: Address) => WriteClient; managerAddress: Address; memoryClient: TevmLikeClient; readClient: ReadClient }) {
@@ -688,6 +738,7 @@ async function refreshSeededOraclePrice({ accountAddress, createWriteClient, man
 		throw new Error(`Expected the coordinator request to submit the initial report for ${managerAddress}`)
 	}
 	await settleOracleReportIfNeeded({
+		managerAddress,
 		memoryClient,
 		openOracleAddress: managerDetails.openOracleAddress,
 		pendingReportId: managerDetails.pendingReportId,
@@ -758,6 +809,7 @@ async function seedSecurityPool({
 		securityBondAllowance: primaryVaultSpec.securityBondAllowance,
 	})
 	await settleOracleReportIfNeeded({
+		managerAddress: primaryVault.managerAddress,
 		memoryClient,
 		openOracleAddress: seededOracleReport.openOracleAddress,
 		pendingReportId: seededOracleReport.pendingReportId,
@@ -955,6 +1007,7 @@ async function seedSecurityPoolX2Scenario({
 
 	for (const preparedPool of preparedPools) {
 		await settleOracleReportIfNeeded({
+			managerAddress: preparedPool.managerAddress,
 			memoryClient,
 			openOracleAddress: preparedPool.openOracleAddress,
 			pendingReportId: preparedPool.pendingReportId,

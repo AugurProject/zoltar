@@ -7,7 +7,20 @@ import { GENESIS_REPUTATION_TOKEN } from '../constants'
 import { approveToken, contractExists, getERC20Balance } from '../utilities'
 import { WriteClient } from '../clients'
 import assert from '../assert'
-import { getIsPriceValid, getLastPrice, getOpenOracleReportMeta, getOpenOracleReportStatus, getPendingReportId, getRequestPriceEthCost, openOracleSettle, OperationType, requestPriceIfNeededAndStageOperationWithInitialReportPrice, requestPriceWithValue } from './peripherals'
+import {
+	executeStagedOperation,
+	getIsPriceValid,
+	getLastPrice,
+	getOpenOracleReportMeta,
+	getOpenOracleReportStatus,
+	getPendingOperationSlotId,
+	getPendingReportId,
+	getRequestPriceEthCost,
+	OperationType,
+	requestPriceIfNeededAndStageOperationWithInitialReportPrice,
+	requestPriceWithValue,
+	settleAndFinalizeCoordinatorPrice,
+} from './peripherals'
 import { QuestionOutcome } from '../../types/types'
 import { forkZoltarWithOwnEscalationGame } from './securityPoolForker'
 import { getTotalTheoreticalSupply } from './zoltar'
@@ -65,10 +78,10 @@ export const handleOracleReporting = async (client: WriteClient, mockWindow: Anv
 	assert.strictEqual(reportStatus.initialReporter, priceOracleManagerAndOperatorQueuer, 'pending report should preserve the coordinator as the initial reporter')
 	assert.ok(reportStatus.reportTimestamp > 0n, 'pending report should already have a report timestamp')
 
-	await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)
-
-	await openOracleSettle(client, pendingReportId)
+	await settleAndFinalizeCoordinatorPrice(client, mockWindow, priceOracleManagerAndOperatorQueuer, pendingReportId)
 	assert.strictEqual(await getLastPrice(client, priceOracleManagerAndOperatorQueuer), expectedSettledPrice, 'settled coordinator price should match the encoded pending report price')
+	const operationId = await getPendingOperationSlotId(client, priceOracleManagerAndOperatorQueuer)
+	if (operationId !== 0n) await executeStagedOperation(client, priceOracleManagerAndOperatorQueuer, operationId)
 }
 
 export const manipulatePriceOracleAndPerformOperation = async (client: WriteClient, mockWindow: AnvilWindowEthereum, priceOracleManagerAndOperatorQueuer: Address, operation: OperationType, targetVault: Address, amount: bigint, forceRepEthPriceTo: bigint = PRICE_PRECISION) => {

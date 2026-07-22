@@ -1,12 +1,12 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData, getAddress, toHex, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, getAddress, toHex, zeroAddress, type Address, type Hex, type TransactionReceipt } from '@zoltar/shared/ethereum'
 import { encodeOpenOracleStatePreimagePacked, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
-import { getOpenOracleAddress, loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, loadOracleManagerDetails, loadOpenOracleReportSummaries, settleOracleReport, withdrawOpenOracleBalance } from '../../protocol/index.js'
-import { peripherals_openOracle_OpenOracle_OpenOracle } from '../../contractArtifact.js'
+import { finalizeCoordinatorPriceCandidate, getOpenOracleAddress, loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, loadOracleManagerDetails, loadOpenOracleReportSummaries, settleOracleReport, withdrawOpenOracleBalance } from '../../protocol/index.js'
+import { peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_openOracle_OpenOracle_OpenOracle } from '../../contractArtifact.js'
 import { MAINNET_WETH_ADDRESS } from '../../lib/networkProfile.js'
-import { createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from './testSupport.js'
+import { asWriteClient, createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName, mockTransactionHash } from './testSupport.js'
 
 const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
 const alternateSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000a2')
@@ -14,6 +14,30 @@ const token1Address = getAddress('0x00000000000000000000000000000000000000d1')
 const token2Address = getAddress('0x00000000000000000000000000000000000000d2')
 const wethAddress = getAddress(MAINNET_WETH_ADDRESS)
 const initialReporter = getAddress('0x00000000000000000000000000000000000000e1')
+const coordinatorAddress = getAddress('0x00000000000000000000000000000000000000c2')
+
+function createPriceCandidateFinalizedLog(accepted: boolean): TransactionReceipt['logs'][number] {
+	const rejectionReason = accepted ? '' : 'Insufficient dispute economics'
+	return {
+		address: coordinatorAddress,
+		blockHash: toHex(1n, { size: 32 }),
+		blockNumber: 1n,
+		data: encodeAbiParameters(
+			[
+				{ name: 'accepted', type: 'bool' },
+				{ name: 'availableCorrectionProfitWeth', type: 'uint256' },
+				{ name: 'requiredCorrectionProfitWeth', type: 'uint256' },
+				{ name: 'rejectionReason', type: 'string' },
+			],
+			[accepted, 10n, 5n, rejectionReason],
+		),
+		logIndex: 0n,
+		removed: false,
+		topics: encodeEventTopics({ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, args: [7n], eventName: 'PriceCandidateFinalized' }).filter((topic): topic is Hex => topic !== null),
+		transactionHash: mockTransactionHash,
+		transactionIndex: 0n,
+	}
+}
 
 function createOpenOraclePreimage(reportId = 1n): OpenOracleStatePreimage {
 	return {
@@ -56,6 +80,14 @@ function createOpenOracleStateLog(preimage: OpenOracleStatePreimage, topic = OPE
 }
 
 describe('openOracle protocol client', () => {
+	test.each([true, false])('returns the accepted=%s outcome emitted by price candidate finalization', async accepted => {
+		const writeClient = createMockWriteClient(() => undefined, undefined, [createPriceCandidateFinalizedLog(accepted)])
+
+		const result = await finalizeCoordinatorPriceCandidate(asWriteClient(writeClient), coordinatorAddress, [], '0x')
+
+		expect(result).toEqual({ action: 'finalizeSettledPrice', hash: mockTransactionHash, priceCandidateAccepted: accepted, priceCandidateRejectionReason: accepted ? undefined : 'Insufficient dispute economics' })
+	})
+
 	test('loadOpenOracleReportSummaries keeps reports disputed when dispute history returns to the initial reporter', async () => {
 		const initial = createOpenOraclePreimage()
 		const disputed = { ...initial, game: { ...initial.game, numReports: 2n, reportTimestamp: 2n } }
@@ -178,7 +210,7 @@ describe('openOracle protocol client', () => {
 				for (const contract of request.contracts) {
 					requestedFunctionNames.push(getContractFunctionName(contract))
 				}
-				return [1n, pendingOperationSlotId, [pendingOperationSlotId, 13n], 4n, 0n, 1n, 5n, true, 10n, 40n]
+				return [1n, pendingOperationSlotId, [pendingOperationSlotId, 13n], 4n, 0n, 0n, 1n, 5n, true, 10n, 40n]
 			},
 			readContract: async request => {
 				if (request.functionName === 'getActiveStagedOperations') {
@@ -224,7 +256,19 @@ describe('openOracle protocol client', () => {
 
 		const details = await loadOracleManagerDetails(client, managerAddress)
 
-		expect(requestedFunctionNames).toEqual(['lastPrice', 'pendingOperationSlotId', 'getPendingSettlementOperationIds', 'MAX_PENDING_SETTLEMENT_OPERATIONS', 'pendingReportId', 'getQueuedOperationEthCost', 'getRequestPriceEthCost', 'isPriceValid', 'lastSettlementTimestamp', 'getActiveStagedOperationCount'])
+		expect(requestedFunctionNames).toEqual([
+			'lastPrice',
+			'pendingOperationSlotId',
+			'getPendingSettlementOperationIds',
+			'MAX_PENDING_SETTLEMENT_OPERATIONS',
+			'pendingReportId',
+			'candidateReportId',
+			'getQueuedOperationEthCost',
+			'getRequestPriceEthCost',
+			'isPriceUsable',
+			'lastSettlementTimestamp',
+			'getActiveStagedOperationCount',
+		])
 		expect(capturedActiveOperationArgs).toEqual([0n, 25n])
 		expect(details.activeStagedOperationCount).toBe(40n)
 		expect(details.pendingOperation?.operationId).toBe(pendingOperationSlotId)
