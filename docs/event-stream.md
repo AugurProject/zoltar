@@ -47,7 +47,7 @@ The emitting address identifies the current pool, game, auction, token, or coord
 | --- | --- | --- |
 | `ethAmount`, collateral, fees, allowances, reserves | Wei; security-bond allowances are wei-denominated obligations | `CompleteSetCreated.ethAmount` is the gross ETH supplied. Redemption `ethAmount` fields are the net wei paid after fee accrual has reduced collateral. Resulting collateral fields replace prior state. |
 | `repAmount`, REP auction fills | REP token base units | Migration, consumption, and fill fields are per-action deltas unless named cumulative or resulting. |
-| `shareAmount`, `sharesMinted`, share-token supply | Share-token base units | Mint/burn amounts are deltas. `resultingShareTokenSupply` is the authoritative post-action total. Integer division in redemption rounds the wei payout down. |
+| `shareAmount`, `sharesMinted`, share-token supply | Share-token base units | Mint/burn amounts are deltas. `resultingShareTokenSupply` is the authoritative remaining economic claim supply, including unmaterialized fork entitlements. Integer division in redemption rounds the wei payout down. |
 | `poolOwnershipAmount` and ownership denominators | Internal pool-ownership units | Initial conversion uses `repAmount * 1e18`; later conversions preserve the current proportional ownership ratio with Solidity integer rounding. Resulting denominators replace prior totals. |
 | Pool and vault `feeIndex` | `1e18` fixed-point fee-per-eligible-allowance unit | Index deltas truncate toward zero. `feeIndexRemainder` carries the allocation numerator modulo the current eligible-allowance denominator. |
 | `vaultFeeRemainder` | Sub-wei numerator with denominator `1e18` | Carries one vault's fractional entitlement into its next `VaultAccountingCheckpoint`. It is authoritative even when `unpaidEthFees` does not change. |
@@ -70,6 +70,7 @@ Use protocol events, not transfer inference, to discover relationships:
 | Parent pool fork state | `SecurityPoolForkSnapshot`, `ParentRepLocked`, `EscalationRepDrainedAtFork` |
 | Child pool and migrated vault | `ChildPoolLinked`, `ChildRepSplit`, `ChildPoolRepSwept`, `ChildEscalationRepMaterialized`, `VaultMigrationCheckpoint` |
 | Vault escalation entitlement | `EscalationMigrationEntitlementInitialized`, `EscalationMigrationEntitlementMaterialized` |
+| Remaining share economic-claim supply | `ShareTokenSupplySet`; then the `resultingShareTokenSupply` field on complete-set and winning-share action events |
 | Escalation continuation | `ForkCarryCheckpoint`, `CarryDepositConsumed` |
 | Pool and vault accounting | `PoolAccountingCheckpoint`, `VaultAccountingCheckpoint` |
 | Auction demand and settlement | `AuctionStarted`, `BidSubmitted`, `AuctionFinalized`, `BidSettled` |
@@ -111,6 +112,8 @@ Standard ERC-20 `Transfer` and `Approval`, plus ERC-1155 `TransferSingle`, `Tran
 
 Pool accounting is checkpoint based. Replace all eleven fields whenever `PoolAccountingCheckpoint` is observed. Replace the named vault record, including `vaultFeeRemainder`, and its global denominators on `VaultAccountingCheckpoint`. Action events explain cause; checkpoint values are authoritative when both appear.
 
+Share economic-claim accounting is replace based. When `startTruthAuction` prepares the child after its migration window and emits `ShareTokenSupplySet`, replace that pool's remaining economic claim supply with the event value; this includes source entitlements whose child ERC-1155 balances have not materialized yet. ERC-1155 transfers and `Migrate` update materialized token balances but do not change this denominator. `CompleteSetCreated`, `CompleteSetRedeemed`, and `SharesRedeemed` subsequently replace it through `resultingShareTokenSupply`.
+
 For the Zoltar-owned oracle coordinator, replace pending report ID and sponsor, pending operation slot and counts, base-fee guard, and latest price and settlement time whenever `CoordinatorStateCheckpoint` is observed. The associated report and operation IDs identify the cause; zero means that cause has no corresponding ID. Report and operation action events retain lifecycle history, while the checkpoint is the authoritative resulting state. Open Oracle's internal payouts and liabilities remain outside this contract.
 
 For escalation, append each `LocalDepositAppended` leaf under its stable deposit index and retain the live event-derived MMR peaks and leaves for every game. When `SecurityPoolForkSnapshot` records an unresolved escalation, resolve its source game from the pool relationship and `EscalationRepDrainedAtFork`, then preserve an immutable copy of the current roots, counts, peaks, and leaves under `escalationSnapshotId`; later source consumption updates only the live version. On `ForkCarryCheckpoint`, select that historical version by `snapshotId`, verify its source game and each checkpoint count/root, then clone the frozen peaks and leaves into the child before applying child-local deposits. The checkpoint fixes the roots, counts, unresolved totals, and resolution balances written to that child. Apply each `CarryDepositConsumed` by its explicit reason and resulting roots/totals. Reconstruct and maintain peaks from events; never read them from contract storage.
@@ -131,7 +134,7 @@ Token events do not establish protocol cause. Attribute minting, migration, escr
 4. On a universe or own-game fork, freeze the parent from `SecurityPoolForkSnapshot`; apply the cause-specific REP locking and draining events.
 5. Discover two parallel child universes and pools independently. Initialize each continuation from its `ForkCarryCheckpoint`; never treat one child's consumption as the other's.
 6. Apply every `VaultMigrationCheckpoint`, including zero-collateral migrations, using its deltas and resulting parent/child totals.
-7. Replay the truth auction from `AuctionStarted` through every indexed bid and per-bid settlement. Apply auction-claim pool checkpoints to fee eligibility.
+7. On every `startTruthAuction`, initialize the child's remaining economic claim supply from `ShareTokenSupplySet`. If `AuctionStarted` follows, replay every indexed bid and per-bid settlement and apply auction-claim pool checkpoints to fee eligibility. On the immediate no-auction path, apply `TruthAuctionFinalized` and its pool checkpoints without expecting bids.
 8. Consume winning, losing, exported, direct-parent, and forked-escrow continuation deposits by their explicit reasons and resulting commitments.
 9. Finish with complete-set, winning-share, REP, and pool-fee withdrawals. The final replayed checkpoints should match the corresponding storage getters when audited.
 

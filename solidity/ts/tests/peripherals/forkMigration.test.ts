@@ -1429,7 +1429,7 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(await getShareTokenSupply(client, securityPoolAddresses.securityPool), 0n, 'share supply should be empty after all winning shares are redeemed')
 		})
 
-		test('redeemShares drains a child branch even when only part of the parent winning supply migrated', async () => {
+		test('redeemShares reserves collateral for winning shares that migrate after child redemption begins', async () => {
 			const securityPoolAllowance = repDeposit / 4n
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
 			const endTime = await getQuestionEndDate(client, questionId)
@@ -1439,6 +1439,8 @@ describe('Peripherals: fork migration', () => {
 			const secondHolder = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
 			await createCompleteSet(firstHolder, securityPoolAddresses.securityPool, 4n * 10n ** 18n)
 			await createCompleteSet(secondHolder, securityPoolAddresses.securityPool, 6n * 10n ** 18n)
+			const secondHolderParentShares = await balanceOfShares(secondHolder, securityPoolAddresses.shareToken, genesisUniverse, secondHolder.account.address)
+			const secondWinningShares = ensureDefined(secondHolderParentShares[1], 'second holder parent winning shares missing')
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 
 			const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
@@ -1468,16 +1470,25 @@ describe('Peripherals: fork migration', () => {
 			const secondHolderChildShares = await balanceOfShares(secondHolder, yesSecurityPool.shareToken, yesUniverse, secondHolder.account.address)
 
 			assert.ok(childCollateralBeforeRedemption > 0n, `child branch should hold collateral before redemption: ${childCollateralBeforeRedemption}`)
-			strictEqualTypeSafe(childShareSupplyBeforeRedemption, firstHolderWinningShares, 'child pricing supply should reconcile to the maximum migrated outcome supply')
+			strictEqualTypeSafe(childShareSupplyBeforeRedemption, firstHolderWinningShares + secondWinningShares, 'child pricing supply should reserve every fork-time parent claim')
 			strictEqualTypeSafe(ensureDefined(secondHolderChildShares[1], 'second holder yes child winning shares missing'), 0n, 'second holder should not have migrated winning shares into the child')
 
 			const firstHolderBalanceBeforeRedemption = await getETHBalance(client, firstHolder.account.address)
 			await redeemShares(firstHolder, yesSecurityPool.securityPool)
 			const firstHolderPayout = (await getETHBalance(client, firstHolder.account.address)) - firstHolderBalanceBeforeRedemption
 
-			strictEqualTypeSafe(firstHolderPayout, childCollateralBeforeRedemption, 'the migrated winning holder should be able to redeem the full child collateral')
-			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), 0n, 'child collateral should be fully drained after the only migrated winning holder redeems')
-			strictEqualTypeSafe(await getShareTokenSupply(client, yesSecurityPool.securityPool), 0n, 'resolved child share supply should collapse to the remaining winning supply')
+			const expectedFirstHolderPayout = (childCollateralBeforeRedemption * firstHolderWinningShares) / (firstHolderWinningShares + secondWinningShares)
+			strictEqualTypeSafe(firstHolderPayout, expectedFirstHolderPayout, 'the early migrant should receive only its fork-time share of child collateral')
+			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), childCollateralBeforeRedemption - expectedFirstHolderPayout, 'late winning claims should retain their collateral reserve')
+			strictEqualTypeSafe(await getShareTokenSupply(client, yesSecurityPool.securityPool), secondWinningShares, 'redemption should consume economic claims instead of replacing them with materialized supply')
+
+			await migrateShares(secondHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [QuestionOutcome.Yes])
+			const lateMigratedShares = await balanceOfShares(secondHolder, yesSecurityPool.shareToken, yesUniverse, secondHolder.account.address)
+			strictEqualTypeSafe(ensureDefined(lateMigratedShares[1], 'late migrated winning shares missing'), secondWinningShares, 'source winning shares should remain migratable after child activation and redemption')
+			await redeemShares(secondHolder, yesSecurityPool.securityPool)
+
+			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), 0n, 'late winning redemption should consume the remaining child collateral')
+			strictEqualTypeSafe(await getShareTokenSupply(client, yesSecurityPool.securityPool), 0n, 'all fork-time economic claims should be consumed after both holders redeem')
 		})
 
 		test('redeemShares accrues open-interest fees before paying winning shares', async () => {
@@ -1827,7 +1838,7 @@ describe('Peripherals: fork migration', () => {
 			approximatelyEqual(await getETHBalance(client, addressString(TEST_ADDRESSES[2])), balancePriorInvalidRedeemal + invalidChildCollateral, openInterestAmount * 1000n, 'did not gain eth after redeeming invalid shares')
 		})
 
-		test('can migrate shares into arbitrary scalar child universes after an external scalar fork', async () => {
+		test('preserves source share entitlements for independently timed scalar child migrations', async () => {
 			const openInterestAmount = 5n * 10n ** 18n
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 			const scalarForkQuestion = {
@@ -1849,10 +1860,11 @@ describe('Peripherals: fork migration', () => {
 			await forkUniverse(client, genesisUniverse, scalarQuestionId)
 
 			const lowScalarOutcome = getScalarOutcomeIndex(scalarForkQuestion, 3n)
+			const middleScalarOutcome = getScalarOutcomeIndex(scalarForkQuestion, 5n)
 			const highScalarOutcome = getScalarOutcomeIndex(scalarForkQuestion, 7n)
 			const sortedScalarOutcomes = sortBigIntsAscending([lowScalarOutcome, highScalarOutcome])
 			await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
-			for (const outcome of sortedScalarOutcomes) {
+			for (const outcome of [...sortedScalarOutcomes, middleScalarOutcome]) {
 				await createChildUniverse(client, securityPoolAddresses.securityPool, outcome)
 			}
 			const holderAddress = addressString(TEST_ADDRESSES[2])
@@ -1862,7 +1874,7 @@ describe('Peripherals: fork migration', () => {
 			await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, sortedScalarOutcomes)
 
 			const parentBalancesAfterMigration = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, holderAddress)
-			strictEqualTypeSafe(parentBalancesAfterMigration[1], 0n, 'parent yes shares should be burned after migration')
+			strictEqualTypeSafe(parentBalancesAfterMigration[1], parentYesBalance, 'parent yes shares should remain as persistent child-claim entitlements')
 
 			const lowScalarUniverse = getChildUniverseId(genesisUniverse, lowScalarOutcome)
 			const lowScalarBalances = await balanceOfShares(client, securityPoolAddresses.shareToken, lowScalarUniverse, holderAddress)
@@ -1875,9 +1887,31 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(highScalarBalances[0], 0n, 'invalid shares should stay at zero in the high scalar child universe')
 			strictEqualTypeSafe(highScalarBalances[1], parentYesBalance, 'yes shares should migrate into the high scalar child universe')
 			strictEqualTypeSafe(highScalarBalances[2], 0n, 'no shares should stay at zero in the high scalar child universe')
+
+			await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [middleScalarOutcome])
+			const middleScalarUniverse = getChildUniverseId(genesisUniverse, middleScalarOutcome)
+			const middleScalarBalances = await balanceOfShares(client, securityPoolAddresses.shareToken, middleScalarUniverse, holderAddress)
+			strictEqualTypeSafe(middleScalarBalances[1], parentYesBalance, 'a later child selection should materialize the source entitlement independently')
+			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [middleScalarOutcome]), /no new shares to migrate/i)
+
+			const parentYesTokenId = await client.readContract({
+				address: securityPoolAddresses.shareToken,
+				abi: peripherals_tokens_ShareToken_ShareToken.abi,
+				functionName: 'getTokenId',
+				args: [genesisUniverse, QuestionOutcome.Yes],
+			})
+			await assert.rejects(
+				openInterestHolder.writeContract({
+					address: securityPoolAddresses.shareToken,
+					abi: peripherals_tokens_ShareToken_ShareToken.abi,
+					functionName: 'safeTransferFrom',
+					args: [holderAddress, addressString(TEST_ADDRESSES[3]), parentYesTokenId, parentYesBalance],
+				}),
+				/migrated source balance is locked/i,
+			)
 		})
 
-		test('rejects malformed, duplicate, and unsorted share migration target outcomes', async () => {
+		test('rejects malformed and missing-child bulk targets while lazily creating one migration child', async () => {
 			const openInterestAmount = 5n * 10n ** 18n
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 			const scalarForkQuestion = {
@@ -1909,9 +1943,16 @@ describe('Peripherals: fork migration', () => {
 			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [5n]), /target outcome is malformed/)
 			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [validScalarOutcome, validScalarOutcome]), /strictly increasing order/)
 			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [...sortedScalarOutcomes].reverse()), /strictly increasing order/)
+			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, sortedScalarOutcomes), /bulk migration requires canonical child pools/)
+			strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.Operational, 'rejected bulk migration should roll back automatic source-pool fork initiation')
 
 			const parentBalancesAfterFailedMigrations = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, holderAddress)
 			strictEqualTypeSafe(parentBalancesAfterFailedMigrations[1], parentYesBalance, 'failed migrations should preserve the parent yes share balance')
+
+			await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [validScalarOutcome])
+			const lazilyCreatedUniverse = getChildUniverseId(genesisUniverse, validScalarOutcome)
+			const lazilyCreatedBalances = await balanceOfShares(client, securityPoolAddresses.shareToken, lazilyCreatedUniverse, holderAddress)
+			strictEqualTypeSafe(lazilyCreatedBalances[1], parentYesBalance, 'a single missing target should create its canonical child and materialize the source balance')
 		})
 
 		test('can fork zero rep pools', async () => {
@@ -2027,7 +2068,7 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(childVaultAfterRedeem.repDepositShare, 0n, 'operational child pool should allow redeemed ownership to clear')
 		})
 
-		test('child pool reconciles balanced partial migration before complete-set minting', async () => {
+		test('child pool prices complete sets against all fork-time claims after balanced partial migration', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime - 2n * DAY)
 			const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
@@ -2040,6 +2081,7 @@ describe('Peripherals: fork migration', () => {
 			const newMinter = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
 			await createCompleteSet(client, securityPoolAddresses.securityPool, migratedParentMintAmount)
 			await createCompleteSet(unmigratedHolder, securityPoolAddresses.securityPool, 5n * 10n ** 18n)
+			const parentForkTimeShareSupply = await getShareTokenSupply(client, securityPoolAddresses.securityPool)
 
 			await triggerExternalForkForSecurityPool(undefined, 'complete-set child mint fork source')
 			await approveToken(newMinter, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
@@ -2075,9 +2117,10 @@ describe('Peripherals: fork migration', () => {
 			await updateVaultFees(client, yesSecurityPool.securityPool, client.account.address)
 			const childCollateralBeforeMint = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
 			const childShareSupplyBeforeMint = await getShareTokenSupply(client, yesSecurityPool.securityPool)
-			strictEqualTypeSafe(childShareSupplyBeforeMint, migratedParentMintAmount * PRICE_PRECISION, 'child exchange-rate supply should use the balanced shares actually migrated into the child')
+			strictEqualTypeSafe(childShareSupplyBeforeMint, parentForkTimeShareSupply, 'child exchange-rate supply should reserve every fork-time parent claim')
 			const outcomeSuppliesBeforeMint = await getOutcomeShareSupplies(yesSecurityPool.shareToken, yesUniverse)
-			assert.deepStrictEqual(outcomeSuppliesBeforeMint, [childShareSupplyBeforeMint, childShareSupplyBeforeMint, childShareSupplyBeforeMint], 'balanced partial migration should reconcile nominal child supply with every ERC-1155 outcome supply before minting')
+			const migratedCompleteSetSupply = migratedParentMintAmount * PRICE_PRECISION
+			assert.deepStrictEqual(outcomeSuppliesBeforeMint, [migratedCompleteSetSupply, migratedCompleteSetSupply, migratedCompleteSetSupply], 'partial migration should materialize only the migrated ERC-1155 claims')
 
 			await createCompleteSet(newMinter, yesSecurityPool.securityPool, childMintAmount)
 
@@ -2088,7 +2131,8 @@ describe('Peripherals: fork migration', () => {
 			const expectedMintedShares = updatedCollateralBeforeMint === 0n ? childMintAmount * PRICE_PRECISION : (childMintAmount * childShareSupplyBeforeMint) / updatedCollateralBeforeMint
 			const childShareSupplyAfterMint = await getShareTokenSupply(client, yesSecurityPool.securityPool)
 			strictEqualTypeSafe(childShareSupplyAfterMint, childShareSupplyBeforeMint + expectedMintedShares, 'child complete-set mint should add shares at the settled exchange rate')
-			assert.deepStrictEqual(await getOutcomeShareSupplies(yesSecurityPool.shareToken, yesUniverse), [childShareSupplyAfterMint, childShareSupplyAfterMint, childShareSupplyAfterMint], 'successful child minting should preserve nominal and per-outcome supply equality')
+			const materializedSupplyAfterMint = migratedCompleteSetSupply + expectedMintedShares
+			assert.deepStrictEqual(await getOutcomeShareSupplies(yesSecurityPool.shareToken, yesUniverse), [materializedSupplyAfterMint, materializedSupplyAfterMint, materializedSupplyAfterMint], 'successful child minting should add balanced materialized claims without erasing the late-migration reserve')
 
 			await manipulatePriceOracle(newMinter, mockWindow, yesSecurityPool.priceOracleManagerAndOperatorQueuer)
 			await approveToken(newMinter, getRepTokenAddress(yesUniverse), yesSecurityPool.securityPool)
@@ -2103,7 +2147,7 @@ describe('Peripherals: fork migration', () => {
 			assert.ok(newMinterPayout <= childMintAmount, `post-fork complete-set minter must not capture preexisting collateral: deposited ${childMintAmount}, redeemed ${newMinterPayout}`)
 		})
 
-		test('an uneven child blocks minting while a balanced holder retains proportional complete-set redemption', async () => {
+		test('an uneven child mints and redeems complete sets against fork-time economic claims', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime - 2n * DAY)
 			const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
@@ -2117,6 +2161,7 @@ describe('Peripherals: fork migration', () => {
 			const imbalancer = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
 			await createCompleteSet(client, securityPoolAddresses.securityPool, parentMintAmount)
 			await createCompleteSet(imbalancer, securityPoolAddresses.securityPool, imbalancingMintAmount)
+			const parentForkTimeShareSupply = await getShareTokenSupply(client, securityPoolAddresses.securityPool)
 			await triggerExternalForkForSecurityPool(undefined, 'uneven-share child mint fork source')
 			await migrateShares(client, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Invalid, [QuestionOutcome.Yes])
 			await migrateShares(client, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [QuestionOutcome.Yes])
@@ -2141,33 +2186,34 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(ensureDefined(migratedBalances[0], 'invalid child balance missing'), parentMintAmount * PRICE_PRECISION, 'balanced holder should migrate invalid shares')
 			strictEqualTypeSafe(ensureDefined(migratedBalances[1], 'yes child balance missing'), parentMintAmount * PRICE_PRECISION, 'yes supply should migrate unevenly')
 			strictEqualTypeSafe(ensureDefined(migratedBalances[2], 'no child balance missing'), parentMintAmount * PRICE_PRECISION, 'balanced holder should migrate no shares')
-			const nominalSupplyBeforeFailedMint = await getShareTokenSupply(client, yesSecurityPool.securityPool)
+			const economicSupplyBeforeMint = await getShareTokenSupply(client, yesSecurityPool.securityPool)
 			const migratedBalancedSupply = parentMintAmount * PRICE_PRECISION
 			const migratedOutcomeSupplies = await getOutcomeShareSupplies(yesSecurityPool.shareToken, yesUniverse)
 			const migratedMaximumSupply = ensureDefined(migratedOutcomeSupplies[1], 'yes child supply missing')
 			strictEqualTypeSafe(migratedOutcomeSupplies[0], migratedBalancedSupply, 'invalid supply should belong to the balanced holder')
 			assert.ok(migratedMaximumSupply > migratedBalancedSupply, 'one-sided migration should make yes the maximum outcome supply')
 			strictEqualTypeSafe(migratedOutcomeSupplies[2], migratedBalancedSupply, 'no supply should belong to the balanced holder')
-			strictEqualTypeSafe(nominalSupplyBeforeFailedMint, migratedMaximumSupply, 'child accounting should use the maximum migrated outcome supply as its solvency denominator')
+			strictEqualTypeSafe(economicSupplyBeforeMint, parentForkTimeShareSupply, 'child accounting should use all fork-time parent claims as its solvency denominator')
 
 			const newMinter = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
-			const collateralBeforeFailedMint = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
-			const supplyBeforeFailedMint = await getShareTokenSupply(client, yesSecurityPool.securityPool)
-			await assert.rejects(createCompleteSet(newMinter, yesSecurityPool.securityPool, 1n * 10n ** 18n), /Share supply mismatch/)
-			const expectedRedemption = (collateralBeforeFailedMint * migratedBalancedSupply) / migratedMaximumSupply
+			await createCompleteSet(newMinter, yesSecurityPool.securityPool, 1n * 10n ** 18n)
+			const collateralBeforeRedemption = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
+			const supplyBeforeRedemption = await getShareTokenSupply(client, yesSecurityPool.securityPool)
+			assert.ok(supplyBeforeRedemption > economicSupplyBeforeMint, 'new complete sets should add economic claims even when migrated outcome supplies are uneven')
+			const expectedRedemption = (collateralBeforeRedemption * migratedBalancedSupply) / supplyBeforeRedemption
 			const balanceBeforeRedemption = await getETHBalance(client, client.account.address)
 			await redeemCompleteSet(client, yesSecurityPool.securityPool, migratedBalancedSupply)
-			strictEqualTypeSafe((await getETHBalance(client, client.account.address)) - balanceBeforeRedemption, expectedRedemption, 'balanced holder should redeem proportionally against the maximum outcome supply')
+			strictEqualTypeSafe((await getETHBalance(client, client.account.address)) - balanceBeforeRedemption, expectedRedemption, 'balanced holder should redeem proportionally against all economic claims')
 
-			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), collateralBeforeFailedMint - expectedRedemption, 'redemption should debit only the proportional collateral payout')
-			strictEqualTypeSafe(await getShareTokenSupply(client, yesSecurityPool.securityPool), supplyBeforeFailedMint - migratedBalancedSupply, 'redemption should reduce the maximum-supply denominator by the burned complete sets')
-			const balancesAfterFailedOperations = await balanceOfShares(client, yesSecurityPool.shareToken, yesUniverse, client.account.address)
-			strictEqualTypeSafe(balancesAfterFailedOperations[0], 0n, 'redemption should burn the holder invalid balance')
-			strictEqualTypeSafe(balancesAfterFailedOperations[1], 0n, 'redemption should burn the holder yes balance')
-			strictEqualTypeSafe(balancesAfterFailedOperations[2], 0n, 'redemption should burn the holder no balance')
+			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), collateralBeforeRedemption - expectedRedemption, 'redemption should debit only the proportional collateral payout')
+			strictEqualTypeSafe(await getShareTokenSupply(client, yesSecurityPool.securityPool), supplyBeforeRedemption - migratedBalancedSupply, 'redemption should reduce the economic claim denominator by the burned complete sets')
+			const balancesAfterRedemption = await balanceOfShares(client, yesSecurityPool.shareToken, yesUniverse, client.account.address)
+			strictEqualTypeSafe(balancesAfterRedemption[0], 0n, 'redemption should burn the holder invalid balance')
+			strictEqualTypeSafe(balancesAfterRedemption[1], 0n, 'redemption should burn the holder yes balance')
+			strictEqualTypeSafe(balancesAfterRedemption[2], 0n, 'redemption should burn the holder no balance')
 		})
 
-		test('child pool blocks complete-set minting when collateral exists without migrated shares', async () => {
+		test('child pool prices new complete sets from fork-time claims when no shares migrated', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime - 2n * DAY)
 			const parentAllowance = repDeposit / 4n
@@ -2189,14 +2235,19 @@ describe('Peripherals: fork migration', () => {
 
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'child pool should be operational after fork accounting settles')
 			assert.ok((await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)) > 0n, 'test setup requires collateral without migrated shares')
-			strictEqualTypeSafe(await getShareTokenSupply(client, yesSecurityPool.securityPool), 0n, 'zero migrated outcome supplies should reconcile to zero')
-			assert.deepStrictEqual(await getOutcomeShareSupplies(yesSecurityPool.shareToken, yesUniverse), [0n, 0n, 0n], 'zero migration should reconcile nominal and all actual ERC-1155 outcome supplies before rejecting orphan-collateral minting')
+			const forkTimeShareSupply = 10n * 10n ** 18n * PRICE_PRECISION
+			strictEqualTypeSafe(await getShareTokenSupply(client, yesSecurityPool.securityPool), forkTimeShareSupply, 'zero migration should preserve the parent fork-time economic claims')
+			assert.deepStrictEqual(await getOutcomeShareSupplies(yesSecurityPool.shareToken, yesUniverse), [0n, 0n, 0n], 'economic claims should not require materialized child ERC-1155 balances')
 
 			const newMinter = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
-			const collateralBeforeFailedMint = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
-			await assert.rejects(createCompleteSet(newMinter, yesSecurityPool.securityPool, 1n * 10n ** 18n), /Exchange rate undefined/)
-			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), collateralBeforeFailedMint, 'rejected mint should preserve orphan collateral')
-			strictEqualTypeSafe(await getShareTokenSupply(client, yesSecurityPool.securityPool), 0n, 'rejected mint should preserve zero reconciled supply')
+			const collateralBeforeMint = await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool)
+			await createCompleteSet(newMinter, yesSecurityPool.securityPool, 1n * 10n ** 18n)
+			const mintedOutcomeSupplies = await getOutcomeShareSupplies(yesSecurityPool.shareToken, yesUniverse)
+			const mintedCompleteSets = ensureDefined(mintedOutcomeSupplies[0], 'new invalid child shares missing')
+			assert.ok(mintedCompleteSets > 0n, 'fork-time economic claims should define a nonzero child exchange rate')
+			assert.deepStrictEqual(mintedOutcomeSupplies, [mintedCompleteSets, mintedCompleteSets, mintedCompleteSets], 'post-fork complete-set minting should materialize balanced new claims')
+			strictEqualTypeSafe(await getShareTokenSupply(client, yesSecurityPool.securityPool), forkTimeShareSupply + mintedCompleteSets, 'new complete sets should add to the reserved economic claim supply')
+			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, yesSecurityPool.securityPool), collateralBeforeMint + 1n * 10n ** 18n, 'successful minting should add its collateral without exposing the preexisting reserve')
 		})
 
 		test('child pool with migrated shares but no collateral activates after settlement while still rejecting complete-set minting', async () => {
@@ -2356,7 +2407,7 @@ describe('Peripherals: fork migration', () => {
 			await assert.rejects(createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.No), /(Migration closed|Own-fork window closed)/i)
 		})
 
-		test('migrateShares allows the exact migration deadline and rejects one second later', async () => {
+		test('migrateShares remains available for an existing child after the migration deadline', async () => {
 			const openInterestAmount = 5n * 10n ** 18n
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, openInterestAmount)
@@ -2373,7 +2424,9 @@ describe('Peripherals: fork migration', () => {
 
 			await mockWindow.setTime(migrationDeadline + 1n)
 
-			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.No, [QuestionOutcome.No]), /migration window closed/i)
+			await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.No, [QuestionOutcome.Yes])
+			const lateMigratedBalances = await balanceOfShares(client, securityPoolAddresses.shareToken, migratedYesUniverse, openInterestHolder.account.address)
+			strictEqualTypeSafe(ensureDefined(lateMigratedBalances[2], 'late migrated no balance missing'), openInterestAmount * PRICE_PRECISION, 'unredeemed source shares should materialize in an existing child after the fork deadline')
 		})
 
 		test('migrateRepToZoltar should fund an already-created child pool with the unlocked vault REP in own-fork mode', async () => {

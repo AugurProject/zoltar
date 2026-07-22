@@ -43,7 +43,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/contract-interaction-reference.md'
-const expectedProductionSoliditySourceFingerprint = 'ecb6bff97c3cb61ddf916207f18c95534ee5166b807efb606b78ad919748312a'
+const expectedProductionSoliditySourceFingerprint = '2bfd8d8aa22e8fe85ca42a00a76ec74abef8ed4db2625da88550114c50f09341'
 
 const eventSourceByName: Record<string, string> = {
 	Approval: 'solidity/contracts/IERC20.sol',
@@ -320,7 +320,7 @@ const assemblyDelegateCalls: AssemblyDelegateCall[] = [
 	},
 ]
 
-const referencedEventAbiFingerprint = 'e1a6cad2abebddca01baea0165ca20b76d555458b0d8703fc7f6612f93400024'
+const referencedEventAbiFingerprint = '9aea734263baf56393f268585f3e30eac796fd4095af180ae6a7984af7b96928'
 
 const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	'solidity/contracts/ERC20.sol': {
@@ -681,7 +681,7 @@ const contractReferences: ContractReference[] = [
 		compiledAbiFingerprint: '0a40adf38a92537b691b3ea095b09d03506d7a61aa4e52bd4d3f6e20e36275dc',
 		name: 'SecurityPool',
 		purpose: 'Holds ETH collateral and REP underwriting, accounts for vaults and fees, mints shares, and routes local escalation.',
-		readAbiFingerprint: 'd3c6f16a86fa669a17593ac4b80aefd8ce08572452d018d8bedf22ff53836a6d',
+		readAbiFingerprint: '06857683318415b32aa066f45f57ec80cd841048bb855f1ca4bd10f6ed723ae3',
 		readSurface:
 			'Immutable relationship and configuration getters are `questionId`, `universeId`, `initialEscalationGameDeposit`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceOracleManagerAndOperatorQueuer`, `openOracle`, `escalationGameFactory`, `questionData`, `securityPoolForker`, `truthAuction`, `securityPoolFactory`, and `securityMultiplier`; the current game is `escalationGame`. Accounting and lifecycle getters are `totalSecurityBondAllowance`, `completeSetCollateralAmount`, `poolOwnershipDenominator`, `shareTokenSupply`, `totalFeesOwedToVaults`, `lastUpdatedFeeAccumulator`, `feeIndex`, `currentRetentionRate`, `awaitingForkContinuation`, `securityVaults`, and `systemState`. Use `securityPoolEventEmitter`, `getVaultCount`, `getActiveVaultCount`, `getVaults`, `getActiveVaults`, `sharesToCash`, `cashToShares`, `repToPoolOwnership`, `repToPoolOwnershipRoundUp`, `poolOwnershipToRep`, `getTotalRepBalance`, `totalAccruedFees`, `getPoolAccountingSnapshot`, `getVaultFeeRemainder`, and `isEscalationResolved` for derived or paged state. `isEscalationResolved()` is true only when a local escalation game is configured and the forker routes a non-`None` outcome; an operational fixed-outcome child without a local game returns false. `SystemState` determines which transaction paths remain open.',
 		readDeclarations: [
@@ -761,14 +761,14 @@ const contractReferences: ContractReference[] = [
 				caller: 'Trader',
 				effect: 'Adds collateral and mints one `Invalid`, `Yes`, and `No` share per complete-set unit, then invokes the ERC-1155 batch-receiver callback for a contract trader. Callback rejection rolls back the ETH, pool accounting, events, and share mint.',
 				declarations: [{ name: 'createCompleteSet' }],
-				preconditions: 'Operational and unforked; `isEscalationResolved()` is false; not awaiting continuation; all three outcome supplies are equal; positive ETH converts to at least one complete-set unit; bond capacity covers the new collateral; a contract trader accepts `onERC1155BatchReceived`.',
+				preconditions: 'Operational and unforked; `isEscalationResolved()` is false; not awaiting continuation; positive ETH converts to at least one complete-set unit; bond capacity covers the new collateral; a contract trader accepts `onERC1155BatchReceived`.',
 				signals: '`CompleteSetCreated`, `PoolAccountingCheckpoint`, then ERC-1155 `TransferBatch` on a successful callback',
 			},
 			{
 				call: '`redeemCompleteSet(completeSetAmount)`',
 				caller: 'Anyone; positive redemption requires the caller to hold the complete set',
 				effect:
-					"Burns equal balances of all three outcomes and pays `completeSetAmount * completeSetCollateralAmount / shareTokenSupply` using the pool's stored denominator. During ordinary trading that field tracks complete-set issuance and redemption; truth-auction start seeds it from `maximumOutcomeSupply`, and each later `redeemShares` replaces it with the remaining winning-outcome supply. Zero passes the token and accounting checks and follows the normal zero-value event, checkpoint, and ETH-send path; rejection of that ETH call reverts the transaction.",
+					"Burns equal balances of all three outcomes and pays `completeSetAmount * completeSetCollateralAmount / shareTokenSupply` using the pool's remaining economic claim supply as its collateral denominator. Complete-set issuance adds to that denominator, while complete-set and winning-share redemption consume it; fork-time source entitlements materialize without changing it because their claims are already reserved. Zero passes the token and accounting checks and follows the normal zero-value event, checkpoint, and ETH-send path; rejection of that ETH call reverts the transaction.",
 				declarations: [{ name: 'redeemCompleteSet' }],
 				preconditions: 'Operational and unforked; caller owns every outcome amount requested; caller accepts the resulting ETH call, including zero value. Zero is accepted without a token balance.',
 				signals: '`CompleteSetRedeemed` and `PoolAccountingCheckpoint`',
@@ -1076,10 +1076,10 @@ const contractReferences: ContractReference[] = [
 			{
 				call: '`startTruthAuction(securityPool)`',
 				caller: 'Anyone',
-				effect: 'Closes migration accounting and either reopens a fully backed child or starts its repair auction.',
+				effect: "Copies the frozen parent's remaining economic claim supply into the child, closes migration accounting, and either reopens a fully backed child or starts its repair auction.",
 				declarations: [{ name: 'startTruthAuction' }],
 				preconditions: 'Child migration window ended; pool is in fork migration; required child REP is available.',
-				signals: '`TruthAuctionStarted`; immediate no-auction paths also emit `TruthAuctionFinalized` and pool accounting checkpoints',
+				signals: '`ShareTokenSupplySet` and `TruthAuctionStarted`; immediate no-auction paths also emit `TruthAuctionFinalized` and pool accounting checkpoints',
 			},
 			{
 				call: '`finalizeTruthAuction(securityPool)`',
@@ -1423,12 +1423,12 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'feb6377f38e95fa4c0617c8a9c117481ed65ba23ccf457c0d63d89428ff7a813',
+		compiledAbiFingerprint: '57037ae78e2547bcb28e5a683091fe0a03301902f835b0b2600bcbd112fd5dda',
 		name: 'ShareToken',
-		purpose: "Stores universe-aware ERC-1155 outcome shares and reproduces a holder's full source balance into selected fork branches.",
-		readAbiFingerprint: 'c409abbe03b8afc6bc00af45d57eb207c43cb24812f81f4cc76257f4c91c1435',
+		purpose: "Stores universe-aware ERC-1155 outcome shares and materializes a holder's persistent source entitlement in selected fork branches.",
+		readAbiFingerprint: '3b68e6bd8e3cea9398317397c9ab93da54e67d7aa234933be4b4cdcd95e884d9',
 		readSurface:
-			'Base and relationship getters are `name`, `symbol`, `zoltar`, `canonicalPoolByUniverse`, `_balances`, `_supplies`, and `_operatorApprovals`. Standard ERC-1155 reads are `supportsInterface`, `balanceOf`, `totalSupply`, `balanceOfBatch`, and `isApprovedForAll`; protocol-specific reads are `isAuthorized`, `getChildUniverseId`, `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getTokenId`, `getTokenIds`, and `unpackTokenId`.',
+			'Base and relationship getters are `name`, `symbol`, `zoltar`, `canonicalPoolByUniverse`, `_balances`, `_supplies`, and `_operatorApprovals`. Standard ERC-1155 reads are `supportsInterface`, `balanceOf`, `totalSupply`, `balanceOfBatch`, and `isApprovedForAll`; protocol-specific reads are `isAuthorized`, `getChildUniverseId`, `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getMigratedShareAmount`, `getTokenId`, `getTokenIds`, and `unpackTokenId`.',
 		readDeclarations: [
 			{ name: 'supportsInterface', sourcePath: 'solidity/contracts/peripherals/tokens/ERC1155.sol' },
 			{ name: 'balanceOf', sourcePath: 'solidity/contracts/peripherals/tokens/ERC1155.sol' },
@@ -1441,6 +1441,7 @@ const contractReferences: ContractReference[] = [
 			{ name: 'maximumOutcomeSupply' },
 			{ name: 'balanceOfOutcome' },
 			{ name: 'balanceOfShares' },
+			{ name: 'getMigratedShareAmount' },
 			{ name: 'getTokenId' },
 			{ name: 'getTokenIds' },
 			{ name: 'unpackTokenId' },
@@ -1469,7 +1470,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'Share holder or approved ERC-1155 operator',
 				effect: 'Transfers one outcome-token balance without changing supply.',
 				declarations: [{ name: 'safeTransferFrom', sourcePath: 'solidity/contracts/peripherals/tokens/ERC1155.sol' }],
-				preconditions: 'Caller owns the source balance or has operator approval; destination is nonzero; the source balance is sufficient; a contract recipient accepts the ERC-1155 callback.',
+				preconditions: 'Caller owns the source balance or has operator approval; the source account has not materialized that token into any child branch; destination is nonzero; the source balance is sufficient; a contract recipient accepts the ERC-1155 callback.',
 				signals: '`TransferSingle`',
 			},
 			{
@@ -1477,19 +1478,19 @@ const contractReferences: ContractReference[] = [
 				caller: 'Share holder or approved ERC-1155 operator for a nonempty batch; any caller for an empty batch',
 				effect: 'A nonempty batch transfers each listed outcome-token balance without changing supply. Equal empty ID and value arrays return as a no-op without an event.',
 				declarations: [{ name: 'safeBatchTransferFrom', sourcePath: 'solidity/contracts/peripherals/tokens/ERC1155.sol' }],
-				preconditions: 'ID and value array lengths match. A nonempty batch also requires holder or operator authority, a nonzero destination, sufficient source balances, and an accepting ERC-1155 callback from a contract recipient; the empty-batch no-op performs none of those checks.',
+				preconditions: 'ID and value array lengths match. A nonempty batch also requires holder or operator authority, no listed source token that the source account has already materialized into a child branch, a nonzero destination, sufficient source balances, and an accepting ERC-1155 callback from a contract recipient; the empty-batch no-op performs none of those checks.',
 				signals: '`TransferBatch` for a nonempty batch; no event for an empty batch',
 			},
 			{
 				call: '`migrate(fromId, targetOutcomeIndexes)`',
 				caller: 'Holder of the source token ID',
 				effect:
-					"If the source pool is still operational, first initiates its pool fork. It may then deploy one missing child; finally, it burns the holder's full source balance once, then for each target mints the same balance, invokes the holder's ERC-1155 single-receiver callback when it is a contract, and emits `Migrate` only after that callback accepts. Any rejected callback rolls back the source burn, target mints, and preceding fork or child setup.",
+					"If needed, first freezes the operational source pool and records its fork snapshot. A single-target call may lazily create that child while the branch-creation window is open. It keeps and locks the holder's source entitlement, then mints each selected child-universe token ID up to the current source balance. Later source additions materialize only the unminted delta. A contract holder receives the ERC-1155 single-receiver callback for each mint; rejection rolls back the mint and preceding fork or child setup.",
 				declarations: [{ name: 'migrate' }],
 				preconditions:
-					'Source universe forked; positive source balance; nonempty, strictly increasing, well-formed outcomes; a canonical source pool that is `Operational` or `PoolForked`; eight-week pool migration window open. If the source is operational, the normal `initiateSecurityPoolFork` guards must pass. Every destination must be a canonical direct child. One missing target may be deployed lazily only for a single-target call; bulk migration requires every child pool to exist already. A contract holder accepts `onERC1155Received` for every target mint.',
+					'Source universe forked; canonical source pool is `Operational` or `PoolForked`; positive source balance; nonempty, strictly increasing, well-formed outcomes; every target in a multi-target call already has a canonical child pool; after the branch-creation window, a single target must also already exist; at least one selected child has an unmaterialized balance; a contract holder accepts `onERC1155Received` for every target mint.',
 				signals:
-					'`PoolForkModeActivated`, `PoolAccountingCheckpoint`, `SecurityPoolForkSnapshot`, `ParentRepLocked`, and optionally `EscalationRepDrainedAtFork` when auto-forking; `SecurityPoolRegistered`, `DeploySecurityPool`, `AuthorizationUpdated`, and `ChildPoolLinked` when lazily deploying, plus `DeployChild`, `ChildRepSplit`, `ChildPoolRepSwept`, `EscalationGameSet`, `GameContinuedFromFork`, `ForkCarryCheckpoint`, and `ChildEscalationRepMaterialized` as applicable; then one ERC-1155 source-burn `TransferSingle`, followed by one mint `TransferSingle` and `Migrate` per target on successful callbacks',
+					'`PoolForkModeActivated`, `PoolAccountingCheckpoint`, `SecurityPoolForkSnapshot`, `ParentRepLocked`, and optionally `EscalationRepDrainedAtFork` when auto-forking; `SecurityPoolRegistered`, `DeploySecurityPool`, `AuthorizationUpdated`, and `ChildPoolLinked` when lazily deploying, plus `DeployChild`, `ChildRepSplit`, `ChildPoolRepSwept`, `EscalationGameSet`, `GameContinuedFromFork`, `ForkCarryCheckpoint`, and `ChildEscalationRepMaterialized` as applicable; then one ERC-1155 mint `TransferSingle` and `Migrate` per materialized target on successful callbacks',
 			},
 			{
 				call: '`authorize(securityPoolCandidate)`',
@@ -1504,7 +1505,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'An authorized `SecurityPool`',
 				effect: "Mints `amount` each of Invalid, Yes, and No to `account`, then invokes its ERC-1155 batch-receiver callback when it is a contract. Rejection rolls back the mint and the authorized pool's surrounding transaction.",
 				declarations: [{ name: 'mintCompleteSets' }],
-				preconditions: 'Caller is authorized; `account` is nonzero; `amount` is positive; global Invalid, Yes, and No supplies are equal before minting; a contract account accepts `onERC1155BatchReceived`.',
+				preconditions: 'Caller is authorized; `account` is nonzero; `amount` is positive; a contract account accepts `onERC1155BatchReceived`.',
 				signals: '`TransferBatch` on a successful callback',
 			},
 			{

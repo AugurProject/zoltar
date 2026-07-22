@@ -59,6 +59,9 @@ contract SecurityPool is ISecurityPool {
 	uint256 public completeSetCollateralAmount; // protocol-accounted ETH backing complete sets; raw balance can also contain fees or unsolicited surplus
 	uint256 public poolOwnershipDenominator;
 	uint256 public securityMultiplier;
+	// Remaining per-outcome economic claims. After a fork this includes both
+	// materialized child ERC-1155 balances and source entitlements that can still
+	// materialize in this branch.
 	uint256 public shareTokenSupply;
 
 	uint256 public totalFeesOwedToVaults;
@@ -743,13 +746,9 @@ contract SecurityPool is ISecurityPool {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Question open');
 		updateCollateralAmount();
 		uint256 tokenId = shareToken.getTokenId(universeId, outcome);
-		(uint256 amount, uint256 remainingWinningShareSupply) = shareToken.burnTokenIdAndGetRemainingSupply(
-			tokenId,
-			msg.sender
-		);
-		uint256 winningShareSupply = remainingWinningShareSupply + amount;
-		uint256 ethValue = winningShareSupply == 0 ? 0 : (amount * completeSetCollateralAmount) / winningShareSupply;
-		shareTokenSupply = remainingWinningShareSupply;
+		(uint256 amount, ) = shareToken.burnTokenIdAndGetRemainingSupply(tokenId, msg.sender);
+		uint256 ethValue = shareTokenSupply == 0 ? 0 : (amount * completeSetCollateralAmount) / shareTokenSupply;
+		shareTokenSupply -= amount;
 		completeSetCollateralAmount -= ethValue;
 		emit SharesRedeemed(msg.sender, amount, ethValue, shareTokenSupply, completeSetCollateralAmount);
 		_emitPoolAccountingCheckpoint(AccountingReason.CollateralReconciliation, address(0x0));

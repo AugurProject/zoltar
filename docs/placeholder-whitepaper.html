@@ -943,13 +943,9 @@
 						<li>
 							While the pool is operational, a full complete set can be burned
 							with <code>redeemCompleteSet</code> to recover its pro rata share
-							of collateral. The payout uses the pool's current stored
-							<code>shareTokenSupply</code> denominator. Child truth-auction setup
-							seeds that value from the maximum outcome supply; complete-set
-							issuance and redemption then update it, and each winning-share
-							redemption replaces it with the remaining winning supply. Balanced
-							holders therefore retain an exit even though unequal supplies still
-							disable minting.
+							of collateral. A child uses its remaining economic claim supply as
+							the denominator, including fork-time claims whose ERC-1155 balances
+							have not materialized there yet.
 						</li>
 						<li>
 							After the fork route finalizes an outcome, users can redeem
@@ -1969,16 +1965,18 @@
 								Collateral Settlement
 							</text>
 						</svg>
-						<p class="diagram-caption">
-							<span class="figure-label">Share Lifecycle</span>Shares are
-							transferable before either redemption path is exercised.
+					<p class="diagram-caption">
+						<span class="figure-label">Share Lifecycle</span>Shares are
+						transferable until redemption or the first fork-claim
+						materialization. Materialization preserves the source balance but
+						locks it against later transfer.
 						</p>
 					</figure>
 					<p>
-						Shares can migrate across forks.
-						<code>ShareToken.migrate</code> burns a parent-universe token id and
-						mints child-universe token ids for selected valid, non-malformed
-						fork outcomes.
+						Shares can materialize across forks.
+						<code>ShareToken.migrate</code> preserves a parent-universe token id
+						as a persistent entitlement and mints child-universe token ids for
+						selected valid, non-malformed fork outcomes.
 					</p>
 					<figure class="diagram" id="fig-placeholder-share-migration">
 						<svg
@@ -1987,11 +1985,11 @@
 							aria-labelledby="share-migration-title share-migration-desc"
 						>
 							<title id="share-migration-title">
-								Share migration is full-balance reproduction
+								Share migration materializes persistent branch entitlements
 							</title>
 							<desc id="share-migration-desc">
-								A full parent token balance is burned and reproduced into each
-								selected child token id.
+								A parent token balance remains locked as an entitlement while the
+								same balance materializes in each selected child token id.
 							</desc>
 							<defs>
 								<marker
@@ -2037,7 +2035,7 @@
 								migrate()
 							</text>
 							<text class="svg-small" x="460" y="135" text-anchor="middle">
-								burns source
+								records target delta
 							</text>
 							<text class="svg-small" x="460" y="156" text-anchor="middle">
 								checks sorted targets
@@ -2084,15 +2082,15 @@
 						<p class="diagram-caption">
 							<span class="figure-label">Share Migration</span>Share migration
 							is not a pro-rata split across selected branches. The source
-							balance is burned once and reproduced in each valid selected child
-							token id.
+							balance remains as a transfer-locked entitlement after first use,
+							and each selected child materializes its own reserved claim.
 						</p>
 					</figure>
 					<details class="interactive-example" id="share-migration-example">
 						<summary>Adjust a share migration reproduction example</summary>
 						<p>
-							The migration call burns the full parent token balance and
-							reproduces that same balance into each selected child outcome. The
+							The migration call preserves the full parent token balance and
+							materializes that same balance in each selected child outcome. The
 							contract accepts any non-empty, strictly increasing list of valid
 							non-malformed fork-question outcome indexes. The compact diagram
 							caps the displayed branches at three, which shows why migration is
@@ -2153,7 +2151,9 @@
 									rx="6"
 									data-example-rect="parent"
 								></rect>
-								<text class="svg-label" x="80" y="30">Parent burned</text>
+								<text class="svg-label" x="80" y="30">
+									Parent retained + locked
+								</text>
 								<text
 									class="svg-small"
 									x="314"
@@ -2243,7 +2243,7 @@
 						<div class="example-output-grid">
 							<div>
 								<span>Parent balance after call</span
-								><output data-example-output="parentAfter">0 shares</output>
+								><output data-example-output="parentAfter">30 shares</output>
 							</div>
 							<div>
 								<span>Child balance per selected branch</span
@@ -2263,8 +2263,8 @@
 							The caller must hold a positive balance of the parent token id.
 						</li>
 						<li>
-							The entire parent token balance is burned; callers cannot migrate
-							only part of that token id.
+							The parent balance remains as a persistent entitlement. After its
+							first child materialization, that source balance cannot transfer.
 						</li>
 						<li>
 							Target outcomes must be valid for the fork question and strictly
@@ -2273,11 +2273,11 @@
 					</ul>
 					<p>
 						At the implementation level, <code>redeemShares</code> burns the
-						holder’s full balance of the winning token id and pays
+						holder’s full materialized balance of the winning token id and pays
 						the burned amount’s pro-rata share of current collateral, using the
-						actual winning token supply immediately before the burn as the
-						denominator. It does not use the nominal complete-set
-						<code>shareTokenSupply</code>. In the healthy case this corresponds to a
+						pool’s remaining economic claim supply as the denominator. That
+						<code>shareTokenSupply</code> includes materialized ERC-1155 balances
+						and fork-time entitlements that can materialize later. In the healthy case this corresponds to a
 						clean <code>1:1</code> redemption outcome against the economic
 						meaning of a complete-set claim, subject to collateral accounting
 						remaining intact through migration and any required auction repair.
@@ -2285,8 +2285,8 @@
 					<div class="equation" id="eq-placeholder-share-redemption">
 						<math
 							display="block"
-							aria-label="cash payout equals floor of burned winning shares times complete set collateral amount divided by actual winning token supply before the burn"
-							data-source="cashPayout = floor(burnedWinningShares \cdot completeSetCollateralAmount / winningTokenSupplyBeforeBurn)"
+							aria-label="cash payout equals floor of burned winning shares times complete set collateral amount divided by remaining economic claim supply before the burn"
+							data-source="cashPayout = floor(burnedWinningShares \cdot completeSetCollateralAmount / economicClaimSupplyBeforeBurn)"
 						>
 							<mrow>
 								<mi>cashPayout</mi>
@@ -2299,25 +2299,25 @@
 										<mo>&#x22C5;</mo>
 										<mi>completeSetCollateralAmount</mi>
 									</mrow>
-									<mi>winningTokenSupplyBeforeBurn</mi>
+									<mi>economicClaimSupplyBeforeBurn</mi>
 								</mfrac>
 								<mo>)</mo>
 							</mrow>
 						</math>
 						<p class="equation-caption">
 							<span class="equation-label">Share Redemption</span
-							>The actual winning ERC-1155 supply, not nominal complete-set
-							supply, determines each pro-rata payout. Solidity integer division
-							floors any remainder.
+							>The remaining economic claim supply reserves collateral for both
+							materialized winners and winning fork entitlements that arrive
+							later. Solidity integer division floors any remainder.
 						</p>
 					</div>
 					<p>
 						The important edge case is fork recovery. If a child pool emerges
 						from migration with incomplete collateral, the truth auction sells
 						REP for ETH so the child pool can restore the collateral base needed
-						for clean redemption. If multiple target outcomes are selected
-						during share migration, the holder’s full burned balance is
-						reproduced into each selected child universe.
+							for clean redemption. If multiple target outcomes are selected
+							during share migration, the holder’s source entitlement remains
+							and its unmaterialized balance is minted into each selected child.
 					</p>
 				</section>
 
@@ -4010,9 +4010,10 @@
 					</ul>
 					<p id="branch-capital-reproduction-risk">
 						REP migration and share migration intentionally reproduce a source
-						position into every selected child branch. The original
-						parent-universe asset is consumed, and each child balance is colored
-						by a distinct universe, so this is not a same-universe double claim.
+						position into every selected child branch. A share source remains
+						as a transfer-locked entitlement after first use, and each child
+						balance is colored by a distinct universe, so this is not a
+						same-universe double claim.
 						Integrations must nevertheless keep branch balance sheets separate:
 						summing child REP or shares as though all branches were
 						simultaneously redeemable in one economic universe overstates
@@ -6329,7 +6330,7 @@
 					"childCText",
 					selectedChildren >= 3 ? formatFixed(parentBalance, 0) : "0",
 				);
-				context.write("parentAfter", formatShares(0));
+				context.write("parentAfter", formatShares(parentBalance));
 				context.write("childBalance", formatShares(parentBalance));
 				context.write(
 					"totalChildBalances",
