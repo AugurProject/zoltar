@@ -25,17 +25,20 @@ contract SecurityPoolForkerFakePoolMock {
 	ReputationToken private immutable configuredRepToken;
 	uint256 private immutable configuredQuestionId;
 	address private immutable configuredEventEmitter;
+	address private immutable configuredEscalationGame;
 
 	constructor(
 		uint248 configuredUniverse,
 		ReputationToken configuredRep,
 		uint256 configuredQuestion,
-		address configuredEmitter
+		address configuredEmitter,
+		address configuredGame
 	) {
 		configuredUniverseId = configuredUniverse;
 		configuredRepToken = configuredRep;
 		configuredQuestionId = configuredQuestion;
 		configuredEventEmitter = configuredEmitter;
+		configuredEscalationGame = configuredGame;
 	}
 
 	function universeId() external view returns (uint248) {
@@ -46,8 +49,8 @@ contract SecurityPoolForkerFakePoolMock {
 		return SystemState.Operational;
 	}
 
-	function escalationGame() external pure returns (address) {
-		return address(0x0);
+	function escalationGame() external view returns (address) {
+		return configuredEscalationGame;
 	}
 
 	function repToken() external view returns (ReputationToken) {

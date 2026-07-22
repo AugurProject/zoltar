@@ -285,7 +285,7 @@ describe('Peripherals: privileged authorization matrix', () => {
 						args: [addressString(TEST_ADDRESSES[2])],
 					}),
 				),
-			/Only pool or forker/,
+			/Only pool/,
 		)
 	})
 })

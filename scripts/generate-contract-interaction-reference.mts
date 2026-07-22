@@ -43,7 +43,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/contract-interaction-reference.md'
-const expectedProductionSoliditySourceFingerprint = 'fa7b2ca655525640f4d796e4c727aea2627742fc330be468894037c1b3445b0d'
+const expectedProductionSoliditySourceFingerprint = 'f3e720d6adeac96e0031df3243b67d29a10b2fdde6978b18b548d3737f47f8e8'
 
 const eventSourceByName: Record<string, string> = {
 	Approval: 'solidity/contracts/IERC20.sol',
@@ -460,7 +460,7 @@ const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/peripherals/EscalationGameCalculations.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/peripherals/EscalationGameCarry.sol': '7fd8be73b61c6624fb644d2b5818fa414e582e9ed4eea54eceee533f4a022d47',
 	'solidity/contracts/peripherals/EscalationGameEscrow.sol': 'b3755415ee7ff2d0457653e9c9e6a6cca56435ed3b76008ab5446c315f837452',
-	'solidity/contracts/peripherals/EscalationGameSettlement.sol': '895a913bd0a85b6a5b4759f161991d94f31cb0b3fdfec218aae204fa182f39be',
+	'solidity/contracts/peripherals/EscalationGameSettlement.sol': '94801532bfaaef27870ba39c7571c4732276db69c6e88e39a20b3e2be1b7e2a2',
 	'solidity/contracts/peripherals/EscalationGameState.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/peripherals/EscalationGameStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol': 'd6e92001bdc028def593ed95c37a8c23bab0a9006d0a5c9164f9a9f92b84ad49',
@@ -875,9 +875,10 @@ const contractReferences: ContractReference[] = [
 				call: '`activateForkMode(forkQuestionMatchesPoolQuestion)`',
 				caller: '`SecurityPoolForker` only',
 				declarations: [{ name: 'activateForkMode' }],
-				effect: "Sets `PoolForked`, accrues through the fork clamp, and transfers the pool's entire REP balance to the forker. Repeated calls are not lifecycle-guarded and repeat the zero-balance transfer and checkpoints.",
-				preconditions: 'If the pool has an inherited fixed outcome, the universe fork question must match the pool question; no current-state guard.',
-				signals: 'Accrual checkpoint when due; REP `Transfer` including at zero balance; always `PoolForkModeActivated` and fork-activation `PoolAccountingCheckpoint`',
+				effect:
+					"Sets `PoolForked`, accrues through the fork clamp, transfers the pool's entire REP balance to the forker, then makes the pool drain its configured escalation game's entire REP balance to the forker. Repeated calls are not lifecycle-guarded and transfer any balances replenished since the prior call before repeating the checkpoints.",
+				preconditions: "If the pool has an inherited fixed outcome, the universe fork question must match the pool question; no current-state guard. A configured game's drain must succeed or the entire activation reverts without propagating its reason data.",
+				signals: 'Pool REP `Transfer` always, including at zero; configured-game REP `Transfer` only for a positive game balance; accrual checkpoint when due; always `PoolForkModeActivated` and fork-activation `PoolAccountingCheckpoint`',
 			},
 			{
 				call: '`initializeForkedEscalationGame(...)`',
@@ -1016,7 +1017,8 @@ const contractReferences: ContractReference[] = [
 				caller: 'Anyone',
 				effect: 'Freezes the supplied pool after an external universe fork, drains its pool and game REP, and records a migration snapshot keyed by that address. The snapshot is canonical only when the supplied pool is already registered by the configured `SecurityPoolFactory`.',
 				declarations: [{ name: 'initiateSecurityPoolFork' }],
-				preconditions: 'Pool operational; its universe already forked; fork state not initialized; if an escalation game exists, the universe fork occurred before that game settled. This entrypoint does not authenticate the supplied address against a pool factory.',
+				preconditions:
+					'Pool operational; its universe already forked; fork state not initialized; if an escalation game exists, its immutable `securityPool()` binding equals the supplied pool and the universe fork occurred before that game settled. This entrypoint does not authenticate the supplied address against a pool factory.',
 				signals: '`SecurityPoolForkSnapshot` and `ParentRepLocked`; additionally `EscalationRepDrainedAtFork` when unresolved escalation exists',
 			},
 			{
@@ -1024,7 +1026,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'Anyone',
 				effect: "Uses the supplied pool game's non-decision to fork Zoltar, freezes that pool, and records own-fork REP buckets and snapshot state keyed by its address. The snapshot is canonical only when the supplied pool is already registered by the configured `SecurityPoolFactory`.",
 				declarations: [{ name: 'forkZoltarWithOwnEscalationGame' }],
-				preconditions: 'Pool operational; escalation reached non-decision; universe not already forked. This entrypoint does not authenticate the supplied address against a pool factory.',
+				preconditions: 'Pool operational; its escalation game has an immutable `securityPool()` binding equal to the supplied pool and reached non-decision; universe not already forked. This entrypoint does not authenticate the supplied address against a pool factory.',
 				signals: '`SecurityPoolForkSnapshot`, `ParentRepLocked`, and Zoltar fork events; additionally `EscalationRepDrainedAtFork` when unresolved escalation exists',
 			},
 			{
@@ -1269,10 +1271,10 @@ const contractReferences: ContractReference[] = [
 			},
 			{
 				call: '`drainAllRep(receiver)`',
-				caller: 'Owning `SecurityPool` or its `SecurityPoolForker`',
+				caller: 'Owning `SecurityPool` only',
 				declarations: [{ name: 'drainAllRep', sourcePath: 'solidity/contracts/peripherals/EscalationGameSettlement.sol' }],
 				effect: "Transfers the game's full REP balance to `receiver`. A zero balance returns zero without a transfer or event.",
-				preconditions: '`receiver` is nonzero; no positive-balance requirement.',
+				preconditions: '`receiver` is nonzero; no positive-balance requirement. The protocol reaches this call from the owning pool after `activateForkMode` enters `PoolForked`.',
 				signals: 'REP `Transfer` for a positive balance; no event at zero balance',
 			},
 			{

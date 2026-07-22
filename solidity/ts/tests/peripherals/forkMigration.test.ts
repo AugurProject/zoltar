@@ -1,5 +1,5 @@
 import { beforeEach, describe, test } from 'bun:test'
-import { encodeDeployData } from '@zoltar/shared/ethereum'
+import { encodeDeployData, zeroAddress } from '@zoltar/shared/ethereum'
 import { usePeripheralsForkMigrationFixture, type PeripheralsForkMigrationFixture } from './fixture'
 import { getExpectedLiquidationRepMove } from './liquidationTestHelpers'
 import { createCarryProof, SparseNullifierTree } from '../carryProofHelpers'
@@ -7,6 +7,7 @@ import { addRepToMigrationBalance, getMigrationRepBalance, getUniverseData, spli
 import { queueLiquidationAtForcedPrice } from '../../testSupport/simulator/utils/contracts/peripherals'
 import { getQuestionResolution } from '../../testSupport/simulator/utils/contracts/escalationGame'
 import { getForkActivationTime } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
+import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken } from '../../types/contractArtifact'
 import {
 	test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackFactoryMock,
@@ -435,7 +436,7 @@ describe('Peripherals: fork migration', () => {
 				data: encodeDeployData({
 					abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerFakePoolMock.abi,
 					bytecode: `0x${test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerFakePoolMock.evm.bytecode.object}`,
-					args: [genesisUniverse, addressString(GENESIS_REPUTATION_TOKEN), questionId, maliciousEmitter],
+					args: [genesisUniverse, addressString(GENESIS_REPUTATION_TOKEN), questionId, maliciousEmitter, zeroAddress],
 				}),
 			})
 			const fakePoolReceipt = await client.waitForTransactionReceipt({ hash: fakePoolDeploymentHash })
@@ -449,6 +450,64 @@ describe('Peripherals: fork migration', () => {
 
 			strictEqualTypeSafe(await getETHBalance(client, securityPoolAddresses.securityPool), targetBalanceBeforeAttack, 'untrusted delegate target must not drain canonical pool ETH')
 			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool), targetCollateralBeforeAttack, 'untrusted delegate target must not change canonical collateral accounting')
+		})
+
+		test('initiateSecurityPoolFork rejects a fake pool that borrows a canonical escalation game', async () => {
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime + 10000n)
+			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+
+			const escalationGame = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
+			const parentRepToken = getRepTokenAddress(genesisUniverse)
+			const gameBalanceBeforeAttack = await getERC20Balance(client, parentRepToken, escalationGame)
+			const vaultBeforeAttack = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
+			assert.ok(gameBalanceBeforeAttack > 0n, 'canonical escalation game should hold participant REP')
+			assert.ok(vaultBeforeAttack.repInEscalationGame > 0n, 'canonical vault should record escalation escrow')
+
+			const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[5], 0)
+			const forkQuestionData = {
+				...questionData,
+				title: 'borrowed escalation game attack fork source',
+				endTime: (await mockWindow.getTime()) + DAY,
+			}
+			const forkQuestionId = getQuestionId(forkQuestionData, outcomes)
+			await createQuestion(attackerClient, forkQuestionData, outcomes)
+			await mockWindow.setTime(forkQuestionData.endTime + 1n)
+			await approveToken(attackerClient, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+			await forkUniverse(attackerClient, genesisUniverse, forkQuestionId)
+
+			const forkerAddress = getInfraContractAddresses().securityPoolForker
+			await mockWindow.impersonateAccount(forkerAddress)
+			await mockWindow.setBalance(forkerAddress, 10n ** 18n)
+			const forkerClient = createWriteClient(mockWindow, BigInt(forkerAddress), 0)
+			await assert.rejects(
+				writeContractAndWait(forkerClient, () =>
+					forkerClient.writeContract({
+						abi: peripherals_EscalationGame_EscalationGame.abi,
+						address: escalationGame,
+						functionName: 'drainAllRep',
+						args: [forkerAddress],
+					}),
+				),
+				/revert/,
+			)
+
+			const fakePoolDeploymentHash = await attackerClient.sendTransaction({
+				data: encodeDeployData({
+					abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerFakePoolMock.abi,
+					bytecode: `0x${test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerFakePoolMock.evm.bytecode.object}`,
+					args: [genesisUniverse, addressString(GENESIS_REPUTATION_TOKEN), questionId, zeroAddress, escalationGame],
+				}),
+			})
+			const fakePoolReceipt = await attackerClient.waitForTransactionReceipt({ hash: fakePoolDeploymentHash })
+			const fakePool = fakePoolReceipt.contractAddress
+			if (fakePool === undefined || fakePool === null) throw new Error('fake pool address missing')
+
+			await assert.rejects(initiateSecurityPoolFork(attackerClient, fakePool), /Escalation game pool/)
+
+			strictEqualTypeSafe(await getERC20Balance(client, parentRepToken, escalationGame), gameBalanceBeforeAttack, 'fake pool must not drain a canonical escalation game')
+			strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.Operational, 'failed attack must leave the canonical pool operational')
+			strictEqualTypeSafe((await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).repInEscalationGame, vaultBeforeAttack.repInEscalationGame, 'failed attack must leave canonical escrow accounting backed')
 		})
 
 		test('createChildUniverse rejects fake parents that try to reuse a legitimate pool as the child', async () => {

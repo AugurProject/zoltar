@@ -819,7 +819,7 @@ contract SecurityPool is ISecurityPool {
 			outcome,
 			maxAmount
 		);
-		require(depositedAmount > 0, 'No escalation deposit');
+		require(depositedAmount > 0, 'No deposit');
 		if (totalSecurityBondAllowance > 0) {
 			require(priceOracleManagerAndOperatorQueuer.isPriceValid(), 'Stale price');
 		}
@@ -891,6 +891,18 @@ contract SecurityPool is ISecurityPool {
 		updateCollateralAmount();
 		uint256 repTransferred = repToken.balanceOf(address(this));
 		IERC20(address(repToken)).safeTransfer(msg.sender, repTransferred);
+		address game = address(escalationGame);
+		if (game != address(0x0)) {
+			// Keep the internal drain call data-free on failure so this contract remains
+			// deployable under the EIP-170 runtime limit.
+			assembly ('memory-safe') {
+				mstore(0x00, shl(224, 0x3c250020))
+				mstore(0x04, caller())
+				if iszero(call(gas(), game, 0, 0x00, 0x24, 0x00, 0x00)) {
+					revert(0x00, 0x00)
+				}
+			}
+		}
 		emit PoolForkModeActivated(repTransferred, currentRetentionRate, systemState);
 		_emitPoolAccountingCheckpoint(AccountingReason.ForkActivation, address(0x0));
 	}
@@ -968,7 +980,7 @@ contract SecurityPool is ISecurityPool {
 
 	function addFeeEligibleSecurityBondAllowance(address vault, uint256 amount) external onlyForker {
 		feeEligibleSecurityBondAllowance += amount;
-		require(feeEligibleSecurityBondAllowance <= totalSecurityBondAllowance, 'Fee allowance high');
+		require(feeEligibleSecurityBondAllowance <= totalSecurityBondAllowance, 'Fee high');
 		_clearFeeIndexRemainder();
 		_emitVaultAccountingCheckpoint(vault);
 		_emitPoolAccountingCheckpoint(AccountingReason.AuctionClaim, vault);
@@ -1045,7 +1057,7 @@ contract SecurityPool is ISecurityPool {
 		uint256 newFeeEligibleBondAllowance
 	) external onlyForker {
 		require(newTotalBondAllowance >= newCollateral, 'Bond low');
-		require(newFeeEligibleBondAllowance <= newTotalBondAllowance, 'Fee allowance high');
+		require(newFeeEligibleBondAllowance <= newTotalBondAllowance, 'Fee high');
 		completeSetCollateralAmount = newCollateral;
 		totalSecurityBondAllowance = newTotalBondAllowance;
 		feeEligibleSecurityBondAllowance = newFeeEligibleBondAllowance;
