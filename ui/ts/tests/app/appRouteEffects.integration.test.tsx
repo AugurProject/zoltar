@@ -22,6 +22,7 @@ function createDefaultProps(overrides: Partial<RouteEffectsProps> = {}): RouteEf
 		loadOracleReport: async () => undefined,
 		loadSecurityPools: async () => undefined,
 		navigate: () => undefined,
+		resetSecurityPoolCreation: () => undefined,
 		route: 'zoltar',
 		securityPoolAddress: '',
 		securityPoolQuestionId: '',
@@ -48,15 +49,17 @@ function RouteEffectsHarness(props: RouteEffectsProps) {
 
 function SecurityPoolQuestionRouteHarness() {
 	const { securityPoolQuestionId } = useUrlState()
+	const [hasCreationResult, setHasCreationResult] = useState(true)
 	const [marketId, setMarketId] = useState('stale-question')
 	useAppRouteEffects(
 		createDefaultProps({
+			resetSecurityPoolCreation: () => setHasCreationResult(false),
 			route: 'security-pools',
 			securityPoolQuestionId,
 			setSecurityPoolFormMarketId: setMarketId,
 		}),
 	)
-	return <div id='market-id'>{marketId}</div>
+	return hasCreationResult ? <div id='creation-result'>Previous pool created</div> : <div id='market-id'>{marketId}</div>
 }
 
 function OpenOracleReportRouteHarness() {
@@ -203,6 +206,7 @@ describe('app route effects integration', () => {
 	test('restores and clears the route-backed security pool question across history events', async () => {
 		const dom = installDomEnvironment('http://localhost/#/security-pools?securityPoolsView=create&questionId=question-1')
 		const { cleanup, container } = await renderIntoDocument(<SecurityPoolQuestionRouteHarness />)
+		expect(container.querySelector('#creation-result')).toBeNull()
 		expect(container.querySelector('#market-id')?.textContent).toBe('question-1')
 
 		await act(() => {

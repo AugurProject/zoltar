@@ -400,6 +400,7 @@ export function App() {
 	}
 	const onUseQuestionForPool = (questionId: string) => {
 		const { marketId } = getUseQuestionForPoolState(questionId)
+		resetSecurityPoolCreation()
 		setSecurityPoolForm(current => ({
 			...current,
 			marketId,
@@ -435,6 +436,7 @@ export function App() {
 		loadOracleReport: async reportId => await loadOracleReport(reportId),
 		loadSecurityPools: async requestedSecurityPoolAddress => await loadSecurityPools(requestedSecurityPoolAddress),
 		navigate,
+		resetSecurityPoolCreation,
 		route,
 		securityPoolAddress,
 		securityPoolQuestionId,

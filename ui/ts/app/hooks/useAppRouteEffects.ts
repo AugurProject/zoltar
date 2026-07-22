@@ -13,6 +13,7 @@ type Props = {
 	loadOracleReport: (reportId: string) => Promise<void>
 	loadSecurityPools: (securityPoolAddress?: string) => Promise<boolean | void>
 	navigate: (route: 'deploy' | 'open-oracle' | 'security-pools' | 'zoltar') => void
+	resetSecurityPoolCreation: () => void
 	route: AppRoute
 	securityPoolAddress: string
 	securityPoolQuestionId: string
@@ -76,6 +77,7 @@ export function useAppRouteEffects({
 	loadOracleReport,
 	loadSecurityPools,
 	navigate,
+	resetSecurityPoolCreation,
 	route,
 	securityPoolAddress,
 	securityPoolQuestionId,
@@ -101,6 +103,7 @@ export function useAppRouteEffects({
 	const lastSelectedPoolEnvironmentNonce = useRef<number | undefined>(undefined)
 	const lastSelectedSecurityPoolAddress = useRef<string | undefined>(undefined)
 	const lastSyncedOpenOracleReportId = useRef<string | undefined>(undefined)
+	const lastSyncedSecurityPoolQuestionId = useRef<string | undefined>(undefined)
 
 	loadOracleReportRef.current = loadOracleReport
 	loadSecurityPoolsRef.current = loadSecurityPools
@@ -143,9 +146,15 @@ export function useAppRouteEffects({
 	}, [activeEnvironmentNonce, environmentReady, route, urlOpenOracleReportId])
 
 	useEffect(() => {
-		if (route !== 'security-pools') return
+		if (route !== 'security-pools') {
+			lastSyncedSecurityPoolQuestionId.current = undefined
+			return
+		}
+		if (lastSyncedSecurityPoolQuestionId.current === securityPoolQuestionId) return
+		lastSyncedSecurityPoolQuestionId.current = securityPoolQuestionId
+		resetSecurityPoolCreation()
 		setSecurityPoolFormMarketId(securityPoolQuestionId)
-	}, [route, securityPoolQuestionId, setSecurityPoolFormMarketId])
+	}, [resetSecurityPoolCreation, route, securityPoolQuestionId, setSecurityPoolFormMarketId])
 
 	useEffect(() => {
 		if (!shouldSyncSecurityPoolAddressToRouteForms({ route, securityPoolAddress })) return
