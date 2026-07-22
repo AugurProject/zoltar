@@ -69,6 +69,7 @@ const eventSourceByName: Record<string, string> = {
 	ResidualRepSweptToSecurityPool: 'solidity/contracts/peripherals/EscalationGameState.sol',
 	SecurityPoolSet: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	SecurityPoolForkSnapshot: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
+	ShareTokenSupplySet: 'solidity/contracts/peripherals/SecurityPool.sol',
 	SharesRedeemed: 'solidity/contracts/peripherals/interfaces/ISecurityPool.sol',
 	StagedOperationQueued: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	SystemStateSet: 'solidity/contracts/peripherals/SecurityPool.sol',
@@ -261,13 +262,13 @@ const contractReferences: ContractReference[] = [
 				caller: 'Trader',
 				effect: 'Adds collateral and mints one `Invalid`, `Yes`, and `No` share per complete-set unit.',
 				declarations: [{ name: 'createCompleteSet' }],
-				preconditions: 'Operational, unforked, unresolved, not awaiting continuation; all three outcome supplies are equal; positive ETH converts to at least one complete-set unit; bond capacity covers the new collateral.',
+				preconditions: 'Operational, unforked, unresolved, not awaiting continuation; positive ETH converts to at least one complete-set unit; bond capacity covers the new collateral.',
 				signals: '`CompleteSetCreated` and `PoolAccountingCheckpoint`',
 			},
 			{
 				call: '`redeemCompleteSet(completeSetAmount)`',
 				caller: 'Complete-set holder',
-				effect: 'Burns equal balances of all three outcomes and returns ETH using the largest live outcome supply as the collateral denominator, so balanced holders can exit even after one-sided fork migration.',
+				effect: 'Burns equal balances of all three outcomes and returns ETH using the remaining economic claim supply as the collateral denominator.',
 				declarations: [{ name: 'redeemCompleteSet' }],
 				preconditions: 'Operational and unforked; caller owns the complete set.',
 				signals: '`CompleteSetRedeemed` and `PoolAccountingCheckpoint`',
@@ -436,10 +437,10 @@ const contractReferences: ContractReference[] = [
 			{
 				call: '`startTruthAuction(securityPool)`',
 				caller: 'Anyone',
-				effect: 'Closes migration accounting and either reopens a fully backed child or starts its repair auction.',
+				effect: "Copies the frozen parent's remaining economic claim supply into the child, closes migration accounting, and either reopens a fully backed child or starts its repair auction.",
 				declarations: [{ name: 'startTruthAuction' }],
 				preconditions: 'Child migration window ended; pool is in fork migration; required child REP is available.',
-				signals: '`TruthAuctionStarted`; immediate no-auction paths also emit `TruthAuctionFinalized` and pool accounting checkpoints',
+				signals: '`ShareTokenSupplySet` and `TruthAuctionStarted`; immediate no-auction paths also emit `TruthAuctionFinalized` and pool accounting checkpoints',
 			},
 			{
 				call: '`finalizeTruthAuction(securityPool)`',
@@ -588,17 +589,20 @@ const contractReferences: ContractReference[] = [
 	},
 	{
 		name: 'ShareToken',
-		purpose: "Stores universe-aware ERC-1155 outcome shares and reproduces a holder's full source balance into selected fork branches.",
-		readSurface: 'Use standard ERC-1155 reads plus `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getTokenId`, `getTokenIds`, and `unpackTokenId`.',
+		purpose: "Stores universe-aware ERC-1155 outcome shares and materializes a holder's persistent source entitlement in selected fork branches.",
+		readSurface: 'Use standard ERC-1155 reads plus `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getMigratedShareAmount`, `getTokenId`, `getTokenIds`, and `unpackTokenId`.',
 		sourcePath: 'solidity/contracts/peripherals/tokens/ShareToken.sol',
 		interactions: [
 			{
 				call: '`migrate(fromId, targetOutcomeIndexes)`',
 				caller: 'Holder of the source token ID',
-				effect: "Burns the holder's full source balance and mints the same balance into every selected child-universe token ID.",
+				effect:
+					"If needed, first freezes the operational source pool and records its fork snapshot. A single-target call may lazily create that child while the branch-creation window is open. Keeps and locks the holder's source entitlement, then mints each selected child-universe token ID up to the current source balance. Later source additions can materialize only the unminted delta.",
 				declarations: [{ name: 'migrate' }],
-				preconditions: 'Source universe forked; eight-week window open; positive source balance; nonempty, strictly increasing, well-formed outcomes.',
-				signals: 'ERC-1155 transfer events and `Migrate` per branch',
+				preconditions:
+					'Source universe forked; canonical source pool is `Operational` or `PoolForked`; positive source balance; nonempty, strictly increasing, well-formed outcomes; every target in a multi-target call already has a canonical child pool; after the branch-creation window, a single target must also already exist; at least one selected child has an unmaterialized balance.',
+				signals:
+					'`SecurityPoolForkSnapshot` and `ParentRepLocked` when the source pool is first frozen; additionally `EscalationRepDrainedAtFork` when applicable; on the single-target lazy path, `DeployChild` when needed plus child deployment and continuation initialization events; ERC-1155 mint events and `Migrate` per branch',
 			},
 			{
 				call: '`authorize(securityPoolCandidate)`',
@@ -613,7 +617,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'An authorized `SecurityPool`',
 				effect: 'Mints `amount` each of Invalid, Yes, and No to `account`.',
 				declarations: [{ name: 'mintCompleteSets' }],
-				preconditions: 'Caller is authorized; global Invalid, Yes, and No supplies are equal before minting.',
+				preconditions: 'Caller is authorized; `amount` is positive.',
 				signals: 'ERC-1155 transfer events',
 			},
 			{

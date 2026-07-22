@@ -29,6 +29,11 @@ interface IShareToken {
 		address _account
 	) external view returns (uint256);
 	function balanceOfShares(uint248 _universeId, address _account) external view returns (uint256[3] memory balances);
+	function getMigratedShareAmount(
+		uint256 fromId,
+		uint248 targetUniverseId,
+		address account
+	) external view returns (uint256);
 	function getTokenId(
 		uint248 _universeId,
 		BinaryOutcomes.BinaryOutcome _outcome

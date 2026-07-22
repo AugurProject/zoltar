@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { getMainnetProtocolConfig } from '../shared/ts/protocolConfig'
 
 const readme = await readFile('README.md', 'utf8')
+const auctionDesign = await readFile('docs/auction-design.html', 'utf8')
 const html = await readFile('docs/escalation-game-architecture.html', 'utf8')
 const invariantsHtml = await readFile('docs/invariants.html', 'utf8')
 const liquidationHtml = await readFile('docs/liquidation.html', 'utf8')
@@ -261,7 +262,19 @@ function assertStartHereTimelines(): void {
 }
 
 function assertContractInteractionDistinctions(): void {
-	assert.match(invariantsHtml, /<code>SHARE-04<\/code>[\s\S]*maximum actual outcome supply[\s\S]*actual winning supply/)
+	assert.match(invariantsHtml, /<code>SHARE-04<\/code>[\s\S]*remaining economic claim[\s\S]*source entitlements/)
+	assert.match(invariantsHtml, /FORK-05[\s\S]*forkActivationTime \+ 8 weeks[\s\S]*parent pool enters <code>PoolForked<\/code>[\s\S]*Share materialization has no expiry[\s\S]*already-created child/)
+	assert.doesNotMatch(invariantsHtml, /Child creation, share migration, vault migration/)
+	assert.doesNotMatch(invariantsHtml, /forkTime \+ 8 weeks/)
+	assert.match(auctionDesign, /forkActivationTime \+ SecurityPoolUtils\.MIGRATION_TIME[\s\S]*pool-local[\s\S]*universe <code>forkTime<\/code>[\s\S]*invariants\.html#fork-05/)
+	assert.doesNotMatch(auctionDesign, /8 weeks from the parent\s+universe fork time/)
+	assert.match(whitepaperPlaceholder, /Parent retained \+ locked/)
+	assert.doesNotMatch(whitepaperPlaceholder, /Parent burned/)
+	assert.match(eventStream, /ShareTokenSupplySet[\s\S]*source entitlements whose child ERC-1155 balances have not materialized yet[\s\S]*Migrate[\s\S]*do not change this denominator/)
+	assert.match(eventStream, /On every `startTruthAuction`, initialize the child's remaining economic claim supply from `ShareTokenSupplySet`[\s\S]*immediate no-auction path/)
+	assert.match(contractInteractionReference, /single-target call may lazily create that child/)
+	assert.match(contractInteractionReference, /every target in a multi-target call already has a canonical child pool/)
+	assert.match(contractInteractionReference, /startTruthAuction\(securityPool\)[\s\S]*frozen parent's remaining economic claim supply[\s\S]*ShareTokenSupplySet/)
 	assert.match(contractInteractionReference, /getForkThreshold`, `getNonDecisionThreshold`, `getUniverseTheoreticalSupply`/)
 	assert.match(contractInteractionReference, /getQuestionResolution`, `getFinalQuestionResolution`, `fixedQuestionOutcome`/)
 	assert.match(contractInteractionReference, /startFromFork\(startBond, nonDecisionThreshold, elapsedAtFork, fixedQuestionOutcome, winnerHaircutPaidByFork, forkCarryInitialBacking\)[\s\S]*After the continuation deadline, `getFinalQuestionResolution` returns the fixed outcome/)

@@ -362,11 +362,10 @@
 									each use the supply denominator for the claims they settle.
 								</td>
 								<td>
-									Child setup uses the maximum actual outcome supply as its
-									collateral denominator. Unequal supplies block new complete-set
-									minting, while holders of all three outcomes retain proportional
-									complete-set redemption; winning redemption divides collateral by
-									the actual winning supply.
+									Child setup copies the frozen parent's remaining economic claim
+									supply. That denominator reserves collateral for materialized
+									ERC-1155 balances and source entitlements that can materialize
+									later; complete-set and winning-share redemption consume it.
 								</td>
 							</tr>
 							<tr>
@@ -1091,13 +1090,13 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								Child setup records the maximum actual Invalid, Yes, or No supply
-								as its collateral denominator. Unequal outcome supplies block new
-								complete-set mints but not proportional complete-set burns. After
-								resolution, winning-share redemption divides remaining collateral
-								by the actual remaining winning supply.
+								Child setup copies the frozen parent's remaining economic claim
+								supply as its collateral denominator. That supply includes both
+								materialized child ERC-1155 balances and source entitlements that
+								can materialize later. Complete-set minting adds claims, while
+								complete-set and winning-share redemption consume them.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> If migrated supplies are Invalid 10, Yes 8, and No 6, setup records 10; new complete-set minting is blocked, while a Yes resolution pays the eight Yes shares from the remaining collateral.</p>
+							<p class="invariant-example"><strong>Example:</strong> If a parent freezes with 10 claims per outcome and a child has no materialized shares yet, setup still records 10. A new minter receives only the shares purchased at that established rate, while all 10 source claims retain their reserved collateral.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
@@ -1271,21 +1270,29 @@
 							</dl>
 						</div>
 					</details>
-					<details class="invariant-entry">
+					<details class="invariant-entry" id="fork-05">
 						<summary><code>FORK-05</code><span class="invariant-title">Eight-week migration boundary</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								Child creation, share migration, vault migration, REP splitting,
-								and own-fork claims are allowed through
-								<code>forkTime + 8 weeks</code>, inclusive, and are closed after
-								that timestamp. Post-migration activation begins only afterward.
+								Child creation, vault migration, REP splitting, and own-fork
+								claims are allowed through
+								<code>forkActivationTime + 8 weeks</code>, inclusive, and are
+								closed after that timestamp. <code>forkActivationTime</code> is
+								recorded when the parent pool enters <code>PoolForked</code>;
+								post-migration activation begins only after its window ends.
+								Share materialization has no expiry, but after the deadline it can
+								target only an already-created child.
 							</div>
 							<p class="invariant-example"><strong>Example:</strong> Vault migration succeeds exactly at the eight-week deadline and reverts one second later.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
+										<a
+										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
+										><code>forkActivationTime</code> recording and child guards</a
+										>,
 										<a
 										href="../solidity/contracts/peripherals/SecurityPoolUtils.sol"
 										><code>MIGRATION_TIME</code></a
@@ -1395,11 +1402,12 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								Share migration burns the holder's entire parent token-ID
-								balance, rejects duplicate or malformed target outcomes, and
-								mints the same amount into every selected child.
+								Share migration preserves the holder's parent token-ID balance as
+								a persistent entitlement, rejects duplicate or malformed target
+								outcomes, and mints only the unmaterialized balance into each
+								selected child. A used source balance cannot transfer.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> Migrating seven parent Yes shares to the Invalid and No children burns all seven parent shares and mints seven corresponding shares in each selected child.</p>
+							<p class="invariant-example"><strong>Example:</strong> Materializing seven parent Yes shares in one child leaves all seven parent entitlements visible and locked. A later call can mint seven into another existing child, but cannot mint the first child twice.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
@@ -1417,12 +1425,12 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								Child pricing supply equals the maximum actual Invalid, Yes, or
-								No supply. When outcome supplies differ, complete-set minting is
-								blocked, but a holder with all three outcomes can burn them for a
-								proportional share of collateral using that maximum denominator.
+								Child pricing uses the fork-time economic claim supply rather than
+								currently materialized outcome supplies. Unequal ERC-1155 supplies
+								therefore do not block complete-set minting or proportional
+								complete-set redemption.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> Supplies of 12, 10, and 8 produce a pricing supply of 12; minting is blocked, but a holder burning one of each outcome receives one-twelfth of collateral.</p>
+							<p class="invariant-example"><strong>Example:</strong> If the economic supply is 12 while materialized supplies are 10, 8, and 6, a new complete set is priced against 12 and adds the same newly purchased balance to all three materialized supplies.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
@@ -1433,8 +1441,8 @@
 										>,
 										<a
 										href="../solidity/contracts/peripherals/tokens/ShareToken.sol"
-										><code>maximumOutcomeSupply</code> and complete-set mint/burn
-										guards</a
+										><code>mintCompleteSets</code> and persistent migration
+										accounting</a
 										>
 								</dd></div>
 							</dl>
@@ -1447,9 +1455,9 @@
 							<div class="invariant-property">
 								Value-free truth-auction settlement activates a child with its
 								tracked migrated collateral plus retained auction ETH, which cannot
-								exceed the parent fork snapshot. Separate guards keep
-								new complete-set minting blocked when migrated share supplies
-								are inconsistent without blocking proportional burns.
+								exceed the parent fork snapshot. Fork-time economic claim
+								accounting keeps later minting and
+								proportional burns independent from materialization order.
 							</div>
 							<p class="invariant-example"><strong>Example:</strong> A child with 9 ETH against a 10 ETH fork snapshot activates after value-free finalization with 9 ETH of tracked collateral; its later operations remain subject to the ordinary share-supply and minting guards.</p>
 							<dl class="invariant-metadata">
