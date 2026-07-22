@@ -277,7 +277,7 @@ async function checkAllZeroBids(scenario: AuctionExampleScenario): Promise<void>
 		assertEqual(example.output('bindingCondition'), 'underfunded', `${scenario.filePath} zero-bid binding condition`)
 		assertEqual(example.output('ethRaised'), '0 ETH', `${scenario.filePath} zero-bid retained ETH`)
 		assertEqual(example.output('thresholdInputEth'), '0 ETH', `${scenario.filePath} zero-bid threshold input ETH`)
-		const expectedThreshold = scenario.filePath === 'docs/placeholder-whitepaper.html' ? '7.50 ETH/REP' : '7.5 ETH/REP'
+		const expectedThreshold = scenario.filePath === 'docs/statoblast-whitepaper.html' ? '7.50 ETH/REP' : '7.5 ETH/REP'
 		assertEqual(example.output('underfundedThreshold'), expectedThreshold, `${scenario.filePath} zero-bid threshold`)
 		assertEqual(example.output('aliceReceives'), '0 REP', `${scenario.filePath} zero-bid Alice REP`)
 		assertEqual(example.output('bobReceives'), '0 REP', `${scenario.filePath} zero-bid Bob REP`)
@@ -300,9 +300,9 @@ async function checkSourceLabelsAndThresholdText(filePath: string, requiredSourc
 }
 
 async function checkCollateralRepairExample(): Promise<void> {
-	const html = await readFile('docs/placeholder-whitepaper.html', 'utf8')
+	const html = await readFile('docs/statoblast-whitepaper.html', 'utf8')
 	const window = new Window({
-		url: pathToFileURL('docs/placeholder-whitepaper.html').href,
+		url: pathToFileURL('docs/statoblast-whitepaper.html').href,
 	})
 	window.document.write(html)
 	window.document.close()
@@ -311,7 +311,7 @@ async function checkCollateralRepairExample(): Promise<void> {
 		const script = window.document.querySelector('script:not([src])')
 		const scriptText = script?.textContent
 		if (scriptText === undefined || scriptText.trim().length === 0) {
-			throw new Error('docs/placeholder-whitepaper.html is missing an inline collateral repair script')
+			throw new Error('docs/statoblast-whitepaper.html is missing an inline collateral repair script')
 		}
 
 		const runScript = new Function('window', 'document', scriptText)
@@ -319,7 +319,7 @@ async function checkCollateralRepairExample(): Promise<void> {
 
 		const example = window.document.getElementById('collateral-repair-example')
 		if (example === null) {
-			throw new Error('docs/placeholder-whitepaper.html is missing #collateral-repair-example')
+			throw new Error('docs/statoblast-whitepaper.html is missing #collateral-repair-example')
 		}
 
 		const output = (name: string) => {
@@ -362,7 +362,7 @@ async function checkCollateralRepairExample(): Promise<void> {
 }
 
 async function checkResolutionEdgeExample(): Promise<void> {
-	const example = await loadInteractiveExample('docs/placeholder-whitepaper.html', 'resolution-edge-example')
+	const example = await loadInteractiveExample('docs/statoblast-whitepaper.html', 'resolution-edge-example')
 
 	try {
 		assertEqual(example.output('resolutionResult'), 'None', 'resolution edge example default result')
@@ -397,7 +397,7 @@ async function checkResolutionEdgeExample(): Promise<void> {
 }
 
 async function checkPayoutRegionExample(): Promise<void> {
-	const example = await loadInteractiveExample('docs/placeholder-whitepaper.html', 'payout-region-example')
+	const example = await loadInteractiveExample('docs/statoblast-whitepaper.html', 'payout-region-example')
 
 	try {
 		assertEqual(example.output('payoutState'), 'reachable ordinary winner state', 'payout region example default state')
@@ -547,14 +547,14 @@ assert.match(auctionDesignHtml, /1 \/ 0\.11 ≈ 9\.09 REP[\s\S]*below the <code>
 
 const operatorReferenceMarkdown = await readFile('docs/operator-reference.md', 'utf8')
 assert.match(operatorReferenceMarkdown, /parent vault is checkpointed before its allowance is cleared[\s\S]*earned fees remain redeemable[\s\S]*`totalAccruedFees\(\)`/i, 'operator reference should preserve parent fee solvency guardrails during vault migration')
-assert.match(operatorReferenceMarkdown, /placeholder-whitepaper\.html#eq-placeholder-fork-migration-proportion[\s\S]*placeholder-whitepaper\.html#eq-placeholder-fork-collateral-ceiling/i, 'operator reference should delegate migration checkpoint and repair derivations to the whitepaper')
+assert.match(operatorReferenceMarkdown, /statoblast-whitepaper\.html#eq-statoblast-fork-migration-proportion[\s\S]*statoblast-whitepaper\.html#eq-statoblast-fork-collateral-ceiling/i, 'operator reference should delegate migration checkpoint and repair derivations to the whitepaper')
 assert.doesNotMatch(operatorReferenceMarkdown, /activateForkMode[\s\S]*fork-time checkpoint[\s\S]*collateralAtFork/i, 'operator reference should not duplicate the canonical own-fork checkpoint derivation')
 assert.match(operatorReferenceMarkdown, /once every eligible vault checkpoints[\s\S]*no vault can individually claim returns to collateral/i, 'operator reference should document final aggregate-only fee reserve release')
 assert.match(operatorReferenceMarkdown, /each claimed auction allowance joins incrementally[\s\S]*delayed claim adds to the pool’s live eligible total/i, 'operator reference should document live incremental fee eligibility for delayed auction claims')
 assert.match(operatorReferenceMarkdown, /## Security Pool Guardrails[\s\S]*totalFeesOwedToVaults[\s\S]*totalAccruedFees\(\)[\s\S]*## Share Migration/i, 'operator reference security-pool guardrails should define assigned and aggregate fee accounting')
 
-const placeholderHtml = await readFile('docs/placeholder-whitepaper.html', 'utf8')
-const escalationCurvePath = placeholderHtml.match(/data-source="normalizedCost\(t\) = \(exp\(2\.4 \* t\) - 1\) \/ \(exp\(2\.4\) - 1\)"\s+d="([^"]+)"/)
+const statoblastHtml = await readFile('docs/statoblast-whitepaper.html', 'utf8')
+const escalationCurvePath = statoblastHtml.match(/data-source="normalizedCost\(t\) = \(exp\(2\.4 \* t\) - 1\) \/ \(exp\(2\.4\) - 1\)"\s+d="([^"]+)"/)
 const escalationCurvePathData = escalationCurvePath?.[1]
 if (escalationCurvePathData === undefined) {
 	throw new Error('whitepaper escalation chart should expose its normalized exponential sample')
@@ -578,8 +578,8 @@ for (let index = 1; index < escalationCurveRises.length; index += 1) {
 	}
 	assert.ok(current >= previous, 'whitepaper escalation chart should steepen monotonically toward the non-decision threshold')
 }
-assert.match(placeholderHtml, /activateForkMode[\s\S]*fork-time checkpoint[\s\S]*collateralAtFork/i, 'whitepaper should own the ordered own-fork collateral checkpoint lifecycle')
-assert.match(placeholderHtml, /Truth-auction repair subtracts the child's actual cumulative routed[\s\S]*collateral from that snapshot/i, 'whitepaper should own snapshot-based collateral repair')
+assert.match(statoblastHtml, /activateForkMode[\s\S]*fork-time checkpoint[\s\S]*collateralAtFork/i, 'whitepaper should own the ordered own-fork collateral checkpoint lifecycle')
+assert.match(statoblastHtml, /Truth-auction repair subtracts the child's actual cumulative routed[\s\S]*collateral from that snapshot/i, 'whitepaper should own snapshot-based collateral repair')
 const invariantsHtml = await readFile('docs/invariants.html', 'utf8')
 const feeVectorPrecision = 10n ** 18n
 const feeVectorDecayCandidate = 7n
@@ -605,39 +605,39 @@ assert.deepEqual(
 	},
 	'fee accrual documentation vector should preserve nonzero index and global remainders while subtracting only whole-wei reserve credit',
 )
-assert.doesNotMatch(placeholderHtml, /carried remainder across paged withdrawals/i, 'whitepaper auction examples should not describe removed withdrawal-order remainder carry')
-assert.doesNotMatch(placeholderHtml, /paged withdrawals carr(?:y|ies) division dust/i, 'whitepaper should describe fixed cumulative-position allocation rather than mutable division carry')
-assert.doesNotMatch(placeholderHtml, /(?:collateralDecay|decayCandidate)[^\"]*totalSecurityBondAllowance/i, 'whitepaper fee-index formula should not use total capacity as the accrual denominator')
-assert.match(placeholderHtml, /feeEligibleSecurityBondAllowance/i, 'whitepaper fee-index formula should use assigned fee-eligible allowance')
-assert.match(placeholderHtml, /data-source="decayCandidate = collateralIn - floor\(collateralIn \\cdot rpow\(retentionRate, elapsedTime, pricePrecision\) \/ pricePrecision\)"/i, 'whitepaper should distinguish the fixed-point decay candidate from credited whole-wei fees')
-assert.match(placeholderHtml, /collateralOut = collateralIn - reserveCredit/i, 'whitepaper should define stored collateral as input collateral minus whole-wei reserve credit')
-assert.match(placeholderHtml, /feeEligibleSecurityBondAllowance == 0[\s\S]*feeIndexDelta[\s\S]*reserveCredit[\s\S]*advances the accumulator[\s\S]*prevents unclaimed auction allowance from earning retroactive fees/i, 'whitepaper fee-index section should document the zero-eligible-allowance no-accrual branch')
-assert.match(placeholderHtml, /Unallocated Reserve[\s\S]*Assigned Vault Debt[\s\S]*Vault Payout/i, 'whitepaper fee-flow diagram should show reserve, checkpointed debt, and redemption stages')
-assert.match(placeholderHtml, /vaultFeeRemainderOut/i, 'whitepaper fee-index formula should document per-vault fractional carry')
-assert.match(placeholderHtml, /actualCollateralDelta = min\(requestedCollateralDelta, parentCompleteSetCollateral\)/i, 'whitepaper own-fork collateral formula should reserve accrued parent fees')
-assert.match(placeholderHtml, /activateForkMode[\s\S]*universe fork[\s\S]*fork-time checkpoint[\s\S]*collateralAtFork/i, 'whitepaper should document the ordered own-fork collateral checkpoint lifecycle')
-assert.match(placeholderHtml, /Both external and[\s\S]*one fixed, fee-exclusive fork[\s\S]*cumulative\s+ceiling accounting[\s\S]*Truth-auction repair subtracts the child's actual cumulative routed\s+collateral/i, 'whitepaper should document exact fixed-snapshot collateral repair')
+assert.doesNotMatch(statoblastHtml, /carried remainder across paged withdrawals/i, 'whitepaper auction examples should not describe removed withdrawal-order remainder carry')
+assert.doesNotMatch(statoblastHtml, /paged withdrawals carr(?:y|ies) division dust/i, 'whitepaper should describe fixed cumulative-position allocation rather than mutable division carry')
+assert.doesNotMatch(statoblastHtml, /(?:collateralDecay|decayCandidate)[^\"]*totalSecurityBondAllowance/i, 'whitepaper fee-index formula should not use total capacity as the accrual denominator')
+assert.match(statoblastHtml, /feeEligibleSecurityBondAllowance/i, 'whitepaper fee-index formula should use assigned fee-eligible allowance')
+assert.match(statoblastHtml, /data-source="decayCandidate = collateralIn - floor\(collateralIn \\cdot rpow\(retentionRate, elapsedTime, pricePrecision\) \/ pricePrecision\)"/i, 'whitepaper should distinguish the fixed-point decay candidate from credited whole-wei fees')
+assert.match(statoblastHtml, /collateralOut = collateralIn - reserveCredit/i, 'whitepaper should define stored collateral as input collateral minus whole-wei reserve credit')
+assert.match(statoblastHtml, /feeEligibleSecurityBondAllowance == 0[\s\S]*feeIndexDelta[\s\S]*reserveCredit[\s\S]*advances the accumulator[\s\S]*prevents unclaimed auction allowance from earning retroactive fees/i, 'whitepaper fee-index section should document the zero-eligible-allowance no-accrual branch')
+assert.match(statoblastHtml, /Unallocated Reserve[\s\S]*Assigned Vault Debt[\s\S]*Vault Payout/i, 'whitepaper fee-flow diagram should show reserve, checkpointed debt, and redemption stages')
+assert.match(statoblastHtml, /vaultFeeRemainderOut/i, 'whitepaper fee-index formula should document per-vault fractional carry')
+assert.match(statoblastHtml, /actualCollateralDelta = min\(requestedCollateralDelta, parentCompleteSetCollateral\)/i, 'whitepaper own-fork collateral formula should reserve accrued parent fees')
+assert.match(statoblastHtml, /activateForkMode[\s\S]*universe fork[\s\S]*fork-time checkpoint[\s\S]*collateralAtFork/i, 'whitepaper should document the ordered own-fork collateral checkpoint lifecycle')
+assert.match(statoblastHtml, /Both external and[\s\S]*one fixed, fee-exclusive fork[\s\S]*cumulative\s+ceiling accounting[\s\S]*Truth-auction repair subtracts the child's actual cumulative routed\s+collateral/i, 'whitepaper should document exact fixed-snapshot collateral repair')
 assert.match(
-	placeholderHtml,
+	statoblastHtml,
 	/data-source="migrationRepDenominatorAtFork = ownFork \? vaultRepAtFork : auctionableRepAtFork; migratedRep = floor\(parentPoolOwnership \\cdot migrationRepDenominatorAtFork \/ parentPoolOwnershipDenominator\)"/i,
 	'whitepaper should document the fork-specific migrated REP denominator and Solidity floor',
 )
-assert.match(placeholderHtml, /data-source="ethCollateralToBuy = max\(0, parentCollateralAtFork - forkCollateralReceived\)"/i, 'whitepaper should derive the auction repair target from actual routed collateral')
-assert.match(placeholderHtml, /cumulative-ceiling transfers[\s\S]*available-collateral cap[\s\S]*nominal migrated REP/i, 'whitepaper should explain exact and capped collateral-repair accounting')
+assert.match(statoblastHtml, /data-source="ethCollateralToBuy = max\(0, parentCollateralAtFork - forkCollateralReceived\)"/i, 'whitepaper should derive the auction repair target from actual routed collateral')
+assert.match(statoblastHtml, /cumulative-ceiling transfers[\s\S]*available-collateral cap[\s\S]*nominal migrated REP/i, 'whitepaper should explain exact and capped collateral-repair accounting')
 assert.match(
-	placeholderHtml,
+	statoblastHtml,
 	/data-source="migrationRepDenominatorAtFork = ownFork \? vaultRepAtFork : auctionableRepAtFork; cumulativeCollateralTargetAfterMigration = ceil\(parentCollateralAtFork \\cdot cumulativeRepTransferredAfterMigration \/ migrationRepDenominatorAtFork\)/i,
 	'whitepaper should use the fork-specific denominator in cumulative collateral migration',
 )
-assert.doesNotMatch(placeholderHtml, /data-source="cumulativeCollateralTargetAfterMigration = ceil\(parentCollateralAtFork \\cdot cumulativeRepTransferredAfterMigration \/ vaultRepAtFork\)/i, 'whitepaper should not present the own-fork denominator as the generalized collateral migration formula')
-assert.match(placeholderHtml, /fork-neutral snapshot shared by both paths[\s\S]*ETH raise target[\s\S]*depends on auction demand/i, 'whitepaper should explain shared snapshot accounting and demand-dependent auction repair')
-assert.match(placeholderHtml, /After every eligible vault syncs[\s\S]*individually sub-wei vault remainders[\s\S]*returns to complete-set collateral/i, 'whitepaper should document final aggregate-only fee reserve release')
-assert.match(placeholderHtml, /Each delayed claim adds only its newly assigned amount[\s\S]*does not reconstruct that total from[\s\S]*allowance changes and[\s\S]*liquidations remain intact/i, 'whitepaper should document incremental live fee eligibility for delayed auction claims')
-assert.match(placeholderHtml, /auction-design\.html#clearing/i, 'whitepaper should route clearing mechanics to the canonical auction design')
-assert.doesNotMatch(placeholderHtml, /id="auction-clearing-example"|id="underfunded-auction-example"/i, 'whitepaper should not duplicate canonical auction examples')
-assert.doesNotMatch(placeholderHtml, /data-source="[^\"]*underfundedThreshold/i, 'whitepaper should not duplicate the canonical underfunded clearing formula')
-assert.doesNotMatch(placeholderHtml, /totalRepPurchased = underfundedWinningEth/i, 'whitepaper should not duplicate canonical underfunded allocation math')
-assert.match(placeholderHtml, /value-free finalization activates the child[\s\S]*Nonzero\s+finalizer ETH is rejected/i, 'whitepaper should document bounded value-free settlement')
-assert.match(placeholderHtml, /forced[\s\S]*ETH remains unaccounted surplus/i, 'whitepaper should exclude forced ETH from child collateral')
-assert.doesNotMatch(placeholderHtml, /retained ETH at the reserve tick/i, 'whitepaper should not describe the eligibility tick as the execution price')
+assert.doesNotMatch(statoblastHtml, /data-source="cumulativeCollateralTargetAfterMigration = ceil\(parentCollateralAtFork \\cdot cumulativeRepTransferredAfterMigration \/ vaultRepAtFork\)/i, 'whitepaper should not present the own-fork denominator as the generalized collateral migration formula')
+assert.match(statoblastHtml, /fork-neutral snapshot shared by both paths[\s\S]*ETH raise target[\s\S]*depends on auction demand/i, 'whitepaper should explain shared snapshot accounting and demand-dependent auction repair')
+assert.match(statoblastHtml, /After every eligible vault syncs[\s\S]*individually sub-wei vault remainders[\s\S]*returns to complete-set collateral/i, 'whitepaper should document final aggregate-only fee reserve release')
+assert.match(statoblastHtml, /Each delayed claim adds only its newly assigned amount[\s\S]*does not reconstruct that total from[\s\S]*allowance changes and[\s\S]*liquidations remain intact/i, 'whitepaper should document incremental live fee eligibility for delayed auction claims')
+assert.match(statoblastHtml, /auction-design\.html#clearing/i, 'whitepaper should route clearing mechanics to the canonical auction design')
+assert.doesNotMatch(statoblastHtml, /id="auction-clearing-example"|id="underfunded-auction-example"/i, 'whitepaper should not duplicate canonical auction examples')
+assert.doesNotMatch(statoblastHtml, /data-source="[^\"]*underfundedThreshold/i, 'whitepaper should not duplicate the canonical underfunded clearing formula')
+assert.doesNotMatch(statoblastHtml, /totalRepPurchased = underfundedWinningEth/i, 'whitepaper should not duplicate canonical underfunded allocation math')
+assert.match(statoblastHtml, /value-free finalization activates the child[\s\S]*Nonzero\s+finalizer ETH is rejected/i, 'whitepaper should document bounded value-free settlement')
+assert.match(statoblastHtml, /forced[\s\S]*ETH remains unaccounted surplus/i, 'whitepaper should exclude forced ETH from child collateral')
+assert.doesNotMatch(statoblastHtml, /retained ETH at the reserve tick/i, 'whitepaper should not describe the eligibility tick as the execution price')
 assert.match(invariantsHtml, /AUC-09[\s\S]*Bounded bid settlement[\s\S]*finalizeTruthAuctionRepair/i, 'invariant evidence should point bounded settlement to the delegate guard')

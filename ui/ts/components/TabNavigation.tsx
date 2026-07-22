@@ -4,7 +4,7 @@ import { ViewTabs } from './ViewTabs.js'
 import { buildRouteHref, getTopLevelRouteSearch } from '../lib/routing.js'
 import type { TabNavigationProps } from '../types/components.js'
 
-export function TabNavigation({ route, showDeployTab = true, augurPlaceHolderDeployed, deployRoute, marketRoute, openOracleRoute, securityPoolsRoute, onRouteChange }: TabNavigationProps) {
+export function TabNavigation({ route, showDeployTab = true, augurStatoblastDeployed, deployRoute, marketRoute, openOracleRoute, securityPoolsRoute, onRouteChange }: TabNavigationProps) {
 	const disabledTabReason = appCopy.deploymentRequiredDetail
 	const options: Array<{ disabled?: boolean; href: string; label: string; reason?: string; value: Exclude<TabNavigationProps['route'], 'not-found'> }> = []
 	if (showDeployTab) options.push({ value: 'deploy', label: commonCopy.deploy, href: buildRouteHref(deployRoute, getTopLevelRouteSearch('deploy')) })
@@ -12,22 +12,22 @@ export function TabNavigation({ route, showDeployTab = true, augurPlaceHolderDep
 		value: 'zoltar',
 		label: commonCopy.zoltar,
 		href: buildRouteHref(marketRoute, getTopLevelRouteSearch('zoltar')),
-		disabled: !augurPlaceHolderDeployed,
-		...(!augurPlaceHolderDeployed ? { reason: disabledTabReason } : {}),
+		disabled: !augurStatoblastDeployed,
+		...(!augurStatoblastDeployed ? { reason: disabledTabReason } : {}),
 	})
 	options.push({
 		value: 'security-pools',
 		label: commonCopy.securityPools,
 		href: buildRouteHref(securityPoolsRoute, getTopLevelRouteSearch('security-pools')),
-		disabled: !augurPlaceHolderDeployed,
-		...(!augurPlaceHolderDeployed ? { reason: disabledTabReason } : {}),
+		disabled: !augurStatoblastDeployed,
+		...(!augurStatoblastDeployed ? { reason: disabledTabReason } : {}),
 	})
 	options.push({
 		value: 'open-oracle',
 		label: appCopy.oracleReports,
 		href: buildRouteHref(openOracleRoute, getTopLevelRouteSearch('open-oracle')),
-		disabled: !augurPlaceHolderDeployed,
-		...(!augurPlaceHolderDeployed ? { reason: disabledTabReason } : {}),
+		disabled: !augurStatoblastDeployed,
+		...(!augurStatoblastDeployed ? { reason: disabledTabReason } : {}),
 	})
 
 	return (

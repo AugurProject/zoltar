@@ -6,7 +6,7 @@
 		<title>Augur Statoblast White Paper</title>
 		<link rel="stylesheet" href="./shared-docs.css" />
 	</head>
-	<body class="paper-page paper-placeholder">
+	<body class="paper-page paper-statoblast">
 		<a class="skip-link" href="#main-content">Skip to document</a>
 		<div class="site-shell">
 			<aside class="sidebar" aria-label="Table of contents">
@@ -260,7 +260,7 @@
 							</tbody>
 						</table>
 					</div>
-					<figure class="diagram" id="fig-placeholder-actor-swimlanes">
+					<figure class="diagram" id="fig-statoblast-actor-swimlanes">
 						<svg
 							viewBox="0 0 980 430"
 							role="img"
@@ -642,7 +642,7 @@
 						origin cannot occupy an inherited lineage's registry entry, origin
 						deployment does not scan universe ancestors.
 					</p>
-					<figure class="diagram" id="fig-placeholder-asset-flow">
+					<figure class="diagram" id="fig-statoblast-asset-flow">
 						<svg
 							viewBox="0 0 960 430"
 							role="img"
@@ -829,7 +829,7 @@
 						stores the result as scaled REP per ETH because solvency checks
 						compare REP backing against ETH obligations.
 					</p>
-					<div class="equation" id="eq-placeholder-rep-eth-price">
+					<div class="equation" id="eq-statoblast-rep-eth-price">
 						<math
 							display="block"
 							aria-label="REP per ETH price equals REP amount times price precision divided by ETH amount"
@@ -856,7 +856,7 @@
 							units.
 						</p>
 					</div>
-					<div class="equation" id="eq-placeholder-bond-solvency">
+					<div class="equation" id="eq-statoblast-bond-solvency">
 						<math
 							display="block"
 							aria-label="remaining REP backing times price precision is greater than or equal to security bond allowance times REP per ETH price"
@@ -878,7 +878,7 @@
 							ETH-denominated security-bond allowance.
 						</p>
 					</div>
-					<div class="equation" id="eq-placeholder-allowance-backing">
+					<div class="equation" id="eq-statoblast-allowance-backing">
 						<math
 							display="block"
 							aria-label="REP backing times price precision must be strictly greater than security bond allowance times REP per ETH price for allowance backing"
@@ -901,7 +901,7 @@
 							allowance.
 						</p>
 					</div>
-					<div class="equation" id="eq-placeholder-liquidation-condition">
+					<div class="equation" id="eq-statoblast-liquidation-condition">
 						<math
 							display="block"
 							aria-label="a vault is liquidable when security bond allowance times security multiplier times REP per ETH price is greater than REP backing times price precision"
@@ -987,7 +987,7 @@
 							<code>currentRetentionRate</code> changes as utilization changes.
 						</li>
 					</ul>
-					<figure class="diagram" id="fig-placeholder-fee-flow">
+					<figure class="diagram" id="fig-statoblast-fee-flow">
 						<svg
 							viewBox="0 0 860 270"
 							role="img"
@@ -1128,12 +1128,12 @@
 						stays at the minimum retention rate. The intent is to charge more
 						aggressively for security as utilization rises and underwriting
 						slack falls. The
-						<a href="#fig-placeholder-retention-rate-curve"
+						<a href="#fig-statoblast-retention-rate-curve"
 							>Retention Rate Curve</a
 						>
 						figure shows the same shape as the contract.
 					</p>
-					<figure class="diagram" id="fig-placeholder-retention-rate-curve">
+					<figure class="diagram" id="fig-statoblast-retention-rate-curve">
 						<svg
 							viewBox="0 0 860 330"
 							role="img"
@@ -1250,7 +1250,7 @@
 							>annualFee = 1 - (retentionRate / PRICE_PRECISION)^SECONDS_PER_YEAR</code
 						>.
 					</p>
-					<figure class="diagram" id="fig-placeholder-open-interest-fee-curve">
+					<figure class="diagram" id="fig-statoblast-open-interest-fee-curve">
 						<svg
 							viewBox="0 0 860 330"
 							role="img"
@@ -1370,7 +1370,7 @@
 							is reached.
 						</p>
 					</figure>
-					<div class="equation" id="eq-placeholder-utilization">
+					<div class="equation" id="eq-statoblast-utilization">
 						<math
 							display="block"
 							aria-label="scaled utilization equals complete set collateral amount times price precision divided by total security bond allowance"
@@ -1404,7 +1404,7 @@
 							before applying the linear slope.
 						</p>
 					</div>
-					<div class="equation" id="eq-placeholder-retention-rate">
+					<div class="equation" id="eq-statoblast-retention-rate">
 						<math
 							display="block"
 							aria-label="retention rate equals max retention rate when bond allowance is zero, otherwise max minus floored slope span times utilization ratio until the dip, otherwise minimum retention rate"
@@ -1465,7 +1465,7 @@
 							to the minimum rate.
 						</p>
 					</div>
-					<div class="equation" id="eq-placeholder-retention-decay">
+					<div class="equation" id="eq-statoblast-retention-decay">
 						<math
 							display="block"
 							aria-label="decay candidate equals collateral in minus the floor of collateral in times fixed point retention power divided by price precision"
@@ -1500,7 +1500,7 @@
 						The remaining fee-index equations apply only when fee-eligible
 						allowance is positive.
 					</p>
-					<div class="equation" id="eq-placeholder-fee-index-accrual">
+					<div class="equation" id="eq-statoblast-fee-index-accrual">
 						<math
 							display="block"
 							aria-label="fee index delta floors scaled decay candidate plus its carried remainder over fee eligible allowance; reserve credit floors the indexed eligible allowance plus global fee remainder over price precision; collateral out equals collateral in minus reserve credit; vault fees floor vault allowance times its index delta plus vault remainder over price precision"
@@ -1616,7 +1616,7 @@
 						checkpoint, that reserve remains protected by
 						<code>totalAccruedFees()</code>.
 					</p>
-					<figure class="diagram" id="fig-placeholder-pool-accounting">
+					<figure class="diagram" id="fig-statoblast-pool-accounting">
 						<svg
 							viewBox="0 0 920 310"
 							role="img"
@@ -1755,7 +1755,7 @@
 							to vaults.
 						</p>
 					</figure>
-					<div class="equation" id="eq-placeholder-pool-ownership-conversion">
+					<div class="equation" id="eq-statoblast-pool-ownership-conversion">
 						<math
 							display="block"
 							aria-label="pool ownership equals REP amount times pool ownership denominator divided by total REP balance, and REP amount equals pool ownership times total REP balance divided by pool ownership denominator"
@@ -1817,7 +1817,7 @@
 						The <a href="./liquidation.html">Liquidation Design</a> owns the
 						queue snapshot, eligibility gates, penalty and rounding math, health
 						improvement rule, and worked examples. The
-						<a href="./open-oracle-integration.html#placeholder-integration">OpenOracle integration</a>
+						<a href="./open-oracle-integration.html#statoblast-integration">OpenOracle integration</a>
 						owns price staging and callback behavior.
 					</p>
 					<p>
@@ -1844,7 +1844,7 @@
 						<code>No</code> share. The token id encodes the universe id and
 						outcome, making positions fork-aware.
 					</p>
-					<figure class="diagram" id="fig-placeholder-share-lifecycle">
+					<figure class="diagram" id="fig-statoblast-share-lifecycle">
 						<svg
 							viewBox="0 0 860 340"
 							role="img"
@@ -1980,7 +1980,7 @@
 						and per-child delta rules are owned by
 						<a href="invariants.html#fork-10"><code>FORK-10</code></a>.
 					</p>
-					<figure class="diagram" id="fig-placeholder-share-migration">
+					<figure class="diagram" id="fig-statoblast-share-migration">
 						<svg
 							viewBox="0 0 900 300"
 							role="img"
@@ -2295,7 +2295,7 @@
 						meaning of a complete-set claim, subject to collateral accounting
 						remaining intact through migration and any required auction repair.
 					</p>
-					<div class="equation" id="eq-placeholder-share-redemption">
+					<div class="equation" id="eq-statoblast-share-redemption">
 						<math
 							display="block"
 							aria-label="cash payout equals floor of burned winning shares times complete set collateral amount divided by remaining economic claim supply before the burn"
@@ -2384,7 +2384,7 @@
 						keeps the fork path available when competing outcomes remain
 						strongly funded.
 					</div>
-					<div class="equation" id="eq-placeholder-escalation-cost">
+					<div class="equation" id="eq-statoblast-escalation-cost">
 						<math
 							display="block"
 							aria-label="required escalation cost at elapsed escalation time equals starting bond amount times exponential of natural log of non decision threshold amount divided by starting bond amount times elapsed escalation time divided by full escalation interval"
@@ -2445,7 +2445,7 @@
 						fixed-point integer approximation using <code>SCALE = 1e6</code> and
 						clamps the endpoints.
 					</p>
-					<figure class="diagram" id="fig-placeholder-escalation-cost-curve">
+					<figure class="diagram" id="fig-statoblast-escalation-cost-curve">
 						<svg
 							viewBox="0 0 860 300"
 							role="img"
@@ -2997,7 +2997,7 @@
 						elapsed time can be inherited from a parent game and then resume
 						later instead of restarting from zero.
 					</p>
-					<figure class="diagram" id="fig-placeholder-non-decision-flow">
+					<figure class="diagram" id="fig-statoblast-non-decision-flow">
 						<svg
 							viewBox="0 0 860 365"
 							role="img"
@@ -3160,7 +3160,7 @@
 						is still jointly sustained by competing outcomes, which is why it
 						drives timeout and payout logic.
 					</p>
-					<figure class="diagram" id="fig-placeholder-payout-regions">
+					<figure class="diagram" id="fig-statoblast-payout-regions">
 						<svg
 							viewBox="0 0 860 220"
 							role="img"
@@ -3224,7 +3224,7 @@
 							while excess receives principal only.
 						</p>
 					</figure>
-					<div class="equation" id="eq-placeholder-escalation-winning-payout">
+					<div class="equation" id="eq-statoblast-escalation-winning-payout">
 						<math
 							display="block"
 							aria-label="reward eligible cap equals binding capital plus floor of binding capital divided by excess reward window divisor, reward bonus pool equals floor of binding capital times three divided by five, burn amount equals floor of reward eligible deposit times floor of binding capital times two divided by five divided by reward eligible principal, amount to withdraw equals deposit amount plus floor of reward eligible deposit times reward bonus pool divided by reward eligible principal, and scaled withdrawal equals floor of amount to withdraw times actual fork threshold divided by non decision threshold when actual fork threshold is lower"
@@ -3817,7 +3817,7 @@
 						finalized share, REP, and eligible escalation-deposit redemption
 						paths that check only the stored state remain callable.
 					</p>
-					<figure class="diagram" id="fig-placeholder-fork-state-machine">
+					<figure class="diagram" id="fig-statoblast-fork-state-machine">
 						<svg
 							viewBox="0 0 960 340"
 							role="img"
@@ -4085,7 +4085,7 @@
 							</tbody>
 						</table>
 					</div>
-					<figure class="diagram" id="fig-placeholder-migration-flow">
+					<figure class="diagram" id="fig-statoblast-migration-flow">
 						<svg
 							viewBox="0 0 860 330"
 							role="img"
@@ -4227,7 +4227,7 @@
 						at the address remains isolated surplus and is not swept into a child
 						on the pool’s behalf.
 					</p>
-					<figure class="diagram" id="fig-placeholder-migration-proxy">
+					<figure class="diagram" id="fig-statoblast-migration-proxy">
 						<svg
 							viewBox="0 0 920 300"
 							role="img"
@@ -4337,7 +4337,7 @@
 						<a href="./operator-reference.md#fork-migration">Fork Migration</a>
 						.
 					</p>
-					<figure class="diagram" id="fig-placeholder-proportional-migration">
+					<figure class="diagram" id="fig-statoblast-proportional-migration">
 						<svg
 							viewBox="0 0 940 330"
 							role="img"
@@ -4462,7 +4462,7 @@
 							proportion.
 						</p>
 					</figure>
-					<div class="equation" id="eq-placeholder-fork-migration-proportion">
+					<div class="equation" id="eq-statoblast-fork-migration-proportion">
 						<math
 							display="block"
 							aria-label="migration REP denominator at fork equals vault REP at fork for an own fork and auctionable REP at fork for an external fork; migrated REP equals the floor of parent pool ownership times the migration REP denominator at fork divided by the parent pool ownership denominator"
@@ -4536,7 +4536,7 @@
 						<code>totalAccruedFees()</code>, keeping both the unallocated reserve
 						and assigned vault debt funded in the parent.
 					</p>
-					<div class="equation" id="eq-placeholder-fork-collateral-ceiling">
+					<div class="equation" id="eq-statoblast-fork-collateral-ceiling">
 						<math
 							display="block"
 							aria-label="cumulative collateral target after migration equals ceiling of parent collateral at fork times cumulative REP transferred after migration divided by the migration REP denominator at fork, which is vault REP at fork for an own fork and auctionable REP at fork for an external fork; requested collateral delta equals the cumulative target minus cumulative collateral already transferred; actual collateral delta is the minimum of requested delta and current parent complete-set collateral"
@@ -4595,7 +4595,7 @@
 						migration balance. Statoblast splits that balance into a vault
 						bucket and an escalation bucket before child migration resumes.
 					</p>
-					<figure class="diagram" id="fig-placeholder-own-fork-rep-buckets">
+					<figure class="diagram" id="fig-statoblast-own-fork-rep-buckets">
 						<svg
 							viewBox="0 0 940 340"
 							role="img"
@@ -4720,7 +4720,7 @@
 							vault bucket without a haircut.
 						</p>
 					</figure>
-					<div class="equation" id="eq-placeholder-own-fork-rep-buckets">
+					<div class="equation" id="eq-statoblast-own-fork-rep-buckets">
 						<math
 							display="block"
 							aria-label="fork haircut equals fork threshold divided by fork burn divisor, escalation child REP equals escalation REP minus the haircut, vault REP equals auctionable REP minus escalation child REP, and selected child backing equals escalation child REP"
@@ -4864,7 +4864,7 @@
 						unrelated Atlas-upgrade question; the recursive fork creates branches for the
 						possible answers to the pool's original London-temperature question.
 					</p>
-					<figure class="diagram" id="fig-placeholder-recursive-continuation">
+					<figure class="diagram" id="fig-statoblast-recursive-continuation">
 						<svg
 							viewBox="0 0 980 520"
 							role="img"
@@ -5031,7 +5031,7 @@
 							again into the next fork generation.
 						</p>
 					</figure>
-					<figure class="diagram" id="fig-placeholder-carry-snapshot">
+					<figure class="diagram" id="fig-statoblast-carry-snapshot">
 						<svg
 							viewBox="0 0 920 470"
 							role="img"
@@ -5247,7 +5247,7 @@
 						outcome. The <code>ownFork</code> flag changes accounting, not question
 						semantics.
 					</p>
-					<figure class="diagram" id="fig-placeholder-system-decision-flow">
+					<figure class="diagram" id="fig-statoblast-system-decision-flow">
 						<svg
 							viewBox="0 0 940 500"
 							role="img"
@@ -5441,7 +5441,7 @@
 							escalation game can become the parent of the next fork generation.
 						</p>
 					</figure>
-					<div class="equation" id="eq-placeholder-truth-auction-shortfall">
+					<div class="equation" id="eq-statoblast-truth-auction-shortfall">
 						<math
 							display="block"
 							aria-label="ETH collateral to buy equals the greater of zero and parent collateral at fork minus collateral actually received through migration"
@@ -5673,7 +5673,7 @@
 						in the truth auction. For an external fork, it means the parent
 						pool’s full auctionable REP at fork.
 					</p>
-					<div class="equation" id="eq-placeholder-auction-rep-sale-cap">
+					<div class="equation" id="eq-statoblast-auction-rep-sale-cap">
 						<math
 							display="block"
 							aria-label="migrated REP haircut equals migrated REP divided by max auction vault haircut divisor, and maximum REP being sold is zero when the haircut is at least the pool auctionable REP at fork, otherwise pool auctionable REP at fork minus migrated REP haircut"
@@ -5736,7 +5736,7 @@
 							floor rounding.
 						</p>
 					</div>
-					<figure class="diagram" id="fig-placeholder-auction-balance-sheet">
+					<figure class="diagram" id="fig-statoblast-auction-balance-sheet">
 						<svg
 							viewBox="0 0 960 360"
 							role="img"
@@ -5922,7 +5922,7 @@
 						<a href="./security-model.html#oracle-a1">normative security model</a>
 						owns the full assumption, excluded guarantee, and residual loss boundary.
 					</p>
-					<figure class="diagram" id="fig-placeholder-oracle-flow">
+					<figure class="diagram" id="fig-statoblast-oracle-flow">
 						<svg
 							viewBox="0 0 940 380"
 							role="img"
@@ -6082,7 +6082,7 @@
 					</figure>
 					<h3>Staging and Recovery</h3>
 					<p>
-						The <a href="./open-oracle-integration.html#placeholder-integration">OpenOracle integration</a>
+						The <a href="./open-oracle-integration.html#statoblast-integration">OpenOracle integration</a>
 						owns request funding, staged-operation ordering, settlement
 						callbacks, rejected-price handling, recovery, report sizing, and
 						current parameters. The application-level distinction is that a

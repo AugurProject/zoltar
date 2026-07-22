@@ -49,7 +49,7 @@ export const simulationBootstrapFailed = 'Simulation bootstrap failed'
 export const staleReadBackendDetail = 'Displayed onchain state may be behind the latest chain state. Refresh or switch RPC before acting on balances, settlement, or liquidation.'
 export const urlProvidedReadRpc = 'URL-provided read RPC'
 export const address = 'Address'
-export const augurPlaceholderTitle = 'Augur Statoblast'
+export const augurStatoblastTitle = 'Augur Statoblast'
 export const formatShowEarlierNavigationItems = (navigationLabel: string) => `Show earlier ${navigationLabel}`
 export const formatShowLaterNavigationItems = (navigationLabel: string) => `Show later ${navigationLabel}`
 export const connected = 'Connected'

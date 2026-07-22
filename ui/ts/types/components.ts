@@ -219,7 +219,7 @@ export type OperationModalProps = {
 export type TabNavigationProps = {
 	route: Route
 	showDeployTab?: boolean
-	augurPlaceHolderDeployed: boolean
+	augurStatoblastDeployed: boolean
 	deployRoute: string
 	marketRoute: string
 	openOracleRoute: string

@@ -16,7 +16,7 @@ function createDefaultProps(overrides: Partial<RouteEffectsProps> = {}): RouteEf
 		accountAddress: undefined,
 		activeZoltarView: 'questions',
 		activeEnvironmentNonce: 0,
-		augurPlaceHolderDeploymentMissing: false,
+		augurStatoblastDeploymentMissing: false,
 		environmentReady: true,
 		loadOracleReport: async () => undefined,
 		loadSecurityPools: async () => undefined,

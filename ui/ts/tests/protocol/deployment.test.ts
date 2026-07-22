@@ -62,7 +62,7 @@ describe('contract deployment internals', () => {
 		const snapshot = await loadDeploymentStatusOracleSnapshot(readClient as ReadClient)
 
 		expect(readContractCalls).toEqual(['getDeploymentMask'])
-		expect(snapshot.augurPlaceHolderDeployed).toBe(false)
+		expect(snapshot.augurStatoblastDeployed).toBe(false)
 		expect(snapshot.deploymentStatuses.find(step => step.id === 'proxyDeployer')?.deployed).toBe(true)
 		expect(snapshot.deploymentStatuses.find(step => step.id === 'deploymentStatusOracle')?.deployed).toBe(true)
 		expect(snapshot.deploymentStatuses.find(step => step.id === 'multicall3')?.deployed).toBe(false)
