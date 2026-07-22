@@ -79,7 +79,7 @@ export function App() {
 	const { navigate, route } = useHashRoute()
 	const {
 		accountState,
-		augurPlaceHolderDeployed,
+		augurStatoblastDeployed,
 		changeWallet,
 		connectWallet,
 		currentBlockNumber,
@@ -300,16 +300,16 @@ export function App() {
 	const lastStagedVaultRepRefreshHash = useRef<string | undefined>(undefined)
 	const deploymentSections = getDeploymentSections(deploymentStatuses)
 	const errorMessage = deploymentErrorMessage ?? walletErrorMessage
-	const augurPlaceHolderDeploymentMissing = canReadOnchainData && augurPlaceHolderDeployed === false
-	const showDeployTab = augurPlaceHolderDeploymentMissing || (hasLoadedDeploymentStatuses && deploymentStatuses.some(step => !step.deployed))
-	const showAugurPlaceHolderDeploymentWarning = augurPlaceHolderDeploymentMissing
+	const augurStatoblastDeploymentMissing = canReadOnchainData && augurStatoblastDeployed === false
+	const showDeployTab = augurStatoblastDeploymentMissing || (hasLoadedDeploymentStatuses && deploymentStatuses.some(step => !step.deployed))
+	const showAugurStatoblastDeploymentWarning = augurStatoblastDeploymentMissing
 	const zoltarUniverseState = resolveLoadableValueState({
 		isLoading: loadingZoltarUniverse,
 		isMissing: zoltarUniverseMissing,
 		value: zoltarUniverse,
 	})
 	const showZoltarUniverseWarning = canReadOnchainData && zoltarUniverseState === 'missing'
-	const disableRouteContent = route !== 'deploy' && (!readBackendReady || augurPlaceHolderDeploymentMissing || showZoltarUniverseWarning)
+	const disableRouteContent = route !== 'deploy' && (!readBackendReady || augurStatoblastDeploymentMissing || showZoltarUniverseWarning)
 	const isRouteContentDisabled = disableRouteContent
 	const universeLabel = formatUniverseCollectionLabel([activeUniverseId])
 	const universePresentation = showZoltarUniverseWarning ? getUniversePresentation(zoltarUniverseState) : undefined
@@ -346,7 +346,7 @@ export function App() {
 	const tabNavigationProps = {
 		route,
 		showDeployTab,
-		augurPlaceHolderDeployed: hasLoadedDeploymentStatuses && augurPlaceHolderDeployed === true && !showZoltarUniverseWarning,
+		augurStatoblastDeployed: hasLoadedDeploymentStatuses && augurStatoblastDeployed === true && !showZoltarUniverseWarning,
 		deployRoute: DEPLOY_ROUTE,
 		marketRoute: ZOLTAR_ROUTE,
 		openOracleRoute: OPEN_ORACLE_ROUTE,
@@ -414,7 +414,7 @@ export function App() {
 	useAppRouteEffects({
 		accountAddress: walletScopedAccountAddress,
 		activeZoltarView,
-		augurPlaceHolderDeploymentMissing,
+		augurStatoblastDeploymentMissing,
 		environmentReady: canReadOnchainData,
 		activeEnvironmentNonce,
 		loadOracleReport: async reportId => await loadOracleReport(reportId),
@@ -770,7 +770,7 @@ export function App() {
 			<ChainTimestampContext.Provider value={currentTimestamp}>
 				<main>
 					<AppPageHeading pageTitle={pageTitle} />
-					<AppStatusNotices errorMessage={errorMessage} readBackendMessage={readBackendMessage} readBackendStatus={readBackendStatus} simulationBootstrapError={environmentBootstrapError} showAugurPlaceHolderDeploymentWarning={showAugurPlaceHolderDeploymentWarning} />
+					<AppStatusNotices errorMessage={errorMessage} readBackendMessage={readBackendMessage} readBackendStatus={readBackendStatus} simulationBootstrapError={environmentBootstrapError} showAugurStatoblastDeploymentWarning={showAugurStatoblastDeploymentWarning} />
 					<AppHeaderShell overview={overviewProps} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onEnvironmentChanged={refreshActiveEnvironment} onRefresh={refreshSimulationView} />
 					<GlobalTransactionTray transaction={transactionState.value.active} />
 

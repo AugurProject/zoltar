@@ -309,7 +309,7 @@ const discouragedPatternFixtures = [
 	{ expected: 'wrong question lifecycle actor', text: 'question is forked' },
 	{ expected: 'wrong question lifecycle actor', text: 'the question cannot settle locally' },
 	{ expected: 'wrong question lifecycle actor', text: '<p><code>forkQuestion</code> triggered a fork.</p>', path: 'docs/example.html' },
-	{ expected: 'exhaustive child-pool creation', text: 'Placeholder creates one child pool for each fork branch.' },
+	{ expected: 'exhaustive child-pool creation', text: 'Statoblast creates one child pool for each fork branch.' },
 	{ expected: 'passive migration-balance grant', text: '<p>After a fork, a holder receives a <em>migration balance</em>.</p>', path: 'docs/example.html' },
 ]
 
@@ -338,7 +338,7 @@ assert.ok(
 	'definition pileup fixture should be detected',
 )
 
-const whitepaper = await Bun.file('docs/placeholder-whitepaper.html').text()
+const whitepaper = await Bun.file('docs/statoblast-whitepaper.html').text()
 const zoltarWhitepaper = await Bun.file('docs/zoltar-whitepaper.html').text()
 const openOracleIntegration = await Bun.file('docs/open-oracle-integration.html').text()
 const operatorReference = await Bun.file('docs/operator-reference.md').text()
@@ -388,11 +388,11 @@ assert.match(whitepaper, /Settlement does not re-mint that ownership[\s\S]{0,100
 assert.match(whitepaper, /own-fork direct claim[\s\S]{0,100}same winning reward math[\s\S]{0,100}pre-funded child REP[\s\S]{0,160}not a claim-time conversion[\s\S]{0,80}does not mint child-pool\s+ownership/)
 assert.match(whitepaper, /href="#migration">Forks and Migration<\/a>[\s\S]{0,220}only distinguishes[\s\S]{0,120}settlement entry points/)
 assert.match(whitepaper, /operator-reference\.md#escalation-resolution-and-deposits/)
-assert.doesNotMatch(whitepaper, /id="fig-placeholder-unresolved-migration"|Unresolved Escalation Continuation Trace/)
+assert.doesNotMatch(whitepaper, /id="fig-statoblast-unresolved-migration"|Unresolved Escalation Continuation Trace/)
 assert.match(whitepaper, /forkHaircut = floor\(forkThreshold \/ forkBurnDivisor\); escalationChildRepAtFork = escalationRepToFork - forkHaircut; vaultRepAtFork = auctionableRepAtFork - escalationChildRepAtFork; selectedChildEscalationBacking = escalationChildRepAtFork/)
 assert.match(whitepaper, /Each\s+selected grandchild receives that same canonical snapshot and full remaining[\s\S]{0,80}backing once; winning proofs remain their own authorization/)
 assert.match(whitepaper, /external-fork example, source REP converts to child REP[\s\S]{0,80}one-for-one[\s\S]{0,520}<code>20 REP<\/code>/)
-assert.match(startHere, /placeholder-whitepaper\.html#migration/)
+assert.match(startHere, /statoblast-whitepaper\.html#migration/)
 assert.match(startHere, /merkle-mountain-range\.html/)
 assert.match(escalationGameArchitecture, /Optional parent-vault cleanup stays constant-size because it clears three outcome totals without scanning deposit history/)
 assert.match(escalationGameArchitecture, /Child continuation claims use aggregate game backing rather than copied per-vault escrow/)

@@ -41,7 +41,7 @@ void describe('error helpers', () => {
 	})
 
 	void test('keeps blocking guidance errors non-closeable', () => {
-		expect(isCloseableErrorMessage('Augur PLACEHOLDER contracts are not deployed yet. Deploy them before the application works.')).toBe(false)
+		expect(isCloseableErrorMessage('Augur Statoblast contracts are not deployed yet. Deploy them before the application works.')).toBe(false)
 		expect(isCloseableErrorMessage('Deploy SecurityPoolUtils first')).toBe(false)
 	})
 })

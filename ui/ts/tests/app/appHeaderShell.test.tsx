@@ -54,7 +54,7 @@ function createOverviewProps(): OverviewPanelsProps {
 
 function createTabNavigationProps(): TabNavigationProps {
 	return {
-		augurPlaceHolderDeployed: true,
+		augurStatoblastDeployed: true,
 		deployRoute: '#/deploy',
 		marketRoute: '#/zoltar',
 		onRouteChange: () => undefined,

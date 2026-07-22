@@ -361,7 +361,7 @@ body.doc-openoracle .equation-caption {
 	font-size: 0.94rem;
 }
 body.doc-openoracle .interactive-example,
-body.paper-placeholder .interactive-example {
+body.paper-statoblast .interactive-example {
 	margin: 1rem 0;
 	padding: 0.75rem;
 	border: 1px solid var(--line);
@@ -369,19 +369,19 @@ body.paper-placeholder .interactive-example {
 	background: var(--paper);
 }
 body.doc-openoracle .interactive-example summary,
-body.paper-placeholder .interactive-example summary {
+body.paper-statoblast .interactive-example summary {
 	cursor: pointer;
 	font-weight: 700;
 }
 body.doc-openoracle .example-grid,
-body.paper-placeholder .example-grid {
+body.paper-statoblast .example-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
 	gap: 0.75rem;
 	margin: 0.9rem 0;
 }
 body.doc-openoracle .example-grid label,
-body.paper-placeholder .example-grid label {
+body.paper-statoblast .example-grid label {
 	display: grid;
 	gap: 0.25rem;
 	color: var(--muted);
@@ -389,7 +389,7 @@ body.paper-placeholder .example-grid label {
 	font-weight: 650;
 }
 body.doc-openoracle .example-grid input,
-body.paper-placeholder .example-grid input {
+body.paper-statoblast .example-grid input {
 	width: 100%;
 	padding: 0.45rem 0.5rem;
 	border: 1px solid var(--line);
@@ -409,7 +409,7 @@ body.doc-openoracle .example-value {
 	font-weight: 800;
 }
 body.doc-openoracle .example-output,
-body.paper-placeholder .example-output {
+body.paper-statoblast .example-output {
 	margin: 0;
 	padding-left: 1.1rem;
 }
@@ -549,9 +549,9 @@ body.doc-openoracle td math {
 	existing layout and palette. Future cleanup can consolidate the shared selectors.
 */
 
-/* Augur Placeholder white paper */
+/* Augur Statoblast white paper */
 
-body.paper-placeholder {
+body.paper-statoblast {
 	color-scheme: light dark;
 	--bg: #f4f7f6;
 	--paper: #fffefd;
@@ -585,7 +585,7 @@ body.paper-placeholder {
 	--section-shadow: 0 12px 34px rgb(22 50 45 / 6%);
 	font-family: var(--docs-font-sans);
 }
-body.paper-placeholder {
+body.paper-statoblast {
 	--accent: var(--green);
 	--accent-soft: var(--green-soft);
 	--accent-2: var(--gold);
@@ -603,7 +603,7 @@ body.paper-zoltar {
 }
 
 @media (prefers-color-scheme: dark) {
-	body.paper-placeholder {
+	body.paper-statoblast {
 		--bg: #111516;
 		--paper: #191d1e;
 		--ink: #f1f4f2;
@@ -627,7 +627,7 @@ body.paper-zoltar {
 		--shadow: 0 18px 48px rgb(0 0 0 / 32%);
 		--section-shadow: 0 12px 34px rgb(0 0 0 / 22%);
 	}
-	body.paper-placeholder {
+	body.paper-statoblast {
 		--accent: var(--green);
 		--accent-soft: var(--green-soft);
 		--accent-2: var(--gold);
@@ -644,7 +644,7 @@ body.paper-zoltar {
 		--accent-2-rgb: 114 203 169;
 	}
 }
-body.paper-placeholder * {
+body.paper-statoblast * {
 	box-sizing: border-box;
 }
 html {
@@ -653,9 +653,9 @@ html {
 }
 
 @media (prefers-reduced-motion: reduce) {
-	body.paper-placeholder *,
-	body.paper-placeholder *::before,
-	body.paper-placeholder *::after {
+	body.paper-statoblast *,
+	body.paper-statoblast *::before,
+	body.paper-statoblast *::after {
 		transition-duration: 0.01ms !important;
 		animation-duration: 0.01ms !important;
 		animation-iteration-count: 1 !important;
@@ -664,7 +664,7 @@ html {
 		scroll-behavior: auto;
 	}
 }
-body.paper-placeholder {
+body.paper-statoblast {
 	counter-reset: figure equation;
 	margin: 0;
 	background: linear-gradient(120deg, rgb(var(--accent-rgb) / 9%), transparent 32rem), linear-gradient(300deg, rgb(var(--accent-2-rgb) / 8%), transparent 34rem), var(--bg);
@@ -673,7 +673,7 @@ body.paper-placeholder {
 	line-height: 1.64;
 	text-rendering: optimizeLegibility;
 }
-body.paper-placeholder::before {
+body.paper-statoblast::before {
 	position: fixed;
 	z-index: 2;
 	top: 0;
@@ -684,29 +684,29 @@ body.paper-placeholder::before {
 	content: "";
 	pointer-events: none;
 }
-body.paper-placeholder a {
+body.paper-statoblast a {
 	color: var(--blue);
 	text-decoration-thickness: 0.08em;
 	text-underline-offset: 0.18em;
 }
-body.paper-placeholder a:hover {
+body.paper-statoblast a:hover {
 	color: var(--ink);
 }
-body.paper-placeholder a:focus-visible,
-body.paper-placeholder button:focus-visible,
-body.paper-placeholder [tabindex]:focus-visible {
+body.paper-statoblast a:focus-visible,
+body.paper-statoblast button:focus-visible,
+body.paper-statoblast [tabindex]:focus-visible {
 	outline: 2px solid var(--focus);
 	outline-offset: 3px;
 	border-radius: var(--radius-sm);
 }
-body.paper-placeholder p {
+body.paper-statoblast p {
 	margin: 0 0 1rem;
 }
-body.paper-placeholder figure {
+body.paper-statoblast figure {
 	margin-right: 0;
 	margin-left: 0;
 }
-body.paper-placeholder code {
+body.paper-statoblast code {
 	padding: 0.1rem 0.32rem;
 	border: 1px solid var(--soft-line);
 	border-radius: var(--radius-sm);
@@ -715,7 +715,7 @@ body.paper-placeholder code {
 	font-size: 0.92em;
 	overflow-wrap: anywhere;
 }
-body.paper-placeholder .skip-link {
+body.paper-statoblast .skip-link {
 	position: fixed;
 	z-index: 3;
 	top: 0.55rem;
@@ -730,10 +730,10 @@ body.paper-placeholder .skip-link {
 	font-weight: 800;
 	text-decoration: none;
 }
-body.paper-placeholder .skip-link:focus-visible {
+body.paper-statoblast .skip-link:focus-visible {
 	transform: translateY(0);
 }
-body.paper-placeholder .site-shell {
+body.paper-statoblast .site-shell {
 	display: grid;
 	grid-template-columns: minmax(14rem, 17.5rem) minmax(0, 1fr);
 	gap: clamp(1rem, 3vw, 2.25rem);
@@ -741,7 +741,7 @@ body.paper-placeholder .site-shell {
 	margin: 0 auto;
 	padding: 2rem 0 4rem;
 }
-body.paper-placeholder .sidebar {
+body.paper-statoblast .sidebar {
 	position: sticky;
 	top: 1.5rem;
 	align-self: start;
@@ -754,11 +754,11 @@ body.paper-placeholder .sidebar {
 	box-shadow: 0 10px 34px rgb(22 50 45 / 7%);
 	backdrop-filter: blur(12px);
 }
-body.paper-placeholder .sidebar-header {
+body.paper-statoblast .sidebar-header {
 	padding: 0.2rem 0.25rem 0.75rem;
 	border-bottom: 1px solid var(--soft-line);
 }
-body.paper-placeholder .sidebar-series {
+body.paper-statoblast .sidebar-series {
 	display: block;
 	color: var(--muted);
 	font-size: 0.75rem;
@@ -766,24 +766,24 @@ body.paper-placeholder .sidebar-series {
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
 }
-body.paper-placeholder .sidebar strong {
+body.paper-statoblast .sidebar strong {
 	display: block;
 	margin-top: 0.15rem;
 	color: var(--accent);
 	font-size: 0.98rem;
 	font-weight: 850;
 }
-body.paper-placeholder .sidebar-header p {
+body.paper-statoblast .sidebar-header p {
 	margin: 0.2rem 0 0;
 	color: var(--muted);
 	font-size: 0.86rem;
 	line-height: 1.35;
 }
-body.paper-placeholder .sidebar-companion,
-body.paper-placeholder .companion-link {
+body.paper-statoblast .sidebar-companion,
+body.paper-statoblast .companion-link {
 	text-decoration: none;
 }
-body.paper-placeholder .sidebar-companion {
+body.paper-statoblast .sidebar-companion {
 	display: block;
 	margin: 0.8rem 0;
 	padding: 0.65rem 0.72rem;
@@ -792,8 +792,8 @@ body.paper-placeholder .sidebar-companion {
 	background: color-mix(in srgb, var(--accent-soft) 54%, var(--paper));
 	color: var(--ink);
 }
-body.paper-placeholder .sidebar-companion span,
-body.paper-placeholder .companion-link span {
+body.paper-statoblast .sidebar-companion span,
+body.paper-statoblast .companion-link span {
 	display: block;
 	color: var(--muted);
 	font-size: 0.72rem;
@@ -801,18 +801,18 @@ body.paper-placeholder .companion-link span {
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
 }
-body.paper-placeholder .sidebar-companion b,
-body.paper-placeholder .companion-link b {
+body.paper-statoblast .sidebar-companion b,
+body.paper-statoblast .companion-link b {
 	display: block;
 	margin-top: 0.16rem;
 	font-size: 0.92rem;
 	line-height: 1.25;
 }
-body.paper-placeholder .sidebar nav {
+body.paper-statoblast .sidebar nav {
 	display: grid;
 	gap: 0.12rem;
 }
-body.paper-placeholder .sidebar nav a {
+body.paper-statoblast .sidebar nav a {
 	display: block;
 	min-height: 2rem;
 	padding: 0.36rem 0.65rem 0.36rem 0.75rem;
@@ -823,60 +823,60 @@ body.paper-placeholder .sidebar nav a {
 	line-height: 1.35;
 	text-decoration: none;
 }
-body.paper-placeholder .sidebar nav a:hover {
+body.paper-statoblast .sidebar nav a:hover {
 	border-color: var(--soft-line);
 	background: color-mix(in srgb, var(--accent-soft) 36%, transparent);
 	color: var(--ink);
 }
-body.paper-placeholder .sidebar nav a[aria-current="location"] {
+body.paper-statoblast .sidebar nav a[aria-current="location"] {
 	border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
 	background: color-mix(in srgb, var(--accent-soft) 68%, var(--paper));
 	box-shadow: inset 0.22rem 0 0 var(--accent);
 	color: var(--ink);
 	font-weight: 800;
 }
-body.paper-placeholder main {
+body.paper-statoblast main {
 	min-width: 0;
 }
-body.paper-placeholder .hero,
-body.paper-placeholder .paper-section {
+body.paper-statoblast .hero,
+body.paper-statoblast .paper-section {
 	border: 1px solid var(--line);
 	border-radius: var(--radius);
 	background: var(--paper);
 	box-shadow: var(--section-shadow);
 }
-body.paper-placeholder .hero {
+body.paper-statoblast .hero {
 	position: relative;
 	overflow: hidden;
 	padding: clamp(2rem, 5vw, 4rem);
 	background: radial-gradient(circle at 85% 15%, rgb(var(--accent-2-rgb) / 14%), transparent 15rem), linear-gradient(145deg, var(--paper), var(--section-bg));
 	box-shadow: var(--shadow);
 }
-body.paper-placeholder .hero::after {
+body.paper-statoblast .hero::after {
 	position: absolute;
 	inset: 0;
 	background: linear-gradient(90deg, rgb(var(--accent-rgb) / 9%), transparent 28rem);
 	content: "";
 	pointer-events: none;
 }
-body.paper-placeholder .hero > * {
+body.paper-statoblast .hero > * {
 	position: relative;
 	z-index: 1;
 }
-body.paper-placeholder .paper-brand {
+body.paper-statoblast .paper-brand {
 	display: flex;
 	align-items: flex-start;
 	justify-content: space-between;
 	gap: 1rem;
 	margin-bottom: clamp(1.5rem, 4vw, 2.4rem);
 }
-body.paper-placeholder .brand-lockup {
+body.paper-statoblast .brand-lockup {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.72rem;
 	min-width: 0;
 }
-body.paper-placeholder .brand-mark {
+body.paper-statoblast .brand-mark {
 	display: grid;
 	flex: 0 0 auto;
 	grid-template-columns: repeat(2, 0.55rem);
@@ -889,35 +889,35 @@ body.paper-placeholder .brand-mark {
 	border-radius: var(--radius);
 	background: color-mix(in srgb, var(--accent-soft) 56%, var(--paper));
 }
-body.paper-placeholder .brand-mark span {
+body.paper-statoblast .brand-mark span {
 	border-radius: 999px;
 	background: var(--accent);
 }
-body.paper-placeholder .brand-mark span:nth-child(2) {
+body.paper-statoblast .brand-mark span:nth-child(2) {
 	background: var(--accent-2);
 }
-body.paper-placeholder .brand-mark span:nth-child(3) {
+body.paper-statoblast .brand-mark span:nth-child(3) {
 	grid-column: 1 / 3;
 	width: 1.32rem;
 	border-radius: 0.2rem;
 	background: linear-gradient(90deg, var(--accent), var(--accent-2));
 	justify-self: center;
 }
-body.paper-placeholder .brand-name,
-body.paper-placeholder .brand-subtitle {
+body.paper-statoblast .brand-name,
+body.paper-statoblast .brand-subtitle {
 	display: block;
 	line-height: 1.2;
 }
-body.paper-placeholder .brand-name {
+body.paper-statoblast .brand-name {
 	font-size: 0.92rem;
 	font-weight: 850;
 }
-body.paper-placeholder .brand-subtitle {
+body.paper-statoblast .brand-subtitle {
 	margin-top: 0.12rem;
 	color: var(--muted);
 	font-size: 0.78rem;
 }
-body.paper-placeholder .companion-link {
+body.paper-statoblast .companion-link {
 	max-width: 15.5rem;
 	padding: 0.62rem 0.75rem;
 	border: 1px solid var(--soft-line);
@@ -925,14 +925,14 @@ body.paper-placeholder .companion-link {
 	background: color-mix(in srgb, var(--paper) 78%, transparent);
 	color: var(--ink);
 }
-body.paper-placeholder .hero-label-row {
+body.paper-statoblast .hero-label-row {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
 	gap: 0.7rem 1rem;
 	margin-bottom: 0.8rem;
 }
-body.paper-placeholder .kicker {
+body.paper-statoblast .kicker {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.42rem;
@@ -943,72 +943,72 @@ body.paper-placeholder .kicker {
 	letter-spacing: 0.1em;
 	text-transform: uppercase;
 }
-body.paper-placeholder .layer-dot {
+body.paper-statoblast .layer-dot {
 	width: 0.52rem;
 	height: 0.52rem;
 	border-radius: 999px;
 	background: var(--accent);
 	box-shadow: 0 0 0 0.22rem rgb(var(--accent-rgb) / 14%);
 }
-body.paper-placeholder .paper-status {
+body.paper-statoblast .paper-status {
 	margin: 0;
 	color: var(--muted);
 	font-size: 0.9rem;
 	font-weight: 650;
 }
-body.paper-placeholder h1,
-body.paper-placeholder h2,
-body.paper-placeholder h3 {
+body.paper-statoblast h1,
+body.paper-statoblast h2,
+body.paper-statoblast h3 {
 	line-height: 1.15;
 }
-body.paper-placeholder h1 {
+body.paper-statoblast h1 {
 	max-width: 18ch;
 	margin: 0;
 	font-size: clamp(2.5rem, 6vw, 4.6rem);
 	letter-spacing: 0;
 }
-body.paper-placeholder .subtitle {
+body.paper-statoblast .subtitle {
 	max-width: 74ch;
 	margin: 1.1rem 0 0;
 	color: var(--muted);
 	font-size: 1.12rem;
 }
-body.paper-placeholder .meta-grid,
-body.paper-placeholder .summary-grid,
-body.paper-placeholder .role-grid,
-body.paper-placeholder .parameter-grid {
+body.paper-statoblast .meta-grid,
+body.paper-statoblast .summary-grid,
+body.paper-statoblast .role-grid,
+body.paper-statoblast .parameter-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
 	gap: 0.9rem;
 }
-body.paper-placeholder .meta-grid {
+body.paper-statoblast .meta-grid {
 	margin-top: 1.8rem;
 }
-body.paper-placeholder .summary-grid,
-body.paper-placeholder .role-grid,
-body.paper-placeholder .parameter-grid {
+body.paper-statoblast .summary-grid,
+body.paper-statoblast .role-grid,
+body.paper-statoblast .parameter-grid {
 	margin: 1.35rem 0 0;
 }
-body.paper-placeholder .meta-card,
-body.paper-placeholder .summary-card,
-body.paper-placeholder .role-card,
-body.paper-placeholder .parameter-card,
-body.paper-placeholder .glossary-card,
-body.paper-placeholder .timeline-card,
-body.paper-placeholder .implementation-note {
+body.paper-statoblast .meta-card,
+body.paper-statoblast .summary-card,
+body.paper-statoblast .role-card,
+body.paper-statoblast .parameter-card,
+body.paper-statoblast .glossary-card,
+body.paper-statoblast .timeline-card,
+body.paper-statoblast .implementation-note {
 	border: 1px solid var(--soft-line);
 	border-radius: var(--radius);
 	background: var(--card-bg);
 	padding: 0.95rem 1rem;
 }
-body.paper-placeholder .meta-card,
-body.paper-placeholder .summary-card {
+body.paper-statoblast .meta-card,
+body.paper-statoblast .summary-card {
 	border-top: 2px solid color-mix(in srgb, var(--accent) 52%, var(--line));
 }
-body.paper-placeholder .meta-card span,
-body.paper-placeholder .summary-card span,
-body.paper-placeholder .role-card span,
-body.paper-placeholder .parameter-card span {
+body.paper-statoblast .meta-card span,
+body.paper-statoblast .summary-card span,
+body.paper-statoblast .role-card span,
+body.paper-statoblast .parameter-card span {
 	display: block;
 	color: var(--muted);
 	font-size: 0.76rem;
@@ -1016,26 +1016,26 @@ body.paper-placeholder .parameter-card span {
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
 }
-body.paper-placeholder .meta-card b,
-body.paper-placeholder .summary-card b,
-body.paper-placeholder .role-card b,
-body.paper-placeholder .parameter-card b {
+body.paper-statoblast .meta-card b,
+body.paper-statoblast .summary-card b,
+body.paper-statoblast .role-card b,
+body.paper-statoblast .parameter-card b {
 	display: block;
 	margin-top: 0.28rem;
 	font-size: 1rem;
 	line-height: 1.34;
 }
-body.paper-placeholder .paper-section {
+body.paper-statoblast .paper-section {
 	margin-top: 1.25rem;
 	padding: clamp(1rem, 3vw, 2rem);
 }
-body.paper-placeholder .paper-section:target {
+body.paper-statoblast .paper-section:target {
 	border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
 	box-shadow:
 		0 0 0 3px rgb(var(--accent-rgb) / 10%),
 		var(--section-shadow);
 }
-body.paper-placeholder .section-heading {
+body.paper-statoblast .section-heading {
 	display: flex;
 	align-items: baseline;
 	justify-content: space-between;
@@ -1043,40 +1043,40 @@ body.paper-placeholder .section-heading {
 	margin-bottom: 1rem;
 	border-bottom: 1px solid var(--soft-line);
 }
-body.paper-placeholder .section-heading h2,
-body.paper-placeholder .paper-section > h2 {
+body.paper-statoblast .section-heading h2,
+body.paper-statoblast .paper-section > h2 {
 	margin: 0 0 0.85rem;
 	font-size: clamp(1.65rem, 4vw, 2.55rem);
 }
-body.paper-placeholder .paper-section h3 {
+body.paper-statoblast .paper-section h3 {
 	max-width: 76ch;
 	margin: 1.8rem 0 0.65rem;
 	font-size: 1.25rem;
 }
-body.paper-placeholder .anchor-link {
+body.paper-statoblast .anchor-link {
 	flex: none;
 	color: var(--muted);
 	font-weight: 850;
 	text-decoration: none;
 }
-body.paper-placeholder .anchor-link:hover {
+body.paper-statoblast .anchor-link:hover {
 	color: var(--ink);
 }
-body.paper-placeholder .paper-section > p,
-body.paper-placeholder .paper-section > ol,
-body.paper-placeholder .paper-section > ul {
+body.paper-statoblast .paper-section > p,
+body.paper-statoblast .paper-section > ol,
+body.paper-statoblast .paper-section > ul {
 	max-width: 76ch;
 }
-body.paper-placeholder .paper-section > p + p {
+body.paper-statoblast .paper-section > p + p {
 	margin-top: 0.2rem;
 }
-body.paper-placeholder .lede {
+body.paper-statoblast .lede {
 	max-width: 76ch;
 	color: color-mix(in srgb, var(--ink) 82%, var(--muted));
 	font-size: 1.08rem;
 	line-height: 1.68;
 }
-body.paper-placeholder .callout {
+body.paper-statoblast .callout {
 	max-width: 76ch;
 	margin: 1.25rem 0;
 	padding: 1rem 1.1rem;
@@ -1085,11 +1085,11 @@ body.paper-placeholder .callout {
 	border-radius: var(--radius);
 	background: color-mix(in srgb, var(--accent-soft) 62%, var(--paper));
 }
-body.paper-placeholder .callout strong {
+body.paper-statoblast .callout strong {
 	display: block;
 	margin-bottom: 0.25rem;
 }
-body.paper-placeholder .interactive-example {
+body.paper-statoblast .interactive-example {
 	max-width: 76ch;
 	margin: 1.25rem 0;
 	padding: 1rem;
@@ -1097,48 +1097,48 @@ body.paper-placeholder .interactive-example {
 	border-radius: var(--radius);
 	background: var(--card-bg);
 }
-body.paper-placeholder .interactive-example summary {
+body.paper-statoblast .interactive-example summary {
 	cursor: pointer;
 	font-weight: 800;
 }
-body.paper-placeholder .interactive-example > p {
+body.paper-statoblast .interactive-example > p {
 	margin: 0.75rem 0 0;
 }
-body.paper-placeholder .example-grid {
+body.paper-statoblast .example-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
 	gap: 0.85rem;
 	margin: 1rem 0;
 }
-body.paper-placeholder .example-grid label {
+body.paper-statoblast .example-grid label {
 	display: grid;
 	gap: 0.35rem;
 	color: var(--muted);
 	font-size: 0.9rem;
 	font-weight: 700;
 }
-body.paper-placeholder .example-grid input[type="range"] {
+body.paper-statoblast .example-grid input[type="range"] {
 	width: 100%;
 	accent-color: var(--accent);
 }
-body.paper-placeholder .example-value {
+body.paper-statoblast .example-value {
 	color: var(--ink);
 	font-size: 0.86rem;
 	font-weight: 800;
 }
-body.paper-placeholder .example-output-grid {
+body.paper-statoblast .example-output-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
 	gap: 0.7rem;
 	margin: 0.85rem 0 0;
 }
-body.paper-placeholder .example-output-grid div {
+body.paper-statoblast .example-output-grid div {
 	padding: 0.75rem;
 	border: 1px solid var(--soft-line);
 	border-radius: calc(var(--radius) * 0.75);
 	background: var(--paper);
 }
-body.paper-placeholder .example-output-grid span {
+body.paper-statoblast .example-output-grid span {
 	display: block;
 	color: var(--muted);
 	font-size: 0.74rem;
@@ -1146,50 +1146,50 @@ body.paper-placeholder .example-output-grid span {
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
 }
-body.paper-placeholder .example-output-grid output {
+body.paper-statoblast .example-output-grid output {
 	display: block;
 	margin-top: 0.25rem;
 	color: var(--ink);
 	font-weight: 850;
 }
-body.paper-placeholder .example-visual {
+body.paper-statoblast .example-visual {
 	margin-top: 1rem;
 	border: 1px solid var(--soft-line);
 	border-radius: var(--radius);
 	background: var(--section-bg);
 	overflow-x: auto;
 }
-body.paper-placeholder .example-visual svg {
+body.paper-statoblast .example-visual svg {
 	display: block;
 	width: 100%;
 	min-width: 34rem;
 	height: auto;
 }
-body.paper-placeholder .example-bar-base {
+body.paper-statoblast .example-bar-base {
 	fill: color-mix(in srgb, var(--line) 58%, transparent);
 }
-body.paper-placeholder .example-bar-green {
+body.paper-statoblast .example-bar-green {
 	fill: var(--green-soft);
 	stroke: var(--green);
 	stroke-width: 1.5;
 }
-body.paper-placeholder .example-bar-blue {
+body.paper-statoblast .example-bar-blue {
 	fill: var(--blue-soft);
 	stroke: var(--blue);
 	stroke-width: 1.5;
 }
-body.paper-placeholder .example-bar-gold {
+body.paper-statoblast .example-bar-gold {
 	fill: var(--gold-soft);
 	stroke: var(--gold);
 	stroke-width: 1.5;
 }
-body.paper-placeholder .example-bar-red {
+body.paper-statoblast .example-bar-red {
 	fill: var(--red-soft);
 	stroke: var(--red);
 	stroke-width: 1.5;
 }
-body.paper-placeholder .equation,
-body.paper-placeholder .diagram {
+body.paper-statoblast .equation,
+body.paper-statoblast .diagram {
 	scroll-margin-top: 1rem;
 	border: 1px solid var(--line);
 	border-radius: var(--radius);
@@ -1199,33 +1199,33 @@ body.paper-placeholder .diagram {
 	scrollbar-color: color-mix(in srgb, var(--accent) 52%, var(--line)) transparent;
 	scrollbar-width: thin;
 }
-body.paper-placeholder .equation {
+body.paper-statoblast .equation {
 	counter-increment: equation;
 	margin: 1.1rem 0;
 	padding: 0.5rem;
 	background: var(--code-bg);
 }
-body.paper-placeholder .equation math {
+body.paper-statoblast .equation math {
 	display: block;
 	min-width: max-content;
 	font-size: 1.02rem;
 }
-body.paper-placeholder .equation-caption {
+body.paper-statoblast .equation-caption {
 	margin: 0.7rem 0 0;
 	color: var(--muted);
 	font-size: 0.92rem;
 }
-body.paper-placeholder .equation-label {
+body.paper-statoblast .equation-label {
 	color: var(--ink);
 	font-weight: 850;
 }
-body.paper-placeholder .equation-label::before {
+body.paper-statoblast .equation-label::before {
 	content: "Equation " counter(equation) ": ";
 }
-body.paper-placeholder .equation-label::after {
+body.paper-statoblast .equation-label::after {
 	content: ". ";
 }
-body.paper-placeholder .diagram {
+body.paper-statoblast .diagram {
 	counter-increment: figure;
 	position: relative;
 	margin: 1.45rem 0;
@@ -1233,17 +1233,17 @@ body.paper-placeholder .diagram {
 	border-top: 3px solid var(--accent);
 	box-shadow: inset 0 -1.5rem 1.8rem -2rem rgb(var(--accent-rgb) / 34%);
 }
-body.paper-placeholder .diagram:nth-of-type(even) {
+body.paper-statoblast .diagram:nth-of-type(even) {
 	border-top-color: var(--accent-2);
 }
-body.paper-placeholder .diagram svg {
+body.paper-statoblast .diagram svg {
 	display: block;
 	width: 100%;
 	min-width: 42rem;
 	height: auto;
 	color: var(--diagram-line);
 }
-body.paper-placeholder .diagram-title {
+body.paper-statoblast .diagram-title {
 	margin: 0 0 0.75rem;
 	color: var(--muted);
 	font-size: 0.8rem;
@@ -1251,23 +1251,23 @@ body.paper-placeholder .diagram-title {
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
 }
-body.paper-placeholder .diagram-caption {
+body.paper-statoblast .diagram-caption {
 	margin: 0.8rem 0 0;
 	color: var(--muted);
 	font-size: 0.94rem;
 	line-height: 1.5;
 }
-body.paper-placeholder .figure-label {
+body.paper-statoblast .figure-label {
 	color: var(--ink);
 	font-weight: 850;
 }
-body.paper-placeholder .figure-label::before {
+body.paper-statoblast .figure-label::before {
 	content: "Figure " counter(figure) ": ";
 }
-body.paper-placeholder .figure-label::after {
+body.paper-statoblast .figure-label::after {
 	content: ". ";
 }
-body.paper-placeholder .legend {
+body.paper-statoblast .legend {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 0.55rem 1rem;
@@ -1275,84 +1275,84 @@ body.paper-placeholder .legend {
 	color: var(--muted);
 	font-size: 0.86rem;
 }
-body.paper-placeholder .legend-item {
+body.paper-statoblast .legend-item {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.4rem;
 }
-body.paper-placeholder .legend-swatch {
+body.paper-statoblast .legend-swatch {
 	width: 0.9rem;
 	height: 0.9rem;
 	border: 1px solid currentColor;
 	border-radius: 0.2rem;
 }
-body.paper-placeholder .legend-swatch.teal,
-body.paper-placeholder .legend-swatch.green {
+body.paper-statoblast .legend-swatch.teal,
+body.paper-statoblast .legend-swatch.green {
 	background: var(--green-soft);
 	color: var(--green);
 }
-body.paper-placeholder .legend-swatch.gold {
+body.paper-statoblast .legend-swatch.gold {
 	background: var(--gold-soft);
 	color: var(--gold);
 }
-body.paper-placeholder .legend-swatch.red {
+body.paper-statoblast .legend-swatch.red {
 	background: var(--red-soft);
 	color: var(--red);
 }
-body.paper-placeholder .legend-swatch.blue {
+body.paper-statoblast .legend-swatch.blue {
 	background: var(--blue-soft);
 	color: var(--blue);
 }
-body.paper-placeholder .svg-box {
+body.paper-statoblast .svg-box {
 	fill: var(--paper);
 	stroke: var(--line);
 	stroke-width: 2;
 }
-body.paper-placeholder .svg-green,
-body.paper-placeholder .svg-teal {
+body.paper-statoblast .svg-green,
+body.paper-statoblast .svg-teal {
 	fill: var(--green-soft);
 	stroke: var(--green);
 	stroke-width: 2;
 }
-body.paper-placeholder .svg-blue {
+body.paper-statoblast .svg-blue {
 	fill: var(--blue-soft);
 	stroke: var(--blue);
 	stroke-width: 2;
 }
-body.paper-placeholder .svg-gold {
+body.paper-statoblast .svg-gold {
 	fill: var(--gold-soft);
 	stroke: var(--gold);
 	stroke-width: 2;
 }
-body.paper-placeholder .svg-red {
+body.paper-statoblast .svg-red {
 	fill: var(--red-soft);
 	stroke: var(--red);
 	stroke-width: 2;
 }
-body.paper-placeholder .svg-line {
+body.paper-statoblast .svg-line {
 	fill: none;
 	stroke: var(--diagram-line);
 	stroke-linecap: round;
 	stroke-linejoin: round;
 	stroke-width: 2.35;
 }
-body.paper-placeholder .svg-label {
+body.paper-statoblast .svg-label {
 	fill: var(--ink);
 	font-family: var(--docs-font-sans);
 	font-size: 17px;
 	font-weight: 800;
 }
-body.paper-placeholder .svg-small {
+body.paper-statoblast .svg-small {
 	fill: var(--muted);
 	font-size: 13px;
 	font-weight: 650;
 }
-body.paper-placeholder .svg-micro {
+body.paper-statoblast .svg-micro {
 	fill: var(--muted);
 	font-size: 11px;
 	font-weight: 650;
 }
-body.paper-placeholder .table-wrap {
+body.paper-statoblast .table-wrap {
 	overflow-x: auto;
 	margin: 1.2rem 0;
 	border: 1px solid var(--line);
@@ -1361,7 +1361,7 @@ body.paper-placeholder .table-wrap {
 	scrollbar-color: color-mix(in srgb, var(--accent) 52%, var(--line)) transparent;
 	scrollbar-width: thin;
 }
-body.paper-placeholder table {
+body.paper-statoblast table {
 	width: 100%;
 	margin: 1.2rem 0;
 	border-collapse: separate;
@@ -1369,32 +1369,32 @@ body.paper-placeholder table {
 	background: var(--section-bg);
 	font-size: 0.94rem;
 }
-body.paper-placeholder .table-wrap table {
+body.paper-statoblast .table-wrap table {
 	margin: 0;
 }
-body.paper-placeholder .wide-table {
+body.paper-statoblast .wide-table {
 	min-width: 44rem;
 }
-body.paper-placeholder .invalid-table {
+body.paper-statoblast .invalid-table {
 	min-width: 42rem;
 }
-body.paper-placeholder .invalid-table th:first-child,
-body.paper-placeholder .invalid-table td:first-child {
+body.paper-statoblast .invalid-table th:first-child,
+body.paper-statoblast .invalid-table td:first-child {
 	width: 10rem;
 	white-space: nowrap;
 }
-body.paper-placeholder th,
-body.paper-placeholder td {
+body.paper-statoblast th,
+body.paper-statoblast td {
 	padding: 0.78rem 0.9rem;
 	border-bottom: 1px solid var(--soft-line);
 	text-align: left;
 	vertical-align: top;
 }
-body.paper-placeholder th + th,
-body.paper-placeholder td + td {
+body.paper-statoblast th + th,
+body.paper-statoblast td + td {
 	border-left: 1px solid var(--soft-line);
 }
-body.paper-placeholder th {
+body.paper-statoblast th {
 	background: var(--table-head);
 	color: var(--accent);
 	font-size: 0.78rem;
@@ -1402,62 +1402,62 @@ body.paper-placeholder th {
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
 }
-body.paper-placeholder tr:last-child td {
+body.paper-statoblast tr:last-child td {
 	border-bottom: 0;
 }
-body.paper-placeholder ul,
-body.paper-placeholder ol {
+body.paper-statoblast ul,
+body.paper-statoblast ol {
 	padding-left: 1.35rem;
 }
-body.paper-placeholder li + li {
+body.paper-statoblast li + li {
 	margin-top: 0.42rem;
 }
-body.paper-placeholder .contract-list,
-body.paper-placeholder .clean-list {
+body.paper-statoblast .contract-list,
+body.paper-statoblast .clean-list {
 	display: grid;
 	gap: 0.55rem;
 	padding-left: 1.1rem;
 }
-body.paper-placeholder .contract-list li,
-body.paper-placeholder .clean-list li {
+body.paper-statoblast .contract-list li,
+body.paper-statoblast .clean-list li {
 	padding-left: 0.2rem;
 }
-body.paper-placeholder .glossary-grid,
-body.paper-placeholder .timeline-grid,
-body.paper-placeholder .implementation-grid {
+body.paper-statoblast .glossary-grid,
+body.paper-statoblast .timeline-grid,
+body.paper-statoblast .implementation-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
 	gap: 0.85rem;
 	margin: 1.2rem 0;
 }
-body.paper-placeholder .glossary-card b,
-body.paper-placeholder .timeline-card b,
-body.paper-placeholder .implementation-note b {
+body.paper-statoblast .glossary-card b,
+body.paper-statoblast .timeline-card b,
+body.paper-statoblast .implementation-note b {
 	display: block;
 	margin-bottom: 0.25rem;
 }
-body.paper-placeholder .glossary-card p,
-body.paper-placeholder .timeline-card p,
-body.paper-placeholder .implementation-note p {
+body.paper-statoblast .glossary-card p,
+body.paper-statoblast .timeline-card p,
+body.paper-statoblast .implementation-note p {
 	margin: 0;
 	color: var(--muted);
 }
-body.paper-placeholder .term {
+body.paper-statoblast .term {
 	border-bottom: 1px dotted currentColor;
 	cursor: help;
 	font-weight: 650;
 	text-decoration: none;
 	text-underline-offset: 0.18em;
 }
-body.paper-placeholder .term:focus-visible {
+body.paper-statoblast .term:focus-visible {
 	outline: 2px solid var(--accent);
 	outline-offset: 0.12rem;
 	border-radius: 0.15rem;
 }
-body.paper-placeholder .implementation-note {
+body.paper-statoblast .implementation-note {
 	border-left: 0.3rem solid var(--blue);
 }
-body.paper-placeholder .step-list {
+body.paper-statoblast .step-list {
 	display: grid;
 	gap: 0.8rem;
 	max-width: none;
@@ -1465,10 +1465,10 @@ body.paper-placeholder .step-list {
 	list-style: none;
 	padding: 0;
 }
-body.paper-placeholder .paper-section > .step-list {
+body.paper-statoblast .paper-section > .step-list {
 	max-width: none;
 }
-body.paper-placeholder .step-list li {
+body.paper-statoblast .step-list li {
 	display: flex;
 	gap: 0.75rem;
 	align-items: start;
@@ -1479,7 +1479,7 @@ body.paper-placeholder .step-list li {
 	background: var(--section-bg);
 	counter-increment: steps;
 }
-body.paper-placeholder .step-list li::before {
+body.paper-statoblast .step-list li::before {
 	display: grid;
 	flex: 0 0 auto;
 	width: 2rem;
@@ -1492,87 +1492,87 @@ body.paper-placeholder .step-list li::before {
 	font-size: 0.9rem;
 	font-weight: 850;
 }
-body.paper-placeholder .step-content {
+body.paper-statoblast .step-content {
 	min-width: 0;
 	overflow-wrap: anywhere;
 }
-body.paper-placeholder .footer-note {
+body.paper-statoblast .footer-note {
 	margin: 1.5rem 0 0;
 	color: var(--muted);
 	font-size: 0.92rem;
 }
 
 @media (max-width: 1000px) {
-	body.paper-placeholder .site-shell {
+	body.paper-statoblast .site-shell {
 		display: block;
 		width: min(calc(100% - var(--docs-page-inline-gutter-tablet)), var(--docs-page-tablet-width));
 		padding-top: 0.75rem;
 	}
-	body.paper-placeholder .sidebar {
+	body.paper-statoblast .sidebar {
 		position: static;
 		max-height: none;
 		margin: 0.5rem 0 1rem;
 	}
-	body.paper-placeholder .sidebar nav {
+	body.paper-statoblast .sidebar nav {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		column-gap: 0.35rem;
 	}
-	body.paper-placeholder .paper-brand {
+	body.paper-statoblast .paper-brand {
 		align-items: stretch;
 	}
-	body.paper-placeholder .companion-link {
+	body.paper-statoblast .companion-link {
 		max-width: none;
 	}
 }
 
 @media (max-width: 640px) {
-	body.paper-placeholder .site-shell {
+	body.paper-statoblast .site-shell {
 		width: min(calc(100% - var(--docs-page-inline-gutter-mobile)), var(--docs-page-tablet-width));
 		padding-bottom: 2rem;
 	}
-	body.paper-placeholder .sidebar nav {
+	body.paper-statoblast .sidebar nav {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		column-gap: 0.25rem;
 	}
-	body.paper-placeholder .hero,
-	body.paper-placeholder .paper-section {
+	body.paper-statoblast .hero,
+	body.paper-statoblast .paper-section {
 		border-radius: var(--radius);
 	}
-	body.paper-placeholder .hero {
+	body.paper-statoblast .hero {
 		padding: 1.2rem;
 	}
-	body.paper-placeholder .paper-section {
+	body.paper-statoblast .paper-section {
 		padding: 0.7rem;
 	}
-	body.paper-placeholder .paper-brand {
+	body.paper-statoblast .paper-brand {
 		flex-direction: column;
 		margin-bottom: 1.4rem;
 	}
-	body.paper-placeholder h1 {
+	body.paper-statoblast h1 {
 		max-width: 100%;
 		font-size: clamp(2.15rem, 10.5vw, 3rem);
 	}
-	body.paper-placeholder .subtitle {
+	body.paper-statoblast .subtitle {
 		font-size: 1rem;
 	}
-	body.paper-placeholder .diagram {
+	body.paper-statoblast .diagram {
 		margin-right: -0.2rem;
 		margin-left: -0.2rem;
 		padding: 0.4rem;
 	}
-	body.paper-placeholder .diagram svg {
+	body.paper-statoblast .diagram svg {
 		width: 42rem;
 		max-width: none;
 		min-width: 42rem;
 	}
-	body.paper-placeholder th,
-	body.paper-placeholder td {
+	body.paper-statoblast th,
+	body.paper-statoblast td {
 		padding: 0.65rem 0.72rem;
 	}
 }
 
 @media (max-width: 360px) {
-	body.paper-placeholder .sidebar nav {
+	body.paper-statoblast .sidebar nav {
 		grid-template-columns: 1fr;
 	}
 }
@@ -1582,7 +1582,7 @@ body.paper-placeholder .footer-note {
 }
 
 @media print {
-	body.paper-placeholder {
+	body.paper-statoblast {
 		color-scheme: light;
 		--bg: #fff;
 		--paper: #fff;
@@ -1597,57 +1597,57 @@ body.paper-placeholder .footer-note {
 		--shadow: none;
 		--section-shadow: none;
 	}
-	body.paper-placeholder {
+	body.paper-statoblast {
 		background: #fff;
 	}
-	body.paper-placeholder::before,
-	body.paper-placeholder .skip-link,
-	body.paper-placeholder .sidebar,
-	body.paper-placeholder .anchor-link {
+	body.paper-statoblast::before,
+	body.paper-statoblast .skip-link,
+	body.paper-statoblast .sidebar,
+	body.paper-statoblast .anchor-link {
 		display: none;
 	}
-	body.paper-placeholder .site-shell {
+	body.paper-statoblast .site-shell {
 		display: block;
 		width: 100%;
 		padding: 0;
 	}
-	body.paper-placeholder .hero,
-	body.paper-placeholder .paper-section {
+	body.paper-statoblast .hero,
+	body.paper-statoblast .paper-section {
 		border: 0;
 		box-shadow: none;
 		break-inside: auto;
 	}
-	body.paper-placeholder .hero {
+	body.paper-statoblast .hero {
 		padding: 0 0 1rem;
 	}
-	body.paper-placeholder .paper-section {
+	body.paper-statoblast .paper-section {
 		margin-top: 1rem;
 		padding: 1rem 0 0;
 		border-top: 1px solid #ddd;
 	}
-	body.paper-placeholder .companion-link {
+	body.paper-statoblast .companion-link {
 		border: 0;
 		padding: 0;
 	}
-	body.paper-placeholder .diagram,
-	body.paper-placeholder .table-wrap,
-	body.paper-placeholder table,
-	body.paper-placeholder .step-list li,
-	body.paper-placeholder .glossary-card,
-	body.paper-placeholder .timeline-card,
-	body.paper-placeholder .implementation-note {
+	body.paper-statoblast .diagram,
+	body.paper-statoblast .table-wrap,
+	body.paper-statoblast table,
+	body.paper-statoblast .step-list li,
+	body.paper-statoblast .glossary-card,
+	body.paper-statoblast .timeline-card,
+	body.paper-statoblast .implementation-note {
 		break-inside: avoid;
 	}
-	body.paper-placeholder .diagram,
-	body.paper-placeholder .table-wrap,
-	body.paper-placeholder .equation {
+	body.paper-statoblast .diagram,
+	body.paper-statoblast .table-wrap,
+	body.paper-statoblast .equation {
 		overflow: visible;
 	}
-	body.paper-placeholder .diagram svg {
+	body.paper-statoblast .diagram svg {
 		max-width: 100%;
 		min-width: 0;
 	}
-	body.paper-placeholder a {
+	body.paper-statoblast a {
 		color: #111;
 		text-decoration: none;
 	}
@@ -1691,7 +1691,7 @@ body.paper-zoltar {
 	--section-shadow: 0 12px 34px rgb(22 50 45 / 6%);
 	font-family: var(--docs-font-sans);
 }
-body.paper-placeholder {
+body.paper-statoblast {
 	--accent: var(--green);
 	--accent-soft: var(--green-soft);
 	--accent-2: var(--gold);
@@ -1735,7 +1735,7 @@ body.paper-zoltar {
 		--shadow: 0 18px 48px rgb(0 0 0 / 32%);
 		--section-shadow: 0 12px 34px rgb(0 0 0 / 22%);
 	}
-	body.paper-placeholder {
+	body.paper-statoblast {
 		--accent: var(--green);
 		--accent-soft: var(--green-soft);
 		--accent-2: var(--gold);

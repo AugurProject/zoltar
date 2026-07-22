@@ -9,7 +9,7 @@ type AppStatusNoticesProps = {
 	readBackendMessage: string | undefined
 	readBackendStatus?: ReadBackendStatus | undefined
 	simulationBootstrapError: string | undefined
-	showAugurPlaceHolderDeploymentWarning: boolean
+	showAugurStatoblastDeploymentWarning: boolean
 }
 
 function formatRpcSourceLabel(source: ReadBackendStatus['rpcSource']) {
@@ -61,11 +61,11 @@ function buildRpcOverrideNotice(readBackendStatus: ReadBackendStatus | undefined
 	}
 }
 
-export function AppStatusNotices({ errorMessage, readBackendMessage, readBackendStatus, simulationBootstrapError, showAugurPlaceHolderDeploymentWarning }: AppStatusNoticesProps) {
+export function AppStatusNotices({ errorMessage, readBackendMessage, readBackendStatus, simulationBootstrapError, showAugurStatoblastDeploymentWarning }: AppStatusNoticesProps) {
 	const items: NoticeItem[] = []
 	const rpcOverrideNotice = buildRpcOverrideNotice(readBackendStatus)
 	if (simulationBootstrapError !== undefined) items.push({ detail: simulationBootstrapError, id: 'simulation-bootstrap-error', tone: 'blocking', title: appCopy.simulationBootstrapFailed })
-	if (showAugurPlaceHolderDeploymentWarning) items.push({ detail: appCopy.deploymentIncompleteReason, id: 'setup-incomplete', tone: 'blocking', title: appCopy.setupIncomplete })
+	if (showAugurStatoblastDeploymentWarning) items.push({ detail: appCopy.deploymentIncompleteReason, id: 'setup-incomplete', tone: 'blocking', title: appCopy.setupIncomplete })
 	if (readBackendMessage !== undefined) items.push({ detail: getReadBackendNoticeDetail(readBackendMessage), id: 'read-backend-mismatch', tone: 'blocking', title: appCopy.readRpcMismatch })
 	if (errorMessage !== undefined) items.push({ detail: errorMessage, id: 'app-error', tone: 'blocking', title: commonCopy.error })
 	if (rpcOverrideNotice !== undefined) items.push(rpcOverrideNotice)

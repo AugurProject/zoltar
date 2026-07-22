@@ -10,7 +10,7 @@ const liquidationHtml = await readFile('docs/liquidation.html', 'utf8')
 const openOracleIntegration = await readFile('docs/open-oracle-integration.html', 'utf8')
 const securityModel = await readFile('docs/security-model.html', 'utf8')
 const zoltarWhitepaper = await readFile('docs/zoltar-whitepaper.html', 'utf8')
-const whitepaperPlaceholder = await readFile('docs/placeholder-whitepaper.html', 'utf8')
+const whitepaperStatoblast = await readFile('docs/statoblast-whitepaper.html', 'utf8')
 const startHere = await readFile('docs/start-here.html', 'utf8')
 const operatorReference = await readFile('docs/operator-reference.md', 'utf8')
 const contractInteractionReference = await readFile('docs/contract-interaction-reference.md', 'utf8')
@@ -77,13 +77,13 @@ function assertContinuationIdentifierExplanation(): void {
 }
 
 function assertAggregateEscalationContinuationDocs(): void {
-	const normalizedPlaceholder = whitepaperPlaceholder.replaceAll(/\s+/g, ' ')
+	const normalizedStatoblast = whitepaperStatoblast.replaceAll(/\s+/g, ' ')
 	const normalizedOperatorReference = operatorReference.replaceAll(/\s+/g, ' ')
 	const normalizedContractReference = contractInteractionReference.replaceAll(/\s+/g, ' ')
 	const normalizedZoltarWhitepaper = zoltarWhitepaper.replaceAll(/\s+/g, ' ')
 	const normalizedInvariants = invariantsHtml.replaceAll(/\s+/g, ' ')
 	for (const [documentName, contents] of [
-		['Placeholder whitepaper', normalizedPlaceholder],
+		['Statoblast whitepaper', normalizedStatoblast],
 		['Operator reference', normalizedOperatorReference],
 	] as const) {
 		for (const documentedClaim of ['aggregate backing', 'winning proof', 'recorded depositor', 'inherited losers', 'optional parent']) {
@@ -95,7 +95,7 @@ function assertAggregateEscalationContinuationDocs(): void {
 		assert.ok(normalizedContractReference.includes(documentedClaim), `Contract interaction reference must document fork admission economics: ${documentedClaim}`)
 	}
 	for (const forbiddenClaim of ['vaultEscrowChildRep', 'forked-escrow-scaling', 'forked-escrow-example', 'only selected vault escrow authorizes inherited proofs', 'vault migration grants only logical authorization', 'only materialized vault escrow authorizes proofs']) {
-		assert.ok(!normalizedPlaceholder.includes(forbiddenClaim), `Placeholder whitepaper retains obsolete per-vault continuation claim: ${forbiddenClaim}`)
+		assert.ok(!normalizedStatoblast.includes(forbiddenClaim), `Statoblast whitepaper retains obsolete per-vault continuation claim: ${forbiddenClaim}`)
 	}
 	assert.match(normalizedContractReference, /cleanup neither funds escalation backing nor authorizes carried proofs/)
 	assert.match(normalizedOperatorReference, /Child creation initializes the canonical carry and aggregate backing without waiting for vault transactions/)
@@ -186,7 +186,7 @@ function assertRecursiveForkGasStatusDocs(): void {
 		['Operator reference', operatorReference],
 		['Security model', securityModel],
 		['Zoltar whitepaper', zoltarWhitepaper],
-		['Placeholder whitepaper', whitepaperPlaceholder],
+		['Statoblast whitepaper', whitepaperStatoblast],
 	] as const) {
 		assert.match(contents, /invariants\.html#ext-05/, `${documentName} must route recursive-fork gas status to EXT-05`)
 		assert.doesNotMatch(
@@ -205,7 +205,7 @@ function assertCoordinatorRecoveryBranch(): void {
 	]) {
 		assert.ok(normalizedIntegration.includes(documentedClaim), `Missing coordinator recovery-branch claim: ${documentedClaim}`)
 	}
-	assert.match(whitepaperPlaceholder, /open-oracle-integration\.html#placeholder-integration/, 'whitepaper should route recovery details to the OpenOracle integration')
+	assert.match(whitepaperStatoblast, /open-oracle-integration\.html#statoblast-integration/, 'whitepaper should route recovery details to the OpenOracle integration')
 }
 
 function assertCoordinatorSettlementEconomics(): void {
@@ -228,8 +228,8 @@ function assertCoordinatorSettlementEconomics(): void {
 	assert.match(priceCoordinator, /settlerReward: uint96\(settlerReward\)/, 'coordinator report creation must forward the full request bounty as settler reward')
 	const requestBountyFormula = 'data-source="requestPriceEthCost = block.basefee \\cdot 4 \\cdot (callbackGasLimit + gasConsumedOpenOracleReportPrice) + 101"'
 	assert.ok(openOracleIntegration.includes(requestBountyFormula), 'OpenOracle request-cost section must retain the current full request-bounty formula')
-	assert.ok(!whitepaperPlaceholder.includes(requestBountyFormula), 'whitepaper must link to the canonical request-bounty formula instead of copying it')
-	assert.doesNotMatch(whitepaperPlaceholder, /disputers can replace a bad\s+report with a larger one/, 'whitepaper must not claim every dispute strictly increases the report after integer flooring')
+	assert.ok(!whitepaperStatoblast.includes(requestBountyFormula), 'whitepaper must link to the canonical request-bounty formula instead of copying it')
+	assert.doesNotMatch(whitepaperStatoblast, /disputers can replace a bad\s+report with a larger one/, 'whitepaper must not claim every dispute strictly increases the report after integer flooring')
 }
 
 function assertOpenOracleVendorAndEventDocs(): void {
@@ -241,8 +241,8 @@ function assertOpenOracleVendorAndEventDocs(): void {
 	}
 	assert.match(openOracleState, /new Uint8Array\(235\)/, 'shared OpenOracle encoder must retain the documented 235-byte packed layout')
 	assert.match(openOracleState, /if \(bytes\.length !== 235\)/, 'shared OpenOracle decoder must reject non-canonical packed lengths')
-	assert.doesNotMatch(whitepaperPlaceholder, /sponsor posts initial report/, 'whitepaper diagrams must not identify the funding sponsor as the on-chain reporter')
-	assert.match(whitepaperPlaceholder, /coordinator reports\s*<\/text>\s*<text[^>]+>\s*sponsor funds/, 'whitepaper oracle flow must distinguish the coordinator reporter from the funding sponsor')
+	assert.doesNotMatch(whitepaperStatoblast, /sponsor posts initial report/, 'whitepaper diagrams must not identify the funding sponsor as the on-chain reporter')
+	assert.match(whitepaperStatoblast, /coordinator reports\s*<\/text>\s*<text[^>]+>\s*sponsor funds/, 'whitepaper oracle flow must distinguish the coordinator reporter from the funding sponsor')
 	assert.doesNotMatch(openOracleIntegration, /\b(?:sponsor|caller)s?\s+(?:may\s+)?(?:voluntarily\s+)?post(?:s|ed|ing)?\b/i, 'OpenOracle integration must not describe the funding sponsor as posting the report')
 	const normalizedIntegration = openOracleIntegration.replaceAll(/\s+/g, ' ')
 	assert.ok(normalizedIntegration.includes('The sponsor may request and fund more than the minimum; the coordinator submits the selected amount as <code>currentAmount1</code>.'), 'OpenOracle integration must distinguish sponsor funding from coordinator submission')
@@ -266,8 +266,8 @@ function assertLiquidationFullCloseDocs(): void {
 		assert.ok(liquidationHtml.includes(marker), `Missing liquidation documentation marker: ${marker}`)
 	}
 
-	assert.match(whitepaperPlaceholder, /href="\.\/liquidation\.html"/, 'whitepaper should route liquidation math and examples to the canonical design')
-	assert.doesNotMatch(whitepaperPlaceholder, /id="eq-placeholder-liquidation-transfer"/, 'whitepaper must not duplicate the canonical liquidation equation')
+	assert.match(whitepaperStatoblast, /href="\.\/liquidation\.html"/, 'whitepaper should route liquidation math and examples to the canonical design')
+	assert.doesNotMatch(whitepaperStatoblast, /id="eq-statoblast-liquidation-transfer"/, 'whitepaper must not duplicate the canonical liquidation equation')
 	assert.ok(liquidationHtml.includes('data-liquidation-summary="normal-plus-full-close"'), 'canonical liquidation diagram caption must be tagged for the normal-path plus full-close summary')
 	const computeCandidateIndex = liquidationHtml.indexOf('Compute debt and REP candidate')
 	const fullCloseDecisionIndex = liquidationHtml.indexOf('Full-close sweep required?')
@@ -277,8 +277,8 @@ function assertLiquidationFullCloseDocs(): void {
 	assert.ok(fullCloseDecisionIndex < poolValidationIndex, 'liquidation diagram must select the ordinary or full-close candidate before pool validation')
 	assert.ok(poolValidationIndex < completedTransferIndex, 'liquidation diagram must show pool validation before a completed transfer')
 	assert.doesNotMatch(liquidationHtml, /Pool execution succeeds\?/, 'liquidation diagram must not imply success before full-close candidate selection')
-	assert.doesNotMatch(whitepaperPlaceholder, /id="fig-placeholder-auction-clearing"/, 'whitepaper must delegate auction clearing to the canonical focused diagram')
-	assert.match(whitepaperPlaceholder, /auction-design\.html#clearing/)
+	assert.doesNotMatch(whitepaperStatoblast, /id="fig-statoblast-auction-clearing"/, 'whitepaper must delegate auction clearing to the canonical focused diagram')
+	assert.match(whitepaperStatoblast, /auction-design\.html#clearing/)
 }
 
 function assertStartHereTimelines(): void {
@@ -295,7 +295,7 @@ function assertStartHereTimelines(): void {
 	assert.match(startHere, /resumes\s+from its inherited elapsed time without a new activation delay/)
 	assert.match(startHere, /d="M 800 103 C 818 103 812 59 835 59"/)
 	assert.match(startHere, /d="M 800 103 C 818 103 812 151 835 151"/)
-	assert.match(startHere, /placeholder-whitepaper\.html#migration/)
+	assert.match(startHere, /statoblast-whitepaper\.html#migration/)
 	assert.match(startHere, /merkle-mountain-range\.html/)
 	assert.match(startHere, />activateForkMode</)
 	assert.match(startHere, /A universe\s+fork alone leaves <code>systemState<\/code> as <code>Operational<\/code>/)
@@ -315,15 +315,15 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(invariantsHtml, /id="fork-10"[\s\S]*<code>FORK-10<\/code>[\s\S]*mints only the unmaterialized balance/)
 	assert.match(invariantsHtml, /id="fork-11"[\s\S]*<code>FORK-11<\/code>[\s\S]*fork-time economic claim supply[\s\S]*Unequal ERC-1155 supplies[\s\S]*do not block complete-set minting[\s\S]*href="#share-04"><code>SHARE-04<\/code>/)
 	assert.match(operatorReference, /invariants\.html#fork-10[\s\S]*invariants\.html#share-04[\s\S]*invariants\.html#fork-11/)
-	assert.match(whitepaperPlaceholder, /none of the selected children has received[\s\S]*On a later call, each child receives only[\s\S]*current source balance - amount already materialized[\s\S]*every selected delta is zero, the call reverts/)
-	assert.match(whitepaperPlaceholder, /invariants\.html#fork-10[\s\S]*invariants\.html#share-04[\s\S]*invariants\.html#fork-11/)
+	assert.match(whitepaperStatoblast, /none of the selected children has received[\s\S]*On a later call, each child receives only[\s\S]*current source balance - amount already materialized[\s\S]*every selected delta is zero, the call reverts/)
+	assert.match(whitepaperStatoblast, /invariants\.html#fork-10[\s\S]*invariants\.html#share-04[\s\S]*invariants\.html#fork-11/)
 	assert.match(invariantsHtml, /FORK-05[\s\S]*forkActivationTime \+ 8 weeks[\s\S]*parent pool enters <code>PoolForked<\/code>[\s\S]*Share materialization has no expiry[\s\S]*already-created child/)
 	assert.doesNotMatch(invariantsHtml, /Child creation, share migration, vault migration/)
 	assert.doesNotMatch(invariantsHtml, /forkTime \+ 8 weeks/)
 	assert.match(auctionDesign, /forkActivationTime \+ SecurityPoolUtils\.MIGRATION_TIME[\s\S]*pool-local[\s\S]*universe <code>forkTime<\/code>[\s\S]*invariants\.html#fork-05/)
 	assert.doesNotMatch(auctionDesign, /8 weeks from the parent\s+universe fork time/)
-	assert.match(whitepaperPlaceholder, /Parent retained \+ locked/)
-	assert.doesNotMatch(whitepaperPlaceholder, /Parent burned/)
+	assert.match(whitepaperStatoblast, /Parent retained \+ locked/)
+	assert.doesNotMatch(whitepaperStatoblast, /Parent burned/)
 	assert.match(eventStream, /ShareTokenSupplySet[\s\S]*source entitlements whose child ERC-1155 balances have not materialized yet[\s\S]*Migrate[\s\S]*do not change this denominator/)
 	assert.match(eventStream, /On every `startTruthAuction`, initialize the child's remaining economic claim supply from `ShareTokenSupplySet`[\s\S]*immediate no-auction path/)
 	assert.match(contractInteractionReference, /single-target call may lazily create that child/)
@@ -398,12 +398,12 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(securityPoolForker, /securityPool\.setTotalShares\(parent\.shareTokenSupply\(\)\)/)
 	assert.match(contractInteractionReference, /redeemCompleteSet\(completeSetAmount\)[\s\S]*completeSetAmount \* completeSetCollateralAmount \/ shareTokenSupply[\s\S]*remaining economic claim supply[\s\S]*source entitlements materialize without changing it/)
 	assert.doesNotMatch(contractInteractionReference, /redeemCompleteSet\(completeSetAmount\)[\s\S]*largest live outcome supply/)
-	assert.match(whitepaperPlaceholder, /child uses its remaining economic claim supply as\s*the denominator[\s\S]*fork-time claims whose ERC-1155 balances\s*have not materialized there yet/)
-	assert.doesNotMatch(whitepaperPlaceholder, /payout uses\s*the maximum outcome supply as its denominator/)
+	assert.match(whitepaperStatoblast, /child uses its remaining economic claim supply as\s*the denominator[\s\S]*fork-time claims whose ERC-1155 balances\s*have not materialized there yet/)
+	assert.doesNotMatch(whitepaperStatoblast, /payout uses\s*the maximum outcome supply as its denominator/)
 	assert.match(contractInteractionReference, /redeemShares\(\)[\s\S]*caller accepts the resulting ETH call, including zero value[\s\S]*rejection of that ETH call reverts the transaction/)
 	assert.match(contractInteractionReference, /redeemFees\(vault\)[\s\S]*If resulting unpaid fees are zero, returns without payment[\s\S]*no event when fees and accrual state are unchanged/)
 	assert.match(contractInteractionReference, /performWithdrawRep\(vault, repAmount\)[\s\S]*operational pool in an unforked universe[\s\S]*`isEscalationResolved\(\)` is false/)
-	assert.match(whitepaperPlaceholder, /cashToShares[\s\S]*Exchange rate undefined/)
+	assert.match(whitepaperStatoblast, /cashToShares[\s\S]*Exchange rate undefined/)
 	assert.match(contractInteractionReference, /if an escalation game exists, the universe fork occurred before that game settled/)
 	assert.match(contractInteractionReference, /withdrawDeposit\(uint256 depositIndex, outcome\)[\s\S]*`CarryDepositConsumed` and `VaultEscrowUpdated`[\s\S]*for a winner, `ClaimDeposit`/)
 	assert.match(contractInteractionReference, /`EscalationRepDrainedAtFork` when unresolved escalation exists/)
@@ -534,10 +534,10 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(operatorReference, /coordinator and child truth-auction factories each hash that value again with their caller \(`SecurityPoolFactory`\)/)
 	assert.match(operatorReference, /pool deployment worker instead uses literal CREATE2 salt zero[\s\S]*full constructor init-code hash/)
 	assert.match(operatorReference, /origin share token uses `originId = keccak256\(abi\.encode\(questionId, securityMultiplier, originUniverseId\)\)` directly as its CREATE2 salt[\s\S]*children reuse that lineage token/)
-	assert.match(whitepaperPlaceholder, /<code>securityPoolSalt<\/code> seed from the parent address, universe\s*id, question id, and <code>securityMultiplier<\/code>, using a zero\s*parent for an origin/)
-	assert.match(whitepaperPlaceholder, /pool deployment worker's raw CREATE2 salt\s*is zero; constructor init code commits the pool wiring/)
-	assert.match(whitepaperPlaceholder, /href="\.\/operator-reference\.md#security-pool-guardrails"/)
-	assert.doesNotMatch(whitepaperPlaceholder, /Origin-pool\s*deployment salts include/)
+	assert.match(whitepaperStatoblast, /<code>securityPoolSalt<\/code> seed from the parent address, universe\s*id, question id, and <code>securityMultiplier<\/code>, using a zero\s*parent for an origin/)
+	assert.match(whitepaperStatoblast, /pool deployment worker's raw CREATE2 salt\s*is zero; constructor init code commits the pool wiring/)
+	assert.match(whitepaperStatoblast, /href="\.\/operator-reference\.md#security-pool-guardrails"/)
+	assert.doesNotMatch(whitepaperStatoblast, /Origin-pool\s*deployment salts include/)
 	for (const emitterFunction of ['emitPoolAccountingCheckpoint', 'emitVaultAccountingCheckpoint']) {
 		assert.match(securityPoolEventEmitter, new RegExp(`function ${emitterFunction}\\([\\s\\S]*?\\) external payable`), `${emitterFunction} must remain externally payable for delegatecall flows`)
 	}

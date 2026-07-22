@@ -172,7 +172,7 @@ void describe('deployment helpers', () => {
 	void test('loadDeploymentStatusOracleSnapshot returns the proxy deployer when the oracle is missing', async () => {
 		const snapshot = await loadDeploymentStatusOracleSnapshot(readClient)
 
-		expect(snapshot.augurPlaceHolderDeployed).toBe(false)
+		expect(snapshot.augurStatoblastDeployed).toBe(false)
 		expect(snapshot.deploymentStatuses.find(step => step.id === 'proxyDeployer')?.deployed).toBe(true)
 		expect(snapshot.deploymentStatuses.find(step => step.id === 'deploymentStatusOracle')?.deployed).toBe(false)
 	})

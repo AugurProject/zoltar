@@ -11,7 +11,7 @@
 				<header>
 					<h1>OpenOracle Integration</h1>
 					<p>
-						Placeholder uses <code>OpenOracle</code> for one narrow job: getting
+						Statoblast uses <code>OpenOracle</code> for one narrow job: getting
 						a fresh REP/ETH price when a pool needs to check solvency. It does
 						not use OpenOracle to decide market truth; truth still comes from
 						local escalation and, if necessary, Zoltar forks.
@@ -25,7 +25,7 @@
 					</p>
 					<p>
 						A stale or missing price sends solvency-sensitive operations into
-						staging because Placeholder would rather delay a withdrawal,
+						staging because Statoblast would rather delay a withdrawal,
 						liquidation, or allowance change than let an old REP/ETH quote
 						distort pool solvency checks.
 					</p>
@@ -57,8 +57,8 @@
 					<a
 						href="../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
 						>OpenOraclePriceCoordinator integration</a
-					>, and the Placeholder whitepaper's
-					<a href="./placeholder-whitepaper.html#oracle"
+					>, and the Statoblast whitepaper's
+					<a href="./statoblast-whitepaper.html#oracle"
 						>REP/ETH Price Oracle</a
 					>
 					section. Current oracle research lives in the OpenOracle Technical
@@ -77,7 +77,7 @@
 				<section id="openoracle-role">
 					<h2>OpenOracle Role</h2>
 					<p>
-						The generic oracle lifecycle comes first. Placeholder's coordinator
+						The generic oracle lifecycle comes first. Statoblast's coordinator
 						calls OpenOracle and becomes the initial reporter, then consumes the
 						settled result through OpenOracle's callback.
 					</p>
@@ -171,10 +171,10 @@
 				</p>
 			</section>
 
-			<section id="placeholder-integration">
-				<h2>Placeholder Integration</h2>
+			<section id="statoblast-integration">
+				<h2>Statoblast Integration</h2>
 				<p>
-					In Placeholder, every pool gets its own coordinator. That keeps
+					In Statoblast, every pool gets its own coordinator. That keeps
 					pending operations, freshness windows, and callback state local to one
 					pool instead of sharing one global queue across the protocol.
 				</p>
@@ -216,7 +216,7 @@
 							OpenOracle integration flow
 						</title>
 						<desc id="integration-flow-desc">
-							Placeholder queues solvency-sensitive operations behind a bounded
+							Statoblast queues solvency-sensitive operations behind a bounded
 							OpenOracle REP/ETH report and executes them only with a fresh
 							accepted price.
 						</desc>
@@ -344,7 +344,7 @@
 					</svg>
 					<p class="diagram-caption">
 						<span class="figure-label">Integration Flow</span>The coordinator is
-						the trust boundary between Placeholder operations and OpenOracle
+						the trust boundary between Statoblast operations and OpenOracle
 						reports. It applies guardrails before request and staging, then
 						again after callback before execution.
 					</p>
@@ -629,7 +629,7 @@
 			<section id="security-guarantee">
 				<h2>Security Model and Guardrails</h2>
 				<p>
-					Placeholder uses the oracle to preserve solvency accounting around ETH
+					Statoblast uses the oracle to preserve solvency accounting around ETH
 					obligations backed by REP. The
 					<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a>
 					section owns the required economic assumption. Locally, operations that can change REP backing or
@@ -945,7 +945,7 @@
 				<p>
 					OpenOracle's inclusion analysis models an attacker who posts a wrong
 					price and pays for censorship until the report can settle. For linear
-					payoffs the settle payoff scales with price error, but Placeholder's
+					payoffs the settle payoff scales with price error, but Statoblast's
 					most relevant liquidation payoff is binary: the attacker wins a
 					fixed payoff only if the manipulated REP/ETH price is strictly above
 					the liquidation threshold and satisfies the configured liquidation
@@ -1566,7 +1566,7 @@
 					The integration depends on the OpenOracle fields below. This is the
 					canonical current-value table for coordinator and OpenOracle
 					parameters; the
-					<a href="./placeholder-whitepaper.html#parameters">Placeholder whitepaper</a>
+					<a href="./statoblast-whitepaper.html#parameters">Statoblast whitepaper</a>
 					routes readers here instead of maintaining a second copy.
 				</p>
 				<table>
@@ -1574,7 +1574,7 @@
 						<tr>
 							<th>Parameter</th>
 							<th>Current integration value</th>
-							<th>Use in Placeholder</th>
+							<th>Use in Statoblast</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -1703,7 +1703,7 @@
 							<td><code>callbackContract</code></td>
 							<td><code>OpenOraclePriceCoordinator</code></td>
 							<td>
-								Routes settled amounts back into Placeholder's price cache and
+								Routes settled amounts back into Statoblast's price cache and
 								staged-operation executor.
 							</td>
 						</tr>
