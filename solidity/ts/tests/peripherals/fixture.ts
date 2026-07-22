@@ -624,6 +624,7 @@ export function usePeripheralsForkMigrationFixture() {
 		'manipulatePriceOracle',
 		'manipulatePriceOracleAndPerformOperation',
 		'triggerOwnGameFork',
+		'deployOriginSecurityPool',
 		'getInfraContractAddresses',
 		'getSecurityPoolAddresses',
 		'createQuestion',

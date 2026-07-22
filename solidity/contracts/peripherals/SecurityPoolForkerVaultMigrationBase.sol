@@ -55,7 +55,10 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		);
 	}
 
-	function _getOrDeployChildPool(ISecurityPool parent, uint256 outcomeIndex) internal returns (ISecurityPool child) {
+	function _getOrDeployChildPool(
+		ISecurityPool parent,
+		uint256 outcomeIndex
+	) internal returns (ISecurityPool child, EscalationGame childEscalationGame) {
 		child = childrenByPoolAndOutcome[parent][outcomeIndex];
 		if (address(child) == address(0x0)) {
 			require(parent.systemState() == SystemState.PoolForked, 'Parent not forked');
@@ -116,11 +119,22 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		}
 
 		_initializeChildForkedEscalationGameIfNeeded(parent, child);
-		_ensureChildEscalationBacking(parent, outcomeIndex, child);
+		childEscalationGame = child.escalationGame();
+		require(
+			address(childEscalationGame) == address(0x0) ||
+				address(childEscalationGame.securityPool()) == address(child),
+			'Child game pool'
+		);
+		_ensureChildEscalationBacking(parent, outcomeIndex, child, childEscalationGame);
 		_sweepChildRepToPool(parent, outcomeIndex);
 	}
 
-	function _ensureChildEscalationBacking(ISecurityPool parent, uint256 outcomeIndex, ISecurityPool child) internal {
+	function _ensureChildEscalationBacking(
+		ISecurityPool parent,
+		uint256 outcomeIndex,
+		ISecurityPool child,
+		EscalationGame childEscalationGame
+	) internal {
 		SecurityPoolForkerForkData storage parentForkData = forkDataByPool[parent];
 		if (
 			!parentForkData.unresolvedEscalationAtFork ||
@@ -128,7 +142,6 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 		) return;
 		escalationBackingMaterializedByPoolAndOutcome[parent][outcomeIndex] = true;
 		uint256 childRepAmount = parentForkData.escalationChildRepAtFork;
-		EscalationGame childEscalationGame = child.escalationGame();
 		require(address(childEscalationGame) != address(0x0), 'Child game');
 		if (childRepAmount > 0) {
 			_splitMigrationRepToChild(parent, outcomeIndex, childRepAmount, parentForkData.ownFork, true);

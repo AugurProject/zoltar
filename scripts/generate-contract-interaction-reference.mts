@@ -43,7 +43,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/contract-interaction-reference.md'
-const expectedProductionSoliditySourceFingerprint = 'f3e720d6adeac96e0031df3243b67d29a10b2fdde6978b18b548d3737f47f8e8'
+const expectedProductionSoliditySourceFingerprint = '1a5853cb3be9d259b347bb37333e01fa70c562c88980af7c9f185d375d3839e6'
 
 const eventSourceByName: Record<string, string> = {
 	Approval: 'solidity/contracts/IERC20.sol',
@@ -1041,9 +1041,10 @@ const contractReferences: ContractReference[] = [
 			{
 				call: '`createChildUniverse(securityPool, outcomeIndex)`',
 				caller: 'Anyone',
-				effect: 'Loads an already deployed child universe and REP token or deploys them when absent, then lazily deploys the selected child pool, coordinator, and auction; authorizes and links the child; and initializes any continuation snapshot and materializes or sweeps child backing.',
+				effect:
+					"Loads an already deployed child universe and REP token or deploys them when absent, then lazily deploys the selected child pool, coordinator, and auction; authorizes and links the child; captures and validates the child's escalation game; and initializes any continuation snapshot and materializes or sweeps child backing through that validated game.",
 				declarations: [{ name: 'createChildUniverse' }],
-				preconditions: 'Parent in migration window; selected fork outcome is well formed; child pool is not already deployed.',
+				preconditions: "Parent in migration window; selected fork outcome is well formed; child pool is not already deployed; the selected child's nonzero escalation game has an immutable `securityPool()` binding equal to that child.",
 				signals:
 					'`DeployChild` only when child REP was absent; always `SecurityPoolRegistered`, `DeploySecurityPool`, `AuthorizationUpdated`, `ChildPoolLinked`, and `OwnershipDenominatorSet`; `AwaitingForkContinuationSet`, `EscalationGameSet`, `GameContinuedFromFork`, `ForkCarryCheckpoint`, `MigrationRepSplit`, `ChildEscalationRepMaterialized`, and `ChildPoolRepSwept` as continuation and backing state requires',
 			},
@@ -1052,7 +1053,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'Vault owner for its unlocked position',
 				declarations: [{ name: 'migrateVault' }],
 				effect: "Moves the caller's currently unlocked REP ownership, allowance, fees, and collateral into one child pool. Repeat calls can have no additional unlocked state to move.",
-				preconditions: 'Migration window open. The optional unresolved-lock cleanup wrapper calls this function first to migrate any unlocked state.',
+				preconditions: "Migration window open; the selected child's nonzero escalation game has an immutable `securityPool()` binding equal to that child. The optional unresolved-lock cleanup wrapper calls this function first to migrate any unlocked state.",
 				signals: '`VaultMigrationCheckpoint`',
 			},
 			{
@@ -1061,17 +1062,17 @@ const contractReferences: ContractReference[] = [
 				effect:
 					"First runs ordinary migration for the same vault, which may move its unlocked ownership, allowance, fees, and collateral to the selected child. Then clears that vault's parent unresolved-lock accounting in constant-size work and records the cleanup; the cleanup neither funds escalation backing nor authorizes carried proofs.",
 				declarations: [{ name: 'migrateVaultWithUnresolvedEscalation' }],
-				preconditions: 'Migration window open; caller equals `vault`; selected child not already recorded for this optional cleanup.',
+				preconditions: "Migration window open; caller equals `vault`; selected child not already recorded for this optional cleanup; the selected child's nonzero escalation game has an immutable `securityPool()` binding equal to that child.",
 				signals: 'Vault migration events plus `EscalationMigrationEntitlementInitialized` on first export and `EscalationMigrationEntitlementMaterialized` for the selected child',
 			},
 			{
 				call: '`claimForkedEscalationDeposits(...)`',
 				caller: 'The named vault',
 				effect:
-					'First gets or lazily deploys the selected child universe, REP token, pool, coordinator, and auction, then initializes its continuation snapshot and materializes or sweeps child backing as needed. A nonempty list claims winning own-fork parent deposits and records their stable identities against descendant replay. An empty list still performs child setup and emits a zero-valued claim summary.',
+					"First gets or lazily deploys the selected child universe, REP token, pool, coordinator, and auction, then captures and validates the child's escalation game and uses that same game for continuation backing and escrow payment. A nonempty list claims winning own-fork parent deposits and records their stable identities against descendant replay. An empty list still performs child setup and emits a zero-valued claim summary.",
 				declarations: [{ name: 'claimForkedEscalationDeposits' }],
 				preconditions:
-					'Caller equals `vault`; unresolved escalation existed at an own-question non-decision fork; selected child can be created or loaded, remains in `ForkMigration`, has its continuation game, and is inside the eight-week claim window. A nonempty list additionally requires the matching winning outcome, deposits belonging to `vault`, and unclaimed deposit identities.',
+					'Caller equals `vault`; unresolved escalation existed at an own-question non-decision fork; selected child can be created or loaded, remains in `ForkMigration`, has a continuation game whose immutable `securityPool()` binding equals that child, and is inside the eight-week claim window. A nonempty list additionally requires the matching winning outcome, deposits belonging to `vault`, and unclaimed deposit identities.',
 				signals:
 					'`DeployChild`, `SecurityPoolRegistered`, `DeploySecurityPool`, `AuthorizationUpdated`, `ChildPoolLinked`, `OwnershipDenominatorSet`, `AwaitingForkContinuationSet`, `EscalationGameSet`, `GameContinuedFromFork`, `ForkCarryCheckpoint`, `MigrationRepSplit`, `ChildEscalationRepMaterialized`, and `ChildPoolRepSwept` as setup requires; per claimed deposit, `CarryDepositConsumed` and `ClaimDeposit`; escrow record/export events when REP is paid; always `ClaimForkedEscalationDepositsToWallet`, including for an empty list',
 			},

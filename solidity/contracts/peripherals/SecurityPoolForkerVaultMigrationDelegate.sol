@@ -30,7 +30,7 @@ contract SecurityPoolForkerVaultMigrationDelegate is SecurityPoolForkerVaultMigr
 			block.timestamp <= forkDataByPool[parent].forkActivationTime + SecurityPoolUtils.MIGRATION_TIME,
 			'Migration window closed'
 		);
-		ISecurityPool child = _getOrDeployChildPool(parent, outcomeIndex);
+		(ISecurityPool child, ) = _getOrDeployChildPool(parent, outcomeIndex);
 		_migrateVaultUnlockedState(parent, child, msg.sender);
 	}
 

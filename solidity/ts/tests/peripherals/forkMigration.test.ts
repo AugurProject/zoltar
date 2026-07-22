@@ -12,6 +12,10 @@ import { peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_Sh
 import {
 	test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackFactoryMock,
 	test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackParentMock,
+	test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackChildMock,
+	test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackFactoryMock,
+	test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackGameMock,
+	test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackParentMock,
 	test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerFakePoolMock,
 	test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerMaliciousEventEmitter,
 } from '../../types/contractArtifact'
@@ -50,6 +54,7 @@ describe('Peripherals: fork migration', () => {
 		triggerOwnGameFork,
 		getInfraContractAddresses,
 		getSecurityPoolAddresses,
+		deployOriginSecurityPool,
 		createQuestion,
 		getQuestionId,
 		balanceOfShares,
@@ -545,6 +550,101 @@ describe('Peripherals: fork migration', () => {
 
 			strictEqualTypeSafe(await getPoolOwnershipDenominator(client, targetPool), denominatorBeforeAttack, 'attack should not change the legitimate pool ownership denominator')
 			strictEqualTypeSafe((await getSecurityPoolForkerForkData(client, targetPool)).truthAuction, targetForkDataBeforeAttack.truthAuction, 'attack should not overwrite the legitimate pool fork metadata')
+		})
+
+		test('claimForkedEscalationDeposits rejects a fake child that injects a canonical escalation game', async () => {
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime + 10000n)
+			const forker = getInfraContractAddresses().securityPoolForker
+			const genesisRep = addressString(GENESIS_REPUTATION_TOKEN)
+			const forkThreshold = await getZoltarForkThreshold(client, genesisUniverse)
+			const fakeEscalationRep = forkThreshold * 2n
+			const expectedEscalationChildRep = fakeEscalationRep - forkThreshold / 5n
+			const victimDeposit = repDeposit
+			const forgedClaim = expectedEscalationChildRep + victimDeposit
+
+			const fakeFactoryDeploymentHash = await client.sendTransaction({
+				data: encodeDeployData({
+					abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackFactoryMock.abi,
+					bytecode: `0x${test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackFactoryMock.evm.bytecode.object}`,
+					args: [],
+				}),
+			})
+			const fakeFactoryReceipt = await client.waitForTransactionReceipt({ hash: fakeFactoryDeploymentHash })
+			const fakeFactory = fakeFactoryReceipt.contractAddress
+			if (fakeFactory === undefined || fakeFactory === null) throw new Error('fake escrow factory address missing')
+
+			const fakeParentDeploymentHash = await client.sendTransaction({
+				data: encodeDeployData({
+					abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackParentMock.abi,
+					bytecode: `0x${test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackParentMock.evm.bytecode.object}`,
+					args: [genesisRep, fakeFactory, securityPoolAddresses.shareToken, forker, genesisUniverse, questionId, securityMultiplier],
+				}),
+			})
+			const fakeParentReceipt = await client.waitForTransactionReceipt({ hash: fakeParentDeploymentHash })
+			const fakeParent = fakeParentReceipt.contractAddress
+			if (fakeParent === undefined || fakeParent === null) throw new Error('fake escrow parent address missing')
+
+			const fakeGameDeploymentHash = await client.sendTransaction({
+				data: encodeDeployData({
+					abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackGameMock.abi,
+					bytecode: `0x${test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackGameMock.evm.bytecode.object}`,
+					args: [fakeParent, genesisRep, client.account.address, forgedClaim],
+				}),
+			})
+			const fakeGameReceipt = await client.waitForTransactionReceipt({ hash: fakeGameDeploymentHash })
+			const fakeGame = fakeGameReceipt.contractAddress
+			if (fakeGame === undefined || fakeGame === null) throw new Error('fake escalation game address missing')
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackParentMock.abi,
+					address: fakeParent,
+					functionName: 'configureEscalationGame',
+					args: [fakeGame],
+				}),
+			)
+			await transferRepToAddress(client, fakeGame, fakeEscalationRep)
+			await forkZoltarWithOwnEscalationGame(client, fakeParent)
+
+			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+			const childRep = getRepTokenAddress(yesUniverse)
+			const victimClient = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
+			await approveToken(victimClient, genesisRep, getZoltarAddress())
+			await addRepToMigrationBalance(victimClient, genesisUniverse, victimDeposit)
+			await splitMigrationRep(victimClient, genesisUniverse, victimDeposit, [QuestionOutcome.Yes])
+			await deployOriginSecurityPool(victimClient, yesUniverse, questionId, securityMultiplier)
+			const targetPool = getSecurityPoolAddresses(addressString(0n), yesUniverse, questionId, securityMultiplier, yesUniverse)
+			await approveToken(victimClient, childRep, targetPool.securityPool)
+			await depositRep(victimClient, targetPool.securityPool, victimDeposit)
+			await depositToEscalationGame(victimClient, targetPool.securityPool, QuestionOutcome.Yes, victimDeposit)
+			const targetGame = await getSecurityPoolsEscalationGame(client, targetPool.securityPool)
+			strictEqualTypeSafe(await getERC20Balance(client, childRep, targetGame), victimDeposit, 'canonical target game should begin with victim-funded child REP')
+
+			const fakeChildDeploymentHash = await client.sendTransaction({
+				data: encodeDeployData({
+					abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackChildMock.abi,
+					bytecode: `0x${test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackChildMock.evm.bytecode.object}`,
+					args: [fakeParent, fakeFactory, childRep, forker, targetPool.securityPool, targetGame, yesUniverse],
+				}),
+			})
+			const fakeChildReceipt = await client.waitForTransactionReceipt({ hash: fakeChildDeploymentHash })
+			const fakeChild = fakeChildReceipt.contractAddress
+			if (fakeChild === undefined || fakeChild === null) throw new Error('fake escrow child address missing')
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackFactoryMock.abi,
+					address: fakeFactory,
+					functionName: 'configureChild',
+					args: [fakeChild, targetPool.securityPool],
+				}),
+			)
+
+			const attackerChildRepBefore = await getERC20Balance(client, childRep, client.account.address)
+			await assert.rejects(claimForkedEscalationDeposits(client, fakeParent, client.account.address, QuestionOutcome.Yes, [0n]), /Child game pool/)
+
+			strictEqualTypeSafe(await getERC20Balance(client, childRep, client.account.address), attackerChildRepBefore, 'rejected forged claim must not transfer child REP to the attacker')
+			strictEqualTypeSafe(await getERC20Balance(client, childRep, targetGame), victimDeposit, 'rejected forged claim must leave the canonical target game funded')
+			strictEqualTypeSafe((await getSecurityVault(client, targetPool.securityPool, victimClient.account.address)).repInEscalationGame, victimDeposit, 'rejected forged claim must leave canonical victim escrow accounting backed')
 		})
 	})
 
