@@ -126,6 +126,12 @@
 					same ordered list that seeded the oracle.
 				</p>
 				<p>
+					The constructor emits <code>DeploymentAddressesSet(address[] deploymentAddresses)</code>
+					with that exact ordered list. It is the onchain source for recovering a particular
+					oracle instance's bit mapping; the manifest below describes the current planned
+					deployment and must match the constructor event for that instance.
+				</p>
+				<p>
 					The current UI and deployment helpers derive the constructor list from
 					<code>deploymentSteps</code> with one exception: the oracle does not include its own
 					address in its constructor array. The manifest still lists

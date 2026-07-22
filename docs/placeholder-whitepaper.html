@@ -614,11 +614,18 @@
 						implementation.
 					</div>
 					<p>
-						Pool-related addresses are also deterministic. Origin-pool
-						deployment salts include the zero parent address, universe id,
-						question id, and
-						<code>securityMultiplier</code>; child-pool salts include the parent
-						pool address as well. Each origin receives
+						Pool-related addresses are also deterministic. The
+						<code>SecurityPoolFactory</code> derives a factory-level
+						<code>securityPoolSalt</code> seed from the parent address, universe
+						id, question id, and <code>securityMultiplier</code>, using a zero
+						parent for an origin. The pool deployment worker's raw CREATE2 salt
+						is zero; constructor init code commits the pool wiring. Coordinator
+						and auction factories derive their own caller-scoped salts from the
+						factory seed. See the
+						<a href="./operator-reference.md#security-pool-guardrails"
+							>Operator Reference</a
+						>
+						for the exact address derivations. Each origin receives
 						<code>originId = keccak256(abi.encode(questionId, securityMultiplier, originUniverseId))</code>.
 						Migrated children retain that origin id and register with
 						<code>poolId = keccak256(abi.encode(originId, childUniverseId))</code>. The origin id
@@ -985,8 +992,12 @@
 							viewBox="0 0 860 270"
 							role="img"
 							aria-labelledby="fees-title fees-desc"
+							data-flow-stages="Unallocated Reserve, Assigned Vault Debt, Vault Payout"
 						>
-							<title id="fees-title">Collateral retention and fee flow</title>
+							<title id="fees-title">
+								Collateral retention and fee flow: Unallocated Reserve to Assigned
+								Vault Debt to Vault Payout
+							</title>
 							<desc id="fees-desc">
 								Complete-set collateral decays into an unallocated reserve. Vault
 								checkpoints assign whole wei as redeemable vault debt.
@@ -1012,18 +1023,21 @@
 								height="78"
 								rx="10"
 							></rect>
-							<text class="svg-label" x="110" y="88" text-anchor="middle">
-								Complete-Set Collateral
+							<text class="svg-label" x="110" y="79" text-anchor="middle">
+								Complete-Set
 							</text>
-							<text class="svg-small" x="110" y="112" text-anchor="middle">
-								starts higher, decays over time
+							<text class="svg-label" x="110" y="99" text-anchor="middle">
+								Collateral
+							</text>
+							<text class="svg-micro" x="110" y="120" text-anchor="middle">
+								starts high; then decays
 							</text>
 							<path
 								class="svg-line"
 								marker-end="url(#arrow-fees)"
 								d="M 200 93 H 235"
 							></path>
-							<text class="svg-small" x="217" y="76" text-anchor="middle">
+							<text class="svg-micro" x="217" y="42" text-anchor="middle">
 								decay
 							</text>
 							<rect
@@ -1034,10 +1048,13 @@
 								height="78"
 								rx="10"
 							></rect>
-							<text class="svg-label" x="325" y="88" text-anchor="middle">
-								Unallocated Reserve
+							<text class="svg-label" x="325" y="79" text-anchor="middle">
+								Unallocated
 							</text>
-							<text class="svg-small" x="325" y="112" text-anchor="middle">
+							<text class="svg-label" x="325" y="99" text-anchor="middle">
+								Reserve
+							</text>
+							<text class="svg-micro" x="325" y="120" text-anchor="middle">
 								accrued, not yet redeemable
 							</text>
 							<path
@@ -1045,7 +1062,7 @@
 								marker-end="url(#arrow-fees)"
 								d="M 415 93 H 450"
 							></path>
-							<text class="svg-small" x="432" y="76" text-anchor="middle">
+							<text class="svg-micro" x="432" y="42" text-anchor="middle">
 								checkpoint
 							</text>
 							<rect
@@ -1056,10 +1073,13 @@
 								height="78"
 								rx="10"
 							></rect>
-							<text class="svg-label" x="540" y="88" text-anchor="middle">
-								Assigned Vault Debt
+							<text class="svg-label" x="540" y="79" text-anchor="middle">
+								Assigned Vault
 							</text>
-							<text class="svg-small" x="540" y="112" text-anchor="middle">
+							<text class="svg-label" x="540" y="99" text-anchor="middle">
+								Debt
+							</text>
+							<text class="svg-small" x="540" y="120" text-anchor="middle">
 								whole wei, redeemable
 							</text>
 							<path
@@ -1067,7 +1087,7 @@
 								marker-end="url(#arrow-fees)"
 								d="M 630 93 H 665"
 							></path>
-							<text class="svg-small" x="647" y="76" text-anchor="middle">
+							<text class="svg-micro" x="647" y="42" text-anchor="middle">
 								redeem
 							</text>
 							<rect
@@ -1194,7 +1214,7 @@
 							<text class="svg-label" x="304" y="129" text-anchor="middle">
 								Linear decline
 							</text>
-							<text class="svg-small" x="304" y="150" text-anchor="middle">
+							<text class="svg-micro" x="304" y="150" text-anchor="middle">
 								higher utilization extracts more fees
 							</text>
 							<rect
@@ -1321,8 +1341,11 @@
 							<text class="svg-label" x="308" y="137" text-anchor="middle">
 								Annualized fee rises
 							</text>
-							<text class="svg-small" x="308" y="158" text-anchor="middle">
-								utilization makes underwriting more expensive
+							<text class="svg-micro" x="308" y="154" text-anchor="middle">
+								utilization makes underwriting
+							</text>
+							<text class="svg-micro" x="308" y="167" text-anchor="middle">
+								more expensive
 							</text>
 							<rect
 								class="svg-box"
@@ -1335,8 +1358,8 @@
 							<text class="svg-label" x="681" y="142" text-anchor="middle">
 								Fee cap reached
 							</text>
-							<text class="svg-small" x="681" y="162" text-anchor="middle">
-								retention floor keeps the fee flat
+							<text class="svg-micro" x="681" y="162" text-anchor="middle">
+								retention floor keeps fee flat
 							</text>
 						</svg>
 						<p class="diagram-caption">
@@ -1953,7 +1976,9 @@
 						Shares can materialize across forks.
 						<code>ShareToken.migrate</code> preserves a parent-universe token id
 						as a persistent entitlement and mints child-universe token ids for
-						selected valid, non-malformed fork outcomes.
+						selected valid, non-malformed fork outcomes. The formal transfer-lock
+						and per-child delta rules are owned by
+						<a href="invariants.html#fork-10"><code>FORK-10</code></a>.
 					</p>
 					<figure class="diagram" id="fig-placeholder-share-migration">
 						<svg
@@ -1965,8 +1990,10 @@
 								Share migration materializes persistent branch entitlements
 							</title>
 							<desc id="share-migration-desc">
-								A parent token balance remains locked as an entitlement while the
-								same balance materializes in each selected child token id.
+								On first materialization into untouched children, the full current
+								parent balance materializes in each selected child token id while
+								the source remains locked as an entitlement. Later calls mint only
+								the unmaterialized delta for each child.
 							</desc>
 							<defs>
 								<marker
@@ -2039,7 +2066,7 @@
 								Child Token A
 							</text>
 							<text class="svg-small" x="745" y="125" text-anchor="middle">
-								same full balance
+								first: full balance
 							</text>
 							<rect
 								class="svg-blue"
@@ -2053,25 +2080,29 @@
 								Child Token B
 							</text>
 							<text class="svg-small" x="775" y="239" text-anchor="middle">
-								same full balance
+								first: full balance
 							</text>
 						</svg>
 						<p class="diagram-caption">
 							<span class="figure-label">Share Migration</span>Share migration
 							is not a pro-rata split across selected branches. The source
 							balance remains as a transfer-locked entitlement after first use,
-							and each selected child materializes its own reserved claim.
+							and each untouched selected child first materializes the full current
+							balance. Later calls mint only that child's unmaterialized delta.
 						</p>
 					</figure>
 					<details class="interactive-example" id="share-migration-example">
-						<summary>Adjust a share migration reproduction example</summary>
+						<summary>Adjust a first-materialization share example</summary>
 						<p>
-							The migration call preserves the full parent token balance and
-							materializes that same balance in each selected child outcome. The
-							contract accepts any non-empty, strictly increasing list of valid
-							non-malformed fork-question outcome indexes. The compact diagram
-							caps the displayed branches at three, which shows why migration is
-							not a pro-rata split.
+							This example assumes that none of the selected children has received
+							this source entitlement before. The first call preserves the full
+							parent token balance and materializes that balance in each selected
+							child outcome. On a later call, each child receives only
+							<code>current source balance - amount already materialized</code>; if
+							every selected delta is zero, the call reverts. The contract accepts
+							any non-empty, strictly increasing list of valid non-malformed
+							fork-question outcome indexes. The compact diagram caps the displayed
+							branches at three.
 						</p>
 						<div class="example-grid">
 							<label>
@@ -2109,7 +2140,7 @@
 							<svg
 								viewBox="0 0 760 220"
 								role="img"
-								aria-label="Share migration balance reproduction"
+								aria-label="First materialization of a share entitlement into untouched child branches"
 							>
 								<rect
 									class="example-bar-base"
@@ -2223,7 +2254,7 @@
 								><output data-example-output="parentAfter">30 shares</output>
 							</div>
 							<div>
-								<span>Child balance per selected branch</span
+								<span>First materialized balance per selected branch</span
 								><output data-example-output="childBalance">30 shares</output>
 							</div>
 							<div>
@@ -2252,9 +2283,14 @@
 						At the implementation level, <code>redeemShares</code> burns the
 						holder’s full materialized balance of the winning token id and pays
 						the burned amount’s pro-rata share of current collateral, using the
-						pool’s remaining economic claim supply as the denominator. That
+						pool’s remaining economic claim supply as the denominator. The
+						canonical lifecycle is
+						<a href="invariants.html#share-04"><code>SHARE-04</code></a>,
+						and unequal materialized supplies are covered by
+						<a href="invariants.html#fork-11"><code>FORK-11</code></a>. That
 						<code>shareTokenSupply</code> includes materialized ERC-1155 balances
-						and fork-time entitlements that can materialize later. In the healthy case this corresponds to a
+						and fork-time entitlements that can materialize later. In the healthy
+						case this corresponds to a
 						clean <code>1:1</code> redemption outcome against the economic
 						meaning of a complete-set claim, subject to collateral accounting
 						remaining intact through migration and any required auction repair.
@@ -2292,9 +2328,9 @@
 						The important edge case is fork recovery. If a child pool emerges
 						from migration with incomplete collateral, the truth auction sells
 						REP for ETH so the child pool can restore the collateral base needed
-							for clean redemption. If multiple target outcomes are selected
-							during share migration, the holder’s source entitlement remains
-							and its unmaterialized balance is minted into each selected child.
+						for clean redemption. If multiple target outcomes are selected
+						during share migration, the holder’s source entitlement remains
+						and its unmaterialized balance is minted into each selected child.
 					</p>
 				</section>
 
@@ -2424,7 +2460,8 @@
 							<line class="svg-line" x1="90" y1="230" x2="90" y2="50"></line>
 							<path
 								class="svg-line"
-								d="M 90 212 C 210 205 310 186 420 150 C 540 111 650 78 780 50"
+								data-source="normalizedCost(t) = (exp(2.4 * t) - 1) / (exp(2.4) - 1)"
+								d="M 90 212 L 159 208 L 228 202 L 297 195 L 366 186 L 435 175 L 504 160 L 573 141 L 642 118 L 711 88 L 780 50"
 							></path>
 							<circle class="svg-green" cx="90" cy="212" r="8"></circle>
 							<circle class="svg-red" cx="780" cy="50" r="8"></circle>
@@ -3517,7 +3554,7 @@
 								<text
 									class="svg-small"
 									x="580"
-									y="145"
+									y="162"
 									text-anchor="middle"
 									data-example-text="capMarker"
 								>
@@ -3526,8 +3563,8 @@
 								<text
 									class="svg-small"
 									x="680"
-									y="145"
-									text-anchor="end"
+									y="179"
+									text-anchor="middle"
 									data-example-text="winningMarker"
 								>
 									winning 18
@@ -4139,7 +4176,7 @@
 							<path
 								class="svg-line"
 								marker-end="url(#arrow-mig)"
-								d="M 540 89 H 590 V 136 H 635"
+								d="M 540 89 C 580 89 595 136 635 136"
 							></path>
 							<path
 								class="svg-line"
@@ -4149,7 +4186,7 @@
 							<path
 								class="svg-line"
 								marker-end="url(#arrow-mig)"
-								d="M 540 253 H 590 V 174 H 635"
+								d="M 540 253 C 580 253 595 174 635 174"
 							></path>
 							<rect
 								class="svg-green"
@@ -4640,39 +4677,39 @@
 							<path
 								class="svg-line"
 								marker-end="url(#arrow-own-fork-buckets)"
-								d="M 640 150 C 690 126 712 100 760 92"
+									d="M 640 150 C 680 126 692 100 720 92"
 							></path>
 							<path
 								class="svg-line"
 								marker-end="url(#arrow-own-fork-buckets)"
-								d="M 640 184 C 690 210 712 234 760 242"
+									d="M 640 184 C 680 210 692 234 720 242"
 							></path>
 							<rect
 								class="svg-green"
-								x="760"
+								x="720"
 								y="54"
-								width="140"
+								width="200"
 								height="76"
 								rx="10"
 							></rect>
-							<text class="svg-label" x="830" y="84" text-anchor="middle">
+							<text class="svg-label" x="820" y="84" text-anchor="middle">
 								Vault Bucket
 							</text>
-							<text class="svg-small" x="830" y="107" text-anchor="middle">
+							<text class="svg-small" x="820" y="107" text-anchor="middle">
 								migrate vaults
 							</text>
 							<rect
 								class="svg-box"
-								x="760"
+								x="720"
 								y="204"
-								width="140"
+								width="200"
 								height="76"
 								rx="10"
 							></rect>
-							<text class="svg-label" x="830" y="234" text-anchor="middle">
+							<text class="svg-label" x="820" y="234" text-anchor="middle">
 								Escalation Backing
 							</text>
-							<text class="svg-small" x="830" y="257" text-anchor="middle">
+							<text class="svg-small" x="820" y="257" text-anchor="middle">
 								game REP minus haircut
 							</text>
 						</svg>
@@ -4982,7 +5019,7 @@
 							<text class="svg-small" x="490" y="489" text-anchor="middle">
 								new snapshot combines
 							</text>
-							<text class="svg-small" x="490" y="506" text-anchor="middle">
+							<text class="svg-micro" x="490" y="506" text-anchor="middle">
 								inherited carry + local carry
 							</text>
 						</svg>
@@ -5037,19 +5074,19 @@
 							</text>
 							<rect
 								class="svg-green"
-								x="654"
+								x="644"
 								y="40"
-								width="220"
+								width="240"
 								height="82"
 								rx="10"
 							></rect>
 							<text class="svg-label" x="764" y="73" text-anchor="middle">
 								Canonical Snapshot
 							</text>
-							<text class="svg-small" x="764" y="98" text-anchor="middle">
+							<text class="svg-micro" x="764" y="98" text-anchor="middle">
 								reused by every selected child
 							</text>
-							<path class="svg-line" marker-end="url(#arrow-carry)" d="M 304 81 H 654"></path>
+							<path class="svg-line" marker-end="url(#arrow-carry)" d="M 304 81 H 644"></path>
 							<rect
 								class="svg-gold"
 								x="54"
@@ -5058,27 +5095,33 @@
 								height="82"
 								rx="10"
 							></rect>
-							<text class="svg-label" x="179" y="213" text-anchor="middle">
-								Remaining Aggregate REP
+							<text class="svg-label" x="179" y="205" text-anchor="middle">
+								Remaining Aggregate
 							</text>
-							<text class="svg-small" x="179" y="238" text-anchor="middle">
+							<text class="svg-label" x="179" y="225" text-anchor="middle">
+								REP
+							</text>
+							<text class="svg-micro" x="179" y="247" text-anchor="middle">
 								locked once at the fork
 							</text>
 							<rect
 								class="svg-green"
-								x="654"
+								x="644"
 								y="180"
-								width="220"
+								width="240"
 								height="82"
 								rx="10"
 							></rect>
-							<text class="svg-label" x="764" y="213" text-anchor="middle">
-								Physical Child Backing
+							<text class="svg-label" x="764" y="205" text-anchor="middle">
+								Physical Child
 							</text>
-							<text class="svg-small" x="764" y="238" text-anchor="middle">
+							<text class="svg-label" x="764" y="225" text-anchor="middle">
+								Backing
+							</text>
+							<text class="svg-micro" x="764" y="247" text-anchor="middle">
 								complete backing per selected child
 							</text>
-							<path class="svg-line" marker-end="url(#arrow-carry)" d="M 304 221 H 654"></path>
+							<path class="svg-line" marker-end="url(#arrow-carry)" d="M 304 221 H 644"></path>
 							<rect class="svg-blue" x="54" y="330" width="250" height="82" rx="10"></rect>
 							<text class="svg-label" x="179" y="363" text-anchor="middle">
 								Final Winning Outcome
@@ -5093,7 +5136,7 @@
 							<text class="svg-small" x="464" y="388" text-anchor="middle">
 								relayed permissionlessly
 							</text>
-							<rect class="svg-red" x="654" y="330" width="220" height="82" rx="10"></rect>
+							<rect class="svg-red" x="644" y="330" width="240" height="82" rx="10"></rect>
 							<text class="svg-label" x="764" y="363" text-anchor="middle">
 								Authenticated Payout
 							</text>
@@ -5101,7 +5144,7 @@
 								to recorded depositor
 							</text>
 							<path class="svg-line" marker-end="url(#arrow-carry)" d="M 304 371 H 354"></path>
-							<path class="svg-line" marker-end="url(#arrow-carry)" d="M 574 371 H 654"></path>
+							<path class="svg-line" marker-end="url(#arrow-carry)" d="M 574 371 H 644"></path>
 						</svg>
 						<p class="diagram-caption">
 							<span class="figure-label">Recursive Accounting</span>The next canonical
@@ -5786,16 +5829,19 @@
 								height="148"
 								rx="10"
 							></rect>
-							<text class="svg-label" x="803" y="190" text-anchor="middle">
-								Weak Demand Settlement
+							<text class="svg-label" x="803" y="184" text-anchor="middle">
+								Weak Demand
 							</text>
-							<text class="svg-small" x="803" y="222" text-anchor="middle">
+							<text class="svg-label" x="803" y="205" text-anchor="middle">
+								Settlement
+							</text>
+							<text class="svg-small" x="803" y="232" text-anchor="middle">
 								auction ETH below cap
 							</text>
-							<text class="svg-small" x="803" y="247" text-anchor="middle">
+							<text class="svg-small" x="803" y="254" text-anchor="middle">
 								no caller donation
 							</text>
-							<text class="svg-small" x="803" y="272" text-anchor="middle">
+							<text class="svg-small" x="803" y="276" text-anchor="middle">
 								activates at raised collateral
 							</text>
 						</svg>
@@ -6019,10 +6065,10 @@
 								Consume or Replay
 							</text>
 							<text class="svg-small" x="202" y="247" text-anchor="middle">
-								expired, stale, failed local checks,
+								expired, stale, or failed checks
 							</text>
 							<text class="svg-small" x="202" y="263" text-anchor="middle">
-								or executed
+								or already executed
 							</text>
 						</svg>
 							<p class="diagram-caption">
@@ -6243,6 +6289,13 @@
 						rectElement.setAttribute("x", String(rectX));
 					}
 				};
+				const setTextPosition = (textName, x, y) => {
+					const textElement = texts[textName];
+					if (textElement !== undefined) {
+						textElement.setAttribute("x", String(x));
+						textElement.setAttribute("y", String(y));
+					}
+				};
 				return {
 					inputs,
 					read,
@@ -6251,6 +6304,7 @@
 					writeText,
 					setRectWidth,
 					setRectX,
+					setTextPosition,
 				};
 			};
 			const bindExample = (exampleId, update) => {
@@ -6515,6 +6569,21 @@
 				context.writeText(
 					"winningMarker",
 					`winning ${formatFixed(winningPrincipal, 0)}`,
+				);
+				context.setTextPosition(
+					"bindingMarker",
+					80 + Math.min(bindingCapital * visualScale, 600),
+					145,
+				);
+				context.setTextPosition(
+					"capMarker",
+					80 + Math.min(rewardCap * visualScale, 600),
+					162,
+				);
+				context.setTextPosition(
+					"winningMarker",
+					80 + Math.min(winningPrincipal * visualScale, 600),
+					179,
 				);
 				context.write("rewardCap", formatRep(rewardCap));
 				context.write("rewardPool", formatRep(rewardPool));

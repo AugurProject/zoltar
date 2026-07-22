@@ -63,12 +63,13 @@ Use protocol events, not transfer inference, to discover relationships:
 
 | Relationship or state | Canonical events |
 | --- | --- |
-| Question and universe fork | question events, `UniverseForked` |
+| Question, root universe, and universe fork | `QuestionCreated`, `UniverseInitialized`, `UniverseForked` |
 | Child universe and child REP | `DeployChild`, `MigrationRepAdded`, `MigrationRepSplit` |
-| Pool, share token, auction, and coordinator | `DeploySecurityPool` and constructor/deployment events |
+| Pool, share token, auction, and coordinator | `SecurityPoolRegistered`, `DeploySecurityPool`, and constructor/deployment events |
 | Share-token permissions | `AuthorizationUpdated` |
 | Parent pool fork state | `SecurityPoolForkSnapshot`, `ParentRepLocked`, `EscalationRepDrainedAtFork` |
-| Child pool and migrated vault | child-link events, `VaultMigrationCheckpoint` |
+| Child pool and migrated vault | `ChildPoolLinked`, `ChildRepSplit`, `ChildPoolRepSwept`, `ChildEscalationRepMaterialized`, `VaultMigrationCheckpoint` |
+| Vault escalation entitlement | `EscalationMigrationEntitlementInitialized`, `EscalationMigrationEntitlementMaterialized` |
 | Remaining share economic-claim supply | `ShareTokenSupplySet`; then the `resultingShareTokenSupply` field on complete-set and winning-share action events |
 | Escalation continuation | `ForkCarryCheckpoint`, `CarryDepositConsumed` |
 | Pool and vault accounting | `PoolAccountingCheckpoint`, `VaultAccountingCheckpoint` |
@@ -76,6 +77,36 @@ Use protocol events, not transfer inference, to discover relationships:
 | Coordinator operations | `StagedOperationQueued`, `ExecutedStagedOperation`, terminal report events, `CoordinatorStateCheckpoint` |
 
 Protocol-global identifiers are universe and question IDs, contract addresses, and escalation snapshot IDs. Contract-local counters are stable only as composite keys: use `(game or snapshot lineage, outcome, parentDepositIndex)`, `(sourceGame, outcome, sourceNodeId)`, `(auction emitter, tick, bidIndex)`, and `(coordinator emitter, operationId)`. Mutable labels are not identifiers.
+
+### Discovery and migration event schemas
+
+The events below close the discovery and fork-migration boundaries that an indexer must not infer from token transfers. Field names are listed in declaration order; indexed fields are marked `indexed`.
+
+| Emitter and event | Fields | Reducer meaning |
+| --- | --- | --- |
+| `ZoltarQuestionData.QuestionCreated` | `questionId indexed`, `createdTimestamp`, `questionData`, `outcomeOptions` | Creates the immutable question record and its categorical labels. |
+| `Zoltar.UniverseInitialized` | `universeId indexed`, `forkTime`, `forkQuestionId`, `forkingOutcomeIndex`, `reputationToken`, `parentUniverseId indexed`, `universeTheoreticalSupply` | Discovers the root universe and its genesis REP token and theoretical supply. The constructor emits it only for universe 0. |
+| `Zoltar.DeployChild` | `deployer`, `universeId indexed`, `outcomeIndex indexed`, `childUniverseId indexed`, `childReputationToken`, `childUniverseTheoreticalSupply` | Discovers a child universe, its parent branch, child REP token, and theoretical supply. |
+| `SecurityPoolFactory.SecurityPoolRegistered` | `originId indexed`, `poolId indexed`, `universeId indexed`, `securityPool` | Establishes the canonical pool lookup key. It is emitted before `DeploySecurityPool` in the same transaction. |
+| `SecurityPoolFactory.DeploySecurityPool` | `securityPool indexed`, `truthAuction`, `priceOracleManagerAndOperatorQueuer`, `shareToken`, `parent indexed`, `universeId indexed`, `questionId`, `securityMultiplier`, `currentRetentionRate`, `completeSetCollateralAmount` | Discovers the pool and all of its constructed relationships. |
+| `SecurityPoolForker.ChildPoolLinked` | `parent indexed`, `outcomeIndex indexed`, `child indexed`, `truthAuction` | Connects one fork branch to its canonical child pool and auction. |
+| `SecurityPoolForker.ChildRepSplit` | `parent indexed`, `outcomeIndex indexed`, `childPoolRepSplit`, `pendingChildRep` | Replaces cumulative REP split and pending-to-pool accounting for that branch. |
+| `SecurityPoolForker.ChildEscalationRepMaterialized` | `parentPool indexed`, `childPool indexed`, `childGame indexed`, `outcomeIndex`, `repAmount`, `resultingEscalationRepBalance` | Records child REP delivered as continuation-game backing and its resulting balance. |
+| `SecurityPoolForker.ChildPoolRepSwept` | `parentPool indexed`, `childPool indexed`, `outcomeIndex indexed`, `repAmount`, `resultingChildPoolRepBalance` | Records pending child REP delivered to the pool and its resulting balance. |
+| `SecurityPoolForker.EscalationMigrationEntitlementInitialized` | `parent indexed`, `vault indexed`, `sourcePrincipalByOutcome`, `currentRepByOutcome`, `totalCurrentRep` | Freezes the vault's exported unresolved-escalation entitlement once. |
+| `SecurityPoolForker.EscalationMigrationEntitlementMaterialized` | `parent indexed`, `vault indexed`, `childOutcomeIndex indexed`, `child`, `childRep` | Marks that entitlement as materialized for one child branch. |
+
+These child and entitlement event families are declared in migration base, interface, or delegate modules but are emitted from the recognized `SecurityPoolForker` address because the implementation executes them through `delegatecall`. Accepting the same signature from a helper, delegate, or event-emitter address would allow false protocol history.
+
+`ReputationToken.TheoreticalSupplySet(totalTheoreticalSupply)`, `Mint(account indexed, value)`, and `Burn(account indexed, value, totalTheoreticalSupply)` explain the theoretical-supply changes around the standard ERC-20 `Transfer` stream. The ERC-20 transfer remains authoritative for balances and actual supply; `Burn.totalTheoreticalSupply` is the authoritative post-burn ceiling.
+
+Pool migration setters have exact replacement events: `AwaitingForkContinuationSet(awaitingForkContinuation)`, `OwnershipDenominatorSet(poolOwnershipDenominator)`, `ShareTokenSupplySet(shareTokenSupply)`, and `SystemStateSet(systemState)`. Apply them only from the affected recognized pool. `configureVault` and `setPoolFinancials` instead end in the authoritative vault or pool checkpoints described below.
+
+Escalation escrow bookkeeping uses `VaultEscrowUpdated(vault indexed, escrowedRepByVault, totalEscrowedRep)`, `ForkedEscrowRecorded(depositor indexed, outcome indexed, sourcePrincipalTotal, childRepTotal, escrowedRepByVault, totalEscrowedRep, outcomeBalance)`, `VaultUnresolvedTotalsExported(vault indexed, repReceiver, principalByOutcome, principalToTransfer, transferredRep)`, and `ForkedEscrowExported(vault indexed, repReceiver, sourcePrincipalByOutcome, childRepByOutcome, totalChildRepToTransfer, transferredRep)`. The ABI also declares `ForkedEscrowClaimed`, but the current implementation never emits it; reducers must not wait for or synthesize that event.
+
+Standard ERC-20 `Transfer` and `Approval`, plus ERC-1155 `TransferSingle`, `TransferBatch`, and `ApprovalForAll`, may be indexed for wallet balances and authorization, but they do not replace a Zoltar lifecycle or accounting field. The ERC-1155 ABI declares `URI`, but the current implementation never emits it; indexers must not wait for or synthesize that event. ERC-20 `Approval` is not an authoritative allowance reducer: a finite `transferFrom` spend decreases allowance without emitting `Approval`, while infinite allowance is neither decreased nor re-emitted. OpenOracle's `InternalApproval` likewise tracks only its separate internal-balance allowance and is not part of the packed report-state reducer. The imported `IAugur` event declarations are compatibility types; Zoltar contracts do not emit an Augur event stream.
+
+`DeploymentStatusOracle.DeploymentAddressesSet(address[])` is a constructor event for deployment tooling, not part of the economic reducer. It records the exact ordered address list whose positions are queried by `getDeploymentMask()`; see [Deployment Status Oracle](./deployment-status.html).
 
 ## Canonical reducers
 

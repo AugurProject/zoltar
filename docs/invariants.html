@@ -1085,7 +1085,7 @@
 							</dl>
 						</div>
 					</details>
-					<details class="invariant-entry">
+					<details class="invariant-entry" id="share-04">
 						<summary><code>SHARE-04</code><span class="invariant-title">Child supply denominators</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1103,6 +1103,10 @@
 								<div><dt>Primary evidence</dt><dd>
 										<a href="../solidity/contracts/peripherals/SecurityPool.sol"
 										><code>cashToShares</code> and <code>redeemShares</code></a
+										>
+										and
+										<a href="../solidity/contracts/peripherals/tokens/ShareToken.sol"
+										><code>ShareToken.migrate</code></a
 										>
 								</dd></div>
 							</dl>
@@ -1397,7 +1401,7 @@
 							</dl>
 						</div>
 					</details>
-					<details class="invariant-entry">
+					<details class="invariant-entry" id="fork-10">
 						<summary><code>FORK-10</code><span class="invariant-title">Share migration integrity</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1420,7 +1424,7 @@
 							</dl>
 						</div>
 					</details>
-					<details class="invariant-entry">
+					<details class="invariant-entry" id="fork-11">
 						<summary><code>FORK-11</code><span class="invariant-title">Unequal child share supplies</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1428,18 +1432,24 @@
 								Child pricing uses the fork-time economic claim supply rather than
 								currently materialized outcome supplies. Unequal ERC-1155 supplies
 								therefore do not block complete-set minting or proportional
-								complete-set redemption.
+								complete-set redemption. The denominator lifecycle and payout
+								mechanics are owned by
+								<a href="#share-04"><code>SHARE-04</code></a>.
 							</div>
 							<p class="invariant-example"><strong>Example:</strong> If the economic supply is 12 while materialized supplies are 10, 8, and 6, a new complete set is priced against 12 and adds the same newly purchased balance to all three materialized supplies.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										<a
+									<a
 										href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
 										><code>setTotalShares</code> during auction preparation</a
-										>,
-										<a
+									>,
+									<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										><code>sharesToCash</code>, <code>redeemCompleteSet</code>,
+										and <code>redeemShares</code></a
+									>,
+									<a
 										href="../solidity/contracts/peripherals/tokens/ShareToken.sol"
 										><code>mintCompleteSets</code> and persistent migration
 										accounting</a
