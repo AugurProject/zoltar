@@ -125,6 +125,10 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 			return
 		}
 		const submittedSecurityPoolForm = securityPoolForm.value
+		const transactionContext = {
+			questionId: submittedSecurityPoolForm.marketId,
+			securityMultiplier: submittedSecurityPoolForm.securityMultiplier,
+		}
 		securityPoolSubmissionInProgress.value = true
 		securityPoolResult.value = undefined
 		poolCreationMarketDetails.value = undefined
@@ -145,7 +149,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 					},
 					onTransactionRequested: () => {
 						securityPoolCreating.value = true
-						onTransactionRequested(createSecurityPoolCreationTransactionIntent())
+						onTransactionRequested(createSecurityPoolCreationTransactionIntent(transactionContext))
 					},
 					onTransactionFinished: () => {
 						securityPoolCreating.value = false

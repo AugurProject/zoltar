@@ -204,6 +204,7 @@ describe('runWriteAction', () => {
 		restoreActiveEnvironment?.()
 		restoreActiveEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: walletAddress, profile: createFakeSimulationProfile() }))
 		let transactionState = createInitialTransactionTrayState()
+		let requestedRequiresWalletConfirmation: boolean | undefined
 		const errorSignal: { value: string | undefined } = { value: undefined }
 		const writeActionConfig = buildWriteActionConfig(
 			{
@@ -219,6 +220,7 @@ describe('runWriteAction', () => {
 				onTransactionPrepared: undefined,
 				onTransactionRequested: intent => {
 					transactionState = markTransactionRequested(transactionState, intent)
+					requestedRequiresWalletConfirmation = transactionState.pendingIntent?.requiresWalletConfirmation
 				},
 				refreshState: async () => undefined,
 			},
@@ -236,7 +238,8 @@ describe('runWriteAction', () => {
 
 		expect(transactionState.active?.tone).toBe('preparing')
 		expect(transactionState.active?.detail).toBe('Submitting in browser simulation. No wallet confirmation is required.')
-		expect(transactionState.pendingIntent?.requiresWalletConfirmation).toBe(false)
+		expect(requestedRequiresWalletConfirmation).toBe(false)
+		expect(transactionState.pendingIntent).toBeUndefined()
 		expect(transactionState.inFlightCount).toBe(0)
 		expect(errorSignal.value).toBeUndefined()
 	})

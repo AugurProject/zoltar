@@ -154,10 +154,21 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 		action: (walletAddress: Address, details: ForkAuctionDetails, isCurrentSelection: () => boolean) => Promise<ForkAuctionActionResult | undefined>,
 		errorFallback: string,
 		securityPoolAddressOverride?: Address,
+		universeIdOverride?: bigint,
 		{ displayTitleOverride }: { displayTitleOverride?: string } = {},
 	) => {
 		const actionSelectionKey = currentForkAuctionSelectionKey
 		const overrideSelectionKey = securityPoolAddressOverride === undefined ? undefined : (normalizeAddress(securityPoolAddressOverride) ?? '')
+		let transactionSecurityPoolAddress: string | undefined
+		if (overrideSelectionKey !== undefined) {
+			transactionSecurityPoolAddress = overrideSelectionKey
+		} else if (actionSelectionKey !== '') {
+			transactionSecurityPoolAddress = actionSelectionKey
+		}
+		const transactionContext = {
+			securityPoolAddress: transactionSecurityPoolAddress,
+			universeId: securityPoolAddressOverride === undefined ? forkAuctionDetails.value?.universeId : universeIdOverride,
+		}
 		const shouldRefreshCurrentSelection = securityPoolAddressOverride === undefined
 		const isCurrentSelection = () => !shouldRefreshCurrentSelection || isForkAuctionSelectionCurrent(actionSelectionKey)
 		const shouldApplyCurrentSelection = () => (securityPoolAddressOverride === undefined ? isForkAuctionSelectionCurrent(actionSelectionKey) : overrideSelectionKey !== undefined && isForkAuctionSelectionCurrent(overrideSelectionKey))
@@ -170,7 +181,10 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 						{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState },
 						forkAuctionError,
 						'Connect a wallet before using fork or truth auction actions',
-						createForkAuctionTransactionIntent(actionName, displayTitleOverride === undefined ? undefined : { submittedTitle: displayTitleOverride }),
+						createForkAuctionTransactionIntent(actionName, {
+							context: transactionContext,
+							...(displayTitleOverride === undefined ? {} : { submittedTitle: displayTitleOverride }),
+						}),
 					),
 					onRefreshError: (message, hash) => {
 						forkAuctionFeedback.value = createWarningActionFeedback(actionName, getSuccessTitle(actionName, displayTitleOverride), message, hash)
@@ -305,7 +319,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 			'Failed to clear parent escalation locks',
 		)
 
-	const startTruthAuction = async (securityPoolAddressOverride?: Address) =>
+	const startTruthAuction = async (securityPoolAddressOverride?: Address, universeIdOverride?: bigint) =>
 		await runForkAuctionAction(
 			'startTruthAuction',
 			async (walletAddress, details, isCurrentSelection) => {
@@ -314,9 +328,10 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 			},
 			'Failed to start truth auction',
 			securityPoolAddressOverride,
+			universeIdOverride,
 		)
 
-	const submitBid = async (securityPoolAddressOverride?: Address) =>
+	const submitBid = async (securityPoolAddressOverride?: Address, universeIdOverride?: bigint) =>
 		await (() => {
 			const submittedBidAmountInput = forkAuctionForm.value.submitBidAmount
 			const submittedBidPriceInput = forkAuctionForm.value.submitBidPrice
@@ -344,10 +359,11 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 				},
 				'Failed to submit truth auction bid',
 				securityPoolAddressOverride,
+				universeIdOverride,
 			)
 		})()
 
-	const refundLosingBids = async (securityPoolAddressOverride?: Address, selectedBids?: readonly SettlementSelectedBid[]) =>
+	const refundLosingBids = async (securityPoolAddressOverride?: Address, selectedBids?: readonly SettlementSelectedBid[], universeIdOverride?: bigint) =>
 		await (() => {
 			const submittedRefundTick = forkAuctionForm.value.refundTick
 			const submittedRefundBidIndex = forkAuctionForm.value.refundBidIndex
@@ -364,10 +380,11 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 				},
 				'Failed to refund losing bids',
 				securityPoolAddressOverride,
+				universeIdOverride,
 			)
 		})()
 
-	const finalizeTruthAuction = async (securityPoolAddressOverride?: Address) =>
+	const finalizeTruthAuction = async (securityPoolAddressOverride?: Address, universeIdOverride?: bigint) =>
 		await runForkAuctionAction(
 			'finalizeTruthAuction',
 			async (walletAddress, details, isCurrentSelection) => {
@@ -376,9 +393,10 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 			},
 			'Failed to finalize truth auction',
 			securityPoolAddressOverride,
+			universeIdOverride,
 		)
 
-	const claimAuctionProceeds = async (securityPoolAddressOverride?: Address, selectedClaimBids?: readonly SettlementSelectedBid[], selectedRefundBids?: readonly SettlementSelectedBid[]) => {
+	const claimAuctionProceeds = async (securityPoolAddressOverride?: Address, selectedClaimBids?: readonly SettlementSelectedBid[], selectedRefundBids?: readonly SettlementSelectedBid[], universeIdOverride?: bigint) => {
 		const displayTitleOverride = selectedClaimBids !== undefined && selectedRefundBids !== undefined && selectedClaimBids.length === 0 && selectedRefundBids.length > 0 ? 'Settle Finalized Refunds' : undefined
 
 		return await (() => {
@@ -403,6 +421,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 				},
 				'Failed to settle finalized bid',
 				securityPoolAddressOverride,
+				universeIdOverride,
 				displayTitleOverride === undefined ? {} : { displayTitleOverride },
 			)
 		})()

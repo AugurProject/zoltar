@@ -56,6 +56,31 @@ describe('GlobalTransactionTray', () => {
 		expect(documentQueries.getByRole('button', { name: 'Dismiss' })).not.toBeNull()
 	})
 
+	test('keeps semantic object context visible and call data in a technical disclosure after completion', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<GlobalTransactionTray
+				transaction={{
+					dismissKey: '0xprepared-price-request',
+					hash: '0xprepared-price-request',
+					rows: [{ label: 'Security Pool Address', value: '0xpool' }],
+					technicalRows: [
+						{ label: 'Function', value: 'requestPrice' },
+						{ label: 'Arguments', value: '0xpool, 1000000000000000000' },
+					],
+					title: 'Price Requested',
+					tone: 'success',
+				}}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Security Pool Address')).not.toBeNull()
+		expect(documentQueries.getByText('0xpool')).not.toBeNull()
+		expect(documentQueries.getByText('Technical details', { selector: 'summary' })).not.toBeNull()
+		expect(documentQueries.getByText('Arguments')).not.toBeNull()
+	})
+
 	test('renders complete copyable question identifiers across success notices', async () => {
 		const questionId = '0x0000000000000000000000000000000000000000000000000000000000000001'
 		const presentations = [

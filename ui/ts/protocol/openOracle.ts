@@ -771,7 +771,7 @@ async function fundCoordinatorInitialReport(client: WriteClient, managerAddress:
 	return fundingRequirement
 }
 
-export async function requestOraclePrice(client: WriteClient, managerAddress: Address, proposedRepPerEthPrice?: bigint, requestedInitialWeth = 0n) {
+export async function requestOraclePrice(client: WriteClient, managerAddress: Address, proposedRepPerEthPrice?: bigint, requestedInitialWeth = 0n, reviewedRequestEthValue?: bigint) {
 	await assertCoordinatorRequestPriceAllowed(client, managerAddress)
 	const resolvedInitialReportPrice = proposedRepPerEthPrice ?? (await getCoordinatorInitialReportPrice(client, managerAddress))
 	await fundCoordinatorInitialReport(client, managerAddress, resolvedInitialReportPrice, requestedInitialWeth)
@@ -780,7 +780,7 @@ export async function requestOraclePrice(client: WriteClient, managerAddress: Ad
 		abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'requestPrice',
 		args: [resolvedInitialReportPrice, requestedInitialWeth],
-		value: await loadBufferedOracleRequestEthCost(client, managerAddress),
+		value: reviewedRequestEthValue ?? (await loadBufferedOracleRequestEthCost(client, managerAddress)),
 	}
 	const hash = await writeContractAndWait(client, () => callParams)
 	return {

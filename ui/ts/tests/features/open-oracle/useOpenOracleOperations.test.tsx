@@ -112,11 +112,11 @@ function createOpenOracleOperationsDependencies(overrides: Partial<UseOpenOracle
 	}
 }
 
-function createHarness(dependencies: UseOpenOracleOperationsDependencies<TestOpenOracleWriteClient>, onRender: (state: UseOpenOracleOperationsState) => void) {
+function createHarness(dependencies: UseOpenOracleOperationsDependencies<TestOpenOracleWriteClient>, onRender: (state: UseOpenOracleOperationsState) => void, connected = true) {
 	return function OpenOracleOperationsHarness() {
 		const state = useOpenOracleOperations(
 			{
-				accountAddress: WALLET_ADDRESS,
+				accountAddress: connected ? WALLET_ADDRESS : undefined,
 				enabled: true,
 				onTransactionFinished: () => undefined,
 				onTransactionPresented: () => undefined,
@@ -158,6 +158,26 @@ describe('useOpenOracleOperations', () => {
 		restoreDomEnvironment?.()
 		restoreDomEnvironment = undefined
 		mock.restore()
+	})
+
+	test('uses consistent Open Oracle capitalization in disconnected-wallet recovery', async () => {
+		const dependencies = createOpenOracleOperationsDependencies()
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(
+			dependencies,
+			state => {
+				hookState = state
+			},
+			false,
+		)
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).approveToken1(1n)
+		})
+
+		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('Connect a wallet before operating Open Oracle')
 	})
 
 	test('distinguishes unsubmitted, missing, and failed report lookups', async () => {

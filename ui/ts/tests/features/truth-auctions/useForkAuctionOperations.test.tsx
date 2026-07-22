@@ -5,7 +5,7 @@ import { h } from 'preact'
 import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/shared/ethereum'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../../../lib/activeEnvironment.js'
-import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFinished, markTransactionRequested } from '../../../lib/transactionTray.js'
+import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionRequested, markTransactionSubmitted } from '../../../lib/transactionTray.js'
 import { parseTruthAuctionAmountInput, parseTruthAuctionPriceInput } from '../../../features/markets/lib/marketForm.js'
 import { getTruthAuctionTickAtPrice } from '../../../features/truth-auctions/lib/truthAuctionBook.js'
 import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
@@ -112,6 +112,14 @@ function createForkAuctionResult(action: ForkAuctionActionResult['action']): For
 function requireHookState(state: UseForkAuctionOperationsState | undefined) {
 	if (state === undefined) throw new Error('Hook state unavailable')
 	return state
+}
+
+function getTransactionRowValueProp(state: ReturnType<typeof createInitialTransactionTrayState>, label: string, propName: 'address' | 'universeId') {
+	const value = state.active?.rows?.find(row => row.label === label)?.value
+	if (typeof value !== 'object' || value === null || !('props' in value)) throw new Error(`${label} transaction row is not a component`)
+	const props = value.props
+	if (typeof props !== 'object' || props === null || !(propName in props)) throw new Error(`${label} transaction row does not expose ${propName}`)
+	return props[propName]
 }
 
 function createForkAuctionOperationsDependencies(overrides: Partial<UseForkAuctionOperationsDependencies<TestForkAuctionWriteClient>> = {}): UseForkAuctionOperationsDependencies<TestForkAuctionWriteClient> {
@@ -970,5 +978,75 @@ describe('useForkAuctionOperations', () => {
 		expect(requireHookState(hookState).forkAuctionResult?.action).toBe('startTruthAuction')
 		expect(startTruthAuctionForSecurityPool).toHaveBeenCalledTimes(1)
 		expect(onTransactionFailed).not.toHaveBeenCalled()
+	})
+
+	test('startTruthAuction override preserves the child pool and universe throughout transaction states', async () => {
+		const parentPoolAddress = getAddress('0x0000000000000000000000000000000000000011')
+		const childPoolAddress = getAddress('0x0000000000000000000000000000000000000022')
+		const childUniverseId = 22n
+		let transactionState = createInitialTransactionTrayState()
+		const startTruthAuctionForSecurityPool = mock(async (_client: unknown, securityPoolAddress: Address, universeId: bigint) => ({
+			action: 'startTruthAuction' as const,
+			hash: zeroHash,
+			securityPoolAddress,
+			universeId,
+		}))
+		const dependencies = createForkAuctionOperationsDependencies({
+			loadForkAuctionDetails: mock(async securityPoolAddress => createForkAuctionDetails({ securityPoolAddress, universeId: childUniverseId })),
+			startTruthAuctionForSecurityPool,
+		})
+
+		let hookState: UseForkAuctionOperationsState | undefined
+		function Harness() {
+			const state = useForkAuctionOperations(
+				{
+					accountAddress: WALLET_ADDRESS,
+					onTransactionFailed: message => {
+						transactionState = markTransactionFailed(transactionState, message)
+					},
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionPrepared: () => undefined,
+					onTransactionRequested: intent => {
+						transactionState = markTransactionRequested(transactionState, intent)
+					},
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+					selectedSecurityPoolAddress: parentPoolAddress,
+				},
+				dependencies,
+			)
+			hookState = state
+			return <div />
+		}
+
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).startTruthAuction(childPoolAddress, childUniverseId)
+		})
+
+		expect(startTruthAuctionForSecurityPool).toHaveBeenCalledTimes(1)
+		const requested = transactionState
+		const prepared = markTransactionPrepared(requested, {
+			account: WALLET_ADDRESS,
+			args: [childPoolAddress, childUniverseId],
+			chainName: 'Ethereum',
+			contractAddress: childPoolAddress,
+			functionName: 'startTruthAuction',
+			value: 0n,
+		})
+		const submitted = markTransactionSubmitted(prepared, zeroHash)
+		const failed = markTransactionFailed(submitted, 'Transaction reverted')
+
+		for (const state of [requested, prepared, submitted, failed]) {
+			expect(getTransactionRowValueProp(state, 'Pool', 'address')).toBe(childPoolAddress)
+			expect(getTransactionRowValueProp(state, 'Universe', 'universeId')).toBe(childUniverseId)
+			expect(getTransactionRowValueProp(state, 'Pool', 'address')).not.toBe(parentPoolAddress)
+		}
+		expect(prepared.active?.technicalRows?.map(row => row.label)).toContain('Function')
+		expect(submitted.active?.technicalRows?.map(row => row.label)).toContain('Function')
+		expect(failed.active?.technicalRows?.map(row => row.label)).toContain('Function')
 	})
 })

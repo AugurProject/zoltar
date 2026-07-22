@@ -544,7 +544,10 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		securityPool.setSystemState(SystemState.ForkTruthAuction);
 		data.truthAuctionStarted = block.timestamp;
 		parent.updateCollateralAmount();
-		securityPool.setTotalShares(securityPool.shareToken().maximumOutcomeSupply(securityPool.universeId()));
+		// The parent is frozen for the lifetime of its fork. Reserve its complete
+		// economic claim supply in every child, independently of how many ERC-1155
+		// balances have materialized there so far.
+		securityPool.setTotalShares(parent.shareTokenSupply());
 		parentCollateral = parentData.collateralAtFork;
 	}
 

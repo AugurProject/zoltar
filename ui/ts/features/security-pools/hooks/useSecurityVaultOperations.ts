@@ -310,6 +310,10 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 	) => {
 		const actionSelectionKey = effectiveVaultSelectionKey
 		const isCurrentSelection = () => isVaultSelectionCurrent(actionSelectionKey)
+		const transactionContext = {
+			securityPoolAddress: snapshot.effectiveSecurityPoolAddressInput,
+			vaultAddress: getSelectedVaultAddress(snapshot.form.selectedVaultAddress, accountAddress),
+		}
 		let securityPoolAddress: Address | undefined
 		try {
 			securityVaultActiveAction.value = actionName
@@ -320,13 +324,13 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 						{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState },
 						securityVaultError,
 						'Connect a wallet before operating a security vault',
-						createSecurityVaultTransactionIntent(actionName),
+						createSecurityVaultTransactionIntent(actionName, transactionContext),
 					),
 					onRefreshError: (message, hash) => {
 						if (!isVaultActionSnapshotCurrent(snapshot)) return
 						securityVaultFeedback.value = createWarningActionFeedback(actionName, getSuccessTitle(actionName), message, hash)
 						const result = securityVaultResult.value
-						if (result !== undefined) onTransactionPresented(createSecurityVaultWarningPresentation(result, message))
+						if (result !== undefined) onTransactionPresented(createSecurityVaultWarningPresentation(result, message, transactionContext))
 					},
 					onWriteCanceled: () => {
 						securityVaultFeedback.value = undefined
@@ -354,7 +358,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 					const resolvedSecurityPoolAddress = requireDefined(securityPoolAddress, 'Security pool address is required')
 					securityVaultResult.value = result
 					securityVaultFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName), result.hash)
-					onTransactionPresented(createSecurityVaultSuccessPresentation(result))
+					onTransactionPresented(createSecurityVaultSuccessPresentation(result, transactionContext))
 					if (!isCurrentSelection()) return
 					await onSuccess?.(result, resolvedSecurityPoolAddress, walletAddress, isCurrentSelection)
 				},

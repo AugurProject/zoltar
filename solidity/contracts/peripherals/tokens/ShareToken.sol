@@ -8,7 +8,6 @@ import '../interfaces/ISecurityPool.sol';
 import '../interfaces/ISecurityPoolForker.sol';
 import '../interfaces/IShareToken.sol';
 import '../BinaryOutcomes.sol';
-import '../SecurityPoolUtils.sol';
 import './ERC1155.sol';
 
 /**
@@ -21,7 +20,12 @@ contract ShareToken is ERC1155, IShareToken {
 	Zoltar public immutable zoltar;
 	mapping(address => bool) private authorized;
 	mapping(uint248 => ISecurityPool) public canonicalPoolByUniverse;
-	event Migrate(address indexed migrator, uint256 indexed fromId, uint256 indexed toId, uint256 fromIdBalance);
+	// Forked source shares remain as branch-independent entitlements. Once an
+	// account materializes any branch, its source balance is locked so a transfer
+	// cannot let both sender and receiver reproduce the same claim.
+	mapping(uint256 => mapping(uint248 => mapping(address => uint256))) private migratedShareAmount;
+	mapping(uint256 => mapping(address => bool)) private migratedSourceBalanceLocked;
+	event Migrate(address indexed migrator, uint256 indexed fromId, uint256 indexed toId, uint256 shareAmount);
 
 	constructor(address owner, Zoltar _zoltar, uint256 questionId) {
 		zoltar = _zoltar;
@@ -91,8 +95,6 @@ contract ShareToken is ERC1155, IShareToken {
 
 	function mintCompleteSets(uint248 _universeId, address _account, uint256 _cashAmount) external {
 		require(authorized[msg.sender] == true, 'ShareToken caller is not authorized to mint complete sets');
-		(bool isReconciled, ) = _getActualCompleteSetSupply(_universeId);
-		require(isReconciled, 'Share supply mismatch');
 		require(_cashAmount > 0, 'Exchange rate undefined');
 		uint256[] memory _tokenIds = new uint256[](Constants.NUM_OUTCOMES);
 		uint256[] memory _values = new uint256[](Constants.NUM_OUTCOMES);
@@ -140,15 +142,6 @@ contract ShareToken is ERC1155, IShareToken {
 		return totalSupply(_tokenId);
 	}
 
-	function _getActualCompleteSetSupply(
-		uint248 _universeId
-	) private view returns (bool isReconciled, uint256 actualSupply) {
-		actualSupply = totalSupplyForOutcome(_universeId, BinaryOutcomes.BinaryOutcome.Invalid);
-		uint256 yesSupply = totalSupplyForOutcome(_universeId, BinaryOutcomes.BinaryOutcome.Yes);
-		uint256 noSupply = totalSupplyForOutcome(_universeId, BinaryOutcomes.BinaryOutcome.No);
-		isReconciled = actualSupply == yesSupply && yesSupply == noSupply;
-	}
-
 	function maximumOutcomeSupply(uint248 _universeId) external view returns (uint256 maximumSupply) {
 		maximumSupply = totalSupplyForOutcome(_universeId, BinaryOutcomes.BinaryOutcome.Invalid);
 		uint256 yesSupply = totalSupplyForOutcome(_universeId, BinaryOutcomes.BinaryOutcome.Yes);
@@ -170,6 +163,14 @@ contract ShareToken is ERC1155, IShareToken {
 		balances[0] = balanceOf(_account, getTokenId(_universeId, BinaryOutcomes.BinaryOutcome.Invalid));
 		balances[1] = balanceOf(_account, getTokenId(_universeId, BinaryOutcomes.BinaryOutcome.Yes));
 		balances[2] = balanceOf(_account, getTokenId(_universeId, BinaryOutcomes.BinaryOutcome.No));
+	}
+
+	function getMigratedShareAmount(
+		uint256 fromId,
+		uint248 targetUniverseId,
+		address account
+	) external view returns (uint256) {
+		return migratedShareAmount[fromId][targetUniverseId][account];
 	}
 
 	function getTokenId(
@@ -224,10 +225,6 @@ contract ShareToken is ERC1155, IShareToken {
 			forker.initiateSecurityPoolFork(sourcePool);
 		}
 		require(sourcePool.systemState() == SystemState.PoolForked, 'ShareToken source pool cannot migrate');
-		require(
-			block.timestamp <= forker.getForkActivationTime(sourcePool) + SecurityPoolUtils.MIGRATION_TIME,
-			'ShareToken migration window closed'
-		);
 
 		uint248[] memory targetUniverseIds = new uint248[](targetOutcomeIndexesLength);
 		for (uint256 i = 0; i < targetOutcomeIndexesLength; i++) {
@@ -246,11 +243,44 @@ contract ShareToken is ERC1155, IShareToken {
 			targetUniverseIds[i] = targetUniverseId;
 		}
 
-		_burn(msg.sender, fromId, fromIdBalance);
+		bool migratedAnyShares;
 		for (uint256 i = 0; i < targetOutcomeIndexesLength; i++) {
-			uint256 toId = getChildId(fromId, targetUniverseIds[i]);
-			_mint(msg.sender, toId, fromIdBalance);
-			emit Migrate(msg.sender, fromId, toId, fromIdBalance);
+			uint248 targetUniverseId = targetUniverseIds[i];
+			uint256 alreadyMigratedAmount = migratedShareAmount[fromId][targetUniverseId][msg.sender];
+			require(alreadyMigratedAmount <= fromIdBalance, 'ShareToken migrated amount exceeds source balance');
+			uint256 shareAmount = fromIdBalance - alreadyMigratedAmount;
+			if (shareAmount == 0) continue;
+			migratedShareAmount[fromId][targetUniverseId][msg.sender] = fromIdBalance;
+			migratedSourceBalanceLocked[fromId][msg.sender] = true;
+			migratedAnyShares = true;
+			uint256 toId = getChildId(fromId, targetUniverseId);
+			_mint(msg.sender, toId, shareAmount);
+			emit Migrate(msg.sender, fromId, toId, shareAmount);
 		}
+		require(migratedAnyShares, 'ShareToken has no new shares to migrate');
+	}
+
+	function _internalTransferFrom(
+		address from,
+		address to,
+		uint256 id,
+		uint256 value,
+		bytes memory data
+	) internal override {
+		require(!migratedSourceBalanceLocked[id][from], 'ShareToken migrated source balance is locked');
+		super._internalTransferFrom(from, to, id, value, data);
+	}
+
+	function _internalBatchTransferFrom(
+		address from,
+		address to,
+		uint256[] memory ids,
+		uint256[] memory values,
+		bytes memory data
+	) internal override {
+		for (uint256 i = 0; i < ids.length; i++) {
+			require(!migratedSourceBalanceLocked[ids[i]][from], 'ShareToken migrated source balance is locked');
+		}
+		super._internalBatchTransferFrom(from, to, ids, values, data);
 	}
 }

@@ -6,7 +6,7 @@ import { formatCurrencyBalance } from './formatters.js'
 import type { TransactionRequestPreview } from './chainBackend.js'
 import type { GlobalTransactionPresentation, GlobalTransactionRow, TransactionIntent } from '../types/components.js'
 
-export function buildPresentation({ detail, hash, rows, title, tone }: { detail?: GlobalTransactionPresentation['detail']; hash: Hash; rows?: GlobalTransactionRow[]; title: GlobalTransactionPresentation['title']; tone: GlobalTransactionPresentation['tone'] }): GlobalTransactionPresentation {
+export function buildPresentation({ detail, hash, rows, title, tone }: { detail?: GlobalTransactionPresentation['detail']; hash: Hash; rows?: GlobalTransactionRow[] | undefined; title: GlobalTransactionPresentation['title']; tone: GlobalTransactionPresentation['tone'] }): GlobalTransactionPresentation {
 	return {
 		dismissKey: hash,
 		hash,
@@ -17,17 +17,32 @@ export function buildPresentation({ detail, hash, rows, title, tone }: { detail?
 	}
 }
 
-function buildHashlessPresentation({ detail, dismissKey, rows, title, tone }: { detail: ComponentChildren; dismissKey: string; rows?: GlobalTransactionRow[]; title: GlobalTransactionPresentation['title']; tone: GlobalTransactionPresentation['tone'] }): GlobalTransactionPresentation {
+function buildHashlessPresentation({
+	detail,
+	dismissKey,
+	rows,
+	technicalRows,
+	title,
+	tone,
+}: {
+	detail: ComponentChildren
+	dismissKey: string
+	rows?: GlobalTransactionRow[]
+	technicalRows?: GlobalTransactionRow[]
+	title: GlobalTransactionPresentation['title']
+	tone: GlobalTransactionPresentation['tone']
+}): GlobalTransactionPresentation {
 	return {
 		detail,
 		dismissKey,
 		title,
 		tone,
 		...(rows === undefined ? {} : { rows }),
+		...(technicalRows === undefined ? {} : { technicalRows }),
 	}
 }
 
-export function buildIntent({ action, rows, source, submittedDetail, submittedTitle }: { action: string; rows?: GlobalTransactionRow[]; source: string; submittedDetail?: TransactionIntent['submittedDetail']; submittedTitle: TransactionIntent['submittedTitle'] }): TransactionIntent {
+export function buildIntent({ action, rows, source, submittedDetail, submittedTitle }: { action: string; rows?: GlobalTransactionRow[] | undefined; source: string; submittedDetail?: TransactionIntent['submittedDetail']; submittedTitle: TransactionIntent['submittedTitle'] }): TransactionIntent {
 	return {
 		action,
 		...(rows === undefined ? {} : { rows }),
@@ -67,9 +82,8 @@ function formatRecipient(label: string | undefined, address: string) {
 	return label === undefined ? address : `${label} (${address})`
 }
 
-function getPreparedTransactionRows(intent: TransactionIntent, preview: TransactionRequestPreview): GlobalTransactionRow[] {
+function getPreparedTransactionTechnicalRows(preview: TransactionRequestPreview): GlobalTransactionRow[] {
 	return [
-		...(intent.rows ?? []),
 		...(preview.contractAddress === undefined ? [] : [{ label: transactionCopy.contract, value: formatRecipient(preview.contractLabel, preview.contractAddress) }]),
 		...(preview.to === undefined ? [] : [{ label: transactionCopy.to, value: formatRecipient(preview.toLabel, preview.to) }]),
 		{ label: transactionCopy.functionLabel, value: preview.functionName },
@@ -102,7 +116,8 @@ export function createPreparedWalletPresentation(intent: TransactionIntent, prev
 	return buildHashlessPresentation({
 		detail: requiresWalletConfirmation ? transactionCopy.walletConfirmationReviewDetail : transactionCopy.simulationSubmissionReviewDetail,
 		dismissKey,
-		rows: getPreparedTransactionRows(intent, preview),
+		...(intent.rows === undefined ? {} : { rows: intent.rows }),
+		technicalRows: getPreparedTransactionTechnicalRows(preview),
 		title: intent.submittedTitle,
 		tone: requiresWalletConfirmation ? 'awaiting-wallet' : 'preparing',
 	})
@@ -115,5 +130,6 @@ export function createTransactionFailurePresentation(intent: TransactionIntent, 
 		title: intent.submittedTitle,
 		tone: 'error',
 		...(intent.rows === undefined ? {} : { rows: intent.rows }),
+		...(intent.technicalRows === undefined ? {} : { technicalRows: intent.technicalRows }),
 	})
 }

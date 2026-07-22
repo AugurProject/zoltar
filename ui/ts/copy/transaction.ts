@@ -17,7 +17,6 @@ export const walletConfirmationInstruction = 'Confirm the transaction in your wa
 export const walletConfirmationReviewDetail = 'Review the prepared transaction, then confirm it in your wallet.'
 export const simulationSubmissionReviewDetail = 'Review the prepared transaction before it is submitted.'
 export const creatingQuestion = 'Creating Question'
-export const marketType = 'Market Type'
 export const questionCreated = 'Question Created'
 export const approvingForkRep = 'Approving Fork REP'
 export const forkingZoltar = 'Forking Zoltar'
@@ -38,7 +37,7 @@ export const securityPoolCreated = 'Security Pool Created'
 export const formatQueuedOperationAutoExecutionDetail = (operationId: CopyTemplateValue) => `Staged operation #${operationId} was queued for the next oracle settlement.`
 export const formatQueuedOperationManualExecutionDetail = (operationId: CopyTemplateValue) => `Staged operation #${operationId} was queued and must be executed manually after a valid oracle price is available.`
 export const completeSetBurnSuccessDetail = 'Matching shares were burned and collateral was returned from the selected pool.'
-export const parentPoolSharesMigratedDetail = 'Selected parent-pool shares were migrated into child universes.'
+export const parentPoolSharesMigratedDetail = 'Child-universe shares were materialized from the selected parent-pool entitlements.'
 export const shareOutcome = 'Share Outcome'
 export const targetOutcomeIndexes = 'Target Outcome Indexes'
 export const reportingContributionSuccessDetail = 'Your selected REP was committed to the chosen escalation side.'

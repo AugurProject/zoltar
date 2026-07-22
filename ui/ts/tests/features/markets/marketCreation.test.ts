@@ -115,7 +115,7 @@ void describe('market creation helpers', () => {
 			startTime: '1000',
 		})
 		expect(oneOutcome.isValid).toBe(false)
-		expect(oneOutcome.fieldErrors.categoricalOutcomes).toBe('Categorical markets require at least 2 outcomes')
+		expect(oneOutcome.fieldErrors.categoricalOutcomes).toBe('Outcome 2 is required')
 
 		const duplicateOutcomes = validateMarketForm({
 			answerUnit: '',
@@ -167,8 +167,29 @@ void describe('market creation helpers', () => {
 		})
 
 		expect(noOutcomes.isValid).toBe(false)
-		expect(noOutcomes.fieldErrors.categoricalOutcomes).toBe('Outcomes are required')
-		expect(noOutcomes.notice).toContain('Missing required fields: Outcomes')
+		expect(noOutcomes.fieldErrors.categoricalOutcomes).toBe('Outcome 1 and Outcome 2 are required')
+		expect(noOutcomes.notice).toContain('Missing required fields: Outcome 1, Outcome 2')
+	})
+
+	test('categorical validation rejects a blank required slot even when later optional rows are populated', () => {
+		const sparseOutcomesForm: MarketFormState = {
+			answerUnit: '',
+			categoricalOutcomes: ['', 'Yes', 'No'],
+			description: 'test categorical description',
+			endTime: '2000',
+			marketType: 'categorical',
+			scalarIncrement: '1',
+			scalarMax: '0',
+			scalarMin: '0',
+			title: 'categorical market with a sparse outcome list',
+			startTime: '1000',
+		}
+
+		const validation = validateMarketForm(sparseOutcomesForm)
+		expect(validation.isValid).toBe(false)
+		expect(validation.fieldErrors.categoricalOutcomes).toBe('Outcome 1 is required')
+		expect(validation.notice).toContain('Missing required fields: Outcome 1')
+		expect(() => createMarketParameters(sparseOutcomesForm)).toThrow('Outcome 1 is required')
 	})
 
 	test('validation catches invalid time ordering for categorical and scalar forms', () => {
