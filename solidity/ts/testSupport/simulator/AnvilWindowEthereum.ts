@@ -298,6 +298,9 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		if (args.method === 'anvil_setCode' && typeof params[0] === 'string') invalidateSolidityBytecodeCoverageAddressCache(params[0])
 
 		const minePendingTransactions = async () => {
+			const automineEnabled = await request({ method: 'anvil_getAutomine', params: [] })
+			if (typeof automineEnabled !== 'boolean') throw new Error('Invalid anvil_getAutomine response: expected boolean')
+			if (automineEnabled) return
 			try {
 				await request({
 					method: 'evm_mine',
@@ -309,7 +312,7 @@ export const getMockedEthSimulateWindowEthereum = async (rpcUrl?: string): Promi
 		}
 		const waitForReceiptStatus = async (hash: string) => {
 			const deadline = Date.now() + SEND_TRANSACTION_RECEIPT_TIMEOUT_MS
-			let lastMineAttempt = 0
+			let lastMineAttempt = Date.now()
 			while (Date.now() < deadline) {
 				const receipt = await request({
 					method: 'eth_getTransactionReceipt',
