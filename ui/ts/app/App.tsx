@@ -36,7 +36,7 @@ import { resolveLoadableValueState } from '../lib/loadState.js'
 import { getWalletScopedAccountAddress, isSupportedAppChain } from '../lib/network.js'
 import { applyReportingFormUpdate } from '../features/reporting/lib/reportingForm.js'
 import { createLoadSecurityVaultHandler } from '../features/security-pools/lib/securityVaultHandlers.js'
-import { getUseQuestionForPoolState } from '../features/security-pools/lib/securityPoolNavigation.js'
+import { getUseQuestionForPoolHref, getUseQuestionForPoolState } from '../features/security-pools/lib/securityPoolNavigation.js'
 import { createInitialTransactionTrayState, getTransactionActionLockReason, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '../lib/transactionTray.js'
 import type { TransactionTrayState } from '../lib/transactionTray.js'
 import type { TransactionRequestPreview } from '../lib/chainBackend.js'
@@ -53,7 +53,24 @@ export function App() {
 	const deployNextMissingPending = useSignal(false)
 	const [activeEnvironmentNonce, setActiveEnvironmentNonce] = useState(0)
 	const [selectedPoolRefreshNonce, setSelectedPoolRefreshNonce] = useState(0)
-	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, openOracleView, securityPoolsView, securityPoolAddress, selectedPoolView, setActiveUniverseId, setOpenOracleReport, setOpenOracleView, setSecurityPoolsView, setSecurityPoolAddress, setSelectedPoolView, setZoltarView, zoltarView } = useUrlState()
+	const {
+		activeUniverseId,
+		openOracleReportId: urlOpenOracleReportId,
+		openOracleView,
+		securityPoolsView,
+		securityPoolAddress,
+		securityPoolQuestionId,
+		selectedPoolView,
+		setActiveUniverseId,
+		setOpenOracleReport,
+		setOpenOracleView,
+		setSecurityPoolsView,
+		setSecurityPoolAddress,
+		setSecurityPoolQuestionId,
+		setSelectedPoolView,
+		setZoltarView,
+		zoltarView,
+	} = useUrlState()
 	const activeZoltarView = resolveEnumValue<ZoltarView>(zoltarView, 'questions', ['questions', 'create', 'fork', 'migrate'])
 	const onTransactionRequested = (intent: TransactionIntent) => {
 		transactionState.value = markTransactionRequested(transactionState.value, intent)
@@ -382,14 +399,13 @@ export function App() {
 		}
 	}
 	const onUseQuestionForPool = (questionId: string) => {
-		const { marketId, securityPoolAddress } = getUseQuestionForPoolState(questionId)
+		const { marketId } = getUseQuestionForPoolState(questionId)
+		resetSecurityPoolCreation()
 		setSecurityPoolForm(current => ({
 			...current,
 			marketId,
 		}))
-		setSecurityPoolsView('create')
-		setSecurityPoolAddress(securityPoolAddress)
-		navigate('security-pools')
+		window.location.hash = getUseQuestionForPoolHref(questionId, activeUniverseId)
 	}
 	useEffect(() => {
 		const securityVaultRepRefreshHash = securityVaultResult?.action === 'depositRep' || securityVaultResult?.action === 'redeemRep' || (securityVaultResult?.action === 'queueWithdrawRep' && securityVaultResult.stagedExecution?.success === true) ? securityVaultResult.hash : undefined
@@ -420,17 +436,18 @@ export function App() {
 		loadOracleReport: async reportId => await loadOracleReport(reportId),
 		loadSecurityPools: async requestedSecurityPoolAddress => await loadSecurityPools(requestedSecurityPoolAddress),
 		navigate,
-		openOracleFormReportId: openOracleForm.reportId,
-		openOracleReportDetailsReportId: openOracleReportDetails?.reportId,
+		resetSecurityPoolCreation,
 		route,
 		securityPoolAddress,
+		securityPoolQuestionId,
 		securityPoolResultHash: securityPoolResult?.deployPoolHash,
 		selectedPoolSecurityPoolAddress: selectedPool?.securityPoolAddress,
 		setForkAuctionFormSecurityPoolAddress: nextSecurityPoolAddress => setForkAuctionForm(current => (current.securityPoolAddress === nextSecurityPoolAddress ? current : { ...current, securityPoolAddress: nextSecurityPoolAddress })),
-		setOpenOracleReport,
+		setOpenOracleFormReportId: reportId => setOpenOracleForm(current => ({ ...current, reportId })),
 		setReportingFormSecurityPoolAddress: nextSecurityPoolAddress => updateReportingForm({ securityPoolAddress: nextSecurityPoolAddress }),
 		setSecurityVaultFormSelectedVaultAddress: nextSelectedVaultAddress => setSecurityVaultForm(current => (current.selectedVaultAddress === nextSelectedVaultAddress ? current : { ...current, selectedVaultAddress: nextSelectedVaultAddress })),
 		setSecurityVaultFormSecurityPoolAddress: nextSecurityPoolAddress => setSecurityVaultForm(current => (current.securityPoolAddress === nextSecurityPoolAddress ? current : { ...current, securityPoolAddress: nextSecurityPoolAddress })),
+		setSecurityPoolFormMarketId: marketId => setSecurityPoolForm(current => (current.marketId === marketId ? current : { ...current, marketId })),
 		setTradingFormSecurityPoolAddress: nextSecurityPoolAddress => setTradingForm(current => (current.securityPoolAddress === nextSecurityPoolAddress ? current : { ...current, securityPoolAddress: nextSecurityPoolAddress })),
 		tradingResultHash: tradingResult?.hash,
 		urlOpenOracleReportId,
@@ -513,7 +530,10 @@ export function App() {
 			loadingMarketDetails,
 			marketDetails,
 			onResetSecurityPoolCreation: resetSecurityPoolCreation,
-			onSecurityPoolFormChange: update => setSecurityPoolForm(current => ({ ...current, ...update })),
+			onSecurityPoolFormChange: update => {
+				setSecurityPoolForm(current => ({ ...current, ...update }))
+				if (update.marketId !== undefined) setSecurityPoolQuestionId(update.marketId)
+			},
 			zoltarUniverseHasForked,
 			securityPools,
 			securityPoolCreating,
@@ -601,7 +621,7 @@ export function App() {
 			onRefreshSelectedPoolData: refreshSelectedPoolData,
 			onSelectedPoolViewChange: setSelectedPoolView,
 			onViewPendingReport: reportId => {
-				setOpenOracleView('selected-report')
+				setOpenOracleReport(reportId.toString())
 				setOpenOracleForm(current => ({ ...current, reportId: reportId.toString() }))
 				navigate('open-oracle', new Set(['securityPool', 'securityPoolsView', 'selectedPoolView']))
 				void loadOracleReport(reportId.toString())
@@ -699,7 +719,10 @@ export function App() {
 		},
 		onActiveViewChange: view => setOpenOracleView(view),
 		onOpenOracleCreateFormChange: update => setOpenOracleCreateForm(current => ({ ...current, ...update })),
-		onOpenOracleFormChange: update => setOpenOracleForm(current => ({ ...current, ...update })),
+		onOpenOracleFormChange: update => {
+			setOpenOracleForm(current => ({ ...current, ...update }))
+			if (update.reportId !== undefined) setOpenOracleReport(update.reportId)
+		},
 		onSettleReport: () => void settleReport(),
 		onWithdrawOpenOracleBalance: balance => void withdrawBalance(balance),
 		loadingOpenOracleCreate,

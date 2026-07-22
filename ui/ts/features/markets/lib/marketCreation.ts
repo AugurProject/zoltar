@@ -2,7 +2,7 @@ import { sortStringArrayByKeccak } from '@zoltar/shared/sortStringArrayByKeccak'
 import type { MarketFormState, SecurityPoolFormState } from '../../../types/app.js'
 import type { DeploymentStatus, QuestionData } from '../../../types/contracts.js'
 import { assertNever } from '../../../lib/assert.js'
-import { parseBigIntInput, parseTimestampInput, tryParseBigIntInput } from './marketForm.js'
+import { parseBigIntInput, parseTimestampInput, tryParseBigIntInput, tryParseTimestampInput } from './marketForm.js'
 import { parseScalarFormInputs } from './scalarOutcome.js'
 type MarketFormField = keyof Pick<MarketFormState, 'categoricalOutcomes' | 'endTime' | 'scalarIncrement' | 'scalarMax' | 'scalarMin' | 'startTime' | 'title'>
 type MarketFormValidation = {
@@ -81,6 +81,12 @@ function getOutcomeLabels(form: MarketFormState) {
 
 export function getMarketCreationOutcomeLabels(form: MarketFormState) {
 	return getOutcomeLabels(form)
+}
+
+export function hasMarketEndTimePassed(form: MarketFormState, currentTimestamp: bigint | undefined) {
+	if (currentTimestamp === undefined || form.endTime.trim() === '') return false
+	const endTimestamp = tryParseTimestampInput(form.endTime)
+	return endTimestamp !== undefined && endTimestamp <= currentTimestamp
 }
 function setFieldError(fieldErrors: Partial<Record<MarketFormField, string>>, field: MarketFormField, message: string) {
 	if (fieldErrors[field] !== undefined) return

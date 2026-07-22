@@ -13,17 +13,18 @@ type Props = {
 	loadOracleReport: (reportId: string) => Promise<void>
 	loadSecurityPools: (securityPoolAddress?: string) => Promise<boolean | void>
 	navigate: (route: 'deploy' | 'open-oracle' | 'security-pools' | 'zoltar') => void
-	openOracleFormReportId: string
-	openOracleReportDetailsReportId: bigint | undefined
+	resetSecurityPoolCreation: () => void
 	route: AppRoute
 	securityPoolAddress: string
+	securityPoolQuestionId: string
 	securityPoolResultHash: string | undefined
 	selectedPoolSecurityPoolAddress: string | undefined
 	setForkAuctionFormSecurityPoolAddress: (securityPoolAddress: string) => void
-	setOpenOracleReport: (reportId: string | undefined) => void
+	setOpenOracleFormReportId: (reportId: string) => void
 	setReportingFormSecurityPoolAddress: (securityPoolAddress: string) => void
 	setSecurityVaultFormSelectedVaultAddress: (selectedVaultAddress: string) => void
 	setSecurityVaultFormSecurityPoolAddress: (securityPoolAddress: string) => void
+	setSecurityPoolFormMarketId: (marketId: string) => void
 	setTradingFormSecurityPoolAddress: (securityPoolAddress: string) => void
 	tradingResultHash: string | undefined
 	urlOpenOracleReportId: string
@@ -76,17 +77,18 @@ export function useAppRouteEffects({
 	loadOracleReport,
 	loadSecurityPools,
 	navigate,
-	openOracleFormReportId,
-	openOracleReportDetailsReportId,
+	resetSecurityPoolCreation,
 	route,
 	securityPoolAddress,
+	securityPoolQuestionId,
 	securityPoolResultHash,
 	selectedPoolSecurityPoolAddress,
 	setForkAuctionFormSecurityPoolAddress,
-	setOpenOracleReport,
+	setOpenOracleFormReportId,
 	setReportingFormSecurityPoolAddress,
 	setSecurityVaultFormSelectedVaultAddress,
 	setSecurityVaultFormSecurityPoolAddress,
+	setSecurityPoolFormMarketId,
 	setTradingFormSecurityPoolAddress,
 	tradingResultHash,
 	urlOpenOracleReportId,
@@ -100,6 +102,8 @@ export function useAppRouteEffects({
 	const lastRequestedSecurityPoolAddress = useRef<string | undefined>(undefined)
 	const lastSelectedPoolEnvironmentNonce = useRef<number | undefined>(undefined)
 	const lastSelectedSecurityPoolAddress = useRef<string | undefined>(undefined)
+	const lastSyncedOpenOracleReportId = useRef<string | undefined>(undefined)
+	const lastSyncedSecurityPoolQuestionId = useRef<string | undefined>(undefined)
 
 	loadOracleReportRef.current = loadOracleReport
 	loadSecurityPoolsRef.current = loadSecurityPools
@@ -119,6 +123,17 @@ export function useAppRouteEffects({
 	}, [accountAddress, activeEnvironmentNonce, activeZoltarView, environmentReady, route, walletBootstrapComplete])
 
 	useEffect(() => {
+		if (route !== 'open-oracle') {
+			lastSyncedOpenOracleReportId.current = undefined
+			return
+		}
+		const normalizedReportId = urlOpenOracleReportId.trim()
+		if (lastSyncedOpenOracleReportId.current === normalizedReportId) return
+		lastSyncedOpenOracleReportId.current = normalizedReportId
+		setOpenOracleFormReportId(normalizedReportId)
+	}, [route, setOpenOracleFormReportId, urlOpenOracleReportId])
+
+	useEffect(() => {
 		const shouldLoadReport = shouldLoadOpenOracleReportFromUrl({ environmentReady, route, urlOpenOracleReportId })
 		if (!shouldLoadReport) {
 			lastRequestedOpenOracleReportId.current = undefined
@@ -131,16 +146,15 @@ export function useAppRouteEffects({
 	}, [activeEnvironmentNonce, environmentReady, route, urlOpenOracleReportId])
 
 	useEffect(() => {
-		if (openOracleReportDetailsReportId !== undefined) {
-			setOpenOracleReport(openOracleReportDetailsReportId.toString())
+		if (route !== 'security-pools') {
+			lastSyncedSecurityPoolQuestionId.current = undefined
 			return
 		}
-		if (openOracleFormReportId.trim() !== '') {
-			setOpenOracleReport(openOracleFormReportId)
-			return
-		}
-		setOpenOracleReport(undefined)
-	}, [openOracleFormReportId, openOracleReportDetailsReportId, setOpenOracleReport])
+		if (lastSyncedSecurityPoolQuestionId.current === securityPoolQuestionId) return
+		lastSyncedSecurityPoolQuestionId.current = securityPoolQuestionId
+		resetSecurityPoolCreation()
+		setSecurityPoolFormMarketId(securityPoolQuestionId)
+	}, [resetSecurityPoolCreation, route, securityPoolQuestionId, setSecurityPoolFormMarketId])
 
 	useEffect(() => {
 		if (!shouldSyncSecurityPoolAddressToRouteForms({ route, securityPoolAddress })) return

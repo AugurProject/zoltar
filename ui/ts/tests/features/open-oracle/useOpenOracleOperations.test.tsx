@@ -301,6 +301,50 @@ describe('useOpenOracleOperations', () => {
 		expect(requireHookState(hookState).openOracleError).toBeUndefined()
 	})
 
+	test('clears stale details for a direct replacement load and ignores it after the selection is cleared', async () => {
+		const secondReportId = 2n
+		const secondReportLoad = createDeferred<OpenOracleReportDetails>()
+		const dependencies = createOpenOracleOperationsDependencies({
+			loadOpenOracleReportDetails: mock(async (_openOracleAddress: Address, reportId: bigint) => {
+				if (reportId === REPORT_ID) return createOpenOracleReportDetails()
+				if (reportId === secondReportId) return await secondReportLoad.promise
+				throw new Error(`Unexpected report ${reportId.toString()}`)
+			}),
+		})
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+		})
+		expect(requireHookState(hookState).openOracleReportDetails?.reportId).toBe(REPORT_ID)
+
+		let replacementLoadPromise = Promise.resolve()
+		await act(() => {
+			replacementLoadPromise = requireHookState(hookState).loadOracleReport(secondReportId.toString())
+		})
+		await waitFor(() => expect(requireHookState(hookState).openOracleReportLookupState).toBe('loading'))
+		expect(requireHookState(hookState).openOracleForm.reportId).toBe(secondReportId.toString())
+		expect(requireHookState(hookState).openOracleReportDetails).toBeUndefined()
+
+		await act(() => {
+			requireHookState(hookState).setOpenOracleForm(current => ({ ...current, reportId: '' }))
+		})
+		expect(requireHookState(hookState).openOracleReportLookupState).toBe('unknown')
+
+		await act(async () => {
+			secondReportLoad.resolve(createOpenOracleReportDetails({ reportId: secondReportId }))
+			await replacementLoadPromise
+		})
+		expect(requireHookState(hookState).openOracleForm.reportId).toBe('')
+		expect(requireHookState(hookState).openOracleReportDetails).toBeUndefined()
+		expect(requireHookState(hookState).openOracleReportLookupState).toBe('unknown')
+	})
+
 	test('approveToken1 and approveToken2 reject stale loaded details after the selected report changes', async () => {
 		const secondReportId = 2n
 		const firstReportDetails = createOpenOracleReportDetails()
