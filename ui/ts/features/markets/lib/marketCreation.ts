@@ -82,6 +82,15 @@ function getOutcomeLabels(form: MarketFormState) {
 export function getMarketCreationOutcomeLabels(form: MarketFormState) {
 	return getOutcomeLabels(form)
 }
+
+export function hasMarketEndTimePassed(form: MarketFormState, currentTimestamp: bigint | undefined) {
+	if (currentTimestamp === undefined || form.endTime.trim() === '') return false
+	try {
+		return parseTimestampInput(form.endTime, 'End time') <= currentTimestamp
+	} catch {
+		return false
+	}
+}
 function setFieldError(fieldErrors: Partial<Record<MarketFormField, string>>, field: MarketFormField, message: string) {
 	if (fieldErrors[field] !== undefined) return
 	fieldErrors[field] = message

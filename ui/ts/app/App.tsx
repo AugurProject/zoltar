@@ -36,7 +36,7 @@ import { resolveLoadableValueState } from '../lib/loadState.js'
 import { getWalletScopedAccountAddress, isSupportedAppChain } from '../lib/network.js'
 import { applyReportingFormUpdate } from '../features/reporting/lib/reportingForm.js'
 import { createLoadSecurityVaultHandler } from '../features/security-pools/lib/securityVaultHandlers.js'
-import { getUseQuestionForPoolState } from '../features/security-pools/lib/securityPoolNavigation.js'
+import { getUseQuestionForPoolHref, getUseQuestionForPoolState } from '../features/security-pools/lib/securityPoolNavigation.js'
 import { createInitialTransactionTrayState, getTransactionActionLockReason, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '../lib/transactionTray.js'
 import type { TransactionTrayState } from '../lib/transactionTray.js'
 import type { TransactionRequestPreview } from '../lib/chainBackend.js'
@@ -53,7 +53,24 @@ export function App() {
 	const deployNextMissingPending = useSignal(false)
 	const [activeEnvironmentNonce, setActiveEnvironmentNonce] = useState(0)
 	const [selectedPoolRefreshNonce, setSelectedPoolRefreshNonce] = useState(0)
-	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, openOracleView, securityPoolsView, securityPoolAddress, selectedPoolView, setActiveUniverseId, setOpenOracleReport, setOpenOracleView, setSecurityPoolsView, setSecurityPoolAddress, setSelectedPoolView, setZoltarView, zoltarView } = useUrlState()
+	const {
+		activeUniverseId,
+		openOracleReportId: urlOpenOracleReportId,
+		openOracleView,
+		securityPoolsView,
+		securityPoolAddress,
+		securityPoolQuestionId,
+		selectedPoolView,
+		setActiveUniverseId,
+		setOpenOracleReport,
+		setOpenOracleView,
+		setSecurityPoolsView,
+		setSecurityPoolAddress,
+		setSecurityPoolQuestionId,
+		setSelectedPoolView,
+		setZoltarView,
+		zoltarView,
+	} = useUrlState()
 	const activeZoltarView = resolveEnumValue<ZoltarView>(zoltarView, 'questions', ['questions', 'create', 'fork', 'migrate'])
 	const onTransactionRequested = (intent: TransactionIntent) => {
 		transactionState.value = markTransactionRequested(transactionState.value, intent)
@@ -171,6 +188,10 @@ export function App() {
 		enabled: route === 'security-pools' && canReadOnchainData,
 		zoltarUniverseHasForked,
 	})
+	useEffect(() => {
+		if (route !== 'security-pools' || securityPoolQuestionId === '') return
+		setSecurityPoolForm(current => (current.marketId === securityPoolQuestionId ? current : { ...current, marketId: securityPoolQuestionId }))
+	}, [route, securityPoolQuestionId, setSecurityPoolForm])
 	const {
 		approveRep,
 		depositRep,
@@ -382,14 +403,12 @@ export function App() {
 		}
 	}
 	const onUseQuestionForPool = (questionId: string) => {
-		const { marketId, securityPoolAddress } = getUseQuestionForPoolState(questionId)
+		const { marketId } = getUseQuestionForPoolState(questionId)
 		setSecurityPoolForm(current => ({
 			...current,
 			marketId,
 		}))
-		setSecurityPoolsView('create')
-		setSecurityPoolAddress(securityPoolAddress)
-		navigate('security-pools')
+		window.location.hash = getUseQuestionForPoolHref(questionId, activeUniverseId)
 	}
 	useEffect(() => {
 		const securityVaultRepRefreshHash = securityVaultResult?.action === 'depositRep' || securityVaultResult?.action === 'redeemRep' || (securityVaultResult?.action === 'queueWithdrawRep' && securityVaultResult.stagedExecution?.success === true) ? securityVaultResult.hash : undefined
@@ -513,7 +532,10 @@ export function App() {
 			loadingMarketDetails,
 			marketDetails,
 			onResetSecurityPoolCreation: resetSecurityPoolCreation,
-			onSecurityPoolFormChange: update => setSecurityPoolForm(current => ({ ...current, ...update })),
+			onSecurityPoolFormChange: update => {
+				setSecurityPoolForm(current => ({ ...current, ...update }))
+				if (update.marketId !== undefined) setSecurityPoolQuestionId(update.marketId)
+			},
 			zoltarUniverseHasForked,
 			securityPools,
 			securityPoolCreating,

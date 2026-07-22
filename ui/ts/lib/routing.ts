@@ -16,7 +16,7 @@ const SHARED_ROUTE_QUERY_PARAMETERS = new Set(['simScenario', 'simState', 'simul
 const ROUTE_QUERY_PARAMETERS: Record<Exclude<Route, 'not-found'>, ReadonlySet<string>> = {
 	deploy: new Set(),
 	zoltar: new Set(['zoltarView']),
-	'security-pools': new Set(['securityPool', 'securityPoolsView', 'selectedPoolView']),
+	'security-pools': new Set(['questionId', 'securityPool', 'securityPoolsView', 'selectedPoolView']),
 	'open-oracle': new Set(['openOracleReportId', 'openOracleView']),
 }
 

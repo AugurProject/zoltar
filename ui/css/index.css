@@ -7565,6 +7565,33 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 		grid-column: 1 / -1;
 	}
 
+	.overview-wallet-panel.is-simulation .route-header {
+		gap: var(--space-2);
+		padding-bottom: var(--space-2);
+	}
+
+	.overview-wallet-panel.is-simulation .route-header-copy {
+		gap: var(--space-1);
+	}
+
+	.overview-wallet-panel.is-simulation .route-description {
+		font-size: var(--font-caption);
+		line-height: 1.35;
+	}
+
+	.overview-wallet-panel.is-simulation .overview-inline-metrics.data-grid {
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: var(--space-2);
+	}
+
+	.overview-wallet-panel.is-simulation .overview-inline-metrics:not(.mobile-expanded) .overview-simulation-secondary {
+		display: none;
+	}
+
+	.overview-wallet-panel.is-simulation .overview-inline-metrics.data-grid > .overview-address-metric {
+		grid-column: auto;
+	}
+
 	.route-header,
 	.section-block,
 	.overview-panel {

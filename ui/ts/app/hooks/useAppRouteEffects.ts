@@ -131,6 +131,7 @@ export function useAppRouteEffects({
 	}, [activeEnvironmentNonce, environmentReady, route, urlOpenOracleReportId])
 
 	useEffect(() => {
+		if (urlOpenOracleReportId.trim() !== '' && openOracleReportDetailsReportId === undefined && openOracleFormReportId.trim() === '') return
 		if (openOracleReportDetailsReportId !== undefined) {
 			setOpenOracleReport(openOracleReportDetailsReportId.toString())
 			return
@@ -140,7 +141,7 @@ export function useAppRouteEffects({
 			return
 		}
 		setOpenOracleReport(undefined)
-	}, [openOracleFormReportId, openOracleReportDetailsReportId, setOpenOracleReport])
+	}, [openOracleFormReportId, openOracleReportDetailsReportId, setOpenOracleReport, urlOpenOracleReportId])
 
 	useEffect(() => {
 		if (!shouldSyncSecurityPoolAddressToRouteForms({ route, securityPoolAddress })) return

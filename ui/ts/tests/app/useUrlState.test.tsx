@@ -30,7 +30,7 @@ describe('useUrlState', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
 	beforeEach(() => {
-		cleanupDom = installDomEnvironment('http://localhost/#/open-oracle?universe=1&openOracleView=selected-report&openOracleReportId=101&securityPool=0x1111111111111111111111111111111111111111&securityPoolsView=operate&selectedPoolView=positions&zoltarView=trading').cleanup
+		cleanupDom = installDomEnvironment('http://localhost/#/open-oracle?universe=1&openOracleView=selected-report&openOracleReportId=101&securityPool=0x1111111111111111111111111111111111111111&securityPoolsView=operate&selectedPoolView=positions&zoltarView=trading&questionId=0x42').cleanup
 	})
 
 	afterEach(async () => {
@@ -55,6 +55,7 @@ describe('useUrlState', () => {
 		expect(requireState(hookState).securityPoolsView).toBe('operate')
 		expect(requireState(hookState).selectedPoolView).toBe('positions')
 		expect(requireState(hookState).securityPoolAddress).toBe('0x1111111111111111111111111111111111111111')
+		expect(requireState(hookState).securityPoolQuestionId).toBe('0x42')
 		expect(requireState(hookState).zoltarView).toBe('trading')
 	})
 
@@ -109,6 +110,13 @@ describe('useUrlState', () => {
 		expect(window.location.hash.includes('securityPoolsView=history')).toBe(true)
 		expect(window.location.hash.includes('securityPool=')).toBe(false)
 		expect(window.location.hash.includes('selectedPoolView=')).toBe(false)
+
+		await act(() => {
+			requireState(hookState).setSecurityPoolQuestionId('0x99')
+		})
+		expect(window.location.hash.includes('questionId=0x99')).toBe(true)
+		expect(window.location.hash.includes('securityPoolsView=create')).toBe(true)
+		expect(requireState(hookState).securityPoolQuestionId).toBe('0x99')
 
 		await act(() => {
 			requireState(hookState).setSelectedPoolView('positions')

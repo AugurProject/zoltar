@@ -132,6 +132,21 @@ describe('app route effects integration', () => {
 		dom.cleanup()
 	})
 
+	test('preserves a route-selected open oracle report while its details are loading', async () => {
+		const dom = installDomEnvironment('http://localhost/#/open-oracle?openOracleView=selected-report&openOracleReportId=2')
+		const initialProps = createDefaultProps({
+			loadOracleReport: async () => undefined,
+			route: 'open-oracle',
+			urlOpenOracleReportId: '2',
+		})
+
+		const { cleanup } = await renderIntoDocument(<RouteEffectsWithUrlStateHarness {...initialProps} />)
+		expect(window.location.hash).toContain('openOracleReportId=2')
+
+		await cleanup()
+		dom.cleanup()
+	})
+
 	test('reloads route data after the active environment nonce changes', async () => {
 		const dom = installDomEnvironment()
 		const securityPoolCalls: string[] = []

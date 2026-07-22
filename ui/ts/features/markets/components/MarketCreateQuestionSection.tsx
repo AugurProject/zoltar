@@ -11,9 +11,11 @@ import { Question, getQuestionTitle } from './Question.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
 import { TransactionHashLink } from '../../../components/TransactionHashLink.js'
+import { WarningSurface } from '../../../components/WarningSurface.js'
 import { MetricField } from '../../../components/MetricField.js'
 import { assertNever } from '../../../lib/assert.js'
-import { getMarketCreationOutcomeLabels, validateMarketForm } from '../lib/marketCreation.js'
+import { getMarketCreationOutcomeLabels, hasMarketEndTimePassed, validateMarketForm } from '../lib/marketCreation.js'
+import { useChainTimestamp } from '../../../lib/chainTimestamp.js'
 import { appendInvalidOutcomeLabelIfMissing, isInvalidOutcomeLabel } from '../lib/outcomeLabels.js'
 import { clampScalarTickIndex, parseScalarFormInputs } from '../lib/scalarOutcome.js'
 import { getMarketTypeLabel } from '../lib/marketType.js'
@@ -139,6 +141,7 @@ export function MarketCreateQuestionSection({
 	zoltarQuestions,
 }: MarketCreateQuestionSectionProps) {
 	const [scalarCreatePreviewTick, setScalarCreatePreviewTick] = useState('0')
+	const currentTimestamp = useChainTimestamp()
 	const [touchedFields, setTouchedFields] = useState<ReadonlySet<MarketFormFieldName>>(new Set())
 	const selectedQuestionDetails = useMemo(() => (marketResult === undefined ? undefined : zoltarQuestions.find(question => question.questionId === marketResult.questionId)), [marketResult?.questionId, zoltarQuestions])
 	const marketFormValidation = validateMarketForm(marketForm)
@@ -157,6 +160,7 @@ export function MarketCreateQuestionSection({
 	const markFieldTouched = (field: MarketFormFieldName) => setTouchedFields(current => new Set([...current, field]))
 	const getVisibleFieldError = (field: MarketFormFieldName) => (touchedFields.has(field) ? marketFormValidation.fieldErrors[field] : undefined)
 	const canCreateQuestion = accountAddress !== undefined && isMainnet && !marketCreating && marketFormValidation.isValid
+	const showEndedQuestionWarning = marketFormValidation.fieldErrors.endTime === undefined && hasMarketEndTimePassed(marketForm, currentTimestamp)
 	useEffect(() => {
 		if (scalarCreatePreviewDetails === undefined) return
 		const clampedTick = clampScalarTickIndex(BigInt(scalarCreatePreviewTick), scalarCreatePreviewDetails.numTicks).toString()
@@ -401,6 +405,11 @@ export function MarketCreateQuestionSection({
 							</div>
 						) : undefined}
 						{marketForm.marketType === 'scalar' ? <p className='field-help'>{marketCopy.scalarResolutionHelpText}</p> : undefined}
+						{showEndedQuestionWarning ? (
+							<WarningSurface ariaLive='polite' role='status' surface='flat' variant='compact'>
+								<p>{marketCopy.endedQuestionWarning}</p>
+							</WarningSurface>
+						) : undefined}
 
 						{(() => {
 							if (marketForm.marketType === 'scalar') {

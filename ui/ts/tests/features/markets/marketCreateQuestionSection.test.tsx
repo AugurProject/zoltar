@@ -5,6 +5,7 @@ import { fireEvent, within } from '../../testUtils/queries'
 import { act } from 'preact/test-utils'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { MarketCreateQuestionSection } from '../../../features/markets/components/MarketCreateQuestionSection.js'
+import { ChainTimestampContext } from '../../../lib/chainTimestamp.js'
 import { createMarketParameters } from '../../../features/markets/lib/marketCreation.js'
 import type { MarketFormState } from '../../../types/app.js'
 import type { MarketCreationResult, MarketDetails } from '../../../types/contracts.js'
@@ -174,6 +175,44 @@ describe('MarketCreateQuestionSection', () => {
 
 		expect(documentQueries.getByText('Title is required')).not.toBeNull()
 		expect(titleInput.getAttribute('aria-describedby')).toBe('market-create-title-error')
+	})
+
+	test('warns but allows creation when the question end time has passed', async () => {
+		let createCount = 0
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={2_000_000_000n}>
+				<MarketCreateQuestionSection
+					accountAddress={zeroAddress}
+					hasForked={false}
+					isMainnet={true}
+					marketCreating={false}
+					marketError={undefined}
+					marketForm={createMarketForm({ startTime: '', endTime: '2000' })}
+					marketResult={undefined}
+					loadingZoltarQuestions={false}
+					onCreateMarket={() => {
+						createCount += 1
+					}}
+					onMarketFormChange={() => undefined}
+					onOpenForkTab={() => undefined}
+					onResetMarket={() => undefined}
+					onUseQuestionForFork={() => undefined}
+					onUseQuestionForPool={() => undefined}
+					zoltarQuestions={[]}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('This question will be created already ended. Reporting and resolution may be available immediately.')).not.toBeNull()
+		const createButton = documentQueries.getByRole('button', { name: 'Create Question' }) as HTMLButtonElement
+		expect(createButton.disabled).toBe(false)
+
+		await act(() => {
+			fireEvent.click(createButton)
+		})
+		expect(createCount).toBe(1)
 	})
 
 	test('uses normalized market type and Augur Statoblast terminology for categorical questions', async () => {

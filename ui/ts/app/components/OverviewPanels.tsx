@@ -133,7 +133,7 @@ export function OverviewPanels({
 	})()
 	return (
 		<section className='overview-shell'>
-			<article className='overview-panel overview-wallet-panel'>
+			<article className={`overview-panel overview-wallet-panel${isBrowserSimulationReadBackend ? ' is-simulation' : ''}`}>
 				<RouteHeader
 					actions={accountActions}
 					badge={
@@ -163,13 +163,13 @@ export function OverviewPanels({
 					</MetricField>
 					{showAccountBalances ? (
 						<>
-							<MetricField label={commonCopy.eth}>
+							<MetricField className='overview-simulation-secondary' label={commonCopy.eth}>
 								<CurrencyValue value={accountState.ethBalance} loading={isRefreshing && accountState.ethBalance === undefined} suffix={commonCopy.eth} compactWhenOverflow />
 							</MetricField>
 							<MetricField className='overview-metric-secondary' label={commonCopy.weth}>
 								<CurrencyValue value={accountState.wethBalance} loading={isRefreshing && accountState.wethBalance === undefined} suffix={commonCopy.weth} compactWhenOverflow />
 							</MetricField>
-							<MetricField label={commonCopy.rep}>
+							<MetricField className='overview-simulation-secondary' label={commonCopy.rep}>
 								<CurrencyValue value={universeRepBalance} loading={isLoadingUniverseRepBalance} suffix={commonCopy.rep} compactWhenOverflow />
 							</MetricField>
 						</>
