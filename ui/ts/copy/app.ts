@@ -50,6 +50,8 @@ export const staleReadBackendDetail = 'Displayed onchain state may be behind the
 export const urlProvidedReadRpc = 'URL-provided read RPC'
 export const address = 'Address'
 export const augurPlaceholderTitle = 'Augur Placeholder'
+export const formatShowEarlierNavigationItems = (navigationLabel: string) => `Show earlier ${navigationLabel}`
+export const formatShowLaterNavigationItems = (navigationLabel: string) => `Show later ${navigationLabel}`
 export const connected = 'Connected'
 export const notConnected = 'Not connected'
 export const operations = 'Operations'

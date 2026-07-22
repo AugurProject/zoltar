@@ -37,10 +37,11 @@ describe('transactionTray', () => {
 		expect(submitted.active?.tone).toBe('pending')
 		expect(submitted.active?.hash).toBe(transactionHash)
 		expect(submitted.active?.title).toBe('Creating Question')
-		expect(submitted.pendingIntent).toBeUndefined()
+		expect(submitted.pendingIntent?.submittedTitle).toBe('Creating Question')
 		expect(presented.active?.tone).toBe('success')
 		expect(presented.active?.title).toBe('Question Created')
 		expect(finished.inFlightCount).toBe(0)
+		expect(finished.pendingIntent).toBeUndefined()
 	})
 
 	test('keeps transaction actions locked until the current transaction finishes', () => {
@@ -58,9 +59,10 @@ describe('transactionTray', () => {
 		expect(requested.pendingIntent).toBeDefined()
 		expect(getTransactionActionLockReason(submitted)).toBe(TRANSACTION_ACTION_LOCK_REASON)
 		expect(submitted.inFlightCount).toBe(1)
-		expect(submitted.pendingIntent).toBeUndefined()
+		expect(submitted.pendingIntent).toBeDefined()
 		expect(getTransactionActionLockReason(finished)).toBeUndefined()
 		expect(finished.inFlightCount).toBe(0)
+		expect(finished.pendingIntent).toBeUndefined()
 	})
 
 	test('does not underflow the in-flight count', () => {
@@ -108,15 +110,78 @@ describe('transactionTray', () => {
 			value: 0n,
 		})
 		const submitted = markTransactionSubmitted(prepared, transactionHash)
+		const presented = markTransactionPresented(submitted, {
+			dismissKey: transactionHash,
+			hash: transactionHash,
+			rows: [{ label: 'Question ID', value: '0x01' }],
+			title: 'Question Created',
+			tone: 'success',
+		})
 
 		expect(prepared.active?.tone).toBe('awaiting-wallet')
 		expect(prepared.active?.detail).toBe('Review the prepared transaction, then confirm it in your wallet.')
-		expect(prepared.active?.rows?.some(row => row.label === 'Function' && row.value === 'createQuestion')).toBe(true)
-		expect(prepared.active?.rows?.some(row => row.label === 'Arguments' && row.value === '1, {title: Will this resolve?}, [yes, no]')).toBe(true)
-		expect(prepared.active?.rows?.some(row => row.label === 'Sender')).toBe(false)
-		expect(prepared.active?.rows?.some(row => row.label === 'Chain')).toBe(false)
-		expect(prepared.active?.rows?.some(row => String(row.value).includes('[object Object]'))).toBe(false)
-		expect(submitted.active?.rows?.some(row => row.label === 'Contract' && row.value === '0x00000000000000000000000000000000000000b2')).toBe(true)
+		expect(prepared.active?.rows).toBeUndefined()
+		expect(prepared.active?.technicalRows?.some(row => row.label === 'Function' && row.value === 'createQuestion')).toBe(true)
+		expect(prepared.active?.technicalRows?.some(row => row.label === 'Arguments' && row.value === '1, {title: Will this resolve?}, [yes, no]')).toBe(true)
+		expect(prepared.active?.technicalRows?.some(row => row.label === 'Sender')).toBe(false)
+		expect(prepared.active?.technicalRows?.some(row => row.label === 'Chain')).toBe(false)
+		expect(prepared.active?.technicalRows?.some(row => String(row.value).includes('[object Object]'))).toBe(false)
+		expect(submitted.active?.technicalRows?.some(row => row.label === 'Contract' && row.value === '0x00000000000000000000000000000000000000b2')).toBe(true)
+		expect(presented.active?.rows).toEqual([{ label: 'Question ID', value: '0x01' }])
+		expect(presented.active?.technicalRows?.some(row => row.label === 'Function' && row.value === 'createQuestion')).toBe(true)
+	})
+
+	test('updates technical details for every transaction in a multi-write operation', () => {
+		const approvalHash = '0xaaaa000000000000000000000000000000000000000000000000000000000000'
+		const requestHash = '0xbbbb000000000000000000000000000000000000000000000000000000000000'
+		const requested = markTransactionRequested(createInitialTransactionTrayState(), {
+			action: 'requestPrice',
+			rows: [{ label: 'Pool', value: '0x0000000000000000000000000000000000000001' }],
+			source: 'pool-oracle',
+			submittedTitle: 'Requesting New Price',
+		})
+		const approvalPrepared = markTransactionPrepared(requested, {
+			account: '0x0000000000000000000000000000000000000002',
+			args: ['0x0000000000000000000000000000000000000003', 10n],
+			chainName: 'Ethereum',
+			contractAddress: '0x0000000000000000000000000000000000000004',
+			functionName: 'approve',
+			value: 0n,
+		})
+		const approvalSubmitted = markTransactionSubmitted(approvalPrepared, approvalHash)
+		const requestPrepared = markTransactionPrepared(approvalSubmitted, {
+			account: '0x0000000000000000000000000000000000000002',
+			args: [3n, 4n],
+			chainName: 'Ethereum',
+			contractAddress: '0x0000000000000000000000000000000000000001',
+			functionName: 'requestPrice',
+			value: 5n,
+		})
+		const requestSubmitted = markTransactionSubmitted(requestPrepared, requestHash)
+		const requestFailed = markTransactionFailed(requestSubmitted, 'Transaction reverted')
+		const requestSucceeded = markTransactionPresented(requestSubmitted, {
+			dismissKey: requestHash,
+			hash: requestHash,
+			rows: [{ label: 'Pool', value: '0x0000000000000000000000000000000000000001' }],
+			title: 'Price Request Submitted',
+			tone: 'success',
+		})
+		const finished = markTransactionFinished(requestSucceeded)
+
+		expect(approvalSubmitted.active?.hash).toBe(approvalHash)
+		expect(approvalSubmitted.active?.technicalRows?.some(row => row.label === 'Function' && row.value === 'approve')).toBe(true)
+		expect(requestPrepared.active?.hash).toBeUndefined()
+		expect(requestPrepared.active?.technicalRows?.some(row => row.label === 'Function' && row.value === 'requestPrice')).toBe(true)
+		for (const state of [requestPrepared, requestSubmitted, requestFailed, requestSucceeded]) {
+			expect(state.active?.rows?.map(row => row.label)).toContain('Pool')
+			expect(state.active?.technicalRows?.some(row => row.label === 'Function' && row.value === 'requestPrice')).toBe(true)
+			expect(state.active?.technicalRows?.some(row => row.label === 'Function' && row.value === 'approve')).toBe(false)
+		}
+		expect(requestSubmitted.active?.hash).toBe(requestHash)
+		expect(requestFailed.active?.hash).toBe(requestHash)
+		expect(requestSucceeded.active?.hash).toBe(requestHash)
+		expect(finished.pendingIntent).toBeUndefined()
+		expect(finished.pendingRequestKey).toBeUndefined()
 	})
 
 	test('formats self-referential arrays and mixed object-array cycles safely', () => {
@@ -140,7 +205,7 @@ describe('transactionTray', () => {
 			value: 0n,
 		})
 
-		expect(prepared.active?.rows?.some(row => row.label === 'Arguments' && row.value === '[[circular value]], {values: [[circular value]]}')).toBe(true)
+		expect(prepared.active?.technicalRows?.some(row => row.label === 'Arguments' && row.value === '[[circular value]], {values: [[circular value]]}')).toBe(true)
 	})
 
 	test('uses non-wallet prepared copy for raw broadcasts', () => {
@@ -165,10 +230,10 @@ describe('transactionTray', () => {
 
 		expect(prepared.active?.tone).toBe('preparing')
 		expect(prepared.active?.detail).toBe('Review the prepared transaction before it is submitted.')
-		expect(prepared.active?.rows?.some(row => row.label === 'Sender')).toBe(false)
-		expect(prepared.active?.rows?.some(row => row.label === 'Chain')).toBe(false)
-		expect(prepared.active?.rows?.some(row => row.label === 'Raw transaction')).toBe(false)
-		expect(prepared.active?.rows?.some(row => row.label === 'To' && row.value === 'Proxy deployer (0x00000000000000000000000000000000000000d4)')).toBe(true)
+		expect(prepared.active?.technicalRows?.some(row => row.label === 'Sender')).toBe(false)
+		expect(prepared.active?.technicalRows?.some(row => row.label === 'Chain')).toBe(false)
+		expect(prepared.active?.technicalRows?.some(row => row.label === 'Raw transaction')).toBe(false)
+		expect(prepared.active?.technicalRows?.some(row => row.label === 'To' && row.value === 'Proxy deployer (0x00000000000000000000000000000000000000d4)')).toBe(true)
 	})
 
 	test('uses preparing copy for requested simulation transactions', () => {
@@ -221,7 +286,7 @@ describe('transactionTray', () => {
 
 		expect(prepared.active?.tone).toBe('preparing')
 		expect(prepared.active?.detail).toBe('Review the prepared transaction before it is submitted.')
-		expect(prepared.active?.rows?.some(row => row.label === 'Function' && row.value === 'createQuestion')).toBe(true)
+		expect(prepared.active?.technicalRows?.some(row => row.label === 'Function' && row.value === 'createQuestion')).toBe(true)
 	})
 
 	test('turns a requested transaction into a dismissible failure when submission fails', () => {

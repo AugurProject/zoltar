@@ -144,4 +144,15 @@ describe('CurrencyValue', () => {
 		})
 		expect(copyButton.textContent).toBe('Copied')
 	})
+
+	test('keeps an exact-precision value fully visible without an approximation marker', async () => {
+		const documentQueries = await renderCurrencyValue({
+			precision: 'exact',
+			value: 137760122n,
+		})
+		const copyButton = documentQueries.getByRole('button', { name: 'Copy exact value 0.000000000137760122' })
+
+		expect(copyButton.textContent).toBe('0.000000000137760122 ETH')
+		expect(copyButton.textContent).not.toContain('≈')
+	})
 })

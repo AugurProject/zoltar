@@ -59,6 +59,11 @@ export function useMarketCreation(
 			return
 		}
 		const submittedMarketForm = marketForm.value
+		const transactionContext = {
+			marketType: submittedMarketForm.marketType,
+			title: submittedMarketForm.title,
+			universeId: activeUniverseId,
+		}
 		marketSubmissionInProgress.value = true
 		marketResult.value = undefined
 		marketFeedback.value = createPendingActionFeedback('createMarket', 'Creating question')
@@ -70,11 +75,11 @@ export function useMarketCreation(
 					onRefreshError: (message, hash) => {
 						marketFeedback.value = createWarningActionFeedback('createMarket', 'Question created', message, hash)
 						const result = marketResult.value
-						if (result !== undefined) onTransactionPresented(createMarketCreationWarningPresentation(result, message))
+						if (result !== undefined) onTransactionPresented(createMarketCreationWarningPresentation(result, message, transactionContext))
 					},
 					onTransactionRequested: () => {
 						marketCreating.value = true
-						onTransactionRequested(createMarketCreationTransactionIntent())
+						onTransactionRequested(createMarketCreationTransactionIntent(transactionContext))
 					},
 					onTransactionFinished: () => {
 						marketCreating.value = false
@@ -100,7 +105,7 @@ export function useMarketCreation(
 				result => {
 					marketResult.value = result
 					marketFeedback.value = createSuccessActionFeedback('createMarket', 'Question created', result.hash)
-					onTransactionPresented(createMarketCreationSuccessPresentation(result))
+					onTransactionPresented(createMarketCreationSuccessPresentation(result, transactionContext))
 					zoltar.setZoltarForkQuestionId(result.questionId)
 				},
 			)

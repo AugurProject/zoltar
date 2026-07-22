@@ -143,7 +143,10 @@ describe('MarketCreateQuestionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const titleInput = documentQueries.getByLabelText('Title')
+		const titleInput = documentQueries.getByLabelText('Title') as HTMLInputElement
+		expect(titleInput.required).toBe(true)
+		expect((documentQueries.getByLabelText('End Time') as HTMLInputElement).required).toBe(true)
+		expect(documentQueries.getByText('Required fields are marked with an asterisk (*).')).not.toBeNull()
 		expect(documentQueries.getByText('Local time; blank start means immediately.')).not.toBeNull()
 		expect(documentQueries.queryByText('Use a short question that clearly distinguishes the possible outcomes.')).toBeNull()
 		expect(document.body.querySelector('.workflow-summary-strip')).toBeNull()
@@ -153,6 +156,8 @@ describe('MarketCreateQuestionSection', () => {
 		const draftPreview = documentQueries.getByRole('heading', { name: 'Draft Preview' }).closest('section')
 		if (!(draftPreview instanceof HTMLElement)) throw new Error('Expected draft preview section')
 		expect(within(draftPreview).getByText('Untitled question')).not.toBeNull()
+		expect(within(draftPreview).getByText('Binary')).not.toBeNull()
+		expect(within(draftPreview).queryByText('binary')).toBeNull()
 		expect(within(draftPreview).queryByText('Add resolution notes, evidence sources, and edge-case handling so other users know how this question will settle.')).toBeNull()
 		expect(within(draftPreview).queryByText('Add a clear question title')).toBeNull()
 		expect(document.body.textContent?.includes('Placeholder origin security pools support this exact Yes / No question shape.')).toBe(false)
@@ -169,6 +174,35 @@ describe('MarketCreateQuestionSection', () => {
 
 		expect(documentQueries.getByText('Title is required')).not.toBeNull()
 		expect(titleInput.getAttribute('aria-describedby')).toBe('market-create-title-error')
+	})
+
+	test('uses normalized market type and Augur Placeholder terminology for categorical questions', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<MarketCreateQuestionSection
+				accountAddress={zeroAddress}
+				hasForked={false}
+				isMainnet={true}
+				marketCreating={false}
+				marketError={undefined}
+				marketForm={createMarketForm({ marketType: 'categorical' })}
+				marketResult={undefined}
+				loadingZoltarQuestions={false}
+				onCreateMarket={() => undefined}
+				onMarketFormChange={() => undefined}
+				onOpenForkTab={() => undefined}
+				onResetMarket={() => undefined}
+				onUseQuestionForFork={() => undefined}
+				onUseQuestionForPool={() => undefined}
+				zoltarQuestions={[]}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const draftPreview = documentQueries.getByRole('heading', { name: 'Draft Preview' }).closest('section')
+		if (!(draftPreview instanceof HTMLElement)) throw new Error('Expected draft preview section')
+		expect(within(draftPreview).getByText('Categorical')).not.toBeNull()
+		expect(documentQueries.getByText(/Augur Placeholder origin security pools/)).not.toBeNull()
 	})
 
 	test('renders selected market details and triggers selection callbacks', async () => {
@@ -269,6 +303,49 @@ describe('MarketCreateQuestionSection', () => {
 			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Remove' })[0] as HTMLButtonElement)
 		})
 		expect(updates.some(update => update.categoricalOutcomes !== undefined)).toBe(true)
+	})
+
+	test('marks the required categorical outcome slots and associates their shared error', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<MarketCreateQuestionSection
+				accountAddress={zeroAddress}
+				hasForked={false}
+				isMainnet={true}
+				marketCreating={false}
+				marketError={undefined}
+				marketForm={createMarketForm({ categoricalOutcomes: ['', 'Yes', 'No'], marketType: 'categorical' })}
+				marketResult={undefined}
+				loadingZoltarQuestions={false}
+				onCreateMarket={() => undefined}
+				onMarketFormChange={() => undefined}
+				onOpenForkTab={() => undefined}
+				onResetMarket={() => undefined}
+				onUseQuestionForFork={() => undefined}
+				onUseQuestionForPool={() => undefined}
+				zoltarQuestions={[]}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const outcomesGroup = document.body.querySelector('[role="group"][aria-labelledby="market-create-outcomes-label"]')
+		if (!(outcomesGroup instanceof HTMLElement)) throw new Error('Expected required outcomes group')
+		const outcome1 = documentQueries.getByLabelText('Outcome 1') as HTMLInputElement
+		const outcome2 = documentQueries.getByLabelText('Outcome 2') as HTMLInputElement
+		const outcome3 = documentQueries.getByLabelText('Outcome 3') as HTMLInputElement
+		expect(outcomesGroup.querySelector('.required-field-indicator')).not.toBeNull()
+		expect(outcome1.required).toBe(true)
+		expect(outcome2.required).toBe(true)
+		expect(outcome3.required).toBe(false)
+		expect(documentQueries.queryByText('Outcome 1 is required')).toBeNull()
+
+		await act(() => {
+			outcome1.dispatchEvent(new Event('blur'))
+		})
+
+		expect(documentQueries.getByText('Outcome 1 is required')).not.toBeNull()
+		expect(outcome1.getAttribute('aria-describedby')).toBe('market-create-categoricalOutcomes-error')
+		expect(outcome2.getAttribute('aria-describedby')).toBe('market-create-categoricalOutcomes-error')
 	})
 
 	test('uses canonical categorical outcome ordering in the draft preview', async () => {
@@ -441,6 +518,51 @@ describe('MarketCreateQuestionSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Enter scalar min, max, and increment to preview the tick slider.')).not.toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Create Question')
+	})
+
+	test('marks scalar range fields required and associates their contextual errors', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<MarketCreateQuestionSection
+				accountAddress={zeroAddress}
+				hasForked={false}
+				isMainnet={true}
+				marketCreating={false}
+				marketError={undefined}
+				marketForm={createMarketForm({ marketType: 'scalar', scalarIncrement: '', scalarMax: '', scalarMin: '' })}
+				marketResult={undefined}
+				loadingZoltarQuestions={false}
+				onCreateMarket={() => undefined}
+				onMarketFormChange={() => undefined}
+				onOpenForkTab={() => undefined}
+				onResetMarket={() => undefined}
+				onUseQuestionForFork={() => undefined}
+				onUseQuestionForPool={() => undefined}
+				zoltarQuestions={[]}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const scalarMin = documentQueries.getByLabelText('Scalar Min') as HTMLInputElement
+		const scalarIncrement = documentQueries.getByLabelText('Scalar Increment') as HTMLInputElement
+		const scalarMax = documentQueries.getByLabelText('Scalar Max') as HTMLInputElement
+		for (const input of [scalarMin, scalarIncrement, scalarMax]) {
+			expect(input.required).toBe(true)
+			expect(input.closest('label')?.querySelector('.required-field-indicator')).not.toBeNull()
+		}
+
+		await act(() => {
+			scalarMin.dispatchEvent(new Event('blur'))
+			scalarIncrement.dispatchEvent(new Event('blur'))
+			scalarMax.dispatchEvent(new Event('blur'))
+		})
+
+		expect(documentQueries.getByText('Scalar Min is required')).not.toBeNull()
+		expect(documentQueries.getByText('Scalar Increment is required')).not.toBeNull()
+		expect(documentQueries.getByText('Scalar Max is required')).not.toBeNull()
+		expect(scalarMin.getAttribute('aria-describedby')).toBe('market-create-scalarMin-error')
+		expect(scalarIncrement.getAttribute('aria-describedby')).toBe('market-create-scalarIncrement-error')
+		expect(scalarMax.getAttribute('aria-describedby')).toBe('market-create-scalarMax-error')
 	})
 
 	test('calls create market handler when validation passes', async () => {

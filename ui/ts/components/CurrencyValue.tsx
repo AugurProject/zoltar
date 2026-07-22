@@ -12,12 +12,13 @@ type CurrencyValueProps = {
 	decimals?: number
 	loading?: boolean
 	copyable?: boolean
+	precision?: 'exact' | 'rounded'
 	suffix?: string
 	units?: number
 	value: bigint | undefined
 }
 
-export function CurrencyValue({ className = '', compactWhenOverflow = false, copyable = true, decimals = 2, loading = false, suffix = '', units = 18, value }: CurrencyValueProps) {
+export function CurrencyValue({ className = '', compactWhenOverflow = false, copyable = true, decimals = 2, loading = false, precision = 'rounded', suffix = '', units = 18, value }: CurrencyValueProps) {
 	const { copied, copyText } = useCopyToClipboard()
 	const buttonRef = useRef<HTMLButtonElement>(null)
 	const spanRef = useRef<HTMLSpanElement>(null)
@@ -31,8 +32,17 @@ export function CurrencyValue({ className = '', compactWhenOverflow = false, cop
 		copied.value = false
 	}, [exactValue])
 
-	const displayValue = value === undefined ? undefined : `≈ ${formatRoundedCurrencyBalance(value, units, decimals)}${exactSuffix}`
-	const compactDisplayValue = value === undefined ? undefined : `≈ ${formatCompactCurrencyBalance(value, units)}${exactSuffix}`
+	let displayValue: string | undefined
+	let compactDisplayValue: string | undefined
+	if (value !== undefined && exactValue !== undefined) {
+		if (precision === 'exact') {
+			displayValue = `${exactValue}${exactSuffix}`
+			compactDisplayValue = displayValue
+		} else {
+			displayValue = `≈ ${formatRoundedCurrencyBalance(value, units, decimals)}${exactSuffix}`
+			compactDisplayValue = `≈ ${formatCompactCurrencyBalance(value, units)}${exactSuffix}`
+		}
+	}
 
 	useLayoutEffect(() => {
 		if (!compactWhenOverflow || value === undefined || displayValue === undefined) {

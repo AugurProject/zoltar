@@ -166,7 +166,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 			const dialogQueries = within(withdrawDialog)
 			expect(dialogQueries.getByRole('heading', { name: 'REP Withdrawal Queued' })).not.toBeNull()
 			expect(dialogQueries.getByText('#11')).not.toBeNull()
-			expect(dialogQueries.getByText('The settlement auto-execute list is full. Execute this staged operation manually with its id after a valid oracle price is available.')).not.toBeNull()
+			expect(dialogQueries.getByText('The settlement auto-execute list is full. Execute this staged operation manually with its ID after a valid oracle price is available.')).not.toBeNull()
 		})
 
 		test('shows immediate execution when a withdraw uses an already valid oracle price', async () => {

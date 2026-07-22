@@ -131,6 +131,6 @@ export function getVaultExecutePendingOperationGuardMessage({
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (!hasLoadedOracleManager) return 'Load the price oracle before executing a staged operation.'
 	if (isPriceValid === false) return 'Wait for a valid oracle price before executing a staged operation.'
-	if (resolvedPendingOperationId === undefined) return 'Enter a valid staged operation id.'
+	if (resolvedPendingOperationId === undefined) return 'Enter a valid staged operation ID.'
 	return undefined
 }

@@ -276,7 +276,7 @@ export function useZoltarUniverse(
 			let result: ZoltarChildUniverseActionResult | undefined
 			try {
 				await assertActiveWallet(accountAddress)
-				onTransactionRequested(createChildUniverseTransactionIntent('zoltar'))
+				onTransactionRequested(createChildUniverseTransactionIntent('zoltar', { outcomeIndex, universeId: activeUniverseId }))
 				const universe = await ensureZoltarUniverse()
 				if (!universe.hasForked) throw new Error('Zoltar needs to fork before child universes can be deployed')
 				const transaction = await dependencies.createZoltarChildUniverse(dependencies.createWalletWriteClient(accountAddress, { onTransactionPrepared, onTransactionSubmitted }), universe.universeId, outcomeIndex)

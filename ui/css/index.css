@@ -110,6 +110,10 @@ main {
 	padding: 0 0 0 0.35rem;
 }
 
+.route-subnav-overflow-control {
+	display: none;
+}
+
 h1 {
 	margin: 0;
 	font-family: var(--font-family-serif);
@@ -139,6 +143,19 @@ h4 {
 	font-size: var(--font-body);
 	line-height: 1.2;
 	overflow-wrap: anywhere;
+}
+
+.required-field-indicator {
+	color: var(--danger);
+	font-weight: 700;
+}
+
+.fork-readiness-list {
+	display: grid;
+	gap: var(--space-2);
+	margin: 0;
+	padding-left: 1.25rem;
+	color: var(--text-muted);
 }
 
 button {
@@ -7317,7 +7334,22 @@ main.global-transaction-tray-open {
 	}
 
 	.route-subnav-shell {
+		display: grid;
+		grid-template-columns: var(--touch-target-min) minmax(0, 1fr) var(--touch-target-min);
+		align-items: center;
 		padding: 0;
+	}
+
+	.route-subnav-overflow-control {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: var(--touch-target-min);
+		min-height: var(--touch-target-min);
+		padding: 0;
+		border-radius: var(--radius-control);
+		font-size: 1.35rem;
+		color: var(--text-muted);
 	}
 
 	.data-grid[data-columns="2"],

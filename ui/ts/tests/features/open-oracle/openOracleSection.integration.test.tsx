@@ -162,6 +162,7 @@ async function fillOpenOracleCreateForm() {
 	await setInputValue('Quote Token Amount', formatCurrencyInputBalance(openOracleCreateParameters.initialToken2Amount))
 	await setInputValue('Settler Reward', formatCurrencyInputBalance(openOracleCreateParameters.settlerReward))
 	await setInputValue('ETH Value To Send', formatCurrencyInputBalance(openOracleCreateParameters.ethValue))
+	await clickElement(within(document.body).getByText('Advanced Dispute & Timing Settings', { selector: 'summary' }))
 	await setInputValue('Dispute Fee (%)', formatOpenOracleFeePercentageInput(BigInt(openOracleCreateParameters.feePercentage)))
 	await setInputValue('Multiplier', openOracleCreateParameters.multiplier.toString())
 	await setInputValue('Settlement Delay (seconds)', openOracleCreateParameters.settlementTime.toString())
@@ -243,6 +244,8 @@ describe.serial('OpenOracleSection integration', () => {
 	test('creates, funds, and opens an atomic initial report through the UI', async () => {
 		const renderedComponent = await renderIntoDocument(<OpenOracleSectionHarness accountAddress={walletAddress} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(within(document.body).getByText('Define the token pair and initial report economics first. Default dispute and timing settings are available below for users who need to tune the report lifecycle.')).not.toBeNull()
+		expect(within(document.body).getByText('Transaction Review')).not.toBeNull()
 
 		await fillOpenOracleCreateForm()
 

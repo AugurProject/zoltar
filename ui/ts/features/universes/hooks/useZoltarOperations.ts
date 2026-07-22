@@ -75,6 +75,7 @@ export function useZoltarOperations({
 	}, [fork.loadZoltarForkAccess])
 	const migration = useZoltarMigration({
 		accountAddress,
+		activeUniverseId,
 		ensureZoltarUniverse: universe.ensureZoltarUniverse,
 		onTransactionFailed,
 		onTransactionFinished,

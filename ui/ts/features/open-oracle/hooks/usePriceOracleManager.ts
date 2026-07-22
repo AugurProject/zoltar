@@ -15,7 +15,6 @@ import { runWriteAction } from '../../../lib/writeAction.js'
 import { refreshWalletStateOnly } from '../../../lib/refreshState.js'
 import type { WriteOperationsParameters } from '../../../types/app.js'
 import type { OpenOracleActionResult, OracleManagerDetails } from '../../../types/contracts.js'
-import { addOpenOracleBountyBuffer } from '../lib/openOracle.js'
 
 type UsePriceOracleManagerParameters = {
 	accountAddress: Address | undefined
@@ -66,7 +65,8 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 		})
 	}
 
-	const requestPoolPrice = async (managerAddress: Address) => {
+	const requestPoolPrice = async (managerAddress: Address, securityPoolAddress: Address, reviewedRequestEthValue: bigint) => {
+		const transactionContext = { managerAddress, securityPoolAddress }
 		poolPriceOracleResult.value = undefined
 		try {
 			poolOracleActiveAction.value = 'requestPrice'
@@ -78,11 +78,11 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 					onRefreshError: (message, hash) => {
 						poolOracleFeedback.value = createWarningActionFeedback('requestPrice', getSuccessTitle('requestPrice'), message, hash)
 						const result = poolPriceOracleResult.value
-						if (result !== undefined) onTransactionPresented(createPoolOracleWarningPresentation(result, message))
+						if (result !== undefined) onTransactionPresented(createPoolOracleWarningPresentation(result, message, transactionContext))
 					},
 					onTransactionFailed,
 					onTransactionFinished,
-					onTransactionRequested: () => onTransactionRequested(createPoolOracleTransactionIntent('requestPrice')),
+					onTransactionRequested: () => onTransactionRequested(createPoolOracleTransactionIntent('requestPrice', transactionContext)),
 					onWriteError: message => {
 						poolOracleFeedback.value = createErrorActionFeedback('requestPrice', getFailureTitle('requestPrice'), message)
 					},
@@ -107,24 +107,23 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 						throw new Error(`Need ${formatCurrencyBalance(initialReportFunding.initialReportAmount2 - initialReportFunding.currentRepBalance)} more REP in this wallet to fund the initial report.`)
 					}
 					const walletEthBalance = await createConnectedReadClient().getBalance({ address: walletAddress })
-					const totalRequiredEth = addOpenOracleBountyBuffer(refreshedManagerDetails?.requestPriceEthCost ?? 0n) + initialReportFunding.wethShortfall
+					const totalRequiredEth = reviewedRequestEthValue + initialReportFunding.wethShortfall
 					if (walletEthBalance < totalRequiredEth) {
 						throw new Error(`Need ${formatCurrencyBalance(totalRequiredEth - walletEthBalance)} more ETH in this wallet to fund the initial report and request a new price.`)
 					}
 					const requestPriceGuardMessage = getOracleRequestEthGuardMessage({
 						actionLabel: 'request a new price',
-						includeBuffer: true,
-						requiredEthCost: refreshedManagerDetails?.requestPriceEthCost,
+						requiredEthCost: reviewedRequestEthValue,
 						walletEthBalance,
 					})
 					if (requestPriceGuardMessage !== undefined) throw new Error(requestPriceGuardMessage)
-					return await requestOraclePrice(writeClient, managerAddress, initialReportFunding.proposedRepPerEthPrice)
+					return await requestOraclePrice(writeClient, managerAddress, initialReportFunding.proposedRepPerEthPrice, 0n, reviewedRequestEthValue)
 				},
 				'Failed to request price',
 				result => {
 					poolPriceOracleResult.value = result
 					poolOracleFeedback.value = createSuccessActionFeedback('requestPrice', getSuccessTitle('requestPrice'), result.hash)
-					onTransactionPresented(createPoolOracleSuccessPresentation(result))
+					onTransactionPresented(createPoolOracleSuccessPresentation(result, transactionContext))
 				},
 			)
 		} finally {
@@ -132,7 +131,8 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 		}
 	}
 
-	const executePendingPoolOperation = async (managerAddress: Address, operationId: bigint) => {
+	const executePendingPoolOperation = async (managerAddress: Address, operationId: bigint, securityPoolAddress?: Address) => {
+		const transactionContext = { managerAddress, securityPoolAddress }
 		poolPriceOracleResult.value = undefined
 		try {
 			poolOracleActiveAction.value = 'executeStagedOperation'
@@ -144,11 +144,11 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 					onRefreshError: (message, hash) => {
 						poolOracleFeedback.value = createWarningActionFeedback('executeStagedOperation', getSuccessTitle('executeStagedOperation'), message, hash)
 						const result = poolPriceOracleResult.value
-						if (result !== undefined) onTransactionPresented(createPoolOracleWarningPresentation(result, message))
+						if (result !== undefined) onTransactionPresented(createPoolOracleWarningPresentation(result, message, transactionContext))
 					},
 					onTransactionFailed,
 					onTransactionFinished,
-					onTransactionRequested: () => onTransactionRequested(createPoolOracleTransactionIntent('executeStagedOperation')),
+					onTransactionRequested: () => onTransactionRequested(createPoolOracleTransactionIntent('executeStagedOperation', transactionContext)),
 					onWriteError: message => {
 						poolOracleFeedback.value = createErrorActionFeedback('executeStagedOperation', getFailureTitle('executeStagedOperation'), message)
 					},
@@ -166,7 +166,7 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 				result => {
 					poolPriceOracleResult.value = result
 					poolOracleFeedback.value = createSuccessActionFeedback('executeStagedOperation', getSuccessTitle('executeStagedOperation'), result.hash)
-					onTransactionPresented(createPoolOracleSuccessPresentation(result))
+					onTransactionPresented(createPoolOracleSuccessPresentation(result, transactionContext))
 				},
 			)
 		} finally {
