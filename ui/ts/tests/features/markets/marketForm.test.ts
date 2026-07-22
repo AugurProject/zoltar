@@ -16,6 +16,7 @@ import {
 	parseRepAmountInput,
 	parseTimestampInput,
 	parseTradingAmountInput,
+	tryParseTimestampInput,
 } from '../../../features/markets/lib/marketForm.js'
 
 describe('market form defaults and conversion helpers', () => {
@@ -59,5 +60,7 @@ describe('market form defaults and conversion helpers', () => {
 	test('throws clear message for malformed timestamps and parses valid date strings', () => {
 		expect(parseTimestampInput('2025-01-01T00:00:00Z', 'End time')).toBeGreaterThan(0n)
 		expect(() => parseTimestampInput('nonsense', 'End time')).toThrow('End time is invalid')
+		expect(tryParseTimestampInput('2025-01-01T00:00:00Z')).toBeGreaterThan(0n)
+		expect(tryParseTimestampInput('nonsense')).toBeUndefined()
 	})
 })
