@@ -1,7 +1,7 @@
 import * as commonCopy from '../copy/common.js'
 import * as simulationCopy from '../copy/simulation.js'
 import { useSignal } from '@preact/signals'
-import { useEffect } from 'preact/hooks'
+import { useEffect, useRef } from 'preact/hooks'
 import { getErrorMessage } from '../lib/errors.js'
 import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch } from '../lib/routing.js'
 import type { SimulationController } from '../simulation/controller.js'
@@ -119,6 +119,7 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 	const bootstrapProgress = useSignal(controller.bootstrapProgress)
 	const transactionCountSinceReset = useSignal(controller.transactionCountSinceReset)
 	const transactionDelayMilliseconds = useSignal(controller.transactionDelayMilliseconds.toString())
+	const previousController = useRef(controller)
 
 	const reloadSavedStateRecords = () => {
 		const summary = getSavedSimulationStateStorageSummary(savedStateStorage)
@@ -145,29 +146,33 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 	const resetRepPerUsdcPriceInput = () => {
 		repPerUsdcPrice.value = formatCurrencyInputBalance(controller.repPerUsdcPrice, 6)
 	}
-	useEffect(
-		() =>
-			controller.subscribe(() => {
-				const wasBootstrapped = isBootstrapped.value
-				blockCountSinceReset.value = controller.blockCountSinceReset
-				bootstrapError.value = controller.bootstrapError
-				bootstrapLabel.value = controller.bootstrapLabel
-				bootstrapProgress.value = controller.bootstrapProgress
-				currentTimestamp.value = controller.currentTimestamp
-				currentScenario.value = controller.currentScenario
-				currentSource.value = controller.simulationSource
-				isBootstrapped.value = controller.isBootstrapped
-				if (!wasBootstrapped && controller.isBootstrapped) simulationDetailsOpen.value = false
-				isBootstrapping.value = controller.isBootstrapping
-				queryDelayMilliseconds.value = controller.queryDelayMilliseconds.toString()
-				repPerEthPrice.value = formatCurrencyInputBalance(controller.repPerEthPrice)
-				repPerUsdcPrice.value = formatCurrencyInputBalance(controller.repPerUsdcPrice, 6)
-				selectedAccount.value = controller.selectedAccount
-				transactionCountSinceReset.value = controller.transactionCountSinceReset
-				transactionDelayMilliseconds.value = controller.transactionDelayMilliseconds.toString()
-			}),
-		[controller],
-	)
+	useEffect(() => {
+		let controllerChanged = previousController.current !== controller
+		previousController.current = controller
+		const syncControllerState = () => {
+			const wasBootstrapped = isBootstrapped.value
+			blockCountSinceReset.value = controller.blockCountSinceReset
+			bootstrapError.value = controller.bootstrapError
+			bootstrapLabel.value = controller.bootstrapLabel
+			bootstrapProgress.value = controller.bootstrapProgress
+			currentTimestamp.value = controller.currentTimestamp
+			currentScenario.value = controller.currentScenario
+			currentSource.value = controller.simulationSource
+			isBootstrapped.value = controller.isBootstrapped
+			isBootstrapping.value = controller.isBootstrapping
+			if (!controller.isBootstrapped || controller.isBootstrapping) simulationDetailsOpen.value = true
+			else if (controllerChanged || !wasBootstrapped) simulationDetailsOpen.value = false
+			controllerChanged = false
+			queryDelayMilliseconds.value = controller.queryDelayMilliseconds.toString()
+			repPerEthPrice.value = formatCurrencyInputBalance(controller.repPerEthPrice)
+			repPerUsdcPrice.value = formatCurrencyInputBalance(controller.repPerUsdcPrice, 6)
+			selectedAccount.value = controller.selectedAccount
+			transactionCountSinceReset.value = controller.transactionCountSinceReset
+			transactionDelayMilliseconds.value = controller.transactionDelayMilliseconds.toString()
+		}
+		syncControllerState()
+		return controller.subscribe(syncControllerState)
+	}, [controller])
 	const runControl = async (work: () => Promise<void>) => {
 		if (busy.value) return
 		busy.value = true
