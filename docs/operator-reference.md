@@ -84,7 +84,10 @@ contract-first form.
 ## Share Migration
 
 Share migration after a fork is user-facing asset migration, not vault REP
-migration.
+migration. Canonical rules live in [`FORK-10`](invariants.html#fork-10) for
+persistent per-child materialization, [`SHARE-04`](invariants.html#share-04) for
+the economic-claim denominator, and [`FORK-11`](invariants.html#fork-11) for
+unequal materialized supplies.
 
 | Area | Implementation behavior | Source |
 | --- | --- | --- |

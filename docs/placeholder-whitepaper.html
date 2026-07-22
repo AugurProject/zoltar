@@ -1976,7 +1976,9 @@
 						Shares can materialize across forks.
 						<code>ShareToken.migrate</code> preserves a parent-universe token id
 						as a persistent entitlement and mints child-universe token ids for
-						selected valid, non-malformed fork outcomes.
+						selected valid, non-malformed fork outcomes. The formal transfer-lock
+						and per-child delta rules are owned by
+						<a href="invariants.html#fork-10"><code>FORK-10</code></a>.
 					</p>
 					<figure class="diagram" id="fig-placeholder-share-migration">
 						<svg
@@ -1988,8 +1990,10 @@
 								Share migration materializes persistent branch entitlements
 							</title>
 							<desc id="share-migration-desc">
-								A parent token balance remains locked as an entitlement while the
-								same balance materializes in each selected child token id.
+								On first materialization into untouched children, the full current
+								parent balance materializes in each selected child token id while
+								the source remains locked as an entitlement. Later calls mint only
+								the unmaterialized delta for each child.
 							</desc>
 							<defs>
 								<marker
@@ -2062,7 +2066,7 @@
 								Child Token A
 							</text>
 							<text class="svg-small" x="745" y="125" text-anchor="middle">
-								same full balance
+								first: full balance
 							</text>
 							<rect
 								class="svg-blue"
@@ -2076,25 +2080,29 @@
 								Child Token B
 							</text>
 							<text class="svg-small" x="775" y="239" text-anchor="middle">
-								same full balance
+								first: full balance
 							</text>
 						</svg>
 						<p class="diagram-caption">
 							<span class="figure-label">Share Migration</span>Share migration
 							is not a pro-rata split across selected branches. The source
 							balance remains as a transfer-locked entitlement after first use,
-							and each selected child materializes its own reserved claim.
+							and each untouched selected child first materializes the full current
+							balance. Later calls mint only that child's unmaterialized delta.
 						</p>
 					</figure>
 					<details class="interactive-example" id="share-migration-example">
-						<summary>Adjust a share migration reproduction example</summary>
+						<summary>Adjust a first-materialization share example</summary>
 						<p>
-							The migration call preserves the full parent token balance and
-							materializes that same balance in each selected child outcome. The
-							contract accepts any non-empty, strictly increasing list of valid
-							non-malformed fork-question outcome indexes. The compact diagram
-							caps the displayed branches at three, which shows why migration is
-							not a pro-rata split.
+							This example assumes that none of the selected children has received
+							this source entitlement before. The first call preserves the full
+							parent token balance and materializes that balance in each selected
+							child outcome. On a later call, each child receives only
+							<code>current source balance - amount already materialized</code>; if
+							every selected delta is zero, the call reverts. The contract accepts
+							any non-empty, strictly increasing list of valid non-malformed
+							fork-question outcome indexes. The compact diagram caps the displayed
+							branches at three.
 						</p>
 						<div class="example-grid">
 							<label>
@@ -2132,7 +2140,7 @@
 							<svg
 								viewBox="0 0 760 220"
 								role="img"
-								aria-label="Share migration balance reproduction"
+								aria-label="First materialization of a share entitlement into untouched child branches"
 							>
 								<rect
 									class="example-bar-base"
@@ -2246,7 +2254,7 @@
 								><output data-example-output="parentAfter">30 shares</output>
 							</div>
 							<div>
-								<span>Child balance per selected branch</span
+								<span>First materialized balance per selected branch</span
 								><output data-example-output="childBalance">30 shares</output>
 							</div>
 							<div>
@@ -2275,9 +2283,14 @@
 						At the implementation level, <code>redeemShares</code> burns the
 						holder’s full materialized balance of the winning token id and pays
 						the burned amount’s pro-rata share of current collateral, using the
-						pool’s remaining economic claim supply as the denominator. That
+						pool’s remaining economic claim supply as the denominator. The
+						canonical lifecycle is
+						<a href="invariants.html#share-04"><code>SHARE-04</code></a>,
+						and unequal materialized supplies are covered by
+						<a href="invariants.html#fork-11"><code>FORK-11</code></a>. That
 						<code>shareTokenSupply</code> includes materialized ERC-1155 balances
-						and fork-time entitlements that can materialize later. In the healthy case this corresponds to a
+						and fork-time entitlements that can materialize later. In the healthy
+						case this corresponds to a
 						clean <code>1:1</code> redemption outcome against the economic
 						meaning of a complete-set claim, subject to collateral accounting
 						remaining intact through migration and any required auction repair.
@@ -2315,9 +2328,9 @@
 						The important edge case is fork recovery. If a child pool emerges
 						from migration with incomplete collateral, the truth auction sells
 						REP for ETH so the child pool can restore the collateral base needed
-							for clean redemption. If multiple target outcomes are selected
-							during share migration, the holder’s source entitlement remains
-							and its unmaterialized balance is minted into each selected child.
+						for clean redemption. If multiple target outcomes are selected
+						during share migration, the holder’s source entitlement remains
+						and its unmaterialized balance is minted into each selected child.
 					</p>
 				</section>
 

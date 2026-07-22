@@ -312,7 +312,11 @@ function assertStartHereTimelines(): void {
 function assertContractInteractionDistinctions(): void {
 	assert.match(contractReferenceGenerator, /interaction\.declarations\.length, 1,[\s\S]*interaction rows must describe exactly one entrypoint name; split materially different guards, effects, and signals into separate rows/, 'generated interaction rows must remain limited to one entrypoint name')
 	assert.match(invariantsHtml, /<code>SHARE-04<\/code>[\s\S]*remaining economic claim[\s\S]*source entitlements/)
-	assert.match(invariantsHtml, /<code>FORK-11<\/code>[\s\S]*fork-time economic claim supply[\s\S]*Unequal ERC-1155 supplies[\s\S]*do not block complete-set minting[\s\S]*href="#share-04"><code>SHARE-04<\/code>/)
+	assert.match(invariantsHtml, /id="fork-10"[\s\S]*<code>FORK-10<\/code>[\s\S]*mints only the unmaterialized balance/)
+	assert.match(invariantsHtml, /id="fork-11"[\s\S]*<code>FORK-11<\/code>[\s\S]*fork-time economic claim supply[\s\S]*Unequal ERC-1155 supplies[\s\S]*do not block complete-set minting[\s\S]*href="#share-04"><code>SHARE-04<\/code>/)
+	assert.match(operatorReference, /invariants\.html#fork-10[\s\S]*invariants\.html#share-04[\s\S]*invariants\.html#fork-11/)
+	assert.match(whitepaperPlaceholder, /none of the selected children has received[\s\S]*On a later call, each child receives only[\s\S]*current source balance - amount already materialized[\s\S]*every selected delta is zero, the call reverts/)
+	assert.match(whitepaperPlaceholder, /invariants\.html#fork-10[\s\S]*invariants\.html#share-04[\s\S]*invariants\.html#fork-11/)
 	assert.match(invariantsHtml, /FORK-05[\s\S]*forkActivationTime \+ 8 weeks[\s\S]*parent pool enters <code>PoolForked<\/code>[\s\S]*Share materialization has no expiry[\s\S]*already-created child/)
 	assert.doesNotMatch(invariantsHtml, /Child creation, share migration, vault migration/)
 	assert.doesNotMatch(invariantsHtml, /forkTime \+ 8 weeks/)
