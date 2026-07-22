@@ -6,7 +6,10 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 	const { setCleanup } = testDom
 	const fixture = createReportingAndOracleFixture()
 	const {
+		fireEvent,
 		within,
+		render,
+		act,
 		getAddress,
 		zeroAddress,
 		SecurityPoolWorkflowSection,
@@ -293,6 +296,8 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Withdraw REP')).not.toBeNull()
 		expect(documentQueries.getByText('Auto-exec pending')).not.toBeNull()
+		expect(documentQueries.getByText('Operation ID')).not.toBeNull()
+		expect(documentQueries.getByText('Staged Operation ID')).not.toBeNull()
 		expect(documentQueries.getByText('7')).not.toBeNull()
 		expect(documentQueries.getByText('Showing 1 of 4 active staged operations, newest first.')).not.toBeNull()
 		expect(documentQueries.queryByText('Pending Price Request')).toBeNull()
@@ -420,6 +425,42 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(documentQueries.getByRole('button', { name: 'Request New Price' })).not.toBeNull()
 		expect(sectionQueries.getByText('Pending Request')).not.toBeNull()
 		expect(sectionQueries.getByRole('button', { name: /Report #\s*12/ })).not.toBeNull()
+	})
+
+	test('reviews the pool identity and ETH cost before requesting a new price', async () => {
+		const requests: Array<{ managerAddress: string; reviewedRequestEthValue: bigint; securityPoolAddress: string }> = []
+		const pool = createSelectedPool()
+		const baseProps = createSecurityPoolWorkflowProps({
+			accountState: createAccountState({ ethBalance: 100n * 10n ** 18n }),
+			checkedSecurityPoolAddress: pool.securityPoolAddress,
+			onRequestPoolPrice: (managerAddress, securityPoolAddress, reviewedRequestEthValue) => requests.push({ managerAddress, reviewedRequestEthValue, securityPoolAddress }),
+			poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, pendingReportId: 0n, requestPriceEthCost: 2n * 10n ** 18n }),
+			securityPoolAddress: pool.securityPoolAddress,
+			securityPools: [pool],
+			selectedPoolView: 'price-oracle',
+		})
+		const renderedComponent = await renderIntoDocument(<SecurityPoolWorkflowSection {...baseProps} showHeader={false} />)
+		setCleanup(renderedComponent.cleanup)
+
+		const documentQueries = within(document.body)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Request New Price' }))
+		const dialog = documentQueries.getByRole('dialog', { name: 'Request New Price' })
+		expect(within(dialog).getByText('Transaction Review')).not.toBeNull()
+		expect(within(dialog).getByText('You Pay')).not.toBeNull()
+		expect(within(dialog).getByText('2.4 ETH')).not.toBeNull()
+		expect(within(dialog).queryByText(/≈/)).toBeNull()
+		expect(dialog.querySelector('[title="2.4 ETH"]')).not.toBeNull()
+		expect(within(dialog).getByText(/20% request buffer/)).not.toBeNull()
+		expect(requests).toEqual([])
+
+		await act(async () => {
+			render(<SecurityPoolWorkflowSection {...baseProps} poolOracleManagerDetails={createOracleManagerDetails({ isPriceValid: false, pendingReportId: 0n, requestPriceEthCost: 3n * 10n ** 18n })} showHeader={false} />, renderedComponent.container)
+		})
+		expect(within(dialog).getByText('2.4 ETH')).not.toBeNull()
+		expect(within(dialog).queryByText('3.6 ETH')).toBeNull()
+
+		fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm Price Request' }))
+		expect(requests).toEqual([{ managerAddress: pool.managerAddress, reviewedRequestEthValue: 2_400_000_000_000_000_000n, securityPoolAddress: pool.securityPoolAddress }])
 	})
 
 	test('disables Request New Price when the wallet lacks the buffered oracle bounty ETH', async () => {

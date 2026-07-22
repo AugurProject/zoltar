@@ -295,9 +295,9 @@ export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
 	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => void
 	onReturnToCurrentUniverse?: () => void
 	onSwitchToPoolUniverse?: (universeId: bigint, securityPoolAddress: Address) => void
-	onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint) => void
+	onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint, securityPoolAddress: Address) => void
 	onRefreshSelectedPoolData: (securityPoolAddress?: string) => void
-	onRequestPoolPrice: (managerAddress: Address) => void
+	onRequestPoolPrice: (managerAddress: Address, securityPoolAddress: Address, reviewedRequestEthValue: bigint) => void
 	onSelectedPoolViewChange: (view: string | undefined) => void
 	onViewPendingReport: (reportId: bigint) => void
 	selectedPoolRefreshNonce: number
@@ -488,9 +488,9 @@ export type ForkAuctionRouteContentProps = {
 	forkAuctionForm: ForkAuctionFormState
 	forkAuctionResult: ForkAuctionActionResult | undefined
 	loadingForkAuctionDetails: boolean
-	onClaimAuctionProceeds: (securityPoolAddressOverride?: Address, selectedClaimBids?: readonly SettlementSelectedBid[], selectedRefundBids?: readonly SettlementSelectedBid[]) => void
+	onClaimAuctionProceeds: (securityPoolAddressOverride?: Address, selectedClaimBids?: readonly SettlementSelectedBid[], selectedRefundBids?: readonly SettlementSelectedBid[], universeIdOverride?: bigint) => void
 	onCreateChildUniverse: () => void
-	onFinalizeTruthAuction: (securityPoolAddressOverride?: Address) => void
+	onFinalizeTruthAuction: (securityPoolAddressOverride?: Address, universeIdOverride?: bigint) => void
 	onForkAuctionFormChange: (update: Partial<ForkAuctionFormState>) => void
 	onForkUniverse: () => void
 	onForkWithOwnEscalation: () => void
@@ -500,9 +500,9 @@ export type ForkAuctionRouteContentProps = {
 	onMigrateUnresolvedEscalation: (selectedChildOutcome: ReportingOutcomeKey) => void
 	onMigrateRepToZoltar: (outcomes?: ReportingOutcomeKey[]) => void
 	onMigrateVault: () => void
-	onRefundLosingBids: (securityPoolAddressOverride?: Address, selectedBids?: readonly SettlementSelectedBid[]) => void
-	onStartTruthAuction: (securityPoolAddressOverride?: Address) => void
-	onSubmitBid: (securityPoolAddressOverride?: Address) => void
+	onRefundLosingBids: (securityPoolAddressOverride?: Address, selectedBids?: readonly SettlementSelectedBid[], universeIdOverride?: bigint) => void
+	onStartTruthAuction: (securityPoolAddressOverride?: Address, universeIdOverride?: bigint) => void
+	onSubmitBid: (securityPoolAddressOverride?: Address, universeIdOverride?: bigint) => void
 	onWithdrawForkedEscalation: (outcome: ReportingOutcomeKey, parentDepositIndexes: bigint[]) => void
 }
 

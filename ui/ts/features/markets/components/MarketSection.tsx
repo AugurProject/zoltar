@@ -171,7 +171,12 @@ export function MarketSection({
 
 				{view === 'fork' ? (
 					<>
-						<SectionBlock title={marketCopy.fork}>
+						<SectionBlock title={marketCopy.fork} description={marketCopy.forkIntroduction}>
+							<ul className='fork-readiness-list'>
+								<li>{marketCopy.forkQuestionRequirement}</li>
+								<li>{marketCopy.forkRepRequirement}</li>
+								<li>{marketCopy.forkConsequence}</li>
+							</ul>
 							<div className='actions'>
 								<button className='primary' type='button' onClick={() => setForkModalOpen(true)}>
 									{forkModalTitle}

@@ -837,6 +837,8 @@ describe('MarketSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('dialog')).toBeNull()
+		expect(documentQueries.getByText('Forking selects one existing question to split the active universe into outcome-specific child universes. This protocol action cannot be undone.')).not.toBeNull()
+		expect(documentQueries.getByText('The connected wallet must hold and approve enough REP to meet the fork threshold.')).not.toBeNull()
 		const openForkButton = documentQueries.getByRole('button', { name: 'Fork Zoltar' })
 		await act(() => {
 			openForkButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))

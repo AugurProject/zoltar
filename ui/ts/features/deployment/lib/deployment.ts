@@ -20,7 +20,7 @@ const DEPLOYMENT_SECTIONS: DeploymentSectionDefinition[] = [
 		stepIds: ['scalarOutcomes', 'zoltarQuestionData', 'zoltar'],
 	},
 	{
-		title: 'Augur PlaceHolder',
+		title: 'Augur Placeholder',
 		stepIds: ['uniformPriceDualCapBatchAuctionFactory', 'securityPoolUtils', 'openOracle', 'shareTokenFactory', 'priceOracleManagerAndOperatorQueuerFactory', 'securityPoolForker', 'escalationGameFactory', 'securityPoolFactory'],
 	},
 ]

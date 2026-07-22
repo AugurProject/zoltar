@@ -2,7 +2,7 @@ import * as commonCopy from '../../../copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import type { ComponentChildren } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { getAddress, zeroAddress } from '@zoltar/shared/ethereum'
+import { getAddress, zeroAddress, type Address } from '@zoltar/shared/ethereum'
 import { AddressValue } from '../../../components/AddressValue.js'
 import { Badge } from '../../../components/Badge.js'
 import { CurrencyValue } from '../../../components/CurrencyValue.js'
@@ -28,6 +28,10 @@ import { StickyObjectContext } from '../../../components/StickyObjectContext.js'
 import { StateHint } from '../../../components/StateHint.js'
 import { TradingSection } from '../../markets/components/TradingSection.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
+import { TransactionNetworkValue } from '../../../components/TransactionNetworkValue.js'
+import { TransactionReview } from '../../../components/TransactionReview.js'
+import { OperationModal } from '../../../components/OperationModal.js'
+import * as transactionReviewCopy from '../../../copy/transactionReview.js'
 import { UniverseLink } from '../../universes/components/UniverseLink.js'
 import { ViewTabs } from '../../../components/ViewTabs.js'
 import { WarningSurface } from '../../../components/WarningSurface.js'
@@ -65,6 +69,7 @@ import { getLiquidationNoticeState } from '../lib/liquidationStatus.js'
 import { resolveRequestedLoadableValueState } from '../../../lib/loadState.js'
 import { isMainnetChain } from '../../../lib/network.js'
 import { getReportingLockedUntilMessage, hasReportingOpened } from '../../reporting/lib/reporting.js'
+import { addOpenOracleBountyBuffer } from '../../open-oracle/lib/openOracle.js'
 import { getSecurityPoolStatusBadgeLabel } from '../lib/securityPoolLabels.js'
 import { deriveSecurityPoolLifecycleState, deriveSecurityPoolReportingStage, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage } from '../lib/securityVaultGuards.js'
@@ -116,6 +121,15 @@ function getSecurityPoolStatusBadgeTone(systemState: SecurityPoolLifecycleState 
 	if (systemState === undefined) return 'muted'
 	return 'warning'
 }
+
+type RequestPriceReview = {
+	ethValue: bigint
+	managerAddress: Address
+	questionTitle: string | undefined
+	securityPoolAddress: Address
+	universeId: bigint
+}
+
 export function SecurityPoolWorkflowSection({
 	accountState,
 	activeUniverseId,
@@ -177,6 +191,7 @@ export function SecurityPoolWorkflowSection({
 	const legacyForkWorkflowSelectionStage = resolveForkWorkflowSelectionStage(selectedPoolView)
 	const chainCurrentTimestamp = useChainTimestamp()
 	const [manualPendingOperationId, setManualPendingOperationId] = useState('')
+	const [requestPriceReview, setRequestPriceReview] = useState<RequestPriceReview | undefined>(undefined)
 	const lastHandledReportingRefreshNonceRef = useRef(selectedPoolRefreshNonce)
 	const lastHandledForkAuctionRefreshNonceRef = useRef(selectedPoolRefreshNonce)
 	const isMainnet = isMainnetChain(accountState.chainId)
@@ -371,6 +386,7 @@ export function SecurityPoolWorkflowSection({
 	const selectedPoolOracleMetricValues = loadedSelectedPool === undefined ? undefined : getSelectedPoolOracleMetricValues(loadedSelectedPool)
 	const currentPoolOraclePrice = (currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastPrice
 	const currentPoolOracleSettlementTimestamp = (currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastSettlementTimestamp
+	const requestPriceTransactionEthValue = currentPoolOracleManagerDetails === undefined ? undefined : addOpenOracleBountyBuffer(currentPoolOracleManagerDetails.requestPriceEthCost)
 	const requestPriceGuardMessage = getVaultRequestPriceGuardMessage({
 		accountAddress: accountState.address,
 		hasLoadedSelectedPool: loadedSelectedPool !== undefined,
@@ -378,6 +394,17 @@ export function SecurityPoolWorkflowSection({
 		isPriceValid: currentPoolOracleManagerDetails?.isPriceValid,
 		pendingReportId: currentPoolOracleManagerDetails?.pendingReportId,
 		requiredEthCost: currentPoolOracleManagerDetails?.requestPriceEthCost,
+		walletEthBalance: accountState.ethBalance,
+	})
+	const requestPriceOpenGuardMessage = requestPriceTransactionEthValue === undefined ? securityPoolCopy.loadOracleBeforePriceReview : requestPriceGuardMessage
+	const requestPriceConfirmationGuardMessage = getVaultRequestPriceGuardMessage({
+		accountAddress: accountState.address,
+		bufferRequiredEthCost: false,
+		hasLoadedSelectedPool: requestPriceReview !== undefined,
+		isMainnet,
+		isPriceValid: currentPoolOracleManagerDetails?.isPriceValid,
+		pendingReportId: currentPoolOracleManagerDetails?.pendingReportId,
+		requiredEthCost: requestPriceReview?.ethValue,
 		walletEthBalance: accountState.ethBalance,
 	})
 	const selectedPendingOperationId = currentPoolOracleManagerDetails?.pendingOperationSlotId ?? 0n
@@ -696,8 +723,15 @@ export function SecurityPoolWorkflowSection({
 							),
 						})}
 				sticky={false}
-				title={getSelectedPoolCardTitle()}
-				items={[]}
+				title={getSelectedPoolCardTitle(marketDetails === undefined ? undefined : getQuestionTitle(marketDetails))}
+				items={
+					selectedPoolSummaryPool === undefined
+						? []
+						: [
+								{ label: commonCopy.securityPoolAddress, value: <AddressValue address={selectedPoolSummaryPool.securityPoolAddress} /> },
+								{ label: commonCopy.universe, value: <UniverseLink universeId={selectedPoolSummaryPool.universeId} /> },
+							]
+				}
 				variant='context-strip'
 			>
 				<div className='selected-pool-context-controls'>
@@ -989,7 +1023,7 @@ export function SecurityPoolWorkflowSection({
 													pendingLabel={securityPoolCopy.executingStagedOperationLabel}
 													onClick={() => {
 														if (resolvedPendingOperationId === undefined) return
-														onExecutePendingPoolOperation(loadedSelectedPool.managerAddress, resolvedPendingOperationId)
+														onExecutePendingPoolOperation(loadedSelectedPool.managerAddress, resolvedPendingOperationId, loadedSelectedPool.securityPoolAddress)
 													}}
 													pending={poolOracleActiveAction === 'executeStagedOperation'}
 													tone='secondary'
@@ -1035,12 +1069,21 @@ export function SecurityPoolWorkflowSection({
 											<TransactionActionButton
 												idleLabel={securityPoolCopy.requestNewPrice}
 												pendingLabel={securityPoolCopy.requestingNewPrice}
-												onClick={() => onRequestPoolPrice(loadedSelectedPool.managerAddress)}
+												onClick={() => {
+													if (requestPriceTransactionEthValue === undefined) return
+													setRequestPriceReview({
+														ethValue: requestPriceTransactionEthValue,
+														managerAddress: loadedSelectedPool.managerAddress,
+														questionTitle: marketDetails === undefined ? undefined : getQuestionTitle(marketDetails),
+														securityPoolAddress: loadedSelectedPool.securityPoolAddress,
+														universeId: loadedSelectedPool.universeId,
+													})
+												}}
 												pending={poolOracleActiveAction === 'requestPrice'}
 												tone='secondary'
 												availability={{
-													disabled: !selectedPoolStateModel.actions.requestPrice.enabled || !canUseOracleActions || requestPriceGuardMessage !== undefined,
-													reason: selectedPoolStateModel.actions.requestPrice.enabled ? requestPriceGuardMessage : undefined,
+													disabled: !selectedPoolStateModel.actions.requestPrice.enabled || !canUseOracleActions || requestPriceTransactionEthValue === undefined || requestPriceGuardMessage !== undefined,
+													reason: selectedPoolStateModel.actions.requestPrice.enabled ? requestPriceOpenGuardMessage : undefined,
 												}}
 											/>
 										</div>
@@ -1051,6 +1094,51 @@ export function SecurityPoolWorkflowSection({
 					</div>
 				</div>
 			</section>
+			<OperationModal
+				closeOnSuccessKey={poolPriceOracleResult?.action === 'requestPrice' ? poolPriceOracleResult.hash : undefined}
+				context={
+					requestPriceReview === undefined
+						? []
+						: [
+								...(requestPriceReview.questionTitle === undefined ? [] : [{ label: commonCopy.question, value: requestPriceReview.questionTitle }]),
+								{ label: commonCopy.securityPoolAddress, value: <AddressValue address={requestPriceReview.securityPoolAddress} /> },
+								{ label: commonCopy.universe, value: <UniverseLink universeId={requestPriceReview.universeId} /> },
+								{ label: transactionReviewCopy.network, value: <TransactionNetworkValue /> },
+							]
+				}
+				description={securityPoolCopy.requestPriceReviewDescription}
+				isOpen={requestPriceReview !== undefined}
+				onClose={() => setRequestPriceReview(undefined)}
+				title={securityPoolCopy.requestNewPrice}
+			>
+				<TransactionReview
+					primary={[
+						{
+							label: transactionReviewCopy.youPay,
+							value: <CurrencyValue precision='exact' value={requestPriceReview?.ethValue} suffix={commonCopy.eth} />,
+						},
+					]}
+					risks={[securityPoolCopy.requestPricePendingReportRisk, securityPoolCopy.requestPriceFundingRisk]}
+				/>
+				<div className='actions'>
+					<button className='secondary' type='button' onClick={() => setRequestPriceReview(undefined)} disabled={poolOracleActiveAction === 'requestPrice'}>
+						{commonCopy.cancel}
+					</button>
+					<TransactionActionButton
+						idleLabel={securityPoolCopy.confirmPriceRequest}
+						pendingLabel={securityPoolCopy.requestingNewPrice}
+						onClick={() => {
+							if (requestPriceReview === undefined) return
+							onRequestPoolPrice(requestPriceReview.managerAddress, requestPriceReview.securityPoolAddress, requestPriceReview.ethValue)
+						}}
+						pending={poolOracleActiveAction === 'requestPrice'}
+						availability={{
+							disabled: requestPriceReview === undefined || !selectedPoolStateModel.actions.requestPrice.enabled || !canUseOracleActions || requestPriceConfirmationGuardMessage !== undefined,
+							reason: selectedPoolStateModel.actions.requestPrice.enabled ? requestPriceConfirmationGuardMessage : undefined,
+						}}
+					/>
+				</div>
+			</OperationModal>
 			<LiquidationModal
 				accountAddress={accountState.address}
 				closeLiquidationModal={closeLiquidationModal}

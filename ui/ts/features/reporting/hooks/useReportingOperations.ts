@@ -116,16 +116,31 @@ export function useReportingOperations(
 		})
 	}
 
-	const runReportingAction = async (actionName: ReportingActionResult['action'], action: (walletAddress: Address, securityPoolAddress: Address, currentForm: ReportingFormState, isCurrentSelection: () => boolean) => Promise<ReportingActionResult | undefined>, errorFallback: string) => {
+	const runReportingAction = async (
+		actionName: ReportingActionResult['action'],
+		action: (walletAddress: Address, securityPoolAddress: Address, currentForm: ReportingFormState, isCurrentSelection: () => boolean) => Promise<ReportingActionResult | undefined>,
+		errorFallback: string,
+		outcomeOverride?: ReportingOutcomeKey,
+	) => {
 		const currentForm = reportingForm.value
 		const actionSelectionKey = currentReportingSelectionKey
+		const transactionContext = {
+			outcome: outcomeOverride ?? currentForm.selectedOutcome,
+			securityPoolAddress: actionSelectionKey === '' ? undefined : actionSelectionKey,
+			universeId: reportingDetails.value?.universeId,
+		}
 		const isCurrentSelection = () => isReportingSelectionCurrent(actionSelectionKey)
 		try {
 			reportingActiveAction.value = actionName
 			reportingFeedback.value = createPendingActionFeedback(actionName, getPendingTitle(actionName))
 			await runWriteAction(
 				{
-					...buildWriteActionConfig({ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState }, reportingError, 'Connect a wallet before reporting on a market', createReportingTransactionIntent(actionName)),
+					...buildWriteActionConfig(
+						{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState },
+						reportingError,
+						'Connect a wallet before reporting on a market',
+						createReportingTransactionIntent(actionName, transactionContext),
+					),
 					onRefreshError: (message, hash) => {
 						reportingFeedback.value = createWarningActionFeedback(actionName, getSuccessTitle(actionName), message, hash)
 						const result = reportingResult.value
@@ -232,6 +247,7 @@ export function useReportingOperations(
 				return await dependencies.withdrawEscalationFromSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted }, securityPoolAddress, outcome, depositIndexes)
 			},
 			'Failed to settle escalation deposits',
+			outcome,
 		)
 
 	return {
