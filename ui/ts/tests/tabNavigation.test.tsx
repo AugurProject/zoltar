@@ -44,13 +44,13 @@ describe('TabNavigation', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('navigation', { name: 'Application sections' })).not.toBeNull()
 		expect(documentQueries.getByRole('link', { name: 'Deploy' }).getAttribute('href')).toBe('#/deploy?universe=7&simulate=1')
-		expect(documentQueries.getByRole('link', { name: 'Markets' }).getAttribute('href')).toBe('#/zoltar?universe=7&zoltarView=create&simulate=1')
-		expect(documentQueries.getByRole('link', { name: 'Markets' }).getAttribute('aria-current')).toBe('page')
+		expect(documentQueries.getByRole('link', { name: 'Zoltar' }).getAttribute('href')).toBe('#/zoltar?universe=7&zoltarView=create&simulate=1')
+		expect(documentQueries.getByRole('link', { name: 'Zoltar' }).getAttribute('aria-current')).toBe('page')
 		expect(documentQueries.getByRole('link', { name: 'Security Pools' }).getAttribute('href')).toBe('#/security-pools?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Oracle Reports' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1')
 		expect(documentQueries.getByRole('combobox', { name: 'Current application section' })).not.toBeNull()
 		expect(documentQueries.getByRole('link', { name: 'Protocol Guide' }).getAttribute('href')).toBe('https://augurproject.github.io/zoltar/docs/start-here.html')
-		expect(documentQueries.queryByRole('link', { name: 'Zoltar' })).toBeNull()
+		expect(documentQueries.queryByRole('link', { name: 'Markets' })).toBeNull()
 		expect(documentQueries.queryByRole('link', { name: 'Open Oracle' })).toBeNull()
 	})
 
@@ -86,12 +86,12 @@ describe('TabNavigation', () => {
 		)
 		cleanupRenderedComponent = rendered.cleanup
 
-		const marketsTab = within(document.body).getByRole('button', { name: 'Markets' }) as HTMLButtonElement
-		expect(marketsTab.disabled).toBe(true)
-		expect(marketsTab.title).toBe('Deploy the application contracts before using this section.')
-		expect(marketsTab.getAttribute('aria-description')).toBe('Deploy the application contracts before using this section.')
+		const zoltarTab = within(document.body).getByRole('button', { name: 'Zoltar' }) as HTMLButtonElement
+		expect(zoltarTab.disabled).toBe(true)
+		expect(zoltarTab.title).toBe('Deploy the application contracts before using this section.')
+		expect(zoltarTab.getAttribute('aria-description')).toBe('Deploy the application contracts before using this section.')
 
-		fireEvent.click(marketsTab)
+		fireEvent.click(zoltarTab)
 		expect(routeChanges).toEqual([])
 	})
 
@@ -101,7 +101,7 @@ describe('TabNavigation', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('link', { name: 'Deploy' }).getAttribute('href')).toBe('#/deploy?universe=7&simulate=1')
-		expect(documentQueries.getByRole('link', { name: 'Markets' }).getAttribute('href')).toBe('#/zoltar?universe=7&zoltarView=create&simulate=1')
+		expect(documentQueries.getByRole('link', { name: 'Zoltar' }).getAttribute('href')).toBe('#/zoltar?universe=7&zoltarView=create&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Security Pools' }).getAttribute('href')).toBe('#/security-pools?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Oracle Reports' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1')
 	})

@@ -178,17 +178,17 @@ describe('MarketSection', () => {
 		restoreDomEnvironment = undefined
 	})
 
-	test('renders the Markets title without local view tabs in the section header', async () => {
+	test('renders the Zoltar title without local view tabs in the section header', async () => {
 		const renderedComponent = await renderIntoDocument(h(MarketSection, createMarketSectionProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const questionsTitle = document.body.querySelector('h3')
-		if (!(questionsTitle instanceof HTMLElement)) throw new Error('Expected to find the Markets section heading')
-		expect(questionsTitle.textContent).toBe('Markets')
+		if (!(questionsTitle instanceof HTMLElement)) throw new Error('Expected to find the Zoltar section heading')
+		expect(questionsTitle.textContent).toBe('Zoltar')
 
 		const sectionHeader = questionsTitle.closest('.section-block-header')
-		if (sectionHeader === null) throw new Error('Expected Markets title to render inside a section header')
-		expect(sectionHeader.querySelector('[role="tablist"][aria-label="Market views"]')).toBeNull()
+		if (sectionHeader === null) throw new Error('Expected Zoltar title to render inside a section header')
+		expect(sectionHeader.querySelector('[role="tablist"][aria-label="Zoltar views"]')).toBeNull()
 	})
 
 	test('renders the active universe as a deterministic hex identifier outside the questions view', async () => {

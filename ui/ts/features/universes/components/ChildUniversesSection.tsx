@@ -27,13 +27,14 @@ type ChildUniversesSectionProps = {
 	renderBody: (child: ZoltarChildUniverseSummary) => ComponentChildren
 	renderBadge?: (child: ZoltarChildUniverseSummary) => ComponentChildren
 	renderTitle?: (child: ZoltarChildUniverseSummary) => ComponentChildren
+	surface: 'card' | 'flat'
 }
 
 export function ChildUniverseStatusBadge({ child }: { child: ZoltarChildUniverseSummary }) {
 	return <Badge tone={child.exists ? 'ok' : 'pending'}>{child.exists ? commonCopy.exists : commonCopy.notDeployed}</Badge>
 }
 
-export function ChildUniversesSection({ action, childUniverses, emptyMessage, headerSubtitle, headerTitle, renderBody, renderBadge, renderTitle }: ChildUniversesSectionProps) {
+export function ChildUniversesSection({ action, childUniverses, emptyMessage, headerSubtitle, headerTitle, renderBody, renderBadge, renderTitle, surface }: ChildUniversesSectionProps) {
 	return (
 		<WorkflowSubsection badge={headerSubtitle === undefined ? undefined : <span className='detail'>{headerSubtitle}</span>} className='child-universes-section' title={headerTitle}>
 			{childUniverses.length === 0 ? (
@@ -45,6 +46,7 @@ export function ChildUniversesSection({ action, childUniverses, emptyMessage, he
 						return (
 							<EntityCard
 								key={child.universeId.toString()}
+								surface={surface}
 								className='compact'
 								title={renderTitle === undefined ? <UniverseLink universeId={child.universeId} /> : renderTitle(child)}
 								badge={renderBadge === undefined ? undefined : renderBadge(child)}

@@ -75,6 +75,8 @@ describe('DeploymentRouteContent', () => {
 		expect(within(completedAccordion).queryByRole('heading', { name: 'Utilities' })).toBeNull()
 		expect(within(completedAccordion).queryByText('Deployed')).toBeNull()
 		expect(within(completedAccordion).getByText('Proxy Deployer')).not.toBeNull()
+		expect(document.body.querySelector('.section-block.default .section-block.default')).toBeNull()
+		expect(document.body.querySelector('.section-block.default .contract-panel.plain')).not.toBeNull()
 	})
 
 	test('disables deploy-next and blocked per-step actions until prerequisites are satisfied', async () => {

@@ -1156,10 +1156,11 @@ button.currency-value.copyable:hover:not(:disabled) {
 .simulation-stat-card {
 	display: grid;
 	gap: 0.2rem;
-	padding: 0.5rem 0.65rem;
-	border: 1px solid rgba(255, 227, 145, 0.28);
-	border-radius: 0.75rem;
-	background: rgba(255, 244, 214, 0.08);
+	padding: 0.5rem 0;
+	border: 0;
+	border-top: 1px solid rgba(255, 227, 145, 0.28);
+	border-radius: 0;
+	background: transparent;
 }
 
 .simulation-stat-card strong {
@@ -1213,10 +1214,11 @@ button.currency-value.copyable:hover:not(:disabled) {
 	grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem);
 	gap: 1rem;
 	align-items: start;
-	padding: 1rem;
-	border: 1px dashed rgba(255, 227, 145, 0.42);
-	border-radius: 1rem;
-	background: rgba(255, 214, 102, 0.12);
+	padding: 1rem 0 0;
+	border: 0;
+	border-top: 1px solid rgba(255, 227, 145, 0.42);
+	border-radius: 0;
+	background: transparent;
 }
 
 .simulation-delay-grid {
@@ -1239,10 +1241,11 @@ button.currency-value.copyable:hover:not(:disabled) {
 .simulation-control-group {
 	display: grid;
 	gap: 0.45rem;
-	padding: 0.85rem;
-	border: 1px solid rgba(255, 227, 145, 0.24);
-	border-radius: 0.85rem;
-	background: rgba(56, 40, 7, 0.24);
+	padding: 0.85rem 0 0;
+	border: 0;
+	border-top: 1px solid rgba(255, 227, 145, 0.24);
+	border-radius: 0;
+	background: transparent;
 }
 
 .simulation-control-group-label {
@@ -2131,10 +2134,15 @@ button.currency-value.copyable:hover:not(:disabled) {
 	grid-template-columns: minmax(0, 1fr) minmax(12rem, 0.8fr) auto;
 	align-items: center;
 	gap: 1rem;
-	padding: 0.75rem;
-	border: 1px solid var(--border-default);
-	border-radius: var(--radius-control);
-	background: var(--surface-inset);
+	padding: 0.75rem 0;
+	border: 0;
+	border-bottom: 1px solid var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
+}
+
+.market-linked-pool:last-child {
+	border-bottom: 0;
 }
 
 .market-linked-pool-summary {
@@ -2375,6 +2383,23 @@ strong.metric-value-danger {
 	padding: 0.85rem 0.9rem;
 }
 
+.entity-card.flat {
+	padding: 0.85rem 0;
+	border: 0;
+	border-bottom: 1px solid var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+}
+
+.entity-card.flat::before {
+	display: none;
+}
+
+.entity-card.flat:last-child {
+	border-bottom: 0;
+}
+
 .entity-card.compact .entity-card-body {
 	gap: 0.7rem;
 }
@@ -2454,12 +2479,11 @@ strong.metric-value-danger {
 .fork-stage-panel .entity-card-subsection {
 	gap: 0.95rem;
 	margin: 0;
-	padding: 0.95rem 1rem 1rem;
-	border: 1px solid var(--border-default);
-	background: linear-gradient(180deg, var(--surface-raised) 0%, var(--surface-card-end) 100%);
-	box-shadow:
-		var(--glow-inset-subtle),
-		0 10px 30px var(--shadow-color-soft);
+	padding: 0.95rem 0 1rem;
+	border: 0;
+	border-bottom: 1px solid var(--divider-subtle);
+	background: transparent;
+	box-shadow: none;
 }
 
 .fork-stage-panel .entity-card-subsection-header {
@@ -2494,12 +2518,10 @@ strong.metric-value-danger {
 
 .fork-workflow-summary-primary,
 .truth-auction-panel {
-	padding: 1rem;
-	border: 1px solid var(--border-default);
-	background: linear-gradient(180deg, var(--surface-raised) 0%, var(--surface-card-end) 100%);
-	box-shadow:
-		var(--glow-inset-subtle),
-		0 12px 28px var(--shadow-color-soft);
+	padding: 0;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
 }
 
 .fork-workflow-summary-primary,
@@ -2687,8 +2709,9 @@ strong.metric-value-danger {
 .truth-auction-depth-chart {
 	position: relative;
 	min-height: 13rem;
-	border: 1px solid var(--border-default);
-	border-radius: 1rem;
+	border: 0;
+	border-block: 1px solid var(--divider-subtle);
+	border-radius: 0;
 	background: linear-gradient(180deg, rgba(232, 166, 68, 0.04), rgba(62, 159, 120, 0.04)), color-mix(in srgb, var(--surface-card-end) 82%, var(--truth-auction-track) 18%);
 	overflow: hidden;
 }
@@ -3450,6 +3473,15 @@ strong.metric-value-danger {
 	padding: 1rem 1.1rem;
 }
 
+.workflow-summary-strip {
+	padding: 1rem 0;
+	border-width: 1px 0;
+	border-color: var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+}
+
 .environment-gate.critical,
 .lifecycle-stage-banner.critical {
 	border-color: var(--danger-border);
@@ -3697,10 +3729,11 @@ main.global-transaction-tray-open {
 
 .sticky-object-context-item,
 .action-launcher-card {
-	border: 1px solid var(--border-subtle);
-	border-radius: var(--radius-control);
-	background: var(--surface-inset);
-	padding: 0.8rem 0.9rem;
+	border: 0;
+	border-top: 1px solid var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
+	padding: 0.8rem 0;
 }
 
 .sticky-object-context-item {
@@ -3861,6 +3894,21 @@ main.global-transaction-tray-open {
 	grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
 }
 
+.vault-action-launcher-grid {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.vault-action-launcher-grid .action-launcher-card {
+	grid-template-columns: minmax(0, 1fr) minmax(15rem, 22rem);
+	align-items: center;
+	gap: 1.25rem;
+}
+
+.vault-action-launcher-grid .action-launcher-card.compact {
+	grid-template-columns: minmax(15rem, 22rem);
+	justify-content: end;
+}
+
 .action-launcher-card {
 	display: grid;
 	align-content: start;
@@ -3933,16 +3981,50 @@ main.global-transaction-tray-open {
 	border-radius: var(--radius-record);
 }
 
+.warning-surface.flat,
+.lifecycle-stage-banner.flat {
+	padding: 0.8rem 0 0.8rem 0.9rem;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+}
+
+.warning-surface.flat {
+	border-left: 3px solid var(--warning-border-strong);
+}
+
+.lifecycle-stage-banner.flat {
+	border-left: 3px solid var(--border-default);
+}
+
+.warning-surface.lifecycle-stage-banner.flat {
+	border-left-color: var(--warning-border-strong);
+}
+
+.lifecycle-stage-banner.flat.critical {
+	border-left-color: var(--danger-border);
+}
+
+.lifecycle-stage-banner.flat.success {
+	border-left-color: var(--success-border);
+}
+
+.warning-surface.flat::before {
+	display: none;
+}
+
 .warning-surface a {
 	color: inherit;
 	text-decoration-thickness: 0.08em;
 }
 
 .read-only-detail-accordion {
-	border: 1px solid var(--border-subtle);
-	border-radius: var(--radius-control);
-	background: rgba(9, 18, 31, 0.5);
-	padding: 0.1rem 0.9rem;
+	border: 0;
+	border-top: 1px solid var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
+	padding: 0.1rem 0;
 }
 
 .read-only-detail-accordion summary {
@@ -4107,10 +4189,12 @@ main.global-transaction-tray-open {
 }
 
 .loaded-question-preview {
-	padding: 1rem;
-	border: 1px solid var(--border-strong);
-	border-radius: var(--radius-control);
-	background: rgba(9, 18, 31, 0.46);
+	padding: 1rem 0;
+	border: 0;
+	border-top: 1px solid var(--divider-subtle);
+	border-bottom: 1px solid var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
 }
 
 .field-inline {
@@ -4968,6 +5052,14 @@ main.global-transaction-tray-open {
 	background: linear-gradient(180deg, rgba(59, 14, 24, 0.76) 0%, rgba(41, 10, 18, 0.82) 100%);
 }
 
+.section-block.embedded.tone-critical {
+	padding-left: var(--space-3);
+	border: 0;
+	border-left: 3px solid var(--danger-border);
+	border-radius: 0;
+	background: transparent;
+}
+
 .section-block-body {
 	display: grid;
 	gap: var(--space-5);
@@ -5610,10 +5702,11 @@ main.global-transaction-tray-open {
 .question-preview-timeline-item {
 	display: grid;
 	gap: 0.35rem;
-	padding: 0.8rem 0.9rem;
-	border: 1px solid var(--color-white-08);
-	border-radius: 0.95rem;
-	background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015));
+	padding: 0.2rem 0 0.2rem 0.8rem;
+	border: 0;
+	border-left: 2px solid var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
 }
 
 .question-preview-timeline-label,
@@ -5743,11 +5836,24 @@ main.global-transaction-tray-open {
 	display: none;
 }
 
+.security-pool-strip-question .question-preview-timeline-item {
+	padding: 0.6rem 0 0;
+	border: 0;
+	border-top: 1px solid var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
+}
+
 .security-pool-strip-stats {
 	grid-template-columns: repeat(3, minmax(0, 1fr));
 	padding-top: 0.15rem;
 	padding-bottom: 0.15rem;
 	border-top: 1px solid var(--color-white-08);
+}
+
+.security-pool-strip-stats button.currency-value.copyable,
+.security-pool-card-progress button.currency-value.copyable {
+	white-space: nowrap;
 }
 
 .security-pool-strip-price,
@@ -5772,22 +5878,6 @@ main.global-transaction-tray-open {
 	background: transparent;
 }
 
-.security-pool-strip-vaults {
-	padding-top: 0.35rem;
-	border-top: 1px solid var(--color-white-08);
-}
-
-.security-pool-strip-ranked-list .ranked-bar-item {
-	padding: 0.55rem 0;
-	border-width: 0 0 1px;
-	border-radius: 0;
-	background: transparent;
-}
-
-.security-pool-strip-ranked-list .ranked-bar-item:last-child {
-	border-bottom: 0;
-}
-
 .security-pool-detail-rail {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
@@ -5803,30 +5893,16 @@ main.global-transaction-tray-open {
 	border-top: 1px solid var(--color-white-08);
 }
 
-.security-pool-card-vault-preview {
-	display: grid;
-	gap: 0.8rem;
+.security-pool-card .read-only-detail-accordion {
+	padding: 0;
+	border: 0;
+	border-top: 1px solid var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
 }
 
-.security-pool-browse-vaults {
-	display: grid;
-	gap: 0.75rem;
-}
-
-.security-pool-browse-vaults-head {
-	display: flex;
-	gap: 0.75rem;
-	align-items: baseline;
-	justify-content: space-between;
-}
-
-.security-pool-browse-vaults-head h4 {
-	margin: 0;
-	font-size: var(--font-base);
-}
-
-.security-pool-browse-vaults .vault-position-list {
-	gap: 0.55rem;
+.security-pool-card .read-only-detail-accordion-content .security-pool-card-inline-details {
+	border-top: 0;
 }
 
 .security-pool-browse-vault-list {
@@ -5846,14 +5922,7 @@ main.global-transaction-tray-open {
 	padding-bottom: 0;
 }
 
-.security-pool-browse-vault-row-head {
-	display: grid;
-	gap: 0.45rem;
-}
-
-.security-pool-browse-vault-row-top,
-.security-pool-browse-vault-row-meter,
-.security-pool-browse-vault-row-actions {
+.security-pool-browse-vault-row-top {
 	display: grid;
 	grid-template-columns: minmax(0, 1.35fr) minmax(10.5rem, 0.72fr) minmax(10.5rem, 0.72fr) minmax(8.3rem, 0.52fr);
 	gap: 0.7rem;
@@ -5893,63 +5962,6 @@ main.global-transaction-tray-open {
 	min-width: 0;
 }
 
-.security-pool-browse-vault-row-liquidate {
-	justify-self: end;
-	min-width: 0;
-	padding-top: 0.35rem;
-	padding-bottom: 0.35rem;
-}
-
-.security-pool-browse-vault-row-meter .progress-meter {
-	padding: 0.18rem 0;
-	border: 0;
-	background: transparent;
-}
-
-.security-pool-browse-vault-row-meter-widget.progress-meter {
-	background: transparent;
-}
-
-.security-pool-browse-vault-row-meter {
-	grid-template-columns: 1fr;
-}
-
-.security-pool-browse-vault-row-meter .progress-meter-header {
-	gap: 0.2rem;
-}
-
-.security-pool-browse-vault-row-meter .progress-meter-track {
-	height: 0.48rem;
-}
-
-.security-pool-browse-vault-row-meter .progress-meter-label {
-	letter-spacing: 0.08em;
-	font-size: var(--font-label);
-}
-
-.security-pool-browse-vault-row-meter .progress-meter-value {
-	font-size: var(--font-value);
-}
-
-.security-pool-browse-vault-row-actions > button {
-	justify-self: end;
-	padding-top: 0.36rem;
-	padding-bottom: 0.36rem;
-	min-width: 8.2rem;
-}
-
-.security-pool-card-vault-header {
-	display: flex;
-	align-items: baseline;
-	justify-content: space-between;
-	gap: 1rem;
-}
-
-.security-pool-card-vault-header h4 {
-	margin: 0;
-	font-size: var(--font-h4);
-}
-
 .security-pool-hero-metrics,
 .vault-position-list {
 	display: grid;
@@ -5957,10 +5969,10 @@ main.global-transaction-tray-open {
 }
 
 .selected-pool-context-summary-hero {
-	padding: 0.55rem 0.9rem;
-	border: 1px solid rgba(56, 213, 255, 0.14);
-	border-radius: 1.2rem;
-	background: radial-gradient(circle at top left, var(--accent-soft), transparent 32%), linear-gradient(180deg, rgba(10, 18, 31, 0.96), rgba(9, 16, 27, 0.92));
+	padding: 0.55rem 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
 }
 
 .selected-pool-context-summary-hero-compact {
@@ -6019,10 +6031,11 @@ main.global-transaction-tray-open {
 .security-pool-ribbon-stat {
 	display: grid;
 	gap: 0.35rem;
-	padding: 0.8rem 0.9rem;
-	border: 1px solid var(--color-white-08);
-	border-radius: 1rem;
-	background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015));
+	padding: 0.8rem 0;
+	border: 0;
+	border-top: 1px solid var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
 }
 
 .security-pool-ribbon-stat-label {
@@ -6120,27 +6133,19 @@ main.global-transaction-tray-open {
 }
 
 .vault-position-strip {
-	position: relative;
 	display: grid;
 	gap: 0.9rem;
-	padding: 0.95rem 1rem;
-	border: 1px solid var(--border-subtle);
-	border-left: 3px solid rgba(56, 213, 255, 0.26);
-	border-radius: 0.9rem;
-	background: linear-gradient(180deg, rgba(7, 15, 27, 0.32), rgba(6, 14, 22, 0.2));
+	padding: 0.95rem 0;
+	border-bottom: 1px solid var(--divider-subtle);
 }
 
-.vault-position-strip::before {
-	content: "";
-	position: absolute;
-	inset: 0;
-	pointer-events: none;
-	background: radial-gradient(circle at top right, var(--accent-faint), transparent 45%);
-	opacity: 0.7;
+.vault-position-strip:first-child {
+	padding-top: 0;
 }
 
-.vault-position-strip > * {
-	position: relative;
+.vault-position-strip:last-child {
+	padding-bottom: 0;
+	border-bottom: 0;
 }
 
 .vault-position-strip-head {
@@ -6245,7 +6250,7 @@ main.global-transaction-tray-open {
 }
 
 .trading-holdings-layout {
-	grid-template-columns: minmax(0, 1.3fr) minmax(14rem, 0.7fr);
+	grid-template-columns: minmax(0, 1fr);
 	align-items: start;
 }
 
@@ -6274,9 +6279,23 @@ main.global-transaction-tray-open {
 }
 
 .trading-share-callouts-total {
-	margin-top: 0.5rem;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: baseline;
+	gap: 1rem;
+	margin-top: 0;
 	padding-top: 0.5rem;
 	border-top: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.trading-share-distribution .ranked-bar-item-value,
+.trading-share-callouts-total strong {
+	white-space: nowrap;
+}
+
+.trading-share-distribution .ranked-bar-item-value button.currency-value.copyable,
+.trading-share-callouts-total strong button.currency-value.copyable {
+	white-space: nowrap;
 }
 
 .security-pool-strip-meter {
@@ -6315,6 +6334,16 @@ main.global-transaction-tray-open {
 }
 
 @media (max-width: 640px) {
+	.vault-action-launcher-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.vault-action-launcher-grid .action-launcher-card,
+	.vault-action-launcher-grid .action-launcher-card.compact {
+		grid-template-columns: minmax(0, 1fr);
+		justify-content: stretch;
+	}
+
 	.metric-tile-grid[data-columns="4"],
 	.metric-tile-grid[data-columns="3"],
 	.question-draft-preview-meta,
@@ -6849,10 +6878,11 @@ main.global-transaction-tray-open {
 .fork-workflow-child-pool-card {
 	display: grid;
 	gap: var(--space-2);
-	padding: 0.9rem 1rem;
-	border: 1px solid var(--divider-subtle);
-	border-radius: var(--radius-panel);
-	background: rgba(10, 20, 36, 0.22);
+	padding: 0.9rem 0;
+	border: 0;
+	border-bottom: 1px solid var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
 }
 
 .fork-workflow-child-pool-card-copy,
@@ -6940,10 +6970,19 @@ main.global-transaction-tray-open {
 	display: grid;
 	gap: 0.35rem;
 	min-width: 0;
-	padding: 0.8rem 0.9rem;
-	border: 1px solid var(--border-subtle);
-	border-radius: var(--radius-control);
-	background: rgba(255, 255, 255, 0.03);
+	padding: 0.8rem 0;
+	border: 0;
+	border-top: 1px solid var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
+}
+
+.selected-pool-hero-question .question-preview-timeline-item {
+	padding: 0.8rem 0 0;
+	border: 0;
+	border-top: 1px solid var(--divider-subtle);
+	border-radius: 0;
+	background: transparent;
 }
 
 .selected-pool-context-grid .metric-field-value {
@@ -7480,9 +7519,7 @@ main.global-transaction-tray-open {
 
 	.security-pool-detail-rail,
 	.security-pool-browse-vault-row-top,
-	.security-pool-browse-vault-row-top-compact,
-	.security-pool-browse-vault-row-meter,
-	.security-pool-browse-vault-row-actions {
+	.security-pool-browse-vault-row-top-compact {
 		grid-template-columns: minmax(0, 1fr);
 	}
 
@@ -7503,13 +7540,6 @@ main.global-transaction-tray-open {
 	.security-pool-browse-vault-row-title .security-pool-browse-vault-row-id {
 		align-self: stretch;
 		width: 100%;
-	}
-
-	.security-pool-browse-vault-row-liquidate,
-	.security-pool-browse-vault-row-actions > button {
-		justify-self: stretch;
-		width: 100%;
-		min-width: 0;
 	}
 
 	.security-pool-browse-vault-row-id .address-value.copyable {

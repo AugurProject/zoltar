@@ -10,7 +10,7 @@ export function NotFoundSection() {
 					{commonCopy.deploy}
 				</a>
 				<a className='button-link secondary-link' href='#/zoltar'>
-					{commonCopy.markets}
+					{commonCopy.zoltar}
 				</a>
 				<a className='button-link secondary-link' href='#/security-pools'>
 					{commonCopy.securityPools}

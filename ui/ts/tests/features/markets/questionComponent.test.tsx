@@ -92,7 +92,7 @@ describe('Question component', () => {
 		expect(document.body.querySelector('.question-summary-heading')).toBeNull()
 	})
 
-	test('renders preview timestamps as separate timeline cards with relative sublabels', async () => {
+	test('renders preview timestamps as separate timeline rows with relative sublabels', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<ChainTimestampContext.Provider value={240n}>
 				<Question question={createQuestion()} variant='preview' />

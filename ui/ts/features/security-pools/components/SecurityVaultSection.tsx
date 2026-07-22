@@ -119,7 +119,7 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 			</SectionBlock>
 		)
 	return (
-		<EntityCard badge={<Badge tone={selectedVaultIsOwnedByAccount ? 'ok' : 'muted'}>{selectedVaultIsOwnedByAccount ? securityPoolCopy.owned : securityPoolCopy.readOnlyBadgeLabel}</Badge>} title={securityPoolCopy.selectedVault} variant='record'>
+		<EntityCard badge={<Badge tone={selectedVaultIsOwnedByAccount ? 'ok' : 'muted'}>{selectedVaultIsOwnedByAccount ? securityPoolCopy.owned : securityPoolCopy.readOnlyBadgeLabel}</Badge>} surface='flat' title={securityPoolCopy.selectedVault} variant='record'>
 			{gridContent}
 		</EntityCard>
 	)
@@ -185,7 +185,7 @@ function VaultQueuedOperationStatusCard({
 	if (status === undefined) return undefined
 	if (status === 'queued' || status === 'manual-queued')
 		return (
-			<WarningSurface as='section' variant='compact'>
+			<WarningSurface as='section' surface='flat' variant='compact'>
 				<div className='entity-card-header'>
 					<div>
 						<h4>{queuedTitle}</h4>
@@ -211,7 +211,7 @@ function VaultQueuedOperationStatusCard({
 		)
 	if (status === 'failed')
 		return (
-			<section className='entity-card compact'>
+			<section className='entity-card compact flat'>
 				<div className='entity-card-header'>
 					<div>
 						<h4>{failedTitle}</h4>
@@ -224,7 +224,7 @@ function VaultQueuedOperationStatusCard({
 		)
 	if (status === 'executed')
 		return (
-			<section className='entity-card compact'>
+			<section className='entity-card compact flat'>
 				<div className='entity-card-header'>
 					<div>
 						<h4>{executedTitle}</h4>
@@ -236,7 +236,7 @@ function VaultQueuedOperationStatusCard({
 		)
 	if (status === 'missing')
 		return (
-			<WarningSurface as='section' variant='compact'>
+			<WarningSurface as='section' surface='flat' variant='compact'>
 				<div className='entity-card-header'>
 					<div>
 						<h4>{missingTitle}</h4>
@@ -246,7 +246,7 @@ function VaultQueuedOperationStatusCard({
 			</WarningSurface>
 		)
 	return (
-		<section className='entity-card compact'>
+		<section className='entity-card compact flat'>
 			<div className='entity-card-header'>
 				<div>
 					<h4>{refreshingTitle}</h4>
@@ -494,6 +494,7 @@ export function SecurityVaultSection({
 	const vaultReadinessActions = getSecurityPoolVaultReadinessActions([
 		{
 			actionLabel: securityPoolCopy.depositRep,
+			description: securityPoolCopy.depositRepDescription,
 			key: 'deposit-rep',
 			...(depositRepEnabled && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('deposit-rep') } : {}),
 			readiness: depositRepEnabled && canUseLoadedVaultActions ? 'ready' : 'blocked',
@@ -523,6 +524,7 @@ export function SecurityVaultSection({
 		},
 		{
 			actionLabel: securityPoolCopy.claimFees,
+			description: securityPoolCopy.claimFeesDescription,
 			key: 'claim-fees',
 			...(claimFeesEnabled && hasClaimableFees && claimFeesLauncherBlocker === undefined && vaultExistsOnchain && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('claim-fees') } : {}),
 			readiness: claimFeesEnabled && hasClaimableFees && claimFeesLauncherBlocker === undefined && vaultExistsOnchain && canUseLoadedVaultActions ? 'ready' : 'blocked',
@@ -534,7 +536,7 @@ export function SecurityVaultSection({
 	] satisfies ReadinessAction[])
 	const actionSections = modalFirst ? (
 		<>
-			<SectionBlock title={securityPoolCopy.vaultActions}>
+			<SectionBlock title={securityPoolCopy.vaultActions} variant='plain'>
 				{showMissingVaultNotice ? <StateHint presentation={{ key: 'not_found', badgeLabel: securityPoolCopy.vaultMissing, badgeTone: 'muted', detail: securityPoolCopy.missingVaultDepositDetail }} /> : undefined}
 				{showSharedRefreshVaultBlocker ? (
 					<p className='detail' id={refreshVaultActionsDescriptionId}>
@@ -784,7 +786,7 @@ export function SecurityVaultSection({
 		</>
 	) : (
 		<>
-			<SectionBlock title={securityPoolCopy.claimFees}>
+			<SectionBlock title={securityPoolCopy.claimFees} variant='embedded'>
 				{currentSelectedVaultDetails === undefined ? (
 					<p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p>
 				) : (
@@ -799,7 +801,7 @@ export function SecurityVaultSection({
 				</div>
 			</SectionBlock>
 
-			<SectionBlock title={securityPoolCopy.depositRep}>
+			<SectionBlock title={securityPoolCopy.depositRep} variant='embedded'>
 				<label className='field'>
 					<span>{securityPoolCopy.repCollateralAmount}</span>
 					<div className='field-inline'>
@@ -854,7 +856,7 @@ export function SecurityVaultSection({
 				})()}
 			</SectionBlock>
 
-			<SectionBlock title={securityPoolCopy.setSecurityBondAllowance}>
+			<SectionBlock title={securityPoolCopy.setSecurityBondAllowance} variant='embedded'>
 				{currentSelectedVaultDetails === undefined ? (
 					<p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p>
 				) : (
@@ -893,7 +895,7 @@ export function SecurityVaultSection({
 				)}
 			</SectionBlock>
 
-			<SectionBlock title={repExitActionLabel}>
+			<SectionBlock title={repExitActionLabel} variant='embedded'>
 				{(effectiveRepExitMode === 'redeem' ? redeemableRepAmount : queuedWithdrawRepLimit) === undefined ? (
 					<p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p>
 				) : (
@@ -960,7 +962,7 @@ export function SecurityVaultSection({
 	const sections = (
 		<>
 			{showLookupSection ? (
-				<SectionBlock title={securityPoolCopy.vaultLookup}>
+				<SectionBlock title={securityPoolCopy.vaultLookup} variant='embedded'>
 					{vaultLoadNotice}
 					<LookupFieldRow
 						label={securityPoolCopy.selectedVaultAddress}

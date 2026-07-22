@@ -55,7 +55,7 @@ function ViewerBidsHeader({ showActions }: { showActions: boolean }) {
 
 export function TruthAuctionBidsSection({ aggregatedAuctionBidCountForLoadedTicks, hasMoreAggregatedAuctionBids, loadedTickCount, loadingAggregatedAuctionBids, onLoadNextAuctionBidPage, renderPriceValue, rows }: TruthAuctionBidsSectionProps) {
 	return (
-		<SectionBlock title={forkAuctionCopy.truthAuctionBids}>
+		<SectionBlock title={forkAuctionCopy.truthAuctionBids} variant='embedded'>
 			<div className='truth-auction-bid-coverage-summary'>
 				<MetricField label={forkAuctionCopy.loadedLevels}>{loadedTickCount.toString()}</MetricField>
 				<MetricField label={forkAuctionCopy.loadedBids}>{rows.length.toString()}</MetricField>
@@ -95,7 +95,7 @@ export function TruthAuctionBidsSection({ aggregatedAuctionBidCountForLoadedTick
 
 export function ViewerTruthAuctionBidsSection({ accountAddress, hasMoreViewerBids, loadingTruthAuctionBook, onLoadNextViewerBidPage, onSettlementBidSelectionChange, renderPriceValue, rows, showSettlementActionColumn }: ViewerTruthAuctionBidsSectionProps) {
 	return (
-		<SectionBlock title={forkAuctionCopy.myBids}>
+		<SectionBlock title={forkAuctionCopy.myBids} variant='embedded'>
 			{accountAddress === undefined ? <p className='detail'>{forkAuctionCopy.walletBidsConnectionRequired}</p> : undefined}
 			{accountAddress !== undefined && loadingTruthAuctionBook ? <p className='detail'>{forkAuctionCopy.loadingYourBids}</p> : undefined}
 			{accountAddress !== undefined && !loadingTruthAuctionBook && rows.length === 0 ? <p className='detail'>{forkAuctionCopy.walletBidsEmpty}</p> : undefined}

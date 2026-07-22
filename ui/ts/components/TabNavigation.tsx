@@ -10,7 +10,7 @@ export function TabNavigation({ route, showDeployTab = true, augurPlaceHolderDep
 	if (showDeployTab) options.push({ value: 'deploy', label: commonCopy.deploy, href: buildRouteHref(deployRoute, getTopLevelRouteSearch('deploy')) })
 	options.push({
 		value: 'zoltar',
-		label: commonCopy.markets,
+		label: commonCopy.zoltar,
 		href: buildRouteHref(marketRoute, getTopLevelRouteSearch('zoltar')),
 		disabled: !augurPlaceHolderDeployed,
 		...(!augurPlaceHolderDeployed ? { reason: disabledTabReason } : {}),

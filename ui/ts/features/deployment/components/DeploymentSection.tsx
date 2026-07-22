@@ -61,7 +61,7 @@ function getStepStatus(stepDeployed: boolean, prerequisiteLabel: string | undefi
 
 export function DeploymentSection({ title, completedGroup = false, steps, allSteps, accountAddress, busyStepId, isMainnet, onDeploy }: DeploymentSectionProps) {
 	return (
-		<SectionBlock className='contract-panel' title={completedGroup ? undefined : title}>
+		<SectionBlock className='contract-panel' title={completedGroup ? undefined : title} variant='plain'>
 			<div className='contract-list'>
 				{steps.map(step => {
 					const stepIndex = allSteps.findIndex(candidate => candidate.id === step.id)
