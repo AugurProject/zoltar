@@ -547,6 +547,15 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 		},
 	) => {
 		const actionReportIdInput = currentSelectedReportIdInput
+		const reportDetailsSnapshot = openOracleReportDetails.value
+		const transactionContext =
+			actionName === 'createReportInstance'
+				? { tokenPair: `${openOracleCreateForm.value.token1Address} / ${openOracleCreateForm.value.token2Address}` }
+				: {
+						openOracleAddress: reportDetailsSnapshot?.openOracleAddress,
+						reportId: actionReportIdInput,
+						tokenPair: reportDetailsSnapshot === undefined ? undefined : `${reportDetailsSnapshot.token1Symbol} / ${reportDetailsSnapshot.token2Symbol}`,
+					}
 		try {
 			openOracleFeedback.value = createPendingActionFeedback(actionName, getPendingTitle(actionName))
 			await runWriteAction(
@@ -554,14 +563,14 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 					...buildWriteActionConfig(
 						{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState },
 						openOracleError,
-						'Connect a wallet before operating open oracle',
-						createOpenOracleTransactionIntent(actionName),
+						'Connect a wallet before operating Open Oracle',
+						createOpenOracleTransactionIntent(actionName, transactionContext),
 					),
 					formatErrorMessage: options?.formatErrorMessage,
 					onRefreshError: (message, hash) => {
 						openOracleFeedback.value = createWarningActionFeedback(actionName, getSuccessTitle(actionName), message, hash)
 						const result = openOracleResult.value
-						if (result !== undefined) onTransactionPresented(createOpenOracleWarningPresentation(result, message))
+						if (result !== undefined) onTransactionPresented(createOpenOracleWarningPresentation(result, message, transactionContext))
 					},
 					onWriteError: message => {
 						openOracleFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName), message)
@@ -580,7 +589,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 				async result => {
 					openOracleResult.value = result
 					openOracleFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName), result.hash)
-					onTransactionPresented(createOpenOracleSuccessPresentation(result))
+					onTransactionPresented(createOpenOracleSuccessPresentation(result, transactionContext))
 					if (result.action === 'createReportInstance') openOracleCreateForm.value = getDefaultOpenOracleCreateFormState()
 					if (result.action !== 'createReportInstance' && actionReportIdInput !== '' && isSelectedReportCurrent(actionReportIdInput)) {
 						await ensureLoadedSelectedReport({ forceReload: true, reportIdInput: actionReportIdInput, requireCurrentSelection: true })

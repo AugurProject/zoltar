@@ -238,7 +238,12 @@ export function useZoltarFork(
 			let result: ZoltarForkActionResult | undefined
 			try {
 				await assertActiveWallet(accountAddress)
-				onTransactionRequested(createZoltarForkTransactionIntent(actionName))
+				onTransactionRequested(
+					createZoltarForkTransactionIntent(actionName, {
+						questionId: submittedQuestionId,
+						universeId: activeUniverseId,
+					}),
+				)
 				const universe = await ensureZoltarUniverse()
 				const questionId = resolveForkQuestionId(submittedQuestionId, universe)
 				result = await action(accountAddress, universe, questionId)

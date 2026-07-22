@@ -3,6 +3,7 @@ import * as transactionCopy from '../../copy/transaction.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { Badge } from '../../components/Badge.js'
 import { TransactionHashLink } from '../../components/TransactionHashLink.js'
+import { ReadOnlyDetailAccordion } from '../../components/ReadOnlyDetailAccordion.js'
 import type { BadgeTone, GlobalTransactionPresentation } from '../../types/components.js'
 
 type GlobalTransactionTrayProps = {
@@ -74,6 +75,7 @@ export function GlobalTransactionTray({ transaction }: GlobalTransactionTrayProp
 	const transactionHash = transaction.hash
 	const showHash = transactionHash !== undefined
 	const rows = transaction.rows ?? []
+	const technicalRows = transaction.technicalRows ?? []
 	const dismiss = () => {
 		if (transactionDismissKey === undefined) return
 		dismissedKeys.add(transactionDismissKey)
@@ -104,6 +106,18 @@ export function GlobalTransactionTray({ transaction }: GlobalTransactionTrayProp
 								</div>
 							))}
 						</dl>
+					)}
+					{technicalRows.length === 0 ? undefined : (
+						<ReadOnlyDetailAccordion title={commonCopy.technicalDetails}>
+							<dl className='global-transaction-notice-rows'>
+								{technicalRows.map((row, rowIndex) => (
+									<div className='global-transaction-notice-row' key={`${row.label}:${rowIndex.toString()}`}>
+										<dt>{row.label}</dt>
+										<dd>{row.value}</dd>
+									</div>
+								))}
+							</dl>
+						</ReadOnlyDetailAccordion>
 					)}
 					{!showHash ? undefined : <TransactionHashLink hash={transactionHash} />}
 				</div>

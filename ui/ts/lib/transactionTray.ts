@@ -55,6 +55,7 @@ export function markTransactionPrepared(state: TransactionTrayState, preview: Tr
 		pendingIntent: {
 			...pendingIntent,
 			...(prepared.rows === undefined ? {} : { rows: prepared.rows }),
+			...(prepared.technicalRows === undefined ? {} : { technicalRows: prepared.technicalRows }),
 		},
 	}
 }
@@ -81,15 +82,29 @@ export function markTransactionSubmitted(state: TransactionTrayState, hash: Hash
 			hash,
 			...(pendingIntent.submittedDetail === undefined ? {} : { detail: pendingIntent.submittedDetail }),
 			...(pendingIntent.rows === undefined ? {} : { rows: pendingIntent.rows }),
+			...(pendingIntent.technicalRows === undefined ? {} : { technicalRows: pendingIntent.technicalRows }),
 			title: pendingIntent.submittedTitle,
 			tone: 'pending',
 		},
-		pendingIntent: undefined,
-		pendingRequestKey: undefined,
 	}
 }
 
 export function markTransactionFailed(state: TransactionTrayState, message: string): TransactionTrayState {
+	const active = state.active
+	if (active?.tone === 'pending' && active.hash !== undefined) {
+		return {
+			...state,
+			active: {
+				...active,
+				detail: message,
+				dismissKey: active.hash,
+				tone: 'error',
+			},
+			pendingIntent: undefined,
+			pendingRequestKey: undefined,
+		}
+	}
+
 	const pendingIntent = state.pendingIntent
 	const pendingRequestKey = state.pendingRequestKey
 	if (pendingIntent !== undefined && pendingRequestKey !== undefined) {
@@ -101,18 +116,7 @@ export function markTransactionFailed(state: TransactionTrayState, message: stri
 		}
 	}
 
-	const active = state.active
-	if (active?.tone !== 'pending' || active.hash === undefined) return state
-
-	return {
-		...state,
-		active: {
-			...active,
-			detail: message,
-			dismissKey: active.hash,
-			tone: 'error',
-		},
-	}
+	return state
 }
 
 export function markTransactionCanceled(state: TransactionTrayState): TransactionTrayState {
@@ -128,9 +132,15 @@ export function markTransactionCanceled(state: TransactionTrayState): Transactio
 }
 
 export function markTransactionPresented(state: TransactionTrayState, active: GlobalTransactionPresentation): TransactionTrayState {
+	const previousActive = state.active
+	const isSameTransaction = previousActive !== undefined && ((active.hash !== undefined && active.hash === previousActive.hash) || (active.dismissKey !== undefined && active.dismissKey === previousActive.dismissKey))
+	const technicalRows = active.technicalRows ?? (isSameTransaction ? previousActive.technicalRows : undefined)
 	return {
 		...state,
-		active,
+		active: {
+			...active,
+			...(technicalRows === undefined ? {} : { technicalRows }),
+		},
 	}
 }
 
@@ -139,8 +149,15 @@ export function getTransactionActionLockReason(state: TransactionTrayState): str
 }
 
 export function markTransactionFinished(state: TransactionTrayState): TransactionTrayState {
+	const inFlightCount = Math.max(0, state.inFlightCount - 1)
 	return {
 		...state,
-		inFlightCount: Math.max(0, state.inFlightCount - 1),
+		inFlightCount,
+		...(inFlightCount > 0
+			? {}
+			: {
+					pendingIntent: undefined,
+					pendingRequestKey: undefined,
+				}),
 	}
 }

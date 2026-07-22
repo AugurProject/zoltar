@@ -17,7 +17,6 @@ export const walletConfirmationInstruction = 'Confirm the transaction in your wa
 export const walletConfirmationReviewDetail = 'Review the prepared transaction, then confirm it in your wallet.'
 export const simulationSubmissionReviewDetail = 'Review the prepared transaction before it is submitted.'
 export const creatingQuestion = 'Creating Question'
-export const marketType = 'Market Type'
 export const questionCreated = 'Question Created'
 export const approvingForkRep = 'Approving Fork REP'
 export const forkingZoltar = 'Forking Zoltar'

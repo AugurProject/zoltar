@@ -330,6 +330,12 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 			targetVault: liquidationTargetVault.value,
 			timeoutMinutes: liquidationTimeoutMinutes.value,
 		}
+		const transactionContext = {
+			amount: submittedLiquidation.amount,
+			securityPoolAddress: submittedLiquidation.securityPoolAddress,
+			targetVault: submittedLiquidation.targetVault,
+			universeId: securityPools.value.find(pool => normalizeAddress(pool.securityPoolAddress) === normalizeAddress(submittedLiquidation.securityPoolAddress))?.universeId,
+		}
 		let completedResult: SecurityPoolOverviewActionResult | undefined
 		try {
 			securityPoolOverviewActiveAction.value = 'queueLiquidation'
@@ -340,13 +346,13 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 						{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState },
 						securityPoolOverviewError,
 						'Connect a wallet before queueing liquidation',
-						createLiquidationTransactionIntent(),
+						createLiquidationTransactionIntent(transactionContext),
 					),
 					onRefreshError: (message, hash) => {
 						if (completedResult?.stagedExecution?.success === false) return
 						securityPoolOverviewFeedback.value =
 							completedResult?.stagedExecution?.success === true ? createWarningActionFeedback('queueLiquidation', 'Liquidation executed', message, hash ?? completedResult.hash) : createWarningActionFeedback('queueLiquidation', 'Liquidation submitted', message, hash ?? completedResult?.hash)
-						if (completedResult !== undefined) onTransactionPresented(createLiquidationWarningPresentation(completedResult, message))
+						if (completedResult !== undefined) onTransactionPresented(createLiquidationWarningPresentation(completedResult, message, transactionContext))
 					},
 					onWriteError: message => {
 						if (isLiquidationSnapshotCurrent(submittedLiquidation)) {
@@ -402,9 +408,9 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 					securityPoolOverviewResult.value = nextResult
 					securityPoolOverviewFeedback.value = getLiquidationFeedbackFromResult(nextResult)
 					if (nextResult.stagedExecution?.success === false) {
-						onTransactionPresented(createLiquidationFailurePresentation(nextResult, getLiquidationExecutionFailureDetail(nextResult.stagedExecution.errorMessage) ?? 'The liquidation execution failed.'))
+						onTransactionPresented(createLiquidationFailurePresentation(nextResult, getLiquidationExecutionFailureDetail(nextResult.stagedExecution.errorMessage) ?? 'The liquidation execution failed.', transactionContext))
 					} else {
-						onTransactionPresented(createLiquidationSuccessPresentation(nextResult))
+						onTransactionPresented(createLiquidationSuccessPresentation(nextResult, transactionContext))
 					}
 					await loadSecurityPools(securityPoolAddress)
 				},

@@ -159,13 +159,23 @@ export function useTradingOperations(
 	const runTradingAction = async (actionName: TradingActionResult['action'], action: (walletAddress: Address, securityPoolAddress: Address, currentForm: TradingFormState, isCurrentSelection: () => boolean) => Promise<TradingActionResult | undefined>, errorFallback: string) => {
 		const currentForm = tradingForm.value
 		const actionSelectionKey = currentTradingSelectionKey
+		const transactionContext = {
+			securityPoolAddress: actionSelectionKey === '' ? undefined : actionSelectionKey,
+			shareOutcome: actionName === 'migrateShares' ? currentForm.selectedShareOutcome : undefined,
+			universeId: tradingDetails.value?.universeId,
+		}
 		const isActionSelectionCurrent = () => isTradingSelectionCurrent(actionSelectionKey)
 		try {
 			tradingActiveAction.value = actionName
 			tradingFeedback.value = createPendingActionFeedback(actionName, getPendingTitle(actionName))
 			await runWriteAction(
 				{
-					...buildWriteActionConfig({ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState }, tradingError, 'Connect a wallet before trading', createTradingTransactionIntent(actionName)),
+					...buildWriteActionConfig(
+						{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState },
+						tradingError,
+						'Connect a wallet before trading',
+						createTradingTransactionIntent(actionName, transactionContext),
+					),
 					onRefreshError: (message, hash) => {
 						tradingFeedback.value = createWarningActionFeedback(actionName, getSuccessTitle(actionName), message, hash)
 						const result = tradingResult.value

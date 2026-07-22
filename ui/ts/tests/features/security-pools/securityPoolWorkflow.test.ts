@@ -29,7 +29,7 @@ import { ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS } from '../../../features/securi
 
 void describe('selected pool workflow lookup state', () => {
 	void test('uses a single stable operate header title', () => {
-		expect(getSelectedPoolCardTitle()).toBe('Manage Pool')
+		expect(getSelectedPoolCardTitle('Will the event happen?')).toBe('Will the event happen?')
 
 		expect(getSelectedPoolCardTitle()).toBe('Manage Pool')
 

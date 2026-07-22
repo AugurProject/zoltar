@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { OperationModal } from '../components/OperationModal.js'
 import { AddressValue } from '../components/AddressValue.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
+import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 function OperationModalHarness() {
 	const [value, setValue] = useState('')
@@ -19,6 +20,38 @@ function OperationModalHarness() {
 				<input value={value} onInput={event => setValue(event.currentTarget.value)} />
 			</label>
 			<button type='button'>Confirm</button>
+		</OperationModal>
+	)
+}
+
+function CompletingOperationModalHarness() {
+	const [isOpen, setIsOpen] = useState(true)
+	const [completionKey, setCompletionKey] = useState<string | undefined>()
+
+	return (
+		<OperationModal closeOnSuccessKey={completionKey} isOpen={isOpen} onClose={() => setIsOpen(false)} title='Deposit REP'>
+			<button type='button' onClick={() => setCompletionKey('0x1234')}>
+				Complete transaction
+			</button>
+		</OperationModal>
+	)
+}
+
+function StaleCompletionOperationModalHarness() {
+	const [isOpen, setIsOpen] = useState(true)
+	const [completionState, setCompletionState] = useState<'matching' | 'stale' | 'unrelated'>('stale')
+	let closeOnSuccessKey: string | undefined
+	if (completionState === 'stale') closeOnSuccessKey = '0xstale'
+	if (completionState === 'matching') closeOnSuccessKey = '0xmatching'
+
+	return (
+		<OperationModal closeOnSuccessKey={closeOnSuccessKey} isOpen={isOpen} onClose={() => setIsOpen(false)} title='Settle Report'>
+			<button type='button' onClick={() => setCompletionState('unrelated')}>
+				Observe unrelated success
+			</button>
+			<button type='button' onClick={() => setCompletionState('matching')}>
+				Complete matching transaction
+			</button>
 		</OperationModal>
 	)
 }
@@ -140,6 +173,37 @@ describe('OperationModal', () => {
 
 		render(null, container)
 		container.remove()
+	})
+
+	test('closes an operation dialog when its submitted transaction succeeds', async () => {
+		const renderedComponent = await renderIntoDocument(<CompletingOperationModalHarness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('dialog', { name: 'Deposit REP' })).not.toBeNull()
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Complete transaction' }))
+		})
+
+		expect(documentQueries.queryByRole('dialog', { name: 'Deposit REP' })).toBeNull()
+	})
+
+	test('ignores stale and unrelated success state before closing for a new matching success', async () => {
+		const renderedComponent = await renderIntoDocument(<StaleCompletionOperationModalHarness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('dialog', { name: 'Settle Report' })).not.toBeNull()
+
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Observe unrelated success' }))
+		})
+		expect(documentQueries.getByRole('dialog', { name: 'Settle Report' })).not.toBeNull()
+
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Complete matching transaction' }))
+		})
+		expect(documentQueries.queryByRole('dialog', { name: 'Settle Report' })).toBeNull()
 	})
 
 	test('associates the optional description with the dialog', async () => {
