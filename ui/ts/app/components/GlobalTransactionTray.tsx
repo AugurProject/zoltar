@@ -53,7 +53,9 @@ export function GlobalTransactionTray({ transaction }: GlobalTransactionTrayProp
 		const main = notice.closest('main')
 		if (!(main instanceof HTMLElement) || transaction === undefined) return
 		const updateReservedSpace = () => {
-			main.style.setProperty('--global-transaction-tray-height', `${notice.getBoundingClientRect().height.toString()}px`)
+			const trayHeight = `${notice.getBoundingClientRect().height.toString()}px`
+			main.style.setProperty('--global-transaction-tray-height', trayHeight)
+			document.documentElement.style.scrollPaddingBottom = `calc(${trayHeight} + 2rem + env(safe-area-inset-bottom, 0rem))`
 		}
 		main.classList.add('global-transaction-tray-open')
 		updateReservedSpace()
@@ -63,6 +65,7 @@ export function GlobalTransactionTray({ transaction }: GlobalTransactionTrayProp
 			resizeObserver?.disconnect()
 			main.classList.remove('global-transaction-tray-open')
 			main.style.removeProperty('--global-transaction-tray-height')
+			document.documentElement.style.removeProperty('scroll-padding-bottom')
 		}
 	}, [transaction, dismissedKey])
 

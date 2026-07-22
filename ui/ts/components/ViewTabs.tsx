@@ -129,8 +129,15 @@ export function ViewTabs<TValue extends string>({ ariaLabel, className = '', gro
 			if (container.scrollWidth <= container.clientWidth || !(activeOption instanceof HTMLElement)) return
 			const containerRect = container.getBoundingClientRect()
 			const activeOptionRect = activeOption.getBoundingClientRect()
-			const centeredScrollLeft = container.scrollLeft + activeOptionRect.left - containerRect.left - (container.clientWidth - activeOptionRect.width) / 2
-			const targetScrollLeft = Math.min(container.scrollWidth - container.clientWidth, Math.max(0, centeredScrollLeft))
+			const measuredLayout = containerRect.width > 0 && activeOptionRect.width > 0
+			const nearestScrollLeft = (() => {
+				if (!measuredLayout) return container.scrollLeft + activeOptionRect.left - containerRect.left - (container.clientWidth - activeOptionRect.width) / 2
+				if (activeOptionRect.left < containerRect.left) return container.scrollLeft + activeOptionRect.left - containerRect.left
+				if (activeOptionRect.right > containerRect.right) return container.scrollLeft + activeOptionRect.right - containerRect.right
+				return undefined
+			})()
+			if (nearestScrollLeft === undefined) return
+			const targetScrollLeft = Math.min(container.scrollWidth - container.clientWidth, Math.max(0, nearestScrollLeft))
 			if (typeof container.scrollTo === 'function') container.scrollTo({ behavior: scrollBehavior, left: targetScrollLeft })
 			else container.scrollLeft = targetScrollLeft
 		}

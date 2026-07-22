@@ -42,9 +42,9 @@ describe('app page titles', () => {
 			{ input: { ...baseInput, route: 'security-pools', activeSecurityPoolsView: 'browse' }, title: 'Security Pools' },
 			{ input: { ...baseInput, route: 'security-pools', activeSecurityPoolsView: 'create' }, title: 'Create Security Pool' },
 			{ input: { ...baseInput, route: 'security-pools', activeSecurityPoolsView: 'operate' }, title: 'Manage Security Pool' },
-			{ input: { ...baseInput, route: 'open-oracle', activeOpenOracleView: 'browse' }, title: 'Oracle Reports' },
-			{ input: { ...baseInput, route: 'open-oracle', activeOpenOracleView: 'create' }, title: 'Create Oracle Report' },
-			{ input: { ...baseInput, route: 'open-oracle', activeOpenOracleView: 'selected-report' }, title: 'Oracle Report Details' },
+			{ input: { ...baseInput, route: 'open-oracle', activeOpenOracleView: 'browse' }, title: 'Open Oracle' },
+			{ input: { ...baseInput, route: 'open-oracle', activeOpenOracleView: 'create' }, title: 'Create Open Oracle Report' },
+			{ input: { ...baseInput, route: 'open-oracle', activeOpenOracleView: 'selected-report' }, title: 'Open Oracle Report Details' },
 			{ input: { ...baseInput, route: 'not-found' }, title: 'Page Not Found' },
 		]
 
@@ -130,14 +130,14 @@ describe('app page titles', () => {
 			await act(() => {
 				render(
 					<>
-						<AppPageHeading pageTitle='Oracle Reports' />
+						<AppPageHeading pageTitle='Open Oracle' />
 						<div id='app-content'>Oracle content</div>
 					</>,
 					renderedComponent.container,
 				)
 			})
 
-			const heading = within(document.body).getByRole('heading', { level: 1, name: 'Oracle Reports' })
+			const heading = within(document.body).getByRole('heading', { level: 1, name: 'Open Oracle' })
 			expect(document.activeElement).toBe(heading)
 			expect(scrollIntoViewCalls).toBe(1)
 		} finally {

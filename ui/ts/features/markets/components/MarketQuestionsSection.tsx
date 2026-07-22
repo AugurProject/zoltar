@@ -219,7 +219,7 @@ export function MarketQuestionsSection({
 																<strong>{marketCopy.openInterest}</strong>: <CurrencyValue value={pool.completeSetCollateralAmount} suffix={commonCopy.eth} copyable={false} />
 															</span>
 															<span>
-																<strong>{marketCopy.shareSupply}</strong>: <CurrencyValue value={pool.shareTokenSupply} copyable={false} />
+																<strong>{marketCopy.shareSupply}</strong>: <CurrencyValue className='market-linked-pool-share-supply' compactWhenOverflow value={pool.shareTokenSupply} copyable={false} />
 															</span>
 														</div>
 														<div className='market-linked-pool-participation'>

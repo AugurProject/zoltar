@@ -210,6 +210,10 @@ describe('SecurityVaultSection', () => {
 			<SecurityVaultSection
 				{...createSecurityVaultSectionProps({
 					modalFirst: true,
+					poolState: evaluateSecurityPoolState({
+						lifecycleState: 'forkMigration',
+						universeHasForked: true,
+					}),
 					securityVaultDetails: createSecurityVaultDetails({
 						unpaidEthFees: 0n,
 					}),
@@ -221,7 +225,8 @@ describe('SecurityVaultSection', () => {
 		const documentQueries = within(document.body)
 		const claimFeesButton = documentQueries.getByRole('button', { name: 'Claim Fees' })
 
-		expectTransactionButtonDisabled(document.body, 'Claim Fees')
+		expectTransactionButtonDisabled(document.body, 'Claim Fees', 'No fees are available to claim.')
+		expect(claimFeesButton.getAttribute('aria-describedby')).toBeNull()
 		fireEvent.click(claimFeesButton)
 		expect(documentQueries.queryByRole('dialog', { name: 'Claim Fees' })).toBeNull()
 	})
@@ -336,6 +341,56 @@ describe('SecurityVaultSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonDisabled(document.body, 'Claim Fees')
+	})
+
+	test('explains fork lifecycle gating once for the complete vault action group', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					extraReadinessActions: [
+						{
+							actionLabel: 'Review Special Action',
+							blocker: 'Complete its separate prerequisite.',
+							key: 'special-action',
+							readiness: 'blocked',
+							title: 'Review Special Action',
+						},
+					],
+					modalFirst: true,
+					poolState: evaluateSecurityPoolState({
+						lifecycleState: 'forkMigration',
+						universeHasForked: true,
+					}),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const lifecycleReason = documentQueries.getByText('Vault collateral actions are unavailable while this pool is in fork migration. Continue in Fork & Migration. Fee claiming remains available only when this vault has accrued fees.')
+		for (const actionLabel of ['Deposit REP', 'Withdraw REP', 'Set Bond Allowance']) {
+			const button = documentQueries.getByRole('button', { name: actionLabel })
+			expect(button.getAttribute('aria-describedby')).toBe(lifecycleReason.id)
+			expectTransactionButtonDisabled(document.body, actionLabel)
+		}
+		expect(getTransactionButtonState(document.body, 'Review Special Action')).toEqual({ disabled: true, reason: 'Complete its separate prerequisite.' })
+		expect(documentQueries.getByRole('button', { name: 'Review Special Action' }).getAttribute('aria-describedby')).toBeNull()
+	})
+
+	test('preserves wallet recovery for lifecycle-enabled redemption after the pool ends', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					accountState: createAccountState({ address: undefined }),
+					modalFirst: true,
+					poolState: createEndedPoolState(),
+					securityVaultDetails: createSecurityVaultDetails({ escalationEscrowedRep: 0n }),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(getTransactionButtonState(document.body, 'Redeem REP')).toEqual({ disabled: true, reason: 'Connect a wallet before redeeming REP.' })
 	})
 
 	test('shows explicit modal-first vault blockers when the wallet is disconnected', async () => {

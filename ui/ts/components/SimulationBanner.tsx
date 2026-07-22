@@ -1,7 +1,7 @@
 import * as commonCopy from '../copy/common.js'
 import * as simulationCopy from '../copy/simulation.js'
 import { useSignal } from '@preact/signals'
-import { useEffect } from 'preact/hooks'
+import { useEffect, useRef } from 'preact/hooks'
 import { getErrorMessage } from '../lib/errors.js'
 import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch } from '../lib/routing.js'
 import type { SimulationController } from '../simulation/controller.js'
@@ -113,12 +113,13 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 	const exportStateText = useSignal('')
 	const importStateText = useSignal('')
 	const selectedAccount = useSignal(controller.selectedAccount)
-	const simulationDetailsOpen = useSignal(typeof window.matchMedia !== 'function' || !window.matchMedia('(max-width: 800px)').matches || !controller.isBootstrapped)
+	const simulationDetailsOpen = useSignal(!controller.isBootstrapped)
 	const bootstrapError = useSignal(controller.bootstrapError)
 	const bootstrapLabel = useSignal(controller.bootstrapLabel)
 	const bootstrapProgress = useSignal(controller.bootstrapProgress)
 	const transactionCountSinceReset = useSignal(controller.transactionCountSinceReset)
 	const transactionDelayMilliseconds = useSignal(controller.transactionDelayMilliseconds.toString())
+	const previousController = useRef(controller)
 
 	const reloadSavedStateRecords = () => {
 		const summary = getSavedSimulationStateStorageSummary(savedStateStorage)
@@ -145,38 +146,33 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 	const resetRepPerUsdcPriceInput = () => {
 		repPerUsdcPrice.value = formatCurrencyInputBalance(controller.repPerUsdcPrice, 6)
 	}
-	useEffect(
-		() =>
-			controller.subscribe(() => {
-				const wasBootstrapped = isBootstrapped.value
-				blockCountSinceReset.value = controller.blockCountSinceReset
-				bootstrapError.value = controller.bootstrapError
-				bootstrapLabel.value = controller.bootstrapLabel
-				bootstrapProgress.value = controller.bootstrapProgress
-				currentTimestamp.value = controller.currentTimestamp
-				currentScenario.value = controller.currentScenario
-				currentSource.value = controller.simulationSource
-				isBootstrapped.value = controller.isBootstrapped
-				if (!wasBootstrapped && controller.isBootstrapped && typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 800px)').matches) simulationDetailsOpen.value = false
-				isBootstrapping.value = controller.isBootstrapping
-				queryDelayMilliseconds.value = controller.queryDelayMilliseconds.toString()
-				repPerEthPrice.value = formatCurrencyInputBalance(controller.repPerEthPrice)
-				repPerUsdcPrice.value = formatCurrencyInputBalance(controller.repPerUsdcPrice, 6)
-				selectedAccount.value = controller.selectedAccount
-				transactionCountSinceReset.value = controller.transactionCountSinceReset
-				transactionDelayMilliseconds.value = controller.transactionDelayMilliseconds.toString()
-			}),
-		[controller],
-	)
 	useEffect(() => {
-		if (typeof window.matchMedia !== 'function') return
-		const mediaQuery = window.matchMedia('(max-width: 800px)')
-		const onViewportChange = () => {
-			simulationDetailsOpen.value = !mediaQuery.matches || !isBootstrapped.value
+		let controllerChanged = previousController.current !== controller
+		previousController.current = controller
+		const syncControllerState = () => {
+			const wasBootstrapped = isBootstrapped.value
+			blockCountSinceReset.value = controller.blockCountSinceReset
+			bootstrapError.value = controller.bootstrapError
+			bootstrapLabel.value = controller.bootstrapLabel
+			bootstrapProgress.value = controller.bootstrapProgress
+			currentTimestamp.value = controller.currentTimestamp
+			currentScenario.value = controller.currentScenario
+			currentSource.value = controller.simulationSource
+			isBootstrapped.value = controller.isBootstrapped
+			isBootstrapping.value = controller.isBootstrapping
+			if (!controller.isBootstrapped || controller.isBootstrapping) simulationDetailsOpen.value = true
+			else if (controllerChanged || !wasBootstrapped) simulationDetailsOpen.value = false
+			controllerChanged = false
+			queryDelayMilliseconds.value = controller.queryDelayMilliseconds.toString()
+			repPerEthPrice.value = formatCurrencyInputBalance(controller.repPerEthPrice)
+			repPerUsdcPrice.value = formatCurrencyInputBalance(controller.repPerUsdcPrice, 6)
+			selectedAccount.value = controller.selectedAccount
+			transactionCountSinceReset.value = controller.transactionCountSinceReset
+			transactionDelayMilliseconds.value = controller.transactionDelayMilliseconds.toString()
 		}
-		mediaQuery.addEventListener('change', onViewportChange)
-		return () => mediaQuery.removeEventListener('change', onViewportChange)
-	}, [])
+		syncControllerState()
+		return controller.subscribe(syncControllerState)
+	}, [controller])
 	const runControl = async (work: () => Promise<void>) => {
 		if (busy.value) return
 		busy.value = true
@@ -240,11 +236,6 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 
 	return (
 		<section className='panel contract-panel simulation-banner'>
-			<div className='contract-panel-header simulation-banner-header'>
-				<div>
-					<h2>{simulationCopy.browserSimulation}</h2>
-				</div>
-			</div>
 			<details
 				className='simulation-banner-details'
 				open={simulationDetailsOpen.value}
@@ -254,12 +245,12 @@ export function SimulationBanner({ controller, onEnvironmentChanged = async () =
 			>
 				<summary>
 					<span className='simulation-banner-compact-summary'>
-						<span className='simulation-banner-compact-state'>
-							<Badge tone={scenarioStatus.badgeTone}>{scenarioStatus.label}</Badge>
-							<strong>{getSimulationScenarioLabel(currentScenario.value)}</strong>
-							<span className='simulation-banner-compact-account'>
-								<span aria-hidden='true'>· </span>
-								{selectedAccountLabel}
+						<span className='simulation-banner-compact-heading'>
+							<h2>{simulationCopy.browserSimulation}</h2>
+							<span className='simulation-banner-compact-state'>
+								<Badge tone={scenarioStatus.badgeTone}>{scenarioStatus.label}</Badge>
+								<strong>{getSimulationScenarioLabel(currentScenario.value)}</strong>
+								<span className='simulation-banner-compact-account'>{selectedAccountLabel}</span>
 							</span>
 						</span>
 						<span className='simulation-banner-compact-action'>{simulationDetailsOpen.value ? simulationCopy.hideSimulationDetails : simulationCopy.showSimulationDetails}</span>

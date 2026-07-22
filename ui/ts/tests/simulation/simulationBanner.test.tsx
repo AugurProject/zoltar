@@ -2,6 +2,8 @@
 
 import { fireEvent, waitFor, within } from '../testUtils/queries'
 import { describe, expect, mock, test } from 'bun:test'
+import { render } from 'preact'
+import { act } from 'preact/test-utils'
 import type { Address } from '@zoltar/shared/ethereum'
 import { SimulationBanner } from '../../components/SimulationBanner.js'
 import type { SimulationController } from '../../simulation/controller.js'
@@ -107,7 +109,7 @@ describe('SimulationBanner', () => {
 		}
 	})
 
-	test('puts the full simulation controls behind a compact disclosure', async () => {
+	test('keeps a bootstrapped simulation compact until details are requested', async () => {
 		const domEnvironment = installDomEnvironment()
 		const controller = createSimulationController({ currentScenario: 'security-pool' })
 		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={async () => undefined} />)
@@ -115,12 +117,51 @@ describe('SimulationBanner', () => {
 		try {
 			const disclosure = renderedComponent.container.querySelector('.simulation-banner-details')
 			if (!(disclosure instanceof HTMLElement) || disclosure.tagName !== 'DETAILS') throw new Error('Expected simulation banner disclosure')
-			expect(disclosure.hasAttribute('open')).toBe(true)
+			expect(disclosure.hasAttribute('open')).toBe(false)
 			const summary = disclosure.querySelector('summary')
 			if (!(summary instanceof HTMLElement)) throw new Error('Expected simulation banner disclosure summary')
 			expect(summary.textContent).toContain('Ready')
 			expect(summary.textContent).toContain('Security pool')
 			expect(summary.textContent).toContain('QA account 1')
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
+	test('expands while a replacement controller bootstraps and collapses when it completes', async () => {
+		const domEnvironment = installDomEnvironment()
+		const readyController = createSimulationController({ currentScenario: 'deployed' })
+		let notifyControllerChanged: () => void = () => undefined
+		const bootstrappingController = createSimulationController({
+			bootstrapLabel: 'Preparing replacement scenario',
+			currentScenario: 'security-pool',
+			isBootstrapped: false,
+			isBootstrapping: true,
+			subscribe: handler => {
+				notifyControllerChanged = handler
+				return () => undefined
+			},
+		})
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={readyController} onRefresh={async () => undefined} />)
+
+		try {
+			const disclosure = renderedComponent.container.querySelector('.simulation-banner-details')
+			if (!isDetailsElement(disclosure)) throw new Error('Expected simulation banner disclosure')
+			expect(disclosure.open).toBe(false)
+
+			await act(() => {
+				render(<SimulationBanner controller={bootstrappingController} onRefresh={async () => undefined} />, renderedComponent.container)
+			})
+			expect(disclosure.open).toBe(true)
+			expect(within(disclosure).getByText('Preparing replacement scenario')).not.toBeNull()
+
+			bootstrappingController.isBootstrapped = true
+			bootstrappingController.isBootstrapping = false
+			await act(() => {
+				notifyControllerChanged()
+			})
+			expect(disclosure.open).toBe(false)
 		} finally {
 			await renderedComponent.cleanup()
 			domEnvironment.cleanup()

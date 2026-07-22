@@ -297,6 +297,7 @@ export function SecurityVaultSection({
 }: SecurityVaultSectionProps) {
 	const [vaultActionModal, setVaultActionModal] = useState<VaultActionModal>(undefined)
 	const refreshVaultActionsDescriptionId = useId()
+	const vaultLifecycleBlockerId = useId()
 	const isMainnet = isMainnetChain(accountState?.chainId)
 	const normalizedSecurityVaultForm = {
 		depositAmount: securityVaultForm.depositAmount ?? '0',
@@ -363,6 +364,12 @@ export function SecurityVaultSection({
 	const approveRepEnabled = poolState?.actions.approveRep.enabled ?? true
 	const bondAllowanceEnabled = poolState?.actions.queueSetSecurityBondAllowance.enabled ?? true
 	const claimFeesEnabled = poolState?.actions.redeemFees.enabled ?? true
+	const vaultLifecycleBlocker = (() => {
+		if (poolState?.lifecycleState === 'ended') return securityPoolCopy.vaultActionsEndedDetail
+		if (poolState?.lifecycleState === 'poolForked' || poolState?.lifecycleState === 'forkMigration') return securityPoolCopy.vaultActionsForkMigrationDetail
+		if (poolState?.lifecycleState === 'forkTruthAuction') return securityPoolCopy.vaultActionsTruthAuctionDetail
+		return undefined
+	})()
 	const poolCollateralActionsEnabled = depositRepEnabled
 	const effectiveRepExitMode = redeemRepEnabled ? 'redeem' : 'withdraw'
 	const repExitEnabled = effectiveRepExitMode === 'redeem' ? redeemRepEnabled : queueWithdrawRepEnabled
@@ -477,11 +484,21 @@ export function SecurityVaultSection({
 	const repExitLauncherBlocker = getVaultLauncherBlocker('rep-exit')
 	const bondAllowanceLauncherBlocker = getVaultLauncherBlocker('set-bond-allowance')
 	const claimFeesLauncherBlocker = getVaultLauncherBlocker('claim-fees')
-	const showSharedRefreshVaultBlocker = hasConnectedWallet && selectedVaultIsOwnedByAccount && !hasLoadedSelectedVaultDetails && isMainnet
+	const showSharedRefreshVaultBlocker = vaultLifecycleBlocker === undefined && hasConnectedWallet && selectedVaultIsOwnedByAccount && !hasLoadedSelectedVaultDetails && isMainnet
+	const getVaultActionDisabledReasonId = (lifecycleActionEnabled: boolean) => {
+		if (vaultLifecycleBlocker !== undefined && !lifecycleActionEnabled) return vaultLifecycleBlockerId
+		if (showSharedRefreshVaultBlocker) return refreshVaultActionsDescriptionId
+		return undefined
+	}
+	const depositDisabledReasonId = getVaultActionDisabledReasonId(depositRepEnabled)
+	const repExitDisabledReasonId = getVaultActionDisabledReasonId(repExitEnabled)
+	const bondAllowanceDisabledReasonId = getVaultActionDisabledReasonId(bondAllowanceEnabled)
+	const claimFeesDisabledReasonId = getVaultActionDisabledReasonId(claimFeesEnabled)
 	const visibleDepositLauncherBlocker = showSharedRefreshVaultBlocker ? undefined : depositLauncherBlocker
 	const visibleRepExitLauncherBlocker = showSharedRefreshVaultBlocker ? undefined : repExitLauncherBlocker
 	const visibleBondAllowanceLauncherBlocker = showSharedRefreshVaultBlocker ? undefined : bondAllowanceLauncherBlocker
 	const visibleClaimFeesLauncherBlocker = showSharedRefreshVaultBlocker ? undefined : claimFeesLauncherBlocker
+	const claimFeesAvailabilityBlocker = visibleClaimFeesLauncherBlocker ?? (hasLoadedSelectedVaultDetails && claimFeesEnabled && !hasClaimableFees ? securityPoolCopy.noClaimableFeesReason : undefined)
 	useEffect(() => {
 		if (!autoLoadVault) return
 		if (normalizedSecurityVaultForm.securityPoolAddress.trim() === '') return
@@ -498,8 +515,8 @@ export function SecurityVaultSection({
 			key: 'deposit-rep',
 			...(depositRepEnabled && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('deposit-rep') } : {}),
 			readiness: depositRepEnabled && canUseLoadedVaultActions ? 'ready' : 'blocked',
-			...(showSharedRefreshVaultBlocker ? { disabledReasonId: refreshVaultActionsDescriptionId } : {}),
-			...(visibleDepositLauncherBlocker === undefined ? {} : { blocker: visibleDepositLauncherBlocker }),
+			...(depositDisabledReasonId === undefined ? {} : { disabledReasonId: depositDisabledReasonId }),
+			...(visibleDepositLauncherBlocker === undefined || !depositRepEnabled ? {} : { blocker: visibleDepositLauncherBlocker }),
 			title: securityPoolCopy.depositRep,
 		},
 		{
@@ -508,8 +525,8 @@ export function SecurityVaultSection({
 			key: 'rep-exit',
 			...(repExitEnabled && vaultExistsOnchain && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('withdraw-rep') } : {}),
 			readiness: repExitEnabled && vaultExistsOnchain && canUseLoadedVaultActions ? 'ready' : 'blocked',
-			...(showSharedRefreshVaultBlocker ? { disabledReasonId: refreshVaultActionsDescriptionId } : {}),
-			...(visibleRepExitLauncherBlocker === undefined ? {} : { blocker: visibleRepExitLauncherBlocker }),
+			...(repExitDisabledReasonId === undefined ? {} : { disabledReasonId: repExitDisabledReasonId }),
+			...(visibleRepExitLauncherBlocker === undefined || !repExitEnabled ? {} : { blocker: visibleRepExitLauncherBlocker }),
 			title: repExitActionLabel,
 		},
 		{
@@ -518,8 +535,8 @@ export function SecurityVaultSection({
 			key: 'set-bond-allowance',
 			...(bondAllowanceEnabled && vaultExistsOnchain && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('set-bond-allowance') } : {}),
 			readiness: bondAllowanceEnabled && vaultExistsOnchain && canUseLoadedVaultActions ? 'ready' : 'blocked',
-			...(showSharedRefreshVaultBlocker ? { disabledReasonId: refreshVaultActionsDescriptionId } : {}),
-			...(visibleBondAllowanceLauncherBlocker === undefined ? {} : { blocker: visibleBondAllowanceLauncherBlocker }),
+			...(bondAllowanceDisabledReasonId === undefined ? {} : { disabledReasonId: bondAllowanceDisabledReasonId }),
+			...(visibleBondAllowanceLauncherBlocker === undefined || !bondAllowanceEnabled ? {} : { blocker: visibleBondAllowanceLauncherBlocker }),
 			title: securityPoolCopy.setSecurityBondAllowance,
 		},
 		{
@@ -528,8 +545,8 @@ export function SecurityVaultSection({
 			key: 'claim-fees',
 			...(claimFeesEnabled && hasClaimableFees && claimFeesLauncherBlocker === undefined && vaultExistsOnchain && canUseLoadedVaultActions ? { onAction: () => setVaultActionModal('claim-fees') } : {}),
 			readiness: claimFeesEnabled && hasClaimableFees && claimFeesLauncherBlocker === undefined && vaultExistsOnchain && canUseLoadedVaultActions ? 'ready' : 'blocked',
-			...(showSharedRefreshVaultBlocker ? { disabledReasonId: refreshVaultActionsDescriptionId } : {}),
-			...(visibleClaimFeesLauncherBlocker === undefined ? {} : { blocker: visibleClaimFeesLauncherBlocker }),
+			...(claimFeesDisabledReasonId === undefined ? {} : { disabledReasonId: claimFeesDisabledReasonId }),
+			...(claimFeesAvailabilityBlocker === undefined ? {} : { blocker: claimFeesAvailabilityBlocker }),
 			title: securityPoolCopy.claimFees,
 		},
 		...extraReadinessActions,
@@ -538,6 +555,11 @@ export function SecurityVaultSection({
 		<>
 			<SectionBlock title={securityPoolCopy.vaultActions} variant='plain'>
 				{showMissingVaultNotice ? <StateHint presentation={{ key: 'not_found', badgeLabel: securityPoolCopy.vaultMissing, badgeTone: 'muted', detail: securityPoolCopy.missingVaultDepositDetail }} /> : undefined}
+				{vaultLifecycleBlocker === undefined ? undefined : (
+					<p className='notice warning' id={vaultLifecycleBlockerId}>
+						{vaultLifecycleBlocker}
+					</p>
+				)}
 				{showSharedRefreshVaultBlocker ? (
 					<p className='detail' id={refreshVaultActionsDescriptionId}>
 						{securityPoolCopy.refreshVaultActionsDetail}
