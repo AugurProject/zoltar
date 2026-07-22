@@ -1478,7 +1478,8 @@ const contractReferences: ContractReference[] = [
 				caller: 'Share holder or approved ERC-1155 operator for a nonempty batch; any caller for an empty batch',
 				effect: 'A nonempty batch transfers each listed outcome-token balance without changing supply. Equal empty ID and value arrays return as a no-op without an event.',
 				declarations: [{ name: 'safeBatchTransferFrom', sourcePath: 'solidity/contracts/peripherals/tokens/ERC1155.sol' }],
-				preconditions: 'ID and value array lengths match. A nonempty batch also requires holder or operator authority, no listed source token that the source account has already materialized into a child branch, a nonzero destination, sufficient source balances, and an accepting ERC-1155 callback from a contract recipient; the empty-batch no-op performs none of those checks.',
+				preconditions:
+					'ID and value array lengths match. A nonempty batch also requires holder or operator authority, no listed source token that the source account has already materialized into a child branch, a nonzero destination, sufficient source balances, and an accepting ERC-1155 callback from a contract recipient; the empty-batch no-op performs none of those checks.',
 				signals: '`TransferBatch` for a nonempty batch; no event for an empty batch',
 			},
 			{
