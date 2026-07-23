@@ -59,6 +59,7 @@ assertSimpleByteRow('Deployed bytecode', formatNumber(bytecodeSnapshot.deployedB
 assertBudgetHeadroomRow('Project deployed-bytecode budget headroom', formatNumber(expectedProjectBudget - bytecodeSnapshot.deployedBytes), formatNumber(expectedProjectBudget))
 assertBudgetHeadroomRow('EIP-170 headroom', formatNumber(expectedEip170Budget - bytecodeSnapshot.deployedBytes), formatNumber(expectedEip170Budget))
 assertContinuationIdentifierExplanation()
+assertEscalationReplayIdentityDocs()
 assertAggregateEscalationContinuationDocs()
 assertNonDecisionLifecycleDocs()
 assertEventStreamSemantics()
@@ -77,6 +78,19 @@ function assertContinuationIdentifierExplanation(): void {
 	assert.ok(html.includes('consumedParentDepositIndexes'), 'docs/escalation-game-architecture.html must connect the continuation identifier to consumedParentDepositIndexes')
 	assert.ok(html.includes('LocalDepositAppended') && html.includes('CarryDepositConsumed') && html.includes('ClaimDeposit') && html.includes('exportUnresolvedDeposit'), 'docs/escalation-game-architecture.html must name the exact event and export surfaces that expose the continuation identifier')
 	assert.ok(!html.includes('CarriedDepositClaimed'), 'docs/escalation-game-architecture.html must not reference the removed CarriedDepositClaimed event')
+}
+
+function assertEscalationReplayIdentityDocs(): void {
+	const replayIdentityFunction = securityPoolForkerBase.match(/function _getEscalationDepositId\([^}]+?\n\t\}/s)?.[0]
+	assert.ok(replayIdentityFunction, 'SecurityPoolForkerBase.sol must define _getEscalationDepositId')
+	assert.match(replayIdentityFunction, /ISecurityPoolFactory factory = securityPool\.securityPoolFactory\(\);/)
+	assert.match(replayIdentityFunction, /bytes32 originId = factory\.getSecurityPoolOriginId\(securityPool\);/)
+	assert.match(replayIdentityFunction, /keccak256\(abi\.encode\(factory, originId, outcomeIndex, parentDepositIndex\)\)/)
+
+	const normalizedStatoblast = whitepaperStatoblast.replaceAll(/\s+/g, ' ')
+	const normalizedArchitecture = html.replaceAll(/\s+/g, ' ')
+	assert.ok(normalizedStatoblast.includes('keccak256(abi.encode(securityPoolFactory, originId, uint8(outcomeIndex), parentDepositIndex))'), 'Statoblast whitepaper must document the factory-scoped escalation replay identity encoded by SecurityPoolForkerBase.sol')
+	assert.match(normalizedArchitecture, /factory-scoped lineage id[\s\S]*href="statoblast-whitepaper\.html#migration">fork-migration specification<\/a> owns the exact construction/)
 }
 
 function assertAggregateEscalationContinuationDocs(): void {

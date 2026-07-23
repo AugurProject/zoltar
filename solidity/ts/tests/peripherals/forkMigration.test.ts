@@ -554,6 +554,57 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe((await getSecurityPoolForkerForkData(client, targetPool)).truthAuction, targetForkDataBeforeAttack.truthAuction, 'attack should not overwrite the legitimate pool fork metadata')
 		})
 
+		test('escalation replay IDs separate factories that report the same origin', async () => {
+			const forker = getInfraContractAddresses().securityPoolForker
+			const canonicalOriginId = await client.readContract({
+				abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
+				address: getInfraContractAddresses().securityPoolFactory,
+				functionName: 'getSecurityPoolOriginId',
+				args: [securityPoolAddresses.securityPool],
+			})
+			const fakeFactoryDeploymentHash = await client.sendTransaction({
+				data: encodeDeployData({
+					abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackFactoryMock.abi,
+					bytecode: `0x${test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackFactoryMock.evm.bytecode.object}`,
+					args: [],
+				}),
+			})
+			const fakeFactoryReceipt = await client.waitForTransactionReceipt({ hash: fakeFactoryDeploymentHash })
+			const fakeFactory = fakeFactoryReceipt.contractAddress
+			if (fakeFactory === undefined || fakeFactory === null) throw new Error('fake escrow factory address missing')
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackFactoryMock.abi,
+					address: fakeFactory,
+					functionName: 'configureOriginId',
+					args: [canonicalOriginId],
+				}),
+			)
+			const fakeParentDeploymentHash = await client.sendTransaction({
+				data: encodeDeployData({
+					abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackParentMock.abi,
+					bytecode: `0x${test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackParentMock.evm.bytecode.object}`,
+					args: [addressString(GENESIS_REPUTATION_TOKEN), fakeFactory, securityPoolAddresses.shareToken, forker, genesisUniverse, questionId, securityMultiplier],
+				}),
+			})
+			const fakeParentReceipt = await client.waitForTransactionReceipt({ hash: fakeParentDeploymentHash })
+			const fakeParent = fakeParentReceipt.contractAddress
+			if (fakeParent === undefined || fakeParent === null) throw new Error('fake escrow parent address missing')
+			const [canonicalDepositId, fakeDepositId] = await Promise.all(
+				[securityPoolAddresses.securityPool, fakeParent].map(
+					async pool =>
+						await client.readContract({
+							abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+							address: forker,
+							functionName: 'getEscalationDepositId',
+							args: [pool, QuestionOutcome.Yes, 0n],
+						}),
+				),
+			)
+
+			assert.notEqual(fakeDepositId, canonicalDepositId, 'an untrusted factory must not share the canonical replay namespace')
+		})
+
 		test('claimForkedEscalationDeposits rejects a fake child that injects a canonical escalation game', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
