@@ -15,8 +15,14 @@ export const settlementTime = 'Settlement Time'
 export const settlementDelaySeconds = 'Settlement Delay (seconds)'
 export const settlerReward = 'Settler Reward'
 export const tokenPair = 'Token Pair'
+export const baseToken = 'Base Token'
+export const quoteToken = 'Quote Token'
+export const oracleBalance = 'Oracle Balance'
 export const openOracleGame = 'Standalone Oracle Report'
 export const formatApprovingTokenPendingLabel = (tokenSymbol: string) => `Approving ${tokenSymbol}…`
+export const formatApproveToken = (tokenSymbol: CopyTemplateValue) => `Approve ${tokenSymbol}`
+export const formatTokenApproved = (tokenSymbol: CopyTemplateValue) => `${tokenSymbol} Approved`
+export const formatTokenWithdrawn = (tokenSymbol: CopyTemplateValue) => `${tokenSymbol} Withdrawn`
 export const browseReports = 'Browse Reports'
 export const formatBrowseShownCountSummary = (shownCount: string, pageCount: string) => `${shownCount} of ${pageCount} reports shown on this page.`
 export const callbackContract = 'Callback Contract'
@@ -61,9 +67,16 @@ export const formatNewAmountMustBeExactDetail = (tokenSymbol: string, amount: st
 export const oracleBalances = 'Your Oracle Balances'
 export const oracleBalancesDetail = 'Settlement rewards, returned report liquidity, and dispute proceeds stay in the Oracle until the credited account withdraws them.'
 export const noOracleBalances = 'No withdrawable Oracle balances are available for this token pair.'
+export const noWithdrawableBalanceForAsset = 'No withdrawable balance is available for this asset.'
 export const loadingOracleBalances = 'Loading Oracle balances…'
 export const withdrawBalance = (tokenSymbol: string) => `Withdraw ${tokenSymbol}`
 export const withdrawingBalance = (tokenSymbol: string) => `Withdrawing ${tokenSymbol}…`
+export const checkingWithdrawalBalance = (tokenSymbol: string) => `Checking ${tokenSymbol} balance…`
+export const confirmWithdrawal = 'Confirm Withdrawal'
+export const withdrawalRecipient = 'Recipient'
+export const formatWithdrawalRisk = (tokenSymbol: CopyTemplateValue) => `Withdraws the full credited ${tokenSymbol} balance to the connected account. Wallet gas is separate.`
+export const formatWithdrawalBalanceChanged = (tokenSymbol: CopyTemplateValue) => `Your withdrawable ${tokenSymbol} balance changed. Review the updated amount and confirm again`
+export const withdrawalBalanceRefreshFailed = 'Unable to refresh the withdrawable balance'
 export const numberOfReports = 'Number of Reports'
 export const openReport = 'Open report'
 export const oracleAddress = 'Oracle Address'

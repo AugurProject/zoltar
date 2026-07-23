@@ -6,7 +6,7 @@ import { sameAddress } from '../../../lib/address.js'
 import { assertNever } from '../../../lib/assert.js'
 import { parseDecimalInput, tryParseDecimalInput } from '../../../lib/decimal.js'
 import { formatWriteErrorMessage, getErrorDetail, sanitizeErrorDetail } from '../../../lib/errors.js'
-import { formatCurrencyBalance, formatDuration } from '../../../lib/formatters.js'
+import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } from '../../../lib/formatters.js'
 import { parseAddressInput, tryParseAddressInput } from '../../../lib/inputs.js'
 import { parseBigIntInput, tryParseBigIntInput } from '../../markets/lib/marketForm.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, type TokenApprovalRequirement } from '../../../lib/tokenApproval.js'
@@ -28,6 +28,8 @@ export type OpenOracleDisputeSubmissionDetails = {
 	blockMessage: OpenOracleGateMessage | undefined
 	canSubmit: boolean
 	expectedNewAmount1: bigint | undefined
+	newAmount1: bigint | undefined
+	newAmount2: bigint | undefined
 	token1Approval: TokenApprovalRequirement
 	token1ContributionAmount: bigint | undefined
 	token1Decimals: number | undefined
@@ -459,8 +461,8 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 						return multiplied > reportDetails.escalationHalt ? reportDetails.escalationHalt : multiplied
 					})()
 				: reportDetails.currentAmount1 + 1n
-	newAmount1 = tryParseBigIntInput(disputeNewAmount1Input)
-	newAmount2 = tryParseBigIntInput(disputeNewAmount2Input)
+	newAmount1 = token1Decimals === undefined ? undefined : tryParseDecimalInput(disputeNewAmount1Input, token1Decimals)
+	newAmount2 = token2Decimals === undefined ? undefined : tryParseDecimalInput(disputeNewAmount2Input, token2Decimals)
 	const isSelfDispute = accountAddress !== undefined && reportDetails !== undefined && sameAddress(accountAddress, reportDetails.currentReporter)
 	const token1ContributionAmount =
 		reportDetails === undefined || newAmount2 === undefined || expectedNewAmount1 === undefined
@@ -493,6 +495,10 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 		const disputeAvailability = getOpenOracleDisputeAvailability(reportDetails)
 		if (!disputeAvailability.canAct) {
 			blockMessage = createVisibleGateMessage(disputeAvailability.message ?? 'This report is not ready to dispute.')
+		} else if (token1Decimals === undefined) {
+			blockMessage = createHiddenLoadingGateMessage(`Loading ${token1Label} decimal metadata.`)
+		} else if (token2Decimals === undefined) {
+			blockMessage = createHiddenLoadingGateMessage(`Loading ${token2Label} decimal metadata.`)
 		} else if (newAmount1 === undefined) {
 			blockMessage = createVisibleGateMessage('Enter a valid new base token amount.')
 		} else if (newAmount2 === undefined || newAmount2 <= 0n) {
@@ -500,7 +506,7 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 		} else if (expectedNewAmount1 === undefined) {
 			blockMessage = createVisibleGateMessage('Unable to determine the required new base token amount.')
 		} else if (newAmount1 !== expectedNewAmount1) {
-			blockMessage = createVisibleGateMessage(`New base token amount must be exactly ${expectedNewAmount1.toString()} for this dispute.`)
+			blockMessage = createVisibleGateMessage(`New base token amount must be exactly ${formatCurrencyInputBalance(expectedNewAmount1, token1Decimals)} for this dispute.`)
 		} else if (approvedToken1Amount === undefined && token1AllowanceError !== undefined) {
 			blockMessage = createVisibleGateMessage(
 				formatOpenOracleDisputeApprovalStatusUnavailableMessage({
@@ -563,6 +569,8 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 		blockMessage,
 		canSubmit: blockMessage === undefined,
 		expectedNewAmount1,
+		newAmount1,
+		newAmount2,
 		token1Approval,
 		token1ContributionAmount,
 		token1Decimals,

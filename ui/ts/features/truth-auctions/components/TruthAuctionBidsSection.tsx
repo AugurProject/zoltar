@@ -89,7 +89,7 @@ export function TruthAuctionBidsSection({ aggregatedAuctionBidCountForLoadedTick
 			{hasLoadedData && error === undefined && !loadingAggregatedAuctionBids && loadedTickCount === 0 ? <p className='detail'>{forkAuctionCopy.auctionPriceLevelsEmpty}</p> : undefined}
 			{hasLoadedData && error === undefined && !loadingAggregatedAuctionBids && loadedTickCount > 0 && rows.length === 0 ? <p className='detail'>{forkAuctionCopy.loadedPriceBidsEmpty}</p> : undefined}
 			{rows.length === 0 ? undefined : (
-				<div className='truth-auction-bid-table truth-auction-bid-table-scroll' role='region' aria-label={forkAuctionCopy.scrollableAuctionBidHistory} tabIndex={0}>
+				<div className='truth-auction-bid-table' role='region' aria-label={forkAuctionCopy.auctionBidHistory}>
 					<AuctionBidsHeader />
 					{rows.map(row => (
 						<div className='truth-auction-bid-row is-wide is-no-actions' key={row.key}>

@@ -261,6 +261,13 @@ describe('ReportingSection', () => {
 	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
+	test('describes reporting timing with question terminology', () => {
+		const message = getReportingLockedUntilMessage(100n, 50n)
+
+		expect(message).toContain("this pool's underlying question ends")
+		expect(message).not.toContain("this pool's market ends")
+	})
+
 	beforeEach(() => {
 		const domEnvironment = installDomEnvironment()
 		restoreDomEnvironment = domEnvironment.cleanup

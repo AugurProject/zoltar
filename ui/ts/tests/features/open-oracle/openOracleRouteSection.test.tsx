@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { fireEvent, within } from '../../testUtils/queries'
 import { h } from 'preact'
 import { zeroAddress } from '@zoltar/shared/ethereum'
@@ -73,6 +73,7 @@ function createOpenOracleSectionProps(overrides: Partial<OpenOracleSectionProps>
 		onActiveViewChange: () => undefined,
 		onApproveToken1: () => undefined,
 		onApproveToken2: () => undefined,
+		onCancelOpenOracleWithdrawalBalanceCheck: () => undefined,
 		onCreateOpenOracleGame: () => undefined,
 		onDisputeReport: () => undefined,
 		onLoadOracleReport: () => undefined,
@@ -90,6 +91,8 @@ function createOpenOracleSectionProps(overrides: Partial<OpenOracleSectionProps>
 		openOracleTokenAccessState,
 		openOracleReportDetails,
 		openOracleResult: undefined,
+		openOracleWithdrawalBalanceChecking: false,
+		openOracleWithdrawalReviewMessage: undefined,
 		openOracleWithdrawableBalances: undefined,
 		openOracleWithdrawableBalancesError: undefined,
 		openOracleWithdrawableBalancesLoading: false,
@@ -554,7 +557,7 @@ describe('OpenOracleSection route create view', () => {
 					activeView: 'selected-report',
 					onWithdrawOpenOracleBalance: balance => withdrawnBalances.push(balance),
 					openOracleReportDetails: reportDetails,
-					openOracleWithdrawableBalances: { eth: 7n, token1: 100n, token2: 0n },
+					openOracleWithdrawableBalances: { eth: 7n * ETH, token1: 100n * ETH, token2: 0n },
 				})}
 			/>,
 		)
@@ -564,9 +567,13 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.getByText('Your Oracle Balances')).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Report Actions' })).toBeNull()
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Withdraw ETH' }))
-		fireEvent.click(documentQueries.getByRole('button', { name: `Withdraw ${reportDetails.token1Symbol}` }))
+		expect(withdrawnBalances).toEqual([])
+		expect(documentQueries.getByRole('dialog', { name: 'Withdraw ETH' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Transaction Review' })).not.toBeNull()
+		expect(documentQueries.getByText('7 ETH')).not.toBeNull()
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Confirm Withdrawal' }))
 		expect(documentQueries.queryByRole('button', { name: `Withdraw ${reportDetails.token2Symbol}` })).toBeNull()
-		expect(withdrawnBalances).toEqual(['eth', 'token1'])
+		expect(withdrawnBalances).toEqual(['eth'])
 	})
 
 	test('shows pending copy only for the balance being withdrawn', async () => {
@@ -593,6 +600,67 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.getByRole('button', { name: 'Withdrawing ETH…' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: `Withdraw ${reportDetails.token1Symbol}` })).not.toBeNull()
 		expectTransactionButtonDisabled(document.body, `Withdraw ${reportDetails.token1Symbol}`)
+	})
+
+	test('shows changed-balance recovery inside the withdrawal review', async () => {
+		const reportDetails = createOpenOracleReportDetails({
+			currentReporter: '0x3000000000000000000000000000000000000000',
+			isDistributed: true,
+			reportTimestamp: 100n,
+			settlementTimestamp: 160n,
+		})
+		const renderedComponent = await renderIntoDocument(
+			<OpenOracleSection
+				{...createOpenOracleSectionProps({
+					activeView: 'selected-report',
+					openOracleReportDetails: reportDetails,
+					openOracleWithdrawalReviewMessage: {
+						balance: 'token1',
+						message: 'Your withdrawable REPv2 balance changed. Review the updated amount and confirm again',
+					},
+					openOracleWithdrawableBalances: { eth: 0n, token1: 125n * ETH, token2: 0n },
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Withdraw REPv2' }))
+
+		const dialog = documentQueries.getByRole('dialog', { name: 'Withdraw REPv2' })
+		const dialogQueries = within(dialog)
+		expect(dialogQueries.getByText('125 REPv2')).not.toBeNull()
+		expect(dialogQueries.getByRole('alert').textContent).toContain('Your withdrawable REPv2 balance changed. Review the updated amount and confirm again')
+		expectTransactionButtonEnabled(dialog, 'Confirm Withdrawal')
+	})
+
+	test('cancels an in-progress withdrawal balance check when its review closes', async () => {
+		const cancelWithdrawalBalanceCheck = mock(() => undefined)
+		const reportDetails = createOpenOracleReportDetails({
+			currentReporter: '0x3000000000000000000000000000000000000000',
+			isDistributed: true,
+			reportTimestamp: 100n,
+			settlementTimestamp: 160n,
+		})
+		const renderedComponent = await renderIntoDocument(
+			<OpenOracleSection
+				{...createOpenOracleSectionProps({
+					activeView: 'selected-report',
+					onCancelOpenOracleWithdrawalBalanceCheck: cancelWithdrawalBalanceCheck,
+					openOracleReportDetails: reportDetails,
+					openOracleWithdrawableBalances: { eth: 7n * ETH, token1: 0n, token2: 0n },
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Withdraw ETH' }))
+		const dialog = documentQueries.getByRole('dialog', { name: 'Withdraw ETH' })
+		fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
+
+		expect(cancelWithdrawalBalanceCheck).toHaveBeenCalledTimes(1)
+		expect(documentQueries.queryByRole('dialog', { name: 'Withdraw ETH' })).toBeNull()
 	})
 
 	test('shows a terminal balance-load error without stale loading copy', async () => {
