@@ -5274,8 +5274,12 @@
 						Child pools resolve outcomes through the forker. When the parent
 						universe forks on the pool's question, each child stores its selected
 						Zoltar outcome index as the fixed result, whether the fork began
-						through the pool-specific path or a direct Zoltar call. That result
-						applies after the continuation deadline and is final for that pool.
+						through the pool-specific path or a direct Zoltar call. The pool stores
+						and reports that result from child creation, and it is final for that
+						pool. Pool asset redemptions begin after the child becomes operational.
+						When a continuation game exists, it uses the same result for
+						carried-deposit settlement only after its remaining continuation
+						deadline.
 						Later universe forks cannot transition a pool with an inherited fixed
 						result, even when they reuse the pool question. A child created by an
 						unrelated fork without an inherited fixed result uses a local

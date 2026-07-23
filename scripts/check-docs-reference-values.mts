@@ -23,6 +23,7 @@ const escalationGameCarry = await readFile('solidity/contracts/peripherals/Escal
 const escalationGameState = await readFile('solidity/contracts/peripherals/EscalationGameState.sol', 'utf8')
 const escalationGameTypes = await readFile('solidity/contracts/peripherals/EscalationGameTypes.sol', 'utf8')
 const escalationGameForker = await readFile('solidity/contracts/peripherals/EscalationGameForker.sol', 'utf8')
+const escalationGameCalculations = await readFile('solidity/contracts/peripherals/EscalationGameCalculations.sol', 'utf8')
 const escalationGameSettlement = await readFile('solidity/contracts/peripherals/EscalationGameSettlement.sol', 'utf8')
 const escalationGameEscrow = await readFile('solidity/contracts/peripherals/EscalationGameEscrow.sol', 'utf8')
 const priceCoordinator = await readFile('solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol', 'utf8')
@@ -153,8 +154,10 @@ function assertNonDecisionLifecycleDocs(): void {
 	assert.match(normalizedStatoblast, /<span>Edge cases<\/span> <b\s*>Only continuations without a fixed outcome can fork again; their game-local trigger may be a local non-decision or an inherited threshold tie\.<\/b\s*>/)
 	assert.match(
 		normalizedStatoblast,
-		/<h3 id="child-outcome-resolution">Child Outcome Resolution<\/h3>[\s\S]*Later universe forks cannot transition a pool with an inherited fixed result, even when they reuse the pool question\.[\s\S]*Winning-share redemption burns only the fixed winning token and reduces the pool's remaining economic claim supply\.[\s\S]*surviving sibling outcome token as winning against that reduced denominator\.[\s\S]*fixed-outcome pool cannot use another fork to export a local non-decision[\s\S]*lock the depositor's vault ownership and block REP redemption[\s\S]*Carried winning proofs from the parent continuation remain claimable/,
+		/<h3 id="child-outcome-resolution">Child Outcome Resolution<\/h3>[\s\S]*pool stores and reports that result from child creation[\s\S]*Pool asset redemptions begin after the child becomes operational\.[\s\S]*continuation game exists[\s\S]*carried-deposit settlement only after its remaining continuation deadline\.[\s\S]*Later universe forks cannot transition a pool with an inherited fixed result, even when they reuse the pool question\.[\s\S]*Winning-share redemption burns only the fixed winning token and reduces the pool's remaining economic claim supply\.[\s\S]*surviving sibling outcome token as winning against that reduced denominator\.[\s\S]*fixed-outcome pool cannot use another fork to export a local non-decision[\s\S]*lock the depositor's vault ownership and block REP redemption[\s\S]*Carried winning proofs from the parent continuation remain claimable/,
 	)
+	assert.match(securityPoolForker, /function getQuestionOutcome\([\s\S]*if \(data\.fixedQuestionOutcomePlusOne > 0\)[\s\S]*return BinaryOutcomes\.BinaryOutcome\(data\.fixedQuestionOutcomePlusOne - 1\)/)
+	assert.match(escalationGameCalculations, /function getFinalQuestionResolution\(\)[\s\S]*if \(block\.timestamp <= getEscalationGameEndDate\(\)\) return BinaryOutcomes\.BinaryOutcome\.None/)
 	assert.match(
 		normalizedInvariants,
 		/<summary><code>ESC-12<\/code><span class="invariant-title">Pool and continuation payout agreement<\/span><\/summary>[\s\S]*Once a pool inherits that fixed outcome, new local escalation deposits and every later fork transition revert[\s\S]*rejects new local escalation REP before escrow[\s\S]*eligible share, vault REP, and carried-proof redemption paths remain available/,
