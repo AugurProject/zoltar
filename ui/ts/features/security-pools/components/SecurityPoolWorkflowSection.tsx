@@ -737,14 +737,7 @@ export function SecurityPoolWorkflowSection({
 						})}
 				sticky={false}
 				title={getSelectedPoolCardTitle(marketDetails === undefined ? undefined : getQuestionTitle(marketDetails))}
-				items={
-					selectedPoolSummaryPool === undefined
-						? []
-						: [
-								{ label: commonCopy.securityPoolAddress, value: <AddressValue address={selectedPoolSummaryPool.securityPoolAddress} /> },
-								{ label: commonCopy.universe, value: <UniverseLink universeId={selectedPoolSummaryPool.universeId} /> },
-							]
-				}
+				items={selectedPoolSummaryPool === undefined ? [] : [{ label: commonCopy.universe, value: <UniverseLink universeId={selectedPoolSummaryPool.universeId} /> }]}
 				variant='context-strip'
 			>
 				<div className='selected-pool-context-controls'>
