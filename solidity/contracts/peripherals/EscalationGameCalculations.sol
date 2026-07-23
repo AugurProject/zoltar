@@ -3,7 +3,7 @@ pragma solidity 0.8.35;
 
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameState } from './EscalationGameState.sol';
-import { ESCALATION_TIME_LENGTH } from './EscalationGameTypes.sol';
+import { ESCALATION_TIME_LENGTH, NonDecisionState } from './EscalationGameTypes.sol';
 
 abstract contract EscalationGameCalculations is EscalationGameState {
 	// Attrition cost = startBond * exp( ln(ratio) * t / T ) where ratio = nonDecisionThreshold / startBond.
@@ -32,7 +32,7 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 	}
 
 	function getEscalationGameEndDate() public view returns (uint256 endTime) {
-		if (nonDecisionTimestamp > 0) return nonDecisionTimestamp;
+		if (nonDecisionState == NonDecisionState.Local) return nonDecisionTimestamp;
 		if (forkContinuation) {
 			if (forkResumedAt == 0) return type(uint256).max;
 			uint256 requiredElapsed = computeTimeSinceStartFromAttritionCost(getBindingCapital());
@@ -73,6 +73,13 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 	function hasReachedNonDecision() public view returns (bool) {
 		(uint256 invalidBalance, uint256 yesBalance, uint256 noBalance) = _getOutcomeBalances();
 		return proofVerifier.hasReachedNonDecision([invalidBalance, yesBalance, noBalance], nonDecisionThreshold);
+	}
+
+	function canTriggerOwnFork() public view returns (bool) {
+		if (nonDecisionState == NonDecisionState.Local) return true;
+		return
+			nonDecisionState == NonDecisionState.InheritedThresholdTie &&
+			fixedQuestionOutcome == BinaryOutcomes.BinaryOutcome.None;
 	}
 
 	function getBindingCapital() public view returns (uint256) {

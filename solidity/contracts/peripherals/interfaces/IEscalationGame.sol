@@ -14,6 +14,8 @@ enum CarryConsumptionReason {
 interface IEscalationGameEvents {
 	/// @notice The game reached its non-decision threshold; timestamp uses Unix seconds.
 	event NonDecisionReached(uint256 nonDecisionTimestamp);
+	/// @notice A continuation inherited two or more threshold-full outcomes without fabricating a local timestamp.
+	event InheritedThresholdTie(address indexed sourceGame);
 	/// @notice Accepted REP and resulting escrow totals, all in REP token base units. `depositIndex` is the local
 	/// per-outcome array index; `LocalDepositAppended.parentDepositIndex` is the stable continuation identity.
 	/// `cumulativeRepAmount` is the resulting outcome total.

@@ -7,7 +7,7 @@ import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameProofVerifier } from './EscalationGameProofVerifier.sol';
 import { EscalationGameSettlement } from './EscalationGameSettlement.sol';
 import { EscalationGameState } from './EscalationGameState.sol';
-import { ESCALATION_TIME_LENGTH, OutcomeState } from './EscalationGameTypes.sol';
+import { ESCALATION_TIME_LENGTH, NonDecisionState, OutcomeState } from './EscalationGameTypes.sol';
 import { EscalationGameDepositDelegate } from './EscalationGameDepositDelegate.sol';
 
 contract EscalationGame is EscalationGameSettlement {
@@ -58,7 +58,7 @@ contract EscalationGame is EscalationGameSettlement {
 		BinaryOutcomes.BinaryOutcome outcome,
 		uint256 amount
 	) external view returns (uint256 acceptedAmount, uint256 resultingCumulativeAmount) {
-		require(nonDecisionTimestamp == 0, 'Non-decision done');
+		require(nonDecisionState == NonDecisionState.None, 'Non-decision done');
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
 		require(getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None, 'Question resolved');
 		require(outcomeState[uint8(outcome)].balance < nonDecisionThreshold, 'Outcome full');
