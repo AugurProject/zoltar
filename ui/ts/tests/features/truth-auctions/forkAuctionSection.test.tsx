@@ -864,6 +864,43 @@ describe('ForkAuctionSection', () => {
 		expect(documentQueries.queryByText('Security Pool for Yes universe does not exist.')).toBeNull()
 	})
 
+	test('replaces the start action with auction status after the truth auction has started', async () => {
+		const startedChildPool = createChildPool({
+			systemState: 'forkTruthAuction',
+			truthAuctionStartedAt: 10n,
+		})
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					auctionDetailsOverride: createForkAuctionDetails({
+						parentSecurityPoolAddress: PARENT_POOL_ADDRESS,
+						securityPoolAddress: startedChildPool.securityPoolAddress,
+						systemState: 'forkTruthAuction',
+						truthAuctionStartedAt: 10n,
+						universeId: startedChildPool.universeId,
+					}),
+					currentStageView: 'auction',
+					currentTimestamp: 20n,
+					securityPools: [startedChildPool],
+					selectedStageView: 'auction',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const statusHeading = documentQueries.getByRole('heading', { name: 'Truth Auction Status' })
+		const statusHeader = statusHeading.closest('.section-block-header')
+		if (!(statusHeader instanceof HTMLElement)) throw new Error('Expected truth auction status header')
+		expect(statusHeader.querySelector('.section-block-badge .badge')?.textContent?.trim()).toBe('Started')
+		expect(documentQueries.getByText('1970-01-01 00:00:10 UTC')).not.toBeNull()
+		expect(documentQueries.queryByText('Inactive')).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Start Truth Auction' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Start Truth Auction' })).toBeNull()
+		expect(documentQueries.queryByText('Truth auction already started.')).toBeNull()
+	})
+
 	test('shows truth auction end time as a timestamp instead of a standalone time-left field', async () => {
 		const currentChildPool = createChildPool({
 			securityPoolAddress: '0x00000000000000000000000000000000000000f7',

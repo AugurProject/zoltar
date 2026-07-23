@@ -355,6 +355,7 @@ function getTruthAuctionStateBadge({
 		if (isStartTruthAuctionInProgress || (hasSelectedAuctionChildPool && truthAuctionStartedAt === 0n && startTruthAuctionCountdown !== undefined && startTruthAuctionCountdown > 0n)) {
 			return { label: commonCopy.pending, tone: 'pending' }
 		}
+		if (truthAuctionStartedAt > 0n) return { label: forkAuctionCopy.started, tone: 'pending' }
 		return { label: forkAuctionCopy.inactive, tone: 'muted' }
 	}
 	if (!truthAuction.finalized) {
@@ -646,7 +647,7 @@ export function ForkAuctionSection({
 		isStartTruthAuctionInProgress,
 		startTruthAuctionCountdown,
 		truthAuction: truthAuctionStatus,
-		truthAuctionStartedAt: auctionHasStartedAtValue,
+		truthAuctionStartedAt: effectiveTruthAuctionStartedAt ?? 0n,
 	})
 	const startedDisplay = (() => {
 		if (hasStartedTruthAuction) {
@@ -845,7 +846,6 @@ export function ForkAuctionSection({
 	})
 	const bidPriceValidationMessage = getTruthAuctionBidPriceValidationMessage(forkAuctionForm.submitBidPrice)
 	const startTruthAuctionAvailabilityMessage = (() => {
-		if (hasStartedTruthAuction) return forkAuctionCopy.auctionStartedReason
 		if (isStartTruthAuctionInProgress) return forkAuctionCopy.startingTruthAuction
 		return startTruthAuctionGuardMessage
 	})()
@@ -1623,22 +1623,24 @@ export function ForkAuctionSection({
 							{renderWorkflowMetricGrid(auctionStatusMetrics)}
 						</SectionBlock>
 
-						<SectionBlock title={forkAuctionCopy.startTruthAuction} variant='embedded'>
-							<p className='detail'>{forkAuctionCopy.formatStartTruthAuctionDetail(AUCTIONED_BOND_ALLOWANCE_LABEL)}</p>
-							{startTruthAuctionReadyInText === undefined ? undefined : <p className='detail'>{startTruthAuctionReadyInText}</p>}
-							{truthAuctionBypassReason === undefined ? undefined : <p className='detail'>{truthAuctionBypassReason}</p>}
-							<div className='actions'>
-								{renderStageActionButton({
-									action: 'startTruthAuction',
-									availability: createActionAvailability(!hasSelectedAuctionChildPool ? forkAuctionCopy.formatMissingChildUniverseDetail(selectedAuctionLabel) : startTruthAuctionAvailabilityMessage),
-									forceEnabled: hasSelectedAuctionChildPool,
-									idleLabel: truthAuctionBypassReason === undefined ? forkAuctionCopy.startTruthAuction : forkAuctionCopy.bypassTruthAuction,
-									onClick: onStartTruthAuctionSubmit,
-									pendingLabel: truthAuctionBypassReason === undefined ? forkAuctionCopy.startingTruthAuction : forkAuctionCopy.bypassingAuctionTruncated,
-									tone: 'primary',
-								})}
-							</div>
-						</SectionBlock>
+						{hasStartedTruthAuction ? undefined : (
+							<SectionBlock title={forkAuctionCopy.startTruthAuction} variant='embedded'>
+								<p className='detail'>{forkAuctionCopy.formatStartTruthAuctionDetail(AUCTIONED_BOND_ALLOWANCE_LABEL)}</p>
+								{startTruthAuctionReadyInText === undefined ? undefined : <p className='detail'>{startTruthAuctionReadyInText}</p>}
+								{truthAuctionBypassReason === undefined ? undefined : <p className='detail'>{truthAuctionBypassReason}</p>}
+								<div className='actions'>
+									{renderStageActionButton({
+										action: 'startTruthAuction',
+										availability: createActionAvailability(!hasSelectedAuctionChildPool ? forkAuctionCopy.formatMissingChildUniverseDetail(selectedAuctionLabel) : startTruthAuctionAvailabilityMessage),
+										forceEnabled: hasSelectedAuctionChildPool,
+										idleLabel: truthAuctionBypassReason === undefined ? forkAuctionCopy.startTruthAuction : forkAuctionCopy.bypassTruthAuction,
+										onClick: onStartTruthAuctionSubmit,
+										pendingLabel: truthAuctionBypassReason === undefined ? forkAuctionCopy.startingTruthAuction : forkAuctionCopy.bypassingAuctionTruncated,
+										tone: 'primary',
+									})}
+								</div>
+							</SectionBlock>
+						)}
 
 						{renderSubmitBidSection()}
 					</fieldset>

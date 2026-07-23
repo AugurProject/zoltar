@@ -115,7 +115,6 @@ export const endedAtLead = 'Ended at: '
 export const finalizeTruthAuction = 'Finalize Truth Auction'
 export const finalizingTruthAuctionTruncated = 'Finalizing truth auction…'
 export const formatTruthAuctionStartDelay = (duration: CopyTemplateValue) => `Truth auction can be started in ${duration} once migration ends.`
-export const auctionStartedReason = 'Truth auction already started.'
 export const eligibleDepositsLoading = 'Loading eligible escalation deposits.'
 export const useUnresolvedMigrationReason = 'Use the optional parent escalation-lock cleanup for this pool.'
 export const unresolvedMigrationExpiredReason = 'The optional parent escalation-lock cleanup window has closed.'
