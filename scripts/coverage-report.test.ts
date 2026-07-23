@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
-import { buildTypeScriptCoverage, classifyTypeScriptSource, evaluateCoveragePolicy, mergeLcovRecords, parseChangedLines, parseLcov, readTrackedTypeScriptSources, summarizeSolidityCoverage, type CoveragePolicy } from './coverage-report.mts'
+import { buildTypeScriptCoverage, classifyTypeScriptSource, evaluateCoveragePolicy, mergeLcovRecords, parseChangedLines, parseLcov, readTrackedTypeScriptSources, resolveCoverageBaseRef, summarizeSolidityCoverage, type CoveragePolicy } from './coverage-report.mts'
 
 describe('TypeScript coverage accounting', () => {
 	test('uses weighted executable totals instead of averaging file percentages', () => {
@@ -60,7 +60,7 @@ end_of_record
 
 	test('lists unloaded runtime source while excluding tests, generated files, and type-only modules', () => {
 		const report = buildTypeScriptCoverage(new Map(), [
-			{ file: 'shared/ts/runtime.ts', source: 'export const answer = 42' },
+			{ file: 'shared/ts/runtime.ts', source: 'export const answer = () => 42\nanswer()' },
 			{ file: 'shared/ts/types.ts', source: 'export interface Answer { value: number }' },
 			{ file: 'shared/ts/runtime.test.ts', source: 'test("answer", () => {})' },
 			{ file: 'ui/ts/contractArtifact.ts', source: 'export const artifact = {}' },
@@ -68,6 +68,8 @@ end_of_record
 
 		expect(report.surfaces.shared.unloadedFiles).toEqual(['shared/ts/runtime.ts'])
 		expect(report.surfaces.shared.sourceFiles).toBe(1)
+		expect(report.surfaces.shared.lines).toEqual({ covered: 0, total: 2, percentage: 0 })
+		expect(report.surfaces.shared.functions).toEqual({ covered: 0, total: 1, percentage: 0 })
 		expect(report.excludedFiles).toContain('shared/ts/types.ts')
 		expect(report.excludedFiles).toContain('shared/ts/runtime.test.ts')
 		expect(report.excludedFiles).toContain('ui/ts/contractArtifact.ts')
@@ -145,9 +147,35 @@ describe('coverage policy', () => {
 		expect(result.failures).toContain('First-party Solidity line coverage 99.50% is below 99.90%')
 		expect(result.failures).toContain('Changed product TypeScript line coverage 85.00% is below 90.00%')
 	})
+
+	test('rejects an unavailable configured changed-line metric', () => {
+		const result = evaluateCoveragePolicy(
+			{
+				typescript: {
+					surfaces: {
+						ui: surface(80, 70),
+						shared: { ...surface(75, 65), unloadedFiles: ['shared/ts/known.ts'] },
+						tooling: surface(35, 30),
+					},
+					excludedFiles: [],
+				},
+				changedLines: { available: false },
+			},
+			policy,
+		)
+
+		expect(result.failures).toContain('Changed product TypeScript line coverage is unavailable')
+	})
 })
 
 describe('changed-line and Solidity coverage', () => {
+	test('uses origin/main as the standard changed-line base while honoring overrides', () => {
+		expect(resolveCoverageBaseRef(['bun', 'coverage-report.mts'], undefined)).toBe('origin/main')
+		expect(resolveCoverageBaseRef(['bun', 'coverage-report.mts'], 'upstream/main')).toBe('upstream/main')
+		expect(resolveCoverageBaseRef(['bun', 'coverage-report.mts', '--base-ref', 'HEAD~1'], 'upstream/main')).toBe('HEAD~1')
+		expect(() => resolveCoverageBaseRef(['bun', 'coverage-report.mts', '--base-ref'], undefined)).toThrow('--base-ref requires a git ref')
+	})
+
 	test('parses added line numbers from zero-context git diffs', () => {
 		const changed = parseChangedLines(`diff --git a/ui/ts/app.ts b/ui/ts/app.ts
 --- a/ui/ts/app.ts

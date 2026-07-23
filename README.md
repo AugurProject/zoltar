@@ -225,6 +225,6 @@ Use `ANVIL_RPC=http://host.docker.internal:8545 bun run gas-costs` when the comm
 - `bun run tsc` is a pure typecheck for the app TypeScript, the Solidity-side TypeScript utilities, and the Bun build/dev scripts. It does not regenerate shared assets or vendor output.
 - `bun run test` runs the TypeScript check first, then executes the test suite.
 - `bun run test:launch-invariants` is the targeted pre-release gate for adversarial fork, truth-auction, unresolved escalation carry, and auction edge-case invariants.
-- `bun run coverage` runs every canonically discovered TypeScript test, reports weighted coverage for UI, shared, and tooling source, and detects unloaded executable files. Use `bun run coverage:full` to enforce the same policy with the slower Solidity bytecode trace phase.
+- `bun run coverage` runs every canonically discovered TypeScript test, reports weighted coverage for UI, shared, and tooling source, counts statically identified executable lines and functions in unloaded source as zero-hit coverage, and checks changed product TypeScript against `origin/main`. Set `COVERAGE_BASE_REF` or pass `--base-ref` to the reporter to use another comparison ref. Use `bun run coverage:full` to enforce the same policy with the slower Solidity bytecode trace phase.
 - The legacy `ui:*` commands still exist as compatibility aliases, but `app:*` names are the clearer entrypoints because they run more than frontend-only work.
 - The repo uses exact dependency versions for reproducible installs.

@@ -219,6 +219,26 @@ function hasRuntimeStatement(statement: ts.Statement): boolean {
 	return !ts.isEmptyStatement(statement)
 }
 
+function unloadedSourceCoverage(file: string, source: string) {
+	const scriptKind = file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS
+	const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, false, scriptKind)
+	const executableLines = new Set<number>()
+	let functions = 0
+	const addLine = (node: ts.Node) => executableLines.add(sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1)
+	const visit = (node: ts.Node) => {
+		if (ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) return
+		if (ts.isStatement(node)) {
+			if (!hasRuntimeStatement(node)) return
+			if (!ts.isBlock(node)) addLine(node)
+		}
+		if (ts.isFunctionLike(node) && 'body' in node && node.body !== undefined) functions += 1
+		if ((ts.isPropertyDeclaration(node) || ts.isParameter(node)) && node.initializer !== undefined) addLine(node)
+		ts.forEachChild(node, visit)
+	}
+	visit(sourceFile)
+	return { lines: executableLines.size, functions }
+}
+
 function isGeneratedSource(file: string) {
 	return file === 'ui/ts/contractArtifact.ts' || file === 'solidity/ts/types/contractArtifact.ts' || file.startsWith('ui/vendor/') || file.startsWith('ui/js/') || file.startsWith('shared/js/')
 }
@@ -276,6 +296,9 @@ export function buildTypeScriptCoverage(records: Map<string, LcovRecord>, tracke
 		const record = records.get(file)
 		if (record === undefined) {
 			surface.unloadedFiles.push(file)
+			const zeroHitCoverage = unloadedSourceCoverage(file, trackedSource.source)
+			total.linesTotal += zeroHitCoverage.lines
+			total.functionsTotal += zeroHitCoverage.functions
 			continue
 		}
 		surface.loadedFiles += 1
@@ -389,7 +412,9 @@ export function evaluateCoveragePolicy(report: CompleteCoverage, policy: Coverag
 	if (report.solidity !== undefined && report.solidity.firstParty.percentage < policy.solidity.minimumFirstPartyLines) {
 		failures.push(`First-party Solidity line coverage ${report.solidity.firstParty.percentage.toFixed(2)}% is below ${policy.solidity.minimumFirstPartyLines.toFixed(2)}%`)
 	}
-	if (report.changedLines !== undefined && 'percentage' in report.changedLines && report.changedLines.percentage < policy.changedLines.minimum) {
+	if (report.changedLines === undefined || !('percentage' in report.changedLines)) {
+		failures.push('Changed product TypeScript line coverage is unavailable')
+	} else if (report.changedLines.percentage < policy.changedLines.minimum) {
 		failures.push(`Changed product TypeScript line coverage ${report.changedLines.percentage.toFixed(2)}% is below ${policy.changedLines.minimum.toFixed(2)}%`)
 	}
 	return { passed: failures.length === 0, failures }
@@ -530,6 +555,16 @@ function renderMarkdown(report: CompleteCoverage, testFileCount: number, policyR
 	return `${lines.join('\n')}\n`
 }
 
+export function resolveCoverageBaseRef(args: readonly string[], environmentBaseRef: string | undefined) {
+	const baseRefIndex = args.indexOf('--base-ref')
+	if (baseRefIndex !== -1) {
+		const explicitBaseRef = args[baseRefIndex + 1]
+		if (explicitBaseRef === undefined || explicitBaseRef.startsWith('--')) throw new Error('--base-ref requires a git ref')
+		return explicitBaseRef
+	}
+	return environmentBaseRef || 'origin/main'
+}
+
 async function main() {
 	const repositoryRoot = process.cwd()
 	const check = process.argv.includes('--check')
@@ -554,22 +589,17 @@ async function main() {
 		}
 	}
 
-	const baseRefIndex = process.argv.indexOf('--base-ref')
-	const explicitBaseRef = baseRefIndex === -1 ? undefined : process.argv[baseRefIndex + 1]
-	const baseRef = explicitBaseRef || process.env['COVERAGE_BASE_REF'] || undefined
-	let changedLines: CoverageMetric | UnavailableMetric = { available: false }
-	if (baseRef !== undefined) {
-		const diff = await runGit(['diff', '--unified=0', '--no-renames', `${baseRef}...HEAD`, '--'])
-		const sourceFiles = new Set(
-			trackedSources
-				.filter(source => {
-					const surface = classifyTypeScriptSource(source.file, source.source)
-					return surface === 'ui' || surface === 'shared'
-				})
-				.map(source => source.file),
-		)
-		changedLines = calculateChangedLineCoverage(parseChangedLines(diff), lcov, sourceFiles)
-	}
+	const baseRef = resolveCoverageBaseRef(process.argv, process.env['COVERAGE_BASE_REF'])
+	const diff = await runGit(['diff', '--unified=0', '--no-renames', `${baseRef}...HEAD`, '--'])
+	const sourceFiles = new Set(
+		trackedSources
+			.filter(source => {
+				const surface = classifyTypeScriptSource(source.file, source.source)
+				return surface === 'ui' || surface === 'shared'
+			})
+			.map(source => source.file),
+	)
+	const changedLines = calculateChangedLineCoverage(parseChangedLines(diff), lcov, sourceFiles)
 
 	const report: CompleteCoverage = { typescript, ...(solidity === undefined ? {} : { solidity }), changedLines }
 	const policy = parsePolicy(JSON.parse(await readFile(resolve(repositoryRoot, '.coverage-policy.json'), 'utf8')))

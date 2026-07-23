@@ -2,18 +2,18 @@
 	"version": 1,
 	"typescript": {
 		"ui": {
-			"minimumLines": 90.15,
-			"minimumFunctions": 86.99,
+			"minimumLines": 88.06,
+			"minimumFunctions": 80.4,
 			"allowedUnloadedFiles": ["ui/ts/app/App.tsx", "ui/ts/features/open-oracle/hooks/usePriceOracleManager.ts", "ui/ts/features/universes/hooks/useZoltarOperations.ts", "ui/ts/index.ts", "ui/ts/simulation/tevmEngine.ts", "ui/ts/simulation/tevmWorker.ts"]
 		},
 		"shared": {
-			"minimumLines": 76.84,
+			"minimumLines": 76.88,
 			"minimumFunctions": 79.54,
 			"allowedUnloadedFiles": []
 		},
 		"tooling": {
-			"minimumLines": 51.21,
-			"minimumFunctions": 58.53,
+			"minimumLines": 25.13,
+			"minimumFunctions": 24.49,
 			"allowedUnloadedFiles": [
 				"scripts/check-agent-configs.mts",
 				"scripts/check-docs-content.mts",
