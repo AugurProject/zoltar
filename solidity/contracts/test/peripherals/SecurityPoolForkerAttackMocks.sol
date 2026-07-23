@@ -183,6 +183,7 @@ contract SecurityPoolForkerAttackParentMock {
 contract SecurityPoolForkerEscrowAttackFactoryMock {
 	ISecurityPool private childPool;
 	UniformPriceDualCapBatchAuction private childTruthAuction;
+	bytes32 private configuredOriginId = keccak256('fake escalation lineage');
 
 	function configureChild(
 		ISecurityPool configuredChildPool,
@@ -192,8 +193,12 @@ contract SecurityPoolForkerEscrowAttackFactoryMock {
 		childTruthAuction = configuredChildTruthAuction;
 	}
 
-	function getSecurityPoolOriginId(ISecurityPool) external pure returns (bytes32) {
-		return keccak256('fake escalation lineage');
+	function configureOriginId(bytes32 originId) external {
+		configuredOriginId = originId;
+	}
+
+	function getSecurityPoolOriginId(ISecurityPool) external view returns (bytes32) {
+		return configuredOriginId;
 	}
 
 	function deployChildSecurityPool(

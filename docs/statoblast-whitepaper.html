@@ -4836,8 +4836,11 @@
 						recursively with Zoltar universes without replaying spent proofs or
 						requiring other vaults to migrate. Before consuming a carried proof,
 						the forker derives a stable global deposit id as
-						<code>keccak256(abi.encode(originId, uint8(outcomeIndex), parentDepositIndex))</code>.
-						A direct claim recorded anywhere in that origin lineage therefore
+						<code
+							>keccak256(abi.encode(securityPoolFactory, originId, uint8(outcomeIndex),
+							parentDepositIndex))</code
+						>.
+						A direct claim recorded anywhere in that factory-scoped origin lineage therefore
 						blocks the corresponding descendant proof with one mapping lookup.
 					</p>
 					<p id="recursive-fork-depth-risk">
