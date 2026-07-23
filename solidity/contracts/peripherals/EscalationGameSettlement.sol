@@ -94,28 +94,6 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		);
 	}
 
-	function exportUnresolvedDeposit(
-		CarriedDepositProof calldata proof,
-		BinaryOutcomes.BinaryOutcome outcome
-	) public onlySecurityPoolOrForker returns (address depositor, uint256 amount, uint256 parentDepositIndex) {
-		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
-		require(!forkCarrySnapshotRequiresForkedEscrow, 'Forked proof unsupported');
-		uint8 outcomeIndex = uint8(outcome);
-		_verifyAndConsumeCarriedDepositProof(outcomeIndex, proof);
-		_emitCarryDepositConsumed(
-			outcomeIndex,
-			proof.depositor,
-			proof.amount,
-			proof.parentDepositIndex,
-			proof.sourceNodeId,
-			CarryConsumptionReason.Export
-		);
-		depositor = proof.depositor;
-		amount = proof.amount;
-		parentDepositIndex = proof.parentDepositIndex;
-		_consumeEscrowedRepForVault(depositor, amount);
-	}
-
 	function withdrawDeposit(
 		uint256 depositIndex,
 		BinaryOutcomes.BinaryOutcome outcome
