@@ -417,6 +417,9 @@ export function SecurityPoolWorkflowSection({
 	})
 	const selectedPendingOperationId = currentPoolOracleManagerDetails?.pendingOperationSlotId ?? 0n
 	const reportingOracleGuardMessage = (() => {
+		if (reportingLockedReason !== undefined) return undefined
+		if (!selectedPoolStateModel.actions.reportOutcome.enabled) return undefined
+		if ((loadedSelectedPool?.totalSecurityBondAllowance ?? 0n) === 0n) return undefined
 		if (currentPoolOracleManagerDetails === undefined || currentPoolOraclePriceUsable === true) return undefined
 		return currentPoolOracleManagerDetails.lastSettlementTimestamp > 0n ? securityPoolCopy.reportingOraclePriceExpiredReason : securityPoolCopy.reportingOraclePriceRequiredReason
 	})()
