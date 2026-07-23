@@ -257,7 +257,7 @@
 						</tr>
 						<tr>
 							<td>Direct parent claim identity</td>
-							<td>The stable parent deposit index remains in the carry leaf and nullifier proof. A direct own-fork claim combines that index with the origin id and outcome to record one global claimed-deposit id in the shared forker. Every child checks the same id before consuming its local nullifier and subtracts the claimed principal from effective inherited carry, including children created after the claim.</td>
+							<td>The stable parent deposit index remains in the carry leaf and nullifier proof. A direct own-fork claim records one factory-scoped lineage id in the shared forker; the <a href="statoblast-whitepaper.html#migration">fork-migration specification</a> owns the exact construction. Every child checks the same id before consuming its local nullifier and subtracts the claimed principal from effective inherited carry, including children created after the claim.</td>
 						</tr>
 					</tbody>
 				</table>
