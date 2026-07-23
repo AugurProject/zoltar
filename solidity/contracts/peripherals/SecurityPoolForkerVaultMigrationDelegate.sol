@@ -5,6 +5,7 @@ import { Zoltar } from '../Zoltar.sol';
 import { ISecurityPool, SystemState } from './interfaces/ISecurityPool.sol';
 import { ISecurityPoolForkerChildEscalationGameInitializer } from './interfaces/ISecurityPoolForkerChildEscalationGameInitializer.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
+import { EscalationGame } from './EscalationGame.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { SecurityPoolForkerBase } from './SecurityPoolForkerBase.sol';
 import { SecurityPoolForkerForkData } from './SecurityPoolForkerTypes.sol';
@@ -13,11 +14,14 @@ import { SecurityPoolForkerVaultMigrationBase } from './SecurityPoolForkerVaultM
 contract SecurityPoolForkerVaultMigrationDelegate is SecurityPoolForkerVaultMigrationBase {
 	constructor(Zoltar _zoltar) SecurityPoolForkerBase(_zoltar) {}
 
-	function _initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child) internal override {
-		ISecurityPoolForkerChildEscalationGameInitializer(address(this)).initializeChildForkedEscalationGameIfNeeded(
-			parent,
-			child
-		);
+	function _initializeChildForkedEscalationGameIfNeeded(
+		ISecurityPool parent,
+		ISecurityPool child,
+		EscalationGame childEscalationGame
+	) internal override returns (EscalationGame) {
+		return
+			ISecurityPoolForkerChildEscalationGameInitializer(address(this))
+				.initializeChildForkedEscalationGameIfNeeded(parent, child, childEscalationGame);
 	}
 
 	function createChildUniverse(ISecurityPool parent, uint256 outcomeIndex) public {
@@ -25,13 +29,17 @@ contract SecurityPoolForkerVaultMigrationDelegate is SecurityPoolForkerVaultMigr
 		_getOrDeployChildPool(parent, outcomeIndex);
 	}
 
-	function migrateVault(ISecurityPool parent, uint256 outcomeIndex) public {
+	function migrateVault(
+		ISecurityPool parent,
+		uint256 outcomeIndex
+	) public returns (ISecurityPool child, EscalationGame childEscalationGame) {
 		require(
 			block.timestamp <= forkDataByPool[parent].forkActivationTime + SecurityPoolUtils.MIGRATION_TIME,
 			'Migration window closed'
 		);
-		ISecurityPool child = _getOrDeployChildPool(parent, outcomeIndex);
+		(child, childEscalationGame) = _getOrDeployChildPool(parent, outcomeIndex);
 		_migrateVaultUnlockedState(parent, child, msg.sender);
+		return (child, childEscalationGame);
 	}
 
 	function ensureChildPoolRepSplit(ISecurityPool parent, uint256 outcomeIndex, uint256 requiredSplit) public {
