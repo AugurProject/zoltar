@@ -9,7 +9,7 @@ import { createWriteClient, WriteClient } from '../testSupport/simulator/utils/c
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, DAY, WETH_ADDRESS } from '../testSupport/simulator/utils/constants'
 import { addressString, dateToBigintSeconds } from '../testSupport/simulator/utils/bigint'
 import { approveToken, setupTestAccounts, getERC20Balance, getETHBalance } from '../testSupport/simulator/utils/utilities'
-import { approveAndDepositRep, handleOracleReporting, manipulatePriceOracleAndPerformOperation } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
+import { approveAndDepositRep, handleOracleReporting, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
 import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, applyLibraries, deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
 import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/zoltar'
@@ -1304,6 +1304,80 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(withdrawalExecutionLog.args.success, false, 'withdrawing REP below the active bond backing must fail')
 		assert.strictEqual(withdrawalExecutionLog.args.errorMessage, 'Vault bond', 'under-backed withdrawal must expose its exact dynamic reason')
 		assert.deepStrictEqual(await readFinancialState(), withdrawalStateBefore, 'vault bond failure must roll back REP balances and aggregate and per-vault accounting')
+	})
+
+	test('aggregate allowance guard rejects a locally valid update after another vault becomes under-backed', async () => {
+		const repToken = addressString(GENESIS_REPUTATION_TOKEN)
+		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const counterpartyAllowance = (repDeposit * 9n) / 10n
+		const increasedPrice = 2n * 10n ** 18n
+
+		await approveToken(counterpartyClient, repToken, securityPool)
+		await depositRep(counterpartyClient, securityPool, repDeposit)
+		await manipulatePriceOracleAndPerformOperation(counterpartyClient, mockWindow, priceOracle, OperationType.SetSecurityBondsAllowance, counterpartyClient.account.address, counterpartyAllowance)
+		await manipulatePriceOracle(client, mockWindow, priceOracle, increasedPrice)
+
+		const readFinancialState = async () => ({
+			callerRep: await getERC20Balance(client, repToken, client.account.address),
+			callerVault: await getSecurityVault(client, securityPool, client.account.address),
+			counterpartyRep: await getERC20Balance(client, repToken, counterpartyClient.account.address),
+			counterpartyVault: await getSecurityVault(client, securityPool, counterpartyClient.account.address),
+			poolRep: await getERC20Balance(client, repToken, securityPool),
+			totalAllowance: await client.readContract({
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				address: securityPool,
+				functionName: 'totalSecurityBondAllowance',
+				args: [],
+			}),
+		})
+		const stateBefore = await readFinancialState()
+		const locallyBackedAllowance = repDeposit / 10n
+		const updateHash = await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, locallyBackedAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+		const updateReceipt = await client.waitForTransactionReceipt({ hash: updateHash })
+		const executionLog = findExecutedStagedOperationLog(updateReceipt.logs)
+		if (executionLog === undefined) throw new Error('missing ExecutedStagedOperation log for aggregate allowance failure')
+
+		assert.strictEqual(await getLastPrice(client, priceOracle), increasedPrice, 'the aggregate guard must use the increased REP price')
+		assert.strictEqual(executionLog.args.success, false, 'an individually backed allowance must fail when aggregate pool backing is insufficient')
+		assert.strictEqual(executionLog.args.errorMessage, 'Pool allow', 'aggregate allowance failure must expose its exact dynamic reason')
+		assert.deepStrictEqual(await readFinancialState(), stateBefore, 'aggregate allowance failure must roll back both vaults, the pool allowance, and REP balances')
+	})
+
+	test('aggregate withdrawal bond guard rejects an unencumbered vault after another vault becomes under-backed', async () => {
+		const repToken = addressString(GENESIS_REPUTATION_TOKEN)
+		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const counterpartyAllowance = (repDeposit * 9n) / 10n
+		const increasedPrice = 2n * 10n ** 18n
+
+		await approveToken(counterpartyClient, repToken, securityPool)
+		await depositRep(counterpartyClient, securityPool, repDeposit)
+		await manipulatePriceOracleAndPerformOperation(counterpartyClient, mockWindow, priceOracle, OperationType.SetSecurityBondsAllowance, counterpartyClient.account.address, counterpartyAllowance)
+		await manipulatePriceOracle(client, mockWindow, priceOracle, increasedPrice)
+
+		const readFinancialState = async () => ({
+			callerRep: await getERC20Balance(client, repToken, client.account.address),
+			callerVault: await getSecurityVault(client, securityPool, client.account.address),
+			counterpartyRep: await getERC20Balance(client, repToken, counterpartyClient.account.address),
+			counterpartyVault: await getSecurityVault(client, securityPool, counterpartyClient.account.address),
+			poolRep: await getERC20Balance(client, repToken, securityPool),
+			totalAllowance: await client.readContract({
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				address: securityPool,
+				functionName: 'totalSecurityBondAllowance',
+				args: [],
+			}),
+		})
+		const stateBefore = await readFinancialState()
+		const withdrawalAmount = repDeposit / 4n
+		const withdrawalHash = await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.WithdrawRep, client.account.address, withdrawalAmount, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+		const withdrawalReceipt = await client.waitForTransactionReceipt({ hash: withdrawalHash })
+		const executionLog = findExecutedStagedOperationLog(withdrawalReceipt.logs)
+		if (executionLog === undefined) throw new Error('missing ExecutedStagedOperation log for aggregate withdrawal failure')
+
+		assert.strictEqual(await getLastPrice(client, priceOracle), increasedPrice, 'the aggregate guard must use the increased REP price')
+		assert.strictEqual(executionLog.args.success, false, 'an unencumbered vault withdrawal must fail when aggregate pool backing is insufficient')
+		assert.strictEqual(executionLog.args.errorMessage, 'Pool bond', 'aggregate withdrawal failure must expose its exact dynamic reason')
+		assert.deepStrictEqual(await readFinancialState(), stateBefore, 'aggregate withdrawal failure must roll back both vaults, the pool allowance, and REP balances')
 	})
 
 	test('rejecting complete-set redeemer exposes ETH failed and restores every accounting mutation', async () => {
