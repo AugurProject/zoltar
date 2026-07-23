@@ -10,6 +10,7 @@ import {
 	Deposit,
 	MERKLE_MOUNTAIN_RANGE_MAX_PEAKS,
 	Node,
+	NonDecisionState,
 	NULLIFIER_DEPTH,
 	OutcomeState,
 	OutcomeStateView
@@ -225,6 +226,9 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 			totalCarry += snapshotCarryTotals[outcomeIndex];
 		}
 		forkCarrySnapshotRequiresForkedEscrow = totalCarry > 0;
+		if (proofVerifier.hasReachedNonDecision(snapshotResolutionBalances, nonDecisionThreshold)) {
+			nonDecisionState = NonDecisionState.InheritedThresholdTie;
+		}
 
 		_emitForkCarryCheckpoint(
 			sourceGame,
@@ -235,6 +239,9 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 			snapshotCarryTotals,
 			snapshotResolutionBalances
 		);
+		if (nonDecisionState == NonDecisionState.InheritedThresholdTie) {
+			emit InheritedThresholdTie(sourceGame);
+		}
 	}
 
 	function _emitForkCarryCheckpoint(

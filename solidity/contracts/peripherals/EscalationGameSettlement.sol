@@ -4,7 +4,7 @@ pragma solidity 0.8.35;
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameEscrow } from './EscalationGameEscrow.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
-import { CarriedDepositProof, Deposit } from './EscalationGameTypes.sol';
+import { CarriedDepositProof, Deposit, NonDecisionState } from './EscalationGameTypes.sol';
 import { CarryConsumptionReason } from './interfaces/IEscalationGame.sol';
 
 abstract contract EscalationGameSettlement is EscalationGameEscrow {
@@ -121,7 +121,7 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		BinaryOutcomes.BinaryOutcome outcome
 	) public returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) {
 		require(msg.sender == address(securityPool), 'Only pool');
-		require(nonDecisionTimestamp == 0, 'Non-decision done');
+		require(nonDecisionState == NonDecisionState.None, 'Non-decision done');
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
 		BinaryOutcomes.BinaryOutcome questionResolution = _getPayoutQuestionResolution();
 		require(questionResolution != BinaryOutcomes.BinaryOutcome.None, 'Question not final');

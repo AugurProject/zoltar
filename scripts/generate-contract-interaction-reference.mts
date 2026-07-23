@@ -44,7 +44,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/contract-interaction-reference.md'
-const expectedProductionSoliditySourceFingerprint = '2cd6e31e48d437b5bac9ea77a68ac9a5394eaf92c010f0ebc6bfd46afc089cff'
+const expectedProductionSoliditySourceFingerprint = '420b8647fd50b494c560f0fc649ba3b7ec7fa2cac36c9756a6aa7cc8bad40da0'
 
 const eventSourceByName: Record<string, string> = {
 	Approval: 'solidity/contracts/IERC20.sol',
@@ -83,6 +83,7 @@ const eventSourceByName: Record<string, string> = {
 	ForkedEscrowRecorded: 'solidity/contracts/peripherals/EscalationGameState.sol',
 	GameContinuedFromFork: 'solidity/contracts/peripherals/EscalationGameState.sol',
 	GameStarted: 'solidity/contracts/peripherals/EscalationGameState.sol',
+	InheritedThresholdTie: 'solidity/contracts/peripherals/interfaces/IEscalationGame.sol',
 	LocalDepositAppended: 'solidity/contracts/peripherals/interfaces/IEscalationGame.sol',
 	Migrate: 'solidity/contracts/peripherals/tokens/ShareToken.sol',
 	VaultMigrationCheckpoint: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
@@ -321,7 +322,7 @@ const assemblyDelegateCalls: AssemblyDelegateCall[] = [
 	},
 ]
 
-const referencedEventAbiFingerprint = '9aea734263baf56393f268585f3e30eac796fd4095af180ae6a7984af7b96928'
+const referencedEventAbiFingerprint = 'a2d09004dfe746b8f024675f4a617d5b2d8f9bb164515874854179cb2b36ea31'
 
 const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	'solidity/contracts/ERC20.sol': {
@@ -1030,7 +1031,7 @@ const contractReferences: ContractReference[] = [
 				effect: "Uses the supplied pool game's non-decision to fork Zoltar, freezes that pool, and records own-fork REP buckets and snapshot state keyed by its address. The snapshot is canonical only when the supplied pool is already registered by the configured `SecurityPoolFactory`.",
 				declarations: [{ name: 'forkZoltarWithOwnEscalationGame' }],
 				preconditions:
-					'Pool operational; its escalation game reports the supplied pool from `securityPool()` when validated and reached non-decision; universe not already forked. This entrypoint does not authenticate the supplied address against a pool factory; see the [child-game trust boundary](#child-game-trust-boundary).',
+					'Pool operational; its escalation game reports the supplied pool from `securityPool()` when validated and either recorded a local non-decision or inherited a threshold tie without a fixed outcome; universe not already forked. This entrypoint does not authenticate the supplied address against a pool factory; see the [child-game trust boundary](#child-game-trust-boundary).',
 				signals: '`SecurityPoolForkSnapshot`, `ParentRepLocked`, and Zoltar fork events; additionally `EscalationRepDrainedAtFork` when unresolved escalation exists',
 			},
 			{
@@ -1076,7 +1077,7 @@ const contractReferences: ContractReference[] = [
 					"First gets or lazily deploys the selected child universe, REP token, pool, coordinator, and auction, then captures and validates the child's escalation game and uses that same game for continuation backing and escrow payment. A nonempty list claims winning own-fork parent deposits and records their stable identities against descendant replay. An empty list still performs child setup and emits a zero-valued claim summary.",
 				declarations: [{ name: 'claimForkedEscalationDeposits' }],
 				preconditions:
-					'Caller equals `vault`; unresolved escalation existed at an own-question non-decision fork; selected child can be created or loaded, remains in `ForkMigration`, has a continuation game that passes the [child-game trust boundary](#child-game-trust-boundary), and is inside the eight-week claim window. A nonempty list additionally requires the matching winning outcome, deposits belonging to `vault`, and unclaimed deposit identities.',
+					'Caller equals `vault`; unresolved escalation existed when the pool initiated its own fork and the parent game still satisfies `canTriggerOwnFork()` by having either a local non-decision or an inherited threshold tie without a fixed outcome; selected child can be created or loaded, remains in `ForkMigration`, has a continuation game that passes the [child-game trust boundary](#child-game-trust-boundary), and is inside the eight-week claim window. A nonempty list additionally requires the matching winning outcome, deposits belonging to `vault`, and unclaimed deposit identities.',
 				signals:
 					'`DeployChild`, `SecurityPoolRegistered`, `DeploySecurityPool`, `AuthorizationUpdated`, `ChildPoolLinked`, `OwnershipDenominatorSet`, `AwaitingForkContinuationSet`, `EscalationGameSet`, `GameContinuedFromFork`, `ForkCarryCheckpoint`, `MigrationRepSplit`, `ChildEscalationRepMaterialized`, and `ChildPoolRepSwept` as setup requires; per claimed deposit, `CarryDepositConsumed` and `ClaimDeposit`; escrow record/export events when REP is paid; always `ClaimForkedEscalationDepositsToWallet`, including for an empty list',
 			},
@@ -1133,12 +1134,12 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'f7e14533c33a4697972b6396f8567a355e687356b7685156a83868b9e6316b4f',
+		compiledAbiFingerprint: 'b55aad00e1d6e88d4187d76e976289f3ec0e44aacaa926c5520e3abb4a7fc29f',
 		name: 'EscalationGame',
 		purpose: 'Escrows outcome REP, raises the running resolution cost, detects non-decision, and settles local or carried deposits.',
-		readAbiFingerprint: '9a47b56db13d811060b811f30ea675c3f1083267084e6f8a671f876414609adf',
+		readAbiFingerprint: 'ed805db82536ad060437fa3f82ceb85839349441a6fede83e2fd40ee761e13d5',
 		readSurface:
-			'Base getters are `securityPool`, `repToken`, `activationTime`, `nonDecisionThreshold`, `startBond`, `nonDecisionTimestamp`, `forkContinuation`, `forkElapsedAtStart`, `forkResumedAt`, `fixedQuestionOutcome`, `nodes`, `escrowedRepByVault`, and `totalEscrowedRep`. Use `previewDepositOnOutcome`, `computeIterativeAttritionCost`, `computeTimeSinceStartFromAttritionCost`, `totalCost`, `getEscalationGameEndDate`, `getQuestionResolution`, `getFinalQuestionResolution`, `hasReachedNonDecision`, `getBindingCapital`, `getOutcomeBalances`, `getDepositsByOutcome`, `getDepositsByOutcomeLength`, `forkCarrySnapshotInitialized`, `getOutcomeState`, `getForkCarrySnapshot`, `getForkCarryRoots`, `isForkCarryFundingComplete`, `getCarryLeafPageByOutcome`, `getProofConsumedCarriedDepositIndexesByOutcome`, `getLocalUnresolvedPrincipalByVaultAndOutcome`, and `getForkedEscrowByVaultAndOutcome` for calculations, pages, carry state, and escrow. Ordinary users route deposits and withdrawals through `SecurityPool`.',
+			'Base getters are `securityPool`, `repToken`, `activationTime`, `nonDecisionThreshold`, `startBond`, `nonDecisionTimestamp`, `nonDecisionState`, `forkContinuation`, `forkElapsedAtStart`, `forkResumedAt`, `fixedQuestionOutcome`, `nodes`, `escrowedRepByVault`, and `totalEscrowedRep`. Use `previewDepositOnOutcome`, `computeIterativeAttritionCost`, `computeTimeSinceStartFromAttritionCost`, `totalCost`, `getEscalationGameEndDate`, `getQuestionResolution`, `getFinalQuestionResolution`, `hasReachedNonDecision`, `canTriggerOwnFork`, `getBindingCapital`, `getOutcomeBalances`, `getDepositsByOutcome`, `getDepositsByOutcomeLength`, `forkCarrySnapshotInitialized`, `getOutcomeState`, `getForkCarrySnapshot`, `getForkCarryRoots`, `isForkCarryFundingComplete`, `getCarryLeafPageByOutcome`, `getProofConsumedCarriedDepositIndexesByOutcome`, `getLocalUnresolvedPrincipalByVaultAndOutcome`, and `getForkedEscrowByVaultAndOutcome` for calculations, lifecycle authorization, pages, carry state, and escrow. Ordinary users route deposits and withdrawals through `SecurityPool`.',
 		readDeclarations: [
 			{ name: 'previewDepositOnOutcome' },
 			{ name: 'computeIterativeAttritionCost', sourcePath: 'solidity/contracts/peripherals/EscalationGameCalculations.sol' },
@@ -1148,6 +1149,7 @@ const contractReferences: ContractReference[] = [
 			{ name: 'getQuestionResolution', sourcePath: 'solidity/contracts/peripherals/EscalationGameCalculations.sol' },
 			{ name: 'getFinalQuestionResolution', sourcePath: 'solidity/contracts/peripherals/EscalationGameCalculations.sol' },
 			{ name: 'hasReachedNonDecision', sourcePath: 'solidity/contracts/peripherals/EscalationGameCalculations.sol' },
+			{ name: 'canTriggerOwnFork', sourcePath: 'solidity/contracts/peripherals/EscalationGameCalculations.sol' },
 			{ name: 'getBindingCapital', sourcePath: 'solidity/contracts/peripherals/EscalationGameCalculations.sol' },
 			{ name: 'getOutcomeBalances', sourcePath: 'solidity/contracts/peripherals/EscalationGameCalculations.sol' },
 			{ name: 'getDepositsByOutcome', sourcePath: 'solidity/contracts/peripherals/EscalationGameSettlement.sol' },
@@ -1169,6 +1171,7 @@ const contractReferences: ContractReference[] = [
 			{ name: 'nonDecisionThreshold', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
 			{ name: 'startBond', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
 			{ name: 'nonDecisionTimestamp', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
+			{ name: 'nonDecisionState', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
 			{ name: 'forkContinuation', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
 			{ name: 'forkElapsedAtStart', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
 			{ name: 'forkResumedAt', sourcePath: 'solidity/contracts/peripherals/EscalationGameStorage.sol' },
@@ -1208,7 +1211,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'Owning `SecurityPool` only',
 				effect: 'Appends an accepted local deposit, updates outcome and vault escrow, and records its carry leaf.',
 				declarations: [{ name: 'recordDepositFromSecurityPool' }],
-				preconditions: 'Game unresolved; valid outcome; preview and accepted cumulative amount match; room remains below threshold.',
+				preconditions: 'Explicit non-decision state is `None`; game unresolved; valid outcome; preview and accepted cumulative amount match; room remains below threshold.',
 				signals: '`LocalDepositAppended`, `DepositOnOutcome`, optionally `NonDecisionReached`',
 			},
 			{
@@ -1216,16 +1219,16 @@ const contractReferences: ContractReference[] = [
 				caller: 'Owning `SecurityPool` only',
 				declarations: [{ name: 'withdrawDeposit', sourcePath: 'solidity/contracts/peripherals/EscalationGameSettlement.sol' }],
 				effect: 'Consumes one local deposit after resolution. A winner is paid after its haircut; a loser only retires its escrow accounting.',
-				preconditions: 'No prior non-decision; non-`None` supplied outcome; game final; game and pool final outcomes match; valid unsettled local deposit index.',
+				preconditions: 'Explicit non-decision state is `None`; non-`None` supplied outcome; game final; game and pool final outcomes match; valid unsettled local deposit index.',
 				signals: '`CarryDepositConsumed` and `VaultEscrowUpdated`; for a winner, `ClaimDeposit`, positive REP payout `Transfer`, and haircut burn signals when nonzero',
 			},
 			{
 				call: '`initializeForkCarrySnapshotWithResolutionBalances(...)`',
 				caller: 'Owning `SecurityPool` only',
 				declarations: [{ name: 'initializeForkCarrySnapshotWithResolutionBalances', sourcePath: 'solidity/contracts/peripherals/EscalationGameCarry.sol' }],
-				effect: 'Installs the immutable inherited peaks, leaf counts, carry totals, resolution balances, and normalized nullifier roots; zero snapshot ID selects the computed ID.',
+				effect: 'Installs the immutable inherited peaks, leaf counts, carry totals, resolution balances, and normalized nullifier roots; zero snapshot ID selects the computed ID. Two or more threshold-full inherited balances set `nonDecisionState` to `InheritedThresholdTie` without creating a local timestamp.',
 				preconditions: 'Fork-continuation mode; no prior snapshot; each leaf count fits the MMR; supplied nonzero snapshot ID equals the hash of the normalized data.',
-				signals: '`ForkCarryCheckpoint`',
+				signals: '`ForkCarryCheckpoint`; additionally `InheritedThresholdTie` when the installed balances meet the non-decision threshold',
 			},
 			{
 				call: '`claimDepositForWinning(depositIndex, outcome)`',

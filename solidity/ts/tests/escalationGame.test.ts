@@ -29,6 +29,9 @@ import { replayZoltarEvents, type ReplayLog } from './eventReplay/eventReplayMod
 
 const ESCALATION_TIME_LENGTH = 4233600n
 const MAX_UINT256 = 2n ** 256n - 1n
+const NON_DECISION_STATE_NONE = 0n
+const NON_DECISION_STATE_LOCAL = 1n
+const NON_DECISION_STATE_INHERITED_THRESHOLD_TIE = 2n
 const initializeForkCarrySnapshotAbi: Abi = [
 	{
 		inputs: [
@@ -126,6 +129,30 @@ describe('Escalation Game Test Suite', () => {
 		await client.readContract({
 			abi: peripherals_EscalationGame_EscalationGame.abi,
 			functionName: 'hasReachedNonDecision',
+			address: escalationGame,
+			args: [],
+		})
+
+	const readNonDecisionState = async (escalationGame: Address) =>
+		await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'nonDecisionState',
+			address: escalationGame,
+			args: [],
+		})
+
+	const readCanTriggerOwnFork = async (escalationGame: Address) =>
+		await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'canTriggerOwnFork',
+			address: escalationGame,
+			args: [],
+		})
+
+	const readNonDecisionTimestamp = async (escalationGame: Address) =>
+		await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			functionName: 'nonDecisionTimestamp',
 			address: escalationGame,
 			args: [],
 		})
@@ -795,6 +822,9 @@ describe('Escalation Game Test Suite', () => {
 		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, nonDecisionThreshold)
 		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.No, nonDecisionThreshold)
 		assert.strictEqual(await readHasReachedNonDecision(escalationGame), true, 'two threshold-reaching outcomes should trigger non-decision')
+		assert.strictEqual(await readNonDecisionState(escalationGame), NON_DECISION_STATE_LOCAL, 'a local threshold-crossing deposit should record local non-decision')
+		assert.strictEqual(await readCanTriggerOwnFork(escalationGame), true, 'a local non-decision should authorize the own-fork path')
+		assert.ok((await readNonDecisionTimestamp(escalationGame)) > 0n, 'a local non-decision should record its event time')
 		assert.strictEqual(await getQuestionResolution(client, escalationGame), QuestionOutcome.None, 'non-decision should leave the question unresolved')
 
 		const activationTime = await getActivationTime(client, escalationGame)
@@ -1789,14 +1819,67 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual((await readOutcomeState(child.escalationGameAddress, QuestionOutcome.Yes)).balance, tiedBalance, 'the yes balance should match the tied parent snapshot')
 		assert.strictEqual((await readOutcomeState(child.escalationGameAddress, QuestionOutcome.No)).balance, tiedBalance, 'the no balance should match the tied parent snapshot')
 		assert.strictEqual(await getQuestionResolution(client, child.escalationGameAddress), QuestionOutcome.None, 'the inherited tie should remain unresolved')
+		assert.strictEqual(await readNonDecisionState(child.escalationGameAddress), NON_DECISION_STATE_NONE, 'a below-threshold inherited tie should remain an ordinary live continuation')
+		assert.strictEqual(await readCanTriggerOwnFork(child.escalationGameAddress), false, 'a below-threshold inherited tie should not authorize a fork')
 	})
 
-	test('fork continuation snapshot allows tied preserved leaders at non-decision threshold', async () => {
+	test('fork continuation records an inherited threshold tie without fabricating a local timestamp', async () => {
 		const child = await deployEscalationGameWithProofPool()
 		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
-		await initializeSnapshotWithResolutionBalancesViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 1n, 1n], [0n, nonDecisionThreshold, nonDecisionThreshold], [0n, nonDecisionThreshold, nonDecisionThreshold], [zeroHash(), zeroHash(), zeroHash()])
+		const snapshotHash = await initializeSnapshotWithResolutionBalancesViaTestSecurityPool(
+			child.testSecurityPoolAddress,
+			[zeroPeakArray(), zeroPeakArray(), zeroPeakArray()],
+			[0n, 1n, 1n],
+			[0n, nonDecisionThreshold, nonDecisionThreshold],
+			[0n, nonDecisionThreshold, nonDecisionThreshold],
+			[zeroHash(), zeroHash(), zeroHash()],
+		)
 
 		assert.strictEqual(await getQuestionResolution(client, child.escalationGameAddress), QuestionOutcome.None, 'threshold-tied carried non-decision states should remain unresolved')
+		assert.strictEqual(await readHasReachedNonDecision(child.escalationGameAddress), true, 'the inherited balances should satisfy the structural threshold predicate')
+		assert.strictEqual(await readNonDecisionState(child.escalationGameAddress), NON_DECISION_STATE_INHERITED_THRESHOLD_TIE, 'the lifecycle state should identify an inherited threshold tie')
+		assert.strictEqual(await readNonDecisionTimestamp(child.escalationGameAddress), 0n, 'snapshot initialization should not fabricate a local non-decision timestamp')
+		assert.strictEqual(await readCanTriggerOwnFork(child.escalationGameAddress), true, 'an inherited threshold tie without a fixed outcome should authorize its own fork')
+		await assert.rejects(
+			client.readContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: child.escalationGameAddress,
+				functionName: 'previewDepositOnOutcome',
+				args: [QuestionOutcome.Invalid, reportBond],
+			}),
+			/Non-decision done/,
+			'an inherited threshold tie should close the deposit path without requiring a synthetic local deposit',
+		)
+		const snapshotReceipt = await client.getTransactionReceipt({ hash: snapshotHash })
+		const snapshotEventNames = snapshotReceipt.logs
+			.filter(log => log.address.toLowerCase() === child.escalationGameAddress.toLowerCase())
+			.flatMap(log => {
+				try {
+					return [decodeEventLog({ abi: peripherals_EscalationGame_EscalationGame.abi, data: log.data, topics: log.topics }).eventName]
+				} catch (error) {
+					if (!isIgnorableLogDecodeError(error)) throw error
+					return []
+				}
+			})
+		assert.strictEqual(snapshotEventNames.filter(eventName => eventName === 'InheritedThresholdTie').length, 1, 'snapshot initialization should emit one inherited-threshold-tie lifecycle event')
+	})
+
+	test('a fixed-outcome continuation settles an inherited threshold tie instead of authorizing another fork', async () => {
+		const child = await deployEscalationGameWithProofPool()
+		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThreshold, 0n, QuestionOutcome.Yes)
+		await initializeSnapshotWithResolutionBalancesViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 1n, 1n], [0n, nonDecisionThreshold, nonDecisionThreshold], [0n, nonDecisionThreshold, nonDecisionThreshold], [zeroHash(), zeroHash(), zeroHash()])
+
+		assert.strictEqual(await readNonDecisionState(child.escalationGameAddress), NON_DECISION_STATE_INHERITED_THRESHOLD_TIE, 'the fixed child should retain the inherited threshold-tie lifecycle state')
+		assert.strictEqual(await readCanTriggerOwnFork(child.escalationGameAddress), false, 'a fixed child should continue to its selected outcome instead of forking again')
+		await resumeEscalationFromFork(child.escalationGameAddress)
+		const continuationEndDate = await client.readContract({
+			abi: peripherals_EscalationGame_EscalationGame.abi,
+			address: child.escalationGameAddress,
+			functionName: 'getEscalationGameEndDate',
+			args: [],
+		})
+		await mockWindow.setTime(continuationEndDate + 1n)
+		assert.strictEqual(await getQuestionResolution(client, child.escalationGameAddress), QuestionOutcome.Yes, 'the fixed branch should resolve normally after its continuation deadline')
 	})
 
 	test('carried proof pays its authenticated depositor without consulting vault escrow', async () => {

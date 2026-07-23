@@ -48,7 +48,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 		EscalationGame escalationGame = parent.escalationGame();
 		// A non-decision alone does not authorize forked escrow claims; fork-time escrow state is also required.
 		require(
-			forkDataByPool[parent].unresolvedEscalationAtFork && escalationGame.nonDecisionTimestamp() > 0,
+			forkDataByPool[parent].unresolvedEscalationAtFork && escalationGame.canTriggerOwnFork(),
 			'Non-decision required'
 		);
 		require(forkDataByPool[parent].ownFork, 'Own fork required');

@@ -5,7 +5,13 @@ import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameStorage } from './EscalationGameStorage.sol';
 import { IEscalationGameEvents } from './interfaces/IEscalationGame.sol';
 import { MerkleMountainRange } from './MerkleMountainRange.sol';
-import { Deposit, MERKLE_MOUNTAIN_RANGE_MAX_PEAKS, Node, OutcomeState } from './EscalationGameTypes.sol';
+import {
+	Deposit,
+	MERKLE_MOUNTAIN_RANGE_MAX_PEAKS,
+	Node,
+	NonDecisionState,
+	OutcomeState
+} from './EscalationGameTypes.sol';
 
 interface IEscalationGameDepositContext {
 	function getQuestionResolution() external view returns (BinaryOutcomes.BinaryOutcome);
@@ -74,6 +80,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 			totalEscrowedRep
 		);
 		if (IEscalationGameDepositContext(address(this)).hasReachedNonDecision()) {
+			nonDecisionState = NonDecisionState.Local;
 			nonDecisionTimestamp = block.timestamp;
 			emit NonDecisionReached(nonDecisionTimestamp);
 		}
@@ -86,7 +93,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		uint256 repAmount,
 		uint256 expectedCumulativeRepAmount
 	) private view {
-		require(nonDecisionTimestamp == 0, 'Non-decision done');
+		require(nonDecisionState == NonDecisionState.None, 'Non-decision done');
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
 		require(
 			IEscalationGameDepositContext(address(this)).getQuestionResolution() == BinaryOutcomes.BinaryOutcome.None,

@@ -240,6 +240,10 @@ contract SecurityPoolForkerEscrowAttackGameMock {
 		return 1;
 	}
 
+	function canTriggerOwnFork() external pure returns (bool) {
+		return true;
+	}
+
 	function getQuestionResolution() external pure returns (BinaryOutcomes.BinaryOutcome) {
 		return BinaryOutcomes.BinaryOutcome.None;
 	}

@@ -736,7 +736,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 
 	function forkZoltarWithOwnEscalationGame(ISecurityPool securityPool) external {
 		EscalationGame escalationGame = _getEscalationGame(securityPool);
-		require(address(escalationGame) != address(0x0) && escalationGame.nonDecisionTimestamp() > 0, 'Need game');
+		require(address(escalationGame) != address(0x0) && escalationGame.canTriggerOwnFork(), 'Need game');
 		require(securityPool.systemState() != SystemState.PoolForked, 'Forked');
 		require(securityPool.systemState() == SystemState.Operational, 'Inactive');
 		ReputationToken rep = securityPool.repToken();
