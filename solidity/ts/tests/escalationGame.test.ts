@@ -2300,33 +2300,6 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual(await readCarryTotal(child.escalationGameAddress, QuestionOutcome.Yes), 0n, 'the losing inherited outcome should already be terminal')
 	})
 
-	test('forked proof export is rejected in escrow-backed continuation mode', async () => {
-		const parent = await deployEscalationGameWithProofPool()
-		await startEscalation(parent.escalationGameAddress, reportBond, nonDecisionThreshold)
-		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
-		const parentLeafCount = await readCarryLeafCount(parent.escalationGameAddress, QuestionOutcome.Yes)
-		const parentCarryTotal = await readCarryTotal(parent.escalationGameAddress, QuestionOutcome.Yes)
-		const parentNullifierRoot = await readNullifierRoot(parent.escalationGameAddress, QuestionOutcome.Yes)
-		const parentYesPeaks = await readCarryPeaks(parent.escalationGameAddress, QuestionOutcome.Yes)
-
-		const child = await deployEscalationGameWithProofPool()
-		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
-		await initializeSnapshotWithResolutionBalancesViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), parentYesPeaks, zeroPeakArray()], [0n, parentLeafCount, 0n], [0n, parentCarryTotal, 0n], [0n, parentCarryTotal, 0n], [zeroHash(), parentNullifierRoot, zeroHash()])
-
-		const proof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 0n, [], new SparseNullifierTree().getProof(0n))
-		await assert.rejects(
-			writeContractAndWait(client, async () =>
-				client.writeContract({
-					abi: escalationGameProofTestPoolArtifact.abi,
-					address: child.testSecurityPoolAddress,
-					functionName: 'exportUnresolvedDeposit',
-					args: [QuestionOutcome.Yes, proof],
-				}),
-			),
-			/Forked proof unsupported/,
-		)
-	})
-
 	test('forked-escrow winner payout applies the inherited reward schedule in child REP', async () => {
 		const parent = await deployEscalationGameWithProofPool()
 		await startEscalation(parent.escalationGameAddress, reportBond, nonDecisionThreshold)

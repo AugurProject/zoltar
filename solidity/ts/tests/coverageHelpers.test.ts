@@ -185,9 +185,9 @@ test('coverage source-map gap manifest stays aligned with current Solidity sourc
 })
 
 test('coverage classifier keeps similar lines coverable when source-map gap context does not match', () => {
-	const settlementProofOverload = [
+	const settlementProofFunction = [
 		'contract EscalationGameSettlement {',
-		'    function exportUnresolvedDeposit(',
+		'    function withdrawDeposit(',
 		'        CarriedDepositProof calldata proof,',
 		'        BinaryOutcomes.BinaryOutcome selectedOutcome',
 		'    ) public {',
@@ -207,7 +207,7 @@ test('coverage classifier keeps similar lines coverable when source-map gap cont
 	].join('\n')
 	const erc1155Return = ['contract ERC1155 {', '    function balanceOf(address account, uint256 id) public view returns (uint256) {', '        return _balances[id][account];', '    }', '}'].join('\n')
 
-	assert.deepStrictEqual(getSolidityCoverableLineNumbersForTest('/tmp/solidity/contracts/peripherals/EscalationGameSettlement.sol', settlementProofOverload), [6])
+	assert.deepStrictEqual(getSolidityCoverableLineNumbersForTest('/tmp/solidity/contracts/peripherals/EscalationGameSettlement.sol', settlementProofFunction), [6])
 	assert.deepStrictEqual(getSolidityCoverableLineNumbersForTest('/tmp/solidity/contracts/peripherals/EscalationGameSettlement.sol', settlementUnrelatedUintOverload), [6])
 	assert.deepStrictEqual(getSolidityCoverableLineNumbersForTest('/tmp/solidity/contracts/peripherals/tokens/ERC1155.sol', erc1155Return), [3])
 })
