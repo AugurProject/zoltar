@@ -7,6 +7,8 @@ import {
 	createLiquidationSuccessPresentation,
 	createLiquidationTransactionIntent,
 	createMarketCreationSuccessPresentation,
+	createOpenOracleSuccessPresentation,
+	createOpenOracleTransactionIntent,
 	createReportingSuccessPresentation,
 	createReportingTransactionIntent,
 	createSecurityVaultTransactionIntent,
@@ -47,6 +49,19 @@ describe('transaction presentations', () => {
 			vaultAddress: '0x0000000000000000000000000000000000000002',
 		})
 		expect(intent.rows?.map(row => row.label)).toEqual(['Security Pool Address', 'Vault'])
+	})
+
+	test('uses resolved token symbols in Open Oracle approval and withdrawal titles', () => {
+		const context = {
+			token1Symbol: 'WETH',
+			token2Symbol: 'REP',
+			withdrawalTokenSymbol: 'WETH',
+		}
+
+		expect(createOpenOracleTransactionIntent('approveToken1', context).submittedTitle).toBe('Approve WETH')
+		expect(createOpenOracleSuccessPresentation({ action: 'approveToken1', hash: '0x1234' }, context).title).toBe('WETH Approved')
+		expect(createOpenOracleTransactionIntent('withdrawBalance', context).submittedTitle).toBe('Withdraw WETH')
+		expect(createOpenOracleSuccessPresentation({ action: 'withdrawBalance', hash: '0x1234' }, context).title).toBe('WETH Withdrawn')
 	})
 
 	test('keeps pool, universe, and action context in trading and reporting intents', () => {
