@@ -72,7 +72,7 @@ contract SecurityPoolForkerFakePoolMock {
 		return configuredQuestionId;
 	}
 
-	function activateForkMode(bool) external pure {}
+	function activateForkMode() external pure {}
 
 	function completeSetCollateralAmount() external pure returns (uint256) {
 		return 0;
@@ -368,7 +368,7 @@ contract SecurityPoolForkerEscrowAttackParentMock {
 		return configuredEscalationGame;
 	}
 
-	function activateForkMode(bool) external {
+	function activateForkMode() external {
 		configuredSystemState = SystemState.PoolForked;
 		uint256 balance = configuredRepToken.balanceOf(address(this));
 		if (balance > 0) require(configuredRepToken.transfer(msg.sender, balance), 'REP transfer');

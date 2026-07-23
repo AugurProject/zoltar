@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { getAddress, zeroAddress, type Address, type Hash } from '@zoltar/shared/ethereum'
+import { getAddress, maxUint256, zeroAddress, type Address, type Hash } from '@zoltar/shared/ethereum'
 import {
 	createOpenOracleReportInstance,
 	executeOracleManagerStagedOperation,
@@ -340,10 +340,10 @@ describe('Open Oracle helpers', () => {
 		expect(settlerWithdrawable).toEqual({ eth: 1_000n, token1: 0n, token2: 0n })
 
 		installInjectedEthereum(mockWindow, reporter)
-		await withdrawOpenOracleBalance(uiWriteClient, getOpenOracleAddress(), getAddress(addressString(GENESIS_REPUTATION_TOKEN)), reporter)
-		await withdrawOpenOracleBalance(uiWriteClient, getOpenOracleAddress(), getAddress(WETH_ADDRESS), reporter)
+		await withdrawOpenOracleBalance(uiWriteClient, getOpenOracleAddress(), getAddress(addressString(GENESIS_REPUTATION_TOKEN)), maxUint256, reporter)
+		await withdrawOpenOracleBalance(uiWriteClient, getOpenOracleAddress(), getAddress(WETH_ADDRESS), maxUint256, reporter)
 		installInjectedEthereum(mockWindow, settler)
-		await withdrawOpenOracleBalance(settlerWriteClient, getOpenOracleAddress(), zeroAddress, settler)
+		await withdrawOpenOracleBalance(settlerWriteClient, getOpenOracleAddress(), zeroAddress, maxUint256, settler)
 		expect(await loadErc20Balance(uiReadClient, addressString(GENESIS_REPUTATION_TOKEN), reporter)).toBe(repBalanceBeforeReport)
 		expect(await loadErc20Balance(uiReadClient, WETH_ADDRESS, reporter)).toBe(wethBalanceBeforeReport)
 		for (const [holder, token] of [

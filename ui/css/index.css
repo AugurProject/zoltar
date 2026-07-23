@@ -3080,13 +3080,6 @@ strong.metric-value-danger {
 	gap: 0.6rem;
 }
 
-.truth-auction-bid-table-scroll {
-	max-height: min(38rem, 70vh);
-	overflow-y: auto;
-	overscroll-behavior: contain;
-	scrollbar-gutter: stable;
-}
-
 .truth-auction-bid-row {
 	display: grid;
 	grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.2fr) minmax(0, 0.85fr) minmax(0, 0.9fr) auto minmax(0, 1.15fr);
@@ -4865,10 +4858,6 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	.truth-auction-bid-row:not(.is-header) > .truth-auction-bid-row-address[data-label] {
 		grid-template-columns: minmax(0, 1fr);
 		gap: 0.3rem;
-	}
-
-	.truth-auction-bid-table-scroll {
-		max-height: min(32rem, 65vh);
 	}
 
 	.truth-auction-bid-row-actions {

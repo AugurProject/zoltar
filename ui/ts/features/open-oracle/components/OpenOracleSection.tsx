@@ -51,14 +51,25 @@ import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCou
 import { loadOpenOracleReportSummaries } from '../../../protocol/index.js'
 import { isMainnetChain } from '../../../lib/network.js'
 import { getReportPresentation } from '../../../lib/userCopy.js'
+import { formatCurrencyInputBalance } from '../../../lib/formatters.js'
 import type { OpenOracleFormState } from '../../../types/app.js'
-import type { OpenOracleReportDetails, OpenOracleReportSummary, OpenOracleReportSummaryPage } from '../../../types/contracts.js'
+import type { OpenOracleReportDetails, OpenOracleReportSummary, OpenOracleReportSummaryPage, OpenOracleWithdrawableBalances } from '../../../types/contracts.js'
 import type { OpenOracleSectionProps } from '../../types.js'
 const BROWSE_PAGE_SIZE = 10
 const OPEN_ORACLE_PRICE_UNITS = 30
-type SelectedReportModal = 'dispute' | 'settle' | undefined
+type WithdrawalBalanceKey = keyof OpenOracleWithdrawableBalances
+type SelectedReportModal = 'dispute' | 'settle' | `withdraw-${WithdrawalBalanceKey}` | undefined
 const DISPUTE_REPORT_MODAL: SelectedReportModal = 'dispute'
 const SETTLE_REPORT_MODAL: SelectedReportModal = 'settle'
+function getWithdrawalReportModal(balance: WithdrawalBalanceKey): SelectedReportModal {
+	return `withdraw-${balance}`
+}
+function getSelectedWithdrawalBalance(modal: SelectedReportModal): WithdrawalBalanceKey | undefined {
+	if (modal === 'withdraw-eth') return 'eth'
+	if (modal === 'withdraw-token1') return 'token1'
+	if (modal === 'withdraw-token2') return 'token2'
+	return undefined
+}
 type BrowseStatusFilter = 'all' | 'Pending' | 'Disputed' | 'Settled'
 function getEffectiveOpenOracleReportDetails(report: OpenOracleReportDetails | undefined, currentTimestamp: bigint | undefined, currentBlockNumber: bigint | undefined) {
 	if (report === undefined) return undefined
@@ -232,7 +243,7 @@ export function renderSelectedReportActionSection({
 							: renderReportSection(openOracleCopy.currentReportState, [
 									{ label: openOracleCopy.report, value: `#${openOracleReportDetails.reportId.toString()}` },
 									{ label: openOracleCopy.currentReporter, value: openOracleReportDetails.currentReporter === zeroAddress ? commonCopy.none : <AddressValue address={openOracleReportDetails.currentReporter} /> },
-									{ label: openOracleCopy.currentPrice, value: <CurrencyValue value={openOracleReportDetails.price} suffix={openOracleCopy.formatTokenPairSuffix(token1Symbol, token2Symbol)} copyable={false} /> },
+									{ label: openOracleCopy.currentPrice, value: <CurrencyValue value={openOracleReportDetails.price} suffix={openOracleCopy.formatTokenPairSuffix(token1Symbol, token2Symbol)} units={OPEN_ORACLE_PRICE_UNITS} copyable={false} /> },
 								])}
 						<label className='field'>
 							<span>{openOracleCopy.tokenToSwapOut}</span>
@@ -241,14 +252,14 @@ export function renderSelectedReportActionSection({
 						<div className='field-row'>
 							<label className='field'>
 								<span>{openOracleCopy.formatNewTokenAmountFieldLabel(token1Symbol)}</span>
-								<FormInput value={openOracleForm.disputeNewAmount1} onInput={event => onOpenOracleFormChange({ disputeNewAmount1: event.currentTarget.value })} />
+								<FormInput value={openOracleForm.disputeNewAmount1} inputMode='decimal' onInput={event => onOpenOracleFormChange({ disputeNewAmount1: event.currentTarget.value })} />
 							</label>
 							<label className='field'>
 								<span>{openOracleCopy.formatNewTokenAmountFieldLabel(token2Symbol)}</span>
-								<FormInput value={openOracleForm.disputeNewAmount2} onInput={event => onOpenOracleFormChange({ disputeNewAmount2: event.currentTarget.value })} />
+								<FormInput value={openOracleForm.disputeNewAmount2} inputMode='decimal' onInput={event => onOpenOracleFormChange({ disputeNewAmount2: event.currentTarget.value })} />
 							</label>
 						</div>
-						{disputeSubmission?.expectedNewAmount1 === undefined ? undefined : <p className='detail'>{openOracleCopy.formatNewAmountMustBeExactDetail(token1Symbol, disputeSubmission.expectedNewAmount1.toString())}</p>}
+						{disputeSubmission?.expectedNewAmount1 === undefined || disputeSubmission.token1Decimals === undefined ? undefined : <p className='detail'>{openOracleCopy.formatNewAmountMustBeExactDetail(token1Symbol, formatCurrencyInputBalance(disputeSubmission.expectedNewAmount1, disputeSubmission.token1Decimals))}</p>}
 						<SectionBlock headingLevel={4} title={openOracleCopy.formatTokenApprovalTitle(token1Symbol)} variant='embedded'>
 							<TokenApprovalControl
 								actionLabel={openOracleCopy.disputingTheReport}
@@ -352,6 +363,9 @@ function renderReportDetailsCard(
 	openOracleActiveWithdrawalBalance: OpenOracleSectionProps['openOracleActiveWithdrawalBalance'],
 	openOracleResult: OpenOracleSectionProps['openOracleResult'],
 	openOracleReportLookupState: OpenOracleSectionProps['openOracleReportLookupState'],
+	openOracleWithdrawalBalanceChecking: OpenOracleSectionProps['openOracleWithdrawalBalanceChecking'],
+	openOracleWithdrawalReviewMessage: OpenOracleSectionProps['openOracleWithdrawalReviewMessage'],
+	accountAddress: string | undefined,
 	isConnected: boolean,
 	isMainnet: boolean,
 	selectedReportModal: SelectedReportModal,
@@ -429,6 +443,15 @@ function renderReportDetailsCard(
 		{ amount: openOracleWithdrawableBalances?.token1, key: 'token1' as const, symbol: openOracleReportDetails.token1Symbol, units: openOracleReportDetails.token1Decimals },
 		{ amount: openOracleWithdrawableBalances?.token2, key: 'token2' as const, symbol: openOracleReportDetails.token2Symbol, units: openOracleReportDetails.token2Decimals },
 	]
+	const selectedWithdrawalBalance = getSelectedWithdrawalBalance(selectedReportModal)
+	const selectedWithdrawalItem = withdrawableBalanceItems.find(item => item.key === selectedWithdrawalBalance)
+	const selectedWithdrawalAmount = selectedWithdrawalItem?.amount
+	const selectedWithdrawalReviewMessage = openOracleWithdrawalReviewMessage !== undefined && openOracleWithdrawalReviewMessage.balance === selectedWithdrawalBalance ? openOracleWithdrawalReviewMessage.message : undefined
+	const withdrawalDisabledReason = (() => {
+		if (!isMainnet) return commonCopy.mainnetRequiredReason
+		if (selectedWithdrawalAmount !== undefined && selectedWithdrawalAmount <= 0n) return openOracleCopy.noWithdrawableBalanceForAsset
+		return undefined
+	})()
 	const hasWithdrawableBalance = withdrawableBalanceItems.some(item => (item.amount ?? 0n) > 0n)
 	const showWithdrawableBalances = isConnected && (openOracleReportDetails.isDistributed || hasWithdrawableBalance || openOracleWithdrawableBalancesLoading || openOracleWithdrawableBalancesError !== undefined)
 	let withdrawableBalancesContent: ComponentChildren
@@ -486,9 +509,9 @@ function renderReportDetailsCard(
 									<TransactionActionButton
 										key={item.key}
 										idleLabel={openOracleCopy.withdrawBalance(item.symbol)}
-										pendingLabel={openOracleCopy.withdrawingBalance(item.symbol)}
-										onClick={() => onWithdrawOpenOracleBalance(item.key)}
-										pending={openOracleActiveAction === 'withdrawBalance' && openOracleActiveWithdrawalBalance === item.key}
+										pendingLabel={openOracleWithdrawalBalanceChecking ? openOracleCopy.checkingWithdrawalBalance(item.symbol) : openOracleCopy.withdrawingBalance(item.symbol)}
+										onClick={() => onSelectedReportModalChange(getWithdrawalReportModal(item.key))}
+										pending={(openOracleWithdrawalBalanceChecking || openOracleActiveAction === 'withdrawBalance') && openOracleActiveWithdrawalBalance === item.key}
 										tone='secondary'
 										availability={{ disabled: !isMainnet || openOracleActiveAction === 'withdrawBalance', reason: isMainnet ? undefined : commonCopy.mainnetRequiredReason }}
 									/>
@@ -667,6 +690,45 @@ function renderReportDetailsCard(
 					token2Symbol: openOracleReportDetails.token2Symbol,
 				})}
 			</OperationModal>
+
+			{selectedWithdrawalItem === undefined || selectedWithdrawalAmount === undefined ? undefined : (
+				<OperationModal
+					closeOnSuccessKey={openOracleResult?.action === 'withdrawBalance' ? openOracleResult.hash : undefined}
+					context={reportTransactionContext}
+					isOpen={selectedWithdrawalBalance !== undefined}
+					onClose={() => onSelectedReportModalChange(undefined)}
+					title={openOracleCopy.withdrawBalance(selectedWithdrawalItem.symbol)}
+				>
+					<TransactionReview
+						primary={[
+							{
+								label: transactionReviewCopy.youReceive,
+								value: <CurrencyValue value={selectedWithdrawalAmount} suffix={selectedWithdrawalItem.symbol} units={selectedWithdrawalItem.units} precision='exact' copyable={false} />,
+							},
+						]}
+						details={[
+							{
+								label: openOracleCopy.withdrawalRecipient,
+								value: <AddressValue address={accountAddress} />,
+							},
+						]}
+						risks={[openOracleCopy.formatWithdrawalRisk(selectedWithdrawalItem.symbol)]}
+					/>
+					<ErrorNotice message={selectedWithdrawalReviewMessage} />
+					<div className='actions'>
+						<TransactionActionButton
+							idleLabel={openOracleCopy.confirmWithdrawal}
+							pendingLabel={openOracleWithdrawalBalanceChecking ? openOracleCopy.checkingWithdrawalBalance(selectedWithdrawalItem.symbol) : openOracleCopy.withdrawingBalance(selectedWithdrawalItem.symbol)}
+							onClick={() => onWithdrawOpenOracleBalance(selectedWithdrawalItem.key, selectedWithdrawalAmount)}
+							pending={(openOracleWithdrawalBalanceChecking || openOracleActiveAction === 'withdrawBalance') && openOracleActiveWithdrawalBalance === selectedWithdrawalItem.key}
+							availability={{
+								disabled: !isMainnet || selectedWithdrawalAmount <= 0n || openOracleWithdrawalBalanceChecking || openOracleActiveAction === 'withdrawBalance',
+								reason: withdrawalDisabledReason,
+							}}
+						/>
+					</div>
+				</OperationModal>
+			)}
 		</>
 	)
 }
@@ -676,6 +738,7 @@ export function OpenOracleSection({
 	environmentReady,
 	onApproveToken1,
 	onApproveToken2,
+	onCancelOpenOracleWithdrawalBalanceCheck,
 	onCreateOpenOracleGame,
 	onDisputeReport,
 	onLoadOracleReport,
@@ -691,6 +754,8 @@ export function OpenOracleSection({
 	openOracleError,
 	openOracleForm,
 	openOracleReportLookupState,
+	openOracleWithdrawalBalanceChecking,
+	openOracleWithdrawalReviewMessage,
 	openOracleTokenAccessState,
 	openOracleReportDetails,
 	openOracleResult,
@@ -708,6 +773,10 @@ export function OpenOracleSection({
 	const [browseSearchText, setBrowseSearchText] = useState('')
 	const [browseStatusFilter, setBrowseStatusFilter] = useState<BrowseStatusFilter>('all')
 	const [selectedReportModal, setSelectedReportModal] = useState<SelectedReportModal>(undefined)
+	const changeSelectedReportModal = (modal: SelectedReportModal) => {
+		if (getSelectedWithdrawalBalance(selectedReportModal) !== undefined && modal !== selectedReportModal) onCancelOpenOracleWithdrawalBalanceCheck()
+		setSelectedReportModal(modal)
+	}
 	const browseLoad = useLoadController()
 	const isConnected = accountState.address !== undefined
 	const isMainnet = isMainnetChain(accountState.chainId)
@@ -972,6 +1041,9 @@ export function OpenOracleSection({
 						openOracleActiveWithdrawalBalance,
 						openOracleResult,
 						openOracleReportLookupState,
+						openOracleWithdrawalBalanceChecking,
+						openOracleWithdrawalReviewMessage,
+						accountState.address,
 						isConnected,
 						isMainnet,
 						selectedReportModal,
@@ -980,7 +1052,7 @@ export function OpenOracleSection({
 						onDisputeReport,
 						onLoadOracleReport,
 						onOpenOracleFormChange,
-						setSelectedReportModal,
+						changeSelectedReportModal,
 						onSettleReport,
 						onWithdrawOpenOracleBalance,
 						openOracleWithdrawableBalances,

@@ -23,6 +23,7 @@ const escalationGameCarry = await readFile('solidity/contracts/peripherals/Escal
 const escalationGameState = await readFile('solidity/contracts/peripherals/EscalationGameState.sol', 'utf8')
 const escalationGameTypes = await readFile('solidity/contracts/peripherals/EscalationGameTypes.sol', 'utf8')
 const escalationGameForker = await readFile('solidity/contracts/peripherals/EscalationGameForker.sol', 'utf8')
+const escalationGameCalculations = await readFile('solidity/contracts/peripherals/EscalationGameCalculations.sol', 'utf8')
 const escalationGameSettlement = await readFile('solidity/contracts/peripherals/EscalationGameSettlement.sol', 'utf8')
 const escalationGameEscrow = await readFile('solidity/contracts/peripherals/EscalationGameEscrow.sol', 'utf8')
 const priceCoordinator = await readFile('solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol', 'utf8')
@@ -139,19 +140,38 @@ function assertNonDecisionLifecycleDocs(): void {
 		.filter(member => member.length > 0)
 	const normalizedOperatorReference = operatorReference.replaceAll(/\s+/g, ' ')
 	const normalizedStatoblast = whitepaperStatoblast.replaceAll(/\s+/g, ' ')
+	const normalizedInvariants = invariantsHtml.replaceAll(/\s+/g, ' ')
 	for (const enumMember of enumMembers) {
 		assert.ok(normalizedOperatorReference.includes(`nonDecisionState = ${enumMember}`), `Operator reference must define NonDecisionState.${enumMember}`)
 	}
 	assert.match(normalizedOperatorReference, /nonDecisionState = Local[\s\S]*closes further deposits[\s\S]*nonDecisionState = InheritedThresholdTie[\s\S]*closes further deposits/)
 	assert.ok(normalizedStatoblast.includes('Both explicit states close further deposits.'), 'Statoblast whitepaper must explain the shared deposit-closure rule')
-	assert.match(normalizedStatoblast, /This diagram shows a local threshold crossing, which opens the fork path/)
-	assert.match(normalizedStatoblast, /A local non-decision, or an inherited threshold tie without a fixed outcome/)
-	assert.match(normalizedStatoblast, /<span>Edge cases<\/span> <b\s*>Paused continuations can fork again once operational if they record a local non-decision or inherited a threshold tie without a fixed outcome\.<\/b\s*>/)
+	assert.match(normalizedStatoblast, /<desc id="escalation-desc">[\s\S]*local game's fork eligibility[\s\S]*pool with an inherited fixed outcome rejects both new local deposits and fork activation/)
+	assert.match(normalizedStatoblast, /Game-Local[\s\S]*Eligibility[\s\S]*pool guard still applies/)
+	assert.match(normalizedStatoblast, /This diagram shows a local threshold crossing, which makes <code>canTriggerOwnFork\(\)<\/code> true[\s\S]*pool with an inherited fixed outcome rejects the deposits that could create this state[\s\S]*still rejects <code>activateForkMode\(\)<\/code>/)
+	assert.match(normalizedStatoblast, /A continuation pool can fork again only when it has no inherited fixed outcome/)
+	assert.match(normalizedStatoblast, /The game-local <code>canTriggerOwnFork\(\)<\/code> predicate returns true for a local non-decision, but it does not bypass the pool's fixed-outcome guard/)
+	assert.match(normalizedStatoblast, /<span>Edge cases<\/span> <b\s*>Only continuations without a fixed outcome can fork again; their game-local trigger may be a local non-decision or an inherited threshold tie\.<\/b\s*>/)
+	assert.match(
+		normalizedStatoblast,
+		/<h3 id="child-outcome-resolution">Child Outcome Resolution<\/h3>[\s\S]*pool stores and reports that result from child creation[\s\S]*Pool asset redemptions begin after the child becomes operational\.[\s\S]*continuation game exists[\s\S]*carried-deposit settlement only after its remaining continuation deadline\.[\s\S]*Later universe forks cannot transition a pool with an inherited fixed result, even when they reuse the pool question\.[\s\S]*Winning-share redemption burns only the fixed winning token and reduces the pool's remaining economic claim supply\.[\s\S]*surviving sibling outcome token as winning against that reduced denominator\.[\s\S]*fixed-outcome pool cannot use another fork to export a local non-decision[\s\S]*lock the depositor's vault ownership and block REP redemption[\s\S]*Carried winning proofs from the parent continuation remain claimable/,
+	)
+	assert.match(securityPoolForker, /function getQuestionOutcome\([\s\S]*if \(data\.fixedQuestionOutcomePlusOne > 0\)[\s\S]*return BinaryOutcomes\.BinaryOutcome\(data\.fixedQuestionOutcomePlusOne - 1\)/)
+	assert.match(escalationGameCalculations, /function getFinalQuestionResolution\(\)[\s\S]*if \(block\.timestamp <= getEscalationGameEndDate\(\)\) return BinaryOutcomes\.BinaryOutcome\.None/)
+	assert.match(
+		normalizedInvariants,
+		/<summary><code>ESC-12<\/code><span class="invariant-title">Pool and continuation payout agreement<\/span><\/summary>[\s\S]*Once a pool inherits that fixed outcome, new local escalation deposits and every later fork transition revert[\s\S]*rejects new local escalation REP before escrow[\s\S]*eligible share, vault REP, and carried-proof redemption paths remain available/,
+	)
+	assert.match(normalizedOperatorReference, /\| Escalation deposit wrapper \|[\s\S]*rejects pools with an inherited fixed outcome because they cannot enter another fork or safely unwind a later local non-decision/)
+	assert.match(normalizedOperatorReference, /\| Matching-question child outcome \|[\s\S]*`depositToEscalationGame` rejects new local deposits, and `activateForkMode` rejects every later pool fork transition[\s\S]*Child Outcome Resolution/)
 	assert.match(
 		normalizedStatoblast,
 		/<td>Second fork<\/td> <td> This unrelated continuation has no fixed outcome and did not inherit a threshold tie\. When new activity records a local non-decision, <code>canTriggerOwnFork\(\)<\/code> becomes true\. <\/td> <td> The same predicate also accepts an inherited threshold tie without a fixed outcome\./,
 	)
-	assert.match(protocolTerms, /Whether it authorizes a fork depends on whether it arose locally or was inherited/)
+	assert.match(protocolTerms, /local or inherited origin determines the game's canTriggerOwnFork\(\) predicate, but a successful pool fork also requires no inherited fixed outcome\. Fixed-outcome pools reject new local escalation deposits before this state can be created/)
+	for (const forbiddenClaim of ['a later fork on the same question replaces the inherited outcome', 'the fixed result applies after continuation and is inherited through later unrelated descendants', 'a later unrelated fork keeps Yes as the payout outcome']) {
+		assert.ok(!`${normalizedStatoblast} ${normalizedInvariants} ${normalizedOperatorReference}`.toLowerCase().includes(forbiddenClaim.toLowerCase()), `Fixed-outcome documentation retains obsolete replacement or descendant-inheritance semantics: ${forbiddenClaim}`)
+	}
 }
 
 function assertEventStreamSemantics(): void {
@@ -354,9 +374,11 @@ function assertStartHereTimelines(): void {
 }
 
 function assertContractInteractionDistinctions(): void {
-	const activateForkModeRow = getContractInteractionRow('activateForkMode(forkQuestionMatchesPoolQuestion)')
+	const activateForkModeRow = getContractInteractionRow('activateForkMode()')
 	const initiateSecurityPoolForkRow = getContractInteractionRow('initiateSecurityPoolFork(securityPool)')
 	const ownEscalationForkRow = getContractInteractionRow('forkZoltarWithOwnEscalationGame(securityPool)')
+	const escalationDepositRow = getContractInteractionRow('depositToEscalationGame(outcome, maxAmount)')
+	const migrateSharesRow = getContractInteractionRow('migrate(fromId, targetOutcomeIndexes)')
 	const drainAllRepRow = getContractInteractionRow('drainAllRep(receiver)')
 	const createChildUniverseRow = getContractInteractionRow('createChildUniverse(securityPool, outcomeIndex)')
 	const migrateVaultRow = getContractInteractionRow('migrateVault(securityPool, outcomeIndex)')
@@ -458,8 +480,11 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /redeemFees\(vault\)[\s\S]*If resulting unpaid fees are zero, returns without payment[\s\S]*no event when fees and accrual state are unchanged/)
 	assert.match(contractInteractionReference, /performWithdrawRep\(vault, repAmount\)[\s\S]*operational pool in an unforked universe[\s\S]*`isEscalationResolved\(\)` is false/)
 	assert.match(whitepaperStatoblast, /cashToShares[\s\S]*Exchange rate undefined/)
-	assert.match(initiateSecurityPoolForkRow, /if an escalation game exists, it reports the supplied pool from `securityPool\(\)` when validated and the universe fork occurred before that game settled/)
-	assert.match(ownEscalationForkRow, /escalation game reports the supplied pool from `securityPool\(\)` when validated and either recorded a local non-decision or inherited a threshold tie without a fixed outcome/)
+	assert.match(initiateSecurityPoolForkRow, /Pool operational with no inherited fixed outcome;[\s\S]*if an escalation game exists, it reports the supplied pool from `securityPool\(\)` when validated and the universe fork occurred before that game settled/)
+	assert.match(ownEscalationForkRow, /Pool operational with no inherited fixed outcome;[\s\S]*`canTriggerOwnFork\(\)` is true because it recorded a local non-decision or inherited a threshold tie without a game-level fixed outcome[\s\S]*game-local predicate does not bypass the pool guard/)
+	assert.match(escalationDepositRow, /pool operational in an unforked universe, without an inherited fixed outcome, and not awaiting continuation/)
+	assert.match(securityPool, /function depositToEscalationGame\([^}]+require\(!hasInheritedForkOutcome, 'Resolved'\);/)
+	assert.match(migrateSharesRow, /an `Operational` source has no inherited fixed outcome because auto-fork activation rejects one/)
 	assert.match(contractInteractionReference, /claimForkedEscalationDeposits\(\.\.\.\)[\s\S]*parent game still satisfies `canTriggerOwnFork\(\)` by having either a local non-decision or an inherited threshold tie without a fixed outcome/)
 	assert.match(contractInteractionReference, /withdrawDeposit\(uint256 depositIndex, outcome\)[\s\S]*`CarryDepositConsumed` and `VaultEscrowUpdated`[\s\S]*for a winner, `ClaimDeposit`/)
 	assert.match(contractInteractionReference, /`EscalationRepDrainedAtFork` when unresolved escalation exists/)
@@ -500,7 +525,7 @@ function assertContractInteractionDistinctions(): void {
 	)
 	assert.match(escalationGameSettlement, /function drainAllRep\(address receiver\)[\s\S]*amount = repToken\.balanceOf\(address\(this\)\);[\s\S]*if \(amount == 0\) return 0;[\s\S]*_safeTransferRep\(receiver, amount\)/)
 	assert.match(escalationGameSettlement, /function drainAllRep\(address receiver\)[\s\S]*require\(msg\.sender == address\(securityPool\), 'Only pool'\)/)
-	assert.match(securityPool, /function activateForkMode\(bool forkQuestionMatchesPoolQuestion\)[\s\S]*systemState = SystemState\.PoolForked;[\s\S]*mstore\(0x00, shl\(224, 0x3c250020\)\)[\s\S]*call\(gas\(\), game/)
+	assert.match(securityPool, /function activateForkMode\(\)[\s\S]*require\(!hasInheritedForkOutcome, 'Resolved'\)[\s\S]*systemState = SystemState\.PoolForked;[\s\S]*mstore\(0x00, shl\(224, 0x3c250020\)\)[\s\S]*call\(gas\(\), game/)
 	assert.match(securityPoolForker, /function _getEscalationGame\(ISecurityPool securityPool\)[\s\S]*escalationGame\.securityPool\(\)[\s\S]*'Escalation game pool'/)
 	assert.match(securityPoolForkerBase, /function _validateChildEscalationGame\([\s\S]*childEscalationGame\.securityPool\(\)[\s\S]*'Child game'/)
 	assert.match(
@@ -588,7 +613,11 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(escalationGameForker, /'Claim window closed'/)
 	assert.match(securityPool, /event SystemStateSet\(SystemState systemState\)/)
 	assert.match(securityPool, /require\(zoltar\.getForkTime\(universeId\) == 0, 'Forked'\)/)
-	assert.match(securityPool, /function activateForkMode\(bool forkQuestionMatchesPoolQuestion\) external onlyForker/)
+	assert.match(securityPool, /function activateForkMode\(\) external onlyForker/)
+	assert.match(securityPool, /function activateForkMode\(\) external onlyForker \{\s*require\(!hasInheritedForkOutcome, 'Resolved'\)/)
+	assert.match(securityPoolForker, /function initiateSecurityPoolFork\(ISecurityPool securityPool\)[\s\S]*securityPool\.activateForkMode\(\)/)
+	assert.match(securityPoolForker, /function forkZoltarWithOwnEscalationGame\(ISecurityPool securityPool\)[\s\S]*securityPool\.activateForkMode\(\)/)
+	assert.match(shareToken, /if \(sourcePool\.systemState\(\) == SystemState\.Operational\) \{\s*forker\.initiateSecurityPoolFork\(sourcePool\)/)
 	assert.match(securityPool, /systemState = SystemState\.PoolForked/)
 	assert.match(securityPool, /shareToken\.authorize\(pool\)/)
 	assert.match(securityPoolFactory, /shareToken\.authorize\(securityPool\)/)
