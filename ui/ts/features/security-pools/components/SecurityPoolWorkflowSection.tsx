@@ -151,6 +151,8 @@ export function SecurityPoolWorkflowSection({
 	onLiquidationAmountChange,
 	onLiquidationTimeoutMinutesChange,
 	onLoadPoolOracleManager,
+	onBrowsePools,
+	onCreatePool,
 	onLoadLiquidationFundingPreview,
 	onOpenLiquidationModal,
 	onReturnToCurrentUniverse,
@@ -797,6 +799,16 @@ export function SecurityPoolWorkflowSection({
 						{!showSelectedPoolWorkflowDetails ? (
 							<SectionBlock title={selectedPoolLookupState === 'missing' ? securityPoolCopy.poolNotFound : commonCopy.managePool} variant='plain'>
 								{selectedPoolUniverseMismatch || selectedPoolWorkflowLockedPresentation === undefined ? undefined : <StateHint presentation={selectedPoolWorkflowLockedPresentation} />}
+								{hasSelectedPoolAddress ? undefined : (
+									<div className='actions'>
+										<button className='primary' type='button' onClick={onBrowsePools}>
+											{commonCopy.browsePools}
+										</button>
+										<button className='secondary' type='button' onClick={onCreatePool}>
+											{commonCopy.createPool}
+										</button>
+									</div>
+								)}
 							</SectionBlock>
 						) : (
 							<>

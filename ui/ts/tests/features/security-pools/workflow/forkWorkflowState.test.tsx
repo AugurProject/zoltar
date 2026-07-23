@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { useState } from 'preact/hooks'
 import { createForkWorkflowStateFixture, useSecurityPoolWorkflowSectionTestDom } from './fixture'
 
 describe('SecurityPoolWorkflowSection: fork workflow state', () => {
@@ -212,6 +213,153 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 			})
 
 			expect(selectedViews).toEqual(['fork-migration'])
+		})
+
+		test('keeps a route-selected fork stage visible after selection effects settle', async () => {
+			const selectedPoolAddress = zeroAddress
+			const renderedComponent = await renderIntoDocument(
+				<SecurityPoolWorkflowSection
+					{...createSecurityPoolWorkflowProps({
+						checkedSecurityPoolAddress: selectedPoolAddress,
+						forkAuction: createForkAuctionProps({
+							forkAuctionDetails: createForkAuctionDetails({
+								forkOutcome: 'yes',
+								migratedRep: 1n,
+								securityPoolAddress: selectedPoolAddress,
+								systemState: 'poolForked',
+							}),
+						}),
+						securityPoolAddress: selectedPoolAddress,
+						securityPools: [createSelectedPool({ forkOutcome: 'yes', migratedRep: 1n, securityPoolAddress: selectedPoolAddress, systemState: 'poolForked' })],
+						selectedPoolView: 'fork-auction',
+					})}
+					showHeader={false}
+				/>,
+			)
+			setCleanup(renderedComponent.cleanup)
+
+			await waitFor(() => {
+				const documentQueries = within(document.body)
+				expect(documentQueries.getByRole('tab', { name: 'Truth Auction' }).getAttribute('aria-selected')).toBe('true')
+				expect(documentQueries.getByRole('heading', { name: 'Truth Auction Status' })).not.toBeNull()
+				expect(documentQueries.queryByRole('heading', { name: 'Migration Status' })).toBeNull()
+			})
+		})
+
+		test('returns to lifecycle-driven stages when a stage-specific route becomes the generic fork workflow', async () => {
+			const selectedPoolAddress = zeroAddress
+			const baseProps = createSecurityPoolWorkflowProps({
+				checkedSecurityPoolAddress: selectedPoolAddress,
+				forkAuction: createForkAuctionProps({
+					forkAuctionDetails: createForkAuctionDetails({
+						forkOutcome: 'yes',
+						migratedRep: 1n,
+						securityPoolAddress: selectedPoolAddress,
+						systemState: 'poolForked',
+					}),
+				}),
+				securityPoolAddress: selectedPoolAddress,
+				securityPools: [createSelectedPool({ forkOutcome: 'yes', migratedRep: 1n, securityPoolAddress: selectedPoolAddress, systemState: 'poolForked' })],
+				selectedPoolView: 'fork-auction',
+			})
+			const renderedComponent = await renderIntoDocument(<SecurityPoolWorkflowSection {...baseProps} showHeader={false} />)
+			setCleanup(renderedComponent.cleanup)
+
+			await act(async () => {
+				render(<SecurityPoolWorkflowSection {...baseProps} selectedPoolView='fork-workflow' showHeader={false} />, renderedComponent.container)
+			})
+
+			let documentQueries = within(document.body)
+			expect(documentQueries.getByRole('tab', { name: 'Migration' }).getAttribute('aria-selected')).toBe('true')
+			expect(documentQueries.getByRole('heading', { name: 'Migration Status' })).not.toBeNull()
+
+			await act(async () => {
+				render(
+					<SecurityPoolWorkflowSection
+						{...baseProps}
+						forkAuction={createForkAuctionProps({
+							forkAuctionDetails: createForkAuctionDetails({
+								claimingAvailable: false,
+								forkOutcome: 'yes',
+								migratedRep: 1n,
+								securityPoolAddress: selectedPoolAddress,
+								systemState: 'operational',
+								truthAuction: {
+									accumulatedEth: 0n,
+									auctionEndsAt: 10n,
+									clearingPrice: 1n,
+									clearingTick: 0n,
+									ethAtClearingTick: 0n,
+									ethRaiseCap: 1n,
+									ethRaised: 0n,
+									finalized: true,
+									hitCap: true,
+									maxRepBeingSold: 1n,
+									minBidSize: 1n,
+									repPurchasableAtBid: undefined,
+									timeRemaining: 0n,
+									totalRepPurchased: 0n,
+									underfunded: false,
+									underfundedThreshold: undefined,
+									underfundedWinningEth: 0n,
+								},
+								truthAuctionStartedAt: 1n,
+							}),
+						})}
+						securityPools={[
+							createSelectedPool({
+								forkOutcome: 'yes',
+								migratedRep: 1n,
+								securityPoolAddress: selectedPoolAddress,
+								systemState: 'operational',
+								truthAuctionStartedAt: 1n,
+							}),
+						]}
+						selectedPoolView='fork-workflow'
+						showHeader={false}
+					/>,
+					renderedComponent.container,
+				)
+			})
+
+			documentQueries = within(document.body)
+			expect(documentQueries.getByRole('tab', { name: 'Settlement' }).getAttribute('aria-selected')).toBe('true')
+			expect(documentQueries.getByRole('heading', { name: 'Settlement Status' })).not.toBeNull()
+		})
+
+		test('keeps Fork Triggered selected when its user action changes a stage-specific route to the generic workflow', async () => {
+			const selectedPoolAddress = zeroAddress
+			const baseProps = createSecurityPoolWorkflowProps({
+				checkedSecurityPoolAddress: selectedPoolAddress,
+				forkAuction: createForkAuctionProps({
+					forkAuctionDetails: createForkAuctionDetails({
+						forkOutcome: 'yes',
+						migratedRep: 1n,
+						securityPoolAddress: selectedPoolAddress,
+						systemState: 'poolForked',
+					}),
+				}),
+				securityPoolAddress: selectedPoolAddress,
+				securityPools: [createSelectedPool({ forkOutcome: 'yes', migratedRep: 1n, securityPoolAddress: selectedPoolAddress, systemState: 'poolForked' })],
+				selectedPoolView: 'fork-auction',
+			})
+			const StatefulRouteHarness = () => {
+				const [selectedPoolView, setSelectedPoolView] = useState<string>('fork-auction')
+				return <SecurityPoolWorkflowSection {...baseProps} selectedPoolView={selectedPoolView} onSelectedPoolViewChange={view => setSelectedPoolView(view ?? 'fork-workflow')} showHeader={false} />
+			}
+			const renderedComponent = await renderIntoDocument(<StatefulRouteHarness />)
+			setCleanup(renderedComponent.cleanup)
+
+			await act(() => {
+				fireEvent.click(within(document.body).getByRole('tab', { name: 'Fork Readiness' }))
+			})
+
+			await waitFor(() => {
+				const documentQueries = within(document.body)
+				expect(documentQueries.getByRole('tab', { name: 'Fork Readiness' }).getAttribute('aria-selected')).toBe('true')
+				expect(documentQueries.getByRole('heading', { name: 'Fork Triggered' })).not.toBeNull()
+				expect(documentQueries.queryByRole('heading', { name: 'Migration Status' })).toBeNull()
+			})
 		})
 
 		test('opens the migration step for root-universe pools that present as Fork Migration after universe fork', async () => {

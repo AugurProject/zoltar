@@ -292,6 +292,8 @@ export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
 	checkedSecurityPoolAddress: string | undefined
 	forkAuction: ForkAuctionRouteContentProps
 	loadingSecurityPools: boolean
+	onBrowsePools: () => void
+	onCreatePool: () => void
 	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => void
 	onReturnToCurrentUniverse?: () => void
 	onSwitchToPoolUniverse?: (universeId: bigint, securityPoolAddress: Address) => void

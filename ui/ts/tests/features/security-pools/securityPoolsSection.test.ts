@@ -233,6 +233,8 @@ function createWorkflowProps(overrides: Partial<SecurityPoolWorkflowRouteContent
 		liquidationTimeoutMinutes: '5',
 		loadingPoolOracleManager: false,
 		loadingSecurityPools: false,
+		onBrowsePools: () => undefined,
+		onCreatePool: () => undefined,
 		onLiquidationAmountChange: () => undefined,
 		onLiquidationTimeoutMinutesChange: () => undefined,
 		onLoadPoolOracleManager: () => undefined,

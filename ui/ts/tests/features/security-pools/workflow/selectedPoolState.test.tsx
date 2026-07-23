@@ -114,7 +114,17 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 	})
 
 	test('keeps the workflow rail visible with disabled items before a pool loads', async () => {
-		await renderWorkflow(createSecurityPoolWorkflowProps())
+		let browseCalls = 0
+		let createCalls = 0
+		await renderWorkflow({
+			...createSecurityPoolWorkflowProps(),
+			onBrowsePools: () => {
+				browseCalls += 1
+			},
+			onCreatePool: () => {
+				createCalls += 1
+			},
+		})
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('group', { name: 'Selected pool views' })).not.toBeNull()
@@ -133,6 +143,12 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 
 		expect(documentQueries.getByRole('heading', { name: 'Manage Pool' })).not.toBeNull()
 		expect(documentQueries.getByText('No pool selected.')).not.toBeNull()
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Browse Pools' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Create Pool' }))
+		})
+		expect(browseCalls).toBe(1)
+		expect(createCalls).toBe(1)
 		expect(documentQueries.queryByText('Paste a security pool address or browse pools.')).toBeNull()
 		expect(documentQueries.queryByText('Locked')).toBeNull()
 	})

@@ -205,6 +205,9 @@ describe('MarketSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(within(document.body).getByText('Universe 0xa')).not.toBeNull()
+		const contextSummary = document.body.querySelector('.market-task-context')
+		if (!(contextSummary instanceof HTMLElement)) throw new Error('Expected task-focused market context')
+		expect(contextSummary.querySelector('.data-grid')).not.toBeNull()
 	})
 
 	test('links a question directly to its child-universe shares and reporting workflows', async () => {

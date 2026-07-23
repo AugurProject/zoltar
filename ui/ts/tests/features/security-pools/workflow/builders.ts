@@ -304,6 +304,8 @@ export function createSecurityPoolWorkflowProps(overrides: Partial<SecurityPoolW
 		liquidationTimeoutMinutes: '5',
 		loadingPoolOracleManager: false,
 		loadingSecurityPools: false,
+		onBrowsePools: () => undefined,
+		onCreatePool: () => undefined,
 		onExecutePendingPoolOperation: () => undefined,
 		onLiquidationAmountChange: () => undefined,
 		onLiquidationTimeoutMinutesChange: () => undefined,
