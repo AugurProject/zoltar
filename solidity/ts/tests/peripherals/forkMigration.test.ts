@@ -8,7 +8,7 @@ import { queueLiquidationAtForcedPrice } from '../../testSupport/simulator/utils
 import { getQuestionResolution } from '../../testSupport/simulator/utils/contracts/escalationGame'
 import { getForkActivationTime } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
-import { peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken } from '../../types/contractArtifact'
+import { peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken, ReputationToken_ReputationToken } from '../../types/contractArtifact'
 import {
 	test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackFactoryMock,
 	test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackParentMock,
@@ -3030,11 +3030,12 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(await getQuestionOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'matching-question child should resolve to its branch outcome')
 		})
 
-		test('a fixed-outcome child rejects an unrelated recursive fork without burning funded shares', async () => {
+		test('a fixed-outcome child rejects every recursive fork without burning funded shares', async () => {
 			const openInterestAmount = 5n * 10n ** 18n
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, repDeposit / 4n)
 			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, 0n)
 
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
@@ -3058,19 +3059,47 @@ describe('Peripherals: fork migration', () => {
 			}
 			strictEqualTypeSafe(await getSystemState(client, fixedChildPool.securityPool), SystemState.Operational, 'fixed child should be operational before the unrelated recursive fork')
 			strictEqualTypeSafe(await getQuestionOutcome(client, fixedChildPool.securityPool), QuestionOutcome.Yes, 'matching first fork should fix the child outcome to yes')
-			await client.simulateContract({
-				abi: peripherals_SecurityPool_SecurityPool.abi,
-				address: fixedChildPool.securityPool,
-				functionName: 'activateForkMode',
-				args: [true],
-				account: getInfraContractAddresses().securityPoolForker,
+			const childRepToken = await getRepToken(client, fixedChildPool.securityPool)
+			const childForkThreshold = await getZoltarForkThreshold(client, fixedChildUniverse)
+			const childBalanceSlot = formatStorageSlot(getMappingStorageSlot(client.account.address, 0n))
+			await mockWindow.addStateOverrides({
+				[childRepToken]: {
+					stateDiff: {
+						[childBalanceSlot]: childForkThreshold * 4n,
+					},
+				},
 			})
+			await approveToken(client, childRepToken, fixedChildPool.securityPool)
+			await depositRep(client, fixedChildPool.securityPool, childForkThreshold * 3n)
+			await manipulatePriceOracle(client, mockWindow, fixedChildPool.priceOracleManagerAndOperatorQueuer, PRICE_PRECISION)
+			await depositToEscalationGame(client, fixedChildPool.securityPool, QuestionOutcome.Yes, childForkThreshold)
+			await depositToEscalationGame(client, fixedChildPool.securityPool, QuestionOutcome.No, childForkThreshold)
+			const fixedChildEscalationGame = await getSecurityPoolsEscalationGame(client, fixedChildPool.securityPool)
+			strictEqualTypeSafe(
+				await client.readContract({
+					abi: peripherals_EscalationGame_EscalationGame.abi,
+					address: fixedChildEscalationGame,
+					functionName: 'canTriggerOwnFork',
+				}),
+				true,
+				'the child game-local predicate should recognize its local non-decision',
+			)
+			const sourceBalancesBeforeRejectedOwnFork = await balanceOfShares(openInterestHolder, fixedChildPool.shareToken, fixedChildUniverse, openInterestHolder.account.address)
+			const collateralBeforeRejectedOwnFork = await getCompleteSetCollateralAmount(client, fixedChildPool.securityPool)
+			const supplyBeforeRejectedOwnFork = await getShareTokenSupply(client, fixedChildPool.securityPool)
+			await assert.rejects(forkZoltarWithOwnEscalationGame(client, fixedChildPool.securityPool), /Resolved/)
+			strictEqualTypeSafe((await getUniverseData(client, fixedChildUniverse)).forkTime, 0n, 'the fixed child guard should reject before its own universe can fork')
+			strictEqualTypeSafe(await getSystemState(client, fixedChildPool.securityPool), SystemState.Operational, 'the rejected own fork should preserve the stored pool state')
+			strictEqualTypeSafe(await getQuestionOutcome(client, fixedChildPool.securityPool), QuestionOutcome.Yes, 'the rejected own fork should preserve the fixed outcome')
+			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, fixedChildPool.securityPool), collateralBeforeRejectedOwnFork, 'the rejected own fork should preserve collateral')
+			strictEqualTypeSafe(await getShareTokenSupply(client, fixedChildPool.securityPool), supplyBeforeRejectedOwnFork, 'the rejected own fork should preserve the economic claim supply')
+			assert.deepStrictEqual(await balanceOfShares(openInterestHolder, fixedChildPool.shareToken, fixedChildUniverse, openInterestHolder.account.address), sourceBalancesBeforeRejectedOwnFork, 'the rejected own fork should preserve funded shares')
 			await assert.rejects(
 				client.simulateContract({
 					abi: peripherals_SecurityPool_SecurityPool.abi,
 					address: fixedChildPool.securityPool,
 					functionName: 'activateForkMode',
-					args: [false],
+					args: [],
 					account: getInfraContractAddresses().securityPoolForker,
 				}),
 				/Resolved/,
@@ -3083,9 +3112,6 @@ describe('Peripherals: fork migration', () => {
 			}
 			const unrelatedForkQuestionId = getQuestionId(unrelatedForkQuestionData, outcomes)
 			await createQuestion(client, unrelatedForkQuestionData, outcomes)
-			const childRepToken = await getRepToken(client, fixedChildPool.securityPool)
-			const childForkThreshold = await getZoltarForkThreshold(client, fixedChildUniverse)
-			const childBalanceSlot = formatStorageSlot(getMappingStorageSlot(client.account.address, 0n))
 			await mockWindow.addStateOverrides({
 				[childRepToken]: {
 					stateDiff: {
@@ -3113,20 +3139,84 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(await getShareTokenSupply(client, fixedChildPool.securityPool), 0n, 'winning redemption should consume the fixed child supply')
 		})
 
-		test.each([
-			{
-				name: 'unrelated then matching installs the second branch outcome',
-				firstForkMatches: false,
-				secondForkMatches: true,
-				expectedOutcome: QuestionOutcome.No,
-			},
-			{
-				name: 'matching then matching replaces the first fixed outcome',
-				firstForkMatches: true,
-				secondForkMatches: true,
-				expectedOutcome: QuestionOutcome.No,
-			},
-		])('$name across a recursive continuation', async ({ firstForkMatches, secondForkMatches, expectedOutcome }) => {
+		test('a fixed-outcome child rejects recycling a redeemed complete set through a recursive matching fork', async () => {
+			const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+			const victim = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
+			const victimClaimAmount = 5n * 10n ** 18n
+			const attackerMintAmount = 4n * 10n ** 18n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, repDeposit / 4n)
+			await createCompleteSet(victim, securityPoolAddresses.securityPool, victimClaimAmount)
+
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime + 10000n)
+			await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+			await forkUniverse(client, genesisUniverse, questionId)
+			await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+			await migrateShares(victim, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [QuestionOutcome.Yes])
+			await migrateShares(victim, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.No, [QuestionOutcome.Yes])
+
+			const firstChildUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+			const firstChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, firstChildUniverse, questionId, securityMultiplier)
+			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+			await startTruthAuction(client, firstChildPool.securityPool)
+			if ((await getSystemState(client, firstChildPool.securityPool)) === SystemState.ForkTruthAuction) {
+				const repairTarget = await getEthRaiseCap(client, firstChildPool.truthAuction)
+				const parentForkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
+				await participateAuction(client, firstChildPool.truthAuction, parentForkData.auctionableRepAtFork / 4n, repairTarget)
+				await mockWindow.advanceTime(7n * DAY + DAY)
+				await finalizeTruthAuction(client, firstChildPool.securityPool)
+			}
+
+			strictEqualTypeSafe(await getQuestionOutcome(client, firstChildPool.securityPool), QuestionOutcome.Yes, 'first matching fork should resolve the first child as yes')
+			const victimFirstChildShares = await balanceOfShares(victim, firstChildPool.shareToken, firstChildUniverse, victim.account.address)
+			const victimEconomicClaim = ensureDefined(victimFirstChildShares[1], 'victim yes shares missing from first child')
+			const attackerBalanceBeforeMint = await getETHBalance(client, attacker.account.address)
+			await createCompleteSet(attacker, firstChildPool.securityPool, attackerMintAmount)
+			const attackerBalanceAfterMint = await getETHBalance(client, attacker.account.address)
+			strictEqualTypeSafe(attackerBalanceBeforeMint - attackerBalanceAfterMint, attackerMintAmount, 'the attacker should fund the temporary complete set')
+			const attackerFirstChildShares = await balanceOfShares(attacker, firstChildPool.shareToken, firstChildUniverse, attacker.account.address)
+			const attackerRetainedNoShares = ensureDefined(attackerFirstChildShares[2], 'attacker no shares missing from first child')
+			assert.ok(attackerRetainedNoShares > 0n, 'the resolved fixed-outcome child should mint the attacker a reusable losing balance')
+			await redeemShares(attacker, firstChildPool.securityPool)
+			const attackerFirstRedemption = (await getETHBalance(client, attacker.account.address)) - attackerBalanceAfterMint
+			assert.ok(attackerFirstRedemption * 100n > attackerMintAmount * 99n, 'the attacker should recover more than 99% of the temporary complete-set deposit before recycling its losing share')
+			strictEqualTypeSafe(await getShareTokenSupply(client, firstChildPool.securityPool), victimEconomicClaim, 'the first redemption should leave only the victim economic claim')
+			const victimCollateral = await getCompleteSetCollateralAmount(client, firstChildPool.securityPool)
+			assert.ok(victimCollateral > 0n, 'the first child should retain collateral for the victim')
+
+			const firstChildRepToken = await getRepToken(client, firstChildPool.securityPool)
+			const firstChildForkThreshold = await getZoltarForkThreshold(client, firstChildUniverse)
+			const initialForkMigrationBalance = await getMigrationRepBalance(client, genesisUniverse, client.account.address)
+			if (initialForkMigrationBalance < firstChildForkThreshold) {
+				await addRepToMigrationBalance(client, genesisUniverse, firstChildForkThreshold - initialForkMigrationBalance)
+			}
+			await splitMigrationRep(client, genesisUniverse, firstChildForkThreshold, [QuestionOutcome.Yes])
+			assert.ok((await getERC20Balance(client, firstChildRepToken, client.account.address)) >= firstChildForkThreshold, 'the fork initiator should hold a normally migrated child REP threshold')
+			const firstChildRepTotalSupply = await client.readContract({
+				abi: ReputationToken_ReputationToken.abi,
+				address: firstChildRepToken,
+				functionName: 'totalSupply',
+			})
+			assert.ok(firstChildRepTotalSupply >= firstChildForkThreshold, 'the normally migrated child REP supply should cover the recursive fork threshold')
+			await approveToken(client, firstChildRepToken, getZoltarAddress())
+			await forkUniverse(client, firstChildUniverse, questionId)
+			await assert.rejects(initiateSecurityPoolFork(client, firstChildPool.securityPool), /Resolved/)
+			await assert.rejects(migrateShares(attacker, firstChildPool.shareToken, firstChildUniverse, QuestionOutcome.No, [QuestionOutcome.No]), /Resolved/)
+			strictEqualTypeSafe(await getSystemState(client, firstChildPool.securityPool), SystemState.Operational, 'the rejected recursive fork should leave the fixed child operational')
+			strictEqualTypeSafe(await getQuestionOutcome(client, firstChildPool.securityPool), QuestionOutcome.Yes, 'the rejected recursive fork should preserve the fixed outcome')
+
+			const victimBalanceBeforeRedemption = await getETHBalance(client, victim.account.address)
+			await redeemShares(victim, firstChildPool.securityPool)
+			const victimRedemption = (await getETHBalance(client, victim.account.address)) - victimBalanceBeforeRedemption
+			strictEqualTypeSafe(victimRedemption, victimCollateral, 'the victim should retain the full collateral reserve after the recursive fork is rejected')
+			strictEqualTypeSafe(await getShareTokenSupply(client, firstChildPool.securityPool), 0n, 'the victim redemption should consume the remaining economic claims')
+			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, firstChildPool.securityPool), 0n, 'the victim redemption should consume the remaining collateral')
+		})
+
+		test('an unrelated fork followed by a matching fork installs the second branch outcome across a recursive continuation', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 			const opposingClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
@@ -3136,15 +3226,12 @@ describe('Peripherals: fork migration', () => {
 			await depositToEscalationGame(opposingClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes, recursiveDeposit)
 			await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 
-			let firstForkQuestionId = questionId
-			if (!firstForkMatches) {
-				const firstForkQuestionData = {
-					...questionData,
-					title: 'first unrelated recursive fixed-outcome source',
-				}
-				firstForkQuestionId = getQuestionId(firstForkQuestionData, outcomes)
-				await createQuestion(client, firstForkQuestionData, outcomes)
+			const firstForkQuestionData = {
+				...questionData,
+				title: 'first unrelated recursive fixed-outcome source',
 			}
+			const firstForkQuestionId = getQuestionId(firstForkQuestionData, outcomes)
+			await createQuestion(client, firstForkQuestionData, outcomes)
 			await forkUniverse(client, genesisUniverse, firstForkQuestionId)
 			await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
@@ -3159,24 +3246,13 @@ describe('Peripherals: fork migration', () => {
 					address: firstChildGame,
 					functionName: 'fixedQuestionOutcome',
 				}),
-				BigInt(firstForkMatches ? QuestionOutcome.Yes : QuestionOutcome.None),
-				'first continuation should encode only a matching-question fixed outcome',
+				BigInt(QuestionOutcome.None),
+				'an unrelated first fork should leave the first continuation without a fixed outcome',
 			)
 
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, firstChildPool.securityPool)
 			strictEqualTypeSafe(await getSystemState(client, firstChildPool.securityPool), SystemState.Operational, 'first recursive child should become operational before its own fork')
-
-			let secondForkQuestionId = questionId
-			if (!secondForkMatches) {
-				const secondForkQuestionData = {
-					...questionData,
-					title: 'second unrelated recursive fixed-outcome source',
-					endTime: await mockWindow.getTime(),
-				}
-				secondForkQuestionId = getQuestionId(secondForkQuestionData, outcomes)
-				await createQuestion(client, secondForkQuestionData, outcomes)
-			}
 
 			const firstChildRepToken = await getRepToken(client, firstChildPool.securityPool)
 			const firstChildForkThreshold = await getZoltarForkThreshold(client, firstChildUniverse)
@@ -3189,7 +3265,7 @@ describe('Peripherals: fork migration', () => {
 				},
 			})
 
-			await forkUniverse(client, firstChildUniverse, secondForkQuestionId)
+			await forkUniverse(client, firstChildUniverse, questionId)
 			await initiateSecurityPoolFork(client, firstChildPool.securityPool)
 			await migrateRepToZoltar(client, firstChildPool.securityPool, [QuestionOutcome.No])
 			await migrateVaultWithUnresolvedEscalation(client, firstChildPool.securityPool, client.account.address, QuestionOutcome.No)
@@ -3207,8 +3283,8 @@ describe('Peripherals: fork migration', () => {
 			})
 			await mockWindow.setTime(secondChildGameEndDate + 1n)
 
-			strictEqualTypeSafe(await getQuestionOutcome(client, secondChildPool.securityPool), expectedOutcome, 'recursive child pool should retain the canonical matching-question outcome')
-			strictEqualTypeSafe(await getQuestionResolution(client, secondChildGame), expectedOutcome, 'recursive continuation game should settle against the same canonical outcome')
+			strictEqualTypeSafe(await getQuestionOutcome(client, secondChildPool.securityPool), QuestionOutcome.No, 'recursive child pool should retain the canonical matching-question outcome')
+			strictEqualTypeSafe(await getQuestionResolution(client, secondChildGame), QuestionOutcome.No, 'recursive continuation game should settle against the same canonical outcome')
 		})
 
 		test('a direct same-question fork rejects carried deposits that lose in the selected child branch', async () => {

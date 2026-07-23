@@ -885,8 +885,8 @@ contract SecurityPool is ISecurityPool {
 		_syncActiveVault(beneficiaryVault);
 	}
 
-	function activateForkMode(bool forkQuestionMatchesPoolQuestion) external onlyForker {
-		require(!hasInheritedForkOutcome || forkQuestionMatchesPoolQuestion, 'Resolved');
+	function activateForkMode() external onlyForker {
+		require(!hasInheritedForkOutcome, 'Resolved');
 		systemState = SystemState.PoolForked;
 		updateCollateralAmount();
 		uint256 repTransferred = repToken.balanceOf(address(this));

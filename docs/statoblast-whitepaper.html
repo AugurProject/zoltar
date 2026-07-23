@@ -3007,7 +3007,8 @@
 							<desc id="escalation-desc">
 								Outcome balances are compared to running total cost for local
 								resolution and to the fixed non-decision threshold for a local
-								fork path.
+								game's fork eligibility. A pool with an inherited fixed outcome
+								still rejects fork activation.
 							</desc>
 							<defs>
 								<marker
@@ -3119,17 +3120,21 @@
 								rx="10"
 							></rect>
 							<text class="svg-label" x="756" y="260" text-anchor="middle">
-								Local Fork
+								Game-Local
 							</text>
-							<text class="svg-small" x="756" y="284" text-anchor="middle">
-								path opens
+							<text class="svg-label" x="756" y="284" text-anchor="middle">
+								Eligibility
+							</text>
+							<text class="svg-micro" x="756" y="302" text-anchor="middle">
+								pool guard still applies
 							</text>
 						</svg>
 						<p class="diagram-caption">
 							<span class="figure-label">Non-Decision Flow</span>A live
 							unresolved contest is not the same as the stronger non-decision
 							condition. This diagram shows a local threshold crossing, which
-							opens the fork path.
+							makes <code>canTriggerOwnFork()</code> true. A pool with an
+							inherited fixed outcome still rejects <code>activateForkMode()</code>.
 						</p>
 					</figure>
 					<p>
@@ -3143,8 +3148,11 @@
 						interactive example above applies. A local deposit that brings
 						a second outcome to <code>nonDecisionThreshold</code> records
 						<code>nonDecisionState = Local</code> and
-						<code>nonDecisionTimestamp</code>, then opens the fork path. A fork
-						continuation instead records
+						<code>nonDecisionTimestamp</code>, then makes the game-local
+						<code>canTriggerOwnFork()</code> predicate true. That predicate does
+						not override pool finality: a pool with an inherited fixed outcome
+						still rejects <code>activateForkMode()</code>. A fork continuation
+						instead records
 						<code>nonDecisionState = InheritedThresholdTie</code> when its
 						preserved balances already meet that condition, without rebasing
 						balances or fabricating a local timestamp. Both explicit states close
@@ -3761,13 +3769,13 @@
 								migrated vaults, collateral, shares, and escalation state.</b
 							>
 						</div>
-							<div class="summary-card">
-								<span>Edge cases</span>
-								<b
-									>Paused continuations can fork again once operational if they
-									record a local non-decision or inherited a threshold tie without
-									a fixed outcome.</b
-								>
+						<div class="summary-card">
+							<span>Edge cases</span>
+							<b
+								>Only continuations without a fixed outcome can fork again; their
+								game-local trigger may be a local non-decision or an inherited
+								threshold tie.</b
+							>
 						</div>
 					</div>
 					<table>
@@ -4835,10 +4843,13 @@
 						</li>
 					</ol>
 					<p>
-						A continuation game can inherit a threshold tie at snapshot
-						initialization or later record a local non-decision after resuming. A
-						local non-decision can fork again; an inherited threshold tie can do
-						so only when the continuation has no fixed outcome. When eligible,
+						A continuation pool can fork again only when it has no inherited fixed
+						outcome. Within that pool-level boundary, its game can become eligible
+						by inheriting a threshold tie at snapshot initialization or by recording
+						a local non-decision after resuming. The game-local
+						<code>canTriggerOwnFork()</code> predicate returns true for a local
+						non-decision, but it does not bypass the pool's fixed-outcome guard. When
+						both levels are eligible,
 						the forker stores the game's current balances, carry totals,
 						peaks, leaf counts, and current nullifier roots after any prior proof
 						consumption. It drains and locks the remaining aggregate REP once. Each
@@ -4872,8 +4883,9 @@
 						question. The pool's unresolved London-temperature escalation migrates into
 						selected child universes as separate paused continuation games, one in each
 						selected child universe. After a continuation resumes, it still disputes the
-						London-temperature question. If it inherited a threshold tie without a
-						fixed outcome or later records a local non-decision, a caller can invoke the
+						London-temperature question. Because the unrelated fork did not give the
+						continuation pool a fixed outcome, an inherited threshold tie or a later
+						local non-decision lets a caller invoke the
 						security-pool fork path, causing Zoltar to fork that child universe again.
 						The first fork therefore creates branches for the possible answers to the
 						unrelated Atlas-upgrade question; the recursive fork creates branches for the
@@ -4893,9 +4905,10 @@
 								an unresolved escalation. Later, migration into selected child branches deploys child pools
 								and initializes paused continuation games. Canonical snapshot state supplies each selected
 								child's proof baseline, aggregate REP supplies physical backing once, and
-							authenticated winning proofs pay their recorded depositors. A local non-decision, or an
-							inherited threshold tie without a fixed outcome, lets a caller invoke the
-							security-pool fork path so Zoltar forks that child universe again.
+								authenticated winning proofs pay their recorded depositors. Only a
+								continuation pool without a fixed outcome may fork again; within that
+								boundary, a local non-decision or inherited threshold tie makes its game
+								eligible for the security-pool fork path.
 							</desc>
 							<defs>
 								<marker
@@ -5032,19 +5045,19 @@
 							Can Fork Again
 						</text>
 						<text class="svg-small" x="490" y="489" text-anchor="middle">
-							local, or inherited tie
+							pool has no fixed outcome
 						</text>
 						<text class="svg-micro" x="490" y="506" text-anchor="middle">
-							without fixed outcome
+							local or inherited game trigger
 						</text>
 						</svg>
 						<p class="diagram-caption">
 							<span class="figure-label">Recursive Continuation</span>Each child
 							continuation game receives the same canonical proof snapshot and aggregate
-							backing. Winning proofs remain claimable without vault migration. If a
-							child game records a local non-decision, or inherits a threshold tie
-							without a fixed outcome, the carry can be exported again into the next
-							fork generation.
+							backing. Winning proofs remain claimable without vault migration. Only
+							a child pool without a fixed outcome can export the carry into another
+							fork generation; within that boundary, a local non-decision or inherited
+							threshold tie makes its game eligible.
 						</p>
 					</figure>
 					<figure class="diagram" id="fig-statoblast-carry-snapshot">
@@ -5253,19 +5266,27 @@
 							</tbody>
 						</table>
 					</div>
-					<h3>Child Outcome Resolution</h3>
+					<h3 id="child-outcome-resolution">Child Outcome Resolution</h3>
 					<p>
 						Child pools resolve outcomes through the forker. When the parent
 						universe forks on the pool's question, each child stores its selected
 						Zoltar outcome index as the fixed result, whether the fork began
 						through the pool-specific path or a direct Zoltar call. That result
-						applies after the continuation deadline and remains fixed through
-						later unrelated descendants. A child created by an unrelated fork
-						without an inherited fixed result uses a local escalation result only
-						if the escalation ended before the universe forked; otherwise it
-						remains unresolved until continuation or later state produces an
-						outcome. The <code>ownFork</code> flag changes accounting, not question
-						semantics.
+						applies after the continuation deadline and is final for that pool.
+						Later universe forks cannot transition a pool with an inherited fixed
+						result, even when they reuse the pool question. A child created by an
+						unrelated fork without an inherited fixed result uses a local
+						escalation result only if that escalation ended before the universe
+						forked; otherwise it remains unresolved until continuation or later
+						state produces an outcome. The <code>ownFork</code> flag changes
+						accounting, not question semantics.
+					</p>
+					<p>
+						This finality is also a collateral-accounting boundary. Winning-share
+						redemption burns only the fixed winning token and reduces the pool's
+						remaining economic claim supply. A later fork must not reclassify a
+						surviving sibling outcome token as winning against that reduced
+						denominator.
 					</p>
 					<figure class="diagram" id="fig-statoblast-system-decision-flow">
 						<svg
@@ -5276,7 +5297,8 @@
 							<title id="system-flow-title">Whole-system decision flow</title>
 							<desc id="system-flow-desc">
 								Question, pool, escalation, fork, child migration, auction
-								repair, and recursive continuation flow.
+								repair, fixed-outcome settlement, and unresolved recursive
+								continuation flow.
 							</desc>
 							<defs>
 								<marker
@@ -5441,7 +5463,7 @@
 								Operational Child
 							</text>
 							<text class="svg-small" x="735" y="456" text-anchor="middle">
-								settle or resume continuation
+								settle; unresolved may continue
 							</text>
 							<path
 								class="svg-line"
@@ -5449,16 +5471,18 @@
 								d="M 860 440 C 908 390 908 196 860 91"
 							></path>
 							<text class="svg-micro" x="892" y="276" text-anchor="end">
-								recursive
+								unresolved
 							</text>
 							<text class="svg-micro" x="892" y="292" text-anchor="end">
-								continuation
+								recursive continuation
 							</text>
 						</svg>
 						<p class="diagram-caption">
 							<span class="figure-label">System Decision Flow</span>The main
-							path is simple, but the continuation loop matters: a child
-							escalation game can become the parent of the next fork generation.
+							path is simple, but the unresolved continuation loop matters: a
+							child without a fixed outcome can become the parent of the next
+							fork generation. A fixed-outcome child settles without re-entering
+							the loop.
 						</p>
 					</figure>
 					<div class="equation" id="eq-statoblast-truth-auction-shortfall">
