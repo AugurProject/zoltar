@@ -66,6 +66,7 @@ export const weth = 'WETH'
 export const yes = 'Yes'
 export const zeroDecimalPlaceholder = '0.0'
 export const connectWallet = 'Connect wallet'
+export const browsePools = 'Browse Pools'
 export const createPool = 'Create Pool'
 export const close = 'Close'
 export const manualExecutionTimeout = 'Manual Execution Timeout'
@@ -92,7 +93,7 @@ export const blocked = 'Blocked'
 export const formatCopyAddressValue = (address: CopyTemplateValue) => `Copy address ${address}`
 export const formatCopyIdentifierValue = (identifier: CopyTemplateValue) => `Copy identifier ${identifier}`
 export const metricUnavailablePlaceholder = '—'
-export const loadMore = 'Load More'
+export const loadMore = 'Show More'
 export const nextPage = 'Next Page'
 export const previousPage = 'Previous Page'
 export const formatDecimalNumberRequiredError = (fieldLabel: CopyTemplateValue) => `${fieldLabel} must be a decimal number.`

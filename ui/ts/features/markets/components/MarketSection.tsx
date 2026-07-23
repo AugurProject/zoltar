@@ -7,6 +7,7 @@ import { ForkZoltarSection } from '../../universes/components/ForkZoltarSection.
 import { MarketCreateQuestionSection } from './MarketCreateQuestionSection.js'
 import { MarketOverviewSection } from './MarketOverviewSection.js'
 import { MarketQuestionsSection } from './MarketQuestionsSection.js'
+import { LoadingText } from '../../../components/LoadingText.js'
 import { OperationModal } from '../../../components/OperationModal.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
 import { TransactionUniverseValue } from '../../universes/components/TransactionUniverseValue.js'
@@ -87,7 +88,7 @@ export function MarketSection({
 
 	return (
 		<div className='route-view-flow'>
-			<SectionBlock density='compact' title={commonCopy.zoltar} variant='plain'>
+			<SectionBlock className={view === 'questions' ? '' : 'market-task-context'} density='compact' title={commonCopy.zoltar} variant='plain'>
 				{showUniverseSummary ? (
 					<MarketOverviewSection
 						accountAddress={accountState.address}
@@ -103,7 +104,7 @@ export function MarketSection({
 					<DataGrid columns='auto'>
 						<div>
 							<p className='detail'>{commonCopy.universe}</p>
-							<strong>{zoltarUniverse === undefined ? commonCopy.loadingWithEllipsis : <TransactionUniverseValue universeId={zoltarUniverse.universeId} />}</strong>
+							<strong>{zoltarUniverse === undefined ? <LoadingText /> : <TransactionUniverseValue universeId={zoltarUniverse.universeId} />}</strong>
 						</div>
 						<div>
 							<p className='detail'>{commonCopy.status}</p>

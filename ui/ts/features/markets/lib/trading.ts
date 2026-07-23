@@ -165,7 +165,7 @@ export function getTradingMintGuardMessage({
 	totalRepDeposit: bigint | undefined
 	totalSecurityBondAllowance: bigint | undefined
 }) {
-	if (!hasSelectedPool) return 'Load a pool before minting.'
+	if (!hasSelectedPool) return 'Select a pool before minting.'
 	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before minting complete sets.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
 
@@ -212,7 +212,7 @@ export function getTradingRedeemCompleteSetGuardMessage({
 	shareBalances: TradingShareBalances | undefined
 	shareTokenSupply: bigint | undefined
 }) {
-	if (!hasSelectedPool) return 'Load a pool before redeeming complete sets.'
+	if (!hasSelectedPool) return 'Select a pool before redeeming complete sets.'
 	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before redeeming complete sets.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (loadingTradingDetails) return 'Loading wallet share balances.'
@@ -257,7 +257,7 @@ export function getTradingMigrateSharesGuardMessage({
 	targetOutcomeIndexesInput: string
 	tradingForkUniverse: ZoltarUniverseSummary | undefined
 }) {
-	if (!hasSelectedPool) return 'Load a pool before migrating shares.'
+	if (!hasSelectedPool) return 'Select a pool before migrating shares.'
 	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before migrating shares.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (loadingTradingForkUniverse) return 'Loading fork target universes.'
@@ -276,7 +276,7 @@ export function getTradingMigrateSharesGuardMessage({
 }
 
 export function getTradingRedeemSharesGuardMessage({ accountAddress, hasSelectedPool, isMainnet }: { accountAddress: Address | undefined; hasSelectedPool: boolean; isMainnet: boolean }) {
-	if (!hasSelectedPool) return 'Load a pool before redeeming shares.'
+	if (!hasSelectedPool) return 'Select a pool before redeeming shares.'
 	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before redeeming shares.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	return undefined

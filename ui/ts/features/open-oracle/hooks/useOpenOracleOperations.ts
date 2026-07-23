@@ -507,7 +507,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 	}
 
 	const requireLoadedCurrentSelectedReport = () => {
-		const reportDetails = requireDefined(openOracleReportDetails.value, 'Load an oracle report first')
+		const reportDetails = requireDefined(openOracleReportDetails.value, 'Select an oracle report first')
 		assertSelectedReportCurrent(reportDetails.reportId.toString())
 		return reportDetails
 	}
@@ -699,7 +699,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 				'withdrawBalance',
 				async walletAddress => {
 					const details = requireLoadedCurrentSelectedReport()
-					const balances = requireDefined(openOracleWithdrawableBalances.value, 'Load Open Oracle balances first')
+					const balances = requireDefined(openOracleWithdrawableBalances.value, 'Open Oracle balances are not ready')
 					if (balances[balance] <= 0n) throw new Error('No withdrawable Open Oracle balance is available for this asset')
 					let token = zeroAddress
 					if (balance === 'token1') token = details.token1

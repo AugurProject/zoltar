@@ -101,7 +101,7 @@ export function getVaultRequestPriceGuardMessage({
 }) {
 	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before requesting a new price.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
-	if (!hasLoadedSelectedPool) return 'Load a security pool before requesting a new price.'
+	if (!hasLoadedSelectedPool) return 'Select a security pool before requesting a new price.'
 	if (pendingReportId !== undefined && pendingReportId > 0n) return 'A pending price report already exists for this pool.'
 	if (isPriceValid === true) return 'The current oracle price is still valid.'
 	const ethGuardMessage = getOracleRequestEthGuardMessage({
@@ -129,7 +129,7 @@ export function getVaultExecutePendingOperationGuardMessage({
 }) {
 	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before executing a staged operation.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
-	if (!hasLoadedOracleManager) return 'Load the price oracle before executing a staged operation.'
+	if (!hasLoadedOracleManager) return 'Loading price oracle details.'
 	if (isPriceValid === false) return 'Wait for a valid oracle price before executing a staged operation.'
 	if (resolvedPendingOperationId === undefined) return 'Enter a valid staged operation ID.'
 	return undefined

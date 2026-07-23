@@ -7528,6 +7528,27 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 		padding: 0.5rem 0.55rem;
 	}
 
+	.market-task-context {
+		gap: var(--space-2);
+	}
+
+	.market-task-context > .section-block-header {
+		display: none;
+	}
+
+	.market-task-context .data-grid {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: var(--space-2);
+	}
+
+	.market-task-context .data-grid > div {
+		padding-top: var(--space-2);
+	}
+
+	.market-task-context .data-grid strong {
+		font-size: var(--font-detail);
+	}
+
 	.tab-nav > .view-tabs.route {
 		display: none;
 	}

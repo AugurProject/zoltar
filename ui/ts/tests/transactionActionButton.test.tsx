@@ -61,6 +61,26 @@ describe('TransactionActionButton', () => {
 		expect(documentQueries.getByText('Connect a wallet before submitting.')).not.toBeNull()
 	})
 
+	test('adds a spinner to a loading disabled reason', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TransactionActionButton
+				availability={{
+					disabled: true,
+					reason: 'Loading truth auction status…',
+				}}
+				idleLabel='Submit Bid'
+				onClick={() => undefined}
+				pendingLabel='Submitting bid…'
+				showDisabledReason
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const loadingStatus = within(document.body).getByRole('status')
+		expect(loadingStatus.textContent).toContain('Loading truth auction status…')
+		expect(loadingStatus.querySelector('.spinner')).not.toBeNull()
+	})
+
 	test('calls onClick immediately when enabled', async () => {
 		let callCount = 0
 		const renderedComponent = await renderIntoDocument(<TransactionActionButton idleLabel='Liquidate Vault' onClick={() => callCount++} pendingLabel='Submitting...' />)

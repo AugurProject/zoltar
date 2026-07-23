@@ -154,6 +154,7 @@ describe('LiquidationModal', () => {
 			onLiquidationTimeoutMinutesChange: () => undefined,
 			onQueueLiquidation: () => undefined,
 			onSelectedPoolViewChange: () => undefined,
+			poolOracleManagerError: undefined,
 			repPerEthPrice: 1n * 10n ** 18n,
 			repPerEthSource: 'mock',
 			repPerEthSourceUrl: undefined,
@@ -1738,5 +1739,33 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getByText('Refreshing price validity.')).not.toBeNull()
 		expect((documentQueries.getByRole('button', { name: 'Liquidate Vault' }) as HTMLButtonElement).disabled).toBe(true)
 		expect(loadRequests).toEqual([])
+	})
+
+	test('stops automatic price-status retries after an error and retries only on request', async () => {
+		const loadRequests: string[] = []
+		const managerAddress = '0x00000000000000000000000000000000000000aa'
+		const initialProps = createLiquidationModalProps({
+			currentPoolOracleManagerDetails: undefined,
+			liquidationManagerAddress: managerAddress,
+			onLoadPoolOracleManager: address => {
+				loadRequests.push(address)
+			},
+		})
+		const renderedComponent = await renderIntoDocument(<LiquidationModal {...initialProps} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(loadRequests).toEqual([managerAddress])
+
+		await act(() => {
+			render(<LiquidationModal {...initialProps} poolOracleManagerError='Failed to load price oracle details. Reason: RPC unavailable' />, renderedComponent.container)
+		})
+		await act(async () => {
+			await Promise.resolve()
+		})
+		expect(loadRequests).toEqual([managerAddress])
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Failed to load price oracle details. Reason: RPC unavailable')).not.toBeNull()
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry price status' }))
+		expect(loadRequests).toEqual([managerAddress, managerAddress])
 	})
 })

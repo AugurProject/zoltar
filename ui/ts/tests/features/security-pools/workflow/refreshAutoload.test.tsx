@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { fireEvent, within } from '../../../testUtils/queries'
 import { createRefreshAutoloadFixture, useSecurityPoolWorkflowSectionTestDom } from './fixture'
 
 describe('SecurityPoolWorkflowSection: refresh and autoload', () => {
@@ -186,7 +187,56 @@ describe('SecurityPoolWorkflowSection: refresh and autoload', () => {
 		expect(reportingLoadCalls).toBe(2)
 	})
 
-	test('retries fork autoload on rerender until matching details are available', async () => {
+	test('shows an explicit retry after automatic reporting loads fail in reporting and fork views', async () => {
+		let reportingLoadCalls = 0
+		const selectedPoolAddress = zeroAddress
+		const reporting = createReportingProps({
+			onLoadReporting: () => {
+				reportingLoadCalls += 1
+			},
+			reportingError: 'Failed to load reporting details. Reason: RPC unavailable',
+			reportingForm: {
+				reportAmount: '',
+				securityPoolAddress: selectedPoolAddress,
+				selectedOutcome: 'yes',
+				selectedWithdrawDepositIndexesByOutcome: {
+					invalid: [],
+					yes: [],
+					no: [],
+				},
+			},
+		})
+		const baseProps = createSecurityPoolWorkflowProps({
+			checkedSecurityPoolAddress: selectedPoolAddress,
+			reporting,
+			securityPoolAddress: selectedPoolAddress,
+			securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 0n }) })],
+		})
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={1n}>
+				<SecurityPoolWorkflowSection {...baseProps} selectedPoolView='reporting' showHeader={false} />
+			</ChainTimestampContext.Provider>,
+		)
+		setCleanup(renderedComponent.cleanup)
+		const documentQueries = within(document.body)
+
+		expect(reportingLoadCalls).toBe(1)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry reporting' }))
+		expect(reportingLoadCalls).toBe(2)
+
+		await act(async () => {
+			render(
+				<ChainTimestampContext.Provider value={1n}>
+					<SecurityPoolWorkflowSection {...baseProps} selectedPoolView='fork-migration' showHeader={false} />
+				</ChainTimestampContext.Provider>,
+				renderedComponent.container,
+			)
+		})
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry reporting' }))
+		expect(reportingLoadCalls).toBe(3)
+	})
+
+	test('stabilizes a failed fork autoload until retry or the selected pool changes', async () => {
 		let forkLoadCalls = 0
 		const baseProps = createSecurityPoolWorkflowProps({
 			checkedSecurityPoolAddress: zeroAddress,
@@ -209,6 +259,7 @@ describe('SecurityPoolWorkflowSection: refresh and autoload', () => {
 				<SecurityPoolWorkflowSection
 					{...baseProps}
 					forkAuction={createForkAuctionProps({
+						forkAuctionError: 'Failed to load fork and auction details. Reason: RPC unavailable',
 						onLoadForkAuction: () => {
 							forkLoadCalls += 1
 						},
@@ -219,7 +270,30 @@ describe('SecurityPoolWorkflowSection: refresh and autoload', () => {
 			)
 		})
 
+		expect(forkLoadCalls).toBe(1)
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Retry fork workflow' }))
 		expect(forkLoadCalls).toBe(2)
+
+		const nextPoolAddress = getAddress('0x00000000000000000000000000000000000000a9')
+		await act(async () => {
+			render(
+				<SecurityPoolWorkflowSection
+					{...baseProps}
+					checkedSecurityPoolAddress={nextPoolAddress}
+					forkAuction={createForkAuctionProps({
+						forkAuctionError: 'Failed to load fork and auction details. Reason: RPC unavailable',
+						onLoadForkAuction: () => {
+							forkLoadCalls += 1
+						},
+					})}
+					securityPoolAddress={nextPoolAddress}
+					securityPools={[createSelectedPool({ securityPoolAddress: nextPoolAddress })]}
+					showHeader={false}
+				/>,
+				renderedComponent.container,
+			)
+		})
+		expect(forkLoadCalls).toBe(3)
 	})
 
 	test('refreshes the selected pool and current vault after finalized auction settlement', async () => {

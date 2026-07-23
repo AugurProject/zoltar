@@ -3,7 +3,7 @@ export const wrongNetwork = 'Wrong network'
 export const emptyPoolRegistryActionHint = 'Create a pool from an exact Yes / No question to enable shares, reporting, and vault workflows.'
 export const emptyPoolRegistryDetail = 'No security pools are available in this universe.'
 export const refreshingPoolRegistryDetail = 'Refreshing pools.'
-export const uncheckedPoolRegistryDetail = 'Load security pools to check what is available in this universe.'
+export const uncheckedPoolRegistryDetail = 'Loading security pools…'
 export const retrieving = 'retrieving…'
 export const formatMissingLookupDetail = (kind: 'question' | 'report') => `No ${kind} matches this ID. Try another ${kind} ID.`
 export const uncheckedUniverseDetail = 'Choose a universe to continue.'

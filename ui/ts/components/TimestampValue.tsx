@@ -1,5 +1,5 @@
-import * as commonCopy from '../copy/common.js'
 import type { ComponentChildren } from 'preact'
+import { LoadingText } from './LoadingText.js'
 import { useChainTimestamp } from '../lib/chainTimestamp.js'
 import { formatRelativeTimestamp, formatTimestamp } from '../lib/formatters.js'
 import { getMetricPlaceholderPresentation } from '../lib/userCopy.js'
@@ -17,7 +17,7 @@ export function TimestampValue({ className = '', currentTimestamp, loading = fal
 	const chainCurrentTimestamp = useChainTimestamp()
 	const resolvedCurrentTimestamp = currentTimestamp ?? chainCurrentTimestamp
 
-	if (loading) return <span className={`timestamp-value loading ${className}`}>{commonCopy.loadingWithEllipsis}</span>
+	if (loading) return <LoadingText className={`timestamp-value loading ${className}`} />
 
 	if (timestamp === undefined) return <span className={`timestamp-value unavailable ${className}`}>{undefinedText}</span>
 

@@ -13,27 +13,44 @@ type UseForkWorkflowSelectionStateParameters = {
 export function useForkWorkflowSelectionState({ currentForkWorkflowSelectionStage, legacyForkWorkflowSelectionStage, onSelectedStageViewChange, selectedPoolAddress, view }: UseForkWorkflowSelectionStateParameters) {
 	const previousSelectedPoolViewRef = useRef<SelectedPoolView | undefined>(undefined)
 	const previousForkWorkflowPoolKeyRef = useRef<string | undefined>(undefined)
+	const previousLegacyForkWorkflowSelectionStageRef = useRef<ForkWorkflowSelectionStage | undefined>(legacyForkWorkflowSelectionStage)
 	const pendingLegacyForkWorkflowSelectionStageRef = useRef<ForkWorkflowSelectionStage | undefined>(legacyForkWorkflowSelectionStage)
+	const pendingGenericRouteManualSelectionRef = useRef(false)
 	const hasManualForkWorkflowSelectionRef = useRef(false)
 	const [forkWorkflowSelectionStage, setForkWorkflowSelectionStage] = useState<ForkWorkflowSelectionStage>(legacyForkWorkflowSelectionStage ?? currentForkWorkflowSelectionStage)
 
 	useEffect(() => {
-		if (legacyForkWorkflowSelectionStage === undefined) return
+		const previousLegacyForkWorkflowSelectionStage = previousLegacyForkWorkflowSelectionStageRef.current
+		previousLegacyForkWorkflowSelectionStageRef.current = legacyForkWorkflowSelectionStage
+		if (legacyForkWorkflowSelectionStage === undefined) {
+			if (previousLegacyForkWorkflowSelectionStage === undefined) return
+			pendingLegacyForkWorkflowSelectionStageRef.current = undefined
+			if (pendingGenericRouteManualSelectionRef.current) {
+				pendingGenericRouteManualSelectionRef.current = false
+				hasManualForkWorkflowSelectionRef.current = true
+				return
+			}
+			hasManualForkWorkflowSelectionRef.current = false
+			if (view === 'fork-workflow') setForkWorkflowSelectionStage(currentForkWorkflowSelectionStage)
+			return
+		}
+		pendingGenericRouteManualSelectionRef.current = false
 		pendingLegacyForkWorkflowSelectionStageRef.current = legacyForkWorkflowSelectionStage
-		hasManualForkWorkflowSelectionRef.current = false
+		hasManualForkWorkflowSelectionRef.current = true
 		if (view !== 'fork-workflow') return
 		setForkWorkflowSelectionStage(legacyForkWorkflowSelectionStage)
 		pendingLegacyForkWorkflowSelectionStageRef.current = undefined
-	}, [legacyForkWorkflowSelectionStage, view])
+	}, [currentForkWorkflowSelectionStage, legacyForkWorkflowSelectionStage, view])
 
 	useEffect(() => {
 		const selectedPoolKey = normalizeAddress(selectedPoolAddress)
 		if (previousForkWorkflowPoolKeyRef.current === selectedPoolKey) return
 		previousForkWorkflowPoolKeyRef.current = selectedPoolKey
-		pendingLegacyForkWorkflowSelectionStageRef.current = undefined
-		hasManualForkWorkflowSelectionRef.current = false
-		setForkWorkflowSelectionStage(currentForkWorkflowSelectionStage)
-	}, [currentForkWorkflowSelectionStage, selectedPoolAddress])
+		pendingGenericRouteManualSelectionRef.current = false
+		pendingLegacyForkWorkflowSelectionStageRef.current = legacyForkWorkflowSelectionStage
+		hasManualForkWorkflowSelectionRef.current = legacyForkWorkflowSelectionStage !== undefined
+		setForkWorkflowSelectionStage(legacyForkWorkflowSelectionStage ?? currentForkWorkflowSelectionStage)
+	}, [currentForkWorkflowSelectionStage, legacyForkWorkflowSelectionStage, selectedPoolAddress])
 
 	useEffect(() => {
 		const previousView = previousSelectedPoolViewRef.current
@@ -41,7 +58,7 @@ export function useForkWorkflowSelectionState({ currentForkWorkflowSelectionStag
 		if (view !== 'fork-workflow' || previousView === 'fork-workflow') return
 		const seededStage = pendingLegacyForkWorkflowSelectionStageRef.current
 		if (seededStage !== undefined) {
-			hasManualForkWorkflowSelectionRef.current = false
+			hasManualForkWorkflowSelectionRef.current = true
 			setForkWorkflowSelectionStage(seededStage)
 			pendingLegacyForkWorkflowSelectionStageRef.current = undefined
 			return
@@ -61,6 +78,7 @@ export function useForkWorkflowSelectionState({ currentForkWorkflowSelectionStag
 	return {
 		forkWorkflowSelectionStage,
 		onForkWorkflowSelectionStageChange: (stage: ForkWorkflowSelectionStage) => {
+			pendingGenericRouteManualSelectionRef.current = stage === 'fork-triggered'
 			hasManualForkWorkflowSelectionRef.current = true
 			setForkWorkflowSelectionStage(stage)
 			onSelectedStageViewChange(stage)

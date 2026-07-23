@@ -102,7 +102,7 @@ describe('SimulationBanner', () => {
 			const documentQueries = within(renderedComponent.container)
 			expect(documentQueries.getByRole('heading', { name: 'Browser Simulation' })).not.toBeNull()
 			expect(documentQueries.queryByText('Simulation Mode')).toBeNull()
-			expect(documentQueries.getByText('One seeded market, one security pool, and one funded vault with an active security bond allowance. Use it to test pool actions and liquidation paths.')).not.toBeNull()
+			expect(documentQueries.getByText('One seeded question, one security pool, and one funded vault with an active security bond allowance. Use it to test pool actions and liquidation paths.')).not.toBeNull()
 		} finally {
 			await renderedComponent.cleanup()
 			domEnvironment.cleanup()
@@ -220,7 +220,7 @@ describe('SimulationBanner', () => {
 
 		try {
 			const documentQueries = within(renderedComponent.container)
-			expect(documentQueries.getByText('One seeded market, one security pool, and one funded vault with an active security bond allowance. Use it to test pool actions and liquidation paths.')).not.toBeNull()
+			expect(documentQueries.getByText('One seeded question, one security pool, and one funded vault with an active security bond allowance. Use it to test pool actions and liquidation paths.')).not.toBeNull()
 			expect(documentQueries.getByText('Deploying seeded security pool')).not.toBeNull()
 		} finally {
 			await renderedComponent.cleanup()
@@ -517,7 +517,7 @@ describe('SimulationBanner', () => {
 				currentTarget: { value: importedState },
 				target: { value: importedState },
 			})
-			fireEvent.click(dialogQueries.getByRole('button', { name: 'Import and load' }))
+			fireEvent.click(dialogQueries.getByRole('button', { name: 'Import' }))
 
 			await waitFor(() => {
 				expect(domEnvironment.window.location.hash).toContain('simState=imported-state-20260602123456')
@@ -621,7 +621,7 @@ describe('SimulationBanner', () => {
 				currentTarget: { value: '{bad json' },
 				target: { value: '{bad json' },
 			})
-			fireEvent.click(dialogQueries.getByRole('button', { name: 'Import and load' }))
+			fireEvent.click(dialogQueries.getByRole('button', { name: 'Import' }))
 
 			await waitFor(() => {
 				expect(dialogQueries.getByText(/Failed to update the saved simulation state/i)).toBeTruthy()

@@ -70,7 +70,7 @@ describe('reporting guards', () => {
 				viewerVaultAvailableEscalationRep: 10n,
 				viewerVaultExists: true,
 			}),
-		).toBe('Load reporting details before reporting on an outcome.')
+		).toBe('Loading reporting details.')
 
 		expect(
 			getReportingReportGuardMessage({
@@ -248,7 +248,7 @@ describe('reporting guards', () => {
 				isMainnet: true,
 				reportingStatus: 'missing',
 			}),
-		).toBe('Load reporting details before settling escalation deposits.')
+		).toBe('Loading reporting details.')
 	})
 
 	test('leaves withdrawal lifecycle handling to the shared action matrix', () => {

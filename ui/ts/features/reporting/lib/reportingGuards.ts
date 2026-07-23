@@ -32,7 +32,7 @@ export function getReportingReportGuardMessage({
 }) {
 	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before reporting on a market.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
-	if (reportingStatus === 'missing') return 'Load reporting details before reporting on an outcome.'
+	if (reportingStatus === 'missing') return 'Loading reporting details.'
 	if (selectedOutcome === undefined) return 'Select an outcome side before reporting on a market.'
 	if (reportAmount.trim() === '') return 'Enter a report amount greater than zero.'
 	if (selectedAmount === undefined || selectedAmount <= 0n) return 'Enter a valid report amount greater than zero.'
@@ -51,6 +51,6 @@ export function getReportingReportGuardMessage({
 export function getReportingWithdrawGuardMessage({ accountAddress, isMainnet, reportingStatus }: { accountAddress: Address | undefined; isMainnet: boolean; reportingStatus: ReportingStatus }) {
 	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before settling escalation deposits.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
-	if (reportingStatus === 'missing') return 'Load reporting details before settling escalation deposits.'
+	if (reportingStatus === 'missing') return 'Loading reporting details.'
 	return undefined
 }
