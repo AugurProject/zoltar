@@ -463,6 +463,7 @@ export function ForkAuctionSection({
 	const selectedOutcomeMigrationChildVault = selectedOutcomeMigrationChildPool === undefined || accountState.address === undefined ? undefined : selectedOutcomeMigrationChildPool.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))
 	const fullTruthAuctionReadClient = isFullReadClient(truthAuctionReadClient) ? truthAuctionReadClient : undefined
 	const {
+		loadingSelectedAuctionChildPoolRecovery,
 		loadingSelectedOutcomeMigrationSeedStatus,
 		retryingSelectedAuctionDetails,
 		retrySelectedAuctionChildPoolRecovery,
@@ -1033,9 +1034,19 @@ export function ForkAuctionSection({
 	}
 	function renderSelectedOutcomeChildPoolNotice() {
 		if (selectedAuctionChildPool !== undefined) return undefined
+		const noticeContent = (() => {
+			if (loadingSelectedAuctionChildPoolRecovery)
+				return (
+					<p className='detail'>
+						<LoadingText>{forkAuctionCopy.formatLoadingOutcomePoolDetail(selectedOutcomeLabel)}</LoadingText>
+					</p>
+				)
+			if (selectedAuctionChildPoolRecoveryError !== undefined) return <ErrorNotice message={selectedAuctionChildPoolRecoveryError} />
+			return <p className='detail'>{forkAuctionCopy.formatMissingOutcomePoolDetail(selectedOutcomeLabel)}</p>
+		})()
 		return (
 			<div className='fork-workflow-outcome-notice'>
-				{selectedAuctionChildPoolRecoveryError === undefined ? <p className='detail'>{forkAuctionCopy.formatMissingOutcomePoolDetail(selectedOutcomeLabel)}</p> : <ErrorNotice message={selectedAuctionChildPoolRecoveryError} />}
+				{noticeContent}
 				{selectedAuctionChildPoolRecoveryError === undefined ? undefined : (
 					<div className='actions'>
 						<button className='secondary' onClick={retrySelectedAuctionChildPoolRecovery} type='button'>

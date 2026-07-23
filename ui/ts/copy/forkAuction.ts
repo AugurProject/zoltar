@@ -204,6 +204,7 @@ export const retryAuctionDetails = 'Retry'
 export const retryingAuctionDetails = 'Retrying auction details…'
 export const retryForkWorkflow = 'Retry fork workflow'
 export const retryChildUniverse = 'Retry child universe'
+export const formatLoadingOutcomePoolDetail = (outcomeLabel: CopyTemplateValue) => `Loading the ${outcomeLabel} child pool…`
 export const retryPoolRepReadiness = 'Retry pool REP readiness'
 export const retryReporting = 'Retry reporting'
 export const loadingReportingDetails = 'Loading reporting details…'

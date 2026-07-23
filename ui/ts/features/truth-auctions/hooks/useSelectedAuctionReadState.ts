@@ -45,6 +45,7 @@ export function useSelectedAuctionReadState({
 	const [loadingSelectedAuctionDetails, setLoadingSelectedAuctionDetails] = useState(false)
 	const [retryingSelectedAuctionDetails, setRetryingSelectedAuctionDetails] = useState(false)
 	const [recoveredSelectedAuctionChildPool, setRecoveredSelectedAuctionChildPool] = useState<ListedSecurityPool | undefined>(undefined)
+	const [selectedAuctionChildPoolRecoveryCompletedKey, setSelectedAuctionChildPoolRecoveryCompletedKey] = useState<string | undefined>(undefined)
 	const [selectedAuctionChildPoolRecoveryError, setSelectedAuctionChildPoolRecoveryError] = useState<string | undefined>(undefined)
 	const [selectedAuctionChildPoolRecoveryErrorKey, setSelectedAuctionChildPoolRecoveryErrorKey] = useState<string | undefined>(undefined)
 	const [selectedAuctionChildPoolRecoveryRetryNonce, setSelectedAuctionChildPoolRecoveryRetryNonce] = useState(0)
@@ -97,15 +98,18 @@ export function useSelectedAuctionReadState({
 	useEffect(() => {
 		if (selectedStage === 'migration' || securityPoolAddress === undefined) {
 			setRecoveredSelectedAuctionChildPool(undefined)
+			setSelectedAuctionChildPoolRecoveryCompletedKey(undefined)
 			setSelectedAuctionChildPoolRecoveryError(undefined)
 			setSelectedAuctionChildPoolRecoveryErrorKey(undefined)
 			return
 		}
 		if (selectedOutcomeMigrationChildPool !== undefined) {
 			setRecoveredSelectedAuctionChildPool(currentPool => (currentPool?.securityPoolAddress === selectedOutcomeMigrationChildPool.securityPoolAddress ? currentPool : selectedOutcomeMigrationChildPool))
+			setSelectedAuctionChildPoolRecoveryCompletedKey(selectedAuctionChildPoolRecoveryKey)
 			return
 		}
 		let cancelled = false
+		setSelectedAuctionChildPoolRecoveryCompletedKey(undefined)
 		setSelectedAuctionChildPoolRecoveryError(undefined)
 		setSelectedAuctionChildPoolRecoveryErrorKey(undefined)
 		void loadAllSecurityPools(fullTruthAuctionReadClient ?? createConnectedReadClient(), {
@@ -117,12 +121,14 @@ export function useSelectedAuctionReadState({
 				if (cancelled) return
 				const recoveredPool = allPools.find(pool => sameAddress(pool.parent, securityPoolAddress) && pool.questionOutcome === selectedOutcome)
 				setRecoveredSelectedAuctionChildPool(recoveredPool)
+				setSelectedAuctionChildPoolRecoveryCompletedKey(selectedAuctionChildPoolRecoveryKey)
 			})
 			.catch(error => {
 				if (cancelled) return
 				setRecoveredSelectedAuctionChildPool(undefined)
 				setSelectedAuctionChildPoolRecoveryError(getErrorMessage(error, `Unable to check whether the ${selectedAuctionLabel} child universe exists.`))
 				setSelectedAuctionChildPoolRecoveryErrorKey(selectedAuctionChildPoolRecoveryKey)
+				setSelectedAuctionChildPoolRecoveryCompletedKey(selectedAuctionChildPoolRecoveryKey)
 			})
 		return () => {
 			cancelled = true
@@ -211,6 +217,8 @@ export function useSelectedAuctionReadState({
 	}, [forkAuctionResultHash, forkMigrationReadClient, securityPoolAddress, selectedAuctionLabel, selectedOutcome, selectedOutcomeMigrationChildPool?.securityPoolAddress, selectedOutcomeMigrationSeedStatusRetryNonce, selectedStage, universeId])
 
 	return {
+		loadingSelectedAuctionChildPoolRecovery:
+			(selectedStage === 'auction' || selectedStage === 'settlement') && selectedAuctionChildPoolRecoveryKey !== undefined && selectedAuctionChildPool === undefined && scopedSelectedAuctionChildPoolRecoveryError === undefined && selectedAuctionChildPoolRecoveryCompletedKey !== selectedAuctionChildPoolRecoveryKey,
 		loadingSelectedAuctionDetails: loadingSelectedAuctionDetails || ((selectedStage === 'auction' || selectedStage === 'settlement') && selectedAuctionPoolAddress !== undefined && currentSelectedAuctionDetails === undefined && scopedSelectedAuctionError === undefined),
 		loadingSelectedOutcomeMigrationSeedStatus,
 		retryingSelectedAuctionDetails: retryingSelectedAuctionDetails && loadingSelectedAuctionDetails && scopedSelectedAuctionDetails === undefined,

@@ -311,6 +311,37 @@ describe('ForkAuctionSection child pool recovery', () => {
 		])
 	})
 
+	test('shows child-pool discovery as loading until an empty result is confirmed', async () => {
+		const recovery = createDeferred<ListedSecurityPool[]>()
+		recoveredPoolsFactory = () => recovery.promise
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentStageView: 'auction',
+					selectedStageView: 'auction',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => {
+			const loadingStatus = within(document.body).getByText('Loading the Yes child pool…')
+			expect(loadingStatus.getAttribute('role')).toBe('status')
+			expect(loadingStatus.querySelector('.spinner')).not.toBeNull()
+			expect(document.body.textContent).not.toContain('does not exist')
+		})
+
+		await act(async () => {
+			recovery.resolve([])
+			await recovery.promise
+		})
+		await waitFor(() => {
+			expect(document.body.textContent).toContain('does not exist')
+			expect(within(document.body).queryByText('Loading the Yes child pool…')).toBeNull()
+		})
+	})
+
 	test('shows recovery guidance and retries when child-universe discovery fails', async () => {
 		let recoveryAttempts = 0
 		recoveredPoolsFactory = () => {
