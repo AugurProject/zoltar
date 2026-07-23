@@ -576,6 +576,44 @@ describe('ForkAuctionSection', () => {
 		expect(button.getAttribute('title')).toBe('Migration window has closed for this parent pool.')
 	})
 
+	test('renders unresolved parent-lock loading with the shared accessible spinner', async () => {
+		const walletAddress = getAddress('0x00000000000000000000000000000000000000ac')
+		const unresolvedDeposit = createReportingDeposit({ depositor: walletAddress })
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ address: walletAddress }),
+					currentStageView: 'migration',
+					forkAuctionDetails: createForkAuctionDetails({
+						systemState: 'forkMigration',
+						truthAuction: undefined,
+						truthAuctionStartedAt: 0n,
+					}),
+					loadingReportingDetails: true,
+					reportingDetails: createActiveReportingDetails({
+						settlementState: 'migration-required',
+						sides: [
+							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: 10n, deposits: [unresolvedDeposit], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [unresolvedDeposit] },
+							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+						],
+						viewerVaultEscrowedRep: 10n,
+						viewerVaultExists: true,
+						viewerVaultRepDepositShare: 10n,
+					}),
+					selectedStageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const loadingStatus = within(document.body).getByText('Loading parent escalation locks for the connected wallet…')
+		expect(loadingStatus.textContent).toContain('Loading parent escalation locks for the connected wallet…')
+		expect(loadingStatus.getAttribute('role')).toBe('status')
+		expect(loadingStatus.querySelector('.spinner')).not.toBeNull()
+	})
+
 	test('keeps an exported escalation entitlement available for another selected child', async () => {
 		const walletAddress = getAddress('0x00000000000000000000000000000000000000ad')
 		const consumedDeposit = createReportingDeposit({

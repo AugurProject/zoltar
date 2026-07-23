@@ -14,7 +14,7 @@ import { ErrorNotice } from '../../../components/ErrorNotice.js'
 import { FormInput } from '../../../components/FormInput.js'
 import { ImportedForkSettlementSection } from '../../reporting/components/ImportedForkSettlementSection.js'
 import { LookupFieldRow } from '../../../components/LookupFieldRow.js'
-import { LoadingText } from '../../../components/LoadingText.js'
+import { LoadingAwareText, LoadingText } from '../../../components/LoadingText.js'
 import { MetricGrid } from '../../../components/MetricGrid.js'
 import { MetricField } from '../../../components/MetricField.js'
 import { ReadOnlyDetailAccordion } from '../../../components/ReadOnlyDetailAccordion.js'
@@ -1507,14 +1507,16 @@ export function ForkAuctionSection({
 								{hasUnresolvedMigrationState ? (
 									<SectionBlock density='compact' headingLevel={4} title={forkAuctionCopy.migrateUnresolvedEscalationLocks} variant='embedded'>
 										<p className='detail'>
-											{(() => {
-												if (isMigrationExpired) return forkAuctionCopy.unresolvedMigrationExpiredDetail
-												if (loadingReportingDetails) return forkAuctionCopy.walletUnresolvedDepositsLoading
-												if (activeReportingDetails === undefined) return forkAuctionCopy.unresolvedDepositDetailsUnavailable
-												if (hasStoredEscalationMigrationEntitlement) return forkAuctionCopy.capturedEntitlementDetail
-												if (!hasUnresolvedMigrationDeposits) return forkAuctionCopy.walletUnresolvedDepositsEmpty
-												return forkAuctionCopy.unresolvedEscalationMigrationWithVaultDetail
-											})()}
+											<LoadingAwareText>
+												{(() => {
+													if (isMigrationExpired) return forkAuctionCopy.unresolvedMigrationExpiredDetail
+													if (loadingReportingDetails) return forkAuctionCopy.walletUnresolvedDepositsLoading
+													if (activeReportingDetails === undefined) return forkAuctionCopy.unresolvedDepositDetailsUnavailable
+													if (hasStoredEscalationMigrationEntitlement) return forkAuctionCopy.capturedEntitlementDetail
+													if (!hasUnresolvedMigrationDeposits) return forkAuctionCopy.walletUnresolvedDepositsEmpty
+													return forkAuctionCopy.unresolvedEscalationMigrationWithVaultDetail
+												})()}
+											</LoadingAwareText>
 										</p>
 										{activeReportingDetails === undefined || hasStoredEscalationMigrationEntitlement
 											? undefined

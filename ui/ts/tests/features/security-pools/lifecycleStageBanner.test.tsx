@@ -2,6 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
+import { within } from '../../testUtils/queries'
 import { LifecycleStageBanner } from '../../../features/security-pools/components/LifecycleStageBanner.js'
 import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
@@ -44,5 +45,19 @@ describe('LifecycleStageBanner', () => {
 		expect(warningFlatRuleIndex).toBeGreaterThan(baseFlatRuleIndex)
 		expect(criticalFlatRuleIndex).toBeGreaterThan(warningFlatRuleIndex)
 		expect(successFlatRuleIndex).toBeGreaterThan(criticalFlatRuleIndex)
+	})
+
+	test('renders loading detail with the shared accessible spinner for standard and warning stages', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<>
+				<LifecycleStageBanner stage={{ availableActions: [], blockedActions: [], detail: 'Loading reporting details.', key: 'reportingOpen', label: 'Reporting Open', tone: 'success' }} />
+				<LifecycleStageBanner stage={{ availableActions: [], blockedActions: [], detail: 'Loading warning details.', key: 'warning', label: 'Warning', tone: 'warning' }} />
+			</>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const loadingStatuses = within(document.body).getAllByRole('status')
+		expect(loadingStatuses).toHaveLength(2)
+		expect(loadingStatuses.every(status => status.querySelector('.spinner') !== null)).toBe(true)
 	})
 })
