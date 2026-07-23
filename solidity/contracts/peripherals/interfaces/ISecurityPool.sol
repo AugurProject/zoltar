@@ -216,7 +216,7 @@ interface ISecurityPool {
 	) external;
 	function resumeForkedEscalationGame() external;
 	function setAwaitingForkContinuation(bool shouldAwait) external;
-	function activateForkMode(bool forkQuestionMatchesPoolQuestion) external;
+	function activateForkMode() external;
 	function setSystemState(SystemState newState) external;
 	function configureVault(
 		address vault,

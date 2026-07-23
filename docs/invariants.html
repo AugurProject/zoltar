@@ -412,8 +412,8 @@
 								</td>
 								<td>
 									A branch selected by a matching fork becomes the immutable
-									continuation outcome, unrelated forks preserve the previous fixed
-									outcome, and escalation-deposit withdrawal rejects a pool/game
+									continuation outcome, later universe forks cannot transition that
+									fixed pool, and escalation-deposit withdrawal rejects a pool/game
 									mismatch.
 								</td>
 							</tr>
@@ -1748,16 +1748,21 @@
 							<div class="invariant-property">
 								When a universe forks on a pool's question, each child pool and its
 								continuation game use that child's Invalid, Yes, or No branch as
-								the final pool-question outcome. A later fork on the same question
-								replaces the inherited outcome with its newly selected branch; a
-								fork on another question preserves the inherited outcome. Deposit
-								withdrawal reverts unless the pool and game report the same outcome.
+								the final pool-question outcome. Once a pool inherits that fixed
+								outcome, new local escalation deposits and every later fork
+								transition revert, whether the new universe fork uses the same
+								question or another one. Deposit withdrawal reverts unless the pool
+								and game report the same outcome.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> A Yes child created by a fork on the pool question pays carried Yes deposits even if copied game balances favored No; a later unrelated fork keeps Yes as the payout outcome.</p>
+							<p class="invariant-example"><strong>Example:</strong> A Yes child created by a fork on the pool question pays carried Yes deposits even if copied game balances favored No. It rejects new local escalation REP before escrow, so a later local non-decision cannot lock vault redemption. A later matching or unrelated universe fork leaves the stored <code>SystemState.Operational</code> and fixed Yes outcome unchanged, and eligible share, vault REP, and carried-proof redemption paths remain available, while universe-fork guards still freeze normal operating calls.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
+										<a
+										href="../solidity/contracts/peripherals/SecurityPool.sol"
+										><code>activateForkMode</code></a
+										>,
 										<a
 										href="../solidity/contracts/peripherals/EscalationGameCalculations.sol"
 										><code>getQuestionResolution</code></a

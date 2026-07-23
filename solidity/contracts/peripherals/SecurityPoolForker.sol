@@ -403,7 +403,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		data.forkQuestionMatchesPoolQuestion = zoltar.forkQuestionMatches(universe, securityPool.questionId());
 		uint256 escalationRepToLock = data.unresolvedEscalationAtFork ? rep.balanceOf(address(escalationGame)) : 0;
 		uint256 repBalanceBefore = rep.balanceOf(address(this));
-		securityPool.activateForkMode(data.forkQuestionMatchesPoolQuestion);
+		securityPool.activateForkMode();
 		data.forkActivationTime = block.timestamp;
 		data.collateralAtFork = securityPool.completeSetCollateralAmount();
 		data.migratedRepCollateralized = 0;
@@ -743,7 +743,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		uint256 poolRepToFork = rep.balanceOf(address(securityPool));
 		uint256 escalationRepToFork = rep.balanceOf(address(escalationGame));
 		uint256 repBalanceBefore = rep.balanceOf(address(this));
-		securityPool.activateForkMode(true);
+		securityPool.activateForkMode();
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
 		data.forkActivationTime = block.timestamp;
 		data.ownFork = true;
