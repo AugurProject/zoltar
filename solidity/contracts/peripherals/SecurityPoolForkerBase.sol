@@ -2,7 +2,7 @@
 pragma solidity 0.8.35;
 
 import { Zoltar } from '../Zoltar.sol';
-import { ISecurityPool, SystemState } from './interfaces/ISecurityPool.sol';
+import { ISecurityPool, ISecurityPoolFactory, SystemState } from './interfaces/ISecurityPool.sol';
 import { EscalationGame } from './EscalationGame.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { SecurityPoolForkerStorage } from './SecurityPoolForkerStorage.sol';
@@ -21,8 +21,9 @@ abstract contract SecurityPoolForkerBase is SecurityPoolForkerStorage, ISecurity
 		uint8 outcomeIndex,
 		uint256 parentDepositIndex
 	) internal view returns (bytes32) {
-		bytes32 originId = securityPool.securityPoolFactory().getSecurityPoolOriginId(securityPool);
-		return keccak256(abi.encode(originId, outcomeIndex, parentDepositIndex));
+		ISecurityPoolFactory factory = securityPool.securityPoolFactory();
+		bytes32 originId = factory.getSecurityPoolOriginId(securityPool);
+		return keccak256(abi.encode(factory, originId, outcomeIndex, parentDepositIndex));
 	}
 
 	function repToPoolOwnership(ISecurityPool securityPool, uint256 repAmount) public view returns (uint256) {
