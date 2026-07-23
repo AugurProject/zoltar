@@ -730,17 +730,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			if (!attemptEnabled || !enabledRef.current || accountAddressRef.current !== attemptAccountAddress || currentSelectedReportIdRef.current !== attemptReportIdInput) return false
 			const currentReportDetails = openOracleReportDetails.value
 			if (attemptReportDetails === undefined || currentReportDetails === undefined) return attemptReportDetails === currentReportDetails
-			try {
-				return (
-					currentReportDetails.openOracleAddress === attemptReportDetails.openOracleAddress &&
-					currentReportDetails.reportId === attemptReportDetails.reportId &&
-					currentReportDetails.token1 === attemptReportDetails.token1 &&
-					currentReportDetails.token2 === attemptReportDetails.token2 &&
-					getOpenOracleAddress() === attemptOpenOracleAddress
-				)
-			} catch {
-				return false
-			}
+			return currentReportDetails.openOracleAddress === attemptReportDetails.openOracleAddress && currentReportDetails.reportId === attemptReportDetails.reportId && currentReportDetails.token1 === attemptReportDetails.token1 && currentReportDetails.token2 === attemptReportDetails.token2
 		}
 		openOracleActiveWithdrawalBalance.value = balance
 		openOracleWithdrawalBalanceChecking.value = true
