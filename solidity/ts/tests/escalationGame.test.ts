@@ -77,6 +77,23 @@ const initializeForkCarrySnapshotFromSourceAbi: Abi = [
 		type: 'function',
 	},
 ]
+const initializeGameForkCarrySnapshotAbi: Abi = [
+	{
+		inputs: [
+			{ name: 'sourceGame', type: 'address' },
+			{ name: 'snapshotId', type: 'bytes32' },
+			{ name: 'snapshotPeaksInput', type: 'bytes32[64][3]' },
+			{ name: 'snapshotLeafCountsInput', type: 'uint256[3]' },
+			{ name: 'snapshotCarryTotals', type: 'uint256[3]' },
+			{ name: 'snapshotResolutionBalances', type: 'uint256[3]' },
+			{ name: 'snapshotNullifierRoots', type: 'bytes32[3]' },
+		],
+		name: 'initializeForkCarrySnapshotWithResolutionBalances',
+		outputs: [],
+		stateMutability: 'nonpayable',
+		type: 'function',
+	},
+]
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
@@ -207,7 +224,7 @@ describe('Escalation Game Test Suite', () => {
 					args: [escalationGameAddress],
 				}),
 		)
-		return { escalationGameAddress, testSecurityPoolAddress }
+		return { escalationGameAddress, testSecurityPoolAddress, proofVerifierAddress }
 	}
 
 	async function deployEscalationGameForkerHarness() {
@@ -810,6 +827,305 @@ describe('Escalation Game Test Suite', () => {
 		)
 	})
 
+	test('start and fork-resume lifecycle guards report every reachable failure reason', async () => {
+		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const unauthorized = await deployEscalationGameWithProofPool()
+		await assert.rejects(
+			attacker.writeContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: unauthorized.escalationGameAddress,
+				functionName: 'start',
+				args: [reportBond, nonDecisionThreshold],
+			}),
+			/Only game owner/,
+		)
+
+		const thresholdTooLow = await deployEscalationGameWithProofPool()
+		await assert.rejects(startEscalation(thresholdTooLow.escalationGameAddress, reportBond, reportBond), /Threshold too low/)
+		const zeroBond = await deployEscalationGameWithProofPool()
+		await assert.rejects(startEscalation(zeroBond.escalationGameAddress, 0n, reportBond), /Start bond zero/)
+		const subRepBond = await deployEscalationGameWithProofPool()
+		await assert.rejects(startEscalation(subRepBond.escalationGameAddress, 1n, reportBond), /Start bond below 1 REP/)
+
+		const alreadyStarted = await deployEscalationGameWithProofPool()
+		await startEscalation(alreadyStarted.escalationGameAddress, reportBond, nonDecisionThreshold)
+		await assert.rejects(startEscalation(alreadyStarted.escalationGameAddress, reportBond, nonDecisionThreshold), /Game started/)
+		await assert.rejects(resumeEscalationFromFork(alreadyStarted.escalationGameAddress), /No fork mode/)
+
+		const excessiveForkTime = await deployEscalationGameWithProofPool()
+		await assert.rejects(startEscalationFromFork(excessiveForkTime.escalationGameAddress, reportBond, nonDecisionThreshold, ESCALATION_TIME_LENGTH + 1n), /Fork time too high/)
+
+		const fork = await deployEscalationGameWithProofPool()
+		await startEscalationFromFork(fork.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
+		await assert.rejects(
+			attacker.writeContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: fork.escalationGameAddress,
+				functionName: 'resumeFromFork',
+				args: [],
+			}),
+			/Only owner or security pool/,
+		)
+		await resumeEscalationFromFork(fork.escalationGameAddress)
+		await assert.rejects(resumeEscalationFromFork(fork.escalationGameAddress), /Fork resumed/)
+	})
+
+	test('carry snapshot initialization guards reject wrong callers, modes, repeated snapshots, oversized counts, and bad ids', async () => {
+		const normal = await deployEscalationGameTestSecurityPool()
+		await assert.rejects(initializeSnapshotViaTestSecurityPool(normal.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()]), /No fork mode/)
+
+		const unauthorized = await deployEscalationGameWithProofPool()
+		await startEscalationFromFork(unauthorized.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
+		await assert.rejects(
+			client.writeContract({
+				abi: initializeGameForkCarrySnapshotAbi,
+				address: unauthorized.escalationGameAddress,
+				functionName: 'initializeForkCarrySnapshotWithResolutionBalances',
+				args: [zeroAddress, zeroHash(), [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, 0n, 0n], [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()]],
+			}),
+			/Only pool/,
+		)
+
+		const repeated = await deployEscalationGameWithProofPool()
+		await startEscalationFromFork(repeated.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
+		const emptySnapshot = [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()] as const
+		await initializeSnapshotViaTestSecurityPool(repeated.testSecurityPoolAddress, emptySnapshot, [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
+		await assert.rejects(initializeSnapshotViaTestSecurityPool(repeated.testSecurityPoolAddress, emptySnapshot, [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()]), /Snapshot initialized/)
+
+		const oversized = await deployEscalationGameWithProofPool()
+		await startEscalationFromFork(oversized.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
+		await assert.rejects(initializeSnapshotViaTestSecurityPool(oversized.testSecurityPoolAddress, emptySnapshot, [1n << 64n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()]), /Leaf count high/)
+
+		const badId = await deployEscalationGameWithProofPool()
+		await startEscalationFromFork(badId.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
+		await assert.rejects(initializeSnapshotFromSourceViaTestSecurityPool(badId.testSecurityPoolAddress, client.account.address, `0x${'0'.repeat(63)}1`, emptySnapshot, [0n, 0n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()]), /Snapshot id mismatch/)
+	})
+
+	test('deposit preview and recording guards cover resolved, full, zero, mismatched, oversized, and maximum-height deposits', async () => {
+		const record = (testSecurityPoolAddress: Address, amount: bigint, expectedCumulativeAmount: bigint) =>
+			client.writeContract({
+				abi: escalationGameProofTestPoolArtifact.abi,
+				address: testSecurityPoolAddress,
+				functionName: 'recordDeposit',
+				args: [client.account.address, QuestionOutcome.Yes, amount, expectedCumulativeAmount],
+			})
+
+		const fresh = await deployEscalationGameTestSecurityPool()
+		await assert.rejects(record(fresh.testSecurityPoolAddress, 0n, 0n), /Deposit zero/)
+		await assert.rejects(record(fresh.testSecurityPoolAddress, reportBond, reportBond + 1n), /Preview mismatch/)
+		await assert.rejects(record(fresh.testSecurityPoolAddress, nonDecisionThreshold + 1n, nonDecisionThreshold + 1n), /Deposit exceeds room/)
+
+		const full = await deployEscalationGameTestSecurityPool()
+		await depositOnOutcomeViaProofTestSecurityPool(full.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, nonDecisionThreshold)
+		await assert.rejects(
+			client.readContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: full.escalationGameAddress,
+				functionName: 'previewDepositOnOutcome',
+				args: [QuestionOutcome.Yes, reportBond],
+			}),
+			/Outcome full/,
+		)
+		await assert.rejects(record(full.testSecurityPoolAddress, reportBond, nonDecisionThreshold + reportBond), /Outcome full/)
+
+		const resolved = await deployEscalationGameWithProofPool()
+		await startEscalationFromFork(resolved.escalationGameAddress, reportBond, nonDecisionThreshold, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes)
+		await resumeEscalationFromFork(resolved.escalationGameAddress)
+		await mockWindow.advanceTime(1n)
+		await assert.rejects(
+			client.readContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: resolved.escalationGameAddress,
+				functionName: 'previewDepositOnOutcome',
+				args: [QuestionOutcome.Yes, reportBond],
+			}),
+			/Question resolved/,
+		)
+		await assert.rejects(record(resolved.testSecurityPoolAddress, reportBond, reportBond), /Question resolved/)
+
+		const maximumHeight = await deployEscalationGameWithProofPool()
+		await startEscalationFromFork(maximumHeight.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
+		await initializeSnapshotViaTestSecurityPool(maximumHeight.testSecurityPoolAddress, [zeroPeakArray(), zeroPeakArray(), zeroPeakArray()], [0n, (1n << 64n) - 1n, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
+		await assert.rejects(record(maximumHeight.testSecurityPoolAddress, reportBond, reportBond), /MMR too tall/)
+	})
+
+	test('proof verifier public boundaries expose deterministic error reasons', async () => {
+		const { proofVerifierAddress } = await deployEscalationGameWithProofPool()
+		const verifierAbi = peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier.abi
+
+		await assert.rejects(client.readContract({ abi: verifierAbi, address: proofVerifierAddress, functionName: 'computeIterativeAttritionCost', args: [1n, 2n, 0n, 2n, 1n] }), /Time too high/)
+		await assert.rejects(client.readContract({ abi: verifierAbi, address: proofVerifierAddress, functionName: 'computeAcceptedDepositAmount', args: [1n, 0n, 0n, 10n, 1n, 10n, [1n, 0n, 0n]] }), /Below start bond/)
+		await assert.rejects(client.readContract({ abi: verifierAbi, address: proofVerifierAddress, functionName: 'getCurrentCarryPeakForLeaf', args: [0n, 0n] }), /Carry peak absent/)
+		await assert.rejects(client.readContract({ abi: verifierAbi, address: proofVerifierAddress, functionName: 'computeMerkleMountainRangeRootFromProof', args: [zeroHash(), 1n, 0n, 64n, []] }), /Bad carry peak/)
+		await assert.rejects(client.readContract({ abi: verifierAbi, address: proofVerifierAddress, functionName: 'computeMerkleMountainRangeRootFromProof', args: [zeroHash(), 1n, 0n, 1n, []] }), /Carry peak absent/)
+		await assert.rejects(client.readContract({ abi: verifierAbi, address: proofVerifierAddress, functionName: 'computeMerkleMountainRangeRootFromProof', args: [zeroHash(), 2n, 2n, 1n, []] }), /Bad carry leaf/)
+		await assert.rejects(client.readContract({ abi: verifierAbi, address: proofVerifierAddress, functionName: 'computeMerkleMountainRangeRootFromProof', args: [zeroHash(), 2n, 0n, 1n, []] }), /Bad MMR proof length/)
+	})
+
+	test('carried proof verification rejects a zero amount before mutating the inherited snapshot', async () => {
+		const parent = await deployEscalationGameWithProofPool()
+		await startEscalation(parent.escalationGameAddress, reportBond, nonDecisionThreshold)
+		await depositOnOutcomeViaProofTestSecurityPool(parent.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		const parentPeaks = await readCarryPeaks(parent.escalationGameAddress, QuestionOutcome.Yes)
+		const parentLeafCount = await readCarryLeafCount(parent.escalationGameAddress, QuestionOutcome.Yes)
+		const parentCarryTotal = await readCarryTotal(parent.escalationGameAddress, QuestionOutcome.Yes)
+		const parentNullifierRoot = await readNullifierRoot(parent.escalationGameAddress, QuestionOutcome.Yes)
+
+		const child = await deployEscalationGameWithProofPool()
+		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThreshold, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes)
+		await initializeSnapshotWithResolutionBalancesViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), parentPeaks, zeroPeakArray()], [0n, parentLeafCount, 0n], [0n, parentCarryTotal, 0n], [0n, parentCarryTotal, 0n], [zeroHash(), parentNullifierRoot, zeroHash()])
+		await resumeEscalationFromFork(child.escalationGameAddress)
+		await mockWindow.advanceTime(1n)
+		assert.strictEqual(await getQuestionResolution(client, child.escalationGameAddress), QuestionOutcome.Yes, 'real inherited snapshot should resolve to the fixed child outcome')
+		const childNullifierRootBefore = await readNullifierRoot(child.escalationGameAddress, QuestionOutcome.Yes)
+
+		const zeroAmountProof = {
+			depositor: client.account.address,
+			amount: 0n,
+			parentDepositIndex: 0n,
+			cumulativeAmount: 0n,
+			sourceNodeId: 0n,
+			leafIndex: 0n,
+			merkleMountainRangeSiblings: [],
+			merkleMountainRangePeakIndex: 0n,
+			nullifierSiblings: [],
+		}
+		await assert.rejects(withdrawDepositViaProofTestSecurityPool(child.testSecurityPoolAddress, QuestionOutcome.Yes, zeroAmountProof), /Proof amount zero/)
+		assert.strictEqual(await readCarryLeafCount(child.escalationGameAddress, QuestionOutcome.Yes), parentLeafCount, 'a rejected zero-amount proof must preserve the inherited leaf count')
+		assert.strictEqual(await readCarryTotal(child.escalationGameAddress, QuestionOutcome.Yes), parentCarryTotal, 'a rejected zero-amount proof must preserve the inherited carry total')
+		assert.strictEqual(await readNullifierRoot(child.escalationGameAddress, QuestionOutcome.Yes), childNullifierRootBefore, 'a rejected zero-amount proof must preserve the inherited nullifier root')
+	})
+
+	test('escrow and settlement entry points cover authorization, argument, lifecycle, and residual-state guards', async () => {
+		const deployment = await deployEscalationGameTestSecurityPool()
+		await assert.rejects(
+			client.readContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: deployment.escalationGameAddress,
+				functionName: 'getLocalUnresolvedPrincipalByVaultAndOutcome',
+				args: [client.account.address, QuestionOutcome.None],
+			}),
+			/No outcome/,
+		)
+		await assert.rejects(
+			client.writeContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: deployment.escalationGameAddress,
+				functionName: 'recordForkedEscrowForOutcome',
+				args: [client.account.address, QuestionOutcome.Yes, 1n, 0n],
+			}),
+			/Only pool or forker/,
+		)
+		await assert.rejects(recordForkedEscrowForOutcomeViaTestSecurityPool(deployment.testSecurityPoolAddress, client.account.address, QuestionOutcome.None, 1n, 0n), /No outcome/)
+		await assert.rejects(recordForkedEscrowForOutcomeViaTestSecurityPool(deployment.testSecurityPoolAddress, zeroAddress, QuestionOutcome.Yes, 1n, 0n), /Depositor is zero/)
+		await assert.rejects(recordForkedEscrowForOutcomeViaTestSecurityPool(deployment.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 0n, 1n), /Escrow principal missing/)
+		await assert.rejects(
+			client.writeContract({
+				abi: escalationGameProofTestPoolArtifact.abi,
+				address: deployment.testSecurityPoolAddress,
+				functionName: 'exportForkedEscrowByOutcome',
+				args: [client.account.address, zeroAddress],
+			}),
+			/REP receiver zero/,
+		)
+		await assert.rejects(
+			client.writeContract({
+				abi: escalationGameProofTestPoolArtifact.abi,
+				address: deployment.testSecurityPoolAddress,
+				functionName: 'exportVaultUnresolvedDeposits',
+				args: [zeroAddress, client.account.address],
+			}),
+			/Vault is zero/,
+		)
+		await writeContractAndWait(client, () =>
+			client.writeContract({
+				abi: escalationGameProofTestPoolArtifact.abi,
+				address: deployment.testSecurityPoolAddress,
+				functionName: 'exportVaultUnresolvedDeposits',
+				args: [client.account.address, client.account.address],
+			}),
+		)
+		await assert.rejects(
+			client.writeContract({
+				abi: escalationGameProofTestPoolArtifact.abi,
+				address: deployment.testSecurityPoolAddress,
+				functionName: 'exportVaultUnresolvedDeposits',
+				args: [client.account.address, client.account.address],
+			}),
+			/Vault totals exported/,
+		)
+		await assert.rejects(
+			client.writeContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: deployment.escalationGameAddress,
+				functionName: 'drainAllRep',
+				args: [client.account.address],
+			}),
+			/Only pool/,
+		)
+		await assert.rejects(
+			client.writeContract({
+				abi: escalationGameProofTestPoolArtifact.abi,
+				address: deployment.testSecurityPoolAddress,
+				functionName: 'drainAllRep',
+				args: [zeroAddress],
+			}),
+			/REP receiver zero/,
+		)
+		await assert.rejects(
+			client.writeContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: deployment.escalationGameAddress,
+				functionName: 'sweepResidualRepToSecurityPool',
+				args: [],
+			}),
+			/Question not final/,
+		)
+
+		const emptyFinal = await deployEscalationGameWithProofPool()
+		await startEscalationFromFork(emptyFinal.escalationGameAddress, reportBond, nonDecisionThreshold, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes)
+		await resumeEscalationFromFork(emptyFinal.escalationGameAddress)
+		await mockWindow.advanceTime(1n)
+		await assert.rejects(
+			client.writeContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: emptyFinal.escalationGameAddress,
+				functionName: 'sweepResidualRepToSecurityPool',
+				args: [],
+			}),
+			/No sweepable REP/,
+		)
+
+		const unresolved = await deployEscalationGameTestSecurityPool()
+		await depositOnOutcomeViaProofTestSecurityPool(unresolved.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		const activationTime = await getActivationTime(client, unresolved.escalationGameAddress)
+		await mockWindow.setTime(activationTime + ESCALATION_TIME_LENGTH + 1n)
+		await assert.rejects(
+			client.writeContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: unresolved.escalationGameAddress,
+				functionName: 'sweepResidualRepToSecurityPool',
+				args: [],
+			}),
+			/Principal remains/,
+		)
+
+		const escrowed = await deployEscalationGameWithProofPool()
+		await startEscalationFromFork(escrowed.escalationGameAddress, reportBond, nonDecisionThreshold, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes)
+		await recordForkedEscrowForOutcomeViaTestSecurityPool(escrowed.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 1n, 1n)
+		await resumeEscalationFromFork(escrowed.escalationGameAddress)
+		await mockWindow.advanceTime(1n)
+		await assert.rejects(
+			client.writeContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: escrowed.escalationGameAddress,
+				functionName: 'sweepResidualRepToSecurityPool',
+				args: [],
+			}),
+			/Escrowed REP remains/,
+		)
+	})
+
 	test('empty started game resolves to invalid after timeout', async () => {
 		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThreshold)
 		const activationTime = await getActivationTime(client, escalationGame)
@@ -924,7 +1240,7 @@ describe('Escalation Game Test Suite', () => {
 		await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
 		await mockWindow.advanceTime(4n * DAY)
 
-		await assert.rejects(claimDepositForWinningViaTestSecurityPool(testSecurityPoolAddress, 0n, QuestionOutcome.Yes), /token returned false/i)
+		await assert.rejects(claimDepositForWinningViaTestSecurityPool(testSecurityPoolAddress, 0n, QuestionOutcome.Yes), /SafeERC20Ops token returned false from ERC20 call/)
 	})
 
 	test('local unresolved export rejects none outcome', async () => {

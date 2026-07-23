@@ -1,5 +1,5 @@
 import { beforeEach, describe, test } from 'bun:test'
-import { encodeDeployData, zeroAddress } from '@zoltar/shared/ethereum'
+import { encodeDeployData, type Hash, zeroAddress } from '@zoltar/shared/ethereum'
 import { usePeripheralsForkMigrationFixture, type PeripheralsForkMigrationFixture } from './fixture'
 import { getExpectedLiquidationRepMove } from './liquidationTestHelpers'
 import { createCarryProof, SparseNullifierTree } from '../carryProofHelpers'
@@ -8,7 +8,7 @@ import { queueLiquidationAtForcedPrice } from '../../testSupport/simulator/utils
 import { getQuestionResolution } from '../../testSupport/simulator/utils/contracts/escalationGame'
 import { getForkActivationTime } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
-import { peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken } from '../../types/contractArtifact'
+import { peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken } from '../../types/contractArtifact'
 import {
 	test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackFactoryMock,
 	test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackParentMock,
@@ -175,6 +175,20 @@ describe('Peripherals: fork migration', () => {
 					}),
 			),
 		)
+
+	const getExecutedStagedOperation = async (transactionHash: Hash) => {
+		const receipt = await client.waitForTransactionReceipt({ hash: transactionHash })
+		for (const log of receipt.logs) {
+			if (log.address.toLowerCase() !== securityPoolAddresses.priceOracleManagerAndOperatorQueuer.toLowerCase()) continue
+			const decoded = decodeEventLog({
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				data: log.data,
+				topics: log.topics,
+			})
+			if (decoded.eventName === 'ExecutedStagedOperation') return decoded
+		}
+		throw new Error('missing ExecutedStagedOperation log')
+	}
 
 	const assertVaultMigrationPreservesParentFees = async (vaultClient: PeripheralsForkMigrationFixture['client'], migrate: () => Promise<void>) => {
 		const beforeMigrationSnapshot = await mockWindow.anvilSnapshot()
@@ -775,6 +789,42 @@ describe('Peripherals: fork migration', () => {
 	})
 
 	describe('liquidation and collateral accounting', () => {
+		test('liquidation with no REP above the minimum exposes No liq and preserves both vaults', async () => {
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime + 10000n)
+			const targetClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+			const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+			const minimumRepDeposit = 10n * 10n ** 18n
+			const targetAllowance = 2n * 10n ** 18n
+			const allowancePrice = 4n * PRICE_PRECISION
+			const liquidationPrice = 6n * PRICE_PRECISION
+
+			await approveToken(targetClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
+			await depositRep(targetClient, securityPoolAddresses.securityPool, minimumRepDeposit)
+			await manipulatePriceOracle(targetClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, allowancePrice)
+			const allowanceHash = await requestPriceIfNeededAndStageOperation(targetClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, targetClient.account.address, targetAllowance)
+			const allowanceLog = await getExecutedStagedOperation(allowanceHash)
+			assert.strictEqual(allowanceLog.args.success, true, `minimum-REP target allowance setup failed with ${allowanceLog.args.errorMessage}`)
+
+			await approveToken(liquidatorClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
+			await depositRep(liquidatorClient, securityPoolAddresses.securityPool, repDeposit)
+			await manipulatePriceOracle(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, liquidationPrice)
+
+			const readNoLiquidationState = async () => ({
+				liquidatorVault: await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address),
+				targetVault: await getSecurityVault(client, securityPoolAddresses.securityPool, targetClient.account.address),
+				totalAllowance: await getTotalSecurityBondAllowance(client, securityPoolAddresses.securityPool),
+				totalRep: await getTotalRepBalance(client, securityPoolAddresses.securityPool),
+			})
+			const stateBefore = await readNoLiquidationState()
+			const executionHash = await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, targetClient.account.address, 1n * 10n ** 18n)
+			const executionLog = await getExecutedStagedOperation(executionHash)
+
+			assert.strictEqual(executionLog.args.success, false, 'minimum-REP target must not produce a liquidation transfer')
+			assert.strictEqual(executionLog.args.errorMessage, 'No liq', 'zero-sized liquidation must expose its exact dynamic reason')
+			assert.deepStrictEqual(await readNoLiquidationState(), stateBefore, 'No liq failure must preserve both vaults and aggregate allowance and REP accounting')
+		})
+
 		test('liquidation transfers REP from the target to the liquidator', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
@@ -968,11 +1018,14 @@ describe('Peripherals: fork migration', () => {
 			const dustRoundingPrice = PRICE_PRECISION * 1000n
 
 			await manipulatePriceOracle(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, dustRoundingPrice)
-			await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, liquidationAmount)
+			const executionHash = await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, liquidationAmount)
+			const executionLog = await getExecutedStagedOperation(executionHash)
 
 			const targetVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const liquidatorVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
 
+			assert.strictEqual(executionLog.args.success, false, 'caller debt dust must fail the staged liquidation')
+			assert.strictEqual(executionLog.args.errorMessage, 'Caller debt', 'caller debt dust must expose its exact dynamic reason')
 			strictEqualTypeSafe(targetVaultBefore.securityBondAllowance, securityPoolAllowance, 'setup should leave the target at the configured allowance')
 			strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, targetVaultBefore.securityBondAllowance, 'liquidation should fail when the only dust-safe target chunk would leave the caller below the minimum debt floor')
 			strictEqualTypeSafe(targetVaultAfter.repDepositShare, targetVaultBefore.repDepositShare, 'failed liquidation should not move target REP')
@@ -1137,18 +1190,22 @@ describe('Peripherals: fork migration', () => {
 			const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveToken(liquidatorClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
 			await depositRep(liquidatorClient, securityPoolAddresses.securityPool, repDeposit * 10n)
+			await manipulatePriceOracleAndPerformOperation(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, liquidatorClient.account.address, 1n * 10n ** 18n)
 
 			const targetVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const liquidatorVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
 			const dustRevertingAmount = 8n * 10n ** 17n
-			const dustRoundingPrice = PRICE_PRECISION * 1000n
+			const dustRoundingPrice = PRICE_PRECISION * 400n
 
 			await manipulatePriceOracle(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, dustRoundingPrice)
-			await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, dustRevertingAmount)
+			const executionHash = await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, dustRevertingAmount)
+			const executionLog = await getExecutedStagedOperation(executionHash)
 
 			const targetVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const liquidatorVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
 
+			assert.strictEqual(executionLog.args.success, false, 'target debt dust must fail the staged liquidation')
+			assert.strictEqual(executionLog.args.errorMessage, 'Target debt', 'target debt dust must expose its exact dynamic reason')
 			strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, targetVaultBefore.securityBondAllowance, 'a dust-reverting liquidation should leave the target allowance unchanged')
 			strictEqualTypeSafe(targetVaultAfter.repDepositShare, targetVaultBefore.repDepositShare, 'a dust-reverting liquidation should leave the target REP claim unchanged')
 			strictEqualTypeSafe(liquidatorVaultAfter.securityBondAllowance, liquidatorVaultBefore.securityBondAllowance, 'a dust-reverting liquidation should not move debt to the liquidator')
@@ -1158,8 +1215,14 @@ describe('Peripherals: fork migration', () => {
 		test('liquidation leaves state unchanged when a tiny chunk would not improve target health after rounding', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
-			const targetAllowance = 130n * 10n ** 18n
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, targetAllowance)
+			const roundingSensitivePrice = (PRICE_PRECISION * 45n) / 100n
+			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, roundingSensitivePrice)
+			const setupPrice = await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+			const setupTargetRep = await getVaultRepClaim(client.account.address)
+			const targetAllowance = (setupTargetRep * PRICE_PRECISION * 3n) / (setupPrice * 4n)
+			const allowanceExecutionHash = await requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, targetAllowance)
+			const allowanceExecutionLog = await getExecutedStagedOperation(allowanceExecutionHash)
+			assert.strictEqual(allowanceExecutionLog.args.success, true, `rounding setup allowance failed with ${allowanceExecutionLog.args.errorMessage}`)
 
 			const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveToken(liquidatorClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
@@ -1168,15 +1231,21 @@ describe('Peripherals: fork migration', () => {
 
 			const targetVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const liquidatorVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
-			const roundingSensitivePrice = (PRICE_PRECISION * 4n) / 10n
 			const tinyLiquidationAmount = 1n
+			const actualPrice = await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+			const targetRepClaim = await getVaultRepClaim(client.account.address)
+			const liquidationThresholdPrice = (targetRepClaim * PRICE_PRECISION) / (targetVaultBefore.securityBondAllowance * securityMultiplier)
+			assert.ok(actualPrice > liquidationThresholdPrice, `rounding setup must be liquidatable: price ${actualPrice}, threshold ${liquidationThresholdPrice}`)
+			assert.ok(((actualPrice - liquidationThresholdPrice) * 10000n) / actualPrice >= 1000n, `rounding setup must clear the coordinator distance: price ${actualPrice}, threshold ${liquidationThresholdPrice}`)
 
-			await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, tinyLiquidationAmount)
-			await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, roundingSensitivePrice)
+			const executionHash = await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, tinyLiquidationAmount)
+			const executionLog = await getExecutedStagedOperation(executionHash)
 
 			const targetVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const liquidatorVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
 
+			assert.strictEqual(executionLog.args.success, false, 'a liquidation whose rounded REP transfer erases the bonus must fail')
+			assert.strictEqual(executionLog.args.errorMessage, 'No gain', 'rounded non-improving liquidation must expose its exact dynamic reason')
 			strictEqualTypeSafe(targetVaultAfter.securityBondAllowance, targetVaultBefore.securityBondAllowance, 'a non-improving rounded liquidation should not change target debt')
 			strictEqualTypeSafe(targetVaultAfter.repDepositShare, targetVaultBefore.repDepositShare, 'a non-improving rounded liquidation should not change target REP')
 			strictEqualTypeSafe(liquidatorVaultAfter.securityBondAllowance, liquidatorVaultBefore.securityBondAllowance, 'a non-improving rounded liquidation should not change caller debt')
@@ -2219,7 +2288,7 @@ describe('Peripherals: fork migration', () => {
 			const middleScalarUniverse = getChildUniverseId(genesisUniverse, middleScalarOutcome)
 			const middleScalarBalances = await balanceOfShares(client, securityPoolAddresses.shareToken, middleScalarUniverse, holderAddress)
 			strictEqualTypeSafe(middleScalarBalances[1], parentYesBalance, 'a later child selection should materialize the source entitlement independently')
-			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [middleScalarOutcome]), /no new shares to migrate/i)
+			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [middleScalarOutcome]), /ShareToken has no new shares to migrate/)
 
 			const parentYesTokenId = await client.readContract({
 				address: securityPoolAddresses.shareToken,
@@ -2234,7 +2303,7 @@ describe('Peripherals: fork migration', () => {
 					functionName: 'safeTransferFrom',
 					args: [holderAddress, addressString(TEST_ADDRESSES[3]), parentYesTokenId, parentYesBalance],
 				}),
-				/migrated source balance is locked/i,
+				/ShareToken migrated source balance is locked/,
 			)
 		})
 
@@ -2267,10 +2336,10 @@ describe('Peripherals: fork migration', () => {
 			const parentBalancesBeforeFailedMigrations = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, holderAddress)
 			const parentYesBalance = ensureDefined(parentBalancesBeforeFailedMigrations[1], 'parent yes balance is undefined')
 
-			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [5n]), /target outcome is malformed/)
-			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [validScalarOutcome, validScalarOutcome]), /strictly increasing order/)
-			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [...sortedScalarOutcomes].reverse()), /strictly increasing order/)
-			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, sortedScalarOutcomes), /bulk migration requires canonical child pools/)
+			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [5n]), /ShareToken target outcome is malformed for the fork question/)
+			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [validScalarOutcome, validScalarOutcome]), /ShareToken target outcomes must be provided in strictly increasing order/)
+			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [...sortedScalarOutcomes].reverse()), /ShareToken target outcomes must be provided in strictly increasing order/)
+			await assert.rejects(migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, sortedScalarOutcomes), /ShareToken bulk migration requires canonical child pools/)
 			strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.Operational, 'rejected bulk migration should roll back automatic source-pool fork initiation')
 
 			const parentBalancesAfterFailedMigrations = await balanceOfShares(client, securityPoolAddresses.shareToken, genesisUniverse, holderAddress)
@@ -2791,7 +2860,19 @@ describe('Peripherals: fork migration', () => {
 			const migrationDeadline = (await mockWindow.getTime()) + 8n * 7n * DAY
 			await mockWindow.setTime(migrationDeadline + 1n)
 
-			await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes]), /closed/i)
+			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+			const yesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier).securityPool
+			const migrationProxy = await getMigrationProxyAddress()
+			const readClosedMigrationState = async () => ({
+				childExists: await contractExists(client, yesChildPool),
+				migrationBalance: await getMigrationRepBalance(client, genesisUniverse, migrationProxy),
+				parentForkData: await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool),
+				parentRep: await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool),
+			})
+			const stateBefore = await readClosedMigrationState()
+
+			await assert.rejects(migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes]), /Closed/)
+			assert.deepStrictEqual(await readClosedMigrationState(), stateBefore, 'closed migration must preserve the parent fork, proxy migration balance, REP, and child nondeployment')
 		})
 
 		test('migrateRepToZoltar allows the exact own-fork migration deadline', async () => {
@@ -3028,6 +3109,54 @@ describe('Peripherals: fork migration', () => {
 			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
 
 			strictEqualTypeSafe(await getQuestionOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'matching-question child should resolve to its branch outcome')
+		})
+
+		test('nested universe fork rejects a child pool that is still in fork migration with Inactive', async () => {
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime + 10000n)
+			const firstForkQuestion = {
+				...questionData,
+				title: 'outer fork while child remains in migration',
+			}
+			const firstForkQuestionId = getQuestionId(firstForkQuestion, outcomes)
+			await createQuestion(client, firstForkQuestion, outcomes)
+			const migrationAmount = (await getZoltarForkThreshold(client, genesisUniverse)) * 2n
+			const repDonor = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+			await transferRepToAddress(repDonor, client.account.address, migrationAmount)
+			await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+			await forkUniverse(client, genesisUniverse, firstForkQuestionId)
+
+			await addRepToMigrationBalance(client, genesisUniverse, migrationAmount)
+			await splitMigrationRep(client, genesisUniverse, migrationAmount, [QuestionOutcome.Yes])
+			await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+			const yesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			strictEqualTypeSafe(await getSystemState(client, yesChildPool.securityPool), SystemState.ForkMigration, 'nested-fork target child must remain in ForkMigration')
+			const childRepToken = getRepTokenAddress(yesUniverse)
+			const secondForkQuestion = {
+				...questionData,
+				title: 'inner fork against inactive child pool',
+				endTime: await mockWindow.getTime(),
+			}
+			const secondForkQuestionId = getQuestionId(secondForkQuestion, outcomes)
+			await createQuestion(client, secondForkQuestion, outcomes)
+			await approveToken(client, childRepToken, getZoltarAddress())
+			await forkUniverse(client, yesUniverse, secondForkQuestionId)
+
+			const readInactiveForkState = async () => ({
+				childPoolRep: await getERC20Balance(client, childRepToken, yesChildPool.securityPool),
+				childState: await getSystemState(client, yesChildPool.securityPool),
+				childUniverse: await getUniverseData(client, yesUniverse),
+				childVault: await getSecurityVault(client, yesChildPool.securityPool, client.account.address),
+				forkData: await getSecurityPoolForkerForkData(client, yesChildPool.securityPool),
+				walletChildRep: await getERC20Balance(client, childRepToken, client.account.address),
+			})
+			const stateBefore = await readInactiveForkState()
+
+			await assert.rejects(initiateSecurityPoolFork(client, yesChildPool.securityPool), /Inactive/)
+			assert.deepStrictEqual(await readInactiveForkState(), stateBefore, 'inactive nested-fork rejection must preserve child state, fork data, REP balances, and vault accounting')
 		})
 
 		test('a fixed-outcome child rejects an unrelated recursive fork without burning funded shares', async () => {

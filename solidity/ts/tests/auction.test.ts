@@ -4,7 +4,7 @@ import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereu
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { contractExists, getETHBalance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
-import { decodeEventLog, encodeAbiParameters, encodeFunctionData, isHex, keccak256, type Address, type Hash } from '@zoltar/shared/ethereum'
+import { decodeEventLog, encodeAbiParameters, encodeDeployData, encodeFunctionData, isHex, keccak256, type Address, type Hash, type Hex } from '@zoltar/shared/ethereum'
 import {
 	computeClearing,
 	deployUniformPriceDualCapBatchAuction,
@@ -37,7 +37,7 @@ import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/z
 import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/deployPeripherals'
 import { getUniformPriceDualCapBatchAuctionAddress } from '../testSupport/simulator/utils/contracts/deployments'
 import { addressString } from '../testSupport/simulator/utils/bigint'
-import { peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../types/contractArtifact'
+import { peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction, test_peripherals_OpenOracleAdversarialHarnesses_OpenOracleRejectingETHReceiver as rejectingEthReceiverArtifact } from '../types/contractArtifact'
 
 // ============ MODULE-LEVEL CONSTANTS ============
 const ATTOETH_PER_ETH = 10n ** 18n
@@ -80,6 +80,30 @@ describe('Auction', () => {
 	function createTestClient(idx: number): WriteClient {
 		const address = ensureDefined(TEST_ADDRESSES[idx], `TEST_ADDRESSES[${idx}] is undefined`)
 		return createWriteClient(mockWindow, address, 0)
+	}
+
+	const deployRejectingEthReceiver = async (): Promise<Address> => {
+		const hash = await client.sendTransaction({
+			data: encodeDeployData({
+				abi: rejectingEthReceiverArtifact.abi,
+				bytecode: `0x${rejectingEthReceiverArtifact.evm.bytecode.object}`,
+			}),
+		})
+		const receipt = await client.waitForTransactionReceipt({ hash })
+		const contractAddress = receipt.contractAddress
+		if (typeof contractAddress !== 'string') throw new Error('rejecting ETH receiver deployment address is unavailable')
+		return contractAddress
+	}
+
+	const executeThroughReceiver = async (receiver: Address, target: Address, data: Hex, value = 0n) => {
+		const hash = await client.writeContract({
+			abi: rejectingEthReceiverArtifact.abi,
+			address: receiver,
+			functionName: 'execute',
+			args: [target, data],
+			value,
+		})
+		await client.waitForTransactionReceipt({ hash })
 	}
 
 	async function decodeAuctionEvents(hash: Hash) {
@@ -475,13 +499,17 @@ describe('Auction', () => {
 		})
 
 		test('finalize rejects before the auction starts or ends', async () => {
-			await assert.rejects(async () => await finalize(client, auctionAddress), /started before finalization/)
+			const attacker = createTestClient(1)
+			await assert.rejects(async () => await finalize(attacker, auctionAddress), /Only the auction owner can finalize/)
+			assert.strictEqual(await isFinalized(client, auctionAddress), false, 'rejected unauthorized finalization must leave the auction unfinalized')
+
+			await assert.rejects(async () => await finalize(client, auctionAddress), /Auction must be started before finalization/)
 
 			const raiseCap = DEFAULT_ETH_RAISE_CAP * ATTOETH_PER_ETH
 			await setupStandardAuction(client, auctionAddress)
 			await submitBid(client, auctionAddress, tickForPrice(PRICE_PRECISION), raiseCap)
 
-			await assert.rejects(async () => await finalize(client, auctionAddress), /bidding period is still active/)
+			await assert.rejects(async () => await finalize(client, auctionAddress), /Auction bidding period is still active/)
 		})
 
 		test('can start auction and make a single bid that finalizes', async () => {
@@ -1290,7 +1318,7 @@ describe('Auction', () => {
 
 			const tick = tickForPrice(PRICE_PRECISION)
 			const bidAmount = 1n * 10n ** 18n
-			await assert.rejects(async () => await submitBid(client, auctionAddress, tick, bidAmount), /bidding period has ended/)
+			await assert.rejects(async () => await submitBid(client, auctionAddress, tick, bidAmount), /Auction bidding period has ended/)
 		})
 	})
 
@@ -1355,7 +1383,7 @@ describe('Auction', () => {
 			const minBid = await getMinBidSize(client, auctionAddress)
 			strictEqualTypeSafe(minBid, 1n, 'minBidSize should be 1')
 
-			await assert.rejects(async () => await submitBid(client, auctionAddress, 0n, 0n), /smaller than the minimum bid size/)
+			await assert.rejects(async () => await submitBid(client, auctionAddress, 0n, 0n), /Auction bid is smaller than the minimum bid size/)
 
 			await submitBid(client, auctionAddress, 0n, 1n)
 		})
@@ -1375,6 +1403,17 @@ describe('Auction', () => {
 			strictEqualTypeSafe(await getBidCountAtTick(client, auctionAddress, MAX_TICK), 1n, 'maximum tick bid count')
 		})
 
+		test('submitBid rejects ticks outside the supported range without locking ETH', async () => {
+			await setupStandardAuction(client, auctionAddress)
+			const minBid = await getMinBidSize(client, auctionAddress)
+
+			await assert.rejects(async () => await submitBid(client, auctionAddress, MAX_TICK + 1n, minBid), /Auction tick is outside the supported price range/)
+			await assert.rejects(async () => await submitBid(client, auctionAddress, MIN_TICK - 1n, minBid), /Auction tick is outside the supported price range/)
+
+			assert.strictEqual(await getETHBalance(client, auctionAddress), 0n, 'rejected out-of-range bids must not lock ETH')
+			assert.strictEqual(await getTickCount(client, auctionAddress), 0n, 'rejected out-of-range bids must not create tick history')
+		})
+
 		test('submitBid rejects zero-price ticks', async () => {
 			const ethRaiseCap = 1000n * ATTOETH_PER_ETH
 			const maxRepBeingSold = 1n
@@ -1383,8 +1422,8 @@ describe('Auction', () => {
 			const bidAmount = 1n * ATTOETH_PER_ETH
 
 			assert.strictEqual(tickToPrice(zeroPriceTick), 0n, 'test setup should use a zero-price tick')
-			await assert.rejects(async () => await submitBid(client, auctionAddress, zeroPriceTick, bidAmount), /tick price rounds down to zero/)
-			await assert.rejects(async () => await submitBid(client, auctionAddress, MIN_TICK, bidAmount), /tick price rounds down to zero/)
+			await assert.rejects(async () => await submitBid(client, auctionAddress, zeroPriceTick, bidAmount), /Auction tick price rounds down to zero/)
+			await assert.rejects(async () => await submitBid(client, auctionAddress, MIN_TICK, bidAmount), /Auction tick price rounds down to zero/)
 			await assertContractEmpty(client, auctionAddress)
 		})
 
@@ -1396,7 +1435,7 @@ describe('Auction', () => {
 
 			const freshAddress = getUniformPriceDualCapBatchAuctionAddress(addressString(TEST_ADDRESSES[3]))
 			await deployUniformPriceDualCapBatchAuction(client, addressString(TEST_ADDRESSES[3]))
-			await assert.rejects(async () => await submitBid(client, freshAddress, tick, bidAmount), /started before accepting bids/)
+			await assert.rejects(async () => await submitBid(client, freshAddress, tick, bidAmount), /Auction must be started before accepting bids/)
 
 			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
 			await submitBid(client, auctionAddress, tick, ethRaiseCap)
@@ -1404,7 +1443,7 @@ describe('Auction', () => {
 			await finalize(client, auctionAddress)
 			strictEqualTypeSafe(await isFinalized(client, auctionAddress), true, 'auction should be finalized before post-finalization assertions')
 
-			await assert.rejects(async () => await submitBid(client, auctionAddress, tick, bidAmount), /already been finalized/)
+			await assert.rejects(async () => await submitBid(client, auctionAddress, tick, bidAmount), /Auction has already been finalized/)
 		})
 
 		test('withdrawBids reverts before finalize', async () => {
@@ -1415,7 +1454,7 @@ describe('Auction', () => {
 			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
 			await submitBid(client, auctionAddress, tick, 1n * 10n ** 18n)
 
-			await assert.rejects(async () => await withdrawBids(client, auctionAddress, client.account.address, [{ tick, bidIndex: 0n }]), /finalized before withdrawing bids/)
+			await assert.rejects(async () => await withdrawBids(client, auctionAddress, client.account.address, [{ tick, bidIndex: 0n }]), /Auction must be finalized before withdrawing bids/)
 		})
 	})
 
@@ -1890,11 +1929,158 @@ describe('Auction', () => {
 			const maxRepBeingSold = 10n * 10n ** 18n
 
 			const attacker = createTestClient(1)
-			await assert.rejects(async () => await startAuction(attacker, auctionAddress, ethRaiseCap, maxRepBeingSold), /Only the auction owner can start/)
+			await assert.rejects(async () => await startAuction(attacker, auctionAddress, ethRaiseCap, maxRepBeingSold), /Only the auction owner can start the auction/)
+			await assert.rejects(async () => await startAuction(client, auctionAddress, 0n, maxRepBeingSold), /Auction ETH raise cap and REP sale cap must both be positive/)
+			await assert.rejects(async () => await startAuction(client, auctionAddress, ethRaiseCap, 0n), /Auction ETH raise cap and REP sale cap must both be positive/)
 
 			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
 
-			await assert.rejects(async () => await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold), /already been started/)
+			await assert.rejects(async () => await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold), /Auction has already been started/)
+		})
+
+		test('finalization and withdrawal guards reject repeats, wrong beneficiaries, missing indices, and claimed bids', async () => {
+			const tick = 0n
+			const bidAmount = 2n * ATTOETH_PER_ETH
+			await startAuction(client, auctionAddress, bidAmount, 10n * ATTOETH_PER_ETH)
+			await submitBid(client, auctionAddress, tick, bidAmount)
+			await finalizeAndVerify(client, auctionAddress)
+
+			await assert.rejects(finalize(client, auctionAddress), /Auction has already been finalized/)
+			await assert.rejects(withdrawBids(client, auctionAddress, addressString(TEST_ADDRESSES[1]), [{ tick, bidIndex: 0n }]), /Bid does not belong to the requested withdrawal address/)
+			await assert.rejects(withdrawBids(client, auctionAddress, client.account.address, [{ tick, bidIndex: 1n }]), /panic: array out-of-bounds access \(0x32\)/)
+
+			await withdrawBids(client, auctionAddress, client.account.address, [{ tick, bidIndex: 0n }])
+			await assert.rejects(withdrawBids(client, auctionAddress, client.account.address, [{ tick, bidIndex: 0n }]), /Bid has already been claimed or does not exist/)
+		})
+
+		test('pre-finalization refund guards cover owner delegation, lifecycle, clearing, bidder identity, and repeats', async () => {
+			const attacker = createTestClient(1)
+			const losingBidder = createTestClient(2)
+			const tickIndices = [{ tick: -10_000n, bidIndex: 0n }]
+			const auctionAbi = peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi
+
+			await assert.rejects(refundLosingBids(client, auctionAddress, []), /Auction must be started before refunding losing bids/)
+			await startAuction(client, auctionAddress, 2n * ATTOETH_PER_ETH, 10n * ATTOETH_PER_ETH)
+			await assert.rejects(refundLosingBids(client, auctionAddress, []), /Auction has not reached a clearing price yet/)
+			await assert.rejects(
+				attacker.writeContract({
+					abi: auctionAbi,
+					address: auctionAddress,
+					functionName: 'refundLosingBidsFor',
+					args: [losingBidder.account.address, []],
+				}),
+				/Only the auction owner can refund losing bids on behalf of bidders/,
+			)
+
+			await submitBid(client, auctionAddress, 0n, 2n * ATTOETH_PER_ETH)
+			await submitBid(losingBidder, auctionAddress, -10_000n, ATTOETH_PER_ETH)
+			await assert.rejects(
+				client.writeContract({
+					abi: auctionAbi,
+					address: auctionAddress,
+					functionName: 'refundLosingBidsFor',
+					args: [addressString(0n), []],
+				}),
+				/Auction bidder address must not be the zero address/,
+			)
+			await assert.rejects(
+				client.writeContract({
+					abi: auctionAbi,
+					address: auctionAddress,
+					functionName: 'refundLosingBidsFor',
+					args: [attacker.account.address, tickIndices],
+				}),
+				/Bid does not belong to the requested refund bidder/,
+			)
+			await assert.rejects(refundLosingBids(client, auctionAddress, [{ tick: 0n, bidIndex: 0n }]), /Binding or winning bid cannot be refunded before finalization/)
+
+			await refundLosingBids(losingBidder, auctionAddress, tickIndices)
+			await assert.rejects(refundLosingBids(losingBidder, auctionAddress, tickIndices), /Bid has already been withdrawn or does not exist/)
+
+			await finalizeAndVerify(client, auctionAddress)
+			await assert.rejects(refundLosingBids(client, auctionAddress, []), /Auction has already been finalized/)
+		})
+
+		test('rejecting ETH recipients roll back finalization, withdrawal, and pre-finalization refunds', async () => {
+			const auctionAbi = peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi
+			const rejectingReceiver = await deployRejectingEthReceiver()
+			await deployUniformPriceDualCapBatchAuction(client, rejectingReceiver)
+			const rejectingOwnerAuction = getUniformPriceDualCapBatchAuctionAddress(rejectingReceiver)
+			const winningBid = 2n * ATTOETH_PER_ETH
+			const losingBid = ATTOETH_PER_ETH
+			const losingTick = -10_000n
+			const startData = encodeFunctionData({
+				abi: auctionAbi,
+				functionName: 'startAuction',
+				args: [winningBid, 10n * ATTOETH_PER_ETH],
+			})
+			await executeThroughReceiver(rejectingReceiver, rejectingOwnerAuction, startData)
+			await submitBid(client, rejectingOwnerAuction, 0n, winningBid)
+			await executeThroughReceiver(rejectingReceiver, rejectingOwnerAuction, encodeFunctionData({ abi: auctionAbi, functionName: 'submitBid', args: [losingTick] }), losingBid)
+			await mockWindow.advanceTime(AUCTION_TIME + 1n)
+
+			const auctionBalanceBeforeFailedFinalize = await getETHBalance(client, rejectingOwnerAuction)
+			await assert.rejects(executeThroughReceiver(rejectingReceiver, rejectingOwnerAuction, encodeFunctionData({ abi: auctionAbi, functionName: 'finalize', args: [] })), /Auction failed to send raised ETH to the owner/)
+			assert.strictEqual(await isFinalized(client, rejectingOwnerAuction), false, 'failed owner payment must roll back finalization')
+			assert.strictEqual(await getEthRaised(client, rejectingOwnerAuction), 0n, 'failed owner payment must roll back raised ETH accounting')
+			assert.strictEqual(await getTotalRepPurchased(client, rejectingOwnerAuction), 0n, 'failed owner payment must roll back purchased REP accounting')
+			assert.strictEqual(await getETHBalance(client, rejectingOwnerAuction), auctionBalanceBeforeFailedFinalize, 'failed owner payment must preserve auction ETH')
+
+			await client.writeContract({
+				abi: rejectingEthReceiverArtifact.abi,
+				address: rejectingReceiver,
+				functionName: 'setRejectETH',
+				args: [false],
+			})
+			await executeThroughReceiver(rejectingReceiver, rejectingOwnerAuction, encodeFunctionData({ abi: auctionAbi, functionName: 'finalize', args: [] }))
+			await client.writeContract({
+				abi: rejectingEthReceiverArtifact.abi,
+				address: rejectingReceiver,
+				functionName: 'setRejectETH',
+				args: [true],
+			})
+
+			const losingBidBeforeWithdrawal = ensureDefined((await getBidPageAtTick(client, rejectingOwnerAuction, losingTick, 0n, 1n))[0], 'missing rejecting receiver bid before withdrawal')
+			const auctionBalanceBeforeFailedWithdrawal = await getETHBalance(client, rejectingOwnerAuction)
+			await assert.rejects(
+				executeThroughReceiver(
+					rejectingReceiver,
+					rejectingOwnerAuction,
+					encodeFunctionData({
+						abi: auctionAbi,
+						functionName: 'withdrawBids',
+						args: [rejectingReceiver, [{ tick: losingTick, bidIndex: 0n }], 0n],
+					}),
+				),
+				/Auction failed to refund ETH while withdrawing bids/,
+			)
+			const losingBidAfterWithdrawal = ensureDefined((await getBidPageAtTick(client, rejectingOwnerAuction, losingTick, 0n, 1n))[0], 'missing rejecting receiver bid after withdrawal')
+			assert.strictEqual(losingBidBeforeWithdrawal.claimed, false, 'losing bid should begin unclaimed')
+			assert.strictEqual(losingBidAfterWithdrawal.claimed, false, 'failed withdrawal refund must roll back the claimed flag')
+			assert.strictEqual(await getETHBalance(client, rejectingOwnerAuction), auctionBalanceBeforeFailedWithdrawal, 'failed withdrawal refund must preserve auction ETH')
+
+			await startAuction(client, auctionAddress, winningBid, 10n * ATTOETH_PER_ETH)
+			await submitBid(client, auctionAddress, 0n, winningBid)
+			await executeThroughReceiver(rejectingReceiver, auctionAddress, encodeFunctionData({ abi: auctionAbi, functionName: 'submitBid', args: [losingTick] }), losingBid)
+			const clearingBeforeRefund = await computeClearing(client, auctionAddress)
+			const balanceBeforeFailedRefund = await getETHBalance(client, auctionAddress)
+			await assert.rejects(
+				executeThroughReceiver(
+					rejectingReceiver,
+					auctionAddress,
+					encodeFunctionData({
+						abi: auctionAbi,
+						functionName: 'refundLosingBids',
+						args: [[{ tick: losingTick, bidIndex: 0n }]],
+					}),
+				),
+				/Auction failed to refund ETH for losing bids/,
+			)
+			const losingBidAfterRefund = ensureDefined((await getBidPageAtTick(client, auctionAddress, losingTick, 0n, 1n))[0], 'missing rejecting receiver bid after refund')
+			const clearingAfterRefund = await computeClearing(client, auctionAddress)
+			assert.strictEqual(losingBidAfterRefund.claimed, false, 'failed pre-finalization refund must roll back the claimed flag')
+			assert.deepStrictEqual(clearingAfterRefund, clearingBeforeRefund, 'failed pre-finalization refund must restore clearing state')
+			assert.strictEqual(await getETHBalance(client, auctionAddress), balanceBeforeFailedRefund, 'failed pre-finalization refund must preserve auction ETH')
 		})
 	})
 
@@ -2092,10 +2278,10 @@ describe('Auction', () => {
 			strictEqualTypeSafe(await isFinalized(client, auctionAddress), true)
 
 			// 1) Non-owner (alice) cannot withdraw her losing bid -> revert with "Only owner can call"
-			await assert.rejects(async () => await withdrawBids(alice, auctionAddress, alice.account.address, [{ tick: losingTick, bidIndex: 0n }]), /Only the auction owner can withdraw bids/)
+			await assert.rejects(async () => await withdrawBids(alice, auctionAddress, alice.account.address, [{ tick: losingTick, bidIndex: 0n }]), /Only the auction owner can withdraw bids on behalf of bidders/)
 
 			// 2) Non-owner (bob) cannot withdraw his winning bid -> also revert
-			await assert.rejects(async () => await withdrawBids(bob, auctionAddress, bob.account.address, [{ tick: winningTick, bidIndex: 0n }]), /Only the auction owner can withdraw bids/)
+			await assert.rejects(async () => await withdrawBids(bob, auctionAddress, bob.account.address, [{ tick: winningTick, bidIndex: 0n }]), /Only the auction owner can withdraw bids on behalf of bidders/)
 
 			// 3) Owner withdraws for alice (losing) -> full ETH refund
 			const aliceBalanceBefore = await getETHBalance(client, alice.account.address)
@@ -2123,7 +2309,7 @@ describe('Auction', () => {
 			const bidAmount = 1n * ATTOETH_PER_ETH
 
 			assert.strictEqual(tickToPrice(zeroPriceTick), 0n, 'test setup should use a zero-price tick')
-			await assert.rejects(async () => await submitBid(client, auctionAddress, zeroPriceTick, bidAmount), /tick price rounds down to zero/)
+			await assert.rejects(async () => await submitBid(client, auctionAddress, zeroPriceTick, bidAmount), /Auction tick price rounds down to zero/)
 			await submitBidAndVerifyLock(client, auctionAddress, lowPositiveTick, bidAmount)
 			strictEqualTypeSafe(await getBidCountAtTick(client, auctionAddress, zeroPriceTick), 0n, 'rejected zero-price bid count')
 			strictEqualTypeSafe(await getBidCountAtTick(client, auctionAddress, lowPositiveTick), 1n, 'lowest positive-price bid count')

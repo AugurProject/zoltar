@@ -473,6 +473,40 @@ describe('Question Data', () => {
 		await assert.rejects(createQuestion(client, question, ['Yes', 'No']), { message: /question end time must be on or after the start time/i })
 	})
 
+	test('createQuestion reports duplicate, malformed scalar, and empty-label guards precisely', async () => {
+		const currentTime = await mockWindow.getTime()
+		const categoricalQuestion = {
+			title: 'explicit question guard coverage',
+			description: '',
+			startTime: currentTime + 100000n,
+			endTime: currentTime + 200000n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
+		await createQuestion(client, categoricalQuestion, outcomes)
+		await assert.rejects(createQuestion(client, categoricalQuestion, outcomes), {
+			message: /Question already exists and cannot be created twice/,
+		})
+		await assert.rejects(createQuestion(client, { ...categoricalQuestion, title: 'empty label guard' }, ['']), {
+			message: /Outcome option label must not be an empty string/,
+		})
+
+		const scalarQuestion = {
+			...categoricalQuestion,
+			title: 'scalar guard coverage',
+			displayValueMax: 1n,
+		}
+		await assert.rejects(createQuestion(client, { ...scalarQuestion, displayValueMax: 0n }, []), {
+			message: /Scalar question display max must be greater than display min/,
+		})
+		await assert.rejects(createQuestion(client, scalarQuestion, []), {
+			message: /Scalar question numTicks must be positive/,
+		})
+	})
+
 	test('createQuestion enforces binary outcome order', async () => {
 		const question = {
 			title: 'Test Binary Order',

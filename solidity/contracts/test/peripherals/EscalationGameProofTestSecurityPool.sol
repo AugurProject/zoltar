@@ -75,6 +75,15 @@ contract EscalationGameProofTestSecurityPool {
 		return (acceptedAmount, parentDepositIndex);
 	}
 
+	function recordDeposit(
+		address depositor,
+		BinaryOutcomes.BinaryOutcome outcome,
+		uint256 amount,
+		uint256 expectedCumulativeAmount
+	) external returns (uint256 parentDepositIndex) {
+		return escalationGame.recordDepositFromSecurityPool(depositor, outcome, amount, expectedCumulativeAmount);
+	}
+
 	function initializeForkCarrySnapshot(
 		bytes32[64][3] memory inheritedCarryPeaks,
 		uint256[3] memory inheritedCarryLeafCounts,
@@ -201,5 +210,13 @@ contract EscalationGameProofTestSecurityPool {
 		BinaryOutcomes.BinaryOutcome outcome
 	) external returns (address depositor, uint256 amountToWithdraw, uint256 originalDepositAmount) {
 		return escalationGame.claimDepositForWinning(depositIndex, outcome);
+	}
+
+	function sweepResidualRepToSecurityPool() external {
+		escalationGame.sweepResidualRepToSecurityPool();
+	}
+
+	function drainAllRep(address receiver) external returns (uint256 amount) {
+		return escalationGame.drainAllRep(receiver);
 	}
 }
