@@ -186,7 +186,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		const documentQueries = within(document.body)
 		const reportButton = documentQueries.getByRole('button', { name: 'Report On Selected Side' }) as HTMLButtonElement
 		expect(reportButton.disabled).toBe(true)
-		expect(reportButton.title).toBe('Load reporting details before reporting on an outcome.')
+		expect(reportButton.title).toBe('Loading reporting details.')
 	})
 
 	test('keeps reporting disabled at the exact market end timestamp', async () => {

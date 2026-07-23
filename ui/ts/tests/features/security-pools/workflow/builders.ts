@@ -320,6 +320,7 @@ export function createSecurityPoolWorkflowProps(overrides: Partial<SecurityPoolW
 		poolOracleActiveAction: undefined,
 		poolOracleManagerDetails: undefined,
 		poolOracleManagerError: undefined,
+		poolOracleManagerErrorAddress: undefined,
 		poolPriceOracleResult: undefined,
 		repPerEthPrice: undefined,
 		repPerEthSource: undefined,

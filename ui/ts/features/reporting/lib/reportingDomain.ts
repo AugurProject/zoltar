@@ -17,7 +17,7 @@ type ReportingAmountSuggestion = {
 const REP_UNIT = 10n ** 18n
 export const ESCALATION_GAME_ACTIVATION_DELAY = 3n * 24n * 60n * 60n
 export { computeEscalationTimeSinceStartFromAttritionCost, getEscalationBindingCapital }
-const LOAD_REPORTING_PRESETS_REASON = 'Load reporting details before using presets.'
+const LOAD_REPORTING_PRESETS_REASON = 'Loading reporting details.'
 const MAX_PROFIT_NOT_STARTED_REASON = 'Max profit becomes available after the escalation game starts.'
 const SELECTED_SIDE_ALREADY_LEADS_REASON = 'Selected side already leads.'
 const ESCALATION_RESOLVED_REASON = 'Escalation is already resolved.'

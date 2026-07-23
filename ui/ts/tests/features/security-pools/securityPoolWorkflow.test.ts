@@ -428,7 +428,7 @@ void describe('selected pool workflow visibility', () => {
 				selectedPoolLookupState: 'unknown',
 				selectedPoolUniverseMismatch: false,
 			}),
-		).toBe('Load a pool before using pool actions.')
+		).toBe('Select a pool before using pool actions.')
 
 		expect(
 			getSelectedPoolWorkflowGuardMessage({
@@ -436,7 +436,7 @@ void describe('selected pool workflow visibility', () => {
 				selectedPoolLookupState: 'loading',
 				selectedPoolUniverseMismatch: false,
 			}),
-		).toBe('Wait for this pool to finish loading.')
+		).toBe('Loading pool…')
 
 		expect(
 			getSelectedPoolWorkflowGuardMessage({
@@ -444,7 +444,7 @@ void describe('selected pool workflow visibility', () => {
 				selectedPoolLookupState: 'missing',
 				selectedPoolUniverseMismatch: false,
 			}),
-		).toBe('Load a valid pool before using pool actions.')
+		).toBe('Select a valid pool before using pool actions.')
 
 		expect(
 			getSelectedPoolWorkflowGuardMessage({

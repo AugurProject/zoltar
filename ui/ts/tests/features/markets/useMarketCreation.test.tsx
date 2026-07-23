@@ -558,7 +558,7 @@ describe('useMarketCreation', () => {
 			Object.defineProperty(window, 'sessionStorage', {
 				configurable: true,
 				get: () => {
-					throw new Error('Storage unavailable')
+					throw new DOMException('Storage unavailable', 'SecurityError')
 				},
 			})
 			await act(async () => {

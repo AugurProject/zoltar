@@ -236,7 +236,7 @@ export function App() {
 	const updateReportingForm = (update: Partial<ReportingFormState>) => {
 		setReportingForm(current => applyReportingFormUpdate(current, update))
 	}
-	const { executePendingPoolOperation, loadingPoolOracleManager, loadPoolOracleManager, poolOracleActiveAction, poolOracleManagerDetails, poolOracleManagerError, poolPriceOracleResult, requestPoolPrice } = usePriceOracleManager(walletScopedHookConfig)
+	const { executePendingPoolOperation, loadingPoolOracleManager, loadPoolOracleManager, poolOracleActiveAction, poolOracleManagerDetails, poolOracleManagerError, poolOracleManagerErrorAddress, poolPriceOracleResult, requestPoolPrice } = usePriceOracleManager(walletScopedHookConfig)
 	const {
 		checkedSecurityPoolAddress,
 		closeLiquidationModal,
@@ -635,6 +635,7 @@ export function App() {
 			poolOracleActiveAction,
 			poolOracleManagerDetails,
 			poolOracleManagerError,
+			poolOracleManagerErrorAddress,
 			poolPriceOracleResult,
 			selectedPoolRefreshNonce,
 			universeForkTime: zoltarUniverse?.forkTime,

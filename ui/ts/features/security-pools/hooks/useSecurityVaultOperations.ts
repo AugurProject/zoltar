@@ -175,7 +175,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 	const isVaultSelectionCurrent = (selectionKey: string) => currentVaultSelectionKeyRef.current === selectionKey
 
 	const resolveSelectedVaultAddress = () => {
-		const selectedVaultAddress = requireDefined(getSelectedVaultAddress(securityVaultForm.value.selectedVaultAddress, accountAddress), 'Enter a vault address or connect a wallet before loading a security vault')
+		const selectedVaultAddress = requireDefined(getSelectedVaultAddress(securityVaultForm.value.selectedVaultAddress, accountAddress), 'Enter a vault address or connect a wallet before selecting a security vault')
 		return parseAddressInput(selectedVaultAddress, 'Selected vault address')
 	}
 	const createVaultActionSnapshot = (): SecurityVaultActionSnapshot => ({
@@ -185,7 +185,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 	})
 	const isVaultActionSnapshotCurrent = (snapshot: SecurityVaultActionSnapshot) => snapshot.effectiveVaultSelectionKey === lastEffectiveVaultSelectionKey.current
 	const resolveSelectedVaultAddressFromSnapshot = (snapshot: SecurityVaultActionSnapshot) => {
-		const selectedVaultAddress = requireDefined(getSelectedVaultAddress(snapshot.form.selectedVaultAddress, accountAddress), 'Enter a vault address or connect a wallet before loading a security vault')
+		const selectedVaultAddress = requireDefined(getSelectedVaultAddress(snapshot.form.selectedVaultAddress, accountAddress), 'Enter a vault address or connect a wallet before selecting a security vault')
 		return parseAddressInput(selectedVaultAddress, 'Selected vault address')
 	}
 	const resolveSecurityVaultPoolAddressFromSnapshot = (snapshot: SecurityVaultActionSnapshot) => parseAddressInput(requireDefined(snapshot.effectiveSecurityPoolAddressInput, 'Security pool address is required'), 'Security pool address')

@@ -51,7 +51,7 @@ export const exportName = 'Export name'
 export const refreshExport = 'Refresh export'
 export const copyJson = 'Copy JSON'
 export const importSimulationState = 'Import Simulation State'
-export const importAndLoad = 'Import and load'
+export const importAndLoad = 'Import'
 export const deleteSavedSimulationState = 'Delete Saved Simulation State'
 export const formatDeleteSavedSimulationStateDetail = (stateName: CopyTemplateValue) => `Delete the saved state "${stateName}" from browser storage. Built-in scenarios are not affected.`
 export const builtInScenarioDeletionReason = 'Built-in scenarios cannot be deleted.'

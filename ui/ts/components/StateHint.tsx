@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact'
-import { LoadingText } from './LoadingText.js'
+import { LoadingAwareText, LoadingText } from './LoadingText.js'
 import type { UserMessagePresentation } from '../lib/userCopy.js'
 
 type StateHintProps = {
@@ -17,8 +17,12 @@ export function StateHint({ actions, className = '', presentation, title }: Stat
 		<div className={`state-hint ${className}`.trim()}>
 			{title === undefined ? undefined : <h3>{title}</h3>}
 			{fallbackTitle === undefined ? undefined : <h3>{fallbackTitle}</h3>}
-			{presentation.detail === undefined ? undefined : <p className='detail'>{presentation.detailIsLoading ? <LoadingText>{presentation.detail}</LoadingText> : presentation.detail}</p>}
-			{presentation.actionHint === undefined ? undefined : <p className='detail'>{presentation.actionHint}</p>}
+			{presentation.detail === undefined ? undefined : <p className='detail'>{presentation.detailIsLoading ? <LoadingText>{presentation.detail}</LoadingText> : <LoadingAwareText>{presentation.detail}</LoadingAwareText>}</p>}
+			{presentation.actionHint === undefined ? undefined : (
+				<p className='detail'>
+					<LoadingAwareText>{presentation.actionHint}</LoadingAwareText>
+				</p>
+			)}
 			{actions === undefined ? undefined : <div className='actions state-hint-actions'>{actions}</div>}
 		</div>
 	)

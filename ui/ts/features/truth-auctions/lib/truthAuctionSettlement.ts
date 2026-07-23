@@ -135,7 +135,7 @@ export function getTruthAuctionSettlementActionAvailabilityMessage({
 }) {
 	const bidActionAvailability = (() => {
 		if (selectedRows.length === 0) return 'Pick one or more of your bids before settlement.'
-		if (truthAuction === undefined) return 'Load the truth auction before settling bids.'
+		if (truthAuction === undefined) return 'Loading truth auction.'
 		if (truthAuction.finalized && selectionHasClaims && claimingAvailable === false) return 'Finalized settlement is not available for this pool.'
 		if (selectionHasClaims && !truthAuction.finalized) return 'Winning bids can only be settled after the truth auction is finalized.'
 		if (!truthAuction.finalized && (!truthAuction.hitCap || truthAuction.clearingTick === undefined)) return 'Losing bids cannot be refunded until the auction has a clearing tick.'

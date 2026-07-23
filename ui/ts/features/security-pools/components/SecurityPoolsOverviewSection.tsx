@@ -45,6 +45,7 @@ export function SecurityPoolsOverviewSection({
 }: SecurityPoolsOverviewSectionProps) {
 	const [pageIndex, setPageIndex] = useState(0)
 	const [activePageRequestKey, setActivePageRequestKey] = useState<string | undefined>(undefined)
+	const [pageLoadError, setPageLoadError] = useState<string | undefined>(undefined)
 	const [searchText, setSearchText] = useState('')
 	const [systemStateFilter, setSystemStateFilter] = useState<'all' | SecurityPoolLifecycleState>('all')
 	const [vaultFilter, setVaultFilter] = useState<'all' | 'has-vaults' | 'empty'>('all')
@@ -61,8 +62,9 @@ export function SecurityPoolsOverviewSection({
 	const poolPageCount = getPaginationPageCount(currentPoolCount, SECURITY_POOL_PAGE_SIZE)
 	const pagedSecurityPools = hasCurrentPageData ? securityPoolPage.pools : []
 	const isWaitingForPageData = activePageRequestKey === currentPageRequestKey
-	const loadingCurrentPage = loadingSecurityPoolPage || isWaitingForPageData
 	const hasLoadedCurrentPage = hasLoadedSecurityPoolPage && hasCurrentPageData
+	const effectiveSecurityPoolOverviewError = securityPoolOverviewError ?? pageLoadError
+	const loadingCurrentPage = loadingSecurityPoolPage || isWaitingForPageData || (!hasLoadedCurrentPage && effectiveSecurityPoolOverviewError === undefined)
 	const registryPresentation = getPoolRegistryPresentation({
 		hasLoaded: hasLoadedCurrentPage,
 		isLoading: loadingCurrentPage && !hasLoadedCurrentPage,
@@ -87,7 +89,15 @@ export function SecurityPoolsOverviewSection({
 	const hasPreviousPage = resolvedPageIndex > 0
 	const hasNextPage = hasCurrentPageData && getHasNextPaginationPage(resolvedPageIndex, poolPageCount)
 	const retryPoolRegistryLoad = () => {
-		onLoadSecurityPoolPage(resolvedPageIndex, SECURITY_POOL_PAGE_SIZE, currentPageRequestKey)
+		setPageLoadError(undefined)
+		setActivePageRequestKey(currentPageRequestKey)
+		void Promise.resolve(onLoadSecurityPoolPage(resolvedPageIndex, SECURITY_POOL_PAGE_SIZE, currentPageRequestKey))
+			.catch(() => {
+				setPageLoadError(securityPoolCopy.poolPageLoadError)
+			})
+			.finally(() => {
+				setActivePageRequestKey(current => (current === currentPageRequestKey ? undefined : current))
+			})
 	}
 	useEffect(() => {
 		if (resolvedPageIndex === pageIndex) return
@@ -95,9 +105,13 @@ export function SecurityPoolsOverviewSection({
 	}, [pageIndex, resolvedPageIndex])
 	useEffect(() => {
 		let cancelled = false
+		setPageLoadError(undefined)
 		setActivePageRequestKey(currentPageRequestKey)
 		void Promise.resolve(loadSecurityPoolPageRef.current(resolvedPageIndex, SECURITY_POOL_PAGE_SIZE, currentPageRequestKey))
-			.catch(() => undefined)
+			.catch(() => {
+				if (cancelled) return
+				setPageLoadError(securityPoolCopy.poolPageLoadError)
+			})
 			.finally(() => {
 				if (cancelled) return
 				setActivePageRequestKey(current => (current === currentPageRequestKey ? undefined : current))
@@ -135,11 +149,11 @@ export function SecurityPoolsOverviewSection({
 				/>
 			}
 		>
-			<ErrorNotice message={securityPoolOverviewError} />
-			{securityPoolOverviewError === undefined ? undefined : (
+			<ErrorNotice message={effectiveSecurityPoolOverviewError} />
+			{effectiveSecurityPoolOverviewError === undefined ? undefined : (
 				<div className='actions pool-registry-recovery-actions'>
-					<button className='secondary' type='button' onClick={retryPoolRegistryLoad} disabled={loadingSecurityPoolPage}>
-						{loadingSecurityPoolPage ? <LoadingText>{securityPoolCopy.retryingSecurityPoolsTruncated}</LoadingText> : securityPoolCopy.retryLoadingPools}
+					<button className='secondary' type='button' onClick={retryPoolRegistryLoad} disabled={loadingCurrentPage}>
+						{loadingCurrentPage ? <LoadingText>{securityPoolCopy.retryingSecurityPoolsTruncated}</LoadingText> : securityPoolCopy.retryLoadingPools}
 					</button>
 				</div>
 			)}
@@ -174,18 +188,11 @@ export function SecurityPoolsOverviewSection({
 				if (pagedSecurityPools.length === 0) {
 					if (registryPresentation === undefined) return undefined
 					const isEmptyRegistry = registryPresentation.key === 'empty'
-					const isUncheckedRegistry = registryPresentation.key === 'not_checked'
 					const registryActions = (() => {
 						if (isEmptyRegistry && onCreateSecurityPool !== undefined)
 							return (
 								<button className='primary' type='button' onClick={onCreateSecurityPool}>
 									{commonCopy.createSecurityPool}
-								</button>
-							)
-						if (isUncheckedRegistry && securityPoolOverviewError === undefined)
-							return (
-								<button className='secondary' type='button' onClick={retryPoolRegistryLoad} disabled={loadingSecurityPoolPage}>
-									{securityPoolCopy.loadSecurityPools}
 								</button>
 							)
 						return undefined

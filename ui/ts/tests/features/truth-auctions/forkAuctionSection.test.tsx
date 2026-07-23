@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { fireEvent, within } from '../../testUtils/queries'
+import { fireEvent, waitFor, within } from '../../testUtils/queries'
 import { h } from 'preact'
 import { type Address, getAddress, zeroAddress } from '@zoltar/shared/ethereum'
 import { ForkAuctionSection } from '../../../features/truth-auctions/components/ForkAuctionSection.js'
@@ -21,6 +21,14 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 		wethBalance: 0n,
 		...overrides,
 	}
+}
+
+function createDeferred<T>() {
+	let resolve: (value: T) => void = () => undefined
+	const promise = new Promise<T>(promiseResolve => {
+		resolve = promiseResolve
+	})
+	return { promise, resolve }
 }
 
 function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDetails {
@@ -963,6 +971,143 @@ describe('ForkAuctionSection', () => {
 		if (!(truthAuctionCard instanceof HTMLElement)) throw new Error('Expected truth auction summary card')
 		expect(truthAuctionCard.querySelector('.section-block-badge .badge')?.textContent?.trim()).toBe('Open')
 		expect(truthAuctionCard.querySelector('.fork-workflow-summary')).not.toBeNull()
+	})
+
+	test('shows current auction bids before the submit bid form', async () => {
+		const currentChildPool = createChildPool({
+			securityPoolAddress: '0x00000000000000000000000000000000000000f7',
+			systemState: 'forkTruthAuction',
+			truthAuctionAddress: getAddress('0x00000000000000000000000000000000000000f8'),
+			truthAuctionStartedAt: 1n,
+		})
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentStageView: 'auction',
+					currentTimestamp: 5n,
+					forkAuctionDetails: createForkAuctionDetails({
+						currentTime: 5n,
+						parentSecurityPoolAddress: PARENT_POOL_ADDRESS,
+						questionOutcome: 'yes',
+						securityPoolAddress: currentChildPool.securityPoolAddress,
+						systemState: 'forkTruthAuction',
+						truthAuction: {
+							accumulatedEth: 0n,
+							auctionEndsAt: 604_801n,
+							clearingPrice: 1n,
+							clearingTick: 0n,
+							ethAtClearingTick: 0n,
+							ethRaiseCap: 1n,
+							ethRaised: 0n,
+							finalized: false,
+							hitCap: false,
+							maxRepBeingSold: 1n,
+							minBidSize: 1n,
+							repPurchasableAtBid: undefined,
+							timeRemaining: 604_796n,
+							totalRepPurchased: 0n,
+							underfunded: false,
+							underfundedThreshold: undefined,
+							underfundedWinningEth: 0n,
+						},
+						truthAuctionAddress: currentChildPool.truthAuctionAddress,
+						truthAuctionStartedAt: 1n,
+						universeId: currentChildPool.universeId,
+					}),
+					previewPool: currentChildPool,
+					securityPools: [currentChildPool],
+					selectedStageView: 'auction',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const currentBidsHeading = documentQueries.getByRole('heading', { name: 'Current Bids' })
+		const submitBidHeading = documentQueries.getByRole('heading', { name: 'Submit Bid' })
+		expect(documentQueries.getByText('Market Depth')).not.toBeNull()
+		expect(documentQueries.queryByText('Market Depth & Bid History')).toBeNull()
+		expect(currentBidsHeading.compareDocumentPosition(submitBidHeading) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+		expect(currentBidsHeading.closest('details')).toBeNull()
+	})
+
+	test('shows bid-book failure recovery and repeats the automatic read', async () => {
+		const currentChildPool = createChildPool({
+			securityPoolAddress: '0x00000000000000000000000000000000000000f7',
+			systemState: 'forkTruthAuction',
+			truthAuctionAddress: getAddress('0x00000000000000000000000000000000000000f8'),
+			truthAuctionStartedAt: 1n,
+		})
+		const retriedTickCount = createDeferred<bigint>()
+		let activeTickCountCalls = 0
+		const truthAuctionReadClient: Pick<ReadClient, 'readContract'> = {
+			readContract: mock(async request => {
+				if (request.functionName === 'activeTickCount') {
+					activeTickCountCalls += 1
+					if (activeTickCountCalls === 1) throw new Error('Bidbook RPC unavailable')
+					return await retriedTickCount.promise
+				}
+				if (request.functionName === 'getActiveTickPage') return []
+				throw new Error(`Unexpected readContract call: ${String(request.functionName)}`)
+			}) as ReadClient['readContract'],
+		}
+		const props = createProps({
+			accountState: createAccountState({ address: undefined }),
+			currentStageView: 'auction',
+			currentTimestamp: 5n,
+			forkAuctionDetails: createForkAuctionDetails({
+				currentTime: 5n,
+				parentSecurityPoolAddress: PARENT_POOL_ADDRESS,
+				questionOutcome: 'yes',
+				securityPoolAddress: currentChildPool.securityPoolAddress,
+				systemState: 'forkTruthAuction',
+				truthAuction: {
+					accumulatedEth: 0n,
+					auctionEndsAt: 604_801n,
+					clearingPrice: 1n,
+					clearingTick: 0n,
+					ethAtClearingTick: 0n,
+					ethRaiseCap: 1n,
+					ethRaised: 0n,
+					finalized: false,
+					hitCap: false,
+					maxRepBeingSold: 1n,
+					minBidSize: 1n,
+					repPurchasableAtBid: undefined,
+					timeRemaining: 604_796n,
+					totalRepPurchased: 0n,
+					underfunded: false,
+					underfundedThreshold: undefined,
+					underfundedWinningEth: 0n,
+				},
+				truthAuctionAddress: currentChildPool.truthAuctionAddress,
+				truthAuctionStartedAt: 1n,
+				universeId: currentChildPool.universeId,
+			}),
+			previewPool: currentChildPool,
+			securityPools: [currentChildPool],
+			selectedStageView: 'auction',
+			truthAuctionReadClient,
+		})
+		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, props))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await waitFor(() => {
+			expect(documentQueries.getByText('Failed to load truth auction price levels. Reason: Bidbook RPC unavailable')).not.toBeNull()
+		})
+		expect(documentQueries.queryByText('No active prices are currently visible for this auction.')).toBeNull()
+		fireEvent.click(documentQueries.getByText('Market Depth'))
+		expect(documentQueries.queryByText('No live price levels are currently active for this auction.')).toBeNull()
+		expect(documentQueries.queryByText('No active levels are visible.')).toBeNull()
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry current bids' }))
+		await waitFor(() => {
+			const retryingButton = documentQueries.getByRole('button', { name: 'Retry current bids' })
+			expect(retryingButton.hasAttribute('disabled')).toBe(true)
+			expect(retryingButton.textContent).toContain('Retrying auction bids…')
+			expect(activeTickCountCalls).toBe(2)
+		})
 	})
 
 	test('makes the auctioned bond allowance and debt transfer explicit during bidding', async () => {

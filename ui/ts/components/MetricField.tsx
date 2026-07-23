@@ -1,4 +1,5 @@
 import type { ComponentChildren } from 'preact'
+import { LoadingAwareText } from './LoadingText.js'
 
 type MetricFieldProps = {
 	children: ComponentChildren
@@ -15,7 +16,9 @@ export function MetricField({ children, className = '', label, valueClassName = 
 	return (
 		<div className={className === '' ? undefined : className}>
 			<span className='metric-label'>{label}</span>
-			<ValueTag className={resolvedValueClassName}>{children}</ValueTag>
+			<ValueTag className={resolvedValueClassName}>
+				<LoadingAwareText>{children}</LoadingAwareText>
+			</ValueTag>
 		</div>
 	)
 }

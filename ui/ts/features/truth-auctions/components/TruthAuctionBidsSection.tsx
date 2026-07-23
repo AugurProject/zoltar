@@ -4,6 +4,8 @@ import type { ComponentChildren } from 'preact'
 import type { Address } from '@zoltar/shared/ethereum'
 import { AddressValue } from '../../../components/AddressValue.js'
 import { CurrencyValue } from '../../../components/CurrencyValue.js'
+import { ErrorNotice } from '../../../components/ErrorNotice.js'
+import { LoadingText } from '../../../components/LoadingText.js'
 import { MetricField } from '../../../components/MetricField.js'
 import { PaginationControls } from '../../../components/PaginationControls.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
@@ -11,21 +13,29 @@ import type { TruthAuctionBidRowViewModel, ViewerTruthAuctionBidRowViewModel } f
 
 type TruthAuctionBidsSectionProps = {
 	aggregatedAuctionBidCountForLoadedTicks: bigint
+	error?: string | undefined
+	hasLoadedData?: boolean
 	hasMoreAggregatedAuctionBids: boolean
 	loadedTickCount: number
 	loadingAggregatedAuctionBids: boolean
 	onLoadNextAuctionBidPage: () => void
+	onRetry?: (() => void) | undefined
 	renderPriceValue: (value: bigint | undefined) => ComponentChildren
+	retrying?: boolean
 	rows: TruthAuctionBidRowViewModel[]
 }
 
 type ViewerTruthAuctionBidsSectionProps = {
 	accountAddress: Address | undefined
+	error?: string | undefined
+	hasLoadedData?: boolean
 	hasMoreViewerBids: boolean
 	loadingTruthAuctionBook: boolean
 	onLoadNextViewerBidPage: () => void
+	onRetry?: (() => void) | undefined
 	onSettlementBidSelectionChange: (bidKey: string, checked: boolean) => void
 	renderPriceValue: (value: bigint | undefined) => ComponentChildren
+	retrying?: boolean
 	rows: ViewerTruthAuctionBidRowViewModel[]
 	showSettlementActionColumn: boolean
 }
@@ -53,17 +63,31 @@ function ViewerBidsHeader({ showActions }: { showActions: boolean }) {
 	)
 }
 
-export function TruthAuctionBidsSection({ aggregatedAuctionBidCountForLoadedTicks, hasMoreAggregatedAuctionBids, loadedTickCount, loadingAggregatedAuctionBids, onLoadNextAuctionBidPage, renderPriceValue, rows }: TruthAuctionBidsSectionProps) {
+export function TruthAuctionBidsSection({ aggregatedAuctionBidCountForLoadedTicks, error, hasLoadedData = true, hasMoreAggregatedAuctionBids, loadedTickCount, loadingAggregatedAuctionBids, onLoadNextAuctionBidPage, onRetry, renderPriceValue, retrying = false, rows }: TruthAuctionBidsSectionProps) {
 	return (
-		<SectionBlock title={forkAuctionCopy.truthAuctionBids} variant='embedded'>
-			<div className='truth-auction-bid-coverage-summary'>
-				<MetricField label={forkAuctionCopy.loadedLevels}>{loadedTickCount.toString()}</MetricField>
-				<MetricField label={forkAuctionCopy.loadedBids}>{rows.length.toString()}</MetricField>
-				<MetricField label={forkAuctionCopy.coverage}>{forkAuctionCopy.formatLoadedBidCoverageSummary(rows.length.toString(), aggregatedAuctionBidCountForLoadedTicks.toString())}</MetricField>
-			</div>
-			{loadingAggregatedAuctionBids ? <p className='detail'>{forkAuctionCopy.loadingAuctionBids}</p> : undefined}
-			{!loadingAggregatedAuctionBids && loadedTickCount === 0 ? <p className='detail'>{forkAuctionCopy.auctionPriceLevelsEmpty}</p> : undefined}
-			{!loadingAggregatedAuctionBids && loadedTickCount > 0 && rows.length === 0 ? <p className='detail'>{forkAuctionCopy.loadedPriceBidsEmpty}</p> : undefined}
+		<SectionBlock title={forkAuctionCopy.currentBids} variant='embedded'>
+			{hasLoadedData ? (
+				<div className='truth-auction-bid-coverage-summary'>
+					<MetricField label={forkAuctionCopy.loadedLevels}>{loadedTickCount.toString()}</MetricField>
+					<MetricField label={forkAuctionCopy.loadedBids}>{rows.length.toString()}</MetricField>
+					<MetricField label={forkAuctionCopy.coverage}>{forkAuctionCopy.formatLoadedBidCoverageSummary(rows.length.toString(), aggregatedAuctionBidCountForLoadedTicks.toString())}</MetricField>
+				</div>
+			) : undefined}
+			{loadingAggregatedAuctionBids ? (
+				<p className='detail'>
+					<LoadingText>{forkAuctionCopy.loadingAuctionBids}</LoadingText>
+				</p>
+			) : undefined}
+			<ErrorNotice message={error} />
+			{error === undefined || onRetry === undefined ? undefined : (
+				<div className='actions'>
+					<button aria-label={forkAuctionCopy.retryCurrentBids} className='secondary' disabled={retrying} onClick={onRetry} type='button'>
+						{retrying ? <LoadingText>{forkAuctionCopy.retryingAuctionBids}</LoadingText> : forkAuctionCopy.retryAuctionBids}
+					</button>
+				</div>
+			)}
+			{hasLoadedData && error === undefined && !loadingAggregatedAuctionBids && loadedTickCount === 0 ? <p className='detail'>{forkAuctionCopy.auctionPriceLevelsEmpty}</p> : undefined}
+			{hasLoadedData && error === undefined && !loadingAggregatedAuctionBids && loadedTickCount > 0 && rows.length === 0 ? <p className='detail'>{forkAuctionCopy.loadedPriceBidsEmpty}</p> : undefined}
 			{rows.length === 0 ? undefined : (
 				<div className='truth-auction-bid-table truth-auction-bid-table-scroll' role='region' aria-label={forkAuctionCopy.scrollableAuctionBidHistory} tabIndex={0}>
 					<AuctionBidsHeader />
@@ -88,17 +112,29 @@ export function TruthAuctionBidsSection({ aggregatedAuctionBidCountForLoadedTick
 					))}
 				</div>
 			)}
-			{hasMoreAggregatedAuctionBids ? <PaginationControls hasNextPage={hasMoreAggregatedAuctionBids} onLoadMore={onLoadNextAuctionBidPage} loadMoreLabel={forkAuctionCopy.loadMoreTruthAuctionBids} /> : undefined}
+			{error === undefined && hasMoreAggregatedAuctionBids ? <PaginationControls hasNextPage={hasMoreAggregatedAuctionBids} onLoadMore={onLoadNextAuctionBidPage} loadMoreLabel={forkAuctionCopy.loadMoreTruthAuctionBids} /> : undefined}
 		</SectionBlock>
 	)
 }
 
-export function ViewerTruthAuctionBidsSection({ accountAddress, hasMoreViewerBids, loadingTruthAuctionBook, onLoadNextViewerBidPage, onSettlementBidSelectionChange, renderPriceValue, rows, showSettlementActionColumn }: ViewerTruthAuctionBidsSectionProps) {
+export function ViewerTruthAuctionBidsSection({ accountAddress, error, hasLoadedData = true, hasMoreViewerBids, loadingTruthAuctionBook, onLoadNextViewerBidPage, onRetry, onSettlementBidSelectionChange, renderPriceValue, retrying = false, rows, showSettlementActionColumn }: ViewerTruthAuctionBidsSectionProps) {
 	return (
 		<SectionBlock title={forkAuctionCopy.myBids} variant='embedded'>
 			{accountAddress === undefined ? <p className='detail'>{forkAuctionCopy.walletBidsConnectionRequired}</p> : undefined}
-			{accountAddress !== undefined && loadingTruthAuctionBook ? <p className='detail'>{forkAuctionCopy.loadingYourBids}</p> : undefined}
-			{accountAddress !== undefined && !loadingTruthAuctionBook && rows.length === 0 ? <p className='detail'>{forkAuctionCopy.walletBidsEmpty}</p> : undefined}
+			{accountAddress !== undefined && loadingTruthAuctionBook ? (
+				<p className='detail'>
+					<LoadingText>{forkAuctionCopy.loadingYourBids}</LoadingText>
+				</p>
+			) : undefined}
+			<ErrorNotice message={error} />
+			{error === undefined || onRetry === undefined ? undefined : (
+				<div className='actions'>
+					<button aria-label={forkAuctionCopy.retryMyBids} className='secondary' disabled={retrying} onClick={onRetry} type='button'>
+						{retrying ? <LoadingText>{forkAuctionCopy.retryingAuctionBids}</LoadingText> : forkAuctionCopy.retryAuctionBids}
+					</button>
+				</div>
+			)}
+			{accountAddress !== undefined && hasLoadedData && error === undefined && !loadingTruthAuctionBook && rows.length === 0 ? <p className='detail'>{forkAuctionCopy.walletBidsEmpty}</p> : undefined}
 			{rows.length === 0 ? undefined : (
 				<div className='truth-auction-bid-table'>
 					<ViewerBidsHeader showActions={showSettlementActionColumn} />
@@ -126,7 +162,7 @@ export function ViewerTruthAuctionBidsSection({ accountAddress, hasMoreViewerBid
 					))}
 				</div>
 			)}
-			{accountAddress !== undefined && hasMoreViewerBids ? <PaginationControls hasNextPage={hasMoreViewerBids} onLoadMore={onLoadNextViewerBidPage} loadMoreLabel={forkAuctionCopy.loadMoreOfMyBids} /> : undefined}
+			{accountAddress !== undefined && error === undefined && hasMoreViewerBids ? <PaginationControls hasNextPage={hasMoreViewerBids} onLoadMore={onLoadNextViewerBidPage} loadMoreLabel={forkAuctionCopy.loadMoreOfMyBids} /> : undefined}
 		</SectionBlock>
 	)
 }

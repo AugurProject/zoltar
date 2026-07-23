@@ -93,7 +93,7 @@ export const blocked = 'Blocked'
 export const formatCopyAddressValue = (address: CopyTemplateValue) => `Copy address ${address}`
 export const formatCopyIdentifierValue = (identifier: CopyTemplateValue) => `Copy identifier ${identifier}`
 export const metricUnavailablePlaceholder = '—'
-export const loadMore = 'Load More'
+export const loadMore = 'Show More'
 export const nextPage = 'Next Page'
 export const previousPage = 'Previous Page'
 export const formatDecimalNumberRequiredError = (fieldLabel: CopyTemplateValue) => `${fieldLabel} must be a decimal number.`

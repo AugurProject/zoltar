@@ -1,7 +1,7 @@
 import { createContext } from 'preact'
 import { useContext, useId } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
-import { LoadingText } from './LoadingText.js'
+import { LoadingAwareText, LoadingText } from './LoadingText.js'
 import type { TransactionActionButtonProps } from '../types/components.js'
 
 const TransactionActionButtonLockContext = createContext<string | undefined>(undefined)
@@ -28,7 +28,7 @@ export function TransactionActionButton({ availability, className = '', disabled
 			</button>
 			{shouldShowDisabledReason ? (
 				<p id={disabledReasonId} className='detail disabled-reason'>
-					{disabledReason}
+					<LoadingAwareText>{disabledReason}</LoadingAwareText>
 				</p>
 			) : undefined}
 		</div>

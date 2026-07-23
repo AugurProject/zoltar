@@ -2,6 +2,7 @@ import * as commonCopy from '../../../copy/common.js'
 import * as deploymentCopy from '../../../copy/deployment.js'
 import type { ComponentChildren } from 'preact'
 import { LoadableValue } from '../../../components/LoadableValue.js'
+import { LoadingText } from '../../../components/LoadingText.js'
 import { DeploymentSection } from './DeploymentSection.js'
 import { ReadOnlyDetailAccordion } from '../../../components/ReadOnlyDetailAccordion.js'
 import { RouteHeader } from '../../../components/RouteHeader.js'
@@ -46,7 +47,7 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextM
 						</div>
 						<div>
 							<p className='detail'>{deploymentCopy.nextDeployable}</p>
-							<strong>{isLoadingDeploymentStatuses ? commonCopy.loadingWithEllipsis : (nextMissingStep?.label ?? deploymentCopy.allDeployed)}</strong>
+							<strong>{isLoadingDeploymentStatuses ? <LoadingText /> : (nextMissingStep?.label ?? deploymentCopy.allDeployed)}</strong>
 						</div>
 					</DataGrid>
 				}

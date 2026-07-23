@@ -41,22 +41,64 @@ export function useSelectedAuctionReadState({
 }: UseSelectedAuctionReadStateParameters) {
 	const [selectedAuctionDetails, setSelectedAuctionDetails] = useState<ForkAuctionSectionProps['forkAuctionDetails']>(undefined)
 	const [selectedAuctionError, setSelectedAuctionError] = useState<string | undefined>(undefined)
+	const [selectedAuctionErrorAddress, setSelectedAuctionErrorAddress] = useState<Address | undefined>(undefined)
 	const [loadingSelectedAuctionDetails, setLoadingSelectedAuctionDetails] = useState(false)
+	const [retryingSelectedAuctionDetails, setRetryingSelectedAuctionDetails] = useState(false)
 	const [recoveredSelectedAuctionChildPool, setRecoveredSelectedAuctionChildPool] = useState<ListedSecurityPool | undefined>(undefined)
+	const [selectedAuctionChildPoolRecoveryError, setSelectedAuctionChildPoolRecoveryError] = useState<string | undefined>(undefined)
+	const [selectedAuctionChildPoolRecoveryErrorKey, setSelectedAuctionChildPoolRecoveryErrorKey] = useState<string | undefined>(undefined)
+	const [selectedAuctionChildPoolRecoveryRetryNonce, setSelectedAuctionChildPoolRecoveryRetryNonce] = useState(0)
 	const lastHandledSelectedAuctionRefreshNonceRef = useRef(selectedPoolRefreshNonce)
+	const selectedAuctionRequestGenerationRef = useRef(0)
 	const [selectedOutcomeMigrationSeedStatus, setSelectedOutcomeMigrationSeedStatus] = useState<ForkOutcomeMigrationSeedStatus | undefined>(undefined)
 	const [selectedOutcomeMigrationSeedStatusError, setSelectedOutcomeMigrationSeedStatusError] = useState<string | undefined>(undefined)
 	const [loadingSelectedOutcomeMigrationSeedStatus, setLoadingSelectedOutcomeMigrationSeedStatus] = useState(false)
-	const selectedAuctionChildPool = selectedOutcomeMigrationChildPool ?? recoveredSelectedAuctionChildPool ?? currentSelectedOutcomePool
+	const [selectedOutcomeMigrationSeedStatusRetryNonce, setSelectedOutcomeMigrationSeedStatusRetryNonce] = useState(0)
+	const selectedAuctionChildPoolRecoveryKey = securityPoolAddress === undefined ? undefined : `${securityPoolAddress.toLowerCase()}:${selectedOutcome}`
+	const scopedSelectedAuctionChildPoolRecoveryError = selectedAuctionChildPoolRecoveryErrorKey === selectedAuctionChildPoolRecoveryKey ? selectedAuctionChildPoolRecoveryError : undefined
+	const currentRecoveredSelectedAuctionChildPool =
+		recoveredSelectedAuctionChildPool !== undefined && securityPoolAddress !== undefined && sameAddress(recoveredSelectedAuctionChildPool.parent, securityPoolAddress) && recoveredSelectedAuctionChildPool.questionOutcome === selectedOutcome ? recoveredSelectedAuctionChildPool : undefined
+	const selectedAuctionChildPool = selectedOutcomeMigrationChildPool ?? currentRecoveredSelectedAuctionChildPool ?? currentSelectedOutcomePool
 	const selectedAuctionPoolAddress = selectedAuctionChildPool?.securityPoolAddress
+	const scopedSelectedAuctionDetails = selectedAuctionPoolAddress !== undefined && sameAddress(selectedAuctionDetails?.securityPoolAddress, selectedAuctionPoolAddress) ? selectedAuctionDetails : undefined
+	const scopedSelectedAuctionError = selectedAuctionPoolAddress !== undefined && sameAddress(selectedAuctionErrorAddress, selectedAuctionPoolAddress) ? selectedAuctionError : undefined
 	const currentSelectedAuctionDetails = getCurrentSelectedPoolForkAuctionDetails({
-		forkAuctionDetails: selectedAuctionDetails,
+		forkAuctionDetails: scopedSelectedAuctionDetails,
 		selectedPool: selectedAuctionChildPool,
 	})
+	const retrySelectedAuctionDetails = () => {
+		if (selectedAuctionPoolAddress === undefined) return
+		const requestGeneration = ++selectedAuctionRequestGenerationRef.current
+		setRetryingSelectedAuctionDetails(true)
+		setLoadingSelectedAuctionDetails(true)
+		setSelectedAuctionError(undefined)
+		setSelectedAuctionErrorAddress(undefined)
+		void loadForkAuctionDetails(fullTruthAuctionReadClient ?? createConnectedReadClient(), selectedAuctionPoolAddress)
+			.then(details => {
+				if (requestGeneration !== selectedAuctionRequestGenerationRef.current) return
+				setSelectedAuctionDetails(details)
+				setLoadingSelectedAuctionDetails(false)
+				setRetryingSelectedAuctionDetails(false)
+			})
+			.catch(error => {
+				if (requestGeneration !== selectedAuctionRequestGenerationRef.current) return
+				setSelectedAuctionError(getErrorMessage(error, `Unable to load auction details for the ${selectedAuctionLabel} child universe.`))
+				setSelectedAuctionErrorAddress(selectedAuctionPoolAddress)
+				setLoadingSelectedAuctionDetails(false)
+				setRetryingSelectedAuctionDetails(false)
+			})
+	}
+
+	useEffect(() => {
+		if (!retryingSelectedAuctionDetails || loadingSelectedAuctionDetails) return
+		setRetryingSelectedAuctionDetails(false)
+	}, [loadingSelectedAuctionDetails, retryingSelectedAuctionDetails])
 
 	useEffect(() => {
 		if (selectedStage === 'migration' || securityPoolAddress === undefined) {
 			setRecoveredSelectedAuctionChildPool(undefined)
+			setSelectedAuctionChildPoolRecoveryError(undefined)
+			setSelectedAuctionChildPoolRecoveryErrorKey(undefined)
 			return
 		}
 		if (selectedOutcomeMigrationChildPool !== undefined) {
@@ -64,6 +106,8 @@ export function useSelectedAuctionReadState({
 			return
 		}
 		let cancelled = false
+		setSelectedAuctionChildPoolRecoveryError(undefined)
+		setSelectedAuctionChildPoolRecoveryErrorKey(undefined)
 		void loadAllSecurityPools(fullTruthAuctionReadClient ?? createConnectedReadClient(), {
 			...(accountAddress === undefined ? {} : { accountAddress }),
 			selectedSecurityPoolAddress: securityPoolAddress,
@@ -74,20 +118,25 @@ export function useSelectedAuctionReadState({
 				const recoveredPool = allPools.find(pool => sameAddress(pool.parent, securityPoolAddress) && pool.questionOutcome === selectedOutcome)
 				setRecoveredSelectedAuctionChildPool(recoveredPool)
 			})
-			.catch(() => {
+			.catch(error => {
 				if (cancelled) return
 				setRecoveredSelectedAuctionChildPool(undefined)
+				setSelectedAuctionChildPoolRecoveryError(getErrorMessage(error, `Unable to check whether the ${selectedAuctionLabel} child universe exists.`))
+				setSelectedAuctionChildPoolRecoveryErrorKey(selectedAuctionChildPoolRecoveryKey)
 			})
 		return () => {
 			cancelled = true
 		}
-	}, [accountAddress, forkAuctionResultHash, fullTruthAuctionReadClient, securityPoolAddress, selectedOutcome, selectedOutcomeMigrationChildPool, selectedStage])
+	}, [accountAddress, forkAuctionResultHash, fullTruthAuctionReadClient, securityPoolAddress, selectedAuctionChildPoolRecoveryKey, selectedAuctionChildPoolRecoveryRetryNonce, selectedAuctionLabel, selectedOutcome, selectedOutcomeMigrationChildPool, selectedStage])
 
 	useEffect(() => {
 		if ((selectedStage !== 'auction' && selectedStage !== 'settlement') || selectedAuctionPoolAddress === undefined) {
+			selectedAuctionRequestGenerationRef.current += 1
 			setSelectedAuctionDetails(undefined)
 			setSelectedAuctionError(undefined)
+			setSelectedAuctionErrorAddress(undefined)
 			setLoadingSelectedAuctionDetails(false)
+			setRetryingSelectedAuctionDetails(false)
 			return
 		}
 		const shouldReloadSelectedAuction = shouldReloadSelectedPoolDetails({
@@ -102,27 +151,29 @@ export function useSelectedAuctionReadState({
 		}
 		const client = fullTruthAuctionReadClient ?? createConnectedReadClient()
 		let cancelled = false
+		const requestGeneration = ++selectedAuctionRequestGenerationRef.current
 		setLoadingSelectedAuctionDetails(true)
 		setSelectedAuctionError(undefined)
+		setSelectedAuctionErrorAddress(undefined)
 		lastHandledSelectedAuctionRefreshNonceRef.current = selectedPoolRefreshNonce
 		void loadForkAuctionDetails(client, selectedAuctionPoolAddress)
 			.then(details => {
-				if (cancelled) return
+				if (cancelled || requestGeneration !== selectedAuctionRequestGenerationRef.current) return
+				setLoadingSelectedAuctionDetails(false)
+				setRetryingSelectedAuctionDetails(false)
 				setSelectedAuctionDetails(details)
 			})
 			.catch(error => {
-				if (cancelled) return
-				setSelectedAuctionDetails(undefined)
-				setSelectedAuctionError(getErrorMessage(error, `Unable to load auction details for the ${selectedAuctionLabel} child universe.`))
-			})
-			.finally(() => {
-				if (cancelled) return
+				if (cancelled || requestGeneration !== selectedAuctionRequestGenerationRef.current) return
 				setLoadingSelectedAuctionDetails(false)
+				setRetryingSelectedAuctionDetails(false)
+				setSelectedAuctionError(getErrorMessage(error, `Unable to load auction details for the ${selectedAuctionLabel} child universe.`))
+				setSelectedAuctionErrorAddress(selectedAuctionPoolAddress)
 			})
 		return () => {
 			cancelled = true
 		}
-	}, [currentSelectedAuctionDetails, fullTruthAuctionReadClient, selectedAuctionDetails?.securityPoolAddress, selectedAuctionLabel, selectedAuctionPoolAddress, selectedPoolRefreshNonce, selectedStage])
+	}, [currentSelectedAuctionDetails, fullTruthAuctionReadClient, scopedSelectedAuctionDetails?.systemState, selectedAuctionLabel, selectedAuctionPoolAddress, selectedPoolRefreshNonce, selectedStage])
 
 	useEffect(() => {
 		if (selectedStage !== 'migration' || securityPoolAddress === undefined || universeId === undefined) {
@@ -157,15 +208,20 @@ export function useSelectedAuctionReadState({
 		return () => {
 			cancelled = true
 		}
-	}, [forkAuctionResultHash, forkMigrationReadClient, securityPoolAddress, selectedAuctionLabel, selectedOutcome, selectedOutcomeMigrationChildPool?.securityPoolAddress, selectedStage, universeId])
+	}, [forkAuctionResultHash, forkMigrationReadClient, securityPoolAddress, selectedAuctionLabel, selectedOutcome, selectedOutcomeMigrationChildPool?.securityPoolAddress, selectedOutcomeMigrationSeedStatusRetryNonce, selectedStage, universeId])
 
 	return {
-		loadingSelectedAuctionDetails,
+		loadingSelectedAuctionDetails: loadingSelectedAuctionDetails || ((selectedStage === 'auction' || selectedStage === 'settlement') && selectedAuctionPoolAddress !== undefined && currentSelectedAuctionDetails === undefined && scopedSelectedAuctionError === undefined),
 		loadingSelectedOutcomeMigrationSeedStatus,
+		retryingSelectedAuctionDetails: retryingSelectedAuctionDetails && loadingSelectedAuctionDetails && scopedSelectedAuctionDetails === undefined,
+		retrySelectedAuctionChildPoolRecovery: () => setSelectedAuctionChildPoolRecoveryRetryNonce(currentNonce => currentNonce + 1),
+		retrySelectedAuctionDetails,
+		retrySelectedOutcomeMigrationSeedStatus: () => setSelectedOutcomeMigrationSeedStatusRetryNonce(currentNonce => currentNonce + 1),
+		selectedAuctionChildPoolRecoveryError: scopedSelectedAuctionChildPoolRecoveryError,
 		selectedAuctionChildPool,
 		selectedAuctionPoolAddress,
-		selectedAuctionDetails,
-		selectedAuctionError,
+		selectedAuctionDetails: scopedSelectedAuctionDetails,
+		selectedAuctionError: scopedSelectedAuctionError,
 		selectedOutcomeMigrationSeedStatus,
 		selectedOutcomeMigrationSeedStatusError,
 	}

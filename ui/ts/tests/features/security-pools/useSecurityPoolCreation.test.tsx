@@ -154,7 +154,7 @@ describe('useSecurityPoolCreation', () => {
 		await act(async () => {
 			await requireState(state).loadMarketById('11')
 		})
-		expect(requireState(state).securityPoolError).toBe('Deploy ZoltarQuestionData before loading a market')
+		expect(requireState(state).securityPoolError).toBe('Deploy ZoltarQuestionData before selecting a question')
 		expect(requireState(state).marketDetails).toBeUndefined()
 	})
 

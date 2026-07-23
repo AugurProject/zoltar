@@ -246,7 +246,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		if (walletAddress === undefined) {
 			liquidationFundingPreview.value = undefined
 			liquidationFundingPreviewResolvedKey.value = undefined
-			liquidationFundingPreviewError.value = 'Connect a wallet before loading liquidation funding.'
+			liquidationFundingPreviewError.value = 'Connect a wallet to review liquidation funding.'
 			liquidationFundingPreviewErrorKey.value = undefined
 			return false
 		}

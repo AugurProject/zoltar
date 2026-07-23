@@ -517,7 +517,7 @@ describe('SimulationBanner', () => {
 				currentTarget: { value: importedState },
 				target: { value: importedState },
 			})
-			fireEvent.click(dialogQueries.getByRole('button', { name: 'Import and load' }))
+			fireEvent.click(dialogQueries.getByRole('button', { name: 'Import' }))
 
 			await waitFor(() => {
 				expect(domEnvironment.window.location.hash).toContain('simState=imported-state-20260602123456')
@@ -621,7 +621,7 @@ describe('SimulationBanner', () => {
 				currentTarget: { value: '{bad json' },
 				target: { value: '{bad json' },
 			})
-			fireEvent.click(dialogQueries.getByRole('button', { name: 'Import and load' }))
+			fireEvent.click(dialogQueries.getByRole('button', { name: 'Import' }))
 
 			await waitFor(() => {
 				expect(dialogQueries.getByText(/Failed to update the saved simulation state/i)).toBeTruthy()

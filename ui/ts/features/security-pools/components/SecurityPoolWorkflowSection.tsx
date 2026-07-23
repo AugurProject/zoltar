@@ -165,6 +165,7 @@ export function SecurityPoolWorkflowSection({
 	poolOracleActiveAction,
 	poolOracleManagerDetails,
 	poolOracleManagerError,
+	poolOracleManagerErrorAddress,
 	poolPriceOracleResult,
 	universeForkTime,
 	selectedPoolRefreshNonce,
@@ -196,6 +197,7 @@ export function SecurityPoolWorkflowSection({
 	const [requestPriceReview, setRequestPriceReview] = useState<RequestPriceReview | undefined>(undefined)
 	const lastHandledReportingRefreshNonceRef = useRef(selectedPoolRefreshNonce)
 	const lastHandledForkAuctionRefreshNonceRef = useRef(selectedPoolRefreshNonce)
+	const lastForkAuctionAutoLoadKey = useRef<string | undefined>(undefined)
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const selectedPool = securityPools.find(pool => sameCaseInsensitiveText(pool.securityPoolAddress, securityPoolAddress))
 	const normalizedSelectedPoolAddress = normalizeAddress(selectedPool?.securityPoolAddress)
@@ -327,6 +329,8 @@ export function SecurityPoolWorkflowSection({
 		{ label: commonCopy.selected, value: 'selected-vault' },
 	]
 	const selectedPoolManagerAddress = selectedPool?.managerAddress
+	const currentPoolOracleManagerError = selectedPoolManagerAddress !== undefined && sameAddress(poolOracleManagerErrorAddress, selectedPoolManagerAddress) ? poolOracleManagerError : undefined
+	const liquidationPoolOracleManagerError = liquidationManagerAddress !== undefined && sameAddress(poolOracleManagerErrorAddress, liquidationManagerAddress) ? poolOracleManagerError : undefined
 	const currentPoolOracleManagerDetails = getCurrentPoolOracleManagerDetails({
 		poolOracleManagerDetails,
 		selectedPoolManagerAddress,
@@ -526,8 +530,9 @@ export function SecurityPoolWorkflowSection({
 		if (selectedPoolManagerAddress === undefined) return
 		if (sameAddress(poolOracleManagerDetails?.managerAddress, selectedPoolManagerAddress)) return
 		if (loadingPoolOracleManager) return
+		if (currentPoolOracleManagerError !== undefined) return
 		void onLoadPoolOracleManager(selectedPoolManagerAddress)
-	}, [loadingPoolOracleManager, onLoadPoolOracleManager, poolOracleManagerDetails?.managerAddress, selectedPoolManagerAddress])
+	}, [currentPoolOracleManagerError, loadingPoolOracleManager, onLoadPoolOracleManager, poolOracleManagerDetails?.managerAddress, selectedPoolManagerAddress])
 	useEffect(() => {
 		if (selectedPoolManagerAddress === undefined) return
 		if (loadingPoolOracleManager) return
@@ -584,7 +589,10 @@ export function SecurityPoolWorkflowSection({
 	])
 	useEffect(() => {
 		const normalizedSelectedPoolAddress = normalizeAddress(selectedPool?.securityPoolAddress)
-		if (!isSelectedPoolForkWorkflowView(view) || !showSelectedPoolWorkflowDetails || normalizedSelectedPoolAddress === undefined) return
+		if (!isSelectedPoolForkWorkflowView(view) || !showSelectedPoolWorkflowDetails || normalizedSelectedPoolAddress === undefined) {
+			lastForkAuctionAutoLoadKey.current = undefined
+			return
+		}
 		if (forkAuction.loadingForkAuctionDetails) return
 		const shouldReloadForkAuction = shouldReloadSelectedPoolDetails({
 			currentDetailsAvailable: currentForkAuctionDetails !== undefined,
@@ -594,6 +602,9 @@ export function SecurityPoolWorkflowSection({
 			selectedPoolAddress: normalizedSelectedPoolAddress,
 		})
 		if (!shouldReloadForkAuction && sameAddress(loadedForkAuctionDetails?.securityPoolAddress, normalizedSelectedPoolAddress) && currentForkAuctionDetails !== undefined) return
+		const forkAuctionAutoLoadKey = `${normalizedSelectedPoolAddress}:${selectedPoolRefreshNonce}`
+		if (lastForkAuctionAutoLoadKey.current === forkAuctionAutoLoadKey) return
+		lastForkAuctionAutoLoadKey.current = forkAuctionAutoLoadKey
 		lastHandledForkAuctionRefreshNonceRef.current = selectedPoolRefreshNonce
 		void forkAuction.onLoadForkAuction(getAddress(normalizedSelectedPoolAddress))
 	}, [currentForkAuctionDetails, forkAuction.loadingForkAuctionDetails, forkAuction.onLoadForkAuction, loadedForkAuctionDetails?.securityPoolAddress, selectedPool?.securityPoolAddress, selectedPoolRefreshNonce, showSelectedPoolWorkflowDetails, view])
@@ -971,9 +982,11 @@ export function SecurityPoolWorkflowSection({
 										forkAuctionDetails={currentForkAuctionDetails}
 										lifecycleStateOverride={selectedPoolLifecycleState}
 										loadingReportingDetails={reporting.loadingReportingDetails}
+										onLoadReporting={reporting.onLoadReporting}
 										onReportingFormChange={reporting.onReportingFormChange}
 										previewPool={selectedPool}
 										reportingDetails={currentReportingDetails}
+										reportingError={reporting.reportingError}
 										reportingForm={reporting.reportingForm}
 										selectedStageView={forkWorkflowSelectionStage}
 										selectedPoolRefreshNonce={selectedPoolRefreshNonce}
@@ -987,7 +1000,7 @@ export function SecurityPoolWorkflowSection({
 
 								{view === 'staged-operations' && loadedSelectedPool !== undefined ? (
 									<SectionBlock density='compact' title={securityPoolCopy.stagedOperations} variant='plain'>
-										<ErrorNotice message={poolOracleManagerError} />
+										<ErrorNotice message={currentPoolOracleManagerError} />
 										<SectionBlock density='compact' variant='embedded'>
 											{stagedOperations.map(operation => (
 												<WarningSurface key={operation.operationId.toString()} as='article' className='warning-entity-card' surface='flat' variant='compact'>
@@ -1021,10 +1034,11 @@ export function SecurityPoolWorkflowSection({
 											</label>
 										)}
 										<div className='actions'>
-											<button className='secondary' onClick={() => onLoadPoolOracleManager(loadedSelectedPool.managerAddress)} disabled={loadingPoolOracleManager}>
+											<button className='secondary' onClick={() => onLoadPoolOracleManager(loadedSelectedPool.managerAddress)} disabled={loadingPoolOracleManager || (currentPoolOracleManagerDetails === undefined && currentPoolOracleManagerError === undefined)}>
 												{(() => {
+													if (currentPoolOracleManagerDetails === undefined && currentPoolOracleManagerError === undefined) return <LoadingText>{securityPoolCopy.loadingStagedOperations}</LoadingText>
+													if (currentPoolOracleManagerDetails === undefined) return securityPoolCopy.retryStagedOperations
 													if (loadingPoolOracleManager) return <LoadingText>{securityPoolCopy.refreshingOperations}</LoadingText>
-													if (currentPoolOracleManagerDetails === undefined) return securityPoolCopy.loadStagedOperations
 
 													return securityPoolCopy.refreshStagedOperations
 												})()}
@@ -1073,7 +1087,7 @@ export function SecurityPoolWorkflowSection({
 												</MetricField>
 											)}
 										</MetricGrid>
-										<ErrorNotice message={poolOracleManagerError} />
+										<ErrorNotice message={currentPoolOracleManagerError} />
 										<div className='actions'>
 											<button className='secondary' onClick={() => onLoadPoolOracleManager(loadedSelectedPool.managerAddress)} disabled={loadingPoolOracleManager}>
 												{loadingPoolOracleManager ? <LoadingText>{securityPoolCopy.refreshingOracle}</LoadingText> : securityPoolCopy.refreshOracle}
@@ -1171,6 +1185,7 @@ export function SecurityPoolWorkflowSection({
 				onLoadLiquidationFundingPreview={onLoadLiquidationFundingPreview}
 				onSelectedPoolViewChange={onSelectedPoolViewChange}
 				poolState={selectedPoolStateModel}
+				poolOracleManagerError={liquidationPoolOracleManagerError}
 				repPerEthPrice={repPerEthPrice}
 				repPerEthSource={repPerEthSource}
 				repPerEthSourceUrl={repPerEthSourceUrl}

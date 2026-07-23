@@ -135,7 +135,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		for (const label of ['Vaults', 'Shares', 'Reporting', 'Fork & Migration', 'Staged Operations', 'Open Oracle']) {
 			const button = documentQueries.getByRole('button', { name: label }) as HTMLButtonElement
 			expect(button.disabled).toBe(true)
-			expect(button.title).toBe('Load a pool before using pool actions.')
+			expect(button.title).toBe('Select a pool before using pool actions.')
 		}
 		expect(documentQueries.queryByRole('tab', { name: 'Migration' })).toBeNull()
 		expect(documentQueries.queryByRole('tab', { name: 'Truth Auction' })).toBeNull()

@@ -398,7 +398,7 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Reporting Open' })).not.toBeNull()
-		expect(document.body.textContent?.includes('Load reporting details to view the escalation state for this pool.')).toBe(true)
+		expect(document.body.textContent?.includes('Loading reporting details.')).toBe(true)
 	})
 
 	test('keeps reporting locked at the exact market end timestamp until the next second', async () => {

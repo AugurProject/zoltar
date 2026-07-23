@@ -34,7 +34,7 @@ describe('TruthAuctionBidsSection', () => {
 		const rendered = await renderIntoDocument(<TruthAuctionBidsSection aggregatedAuctionBidCountForLoadedTicks={0n} hasMoreAggregatedAuctionBids={false} loadedTickCount={0} loadingAggregatedAuctionBids={true} onLoadNextAuctionBidPage={() => undefined} renderPriceValue={renderPriceValue} rows={[]} />)
 		cleanupRendered = rendered.cleanup
 
-		expect(within(document.body).getByRole('heading', { name: 'Truth Auction Bids' })).not.toBeNull()
+		expect(within(document.body).getByRole('heading', { name: 'Current Bids' })).not.toBeNull()
 		expect(within(document.body).getByText(/Loading auction bids/)).not.toBeNull()
 
 		await rendered.unmount()
@@ -79,8 +79,58 @@ describe('TruthAuctionBidsSection', () => {
 		const bidHistory = within(document.body).getByRole('region', { name: 'Scrollable auction bid history' })
 		expect(bidHistory.className).toContain('truth-auction-bid-table-scroll')
 		expect(bidHistory.getAttribute('tabindex')).toBe('0')
-		fireEvent.click(within(document.body).getByRole('button', { name: 'Load More Truth Auction Bids' }))
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Show More Truth Auction Bids' }))
 		expect(loadMoreCalls).toBe(1)
+	})
+
+	test('shows bid-book errors with retry instead of an empty-auction message', async () => {
+		let retryCalls = 0
+		const rendered = await renderIntoDocument(
+			<TruthAuctionBidsSection
+				aggregatedAuctionBidCountForLoadedTicks={0n}
+				error='Failed to load truth auction bidbook'
+				hasLoadedData={false}
+				hasMoreAggregatedAuctionBids={false}
+				loadedTickCount={0}
+				loadingAggregatedAuctionBids={false}
+				onLoadNextAuctionBidPage={() => undefined}
+				onRetry={() => {
+					retryCalls += 1
+				}}
+				renderPriceValue={renderPriceValue}
+				rows={[]}
+			/>,
+		)
+		cleanupRendered = rendered.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Failed to load truth auction bidbook')).not.toBeNull()
+		expect(documentQueries.queryByText('No active prices are currently visible for this auction.')).toBeNull()
+		expect(documentQueries.queryByText('Visible Levels')).toBeNull()
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry current bids' }))
+		expect(retryCalls).toBe(1)
+
+		await rendered.unmount()
+		cleanupRendered = undefined
+		const retryingRendered = await renderIntoDocument(
+			<TruthAuctionBidsSection
+				aggregatedAuctionBidCountForLoadedTicks={0n}
+				error='Failed to load truth auction bidbook'
+				hasMoreAggregatedAuctionBids={false}
+				loadedTickCount={0}
+				loadingAggregatedAuctionBids={true}
+				onLoadNextAuctionBidPage={() => undefined}
+				onRetry={() => undefined}
+				renderPriceValue={renderPriceValue}
+				retrying={true}
+				rows={[]}
+			/>,
+		)
+		cleanupRendered = retryingRendered.cleanup
+
+		const retryingButton = within(document.body).getByRole('button', { name: 'Retry current bids' })
+		expect(retryingButton.hasAttribute('disabled')).toBe(true)
+		expect(retryingButton.textContent).toContain('Retrying auction bids…')
 	})
 })
 
@@ -146,6 +196,35 @@ describe('ViewerTruthAuctionBidsSection', () => {
 		expect(checkbox.disabled).toBe(false)
 		fireEvent.change(checkbox, { target: { checked: true } })
 		expect(selectionChanges).toEqual([{ bidKey: '11:1', checked: true }])
-		expect(within(document.body).getByRole('button', { name: 'Load More Of My Bids' })).not.toBeNull()
+		expect(within(document.body).getByRole('button', { name: 'Show More Of My Bids' })).not.toBeNull()
+	})
+
+	test('shows bid-book recovery instead of a false empty My Bids state', async () => {
+		let retryCalls = 0
+		const rendered = await renderIntoDocument(
+			<ViewerTruthAuctionBidsSection
+				accountAddress={walletAddress}
+				error='Failed to load truth auction bidbook'
+				hasLoadedData={false}
+				hasMoreViewerBids={true}
+				loadingTruthAuctionBook={false}
+				onLoadNextViewerBidPage={() => undefined}
+				onRetry={() => {
+					retryCalls += 1
+				}}
+				onSettlementBidSelectionChange={() => undefined}
+				renderPriceValue={renderPriceValue}
+				rows={[]}
+				showSettlementActionColumn={true}
+			/>,
+		)
+		cleanupRendered = rendered.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Failed to load truth auction bidbook')).not.toBeNull()
+		expect(documentQueries.queryByText('No bids from this wallet are indexed for the current auction.')).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Show More Of My Bids' })).toBeNull()
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry my bids' }))
+		expect(retryCalls).toBe(1)
 	})
 })

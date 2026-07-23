@@ -56,7 +56,8 @@ function getQuestionDraftStorage() {
 	if (typeof window === 'undefined') return undefined
 	try {
 		return window.sessionStorage
-	} catch {
+	} catch (error) {
+		if (!(error instanceof DOMException)) throw error
 		return undefined
 	}
 }
@@ -84,7 +85,8 @@ function readQuestionDraft(storageKey: string | undefined) {
 		if (storedValue === null || storedValue === undefined) return defaultState
 		const parsedValue: unknown = JSON.parse(storedValue)
 		return isMarketFormState(parsedValue) ? parsedValue : defaultState
-	} catch {
+	} catch (error) {
+		if (!(error instanceof SyntaxError)) throw error
 		return defaultState
 	}
 }
@@ -93,7 +95,8 @@ function writeQuestionDraft(storageKey: string | undefined, form: MarketFormStat
 	if (storageKey === undefined) return
 	try {
 		getQuestionDraftStorage()?.setItem(storageKey, JSON.stringify(form))
-	} catch {
+	} catch (error) {
+		if (!(error instanceof DOMException)) throw error
 		// Draft persistence is progressive enhancement; the form remains usable without storage.
 	}
 }
@@ -102,7 +105,8 @@ function clearQuestionDraft(storageKey: string | undefined) {
 	if (storageKey === undefined) return
 	try {
 		getQuestionDraftStorage()?.removeItem(storageKey)
-	} catch {
+	} catch (error) {
+		if (!(error instanceof DOMException)) throw error
 		// Draft persistence is progressive enhancement; the form remains usable without storage.
 	}
 }
