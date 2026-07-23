@@ -88,7 +88,7 @@ export function useSecurityPoolCreation({ accountAddress, deploymentStatuses, en
 
 	const loadMarketById = async (marketId: string, options?: { clearExisting?: boolean; isCurrent?: () => boolean }) => {
 		if (!hasDeployedStep(deploymentStatuses, 'zoltarQuestionData')) {
-			securityPoolError.value = 'Deploy ZoltarQuestionData before loading a market'
+			securityPoolError.value = 'Deploy ZoltarQuestionData before selecting a question'
 			return
 		}
 

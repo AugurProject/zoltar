@@ -55,7 +55,7 @@ export const initialEconomics = 'Initial Economics'
 export const initialReporter = 'Initial Reporter'
 export const lastReportOpportunity = 'Last Report Opportunity'
 export const reportLoadError = 'Failed to load Open Oracle reports.'
-export const reportLoadRequired = 'Load a report first.'
+export const reportLoadRequired = 'Select a report first.'
 export const escalationMultiplierHelpText = 'Dispute escalation multiplier.'
 export const formatNewAmountMustBeExactDetail = (tokenSymbol: string, amount: string) => `New ${tokenSymbol} amount must be exactly ${amount} for this dispute.`
 export const oracleBalances = 'Your Oracle Balances'

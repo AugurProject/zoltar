@@ -33,6 +33,7 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 	const poolOracleFeedback = useSignal<ActionFeedback<OpenOracleActionResult['action']> | undefined>(undefined)
 	const poolOracleManagerDetails = useSignal<OracleManagerDetails | undefined>(undefined)
 	const poolOracleManagerError = useSignal<string | undefined>(undefined)
+	const poolOracleManagerErrorAddress = useSignal<Address | undefined>(undefined)
 	const poolPriceOracleResult = useSignal<OpenOracleActionResult | undefined>(undefined)
 	const nextPoolOracleManagerLoad = useRequestGuard()
 	const getPendingTitle = (actionName: OpenOracleActionResult['action']) => {
@@ -54,6 +55,7 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 			isCurrent,
 			onStart: () => {
 				poolOracleManagerError.value = undefined
+				poolOracleManagerErrorAddress.value = undefined
 			},
 			load: async () => await loadOracleManagerDetails(createConnectedReadClient(), managerAddress),
 			onSuccess: details => {
@@ -61,6 +63,7 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 			},
 			onError: error => {
 				poolOracleManagerError.value = getErrorMessage(error, 'Failed to load price oracle details')
+				poolOracleManagerErrorAddress.value = managerAddress
 			},
 		})
 	}
@@ -93,6 +96,7 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 					},
 					setErrorMessage: message => {
 						poolOracleManagerError.value = message
+						poolOracleManagerErrorAddress.value = managerAddress
 					},
 				},
 				async walletAddress => {
@@ -159,6 +163,7 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 					},
 					setErrorMessage: message => {
 						poolOracleManagerError.value = message
+						poolOracleManagerErrorAddress.value = managerAddress
 					},
 				},
 				async walletAddress => await executeOracleManagerStagedOperation(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), managerAddress, operationId),
@@ -182,6 +187,7 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 		poolOracleFeedback: poolOracleFeedback.value,
 		poolOracleManagerDetails: poolOracleManagerDetails.value,
 		poolOracleManagerError: poolOracleManagerError.value,
+		poolOracleManagerErrorAddress: poolOracleManagerErrorAddress.value,
 		poolPriceOracleResult: poolPriceOracleResult.value,
 		requestPoolPrice,
 	}

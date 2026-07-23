@@ -51,6 +51,7 @@ type LiquidationModalProps = {
 	loadingLiquidationFundingPreview?: boolean | undefined
 	onLoadLiquidationFundingPreview?: ((managerAddress: Address) => void) | undefined
 	onLoadPoolOracleManager: (managerAddress: Address) => void
+	poolOracleManagerError?: string | undefined
 	onSelectedPoolViewChange: (view: string | undefined) => void
 	repPerEthPrice: bigint | undefined
 	repPerEthSource: RepPriceSource | undefined
@@ -176,6 +177,7 @@ export function LiquidationModal({
 	onLoadLiquidationFundingPreview = () => undefined,
 	onSelectedPoolViewChange,
 	poolState,
+	poolOracleManagerError = undefined,
 	repPerEthPrice,
 	repPerEthSource,
 	repPerEthSourceUrl,
@@ -203,9 +205,9 @@ export function LiquidationModal({
 	})
 	useEffect(() => {
 		if (!showLiquidationModal) return
-		if (liquidationManagerAddress === undefined || currentPoolOracleManagerDetails !== undefined || loadingPoolOracleManager) return
+		if (liquidationManagerAddress === undefined || currentPoolOracleManagerDetails !== undefined || loadingPoolOracleManager || poolOracleManagerError !== undefined) return
 		onLoadPoolOracleManager(liquidationManagerAddress)
-	}, [currentPoolOracleManagerDetails, liquidationManagerAddress, loadingPoolOracleManager, onLoadPoolOracleManager, showLiquidationModal])
+	}, [currentPoolOracleManagerDetails, liquidationManagerAddress, loadingPoolOracleManager, onLoadPoolOracleManager, poolOracleManagerError, showLiquidationModal])
 	useEffect(() => {
 		if (!showLiquidationModal || getLiquidationExecutionMode(currentPoolOracleManagerDetails) !== 'queue') return
 		if (liquidationManagerAddress === undefined || liquidationFundingPreview !== undefined || liquidationFundingPreviewError !== undefined || loadingLiquidationFundingPreview) return
@@ -285,7 +287,7 @@ export function LiquidationModal({
 		liquidationExecutionMode === 'queue' && liquidationTimeoutSeconds === undefined ? liquidationCopy.liquidationTimeoutMinimumReason : undefined,
 		liquidationExecutionMode === 'queue' && loadingLiquidationFundingPreview ? liquidationCopy.loadingQueueFunding : undefined,
 		liquidationExecutionMode === 'queue' && liquidationFundingPreviewError !== undefined ? liquidationFundingPreviewError : undefined,
-		liquidationExecutionMode === 'queue' && liquidationFundingPreview === undefined ? liquidationCopy.queueFundingRequired : undefined,
+		liquidationExecutionMode === 'queue' && liquidationFundingPreview === undefined ? liquidationCopy.loadingQueueFunding : undefined,
 		deterministicLiquidationReason,
 		directLiquidationReason,
 		queueLiquidationEthGuardMessage,
@@ -347,6 +349,14 @@ export function LiquidationModal({
 					queuedLiquidationStatus,
 					securityPoolOverviewResult,
 				})}
+				<ErrorNotice message={poolOracleManagerError} />
+				{poolOracleManagerError === undefined || liquidationManagerAddress === undefined ? undefined : (
+					<div className='actions'>
+						<button className='secondary' disabled={loadingPoolOracleManager} onClick={() => onLoadPoolOracleManager(liquidationManagerAddress)} type='button'>
+							{liquidationCopy.retryPriceStatus}
+						</button>
+					</div>
+				)}
 				<ErrorNotice message={securityPoolLiquidationError} />
 				<DataGrid className='modal-summary-grid' columns={2}>
 					<AddressInfo address={liquidationSecurityPoolAddress} label={liquidationCopy.securityPool} />

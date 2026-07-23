@@ -688,6 +688,13 @@ export function ReportingSection({
 			{forkTriggeredActions}
 
 			<ErrorNotice message={reportingError} />
+			{reportingError === undefined || showSecurityPoolAddressInput ? undefined : (
+				<div className='actions'>
+					<button className='secondary' disabled={loadingReportingDetails} onClick={onLoadReporting} type='button'>
+						{loadingReportingDetails ? <LoadingText>{reportingCopy.loadingEscalation}</LoadingText> : reportingCopy.retryReporting}
+					</button>
+				</div>
+			)}
 		</>
 	)
 	if (embedInCard) return sections

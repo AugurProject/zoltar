@@ -11,6 +11,33 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 	const { fireEvent, within, act, zeroAddress, SecurityPoolWorkflowSection, renderIntoDocument, createAccountState, createReportingProps, createSecurityVaultProps, createSecurityVaultDetails, createOracleManagerDetails, createMarketDetails, createSelectedPool, createSecurityPoolWorkflowProps } = fixture
 
 	describe('queueing and execution feedback', () => {
+		test('does not loop the automatic oracle-manager read after an error', async () => {
+			const loadPoolOracleManagerCalls: string[] = []
+			const selectedPoolAddress = zeroAddress
+			const managerAddress = '0x00000000000000000000000000000000000000aa'
+			const renderedComponent = await renderIntoDocument(
+				<SecurityPoolWorkflowSection
+					{...createSecurityPoolWorkflowProps({
+						onLoadPoolOracleManager: managerAddressInput => {
+							loadPoolOracleManagerCalls.push(managerAddressInput)
+						},
+						poolOracleManagerDetails: undefined,
+						poolOracleManagerError: 'Failed to load price oracle details. Reason: RPC unavailable',
+						poolOracleManagerErrorAddress: managerAddress,
+						securityPoolAddress: selectedPoolAddress,
+						securityPools: [createSelectedPool({ managerAddress, securityPoolAddress: selectedPoolAddress })],
+					})}
+					showHeader={false}
+				/>,
+			)
+			setCleanup(renderedComponent.cleanup)
+
+			await act(async () => {
+				await Promise.resolve()
+			})
+			expect(loadPoolOracleManagerCalls).toEqual([])
+		})
+
 		test('refreshes staged operations after queueing a vault withdrawal', async () => {
 			const loadPoolOracleManagerCalls: string[] = []
 			const selectedPoolAddress = zeroAddress

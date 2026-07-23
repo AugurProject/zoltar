@@ -40,7 +40,7 @@ export function formatOpenOracleSettleWriteErrorMessage(error: unknown, fallback
 	if (genericMessage === 'Action canceled in wallet.') return genericMessage
 	const detail = getErrorDetail(error, fallbackMessage)
 	const normalizedDetail = detail?.toLowerCase()
-	if (normalizedDetail === undefined) return 'Transaction failed while settling the report. Reload the report and try again.'
+	if (normalizedDetail === undefined) return 'Transaction failed while settling the report. Try again; the latest report state will be checked automatically.'
 	if (genericMessage === detail) return detail
 	if (normalizedDetail.includes('0x98bdb2e0') || normalizedDetail.includes('invalidgaslimit') || normalizedDetail.includes('invalid gas limit')) return 'This report requires a higher settlement gas limit because it executes a callback on settlement. Retry with the updated UI.'
 	if (normalizedDetail.includes('settletooearly') || normalizedDetail.includes('settlement')) return 'This report is not ready to settle.'
@@ -53,7 +53,7 @@ export function formatOpenOracleDisputeWriteErrorMessage(error: unknown, fallbac
 	if (genericMessage === 'Action canceled in wallet.') return genericMessage
 	const detail = getErrorDetail(error, fallbackMessage)
 	const normalizedDetail = detail?.toLowerCase()
-	if (normalizedDetail === undefined) return 'Transaction failed while disputing the report. Reload the report and try again.'
+	if (normalizedDetail === undefined) return 'Transaction failed while disputing the report. Try again; the latest report state will be checked automatically.'
 	if (genericMessage === detail) return detail
 	if (normalizedDetail.includes('disputetooearly') || normalizedDetail.includes('dispute too early')) return 'This report is not ready to dispute.'
 	if (normalizedDetail.includes('disputetoolate') || normalizedDetail.includes('dispute period expired')) return 'Dispute window closed. Settle Report instead.'
@@ -488,7 +488,7 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 	const token2Approval = deriveTokenApprovalRequirement(token2ContributionAmount, approvedToken2Amount)
 	let blockMessage: OpenOracleGateMessage | undefined
 	if (reportDetails === undefined) {
-		blockMessage = createVisibleGateMessage('Load a report first')
+		blockMessage = createVisibleGateMessage('Select a report first')
 	} else {
 		const disputeAvailability = getOpenOracleDisputeAvailability(reportDetails)
 		if (!disputeAvailability.canAct) {

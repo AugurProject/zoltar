@@ -103,19 +103,73 @@ export function useTruthAuctionBookData({ accountAddress, enteredBidTick, forkAu
 	})
 	const [aggregatedAuctionBids, setAggregatedAuctionBids] = useState<TruthAuctionBidView[]>([])
 	const [aggregatedAuctionBidCountForLoadedTicks, setAggregatedAuctionBidCountForLoadedTicks] = useState(0n)
-	const [loadingTruthAuctionBook, setLoadingTruthAuctionBook] = useState(false)
+	const [tickDataKey, setTickDataKey] = useState<string | undefined>(undefined)
+	const [viewerDataKey, setViewerDataKey] = useState<string | undefined>(undefined)
+	const [aggregatedDataKey, setAggregatedDataKey] = useState<string | undefined>(undefined)
+	const [loadingTruthAuctionLevels, setLoadingTruthAuctionLevels] = useState(false)
+	const [loadingViewerTruthAuctionBids, setLoadingViewerTruthAuctionBids] = useState(false)
 	const [loadingAggregatedAuctionBids, setLoadingAggregatedAuctionBids] = useState(false)
-	const [truthAuctionBookError, setTruthAuctionBookError] = useState<string | undefined>(undefined)
+	const [truthAuctionLevelsError, setTruthAuctionLevelsError] = useState<string | undefined>(undefined)
+	const [truthAuctionLevelsErrorKey, setTruthAuctionLevelsErrorKey] = useState<string | undefined>(undefined)
+	const [viewerTruthAuctionBidsError, setViewerTruthAuctionBidsError] = useState<string | undefined>(undefined)
+	const [viewerTruthAuctionBidsErrorKey, setViewerTruthAuctionBidsErrorKey] = useState<string | undefined>(undefined)
+	const [aggregatedAuctionBidsError, setAggregatedAuctionBidsError] = useState<string | undefined>(undefined)
+	const [aggregatedAuctionBidsErrorKey, setAggregatedAuctionBidsErrorKey] = useState<string | undefined>(undefined)
+	const [levelRetryRequestNonce, setLevelRetryRequestNonce] = useState(0)
+	const [aggregateRetryRequestNonce, setAggregateRetryRequestNonce] = useState(0)
+	const [viewerRetryRequestNonce, setViewerRetryRequestNonce] = useState(0)
+	const truthAuctionKey = truthAuctionAddress?.toLowerCase()
+	const viewerBookKey = truthAuctionKey === undefined ? undefined : `${truthAuctionKey}:${accountAddress?.toLowerCase() ?? 'no-account'}`
 	const isTruthAuctionBookVisible = shouldShowTruthAuctionVisualization && truthAuctionAddress !== undefined && truthAuctionAddress !== zeroAddress && (selectedStage === 'auction' || selectedStage === 'settlement')
-	const hasMoreTickSummaries = BigInt(truthAuctionBookData.tickSummaries.length) < truthAuctionBookData.tickCount
-	const hasMoreViewerBids = BigInt(truthAuctionBookData.viewerBids.length) < truthAuctionBookData.viewerBidCount
-	const hasMoreAggregatedAuctionBids = BigInt(aggregatedAuctionBids.length) < aggregatedAuctionBidCountForLoadedTicks
+	const scopedTruthAuctionBookData: TruthAuctionBookData = {
+		tickSummaries: tickDataKey === truthAuctionKey ? truthAuctionBookData.tickSummaries : [],
+		tickCount: tickDataKey === truthAuctionKey ? truthAuctionBookData.tickCount : 0n,
+		viewerBids: viewerDataKey === viewerBookKey ? truthAuctionBookData.viewerBids : [],
+		viewerBidCount: viewerDataKey === viewerBookKey ? truthAuctionBookData.viewerBidCount : 0n,
+	}
+	const scopedAggregatedAuctionBids = aggregatedDataKey === truthAuctionKey ? aggregatedAuctionBids : []
+	const scopedAggregatedAuctionBidCountForLoadedTicks = aggregatedDataKey === truthAuctionKey ? aggregatedAuctionBidCountForLoadedTicks : 0n
+	const hasLoadedTruthAuctionBook = isTruthAuctionBookVisible && tickDataKey === truthAuctionKey
+	const hasLoadedViewerTruthAuctionBids = isTruthAuctionBookVisible && viewerDataKey === viewerBookKey
+	const hasLoadedAggregatedAuctionBids = isTruthAuctionBookVisible && aggregatedDataKey === truthAuctionKey
+	const scopedTruthAuctionLevelsError = truthAuctionLevelsErrorKey === truthAuctionKey ? truthAuctionLevelsError : undefined
+	const scopedViewerTruthAuctionBidsError = viewerTruthAuctionBidsErrorKey === viewerBookKey ? viewerTruthAuctionBidsError : undefined
+	const scopedAggregatedAuctionBidsError = aggregatedAuctionBidsErrorKey === truthAuctionKey ? aggregatedAuctionBidsError : undefined
+	const truthAuctionBookError = scopedTruthAuctionLevelsError ?? scopedAggregatedAuctionBidsError
+	const isLoadingTruthAuctionBook = loadingTruthAuctionLevels || (isTruthAuctionBookVisible && !hasLoadedTruthAuctionBook && scopedTruthAuctionLevelsError === undefined)
+	const isLoadingViewerTruthAuctionBids = loadingViewerTruthAuctionBids || (isTruthAuctionBookVisible && accountAddress !== undefined && !hasLoadedViewerTruthAuctionBids && scopedViewerTruthAuctionBidsError === undefined)
+	const isLoadingAggregatedAuctionBids = loadingAggregatedAuctionBids || (isTruthAuctionBookVisible && hasLoadedTruthAuctionBook && !hasLoadedAggregatedAuctionBids && scopedAggregatedAuctionBidsError === undefined)
+	const hasMoreTickSummaries = BigInt(scopedTruthAuctionBookData.tickSummaries.length) < scopedTruthAuctionBookData.tickCount
+	const hasMoreViewerBids = BigInt(scopedTruthAuctionBookData.viewerBids.length) < scopedTruthAuctionBookData.viewerBidCount
+	const hasMoreAggregatedAuctionBids = BigInt(scopedAggregatedAuctionBids.length) < scopedAggregatedAuctionBidCountForLoadedTicks
 	const selectTruthAuctionTick = (tick: bigint) => {
 		setSelectedBookTick(currentTick => (currentTick === tick ? currentTick : tick))
+	}
+	const retryPublicTruthAuctionBook = () => {
+		if (scopedTruthAuctionLevelsError !== undefined) {
+			setLoadingTruthAuctionLevels(true)
+			setLevelRetryRequestNonce(currentNonce => currentNonce + 1)
+			return
+		}
+		setLoadingAggregatedAuctionBids(true)
+		setAggregateRetryRequestNonce(currentNonce => currentNonce + 1)
+	}
+	const retryViewerTruthAuctionBids = () => {
+		setLoadingViewerTruthAuctionBids(true)
+		setViewerRetryRequestNonce(currentNonce => currentNonce + 1)
 	}
 
 	useEffect(() => {
 		setSelectedBookTick(undefined)
+		setTruthAuctionLevelsError(undefined)
+		setTruthAuctionLevelsErrorKey(undefined)
+		setAggregatedAuctionBidsError(undefined)
+		setAggregatedAuctionBidsErrorKey(undefined)
+	}, [truthAuctionAddress])
+
+	useEffect(() => {
+		setViewerTruthAuctionBidsError(undefined)
+		setViewerTruthAuctionBidsErrorKey(undefined)
 	}, [accountAddress, truthAuctionAddress])
 
 	useEffect(() => {
@@ -126,29 +180,30 @@ export function useTruthAuctionBookData({ accountAddress, enteredBidTick, forkAu
 				viewerBids: [],
 				viewerBidCount: 0n,
 			})
+			setTickDataKey(undefined)
+			setViewerDataKey(undefined)
 			setSelectedBookTick(undefined)
-			setLoadingTruthAuctionBook(false)
-			setAggregatedAuctionBids([])
-			setAggregatedAuctionBidCountForLoadedTicks(0n)
-			setLoadingAggregatedAuctionBids(false)
-			setTruthAuctionBookError(undefined)
+			setLoadingTruthAuctionLevels(false)
+			setTruthAuctionLevelsError(undefined)
+			setTruthAuctionLevelsErrorKey(undefined)
 			return
 		}
 
 		const client = truthAuctionReadClient ?? createConnectedReadClient()
 		let cancelled = false
-		setLoadingTruthAuctionBook(true)
-		setTruthAuctionBookError(undefined)
-		void Promise.all([loadTruthAuctionActiveTickPages(client, truthAuctionAddress, loadedTickPageCount), accountAddress === undefined ? Promise.resolve({ bidCount: 0n, bids: [] }) : loadTruthAuctionBidderBidPages(client, truthAuctionAddress, accountAddress, loadedViewerBidPageCount)])
-			.then(([tickPageData, viewerBidData]) => {
+		setLoadingTruthAuctionLevels(true)
+		void loadTruthAuctionActiveTickPages(client, truthAuctionAddress, loadedTickPageCount)
+			.then(tickPageData => {
 				if (cancelled) return
+				setTruthAuctionLevelsError(undefined)
+				setTruthAuctionLevelsErrorKey(undefined)
 				const sortedTickSummaries = sortTruthAuctionTickSummariesDescending(tickPageData.tickSummaries)
-				setTruthAuctionBookData({
+				setTruthAuctionBookData(currentData => ({
+					...currentData,
 					tickSummaries: sortedTickSummaries,
 					tickCount: tickPageData.tickCount,
-					viewerBids: viewerBidData.bids,
-					viewerBidCount: viewerBidData.bidCount,
-				})
+				}))
+				setTickDataKey(truthAuctionKey)
 				setSelectedBookTick(currentSelection => {
 					if (currentSelection !== undefined && sortedTickSummaries.some(tickSummary => tickSummary.tick === currentSelection)) return currentSelection
 					if (enteredBidTick !== undefined && sortedTickSummaries.some(tickSummary => tickSummary.tick === enteredBidTick)) return enteredBidTick
@@ -158,29 +213,77 @@ export function useTruthAuctionBookData({ accountAddress, enteredBidTick, forkAu
 			})
 			.catch(error => {
 				if (cancelled) return
-				setTruthAuctionBookData({
-					tickSummaries: [],
-					tickCount: 0n,
-					viewerBids: [],
-					viewerBidCount: 0n,
-				})
-				setSelectedBookTick(undefined)
-				setTruthAuctionBookError(getErrorMessage(error, 'Failed to load truth auction bidbook'))
+				setTruthAuctionLevelsError(getErrorMessage(error, 'Failed to load truth auction price levels'))
+				setTruthAuctionLevelsErrorKey(truthAuctionKey)
 			})
 			.finally(() => {
 				if (cancelled) return
-				setLoadingTruthAuctionBook(false)
+				setLoadingTruthAuctionLevels(false)
 			})
 		return () => {
 			cancelled = true
 		}
-	}, [accountAddress, enteredBidTick, forkAuctionResultHash, isTruthAuctionBookVisible, loadedTickPageCount, loadedViewerBidPageCount, truthAuctionAddress, truthAuctionClearingTick, truthAuctionReadClient])
+	}, [enteredBidTick, forkAuctionResultHash, isTruthAuctionBookVisible, levelRetryRequestNonce, loadedTickPageCount, truthAuctionAddress, truthAuctionClearingTick, truthAuctionKey, truthAuctionReadClient])
 
 	useEffect(() => {
 		if (!isTruthAuctionBookVisible || truthAuctionAddress === undefined || truthAuctionAddress === zeroAddress) {
+			setViewerDataKey(undefined)
+			setLoadingViewerTruthAuctionBids(false)
+			setViewerTruthAuctionBidsError(undefined)
+			setViewerTruthAuctionBidsErrorKey(undefined)
+			return
+		}
+
+		if (accountAddress === undefined) {
+			setTruthAuctionBookData(currentData => ({
+				...currentData,
+				viewerBids: [],
+				viewerBidCount: 0n,
+			}))
+			setViewerDataKey(viewerBookKey)
+			setLoadingViewerTruthAuctionBids(false)
+			setViewerTruthAuctionBidsError(undefined)
+			setViewerTruthAuctionBidsErrorKey(undefined)
+			return
+		}
+
+		const client = truthAuctionReadClient ?? createConnectedReadClient()
+		let cancelled = false
+		setLoadingViewerTruthAuctionBids(true)
+		void loadTruthAuctionBidderBidPages(client, truthAuctionAddress, accountAddress, loadedViewerBidPageCount)
+			.then(viewerBidData => {
+				if (cancelled) return
+				setViewerTruthAuctionBidsError(undefined)
+				setViewerTruthAuctionBidsErrorKey(undefined)
+				setTruthAuctionBookData(currentData => ({
+					...currentData,
+					viewerBids: viewerBidData.bids,
+					viewerBidCount: viewerBidData.bidCount,
+				}))
+				setViewerDataKey(viewerBookKey)
+			})
+			.catch(error => {
+				if (cancelled) return
+				setViewerTruthAuctionBidsError(getErrorMessage(error, 'Failed to load your truth auction bids'))
+				setViewerTruthAuctionBidsErrorKey(viewerBookKey)
+			})
+			.finally(() => {
+				if (cancelled) return
+				setLoadingViewerTruthAuctionBids(false)
+			})
+		return () => {
+			cancelled = true
+		}
+	}, [accountAddress, forkAuctionResultHash, isTruthAuctionBookVisible, loadedViewerBidPageCount, truthAuctionAddress, truthAuctionReadClient, viewerBookKey, viewerRetryRequestNonce])
+
+	useEffect(() => {
+		if (!isTruthAuctionBookVisible || truthAuctionAddress === undefined || truthAuctionAddress === zeroAddress || tickDataKey !== truthAuctionKey) {
 			setAggregatedAuctionBids([])
 			setAggregatedAuctionBidCountForLoadedTicks(0n)
+			setAggregatedDataKey(undefined)
 			setLoadingAggregatedAuctionBids(false)
+			setAggregatedAuctionBidsError(undefined)
+			setAggregatedAuctionBidsErrorKey(undefined)
 			return
 		}
 
@@ -190,14 +293,16 @@ export function useTruthAuctionBookData({ accountAddress, enteredBidTick, forkAu
 		void loadAggregatedTruthAuctionBidPages(client, truthAuctionAddress, truthAuctionBookData.tickSummaries, loadedAuctionBidPageCount)
 			.then(({ bids, bidCountForLoadedTicks }) => {
 				if (cancelled) return
+				setAggregatedAuctionBidsError(undefined)
+				setAggregatedAuctionBidsErrorKey(undefined)
 				setAggregatedAuctionBids(bids)
 				setAggregatedAuctionBidCountForLoadedTicks(bidCountForLoadedTicks)
+				setAggregatedDataKey(truthAuctionKey)
 			})
 			.catch(error => {
 				if (cancelled) return
-				setAggregatedAuctionBids([])
-				setAggregatedAuctionBidCountForLoadedTicks(0n)
-				setTruthAuctionBookError(currentError => currentError ?? getErrorMessage(error, 'Failed to load truth auction bids across the visible price levels'))
+				setAggregatedAuctionBidsError(getErrorMessage(error, 'Failed to load truth auction bids across the visible price levels'))
+				setAggregatedAuctionBidsErrorKey(truthAuctionKey)
 			})
 			.finally(() => {
 				if (cancelled) return
@@ -206,22 +311,31 @@ export function useTruthAuctionBookData({ accountAddress, enteredBidTick, forkAu
 		return () => {
 			cancelled = true
 		}
-	}, [forkAuctionResultHash, isTruthAuctionBookVisible, loadedAuctionBidPageCount, truthAuctionAddress, truthAuctionBookData.tickSummaries, truthAuctionReadClient])
+	}, [aggregateRetryRequestNonce, isTruthAuctionBookVisible, loadedAuctionBidPageCount, tickDataKey, truthAuctionAddress, truthAuctionBookData.tickSummaries, truthAuctionKey, truthAuctionReadClient])
 
 	return {
-		aggregatedAuctionBidCountForLoadedTicks,
-		aggregatedAuctionBids,
+		aggregatedAuctionBidCountForLoadedTicks: scopedAggregatedAuctionBidCountForLoadedTicks,
+		aggregatedAuctionBids: scopedAggregatedAuctionBids,
 		hasMoreAggregatedAuctionBids,
 		hasMoreTickSummaries,
 		hasMoreViewerBids,
+		hasLoadedAggregatedAuctionBids,
+		hasLoadedTruthAuctionBook,
+		hasLoadedViewerTruthAuctionBids,
 		loadNextAuctionBidPage,
 		loadNextTickPage,
 		loadNextViewerBidPage,
-		loadingAggregatedAuctionBids,
-		loadingTruthAuctionBook,
+		loadingAggregatedAuctionBids: isLoadingAggregatedAuctionBids,
+		loadingTruthAuctionBook: isLoadingTruthAuctionBook,
+		loadingViewerTruthAuctionBids: isLoadingViewerTruthAuctionBids,
+		retryingPublicTruthAuctionBook: truthAuctionBookError !== undefined && (isLoadingTruthAuctionBook || isLoadingAggregatedAuctionBids),
+		retryingViewerTruthAuctionBids: scopedViewerTruthAuctionBidsError !== undefined && isLoadingViewerTruthAuctionBids,
+		retryPublicTruthAuctionBook,
+		retryViewerTruthAuctionBids,
 		selectTruthAuctionTick,
 		selectedBookTick,
-		truthAuctionBookData,
+		truthAuctionBookData: scopedTruthAuctionBookData,
 		truthAuctionBookError,
+		viewerTruthAuctionBidsError: scopedViewerTruthAuctionBidsError,
 	}
 }

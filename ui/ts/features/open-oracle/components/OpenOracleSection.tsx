@@ -433,7 +433,11 @@ function renderReportDetailsCard(
 	const showWithdrawableBalances = isConnected && (openOracleReportDetails.isDistributed || hasWithdrawableBalance || openOracleWithdrawableBalancesLoading || openOracleWithdrawableBalancesError !== undefined)
 	let withdrawableBalancesContent: ComponentChildren
 	if (openOracleWithdrawableBalances === undefined) {
-		withdrawableBalancesContent = openOracleWithdrawableBalancesLoading ? <p className='detail'>{openOracleCopy.loadingOracleBalances}</p> : undefined
+		withdrawableBalancesContent = openOracleWithdrawableBalancesLoading ? (
+			<p className='detail'>
+				<LoadingText>{openOracleCopy.loadingOracleBalances}</LoadingText>
+			</p>
+		) : undefined
 	} else {
 		withdrawableBalancesContent = <MetricGrid>{withdrawableBalanceItems.map(item => renderReportField(item.symbol, <CurrencyValue value={item.amount ?? 0n} suffix={item.symbol} units={item.units} copyable={false} />))}</MetricGrid>
 	}

@@ -878,7 +878,7 @@ export async function settleOracleReport<TReceipt extends Pick<TransactionReceip
 export async function disputeOracleReport(client: WriteClient, openOracleAddress: Address, reportId: bigint, tokenToSwap: Address, newAmount1: bigint, newAmount2: bigint, _amt2Expected: bigint, stateHash: Hex) {
 	const state = await loadOpenOracleEventState(client, openOracleAddress, reportId)
 	const currentStateHash = hashOpenOracleStatePreimage(state.latest)
-	if (currentStateHash.toLowerCase() !== stateHash.toLowerCase()) throw new Error('This report changed on-chain. Reload it before disputing.')
+	if (currentStateHash.toLowerCase() !== stateHash.toLowerCase()) throw new Error('This report changed on-chain while the dispute was being prepared. Retry to use the latest state.')
 	const hash = await writeContractAndWait(client, () => ({
 		address: openOracleAddress,
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,

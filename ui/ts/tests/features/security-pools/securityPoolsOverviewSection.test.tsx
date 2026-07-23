@@ -651,14 +651,15 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const hasLoadingOrLoadCopy = documentQueries.queryByText('Refreshing pools.') !== null || documentQueries.queryByText('Load security pools to check what is available in this universe.') !== null
-		expect(hasLoadingOrLoadCopy).toBe(true)
+		expect(documentQueries.queryByText('Refreshing pools.')).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'No security pools' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Create Security Pool' })).toBeNull()
 	})
 
 	test('offers an explicit retry action when the pool list fails to load', async () => {
 		const requestedPages: string[] = []
+		const retryPageLoad = createDeferred<void>()
+		let pageLoadCount = 0
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
@@ -666,6 +667,8 @@ describe('SecurityPoolsOverviewSection', () => {
 					loadingSecurityPoolPage: false,
 					onLoadSecurityPoolPage: (pageIndex, pageSize) => {
 						requestedPages.push(`${pageIndex}:${pageSize}`)
+						pageLoadCount += 1
+						return pageLoadCount === 1 ? undefined : retryPageLoad.promise
 					},
 					securityPoolOverviewError: 'Failed to load security pools.',
 					securityPoolPage: undefined,
@@ -675,13 +678,22 @@ describe('SecurityPoolsOverviewSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const retryButton = within(document.body).getByRole('button', { name: 'Retry Loading Pools' })
+		const documentQueries = within(document.body)
+		await waitFor(() => {
+			expect(documentQueries.getByRole('button', { name: 'Retry' })).not.toBeNull()
+		})
+		const retryButton = documentQueries.getByRole('button', { name: 'Retry' })
 		expect(within(document.body).queryByRole('button', { name: 'Load Security Pools' })).toBeNull()
 		await act(() => {
 			fireEvent.click(retryButton)
 		})
 
 		expect(requestedPages).toContain('0:6')
+		expect(documentQueries.getByRole('button', { name: 'Retrying security pools…' }).hasAttribute('disabled')).toBe(true)
+		retryPageLoad.resolve()
+		await act(async () => {
+			await retryPageLoad.promise
+		})
 	})
 
 	test('does not infer browse page count from selected-pool cache before the first pool page loads', async () => {
@@ -843,7 +855,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		})
 		await waitFor(() => {
 			expect(documentQueries.queryByText('Refreshing pools.')).toBeNull()
-			expect(documentQueries.getByRole('button', { name: 'Load Security Pools' })).not.toBeNull()
+			expect(documentQueries.getByRole('button', { name: 'Retry' })).not.toBeNull()
 		})
 	})
 

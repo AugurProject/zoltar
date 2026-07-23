@@ -41,7 +41,7 @@ describe('open oracle readiness actions', () => {
 		).toEqual([
 			{
 				actionLabel: 'Dispute & Swap',
-				blocker: 'Load a report first.',
+				blocker: 'Select a report first.',
 				description: 'Challenge the current report and provide the replacement swap amounts.',
 				key: 'dispute-report',
 				readiness: 'blocked',
@@ -49,7 +49,7 @@ describe('open oracle readiness actions', () => {
 			},
 			{
 				actionLabel: 'Settle Report',
-				blocker: 'Load a report first.',
+				blocker: 'Select a report first.',
 				key: 'settle-report',
 				readiness: 'blocked',
 				title: 'Settle Report',

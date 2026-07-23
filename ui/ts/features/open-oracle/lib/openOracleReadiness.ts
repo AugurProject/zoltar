@@ -2,7 +2,7 @@ import type { OpenOracleSelectedReportActionMode } from './openOracle.js'
 import type { ReadinessAction } from '../../types.js'
 
 export function getOpenOracleReadinessActions({ actionMode, disputeMessage, hasReport, settleMessage }: { actionMode: OpenOracleSelectedReportActionMode; disputeMessage: string | undefined; hasReport: boolean; settleMessage: string | undefined }): ReadinessAction[] {
-	const baseBlocker = !hasReport ? 'Load a report first.' : undefined
+	const baseBlocker = !hasReport ? 'Select a report first.' : undefined
 	const actions: ReadinessAction[] = []
 
 	if (actionMode === 'dispute') {

@@ -156,7 +156,7 @@ export function getDeterministicLiquidationFailureReason({
 }) {
 	if (liquidationAmount === undefined) return 'Enter a valid liquidation amount.'
 	if (liquidationAmount <= 0n) return 'Enter a liquidation amount greater than zero.'
-	if (targetVaultSummary === undefined) return 'Reload the target vault before executing liquidation.'
+	if (targetVaultSummary === undefined) return 'Target vault details are still loading.'
 	if (targetVaultSummary.securityBondAllowance === 0n) return 'This vault has no active security bond allowance to liquidate.'
 	if (repPerEthPrice !== undefined && securityMultiplier !== undefined && !isVaultLiquidatable(repPerEthPrice, targetVaultSummary.securityBondAllowance, targetVaultSummary.repDepositShare, securityMultiplier)) {
 		return 'This vault is not undercollateralized at the current Open Oracle price.'
@@ -213,7 +213,7 @@ export function getLiquidationFailureReason({
 	if (deterministicFailureReason !== undefined) return deterministicFailureReason
 	if (liquidationAmount === undefined) return 'Enter a valid liquidation amount.'
 	if (repPerEthPrice === undefined || securityMultiplier === undefined) return 'Refresh the Open Oracle before executing liquidation.'
-	if (targetVaultSummary === undefined) return 'Reload the target vault before executing liquidation.'
+	if (targetVaultSummary === undefined) return 'Target vault details are still loading.'
 
 	const simulation = simulateLiquidation({
 		callerVaultSummary,

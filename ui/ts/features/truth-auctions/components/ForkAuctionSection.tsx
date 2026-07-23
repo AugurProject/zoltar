@@ -14,6 +14,7 @@ import { ErrorNotice } from '../../../components/ErrorNotice.js'
 import { FormInput } from '../../../components/FormInput.js'
 import { ImportedForkSettlementSection } from '../../reporting/components/ImportedForkSettlementSection.js'
 import { LookupFieldRow } from '../../../components/LookupFieldRow.js'
+import { LoadingAwareText, LoadingText } from '../../../components/LoadingText.js'
 import { MetricGrid } from '../../../components/MetricGrid.js'
 import { MetricField } from '../../../components/MetricField.js'
 import { ReadOnlyDetailAccordion } from '../../../components/ReadOnlyDetailAccordion.js'
@@ -326,7 +327,7 @@ function getTruthAuctionBypassReason({ migratedRep, parentCollateralAmount, auct
 }
 
 function getFinalizeTruthAuctionGuardMessage({ currentTimestamp, truthAuction, truthAuctionEndsAt }: { currentTimestamp: bigint | undefined; truthAuction: TruthAuctionMetrics | undefined; truthAuctionEndsAt: bigint | undefined }) {
-	if (truthAuction === undefined) return forkAuctionCopy.truthAuctionLoadRequired
+	if (truthAuction === undefined) return forkAuctionCopy.loadingTruthAuction
 	if (truthAuction.finalized) return forkAuctionCopy.truthAuctionFinalizedReason
 	if (truthAuctionEndsAt === undefined) return forkAuctionCopy.auctionEndTimeUnavailable
 	if (currentTimestamp === undefined) return forkAuctionCopy.loadingCurrentChainTime
@@ -355,6 +356,7 @@ function getTruthAuctionStateBadge({
 		if (isStartTruthAuctionInProgress || (hasSelectedAuctionChildPool && truthAuctionStartedAt === 0n && startTruthAuctionCountdown !== undefined && startTruthAuctionCountdown > 0n)) {
 			return { label: commonCopy.pending, tone: 'pending' }
 		}
+		if (truthAuctionStartedAt > 0n) return { label: forkAuctionCopy.started, tone: 'pending' }
 		return { label: forkAuctionCopy.inactive, tone: 'muted' }
 	}
 	if (!truthAuction.finalized) {
@@ -394,20 +396,24 @@ export function ForkAuctionSection({
 	forkMigrationReadClient,
 	lifecycleStateOverride,
 	loadingReportingDetails = false,
+	loadingForkAuctionDetails,
 	onClaimAuctionProceeds,
 	onFinalizeTruthAuction,
 	onForkAuctionFormChange,
+	onLoadForkAuction,
 	onMigrateRepToZoltar,
 	onClaimParentEscalationDeposits,
 	onMigrateUnresolvedEscalation,
 	onMigrateVault,
 	onRefundLosingBids,
+	onLoadReporting,
 	onReportingFormChange,
 	onStartTruthAuction,
 	onSubmitBid,
 	onWithdrawForkedEscalation,
 	previewPool,
 	reportingDetails,
+	reportingError,
 	reportingForm,
 	selectedStageView,
 	selectedPoolRefreshNonce = 0,
@@ -456,7 +462,20 @@ export function ForkAuctionSection({
 	const selectedOutcomeMigrationChildPool = securityPoolAddress === undefined ? undefined : securityPools.find(pool => sameAddress(pool.parent, securityPoolAddress) && pool.questionOutcome === forkAuctionForm.selectedOutcome)
 	const selectedOutcomeMigrationChildVault = selectedOutcomeMigrationChildPool === undefined || accountState.address === undefined ? undefined : selectedOutcomeMigrationChildPool.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))
 	const fullTruthAuctionReadClient = isFullReadClient(truthAuctionReadClient) ? truthAuctionReadClient : undefined
-	const { loadingSelectedAuctionDetails, loadingSelectedOutcomeMigrationSeedStatus, selectedAuctionChildPool, selectedAuctionDetails, selectedAuctionError, selectedOutcomeMigrationSeedStatus, selectedOutcomeMigrationSeedStatusError } = useSelectedAuctionReadState({
+	const {
+		loadingSelectedAuctionChildPoolRecovery,
+		loadingSelectedOutcomeMigrationSeedStatus,
+		retryingSelectedAuctionDetails,
+		retrySelectedAuctionChildPoolRecovery,
+		retrySelectedAuctionDetails,
+		retrySelectedOutcomeMigrationSeedStatus,
+		selectedAuctionChildPool,
+		selectedAuctionChildPoolRecoveryError,
+		selectedAuctionDetails,
+		selectedAuctionError,
+		selectedOutcomeMigrationSeedStatus,
+		selectedOutcomeMigrationSeedStatusError,
+	} = useSelectedAuctionReadState({
 		accountAddress: accountState.address,
 		currentSelectedOutcomePool,
 		forkAuctionResultHash: forkAuctionResult?.hash,
@@ -507,6 +526,7 @@ export function ForkAuctionSection({
 		hasStartedTruthAuction,
 		reportingDetails,
 		securityPoolAddress,
+		startTruthAuctionSecurityPoolAddress: selectedAuctionPoolAddress,
 	})
 	const effectiveEscrowedRepInEscalationGame = (() => {
 		if (connectedWalletVaultSummary === undefined) return undefined
@@ -606,6 +626,7 @@ export function ForkAuctionSection({
 		return forkOnlyFallbackText
 	})()
 	const truthAuctionStatus = auctionTruthAuctionStatus
+	const isTruthAuctionDetailsLoading = hasSelectedAuctionChildPool && hasStartedTruthAuction && truthAuctionStatus === undefined && selectedAuctionContextError === undefined
 	const shouldShowTruthAuctionVisualization = truthAuctionStatus !== undefined && auctionTruthAuctionAddress !== undefined && auctionTruthAuctionAddress !== zeroAddress
 	const {
 		aggregatedAuctionBidCountForLoadedTicks,
@@ -613,15 +634,24 @@ export function ForkAuctionSection({
 		hasMoreAggregatedAuctionBids,
 		hasMoreTickSummaries,
 		hasMoreViewerBids,
+		hasLoadedAggregatedAuctionBids,
+		hasLoadedTruthAuctionBook,
+		hasLoadedViewerTruthAuctionBids,
 		loadNextAuctionBidPage,
 		loadNextTickPage,
 		loadNextViewerBidPage,
 		loadingAggregatedAuctionBids,
 		loadingTruthAuctionBook,
+		loadingViewerTruthAuctionBids,
+		retryingPublicTruthAuctionBook,
+		retryingViewerTruthAuctionBids,
+		retryPublicTruthAuctionBook,
+		retryViewerTruthAuctionBids,
 		selectTruthAuctionTick,
 		selectedBookTick,
 		truthAuctionBookData,
 		truthAuctionBookError,
+		viewerTruthAuctionBidsError,
 	} = useTruthAuctionBookData({
 		accountAddress: accountState.address,
 		enteredBidTick,
@@ -646,7 +676,7 @@ export function ForkAuctionSection({
 		isStartTruthAuctionInProgress,
 		startTruthAuctionCountdown,
 		truthAuction: truthAuctionStatus,
-		truthAuctionStartedAt: auctionHasStartedAtValue,
+		truthAuctionStartedAt: effectiveTruthAuctionStartedAt ?? 0n,
 	})
 	const startedDisplay = (() => {
 		if (hasStartedTruthAuction) {
@@ -785,14 +815,19 @@ export function ForkAuctionSection({
 			}),
 		universeHasForked: previewPool?.universeHasForked === true,
 	})
-	const truthAuctionBidGuardMessage = getTruthAuctionBidGuardMessage({
-		accountAddress: accountState.address,
-		currentTimestamp: effectiveCurrentTimestamp,
-		isMainnet,
-		submitBidAmountInput: forkAuctionForm.submitBidAmount,
-		truthAuction: truthAuctionStatus,
-		walletEthBalance: accountState.ethBalance,
-	})
+	const truthAuctionBidGuardMessage = (() => {
+		if (isTruthAuctionDetailsLoading) return undefined
+		if (!hasStartedTruthAuction) return forkAuctionCopy.truthAuctionNotStartedReason
+		if (selectedAuctionContextError !== undefined) return selectedAuctionContextError
+		return getTruthAuctionBidGuardMessage({
+			accountAddress: accountState.address,
+			currentTimestamp: effectiveCurrentTimestamp,
+			isMainnet,
+			submitBidAmountInput: forkAuctionForm.submitBidAmount,
+			truthAuction: truthAuctionStatus,
+			walletEthBalance: accountState.ethBalance,
+		})
+	})()
 	const startTruthAuctionGuardMessage = getStartTruthAuctionGuardMessage({
 		currentTimestamp: effectiveCurrentTimestamp,
 		migrationEndsAt: forkAuctionDetails?.migrationEndsAt,
@@ -845,7 +880,6 @@ export function ForkAuctionSection({
 	})
 	const bidPriceValidationMessage = getTruthAuctionBidPriceValidationMessage(forkAuctionForm.submitBidPrice)
 	const startTruthAuctionAvailabilityMessage = (() => {
-		if (hasStartedTruthAuction) return forkAuctionCopy.auctionStartedReason
 		if (isStartTruthAuctionInProgress) return forkAuctionCopy.startingTruthAuction
 		return startTruthAuctionGuardMessage
 	})()
@@ -1000,9 +1034,26 @@ export function ForkAuctionSection({
 	}
 	function renderSelectedOutcomeChildPoolNotice() {
 		if (selectedAuctionChildPool !== undefined) return undefined
+		const noticeContent = (() => {
+			if (loadingSelectedAuctionChildPoolRecovery)
+				return (
+					<p className='detail'>
+						<LoadingText>{forkAuctionCopy.formatLoadingOutcomePoolDetail(selectedOutcomeLabel)}</LoadingText>
+					</p>
+				)
+			if (selectedAuctionChildPoolRecoveryError !== undefined) return <ErrorNotice message={selectedAuctionChildPoolRecoveryError} />
+			return <p className='detail'>{forkAuctionCopy.formatMissingOutcomePoolDetail(selectedOutcomeLabel)}</p>
+		})()
 		return (
 			<div className='fork-workflow-outcome-notice'>
-				<p className='detail'>{forkAuctionCopy.formatMissingOutcomePoolDetail(selectedOutcomeLabel)}</p>
+				{noticeContent}
+				{selectedAuctionChildPoolRecoveryError === undefined ? undefined : (
+					<div className='actions'>
+						<button className='secondary' onClick={retrySelectedAuctionChildPoolRecovery} type='button'>
+							{forkAuctionCopy.retryChildUniverse}
+						</button>
+					</div>
+				)}
 			</div>
 		)
 	}
@@ -1055,7 +1106,8 @@ export function ForkAuctionSection({
 						forceEnabled: hasSelectedAuctionChildPool,
 						idleLabel: forkAuctionCopy.submitBid,
 						onClick: onSubmitBidForSelectedAuction,
-						pendingLabel: forkAuctionCopy.submittingBidTruncated,
+						pending: isTruthAuctionDetailsLoading || forkAuctionActiveAction === 'submitBid',
+						pendingLabel: isTruthAuctionDetailsLoading ? forkAuctionCopy.loadingTruthAuction : forkAuctionCopy.submittingBidTruncated,
 					})}
 				</div>
 			</div>
@@ -1177,12 +1229,6 @@ export function ForkAuctionSection({
 			</label>
 		</div>
 	)
-	const selectedAuctionDetailsNotice = (() => {
-		if (!hasSelectedAuctionChildPool || selectedStage === 'migration') return undefined
-		if (loadingSelectedAuctionDetails) return <p className='detail'>{forkAuctionCopy.formatLoadingChildAuctionDetails(selectedAuctionLabel)}</p>
-		if (selectedAuctionContextError === undefined) return undefined
-		return <p className='detail'>{selectedAuctionContextError}</p>
-	})()
 	const truthAuctionHero = (() => {
 		if (!shouldShowTruthAuctionVisualization || truthAuctionStatus === undefined) return undefined
 		return (
@@ -1272,26 +1318,52 @@ export function ForkAuctionSection({
 		return (
 			<TruthAuctionBidsSection
 				aggregatedAuctionBidCountForLoadedTicks={aggregatedAuctionBidCountForLoadedTicks}
+				error={truthAuctionBookError}
+				hasLoadedData={hasLoadedTruthAuctionBook && hasLoadedAggregatedAuctionBids}
 				hasMoreAggregatedAuctionBids={hasMoreAggregatedAuctionBids}
 				loadedTickCount={truthAuctionBookData.tickSummaries.length}
-				loadingAggregatedAuctionBids={loadingAggregatedAuctionBids}
+				loadingAggregatedAuctionBids={loadingTruthAuctionBook || loadingAggregatedAuctionBids}
 				onLoadNextAuctionBidPage={loadNextAuctionBidPage}
+				onRetry={retryPublicTruthAuctionBook}
 				renderPriceValue={renderTruthAuctionPriceValue}
+				retrying={retryingPublicTruthAuctionBook}
 				rows={auctionBidRows}
 			/>
 		)
 	})()
+	const auctionWideBidsStatusSection =
+		!isTruthAuctionDetailsLoading && selectedAuctionContextError === undefined && !retryingSelectedAuctionDetails ? undefined : (
+			<SectionBlock title={forkAuctionCopy.currentBids} variant='embedded'>
+				{isTruthAuctionDetailsLoading && !retryingSelectedAuctionDetails ? (
+					<p className='detail'>
+						<LoadingText>{forkAuctionCopy.loadingAuctionBids}</LoadingText>
+					</p>
+				) : undefined}
+				<ErrorNotice message={selectedAuctionContextError} />
+				{selectedAuctionContextError === undefined && !retryingSelectedAuctionDetails ? undefined : (
+					<div className='actions'>
+						<button className='secondary' disabled={retryingSelectedAuctionDetails} onClick={retrySelectedAuctionDetails} type='button'>
+							{retryingSelectedAuctionDetails ? <LoadingText>{forkAuctionCopy.retryingAuctionDetails}</LoadingText> : forkAuctionCopy.retryAuctionDetails}
+						</button>
+					</div>
+				)}
+			</SectionBlock>
+		)
 	const viewerTruthAuctionBidsSection = (() => {
 		if (!shouldShowTruthAuctionVisualization || truthAuctionStatus === undefined) return undefined
 
 		return (
 			<ViewerTruthAuctionBidsSection
 				accountAddress={accountState.address}
+				error={viewerTruthAuctionBidsError}
+				hasLoadedData={hasLoadedViewerTruthAuctionBids}
 				hasMoreViewerBids={hasMoreViewerBids}
-				loadingTruthAuctionBook={loadingTruthAuctionBook}
+				loadingTruthAuctionBook={loadingViewerTruthAuctionBids}
 				onLoadNextViewerBidPage={loadNextViewerBidPage}
+				onRetry={retryViewerTruthAuctionBids}
 				onSettlementBidSelectionChange={onSettlementBidSelectionChange}
 				renderPriceValue={renderTruthAuctionPriceValue}
+				retrying={retryingViewerTruthAuctionBids}
 				rows={viewerBidRows}
 				showSettlementActionColumn={showViewerSettlementActionColumn}
 			/>
@@ -1446,14 +1518,16 @@ export function ForkAuctionSection({
 								{hasUnresolvedMigrationState ? (
 									<SectionBlock density='compact' headingLevel={4} title={forkAuctionCopy.migrateUnresolvedEscalationLocks} variant='embedded'>
 										<p className='detail'>
-											{(() => {
-												if (isMigrationExpired) return forkAuctionCopy.unresolvedMigrationExpiredDetail
-												if (loadingReportingDetails) return forkAuctionCopy.walletUnresolvedDepositsLoading
-												if (activeReportingDetails === undefined) return forkAuctionCopy.unresolvedDepositDetailsUnavailable
-												if (hasStoredEscalationMigrationEntitlement) return forkAuctionCopy.capturedEntitlementDetail
-												if (!hasUnresolvedMigrationDeposits) return forkAuctionCopy.walletUnresolvedDepositsEmpty
-												return forkAuctionCopy.unresolvedEscalationMigrationWithVaultDetail
-											})()}
+											<LoadingAwareText>
+												{(() => {
+													if (isMigrationExpired) return forkAuctionCopy.unresolvedMigrationExpiredDetail
+													if (loadingReportingDetails) return forkAuctionCopy.walletUnresolvedDepositsLoading
+													if (activeReportingDetails === undefined) return forkAuctionCopy.unresolvedDepositDetailsUnavailable
+													if (hasStoredEscalationMigrationEntitlement) return forkAuctionCopy.capturedEntitlementDetail
+													if (!hasUnresolvedMigrationDeposits) return forkAuctionCopy.walletUnresolvedDepositsEmpty
+													return forkAuctionCopy.unresolvedEscalationMigrationWithVaultDetail
+												})()}
+											</LoadingAwareText>
 										</p>
 										{activeReportingDetails === undefined || hasStoredEscalationMigrationEntitlement
 											? undefined
@@ -1503,7 +1577,11 @@ export function ForkAuctionSection({
 									<SectionBlock density='compact' headingLevel={4} title={forkAuctionCopy.claimResolvedParentEscalationDeposits} variant='embedded'>
 										<p className='detail'>{forkAuctionCopy.resolvedParentDepositClaimDetail}</p>
 										{connectedWalletVaultSummary !== undefined && !hasWalletParentEscalationClaimBalance ? <p className='detail'>{forkAuctionCopy.parentEscalationClaimEmptyEscrowDetail}</p> : undefined}
-										{loadingReportingDetails ? <p className='detail'>{forkAuctionCopy.walletEscalationDepositsLoading}</p> : undefined}
+										{loadingReportingDetails ? (
+											<p className='detail'>
+												<LoadingText>{forkAuctionCopy.walletEscalationDepositsLoading}</LoadingText>
+											</p>
+										) : undefined}
 										{loadingReportingDetails || reportingDetails?.status === 'active' ? undefined : <p className='detail'>{forkAuctionCopy.escalationDepositDetailsUnavailable}</p>}
 										{showSelectedParentEscalationClaimDeposits && !hasSelectedParentEscalationClaimDeposits ? <p className='detail'>{forkAuctionCopy.formatNoClaimableParentEscalationDeposits(selectedOutcomeLabel)}</p> : undefined}
 										{showSelectedParentEscalationClaimDeposits && hasSelectedParentEscalationClaimDeposits ? (
@@ -1555,8 +1633,21 @@ export function ForkAuctionSection({
 								)}
 								<SectionBlock density='compact' headingLevel={4} title={forkAuctionCopy.migratePoolToUniverse} variant='embedded'>
 									<p className='detail'>{forkAuctionCopy.poolRepMigrationDetail}</p>
-									{loadingSelectedOutcomeMigrationSeedStatus ? <p className='detail'>{forkAuctionCopy.selectedChildPoolRepReadinessLoading}</p> : undefined}
-									{selectedOutcomeMigrationSeedStatusError === undefined || loadingSelectedOutcomeMigrationSeedStatus ? undefined : <p className='detail'>{selectedOutcomeMigrationSeedStatusError}</p>}
+									{loadingSelectedOutcomeMigrationSeedStatus ? (
+										<p className='detail'>
+											<LoadingText>{forkAuctionCopy.selectedChildPoolRepReadinessLoading}</LoadingText>
+										</p>
+									) : undefined}
+									{selectedOutcomeMigrationSeedStatusError === undefined || loadingSelectedOutcomeMigrationSeedStatus ? undefined : (
+										<>
+											<ErrorNotice message={selectedOutcomeMigrationSeedStatusError} />
+											<div className='actions'>
+												<button className='secondary' onClick={retrySelectedOutcomeMigrationSeedStatus} type='button'>
+													{forkAuctionCopy.retryPoolRepReadiness}
+												</button>
+											</div>
+										</>
+									)}
 									{loadingSelectedOutcomeMigrationSeedStatus || selectedOutcomeMigrationSeedStatusError !== undefined || selectedOutcomeMigrationSeedStatus === undefined || !selectedOutcomeMigrationSeedStatus.seeded ? undefined : (
 										<p className='detail'>{selectedOutcomeMigrationSeedStatus.childPoolRepBalance > 0n ? forkAuctionCopy.poolRepAlreadyMigratedDetail : forkAuctionCopy.poolRepStagedForVaultMigrationDetail}</p>
 									)}
@@ -1573,8 +1664,11 @@ export function ForkAuctionSection({
 								<SectionBlock density='compact' headingLevel={4} title={forkAuctionCopy.migrateVault} variant='embedded'>
 									<p className='detail'>{forkAuctionCopy.vaultMigrationDetail}</p>
 									{connectedWalletVaultSummary !== undefined && !hasWalletVaultMigrationBalance ? <p className='detail'>{forkAuctionCopy.poolMigrationCapacityEmpty}</p> : undefined}
-									{loadingSelectedOutcomeMigrationSeedStatus ? <p className='detail'>{forkAuctionCopy.selectedChildPoolRepReadinessLoading}</p> : undefined}
-									{selectedOutcomeMigrationSeedStatusError === undefined || loadingSelectedOutcomeMigrationSeedStatus ? undefined : <p className='detail'>{selectedOutcomeMigrationSeedStatusError}</p>}
+									{loadingSelectedOutcomeMigrationSeedStatus ? (
+										<p className='detail'>
+											<LoadingText>{forkAuctionCopy.selectedChildPoolRepReadinessLoading}</LoadingText>
+										</p>
+									) : undefined}
 									<div className='actions'>
 										{renderStageActionButton({
 											action: 'migrateVault',
@@ -1601,13 +1695,10 @@ export function ForkAuctionSection({
 							{selectedStageAheadMessage === undefined ? undefined : <p className='detail'>{selectedStageAheadMessage}</p>}
 							{auctionOutcomeSelector}
 							{renderSelectedOutcomeChildPoolNotice()}
-							{selectedAuctionDetailsNotice}
 							{truthAuctionEndedNotice}
 							{truthAuctionHero}
-							<ReadOnlyDetailAccordion title={forkAuctionCopy.marketDepthAndBidHistory}>
-								{truthAuctionMarketViewSection}
-								{auctionWideBidsSection}
-							</ReadOnlyDetailAccordion>
+							<ReadOnlyDetailAccordion title={forkAuctionCopy.marketDepth}>{truthAuctionMarketViewSection}</ReadOnlyDetailAccordion>
+							{auctionWideBidsSection}
 							{renderSubmitBidSection()}
 							{viewerTruthAuctionBidsSection}
 						</fieldset>
@@ -1617,29 +1708,31 @@ export function ForkAuctionSection({
 						{selectedStageAheadMessage === undefined ? undefined : <p className='detail'>{selectedStageAheadMessage}</p>}
 						{auctionOutcomeSelector}
 						{renderSelectedOutcomeChildPoolNotice()}
-						{selectedAuctionDetailsNotice}
 						{truthAuctionEndedNotice}
 						<SectionBlock badge={truthAuctionStateBadgeElement} title={forkAuctionCopy.truthAuctionStatus} variant='embedded'>
 							{renderWorkflowMetricGrid(auctionStatusMetrics)}
 						</SectionBlock>
 
-						<SectionBlock title={forkAuctionCopy.startTruthAuction} variant='embedded'>
-							<p className='detail'>{forkAuctionCopy.formatStartTruthAuctionDetail(AUCTIONED_BOND_ALLOWANCE_LABEL)}</p>
-							{startTruthAuctionReadyInText === undefined ? undefined : <p className='detail'>{startTruthAuctionReadyInText}</p>}
-							{truthAuctionBypassReason === undefined ? undefined : <p className='detail'>{truthAuctionBypassReason}</p>}
-							<div className='actions'>
-								{renderStageActionButton({
-									action: 'startTruthAuction',
-									availability: createActionAvailability(!hasSelectedAuctionChildPool ? forkAuctionCopy.formatMissingChildUniverseDetail(selectedAuctionLabel) : startTruthAuctionAvailabilityMessage),
-									forceEnabled: hasSelectedAuctionChildPool,
-									idleLabel: truthAuctionBypassReason === undefined ? forkAuctionCopy.startTruthAuction : forkAuctionCopy.bypassTruthAuction,
-									onClick: onStartTruthAuctionSubmit,
-									pendingLabel: truthAuctionBypassReason === undefined ? forkAuctionCopy.startingTruthAuction : forkAuctionCopy.bypassingAuctionTruncated,
-									tone: 'primary',
-								})}
-							</div>
-						</SectionBlock>
+						{hasStartedTruthAuction ? undefined : (
+							<SectionBlock title={forkAuctionCopy.startTruthAuction} variant='embedded'>
+								<p className='detail'>{forkAuctionCopy.formatStartTruthAuctionDetail(AUCTIONED_BOND_ALLOWANCE_LABEL)}</p>
+								{startTruthAuctionReadyInText === undefined ? undefined : <p className='detail'>{startTruthAuctionReadyInText}</p>}
+								{truthAuctionBypassReason === undefined ? undefined : <p className='detail'>{truthAuctionBypassReason}</p>}
+								<div className='actions'>
+									{renderStageActionButton({
+										action: 'startTruthAuction',
+										availability: createActionAvailability(!hasSelectedAuctionChildPool ? forkAuctionCopy.formatMissingChildUniverseDetail(selectedAuctionLabel) : startTruthAuctionAvailabilityMessage),
+										forceEnabled: hasSelectedAuctionChildPool,
+										idleLabel: truthAuctionBypassReason === undefined ? forkAuctionCopy.startTruthAuction : forkAuctionCopy.bypassTruthAuction,
+										onClick: onStartTruthAuctionSubmit,
+										pendingLabel: truthAuctionBypassReason === undefined ? forkAuctionCopy.startingTruthAuction : forkAuctionCopy.bypassingAuctionTruncated,
+										tone: 'primary',
+									})}
+								</div>
+							</SectionBlock>
+						)}
 
+						{auctionWideBidsStatusSection}
 						{renderSubmitBidSection()}
 					</fieldset>
 				)
@@ -1649,7 +1742,6 @@ export function ForkAuctionSection({
 					return (
 						<fieldset aria-labelledby='fork-workflow-stage-settlement' className='fork-stage-panel' disabled={disabled} id='fork-workflow-stage-panel-settlement' role='tabpanel'>
 							{selectedStageAheadMessage === undefined ? undefined : <p className='detail'>{selectedStageAheadMessage}</p>}
-							{selectedAuctionDetailsNotice}
 							{truthAuctionEndedNotice}
 							{truthAuctionHero}
 							{viewerTruthAuctionBidsSection}
@@ -1665,11 +1757,11 @@ export function ForkAuctionSection({
 				return (
 					<fieldset aria-labelledby='fork-workflow-stage-settlement' className='fork-stage-panel' disabled={disabled} id='fork-workflow-stage-panel-settlement' role='tabpanel'>
 						{selectedStageAheadMessage === undefined ? undefined : <p className='detail'>{selectedStageAheadMessage}</p>}
-						{selectedAuctionDetailsNotice}
 						{truthAuctionEndedNotice}
 						<SectionBlock badge={truthAuctionStateBadgeElement} title={forkAuctionCopy.settlementStatus} variant='embedded'>
 							{renderWorkflowMetricGrid(settlementStatusMetrics)}
 						</SectionBlock>
+						{auctionWideBidsStatusSection}
 						{truthAuctionSettlementSection}
 						{importedForkSettlementSection}
 						{renderChildSecurityPoolsSection({
@@ -1696,6 +1788,21 @@ export function ForkAuctionSection({
 			{hasLoadedPoolContext ? stagePanel : undefined}
 
 			<ErrorNotice message={forkAuctionError} />
+			{forkAuctionError === undefined || forkAuctionDetails !== undefined || securityPoolAddress === undefined ? undefined : (
+				<div className='actions'>
+					<button className='secondary' disabled={loadingForkAuctionDetails} onClick={() => onLoadForkAuction(securityPoolAddress)} type='button'>
+						{forkAuctionCopy.retryForkWorkflow}
+					</button>
+				</div>
+			)}
+			<ErrorNotice message={reportingError} />
+			{reportingError === undefined || onLoadReporting === undefined ? undefined : (
+				<div className='actions'>
+					<button className='secondary' disabled={loadingReportingDetails} onClick={onLoadReporting} type='button'>
+						{loadingReportingDetails ? <LoadingText>{forkAuctionCopy.loadingReportingDetails}</LoadingText> : forkAuctionCopy.retryReporting}
+					</button>
+				</div>
+			)}
 		</>
 	)
 	if (embedInCard) return content

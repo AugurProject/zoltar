@@ -34,13 +34,13 @@ export function getSimulationScenarioDescription(scenario: SimulationScenario) {
 		case 'baseline':
 			return 'Fresh walletless simulation with funded QA accounts and no app contracts deployed. Use it to test the Deploy flow from scratch.'
 		case 'deployed':
-			return 'App contracts are deployed, but no security pools or seeded markets are created. Use it to test setup flows from an empty deployment.'
+			return 'App contracts are deployed, but no security pools or questions are created. Use it to test setup flows from an empty deployment.'
 		case 'security-pool':
-			return 'One seeded market, one security pool, and one funded vault with an active security bond allowance. Use it to test pool actions and liquidation paths.'
+			return 'One seeded question, one security pool, and one funded vault with an active security bond allowance. Use it to test pool actions and liquidation paths.'
 		case 'securitypoolx2':
-			return 'Two seeded markets with two security pools and two funded vaults in each pool. Use it to test multi-pool selection and repeated pool actions.'
+			return 'Two seeded questions with two security pools and two funded vaults in each pool. Use it to test multi-pool selection and repeated pool actions.'
 		case 'securitypoolx2-auction':
-			return 'Two seeded markets with one own-escalation fork already triggered and one child truth auction seeded with ten bids. Use it to test the fork-auction bidbook and settlement actions.'
+			return 'Two seeded questions with one own-escalation fork already triggered and one child truth auction seeded with ten bids. Use it to test the fork-auction bidbook and settlement actions.'
 		default:
 			return assertNever(scenario)
 	}

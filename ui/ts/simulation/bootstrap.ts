@@ -735,7 +735,7 @@ async function seedSecurityPool({
 		deployerAccount: primaryVaultAccount,
 		questionTitle: poolSpec.questionTitle,
 	})
-	await reportStep(`Creating seeded market for ${poolSpec.poolLabel}`)
+	await reportStep(`Creating seeded question for ${poolSpec.poolLabel}`)
 	await reportStep(`Deploying seeded security pool for ${poolSpec.poolLabel}`)
 
 	for (const [index, vaultSpec] of poolSpec.vaults.entries()) {
@@ -917,7 +917,7 @@ async function seedSecurityPoolX2Scenario({
 			deployerAccount: primaryAccount,
 			questionTitle: seededPool.questionTitle,
 		})
-		await reportStep(`Creating seeded market for ${seededPool.poolLabel}`)
+		await reportStep(`Creating seeded question for ${seededPool.poolLabel}`)
 		await reportStep(`Deploying seeded security pool for ${seededPool.poolLabel}`)
 
 		for (const [index, vaultSpec] of seededPool.vaults.entries()) {

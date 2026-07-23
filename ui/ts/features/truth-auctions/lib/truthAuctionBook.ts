@@ -505,7 +505,7 @@ export function getTruthAuctionBidGuardMessage({
 }) {
 	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before submitting a truth auction bid.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
-	if (truthAuction === undefined) return 'Load the truth auction before bidding.'
+	if (truthAuction === undefined) return 'Loading truth auction.'
 	if (truthAuction.finalized) return 'Truth auction is already finalized.'
 	const auctionHasEndedByTimestamp = currentTimestamp !== undefined && truthAuction.auctionEndsAt !== undefined && currentTimestamp >= truthAuction.auctionEndsAt
 	if (auctionHasEndedByTimestamp || truthAuction.timeRemaining === 0n) return 'Truth auction has ended.'

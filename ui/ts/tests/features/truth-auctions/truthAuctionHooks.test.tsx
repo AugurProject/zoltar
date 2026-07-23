@@ -5,15 +5,18 @@ import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import type { Address } from '@zoltar/shared/ethereum'
 import { useTruthAuctionPaginationState } from '../../../features/truth-auctions/hooks/useTruthAuctionPaginationState.js'
+import { useTruthAuctionBookData } from '../../../features/truth-auctions/hooks/useTruthAuctionBookData.js'
 import { useTruthAuctionSettlementActionState } from '../../../features/truth-auctions/hooks/useTruthAuctionSettlementActionState.js'
 import type { TruthAuctionBidDisposition } from '../../../features/truth-auctions/lib/truthAuctionBook.js'
 import { getTruthAuctionSettlementBidKey, type TruthAuctionSettlementBidRow } from '../../../features/truth-auctions/lib/truthAuctionSettlement.js'
-import type { ForkAuctionActionResult, TruthAuctionBidView } from '../../../types/contracts.js'
+import type { ForkAuctionActionResult, ReadClient, TruthAuctionBidView } from '../../../types/contracts.js'
 import type { SettlementSelectedBid } from '../../../features/types.js'
 import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
+import { waitFor } from '../../testUtils/queries.js'
 
 const walletAddress: Address = '0x0000000000000000000000000000000000000001'
+const otherWalletAddress: Address = '0x0000000000000000000000000000000000000002'
 const poolAddress: Address = '0x0000000000000000000000000000000000000100'
 const truthAuctionAddress: Address = '0x0000000000000000000000000000000000000200'
 const otherTruthAuctionAddress: Address = '0x0000000000000000000000000000000000000201'
@@ -23,6 +26,8 @@ type PaginationState = ReturnType<typeof useTruthAuctionPaginationState>
 type PaginationProps = Parameters<typeof useTruthAuctionPaginationState>[0]
 type SettlementState = ReturnType<typeof useTruthAuctionSettlementActionState>
 type SettlementProps = Parameters<typeof useTruthAuctionSettlementActionState>[0]
+type BookState = ReturnType<typeof useTruthAuctionBookData>
+type BookProps = Parameters<typeof useTruthAuctionBookData>[0]
 
 const claimDisposition: TruthAuctionBidDisposition = {
 	canPrefillRefund: false,
@@ -79,6 +84,14 @@ function createForkAuctionResult(action: ForkAuctionActionResult['action'], hash
 		securityPoolAddress: poolAddress,
 		universeId: 1n,
 	}
+}
+
+function createDeferred<T>() {
+	let resolve: (value: T) => void = () => undefined
+	const promise = new Promise<T>(promiseResolve => {
+		resolve = promiseResolve
+	})
+	return { promise, resolve }
 }
 
 describe('truth auction hooks', () => {
@@ -138,6 +151,286 @@ describe('truth auction hooks', () => {
 		expect(requireHookState(hookState).loadedTickPageCount).toBe(1)
 		expect(requireHookState(hookState).loadedViewerBidPageCount).toBe(1)
 		expect(requireHookState(hookState).loadedAuctionBidPageCount).toBe(1)
+	})
+
+	test('hides bid-book data synchronously when the auction address changes', async () => {
+		let hookState: BookState | undefined
+		let setHarnessProps: HarnessSetter<BookProps> | undefined
+		const nextTickCount = createDeferred<bigint>()
+		const readClient: Pick<ReadClient, 'readContract'> = {
+			readContract: (async request => {
+				if (request.functionName === 'activeTickCount') {
+					if (request.address === otherTruthAuctionAddress) return await nextTickCount.promise
+					return 1n
+				}
+				if (request.functionName === 'getActiveTickPage') return [{ active: true, currentTotalEth: 2n, price: 3n, submissionCount: 0n, tick: 4n }]
+				if (request.functionName === 'getBidderBidCount') return 1n
+				if (request.functionName === 'getBidderBidPage') return [createBid({ bidIndex: 0n, tick: 4n })]
+				if (request.functionName === 'getBidCountAtTick') return 0n
+				if (request.functionName === 'getBidPageAtTick') return []
+				throw new Error(`Unexpected readContract call: ${String(request.functionName)}`)
+			}) as ReadClient['readContract'],
+		}
+		const initialProps: BookProps = {
+			accountAddress: walletAddress,
+			enteredBidTick: undefined,
+			forkAuctionResultHash: undefined,
+			selectedStage: 'auction',
+			shouldShowTruthAuctionVisualization: true,
+			truthAuctionAddress,
+			truthAuctionClearingTick: undefined,
+			truthAuctionReadClient: readClient,
+		}
+
+		function Harness() {
+			const [props, setProps] = useState(initialProps)
+			setHarnessProps = setProps
+			hookState = useTruthAuctionBookData(props)
+			return <div />
+		}
+
+		const rendered = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = rendered.cleanup
+		await waitFor(() => {
+			expect(requireHookState(hookState).truthAuctionBookData.tickSummaries).toHaveLength(1)
+			expect(requireHookState(hookState).truthAuctionBookData.viewerBids).toHaveLength(1)
+		})
+
+		await act(() => {
+			requireHarnessSetter(setHarnessProps)(currentProps => ({
+				...currentProps,
+				truthAuctionAddress: otherTruthAuctionAddress,
+			}))
+		})
+
+		expect(requireHookState(hookState).truthAuctionBookData.tickSummaries).toEqual([])
+		expect(requireHookState(hookState).truthAuctionBookData.viewerBids).toEqual([])
+		expect(requireHookState(hookState).aggregatedAuctionBids).toEqual([])
+		nextTickCount.resolve(0n)
+	})
+
+	test('isolates wallet bid errors from public auction levels', async () => {
+		let hookState: BookState | undefined
+		let activeTickCountCalls = 0
+		let bidderBidCountCalls = 0
+		const viewerRetryResult = createDeferred<bigint>()
+		const readClient: Pick<ReadClient, 'readContract'> = {
+			readContract: (async request => {
+				if (request.functionName === 'activeTickCount') {
+					activeTickCountCalls += 1
+					return 0n
+				}
+				if (request.functionName === 'getActiveTickPage') return []
+				if (request.functionName === 'getBidderBidCount') {
+					bidderBidCountCalls += 1
+					if (bidderBidCountCalls === 1) throw new Error('Wallet bid RPC unavailable')
+					return await viewerRetryResult.promise
+				}
+				if (request.functionName === 'getBidderBidPage') return []
+				throw new Error(`Unexpected readContract call: ${String(request.functionName)}`)
+			}) as ReadClient['readContract'],
+		}
+
+		function Harness() {
+			hookState = useTruthAuctionBookData({
+				accountAddress: walletAddress,
+				enteredBidTick: undefined,
+				forkAuctionResultHash: undefined,
+				selectedStage: 'auction',
+				shouldShowTruthAuctionVisualization: true,
+				truthAuctionAddress,
+				truthAuctionClearingTick: undefined,
+				truthAuctionReadClient: readClient,
+			})
+			return <div />
+		}
+
+		const rendered = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = rendered.cleanup
+		await waitFor(() => {
+			expect(requireHookState(hookState).viewerTruthAuctionBidsError).toBe('Failed to load your truth auction bids. Reason: Wallet bid RPC unavailable')
+		})
+		expect(requireHookState(hookState).truthAuctionBookError).toBeUndefined()
+		expect(requireHookState(hookState).hasLoadedTruthAuctionBook).toBe(true)
+		await act(() => {
+			requireHookState(hookState).retryViewerTruthAuctionBids()
+		})
+		await waitFor(() => {
+			expect(bidderBidCountCalls).toBe(2)
+		})
+		expect(activeTickCountCalls).toBe(1)
+		expect(requireHookState(hookState).loadingTruthAuctionBook).toBe(false)
+		expect(requireHookState(hookState).loadingViewerTruthAuctionBids).toBe(true)
+		expect(requireHookState(hookState).retryingViewerTruthAuctionBids).toBe(true)
+	})
+
+	test('isolates public bid aggregation errors from wallet bids', async () => {
+		let hookState: BookState | undefined
+		let activeTickCountCalls = 0
+		let bidCountAtTickCalls = 0
+		let bidderBidCountCalls = 0
+		const publicRetryResult = createDeferred<bigint>()
+		const readClient: Pick<ReadClient, 'readContract'> = {
+			readContract: (async request => {
+				if (request.functionName === 'activeTickCount') {
+					activeTickCountCalls += 1
+					return 1n
+				}
+				if (request.functionName === 'getActiveTickPage') return [{ active: true, currentTotalEth: 2n, price: 3n, submissionCount: 1n, tick: 4n }]
+				if (request.functionName === 'getBidderBidCount') {
+					bidderBidCountCalls += 1
+					return 0n
+				}
+				if (request.functionName === 'getBidderBidPage') return []
+				if (request.functionName === 'getBidCountAtTick') {
+					bidCountAtTickCalls += 1
+					if (bidCountAtTickCalls === 1) throw new Error('Public bids RPC unavailable')
+					return await publicRetryResult.promise
+				}
+				throw new Error(`Unexpected readContract call: ${String(request.functionName)}`)
+			}) as ReadClient['readContract'],
+		}
+
+		function Harness() {
+			hookState = useTruthAuctionBookData({
+				accountAddress: walletAddress,
+				enteredBidTick: undefined,
+				forkAuctionResultHash: undefined,
+				selectedStage: 'auction',
+				shouldShowTruthAuctionVisualization: true,
+				truthAuctionAddress,
+				truthAuctionClearingTick: undefined,
+				truthAuctionReadClient: readClient,
+			})
+			return <div />
+		}
+
+		const rendered = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = rendered.cleanup
+		await waitFor(() => {
+			expect(requireHookState(hookState).truthAuctionBookError).toBe('Failed to load truth auction bids across the visible price levels. Reason: Public bids RPC unavailable')
+		})
+		expect(requireHookState(hookState).viewerTruthAuctionBidsError).toBeUndefined()
+		expect(requireHookState(hookState).hasLoadedViewerTruthAuctionBids).toBe(true)
+		await act(() => {
+			requireHookState(hookState).retryPublicTruthAuctionBook()
+		})
+		await waitFor(() => {
+			expect(bidCountAtTickCalls).toBe(2)
+		})
+		expect(activeTickCountCalls).toBe(1)
+		expect(bidderBidCountCalls).toBe(1)
+		expect(requireHookState(hookState).loadingTruthAuctionBook).toBe(false)
+		expect(requireHookState(hookState).loadingAggregatedAuctionBids).toBe(true)
+		expect(requireHookState(hookState).loadingViewerTruthAuctionBids).toBe(false)
+		expect(requireHookState(hookState).retryingPublicTruthAuctionBook).toBe(true)
+	})
+
+	test('clears a public bid-book error after retry succeeds', async () => {
+		let hookState: BookState | undefined
+		let activeTickCountCalls = 0
+		const retryResult = createDeferred<bigint>()
+		const readClient: Pick<ReadClient, 'readContract'> = {
+			readContract: (async request => {
+				if (request.functionName === 'activeTickCount') {
+					activeTickCountCalls += 1
+					if (activeTickCountCalls === 1) throw new Error('RPC unavailable')
+					return await retryResult.promise
+				}
+				if (request.functionName === 'getActiveTickPage') return []
+				throw new Error(`Unexpected readContract call: ${String(request.functionName)}`)
+			}) as ReadClient['readContract'],
+		}
+
+		function Harness() {
+			hookState = useTruthAuctionBookData({
+				accountAddress: undefined,
+				enteredBidTick: undefined,
+				forkAuctionResultHash: undefined,
+				selectedStage: 'auction',
+				shouldShowTruthAuctionVisualization: true,
+				truthAuctionAddress,
+				truthAuctionClearingTick: undefined,
+				truthAuctionReadClient: readClient,
+			})
+			return <div />
+		}
+
+		const rendered = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = rendered.cleanup
+		await waitFor(() => {
+			expect(requireHookState(hookState).truthAuctionBookError).toBe('Failed to load truth auction price levels. Reason: RPC unavailable')
+		})
+		await act(() => {
+			requireHookState(hookState).retryPublicTruthAuctionBook()
+		})
+		await waitFor(() => {
+			expect(activeTickCountCalls).toBe(2)
+		})
+		await act(async () => {
+			retryResult.resolve(0n)
+			await retryResult.promise
+		})
+		await waitFor(() => {
+			expect(requireHookState(hookState).truthAuctionBookError).toBeUndefined()
+		})
+	})
+
+	test('preserves public recovery and hides the previous viewer error when the account changes', async () => {
+		let hookState: BookState | undefined
+		let setHarnessProps: HarnessSetter<BookProps> | undefined
+		let activeTickCountCalls = 0
+		const nextViewerResult = createDeferred<bigint>()
+		const readClient: Pick<ReadClient, 'readContract'> = {
+			readContract: (async request => {
+				if (request.functionName === 'activeTickCount') {
+					activeTickCountCalls += 1
+					throw new Error('Public RPC unavailable')
+				}
+				if (request.functionName === 'getBidderBidCount') {
+					if (request.args?.[0] === walletAddress) throw new Error('Old wallet RPC unavailable')
+					return await nextViewerResult.promise
+				}
+				if (request.functionName === 'getBidderBidPage') return []
+				throw new Error(`Unexpected readContract call: ${String(request.functionName)}`)
+			}) as ReadClient['readContract'],
+		}
+		const initialProps: BookProps = {
+			accountAddress: walletAddress,
+			enteredBidTick: undefined,
+			forkAuctionResultHash: undefined,
+			selectedStage: 'auction',
+			shouldShowTruthAuctionVisualization: true,
+			truthAuctionAddress,
+			truthAuctionClearingTick: undefined,
+			truthAuctionReadClient: readClient,
+		}
+
+		function Harness() {
+			const [props, setProps] = useState(initialProps)
+			setHarnessProps = setProps
+			hookState = useTruthAuctionBookData(props)
+			return <div />
+		}
+
+		const rendered = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = rendered.cleanup
+		await waitFor(() => {
+			expect(requireHookState(hookState).truthAuctionBookError).toBe('Failed to load truth auction price levels. Reason: Public RPC unavailable')
+			expect(requireHookState(hookState).viewerTruthAuctionBidsError).toBe('Failed to load your truth auction bids. Reason: Old wallet RPC unavailable')
+		})
+
+		await act(() => {
+			requireHarnessSetter(setHarnessProps)(currentProps => ({
+				...currentProps,
+				accountAddress: otherWalletAddress,
+			}))
+		})
+
+		expect(activeTickCountCalls).toBe(1)
+		expect(requireHookState(hookState).truthAuctionBookError).toBe('Failed to load truth auction price levels. Reason: Public RPC unavailable')
+		expect(requireHookState(hookState).viewerTruthAuctionBidsError).toBeUndefined()
+		expect(requireHookState(hookState).loadingViewerTruthAuctionBids).toBe(true)
 	})
 
 	test('routes refund-only settlement through refund action and reconciles the result', async () => {

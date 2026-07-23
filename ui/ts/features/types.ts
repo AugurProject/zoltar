@@ -292,6 +292,8 @@ export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
 	checkedSecurityPoolAddress: string | undefined
 	forkAuction: ForkAuctionRouteContentProps
 	loadingSecurityPools: boolean
+	onBrowsePools: () => void
+	onCreatePool: () => void
 	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => void
 	onReturnToCurrentUniverse?: () => void
 	onSwitchToPoolUniverse?: (universeId: bigint, securityPoolAddress: Address) => void
@@ -304,6 +306,7 @@ export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
 	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
 	poolOracleActiveAction: OpenOracleActionResult['action'] | undefined
 	poolOracleManagerError: string | undefined
+	poolOracleManagerErrorAddress: Address | undefined
 	poolPriceOracleResult: OpenOracleActionResult | undefined
 	universeForkTime?: bigint | undefined
 	selectedPoolView: string
@@ -515,9 +518,11 @@ export type ForkAuctionSectionProps = ForkAuctionRouteContentProps & {
 	forkMigrationReadClient?: Pick<ReadClient, 'readContract'> | ReadClient | undefined
 	lifecycleStateOverride?: SecurityPoolLifecycleState | undefined
 	loadingReportingDetails?: boolean
+	onLoadReporting?: (() => void) | undefined
 	onReportingFormChange?: ((update: Partial<ReportingFormState>) => void) | undefined
 	previewPool?: ListedSecurityPool | undefined
 	reportingDetails?: ReportingDetails | undefined
+	reportingError?: string | undefined
 	reportingForm?: ReportingFormState | undefined
 	securityPools?: ListedSecurityPool[] | undefined
 	selectedPoolRefreshNonce?: number | undefined

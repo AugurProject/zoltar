@@ -287,7 +287,7 @@ void describe('fork auction helpers', () => {
 				truthAuction: undefined,
 				walletEthBalance: 100n,
 			}),
-		).toBe('Load the truth auction before bidding.')
+		).toBe('Loading truth auction.')
 
 		expect(
 			getTruthAuctionBidGuardMessage({

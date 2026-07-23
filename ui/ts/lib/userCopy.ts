@@ -58,6 +58,7 @@ export function getPoolRegistryPresentation(
 				badgeLabel: commonCopy.loading,
 				badgeTone: 'pending',
 				detail: userMessagesCopy.refreshingPoolRegistryDetail,
+				detailIsLoading: true,
 			})
 		if (!input.hasLoaded)
 			return createPresentation('not_checked', {

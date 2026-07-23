@@ -222,7 +222,7 @@ void describe('trading helpers', () => {
 				totalRepDeposit: 0n,
 				totalSecurityBondAllowance: 10n,
 			}),
-		).toBe('Load a pool before minting.')
+		).toBe('Select a pool before minting.')
 
 		expect(
 			getTradingMintGuardMessage({
@@ -582,7 +582,7 @@ void describe('trading helpers', () => {
 				hasSelectedPool: false,
 				isMainnet: true,
 			}),
-		).toBe('Load a pool before redeeming shares.')
+		).toBe('Select a pool before redeeming shares.')
 
 		expect(
 			getTradingRedeemSharesGuardMessage({

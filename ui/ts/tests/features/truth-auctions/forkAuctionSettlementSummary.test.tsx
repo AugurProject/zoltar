@@ -216,11 +216,19 @@ function createTruthAuctionBookState(overrides: Partial<TruthAuctionBookHookStat
 		hasMoreAggregatedAuctionBids: false,
 		hasMoreTickSummaries: false,
 		hasMoreViewerBids: false,
+		hasLoadedAggregatedAuctionBids: false,
+		hasLoadedTruthAuctionBook: false,
+		hasLoadedViewerTruthAuctionBids: false,
 		loadNextAuctionBidPage: () => undefined,
 		loadNextTickPage: () => undefined,
 		loadNextViewerBidPage: () => undefined,
 		loadingAggregatedAuctionBids: false,
 		loadingTruthAuctionBook: false,
+		loadingViewerTruthAuctionBids: false,
+		retryingPublicTruthAuctionBook: false,
+		retryingViewerTruthAuctionBids: false,
+		retryPublicTruthAuctionBook: () => undefined,
+		retryViewerTruthAuctionBids: () => undefined,
 		selectTruthAuctionTick: () => undefined,
 		selectedBookTick: undefined,
 		truthAuctionBookData: {
@@ -230,6 +238,7 @@ function createTruthAuctionBookState(overrides: Partial<TruthAuctionBookHookStat
 			viewerBids: [],
 		},
 		truthAuctionBookError: undefined,
+		viewerTruthAuctionBidsError: undefined,
 		...overrides,
 	}
 }

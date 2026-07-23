@@ -236,7 +236,7 @@ export function App() {
 	const updateReportingForm = (update: Partial<ReportingFormState>) => {
 		setReportingForm(current => applyReportingFormUpdate(current, update))
 	}
-	const { executePendingPoolOperation, loadingPoolOracleManager, loadPoolOracleManager, poolOracleActiveAction, poolOracleManagerDetails, poolOracleManagerError, poolPriceOracleResult, requestPoolPrice } = usePriceOracleManager(walletScopedHookConfig)
+	const { executePendingPoolOperation, loadingPoolOracleManager, loadPoolOracleManager, poolOracleActiveAction, poolOracleManagerDetails, poolOracleManagerError, poolOracleManagerErrorAddress, poolPriceOracleResult, requestPoolPrice } = usePriceOracleManager(walletScopedHookConfig)
 	const {
 		checkedSecurityPoolAddress,
 		closeLiquidationModal,
@@ -563,6 +563,8 @@ export function App() {
 			activeUniverseId,
 			checkedSecurityPoolAddress,
 			closeLiquidationModal: () => closeLiquidationModal(),
+			onBrowsePools: () => setSecurityPoolsView('browse'),
+			onCreatePool: () => setSecurityPoolsView('create'),
 			forkAuction: {
 				accountState,
 				forkAuctionActiveAction,
@@ -633,6 +635,7 @@ export function App() {
 			poolOracleActiveAction,
 			poolOracleManagerDetails,
 			poolOracleManagerError,
+			poolOracleManagerErrorAddress,
 			poolPriceOracleResult,
 			selectedPoolRefreshNonce,
 			universeForkTime: zoltarUniverse?.forkTime,
@@ -767,7 +770,7 @@ export function App() {
 				value={activeSecurityPoolsView}
 				onChange={view => setSecurityPoolsView(view)}
 				options={[
-					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')), label: appCopy.browsePools, value: 'browse' },
+					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'browse')), label: commonCopy.browsePools, value: 'browse' },
 					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'create')), label: commonCopy.createPool, value: 'create' },
 					{ href: buildRouteHref(SECURITY_POOLS_ROUTE, writeSecurityPoolsViewQueryParam(getRouteHashSearch(), 'operate')), label: commonCopy.managePool, value: 'operate' },
 				]}

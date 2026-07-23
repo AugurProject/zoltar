@@ -53,4 +53,13 @@ describe('TimestampValue', () => {
 		expect(document.body.textContent?.includes(formatTimestamp(840n))).toBe(true)
 		expect(document.body.querySelector('.timestamp-value-relative')).toBeNull()
 	})
+
+	test('renders loading timestamps with an accessible spinner', async () => {
+		const renderedComponent = await renderIntoDocument(<TimestampValue loading timestamp={undefined} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const loadingStatus = document.body.querySelector('[role="status"].timestamp-value')
+		expect(loadingStatus?.textContent).toContain('Loading…')
+		expect(loadingStatus?.querySelector('.spinner')).not.toBeNull()
+	})
 })

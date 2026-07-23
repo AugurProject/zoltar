@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact'
-import { LoadingText } from './LoadingText.js'
+import { LoadingAwareText, LoadingText } from './LoadingText.js'
 import type { ActionAvailability } from '../types/components.js'
 
 type ActionLauncherButtonProps = {
@@ -26,7 +26,12 @@ export function ActionLauncherButton({ availability, className = '', describedBy
 			</button>
 			{(() => {
 				if (showDisabledReason && disabledReason === undefined) return undefined
-				if (showDisabledReason && isDisabled) return <p className='detail disabled-reason'>{disabledReason}</p>
+				if (showDisabledReason && isDisabled)
+					return (
+						<p className='detail disabled-reason'>
+							<LoadingAwareText>{disabledReason}</LoadingAwareText>
+						</p>
+					)
 
 				return undefined
 			})()}

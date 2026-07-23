@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/shared/ethereum'
+import { sameAddress } from '../../../lib/address.js'
 import type { ForkAuctionSectionProps } from '../../types.js'
 import type { ReportingOutcomeKey } from '../../../types/contracts.js'
 
@@ -17,10 +18,12 @@ type UseForkAuctionInteractionStateParameters = {
 	hasStartedTruthAuction: boolean
 	reportingDetails: ForkAuctionSectionProps['reportingDetails']
 	securityPoolAddress: Address | undefined
+	startTruthAuctionSecurityPoolAddress: Address | undefined
 }
 
-export function useForkAuctionInteractionState({ accountAddress, connectedWalletEscrowedRep, forkAuctionActiveAction, forkAuctionError, forkAuctionResult, hasStartedTruthAuction, reportingDetails, securityPoolAddress }: UseForkAuctionInteractionStateParameters) {
-	const [isStartTruthAuctionInProgressState, setIsStartTruthAuctionInProgressState] = useState(false)
+export function useForkAuctionInteractionState({ accountAddress, connectedWalletEscrowedRep, forkAuctionActiveAction, forkAuctionError, forkAuctionResult, hasStartedTruthAuction, reportingDetails, securityPoolAddress, startTruthAuctionSecurityPoolAddress }: UseForkAuctionInteractionStateParameters) {
+	const [pendingStartTruthAuctionSecurityPoolAddress, setPendingStartTruthAuctionSecurityPoolAddress] = useState<Address | undefined>(undefined)
+	const isStartTruthAuctionInProgressState = startTruthAuctionSecurityPoolAddress !== undefined && sameAddress(pendingStartTruthAuctionSecurityPoolAddress, startTruthAuctionSecurityPoolAddress)
 	const [isVaultMigrationPending, setIsVaultMigrationPending] = useState(false)
 	const [hasCompletedVaultMigration, setHasCompletedVaultMigration] = useState(false)
 	const [pendingParentEscalationClaimSelection, setPendingParentEscalationClaimSelection] = useState<PendingParentEscalationClaimSelection | undefined>(undefined)
@@ -72,13 +75,19 @@ export function useForkAuctionInteractionState({ accountAddress, connectedWallet
 	useEffect(() => {
 		if (!isStartTruthAuctionInProgressState) return
 		if (hasStartedTruthAuction) {
-			setIsStartTruthAuctionInProgressState(false)
+			setPendingStartTruthAuctionSecurityPoolAddress(undefined)
 			return
 		}
 		if (forkAuctionError !== undefined && forkAuctionActiveAction === undefined) {
-			setIsStartTruthAuctionInProgressState(false)
+			setPendingStartTruthAuctionSecurityPoolAddress(undefined)
 		}
-	}, [forkAuctionActiveAction, forkAuctionError, hasStartedTruthAuction, isStartTruthAuctionInProgressState, securityPoolAddress])
+	}, [forkAuctionActiveAction, forkAuctionError, hasStartedTruthAuction, isStartTruthAuctionInProgressState])
+
+	useEffect(() => {
+		if (forkAuctionResult?.action !== 'startTruthAuction') return
+		if (!sameAddress(forkAuctionResult.securityPoolAddress, pendingStartTruthAuctionSecurityPoolAddress)) return
+		setPendingStartTruthAuctionSecurityPoolAddress(undefined)
+	}, [forkAuctionResult, pendingStartTruthAuctionSecurityPoolAddress])
 
 	useEffect(() => {
 		if (!isVaultMigrationPending) return
@@ -100,14 +109,14 @@ export function useForkAuctionInteractionState({ accountAddress, connectedWallet
 
 	useEffect(() => {
 		if (!isStartTruthAuctionInProgressState) return
-		if (accountAddress === undefined || securityPoolAddress === undefined) {
-			setIsStartTruthAuctionInProgressState(false)
+		if (accountAddress === undefined || startTruthAuctionSecurityPoolAddress === undefined) {
+			setPendingStartTruthAuctionSecurityPoolAddress(undefined)
 		}
-	}, [accountAddress, isStartTruthAuctionInProgressState, securityPoolAddress])
+	}, [accountAddress, isStartTruthAuctionInProgressState, startTruthAuctionSecurityPoolAddress])
 
 	return {
 		beginStartTruthAuctionProgress: () => {
-			setIsStartTruthAuctionInProgressState(true)
+			setPendingStartTruthAuctionSecurityPoolAddress(startTruthAuctionSecurityPoolAddress)
 		},
 		beginVaultMigrationProgress: () => {
 			setIsVaultMigrationPending(true)
