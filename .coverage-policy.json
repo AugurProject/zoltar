@@ -1,0 +1,50 @@
+{
+	"version": 1,
+	"typescript": {
+		"ui": {
+			"minimumLines": 90.14,
+			"minimumFunctions": 86.95,
+			"allowedUnloadedFiles": ["ui/ts/app/App.tsx", "ui/ts/features/open-oracle/hooks/usePriceOracleManager.ts", "ui/ts/features/universes/hooks/useZoltarOperations.ts", "ui/ts/index.ts", "ui/ts/simulation/tevmEngine.ts", "ui/ts/simulation/tevmWorker.ts"]
+		},
+		"shared": {
+			"minimumLines": 76.88,
+			"minimumFunctions": 79.54,
+			"allowedUnloadedFiles": []
+		},
+		"tooling": {
+			"minimumLines": 51.21,
+			"minimumFunctions": 58.53,
+			"allowedUnloadedFiles": [
+				"scripts/check-agent-configs.mts",
+				"scripts/check-docs-content.mts",
+				"scripts/check-docs-examples.mts",
+				"scripts/check-docs-html.mts",
+				"scripts/check-docs-reference-values.mts",
+				"scripts/check-mainnet-deployment.mts",
+				"scripts/generate-contract-interaction-reference.mts",
+				"scripts/lint-no-bare-catch.mts",
+				"scripts/lint-no-direct-viem-imports.mts",
+				"scripts/lint-no-nested-solidity-ternaries.mts",
+				"scripts/lint-no-signal-wrapper-comparisons.mts",
+				"scripts/merge-test-timings.mts",
+				"scripts/run-ci-preflight.mts",
+				"scripts/run-tests.mts",
+				"scripts/run-typescript-coverage.mts",
+				"solidity/ts/gas-costs.ts",
+				"ui/build/production.mts",
+				"ui/build/tests.mts",
+				"ui/build/watch.mts",
+				"ui/build/workers.mts",
+				"ui/dev-server.ts",
+				"ui/ts/index.dev.ts",
+				"ui/ts/liveReload.ts"
+			]
+		}
+	},
+	"solidity": {
+		"minimumFirstPartyLines": 99.9
+	},
+	"changedLines": {
+		"minimum": 90
+	}
+}
