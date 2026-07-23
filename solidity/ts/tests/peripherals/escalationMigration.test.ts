@@ -1268,6 +1268,85 @@ describe('Peripherals: escalation migration', () => {
 		strictEqualTypeSafe(grandchildOutcomeState.currentCarryTotal, recursiveDeposit, 'the recursive continuation migration should preserve the carried unresolved total by snapshot')
 	})
 
+	test('an unrelated continuation with an inherited threshold tie can trigger its own fork without a synthetic deposit', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+
+		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveAndDepositRep(attackerClient, repDeposit, questionId)
+		const forkThreshold = await getZoltarForkThreshold(client, genesisUniverse)
+		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
+		await depositRep(attackerClient, securityPoolAddresses.securityPool, 2n * forkThreshold)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, forkThreshold)
+		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThreshold)
+
+		const unrelatedQuestionData = {
+			...questionData,
+			title: 'inherited threshold tie fork source question',
+		}
+		const unrelatedQuestionId = getQuestionId(unrelatedQuestionData, outcomes)
+		const forkInitiator = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		const forkInitiatorBalanceSlot = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [forkInitiator.account.address, 0n]))
+		await mockWindow.addStateOverrides({
+			[addressString(GENESIS_REPUTATION_TOKEN)]: {
+				stateDiff: {
+					[forkInitiatorBalanceSlot]: 2n * forkThreshold,
+				},
+			},
+		})
+		await createQuestion(forkInitiator, unrelatedQuestionData, outcomes)
+		await approveToken(forkInitiator, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(forkInitiator, genesisUniverse, unrelatedQuestionId)
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
+		await migrateVaultWithUnresolvedEscalation(attackerClient, securityPoolAddresses.securityPool, attackerClient.account.address, QuestionOutcome.Yes)
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+		await startTruthAuction(client, yesSecurityPool.securityPool)
+		if ((await getSystemState(client, yesSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
+			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+		}
+		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'the unrelated continuation should become operational before its own fork')
+
+		const childEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
+		strictEqualTypeSafe(
+			await client.readContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: childEscalationGame,
+				functionName: 'nonDecisionState',
+				args: [],
+			}),
+			2n,
+			'the child should identify the inherited threshold tie explicitly',
+		)
+		strictEqualTypeSafe(
+			await client.readContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: childEscalationGame,
+				functionName: 'nonDecisionTimestamp',
+				args: [],
+			}),
+			0n,
+			'the child should not fabricate a local non-decision timestamp',
+		)
+		strictEqualTypeSafe(
+			await client.readContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: childEscalationGame,
+				functionName: 'canTriggerOwnFork',
+				args: [],
+			}),
+			true,
+			'an inherited threshold tie without a fixed outcome should authorize the child fork',
+		)
+
+		await forkZoltarWithOwnEscalationGame(client, yesSecurityPool.securityPool)
+		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.PoolForked, 'the inherited tie should trigger the own-fork transition directly')
+	})
+
 	test('own-fork unresolved preparation on a continuation child includes inherited carried escrow', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)

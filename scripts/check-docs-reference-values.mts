@@ -16,6 +16,7 @@ const operatorReference = await readFile('docs/operator-reference.md', 'utf8')
 const contractInteractionReference = await readFile('docs/contract-interaction-reference.md', 'utf8')
 const contractReferenceGenerator = await readFile('scripts/generate-contract-interaction-reference.mts', 'utf8')
 const eventStream = await readFile('docs/event-stream.md', 'utf8')
+const protocolTerms = await readFile('docs/protocolTerms.js', 'utf8')
 const deploymentStatus = await readFile('docs/deployment-status.html', 'utf8')
 const escalationGame = await readFile('solidity/contracts/peripherals/EscalationGame.sol', 'utf8')
 const escalationGameCarry = await readFile('solidity/contracts/peripherals/EscalationGameCarry.sol', 'utf8')
@@ -58,7 +59,9 @@ assertSimpleByteRow('Deployed bytecode', formatNumber(bytecodeSnapshot.deployedB
 assertBudgetHeadroomRow('Project deployed-bytecode budget headroom', formatNumber(expectedProjectBudget - bytecodeSnapshot.deployedBytes), formatNumber(expectedProjectBudget))
 assertBudgetHeadroomRow('EIP-170 headroom', formatNumber(expectedEip170Budget - bytecodeSnapshot.deployedBytes), formatNumber(expectedEip170Budget))
 assertContinuationIdentifierExplanation()
+assertEscalationReplayIdentityDocs()
 assertAggregateEscalationContinuationDocs()
+assertNonDecisionLifecycleDocs()
 assertEventStreamSemantics()
 assertZoltarForkDepths()
 assertRecursiveForkGasStatusDocs()
@@ -75,6 +78,19 @@ function assertContinuationIdentifierExplanation(): void {
 	assert.ok(html.includes('consumedParentDepositIndexes'), 'docs/escalation-game-architecture.html must connect the continuation identifier to consumedParentDepositIndexes')
 	assert.ok(html.includes('LocalDepositAppended') && html.includes('CarryDepositConsumed') && html.includes('ClaimDeposit') && html.includes('exportUnresolvedDeposit'), 'docs/escalation-game-architecture.html must name the exact event and export surfaces that expose the continuation identifier')
 	assert.ok(!html.includes('CarriedDepositClaimed'), 'docs/escalation-game-architecture.html must not reference the removed CarriedDepositClaimed event')
+}
+
+function assertEscalationReplayIdentityDocs(): void {
+	const replayIdentityFunction = securityPoolForkerBase.match(/function _getEscalationDepositId\([^}]+?\n\t\}/s)?.[0]
+	assert.ok(replayIdentityFunction, 'SecurityPoolForkerBase.sol must define _getEscalationDepositId')
+	assert.match(replayIdentityFunction, /ISecurityPoolFactory factory = securityPool\.securityPoolFactory\(\);/)
+	assert.match(replayIdentityFunction, /bytes32 originId = factory\.getSecurityPoolOriginId\(securityPool\);/)
+	assert.match(replayIdentityFunction, /keccak256\(abi\.encode\(factory, originId, outcomeIndex, parentDepositIndex\)\)/)
+
+	const normalizedStatoblast = whitepaperStatoblast.replaceAll(/\s+/g, ' ')
+	const normalizedArchitecture = html.replaceAll(/\s+/g, ' ')
+	assert.ok(normalizedStatoblast.includes('keccak256(abi.encode(securityPoolFactory, originId, uint8(outcomeIndex), parentDepositIndex))'), 'Statoblast whitepaper must document the factory-scoped escalation replay identity encoded by SecurityPoolForkerBase.sol')
+	assert.match(normalizedArchitecture, /factory-scoped lineage id[\s\S]*href="statoblast-whitepaper\.html#migration">fork-migration specification<\/a> owns the exact construction/)
 }
 
 function assertAggregateEscalationContinuationDocs(): void {
@@ -114,6 +130,30 @@ function assertAggregateEscalationContinuationDocs(): void {
 	}
 }
 
+function assertNonDecisionLifecycleDocs(): void {
+	const enumBody = escalationGameTypes.match(/enum NonDecisionState\s*\{([^}]*)\}/s)?.[1]
+	assert.ok(enumBody, 'EscalationGameTypes.sol must define NonDecisionState')
+	const enumMembers = enumBody
+		.split(',')
+		.map(member => member.trim())
+		.filter(member => member.length > 0)
+	const normalizedOperatorReference = operatorReference.replaceAll(/\s+/g, ' ')
+	const normalizedStatoblast = whitepaperStatoblast.replaceAll(/\s+/g, ' ')
+	for (const enumMember of enumMembers) {
+		assert.ok(normalizedOperatorReference.includes(`nonDecisionState = ${enumMember}`), `Operator reference must define NonDecisionState.${enumMember}`)
+	}
+	assert.match(normalizedOperatorReference, /nonDecisionState = Local[\s\S]*closes further deposits[\s\S]*nonDecisionState = InheritedThresholdTie[\s\S]*closes further deposits/)
+	assert.ok(normalizedStatoblast.includes('Both explicit states close further deposits.'), 'Statoblast whitepaper must explain the shared deposit-closure rule')
+	assert.match(normalizedStatoblast, /This diagram shows a local threshold crossing, which opens the fork path/)
+	assert.match(normalizedStatoblast, /A local non-decision, or an inherited threshold tie without a fixed outcome/)
+	assert.match(normalizedStatoblast, /<span>Edge cases<\/span> <b\s*>Paused continuations can fork again once operational if they record a local non-decision or inherited a threshold tie without a fixed outcome\.<\/b\s*>/)
+	assert.match(
+		normalizedStatoblast,
+		/<td>Second fork<\/td> <td> This unrelated continuation has no fixed outcome and did not inherit a threshold tie\. When new activity records a local non-decision, <code>canTriggerOwnFork\(\)<\/code> becomes true\. <\/td> <td> The same predicate also accepts an inherited threshold tie without a fixed outcome\./,
+	)
+	assert.match(protocolTerms, /Whether it authorizes a fork depends on whether it arose locally or was inherited/)
+}
+
 function assertEventStreamSemantics(): void {
 	assert.match(priceCoordinator, /PRICE_PRECISION = 1e18/)
 	assert.match(securityPoolUtils, /PRICE_PRECISION = 1e18/)
@@ -133,6 +173,9 @@ function assertEventStreamSemantics(): void {
 		'preserve an immutable copy of the current roots, counts, peaks, and leaves under `escalationSnapshotId`',
 		'select that historical version by `snapshotId`',
 		'clone the frozen peaks and leaves into the child',
+		'`InheritedThresholdTie(sourceGame indexed)`',
+		'accept it only after a `ForkCarryCheckpoint` from the same child emitter',
+		"require its indexed `sourceGame` to equal that checkpoint's source",
 		'require `ids.length == values.length`',
 		'apply each `(ids[i], values[i])` pair in array order',
 		'Array-taking protocol calls expand into one cause event per affected item',
@@ -416,7 +459,8 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /performWithdrawRep\(vault, repAmount\)[\s\S]*operational pool in an unforked universe[\s\S]*`isEscalationResolved\(\)` is false/)
 	assert.match(whitepaperStatoblast, /cashToShares[\s\S]*Exchange rate undefined/)
 	assert.match(initiateSecurityPoolForkRow, /if an escalation game exists, it reports the supplied pool from `securityPool\(\)` when validated and the universe fork occurred before that game settled/)
-	assert.match(ownEscalationForkRow, /escalation game reports the supplied pool from `securityPool\(\)` when validated and reached non-decision/)
+	assert.match(ownEscalationForkRow, /escalation game reports the supplied pool from `securityPool\(\)` when validated and either recorded a local non-decision or inherited a threshold tie without a fixed outcome/)
+	assert.match(contractInteractionReference, /claimForkedEscalationDeposits\(\.\.\.\)[\s\S]*parent game still satisfies `canTriggerOwnFork\(\)` by having either a local non-decision or an inherited threshold tie without a fixed outcome/)
 	assert.match(contractInteractionReference, /withdrawDeposit\(uint256 depositIndex, outcome\)[\s\S]*`CarryDepositConsumed` and `VaultEscrowUpdated`[\s\S]*for a winner, `ClaimDeposit`/)
 	assert.match(contractInteractionReference, /`EscalationRepDrainedAtFork` when unresolved escalation exists/)
 	assert.match(contractInteractionReference, /Initially authorized `SecurityPoolFactory` for an origin pool; an authorized parent `SecurityPool` for a child pool/)

@@ -1,4 +1,4 @@
-import { beforeEach, describe, test } from 'bun:test'
+import { beforeEach, describe, expect, test } from 'bun:test'
 import { decodeEventLog, zeroAddress, type Abi, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { peripherals_EscalationGame_EscalationGame, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken, Zoltar_Zoltar } from '../../types/contractArtifact'
 import { getMigrationRepBalance, getUniverseData, getUniverseTheoreticalSupply } from '../../testSupport/simulator/utils/contracts/zoltar'
@@ -622,6 +622,85 @@ describe('event-only replay', () => {
 		if (replayed.escalationCarryRoots.get(grandchildGame)?.[1] !== consumedChildRoot) throw new Error('recursive carry root mismatch')
 		if (replayed.escalationCarryPeaks.get(grandchildGame)?.[1]?.[1] !== consumedChildRoot) throw new Error('recursive carry peak mismatch')
 		if (hashParent(parentLeaf, childLeaf) === consumedChildRoot) throw new Error('test setup did not distinguish live and consumed child roots')
+	})
+
+	test('explicit local and inherited non-decision states replay independently from timestamps', () => {
+		const localGame = '0x1111111111111111111111111111111111111111'
+		const continuationGame = '0x2222222222222222222222222222222222222222'
+		const zeroHash = `0x${'0'.repeat(64)}` as Hex
+		const logs = [
+			createReplayLog({ emitter: localGame, eventName: 'GameStarted', logIndex: 0, args: { activationTime: 1n, startBond: 1n, nonDecisionThreshold: 100n } }),
+			createReplayLog({ emitter: localGame, eventName: 'NonDecisionReached', logIndex: 1, args: { nonDecisionTimestamp: 20n } }),
+			createReplayLog({ emitter: continuationGame, eventName: 'GameContinuedFromFork', logIndex: 2, args: { startBond: 1n, nonDecisionThreshold: 100n, elapsedAtFork: 5n } }),
+			createReplayLog({
+				emitter: continuationGame,
+				eventName: 'ForkCarryCheckpoint',
+				logIndex: 3,
+				args: {
+					sourceGame: localGame,
+					snapshotId: zeroHash,
+					carryRoots: [zeroHash, zeroHash, zeroHash],
+					nullifierRoots: [zeroHash, zeroHash, zeroHash],
+					leafCounts: [0n, 0n, 0n],
+					unresolvedTotals: [0n, 0n, 0n],
+					resolutionBalances: [100n, 100n, 0n],
+				},
+			}),
+			createReplayLog({ emitter: continuationGame, eventName: 'InheritedThresholdTie', logIndex: 4, args: { sourceGame: localGame } }),
+		]
+
+		const replayed = replayZoltarEvents(logs)
+		const localLifecycle = replayed.escalationLifecycles.get(localGame)
+		const continuationLifecycle = replayed.escalationLifecycles.get(continuationGame)
+		if (localLifecycle?.nonDecisionState !== 'local' || localLifecycle.nonDecisionTimestamp !== 20n) {
+			throw new Error('local non-decision lifecycle mismatch')
+		}
+		if (continuationLifecycle?.nonDecisionState !== 'inheritedThresholdTie' || continuationLifecycle.nonDecisionTimestamp !== undefined) {
+			throw new Error('inherited threshold tie should replay without a local timestamp')
+		}
+		if (continuationLifecycle.inheritedThresholdTieSourceGame !== localGame) throw new Error('inherited threshold tie source game mismatch')
+	})
+
+	test('inherited threshold tie replay requires a matching preceding fork carry checkpoint', () => {
+		const sourceGame = '0x1111111111111111111111111111111111111111'
+		const otherGame = '0x2222222222222222222222222222222222222222'
+		const continuationGame = '0x3333333333333333333333333333333333333333'
+		const zeroHash = `0x${'0'.repeat(64)}` as Hex
+		const continued = createReplayLog({
+			emitter: continuationGame,
+			eventName: 'GameContinuedFromFork',
+			logIndex: 1,
+			args: { startBond: 1n, nonDecisionThreshold: 100n, elapsedAtFork: 5n },
+		})
+		const inheritedTie = createReplayLog({
+			emitter: continuationGame,
+			eventName: 'InheritedThresholdTie',
+			logIndex: 3,
+			args: { sourceGame },
+		})
+
+		expect(() => replayZoltarEvents([continued, inheritedTie])).toThrow('inherited threshold tie requires a preceding fork carry checkpoint')
+
+		const checkpointLogs = [
+			createReplayLog({ emitter: otherGame, eventName: 'GameStarted', logIndex: 0, args: { activationTime: 1n, startBond: 1n, nonDecisionThreshold: 100n } }),
+			continued,
+			createReplayLog({
+				emitter: continuationGame,
+				eventName: 'ForkCarryCheckpoint',
+				logIndex: 2,
+				args: {
+					sourceGame: otherGame,
+					snapshotId: zeroHash,
+					carryRoots: [zeroHash, zeroHash, zeroHash],
+					nullifierRoots: [zeroHash, zeroHash, zeroHash],
+					leafCounts: [0n, 0n, 0n],
+					unresolvedTotals: [0n, 0n, 0n],
+					resolutionBalances: [100n, 100n, 0n],
+				},
+			}),
+			inheritedTie,
+		]
+		expect(() => replayZoltarEvents(checkpointLogs)).toThrow('inherited threshold tie source game does not match its fork carry checkpoint')
 	})
 
 	test('late children inherit the immutable fork-time carry snapshot after source consumption', () => {

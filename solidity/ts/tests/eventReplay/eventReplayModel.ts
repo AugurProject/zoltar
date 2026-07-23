@@ -178,6 +178,9 @@ export type EscalationLifecycleReplay = {
 	activationTime?: bigint
 	startBond?: bigint
 	nonDecisionThreshold?: bigint
+	nonDecisionState?: 'none' | 'local' | 'inheritedThresholdTie'
+	forkCarrySourceGame?: Address
+	inheritedThresholdTieSourceGame?: Address
 	forkContinuation?: boolean
 	elapsedAtFork?: bigint
 	resumedAt?: bigint
@@ -942,6 +945,7 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 			activationTime: requireBigInt(log.args, 'activationTime'),
 			startBond: requireBigInt(log.args, 'startBond'),
 			nonDecisionThreshold: requireBigInt(log.args, 'nonDecisionThreshold'),
+			nonDecisionState: 'none',
 			forkContinuation: false,
 		})
 		const emptyNullifierRoot = getEmptyNullifierRoot()
@@ -958,6 +962,7 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 		state.escalationLifecycles.set(log.emitter, {
 			startBond: requireBigInt(log.args, 'startBond'),
 			nonDecisionThreshold: requireBigInt(log.args, 'nonDecisionThreshold'),
+			nonDecisionState: 'none',
 			elapsedAtFork: requireBigInt(log.args, 'elapsedAtFork'),
 			forkContinuation: true,
 		})
@@ -971,7 +976,18 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 	}
 	if (log.eventName === 'NonDecisionReached') {
 		const lifecycle = state.escalationLifecycles.get(log.emitter) ?? {}
+		lifecycle.nonDecisionState = 'local'
 		lifecycle.nonDecisionTimestamp = requireBigInt(log.args, 'nonDecisionTimestamp')
+		state.escalationLifecycles.set(log.emitter, lifecycle)
+		return
+	}
+	if (log.eventName === 'InheritedThresholdTie') {
+		const lifecycle = state.escalationLifecycles.get(log.emitter) ?? {}
+		const sourceGame = requireAddress(log.args, 'sourceGame')
+		if (lifecycle.forkCarrySourceGame === undefined) throw new Error('inherited threshold tie requires a preceding fork carry checkpoint')
+		if (lifecycle.forkCarrySourceGame !== sourceGame) throw new Error('inherited threshold tie source game does not match its fork carry checkpoint')
+		lifecycle.nonDecisionState = 'inheritedThresholdTie'
+		lifecycle.inheritedThresholdTieSourceGame = sourceGame
 		state.escalationLifecycles.set(log.emitter, lifecycle)
 		return
 	}
@@ -1018,6 +1034,9 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 		}
 		state.escalationCarryPeaks.set(log.emitter, cloneHexPeaksTriple(snapshot.carryPeaks))
 		state.escalationCarryLeaves.set(log.emitter, cloneHexPeaksTriple(snapshot.carryLeaves))
+		const lifecycle = state.escalationLifecycles.get(log.emitter) ?? {}
+		lifecycle.forkCarrySourceGame = sourceGame
+		state.escalationLifecycles.set(log.emitter, lifecycle)
 		return
 	}
 	if (log.eventName === 'LocalDepositAppended') {

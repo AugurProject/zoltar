@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
-import { ForkedEscrowState, Node, OutcomeState } from './EscalationGameTypes.sol';
+import { ForkedEscrowState, Node, NonDecisionState, OutcomeState } from './EscalationGameTypes.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 
 abstract contract EscalationGameStorage {
@@ -27,4 +27,5 @@ abstract contract EscalationGameStorage {
 	bool internal winnerHaircutPaidByFork;
 	uint256 internal forkCarryInitialBacking;
 	BinaryOutcomes.BinaryOutcome public fixedQuestionOutcome;
+	NonDecisionState public nonDecisionState;
 }

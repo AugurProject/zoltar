@@ -12,6 +12,12 @@ uint256 constant EXCESS_REWARD_WINDOW_DIVISOR = 2;
 uint256 constant MERKLE_MOUNTAIN_RANGE_MAX_PEAKS = 64;
 uint256 constant NULLIFIER_DEPTH = 64;
 
+enum NonDecisionState {
+	None,
+	Local,
+	InheritedThresholdTie
+}
+
 struct Deposit {
 	address depositor;
 	uint256 amount;
