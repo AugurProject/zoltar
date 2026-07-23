@@ -118,7 +118,7 @@ window.protocolTermDefinitions = Object.freeze({
 	MIN_SECURITY_BOND_DEBT: 'The smallest security-bond debt amount tracked. Smaller dust amounts are avoided.',
 	minLiquidationPriceDistanceBps: 'The basis-point distance required beyond the liquidation threshold before execution.',
 	'non-decision threshold': 'The REP balance level that two or more outcomes must reach for the structural non-decision condition.',
-	'non-decision': "A structurally contested escalation state. Its local or inherited origin determines the game's canTriggerOwnFork() predicate, but a successful pool fork also requires the pool to have no inherited fixed outcome.",
+	'non-decision': "A structurally contested escalation state. Its local or inherited origin determines the game's canTriggerOwnFork() predicate, but a successful pool fork also requires no inherited fixed outcome. Fixed-outcome pools reject new local escalation deposits before this state can be created.",
 	NUM_OUTCOMES: 'The Statoblast constant for the three supported outcomes: Invalid, Yes, and No.',
 	NULLIFIER_DEPTH: 'The depth of the tree used to remember consumed proofs. It prevents the same carried deposit from being used twice.',
 	'number of ticks': 'The scalar-outcome denominator used to map a scalar answer onto payout numerators.',

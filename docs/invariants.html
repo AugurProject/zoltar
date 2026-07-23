@@ -1749,11 +1749,12 @@
 								When a universe forks on a pool's question, each child pool and its
 								continuation game use that child's Invalid, Yes, or No branch as
 								the final pool-question outcome. Once a pool inherits that fixed
-								outcome, every later fork transition reverts, whether the new
-								universe fork uses the same question or another one. Deposit
-								withdrawal reverts unless the pool and game report the same outcome.
+								outcome, new local escalation deposits and every later fork
+								transition revert, whether the new universe fork uses the same
+								question or another one. Deposit withdrawal reverts unless the pool
+								and game report the same outcome.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> A Yes child created by a fork on the pool question pays carried Yes deposits even if copied game balances favored No. A later matching or unrelated universe fork leaves the stored <code>SystemState.Operational</code> and fixed Yes outcome unchanged, and eligible redemption paths remain available, while universe-fork guards still freeze normal operating calls.</p>
+							<p class="invariant-example"><strong>Example:</strong> A Yes child created by a fork on the pool question pays carried Yes deposits even if copied game balances favored No. It rejects new local escalation REP before escrow, so a later local non-decision cannot lock vault redemption. A later matching or unrelated universe fork leaves the stored <code>SystemState.Operational</code> and fixed Yes outcome unchanged, and eligible share, vault REP, and carried-proof redemption paths remain available, while universe-fork guards still freeze normal operating calls.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>

@@ -3072,28 +3072,18 @@ describe('Peripherals: fork migration', () => {
 			await approveToken(client, childRepToken, fixedChildPool.securityPool)
 			await depositRep(client, fixedChildPool.securityPool, childForkThreshold * 3n)
 			await manipulatePriceOracle(client, mockWindow, fixedChildPool.priceOracleManagerAndOperatorQueuer, PRICE_PRECISION)
-			await depositToEscalationGame(client, fixedChildPool.securityPool, QuestionOutcome.Yes, childForkThreshold)
-			await depositToEscalationGame(client, fixedChildPool.securityPool, QuestionOutcome.No, childForkThreshold)
-			const fixedChildEscalationGame = await getSecurityPoolsEscalationGame(client, fixedChildPool.securityPool)
-			strictEqualTypeSafe(
-				await client.readContract({
-					abi: peripherals_EscalationGame_EscalationGame.abi,
-					address: fixedChildEscalationGame,
-					functionName: 'canTriggerOwnFork',
-				}),
-				true,
-				'the child game-local predicate should recognize its local non-decision',
-			)
-			const sourceBalancesBeforeRejectedOwnFork = await balanceOfShares(openInterestHolder, fixedChildPool.shareToken, fixedChildUniverse, openInterestHolder.account.address)
-			const collateralBeforeRejectedOwnFork = await getCompleteSetCollateralAmount(client, fixedChildPool.securityPool)
-			const supplyBeforeRejectedOwnFork = await getShareTokenSupply(client, fixedChildPool.securityPool)
-			await assert.rejects(forkZoltarWithOwnEscalationGame(client, fixedChildPool.securityPool), /Resolved/)
-			strictEqualTypeSafe((await getUniverseData(client, fixedChildUniverse)).forkTime, 0n, 'the fixed child guard should reject before its own universe can fork')
-			strictEqualTypeSafe(await getSystemState(client, fixedChildPool.securityPool), SystemState.Operational, 'the rejected own fork should preserve the stored pool state')
-			strictEqualTypeSafe(await getQuestionOutcome(client, fixedChildPool.securityPool), QuestionOutcome.Yes, 'the rejected own fork should preserve the fixed outcome')
-			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, fixedChildPool.securityPool), collateralBeforeRejectedOwnFork, 'the rejected own fork should preserve collateral')
-			strictEqualTypeSafe(await getShareTokenSupply(client, fixedChildPool.securityPool), supplyBeforeRejectedOwnFork, 'the rejected own fork should preserve the economic claim supply')
-			assert.deepStrictEqual(await balanceOfShares(openInterestHolder, fixedChildPool.shareToken, fixedChildUniverse, openInterestHolder.account.address), sourceBalancesBeforeRejectedOwnFork, 'the rejected own fork should preserve funded shares')
+			const fixedChildEscalationGameBeforeDeposit = await getSecurityPoolsEscalationGame(client, fixedChildPool.securityPool)
+			const fixedChildGameRepBeforeDeposit = fixedChildEscalationGameBeforeDeposit === zeroAddress ? 0n : await getERC20Balance(client, childRepToken, fixedChildEscalationGameBeforeDeposit)
+			const fixedChildPoolRepBeforeDeposit = await getERC20Balance(client, childRepToken, fixedChildPool.securityPool)
+			const fixedChildVaultBeforeDeposit = await getSecurityVault(client, fixedChildPool.securityPool, client.account.address)
+			const fixedChildOwnershipBeforeDeposit = await getPoolOwnershipDenominator(client, fixedChildPool.securityPool)
+			await assert.rejects(depositToEscalationGame(client, fixedChildPool.securityPool, QuestionOutcome.Yes, childForkThreshold), /Resolved/)
+			const fixedChildEscalationGameAfterDeposit = await getSecurityPoolsEscalationGame(client, fixedChildPool.securityPool)
+			strictEqualTypeSafe(fixedChildEscalationGameAfterDeposit, fixedChildEscalationGameBeforeDeposit, 'a fixed child should reject before deploying or replacing its escalation game')
+			strictEqualTypeSafe(fixedChildEscalationGameAfterDeposit === zeroAddress ? 0n : await getERC20Balance(client, childRepToken, fixedChildEscalationGameAfterDeposit), fixedChildGameRepBeforeDeposit, 'a rejected fixed-child report must not transfer REP into the escalation game')
+			strictEqualTypeSafe(await getERC20Balance(client, childRepToken, fixedChildPool.securityPool), fixedChildPoolRepBeforeDeposit, 'a rejected fixed-child report must preserve pool REP')
+			assert.deepStrictEqual(await getSecurityVault(client, fixedChildPool.securityPool, client.account.address), fixedChildVaultBeforeDeposit, 'a rejected fixed-child report must preserve vault ownership and escrow')
+			strictEqualTypeSafe(await getPoolOwnershipDenominator(client, fixedChildPool.securityPool), fixedChildOwnershipBeforeDeposit, 'a rejected fixed-child report must preserve aggregate ownership')
 			await assert.rejects(
 				client.simulateContract({
 					abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -3137,6 +3127,10 @@ describe('Peripherals: fork migration', () => {
 			assert.ok(collateralBeforeRedemption > 0n, 'fixed child should hold funded collateral before redemption')
 			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, fixedChildPool.securityPool), 0n, 'winning redemption should consume the fixed child collateral')
 			strictEqualTypeSafe(await getShareTokenSupply(client, fixedChildPool.securityPool), 0n, 'winning redemption should consume the fixed child supply')
+			const vaultRepBeforeRedemption = await getERC20Balance(client, childRepToken, client.account.address)
+			await redeemRep(client, fixedChildPool.securityPool, client.account.address)
+			assert.ok((await getERC20Balance(client, childRepToken, client.account.address)) > vaultRepBeforeRedemption, 'fixed-child vault REP should remain redeemable after every rejected deposit and fork path')
+			strictEqualTypeSafe((await getSecurityVault(client, fixedChildPool.securityPool, client.account.address)).repDepositShare, 0n, 'fixed-child REP redemption should consume the vault ownership claim')
 		})
 
 		test('a fixed-outcome child rejects recycling a redeemed complete set through a recursive matching fork', async () => {

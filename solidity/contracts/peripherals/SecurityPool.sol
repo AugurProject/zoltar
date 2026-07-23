@@ -802,6 +802,7 @@ contract SecurityPool is ISecurityPool {
 	////////////////////////////////////////
 
 	function depositToEscalationGame(BinaryOutcomes.BinaryOutcome outcome, uint256 maxAmount) external isOperational {
+		require(!hasInheritedForkOutcome, 'Resolved');
 		require(!awaitingForkContinuation, 'Fork await');
 		if (address(escalationGame) == address(0x0)) {
 			uint256 endTime = questionData.getQuestionEndDate(questionId);
@@ -826,7 +827,7 @@ contract SecurityPool is ISecurityPool {
 		uint256 ownershipToEscrow = repToPoolOwnershipRoundUp(depositedAmount);
 		uint256 currentRep = poolOwnershipToRep(securityVaults[msg.sender].poolOwnership);
 		require(currentRep >= depositedAmount, 'REP too low');
-		require(ownershipToEscrow > 0, 'Escrow too low');
+		require(ownershipToEscrow > 0, 'Escrow low');
 
 		uint256 updatedPoolOwnership = securityVaults[msg.sender].poolOwnership - ownershipToEscrow;
 		uint256 repEthPrice = priceOracleManagerAndOperatorQueuer.lastPrice();

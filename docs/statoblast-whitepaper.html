@@ -3008,7 +3008,7 @@
 								Outcome balances are compared to running total cost for local
 								resolution and to the fixed non-decision threshold for a local
 								game's fork eligibility. A pool with an inherited fixed outcome
-								still rejects fork activation.
+								rejects both new local deposits and fork activation.
 							</desc>
 							<defs>
 								<marker
@@ -3134,7 +3134,8 @@
 							unresolved contest is not the same as the stronger non-decision
 							condition. This diagram shows a local threshold crossing, which
 							makes <code>canTriggerOwnFork()</code> true. A pool with an
-							inherited fixed outcome still rejects <code>activateForkMode()</code>.
+							inherited fixed outcome rejects the deposits that could create this
+							state and still rejects <code>activateForkMode()</code>.
 						</p>
 					</figure>
 					<p>
@@ -3151,7 +3152,9 @@
 						<code>nonDecisionTimestamp</code>, then makes the game-local
 						<code>canTriggerOwnFork()</code> predicate true. That predicate does
 						not override pool finality: a pool with an inherited fixed outcome
-						still rejects <code>activateForkMode()</code>. A fork continuation
+						rejects new <code>depositToEscalationGame</code> calls before they can
+						create a local non-decision and still rejects
+						<code>activateForkMode()</code>. A fork continuation
 						instead records
 						<code>nonDecisionState = InheritedThresholdTie</code> when its
 						preserved balances already meet that condition, without rebasing
@@ -5287,6 +5290,14 @@
 						remaining economic claim supply. A later fork must not reclassify a
 						surviving sibling outcome token as winning against that reduced
 						denominator.
+					</p>
+					<p>
+						The same boundary closes new local escalation deposits. A fixed-outcome
+						pool cannot use another fork to export a local non-decision, while local
+						settlement rejects deposits after non-decision. Accepting new REP in that
+						state would therefore lock the depositor's vault ownership and block REP
+						redemption. Carried winning proofs from the parent continuation remain
+						claimable through their separate withdrawal path.
 					</p>
 					<figure class="diagram" id="fig-statoblast-system-decision-flow">
 						<svg

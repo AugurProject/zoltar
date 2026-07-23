@@ -44,7 +44,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/contract-interaction-reference.md'
-const expectedProductionSoliditySourceFingerprint = '52b4a3c69b261e251b416ffa6e8a532af31cd4fadd80123b3368cfdfdc4a7e25'
+const expectedProductionSoliditySourceFingerprint = 'b8f882b3154f5834c02cedff166c8078a48155c8cefda0b655d9f4dd6fe8ccb1'
 
 const eventSourceByName: Record<string, string> = {
 	Approval: 'solidity/contracts/IERC20.sol',
@@ -796,7 +796,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'Vault owner',
 				effect: 'Deploys the local game on the first deposit, removes enough vault ownership, and escrows accepted REP on the selected outcome.',
 				declarations: [{ name: 'depositToEscalationGame' }],
-				preconditions: 'Question end has passed; pool operational in an unforked universe and not awaiting continuation; outcome and amount accepted; remaining vault and pool backing stay solvent; fresh price when allowance is nonzero.',
+				preconditions: 'Question end has passed; pool operational in an unforked universe, without an inherited fixed outcome, and not awaiting continuation; outcome and amount accepted; remaining vault and pool backing stay solvent; fresh price when allowance is nonzero.',
 				signals: '`EscalationGameSet` on first deposit; `DepositToEscalationGame`',
 			},
 			{

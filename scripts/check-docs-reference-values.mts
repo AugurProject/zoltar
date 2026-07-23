@@ -145,26 +145,27 @@ function assertNonDecisionLifecycleDocs(): void {
 	}
 	assert.match(normalizedOperatorReference, /nonDecisionState = Local[\s\S]*closes further deposits[\s\S]*nonDecisionState = InheritedThresholdTie[\s\S]*closes further deposits/)
 	assert.ok(normalizedStatoblast.includes('Both explicit states close further deposits.'), 'Statoblast whitepaper must explain the shared deposit-closure rule')
-	assert.match(normalizedStatoblast, /<desc id="escalation-desc">[\s\S]*local game's fork eligibility[\s\S]*pool with an inherited fixed outcome still rejects fork activation/)
+	assert.match(normalizedStatoblast, /<desc id="escalation-desc">[\s\S]*local game's fork eligibility[\s\S]*pool with an inherited fixed outcome rejects both new local deposits and fork activation/)
 	assert.match(normalizedStatoblast, /Game-Local[\s\S]*Eligibility[\s\S]*pool guard still applies/)
-	assert.match(normalizedStatoblast, /This diagram shows a local threshold crossing, which makes <code>canTriggerOwnFork\(\)<\/code> true[\s\S]*pool with an inherited fixed outcome still rejects <code>activateForkMode\(\)<\/code>/)
+	assert.match(normalizedStatoblast, /This diagram shows a local threshold crossing, which makes <code>canTriggerOwnFork\(\)<\/code> true[\s\S]*pool with an inherited fixed outcome rejects the deposits that could create this state[\s\S]*still rejects <code>activateForkMode\(\)<\/code>/)
 	assert.match(normalizedStatoblast, /A continuation pool can fork again only when it has no inherited fixed outcome/)
 	assert.match(normalizedStatoblast, /The game-local <code>canTriggerOwnFork\(\)<\/code> predicate returns true for a local non-decision, but it does not bypass the pool's fixed-outcome guard/)
 	assert.match(normalizedStatoblast, /<span>Edge cases<\/span> <b\s*>Only continuations without a fixed outcome can fork again; their game-local trigger may be a local non-decision or an inherited threshold tie\.<\/b\s*>/)
 	assert.match(
 		normalizedStatoblast,
-		/<h3 id="child-outcome-resolution">Child Outcome Resolution<\/h3>[\s\S]*Later universe forks cannot transition a pool with an inherited fixed result, even when they reuse the pool question\.[\s\S]*Winning-share redemption burns only the fixed winning token and reduces the pool's remaining economic claim supply\.[\s\S]*surviving sibling outcome token as winning against that reduced denominator\./,
+		/<h3 id="child-outcome-resolution">Child Outcome Resolution<\/h3>[\s\S]*Later universe forks cannot transition a pool with an inherited fixed result, even when they reuse the pool question\.[\s\S]*Winning-share redemption burns only the fixed winning token and reduces the pool's remaining economic claim supply\.[\s\S]*surviving sibling outcome token as winning against that reduced denominator\.[\s\S]*fixed-outcome pool cannot use another fork to export a local non-decision[\s\S]*lock the depositor's vault ownership and block REP redemption[\s\S]*Carried winning proofs from the parent continuation remain claimable/,
 	)
 	assert.match(
 		normalizedInvariants,
-		/<summary><code>ESC-12<\/code><span class="invariant-title">Pool and continuation payout agreement<\/span><\/summary>[\s\S]*Once a pool inherits that fixed outcome, every later fork transition reverts, whether the new universe fork uses the same question or another one\.[\s\S]*eligible redemption paths remain available, while universe-fork guards still freeze normal operating calls\./,
+		/<summary><code>ESC-12<\/code><span class="invariant-title">Pool and continuation payout agreement<\/span><\/summary>[\s\S]*Once a pool inherits that fixed outcome, new local escalation deposits and every later fork transition revert[\s\S]*rejects new local escalation REP before escrow[\s\S]*eligible share, vault REP, and carried-proof redemption paths remain available/,
 	)
-	assert.match(normalizedOperatorReference, /\| Matching-question child outcome \|[\s\S]*`activateForkMode` rejects every later pool fork transition, including when `canTriggerOwnFork\(\)` is game-locally true\.[\s\S]*Child Outcome Resolution/)
+	assert.match(normalizedOperatorReference, /\| Escalation deposit wrapper \|[\s\S]*rejects pools with an inherited fixed outcome because they cannot enter another fork or safely unwind a later local non-decision/)
+	assert.match(normalizedOperatorReference, /\| Matching-question child outcome \|[\s\S]*`depositToEscalationGame` rejects new local deposits, and `activateForkMode` rejects every later pool fork transition[\s\S]*Child Outcome Resolution/)
 	assert.match(
 		normalizedStatoblast,
 		/<td>Second fork<\/td> <td> This unrelated continuation has no fixed outcome and did not inherit a threshold tie\. When new activity records a local non-decision, <code>canTriggerOwnFork\(\)<\/code> becomes true\. <\/td> <td> The same predicate also accepts an inherited threshold tie without a fixed outcome\./,
 	)
-	assert.match(protocolTerms, /local or inherited origin determines the game's canTriggerOwnFork\(\) predicate, but a successful pool fork also requires the pool to have no inherited fixed outcome/)
+	assert.match(protocolTerms, /local or inherited origin determines the game's canTriggerOwnFork\(\) predicate, but a successful pool fork also requires no inherited fixed outcome\. Fixed-outcome pools reject new local escalation deposits before this state can be created/)
 	for (const forbiddenClaim of ['a later fork on the same question replaces the inherited outcome', 'the fixed result applies after continuation and is inherited through later unrelated descendants', 'a later unrelated fork keeps Yes as the payout outcome']) {
 		assert.ok(!`${normalizedStatoblast} ${normalizedInvariants} ${normalizedOperatorReference}`.toLowerCase().includes(forbiddenClaim.toLowerCase()), `Fixed-outcome documentation retains obsolete replacement or descendant-inheritance semantics: ${forbiddenClaim}`)
 	}
@@ -373,6 +374,7 @@ function assertContractInteractionDistinctions(): void {
 	const activateForkModeRow = getContractInteractionRow('activateForkMode()')
 	const initiateSecurityPoolForkRow = getContractInteractionRow('initiateSecurityPoolFork(securityPool)')
 	const ownEscalationForkRow = getContractInteractionRow('forkZoltarWithOwnEscalationGame(securityPool)')
+	const escalationDepositRow = getContractInteractionRow('depositToEscalationGame(outcome, maxAmount)')
 	const migrateSharesRow = getContractInteractionRow('migrate(fromId, targetOutcomeIndexes)')
 	const drainAllRepRow = getContractInteractionRow('drainAllRep(receiver)')
 	const createChildUniverseRow = getContractInteractionRow('createChildUniverse(securityPool, outcomeIndex)')
@@ -477,6 +479,8 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(whitepaperStatoblast, /cashToShares[\s\S]*Exchange rate undefined/)
 	assert.match(initiateSecurityPoolForkRow, /Pool operational with no inherited fixed outcome;[\s\S]*if an escalation game exists, it reports the supplied pool from `securityPool\(\)` when validated and the universe fork occurred before that game settled/)
 	assert.match(ownEscalationForkRow, /Pool operational with no inherited fixed outcome;[\s\S]*`canTriggerOwnFork\(\)` is true because it recorded a local non-decision or inherited a threshold tie without a game-level fixed outcome[\s\S]*game-local predicate does not bypass the pool guard/)
+	assert.match(escalationDepositRow, /pool operational in an unforked universe, without an inherited fixed outcome, and not awaiting continuation/)
+	assert.match(securityPool, /function depositToEscalationGame\([^}]+require\(!hasInheritedForkOutcome, 'Resolved'\);/)
 	assert.match(migrateSharesRow, /an `Operational` source has no inherited fixed outcome because auto-fork activation rejects one/)
 	assert.match(contractInteractionReference, /claimForkedEscalationDeposits\(\.\.\.\)[\s\S]*parent game still satisfies `canTriggerOwnFork\(\)` by having either a local non-decision or an inherited threshold tie without a fixed outcome/)
 	assert.match(contractInteractionReference, /withdrawDeposit\(uint256 depositIndex, outcome\)[\s\S]*`CarryDepositConsumed` and `VaultEscrowUpdated`[\s\S]*for a winner, `ClaimDeposit`/)
