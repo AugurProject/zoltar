@@ -74,12 +74,12 @@ type QueuedLiquidationOperationView = {
 	isPendingSlot: boolean
 	operationId: bigint
 }
-function getLiquidationExecutionMode(currentPoolOracleManagerDetails: OracleManagerDetails | undefined) {
+function getLiquidationExecutionMode(currentPoolOracleManagerDetails: OracleManagerDetails | undefined, currentTimestamp: bigint | undefined) {
 	if (currentPoolOracleManagerDetails === undefined) return 'refreshing'
-	return isOracleManagerPriceUsable(currentPoolOracleManagerDetails) ? 'execute' : 'queue'
+	return isOracleManagerPriceUsable(currentPoolOracleManagerDetails, currentTimestamp) ? 'execute' : 'queue'
 }
-function getLiquidationModalTitle(currentPoolOracleManagerDetails: OracleManagerDetails | undefined) {
-	const executionMode = getLiquidationExecutionMode(currentPoolOracleManagerDetails)
+function getLiquidationModalTitle(currentPoolOracleManagerDetails: OracleManagerDetails | undefined, currentTimestamp: bigint | undefined) {
+	const executionMode = getLiquidationExecutionMode(currentPoolOracleManagerDetails, currentTimestamp)
 	switch (executionMode) {
 		case 'execute':
 			return liquidationCopy.executeVaultLiquidation
@@ -91,8 +91,8 @@ function getLiquidationModalTitle(currentPoolOracleManagerDetails: OracleManager
 			return assertNever(executionMode)
 	}
 }
-function getLiquidationButtonLabels(currentPoolOracleManagerDetails: OracleManagerDetails | undefined) {
-	const executionMode = getLiquidationExecutionMode(currentPoolOracleManagerDetails)
+function getLiquidationButtonLabels(currentPoolOracleManagerDetails: OracleManagerDetails | undefined, currentTimestamp: bigint | undefined) {
+	const executionMode = getLiquidationExecutionMode(currentPoolOracleManagerDetails, currentTimestamp)
 	switch (executionMode) {
 		case 'execute':
 			return { idle: liquidationCopy.executeVaultLiquidation, pending: liquidationCopy.executingLiquidation }
@@ -209,10 +209,10 @@ export function LiquidationModal({
 		onLoadPoolOracleManager(liquidationManagerAddress)
 	}, [currentPoolOracleManagerDetails, liquidationManagerAddress, loadingPoolOracleManager, onLoadPoolOracleManager, poolOracleManagerError, showLiquidationModal])
 	useEffect(() => {
-		if (!showLiquidationModal || getLiquidationExecutionMode(currentPoolOracleManagerDetails) !== 'queue') return
+		if (!showLiquidationModal || getLiquidationExecutionMode(currentPoolOracleManagerDetails, chainCurrentTimestamp) !== 'queue') return
 		if (liquidationManagerAddress === undefined || liquidationFundingPreview !== undefined || liquidationFundingPreviewError !== undefined || loadingLiquidationFundingPreview) return
 		onLoadLiquidationFundingPreview(liquidationManagerAddress)
-	}, [currentPoolOracleManagerDetails, liquidationFundingPreview, liquidationFundingPreviewError, liquidationManagerAddress, loadingLiquidationFundingPreview, onLoadLiquidationFundingPreview, showLiquidationModal])
+	}, [chainCurrentTimestamp, currentPoolOracleManagerDetails, liquidationFundingPreview, liquidationFundingPreviewError, liquidationManagerAddress, loadingLiquidationFundingPreview, onLoadLiquidationFundingPreview, showLiquidationModal])
 	if (!showLiquidationModal) return undefined
 	const currentTimestamp = chainCurrentTimestamp
 	const liquidationAmountValue = tryParseRepAmountInput(liquidationAmount)
@@ -222,9 +222,9 @@ export function LiquidationModal({
 	const quotedPriceCollateralization = targetVaultSummary === undefined ? undefined : getVaultCollateralizationPercent(targetVaultSummary.repDepositShare, targetVaultSummary.securityBondAllowance, repPerEthPrice)
 	const callerPoolOracleCollateralization = callerVaultSummary === undefined ? undefined : getVaultCollateralizationPercent(callerVaultSummary.repDepositShare, callerVaultSummary.securityBondAllowance, poolOraclePrice)
 	const repPriceSourceCopy = getRepPriceSourceCopy(repPerEthSource)
-	const liquidationExecutionMode = getLiquidationExecutionMode(currentPoolOracleManagerDetails)
-	const buttonLabels = getLiquidationButtonLabels(currentPoolOracleManagerDetails)
-	const hasUsableOraclePrice = currentPoolOracleManagerDetails !== undefined && isOracleManagerPriceUsable(currentPoolOracleManagerDetails)
+	const liquidationExecutionMode = getLiquidationExecutionMode(currentPoolOracleManagerDetails, currentTimestamp)
+	const buttonLabels = getLiquidationButtonLabels(currentPoolOracleManagerDetails, currentTimestamp)
+	const hasUsableOraclePrice = currentPoolOracleManagerDetails !== undefined && isOracleManagerPriceUsable(currentPoolOracleManagerDetails, currentTimestamp)
 	const trimmedLiquidationTargetVault = liquidationTargetVault.trim()
 	const liquidationTimeoutDisplayValue = liquidationTimeoutMinutes === '' ? '' : liquidationTimeoutMinutes
 	const liquidationTimeoutSeconds = getStagedOperationTimeoutSeconds(tryParseBigIntInput(liquidationTimeoutDisplayValue))
@@ -327,7 +327,7 @@ export function LiquidationModal({
 					if (loadingPoolOracleManager || currentPoolOracleManagerDetails === undefined) return 'refreshing'
 
 					return (() => {
-						if (isOracleManagerPriceUsable(currentPoolOracleManagerDetails)) return 'executed'
+						if (isOracleManagerPriceUsable(currentPoolOracleManagerDetails, currentTimestamp)) return 'executed'
 
 						return 'missing'
 					})()
@@ -337,7 +337,7 @@ export function LiquidationModal({
 			<section ref={dialogRef} className='modal-panel' role='dialog' aria-modal='true' aria-labelledby={titleId} onClick={event => event.stopPropagation()}>
 				<div className='modal-header'>
 					<div className='modal-header-title'>
-						<h3 id={titleId}>{getLiquidationModalTitle(currentPoolOracleManagerDetails)}</h3>
+						<h3 id={titleId}>{getLiquidationModalTitle(currentPoolOracleManagerDetails, currentTimestamp)}</h3>
 					</div>
 					<button ref={closeButtonRef} className='quiet modal-close-button' type='button' aria-label={commonCopy.close} title={commonCopy.close} onClick={closeLiquidationModal}>
 						×

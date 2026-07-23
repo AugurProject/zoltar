@@ -116,12 +116,15 @@ export function getStagedOperationTimeoutSeconds(timeoutMinutes: bigint | undefi
 	return timeoutMinutes * 60n
 }
 
-export function hasValidSecurityVaultOraclePrice(managerAddress: Address | undefined, oracleManagerDetails: Pick<OracleManagerDetails, 'isPriceValid' | 'managerAddress'> | undefined) {
+export function hasValidSecurityVaultOraclePrice(managerAddress: Address | undefined, oracleManagerDetails: Pick<OracleManagerDetails, 'isPriceValid' | 'lastSettlementTimestamp' | 'managerAddress' | 'priceValidUntilTimestamp'> | undefined, currentTimestamp?: bigint) {
 	if (managerAddress === undefined || oracleManagerDetails === undefined) return false
 	if (!sameAddress(managerAddress, oracleManagerDetails.managerAddress)) return false
-	return oracleManagerDetails.isPriceValid
+	return isOracleManagerPriceUsable(oracleManagerDetails, currentTimestamp)
 }
 
-export function isOracleManagerPriceUsable(oracleManagerDetails: Pick<OracleManagerDetails, 'isPriceValid'> | undefined) {
-	return oracleManagerDetails?.isPriceValid === true
+export function isOracleManagerPriceUsable(oracleManagerDetails: Pick<OracleManagerDetails, 'isPriceValid' | 'lastSettlementTimestamp' | 'priceValidUntilTimestamp'> | undefined, currentTimestamp?: bigint | undefined) {
+	if (oracleManagerDetails?.isPriceValid !== true) return false
+	if (currentTimestamp === undefined) return true
+	const validUntilTimestamp = oracleManagerDetails.priceValidUntilTimestamp ?? getOracleManagerPriceValidUntilTimestamp(oracleManagerDetails.lastSettlementTimestamp)
+	return validUntilTimestamp !== undefined && currentTimestamp < validUntilTimestamp
 }

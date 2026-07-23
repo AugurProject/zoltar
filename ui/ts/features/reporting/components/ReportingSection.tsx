@@ -19,6 +19,7 @@ import { TransactionReview } from '../../../components/TransactionReview.js'
 import { TransactionNetworkValue } from '../../../components/TransactionNetworkValue.js'
 import { TransactionUniverseValue } from '../../universes/components/TransactionUniverseValue.js'
 import { TimestampValue } from '../../../components/TimestampValue.js'
+import { WarningSurface } from '../../../components/WarningSurface.js'
 import { assertNever } from '../../../lib/assert.js'
 import { pickFirstReason } from '../../../lib/actionAvailability.js'
 import { formatCurrencyInputBalance, formatDuration } from '../../../lib/formatters.js'
@@ -205,6 +206,7 @@ export function ReportingSection({
 	lockedReason,
 	onLoadReporting,
 	onOpenForkWorkflow,
+	onOpenPriceOracle,
 	onTriggerZoltarFork,
 	onReportOutcome,
 	onReportingFormChange,
@@ -214,6 +216,7 @@ export function ReportingSection({
 	reportingDetails,
 	reportingError,
 	reportingForm,
+	reportActionGuardMessage,
 	showHeader = true,
 	showSecurityPoolAddressInput = true,
 	mode = 'full-reporting',
@@ -345,6 +348,7 @@ export function ReportingSection({
 	})()
 	const reportAmountError = selectedAmount === undefined && reportingForm.reportAmount.trim() !== '' ? reportingCopy.reportAmountPreviewRequired : undefined
 	const reportGuardMessage =
+		reportActionGuardMessage ??
 		reportControlsLockedReason ??
 		getReportingReportGuardMessage({
 			actualDepositAmount: actualReportDepositAmount,
@@ -359,6 +363,7 @@ export function ReportingSection({
 			viewerVaultAvailableEscalationRep: effectiveReportingDetails?.viewerVaultAvailableEscalationRep,
 			viewerVaultExists: effectiveReportingDetails?.viewerVaultExists ?? false,
 		})
+	const reportButtonGuardMessage = reportActionGuardMessage === undefined ? reportGuardMessage : reportingCopy.currentOraclePriceRequired
 	const withdrawGuardMessage =
 		withdrawControlsLockedReason ??
 		getReportingWithdrawGuardMessage({
@@ -458,6 +463,18 @@ export function ReportingSection({
 
 			{showFullReporting && reportingReady !== false ? (
 				<SectionBlock className='reporting-outcome-section' title={reportingCopy.reportOutcome} variant='embedded'>
+					{reportActionGuardMessage === undefined ? undefined : (
+						<WarningSurface ariaLive='polite' role='status' surface='flat' variant='compact'>
+							<p>{reportActionGuardMessage}</p>
+							{onOpenPriceOracle === undefined ? undefined : (
+								<div className='actions'>
+									<button className='secondary' type='button' onClick={onOpenPriceOracle}>
+										{reportingCopy.openOracle}
+									</button>
+								</div>
+							)}
+						</WarningSurface>
+					)}
 					<div className='escalation-sides-shell'>
 						<div className='escalation-sides-legend'>
 							<div className='escalation-sides-legend-item'>
@@ -591,7 +608,7 @@ export function ReportingSection({
 							pendingLabel={reportingCopy.submittingReport}
 							onClick={onReportOutcome}
 							pending={reportingActiveAction === 'reportOutcome'}
-							availability={{ disabled: !isMainnet || !reportOutcomeEnabled || reportGuardMessage !== undefined, reason: !isMainnet ? commonCopy.mainnetRequiredReason : reportGuardMessage }}
+							availability={{ disabled: !isMainnet || !reportOutcomeEnabled || reportButtonGuardMessage !== undefined, reason: !isMainnet ? commonCopy.mainnetRequiredReason : reportButtonGuardMessage }}
 						/>
 					</div>
 				</SectionBlock>

@@ -507,6 +507,37 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expectTransactionButtonDisabled(document.body, 'Request New Price', 'The current oracle price is still valid.')
 	})
 
+	test('enables Request New Price when the shared chain time reaches a loaded price expiry', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={1000n}>
+				<SecurityPoolWorkflowSection
+					{...createSecurityPoolWorkflowProps({
+						accountState: createAccountState({ ethBalance: 100n * 10n ** 18n }),
+						checkedSecurityPoolAddress: zeroAddress,
+						poolOracleManagerDetails: createOracleManagerDetails({
+							isPriceValid: true,
+							lastSettlementTimestamp: 700n,
+							pendingReportId: 0n,
+							priceValidUntilTimestamp: 1000n,
+							requestPriceEthCost: 1n,
+						}),
+						securityPoolAddress: zeroAddress,
+						securityPools: [createSelectedPool()],
+						selectedPoolView: 'price-oracle',
+					})}
+					showHeader={false}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		setCleanup(renderedComponent.cleanup)
+
+		const requestButton = within(document.body).getByRole('button', { name: 'Request New Price' })
+		if (!(requestButton instanceof HTMLButtonElement)) throw new Error('Expected Request New Price button')
+		expect(requestButton.disabled).toBe(false)
+		expect(document.body.textContent).toContain('(expired less than a minute ago)')
+		expect(document.body.textContent).not.toContain('The current oracle price is still valid.')
+	})
+
 	test('uses the lifted selected pool view state and reports tab changes through the shared setter', async () => {
 		const selectedViews: string[] = []
 		const renderedComponent = await renderIntoDocument(

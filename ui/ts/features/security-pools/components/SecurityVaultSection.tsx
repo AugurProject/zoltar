@@ -37,6 +37,7 @@ import { getSecurityPoolVaultReadinessActions } from '../lib/securityPoolReadine
 import { getVaultLauncherOwnershipReason, getVaultLauncherWalletReason } from '../lib/securityPoolLabels.js'
 import { getVaultDepositGuardMessage, getVaultRedeemRepGuardMessage, getVaultSetSecurityBondAllowanceGuardMessage, getVaultWithdrawGuardMessage } from '../lib/securityVaultGuards.js'
 import { deriveTokenApprovalRequirement } from '../../../lib/tokenApproval.js'
+import { useChainTimestamp } from '../../../lib/chainTimestamp.js'
 import {
 	DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES,
 	doesSecurityVaultExistOnchain,
@@ -46,6 +47,7 @@ import {
 	getSecurityVaultWithdrawableRepAmount,
 	getSelectedVaultAddress,
 	hasValidSecurityVaultOraclePrice,
+	isOracleManagerPriceUsable,
 	isSecurityVaultDepositBelowMinimum,
 	isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper,
 	MIN_SECURITY_VAULT_REP_DEPOSIT,
@@ -136,11 +138,13 @@ export function getQueuedVaultOperation({ pendingOperation, selectedVaultAddress
 	return undefined
 }
 function getQueuedVaultOperationStatus({
+	currentTimestamp,
 	currentPoolOracleManagerDetails,
 	loadingSecurityVault,
 	queuedVaultOperation,
 	securityVaultResult,
 }: {
+	currentTimestamp: bigint | undefined
 	currentPoolOracleManagerDetails: SecurityVaultSectionProps['oracleManagerDetails']
 	loadingSecurityVault: boolean
 	queuedVaultOperation: ReturnType<typeof getQueuedVaultOperation>
@@ -150,7 +154,7 @@ function getQueuedVaultOperationStatus({
 	if (securityVaultResult.stagedExecution !== undefined) return securityVaultResult.stagedExecution.success ? 'executed' : 'failed'
 	if (queuedVaultOperation !== undefined) return queuedVaultOperation.isPendingSlot ? 'queued' : 'manual-queued'
 	if (loadingSecurityVault || currentPoolOracleManagerDetails === undefined) return 'refreshing'
-	if (currentPoolOracleManagerDetails.isPriceValid) return 'executed'
+	if (isOracleManagerPriceUsable(currentPoolOracleManagerDetails, currentTimestamp)) return 'executed'
 	return 'missing'
 }
 function VaultQueuedOperationStatusCard({
@@ -295,6 +299,7 @@ export function SecurityVaultSection({
 	showSummarySection = true,
 	poolState,
 }: SecurityVaultSectionProps) {
+	const currentTimestamp = useChainTimestamp()
 	const [vaultActionModal, setVaultActionModal] = useState<VaultActionModal>(undefined)
 	const refreshVaultActionsDescriptionId = useId()
 	const vaultLifecycleBlockerId = useId()
@@ -331,7 +336,7 @@ export function SecurityVaultSection({
 	const stagedOperationTimeoutSeconds = getStagedOperationTimeoutSeconds(stagedOperationTimeoutMinutes)
 	const securityBondAllowance = currentSelectedVaultDetails?.securityBondAllowance ?? 0n
 	const vaultExistsOnchain = doesSecurityVaultExistOnchain(currentSelectedVaultDetails)
-	const hasValidOraclePrice = hasValidSecurityVaultOraclePrice(currentSelectedVaultDetails?.managerAddress, oracleManagerDetails)
+	const hasValidOraclePrice = hasValidSecurityVaultOraclePrice(currentSelectedVaultDetails?.managerAddress, oracleManagerDetails, currentTimestamp)
 	const oraclePriceValidUntilTimestamp = hasValidOraclePrice ? oracleManagerDetails?.priceValidUntilTimestamp : undefined
 	const approvalRequirement = deriveTokenApprovalRequirement(depositAmount, securityVaultRepApproval.value)
 	const repBalanceGap = balanceShortage(depositAmount, securityVaultRepBalance)
@@ -381,6 +386,7 @@ export function SecurityVaultSection({
 	})()
 	const setSecurityBondAllowanceFunding = resolveOracleOperationEthFunding({
 		managerDetails: oracleManagerDetails,
+		priceUsable: hasValidOraclePrice,
 	})
 	const setSecurityBondAllowanceGuardMessage = getVaultSetSecurityBondAllowanceGuardMessage({
 		bufferRequiredEthCost: setSecurityBondAllowanceFunding?.includeBuffer === true,
@@ -398,6 +404,7 @@ export function SecurityVaultSection({
 	})
 	const withdrawRepFunding = resolveOracleOperationEthFunding({
 		managerDetails: oracleManagerDetails,
+		priceUsable: hasValidOraclePrice,
 	})
 	const withdrawRepGuardMessage = getVaultWithdrawGuardMessage({
 		bufferRequiredEthCost: withdrawRepFunding?.includeBuffer === true,
@@ -426,6 +433,7 @@ export function SecurityVaultSection({
 		securityVaultResult,
 	})
 	const queuedVaultOperationStatus = getQueuedVaultOperationStatus({
+		currentTimestamp,
 		currentPoolOracleManagerDetails: oracleManagerDetails,
 		loadingSecurityVault,
 		queuedVaultOperation,

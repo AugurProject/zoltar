@@ -423,7 +423,7 @@ function renderReportDetailsCard(
 	})
 	const statusTone = getOpenOracleReportStatusTone(status)
 	const actionMode = getOpenOracleSelectedReportActionMode(openOracleReportDetails)
-	const stage = getOpenOracleStagePresentation(actionMode)
+	const stage = getOpenOracleStagePresentation(actionMode, openOracleReportDetails)
 	const disputeAvailability = getOpenOracleDisputeAvailability(openOracleReportDetails)
 	const settleAvailability = getOpenOracleSettleAvailability(openOracleReportDetails)
 	const readinessActions = getOpenOracleReadinessActions({
@@ -1031,7 +1031,7 @@ export function OpenOracleSection({
 			) : undefined}
 
 			{view === 'selected-report' ? (
-				<div className='workflow-stack route-workflow-stack'>
+				<div className='workflow-stack route-workflow-stack open-oracle-report-stack'>
 					{renderReportDetailsCard(
 						effectiveOpenOracleReportDetails,
 						openOracleForm,

@@ -20,7 +20,7 @@ describe('reporting guards', () => {
 				viewerVaultAvailableEscalationRep: 10n,
 				viewerVaultExists: true,
 			}),
-		).toBe('Connect a wallet before reporting on a market.')
+		).toBe('Connect a wallet before reporting on a question.')
 
 		expect(
 			getReportingReportGuardMessage({
@@ -36,7 +36,7 @@ describe('reporting guards', () => {
 				viewerVaultAvailableEscalationRep: 10n,
 				viewerVaultExists: true,
 			}),
-		).toBe('Select an outcome side before reporting on a market.')
+		).toBe('Select an outcome side before reporting on a question.')
 
 		expect(
 			getReportingReportGuardMessage({

@@ -64,6 +64,11 @@ describe('transaction presentations', () => {
 		expect(createOpenOracleSuccessPresentation({ action: 'withdrawBalance', hash: '0x1234' }, context).title).toBe('WETH Withdrawn')
 	})
 
+	test('uses the user-facing report name for Open Oracle creation', () => {
+		expect(createOpenOracleTransactionIntent('createReportInstance').submittedTitle).toBe('Create Report')
+		expect(createOpenOracleSuccessPresentation({ action: 'createReportInstance', hash: '0x1234' }).title).toBe('Report Created')
+	})
+
 	test('keeps pool, universe, and action context in trading and reporting intents', () => {
 		const context = {
 			securityPoolAddress: '0x0000000000000000000000000000000000000001',

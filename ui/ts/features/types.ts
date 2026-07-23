@@ -445,8 +445,10 @@ export type ReportingSectionProps = ReportingRouteContentProps & {
 	lockedReason?: string | undefined
 	mode?: 'full-reporting' | 'withdraw-only'
 	onOpenForkWorkflow?: (() => void) | undefined
+	onOpenPriceOracle?: (() => void) | undefined
 	onTriggerZoltarFork?: (() => void) | undefined
 	previewMarketDetails?: MarketDetails | undefined
+	reportActionGuardMessage?: string | undefined
 	showHeader?: boolean
 	showSecurityPoolAddressInput?: boolean
 	triggerZoltarForkAvailability?: ActionAvailability | undefined

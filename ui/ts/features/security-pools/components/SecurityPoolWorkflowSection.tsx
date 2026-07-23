@@ -73,7 +73,7 @@ import { addOpenOracleBountyBuffer } from '../../open-oracle/lib/openOracle.js'
 import { getSecurityPoolStatusBadgeLabel } from '../lib/securityPoolLabels.js'
 import { deriveSecurityPoolLifecycleState, deriveSecurityPoolReportingStage, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage } from '../lib/securityVaultGuards.js'
-import { doesLoadedSecurityVaultMatchSelection, doesSecurityVaultExistOnchain, getSelectedVaultAddress, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
+import { doesLoadedSecurityVaultMatchSelection, doesSecurityVaultExistOnchain, getSelectedVaultAddress, isOracleManagerPriceUsable, isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
 import { getPoolRegistryPresentation } from '../../../lib/userCopy.js'
 import { formatUniverseIdHex } from '../../universes/lib/universe.js'
 import { useForkWorkflowSelectionState } from '../../truth-auctions/hooks/useForkWorkflowSelectionState.js'
@@ -378,6 +378,7 @@ export function SecurityPoolWorkflowSection({
 		securityVaultResult: currentSecurityVaultResult,
 	})
 	const liquidationNoticeState = getLiquidationNoticeState({
+		currentTimestamp,
 		currentPoolOracleManagerDetails,
 		liquidationTargetVault,
 		loadingPoolOracleManager,
@@ -392,12 +393,13 @@ export function SecurityPoolWorkflowSection({
 	const selectedPoolOracleMetricValues = loadedSelectedPool === undefined ? undefined : getSelectedPoolOracleMetricValues(loadedSelectedPool)
 	const currentPoolOraclePrice = (currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastPrice
 	const currentPoolOracleSettlementTimestamp = (currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastSettlementTimestamp
+	const currentPoolOraclePriceUsable = currentPoolOracleManagerDetails === undefined ? undefined : isOracleManagerPriceUsable(currentPoolOracleManagerDetails, currentTimestamp)
 	const requestPriceTransactionEthValue = currentPoolOracleManagerDetails === undefined ? undefined : addOpenOracleBountyBuffer(currentPoolOracleManagerDetails.requestPriceEthCost)
 	const requestPriceGuardMessage = getVaultRequestPriceGuardMessage({
 		accountAddress: accountState.address,
 		hasLoadedSelectedPool: loadedSelectedPool !== undefined,
 		isMainnet,
-		isPriceValid: currentPoolOracleManagerDetails?.isPriceValid,
+		isPriceValid: currentPoolOraclePriceUsable,
 		pendingReportId: currentPoolOracleManagerDetails?.pendingReportId,
 		requiredEthCost: currentPoolOracleManagerDetails?.requestPriceEthCost,
 		walletEthBalance: accountState.ethBalance,
@@ -408,12 +410,16 @@ export function SecurityPoolWorkflowSection({
 		bufferRequiredEthCost: false,
 		hasLoadedSelectedPool: requestPriceReview !== undefined,
 		isMainnet,
-		isPriceValid: currentPoolOracleManagerDetails?.isPriceValid,
+		isPriceValid: currentPoolOraclePriceUsable,
 		pendingReportId: currentPoolOracleManagerDetails?.pendingReportId,
 		requiredEthCost: requestPriceReview?.ethValue,
 		walletEthBalance: accountState.ethBalance,
 	})
 	const selectedPendingOperationId = currentPoolOracleManagerDetails?.pendingOperationSlotId ?? 0n
+	const reportingOracleGuardMessage = (() => {
+		if (currentPoolOracleManagerDetails === undefined || currentPoolOraclePriceUsable === true) return undefined
+		return currentPoolOracleManagerDetails.lastSettlementTimestamp > 0n ? securityPoolCopy.reportingOraclePriceExpiredReason : securityPoolCopy.reportingOraclePriceRequiredReason
+	})()
 	const liquidationEnabled = selectedPoolStateModel.actions.queueLiquidation.enabled
 	const pendingOperationInput = (() => {
 		if (manualPendingOperationId.trim() !== '') return manualPendingOperationId.trim()
@@ -426,7 +432,7 @@ export function SecurityPoolWorkflowSection({
 		accountAddress: accountState.address,
 		hasLoadedOracleManager: currentPoolOracleManagerDetails !== undefined,
 		isMainnet,
-		isPriceValid: currentPoolOracleManagerDetails?.isPriceValid,
+		isPriceValid: currentPoolOraclePriceUsable,
 		resolvedPendingOperationId,
 	})
 	const pendingOperation = currentPoolOracleManagerDetails?.pendingOperation
@@ -670,7 +676,7 @@ export function SecurityPoolWorkflowSection({
 			return
 		}
 		if (loadingPoolOracleManager || currentPoolOracleManagerDetails === undefined) return
-		if (queuedVaultOperation !== undefined || !currentPoolOracleManagerDetails.isPriceValid) return
+		if (queuedVaultOperation !== undefined || currentPoolOraclePriceUsable !== true) return
 		if (lastImmediateQueuedOperationRefreshHash.current === queuedOperationHash) return
 		lastImmediateQueuedOperationRefreshHash.current = queuedOperationHash
 		void onRefreshSelectedPoolData(selectedPool?.securityPoolAddress)
@@ -678,6 +684,7 @@ export function SecurityPoolWorkflowSection({
 		if (showSelectedPoolWorkflowDetails && view === 'vaults' && hasLoadedCurrentVault) void securityVault.onLoadSecurityVault()
 	}, [
 		currentPoolOracleManagerDetails,
+		currentPoolOraclePriceUsable,
 		hasLoadedCurrentVault,
 		loadingPoolOracleManager,
 		onRefreshSelectedPoolData,
@@ -884,7 +891,7 @@ export function SecurityPoolWorkflowSection({
 																<button
 																	className='secondary'
 																	onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress, vault.securityBondAllowance)}
-																	disabled={accountState.address === undefined || !isMainnet || currentPoolOracleManagerDetails?.isPriceValid === false || !liquidationEnabled}
+																	disabled={accountState.address === undefined || !isMainnet || !liquidationEnabled}
 																	title={!isMainnet && accountState.address !== undefined ? commonCopy.mainnetRequiredReason : securityPoolCopy.reviewLiquidation}
 																>
 																	{securityPoolCopy.reviewLiquidation}
@@ -954,9 +961,11 @@ export function SecurityPoolWorkflowSection({
 										lockedReason={reportingLockedReason}
 										mode='full-reporting'
 										onOpenForkWorkflow={openSelectedPoolForkWorkflow}
+										onOpenPriceOracle={() => onSelectedPoolViewChange('price-oracle')}
 										onTriggerZoltarFork={triggerZoltarForkAvailability.disabled ? undefined : forkAuction.onForkWithOwnEscalation}
 										previewMarketDetails={currentReportingDetails === undefined ? marketDetails : undefined}
 										reportingDetails={currentReportingDetails}
+										reportActionGuardMessage={reportingOracleGuardMessage}
 										showHeader={false}
 										showSecurityPoolAddressInput={false}
 										triggerZoltarForkAvailability={triggerZoltarForkAvailability}

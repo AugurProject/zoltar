@@ -67,6 +67,20 @@ describe('oracle request ETH funding', () => {
 		})
 	})
 
+	test('uses fresh-request funding when a caller identifies a cached valid price as expired', () => {
+		expect(
+			resolveOracleOperationEthFunding({
+				managerDetails: createOracleManagerDetails({
+					isPriceValid: true,
+				}),
+				priceUsable: false,
+			}),
+		).toEqual({
+			ethCost: 10n,
+			includeBuffer: true,
+		})
+	})
+
 	test('uses no ETH for overflow operations outside the bounded settlement queue', () => {
 		expect(
 			resolveOracleOperationEthFunding({
