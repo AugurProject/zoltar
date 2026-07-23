@@ -152,7 +152,8 @@ abstract contract EscalationGameSettlement is EscalationGameEscrow {
 		emit ResidualRepSweptToSecurityPool(amount);
 	}
 
-	function drainAllRep(address receiver) external onlySecurityPoolOrForker returns (uint256 amount) {
+	function drainAllRep(address receiver) external returns (uint256 amount) {
+		require(msg.sender == address(securityPool), 'Only pool');
 		require(receiver != address(0x0), 'REP receiver zero');
 		amount = repToken.balanceOf(address(this));
 		if (amount == 0) return 0;

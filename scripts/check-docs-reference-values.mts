@@ -35,6 +35,7 @@ const shareTokenFactory = await readFile('solidity/contracts/peripherals/factori
 const truthAuctionFactory = await readFile('solidity/contracts/peripherals/factories/UniformPriceDualCapBatchAuctionFactory.sol', 'utf8')
 const securityPoolInterface = await readFile('solidity/contracts/peripherals/interfaces/ISecurityPool.sol', 'utf8')
 const securityPoolForker = await readFile('solidity/contracts/peripherals/SecurityPoolForker.sol', 'utf8')
+const securityPoolForkerBase = await readFile('solidity/contracts/peripherals/SecurityPoolForkerBase.sol', 'utf8')
 const securityPoolForkerVaultMigrationBase = await readFile('solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol', 'utf8')
 const securityPoolForkerVaultMigrationDelegate = await readFile('solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationDelegate.sol', 'utf8')
 const securityPoolEventEmitter = await readFile('solidity/contracts/peripherals/SecurityPoolEventEmitter.sol', 'utf8')
@@ -310,6 +311,16 @@ function assertStartHereTimelines(): void {
 }
 
 function assertContractInteractionDistinctions(): void {
+	const activateForkModeRow = getContractInteractionRow('activateForkMode(forkQuestionMatchesPoolQuestion)')
+	const initiateSecurityPoolForkRow = getContractInteractionRow('initiateSecurityPoolFork(securityPool)')
+	const ownEscalationForkRow = getContractInteractionRow('forkZoltarWithOwnEscalationGame(securityPool)')
+	const drainAllRepRow = getContractInteractionRow('drainAllRep(receiver)')
+	const createChildUniverseRow = getContractInteractionRow('createChildUniverse(securityPool, outcomeIndex)')
+	const migrateVaultRow = getContractInteractionRow('migrateVault(securityPool, outcomeIndex)')
+	const migrateVaultWithUnresolvedEscalationRow = getContractInteractionRow('migrateVaultWithUnresolvedEscalation(securityPool, vault, childOutcomeIndex)')
+	const claimForkedEscalationDepositsRow = getContractInteractionRow('claimForkedEscalationDeposits(...)')
+	const startTruthAuctionRow = getContractInteractionRow('startTruthAuction(securityPool)')
+	const finalizeTruthAuctionRow = getContractInteractionRow('finalizeTruthAuction(securityPool)')
 	assert.match(contractReferenceGenerator, /interaction\.declarations\.length, 1,[\s\S]*interaction rows must describe exactly one entrypoint name; split materially different guards, effects, and signals into separate rows/, 'generated interaction rows must remain limited to one entrypoint name')
 	assert.match(invariantsHtml, /<code>SHARE-04<\/code>[\s\S]*remaining economic claim[\s\S]*source entitlements/)
 	assert.match(invariantsHtml, /id="fork-10"[\s\S]*<code>FORK-10<\/code>[\s\S]*mints only the unmaterialized balance/)
@@ -376,7 +387,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /Auction owner \(`SecurityPoolForker`\) only; public callers use `settleAuctionBids`/)
 	assert.match(contractInteractionReference, /Only a positive migration amount with at least one selected outcome checks the eight-week window, existing child `ForkMigration` state/)
 	assert.match(contractInteractionReference, /child pool is not already deployed/)
-	assert.match(contractInteractionReference, /selected child can be created or loaded, remains in `ForkMigration`, has its continuation game, and is inside the eight-week claim window/)
+	assert.match(contractInteractionReference, /selected child can be created or loaded, remains in `ForkMigration`, has a continuation game that passes the \[child-game trust boundary\]\(#child-game-trust-boundary\), and is inside the eight-week claim window/)
 	assert.match(contractInteractionReference, /rejected settlement clears pending-report state but leaves staged operations queued for a later valid price path/)
 	assert.match(contractInteractionReference, /setSecurityPool\(pool\)[\s\S]*Anyone while `securityPool` remains zero[\s\S]*zero value emits and checkpoints zero but leaves the setter callable/)
 	assert.match(contractInteractionReference, /setRepEthPrice\(price\)[\s\S]*Configured nonzero `SecurityPool` only/)
@@ -404,7 +415,8 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /redeemFees\(vault\)[\s\S]*If resulting unpaid fees are zero, returns without payment[\s\S]*no event when fees and accrual state are unchanged/)
 	assert.match(contractInteractionReference, /performWithdrawRep\(vault, repAmount\)[\s\S]*operational pool in an unforked universe[\s\S]*`isEscalationResolved\(\)` is false/)
 	assert.match(whitepaperStatoblast, /cashToShares[\s\S]*Exchange rate undefined/)
-	assert.match(contractInteractionReference, /if an escalation game exists, the universe fork occurred before that game settled/)
+	assert.match(initiateSecurityPoolForkRow, /if an escalation game exists, it reports the supplied pool from `securityPool\(\)` when validated and the universe fork occurred before that game settled/)
+	assert.match(ownEscalationForkRow, /escalation game reports the supplied pool from `securityPool\(\)` when validated and reached non-decision/)
 	assert.match(contractInteractionReference, /withdrawDeposit\(uint256 depositIndex, outcome\)[\s\S]*`CarryDepositConsumed` and `VaultEscrowUpdated`[\s\S]*for a winner, `ClaimDeposit`/)
 	assert.match(contractInteractionReference, /`EscalationRepDrainedAtFork` when unresolved escalation exists/)
 	assert.match(contractInteractionReference, /Initially authorized `SecurityPoolFactory` for an origin pool; an authorized parent `SecurityPool` for a child pool/)
@@ -412,7 +424,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /If needed, first freezes the operational source pool and records its fork snapshot/)
 	assert.match(securityPoolForker, /uint256 migrationAmount = data\.ownFork \? data\.vaultRepAtFork : data\.auctionableRepAtFork;\s*if \(migrationAmount > 0\) \{\s*for \(uint256 index = 0; index < outcomeIndices\.length; index\+\+\)/)
 	assert.match(contractInteractionReference, /migrateRepToZoltar\(securityPool, outcomeIndices\)[\s\S]*A zero migration amount or empty list returns after the proxy and pool-state guards without per-outcome validation or events/)
-	assert.match(escalationGameForker, /ISecurityPool child = _getOrDeployChildPool\(parent, uint8\(outcomeIndex\)\);[\s\S]*_claimWinningDepositsFromGame\([\s\S]*emit ClaimForkedEscalationDepositsToWallet\(/)
+	assert.match(escalationGameForker, /\(ISecurityPool child, EscalationGame childEscalationGame\) = _getOrDeployChildPool\(parent, uint8\(outcomeIndex\)\);[\s\S]*_claimWinningDepositsFromGame\([\s\S]*emit ClaimForkedEscalationDepositsToWallet\(/)
 	assert.match(contractInteractionReference, /claimForkedEscalationDeposits\(\.\.\.\)[\s\S]*An empty list still performs child setup and emits a zero-valued claim summary[\s\S]*always `ClaimForkedEscalationDepositsToWallet`, including for an empty list/)
 	assert.match(securityPoolForkerVaultMigrationBase, /if \(address\(zoltar\.getRepToken\(childUniverseId\)\) == address\(0x0\)\) \{\s*zoltar\.deployChild\(parent\.universeId\(\), outcomeIndex\)/)
 	assert.match(contractInteractionReference, /createChildUniverse\(securityPool, outcomeIndex\)[\s\S]*Loads an already deployed child universe and REP token or deploys them when absent[\s\S]*`DeployChild` only when child REP was absent/)
@@ -443,7 +455,44 @@ function assertContractInteractionDistinctions(): void {
 		/claimAuctionProceeds\(securityPool, vault, tickIndices\)[\s\S]*For an empty list, the underlying auction withdrawal returns three zeros and the wrapper exits after the finalization guard without validating bids or the named beneficiary, calling it, changing state, or emitting events[\s\S]*no event for an empty list/,
 	)
 	assert.match(escalationGameSettlement, /function drainAllRep\(address receiver\)[\s\S]*amount = repToken\.balanceOf\(address\(this\)\);[\s\S]*if \(amount == 0\) return 0;[\s\S]*_safeTransferRep\(receiver, amount\)/)
-	assert.match(contractInteractionReference, /drainAllRep\(receiver\)[\s\S]*A zero balance returns zero without a transfer or event[\s\S]*no event at zero balance/)
+	assert.match(escalationGameSettlement, /function drainAllRep\(address receiver\)[\s\S]*require\(msg\.sender == address\(securityPool\), 'Only pool'\)/)
+	assert.match(securityPool, /function activateForkMode\(bool forkQuestionMatchesPoolQuestion\)[\s\S]*systemState = SystemState\.PoolForked;[\s\S]*mstore\(0x00, shl\(224, 0x3c250020\)\)[\s\S]*call\(gas\(\), game/)
+	assert.match(securityPoolForker, /function _getEscalationGame\(ISecurityPool securityPool\)[\s\S]*escalationGame\.securityPool\(\)[\s\S]*'Escalation game pool'/)
+	assert.match(securityPoolForkerBase, /function _validateChildEscalationGame\([\s\S]*childEscalationGame\.securityPool\(\)[\s\S]*'Child game'/)
+	assert.match(
+		securityPoolForkerVaultMigrationBase,
+		/childEscalationGame = child\.escalationGame\(\);[\s\S]*_validateChildEscalationGame\(child, childEscalationGame\);[\s\S]*_initializeChildForkedEscalationGameIfNeeded\([\s\S]*childEscalationGame[\s\S]*_ensureChildEscalationBacking\(parent, outcomeIndex, child, childEscalationGame\)/,
+	)
+	assert.match(escalationGameForker, /\(ISecurityPool child, EscalationGame childEscalationGame\) = _getOrDeployChildPool\([\s\S]*childEscalationGame\.recordForkedEscrowForOutcome\([\s\S]*childEscalationGame\.exportForkedEscrowByOutcome\(vault, vault\)/)
+	assert.match(securityPoolForker, /\(child, childEscalationGame\) = _migrateVaultAndReturnChild\(securityPool, childOutcomeIndex\);[\s\S]*\(securityPool, vault, childOutcomeIndex, child, childEscalationGame\)/)
+	assert.match(escalationGameForker, /ISecurityPool child = migratedChild;[\s\S]*EscalationGame childEscalationGame = migratedChildEscalationGame;[\s\S]*if \(address\(child\) == address\(0x0\)\)[\s\S]*_validateChildEscalationGame\(child, childEscalationGame\)/)
+	assert.equal((securityPoolForkerVaultMigrationBase.match(/child\.escalationGame\(\)/g) ?? []).length, 1, 'child setup must capture the child game exactly once')
+	assert.equal((securityPoolForker.match(/child\.escalationGame\(\)/g) ?? []).length, 1, 'the zero-game initialization branch must capture the newly initialized game exactly once')
+	assert.equal((securityPoolForkerBase.match(/child\.escalationGame\(\)/g) ?? []).length, 1, 'auction completion must capture the child game exactly once')
+	assert.doesNotMatch(escalationGameForker, /child\.escalationGame\(\)/, 'claim and unresolved cleanup must reuse the validated child game instead of reading the child getter')
+	assert.match(
+		contractInteractionReference,
+		/### Child-game trust boundary[\s\S]*game relationship check is point-in-time[\s\S]*does not prove that an arbitrary game getter is immutable[\s\S]*reuses that exact address[\s\S]*without reading the child getter again[\s\S]*Truth-auction completion performs a fresh point-in-time validation/,
+	)
+	assert.doesNotMatch(contractInteractionReference, /immutable `securityPool\(\)` binding/)
+	for (const childPoolInteractionRow of [createChildUniverseRow, migrateVaultRow, migrateVaultWithUnresolvedEscalationRow]) {
+		assert.match(childPoolInteractionRow, /reported nonzero escalation game passes the \[child-game trust boundary\]\(#child-game-trust-boundary\)/)
+	}
+	assert.match(claimForkedEscalationDepositsRow, /continuation game that passes the \[child-game trust boundary\]\(#child-game-trust-boundary\)/)
+	assert.match(claimForkedEscalationDepositsRow, /captures and validates the child's escalation game and uses that same game for continuation backing and escrow payment/)
+	assert.match(migrateVaultWithUnresolvedEscalationRow, /returns the selected child and its captured, validated escalation game to the unresolved-cleanup phase, which reuses those exact addresses without reading the child's game again/)
+	assert.match(securityPoolForkerBase, /function _finalizeEscalationStateAfterAuction\([\s\S]*childEscalationGame = child\.escalationGame\(\);\s*_validateChildEscalationGame\(child, childEscalationGame\);[\s\S]*_finalizeAwaitingForkContinuationIfReady\(child, childEscalationGame\)/)
+	assert.match(securityPoolForker, /if \(!parentForkData\.unresolvedEscalationAtFork\) return childEscalationGame;\s*if \(address\(childEscalationGame\) == address\(0x0\)\)/)
+	assert.match(contractInteractionReference, /When unresolved escalation requires a continuation and setup initially reports no game, initialization creates one; the forker then captures and validates it before continuation use/)
+	assert.match(contractInteractionReference, /initializeChildForkedEscalationGameIfNeeded\(parent, child, childEscalationGame\)[\s\S]*When unresolved escalation requires a continuation and no game existed, it captures and validates the game created by initialization before any continuation use/)
+	assert.match(startTruthAuctionRow, /game reported during immediate completion passes the \[child-game trust boundary\]\(#child-game-trust-boundary\)/)
+	assert.match(finalizeTruthAuctionRow, /game reported at completion passes the \[child-game trust boundary\]\(#child-game-trust-boundary\)/)
+	assert.match(drainAllRepRow, /Owning `SecurityPool` only[\s\S]*A zero balance returns zero without a transfer or event[\s\S]*no event at zero balance/)
+	assert.doesNotMatch(drainAllRepRow, /SecurityPoolForker/)
+	assert.match(
+		activateForkModeRow,
+		/configured game's drain must succeed or the entire activation reverts without propagating its reason data[\s\S]*makes the pool drain its configured escalation game's entire REP balance to the forker[\s\S]*balances replenished since the prior call[\s\S]*Pool REP `Transfer` always, including at zero; configured-game REP `Transfer` only for a positive game balance/,
+	)
 	assert.match(escalationGameEscrow, /function recordForkedEscrowForOutcome\([\s\S]*if \(sourcePrincipal == 0 && childRepAmount == 0\) return;[\s\S]*emit ForkedEscrowRecorded\(/)
 	assert.match(contractInteractionReference, /recordForkedEscrowForOutcome\(depositor, outcome, sourcePrincipal, childRepAmount\)[\s\S]*When both amounts are zero, returns without changing state or emitting an event[\s\S]*no event when both amounts are zero/)
 	assert.match(escalationGameEscrow, /function _exportForkedEscrowByOutcome\([\s\S]*if \(exported\) \{[\s\S]*emit ForkedEscrowExported\([\s\S]*if \(totalChildRepToTransfer == 0\) return/)
@@ -596,6 +645,15 @@ async function listSoliditySources(directoryPath: string): Promise<string[]> {
 		else if (entry.isFile() && entry.name.endsWith('.sol')) sourcePaths.push(entryPath)
 	}
 	return sourcePaths.sort()
+}
+
+function getContractInteractionRow(call: string): string {
+	const rowPrefix = `| \`${call}\` |`
+	const rows = contractInteractionReference.split('\n').filter(row => row.startsWith(rowPrefix))
+	assert.equal(rows.length, 1, `Expected exactly one generated interaction row for ${call}`)
+	const [row] = rows
+	assert.ok(row, `Missing generated interaction row for ${call}`)
+	return row
 }
 
 function assertSimpleByteRow(label: string, expectedValue: string): void {

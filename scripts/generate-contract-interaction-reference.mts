@@ -28,6 +28,7 @@ type ContractReference = {
 	readDeclarations: ContractDeclaration[]
 	readStorageDeclarations?: ContractDeclaration[]
 	readSurface: string
+	securityBoundary?: string
 	sourcePath: string
 }
 
@@ -43,7 +44,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/contract-interaction-reference.md'
-const expectedProductionSoliditySourceFingerprint = '5f2fb09e7f9b533ba4ed2a7382637ee04274297847bfbfc1ce66ce8341889798'
+const expectedProductionSoliditySourceFingerprint = '9c6bec1619721ef55f8bfe4db66f88cdc1a55467c41fda4a3d87354e2510dd37'
 
 const eventSourceByName: Record<string, string> = {
 	Approval: 'solidity/contracts/IERC20.sol',
@@ -420,7 +421,7 @@ const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 		finalizeTruthAuction: ['external(ISecurityPool)'],
 		forkZoltarWithOwnEscalationGame: ['external(ISecurityPool)'],
 		initiateSecurityPoolFork: ['external(ISecurityPool)'],
-		initializeChildForkedEscalationGameIfNeeded: ['external(ISecurityPool,ISecurityPool)'],
+		initializeChildForkedEscalationGameIfNeeded: ['external(ISecurityPool,ISecurityPool,EscalationGame)'],
 		migrateRepToZoltar: ['external(ISecurityPool,uint256[])'],
 		migrateVault: ['public(ISecurityPool,uint256)'],
 		migrateVaultWithUnresolvedEscalation: ['external(ISecurityPool,address,uint256)'],
@@ -460,12 +461,12 @@ const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/peripherals/EscalationGameCalculations.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/peripherals/EscalationGameCarry.sol': '7fd8be73b61c6624fb644d2b5818fa414e582e9ed4eea54eceee533f4a022d47',
 	'solidity/contracts/peripherals/EscalationGameEscrow.sol': 'b3755415ee7ff2d0457653e9c9e6a6cca56435ed3b76008ab5446c315f837452',
-	'solidity/contracts/peripherals/EscalationGameSettlement.sol': '895a913bd0a85b6a5b4759f161991d94f31cb0b3fdfec218aae204fa182f39be',
+	'solidity/contracts/peripherals/EscalationGameSettlement.sol': '94801532bfaaef27870ba39c7571c4732276db69c6e88e39a20b3e2be1b7e2a2',
 	'solidity/contracts/peripherals/EscalationGameState.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/peripherals/EscalationGameStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol': 'd6e92001bdc028def593ed95c37a8c23bab0a9006d0a5c9164f9a9f92b84ad49',
 	'solidity/contracts/peripherals/SecurityPool.sol': '7cd0c64aa36af777e176aac58a7aa3c2fe4e14942752eec51febd84b6380d76c',
-	'solidity/contracts/peripherals/SecurityPoolForker.sol': 'a6738d9c02e9eb21fa7b3092f566d491bedd68787c58dc355be0ad09f45dc72c',
+	'solidity/contracts/peripherals/SecurityPoolForker.sol': '282c464a68623405a6241816a1c5fcef4b80e9db39e42e89d77177d8a4f10eae',
 	'solidity/contracts/peripherals/SecurityPoolForkerBase.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/peripherals/SecurityPoolForkerStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol': '2c1768ca6df9cc73f7cd8743eb1955f628d8452135ad20a6afa84266f87da6ff',
@@ -875,9 +876,10 @@ const contractReferences: ContractReference[] = [
 				call: '`activateForkMode(forkQuestionMatchesPoolQuestion)`',
 				caller: '`SecurityPoolForker` only',
 				declarations: [{ name: 'activateForkMode' }],
-				effect: "Sets `PoolForked`, accrues through the fork clamp, and transfers the pool's entire REP balance to the forker. Repeated calls are not lifecycle-guarded and repeat the zero-balance transfer and checkpoints.",
-				preconditions: 'If the pool has an inherited fixed outcome, the universe fork question must match the pool question; no current-state guard.',
-				signals: 'Accrual checkpoint when due; REP `Transfer` including at zero balance; always `PoolForkModeActivated` and fork-activation `PoolAccountingCheckpoint`',
+				effect:
+					"Sets `PoolForked`, accrues through the fork clamp, transfers the pool's entire REP balance to the forker, then makes the pool drain its configured escalation game's entire REP balance to the forker. Repeated calls are not lifecycle-guarded and transfer any balances replenished since the prior call before repeating the checkpoints.",
+				preconditions: "If the pool has an inherited fixed outcome, the universe fork question must match the pool question; no current-state guard. A configured game's drain must succeed or the entire activation reverts without propagating its reason data.",
+				signals: 'Pool REP `Transfer` always, including at zero; configured-game REP `Transfer` only for a positive game balance; accrual checkpoint when due; always `PoolForkModeActivated` and fork-activation `PoolAccountingCheckpoint`',
 			},
 			{
 				call: '`initializeForkedEscalationGame(...)`',
@@ -986,7 +988,7 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '47213c714a0022dad57ed547f469c1f2f28f06e2c6fdcb9b76f5645fd81910bb',
+		compiledAbiFingerprint: '8c7458fdb53493a7885c09e85c0b971cad80664f957b1912189abc9340a8c1a9',
 		name: 'SecurityPoolForker',
 		purpose: 'Freezes parent pools, creates selected child pools, migrates vault and escalation state, and settles collateral-repair auctions.',
 		readAbiFingerprint: 'aa79d2d795e90ce0f0347186328bacbb1d5e28bbf7792359569ae44fead526f2',
@@ -1009,22 +1011,26 @@ const contractReferences: ContractReference[] = [
 			{ name: 'poolOwnershipToRep', sourcePath: 'solidity/contracts/peripherals/SecurityPoolForkerBase.sol' },
 		],
 		readStorageDeclarations: [{ name: 'zoltar', sourcePath: 'solidity/contracts/peripherals/SecurityPoolForkerBase.sol' }],
+		securityBoundary:
+			'### Child-game trust boundary\n\nFork entrypoints and child setup may receive contracts through unauthenticated pool lineages. A game relationship check is point-in-time: the reported nonzero game address must return the supplied pool or child from `securityPool()` when validated. This does not prove that an arbitrary game getter is immutable or that the address was factory-deployed. Child setup captures one reported game address, validates it before privileged use, and reuses that exact address for continuation backing and escrow work. When unresolved escalation requires a continuation and setup initially reports no game, initialization creates one; the forker then captures and validates it before continuation use. Combined vault migration passes the captured child/game pair into unresolved cleanup without reading the child getter again. Truth-auction completion performs a fresh point-in-time validation of the game reported then before checking continuation readiness. Genuine factory-deployed `EscalationGame` instances store their pool immutably, but safety on unauthenticated paths does not assume arbitrary contracts do.',
 		sourcePath: 'solidity/contracts/peripherals/SecurityPoolForker.sol',
 		interactions: [
 			{
 				call: '`initiateSecurityPoolFork(securityPool)`',
 				caller: 'Anyone',
-				effect: 'Freezes the parent pool after an external universe fork, drains pool and game REP, and records the canonical migration snapshot.',
+				effect: 'Freezes the supplied pool after an external universe fork, drains its pool and game REP, and records a migration snapshot keyed by that address. The snapshot is canonical only when the supplied pool is already registered by the configured `SecurityPoolFactory`.',
 				declarations: [{ name: 'initiateSecurityPoolFork' }],
-				preconditions: 'Pool operational; its universe already forked; fork state not initialized; if an escalation game exists, the universe fork occurred before that game settled.',
+				preconditions:
+					'Pool operational; its universe already forked; fork state not initialized; if an escalation game exists, it reports the supplied pool from `securityPool()` when validated and the universe fork occurred before that game settled. This entrypoint does not authenticate the supplied address against a pool factory; see the [child-game trust boundary](#child-game-trust-boundary).',
 				signals: '`SecurityPoolForkSnapshot` and `ParentRepLocked`; additionally `EscalationRepDrainedAtFork` when unresolved escalation exists',
 			},
 			{
 				call: '`forkZoltarWithOwnEscalationGame(securityPool)`',
 				caller: 'Anyone',
-				effect: 'Uses a game non-decision to fork Zoltar, freezes the pool, and records own-fork REP buckets and snapshot state.',
+				effect: "Uses the supplied pool game's non-decision to fork Zoltar, freezes that pool, and records own-fork REP buckets and snapshot state keyed by its address. The snapshot is canonical only when the supplied pool is already registered by the configured `SecurityPoolFactory`.",
 				declarations: [{ name: 'forkZoltarWithOwnEscalationGame' }],
-				preconditions: 'Pool operational; escalation reached non-decision; universe not already forked.',
+				preconditions:
+					'Pool operational; its escalation game reports the supplied pool from `securityPool()` when validated and reached non-decision; universe not already forked. This entrypoint does not authenticate the supplied address against a pool factory; see the [child-game trust boundary](#child-game-trust-boundary).',
 				signals: '`SecurityPoolForkSnapshot`, `ParentRepLocked`, and Zoltar fork events; additionally `EscalationRepDrainedAtFork` when unresolved escalation exists',
 			},
 			{
@@ -1039,9 +1045,10 @@ const contractReferences: ContractReference[] = [
 			{
 				call: '`createChildUniverse(securityPool, outcomeIndex)`',
 				caller: 'Anyone',
-				effect: 'Loads an already deployed child universe and REP token or deploys them when absent, then lazily deploys the selected child pool, coordinator, and auction; authorizes and links the child; and initializes any continuation snapshot and materializes or sweeps child backing.',
+				effect:
+					"Loads an already deployed child universe and REP token or deploys them when absent, then lazily deploys the selected child pool, coordinator, and auction; authorizes and links the child; captures and validates the child's escalation game; and initializes any continuation snapshot and materializes or sweeps child backing through that validated game.",
 				declarations: [{ name: 'createChildUniverse' }],
-				preconditions: 'Parent in migration window; selected fork outcome is well formed; child pool is not already deployed.',
+				preconditions: "Parent in migration window; selected fork outcome is well formed; child pool is not already deployed; the selected child's reported nonzero escalation game passes the [child-game trust boundary](#child-game-trust-boundary).",
 				signals:
 					'`DeployChild` only when child REP was absent; always `SecurityPoolRegistered`, `DeploySecurityPool`, `AuthorizationUpdated`, `ChildPoolLinked`, and `OwnershipDenominatorSet`; `AwaitingForkContinuationSet`, `EscalationGameSet`, `GameContinuedFromFork`, `ForkCarryCheckpoint`, `MigrationRepSplit`, `ChildEscalationRepMaterialized`, and `ChildPoolRepSwept` as continuation and backing state requires',
 			},
@@ -1050,26 +1057,26 @@ const contractReferences: ContractReference[] = [
 				caller: 'Vault owner for its unlocked position',
 				declarations: [{ name: 'migrateVault' }],
 				effect: "Moves the caller's currently unlocked REP ownership, allowance, fees, and collateral into one child pool. Repeat calls can have no additional unlocked state to move.",
-				preconditions: 'Migration window open. The optional unresolved-lock cleanup wrapper calls this function first to migrate any unlocked state.',
+				preconditions: "Migration window open; the selected child's reported nonzero escalation game passes the [child-game trust boundary](#child-game-trust-boundary). The optional unresolved-lock cleanup wrapper calls this function first to migrate any unlocked state.",
 				signals: '`VaultMigrationCheckpoint`',
 			},
 			{
 				call: '`migrateVaultWithUnresolvedEscalation(securityPool, vault, childOutcomeIndex)`',
 				caller: 'The named vault',
 				effect:
-					"First runs ordinary migration for the same vault, which may move its unlocked ownership, allowance, fees, and collateral to the selected child. Then clears that vault's parent unresolved-lock accounting in constant-size work and records the cleanup; the cleanup neither funds escalation backing nor authorizes carried proofs.",
+					"First runs ordinary migration for the same vault, which may move its unlocked ownership, allowance, fees, and collateral to the selected child. It returns the selected child and its captured, validated escalation game to the unresolved-cleanup phase, which reuses those exact addresses without reading the child's game again. The cleanup then clears that vault's parent unresolved-lock accounting in constant-size work and records it; the cleanup neither funds escalation backing nor authorizes carried proofs.",
 				declarations: [{ name: 'migrateVaultWithUnresolvedEscalation' }],
-				preconditions: 'Migration window open; caller equals `vault`; selected child not already recorded for this optional cleanup.',
+				preconditions: "Migration window open; caller equals `vault`; selected child not already recorded for this optional cleanup; the selected child's reported nonzero escalation game passes the [child-game trust boundary](#child-game-trust-boundary).",
 				signals: 'Vault migration events plus `EscalationMigrationEntitlementInitialized` on first export and `EscalationMigrationEntitlementMaterialized` for the selected child',
 			},
 			{
 				call: '`claimForkedEscalationDeposits(...)`',
 				caller: 'The named vault',
 				effect:
-					'First gets or lazily deploys the selected child universe, REP token, pool, coordinator, and auction, then initializes its continuation snapshot and materializes or sweeps child backing as needed. A nonempty list claims winning own-fork parent deposits and records their stable identities against descendant replay. An empty list still performs child setup and emits a zero-valued claim summary.',
+					"First gets or lazily deploys the selected child universe, REP token, pool, coordinator, and auction, then captures and validates the child's escalation game and uses that same game for continuation backing and escrow payment. A nonempty list claims winning own-fork parent deposits and records their stable identities against descendant replay. An empty list still performs child setup and emits a zero-valued claim summary.",
 				declarations: [{ name: 'claimForkedEscalationDeposits' }],
 				preconditions:
-					'Caller equals `vault`; unresolved escalation existed at an own-question non-decision fork; selected child can be created or loaded, remains in `ForkMigration`, has its continuation game, and is inside the eight-week claim window. A nonempty list additionally requires the matching winning outcome, deposits belonging to `vault`, and unclaimed deposit identities.',
+					'Caller equals `vault`; unresolved escalation existed at an own-question non-decision fork; selected child can be created or loaded, remains in `ForkMigration`, has a continuation game that passes the [child-game trust boundary](#child-game-trust-boundary), and is inside the eight-week claim window. A nonempty list additionally requires the matching winning outcome, deposits belonging to `vault`, and unclaimed deposit identities.',
 				signals:
 					'`DeployChild`, `SecurityPoolRegistered`, `DeploySecurityPool`, `AuthorizationUpdated`, `ChildPoolLinked`, `OwnershipDenominatorSet`, `AwaitingForkContinuationSet`, `EscalationGameSet`, `GameContinuedFromFork`, `ForkCarryCheckpoint`, `MigrationRepSplit`, `ChildEscalationRepMaterialized`, and `ChildPoolRepSwept` as setup requires; per claimed deposit, `CarryDepositConsumed` and `ClaimDeposit`; escrow record/export events when REP is paid; always `ClaimForkedEscalationDepositsToWallet`, including for an empty list',
 			},
@@ -1078,7 +1085,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'Anyone',
 				effect: "Copies the frozen parent's remaining economic claim supply into the child, closes migration accounting, and either reopens a fully backed child or starts its repair auction.",
 				declarations: [{ name: 'startTruthAuction' }],
-				preconditions: 'Child migration window ended; pool is in fork migration; required child REP is available.',
+				preconditions: 'Child migration window ended; pool is in fork migration; required child REP is available. If unresolved escalation existed at fork, any game reported during immediate completion passes the [child-game trust boundary](#child-game-trust-boundary).',
 				signals: '`ShareTokenSupplySet` and `TruthAuctionStarted`; immediate no-auction paths also emit `TruthAuctionFinalized` and pool accounting checkpoints',
 			},
 			{
@@ -1086,7 +1093,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'Anyone',
 				effect: 'Finalizes the ended auction, accounts migration-routed collateral plus accepted bid ETH, activates the child at that collateral level, and fixes bidder ownership and allowance rates. A nonzero repair contribution is rejected.',
 				declarations: [{ name: 'finalizeTruthAuction' }],
-				preconditions: 'Truth auction started, its one-week window has passed, and `msg.value` is zero.',
+				preconditions: 'Truth auction started, its one-week window has passed, and `msg.value` is zero. If unresolved escalation existed at fork, the game reported at completion passes the [child-game trust boundary](#child-game-trust-boundary).',
 				signals: '`TruthAuctionFinalized`, auction `AuctionFinalized`, and pool accounting checkpoints',
 			},
 			{
@@ -1107,11 +1114,12 @@ const contractReferences: ContractReference[] = [
 				signals: 'For processed bids, underlying auction `BidSettled`; `ClaimAuctionProceeds` when REP or allowance is credited; no event for an empty list',
 			},
 			{
-				call: '`initializeChildForkedEscalationGameIfNeeded(parent, child)`',
+				call: '`initializeChildForkedEscalationGameIfNeeded(parent, child, childEscalationGame)`',
 				caller: 'This `SecurityPoolForker` contract only, through its migration delegate callback',
-				effect: 'Allows delegated migration code to initialize a child continuation while preserving the forker as the authoritative caller.',
+				effect:
+					'Allows delegated migration code to initialize a child continuation while preserving the forker as the authoritative caller and the already captured child-game identity. When unresolved escalation requires a continuation and no game existed, it captures and validates the game created by initialization before any continuation use.',
 				declarations: [{ name: 'initializeChildForkedEscalationGameIfNeeded' }],
-				preconditions: 'External caller is the forker itself; parent and child match the active migration path.',
+				preconditions: 'External caller is the forker itself; parent and child match the active migration path; a supplied nonzero game passes the [child-game trust boundary](#child-game-trust-boundary).',
 				signals: '`ChildEscalationRepMaterialized` and escalation-continuation events when initialization is required',
 			},
 			{
@@ -1269,10 +1277,10 @@ const contractReferences: ContractReference[] = [
 			},
 			{
 				call: '`drainAllRep(receiver)`',
-				caller: 'Owning `SecurityPool` or its `SecurityPoolForker`',
+				caller: 'Owning `SecurityPool` only',
 				declarations: [{ name: 'drainAllRep', sourcePath: 'solidity/contracts/peripherals/EscalationGameSettlement.sol' }],
 				effect: "Transfers the game's full REP balance to `receiver`. A zero balance returns zero without a transfer or event.",
-				preconditions: '`receiver` is nonzero; no positive-balance requirement.',
+				preconditions: '`receiver` is nonzero; no positive-balance requirement. The protocol reaches this call from the owning pool after `activateForkMode` enters `PoolForked`.',
 				signals: 'REP `Transfer` for a positive balance; no event at zero balance',
 			},
 			{
@@ -1743,7 +1751,8 @@ async function generateMarkdown(): Promise<string> {
 		assert.ok(readAbiFingerprint, `Missing read ABI fingerprint for ${contractReference.name}`)
 		const compiledAbiFingerprint = compiledAbiFingerprintByContract.get(contractReference.name)
 		assert.ok(compiledAbiFingerprint, `Missing compiled ABI fingerprint for ${contractReference.name}`)
-		return `## ${contractReference.name}\n\n${contractReference.purpose} [Source](${sourceLink})\n\nRead surface: ${contractReference.readSurface}\n\n<!-- Validated read ABI fingerprint: ${readAbiFingerprint} -->\n<!-- Validated complete compiled ABI fingerprint: ${compiledAbiFingerprint} -->\n\n| Transaction | Caller | Main prerequisites | State or asset effect | Primary signals |\n| --- | --- | --- | --- | --- |\n${rows}`
+		const securityBoundary = contractReference.securityBoundary === undefined ? '' : `\n\n${contractReference.securityBoundary}`
+		return `## ${contractReference.name}\n\n${contractReference.purpose} [Source](${sourceLink})\n\nRead surface: ${contractReference.readSurface}${securityBoundary}\n\n<!-- Validated read ABI fingerprint: ${readAbiFingerprint} -->\n<!-- Validated complete compiled ABI fingerprint: ${compiledAbiFingerprint} -->\n\n| Transaction | Caller | Main prerequisites | State or asset effect | Primary signals |\n| --- | --- | --- | --- | --- |\n${rows}`
 	})
 
 	return `<!-- Generated by scripts/generate-contract-interaction-reference.mts. Do not edit directly. -->

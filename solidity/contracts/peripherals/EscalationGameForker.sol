@@ -29,11 +29,14 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 
 	constructor(Zoltar _zoltar) SecurityPoolForkerBase(_zoltar) {}
 
-	function _initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child) internal override {
-		ISecurityPoolForkerChildEscalationGameInitializer(address(this)).initializeChildForkedEscalationGameIfNeeded(
-			parent,
-			child
-		);
+	function _initializeChildForkedEscalationGameIfNeeded(
+		ISecurityPool parent,
+		ISecurityPool child,
+		EscalationGame childEscalationGame
+	) internal override returns (EscalationGame) {
+		return
+			ISecurityPoolForkerChildEscalationGameInitializer(address(this))
+				.initializeChildForkedEscalationGameIfNeeded(parent, child, childEscalationGame);
 	}
 
 	function claimForkedEscalationDeposits(
@@ -49,13 +52,12 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 			'Non-decision required'
 		);
 		require(forkDataByPool[parent].ownFork, 'Own fork required');
-		ISecurityPool child = _getOrDeployChildPool(parent, uint8(outcomeIndex));
+		(ISecurityPool child, EscalationGame childEscalationGame) = _getOrDeployChildPool(parent, uint8(outcomeIndex));
 		require(child.systemState() == SystemState.ForkMigration, 'Child not migrating');
 		require(
 			block.timestamp <= forkDataByPool[parent].forkActivationTime + SecurityPoolUtils.MIGRATION_TIME,
 			'Claim window closed'
 		);
-		EscalationGame childEscalationGame = child.escalationGame();
 		require(address(childEscalationGame) != address(0x0), 'Child game missing');
 		(uint256 repMigratedFromEscalationGame, uint256 sourcePrincipalClaimed) = _claimWinningDepositsFromGame(
 			escalationGame,
@@ -131,7 +133,9 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 	function migrateVaultWithUnresolvedEscalation(
 		ISecurityPool parent,
 		address vault,
-		uint256 childOutcomeIndex
+		uint256 childOutcomeIndex,
+		ISecurityPool migratedChild,
+		EscalationGame migratedChildEscalationGame
 	) public {
 		require(msg.sender == vault, 'Only vault');
 		require(
@@ -144,14 +148,20 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 			!escalationEntitlementMaterializedByPoolVaultAndOutcome[parent][vault][childOutcomeIndex],
 			'Entitlement materialized'
 		);
+		ISecurityPool child = migratedChild;
+		EscalationGame childEscalationGame = migratedChildEscalationGame;
+		if (address(child) == address(0x0)) {
+			(child, childEscalationGame) = _getOrDeployChildPool(parent, childOutcomeIndex);
+		} else {
+			require(address(childrenByPoolAndOutcome[parent][childOutcomeIndex]) == address(child), 'Child game');
+			_validateChildEscalationGame(child, childEscalationGame);
+		}
 		EscalationMigrationEntitlement storage entitlement = escalationMigrationEntitlementByPoolAndVault[parent][
 			vault
 		];
 		if (!entitlement.initialized) {
 			_initializeEscalationMigrationEntitlement(parent, parent.escalationGame(), vault, entitlement);
 		}
-		ISecurityPool child = _getOrDeployChildPool(parent, childOutcomeIndex);
-		EscalationGame childEscalationGame = child.escalationGame();
 		require(address(childEscalationGame) != address(0x0), 'Child game missing');
 		escalationEntitlementMaterializedByPoolVaultAndOutcome[parent][vault][childOutcomeIndex] = true;
 		_finalizeAwaitingForkContinuationIfReady(child, childEscalationGame);
