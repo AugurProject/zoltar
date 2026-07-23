@@ -13,6 +13,7 @@ import { approveAndDepositRep, handleOracleReporting, manipulatePriceOracle, man
 import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, applyLibraries, deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
 import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/zoltar'
+import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import {
 	OperationType,
 	executeStagedOperation,
@@ -41,7 +42,7 @@ import {
 	requestPriceWithValue,
 	wrapWeth,
 } from '../testSupport/simulator/utils/contracts/peripherals'
-import { createCompleteSet, depositRep, getCompleteSetCollateralAmount, getSecurityVault, getShareTokenSupply, getTotalAccruedFees, getTotalFeesOwedToVaults } from '../testSupport/simulator/utils/contracts/securityPool'
+import { createCompleteSet, depositRep, depositToEscalationGame, getCompleteSetCollateralAmount, getSecurityVault, getShareTokenSupply, getTotalAccruedFees, getTotalFeesOwedToVaults } from '../testSupport/simulator/utils/contracts/securityPool'
 import {
 	peripherals_openOracle_OpenOracle_OpenOracle,
 	peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
@@ -318,6 +319,38 @@ describe('Price Oracle Refund Security Tests', () => {
 		const settleHash = await openOracleSettle(client, pendingReportId)
 		const settleReceipt = await client.waitForTransactionReceipt({ hash: settleHash })
 		return { pendingReportId, settleReceipt }
+	}
+
+	const readPoolGuardState = async (vaults: Address[]) => {
+		const repToken = addressString(GENESIS_REPUTATION_TOKEN)
+		return {
+			escalationGame: await client.readContract({
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				address: securityPool,
+				functionName: 'escalationGame',
+				args: [],
+			}),
+			poolAccounting: await client.readContract({
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				address: securityPool,
+				functionName: 'getPoolAccountingSnapshot',
+				args: [],
+			}),
+			poolOwnershipDenominator: await client.readContract({
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				address: securityPool,
+				functionName: 'poolOwnershipDenominator',
+				args: [],
+			}),
+			poolRep: await getERC20Balance(client, repToken, securityPool),
+			vaults: await Promise.all(
+				vaults.map(async vault => ({
+					address: vault,
+					rep: await getERC20Balance(client, repToken, vault),
+					state: await getSecurityVault(client, securityPool, vault),
+				})),
+			),
+		}
 	}
 
 	const assertCoordinatorReplayMatchesStorage = async (logs: TransactionReceiptLogs, context: string) => {
@@ -1317,20 +1350,8 @@ describe('Price Oracle Refund Security Tests', () => {
 		await manipulatePriceOracleAndPerformOperation(counterpartyClient, mockWindow, priceOracle, OperationType.SetSecurityBondsAllowance, counterpartyClient.account.address, counterpartyAllowance)
 		await manipulatePriceOracle(client, mockWindow, priceOracle, increasedPrice)
 
-		const readFinancialState = async () => ({
-			callerRep: await getERC20Balance(client, repToken, client.account.address),
-			callerVault: await getSecurityVault(client, securityPool, client.account.address),
-			counterpartyRep: await getERC20Balance(client, repToken, counterpartyClient.account.address),
-			counterpartyVault: await getSecurityVault(client, securityPool, counterpartyClient.account.address),
-			poolRep: await getERC20Balance(client, repToken, securityPool),
-			totalAllowance: await client.readContract({
-				abi: peripherals_SecurityPool_SecurityPool.abi,
-				address: securityPool,
-				functionName: 'totalSecurityBondAllowance',
-				args: [],
-			}),
-		})
-		const stateBefore = await readFinancialState()
+		const guardedVaults = [client.account.address, counterpartyClient.account.address]
+		const stateBefore = await readPoolGuardState(guardedVaults)
 		const locallyBackedAllowance = repDeposit / 10n
 		const updateHash = await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, locallyBackedAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
 		const updateReceipt = await client.waitForTransactionReceipt({ hash: updateHash })
@@ -1340,7 +1361,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(await getLastPrice(client, priceOracle), increasedPrice, 'the aggregate guard must use the increased REP price')
 		assert.strictEqual(executionLog.args.success, false, 'an individually backed allowance must fail when aggregate pool backing is insufficient')
 		assert.strictEqual(executionLog.args.errorMessage, 'Pool allow', 'aggregate allowance failure must expose its exact dynamic reason')
-		assert.deepStrictEqual(await readFinancialState(), stateBefore, 'aggregate allowance failure must roll back both vaults, the pool allowance, and REP balances')
+		assert.deepStrictEqual(await readPoolGuardState(guardedVaults), stateBefore, 'aggregate allowance failure must roll back both vaults, complete pool accounting, ownership, and REP balances')
 	})
 
 	test('aggregate withdrawal bond guard rejects an unencumbered vault after another vault becomes under-backed', async () => {
@@ -1354,20 +1375,8 @@ describe('Price Oracle Refund Security Tests', () => {
 		await manipulatePriceOracleAndPerformOperation(counterpartyClient, mockWindow, priceOracle, OperationType.SetSecurityBondsAllowance, counterpartyClient.account.address, counterpartyAllowance)
 		await manipulatePriceOracle(client, mockWindow, priceOracle, increasedPrice)
 
-		const readFinancialState = async () => ({
-			callerRep: await getERC20Balance(client, repToken, client.account.address),
-			callerVault: await getSecurityVault(client, securityPool, client.account.address),
-			counterpartyRep: await getERC20Balance(client, repToken, counterpartyClient.account.address),
-			counterpartyVault: await getSecurityVault(client, securityPool, counterpartyClient.account.address),
-			poolRep: await getERC20Balance(client, repToken, securityPool),
-			totalAllowance: await client.readContract({
-				abi: peripherals_SecurityPool_SecurityPool.abi,
-				address: securityPool,
-				functionName: 'totalSecurityBondAllowance',
-				args: [],
-			}),
-		})
-		const stateBefore = await readFinancialState()
+		const guardedVaults = [client.account.address, counterpartyClient.account.address]
+		const stateBefore = await readPoolGuardState(guardedVaults)
 		const withdrawalAmount = repDeposit / 4n
 		const withdrawalHash = await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.WithdrawRep, client.account.address, withdrawalAmount, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
 		const withdrawalReceipt = await client.waitForTransactionReceipt({ hash: withdrawalHash })
@@ -1377,7 +1386,61 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(await getLastPrice(client, priceOracle), increasedPrice, 'the aggregate guard must use the increased REP price')
 		assert.strictEqual(executionLog.args.success, false, 'an unencumbered vault withdrawal must fail when aggregate pool backing is insufficient')
 		assert.strictEqual(executionLog.args.errorMessage, 'Pool bond', 'aggregate withdrawal failure must expose its exact dynamic reason')
-		assert.deepStrictEqual(await readFinancialState(), stateBefore, 'aggregate withdrawal failure must roll back both vaults, the pool allowance, and REP balances')
+		assert.deepStrictEqual(await readPoolGuardState(guardedVaults), stateBefore, 'aggregate withdrawal failure must roll back both vaults, complete pool accounting, ownership, and REP balances')
+	})
+
+	test('escalation deposit local bond failure rolls back game deployment and escrow accounting', async () => {
+		const repToken = addressString(GENESIS_REPUTATION_TOKEN)
+		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const callerAllowance = (repDeposit * 9n) / 10n
+		const escrowAmount = repDeposit / 5n
+
+		await approveToken(counterpartyClient, repToken, securityPool)
+		await depositRep(counterpartyClient, securityPool, repDeposit)
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, callerAllowance)
+		await mockWindow.setTime(questionEndDate + 1n)
+		await manipulatePriceOracle(client, mockWindow, priceOracle)
+
+		const guardedVaults = [client.account.address, counterpartyClient.account.address]
+		const stateBefore = await readPoolGuardState(guardedVaults)
+		assert.strictEqual(stateBefore.escalationGame, zeroAddress, 'the local bond failure must exercise first-deposit game deployment')
+
+		await assert.rejects(depositToEscalationGame(client, securityPool, QuestionOutcome.Yes, escrowAmount), /Vault bond/)
+		assert.deepStrictEqual(await readPoolGuardState(guardedVaults), stateBefore, 'local bond failure must roll back game deployment, both vaults, pool accounting, ownership, REP, and escrow')
+	})
+
+	test('escalation deposit aggregate bond failure rolls back game deployment and escrow accounting', async () => {
+		const repToken = addressString(GENESIS_REPUTATION_TOKEN)
+		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const counterpartyAllowance = (repDeposit * 9n) / 10n
+		const increasedPrice = 2n * 10n ** 18n
+		const escrowAmount = repDeposit / 4n
+
+		await approveToken(counterpartyClient, repToken, securityPool)
+		await depositRep(counterpartyClient, securityPool, repDeposit)
+		await manipulatePriceOracleAndPerformOperation(counterpartyClient, mockWindow, priceOracle, OperationType.SetSecurityBondsAllowance, counterpartyClient.account.address, counterpartyAllowance)
+		await mockWindow.setTime(questionEndDate + 1n)
+		await manipulatePriceOracle(client, mockWindow, priceOracle, increasedPrice)
+
+		const guardedVaults = [client.account.address, counterpartyClient.account.address]
+		const stateBefore = await readPoolGuardState(guardedVaults)
+		assert.strictEqual(stateBefore.escalationGame, zeroAddress, 'the aggregate bond failure must exercise first-deposit game deployment')
+
+		await assert.rejects(depositToEscalationGame(client, securityPool, QuestionOutcome.Yes, escrowAmount), /Pool bond/)
+		assert.deepStrictEqual(await readPoolGuardState(guardedVaults), stateBefore, 'aggregate bond failure must roll back game deployment, both vaults, pool accounting, ownership, REP, and escrow')
+	})
+
+	test('escalation deposit minimum REP failure rolls back game deployment and escrow accounting', async () => {
+		const remainingDust = 9n * 10n ** 18n
+		const escrowAmount = repDeposit - remainingDust
+		await mockWindow.setTime(questionEndDate + 1n)
+
+		const guardedVaults = [client.account.address]
+		const stateBefore = await readPoolGuardState(guardedVaults)
+		assert.strictEqual(stateBefore.escalationGame, zeroAddress, 'the minimum REP failure must exercise first-deposit game deployment')
+
+		await assert.rejects(depositToEscalationGame(client, securityPool, QuestionOutcome.Yes, escrowAmount), /Vault REP below minimum/)
+		assert.deepStrictEqual(await readPoolGuardState(guardedVaults), stateBefore, 'minimum REP failure must roll back game deployment, vault and pool accounting, ownership, REP, and escrow')
 	})
 
 	test('rejecting complete-set redeemer exposes ETH failed and restores every accounting mutation', async () => {
