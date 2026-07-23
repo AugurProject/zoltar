@@ -101,13 +101,14 @@ function OpenOracleSectionHarness({ accountAddress, initialActiveView = 'create'
 				onActiveViewChange={setActiveView}
 				onApproveToken1={amount => void openOracle.approveToken1(amount)}
 				onApproveToken2={amount => void openOracle.approveToken2(amount)}
+				onCancelOpenOracleWithdrawalBalanceCheck={openOracle.cancelWithdrawalBalanceCheck}
 				onCreateOpenOracleGame={() => void openOracle.createOpenOracleGame()}
 				onDisputeReport={() => void openOracle.disputeReport()}
 				onLoadOracleReport={reportIdInput => void openOracle.loadOracleReport(reportIdInput)}
 				onOpenOracleCreateFormChange={update => openOracle.setOpenOracleCreateForm(current => ({ ...current, ...update }))}
 				onOpenOracleFormChange={update => openOracle.setOpenOracleForm(current => ({ ...current, ...update }))}
 				onSettleReport={() => void openOracle.settleReport()}
-				onWithdrawOpenOracleBalance={balance => void openOracle.withdrawBalance(balance)}
+				onWithdrawOpenOracleBalance={(balance, reviewedAmount) => void openOracle.withdrawBalance(balance, reviewedAmount)}
 				openOracleActiveAction={openOracle.openOracleActiveAction}
 				openOracleActiveWithdrawalBalance={openOracle.openOracleActiveWithdrawalBalance}
 				openOracleCreateForm={openOracle.openOracleCreateForm}
@@ -118,6 +119,8 @@ function OpenOracleSectionHarness({ accountAddress, initialActiveView = 'create'
 				openOracleTokenAccessState={openOracle.openOracleTokenAccessState}
 				openOracleReportDetails={openOracle.openOracleReportDetails}
 				openOracleResult={openOracle.openOracleResult}
+				openOracleWithdrawalBalanceChecking={openOracle.openOracleWithdrawalBalanceChecking}
+				openOracleWithdrawalReviewMessage={openOracle.openOracleWithdrawalReviewMessage}
 				openOracleWithdrawableBalances={openOracle.openOracleWithdrawableBalances}
 				openOracleWithdrawableBalancesError={openOracle.openOracleWithdrawableBalancesError}
 				openOracleWithdrawableBalancesLoading={openOracle.openOracleWithdrawableBalancesLoading}

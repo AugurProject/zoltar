@@ -377,13 +377,14 @@ type OpenOracleRouteContentProps = {
 	accountState: AccountState
 	onApproveToken1: (amount?: bigint) => void
 	onApproveToken2: (amount?: bigint) => void
+	onCancelOpenOracleWithdrawalBalanceCheck: () => void
 	onCreateOpenOracleGame: () => void
 	onDisputeReport: () => void
 	onLoadOracleReport: (reportId?: string) => void
 	onOpenOracleFormChange: (update: Partial<OpenOracleFormState>) => void
 	onOpenOracleCreateFormChange: (update: Partial<OpenOracleCreateFormState>) => void
 	onSettleReport: () => void
-	onWithdrawOpenOracleBalance: (balance: keyof OpenOracleWithdrawableBalances) => void
+	onWithdrawOpenOracleBalance: (balance: keyof OpenOracleWithdrawableBalances, reviewedAmount: bigint) => void
 	loadingOpenOracleCreate: boolean
 	openOracleActiveAction: OpenOracleActionResult['action'] | undefined
 	openOracleActiveWithdrawalBalance: keyof OpenOracleWithdrawableBalances | undefined
@@ -406,6 +407,8 @@ type OpenOracleRouteContentProps = {
 	openOracleReportLookupState: OpenOracleReportLookupState
 	openOracleReportDetails: OpenOracleReportDetails | undefined
 	openOracleResult: OpenOracleActionResult | undefined
+	openOracleWithdrawalBalanceChecking: boolean
+	openOracleWithdrawalReviewMessage: { balance: keyof OpenOracleWithdrawableBalances; message: string } | undefined
 	openOracleWithdrawableBalances: OpenOracleWithdrawableBalances | undefined
 	openOracleWithdrawableBalancesError: string | undefined
 	openOracleWithdrawableBalancesLoading: boolean

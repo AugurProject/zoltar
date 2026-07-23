@@ -191,6 +191,7 @@ function createOpenOracleSectionProps(): OpenOracleSectionProps {
 		onActiveViewChange: () => undefined,
 		onApproveToken1: () => undefined,
 		onApproveToken2: () => undefined,
+		onCancelOpenOracleWithdrawalBalanceCheck: () => undefined,
 		onCreateOpenOracleGame: () => undefined,
 		onDisputeReport: () => undefined,
 		onLoadOracleReport: () => undefined,
@@ -208,6 +209,8 @@ function createOpenOracleSectionProps(): OpenOracleSectionProps {
 		openOracleReportDetails: undefined,
 		openOracleResult: undefined,
 		openOracleTokenAccessState: createOpenOracleTokenAccessState(),
+		openOracleWithdrawalBalanceChecking: false,
+		openOracleWithdrawalReviewMessage: undefined,
 		openOracleWithdrawableBalances: undefined,
 		openOracleWithdrawableBalancesError: undefined,
 		openOracleWithdrawableBalancesLoading: false,
@@ -406,8 +409,8 @@ void describe('OpenOracleSection', () => {
 			settlementTime: 200n,
 		})
 		const openOracleForm = createOpenOracleForm({
-			disputeNewAmount1: (20n * tokenUnits).toString(),
-			disputeNewAmount2: (7n * tokenUnits).toString(),
+			disputeNewAmount1: '20',
+			disputeNewAmount2: '7',
 		})
 		const openOracleTokenAccessState = createOpenOracleTokenAccessState({
 			token1Approval: {
@@ -435,6 +438,49 @@ void describe('OpenOracleSection', () => {
 		expect(getButtonDisabled(disputeButton)).toBe(true)
 	})
 
+	void test('accepts human-readable token decimals for dispute amounts', () => {
+		const tokenUnits = 10n ** 18n
+		const openOracleReportDetails = createOpenOracleReportDetails({
+			currentAmount1: tokenUnits,
+			currentAmount2: 5n * tokenUnits,
+			currentReporter: getAddress('0x3000000000000000000000000000000000000000'),
+			currentTime: 200n,
+			disputeDelay: 10n,
+			escalationHalt: 2n * tokenUnits,
+			feePercentage: 0n,
+			multiplier: 20_000n,
+			protocolFee: 0n,
+			reportTimestamp: 100n,
+			settlementTime: 200n,
+		})
+		const openOracleForm = createOpenOracleForm({
+			disputeNewAmount1: '2',
+			disputeNewAmount2: '7.5',
+		})
+		const openOracleTokenAccessState = createOpenOracleTokenAccessState({
+			token1Approval: {
+				error: undefined,
+				loading: false,
+				value: 100n * tokenUnits,
+			},
+			token2Approval: {
+				error: undefined,
+				loading: false,
+				value: 100n * tokenUnits,
+			},
+		})
+
+		const disputeSubmission = createOpenOracleDisputeSubmission({
+			openOracleForm,
+			openOracleReportDetails,
+			openOracleTokenAccessState,
+		})
+
+		expect(disputeSubmission.expectedNewAmount1).toBe(2n * tokenUnits)
+		expect(disputeSubmission.canSubmit).toBe(true)
+		expect(disputeSubmission.blockMessage).toBeUndefined()
+	})
+
 	void test('renders dispute balance blockers when the wallet lacks the required swap contribution', () => {
 		const tokenUnits = 10n ** 18n
 		const openOracleReportDetails = createOpenOracleReportDetails({
@@ -451,8 +497,8 @@ void describe('OpenOracleSection', () => {
 			settlementTime: 200n,
 		})
 		const openOracleForm = createOpenOracleForm({
-			disputeNewAmount1: (20n * tokenUnits).toString(),
-			disputeNewAmount2: (7n * tokenUnits).toString(),
+			disputeNewAmount1: '20',
+			disputeNewAmount2: '7',
 		})
 		const openOracleTokenAccessState = createOpenOracleTokenAccessState({
 			token1Approval: {

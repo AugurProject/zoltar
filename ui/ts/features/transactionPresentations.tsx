@@ -468,7 +468,10 @@ export function createPoolOracleWarningPresentation(result: OpenOracleActionResu
 type OpenOracleTransactionContext = {
 	openOracleAddress?: string | undefined
 	reportId?: string | undefined
+	token1Symbol?: string | undefined
+	token2Symbol?: string | undefined
 	tokenPair?: string | undefined
+	withdrawalTokenSymbol?: string | undefined
 }
 
 function getOpenOracleTransactionRows(context: OpenOracleTransactionContext | undefined) {
@@ -480,12 +483,26 @@ function getOpenOracleTransactionRows(context: OpenOracleTransactionContext | un
 	]
 }
 
+function getOpenOracleSubmittedTitle(actionName: OpenOracleActionResult['action'], context: OpenOracleTransactionContext | undefined) {
+	if (actionName === 'approveToken1') return openOracleCopy.formatApproveToken(context?.token1Symbol ?? openOracleCopy.baseToken)
+	if (actionName === 'approveToken2') return openOracleCopy.formatApproveToken(context?.token2Symbol ?? openOracleCopy.quoteToken)
+	if (actionName === 'withdrawBalance') return openOracleCopy.withdrawBalance(context?.withdrawalTokenSymbol ?? openOracleCopy.oracleBalance)
+	return humanizeAction(actionName)
+}
+
+function getOpenOracleSuccessTitle(actionName: OpenOracleActionResult['action'], context: OpenOracleTransactionContext | undefined) {
+	if (actionName === 'approveToken1') return openOracleCopy.formatTokenApproved(context?.token1Symbol ?? openOracleCopy.baseToken)
+	if (actionName === 'approveToken2') return openOracleCopy.formatTokenApproved(context?.token2Symbol ?? openOracleCopy.quoteToken)
+	if (actionName === 'withdrawBalance') return openOracleCopy.formatTokenWithdrawn(context?.withdrawalTokenSymbol ?? openOracleCopy.oracleBalance)
+	return humanizeAction(actionName)
+}
+
 export function createOpenOracleTransactionIntent(actionName: OpenOracleActionResult['action'], context?: OpenOracleTransactionContext) {
 	return buildIntent({
 		action: actionName,
 		rows: getOpenOracleTransactionRows(context),
 		source: 'open-oracle',
-		submittedTitle: humanizeAction(actionName),
+		submittedTitle: getOpenOracleSubmittedTitle(actionName, context),
 	})
 }
 
@@ -493,7 +510,7 @@ export function createOpenOracleSuccessPresentation(result: OpenOracleActionResu
 	return buildPresentation({
 		hash: result.hash,
 		rows: getOpenOracleTransactionRows(context),
-		title: humanizeAction(result.action),
+		title: getOpenOracleSuccessTitle(result.action, context),
 		tone: 'success',
 	})
 }

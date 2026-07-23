@@ -1,4 +1,4 @@
-import { decodeEventLog, getAddress, maxUint256, zeroAddress, type Address, type Hex, type TransactionReceipt } from '@zoltar/shared/ethereum'
+import { decodeEventLog, getAddress, zeroAddress, type Address, type Hex, type TransactionReceipt } from '@zoltar/shared/ethereum'
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hasOpenOracleFlag, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_STORE_PRICE, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
 import { ABIS } from '../abis.js'
 import { sameAddress } from '../lib/address.js'
@@ -842,12 +842,12 @@ export async function loadOpenOracleWithdrawableBalances(client: Pick<ReadClient
 		token2: availableBalance(rawToken2),
 	}
 }
-export async function withdrawOpenOracleBalance<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt>, openOracleAddress: Address, token: Address, recipient: Address): Promise<OpenOracleActionResult> {
+export async function withdrawOpenOracleBalance<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt>, openOracleAddress: Address, token: Address, amount: bigint, recipient: Address): Promise<OpenOracleActionResult> {
 	const hash = await writeContractAndWait(client, () => ({
 		address: openOracleAddress,
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'withdrawTo',
-		args: [token, maxUint256, recipient],
+		args: [token, amount, recipient],
 	}))
 	return {
 		action: 'withdrawBalance',
