@@ -133,7 +133,7 @@
 						<tbody>
 							<tr>
 								<td><strong>Oracle security is not bounded by downstream value.</strong> Report liquidity need not equal the value of one operation or all operations using the cached price.</td>
-								<td><code>ORACLE-A1</code>: independent, profit-driven arbitragers monitor every pending report, correct profitable errors, and obtain inclusion before settlement. The position is an incentive for correction, not loss collateral.</td>
+								<td><code>ORACLE-A1</code>: independent, profit-driven arbitragers monitor every pending report, correct profitable errors, and obtain inclusion before settlement. The selected initial WETH position equals the greater of the gas-based minimum and the sponsor's requested amount. The multiplicative-escalation halt equals the greater of the floored selected-initial-times-halt-multiplier candidate and the <a href="./open-oracle-integration.html#parameters">configured OI-derived floor</a>. The position remains an incentive for correction rather than loss collateral.</td>
 								<td>Incorrect sizing or settlement math; a bypass of public dispute access; cache use outside the documented window; or concrete launch parameters under which a material false report cannot be corrected profitably and in time.</td>
 							</tr>
 							<tr>
@@ -143,7 +143,7 @@
 							</tr>
 							<tr>
 								<td><strong>Valid rolling disputes may extend the pending oracle lane indefinitely.</strong> The coordinator has no absolute settlement deadline while disputes continue.</td>
-								<td>Every extension executes a valid OpenOracle replacement, restarts settlement, requires the replacement position, and charges the computed protocol fee. The deployment configures an unrecoverable OpenOracle fee sink. Availability against an indefinitely funded participant is excluded.</td>
+								<td>Every extension executes a valid OpenOracle limit-order replacement, restarts settlement, and requires the replacement position. The computed protocol fee can floor to zero at atomic-unit dust, but a wildly wrong dust-side quote exposes the reporter's opposite-side position to immediate profitable correction under <code>ORACLE-A1</code>. Availability against an indefinitely funded participant or sustained correction censorship is excluded.</td>
 								<td>A free or underfunded reset; fee avoidance or refund; unauthorized queue use; invalid deadline transition; accounting that lets capital be reused simultaneously; or documentation or UI that promises bounded completion.</td>
 							</tr>
 						</tbody>
@@ -156,9 +156,9 @@
 						strength depends on supply along the recursive lineage. The
 						<a href="./zoltar-whitepaper.html#economics">Zoltar economics section</a>
 						owns current defaults, flooring boundaries, and worked values. Each valid rolling
-						dispute must fund a replacement position and the configured protocol
-						fee. Dust flooring can reduce that fee but not the replacement-position
-						requirement. Crediting an economically inaccessible internal fee balance
+						dispute must fund a replacement position and its computed protocol fee.
+						Dust flooring can reduce that fee to zero, but it does not remove the
+						executable limit order or replacement-position requirement. Crediting an economically inaccessible internal fee balance
 						is not an ERC-20 supply burn. See the
 						<a href="./open-oracle-integration.html#rolling-dispute-security-classification">OpenOracle security classification</a>
 						and <a href="./open-oracle-integration.html#parameters">parameter table</a>

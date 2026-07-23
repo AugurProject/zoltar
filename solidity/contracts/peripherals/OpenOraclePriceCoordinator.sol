@@ -64,6 +64,7 @@ struct StagedOperation {
 
 contract OpenOraclePriceCoordinator {
 	uint256 public constant MAX_PENDING_SETTLEMENT_OPERATIONS = 4;
+	uint256 public constant OPEN_INTEREST_DIVIDER = 100;
 	string private constant STAGED_OPERATION_EXECUTION_OK = '';
 	string private constant STAGED_OPERATION_ERROR_EXPIRED = 'staged operation expired';
 	string private constant STAGED_OPERATION_ERROR_STALE_LIQUIDATION = 'stale liquidation';
@@ -308,6 +309,11 @@ contract OpenOraclePriceCoordinator {
 			escalationHaltMultiplierBps,
 			SecurityPoolUtils.BPS_DENOMINATOR
 		);
+		uint256 openInterestEscalationHalt = Math.ceilDiv(
+			securityPool.completeSetCollateralAmount(),
+			OPEN_INTEREST_DIVIDER
+		);
+		if (openInterestEscalationHalt > escalationHalt) escalationHalt = openInterestEscalationHalt;
 		uint256 settlerReward = ethCost;
 		require(initialWethReport <= type(uint128).max, 'Oracle initial WETH report amount exceeds uint128 maximum');
 		require(amount2 <= type(uint128).max, 'Oracle initial REP report amount exceeds uint128 maximum');
