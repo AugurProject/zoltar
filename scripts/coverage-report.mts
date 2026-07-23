@@ -103,6 +103,11 @@ function percentage(covered: number, total: number) {
 	return Math.round((covered / total) * 10_000) / 100
 }
 
+function exactPercentage(value: CoverageMetric) {
+	if (value.total === 0) return 100
+	return (value.covered / value.total) * 100
+}
+
 function metric(covered: number, total: number): CoverageMetric {
 	return { covered, total, percentage: percentage(covered, total) }
 }
@@ -236,7 +241,7 @@ function unloadedSourceCoverage(file: string, source: string) {
 		ts.forEachChild(node, visit)
 	}
 	visit(sourceFile)
-	return { lines: executableLines.size, functions }
+	return { executableLines, functions }
 }
 
 function isGeneratedSource(file: string) {
@@ -297,7 +302,7 @@ export function buildTypeScriptCoverage(records: Map<string, LcovRecord>, tracke
 		if (record === undefined) {
 			surface.unloadedFiles.push(file)
 			const zeroHitCoverage = unloadedSourceCoverage(file, trackedSource.source)
-			total.linesTotal += zeroHitCoverage.lines
+			total.linesTotal += zeroHitCoverage.executableLines.size
 			total.functionsTotal += zeroHitCoverage.functions
 			continue
 		}
@@ -394,14 +399,16 @@ export function summarizeSolidityCoverage(summary: SolidityCoverageInput, reposi
 
 export function evaluateCoveragePolicy(report: CompleteCoverage, policy: CoveragePolicy) {
 	const failures: string[] = []
+	const belowMinimum = (value: CoverageMetric, minimum: number) => exactPercentage(value) < minimum
+	const formatExact = (value: CoverageMetric) => exactPercentage(value).toFixed(4)
 	for (const surfaceName of ['ui', 'shared', 'tooling'] as const) {
 		const surface = report.typescript.surfaces[surfaceName]
 		const surfacePolicy = policy.typescript[surfaceName]
-		if (surface.lines.percentage < surfacePolicy.minimumLines) {
-			failures.push(`TypeScript ${surfaceName} line coverage ${surface.lines.percentage.toFixed(2)}% is below ${surfacePolicy.minimumLines.toFixed(2)}%`)
+		if (belowMinimum(surface.lines, surfacePolicy.minimumLines)) {
+			failures.push(`TypeScript ${surfaceName} line coverage ${formatExact(surface.lines)}% is below ${surfacePolicy.minimumLines.toFixed(3)}%`)
 		}
-		if (surface.functions.percentage < surfacePolicy.minimumFunctions) {
-			failures.push(`TypeScript ${surfaceName} function coverage ${surface.functions.percentage.toFixed(2)}% is below ${surfacePolicy.minimumFunctions.toFixed(2)}%`)
+		if (belowMinimum(surface.functions, surfacePolicy.minimumFunctions)) {
+			failures.push(`TypeScript ${surfaceName} function coverage ${formatExact(surface.functions)}% is below ${surfacePolicy.minimumFunctions.toFixed(3)}%`)
 		}
 		const allowedUnloadedFiles = new Set(surfacePolicy.allowedUnloadedFiles)
 		const newlyUnloadedFiles = surface.unloadedFiles.filter(file => !allowedUnloadedFiles.has(file))
@@ -409,13 +416,13 @@ export function evaluateCoveragePolicy(report: CompleteCoverage, policy: Coverag
 		if (newlyUnloadedFiles.length > 0) failures.push(`TypeScript ${surfaceName} has newly unloaded executable source: ${newlyUnloadedFiles.join(', ')}`)
 		if (staleAllowedFiles.length > 0) failures.push(`TypeScript ${surfaceName} policy still allows source that is no longer unloaded: ${staleAllowedFiles.join(', ')}`)
 	}
-	if (report.solidity !== undefined && report.solidity.firstParty.percentage < policy.solidity.minimumFirstPartyLines) {
-		failures.push(`First-party Solidity line coverage ${report.solidity.firstParty.percentage.toFixed(2)}% is below ${policy.solidity.minimumFirstPartyLines.toFixed(2)}%`)
+	if (report.solidity !== undefined && belowMinimum(report.solidity.firstParty, policy.solidity.minimumFirstPartyLines)) {
+		failures.push(`First-party Solidity line coverage ${formatExact(report.solidity.firstParty)}% is below ${policy.solidity.minimumFirstPartyLines.toFixed(3)}%`)
 	}
 	if (report.changedLines === undefined || !('percentage' in report.changedLines)) {
 		failures.push('Changed product TypeScript line coverage is unavailable')
-	} else if (report.changedLines.percentage < policy.changedLines.minimum) {
-		failures.push(`Changed product TypeScript line coverage ${report.changedLines.percentage.toFixed(2)}% is below ${policy.changedLines.minimum.toFixed(2)}%`)
+	} else if (belowMinimum(report.changedLines, policy.changedLines.minimum)) {
+		failures.push(`Changed product TypeScript line coverage ${formatExact(report.changedLines)}% is below ${policy.changedLines.minimum.toFixed(3)}%`)
 	}
 	return { passed: failures.length === 0, failures }
 }
@@ -505,14 +512,39 @@ export async function readTrackedTypeScriptSources(repositoryRoot: string) {
 	return sources.filter(source => source !== undefined)
 }
 
-function calculateChangedLineCoverage(changedLines: Map<string, Set<number>>, records: Map<string, LcovRecord>, sourceFiles: Set<string>) {
+function mergeChangedLines(target: Map<string, Set<number>>, source: Map<string, Set<number>>) {
+	for (const [file, lines] of source) {
+		const targetLines = target.get(file) ?? new Set<number>()
+		for (const line of lines) targetLines.add(line)
+		target.set(file, targetLines)
+	}
+}
+
+export async function readTaskChangedLines(repositoryRoot: string, baseRef: string) {
+	const mergeBase = (await runGit(['merge-base', baseRef, 'HEAD'], repositoryRoot)).trim()
+	const diff = await runGit(['diff', '--unified=0', '--no-renames', mergeBase, '--'], repositoryRoot)
+	const changedLines = parseChangedLines(diff)
+	const untrackedFiles = (await runGit(['ls-files', '--others', '--exclude-standard'], repositoryRoot)).split(/\r?\n/).filter(file => sourceExtensions.test(file))
+	for (const file of untrackedFiles) {
+		const source = await readFile(resolve(repositoryRoot, file), 'utf8')
+		const lineCount = source.endsWith('\n') ? source.split(/\r?\n/).length - 1 : source.split(/\r?\n/).length
+		mergeChangedLines(changedLines, new Map([[normalizePath(file), new Set(Array.from({ length: lineCount }, (_, index) => index + 1))]]))
+	}
+	return changedLines
+}
+
+export function calculateChangedLineCoverage(changedLines: Map<string, Set<number>>, records: Map<string, LcovRecord>, sourceFiles: Map<string, string>) {
 	let covered = 0
 	let total = 0
 	for (const [file, lines] of changedLines) {
-		if (!sourceFiles.has(file)) continue
+		const source = sourceFiles.get(file)
+		if (source === undefined) continue
 		const record = records.get(file)
 		if (record === undefined) {
-			total += lines.size
+			const executableLines = unloadedSourceCoverage(file, source).executableLines
+			for (const line of lines) {
+				if (executableLines.has(line)) total += 1
+			}
 			continue
 		}
 		for (const line of lines) {
@@ -590,16 +622,15 @@ async function main() {
 	}
 
 	const baseRef = resolveCoverageBaseRef(process.argv, process.env['COVERAGE_BASE_REF'])
-	const diff = await runGit(['diff', '--unified=0', '--no-renames', `${baseRef}...HEAD`, '--'])
-	const sourceFiles = new Set(
+	const sourceFiles = new Map<string, string>(
 		trackedSources
 			.filter(source => {
 				const surface = classifyTypeScriptSource(source.file, source.source)
 				return surface === 'ui' || surface === 'shared'
 			})
-			.map(source => source.file),
+			.map(source => [source.file, source.source]),
 	)
-	const changedLines = calculateChangedLineCoverage(parseChangedLines(diff), lcov, sourceFiles)
+	const changedLines = calculateChangedLineCoverage(await readTaskChangedLines(repositoryRoot, baseRef), lcov, sourceFiles)
 
 	const report: CompleteCoverage = { typescript, ...(solidity === undefined ? {} : { solidity }), changedLines }
 	const policy = parsePolicy(JSON.parse(await readFile(resolve(repositoryRoot, '.coverage-policy.json'), 'utf8')))

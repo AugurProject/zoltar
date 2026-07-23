@@ -1,8 +1,8 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
-import { buildTypeScriptCoverage, classifyTypeScriptSource, evaluateCoveragePolicy, mergeLcovRecords, parseChangedLines, parseLcov, readTrackedTypeScriptSources, resolveCoverageBaseRef, summarizeSolidityCoverage, type CoveragePolicy } from './coverage-report.mts'
+import { buildTypeScriptCoverage, calculateChangedLineCoverage, classifyTypeScriptSource, evaluateCoveragePolicy, mergeLcovRecords, parseChangedLines, parseLcov, readTaskChangedLines, readTrackedTypeScriptSources, resolveCoverageBaseRef, summarizeSolidityCoverage, type CoveragePolicy } from './coverage-report.mts'
 
 describe('TypeScript coverage accounting', () => {
 	test('uses weighted executable totals instead of averaging file percentages', () => {
@@ -141,11 +141,11 @@ describe('coverage policy', () => {
 			policy,
 		)
 
-		expect(result.failures).toContain('TypeScript ui line coverage 79.00% is below 80.00%')
+		expect(result.failures).toContain('TypeScript ui line coverage 79.0000% is below 80.000%')
 		expect(result.failures).toContain('TypeScript shared has newly unloaded executable source: shared/ts/new.ts')
 		expect(result.failures).toContain('TypeScript shared policy still allows source that is no longer unloaded: shared/ts/known.ts')
-		expect(result.failures).toContain('First-party Solidity line coverage 99.50% is below 99.90%')
-		expect(result.failures).toContain('Changed product TypeScript line coverage 85.00% is below 90.00%')
+		expect(result.failures).toContain('First-party Solidity line coverage 99.5000% is below 99.900%')
+		expect(result.failures).toContain('Changed product TypeScript line coverage 85.0000% is below 90.000%')
 	})
 
 	test('rejects an unavailable configured changed-line metric', () => {
@@ -165,6 +165,25 @@ describe('coverage policy', () => {
 		)
 
 		expect(result.failures).toContain('Changed product TypeScript line coverage is unavailable')
+	})
+
+	test('compares exact ratios instead of rounded display percentages', () => {
+		const result = evaluateCoveragePolicy(
+			{
+				typescript: {
+					surfaces: {
+						ui: { ...surface(88.06, 70), lines: { covered: 28_105, total: 31_917, percentage: 88.06 } },
+						shared: { ...surface(75, 65), unloadedFiles: ['shared/ts/known.ts'] },
+						tooling: surface(35, 30),
+					},
+					excludedFiles: [],
+				},
+				changedLines: metric(100),
+			},
+			{ ...policy, typescript: { ...policy.typescript, ui: { ...policy.typescript.ui, minimumLines: 88.06 } } },
+		)
+
+		expect(result.failures).toContain('TypeScript ui line coverage 88.0565% is below 88.060%')
 	})
 })
 
@@ -194,6 +213,65 @@ diff --git a/shared/ts/new.ts b/shared/ts/new.ts
 
 		expect(changed.get('ui/ts/app.ts')).toEqual(new Set([10, 12]))
 		expect(changed.get('shared/ts/new.ts')).toEqual(new Set([1, 2]))
+	})
+
+	test('counts committed, staged, unstaged, and untracked product additions', async () => {
+		const repositoryRoot = await mkdtemp(join(tmpdir(), 'coverage-changed-lines-'))
+		try {
+			await runTemporaryGit(repositoryRoot, ['init', '--quiet'])
+			await runTemporaryGit(repositoryRoot, ['config', 'user.email', 'coverage@example.com'])
+			await runTemporaryGit(repositoryRoot, ['config', 'user.name', 'Coverage Test'])
+			await mkdir(join(repositoryRoot, 'ui/ts'), { recursive: true })
+			await mkdir(join(repositoryRoot, 'shared/ts'), { recursive: true })
+			await writeFile(join(repositoryRoot, 'ui/ts/existing.ts'), 'export const baseline = 1\n')
+			await runTemporaryGit(repositoryRoot, ['add', 'ui/ts/existing.ts'])
+			await runTemporaryGit(repositoryRoot, ['commit', '--quiet', '-m', 'baseline'])
+			await runTemporaryGit(repositoryRoot, ['branch', 'coverage-baseline'])
+
+			await writeFile(join(repositoryRoot, 'ui/ts/committed.ts'), 'export const committed = 1\n')
+			await runTemporaryGit(repositoryRoot, ['add', 'ui/ts/committed.ts'])
+			await runTemporaryGit(repositoryRoot, ['commit', '--quiet', '-m', 'committed'])
+			await writeFile(join(repositoryRoot, 'shared/ts/staged.ts'), 'export const staged = 1\n')
+			await runTemporaryGit(repositoryRoot, ['add', 'shared/ts/staged.ts'])
+			await writeFile(join(repositoryRoot, 'ui/ts/existing.ts'), 'export const baseline = 1\nexport const unstaged = 2\n')
+			await writeFile(join(repositoryRoot, 'ui/ts/untracked.ts'), '// untracked product source\nexport const untracked = 3\n')
+
+			const changedLines = await readTaskChangedLines(repositoryRoot, 'coverage-baseline')
+			const trackedSources = await readTrackedTypeScriptSources(repositoryRoot)
+			const productSources = new Map<string, string>(
+				trackedSources
+					.filter(source => {
+						const surfaceName = classifyTypeScriptSource(source.file, source.source)
+						return surfaceName === 'ui' || surfaceName === 'shared'
+					})
+					.map(source => [source.file, source.source]),
+			)
+			const records = parseLcov(`SF:ui/ts/committed.ts
+DA:1,1
+FNF:0
+FNH:0
+end_of_record
+SF:shared/ts/staged.ts
+DA:1,1
+FNF:0
+FNH:0
+end_of_record
+SF:ui/ts/existing.ts
+DA:1,1
+DA:2,1
+FNF:0
+FNH:0
+end_of_record
+`)
+
+			expect(changedLines.get('ui/ts/committed.ts')).toEqual(new Set([1]))
+			expect(changedLines.get('shared/ts/staged.ts')).toEqual(new Set([1]))
+			expect(changedLines.get('ui/ts/existing.ts')).toEqual(new Set([2]))
+			expect(changedLines.get('ui/ts/untracked.ts')).toEqual(new Set([1, 2]))
+			expect(calculateChangedLineCoverage(changedLines, records, productSources)).toEqual({ covered: 3, total: 4, percentage: 75 })
+		} finally {
+			await rm(repositoryRoot, { recursive: true, force: true })
+		}
 	})
 
 	test('separates imported compatibility contracts from first-party Solidity', () => {
