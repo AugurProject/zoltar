@@ -207,8 +207,8 @@
 					index zero. That same identifier is stored in carry leaves, emitted by
 					<code>LocalDepositAppended</code>,
 					<code>CarryDepositConsumed</code>, and
-					<code>ClaimDeposit</code>, returned by both
-					<code>exportUnresolvedDeposit</code> overloads, and consumed through
+					<code>ClaimDeposit</code>, returned by
+					<code>exportUnresolvedDeposit(uint256,...)</code>, and consumed through
 					<code>consumedParentDepositIndexes</code>.
 				</p>
 				<table>
@@ -330,19 +330,19 @@
 					<tbody>
 						<tr>
 							<td>Creation bytecode</td>
-							<td><code>32,390</code> bytes</td>
+							<td><code>31,840</code> bytes</td>
 						</tr>
 						<tr>
 							<td>Deployed bytecode</td>
-							<td><code>24,411</code> bytes</td>
+							<td><code>23,868</code> bytes</td>
 						</tr>
 						<tr>
 							<td>Project deployed-bytecode budget headroom</td>
-							<td><code>165</code> bytes below <code>24,576</code></td>
+							<td><code>708</code> bytes below <code>24,576</code></td>
 						</tr>
 						<tr>
 							<td>EIP-170 headroom</td>
-							<td><code>165</code> bytes below <code>24,576</code></td>
+							<td><code>708</code> bytes below <code>24,576</code></td>
 						</tr>
 					</tbody>
 				</table>
