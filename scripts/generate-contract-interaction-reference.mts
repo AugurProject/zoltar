@@ -788,7 +788,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'Anyone; REP is always sent to `vault`',
 				effect: "Burns the vault's pool-ownership claim and returns its proportional REP.",
 				declarations: [{ name: 'redeemRep' }],
-				preconditions: 'Operational pool with a final outcome; no escalation escrow remains; vault has redeemable REP.',
+				preconditions: 'Operational pool with a final outcome; the specified `vault` has no escalation escrow and has redeemable REP.',
 				signals: '`RedeemRep`',
 			},
 			{
@@ -820,7 +820,7 @@ const contractReferences: ContractReference[] = [
 				call: '`updateCollateralAmount()`',
 				caller: 'Anyone',
 				effect:
-					'Accrues elapsed fees up to the earlier question-end or universe-fork clamp, moves whole credited fees from collateral into the unallocated reserve, and advances the accumulator. With positive elapsed time but zero fee-eligible allowance it clears denominator-specific remainder and advances the timestamp without charging fees.',
+					"Accrues elapsed fees through question end while this pool's universe remains unforked; after that universe forks, its fork timestamp replaces question end as this pool epoch's cutoff, including a later question-end-to-fork interval. The cutoff is local to this pool: an activated child starts a separate fee epoch. It moves whole credited fees from collateral into the unallocated reserve and advances the accumulator. With positive elapsed time but zero fee-eligible allowance it clears denominator-specific remainder and advances the timestamp without charging fees.",
 				declarations: [{ name: 'updateCollateralAmount' }],
 				preconditions: 'No caller or lifecycle restriction. It returns unchanged when the accumulator is already at or beyond the clamped timestamp.',
 				signals: '`PoolAccountingCheckpoint` whenever positive elapsed time is processed, including the zero-allowance branch; no event for an unchanged timestamp',
