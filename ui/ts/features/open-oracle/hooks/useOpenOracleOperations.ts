@@ -20,7 +20,7 @@ import {
 	parseOpenOracleCreateFormSubmission,
 } from '../lib/openOracle.js'
 import { parseAddressInput, parseBytes32Input, parseReportIdInput } from '../../../lib/inputs.js'
-import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState, parseBigIntInput } from '../../markets/lib/marketForm.js'
+import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '../../markets/lib/marketForm.js'
 import { requireDefined } from '../../../lib/required.js'
 import type { TokenApprovalState } from '../../../lib/tokenApproval.js'
 import { useRequestGuard } from '../../../lib/requestGuard.js'
@@ -32,6 +32,7 @@ import { refreshWalletStateOnly } from '../../../lib/refreshState.js'
 import type { OpenOracleCreateFormState, OpenOracleFormState, WriteOperationsParameters } from '../../../types/app.js'
 import type { OpenOracleActionResult, OpenOracleReportDetails, OpenOracleWithdrawableBalances } from '../../../types/contracts.js'
 import type { OpenOracleReportLookupState } from '../../types.js'
+import * as openOracleCopy from '../../../copy/openOracle.js'
 
 type UseOpenOracleOperationsParameters = WriteOperationsParameters & {
 	enabled: boolean
@@ -55,7 +56,7 @@ export type UseOpenOracleOperationsDependencies<TWriteClient = OpenOracleProduct
 	loadOpenOracleWithdrawableBalances: (openOracleAddress: Address, holder: Address, token1: Address, token2: Address) => Promise<OpenOracleWithdrawableBalances>
 	readOptionalMulticall: (contracts: readonly unknown[]) => Promise<readonly OpenOracleRawReadResult[]>
 	settleOracleReport: (client: TWriteClient, openOracleAddress: Address, reportId: bigint) => Promise<OpenOracleActionResult>
-	withdrawOpenOracleBalance: (client: TWriteClient, openOracleAddress: Address, token: Address, recipient: Address) => Promise<OpenOracleActionResult>
+	withdrawOpenOracleBalance: (client: TWriteClient, openOracleAddress: Address, token: Address, amount: bigint, recipient: Address) => Promise<OpenOracleActionResult>
 }
 
 const defaultUseOpenOracleOperationsDependencies: UseOpenOracleOperationsDependencies = {
@@ -74,7 +75,7 @@ const defaultUseOpenOracleOperationsDependencies: UseOpenOracleOperationsDepende
 	loadOpenOracleWithdrawableBalances: async (openOracleAddress, holder, token1, token2) => await loadOpenOracleWithdrawableBalances(createConnectedReadClient(), openOracleAddress, holder, token1, token2),
 	readOptionalMulticall: async contracts => await readOptionalMulticall(createConnectedReadClient(), contracts),
 	settleOracleReport: async (client, openOracleAddress, reportId) => await settleOracleReport(client, openOracleAddress, reportId),
-	withdrawOpenOracleBalance: async (client, openOracleAddress, token, recipient) => await withdrawOpenOracleBalance(client, openOracleAddress, token, recipient),
+	withdrawOpenOracleBalance: async (client, openOracleAddress, token, amount, recipient) => await withdrawOpenOracleBalance(client, openOracleAddress, token, amount, recipient),
 }
 
 function requireTokenDecimals(value: unknown, label: string) {
@@ -146,6 +147,8 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 	const openOracleResult = useSignal<OpenOracleActionResult | undefined>(undefined)
 	const openOracleReportDetails = useSignal<OpenOracleReportDetails | undefined>(undefined)
 	const openOracleReportLookupState = useSignal<OpenOracleReportLookupState>('unknown')
+	const openOracleWithdrawalBalanceChecking = useSignal(false)
+	const openOracleWithdrawalReviewMessage = useSignal<{ balance: keyof OpenOracleWithdrawableBalances; message: string } | undefined>(undefined)
 	const openOracleWithdrawableBalances = useSignal<OpenOracleWithdrawableBalances | undefined>(undefined)
 	const openOracleWithdrawableBalancesError = useSignal<string | undefined>(undefined)
 	const loadedOpenOracleReportId = useSignal<bigint | undefined>(undefined)
@@ -167,8 +170,13 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 	const openOracleTokenAccessRefreshing = useSignal(false)
 	const nextOpenOracleTokenAccessLoad = useRequestGuard()
 	const nextOpenOracleWithdrawableBalanceLoad = useRequestGuard()
+	const nextOpenOracleWithdrawalAttempt = useRequestGuard()
 	const nextOracleReportLoad = useRequestGuard()
 	const currentSelectedReportIdInput = openOracleForm.value.reportId.trim()
+	const accountAddressRef = useRef(accountAddress)
+	accountAddressRef.current = accountAddress
+	const enabledRef = useRef(enabled)
+	enabledRef.current = enabled
 	const currentSelectedReportIdRef = useRef(currentSelectedReportIdInput)
 	currentSelectedReportIdRef.current = currentSelectedReportIdInput
 	const getPendingTitle = (actionName: OpenOracleActionResult['action']) => {
@@ -540,15 +548,28 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			refreshTokenAccessOnSuccess?: boolean
 		},
 	) => {
+		if (openOracleActiveAction.value !== undefined || openOracleWithdrawalBalanceChecking.value) return
+		openOracleActiveAction.value = actionName
+		openOracleResult.value = undefined
 		const actionReportIdInput = currentSelectedReportIdInput
 		const reportDetailsSnapshot = openOracleReportDetails.value
+		const withdrawalTokenSymbol = (() => {
+			if (actionName !== 'withdrawBalance' || reportDetailsSnapshot === undefined) return undefined
+			if (openOracleActiveWithdrawalBalance.value === 'eth') return 'ETH'
+			if (openOracleActiveWithdrawalBalance.value === 'token1') return reportDetailsSnapshot.token1Symbol
+			if (openOracleActiveWithdrawalBalance.value === 'token2') return reportDetailsSnapshot.token2Symbol
+			return undefined
+		})()
 		const transactionContext =
 			actionName === 'createReportInstance'
 				? { tokenPair: `${openOracleCreateForm.value.token1Address} / ${openOracleCreateForm.value.token2Address}` }
 				: {
 						openOracleAddress: reportDetailsSnapshot?.openOracleAddress,
 						reportId: actionReportIdInput,
+						token1Symbol: reportDetailsSnapshot?.token1Symbol,
+						token2Symbol: reportDetailsSnapshot?.token2Symbol,
 						tokenPair: reportDetailsSnapshot === undefined ? undefined : `${reportDetailsSnapshot.token1Symbol} / ${reportDetailsSnapshot.token2Symbol}`,
+						withdrawalTokenSymbol,
 					}
 		try {
 			openOracleFeedback.value = createPendingActionFeedback(actionName, getPendingTitle(actionName))
@@ -575,8 +596,6 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 					},
 				},
 				async walletAddress => {
-					openOracleActiveAction.value = actionName
-					openOracleResult.value = undefined
 					return await action(walletAddress)
 				},
 				errorFallback,
@@ -692,20 +711,88 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			{ formatErrorMessage: formatOpenOracleSettleWriteErrorMessage },
 		)
 
-	const withdrawBalance = async (balance: keyof OpenOracleWithdrawableBalances) => {
+	const cancelWithdrawalBalanceCheck = () => {
+		if (!openOracleWithdrawalBalanceChecking.value) return
+		nextOpenOracleWithdrawalAttempt()
+		openOracleWithdrawalBalanceChecking.value = false
+		openOracleActiveWithdrawalBalance.value = undefined
+	}
+
+	const withdrawBalance = async (balance: keyof OpenOracleWithdrawableBalances, reviewedAmount: bigint) => {
+		if (openOracleWithdrawalBalanceChecking.value || openOracleActiveAction.value !== undefined) return
+		const isCurrentWithdrawalAttempt = nextOpenOracleWithdrawalAttempt()
+		const attemptAccountAddress = accountAddress
+		const attemptEnabled = enabled
+		const attemptReportIdInput = currentSelectedReportIdRef.current
+		const attemptReportDetails = openOracleReportDetails.value
+		const attemptOpenOracleAddress = getOpenOracleAddress()
+		const isWithdrawalContextCurrent = () => {
+			if (!attemptEnabled || !enabledRef.current || accountAddressRef.current !== attemptAccountAddress || currentSelectedReportIdRef.current !== attemptReportIdInput) return false
+			const currentReportDetails = openOracleReportDetails.value
+			if (attemptReportDetails === undefined || currentReportDetails === undefined) return attemptReportDetails === currentReportDetails
+			try {
+				return (
+					currentReportDetails.openOracleAddress === attemptReportDetails.openOracleAddress &&
+					currentReportDetails.reportId === attemptReportDetails.reportId &&
+					currentReportDetails.token1 === attemptReportDetails.token1 &&
+					currentReportDetails.token2 === attemptReportDetails.token2 &&
+					getOpenOracleAddress() === attemptOpenOracleAddress
+				)
+			} catch {
+				return false
+			}
+		}
 		openOracleActiveWithdrawalBalance.value = balance
+		openOracleWithdrawalBalanceChecking.value = true
+		let currentAmount: bigint
+		let token = zeroAddress
+		let preflightCanSubmit = false
+		try {
+			const holder = requireDefined(accountAddress, 'Connect a wallet before withdrawing an Open Oracle balance')
+			const details = requireLoadedCurrentSelectedReport()
+			const currentReportIdInput = details.reportId.toString()
+			const balances = await dependencies.loadOpenOracleWithdrawableBalances(attemptOpenOracleAddress, holder, details.token1, details.token2)
+			if (!isCurrentWithdrawalAttempt() || !isWithdrawalContextCurrent()) return
+			assertSelectedReportCurrent(currentReportIdInput)
+			openOracleWithdrawableBalances.value = balances
+			currentAmount = balances[balance]
+			let tokenSymbol = 'ETH'
+			if (balance === 'token1') {
+				token = details.token1
+				tokenSymbol = details.token1Symbol
+			} else if (balance === 'token2') {
+				token = details.token2
+				tokenSymbol = details.token2Symbol
+			}
+			if (currentAmount !== reviewedAmount) {
+				openOracleWithdrawalReviewMessage.value = { balance, message: openOracleCopy.formatWithdrawalBalanceChanged(tokenSymbol) }
+				return
+			}
+			if (currentAmount <= 0n) {
+				openOracleWithdrawalReviewMessage.value = { balance, message: openOracleCopy.noWithdrawableBalanceForAsset }
+				return
+			}
+			preflightCanSubmit = true
+		} catch (error) {
+			if (!isCurrentWithdrawalAttempt() || !isWithdrawalContextCurrent()) return
+			openOracleWithdrawalReviewMessage.value = { balance, message: getErrorMessage(error, openOracleCopy.withdrawalBalanceRefreshFailed) }
+			return
+		} finally {
+			if (isCurrentWithdrawalAttempt()) {
+				openOracleWithdrawalBalanceChecking.value = false
+				if (!preflightCanSubmit) openOracleActiveWithdrawalBalance.value = undefined
+			}
+		}
+
+		if (!isCurrentWithdrawalAttempt() || !isWithdrawalContextCurrent()) {
+			if (isCurrentWithdrawalAttempt()) openOracleActiveWithdrawalBalance.value = undefined
+			return
+		}
+		openOracleWithdrawalReviewMessage.value = undefined
 		try {
 			await runOracleAction(
 				'withdrawBalance',
-				async walletAddress => {
-					const details = requireLoadedCurrentSelectedReport()
-					const balances = requireDefined(openOracleWithdrawableBalances.value, 'Open Oracle balances are not ready')
-					if (balances[balance] <= 0n) throw new Error('No withdrawable Open Oracle balance is available for this asset')
-					let token = zeroAddress
-					if (balance === 'token1') token = details.token1
-					else if (balance === 'token2') token = details.token2
-					return await dependencies.withdrawOpenOracleBalance(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), getOpenOracleAddress(), token, walletAddress)
-				},
+				async walletAddress => await dependencies.withdrawOpenOracleBalance(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), attemptOpenOracleAddress, token, currentAmount, walletAddress),
 				'Failed to withdraw Open Oracle balance',
 			)
 		} finally {
@@ -726,15 +813,15 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 					await refreshOpenOracleTokenAccess(details, { preserveExisting: true })
 					assertSelectedReportCurrent(details.reportId.toString())
 					const disputeSubmission = getDisputeSubmission(details, submittedOpenOracleForm)
-					if (!disputeSubmission.canSubmit || disputeSubmission.expectedNewAmount1 === undefined) throw new Error(disputeSubmission.blockMessage?.message ?? 'Invalid dispute submission details.')
+					if (!disputeSubmission.canSubmit || disputeSubmission.newAmount1 === undefined || disputeSubmission.newAmount2 === undefined) throw new Error(disputeSubmission.blockMessage?.message ?? 'Invalid dispute submission details.')
 					const tokenToSwap = submittedOpenOracleForm.disputeTokenToSwap === 'token1' ? details.token1 : details.token2
 					return await dependencies.disputeOracleReport(
 						dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }),
 						getOpenOracleAddress(),
 						details.reportId,
 						tokenToSwap,
-						parseBigIntInput(submittedOpenOracleForm.disputeNewAmount1, 'New base token amount'),
-						parseBigIntInput(submittedOpenOracleForm.disputeNewAmount2, 'New quote token amount'),
+						disputeSubmission.newAmount1,
+						disputeSubmission.newAmount2,
 						details.currentAmount2,
 						parseBytes32Input(submittedOpenOracleForm.stateHash, 'State hash'),
 					)
@@ -748,6 +835,8 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 		})()
 
 	useEffect(() => {
+		cancelWithdrawalBalanceCheck()
+		openOracleWithdrawalReviewMessage.value = undefined
 		if (!enabled) return
 		if (openOracleReportDetails.value === undefined) {
 			resetOpenOracleTokenAccessState(false)
@@ -763,6 +852,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 	return {
 		approveToken1,
 		approveToken2,
+		cancelWithdrawalBalanceCheck,
 		createOpenOracleGame,
 		disputeReport,
 		loadOracleReport,
@@ -789,6 +879,8 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 		openOracleReportLookupState: openOracleReportLookupState.value,
 		openOracleReportDetails: openOracleReportDetails.value,
 		openOracleResult: openOracleResult.value,
+		openOracleWithdrawalBalanceChecking: openOracleWithdrawalBalanceChecking.value,
+		openOracleWithdrawalReviewMessage: openOracleWithdrawalReviewMessage.value,
 		openOracleWithdrawableBalances: openOracleWithdrawableBalances.value,
 		openOracleWithdrawableBalancesError: openOracleWithdrawableBalancesError.value,
 		openOracleWithdrawableBalancesLoading: openOracleWithdrawableBalanceLoad.isLoading.value,

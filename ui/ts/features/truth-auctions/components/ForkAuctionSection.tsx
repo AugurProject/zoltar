@@ -430,7 +430,8 @@ export function ForkAuctionSection({
 	const securityPoolAddress = forkAuctionDetails?.securityPoolAddress ?? previewPool?.securityPoolAddress
 	const universeId = forkAuctionDetails?.universeId ?? previewPool?.universeId
 	const systemState = forkAuctionDetails?.systemState ?? previewPool?.systemState
-	const hasTriggeredFork = universeForkTime !== undefined && universeForkTime > 0n
+	const hasEnteredForkLifecycle = lifecycleStateOverride === 'poolForked' || lifecycleStateOverride === 'forkMigration' || lifecycleStateOverride === 'forkTruthAuction'
+	const hasTriggeredFork = hasEnteredForkLifecycle || (universeForkTime !== undefined && universeForkTime > 0n)
 	const forkOutcome = forkAuctionDetails?.forkOutcome ?? previewPool?.forkOutcome
 	const questionOutcome = forkAuctionDetails?.questionOutcome ?? previewPool?.questionOutcome
 	const previewPoolHasActualForkActivity = previewPool?.hasForkActivity === true
@@ -1487,21 +1488,19 @@ export function ForkAuctionSection({
 		if (selectedStage === 'fork-triggered')
 			return (
 				<fieldset aria-labelledby='fork-workflow-stage-fork-triggered' className='fork-stage-panel' disabled={disabled} id='fork-workflow-stage-panel-fork-triggered' role='tabpanel'>
-					<SectionBlock title={commonCopy.forkTriggered} variant='embedded'>
-						{hasTriggeredFork ? (
-							renderWorkflowMetricGrid([
-								{
-									label: commonCopy.status,
-									value: forkAuctionCopy.systemIsForking,
-								},
-								{
-									label: forkAuctionCopy.triggeredAt,
-									value: <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={universeForkTime} />,
-								},
-							])
-						) : (
-							<p className='detail'>{forkAuctionCopy.forkInactiveDetail}</p>
-						)}
+					<SectionBlock title={hasTriggeredFork ? commonCopy.forkTriggered : forkAuctionCopy.forkNotTriggered} variant='embedded'>
+						{hasTriggeredFork
+							? renderWorkflowMetricGrid([
+									{
+										label: commonCopy.status,
+										value: forkAuctionCopy.systemIsForking,
+									},
+									{
+										label: forkAuctionCopy.triggeredAt,
+										value: <TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={universeForkTime} />,
+									},
+								])
+							: undefined}
 					</SectionBlock>
 				</fieldset>
 			)

@@ -354,7 +354,8 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('The system is not forking.')).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Fork Not Triggered' })).not.toBeNull()
+		expect(documentQueries.queryByText('The system is not forking.')).toBeNull()
 		expect(documentQueries.queryByText('System is forking')).toBeNull()
 	})
 

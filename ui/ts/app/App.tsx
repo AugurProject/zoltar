@@ -210,6 +210,7 @@ export function App() {
 	const {
 		approveToken1,
 		approveToken2,
+		cancelWithdrawalBalanceCheck,
 		createOpenOracleGame,
 		disputeReport,
 		loadOracleReport,
@@ -224,6 +225,8 @@ export function App() {
 		openOracleTokenAccessState,
 		openOracleReportDetails,
 		openOracleResult,
+		openOracleWithdrawalBalanceChecking,
+		openOracleWithdrawalReviewMessage,
 		openOracleWithdrawableBalances,
 		openOracleWithdrawableBalancesError,
 		openOracleWithdrawableBalancesLoading,
@@ -714,6 +717,7 @@ export function App() {
 		environmentReady: canReadOnchainData,
 		onApproveToken1: amount => void approveToken1(amount),
 		onApproveToken2: amount => void approveToken2(amount),
+		onCancelOpenOracleWithdrawalBalanceCheck: cancelWithdrawalBalanceCheck,
 		onCreateOpenOracleGame: () => void createOpenOracleGame(),
 		onDisputeReport: () => void disputeReport(),
 		onLoadOracleReport: reportId => {
@@ -727,7 +731,7 @@ export function App() {
 			if (update.reportId !== undefined) setOpenOracleReport(update.reportId)
 		},
 		onSettleReport: () => void settleReport(),
-		onWithdrawOpenOracleBalance: balance => void withdrawBalance(balance),
+		onWithdrawOpenOracleBalance: (balance, reviewedAmount) => void withdrawBalance(balance, reviewedAmount),
 		loadingOpenOracleCreate,
 		openOracleActiveAction,
 		openOracleActiveWithdrawalBalance,
@@ -739,6 +743,8 @@ export function App() {
 		openOracleTokenAccessState,
 		openOracleReportDetails,
 		openOracleResult,
+		openOracleWithdrawalBalanceChecking,
+		openOracleWithdrawalReviewMessage,
 		openOracleWithdrawableBalances,
 		openOracleWithdrawableBalancesError,
 		openOracleWithdrawableBalancesLoading,
