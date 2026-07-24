@@ -188,6 +188,69 @@ describe('Peripherals: truth auction', () => {
 		return { auctionParticipant, auctionTick, yesSecurityPool }
 	}
 
+	test('forker public entry points expose exact wrong-state and empty-action guards', async () => {
+		const parentPool = securityPoolAddresses.securityPool
+		const forkerAddress = getInfraContractAddresses().securityPoolForker
+		const forkerAbi = peripherals_SecurityPoolForker_SecurityPoolForker.abi
+
+		await assert.rejects(startTruthAuction(client, parentPool), /Not mig/)
+		await assert.rejects(finalizeTruthAuction(client, parentPool, 1n), /Auction finalization does not accept repair contributions/)
+		await mockWindow.advanceTime(8n * DAY)
+		await assert.rejects(finalizeTruthAuction(client, parentPool), /Not auction/)
+		await assert.rejects(
+			client.writeContract({
+				abi: forkerAbi,
+				address: forkerAddress,
+				functionName: 'forkZoltarWithOwnEscalationGame',
+				args: [parentPool],
+			}),
+			/Need game/,
+		)
+		await assert.rejects(migrateRepToZoltar(client, parentPool, [QuestionOutcome.Yes]), /Proxy/)
+		await assert.rejects(initiateSecurityPoolFork(client, parentPool), /Unforked/)
+		await assert.rejects(
+			client.writeContract({
+				abi: forkerAbi,
+				address: forkerAddress,
+				functionName: 'settleAuctionBids',
+				args: [parentPool, client.account.address, [], []],
+			}),
+			/Need action/,
+		)
+		await assert.rejects(
+			client.writeContract({
+				abi: forkerAbi,
+				address: forkerAddress,
+				functionName: 'initializeChildForkedEscalationGameIfNeeded',
+				args: [parentPool, parentPool, addressString(0n)],
+			}),
+			/Forker/,
+		)
+		await assert.rejects(
+			client.writeContract({
+				abi: forkerAbi,
+				address: forkerAddress,
+				functionName: 'claimForkedEscalationDeposits',
+				args: [parentPool, addressString(TEST_ADDRESSES[1]), QuestionOutcome.Yes, []],
+			}),
+			/Vault/,
+		)
+	})
+
+	test('auction claims reject unfinalized truth auctions through both public settlement selectors', async () => {
+		const { yesSecurityPool } = await setupStartedTruthAuction('unfinalized public settlement guard source')
+		await assert.rejects(claimAuctionProceeds(client, yesSecurityPool.securityPool, client.account.address, []), /Not final/)
+		await assert.rejects(
+			client.writeContract({
+				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+				address: getInfraContractAddresses().securityPoolForker,
+				functionName: 'settleAuctionBids',
+				args: [yesSecurityPool.securityPool, client.account.address, [{ tick: 0n, bidIndex: 0n }], []],
+			}),
+			/Not final/,
+		)
+	})
+
 	describe('auction startup and migration isolation', () => {
 		test('truth-auction finalization starts long-dated child fee accrual at activation', async () => {
 			const { yesSecurityPool } = await setupLongDatedChildAuction('long-dated child fee activation source')
@@ -376,7 +439,7 @@ describe('Peripherals: truth auction', () => {
 			const losingTick = await participateAuction(losingBidder, yesSecurityPool.truthAuction, repAtFork, losingBid)
 			await mockWindow.advanceTime(7n * DAY + DAY)
 
-			await assert.rejects(finalizeTruthAuction(client, yesSecurityPool.securityPool, 1n), /does not accept repair contributions/)
+			await assert.rejects(finalizeTruthAuction(client, yesSecurityPool.securityPool, 1n), /Auction finalization does not accept repair contributions/)
 			strictEqualTypeSafe(await isFinalized(client, yesSecurityPool.truthAuction), false, 'rejected contribution must leave the auction available for value-free finalization')
 
 			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
@@ -1699,7 +1762,7 @@ describe('Peripherals: truth auction', () => {
 			const { yesSecurityPool, losingBidder, losingTick } = await setupFinalizedTruthAuctionWithMixedBids()
 
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }])
-			await assert.rejects(async () => await claimAuctionProceeds(client, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }]), /already been claimed/)
+			await assert.rejects(async () => await claimAuctionProceeds(client, yesSecurityPool.securityPool, losingBidder.account.address, [{ tick: losingTick, bidIndex: 0n }]), /Bid has already been claimed or does not exist/)
 		})
 
 		test('claimAuctionProceeds should add auctioned allowance on top of an existing migrated allowance', async () => {

@@ -108,6 +108,185 @@ describe('Peripherals: escalation migration', () => {
 		questionId = fixture.questionId
 	})
 
+	test('unfunded vault escalation deposit exposes REP too low and rolls back game deployment and pool state', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		const unfundedVault = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
+		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
+		const readDepositGuardState = async () => ({
+			escalationGame: await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool),
+			poolRep: await getERC20Balance(client, repToken, securityPoolAddresses.securityPool),
+			vault: await getSecurityVault(client, securityPoolAddresses.securityPool, unfundedVault.account.address),
+		})
+		const stateBefore = await readDepositGuardState()
+
+		await assert.rejects(depositToEscalationGame(unfundedVault, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond), /REP too low/)
+		assert.deepStrictEqual(await readDepositGuardState(), stateBefore, 'unfunded escalation deposit must roll back game deployment, REP, and vault accounting')
+	})
+
+	test('unresolved migration rejects forks without unresolved deposits and preserves parent and child state', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		const forkInitiator = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const externalForkQuestion = {
+			...questionData,
+			title: 'resolved-only external fork',
+		}
+		const externalForkQuestionId = getQuestionId(externalForkQuestion, outcomes)
+		await createQuestion(forkInitiator, externalForkQuestion, outcomes)
+		await approveToken(forkInitiator, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(forkInitiator, genesisUniverse, externalForkQuestionId)
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier).securityPool
+		const parentGame = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
+		const parentRepToken = await getRepToken(client, securityPoolAddresses.securityPool)
+		const readMigrationGuardState = async () => ({
+			childExists: await contractExists(client, yesChildPool),
+			forkData: await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool),
+			parentGameRep: await getERC20Balance(client, parentRepToken, parentGame),
+			parentPoolRep: await getERC20Balance(client, parentRepToken, securityPoolAddresses.securityPool),
+			parentVault: await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address),
+		})
+		const stateBefore = await readMigrationGuardState()
+
+		await assert.rejects(migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes), /No unresolved deposits/)
+		assert.deepStrictEqual(await readMigrationGuardState(), stateBefore, 'missing unresolved deposits must not deploy a child or move parent REP and vault accounting')
+	})
+
+	test('external fork escalation claims expose Own fork required and preserve unresolved deposits', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
+		const forkThreshold = (await getTotalTheoreticalSupply(client, repToken)) / 20n / securityMultiplier
+		await approveAndDepositRep(client, 3n * forkThreshold, questionId)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, forkThreshold)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThreshold)
+
+		const externalForker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const externalQuestion = {
+			...questionData,
+			title: 'external fork after escalation non-decision',
+		}
+		const externalQuestionId = getQuestionId(externalQuestion, outcomes)
+		await createQuestion(externalForker, externalQuestion, outcomes)
+		await approveToken(externalForker, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(externalForker, genesisUniverse, externalQuestionId)
+		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+
+		const parentGame = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
+		const readOwnForkGuardState = async () => ({
+			forkData: await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool),
+			gameRep: await getERC20Balance(client, repToken, parentGame),
+			noDeposits: await getEscalationGameDeposits(client, parentGame, QuestionOutcome.No),
+			parentVault: await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address),
+			yesDeposits: await getEscalationGameDeposits(client, parentGame, QuestionOutcome.Yes),
+		})
+		const stateBefore = await readOwnForkGuardState()
+		const yesDeposit = ensureDefined(stateBefore.yesDeposits[0], 'external-fork yes deposit is undefined')
+
+		await assert.rejects(claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [yesDeposit.depositIndex]), /Own fork required/)
+		assert.deepStrictEqual(await readOwnForkGuardState(), stateBefore, 'wrong fork mode claim must preserve fork data, deposits, REP, and vault accounting')
+	})
+
+	test('forked escalation claim exposes Child not migrating after the selected child activates', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
+		const forkThreshold = (await getTotalTheoreticalSupply(client, repToken)) / 20n / securityMultiplier
+		await approveAndDepositRep(client, 3n * forkThreshold, questionId)
+		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier).securityPool
+		await mockWindow.advanceTime(8n * 7n * DAY + 1n)
+		await startTruthAuction(client, yesChildPool)
+		if ((await getSystemState(client, yesChildPool)) === SystemState.ForkTruthAuction) {
+			await mockWindow.advanceTime(7n * DAY + 1n)
+			await finalizeTruthAuction(client, yesChildPool)
+		}
+		strictEqualTypeSafe(await getSystemState(client, yesChildPool), SystemState.Operational, 'selected child must be active before testing the claim guard')
+
+		const parentGame = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
+		const childRepToken = getRepTokenAddress(yesUniverse)
+		const readChildStateGuard = async () => ({
+			childPoolRep: await getERC20Balance(client, childRepToken, yesChildPool),
+			childState: await getSystemState(client, yesChildPool),
+			deposits: await getEscalationGameDeposits(client, parentGame, QuestionOutcome.Yes),
+			parentGameRep: await getERC20Balance(client, repToken, parentGame),
+			parentVault: await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address),
+		})
+		const stateBefore = await readChildStateGuard()
+		const deposit = ensureDefined(stateBefore.deposits[0], 'own-fork yes deposit is undefined')
+
+		await assert.rejects(claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [deposit.depositIndex]), /Child not migrating/)
+		assert.deepStrictEqual(await readChildStateGuard(), stateBefore, 'inactive claim path must preserve the activated child, deposits, REP, and parent vault')
+	})
+
+	test('own-fork claims reject another vaults deposit and roll back consumption, child deployment, and REP state', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		const otherVault = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveAndDepositRep(otherVault, repDeposit, questionId)
+		await depositToEscalationGame(otherVault, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+
+		const parentRepToken = await getRepToken(client, securityPoolAddresses.securityPool)
+		const forkThreshold = (await getTotalTheoreticalSupply(client, parentRepToken)) / 20n / securityMultiplier
+		await approveAndDepositRep(client, 3n * forkThreshold, questionId)
+		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		const yesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier).securityPool
+		const parentGame = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
+		const readWrongVaultState = async () => ({
+			childExists: await contractExists(client, yesChildPool),
+			clientVault: await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address),
+			deposits: await getEscalationGameDeposits(client, parentGame, QuestionOutcome.Yes),
+			otherVault: await getSecurityVault(client, securityPoolAddresses.securityPool, otherVault.account.address),
+			parentGameRep: await getERC20Balance(client, parentRepToken, parentGame),
+			parentPoolRep: await getERC20Balance(client, parentRepToken, securityPoolAddresses.securityPool),
+		})
+		const stateBefore = await readWrongVaultState()
+		const otherVaultDeposit = ensureDefined(stateBefore.deposits[0], 'other vault deposit is undefined')
+		strictEqualTypeSafe(otherVaultDeposit.depositor, otherVault.account.address, 'the selected deposit must belong to the other vault')
+
+		await assert.rejects(claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [otherVaultDeposit.depositIndex]), /Wrong deposit vault/)
+		assert.deepStrictEqual(await readWrongVaultState(), stateBefore, 'wrong-vault claim must roll back deposit consumption, child deployment, REP balances, and both vaults')
+	})
+
+	test('resolved escalation withdrawal rejects mixed-vault batches and rolls back every deposit and vault mutation', async () => {
+		const endTime = await getQuestionEndDate(client, questionId)
+		await mockWindow.setTime(endTime + 10000n)
+		const secondWinner = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const losingVault = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+		await approveAndDepositRep(secondWinner, repDeposit, questionId)
+		await approveAndDepositRep(losingVault, repDeposit, questionId)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, 14n * 10n ** 18n)
+		await depositToEscalationGame(secondWinner, securityPoolAddresses.securityPool, QuestionOutcome.Yes, 10n * 10n ** 18n)
+		await depositToEscalationGame(losingVault, securityPoolAddresses.securityPool, QuestionOutcome.No, 20n * 10n ** 18n)
+		await mockWindow.advanceTime(60n * DAY)
+		strictEqualTypeSafe(await getQuestionResolution(client, securityPoolAddresses.escalationGame), QuestionOutcome.Yes, 'mixed-vault withdrawal setup must resolve to yes')
+
+		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
+		const readMixedVaultState = async () => ({
+			clientVault: await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address),
+			gameRep: await getERC20Balance(client, repToken, securityPoolAddresses.escalationGame),
+			poolRep: await getERC20Balance(client, repToken, securityPoolAddresses.securityPool),
+			secondWinnerVault: await getSecurityVault(client, securityPoolAddresses.securityPool, secondWinner.account.address),
+			yesDeposits: await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes),
+		})
+		const stateBefore = await readMixedVaultState()
+		const firstDeposit = ensureDefined(stateBefore.yesDeposits[0], 'first winning deposit is undefined')
+		const secondDeposit = ensureDefined(stateBefore.yesDeposits[1], 'second winning deposit is undefined')
+
+		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [firstDeposit.depositIndex, secondDeposit.depositIndex]), /One vault/)
+		assert.deepStrictEqual(await readMixedVaultState(), stateBefore, 'mixed-vault withdrawal must roll back deposit settlement, REP movement, and both vault updates')
+	})
+
 	test('optional vault migration clears the dead parent lock without creating child escrow', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)

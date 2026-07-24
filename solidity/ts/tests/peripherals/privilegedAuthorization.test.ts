@@ -1,5 +1,5 @@
 import { beforeEach, describe, test } from 'bun:test'
-import { encodeDeployData, getAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { encodeDeployData, encodeFunctionData, getAddress, type Address, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
 import { writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { getCompleteSetCollateralAmount, getCurrentRetentionRate, getPoolOwnershipDenominator, getSecurityPoolsEscalationGame, getSecurityVault, getTotalRepBalance, getTotalSecurityBondAllowance } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { getERC20Balance, getETHBalance } from '../../testSupport/simulator/utils/utilities'
@@ -213,6 +213,37 @@ describe('Peripherals: privileged authorization matrix', () => {
 		)
 		assert.strictEqual(await getCurrentRetentionRate(client, securityPool), currentRetentionRate)
 		assert.strictEqual(await getCompleteSetCollateralAmount(client, securityPool), currentCollateral)
+	})
+
+	test('every forker-only pool mutation rejects direct callers without changing accounting', async () => {
+		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const poolAbi = peripherals_SecurityPool_SecurityPool.abi
+		const readSnapshot = async () => ({
+			collateral: await getCompleteSetCollateralAmount(client, securityPool),
+			denominator: await getPoolOwnershipDenominator(client, securityPool),
+			repBalance: await getTotalRepBalance(client, securityPool),
+			totalAllowance: await getTotalSecurityBondAllowance(client, securityPool),
+			vault: await getSecurityVault(client, securityPool, attacker.account.address),
+		})
+		const calls = [
+			encodeFunctionData({ abi: poolAbi, functionName: 'activateForkMode', args: [false] }),
+			encodeFunctionData({ abi: poolAbi, functionName: 'initializeForkedEscalationGame', args: [1n, 2n, 0n, QuestionOutcome.None] }),
+			encodeFunctionData({ abi: poolAbi, functionName: 'resumeForkedEscalationGame', args: [] }),
+			encodeFunctionData({ abi: poolAbi, functionName: 'setAwaitingForkContinuation', args: [true] }),
+			encodeFunctionData({ abi: poolAbi, functionName: 'setSystemState', args: [1] }),
+			encodeFunctionData({ abi: poolAbi, functionName: 'configureVault', args: [attacker.account.address, 1n, 1n, 1n] }),
+			encodeFunctionData({ abi: poolAbi, functionName: 'addFeeEligibleSecurityBondAllowance', args: [attacker.account.address, 1n] }),
+			encodeFunctionData({ abi: poolAbi, functionName: 'setOwnershipDenominator', args: [1n] }),
+			encodeFunctionData({ abi: poolAbi, functionName: 'setTotalShares', args: [1n] }),
+			encodeFunctionData({ abi: poolAbi, functionName: 'setPoolFinancials', args: [0n, 0n, 0n] }),
+			encodeFunctionData({ abi: poolAbi, functionName: 'transferEth', args: [attacker.account.address, 0n] }),
+			encodeFunctionData({ abi: poolAbi, functionName: 'authorizeChildPool', args: [zeroAddress] }),
+		]
+		const before = await readSnapshot()
+		for (const data of calls) {
+			await assert.rejects(attacker.sendTransaction({ to: securityPool, data }), /Only forker/)
+			assert.deepStrictEqual(await readSnapshot(), before)
+		}
 	})
 
 	test('pool-only escalation deposit and withdrawal selectors reject direct callers', async () => {
