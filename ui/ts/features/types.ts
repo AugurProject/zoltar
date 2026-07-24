@@ -13,6 +13,7 @@ import type {
 	MarketDetailsPage,
 	OpenOracleActionResult,
 	OpenOracleReportDetails,
+	OpenOracleReportSummaryPage,
 	OpenOracleWithdrawableBalances,
 	OracleManagerDetails,
 	ReadClient,
@@ -421,6 +422,8 @@ export type OpenOracleView = 'browse' | 'create' | 'selected-report'
 export type OpenOracleSectionProps = OpenOracleRouteContentProps & {
 	activeView: OpenOracleView
 	environmentReady: boolean
+	environmentRefreshKey: number
+	loadBrowseReports?: (pageIndex: number, pageSize: number) => Promise<OpenOracleReportSummaryPage>
 	onActiveViewChange: (view: OpenOracleView) => void
 }
 

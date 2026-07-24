@@ -97,6 +97,7 @@ function OpenOracleSectionHarness({ accountAddress, initialActiveView = 'create'
 				activeView={activeView}
 				accountState={accountState}
 				environmentReady
+				environmentRefreshKey={0}
 				loadingOpenOracleCreate={openOracle.loadingOpenOracleCreate}
 				onActiveViewChange={setActiveView}
 				onApproveToken1={amount => void openOracle.approveToken1(amount)}

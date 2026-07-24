@@ -109,7 +109,7 @@ describe('ZoltarMigrationSection', () => {
 
 		expect(Array.from(document.body.querySelectorAll('.migration-workflow-steps span')).map(step => step.textContent)).toEqual(['1. Choose destinations', '2. Prepare REP', '3. Split REP'])
 		expectTransactionButtonDisabled(document.body, 'Prepare REP', 'REP preparation is unavailable because this universe has not forked.')
-		expectTransactionButtonDisabled(document.body, 'Split REP', 'REP migration is unavailable because this universe has not forked.')
+		expectTransactionButtonDisabled(document.body, 'Split REP', 'Available after this universe forks.')
 	})
 
 	test('labels the irreversible migration amount and requires an explicit destination', async () => {

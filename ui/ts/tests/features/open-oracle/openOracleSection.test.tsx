@@ -2,6 +2,8 @@
 
 import { describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress } from '@zoltar/shared/ethereum'
+import { render } from 'preact'
+import { act } from 'preact/test-utils'
 import { renderSelectedReportActionSection } from '../../../features/open-oracle/components/OpenOracleSection.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
@@ -9,12 +11,13 @@ import { deriveOpenOracleDisputeSubmissionDetails, type OpenOracleDisputeSubmiss
 import { getDefaultOpenOracleFormState } from '../../../features/markets/lib/marketForm.js'
 import type { AccountState, OpenOracleFormState } from '../../../types/app.js'
 import type { OpenOracleSectionProps } from '../../../features/types.js'
-import type { OpenOracleReportDetails } from '../../../types/contracts.js'
+import type { OpenOracleReportDetails, OpenOracleReportSummaryPage } from '../../../types/contracts.js'
 import { OpenOracleSection } from '../../../features/open-oracle/components/OpenOracleSection.js'
 import { getDefaultOpenOracleCreateFormState } from '../../../features/markets/lib/marketForm.js'
 import { createFakeBackend } from '../../testUtils/fakeBackend.js'
 import { installActiveEnvironmentForTesting } from '../../../lib/activeEnvironment.js'
 import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
+import { fireEvent, within } from '../../testUtils/queries.js'
 import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
 
 type VNodeLike = {
@@ -182,11 +185,12 @@ function createOpenOracleTokenAccessState(overrides: Partial<OpenOracleSectionPr
 	}
 }
 
-function createOpenOracleSectionProps(): OpenOracleSectionProps {
+function createOpenOracleSectionProps(overrides: Partial<OpenOracleSectionProps> = {}): OpenOracleSectionProps {
 	return {
 		accountState: createAccountState(),
 		activeView: 'browse',
 		environmentReady: true,
+		environmentRefreshKey: 0,
 		loadingOpenOracleCreate: false,
 		onActiveViewChange: () => undefined,
 		onApproveToken1: () => undefined,
@@ -214,6 +218,31 @@ function createOpenOracleSectionProps(): OpenOracleSectionProps {
 		openOracleWithdrawableBalances: undefined,
 		openOracleWithdrawableBalancesError: undefined,
 		openOracleWithdrawableBalancesLoading: false,
+		...overrides,
+	}
+}
+
+function createDeferred<T>() {
+	let resolvePromise: ((value: T) => void) | undefined
+	const promise = new Promise<T>(resolve => {
+		resolvePromise = resolve
+	})
+	return {
+		promise,
+		resolve(value: T) {
+			if (resolvePromise === undefined) throw new Error('Deferred promise resolver is unavailable')
+			resolvePromise(value)
+		},
+	}
+}
+
+function createEmptyBrowsePage(pageIndex = 0): OpenOracleReportSummaryPage {
+	return {
+		nextReportId: 1n,
+		pageIndex,
+		pageSize: 10,
+		reportCount: 0n,
+		reports: [],
 	}
 }
 
@@ -342,9 +371,92 @@ void describe('OpenOracleSection', () => {
 		try {
 			await Promise.resolve()
 			expect(browseLoadAttempts).toBe(0)
+			expect(within(document.body).getByText('Preparing report summaries.')).not.toBeNull()
+			expect(within(document.body).getByRole('status', { name: 'Preparing report summaries.' })).not.toBeNull()
+			expect(within(document.body).queryByText('No Open Oracle reports found.')).toBeNull()
 		} finally {
 			await rendered.cleanup()
 			restoreActiveEnvironment()
+			domEnvironment.cleanup()
+		}
+	})
+
+	void test('shows failed browse loads with retry instead of a confirmed empty state', async () => {
+		const domEnvironment = installDomEnvironment()
+		let browseLoadAttempts = 0
+		const restoreActiveEnvironment = installActiveEnvironmentForTesting({
+			...createFakeBackend(),
+			createReadClient: () => {
+				browseLoadAttempts += 1
+				throw new Error('Report summary service unavailable')
+			},
+		})
+		const rendered = await renderIntoDocument(<OpenOracleSection {...createOpenOracleSectionProps()} />)
+
+		try {
+			await Promise.resolve()
+			await Promise.resolve()
+			const documentQueries = within(document.body)
+			expect(documentQueries.getByRole('alert', { name: /Report summary service unavailable.*Retry/ })).not.toBeNull()
+			expect(documentQueries.queryByText('No Open Oracle reports found.')).toBeNull()
+
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Retry' }))
+			await Promise.resolve()
+			await Promise.resolve()
+			expect(browseLoadAttempts).toBe(2)
+			expect(documentQueries.queryByText('No Open Oracle reports found.')).toBeNull()
+		} finally {
+			await rendered.cleanup()
+			restoreActiveEnvironment()
+			domEnvironment.cleanup()
+		}
+	})
+
+	void test('invalidates ready browse state across environment changes and ignores late responses', async () => {
+		const domEnvironment = installDomEnvironment()
+		const secondEnvironmentLoad = createDeferred<OpenOracleReportSummaryPage>()
+		const thirdEnvironmentLoad = createDeferred<OpenOracleReportSummaryPage>()
+		let browseLoadAttempts = 0
+		const loadBrowseReports = () => {
+			browseLoadAttempts += 1
+			if (browseLoadAttempts === 1) return Promise.resolve(createEmptyBrowsePage())
+			if (browseLoadAttempts === 2) return secondEnvironmentLoad.promise
+			return thirdEnvironmentLoad.promise
+		}
+		const rendered = await renderIntoDocument(<OpenOracleSection {...createOpenOracleSectionProps({ loadBrowseReports })} />)
+
+		try {
+			await act(async () => {
+				await Promise.resolve()
+				await Promise.resolve()
+			})
+			const documentQueries = within(document.body)
+			expect(documentQueries.getByRole('status', { name: 'No Open Oracle reports found.' })).not.toBeNull()
+
+			await act(() => {
+				render(<OpenOracleSection {...createOpenOracleSectionProps({ environmentRefreshKey: 1, loadBrowseReports })} />, rendered.container)
+			})
+			expect(documentQueries.getByRole('status', { name: 'Refreshing report summaries.' })).not.toBeNull()
+			expect(documentQueries.queryByText('No Open Oracle reports found.')).toBeNull()
+
+			await act(() => {
+				render(<OpenOracleSection {...createOpenOracleSectionProps({ environmentRefreshKey: 2, loadBrowseReports })} />, rendered.container)
+			})
+			await act(async () => {
+				secondEnvironmentLoad.resolve(createEmptyBrowsePage())
+				await secondEnvironmentLoad.promise
+			})
+			expect(documentQueries.getByRole('status', { name: 'Refreshing report summaries.' })).not.toBeNull()
+			expect(documentQueries.queryByText('No Open Oracle reports found.')).toBeNull()
+
+			await act(async () => {
+				thirdEnvironmentLoad.resolve(createEmptyBrowsePage())
+				await thirdEnvironmentLoad.promise
+			})
+			expect(documentQueries.getByRole('status', { name: 'No Open Oracle reports found.' })).not.toBeNull()
+			expect(browseLoadAttempts).toBe(3)
+		} finally {
+			await rendered.cleanup()
 			domEnvironment.cleanup()
 		}
 	})

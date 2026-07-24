@@ -69,6 +69,7 @@ function createOpenOracleSectionProps(overrides: Partial<OpenOracleSectionProps>
 		activeView: 'create',
 		accountState: createAccountState(),
 		environmentReady: true,
+		environmentRefreshKey: 0,
 		loadingOpenOracleCreate: false,
 		onActiveViewChange: () => undefined,
 		onApproveToken1: () => undefined,
