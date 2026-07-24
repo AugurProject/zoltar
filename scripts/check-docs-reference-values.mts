@@ -153,7 +153,6 @@ function assertNonDecisionLifecycleDocs(): void {
 	assert.match(normalizedStatoblast, /This diagram shows a local threshold crossing, which makes <code>canTriggerOwnFork\(\)<\/code> true[\s\S]*pool with an inherited fixed outcome rejects the deposits that could create this state[\s\S]*still rejects <code>activateForkMode\(\)<\/code>/)
 	assert.match(normalizedStatoblast, /A continuation pool can fork again only when it has no inherited fixed outcome/)
 	assert.match(normalizedStatoblast, /The game-local <code>canTriggerOwnFork\(\)<\/code> predicate returns true for a local non-decision, but it does not bypass the pool's fixed-outcome guard/)
-	assert.match(normalizedStatoblast, /<span>Edge cases<\/span> <b\s*>Only continuations without a fixed outcome can fork again; their game-local trigger may be a local non-decision or an inherited threshold tie\.<\/b\s*>/)
 	assert.match(
 		normalizedStatoblast,
 		/<h3 id="child-outcome-resolution">Child Outcome Resolution<\/h3>[\s\S]*pool stores and reports that result from child creation[\s\S]*Pool asset redemptions begin after the child becomes operational\.[\s\S]*continuation game exists[\s\S]*carried-deposit settlement only after its remaining continuation deadline\.[\s\S]*Later universe forks cannot transition a pool with an inherited fixed result, even when they reuse the pool question\.[\s\S]*Winning-share redemption burns only the fixed winning token and reduces the pool's remaining economic claim supply\.[\s\S]*surviving sibling outcome token as winning against that reduced denominator\.[\s\S]*fixed-outcome pool cannot use another fork to export a local non-decision[\s\S]*lock the depositor's vault ownership and block REP redemption[\s\S]*Carried winning proofs from the parent continuation remain claimable/,
@@ -241,7 +240,7 @@ function assertZoltarForkDepths(): void {
 	assert.equal(protocolConfig.forkThresholdDivisor, 20n, 'Zoltar fork threshold divisor changed')
 	assert.equal(protocolConfig.forkBurnDivisor, 5n, 'Zoltar fork burn divisor changed')
 	const normalizedWhitepaper = zoltarWhitepaper.replaceAll(/\s+/g, ' ')
-	for (const documentedClaim of ['one fifth of the threshold is an uncredited haircut', 'Later REP added to a migration balance converts 1:1', 'Permanent admission cost']) {
+	for (const documentedClaim of ['20% of the threshold is an uncredited haircut', 'Later REP added to a migration balance converts 1:1', 'intended admission cost']) {
 		assert.ok(normalizedWhitepaper.includes(documentedClaim), `Missing Zoltar fork haircut claim: ${documentedClaim}`)
 	}
 }
@@ -384,21 +383,33 @@ function assertStartHereTimelines(): void {
 	assert.match(startHere, /three-day activation delay/)
 	assert.match(startHere, /up to seven weeks/)
 	assert.match(startHere, /eight-week migration window/)
-	assert.match(startHere, /resumes\s+from its inherited elapsed time without a new activation delay/)
-	assert.match(startHere, /d="M 800 103 C 818 103 812 59 835 59"/)
-	assert.match(startHere, /d="M 800 103 C 818 103 812 151 835 151"/)
+	assert.match(startHere, /resumes\s+from its inherited elapsed time without a new\s+activation delay/)
 	assert.match(startHere, /statoblast-whitepaper\.html#migration/)
 	assert.match(startHere, /merkle-mountain-range\.html/)
 	assert.match(startHere, />activateForkMode</)
-	assert.match(startHere, /A universe\s+fork alone leaves <code>systemState<\/code> as <code>Operational<\/code>/)
-	assert.match(startHere, /Pool fork initiation calls <code>activateForkMode<\/code>/)
-	assert.match(startHere, /<code>startTruthAuction<\/code> always moves\s+the child into <code>ForkTruthAuction<\/code>/)
-	assert.match(startHere, /a child that needs no\s+auction finalizes immediately/)
+	assert.match(startHere, /A universe\s+fork alone leaves <code>systemState<\/code> as\s+<code>Operational<\/code>/)
+	assert.match(startHere, /pool fork initiation calls\s+<code>activateForkMode<\/code>/)
+	assert.match(startHere, /<code>startTruthAuction<\/code> always moves a child into\s+<code>ForkTruthAuction<\/code>/)
+	assert.match(startHere, /a child that needs no\s+auction finalizes\s+immediately/)
 	assert.match(startHere, /an auctioned child returns to\s+<code>Operational<\/code> after its deadline and value-free finalization/)
-	assert.match(startHere, /d="M 555 82 C 555 120 215 120 215 146"/, 'Start Here deployment arrow must end at the ForkMigration child state')
-	assert.doesNotMatch(startHere, /d="M 555 82 V 146"/, 'Start Here deployment arrow must not point into ForkTruthAuction')
-	assert.doesNotMatch(startHere, /d="M 340 222 C 450 270 650 270 710 218"/)
-	assert.ok(startHere.indexOf('The ordinary lifecycle is question, pool, trading, local escalation') < startHere.indexOf('<code>deployChild</code>'), 'Start Here must introduce the ordinary lifecycle before fork implementation calls')
+	assert.match(whitepaperStatoblast, /<td><code>ForkTruthAuction<\/code><\/td>[\s\S]{0,220}decision and finalization phase[\s\S]{0,180}sells REP when repair is needed or finalizes immediately without a sale/)
+	for (const transition of ['ForkMigration->ForkTruthAuction', 'ForkTruthAuction->Operational']) {
+		assert.match(startHere, new RegExp(`data-transition="${transition}"`), `Documentation lifecycle must include ${transition}`)
+		assert.match(whitepaperStatoblast, new RegExp(`data-transition="${transition}"`), `Statoblast lifecycle must include ${transition}`)
+	}
+	for (const [state, role] of [
+		['Operational', 'parent'],
+		['PoolForked', 'parent'],
+		['ForkMigration', 'child'],
+		['ForkTruthAuction', 'child'],
+		['Operational', 'child'],
+	]) {
+		assert.match(startHere, new RegExp(`data-state="${state}" data-pool-role="${role}"`), `Documentation lifecycle must label ${role} ${state}`)
+	}
+	assert.match(startHere, /data-transition="PoolForked->ForkMigration" data-boundary="parent-to-child"/)
+	assert.doesNotMatch(startHere, /data-transition="ForkMigration->Operational"/)
+	assert.doesNotMatch(whitepaperStatoblast, /data-transition="ForkMigration->Operational"/)
+	assert.ok(startHere.indexOf('id="lifecycle"') < startHere.indexOf('id="documentation-map"'), 'Documentation home must introduce the lifecycle before the document index')
 }
 
 function assertContractInteractionDistinctions(): void {
@@ -426,7 +437,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.doesNotMatch(invariantsHtml, /forkTime \+ 8 weeks/)
 	assert.match(auctionDesign, /forkActivationTime \+ SecurityPoolUtils\.MIGRATION_TIME[\s\S]*pool-local[\s\S]*universe <code>forkTime<\/code>[\s\S]*invariants\.html#fork-05/)
 	assert.doesNotMatch(auctionDesign, /8 weeks from the parent\s+universe fork time/)
-	assert.match(whitepaperStatoblast, /Parent retained \+ locked/)
+	assert.match(whitepaperStatoblast, /source remains locked as an entitlement/)
 	assert.doesNotMatch(whitepaperStatoblast, /Parent burned/)
 	assert.match(eventStream, /ShareTokenSupplySet[\s\S]*source entitlements whose child ERC-1155 balances have not materialized yet[\s\S]*Migrate[\s\S]*do not change this denominator/)
 	assert.match(eventStream, /On every `startTruthAuction`, initialize the child's remaining economic claim supply from `ShareTokenSupplySet`[\s\S]*immediate no-auction path/)
@@ -508,6 +519,11 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /redeemFees\(vault\)[\s\S]*If resulting unpaid fees are zero, returns without payment[\s\S]*no event when fees and accrual state are unchanged/)
 	assert.match(contractInteractionReference, /performWithdrawRep\(vault, repAmount\)[\s\S]*operational pool in an unforked universe[\s\S]*`isEscalationResolved\(\)` is false/)
 	assert.match(whitepaperStatoblast, /cashToShares[\s\S]*Exchange rate undefined/)
+	for (const flow of ['pool-to-share-token-mint', 'pool-to-share-token-burn', 'trader-to-pool-redemption', 'pool-to-trader-eth-payout']) {
+		assert.match(whitepaperStatoblast, new RegExp(`data-flow="${flow}"`), `Statoblast asset flow must include ${flow}`)
+	}
+	assert.doesNotMatch(whitepaperStatoblast, /data-flow="share-token-to-trader-redemption"/)
+	assert.match(whitepaperStatoblast, /Before REP withdrawals and allowance changes[\s\S]{0,180}vault and whole-pool level[\s\S]{0,180}Liquidation follows a different path[\s\S]{0,220}caller\s+remains safe while aggregate allowance is preserved/)
 	assert.match(initiateSecurityPoolForkRow, /Pool operational with no inherited fixed outcome;[\s\S]*if an escalation game exists, it reports the supplied pool from `securityPool\(\)` when validated and the universe fork occurred before that game settled/)
 	assert.match(ownEscalationForkRow, /Pool operational with no inherited fixed outcome;[\s\S]*`canTriggerOwnFork\(\)` is true because it recorded a local non-decision or inherited a threshold tie without a game-level fixed outcome[\s\S]*game-local predicate does not bypass the pool guard/)
 	assert.match(escalationDepositRow, /pool operational in an unforked universe, without an inherited fixed outcome, and not awaiting continuation/)
@@ -692,7 +708,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /deployChildSecurityPool\(parent, shareToken[\s\S]*inherits `initialReportPriorityFeeWeiPerGas` from the parent coordinator/)
 	assert.match(protocolTerms, /minimumToken1ReportDefinition = 'The coordinator-computed minimum WETH side: the priority-fee-derived report plus the larger base-fee- or open-interest-derived report\.'/)
 	assert.match(protocolTerms, /'initial report size':[\s\S]*minimumToken1ReportDefinition/)
-	assert.match(whitepaperStatoblast, /lineage identity[\s\S]*commits to the origin's immutable[\s\S]*<code>initialReportPriorityFeeWeiPerGas<\/code>[\s\S]*children inherit their origin's configuration/)
+	assert.match(whitepaperStatoblast, /lineage identity[\s\S]*commits to the origin's immutable[\s\S]*<code>initialReportPriorityFeeWeiPerGas<\/code>[\s\S]*children\s+inherit their origin's\s+configuration/)
 	assert.match(whitepaperStatoblast, /href="\.\/operator-reference\.md#security-pool-guardrails"/)
 	assert.doesNotMatch(whitepaperStatoblast, /originId = keccak256\(abi\.encode\(questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas, originUniverseId\)\)/)
 	for (const emitterFunction of ['emitPoolAccountingCheckpoint', 'emitVaultAccountingCheckpoint']) {

@@ -42,8 +42,8 @@
 						<h2>Abstract</h2>
 						<a class="anchor-link" href="#abstract" aria-label="Link to Abstract">#</a>
 					</div>
-					<p> Zoltar is a foundational fork and coordination layer. It is not itself a prediction market or an outcome-reporting oracle. Instead, it maintains the shared registries for questions, REP tokens, and forks. If a dispute in a higher-level protocol, such as Statoblast, cannot be resolved locally, that protocol can initiate a Zoltar fork by depositing and burning the required amount of REP. The resulting fork applies to every product built on the same Zoltar deployment. </p>
-					<p> Zoltar preserves unresolved disagreement rather than forcing a single onchain answer. When a dispute can no longer be resolved safely within one branch, Zoltar creates child branches for the valid competing answers. The protocol does not decide which branch is economically dominant or what is the truth; that is up for higher levels of the protocol to decide (e.g., Statoblast) </p>
+					<p> Zoltar is a foundational fork and coordination layer. It is not itself a prediction market or an outcome-reporting oracle. Instead, it maintains the shared registries for questions, REP tokens, and universe forks. A higher-level application may use a paid fork after local non-decision, but Zoltar itself permits any address able to commit the threshold REP to fork an unforked universe using any eligible ended global question. The fork changes the universe used by applications that choose to continue from that forked universe. </p>
+					<p> Once a fork is initiated, Zoltar creates child branches for the question's valid answers rather than forcing a single onchain answer. The protocol does not decide which branch is economically dominant or truthful; applications and their users make that coordination choice. </p>
 
 					<p> Zoltar supports binary, categorical and scalar questions. </p>
 				</section>
@@ -54,7 +54,7 @@
 							<a class="anchor-link" href="#timeline" aria-label="Link to Lifecycle Timeline">#</a>
 						</div>
 						<p>
-							Zoltar's lifecycle has six contract-visible steps, from question
+							Zoltar's lifecycle has six conceptual steps, from question
 							registration through post-fork coordination.
 						</p>
 						<div class="timeline-grid">
@@ -64,7 +64,7 @@
 						</div>
 						<div class="timeline-card">
 							<b>2. Disagreement persists</b>
-							<p>If there's a disagreement on the questions truthfull outcome, after the question end date is reached, any application with threshold REP can call <code>forkUniverse</code>; applications decide when disagreement justifies doing so.</p>
+							<p>After the question end date, any address able to supply the threshold REP can call <code>forkUniverse</code>. Zoltar does not verify that a disagreement exists; applications decide when a fork is justified.</p>
 						</div>
 						<div class="timeline-card">
 							<b>3. Parent universe forks</b>
@@ -101,7 +101,11 @@
 							<li>turn migration balances into selected child REP</li>
 						</ul>
 						<p>
-							In practice, that means an application can hand Zoltar a question, later (or right away) trigger a fork if disagreement persists, and then consume the child-universe structure that Zoltar defines. Only Zoltar can mint REP tokens.
+							In practice, that means an application can register a question,
+							trigger a fork after that question ends, and consume the
+							child-universe structure that Zoltar defines. Only Zoltar can mint
+							the child-universe <code>ReputationToken</code>; genesis REP is an
+							external token.
 						</p>
 
 					<h3>Zoltar Contracts</h3>
@@ -219,10 +223,15 @@
 						<a class="anchor-link" href="#economics" aria-label="Link to Fork Thresholds and REP Economics">#</a>
 					</div>
 					<p>
-						To trigger a Zoltar fork, an application must commit a specified amount of REP - the <code>ForkThreshold</code> (5% of all REP) - to future universes and permanently burn a portion of that REP through the <code>UncreditedForkHaircut</code>.
+						To trigger a Zoltar fork, the caller must commit the
+						<code>forkThreshold</code>: the parent universe's theoretical REP
+						supply divided by the configured threshold divisor, rounded down.
+						The REP threshold and haircut are the intended admission cost for a
+						fork, including unnecessary forks that impose migration work on
+						applications using that universe.
 					</p>
 					<p>
-						Both the threshold and the haircut are intended to make unnecessary forks economically costly. Forking should remain a last resort because it affects every application and user operating on the same Zoltar deployment.
+						Both the threshold and the haircut are intended to make unnecessary forks economically costly. Forking affects applications and users relying on that parent universe; each application chooses which child branch, if any, to continue using.
 					</p>
 					<div class="equation" id="eq-zoltar-fork-threshold">
 						<math display="block" aria-label="fork threshold equals floor total theoretical REP supply divided by fork threshold divisor" data-source="forkThreshold = floor(totalTheoreticalRepSupply / forkThresholdDivisor)">
@@ -238,12 +247,17 @@
 								<mo form="postfix" stretchy="true">⌋
 								</mo>
 							</mrow>
-						</mrow>
-						<p class="equation-caption"><span class="equation-label">Fork Threshold</span> 5% of all REP with the default divisor of<code>20</code>. </p>
+							</mrow>
+						</math>
+						<p class="equation-caption"><span class="equation-label">Fork Threshold</span>With the default divisor of <code>20</code>, this is approximately 5% of theoretical REP supply, subject to integer flooring.</p>
 					</div>
 						<p>
-							After triggering the fork, the full threshold deposit leaves the parent universe:<code>forkUniverse</code> burns that entire parent-REP amount and reduces the parent theoretical supply by the full threshold. The burn divisor then controls how much child-REP minting credit the initiator receives. Under the current deployment default <code>forkBurnDivisor = 5</code>, 20%
-							the threshold is an uncredited haircut and the remaining 80% becomes the initiator's migration balance.
+							After triggering the fork, the full threshold leaves the parent
+							universe: <code>forkUniverse</code> removes that parent REP and
+							reduces parent theoretical supply by the full threshold. The burn
+							divisor then controls the child-REP minting credit. With
+							<code>forkBurnDivisor = 5</code>, 20% of the threshold is an
+							uncredited haircut and the remaining 80% becomes migration credit.
 						</p>
 						<div class="equation" id="eq-zoltar-fork-burn">
 							<math display="block" aria-label="uncredited fork haircut equals floor fork threshold divided by fork burn divisor" data-source="uncreditedForkHaircut = ⌊forkThreshold / forkBurnDivisor⌋">
@@ -270,7 +284,7 @@
 									<mi>uncreditedForkHaircut</mi>
 							</mrow>
 						</math>
-						<p class="equation-caption"><span class="equation-label">Initiator Migration Balance</span>With the default burn divisor of <code>5</code>, the initiator receives the 80% of their REP back in migration balance.</p>
+						<p class="equation-caption"><span class="equation-label">Initiator Migration Balance</span>With the default burn divisor of <code>5</code>, the initiator receives migration credit equal to 80% of the threshold, subject to integer flooring.</p>
 					</div>
 					<div class="implementation-grid">
 						<div class="implementation-note">
@@ -281,7 +295,7 @@
 
 					<figure class="diagram" id="fig-zoltar-threshold-deposit" aria-labelledby="deposit-diagram-title">
 						<p class="diagram-title" id="deposit-diagram-title">Threshold Deposit Split</p>
-							<svg viewBox="0 0 860 360" role="img" aria-label="Fork threshold deposit leaves the parent universe, with 20 percent uncredited haircut and 80 percent migration balance.">
+							<svg viewBox="0 0 860 360" role="img" aria-label="Fork threshold deposit leaves the parent universe, with approximately 20 percent as an uncredited haircut and approximately 80 percent as migration balance after integer flooring." data-rounding="integer-flooring">
 							<defs>
 								<marker id="arrow-deposit" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 									<path d="M 0 0 L 10 5 L 0 10 z" fill="#615642"></path>
@@ -291,15 +305,21 @@
 							<path class="svg-line" marker-end="url(#arrow-deposit)" d="M 430 58 V 94"></path>
 							<rect class="svg-gold" x="286" y="98" width="288" height="76" rx="12"></rect>
 							<text class="svg-label" x="430" y="130" text-anchor="middle">Threshold deposit</text>
-							<text class="svg-small" x="430" y="153" text-anchor="middle">5% of theoretical REP supply</text>
+							<text class="svg-small" x="430" y="153" text-anchor="middle">≈5% of theoretical REP supply</text>
 							<path class="svg-line" d="M 430 176 V 222"></path>
 							<path class="svg-line" d="M 250 222 H 610"></path>
 							<path class="svg-line" marker-end="url(#arrow-deposit)" d="M 250 222 V 260"></path>
 							<path class="svg-line" marker-end="url(#arrow-deposit)" d="M 610 222 V 260"></path>
 							<rect class="svg-red" x="134" y="264" width="232" height="58" rx="10"></rect>
 							<rect class="svg-teal" x="494" y="264" width="232" height="58" rx="10"></rect>
-							<text class="svg-label" x="250" y="292" text-anchor="middle">20% uncredited haircut</text>
-							<text class="svg-label" x="610" y="291" text-anchor="middle">80% migration balance</text>
+							<text class="svg-label" x="250" y="286" text-anchor="middle" aria-label="approximately 20 percent uncredited haircut">
+								<tspan x="250">≈20% uncredited</tspan>
+								<tspan class="svg-small" x="250" dy="20">haircut</tspan>
+							</text>
+							<text class="svg-label" x="610" y="286" text-anchor="middle" aria-label="approximately 80 percent migration balance">
+								<tspan x="610">≈80% migration</tspan>
+								<tspan class="svg-small" x="610" dy="20">balance</tspan>
+							</text>
 						</svg>
 						<p class="diagram-caption"><span class="figure-label">Threshold Deposit Split</span>The full parent-REP threshold leaves parent supply. Most is re-expressed as migratable child-REP credit; the haircut is not credited.</p>
 					</figure>
@@ -312,7 +332,11 @@
 					</p>
 					<p>
 						A child's theoretical supply is a maximum for REP that can be minted in that branch. It starts from the parent's pre-fork theoretical supply and subtracts
-						only the uncredited haircut. Later REP added to a migration balance converts 1:1; only fork initiation pays this admission cost. REP can also be burnt voluntarily by using REP tokens burn function, this reduces the theoretical supply of REP.
+						only the uncredited haircut. Later REP added to a migration balance
+						converts 1:1; only fork initiation pays this admission cost. A holder
+						can voluntarily remove REP and reduce theoretical supply through
+						<code>Zoltar.burnRep</code>; the child token's <code>burn</code>
+						entrypoint itself is restricted to Zoltar.
 					</p>
 
 					<h3>Repeated-fork threshold decay</h3>
@@ -461,6 +485,11 @@
 						concentrates there. Holders can reproduce a migration balance into multiple valid child universes, subject to the per-child cap and the gas and coordination
 						costs of doing so. The economic pressure is therefore value concentration: REP in an abandoned branch may keep existing, but it is expected to have little
 						long-term value compared with REP in the branch that markets keep using.
+					</p>
+					<p>
+						The enforced recursive-fork gas bound and its implementation evidence
+						are maintained in
+						<a href="./invariants.html#ext-05"><code>EXT-05</code></a>.
 					</p>
 				</section>
 
@@ -669,7 +698,7 @@
 					</p>
 					<ul class="clean-list">
 						<li>categorical questions, implemented as an ordered array of non-empty outcome labels</li>
-						<li>binary questions, same as categoricals but with just yes, no and invalid outcome options</li>
+						<li>binary questions, represented by the higher-level Statoblast convention of categorical <code>Yes</code> and <code>No</code> labels plus the implicit <code>Invalid</code> resolution</li>
 						<li>scalar questions, implemented as a tick-based numeric range with no categorical labels</li>
 					</ul>
 					<p>

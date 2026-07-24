@@ -44,7 +44,14 @@ export async function validateDocsHtml(): Promise<ValidationFailure[]> {
 		validateTextEnvelope(parsedDocument, failures)
 		validateIds(parsedDocument, failures)
 		validateAriaReferences(parsedDocument, failures)
-		validateDiagrams(parsedDocument, failures)
+		if (isLegacyRedirectDocument(parsedDocument)) {
+			validateLegacyRedirect(parsedDocument, failures)
+		} else {
+			if (parsedDocument.document.querySelector('meta[http-equiv="refresh"]') !== null) {
+				addFailure(parsedDocument, 'only docs/start-here.html may use a meta refresh redirect', failures)
+			}
+			validateDiagrams(parsedDocument, failures)
+		}
 		validateEquations(parsedDocument, failures)
 		validateTables(parsedDocument, failures)
 		await validateHtmlLinks(parsedDocument, parsedDocumentsByPath, markdownAnchorsByPath, failures)
@@ -59,6 +66,29 @@ export async function validateDocsHtml(): Promise<ValidationFailure[]> {
 	}
 
 	return failures
+}
+
+function isLegacyRedirectDocument(parsedDocument: ParsedHtmlDocument): boolean {
+	return parsedDocument.relativePath === 'docs/start-here.html'
+}
+
+function validateLegacyRedirect(parsedDocument: ParsedHtmlDocument, failures: ValidationFailure[]): void {
+	const expectedTarget = './documentation.html'
+	const refresh = parsedDocument.document.querySelector('meta[http-equiv="refresh"]')
+	const refreshContent = refresh?.getAttribute('content')?.trim() ?? ''
+	if (!/^0\s*;\s*url=\.\/documentation\.html$/i.test(refreshContent)) {
+		addFailure(parsedDocument, `legacy redirect meta refresh must target ${expectedTarget} with zero delay`, failures)
+	}
+
+	const canonicalTarget = parsedDocument.document.querySelector('link[rel="canonical"]')?.getAttribute('href')?.trim()
+	if (canonicalTarget !== expectedTarget) {
+		addFailure(parsedDocument, `legacy redirect canonical link must target ${expectedTarget}`, failures)
+	}
+
+	const fallbackTarget = parsedDocument.document.querySelector('a')?.getAttribute('href')?.trim()
+	if (fallbackTarget !== expectedTarget) {
+		addFailure(parsedDocument, `legacy redirect fallback link must target ${expectedTarget}`, failures)
+	}
 }
 
 async function findDocsFiles(extension: string): Promise<string[]> {

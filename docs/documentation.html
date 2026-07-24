@@ -8,8 +8,8 @@
 	</head>
 	<body class="doc-openoracle">
 		<main>
-				<header>
-					<h1>Zoltar Monorepo</h1>
+			<header>
+				<h1>Zoltar Monorepo</h1>
 					<p>
 						This monorepo contains three components. Project documentation is
 						available at
@@ -26,22 +26,104 @@
 							<strong>Statoblast contracts</strong> —
 							<a href="./statoblast-whitepaper.html">Statoblast whitepaper</a>
 						</li>
-						<li>
-							<strong>Zoltar and Statoblast user interface</strong> —
-							<a href="./user-interface-documentation.html">
-								User interface documentation
-							</a>
-						</li>
+						<li><strong>Zoltar and Statoblast user interface</strong></li>
 					</ul>
-					<p> Zoltar is a foundational fork and coordination layer. It is not itself a prediction market or an outcome-reporting oracle. Instead, it maintains the shared registries for questions, REP tokens, and forks. If a dispute in a higher-level protocol, such as Statoblast, cannot be resolved locally, that protocol can initiate a Zoltar fork by depositing and burning the required amount of REP. The resulting fork applies to every product built on the same Zoltar deployment. </p>
+				<p>
+					Zoltar maintains the shared registries for questions, REP tokens, and
+					universe forks. It is neither a prediction market nor an
+					outcome-reporting oracle. A higher-level protocol can initiate a paid
+					Zoltar fork after an eligible question ends; that fork changes the
+					universe used by every application that chooses to continue from the
+					forked universe.
+				</p>
+				<p>
+					Statoblast is a binary prediction-market protocol built on Ethereum and
+					Zoltar. It creates security pools, issues transferable outcome shares,
+					coordinates local outcome reporting, and resolves or migrates markets.
+					Secondary-market trading is outside the current protocol.
+				</p>
+			</header>
 
-					<p> Statoblast is a censorship-resistant oracle and prediction-market protocol built on Ethereum and Zoltar. It enables users to create prediction markets, mint complete sets of outcome shares, trade those shares, report outcomes, and resolve markets. Its incentive mechanisms are designed to encourage accurate reporting of real-world events. </p>
-					<img
-		src="images/layers.png"
-		width = "100%"
-		alt="Diagram showing the user interface, Statoblast, and Zoltar protocol layers"
-	>
-				</header>
+			<section id="lifecycle">
+				<h2>Lifecycle at a Glance</h2>
+				<p>
+					A parent pool begins in <code>Operational</code>. Local escalation starts
+					after a three-day activation delay and may run for up to seven weeks.
+					A universe fork alone leaves <code>systemState</code> as
+					<code>Operational</code>; pool fork initiation calls
+					<code>activateForkMode</code> and leaves the parent in
+					<code>PoolForked</code>. Child creation is the boundary: the new child
+					starts in <code>ForkMigration</code> and later becomes operational.
+				</p>
+				<figure
+					class="diagram diagram-wide"
+					id="fig-documentation-lifecycle"
+					aria-labelledby="documentation-lifecycle-title"
+				>
+					<svg
+						viewBox="0 0 920 210"
+						role="img"
+						aria-labelledby="documentation-lifecycle-title documentation-lifecycle-desc"
+					>
+						<title id="documentation-lifecycle-title">Statoblast pool lifecycle</title>
+						<desc id="documentation-lifecycle-desc">
+							An operational parent enters PoolForked. A separately created
+							child enters ForkMigration, then ForkTruthAuction, and becomes
+							Operational either immediately when no auction is needed or after
+							auction finalization.
+						</desc>
+						<defs>
+							<marker
+								id="arrow-documentation-lifecycle"
+								viewBox="0 0 10 10"
+								refX="8"
+								refY="5"
+								markerWidth="7"
+								markerHeight="7"
+								orient="auto-start-reverse"
+							>
+								<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
+							</marker>
+						</defs>
+						<rect class="svg-green" data-state="Operational" data-pool-role="parent" x="10" y="70" width="160" height="62" rx="8"></rect>
+						<text class="svg-label" x="90" y="98" text-anchor="middle">Operational</text>
+						<text class="svg-small" x="90" y="120" text-anchor="middle">parent pool</text>
+						<path class="svg-line" marker-end="url(#arrow-documentation-lifecycle)" d="M 170 101 H 188"></path>
+						<rect class="svg-red" data-state="PoolForked" data-pool-role="parent" x="190" y="70" width="160" height="62" rx="8"></rect>
+						<text class="svg-label" x="270" y="98" text-anchor="middle">PoolForked</text>
+						<text class="svg-small" x="270" y="120" text-anchor="middle">parent halted</text>
+						<path class="svg-line" marker-end="url(#arrow-documentation-lifecycle)" data-transition="PoolForked->ForkMigration" data-boundary="parent-to-child" d="M 350 101 H 368"></path>
+						<text class="svg-micro" x="360" y="58" text-anchor="middle">create child</text>
+						<rect class="svg-blue" data-state="ForkMigration" data-pool-role="child" x="370" y="70" width="160" height="62" rx="8"></rect>
+						<text class="svg-label" x="450" y="98" text-anchor="middle">ForkMigration</text>
+						<text class="svg-small" x="450" y="120" text-anchor="middle">child pool</text>
+						<path class="svg-line" marker-end="url(#arrow-documentation-lifecycle)" data-transition="ForkMigration->ForkTruthAuction" d="M 530 101 H 548"></path>
+						<rect class="svg-gold" data-state="ForkTruthAuction" data-pool-role="child" x="550" y="70" width="180" height="62" rx="8"></rect>
+						<text class="svg-label" x="640" y="98" text-anchor="middle">ForkTruthAuction</text>
+						<text class="svg-small" x="640" y="120" text-anchor="middle">child checkpoint</text>
+						<path class="svg-line" marker-end="url(#arrow-documentation-lifecycle)" data-transition="ForkTruthAuction->Operational" d="M 730 101 H 748"></path>
+						<rect class="svg-green" data-state="Operational" data-pool-role="child" x="750" y="70" width="160" height="62" rx="8"></rect>
+						<text class="svg-label" x="830" y="98" text-anchor="middle">Operational</text>
+						<text class="svg-small" x="830" y="120" text-anchor="middle">child pool</text>
+					</svg>
+					<p class="diagram-caption">
+						<span class="figure-label">Pool lifecycle</span>
+						The fork path includes an eight-week migration window.
+						<code>startTruthAuction</code> always moves a child into
+						<code>ForkTruthAuction</code>; a child that needs no auction finalizes
+						immediately, while an auctioned child returns to
+						<code>Operational</code> after its deadline and value-free finalization.
+					</p>
+				</figure>
+				<p>
+					A continuation game resumes from its inherited elapsed time without a new
+					activation delay. See
+					<a href="./statoblast-whitepaper.html#migration">Forks and Migration</a>
+					and
+					<a href="./merkle-mountain-range.html">Merkle Mountain Range carry proofs</a>
+					for the detailed continuation path.
+				</p>
+			</section>
 
 			<section id="documentation-map">
 				<h2>Documentation Index</h2>

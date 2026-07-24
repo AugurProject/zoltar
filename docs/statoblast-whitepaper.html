@@ -60,7 +60,9 @@
 					</div>
 					<h1>Augur Statoblast White Paper</h1>
 					<p class="subtitle">
-						a censorship-resistant oracle and prediction-market protocol built on Ethereum and Zoltar.
+						A permissionless oracle and prediction-market protocol built on
+						Ethereum and Zoltar, subject to the assumptions in the
+						<a href="./security-model.html">Protocol Security Model</a>.
 					</p>
 				</header>
 
@@ -76,10 +78,9 @@
 						underwriting, and tries to settle disputes locally before forcing
 						Zoltar to fork.
 					</p>
-					<img src="images/layers.png" width = "100%" alt="Diagram showing the user interface, Statoblast, and Zoltar protocol layers">
-					<p> When Zoltar forks, Statoblast forks alongside it into the same child universes. Statoblast REP holders then choose which universe they believe represents the correct outcome and migrate their REP there. </p>
+					<p> A Zoltar fork first freezes or redirects fork-guarded parent flows. Statoblast fork handling must then be initiated separately to snapshot the affected pool and create child pools. This can follow the pool's own local non-decision or an unrelated external Zoltar fork. REP holders choose which child universe to support and migrate REP there. </p>
 					<p> Open-interest collateral follows that migration, but it is not duplicated across universes. As a result, some child universes may not receive enough collateral to fully back their inherited open interest. </p>
-					<p> After the migration period ends, each undercollateralized universe holds a truth auction. The auction sells REP from that universe in exchange for ETH, using the proceeds to restore the missing collateral and repair the open interest. </p>
+					<p> After the migration window ends, each undercollateralized child pool may run its own <a href="./auction-design.html#lifecycle">truth auction</a>, selling that child universe's REP to raise as much repair ETH as demand supports. </p>
 				</section>
 
 				<section class="paper-section" id="overview">
@@ -98,7 +99,7 @@
 						<li> A question is registered in Zoltar and a Statoblast security pool is deployed for that question in one universe. </li>
 						<li> REP vaults fund underwriting capacity and users mint ETH-backed complete sets. </li>
 						<li> After question end, disputes first try to resolve locally through the escalation game. </li>
-						<li> If local resolution fails and the system reaches non-decision, Statoblast triggers a Zoltar fork and migrate pool state into child universes. The market is then resolved in each child universe. </li>
+						<li> If local resolution reaches non-decision, Statoblast can trigger a Zoltar fork. An unrelated external Zoltar fork can also interrupt the pool before local resolution. In either case, a separate pool-fork activation snapshots the parent before child-pool migration begins. </li>
 						<li>If a child pool is missing ETH collateral after migration, it can sell child-universe REP through a truth auction to repair that collateral gap.</li>
 						<li> The child pool in the branch users choose to keep using resumes operation and users settle or redeem positions there. </li>
 					</ol>
@@ -116,12 +117,12 @@
 								<tr>
 									<td>Resolution trigger</td>
 									<td> Escalation picks a single local winner before non-decision. </td>
-									<td> Two or more outcomes reach the non-decision threshold and Zoltar forks. </td>
+									<td> The pool's own non-decision triggers Zoltar, or an unrelated external Zoltar fork interrupts the pool; pool-fork activation is a separate step. </td>
 								</tr>
 								<tr>
 									<td>Where state settles</td>
 									<td>The original pool remains the settlement venue.</td>
-									<td> Vaults, shares, and collateral accounting can migrate into child pools. Each child receives one canonical unresolved-escalation snapshot and aggregate backing.
+									<td> Vaults, shares, and collateral accounting can migrate into child pools. Each child receives one canonical unresolved-escalation snapshot and aggregate backing; winners later settle by proof.
 									</td>
 								</tr>
 								<tr>
@@ -256,7 +257,7 @@
 								rx="8"
 							></rect>
 							<text class="svg-small" x="465" y="100" text-anchor="middle">
-								hold outcomes / trade
+								hold outcomes
 							</text>
 							<rect
 								class="svg-gold"
@@ -367,7 +368,32 @@
 							>#</a
 						>
 					</div>
-					TODO
+					<div class="role-grid">
+						<div class="role-card">
+							<span>SecurityPool</span>
+							<b>Question-specific underwriting and ETH collateral engine.</b>
+						</div>
+						<div class="role-card">
+							<span>EscalationGame</span>
+							<b>Local dispute game for Invalid, Yes, and No.</b>
+						</div>
+						<div class="role-card">
+							<span>SecurityPoolForker</span>
+							<b>Fork migration and child-pool activation coordinator.</b>
+						</div>
+						<div class="role-card">
+							<span>Truth Auction</span>
+							<b>Batch auction that sells child-universe REP for ETH repair.</b>
+						</div>
+						<div class="role-card">
+							<span>Oracle Coordinator</span>
+							<b>REP/ETH price flow for solvency-sensitive operations.</b>
+						</div>
+						<div class="role-card">
+							<span>ShareToken</span>
+							<b>ERC-1155 positions with universe-aware token ids.</b>
+						</div>
+					</div>
 				</section>
 
 				<section class="paper-section" id="roles">
@@ -383,7 +409,7 @@
 					<ul>
 						<li> Question creators register questions in Zoltar question data, creating the objects around which Statoblast markets can be built. </li>
 						<li> REP vault operators deposit REP into a security pool and provide REP-backed underwriting capacity. Their deposits back open interest and earn fees extracted from collateral over time. </li>
-						<li>Trades mint complete sets with ETH and hold and sell outcome shares.</li>
+						<li>Traders mint complete sets with ETH and hold transferable outcome shares; secondary-market execution is external to Statoblast.</li>
 						<li> REP vault operators can escrow vault-backed REP behind <code>Invalid</code>, <code>Yes</code>, or <code>No</code> after a question ends so the local escalation process can settle locally or force a non-decision. </li>
 						<li> Anyone can create child pools, while vault owners and share holders move vault state and shares across child universes after a Zoltar fork. Child creation reproduces unresolved escalation state and aggregate backing once; winning proofs can be relayed permissionlessly and always pay their recorded depositors. </li>
 						<li> Truth-auction bidders buy REP with ETH when a child pool in a child universe needs to restore missing collateral. </li>
@@ -395,7 +421,7 @@
 				<section class="paper-section" id="pools">
 					<div class="section-heading">
 						<h2>4. Security Pools</h2>
-						<a class="anchor-link" href="#pools" aria-label="Link to Security Pools" >#</a >
+						<a class="anchor-link" href="#pools" aria-label="Link to Security Pools">#</a>
 					</div>
 					<p class="lede">
 						A <code>SecurityPool</code> is a lineage-specific Statoblast contract for a question in a universe. Vault operators deposit REP, choose bond allowance, and underwrite ETH-backed complete sets in that pool's
@@ -408,16 +434,15 @@
 					<div class="callout">
 						Origin pool validation intentionally lives above Zoltar. Zoltar accepts global questions; Statoblast's factory decides which question shape is eligible for the current security-pool implementation.
 					</div>
-					<p> Pool-related addresses are also deterministic. The
-						<code>SecurityPoolFactory</code> derives a factory-level
-						<code>securityPoolSalt</code> seed from the parent address, universe id, question id, and <code>securityMultiplier</code>, using a zero parent for an origin. The pool deployment worker's raw CREATE2 salt
-						is zero; constructor init code commits the pool wiring. Coordinator and auction factories derive their own caller-scoped salts from the factory seed. See the
+					<p>
+						Pool-related addresses are deterministic and their lineage identity
+						commits to the origin's immutable
+						<code>initialReportPriorityFeeWeiPerGas</code>. Origins configured
+						with different priority fees therefore cannot share a pool or
+						share-token namespace, while children inherit their origin's
+						configuration. The
 						<a href="./operator-reference.md#security-pool-guardrails">Operator Reference</a>
-						for the exact address derivations. Each origin receives
-						<code>originId = keccak256(abi.encode(questionId, securityMultiplier, originUniverseId))</code>.
-						Migrated children retain that origin id and register with
-						<code>poolId = keccak256(abi.encode(originId, childUniverseId))</code>. The origin id
-						is also the share-token salt, so every lineage has a separate share-token contract and position namespace while all children of that lineage reuse the same contract.
+						owns the exact address and registry-key derivations.
 					</p>
 					<p>
 						An inherited child and a newly created origin may coexist for the same question, multiplier, initial-report priority fee, and universe. This is intentional: their origin IDs, pool addresses, share tokens, collateral ledgers, and migration paths are distinct. A caller selecting a pool therefore selects an origin lineage, not merely a question and universe. Because a fresh origin cannot occupy an inherited lineage’s registry entry, origin deployment does not scan universe ancestors.
@@ -432,8 +457,10 @@
 								ETH, REP, shares, and fee flow
 							</title>
 							<desc id="asset-flow-desc">
-								Users send ETH and receive shares; vaults send REP and receive
-								fees; fork repair can sell child REP for ETH.
+								Users send ETH to the security pool, which mints shares. A
+								redemption request goes to the pool; the pool burns the relevant
+								shares and pays ETH. Vaults send REP and receive fees; fork
+								repair can sell child REP for ETH.
 							</desc>
 							<defs>
 								<marker
@@ -504,6 +531,7 @@
 							<path
 								class="svg-line"
 								marker-end="url(#arrow-assets)"
+								data-flow="pool-to-share-token-mint"
 								d="M 584 94 H 734"
 							></path>
 							<text class="svg-small" x="654" y="79" text-anchor="middle">
@@ -512,13 +540,29 @@
 							<path
 								class="svg-line"
 								marker-end="url(#arrow-assets)"
-								d="M 734 126 C 610 182 350 182 224 126"
+								data-flow="pool-to-share-token-burn"
+								d="M 590 152 C 640 190 690 190 728 132"
 							></path>
-							<text class="svg-small" x="484" y="205" text-anchor="middle">
-								redeem full sets while operational
+							<text class="svg-small" x="659" y="190" text-anchor="middle">
+								authorized burn
 							</text>
-							<text class="svg-small" x="484" y="227" text-anchor="middle">
-								or finalized winning shares
+							<path
+								class="svg-line"
+								marker-end="url(#arrow-assets)"
+								data-flow="trader-to-pool-redemption"
+								d="M 224 118 C 280 158 330 158 384 118"
+							></path>
+							<text class="svg-small" x="304" y="170" text-anchor="middle">
+								redeem request
+							</text>
+							<path
+								class="svg-line"
+								marker-end="url(#arrow-assets)"
+								data-flow="pool-to-trader-eth-payout"
+								d="M 384 138 C 330 220 280 220 224 138"
+							></path>
+							<text class="svg-small" x="304" y="228" text-anchor="middle">
+								ETH payout
 							</text>
 							<rect
 								class="svg-gold"
@@ -632,39 +676,92 @@
 							units.
 						</p>
 					</div>
-					<p>Statoblast then uses REP/ETH price to ensure that every operation being conducted on the platform is safe. Its the utmost importance for the protocol that the value of Open Interest collateral (ETH) value is below the REP collateral. As if this is not the case its impossible to recover the Open interest collateral via the truth auction.</p>
-
-					<p>REP vault holders can decide how much ETH can be minted against their REP holdings (Security Bond Allowance). The maxium amount that can be minted restricted by amount of REP, security multiplier and REP/ETH:
+					<p>
+						Statoblast uses the REP/ETH price to compare REP backing with
+						ETH-denominated obligations. Vault operators choose their security
+						bond allowance, but both the vault and the pool must remain backed.
+						The security multiplier belongs to the liquidation threshold; it is
+						not part of the ordinary allowance-setting inequality.
 					</p>
-					<div>
-						<math display="block">
+					<div class="equation" id="eq-statoblast-bond-solvency">
+						<math
+							display="block"
+							aria-label="remaining REP backing times price precision is greater than or equal to security bond allowance times REP per ETH price"
+							data-source="remainingRepBacking * pricePrecision >= securityBondAllowance * repPerEthPrice"
+						>
+							<mrow>
+								<mi>remainingRepBacking</mi>
+								<mo>&#x22C5;</mo>
+								<mi>pricePrecision</mi>
+								<mo>&ge;</mo>
+								<mi>securityBondAllowance</mi>
+								<mo>&#x22C5;</mo>
+								<mi>repPerEthPrice</mi>
+							</mrow>
+						</math>
+						<p class="equation-caption">
+							<span class="equation-label">Bond Solvency</span>
+							Remaining REP value must cover the ETH-denominated allowance.
+						</p>
+					</div>
+					<div class="equation" id="eq-statoblast-allowance-backing">
+						<math
+							display="block"
+							aria-label="REP backing times price precision must be strictly greater than security bond allowance times REP per ETH price"
+							data-source="repBacking * pricePrecision > securityBondAllowance * repPerEthPrice"
+						>
+							<mrow>
+								<mi>repBacking</mi>
+								<mo>&#x22C5;</mo>
+								<mi>pricePrecision</mi>
+								<mo>&gt;</mo>
+								<mi>securityBondAllowance</mi>
+								<mo>&#x22C5;</mo>
+								<mi>repPerEthPrice</mi>
+							</mrow>
+						</math>
+						<p class="equation-caption">
+							<span class="equation-label">Allowance Backing</span>
+							Setting or increasing allowance requires strict overcollateralization.
+						</p>
+					</div>
+					<div class="equation" id="eq-statoblast-liquidation-condition">
+						<math
+							display="block"
+							aria-label="a vault is liquidable when security bond allowance times security multiplier times REP per ETH price is greater than REP backing times price precision"
+							data-source="securityBondAllowance * securityMultiplier * repPerEthPrice > repBacking * pricePrecision"
+						>
 							<mrow>
 								<mi>securityBondAllowance</mi>
 								<mo>&#x22C5;</mo>
-								<mi>pricePrecision</mi>
-								<mo>&lt;</mo>
-								<mi>repBacking</mi>
+								<mi>securityMultiplier</mi>
 								<mo>&#x22C5;</mo>
 								<mi>repPerEthPrice</mi>
+								<mo>&gt;</mo>
+								<mi>repBacking</mi>
 								<mo>&#x22C5;</mo>
-								<mo>securityMultiplier;</mo>
+								<mi>pricePrecision</mi>
 							</mrow>
 						</math>
+						<p class="equation-caption">
+							<span class="equation-label">Liquidation Condition</span>
+							The multiplier determines when unsafe allowance becomes liquidable.
+						</p>
 					</div>
-
 					<p>
-						The contract applies related conditions at both the vault level and the whole-pool level before allowing three kinds of operations:
-						<ul>
-							<li><code>performWithdrawRep</code></li>
-							<li><code>performLiquidation</code></li>
-							<li><code>performSetSecurityBondsAllowance</code></li>
-						</ul>
+						Before REP withdrawals and allowance changes, the contract applies
+						related solvency checks at both the vault and whole-pool level.
+						Liquidation follows a different path: it requires the target to be
+						liquidatable, bounds the transfer, and verifies that the caller
+						remains safe while aggregate allowance is preserved.
 					</p>
 					<h3>Complete Sets</h3>
 					<p>
-						Traders and liquidity providers can mint complete sets by calling <code>createCompleteSet</code> and depositing ETH. The pool then mints
-						one <code>Invalid</code>, one <code>Yes</code>, and one <code>No</code> ERC-1155 share through <code>ShareToken</code> for each ETH depsoited. The deposited ETH is tracked by
-						<code>completeSetCollateralAmount</code> variable.
+						Traders and liquidity providers can mint complete sets by calling
+						<code>createCompleteSet</code> with ETH. For each complete-set unit,
+						the pool mints one <code>Invalid</code>, one <code>Yes</code>, and
+						one <code>No</code> ERC-1155 share through <code>ShareToken</code>.
+						The deposited ETH increases <code>completeSetCollateralAmount</code>.
 					</p>
 					<ul>
 						<li>
@@ -679,12 +776,18 @@
 							winning outcome shares through <code>redeemShares</code>.
 						</li>
 						<li>
-							Security Pool won't allow minting more complete sets than there's security bond allowance.
+							The pool rejects a mint when the resulting collateral would exceed
+							available security bond allowance. A positive deposit must also
+							convert to at least one complete-set unit.
 						</li>
 					</ul>
 					<h3>Fee Extraction and Retention Rate</h3>
 					<p>
-						Complete-set collateral gradually decays into an unallocated fee reserve. These fees can be claimed by the vault holders a the rate they are supplying security bond allowance (the bigger share your vault contributes to the security bond allowance, the bigger share of the fees you receive). Vault checkpoints turn whole-wei entitlements from that reserve into redeemable vault debt. </p>
+						Complete-set collateral gradually decays into an unallocated fee
+						reserve. Fee-eligible vaults accrue fees in proportion to their
+						assigned security bond allowance. Vault checkpoints turn whole-wei
+						entitlements from that reserve into redeemable vault debt.
+					</p>
 					<p>The retention rate falls as utilization rises, so security becomes more expensive as open interest consumes underwriting slack.
 					</p>
 					<ul>
@@ -718,12 +821,10 @@
 						the constants imply roughly a <code>10%</code> yearly fee. Once
 						utilization reaches the <code>80%</code> dip, the annualized fee is
 						roughly <code>50%</code> and then stays flat because the on-chain
-						retention rate is already pinned to its minimum. The plotted line
-						below follows the same annualization the UI uses:
+						retention rate is already pinned to its minimum. The UI annualizes
+						the rate as
 						<code>annualFee = 1 - (retentionRate / PRICE_PRECISION)^SECONDS_PER_YEAR</code>.
 					</p>
-
-					<p>TODO, add a better equations and charts here that explain the curve better</p>
 
 					<p>
 						When <code>feeEligibleSecurityBondAllowance == 0</code>, the pool
@@ -735,12 +836,18 @@
 						allowance is positive.
 					</p>
 
-					<p> TODO: explain how the lazy fee accrual works in the pool (makerdao like accumulator system)</p>
+					<p>
+						Fee accrual is lazy: state-changing pool operations checkpoint the
+						global fee index, and vault operations checkpoint each vault against
+						that index. Fractional amounts remain in explicit remainders until
+						they accumulate into whole wei, so callers do not need to iterate over
+						every vault when time advances.
+					</p>
 					<p>
 						Fee accrual is time-clamped. The pool extracts collateral into fees
 						only until the question end time while the universe remains
 						unforked; after the universe forks, the fee accumulator is instead
-						clamped to the fork time (However, the child pools start to accrue fees right when the fork occured). Retention-rate updates also no-op when total bond allowance is zero or when the pool is outside
+						clamped to the fork time. Retention-rate updates also no-op when total bond allowance is zero or when the pool is outside
 						<code>Operational</code> mode, so fork handling does not silently
 						change the live fee curve.
 					</p>
@@ -970,6 +1077,13 @@
 						<a class="anchor-link" href="#shares" aria-label="Link to Shares">#</a>
 					</div>
 					<p> <code>ShareToken</code> is an ERC-1155 contract. Each complete set mints one <code>Invalid</code>, one <code>Yes</code>, and one <code>No</code> share. The token id encodes the universe id and outcome, making positions fork-aware.
+					</p>
+					<p>
+						A positive ETH deposit must convert through
+						<code>cashToShares</code> to at least one complete-set unit. If
+						rounding would mint zero shares, <code>createCompleteSet</code>
+						reverts with <code>Exchange rate undefined</code> instead of
+						accepting collateral.
 					</p>
 					<figure class="diagram" id="fig-statoblast-share-lifecycle">
 						<svg
@@ -1209,6 +1323,17 @@
 						</p>
 					</figure>
 					<p>
+						If none of the selected children has received a source entitlement,
+						the first call materializes the full current source balance in each
+						selected child. On a later call, each child receives only
+						<code>current source balance - amount already materialized</code>. If
+						every selected delta is zero, the call reverts.
+						The canonical guarantees are
+						<a href="./invariants.html#fork-10"><code>FORK-10</code></a>,
+						<a href="./invariants.html#share-04"><code>SHARE-04</code></a>, and
+						<a href="./invariants.html#fork-11"><code>FORK-11</code></a>.
+					</p>
+					<p>
 						At the implementation level, <code>redeemShares</code> burns the holder’s full materialized balance of the winning token id and pays the burned amount’s pro-rata share of current collateral, using the pool’s remaining economic claim supply as the denominator. That
 						<code>shareTokenSupply</code> includes materialized ERC-1155 balances
 						and fork-time entitlements that can materialize later. In the healthy
@@ -1259,7 +1384,14 @@
 							>#</a
 						>
 					</div>
-					<p class="lede"> Statoblast tries local resolution before forcing Zoltar to fork. The local resolution is implemented via an Escalation Game. Users stake funds behind the outcome they believe is correct. The winner outcome is the outcome that gets the most money raised over a time. However, if enough funds are raised, Statoblast uses the funds to trigger a fork.
+					<p class="lede">
+						Statoblast tries local resolution before forcing Zoltar to fork. An
+						<code>EscalationGame</code> escrows vault-backed REP behind
+						<code>Invalid</code>, <code>Yes</code>, or <code>No</code>. After
+						the deadline, a unique leading outcome can resolve locally. If at
+						least two outcomes reach the non-decision threshold, the pool can use
+						its escalation backing to initiate a Zoltar fork.
+					</p>
 
 					<div class="callout">
 						<strong>Why not fork immediately?</strong> A fork asks the whole universe to branch, so Statoblast first gives vault-backed REP a local path to settle the question. The rising cost curve makes late disagreement increasingly expensive, while the non-decision threshold keeps the fork path available when competing outcomes remain strongly funded.
@@ -1317,7 +1449,9 @@
 						<li>The cost rises monotonically between those endpoints.</li>
 					</ul>
 					<p>
-						The plot below is the same curve used by
+						The plot below is an illustrative normalized instance with
+						<code>ln(nonDecisionThreshold / startingBond) = 2.4</code>. It uses
+						the parameterized curve implemented by
 						<code>totalCost()</code> and
 						<code>computeIterativeAttritionCost</code>: early deposits face the
 						starting bond, while sustained late disagreement approaches the
@@ -1693,7 +1827,6 @@
 							</div>
 						</div>
 					</details>
-					<p> TODO, this interactive example is wrong</p>
 					<details class="interactive-example" id="resolution-edge-example">
 						<summary>Adjust escalation resolution edge cases</summary>
 						<p>
@@ -1767,7 +1900,6 @@
 								>
 							</label>
 						</div>
-					<p> TODO, I think on example simulator should be enough? However, we want to visualize the line graph in his as well</p>
 						<div class="example-visual">
 							<svg
 								viewBox="0 0 760 210"
@@ -2387,7 +2519,10 @@
 						<code>msg.sender</code> to be the affected vault.
 					</p>
 					<p>
-						External zoltar forks interrupt the escalation game. This is called continuation. Read more about this in <a href="#migration">Forks and Migration</a>.
+						External Zoltar forks interrupt the escalation game. This is called
+						continuation. The canonical continuation lifecycle lives in
+						<a href="#migration">Forks and Migration</a>. This section only distinguishes
+						the settlement entry points and their caller permissions.
 					</p>
 					<p> Continuation claims use Merkle Mountain Range proofs and nullifier roots. The canonical leaf fields, peak ordering, proof lengths, and replay rules are documented in <a href="./merkle-mountain-range.html">Merkle Mountain Range carry proofs</a>. </p>
 				</section>
@@ -2404,6 +2539,14 @@
 					</div>
 					<p> Fork handling spans both layers. Zoltar creates child universes and handles REP splitting. Statoblast separately moves vault state, proportional collateral, and share positions into child pools, while child creation reproduces unresolved escalation state from one canonical snapshot and aggregate backing transfer.</p>
 					<p> The child-pool selector comes from the universe’s fork question, not from Statoblast’s binary market shape. A binary Statoblast pool can therefore spawn child pools keyed to scalar encodings or multi-way categorical outcomes when the universe fork used a different Zoltar question.</p>
+					<p>
+						As described by
+						<a href="./zoltar-whitepaper.html#global-question-scope"
+							>Zoltar's global-question rules</a
+						>, the consequence is universe-wide: an eligible Zoltar fork stops
+						or redirects parent flows for every pool using that universe, even
+						when the fork question is unrelated to a pool.
+					</p>
 
 					<table>
 						<thead>
@@ -2432,7 +2575,8 @@
 							</tr>
 							<tr>
 								<td><code>ForkTruthAuction</code></td>
-								<td>Child pool repairs missing collateral by selling REP.</td>
+								<td> Truth-auction decision and finalization phase. The child either sells REP when repair is needed or finalizes immediately without a sale.
+								</td>
 								<td> Auction finalization accounts legitimate routed collateral plus accepted bid ETH and activates the child at that level. It rejects explicit caller contribution ETH.
 								</td>
 							</tr>
@@ -2527,6 +2671,7 @@
 							<path
 								class="svg-line"
 								marker-end="url(#arrow-state)"
+								data-transition="ForkMigration->ForkTruthAuction"
 								d="M 635 148 V 218"
 							></path>
 							<text class="svg-micro" x="742" y="187" text-anchor="middle">
@@ -2552,10 +2697,11 @@
 							<path
 								class="svg-line"
 								marker-end="url(#arrow-state)"
+								data-transition="ForkTruthAuction->Operational"
 								d="M 720 257 H 800"
 							></path>
 							<text class="svg-micro" x="760" y="240" text-anchor="middle">
-								auction settled
+								finalized
 							</text>
 							<rect
 								class="svg-green"
@@ -2571,13 +2717,8 @@
 							<text class="svg-small" x="860" y="274" text-anchor="middle">
 								bids accounted
 							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-state)"
-								d="M 720 109 C 790 120 840 154 860 218"
-							></path>
-							<text class="svg-micro" x="825" y="92" text-anchor="middle">
-								no auction needed
+							<text class="svg-micro" x="760" y="320" text-anchor="middle">
+								immediate if no auction is needed
 							</text>
 							<text class="svg-small" x="386" y="184" text-anchor="middle">
 								migration calls
@@ -3085,7 +3226,11 @@
 						</p>
 					</figure>
 					<div class="equation" id="eq-statoblast-fork-migration-proportion">
-						<math>
+						<math
+							display="block"
+							aria-label="migration REP denominator at fork equals vault REP at fork for an own fork and auctionable REP at fork for an external fork; migrated REP equals the floor of parent pool ownership times the migration REP denominator at fork divided by the parent pool ownership denominator"
+							data-source="migrationRepDenominatorAtFork = ownFork ? vaultRepAtFork : auctionableRepAtFork; migratedRep = floor(parentPoolOwnership \cdot migrationRepDenominatorAtFork / parentPoolOwnershipDenominator)"
+						>
 							<mtable columnalign="right center left" rowspacing="0.8em">
 							<mtr>
 								<mtd>
@@ -4526,8 +4671,8 @@
 						<h2>9. REP/ETH Price Oracle</h2>
 						<a class="anchor-link" href="#oracle" aria-label="Link to REP/ETH Oracle">#</a>
 					</div>
-					<p> The REP/ETH oracle is narrow in purpose. <code>OpenOraclePriceCoordinator</code> uses <a href="https://docs.openoracle.org">OpenOracle</a> to obtain a fresh REP/ETH price for liquidation, REP withdrawal, and bond-allowance updates. A stale price also blocks <code>depositToEscalationGame</code> whenever the pool still has active security-bond allowance. </p>
-					<p> The OpenOracle path is contestable before the coordinator can use it: the sponsor funds the request, the coordinator atomically posts the initial token amounts and becomes the onchain reporter, disputers can replace a bad report with the contract-required replacement amounts strictly before the settlement deadline, and a settler can finalize the report at or after that deadline. OpenOracle credits the final position to the final reporter. Its callback supplies the accepted amounts to the coordinator, which withdraws only its own internal WETH/REP balances back to the sponsor. Request, dispute, settlement, and callback safety checks are detailed in the dedicated <a href="./open-oracle-integration.html">OpenOracle integration</a> guide. </p>
+					<p> The REP/ETH oracle is narrow in purpose. <code>OpenOraclePriceCoordinator</code> uses <code>OpenOracle</code> to obtain a fresh REP/ETH price for liquidation, REP withdrawal, and bond-allowance updates. A stale price also blocks <code>depositToEscalationGame</code> whenever the pool still has active security-bond allowance. It is not the oracle for question truth; escalation and, if necessary, Zoltar forks handle that path. </p>
+					<p> The OpenOracle path is contestable before the coordinator can use it: the sponsor funds the request, the coordinator atomically posts the initial token amounts and becomes the onchain reporter, disputers can replace a bad report with the contract-required replacement amounts strictly before the settlement deadline, and a settler can finalize the report at or after that deadline. OpenOracle credits the final position to the final reporter. Its callback supplies the accepted amounts to the coordinator, which withdraws only its own internal WETH/REP balances back to the sponsor. Request, dispute, settlement, callback safety, and recovery details are maintained in the dedicated <a href="./open-oracle-integration.html#statoblast-integration">OpenOracle integration</a> guide. </p>
 					<p>
 						If the last price is stale, solvency-sensitive operations can be
 						queued until a valid report is settled. The coordinator then replays
@@ -4538,8 +4683,11 @@
 						collateral.
 					</p>
 					<p id="oracle-economic-security-assumption">
-						<strong><code>ORACLE-A1</code> - always-available profitable arbitrager.</strong>
-						Statoblast assumes that there are arbitragers out there that are willing to play profitable Open Oracle games. This ensures that the price given by the price oracle is correct.
+						<strong><code>ORACLE-A1</code> — always-available profitable arbitrager.</strong>
+						Security depends on profitable corrections receiving timely inclusion;
+						the mechanism does not guarantee that every accepted price is correct.
+						The <a href="./security-model.html#oracle-a1">normative security model</a>
+						owns the full assumption, excluded guarantee, and residual loss boundary.
 					</p>
 					<figure class="diagram" id="fig-statoblast-oracle-flow">
 						<svg
@@ -4602,7 +4750,7 @@
 								Valid Price?
 							</text>
 							<text class="svg-small" x="470" y="113" text-anchor="middle">
-								5-minute freshness window
+								configured freshness window
 							</text>
 							<path
 								class="svg-line"
@@ -4711,7 +4859,25 @@
 							>#</a
 						>
 					</div>
-					add from here and adjust https://github.com/AugurProject/oracle-research/blob/main/first_draft_whitepaper/whitepaper_DRAFT.md
+					<p>
+						The <a href="./security-model.html">Protocol Security Model</a> is
+						normative for <code>ORACLE-A1</code>, <code>AUCTION-A1</code>, their
+						excluded guarantees, and the resulting loss allocation.
+					</p>
+					<ul>
+						<li>REP backing must remain economically meaningful relative to the obligations it secures.</li>
+						<li>Profitable oracle corrections must receive timely inclusion; this is an assumption, not an onchain guarantee.</li>
+						<li>Truth-auction demand may be insufficient, in which case the child activates with the collateral actually migrated and raised.</li>
+						<li>Usable value depends on users and capital coordinating on the child branches they continue to support.</li>
+					</ul>
+					<p>
+						Zoltar creates child universes, while Statoblast carries underwriting
+						state, collateral accounting, and outcome-share claims into child
+						pools. REP migration, proportional collateral migration, and
+						truth-auction repair can rebuild usable market state, but none of
+						those mechanisms independently identifies truth or guarantees full
+						collateral repair.
+					</p>
 				</section>
 
 				<section class="paper-section" id="parameters">
@@ -4766,10 +4932,6 @@
 							The retention-rate curve in <code>SecurityPoolUtils</code> is
 							heuristic rather than final market design.
 						</li>
-						<li>
-							Some comments in <code>SecurityPool</code> acknowledge open
-							accounting questions around child-pool complete-set behavior.
-						</li>
 					</ul>
 				</section>
 			</main>
@@ -4784,8 +4946,6 @@
 			const formatRep = (value, digits = 2) =>
 				`${formatFixed(value, digits)} REP`;
 			const formatEth = (value) => `${formatFixed(value)} ETH`;
-			const formatShares = (value) => `${formatFixed(value, 0)} shares`;
-			const formatPercent = (value) => `${formatFixed(value, 0)}%`;
 			const atomicDisplayScale = 1_000_000n;
 			const weiPerDisplayUnit = 1_000_000_000_000n;
 			const toAtomic = (value) =>
@@ -4875,13 +5035,6 @@
 						rectElement.setAttribute("x", String(rectX));
 					}
 				};
-				const setTextPosition = (textName, x, y) => {
-					const textElement = texts[textName];
-					if (textElement !== undefined) {
-						textElement.setAttribute("x", String(x));
-						textElement.setAttribute("y", String(y));
-					}
-				};
 				return {
 					inputs,
 					read,
@@ -4890,7 +5043,6 @@
 					writeText,
 					setRectWidth,
 					setRectX,
-					setTextPosition,
 				};
 			};
 			const bindExample = (exampleId, update) => {
@@ -4903,39 +5055,6 @@
 				}
 				update(context);
 			};
-			bindExample("share-migration-example", (context) => {
-				const parentBalance = context.read("parentBalance");
-				const selectedChildren = context.read("selectedChildren");
-				const childWidth = parentBalance * 2.2;
-				context.writeValue("parentBalance", formatShares(parentBalance));
-				context.writeValue(
-					"selectedChildren",
-					`${selectedChildren} ${selectedChildren === 1 ? "branch" : "branches"}`,
-				);
-				context.setRectWidth("parent", childWidth);
-				context.setRectWidth("childA", selectedChildren >= 1 ? childWidth : 0);
-				context.setRectWidth("childB", selectedChildren >= 2 ? childWidth : 0);
-				context.setRectWidth("childC", selectedChildren >= 3 ? childWidth : 0);
-				context.writeText("parentText", formatFixed(parentBalance, 0));
-				context.writeText(
-					"childAText",
-					selectedChildren >= 1 ? formatFixed(parentBalance, 0) : "0",
-				);
-				context.writeText(
-					"childBText",
-					selectedChildren >= 2 ? formatFixed(parentBalance, 0) : "0",
-				);
-				context.writeText(
-					"childCText",
-					selectedChildren >= 3 ? formatFixed(parentBalance, 0) : "0",
-				);
-				context.write("parentAfter", formatShares(parentBalance));
-				context.write("childBalance", formatShares(parentBalance));
-				context.write(
-					"totalChildBalances",
-					formatShares(parentBalance * selectedChildren),
-				);
-			});
 			bindExample("escalation-deposit-example", (context) => {
 				const invalidBalance = context.read("invalidBalance");
 				const yesBalance = context.read("yesBalance");
@@ -5084,106 +5203,6 @@
 				context.write("resolutionResult", result);
 				context.write("resolutionReason", reason);
 			});
-			bindExample("payout-region-example", (context) => {
-				const bindingCapital = context.read("bindingCapital");
-				const winningPrincipal = context.read("winningPrincipal");
-				const depositAmount = Math.min(
-					context.read("depositAmount"),
-					winningPrincipal,
-				);
-				const depositStart = Math.min(
-					context.read("depositStart"),
-					Math.max(0, winningPrincipal - depositAmount),
-				);
-				const cumulativeAmount = depositStart + depositAmount;
-				const thresholdPercent = context.read("actualForkThresholdPercent");
-				const bindingAtomic = toAtomic(bindingCapital);
-				const rewardCap = fromAtomic(bindingAtomic + bindingAtomic / 2n);
-				const rewardPool = fromAtomic((bindingAtomic * 3n) / 5n);
-				const rewardEligiblePrincipal = Math.max(
-					Math.min(winningPrincipal, rewardCap),
-					0.000001,
-				);
-				const eligibleEnd = Math.min(cumulativeAmount, rewardCap);
-				const eligibleDeposit = Math.max(
-					0,
-					Math.min(depositAmount, eligibleEnd - depositStart),
-				);
-				const depositWithdrawal =
-					depositAmount +
-					(eligibleDeposit * rewardPool) / rewardEligiblePrincipal;
-				const scaledWithdrawal = (depositWithdrawal * thresholdPercent) / 100;
-				const excessPrincipal = Math.max(0, winningPrincipal - rewardCap);
-				const visualMax = Math.max(winningPrincipal, rewardCap, 1);
-				const visualScale = 600 / visualMax;
-				context.writeValue("bindingCapital", formatRep(bindingCapital));
-				context.writeValue("winningPrincipal", formatRep(winningPrincipal));
-				context.writeValue("depositAmount", formatRep(depositAmount));
-				context.writeValue("depositStart", formatRep(depositStart));
-				context.writeValue(
-					"actualForkThresholdPercent",
-					formatPercent(thresholdPercent),
-				);
-				context.setRectWidth(
-					"bindingRegion",
-					Math.min(bindingCapital * visualScale, 600),
-				);
-				context.setRectWidth(
-					"safetyRegion",
-					Math.max(
-						0,
-						Math.min((rewardCap - bindingCapital) * visualScale, 600),
-					),
-				);
-				context.setRectX(
-					"safetyRegion",
-					80 + Math.min(bindingCapital * visualScale, 600),
-				);
-				context.setRectWidth(
-					"excessRegion",
-					Math.max(0, Math.min(excessPrincipal * visualScale, 600)),
-				);
-				context.setRectX(
-					"excessRegion",
-					80 + Math.min(rewardCap * visualScale, 600),
-				);
-				context.writeText(
-					"bindingMarker",
-					`binding ${formatFixed(bindingCapital, 0)}`,
-				);
-				context.writeText("capMarker", `cap ${formatFixed(rewardCap, 0)}`);
-				context.writeText(
-					"winningMarker",
-					`winning ${formatFixed(winningPrincipal, 0)}`,
-				);
-				context.setTextPosition(
-					"bindingMarker",
-					80 + Math.min(bindingCapital * visualScale, 600),
-					145,
-				);
-				context.setTextPosition(
-					"capMarker",
-					80 + Math.min(rewardCap * visualScale, 600),
-					162,
-				);
-				context.setTextPosition(
-					"winningMarker",
-					80 + Math.min(winningPrincipal * visualScale, 600),
-					179,
-				);
-				context.write("rewardCap", formatRep(rewardCap));
-				context.write("rewardPool", formatRep(rewardPool));
-				context.write("eligibleDeposit", formatRep(eligibleDeposit));
-				context.write("excessPrincipal", formatRep(excessPrincipal));
-				context.write("depositWithdrawal", formatRep(depositWithdrawal));
-				context.write("scaledWithdrawal", formatRep(scaledWithdrawal));
-				context.write(
-					"payoutState",
-					bindingCapital > winningPrincipal
-						? "not a valid final winner state: binding capital cannot exceed a strict winner's balance"
-						: "reachable ordinary winner state",
-				);
-			});
 			bindExample("collateral-repair-example", (context) => {
 				const parentCollateral = context.read("parentCollateral");
 				const forkCollateralReceived = Math.min(
@@ -5229,8 +5248,8 @@
 				context.write(
 					"repairStatus",
 					remainingShortfall === 0
-						? "full target raised"
-						: "partial target raised",
+						? "full target raised; activates"
+						: "partial target raised; activates without donation",
 				);
 			});
 			const navLinks = Array.from(
