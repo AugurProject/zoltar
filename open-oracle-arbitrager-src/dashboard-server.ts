@@ -5,10 +5,10 @@ import type { SubmissionSettings } from './transaction-submission.js'
 
 type DashboardController = {
 	getSnapshot: () => OperatorSnapshot | Promise<OperatorSnapshot>
-	setPaused: (paused: boolean) => void
+	setPaused: (paused: boolean) => void | Promise<void>
 	updateConnectivity: (value: unknown) => ConnectivitySettings | Promise<ConnectivitySettings>
 	updateSigner: (value: unknown) => { wallet: string | undefined } | Promise<{ wallet: string | undefined }>
-	updateStrategy: (value: unknown) => StrategySettings
+	updateStrategy: (value: unknown) => StrategySettings | Promise<StrategySettings>
 	updateSubmission: (value: unknown) => SubmissionSettings | Promise<SubmissionSettings>
 }
 
@@ -79,7 +79,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			if (request.method === 'PUT' && url.pathname === '/api/settings') {
 				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
 				try {
-					return json({ settings: controller.updateStrategy(await requireJson(request)) })
+					return json({ settings: await controller.updateStrategy(await requireJson(request)) })
 				} catch (error) {
 					return json({ error: errorMessage(error) }, 400)
 				}
@@ -113,7 +113,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				try {
 					const value = await requireJson(request)
 					if (typeof value !== 'object' || value === null || !('paused' in value) || typeof value['paused'] !== 'boolean') throw new Error('paused must be a boolean')
-					controller.setPaused(value['paused'])
+					await controller.setPaused(value['paused'])
 					return json({ paused: value['paused'] })
 				} catch (error) {
 					return json({ error: errorMessage(error) }, 400)

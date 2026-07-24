@@ -40,6 +40,7 @@ import {
 } from './operator-state.js'
 import { defaultRpcUrl, networkConfiguration, parseNetworkName, type NetworkConfiguration } from './network.js'
 import { bestSuccessful, pollUntilStopped, replaceOverlap } from './resilience.js'
+import { loadOperatorSettings, saveOperatorSettings, type PersistedOperatorSettings } from './settings-store.js'
 import { signerCandidate } from './signer.js'
 import { calculateContribution, calculateFee, calculateNextAmount1, calculateTrackedNetProfitEth, deriveTokenToSwap, evaluateBuyRep, evaluateSellRep, hasFreshSubmissionWindow, isSelfReport, meetsProfitThreshold, type ArbitrageQuote } from './strategy.js'
 import { assertSubmissionWindowOpen, mergeSubmissionFailures, prepareSignedTransaction, SubmissionFailure, submitSignedTransaction, validateSubmissionSettings, type SignedTransaction, type SubmissionSettings, type SubmittedTransaction, type SubmissionTargetResult } from './transaction-submission.js'
@@ -54,7 +55,10 @@ type Configuration = MutableStrategy & {
 	network: NetworkConfiguration
 	once: boolean
 	openOracle: Address
+	paused: boolean
+	persistedPrivateKey: Hex | undefined
 	privateKey: Hex | undefined
+	settingsFile: string
 	connectivity: ConnectivitySettings
 	submission: SubmissionSettings
 	ui: boolean
@@ -128,6 +132,7 @@ Data and connectivity:
   --lookback-blocks=50000        Initial event search range
   --ui-port=4173                 Local dashboard port
   --history-file=PATH            Confirmed-submission JSONL path
+  --settings-file=PATH           Persistent dashboard settings JSON path
 
 Execution is off by default. See open-oracle-arbitrager-src/README.md.`)
 }
@@ -149,53 +154,61 @@ function requiredAddress(name: string) {
 	return getAddress(value)
 }
 
-function loadConfiguration(): Configuration {
+async function loadConfiguration(): Promise<Configuration> {
 	const privateKeyValue = process.env['PRIVATE_KEY']
 	if (privateKeyValue !== undefined && !/^0x[0-9a-fA-F]{64}$/.test(privateKeyValue)) throw new Error('PRIVATE_KEY must be a 32-byte 0x-prefixed hex value')
-	const privateKey = privateKeyValue as Hex | undefined
-	const strategy: MutableStrategy = {
-		maxSpotTwapTicks: 0n,
-		minimumProfitBps: 0n,
-		minimumProfitWeth: 0n,
-		minimumRemainingBlocks: 1n,
-		minimumRemainingSeconds: 1n,
-		pollMilliseconds: 1_000,
-		twapSeconds: 60,
-	}
-	updateStrategyFromRequest(strategy, {
-		maxSpotTwapTicks: option('max-spot-twap-ticks') ?? '100',
-		minimumProfitBps: option('minimum-profit-bps') ?? '100',
-		minimumProfitWeth: option('minimum-profit-weth') ?? '0.01',
-		minimumRemainingBlocks: option('minimum-remaining-blocks') ?? '3',
-		minimumRemainingSeconds: option('minimum-remaining-seconds') ?? '36',
-		pollMilliseconds: Number(option('poll-ms') ?? '12000'),
-		twapSeconds: Number(option('twap-seconds') ?? '1800'),
-	})
 	const networkName = parseNetworkName(option('network'))
+	const settingsFile = resolve(option('settings-file') ?? `.open-oracle-arbitrager/settings-${networkName}.json`)
+	const saved = await loadOperatorSettings(settingsFile, networkName)
+	const strategy = mutableStrategy(
+		saved?.strategy ?? {
+			maxSpotTwapTicks: 100n,
+			minimumProfitBps: 100n,
+			minimumProfitWeth: 10n ** 16n,
+			minimumRemainingBlocks: 3n,
+			minimumRemainingSeconds: 36n,
+			pollMilliseconds: 12_000,
+			twapSeconds: 1_800,
+		},
+	)
+	updateStrategyFromRequest(strategy, {
+		maxSpotTwapTicks: option('max-spot-twap-ticks') ?? strategy.maxSpotTwapTicks.toString(),
+		minimumProfitBps: option('minimum-profit-bps') ?? strategy.minimumProfitBps.toString(),
+		minimumProfitWeth: option('minimum-profit-weth') ?? decimalWeth(strategy.minimumProfitWeth),
+		minimumRemainingBlocks: option('minimum-remaining-blocks') ?? strategy.minimumRemainingBlocks.toString(),
+		minimumRemainingSeconds: option('minimum-remaining-seconds') ?? strategy.minimumRemainingSeconds.toString(),
+		pollMilliseconds: Number(option('poll-ms') ?? strategy.pollMilliseconds),
+		twapSeconds: Number(option('twap-seconds') ?? strategy.twapSeconds),
+	})
 	const network = networkConfiguration(networkName, {
 		factory: option('uniswap-factory') ?? process.env['UNISWAP_FACTORY_ADDRESS'],
 		quoter: option('uniswap-quoter') ?? process.env['UNISWAP_QUOTER_ADDRESS'],
 		rep: option('rep-address') ?? process.env['REP_ADDRESS'],
 		weth: option('weth-address') ?? process.env['WETH_ADDRESS'],
 	})
-	const readRpcUrl = option('rpc-url') ?? process.env['ETH_RPC_URL'] ?? defaultRpcUrl(networkName)
+	const readRpcUrl = option('rpc-url') ?? process.env['ETH_RPC_URL'] ?? saved?.connectivity.readRpcUrl ?? defaultRpcUrl(networkName)
 	const publicRpcUrls = options('public-rpc-url')
+	const relayUrls = options('relay-url')
+	const privateKey = (privateKeyValue as Hex | undefined) ?? saved?.privateKey
 	return {
 		...strategy,
 		execute: process.argv.includes('--execute'),
 		historyFile: resolve(option('history-file') ?? `.open-oracle-arbitrager/history-${networkName}.jsonl`),
 		lookbackBlocks: BigInt(option('lookback-blocks') ?? '50000'),
-		once: process.argv.includes('--once'),
 		network,
+		once: process.argv.includes('--once'),
 		openOracle: requiredAddress('open-oracle'),
+		paused: saved?.paused ?? false,
+		persistedPrivateKey: saved?.privateKey,
 		privateKey,
+		settingsFile,
 		connectivity: validateConnectivitySettings({
-			publicRpcUrls: publicRpcUrls.length === 0 ? [readRpcUrl] : publicRpcUrls,
+			publicRpcUrls: publicRpcUrls.length === 0 ? (saved?.connectivity.publicRpcUrls ?? [readRpcUrl]) : publicRpcUrls,
 			readRpcUrl,
 		}),
 		submission: validateSubmissionSettings({
-			mode: option('submission-mode') ?? 'public',
-			relayUrls: options('relay-url').length === 0 ? ['https://relay.flashbots.net'] : options('relay-url'),
+			mode: option('submission-mode') ?? saved?.submission.mode ?? 'public',
+			relayUrls: relayUrls.length === 0 ? (saved?.submission.relayUrls ?? ['https://relay.flashbots.net']) : relayUrls,
 		}),
 		ui: process.argv.includes('--ui'),
 		uiPort: Number(option('ui-port') ?? '4173'),
@@ -767,7 +780,7 @@ async function main() {
 		printHelp()
 		return
 	}
-	const config = loadConfiguration()
+	const config = await loadConfiguration()
 	if (config.lookbackBlocks < 0n) throw new Error('lookback-blocks must be a non-negative integer')
 	if (!Number.isSafeInteger(config.uiPort) || config.uiPort < 1 || config.uiPort > 65_535) throw new Error('ui-port must be an integer from 1 to 65535')
 	if (config.ui && config.once) throw new Error('--ui cannot be combined with --once')
@@ -798,7 +811,7 @@ async function main() {
 		lastPollAt: undefined,
 		opportunities: [],
 		operationLog: [],
-		paused: false,
+		paused: config.paused,
 		status: 'starting',
 		transactionActivity: [],
 	}
@@ -809,6 +822,7 @@ async function main() {
 		network: NetworkConfiguration['name']
 		openOracle: Address
 		queuedWallet: Address | null | undefined
+		savedWallet: Address | undefined
 		wallet: Address | undefined
 	} = {
 		execute: config.execute,
@@ -817,6 +831,7 @@ async function main() {
 		network: config.network.name,
 		openOracle: config.openOracle,
 		queuedWallet: undefined,
+		savedWallet: config.persistedPrivateKey === undefined ? undefined : privateKeyToAccount(config.persistedPrivateKey).address,
 		wallet: wallet?.account.address,
 	}
 	let pendingStrategy: MutableStrategy | undefined
@@ -824,6 +839,23 @@ async function main() {
 	let pendingConnectivity: ConnectivitySettings | undefined
 	let pendingPrivateKey: Hex | undefined
 	let signerUpdatePending = false
+	const currentPersistedSettings = (): PersistedOperatorSettings => ({
+		connectivity: pendingConnectivity ?? config.connectivity,
+		paused: state.paused,
+		privateKey: config.persistedPrivateKey,
+		strategy: pendingStrategy ?? config,
+		submission: pendingSubmission ?? config.submission,
+	})
+	const persistSettings = (settings: PersistedOperatorSettings) => saveOperatorSettings(config.settingsFile, config.network.name, settings)
+	let settingsUpdateQueue = Promise.resolve()
+	const queueSettingsUpdate = <T>(update: () => Promise<T>) => {
+		const result = settingsUpdateQueue.then(update)
+		settingsUpdateQueue = result.then(
+			() => undefined,
+			() => undefined,
+		)
+		return result
+	}
 	const trackTransaction: TrackTransaction = activity => {
 		state.transactionActivity = [activity, ...state.transactionActivity.filter(existing => existing.originalHash.toLowerCase() !== activity.originalHash.toLowerCase())].slice(0, 100)
 		recordOperation(state, {
@@ -838,41 +870,87 @@ async function main() {
 	const dashboard = config.ui
 		? startDashboardServer(config.uiPort, {
 				getSnapshot: () => operatorSnapshot(state, pendingStrategy ?? config, pendingSubmission ?? config.submission, pendingConnectivity ?? config.connectivity, fixedState),
-				setPaused: paused => {
-					state.paused = paused
-					state.status = paused ? 'paused' : 'sleeping'
-					recordOperation(state, { category: 'configuration', details: undefined, level: 'info', message: paused ? 'Operator paused' : 'Operator resumed', reason: 'Dashboard command', reportId: undefined })
-				},
+				setPaused: paused =>
+					queueSettingsUpdate(async () => {
+						await persistSettings({ ...currentPersistedSettings(), paused })
+						state.paused = paused
+						state.status = paused ? 'paused' : 'sleeping'
+						recordOperation(state, { category: 'configuration', details: undefined, level: 'info', message: paused ? 'Operator paused' : 'Operator resumed', reason: 'Dashboard command saved for restart', reportId: undefined })
+					}),
 				updateConnectivity: async value => {
 					const next = validateConnectivitySettings(value)
 					await updateConnectivityEndpointChecks(state, () => checkConnectivity(next, config.network.chain.id))
-					pendingConnectivity = next
-					recordOperation(state, { category: 'configuration', details: next.publicRpcUrls.map(endpointLabel).join(', '), level: 'info', message: 'RPC configuration verified', reason: `Read RPC ${endpointLabel(next.readRpcUrl)}`, reportId: undefined })
-					return next
+					return queueSettingsUpdate(async () => {
+						await persistSettings({ ...currentPersistedSettings(), connectivity: next })
+						pendingConnectivity = next
+						recordOperation(state, { category: 'configuration', details: next.publicRpcUrls.map(endpointLabel).join(', '), level: 'info', message: 'RPC configuration verified and saved', reason: `Read RPC ${endpointLabel(next.readRpcUrl)}`, reportId: undefined })
+						return next
+					})
 				},
-				updateSigner: value => {
-					if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).length !== 1 || !('privateKey' in value)) throw new Error('Signer request requires only privateKey')
+				updateSigner: async value => {
+					const signerRecord = typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined
+					if (signerRecord !== undefined && Object.keys(signerRecord).length === 1 && signerRecord['forgetSavedSigner'] === true) {
+						return queueSettingsUpdate(async () => {
+							await persistSettings({ ...currentPersistedSettings(), privateKey: undefined })
+							config.persistedPrivateKey = undefined
+							fixedState.savedWallet = undefined
+							recordOperation(state, {
+								category: 'configuration',
+								details: undefined,
+								level: 'info',
+								message: 'Saved signer forgotten',
+								reason: 'Active in-memory signer unchanged',
+								reportId: undefined,
+							})
+							return { wallet: fixedState.wallet }
+						})
+					}
+					if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).length !== 2 || !('privateKey' in value) || !('rememberSigner' in value) || typeof value['rememberSigner'] !== 'boolean') {
+						throw new Error('Signer request requires privateKey and rememberSigner, or forgetSavedSigner')
+					}
 					const candidate = signerCandidate(value['privateKey'])
-					pendingPrivateKey = candidate.privateKey
-					signerUpdatePending = true
-					const address = candidate.address
-					fixedState.queuedWallet = address ?? null
-					recordOperation(state, { category: 'configuration', details: undefined, level: 'info', message: address === undefined ? 'Signer clear queued' : `Signer ${address} queued`, reason: 'Applied at the next scan boundary', reportId: undefined })
-					return { wallet: address }
+					const rememberSigner = candidate.privateKey !== undefined && value['rememberSigner']
+					return queueSettingsUpdate(async () => {
+						let persistedPrivateKey = config.persistedPrivateKey
+						if (candidate.privateKey === undefined) persistedPrivateKey = undefined
+						else if (rememberSigner) persistedPrivateKey = candidate.privateKey
+						await persistSettings({ ...currentPersistedSettings(), privateKey: persistedPrivateKey })
+						config.persistedPrivateKey = persistedPrivateKey
+						pendingPrivateKey = candidate.privateKey
+						signerUpdatePending = true
+						const address = candidate.address
+						fixedState.queuedWallet = address ?? null
+						fixedState.savedWallet = persistedPrivateKey === undefined ? undefined : privateKeyToAccount(persistedPrivateKey).address
+						recordOperation(state, {
+							category: 'configuration',
+							details: undefined,
+							level: 'info',
+							message: address === undefined ? 'Signer clear queued and saved' : `Signer ${address} queued${rememberSigner ? ' and remembered' : ''}`,
+							reason: 'Applied at the next scan boundary',
+							reportId: undefined,
+						})
+						return { wallet: address }
+					})
 				},
 				updateSubmission: async value => {
 					const next = validateSubmissionSettings(value)
 					await updateSubmissionEndpointChecks(state, () => checkSubmissionEndpoints(next, config.network.chain.id))
-					pendingSubmission = next
-					recordOperation(state, { category: 'configuration', details: next.relayUrls.join(', ') || undefined, level: 'info', message: `Submission mode ${next.mode} verified`, reason: 'Applied at the next scan boundary', reportId: undefined })
-					return pendingSubmission
+					return queueSettingsUpdate(async () => {
+						await persistSettings({ ...currentPersistedSettings(), submission: next })
+						pendingSubmission = next
+						recordOperation(state, { category: 'configuration', details: next.relayUrls.join(', ') || undefined, level: 'info', message: `Submission mode ${next.mode} verified and saved`, reason: 'Applied at the next scan boundary', reportId: undefined })
+						return pendingSubmission
+					})
 				},
-				updateStrategy: value => {
+				updateStrategy: async value => {
 					const next = mutableStrategy(pendingStrategy ?? config)
 					updateStrategyFromRequest(next, value)
-					pendingStrategy = next
-					recordOperation(state, { category: 'configuration', details: undefined, level: 'info', message: 'Strategy update queued', reason: 'Applied at the next scan boundary', reportId: undefined })
-					return strategySettings(next)
+					return queueSettingsUpdate(async () => {
+						await persistSettings({ ...currentPersistedSettings(), strategy: next })
+						pendingStrategy = next
+						recordOperation(state, { category: 'configuration', details: undefined, level: 'info', message: 'Strategy update saved and queued', reason: 'Applied at the next scan boundary', reportId: undefined })
+						return strategySettings(next)
+					})
 				},
 			})
 		: undefined

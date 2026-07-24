@@ -154,13 +154,18 @@
 					<form id="signer-form">
 						<fieldset id="signer-fieldset" disabled>
 							<label>
-								<span>Private key · held in process memory only</span>
+								<span>Private key</span>
 								<input id="private-key" type="password" autocomplete="off" aria-describedby="signer-status" placeholder="0x…" spellcheck="false" required />
 							</label>
+							<label class="remember-signer">
+								<input id="remember-signer" type="checkbox" />
+								<span>Save this new key in plaintext for future restarts</span>
+							</label>
 							<div class="form-actions">
-								<span class="muted">The key is never returned by the API, stored in history, or written to logs.</span>
+								<span class="muted">Remembered keys are stored in the owner-only settings file. Keys are never returned by the API, stored in history, or written to logs.</span>
 								<div class="button-group">
-									<button id="clear-signer-button" class="button button-secondary" type="button">Clear signer</button>
+									<button id="forget-signer-button" class="button button-secondary" type="button">Forget saved key</button>
+									<button id="clear-signer-button" class="button button-secondary" type="button">Clear signer &amp; saved key</button>
 									<button id="set-signer-button" class="button" type="submit" disabled>Set signer</button>
 								</div>
 							</div>

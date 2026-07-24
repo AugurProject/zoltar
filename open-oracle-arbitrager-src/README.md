@@ -7,8 +7,8 @@ operator dashboard for live state, strategy controls, wallet inventory, submitte
 disputes, transaction delivery, and ETH-denominated profit tracking.
 
 Dry-run is the default. The bot cannot submit a transaction unless it is explicitly
-started with `--execute` and has a signer, supplied either through `PRIVATE_KEY` at
-startup or through the local dashboard when `--ui` is enabled.
+started with `--execute` and has a signer supplied through `PRIVATE_KEY`, saved
+restart settings, or the local dashboard when `--ui` is enabled.
 
 ## Requirements
 
@@ -112,12 +112,12 @@ ETH_RPC_URL=https://your-private-mainnet-rpc.example \
 ```
 
 Execution remains fixed for the lifetime of the process. It cannot be enabled from
-the dashboard. When `--execute --ui` starts without `PRIVATE_KEY`, it remains locked
-until a key is set in the local dashboard. The key is retained only in process
-memory and never returned by the API. Signer set/clear changes apply at the next
-unpaused scan boundary; they do not interrupt the current scan or confirmation wait,
-and clearing a signer cannot cancel a transaction already broadcast. Restarting the
-command is required to change between dry-run and execution.
+the dashboard. When `--execute --ui` starts without `PRIVATE_KEY` or a remembered
+signer, it remains locked until a key is set in the local dashboard. Signer set/clear
+changes apply at the next unpaused scan boundary; they do not interrupt the current
+scan or confirmation wait, and clearing a signer cannot cancel a transaction already
+broadcast. Restarting the command is required to change between dry-run and
+execution.
 
 Public mempool delivery is the default. To send the same signed transaction to
 multiple private relays instead:
@@ -138,9 +138,11 @@ Choose **Public mempool** or **Private relays** in the dashboard to change deliv
 for the next scan. Private mode requires at least one relay and supports up to eight.
 Startup and dashboard updates probe every private relay with `eth_chainId` and reject
 the configuration when a relay is unreachable or reports the wrong selected network.
-Relay URLs are process memory only and are not written to the history file. URLs may
-use HTTPS, or loopback HTTP for a locally operated relay; embedded URL credentials,
-query parameters, fragments, and redirects are rejected.
+Relay URLs changed in the dashboard are saved in the network-specific operator
+settings file. Startup `--relay-url` values remain process overrides until a
+dashboard save. Relay URLs are never written to the transaction-history file. URLs
+may use HTTPS, or loopback HTTP for a locally operated relay; embedded URL
+credentials, query parameters, fragments, and redirects are rejected.
 
 Before each dispute, the bot:
 
@@ -218,16 +220,65 @@ The dashboard shows:
   records; the summary still includes every valid unique record in the history file.
 - Signed transaction status, public/private delivery, accepted and failed relay
   targets, mined replacement hash, actual gas, and ETH profit estimates.
-- Runtime strategy, RPC fanout, relay submission controls, and pause/resume.
+- Persistent strategy, RPC fanout, relay submission controls, and pause/resume.
 - A 500-entry in-memory operations journal showing scans, decisions, configuration
   changes, transaction states, and the reason for each action.
 
 The UI is intentionally local-only. A private key entered there is sent only to the
-loopback bot process over HTTP, immediately cleared from the input, never echoed by
-the API, and never persisted. Mutable API requests require same-origin JSON and the
-fixed loopback host authority. Do not
-reverse-proxy or expose the dashboard to a network without adding authentication and
-transport security.
+loopback bot process over HTTP, immediately cleared from the input, and never echoed
+by the API or written to logs or transaction history. It is kept in memory unless
+**Save this new key in plaintext for future restarts** is selected. That explicit
+choice stores the key in the owner-only operator settings file; protect the host,
+backups, and settings path as wallet credentials. **Forget saved key** atomically
+removes only the restart credential while retaining the active in-memory signer.
+**Clear signer & saved key** removes both the active signer and any saved restart credential.
+The status names the active address and, when different, the address that a future
+restart will use. Setting a different memory-only key preserves an existing restart
+key until **Forget saved key** or **Clear signer & saved key** is used. Mutable API requests
+require same-origin JSON and the fixed loopback host authority. Do not reverse-proxy
+or expose the dashboard to a network without adding authentication and transport
+security.
+
+## Persistent operator settings
+
+Dashboard changes to strategy, read/public RPCs, delivery mode, relay URLs, and the
+pause state are atomically saved after validation and restored on restart. Mainnet
+and Sepolia use separate files by default:
+
+```text
+.open-oracle-arbitrager/settings-mainnet.json
+.open-oracle-arbitrager/settings-sepolia.json
+```
+
+Override the destination with `--settings-file=/secure/operator/settings.json`.
+The containing directory is created with owner-only permissions when possible, and
+every replacement settings file is mode `0600`. The default directory is ignored by
+Git. A malformed, unsupported, or wrong-network file stops startup instead of
+silently reverting to defaults. A runtime write failure rejects the dashboard
+mutation and keeps the prior runtime settings active; fix the settings path or
+permissions and retry.
+
+Startup resolves values in this order:
+
+| Field | Highest-to-lowest precedence |
+| --- | --- |
+| Strategy value | Its explicit strategy flag; saved value; built-in default |
+| Read RPC | `--rpc-url`; `ETH_RPC_URL`; saved read RPC; network default |
+| Public submission RPCs | Repeated `--public-rpc-url`; saved list; selected read RPC |
+| Active signer | `PRIVATE_KEY`; saved restart signer; no signer |
+| Submission mode | `--submission-mode`; saved mode; `public` |
+| Relay URLs | Repeated `--relay-url`; saved list; Flashbots relay |
+| Pause state | Saved value; `false` |
+
+An environment `PRIVATE_KEY` is never automatically remembered and does not replace
+an existing saved restart signer. The dashboard shows active, queued, and restart
+addresses independently, and **Forget saved key** removes the disk credential
+without changing the environment-backed in-memory signer. Every successful
+dashboard mutation writes one complete snapshot of the effective strategy,
+connectivity, submission, pause, and persisted-signer settings. This means a CLI or
+environment override for a non-secret setting becomes the saved restart value after
+any dashboard save. `PRIVATE_KEY` is the exception: it is saved only through the
+explicit plaintext opt-in.
 
 Pause is checked between execution stages and again immediately before each approval
 or dispute submission. A submission already started may still finish. Pause cannot
@@ -301,7 +352,8 @@ in the configured history file.
 ## Adjust the strategy
 
 Every setting below can be changed in the dashboard and takes effect on the next
-scan. The equivalent startup flags are:
+scan. The equivalent startup flags are shown below. Defaults apply when neither a
+saved value nor a higher-precedence override exists:
 
 | Setting | Default | Flag | Effect |
 | --- | ---: | --- | --- |
@@ -332,8 +384,9 @@ Other startup-only options:
 | `--lookback-blocks` | `50000` | Initial event-log search range. Choose a start range that covers every potentially active report. |
 | `--ui-port` | `4173` | Local dashboard port. |
 | `--history-file` | Network-specific JSONL | Persistent confirmed-submission history. |
+| `--settings-file` | Network-specific JSON | Persistent dashboard strategy, endpoint, delivery, pause, and opt-in signer settings. |
 | `--once` | off | Run one scan and exit. Cannot be combined with `--ui`. |
-| `--execute` | off | Enable guarded approval and dispute submission. Requires a startup `PRIVATE_KEY`, or `--ui` so a signer can be supplied locally. |
+| `--execute` | off | Enable guarded approval and dispute submission. Requires `PRIVATE_KEY`, a saved restart signer, or `--ui` so a signer can be supplied locally. |
 | `--submission-mode` | `public` | `public` submits to the RPC mempool; `private` fans out to configured relays. Adjustable in the dashboard. |
 | `--relay-url` | `https://relay.flashbots.net` | Private relay endpoint. Repeat the flag for up to eight relays; adjustable in the dashboard. |
 

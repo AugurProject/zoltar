@@ -297,6 +297,7 @@ function renderOperations(operations: readonly OperationEntry[]) {
 
 function renderSignerStatus(snapshot: OperatorSnapshot) {
 	const privateKeyInput = element<HTMLInputElement>('private-key')
+	const rememberSignerInput = element<HTMLInputElement>('remember-signer')
 	const signerStatus = element('signer-status')
 	if (signerFeedback !== undefined) {
 		signerStatus.textContent = signerFeedback.message
@@ -305,9 +306,14 @@ function renderSignerStatus(snapshot: OperatorSnapshot) {
 	} else {
 		signerStatus.setAttribute('role', 'status')
 		privateKeyInput.setAttribute('aria-invalid', 'false')
-		if (snapshot.queuedWallet === null) signerStatus.textContent = 'Signer clear queued'
-		else if (typeof snapshot.queuedWallet === 'string') signerStatus.textContent = `Signer ${shorten(snapshot.queuedWallet)} queued`
-		else signerStatus.textContent = snapshot.wallet === undefined ? 'Locked · no signer' : `Unlocked · ${shorten(snapshot.wallet)}`
+		const activeSigner = snapshot.wallet === undefined ? 'no active signer' : `active ${shorten(snapshot.wallet)}`
+		const restartSigner = snapshot.savedWallet === undefined ? 'no restart signer' : `restart ${shorten(snapshot.savedWallet)}`
+		if (snapshot.queuedWallet === null) signerStatus.textContent = `Clear queued · ${activeSigner} · ${restartSigner}`
+		else if (typeof snapshot.queuedWallet === 'string') signerStatus.textContent = `Queued ${shorten(snapshot.queuedWallet)} · ${activeSigner} · ${restartSigner}`
+		else if (snapshot.wallet === undefined) signerStatus.textContent = snapshot.savedWallet === undefined ? 'Locked · no signer' : `Locked · ${shorten(snapshot.savedWallet)} saved for restart`
+		else if (snapshot.savedWallet === undefined) signerStatus.textContent = `Unlocked · ${shorten(snapshot.wallet)} · memory only`
+		else if (snapshot.savedWallet.toLowerCase() === snapshot.wallet.toLowerCase()) signerStatus.textContent = `Unlocked · ${shorten(snapshot.wallet)} · saved for restart`
+		else signerStatus.textContent = `Unlocked · ${shorten(snapshot.wallet)} · restart uses ${shorten(snapshot.savedWallet)}`
 	}
 	const controls = signerControlState({
 		hasQueuedSigner: typeof snapshot.queuedWallet === 'string',
@@ -316,7 +322,9 @@ function renderSignerStatus(snapshot: OperatorSnapshot) {
 		requestPending: signerRequestPending,
 	})
 	privateKeyInput.disabled = controls.inputDisabled
+	rememberSignerInput.disabled = controls.inputDisabled
 	element<HTMLButtonElement>('clear-signer-button').disabled = controls.clearDisabled
+	element<HTMLButtonElement>('forget-signer-button').disabled = signerRequestPending || snapshot.savedWallet === undefined
 	element<HTMLButtonElement>('set-signer-button').disabled = controls.setDisabled
 }
 
@@ -461,7 +469,7 @@ element<HTMLFormElement>('strategy-form').addEventListener('submit', async event
 			method: 'PUT',
 		})
 		loadSettings(response.settings)
-		setText('form-status', 'Strategy updated. Applies to the next scan.')
+		setText('form-status', 'Strategy saved. Applies to the next scan and future restarts.')
 		await refresh()
 	} catch (error) {
 		setText('form-status', error instanceof Error ? error.message : String(error))
@@ -491,7 +499,7 @@ element<HTMLFormElement>('submission-form').addEventListener('submit', async eve
 			method: 'PUT',
 		})
 		loadSubmission(response.submission)
-		setText('submission-status', 'Submission settings updated. Applies to the next scan.')
+		setText('submission-status', 'Submission settings saved. Applies to the next scan and future restarts.')
 		await refresh()
 	} catch (error) {
 		setText('submission-status', error instanceof Error ? error.message : String(error))
@@ -521,7 +529,7 @@ element<HTMLFormElement>('connectivity-form').addEventListener('submit', async e
 			method: 'PUT',
 		})
 		loadConnectivity(response.connectivity)
-		setText('connectivity-status', 'RPCs passed chain checks and will apply at the next scan.')
+		setText('connectivity-status', 'RPCs passed chain checks and were saved for the next scan and future restarts.')
 		await refresh()
 	} catch (error) {
 		setText('connectivity-status', error instanceof Error ? error.message : String(error))
@@ -531,7 +539,7 @@ element<HTMLFormElement>('connectivity-form').addEventListener('submit', async e
 	}
 })
 
-async function updateSigner(privateKey: string | undefined) {
+async function updateSigner(privateKey: string | undefined, rememberSigner: boolean) {
 	if (signerRequestPending) return
 	const input = element<HTMLInputElement>('private-key')
 	signerRequestPending = true
@@ -539,11 +547,12 @@ async function updateSigner(privateKey: string | undefined) {
 	if (latestSnapshot !== undefined) renderSignerStatus(latestSnapshot)
 	try {
 		await api<{ wallet: string | undefined }>('/api/signer', {
-			body: JSON.stringify({ privateKey: privateKey ?? null }),
+			body: JSON.stringify({ privateKey: privateKey ?? null, rememberSigner }),
 			headers: { 'content-type': 'application/json' },
 			method: 'PUT',
 		})
 		input.value = ''
+		element<HTMLInputElement>('remember-signer').checked = false
 		signerFeedback = undefined
 	} catch (error) {
 		input.value = ''
@@ -558,13 +567,32 @@ element<HTMLFormElement>('signer-form').addEventListener('submit', event => {
 	event.preventDefault()
 	try {
 		const privateKey = requiredSignerPrivateKey(element<HTMLInputElement>('private-key').value)
-		void updateSigner(privateKey)
+		void updateSigner(privateKey, element<HTMLInputElement>('remember-signer').checked)
 	} catch (error) {
 		signerFeedback = { error: true, message: error instanceof Error ? error.message : String(error) }
 		if (latestSnapshot !== undefined) renderSignerStatus(latestSnapshot)
 	}
 })
-element('clear-signer-button').addEventListener('click', () => void updateSigner(undefined))
+element('clear-signer-button').addEventListener('click', () => void updateSigner(undefined, false))
+element('forget-signer-button').addEventListener('click', async () => {
+	if (signerRequestPending) return
+	signerRequestPending = true
+	signerFeedback = { error: false, message: 'Removing the saved restart key…' }
+	if (latestSnapshot !== undefined) renderSignerStatus(latestSnapshot)
+	try {
+		await api<{ wallet: string | undefined }>('/api/signer', {
+			body: JSON.stringify({ forgetSavedSigner: true }),
+			headers: { 'content-type': 'application/json' },
+			method: 'PUT',
+		})
+		signerFeedback = undefined
+	} catch (error) {
+		signerFeedback = { error: true, message: error instanceof Error ? error.message : String(error) }
+	} finally {
+		signerRequestPending = false
+		await refresh()
+	}
+})
 element<HTMLInputElement>('private-key').addEventListener('input', () => {
 	if (signerRequestPending) return
 	signerFeedback = undefined

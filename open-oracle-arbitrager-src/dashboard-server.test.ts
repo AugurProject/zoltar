@@ -38,8 +38,9 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	let submission = validateSubmissionSettings({ mode: 'public', relayUrls: ['https://relay.flashbots.net'] })
 	let connectivity = { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' }
 	let queuedWallet: Address | null | undefined
+	let savedWallet: Address | undefined
 	const server = startDashboardServer(0, {
-		getSnapshot: () => operatorSnapshot(state, strategy, submission, connectivity, { execute: false, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedWallet, wallet: undefined }),
+		getSnapshot: () => operatorSnapshot(state, strategy, submission, connectivity, { execute: false, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedWallet, savedWallet, wallet: undefined }),
 		setPaused: paused => {
 			state.paused = paused
 		},
@@ -49,8 +50,13 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 			return connectivity
 		},
 		updateSigner: value => {
+			if (typeof value === 'object' && value !== null && 'forgetSavedSigner' in value) {
+				savedWallet = undefined
+				return { wallet: address }
+			}
 			const clear = typeof value === 'object' && value !== null && 'privateKey' in value && value['privateKey'] === null
 			queuedWallet = clear ? null : address
+			savedWallet = clear ? undefined : address
 			return { wallet: clear ? undefined : address }
 		},
 		updateSubmission: value => {
@@ -73,6 +79,10 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(pageSource).toContain('id="signer-fieldset" disabled')
 	expect(pageSource).toContain('id="signer-status" class="muted" role="status" aria-live="polite"')
 	expect(pageSource).toContain('aria-describedby="signer-status"')
+	expect(pageSource).toContain('id="remember-signer" type="checkbox"')
+	expect(pageSource).toContain('id="forget-signer-button"')
+	expect(pageSource).toContain('Save this new key in plaintext')
+	expect(pageSource).toContain('Clear signer &amp; saved key')
 	const browserScript = await fetch(`${origin}/dashboard.js`)
 	expect(browserScript.headers.get('content-type')).toContain('text/javascript')
 	expect(await browserScript.text()).toContain('setInterval')
@@ -133,7 +143,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(connectivityUpdate.status).toBe(200)
 	expect(connectivity.readRpcUrl).toBe('https://read.example')
 	const signerUpdate = await fetch(`${origin}/api/signer`, {
-		body: JSON.stringify({ privateKey: 'not returned by test controller' }),
+		body: JSON.stringify({ privateKey: 'not returned by test controller', rememberSigner: true }),
 		headers: { 'content-type': 'application/json', origin },
 		method: 'PUT',
 	})
@@ -141,8 +151,18 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(await signerUpdate.json()).toEqual({ wallet: address })
 	const reloadedState = await fetch(`${origin}/api/state`).then(response => response.json())
 	expect(reloadedState).toMatchObject({ queuedWallet: address })
+	expect(reloadedState).toMatchObject({ savedWallet: address })
+	const forgetSigner = await fetch(`${origin}/api/signer`, {
+		body: JSON.stringify({ forgetSavedSigner: true }),
+		headers: { 'content-type': 'application/json', origin },
+		method: 'PUT',
+	})
+	expect(forgetSigner.status).toBe(200)
+	const forgottenState = (await fetch(`${origin}/api/state`).then(response => response.json())) as Record<string, unknown>
+	expect(forgottenState).toMatchObject({ queuedWallet: address })
+	expect(forgottenState['savedWallet']).toBeUndefined()
 	const signerClear = await fetch(`${origin}/api/signer`, {
-		body: JSON.stringify({ privateKey: null }),
+		body: JSON.stringify({ privateKey: null, rememberSigner: false }),
 		headers: { 'content-type': 'application/json', origin },
 		method: 'PUT',
 	})

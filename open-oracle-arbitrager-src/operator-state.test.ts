@@ -9,7 +9,7 @@ const temporaryDirectories: string[] = []
 const address = '0x0000000000000000000000000000000000000001' as Address
 const submission = { mode: 'public', relayUrls: ['https://relay.flashbots.net/'] } as const
 const connectivity = { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' } as const
-const fixed = { execute: false, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedWallet: undefined, wallet: undefined } as const
+const fixed = { execute: false, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedWallet: undefined, savedWallet: undefined, wallet: undefined } as const
 
 function strategy(): MutableStrategy {
 	return {

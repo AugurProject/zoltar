@@ -306,6 +306,23 @@ input {
 	font-family: var(--mono);
 }
 
+.remember-signer {
+	display: flex;
+	align-items: center;
+	grid-template-columns: none;
+	gap: 9px;
+	margin-top: 12px;
+	font-size: 0.78rem;
+}
+
+.remember-signer input {
+	width: 16px;
+	height: 16px;
+	margin: 0;
+	padding: 0;
+	accent-color: var(--accent);
+}
+
 select,
 textarea {
 	width: 100%;

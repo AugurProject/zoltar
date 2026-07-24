@@ -108,6 +108,7 @@ export type OperatorSnapshot = {
 	opportunities: readonly OpportunitySnapshot[]
 	paused: boolean
 	queuedWallet: Address | null | undefined
+	savedWallet: Address | undefined
 	settings: StrategySettings
 	status: 'error' | 'paused' | 'scanning' | 'sleeping' | 'starting' | 'stopped'
 	submission: SubmissionSettings
@@ -345,7 +346,7 @@ export function operatorSnapshot(
 	strategy: MutableStrategy,
 	submission: SubmissionSettings,
 	connectivity: ConnectivitySettings,
-	fixed: { execute: boolean; expectedChainId: number; explorerUrl: string; network: NetworkName; openOracle: Address; queuedWallet: Address | null | undefined; wallet: Address | undefined },
+	fixed: { execute: boolean; expectedChainId: number; explorerUrl: string; network: NetworkName; openOracle: Address; queuedWallet: Address | null | undefined; savedWallet: Address | undefined; wallet: Address | undefined },
 ): OperatorSnapshot {
 	return {
 		activeReportCount: state.activeReportCount,
@@ -366,6 +367,7 @@ export function operatorSnapshot(
 		operationLog: state.operationLog,
 		paused: state.paused,
 		queuedWallet: fixed.queuedWallet,
+		savedWallet: fixed.savedWallet,
 		settings: strategySettings(strategy),
 		status: state.status,
 		submission,
