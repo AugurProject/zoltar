@@ -70,7 +70,7 @@
 						<a class="anchor-link" href="#abstract" aria-label="Link to Abstract">#</a>
 					</div>
 					<p class="lede">
-						Augur Statoblast is a binary (Yes, No, Invalid) prediction market built on top of Zoltar. It
+						Augur Statoblast is a binary prediction market built on top of Zoltar. It
 						creates security pools scoped to individual questions, lets traders
 						mint and redeem ETH-backed shares, lets REP vaults provide
 						underwriting, and tries to settle disputes locally before forcing
@@ -432,63 +432,29 @@
 						>
 					</div>
 					<p class="lede">
-						A <code>SecurityPool</code> is a lineage-specific Statoblast contract
-						for a question in a universe. Vault operators deposit REP, choose bond
-						allowance, and underwrite ETH-backed complete sets in that pool's
+						A <code>SecurityPool</code> is a lineage-specific Statoblast contract for a question in a universe. Vault operators deposit REP, choose bond allowance, and underwrite ETH-backed complete sets in that pool's
 						local accounting ledger.
 					</p>
-					<div class="callout">
-						<strong>Why a per-question pool?</strong> The contract keeps market
-						collateral, REP backing, escalation state, and fork migration scoped
-						to one question and one universe. That boundary lets a fork or local
-						escalation affect the market that depends on the disputed question
-						without rewriting Zoltar's global question registry.
-					</div>
 					<p>
-						Origin pools are narrower than the general Zoltar question model.
-						The factory requires the question to exist, the universe to be
-						unforked, the universe REP token to be present, and the question to
-						have exactly two categorical labels in this order: <code>Yes</code>,
-						then <code>No</code>. <code>Invalid</code> is added by Statoblast
-						as the third trading and resolution outcome; it is not one of the
-						two origin-pool labels checked by the factory. The factory also
-						records each deployment and exposes paged deployment-history reads
-						for indexers and UIs.
+						Origin pools are narrower than the general Zoltar question model. The factory requires the question to exist, the universe to be unforked, the universe REP token to be present, and the question to have exactly two categorical labels in this order: <code>Yes</code>,
+						then <code>No</code>. <code>Invalid</code> is added by Statoblast as the third trading and resolution outcome; it is not one of the two origin-pool labels checked by the factory. The factory also records each deployment and exposes paged deployment-history reads for indexers and UIs.
 					</p>
 					<div class="callout">
-						Origin pool validation intentionally lives above Zoltar. Zoltar
-						accepts global questions; Statoblast's factory decides which
-						question shape is eligible for the current security-pool
-						implementation.
+						Origin pool validation intentionally lives above Zoltar. Zoltar accepts global questions; Statoblast's factory decides which question shape is eligible for the current security-pool implementation.
 					</div>
-					<p>
-						Pool-related addresses are also deterministic. The
+					<p> Pool-related addresses are also deterministic. The
 						<code>SecurityPoolFactory</code> derives a factory-level
-						<code>securityPoolSalt</code> seed from the parent address, universe
-						id, question id, and <code>securityMultiplier</code>, using a zero
-						parent for an origin. The pool deployment worker's raw CREATE2 salt
-						is zero; constructor init code commits the pool wiring. Coordinator
-						and auction factories derive their own caller-scoped salts from the
-						factory seed. See the
-						<a href="./operator-reference.md#security-pool-guardrails"
-							>Operator Reference</a
-						>
+						<code>securityPoolSalt</code> seed from the parent address, universe id, question id, and <code>securityMultiplier</code>, using a zero parent for an origin. The pool deployment worker's raw CREATE2 salt
+						is zero; constructor init code commits the pool wiring. Coordinator and auction factories derive their own caller-scoped salts from the factory seed. See the
+						<a href="./operator-reference.md#security-pool-guardrails">Operator Reference</a>
 						for the exact address derivations. Each origin receives
 						<code>originId = keccak256(abi.encode(questionId, securityMultiplier, originUniverseId))</code>.
 						Migrated children retain that origin id and register with
 						<code>poolId = keccak256(abi.encode(originId, childUniverseId))</code>. The origin id
-						is also the share-token salt, so every lineage has a separate
-						share-token contract and position namespace while all children of that
-						lineage reuse the same contract.
+						is also the share-token salt, so every lineage has a separate share-token contract and position namespace while all children of that lineage reuse the same contract.
 					</p>
 					<p>
-						An inherited child and a newly created origin may coexist for the same
-						question, multiplier, and universe. This is intentional: their origin
-						ids, pool addresses, share tokens, collateral ledgers, and migration
-						paths are distinct. A caller selecting a pool therefore selects an
-						origin lineage, not merely a question and universe. Because a fresh
-						origin cannot occupy an inherited lineage's registry entry, origin
-						deployment does not scan universe ancestors.
+						An inherited child and a newly created origin may coexist for the same question, multiplier, initial-report priority fee, and universe. This is intentional: their origin IDs, pool addresses, share tokens, collateral ledgers, and migration paths are distinct. A caller selecting a pool therefore selects an origin lineage, not merely a question and universe. Because a fresh origin cannot occupy an inherited lineage’s registry entry, origin deployment does not scan universe ancestors.
 					</p>
 					<figure class="diagram" id="fig-statoblast-asset-flow">
 						<svg
