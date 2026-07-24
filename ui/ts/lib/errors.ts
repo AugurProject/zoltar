@@ -136,6 +136,13 @@ function isGenericErrorDetail(value: string) {
 	return comparable === '' || comparable === '[object object]' || comparable === 'unknown error' || comparable === 'for an unknown reason'
 }
 
+function getKnownTransactionErrorDetail(details: string[]) {
+	for (const detail of details) {
+		if (detail.toLowerCase().includes('stale price')) return "The pool's oracle price expired. Request a new price in Open Oracle, then retry."
+	}
+	return undefined
+}
+
 function getContractNoDataDetail(value: string) {
 	const normalized = value.toLowerCase()
 	if (!normalized.includes('returned no data') && !normalized.includes('no data')) return undefined
@@ -176,7 +183,10 @@ export function sanitizeErrorDetail(detail: string | undefined, fallbackMessage?
 }
 
 export function getErrorDetail(error: unknown, fallbackMessage?: string) {
-	for (const detail of collectErrorDetails(error)) {
+	const details = collectErrorDetails(error)
+	const knownTransactionErrorDetail = getKnownTransactionErrorDetail(details)
+	if (knownTransactionErrorDetail !== undefined) return knownTransactionErrorDetail
+	for (const detail of details) {
 		const sanitized = sanitizeErrorDetail(detail, fallbackMessage)
 		if (sanitized !== undefined) return sanitized
 	}

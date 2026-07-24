@@ -5,11 +5,13 @@ import type { OracleManagerDetails, SecurityPoolOverviewActionResult } from '../
 type LiquidationNoticeState = 'failed' | 'queued' | 'submitted' | 'successful'
 
 export function getLiquidationNoticeState({
+	currentTimestamp,
 	currentPoolOracleManagerDetails,
 	liquidationTargetVault,
 	loadingPoolOracleManager,
 	securityPoolOverviewResult,
 }: {
+	currentTimestamp?: bigint | undefined
 	currentPoolOracleManagerDetails: OracleManagerDetails | undefined
 	liquidationTargetVault: string
 	loadingPoolOracleManager: boolean
@@ -20,6 +22,6 @@ export function getLiquidationNoticeState({
 	if (securityPoolOverviewResult.queuedOperation?.operation === 'liquidation') return 'queued'
 	if (loadingPoolOracleManager || currentPoolOracleManagerDetails === undefined) return 'submitted'
 	if (currentPoolOracleManagerDetails.pendingOperation?.operation === 'liquidation' && sameAddress(currentPoolOracleManagerDetails.pendingOperation.targetVault, liquidationTargetVault)) return 'queued'
-	if (isOracleManagerPriceUsable(currentPoolOracleManagerDetails)) return 'successful'
+	if (isOracleManagerPriceUsable(currentPoolOracleManagerDetails, currentTimestamp)) return 'successful'
 	return 'submitted'
 }

@@ -36,6 +36,7 @@ import * as openOracleCopy from '../../../copy/openOracle.js'
 
 type UseOpenOracleOperationsParameters = WriteOperationsParameters & {
 	enabled: boolean
+	onReportSettled?: () => Promise<void> | void
 }
 
 type OpenOracleReadClient = {
@@ -131,7 +132,7 @@ function toBigIntReadResult(result: OpenOracleRawReadResult): OptionalReadResult
 }
 
 function useOpenOracleOperationsWithDependencies<TWriteClient>(
-	{ accountAddress, enabled, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseOpenOracleOperationsParameters,
+	{ accountAddress, enabled, onReportSettled, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseOpenOracleOperationsParameters,
 	dependencies: UseOpenOracleOperationsDependencies<TWriteClient>,
 ) {
 	const loadingOpenOracleCreate = useSignal(false)
@@ -604,6 +605,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 					openOracleFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName), result.hash)
 					onTransactionPresented(createOpenOracleSuccessPresentation(result, transactionContext))
 					if (result.action === 'createReportInstance') openOracleCreateForm.value = getDefaultOpenOracleCreateFormState()
+					if (result.action === 'settle') await onReportSettled?.()
 					if (result.action !== 'createReportInstance' && actionReportIdInput !== '' && isSelectedReportCurrent(actionReportIdInput)) {
 						await ensureLoadedSelectedReport({ forceReload: true, reportIdInput: actionReportIdInput, requireCurrentSelection: true })
 					}

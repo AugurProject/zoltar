@@ -782,7 +782,7 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 				expect(reportingLoadCalls).toBe(1)
 			})
 			expect(document.body.textContent?.includes('This pool is in truth auction. Reporting actions unlock once the pool becomes operational.')).toBe(false)
-			expect(documentQueries.queryByText('Market finalized as Yes')).toBeNull()
+			expect(documentQueries.queryByText('Question finalized as Yes')).toBeNull()
 		})
 
 		test('reloads reporting instead of trusting stale same-address operational reporting details after the pool enters fork mode', async () => {

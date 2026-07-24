@@ -1,8 +1,8 @@
 import type { OracleManagerDetails } from '../types/contracts.js'
 
-export function resolveOracleOperationEthFunding({ managerDetails }: { managerDetails: OracleManagerDetails | undefined }) {
+export function resolveOracleOperationEthFunding({ managerDetails, priceUsable }: { managerDetails: OracleManagerDetails | undefined; priceUsable?: boolean | undefined }) {
 	if (managerDetails === undefined) return undefined
-	if (managerDetails.isPriceValid) {
+	if (priceUsable ?? managerDetails.isPriceValid) {
 		return {
 			ethCost: 0n,
 			includeBuffer: false,

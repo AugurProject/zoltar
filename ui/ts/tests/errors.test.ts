@@ -32,6 +32,14 @@ void describe('error helpers', () => {
 		expect(formatWriteErrorMessage(new Error('No market found for that ID'), 'Failed to create security pool')).toBe('No market found for that ID')
 	})
 
+	void test('maps stale-price provider failures to an actionable recovery step', () => {
+		const error = {
+			message: 'An unknown RPC error occurred. Details: execution reverted: Stale price Version: viem@2.53.1',
+			shortMessage: 'An unknown RPC error occurred.',
+		}
+		expect(formatWriteErrorMessage(error, 'Failed to report on outcome')).toBe("The pool's oracle price expired. Request a new price in Open Oracle, then retry.")
+	})
+
 	void test('formats refresh failures with appended reasons', () => {
 		expect(formatRefreshErrorMessage(new Error('RPC unavailable'), 'Reporting transaction succeeded, but refreshing reporting details failed')).toBe('Reporting transaction succeeded, but refreshing reporting details failed. Reason: RPC unavailable')
 	})
