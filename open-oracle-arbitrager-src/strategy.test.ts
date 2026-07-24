@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/shared/ethereum'
 import type { OpenOracleGame } from '@zoltar/shared/openOracle'
-import { calculateContribution, calculateNextAmount1, evaluateBuyRep, evaluateSellRep, hasFreshSubmissionWindow, meetsProfitThreshold } from './strategy.js'
+import { calculateContribution, calculateNextAmount1, deriveTokenToSwap, evaluateBuyRep, evaluateSellRep, hasFreshSubmissionWindow, isSelfReport, meetsProfitThreshold } from './strategy.js'
 
 const weth = '0x0000000000000000000000000000000000000001' as Address
 const rep = '0x0000000000000000000000000000000000000002' as Address
@@ -49,6 +49,17 @@ describe('OpenOracle arbitrage strategy', () => {
 				multiplier: 115n,
 			}),
 		).toBe(10_000_001n)
+	})
+
+	test('derives the contract swap side from the strict replacement-ratio comparison', () => {
+		expect(deriveTokenToSwap(game, 1_150_000n, 2_300_001n)).toBe(rep)
+		expect(deriveTokenToSwap(game, 1_150_000n, 2_300_000n)).toBe(weth)
+		expect(deriveTokenToSwap(game, 1_150_000n, 2_299_999n)).toBe(weth)
+	})
+
+	test('rejects self-disputes because they use different contract accounting', () => {
+		expect(isSelfReport(weth, weth)).toBe(true)
+		expect(isSelfReport(weth, rep)).toBe(false)
 	})
 
 	test('rejects stale quotes and submission windows that shrink after approvals', () => {

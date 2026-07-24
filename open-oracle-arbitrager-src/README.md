@@ -24,8 +24,10 @@ Important operational constraints:
 - `--execute` approves the prepared OpenOracle contributions, then refreshes the
   pool, TWAP, executable quotes, gas estimate, profit threshold, report deadline,
   and report state hash before simulating and submitting. It aborts if the refreshed
-  contribution would require a larger approval and supplies on-chain block and
-  timestamp timing bounds so a delayed transaction reverts.
+  contribution would require a larger approval or if the replacement ratio does not
+  derive the intended swap side. It supplies on-chain block and timestamp timing
+  bounds so a delayed transaction reverts. Reports already owned by the execution
+  account are skipped because OpenOracle self-disputes use different accounting.
 - The strategy uses executable exact-input and exact-output Uniswap quotes. It does
   not execute a flash swap. Operators must hold both contribution assets, keep
   enough ETH for gas, settle winning reports, withdraw the returned assets, and

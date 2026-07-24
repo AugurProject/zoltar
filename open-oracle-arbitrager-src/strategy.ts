@@ -26,6 +26,14 @@ export function calculateNextAmount1(game: Pick<OpenOracleGame, 'currentAmount1'
 	return game.currentAmount1 + 1n
 }
 
+export function deriveTokenToSwap(game: Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'token1' | 'token2'>, newAmount1: bigint, newAmount2: bigint) {
+	return newAmount2 * game.currentAmount1 > game.currentAmount2 * newAmount1 ? game.token2 : game.token1
+}
+
+export function isSelfReport(account: Address, currentReporter: Address) {
+	return account.toLowerCase() === currentReporter.toLowerCase()
+}
+
 export function calculateContribution(game: Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'feePercentage' | 'protocolFee'>, tokenToSwap: Address, token1: Address, newAmount1: bigint, newAmount2: bigint) {
 	if (tokenToSwap.toLowerCase() === token1.toLowerCase()) {
 		return {

@@ -129,6 +129,11 @@
 					remains the canonical owner of configured fee, multiplier,
 					target-error, and sizing values.
 				</p>
+				<p>
+					OpenOracle derives the swap side from the proposed replacement ratio;
+					the arbitrager verifies that this strict on-chain comparison matches the
+					profitable direction before it submits.
+				</p>
 				<div
 					class="table-scroll"
 					role="region"
@@ -391,6 +396,8 @@
 					ORACLE-A1 passes only if every row of the gate below passes in both
 					error directions. The protocol risk owner owns these thresholds and
 					must sign any change before the deployment decision is rerun.
+					The present snapshot already fails before gas, so its failure does not
+					depend on the additional admissibility and settlement checks below.
 				</p>
 				<div
 					class="table-scroll"
@@ -408,9 +415,32 @@
 						</thead>
 						<tbody>
 							<tr>
-								<td>Base fee</td>
+								<td>Request base fee</td>
 								<td>0, 1, 5, 10, 20, 50, 100, and 200 gwei</td>
-								<td>Every point passes</td>
+								<td>Every point passes report sizing</td>
+							</tr>
+							<tr>
+								<td>Dispute / final-report base fee</td>
+								<td>
+									0, 1, 5, 10, 20, 50, 100, and 200 gwei, crossed with
+									every request-base-fee point
+								</td>
+								<td>
+									Final <code>newAmount1</code> covers the coordinator's
+									recorded-base-fee security formula plus configured priority fee
+								</td>
+							</tr>
+							<tr>
+								<td>Settlement base fee</td>
+								<td>
+									0 and the exact request-time settlement cap for every
+									request/dispute pair; cap + 1 is a required rejection case
+								</td>
+								<td>
+									At or below the cap emits <code>PriceReported</code>; cap + 1
+									emits <code>PriceReportRejected</code> and triggers the approved
+									retry/recovery runbook
+								</td>
 							</tr>
 							<tr>
 								<td>Open interest</td>
@@ -422,7 +452,19 @@
 							<tr>
 								<td>Error direction</td>
 								<td>REP 5% cheap and REP 5% expensive</td>
-								<td>Both pass at every gas/OI pair</td>
+								<td>Both pass at every request/dispute gas and OI tuple</td>
+							</tr>
+							<tr>
+								<td>Replacement admissibility</td>
+								<td>
+									Record exact atomic <code>newAmount1</code> and
+									<code>newAmount2</code>, the two cross-products, complete token
+									contributions, and locked replacement inventory
+								</td>
+								<td>
+									The strict cross-product derives the intended swap side, the bot
+									does not abort, and both contribution balances are funded
+								</td>
 							</tr>
 							<tr>
 								<td>Profit buffer</td>
@@ -456,7 +498,9 @@
 								<td>Operators</td>
 								<td>Two independently funded and operated bots</td>
 								<td>
-									Both rehearse dispute, settlement, withdrawal, and rebalancing
+									Both submit the planned amounts on a fork, settle through the
+									coordinator, observe <code>PriceReported</code>, withdraw, and
+									rebalance; a successful low-level settlement alone does not pass
 								</td>
 							</tr>
 						</tbody>

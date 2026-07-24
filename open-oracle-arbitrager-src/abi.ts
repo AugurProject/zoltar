@@ -139,7 +139,6 @@ export const openOracleAbi = [
 		stateMutability: 'payable',
 		inputs: [
 			{ name: 'reportId', type: 'uint256' },
-			{ name: 'tokenToSwap', type: 'address' },
 			{ name: 'newAmount1', type: 'uint128' },
 			{ name: 'newAmount2', type: 'uint128' },
 			{ name: 'disputer', type: 'address' },

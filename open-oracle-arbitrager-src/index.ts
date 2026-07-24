@@ -4,7 +4,7 @@ import { createPublicClient, createWalletClient, formatEther, getAddress, http, 
 import { decodeOpenOracleStatePreimage, getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
 import { erc20Abi, factoryAbi, openOracleAbi, poolAbi, quoterAbi } from './abi.js'
 import { bestSuccessful, pollUntilStopped, replaceOverlap } from './resilience.js'
-import { calculateContribution, calculateFee, calculateNextAmount1, evaluateBuyRep, evaluateSellRep, hasFreshSubmissionWindow, meetsProfitThreshold, type ArbitrageQuote } from './strategy.js'
+import { calculateContribution, calculateFee, calculateNextAmount1, deriveTokenToSwap, evaluateBuyRep, evaluateSellRep, hasFreshSubmissionWindow, isSelfReport, meetsProfitThreshold, type ArbitrageQuote } from './strategy.js'
 
 const WETH = getAddress('0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2')
 const REP = getAddress('0x221657776846890989a759BA2973e427DfF5C9bB')
@@ -232,9 +232,12 @@ async function executeDispute(client: ReadClient, wallet: WriteClient, config: C
 	const account = wallet.account
 	if (account === undefined) throw new Error('Execution requires a local account')
 	const game = report.game
+	if (isSelfReport(account.address, game.currentReporter)) throw new Error('Self-disputes use different OpenOracle accounting and are not supported')
 	const newAmount1 = calculateNextAmount1(game)
 	const preparedAmount2 = await quoteInput(client, WETH, REP, newAmount1, pool.fee)
-	const preparedContribution = calculateContribution(game, quote.tokenToSwap, game.token1, newAmount1, preparedAmount2)
+	const preparedTokenToSwap = deriveTokenToSwap(game, newAmount1, preparedAmount2)
+	if (preparedTokenToSwap.toLowerCase() !== quote.tokenToSwap.toLowerCase()) throw new Error('Replacement ratio does not derive the selected arbitrage direction')
+	const preparedContribution = calculateContribution(game, preparedTokenToSwap, game.token1, newAmount1, preparedAmount2)
 	await approveAndWait(wallet, game.token1, config.openOracle, preparedContribution.token1)
 	await approveAndWait(wallet, game.token2, config.openOracle, preparedContribution.token2)
 
@@ -250,7 +253,9 @@ async function executeDispute(client: ReadClient, wallet: WriteClient, config: C
 	if (refreshedQuote.direction !== quote.direction) throw new Error('Best arbitrage direction changed while approvals were mined')
 	if (!meetsProfitThreshold(refreshedQuote, config.minimumProfitWeth, config.minimumProfitBps)) throw new Error('Arbitrage no longer meets the profit threshold after approvals')
 	const newAmount2 = await quoteInput(client, WETH, REP, newAmount1, refreshedPool.fee)
-	const contribution = calculateContribution(game, refreshedQuote.tokenToSwap, game.token1, newAmount1, newAmount2)
+	const tokenToSwap = deriveTokenToSwap(game, newAmount1, newAmount2)
+	if (tokenToSwap.toLowerCase() !== refreshedQuote.tokenToSwap.toLowerCase()) throw new Error('Refreshed replacement ratio does not derive the selected arbitrage direction')
+	const contribution = calculateContribution(game, tokenToSwap, game.token1, newAmount1, newAmount2)
 	if (contribution.token1 > preparedContribution.token1 || contribution.token2 > preparedContribution.token2) throw new Error('Refreshed dispute requires more token approval; aborting instead of submitting a stale quote')
 
 	const submissionBlock = await client.getBlock()
@@ -280,7 +285,7 @@ async function executeDispute(client: ReadClient, wallet: WriteClient, config: C
 		address: config.openOracle,
 		abi: openOracleAbi,
 		functionName: 'dispute',
-		args: [report.helper.reportId, refreshedQuote.tokenToSwap, newAmount1, newAmount2, account.address, false, false, getOpenOracleGameTuple(game), getOpenOracleHelperTuple(report.helper), [quoteBlock.number, 1n, quoteBlock.timestamp, config.minimumRemainingSeconds]],
+		args: [report.helper.reportId, newAmount1, newAmount2, account.address, false, false, getOpenOracleGameTuple(game), getOpenOracleHelperTuple(report.helper), [quoteBlock.number, 1n, quoteBlock.timestamp, config.minimumRemainingSeconds]],
 	} as const
 	await wallet.simulateContract(request)
 	const hash = await wallet.writeContract(request)
@@ -318,6 +323,10 @@ async function inspectReport(client: ReadClient, wallet: WriteClient | undefined
 	console.log([`report=${report.helper.reportId.toString()}`, `direction=${best.quote.direction}`, `pool=${best.pool.address}`, `fee=${best.pool.fee.toString()}`, `profitWeth=${formatEther(best.quote.netProfitWeth)}`, `decision=${decision}`].join(' '))
 	if (!profitable || !config.execute) return
 	if (wallet === undefined) throw new Error('Execution requested without PRIVATE_KEY')
+	if (isSelfReport(wallet.account.address, game.currentReporter)) {
+		console.log(`report=${report.helper.reportId.toString()} skipped=self-report`)
+		return
+	}
 	await executeDispute(client, wallet, config, report, best.quote, best.pool)
 }
 
