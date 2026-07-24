@@ -260,6 +260,7 @@ export function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}):
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
 		hasForkActivity: false,
+		initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 		lastOraclePrice: undefined,
 		lastOracleSettlementTimestamp: 0n,
 		managerAddress: zeroAddress,

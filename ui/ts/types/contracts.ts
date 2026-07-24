@@ -166,6 +166,7 @@ export type MarketDetailsPage = {
 
 export type SecurityPoolCreationResult = {
 	deployPoolHash: Hash
+	initialReportPriorityFeeWeiPerGas: bigint
 	questionId: string
 	securityPoolAddress: Address
 	securityMultiplier: bigint
@@ -297,6 +298,7 @@ export type ListedSecurityPool = {
 	completeSetCollateralAmount: bigint
 	currentRetentionRate: bigint
 	hasForkActivity: boolean
+	initialReportPriorityFeeWeiPerGas: bigint
 	forkOutcome: ForkOutcomeKey
 	forkOwnSecurityPool: boolean
 	lastOraclePrice: bigint | undefined

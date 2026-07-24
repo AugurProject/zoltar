@@ -328,6 +328,7 @@ void describe('market creation helpers', () => {
 
 	test('parses security-pool market IDs as decimal and hexadecimal values', () => {
 		const form: SecurityPoolFormState = {
+			initialReportPriorityFeeGwei: '10',
 			marketId: '0x2a',
 			securityMultiplier: '3',
 		}
@@ -339,6 +340,7 @@ void describe('market creation helpers', () => {
 	test('normalizes and rejects malformed security-pool market IDs', () => {
 		expect(
 			createSecurityPoolParameters({
+				initialReportPriorityFeeGwei: '10',
 				marketId: '  55  ',
 				securityMultiplier: '3',
 			} as SecurityPoolFormState).questionId,
@@ -374,15 +376,39 @@ void describe('market creation helpers', () => {
 
 	test('security pool creation parameters exclude origin retention input', () => {
 		const parameters = createSecurityPoolParameters({
+			initialReportPriorityFeeGwei: '10',
 			marketId: '42',
 			securityMultiplier: '2',
 		} as SecurityPoolFormState)
 
 		expect(parameters).toEqual({
+			initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 			questionId: 42n,
 			securityMultiplier: 2n,
 		})
 		expect('currentRetentionRate' in parameters).toBe(false)
+	})
+
+	test('parses the initial report priority fee from gwei and rejects zero', () => {
+		expect(
+			createSecurityPoolParameters({
+				initialReportPriorityFeeGwei: '10.5',
+				marketId: '42',
+				securityMultiplier: '2',
+			}),
+		).toEqual({
+			initialReportPriorityFeeWeiPerGas: 10_500_000_000n,
+			questionId: 42n,
+			securityMultiplier: 2n,
+		})
+
+		expect(() =>
+			createSecurityPoolParameters({
+				initialReportPriorityFeeGwei: '0',
+				marketId: '42',
+				securityMultiplier: '2',
+			}),
+		).toThrow('Initial report priority fee must be greater than 0')
 	})
 
 	test('security pool creation rejects multipliers the origin factory cannot accept', () => {

@@ -2,7 +2,7 @@ import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
 import assert from '../testSupport/simulator/utils/assert'
 import { decodeEventLog, encodeAbiParameters, encodeDeployData, keccak256, type Address, type Hex, zeroAddress } from '@zoltar/shared/ethereum'
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
-import { DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, calculateOracleMinimumWethReport } from '@zoltar/shared/oracleInitialReport'
+import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS, DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS, calculateOracleMinimumWethReport } from '@zoltar/shared/oracleInitialReport'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient } from '../testSupport/simulator/utils/clients'
@@ -148,7 +148,7 @@ const findPriceReportRejectedLog = (logs: TransactionReceiptLogs) =>
 		})
 		.find(log => log?.eventName === 'PriceReportRejected')
 
-type OracleCoordinatorConstructorArgs = [Address, Address, Address, bigint, number, bigint, bigint, bigint, number, number, number, number, number, boolean, boolean, Address, bigint, bigint, bigint]
+type OracleCoordinatorConstructorArgs = [Address, Address, Address, bigint, number, bigint, bigint, bigint, bigint, number, number, number, number, number, boolean, boolean, Address, bigint, bigint, bigint]
 
 function encodeOracleCoordinatorDeployData(args: OracleCoordinatorConstructorArgs) {
 	return encodeDeployData({
@@ -208,6 +208,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		ORACLE_REPORT_GAS,
 		ORACLE_SETTLEMENT_GAS,
 		ORACLE_GAS_UNITS_FOR_ONE_DISPUTE,
+		DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS,
 		ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE,
 		OPEN_ORACLE_SECURITY_MULTIPLIER_BPS,
 		ORACLE_SETTLEMENT_TIME,
@@ -398,7 +399,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			args: [],
 		})
 
-		assert.strictEqual(minimumToken1Report, 1n, 'zero-basefee test chains should use only the one-wei OpenOracle non-zero minimum')
+		assert.strictEqual(minimumToken1Report, calculateOracleMinimumWethReport(), 'zero-basefee test chains should retain the configured priority-fee report')
 		await requestPrice(client, priceOracle)
 
 		const reportId = await getPendingReportId(client, priceOracle)
@@ -419,7 +420,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(sizedForBaseFee, calculateOracleMinimumWethReport({ ...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, baseFeeWeiPerGas }), 'the on-chain WETH calculation should match the shared integer formula')
 	})
 
-	test('coordinator sizes the game escalation halt to one percent of pool open interest when larger than the initial-report-derived halt', async () => {
+	test('coordinator adds priority-fee security to the open-interest-dependent initial report', async () => {
 		const openInterest = 100n * 10n ** 18n + 1n
 		const expectedOpenInterestMinimum = (openInterest + 99n) / 100n
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
@@ -434,17 +435,22 @@ describe('Price Oracle Refund Security Tests', () => {
 			args: [],
 		})
 
-		assert.strictEqual(minimumToken1Report, 1n, 'pool open interest should not increase the gas-based initial WETH report minimum')
+		const expectedMinimumToken1Report = calculateOracleMinimumWethReport({
+			...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
+			openInterestWei: openInterest,
+		})
+		assert.strictEqual(minimumToken1Report, expectedMinimumToken1Report, 'pool open interest should replace the lower base-fee-dependent report before priority security is added')
 		await mockWindow.advanceTime(5n * 60n + 1n)
 		await requestPrice(client, priceOracle)
 		const reportMeta = await getOpenOracleReportMeta(client, await getPendingReportId(client, priceOracle))
-		assert.strictEqual(reportMeta.exactToken1Report, 1n, 'the pending game should retain the gas-based initial WETH amount')
-		assert.strictEqual(reportMeta.escalationHalt, expectedOpenInterestMinimum, 'one percent of pool open interest should override the lower initial-report-derived escalation halt')
+		assert.strictEqual(reportMeta.exactToken1Report, expectedMinimumToken1Report, 'the pending game should retain the priority plus open-interest initial WETH amount')
+		assert.strictEqual(reportMeta.escalationHalt, expectedMinimumToken1Report * 10n, 'the priority plus open-interest initial report should set the larger escalation halt')
+		assert.ok(reportMeta.escalationHalt > expectedOpenInterestMinimum)
 	})
 
 	test('caller can voluntarily fund initial WETH above the coordinator minimum', async () => {
 		const proposedRepPerEthPrice = 10n ** 18n
-		const requestedInitialWeth = 10n
+		const requestedInitialWeth = calculateOracleMinimumWethReport() * 2n
 		const requestPriceWithMinimumAbi = [
 			{
 				inputs: [
@@ -482,7 +488,7 @@ describe('Price Oracle Refund Security Tests', () => {
 
 	test('coordinator settlement returns the undisputed report liquidity to the sponsor wallet', async () => {
 		const proposedRepPerEthPrice = 10n ** 18n
-		const requestedInitialWeth = 10n
+		const requestedInitialWeth = calculateOracleMinimumWethReport() * 2n
 		await wrapWeth(client, requestedInitialWeth)
 		await approveToken(client, WETH_ADDRESS, priceOracle)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
@@ -538,8 +544,8 @@ describe('Price Oracle Refund Security Tests', () => {
 		const tunedTargetPriceError = 1000000n
 		const tunedOpenOracleSecurityMultiplierBps = 30000n
 		const tunedArgs = getOracleCoordinatorConstructorArgs()
-		tunedArgs[6] = tunedTargetPriceError
-		tunedArgs[7] = tunedOpenOracleSecurityMultiplierBps
+		tunedArgs[7] = tunedTargetPriceError
+		tunedArgs[8] = tunedOpenOracleSecurityMultiplierBps
 		const tunedCoordinator = await deployContract(encodeOracleCoordinatorDeployData(tunedArgs))
 
 		assert.strictEqual(await client.readContract({ abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'targetPriceErrorForDispute', address: tunedCoordinator, args: [] }), tunedTargetPriceError)
@@ -559,6 +565,23 @@ describe('Price Oracle Refund Security Tests', () => {
 		)
 	})
 
+	test('coordinator constructor rejects a priority fee that would exhaust OpenOracle report limits', async () => {
+		const maximumArgs = getOracleCoordinatorConstructorArgs()
+		maximumArgs[6] = MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS
+		const maximumCoordinator = await deployContract(encodeOracleCoordinatorDeployData(maximumArgs))
+		const maximumMinimumReport = await client.readContract({
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'minimumToken1Report',
+			address: maximumCoordinator,
+			args: [],
+		})
+		assert.ok(maximumMinimumReport <= (1n << 128n) - 1n, 'largest configured priority fee should retain room for a dynamic report component')
+
+		const invalidArgs = getOracleCoordinatorConstructorArgs()
+		invalidArgs[6] = MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS + 1n
+		await assert.rejects(async () => await deployContract(encodeOracleCoordinatorDeployData(invalidArgs)), /initial report priority fee exceeds openoracle limits/i)
+	})
+
 	test('coordinator constructor rejects unsafe oracle risk parameters', async () => {
 		const baseArgs = getOracleCoordinatorConstructorArgs()
 		const buildArgsWithSizingParameters = (gasUnitsForOneDispute: bigint, targetPriceErrorForDispute: bigint, openOracleSecurityMultiplierBps: bigint, protocolFee: number, feePercentage: number): OracleCoordinatorConstructorArgs => [
@@ -568,19 +591,20 @@ describe('Price Oracle Refund Security Tests', () => {
 			baseArgs[3],
 			baseArgs[4],
 			gasUnitsForOneDispute,
+			baseArgs[6],
 			targetPriceErrorForDispute,
 			openOracleSecurityMultiplierBps,
-			baseArgs[8],
 			baseArgs[9],
+			baseArgs[10],
 			protocolFee,
 			feePercentage,
-			baseArgs[12],
 			baseArgs[13],
 			baseArgs[14],
 			baseArgs[15],
 			baseArgs[16],
 			baseArgs[17],
 			baseArgs[18],
+			baseArgs[19],
 		]
 		const buildArgsWithRiskParameters = (escalationHaltMultiplierBps: bigint, maxSettlementBaseFeeMultiplierBps: bigint, minLiquidationPriceDistanceBps: bigint): OracleCoordinatorConstructorArgs => [
 			baseArgs[0],
@@ -599,11 +623,16 @@ describe('Price Oracle Refund Security Tests', () => {
 			baseArgs[13],
 			baseArgs[14],
 			baseArgs[15],
+			baseArgs[16],
 			escalationHaltMultiplierBps,
 			maxSettlementBaseFeeMultiplierBps,
 			minLiquidationPriceDistanceBps,
 		]
 		const invalidRiskParameterCases: Array<{ args: OracleCoordinatorConstructorArgs; message: RegExp }> = [
+			{
+				args: [...baseArgs.slice(0, 6), 0n, ...baseArgs.slice(7)] as OracleCoordinatorConstructorArgs,
+				message: /initial report priority fee must be greater than zero/i,
+			},
 			{
 				args: buildArgsWithSizingParameters(0n, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_PROTOCOL_FEE, ORACLE_FEE_PERCENTAGE),
 				message: /dispute gas units must be greater than zero/i,

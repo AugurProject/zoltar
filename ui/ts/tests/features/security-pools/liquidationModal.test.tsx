@@ -78,6 +78,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		hasForkActivity: false,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
+		initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 		lastOraclePrice: 3n * 10n ** 18n,
 		lastOracleSettlementTimestamp: 1n,
 		managerAddress: zeroAddress,

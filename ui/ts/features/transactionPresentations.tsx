@@ -204,6 +204,7 @@ export function createZoltarMigrationWarningPresentation(result: ZoltarMigration
 }
 
 type SecurityPoolCreationTransactionContext = {
+	initialReportPriorityFeeGwei?: string | undefined
 	questionId?: string | undefined
 	securityMultiplier?: string | undefined
 }
@@ -211,6 +212,7 @@ type SecurityPoolCreationTransactionContext = {
 function getSecurityPoolCreationTransactionRows(context: SecurityPoolCreationTransactionContext | undefined) {
 	if (context === undefined) return undefined
 	return [
+		...(context.initialReportPriorityFeeGwei === undefined || context.initialReportPriorityFeeGwei.trim() === '' ? [] : [{ label: commonCopy.initialReportPriorityFee, value: `${context.initialReportPriorityFeeGwei.trim()} gwei` }]),
 		...(context.questionId === undefined || context.questionId.trim() === '' ? [] : [{ label: commonCopy.questionId, value: <IdentifierValue value={context.questionId.trim()} /> }]),
 		...(context.securityMultiplier === undefined || context.securityMultiplier.trim() === '' ? [] : [{ label: commonCopy.securityMultiplier, value: context.securityMultiplier.trim() }]),
 	]
@@ -234,6 +236,7 @@ export function createSecurityPoolCreationSuccessPresentation(result: SecurityPo
 			{ label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
 			{ label: commonCopy.questionId, value: <IdentifierValue value={result.questionId} /> },
 			{ label: commonCopy.securityMultiplier, value: result.securityMultiplier.toString() },
+			{ label: commonCopy.initialReportPriorityFee, value: `${formatCurrencyBalance(result.initialReportPriorityFeeWeiPerGas, 9)} gwei` },
 		],
 		title: transactionCopy.securityPoolCreated,
 		tone: 'success',
