@@ -1,12 +1,16 @@
-import type { ExecutionRecord, OperatorSnapshot, OpportunitySnapshot, StrategySettings, TransactionActivity } from './operator-state.js'
-import { exactAmount, sumSignedDecimals } from './dashboard-format.js'
+import type { ConnectivitySettings } from './connectivity.js'
+import type { ExecutionRecord, OperationEntry, OperatorSnapshot, OpportunitySnapshot, StrategySettings, TransactionActivity } from './operator-state.js'
+import { exactAmount, requiredSignerPrivateKey, signerControlState, sumSignedDecimals } from './dashboard-format.js'
 import type { SubmissionSettings } from './transaction-submission.js'
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
 let latestSnapshot: OperatorSnapshot | undefined
 let settingsLoaded = false
 let submissionLoaded = false
+let connectivityLoaded = false
 let connected = false
+let signerFeedback: { error: boolean; message: string } | undefined
+let signerRequestPending = false
 
 function element<T extends HTMLElement>(id: string) {
 	const found = document.getElementById(id)
@@ -27,6 +31,11 @@ function setControlsEnabled(enabled: boolean) {
 	const submissionFieldset = element('submission-fieldset')
 	if (!(submissionFieldset instanceof HTMLFieldSetElement)) throw new Error('Missing submission fieldset')
 	submissionFieldset.disabled = !enabled
+	for (const id of ['connectivity-fieldset', 'signer-fieldset']) {
+		const fieldset = element(id)
+		if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error(`Missing ${id}`)
+		fieldset.disabled = !enabled
+	}
 }
 
 function shorten(value: string, leading = 8, trailing = 6) {
@@ -71,12 +80,29 @@ function row(cells: readonly (HTMLElement | string)[]) {
 
 function link(value: string, kind: 'address' | 'tx') {
 	const anchor = document.createElement('a')
-	anchor.href = `https://etherscan.io/${kind}/${value}`
+	anchor.href = `${latestSnapshot?.explorerUrl ?? 'https://etherscan.io'}/${kind}/${value}`
 	anchor.target = '_blank'
 	anchor.rel = 'noreferrer'
 	anchor.textContent = shorten(value)
 	anchor.title = value
 	return anchor
+}
+
+function decisionReason(decision: OpportunitySnapshot['decision']) {
+	const reasons: Record<OpportunitySnapshot['decision'], string> = {
+		'dry-run-opportunity': 'All economic guards pass; execution mode is disabled',
+		eligible: 'Profit, timing, state, and inventory guards pass',
+		'execution-failed': 'Execution raised an error after selection',
+		'history-unavailable': 'Confirmed-history durability is unavailable',
+		'insufficient-inventory': 'Wallet lacks the required WETH or REP',
+		paused: 'Operator paused execution',
+		selected: 'Highest modeled net profit in this scan',
+		'self-report': 'Current wallet is already the reporter',
+		'signer-unavailable': 'Execution mode is locked until a local signer is set',
+		submitted: 'Signed dispute was accepted for delivery',
+		unprofitable: 'Modeled profit is below configured thresholds',
+	}
+	return reasons[decision]
 }
 
 function decisionBadge(opportunity: OpportunitySnapshot) {
@@ -90,21 +116,21 @@ function decisionBadge(opportunity: OpportunitySnapshot) {
 function renderBalances(snapshot: OperatorSnapshot) {
 	const list = element('balance-list')
 	list.replaceChildren()
-	const values: [string, string][] =
-		snapshot.balances === undefined
-			? [
-					['ETH', 'Execution wallet required'],
-					['WETH', 'Execution wallet required'],
-					['REP', 'Execution wallet required'],
-					['Executable portfolio', 'Execution wallet required'],
-				]
-			: [
-					['ETH', amount(snapshot.balances.availableEth, 'ETH')],
-					['WETH', amount(snapshot.balances.availableWeth, 'WETH')],
-					['REP', amount(snapshot.balances.availableRep, 'REP')],
-					['REP executable value', amount(snapshot.balances.repValueWeth, 'WETH')],
-					['Executable portfolio', amount(snapshot.balances.totalValueWeth, 'WETH')],
-				]
+	setText('wallet-address', snapshot.wallet === undefined ? 'No execution wallet' : snapshot.wallet)
+	if (snapshot.balances === undefined) {
+		const empty = document.createElement('p')
+		empty.className = 'balance-empty'
+		empty.textContent = 'Set a local signer to load its ETH, WETH, REP, and executable portfolio balances.'
+		list.append(empty)
+		return
+	}
+	const values: [string, string][] = [
+		['ETH', amount(snapshot.balances.availableEth, 'ETH')],
+		['WETH', amount(snapshot.balances.availableWeth, 'WETH')],
+		['REP', amount(snapshot.balances.availableRep, 'REP')],
+		['REP executable value', amount(snapshot.balances.repValueWeth, 'WETH')],
+		['Executable portfolio', amount(snapshot.balances.totalValueWeth, 'WETH')],
+	]
 	for (const [label, value] of values) {
 		const container = document.createElement('div')
 		container.className = 'balance-row'
@@ -115,14 +141,25 @@ function renderBalances(snapshot: OperatorSnapshot) {
 		container.append(name, balance)
 		list.append(container)
 	}
-	setText('wallet-address', snapshot.wallet === undefined ? 'No execution wallet' : snapshot.wallet)
 }
 
 function renderOpportunities(opportunities: readonly OpportunitySnapshot[]) {
 	const body = element<HTMLTableSectionElement>('opportunities-body')
 	body.replaceChildren()
 	for (const opportunity of opportunities) {
-		body.append(row([opportunity.reportId, decisionBadge(opportunity), opportunity.direction, amount(opportunity.estimatedNetProfitEth, 'ETH'), amount(opportunity.requiredWeth, 'WETH'), amount(opportunity.requiredRep, 'REP'), `${opportunity.timeRemaining} ${opportunity.windowUnit}`, link(opportunity.pool, 'address')]))
+		body.append(
+			row([
+				opportunity.reportId,
+				decisionBadge(opportunity),
+				decisionReason(opportunity.decision),
+				opportunity.direction,
+				amount(opportunity.estimatedNetProfitEth, 'ETH'),
+				amount(opportunity.requiredWeth, 'WETH'),
+				amount(opportunity.requiredRep, 'REP'),
+				`${opportunity.timeRemaining} ${opportunity.windowUnit}`,
+				link(opportunity.pool, 'address'),
+			]),
+		)
 	}
 	element('opportunities-empty').hidden = opportunities.length !== 0
 	setText('opportunity-count', `${opportunities.length.toString()} evaluated`)
@@ -220,6 +257,69 @@ function loadSubmission(submission: SubmissionSettings) {
 	element<HTMLTextAreaElement>('relay-urls').value = submission.relayUrls.join('\n')
 }
 
+function loadConnectivity(connectivity: ConnectivitySettings) {
+	element<HTMLInputElement>('read-rpc-url').value = connectivity.readRpcUrl
+	element<HTMLTextAreaElement>('public-rpc-urls').value = connectivity.publicRpcUrls.join('\n')
+}
+
+function renderEndpointChecks(snapshot: OperatorSnapshot) {
+	const container = element('endpoint-checks')
+	container.replaceChildren()
+	for (const check of snapshot.endpointChecks) {
+		const item = document.createElement('div')
+		item.className = 'endpoint-check'
+		item.dataset['status'] = check.status
+		const status = document.createElement('strong')
+		status.textContent = check.status
+		const target = document.createElement('span')
+		target.className = 'mono'
+		target.textContent = check.target
+		const detail = document.createElement('small')
+		detail.textContent = check.error ?? `Chain ${check.chainId?.toString() ?? 'unconfirmed'} · ${check.kind}`
+		item.append(status, target, detail)
+		container.append(item)
+	}
+}
+
+function renderOperations(operations: readonly OperationEntry[]) {
+	const body = element<HTMLTableSectionElement>('operations-body')
+	body.replaceChildren()
+	for (const operation of operations) {
+		const level = document.createElement('span')
+		level.className = 'log-level'
+		level.dataset['level'] = operation.level
+		level.textContent = operation.level
+		body.append(row([new Date(operation.timestamp).toLocaleTimeString(), level, operation.category, operation.reportId ?? '—', operation.message, operation.reason ?? '—', operation.details ?? '—']))
+	}
+	element('operations-empty').hidden = operations.length !== 0
+	setText('operation-count', `${operations.length.toString()} entries`)
+}
+
+function renderSignerStatus(snapshot: OperatorSnapshot) {
+	const privateKeyInput = element<HTMLInputElement>('private-key')
+	const signerStatus = element('signer-status')
+	if (signerFeedback !== undefined) {
+		signerStatus.textContent = signerFeedback.message
+		signerStatus.setAttribute('role', signerFeedback.error ? 'alert' : 'status')
+		privateKeyInput.setAttribute('aria-invalid', signerFeedback.error.toString())
+	} else {
+		signerStatus.setAttribute('role', 'status')
+		privateKeyInput.setAttribute('aria-invalid', 'false')
+		if (snapshot.queuedWallet === null) signerStatus.textContent = 'Signer clear queued'
+		else if (typeof snapshot.queuedWallet === 'string') signerStatus.textContent = `Signer ${shorten(snapshot.queuedWallet)} queued`
+		else signerStatus.textContent = snapshot.wallet === undefined ? 'Locked · no signer' : `Unlocked · ${shorten(snapshot.wallet)}`
+	}
+	const controls = signerControlState({
+		hasQueuedSigner: typeof snapshot.queuedWallet === 'string',
+		hasWallet: snapshot.wallet !== undefined,
+		privateKey: privateKeyInput.value,
+		requestPending: signerRequestPending,
+	})
+	privateKeyInput.disabled = controls.inputDisabled
+	element<HTMLButtonElement>('clear-signer-button').disabled = controls.clearDisabled
+	element<HTMLButtonElement>('set-signer-button').disabled = controls.setDisabled
+}
+
 function renderTransactions(transactions: readonly TransactionActivity[]) {
 	const body = element<HTMLTableSectionElement>('transactions-body')
 	body.replaceChildren()
@@ -257,6 +357,10 @@ function render(snapshot: OperatorSnapshot) {
 		loadSubmission(snapshot.submission)
 		submissionLoaded = true
 	}
+	if (!connectivityLoaded) {
+		loadConnectivity(snapshot.connectivity)
+		connectivityLoaded = true
+	}
 	const modeBadge = element('mode-badge')
 	modeBadge.dataset['mode'] = snapshot.mode
 	modeBadge.textContent = snapshot.mode
@@ -267,6 +371,9 @@ function render(snapshot: OperatorSnapshot) {
 	setText('profit-value', exactAmount(snapshot.totalTrackedNetProfitEth, 'ETH'))
 	setText('gas-value', exactAmount(snapshot.totalActualGasCostEth, 'ETH'))
 	setText('oracle-address', `Oracle ${snapshot.openOracle}`)
+	setText('network-value', `${snapshot.network} · chain ${snapshot.expectedChainId.toString()}`)
+	setText('chain-safety', `Expected and continuously verifies ${snapshot.network} chain ${snapshot.expectedChainId.toString()}.`)
+	renderSignerStatus(snapshot)
 	const pauseButton = element<HTMLButtonElement>('pause-button')
 	pauseButton.textContent = snapshot.paused ? 'Resume bot' : 'Pause bot'
 	const notice = element('notice')
@@ -280,7 +387,7 @@ function render(snapshot: OperatorSnapshot) {
 	}
 	if (snapshot.paused) {
 		noticeTitle = 'Bot paused'
-		noticeCopy = 'No new approvals or disputes will be sent. Transactions broadcast before the pause continue to confirmation.'
+		noticeCopy = 'Pause is checked immediately before each submission. A submission already started may still finish, and broadcast transactions continue to confirmation.'
 		noticeTone = 'warning'
 	}
 	if (snapshot.lastError !== undefined) {
@@ -294,6 +401,8 @@ function render(snapshot: OperatorSnapshot) {
 	renderBalances(snapshot)
 	renderOpportunities(snapshot.opportunities)
 	renderTransactions(snapshot.transactionActivity)
+	renderEndpointChecks(snapshot)
+	renderOperations(snapshot.operationLog)
 	renderHistory(snapshot.executionHistory, snapshot.executionHistoryRecordCount)
 }
 
@@ -390,6 +499,76 @@ element<HTMLFormElement>('submission-form').addEventListener('submit', async eve
 	} finally {
 		button.disabled = !connected
 	}
+})
+
+element<HTMLFormElement>('connectivity-form').addEventListener('submit', async event => {
+	event.preventDefault()
+	const button = element<HTMLFormElement>('connectivity-form').querySelector('button[type="submit"]')
+	if (!(button instanceof HTMLButtonElement)) return
+	button.disabled = true
+	setText('connectivity-status', `Checking every endpoint for ${latestSnapshot?.network ?? 'the selected network'}…`)
+	try {
+		const connectivity = {
+			publicRpcUrls: element<HTMLTextAreaElement>('public-rpc-urls')
+				.value.split('\n')
+				.map(value => value.trim())
+				.filter(value => value !== ''),
+			readRpcUrl: element<HTMLInputElement>('read-rpc-url').value.trim(),
+		}
+		const response = await api<{ connectivity: ConnectivitySettings }>('/api/connectivity', {
+			body: JSON.stringify(connectivity),
+			headers: { 'content-type': 'application/json' },
+			method: 'PUT',
+		})
+		loadConnectivity(response.connectivity)
+		setText('connectivity-status', 'RPCs passed chain checks and will apply at the next scan.')
+		await refresh()
+	} catch (error) {
+		setText('connectivity-status', error instanceof Error ? error.message : String(error))
+		await refresh()
+	} finally {
+		button.disabled = !connected
+	}
+})
+
+async function updateSigner(privateKey: string | undefined) {
+	if (signerRequestPending) return
+	const input = element<HTMLInputElement>('private-key')
+	signerRequestPending = true
+	signerFeedback = { error: false, message: privateKey === undefined ? 'Clearing signer…' : 'Validating signer…' }
+	if (latestSnapshot !== undefined) renderSignerStatus(latestSnapshot)
+	try {
+		await api<{ wallet: string | undefined }>('/api/signer', {
+			body: JSON.stringify({ privateKey: privateKey ?? null }),
+			headers: { 'content-type': 'application/json' },
+			method: 'PUT',
+		})
+		input.value = ''
+		signerFeedback = undefined
+	} catch (error) {
+		input.value = ''
+		signerFeedback = { error: true, message: error instanceof Error ? error.message : String(error) }
+	} finally {
+		signerRequestPending = false
+		await refresh()
+	}
+}
+
+element<HTMLFormElement>('signer-form').addEventListener('submit', event => {
+	event.preventDefault()
+	try {
+		const privateKey = requiredSignerPrivateKey(element<HTMLInputElement>('private-key').value)
+		void updateSigner(privateKey)
+	} catch (error) {
+		signerFeedback = { error: true, message: error instanceof Error ? error.message : String(error) }
+		if (latestSnapshot !== undefined) renderSignerStatus(latestSnapshot)
+	}
+})
+element('clear-signer-button').addEventListener('click', () => void updateSigner(undefined))
+element<HTMLInputElement>('private-key').addEventListener('input', () => {
+	if (signerRequestPending) return
+	signerFeedback = undefined
+	if (latestSnapshot !== undefined) renderSignerStatus(latestSnapshot)
 })
 
 void refresh()

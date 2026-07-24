@@ -48,6 +48,7 @@ describe('signed transaction delivery', () => {
 		const prepared = await prepareSignedTransaction({
 			baseFeePerGas: 10n * 10n ** 9n,
 			blockNumber: 100n,
+			chainId: 1,
 			data: '0x1234',
 			from: account.address,
 			gasEstimate: 100_000n,
@@ -80,6 +81,7 @@ describe('signed transaction delivery', () => {
 		const parameters = {
 			baseFeePerGas: 10n,
 			blockNumber: 100n,
+			chainId: 11_155_111,
 			data: '0x1234' as Hex,
 			from: account.address,
 			gasEstimate: 100_000n,
@@ -89,6 +91,7 @@ describe('signed transaction delivery', () => {
 			to: address,
 		}
 		const prepared = await prepareSignedTransaction(parameters)
+		expect(parseTransaction(prepared.serializedTransaction).chainId).toBe(11_155_111n)
 		expect(prepared.maxBlockNumber).toBe(101n)
 		expect(prepared.lastValidBlockNumber).toBe(101n)
 		await expect(prepareSignedTransaction({ ...parameters, blockNumber: 101n })).rejects.toThrow('validity window expired')
@@ -111,6 +114,7 @@ describe('signed transaction delivery', () => {
 			hash,
 			maxBlockNumber: 125n,
 			publicSubmit: () => Promise.reject(new Error('must not use public RPC')),
+			publicRpcUrls: ['https://rpc.example'],
 			serializedTransaction,
 			settings: validateSubmissionSettings({ mode: 'private', relayUrls: [accepted, rejected] }),
 			signMessage: () => Promise.resolve(signature),
@@ -129,23 +133,27 @@ describe('signed transaction delivery', () => {
 	})
 
 	test('submits directly to the public mempool without contacting relays', async () => {
-		let submitted: Hex | undefined
+		const submitted: { transaction: Hex; url: string }[] = []
 		const result = await submitSignedTransaction({
 			address,
 			hash,
 			maxBlockNumber: 125n,
-			publicSubmit: transaction => {
-				submitted = transaction
-				return Promise.resolve(hash)
+			publicRpcUrls: ['https://rpc-a.example', 'https://rpc-b.example'],
+			publicSubmit: (url, transaction) => {
+				submitted.push({ transaction, url })
+				return url.includes('rpc-a') ? Promise.resolve(hash) : Promise.reject(new Error('RPC unavailable'))
 			},
 			serializedTransaction,
 			settings: validateSubmissionSettings({ mode: 'public', relayUrls: ['https://relay.flashbots.net'] }),
 			signMessage: () => Promise.reject(new Error('must not sign relay payload')),
 		})
-		expect(submitted).toBe(serializedTransaction)
+		expect(submitted).toEqual([
+			{ transaction: serializedTransaction, url: 'https://rpc-a.example' },
+			{ transaction: serializedTransaction, url: 'https://rpc-b.example' },
+		])
 		expect(result).toEqual({
-			acceptedTargets: ['public mempool'],
-			failedTargets: [],
+			acceptedTargets: ['https://rpc-a.example/'],
+			failedTargets: [{ error: 'RPC unavailable', target: 'https://rpc-b.example/' }],
 			hash,
 			mode: 'public',
 		})
@@ -159,6 +167,7 @@ describe('signed transaction delivery', () => {
 			hash,
 			maxBlockNumber: 125n,
 			publicSubmit: () => Promise.reject(new Error('must not use public RPC')),
+			publicRpcUrls: ['https://rpc.example'],
 			relayTimeoutMilliseconds: 20,
 			serializedTransaction,
 			settings: validateSubmissionSettings({ mode: 'private', relayUrls: [accepted, stalled] }),
@@ -183,6 +192,7 @@ describe('signed transaction delivery', () => {
 				hash,
 				maxBlockNumber: 125n,
 				publicSubmit: () => Promise.reject(new Error('must not use public RPC')),
+				publicRpcUrls: ['https://rpc.example'],
 				serializedTransaction,
 				settings: validateSubmissionSettings({ mode: 'private', relayUrls: [redirecting] }),
 				signMessage: () => Promise.resolve(signature),
@@ -199,6 +209,7 @@ describe('signed transaction delivery', () => {
 				hash,
 				maxBlockNumber: 125n,
 				publicSubmit: () => Promise.reject(new Error('must not use public RPC')),
+				publicRpcUrls: ['https://rpc.example'],
 				serializedTransaction,
 				settings: validateSubmissionSettings({ mode: 'private', relayUrls: [rejected] }),
 				signMessage: () => Promise.resolve(signature),

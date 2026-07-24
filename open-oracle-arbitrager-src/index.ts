@@ -1,18 +1,34 @@
 #!/usr/bin/env bun
 
 import { resolve } from 'node:path'
-import { createPublicClient, createWalletClient, encodeFunctionData, formatEther, getAddress, http, mainnet, privateKeyToAccount, type Account, type Address, type Chain, type Hex, type PublicClient, type TransactionLog, type Transport, type WalletClient, zeroAddress } from '@zoltar/shared/ethereum'
+import { createPublicClient, createWalletClient, encodeFunctionData, formatEther, getAddress, http, privateKeyToAccount, type Account, type Address, type Chain, type Hex, type PublicClient, type TransactionLog, type Transport, type WalletClient, zeroAddress } from '@zoltar/shared/ethereum'
 import { decodeOpenOracleStatePreimage, getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
 import { erc20Abi, factoryAbi, openOracleAbi, poolAbi, quoterAbi } from './abi.js'
+import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, sendRawTransactionToRpc, updateConnectivityEndpointChecks, updateSubmissionEndpointChecks, validateConnectivitySettings, type ConnectivitySettings } from './connectivity.js'
 import { startDashboardServer } from './dashboard-server.js'
-import { attemptConfirmationRecovery, executionFailureDecision, flushExecutionHistory, opportunityDecision, recordConfirmedExecution, retryPrivateSubmissionWithinWindow, runFundedExecution, selectBestExecution, signAndSubmitOpenOracleDispute, waitForResolvedTransaction } from './execution-orchestration.js'
+import {
+	attemptConfirmationRecovery,
+	executionFailureDecision,
+	flushExecutionHistory,
+	guardedTransactionSubmission,
+	isExecutionPausedError,
+	opportunityDecision,
+	recordConfirmedExecution,
+	retryPrivateSubmissionWithinWindow,
+	runFundedExecution,
+	selectBestExecution,
+	signAndSubmitOpenOracleDispute,
+	waitForResolvedTransaction,
+} from './execution-orchestration.js'
 import {
 	appendExecutionHistory,
+	clearWalletDerivedState,
 	decimalSignedEth,
 	decimalWeth,
 	ensureExecutionHistoryWritable,
 	loadExecutionHistory,
 	operatorSnapshot,
+	recordOperation,
 	strategySettings,
 	updateStrategyFromRequest,
 	type BalanceSnapshot,
@@ -22,14 +38,12 @@ import {
 	type OpportunitySnapshot,
 	type TransactionActivity,
 } from './operator-state.js'
+import { defaultRpcUrl, networkConfiguration, parseNetworkName, type NetworkConfiguration } from './network.js'
 import { bestSuccessful, pollUntilStopped, replaceOverlap } from './resilience.js'
+import { signerCandidate } from './signer.js'
 import { calculateContribution, calculateFee, calculateNextAmount1, calculateTrackedNetProfitEth, deriveTokenToSwap, evaluateBuyRep, evaluateSellRep, hasFreshSubmissionWindow, isSelfReport, meetsProfitThreshold, type ArbitrageQuote } from './strategy.js'
 import { assertSubmissionWindowOpen, mergeSubmissionFailures, prepareSignedTransaction, SubmissionFailure, submitSignedTransaction, validateSubmissionSettings, type SignedTransaction, type SubmissionSettings, type SubmittedTransaction, type SubmissionTargetResult } from './transaction-submission.js'
 
-const WETH = getAddress('0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2')
-const REP = getAddress('0x221657776846890989a759BA2973e427DfF5C9bB')
-const FACTORY = getAddress('0x1F98431c8aD98523631AE4a59f267346ea31F984')
-const QUOTER = getAddress('0x61fFE014bA17989E743c5F6cB21bF9697530B21e')
 const FEES = [100, 500, 3000, 10000] as const
 const REORG_OVERLAP_BLOCKS = 12n
 
@@ -37,10 +51,11 @@ type Configuration = MutableStrategy & {
 	execute: boolean
 	historyFile: string
 	lookbackBlocks: bigint
+	network: NetworkConfiguration
 	once: boolean
 	openOracle: Address
 	privateKey: Hex | undefined
-	rpcUrl: string
+	connectivity: ConnectivitySettings
 	submission: SubmissionSettings
 	ui: boolean
 	uiPort: number
@@ -89,7 +104,7 @@ Usage:
 Modes:
   --once                         Scan once and exit
   --ui                           Serve the local dashboard on 127.0.0.1
-  --execute                      Submit guarded disputes (requires PRIVATE_KEY)
+  --execute                      Submit guarded disputes (key from env or local UI)
   --submission-mode=public      Submit to public mempool (public) or private relays (private)
   --relay-url=https://...        Private relay URL; repeat for multiple relays
 
@@ -103,7 +118,13 @@ Strategy:
   --poll-ms=12000                Continuous scan interval
 
 Data and connectivity:
-  --rpc-url=https://...          Mainnet RPC (or ETH_RPC_URL)
+  --network=mainnet|sepolia      Expected network; defaults to mainnet
+  --rpc-url=https://...          Read RPC (or ETH_RPC_URL)
+  --public-rpc-url=https://...   Public submission RPC; repeat to fan out
+  --rep-address=0x...            REP address; required on Sepolia
+  --weth-address=0x...           Override the network WETH address
+  --uniswap-factory=0x...        Override the Uniswap V3 factory
+  --uniswap-quoter=0x...         Override the Uniswap V3 quoter
   --lookback-blocks=50000        Initial event search range
   --ui-port=4173                 Local dashboard port
   --history-file=PATH            Confirmed-submission JSONL path
@@ -150,15 +171,28 @@ function loadConfiguration(): Configuration {
 		pollMilliseconds: Number(option('poll-ms') ?? '12000'),
 		twapSeconds: Number(option('twap-seconds') ?? '1800'),
 	})
+	const networkName = parseNetworkName(option('network'))
+	const network = networkConfiguration(networkName, {
+		factory: option('uniswap-factory') ?? process.env['UNISWAP_FACTORY_ADDRESS'],
+		quoter: option('uniswap-quoter') ?? process.env['UNISWAP_QUOTER_ADDRESS'],
+		rep: option('rep-address') ?? process.env['REP_ADDRESS'],
+		weth: option('weth-address') ?? process.env['WETH_ADDRESS'],
+	})
+	const readRpcUrl = option('rpc-url') ?? process.env['ETH_RPC_URL'] ?? defaultRpcUrl(networkName)
+	const publicRpcUrls = options('public-rpc-url')
 	return {
 		...strategy,
 		execute: process.argv.includes('--execute'),
-		historyFile: resolve(option('history-file') ?? '.open-oracle-arbitrager/history.jsonl'),
+		historyFile: resolve(option('history-file') ?? `.open-oracle-arbitrager/history-${networkName}.jsonl`),
 		lookbackBlocks: BigInt(option('lookback-blocks') ?? '50000'),
 		once: process.argv.includes('--once'),
+		network,
 		openOracle: requiredAddress('open-oracle'),
 		privateKey,
-		rpcUrl: option('rpc-url') ?? process.env['ETH_RPC_URL'] ?? 'https://ethereum-rpc.publicnode.com',
+		connectivity: validateConnectivitySettings({
+			publicRpcUrls: publicRpcUrls.length === 0 ? [readRpcUrl] : publicRpcUrls,
+			readRpcUrl,
+		}),
 		submission: validateSubmissionSettings({
 			mode: option('submission-mode') ?? 'public',
 			relayUrls: options('relay-url').length === 0 ? ['https://relay.flashbots.net'] : options('relay-url'),
@@ -218,6 +252,12 @@ function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : String(error)
 }
 
+function transactionLogLevel(status: TransactionActivity['status']) {
+	if (status === 'reverted' || status === 'submission-failed') return 'error'
+	if (status === 'confirmation-unknown') return 'warning'
+	return 'info'
+}
+
 function logBlockNumber(log: TransactionLog): bigint {
 	if (log.blockNumber === null || log.blockNumber === undefined) throw new Error('OpenOracle log is missing its block number')
 	return log.blockNumber
@@ -272,18 +312,18 @@ async function loadPool(client: ReadClient, address: Address, fee: Pool['fee'], 
 	}
 }
 
-async function poolsFor(client: ReadClient, twapSeconds: number) {
+async function poolsFor(client: ReadClient, config: Configuration) {
 	const pools: Pool[] = []
 	for (const fee of FEES) {
 		try {
 			const address = await client.readContract({
-				address: FACTORY,
+				address: config.network.factory,
 				abi: factoryAbi,
 				functionName: 'getPool',
-				args: [WETH, REP, fee],
+				args: [config.network.weth, config.network.rep, fee],
 			})
 			if (address === zeroAddress) continue
-			const pool = await loadPool(client, address, fee, twapSeconds)
+			const pool = await loadPool(client, address, fee, config.twapSeconds)
 			if (pool !== undefined) pools.push(pool)
 		} catch (error) {
 			console.error(`poolFee=${fee.toString()} skipped=${errorMessage(error)}`)
@@ -292,9 +332,9 @@ async function poolsFor(client: ReadClient, twapSeconds: number) {
 	return pools
 }
 
-async function quoteInput(client: ReadClient, tokenIn: Address, tokenOut: Address, amountIn: bigint, fee: number) {
+async function quoteInput(client: ReadClient, quoter: Address, tokenIn: Address, tokenOut: Address, amountIn: bigint, fee: number) {
 	const result = await client.simulateContract({
-		address: QUOTER,
+		address: quoter,
 		abi: quoterAbi,
 		functionName: 'quoteExactInputSingle',
 		args: [{ tokenIn, tokenOut, amountIn, fee, sqrtPriceLimitX96: 0n }],
@@ -302,9 +342,9 @@ async function quoteInput(client: ReadClient, tokenIn: Address, tokenOut: Addres
 	return result.result[0]
 }
 
-async function quoteOutput(client: ReadClient, tokenIn: Address, tokenOut: Address, amount: bigint, fee: number) {
+async function quoteOutput(client: ReadClient, quoter: Address, tokenIn: Address, tokenOut: Address, amount: bigint, fee: number) {
 	const result = await client.simulateContract({
-		address: QUOTER,
+		address: quoter,
 		abi: quoterAbi,
 		functionName: 'quoteExactOutputSingle',
 		args: [{ tokenIn, tokenOut, amount, fee, sqrtPriceLimitX96: 0n }],
@@ -312,30 +352,33 @@ async function quoteOutput(client: ReadClient, tokenIn: Address, tokenOut: Addre
 	return result.result[0]
 }
 
-async function evaluate(client: ReadClient, report: OpenOracleStatePreimage, pool: Pool, gasPrice: bigint) {
+async function evaluate(client: ReadClient, config: Configuration, report: OpenOracleStatePreimage, pool: Pool, gasPrice: bigint) {
 	const game = report.game
 	const gasCost = gasPrice * 600_000n
 	const repWithFees = game.currentAmount2 + calculateFee(game.currentAmount2, game.feePercentage) + calculateFee(game.currentAmount2, game.protocolFee)
 	return bestSuccessful(
-		[async () => evaluateSellRep(game, await quoteInput(client, REP, WETH, game.currentAmount2, pool.fee), gasCost), async () => evaluateBuyRep(game, await quoteOutput(client, WETH, REP, repWithFees, pool.fee), gasCost)],
+		[
+			async () => evaluateSellRep(game, await quoteInput(client, config.network.quoter, config.network.rep, config.network.weth, game.currentAmount2, pool.fee), gasCost),
+			async () => evaluateBuyRep(game, await quoteOutput(client, config.network.quoter, config.network.weth, config.network.rep, repWithFees, pool.fee), gasCost),
+		],
 		candidate => candidate.netProfitWeth,
 		error => console.error(`pool=${pool.address} quoteSkipped=${errorMessage(error)}`),
 	)
 }
 
-async function loadBalances(client: ReadClient, wallet: WriteClient | undefined, pools: readonly Pool[]) {
+async function loadBalances(client: ReadClient, wallet: WriteClient | undefined, config: Configuration, pools: readonly Pool[]) {
 	if (wallet === undefined) return undefined
 	const address = wallet.account.address
 	const [eth, weth, rep] = await Promise.all([
 		client.getBalance({ address }),
 		client.readContract({
-			address: WETH,
+			address: config.network.weth,
 			abi: erc20Abi,
 			functionName: 'balanceOf',
 			args: [address],
 		}),
 		client.readContract({
-			address: REP,
+			address: config.network.rep,
 			abi: erc20Abi,
 			functionName: 'balanceOf',
 			args: [address],
@@ -346,7 +389,7 @@ async function loadBalances(client: ReadClient, wallet: WriteClient | undefined,
 	if (rep === 0n) repValueWeth = 0n
 	else {
 		const best = await bestSuccessful(
-			pools.map(pool => () => quoteInput(client, REP, WETH, rep, pool.fee)),
+			pools.map(pool => () => quoteInput(client, config.network.quoter, config.network.rep, config.network.weth, rep, pool.fee)),
 			value => value,
 			() => undefined,
 		)
@@ -372,7 +415,7 @@ type TrackedSubmission = SignedTransaction &
 		submittedAt: string
 	}
 
-async function signContractTransaction(client: ReadClient, wallet: WriteClient, to: Address, data: Hex, estimateGas: () => Promise<bigint>, lastValidBlockNumber: bigint | undefined = undefined): Promise<SignedTransaction> {
+async function signContractTransaction(client: ReadClient, wallet: WriteClient, chainId: number, to: Address, data: Hex, estimateGas: () => Promise<bigint>, lastValidBlockNumber: bigint | undefined = undefined): Promise<SignedTransaction> {
 	const account = wallet.account
 	if (account === undefined || account.signTransaction === undefined) throw new Error('Execution requires a local transaction signer')
 	const [block, gasEstimate, nonce] = await Promise.all([client.getBlock(), estimateGas(), client.getTransactionCount({ address: account.address, blockTag: 'pending' })])
@@ -380,6 +423,7 @@ async function signContractTransaction(client: ReadClient, wallet: WriteClient, 
 	return prepareSignedTransaction({
 		baseFeePerGas: block.baseFeePerGas ?? 0n,
 		blockNumber: block.number,
+		chainId,
 		data,
 		from: account.address,
 		gasEstimate,
@@ -408,7 +452,7 @@ function trackedActivity(submission: TrackedSubmission, status: TransactionActiv
 	}
 }
 
-async function submitContractTransaction(client: ReadClient, wallet: WriteClient, config: Configuration, signed: SignedTransaction, details: { estimatedNetProfitEth: string | undefined; kind: TransactionActivity['kind']; reportId: string }, track: TrackTransaction): Promise<TrackedSubmission> {
+async function submitContractTransaction(client: ReadClient, wallet: WriteClient, config: Configuration, signed: SignedTransaction, details: { estimatedNetProfitEth: string | undefined; kind: TransactionActivity['kind']; reportId: string }, isPaused: () => boolean, track: TrackTransaction): Promise<TrackedSubmission> {
 	const account = wallet.account
 	const signMessage = account?.signMessage
 	if (account === undefined || signMessage === undefined) throw new Error('Execution requires a local relay authentication signer')
@@ -423,22 +467,31 @@ async function submitContractTransaction(client: ReadClient, wallet: WriteClient
 		reportId: details.reportId,
 		submittedAt,
 	}
-	track(trackedActivity(initial, 'submitting'))
 	try {
-		if (signed.lastValidBlockNumber !== undefined) assertSubmissionWindowOpen(signed.lastValidBlockNumber, await client.getBlockNumber())
-		const result = await submitSignedTransaction({
-			address: account.address,
-			hash: signed.hash,
-			maxBlockNumber: signed.maxBlockNumber,
-			publicSubmit: serializedTransaction => wallet.sendRawTransaction({ serializedTransaction }),
-			serializedTransaction: signed.serializedTransaction,
-			settings: config.submission,
-			signMessage,
-		})
+		const result = await guardedTransactionSubmission(
+			isPaused,
+			async () => {
+				if (signed.lastValidBlockNumber !== undefined) assertSubmissionWindowOpen(signed.lastValidBlockNumber, await client.getBlockNumber())
+			},
+			() => {
+				track(trackedActivity(initial, 'submitting'))
+				return submitSignedTransaction({
+					address: account.address,
+					hash: signed.hash,
+					maxBlockNumber: signed.maxBlockNumber,
+					publicRpcUrls: config.connectivity.publicRpcUrls,
+					publicSubmit: sendRawTransactionToRpc,
+					serializedTransaction: signed.serializedTransaction,
+					settings: config.submission,
+					signMessage,
+				})
+			},
+		)
 		const submission = { ...initial, ...result }
 		track(trackedActivity(submission, 'pending'))
 		return submission
 	} catch (error) {
+		if (isExecutionPausedError(error)) throw error
 		const failedTargets: readonly SubmissionTargetResult[] =
 			error instanceof SubmissionFailure
 				? error.failedTargets
@@ -477,7 +530,8 @@ async function waitForTrackedTransaction(client: ReadClient, wallet: WriteClient
 								address: account.address,
 								hash: submission.hash,
 								maxBlockNumber,
-								publicSubmit: serializedTransaction => wallet.sendRawTransaction({ serializedTransaction }),
+								publicRpcUrls: config.connectivity.publicRpcUrls,
+								publicSubmit: sendRawTransactionToRpc,
 								serializedTransaction: submission.serializedTransaction,
 								settings: config.submission,
 								signMessage,
@@ -511,7 +565,7 @@ async function waitForTrackedTransaction(client: ReadClient, wallet: WriteClient
 	return { receipt, tracked }
 }
 
-async function approveAndWait(client: ReadClient, wallet: WriteClient, config: Configuration, token: Address, spender: Address, amount: bigint, reportId: string, track: TrackTransaction) {
+async function approveAndWait(client: ReadClient, wallet: WriteClient, config: Configuration, token: Address, spender: Address, amount: bigint, reportId: string, isPaused: () => boolean, track: TrackTransaction) {
 	if (amount === 0n) return 0n
 	const request = {
 		address: token,
@@ -520,9 +574,9 @@ async function approveAndWait(client: ReadClient, wallet: WriteClient, config: C
 		args: [spender, amount],
 	} as const
 	const data = encodeFunctionData(request)
-	const signed = await signContractTransaction(client, wallet, token, data, () => client.estimateContractGas({ ...request, account: wallet.account }))
-	const kind = token.toLowerCase() === WETH.toLowerCase() ? 'approval-weth' : 'approval-rep'
-	const submission = await submitContractTransaction(client, wallet, config, signed, { estimatedNetProfitEth: undefined, kind, reportId }, track)
+	const signed = await signContractTransaction(client, wallet, config.network.chain.id, token, data, () => client.estimateContractGas({ ...request, account: wallet.account }))
+	const kind = token.toLowerCase() === config.network.weth.toLowerCase() ? 'approval-weth' : 'approval-rep'
+	const submission = await submitContractTransaction(client, wallet, config, signed, { estimatedNetProfitEth: undefined, kind, reportId }, isPaused, track)
 	const { receipt } = await waitForTrackedTransaction(client, wallet, config, submission, track)
 	if (receipt.status !== 'success') throw new Error(`Approval transaction reverted: ${receipt.transactionHash}`)
 	return receipt.gasUsed * (receipt.effectiveGasPrice ?? 0n)
@@ -534,14 +588,14 @@ async function executeDispute(client: ReadClient, wallet: WriteClient, config: C
 	const game = report.game
 	if (isSelfReport(account.address, game.currentReporter)) throw new Error('Self-disputes use different OpenOracle accounting and are not supported')
 	const newAmount1 = calculateNextAmount1(game)
-	const preparedAmount2 = await quoteInput(client, WETH, REP, newAmount1, pool.fee)
+	const preparedAmount2 = await quoteInput(client, config.network.quoter, config.network.weth, config.network.rep, newAmount1, pool.fee)
 	const preparedTokenToSwap = deriveTokenToSwap(game, newAmount1, preparedAmount2)
 	if (preparedTokenToSwap.toLowerCase() !== quote.tokenToSwap.toLowerCase()) throw new Error('Replacement ratio does not derive the selected arbitrage direction')
 	const preparedContribution = calculateContribution(game, preparedTokenToSwap, game.token1, newAmount1, preparedAmount2)
 	const reportId = report.helper.reportId.toString()
 	return runFundedExecution(isPaused, {
-		approveToken1: () => approveAndWait(client, wallet, config, game.token1, config.openOracle, preparedContribution.token1, reportId, track),
-		approveToken2: () => approveAndWait(client, wallet, config, game.token2, config.openOracle, preparedContribution.token2, reportId, track),
+		approveToken1: () => approveAndWait(client, wallet, config, game.token1, config.openOracle, preparedContribution.token1, reportId, isPaused, track),
+		approveToken2: () => approveAndWait(client, wallet, config, game.token2, config.openOracle, preparedContribution.token2, reportId, isPaused, track),
 		prepare: async () => {
 			const quoteBlock = await client.getBlock()
 			if (quoteBlock.number === undefined) throw new Error('Quote block is missing its number')
@@ -550,11 +604,11 @@ async function executeDispute(client: ReadClient, wallet: WriteClient, config: C
 			const deviation = refreshedPool.spotTick > refreshedPool.twapTick ? refreshedPool.spotTick - refreshedPool.twapTick : refreshedPool.twapTick - refreshedPool.spotTick
 			if (deviation > config.maxSpotTwapTicks) throw new Error('Selected pool failed the spot/TWAP check after approvals')
 			const gasPrice = (quoteBlock.baseFeePerGas ?? 0n) * 2n + 2n * 10n ** 9n
-			const refreshedQuote = await evaluate(client, report, refreshedPool, gasPrice)
+			const refreshedQuote = await evaluate(client, config, report, refreshedPool, gasPrice)
 			if (refreshedQuote === undefined) throw new Error('Selected pool no longer serves either arbitrage direction')
 			if (refreshedQuote.direction !== quote.direction) throw new Error('Best arbitrage direction changed while approvals were mined')
 			if (!meetsProfitThreshold(refreshedQuote, config.minimumProfitWeth, config.minimumProfitBps)) throw new Error('Arbitrage no longer meets the profit threshold after approvals')
-			const newAmount2 = await quoteInput(client, WETH, REP, newAmount1, refreshedPool.fee)
+			const newAmount2 = await quoteInput(client, config.network.quoter, config.network.weth, config.network.rep, newAmount1, refreshedPool.fee)
 			const tokenToSwap = deriveTokenToSwap(game, newAmount1, newAmount2)
 			if (tokenToSwap.toLowerCase() !== refreshedQuote.tokenToSwap.toLowerCase()) throw new Error('Refreshed replacement ratio does not derive the selected arbitrage direction')
 			const contribution = calculateContribution(game, tokenToSwap, game.token1, newAmount1, newAmount2)
@@ -596,8 +650,8 @@ async function executeDispute(client: ReadClient, wallet: WriteClient, config: C
 			const data = encodeFunctionData(prepared.request)
 			return signAndSubmitOpenOracleDispute(
 				prepared.quoteBlockNumber,
-				lastValidBlockNumber => signContractTransaction(client, wallet, prepared.request.address, data, () => client.estimateContractGas({ ...prepared.request, account }), lastValidBlockNumber),
-				signed => submitContractTransaction(client, wallet, config, signed, { estimatedNetProfitEth: decimalWeth(prepared.refreshedQuote.netProfitWeth), kind: 'dispute', reportId }, track),
+				lastValidBlockNumber => signContractTransaction(client, wallet, config.network.chain.id, prepared.request.address, data, () => client.estimateContractGas({ ...prepared.request, account }), lastValidBlockNumber),
+				signed => submitContractTransaction(client, wallet, config, signed, { estimatedNetProfitEth: decimalWeth(prepared.refreshedQuote.netProfitWeth), kind: 'dispute', reportId }, isPaused, track),
 			)
 		},
 		confirm: async (submission, prepared, approvalGasCost) => {
@@ -637,35 +691,45 @@ async function inspectReport(
 	gasPrice: bigint,
 	balances: RawBalances | undefined,
 	executionReady: boolean,
+	recordDecision: (message: string, reason: string) => void,
 ): Promise<EvaluatedOpportunity | undefined> {
 	const game = report.game
-	if (game.token1.toLowerCase() !== WETH.toLowerCase() || game.token2.toLowerCase() !== REP.toLowerCase()) return
+	if (game.token1.toLowerCase() !== config.network.weth.toLowerCase() || game.token2.toLowerCase() !== config.network.rep.toLowerCase()) {
+		recordDecision('Skipped report', 'Token pair is not the configured WETH/REP identity')
+		return
+	}
 	const timeType = (game.flags & OPEN_ORACLE_FLAG_TIME_TYPE) !== 0n
 	const currentTime = timeType ? blockTimestamp : blockNumber
-	if (currentTime < game.reportTimestamp + game.disputeDelay || currentTime >= game.reportTimestamp + game.settlementTime) return
+	if (currentTime < game.reportTimestamp + game.disputeDelay || currentTime >= game.reportTimestamp + game.settlementTime) {
+		recordDecision('Skipped report', 'Report is outside its dispute window')
+		return
+	}
 	const timeRemaining = game.reportTimestamp + game.settlementTime - currentTime
 	const minimumRemaining = timeType ? config.minimumRemainingSeconds : config.minimumRemainingBlocks
 	if (timeRemaining < minimumRemaining) {
 		console.log(`report=${report.helper.reportId.toString()} skipped=insufficient-inclusion-window remaining=${timeRemaining.toString()}`)
+		recordDecision('Skipped report', `Only ${timeRemaining.toString()} ${timeType ? 'seconds' : 'blocks'} remain`)
 		return
 	}
 	let best: { pool: Pool; quote: ArbitrageQuote } | undefined
 	for (const pool of pools) {
 		const deviation = pool.spotTick > pool.twapTick ? pool.spotTick - pool.twapTick : pool.twapTick - pool.spotTick
 		if (deviation > config.maxSpotTwapTicks) continue
-		const quote = await evaluate(client, report, pool, gasPrice)
+		const quote = await evaluate(client, config, report, pool, gasPrice)
 		if (quote === undefined) continue
 		if (best === undefined || quote.netProfitWeth > best.quote.netProfitWeth) best = { pool, quote }
 	}
 	if (best === undefined) {
 		console.log(`report=${report.helper.reportId.toString()} skipped=no-trusted-liquid-pool`)
+		recordDecision('Skipped report', 'No active pool passed quote and spot/TWAP checks')
 		return
 	}
 	const newAmount1 = calculateNextAmount1(game)
-	const replacementAmount2 = await quoteInput(client, WETH, REP, newAmount1, best.pool.fee)
+	const replacementAmount2 = await quoteInput(client, config.network.quoter, config.network.weth, config.network.rep, newAmount1, best.pool.fee)
 	const replacementTokenToSwap = deriveTokenToSwap(game, newAmount1, replacementAmount2)
 	if (replacementTokenToSwap.toLowerCase() !== best.quote.tokenToSwap.toLowerCase()) {
 		console.log(`report=${report.helper.reportId.toString()} skipped=replacement-ratio-direction-mismatch`)
+		recordDecision('Skipped report', 'Replacement ratio selected a different swap direction')
 		return
 	}
 	const contribution = calculateContribution(game, replacementTokenToSwap, game.token1, newAmount1, replacementAmount2)
@@ -707,57 +771,107 @@ async function main() {
 	if (config.lookbackBlocks < 0n) throw new Error('lookback-blocks must be a non-negative integer')
 	if (!Number.isSafeInteger(config.uiPort) || config.uiPort < 1 || config.uiPort > 65_535) throw new Error('ui-port must be an integer from 1 to 65535')
 	if (config.ui && config.once) throw new Error('--ui cannot be combined with --once')
-	if (config.execute && config.privateKey === undefined) throw new Error('--execute requires PRIVATE_KEY')
+	if (config.execute && config.privateKey === undefined && !config.ui) throw new Error('--execute requires PRIVATE_KEY unless --ui is used to unlock the signer')
 	if (config.execute) await ensureExecutionHistoryWritable(config.historyFile)
-	const client = createPublicClient({
-		chain: mainnet,
-		transport: http(config.rpcUrl),
-	})
-	const wallet =
+	const createClient = () =>
+		createPublicClient({
+			chain: config.network.chain,
+			transport: http(config.connectivity.readRpcUrl),
+		})
+	const createWallet = () =>
 		config.privateKey === undefined
 			? undefined
 			: createWalletClient({
 					account: privateKeyToAccount(config.privateKey),
-					chain: mainnet,
-					transport: http(config.rpcUrl),
+					chain: config.network.chain,
+					transport: http(config.connectivity.readRpcUrl),
 				})
+	let client = createClient()
+	let wallet = createWallet()
 	const state: OperatorState = {
 		activeReportCount: 0,
 		balances: undefined,
 		blockNumber: undefined,
 		executionHistory: await loadExecutionHistory(config.historyFile),
+		endpointChecks: [...(await checkConnectivity(config.connectivity, config.network.chain.id)), ...(await checkSubmissionEndpoints(config.submission, config.network.chain.id))],
 		lastError: undefined,
 		lastPollAt: undefined,
 		opportunities: [],
+		operationLog: [],
 		paused: false,
 		status: 'starting',
 		transactionActivity: [],
 	}
-	const fixedState = {
+	const fixedState: {
+		execute: boolean
+		expectedChainId: number
+		explorerUrl: string
+		network: NetworkConfiguration['name']
+		openOracle: Address
+		queuedWallet: Address | null | undefined
+		wallet: Address | undefined
+	} = {
 		execute: config.execute,
+		expectedChainId: config.network.chain.id,
+		explorerUrl: config.network.explorerUrl,
+		network: config.network.name,
 		openOracle: config.openOracle,
+		queuedWallet: undefined,
 		wallet: wallet?.account.address,
 	}
 	let pendingStrategy: MutableStrategy | undefined
 	let pendingSubmission: SubmissionSettings | undefined
+	let pendingConnectivity: ConnectivitySettings | undefined
+	let pendingPrivateKey: Hex | undefined
+	let signerUpdatePending = false
 	const trackTransaction: TrackTransaction = activity => {
 		state.transactionActivity = [activity, ...state.transactionActivity.filter(existing => existing.originalHash.toLowerCase() !== activity.originalHash.toLowerCase())].slice(0, 100)
+		recordOperation(state, {
+			category: 'transaction',
+			details: activity.failedTargets.map(target => `${target.target}: ${target.error ?? 'failed'}`).join('; ') || undefined,
+			level: transactionLogLevel(activity.status),
+			message: `${activity.kind} ${activity.status}`,
+			reason: `Transaction ${activity.hash}`,
+			reportId: activity.reportId,
+		})
 	}
 	const dashboard = config.ui
 		? startDashboardServer(config.uiPort, {
-				getSnapshot: () => operatorSnapshot(state, pendingStrategy ?? config, pendingSubmission ?? config.submission, fixedState),
+				getSnapshot: () => operatorSnapshot(state, pendingStrategy ?? config, pendingSubmission ?? config.submission, pendingConnectivity ?? config.connectivity, fixedState),
 				setPaused: paused => {
 					state.paused = paused
 					state.status = paused ? 'paused' : 'sleeping'
+					recordOperation(state, { category: 'configuration', details: undefined, level: 'info', message: paused ? 'Operator paused' : 'Operator resumed', reason: 'Dashboard command', reportId: undefined })
 				},
-				updateSubmission: value => {
-					pendingSubmission = validateSubmissionSettings(value)
+				updateConnectivity: async value => {
+					const next = validateConnectivitySettings(value)
+					await updateConnectivityEndpointChecks(state, () => checkConnectivity(next, config.network.chain.id))
+					pendingConnectivity = next
+					recordOperation(state, { category: 'configuration', details: next.publicRpcUrls.map(endpointLabel).join(', '), level: 'info', message: 'RPC configuration verified', reason: `Read RPC ${endpointLabel(next.readRpcUrl)}`, reportId: undefined })
+					return next
+				},
+				updateSigner: value => {
+					if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).length !== 1 || !('privateKey' in value)) throw new Error('Signer request requires only privateKey')
+					const candidate = signerCandidate(value['privateKey'])
+					pendingPrivateKey = candidate.privateKey
+					signerUpdatePending = true
+					const address = candidate.address
+					fixedState.queuedWallet = address ?? null
+					recordOperation(state, { category: 'configuration', details: undefined, level: 'info', message: address === undefined ? 'Signer clear queued' : `Signer ${address} queued`, reason: 'Applied at the next scan boundary', reportId: undefined })
+					return { wallet: address }
+				},
+				updateSubmission: async value => {
+					const next = validateSubmissionSettings(value)
+					await updateSubmissionEndpointChecks(state, () => checkSubmissionEndpoints(next, config.network.chain.id))
+					pendingSubmission = next
+					recordOperation(state, { category: 'configuration', details: next.relayUrls.join(', ') || undefined, level: 'info', message: `Submission mode ${next.mode} verified`, reason: 'Applied at the next scan boundary', reportId: undefined })
 					return pendingSubmission
 				},
 				updateStrategy: value => {
 					const next = mutableStrategy(pendingStrategy ?? config)
 					updateStrategyFromRequest(next, value)
 					pendingStrategy = next
+					recordOperation(state, { category: 'configuration', details: undefined, level: 'info', message: 'Strategy update queued', reason: 'Applied at the next scan boundary', reportId: undefined })
 					return strategySettings(next)
 				},
 			})
@@ -766,7 +880,8 @@ async function main() {
 	const pendingHistory: ExecutionRecord[] = []
 	let cachedLogs: TransactionLog[] = []
 	let nextBlock: bigint | undefined
-	console.log(`mode=${config.execute ? 'execute' : 'dry-run'} submission=${config.submission.mode} oracle=${config.openOracle} rpc=${config.rpcUrl}`)
+	recordOperation(state, { category: 'scan', details: undefined, level: 'info', message: 'Operator started', reason: `${config.network.name} chain ${config.network.chain.id.toString()}`, reportId: undefined })
+	console.log(`network=${config.network.name} chain=${config.network.chain.id.toString()} mode=${config.execute ? 'execute' : 'dry-run'} submission=${config.submission.mode} oracle=${config.openOracle} rpc=${endpointLabel(config.connectivity.readRpcUrl)}`)
 	try {
 		await pollUntilStopped(
 			async () => {
@@ -782,8 +897,23 @@ async function main() {
 					config.submission = pendingSubmission
 					pendingSubmission = undefined
 				}
+				if (pendingConnectivity !== undefined) {
+					config.connectivity = pendingConnectivity
+					pendingConnectivity = undefined
+					client = createClient()
+					wallet = createWallet()
+				}
+				if (signerUpdatePending) {
+					config.privateKey = pendingPrivateKey
+					wallet = createWallet()
+					fixedState.wallet = wallet?.account.address
+					fixedState.queuedWallet = undefined
+					clearWalletDerivedState(state)
+					signerUpdatePending = false
+				}
 				state.status = 'scanning'
 				state.lastError = undefined
+				recordOperation(state, { category: 'scan', details: undefined, level: 'info', message: 'Scan started', reason: `Using ${config.network.name} RPC`, reportId: undefined })
 				if (pendingHistory.length !== 0) {
 					try {
 						await flushExecutionHistory(pendingHistory, record => appendExecutionHistory(config.historyFile, record))
@@ -794,6 +924,8 @@ async function main() {
 					}
 				}
 				const executionReady = pendingHistory.length === 0
+				const observedChainId = await client.getChainId()
+				if (observedChainId !== config.network.chain.id) throw new Error(`Read RPC chain mismatch: expected ${config.network.chain.id.toString()}, received ${observedChainId.toString()}`)
 				const block = await client.getBlock()
 				const blockNumber = block.number
 				if (blockNumber === undefined) throw new Error('Latest block is missing its number')
@@ -811,22 +943,34 @@ async function main() {
 				reports.clear()
 				applyLogs(reports, cachedLogs)
 				nextBlock = blockNumber + 1n
-				const pools = await poolsFor(client, config.twapSeconds)
+				const pools = await poolsFor(client, config)
 				if (pools.length === 0) console.log('status=no-liquid-rep-weth-v3-pool')
-				const balances = await loadBalances(client, wallet, pools)
+				const balances = await loadBalances(client, wallet, config, pools)
 				const gasPrice = (block.baseFeePerGas ?? 0n) * 2n + 2n * 10n ** 9n
 				const opportunities: OpportunitySnapshot[] = []
 				const candidates: ExecutionCandidate[] = []
 				for (const report of reports.values()) {
 					if (report.settled) continue
 					try {
-						const evaluated = await inspectReport(client, wallet, config, report.latest, pools, blockNumber, block.timestamp, gasPrice, balances?.raw, executionReady)
+						const reportId = report.latest.helper.reportId.toString()
+						const evaluated = await inspectReport(client, wallet, config, report.latest, pools, blockNumber, block.timestamp, gasPrice, balances?.raw, executionReady, (message, reason) => recordOperation(state, { category: 'decision', details: undefined, level: 'info', message, reason, reportId }))
 						if (evaluated !== undefined) {
 							opportunities.push(evaluated.opportunity)
+							recordOperation(state, {
+								category: 'decision',
+								details: `direction=${evaluated.opportunity.direction} estimatedProfitEth=${evaluated.opportunity.estimatedNetProfitEth}`,
+								level: evaluated.opportunity.decision === 'execution-failed' ? 'error' : 'info',
+								message: `Decision: ${evaluated.opportunity.decision}`,
+								reason: `Profit and inventory gates evaluated for report ${evaluated.opportunity.reportId}`,
+								reportId: evaluated.opportunity.reportId,
+							})
 							if (evaluated.candidate !== undefined) candidates.push(evaluated.candidate)
 						}
 					} catch (error) {
-						console.error(`report=${report.latest.helper.reportId.toString()} skipped=${errorMessage(error)}`)
+						const reportId = report.latest.helper.reportId.toString()
+						const message = errorMessage(error)
+						console.error(`report=${reportId} skipped=${message}`)
+						recordOperation(state, { category: 'decision', details: undefined, level: 'warning', message: 'Report evaluation failed', reason: message, reportId })
 					}
 				}
 				state.activeReportCount = [...reports.values()].filter(report => !report.settled).length
@@ -860,6 +1004,7 @@ async function main() {
 				state.status = 'sleeping'
 				if (state.lastError !== undefined) state.status = 'error'
 				if (state.paused) state.status = 'paused'
+				recordOperation(state, { category: 'scan', details: `${state.activeReportCount.toString()} active reports; ${opportunities.length.toString()} opportunities`, level: state.lastError === undefined ? 'info' : 'warning', message: 'Scan completed', reason: `Block ${blockNumber.toString()}`, reportId: undefined })
 				return config.once
 			},
 			() => Bun.sleep(config.pollMilliseconds),
@@ -868,6 +1013,7 @@ async function main() {
 				const message = errorMessage(error)
 				state.lastError = message
 				state.status = 'error'
+				recordOperation(state, { category: 'scan', details: undefined, level: 'error', message: 'Scan failed', reason: message, reportId: undefined })
 				console.error(`pollFailed=${message}`)
 			},
 		)

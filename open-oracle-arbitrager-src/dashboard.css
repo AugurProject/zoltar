@@ -252,6 +252,12 @@ main {
 	gap: 0;
 }
 
+.balance-empty {
+	padding: 22px 0;
+	color: var(--muted);
+	line-height: 1.5;
+}
+
 .balance-row {
 	display: flex;
 	align-items: baseline;
@@ -326,6 +332,59 @@ textarea {
 	gap: 14px;
 }
 
+.connectivity-grid {
+	display: grid;
+	gap: 14px;
+}
+
+.button-group {
+	display: flex;
+	gap: 10px;
+}
+
+.endpoint-checks {
+	display: grid;
+	gap: 8px;
+	margin-top: 18px;
+}
+
+.endpoint-check {
+	display: grid;
+	grid-template-columns: 70px minmax(0, 1fr) minmax(140px, auto);
+	gap: 12px;
+	align-items: center;
+	padding: 10px 12px;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	background: #0b1017;
+	font-size: 0.72rem;
+}
+
+.endpoint-check strong,
+.log-level {
+	color: var(--accent);
+	text-transform: uppercase;
+}
+
+.endpoint-check[data-status="failed"] strong,
+.log-level[data-level="error"] {
+	color: var(--danger);
+}
+
+.endpoint-check small {
+	color: var(--muted);
+	overflow-wrap: anywhere;
+}
+
+.operation-scroll {
+	max-height: 360px;
+	overflow: auto;
+}
+
+.log-level[data-level="warning"] {
+	color: var(--warning);
+}
+
 .form-actions {
 	justify-content: space-between;
 	margin-top: 18px;
@@ -378,7 +437,8 @@ td {
 .decision[data-decision="insufficient-inventory"],
 .decision[data-decision="history-unavailable"],
 .decision[data-decision="paused"],
-.decision[data-decision="self-report"] {
+.decision[data-decision="self-report"],
+.decision[data-decision="signer-unavailable"] {
 	background: rgb(240 195 107 / 9%);
 	color: var(--warning);
 }
@@ -508,6 +568,19 @@ footer {
 
 	.submission-grid {
 		grid-template-columns: 1fr;
+	}
+
+	.endpoint-check {
+		grid-template-columns: 1fr;
+	}
+
+	.button-group {
+		width: 100%;
+		flex-direction: column;
+	}
+
+	.button-group .button {
+		width: 100%;
 	}
 
 	.form-actions .button {

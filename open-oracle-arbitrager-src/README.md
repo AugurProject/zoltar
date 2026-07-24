@@ -1,21 +1,22 @@
 # OpenOracle arbitrager
 
-The OpenOracle arbitrager monitors active mainnet WETH/REP games, compares their
+The OpenOracle arbitrager monitors active Ethereum WETH/REP games, compares their
 locked exchange against executable Uniswap V3 quotes, and identifies disputes whose
 modeled hedge remains profitable after OpenOracle fees and gas. It includes a local
 operator dashboard for live state, strategy controls, wallet inventory, submitted
 disputes, transaction delivery, and ETH-denominated profit tracking.
 
 Dry-run is the default. The bot cannot submit a transaction unless it is explicitly
-started with both `--execute` and a `PRIVATE_KEY`.
+started with `--execute` and has a signer, supplied either through `PRIVATE_KEY` at
+startup or through the local dashboard when `--ui` is enabled.
 
 ## Requirements
 
 - Bun and this monorepo's frozen dependencies.
-- An Ethereum mainnet RPC endpoint. An archive-capable endpoint is recommended when
+- An RPC endpoint for Ethereum mainnet or Sepolia. An archive-capable endpoint is recommended when
   `--lookback-blocks` reaches beyond the provider's retained log history.
 - The deployed OpenOracle contract address.
-- For execution, a dedicated mainnet key with:
+- For execution, a dedicated key on the selected network with:
   - ETH for approvals and dispute gas.
   - WETH for the token-1 contribution shown in the dashboard.
   - REP for the token-2 contribution shown in the dashboard.
@@ -68,6 +69,35 @@ ETH_RPC_URL=https://your-mainnet-rpc.example \
 Then open `http://127.0.0.1:4173`. Dry-run opportunities are evaluated exactly like
 execution opportunities, but no approvals or disputes are sent.
 
+Every startup and dashboard RPC change calls `eth_chainId`. The bot refuses to start
+or apply a change unless the read RPC and every public-submission RPC report the
+selected network. It also checks the chain before every scan.
+
+## Run on Sepolia
+
+Sepolia uses the canonical Sepolia WETH9, Uniswap V3 factory, and QuoterV2 defaults.
+There is no canonical REP deployment, so the REP and OpenOracle addresses must be
+supplied explicitly:
+
+```bash
+./open-oracle-arbitrager \
+  --network=sepolia \
+  --rpc-url=https://your-sepolia-rpc.example \
+  --public-rpc-url=https://your-sepolia-rpc.example \
+  --rep-address=0xYourSepoliaRep \
+  --open-oracle=0xYourSepoliaOpenOracle \
+  --ui
+```
+
+Only use addresses deployed for the same Sepolia test environment. Override
+`--weth-address`, `--uniswap-factory`, or `--uniswap-quoter` when the test deployment
+uses noncanonical contracts. The selected network cannot be changed in the
+dashboard; restart with a different `--network` so cached reports, transaction
+and contract identities cannot cross networks. The network-specific default history
+paths also isolate records; when overriding `--history-file`, use a different file
+for every network because records do not contain a chain ID and a shared file would
+combine rows and profit totals.
+
 ## Execute disputes
 
 Start an inventory-funded execution process:
@@ -82,9 +112,12 @@ ETH_RPC_URL=https://your-private-mainnet-rpc.example \
 ```
 
 Execution remains fixed for the lifetime of the process. It cannot be enabled from
-the dashboard. The dashboard can pause scanning and adjust strategy or submission
-settings, but restarting the command is required to change between dry-run and
-execution.
+the dashboard. When `--execute --ui` starts without `PRIVATE_KEY`, it remains locked
+until a key is set in the local dashboard. The key is retained only in process
+memory and never returned by the API. Signer set/clear changes apply at the next
+unpaused scan boundary; they do not interrupt the current scan or confirmation wait,
+and clearing a signer cannot cancel a transaction already broadcast. Restarting the
+command is required to change between dry-run and execution.
 
 Public mempool delivery is the default. To send the same signed transaction to
 multiple private relays instead:
@@ -103,6 +136,8 @@ ETH_RPC_URL=https://your-mainnet-rpc.example \
 
 Choose **Public mempool** or **Private relays** in the dashboard to change delivery
 for the next scan. Private mode requires at least one relay and supports up to eight.
+Startup and dashboard updates probe every private relay with `eth_chainId` and reject
+the configuration when a relay is unreachable or reports the wrong selected network.
 Relay URLs are process memory only and are not written to the history file. URLs may
 use HTTPS, or loopback HTTP for a locally operated relay; embedded URL credentials,
 query parameters, fragments, and redirects are rejected.
@@ -120,8 +155,8 @@ Before each dispute, the bot:
    OpenOracle state hash.
 9. Estimates gas, fetches the pending nonce, constructs and signs one canonical
    EIP-1559 transaction.
-10. Sends that identical signed payload either to the public RPC or every configured
-    private relay.
+10. Sends that identical signed payload either to every configured public RPC or
+    every configured private relay.
 11. Tracks submission targets and confirmation, waits for a successful receipt, and
     records the mined transaction and ETH profitability calculation locally.
 
@@ -173,6 +208,8 @@ Start with `--ui` and optionally choose another local port:
 The dashboard shows:
 
 - Bot mode, scan status, latest block, errors, and active-report count.
+- Selected network, expected chain ID, read/public RPC controls, and endpoint checks.
+- A local signer control, connected address, and its ETH/WETH/REP balances.
 - ETH, WETH, REP, executable REP value, and estimated portfolio value.
 - Current opportunities, exact inventory requirements, deadline window, direction,
   pool, and decision.
@@ -181,21 +218,27 @@ The dashboard shows:
   records; the summary still includes every valid unique record in the history file.
 - Signed transaction status, public/private delivery, accepted and failed relay
   targets, mined replacement hash, actual gas, and ETH profit estimates.
-- Runtime strategy and submission controls plus pause/resume.
+- Runtime strategy, RPC fanout, relay submission controls, and pause/resume.
+- A 500-entry in-memory operations journal showing scans, decisions, configuration
+  changes, transaction states, and the reason for each action.
 
-The UI is intentionally local-only and does not receive the private key. Mutable API
-requests require same-origin JSON and the fixed loopback host authority. Do not
+The UI is intentionally local-only. A private key entered there is sent only to the
+loopback bot process over HTTP, immediately cleared from the input, never echoed by
+the API, and never persisted. Mutable API requests require same-origin JSON and the
+fixed loopback host authority. Do not
 reverse-proxy or expose the dashboard to a network without adding authentication and
 transport security.
 
-Pause prevents the next approval or dispute from being broadcast. It cannot cancel a
-transaction already sent to Ethereum; the dashboard explicitly keeps that distinction
-visible.
+Pause is checked between execution stages and again immediately before each approval
+or dispute submission. A submission already started may still finish. Pause cannot
+interrupt confirmation or cancel a transaction already sent to Ethereum; the
+dashboard explicitly keeps those distinctions visible.
 
 ## Profit and history semantics
 
 Successful dispute submissions are appended to
-`.open-oracle-arbitrager/history.jsonl` by default. Override the location with:
+`.open-oracle-arbitrager/history-mainnet.jsonl` or
+`.open-oracle-arbitrager/history-sepolia.jsonl` by default. Override the location with:
 
 ```bash
 ./open-oracle-arbitrager \
@@ -233,8 +276,9 @@ Negative tracked net profit is retained and included in cumulative totals.
 
 ## Transaction delivery and tracking
 
-Public mode calls `eth_sendRawTransaction` on `ETH_RPC_URL`, exposing the signed
-transaction to the public mempool. Private mode calls
+Public mode calls `eth_sendRawTransaction` concurrently on every configured public
+RPC, exposing the identical signed transaction to the public mempool. At least one
+RPC must return the locally computed transaction hash. Private mode calls
 `eth_sendPrivateTransaction` on every configured relay, authenticating each JSON-RPC
 body with `X-Flashbots-Signature` using the execution key. At least one private relay
 must accept the exact expected transaction hash or submission fails closed.
@@ -278,18 +322,26 @@ Other startup-only options:
 
 | Flag | Default | Purpose |
 | --- | ---: | --- |
+| `--network` | `mainnet` | Select `mainnet` or `sepolia`; fixes the expected chain ID and address defaults. |
+| `--rpc-url` | Network public endpoint | Read RPC. Adjustable in the dashboard only after its chain check passes. |
+| `--public-rpc-url` | Read RPC | Public transaction endpoint. Repeat for up to eight; all receive the identical payload. |
+| `--rep-address` | Mainnet REP / required on Sepolia | REP used for game and Uniswap identity checks. |
+| `--weth-address` | Network WETH | Override WETH for a custom test deployment. |
+| `--uniswap-factory` | Network Uniswap V3 factory | Override the factory for a custom test deployment. |
+| `--uniswap-quoter` | Network QuoterV2 | Override the quoter for a custom test deployment. |
 | `--lookback-blocks` | `50000` | Initial event-log search range. Choose a start range that covers every potentially active report. |
 | `--ui-port` | `4173` | Local dashboard port. |
-| `--history-file` | `.open-oracle-arbitrager/history.jsonl` | Persistent confirmed-submission history. |
+| `--history-file` | Network-specific JSONL | Persistent confirmed-submission history. |
 | `--once` | off | Run one scan and exit. Cannot be combined with `--ui`. |
-| `--execute` | off | Enable guarded approval and dispute submission. Requires `PRIVATE_KEY`. |
+| `--execute` | off | Enable guarded approval and dispute submission. Requires a startup `PRIVATE_KEY`, or `--ui` so a signer can be supplied locally. |
 | `--submission-mode` | `public` | `public` submits to the RPC mempool; `private` fans out to configured relays. Adjustable in the dashboard. |
 | `--relay-url` | `https://relay.flashbots.net` | Private relay endpoint. Repeat the flag for up to eight relays; adjustable in the dashboard. |
 
 ## Operational limitations
 
-- Only Ethereum mainnet WETH/REP games and standard Uniswap V3 fee tiers are
-  supported.
+- Ethereum mainnet and Sepolia WETH/REP games using standard Uniswap V3 fee tiers are
+  supported. Sepolia REP and OpenOracle identities are operator-supplied and are not
+  authenticated against a deployment registry.
 - Quoter calls and TWAP checks are filters, not guarantees of inclusion or realized
   execution.
 - The bot does not use a flash swap, settle reports, withdraw OpenOracle balances, or
@@ -314,6 +366,6 @@ Other startup-only options:
 - A process restart does not recover or resume a broadcast but unconfirmed
   transaction. Reconcile the execution account nonce and transaction status before
   restarting execution mode.
-- The current ORACLE-A1 launch analysis concludes that observed REP/WETH executable
-  liquidity is insufficient for deployment. Running this tool does not override that
-  launch gate.
+- The current [ORACLE-A1 launch analysis](../docs/oracle-a1-launch-analysis.html)
+  concludes that observed REP/WETH executable liquidity is insufficient for
+  deployment. Running this tool does not override that launch gate.

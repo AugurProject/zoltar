@@ -113,6 +113,63 @@
 				</section>
 			</div>
 
+			<div class="dashboard-grid">
+				<section class="panel">
+					<div class="section-heading">
+						<div>
+							<p class="eyebrow">Network safety</p>
+							<h2>RPC connectivity</h2>
+						</div>
+						<span id="network-value" class="badge">Unknown network</span>
+					</div>
+					<form id="connectivity-form">
+						<fieldset id="connectivity-fieldset" disabled>
+							<div class="connectivity-grid">
+								<label>
+									<span>Read RPC URL</span>
+									<input id="read-rpc-url" type="url" spellcheck="false" required />
+								</label>
+								<label>
+									<span>Public submission RPC URLs · one per line, up to 8</span>
+									<textarea id="public-rpc-urls" rows="3" spellcheck="false" required></textarea>
+								</label>
+							</div>
+							<div class="form-actions">
+								<span id="connectivity-status" class="muted" aria-live="polite">Every endpoint is checked against the selected chain before it is accepted.</span>
+								<button class="button" type="submit">Check &amp; apply RPCs</button>
+							</div>
+						</fieldset>
+					</form>
+					<div id="endpoint-checks" class="endpoint-checks" aria-label="Endpoint health checks"></div>
+				</section>
+
+				<section class="panel">
+					<div class="section-heading">
+						<div>
+							<p class="eyebrow">Local signer</p>
+							<h2>Execution wallet</h2>
+						</div>
+						<span id="signer-status" class="muted" role="status" aria-live="polite">Locked</span>
+					</div>
+					<form id="signer-form">
+						<fieldset id="signer-fieldset" disabled>
+							<label>
+								<span>Private key · held in process memory only</span>
+								<input id="private-key" type="password" autocomplete="off" aria-describedby="signer-status" placeholder="0x…" spellcheck="false" required />
+							</label>
+							<div class="form-actions">
+								<span class="muted">The key is never returned by the API, stored in history, or written to logs.</span>
+								<div class="button-group">
+									<button id="clear-signer-button" class="button button-secondary" type="button">Clear signer</button>
+									<button id="set-signer-button" class="button" type="submit" disabled>Set signer</button>
+								</div>
+							</div>
+						</fieldset>
+					</form>
+					<p class="section-note">Changing a signer or RPC is queued at a scan boundary so an in-flight scan cannot mix providers or accounts.</p>
+				</section>
+			</div>
+
 			<section class="panel submission-panel">
 				<div class="section-heading">
 					<div>
@@ -158,6 +215,7 @@
 							<tr>
 								<th>Report</th>
 								<th>Decision</th>
+								<th>Reason</th>
 								<th>Direction</th>
 								<th>Estimated net (ETH)</th>
 								<th>Required WETH</th>
@@ -170,6 +228,33 @@
 					</table>
 				</div>
 				<p id="opportunities-empty" class="empty-state">No eligible WETH/REP report was found in the latest scan.</p>
+			</section>
+
+			<section class="panel">
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Decision journal</p>
+						<h2>Operations log</h2>
+					</div>
+					<span id="operation-count" class="muted">0 entries</span>
+				</div>
+				<div class="table-scroll operation-scroll" tabindex="0" aria-label="Operations log table">
+					<table>
+						<thead>
+							<tr>
+								<th>Time</th>
+								<th>Level</th>
+								<th>Category</th>
+								<th>Report</th>
+								<th>Operation</th>
+								<th>Why</th>
+								<th>Details</th>
+							</tr>
+						</thead>
+						<tbody id="operations-body"></tbody>
+					</table>
+				</div>
+				<p id="operations-empty" class="empty-state">No operation has been recorded yet.</p>
 			</section>
 
 			<section class="panel">
@@ -234,7 +319,7 @@
 
 		<footer>
 			<span id="oracle-address" class="mono">Oracle —</span>
-			<span>Private keys never leave the bot process.</span>
+			<span id="chain-safety">Waiting for chain verification.</span>
 		</footer>
 		<script type="module" src="/dashboard.js"></script>
 	</body>

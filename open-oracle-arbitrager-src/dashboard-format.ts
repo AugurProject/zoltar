@@ -23,6 +23,20 @@ export function exactAmount(value: string | undefined, symbol: string) {
 	return value === undefined ? 'Unavailable' : `${value} ${symbol}`
 }
 
+export function requiredSignerPrivateKey(value: string) {
+	const privateKey = value.trim()
+	if (privateKey === '') throw new Error('Enter a private key before setting the signer.')
+	return privateKey
+}
+
+export function signerControlState(parameters: { hasQueuedSigner: boolean; hasWallet: boolean; privateKey: string; requestPending: boolean }) {
+	return {
+		clearDisabled: parameters.requestPending || (!parameters.hasWallet && !parameters.hasQueuedSigner),
+		inputDisabled: parameters.requestPending,
+		setDisabled: parameters.requestPending || parameters.privateKey.trim() === '',
+	}
+}
+
 export function sumSignedDecimals(values: readonly string[]) {
 	return decimalFromScaled(values.reduce((total, value) => total + parseSignedDecimal(value), 0n))
 }

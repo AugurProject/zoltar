@@ -1,6 +1,18 @@
 import { describe, expect, test } from 'bun:test'
 import type { Address, Hex, TransactionReceipt, TransactionReplacement } from '@zoltar/shared/ethereum'
-import { attemptConfirmationRecovery, executionFailureDecision, flushExecutionHistory, opportunityDecision, recordConfirmedExecution, retryPrivateSubmissionWithinWindow, runFundedExecution, selectBestExecution, signAndSubmitOpenOracleDispute, waitForResolvedTransaction } from './execution-orchestration.js'
+import {
+	attemptConfirmationRecovery,
+	executionFailureDecision,
+	flushExecutionHistory,
+	guardedTransactionSubmission,
+	opportunityDecision,
+	recordConfirmedExecution,
+	retryPrivateSubmissionWithinWindow,
+	runFundedExecution,
+	selectBestExecution,
+	signAndSubmitOpenOracleDispute,
+	waitForResolvedTransaction,
+} from './execution-orchestration.js'
 import type { ExecutionRecord } from './operator-state.js'
 import { assertSubmissionWindowOpen } from './transaction-submission.js'
 
@@ -92,6 +104,34 @@ describe('funded execution orchestration', () => {
 			if (expected === undefined) throw new Error('Missing expected pause-boundary call sequence')
 			expect(calls).toEqual(expected)
 		}
+	})
+
+	test('rechecks pause after asynchronous pre-submission work and does not call the sender', async () => {
+		let paused = false
+		let releasePreparation: (() => void) | undefined
+		let submitted = false
+		const preparation = new Promise<void>(resolve => {
+			releasePreparation = resolve
+		})
+		const submission = guardedTransactionSubmission(
+			() => paused,
+			() => preparation,
+			async () => {
+				submitted = true
+				return 'submitted'
+			},
+		)
+		paused = true
+		if (releasePreparation === undefined) throw new Error('Preparation release was not initialized')
+		releasePreparation()
+		let failure: unknown
+		try {
+			await submission
+		} catch (error) {
+			failure = error
+		}
+		expect(executionFailureDecision(failure)).toBe('paused')
+		expect(submitted).toBe(false)
 	})
 
 	test('preserves an in-flight transaction failure even if pause arrives while it runs', async () => {
@@ -322,5 +362,18 @@ describe('funded execution orchestration', () => {
 				profitable: true,
 			}),
 		).toBe('eligible')
+	})
+
+	test('does not label locked execute mode as economically eligible', () => {
+		expect(
+			opportunityDecision({
+				account: undefined,
+				currentReporter: reporter,
+				execute: true,
+				executionReady: true,
+				hasRequiredInventory: undefined,
+				profitable: true,
+			}),
+		).toBe('signer-unavailable')
 	})
 })

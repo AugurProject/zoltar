@@ -91,6 +91,7 @@ export function assertSubmissionWindowOpen(lastValidBlockNumber: bigint | undefi
 export async function prepareSignedTransaction(parameters: {
 	baseFeePerGas: bigint
 	blockNumber: bigint
+	chainId: number
 	data: Hex
 	from: Address
 	gasEstimate: bigint
@@ -104,7 +105,7 @@ export async function prepareSignedTransaction(parameters: {
 	const gas = parameters.gasEstimate + parameters.gasEstimate / 5n + 10_000n
 	const maxFeePerGas = parameters.baseFeePerGas * 2n + maxPriorityFeePerGas
 	const serializedTransaction = await parameters.signTransaction({
-		chainId: 1,
+		chainId: parameters.chainId,
 		data: parameters.data,
 		gas,
 		maxFeePerGas,
@@ -142,6 +143,10 @@ function targetLabel(value: string) {
 function responseError(response: JsonRpcResponse, status: number) {
 	if (response.error !== undefined) return `RPC ${response.error.code?.toString() ?? 'error'}: ${response.error.message ?? 'Unknown relay error'}`
 	return `Relay returned HTTP ${status.toString()} without a transaction hash`
+}
+
+function rejectionMessage(reason: unknown) {
+	return reason instanceof Error ? reason.message : String(reason)
 }
 
 async function sendPrivateTransaction(parameters: { address: Address; hash: Hex; maxBlockNumber: bigint; relayUrl: string; serializedTransaction: Hex; signMessage: (message: string | Uint8Array) => Promise<Hex>; timeoutMilliseconds: number }) {
@@ -182,18 +187,31 @@ export async function submitSignedTransaction(parameters: {
 	address: Address
 	hash: Hex
 	maxBlockNumber: bigint
-	publicSubmit: (serializedTransaction: Hex) => Promise<Hex>
+	publicRpcUrls: readonly string[]
+	publicSubmit: (rpcUrl: string, serializedTransaction: Hex) => Promise<Hex>
 	relayTimeoutMilliseconds?: number | undefined
 	serializedTransaction: Hex
 	settings: SubmissionSettings
 	signMessage: (message: string | Uint8Array) => Promise<Hex>
 }): Promise<SubmittedTransaction> {
 	if (parameters.settings.mode === 'public') {
-		const returnedHash = await parameters.publicSubmit(parameters.serializedTransaction)
-		if (returnedHash.toLowerCase() !== parameters.hash.toLowerCase()) throw new Error(`Public RPC returned unexpected transaction hash ${returnedHash}`)
+		const settled = await Promise.allSettled(parameters.publicRpcUrls.map(url => parameters.publicSubmit(url, parameters.serializedTransaction)))
+		const acceptedTargets: string[] = []
+		const failedTargets: SubmissionTargetResult[] = []
+		for (const [index, result] of settled.entries()) {
+			const rpcUrl = parameters.publicRpcUrls[index]
+			if (rpcUrl === undefined) throw new Error('Missing public RPC URL for submission result')
+			const target = targetLabel(rpcUrl)
+			if (result.status === 'fulfilled' && result.value.toLowerCase() === parameters.hash.toLowerCase()) acceptedTargets.push(target)
+			else {
+				const error = result.status === 'rejected' ? rejectionMessage(result.reason) : `Public RPC returned unexpected transaction hash ${result.value}`
+				failedTargets.push({ error, target })
+			}
+		}
+		if (acceptedTargets.length === 0) throw new SubmissionFailure(`Every public RPC rejected the transaction: ${failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')}`, failedTargets)
 		return {
-			acceptedTargets: ['public mempool'],
-			failedTargets: [],
+			acceptedTargets,
+			failedTargets,
 			hash: parameters.hash,
 			mode: 'public',
 		}

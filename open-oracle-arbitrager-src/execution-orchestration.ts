@@ -18,6 +18,7 @@ export function executionFailureDecision(error: unknown): OpportunitySnapshot['d
 
 export function opportunityDecision(parameters: { account: Address | undefined; currentReporter: Address; execute: boolean; executionReady: boolean; hasRequiredInventory: boolean | undefined; profitable: boolean }): OpportunitySnapshot['decision'] {
 	if (!parameters.profitable) return 'unprofitable'
+	if (parameters.execute && parameters.account === undefined) return 'signer-unavailable'
 	if (isSelfReport(parameters.account, parameters.currentReporter)) return 'self-report'
 	if (parameters.hasRequiredInventory === false) return 'insufficient-inventory'
 	if (parameters.execute && !parameters.executionReady) return 'history-unavailable'
@@ -57,6 +58,12 @@ export async function waitForResolvedTransaction(hash: Hex, wait: (parameters: {
 export async function guardedExecutionStep<T>(isPaused: () => boolean, action: () => Promise<T>) {
 	if (isPaused()) throw executionPausedError()
 	return action()
+}
+
+export async function guardedTransactionSubmission<T>(isPaused: () => boolean, prepare: () => Promise<unknown>, submit: () => Promise<T>) {
+	await prepare()
+	if (isPaused()) throw executionPausedError()
+	return submit()
 }
 
 export async function signAndSubmitOpenOracleDispute<TSigned, TSubmitted>(quoteBlockNumber: bigint, sign: (lastValidBlockNumber: bigint) => Promise<TSigned>, submit: (signed: TSigned) => Promise<TSubmitted>) {

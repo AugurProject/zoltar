@@ -1,12 +1,15 @@
 import { join } from 'node:path'
+import type { ConnectivitySettings } from './connectivity.js'
 import type { OperatorSnapshot, StrategySettings } from './operator-state.js'
 import type { SubmissionSettings } from './transaction-submission.js'
 
 type DashboardController = {
 	getSnapshot: () => OperatorSnapshot | Promise<OperatorSnapshot>
 	setPaused: (paused: boolean) => void
+	updateConnectivity: (value: unknown) => ConnectivitySettings | Promise<ConnectivitySettings>
+	updateSigner: (value: unknown) => { wallet: string | undefined } | Promise<{ wallet: string | undefined }>
 	updateStrategy: (value: unknown) => StrategySettings
-	updateSubmission: (value: unknown) => SubmissionSettings
+	updateSubmission: (value: unknown) => SubmissionSettings | Promise<SubmissionSettings>
 }
 
 function json(value: unknown, status = 200) {
@@ -84,7 +87,23 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			if (request.method === 'PUT' && url.pathname === '/api/submission') {
 				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
 				try {
-					return json({ submission: controller.updateSubmission(await requireJson(request)) })
+					return json({ submission: await controller.updateSubmission(await requireJson(request)) })
+				} catch (error) {
+					return json({ error: errorMessage(error) }, 400)
+				}
+			}
+			if (request.method === 'PUT' && url.pathname === '/api/connectivity') {
+				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
+				try {
+					return json({ connectivity: await controller.updateConnectivity(await requireJson(request)) })
+				} catch (error) {
+					return json({ error: errorMessage(error) }, 400)
+				}
+			}
+			if (request.method === 'PUT' && url.pathname === '/api/signer') {
+				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
+				try {
+					return json(await controller.updateSigner(await requireJson(request)))
 				} catch (error) {
 					return json({ error: errorMessage(error) }, 400)
 				}

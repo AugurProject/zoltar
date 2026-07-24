@@ -26,18 +26,32 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 		balances: undefined,
 		blockNumber: '100',
 		executionHistory: [],
+		endpointChecks: [],
 		lastError: undefined,
 		lastPollAt: undefined,
 		opportunities: [],
+		operationLog: [],
 		paused: false,
 		status: 'sleeping',
 		transactionActivity: [],
 	}
 	let submission = validateSubmissionSettings({ mode: 'public', relayUrls: ['https://relay.flashbots.net'] })
+	let connectivity = { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' }
+	let queuedWallet: Address | null | undefined
 	const server = startDashboardServer(0, {
-		getSnapshot: () => operatorSnapshot(state, strategy, submission, { execute: false, openOracle: address, wallet: undefined }),
+		getSnapshot: () => operatorSnapshot(state, strategy, submission, connectivity, { execute: false, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedWallet, wallet: undefined }),
 		setPaused: paused => {
 			state.paused = paused
+		},
+		updateConnectivity: value => {
+			if (typeof value !== 'object' || value === null || !('readRpcUrl' in value) || !('publicRpcUrls' in value) || typeof value.readRpcUrl !== 'string' || !Array.isArray(value.publicRpcUrls)) throw new Error('Invalid test connectivity')
+			connectivity = { publicRpcUrls: value.publicRpcUrls.map(String), readRpcUrl: value.readRpcUrl }
+			return connectivity
+		},
+		updateSigner: value => {
+			const clear = typeof value === 'object' && value !== null && 'privateKey' in value && value['privateKey'] === null
+			queuedWallet = clear ? null : address
+			return { wallet: clear ? undefined : address }
 		},
 		updateSubmission: value => {
 			submission = validateSubmissionSettings(value)
@@ -55,6 +69,10 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(pageSource).toContain('id="pause-button" class="button" type="button" disabled')
 	expect(pageSource).toContain('id="strategy-fieldset" disabled')
 	expect(pageSource).toContain('id="submission-fieldset" disabled')
+	expect(pageSource).toContain('id="connectivity-fieldset" disabled')
+	expect(pageSource).toContain('id="signer-fieldset" disabled')
+	expect(pageSource).toContain('id="signer-status" class="muted" role="status" aria-live="polite"')
+	expect(pageSource).toContain('aria-describedby="signer-status"')
 	const browserScript = await fetch(`${origin}/dashboard.js`)
 	expect(browserScript.headers.get('content-type')).toContain('text/javascript')
 	expect(await browserScript.text()).toContain('setInterval')
@@ -107,6 +125,30 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(submissionUpdate.status).toBe(200)
 	expect(submission.mode).toBe('private')
 	expect(submission.relayUrls).toHaveLength(2)
+	const connectivityUpdate = await fetch(`${origin}/api/connectivity`, {
+		body: JSON.stringify({ publicRpcUrls: ['https://submit.example'], readRpcUrl: 'https://read.example' }),
+		headers: { 'content-type': 'application/json', origin },
+		method: 'PUT',
+	})
+	expect(connectivityUpdate.status).toBe(200)
+	expect(connectivity.readRpcUrl).toBe('https://read.example')
+	const signerUpdate = await fetch(`${origin}/api/signer`, {
+		body: JSON.stringify({ privateKey: 'not returned by test controller' }),
+		headers: { 'content-type': 'application/json', origin },
+		method: 'PUT',
+	})
+	expect(signerUpdate.status).toBe(200)
+	expect(await signerUpdate.json()).toEqual({ wallet: address })
+	const reloadedState = await fetch(`${origin}/api/state`).then(response => response.json())
+	expect(reloadedState).toMatchObject({ queuedWallet: address })
+	const signerClear = await fetch(`${origin}/api/signer`, {
+		body: JSON.stringify({ privateKey: null }),
+		headers: { 'content-type': 'application/json', origin },
+		method: 'PUT',
+	})
+	expect(signerClear.status).toBe(200)
+	const clearReloadedState = await fetch(`${origin}/api/state`).then(response => response.json())
+	expect(clearReloadedState).toMatchObject({ queuedWallet: null })
 })
 
 test('returns a structured unavailable response when the initial state read fails', async () => {
@@ -115,6 +157,12 @@ test('returns a structured unavailable response when the initial state read fail
 			throw new Error('RPC unavailable')
 		},
 		setPaused: () => undefined,
+		updateConnectivity: () => {
+			throw new Error('Connectivity unavailable')
+		},
+		updateSigner: () => {
+			throw new Error('Signer unavailable')
+		},
 		updateSubmission: () => {
 			throw new Error('Submission unavailable')
 		},

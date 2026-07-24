@@ -1,6 +1,7 @@
 import { appendFile, mkdir, open, readFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { Address, Hex } from '@zoltar/shared/ethereum'
+import type { ConnectivitySettings, EndpointCheck, NetworkName } from './connectivity.js'
 import type { SubmissionSettings, SubmissionTargetResult } from './transaction-submission.js'
 
 export type StrategySettings = {
@@ -32,7 +33,7 @@ export type BalanceSnapshot = {
 }
 
 export type OpportunitySnapshot = {
-	decision: 'dry-run-opportunity' | 'eligible' | 'execution-failed' | 'history-unavailable' | 'insufficient-inventory' | 'paused' | 'selected' | 'self-report' | 'submitted' | 'unprofitable'
+	decision: 'dry-run-opportunity' | 'eligible' | 'execution-failed' | 'history-unavailable' | 'insufficient-inventory' | 'paused' | 'selected' | 'self-report' | 'signer-unavailable' | 'submitted' | 'unprofitable'
 	direction: 'buy-rep' | 'sell-rep'
 	estimatedNetProfitWeth: string
 	estimatedNetProfitEth: string
@@ -78,6 +79,16 @@ export type TransactionActivity = {
 	updatedAt: string
 }
 
+export type OperationEntry = {
+	category: 'configuration' | 'decision' | 'scan' | 'transaction'
+	details: string | undefined
+	level: 'error' | 'info' | 'warning'
+	message: string
+	reason: string | undefined
+	reportId: string | undefined
+	timestamp: string
+}
+
 export type OperatorSnapshot = {
 	activeReportCount: number
 	balances: BalanceSnapshot | undefined
@@ -85,15 +96,22 @@ export type OperatorSnapshot = {
 	execute: boolean
 	executionHistory: readonly ExecutionRecord[]
 	executionHistoryRecordCount: number
+	expectedChainId: number
+	explorerUrl: string
+	endpointChecks: readonly EndpointCheck[]
 	lastError: string | undefined
 	lastPollAt: string | undefined
 	mode: 'dry-run' | 'execute'
+	network: NetworkName
 	openOracle: Address
+	operationLog: readonly OperationEntry[]
 	opportunities: readonly OpportunitySnapshot[]
 	paused: boolean
+	queuedWallet: Address | null | undefined
 	settings: StrategySettings
 	status: 'error' | 'paused' | 'scanning' | 'sleeping' | 'starting' | 'stopped'
 	submission: SubmissionSettings
+	connectivity: ConnectivitySettings
 	totalActualGasCostEth: string
 	totalEstimatedNetProfitEth: string
 	totalEstimatedNetProfitWeth: string
@@ -108,12 +126,23 @@ export type OperatorState = {
 	balances: BalanceSnapshot | undefined
 	blockNumber: string | undefined
 	executionHistory: ExecutionRecord[]
+	endpointChecks: EndpointCheck[]
 	lastError: string | undefined
 	lastPollAt: string | undefined
 	opportunities: OpportunitySnapshot[]
+	operationLog: OperationEntry[]
 	paused: boolean
 	status: OperatorSnapshot['status']
 	transactionActivity: TransactionActivity[]
+}
+
+export function recordOperation(state: OperatorState, entry: Omit<OperationEntry, 'timestamp'> & { timestamp?: string | undefined }) {
+	state.operationLog = [{ ...entry, timestamp: entry.timestamp ?? new Date().toISOString() }, ...state.operationLog].slice(0, 500)
+}
+
+export function clearWalletDerivedState(state: OperatorState) {
+	state.balances = undefined
+	state.opportunities = []
 }
 
 const SETTING_LABELS = {
@@ -311,7 +340,13 @@ function sumSignedEth(records: readonly ExecutionRecord[], field: 'trackedNetPro
 	return decimalSignedEth(records.reduce((total, record) => total + parseSignedDecimalEth(record[field]), 0n))
 }
 
-export function operatorSnapshot(state: OperatorState, strategy: MutableStrategy, submission: SubmissionSettings, fixed: { execute: boolean; openOracle: Address; wallet: Address | undefined }): OperatorSnapshot {
+export function operatorSnapshot(
+	state: OperatorState,
+	strategy: MutableStrategy,
+	submission: SubmissionSettings,
+	connectivity: ConnectivitySettings,
+	fixed: { execute: boolean; expectedChainId: number; explorerUrl: string; network: NetworkName; openOracle: Address; queuedWallet: Address | null | undefined; wallet: Address | undefined },
+): OperatorSnapshot {
 	return {
 		activeReportCount: state.activeReportCount,
 		balances: state.balances,
@@ -319,15 +354,22 @@ export function operatorSnapshot(state: OperatorState, strategy: MutableStrategy
 		execute: fixed.execute,
 		executionHistory: state.executionHistory.slice(0, 500),
 		executionHistoryRecordCount: state.executionHistory.length,
+		expectedChainId: fixed.expectedChainId,
+		explorerUrl: fixed.explorerUrl,
+		endpointChecks: state.endpointChecks,
 		lastError: state.lastError,
 		lastPollAt: state.lastPollAt,
 		mode: fixed.execute ? 'execute' : 'dry-run',
+		network: fixed.network,
 		openOracle: fixed.openOracle,
 		opportunities: state.opportunities,
+		operationLog: state.operationLog,
 		paused: state.paused,
+		queuedWallet: fixed.queuedWallet,
 		settings: strategySettings(strategy),
 		status: state.status,
 		submission,
+		connectivity,
 		totalActualGasCostEth: sumDecimalWeth(state.executionHistory, 'actualGasCostEth'),
 		totalEstimatedNetProfitEth: sumDecimalWeth(state.executionHistory, 'estimatedNetProfitWeth'),
 		totalEstimatedNetProfitWeth: sumDecimalWeth(state.executionHistory, 'estimatedNetProfitWeth'),

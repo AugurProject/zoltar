@@ -3,11 +3,13 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Address, Hex } from '@zoltar/shared/ethereum'
-import { appendExecutionHistory, decimalSignedEth, ensureExecutionHistoryWritable, loadExecutionHistory, operatorSnapshot, parseSignedDecimalEth, updateStrategyFromRequest, type ExecutionRecord, type MutableStrategy, type OperatorState } from './operator-state.js'
+import { appendExecutionHistory, clearWalletDerivedState, decimalSignedEth, ensureExecutionHistoryWritable, loadExecutionHistory, operatorSnapshot, parseSignedDecimalEth, updateStrategyFromRequest, type ExecutionRecord, type MutableStrategy, type OperatorState } from './operator-state.js'
 
 const temporaryDirectories: string[] = []
 const address = '0x0000000000000000000000000000000000000001' as Address
 const submission = { mode: 'public', relayUrls: ['https://relay.flashbots.net/'] } as const
+const connectivity = { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' } as const
+const fixed = { execute: false, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedWallet: undefined, wallet: undefined } as const
 
 function strategy(): MutableStrategy {
 	return {
@@ -57,6 +59,41 @@ describe('operator strategy settings', () => {
 		expect(parseSignedDecimalEth('-0.0015')).toBe(-15n * 10n ** 14n)
 		expect(decimalSignedEth(-15n * 10n ** 14n)).toBe('-0.0015')
 	})
+
+	test('clears wallet-derived balances and decisions when the signer identity changes', () => {
+		const state: OperatorState = {
+			activeReportCount: 1,
+			balances: { availableEth: '1', availableRep: '2', availableWeth: '3', repValueWeth: '4', totalValueWeth: '8' },
+			blockNumber: '100',
+			endpointChecks: [],
+			executionHistory: [],
+			lastError: undefined,
+			lastPollAt: undefined,
+			operationLog: [],
+			opportunities: [
+				{
+					decision: 'eligible',
+					direction: 'buy-rep',
+					estimatedNetProfitEth: '1',
+					estimatedNetProfitWeth: '1',
+					hasRequiredInventory: true,
+					pool: address,
+					poolFee: 3_000,
+					reportId: '1',
+					requiredRep: '1',
+					requiredWeth: '1',
+					timeRemaining: '10',
+					windowUnit: 'blocks',
+				},
+			],
+			paused: false,
+			status: 'sleeping',
+			transactionActivity: [],
+		}
+		clearWalletDerivedState(state)
+		expect(state.balances).toBeUndefined()
+		expect(state.opportunities).toEqual([])
+	})
 })
 
 describe('operator execution history', () => {
@@ -89,14 +126,16 @@ describe('operator execution history', () => {
 			balances: undefined,
 			blockNumber: undefined,
 			executionHistory: history,
+			endpointChecks: [],
 			lastError: undefined,
 			lastPollAt: undefined,
 			opportunities: [],
+			operationLog: [],
 			paused: false,
 			status: 'sleeping',
 			transactionActivity: [],
 		}
-		const snapshot = operatorSnapshot(state, strategy(), submission, { execute: false, openOracle: address, wallet: undefined })
+		const snapshot = operatorSnapshot(state, strategy(), submission, connectivity, fixed)
 		expect(snapshot.totalEstimatedNetProfitWeth).toBe('0.05')
 		expect(snapshot.totalActualGasCostEth).toBe('0.002')
 	})
@@ -138,14 +177,16 @@ describe('operator execution history', () => {
 			balances: undefined,
 			blockNumber: undefined,
 			executionHistory: history,
+			endpointChecks: [],
 			lastError: undefined,
 			lastPollAt: undefined,
 			opportunities: [],
+			operationLog: [],
 			paused: false,
 			status: 'sleeping',
 			transactionActivity: [],
 		}
-		const snapshot = operatorSnapshot(state, strategy(), submission, { execute: true, openOracle: address, wallet: address })
+		const snapshot = operatorSnapshot(state, strategy(), submission, connectivity, { ...fixed, execute: true, wallet: address })
 		expect(snapshot.executionHistory).toHaveLength(500)
 		expect(snapshot.executionHistoryRecordCount).toBe(501)
 		expect(snapshot.totalEstimatedNetProfitWeth).toBe('1.002')
