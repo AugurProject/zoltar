@@ -397,7 +397,7 @@ void describe('OpenOracleSection', () => {
 			await Promise.resolve()
 			await Promise.resolve()
 			const documentQueries = within(document.body)
-			expect(documentQueries.getByText('Report summary service unavailable')).not.toBeNull()
+			expect(documentQueries.getByRole('alert', { name: /Report summary service unavailable.*Retry/ })).not.toBeNull()
 			expect(documentQueries.queryByText('No Open Oracle reports found.')).toBeNull()
 
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Retry' }))
@@ -431,7 +431,7 @@ void describe('OpenOracleSection', () => {
 				await Promise.resolve()
 			})
 			const documentQueries = within(document.body)
-			expect(documentQueries.getByText('No Open Oracle reports found.')).not.toBeNull()
+			expect(documentQueries.getByRole('status', { name: 'No Open Oracle reports found.' })).not.toBeNull()
 
 			await act(() => {
 				render(<OpenOracleSection {...createOpenOracleSectionProps({ environmentRefreshKey: 1, loadBrowseReports })} />, rendered.container)
@@ -453,7 +453,7 @@ void describe('OpenOracleSection', () => {
 				thirdEnvironmentLoad.resolve(createEmptyBrowsePage())
 				await thirdEnvironmentLoad.promise
 			})
-			expect(documentQueries.getByText('No Open Oracle reports found.')).not.toBeNull()
+			expect(documentQueries.getByRole('status', { name: 'No Open Oracle reports found.' })).not.toBeNull()
 			expect(browseLoadAttempts).toBe(3)
 		} finally {
 			await rendered.cleanup()

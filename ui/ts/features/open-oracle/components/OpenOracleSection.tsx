@@ -921,6 +921,7 @@ export function OpenOracleSection({
 							if (browseLoadError !== undefined)
 								return (
 									<StateHint
+										announcement='assertive'
 										actions={
 											<button className='secondary' type='button' onClick={() => setBrowseReloadKey(current => current + 1)}>
 												{openOracleCopy.retryReports}
@@ -935,8 +936,8 @@ export function OpenOracleSection({
 									/>
 								)
 							if (currentBrowsePage === undefined) return undefined
-							if (currentBrowsePage.reports.length === 0) return <StateHint presentation={{ key: 'empty', badgeLabel: commonCopy.none, badgeTone: 'muted', detail: openOracleCopy.oracleGamesEmpty }} />
-							if (filteredBrowseReports.length === 0) return <StateHint presentation={{ key: 'empty', badgeLabel: commonCopy.noMatches, badgeTone: 'muted', detail: openOracleCopy.reportFiltersEmpty }} />
+							if (currentBrowsePage.reports.length === 0) return <StateHint announcement='polite' presentation={{ key: 'empty', badgeLabel: commonCopy.none, badgeTone: 'muted', detail: openOracleCopy.oracleGamesEmpty }} />
+							if (filteredBrowseReports.length === 0) return <StateHint announcement='polite' presentation={{ key: 'empty', badgeLabel: commonCopy.noMatches, badgeTone: 'muted', detail: openOracleCopy.reportFiltersEmpty }} />
 
 							return <div className='entity-card-list'>{filteredBrowseReports.map(report => renderReportSummaryCard(report, reportId => void openBrowseReport(reportId)))}</div>
 						})()}
