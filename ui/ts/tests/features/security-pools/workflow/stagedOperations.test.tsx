@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { ChainTimestampContext } from '../../../../lib/chainTimestamp.js'
 import { createStagedOperationsFixture, useSecurityPoolWorkflowSectionTestDom } from './fixture'
 
 describe('SecurityPoolWorkflowSection: staged operations', () => {
@@ -194,6 +195,35 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 			expect(dialogQueries.getByRole('heading', { name: 'REP Withdrawal Queued' })).not.toBeNull()
 			expect(dialogQueries.getByText('#11')).not.toBeNull()
 			expect(dialogQueries.getByText('The settlement auto-execute list is full. Execute this staged operation manually with its ID after a valid oracle price is available.')).not.toBeNull()
+		})
+
+		test('blocks staged-operation execution at the exact oracle expiry boundary', async () => {
+			const selectedPoolAddress = zeroAddress
+			const renderedComponent = await renderIntoDocument(
+				<ChainTimestampContext.Provider value={400n}>
+					<SecurityPoolWorkflowSection
+						{...createSecurityPoolWorkflowProps({
+							accountState: createAccountState(),
+							poolOracleManagerDetails: createOracleManagerDetails({
+								isPriceValid: true,
+								lastSettlementTimestamp: 100n,
+								pendingOperationSlotId: 6n,
+								priceValidUntilTimestamp: 400n,
+							}),
+							securityPoolAddress: selectedPoolAddress,
+							securityPools: [createSelectedPool({ securityPoolAddress: selectedPoolAddress })],
+							selectedPoolView: 'staged-operations',
+						})}
+						showHeader={false}
+					/>
+				</ChainTimestampContext.Provider>,
+			)
+			setCleanup(renderedComponent.cleanup)
+
+			const executeButton = within(document.body).getByRole('button', { name: 'Execute Staged Operation' })
+			if (!(executeButton instanceof HTMLButtonElement)) throw new Error('Expected Execute Staged Operation button')
+			expect(executeButton.disabled).toBe(true)
+			expect(document.body.textContent).toContain('Wait for a valid oracle price before executing a staged operation.')
 		})
 
 		test('shows immediate execution when a withdraw uses an already valid oracle price', async () => {

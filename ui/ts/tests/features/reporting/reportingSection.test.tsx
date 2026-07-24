@@ -440,7 +440,7 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes('Market finalized as Yes.')).toBe(true)
+		expect(document.body.textContent?.includes('Question finalized as Yes.')).toBe(true)
 	})
 
 	test('does not show resolved state before an own-fork child pool becomes operational', async () => {
@@ -460,7 +460,7 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('heading', { name: 'Resolved' })).toBeNull()
-		expect(document.body.textContent?.includes('Market finalized as Yes.')).toBe(false)
+		expect(document.body.textContent?.includes('Question finalized as Yes.')).toBe(false)
 	})
 
 	test('does not render inline button-local reporting feedback when no reporting result is present', async () => {
@@ -539,8 +539,35 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Report No', 'Connect a wallet before reporting on a market.')
+		expectTransactionButtonDisabled(document.body, 'Report No', 'Connect a wallet before reporting on a question.')
 		expect(document.body.querySelector('button[title="Connect a wallet before settling escalation deposits."]')).toBeNull()
+	})
+
+	test('blocks stale-price submission and links to the pool oracle recovery view', async () => {
+		let openOracleCalls = 0
+		const reason = "The pool's oracle price expired. Request a new price in Open Oracle, then retry."
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					onOpenPriceOracle: () => {
+						openOracleCalls += 1
+					},
+					reportActionGuardMessage: reason,
+					reportingForm: createReportingForm({
+						reportAmount: '1',
+						selectedOutcome: 'no',
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Report No', 'A current pool oracle price is required before reporting.')
+		expect(within(document.body).getByRole('status').textContent).toContain(reason)
+		expect(document.body.textContent?.match(new RegExp(reason.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) ?? []).toHaveLength(1)
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Open Oracle' }))
+		expect(openOracleCalls).toBe(1)
 	})
 
 	test('shows the selected side details after an explicit outcome choice', async () => {
@@ -833,7 +860,7 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Resolved' })).not.toBeNull()
-		expect(document.body.textContent?.includes('Market finalized as Yes.')).toBe(true)
+		expect(document.body.textContent?.includes('Question finalized as Yes.')).toBe(true)
 		expect(document.body.textContent?.includes('Review any remaining deposits below.')).toBe(false)
 	})
 
@@ -854,7 +881,7 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('heading', { name: 'Resolved' })).toBeNull()
-		expect(document.body.textContent?.includes('Market finalized as Yes.')).toBe(false)
+		expect(document.body.textContent?.includes('Question finalized as Yes.')).toBe(false)
 	})
 
 	test('disables reporting after the escalation timer ends', async () => {
@@ -1075,7 +1102,7 @@ describe('ReportingSection', () => {
 
 		expect(document.body.textContent?.includes('Reporting is open. Select an outcome side below to enable reporting.')).toBe(false)
 		expect(document.body.textContent?.includes('Select an outcome side above to enable reporting.')).toBe(true)
-		expectTransactionButtonDisabled(document.body, 'Report On Selected Side', 'Select an outcome side before reporting on a market.')
+		expectTransactionButtonDisabled(document.body, 'Report On Selected Side', 'Select an outcome side before reporting on a question.')
 	})
 
 	test('disables report submission for a pre-start amount below the first-report minimum', async () => {

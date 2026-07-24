@@ -11,6 +11,7 @@ import {
 	getSecurityVaultWithdrawableRepAmount,
 	getSelectedVaultAddress,
 	hasValidSecurityVaultOraclePrice,
+	isOracleManagerPriceUsable,
 	isSecurityVaultDepositBelowMinimum,
 	isSelectedVaultOwnedByAccount,
 	MIN_SECURITY_VAULT_REP_DEPOSIT,
@@ -130,10 +131,13 @@ void describe('security vault helpers', () => {
 		const otherManagerAddress = getAddress('0x00000000000000000000000000000000000000d2')
 		const validOracleManagerDetails = {
 			isPriceValid: true,
+			lastSettlementTimestamp: 100n,
 			managerAddress,
+			priceValidUntilTimestamp: 400n,
 		}
 
-		expect(hasValidSecurityVaultOraclePrice(managerAddress, validOracleManagerDetails)).toBe(true)
+		expect(hasValidSecurityVaultOraclePrice(managerAddress, validOracleManagerDetails, 399n)).toBe(true)
+		expect(hasValidSecurityVaultOraclePrice(managerAddress, validOracleManagerDetails, 400n)).toBe(false)
 		expect(hasValidSecurityVaultOraclePrice(managerAddress, { ...validOracleManagerDetails, isPriceValid: false })).toBe(false)
 		expect(hasValidSecurityVaultOraclePrice(managerAddress, { ...validOracleManagerDetails, managerAddress: otherManagerAddress })).toBe(false)
 		expect(hasValidSecurityVaultOraclePrice(undefined, validOracleManagerDetails)).toBe(false)
@@ -144,6 +148,18 @@ void describe('security vault helpers', () => {
 		expect(getOracleManagerPriceValidUntilTimestamp(undefined)).toBe(undefined)
 		expect(getOracleManagerPriceValidUntilTimestamp(0n)).toBe(undefined)
 		expect(getOracleManagerPriceValidUntilTimestamp(15n)).toBe(15n + ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS)
+	})
+
+	void test('treats a loaded oracle validity flag as expired at the shared time boundary', () => {
+		const details = {
+			isPriceValid: true,
+			lastSettlementTimestamp: 100n,
+			priceValidUntilTimestamp: 400n,
+		}
+		expect(isOracleManagerPriceUsable(details)).toBe(true)
+		expect(isOracleManagerPriceUsable(details, 399n)).toBe(true)
+		expect(isOracleManagerPriceUsable(details, 400n)).toBe(false)
+		expect(isOracleManagerPriceUsable({ ...details, isPriceValid: false }, 399n)).toBe(false)
 	})
 
 	void test('caps max security bond allowance by both vault backing and remaining pool backing', () => {

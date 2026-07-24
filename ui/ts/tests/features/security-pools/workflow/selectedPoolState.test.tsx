@@ -302,6 +302,51 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.getAllByText('Escrowed REP').length).toBeGreaterThan(0)
 	})
 
+	test('keeps directory liquidation review available when the oracle price is stale', async () => {
+		const liquidationRequests: Array<{ managerAddress: string; securityPoolAddress: string; vaultAddress: string }> = []
+		const selectedPoolAddress = getAddress('0x00000000000000000000000000000000000000a4')
+		const vaultAddress = getAddress('0x00000000000000000000000000000000000000a5')
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					checkedSecurityPoolAddress: selectedPoolAddress,
+					onOpenLiquidationModal: (managerAddress, securityPoolAddress, nextVaultAddress) => {
+						liquidationRequests.push({ managerAddress, securityPoolAddress, vaultAddress: nextVaultAddress })
+					},
+					poolOracleManagerDetails: createOracleManagerDetails({
+						isPriceValid: false,
+						managerAddress: zeroAddress,
+					}),
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [
+						createSelectedPool({
+							managerAddress: zeroAddress,
+							securityPoolAddress: selectedPoolAddress,
+							vaults: [createSecurityPoolVaultSummary({ vaultAddress })],
+						}),
+					],
+					selectedPoolView: 'vaults',
+				})}
+				showHeader={false}
+			/>,
+		)
+		setCleanup(renderedComponent.cleanup)
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Directory' }))
+		})
+		const reviewLiquidationButton = documentQueries.getByRole('button', { name: 'Review Liquidation' })
+		if (!(reviewLiquidationButton instanceof HTMLButtonElement)) throw new Error('Expected Review Liquidation button')
+		expect(reviewLiquidationButton.disabled).toBe(false)
+
+		await act(() => {
+			fireEvent.click(reviewLiquidationButton)
+		})
+
+		expect(liquidationRequests).toEqual([{ managerAddress: zeroAddress, securityPoolAddress: selectedPoolAddress, vaultAddress }])
+	})
+
 	test('shows a parent-pool metric for child pools in the selected summary', async () => {
 		const parentPoolAddress = getAddress('0x0000000000000000000000000000000000000200')
 		const parentPool = createSelectedPool({

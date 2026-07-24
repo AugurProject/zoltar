@@ -25,6 +25,51 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		createSecurityPoolWorkflowProps,
 	} = fixture
 
+	const createLoadedReportingProps = (questionOutcome: 'none' | 'yes' = 'none') =>
+		createReportingProps({
+			reportingDetails: {
+				activationTime: 1n,
+				bindingCapital: 5n,
+				completeSetCollateralAmount: 1n,
+				currentRequiredBond: 2n,
+				currentTime: 100n,
+				escalationEndTime: 500n,
+				escalationGameAddress: zeroAddress,
+				forkThreshold: 10n,
+				hasReachedNonDecision: false,
+				marketDetails: createMarketDetails({ endTime: 0n }),
+				nonDecisionThreshold: 20n,
+				questionOutcome,
+				securityPoolAddress: zeroAddress,
+				sides: [
+					{ balance: 1n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+					{ balance: 5n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+					{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+				],
+				startBond: 1n,
+				status: 'active',
+				systemState: 'operational',
+				totalCost: 2n,
+				universeId: 1n,
+				settlementState: 'locked',
+				parentWithdrawalEnabled: false,
+				viewerVaultAvailableEscalationRep: 10n,
+				viewerVaultExists: true,
+				viewerVaultEscrowedRep: 0n,
+				viewerVaultRepDepositShare: 10n,
+			},
+			reportingForm: {
+				reportAmount: '0.000000000000000001',
+				securityPoolAddress: zeroAddress,
+				selectedOutcome: 'no',
+				selectedWithdrawDepositIndexesByOutcome: {
+					invalid: [],
+					yes: [],
+					no: [],
+				},
+			},
+		})
+
 	test('hides the truth auction metric when the selected pool has no truth auction address', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
@@ -93,6 +138,10 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 				<SecurityPoolWorkflowSection
 					{...createSecurityPoolWorkflowProps({
 						checkedSecurityPoolAddress: zeroAddress,
+						poolOracleManagerDetails: createOracleManagerDetails({
+							isPriceValid: false,
+							lastSettlementTimestamp: 1n,
+						}),
 						reporting: createReportingProps({
 							reportingDetails: {
 								activationTime: 1_699_999_000n,
@@ -141,6 +190,69 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		if (!(reportButton instanceof HTMLButtonElement)) throw new Error('Expected report button')
 		expect(reportButton.disabled).toBe(true)
 		expect(reportButton.title).toBe('This pool is in truth auction. Reporting actions unlock once the pool becomes operational.')
+		expect(document.body.textContent).not.toContain("The pool's oracle price expired.")
+	})
+
+	test('allows reporting with a stale oracle price when the pool has no security bond allowance', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={100n}>
+				<SecurityPoolWorkflowSection
+					{...createSecurityPoolWorkflowProps({
+						checkedSecurityPoolAddress: zeroAddress,
+						poolOracleManagerDetails: createOracleManagerDetails({
+							isPriceValid: false,
+							lastSettlementTimestamp: 1n,
+						}),
+						reporting: createLoadedReportingProps(),
+						securityPoolAddress: zeroAddress,
+						securityPools: [
+							createSelectedPool({
+								marketDetails: createMarketDetails({ endTime: 0n }),
+								totalSecurityBondAllowance: 0n,
+							}),
+						],
+						selectedPoolView: 'reporting',
+					})}
+					showHeader={false}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		setCleanup(renderedComponent.cleanup)
+
+		const reportButton = within(document.body).getByRole('button', { name: 'Report No' })
+		if (!(reportButton instanceof HTMLButtonElement)) throw new Error('Expected report button')
+		expect(reportButton.disabled).toBe(false)
+		expect(document.body.textContent).not.toContain("The pool's oracle price expired.")
+	})
+
+	test('preserves the finalized reporting blocker instead of stale-price recovery', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={100n}>
+				<SecurityPoolWorkflowSection
+					{...createSecurityPoolWorkflowProps({
+						checkedSecurityPoolAddress: zeroAddress,
+						poolOracleManagerDetails: createOracleManagerDetails({
+							isPriceValid: false,
+							lastSettlementTimestamp: 1n,
+						}),
+						reporting: createLoadedReportingProps('yes'),
+						securityPoolAddress: zeroAddress,
+						securityPools: [
+							createSelectedPool({
+								marketDetails: createMarketDetails({ endTime: 0n }),
+								questionOutcome: 'yes',
+							}),
+						],
+						selectedPoolView: 'reporting',
+					})}
+					showHeader={false}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		setCleanup(renderedComponent.cleanup)
+
+		expectTransactionButtonDisabled(document.body, 'Report No', 'This pool is already finalized.')
+		expect(document.body.textContent).not.toContain("The pool's oracle price expired.")
 	})
 
 	test('uses the shared chain timestamp context for oracle expiry text', async () => {
@@ -505,6 +617,37 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		setCleanup(renderedComponent.cleanup)
 
 		expectTransactionButtonDisabled(document.body, 'Request New Price', 'The current oracle price is still valid.')
+	})
+
+	test('enables Request New Price when the shared chain time reaches a loaded price expiry', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={1000n}>
+				<SecurityPoolWorkflowSection
+					{...createSecurityPoolWorkflowProps({
+						accountState: createAccountState({ ethBalance: 100n * 10n ** 18n }),
+						checkedSecurityPoolAddress: zeroAddress,
+						poolOracleManagerDetails: createOracleManagerDetails({
+							isPriceValid: true,
+							lastSettlementTimestamp: 700n,
+							pendingReportId: 0n,
+							priceValidUntilTimestamp: 1000n,
+							requestPriceEthCost: 1n,
+						}),
+						securityPoolAddress: zeroAddress,
+						securityPools: [createSelectedPool()],
+						selectedPoolView: 'price-oracle',
+					})}
+					showHeader={false}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		setCleanup(renderedComponent.cleanup)
+
+		const requestButton = within(document.body).getByRole('button', { name: 'Request New Price' })
+		if (!(requestButton instanceof HTMLButtonElement)) throw new Error('Expected Request New Price button')
+		expect(requestButton.disabled).toBe(false)
+		expect(document.body.textContent).toContain('(expired less than a minute ago)')
+		expect(document.body.textContent).not.toContain('The current oracle price is still valid.')
 	})
 
 	test('uses the lifted selected pool view state and reports tab changes through the shared setter', async () => {

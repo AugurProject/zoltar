@@ -30,10 +30,10 @@ export function getReportingReportGuardMessage({
 	viewerVaultAvailableEscalationRep: bigint | undefined
 	viewerVaultExists: boolean
 }) {
-	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before reporting on a market.' })
+	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before reporting on a question.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (reportingStatus === 'missing') return 'Loading reporting details.'
-	if (selectedOutcome === undefined) return 'Select an outcome side before reporting on a market.'
+	if (selectedOutcome === undefined) return 'Select an outcome side before reporting on a question.'
 	if (reportAmount.trim() === '') return 'Enter a report amount greater than zero.'
 	if (selectedAmount === undefined || selectedAmount <= 0n) return 'Enter a valid report amount greater than zero.'
 	if (contributionPreviewReason !== undefined) return contributionPreviewReason

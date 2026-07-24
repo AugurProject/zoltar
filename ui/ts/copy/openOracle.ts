@@ -33,6 +33,8 @@ export const formatCurrentAmount2Label = (tokenSymbol: string) => `Current Amoun
 export const formatTokenPairSuffix = (token1Symbol: string, token2Symbol: string) => `${token1Symbol} / ${token2Symbol}`
 export const formatReportBrowseTitle = (token1Symbol: string, token2Symbol: string, reportId: string) => `${token1Symbol} / ${token2Symbol} · Report #${reportId}`
 export const createAnother = 'Create Another'
+export const createReport = 'Create Report'
+export const reportCreated = 'Report Created'
 export const createStandaloneOracleGame = 'Create Standalone Oracle Report'
 export const creating = 'Creating…'
 export const createSuccess = 'Report created'

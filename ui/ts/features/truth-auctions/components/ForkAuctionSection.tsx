@@ -1697,8 +1697,8 @@ export function ForkAuctionSection({
 							{truthAuctionEndedNotice}
 							{truthAuctionHero}
 							<ReadOnlyDetailAccordion title={forkAuctionCopy.marketDepth}>{truthAuctionMarketViewSection}</ReadOnlyDetailAccordion>
-							{auctionWideBidsSection}
 							{renderSubmitBidSection()}
+							{auctionWideBidsSection}
 							{viewerTruthAuctionBidsSection}
 						</fieldset>
 					)
@@ -1731,8 +1731,8 @@ export function ForkAuctionSection({
 							</SectionBlock>
 						)}
 
-						{auctionWideBidsStatusSection}
 						{renderSubmitBidSection()}
+						{auctionWideBidsStatusSection}
 					</fieldset>
 				)
 			}

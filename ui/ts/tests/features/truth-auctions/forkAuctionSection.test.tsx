@@ -1012,7 +1012,7 @@ describe('ForkAuctionSection', () => {
 		expect(truthAuctionCard.querySelector('.fork-workflow-summary')).not.toBeNull()
 	})
 
-	test('shows current auction bids before the submit bid form', async () => {
+	test('keeps the submit bid form before the current auction bids', async () => {
 		const currentChildPool = createChildPool({
 			securityPoolAddress: '0x00000000000000000000000000000000000000f7',
 			systemState: 'forkTruthAuction',
@@ -1067,7 +1067,7 @@ describe('ForkAuctionSection', () => {
 		const submitBidHeading = documentQueries.getByRole('heading', { name: 'Submit Bid' })
 		expect(documentQueries.getByText('Market Depth')).not.toBeNull()
 		expect(documentQueries.queryByText('Market Depth & Bid History')).toBeNull()
-		expect(currentBidsHeading.compareDocumentPosition(submitBidHeading) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+		expect(submitBidHeading.compareDocumentPosition(currentBidsHeading) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
 		expect(currentBidsHeading.closest('details')).toBeNull()
 	})
 

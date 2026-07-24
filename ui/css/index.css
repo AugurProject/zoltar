@@ -4145,6 +4145,12 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 		top: 0;
 	}
 
+	.open-oracle-report-stack > .sticky-object-context {
+		position: static;
+		top: auto;
+		z-index: auto;
+	}
+
 	.action-readiness-panel-header {
 		grid-template-columns: 1fr;
 	}

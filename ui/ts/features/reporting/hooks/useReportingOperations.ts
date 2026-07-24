@@ -88,7 +88,7 @@ export function useReportingOperations(
 
 	const requireSelectedOutcome = (selectedOutcome: ReportingFormState['selectedOutcome']) => {
 		if (selectedOutcome !== undefined) return selectedOutcome
-		throw new Error('Select an outcome side before reporting on a market.')
+		throw new Error('Select an outcome side before reporting on a question.')
 	}
 	const isReportingSelectionCurrent = (selectionKey: string) => currentReportingSelectionKeyRef.current === selectionKey
 
@@ -138,7 +138,7 @@ export function useReportingOperations(
 					...buildWriteActionConfig(
 						{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState },
 						reportingError,
-						'Connect a wallet before reporting on a market',
+						'Connect a wallet before reporting on a question',
 						createReportingTransactionIntent(actionName, transactionContext),
 					),
 					onRefreshError: (message, hash) => {

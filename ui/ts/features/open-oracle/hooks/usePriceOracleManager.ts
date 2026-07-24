@@ -3,7 +3,6 @@ import type { Address, Hash } from '@zoltar/shared/ethereum'
 import { executeOracleManagerStagedOperation, loadCoordinatorInitialReportFundingRequirement, loadOracleManagerDetails, requestOraclePrice } from '../../../protocol/index.js'
 import { useLoadController } from '../../../hooks/useLoadController.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../../../lib/clients.js'
-import { sameAddress } from '../../../lib/address.js'
 import { getErrorMessage } from '../../../lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../../../lib/actionFeedback.js'
 import type { ActionFeedback } from '../../../lib/actionFeedback.js'
@@ -27,7 +26,32 @@ type UsePriceOracleManagerParameters = {
 	refreshState: WriteOperationsParameters['refreshState']
 }
 
-export function usePriceOracleManager({ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UsePriceOracleManagerParameters) {
+type PriceOracleReadClient = Pick<ReturnType<typeof createConnectedReadClient>, 'getBalance'>
+type PriceOracleProductionWriteClient = ReturnType<typeof createWalletWriteClient>
+type CoordinatorInitialReportFunding = Awaited<ReturnType<typeof loadCoordinatorInitialReportFundingRequirement>>
+
+export type UsePriceOracleManagerDependencies<TWriteClient = PriceOracleProductionWriteClient> = {
+	createConnectedReadClient: () => PriceOracleReadClient
+	createWalletWriteClient: (accountAddress: Address, callbacks?: Parameters<typeof createWalletWriteClient>[1]) => TWriteClient
+	executeOracleManagerStagedOperation: (client: TWriteClient, managerAddress: Address, operationId: bigint) => Promise<OpenOracleActionResult>
+	loadCoordinatorInitialReportFundingRequirement: (client: TWriteClient, managerAddress: Address, walletAddress: Address) => Promise<CoordinatorInitialReportFunding>
+	loadOracleManagerDetails: (managerAddress: Address) => Promise<OracleManagerDetails>
+	requestOraclePrice: (client: TWriteClient, managerAddress: Address, proposedRepPerEthPrice: bigint, requestedInitialWeth: bigint, reviewedRequestEthValue: bigint) => Promise<OpenOracleActionResult>
+}
+
+const defaultUsePriceOracleManagerDependencies: UsePriceOracleManagerDependencies = {
+	createConnectedReadClient,
+	createWalletWriteClient,
+	executeOracleManagerStagedOperation: async (client, managerAddress, operationId) => await executeOracleManagerStagedOperation(client, managerAddress, operationId),
+	loadCoordinatorInitialReportFundingRequirement: async (client, managerAddress, walletAddress) => await loadCoordinatorInitialReportFundingRequirement(client, managerAddress, walletAddress),
+	loadOracleManagerDetails: async managerAddress => await loadOracleManagerDetails(createConnectedReadClient(), managerAddress),
+	requestOraclePrice: async (client, managerAddress, proposedRepPerEthPrice, requestedInitialWeth, reviewedRequestEthValue) => await requestOraclePrice(client, managerAddress, proposedRepPerEthPrice, requestedInitialWeth, reviewedRequestEthValue),
+}
+
+function usePriceOracleManagerWithDependencies<TWriteClient>(
+	{ accountAddress, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UsePriceOracleManagerParameters,
+	dependencies: UsePriceOracleManagerDependencies<TWriteClient>,
+) {
 	const poolOracleManagerLoad = useLoadController()
 	const poolOracleActiveAction = useSignal<OpenOracleActionResult['action'] | undefined>(undefined)
 	const poolOracleFeedback = useSignal<ActionFeedback<OpenOracleActionResult['action']> | undefined>(undefined)
@@ -57,7 +81,7 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 				poolOracleManagerError.value = undefined
 				poolOracleManagerErrorAddress.value = undefined
 			},
-			load: async () => await loadOracleManagerDetails(createConnectedReadClient(), managerAddress),
+			load: async () => await dependencies.loadOracleManagerDetails(managerAddress),
 			onSuccess: details => {
 				poolOracleManagerDetails.value = details
 			},
@@ -100,17 +124,16 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 					},
 				},
 				async walletAddress => {
-					const currentManagerDetails = poolOracleManagerDetails.value
-					if (currentManagerDetails === undefined || !sameAddress(currentManagerDetails.managerAddress, managerAddress)) poolOracleManagerDetails.value = await loadOracleManagerDetails(createConnectedReadClient(), managerAddress)
-					const refreshedManagerDetails = poolOracleManagerDetails.value
+					const refreshedManagerDetails = await dependencies.loadOracleManagerDetails(managerAddress)
+					poolOracleManagerDetails.value = refreshedManagerDetails
 					if (refreshedManagerDetails?.isPriceValid) throw new Error('A fresh oracle price is already available')
 					if ((refreshedManagerDetails?.pendingReportId ?? 0n) > 0n) throw new Error('Oracle price request is already pending')
-					const writeClient = createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted })
-					const initialReportFunding = await loadCoordinatorInitialReportFundingRequirement(writeClient, managerAddress, walletAddress)
+					const writeClient = dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted })
+					const initialReportFunding = await dependencies.loadCoordinatorInitialReportFundingRequirement(writeClient, managerAddress, walletAddress)
 					if (initialReportFunding.currentRepBalance < initialReportFunding.initialReportAmount2) {
 						throw new Error(`Need ${formatCurrencyBalance(initialReportFunding.initialReportAmount2 - initialReportFunding.currentRepBalance)} more REP in this wallet to fund the initial report.`)
 					}
-					const walletEthBalance = await createConnectedReadClient().getBalance({ address: walletAddress })
+					const walletEthBalance = await dependencies.createConnectedReadClient().getBalance({ address: walletAddress })
 					const totalRequiredEth = reviewedRequestEthValue + initialReportFunding.wethShortfall
 					if (walletEthBalance < totalRequiredEth) {
 						throw new Error(`Need ${formatCurrencyBalance(totalRequiredEth - walletEthBalance)} more ETH in this wallet to fund the initial report and request a new price.`)
@@ -121,7 +144,7 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 						walletEthBalance,
 					})
 					if (requestPriceGuardMessage !== undefined) throw new Error(requestPriceGuardMessage)
-					return await requestOraclePrice(writeClient, managerAddress, initialReportFunding.proposedRepPerEthPrice, 0n, reviewedRequestEthValue)
+					return await dependencies.requestOraclePrice(writeClient, managerAddress, initialReportFunding.proposedRepPerEthPrice, 0n, reviewedRequestEthValue)
 				},
 				'Failed to request price',
 				result => {
@@ -166,7 +189,7 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 						poolOracleManagerErrorAddress.value = managerAddress
 					},
 				},
-				async walletAddress => await executeOracleManagerStagedOperation(createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), managerAddress, operationId),
+				async walletAddress => await dependencies.executeOracleManagerStagedOperation(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), managerAddress, operationId),
 				'Failed to execute staged operation',
 				result => {
 					poolPriceOracleResult.value = result
@@ -191,4 +214,11 @@ export function usePriceOracleManager({ accountAddress, onTransactionFailed, onT
 		poolPriceOracleResult: poolPriceOracleResult.value,
 		requestPoolPrice,
 	}
+}
+
+export function usePriceOracleManager(parameters: UsePriceOracleManagerParameters): ReturnType<typeof usePriceOracleManagerWithDependencies<PriceOracleProductionWriteClient>>
+export function usePriceOracleManager<TWriteClient>(parameters: UsePriceOracleManagerParameters, dependencies: UsePriceOracleManagerDependencies<TWriteClient>): ReturnType<typeof usePriceOracleManagerWithDependencies<TWriteClient>>
+export function usePriceOracleManager<TWriteClient>(parameters: UsePriceOracleManagerParameters, dependencies?: UsePriceOracleManagerDependencies<TWriteClient>) {
+	if (dependencies === undefined) return usePriceOracleManagerWithDependencies(parameters, defaultUsePriceOracleManagerDependencies)
+	return usePriceOracleManagerWithDependencies(parameters, dependencies)
 }
