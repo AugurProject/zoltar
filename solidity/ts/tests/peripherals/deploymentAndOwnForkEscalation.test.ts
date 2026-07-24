@@ -2,7 +2,7 @@ import { beforeEach, describe, test } from 'bun:test'
 import { usePeripheralsDeploymentAndOwnForkEscalationFixture, type PeripheralsDeploymentAndOwnForkEscalationFixture } from './fixture'
 import type { Address } from '@zoltar/shared/ethereum'
 import type { WriteClient } from '../../testSupport/simulator/utils/clients'
-import { peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken } from '../../types/contractArtifact'
+import { peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken } from '../../types/contractArtifact'
 import { getQuestionResolution as readQuestionResolution } from '../../testSupport/simulator/utils/contracts/escalationGame'
 import { deployChild, getZoltarForkThreshold } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { finalizeTruthAuction, initiateSecurityPoolFork, startTruthAuction } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
@@ -180,6 +180,16 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		assert.strictEqual(
+			await client.readContract({
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				functionName: 'initialReportPriorityFeeWeiPerGas',
+				address: yesSecurityPool.priceOracleManagerAndOperatorQueuer,
+				args: [],
+			}),
+			10n * 10n ** 9n,
+			'fork children should inherit the origin lineage priority fee',
+		)
 		assert.ok(await contractExists(client, yesSecurityPool.securityPool), 'the inherited child pool should remain deployable beside the independent origin')
 		assert.notStrictEqual(independentOrigin.securityPool, yesSecurityPool.securityPool, 'the independent origin and inherited child must have different pool addresses')
 		assert.notStrictEqual(independentOrigin.shareToken, yesSecurityPool.shareToken, 'each origin lineage must use a separate collateral token namespace')
@@ -202,7 +212,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 				abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 				functionName: 'getOriginId',
 				address: factory,
-				args: [genesisUniverse, questionId, securityMultiplier],
+				args: [genesisUniverse, questionId, securityMultiplier, 10n * 10n ** 9n],
 			}),
 			'the inherited pool family should retain the Genesis origin hash',
 		)
@@ -212,7 +222,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 				abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 				functionName: 'getOriginId',
 				address: factory,
-				args: [yesUniverse, questionId, securityMultiplier],
+				args: [yesUniverse, questionId, securityMultiplier, 10n * 10n ** 9n],
 			}),
 			'the descendant origin should hash its own universe into a distinct family id',
 		)
@@ -315,6 +325,22 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		await deployOriginSecurityPool(client, grandchildUniverse, unrelatedQuestionId, securityMultiplier)
 		const unrelatedPool = getSecurityPoolAddresses(addressString(0n), grandchildUniverse, unrelatedQuestionId, securityMultiplier, grandchildUniverse)
 		assert.ok(await contractExists(client, unrelatedPool.securityPool), 'a genuinely unrelated grandchild market should remain deployable')
+	})
+
+	test('namespaces origin lineages by the configured initial-report priority fee', async () => {
+		const customPriorityFeeWeiPerGas = 20n * 10n ** 9n
+		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, customPriorityFeeWeiPerGas)
+		const customAddresses = getSecurityPoolAddresses(addressString(0n), genesisUniverse, questionId, securityMultiplier, genesisUniverse, customPriorityFeeWeiPerGas)
+		const configuredPriorityFee = await client.readContract({
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'initialReportPriorityFeeWeiPerGas',
+			address: customAddresses.priceOracleManagerAndOperatorQueuer,
+			args: [],
+		})
+
+		assert.strictEqual(configuredPriorityFee, customPriorityFeeWeiPerGas)
+		assert.notStrictEqual(customAddresses.shareToken, securityPoolAddresses.shareToken, 'the priority fee must be part of the origin lineage identity')
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, 0n), /initial report priority fee must be greater than zero/i)
 	})
 
 	test('stateful factory sequences keep one canonical collateral ledger per child token namespace', async () => {

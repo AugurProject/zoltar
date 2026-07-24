@@ -43,6 +43,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		uint248 indexed universeId,
 		uint256 questionId,
 		uint256 securityMultiplier,
+		uint256 initialReportPriorityFeeWeiPerGas,
 		uint256 currentRetentionRate,
 		uint256 completeSetCollateralAmount
 	);
@@ -96,9 +97,11 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	function getOriginId(
 		uint248 originUniverseId,
 		uint256 questionId,
-		uint256 securityMultiplier
+		uint256 securityMultiplier,
+		uint256 initialReportPriorityFeeWeiPerGas
 	) public pure returns (bytes32) {
-		return keccak256(abi.encode(questionId, securityMultiplier, originUniverseId));
+		return
+			keccak256(abi.encode(questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas, originUniverseId));
 	}
 
 	function getPoolId(bytes32 originId, uint248 universeId) public pure returns (bytes32) {
@@ -141,11 +144,21 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		bool hasInheritedForkOutcome =
 			securityPoolHasInheritedForkOutcome[parent] || zoltar.forkQuestionMatches(parent.universeId(), questionId);
 		require(address(parent.shareToken()) == address(shareToken), 'Security pool child must use parent share token');
+		uint256 initialReportPriorityFeeWeiPerGas = parent
+			.priceOracleManagerAndOperatorQueuer()
+			.initialReportPriorityFeeWeiPerGas();
 		_reserveSecurityPool(originId, universeId);
-		bytes32 securityPoolSalt = keccak256(abi.encode(parent, universeId, questionId, securityMultiplier));
+		bytes32 securityPoolSalt = keccak256(
+			abi.encode(parent, universeId, questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas)
+		);
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
 		OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory
-			.deployPriceOracleManagerAndOperatorQueuer(openOracle, reputationToken, securityPoolSalt);
+			.deployPriceOracleManagerAndOperatorQueuer(
+				openOracle,
+				reputationToken,
+				initialReportPriorityFeeWeiPerGas,
+				securityPoolSalt
+			);
 
 		truthAuction = uniformPriceDualCapBatchAuctionFactory.deployUniformPriceDualCapBatchAuction(
 			address(securityPoolForker),
@@ -173,6 +186,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 				universeId,
 				questionId,
 				securityMultiplier,
+				initialReportPriorityFeeWeiPerGas,
 				currentRetentionRate,
 				completeSetCollateralAmount
 			)
@@ -182,10 +196,12 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	function deployOriginSecurityPool(
 		uint248 universeId,
 		uint256 questionId,
-		uint256 securityMultiplier
+		uint256 securityMultiplier,
+		uint256 initialReportPriorityFeeWeiPerGas
 	) external returns (ISecurityPool securityPool) {
 		// Origin pool deployment is intentionally public, so first deployers must not be able to
-		// lock unsafe economic parameters into the canonical pool for a question/multiplier pair.
+		// lock unsafe economic parameters into the canonical pool for a question/multiplier/
+		// priority-fee configuration.
 		// Zero-utilization origin pools always start at the protocol retention curve's maximum rate.
 		require(securityMultiplier > 1, 'Security multiplier must be greater than one');
 
@@ -204,11 +220,18 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
 		require(address(reputationToken) != address(0x0), 'Security pool universe is missing a REP token');
-		bytes32 originId = getOriginId(universeId, questionId, securityMultiplier);
+		bytes32 originId = getOriginId(universeId, questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas);
 		_reserveSecurityPool(originId, universeId);
-		bytes32 securityPoolSalt = keccak256(abi.encode(address(0x0), universeId, questionId, securityMultiplier));
+		bytes32 securityPoolSalt = keccak256(
+			abi.encode(address(0x0), universeId, questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas)
+		);
 		OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory
-			.deployPriceOracleManagerAndOperatorQueuer(openOracle, reputationToken, securityPoolSalt);
+			.deployPriceOracleManagerAndOperatorQueuer(
+				openOracle,
+				reputationToken,
+				initialReportPriorityFeeWeiPerGas,
+				securityPoolSalt
+			);
 
 		// Each origin lineage has its own share token, which is reused by all migrated children.
 		IShareToken shareToken = shareTokenFactory.deployShareToken(originId, questionId);
@@ -237,6 +260,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 				universeId,
 				questionId,
 				securityMultiplier,
+				initialReportPriorityFeeWeiPerGas,
 				initialRetentionRate,
 				0
 			)
@@ -277,6 +301,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 			deployment.universeId,
 			deployment.questionId,
 			deployment.securityMultiplier,
+			deployment.initialReportPriorityFeeWeiPerGas,
 			deployment.currentRetentionRate,
 			deployment.completeSetCollateralAmount
 		);
