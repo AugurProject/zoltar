@@ -153,7 +153,7 @@ ownership, a one-week bidding window, and paged settlement into vault
 accounting. Bids close at <code>auctionStarted + AUCTION_TIME</code>; direct
 auction finalization is allowed at <code>&gt;=</code> that boundary, but the
 public forker wrapper requires the boundary to have passed. The canonical
-clearing rules and examples are in [Truth Auction](./auction-design.html#clearing), while
+clearing rules and examples are in [Truth Auction](./truth-auction.html#clearing), while
 the loss-allocation policy is defined by
 [`AUCTION-A1`](./security-model.html#auction-a1).
 

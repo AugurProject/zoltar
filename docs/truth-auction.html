@@ -10,30 +10,15 @@
 		<main>
 			<header>
 				<h1>Truth Auction</h1>
-				<p>
-					When Zoltar forks, Statoblast evaluates each resulting child universe
-					after migration. If a child pool lacks the ETH needed to fully collateralize
-					its open interest, Statoblast initiates a truth auction for that pool. The
-					fork may have been triggered either by a direct Zoltar fork or by the
-					Statoblast Escalation Game.
-				</p>
+				<p> When Zoltar forks, Statoblast evaluates each resulting child universe after migration. If a child pool lacks the ETH needed to fully collateralize its open interest, Statoblast initiates a truth auction for that pool. The fork may have been triggered either by a direct Zoltar fork or by the Statoblast Escalation Game. </p>
 
-				<p>
-					During the migration period, security vault holders choose which child
-					universe to support by migrating their positions into the corresponding
-					child security vault. This preserves disagreement by splitting the parent
-					market into separate branches. However, ETH is not duplicated across those
-					branches. Each child pool receives only the collateral, migrated REP state,
-					and converted child-universe REP backing that actually move into it.
-				</p>
+				<p> During the migration period, security vault holders choose which child universe to support by migrating their positions into the corresponding child security vault. This preserves disagreement by splitting the parent market into separate branches. However, ETH is not duplicated across those branches. Each child pool receives only the collateral, migrated REP state, and converted child-universe REP backing that actually move into it. </p>
 
 				<p>
 					Because collateral follows migration rather than being copied in full, a
 					child pool can retain its obligations while lacking enough ETH to reopen
 					cleanly. The truth auction sells child-universe REP to raise as much repair
-					ETH as demand supports. The <a href="#clearing">clearing section</a> owns
-					the dual-cap and weak-demand rules. The auction discovers a repair price;
-					it does not determine which branch is true.
+					ETH as demand supports.
 				</p>
 
 				<p>
@@ -45,14 +30,6 @@
 					and its matching security-bond allowance instead of merely receiving
 					REP.
 				</p>
-				<div class="callout" id="punitive-underfunded-clearing">
-					<p>
-						<strong><code>AUCTION-A1</code> — punitive underfunded clearing.</strong>
-						The <a href="./security-model.html#auction-a1">normative security model</a>
-						owns this loss-allocation policy and its excluded guarantees; the
-						<a href="#clearing">clearing section</a> owns the mechanics.
-					</p>
-				</div>
 
 			</header>
 
@@ -66,11 +43,11 @@
 				<code>forkActivationTime + SecurityPoolUtils.MIGRATION_TIME</code>,
 				inclusive. <code>forkActivationTime</code> is recorded when this parent
 				pool enters <code>PoolForked</code>; it is pool-local and can be later
-				than Zoltar's universe <code>forkTime</code>. Until that window ends,
-				vault holders can still choose which child universe to support, so the
-				protocol cannot know the final collateral shortfall. See
+				than Zoltar's universe <code>forkTime</code>. See
 				<a href="./invariants.html#fork-05"><code>FORK-05</code></a> for the
-				normative boundary and the timeless share-materialization exception.
+				canonical timing invariant. Until that window ends,
+				vault holders can still choose which child universe to support, so the
+				protocol cannot know the final collateral shortfall.
 			</p>
 
 			<p>
@@ -85,10 +62,9 @@
 				Finalization clears the batch auction, sends the raised ETH into the
 				repair path, and computes the accounting rates used to settle bidders.
 				The child activates with legitimate migration collateral plus retained bid
-				ETH, even when that total is below the original fork snapshot. Full repair
-				is not guaranteed, and the remaining impairment is borne by the affected
+				ETH, even when that total is below the original fork snapshot. Full repair is not guaranteed, and the remaining impairment is borne by the affected
 				child's open-interest holders. Finalization
-				rejects caller contribution ETH, and forced ETH remains unaccounted surplus.
+				rejects caller contribution ETH, and forced ETH remains unaccounted surplus. In the case auction does't recover all the required ETH, all the REP in the vaults have been auctioned off, the old REP vault holders have been wiped off.
 			</p>
 
 			<p>
