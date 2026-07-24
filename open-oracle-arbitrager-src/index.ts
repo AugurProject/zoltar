@@ -1,8 +1,12 @@
 #!/usr/bin/env bun
 
+import { resolve } from 'node:path'
 import { createPublicClient, createWalletClient, formatEther, getAddress, http, mainnet, privateKeyToAccount, type Account, type Address, type Chain, type Hex, type PublicClient, type TransactionLog, type Transport, type WalletClient, zeroAddress } from '@zoltar/shared/ethereum'
 import { decodeOpenOracleStatePreimage, getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
 import { erc20Abi, factoryAbi, openOracleAbi, poolAbi, quoterAbi } from './abi.js'
+import { startDashboardServer } from './dashboard-server.js'
+import { executionFailureDecision, flushExecutionHistory, opportunityDecision, recordConfirmedExecution, runFundedExecution, selectBestExecution, waitForResolvedTransaction } from './execution-orchestration.js'
+import { appendExecutionHistory, decimalWeth, ensureExecutionHistoryWritable, loadExecutionHistory, operatorSnapshot, strategySettings, updateStrategyFromRequest, type BalanceSnapshot, type ExecutionRecord, type MutableStrategy, type OperatorState, type OpportunitySnapshot } from './operator-state.js'
 import { bestSuccessful, pollUntilStopped, replaceOverlap } from './resilience.js'
 import { calculateContribution, calculateFee, calculateNextAmount1, deriveTokenToSwap, evaluateBuyRep, evaluateSellRep, hasFreshSubmissionWindow, isSelfReport, meetsProfitThreshold, type ArbitrageQuote } from './strategy.js'
 
@@ -13,20 +17,16 @@ const QUOTER = getAddress('0x61fFE014bA17989E743c5F6cB21bF9697530B21e')
 const FEES = [100, 500, 3000, 10000] as const
 const REORG_OVERLAP_BLOCKS = 12n
 
-type Configuration = {
+type Configuration = MutableStrategy & {
 	execute: boolean
+	historyFile: string
 	lookbackBlocks: bigint
-	maxSpotTwapTicks: bigint
-	minimumRemainingBlocks: bigint
-	minimumRemainingSeconds: bigint
-	minimumProfitBps: bigint
-	minimumProfitWeth: bigint
 	once: boolean
 	openOracle: Address
-	pollMilliseconds: number
 	privateKey: Hex | undefined
 	rpcUrl: string
-	twapSeconds: number
+	ui: boolean
+	uiPort: number
 }
 
 type ActiveReport = {
@@ -42,13 +42,54 @@ type Pool = {
 	twapTick: bigint
 }
 
+type RawBalances = {
+	eth: bigint
+	rep: bigint
+	weth: bigint
+}
+
+type ExecutionCandidate = {
+	opportunity: OpportunitySnapshot
+	pool: Pool
+	quote: ArbitrageQuote
+	report: OpenOracleStatePreimage
+}
+
+type EvaluatedOpportunity = {
+	candidate: ExecutionCandidate | undefined
+	opportunity: OpportunitySnapshot
+}
+
 type ReadClient = PublicClient<Transport, Chain>
 type WriteClient = WalletClient<Transport, Chain, Account>
 
-function parseDecimalWeth(value: string) {
-	if (!/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) throw new Error(`Invalid WETH amount: ${value}`)
-	const [whole = '0', fraction = ''] = value.split('.')
-	return BigInt(whole) * 10n ** 18n + BigInt(fraction.padEnd(18, '0'))
+function printHelp() {
+	console.log(`OpenOracle arbitrager
+
+Usage:
+  ./open-oracle-arbitrager --open-oracle=0x... [options]
+
+Modes:
+  --once                         Scan once and exit
+  --ui                           Serve the local dashboard on 127.0.0.1
+  --execute                      Submit guarded disputes (requires PRIVATE_KEY)
+
+Strategy:
+  --minimum-profit-weth=0.01     Absolute modeled net-profit floor
+  --minimum-profit-bps=100       Modeled return floor relative to hedge cost
+  --max-spot-twap-ticks=100      Maximum accepted Uniswap tick deviation
+  --twap-seconds=1800            Uniswap TWAP window
+  --minimum-remaining-blocks=3   Inclusion buffer for block-based games
+  --minimum-remaining-seconds=36 Inclusion buffer for timestamp-based games
+  --poll-ms=12000                Continuous scan interval
+
+Data and connectivity:
+  --rpc-url=https://...          Mainnet RPC (or ETH_RPC_URL)
+  --lookback-blocks=50000        Initial event search range
+  --ui-port=4173                 Local dashboard port
+  --history-file=PATH            Confirmed-submission JSONL path
+
+Execution is off by default. See open-oracle-arbitrager-src/README.md.`)
 }
 
 function option(name: string) {
@@ -67,21 +108,58 @@ function loadConfiguration(): Configuration {
 	const privateKeyValue = process.env['PRIVATE_KEY']
 	if (privateKeyValue !== undefined && !/^0x[0-9a-fA-F]{64}$/.test(privateKeyValue)) throw new Error('PRIVATE_KEY must be a 32-byte 0x-prefixed hex value')
 	const privateKey = privateKeyValue as Hex | undefined
+	const strategy: MutableStrategy = {
+		maxSpotTwapTicks: 0n,
+		minimumProfitBps: 0n,
+		minimumProfitWeth: 0n,
+		minimumRemainingBlocks: 1n,
+		minimumRemainingSeconds: 1n,
+		pollMilliseconds: 1_000,
+		twapSeconds: 60,
+	}
+	updateStrategyFromRequest(strategy, {
+		maxSpotTwapTicks: option('max-spot-twap-ticks') ?? '100',
+		minimumProfitBps: option('minimum-profit-bps') ?? '100',
+		minimumProfitWeth: option('minimum-profit-weth') ?? '0.01',
+		minimumRemainingBlocks: option('minimum-remaining-blocks') ?? '3',
+		minimumRemainingSeconds: option('minimum-remaining-seconds') ?? '36',
+		pollMilliseconds: Number(option('poll-ms') ?? '12000'),
+		twapSeconds: Number(option('twap-seconds') ?? '1800'),
+	})
 	return {
+		...strategy,
 		execute: process.argv.includes('--execute'),
+		historyFile: resolve(option('history-file') ?? '.open-oracle-arbitrager/history.jsonl'),
 		lookbackBlocks: BigInt(option('lookback-blocks') ?? '50000'),
-		maxSpotTwapTicks: BigInt(option('max-spot-twap-ticks') ?? '100'),
-		minimumRemainingBlocks: BigInt(option('minimum-remaining-blocks') ?? '3'),
-		minimumRemainingSeconds: BigInt(option('minimum-remaining-seconds') ?? '36'),
-		minimumProfitBps: BigInt(option('minimum-profit-bps') ?? '100'),
-		minimumProfitWeth: parseDecimalWeth(option('minimum-profit-weth') ?? '0.01'),
 		once: process.argv.includes('--once'),
 		openOracle: requiredAddress('open-oracle'),
-		pollMilliseconds: Number(option('poll-ms') ?? '12000'),
 		privateKey,
 		rpcUrl: option('rpc-url') ?? process.env['ETH_RPC_URL'] ?? 'https://ethereum-rpc.publicnode.com',
-		twapSeconds: Number(option('twap-seconds') ?? '1800'),
+		ui: process.argv.includes('--ui'),
+		uiPort: Number(option('ui-port') ?? '4173'),
 	}
+}
+
+function mutableStrategy(config: MutableStrategy): MutableStrategy {
+	return {
+		maxSpotTwapTicks: config.maxSpotTwapTicks,
+		minimumProfitBps: config.minimumProfitBps,
+		minimumProfitWeth: config.minimumProfitWeth,
+		minimumRemainingBlocks: config.minimumRemainingBlocks,
+		minimumRemainingSeconds: config.minimumRemainingSeconds,
+		pollMilliseconds: config.pollMilliseconds,
+		twapSeconds: config.twapSeconds,
+	}
+}
+
+function applyStrategy(target: MutableStrategy, source: MutableStrategy) {
+	target.maxSpotTwapTicks = source.maxSpotTwapTicks
+	target.minimumProfitBps = source.minimumProfitBps
+	target.minimumProfitWeth = source.minimumProfitWeth
+	target.minimumRemainingBlocks = source.minimumRemainingBlocks
+	target.minimumRemainingSeconds = source.minimumRemainingSeconds
+	target.pollMilliseconds = source.pollMilliseconds
+	target.twapSeconds = source.twapSeconds
 }
 
 function reportId(log: TransactionLog) {
@@ -217,18 +295,66 @@ async function evaluate(client: ReadClient, report: OpenOracleStatePreimage, poo
 	)
 }
 
+async function loadBalances(client: ReadClient, wallet: WriteClient | undefined, pools: readonly Pool[]) {
+	if (wallet === undefined) return undefined
+	const address = wallet.account.address
+	const [eth, weth, rep] = await Promise.all([
+		client.getBalance({ address }),
+		client.readContract({
+			address: WETH,
+			abi: erc20Abi,
+			functionName: 'balanceOf',
+			args: [address],
+		}),
+		client.readContract({
+			address: REP,
+			abi: erc20Abi,
+			functionName: 'balanceOf',
+			args: [address],
+		}),
+	])
+	const raw = { eth, rep, weth }
+	let repValueWeth: bigint | undefined
+	if (rep === 0n) repValueWeth = 0n
+	else {
+		const best = await bestSuccessful(
+			pools.map(pool => () => quoteInput(client, REP, WETH, rep, pool.fee)),
+			value => value,
+			() => undefined,
+		)
+		repValueWeth = best
+	}
+	const snapshot: BalanceSnapshot = {
+		availableEth: decimalWeth(eth),
+		availableRep: decimalWeth(rep),
+		availableWeth: decimalWeth(weth),
+		repValueWeth: repValueWeth === undefined ? undefined : decimalWeth(repValueWeth),
+		totalValueWeth: repValueWeth === undefined ? undefined : decimalWeth(eth + weth + repValueWeth),
+	}
+	return { raw, snapshot }
+}
+
 async function approveAndWait(wallet: WriteClient, token: Address, spender: Address, amount: bigint) {
-	if (amount === 0n) return
+	if (amount === 0n) return 0n
 	const hash = await wallet.writeContract({
 		address: token,
 		abi: erc20Abi,
 		functionName: 'approve',
 		args: [spender, amount],
 	})
-	await wallet.waitForTransactionReceipt({ hash })
+	const receipt = await waitForResolvedTransaction(
+		hash,
+		parameters => wallet.waitForTransactionReceipt(parameters),
+		undefined,
+		error => {
+			console.error(`approval=${hash} confirmationRetry=${errorMessage(error)}`)
+		},
+	)
+	if (receipt.status !== 'success') throw new Error(`Approval transaction reverted: ${hash}`)
+	return receipt.gasUsed * (receipt.effectiveGasPrice ?? 0n)
 }
 
-async function executeDispute(client: ReadClient, wallet: WriteClient, config: Configuration, report: OpenOracleStatePreimage, quote: ArbitrageQuote, pool: Pool) {
+async function executeDispute(client: ReadClient, wallet: WriteClient, config: Configuration, report: OpenOracleStatePreimage, quote: ArbitrageQuote, pool: Pool, isPaused: () => boolean): Promise<ExecutionRecord> {
 	const account = wallet.account
 	if (account === undefined) throw new Error('Execution requires a local account')
 	const game = report.game
@@ -238,62 +364,100 @@ async function executeDispute(client: ReadClient, wallet: WriteClient, config: C
 	const preparedTokenToSwap = deriveTokenToSwap(game, newAmount1, preparedAmount2)
 	if (preparedTokenToSwap.toLowerCase() !== quote.tokenToSwap.toLowerCase()) throw new Error('Replacement ratio does not derive the selected arbitrage direction')
 	const preparedContribution = calculateContribution(game, preparedTokenToSwap, game.token1, newAmount1, preparedAmount2)
-	await approveAndWait(wallet, game.token1, config.openOracle, preparedContribution.token1)
-	await approveAndWait(wallet, game.token2, config.openOracle, preparedContribution.token2)
+	return runFundedExecution(isPaused, {
+		approveToken1: () => approveAndWait(wallet, game.token1, config.openOracle, preparedContribution.token1),
+		approveToken2: () => approveAndWait(wallet, game.token2, config.openOracle, preparedContribution.token2),
+		prepare: async () => {
+			const quoteBlock = await client.getBlock()
+			if (quoteBlock.number === undefined) throw new Error('Quote block is missing its number')
+			const refreshedPool = await loadPool(client, pool.address, pool.fee, config.twapSeconds)
+			if (refreshedPool === undefined) throw new Error('Selected pool lost all active liquidity while approvals were mined')
+			const deviation = refreshedPool.spotTick > refreshedPool.twapTick ? refreshedPool.spotTick - refreshedPool.twapTick : refreshedPool.twapTick - refreshedPool.spotTick
+			if (deviation > config.maxSpotTwapTicks) throw new Error('Selected pool failed the spot/TWAP check after approvals')
+			const gasPrice = (quoteBlock.baseFeePerGas ?? 0n) * 2n + 2n * 10n ** 9n
+			const refreshedQuote = await evaluate(client, report, refreshedPool, gasPrice)
+			if (refreshedQuote === undefined) throw new Error('Selected pool no longer serves either arbitrage direction')
+			if (refreshedQuote.direction !== quote.direction) throw new Error('Best arbitrage direction changed while approvals were mined')
+			if (!meetsProfitThreshold(refreshedQuote, config.minimumProfitWeth, config.minimumProfitBps)) throw new Error('Arbitrage no longer meets the profit threshold after approvals')
+			const newAmount2 = await quoteInput(client, WETH, REP, newAmount1, refreshedPool.fee)
+			const tokenToSwap = deriveTokenToSwap(game, newAmount1, newAmount2)
+			if (tokenToSwap.toLowerCase() !== refreshedQuote.tokenToSwap.toLowerCase()) throw new Error('Refreshed replacement ratio does not derive the selected arbitrage direction')
+			const contribution = calculateContribution(game, tokenToSwap, game.token1, newAmount1, newAmount2)
+			if (contribution.token1 > preparedContribution.token1 || contribution.token2 > preparedContribution.token2) throw new Error('Refreshed dispute requires more token approval; aborting instead of submitting a stale quote')
 
-	const quoteBlock = await client.getBlock()
-	if (quoteBlock.number === undefined) throw new Error('Quote block is missing its number')
-	const refreshedPool = await loadPool(client, pool.address, pool.fee, config.twapSeconds)
-	if (refreshedPool === undefined) throw new Error('Selected pool lost all active liquidity while approvals were mined')
-	const deviation = refreshedPool.spotTick > refreshedPool.twapTick ? refreshedPool.spotTick - refreshedPool.twapTick : refreshedPool.twapTick - refreshedPool.spotTick
-	if (deviation > config.maxSpotTwapTicks) throw new Error('Selected pool failed the spot/TWAP check after approvals')
-	const gasPrice = (quoteBlock.baseFeePerGas ?? 0n) * 2n + 2n * 10n ** 9n
-	const refreshedQuote = await evaluate(client, report, refreshedPool, gasPrice)
-	if (refreshedQuote === undefined) throw new Error('Selected pool no longer serves either arbitrage direction')
-	if (refreshedQuote.direction !== quote.direction) throw new Error('Best arbitrage direction changed while approvals were mined')
-	if (!meetsProfitThreshold(refreshedQuote, config.minimumProfitWeth, config.minimumProfitBps)) throw new Error('Arbitrage no longer meets the profit threshold after approvals')
-	const newAmount2 = await quoteInput(client, WETH, REP, newAmount1, refreshedPool.fee)
-	const tokenToSwap = deriveTokenToSwap(game, newAmount1, newAmount2)
-	if (tokenToSwap.toLowerCase() !== refreshedQuote.tokenToSwap.toLowerCase()) throw new Error('Refreshed replacement ratio does not derive the selected arbitrage direction')
-	const contribution = calculateContribution(game, tokenToSwap, game.token1, newAmount1, newAmount2)
-	if (contribution.token1 > preparedContribution.token1 || contribution.token2 > preparedContribution.token2) throw new Error('Refreshed dispute requires more token approval; aborting instead of submitting a stale quote')
+			const submissionBlock = await client.getBlock()
+			if (submissionBlock.number === undefined) throw new Error('Submission block is missing its number')
+			const timeType = (game.flags & OPEN_ORACLE_FLAG_TIME_TYPE) !== 0n
+			const currentTime = timeType ? submissionBlock.timestamp : submissionBlock.number
+			const minimumRemaining = timeType ? config.minimumRemainingSeconds : config.minimumRemainingBlocks
+			if (
+				!hasFreshSubmissionWindow({
+					currentTime,
+					deadline: game.reportTimestamp + game.settlementTime,
+					minimumRemaining,
+					quoteBlock: quoteBlock.number,
+					submissionBlock: submissionBlock.number,
+				})
+			)
+				throw new Error('Quote became stale or the inclusion window shrank while the dispute was prepared')
 
-	const submissionBlock = await client.getBlock()
-	if (submissionBlock.number === undefined) throw new Error('Submission block is missing its number')
-	const timeType = (game.flags & OPEN_ORACLE_FLAG_TIME_TYPE) !== 0n
-	const currentTime = timeType ? submissionBlock.timestamp : submissionBlock.number
-	const minimumRemaining = timeType ? config.minimumRemainingSeconds : config.minimumRemainingBlocks
-	if (
-		!hasFreshSubmissionWindow({
-			currentTime,
-			deadline: game.reportTimestamp + game.settlementTime,
-			minimumRemaining,
-			quoteBlock: quoteBlock.number,
-			submissionBlock: submissionBlock.number,
-		})
-	)
-		throw new Error('Quote became stale or the inclusion window shrank while the dispute was prepared')
-
-	const storedHash = await client.readContract({
-		address: config.openOracle,
-		abi: openOracleAbi,
-		functionName: 'oracleGame',
-		args: [report.helper.reportId],
+			const storedHash = await client.readContract({
+				address: config.openOracle,
+				abi: openOracleAbi,
+				functionName: 'oracleGame',
+				args: [report.helper.reportId],
+			})
+			if (storedHash.toLowerCase() !== hashOpenOracleStatePreimage(report).toLowerCase()) throw new Error('Report changed while the dispute was prepared')
+			const request = {
+				address: config.openOracle,
+				abi: openOracleAbi,
+				functionName: 'dispute',
+				args: [report.helper.reportId, newAmount1, newAmount2, account.address, false, false, getOpenOracleGameTuple(game), getOpenOracleHelperTuple(report.helper), [quoteBlock.number, 1n, quoteBlock.timestamp, config.minimumRemainingSeconds]],
+			} as const
+			return { contribution, refreshedPool, refreshedQuote, request }
+		},
+		simulate: prepared => wallet.simulateContract(prepared.request),
+		submit: prepared => wallet.writeContract(prepared.request),
+		confirm: async (hash, prepared, approvalGasCost) => {
+			const receipt = await waitForResolvedTransaction(
+				hash,
+				parameters => wallet.waitForTransactionReceipt(parameters),
+				undefined,
+				error => {
+					console.error(`dispute=${hash} confirmationRetry=${errorMessage(error)}`)
+				},
+			)
+			if (receipt.status !== 'success') throw new Error(`Dispute transaction reverted: ${hash}`)
+			console.log(`report=${report.helper.reportId.toString()} dispute=${hash}`)
+			return {
+				actualGasCostEth: decimalWeth(approvalGasCost + receipt.gasUsed * (receipt.effectiveGasPrice ?? 0n)),
+				blockNumber: receipt.blockNumber.toString(),
+				direction: prepared.refreshedQuote.direction,
+				estimatedNetProfitWeth: decimalWeth(prepared.refreshedQuote.netProfitWeth),
+				executedAt: new Date().toISOString(),
+				pool: prepared.refreshedPool.address,
+				poolFee: prepared.refreshedPool.fee,
+				reportId: report.helper.reportId.toString(),
+				requiredRep: decimalWeth(prepared.contribution.token2),
+				requiredWeth: decimalWeth(prepared.contribution.token1),
+				transactionHash: receipt.transactionHash,
+			}
+		},
 	})
-	if (storedHash.toLowerCase() !== hashOpenOracleStatePreimage(report).toLowerCase()) throw new Error('Report changed while the dispute was prepared')
-	const request = {
-		address: config.openOracle,
-		abi: openOracleAbi,
-		functionName: 'dispute',
-		args: [report.helper.reportId, newAmount1, newAmount2, account.address, false, false, getOpenOracleGameTuple(game), getOpenOracleHelperTuple(report.helper), [quoteBlock.number, 1n, quoteBlock.timestamp, config.minimumRemainingSeconds]],
-	} as const
-	await wallet.simulateContract(request)
-	const hash = await wallet.writeContract(request)
-	await wallet.waitForTransactionReceipt({ hash })
-	console.log(`report=${report.helper.reportId.toString()} dispute=${hash}`)
 }
 
-async function inspectReport(client: ReadClient, wallet: WriteClient | undefined, config: Configuration, report: OpenOracleStatePreimage, pools: readonly Pool[], blockNumber: bigint, blockTimestamp: bigint, gasPrice: bigint) {
+async function inspectReport(
+	client: ReadClient,
+	wallet: WriteClient | undefined,
+	config: Configuration,
+	report: OpenOracleStatePreimage,
+	pools: readonly Pool[],
+	blockNumber: bigint,
+	blockTimestamp: bigint,
+	gasPrice: bigint,
+	balances: RawBalances | undefined,
+	executionReady: boolean,
+): Promise<EvaluatedOpportunity | undefined> {
 	const game = report.game
 	if (game.token1.toLowerCase() !== WETH.toLowerCase() || game.token2.toLowerCase() !== REP.toLowerCase()) return
 	const timeType = (game.flags & OPEN_ORACLE_FLAG_TIME_TYPE) !== 0n
@@ -317,24 +481,53 @@ async function inspectReport(client: ReadClient, wallet: WriteClient | undefined
 		console.log(`report=${report.helper.reportId.toString()} skipped=no-trusted-liquid-pool`)
 		return
 	}
-	const profitable = meetsProfitThreshold(best.quote, config.minimumProfitWeth, config.minimumProfitBps)
-	let decision = 'unprofitable'
-	if (profitable) decision = config.execute ? 'execute' : 'dry-run-opportunity'
-	console.log([`report=${report.helper.reportId.toString()}`, `direction=${best.quote.direction}`, `pool=${best.pool.address}`, `fee=${best.pool.fee.toString()}`, `profitWeth=${formatEther(best.quote.netProfitWeth)}`, `decision=${decision}`].join(' '))
-	if (!profitable || !config.execute) return
-	if (wallet === undefined) throw new Error('Execution requested without PRIVATE_KEY')
-	if (isSelfReport(wallet.account.address, game.currentReporter)) {
-		console.log(`report=${report.helper.reportId.toString()} skipped=self-report`)
+	const newAmount1 = calculateNextAmount1(game)
+	const replacementAmount2 = await quoteInput(client, WETH, REP, newAmount1, best.pool.fee)
+	const replacementTokenToSwap = deriveTokenToSwap(game, newAmount1, replacementAmount2)
+	if (replacementTokenToSwap.toLowerCase() !== best.quote.tokenToSwap.toLowerCase()) {
+		console.log(`report=${report.helper.reportId.toString()} skipped=replacement-ratio-direction-mismatch`)
 		return
 	}
-	await executeDispute(client, wallet, config, report, best.quote, best.pool)
+	const contribution = calculateContribution(game, replacementTokenToSwap, game.token1, newAmount1, replacementAmount2)
+	const hasRequiredInventory = balances === undefined ? undefined : balances.weth >= contribution.token1 && balances.rep >= contribution.token2
+	const profitable = meetsProfitThreshold(best.quote, config.minimumProfitWeth, config.minimumProfitBps)
+	const decision = opportunityDecision({
+		account: wallet?.account.address,
+		currentReporter: game.currentReporter,
+		execute: config.execute,
+		executionReady,
+		hasRequiredInventory,
+		profitable,
+	})
+	console.log([`report=${report.helper.reportId.toString()}`, `direction=${best.quote.direction}`, `pool=${best.pool.address}`, `fee=${best.pool.fee.toString()}`, `profitWeth=${formatEther(best.quote.netProfitWeth)}`, `decision=${decision}`].join(' '))
+	const opportunity = {
+		decision,
+		direction: best.quote.direction,
+		estimatedNetProfitWeth: decimalWeth(best.quote.netProfitWeth),
+		hasRequiredInventory,
+		pool: best.pool.address,
+		poolFee: best.pool.fee,
+		reportId: report.helper.reportId.toString(),
+		requiredRep: decimalWeth(contribution.token2),
+		requiredWeth: decimalWeth(contribution.token1),
+		timeRemaining: timeRemaining.toString(),
+		windowUnit: timeType ? 'seconds' : 'blocks',
+	} satisfies OpportunitySnapshot
+	const candidate = decision === 'eligible' ? { opportunity, pool: best.pool, quote: best.quote, report } : undefined
+	return { candidate, opportunity }
 }
 
 async function main() {
+	if (process.argv.includes('--help') || process.argv.includes('-h')) {
+		printHelp()
+		return
+	}
 	const config = loadConfiguration()
-	if (!Number.isSafeInteger(config.pollMilliseconds) || config.pollMilliseconds < 1000) throw new Error('poll-ms must be an integer of at least 1000')
-	if (!Number.isSafeInteger(config.twapSeconds) || config.twapSeconds < 60) throw new Error('twap-seconds must be an integer of at least 60')
+	if (config.lookbackBlocks < 0n) throw new Error('lookback-blocks must be a non-negative integer')
+	if (!Number.isSafeInteger(config.uiPort) || config.uiPort < 1 || config.uiPort > 65_535) throw new Error('ui-port must be an integer from 1 to 65535')
+	if (config.ui && config.once) throw new Error('--ui cannot be combined with --once')
 	if (config.execute && config.privateKey === undefined) throw new Error('--execute requires PRIVATE_KEY')
+	if (config.execute) await ensureExecutionHistoryWritable(config.historyFile)
 	const client = createPublicClient({
 		chain: mainnet,
 		transport: http(config.rpcUrl),
@@ -347,46 +540,147 @@ async function main() {
 					chain: mainnet,
 					transport: http(config.rpcUrl),
 				})
+	const state: OperatorState = {
+		activeReportCount: 0,
+		balances: undefined,
+		blockNumber: undefined,
+		executionHistory: await loadExecutionHistory(config.historyFile),
+		lastError: undefined,
+		lastPollAt: undefined,
+		opportunities: [],
+		paused: false,
+		status: 'starting',
+	}
+	const fixedState = {
+		execute: config.execute,
+		openOracle: config.openOracle,
+		wallet: wallet?.account.address,
+	}
+	let pendingStrategy: MutableStrategy | undefined
+	const dashboard = config.ui
+		? startDashboardServer(config.uiPort, {
+				getSnapshot: () => operatorSnapshot(state, pendingStrategy ?? config, fixedState),
+				setPaused: paused => {
+					state.paused = paused
+					state.status = paused ? 'paused' : 'sleeping'
+				},
+				updateStrategy: value => {
+					const next = mutableStrategy(pendingStrategy ?? config)
+					updateStrategyFromRequest(next, value)
+					pendingStrategy = next
+					return strategySettings(next)
+				},
+			})
+		: undefined
 	const reports = new Map<bigint, ActiveReport>()
+	const pendingHistory: ExecutionRecord[] = []
 	let cachedLogs: TransactionLog[] = []
 	let nextBlock: bigint | undefined
 	console.log(`mode=${config.execute ? 'execute' : 'dry-run'} oracle=${config.openOracle} rpc=${config.rpcUrl}`)
-	await pollUntilStopped(
-		async () => {
-			const block = await client.getBlock()
-			const blockNumber = block.number
-			if (blockNumber === undefined) throw new Error('Latest block is missing its number')
-			const initialFromBlock = blockNumber > config.lookbackBlocks ? blockNumber - config.lookbackBlocks : 0n
-			const overlapFromBlock = nextBlock === undefined || nextBlock <= REORG_OVERLAP_BLOCKS ? 0n : nextBlock - REORG_OVERLAP_BLOCKS
-			const fromBlockCandidate = nextBlock === undefined ? initialFromBlock : overlapFromBlock
-			const fromBlock = fromBlockCandidate > blockNumber ? blockNumber : fromBlockCandidate
-			const logs = await client.getLogs({
-				address: config.openOracle,
-				fromBlock,
-				toBlock: blockNumber,
-				topics: [[OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC]],
-			})
-			cachedLogs = replaceOverlap(cachedLogs, logs, fromBlock, logBlockNumber, compareLogs)
-			reports.clear()
-			applyLogs(reports, cachedLogs)
-			nextBlock = blockNumber + 1n
-			const pools = await poolsFor(client, config.twapSeconds)
-			if (pools.length === 0) console.log('status=no-liquid-rep-weth-v3-pool')
-			const gasPrice = (block.baseFeePerGas ?? 0n) * 2n + 2n * 10n ** 9n
-			for (const report of reports.values()) {
-				if (report.settled) continue
-				try {
-					await inspectReport(client, wallet, config, report.latest, pools, blockNumber, block.timestamp, gasPrice)
-				} catch (error) {
-					console.error(`report=${report.latest.helper.reportId.toString()} skipped=${errorMessage(error)}`)
+	try {
+		await pollUntilStopped(
+			async () => {
+				if (state.paused) {
+					state.status = 'paused'
+					return false
 				}
-			}
-			return config.once
-		},
-		() => Bun.sleep(config.pollMilliseconds),
-		config.once,
-		error => console.error(`pollFailed=${errorMessage(error)}`),
-	)
+				if (pendingStrategy !== undefined) {
+					applyStrategy(config, pendingStrategy)
+					pendingStrategy = undefined
+				}
+				state.status = 'scanning'
+				state.lastError = undefined
+				if (pendingHistory.length !== 0) {
+					try {
+						await flushExecutionHistory(pendingHistory, record => appendExecutionHistory(config.historyFile, record))
+					} catch (error) {
+						const message = `Confirmed dispute history is not durable: ${errorMessage(error)}`
+						state.lastError = message
+						console.error(`historyPersistenceFailed=${message}`)
+					}
+				}
+				const executionReady = pendingHistory.length === 0
+				const block = await client.getBlock()
+				const blockNumber = block.number
+				if (blockNumber === undefined) throw new Error('Latest block is missing its number')
+				const initialFromBlock = blockNumber > config.lookbackBlocks ? blockNumber - config.lookbackBlocks : 0n
+				const overlapFromBlock = nextBlock === undefined || nextBlock <= REORG_OVERLAP_BLOCKS ? 0n : nextBlock - REORG_OVERLAP_BLOCKS
+				const fromBlockCandidate = nextBlock === undefined ? initialFromBlock : overlapFromBlock
+				const fromBlock = fromBlockCandidate > blockNumber ? blockNumber : fromBlockCandidate
+				const logs = await client.getLogs({
+					address: config.openOracle,
+					fromBlock,
+					toBlock: blockNumber,
+					topics: [[OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC]],
+				})
+				cachedLogs = replaceOverlap(cachedLogs, logs, fromBlock, logBlockNumber, compareLogs)
+				reports.clear()
+				applyLogs(reports, cachedLogs)
+				nextBlock = blockNumber + 1n
+				const pools = await poolsFor(client, config.twapSeconds)
+				if (pools.length === 0) console.log('status=no-liquid-rep-weth-v3-pool')
+				const balances = await loadBalances(client, wallet, pools)
+				const gasPrice = (block.baseFeePerGas ?? 0n) * 2n + 2n * 10n ** 9n
+				const opportunities: OpportunitySnapshot[] = []
+				const candidates: ExecutionCandidate[] = []
+				for (const report of reports.values()) {
+					if (report.settled) continue
+					try {
+						const evaluated = await inspectReport(client, wallet, config, report.latest, pools, blockNumber, block.timestamp, gasPrice, balances?.raw, executionReady)
+						if (evaluated !== undefined) {
+							opportunities.push(evaluated.opportunity)
+							if (evaluated.candidate !== undefined) candidates.push(evaluated.candidate)
+						}
+					} catch (error) {
+						console.error(`report=${report.latest.helper.reportId.toString()} skipped=${errorMessage(error)}`)
+					}
+				}
+				state.activeReportCount = [...reports.values()].filter(report => !report.settled).length
+				state.balances = balances?.snapshot
+				state.blockNumber = blockNumber.toString()
+				state.lastPollAt = new Date().toISOString()
+				state.opportunities = opportunities
+				const selected = selectBestExecution(candidates, candidate => candidate.quote.netProfitWeth)
+				if (selected !== undefined && wallet !== undefined) {
+					selected.opportunity.decision = 'selected'
+					try {
+						const record = await executeDispute(client, wallet, config, selected.report, selected.quote, selected.pool, () => state.paused)
+						selected.opportunity.decision = 'submitted'
+						recordConfirmedExecution(state.executionHistory, pendingHistory, record)
+						try {
+							await flushExecutionHistory(pendingHistory, pending => appendExecutionHistory(config.historyFile, pending))
+						} catch (error) {
+							const message = `Confirmed dispute ${record.transactionHash} is visible but history persistence failed: ${errorMessage(error)}`
+							state.lastError = message
+							console.error(`historyPersistenceFailed=${message}`)
+						}
+					} catch (error) {
+						const message = errorMessage(error)
+						selected.opportunity.decision = executionFailureDecision(error)
+						if (selected.opportunity.decision === 'execution-failed') {
+							state.lastError = `Report ${selected.report.helper.reportId.toString()} execution failed: ${message}`
+						}
+						console.error(`report=${selected.report.helper.reportId.toString()} executionFailed=${message}`)
+					}
+				}
+				state.status = 'sleeping'
+				if (state.lastError !== undefined) state.status = 'error'
+				if (state.paused) state.status = 'paused'
+				return config.once
+			},
+			() => Bun.sleep(config.pollMilliseconds),
+			config.once,
+			error => {
+				const message = errorMessage(error)
+				state.lastError = message
+				state.status = 'error'
+				console.error(`pollFailed=${message}`)
+			},
+		)
+	} finally {
+		state.status = 'stopped'
+		dashboard?.stop()
+	}
 }
 
 main().catch(error => {

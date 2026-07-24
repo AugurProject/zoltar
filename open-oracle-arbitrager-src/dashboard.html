@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta name="color-scheme" content="dark" />
+		<title>OpenOracle Arbitrager</title>
+		<link rel="stylesheet" href="/dashboard.css" />
+	</head>
+	<body>
+		<header class="app-header">
+			<div>
+				<p class="eyebrow">Zoltar operator console</p>
+				<h1>OpenOracle Arbitrager</h1>
+			</div>
+			<div class="header-actions">
+				<span id="mode-badge" class="badge">Starting</span>
+				<button id="refresh-button" class="button button-secondary" type="button">Refresh</button>
+				<button id="pause-button" class="button" type="button" disabled>Pause bot</button>
+			</div>
+		</header>
+
+		<main>
+			<section id="notice" class="notice" aria-live="polite">
+				<strong id="notice-title">Connecting to bot</strong>
+				<span id="notice-copy">Waiting for the first local state snapshot.</span>
+			</section>
+
+			<section class="metric-grid" aria-label="Bot summary">
+				<div class="metric">
+					<span class="metric-label">Status</span>
+					<strong id="status-value">Starting</strong>
+					<small id="last-poll-value">No poll completed</small>
+				</div>
+				<div class="metric">
+					<span class="metric-label">Active reports</span>
+					<strong id="active-report-value">0</strong>
+					<small id="block-value">Block —</small>
+				</div>
+				<div class="metric">
+					<span class="metric-label">Estimated net profit</span>
+					<strong id="profit-value">0 WETH</strong>
+					<small>Submitted disputes, not realized P&amp;L</small>
+				</div>
+				<div class="metric">
+					<span class="metric-label">Recorded execution gas</span>
+					<strong id="gas-value">0 ETH</strong>
+					<small>Successful recorded executions only</small>
+				</div>
+			</section>
+
+			<div class="dashboard-grid">
+				<section class="panel balances-panel">
+					<div class="section-heading">
+						<div>
+							<p class="eyebrow">Inventory</p>
+							<h2>Wallet balances</h2>
+						</div>
+						<span id="wallet-address" class="mono muted">No execution wallet</span>
+					</div>
+					<div id="balance-list" class="balance-list"></div>
+					<p class="section-note">
+						Portfolio value treats 1 ETH as 1 WETH and values the entire REP balance with the best executable Uniswap quote. It is an estimate, not accounting profit.
+					</p>
+				</section>
+
+				<section class="panel strategy-panel">
+					<div class="section-heading">
+						<div>
+							<p class="eyebrow">Runtime controls</p>
+							<h2>Strategy</h2>
+						</div>
+						<span class="muted">Applies to the next scan</span>
+					</div>
+					<form id="strategy-form">
+						<fieldset id="strategy-fieldset" disabled>
+							<div class="field-grid">
+								<label>
+									<span>Minimum profit (WETH)</span>
+									<input name="minimumProfitWeth" type="number" min="0" max="1000" step="any" required />
+								</label>
+								<label>
+									<span>Minimum return (bps)</span>
+									<input name="minimumProfitBps" type="number" min="0" max="100000" step="1" required />
+								</label>
+								<label>
+									<span>Maximum spot/TWAP ticks</span>
+									<input name="maxSpotTwapTicks" type="number" min="0" max="100000" step="1" required />
+								</label>
+								<label>
+									<span>TWAP window (seconds)</span>
+									<input name="twapSeconds" type="number" min="60" max="86400" required />
+								</label>
+								<label>
+									<span>Minimum remaining blocks</span>
+									<input name="minimumRemainingBlocks" type="number" min="1" max="1000" step="1" required />
+								</label>
+								<label>
+									<span>Minimum remaining seconds</span>
+									<input name="minimumRemainingSeconds" type="number" min="1" max="86400" step="1" required />
+								</label>
+								<label>
+									<span>Poll interval (milliseconds)</span>
+									<input name="pollMilliseconds" type="number" min="1000" max="3600000" required />
+								</label>
+							</div>
+							<div class="form-actions">
+								<span id="form-status" class="muted" aria-live="polite">Changes do not enable execution.</span>
+								<button class="button" type="submit">Apply strategy</button>
+							</div>
+						</fieldset>
+					</form>
+				</section>
+			</div>
+
+			<section class="panel">
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Current scan</p>
+						<h2>Open opportunities</h2>
+					</div>
+					<span id="opportunity-count" class="muted">0 evaluated</span>
+				</div>
+				<div class="table-scroll" tabindex="0" aria-label="Open opportunities table">
+					<table>
+						<thead>
+							<tr>
+								<th>Report</th>
+								<th>Decision</th>
+								<th>Direction</th>
+								<th>Estimated net</th>
+								<th>Required WETH</th>
+								<th>Required REP</th>
+								<th>Window</th>
+								<th>Pool</th>
+							</tr>
+						</thead>
+						<tbody id="opportunities-body"></tbody>
+					</table>
+				</div>
+				<p id="opportunities-empty" class="empty-state">No eligible WETH/REP report was found in the latest scan.</p>
+			</section>
+
+			<section class="panel">
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Confirmed submissions</p>
+						<h2>Execution history</h2>
+					</div>
+					<span class="muted">Stored on this operator host</span>
+				</div>
+				<div id="profit-chart" class="profit-chart" aria-label="Estimated profit trend for displayed history"></div>
+				<div class="table-scroll" tabindex="0" aria-label="Execution history table">
+					<table>
+						<thead>
+							<tr>
+								<th>Time</th>
+								<th>Report</th>
+								<th>Direction</th>
+								<th>Estimated net</th>
+								<th>Actual gas</th>
+								<th>Inventory used</th>
+								<th>Transaction</th>
+							</tr>
+						</thead>
+						<tbody id="history-body"></tbody>
+					</table>
+				</div>
+				<p id="history-empty" class="empty-state">No disputes have been submitted by this bot.</p>
+			</section>
+		</main>
+
+		<footer>
+			<span id="oracle-address" class="mono">Oracle —</span>
+			<span>Private keys never leave the bot process.</span>
+		</footer>
+		<script type="module" src="/dashboard.js"></script>
+	</body>
+</html>

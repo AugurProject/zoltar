@@ -60,6 +60,7 @@ describe('OpenOracle arbitrage strategy', () => {
 	test('rejects self-disputes because they use different contract accounting', () => {
 		expect(isSelfReport(weth, weth)).toBe(true)
 		expect(isSelfReport(weth, rep)).toBe(false)
+		expect(isSelfReport(undefined, weth)).toBe(false)
 	})
 
 	test('rejects stale quotes and submission windows that shrink after approvals', () => {

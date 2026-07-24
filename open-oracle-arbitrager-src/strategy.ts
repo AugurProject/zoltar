@@ -30,8 +30,8 @@ export function deriveTokenToSwap(game: Pick<OpenOracleGame, 'currentAmount1' | 
 	return newAmount2 * game.currentAmount1 > game.currentAmount2 * newAmount1 ? game.token2 : game.token1
 }
 
-export function isSelfReport(account: Address, currentReporter: Address) {
-	return account.toLowerCase() === currentReporter.toLowerCase()
+export function isSelfReport(account: Address | undefined, currentReporter: Address) {
+	return account !== undefined && account.toLowerCase() === currentReporter.toLowerCase()
 }
 
 export function calculateContribution(game: Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'feePercentage' | 'protocolFee'>, tokenToSwap: Address, token1: Address, newAmount1: bigint, newAmount2: bigint) {
