@@ -78,8 +78,8 @@
 						underwriting, and tries to settle disputes locally before forcing
 						Zoltar to fork.
 					</p>
-					<p> When Zoltar forks, Statoblast forks alongside it into the same child universes. Statoblast REP holders then choose which universe they believe represents the correct outcome and migrate their REP accordingly. </p>
-					<p> Open-interest collateral follows that migration, but it is not duplicated across universes. As a result, some child universes may not receive enough collateral to fully back their inherited open interest. </p>
+					<p> The Zoltar universe fork and Statoblast pool-fork activation are distinct transitions. On the pool's own local non-decision path, Statoblast activates pool fork mode immediately before forking Zoltar in the same transaction. After an unrelated external Zoltar fork, anyone must separately initiate the affected pool's fork handling. Child pools are then created lazily. Vault holders choose a child by migrating their vault positions, and the forker materializes the corresponding child REP. </p>
+					<p> Proportional open-interest collateral moves with each vault migration; it is not duplicated across universes. As a result, some child universes may not receive enough collateral to fully back their inherited open interest. </p>
 					<p> After the migration window ends, each undercollateralized child pool may run its own <a href="./truth-auction.html#lifecycle">truth auction</a>, selling that child universe's REP to raise as much repair ETH as demand supports. </p>
 				</section>
 
@@ -2612,6 +2612,8 @@
 							</defs>
 							<rect
 								class="svg-green"
+								data-state="Operational"
+								data-pool-role="parent"
 								x="50"
 								y="70"
 								width="170"
@@ -2627,6 +2629,7 @@
 							<path
 								class="svg-line"
 								marker-end="url(#arrow-state)"
+								data-transition="Operational->PoolForked"
 								d="M 220 109 H 300"
 							></path>
 							<text class="svg-micro" x="260" y="92" text-anchor="middle">
@@ -2634,6 +2637,8 @@
 							</text>
 							<rect
 								class="svg-red"
+								data-state="PoolForked"
+								data-pool-role="parent"
 								x="300"
 								y="70"
 								width="170"
@@ -2649,6 +2654,8 @@
 							<path
 								class="svg-line"
 								marker-end="url(#arrow-state)"
+								data-transition="PoolForked->ForkMigration"
+								data-boundary="parent-to-child"
 								d="M 470 109 H 550"
 							></path>
 							<text class="svg-micro" x="510" y="92" text-anchor="middle">
@@ -2656,6 +2663,8 @@
 							</text>
 							<rect
 								class="svg-blue"
+								data-state="ForkMigration"
+								data-pool-role="child"
 								x="550"
 								y="70"
 								width="170"
@@ -2679,6 +2688,8 @@
 							</text>
 							<rect
 								class="svg-gold"
+								data-state="ForkTruthAuction"
+								data-pool-role="child"
 								x="550"
 								y="218"
 								width="170"
@@ -2705,6 +2716,8 @@
 							</text>
 							<rect
 								class="svg-green"
+								data-state="Operational"
+								data-pool-role="child"
 								x="800"
 								y="218"
 								width="120"

@@ -20,6 +20,7 @@ type ValidationFailure = {
 const repositoryRootPath = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
 const docsDirectoryPath = path.join(repositoryRootPath, 'docs')
 const conflictMarkerPattern = /^(<<<<<<<|=======|>>>>>>>)($| )/m
+const diagramOptionalDocumentPaths = new Set(['docs/documentation.html'])
 const markdownLinkPattern = /\[[^\]]+\]\(([^)\s]+)(?:\s+['"][^)]*['"])?\)/g
 
 export async function assertDocsHtmlValid(): Promise<void> {
@@ -167,7 +168,9 @@ function validateAriaReferences(parsedDocument: ParsedHtmlDocument, failures: Va
 function validateDiagrams(parsedDocument: ParsedHtmlDocument, failures: ValidationFailure[]): void {
 	const figures = Array.from(parsedDocument.document.querySelectorAll('figure.diagram'))
 	if (figures.length === 0) {
-		addFailure(parsedDocument, 'does not contain any figure.diagram elements', failures)
+		if (!diagramOptionalDocumentPaths.has(parsedDocument.relativePath)) {
+			addFailure(parsedDocument, 'does not contain any figure.diagram elements', failures)
+		}
 		return
 	}
 

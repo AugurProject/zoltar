@@ -43,7 +43,9 @@
 				<code>forkActivationTime + SecurityPoolUtils.MIGRATION_TIME</code>,
 				inclusive. <code>forkActivationTime</code> is recorded when this parent
 				pool enters <code>PoolForked</code>; it is pool-local and can be later
-				than Zoltar's universe <code>forkTime</code>. Until that window ends,
+				than Zoltar's universe <code>forkTime</code>. See
+				<a href="./invariants.html#fork-05"><code>FORK-05</code></a> for the
+				canonical timing invariant. Until that window ends,
 				vault holders can still choose which child universe to support, so the
 				protocol cannot know the final collateral shortfall.
 			</p>
