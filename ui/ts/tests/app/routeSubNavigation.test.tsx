@@ -57,6 +57,7 @@ describe('RouteSubNavigation', () => {
 		expect(migrateRepTab.disabled).toBe(true)
 		expect(migrateRepTab.title).toBe('REP migration is unavailable because this universe has not forked.')
 		expect(migrateRepTab.getAttribute('aria-description')).toBe('REP migration is unavailable because this universe has not forked.')
+		expect(documentQueries.getByText('REP migration is unavailable because this universe has not forked.')).not.toBeNull()
 
 		const createQuestionTab = documentQueries.getByRole('link', { name: 'Create Question' })
 		const locationBeforeClicks = window.location.href

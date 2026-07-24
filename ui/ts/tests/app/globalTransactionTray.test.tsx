@@ -122,6 +122,7 @@ describe('GlobalTransactionTray', () => {
 			<GlobalTransactionTray
 				transaction={{
 					detail: 'Waiting for confirmation.',
+					dismissKey: 'pending-question-creation',
 					hash: '0x2234000000000000000000000000000000000000000000000000000000000000',
 					title: 'Creating Question',
 					tone: 'pending',
@@ -132,6 +133,7 @@ describe('GlobalTransactionTray', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('button', { name: 'Dismiss' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Close transaction status' })).toBeNull()
 		expect(documentQueries.getByText('Pending')).not.toBeNull()
 		expect(documentQueries.getByText('Waiting for confirmation.')).not.toBeNull()
 		expect(documentQueries.getByRole('link', { name: '0x2234000000000000000000000000000000000000000000000000000000000000' })).not.toBeNull()
@@ -155,7 +157,7 @@ describe('GlobalTransactionTray', () => {
 		expect(document.body.querySelector('.global-transaction-notice-detail')).toBeNull()
 	})
 
-	test('renders a wallet-awaiting transaction with a spinner and close control', async () => {
+	test('keeps a wallet-awaiting transaction visible with a spinner', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<GlobalTransactionTray
 				transaction={{
@@ -174,18 +176,15 @@ describe('GlobalTransactionTray', () => {
 		expect(document.body.querySelector('.global-transaction-spinner')).not.toBeNull()
 		expect(documentQueries.queryByRole('link')).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Dismiss' })).toBeNull()
-		const closeButton = documentQueries.getByRole('button', { name: 'Close transaction status' })
-		fireEvent.click(closeButton)
-		expect(renderedComponent.container.textContent).toBe('')
+		expect(documentQueries.queryByRole('button', { name: 'Close transaction status' })).toBeNull()
 	})
 
-	test('shows a terminal failure after the user closes the awaiting-wallet notice', async () => {
+	test('shows a terminal failure after a wallet-awaiting transaction resolves', async () => {
 		const dismissKey = 'transaction-request-wallet-terminal'
 		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray transaction={{ dismissKey, title: 'Creating Question', tone: 'awaiting-wallet' }} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		fireEvent.click(within(document.body).getByRole('button', { name: 'Close transaction status' }))
-		expect(renderedComponent.container.textContent).toBe('')
+		expect(within(document.body).queryByRole('button', { name: 'Close transaction status' })).toBeNull()
 
 		await act(() => {
 			render(<GlobalTransactionTray transaction={{ detail: 'Action canceled in wallet.', dismissKey, title: 'Creating Question', tone: 'error' }} />, renderedComponent.container)
@@ -306,13 +305,12 @@ describe('GlobalTransactionTray', () => {
 		expect(within(document.body).getByRole('link', { name: transaction.hash })).not.toBeNull()
 	})
 
-	test('shows terminal success after the user closes a pending transaction', async () => {
+	test('shows terminal success after a pending transaction resolves', async () => {
 		const hash = '0x6234000000000000000000000000000000000000000000000000000000000000' as const
 		const renderedComponent = await renderIntoDocument(<GlobalTransactionTray transaction={{ hash, title: 'Creating Question', tone: 'pending' }} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		fireEvent.click(within(document.body).getByRole('button', { name: 'Close transaction status' }))
-		expect(renderedComponent.container.textContent).toBe('')
+		expect(within(document.body).queryByRole('button', { name: 'Close transaction status' })).toBeNull()
 
 		await act(() => {
 			render(<GlobalTransactionTray transaction={{ hash, title: 'Question Created', tone: 'success' }} />, renderedComponent.container)

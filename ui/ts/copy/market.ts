@@ -79,6 +79,7 @@ export const binaryQuestionDescription = 'Ask a yes-or-no question that can be r
 export const categoricalOutcomesGuidance = 'List the mutually exclusive outcomes that could win this question.'
 export const scalarQuestionDescription = 'Ask for a measurable number with a unit, range, and increment that users can understand.'
 export const loadingQuestions = 'Loading questions…'
+export const zoltarIntroduction = 'Zoltar questions can define a universe fork or seed an Augur Statoblast security pool.'
 export const binaryPoolsOnly = 'Binary pools only'
 export const linkedPools = 'Linked Pools'
 export const noLinkedPool = 'No tradeable pool is linked to this question yet.'

@@ -15,6 +15,7 @@ import { getDefaultOpenOracleCreateFormState } from '../../../features/markets/l
 import { createFakeBackend } from '../../testUtils/fakeBackend.js'
 import { installActiveEnvironmentForTesting } from '../../../lib/activeEnvironment.js'
 import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
+import { within } from '../../testUtils/queries.js'
 import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
 
 type VNodeLike = {
@@ -342,6 +343,8 @@ void describe('OpenOracleSection', () => {
 		try {
 			await Promise.resolve()
 			expect(browseLoadAttempts).toBe(0)
+			expect(within(document.body).getByText('Preparing report summaries.')).not.toBeNull()
+			expect(within(document.body).queryByText('No Open Oracle reports found.')).toBeNull()
 		} finally {
 			await rendered.cleanup()
 			restoreActiveEnvironment()

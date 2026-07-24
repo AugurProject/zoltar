@@ -88,7 +88,7 @@ export function MarketSection({
 
 	return (
 		<div className='route-view-flow'>
-			<SectionBlock className={view === 'questions' ? '' : 'market-task-context'} density='compact' title={commonCopy.zoltar} variant='plain'>
+			<SectionBlock className={view === 'questions' ? '' : 'market-task-context'} density='compact' description={view === 'questions' ? marketCopy.zoltarIntroduction : undefined} title={commonCopy.zoltar} variant='plain'>
 				{showUniverseSummary ? (
 					<MarketOverviewSection
 						accountAddress={accountState.address}

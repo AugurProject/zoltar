@@ -815,7 +815,7 @@ export function OpenOracleSection({
 			cancelled = true
 		}
 	}, [browsePageIndex, environmentReady, openOracleResult?.action, openOracleResult?.hash, view])
-	const loadingBrowse = browseLoad.isLoading.value
+	const loadingBrowse = !environmentReady || browseLoad.isLoading.value
 	const normalizedBrowseSearchText = browseSearchText.trim().toLowerCase()
 	const browseReportCount = browsePage?.reportCount ?? 0n
 	const browsePageCount = browsePage === undefined ? undefined : getPaginationPageCount(browseReportCount, BROWSE_PAGE_SIZE)
@@ -877,7 +877,14 @@ export function OpenOracleSection({
 						</div>
 						{browsePage === undefined || !hasActiveBrowseFilters ? undefined : <p className='detail'>{openOracleCopy.formatBrowseShownCountSummary(filteredBrowseReports.length.toString(), browsePage.reports.length.toString())}</p>}
 						{loadingBrowse ? (
-							<StateHint presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'pending', detail: openOracleCopy.reportSummariesRefreshingDetail }} />
+							<StateHint
+								presentation={{
+									key: 'loading',
+									badgeLabel: commonCopy.loading,
+									badgeTone: 'pending',
+									detail: environmentReady ? openOracleCopy.reportSummariesRefreshingDetail : openOracleCopy.reportSummariesInitializingDetail,
+								}}
+							/>
 						) : (
 							(() => {
 								if (browsePage === undefined || browsePage.reports.length === 0) return <StateHint presentation={{ key: 'empty', badgeLabel: commonCopy.none, badgeTone: 'muted', detail: openOracleCopy.oracleGamesEmpty }} />
