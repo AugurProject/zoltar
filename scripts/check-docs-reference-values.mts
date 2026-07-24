@@ -239,8 +239,16 @@ function assertZoltarForkDepths(): void {
 	const protocolConfig = getMainnetProtocolConfig()
 	assert.equal(protocolConfig.forkThresholdDivisor, 20n, 'Zoltar fork threshold divisor changed')
 	assert.equal(protocolConfig.forkBurnDivisor, 5n, 'Zoltar fork burn divisor changed')
-	const normalizedWhitepaper = zoltarWhitepaper.replaceAll(/\s+/g, ' ')
-	for (const documentedClaim of ['20% of the threshold is an uncredited haircut', 'Later REP added to a migration balance converts 1:1', 'intended admission cost']) {
+	assert.match(zoltar, /uint256 migrationRepBalance = forkThreshold - forkThreshold \/ forkBurnDivisor;/)
+
+	const nonDivisibleThreshold = 6n
+	const haircut = nonDivisibleThreshold / protocolConfig.forkBurnDivisor
+	const migrationCredit = nonDivisibleThreshold - haircut
+	assert.equal(haircut, 1n, 'non-divisible fork threshold haircut must round down')
+	assert.equal(migrationCredit, 5n, 'non-divisible fork threshold remainder must round the 80% migration credit up')
+
+	const normalizedWhitepaper = zoltarWhitepaper.replaceAll(/<[^>]*>/g, '').replaceAll(/\s+/g, ' ')
+	for (const documentedClaim of ['⌊forkThreshold / 5⌋, approximately 20% of the threshold', '⌈4 × forkThreshold / 5⌉', 'rounded up when the threshold is not divisible by five', 'Later REP added to a migration balance converts 1:1', 'intended admission cost']) {
 		assert.ok(normalizedWhitepaper.includes(documentedClaim), `Missing Zoltar fork haircut claim: ${documentedClaim}`)
 	}
 }
