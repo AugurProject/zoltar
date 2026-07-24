@@ -164,7 +164,6 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 	const disputeReport = async (
 		client: WriteClient,
 		reportId: bigint,
-		tokenToSwap: Address,
 		newAmount1: bigint,
 		newAmount2: bigint,
 		preimage?: Awaited<ReturnType<typeof loadOpenOracleEventState>>['latest'],
@@ -182,18 +181,7 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 				address: openOracle,
 				functionName: 'dispute',
-				args: [
-					reportId,
-					tokenToSwap,
-					newAmount1,
-					newAmount2,
-					options.disputer ?? client.account.address,
-					options.tryInternalBalance1 ?? false,
-					options.tryInternalBalance2 ?? false,
-					getOpenOracleGameTuple(resolvedPreimage.game),
-					getOpenOracleHelperTuple(resolvedPreimage.helper),
-					options.timing ?? getTimingBoundaries(),
-				],
+				args: [reportId, newAmount1, newAmount2, options.disputer ?? client.account.address, options.tryInternalBalance1 ?? false, options.tryInternalBalance2 ?? false, getOpenOracleGameTuple(resolvedPreimage.game), getOpenOracleHelperTuple(resolvedPreimage.helper), options.timing ?? getTimingBoundaries()],
 				value: options.value ?? 0n,
 			}),
 		)
@@ -322,30 +310,28 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 	})
 
 	test('dispute validates every reachable custom-error transition guard', async () => {
-		const token1 = getAddress(addressString(GENESIS_REPUTATION_TOKEN))
 		await prepareReporter(reporter)
 		const reportId = await createReport(reporter)
 		const state = (await loadOpenOracleEventState(reporter, reportId)).latest
 
-		await assertCustomError(() => disputeReport(disputer, reportId, token1, 1_200n, 900n, state), 'DisputeTooEarly')
+		await assertCustomError(() => disputeReport(disputer, reportId, 1_200n, 900n, state), 'DisputeTooEarly')
 		await mockWindow.setTime(state.game.reportTimestamp + DISPUTE_DELAY - 1n)
 
 		const invalidDisputeCases = [
-			{ error: 'InvalidAmount1', execute: () => disputeReport(disputer, reportId, token1, 1_201n, 900n, state) },
-			{ error: 'AmountsCannotBeZero', execute: () => disputeReport(disputer, reportId, token1, 1_200n, 0n, state) },
-			{ error: 'InvalidTokenToSwap', execute: () => disputeReport(disputer, reportId, ZERO_ADDRESS, 1_200n, 900n, state) },
+			{ error: 'InvalidAmount1', execute: () => disputeReport(disputer, reportId, 1_201n, 900n, state) },
+			{ error: 'AmountsCannotBeZero', execute: () => disputeReport(disputer, reportId, 1_200n, 0n, state) },
 			{
 				error: 'AddressCannotBeZero',
-				execute: () => disputeReport(disputer, reportId, token1, 1_200n, 900n, state, { disputer: ZERO_ADDRESS }),
+				execute: () => disputeReport(disputer, reportId, 1_200n, 900n, state, { disputer: ZERO_ADDRESS }),
 			},
 			{
 				error: 'NeitherTokenIsETH',
-				execute: () => disputeReport(disputer, reportId, token1, 1_200n, 900n, state, { value: 1n }),
+				execute: () => disputeReport(disputer, reportId, 1_200n, 900n, state, { value: 1n }),
 			},
 			{
 				error: 'InvalidTiming',
 				execute: () =>
-					disputeReport(disputer, reportId, token1, 1_200n, 900n, state, {
+					disputeReport(disputer, reportId, 1_200n, 900n, state, {
 						timing: { blockNumber: 0n, blockNumberBound: 0n, blockTimestamp: 1n, blockTimestampBound: 0n },
 					}),
 			},
@@ -363,7 +349,7 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		await submitReport(reporter, { ...getReportParameters(reporter), escalationHalt: AMOUNT1 })
 		const haltedState = (await loadOpenOracleEventState(reporter, haltedReportId)).latest
 		await mockWindow.setTime(haltedState.game.reportTimestamp + DISPUTE_DELAY - 1n)
-		await assertCustomError(() => disputeReport(disputer, haltedReportId, token1, 1_002n, 900n, haltedState), 'EscalationHalted')
+		await assertCustomError(() => disputeReport(disputer, haltedReportId, 1_002n, 900n, haltedState), 'EscalationHalted')
 
 		const ethReportId = await reporter.readContract({
 			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
@@ -393,7 +379,7 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 			previousReporterAndProtocolFeeCredit: await getHeldBalance(ethState.game.currentReporter, ethState.game.token1),
 			disputerHeldEth: await getHeldBalance(disputer.account.address, ZERO_ADDRESS),
 		}
-		await assertCustomError(() => disputeReport(disputer, ethReportId, ZERO_ADDRESS, 1_200n, 1_000n, ethState), 'MsgValueTooLow')
+		await assertCustomError(() => disputeReport(disputer, ethReportId, 1_200n, 1_000n, ethState), 'MsgValueTooLow')
 		assert.deepStrictEqual(
 			{
 				disputerHeldToken1: await getHeldBalance(disputer.account.address, ethState.game.token1),
@@ -716,10 +702,10 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		const callbackState = (await loadOpenOracleEventState(reporter, callbackReportId)).latest
 		await mockWindow.setTime(callbackState.game.reportTimestamp + SETTLEMENT_TIME - 1n)
 		const invalidGasStateBefore = {
-			finalizedGame: await reporter.readContract({
+			storedGame: await reporter.readContract({
 				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 				address: openOracle,
-				functionName: 'finalizedGame',
+				functionName: 'storedGame',
 				args: [callbackReportId],
 			}),
 			gameHash: await reporter.readContract({
@@ -741,10 +727,10 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		await assertCustomError(() => openOracleSettle(settler, callbackReportId), 'InvalidGasLimit')
 		assert.deepStrictEqual(
 			{
-				finalizedGame: await reporter.readContract({
+				storedGame: await reporter.readContract({
 					abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 					address: openOracle,
-					functionName: 'finalizedGame',
+					functionName: 'storedGame',
 					args: [callbackReportId],
 				}),
 				gameHash: await reporter.readContract({
@@ -816,7 +802,7 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		const cleanData = encodeFunctionData({
 			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'dispute',
-			args: [reportId, getAddress(addressString(GENESIS_REPUTATION_TOKEN)), 1_200n, 800n, disputer.account.address, false, false, getOpenOracleGameTuple(state.game), getOpenOracleHelperTuple(state.helper), [0n, 0n, 0n, 0n]],
+			args: [reportId, 1_200n, 800n, disputer.account.address, false, false, getOpenOracleGameTuple(state.game), getOpenOracleHelperTuple(state.helper), [0n, 0n, 0n, 0n]],
 		})
 		await assertRawCallReverts(disputer, dirtyCalldataByte(cleanData, 0x4f))
 
@@ -846,14 +832,14 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		const reportId = await createReport(reporter)
 		const original = (await loadOpenOracleEventState(reporter, reportId)).latest
 		await mockWindow.setTime(original.game.reportTimestamp + DISPUTE_DELAY - 1n)
-		await disputeReport(disputer, reportId, getAddress(addressString(GENESIS_REPUTATION_TOKEN)), 1_200n, 800n, original)
+		await disputeReport(disputer, reportId, 1_200n, 800n, original)
 
 		const disputed = await loadOpenOracleEventState(reporter, reportId)
 		assert.strictEqual(disputed.reportCount, 2)
 		assert.strictEqual(disputed.latest.game.currentReporter, disputer.account.address)
 		assert.strictEqual(disputed.latest.game.currentAmount1, 1_200n)
 		assert.strictEqual(disputed.latest.game.currentAmount2, 800n)
-		await assertCustomError(() => disputeReport(disputer, reportId, getAddress(addressString(GENESIS_REPUTATION_TOKEN)), 1_440n, 900n, original), 'InvalidStateHash')
+		await assertCustomError(() => disputeReport(disputer, reportId, 1_440n, 900n, original), 'InvalidStateHash')
 
 		await mockWindow.setTime(disputed.latest.game.reportTimestamp + SETTLEMENT_TIME - 1n)
 		await openOracleSettle(settler, reportId)
@@ -888,7 +874,7 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		const externalToken2Before = await getERC20Balance(reporter, WETH_ADDRESS, reporter.account.address)
 		await mockWindow.setTime(state.game.reportTimestamp + DISPUTE_DELAY - 1n)
 
-		await disputeReport(reporter, reportId, token1, 1_200n, 800n, state)
+		await disputeReport(reporter, reportId, 1_200n, 800n, state)
 
 		assert.strictEqual(await getERC20Balance(reporter, token1, reporter.account.address), externalToken1Before - 205n)
 		assert.strictEqual(await getERC20Balance(reporter, WETH_ADDRESS, reporter.account.address), externalToken2Before)
@@ -911,7 +897,7 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		const externalToken2Before = await getERC20Balance(reporter, WETH_ADDRESS, reporter.account.address)
 		await mockWindow.setTime(state.game.reportTimestamp + DISPUTE_DELAY - 1n)
 
-		await disputeReport(reporter, reportId, WETH_ADDRESS, 1_200n, 1_300n, state)
+		await disputeReport(reporter, reportId, 1_200n, 1_300n, state)
 
 		assert.strictEqual(await getERC20Balance(reporter, token1, reporter.account.address), externalToken1Before - 200n)
 		assert.strictEqual(await getERC20Balance(reporter, WETH_ADDRESS, reporter.account.address), externalToken2Before - 305n)
@@ -934,7 +920,7 @@ describe('OpenOracle 0.2.0 report lifecycle', () => {
 		const boundarySnapshot = await mockWindow.anvilSnapshot()
 		await mockWindow.setTime(deadline - 1n)
 
-		await assertCustomError(() => disputeReport(disputer, reportId, getAddress(addressString(GENESIS_REPUTATION_TOKEN)), 1_200n, 900n, state), 'DisputeTooLate')
+		await assertCustomError(() => disputeReport(disputer, reportId, 1_200n, 900n, state), 'DisputeTooLate')
 		assert.strictEqual((await reporter.getBlock()).timestamp, deadline)
 
 		await mockWindow.anvilRevert(boundarySnapshot)

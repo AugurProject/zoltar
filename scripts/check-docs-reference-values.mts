@@ -1,5 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises'
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { getMainnetProtocolConfig } from '../shared/ts/protocolConfig'
 
 const readme = await readFile('README.md', 'utf8')
@@ -27,6 +28,7 @@ const escalationGameCalculations = await readFile('solidity/contracts/peripheral
 const escalationGameSettlement = await readFile('solidity/contracts/peripherals/EscalationGameSettlement.sol', 'utf8')
 const escalationGameEscrow = await readFile('solidity/contracts/peripherals/EscalationGameEscrow.sol', 'utf8')
 const priceCoordinator = await readFile('solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol', 'utf8')
+const openOracleSource = await readFile('solidity/contracts/peripherals/openOracle/OpenOracle.sol', 'utf8')
 const openOracleProvenance = await readFile('solidity/contracts/peripherals/openOracle/UPSTREAM.md', 'utf8')
 const openOracleState = await readFile('shared/ts/openOracle.ts', 'utf8')
 const securityPool = await readFile('solidity/contracts/peripherals/SecurityPool.sol', 'utf8')
@@ -283,7 +285,10 @@ function assertCoordinatorSettlementEconomics(): void {
 		'the callback cap constrains only <code>block.basefee</code>, so a prevailing transaction priority fee above <code>p</code> weakens it.',
 		"The constructor checks each multiplier's lower bound but does not require the settlement cap to remain below the Open Oracle Security multiplier.",
 		'the callback does not recompute <code>minimumToken1Report()</code> from settlement base fee and does not compare the final price with an external truth source.',
-		'The cap is a rejection boundary, not proof that an accepted price is externally correct;',
+		"OpenOracle records each report block's base fee when dispute tracking is enabled.",
+		"The callback reads <code>storedGame(reportId).numReports</code>, selects history index <code>numReports - 1</code>, and requires the final WETH amount to cover the configured security formula at that record's base fee plus the configured priority fee.",
+		'This check proves only that the final WETH position meets the modeled security-sizing floor.',
+		'A correction is modeled as profitable only when the price is wrong by at least the configured target error and the configured priority-fee, gas-unit, fee, and transaction-inclusion assumptions hold; the check does not prove that an accepted price is externally correct.',
 	]) {
 		assert.ok(normalizedIntegration.includes(documentedClaim), `Missing coordinator settlement-economics claim: ${documentedClaim}`)
 	}
@@ -312,7 +317,8 @@ function assertCoordinatorSettlementEconomics(): void {
 }
 
 function assertOpenOracleVendorAndEventDocs(): void {
-	for (const pinnedRevision of ['ae4578bb4fa9d32820ac32c482f318cdbd63bfa2', 'c64a1edb67b6e3f4a15cca8909c9482ad33a02b0', 'src/OpenOracleSlim.sol', 'OpenZeppelin Contracts v5.4.0']) {
+	assert.equal(createHash('sha256').update(openOracleSource).digest('hex'), 'dd48faa19839d443ffb272458051a14507cccc89faa5cec54786902cbd348b37', 'Vendored OpenOracle source changed; compare it with the pinned SlimStorage revision and update the source fingerprint')
+	for (const pinnedRevision of ['a2d8515333b41fb2fb6f1f84663180ff4ceb5c7d', 'c64a1edb67b6e3f4a15cca8909c9482ad33a02b0', 'src/OpenOracleSlim.sol', 'OpenZeppelin Contracts v5.4.0']) {
 		assert.ok(openOracleProvenance.includes(pinnedRevision), `OpenOracle provenance must retain ${pinnedRevision}`)
 	}
 	for (const reconstructionClaim of ['topic 1 is the indexed 32-byte report ID', '`data` is exactly 235 raw packed bytes', 'set `settlementTimestamp` from the settlement block']) {
@@ -324,6 +330,13 @@ function assertOpenOracleVendorAndEventDocs(): void {
 	assert.match(whitepaperStatoblast, /coordinator reports\s*<\/text>\s*<text[^>]+>\s*sponsor funds/, 'whitepaper oracle flow must distinguish the coordinator reporter from the funding sponsor')
 	assert.doesNotMatch(openOracleIntegration, /\b(?:sponsor|caller)s?\s+(?:may\s+)?(?:voluntarily\s+)?post(?:s|ed|ing)?\b/i, 'OpenOracle integration must not describe the funding sponsor as posting the report')
 	const normalizedIntegration = openOracleIntegration.replaceAll(/\s+/g, ' ')
+	for (const storageClaim of ['Its state hash remains authoritative', 'materializes <code>storedGame</code> and <code>storedHelper</code> when the report is created', 'updates the live game fields after each dispute']) {
+		assert.ok(normalizedIntegration.includes(storageClaim), `OpenOracle integration must document SlimStorage behavior: ${storageClaim}`)
+	}
+	for (const directionClaim of ['The dispute calldata does not select <code>tokenToSwap</code>', '<code>newAmount2 * oldAmount1 &gt; oldAmount2 * newAmount1</code>', 'equality and lower ratios use token1', 'The on-chain comparison remains authoritative.']) {
+		assert.ok(normalizedIntegration.includes(directionClaim), `OpenOracle integration must document derived dispute direction: ${directionClaim}`)
+	}
+	assert.doesNotMatch(openOracleIntegration, /Only its state hash|finalized storage/, 'OpenOracle docs must not retain the superseded finalized-only storage description')
 	assert.ok(normalizedIntegration.includes('The sponsor may request and fund more than the minimum; the coordinator submits the selected amount as <code>currentAmount1</code>.'), 'OpenOracle integration must distinguish sponsor funding from coordinator submission')
 	assert.doesNotMatch(openOracleIntegration, /<code>openOracleReportPrice<\/code>/, 'OpenOracle integration must not name the removed openOracleReportPrice function')
 	assert.doesNotMatch(invariantsHtml, /<\/a\s*>\s*>\s*and\s*<a href="\.\.\/solidity\/ts\/tests\/openOracleDispute\.test\.ts"/, 'oracle verification row must not render a stray greater-than marker between test links')
@@ -596,9 +609,9 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /requestPrice\(proposedRepPerEthPrice, requestedInitialWeth\)[\s\S]*caller must accept any positive excess-ETH refund[\s\S]*Callback rejection rolls back the report and initial position/)
 	assert.match(openOracleIntegration, /id="refund-callback"[\s\S]*Both public request paths refund only a positive unused or excess ETH\s+amount[\s\S]*If it rejects the refund, the entire transaction\s+reverts/)
 	assert.match(operatorReference, /Immediate execution[\s\S]*canonical refund warning[\s\S]*open-oracle-integration\.html#refund-callback/)
-	assert.match(priceCoordinator, /function recoverSettledPendingReport\(\)[\s\S]*finalizedGame\(reportId\)[\s\S]*require\(settlementTimestamp != 0, 'Pending oracle report has not settled'\)/)
-	assert.match(contractInteractionReference, /recoverSettledPendingReport\(\)[\s\S]*stored OpenOracle `finalizedGame\(reportId\)\.settlementTimestamp` is nonzero/)
-	assert.match(operatorReference, /Recovery path[\s\S]*requires both a pending report and a nonzero `finalizedGame\(reportId\)\.settlementTimestamp`/)
+	assert.match(priceCoordinator, /function recoverSettledPendingReport\(\)[\s\S]*storedGame\(reportId\)[\s\S]*require\(settlementTimestamp != 0, 'Pending oracle report has not settled'\)/)
+	assert.match(contractInteractionReference, /recoverSettledPendingReport\(\)[\s\S]*stored OpenOracle `storedGame\(reportId\)\.settlementTimestamp` is nonzero/)
+	assert.match(operatorReference, /Recovery path[\s\S]*requires both a pending report and a nonzero `storedGame\(reportId\)\.settlementTimestamp`/)
 	assert.match(contractInteractionReference, /addFeeEligibleSecurityBondAllowance\(vault, amount\)[\s\S]*no lifecycle, vault, positive-amount, or value-change guard[\s\S]*newly auction-claimed security-bond allowance to the live fee denominator[\s\S]*including at zero amount/)
 	assert.match(securityPool, /function setAwaitingForkContinuation\(bool shouldAwait\) external onlyForker \{\s*awaitingForkContinuation = shouldAwait;\s*emit AwaitingForkContinuationSet\(awaitingForkContinuation\)/)
 	assert.match(contractInteractionReference, /setAwaitingForkContinuation\(shouldAwait\)[\s\S]*No lifecycle or value-change guard[\s\S]*`AwaitingForkContinuationSet`, including for a repeated value/)
