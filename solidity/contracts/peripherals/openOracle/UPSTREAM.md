@@ -1,6 +1,6 @@
 # OpenOracle upstream provenance
 
-This directory vendors the OpenOracle 0.2.0 source used by Zoltar. The snapshot is pinned to OpenOracle repository commit [`ae4578bb4fa9d32820ac32c482f318cdbd63bfa2`](https://github.com/openOracleProject/openOracle/commit/ae4578bb4fa9d32820ac32c482f318cdbd63bfa2).
+This directory vendors the OpenOracle 0.2.0 SlimStorage source used by Zoltar. The snapshot is pinned to the `SlimStorage` branch at OpenOracle repository commit [`a2d8515333b41fb2fb6f1f84663180ff4ceb5c7d`](https://github.com/openOracleProject/openOracle/commit/a2d8515333b41fb2fb6f1f84663180ff4ceb5c7d).
 
 | Upstream source | Local source |
 | --- | --- |

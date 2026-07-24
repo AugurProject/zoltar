@@ -685,6 +685,10 @@ describe('Price Oracle Refund Security Tests', () => {
 				message: /initial report priority fee must be greater than zero/i,
 			},
 			{
+				args: [...baseArgs.slice(0, 15), false, ...baseArgs.slice(16)] as OracleCoordinatorConstructorArgs,
+				message: /revert/i,
+			},
+			{
 				args: buildArgsWithSizingParameters(0n, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_PROTOCOL_FEE, ORACLE_FEE_PERCENTAGE),
 				message: /dispute gas units must be greater than zero/i,
 			},
@@ -1116,6 +1120,14 @@ describe('Price Oracle Refund Security Tests', () => {
 
 		const acceptedReportId = await requestAtConfiguredBaseFee()
 		const acceptedReportMeta = await getOpenOracleReportMeta(client, acceptedReportId)
+		const initialHistoryRecord = await client.readContract({
+			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			functionName: 'disputeHistory',
+			address: getInfraContractAddresses().openOracle,
+			args: [acceptedReportId, 0n],
+		})
+		assert.strictEqual(initialHistoryRecord[0], minimumWethReport, 'the initial report should equal the final-history economic floor')
+		assert.strictEqual(initialHistoryRecord[2], requestBaseFeeWeiPerGas, 'the exact-floor check should use the initial report block base fee')
 		await mockWindow.advanceTime(BigInt(acceptedReportMeta.settlementTime) + 1n)
 		await mockWindow.request({
 			method: 'anvil_setNextBlockBaseFeePerGas',
@@ -1144,6 +1156,154 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(findPriceReportedLog(rejectedReceipt.logs), undefined, 'settlement one wei above the basefee cap must not report a price')
 		assert.strictEqual(rejectedLog.args.reason, 'Base fee too high', 'settlement one wei above the cap should expose the basefee rejection reason')
 		assert.strictEqual(await getIsPriceValid(client, priceOracle), false, 'settlement one wei above the basefee cap must leave the stale price invalid')
+	})
+
+	test('oracle settlement rejects a final report that was uneconomic to dispute at its recorded base fee', async () => {
+		const requestBaseFeeWeiPerGas = 1n * 10n ** 9n
+		const finalReportBaseFeeWeiPerGas = 100n * 10n ** 9n
+		const proposedRepPerEthPrice = 10n ** 18n
+		const requestEthCost = requestBaseFeeWeiPerGas * 4n * (BigInt(ORACLE_SETTLEMENT_GAS) * 4n + ORACLE_REPORT_GAS) + 101n
+		const minimumWethReport = calculateOracleMinimumWethReport({
+			...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
+			baseFeeWeiPerGas: requestBaseFeeWeiPerGas,
+		})
+		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const openOracle = getInfraContractAddresses().openOracle
+
+		await wrapWeth(client, minimumWethReport)
+		await approveToken(client, WETH_ADDRESS, priceOracle)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
+		await wrapWeth(counterpartyClient, minimumWethReport * 4n)
+		await approveToken(counterpartyClient, WETH_ADDRESS, openOracle)
+		await approveToken(counterpartyClient, addressString(GENESIS_REPUTATION_TOKEN), openOracle)
+		await mockWindow.request({
+			method: 'anvil_setNextBlockBaseFeePerGas',
+			params: [`0x${requestBaseFeeWeiPerGas.toString(16)}`],
+		})
+		const requestHash = await client.writeContract({
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'requestPrice',
+			address: priceOracle,
+			args: [proposedRepPerEthPrice, 0n],
+			value: requestEthCost,
+			gasPrice: requestBaseFeeWeiPerGas,
+		})
+		await client.waitForTransactionReceipt({ hash: requestHash })
+
+		const reportId = await getPendingReportId(client, priceOracle)
+		const reportMeta = await getOpenOracleReportMeta(client, reportId)
+		const reportStatus = await getOpenOracleReportStatus(client, reportId)
+		const reportState = (await loadOpenOracleEventState(client, reportId)).latest
+		const disputedAmount1 = (reportStatus.currentAmount1 * reportMeta.multiplier) / 100n
+		const disputedAmount2 = reportStatus.currentAmount2
+		await mockWindow.request({
+			method: 'anvil_setNextBlockBaseFeePerGas',
+			params: [`0x${finalReportBaseFeeWeiPerGas.toString(16)}`],
+		})
+		const disputeHash = await counterpartyClient.writeContract({
+			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			functionName: 'dispute',
+			address: openOracle,
+			args: [reportId, disputedAmount1, disputedAmount2, counterpartyClient.account.address, false, false, getOpenOracleGameTuple(reportState.game), getOpenOracleHelperTuple(reportState.helper), [0n, 0n, 0n, 0n]],
+			gasPrice: finalReportBaseFeeWeiPerGas,
+		})
+		await counterpartyClient.waitForTransactionReceipt({ hash: disputeHash })
+		const finalHistoryRecord = await client.readContract({
+			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+			functionName: 'disputeHistory',
+			address: openOracle,
+			args: [reportId, 1n],
+		})
+		assert.strictEqual(finalHistoryRecord[2], finalReportBaseFeeWeiPerGas, 'OpenOracle should record the final report block base fee')
+
+		const finalReportStatus = await getOpenOracleReportStatus(client, reportId)
+		await mockWindow.setTime(finalReportStatus.reportTimestamp + reportMeta.settlementTime - 1n)
+		await mockWindow.request({
+			method: 'anvil_setNextBlockBaseFeePerGas',
+			params: [`0x${requestBaseFeeWeiPerGas.toString(16)}`],
+		})
+		const settlementHash = await openOracleSettleWithGasPrice(client, reportId, requestBaseFeeWeiPerGas)
+		const settlementReceipt = await client.waitForTransactionReceipt({ hash: settlementHash })
+		const rejectedLog = findPriceReportRejectedLog(settlementReceipt.logs)
+		if (rejectedLog === undefined) throw new Error('missing PriceReportRejected log')
+		assert.strictEqual(rejectedLog.args.reason, 'Final report was not profitable to dispute')
+		assert.strictEqual(findPriceReportedLog(settlementReceipt.logs), undefined, 'an uneconomic final dispute round must not publish a price')
+		assert.strictEqual(await getIsPriceValid(client, priceOracle), false, 'an uneconomic final dispute round must leave the price invalid')
+	})
+
+	test('oracle settlement reads the last of multiple dispute-history records', async () => {
+		const baseFeeWeiPerGas = 1n * 10n ** 9n
+		const finalDisputeBaseFeeWeiPerGas = 100n * 10n ** 9n
+		const proposedRepPerEthPrice = 10n ** 18n
+		const requestEthCost = baseFeeWeiPerGas * 4n * (BigInt(ORACLE_SETTLEMENT_GAS) * 4n + ORACLE_REPORT_GAS) + 101n
+		const initialWethReport = calculateOracleMinimumWethReport({
+			...DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
+			baseFeeWeiPerGas,
+		})
+		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const openOracle = getInfraContractAddresses().openOracle
+
+		await wrapWeth(client, initialWethReport * 2n)
+		await approveToken(client, WETH_ADDRESS, priceOracle)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
+		await wrapWeth(counterpartyClient, initialWethReport * 4n)
+		await approveToken(counterpartyClient, WETH_ADDRESS, openOracle)
+		await approveToken(counterpartyClient, addressString(GENESIS_REPUTATION_TOKEN), openOracle)
+		await mockWindow.request({
+			method: 'anvil_setNextBlockBaseFeePerGas',
+			params: [`0x${baseFeeWeiPerGas.toString(16)}`],
+		})
+		const requestHash = await client.writeContract({
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'requestPrice',
+			address: priceOracle,
+			args: [proposedRepPerEthPrice, 0n],
+			value: requestEthCost,
+			gasPrice: baseFeeWeiPerGas,
+		})
+		await client.waitForTransactionReceipt({ hash: requestHash })
+
+		const reportId = await getPendingReportId(client, priceOracle)
+		const reportMeta = await getOpenOracleReportMeta(client, reportId)
+		for (let disputeIndex = 1n; disputeIndex <= 2n; disputeIndex++) {
+			const reportState = (await loadOpenOracleEventState(client, reportId)).latest
+			const newAmount1 = (reportState.game.currentAmount1 * reportMeta.multiplier) / 100n
+			const newAmount2 = (reportState.game.currentAmount2 * reportMeta.multiplier) / 100n
+			const disputeBaseFeeWeiPerGas = disputeIndex === 2n ? finalDisputeBaseFeeWeiPerGas : baseFeeWeiPerGas
+			await mockWindow.request({
+				method: 'anvil_setNextBlockBaseFeePerGas',
+				params: [`0x${disputeBaseFeeWeiPerGas.toString(16)}`],
+			})
+			const disputeHash = await counterpartyClient.writeContract({
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				functionName: 'dispute',
+				address: openOracle,
+				args: [reportId, newAmount1, newAmount2, counterpartyClient.account.address, false, false, getOpenOracleGameTuple(reportState.game), getOpenOracleHelperTuple(reportState.helper), [0n, 0n, 0n, 0n]],
+				gasPrice: disputeBaseFeeWeiPerGas,
+			})
+			await counterpartyClient.waitForTransactionReceipt({ hash: disputeHash })
+			const historyRecord = await client.readContract({
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				functionName: 'disputeHistory',
+				address: openOracle,
+				args: [reportId, disputeIndex],
+			})
+			assert.strictEqual(historyRecord[0], newAmount1, `history index ${disputeIndex} should preserve the disputed WETH amount`)
+			assert.strictEqual(historyRecord[2], disputeBaseFeeWeiPerGas, `history index ${disputeIndex} should record its report-block base fee`)
+		}
+
+		const finalReportStatus = await getOpenOracleReportStatus(client, reportId)
+		await mockWindow.setTime(finalReportStatus.reportTimestamp + reportMeta.settlementTime - 1n)
+		await mockWindow.request({
+			method: 'anvil_setNextBlockBaseFeePerGas',
+			params: [`0x${baseFeeWeiPerGas.toString(16)}`],
+		})
+		const settlementHash = await openOracleSettleWithGasPrice(client, reportId, baseFeeWeiPerGas)
+		const settlementReceipt = await client.waitForTransactionReceipt({ hash: settlementHash })
+		const rejectedLog = findPriceReportRejectedLog(settlementReceipt.logs)
+		if (rejectedLog === undefined) throw new Error('missing PriceReportRejected log')
+		assert.strictEqual(rejectedLog.args.reason, 'Final report was not profitable to dispute')
+		assert.strictEqual(findPriceReportedLog(settlementReceipt.logs), undefined, 'the uniquely expensive final dispute record must drive settlement rejection')
 	})
 
 	test('oracle settlement skips price updates and staged execution when settlement basefee is too high', async () => {
@@ -1609,7 +1769,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const sponsorRepBalanceAfterRequest = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		const sponsorWethBalanceAfterRequest = await getERC20Balance(client, WETH_ADDRESS, client.account.address)
 		const disputedAmount1 = (reportStatusBeforeDispute.currentAmount1 * reportMeta.multiplier) / 100n
-		const disputedAmount2 = (reportStatusBeforeDispute.currentAmount2 * 8n) / 10n
+		const disputedAmount2 = reportStatusBeforeDispute.currentAmount2 * 2n
 		const disputeFee = (reportStatusBeforeDispute.currentAmount2 * reportMeta.feePercentage) / 10_000_000n
 		const disputeProtocolFee = (reportStatusBeforeDispute.currentAmount2 * reportMeta.protocolFee) / 10_000_000n
 		const sponsorRepPayout = 2n * reportStatusBeforeDispute.currentAmount2 + disputeFee
@@ -1622,7 +1782,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 			functionName: 'dispute',
 			address: openOracle,
-			args: [reportId, addressString(GENESIS_REPUTATION_TOKEN), disputedAmount1, disputedAmount2, counterpartyClient.account.address, false, false, getOpenOracleGameTuple(preimageBeforeDispute.game), getOpenOracleHelperTuple(preimageBeforeDispute.helper), [0n, 0n, 0n, 0n]],
+			args: [reportId, disputedAmount1, disputedAmount2, counterpartyClient.account.address, false, false, getOpenOracleGameTuple(preimageBeforeDispute.game), getOpenOracleHelperTuple(preimageBeforeDispute.helper), [0n, 0n, 0n, 0n]],
 		})
 		await counterpartyClient.waitForTransactionReceipt({ hash: disputeHash })
 

@@ -44,7 +44,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/contract-interaction-reference.md'
-const expectedProductionSoliditySourceFingerprint = '393ca3562bf0cc886aba67e3de7df92a0a886c6436156327e1667fe4879a5e36'
+const expectedProductionSoliditySourceFingerprint = '3c1eafad331c3edad386e3a6b856c0c4ec5b255dcc9ba9b8f478a2c53e34aaf5'
 
 const eventSourceByName: Record<string, string> = {
 	Approval: 'solidity/contracts/IERC20.sol',
@@ -477,7 +477,7 @@ const stateChangingAbiFingerprintBySource: Record<string, string> = {
 }
 
 const readDeclarationExclusionsBySource: Record<string, string[]> = {
-	'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol': ['finalizedGame'],
+	'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol': ['storedGame', 'disputeHistory'],
 	'solidity/contracts/peripherals/SecurityPool.sol': ['eventEmitter', 'factory'],
 }
 
@@ -1407,7 +1407,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'Anyone',
 				effect: 'Clears a pending report whose normal callback path did not clear coordinator state and consumes its pending-operation slot.',
 				declarations: [{ name: 'recoverSettledPendingReport' }],
-				preconditions: 'A pending report ID exists and its stored OpenOracle `finalizedGame(reportId).settlementTimestamp` is nonzero.',
+				preconditions: 'A pending report ID exists and its stored OpenOracle `storedGame(reportId).settlementTimestamp` is nonzero.',
 				signals: '`PendingReportRecovered`, optionally `PendingOperationRecoveryConsumed`, and `CoordinatorStateCheckpoint`',
 			},
 			{
@@ -1415,7 +1415,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'Configured `OpenOracle` only',
 				effect: 'A valid settlement updates the price and auto-executes the bounded pending batch. A rejected settlement clears pending-report state but leaves staged operations queued for a later valid price path.',
 				declarations: [{ name: 'openOracleCallback' }],
-				preconditions: 'Callback report matches the pending report; high basefee or zero values reject the price after clearing pending report state.',
+				preconditions: 'Callback report matches the pending report; excessive settlement basefee, an uneconomic final history record at its recorded base fee plus configured priority fee, or zero values reject the price after clearing pending report state.',
 				signals: '`PriceReported` or `PriceReportRejected`; operation execution events; authoritative `CoordinatorStateCheckpoint` records',
 			},
 			{

@@ -33,6 +33,10 @@ export function isOpenOracleReportMissingError(error: unknown) {
 	return error instanceof Error && error.name === OPEN_ORACLE_REPORT_MISSING_ERROR_NAME
 }
 
+export function getOpenOracleDisputeSwapToken(game: Pick<OpenOracleStatePreimage['game'], 'currentAmount1' | 'currentAmount2' | 'token1' | 'token2'>, newAmount1: bigint, newAmount2: bigint) {
+	return newAmount2 * game.currentAmount1 > game.currentAmount2 * newAmount1 ? game.token2 : game.token1
+}
+
 function normalizeOpenOracleTokenMetadata(tokenAddress: Address, decimalsValue: unknown, symbolValue: unknown) {
 	const decimals = Number(decimalsValue)
 	const symbol = String(symbolValue).trim()
@@ -879,11 +883,13 @@ export async function disputeOracleReport(client: WriteClient, openOracleAddress
 	const state = await loadOpenOracleEventState(client, openOracleAddress, reportId)
 	const currentStateHash = hashOpenOracleStatePreimage(state.latest)
 	if (currentStateHash.toLowerCase() !== stateHash.toLowerCase()) throw new Error('This report changed on-chain while the dispute was being prepared. Retry to use the latest state.')
+	const derivedTokenToSwap = getOpenOracleDisputeSwapToken(state.latest.game, newAmount1, newAmount2)
+	if (derivedTokenToSwap.toLowerCase() !== tokenToSwap.toLowerCase()) throw new Error('The dispute price direction does not match the selected swap token.')
 	const hash = await writeContractAndWait(client, () => ({
 		address: openOracleAddress,
 		abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'dispute',
-		args: [reportId, tokenToSwap, newAmount1, newAmount2, client.account.address, false, false, getOpenOracleGameTuple(state.latest.game), getOpenOracleHelperTuple(state.latest.helper), [0n, 0n, 0n, 0n]],
+		args: [reportId, newAmount1, newAmount2, client.account.address, false, false, getOpenOracleGameTuple(state.latest.game), getOpenOracleHelperTuple(state.latest.helper), [0n, 0n, 0n, 0n]],
 	}))
 	return {
 		action: 'dispute',

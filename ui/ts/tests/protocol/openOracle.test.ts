@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'bun:test'
 import { decodeFunctionData, getAddress, toHex, zeroAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { encodeOpenOracleStatePreimagePacked, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
-import { getOpenOracleAddress, loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, loadOracleManagerDetails, loadOpenOracleReportSummaries, settleOracleReport, withdrawOpenOracleBalance } from '../../protocol/index.js'
+import { getOpenOracleAddress, getOpenOracleDisputeSwapToken, loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, loadOracleManagerDetails, loadOpenOracleReportSummaries, settleOracleReport, withdrawOpenOracleBalance } from '../../protocol/index.js'
 import { peripherals_openOracle_OpenOracle_OpenOracle } from '../../contractArtifact.js'
 import { MAINNET_WETH_ADDRESS } from '../../lib/networkProfile.js'
 import { createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from './testSupport.js'
@@ -56,6 +56,13 @@ function createOpenOracleStateLog(preimage: OpenOracleStatePreimage, topic = OPE
 }
 
 describe('openOracle protocol client', () => {
+	test('derives the dispute contribution token from the strict proposed-price direction', () => {
+		const game = createOpenOraclePreimage().game
+		expect(getOpenOracleDisputeSwapToken(game, 100n, 11n)).toBe(token2Address)
+		expect(getOpenOracleDisputeSwapToken(game, 100n, 9n)).toBe(token1Address)
+		expect(getOpenOracleDisputeSwapToken(game, 100n, 10n)).toBe(token1Address)
+	})
+
 	test('loadOpenOracleReportSummaries keeps reports disputed when dispute history returns to the initial reporter', async () => {
 		const initial = createOpenOraclePreimage()
 		const disputed = { ...initial, game: { ...initial.game, numReports: 2n, reportTimestamp: 2n } }
