@@ -475,7 +475,7 @@ const scenarios: AuctionExampleScenario[] = [
 		defaultAliceReceives: '1 REP',
 		defaultBobReceives: '1.33 REP',
 		defaultCarolReceives: '1.67 REP',
-		filePath: 'docs/auction-design.html',
+		filePath: 'docs/truth-auction.html',
 		exampleId: 'simple-auction-example',
 		underfundedAliceReceives: '4 REP',
 	},
@@ -488,7 +488,7 @@ for (const scenario of scenarios) {
 	await checkAllZeroBids(scenario)
 }
 
-await checkSourceLabelsAndThresholdText('docs/auction-design.html', [
+await checkSourceLabelsAndThresholdText('docs/truth-auction.html', [
 	'write("clearingMode", "underfunded qualification clearing")',
 	'write("bindingCondition", "underfunded")',
 	'write("thresholdInputEth", formatEth(winningEth))',
@@ -509,7 +509,7 @@ assert.doesNotMatch(blockWithId(openOracleHtml, 'eq-openoracle-initial-report-si
 assert.doesNotMatch(openOracleHtml, /259\.332023575638507216 REP/, 'OpenOracle integration should not retain the removed fixed REP report')
 assert.match(openOracleHtml, /WETH as <code>token1<\/code> and\s+REP as <code>token2<\/code>/, 'OpenOracle integration should document WETH as the exact token-one side')
 
-const auctionDesignHtml = await readFile('docs/auction-design.html', 'utf8')
+const auctionDesignHtml = await readFile('docs/truth-auction.html', 'utf8')
 assert.doesNotMatch(auctionDesignHtml, /buy only the REP they demanded/i, 'auction design should not describe underfunded fills as per-tick demand')
 assert.match(auctionDesignHtml, /complete REP sale cap[\s\S]*one effective price/i, 'auction design should explain complete weak-demand REP allocation')
 assert.match(auctionDesignHtml, /only bids at or above\s+the cap-implied qualification threshold/i, 'auction design should make threshold qualification explicit')
@@ -650,7 +650,7 @@ assert.doesNotMatch(statoblastHtml, /data-source="cumulativeCollateralTargetAfte
 assert.match(statoblastHtml, /fork-neutral snapshot shared by both paths[\s\S]*ETH raise target[\s\S]*depends on auction demand/i, 'whitepaper should explain shared snapshot accounting and demand-dependent auction repair')
 assert.match(statoblastHtml, /After every eligible vault syncs[\s\S]*individually sub-wei vault remainders[\s\S]*returns to complete-set collateral/i, 'whitepaper should document final aggregate-only fee reserve release')
 assert.match(statoblastHtml, /Each delayed claim adds only its newly assigned amount[\s\S]*does not reconstruct that total from[\s\S]*allowance changes and[\s\S]*liquidations remain intact/i, 'whitepaper should document incremental live fee eligibility for delayed auction claims')
-assert.match(statoblastHtml, /auction-design\.html#clearing/i, 'whitepaper should route clearing mechanics to the canonical auction design')
+assert.match(statoblastHtml, /truth-auction\.html#clearing/i, 'whitepaper should route clearing mechanics to the canonical auction design')
 assert.doesNotMatch(statoblastHtml, /id="auction-clearing-example"|id="underfunded-auction-example"/i, 'whitepaper should not duplicate canonical auction examples')
 assert.doesNotMatch(statoblastHtml, /data-source="[^\"]*underfundedThreshold/i, 'whitepaper should not duplicate the canonical underfunded clearing formula')
 assert.doesNotMatch(statoblastHtml, /totalRepPurchased = underfundedWinningEth/i, 'whitepaper should not duplicate canonical underfunded allocation math')
