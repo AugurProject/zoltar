@@ -13,7 +13,9 @@ type StateHintProps = {
 export function StateHint({ actions, announcement, className = '', presentation, title }: StateHintProps) {
 	const hasVisibleCopy = title !== undefined || presentation.detail !== undefined || presentation.actionHint !== undefined || actions !== undefined
 	const fallbackTitle = hasVisibleCopy ? undefined : presentation.badgeLabel
-	const announcementRole = announcement === 'assertive' ? 'alert' : announcement === 'polite' ? 'status' : undefined
+	let announcementRole: 'alert' | 'status' | undefined
+	if (announcement === 'assertive') announcementRole = 'alert'
+	if (announcement === 'polite') announcementRole = 'status'
 
 	return (
 		<div aria-atomic={announcement === undefined ? undefined : 'true'} aria-live={announcement} className={`state-hint ${className}`.trim()} role={announcementRole}>
