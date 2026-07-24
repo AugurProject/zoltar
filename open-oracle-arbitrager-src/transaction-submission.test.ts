@@ -34,6 +34,10 @@ describe('transaction submission settings', () => {
 		expect(() => validateSubmissionSettings({ mode: 'private', relayUrls: [] })).toThrow('at least one relay')
 		expect(() => validateSubmissionSettings({ mode: 'private', relayUrls: ['http://relay.example'] })).toThrow('HTTPS')
 		expect(() => validateSubmissionSettings({ mode: 'private', relayUrls: ['https://user:secret@relay.example'] })).toThrow('credentials')
+		expect(() => validateSubmissionSettings({ mode: 'private', relayUrls: ['https://relay.example?api-key=secret'] })).toThrow('query parameters')
+		expect(() => validateSubmissionSettings({ mode: 'private', relayUrls: ['https://relay.example?'] })).toThrow('query parameters')
+		expect(() => validateSubmissionSettings({ mode: 'private', relayUrls: ['https://relay.example#'] })).toThrow('fragments')
+		expect(() => validateSubmissionSettings({ mode: 'private', relayUrls: ['https://relay.example', 'https://relay.example?'] })).toThrow('query parameters')
 	})
 })
 
@@ -164,6 +168,27 @@ describe('signed transaction delivery', () => {
 		expect(result.failedTargets).toHaveLength(1)
 		expect(result.failedTargets[0]?.target).toBe(`${stalled}/`)
 		expect(result.failedTargets[0]?.error?.toLowerCase()).toContain('timed out')
+	})
+
+	test('does not follow relay redirects outside the validated target set', async () => {
+		let destinationRequests = 0
+		const destination = relay(() => {
+			destinationRequests += 1
+			return Response.json({ id: 1, jsonrpc: '2.0', result: hash })
+		})
+		const redirecting = relay(() => Response.redirect(destination, 307))
+		await expect(
+			submitSignedTransaction({
+				address,
+				hash,
+				maxBlockNumber: 125n,
+				publicSubmit: () => Promise.reject(new Error('must not use public RPC')),
+				serializedTransaction,
+				settings: validateSubmissionSettings({ mode: 'private', relayUrls: [redirecting] }),
+				signMessage: () => Promise.resolve(signature),
+			}),
+		).rejects.toThrow('Every private relay rejected')
+		expect(destinationRequests).toBe(0)
 	})
 
 	test('fails closed when every private relay rejects the transaction', async () => {

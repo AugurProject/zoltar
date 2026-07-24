@@ -57,7 +57,8 @@ function relayUrl(value: string) {
 	const loopback = parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost' || parsed.hostname === '[::1]'
 	if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && loopback)) throw new Error(`Relay URL must use HTTPS or loopback HTTP: ${value}`)
 	if (parsed.username !== '' || parsed.password !== '') throw new Error('Relay URLs must not contain embedded credentials')
-	if (parsed.hash !== '') throw new Error('Relay URLs must not contain fragments')
+	if (value.includes('?')) throw new Error('Relay URLs must not contain query parameters')
+	if (value.includes('#')) throw new Error('Relay URLs must not contain fragments')
 	return parsed.toString()
 }
 
@@ -163,6 +164,7 @@ async function sendPrivateTransaction(parameters: { address: Address; hash: Hex;
 			'x-flashbots-signature': `${getAddress(parameters.address)}:${signature}`,
 		},
 		method: 'POST',
+		redirect: 'error',
 		signal: AbortSignal.timeout(parameters.timeoutMilliseconds),
 	})
 	let value: JsonRpcResponse

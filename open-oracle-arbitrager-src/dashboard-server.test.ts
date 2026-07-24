@@ -58,6 +58,9 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	const browserScript = await fetch(`${origin}/dashboard.js`)
 	expect(browserScript.headers.get('content-type')).toContain('text/javascript')
 	expect(await browserScript.text()).toContain('setInterval')
+	const browserFormatScript = await fetch(`${origin}/dashboard-format.js`)
+	expect(browserFormatScript.headers.get('content-type')).toContain('text/javascript')
+	expect(await browserFormatScript.text()).toContain('sumSignedDecimals')
 	const crossOrigin = await fetch(`${origin}/api/paused`, {
 		body: JSON.stringify({ paused: true }),
 		headers: { 'content-type': 'application/json', origin: 'https://attacker.example' },

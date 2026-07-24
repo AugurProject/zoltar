@@ -104,8 +104,8 @@ ETH_RPC_URL=https://your-mainnet-rpc.example \
 Choose **Public mempool** or **Private relays** in the dashboard to change delivery
 for the next scan. Private mode requires at least one relay and supports up to eight.
 Relay URLs are process memory only and are not written to the history file. URLs may
-use HTTPS, or loopback HTTP for a locally operated relay; embedded URL credentials
-and fragments are rejected.
+use HTTPS, or loopback HTTP for a locally operated relay; embedded URL credentials,
+query parameters, fragments, and redirects are rejected.
 
 Before each dispute, the bot:
 

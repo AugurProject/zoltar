@@ -203,12 +203,14 @@ main {
 }
 
 .metric strong {
-	overflow: hidden;
+	overflow-wrap: anywhere;
 	margin: 4px 0 7px;
 	font-family: var(--mono);
 	font-size: clamp(1.15rem, 2.5vw, 1.65rem);
-	text-overflow: ellipsis;
-	white-space: nowrap;
+}
+
+#gas-value {
+	font-size: clamp(1rem, 1.8vw, 1.25rem);
 }
 
 .metric small,

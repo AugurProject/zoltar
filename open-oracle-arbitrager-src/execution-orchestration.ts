@@ -59,6 +59,31 @@ export async function guardedExecutionStep<T>(isPaused: () => boolean, action: (
 	return action()
 }
 
+export async function signAndSubmitOpenOracleDispute<TSigned, TSubmitted>(quoteBlockNumber: bigint, sign: (lastValidBlockNumber: bigint) => Promise<TSigned>, submit: (signed: TSigned) => Promise<TSubmitted>) {
+	const signed = await sign(quoteBlockNumber + 1n)
+	return submit(signed)
+}
+
+export async function retryPrivateSubmissionWithinWindow<T>(parameters: { currentBlockNumber: bigint; lastValidBlockNumber: bigint | undefined; submit: (maxBlockNumber: bigint) => Promise<T> }) {
+	if (parameters.lastValidBlockNumber !== undefined && parameters.currentBlockNumber >= parameters.lastValidBlockNumber) return { attempted: false as const }
+	const defaultMaxBlockNumber = parameters.currentBlockNumber + 25n
+	const maxBlockNumber = parameters.lastValidBlockNumber === undefined || parameters.lastValidBlockNumber > defaultMaxBlockNumber ? defaultMaxBlockNumber : parameters.lastValidBlockNumber
+	return {
+		attempted: true as const,
+		maxBlockNumber,
+		result: await parameters.submit(maxBlockNumber),
+	}
+}
+
+export async function attemptConfirmationRecovery<T>(recover: () => Promise<T>, onFailure: (error: unknown) => Promise<unknown> | unknown) {
+	try {
+		return await recover()
+	} catch (error) {
+		await onFailure(error)
+		return undefined
+	}
+}
+
 export async function runFundedExecution<TPrepared, TSubmitted, TResult>(
 	isPaused: () => boolean,
 	stages: {

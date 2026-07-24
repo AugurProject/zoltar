@@ -5,7 +5,7 @@ import { createPublicClient, createWalletClient, encodeFunctionData, formatEther
 import { decodeOpenOracleStatePreimage, getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
 import { erc20Abi, factoryAbi, openOracleAbi, poolAbi, quoterAbi } from './abi.js'
 import { startDashboardServer } from './dashboard-server.js'
-import { executionFailureDecision, flushExecutionHistory, opportunityDecision, recordConfirmedExecution, runFundedExecution, selectBestExecution, waitForResolvedTransaction } from './execution-orchestration.js'
+import { attemptConfirmationRecovery, executionFailureDecision, flushExecutionHistory, opportunityDecision, recordConfirmedExecution, retryPrivateSubmissionWithinWindow, runFundedExecution, selectBestExecution, signAndSubmitOpenOracleDispute, waitForResolvedTransaction } from './execution-orchestration.js'
 import {
 	appendExecutionHistory,
 	decimalSignedEth,
@@ -466,38 +466,44 @@ async function waitForTrackedTransaction(client: ReadClient, wallet: WriteClient
 			console.error(`transaction=${submission.hash} confirmationRetry=${errorMessage(error)}`)
 			track(trackedActivity(tracked, 'confirmation-unknown'))
 			if (config.submission.mode !== 'private') return
-			const currentBlockNumber = await client.getBlockNumber()
-			if (tracked.lastValidBlockNumber !== undefined && currentBlockNumber >= tracked.lastValidBlockNumber) {
-				console.error(`transaction=${submission.hash} relayResubmissionSkipped=calldata-expired`)
-				return
-			}
-			try {
-				const defaultMaxBlockNumber = currentBlockNumber + 25n
-				const maxBlockNumber = tracked.lastValidBlockNumber === undefined || tracked.lastValidBlockNumber > defaultMaxBlockNumber ? defaultMaxBlockNumber : tracked.lastValidBlockNumber
-				const retried = await submitSignedTransaction({
-					address: account.address,
-					hash: submission.hash,
-					maxBlockNumber,
-					publicSubmit: serializedTransaction => wallet.sendRawTransaction({ serializedTransaction }),
-					serializedTransaction: submission.serializedTransaction,
-					settings: config.submission,
-					signMessage,
-				})
-				tracked = {
-					...tracked,
-					acceptedTargets: [...new Set([...tracked.acceptedTargets, ...retried.acceptedTargets])],
-					failedTargets: retried.failedTargets,
-					maxBlockNumber,
-				}
-				track(trackedActivity(tracked, 'pending'))
-			} catch (retryError) {
-				console.error(`transaction=${submission.hash} relayResubmissionFailed=${errorMessage(retryError)}`)
-				tracked = {
-					...tracked,
-					failedTargets: mergeSubmissionFailures(tracked.failedTargets, retryError),
-				}
-				track(trackedActivity(tracked, 'confirmation-unknown'))
-			}
+			await attemptConfirmationRecovery(
+				async () => {
+					const currentBlockNumber = await client.getBlockNumber()
+					const retry = await retryPrivateSubmissionWithinWindow({
+						currentBlockNumber,
+						lastValidBlockNumber: tracked.lastValidBlockNumber,
+						submit: maxBlockNumber =>
+							submitSignedTransaction({
+								address: account.address,
+								hash: submission.hash,
+								maxBlockNumber,
+								publicSubmit: serializedTransaction => wallet.sendRawTransaction({ serializedTransaction }),
+								serializedTransaction: submission.serializedTransaction,
+								settings: config.submission,
+								signMessage,
+							}),
+					})
+					if (!retry.attempted) {
+						console.error(`transaction=${submission.hash} relayResubmissionSkipped=calldata-expired`)
+						return
+					}
+					tracked = {
+						...tracked,
+						acceptedTargets: [...new Set([...tracked.acceptedTargets, ...retry.result.acceptedTargets])],
+						failedTargets: retry.result.failedTargets,
+						maxBlockNumber: retry.maxBlockNumber,
+					}
+					track(trackedActivity(tracked, 'pending'))
+				},
+				retryError => {
+					console.error(`transaction=${submission.hash} relayResubmissionFailed=${errorMessage(retryError)}`)
+					tracked = {
+						...tracked,
+						failedTargets: mergeSubmissionFailures(tracked.failedTargets, retryError),
+					}
+					track(trackedActivity(tracked, 'confirmation-unknown'))
+				},
+			)
 		},
 	)
 	const actualGasCostEth = decimalWeth(receipt.gasUsed * (receipt.effectiveGasPrice ?? 0n))
@@ -583,13 +589,16 @@ async function executeDispute(client: ReadClient, wallet: WriteClient, config: C
 				functionName: 'dispute',
 				args: [report.helper.reportId, newAmount1, newAmount2, account.address, false, false, getOpenOracleGameTuple(game), getOpenOracleHelperTuple(report.helper), [quoteBlock.number, 1n, quoteBlock.timestamp, config.minimumRemainingSeconds]],
 			} as const
-			return { contribution, lastValidBlockNumber: quoteBlock.number + 1n, refreshedPool, refreshedQuote, request }
+			return { contribution, quoteBlockNumber: quoteBlock.number, refreshedPool, refreshedQuote, request }
 		},
 		simulate: prepared => wallet.simulateContract(prepared.request),
 		submit: async prepared => {
 			const data = encodeFunctionData(prepared.request)
-			const signed = await signContractTransaction(client, wallet, prepared.request.address, data, () => client.estimateContractGas({ ...prepared.request, account }), prepared.lastValidBlockNumber)
-			return submitContractTransaction(client, wallet, config, signed, { estimatedNetProfitEth: decimalWeth(prepared.refreshedQuote.netProfitWeth), kind: 'dispute', reportId }, track)
+			return signAndSubmitOpenOracleDispute(
+				prepared.quoteBlockNumber,
+				lastValidBlockNumber => signContractTransaction(client, wallet, prepared.request.address, data, () => client.estimateContractGas({ ...prepared.request, account }), lastValidBlockNumber),
+				signed => submitContractTransaction(client, wallet, config, signed, { estimatedNetProfitEth: decimalWeth(prepared.refreshedQuote.netProfitWeth), kind: 'dispute', reportId }, track),
+			)
 		},
 		confirm: async (submission, prepared, approvalGasCost) => {
 			const { receipt, tracked } = await waitForTrackedTransaction(client, wallet, config, submission, track)

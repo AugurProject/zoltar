@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import type { Address, Hex, TransactionReceipt, TransactionReplacement } from '@zoltar/shared/ethereum'
-import { executionFailureDecision, flushExecutionHistory, opportunityDecision, recordConfirmedExecution, runFundedExecution, selectBestExecution, waitForResolvedTransaction } from './execution-orchestration.js'
+import { attemptConfirmationRecovery, executionFailureDecision, flushExecutionHistory, opportunityDecision, recordConfirmedExecution, retryPrivateSubmissionWithinWindow, runFundedExecution, selectBestExecution, signAndSubmitOpenOracleDispute, waitForResolvedTransaction } from './execution-orchestration.js'
 import type { ExecutionRecord } from './operator-state.js'
+import { assertSubmissionWindowOpen } from './transaction-submission.js'
 
 const address = '0x0000000000000000000000000000000000000001' as Address
 const reporter = '0x0000000000000000000000000000000000000002' as Address
@@ -177,6 +178,30 @@ describe('funded execution orchestration', () => {
 		expect(receipt.transactionHash).toBe(replacementHash)
 	})
 
+	test('continues receipt polling when private confirmation recovery itself fails', async () => {
+		let receiptAttempts = 0
+		const recoveryFailures: string[] = []
+		const receipt = await waitForResolvedTransaction(
+			originalHash,
+			() => {
+				receiptAttempts += 1
+				if (receiptAttempts === 1) throw new Error('receipt unavailable')
+				return Promise.resolve(transactionReceipt())
+			},
+			() => Promise.resolve(),
+			() =>
+				attemptConfirmationRecovery(
+					() => Promise.reject(new Error('block number unavailable')),
+					error => {
+						recoveryFailures.push(error instanceof Error ? error.message : String(error))
+					},
+				),
+		)
+		expect(receiptAttempts).toBe(2)
+		expect(recoveryFailures).toEqual(['block number unavailable'])
+		expect(receipt.transactionHash).toBe(replacementHash)
+	})
+
 	test('rejects cancellations and unrelated replacements definitively', async () => {
 		for (const reason of ['cancelled', 'replaced'] as const) {
 			await expect(
@@ -204,6 +229,53 @@ describe('funded execution orchestration', () => {
 		)
 		expect(attempts).toBe(1)
 		expect(receipt.status).toBe('reverted')
+	})
+
+	test('wires the OpenOracle quote block through signing and refuses submission after expiry', async () => {
+		const signed = await signAndSubmitOpenOracleDispute(
+			100n,
+			lastValidBlockNumber => Promise.resolve({ lastValidBlockNumber }),
+			transaction => {
+				assertSubmissionWindowOpen(transaction.lastValidBlockNumber, 100n)
+				return Promise.resolve(transaction)
+			},
+		)
+		expect(signed.lastValidBlockNumber).toBe(101n)
+
+		await expect(
+			signAndSubmitOpenOracleDispute(
+				100n,
+				lastValidBlockNumber => Promise.resolve({ lastValidBlockNumber }),
+				transaction => {
+					assertSubmissionWindowOpen(transaction.lastValidBlockNumber, 101n)
+					return Promise.resolve(transaction)
+				},
+			),
+		).rejects.toThrow('validity window expired')
+	})
+
+	test('caps private retries at the dispute window and performs no retry at expiry', async () => {
+		const attemptedMaxBlocks: bigint[] = []
+		const inWindow = await retryPrivateSubmissionWithinWindow({
+			currentBlockNumber: 100n,
+			lastValidBlockNumber: 101n,
+			submit: maxBlockNumber => {
+				attemptedMaxBlocks.push(maxBlockNumber)
+				return Promise.resolve('accepted')
+			},
+		})
+		expect(inWindow).toEqual({ attempted: true, maxBlockNumber: 101n, result: 'accepted' })
+
+		const expired = await retryPrivateSubmissionWithinWindow({
+			currentBlockNumber: 101n,
+			lastValidBlockNumber: 101n,
+			submit: maxBlockNumber => {
+				attemptedMaxBlocks.push(maxBlockNumber)
+				return Promise.resolve('must not submit')
+			},
+		})
+		expect(expired).toEqual({ attempted: false })
+		expect(attemptedMaxBlocks).toEqual([101n])
 	})
 
 	test('selects one best execution without discarding other evaluated opportunities', () => {

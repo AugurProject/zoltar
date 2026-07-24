@@ -1,4 +1,5 @@
 import type { ExecutionRecord, OperatorSnapshot, OpportunitySnapshot, StrategySettings, TransactionActivity } from './operator-state.js'
+import { exactAmount, sumSignedDecimals } from './dashboard-format.js'
 import type { SubmissionSettings } from './transaction-submission.js'
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
@@ -136,9 +137,9 @@ function renderHistory(history: readonly ExecutionRecord[], recordCount: number)
 				new Date(record.executedAt).toLocaleString(),
 				record.reportId,
 				record.direction,
-				amount(record.estimatedNetProfitWeth, 'ETH'),
-				amount(record.trackedNetProfitEth, 'ETH'),
-				amount(record.actualGasCostEth, 'ETH'),
+				exactAmount(record.estimatedNetProfitWeth, 'ETH'),
+				exactAmount(record.trackedNetProfitEth, 'ETH'),
+				exactAmount(record.actualGasCostEth, 'ETH'),
 				`${amount(record.requiredWeth, 'WETH')} · ${amount(record.requiredRep, 'REP')}`,
 				link(record.transactionHash, 'tx'),
 			]),
@@ -192,7 +193,7 @@ function renderProfitChart(history: readonly ExecutionRecord[], recordCount: num
 	const label = document.createElement('span')
 	label.textContent = recordCount > history.length ? `Tracked net profit · latest ${history.length.toString()} of ${recordCount.toString()} records` : `Tracked net profit · ${recordCount.toString()} records`
 	const value = document.createElement('strong')
-	value.textContent = amount(total.toString(), 'ETH')
+	value.textContent = exactAmount(sumSignedDecimals(chronological.map(record => record.trackedNetProfitEth)), 'ETH')
 	summary.append(label, value)
 	container.append(summary, svg)
 }
@@ -235,9 +236,9 @@ function renderTransactions(transactions: readonly TransactionActivity[]) {
 				transaction.mode,
 				transaction.status.replaceAll('-', ' '),
 				targets,
-				amount(transaction.estimatedNetProfitEth, 'ETH'),
-				amount(transaction.trackedNetProfitEth, 'ETH'),
-				amount(transaction.actualGasCostEth, 'ETH'),
+				exactAmount(transaction.estimatedNetProfitEth, 'ETH'),
+				exactAmount(transaction.trackedNetProfitEth, 'ETH'),
+				exactAmount(transaction.actualGasCostEth, 'ETH'),
 			]),
 		)
 	}
@@ -263,8 +264,8 @@ function render(snapshot: OperatorSnapshot) {
 	setText('last-poll-value', snapshot.lastPollAt === undefined ? 'No poll completed' : `Updated ${new Date(snapshot.lastPollAt).toLocaleTimeString()}`)
 	setText('active-report-value', snapshot.activeReportCount.toString())
 	setText('block-value', snapshot.blockNumber === undefined ? 'Block —' : `Block ${snapshot.blockNumber}`)
-	setText('profit-value', amount(snapshot.totalTrackedNetProfitEth, 'ETH'))
-	setText('gas-value', amount(snapshot.totalActualGasCostEth, 'ETH'))
+	setText('profit-value', exactAmount(snapshot.totalTrackedNetProfitEth, 'ETH'))
+	setText('gas-value', exactAmount(snapshot.totalActualGasCostEth, 'ETH'))
 	setText('oracle-address', `Oracle ${snapshot.openOracle}`)
 	const pauseButton = element<HTMLButtonElement>('pause-button')
 	pauseButton.textContent = snapshot.paused ? 'Resume bot' : 'Pause bot'
