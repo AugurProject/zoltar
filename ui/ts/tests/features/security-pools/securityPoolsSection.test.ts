@@ -189,6 +189,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		hasForkActivity: false,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
+		initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 		lastOraclePrice: undefined,
 		lastOracleSettlementTimestamp: 0n,
 		managerAddress: zeroAddress,
@@ -334,6 +335,7 @@ function createCreatePoolProps(overrides: Partial<SecurityPoolRouteContentProps>
 		securityPoolCreating: false,
 		securityPoolError: undefined,
 		securityPoolForm: {
+			initialReportPriorityFeeGwei: '10',
 			marketId: '',
 			securityMultiplier: '',
 		},
@@ -546,6 +548,7 @@ void describe('SecurityPoolsSection', () => {
 					createPool: createCreatePoolProps({
 						securityPoolResult: {
 							deployPoolHash: zeroHash,
+							initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 							questionId: '0x01',
 							securityPoolAddress: createdPoolAddress,
 							securityMultiplier: 2n,
@@ -584,6 +587,7 @@ void describe('SecurityPoolsSection', () => {
 					createPool: createCreatePoolProps({
 						securityPoolResult: {
 							deployPoolHash: zeroHash,
+							initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 							questionId: '0x01',
 							securityPoolAddress: '0x00000000000000000000000000000000000000a5',
 							securityMultiplier: 2n,

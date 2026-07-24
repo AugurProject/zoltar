@@ -253,6 +253,7 @@ interface ISecurityPoolFactory {
 		uint248 universeId;
 		uint256 questionId;
 		uint256 securityMultiplier;
+		uint256 initialReportPriorityFeeWeiPerGas;
 		uint256 currentRetentionRate;
 		uint256 completeSetCollateralAmount;
 	}
@@ -269,12 +270,14 @@ interface ISecurityPoolFactory {
 	function deployOriginSecurityPool(
 		uint248 universeId,
 		uint256 questionId,
-		uint256 securityMultiplier
+		uint256 securityMultiplier,
+		uint256 initialReportPriorityFeeWeiPerGas
 	) external returns (ISecurityPool securityPool);
 	function getOriginId(
 		uint248 originUniverseId,
 		uint256 questionId,
-		uint256 securityMultiplier
+		uint256 securityMultiplier,
+		uint256 initialReportPriorityFeeWeiPerGas
 	) external pure returns (bytes32 originId);
 	function getPoolId(bytes32 originId, uint248 universeId) external pure returns (bytes32 poolId);
 	function getSecurityPool(bytes32 originId, uint248 universeId) external view returns (ISecurityPool securityPool);

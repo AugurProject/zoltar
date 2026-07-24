@@ -77,6 +77,7 @@ function createLinkedSecurityPool(questionId: string): ListedSecurityPool {
 		forkOwnSecurityPool: false,
 		hasForkActivity: false,
 		hasLoadedVaults: true,
+		initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 		lastOraclePrice: undefined,
 		lastOracleSettlementTimestamp: 0n,
 		managerAddress: zeroAddress,
@@ -717,6 +718,13 @@ describe('MarketSection', () => {
 		})
 
 		expect(selectedViews).toEqual(['create'])
+	})
+
+	test('explains how Zoltar questions connect to forks and security pools', async () => {
+		const renderedComponent = await renderIntoDocument(h(MarketSection, createMarketSectionProps()))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(within(document.body).getByText('Zoltar questions can define a universe fork or seed an Augur Statoblast security pool.')).not.toBeNull()
 	})
 
 	test('selects a paginated question for the fork workflow', async () => {

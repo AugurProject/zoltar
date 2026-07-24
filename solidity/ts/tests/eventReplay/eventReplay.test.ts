@@ -302,6 +302,7 @@ describe('event-only replay', () => {
 					universeId: 1n,
 					questionId: 2n,
 					securityMultiplier: 3n,
+					initialReportPriorityFeeWeiPerGas: 10n,
 					currentRetentionRate: 4n,
 					completeSetCollateralAmount: 0n,
 				},
@@ -841,6 +842,7 @@ describe('event-only replay', () => {
 					universeId: 1n,
 					questionId: 2n,
 					securityMultiplier: 3n,
+					initialReportPriorityFeeWeiPerGas: 10n,
 					currentRetentionRate: 4n,
 					completeSetCollateralAmount: 5n,
 				},
@@ -1115,6 +1117,7 @@ describe('event-only replay', () => {
 					universeId: 9n,
 					questionId: 12n,
 					securityMultiplier: 3n,
+					initialReportPriorityFeeWeiPerGas: 10n,
 					currentRetentionRate: 4n,
 					completeSetCollateralAmount: 0n,
 				},
@@ -1292,7 +1295,7 @@ describe('event-only replay', () => {
 			address: factory,
 			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 			functionName: 'deployOriginSecurityPool',
-			args: [fixture.genesisUniverse, questionId, fixture.securityMultiplier],
+			args: [fixture.genesisUniverse, questionId, fixture.securityMultiplier, 10n * 10n ** 9n],
 		})
 		const receipt = await client.waitForTransactionReceipt({ hash: deploymentHash })
 		if (receipt.status === 'reverted') throw new Error('origin pool deployment reverted')
@@ -1321,6 +1324,13 @@ describe('event-only replay', () => {
 
 		const replayed = replayZoltarEvents(replayLogs, new Set(), new Set([factory]))
 		if (replayed.poolDeployments.get(addresses.securityPool)?.shareToken !== addresses.shareToken) throw new Error('origin deployment relationship mismatch')
+		const storedOriginPriorityFee = await client.readContract({
+			address: addresses.priceOracleManagerAndOperatorQueuer,
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'initialReportPriorityFeeWeiPerGas',
+			args: [],
+		})
+		strictEqualTypeSafe(replayed.poolDeployments.get(addresses.securityPool)?.initialReportPriorityFeeWeiPerGas, storedOriginPriorityFee, 'origin priority fee replay mismatch')
 		if (replayed.authorizations.get(addresses.shareToken)?.get(addresses.securityPool) !== true) throw new Error('origin pool authorization was not replayed')
 		if (replayed.pools.get(addresses.securityPool)?.reason !== 5n) throw new Error('origin pool initialization checkpoint was not replayed')
 		if (replayed.coordinators.get(addresses.priceOracleManagerAndOperatorQueuer)?.securityPool !== addresses.securityPool) {
@@ -1424,8 +1434,14 @@ describe('event-only replay', () => {
 		const replayed = replayZoltarEvents([...deploymentLogs, ...receiptLogs], new Set(), new Set([factory]))
 		const deployment = replayed.poolDeployments.get(child.securityPool)
 		if (deployment === undefined) throw new Error('child pool deployment replay missing')
-		const [storedSecurityMultiplier, storedCurrentRetentionRate, storedCollateral, storedSystemState] = await Promise.all([
+		const [storedSecurityMultiplier, storedPriorityFee, storedCurrentRetentionRate, storedCollateral, storedSystemState] = await Promise.all([
 			client.readContract({ address: child.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'securityMultiplier', args: [] }),
+			client.readContract({
+				address: child.priceOracleManagerAndOperatorQueuer,
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				functionName: 'initialReportPriorityFeeWeiPerGas',
+				args: [],
+			}),
 			client.readContract({ address: child.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'currentRetentionRate', args: [] }),
 			client.readContract({ address: child.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'completeSetCollateralAmount', args: [] }),
 			client.readContract({ address: child.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'systemState', args: [] }),
@@ -1438,6 +1454,7 @@ describe('event-only replay', () => {
 		strictEqualTypeSafe(deployment.coordinator, child.priceOracleManagerAndOperatorQueuer, 'child coordinator replay mismatch')
 		strictEqualTypeSafe(deployment.shareToken, child.shareToken, 'child share token replay mismatch')
 		strictEqualTypeSafe(deployment.securityMultiplier, storedSecurityMultiplier, 'child security multiplier replay mismatch')
+		strictEqualTypeSafe(deployment.initialReportPriorityFeeWeiPerGas, storedPriorityFee, 'child priority fee replay mismatch')
 		strictEqualTypeSafe(deployment.currentRetentionRate, storedCurrentRetentionRate, 'child retention rate replay mismatch')
 		strictEqualTypeSafe(deployment.completeSetCollateralAmount, storedCollateral, 'child collateral replay mismatch')
 		strictEqualTypeSafe(replayed.poolStates.get(child.securityPool)?.systemState, storedSystemState, 'child constructor system state replay mismatch')

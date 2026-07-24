@@ -12,6 +12,7 @@ type RouteSubNavigationProps<TValue extends string> = {
 
 export function RouteSubNavigation<TValue extends string>({ ariaLabel, onChange, options, value }: RouteSubNavigationProps<TValue>) {
 	const navigationRef = useRef<HTMLElement>(null)
+	const unavailableOptions = options.filter(option => option.disabled === true && option.reason !== undefined)
 	const scrollOptions = (direction: -1 | 1) => {
 		const tabStrip = navigationRef.current?.querySelector<HTMLElement>('.route-subtab-nav')
 		if (tabStrip === undefined || tabStrip === null) return
@@ -19,14 +20,25 @@ export function RouteSubNavigation<TValue extends string>({ ariaLabel, onChange,
 		tabStrip.scrollBy({ behavior, left: direction * Math.max(160, tabStrip.clientWidth * 0.7) })
 	}
 	return (
-		<nav ref={navigationRef} className='route-subnav-shell' aria-label={ariaLabel} role='navigation'>
-			<button className='quiet route-subnav-overflow-control route-subnav-overflow-start' type='button' aria-label={appCopy.formatShowEarlierNavigationItems(ariaLabel)} onClick={() => scrollOptions(-1)}>
-				<span aria-hidden='true'>‹</span>
-			</button>
-			<ViewTabs ariaLabel={ariaLabel} className='route-subtab-nav' semantics='navigation' size='compact' value={value} variant='subroute' onChange={onChange} options={options} />
-			<button className='quiet route-subnav-overflow-control route-subnav-overflow-end' type='button' aria-label={appCopy.formatShowLaterNavigationItems(ariaLabel)} onClick={() => scrollOptions(1)}>
-				<span aria-hidden='true'>›</span>
-			</button>
-		</nav>
+		<div className='route-subnav-region'>
+			<nav ref={navigationRef} className='route-subnav-shell' aria-label={ariaLabel} role='navigation'>
+				<button className='quiet route-subnav-overflow-control route-subnav-overflow-start' type='button' aria-label={appCopy.formatShowEarlierNavigationItems(ariaLabel)} onClick={() => scrollOptions(-1)}>
+					<span aria-hidden='true'>‹</span>
+				</button>
+				<ViewTabs ariaLabel={ariaLabel} className='route-subtab-nav' semantics='navigation' size='compact' value={value} variant='subroute' onChange={onChange} options={options} />
+				<button className='quiet route-subnav-overflow-control route-subnav-overflow-end' type='button' aria-label={appCopy.formatShowLaterNavigationItems(ariaLabel)} onClick={() => scrollOptions(1)}>
+					<span aria-hidden='true'>›</span>
+				</button>
+			</nav>
+			{unavailableOptions.length === 0 ? undefined : (
+				<div className='route-subnav-unavailable'>
+					{unavailableOptions.map(option => (
+						<p className='detail' key={option.value}>
+							<strong>{option.label}:</strong> {option.reason}
+						</p>
+					))}
+				</div>
+			)}
+		</div>
 	)
 }

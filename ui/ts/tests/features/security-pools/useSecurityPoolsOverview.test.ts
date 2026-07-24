@@ -52,6 +52,7 @@ function createListedSecurityPool(questionId: string, securityPoolAddress: Addre
 		forkOwnSecurityPool: false,
 		hasForkActivity: false,
 		hasLoadedVaults: false,
+		initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 		lastOraclePrice: undefined,
 		lastOracleSettlementTimestamp: 0n,
 		managerAddress: zeroAddress,

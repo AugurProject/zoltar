@@ -14,6 +14,7 @@ contract ERC1155ReceiverMock is IERC1155Receiver {
 	bool public acceptSingle = true;
 	bool public acceptBatch = true;
 	bool public revertOnReceive;
+	bool public panicOnReceive;
 	address public lastOperator;
 	address public lastFrom;
 	uint256 public lastId;
@@ -28,6 +29,10 @@ contract ERC1155ReceiverMock is IERC1155Receiver {
 		revertOnReceive = _revertOnReceive;
 	}
 
+	function setPanicOnReceive(bool _panicOnReceive) external {
+		panicOnReceive = _panicOnReceive;
+	}
+
 	function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
 		return interfaceId == ERC165_INTERFACE_ID || interfaceId == ERC1155_RECEIVER_INTERFACE_ID;
 	}
@@ -39,6 +44,7 @@ contract ERC1155ReceiverMock is IERC1155Receiver {
 		uint256 value,
 		bytes calldata data
 	) external returns (bytes4) {
+		if (panicOnReceive) assert(false);
 		if (revertOnReceive) revert('ERC1155 receiver mock configured to revert on single receive');
 		lastOperator = operator;
 		lastFrom = from;
@@ -56,6 +62,7 @@ contract ERC1155ReceiverMock is IERC1155Receiver {
 		uint256[] calldata,
 		bytes calldata data
 	) external returns (bytes4) {
+		if (panicOnReceive) assert(false);
 		if (revertOnReceive) revert('ERC1155 receiver mock configured to revert on batch receive');
 		lastOperator = operator;
 		lastFrom = from;
@@ -70,6 +77,8 @@ contract ERC1155NonReceiver {}
 contract ShareTokenAuthorizationPoolMock {
 	IShareToken public immutable shareToken;
 	uint248 public immutable universeId;
+	SystemState public systemState = SystemState.ForkMigration;
+	address public securityPoolForker;
 
 	constructor(IShareToken _shareToken, uint248 _universeId) {
 		shareToken = _shareToken;

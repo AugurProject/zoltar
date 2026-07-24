@@ -110,6 +110,25 @@ main {
 	padding: 0 0 0 0.35rem;
 }
 
+.route-subnav-region {
+	display: grid;
+	gap: var(--space-1);
+	min-width: 0;
+}
+
+.route-subnav-unavailable {
+	padding: 0 0.75rem 0.25rem;
+}
+
+.route-subnav-unavailable .detail {
+	margin: 0;
+	font-size: var(--font-label);
+}
+
+.route-subnav-unavailable strong {
+	color: var(--text);
+}
+
 .route-subnav-overflow-control {
 	display: none;
 }
@@ -4226,6 +4245,24 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	height: 100%;
 }
 
+.lookup-field-resolved-value {
+	display: flex;
+	align-items: baseline;
+	gap: var(--space-2);
+	min-width: 0;
+	color: var(--value);
+	font-family: var(--font-family-mono);
+	font-size: var(--font-address);
+}
+
+.lookup-field-resolved-label {
+	flex: 0 0 auto;
+	color: var(--muted);
+	font-size: var(--font-label);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
 .loaded-question-preview {
 	padding: 1rem 0;
 	border: 0;
@@ -4876,6 +4913,16 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 
 	.lookup-field-controls.has-action {
 		grid-template-columns: 1fr;
+	}
+
+	.lookup-field-resolved-value {
+		display: grid;
+		align-items: start;
+		gap: 0.3rem;
+	}
+
+	.lookup-field-resolved-value .address-value {
+		text-align: left;
 	}
 
 	.panel-header,

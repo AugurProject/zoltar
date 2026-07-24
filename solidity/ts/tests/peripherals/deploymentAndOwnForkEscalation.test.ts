@@ -2,7 +2,7 @@ import { beforeEach, describe, test } from 'bun:test'
 import { usePeripheralsDeploymentAndOwnForkEscalationFixture, type PeripheralsDeploymentAndOwnForkEscalationFixture } from './fixture'
 import type { Address } from '@zoltar/shared/ethereum'
 import type { WriteClient } from '../../testSupport/simulator/utils/clients'
-import { peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken } from '../../types/contractArtifact'
+import { peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken } from '../../types/contractArtifact'
 import { getQuestionResolution as readQuestionResolution } from '../../testSupport/simulator/utils/contracts/escalationGame'
 import { deployChild, getZoltarForkThreshold } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { finalizeTruthAuction, initiateSecurityPoolFork, startTruthAuction } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
@@ -130,12 +130,38 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, scalarQuestionId, securityMultiplier), /Security pool question must have exactly two outcomes/)
 	})
 
+	test('cannot deploy security pool when either binary outcome label is not canonical', async () => {
+		const invalidLabelCases = [
+			{
+				title: 'wrong first binary outcome',
+				outcomes: sortStringArrayByKeccak(['Apple', 'Banana']),
+				expected: /Security pool first outcome must be Yes/,
+			},
+			{
+				title: 'wrong second binary outcome',
+				outcomes: sortStringArrayByKeccak(['Yes', 'Apple']),
+				expected: /Security pool second outcome must be No/,
+			},
+		]
+
+		for (const { expected, outcomes: invalidOutcomes, title } of invalidLabelCases) {
+			const invalidQuestionData = {
+				...questionData,
+				title,
+			}
+			await createQuestion(client, invalidQuestionData, invalidOutcomes)
+			const invalidQuestionId = getQuestionId(invalidQuestionData, invalidOutcomes)
+
+			await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, invalidQuestionId, securityMultiplier), expected)
+		}
+	})
+
 	test('cannot deploy security pool with non-existent question', async () => {
 		// Use a questionId that has not been created
 		const nonExistentQuestionId = 999999999999n
 
 		// Attempt to deploy security pool with non-existent question should fail
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, nonExistentQuestionId, securityMultiplier))
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, nonExistentQuestionId, securityMultiplier), /Security pool question must exist before deployment/)
 	})
 
 	test('cannot deploy origin security pool in an already-forked universe', async () => {
@@ -150,13 +176,13 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		await forkUniverse(client, genesisUniverse, forkSourceQuestionId)
 
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier), /universe has already forked/)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier), /Security pool universe has already forked/)
 	})
 
 	test('cannot deploy origin security pool in a missing universe', async () => {
 		const missingUniverseId = 999999n
 
-		await assert.rejects(deployOriginSecurityPool(client, missingUniverseId, questionId, securityMultiplier), /universe is missing/)
+		await assert.rejects(deployOriginSecurityPool(client, missingUniverseId, questionId, securityMultiplier), /Security pool universe is missing a REP token/)
 	})
 
 	test('allows an independent descendant origin alongside the inherited child pool', async () => {
@@ -180,6 +206,16 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		assert.strictEqual(
+			await client.readContract({
+				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+				functionName: 'initialReportPriorityFeeWeiPerGas',
+				address: yesSecurityPool.priceOracleManagerAndOperatorQueuer,
+				args: [],
+			}),
+			10n * 10n ** 9n,
+			'fork children should inherit the origin lineage priority fee',
+		)
 		assert.ok(await contractExists(client, yesSecurityPool.securityPool), 'the inherited child pool should remain deployable beside the independent origin')
 		assert.notStrictEqual(independentOrigin.securityPool, yesSecurityPool.securityPool, 'the independent origin and inherited child must have different pool addresses')
 		assert.notStrictEqual(independentOrigin.shareToken, yesSecurityPool.shareToken, 'each origin lineage must use a separate collateral token namespace')
@@ -202,7 +238,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 				abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 				functionName: 'getOriginId',
 				address: factory,
-				args: [genesisUniverse, questionId, securityMultiplier],
+				args: [genesisUniverse, questionId, securityMultiplier, 10n * 10n ** 9n],
 			}),
 			'the inherited pool family should retain the Genesis origin hash',
 		)
@@ -212,7 +248,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 				abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 				functionName: 'getOriginId',
 				address: factory,
-				args: [yesUniverse, questionId, securityMultiplier],
+				args: [yesUniverse, questionId, securityMultiplier, 10n * 10n ** 9n],
 			}),
 			'the descendant origin should hash its own universe into a distinct family id',
 		)
@@ -260,7 +296,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 			yesSecurityPool.securityPool,
 			'share token should authorize exactly the canonical fork child for the child universe',
 		)
-		await assert.rejects(deployOriginSecurityPool(client, yesUniverse, questionId, securityMultiplier), /origin and universe already claimed/i)
+		await assert.rejects(deployOriginSecurityPool(client, yesUniverse, questionId, securityMultiplier), /Security pool origin and universe already claimed/)
 	})
 
 	test('deploys a new origin without scanning higher security-pool ancestors', async () => {
@@ -315,6 +351,22 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		await deployOriginSecurityPool(client, grandchildUniverse, unrelatedQuestionId, securityMultiplier)
 		const unrelatedPool = getSecurityPoolAddresses(addressString(0n), grandchildUniverse, unrelatedQuestionId, securityMultiplier, grandchildUniverse)
 		assert.ok(await contractExists(client, unrelatedPool.securityPool), 'a genuinely unrelated grandchild market should remain deployable')
+	})
+
+	test('namespaces origin lineages by the configured initial-report priority fee', async () => {
+		const customPriorityFeeWeiPerGas = 20n * 10n ** 9n
+		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, customPriorityFeeWeiPerGas)
+		const customAddresses = getSecurityPoolAddresses(addressString(0n), genesisUniverse, questionId, securityMultiplier, genesisUniverse, customPriorityFeeWeiPerGas)
+		const configuredPriorityFee = await client.readContract({
+			abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'initialReportPriorityFeeWeiPerGas',
+			address: customAddresses.priceOracleManagerAndOperatorQueuer,
+			args: [],
+		})
+
+		assert.strictEqual(configuredPriorityFee, customPriorityFeeWeiPerGas)
+		assert.notStrictEqual(customAddresses.shareToken, securityPoolAddresses.shareToken, 'the priority fee must be part of the origin lineage identity')
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier, 0n), /initial report priority fee must be greater than zero/i)
 	})
 
 	test('stateful factory sequences keep one canonical collateral ledger per child token namespace', async () => {
@@ -375,7 +427,7 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 			await deployOriginSecurityPool(client, childUniverse, questionId, securityMultiplier)
 			const independentOrigin = getSecurityPoolAddresses(addressString(0n), childUniverse, questionId, securityMultiplier, childUniverse)
 			assert.notStrictEqual(independentOrigin.securityPool, childPool, 'an independent origin should not replace the inherited child')
-			await assert.rejects(deployOriginSecurityPool(client, childUniverse, questionId, securityMultiplier), /origin and universe already claimed/i)
+			await assert.rejects(deployOriginSecurityPool(client, childUniverse, questionId, securityMultiplier), /Security pool origin and universe already claimed/)
 		}
 	})
 
@@ -434,10 +486,10 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 			return getQuestionId(deploymentQuestionData, outcomes)
 		}
 		const zeroMultiplierQuestionId = await createBinaryQuestion(`zero multiplier ${await mockWindow.getTime()}`)
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, zeroMultiplierQuestionId, 0n), /security multiplier/i)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, zeroMultiplierQuestionId, 0n), /Security multiplier must be greater than one/)
 
 		const oneMultiplierQuestionId = await createBinaryQuestion(`one multiplier ${await mockWindow.getTime()}`)
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, oneMultiplierQuestionId, 1n), /security multiplier/i)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, oneMultiplierQuestionId, 1n), /Security multiplier must be greater than one/)
 
 		const callerRetentionQuestionId = await createBinaryQuestion(`caller retention ${await mockWindow.getTime()}`)
 		await deployOriginSecurityPool(client, genesisUniverse, callerRetentionQuestionId, securityMultiplier)
@@ -508,6 +560,21 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'Yes child should be in ForkMigration')
 		strictEqualTypeSafe(await getQuestionOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'Yes outcome should be set')
 		assert.ok(await contractExists(client, yesSecurityPool.securityPool), 'YES security pool should exist')
+		const duplicateChildStateBefore = {
+			childState: await getSystemState(client, yesSecurityPool.securityPool),
+			childVault: await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address),
+			parentForkData: await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool),
+		}
+		await assert.rejects(createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes), /Child pool exists/)
+		assert.deepStrictEqual(
+			{
+				childState: await getSystemState(client, yesSecurityPool.securityPool),
+				childVault: await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address),
+				parentForkData: await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool),
+			},
+			duplicateChildStateBefore,
+			'duplicate child creation must preserve the canonical child and parent fork accounting',
+		)
 
 		// Create No child using attacker client
 		await createChildUniverse(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No)

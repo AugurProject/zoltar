@@ -70,6 +70,7 @@ function setupContractMocks({ loadMarketDetails, createSecurityPool, originSecur
 				async () =>
 					({
 						deployPoolHash: '0x0' as Hash,
+						initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 						questionId: '0x0b',
 						securityPoolAddress: zeroAddress,
 						securityMultiplier: 2n,
@@ -482,6 +483,7 @@ describe('useSecurityPoolCreation', () => {
 			client.onTransactionSubmitted?.('0xabc')
 			return {
 				deployPoolHash: '0xabc' as Hash,
+				initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 				questionId: '0x0b',
 				securityPoolAddress: '0x1111111111111111111111111111111111111111',
 				securityMultiplier: 2n,
@@ -744,6 +746,7 @@ describe('useSecurityPoolCreation', () => {
 		}
 		pendingCreate.resolve({
 			deployPoolHash: '0xabc',
+			initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 			questionId: '0x0b',
 			securityPoolAddress: '0x1111111111111111111111111111111111111111',
 			securityMultiplier: 2n,
@@ -815,6 +818,7 @@ describe('useSecurityPoolCreation', () => {
 
 		pendingCreate.resolve({
 			deployPoolHash: '0xabc' as Hash,
+			initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 			questionId: '0x0b',
 			securityPoolAddress: '0x1111111111111111111111111111111111111111',
 			securityMultiplier: 2n,
@@ -895,6 +899,7 @@ describe('useSecurityPoolCreation', () => {
 
 		createPoolDeferred.resolve({
 			deployPoolHash: '0xabc',
+			initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 			questionId: '0x0b',
 			securityPoolAddress: '0x1111111111111111111111111111111111111111',
 			securityMultiplier: 2n,
@@ -971,6 +976,7 @@ describe('useSecurityPoolCreation', () => {
 			originSecurityPoolExists: mock(async () => false),
 			createSecurityPool: mock(async () => ({
 				deployPoolHash: '0xabc' as Hash,
+				initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 				questionId: '0x0b',
 				securityPoolAddress: '0x1111111111111111111111111111111111111111',
 				securityMultiplier: 2n,
@@ -991,6 +997,7 @@ describe('useSecurityPoolCreation', () => {
 		const activeAccounts = createDeferred<readonly Address[]>()
 		const createSecurityPool = mock(async (_client: unknown, parameters: { questionId: bigint; securityMultiplier: bigint }) => ({
 			deployPoolHash: '0xabc' as Hash,
+			initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 			questionId: `0x${parameters.questionId.toString(16)}`,
 			securityPoolAddress: '0x1111111111111111111111111111111111111111',
 			securityMultiplier: parameters.securityMultiplier,

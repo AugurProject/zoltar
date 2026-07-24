@@ -56,6 +56,7 @@ describe('securityPools protocol client', () => {
 						{
 							completeSetCollateralAmount: 0n,
 							currentRetentionRate: 0n,
+							initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 							parent: zeroAddress,
 							priceOracleManagerAndOperatorQueuer: zeroAddress,
 							questionId,
@@ -102,6 +103,7 @@ describe('securityPools protocol client', () => {
 						{
 							completeSetCollateralAmount: 0n,
 							currentRetentionRate: 0n,
+							initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 							parent: zeroAddress,
 							priceOracleManagerAndOperatorQueuer: zeroAddress,
 							questionId,
@@ -148,6 +150,7 @@ describe('securityPools protocol client', () => {
 						{
 							completeSetCollateralAmount: 0n,
 							currentRetentionRate: 0n,
+							initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 							parent: zeroAddress,
 							priceOracleManagerAndOperatorQueuer: zeroAddress,
 							questionId,
@@ -160,6 +163,7 @@ describe('securityPools protocol client', () => {
 						{
 							completeSetCollateralAmount: 0n,
 							currentRetentionRate: 0n,
+							initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 							parent: parentSecurityPoolAddress,
 							priceOracleManagerAndOperatorQueuer: zeroAddress,
 							questionId,
@@ -211,6 +215,7 @@ describe('securityPools protocol client', () => {
 						{
 							completeSetCollateralAmount: 0n,
 							currentRetentionRate: 0n,
+							initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 							parent: zeroAddress,
 							priceOracleManagerAndOperatorQueuer: zeroAddress,
 							questionId,
@@ -223,6 +228,7 @@ describe('securityPools protocol client', () => {
 						{
 							completeSetCollateralAmount: 0n,
 							currentRetentionRate: 0n,
+							initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 							parent: parentSecurityPoolAddress,
 							priceOracleManagerAndOperatorQueuer: zeroAddress,
 							questionId,
@@ -281,6 +287,7 @@ describe('securityPools protocol client', () => {
 				if (request.functionName === 'securityPoolDeploymentsRange') {
 					return [
 						{
+							initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 							parent: zeroAddress,
 							priceOracleManagerAndOperatorQueuer: zeroAddress,
 							questionId,
@@ -339,6 +346,7 @@ describe('securityPools protocol client', () => {
 				if (request.functionName === 'securityPoolDeploymentsRange') {
 					return [
 						{
+							initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 							parent: zeroAddress,
 							priceOracleManagerAndOperatorQueuer: zeroAddress,
 							questionId,
@@ -403,6 +411,7 @@ describe('securityPools protocol client', () => {
 				if (request.functionName === 'securityPoolDeploymentsRange') {
 					return [
 						{
+							initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 							parent: zeroAddress,
 							priceOracleManagerAndOperatorQueuer: zeroAddress,
 							questionId,
@@ -469,6 +478,7 @@ describe('securityPools protocol client', () => {
 						{
 							completeSetCollateralAmount: 0n,
 							currentRetentionRate: 0n,
+							initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 							parent: zeroAddress,
 							priceOracleManagerAndOperatorQueuer: zeroAddress,
 							questionId,
@@ -481,6 +491,7 @@ describe('securityPools protocol client', () => {
 						{
 							completeSetCollateralAmount: 0n,
 							currentRetentionRate: 0n,
+							initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 							parent: zeroAddress,
 							priceOracleManagerAndOperatorQueuer: zeroAddress,
 							questionId,

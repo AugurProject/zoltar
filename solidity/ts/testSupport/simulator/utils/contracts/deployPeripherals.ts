@@ -1,7 +1,7 @@
 import { concatHex, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, type Address, type Hex, toHex } from '@zoltar/shared/ethereum'
 import { createSecurityPoolAddressHelper } from '@zoltar/shared/addressDerivation'
 import { createApplyLinkedLibrariesHelper, createDeploymentStatusOracleAddressHelper, createInfraContractAddressHelper, createZoltarAddressHelpers } from '@zoltar/shared/deploymentAddresses'
-import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_FEE_PERCENTAGE, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_MULTIPLIER, ORACLE_PROTOCOL_FEE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/shared/oracleInitialReport'
+import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_FEE_PERCENTAGE, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_MULTIPLIER, ORACLE_PROTOCOL_FEE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/shared/oracleInitialReport'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
 import { WriteClient, writeContractAndWait } from '../clients'
 import { PROXY_DEPLOYER_ADDRESS } from '../constants'
@@ -214,7 +214,7 @@ export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 			args: [securityPool, repToken, proofVerifier],
 		}),
 	getInfraContracts: () => getInfraContractAddresses(),
-	getPriceOracleManagerAndOperatorQueuerInitCode: (openOracle, repToken) =>
+	getPriceOracleManagerAndOperatorQueuerInitCode: (openOracle, repToken, initialReportPriorityFeeWeiPerGas) =>
 		concatHex([
 			applyLibraries(peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.evm.bytecode.object),
 			encodeAbiParameters(
@@ -224,6 +224,7 @@ export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 					{ type: 'address' },
 					{ type: 'uint256' },
 					{ type: 'uint32' },
+					{ type: 'uint256' },
 					{ type: 'uint256' },
 					{ type: 'uint256' },
 					{ type: 'uint256' },
@@ -246,6 +247,7 @@ export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 					ORACLE_REPORT_GAS,
 					ORACLE_SETTLEMENT_GAS,
 					ORACLE_GAS_UNITS_FOR_ONE_DISPUTE,
+					initialReportPriorityFeeWeiPerGas,
 					ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE,
 					OPEN_ORACLE_SECURITY_MULTIPLIER_BPS,
 					ORACLE_SETTLEMENT_TIME,
@@ -399,14 +401,14 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	if (!(await contractExists(client, getDeploymentStatusOracleAddress()))) throw new Error('deploymentStatusOracle does not exist even though we deployed it')
 }
 
-export const deployOriginSecurityPool = async (client: WriteClient, universeId: bigint, questionId: bigint, securityMultiplier: bigint) => {
+export const deployOriginSecurityPool = async (client: WriteClient, universeId: bigint, questionId: bigint, securityMultiplier: bigint, initialReportPriorityFeeWeiPerGas = DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS) => {
 	const infraAddresses = getInfraContractAddresses()
 	return await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 			functionName: 'deployOriginSecurityPool',
 			address: infraAddresses.securityPoolFactory,
-			args: [universeId, questionId, securityMultiplier],
+			args: [universeId, questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas],
 		}),
 	)
 }

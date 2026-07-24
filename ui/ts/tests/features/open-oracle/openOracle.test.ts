@@ -1194,16 +1194,18 @@ describe('Open Oracle helpers', () => {
 			args: [],
 		})
 		if (typeof minimumToken1Report !== 'bigint') throw new Error('expected bigint minimumToken1Report')
-		await requestOraclePrice(uiWriteClient, managerAddress, minimumToken1Report)
+		const proposedRepPerEthPrice = 10n ** 18n
+		await requestOraclePrice(uiWriteClient, managerAddress, proposedRepPerEthPrice, minimumToken1Report)
 
 		const reportId = (await loadOracleManagerDetails(uiReadClient, managerAddress)).pendingReportId
 		const { exactToken1Report: reportExactToken1Report } = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
 		const amount1 = reportExactToken1Report
+		const expectedAmount2 = (amount1 * proposedRepPerEthPrice + 10n ** 18n - 1n) / 10n ** 18n
 		const openOracleAddress = getOpenOracleAddress()
 
 		let reportDetails = await loadOpenOracleReportDetails(uiReadClient, openOracleAddress, reportId)
 		expect(reportDetails.currentAmount1).toBe(amount1)
-		expect(reportDetails.currentAmount2).toBe(amount1)
+		expect(reportDetails.currentAmount2).toBe(expectedAmount2)
 		expect(reportDetails.settlementTimestamp).toBe(0n)
 		expect(getOpenOracleReportStatus(reportDetails)).toBe('Pending')
 

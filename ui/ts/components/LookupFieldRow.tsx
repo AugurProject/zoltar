@@ -11,10 +11,12 @@ type LookupFieldRowProps = {
 	label: ComponentChildren
 	onInput: (value: string) => void
 	placeholder?: string
+	resolvedValue?: ComponentChildren
+	resolvedValueLabel?: ComponentChildren
 	value: string
 }
 
-export function LookupFieldRow({ action, disabled = false, inputClassName = '', inputMode, invalid = false, label, onInput, placeholder, value }: LookupFieldRowProps) {
+export function LookupFieldRow({ action, disabled = false, inputClassName = '', inputMode, invalid = false, label, onInput, placeholder, resolvedValue, resolvedValueLabel, value }: LookupFieldRowProps) {
 	const inputId = useId()
 	return (
 		<div className='field lookup-field-row'>
@@ -25,6 +27,12 @@ export function LookupFieldRow({ action, disabled = false, inputClassName = '', 
 				<FormInput id={inputId} className={inputClassName} value={value} inputMode={inputMode} invalid={invalid} disabled={disabled} onInput={event => onInput(event.currentTarget.value)} placeholder={placeholder} />
 				{action === undefined ? undefined : <div className='actions'>{action}</div>}
 			</div>
+			{resolvedValue === undefined ? undefined : (
+				<div className='lookup-field-resolved-value'>
+					{resolvedValueLabel === undefined ? undefined : <span className='lookup-field-resolved-label'>{resolvedValueLabel}</span>}
+					{resolvedValue}
+				</div>
+			)}
 		</div>
 	)
 }
