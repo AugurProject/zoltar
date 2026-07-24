@@ -84,6 +84,7 @@ contract OpenOraclePriceCoordinator {
 	uint256 public immutable gasConsumedOpenOracleReportPrice;
 	uint32 public immutable gasConsumedSettlement;
 	uint256 public immutable gasUnitsForOneDispute;
+	uint256 public immutable initialReportPriorityFeeWeiPerGas;
 	uint256 public immutable targetPriceErrorForDispute;
 	uint256 public immutable openOracleSecurityMultiplierBps;
 	uint48 public immutable settlementTime;
@@ -177,6 +178,7 @@ contract OpenOraclePriceCoordinator {
 		uint256 _gasConsumedOpenOracleReportPrice,
 		uint32 _gasConsumedSettlement,
 		uint256 _gasUnitsForOneDispute,
+		uint256 _initialReportPriorityFeeWeiPerGas,
 		uint256 _targetPriceErrorForDispute,
 		uint256 _openOracleSecurityMultiplierBps,
 		uint48 _settlementTime,
@@ -197,6 +199,7 @@ contract OpenOraclePriceCoordinator {
 		gasConsumedOpenOracleReportPrice = _gasConsumedOpenOracleReportPrice;
 		gasConsumedSettlement = _gasConsumedSettlement;
 		require(_gasUnitsForOneDispute > 0, 'Dispute gas units must be greater than zero');
+		require(_initialReportPriorityFeeWeiPerGas > 0, 'Initial report priority fee must be greater than zero');
 		require(
 			_targetPriceErrorForDispute <= OPEN_ORACLE_PERCENTAGE_PRECISION,
 			'Target price error cannot exceed one hundred percent'
@@ -209,12 +212,36 @@ contract OpenOraclePriceCoordinator {
 			uint256(_protocolFee) + uint256(_feePercentage) < _targetPriceErrorForDispute,
 			'Oracle fees must be below the target price error'
 		);
+		require(_escalationHaltMultiplierBps > 0, 'Escalation halt multiplier must be greater than zero');
 		require(
 			_openOracleSecurityMultiplierBps <=
 				type(uint256).max / (OPEN_ORACLE_PERCENTAGE_PRECISION + _targetPriceErrorForDispute),
 			'Open Oracle Security multiplier is too large'
 		);
+		uint256 correctionProfitNumerator =
+			_targetPriceErrorForDispute - uint256(_protocolFee) - uint256(_feePercentage);
+		uint256 reportNumeratorMultiplier =
+			_openOracleSecurityMultiplierBps * (OPEN_ORACLE_PERCENTAGE_PRECISION + _targetPriceErrorForDispute);
+		uint256 reportDenominator = SecurityPoolUtils.BPS_DENOMINATOR * correctionProfitNumerator;
+		uint256 maximumPriorityFeeReport = Math.mulDiv(
+			type(uint128).max,
+			SecurityPoolUtils.BPS_DENOMINATOR,
+			_escalationHaltMultiplierBps
+		);
+		if (maximumPriorityFeeReport > type(uint128).max) maximumPriorityFeeReport = type(uint128).max;
+		maximumPriorityFeeReport /= 2;
+		uint256 maximumPriorityDisputeGasCost = Math.mulDiv(
+			maximumPriorityFeeReport,
+			reportDenominator,
+			reportNumeratorMultiplier
+		);
+		uint256 maximumInitialReportPriorityFeeWeiPerGas = maximumPriorityDisputeGasCost / _gasUnitsForOneDispute;
+		require(
+			_initialReportPriorityFeeWeiPerGas <= maximumInitialReportPriorityFeeWeiPerGas,
+			'Initial report priority fee exceeds OpenOracle limits'
+		);
 		gasUnitsForOneDispute = _gasUnitsForOneDispute;
+		initialReportPriorityFeeWeiPerGas = _initialReportPriorityFeeWeiPerGas;
 		targetPriceErrorForDispute = _targetPriceErrorForDispute;
 		openOracleSecurityMultiplierBps = _openOracleSecurityMultiplierBps;
 		settlementTime = _settlementTime;
@@ -225,7 +252,6 @@ contract OpenOraclePriceCoordinator {
 		timeType = _timeType;
 		trackDisputes = _trackDisputes;
 		protocolFeeRecipient = _protocolFeeRecipient;
-		require(_escalationHaltMultiplierBps > 0, 'Escalation halt multiplier must be greater than zero');
 		escalationHaltMultiplierBps = _escalationHaltMultiplierBps;
 		require(
 			_maxSettlementBaseFeeMultiplierBps >= SecurityPoolUtils.BPS_DENOMINATOR,
@@ -268,8 +294,20 @@ contract OpenOraclePriceCoordinator {
 	}
 
 	function minimumToken1Report() public view returns (uint256) {
-		uint256 disputeGasCost = Math.mulDiv(block.basefee, gasUnitsForOneDispute, 1);
-		if (disputeGasCost == 0) return 1;
+		uint256 priorityFeeReport = _minimumToken1ReportForGasPrice(initialReportPriorityFeeWeiPerGas);
+		uint256 baseFeeReport = _minimumToken1ReportForGasPrice(block.basefee);
+		uint256 openInterestReport =
+			address(securityPool) == address(0x0)
+				? 0
+				: Math.ceilDiv(securityPool.completeSetCollateralAmount(), OPEN_INTEREST_DIVIDER);
+		uint256 dynamicReport = baseFeeReport > openInterestReport ? baseFeeReport : openInterestReport;
+		uint256 minimumReport = priorityFeeReport + dynamicReport;
+		return minimumReport > 0 ? minimumReport : 1;
+	}
+
+	function _minimumToken1ReportForGasPrice(uint256 gasPriceWeiPerGas) private view returns (uint256) {
+		if (gasPriceWeiPerGas == 0) return 0;
+		uint256 disputeGasCost = Math.mulDiv(gasPriceWeiPerGas, gasUnitsForOneDispute, 1);
 		uint256 correctionProfitNumerator = targetPriceErrorForDispute - uint256(protocolFee) - uint256(feePercentage);
 		return
 			Math.mulDiv(

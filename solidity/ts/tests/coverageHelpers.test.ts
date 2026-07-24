@@ -1591,7 +1591,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			encodeFunctionData({
 				abi: peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.abi,
 				functionName: 'deployPriceOracleManagerAndOperatorQueuer',
-				args: [zeroAddress, reputationTokenAddress, ZERO_BYTES32],
+				args: [zeroAddress, reputationTokenAddress, 10n * 10n ** 9n, ZERO_BYTES32],
 			}),
 		)
 

@@ -242,7 +242,7 @@ function usePeripheralsTestFixture() {
 			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 			functionName: 'getOriginId',
 			address: factory,
-			args: [genesisUniverse, questionId, securityMultiplier],
+			args: [genesisUniverse, questionId, securityMultiplier, 10n * 10n ** 9n],
 		})
 		const registeredPool = await client.readContract({
 			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,

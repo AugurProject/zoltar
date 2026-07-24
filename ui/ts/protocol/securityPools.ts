@@ -39,6 +39,7 @@ export type LoadAllSecurityPoolsOptions = {
 }
 
 type SecurityPoolDeploymentQueryResult = {
+	initialReportPriorityFeeWeiPerGas: bigint
 	parent: Address
 	priceOracleManagerAndOperatorQueuer: Address
 	questionId: bigint
@@ -77,14 +78,14 @@ function getSecurityPoolAddressFromReceipt(receipt: TransactionReceipt) {
 	throw new Error('Security pool deployment transaction succeeded without a DeploySecurityPool event')
 }
 
-function getOriginSecurityPoolShareTokenSalt(questionId: bigint, securityMultiplier: bigint) {
-	return keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint248' }], [questionId, securityMultiplier, 0n]))
+function getOriginSecurityPoolShareTokenSalt(questionId: bigint, securityMultiplier: bigint, initialReportPriorityFeeWeiPerGas: bigint) {
+	return keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint248' }], [questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas, 0n]))
 }
 
-function getOriginSecurityPoolShareTokenAddress(questionId: bigint, securityMultiplier: bigint) {
+function getOriginSecurityPoolShareTokenAddress(questionId: bigint, securityMultiplier: bigint, initialReportPriorityFeeWeiPerGas: bigint) {
 	return getCreate2Address({
 		from: getInfraContractAddresses().shareTokenFactory,
-		salt: getOriginSecurityPoolShareTokenSalt(questionId, securityMultiplier),
+		salt: getOriginSecurityPoolShareTokenSalt(questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas),
 		bytecode: encodeDeployData({
 			abi: peripherals_tokens_ShareToken_ShareToken.abi,
 			bytecode: `0x${peripherals_tokens_ShareToken_ShareToken.evm.bytecode.object}`,
@@ -254,7 +255,7 @@ async function loadSecurityPoolDetails(
 		vaultPreviewLimit: bigint
 	},
 ): Promise<ListedSecurityPool> {
-	const { parent, priceOracleManagerAndOperatorQueuer: managerAddress, questionId, securityMultiplier, securityPool: securityPoolAddress, truthAuction: truthAuctionAddress, universeId } = deployment
+	const { initialReportPriorityFeeWeiPerGas, parent, priceOracleManagerAndOperatorQueuer: managerAddress, questionId, securityMultiplier, securityPool: securityPoolAddress, truthAuction: truthAuctionAddress, universeId } = deployment
 	const shouldLoadVaults = shouldLoadSecurityPoolVaults(deployment, options)
 	const [[completeSetCollateralAmount, currentRetentionRate, forkData, lastOraclePrice, lastSettlementTimestamp, questionOutcome, systemStateValue, shareTokenSupply, totalRepDeposit, totalSecurityBondAllowance, universeForkTime], marketDetails, vaultSummaries] = await Promise.all([
 		readRequiredMulticall(client, [
@@ -347,6 +348,7 @@ async function loadSecurityPoolDetails(
 			systemState,
 			truthAuctionStartedAt,
 		}),
+		initialReportPriorityFeeWeiPerGas,
 		lastOraclePrice: lastSettlementTimestamp > 0n ? lastOraclePrice : undefined,
 		lastOracleSettlementTimestamp: lastSettlementTimestamp,
 		managerAddress,
@@ -428,6 +430,7 @@ export async function loadAllSecurityPools(client: ReadClient, options: LoadAllS
 export async function createSecurityPool(
 	client: WriteClient,
 	parameters: {
+		initialReportPriorityFeeWeiPerGas: bigint
 		questionId: bigint
 		securityMultiplier: bigint
 	},
@@ -436,11 +439,12 @@ export async function createSecurityPool(
 		address: getDeploymentStepAddress('securityPoolFactory'),
 		abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 		functionName: 'deployOriginSecurityPool',
-		args: [0n, parameters.questionId, parameters.securityMultiplier],
+		args: [0n, parameters.questionId, parameters.securityMultiplier, parameters.initialReportPriorityFeeWeiPerGas],
 	}))
 
 	return {
 		deployPoolHash,
+		initialReportPriorityFeeWeiPerGas: parameters.initialReportPriorityFeeWeiPerGas,
 		questionId: getQuestionIdHex(parameters.questionId),
 		securityPoolAddress: getSecurityPoolAddressFromReceipt(receipt),
 		securityMultiplier: parameters.securityMultiplier,
@@ -448,8 +452,8 @@ export async function createSecurityPool(
 	} satisfies SecurityPoolCreationResult
 }
 
-export async function originSecurityPoolExists(client: Pick<ReadClient, 'getCode'>, questionId: bigint, securityMultiplier: bigint) {
-	const shareTokenAddress = getOriginSecurityPoolShareTokenAddress(questionId, securityMultiplier)
+export async function originSecurityPoolExists(client: Pick<ReadClient, 'getCode'>, questionId: bigint, securityMultiplier: bigint, initialReportPriorityFeeWeiPerGas: bigint) {
+	const shareTokenAddress = getOriginSecurityPoolShareTokenAddress(questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas)
 	const code = await client.getCode({ address: shareTokenAddress })
 	return code !== undefined && code !== '0x'
 }

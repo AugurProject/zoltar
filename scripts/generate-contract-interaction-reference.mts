@@ -44,7 +44,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/contract-interaction-reference.md'
-const expectedProductionSoliditySourceFingerprint = 'cde16e42c8cae575d597e85c5cf03ddae501ffc060f015d9c2fb3130d162a4fd'
+const expectedProductionSoliditySourceFingerprint = '393ca3562bf0cc886aba67e3de7df92a0a886c6436156327e1667fe4879a5e36'
 
 const eventSourceByName: Record<string, string> = {
 	Approval: 'solidity/contracts/IERC20.sol',
@@ -175,7 +175,7 @@ const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePa
 	{
 		name: 'DeploySecurityPool',
 		parameters:
-			'ISecurityPool indexed securityPool,UniformPriceDualCapBatchAuction truthAuction,OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer,IShareToken shareToken,ISecurityPool indexed parent,uint248 indexed universeId,uint256 questionId,uint256 securityMultiplier,uint256 currentRetentionRate,uint256 completeSetCollateralAmount',
+			'ISecurityPool indexed securityPool,UniformPriceDualCapBatchAuction truthAuction,OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer,IShareToken shareToken,ISecurityPool indexed parent,uint248 indexed universeId,uint256 questionId,uint256 securityMultiplier,uint256 initialReportPriorityFeeWeiPerGas,uint256 currentRetentionRate,uint256 completeSetCollateralAmount',
 		sourcePath: 'solidity/contracts/peripherals/factories/SecurityPoolFactory.sol',
 	},
 	{
@@ -322,7 +322,7 @@ const assemblyDelegateCalls: AssemblyDelegateCall[] = [
 	},
 ]
 
-const referencedEventAbiFingerprint = 'a2d09004dfe746b8f024675f4a617d5b2d8f9bb164515874854179cb2b36ea31'
+const referencedEventAbiFingerprint = '7ac5f4c99a3df29c647b19b127f747ff3d74d1f5d3e351e306374cad567d6c34'
 
 const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	'solidity/contracts/ERC20.sol': {
@@ -347,7 +347,7 @@ const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	},
 	'solidity/contracts/peripherals/factories/SecurityPoolFactory.sol': {
 		deployChildSecurityPool: ['external(ISecurityPool,IShareToken,uint248,uint256,uint256,uint256,uint256)'],
-		deployOriginSecurityPool: ['external(uint248,uint256,uint256)'],
+		deployOriginSecurityPool: ['external(uint248,uint256,uint256,uint256)'],
 	},
 	'solidity/contracts/peripherals/EscalationGame.sol': {
 		recordDepositFromSecurityPool: ['external(address,BinaryOutcomes.BinaryOutcome,uint256,uint256)'],
@@ -471,7 +471,7 @@ const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/peripherals/SecurityPoolForkerBase.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/peripherals/SecurityPoolForkerStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol': '2c1768ca6df9cc73f7cd8743eb1955f628d8452135ad20a6afa84266f87da6ff',
-	'solidity/contracts/peripherals/factories/SecurityPoolFactory.sol': '341a6e1b0e28f1ced56f751ca7fe41e52b1cc48535b3dbfa5c971f80c292ff6f',
+	'solidity/contracts/peripherals/factories/SecurityPoolFactory.sol': '64ce90671df93d7d85580ab404806c41d1eabaf7283ba979a0ff7bb6e7b40bd3',
 	'solidity/contracts/peripherals/tokens/ERC1155.sol': '7bb87695bc3df8fa177c545209ed58d2e4571c19c869b5598bb0a829e764b218',
 	'solidity/contracts/peripherals/tokens/ShareToken.sol': '45fffaf3a3150648f3f43a9129d2a5af0ddc4e261de52a6ad379fa804e44672d',
 }
@@ -651,10 +651,10 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '63f58449dfc5115e0e8e13d90498a9c0a8b9bea022260817bcd46329dd7e7998',
+		compiledAbiFingerprint: 'cc1525492f53d969e461abec0b7a16bdfbcd06333cd8b573b787841f99ab4beb',
 		name: 'SecurityPoolFactory',
 		purpose: 'Creates and canonically registers origin and child security pools with their share token, oracle coordinator, and optional truth auction.',
-		readAbiFingerprint: '2a851398716178a195c1119681a111452b0cf421d177ddd0151b6d5bb8648396',
+		readAbiFingerprint: '02ef47b74eec96814be4fc8a8a933b33fccd4f5bb5b84c30e0876d09234294df',
 		readSurface:
 			'Use `initialEscalationGameDeposit` for the immutable deployment parameter and `securityPoolDeploymentCount` with the strict `securityPoolDeploymentsRange(startIndex, count)` pager, which reverts rather than truncating when the requested range exceeds the array. Use `getOriginId`, `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId`, and `getSecurityPoolHasInheritedForkOutcome` for canonical lookup.',
 		readDeclarations: [{ name: 'securityPoolDeploymentCount' }, { name: 'securityPoolDeploymentsRange' }, { name: 'getOriginId' }, { name: 'getPoolId' }, { name: 'getSecurityPool' }, { name: 'getSecurityPoolOriginId' }, { name: 'getSecurityPoolHasInheritedForkOutcome' }],
@@ -662,17 +662,18 @@ const contractReferences: ContractReference[] = [
 		sourcePath: 'solidity/contracts/peripherals/factories/SecurityPoolFactory.sol',
 		interactions: [
 			{
-				call: '`deployOriginSecurityPool(universeId, questionId, securityMultiplier)`',
+				call: '`deployOriginSecurityPool(universeId, questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas)`',
 				caller: 'Anyone',
-				effect: 'Creates the canonical origin pool, its lineage-wide share token, and its price coordinator, then wires and registers them atomically.',
+				effect: 'Creates the canonical origin pool, its lineage-wide share token, and its price coordinator with the configured initial-report priority fee, then wires and registers them atomically.',
 				declarations: [{ name: 'deployOriginSecurityPool' }],
-				preconditions: '`securityMultiplier > 1`; question exists and has exactly the categorical labels `Yes`, then `No`; universe is unforked and has a REP token; the origin/universe slot has not already been claimed.',
+				preconditions:
+					'`securityMultiplier > 1`; `initialReportPriorityFeeWeiPerGas > 0` and remains within the coordinator-computed OpenOracle `uint128` report/escalation-halt capacity bound; question exists and has exactly the categorical labels `Yes`, then `No`; universe is unforked and has a REP token; the origin/universe/priority-fee slot has not already been claimed.',
 				signals: '`SecurityPoolRegistered`, then `DeploySecurityPool`',
 			},
 			{
 				call: '`deployChildSecurityPool(parent, shareToken, universeId, questionId, securityMultiplier, currentRetentionRate, completeSetCollateralAmount)`',
 				caller: '`SecurityPoolForker` only',
-				effect: 'Creates and registers a canonical child pool with a coordinator and forker-owned truth auction while retaining the parent lineage share token.',
+				effect: 'Creates and registers a canonical child pool with a coordinator that inherits `initialReportPriorityFeeWeiPerGas` from the parent coordinator and a forker-owned truth auction, while retaining the parent lineage share token.',
 				declarations: [{ name: 'deployChildSecurityPool' }],
 				preconditions: 'Parent is the canonical pool for its lineage; supplied share token equals the parent share token; target origin/universe slot is unclaimed; deployment arguments satisfy downstream constructors and wiring.',
 				signals: '`SecurityPoolRegistered`, then `DeploySecurityPool`',
@@ -1321,12 +1322,12 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '77123164dedd551357fc458328598db7d57ffedf791db0943c040894b395cd83',
+		compiledAbiFingerprint: 'f63a7a047a131ddc9e925c2626ede7a117622265b56beb3111375d773e0325c3',
 		name: 'OpenOraclePriceCoordinator',
 		purpose: 'Obtains a fresh REP-per-ETH price and gates withdrawal, allowance, and liquidation operations behind it.',
-		readAbiFingerprint: 'f86d47172374a06e4f6a9eb2e47f8cca1d7c314b30183bd1c4e3d0495e5d6ce4',
+		readAbiFingerprint: '2be51c82eb310480c17a2ea85927bf6ea849498a5cfa9f93c033817919ec10ce',
 		readSurface:
-			'Configuration getters are `MAX_PENDING_SETTLEMENT_OPERATIONS`, `OPEN_INTEREST_DIVIDER`, `reputationToken`, `securityPool`, `openOracle`, `weth`, `gasConsumedOpenOracleReportPrice`, `gasConsumedSettlement`, `gasUnitsForOneDispute`, `targetPriceErrorForDispute`, `openOracleSecurityMultiplierBps`, `settlementTime`, `disputeDelay`, `protocolFee`, `feePercentage`, `multiplier`, `timeType`, `trackDisputes`, `protocolFeeRecipient`, `escalationHaltMultiplierBps`, `maxSettlementBaseFeeMultiplierBps`, and `minLiquidationPriceDistanceBps`. Current report and operation getters are `pendingReportId`, `pendingReportSponsor`, `pendingOperationSlotId`, `lastSettlementTimestamp`, `lastPrice`, `pendingReportMaxSettlementBaseFee`, `stagedOperationCounter`, and `stagedOperations`. Use `isPriceValid`, `minimumToken1Report`, `getRequestPriceEthCost`, `getQueuedOperationEthCost`, `getSettlementCallbackGasLimit`, `getPendingOperationSlot`, `getActiveStagedOperationCount`, `getActiveStagedOperations`, `getPendingSettlementOperationCount`, and `getPendingSettlementOperationIds` for derived or paged state.',
+			'Configuration getters are `MAX_PENDING_SETTLEMENT_OPERATIONS`, `OPEN_INTEREST_DIVIDER`, `reputationToken`, `securityPool`, `openOracle`, `weth`, `gasConsumedOpenOracleReportPrice`, `gasConsumedSettlement`, `gasUnitsForOneDispute`, `initialReportPriorityFeeWeiPerGas`, `targetPriceErrorForDispute`, `openOracleSecurityMultiplierBps`, `settlementTime`, `disputeDelay`, `protocolFee`, `feePercentage`, `multiplier`, `timeType`, `trackDisputes`, `protocolFeeRecipient`, `escalationHaltMultiplierBps`, `maxSettlementBaseFeeMultiplierBps`, and `minLiquidationPriceDistanceBps`. Current report and operation getters are `pendingReportId`, `pendingReportSponsor`, `pendingOperationSlotId`, `lastSettlementTimestamp`, `lastPrice`, `pendingReportMaxSettlementBaseFee`, `stagedOperationCounter`, and `stagedOperations`. Use `isPriceValid`, `minimumToken1Report`, `getRequestPriceEthCost`, `getQueuedOperationEthCost`, `getSettlementCallbackGasLimit`, `getPendingOperationSlot`, `getActiveStagedOperationCount`, `getActiveStagedOperations`, `getPendingSettlementOperationCount`, and `getPendingSettlementOperationIds` for derived or paged state.',
 		readDeclarations: [
 			{ name: 'isPriceValid' },
 			{ name: 'minimumToken1Report' },
@@ -1354,6 +1355,7 @@ const contractReferences: ContractReference[] = [
 			{ name: 'gasConsumedOpenOracleReportPrice' },
 			{ name: 'gasConsumedSettlement' },
 			{ name: 'gasUnitsForOneDispute' },
+			{ name: 'initialReportPriorityFeeWeiPerGas' },
 			{ name: 'targetPriceErrorForDispute' },
 			{ name: 'openOracleSecurityMultiplierBps' },
 			{ name: 'settlementTime' },
@@ -1380,7 +1382,7 @@ const contractReferences: ContractReference[] = [
 					'Records the operation, executes immediately with a fresh price, or attaches it to a bounded pending settlement batch and opens a report when required. If unused ETH is positive, the final caller refund uses a low-level callback; rejection rolls back the entire transaction, including any queueing, immediate execution, or newly opened report.',
 				declarations: [{ name: 'requestPriceIfNeededAndStageOperation' }],
 				preconditions:
-					'`securityPool.isEscalationResolved()` is false; valid target and nonzero amount except zero allowance; timeout from 1 second through 5 minutes. Bounty, buffered funding for at least the dynamic WETH minimum and coordinator-derived REP side, and approvals are required only when this call opens a new report; the caller may request a larger initial WETH amount. Staging beside a pending report or queued rejected-report work does not open or fund another report. The caller must accept any positive unused-ETH refund.',
+					'`securityPool.isEscalationResolved()` is false; valid target and nonzero amount except zero allowance; timeout from 1 second through 5 minutes. Bounty, buffered funding for at least the configured priority report plus the larger of the base-fee and open-interest WETH reports, along with the coordinator-derived REP side and approvals, are required only when this call opens a new report; the caller may request a larger initial WETH amount. Staging beside a pending report or queued rejected-report work does not open or fund another report. The caller must accept any positive unused-ETH refund.',
 				signals: '`StagedOperationQueued`, possibly `PriceRequested`, then `ExecutedStagedOperation`; authoritative `CoordinatorStateCheckpoint` records',
 			},
 			{
@@ -1389,7 +1391,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Opens and atomically funds a fresh WETH/REP report without staging a new operation, then refunds any positive excess ETH through a low-level caller callback. Callback rejection rolls back the report and initial position.',
 				declarations: [{ name: 'requestPrice' }],
 				preconditions:
-					'Cached price stale; no pending report; nonzero proposed REP/ETH price, ETH bounty, and funding and approvals for at least the dynamic WETH minimum plus matching REP. Zero requested WETH uses the minimum; a larger request voluntarily increases the initial report. The caller must accept any positive excess-ETH refund.',
+					'Cached price stale; no pending report; nonzero proposed REP/ETH price, ETH bounty, and funding and approvals for at least the configured priority report plus the larger of the base-fee and open-interest WETH reports, plus matching REP. Zero requested WETH uses the minimum; a larger request voluntarily increases the initial report. The caller must accept any positive excess-ETH refund.',
 				signals: '`PriceRequested` and `CoordinatorStateCheckpoint`',
 			},
 			{

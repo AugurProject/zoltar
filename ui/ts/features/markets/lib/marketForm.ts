@@ -1,6 +1,8 @@
 import type { ForkAuctionFormState, MarketFormState, OpenOracleCreateFormState, OpenOracleFormState, ReportingFormState, ReportingWithdrawDepositIndexesByOutcome, SecurityPoolFormState, SecurityVaultFormState, TradingFormState, ZoltarMigrationFormState } from '../../../types/app.js'
+import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS } from '@zoltar/shared/oracleInitialReport'
 import { parseDecimalInput, tryParseDecimalInput } from '../../../lib/decimal.js'
 import { parseBigIntInput, tryParseBigIntInput } from '../../../lib/integerInput.js'
+import { formatCurrencyInputBalance } from '../../../lib/formatters.js'
 
 export { parseBigIntInput, tryParseBigIntInput }
 
@@ -21,6 +23,7 @@ export function getDefaultMarketFormState(): MarketFormState {
 
 export function getDefaultSecurityPoolFormState(): SecurityPoolFormState {
 	return {
+		initialReportPriorityFeeGwei: formatCurrencyInputBalance(DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS, 9),
 		marketId: '',
 		securityMultiplier: '2',
 	}

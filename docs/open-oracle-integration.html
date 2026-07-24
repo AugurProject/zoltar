@@ -586,37 +586,37 @@
 					The refresh sponsor's coordinator call supplies a proposed REP/ETH price
 					and passes <code>requestedInitialWeth = 0</code>. For this worked example,
 					the pool has no open interest, so the coordinator atomically computes
-					and posts the gas-based minimum WETH amount and its
+					and posts the priority-, base-fee-, and open-interest-sized minimum WETH amount and its
 					matching REP <code>amount2</code>. At the snapshot base fee of
-					<code>69,594,403 wei</code>, the minimum side is
-					<code>0.005621086396153847 WETH</code>. Using the snapshot price of
+					<code>69,594,403 wei</code> and a <code>10 gwei</code> lineage priority fee,
+					the minimum side is <code>0.813313394088461540 WETH</code>. Using the snapshot price of
 					<code>2,210 REP/ETH</code> gives:
 				</p>
 				<figure class="equation" id="eq-openoracle-initial-report-snapshot-example">
 					<math
 						display="block"
 						aria-label="Worked REP amount from the dynamic minimum WETH report and the snapshot REP per ETH price"
-						data-source="amount2 = 0.005621086396153847 \cdot 2,210 = 12.422600935500001870 REP"
+						data-source="amount2 = 0.813313394088461540 \cdot 2,210 = 1,797.422600935500003400 REP"
 					>
 						<mrow>
 							<msub><mi>amount</mi><mn>2</mn></msub>
 							<mo>&#x2248;</mo>
-							<mn>0.005621086396153847</mn>
+							<mn>0.813313394088461540</mn>
 							<mo>&#x22C5;</mo>
 							<mn>2,210</mn>
 							<mo>&#x2248;</mo>
-							<mn>12.422600935500001870</mn>
+							<mn>1,797.422600935500003400</mn>
 							<mtext>&nbsp;REP</mtext>
 						</mrow>
 					</math>
 					<p class="equation-caption">
 						<span class="equation-label">Worked Initial Report Stake</span>The
 						refresh sponsor supplies exactly
-						<code>0.005621086396153847 WETH</code> and approximately
-						<code>12.422600935500001870 REP</code>. Because this example requests
+						<code>0.813313394088461540 WETH</code> and approximately
+						<code>1,797.422600935500003400 REP</code>. Because this example requests
 						zero additional WETH and the example has no open interest, the selected
-						amount equals the minimum computed from the onchain base fee and
-						coordinator parameters. The coordinator
+						amount equals the minimum computed from the onchain base fee,
+						lineage priority fee, and coordinator parameters. The coordinator
 						derives the REP amount from that selected WETH amount and the sponsor's
 						proposed price.
 					</p>
@@ -687,69 +687,81 @@
 					</li>
 				</ul>
 				<p>
-					The minimum side is WETH, so the coordinator can calculate it directly
-					from the current block's base fee. In the conservative correction
-					direction, the true REP/ETH price is
+					The minimum side is WETH. The coordinator adds a report derived from the
+					lineage's immutable priority-fee assumption to the larger of a report
+					derived from the current block's base fee and one percent of current pool
+					open interest. In the conservative correction direction, the true REP/ETH price is
 					<code>(1 + targetError)</code> times the reported price. Correcting that
 					report releases the fraction
 					<code>(targetError - fees) / (1 + targetError)</code> of the WETH
 					position before gas. The report multiplies one modeled dispute's
-					base-fee gas cost by the required profit buffer and divides by that
+					gas cost by the required profit buffer and divides by that
 					correction-profit fraction.
 				</p>
 				<div class="equation" id="eq-openoracle-initial-report-size">
 					<math
 						display="block"
-						aria-label="minimum token one report is the gas based correction incentive floor; open interest halt is the ceiling of pool collateral divided by one hundred; escalation halt is the greater of that open interest halt and the initial report times the halt multiplier"
-						data-source="minimumToken1Report = max(1, ceil(block.basefee \cdot gasUnitsForOneDispute \cdot openOracleSecurityMultiplierBps \cdot (percentagePrecision + targetPriceErrorForDispute) / (10000 \cdot (targetPriceErrorForDispute - protocolFee - reporterFee)))); openInterestHalt = ceil(completeSetCollateralAmount / 100); escalationHalt = max(floor(initialWethReport \cdot escalationHaltMultiplierBps / 10000), openInterestHalt)"
+						aria-label="minimum token one report adds the priority fee report to the larger base fee or open interest report; escalation halt is the greater of the open interest report and the initial report times the halt multiplier"
+						data-source="report(gasPrice) = ceil(gasPrice \cdot gasUnitsForOneDispute \cdot openOracleSecurityMultiplierBps \cdot (percentagePrecision + targetPriceErrorForDispute) / (10000 \cdot (targetPriceErrorForDispute - protocolFee - reporterFee))); priorityFeeReport = report(initialReportPriorityFeeWeiPerGas); baseFeeReport = report(block.basefee); openInterestReport = ceil(completeSetCollateralAmount / 100); minimumToken1Report = priorityFeeReport + max(baseFeeReport, openInterestReport); escalationHalt = max(floor(initialWethReport \cdot escalationHaltMultiplierBps / 10000), openInterestReport)"
 					>
 						<mtable>
 							<mtr>
-								<mtd><mi>minimumToken1Report</mi></mtd>
+								<mtd><mi>report</mi><mo>(</mo><mi>gasPrice</mi><mo>)</mo></mtd>
 								<mtd><mo>=</mo></mtd>
 								<mtd>
-									<mi>max</mi><mo>(</mo><mn>1</mn><mo>,</mo><mi>ceil</mi><mo>(</mo>
+									<mi>ceil</mi><mo>(</mo>
 									<mfrac>
 										<mrow>
-											<mi>block.basefee</mi><mo>&#x22C5;</mo><mi>gasUnitsForOneDispute</mi><mo>&#x22C5;</mo><mi>openOracleSecurityMultiplierBps</mi>
+											<mi>gasPrice</mi><mo>&#x22C5;</mo><mi>gasUnitsForOneDispute</mi><mo>&#x22C5;</mo><mi>openOracleSecurityMultiplierBps</mi>
 											<mo>&#x22C5;</mo><mo>(</mo><mi>percentagePrecision</mi><mo>+</mo><mi>targetPriceErrorForDispute</mi><mo>)</mo>
 										</mrow>
 										<mrow>
 											<mn>10000</mn><mo>&#x22C5;</mo><mo>(</mo><mi>targetPriceErrorForDispute</mi><mo>-</mo><mi>protocolFee</mi><mo>-</mo><mi>reporterFee</mi><mo>)</mo>
 										</mrow>
 									</mfrac>
-									<mo>)</mo><mo>)</mo>
+									<mo>)</mo>
 								</mtd>
 							</mtr>
 							<mtr>
-								<mtd><mi>openInterestHalt</mi></mtd>
+								<mtd><mi>openInterestReport</mi></mtd>
 								<mtd><mo>=</mo></mtd>
 								<mtd><mi>ceil</mi><mo>(</mo><mfrac><mi>completeSetCollateralAmount</mi><mn>100</mn></mfrac><mo>)</mo></mtd>
 							</mtr>
 							<mtr>
+								<mtd><mi>minimumToken1Report</mi></mtd>
+								<mtd><mo>=</mo></mtd>
+								<mtd>
+									<mi>report</mi><mo>(</mo><mi>initialReportPriorityFeeWeiPerGas</mi><mo>)</mo>
+									<mo>+</mo>
+									<mi>max</mi><mo>(</mo><mi>report</mi><mo>(</mo><mi>block.basefee</mi><mo>)</mo><mo>,</mo><mi>openInterestReport</mi><mo>)</mo>
+								</mtd>
+							</mtr>
+							<mtr>
 								<mtd><mi>escalationHalt</mi></mtd>
 								<mtd><mo>=</mo></mtd>
-								<mtd><mi>max</mi><mo>(</mo><mi>floor</mi><mo>(</mo><mfrac><mrow><mi>initialWethReport</mi><mo>&#x22C5;</mo><mi>escalationHaltMultiplierBps</mi></mrow><mn>10000</mn></mfrac><mo>)</mo><mo>,</mo><mi>openInterestHalt</mi><mo>)</mo></mtd>
+								<mtd><mi>max</mi><mo>(</mo><mi>floor</mi><mo>(</mo><mfrac><mrow><mi>initialWethReport</mi><mo>&#x22C5;</mo><mi>escalationHaltMultiplierBps</mi></mrow><mn>10000</mn></mfrac><mo>)</mo><mo>,</mo><mi>openInterestReport</mi><mo>)</mo></mtd>
 							</mtr>
 						</mtable>
 					</math>
 					<p class="equation-caption">
 						<span class="equation-label">Dynamic Report and Escalation Threshold</span>The
-						initial-report minimum is calculated from the request transaction's
-						<code>block.basefee</code>. A zero-base-fee block uses one WETH wei
-						because OpenOracle rejects a zero report amount. The multiplicative-escalation halt is
+						initial-report minimum adds a report derived from the lineage's immutable
+						<code>initialReportPriorityFeeWeiPerGas</code> to the larger of a report
+						derived from the request block's <code>block.basefee</code> and one percent
+						of current pool open interest. The multiplicative-escalation halt is
 						the greater of the selected initial report times the configured halt
 						multiplier and one percent of the pool's stored ETH collateral backing
 						complete sets. The open-interest division rounds up.
 					</p>
 				</div>
 				<p>
-					No REP price, assumed gas price, expected REP price movement, pool open
-					interest, or individual protected-operation notional enters the minimum
-					initial WETH calculation. Pool open interest instead raises
-					<code>escalationHalt</code> through
+					No REP price, expected REP price movement, or individual
+					protected-operation notional enters the minimum initial WETH calculation.
+					The immutable priority fee is selected when the origin pool is created and
+					inherited unchanged by its children. Pool open interest contributes
 					<code>ceil(completeSetCollateralAmount / OPEN_INTEREST_DIVIDER)</code>, with
-					<code>OPEN_INTEREST_DIVIDER = 100</code>. The sponsor
+					<code>OPEN_INTEREST_DIVIDER = 100</code>, before the priority-derived report
+					is added. The sponsor
 					may pass zero to use that minimum or request a larger initial WETH amount.
 					The coordinator sets
 					<code>initialWethReport = max(minimumToken1Report(), requestedInitialWeth)</code>,
@@ -757,7 +769,7 @@
 					<code>amount2 = ceil(initialWethReport * proposedRepPerEthPrice / 1e18)</code>
 					inside the same transaction. If that price is wrong
 					by at least the configured target error (initially five percent), the resulting correction opportunity is
-					designed to pay the modeled base-fee gas cost with the configured
+					designed to pay the modeled base-fee plus configured-priority-fee gas cost with the configured
 					Open Oracle Security multiplier
 					after the configured OpenOracle fees.
 				</p>
@@ -774,6 +786,11 @@
 							<td><code>block.basefee</code></td>
 							<td>Current request block</td>
 							<td>EVM block context</td>
+						</tr>
+						<tr>
+							<td><code>initialReportPriorityFeeWeiPerGas</code></td>
+							<td>Origin-pool parameter; the UI defaults to <code>10 gwei</code></td>
+							<td>Immutable lineage configuration inherited by child pools</td>
 						</tr>
 						<tr>
 							<td><code>completeSetCollateralAmount</code></td>
@@ -816,6 +833,10 @@
 					Coordinator construction requires positive dispute gas units, a target
 					error no greater than 100%, an Open Oracle Security multiplier of at least
 					<code>1x</code>, and combined OpenOracle fees below the target error.
+					It also rejects a priority fee whose constant-derived report would consume
+					the reserved <code>uint128</code> report or escalation-halt capacity; half
+					of that capacity remains available for the dynamic base-fee or open-interest
+					component.
 					The factory stores its deployment configuration, so an invalid domain
 					causes coordinator deployment to revert. Moving the target closer to
 					the fee floor increases required WETH sharply; increasing the Open Oracle
@@ -823,14 +844,23 @@
 					but tolerates a wider error before the modeled correction incentive
 					applies.
 				</p>
+				<div class="callout">
+					The immutable priority fee is an operator-selected transaction-inclusion
+					assumption, not a tip observed from the request block. Setting it too low
+					weakens the modeled incentive for a disputer when prevailing priority
+					fees are higher. Setting it too high raises the sponsor's initial WETH
+					and REP requirements and the initial-report-derived escalation halt, and
+					can make requests impractical. Child pools inherit the origin's value.
+				</div>
 				<p>
-					At <code>30 gwei</code>, the modeled gas cost is
-					<code>0.009 ETH</code>. After the <code>10x</code> Open Oracle Security multiplier and the
+					At a <code>30 gwei</code> base fee and <code>10 gwei</code> configured
+					priority fee, the modeled gas cost is <code>0.012 ETH</code>. After the
+					<code>10x</code> Open Oracle Security multiplier and the
 					worst-direction five-percent correction fraction after fees, the minimum
-					gas-based report is <code>2.423076923076923077 WETH</code>, producing an
-					initial-report-derived halt of <code>24.230769230769230770 WETH</code> at
-					the configured <code>10x</code> halt multiplier. One percent of pool open
-					interest replaces that halt only when it is larger.
+					report with 100 WETH of open interest is
+					<code>3.230769230769230770 WETH</code>, producing an
+					initial-report-derived halt of <code>32.307692307692307700 WETH</code>
+					at the configured <code>10x</code> halt multiplier.
 				</p>
 				<details class="interactive-example" id="initial-report-estimator-example" open>
 					<summary>Dynamic WETH report estimator</summary>
@@ -845,6 +875,11 @@
 							Block base fee
 							<input type="range" min="0" max="200" step="1" value="30" data-example-input="blockBaseFeeGwei" />
 							<span class="example-value" data-example-value="blockBaseFeeGwei">30 gwei</span>
+						</label>
+						<label>
+							Initial-report priority fee
+							<input type="range" min="1" max="100" step="1" value="10" data-example-input="initialReportPriorityFeeGwei" />
+							<span class="example-value" data-example-value="initialReportPriorityFeeGwei">10 gwei</span>
 						</label>
 						<label>
 							Pool open interest
@@ -888,13 +923,13 @@
 						</label>
 					</div>
 					<div class="example-output-grid">
-						<div><span>Initial-derived halt</span><output data-example-output="initialReportEscalationHalt">24.230769230769230770 WETH</output></div>
+						<div><span>Initial-derived halt</span><output data-example-output="initialReportEscalationHalt">32.307692307692307700 WETH</output></div>
 						<div><span>Open-interest halt floor</span><output data-example-output="openInterestEscalationHalt">1.000000000000000000 WETH</output></div>
-						<div><span>Minimum token1 report</span><output data-example-output="estimatedMinimumWethReport">2.423076923076923077 WETH</output></div>
-						<div><span>Selected initial WETH</span><output data-example-output="selectedInitialWethReport">2.423076923076923077 WETH</output></div>
-						<div><span>Escalation halt</span><output data-example-output="selectedEscalationHalt">24.230769230769230770 WETH</output></div>
-						<div><span>Modeled dispute gas cost</span><output data-example-output="disputeGasCost">0.009000 ETH</output></div>
-						<div><span>Buffered gas target</span><output data-example-output="bufferedGasCost">0.090000 ETH</output></div>
+						<div><span>Minimum token1 report</span><output data-example-output="estimatedMinimumWethReport">3.230769230769230770 WETH</output></div>
+						<div><span>Selected initial WETH</span><output data-example-output="selectedInitialWethReport">3.230769230769230770 WETH</output></div>
+						<div><span>Escalation halt</span><output data-example-output="selectedEscalationHalt">32.307692307692307700 WETH</output></div>
+						<div><span>Modeled dispute gas cost</span><output data-example-output="disputeGasCost">0.012000 ETH</output></div>
+						<div><span>Buffered gas target</span><output data-example-output="bufferedGasCost">0.120000 ETH</output></div>
 						<div><span>Correction profit fraction after fees</span><output data-example-output="correctionProfitFraction">3.7143%</output></div>
 						<div><span>Safety state</span><output data-example-output="estimatorSafetyState">fees below target error</output></div>
 					</div>
@@ -1541,13 +1576,20 @@
 						when settlement base fee is greater than that cap. Equality is
 						accepted. With the default <code>10x</code> Open Oracle Security
 						multiplier and <code>3x</code>
-						<code>maxSettlementBaseFeeMultiplierBps</code>, correction profit at
-						the configured target error remains <code>10 / 3</code> times the
-						one-dispute gas cost at the largest admitted settlement base fee.
-						That relationship is a deployment assumption, not a constructor
-						invariant: the constructor checks each multiplier's lower bound but
-						does not require the settlement cap to remain below the Open Oracle
-						Security multiplier.
+						<code>maxSettlementBaseFeeMultiplierBps</code>, let <code>b</code> be
+						the request base fee and <code>p</code> the configured priority fee.
+						When the gas branch sizes the report, the actual transaction priority
+						fee equals <code>p</code>, and rounding is ignored, correction profit
+						at the configured target error is
+						<code>10(b + p) / (3b + p)</code> times one-dispute gas cost at the
+						largest admitted settlement base fee. This is at least the base-fee-only
+						<code>10 / 3</code> lower bound; an open-interest-dominant report only
+						increases the position. The bound is a deployment assumption, not a
+						constructor invariant: the callback cap constrains only
+						<code>block.basefee</code>, so a prevailing transaction priority fee
+						above <code>p</code> weakens it. The constructor checks each
+						multiplier's lower bound but does not require the settlement cap to
+						remain below the Open Oracle Security multiplier.
 					</li>
 					<li>
 						<strong>Settlement validation scope:</strong> the callback does not
@@ -1631,15 +1673,21 @@
 								and the <a href="#initial-report-estimator-example">estimator</a>.
 							</td>
 							<td>
-								Sets the gas-based initial WETH correction floor.
+								Adds the priority-fee report to the larger base-fee or
+								open-interest correction floor.
 							</td>
+						</tr>
+						<tr>
+							<td><code>initialReportPriorityFeeWeiPerGas</code></td>
+							<td>Configured per origin pool; UI default <code>10 gwei</code></td>
+							<td>Provides an immutable inclusion-fee component that every child pool inherits.</td>
 						</tr>
 						<tr>
 							<td><code>OPEN_INTEREST_DIVIDER</code></td>
 							<td><code>100</code></td>
 							<td>
 								Makes one percent of <code>completeSetCollateralAmount</code> the
-								open-interest-derived <code>escalationHalt</code> floor.
+								open-interest-derived initial-report and <code>escalationHalt</code> floor.
 							</td>
 						</tr>
 						<tr>
@@ -1873,30 +1921,48 @@
 					(targetError - feeFraction) / (1 + targetError);
 				const disputeGasCostEth =
 					parameters.gasUnitsForOneDispute *
-					parameters.blockBaseFeeGwei *
+					(parameters.blockBaseFeeGwei +
+						parameters.initialReportPriorityFeeGwei) *
 					1e-9;
 				const bufferedGasCostEth =
 					disputeGasCostEth * parameters.openOracleSecurityMultiplier;
 				const correctionProfitUnits = targetErrorUnits - feeUnits;
-				let gasBasedMinimumWethReportWei;
+				let minimumWethReportWei;
 				if (correctionProfitUnits > 0n) {
-					const numerator =
-						BigInt(Math.round(parameters.blockBaseFeeGwei * 1e9)) *
-						BigInt(Math.round(parameters.gasUnitsForOneDispute)) *
-						BigInt(Math.round(parameters.openOracleSecurityMultiplier * 10_000)) *
-						(percentagePrecision + targetErrorUnits);
 					const denominator = 10_000n * correctionProfitUnits;
-					const calculatedReport =
-						(numerator + denominator - 1n) / denominator;
-					gasBasedMinimumWethReportWei =
-						calculatedReport > 0n ? calculatedReport : 1n;
+					const calculateGasPriceReport = (gasPriceGwei) => {
+						const numerator =
+							BigInt(Math.round(gasPriceGwei * 1e9)) *
+							BigInt(Math.round(parameters.gasUnitsForOneDispute)) *
+							BigInt(
+								Math.round(
+									parameters.openOracleSecurityMultiplier * 10_000,
+								),
+							) *
+							(percentagePrecision + targetErrorUnits);
+						return (numerator + denominator - 1n) / denominator;
+					};
+					const priorityFeeReportWei = calculateGasPriceReport(
+						parameters.initialReportPriorityFeeGwei,
+					);
+					const baseFeeReportWei = calculateGasPriceReport(
+						parameters.blockBaseFeeGwei,
+					);
+					const openInterestWethWei =
+						BigInt(Math.round(parameters.openInterestWeth)) * 10n ** 18n;
+					const openInterestReportWei =
+						(openInterestWethWei + 99n) / 100n;
+					minimumWethReportWei =
+						priorityFeeReportWei +
+						(baseFeeReportWei > openInterestReportWei
+							? baseFeeReportWei
+							: openInterestReportWei);
 				}
 				const openInterestWethWei = BigInt(
 					Math.round(parameters.openInterestWeth),
 				) * 10n ** 18n;
 				const openInterestEscalationHaltWei =
 					(openInterestWethWei + 99n) / 100n;
-				const minimumWethReportWei = gasBasedMinimumWethReportWei;
 				const requestedInitialWethWei = BigInt(
 					Math.round(parameters.requestedInitialWeth * 1e18),
 				);
@@ -1940,6 +2006,9 @@
 			bindExample("#initial-report-estimator-example", (context) => {
 				const parameters = {
 					blockBaseFeeGwei: context.read("blockBaseFeeGwei"),
+					initialReportPriorityFeeGwei: context.read(
+						"initialReportPriorityFeeGwei",
+					),
 					gasUnitsForOneDispute: context.read("gasUnitsForOneDispute"),
 					openInterestWeth: context.read("openInterestWeth"),
 					openOracleProtocolFee: context.read("openOracleProtocolFee"),
@@ -1959,6 +2028,10 @@
 				context.writeValue(
 					"blockBaseFeeGwei",
 					parameters.blockBaseFeeGwei.toFixed(0) + " gwei",
+				);
+				context.writeValue(
+					"initialReportPriorityFeeGwei",
+					parameters.initialReportPriorityFeeGwei.toFixed(0) + " gwei",
 				);
 				context.writeValue(
 					"openInterestWeth",

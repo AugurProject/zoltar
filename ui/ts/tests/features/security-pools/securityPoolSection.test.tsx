@@ -62,6 +62,7 @@ function createProps(overrides: Partial<SecurityPoolSectionProps> = {}): Securit
 		securityPoolCreating: false,
 		securityPoolError: undefined,
 		securityPoolForm: {
+			initialReportPriorityFeeGwei: '10',
 			marketId: '0x01',
 			securityMultiplier: '2',
 		},
@@ -163,6 +164,32 @@ describe('SecurityPoolSection', () => {
 		const securityMultiplierInput = documentQueries.getByRole('textbox', { name: 'Security Multiplier' })
 		expect(securityMultiplierInput.getAttribute('aria-describedby')).toBe('security-pool-security-multiplier-help')
 		expect(documentQueries.getByText('REP target relative to open interest; higher values require more REP.')).not.toBeNull()
+		const priorityFeeInput = documentQueries.getByRole('textbox', { name: 'Initial Report Priority Fee' })
+		expect(priorityFeeInput.getAttribute('aria-describedby')).toBe('security-pool-initial-report-priority-fee-help')
+		expect((priorityFeeInput as HTMLInputElement).value).toBe('10')
+		expect(documentQueries.getByText('Fixed gas-price premium added to Open Oracle report security. Enter gwei.')).not.toBeNull()
+	})
+
+	test('associates invalid priority-fee guidance and disables creation', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolSection,
+				createProps({
+					securityPoolForm: {
+						initialReportPriorityFeeGwei: '0',
+						marketId: '0x01',
+						securityMultiplier: '2',
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const priorityFeeInput = within(document.body).getByRole('textbox', { name: 'Initial Report Priority Fee' })
+		expect(priorityFeeInput.getAttribute('aria-invalid')).toBe('true')
+		expect(priorityFeeInput.getAttribute('aria-describedby')).toBe('security-pool-initial-report-priority-fee-help security-pool-initial-report-priority-fee-error')
+		expect(within(document.body).getByText('Initial-report priority fee must be greater than 0 gwei.')).not.toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Create Pool', 'Initial-report priority fee must be greater than 0 gwei.')
 	})
 
 	test('previews the pasted question before pool creation without a manual load action', async () => {
@@ -215,6 +242,7 @@ describe('SecurityPoolSection', () => {
 				createProps({
 					securityPoolResult: {
 						deployPoolHash: zeroHash,
+						initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 						questionId: '0x01',
 						securityPoolAddress: poolAddress,
 						securityMultiplier: 2n,
@@ -242,7 +270,7 @@ describe('SecurityPoolSection', () => {
 			),
 		)
 		cleanupRenderedComponent = duplicateCheckRender.cleanup
-		expectTransactionButtonDisabled(document.body, 'Checking Duplicate…', 'Checking whether a pool already exists for this question and security multiplier.')
+		expectTransactionButtonDisabled(document.body, 'Checking Duplicate…', 'Checking whether a pool already exists for this question, security multiplier, and priority fee.')
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
 
@@ -268,8 +296,8 @@ describe('SecurityPoolSection', () => {
 			),
 		)
 		cleanupRenderedComponent = duplicateRender.cleanup
-		expectTransactionButtonDisabled(document.body, 'Pool Already Exists', 'A pool for this question and security multiplier already exists.')
-		expect(within(document.body).getByText('Origin pool deployment is deterministic for each question and multiplier pair. Change the multiplier to create a different pool.')).not.toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Pool Already Exists', 'A pool for this question, security multiplier, and priority fee already exists.')
+		expect(within(document.body).getByText('Change the priority fee or security multiplier to create a different origin pool.')).not.toBeNull()
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
 
@@ -294,6 +322,7 @@ describe('SecurityPoolSection', () => {
 
 		const resultPool = {
 			deployPoolHash: zeroHash,
+			initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 			questionId: '0x01',
 			securityPoolAddress: poolAddress,
 			securityMultiplier: 2n,
@@ -330,6 +359,7 @@ describe('SecurityPoolSection', () => {
 	test('uses carried market details when created market does not match loaded market details', async () => {
 		const resultPool = {
 			deployPoolHash: zeroHash,
+			initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 			questionId: '0x99',
 			securityPoolAddress: getAddress('0x00000000000000000000000000000000000000a3'),
 			securityMultiplier: 2n,

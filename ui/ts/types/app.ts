@@ -46,6 +46,7 @@ export type MarketFormState = {
 }
 
 export type SecurityPoolFormState = {
+	initialReportPriorityFeeGwei: string
 	marketId: string
 	securityMultiplier: string
 }
