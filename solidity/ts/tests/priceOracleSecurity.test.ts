@@ -879,7 +879,13 @@ describe('Price Oracle Refund Security Tests', () => {
 		await assert.rejects(stage(OperationType.SetSecurityBondsAllowance, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS), /Not enough ETH was provided to request a fresh oracle price/)
 		assert.strictEqual(await client.readContract({ abi: coordinatorAbi, address: priceOracle, functionName: 'stagedOperationCounter', args: [] }), counterBefore, 'underfunded staging should roll back its operation record')
 
-		await wrapWeth(client, 1n)
+		const minimumInitialWeth = await client.readContract({
+			abi: coordinatorAbi,
+			address: priceOracle,
+			functionName: 'minimumToken1Report',
+			args: [],
+		})
+		await wrapWeth(client, minimumInitialWeth)
 		await approveToken(client, WETH_ADDRESS, priceOracle)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
 		await stage(OperationType.SetSecurityBondsAllowance, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, await getRequestPriceEthCost(client, priceOracle))
@@ -902,15 +908,24 @@ describe('Price Oracle Refund Security Tests', () => {
 				bytecode: `0x${rejectingEthReceiverArtifact.evm.bytecode.object}`,
 			}),
 		)
-		const initialReportAmount = 1n
+		const oraclePricePrecision = 10n ** 18n
+		const proposedRepPerEthPrice = 1n
+		const minimumInitialWeth = await client.readContract({
+			abi: coordinatorAbi,
+			address: priceOracle,
+			functionName: 'minimumToken1Report',
+			args: [],
+		})
+		const initialWethReport = minimumInitialWeth + oraclePricePrecision
+		const initialRepReport = (initialWethReport * proposedRepPerEthPrice + oraclePricePrecision - 1n) / oraclePricePrecision
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
 
-		await executeThroughRejectingReceiver(receiver, WETH_ADDRESS, encodeFunctionData({ abi: peripherals_WETH9_WETH9.abi, functionName: 'deposit', args: [] }), initialReportAmount)
+		await executeThroughRejectingReceiver(receiver, WETH_ADDRESS, encodeFunctionData({ abi: peripherals_WETH9_WETH9.abi, functionName: 'deposit', args: [] }), initialWethReport)
 		const repTransferHash = await client.writeContract({
 			abi: ReputationToken_ReputationToken.abi,
 			address: addressString(GENESIS_REPUTATION_TOKEN),
 			functionName: 'transfer',
-			args: [receiver, initialReportAmount],
+			args: [receiver, initialRepReport],
 		})
 		await client.waitForTransactionReceipt({ hash: repTransferHash })
 		await executeThroughRejectingReceiver(
@@ -919,7 +934,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			encodeFunctionData({
 				abi: peripherals_WETH9_WETH9.abi,
 				functionName: 'approve',
-				args: [priceOracle, initialReportAmount],
+				args: [priceOracle, initialWethReport],
 			}),
 		)
 		await executeThroughRejectingReceiver(
@@ -928,7 +943,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			encodeFunctionData({
 				abi: ReputationToken_ReputationToken.abi,
 				functionName: 'approve',
-				args: [priceOracle, initialReportAmount],
+				args: [priceOracle, initialRepReport],
 			}),
 		)
 
@@ -947,7 +962,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				encodeFunctionData({
 					abi: coordinatorAbi,
 					functionName: 'requestPrice',
-					args: [1n, initialReportAmount],
+					args: [proposedRepPerEthPrice, initialWethReport],
 				}),
 				ethCost + 1n,
 			),
@@ -975,7 +990,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				encodeFunctionData({
 					abi: coordinatorAbi,
 					functionName: 'requestPriceIfNeededAndStageOperation',
-					args: [OperationType.SetSecurityBondsAllowance, receiver, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 1n, initialReportAmount],
+					args: [OperationType.SetSecurityBondsAllowance, receiver, 0n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, proposedRepPerEthPrice, initialWethReport],
 				}),
 				ethCost + 1n,
 			),
