@@ -56,13 +56,14 @@ contract OpenOracle {
 	mapping(uint256 => uint256) public finalPrice;
 	mapping(address => mapping(address => uint256)) public tokenHolder; // owner => token => amount
 	mapping(uint256 => mapping(uint256 => DisputeRecord)) public disputeHistory; // reportId => numReports => dispute data
-	mapping(uint256 => OracleGame) public finalizedGame; // reportId => optional storage
+	mapping(uint256 => OracleGame) public storedGame; // reportId => optional storage
+	mapping(uint256 => StoredHelper) public storedHelper; // reportId => optional stored helper
 	mapping(address => mapping(address => mapping(address => uint256))) public internalAllowance; // owner => spender => token => amount
 
 	struct DisputeRecord {
 		uint128 amount1;
 		uint128 amount2;
-		address tokenToSwap;
+		uint128 baseFee;
 		uint48 reportTimestamp;
 	}
 
@@ -95,6 +96,12 @@ contract OpenOracle {
 		address creator;
 		uint256 blockTimestamp;
 		uint256 blockNumber;
+	}
+
+	struct StoredHelper {
+		address creator;
+		uint48 blockTimestamp;
+		uint48 blockNumber;
 	}
 
 	struct TimingBoundaries {
@@ -166,10 +173,10 @@ contract OpenOracle {
 
 		bool trackDisputes = _hasFlag(params.flags, FLAG_TRACK_DISPUTES);
 		if (trackDisputes) {
-			// Index 0 records the initial report, not a dispute; tokenToSwap is intentionally unset.
 			DisputeRecord storage initialRecord = disputeHistory[reportId][0];
 			initialRecord.amount1 = amount1;
 			initialRecord.amount2 = amount2;
+			initialRecord.baseFee = uint128(block.basefee);
 			initialRecord.reportTimestamp = reportTimestamp;
 		}
 
@@ -192,6 +199,7 @@ contract OpenOracle {
 		// Overrides (slot N at N*0x20): 0x060 reportTimestamp · 0x0C0 lastReportOppoTime · 0x180 numReports (if trackDisputes)
 		bytes32 stateHash;
 		uint256 stagedMem;
+		OracleGame memory staged;
 		assembly ('memory-safe') {
 			let mem := mload(0x40)
 			calldatacopy(mem, params, 0x280)
@@ -205,11 +213,20 @@ contract OpenOracle {
 			}
 			mcopy(add(mem, 0x280), helper, 0x80)
 			stateHash := keccak256(mem, 0x300)
+			staged := mem
 			stagedMem := mem
 			mstore(0x40, add(mem, 0x300))
 		}
 
 		oracleGame[reportId] = stateHash;
+		if (_hasFlag(params.flags, FLAG_STORE_ALL)) {
+			storedGame[reportId] = staged;
+			storedHelper[reportId] = StoredHelper({
+				creator: helper.creator,
+				blockTimestamp: uint48(helper.blockTimestamp),
+				blockNumber: uint48(helper.blockNumber)
+			});
+		}
 
 		if (params.protocolFee > 0 && protocolFeeRecipient != address(0)) {
 			_getDustAmounts(protocolFeeRecipient, token1, token2);
@@ -238,7 +255,6 @@ contract OpenOracle {
 	 *      true when the disputer is intended to fund via approveInternal; any false flag makes
 	 *      that token's required contribution come from msg.sender externally.
 	 * @param reportId The report instance to dispute
-	 * @param tokenToSwap Either token1 or token2; disputer is selling chosen token to previous reporter at the previously quoted exchange rate
 	 * @param newAmount1 New token1 amount; must equal oldAmount1 * multiplier / 100 unless at escalationHalt where it must equal oldAmount1 + 1
 	 * @param newAmount2 New token2 amount proposed by the disputer. Ratio of newAmount1 and newAmount2 is the new price disputer is quoting.
 	 * @param disputer Address recorded as the new currentReporter, credited for any ETH excess. Also receives tokens back when the round completes.
@@ -250,7 +266,6 @@ contract OpenOracle {
 	 */
 	function dispute(
 		uint256 reportId,
-		address tokenToSwap,
 		uint128 newAmount1,
 		uint128 newAmount2,
 		address disputer,
@@ -309,12 +324,13 @@ contract OpenOracle {
 			if (previousReporter == address(0)) revert Errors.NoReportToDispute();
 			if (currentTime >= prevReportTimestamp + oracle.settlementTime) revert Errors.DisputeTooLate();
 			if (oracle.settlementTimestamp != 0) revert Errors.AlreadySettled();
-			if (tokenToSwap != token1 && tokenToSwap != token2) revert Errors.InvalidTokenToSwap();
 			if (currentTime < prevReportTimestamp + oracle.disputeDelay) revert Errors.DisputeTooEarly();
 			if (disputer == address(0)) revert Errors.AddressCannotBeZero();
 			if (timing.blockTimestamp > 0) _validateTiming(timing);
 			if (msg.value > 0 && token1 != ETH_SENTINEL && token2 != ETH_SENTINEL) revert Errors.NeitherTokenIsETH();
 		}
+
+		bool swapToken2 = uint256(newAmount2) * oldAmount1 > uint256(oldAmount2) * newAmount1;
 
 		{
 			oracle.currentAmount1 = newAmount1;
@@ -329,7 +345,7 @@ contract OpenOracle {
 				record.amount1 = newAmount1;
 				record.amount2 = newAmount2;
 				record.reportTimestamp = currentTime;
-				record.tokenToSwap = tokenToSwap;
+				record.baseFee = uint128(block.basefee);
 				if (nextIndex < type(uint24).max) oracle.numReports = nextIndex + 1;
 			}
 
@@ -338,13 +354,24 @@ contract OpenOracle {
 				nextStateHash := keccak256(stagedMem, 0x300)
 			}
 			oracleGame[reportId] = nextStateHash;
+			if (_hasFlag(oracle.flags, FLAG_STORE_ALL)) {
+				OracleGame storage stored = storedGame[reportId];
+				stored.currentAmount1 = newAmount1;
+				stored.currentAmount2 = newAmount2;
+				stored.currentReporter = disputer;
+				stored.reportTimestamp = currentTime;
+				stored.lastReportOppoTime = oppoTime;
+				if (_hasFlag(oracle.flags, FLAG_TRACK_DISPUTES)) {
+					stored.numReports = oracle.numReports;
+				}
+			}
 		}
 
 		_getDustAmounts(disputer, token1, token2);
 
 		uint256 ethRequired = 0;
 
-		if (tokenToSwap == token1) {
+		if (!swapToken2) {
 			uint256 fee = (oldAmount1 * oracle.feePercentage) / PERCENTAGE_PRECISION;
 			uint256 protocolFee = (oldAmount1 * oracle.protocolFee) / PERCENTAGE_PRECISION;
 			uint256 netToken2Contribution = newAmount2 >= oldAmount2 ? newAmount2 - oldAmount2 : 0;
@@ -375,7 +402,7 @@ contract OpenOracle {
 
 				tokenHolder[previousReporter][token1] += 2 * oldAmount1 + fee;
 			}
-		} else if (tokenToSwap == token2) {
+		} else {
 			uint256 fee = (oldAmount2 * oracle.feePercentage) / PERCENTAGE_PRECISION;
 			uint256 protocolFee = (oldAmount2 * oracle.protocolFee) / PERCENTAGE_PRECISION;
 			uint256 netToken1Contribution = newAmount1 > (oldAmount1) ? newAmount1 - oldAmount1 : 0;
@@ -477,7 +504,7 @@ contract OpenOracle {
 		oracleGame[reportId] = nextStateHash;
 
 		if (storePrice) finalPrice[reportId] = finalRatio;
-		if (_hasFlag(oracle.flags, FLAG_STORE_ALL)) finalizedGame[reportId] = oracle;
+		if (_hasFlag(oracle.flags, FLAG_STORE_ALL)) storedGame[reportId] = oracle;
 
 		tokenHolder[currentReporter][token1] += currentAmount1;
 		tokenHolder[currentReporter][token2] += currentAmount2;
@@ -615,13 +642,21 @@ contract OpenOracle {
 		_credit(to, token, amount);
 	}
 
+	function pushOrCredit(address token, address to, uint128 amount) external {
+		_pushOrCredit(token, to, amount, 50_000);
+	}
+
+	function pushOrCredit(address token, address to, uint128 amount, uint32 gasLimit) external {
+		_pushOrCredit(token, to, amount, gasLimit);
+	}
+
 	/**
 	 * @notice Debits caller's internal balance and pushes `amount` of `token` externally to `to`.
-	 *         On push failure (ETH call revert / ERC20 non-standard return / ETH xfer OOG within 50k gas),
+	 *         On push failure (ETH call revert / ERC20 non-standard return / ETH xfer OOG within `gasLimit`),
 	 *         falls back to crediting `to`'s internal balance instead.
 	 * @dev Caller's slot preserves the 1-unit sentinel.
 	 */
-	function pushOrCredit(address token, address to, uint128 amount) external {
+	function _pushOrCredit(address token, address to, uint128 amount, uint32 gasLimit) internal {
 		if (to == address(0)) revert Errors.AddressCannotBeZero();
 		if (amount == 0) return;
 		uint256 bal = tokenHolder[msg.sender][token];
@@ -629,7 +664,7 @@ contract OpenOracle {
 		tokenHolder[msg.sender][token] = bal - amount;
 
 		if (token == ETH_SENTINEL) {
-			(bool ok, ) = to.call{ value: amount, gas: 50000 }('');
+			(bool ok, ) = to.call{ value: amount, gas: gasLimit }('');
 			if (!ok) _credit(to, token, amount);
 		} else {
 			(bool success, bytes memory returndata) = token.call(

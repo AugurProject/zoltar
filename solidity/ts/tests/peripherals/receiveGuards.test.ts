@@ -44,10 +44,15 @@ describe('Peripherals: receive guards', () => {
 		questionId = fixture.questionId
 	})
 
-	const expectUnauthorizedEthSendToReject = async (to: Address, value: bigint) => {
+	const expectUnauthorizedEthSendToReject = async (to: Address, value: bigint, expectedReason: RegExp) => {
 		const unauthorizedSender = createWriteClient(mockWindow, TEST_ADDRESSES[6], 0)
 		await mockWindow.setBalance(unauthorizedSender.account.address, testInternalSenderBalance)
-		await assert.rejects(writeContractAndWait(unauthorizedSender, () => unauthorizedSender.sendTransaction({ to, value })))
+		const targetBalanceBefore = await getETHBalance(client, to)
+		await assert.rejects(
+			writeContractAndWait(unauthorizedSender, () => unauthorizedSender.sendTransaction({ to, value })),
+			expectedReason,
+		)
+		strictEqualTypeSafe(await getETHBalance(client, to), targetBalanceBefore, 'Rejected ETH send must preserve the target balance')
 	}
 
 	test('SecurityPool receive restricts unauthorized senders', async () => {
@@ -58,7 +63,7 @@ describe('Peripherals: receive guards', () => {
 		await mockWindow.setBalance(forkerAddress, testInternalSenderBalance)
 
 		// 1. Unauthorized sender should revert
-		await expectUnauthorizedEthSendToReject(poolAddress, 1000n)
+		await expectUnauthorizedEthSendToReject(poolAddress, 1000n, /Bad ETH sender/)
 
 		// 2. Authorized sender: securityPoolForker
 		await mockWindow.impersonateAccount(forkerAddress)
@@ -93,7 +98,7 @@ describe('Peripherals: receive guards', () => {
 		await mockWindow.setBalance(forkerAddress, testInternalSenderBalance)
 
 		// 4. Unauthorized to child pool reverts
-		await expectUnauthorizedEthSendToReject(childPoolAddress, 100n)
+		await expectUnauthorizedEthSendToReject(childPoolAddress, 100n, /Bad ETH sender/)
 
 		// Record initial child balance
 		const initialChildBal = await getETHBalance(client, childPoolAddress)
@@ -137,7 +142,7 @@ describe('Peripherals: receive guards', () => {
 		await mockWindow.setBalance(truthAuctionAddress, testInternalSenderBalance)
 
 		// 1. Unauthorized sender to forker should revert
-		await expectUnauthorizedEthSendToReject(forkerAddress, 100n)
+		await expectUnauthorizedEthSendToReject(forkerAddress, 100n, /Trusted/)
 
 		// 2. Authorized sender: truthAuction
 		const initialForkerBal = await getETHBalance(client, forkerAddress)

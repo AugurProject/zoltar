@@ -5,7 +5,7 @@ export const viewForkDetails = 'View Fork Details'
 export const migrateRep = 'Migrate REP'
 export const prepareRep = 'Prepare REP'
 export const splitRep = 'Split REP'
-export const migrationNotForkedReason = 'REP migration is unavailable because this universe has not forked.'
+export const migrationNotForkedReason = 'Available after this universe forks.'
 export const migrationAmountAlreadySplitDetail = 'This amount is already fully split across the selected universes.'
 export const alreadyForkedReason = 'Zoltar is already forked.'
 export const formatAddMigrationRepDetail = (repAmount: CopyTemplateValue) => `Add ${repAmount} REP to your migration balance from this universe, then split it across the selected universes.`

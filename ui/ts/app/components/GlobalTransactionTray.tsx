@@ -88,7 +88,7 @@ export function GlobalTransactionTray({ transaction }: GlobalTransactionTrayProp
 	return (
 		<div className='global-transaction-tray'>
 			<div ref={noticeRef} className='global-transaction-notice' role='status' aria-live='polite'>
-				{transactionDismissKey === undefined ? undefined : (
+				{!canDismiss ? undefined : (
 					<button className='quiet global-transaction-close' type='button' aria-label={transactionCopy.closeStatus} onClick={dismiss}>
 						<span aria-hidden='true'>×</span>
 					</button>

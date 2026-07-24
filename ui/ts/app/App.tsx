@@ -721,6 +721,7 @@ export function App() {
 		activeView: activeOpenOracleView,
 		accountState,
 		environmentReady: canReadOnchainData,
+		environmentRefreshKey: activeEnvironmentNonce,
 		onApproveToken1: amount => void approveToken1(amount),
 		onApproveToken2: amount => void approveToken2(amount),
 		onCancelOpenOracleWithdrawalBalanceCheck: cancelWithdrawalBalanceCheck,

@@ -83,14 +83,27 @@
 					</p>
 				<p>
 					OpenOracle atomically creates and funds a report for a token pair.
-					Only its state hash is stored for an active game; the full preimage is
-					emitted as packed report data. Later reporters can dispute by posting the
+					Its state hash remains authoritative and the full preimage is emitted as
+					packed report data. With <code>STORE_ALL</code>, OpenOracle also
+					materializes <code>storedGame</code> and <code>storedHelper</code> when
+					the report is created, updates the live game fields after each dispute,
+					and retains the settled game. Later reporters can dispute by posting the
 					contract-required replacement amounts. A dispute is valid only while
 					<code>currentTime &lt; reportTimestamp + settlementTime</code>; settlement
 					becomes valid at equality, when a dispute is already too late. When a
 					<span class="term" tabindex="0">callback</span>
 					contract is configured, settlement calls that contract with the
 					settled amounts.
+				</p>
+				<p>
+					The dispute calldata does not select <code>tokenToSwap</code>, and the
+					history record does not store it. OpenOracle derives the swap side from
+					the proposed ratio: token2 is the contribution token only when
+					<code>newAmount2 * oldAmount1 &gt; oldAmount2 * newAmount1</code>;
+					equality and lower ratios use token1. The UI applies the same strict
+					comparison, verifies that the selected token matches the derived side,
+					and revalidates the latest state hash immediately before submitting the
+					reduced dispute calldata. The on-chain comparison remains authoritative.
 				</p>
 				<p>
 					The <a href="./event-stream.md#openoracle-packed-state-reconstruction">event-stream reference</a>
@@ -957,6 +970,8 @@
 					Coordinator-level price rejections are separate from low-level
 					callback failures. After a callback successfully enters the
 					coordinator, a settlement with base fee above the request-time cap,
+					a final history record whose WETH amount is too small for another
+					dispute at its recorded base fee plus the configured priority fee,
 					zero amounts, or a computed zero price clears the pending id, emits
 					<code>PriceReportRejected</code>, and does not update the price cache
 					or replay pending operations. Those pending settlement operations
@@ -1591,14 +1606,25 @@
 						multiplier's lower bound but does not require the settlement cap to
 						remain below the Open Oracle Security multiplier.
 					</li>
-					<li>
+					<li id="settlement-validation-scope">
 						<strong>Settlement validation scope:</strong> the callback does not
 						recompute <code>minimumToken1Report()</code> from settlement base fee
-						and does not compare the final price with an external truth source. It
-						checks the request-time base-fee cap, requires nonzero final WETH and
-						REP amounts and a nonzero integer REP/ETH ratio, then records that
-						ratio. The cap is a rejection boundary, not proof that an accepted price
-						is externally correct; <a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a>
+						and does not compare the final price with an external truth source.
+						OpenOracle records each report block's base fee when dispute tracking
+						is enabled. The callback reads
+						<code>storedGame(reportId).numReports</code>, selects history index
+						<code>numReports - 1</code>, and requires the final WETH amount to
+						cover the configured security formula at that record's base fee plus
+						the configured priority fee. It also checks the request-time
+						settlement base-fee cap, requires nonzero final WETH and REP amounts
+						and a nonzero integer REP/ETH ratio, then records that ratio. This
+						check proves only that the final WETH position meets the modeled
+						security-sizing floor. A correction is modeled as profitable only
+						when the price is wrong by at least the configured target error and
+						the configured priority-fee, gas-unit, fee, and transaction-inclusion
+						assumptions hold; the check does not prove that an accepted price is
+						externally correct.
+						<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a>
 						owns the remaining assumption.
 					</li>
 					<li>
@@ -1790,8 +1816,9 @@
 							<td><code>timeType</code> / <code>trackDisputes</code></td>
 							<td><code>true</code> / <code>true</code></td>
 							<td>
-								Uses timestamps and keeps dispute history visible for report
-								inspection.
+								Uses timestamps. Coordinator reports always enable dispute
+								history so settlement can validate the final report's recorded
+								base fee.
 							</td>
 						</tr>
 						<tr>

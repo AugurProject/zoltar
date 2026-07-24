@@ -757,6 +757,8 @@ export function SecurityPoolWorkflowSection({
 							value={securityPoolAddress}
 							onInput={onSecurityPoolAddressChange}
 							placeholder={commonCopy.hexValuePlaceholder}
+							resolvedValue={selectedPool === undefined ? undefined : <AddressValue address={selectedPool.securityPoolAddress} />}
+							resolvedValueLabel={securityPoolCopy.selectedPool}
 							action={
 								<button className='secondary' onClick={() => onRefreshSelectedPoolData()} disabled={!hasSelectedPoolAddress || loadingSecurityPools}>
 									{loadingSecurityPools ? <LoadingText>{securityPoolCopy.refreshingPool}</LoadingText> : securityPoolCopy.refreshPool}
@@ -844,6 +846,8 @@ export function SecurityPoolWorkflowSection({
 												value={selectedVaultAddressInput}
 												onInput={selectedVaultAddress => securityVault.onSecurityVaultFormChange({ selectedVaultAddress })}
 												placeholder={commonCopy.hexValuePlaceholder}
+												resolvedValue={selectedVaultDetails === undefined ? undefined : <AddressValue address={selectedVaultDetails.vaultAddress} />}
+												resolvedValueLabel={securityPoolCopy.selectedVault}
 												action={
 													<button className='secondary' onClick={() => securityVault.onLoadSecurityVault()} disabled={securityVault.loadingSecurityVault}>
 														{securityVault.loadingSecurityVault ? <LoadingText>{securityPoolCopy.refreshing}</LoadingText> : commonCopy.refresh}

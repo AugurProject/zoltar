@@ -18,7 +18,7 @@ uint8 constant OPEN_ORACLE_FLAG_TRACK_DISPUTES = 1 << 1;
 uint8 constant OPEN_ORACLE_FLAG_STORE_ALL = 1 << 2;
 
 interface IStoredOpenOracleGame {
-	function finalizedGame(
+	function storedGame(
 		uint256 reportId
 	)
 		external
@@ -250,6 +250,7 @@ contract OpenOraclePriceCoordinator {
 		feePercentage = _feePercentage;
 		multiplier = _multiplier;
 		timeType = _timeType;
+		require(_trackDisputes);
 		trackDisputes = _trackDisputes;
 		protocolFeeRecipient = _protocolFeeRecipient;
 		escalationHaltMultiplierBps = _escalationHaltMultiplierBps;
@@ -360,9 +361,8 @@ contract OpenOraclePriceCoordinator {
 		pendingReportMaxSettlementBaseFee =
 			(block.basefee * maxSettlementBaseFeeMultiplierBps) / SecurityPoolUtils.BPS_DENOMINATOR;
 
-		uint8 flags = OPEN_ORACLE_FLAG_STORE_ALL;
+		uint8 flags = OPEN_ORACLE_FLAG_STORE_ALL | OPEN_ORACLE_FLAG_TRACK_DISPUTES;
 		if (timeType) flags |= OPEN_ORACLE_FLAG_TIME_TYPE;
-		if (trackDisputes) flags |= OPEN_ORACLE_FLAG_TRACK_DISPUTES;
 		OpenOracle.OracleGame memory reportParams = OpenOracle.OracleGame({
 			currentAmount1: uint128(initialWethReport),
 			currentAmount2: uint128(amount2),
@@ -415,7 +415,7 @@ contract OpenOraclePriceCoordinator {
 	function recoverSettledPendingReport() public {
 		uint256 reportId = pendingReportId;
 		require(reportId != 0, 'No pending oracle price request can be recovered');
-		(, , , , uint48 settlementTimestamp) = IStoredOpenOracleGame(address(openOracle)).finalizedGame(reportId);
+		(, , , , uint48 settlementTimestamp) = IStoredOpenOracleGame(address(openOracle)).storedGame(reportId);
 		require(settlementTimestamp != 0, 'Pending oracle report has not settled');
 		_withdrawOpenOracleReporterBalances(pendingReportSponsor);
 		pendingReportId = 0;
@@ -462,6 +462,10 @@ contract OpenOraclePriceCoordinator {
 			return;
 		}
 		pendingReportMaxSettlementBaseFee = 0;
+		if (!_wasFinalReportProfitableToDispute(reportId, amount1)) {
+			_emitPriceReportRejected(reportId, 'Final report was not profitable to dispute');
+			return;
+		}
 		if (amount1 == 0 || amount2 == 0) {
 			_emitPriceReportRejected(reportId, 'Empty oracle settlement');
 			return;
@@ -485,6 +489,16 @@ contract OpenOraclePriceCoordinator {
 			}
 		}
 		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PriceReported, reportId, 0);
+	}
+
+	function _wasFinalReportProfitableToDispute(uint256 reportId, uint256 finalAmount1) private view returns (bool) {
+		(, , , , , , , , , , , , uint24 numReports, , , , , , , ) = openOracle.storedGame(reportId);
+		if (numReports == 0) return false;
+		(, , uint128 finalReportBaseFee, ) = openOracle.disputeHistory(reportId, numReports - 1);
+		uint256 minimumProfitableReport =
+			_minimumToken1ReportForGasPrice(initialReportPriorityFeeWeiPerGas) +
+				_minimumToken1ReportForGasPrice(uint256(finalReportBaseFee));
+		return finalAmount1 >= minimumProfitableReport;
 	}
 
 	function _withdrawOpenOracleReporterBalances(address sponsor) private {
