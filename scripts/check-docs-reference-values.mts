@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto'
 import { getMainnetProtocolConfig } from '../shared/ts/protocolConfig'
 
 const readme = await readFile('README.md', 'utf8')
-const auctionDesign = await readFile('docs/auction-design.html', 'utf8')
+const auctionDesign = await readFile('docs/truth-auction.html', 'utf8')
 const html = await readFile('docs/escalation-game-architecture.html', 'utf8')
 const invariantsHtml = await readFile('docs/invariants.html', 'utf8')
 const liquidationHtml = await readFile('docs/liquidation.html', 'utf8')
@@ -370,7 +370,7 @@ function assertLiquidationFullCloseDocs(): void {
 	assert.ok(poolValidationIndex < completedTransferIndex, 'liquidation diagram must show pool validation before a completed transfer')
 	assert.doesNotMatch(liquidationHtml, /Pool execution succeeds\?/, 'liquidation diagram must not imply success before full-close candidate selection')
 	assert.doesNotMatch(whitepaperStatoblast, /id="fig-statoblast-auction-clearing"/, 'whitepaper must delegate auction clearing to the canonical focused diagram')
-	assert.match(whitepaperStatoblast, /auction-design\.html#clearing/)
+	assert.match(whitepaperStatoblast, /truth-auction\.html#clearing/)
 }
 
 function assertStartHereTimelines(): void {
