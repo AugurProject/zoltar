@@ -15,7 +15,7 @@ import { getDefaultOpenOracleCreateFormState } from '../../../features/markets/l
 import { createFakeBackend } from '../../testUtils/fakeBackend.js'
 import { installActiveEnvironmentForTesting } from '../../../lib/activeEnvironment.js'
 import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
-import { within } from '../../testUtils/queries.js'
+import { fireEvent, within } from '../../testUtils/queries.js'
 import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
 
 type VNodeLike = {
@@ -344,7 +344,39 @@ void describe('OpenOracleSection', () => {
 			await Promise.resolve()
 			expect(browseLoadAttempts).toBe(0)
 			expect(within(document.body).getByText('Preparing report summaries.')).not.toBeNull()
+			expect(within(document.body).getByRole('status', { name: 'Preparing report summaries.' })).not.toBeNull()
 			expect(within(document.body).queryByText('No Open Oracle reports found.')).toBeNull()
+		} finally {
+			await rendered.cleanup()
+			restoreActiveEnvironment()
+			domEnvironment.cleanup()
+		}
+	})
+
+	void test('shows failed browse loads with retry instead of a confirmed empty state', async () => {
+		const domEnvironment = installDomEnvironment()
+		let browseLoadAttempts = 0
+		const restoreActiveEnvironment = installActiveEnvironmentForTesting({
+			...createFakeBackend(),
+			createReadClient: () => {
+				browseLoadAttempts += 1
+				throw new Error('Report summary service unavailable')
+			},
+		})
+		const rendered = await renderIntoDocument(<OpenOracleSection {...createOpenOracleSectionProps()} />)
+
+		try {
+			await Promise.resolve()
+			await Promise.resolve()
+			const documentQueries = within(document.body)
+			expect(documentQueries.getByText('Report summary service unavailable')).not.toBeNull()
+			expect(documentQueries.queryByText('No Open Oracle reports found.')).toBeNull()
+
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Retry' }))
+			await Promise.resolve()
+			await Promise.resolve()
+			expect(browseLoadAttempts).toBe(2)
+			expect(documentQueries.queryByText('No Open Oracle reports found.')).toBeNull()
 		} finally {
 			await rendered.cleanup()
 			restoreActiveEnvironment()

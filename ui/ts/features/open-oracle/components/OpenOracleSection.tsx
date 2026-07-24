@@ -59,6 +59,20 @@ const BROWSE_PAGE_SIZE = 10
 const OPEN_ORACLE_PRICE_UNITS = 30
 type WithdrawalBalanceKey = keyof OpenOracleWithdrawableBalances
 type SelectedReportModal = 'dispute' | 'settle' | `withdraw-${WithdrawalBalanceKey}` | undefined
+type BrowseLoadState =
+	| {
+			requestKey: string | undefined
+			status: 'loading'
+	  }
+	| {
+			requestKey: string
+			status: 'ready'
+	  }
+	| {
+			message: string
+			requestKey: string
+			status: 'error'
+	  }
 const DISPUTE_REPORT_MODAL: SelectedReportModal = 'dispute'
 const SETTLE_REPORT_MODAL: SelectedReportModal = 'settle'
 function getWithdrawalReportModal(balance: WithdrawalBalanceKey): SelectedReportModal {
@@ -768,7 +782,8 @@ export function OpenOracleSection({
 	const chainCurrentTimestamp = useChainTimestamp()
 	const chainCurrentBlockNumber = useChainBlockNumber()
 	const [browsePage, setBrowsePage] = useState<OpenOracleReportSummaryPage | undefined>(undefined)
-	const [browseError, setBrowseError] = useState<string | undefined>(undefined)
+	const [browseLoadState, setBrowseLoadState] = useState<BrowseLoadState>({ requestKey: undefined, status: 'loading' })
+	const [browseReloadKey, setBrowseReloadKey] = useState(0)
 	const [browsePageIndex, setBrowsePageIndex] = useState(0)
 	const [browseSearchText, setBrowseSearchText] = useState('')
 	const [browseStatusFilter, setBrowseStatusFilter] = useState<BrowseStatusFilter>('all')
@@ -790,6 +805,7 @@ export function OpenOracleSection({
 	const createValidationMessage = getOpenOracleCreateValidationMessage({ form: openOracleCreateForm })
 	const createAvailabilityMessage = createGuardMessage ?? createValidationMessage
 	const effectiveOpenOracleReportDetails = getEffectiveOpenOracleReportDetails(openOracleReportDetails, chainCurrentTimestamp, chainCurrentBlockNumber)
+	const browseRequestKey = `${browsePageIndex}:${browseReloadKey}:${openOracleResult?.action ?? ''}:${openOracleResult?.hash ?? ''}`
 	useEffect(() => {
 		let cancelled = false
 		const shouldLoadBrowse = view === 'browse' || openOracleResult?.action === 'createReportInstance'
@@ -798,15 +814,20 @@ export function OpenOracleSection({
 			await browseLoad.run({
 				isCurrent: () => !cancelled,
 				onStart: () => {
-					setBrowseError(undefined)
+					setBrowseLoadState({ requestKey: browseRequestKey, status: 'loading' })
 				},
 				load: async () => await loadOpenOracleReportSummaries(createConnectedReadClient(), browsePageIndex, BROWSE_PAGE_SIZE),
 				onSuccess: page => {
 					setBrowsePage(page)
+					setBrowseLoadState({ requestKey: browseRequestKey, status: 'ready' })
 				},
 				onError: error => {
 					setBrowsePage(undefined)
-					setBrowseError(error instanceof Error ? error.message : openOracleCopy.reportLoadError)
+					setBrowseLoadState({
+						message: error instanceof Error ? error.message : openOracleCopy.reportLoadError,
+						requestKey: browseRequestKey,
+						status: 'error',
+					})
 				},
 			})
 		}
@@ -814,8 +835,11 @@ export function OpenOracleSection({
 		return () => {
 			cancelled = true
 		}
-	}, [browsePageIndex, environmentReady, openOracleResult?.action, openOracleResult?.hash, view])
-	const loadingBrowse = !environmentReady || browseLoad.isLoading.value
+	}, [browsePageIndex, browseReloadKey, environmentReady, openOracleResult?.action, openOracleResult?.hash, view])
+	const browseLoadStateIsCurrent = browseLoadState.requestKey === browseRequestKey
+	const loadingBrowse = !environmentReady || !browseLoadStateIsCurrent || browseLoadState.status === 'loading'
+	const browseLoadError = browseLoadStateIsCurrent && browseLoadState.status === 'error' ? browseLoadState.message : undefined
+	const browseReady = browseLoadStateIsCurrent && browseLoadState.status === 'ready'
 	const normalizedBrowseSearchText = browseSearchText.trim().toLowerCase()
 	const browseReportCount = browsePage?.reportCount ?? 0n
 	const browsePageCount = browsePage === undefined ? undefined : getPaginationPageCount(browseReportCount, BROWSE_PAGE_SIZE)
@@ -859,7 +883,6 @@ export function OpenOracleSection({
 						title={openOracleCopy.browseReports}
 						variant='plain'
 					>
-						<ErrorNotice message={browseError} />
 						<div className='filter-toolbar'>
 							<label className='field'>
 								<span>{openOracleCopy.searchReports}</span>
@@ -876,23 +899,41 @@ export function OpenOracleSection({
 							</label>
 						</div>
 						{browsePage === undefined || !hasActiveBrowseFilters ? undefined : <p className='detail'>{openOracleCopy.formatBrowseShownCountSummary(filteredBrowseReports.length.toString(), browsePage.reports.length.toString())}</p>}
-						{loadingBrowse ? (
-							<StateHint
-								presentation={{
-									key: 'loading',
-									badgeLabel: commonCopy.loading,
-									badgeTone: 'pending',
-									detail: environmentReady ? openOracleCopy.reportSummariesRefreshingDetail : openOracleCopy.reportSummariesInitializingDetail,
-								}}
-							/>
-						) : (
-							(() => {
-								if (browsePage === undefined || browsePage.reports.length === 0) return <StateHint presentation={{ key: 'empty', badgeLabel: commonCopy.none, badgeTone: 'muted', detail: openOracleCopy.oracleGamesEmpty }} />
-								if (filteredBrowseReports.length === 0) return <StateHint presentation={{ key: 'empty', badgeLabel: commonCopy.noMatches, badgeTone: 'muted', detail: openOracleCopy.reportFiltersEmpty }} />
+						{(() => {
+							if (loadingBrowse)
+								return (
+									<StateHint
+										presentation={{
+											key: 'loading',
+											badgeLabel: commonCopy.loading,
+											badgeTone: 'pending',
+											detail: environmentReady ? openOracleCopy.reportSummariesRefreshingDetail : openOracleCopy.reportSummariesInitializingDetail,
+											detailIsLoading: true,
+										}}
+									/>
+								)
+							if (browseLoadError !== undefined)
+								return (
+									<StateHint
+										actions={
+											<button className='secondary' type='button' onClick={() => setBrowseReloadKey(current => current + 1)}>
+												{openOracleCopy.retryReports}
+											</button>
+										}
+										presentation={{
+											key: 'load_failed',
+											badgeLabel: commonCopy.failed,
+											badgeTone: 'error',
+											detail: browseLoadError,
+										}}
+									/>
+								)
+							if (!browseReady || browsePage === undefined) return undefined
+							if (browsePage.reports.length === 0) return <StateHint presentation={{ key: 'empty', badgeLabel: commonCopy.none, badgeTone: 'muted', detail: openOracleCopy.oracleGamesEmpty }} />
+							if (filteredBrowseReports.length === 0) return <StateHint presentation={{ key: 'empty', badgeLabel: commonCopy.noMatches, badgeTone: 'muted', detail: openOracleCopy.reportFiltersEmpty }} />
 
-								return <div className='entity-card-list'>{filteredBrowseReports.map(report => renderReportSummaryCard(report, reportId => void openBrowseReport(reportId)))}</div>
-							})()
-						)}
+							return <div className='entity-card-list'>{filteredBrowseReports.map(report => renderReportSummaryCard(report, reportId => void openBrowseReport(reportId)))}</div>
+						})()}
 					</SectionBlock>
 				</div>
 			) : undefined}
