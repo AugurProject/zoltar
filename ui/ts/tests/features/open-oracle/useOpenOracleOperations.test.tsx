@@ -760,6 +760,7 @@ describe('useOpenOracleOperations', () => {
 			withdrawOpenOracleBalance,
 		})
 		const onTransactionRequested = mock(() => undefined)
+		const onReportSettled = mock(() => undefined)
 		let hookState: UseOpenOracleOperationsState | undefined
 		const Harness = createHarness(
 			dependencies,
@@ -767,7 +768,7 @@ describe('useOpenOracleOperations', () => {
 				hookState = state
 			},
 			true,
-			{ onTransactionRequested },
+			{ onReportSettled, onTransactionRequested },
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -808,6 +809,7 @@ describe('useOpenOracleOperations', () => {
 
 		expect(withdrawOpenOracleBalance).not.toHaveBeenCalled()
 		expect(settleOracleReport).toHaveBeenCalledTimes(1)
+		expect(onReportSettled).toHaveBeenCalledTimes(1)
 		expect(onTransactionRequested).toHaveBeenCalledTimes(1)
 		expect(requireHookState(hookState).openOracleActiveAction).toBeUndefined()
 		expect(requireHookState(hookState).openOracleActiveWithdrawalBalance).toBeUndefined()

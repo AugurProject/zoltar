@@ -1,8 +1,11 @@
 import { describe, expect, test } from 'bun:test'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { getWeightedTestFiles } from './run-balanced-test-shard.mts'
 import { createSolidityBytecodeTestShards, discoverSolidityBytecodeTestFiles } from './run-solidity-bytecode-coverage.mts'
 import { discoverTestFiles, getDefaultTestParallelism, isExplicitTestPath, MAXIMUM_TEST_PARALLELISM, toBunTestPath } from './test-discovery.mts'
-import { createTestTimingObservation, getHistoricalTestWeights, MAXIMUM_TIMING_SAMPLES, mergeTestTimingHistory, parseJunitTestCaseSeconds, TEST_TIMING_HISTORY_VERSION, type TestTimingHistory } from './test-timings.mts'
+import { createTestTimingObservation, getHistoricalTestWeights, MAXIMUM_TIMING_SAMPLES, mergeTestTimingHistory, parseJunitTestCaseSeconds, readTestTimingHistory, TEST_TIMING_HISTORY_VERSION, type TestTimingHistory } from './test-timings.mts'
 
 describe('canonical test discovery', () => {
 	test('local and CI discovery include source, shared, and fuzz tests exactly once', async () => {
@@ -74,5 +77,14 @@ describe('canonical test discovery', () => {
 			{ filePath: 'new.test.ts', weight: 8 },
 			{ filePath: 'slow.test.ts', weight: 8 },
 		])
+	})
+
+	test('a missing timing history is treated as an empty cache', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-test-timings-'))
+		try {
+			expect(await readTestTimingHistory(join(directory, 'missing.json'))).toBeUndefined()
+		} finally {
+			await rm(directory, { recursive: true })
+		}
 	})
 })

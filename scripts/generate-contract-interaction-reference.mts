@@ -44,7 +44,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/contract-interaction-reference.md'
-const expectedProductionSoliditySourceFingerprint = 'd039deb7184100a3aa1ea1b79be25e7e6bf132afc011f843f559f928da0976c5'
+const expectedProductionSoliditySourceFingerprint = '393ca3562bf0cc886aba67e3de7df92a0a886c6436156327e1667fe4879a5e36'
 
 const eventSourceByName: Record<string, string> = {
 	Approval: 'solidity/contracts/IERC20.sol',
@@ -369,7 +369,7 @@ const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 		claimDepositForWinning: ['public(uint256,BinaryOutcomes.BinaryOutcome)'],
 		claimDepositForWinningWithoutTransfer: ['public(uint256,BinaryOutcomes.BinaryOutcome)'],
 		drainAllRep: ['external(address)'],
-		exportUnresolvedDeposit: ['public(CarriedDepositProof,BinaryOutcomes.BinaryOutcome)', 'public(uint256,BinaryOutcomes.BinaryOutcome)'],
+		exportUnresolvedDeposit: ['public(uint256,BinaryOutcomes.BinaryOutcome)'],
 		sweepResidualRepToSecurityPool: ['external()'],
 		withdrawDeposit: ['public(CarriedDepositProof,BinaryOutcomes.BinaryOutcome)', 'public(uint256,BinaryOutcomes.BinaryOutcome)'],
 	},
@@ -462,7 +462,7 @@ const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/peripherals/EscalationGameCalculations.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/peripherals/EscalationGameCarry.sol': '7fd8be73b61c6624fb644d2b5818fa414e582e9ed4eea54eceee533f4a022d47',
 	'solidity/contracts/peripherals/EscalationGameEscrow.sol': 'b3755415ee7ff2d0457653e9c9e6a6cca56435ed3b76008ab5446c315f837452',
-	'solidity/contracts/peripherals/EscalationGameSettlement.sol': '94801532bfaaef27870ba39c7571c4732276db69c6e88e39a20b3e2be1b7e2a2',
+	'solidity/contracts/peripherals/EscalationGameSettlement.sol': '60c97762c2d882dcb82dd15fa4059f1fc440c9829df809a7932429121a03d83f',
 	'solidity/contracts/peripherals/EscalationGameState.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/peripherals/EscalationGameStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol': 'd6e92001bdc028def593ed95c37a8c23bab0a9006d0a5c9164f9a9f92b84ad49',
@@ -789,7 +789,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'Anyone; REP is always sent to `vault`',
 				effect: "Burns the vault's pool-ownership claim and returns its proportional REP.",
 				declarations: [{ name: 'redeemRep' }],
-				preconditions: 'Operational pool with a final outcome; no escalation escrow remains; vault has redeemable REP.',
+				preconditions: 'Operational pool with a final outcome; the specified `vault` has no escalation escrow and has redeemable REP.',
 				signals: '`RedeemRep`',
 			},
 			{
@@ -821,7 +821,7 @@ const contractReferences: ContractReference[] = [
 				call: '`updateCollateralAmount()`',
 				caller: 'Anyone',
 				effect:
-					'Accrues elapsed fees up to the earlier question-end or universe-fork clamp, moves whole credited fees from collateral into the unallocated reserve, and advances the accumulator. With positive elapsed time but zero fee-eligible allowance it clears denominator-specific remainder and advances the timestamp without charging fees.',
+					"Accrues elapsed fees through question end while this pool's universe remains unforked; after that universe forks, its fork timestamp replaces question end as this pool epoch's cutoff, including a later question-end-to-fork interval. The cutoff is local to this pool: an activated child starts a separate fee epoch. It moves whole credited fees from collateral into the unallocated reserve and advances the accumulator. With positive elapsed time but zero fee-eligible allowance it clears denominator-specific remainder and advances the timestamp without charging fees.",
 				declarations: [{ name: 'updateCollateralAmount' }],
 				preconditions: 'No caller or lifecycle restriction. It returns unchanged when the accumulator is already at or beyond the clamped timestamp.',
 				signals: '`PoolAccountingCheckpoint` whenever positive elapsed time is processed, including the zero-allowance branch; no event for an unchanged timestamp',
@@ -1135,7 +1135,7 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'b55aad00e1d6e88d4187d76e976289f3ec0e44aacaa926c5520e3abb4a7fc29f',
+		compiledAbiFingerprint: '944f05572e55db85409418510e1ef477a80943359d153df5641fb15ce0508d68',
 		name: 'EscalationGame',
 		purpose: 'Escrows outcome REP, raises the running resolution cost, detects non-decision, and settles local or carried deposits.',
 		readAbiFingerprint: 'ed805db82536ad060437fa3f82ceb85839349441a6fede83e2fd40ee761e13d5',
@@ -1248,11 +1248,11 @@ const contractReferences: ContractReference[] = [
 				signals: '`CarryDepositConsumed`, `VaultEscrowUpdated`, and `ClaimDeposit` with `transferredRep = false`; no REP transfer or haircut burn',
 			},
 			{
-				call: 'Both `exportUnresolvedDeposit(...)` overloads',
+				call: '`exportUnresolvedDeposit(depositIndex, outcome)`',
 				caller: 'Owning `SecurityPool` or its `SecurityPoolForker`',
 				declarations: [{ name: 'exportUnresolvedDeposit', sourcePath: 'solidity/contracts/peripherals/EscalationGameSettlement.sol' }],
-				effect: 'Returns deposit identity and amount to the trusted caller while consuming the local or carried proof from unresolved/escrow accounting; neither overload transfers REP.',
-				preconditions: 'Non-`None` outcome. The index form requires a valid unsettled local deposit. The proof form requires forked-escrow mode to be off plus a valid, unconsumed Merkle/nullifier proof. Neither requires final resolution.',
+				effect: 'Returns deposit identity and amount to the trusted caller while consuming the local deposit from unresolved/escrow accounting without transferring REP.',
+				preconditions: 'Non-`None` outcome and a valid unsettled local deposit. Final resolution is not required.',
 				signals: '`CarryDepositConsumed` and `VaultEscrowUpdated`; no `ClaimDeposit` or REP transfer',
 			},
 			{

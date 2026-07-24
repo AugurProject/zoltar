@@ -11,6 +11,7 @@ import type { SecurityVaultSectionProps } from '../../../features/types.js'
 import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled, getTransactionButtonState } from '../../testUtils/transactionActionButton.js'
+import { ChainTimestampContext } from '../../../lib/chainTimestamp.js'
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
@@ -596,6 +597,86 @@ describe('SecurityVaultSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
+	})
+
+	test('requires fresh-report funding for vault actions at the exact oracle-price expiry boundary', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={10n}>
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						oracleManagerDetails: createOracleManagerDetails({
+							isPriceValid: true,
+							priceValidUntilTimestamp: 10n,
+							requestPriceEthCost: 1n * 10n ** 18n,
+						}),
+						securityVaultForm: {
+							depositAmount: '',
+							repWithdrawAmount: '1',
+							securityBondAllowanceAmount: '1',
+							securityPoolAddress: zeroAddress,
+							selectedVaultAddress: zeroAddress,
+						},
+					})}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Set Security Bond Allowance', 'Need 1.2 more ETH in this wallet to queue this bond allowance update.')
+		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'Need 1.2 more ETH in this wallet to queue this REP withdrawal.')
+	})
+
+	test('does not require fresh-report funding immediately before oracle-price expiry', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={9n}>
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						oracleManagerDetails: createOracleManagerDetails({
+							isPriceValid: true,
+							priceValidUntilTimestamp: 10n,
+							requestPriceEthCost: 1n * 10n ** 18n,
+						}),
+						securityVaultForm: {
+							depositAmount: '',
+							repWithdrawAmount: '1',
+							securityBondAllowanceAmount: '1',
+							securityPoolAddress: zeroAddress,
+							selectedVaultAddress: zeroAddress,
+						},
+					})}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonEnabled(document.body, 'Set Security Bond Allowance')
+		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
+	})
+
+	test('does not infer immediate withdrawal execution from an expired raw validity flag', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={10n}>
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						modalFirst: true,
+						oracleManagerDetails: createOracleManagerDetails({
+							isPriceValid: true,
+							priceValidUntilTimestamp: 10n,
+						}),
+						securityVaultResult: {
+							action: 'queueWithdrawRep',
+							hash: '0x00000000000000000000000000000000000000000000000000000000000000a1',
+						},
+					})}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Withdraw REP' }))
+
+		expect(within(document.body).getByRole('heading', { name: 'REP Withdrawal Submitted' })).not.toBeNull()
+		expect(within(document.body).queryByRole('heading', { name: 'REP Withdrawal Executed' })).toBeNull()
 	})
 
 	test('defaults queued self-service timeout copy to 5 minutes when the form has no explicit timeout', async () => {

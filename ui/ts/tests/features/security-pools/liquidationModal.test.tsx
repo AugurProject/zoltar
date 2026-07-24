@@ -1303,6 +1303,27 @@ describe('LiquidationModal', () => {
 		expect(document.body.textContent?.includes('(expired 1m ago)')).toBe(true)
 	})
 
+	test('queues liquidation when the loaded validity flag reaches its shared expiry boundary', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={1000n}>
+				<LiquidationModal
+					{...createLiquidationModalProps({
+						currentPoolOracleManagerDetails: createOracleManagerDetails({
+							isPriceValid: true,
+							priceValidUntilTimestamp: 1000n,
+						}),
+					})}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('heading', { name: 'Queue Vault Liquidation' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Queue Liquidation' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Execute Vault Liquidation' })).toBeNull()
+	})
+
 	test('uses a dedicated top-aligned action row when execute liquidation shows a disabled reason', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({

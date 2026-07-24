@@ -437,7 +437,7 @@ describe('ForkAuctionSection child pool recovery', () => {
 			const submitBidButton = documentQueries.getByRole('button', { name: 'Loading truth auction…' })
 			if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected loading truth auction action to be a button')
 			expect(submitBidButton.disabled).toBe(true)
-			expect(currentBidsHeading.compareDocumentPosition(submitBidHeading) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+			expect(submitBidHeading.compareDocumentPosition(currentBidsHeading) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
 			expect(currentBidsHeading.closest('section')?.textContent).toContain('Loading auction bids…')
 			const loadingMessages = Array.from(document.body.querySelectorAll('.loading-value'))
 			expect(loadingMessages.some(message => message.textContent?.includes('Loading truth auction…') === true)).toBe(true)

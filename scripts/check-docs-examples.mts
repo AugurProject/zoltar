@@ -570,6 +570,22 @@ assert.match(operatorReferenceMarkdown, /once every eligible vault checkpoints[\
 assert.match(operatorReferenceMarkdown, /each claimed auction allowance joins incrementally[\s\S]*delayed claim adds to the pool’s live eligible total/i, 'operator reference should document live incremental fee eligibility for delayed auction claims')
 assert.match(operatorReferenceMarkdown, /## Security Pool Guardrails[\s\S]*totalFeesOwedToVaults[\s\S]*totalAccruedFees\(\)[\s\S]*## Share Migration/i, 'operator reference security-pool guardrails should define assigned and aggregate fee accounting')
 
+const contractInteractionReferenceMarkdown = await readFile('docs/contract-interaction-reference.md', 'utf8')
+const updateCollateralAmountRow = contractInteractionReferenceMarkdown.split('\n').find(line => line.startsWith('| `updateCollateralAmount()` |'))
+if (updateCollateralAmountRow === undefined) {
+	throw new Error('contract interaction reference should document updateCollateralAmount()')
+}
+assert.match(updateCollateralAmountRow, /question end while this pool's universe remains unforked[\s\S]*fork timestamp replaces question end as this pool epoch's cutoff/i, 'contract interaction reference should document the conditional per-pool fee cutoff')
+assert.match(updateCollateralAmountRow, /activated child starts a separate fee epoch/i, 'contract interaction reference should distinguish a child fee epoch from its parent cutoff')
+assert.doesNotMatch(updateCollateralAmountRow, /earlier question-end or universe-fork clamp/i, 'contract interaction reference should not describe the conditional fee cutoff as a minimum')
+
+const redeemRepRow = contractInteractionReferenceMarkdown.split('\n').find(line => line.startsWith('| `redeemRep(vault)` |'))
+if (redeemRepRow === undefined) {
+	throw new Error('contract interaction reference should document redeemRep(vault)')
+}
+assert.match(redeemRepRow, /specified `vault` has no escalation escrow and has redeemable REP/i, 'contract interaction reference should scope the redemption escrow precondition to the specified vault')
+assert.doesNotMatch(redeemRepRow, /no escalation escrow remains/i, 'contract interaction reference should not imply that redeemRep requires global escrow clearance')
+
 const statoblastHtml = await readFile('docs/statoblast-whitepaper.html', 'utf8')
 const escalationCurvePath = statoblastHtml.match(/data-source="normalizedCost\(t\) = \(exp\(2\.4 \* t\) - 1\) \/ \(exp\(2\.4\) - 1\)"\s+d="([^"]+)"/)
 const escalationCurvePathData = escalationCurvePath?.[1]
