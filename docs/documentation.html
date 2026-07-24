@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Zoltar Monorepo</title>
+		<link rel="stylesheet" href="./shared-docs.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main>
+				<header>
+					<h1>Zoltar Monorepo</h1>
+					<p>
+						This monorepo contains three components. Project documentation is
+						available at
+						<a href="https://augurproject.github.io/zoltar">
+							augurproject.github.io/zoltar
+						</a>.
+					</p>
+					<ul>
+						<li>
+							<strong>Zoltar Contracts</strong> —
+							<a href="./zoltar-whitepaper.html">Zoltar whitepaper</a>
+						</li>
+						<li>
+							<strong>Statoblast contracts</strong> —
+							<a href="./statoblast-whitepaper.html">Statoblast whitepaper</a>
+						</li>
+						<li>
+							<strong>Zoltar and Statoblast user interface</strong> —
+							<a href="./user-interface-documentation.html">
+								User interface documentation
+							</a>
+						</li>
+					</ul>
+					<p> Zoltar is a foundational fork and coordination layer. It is not itself a prediction market or an outcome-reporting oracle. Instead, it maintains the shared registries for questions, REP tokens, and forks. If a dispute in a higher-level protocol, such as Statoblast, cannot be resolved locally, that protocol can initiate a Zoltar fork by depositing and burning the required amount of REP. The resulting fork applies to every product built on the same Zoltar deployment. </p>
+
+					<p> Statoblast is a censorship-resistant oracle and prediction-market protocol built on Ethereum and Zoltar. It enables users to create prediction markets, mint complete sets of outcome shares, trade those shares, report outcomes, and resolve markets. Its incentive mechanisms are designed to encourage accurate reporting of real-world events. </p>
+					<img
+		src="images/layers.png"
+		width = "100%"
+		alt="Diagram showing the user interface, Statoblast, and Zoltar protocol layers"
+	>
+				</header>
+
+			<section id="documentation-map">
+				<h2>Documentation Index</h2>
+				<table>
+					<thead>
+						<tr>
+							<th>Goal</th>
+							<th>Document</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Distinguish contract guarantees from accepted economic assumptions, loss-allocation policies, and residual risks.</td>
+							<td><a href="./security-model.html">Protocol security model</a></td>
+						</tr>
+						<tr>
+							<td>Understand the application layer from end to end.</td>
+							<td><a href="./statoblast-whitepaper.html">Statoblast whitepaper</a></td>
+						</tr>
+						<tr>
+							<td>Understand universes, question encoding, forks, and REP splitting.</td>
+							<td><a href="./zoltar-whitepaper.html">Zoltar whitepaper</a></td>
+						</tr>
+						<tr>
+							<td>Understand truth-auction clearing and settlement.</td>
+							<td><a href="./auction-design.html">Auction design</a></td>
+						</tr>
+						<tr>
+							<td>Understand REP/ETH price requests, staging, and attack model.</td>
+							<td><a href="./open-oracle-integration.html">OpenOracle integration</a></td>
+						</tr>
+						<tr>
+							<td>Understand punitive REP-seizure liquidation math, chunking limits, and incentives.</td>
+							<td><a href="./liquidation.html">Liquidation design</a></td>
+						</tr>
+						<tr>
+							<td>Look up edge cases and contract guardrails.</td>
+							<td><a href="./operator-reference.md">Operator reference</a></td>
+						</tr>
+						<tr>
+							<td>Review contract, cross-contract, lifecycle, and economic invariants.</td>
+							<td><a href="./invariants.html">Protocol invariants</a></td>
+						</tr>
+						<tr>
+							<td>Find transaction callers, prerequisites, effects, and events.</td>
+							<td><a href="./contract-interaction-reference.md">Contract interaction reference</a></td>
+						</tr>
+						<tr>
+							<td>Build an event-only indexer with deterministic replay and reorg rollback.</td>
+							<td><a href="./event-stream.md">Zoltar event stream contract</a></td>
+						</tr>
+						<tr>
+							<td>Understand how the local dispute contract is split across Solidity modules.</td>
+							<td><a href="./escalation-game-architecture.html">EscalationGame architecture</a></td>
+						</tr>
+						<tr>
+							<td>Decode the deployment progress bitmask and its 256-step limit.</td>
+							<td><a href="./deployment-status.html">Deployment Status Oracle</a></td>
+						</tr>
+						<tr>
+							<td>Understand carry-proof hashing, snapshot peaks, and nullifier replay protection.</td>
+							<td><a href="./merkle-mountain-range.html">Merkle Mountain Range carry proofs</a></td>
+						</tr>
+					</tbody>
+				</table>
+			</section>
+
+		</main>
+		<script src="./protocolTerms.js"></script>
+		<script src="./termTooltips.js"></script>
+	</body>
+</html>

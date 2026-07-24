@@ -13,15 +13,11 @@
 				<div class="sidebar-header">
 					<span class="sidebar-series">Augur / Zoltar</span>
 					<strong>Statoblast</strong>
-					<p>Prediction market layer built on the Zoltar oracle layer.</p>
+					<p>A prediction market built on Zoltar.</p>
 				</div>
 					<a class="sidebar-companion" href="./zoltar-whitepaper.html">
 						<span>Companion paper</span>
 						<b>Zoltar Oracle Layer</b>
-					</a>
-					<a class="sidebar-companion" href="./start-here.html">
-						<span>Entry overview</span>
-						<b>Start Here Guide</b>
 					</a>
 					<a class="sidebar-companion" href="./security-model.html">
 						<span>Security boundaries</span>
@@ -48,101 +44,42 @@
 			<main id="main-content">
 				<header class="hero">
 					<div class="paper-brand">
-						<div
-							class="brand-lockup"
-							aria-label="Augur and Zoltar whitepaper set"
-						>
-							<span class="brand-mark" aria-hidden="true">
-								<span></span>
-								<span></span>
-								<span></span>
-							</span>
-							<span>
-								<span class="brand-name">Augur / Zoltar</span>
-								<span class="brand-subtitle">Paired whitepaper set</span>
-							</span>
-						</div>
 						<a class="companion-link" href="./zoltar-whitepaper.html">
 							<span>Companion paper</span>
-							<b>Branching Oracle Layer</b>
+							<b>Zoltar - Branching Oracle Base Layer</b>
 						</a>
 					</div>
 					<div class="hero-label-row">
 						<p class="kicker">
 							<span class="layer-dot" aria-hidden="true"></span>Prediction
-							Market Layer
+							Market
 						</p>
 						<p class="paper-status">
-							Protocol draft • Application layer built on Zoltar
+							draft
 						</p>
 					</div>
 					<h1>Augur Statoblast White Paper</h1>
 					<p class="subtitle">
-						A visual guide to the market, underwriting, escalation, fork
-						migration, and collateral-repair system built on top of Zoltar.
+						a censorship-resistant oracle and prediction-market protocol built on Ethereum and Zoltar.
 					</p>
-					<div class="meta-grid" aria-label="Document summary">
-						<div class="meta-card">
-							<span>Collateral</span>
-							<b>ETH-backed complete sets</b>
-						</div>
-						<div class="meta-card">
-							<span>Security</span>
-							<b>REP vault underwriting</b>
-						</div>
-						<div class="meta-card">
-							<span>Recovery</span>
-							<b>Migration plus truth auction</b>
-						</div>
-					</div>
 				</header>
 
 				<section class="paper-section" id="abstract">
 					<div class="section-heading">
 						<h2>Abstract</h2>
-						<a
-							class="anchor-link"
-							href="#abstract"
-							aria-label="Link to Abstract"
-							>#</a
-						>
+						<a class="anchor-link" href="#abstract" aria-label="Link to Abstract">#</a>
 					</div>
 					<p class="lede">
-						Augur Statoblast is the market layer built on top of Zoltar. It
+						Augur Statoblast is a binary (Yes, No, Invalid) prediction market built on top of Zoltar. It
 						creates security pools scoped to individual questions, lets traders
 						mint and redeem ETH-backed shares, lets REP vaults provide
-						underwriting, and tries to settle disputes locally before asking
+						underwriting, and tries to settle disputes locally before forcing
 						Zoltar to fork.
 					</p>
-					<p>
-						If a fork does happen, Statoblast migrates the market into child
-						pools and can repair missing child-pool ETH collateral through a
-						truth auction. Despite the name, that auction repairs collateral; it
-						does not choose the truthful branch.
-					</p>
-					<div class="summary-grid">
-						<div class="summary-card">
-							<span>Market layer</span>
-							<b
-								>Per-question pools combine ETH shares with REP-backed
-								underwriting.</b
-							>
-						</div>
-						<div class="summary-card">
-							<span>Dispute layer</span>
-							<b
-								>Escalation tries to settle outcomes locally before a fork is
-								needed.</b
-							>
-						</div>
-						<div class="summary-card">
-							<span>Recovery layer</span>
-							<b
-								>Fork migration and truth auction repair keep child pools
-								usable.</b
-							>
-						</div>
-					</div>
+					<img src="images/layers.png" width = "100%" alt="Diagram showing the user interface, Statoblast, and Zoltar protocol layers">
+					<p> When Zoltar forks, Statoblast forks alongside it into the same child universes. Statoblast REP holders then choose which universe they believe represents the correct outcome and migrate their REP there. </p>
+					<p> Open-interest collateral follows that migration, but it is not duplicated across universes. As a result, some child universes may not receive enough collateral to fully back their inherited open interest. </p>
+					<p> After the migration period ends, each undercollateralized universe holds a truth auction. The auction sells REP from that universe in exchange for ETH, using the proceeds to restore the missing collateral and repair the open interest. </p>
 				</section>
 
 				<section class="paper-section" id="overview">
@@ -155,58 +92,15 @@
 							>#</a
 						>
 					</div>
-						<p>
-							The stack has two protocol identities. <code>Zoltar</code> is the
-						base truth/forking oracle layer for universes, questions, scalar
-						math, and REP branching. <code>Augur Statoblast</code> is the
-						application layer that adds market collateral, underwriting, local
-						disputes, migration, and collateral repair. For the base oracle
-						layer, see
-						<a href="./zoltar-whitepaper.html">zoltar-whitepaper.html</a>.
-					</p>
-						<p>
-							Statoblast's lifecycle starts by creating a pool scoped to one
-							question and universe, letting traders and REP vaults use it,
-							trying to resolve disputes locally, and only then turning to fork
-							and collateral-repair machinery. The overview sequence below
-							follows that same order.
-						</p>
-						<p>
-							Statoblast also depends on two different oracle paths that answer
-							different questions. Zoltar represents unresolved market-truth
-							disputes by creating child universes. OpenOracle supplies only a
-							fresh, contestable REP/ETH solvency price for withdrawals,
-							allowance updates, and liquidations. Freshness is time-bounded,
-							but the accepted value and its deviation from an external market
-							price are not bounded onchain.
-						</p>
+						<p> The stack has two protocol identities. <code>Zoltar</code> is the base truth/forking oracle layer for universes, questions, scalar math, and REP branching. <code>Augur Statoblast</code> is the application layer that adds market collateral, underwriting, local disputes, migration, and collateral repair. For the base oracle layer, see <a href="./zoltar-whitepaper.html">zoltar-whitepaper.html</a>. </p>
+						<p> Statoblast's lifecycle starts by creating a pool scoped to one question and universe, letting traders and REP vaults use it, trying to resolve disputes locally, and only then turning to fork and collateral-repair machinery. </p>
 					<ol>
-						<li>
-							A question is registered in Zoltar and a Statoblast security pool
-							is deployed for that question in one universe.
-						</li>
-						<li>
-							REP vaults fund underwriting capacity and users mint ETH-backed
-							complete sets.
-						</li>
-						<li>
-							After question end, disputes first try to resolve locally through
-							the escalation game.
-						</li>
-						<li>
-							If local resolution fails and the system reaches non-decision,
-							Zoltar forks and Statoblast migrates pool state into child
-							universes.
-						</li>
-						<li>
-							If a child pool is missing ETH collateral after migration, it can
-							sell child-universe REP through a truth auction to repair that
-							collateral gap.
-						</li>
-							<li>
-								The child pool in the branch users choose to keep using resumes
-								operation and users settle or redeem positions there.
-							</li>
+						<li> A question is registered in Zoltar and a Statoblast security pool is deployed for that question in one universe. </li>
+						<li> REP vaults fund underwriting capacity and users mint ETH-backed complete sets. </li>
+						<li> After question end, disputes first try to resolve locally through the escalation game. </li>
+						<li> If local resolution fails and the system reaches non-decision, Statoblast triggers a Zoltar fork and migrate pool state into child universes. The market is then resolved in each child universe. </li>
+						<li>If a child pool is missing ETH collateral after migration, it can sell child-universe REP through a truth auction to repair that collateral gap.</li>
+						<li> The child pool in the branch users choose to keep using resumes operation and users settle or redeem positions there. </li>
 					</ol>
 					<h3>Happy Path vs Recovery Path</h3>
 					<div class="table-wrap">
@@ -221,40 +115,26 @@
 							<tbody>
 								<tr>
 									<td>Resolution trigger</td>
-									<td>
-										Escalation picks a single local winner before non-decision.
-									</td>
-									<td>
-										Two or more outcomes reach the non-decision threshold and
-										Zoltar forks.
-									</td>
+									<td> Escalation picks a single local winner before non-decision. </td>
+									<td> Two or more outcomes reach the non-decision threshold and Zoltar forks. </td>
 								</tr>
 								<tr>
 									<td>Where state settles</td>
 									<td>The original pool remains the settlement venue.</td>
-									<td>
-										Vaults, shares, and collateral accounting can migrate into child
-										pools. Each child receives one canonical unresolved-escalation
-										snapshot and aggregate backing; winners later settle by proof.
+									<td> Vaults, shares, and collateral accounting can migrate into child pools. Each child receives one canonical unresolved-escalation snapshot and aggregate backing.
 									</td>
 								</tr>
 								<tr>
 									<td>Collateral condition</td>
-									<td>
-										Winning shares redeem against the existing ETH collateral
-										base.
+									<td> Winning shares redeem against the existing ETH collateral base.
 									</td>
-									<td>
-										A child pool may need truth-auction repair before
-										redemptions are clean.
+									<td> A child pool may need truth-auction repair before redemptions are clean.
 									</td>
 								</tr>
 								<tr>
 									<td>User mental model</td>
 									<td>One pool, one final outcome, direct redemption.</td>
-									<td>
-										Choose the child universe that retains value, migrate
-										positions, then settle there.
+									<td> Choose the child universe that retains value, migrate positions, then settle there.
 									</td>
 								</tr>
 							</tbody>
@@ -376,7 +256,7 @@
 								rx="8"
 							></rect>
 							<text class="svg-small" x="465" y="100" text-anchor="middle">
-								hold outcomes
+								hold outcomes / trade
 							</text>
 							<rect
 								class="svg-gold"
@@ -466,10 +346,7 @@
 							</text>
 						</svg>
 						<p class="diagram-caption">
-							<span class="figure-label">Actor Swimlanes</span>The same
-							lifecycle looks different by role: traders mostly mint, hold,
-							migrate, and redeem; vaults underwrite and report; protocol
-							contracts coordinate fork and repair steps.
+							<span class="figure-label">Actor Swimlanes</span>The same lifecycle looks different by role
 						</p>
 					</figure>
 					<p>
@@ -490,36 +367,7 @@
 							>#</a
 						>
 					</div>
-					<div class="role-grid">
-						<div class="role-card">
-							<span>SecurityPool</span>
-							<b>Question-specific underwriting and ETH collateral engine.</b>
-						</div>
-						<div class="role-card">
-							<span>EscalationGame</span>
-							<b
-								>Local dispute game for Invalid,
-								<span class="term" tabindex="0">Yes</span>, and
-								<span class="term" tabindex="0">No</span>.</b
-							>
-						</div>
-						<div class="role-card">
-							<span>SecurityPoolForker</span>
-							<b>Fork migration and child-pool activation coordinator.</b>
-						</div>
-						<div class="role-card">
-							<span>Truth Auction</span>
-							<b>Batch auction that sells child-universe REP for ETH repair.</b>
-						</div>
-						<div class="role-card">
-							<span>Oracle Coordinator</span>
-							<b>REP/ETH price flow for solvency-sensitive operations.</b>
-						</div>
-						<div class="role-card">
-							<span>ShareToken</span>
-							<b>ERC-1155 positions with universe-aware token ids.</b>
-						</div>
-					</div>
+					TODO
 				</section>
 
 				<section class="paper-section" id="roles">
@@ -543,7 +391,7 @@
 							REP-backed underwriting capacity. Their deposits back open
 							interest and earn fees extracted from collateral over time.
 						</li>
-						<li>Users mint complete sets with ETH and hold outcome shares.</li>
+						<li>Trades mint complete sets with ETH and hold and sell outcome shares.</li>
 						<li>
 							REP vault operators can escrow vault-backed REP behind
 							<code>Invalid</code>, <code>Yes</code>, or <code>No</code> after a
