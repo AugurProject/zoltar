@@ -60,6 +60,7 @@ function createSecurityPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		hasForkActivity: false,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
+		initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 		lastOraclePrice: undefined,
 		lastOracleSettlementTimestamp: 0n,
 		managerAddress: zeroAddress,

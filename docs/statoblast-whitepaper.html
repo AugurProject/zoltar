@@ -614,24 +614,15 @@
 						implementation.
 					</div>
 					<p>
-						Pool-related addresses are also deterministic. The
-						<code>SecurityPoolFactory</code> derives a factory-level
-						<code>securityPoolSalt</code> seed from the parent address, universe
-						id, question id, and <code>securityMultiplier</code>, using a zero
-						parent for an origin. The pool deployment worker's raw CREATE2 salt
-						is zero; constructor init code commits the pool wiring. Coordinator
-						and auction factories derive their own caller-scoped salts from the
-						factory seed. See the
+						Pool-related addresses are deterministic and their lineage identity
+						commits to the origin's immutable
+						<code>initialReportPriorityFeeWeiPerGas</code>. Origins configured
+						with different priority fees therefore cannot share a pool or share-token
+						namespace, while children inherit their origin's configuration. See the
 						<a href="./operator-reference.md#security-pool-guardrails"
 							>Operator Reference</a
 						>
-						for the exact address derivations. Each origin receives
-						<code>originId = keccak256(abi.encode(questionId, securityMultiplier, originUniverseId))</code>.
-						Migrated children retain that origin id and register with
-						<code>poolId = keccak256(abi.encode(originId, childUniverseId))</code>. The origin id
-						is also the share-token salt, so every lineage has a separate
-						share-token contract and position namespace while all children of that
-						lineage reuse the same contract.
+						for the exact address and registry-key derivations.
 					</p>
 					<p>
 						An inherited child and a newly created origin may coexist for the same

@@ -67,6 +67,7 @@ describe('security pool creation helper', () => {
 		await createQuestion(client, questionData, outcomes)
 
 		const result = await createSecurityPool(createWalletWriteClient(addressString(TEST_ADDRESSES[0])), {
+			initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 			questionId,
 			securityMultiplier: 2n,
 		})
@@ -87,7 +88,7 @@ describe('security pool creation helper', () => {
 		const spoofedSecurityPoolAddress = addressString(TEST_ADDRESSES[5]) as Address
 		const createDeploymentLog = (emitter: Address, securityPoolAddress: Address) => ({
 			address: emitter,
-			data: encodeAbiParameters(deploySecurityPoolDataInputs, [zeroAddress, zeroAddress, zeroAddress, 123n, 2n, 999_999_996_848_000_000n, 0n]),
+			data: encodeAbiParameters(deploySecurityPoolDataInputs, [zeroAddress, zeroAddress, zeroAddress, 123n, 2n, 10_000_000_000n, 999_999_996_848_000_000n, 0n]),
 			topics: encodeEventTopics({
 				abi: [deploySecurityPoolEvent],
 				eventName: 'DeploySecurityPool',
@@ -109,6 +110,7 @@ describe('security pool creation helper', () => {
 		const fakeClient = fakeClientBase as UiWriteClient
 
 		const result = await createSecurityPool(fakeClient, {
+			initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 			questionId: 123n,
 			securityMultiplier: 2n,
 		})

@@ -102,6 +102,7 @@ export type PoolDeploymentReplay = {
 	coordinator: Address
 	shareToken: Address
 	securityMultiplier: bigint
+	initialReportPriorityFeeWeiPerGas: bigint
 	currentRetentionRate: bigint
 	completeSetCollateralAmount: bigint
 }
@@ -707,6 +708,7 @@ export function reducePoolFactoryEvent(state: ReplayState, log: ReplayLog) {
 		coordinator: requireAddress(log.args, 'priceOracleManagerAndOperatorQueuer'),
 		shareToken: requireAddress(log.args, 'shareToken'),
 		securityMultiplier: requireBigInt(log.args, 'securityMultiplier'),
+		initialReportPriorityFeeWeiPerGas: requireBigInt(log.args, 'initialReportPriorityFeeWeiPerGas'),
 		currentRetentionRate,
 		completeSetCollateralAmount: requireBigInt(log.args, 'completeSetCollateralAmount'),
 	})

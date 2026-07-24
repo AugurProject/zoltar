@@ -15,7 +15,8 @@ import { TransactionHashLink } from '../../../components/TransactionHashLink.js'
 import { UniverseLink } from '../../universes/components/UniverseLink.js'
 import { isMainnetChain } from '../../../lib/network.js'
 import { formatOpenInterestFeePerYearPercent, ORIGIN_POOL_INITIAL_RETENTION_RATE } from '../lib/retentionRate.js'
-import { getSecurityPoolCreateDisabledReason } from '../lib/securityPoolCreationGuards.js'
+import { formatCurrencyBalance } from '../../../lib/formatters.js'
+import { getInitialReportPriorityFeeValidationMessage, getSecurityPoolCreateDisabledReason } from '../lib/securityPoolCreationGuards.js'
 import type { SecurityPoolSectionProps } from '../../types.js'
 
 export function SecurityPoolSection({
@@ -39,10 +40,12 @@ export function SecurityPoolSection({
 }: SecurityPoolSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
 	const hasSecurityPoolResult = securityPoolResult !== undefined
+	const initialReportPriorityFeeValidationMessage = getInitialReportPriorityFeeValidationMessage(securityPoolForm.initialReportPriorityFeeGwei)
 	const createDisabledReason = getSecurityPoolCreateDisabledReason({
 		accountAddress: accountState.address,
 		checkingDuplicateOriginPool,
 		duplicateOriginPoolExists,
+		initialReportPriorityFeeGwei: securityPoolForm.initialReportPriorityFeeGwei,
 		isMainnet,
 		marketDetails,
 		securityPoolCreating,
@@ -101,6 +104,12 @@ export function SecurityPoolSection({
 						<strong>{securityPoolResult.securityMultiplier.toString()}</strong>
 					</li>
 					<li>
+						<span>{commonCopy.initialReportPriorityFee}</span>
+						<strong>
+							{formatCurrencyBalance(securityPoolResult.initialReportPriorityFeeWeiPerGas, 9)} {commonCopy.gwei}
+						</strong>
+					</li>
+					<li>
 						<span>{commonCopy.universe}</span>
 						<strong>
 							<UniverseLink universeId={securityPoolResult.universeId} />
@@ -150,6 +159,31 @@ export function SecurityPoolSection({
 								<p className='field-help' id='security-pool-security-multiplier-help'>
 									{securityPoolCopy.securityMultiplierHelpText}
 								</p>
+							</div>
+
+							<div className='field'>
+								<label htmlFor='security-pool-initial-report-priority-fee'>
+									<span>{commonCopy.initialReportPriorityFee}</span>
+								</label>
+								<FormInput
+									id='security-pool-initial-report-priority-fee'
+									aria-describedby={`security-pool-initial-report-priority-fee-help${initialReportPriorityFeeValidationMessage === undefined ? '' : ' security-pool-initial-report-priority-fee-error'}`}
+									invalid={initialReportPriorityFeeValidationMessage !== undefined}
+									value={securityPoolForm.initialReportPriorityFeeGwei}
+									onInput={event =>
+										onSecurityPoolFormChange({
+											initialReportPriorityFeeGwei: event.currentTarget.value,
+										})
+									}
+								/>
+								<p className='field-help' id='security-pool-initial-report-priority-fee-help'>
+									{securityPoolCopy.initialReportPriorityFeeHelpText}
+								</p>
+								{initialReportPriorityFeeValidationMessage === undefined ? undefined : (
+									<p className='field-error' id='security-pool-initial-report-priority-fee-error'>
+										{initialReportPriorityFeeValidationMessage}
+									</p>
+								)}
 							</div>
 
 							<div className='field'>

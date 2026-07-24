@@ -77,6 +77,7 @@ function createLinkedSecurityPool(questionId: string): ListedSecurityPool {
 		forkOwnSecurityPool: false,
 		hasForkActivity: false,
 		hasLoadedVaults: true,
+		initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 		lastOraclePrice: undefined,
 		lastOracleSettlementTimestamp: 0n,
 		managerAddress: zeroAddress,

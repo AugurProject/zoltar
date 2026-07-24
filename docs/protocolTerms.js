@@ -8,6 +8,7 @@ const liquidationThresholdDefinition = 'The REP/ETH price above which the modele
 const migrationTimeDefinition = 'The configured period for moving state into child universes after a fork.'
 const pricePrecisionDefinition = 'The fixed decimal scale used for REP/ETH price math.'
 const protocolFeeRecipientDefinition = 'The account that receives OpenOracle protocol fees for the report instance.'
+const minimumToken1ReportDefinition = 'The coordinator-computed minimum WETH side: the priority-fee-derived report plus the larger base-fee- or open-interest-derived report.'
 const splitMigrationRepDefinition = 'The action that mints a chosen amount of child REP in each selected child universe, capped per child by the caller migration balance. This is reproduction, not pro-rata splitting.'
 const targetGriefRatioDefinition = 'The desired safety ratio between attacker cost and victim payoff in the attack model.'
 
@@ -86,8 +87,7 @@ window.protocolTermDefinitions = Object.freeze({
 	honestDisputeBarrierFraction: honestDisputeBarrierDefinition,
 	'honest price': honestPriceDefinition,
 	honestPrice: honestPriceDefinition,
-	'initial report size':
-		"The first OpenOracle position. The coordinator computes a minimum WETH side from onchain base fee and dispute-profitability parameters, selects the greater of that minimum and the sponsor-requested WETH, and snapshots the selection as OpenOracle's exact WETH side. It derives the matching REP side from the sponsor's proposed REP/ETH price.",
+	'initial report size': `The first OpenOracle position. ${minimumToken1ReportDefinition} The coordinator selects the greater of that minimum and the sponsor-requested WETH, snapshots the selection as OpenOracle's exact WETH side, and derives the matching REP side from the sponsor's proposed REP/ETH price.`,
 	invalid: 'A valid answer state for an unresolvable or invalid market outcome.',
 	InvalidGasLimit: 'The OpenOracle settlement error used when callback gas headroom is insufficient.',
 	'liquidation threshold price': liquidationThresholdDefinition,
@@ -111,7 +111,7 @@ window.protocolTermDefinitions = Object.freeze({
 	migration: 'Moving state after a fork. Pool state, vault accounting, or REP balances move from a parent universe into selected child universes.',
 	'migration balance': 'Parent-universe REP value available after a fork. A holder can reproduce it into selected child universes; each child can receive up to the source balance.',
 	'migration time': migrationTimeDefinition,
-	minimumToken1Report: 'The coordinator-computed minimum WETH side required for the configured wrong-price correction to meet its modeled profitability target.',
+	minimumToken1Report: minimumToken1ReportDefinition,
 	'minimum vault rules': 'Checks that stop a vault from withdrawing or changing exposure if too little REP backing would remain.',
 	MIN_REP_DEPOSIT: 'The minimum REP amount accepted for escalation-game deposits.',
 	MIN_RETENTION_RATE: 'The minimum retention rate used in security-pool accounting.',

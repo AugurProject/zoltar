@@ -12,6 +12,7 @@ import { UniverseLink } from '../../universes/components/UniverseLink.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { getPoolCollateralizationPercent } from '../../markets/lib/trading.js'
 import { getToneRatioThreshold, getVisualRatio } from '../../../lib/visualMetrics.js'
+import { formatCurrencyBalance } from '../../../lib/formatters.js'
 import type { MetricGridVariant } from '../../types.js'
 import type { ListedSecurityPool } from '../../../types/contracts.js'
 
@@ -64,6 +65,7 @@ export function SecurityPoolSummaryMetrics({
 				) : undefined}
 				<MetricField label={securityPoolCopy.vaults}>{pool.vaultCount.toString()}</MetricField>
 				<MetricField label={commonCopy.securityMultiplier}>{pool.securityMultiplier.toString()}</MetricField>
+				<MetricField label={commonCopy.initialReportPriorityFee}>{`${formatCurrencyBalance(pool.initialReportPriorityFeeWeiPerGas, 9)} ${commonCopy.gwei}`}</MetricField>
 				<MetricField label={securityPoolCopy.openInterestFeeYear}>
 					<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix={commonCopy.percent} />
 				</MetricField>

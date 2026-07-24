@@ -1,4 +1,5 @@
 import { encodeAbiParameters, getAddress, getCreate2Address, getCreateAddress, keccak256, numberToBytes, zeroAddress, type Address, type Hex } from './ethereum.js'
+import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS } from './oracleInitialReport.js'
 
 type SecurityPoolCoreAddresses = {
 	escalationGameFactory: Address
@@ -22,7 +23,7 @@ type RepTokenAddressConfig = {
 type SecurityPoolAddressConfig = {
 	getEscalationGameInitCode: (securityPool: Address, repToken: Address, proofVerifier: Address) => Hex
 	getInfraContracts: () => SecurityPoolCoreAddresses
-	getPriceOracleManagerAndOperatorQueuerInitCode: (openOracle: Address, repToken: Address) => Hex
+	getPriceOracleManagerAndOperatorQueuerInitCode: (openOracle: Address, repToken: Address, initialReportPriorityFeeWeiPerGas: bigint) => Hex
 	getRepTokenAddress: (universeId: bigint) => Address
 	getSecurityPoolInitCode: (inputs: {
 		escalationGameFactory: Address
@@ -53,12 +54,12 @@ function deriveRepTokenAddress(universeId: bigint, genesisRepTokenAddress: Addre
 	})
 }
 
-function getSecurityPoolSalt(parent: Address, universeId: bigint, questionId: bigint, securityMultiplier: bigint) {
-	return keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint248' }, { type: 'uint256' }, { type: 'uint256' }], [parent, universeId, questionId, securityMultiplier]))
+function getSecurityPoolSalt(parent: Address, universeId: bigint, questionId: bigint, securityMultiplier: bigint, initialReportPriorityFeeWeiPerGas: bigint) {
+	return keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint248' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [parent, universeId, questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas]))
 }
 
-export function getSecurityPoolOriginId(originUniverseId: bigint, questionId: bigint, securityMultiplier: bigint) {
-	return keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint248' }], [questionId, securityMultiplier, originUniverseId]))
+export function getSecurityPoolOriginId(originUniverseId: bigint, questionId: bigint, securityMultiplier: bigint, initialReportPriorityFeeWeiPerGas = DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS) {
+	return keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint248' }], [questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas, originUniverseId]))
 }
 
 export function getCallerScopedSalt(caller: Address, salt: Hex) {
@@ -91,21 +92,21 @@ export function createRepTokenAddressHelper(config: RepTokenAddressConfig) {
 }
 
 export function createSecurityPoolAddressHelper(config: SecurityPoolAddressConfig) {
-	const getSecurityPoolAddresses = (parent: Address, universeId: bigint, questionId: bigint, securityMultiplier: bigint, originUniverseId = 0n) => {
+	const getSecurityPoolAddresses = (parent: Address, universeId: bigint, questionId: bigint, securityMultiplier: bigint, originUniverseId = 0n, initialReportPriorityFeeWeiPerGas = DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS) => {
 		const infraContracts = config.getInfraContracts()
-		const securityPoolSalt = getSecurityPoolSalt(parent, universeId, questionId, securityMultiplier)
+		const securityPoolSalt = getSecurityPoolSalt(parent, universeId, questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas)
 		const securityPoolSaltWithMsgSender = getCallerScopedSalt(infraContracts.securityPoolFactory, securityPoolSalt)
 
 		const repToken = config.getRepTokenAddress(universeId)
 		const priceOracleManagerAndOperatorQueuer = getCreate2Address({
-			bytecode: config.getPriceOracleManagerAndOperatorQueuerInitCode(infraContracts.openOracle, repToken),
+			bytecode: config.getPriceOracleManagerAndOperatorQueuerInitCode(infraContracts.openOracle, repToken, initialReportPriorityFeeWeiPerGas),
 			from: infraContracts.priceOracleManagerAndOperatorQueuerFactory,
 			salt: securityPoolSaltWithMsgSender,
 		})
 		const shareToken = getCreate2Address({
 			bytecode: config.getShareTokenInitCode(infraContracts.securityPoolFactory, infraContracts.zoltar, questionId),
 			from: infraContracts.shareTokenFactory,
-			salt: getSecurityPoolOriginId(originUniverseId, questionId, securityMultiplier),
+			salt: getSecurityPoolOriginId(originUniverseId, questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas),
 		})
 		const truthAuction =
 			parent === zeroAddress
