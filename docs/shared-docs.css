@@ -497,7 +497,7 @@ body.doc-openoracle .term:focus-visible {
 body.doc-openoracle .equation math {
 	display: block;
 	width: max-content;
-	min-width: 100%;
+	margin-inline: auto;
 	padding: 0.25rem 0;
 	font-size: clamp(0.84rem, 1.6vw, 1.05rem);
 }
@@ -1207,7 +1207,8 @@ body.paper-statoblast .equation {
 }
 body.paper-statoblast .equation math {
 	display: block;
-	min-width: max-content;
+	width: max-content;
+	margin-inline: auto;
 	font-size: 1.02rem;
 }
 body.paper-statoblast .equation-caption {
@@ -2185,7 +2186,8 @@ body.paper-zoltar .equation {
 }
 body.paper-zoltar .equation math {
 	display: block;
-	min-width: max-content;
+	width: max-content;
+	margin-inline: auto;
 	font-size: 1.02rem;
 }
 body.paper-zoltar .equation-caption {

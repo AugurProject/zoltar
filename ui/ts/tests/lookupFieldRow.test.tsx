@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { fireEvent, within } from './testUtils/queries'
 import { act } from 'preact/test-utils'
 import { LookupFieldRow } from '../components/LookupFieldRow.js'
+import { AddressValue } from '../components/AddressValue.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
@@ -59,5 +60,15 @@ describe('LookupFieldRow', () => {
 		})
 
 		expect(nextValue).toBe('0xabc')
+	})
+
+	test('shows a copyable resolved address separately from the editable lookup value', async () => {
+		const address = '0x00000000000000000000000000000000000000A1'
+		const renderedComponent = await renderIntoDocument(<LookupFieldRow label='Pool Address' onInput={() => undefined} resolvedValue={<AddressValue address={address} />} resolvedValueLabel='Selected Pool' value={address} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Selected Pool')).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: `Copy address ${address}` }).textContent).toBe(address)
 	})
 })
