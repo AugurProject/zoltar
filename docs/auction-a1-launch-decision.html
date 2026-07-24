@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>AUCTION-A1 Launch Decision</title>
+		<link rel="stylesheet" href="./shared-docs.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main>
+			<header>
+				<h1>AUCTION-A1 Launch Decision</h1>
+				<div class="callout">
+					<p>
+						<strong>Status: awaiting accountable human approval.</strong> This
+						record makes the requested loss policy and monitoring explicit. It
+						does not fabricate executive, risk-owner, or governance acceptance.
+						Deployment is blocked until those owners sign the decision below.
+					</p>
+				</div>
+			</header>
+			<section>
+				<h2>Decision proposed for approval</h2>
+				<figure class="diagram diagram-wide" id="fig-auction-a1-decision">
+					<svg
+						viewBox="0 0 900 220"
+						role="img"
+						aria-labelledby="auction-a1-decision-title auction-a1-decision-desc"
+					>
+						<title id="auction-a1-decision-title">AUCTION-A1 loss decision</title>
+						<desc id="auction-a1-decision-desc">
+							A child collateral deficit enters a truth auction. Strong demand
+							can repair the target. Weak demand leaves collateral impairment
+							with the child open-interest holders, while non-migrating security
+							positions separately lose the value assigned to auction buyers.
+						</desc>
+						<rect class="svg-blue" x="30" y="65" width="200" height="90" rx="10"></rect>
+						<text class="svg-label" x="130" y="100" text-anchor="middle">Child deficit</text>
+						<text class="svg-small" x="130" y="127" text-anchor="middle">migration has closed</text>
+						<path class="svg-line" d="M 230 110 H 300"></path>
+						<rect class="svg-gold" x="300" y="65" width="220" height="90" rx="10"></rect>
+						<text class="svg-label" x="410" y="100" text-anchor="middle">Truth auction</text>
+						<text class="svg-small" x="410" y="127" text-anchor="middle">demand sets repair</text>
+						<path class="svg-line" d="M 520 110 H 590"></path>
+						<rect class="svg-red" x="590" y="45" width="280" height="130" rx="10"></rect>
+						<text class="svg-label" x="730" y="82" text-anchor="middle">Two losses to approve</text>
+						<text class="svg-small" x="730" y="110" text-anchor="middle">child OI: collateral impairment</text>
+						<text class="svg-small" x="730" y="137" text-anchor="middle">non-migrators: auctioned value</text>
+					</svg>
+					<p class="diagram-caption">
+						<span class="figure-label">Decision Boundary</span>The auction provides
+						best-effort repair from qualifying bids; retained proceeds may leave
+						the child undercollateralized.
+					</p>
+				</figure>
+				<p>
+					Under <a href="./security-model.html#auction-a1"><code>AUCTION-A1</code></a>,
+					a truth auction is a best-effort repair mechanism. If demand is weak, it
+					may clear below the child pool's ETH deficit. Finalization can activate
+					an undercollateralized child pool. Users holding that child's open
+					interest bear the remaining collateral impairment. Separately,
+					non-migrating security positions forfeit the economic value assigned to
+					qualifying auction buyers; they do not absorb the child pool's collateral
+					deficit as a second liability. The protocol does not guarantee that
+					auction buyers arrive, that the REP cap raises the target, or that
+					governance recapitalizes the child. These are intentional and distinct
+					loss allocations, not contract bugs.
+				</p>
+				<p>
+					Approval means accepting the concrete mechanics in
+					<a href="./auction-design.html#clearing">Truth Auction clearing</a>,
+					including partial repair, weak-demand pricing, paged bidder settlement,
+					and the absence of an automatic external backstop. It also accepts that
+					different child universes can have materially different recovery rates.
+				</p>
+			</section>
+			<section>
+				<h2>Required pre-launch evidence</h2>
+				<ul>
+					<li>Fork rehearsal covering zero bids, one bid, oversubscribed bids, REP-cap binding, ETH-target binding, rounding dust, and paged claim completion.</li>
+					<li>Published child-pool deficit, target, REP cap, clearing price, retained ETH, post-repair collateral ratio, and unclaimed winning pages.</li>
+					<li>Named incident commander and communications owner for an underfunded child activation.</li>
+					<li>Operator runbook and alerts tested against a mainnet-fork deployment.</li>
+				</ul>
+			</section>
+			<section>
+				<h2>Monitoring and escalation</h2>
+				<div class="table-scroll" role="region" aria-label="Truth auction monitoring policy" tabindex="0">
+					<table>
+						<thead><tr><th>Signal</th><th>Required alert</th><th>Owner action</th></tr></thead>
+						<tbody>
+							<tr><td>Migration closes with child deficit</td><td>Immediate</td><td>Publish deficit and start eligibility timestamp</td></tr>
+							<tr><td>Auction not started within 30 minutes of eligibility</td><td>Critical</td><td>Submit start transaction and investigate automation</td></tr>
+							<tr><td>Projected raise below 100% / 75% / 50% of target</td><td>Warning / high / critical</td><td>Disclose projected recovery; do not describe repair as guaranteed</td></tr>
+							<tr><td>Start call does not either start the one-week auction or immediately activate a no-auction child within 30 minutes</td><td>Critical</td><td>Retry through alternate RPC and builder paths; inspect the child state</td></tr>
+							<tr><td>Started auction not finalized within 30 minutes after <code>truthAuctionStarted + AUCTION_TIME</code></td><td>Critical</td><td>Submit finalization through alternate RPC and builder paths</td></tr>
+							<tr><td>Unsettled winning bid pages remain after 6 hours</td><td>High</td><td>Run paged settlement until complete</td></tr>
+							<tr><td>Post-repair collateral ratio below 100%</td><td>Critical and persistent</td><td>Publish realized impairment and affected child identity</td></tr>
+						</tbody>
+					</table>
+				</div>
+			</section>
+			<section>
+				<h2>Approval record</h2>
+				<p>
+					Each signer confirms that they understand an auction can complete
+					without making open-interest holders whole and that no pause, upgrade,
+					or discretionary recovery path should be represented unless separately
+					deployed and documented.
+				</p>
+				<ul>
+					<li>Executive owner: __________________ Date: __________</li>
+					<li>Protocol risk owner: ______________ Date: __________</li>
+					<li>Operations owner: __________________ Date: __________</li>
+					<li>Governance authorization / transaction: __________________</li>
+				</ul>
+			</section>
+		</main>
+	</body>
+</html>

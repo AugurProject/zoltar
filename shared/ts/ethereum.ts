@@ -1,6 +1,6 @@
 import { keccak_256 } from '@noble/hashes/sha3.js'
 import { bytesToHex as nobleBytesToHex, concatBytes, hexToBytes as nobleHexToBytes, utf8ToBytes } from '@noble/hashes/utils.js'
-import { addr, amounts, Transaction } from 'micro-eth-signer'
+import { addr, amounts, eip191Signer, Transaction } from 'micro-eth-signer'
 import { Decoder, createContract, deployContract, events } from 'micro-eth-signer/advanced/abi.js'
 
 export type Hex = `0x${string}`
@@ -260,6 +260,7 @@ type WaitForTransactionReceiptParameters = {
 	hash: Hash
 	onReplaced?: ((replacement: TransactionReplacement) => void) | undefined
 	pollingInterval?: number | undefined
+	transaction?: BlockTransaction | undefined
 	timeout?: number | undefined
 }
 
@@ -295,6 +296,7 @@ export type RpcLog<TArgs = unknown, TEventName extends string = string> = Transa
 
 export type Account = {
 	address: Address
+	signMessage?: (message: string | Uint8Array) => Promise<Hex>
 	signTransaction?: (parameters: SignTransactionParameters) => Promise<Hex>
 	type: 'json-rpc' | 'local' | string
 }
@@ -393,6 +395,7 @@ type PublicClientShape<TTransport extends Transport, TChain extends Chain | unde
 	getCode: (parameters: { address: Address; blockTag?: BlockTag | undefined }) => Promise<Hex | undefined>
 	getLogs: <TEvent extends AbiParameter | undefined>(parameters: { address?: Address | undefined; event?: TEvent; fromBlock?: bigint | undefined; toBlock?: bigint | undefined; topics?: readonly LogTopicFilter[] | undefined }) => Promise<readonly RpcLogForEvent<TEvent>[]>
 	getTransaction: (parameters: { hash: Hash }) => Promise<BlockTransaction>
+	getTransactionCount: (parameters: { address: Address; blockTag?: BlockTag | undefined }) => Promise<bigint>
 	getTransactionReceipt: (parameters: { hash: Hash }) => Promise<TransactionReceipt>
 	multicall: <TContracts extends readonly ContractFunctionParameters[], TAllowFailure extends boolean>(parameters: { allowFailure: TAllowFailure; contracts: TContracts; multicallAddress: Address }) => Promise<MulticallReturnType<TContracts, TAllowFailure>>
 	readContract: <TAbi extends Abi, TFunctionName extends string>(parameters: ContractFunctionParameters<TAbi, TFunctionName>) => Promise<ContractFunctionResult<TAbi, TFunctionName>>
@@ -1263,6 +1266,13 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 					params: [parameters.address, parameters.blockTag ?? 'latest'],
 				}),
 			),
+		getTransactionCount: async parameters =>
+			normalizeRpcBigInt(
+				await requestTransport<string>(transport, {
+					method: 'eth_getTransactionCount',
+					params: [parameters.address, parameters.blockTag ?? 'latest'],
+				}),
+			),
 		getBlock: async parameters => {
 			const includeTransactions = parameters?.includeTransactions === true
 			const blockTag = normalizeBlockTag(parameters?.blockNumber)
@@ -1410,9 +1420,9 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			const pollingInterval = parameters.pollingInterval ?? 1_000
 			const startTime = Date.now()
 			const actions = buildPublicClientActions({ chain, transport })
-			let originalTransaction: BlockTransaction | undefined
+			let originalTransaction = parameters.transaction
 			let lastScannedReplacementBlock: bigint | undefined
-			if (parameters.onReplaced !== undefined) {
+			if (parameters.onReplaced !== undefined && originalTransaction === undefined) {
 				try {
 					originalTransaction = await actions.getTransaction({
 						hash: parameters.hash,
@@ -1845,6 +1855,7 @@ export async function recoverTransactionAddress(parameters: { serializedTransact
 export function privateKeyToAccount(privateKey: Hex) {
 	return {
 		address: getAddress(addr.fromPrivateKey(privateKey)),
+		signMessage: async message => ensure0x(eip191Signer.sign(message, privateKey)),
 		signTransaction: async parameters => {
 			const type = parameters.gasPrice !== undefined ? 'legacy' : 'eip1559'
 			const transaction = Transaction.prepare({

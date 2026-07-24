@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>ORACLE-A1 Launch Analysis</title>
+		<link rel="stylesheet" href="./shared-docs.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main>
+			<header>
+				<h1>ORACLE-A1 Launch Analysis</h1>
+				<p>
+					This note tests whether an independent arbitrager can profitably
+					correct a materially wrong Zoltar WETH/REP OpenOracle report using
+					currently executable Uniswap V3 liquidity. It is a launch-gate
+					measurement, not a timeless proof.
+				</p>
+				<div class="callout">
+					<p>
+						<strong>Decision: fail; deployment blocked.</strong> At Ethereum
+						block <code>25,600,852</code>, a minimum-sized report that is wrong
+						by 5% is not profitable to correct in either direction. The only
+						liquid REP/WETH V3 pool is too shallow. This evidence does not
+						substantiate
+						<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a
+						>.
+					</p>
+				</div>
+			</header>
+
+			<section id="method">
+				<h2>Method and exact economics</h2>
+				<figure class="diagram diagram-wide" id="fig-oracle-a1-gate">
+					<svg
+						viewBox="0 0 900 220"
+						role="img"
+						aria-labelledby="oracle-a1-gate-title oracle-a1-gate-desc"
+					>
+						<title id="oracle-a1-gate-title">
+							ORACLE-A1 executable-profit gate
+						</title>
+						<desc id="oracle-a1-gate-desc">
+							A pending report is checked against a time-weighted Uniswap pool,
+							then executable hedge proceeds are reduced by oracle fees, gas,
+							and a safety margin. The launch gate passes only when the
+							remainder is positive in both error directions.
+						</desc>
+						<rect
+							class="svg-blue"
+							x="30"
+							y="65"
+							width="190"
+							height="90"
+							rx="10"
+						></rect>
+						<text class="svg-label" x="125" y="100" text-anchor="middle">
+							Pending report
+						</text>
+						<text class="svg-small" x="125" y="127" text-anchor="middle">
+							WETH / REP amounts
+						</text>
+						<path class="svg-line" d="M 220 110 H 290"></path>
+						<rect
+							class="svg-gold"
+							x="290"
+							y="45"
+							width="250"
+							height="130"
+							rx="10"
+						></rect>
+						<text class="svg-label" x="415" y="82" text-anchor="middle">
+							Executable hedge
+						</text>
+						<text class="svg-small" x="415" y="110" text-anchor="middle">
+							V3 quote + 30-minute TWAP
+						</text>
+						<text class="svg-small" x="415" y="137" text-anchor="middle">
+							fees + gas + margin
+						</text>
+						<path class="svg-line" d="M 540 110 H 610"></path>
+						<rect
+							class="svg-red"
+							x="610"
+							y="65"
+							width="260"
+							height="90"
+							rx="10"
+						></rect>
+						<text class="svg-label" x="740" y="100" text-anchor="middle">
+							Current result: fail
+						</text>
+						<text class="svg-small" x="740" y="127" text-anchor="middle">
+							5% errors lose value both ways
+						</text>
+					</svg>
+					<p class="diagram-caption">
+						<span class="figure-label">Launch Gate</span>Mid-price agreement is
+						insufficient; the complete hedge must remain profitable at
+						executable size.
+					</p>
+				</figure>
+				<p>
+					The test reads pools from the canonical Uniswap V3 factory, rejects
+					zero-liquidity pools, compares the current tick with a 30-minute
+					time-weighted average tick, and calls QuoterV2 for exact-input and
+					exact-output amounts. This follows the official
+					<a
+						href="https://developers.uniswap.org/docs/protocols/v3/concepts/price-oracles"
+						>V3 oracle</a
+					>,
+					<a href="https://developers.uniswap.org/docs/protocols/v3/deployments"
+						>deployment</a
+					>, and
+					<a
+						href="https://github.com/Uniswap/v3-periphery/blob/main/contracts/interfaces/IQuoterV2.sol"
+						>QuoterV2 interface</a
+					>
+					documentation.
+				</p>
+				<p>
+					Let <code>W</code> and <code>R</code> be the current report's WETH and
+					REP amounts; <code>f</code> and <code>p</code> are reporter and
+					protocol fee rates over precision <code>P = 10,000,000</code>. Integer
+					division floors exactly as the contract does. The
+					<a href="./open-oracle-integration.html#parameters"
+						>OpenOracle parameter table</a
+					>
+					remains the canonical owner of configured fee, multiplier,
+					target-error, and sizing values.
+				</p>
+				<p>
+					OpenOracle derives the swap side from the proposed replacement ratio;
+					the arbitrager verifies that this strict on-chain comparison matches the
+					profitable direction before it submits.
+				</p>
+				<div
+					class="table-scroll"
+					role="region"
+					aria-label="Arbitrage direction formulas"
+					tabindex="0"
+				>
+					<table>
+						<thead>
+							<tr>
+								<th>Wrong report</th>
+								<th>OpenOracle action</th>
+								<th>Profit before capital cost</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>REP is cheap: report offers too much REP per WETH</td>
+								<td>
+									Swap token1; fund <code>W + floor(Wf/P) + floor(Wp/P)</code>,
+									receive <code>R</code>, then sell REP
+								</td>
+								<td>
+									<code>V3ExactInput(R REP) - WETH contribution - gas</code>
+								</td>
+							</tr>
+							<tr>
+								<td>REP is expensive: report offers too little REP per WETH</td>
+								<td>
+									Swap token2; buy and fund
+									<code>R + floor(Rf/P) + floor(Rp/P)</code>, receive
+									<code>W</code>
+								</td>
+								<td><code>W - V3ExactOutput(REP contribution) - gas</code></td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<p>
+					The replacement WETH amount is
+					<code>min(floor(W × multiplier / 100), escalationHalt)</code> before
+					the halt, or <code>W + 1</code> at the halt. Replacement capital is
+					locked, but is not treated as a purchase expense because it is
+					returned to the final reporter. A production decision must separately
+					price that lock duration and the possibility of another dispute.
+				</p>
+			</section>
+
+			<section id="snapshot">
+				<h2>Reproducible mainnet snapshot</h2>
+				<p>
+					Header RPC: <code>https://ethereum-rpc.publicnode.com</code>.
+					Historical state and Quoter replay RPC:
+					<code>https://eth.drpc.org</code>. Block: <code>25,600,852</code>,
+					hash
+					<code
+						>0x4aa49d2760cffd97612684d3306b8be38ce4daf7604ad0f9cbeb975159fde73e</code
+					>, timestamp <code>2026-07-24 06:38:11 UTC</code>. REP is
+					<code>0x221657776846890989a759BA2973e427DfF5C9bB</code>; WETH is
+					<code>0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2</code>. The header
+					RPC does not currently serve unauthenticated archive-state calls, so
+					replay the block-tagged calls through an archive-capable endpoint.
+				</p>
+				<div
+					class="table-scroll"
+					role="region"
+					aria-label="REP WETH Uniswap pools"
+					tabindex="0"
+				>
+					<table>
+						<thead>
+							<tr>
+								<th>Fee</th>
+								<th>Pool</th>
+								<th>Usable state</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>0.3%</td>
+								<td><code>0x877040F2DfFd2dEA384Fe1878D4fBdcB6Ec1d92D</code></td>
+								<td>Liquidity zero; rejected</td>
+							</tr>
+							<tr>
+								<td>1%</td>
+								<td><code>0xb055103b7633b61518CD806D95beeB2d4Cd217E7</code></td>
+								<td>
+									Liquidity <code>88,723,485,940,869,077,175</code>; ERC-20
+									balances about 5,534.72 REP and 2.17174 WETH; spot and
+									30-minute TWAP tick both <code>-78,619</code>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<p>
+					The tick implies a mid-price near <code>0.0003852928 WETH/REP</code>,
+					or <code>2,595.43 REP/WETH</code>. Mid-price multiplication is not
+					used for the decision: 1,000 REP quotes only about 0.312914 WETH, and
+					1 WETH quotes only about 1,638.17 REP because the pool is shallow.
+				</p>
+			</section>
+
+			<section id="calculations">
+				<h2>Minimum report and attack calculations</h2>
+				<p>
+					With zero open interest and the configured 10 gwei priority component,
+					the coordinator formula gives a minimum of
+					<code>0.817262744792307693 WETH</code> at the snapshot base fee (<code
+						>0.118491126 gwei</code
+					>). The corresponding mid-price report is about
+					<code>2,121.15 REP</code>. The minimum grows with base fee:
+				</p>
+				<div
+					class="table-scroll"
+					role="region"
+					aria-label="Minimum report gas stress"
+					tabindex="0"
+				>
+					<table>
+						<thead>
+							<tr>
+								<th>Base fee (gwei)</th>
+								<th>Minimum WETH</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>0</td>
+								<td>0.80769</td>
+							</tr>
+							<tr>
+								<td>1</td>
+								<td>0.88846</td>
+							</tr>
+							<tr>
+								<td>5</td>
+								<td>1.21154</td>
+							</tr>
+							<tr>
+								<td>10</td>
+								<td>1.61538</td>
+							</tr>
+							<tr>
+								<td>20</td>
+								<td>2.42308</td>
+							</tr>
+							<tr>
+								<td>50</td>
+								<td>4.84615</td>
+							</tr>
+							<tr>
+								<td>100</td>
+								<td>8.88462</td>
+							</tr>
+							<tr>
+								<td>200</td>
+								<td>16.96154</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<p>
+					The fixed test defines the tick-mid report in atomic units as
+					<code
+						>R = floor(W / 1.0001^-78619) = 2,121,147,070,719,536,334,508
+						wei-REP</code
+					>. The 5%-cheap amount is
+					<code
+						>floor(R × 105 / 100) = 2,227,204,424,255,513,151,233 wei-REP</code
+					>; the 5%-expensive amount is
+					<code
+						>floor(R × 95 / 100) = 2,015,089,717,183,559,517,782 wei-REP</code
+					>.
+				</p>
+				<div
+					class="table-scroll"
+					role="region"
+					aria-label="Five percent error calculations"
+					tabindex="0"
+				>
+					<table>
+						<thead>
+							<tr>
+								<th>Case</th>
+								<th>Executable calculation</th>
+								<th>Result before gas</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>
+									REP 5% cheap; report
+									<code>2,227,204,424,255,513,151,233</code> wei-REP
+								</td>
+								<td>
+									WETH fee = <code>817,262,744,792,307</code>; protocol fee =
+									<code>8,172,627,447,923,076</code>; total spend =
+									<code>826,252,634,985,023,076</code> wei-WETH. Exact-input
+									output = <code>571,016,899,230,348,553</code> wei-WETH.
+								</td>
+								<td>
+									<code>-255,235,735,754,674,523</code> wei-WETH before gas
+								</td>
+							</tr>
+							<tr>
+								<td>
+									REP 5% expensive; report
+									<code>2,015,089,717,183,559,517,782</code> wei-REP
+								</td>
+								<td>
+									Fee-inclusive exact-output target =
+									<code>2,037,255,704,072,578,672,476</code> wei-REP. Its
+									purchase costs
+									<code>1,443,517,056,219,248,199</code> wei-WETH; the report
+									pays <code>817,262,744,792,307,693</code> wei-WETH.
+								</td>
+								<td>
+									<code>-626,254,311,426,940,506</code> wei-WETH before gas
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<div class="callout">
+					<p>
+						<strong>Exact Quoter replay.</strong> Send <code>eth_call</code> to
+						QuoterV2
+						<code>0x61fFE014bA17989E743c5F6cB21bF9697530B21e</code> with block
+						tag <code>0x186a354</code>. For the cheap-REP exact-input call, data
+						is
+						<code
+							>0xc6a5026a000000000000000000000000221657776846890989a759ba2973e427dff5c9bb000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000000000000000000000000078bcab9fa02841c70100000000000000000000000000000000000000000000000000000000000027100000000000000000000000000000000000000000000000000000000000000000</code
+						>. The four decoded outputs are
+						<code
+							>[571016899230348553, 1045277023077399918283071048, 0,
+							87765]</code
+						>. For the expensive-REP exact-output call, data is
+						<code
+							>0xbd21704a000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000221657776846890989a759ba2973e427dff5c9bb00000000000000000000000000000000000000000000006e709a3502bc60275c00000000000000000000000000000000000000000000000000000000000027100000000000000000000000000000000000000000000000000000000000000000</code
+						>. The decoded outputs are
+						<code
+							>[1443517056219248199, 2831322171024499199808441211, 0,
+							114157]</code
+						>. Each output tuple is amount, post-quote square-root price,
+						initialized ticks crossed, and Quoter gas estimate.
+					</p>
+				</div>
+				<p>
+					Approximate break-even is not reached until the cheap-REP report is
+					nearly 100% wrong (around 4,200 REP) or the expensive-REP report is
+					about 33% wrong (around 1,400 REP), before gas and inventory risk.
+					Therefore the configured 5% target error does not imply a profitable
+					5% correction in the actual venue.
+				</p>
+			</section>
+
+			<section id="gate">
+				<h2>Launch gate and required remediation</h2>
+				<p>
+					ORACLE-A1 passes only if every row of the gate below passes in both
+					error directions. The protocol risk owner owns these thresholds and
+					must sign any change before the deployment decision is rerun.
+					The present snapshot already fails before gas, so its failure does not
+					depend on the additional admissibility and settlement checks below.
+				</p>
+				<div
+					class="table-scroll"
+					role="region"
+					aria-label="Deterministic ORACLE-A1 launch gate"
+					tabindex="0"
+				>
+					<table>
+						<thead>
+							<tr>
+								<th>Gate input</th>
+								<th>Required value</th>
+								<th>Pass rule</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>Request base fee</td>
+								<td>0, 1, 5, 10, 20, 50, 100, and 200 gwei</td>
+								<td>Every point passes report sizing</td>
+							</tr>
+							<tr>
+								<td>Dispute / final-report base fee</td>
+								<td>
+									0, 1, 5, 10, 20, 50, 100, and 200 gwei, crossed with
+									every request-base-fee point
+								</td>
+								<td>
+									Final <code>newAmount1</code> covers the coordinator's
+									recorded-base-fee security formula plus configured priority fee
+								</td>
+							</tr>
+							<tr>
+								<td>Settlement base fee</td>
+								<td>
+									0 and the exact request-time settlement cap for every
+									request/dispute pair; cap + 1 is a required rejection case
+								</td>
+								<td>
+									At or below the cap emits <code>PriceReported</code>; cap + 1
+									emits <code>PriceReportRejected</code> and triggers the approved
+									retry/recovery runbook
+								</td>
+							</tr>
+							<tr>
+								<td>Open interest</td>
+								<td>
+									0 and the maximum open interest permitted by launch policy
+								</td>
+								<td>If no maximum is approved and enforced, fail</td>
+							</tr>
+							<tr>
+								<td>Error direction</td>
+								<td>REP 5% cheap and REP 5% expensive</td>
+								<td>Both pass at every request/dispute gas and OI tuple</td>
+							</tr>
+							<tr>
+								<td>Replacement admissibility</td>
+								<td>
+									Record exact atomic <code>newAmount1</code> and
+									<code>newAmount2</code>, the two cross-products, complete token
+									contributions, and locked replacement inventory
+								</td>
+								<td>
+									The strict cross-product derives the intended swap side, the bot
+									does not abort, and both contribution balances are funded
+								</td>
+							</tr>
+							<tr>
+								<td>Profit buffer</td>
+								<td>
+									After OpenOracle fees, executable V3 price impact, and
+									<code>gasCost = 600,000 × (2 × baseFee + 2 gwei)</code>,
+									multiplied in wei without intermediate rounding
+								</td>
+								<td>
+									At least the greater of 0.01 WETH or 100 bps of hedge cost
+								</td>
+							</tr>
+							<tr>
+								<td>Price history</td>
+								<td>
+									1,800-second TWAP; spot/TWAP difference at most 100 ticks
+								</td>
+								<td>Pool must serve the full window; otherwise fail</td>
+							</tr>
+							<tr>
+								<td>Freshness and inclusion</td>
+								<td>
+									Quote no older than one block; at least 36 seconds or three
+									blocks remain, matching the report clock
+								</td>
+								<td>
+									Simulation and private submission complete inside that budget
+								</td>
+							</tr>
+							<tr>
+								<td>Operators</td>
+								<td>Two independently funded and operated bots</td>
+								<td>
+									Both submit the planned amounts on a fork, settle through the
+									coordinator, observe <code>PriceReported</code>, withdraw, and
+									rebalance; a successful low-level settlement alone does not pass
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<ul>
+					<li>
+						Provision substantially deeper, durable REP/WETH liquidity or use an
+						independently justified deeper reference and hedge venue.
+					</li>
+					<li>
+						Revisit minimum report sizing and the 5% target so security
+						calculations include venue price impact, not only gas and protocol
+						fees.
+					</li>
+					<li>
+						Fund at least two independent arbitragers and rehearse both dispute
+						directions, settlement, withdrawal, and inventory rebalancing on a
+						fork.
+					</li>
+					<li>
+						Rerun this fixed-block analysis plus stressed executable quotes
+						immediately before deployment; fail closed if either direction is
+						unprofitable.
+					</li>
+					<li>
+						Monitor liquidity, observation history, pending reports, quote
+						profit, inclusion delay, and base-fee stress continuously after
+						launch.
+					</li>
+				</ul>
+				<p>
+					The root
+					<a href="../open-oracle-arbitrager-src/README.md"
+						>OpenOracle arbitrager</a
+					>
+					automates event monitoring, TWAP filtering, executable quotes,
+					state-hash revalidation, simulation, and optional dispute submission.
+					It defaults to dry-run and correctly refuses the 5% cases above. It
+					does not remove inclusion, locked-capital, or liquidity risk.
+				</p>
+			</section>
+		</main>
+	</body>
+</html>

@@ -28,6 +28,7 @@ import {
 	publicActions,
 	recoverTransactionAddress,
 	toHex,
+	type BlockTransaction,
 	type EIP1193Provider,
 	type Hash,
 	type Hex,
@@ -477,6 +478,8 @@ describe('shared ethereum compatibility layer', () => {
 	test('transaction helpers sign, parse, recover, and format values', async () => {
 		const account = privateKeyToAccount(PRIVATE_KEY)
 		expect(account.address).toBe(ACCOUNT_ADDRESS)
+		const signedMessage = await account.signMessage?.(keccak256('flashbots request body'))
+		expect(signedMessage).toMatch(/^0x[0-9a-f]{130}$/)
 
 		const signedLegacy = await account.signTransaction?.({
 			chainId: 1,
@@ -905,6 +908,84 @@ describe('shared ethereum compatibility layer', () => {
 		expect(calls.map(call => call.method)).toEqual(['eth_getTransactionByHash', 'eth_getTransactionReceipt', 'eth_blockNumber', 'eth_getBlockByNumber', 'eth_getTransactionReceipt'])
 	})
 
+	test('waitForTransactionReceipt finds private-transaction replacements from supplied metadata', async () => {
+		const originalHash = `0x${'57'.repeat(32)}` satisfies Hash
+		const replacementHash = `0x${'68'.repeat(32)}` satisfies Hash
+		const originalTransaction = {
+			from: getAddress(OWNER_ADDRESS),
+			gas: 21_000n,
+			hash: originalHash,
+			input: '0x1234',
+			nonce: 9n,
+			to: getAddress(RECIPIENT_ADDRESS),
+			type: 'eip1559',
+			value: 5n,
+		} satisfies BlockTransaction
+		const replacementTransaction = {
+			from: OWNER_ADDRESS,
+			gas: '0x5208',
+			hash: replacementHash,
+			input: '0x1234',
+			nonce: '0x9',
+			to: RECIPIENT_ADDRESS,
+			transactionIndex: '0x0',
+			type: '0x2',
+			value: '0x5',
+		}
+		const calls: { method: string; params: unknown }[] = []
+		const provider = createProvider(({ method, params }) => {
+			if (method === 'eth_getTransactionByHash') throw new Error('Private transaction must not require public RPC visibility')
+			if (method === 'eth_getTransactionReceipt') {
+				const requestedHash = getArrayEntry(params, 0, 'receipt params')
+				if (requestedHash === originalHash) return null
+				if (requestedHash === replacementHash) {
+					return {
+						blockHash: BLOCK_HASH,
+						blockNumber: '0xa',
+						cumulativeGasUsed: '0x5208',
+						effectiveGasPrice: '0x9',
+						from: OWNER_ADDRESS,
+						gasUsed: '0x5208',
+						logs: [],
+						status: '0x1',
+						to: RECIPIENT_ADDRESS,
+						transactionHash: replacementHash,
+						transactionIndex: '0x0',
+						type: '0x2',
+					}
+				}
+			}
+			if (method === 'eth_blockNumber') return '0x0'
+			if (method === 'eth_getBlockByNumber') {
+				return {
+					hash: BLOCK_HASH,
+					number: '0x0',
+					parentHash: `0x${'44'.repeat(32)}`,
+					timestamp: '0x5',
+					transactions: [replacementTransaction],
+				}
+			}
+			throw new Error(`Unexpected rpc method: ${method}`)
+		}, calls)
+		const client = createPublicClient({
+			chain: mainnet,
+			transport: custom(provider),
+		})
+		const replacements: string[] = []
+		const receipt = await client.waitForTransactionReceipt({
+			hash: originalHash,
+			onReplaced: replacement => {
+				replacements.push(replacement.reason)
+			},
+			pollingInterval: 0,
+			timeout: 50,
+			transaction: originalTransaction,
+		})
+		expect(receipt.transactionHash).toBe(replacementHash)
+		expect(replacements).toEqual(['repriced'])
+		expect(calls.map(call => call.method)).not.toContain('eth_getTransactionByHash')
+	})
+
 	test('public client rejects malformed fixed-width rpc hashes', async () => {
 		const calls: { method: string; params: unknown }[] = []
 		const provider = createProvider(({ method }) => {
@@ -1146,6 +1227,21 @@ describe('shared ethereum compatibility layer', () => {
 				})
 			).result,
 		).toBe(1n)
+		expect(calls).toHaveLength(1)
+	})
+
+	test('public client reads pending transaction counts', async () => {
+		const calls: { method: string; params: unknown }[] = []
+		const provider = createProvider(({ method, params }) => {
+			expect(method).toBe('eth_getTransactionCount')
+			expect(params).toEqual([getAddress(OWNER_ADDRESS), 'pending'])
+			return '0x7'
+		}, calls)
+		const client = createPublicClient({
+			chain: mainnet,
+			transport: custom(provider),
+		})
+		expect(await client.getTransactionCount({ address: getAddress(OWNER_ADDRESS), blockTag: 'pending' })).toBe(7n)
 		expect(calls).toHaveLength(1)
 	})
 
