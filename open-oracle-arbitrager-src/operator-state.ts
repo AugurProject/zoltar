@@ -1,6 +1,7 @@
 import { appendFile, mkdir, open, readFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { Address, Hex } from '@zoltar/shared/ethereum'
+import type { SubmissionSettings, SubmissionTargetResult } from './transaction-submission.js'
 
 export type StrategySettings = {
 	maxSpotTwapTicks: string
@@ -34,6 +35,7 @@ export type OpportunitySnapshot = {
 	decision: 'dry-run-opportunity' | 'eligible' | 'execution-failed' | 'history-unavailable' | 'insufficient-inventory' | 'paused' | 'selected' | 'self-report' | 'submitted' | 'unprofitable'
 	direction: 'buy-rep' | 'sell-rep'
 	estimatedNetProfitWeth: string
+	estimatedNetProfitEth: string
 	hasRequiredInventory: boolean | undefined
 	pool: Address
 	poolFee: number
@@ -49,13 +51,31 @@ export type ExecutionRecord = {
 	blockNumber: string
 	direction: 'buy-rep' | 'sell-rep'
 	estimatedNetProfitWeth: string
+	estimatedProfitBeforeGasEth: string
 	executedAt: string
 	pool: Address
 	poolFee: number
 	reportId: string
 	requiredRep: string
 	requiredWeth: string
+	trackedNetProfitEth: string
 	transactionHash: Hex
+}
+
+export type TransactionActivity = {
+	acceptedTargets: readonly string[]
+	actualGasCostEth: string | undefined
+	estimatedNetProfitEth: string | undefined
+	failedTargets: readonly SubmissionTargetResult[]
+	hash: Hex
+	kind: 'approval-rep' | 'approval-weth' | 'dispute'
+	mode: SubmissionSettings['mode']
+	originalHash: Hex
+	reportId: string
+	status: 'confirmation-unknown' | 'confirmed' | 'pending' | 'reverted' | 'submission-failed' | 'submitting'
+	submittedAt: string
+	trackedNetProfitEth: string | undefined
+	updatedAt: string
 }
 
 export type OperatorSnapshot = {
@@ -73,8 +93,12 @@ export type OperatorSnapshot = {
 	paused: boolean
 	settings: StrategySettings
 	status: 'error' | 'paused' | 'scanning' | 'sleeping' | 'starting' | 'stopped'
+	submission: SubmissionSettings
 	totalActualGasCostEth: string
+	totalEstimatedNetProfitEth: string
 	totalEstimatedNetProfitWeth: string
+	totalTrackedNetProfitEth: string
+	transactionActivity: readonly TransactionActivity[]
 	updatedAt: string
 	wallet: Address | undefined
 }
@@ -89,6 +113,7 @@ export type OperatorState = {
 	opportunities: OpportunitySnapshot[]
 	paused: boolean
 	status: OperatorSnapshot['status']
+	transactionActivity: TransactionActivity[]
 }
 
 const SETTING_LABELS = {
@@ -105,6 +130,14 @@ export function parseDecimalWeth(value: string) {
 	if (!/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) throw new Error(`Invalid WETH amount: ${value}`)
 	const [whole = '0', fraction = ''] = value.split('.')
 	return BigInt(whole) * 10n ** 18n + BigInt(fraction.padEnd(18, '0'))
+}
+
+export function parseSignedDecimalEth(value: string) {
+	if (!/^-?(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) throw new Error(`Invalid ETH amount: ${value}`)
+	const negative = value.startsWith('-')
+	const unsigned = negative ? value.slice(1) : value
+	const parsed = parseDecimalWeth(unsigned)
+	return negative ? -parsed : parsed
 }
 
 export function strategySettings(strategy: MutableStrategy): StrategySettings {
@@ -177,6 +210,10 @@ export function decimalWeth(value: bigint) {
 	return `${whole.toString()}.${fraction.toString().padStart(18, '0').replace(/0+$/, '')}`
 }
 
+export function decimalSignedEth(value: bigint) {
+	return value < 0n ? `-${decimalWeth(-value)}` : decimalWeth(value)
+}
+
 function executionRecord(value: unknown): ExecutionRecord | undefined {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
 	const record = value as Record<string, unknown>
@@ -189,6 +226,8 @@ function executionRecord(value: unknown): ExecutionRecord | undefined {
 		(record['direction'] !== 'buy-rep' && record['direction'] !== 'sell-rep') ||
 		typeof record['estimatedNetProfitWeth'] !== 'string' ||
 		!decimal.test(record['estimatedNetProfitWeth']) ||
+		typeof record['estimatedProfitBeforeGasEth'] !== 'string' ||
+		!decimal.test(record['estimatedProfitBeforeGasEth']) ||
 		typeof record['executedAt'] !== 'string' ||
 		!Number.isFinite(Date.parse(record['executedAt'])) ||
 		typeof record['pool'] !== 'string' ||
@@ -202,6 +241,8 @@ function executionRecord(value: unknown): ExecutionRecord | undefined {
 		!decimal.test(record['requiredRep']) ||
 		typeof record['requiredWeth'] !== 'string' ||
 		!decimal.test(record['requiredWeth']) ||
+		typeof record['trackedNetProfitEth'] !== 'string' ||
+		!decimal.test(record['trackedNetProfitEth'].replace(/^-/, '')) ||
 		typeof record['transactionHash'] !== 'string' ||
 		!/^0x[0-9a-fA-F]{64}$/.test(record['transactionHash'])
 	)
@@ -211,12 +252,14 @@ function executionRecord(value: unknown): ExecutionRecord | undefined {
 		blockNumber: record['blockNumber'],
 		direction: record['direction'],
 		estimatedNetProfitWeth: record['estimatedNetProfitWeth'],
+		estimatedProfitBeforeGasEth: record['estimatedProfitBeforeGasEth'],
 		executedAt: record['executedAt'],
 		pool: record['pool'] as Address,
 		poolFee: record['poolFee'],
 		reportId: record['reportId'],
 		requiredRep: record['requiredRep'],
 		requiredWeth: record['requiredWeth'],
+		trackedNetProfitEth: record['trackedNetProfitEth'],
 		transactionHash: record['transactionHash'] as Hex,
 	}
 }
@@ -264,7 +307,11 @@ function sumDecimalWeth(records: readonly ExecutionRecord[], field: 'actualGasCo
 	return decimalWeth(records.reduce((total, record) => total + parseDecimalWeth(record[field]), 0n))
 }
 
-export function operatorSnapshot(state: OperatorState, strategy: MutableStrategy, fixed: { execute: boolean; openOracle: Address; wallet: Address | undefined }): OperatorSnapshot {
+function sumSignedEth(records: readonly ExecutionRecord[], field: 'trackedNetProfitEth') {
+	return decimalSignedEth(records.reduce((total, record) => total + parseSignedDecimalEth(record[field]), 0n))
+}
+
+export function operatorSnapshot(state: OperatorState, strategy: MutableStrategy, submission: SubmissionSettings, fixed: { execute: boolean; openOracle: Address; wallet: Address | undefined }): OperatorSnapshot {
 	return {
 		activeReportCount: state.activeReportCount,
 		balances: state.balances,
@@ -280,8 +327,12 @@ export function operatorSnapshot(state: OperatorState, strategy: MutableStrategy
 		paused: state.paused,
 		settings: strategySettings(strategy),
 		status: state.status,
+		submission,
 		totalActualGasCostEth: sumDecimalWeth(state.executionHistory, 'actualGasCostEth'),
+		totalEstimatedNetProfitEth: sumDecimalWeth(state.executionHistory, 'estimatedNetProfitWeth'),
 		totalEstimatedNetProfitWeth: sumDecimalWeth(state.executionHistory, 'estimatedNetProfitWeth'),
+		totalTrackedNetProfitEth: sumSignedEth(state.executionHistory, 'trackedNetProfitEth'),
+		transactionActivity: state.transactionActivity.slice(0, 100),
 		updatedAt: new Date().toISOString(),
 		wallet: fixed.wallet,
 	}

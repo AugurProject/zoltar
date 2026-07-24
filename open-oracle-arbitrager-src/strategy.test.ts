@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/shared/ethereum'
 import type { OpenOracleGame } from '@zoltar/shared/openOracle'
-import { calculateContribution, calculateNextAmount1, deriveTokenToSwap, evaluateBuyRep, evaluateSellRep, hasFreshSubmissionWindow, isSelfReport, meetsProfitThreshold } from './strategy.js'
+import { calculateContribution, calculateNextAmount1, calculateTrackedNetProfitEth, deriveTokenToSwap, evaluateBuyRep, evaluateSellRep, hasFreshSubmissionWindow, isSelfReport, meetsProfitThreshold } from './strategy.js'
 
 const weth = '0x0000000000000000000000000000000000000001' as Address
 const rep = '0x0000000000000000000000000000000000000002' as Address
@@ -39,6 +39,7 @@ describe('OpenOracle arbitrage strategy', () => {
 		expect(buy.hedgeAmountRep).toBe(2_022_000n)
 		expect(buy.netProfitWeth).toBe(90_000n)
 		expect(meetsProfitThreshold(buy, 100_000n, 100n)).toBe(false)
+		expect(calculateTrackedNetProfitEth(buy.profitBeforeGasWeth, 110_000n)).toBe(-10_000n)
 	})
 
 	test('increments by one after the escalation halt', () => {
@@ -69,10 +70,10 @@ describe('OpenOracle arbitrage strategy', () => {
 			deadline: 1_100n,
 			minimumRemaining: 36n,
 			quoteBlock: 20_000n,
-			submissionBlock: 20_001n,
+			submissionBlock: 20_000n,
 		}
 		expect(hasFreshSubmissionWindow(window)).toBe(true)
-		expect(hasFreshSubmissionWindow({ ...window, submissionBlock: 20_002n })).toBe(false)
+		expect(hasFreshSubmissionWindow({ ...window, submissionBlock: 20_001n })).toBe(false)
 		expect(hasFreshSubmissionWindow({ ...window, currentTime: 1_065n })).toBe(false)
 		expect(hasFreshSubmissionWindow({ ...window, submissionBlock: 19_999n })).toBe(false)
 	})

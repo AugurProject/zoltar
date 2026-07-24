@@ -11,6 +11,7 @@ export type ArbitrageQuote = {
 	hedgeAmountRep: bigint
 	hedgeCostWeth: bigint
 	netProfitWeth: bigint
+	profitBeforeGasWeth: bigint
 	tokenToSwap: Address
 }
 
@@ -55,6 +56,7 @@ export function evaluateSellRep(game: Pick<OpenOracleGame, 'currentAmount1' | 'c
 		hedgeAmountRep: game.currentAmount2,
 		hedgeCostWeth: wethSpend,
 		netProfitWeth: quotedWethOut - wethSpend - gasCostWeth,
+		profitBeforeGasWeth: quotedWethOut - wethSpend,
 		tokenToSwap: game.token1,
 	}
 }
@@ -67,6 +69,7 @@ export function evaluateBuyRep(game: Pick<OpenOracleGame, 'currentAmount1' | 'cu
 		hedgeAmountRep: repNeeded,
 		hedgeCostWeth: quotedWethIn,
 		netProfitWeth: game.currentAmount1 - quotedWethIn - gasCostWeth,
+		profitBeforeGasWeth: game.currentAmount1 - quotedWethIn,
 		tokenToSwap: game.token2,
 	}
 }
@@ -76,8 +79,12 @@ export function meetsProfitThreshold(quote: ArbitrageQuote, minimumProfitWeth: b
 	return quote.netProfitWeth * 10_000n >= quote.hedgeCostWeth * minimumProfitBps
 }
 
+export function calculateTrackedNetProfitEth(profitBeforeGasWeth: bigint, actualGasCostEth: bigint) {
+	return profitBeforeGasWeth - actualGasCostEth
+}
+
 export function hasFreshSubmissionWindow({ currentTime, deadline, minimumRemaining, quoteBlock, submissionBlock }: { currentTime: bigint; deadline: bigint; minimumRemaining: bigint; quoteBlock: bigint; submissionBlock: bigint }) {
-	if (submissionBlock < quoteBlock || submissionBlock > quoteBlock + 1n) return false
+	if (submissionBlock !== quoteBlock) return false
 	if (currentTime >= deadline) return false
 	return deadline - currentTime >= minimumRemaining
 }

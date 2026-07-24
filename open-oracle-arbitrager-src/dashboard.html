@@ -38,9 +38,9 @@
 					<small id="block-value">Block —</small>
 				</div>
 				<div class="metric">
-					<span class="metric-label">Estimated net profit</span>
-					<strong id="profit-value">0 WETH</strong>
-					<small>Submitted disputes, not realized P&amp;L</small>
+					<span class="metric-label">Tracked net profit</span>
+					<strong id="profit-value">0 ETH</strong>
+					<small>Submission-time quote minus recorded gas; not realized P&amp;L</small>
 				</div>
 				<div class="metric">
 					<span class="metric-label">Recorded execution gas</span>
@@ -113,6 +113,37 @@
 				</section>
 			</div>
 
+			<section class="panel submission-panel">
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Transaction delivery</p>
+						<h2>Submission</h2>
+					</div>
+					<span class="muted">Applies to the next scan</span>
+				</div>
+				<form id="submission-form">
+					<fieldset id="submission-fieldset" disabled>
+						<div class="submission-grid">
+							<label>
+								<span>Delivery mode</span>
+								<select id="submission-mode" name="submissionMode">
+									<option value="private">Private relays</option>
+									<option value="public">Public mempool</option>
+								</select>
+							</label>
+							<label class="relay-urls-field">
+								<span>Private relay URLs · one per line, up to 8</span>
+								<textarea id="relay-urls" name="relayUrls" rows="3" spellcheck="false"></textarea>
+							</label>
+						</div>
+						<div class="form-actions">
+							<span id="submission-status" class="muted" aria-live="polite">Public mode exposes transactions to the mempool. Private mode sends the same signed transaction to every configured relay.</span>
+							<button class="button" type="submit">Apply submission</button>
+						</div>
+					</fieldset>
+				</form>
+			</section>
+
 			<section class="panel">
 				<div class="section-heading">
 					<div>
@@ -128,7 +159,7 @@
 								<th>Report</th>
 								<th>Decision</th>
 								<th>Direction</th>
-								<th>Estimated net</th>
+								<th>Estimated net (ETH)</th>
 								<th>Required WETH</th>
 								<th>Required REP</th>
 								<th>Window</th>
@@ -144,12 +175,42 @@
 			<section class="panel">
 				<div class="section-heading">
 					<div>
+						<p class="eyebrow">Broadcast lifecycle</p>
+						<h2>Transaction tracking</h2>
+					</div>
+					<span id="transaction-count" class="muted">0 tracked</span>
+				</div>
+				<div class="table-scroll" tabindex="0" aria-label="Transaction tracking table">
+					<table>
+						<thead>
+							<tr>
+								<th>Updated</th>
+								<th>Report</th>
+								<th>Transaction</th>
+								<th>Kind</th>
+								<th>Delivery</th>
+								<th>Status</th>
+								<th>Target results</th>
+								<th>Estimated net (ETH)</th>
+								<th>Tracked net (ETH)</th>
+								<th>Actual gas</th>
+							</tr>
+						</thead>
+						<tbody id="transactions-body"></tbody>
+					</table>
+				</div>
+				<p id="transactions-empty" class="empty-state">No transaction has been signed by this process.</p>
+			</section>
+
+			<section class="panel">
+				<div class="section-heading">
+					<div>
 						<p class="eyebrow">Confirmed submissions</p>
 						<h2>Execution history</h2>
 					</div>
 					<span class="muted">Stored on this operator host</span>
 				</div>
-				<div id="profit-chart" class="profit-chart" aria-label="Estimated profit trend for displayed history"></div>
+				<div id="profit-chart" class="profit-chart" aria-label="Tracked net profit in ETH for displayed history"></div>
 				<div class="table-scroll" tabindex="0" aria-label="Execution history table">
 					<table>
 						<thead>
@@ -157,7 +218,8 @@
 								<th>Time</th>
 								<th>Report</th>
 								<th>Direction</th>
-								<th>Estimated net</th>
+								<th>Modeled net (ETH)</th>
+								<th>Tracked net (ETH)</th>
 								<th>Actual gas</th>
 								<th>Inventory used</th>
 								<th>Transaction</th>

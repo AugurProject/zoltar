@@ -24,6 +24,8 @@ describe('startup configuration', () => {
 		['--max-spot-twap-ticks=-1', 'Maximum spot/TWAP ticks must be a non-negative integer'],
 		['--poll-ms=999', 'Poll interval must be an integer from 1000 to 3600000'],
 		['--lookback-blocks=-1', 'lookback-blocks must be a non-negative integer'],
+		['--submission-mode=unknown', 'Submission mode must be public or private'],
+		['--relay-url=http://relay.example', 'Relay URL must use HTTPS'],
 	])('rejects %s before starting RPC activity', async (argument, message) => {
 		const result = await invalidStartup(argument)
 		expect(result.exitCode).toBe(1)

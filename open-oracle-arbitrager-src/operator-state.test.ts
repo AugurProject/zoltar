@@ -3,10 +3,11 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Address, Hex } from '@zoltar/shared/ethereum'
-import { appendExecutionHistory, ensureExecutionHistoryWritable, loadExecutionHistory, operatorSnapshot, updateStrategyFromRequest, type ExecutionRecord, type MutableStrategy, type OperatorState } from './operator-state.js'
+import { appendExecutionHistory, decimalSignedEth, ensureExecutionHistoryWritable, loadExecutionHistory, operatorSnapshot, parseSignedDecimalEth, updateStrategyFromRequest, type ExecutionRecord, type MutableStrategy, type OperatorState } from './operator-state.js'
 
 const temporaryDirectories: string[] = []
 const address = '0x0000000000000000000000000000000000000001' as Address
+const submission = { mode: 'public', relayUrls: ['https://relay.flashbots.net/'] } as const
 
 function strategy(): MutableStrategy {
 	return {
@@ -51,6 +52,11 @@ describe('operator strategy settings', () => {
 		expect(current).toEqual(before)
 		expect(() => updateStrategyFromRequest(current, { ...settings(), execute: true })).toThrow('Unknown strategy setting')
 	})
+
+	test('preserves negative ETH profitability', () => {
+		expect(parseSignedDecimalEth('-0.0015')).toBe(-15n * 10n ** 14n)
+		expect(decimalSignedEth(-15n * 10n ** 14n)).toBe('-0.0015')
+	})
 })
 
 describe('operator execution history', () => {
@@ -63,12 +69,14 @@ describe('operator execution history', () => {
 			blockNumber: '100',
 			direction: 'sell-rep',
 			estimatedNetProfitWeth: '0.05',
+			estimatedProfitBeforeGasEth: '0.052',
 			executedAt: '2026-07-24T00:00:00.000Z',
 			pool: address,
 			poolFee: 10_000,
 			reportId: '7',
 			requiredRep: '1',
 			requiredWeth: '2',
+			trackedNetProfitEth: '0.05',
 			transactionHash: `0x${'12'.repeat(32)}` as Hex,
 		}
 		await writeFile(path, 'not-json\n', 'utf8')
@@ -86,8 +94,9 @@ describe('operator execution history', () => {
 			opportunities: [],
 			paused: false,
 			status: 'sleeping',
+			transactionActivity: [],
 		}
-		const snapshot = operatorSnapshot(state, strategy(), { execute: false, openOracle: address, wallet: undefined })
+		const snapshot = operatorSnapshot(state, strategy(), submission, { execute: false, openOracle: address, wallet: undefined })
 		expect(snapshot.totalEstimatedNetProfitWeth).toBe('0.05')
 		expect(snapshot.totalActualGasCostEth).toBe('0.002')
 	})
@@ -111,12 +120,14 @@ describe('operator execution history', () => {
 			blockNumber: index.toString(),
 			direction: 'buy-rep' as const,
 			estimatedNetProfitWeth: '0.002',
+			estimatedProfitBeforeGasEth: '0.003',
 			executedAt: new Date(index * 1_000).toISOString(),
 			pool: address,
 			poolFee: 3_000,
 			reportId: index.toString(),
 			requiredRep: '1',
 			requiredWeth: '2',
+			trackedNetProfitEth: '0.002',
 			transactionHash: `0x${index.toString(16).padStart(64, '0')}` as Hex,
 		}))
 		await writeFile(path, `${records.map(record => JSON.stringify(record)).join('\n')}\n`, 'utf8')
@@ -132,11 +143,13 @@ describe('operator execution history', () => {
 			opportunities: [],
 			paused: false,
 			status: 'sleeping',
+			transactionActivity: [],
 		}
-		const snapshot = operatorSnapshot(state, strategy(), { execute: true, openOracle: address, wallet: address })
+		const snapshot = operatorSnapshot(state, strategy(), submission, { execute: true, openOracle: address, wallet: address })
 		expect(snapshot.executionHistory).toHaveLength(500)
 		expect(snapshot.executionHistoryRecordCount).toBe(501)
 		expect(snapshot.totalEstimatedNetProfitWeth).toBe('1.002')
 		expect(snapshot.totalActualGasCostEth).toBe('0.501')
+		expect(snapshot.totalTrackedNetProfitEth).toBe('1.002')
 	})
 })

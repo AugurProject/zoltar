@@ -1,8 +1,10 @@
-import type { ExecutionRecord, OperatorSnapshot, OpportunitySnapshot, StrategySettings } from './operator-state.js'
+import type { ExecutionRecord, OperatorSnapshot, OpportunitySnapshot, StrategySettings, TransactionActivity } from './operator-state.js'
+import type { SubmissionSettings } from './transaction-submission.js'
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
 let latestSnapshot: OperatorSnapshot | undefined
 let settingsLoaded = false
+let submissionLoaded = false
 let connected = false
 
 function element<T extends HTMLElement>(id: string) {
@@ -21,6 +23,9 @@ function setControlsEnabled(enabled: boolean) {
 	const fieldset = element('strategy-fieldset')
 	if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error('Missing strategy fieldset')
 	fieldset.disabled = !enabled
+	const submissionFieldset = element('submission-fieldset')
+	if (!(submissionFieldset instanceof HTMLFieldSetElement)) throw new Error('Missing submission fieldset')
+	submissionFieldset.disabled = !enabled
 }
 
 function shorten(value: string, leading = 8, trailing = 6) {
@@ -39,7 +44,7 @@ function statusLabel(value: OperatorSnapshot['status']) {
 }
 
 function isSnapshot(value: unknown): value is OperatorSnapshot {
-	return typeof value === 'object' && value !== null && 'status' in value && 'settings' in value && 'opportunities' in value && 'executionHistory' in value
+	return typeof value === 'object' && value !== null && 'status' in value && 'settings' in value && 'submission' in value && 'opportunities' in value && 'executionHistory' in value && 'transactionActivity' in value
 }
 
 async function api<T>(path: string, init?: RequestInit) {
@@ -116,9 +121,7 @@ function renderOpportunities(opportunities: readonly OpportunitySnapshot[]) {
 	const body = element<HTMLTableSectionElement>('opportunities-body')
 	body.replaceChildren()
 	for (const opportunity of opportunities) {
-		body.append(
-			row([opportunity.reportId, decisionBadge(opportunity), opportunity.direction, amount(opportunity.estimatedNetProfitWeth, 'WETH'), amount(opportunity.requiredWeth, 'WETH'), amount(opportunity.requiredRep, 'REP'), `${opportunity.timeRemaining} ${opportunity.windowUnit}`, link(opportunity.pool, 'address')]),
-		)
+		body.append(row([opportunity.reportId, decisionBadge(opportunity), opportunity.direction, amount(opportunity.estimatedNetProfitEth, 'ETH'), amount(opportunity.requiredWeth, 'WETH'), amount(opportunity.requiredRep, 'REP'), `${opportunity.timeRemaining} ${opportunity.windowUnit}`, link(opportunity.pool, 'address')]))
 	}
 	element('opportunities-empty').hidden = opportunities.length !== 0
 	setText('opportunity-count', `${opportunities.length.toString()} evaluated`)
@@ -128,7 +131,18 @@ function renderHistory(history: readonly ExecutionRecord[], recordCount: number)
 	const body = element<HTMLTableSectionElement>('history-body')
 	body.replaceChildren()
 	for (const record of history) {
-		body.append(row([new Date(record.executedAt).toLocaleString(), record.reportId, record.direction, amount(record.estimatedNetProfitWeth, 'WETH'), amount(record.actualGasCostEth, 'ETH'), `${amount(record.requiredWeth, 'WETH')} · ${amount(record.requiredRep, 'REP')}`, link(record.transactionHash, 'tx')]))
+		body.append(
+			row([
+				new Date(record.executedAt).toLocaleString(),
+				record.reportId,
+				record.direction,
+				amount(record.estimatedNetProfitWeth, 'ETH'),
+				amount(record.trackedNetProfitEth, 'ETH'),
+				amount(record.actualGasCostEth, 'ETH'),
+				`${amount(record.requiredWeth, 'WETH')} · ${amount(record.requiredRep, 'REP')}`,
+				link(record.transactionHash, 'tx'),
+			]),
+		)
 	}
 	element('history-empty').hidden = history.length !== 0
 	renderProfitChart(history, recordCount)
@@ -141,7 +155,7 @@ function renderProfitChart(history: readonly ExecutionRecord[], recordCount: num
 	const chronological = [...history].reverse()
 	let total = 0
 	const values = chronological.map(record => {
-		total += Number(record.estimatedNetProfitWeth)
+		total += Number(record.trackedNetProfitEth)
 		return total
 	})
 	const minimum = Math.min(0, ...values)
@@ -158,7 +172,7 @@ function renderProfitChart(history: readonly ExecutionRecord[], recordCount: num
 	svg.setAttribute('viewBox', `0 0 ${width.toString()} ${height.toString()}`)
 	svg.setAttribute('role', 'img')
 	const title = document.createElementNS(SVG_NAMESPACE, 'title')
-	title.textContent = 'Estimated net profit trend for the displayed submitted disputes'
+	title.textContent = 'Tracked net profit in ETH for the displayed submitted disputes'
 	const baseline = document.createElementNS(SVG_NAMESPACE, 'line')
 	const baselineY = height - ((0 - minimum) / range) * (height - 16) - 8
 	baseline.setAttribute('x1', '0')
@@ -176,9 +190,9 @@ function renderProfitChart(history: readonly ExecutionRecord[], recordCount: num
 	const summary = document.createElement('div')
 	summary.className = 'profit-chart-summary'
 	const label = document.createElement('span')
-	label.textContent = recordCount > history.length ? `Estimated net profit trend · latest ${history.length.toString()} of ${recordCount.toString()} records` : `Estimated net profit trend · ${recordCount.toString()} records`
+	label.textContent = recordCount > history.length ? `Tracked net profit · latest ${history.length.toString()} of ${recordCount.toString()} records` : `Tracked net profit · ${recordCount.toString()} records`
 	const value = document.createElement('strong')
-	value.textContent = amount(total.toString(), 'WETH')
+	value.textContent = amount(total.toString(), 'ETH')
 	summary.append(label, value)
 	container.append(summary, svg)
 }
@@ -199,12 +213,48 @@ function loadSettings(settings: StrategySettings) {
 	input('pollMilliseconds').value = settings.pollMilliseconds.toString()
 }
 
+function loadSubmission(submission: SubmissionSettings) {
+	const mode = element<HTMLSelectElement>('submission-mode')
+	mode.value = submission.mode
+	element<HTMLTextAreaElement>('relay-urls').value = submission.relayUrls.join('\n')
+}
+
+function renderTransactions(transactions: readonly TransactionActivity[]) {
+	const body = element<HTMLTableSectionElement>('transactions-body')
+	body.replaceChildren()
+	for (const transaction of transactions) {
+		const accepted = transaction.acceptedTargets.map(target => `accepted: ${target}`)
+		const failed = transaction.failedTargets.map(target => `failed: ${target.target}${target.error === undefined ? '' : ` (${target.error})`}`)
+		const targets = [...accepted, ...failed].join(', ') || '—'
+		body.append(
+			row([
+				new Date(transaction.updatedAt).toLocaleString(),
+				transaction.reportId,
+				link(transaction.hash, 'tx'),
+				transaction.kind.replaceAll('-', ' '),
+				transaction.mode,
+				transaction.status.replaceAll('-', ' '),
+				targets,
+				amount(transaction.estimatedNetProfitEth, 'ETH'),
+				amount(transaction.trackedNetProfitEth, 'ETH'),
+				amount(transaction.actualGasCostEth, 'ETH'),
+			]),
+		)
+	}
+	element('transactions-empty').hidden = transactions.length !== 0
+	setText('transaction-count', `${transactions.length.toString()} tracked`)
+}
+
 function render(snapshot: OperatorSnapshot) {
 	latestSnapshot = snapshot
 	setControlsEnabled(true)
 	if (!settingsLoaded) {
 		loadSettings(snapshot.settings)
 		settingsLoaded = true
+	}
+	if (!submissionLoaded) {
+		loadSubmission(snapshot.submission)
+		submissionLoaded = true
 	}
 	const modeBadge = element('mode-badge')
 	modeBadge.dataset['mode'] = snapshot.mode
@@ -213,7 +263,7 @@ function render(snapshot: OperatorSnapshot) {
 	setText('last-poll-value', snapshot.lastPollAt === undefined ? 'No poll completed' : `Updated ${new Date(snapshot.lastPollAt).toLocaleTimeString()}`)
 	setText('active-report-value', snapshot.activeReportCount.toString())
 	setText('block-value', snapshot.blockNumber === undefined ? 'Block —' : `Block ${snapshot.blockNumber}`)
-	setText('profit-value', amount(snapshot.totalEstimatedNetProfitWeth, 'WETH'))
+	setText('profit-value', amount(snapshot.totalTrackedNetProfitEth, 'ETH'))
 	setText('gas-value', amount(snapshot.totalActualGasCostEth, 'ETH'))
 	setText('oracle-address', `Oracle ${snapshot.openOracle}`)
 	const pauseButton = element<HTMLButtonElement>('pause-button')
@@ -242,6 +292,7 @@ function render(snapshot: OperatorSnapshot) {
 	notice.dataset['tone'] = noticeTone
 	renderBalances(snapshot)
 	renderOpportunities(snapshot.opportunities)
+	renderTransactions(snapshot.transactionActivity)
 	renderHistory(snapshot.executionHistory, snapshot.executionHistoryRecordCount)
 }
 
@@ -304,6 +355,36 @@ element<HTMLFormElement>('strategy-form').addEventListener('submit', async event
 		await refresh()
 	} catch (error) {
 		setText('form-status', error instanceof Error ? error.message : String(error))
+		await refresh()
+	} finally {
+		button.disabled = !connected
+	}
+})
+
+element<HTMLFormElement>('submission-form').addEventListener('submit', async event => {
+	event.preventDefault()
+	const button = element<HTMLFormElement>('submission-form').querySelector('button[type="submit"]')
+	if (!(button instanceof HTMLButtonElement)) return
+	button.disabled = true
+	setText('submission-status', 'Applying submission settings…')
+	try {
+		const submission = {
+			mode: element<HTMLSelectElement>('submission-mode').value,
+			relayUrls: element<HTMLTextAreaElement>('relay-urls')
+				.value.split('\n')
+				.map(value => value.trim())
+				.filter(value => value !== ''),
+		}
+		const response = await api<{ submission: SubmissionSettings }>('/api/submission', {
+			body: JSON.stringify(submission),
+			headers: { 'content-type': 'application/json' },
+			method: 'PUT',
+		})
+		loadSubmission(response.submission)
+		setText('submission-status', 'Submission settings updated. Applies to the next scan.')
+		await refresh()
+	} catch (error) {
+		setText('submission-status', error instanceof Error ? error.message : String(error))
 		await refresh()
 	} finally {
 		button.disabled = !connected

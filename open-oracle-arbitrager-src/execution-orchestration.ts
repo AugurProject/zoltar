@@ -34,7 +34,7 @@ function isRejectedReplacementError(error: unknown) {
 	return error instanceof Error && error.name === 'RejectedTransactionReplacementError'
 }
 
-export async function waitForResolvedTransaction(hash: Hex, wait: (parameters: { hash: Hex; onReplaced: (replacement: TransactionReplacement) => void }) => Promise<TransactionReceipt>, retryDelay: () => Promise<unknown> = () => Bun.sleep(1_000), onRetry: (error: unknown) => void = () => {}) {
+export async function waitForResolvedTransaction(hash: Hex, wait: (parameters: { hash: Hex; onReplaced: (replacement: TransactionReplacement) => void }) => Promise<TransactionReceipt>, retryDelay: () => Promise<unknown> = () => Bun.sleep(1_000), onRetry: (error: unknown) => Promise<unknown> | unknown = () => {}) {
 	while (true) {
 		let replacement: TransactionReplacement | undefined
 		try {
@@ -48,7 +48,7 @@ export async function waitForResolvedTransaction(hash: Hex, wait: (parameters: {
 			return receipt
 		} catch (error) {
 			if (isRejectedReplacementError(error)) throw error
-			onRetry(error)
+			await onRetry(error)
 			await retryDelay()
 		}
 	}

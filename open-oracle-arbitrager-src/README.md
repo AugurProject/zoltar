@@ -4,7 +4,7 @@ The OpenOracle arbitrager monitors active mainnet WETH/REP games, compares their
 locked exchange against executable Uniswap V3 quotes, and identifies disputes whose
 modeled hedge remains profitable after OpenOracle fees and gas. It includes a local
 operator dashboard for live state, strategy controls, wallet inventory, submitted
-disputes, and estimated profit.
+disputes, transaction delivery, and ETH-denominated profit tracking.
 
 Dry-run is the default. The bot cannot submit a transaction unless it is explicitly
 started with both `--execute` and a `PRIVATE_KEY`.
@@ -19,8 +19,9 @@ started with both `--execute` and a `PRIVATE_KEY`.
   - ETH for approvals and dispute gas.
   - WETH for the token-1 contribution shown in the dashboard.
   - REP for the token-2 contribution shown in the dashboard.
-- Private transaction delivery for execution. Public mempool submission exposes the
-  quote and dispute to front-running and adverse inclusion.
+- A choice of public-mempool or private-relay delivery. Private delivery is
+  recommended to reduce exposure of the quote and dispute to front-running and
+  adverse inclusion.
 - Operational procedures for settlement, OpenOracle withdrawals, and inventory
   rebalancing. This process submits disputes; it does not settle games or perform a
   separate Uniswap hedge.
@@ -81,8 +82,30 @@ ETH_RPC_URL=https://your-private-mainnet-rpc.example \
 ```
 
 Execution remains fixed for the lifetime of the process. It cannot be enabled from
-the dashboard. The dashboard can pause scanning and adjust strategy parameters, but
-restarting the command is required to change between dry-run and execution.
+the dashboard. The dashboard can pause scanning and adjust strategy or submission
+settings, but restarting the command is required to change between dry-run and
+execution.
+
+Public mempool delivery is the default. To send the same signed transaction to
+multiple private relays instead:
+
+```bash
+PRIVATE_KEY=0xYourDedicatedPrivateKey \
+ETH_RPC_URL=https://your-mainnet-rpc.example \
+  ./open-oracle-arbitrager \
+  --open-oracle=0xYourOpenOracle \
+  --execute \
+  --submission-mode=private \
+  --relay-url=https://relay.flashbots.net \
+  --relay-url=https://your-second-relay.example \
+  --ui
+```
+
+Choose **Public mempool** or **Private relays** in the dashboard to change delivery
+for the next scan. Private mode requires at least one relay and supports up to eight.
+Relay URLs are process memory only and are not written to the history file. URLs may
+use HTTPS, or loopback HTTP for a locally operated relay; embedded URL credentials
+and fragments are rejected.
 
 Before each dispute, the bot:
 
@@ -95,8 +118,12 @@ Before each dispute, the bot:
 7. Approves only the prepared contribution amounts.
 8. Refreshes pool state, quotes, gas, deadline, inventory requirements, and the
    OpenOracle state hash.
-9. Simulates the current dispute call, submits it, waits for a successful receipt,
-   and records the transaction locally.
+9. Estimates gas, fetches the pending nonce, constructs and signs one canonical
+   EIP-1559 transaction.
+10. Sends that identical signed payload either to the public RPC or every configured
+    private relay.
+11. Tracks submission targets and confirmation, waits for a successful receipt, and
+    records the mined transaction and ETH profitability calculation locally.
 
 Reports already owned by the execution account are skipped because OpenOracle
 self-disputes use different accounting. At most one dispute is executed per poll so
@@ -152,7 +179,9 @@ The dashboard shows:
 - Confirmed dispute transactions, estimated net profit, actual gas, and an
   all-history cumulative summary. The table and trend are bounded to the latest 500
   records; the summary still includes every valid unique record in the history file.
-- Runtime strategy controls and pause/resume.
+- Signed transaction status, public/private delivery, accepted and failed relay
+  targets, mined replacement hash, actual gas, and ETH profit estimates.
+- Runtime strategy and submission controls plus pause/resume.
 
 The UI is intentionally local-only and does not receive the private key. Mutable API
 requests require same-origin JSON and the fixed loopback host authority. Do not
@@ -177,22 +206,53 @@ Successful dispute submissions are appended to
 
 The history file is created with owner-only permissions when possible and is ignored
 by Git at its default path. Each record contains the report, pool, direction,
-contributed inventory, transaction hash, block, actual transaction gas, and modeled
-net profit at submission. Actual gas includes the approval transactions and confirmed
-dispute for that successful recorded execution. Gas from an attempt that aborts after
-an approval but before a successful dispute is not included in dashboard totals or
-historical trade records; reconcile those failed-attempt costs from the wallet's
+contributed inventory, mined transaction hash, block, actual transaction gas,
+modeled net profit, profit before gas, and tracked net profit in ETH. Actual gas
+includes the approval transactions and confirmed dispute for that successful
+recorded execution. Gas from an attempt that aborts after an approval but before a
+successful dispute is shown in the in-memory transaction tracker but is not included
+in confirmed-history totals; reconcile all attempt costs against the wallet's
 on-chain transactions.
 
 Execution startup verifies that the history destination is writable. If persistence
 later fails after a confirmed dispute, the record remains visible in memory, further
 execution is blocked, and the bot retries the queued write on later polls.
 
-**Estimated net profit is not realized profit.** It is the executable quote model
-after OpenOracle fees and the bot's 600,000-gas allowance. Final P&L also depends on
-later disputes, settlement, withdrawals, external rebalancing, inventory price
-changes, and any transactions not sent by this process. The dashboard therefore
-labels these values as estimated and reports actual gas separately.
+Profit is tracked in ETH using the exact 1 WETH = 1 ETH unwrap relationship:
+
+```text
+modeled net ETH = quoted proceeds − hedge cost − modeled gas allowance
+tracked net ETH = quoted proceeds − hedge cost − actual approval/dispute gas
+```
+
+**Tracked net profit is still not realized profit.** It combines the submission-time
+executable Uniswap quote with mined gas cost. Final P&L also depends on later
+disputes, settlement, withdrawals, whether and where the external hedge executes,
+inventory price changes, relay refunds, and transactions not sent by this process.
+Negative tracked net profit is retained and included in cumulative totals.
+
+## Transaction delivery and tracking
+
+Public mode calls `eth_sendRawTransaction` on `ETH_RPC_URL`, exposing the signed
+transaction to the public mempool. Private mode calls
+`eth_sendPrivateTransaction` on every configured relay, authenticating each JSON-RPC
+body with `X-Flashbots-Signature` using the execution key. At least one private relay
+must accept the exact expected transaction hash or submission fails closed.
+Configured endpoints must implement the
+[Flashbots private-transaction RPC](https://docs.flashbots.net/flashbots-auction/advanced/rpc-endpoint#eth_sendprivatetransaction)
+and authentication format.
+
+The transaction tracker records approvals and disputes as `submitting`, `pending`,
+`confirmation unknown`, `confirmed`, `reverted`, or `submission failed`. It shows
+which targets accepted or rejected the payload. Receipt timeouts keep execution
+blocked. Private approval payloads can refresh their 25-block inclusion window.
+Dispute payloads are capped at the final block accepted by their embedded OpenOracle
+quote and are never resubmitted after that block. Repriced replacements are followed
+from the locally signed sender and nonce even while the private transaction is not
+visible to the public RPC; the mined replacement hash becomes the tracked and
+historical hash. Active transaction lifecycle rows are kept in process memory and
+reset on restart; confirmed dispute history and its ETH profit totals are persisted
+in the configured history file.
 
 ## Adjust the strategy
 
@@ -223,6 +283,8 @@ Other startup-only options:
 | `--history-file` | `.open-oracle-arbitrager/history.jsonl` | Persistent confirmed-submission history. |
 | `--once` | off | Run one scan and exit. Cannot be combined with `--ui`. |
 | `--execute` | off | Enable guarded approval and dispute submission. Requires `PRIVATE_KEY`. |
+| `--submission-mode` | `public` | `public` submits to the RPC mempool; `private` fans out to configured relays. Adjustable in the dashboard. |
+| `--relay-url` | `https://relay.flashbots.net` | Private relay endpoint. Repeat the flag for up to eight relays; adjustable in the dashboard. |
 
 ## Operational limitations
 
@@ -232,6 +294,13 @@ Other startup-only options:
   execution.
 - The bot does not use a flash swap, settle reports, withdraw OpenOracle balances, or
   rebalance inventory.
+- Private delivery reduces public-mempool exposure but does not guarantee
+  confidentiality, inclusion, fair ordering, or relay/builder behavior. Configuring
+  multiple relays shares the signed payload with every listed operator.
+- Public RPCs offer no standard per-transaction inclusion deadline. A public dispute
+  that remains pending after its embedded one-block quote window can still be mined,
+  revert the contract timing check, and spend gas. Private relay mode caps the relay
+  inclusion request to that same on-chain window.
 - A 12-block event overlap is replayed on every poll to tolerate short
   reorganizations. Operators still need independent alerting for deeper reorgs and
   RPC disagreement.
@@ -242,6 +311,9 @@ Other startup-only options:
   the execution loop blocked while confirmation is retried. Repriced replacements
   are followed and recorded under the mined hash; cancellations and unrelated
   replacements fail definitively.
+- A process restart does not recover or resume a broadcast but unconfirmed
+  transaction. Reconcile the execution account nonce and transaction status before
+  restarting execution mode.
 - The current ORACLE-A1 launch analysis concludes that observed REP/WETH executable
   liquidity is insufficient for deployment. Running this tool does not override that
   launch gate.

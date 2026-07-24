@@ -28,7 +28,9 @@ body {
 }
 
 button,
-input {
+input,
+select,
+textarea {
 	font: inherit;
 }
 
@@ -41,6 +43,8 @@ fieldset {
 
 button:focus-visible,
 input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
 .table-scroll:focus-visible {
 	outline: 2px solid var(--accent);
 	outline-offset: 3px;
@@ -294,6 +298,32 @@ input {
 	font-family: var(--mono);
 }
 
+select,
+textarea {
+	width: 100%;
+	padding: 10px 11px;
+	border: 1px solid var(--border-strong);
+	border-radius: 6px;
+	background: #0b1017;
+	color: var(--text);
+	font-family: var(--mono);
+}
+
+select {
+	height: 42px;
+}
+
+textarea {
+	min-height: 84px;
+	resize: vertical;
+}
+
+.submission-grid {
+	display: grid;
+	grid-template-columns: minmax(180px, 0.35fr) minmax(360px, 1fr);
+	gap: 14px;
+}
+
 .form-actions {
 	justify-content: space-between;
 	margin-top: 18px;
@@ -471,6 +501,10 @@ footer {
 	}
 
 	.field-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.submission-grid {
 		grid-template-columns: 1fr;
 	}
 

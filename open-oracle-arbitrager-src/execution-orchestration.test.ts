@@ -12,12 +12,14 @@ const record: ExecutionRecord = {
 	blockNumber: '100',
 	direction: 'sell-rep',
 	estimatedNetProfitWeth: '0.05',
+	estimatedProfitBeforeGasEth: '0.052',
 	executedAt: '2026-07-24T00:00:00.000Z',
 	pool: address,
 	poolFee: 10_000,
 	reportId: '7',
 	requiredRep: '1',
 	requiredWeth: '2',
+	trackedNetProfitEth: '0.05',
 	transactionHash: `0x${'12'.repeat(32)}` as Hex,
 }
 
@@ -153,17 +155,21 @@ describe('funded execution orchestration', () => {
 	test('blocks on transient confirmation failures and records a repriced replacement', async () => {
 		let attempts = 0
 		const retries: unknown[] = []
+		let retryCompleted = false
 		const receipt = await waitForResolvedTransaction(
 			originalHash,
 			async ({ onReplaced }) => {
 				attempts += 1
 				if (attempts === 1) throw new Error('receipt RPC timed out')
+				expect(retryCompleted).toBe(true)
 				onReplaced(replacement('repriced'))
 				return transactionReceipt()
 			},
 			() => Promise.resolve(),
-			error => {
+			async error => {
+				await Promise.resolve()
 				retries.push(error)
+				retryCompleted = true
 			},
 		)
 		expect(attempts).toBe(2)

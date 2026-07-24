@@ -2,6 +2,7 @@ import { afterEach, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/shared/ethereum'
 import { startDashboardServer } from './dashboard-server.js'
 import { operatorSnapshot, updateStrategyFromRequest, type MutableStrategy, type OperatorState } from './operator-state.js'
+import { validateSubmissionSettings } from './transaction-submission.js'
 
 const servers: ReturnType<typeof startDashboardServer>[] = []
 const address = '0x0000000000000000000000000000000000000001' as Address
@@ -30,11 +31,17 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 		opportunities: [],
 		paused: false,
 		status: 'sleeping',
+		transactionActivity: [],
 	}
+	let submission = validateSubmissionSettings({ mode: 'public', relayUrls: ['https://relay.flashbots.net'] })
 	const server = startDashboardServer(0, {
-		getSnapshot: () => operatorSnapshot(state, strategy, { execute: false, openOracle: address, wallet: undefined }),
+		getSnapshot: () => operatorSnapshot(state, strategy, submission, { execute: false, openOracle: address, wallet: undefined }),
 		setPaused: paused => {
 			state.paused = paused
+		},
+		updateSubmission: value => {
+			submission = validateSubmissionSettings(value)
+			return submission
 		},
 		updateStrategy: value => updateStrategyFromRequest(strategy, value),
 	})
@@ -47,6 +54,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(pageSource).toContain('OpenOracle Arbitrager')
 	expect(pageSource).toContain('id="pause-button" class="button" type="button" disabled')
 	expect(pageSource).toContain('id="strategy-fieldset" disabled')
+	expect(pageSource).toContain('id="submission-fieldset" disabled')
 	const browserScript = await fetch(`${origin}/dashboard.js`)
 	expect(browserScript.headers.get('content-type')).toContain('text/javascript')
 	expect(await browserScript.text()).toContain('setInterval')
@@ -88,6 +96,14 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	})
 	expect(update.status).toBe(200)
 	expect(strategy.minimumProfitWeth).toBe(25n * 10n ** 15n)
+	const submissionUpdate = await fetch(`${origin}/api/submission`, {
+		body: JSON.stringify({ mode: 'private', relayUrls: ['https://relay.flashbots.net', 'https://relay.example'] }),
+		headers: { 'content-type': 'application/json', origin },
+		method: 'PUT',
+	})
+	expect(submissionUpdate.status).toBe(200)
+	expect(submission.mode).toBe('private')
+	expect(submission.relayUrls).toHaveLength(2)
 })
 
 test('returns a structured unavailable response when the initial state read fails', async () => {
@@ -96,6 +112,9 @@ test('returns a structured unavailable response when the initial state read fail
 			throw new Error('RPC unavailable')
 		},
 		setPaused: () => undefined,
+		updateSubmission: () => {
+			throw new Error('Submission unavailable')
+		},
 		updateStrategy: () => {
 			throw new Error('Settings unavailable')
 		},

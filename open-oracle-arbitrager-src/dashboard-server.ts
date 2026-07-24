@@ -1,10 +1,12 @@
 import { join } from 'node:path'
 import type { OperatorSnapshot, StrategySettings } from './operator-state.js'
+import type { SubmissionSettings } from './transaction-submission.js'
 
 type DashboardController = {
 	getSnapshot: () => OperatorSnapshot | Promise<OperatorSnapshot>
 	setPaused: (paused: boolean) => void
 	updateStrategy: (value: unknown) => StrategySettings
+	updateSubmission: (value: unknown) => SubmissionSettings
 }
 
 function json(value: unknown, status = 200) {
@@ -68,6 +70,14 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
 				try {
 					return json({ settings: controller.updateStrategy(await requireJson(request)) })
+				} catch (error) {
+					return json({ error: errorMessage(error) }, 400)
+				}
+			}
+			if (request.method === 'PUT' && url.pathname === '/api/submission') {
+				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
+				try {
+					return json({ submission: controller.updateSubmission(await requireJson(request)) })
 				} catch (error) {
 					return json({ error: errorMessage(error) }, 400)
 				}

@@ -1,14 +1,30 @@
 #!/usr/bin/env bun
 
 import { resolve } from 'node:path'
-import { createPublicClient, createWalletClient, formatEther, getAddress, http, mainnet, privateKeyToAccount, type Account, type Address, type Chain, type Hex, type PublicClient, type TransactionLog, type Transport, type WalletClient, zeroAddress } from '@zoltar/shared/ethereum'
+import { createPublicClient, createWalletClient, encodeFunctionData, formatEther, getAddress, http, mainnet, privateKeyToAccount, type Account, type Address, type Chain, type Hex, type PublicClient, type TransactionLog, type Transport, type WalletClient, zeroAddress } from '@zoltar/shared/ethereum'
 import { decodeOpenOracleStatePreimage, getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
 import { erc20Abi, factoryAbi, openOracleAbi, poolAbi, quoterAbi } from './abi.js'
 import { startDashboardServer } from './dashboard-server.js'
 import { executionFailureDecision, flushExecutionHistory, opportunityDecision, recordConfirmedExecution, runFundedExecution, selectBestExecution, waitForResolvedTransaction } from './execution-orchestration.js'
-import { appendExecutionHistory, decimalWeth, ensureExecutionHistoryWritable, loadExecutionHistory, operatorSnapshot, strategySettings, updateStrategyFromRequest, type BalanceSnapshot, type ExecutionRecord, type MutableStrategy, type OperatorState, type OpportunitySnapshot } from './operator-state.js'
+import {
+	appendExecutionHistory,
+	decimalSignedEth,
+	decimalWeth,
+	ensureExecutionHistoryWritable,
+	loadExecutionHistory,
+	operatorSnapshot,
+	strategySettings,
+	updateStrategyFromRequest,
+	type BalanceSnapshot,
+	type ExecutionRecord,
+	type MutableStrategy,
+	type OperatorState,
+	type OpportunitySnapshot,
+	type TransactionActivity,
+} from './operator-state.js'
 import { bestSuccessful, pollUntilStopped, replaceOverlap } from './resilience.js'
-import { calculateContribution, calculateFee, calculateNextAmount1, deriveTokenToSwap, evaluateBuyRep, evaluateSellRep, hasFreshSubmissionWindow, isSelfReport, meetsProfitThreshold, type ArbitrageQuote } from './strategy.js'
+import { calculateContribution, calculateFee, calculateNextAmount1, calculateTrackedNetProfitEth, deriveTokenToSwap, evaluateBuyRep, evaluateSellRep, hasFreshSubmissionWindow, isSelfReport, meetsProfitThreshold, type ArbitrageQuote } from './strategy.js'
+import { assertSubmissionWindowOpen, mergeSubmissionFailures, prepareSignedTransaction, SubmissionFailure, submitSignedTransaction, validateSubmissionSettings, type SignedTransaction, type SubmissionSettings, type SubmittedTransaction, type SubmissionTargetResult } from './transaction-submission.js'
 
 const WETH = getAddress('0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2')
 const REP = getAddress('0x221657776846890989a759BA2973e427DfF5C9bB')
@@ -25,6 +41,7 @@ type Configuration = MutableStrategy & {
 	openOracle: Address
 	privateKey: Hex | undefined
 	rpcUrl: string
+	submission: SubmissionSettings
 	ui: boolean
 	uiPort: number
 }
@@ -73,6 +90,8 @@ Modes:
   --once                         Scan once and exit
   --ui                           Serve the local dashboard on 127.0.0.1
   --execute                      Submit guarded disputes (requires PRIVATE_KEY)
+  --submission-mode=public      Submit to public mempool (public) or private relays (private)
+  --relay-url=https://...        Private relay URL; repeat for multiple relays
 
 Strategy:
   --minimum-profit-weth=0.01     Absolute modeled net-profit floor
@@ -96,6 +115,11 @@ function option(name: string) {
 	const prefix = `--${name}=`
 	const found = process.argv.find(argument => argument.startsWith(prefix))
 	return found?.slice(prefix.length)
+}
+
+function options(name: string) {
+	const prefix = `--${name}=`
+	return process.argv.filter(argument => argument.startsWith(prefix)).map(argument => argument.slice(prefix.length))
 }
 
 function requiredAddress(name: string) {
@@ -135,6 +159,10 @@ function loadConfiguration(): Configuration {
 		openOracle: requiredAddress('open-oracle'),
 		privateKey,
 		rpcUrl: option('rpc-url') ?? process.env['ETH_RPC_URL'] ?? 'https://ethereum-rpc.publicnode.com',
+		submission: validateSubmissionSettings({
+			mode: option('submission-mode') ?? 'public',
+			relayUrls: options('relay-url').length === 0 ? ['https://relay.flashbots.net'] : options('relay-url'),
+		}),
 		ui: process.argv.includes('--ui'),
 		uiPort: Number(option('ui-port') ?? '4173'),
 	}
@@ -334,27 +362,167 @@ async function loadBalances(client: ReadClient, wallet: WriteClient | undefined,
 	return { raw, snapshot }
 }
 
-async function approveAndWait(wallet: WriteClient, token: Address, spender: Address, amount: bigint) {
+type TrackTransaction = (activity: TransactionActivity) => void
+
+type TrackedSubmission = SignedTransaction &
+	SubmittedTransaction & {
+		estimatedNetProfitEth: string | undefined
+		kind: TransactionActivity['kind']
+		reportId: string
+		submittedAt: string
+	}
+
+async function signContractTransaction(client: ReadClient, wallet: WriteClient, to: Address, data: Hex, estimateGas: () => Promise<bigint>, lastValidBlockNumber: bigint | undefined = undefined): Promise<SignedTransaction> {
+	const account = wallet.account
+	if (account === undefined || account.signTransaction === undefined) throw new Error('Execution requires a local transaction signer')
+	const [block, gasEstimate, nonce] = await Promise.all([client.getBlock(), estimateGas(), client.getTransactionCount({ address: account.address, blockTag: 'pending' })])
+	if (block.number === undefined) throw new Error('Cannot sign a transaction without the latest block number')
+	return prepareSignedTransaction({
+		baseFeePerGas: block.baseFeePerGas ?? 0n,
+		blockNumber: block.number,
+		data,
+		from: account.address,
+		gasEstimate,
+		lastValidBlockNumber,
+		nonce,
+		signTransaction: account.signTransaction,
+		to,
+	})
+}
+
+function trackedActivity(submission: TrackedSubmission, status: TransactionActivity['status'], actualGasCostEth: string | undefined = undefined, hash: Hex = submission.hash, trackedNetProfitEth: string | undefined = undefined): TransactionActivity {
+	return {
+		acceptedTargets: submission.acceptedTargets,
+		actualGasCostEth,
+		estimatedNetProfitEth: submission.estimatedNetProfitEth,
+		failedTargets: submission.failedTargets,
+		hash,
+		kind: submission.kind,
+		mode: submission.mode,
+		originalHash: submission.hash,
+		reportId: submission.reportId,
+		status,
+		submittedAt: submission.submittedAt,
+		trackedNetProfitEth,
+		updatedAt: new Date().toISOString(),
+	}
+}
+
+async function submitContractTransaction(client: ReadClient, wallet: WriteClient, config: Configuration, signed: SignedTransaction, details: { estimatedNetProfitEth: string | undefined; kind: TransactionActivity['kind']; reportId: string }, track: TrackTransaction): Promise<TrackedSubmission> {
+	const account = wallet.account
+	const signMessage = account?.signMessage
+	if (account === undefined || signMessage === undefined) throw new Error('Execution requires a local relay authentication signer')
+	const submittedAt = new Date().toISOString()
+	const initial: TrackedSubmission = {
+		...signed,
+		acceptedTargets: [],
+		estimatedNetProfitEth: details.estimatedNetProfitEth,
+		failedTargets: [],
+		kind: details.kind,
+		mode: config.submission.mode,
+		reportId: details.reportId,
+		submittedAt,
+	}
+	track(trackedActivity(initial, 'submitting'))
+	try {
+		if (signed.lastValidBlockNumber !== undefined) assertSubmissionWindowOpen(signed.lastValidBlockNumber, await client.getBlockNumber())
+		const result = await submitSignedTransaction({
+			address: account.address,
+			hash: signed.hash,
+			maxBlockNumber: signed.maxBlockNumber,
+			publicSubmit: serializedTransaction => wallet.sendRawTransaction({ serializedTransaction }),
+			serializedTransaction: signed.serializedTransaction,
+			settings: config.submission,
+			signMessage,
+		})
+		const submission = { ...initial, ...result }
+		track(trackedActivity(submission, 'pending'))
+		return submission
+	} catch (error) {
+		const failedTargets: readonly SubmissionTargetResult[] =
+			error instanceof SubmissionFailure
+				? error.failedTargets
+				: [
+						{
+							error: errorMessage(error),
+							target: config.submission.mode === 'public' ? 'public mempool' : 'private relay submission',
+						},
+					]
+		track(trackedActivity({ ...initial, failedTargets }, 'submission-failed'))
+		throw error
+	}
+}
+
+async function waitForTrackedTransaction(client: ReadClient, wallet: WriteClient, config: Configuration, submission: TrackedSubmission, track: TrackTransaction) {
+	const account = wallet.account
+	const signMessage = account?.signMessage
+	if (account === undefined || signMessage === undefined) throw new Error('Execution requires a local relay authentication signer')
+	let tracked = submission
+	const receipt = await waitForResolvedTransaction(
+		submission.hash,
+		parameters => wallet.waitForTransactionReceipt({ ...parameters, transaction: submission.transaction }),
+		undefined,
+		async error => {
+			console.error(`transaction=${submission.hash} confirmationRetry=${errorMessage(error)}`)
+			track(trackedActivity(tracked, 'confirmation-unknown'))
+			if (config.submission.mode !== 'private') return
+			const currentBlockNumber = await client.getBlockNumber()
+			if (tracked.lastValidBlockNumber !== undefined && currentBlockNumber >= tracked.lastValidBlockNumber) {
+				console.error(`transaction=${submission.hash} relayResubmissionSkipped=calldata-expired`)
+				return
+			}
+			try {
+				const defaultMaxBlockNumber = currentBlockNumber + 25n
+				const maxBlockNumber = tracked.lastValidBlockNumber === undefined || tracked.lastValidBlockNumber > defaultMaxBlockNumber ? defaultMaxBlockNumber : tracked.lastValidBlockNumber
+				const retried = await submitSignedTransaction({
+					address: account.address,
+					hash: submission.hash,
+					maxBlockNumber,
+					publicSubmit: serializedTransaction => wallet.sendRawTransaction({ serializedTransaction }),
+					serializedTransaction: submission.serializedTransaction,
+					settings: config.submission,
+					signMessage,
+				})
+				tracked = {
+					...tracked,
+					acceptedTargets: [...new Set([...tracked.acceptedTargets, ...retried.acceptedTargets])],
+					failedTargets: retried.failedTargets,
+					maxBlockNumber,
+				}
+				track(trackedActivity(tracked, 'pending'))
+			} catch (retryError) {
+				console.error(`transaction=${submission.hash} relayResubmissionFailed=${errorMessage(retryError)}`)
+				tracked = {
+					...tracked,
+					failedTargets: mergeSubmissionFailures(tracked.failedTargets, retryError),
+				}
+				track(trackedActivity(tracked, 'confirmation-unknown'))
+			}
+		},
+	)
+	const actualGasCostEth = decimalWeth(receipt.gasUsed * (receipt.effectiveGasPrice ?? 0n))
+	track(trackedActivity(tracked, receipt.status === 'success' ? 'confirmed' : 'reverted', actualGasCostEth, receipt.transactionHash))
+	return { receipt, tracked }
+}
+
+async function approveAndWait(client: ReadClient, wallet: WriteClient, config: Configuration, token: Address, spender: Address, amount: bigint, reportId: string, track: TrackTransaction) {
 	if (amount === 0n) return 0n
-	const hash = await wallet.writeContract({
+	const request = {
 		address: token,
 		abi: erc20Abi,
 		functionName: 'approve',
 		args: [spender, amount],
-	})
-	const receipt = await waitForResolvedTransaction(
-		hash,
-		parameters => wallet.waitForTransactionReceipt(parameters),
-		undefined,
-		error => {
-			console.error(`approval=${hash} confirmationRetry=${errorMessage(error)}`)
-		},
-	)
-	if (receipt.status !== 'success') throw new Error(`Approval transaction reverted: ${hash}`)
+	} as const
+	const data = encodeFunctionData(request)
+	const signed = await signContractTransaction(client, wallet, token, data, () => client.estimateContractGas({ ...request, account: wallet.account }))
+	const kind = token.toLowerCase() === WETH.toLowerCase() ? 'approval-weth' : 'approval-rep'
+	const submission = await submitContractTransaction(client, wallet, config, signed, { estimatedNetProfitEth: undefined, kind, reportId }, track)
+	const { receipt } = await waitForTrackedTransaction(client, wallet, config, submission, track)
+	if (receipt.status !== 'success') throw new Error(`Approval transaction reverted: ${receipt.transactionHash}`)
 	return receipt.gasUsed * (receipt.effectiveGasPrice ?? 0n)
 }
 
-async function executeDispute(client: ReadClient, wallet: WriteClient, config: Configuration, report: OpenOracleStatePreimage, quote: ArbitrageQuote, pool: Pool, isPaused: () => boolean): Promise<ExecutionRecord> {
+async function executeDispute(client: ReadClient, wallet: WriteClient, config: Configuration, report: OpenOracleStatePreimage, quote: ArbitrageQuote, pool: Pool, isPaused: () => boolean, track: TrackTransaction): Promise<ExecutionRecord> {
 	const account = wallet.account
 	if (account === undefined) throw new Error('Execution requires a local account')
 	const game = report.game
@@ -364,9 +532,10 @@ async function executeDispute(client: ReadClient, wallet: WriteClient, config: C
 	const preparedTokenToSwap = deriveTokenToSwap(game, newAmount1, preparedAmount2)
 	if (preparedTokenToSwap.toLowerCase() !== quote.tokenToSwap.toLowerCase()) throw new Error('Replacement ratio does not derive the selected arbitrage direction')
 	const preparedContribution = calculateContribution(game, preparedTokenToSwap, game.token1, newAmount1, preparedAmount2)
+	const reportId = report.helper.reportId.toString()
 	return runFundedExecution(isPaused, {
-		approveToken1: () => approveAndWait(wallet, game.token1, config.openOracle, preparedContribution.token1),
-		approveToken2: () => approveAndWait(wallet, game.token2, config.openOracle, preparedContribution.token2),
+		approveToken1: () => approveAndWait(client, wallet, config, game.token1, config.openOracle, preparedContribution.token1, reportId, track),
+		approveToken2: () => approveAndWait(client, wallet, config, game.token2, config.openOracle, preparedContribution.token2, reportId, track),
 		prepare: async () => {
 			const quoteBlock = await client.getBlock()
 			if (quoteBlock.number === undefined) throw new Error('Quote block is missing its number')
@@ -414,32 +583,34 @@ async function executeDispute(client: ReadClient, wallet: WriteClient, config: C
 				functionName: 'dispute',
 				args: [report.helper.reportId, newAmount1, newAmount2, account.address, false, false, getOpenOracleGameTuple(game), getOpenOracleHelperTuple(report.helper), [quoteBlock.number, 1n, quoteBlock.timestamp, config.minimumRemainingSeconds]],
 			} as const
-			return { contribution, refreshedPool, refreshedQuote, request }
+			return { contribution, lastValidBlockNumber: quoteBlock.number + 1n, refreshedPool, refreshedQuote, request }
 		},
 		simulate: prepared => wallet.simulateContract(prepared.request),
-		submit: prepared => wallet.writeContract(prepared.request),
-		confirm: async (hash, prepared, approvalGasCost) => {
-			const receipt = await waitForResolvedTransaction(
-				hash,
-				parameters => wallet.waitForTransactionReceipt(parameters),
-				undefined,
-				error => {
-					console.error(`dispute=${hash} confirmationRetry=${errorMessage(error)}`)
-				},
-			)
-			if (receipt.status !== 'success') throw new Error(`Dispute transaction reverted: ${hash}`)
-			console.log(`report=${report.helper.reportId.toString()} dispute=${hash}`)
+		submit: async prepared => {
+			const data = encodeFunctionData(prepared.request)
+			const signed = await signContractTransaction(client, wallet, prepared.request.address, data, () => client.estimateContractGas({ ...prepared.request, account }), prepared.lastValidBlockNumber)
+			return submitContractTransaction(client, wallet, config, signed, { estimatedNetProfitEth: decimalWeth(prepared.refreshedQuote.netProfitWeth), kind: 'dispute', reportId }, track)
+		},
+		confirm: async (submission, prepared, approvalGasCost) => {
+			const { receipt, tracked } = await waitForTrackedTransaction(client, wallet, config, submission, track)
+			if (receipt.status !== 'success') throw new Error(`Dispute transaction reverted: ${receipt.transactionHash}`)
+			console.log(`report=${report.helper.reportId.toString()} dispute=${receipt.transactionHash}`)
+			const actualGasCost = approvalGasCost + receipt.gasUsed * (receipt.effectiveGasPrice ?? 0n)
+			const trackedNetProfitEth = decimalSignedEth(calculateTrackedNetProfitEth(prepared.refreshedQuote.profitBeforeGasWeth, actualGasCost))
+			track(trackedActivity(tracked, 'confirmed', decimalWeth(actualGasCost), receipt.transactionHash, trackedNetProfitEth))
 			return {
-				actualGasCostEth: decimalWeth(approvalGasCost + receipt.gasUsed * (receipt.effectiveGasPrice ?? 0n)),
+				actualGasCostEth: decimalWeth(actualGasCost),
 				blockNumber: receipt.blockNumber.toString(),
 				direction: prepared.refreshedQuote.direction,
 				estimatedNetProfitWeth: decimalWeth(prepared.refreshedQuote.netProfitWeth),
+				estimatedProfitBeforeGasEth: decimalWeth(prepared.refreshedQuote.profitBeforeGasWeth),
 				executedAt: new Date().toISOString(),
 				pool: prepared.refreshedPool.address,
 				poolFee: prepared.refreshedPool.fee,
 				reportId: report.helper.reportId.toString(),
 				requiredRep: decimalWeth(prepared.contribution.token2),
 				requiredWeth: decimalWeth(prepared.contribution.token1),
+				trackedNetProfitEth,
 				transactionHash: receipt.transactionHash,
 			}
 		},
@@ -503,6 +674,7 @@ async function inspectReport(
 	const opportunity = {
 		decision,
 		direction: best.quote.direction,
+		estimatedNetProfitEth: decimalWeth(best.quote.netProfitWeth),
 		estimatedNetProfitWeth: decimalWeth(best.quote.netProfitWeth),
 		hasRequiredInventory,
 		pool: best.pool.address,
@@ -550,6 +722,7 @@ async function main() {
 		opportunities: [],
 		paused: false,
 		status: 'starting',
+		transactionActivity: [],
 	}
 	const fixedState = {
 		execute: config.execute,
@@ -557,12 +730,20 @@ async function main() {
 		wallet: wallet?.account.address,
 	}
 	let pendingStrategy: MutableStrategy | undefined
+	let pendingSubmission: SubmissionSettings | undefined
+	const trackTransaction: TrackTransaction = activity => {
+		state.transactionActivity = [activity, ...state.transactionActivity.filter(existing => existing.originalHash.toLowerCase() !== activity.originalHash.toLowerCase())].slice(0, 100)
+	}
 	const dashboard = config.ui
 		? startDashboardServer(config.uiPort, {
-				getSnapshot: () => operatorSnapshot(state, pendingStrategy ?? config, fixedState),
+				getSnapshot: () => operatorSnapshot(state, pendingStrategy ?? config, pendingSubmission ?? config.submission, fixedState),
 				setPaused: paused => {
 					state.paused = paused
 					state.status = paused ? 'paused' : 'sleeping'
+				},
+				updateSubmission: value => {
+					pendingSubmission = validateSubmissionSettings(value)
+					return pendingSubmission
 				},
 				updateStrategy: value => {
 					const next = mutableStrategy(pendingStrategy ?? config)
@@ -576,7 +757,7 @@ async function main() {
 	const pendingHistory: ExecutionRecord[] = []
 	let cachedLogs: TransactionLog[] = []
 	let nextBlock: bigint | undefined
-	console.log(`mode=${config.execute ? 'execute' : 'dry-run'} oracle=${config.openOracle} rpc=${config.rpcUrl}`)
+	console.log(`mode=${config.execute ? 'execute' : 'dry-run'} submission=${config.submission.mode} oracle=${config.openOracle} rpc=${config.rpcUrl}`)
 	try {
 		await pollUntilStopped(
 			async () => {
@@ -587,6 +768,10 @@ async function main() {
 				if (pendingStrategy !== undefined) {
 					applyStrategy(config, pendingStrategy)
 					pendingStrategy = undefined
+				}
+				if (pendingSubmission !== undefined) {
+					config.submission = pendingSubmission
+					pendingSubmission = undefined
 				}
 				state.status = 'scanning'
 				state.lastError = undefined
@@ -644,7 +829,7 @@ async function main() {
 				if (selected !== undefined && wallet !== undefined) {
 					selected.opportunity.decision = 'selected'
 					try {
-						const record = await executeDispute(client, wallet, config, selected.report, selected.quote, selected.pool, () => state.paused)
+						const record = await executeDispute(client, wallet, config, selected.report, selected.quote, selected.pool, () => state.paused, trackTransaction)
 						selected.opportunity.decision = 'submitted'
 						recordConfirmedExecution(state.executionHistory, pendingHistory, record)
 						try {
