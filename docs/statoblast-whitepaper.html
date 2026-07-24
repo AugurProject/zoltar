@@ -381,55 +381,21 @@
 						>
 					</div>
 					<ul>
-						<li>
-							Question creators register questions in Zoltar question data,
-							creating the objects around which Statoblast markets can be
-							built.
-						</li>
-						<li>
-							REP vault operators deposit REP into a security pool and provide
-							REP-backed underwriting capacity. Their deposits back open
-							interest and earn fees extracted from collateral over time.
-						</li>
+						<li> Question creators register questions in Zoltar question data, creating the objects around which Statoblast markets can be built. </li>
+						<li> REP vault operators deposit REP into a security pool and provide REP-backed underwriting capacity. Their deposits back open interest and earn fees extracted from collateral over time. </li>
 						<li>Trades mint complete sets with ETH and hold and sell outcome shares.</li>
-						<li>
-							REP vault operators can escrow vault-backed REP behind
-							<code>Invalid</code>, <code>Yes</code>, or <code>No</code> after a
-							question ends so the local escalation process can settle locally
-							or force a non-decision.
-						</li>
-						<li>
-							Anyone can create child pools, while vault owners and share
-							holders move vault state and shares across child universes after a
-							Zoltar fork. Child creation reproduces unresolved escalation state
-							and aggregate backing once; winning proofs can be relayed
-							permissionlessly and always pay their recorded depositors.
-						</li>
-						<li>
-							Truth-auction bidders buy REP with ETH when a child pool in a
-							child universe needs to restore missing collateral.
-						</li>
-						<li>
-							Liquidators move undercollateralized bond allowance away from
-							unsafe vaults.
-						</li>
-						<li>
-							Price reporters and settlers in the OpenOracle flow supply a
-							REP/ETH solvency price for bond accounting, not a truth outcome
-							for the question itself.
-						</li>
+						<li> REP vault operators can escrow vault-backed REP behind <code>Invalid</code>, <code>Yes</code>, or <code>No</code> after a question ends so the local escalation process can settle locally or force a non-decision. </li>
+						<li> Anyone can create child pools, while vault owners and share holders move vault state and shares across child universes after a Zoltar fork. Child creation reproduces unresolved escalation state and aggregate backing once; winning proofs can be relayed permissionlessly and always pay their recorded depositors. </li>
+						<li> Truth-auction bidders buy REP with ETH when a child pool in a child universe needs to restore missing collateral. </li>
+						<li> Liquidators move undercollateralized bond allowance away from unsafe vaults. </li>
+						<li> Price reporters and settlers in the OpenOracle flow supply a REP/ETH solvency price for bond accounting, not a truth outcome for the question itself. </li>
 					</ul>
 				</section>
 
 				<section class="paper-section" id="pools">
 					<div class="section-heading">
 						<h2>4. Security Pools</h2>
-						<a
-							class="anchor-link"
-							href="#pools"
-							aria-label="Link to Security Pools"
-							>#</a
-						>
+						<a class="anchor-link" href="#pools" aria-label="Link to Security Pools" >#</a >
 					</div>
 					<p class="lede">
 						A <code>SecurityPool</code> is a lineage-specific Statoblast contract for a question in a universe. Vault operators deposit REP, choose bond allowance, and underwrite ETH-backed complete sets in that pool's
@@ -637,11 +603,7 @@
 						</p>
 					</figure>
 					<p>
-						The next equations compare REP backing with ETH-denominated
-						obligations. This price is a price-oracle value, not a truth
-						outcome. OpenOracle settles WETH/REP amounts, and the coordinator
-						stores the result as scaled REP per ETH because solvency checks
-						compare REP backing against ETH obligations.
+						Statoblast uses OpenOracle to estimate the value of REP compared to ETH. OpenOracle settles WETH/REP amounts, and the coordinator stores the result as scaled REP per ETH because solvency checks compare REP backing against ETH obligations.
 					</p>
 					<div class="equation" id="eq-statoblast-rep-eth-price">
 						<math
@@ -670,6 +632,7 @@
 							units.
 						</p>
 					</div>
+					<p>Statoblast then uses REP/ETH price to ensure that every operation being conducted on the platform is safe. Its the utmost importance that the value of Open Interest collaterals (ETH) value is below the REP collateral. As if this is not the case, the Truth auction is never able to recover missing open interest</p>
 					<div class="equation" id="eq-statoblast-bond-solvency">
 						<math
 							display="block"
