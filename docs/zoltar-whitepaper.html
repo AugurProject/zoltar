@@ -256,8 +256,11 @@
 							universe: <code>forkUniverse</code> removes that parent REP and
 							reduces parent theoretical supply by the full threshold. The burn
 							divisor then controls the child-REP minting credit. With
-							<code>forkBurnDivisor = 5</code>, 20% of the threshold is an
-							uncredited haircut and the remaining 80% becomes migration credit.
+							<code>forkBurnDivisor = 5</code>, the uncredited haircut is
+							<code>⌊forkThreshold / 5⌋</code>, approximately 20% of the threshold.
+							The remaining <code>forkThreshold - ⌊forkThreshold / 5⌋</code> becomes
+							migration credit: equivalently <code>⌈4 × forkThreshold / 5⌉</code>,
+							approximately 80%.
 						</p>
 						<div class="equation" id="eq-zoltar-fork-burn">
 							<math display="block" aria-label="uncredited fork haircut equals floor fork threshold divided by fork burn divisor" data-source="uncreditedForkHaircut = ⌊forkThreshold / forkBurnDivisor⌋">
@@ -272,7 +275,7 @@
 								<mo form="postfix" stretchy="true">⌋</mo>
 							</mrow>
 							</math>
-							<p class="equation-caption"><span class="equation-label">Fork Haircut</span>The default uncredited share is 20% of the threshold deposit, rounded down; the full parent-REP threshold is still removed from the parent universe.</p>
+							<p class="equation-caption"><span class="equation-label">Fork Haircut</span>The default uncredited share is <code>⌊forkThreshold / 5⌋</code>, approximately 20% of the threshold deposit and rounded down; the full parent-REP threshold is still removed from the parent universe.</p>
 						</div>
 						<div class="equation" id="eq-zoltar-initiator-migration-balance">
 							<math display="block" aria-label="fork initiator migration balance equals fork threshold minus uncredited fork haircut" data-source="forkInitiatorMigrationBalance = forkThreshold - uncreditedForkHaircut">
@@ -284,7 +287,7 @@
 									<mi>uncreditedForkHaircut</mi>
 							</mrow>
 						</math>
-						<p class="equation-caption"><span class="equation-label">Initiator Migration Balance</span>With the default burn divisor of <code>5</code>, the initiator receives migration credit equal to 80% of the threshold, subject to integer flooring.</p>
+						<p class="equation-caption"><span class="equation-label">Initiator Migration Balance</span>With the default burn divisor of <code>5</code>, the initiator receives <code>forkThreshold - ⌊forkThreshold / 5⌋ = ⌈4 × forkThreshold / 5⌉</code>: approximately 80% of the threshold, rounded up when the threshold is not divisible by five.</p>
 					</div>
 					<div class="implementation-grid">
 						<div class="implementation-note">
@@ -295,7 +298,7 @@
 
 					<figure class="diagram" id="fig-zoltar-threshold-deposit" aria-labelledby="deposit-diagram-title">
 						<p class="diagram-title" id="deposit-diagram-title">Threshold Deposit Split</p>
-							<svg viewBox="0 0 860 360" role="img" aria-label="Fork threshold deposit leaves the parent universe, with approximately 20 percent as an uncredited haircut and approximately 80 percent as migration balance after integer flooring." data-rounding="integer-flooring">
+							<svg viewBox="0 0 860 360" role="img" aria-label="Fork threshold deposit leaves the parent universe. After flooring the approximately 20 percent uncredited haircut, the remainder is an approximately 80 percent migration balance." data-rounding="integer-flooring">
 							<defs>
 								<marker id="arrow-deposit" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
 									<path d="M 0 0 L 10 5 L 0 10 z" fill="#615642"></path>
