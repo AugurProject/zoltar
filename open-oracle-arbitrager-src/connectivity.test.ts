@@ -77,15 +77,48 @@ describe('operator connectivity', () => {
 	})
 
 	test('rejects a same-chain JSON-RPC endpoint that is not a private transaction relay', async () => {
-		const regularRpc = rpc(method => {
-			if (method === 'eth_chainId') return '0x1'
-			if (method === 'eth_sendPrivateTransaction') return Response.json({ error: { code: -32_601, message: 'method not found' }, id: 1, jsonrpc: '2.0' })
-			throw new Error(`Unexpected method: ${method}`)
-		})
-		const settings = validateSubmissionSettings({ mode: 'private', relayUrls: [regularRpc] })
-		const state: { endpointChecks: EndpointCheck[] } = { endpointChecks: [] }
-		await expect(updateSubmissionEndpointChecks(state, () => checkSubmissionEndpoints(settings, 1))).rejects.toThrow('does not support eth_sendPrivateTransaction')
-		expect(state.endpointChecks).toMatchObject([{ chainId: 1, kind: 'private-relay', status: 'failed' }])
+		for (const error of [
+			{ code: -32_601, message: 'method not found' },
+			{ code: -32_004, message: 'Method not supported' },
+			{ code: -32_000, message: 'unsupported method' },
+			{ code: -32_000, message: 'upstream unavailable' },
+		]) {
+			const regularRpc = rpc(method => {
+				if (method === 'eth_chainId') return '0x1'
+				if (method === 'eth_sendPrivateTransaction') return Response.json({ error, id: 1, jsonrpc: '2.0' })
+				throw new Error(`Unexpected method: ${method}`)
+			})
+			const settings = validateSubmissionSettings({ mode: 'private', relayUrls: [regularRpc] })
+			const state: { endpointChecks: EndpointCheck[] } = { endpointChecks: [] }
+			await expect(updateSubmissionEndpointChecks(state, () => checkSubmissionEndpoints(settings, 1))).rejects.toThrow('did not prove eth_sendPrivateTransaction support')
+			expect(state.endpointChecks).toMatchObject([{ chainId: 1, kind: 'private-relay', status: 'failed' }])
+			expect(state.endpointChecks[0]?.error).toContain(error.message)
+		}
+	})
+
+	test('accepts structured signature and invalid-parameter errors as positive relay capability evidence', async () => {
+		for (const error of [
+			{ code: -32_600, message: 'signature is required' },
+			{ code: -32_602, message: 'invalid params' },
+		]) {
+			const privateRelay = rpc(method => {
+				if (method === 'eth_chainId') return '0x1'
+				if (method === 'eth_sendPrivateTransaction') return Response.json({ error, id: 1, jsonrpc: '2.0' })
+				throw new Error(`Unexpected method: ${method}`)
+			})
+			await expect(checkSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [privateRelay] }), 1)).resolves.toMatchObject([{ chainId: 1, status: 'healthy' }])
+		}
+	})
+
+	test('rejects malformed and successful private transaction probe responses as inconclusive', async () => {
+		for (const responseBody of [{ result: null }, { error: { code: -32_602 } }, { error: 'invalid params' }]) {
+			const endpoint = rpc(method => {
+				if (method === 'eth_chainId') return '0x1'
+				if (method === 'eth_sendPrivateTransaction') return Response.json({ ...responseBody, id: 1, jsonrpc: '2.0' })
+				throw new Error(`Unexpected method: ${method}`)
+			})
+			await expect(checkSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [endpoint] }), 1)).rejects.toThrow('did not prove eth_sendPrivateTransaction support')
+		}
 	})
 
 	test('preserves every endpoint role regardless of concurrent update completion order', async () => {

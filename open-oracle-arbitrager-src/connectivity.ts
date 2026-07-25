@@ -130,19 +130,39 @@ async function assertPrivateRelayCapability(url: string, timeoutMilliseconds = 5
 		redirect: 'error',
 		signal: AbortSignal.timeout(timeoutMilliseconds),
 	})
-	let value: JsonRpcResponse
+	let value: unknown
 	try {
-		value = (await response.json()) as JsonRpcResponse
+		value = await response.json()
 	} catch (error) {
 		if (error instanceof SyntaxError) throw new Error(`Private relay capability check returned non-JSON HTTP ${response.status.toString()}`)
 		throw error
 	}
-	if (typeof value !== 'object' || value === null) throw new Error('Private relay capability check returned invalid JSON-RPC')
-	const message = value.error?.message?.toLowerCase() ?? ''
-	if (value.error?.code === -32_601 || message.includes('method not found') || message.includes('method is not supported')) {
-		throw new Error('Endpoint does not support eth_sendPrivateTransaction and is not a compatible private relay')
+	if (typeof value !== 'object' || value === null || Array.isArray(value) || !('error' in value)) {
+		throw new Error('Endpoint did not prove eth_sendPrivateTransaction support: expected a JSON-RPC error from the intentionally invalid request')
 	}
-	if (value.error === undefined && value.result === undefined) throw new Error('Private relay capability check returned neither a result nor a JSON-RPC error')
+	const error = value.error
+	if (typeof error !== 'object' || error === null || Array.isArray(error) || !('message' in error) || typeof error.message !== 'string' || error.message.trim() === '') {
+		throw new Error('Endpoint did not prove eth_sendPrivateTransaction support: malformed JSON-RPC error')
+	}
+	const code = 'code' in error && typeof error.code === 'number' && Number.isSafeInteger(error.code) ? error.code : undefined
+	const message = error.message.trim()
+	const normalizedMessage = message.toLowerCase()
+	const unsupported = code === -32_601 || normalizedMessage.includes('method not found') || normalizedMessage.includes('method not supported') || normalizedMessage.includes('method is not supported') || normalizedMessage.includes('unsupported method') || normalizedMessage.includes('unknown method')
+	const recognizedCapabilityEvidence =
+		code === -32_602 ||
+		normalizedMessage.includes('signature is required') ||
+		normalizedMessage.includes('invalid signature') ||
+		normalizedMessage.includes('authentication required') ||
+		normalizedMessage.includes('authentication is required') ||
+		normalizedMessage.includes('invalid params') ||
+		normalizedMessage.includes('invalid parameters') ||
+		normalizedMessage.includes('invalid argument') ||
+		normalizedMessage.includes('missing transaction') ||
+		normalizedMessage.includes('missing tx') ||
+		normalizedMessage.includes('invalid transaction')
+	if (unsupported || !recognizedCapabilityEvidence) {
+		throw new Error(`Endpoint did not prove eth_sendPrivateTransaction support: RPC ${code?.toString() ?? 'error'}: ${message}`)
+	}
 }
 
 async function checkPrivateRelayEndpoint(url: string, expectedChainId: number): Promise<EndpointCheck> {
