@@ -13,15 +13,11 @@
 				<div class="sidebar-header">
 					<span class="sidebar-series">Augur / Zoltar</span>
 					<strong>Statoblast</strong>
-					<p>Prediction market layer built on the Zoltar oracle layer.</p>
+					<p>A prediction market built on Zoltar.</p>
 				</div>
 					<a class="sidebar-companion" href="./zoltar-whitepaper.html">
 						<span>Companion paper</span>
 						<b>Zoltar Oracle Layer</b>
-					</a>
-					<a class="sidebar-companion" href="./start-here.html">
-						<span>Entry overview</span>
-						<b>Start Here Guide</b>
 					</a>
 					<a class="sidebar-companion" href="./security-model.html">
 						<span>Security boundaries</span>
@@ -48,101 +44,43 @@
 			<main id="main-content">
 				<header class="hero">
 					<div class="paper-brand">
-						<div
-							class="brand-lockup"
-							aria-label="Augur and Zoltar whitepaper set"
-						>
-							<span class="brand-mark" aria-hidden="true">
-								<span></span>
-								<span></span>
-								<span></span>
-							</span>
-							<span>
-								<span class="brand-name">Augur / Zoltar</span>
-								<span class="brand-subtitle">Paired whitepaper set</span>
-							</span>
-						</div>
 						<a class="companion-link" href="./zoltar-whitepaper.html">
 							<span>Companion paper</span>
-							<b>Branching Oracle Layer</b>
+							<b>Zoltar - Branching Oracle Base Layer</b>
 						</a>
 					</div>
 					<div class="hero-label-row">
 						<p class="kicker">
 							<span class="layer-dot" aria-hidden="true"></span>Prediction
-							Market Layer
+							Market
 						</p>
 						<p class="paper-status">
-							Protocol draft • Application layer built on Zoltar
+							draft
 						</p>
 					</div>
 					<h1>Augur Statoblast White Paper</h1>
 					<p class="subtitle">
-						A visual guide to the market, underwriting, escalation, fork
-						migration, and collateral-repair system built on top of Zoltar.
+						A permissionless oracle and prediction-market protocol built on
+						Ethereum and Zoltar, subject to the assumptions in the
+						<a href="./security-model.html">Protocol Security Model</a>.
 					</p>
-					<div class="meta-grid" aria-label="Document summary">
-						<div class="meta-card">
-							<span>Collateral</span>
-							<b>ETH-backed complete sets</b>
-						</div>
-						<div class="meta-card">
-							<span>Security</span>
-							<b>REP vault underwriting</b>
-						</div>
-						<div class="meta-card">
-							<span>Recovery</span>
-							<b>Migration plus truth auction</b>
-						</div>
-					</div>
 				</header>
 
 				<section class="paper-section" id="abstract">
 					<div class="section-heading">
 						<h2>Abstract</h2>
-						<a
-							class="anchor-link"
-							href="#abstract"
-							aria-label="Link to Abstract"
-							>#</a
-						>
+						<a class="anchor-link" href="#abstract" aria-label="Link to Abstract">#</a>
 					</div>
 					<p class="lede">
-						Augur Statoblast is the market layer built on top of Zoltar. It
+						Augur Statoblast is a binary prediction market built on top of Zoltar. It
 						creates security pools scoped to individual questions, lets traders
 						mint and redeem ETH-backed shares, lets REP vaults provide
-						underwriting, and tries to settle disputes locally before asking
+						underwriting, and tries to settle disputes locally before forcing
 						Zoltar to fork.
 					</p>
-					<p>
-						If a fork does happen, Statoblast migrates the market into child
-						pools and can repair missing child-pool ETH collateral through a
-						truth auction. Despite the name, that auction repairs collateral; it
-						does not choose the truthful branch.
-					</p>
-					<div class="summary-grid">
-						<div class="summary-card">
-							<span>Market layer</span>
-							<b
-								>Per-question pools combine ETH shares with REP-backed
-								underwriting.</b
-							>
-						</div>
-						<div class="summary-card">
-							<span>Dispute layer</span>
-							<b
-								>Escalation tries to settle outcomes locally before a fork is
-								needed.</b
-							>
-						</div>
-						<div class="summary-card">
-							<span>Recovery layer</span>
-							<b
-								>Fork migration and truth auction repair keep child pools
-								usable.</b
-							>
-						</div>
-					</div>
+					<p> The Zoltar universe fork and Statoblast pool-fork activation are distinct transitions. On the pool's own local non-decision path, Statoblast activates pool fork mode immediately before forking Zoltar in the same transaction. After an unrelated external Zoltar fork, anyone must separately initiate the affected pool's fork handling. Child pools are then created lazily. Vault holders choose a child by migrating their vault positions, and the forker materializes the corresponding child REP. </p>
+					<p> Proportional open-interest collateral moves with each vault migration; it is not duplicated across universes. As a result, some child universes may not receive enough collateral to fully back their inherited open interest. </p>
+					<p> After the migration window ends, each undercollateralized child pool may run its own <a href="./truth-auction.html#lifecycle">truth auction</a>, selling that child universe's REP to raise as much repair ETH as demand supports. </p>
 				</section>
 
 				<section class="paper-section" id="overview">
@@ -155,58 +93,15 @@
 							>#</a
 						>
 					</div>
-						<p>
-							The stack has two protocol identities. <code>Zoltar</code> is the
-						base truth/forking oracle layer for universes, questions, scalar
-						math, and REP branching. <code>Augur Statoblast</code> is the
-						application layer that adds market collateral, underwriting, local
-						disputes, migration, and collateral repair. For the base oracle
-						layer, see
-						<a href="./zoltar-whitepaper.html">zoltar-whitepaper.html</a>.
-					</p>
-						<p>
-							Statoblast's lifecycle starts by creating a pool scoped to one
-							question and universe, letting traders and REP vaults use it,
-							trying to resolve disputes locally, and only then turning to fork
-							and collateral-repair machinery. The overview sequence below
-							follows that same order.
-						</p>
-						<p>
-							Statoblast also depends on two different oracle paths that answer
-							different questions. Zoltar represents unresolved market-truth
-							disputes by creating child universes. OpenOracle supplies only a
-							fresh, contestable REP/ETH solvency price for withdrawals,
-							allowance updates, and liquidations. Freshness is time-bounded,
-							but the accepted value and its deviation from an external market
-							price are not bounded onchain.
-						</p>
+						<p> The stack has two protocol identities. <code>Zoltar</code> is the base truth/forking oracle layer for universes, questions, scalar math, and REP branching. <code>Augur Statoblast</code> is the application layer that adds market collateral, underwriting, local disputes, migration, and collateral repair. For the base oracle layer, see <a href="./zoltar-whitepaper.html">zoltar-whitepaper.html</a>. </p>
+						<p> Statoblast's lifecycle starts by creating a pool scoped to one question and universe, letting traders and REP vaults use it, trying to resolve disputes locally, and only then turning to fork and collateral-repair machinery. </p>
 					<ol>
-						<li>
-							A question is registered in Zoltar and a Statoblast security pool
-							is deployed for that question in one universe.
-						</li>
-						<li>
-							REP vaults fund underwriting capacity and users mint ETH-backed
-							complete sets.
-						</li>
-						<li>
-							After question end, disputes first try to resolve locally through
-							the escalation game.
-						</li>
-						<li>
-							If local resolution fails and the system reaches non-decision,
-							Zoltar forks and Statoblast migrates pool state into child
-							universes.
-						</li>
-						<li>
-							If a child pool is missing ETH collateral after migration, it can
-							sell child-universe REP through a truth auction to repair that
-							collateral gap.
-						</li>
-							<li>
-								The child pool in the branch users choose to keep using resumes
-								operation and users settle or redeem positions there.
-							</li>
+						<li> A question is registered in Zoltar and a Statoblast security pool is deployed for that question in one universe. </li>
+						<li> REP vaults fund underwriting capacity and users mint ETH-backed complete sets. </li>
+						<li> After question end, disputes first try to resolve locally through the escalation game. </li>
+						<li> If local resolution reaches non-decision, Statoblast can trigger a Zoltar fork. An unrelated external Zoltar fork can also interrupt the pool before local resolution. In either case, a separate pool-fork activation snapshots the parent before child-pool migration begins. </li>
+						<li>If a child pool is missing ETH collateral after migration, it can sell child-universe REP through a truth auction to repair that collateral gap.</li>
+						<li> The child pool in the branch users choose to keep using resumes operation and users settle or redeem positions there. </li>
 					</ol>
 					<h3>Happy Path vs Recovery Path</h3>
 					<div class="table-wrap">
@@ -221,40 +116,26 @@
 							<tbody>
 								<tr>
 									<td>Resolution trigger</td>
-									<td>
-										Escalation picks a single local winner before non-decision.
-									</td>
-									<td>
-										Two or more outcomes reach the non-decision threshold and
-										Zoltar forks.
-									</td>
+									<td> Escalation picks a single local winner before non-decision. </td>
+									<td> The pool's own non-decision triggers Zoltar, or an unrelated external Zoltar fork interrupts the pool; pool-fork activation is a separate step. </td>
 								</tr>
 								<tr>
 									<td>Where state settles</td>
 									<td>The original pool remains the settlement venue.</td>
-									<td>
-										Vaults, shares, and collateral accounting can migrate into child
-										pools. Each child receives one canonical unresolved-escalation
-										snapshot and aggregate backing; winners later settle by proof.
+									<td> Vaults, shares, and collateral accounting can migrate into child pools. Each child receives one canonical unresolved-escalation snapshot and aggregate backing; winners later settle by proof.
 									</td>
 								</tr>
 								<tr>
 									<td>Collateral condition</td>
-									<td>
-										Winning shares redeem against the existing ETH collateral
-										base.
+									<td> Winning shares redeem against the existing ETH collateral base.
 									</td>
-									<td>
-										A child pool may need truth-auction repair before
-										redemptions are clean.
+									<td> A child pool may need truth-auction repair before redemptions are clean.
 									</td>
 								</tr>
 								<tr>
 									<td>User mental model</td>
 									<td>One pool, one final outcome, direct redemption.</td>
-									<td>
-										Choose the child universe that retains value, migrate
-										positions, then settle there.
+									<td> Choose the child universe that retains value, migrate positions, then settle there.
 									</td>
 								</tr>
 							</tbody>
@@ -466,10 +347,7 @@
 							</text>
 						</svg>
 						<p class="diagram-caption">
-							<span class="figure-label">Actor Swimlanes</span>The same
-							lifecycle looks different by role: traders mostly mint, hold,
-							migrate, and redeem; vaults underwrite and report; protocol
-							contracts coordinate fork and repair steps.
+							<span class="figure-label">Actor Swimlanes</span>The same lifecycle looks different by role
 						</p>
 					</figure>
 					<p>
@@ -497,11 +375,7 @@
 						</div>
 						<div class="role-card">
 							<span>EscalationGame</span>
-							<b
-								>Local dispute game for Invalid,
-								<span class="term" tabindex="0">Yes</span>, and
-								<span class="term" tabindex="0">No</span>.</b
-							>
+							<b>Local dispute game for Invalid, Yes, and No.</b>
 						</div>
 						<div class="role-card">
 							<span>SecurityPoolForker</span>
@@ -533,105 +407,45 @@
 						>
 					</div>
 					<ul>
-						<li>
-							Question creators register questions in Zoltar question data,
-							creating the objects around which Statoblast markets can be
-							built.
-						</li>
-						<li>
-							REP vault operators deposit REP into a security pool and provide
-							REP-backed underwriting capacity. Their deposits back open
-							interest and earn fees extracted from collateral over time.
-						</li>
-						<li>Users mint complete sets with ETH and hold outcome shares.</li>
-						<li>
-							REP vault operators can escrow vault-backed REP behind
-							<code>Invalid</code>, <code>Yes</code>, or <code>No</code> after a
-							question ends so the local escalation process can settle locally
-							or force a non-decision.
-						</li>
-						<li>
-							Anyone can create child pools, while vault owners and share
-							holders move vault state and shares across child universes after a
-							Zoltar fork. Child creation reproduces unresolved escalation state
-							and aggregate backing once; winning proofs can be relayed
-							permissionlessly and always pay their recorded depositors.
-						</li>
-						<li>
-							Truth-auction bidders buy REP with ETH when a child pool in a
-							child universe needs to restore missing collateral.
-						</li>
-						<li>
-							Liquidators move undercollateralized bond allowance away from
-							unsafe vaults.
-						</li>
-						<li>
-							Price reporters and settlers in the OpenOracle flow supply a
-							REP/ETH solvency price for bond accounting, not a truth outcome
-							for the question itself.
-						</li>
+						<li> Question creators register questions in Zoltar question data, creating the objects around which Statoblast markets can be built. </li>
+						<li> REP vault operators deposit REP into a security pool and provide REP-backed underwriting capacity. Their deposits back open interest and earn fees extracted from collateral over time. </li>
+						<li>Traders mint complete sets with ETH and hold transferable outcome shares; secondary-market execution is external to Statoblast.</li>
+						<li> REP vault operators can escrow vault-backed REP behind <code>Invalid</code>, <code>Yes</code>, or <code>No</code> after a question ends so the local escalation process can settle locally or force a non-decision. </li>
+						<li> Anyone can create child pools, while vault owners and share holders move vault state and shares across child universes after a Zoltar fork. Child creation reproduces unresolved escalation state and aggregate backing once; winning proofs can be relayed permissionlessly and always pay their recorded depositors. </li>
+						<li> Truth-auction bidders buy REP with ETH when a child pool in a child universe needs to restore missing collateral. </li>
+						<li> Liquidators move undercollateralized bond allowance away from unsafe vaults. </li>
+						<li> Price reporters and settlers in the OpenOracle flow supply a REP/ETH solvency price for bond accounting, not a truth outcome for the question itself. </li>
 					</ul>
 				</section>
 
 				<section class="paper-section" id="pools">
 					<div class="section-heading">
 						<h2>4. Security Pools</h2>
-						<a
-							class="anchor-link"
-							href="#pools"
-							aria-label="Link to Security Pools"
-							>#</a
-						>
+						<a class="anchor-link" href="#pools" aria-label="Link to Security Pools">#</a>
 					</div>
 					<p class="lede">
-						A <code>SecurityPool</code> is a lineage-specific Statoblast contract
-						for a question in a universe. Vault operators deposit REP, choose bond
-						allowance, and underwrite ETH-backed complete sets in that pool's
+						A <code>SecurityPool</code> is a lineage-specific Statoblast contract for a question in a universe. Vault operators deposit REP, choose bond allowance, and underwrite ETH-backed complete sets in that pool's
 						local accounting ledger.
 					</p>
-					<div class="callout">
-						<strong>Why a per-question pool?</strong> The contract keeps market
-						collateral, REP backing, escalation state, and fork migration scoped
-						to one question and one universe. That boundary lets a fork or local
-						escalation affect the market that depends on the disputed question
-						without rewriting Zoltar's global question registry.
-					</div>
 					<p>
-						Origin pools are narrower than the general Zoltar question model.
-						The factory requires the question to exist, the universe to be
-						unforked, the universe REP token to be present, and the question to
-						have exactly two categorical labels in this order: <code>Yes</code>,
-						then <code>No</code>. <code>Invalid</code> is added by Statoblast
-						as the third trading and resolution outcome; it is not one of the
-						two origin-pool labels checked by the factory. The factory also
-						records each deployment and exposes paged deployment-history reads
-						for indexers and UIs.
+						Origin pools are narrower than the general Zoltar question model. The factory requires the question to exist, the universe to be unforked, the universe REP token to be present, and the question to have exactly two categorical labels in this order: <code>Yes</code>,
+						then <code>No</code>. <code>Invalid</code> is added by Statoblast as the third trading and resolution outcome; it is not one of the two origin-pool labels checked by the factory. The factory also records each deployment and exposes paged deployment-history reads for indexers and UIs.
 					</p>
 					<div class="callout">
-						Origin pool validation intentionally lives above Zoltar. Zoltar
-						accepts global questions; Statoblast's factory decides which
-						question shape is eligible for the current security-pool
-						implementation.
+						Origin pool validation intentionally lives above Zoltar. Zoltar accepts global questions; Statoblast's factory decides which question shape is eligible for the current security-pool implementation.
 					</div>
 					<p>
 						Pool-related addresses are deterministic and their lineage identity
 						commits to the origin's immutable
 						<code>initialReportPriorityFeeWeiPerGas</code>. Origins configured
-						with different priority fees therefore cannot share a pool or share-token
-						namespace, while children inherit their origin's configuration. See the
-						<a href="./operator-reference.md#security-pool-guardrails"
-							>Operator Reference</a
-						>
-						for the exact address and registry-key derivations.
+						with different priority fees therefore cannot share a pool or
+						share-token namespace, while children inherit their origin's
+						configuration. The
+						<a href="./operator-reference.md#security-pool-guardrails">Operator Reference</a>
+						owns the exact address and registry-key derivations.
 					</p>
 					<p>
-						An inherited child and a newly created origin may coexist for the same
-						question, multiplier, and universe. This is intentional: their origin
-						ids, pool addresses, share tokens, collateral ledgers, and migration
-						paths are distinct. A caller selecting a pool therefore selects an
-						origin lineage, not merely a question and universe. Because a fresh
-						origin cannot occupy an inherited lineage's registry entry, origin
-						deployment does not scan universe ancestors.
+						An inherited child and a newly created origin may coexist for the same question, multiplier, initial-report priority fee, and universe. This is intentional: their origin IDs, pool addresses, share tokens, collateral ledgers, and migration paths are distinct. A caller selecting a pool therefore selects an origin lineage, not merely a question and universe. Because a fresh origin cannot occupy an inherited lineage’s registry entry, origin deployment does not scan universe ancestors.
 					</p>
 					<figure class="diagram" id="fig-statoblast-asset-flow">
 						<svg
@@ -643,8 +457,10 @@
 								ETH, REP, shares, and fee flow
 							</title>
 							<desc id="asset-flow-desc">
-								Users send ETH and receive shares; vaults send REP and receive
-								fees; fork repair can sell child REP for ETH.
+								Users send ETH to the security pool, which mints shares. A
+								redemption request goes to the pool; the pool burns the relevant
+								shares and pays ETH. Vaults send REP and receive fees; fork
+								repair can sell child REP for ETH.
 							</desc>
 							<defs>
 								<marker
@@ -715,6 +531,7 @@
 							<path
 								class="svg-line"
 								marker-end="url(#arrow-assets)"
+								data-flow="pool-to-share-token-mint"
 								d="M 584 94 H 734"
 							></path>
 							<text class="svg-small" x="654" y="79" text-anchor="middle">
@@ -723,13 +540,29 @@
 							<path
 								class="svg-line"
 								marker-end="url(#arrow-assets)"
-								d="M 734 126 C 610 182 350 182 224 126"
+								data-flow="pool-to-share-token-burn"
+								d="M 590 152 C 640 190 690 190 728 132"
 							></path>
-							<text class="svg-small" x="484" y="205" text-anchor="middle">
-								redeem full sets while operational
+							<text class="svg-small" x="659" y="190" text-anchor="middle">
+								authorized burn
 							</text>
-							<text class="svg-small" x="484" y="227" text-anchor="middle">
-								or finalized winning shares
+							<path
+								class="svg-line"
+								marker-end="url(#arrow-assets)"
+								data-flow="trader-to-pool-redemption"
+								d="M 224 118 C 280 158 330 158 384 118"
+							></path>
+							<text class="svg-small" x="304" y="170" text-anchor="middle">
+								redeem request
+							</text>
+							<path
+								class="svg-line"
+								marker-end="url(#arrow-assets)"
+								data-flow="pool-to-trader-eth-payout"
+								d="M 384 138 C 330 220 280 220 224 138"
+							></path>
+							<text class="svg-small" x="304" y="228" text-anchor="middle">
+								ETH payout
 							</text>
 							<rect
 								class="svg-gold"
@@ -814,11 +647,7 @@
 						</p>
 					</figure>
 					<p>
-						The next equations compare REP backing with ETH-denominated
-						obligations. This price is a price-oracle value, not a truth
-						outcome. OpenOracle settles WETH/REP amounts, and the coordinator
-						stores the result as scaled REP per ETH because solvency checks
-						compare REP backing against ETH obligations.
+						Statoblast uses OpenOracle to estimate the value of REP compared to ETH. OpenOracle settles WETH/REP amounts, and the coordinator stores the result as scaled REP per ETH because solvency checks compare REP backing against ETH obligations.
 					</p>
 					<div class="equation" id="eq-statoblast-rep-eth-price">
 						<math
@@ -847,11 +676,18 @@
 							units.
 						</p>
 					</div>
+					<p>
+						Statoblast uses the REP/ETH price to compare REP backing with
+						ETH-denominated obligations. Vault operators choose their security
+						bond allowance, but both the vault and the pool must remain backed.
+						The security multiplier belongs to the liquidation threshold; it is
+						not part of the ordinary allowance-setting inequality.
+					</p>
 					<div class="equation" id="eq-statoblast-bond-solvency">
 						<math
 							display="block"
 							aria-label="remaining REP backing times price precision is greater than or equal to security bond allowance times REP per ETH price"
-							data-source="remainingRepBacking \cdot pricePrecision &gt;= securityBondAllowance \cdot repPerEthPrice"
+							data-source="remainingRepBacking * pricePrecision >= securityBondAllowance * repPerEthPrice"
 						>
 							<mrow>
 								<mi>remainingRepBacking</mi>
@@ -864,16 +700,15 @@
 							</mrow>
 						</math>
 						<p class="equation-caption">
-							<span class="equation-label">Bond Solvency</span>Vault and pool
-							bond checks require remaining REP value to cover the
-							ETH-denominated security-bond allowance.
+							<span class="equation-label">Bond Solvency</span>
+							Remaining REP value must cover the ETH-denominated allowance.
 						</p>
 					</div>
 					<div class="equation" id="eq-statoblast-allowance-backing">
 						<math
 							display="block"
-							aria-label="REP backing times price precision must be strictly greater than security bond allowance times REP per ETH price for allowance backing"
-							data-source="repBacking \cdot pricePrecision &gt; securityBondAllowance \cdot repPerEthPrice"
+							aria-label="REP backing times price precision must be strictly greater than security bond allowance times REP per ETH price"
+							data-source="repBacking * pricePrecision > securityBondAllowance * repPerEthPrice"
 						>
 							<mrow>
 								<mi>repBacking</mi>
@@ -886,17 +721,15 @@
 							</mrow>
 						</math>
 						<p class="equation-caption">
-							<span class="equation-label">Allowance Backing</span>Setting or
-							increasing bond allowance uses a strict inequality at both the
-							vault and pool level, so equality is not enough to authorize new
-							allowance.
+							<span class="equation-label">Allowance Backing</span>
+							Setting or increasing allowance requires strict overcollateralization.
 						</p>
 					</div>
 					<div class="equation" id="eq-statoblast-liquidation-condition">
 						<math
 							display="block"
 							aria-label="a vault is liquidable when security bond allowance times security multiplier times REP per ETH price is greater than REP backing times price precision"
-							data-source="securityBondAllowance \cdot securityMultiplier \cdot repPerEthPrice &gt; repBacking \cdot pricePrecision"
+							data-source="securityBondAllowance * securityMultiplier * repPerEthPrice > repBacking * pricePrecision"
 						>
 							<mrow>
 								<mi>securityBondAllowance</mi>
@@ -911,24 +744,24 @@
 							</mrow>
 						</math>
 						<p class="equation-caption">
-							<span class="equation-label">Liquidation Condition</span>A vault
-							becomes liquidable when its scaled debt exceeds its REP backing
-							after applying the security multiplier.
+							<span class="equation-label">Liquidation Condition</span>
+							The multiplier determines when unsafe allowance becomes liquidable.
 						</p>
 					</div>
 					<p>
-						The contract applies related conditions at both the vault level and
-						the whole-pool level before allowing operations such as
-						<code>performWithdrawRep</code>, <code>performLiquidation</code>,
-						and <code>performSetSecurityBondsAllowance</code>.
+						Before REP withdrawals and allowance changes, the contract applies
+						related solvency checks at both the vault and whole-pool level.
+						Liquidation follows a different path: it requires the target to be
+						liquidatable, bounds the transfer, and verifies that the caller
+						remains safe while aggregate allowance is preserved.
 					</p>
-					<h3>Users and Complete Sets</h3>
+					<h3>Complete Sets</h3>
 					<p>
-						Users call <code>createCompleteSet</code> with ETH. The pool mints
-						one <code>Invalid</code>, one <code>Yes</code>, and one
-						<code>No</code> ERC-1155 share through <code>ShareToken</code> for
-						the current universe. The deposited ETH becomes
-						<code>completeSetCollateralAmount</code>.
+						Traders and liquidity providers can mint complete sets by calling
+						<code>createCompleteSet</code> with ETH. For each complete-set unit,
+						the pool mints one <code>Invalid</code>, one <code>Yes</code>, and
+						one <code>No</code> ERC-1155 share through <code>ShareToken</code>.
+						The deposited ETH increases <code>completeSetCollateralAmount</code>.
 					</p>
 					<ul>
 						<li>
@@ -943,25 +776,19 @@
 							winning outcome shares through <code>redeemShares</code>.
 						</li>
 						<li>
-							Minting checks the next collateral amount against available bond
-							capacity before minting shares, then updates pool accounting
-							before the share-token mint call.
-						</li>
-						<li>
-							A positive ETH deposit must convert through
-							<code>cashToShares</code> to at least one complete-set unit. If
-							the current exchange rate would round the mint to zero shares,
-							<code>createCompleteSet</code> reverts with
-							<code>Exchange rate undefined</code> instead of accepting collateral.
+							The pool rejects a mint when the resulting collateral would exceed
+							available security bond allowance. A positive deposit must also
+							convert to at least one complete-set unit.
 						</li>
 					</ul>
 					<h3>Fee Extraction and Retention Rate</h3>
 					<p>
 						Complete-set collateral gradually decays into an unallocated fee
-						reserve. Vault checkpoints turn whole-wei entitlements from that
-						reserve into redeemable vault debt. The retention rate falls as
-						utilization rises, so security becomes more expensive as open
-						interest consumes underwriting slack.
+						reserve. Fee-eligible vaults accrue fees in proportion to their
+						assigned security bond allowance. Vault checkpoints turn whole-wei
+						entitlements from that reserve into redeemable vault debt.
+					</p>
+					<p>The retention rate falls as utilization rises, so security becomes more expensive as open interest consumes underwriting slack.
 					</p>
 					<ul>
 						<li>
@@ -978,510 +805,27 @@
 							<code>currentRetentionRate</code> changes as utilization changes.
 						</li>
 					</ul>
-					<figure class="diagram" id="fig-statoblast-fee-flow">
-						<svg
-							viewBox="0 0 860 270"
-							role="img"
-							aria-labelledby="fees-title fees-desc"
-							data-flow-stages="Unallocated Reserve, Assigned Vault Debt, Vault Payout"
-						>
-							<title id="fees-title">
-								Collateral retention and fee flow: Unallocated Reserve to Assigned
-								Vault Debt to Vault Payout
-							</title>
-							<desc id="fees-desc">
-								Complete-set collateral decays into an unallocated reserve. Vault
-								checkpoints assign whole wei as redeemable vault debt.
-							</desc>
-							<defs>
-								<marker
-									id="arrow-fees"
-									viewBox="0 0 10 10"
-									refX="8"
-									refY="5"
-									markerWidth="7"
-									markerHeight="7"
-									orient="auto-start-reverse"
-								>
-									<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-								</marker>
-							</defs>
-							<rect
-								class="svg-blue"
-								x="20"
-								y="54"
-								width="180"
-								height="78"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="110" y="79" text-anchor="middle">
-								Complete-Set
-							</text>
-							<text class="svg-label" x="110" y="99" text-anchor="middle">
-								Collateral
-							</text>
-							<text class="svg-micro" x="110" y="120" text-anchor="middle">
-								starts high; then decays
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-fees)"
-								d="M 200 93 H 235"
-							></path>
-							<text class="svg-micro" x="217" y="42" text-anchor="middle">
-								decay
-							</text>
-							<rect
-								class="svg-green"
-								x="235"
-								y="54"
-								width="180"
-								height="78"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="325" y="79" text-anchor="middle">
-								Unallocated
-							</text>
-							<text class="svg-label" x="325" y="99" text-anchor="middle">
-								Reserve
-							</text>
-							<text class="svg-micro" x="325" y="120" text-anchor="middle">
-								accrued, not yet redeemable
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-fees)"
-								d="M 415 93 H 450"
-							></path>
-							<text class="svg-micro" x="432" y="42" text-anchor="middle">
-								checkpoint
-							</text>
-							<rect
-								class="svg-blue"
-								x="450"
-								y="54"
-								width="180"
-								height="78"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="540" y="79" text-anchor="middle">
-								Assigned Vault
-							</text>
-							<text class="svg-label" x="540" y="99" text-anchor="middle">
-								Debt
-							</text>
-							<text class="svg-small" x="540" y="120" text-anchor="middle">
-								whole wei, redeemable
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-fees)"
-								d="M 630 93 H 665"
-							></path>
-							<text class="svg-micro" x="647" y="42" text-anchor="middle">
-								redeem
-							</text>
-							<rect
-								class="svg-green"
-								x="665"
-								y="54"
-								width="175"
-								height="78"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="752" y="88" text-anchor="middle">
-								Vault Payout
-							</text>
-							<text class="svg-small" x="752" y="112" text-anchor="middle">
-								ETH leaves the pool
-							</text>
-							<path
-								class="svg-line"
-								d="M 110 132 C 200 210 435 210 540 132"
-							></path>
-							<text class="svg-small" x="325" y="207" text-anchor="middle">
-								higher utilization lowers retention
-							</text>
-							<text class="svg-small" x="325" y="229" text-anchor="middle">
-								and accelerates fee extraction
-							</text>
-						</svg>
-						<p class="diagram-caption">
-							<span class="figure-label">Fee Flow</span>Complete-set collateral
-							decays into a reserve; checkpointing assigns whole-wei vault debt
-							before redemption.
-						</p>
-					</figure>
+
 					<p>
 						Retention follows a piecewise heuristic in
 						<code>SecurityPoolUtils.calculateRetentionRate</code>. It starts
 						high, declines linearly until <code>80%</code> utilization, and then
 						stays at the minimum retention rate. The intent is to charge more
 						aggressively for security as utilization rises and underwriting
-						slack falls. The
-						<a href="#fig-statoblast-retention-rate-curve"
-							>Retention Rate Curve</a
-						>
-						figure shows the same shape as the contract.
+						slack falls.
 					</p>
-					<figure class="diagram" id="fig-statoblast-retention-rate-curve">
-						<svg
-							viewBox="0 0 860 330"
-							role="img"
-							aria-labelledby="retention-curve-title retention-curve-desc"
-						>
-							<title id="retention-curve-title">Retention-rate curve</title>
-							<desc id="retention-curve-desc">
-								Retention starts at the maximum rate, declines linearly until 80
-								percent utilization, and then stays at the minimum rate.
-							</desc>
-							<defs>
-								<marker
-									id="arrow-retention-curve"
-									viewBox="0 0 10 10"
-									refX="8"
-									refY="5"
-									markerWidth="7"
-									markerHeight="7"
-									orient="auto-start-reverse"
-								>
-									<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-								</marker>
-							</defs>
-							<line
-								class="svg-line"
-								x1="92"
-								y1="250"
-								x2="780"
-								y2="250"
-								marker-end="url(#arrow-retention-curve)"
-							></line>
-							<line
-								class="svg-line"
-								x1="92"
-								y1="250"
-								x2="92"
-								y2="58"
-								marker-end="url(#arrow-retention-curve)"
-							></line>
-							<text class="svg-small" x="430" y="296" text-anchor="middle">
-								utilization
-							</text>
-							<text
-								class="svg-small"
-								x="28"
-								y="154"
-								text-anchor="middle"
-								transform="rotate(-90 28 154)"
-							>
-								retention rate
-							</text>
-							<line class="svg-line" x1="92" y1="82" x2="154" y2="82"></line>
-							<text class="svg-small" x="174" y="87">max</text>
-							<line class="svg-line" x1="92" y1="222" x2="718" y2="222"></line>
-							<text class="svg-small" x="738" y="227">min</text>
-							<line
-								class="svg-line"
-								x1="642"
-								y1="250"
-								x2="642"
-								y2="222"
-								stroke-dasharray="7 7"
-							></line>
-							<text class="svg-small" x="642" y="276" text-anchor="middle">
-								80%
-							</text>
-							<path class="svg-line" d="M 118 82 L 642 222 L 760 222"></path>
-							<circle class="svg-green" cx="118" cy="82" r="9"></circle>
-							<circle class="svg-gold" cx="642" cy="222" r="9"></circle>
-							<rect
-								class="svg-blue"
-								x="184"
-								y="102"
-								width="240"
-								height="64"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="304" y="129" text-anchor="middle">
-								Linear decline
-							</text>
-							<text class="svg-micro" x="304" y="150" text-anchor="middle">
-								higher utilization extracts more fees
-							</text>
-							<rect
-								class="svg-box"
-								x="608"
-								y="116"
-								width="172"
-								height="58"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="694" y="140" text-anchor="middle">
-								Floor after dip
-							</text>
-							<text class="svg-small" x="694" y="160" text-anchor="middle">
-								min retention
-							</text>
-						</svg>
-						<p class="diagram-caption">
-							<span class="figure-label">Retention Rate Curve</span>The
-							retention curve is piecewise: linear until the utilization dip,
-							then flat at the minimum retention rate.
-						</p>
-					</figure>
+
 					<p>
 						Read as a user-facing metric, that retention curve becomes the
 						annualized open-interest fee shown in the UI. At zero utilization,
 						the constants imply roughly a <code>10%</code> yearly fee. Once
 						utilization reaches the <code>80%</code> dip, the annualized fee is
 						roughly <code>50%</code> and then stays flat because the on-chain
-						retention rate is already pinned to its minimum. The plotted line
-						below follows the same annualization the UI uses:
-						<code
-							>annualFee = 1 - (retentionRate / PRICE_PRECISION)^SECONDS_PER_YEAR</code
-						>.
+						retention rate is already pinned to its minimum. The UI annualizes
+						the rate as
+						<code>annualFee = 1 - (retentionRate / PRICE_PRECISION)^SECONDS_PER_YEAR</code>.
 					</p>
-					<figure class="diagram" id="fig-statoblast-open-interest-fee-curve">
-						<svg
-							viewBox="0 0 860 330"
-							role="img"
-							aria-labelledby="open-interest-fee-title open-interest-fee-desc"
-						>
-							<title id="open-interest-fee-title">
-								Open-interest fee per year
-							</title>
-							<desc id="open-interest-fee-desc">
-								The annualized open-interest fee starts near ten percent at zero
-								utilization, rises as utilization increases, reaches roughly
-								fifty percent at eighty percent utilization, and then stays flat.
-							</desc>
-							<defs>
-								<marker
-									id="arrow-open-interest-fee"
-									viewBox="0 0 10 10"
-									refX="8"
-									refY="5"
-									markerWidth="7"
-									markerHeight="7"
-									orient="auto-start-reverse"
-								>
-									<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-								</marker>
-							</defs>
-							<line
-								class="svg-line"
-								x1="92"
-								y1="250"
-								x2="780"
-								y2="250"
-								marker-end="url(#arrow-open-interest-fee)"
-							></line>
-							<line
-								class="svg-line"
-								x1="92"
-								y1="250"
-								x2="92"
-								y2="58"
-								marker-end="url(#arrow-open-interest-fee)"
-							></line>
-							<text class="svg-small" x="430" y="296" text-anchor="middle">
-								utilization
-							</text>
-							<text
-								class="svg-small"
-								x="28"
-								y="154"
-								text-anchor="middle"
-								transform="rotate(-90 28 154)"
-							>
-								open interest fee / year
-							</text>
-							<line class="svg-line" x1="92" y1="214" x2="154" y2="214"></line>
-							<text class="svg-small" x="174" y="219">10%</text>
-							<line class="svg-line" x1="92" y1="82" x2="718" y2="82"></line>
-							<text class="svg-small" x="738" y="87">50%</text>
-							<line
-								class="svg-line"
-								x1="642"
-								y1="250"
-								x2="642"
-								y2="82"
-								stroke-dasharray="7 7"
-							></line>
-							<text class="svg-small" x="92" y="276">0%</text>
-							<text class="svg-small" x="642" y="276" text-anchor="middle">
-								80%
-							</text>
-							<text class="svg-small" x="780" y="276" text-anchor="end">
-								100%
-							</text>
-							<path
-								class="svg-line"
-								d="M 118 216 L 184 194 L 249 174 L 315 156 L 380 139 L 446 123 L 511 108 L 577 94 L 642 81 L 760 81"
-							></path>
-							<circle class="svg-green" cx="118" cy="214" r="9"></circle>
-							<circle class="svg-red" cx="642" cy="82" r="9"></circle>
-							<rect
-								class="svg-blue"
-								x="182"
-								y="110"
-								width="252"
-								height="64"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="308" y="137" text-anchor="middle">
-								Annualized fee rises
-							</text>
-							<text class="svg-micro" x="308" y="154" text-anchor="middle">
-								utilization makes underwriting
-							</text>
-							<text class="svg-micro" x="308" y="167" text-anchor="middle">
-								more expensive
-							</text>
-							<rect
-								class="svg-box"
-								x="582"
-								y="118"
-								width="198"
-								height="58"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="681" y="142" text-anchor="middle">
-								Fee cap reached
-							</text>
-							<text class="svg-micro" x="681" y="162" text-anchor="middle">
-								retention floor keeps fee flat
-							</text>
-						</svg>
-						<p class="diagram-caption">
-							<span class="figure-label">Open Interest Fee Curve</span>The
-							retention constants translate into an annualized open-interest fee
-							that rises from about <code>10%</code> per year to about
-							<code>50%</code> per year, then flattens once the utilization dip
-							is reached.
-						</p>
-					</figure>
-					<div class="equation" id="eq-statoblast-utilization">
-						<math
-							display="block"
-							aria-label="scaled utilization equals complete set collateral amount times price precision divided by total security bond allowance"
-							data-source="utilizationScaled = floor(completeSetCollateralAmount * PRICE_PRECISION / totalSecurityBondAllowance)"
-						>
-							<mrow>
-								<mi>utilizationScaled</mi>
-								<mo>=</mo>
-								<mi>floor</mi>
-								<mo>(</mo>
-								<mfrac>
-									<mrow>
-										<mi>completeSetCollateralAmount</mi>
-										<mo>&#x22C5;</mo>
-										<mi>PRICE_PRECISION</mi>
-									</mrow>
-									<mi>totalSecurityBondAllowance</mi>
-								</mfrac>
-								<mo>)</mo>
-							</mrow>
-						</math>
-						<p class="equation-caption">
-							<span class="equation-label">Utilization</span>The retention curve
-							uses open collateral divided by total underwriting allowance as
-							18-decimal fixed-point integer math. Below the dip, the contract
-							then computes
-							<code
-								>utilizationRatio = floor(utilizationScaled * PRICE_PRECISION /
-								RETENTION_RATE_DIP)</code
-							>
-							before applying the linear slope.
-						</p>
-					</div>
-					<div class="equation" id="eq-statoblast-retention-rate">
-						<math
-							display="block"
-							aria-label="retention rate equals max retention rate when bond allowance is zero, otherwise max minus floored slope span times utilization ratio until the dip, otherwise minimum retention rate"
-							data-source="utilizationRatio = floor(utilizationScaled * PRICE_PRECISION / RETENTION_RATE_DIP); retentionRate = totalSecurityBondAllowance == 0 ? MAX_RETENTION_RATE : utilizationScaled &lt;= RETENTION_RATE_DIP ? MAX_RETENTION_RATE - floor((MAX_RETENTION_RATE - MIN_RETENTION_RATE) * utilizationRatio / PRICE_PRECISION) : MIN_RETENTION_RATE"
-						>
-							<mrow>
-								<mi>retentionRate</mi>
-								<mo>=</mo>
-								<mo>{</mo>
-								<mtable>
-									<mtr>
-										<mtd>
-											<mi>MAX_RETENTION_RATE</mi>
-										</mtd>
-										<mtd>
-											<mtext>if totalSecurityBondAllowance = 0</mtext>
-										</mtd>
-									</mtr>
-									<mtr>
-										<mtd>
-											<mi>MAX_RETENTION_RATE</mi>
-											<mo>-</mo>
-											<mi>floor</mi>
-											<mo>(</mo>
-											<mfrac>
-												<mrow>
-													<mo>(</mo>
-													<mi>MAX_RETENTION_RATE</mi>
-													<mo>-</mo>
-													<mi>MIN_RETENTION_RATE</mi>
-													<mo>)</mo>
-													<mo>&#x22C5;</mo>
-													<mi>utilizationRatio</mi>
-												</mrow>
-												<mi>PRICE_PRECISION</mi>
-											</mfrac>
-											<mo>)</mo>
-										</mtd>
-										<mtd>
-											<mtext>if utilizationScaled &lt;= RETENTION_RATE_DIP</mtext>
-										</mtd>
-									</mtr>
-									<mtr>
-										<mtd>
-											<mi>MIN_RETENTION_RATE</mi>
-										</mtd>
-										<mtd>
-											<mtext>otherwise</mtext>
-										</mtd>
-									</mtr>
-								</mtable>
-							</mrow>
-						</math>
-						<p class="equation-caption">
-							<span class="equation-label">Retention Rate Curve</span>The
-							implementation returns the maximum retention rate when allowance
-							is zero, otherwise it linearly declines to the dip and then clamps
-							to the minimum rate.
-						</p>
-					</div>
-					<div class="equation" id="eq-statoblast-retention-decay">
-						<math
-							display="block"
-							aria-label="decay candidate equals collateral in minus the floor of collateral in times fixed point retention power divided by price precision"
-							data-source="decayCandidate = collateralIn - floor(collateralIn \cdot rpow(retentionRate, elapsedTime, pricePrecision) / pricePrecision)"
-						>
-							<mrow>
-								<mi>decayCandidate</mi>
-								<mo>=</mo>
-								<mi>collateralIn</mi>
-								<mo>-</mo>
-								<mi>floor</mi><mo>(</mo>
-								<mfrac>
-									<mrow><mi>collateralIn</mi><mo>&#x22C5;</mo><mi>rpow</mi><mo>(</mo><mi>retentionRate</mi><mo>,</mo><mi>elapsedTime</mi><mo>,</mo><mi>pricePrecision</mi><mo>)</mo></mrow>
-									<mi>pricePrecision</mi>
-								</mfrac>
-								<mo>)</mo>
-							</mrow>
-						</math>
-						<p class="equation-caption">
-							<span class="equation-label">Retention Decay Candidate</span
-							><code>rpow</code> uses fixed-point integer rounding. The candidate
-							feeds the index and remainder steps below; it is not yet the amount
-							removed from stored collateral.
-						</p>
-					</div>
+
 					<p>
 						When <code>feeEligibleSecurityBondAllowance == 0</code>, the pool
 						sets <code>feeIndexDelta</code> and <code>reserveCredit</code> to zero,
@@ -1491,95 +835,19 @@
 						The remaining fee-index equations apply only when fee-eligible
 						allowance is positive.
 					</p>
-					<div class="equation" id="eq-statoblast-fee-index-accrual">
-						<math
-							display="block"
-							aria-label="fee index delta floors scaled decay candidate plus its carried remainder over fee eligible allowance; reserve credit floors the indexed eligible allowance plus global fee remainder over price precision; collateral out equals collateral in minus reserve credit; vault fees floor vault allowance times its index delta plus vault remainder over price precision"
-							data-source="feeIndexDelta = floor((decayCandidate \cdot pricePrecision + feeIndexRemainderIn) / feeEligibleSecurityBondAllowance); feeIndexRemainderOut = (decayCandidate \cdot pricePrecision + feeIndexRemainderIn) mod feeEligibleSecurityBondAllowance; reserveCredit = floor((feeIndexDelta \cdot feeEligibleSecurityBondAllowance + globalFeeRemainderIn) / pricePrecision); globalFeeRemainderOut = (feeIndexDelta \cdot feeEligibleSecurityBondAllowance + globalFeeRemainderIn) mod pricePrecision; collateralOut = collateralIn - reserveCredit; vaultFees = floor((vaultSecurityBondAllowance \cdot vaultFeeIndexDelta + vaultFeeRemainderIn) / pricePrecision); vaultFeeRemainderOut = (vaultSecurityBondAllowance \cdot vaultFeeIndexDelta + vaultFeeRemainderIn) mod pricePrecision"
-						>
-							<mtable>
-								<mtr>
-									<mtd><mi>feeIndexDelta</mi></mtd>
-									<mtd><mo>=</mo></mtd>
-									<mtd>
-										<mi>floor</mi>
-										<mo>(</mo>
-										<mfrac>
-											<mrow>
-												<mi>decayCandidate</mi>
-												<mo>&#x22C5;</mo>
-												<mi>pricePrecision</mi>
-												<mo>+</mo>
-												<mi>feeIndexRemainderIn</mi>
-											</mrow>
-											<mi>feeEligibleSecurityBondAllowance</mi>
-										</mfrac>
-										<mo>)</mo>
-									</mtd>
-								</mtr>
-								<mtr>
-									<mtd><mi>feeIndexRemainderOut</mi></mtd>
-									<mtd><mo>=</mo></mtd>
-									<mtd>
-										<mo>(</mo><mi>decayCandidate</mi><mo>&#x22C5;</mo><mi>pricePrecision</mi><mo>+</mo><mi>feeIndexRemainderIn</mi><mo>)</mo>
-										<mo>mod</mo><mi>feeEligibleSecurityBondAllowance</mi>
-									</mtd>
-								</mtr>
-								<mtr>
-									<mtd><mi>reserveCredit</mi></mtd>
-									<mtd><mo>=</mo></mtd>
-									<mtd>
-										<mi>floor</mi><mo>(</mo>
-										<mfrac><mrow><mi>feeIndexDelta</mi><mo>&#x22C5;</mo><mi>feeEligibleSecurityBondAllowance</mi><mo>+</mo><mi>globalFeeRemainderIn</mi></mrow><mi>pricePrecision</mi></mfrac>
-										<mo>)</mo>
-									</mtd>
-								</mtr>
-								<mtr>
-									<mtd><mi>globalFeeRemainderOut</mi></mtd>
-									<mtd><mo>=</mo></mtd>
-									<mtd>
-										<mo>(</mo><mi>feeIndexDelta</mi><mo>&#x22C5;</mo><mi>feeEligibleSecurityBondAllowance</mi><mo>+</mo><mi>globalFeeRemainderIn</mi><mo>)</mo>
-										<mo>mod</mo><mi>pricePrecision</mi>
-									</mtd>
-								</mtr>
-								<mtr>
-									<mtd><mi>collateralOut</mi></mtd>
-									<mtd><mo>=</mo></mtd>
-									<mtd><mi>collateralIn</mi><mo>-</mo><mi>reserveCredit</mi></mtd>
-								</mtr>
-								<mtr>
-									<mtd><mi>vaultFees</mi></mtd>
-									<mtd><mo>=</mo></mtd>
-									<mtd>
-										<mi>floor</mi><mo>(</mo>
-										<mfrac><mrow><mi>vaultSecurityBondAllowance</mi><mo>&#x22C5;</mo><mi>vaultFeeIndexDelta</mi><mo>+</mo><mi>vaultFeeRemainderIn</mi></mrow><mi>pricePrecision</mi></mfrac>
-										<mo>)</mo>
-									</mtd>
-								</mtr>
-								<mtr>
-									<mtd><mi>vaultFeeRemainderOut</mi></mtd>
-									<mtd><mo>=</mo></mtd>
-									<mtd>
-										<mo>(</mo><mi>vaultSecurityBondAllowance</mi><mo>&#x22C5;</mo><mi>vaultFeeIndexDelta</mi><mo>+</mo><mi>vaultFeeRemainderIn</mi><mo>)</mo>
-										<mo>mod</mo><mi>pricePrecision</mi>
-									</mtd>
-								</mtr>
-							</mtable>
-						</math>
-						<p class="equation-caption">
-							<span class="equation-label">Fee Index Accrual</span>Only assigned,
-							fee-eligible allowance divides the global index. Only whole-wei
-							<code>reserveCredit</code> leaves stored collateral; index and global
-							remainders retain the rest. Vault checkpoints preserve their own
-							fractional carry while moving whole wei into redeemable debt.
-						</p>
-					</div>
+
+					<p>
+						Fee accrual is lazy: state-changing pool operations checkpoint the
+						global fee index, and vault operations checkpoint each vault against
+						that index. Fractional amounts remain in explicit remainders until
+						they accumulate into whole wei, so callers do not need to iterate over
+						every vault when time advances.
+					</p>
 					<p>
 						Fee accrual is time-clamped. The pool extracts collateral into fees
 						only until the question end time while the universe remains
 						unforked; after the universe forks, the fee accumulator is instead
-						clamped to the fork time. Retention-rate updates also no-op when
-						total bond allowance is zero or when the pool is outside
+						clamped to the fork time. Retention-rate updates also no-op when total bond allowance is zero or when the pool is outside
 						<code>Operational</code> mode, so fork handling does not silently
 						change the live fee curve.
 					</p>
@@ -1798,42 +1066,24 @@
 						</p>
 					</div>
 					<h3>Solvency Operations and Liquidation</h3>
-					<p>
-						Withdrawals, allowance changes, and liquidation depend on a fresh
-						REP/ETH price. Liquidation transfers unsafe allowance to a
-						non-liquidatable caller vault and seizes unlocked target REP, so it
-						redistributes backing rather than creating it.
-					</p>
-					<p>
-						The <a href="./liquidation.html">Liquidation Design</a> owns the
-						queue snapshot, eligibility gates, penalty and rounding math, health
-						improvement rule, and worked examples. The
-						<a href="./open-oracle-integration.html#statoblast-integration">OpenOracle integration</a>
-						owns price staging and callback behavior.
-					</p>
-					<p>
-						Implementation guardrails for withdrawal locks, external-fork locks,
-						liquidation snapshots, direct ETH receiver restrictions, fee clamps,
-						and complete-set minting order are in
-						<a href="./operator-reference.md#security-pool-guardrails"
-							>Security Pool Guardrails</a
-						>
-						.
-					</p>
+					<p> Withdrawals, allowance changes, and liquidation depend on a fresh REP/ETH price. Liquidation transfers unsafe allowance to a non-liquidatable caller vault and seizes unlocked target REP, so it redistributes backing rather than creating it.</p>
+
+					<p>Read how the liquidation works from <a href="./liquidation.html">Liquidation Design</a>.</p>
 				</section>
 
 				<section class="paper-section" id="shares">
 					<div class="section-heading">
 						<h2>5. Shares and Complete Sets</h2>
-						<a class="anchor-link" href="#shares" aria-label="Link to Shares"
-							>#</a
-						>
+						<a class="anchor-link" href="#shares" aria-label="Link to Shares">#</a>
 					</div>
+					<p> <code>ShareToken</code> is an ERC-1155 contract. Each complete set mints one <code>Invalid</code>, one <code>Yes</code>, and one <code>No</code> share. The token id encodes the universe id and outcome, making positions fork-aware.
+					</p>
 					<p>
-						<code>ShareToken</code> is an ERC-1155 contract. Each complete set
-						mints one <code>Invalid</code>, one <code>Yes</code>, and one
-						<code>No</code> share. The token id encodes the universe id and
-						outcome, making positions fork-aware.
+						A positive ETH deposit must convert through
+						<code>cashToShares</code> to at least one complete-set unit. If
+						rounding would mint zero shares, <code>createCompleteSet</code>
+						reverts with <code>Exchange rate undefined</code> instead of
+						accepting collateral.
 					</p>
 					<figure class="diagram" id="fig-statoblast-share-lifecycle">
 						<svg
@@ -1957,20 +1207,10 @@
 							</text>
 						</svg>
 					<p class="diagram-caption">
-						<span class="figure-label">Share Lifecycle</span>Shares are
-						transferable until redemption or the first fork-claim
-						materialization. Materialization preserves the source balance but
-						locks it against later transfer.
+						<span class="figure-label">Share Lifecycle</span>Shares are transferable until redemption or the first fork-claim materialization. Materialization preserves the source balance but locks it against later transfer.
 						</p>
 					</figure>
-					<p>
-						Shares can materialize across forks.
-						<code>ShareToken.migrate</code> preserves a parent-universe token id
-						as a persistent entitlement and mints child-universe token ids for
-						selected valid, non-malformed fork outcomes. The formal transfer-lock
-						and per-child delta rules are owned by
-						<a href="invariants.html#fork-10"><code>FORK-10</code></a>.
-					</p>
+					<p> Shares can materialize across forks. <code>ShareToken.migrate</code> preserves a parent-universe token id as a persistent entitlement and mints child-universe token ids for selected valid, non-malformed fork outcomes.</p>
 					<figure class="diagram" id="fig-statoblast-share-migration">
 						<svg
 							viewBox="0 0 900 300"
@@ -2082,203 +1322,19 @@
 							balance. Later calls mint only that child's unmaterialized delta.
 						</p>
 					</figure>
-					<details class="interactive-example" id="share-migration-example">
-						<summary>Adjust a first-materialization share example</summary>
-						<p>
-							This example assumes that none of the selected children has received
-							this source entitlement before. The first call preserves the full
-							parent token balance and materializes that balance in each selected
-							child outcome. On a later call, each child receives only
-							<code>current source balance - amount already materialized</code>; if
-							every selected delta is zero, the call reverts. The contract accepts
-							any non-empty, strictly increasing list of valid non-malformed
-							fork-question outcome indexes. The compact diagram caps the displayed
-							branches at three.
-						</p>
-						<div class="example-grid">
-							<label>
-								Parent share balance
-								<input
-									type="range"
-									min="1"
-									max="100"
-									step="1"
-									value="30"
-									data-example-input="parentBalance"
-								/>
-								<span class="example-value" data-example-value="parentBalance"
-									>30 shares</span
-								>
-							</label>
-							<label>
-								Displayed selected child outcomes
-								<input
-									type="range"
-									min="1"
-									max="3"
-									step="1"
-									value="2"
-									data-example-input="selectedChildren"
-								/>
-								<span
-									class="example-value"
-									data-example-value="selectedChildren"
-									>2 branches</span
-								>
-							</label>
-						</div>
-						<div class="example-visual">
-							<svg
-								viewBox="0 0 760 220"
-								role="img"
-								aria-label="First materialization of a share entitlement into untouched child branches"
-							>
-								<rect
-									class="example-bar-base"
-									x="80"
-									y="42"
-									width="220"
-									height="32"
-									rx="6"
-								></rect>
-								<rect
-									class="example-bar-red"
-									x="80"
-									y="42"
-									width="66"
-									height="32"
-									rx="6"
-									data-example-rect="parent"
-								></rect>
-								<text class="svg-label" x="80" y="30">
-									Parent retained + locked
-								</text>
-								<text
-									class="svg-small"
-									x="314"
-									y="64"
-									data-example-text="parentText"
-								>
-									30
-								</text>
-								<path class="svg-line" d="M 350 58 H 420"></path>
-								<rect
-									class="example-bar-base"
-									x="460"
-									y="30"
-									width="220"
-									height="28"
-									rx="6"
-								></rect>
-								<rect
-									class="example-bar-green"
-									x="460"
-									y="30"
-									width="66"
-									height="28"
-									rx="6"
-									data-example-rect="childA"
-								></rect>
-								<text
-									class="svg-small"
-									x="690"
-									y="50"
-									data-example-text="childAText"
-								>
-									30
-								</text>
-								<rect
-									class="example-bar-base"
-									x="460"
-									y="82"
-									width="220"
-									height="28"
-									rx="6"
-								></rect>
-								<rect
-									class="example-bar-blue"
-									x="460"
-									y="82"
-									width="66"
-									height="28"
-									rx="6"
-									data-example-rect="childB"
-								></rect>
-								<text
-									class="svg-small"
-									x="690"
-									y="102"
-									data-example-text="childBText"
-								>
-									30
-								</text>
-								<rect
-									class="example-bar-base"
-									x="460"
-									y="134"
-									width="220"
-									height="28"
-									rx="6"
-								></rect>
-								<rect
-									class="example-bar-gold"
-									x="460"
-									y="134"
-									width="66"
-									height="28"
-									rx="6"
-									data-example-rect="childC"
-								></rect>
-								<text
-									class="svg-small"
-									x="690"
-									y="154"
-									data-example-text="childCText"
-								>
-									0
-								</text>
-							</svg>
-						</div>
-						<div class="example-output-grid">
-							<div>
-								<span>Parent balance after call</span
-								><output data-example-output="parentAfter">30 shares</output>
-							</div>
-							<div>
-								<span>First materialized balance per selected branch</span
-								><output data-example-output="childBalance">30 shares</output>
-							</div>
-							<div>
-								<span>Total displayed child balances</span
-								><output data-example-output="totalChildBalances"
-									>60 shares</output
-								>
-							</div>
-						</div>
-					</details>
-					<ul>
-						<li>The selected target list must be non-empty.</li>
-						<li>
-							The caller must hold a positive balance of the parent token id.
-						</li>
-						<li>
-							The parent balance remains as a persistent entitlement. After its
-							first child materialization, that source balance cannot transfer.
-						</li>
-						<li>
-							Target outcomes must be valid for the fork question and strictly
-							increasing, which prevents duplicate child mints in one call.
-						</li>
-					</ul>
 					<p>
-						At the implementation level, <code>redeemShares</code> burns the
-						holder’s full materialized balance of the winning token id and pays
-						the burned amount’s pro-rata share of current collateral, using the
-						pool’s remaining economic claim supply as the denominator. The
-						canonical lifecycle is
-						<a href="invariants.html#share-04"><code>SHARE-04</code></a>,
-						and unequal materialized supplies are covered by
-						<a href="invariants.html#fork-11"><code>FORK-11</code></a>. That
+						If none of the selected children has received a source entitlement,
+						the first call materializes the full current source balance in each
+						selected child. On a later call, each child receives only
+						<code>current source balance - amount already materialized</code>. If
+						every selected delta is zero, the call reverts.
+						The canonical guarantees are
+						<a href="./invariants.html#fork-10"><code>FORK-10</code></a>,
+						<a href="./invariants.html#share-04"><code>SHARE-04</code></a>, and
+						<a href="./invariants.html#fork-11"><code>FORK-11</code></a>.
+					</p>
+					<p>
+						At the implementation level, <code>redeemShares</code> burns the holder’s full materialized balance of the winning token id and pays the burned amount’s pro-rata share of current collateral, using the pool’s remaining economic claim supply as the denominator. That
 						<code>shareTokenSupply</code> includes materialized ERC-1155 balances
 						and fork-time entitlements that can materialize later. In the healthy
 						case this corresponds to a
@@ -2309,19 +1365,12 @@
 							</mrow>
 						</math>
 						<p class="equation-caption">
-							<span class="equation-label">Share Redemption</span
-							>The remaining economic claim supply reserves collateral for both
-							materialized winners and winning fork entitlements that arrive
-							later. Solidity integer division floors any remainder.
+							<span class="equation-label">Share Redemption</span>The remaining economic claim supply reserves collateral for both materialized winners and winning fork entitlements that arrive
+							later.
 						</p>
 					</div>
 					<p>
-						The important edge case is fork recovery. If a child pool emerges
-						from migration with incomplete collateral, the truth auction sells
-						REP for ETH so the child pool can restore the collateral base needed
-						for clean redemption. If multiple target outcomes are selected
-						during share migration, the holder’s source entitlement remains
-						and its unmaterialized balance is minted into each selected child.
+						The important edge case is fork recovery. If a child pool emerges from migration with incomplete collateral, the truth auction sells REP for ETH so the child pool can restore the collateral base needed for clean redemption. If multiple target outcomes are selected during share migration, the holder’s source entitlement remains and its unmaterialized balance is minted into each selected child.
 					</p>
 				</section>
 
@@ -2336,44 +1385,17 @@
 						>
 					</div>
 					<p class="lede">
-						Statoblast tries local resolution before asking Zoltar to fork.
-						Vault operators move REP out of their security-pool position and
-						behind
-						<code>Invalid</code>, <code>Yes</code>, or <code>No</code>. The
-						required attrition cost rises from the starting bond to the
-						non-decision threshold over seven weeks after a three-day activation
-						delay.
+						Statoblast tries local resolution before forcing Zoltar to fork. An
+						<code>EscalationGame</code> escrows vault-backed REP behind
+						<code>Invalid</code>, <code>Yes</code>, or <code>No</code>. After
+						the deadline, a unique leading outcome can resolve locally. If at
+						least two outcomes reach the non-decision threshold, the pool can use
+						its escalation backing to initiate a Zoltar fork.
 					</p>
-					<div class="summary-grid">
-						<div class="summary-card">
-							<span>Local dispute role</span>
-							<b
-								>Escalation is a local dispute game before the protocol
-								escalates to a Zoltar fork.</b
-							>
-						</div>
-						<div class="summary-card">
-							<span>Contract behavior</span>
-							<b
-								>Deposits compete against a rising cost curve and a fixed
-								non-decision threshold.</b
-							>
-						</div>
-						<div class="summary-card">
-							<span>Edge cases</span>
-							<b
-								>Ties, fork-threshold scaling, and interrupted unresolved games
-								change payout handling.</b
-							>
-						</div>
-					</div>
+
 					<div class="callout">
-						<strong>Why not fork immediately?</strong> A fork asks the whole
-						universe to branch, so Statoblast first gives vault-backed REP a
-						local path to settle the question. The rising cost curve makes late
-						disagreement increasingly expensive, while the non-decision threshold
-						keeps the fork path available when competing outcomes remain
-						strongly funded.
+						<strong>Why not fork immediately?</strong> A fork asks the whole universe to branch, so Statoblast first gives vault-backed REP a local path to settle the question. The rising cost curve makes late disagreement increasingly expensive, while the non-decision threshold keeps the fork path available when competing outcomes remain strongly funded.
+						The Escalation Game system is an optimization, and in theory the system would work without it as well.
 					</div>
 					<div class="equation" id="eq-statoblast-escalation-cost">
 						<math
@@ -2427,7 +1449,9 @@
 						<li>The cost rises monotonically between those endpoints.</li>
 					</ul>
 					<p>
-						The plot below is the same curve used by
+						The plot below is an illustrative normalized instance with
+						<code>ln(nonDecisionThreshold / startingBond) = 2.4</code>. It uses
+						the parameterized curve implemented by
 						<code>totalCost()</code> and
 						<code>computeIterativeAttritionCost</code>: early deposits face the
 						starting bond, while sustained late disagreement approaches the
@@ -2486,13 +1510,7 @@
 						</p>
 					</figure>
 					<p>
-						Escalation deposits enter through
-						<code>SecurityPool.depositToEscalationGame</code>. The first valid
-						deposit after question end deploys the game, sets
-						<code>activationTime = block.timestamp + 3 days</code>, and records
-						the game’s starting parameters. Later deposits can continue only
-						while the pool is operational, the game has resumed if it came from
-						a fork continuation, and the child pool is not still waiting for
+						Escalation deposits enter through <code>SecurityPool.depositToEscalationGame</code>. The first valid deposit after question end deploys the game, sets <code>activationTime = block.timestamp + 3 days</code>, and records the game’s starting parameters. Later deposits can continue only while the pool is operational, the game has resumed if it came from a fork continuation, and the child pool is not still waiting for
 						continuation processing.
 					</p>
 					<p>
@@ -3409,210 +2427,8 @@
 						receives principal back with no share of the reward pool.
 					</div>
 					<p>
-						If the actual Zoltar fork threshold for the universe is lower than
-						the escalation game’s configured <code>nonDecisionThreshold</code>,
-						the payout is scaled down by
-						<code>actualForkThreshold / nonDecisionThreshold</code>.
+						If the actual Zoltar fork threshold for the universe is lower than the escalation game’s configured <code>nonDecisionThreshold</code>, the payout is scaled down by <code>actualForkThreshold / nonDecisionThreshold</code>.
 					</p>
-					<details class="interactive-example" id="payout-region-example">
-						<summary>
-							Adjust escalation payout regions and threshold scaling
-						</summary>
-						<p>
-							Winning capital up to the reward cap shares the fixed reward pool.
-							Winning capital above the cap receives principal only, and a lower
-							actual fork threshold scales the withdrawal down. Tied leaders do
-							not resolve to a fallback outcome, so the payout path only applies
-							once one outcome has a strict lead or non-decision has already
-							routed the market into the fork path.
-						</p>
-						<div class="example-grid">
-							<label>
-								Binding capital
-								<input
-									type="range"
-									min="1"
-									max="50"
-									step="1"
-									value="10"
-									data-example-input="bindingCapital"
-								/>
-								<span class="example-value" data-example-value="bindingCapital"
-									>10 REP</span
-								>
-							</label>
-							<label>
-								Winning principal
-								<input
-									type="range"
-									min="1"
-									max="80"
-									step="1"
-									value="18"
-									data-example-input="winningPrincipal"
-								/>
-								<span
-									class="example-value"
-									data-example-value="winningPrincipal"
-									>18 REP</span
-								>
-							</label>
-							<label>
-								This deposit amount
-								<input
-									type="range"
-									min="1"
-									max="30"
-									step="1"
-									value="5"
-									data-example-input="depositAmount"
-								/>
-								<span class="example-value" data-example-value="depositAmount"
-									>5 REP</span
-								>
-							</label>
-							<label>
-								Deposit starts after
-								<input
-									type="range"
-									min="0"
-									max="80"
-									step="1"
-									value="10"
-									data-example-input="depositStart"
-								/>
-								<span class="example-value" data-example-value="depositStart"
-									>10 REP</span
-								>
-							</label>
-							<label>
-								Actual fork threshold share
-								<input
-									type="range"
-									min="20"
-									max="100"
-									step="5"
-									value="100"
-									data-example-input="actualForkThresholdPercent"
-								/>
-								<span
-									class="example-value"
-									data-example-value="actualForkThresholdPercent"
-									>100%</span
-								>
-							</label>
-						</div>
-						<div class="example-visual">
-							<svg
-								viewBox="0 0 760 190"
-								role="img"
-								aria-label="Escalation payout regions"
-							>
-								<rect
-									class="example-bar-base"
-									x="80"
-									y="62"
-									width="600"
-									height="36"
-									rx="7"
-								></rect>
-								<rect
-									class="example-bar-green"
-									x="80"
-									y="62"
-									width="333"
-									height="36"
-									rx="7"
-									data-example-rect="bindingRegion"
-								></rect>
-								<rect
-									class="example-bar-gold"
-									x="413"
-									y="62"
-									width="167"
-									height="36"
-									rx="0"
-									data-example-rect="safetyRegion"
-								></rect>
-								<rect
-									class="example-bar-red"
-									x="580"
-									y="62"
-									width="80"
-									height="36"
-									rx="0"
-									data-example-rect="excessRegion"
-								></rect>
-								<line
-									class="svg-line"
-									x1="80"
-									y1="124"
-									x2="680"
-									y2="124"
-								></line>
-								<text class="svg-small" x="80" y="145">0</text>
-								<text
-									class="svg-small"
-									x="413"
-									y="145"
-									text-anchor="middle"
-									data-example-text="bindingMarker"
-								>
-									binding 10
-								</text>
-								<text
-									class="svg-small"
-									x="580"
-									y="162"
-									text-anchor="middle"
-									data-example-text="capMarker"
-								>
-									cap 15
-								</text>
-								<text
-									class="svg-small"
-									x="680"
-									y="179"
-									text-anchor="middle"
-									data-example-text="winningMarker"
-								>
-									winning 18
-								</text>
-							</svg>
-						</div>
-						<div class="example-output-grid">
-							<div>
-								<span>Reward-eligible cap</span
-								><output data-example-output="rewardCap">15 REP</output>
-							</div>
-							<div>
-								<span>Reward bonus pool</span
-								><output data-example-output="rewardPool">6 REP</output>
-							</div>
-							<div>
-								<span>Reward-eligible part of this deposit</span
-								><output data-example-output="eligibleDeposit">5 REP</output>
-							</div>
-							<div>
-								<span>Excess principal</span
-								><output data-example-output="excessPrincipal">3 REP</output>
-							</div>
-							<div>
-								<span>This deposit withdrawal</span
-								><output data-example-output="depositWithdrawal">7 REP</output>
-							</div>
-							<div>
-								<span>Scaled withdrawal</span
-								><output data-example-output="scaledWithdrawal">7 REP</output>
-							</div>
-							<div>
-								<span>Payout state</span
-								><output data-example-output="payoutState"
-									>reachable game state</output
-								>
-							</div>
-						</div>
-					</details>
 					<p>
 						Settlement uses different calls for local withdrawal, own-fork direct
 						claims, optional parent-lock cleanup, and child proof claims. The
@@ -3703,18 +2519,12 @@
 						<code>msg.sender</code> to be the affected vault.
 					</p>
 					<p>
-						Fork interruption changes the claim path, but the canonical continuation
-						lifecycle—snapshotting, aggregate backing, child activation, proof settlement,
-						optional cleanup independence, and recursive re-forking—lives in
+						External Zoltar forks interrupt the escalation game. This is called
+						continuation. The canonical continuation lifecycle lives in
 						<a href="#migration">Forks and Migration</a>. This section only distinguishes
 						the settlement entry points and their caller permissions.
 					</p>
-					<p>
-						Continuation claims use Merkle Mountain Range proofs and nullifier roots.
-						The canonical leaf fields, peak ordering, proof lengths, and replay rules are
-						documented in
-						<a href="./merkle-mountain-range.html">Merkle Mountain Range carry proofs</a>.
-					</p>
+					<p> Continuation claims use Merkle Mountain Range proofs and nullifier roots. The canonical leaf fields, peak ordering, proof lengths, and replay rules are documented in <a href="./merkle-mountain-range.html">Merkle Mountain Range carry proofs</a>. </p>
 				</section>
 
 				<section class="paper-section" id="migration">
@@ -3727,51 +2537,17 @@
 							>#</a
 						>
 					</div>
+					<p> Fork handling spans both layers. Zoltar creates child universes and handles REP splitting. Statoblast separately moves vault state, proportional collateral, and share positions into child pools, while child creation reproduces unresolved escalation state from one canonical snapshot and aggregate backing transfer.</p>
+					<p> The child-pool selector comes from the universe’s fork question, not from Statoblast’s binary market shape. A binary Statoblast pool can therefore spawn child pools keyed to scalar encodings or multi-way categorical outcomes when the universe fork used a different Zoltar question.</p>
 					<p>
-						Fork handling spans both layers. Zoltar creates child universes and
-						handles REP splitting. Statoblast separately moves vault state,
-						proportional collateral, and share positions into child pools, while
-						child creation reproduces unresolved escalation state from one
-						canonical snapshot and aggregate backing transfer.
+						As described by
+						<a href="./zoltar-whitepaper.html#global-question-scope"
+							>Zoltar's global-question rules</a
+						>, the consequence is universe-wide: an eligible Zoltar fork stops
+						or redirects parent flows for every pool using that universe, even
+						when the fork question is unrelated to a pool.
 					</p>
-					<p>
-						The child-pool selector comes from the universe’s fork question, not
-						from Statoblast’s binary market shape. A binary Statoblast pool
-						can therefore spawn child pools keyed to scalar encodings or
-						multi-way categorical outcomes when the universe fork used a
-						different Zoltar question.
-					</p>
-					<p id="fork-griefing-risk">
-						<strong>Accepted global-fork consequence.</strong> Zoltar's
-						<a href="./zoltar-whitepaper.html#global-question-scope">global-question scope</a>
-						owns admission rules and their security classification. For Statoblast,
-						the consequence is universe-wide: an admitted fork pauses globally guarded
-						parent flows for every pool while migration proceeds.
-					</p>
-					<div class="summary-grid">
-						<div class="summary-card">
-							<span>Fork branch role</span>
-							<b
-								>A Zoltar fork creates branches; Statoblast decides what pool
-								state follows each branch.</b
-							>
-						</div>
-						<div class="summary-card">
-							<span>Contract behavior</span>
-							<b
-								>Globally guarded parent flows halt while child pools collect
-								migrated vaults, collateral, shares, and escalation state.</b
-							>
-						</div>
-						<div class="summary-card">
-							<span>Edge cases</span>
-							<b
-								>Only continuations without a fixed outcome can fork again; their
-								game-local trigger may be a local non-decision or an inherited
-								threshold tie.</b
-							>
-						</div>
-					</div>
+
 					<table>
 						<thead>
 							<tr>
@@ -3783,50 +2559,30 @@
 						<tbody>
 							<tr>
 								<td><code>Operational</code></td>
-								<td>
-									Stored state for normal operation outside the explicit fork
-									lifecycle. A late universe fork can still disable globally
-									guarded calls without changing this enum value.
+								<td> Stored state for normal operation outside the explicit fork lifecycle. A late universe fork can still disable globally guarded calls without changing this enum value.
 								</td>
 								<td>Local resolution or fork handling activation.</td>
 							</tr>
 							<tr>
 								<td><code>PoolForked</code></td>
-								<td>
-									Fork handling was activated for this parent pool, which has
-									stopped normal operation.
-								</td>
+								<td> Fork handling was activated for this parent pool, which has stopped normal operation. </td>
 								<td>Child pools begin migration setup.</td>
 							</tr>
 							<tr>
 								<td><code>ForkMigration</code></td>
-								<td>
-									Child pool receives migrated vaults, REP-derived state, and
-									collateral.
-								</td>
+								<td> Child pool receives migrated vaults, REP-derived state, and collateral. </td>
 								<td>Migration window ends.</td>
 							</tr>
 							<tr>
 								<td><code>ForkTruthAuction</code></td>
-								<td>Child pool repairs missing collateral by selling REP.</td>
-								<td>
-									Auction finalization accounts legitimate routed collateral plus
-									accepted bid ETH and activates the child at that level. It rejects
-									explicit caller contribution ETH.
+								<td> Truth-auction decision and finalization phase. The child either sells REP when repair is needed or finalizes immediately without a sale.
+								</td>
+								<td> Auction finalization accounts legitimate routed collateral plus accepted bid ETH and activates the child at that level. It rejects explicit caller contribution ETH.
 								</td>
 							</tr>
 						</tbody>
 					</table>
-					<p>
-						<code>SystemState</code> is primarily a fork-and-migration state
-						machine, not a generic question-resolution state machine. A pool
-						finalized before a late, unrelated universe fork can retain
-						<code>SystemState.Operational</code>. Its
-						<code>isOperational</code>-guarded activity still freezes because
-						that modifier separately checks the universe fork time, while
-						finalized share, REP, and eligible escalation-deposit redemption
-						paths that check only the stored state remain callable.
-					</p>
+					<p><code>SystemState</code> is primarily a fork-and-migration state machine, not a generic question-resolution state machine. A pool finalized before a late, unrelated universe fork can retain <code>SystemState.Operational</code>. Its <code>isOperational</code>-guarded activity still freezes because that modifier separately checks the universe fork time, while finalized share, REP, and eligible escalation-deposit redemption paths that check only the stored state remain callable. </p>
 					<figure class="diagram" id="fig-statoblast-fork-state-machine">
 						<svg
 							viewBox="0 0 960 340"
@@ -3856,6 +2612,8 @@
 							</defs>
 							<rect
 								class="svg-green"
+								data-state="Operational"
+								data-pool-role="parent"
 								x="50"
 								y="70"
 								width="170"
@@ -3871,6 +2629,7 @@
 							<path
 								class="svg-line"
 								marker-end="url(#arrow-state)"
+								data-transition="Operational->PoolForked"
 								d="M 220 109 H 300"
 							></path>
 							<text class="svg-micro" x="260" y="92" text-anchor="middle">
@@ -3878,6 +2637,8 @@
 							</text>
 							<rect
 								class="svg-red"
+								data-state="PoolForked"
+								data-pool-role="parent"
 								x="300"
 								y="70"
 								width="170"
@@ -3893,6 +2654,8 @@
 							<path
 								class="svg-line"
 								marker-end="url(#arrow-state)"
+								data-transition="PoolForked->ForkMigration"
+								data-boundary="parent-to-child"
 								d="M 470 109 H 550"
 							></path>
 							<text class="svg-micro" x="510" y="92" text-anchor="middle">
@@ -3900,6 +2663,8 @@
 							</text>
 							<rect
 								class="svg-blue"
+								data-state="ForkMigration"
+								data-pool-role="child"
 								x="550"
 								y="70"
 								width="170"
@@ -3915,6 +2680,7 @@
 							<path
 								class="svg-line"
 								marker-end="url(#arrow-state)"
+								data-transition="ForkMigration->ForkTruthAuction"
 								d="M 635 148 V 218"
 							></path>
 							<text class="svg-micro" x="742" y="187" text-anchor="middle">
@@ -3922,6 +2688,8 @@
 							</text>
 							<rect
 								class="svg-gold"
+								data-state="ForkTruthAuction"
+								data-pool-role="child"
 								x="550"
 								y="218"
 								width="170"
@@ -3940,13 +2708,16 @@
 							<path
 								class="svg-line"
 								marker-end="url(#arrow-state)"
+								data-transition="ForkTruthAuction->Operational"
 								d="M 720 257 H 800"
 							></path>
 							<text class="svg-micro" x="760" y="240" text-anchor="middle">
-								auction settled
+								finalized
 							</text>
 							<rect
 								class="svg-green"
+								data-state="Operational"
+								data-pool-role="child"
 								x="800"
 								y="218"
 								width="120"
@@ -3959,13 +2730,8 @@
 							<text class="svg-small" x="860" y="274" text-anchor="middle">
 								bids accounted
 							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-state)"
-								d="M 720 109 C 790 120 840 154 860 218"
-							></path>
-							<text class="svg-micro" x="825" y="92" text-anchor="middle">
-								no auction needed
+							<text class="svg-micro" x="760" y="320" text-anchor="middle">
+								immediate if no auction is needed
 							</text>
 							<text class="svg-small" x="386" y="184" text-anchor="middle">
 								migration calls
@@ -4478,30 +3244,50 @@
 							aria-label="migration REP denominator at fork equals vault REP at fork for an own fork and auctionable REP at fork for an external fork; migrated REP equals the floor of parent pool ownership times the migration REP denominator at fork divided by the parent pool ownership denominator"
 							data-source="migrationRepDenominatorAtFork = ownFork ? vaultRepAtFork : auctionableRepAtFork; migratedRep = floor(parentPoolOwnership \cdot migrationRepDenominatorAtFork / parentPoolOwnershipDenominator)"
 						>
-							<mtable>
-								<mtr>
-									<mtd>
-										<mi>migrationRepDenominatorAtFork</mi>
-									</mtd>
-									<mtd>
-										<mo>=</mo>
-										<mi>ownFork</mi>
-										<mo>?</mo>
-										<mi>vaultRepAtFork</mi>
-										<mo>:</mo>
-										<mi>auctionableRepAtFork</mi>
-									</mtd>
-								</mtr>
-								<mtr>
-									<mtd>
-										<mi>migratedRep</mi>
-									</mtd>
-									<mtd>
-										<mo>=</mo>
-									</mtd>
-									<mtd>
-										<mi>floor</mi>
-										<mo>(</mo>
+							<mtable columnalign="right center left" rowspacing="0.8em">
+							<mtr>
+								<mtd>
+									<mi>migrationRepDenominatorAtFork</mi>
+								</mtd>
+								<mtd>
+									<mo>=</mo>
+								</mtd>
+								<mtd>
+									<mrow>
+										<mo>{</mo>
+										<mtable columnalign="left left" rowspacing="0.35em">
+											<mtr>
+												<mtd>
+													<mi>vaultRepAtFork</mi>
+												</mtd>
+												<mtd>
+													<mtext>if </mtext>
+													<mi>ownFork</mi>
+												</mtd>
+											</mtr>
+											<mtr>
+												<mtd>
+													<mi>auctionableRepAtFork</mi>
+												</mtd>
+												<mtd>
+													<mtext>otherwise</mtext>
+												</mtd>
+											</mtr>
+										</mtable>
+									</mrow>
+								</mtd>
+							</mtr>
+
+							<mtr>
+								<mtd>
+									<mi>migratedRep</mi>
+								</mtd>
+								<mtd>
+									<mo>=</mo>
+								</mtd>
+								<mtd>
+									<mrow>
+										<mo fence="true">&#x230A;</mo>
 										<mfrac>
 											<mrow>
 												<mi>parentPoolOwnership</mi>
@@ -4510,9 +3296,10 @@
 											</mrow>
 											<mi>parentPoolOwnershipDenominator</mi>
 										</mfrac>
-										<mo>)</mo>
-									</mtd>
-								</mtr>
+										<mo fence="true">&#x230B;</mo>
+									</mrow>
+								</mtd>
+							</mtr>
 							</mtable>
 						</math>
 						<p class="equation-caption">
@@ -5667,37 +4454,8 @@
 							>#</a
 						>
 					</div>
-					<p class="lede">
-						After the parent migration window ends, a child pool may still hold
-						less ETH than users need for clean redemption. The truth auction
-						sells child-universe REP for ETH to repair that gap, subject to both
-						an ETH raise cap and a maximum REP sale cap.
-					</p>
-					<div class="summary-grid">
-						<div class="summary-card">
-							<span>Collateral repair role</span>
-							<b
-								>The auction turns child-universe REP into the ETH needed to
-								repair child collateral.</b
-							>
-						</div>
-						<div class="summary-card">
-							<span>Contract behavior</span>
-							<b
-								>Bids clear against both an ETH target and a maximum REP
-								inventory.</b
-							>
-						</div>
-						<div class="summary-card">
-							<span>Edge cases</span>
-							<b
-									>If demand is weak, bids at or above the cap-implied qualification threshold buy
-									the complete REP sale cap at one effective price. Lower bids refund.
-									Value-free finalization activates the child with the collateral
-									actually migrated and raised.</b
-							>
-						</div>
-					</div>
+					<p class="lede"> After the parent migration window ends, a child pool may still hold less ETH than users need for clean redemption. The truth auction sells child-universe REP for ETH to repair that gap, subject to both an ETH raise cap and a maximum REP sale cap. </p>
+
 					<p>
 						The repair target is the contract’s direct statement of the
 						collateral gap: <code>parentCollateralAtFork</code> minus
@@ -5913,7 +4671,7 @@
 					</p>
 					<h3>Clearing and Settlement</h3>
 					<p>
-						The <a href="./auction-design.html#clearing">Truth Auction design</a>
+						The <a href="./truth-auction.html#clearing">Truth Auction design</a>
 						owns tick pricing, cap selection, underfunded qualification,
 						allocation rounding, settlement modes, and the interactive examples.
 						The <a href="./security-model.html#auction-a1">security model</a>
@@ -5924,38 +4682,10 @@
 				<section class="paper-section" id="oracle">
 					<div class="section-heading">
 						<h2>9. REP/ETH Price Oracle</h2>
-						<a
-							class="anchor-link"
-							href="#oracle"
-							aria-label="Link to REP/ETH Oracle"
-							>#</a
-						>
+						<a class="anchor-link" href="#oracle" aria-label="Link to REP/ETH Oracle">#</a>
 					</div>
-					<p>
-						The REP/ETH oracle is narrow in purpose.
-						<code>OpenOraclePriceCoordinator</code> uses
-						<code>OpenOracle</code> to obtain a fresh REP/ETH price for
-						liquidation, REP withdrawal, and bond-allowance updates. A stale
-						price also blocks <code>depositToEscalationGame</code> whenever the
-						pool still has active security-bond allowance. It is not the oracle
-						for question truth; that path is handled by escalation and, if
-						necessary, Zoltar forks.
-					</p>
-					<p>
-							The OpenOracle path is contestable before the coordinator can use
-							it: the sponsor funds the request, the coordinator atomically posts
-							the initial token amounts and becomes the onchain reporter, disputers
-							can replace a bad report with the contract-required replacement
-							amounts strictly before the settlement deadline, and a settler can
-							finalize the report at or after that deadline.
-							OpenOracle credits the final position to the final reporter. Its callback
-							supplies the accepted amounts to the coordinator, which withdraws only
-							its own internal WETH/REP balances back to the sponsor.
-						Request, dispute, settlement, and callback safety checks are
-						detailed in the dedicated
-						<a href="./open-oracle-integration.html">OpenOracle integration</a>
-						guide.
-					</p>
+					<p> The REP/ETH oracle is narrow in purpose. <code>OpenOraclePriceCoordinator</code> uses <code>OpenOracle</code> to obtain a fresh REP/ETH price for liquidation, REP withdrawal, and bond-allowance updates. A stale price also blocks <code>depositToEscalationGame</code> whenever the pool still has active security-bond allowance. It is not the oracle for question truth; escalation and, if necessary, Zoltar forks handle that path. </p>
+					<p> The OpenOracle path is contestable before the coordinator can use it: the sponsor funds the request, the coordinator atomically posts the initial token amounts and becomes the onchain reporter, disputers can replace a bad report with the contract-required replacement amounts strictly before the settlement deadline, and a settler can finalize the report at or after that deadline. OpenOracle credits the final position to the final reporter. Its callback supplies the accepted amounts to the coordinator, which withdraws only its own internal WETH/REP balances back to the sponsor. Request, dispute, settlement, callback safety, and recovery details are maintained in the dedicated <a href="./open-oracle-integration.html#statoblast-integration">OpenOracle integration</a> guide. </p>
 					<p>
 						If the last price is stale, solvency-sensitive operations can be
 						queued until a valid report is settled. The coordinator then replays
@@ -5968,8 +4698,8 @@
 					<p id="oracle-economic-security-assumption">
 						<strong><code>ORACLE-A1</code> — always-available profitable arbitrager.</strong>
 						Security depends on profitable corrections receiving timely inclusion;
-						report liquidity does not collateralize downstream operation value. The
-						<a href="./security-model.html#oracle-a1">normative security model</a>
+						the mechanism does not guarantee that every accepted price is correct.
+						The <a href="./security-model.html#oracle-a1">normative security model</a>
 						owns the full assumption, excluded guarantee, and residual loss boundary.
 					</p>
 					<figure class="diagram" id="fig-statoblast-oracle-flow">
@@ -6033,7 +4763,7 @@
 								Valid Price?
 							</text>
 							<text class="svg-small" x="470" y="113" text-anchor="middle">
-								5-minute freshness window
+								configured freshness window
 							</text>
 							<path
 								class="svg-line"
@@ -6130,15 +4860,6 @@
 								disputes.
 							</p>
 					</figure>
-					<h3>Staging and Recovery</h3>
-					<p>
-						The <a href="./open-oracle-integration.html#statoblast-integration">OpenOracle integration</a>
-						owns request funding, staged-operation ordering, settlement
-						callbacks, rejected-price handling, recovery, report sizing, and
-						current parameters. The application-level distinction is that a
-						fresh price executes an eligible operation immediately, while a
-						stale price routes it through that contestable path.
-					</p>
 				</section>
 
 				<section class="paper-section" id="security">
@@ -6154,20 +4875,21 @@
 					<p>
 						The <a href="./security-model.html">Protocol Security Model</a> is
 						normative for <code>ORACLE-A1</code>, <code>AUCTION-A1</code>, their
-						excluded guarantees, and the resulting loss allocation. The summary
-						below provides the broader economic context.
+						excluded guarantees, and the resulting loss allocation.
 					</p>
 					<ul>
 						<li>REP backing must remain economically meaningful relative to the obligations it secures.</li>
-						<li>Users accept that fork recovery can sell child REP to repair missing ETH collateral.</li>
-						<li>Usable value depends on users and capital coordinating on the branches they continue to support.</li>
+						<li>Profitable oracle corrections must receive timely inclusion; this is an assumption, not an onchain guarantee.</li>
+						<li>Truth-auction demand may be insufficient, in which case the child activates with the collateral actually migrated and raised.</li>
+						<li>Usable value depends on users and capital coordinating on the child branches they continue to support.</li>
 					</ul>
 					<p>
-						Zoltar forks only create child universes, and Statoblast carries
-						underwriting state, collateral state, and outcome shares into them.
-						If users and bidders coordinate on the child universe they expect to
-						keep using, REP migration, proportional collateral migration, and
-						truth-auction repair can rebuild usable market state there.
+						Zoltar creates child universes, while Statoblast carries underwriting
+						state, collateral accounting, and outcome-share claims into child
+						pools. REP migration, proportional collateral migration, and
+						truth-auction repair can rebuild usable market state, but none of
+						those mechanisms independently identifies truth or guarantees full
+						collateral repair.
 					</p>
 				</section>
 
@@ -6176,11 +4898,6 @@
 						<h2>11. Parameter Sources</h2>
 						<a class="anchor-link" href="#parameters" aria-label="Link to Parameter Sources">#</a>
 					</div>
-					<p>
-						Current values live with the mechanism that interprets them. This
-						avoids a second catalog drifting away from the focused design pages
-						or deployment configuration.
-					</p>
 					<table>
 						<thead>
 							<tr><th>Parameter family</th><th>Canonical source</th></tr>
@@ -6188,7 +4905,7 @@
 						<tbody>
 							<tr><td>Universe fork thresholds and haircuts</td><td><a href="./zoltar-whitepaper.html#economics">Zoltar fork economics</a></td></tr>
 							<tr><td>Escalation timing, thresholds, and rewards</td><td><a href="#escalation">Escalation Resolution</a></td></tr>
-							<tr><td>Migration and truth-auction timing and bounds</td><td><a href="./auction-design.html#lifecycle">Truth Auction lifecycle</a></td></tr>
+							<tr><td>Migration and truth-auction timing and bounds</td><td><a href="./truth-auction.html#lifecycle">Truth Auction lifecycle</a></td></tr>
 							<tr><td>Liquidation constants and solvency limits</td><td><a href="./liquidation.html#punitive-liquidation">Liquidation penalty math</a></td></tr>
 							<tr><td>REP/ETH coordinator and OpenOracle values</td><td><a href="./open-oracle-integration.html#parameters">OpenOracle parameters</a></td></tr>
 							<tr><td>Carry-proof peak and nullifier bounds</td><td><a href="./merkle-mountain-range.html#peaks">Merkle Mountain Range bounds</a></td></tr>
@@ -6218,9 +4935,7 @@
 							migration, but does not provide secondary-market trading.
 						</li>
 						<li>
-							Zoltar fork economics are constructor-configured; the
-							<a href="./zoltar-whitepaper.html#economics">Zoltar whitepaper</a>
-							owns the current divisors, rounding, and migration-credit effects.
+							Zoltar fork economics are constructor-configured.
 						</li>
 						<li>
 							Retention-rate bounds and several oracle and auction parameters
@@ -6229,10 +4944,6 @@
 						<li>
 							The retention-rate curve in <code>SecurityPoolUtils</code> is
 							heuristic rather than final market design.
-						</li>
-						<li>
-							Some comments in <code>SecurityPool</code> acknowledge open
-							accounting questions around child-pool complete-set behavior.
 						</li>
 					</ul>
 				</section>
@@ -6248,8 +4959,6 @@
 			const formatRep = (value, digits = 2) =>
 				`${formatFixed(value, digits)} REP`;
 			const formatEth = (value) => `${formatFixed(value)} ETH`;
-			const formatShares = (value) => `${formatFixed(value, 0)} shares`;
-			const formatPercent = (value) => `${formatFixed(value, 0)}%`;
 			const atomicDisplayScale = 1_000_000n;
 			const weiPerDisplayUnit = 1_000_000_000_000n;
 			const toAtomic = (value) =>
@@ -6339,13 +5048,6 @@
 						rectElement.setAttribute("x", String(rectX));
 					}
 				};
-				const setTextPosition = (textName, x, y) => {
-					const textElement = texts[textName];
-					if (textElement !== undefined) {
-						textElement.setAttribute("x", String(x));
-						textElement.setAttribute("y", String(y));
-					}
-				};
 				return {
 					inputs,
 					read,
@@ -6354,7 +5056,6 @@
 					writeText,
 					setRectWidth,
 					setRectX,
-					setTextPosition,
 				};
 			};
 			const bindExample = (exampleId, update) => {
@@ -6367,39 +5068,6 @@
 				}
 				update(context);
 			};
-			bindExample("share-migration-example", (context) => {
-				const parentBalance = context.read("parentBalance");
-				const selectedChildren = context.read("selectedChildren");
-				const childWidth = parentBalance * 2.2;
-				context.writeValue("parentBalance", formatShares(parentBalance));
-				context.writeValue(
-					"selectedChildren",
-					`${selectedChildren} ${selectedChildren === 1 ? "branch" : "branches"}`,
-				);
-				context.setRectWidth("parent", childWidth);
-				context.setRectWidth("childA", selectedChildren >= 1 ? childWidth : 0);
-				context.setRectWidth("childB", selectedChildren >= 2 ? childWidth : 0);
-				context.setRectWidth("childC", selectedChildren >= 3 ? childWidth : 0);
-				context.writeText("parentText", formatFixed(parentBalance, 0));
-				context.writeText(
-					"childAText",
-					selectedChildren >= 1 ? formatFixed(parentBalance, 0) : "0",
-				);
-				context.writeText(
-					"childBText",
-					selectedChildren >= 2 ? formatFixed(parentBalance, 0) : "0",
-				);
-				context.writeText(
-					"childCText",
-					selectedChildren >= 3 ? formatFixed(parentBalance, 0) : "0",
-				);
-				context.write("parentAfter", formatShares(parentBalance));
-				context.write("childBalance", formatShares(parentBalance));
-				context.write(
-					"totalChildBalances",
-					formatShares(parentBalance * selectedChildren),
-				);
-			});
 			bindExample("escalation-deposit-example", (context) => {
 				const invalidBalance = context.read("invalidBalance");
 				const yesBalance = context.read("yesBalance");
@@ -6547,106 +5215,6 @@
 				context.write("outcomesAtCost", String(atCost));
 				context.write("resolutionResult", result);
 				context.write("resolutionReason", reason);
-			});
-			bindExample("payout-region-example", (context) => {
-				const bindingCapital = context.read("bindingCapital");
-				const winningPrincipal = context.read("winningPrincipal");
-				const depositAmount = Math.min(
-					context.read("depositAmount"),
-					winningPrincipal,
-				);
-				const depositStart = Math.min(
-					context.read("depositStart"),
-					Math.max(0, winningPrincipal - depositAmount),
-				);
-				const cumulativeAmount = depositStart + depositAmount;
-				const thresholdPercent = context.read("actualForkThresholdPercent");
-				const bindingAtomic = toAtomic(bindingCapital);
-				const rewardCap = fromAtomic(bindingAtomic + bindingAtomic / 2n);
-				const rewardPool = fromAtomic((bindingAtomic * 3n) / 5n);
-				const rewardEligiblePrincipal = Math.max(
-					Math.min(winningPrincipal, rewardCap),
-					0.000001,
-				);
-				const eligibleEnd = Math.min(cumulativeAmount, rewardCap);
-				const eligibleDeposit = Math.max(
-					0,
-					Math.min(depositAmount, eligibleEnd - depositStart),
-				);
-				const depositWithdrawal =
-					depositAmount +
-					(eligibleDeposit * rewardPool) / rewardEligiblePrincipal;
-				const scaledWithdrawal = (depositWithdrawal * thresholdPercent) / 100;
-				const excessPrincipal = Math.max(0, winningPrincipal - rewardCap);
-				const visualMax = Math.max(winningPrincipal, rewardCap, 1);
-				const visualScale = 600 / visualMax;
-				context.writeValue("bindingCapital", formatRep(bindingCapital));
-				context.writeValue("winningPrincipal", formatRep(winningPrincipal));
-				context.writeValue("depositAmount", formatRep(depositAmount));
-				context.writeValue("depositStart", formatRep(depositStart));
-				context.writeValue(
-					"actualForkThresholdPercent",
-					formatPercent(thresholdPercent),
-				);
-				context.setRectWidth(
-					"bindingRegion",
-					Math.min(bindingCapital * visualScale, 600),
-				);
-				context.setRectWidth(
-					"safetyRegion",
-					Math.max(
-						0,
-						Math.min((rewardCap - bindingCapital) * visualScale, 600),
-					),
-				);
-				context.setRectX(
-					"safetyRegion",
-					80 + Math.min(bindingCapital * visualScale, 600),
-				);
-				context.setRectWidth(
-					"excessRegion",
-					Math.max(0, Math.min(excessPrincipal * visualScale, 600)),
-				);
-				context.setRectX(
-					"excessRegion",
-					80 + Math.min(rewardCap * visualScale, 600),
-				);
-				context.writeText(
-					"bindingMarker",
-					`binding ${formatFixed(bindingCapital, 0)}`,
-				);
-				context.writeText("capMarker", `cap ${formatFixed(rewardCap, 0)}`);
-				context.writeText(
-					"winningMarker",
-					`winning ${formatFixed(winningPrincipal, 0)}`,
-				);
-				context.setTextPosition(
-					"bindingMarker",
-					80 + Math.min(bindingCapital * visualScale, 600),
-					145,
-				);
-				context.setTextPosition(
-					"capMarker",
-					80 + Math.min(rewardCap * visualScale, 600),
-					162,
-				);
-				context.setTextPosition(
-					"winningMarker",
-					80 + Math.min(winningPrincipal * visualScale, 600),
-					179,
-				);
-				context.write("rewardCap", formatRep(rewardCap));
-				context.write("rewardPool", formatRep(rewardPool));
-				context.write("eligibleDeposit", formatRep(eligibleDeposit));
-				context.write("excessPrincipal", formatRep(excessPrincipal));
-				context.write("depositWithdrawal", formatRep(depositWithdrawal));
-				context.write("scaledWithdrawal", formatRep(scaledWithdrawal));
-				context.write(
-					"payoutState",
-					bindingCapital > winningPrincipal
-						? "not a valid final winner state: binding capital cannot exceed a strict winner's balance"
-						: "reachable ordinary winner state",
-				);
 			});
 			bindExample("collateral-repair-example", (context) => {
 				const parentCollateral = context.read("parentCollateral");

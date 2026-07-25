@@ -49,7 +49,7 @@ describe('TabNavigation', () => {
 		expect(documentQueries.getByRole('link', { name: 'Security Pools' }).getAttribute('href')).toBe('#/security-pools?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Open Oracle' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1')
 		expect(documentQueries.getByRole('combobox', { name: 'Current application section' })).not.toBeNull()
-		expect(documentQueries.getByRole('link', { name: 'Protocol Guide' }).getAttribute('href')).toBe('https://augurproject.github.io/zoltar/docs/start-here.html')
+		expect(documentQueries.getByRole('link', { name: 'Protocol Guide' }).getAttribute('href')).toBe('https://augurproject.github.io/zoltar/docs/documentation.html')
 		expect(documentQueries.queryByRole('link', { name: 'Markets' })).toBeNull()
 		expect(documentQueries.queryByRole('link', { name: 'Oracle Reports' })).toBeNull()
 	})
