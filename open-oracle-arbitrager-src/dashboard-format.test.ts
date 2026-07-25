@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { blockAgeLabel, exactAmount, requiredSignerPrivateKey, signerControlState, sumSignedDecimals } from './dashboard-format.js'
+import { blockAgeLabel, botStatusLabels, exactAmount, requiredSignerPrivateKey, signerControlState, sumSignedDecimals } from './dashboard-format.js'
 
 describe('dashboard exact ETH formatting', () => {
 	test('preserves signed sub-micro, 18-decimal, and beyond-safe-integer totals', () => {
@@ -29,5 +29,11 @@ describe('dashboard exact ETH formatting', () => {
 		expect(blockAgeLabel('1000', 1_012_400)).toBe('12s behind')
 		expect(blockAgeLabel('1000', 995_000)).toBe('5s ahead of local clock')
 		expect(blockAgeLabel(undefined, 1_012_400)).toBe('timestamp unavailable')
+	})
+
+	test('clears populated bot labels when the dashboard disconnects', () => {
+		expect(botStatusLabels({ mode: 'execute', paused: false })).toEqual({ mode: 'execute', status: 'Running' })
+		expect(botStatusLabels({ mode: 'dry-run', paused: true })).toEqual({ mode: 'dry-run', status: 'Paused' })
+		expect(botStatusLabels(undefined)).toEqual({ mode: 'Mode —', status: '—' })
 	})
 })

@@ -1,6 +1,6 @@
 import type { ConnectivitySettings } from './connectivity.js'
 import type { ExecutionRecord, OperationEntry, OperatorSnapshot, OpportunitySnapshot, StrategySettings, TransactionActivity } from './operator-state.js'
-import { blockAgeLabel, exactAmount, requiredSignerPrivateKey, signerControlState, sumSignedDecimals } from './dashboard-format.js'
+import { blockAgeLabel, botStatusLabels, exactAmount, requiredSignerPrivateKey, signerControlState, sumSignedDecimals } from './dashboard-format.js'
 import type { SubmissionSettings } from './transaction-submission.js'
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
@@ -367,9 +367,10 @@ function render(snapshot: OperatorSnapshot) {
 		connectivityLoaded = true
 	}
 	const modeBadge = element('mode-badge')
+	const statusLabels = botStatusLabels(snapshot)
 	modeBadge.dataset['mode'] = snapshot.mode
-	modeBadge.textContent = snapshot.mode
-	setText('status-value', snapshot.paused ? 'Paused' : 'Running')
+	modeBadge.textContent = statusLabels.mode
+	setText('status-value', statusLabels.status)
 	setText('last-poll-value', snapshot.lastPollAt === undefined ? 'No poll completed' : `Updated ${new Date(snapshot.lastPollAt).toLocaleTimeString()}`)
 	setText('active-report-value', snapshot.activeReportCount.toString())
 	setText('block-value', snapshot.blockNumber === undefined ? 'Block —' : `Block ${snapshot.blockNumber} · ${blockAgeLabel(snapshot.blockTimestamp)}`)
@@ -421,6 +422,11 @@ async function refresh() {
 		render(value)
 	} catch (error) {
 		setControlsEnabled(false)
+		const modeBadge = element('mode-badge')
+		const statusLabels = botStatusLabels(undefined)
+		delete modeBadge.dataset['mode']
+		modeBadge.textContent = statusLabels.mode
+		setText('status-value', statusLabels.status)
 		setText('notice-title', 'Dashboard disconnected')
 		setText('notice-copy', error instanceof Error ? error.message : String(error))
 		element('notice').dataset['tone'] = 'danger'

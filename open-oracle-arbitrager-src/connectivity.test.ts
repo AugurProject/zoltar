@@ -80,6 +80,7 @@ describe('operator connectivity', () => {
 		for (const error of [
 			{ code: -32_601, message: 'method not found' },
 			{ code: -32_004, message: 'Method not supported' },
+			{ code: -32_004, message: 'invalid params' },
 			{ code: -32_000, message: 'unsupported method' },
 			{ code: -32_000, message: 'upstream unavailable' },
 		]) {
@@ -111,14 +112,30 @@ describe('operator connectivity', () => {
 	})
 
 	test('rejects malformed and successful private transaction probe responses as inconclusive', async () => {
-		for (const responseBody of [{ result: null }, { error: { code: -32_602 } }, { error: 'invalid params' }]) {
+		for (const responseBody of [
+			{ id: 1, jsonrpc: '2.0', result: null },
+			{ error: { code: -32_602, message: 'invalid params' }, id: 1, jsonrpc: '1.0' },
+			{ error: { code: -32_602, message: 'invalid params' }, id: 2, jsonrpc: '2.0' },
+			{ error: { code: -32_602, message: 'invalid params' }, id: 1, jsonrpc: '2.0', result: null },
+			{ error: { code: -32_602 }, id: 1, jsonrpc: '2.0' },
+			{ error: 'invalid params', id: 1, jsonrpc: '2.0' },
+		]) {
 			const endpoint = rpc(method => {
 				if (method === 'eth_chainId') return '0x1'
-				if (method === 'eth_sendPrivateTransaction') return Response.json({ ...responseBody, id: 1, jsonrpc: '2.0' })
+				if (method === 'eth_sendPrivateTransaction') return Response.json(responseBody)
 				throw new Error(`Unexpected method: ${method}`)
 			})
 			await expect(checkSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [endpoint] }), 1)).rejects.toThrow('did not prove eth_sendPrivateTransaction support')
 		}
+	})
+
+	test('rejects unavailable private relays even when their body resembles capability evidence', async () => {
+		const endpoint = rpc(method => {
+			if (method === 'eth_chainId') return '0x1'
+			if (method === 'eth_sendPrivateTransaction') return Response.json({ error: { code: -32_600, message: 'signature is required' }, id: 1, jsonrpc: '2.0' }, { status: 503 })
+			throw new Error(`Unexpected method: ${method}`)
+		})
+		await expect(checkSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [endpoint] }), 1)).rejects.toThrow('HTTP 503')
 	})
 
 	test('preserves every endpoint role regardless of concurrent update completion order', async () => {

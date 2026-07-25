@@ -42,6 +42,11 @@ export function blockAgeLabel(blockTimestamp: string | undefined, nowMillisecond
 	return nowMilliseconds >= timestampMilliseconds ? `${label} behind` : `${label} ahead of local clock`
 }
 
+export function botStatusLabels(state: { mode: 'dry-run' | 'execute'; paused: boolean } | undefined) {
+	if (state === undefined) return { mode: 'Mode —', status: '—' }
+	return { mode: state.mode, status: state.paused ? 'Paused' : 'Running' }
+}
+
 export function requiredSignerPrivateKey(value: string) {
 	const privateKey = value.trim()
 	if (privateKey === '') throw new Error('Enter a private key before setting the signer.')

@@ -142,7 +142,9 @@ relay returns a method-specific authentication or parameter error; a same-chain
 ordinary RPC returning an unsupported-method error is rejected and shown as a
 failed relay. Ambiguous, successful, or malformed probe responses are rejected too:
 the relay must provide positive evidence that it handles the private-transaction
-method.
+method through a matching JSON-RPC 2.0 error with a recognized authentication or
+parameter-error code. Non-successful HTTP responses are rejected regardless of
+their body.
 No transaction is signed or submitted by this capability check. The configuration
 is also rejected when a relay is unreachable or reports the wrong selected network.
 Relay URLs changed in the dashboard are saved in the network-specific operator

@@ -130,6 +130,7 @@ async function assertPrivateRelayCapability(url: string, timeoutMilliseconds = 5
 		redirect: 'error',
 		signal: AbortSignal.timeout(timeoutMilliseconds),
 	})
+	if (!response.ok) throw new Error(`Endpoint did not prove eth_sendPrivateTransaction support: RPC returned HTTP ${response.status.toString()}`)
 	let value: unknown
 	try {
 		value = await response.json()
@@ -137,31 +138,22 @@ async function assertPrivateRelayCapability(url: string, timeoutMilliseconds = 5
 		if (error instanceof SyntaxError) throw new Error(`Private relay capability check returned non-JSON HTTP ${response.status.toString()}`)
 		throw error
 	}
-	if (typeof value !== 'object' || value === null || Array.isArray(value) || !('error' in value)) {
-		throw new Error('Endpoint did not prove eth_sendPrivateTransaction support: expected a JSON-RPC error from the intentionally invalid request')
+	if (typeof value !== 'object' || value === null || Array.isArray(value) || !('jsonrpc' in value) || value.jsonrpc !== '2.0' || !('id' in value) || (value.id !== 1 && value.id !== null) || !('error' in value) || 'result' in value) {
+		throw new Error('Endpoint did not prove eth_sendPrivateTransaction support: expected one matching JSON-RPC 2.0 error from the intentionally invalid request')
 	}
 	const error = value.error
-	if (typeof error !== 'object' || error === null || Array.isArray(error) || !('message' in error) || typeof error.message !== 'string' || error.message.trim() === '') {
+	if (typeof error !== 'object' || error === null || Array.isArray(error) || !('code' in error) || typeof error.code !== 'number' || !Number.isSafeInteger(error.code) || !('message' in error) || typeof error.message !== 'string' || error.message.trim() === '') {
 		throw new Error('Endpoint did not prove eth_sendPrivateTransaction support: malformed JSON-RPC error')
 	}
-	const code = 'code' in error && typeof error.code === 'number' && Number.isSafeInteger(error.code) ? error.code : undefined
+	const code = error.code
 	const message = error.message.trim()
 	const normalizedMessage = message.toLowerCase()
-	const unsupported = code === -32_601 || normalizedMessage.includes('method not found') || normalizedMessage.includes('method not supported') || normalizedMessage.includes('method is not supported') || normalizedMessage.includes('unsupported method') || normalizedMessage.includes('unknown method')
-	const recognizedCapabilityEvidence =
-		code === -32_602 ||
-		normalizedMessage.includes('signature is required') ||
-		normalizedMessage.includes('invalid signature') ||
-		normalizedMessage.includes('authentication required') ||
-		normalizedMessage.includes('authentication is required') ||
-		normalizedMessage.includes('invalid params') ||
-		normalizedMessage.includes('invalid parameters') ||
-		normalizedMessage.includes('invalid argument') ||
-		normalizedMessage.includes('missing transaction') ||
-		normalizedMessage.includes('missing tx') ||
-		normalizedMessage.includes('invalid transaction')
-	if (unsupported || !recognizedCapabilityEvidence) {
-		throw new Error(`Endpoint did not prove eth_sendPrivateTransaction support: RPC ${code?.toString() ?? 'error'}: ${message}`)
+	const authenticationEvidence = normalizedMessage.includes('signature is required') || normalizedMessage.includes('invalid signature') || normalizedMessage.includes('authentication required') || normalizedMessage.includes('authentication is required')
+	const parameterEvidence =
+		normalizedMessage.includes('invalid params') || normalizedMessage.includes('invalid parameters') || normalizedMessage.includes('invalid argument') || normalizedMessage.includes('missing transaction') || normalizedMessage.includes('missing tx') || normalizedMessage.includes('invalid transaction')
+	const recognizedCapabilityEvidence = (code === -32_600 && authenticationEvidence) || (code === -32_602 && parameterEvidence)
+	if (!recognizedCapabilityEvidence) {
+		throw new Error(`Endpoint did not prove eth_sendPrivateTransaction support: RPC ${code.toString()}: ${message}`)
 	}
 }
 
