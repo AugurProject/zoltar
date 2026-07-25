@@ -396,36 +396,6 @@ async function checkResolutionEdgeExample(): Promise<void> {
 	}
 }
 
-async function checkPayoutRegionExample(): Promise<void> {
-	const example = await loadInteractiveExample('docs/statoblast-whitepaper.html', 'payout-region-example')
-
-	try {
-		assertEqual(example.output('payoutState'), 'reachable ordinary winner state', 'payout region example default state')
-		assertEqual(example.output('scaledWithdrawal'), '7 REP', 'payout region example default scaled withdrawal')
-		const defaultBindingMarker = example.textPosition('bindingMarker')
-		assert.equal(defaultBindingMarker.y, 145)
-		assert.ok(Math.abs(defaultBindingMarker.x - (80 + (10 * 600) / 18)) < 1e-9)
-		assert.deepEqual(example.textPosition('capMarker'), { x: 580, y: 162 })
-		assert.deepEqual(example.textPosition('winningMarker'), { x: 680, y: 179 })
-
-		example.setInput('bindingCapital', 10)
-		example.setInput('winningPrincipal', 15)
-		assert.deepEqual(example.textPosition('capMarker'), { x: 680, y: 162 })
-		assert.deepEqual(example.textPosition('winningMarker'), { x: 680, y: 179 })
-
-		example.setInput('bindingCapital', 20)
-		example.setInput('winningPrincipal', 15)
-		example.setInput('depositAmount', 5)
-		example.setInput('depositStart', 10)
-		example.setInput('actualForkThresholdPercent', 100)
-
-		assertEqual(example.output('payoutState'), "not a valid final winner state: binding capital cannot exceed a strict winner's balance", 'payout region example invalid winner state')
-		assertEqual(example.output('scaledWithdrawal'), '9 REP', 'payout region example unreachable state still reports computed withdrawal')
-	} finally {
-		example.close()
-	}
-}
-
 async function checkDynamicWethReportExample(): Promise<void> {
 	const example = await loadInteractiveExample('docs/open-oracle-integration.html', 'initial-report-estimator-example')
 
@@ -505,7 +475,7 @@ const scenarios: AuctionExampleScenario[] = [
 		defaultAliceReceives: '1 REP',
 		defaultBobReceives: '1.33 REP',
 		defaultCarolReceives: '1.67 REP',
-		filePath: 'docs/auction-design.html',
+		filePath: 'docs/truth-auction.html',
 		exampleId: 'simple-auction-example',
 		underfundedAliceReceives: '4 REP',
 	},
@@ -518,7 +488,7 @@ for (const scenario of scenarios) {
 	await checkAllZeroBids(scenario)
 }
 
-await checkSourceLabelsAndThresholdText('docs/auction-design.html', [
+await checkSourceLabelsAndThresholdText('docs/truth-auction.html', [
 	'write("clearingMode", "underfunded qualification clearing")',
 	'write("bindingCondition", "underfunded")',
 	'write("thresholdInputEth", formatEth(winningEth))',
@@ -530,7 +500,6 @@ await checkSourceLabelsAndThresholdText('docs/auction-design.html', [
 
 await checkCollateralRepairExample()
 await checkResolutionEdgeExample()
-await checkPayoutRegionExample()
 await checkDynamicWethReportExample()
 await checkDeploymentMappingStates()
 checkExactRepCapEquality()
@@ -540,7 +509,7 @@ assert.doesNotMatch(blockWithId(openOracleHtml, 'eq-openoracle-initial-report-si
 assert.doesNotMatch(openOracleHtml, /259\.332023575638507216 REP/, 'OpenOracle integration should not retain the removed fixed REP report')
 assert.match(openOracleHtml, /WETH as <code>token1<\/code> and\s+REP as <code>token2<\/code>/, 'OpenOracle integration should document WETH as the exact token-one side')
 
-const auctionDesignHtml = await readFile('docs/auction-design.html', 'utf8')
+const auctionDesignHtml = await readFile('docs/truth-auction.html', 'utf8')
 assert.doesNotMatch(auctionDesignHtml, /buy only the REP they demanded/i, 'auction design should not describe underfunded fills as per-tick demand')
 assert.match(auctionDesignHtml, /complete REP sale cap[\s\S]*one effective price/i, 'auction design should explain complete weak-demand REP allocation')
 assert.match(auctionDesignHtml, /only bids at or above\s+the cap-implied qualification threshold/i, 'auction design should make threshold qualification explicit')
@@ -587,6 +556,13 @@ assert.match(redeemRepRow, /specified `vault` has no escalation escrow and has r
 assert.doesNotMatch(redeemRepRow, /no escalation escrow remains/i, 'contract interaction reference should not imply that redeemRep requires global escrow clearance')
 
 const statoblastHtml = await readFile('docs/statoblast-whitepaper.html', 'utf8')
+for (const bindMatch of statoblastHtml.matchAll(/bindExample\("([^"]+)"/g)) {
+	const exampleId = bindMatch[1]
+	if (exampleId === undefined) {
+		throw new Error('whitepaper bindExample target should be defined')
+	}
+	assert.ok(statoblastHtml.includes(`id="${exampleId}"`), `whitepaper bindExample target should exist: ${exampleId}`)
+}
 const escalationCurvePath = statoblastHtml.match(/data-source="normalizedCost\(t\) = \(exp\(2\.4 \* t\) - 1\) \/ \(exp\(2\.4\) - 1\)"\s+d="([^"]+)"/)
 const escalationCurvePathData = escalationCurvePath?.[1]
 if (escalationCurvePathData === undefined) {
@@ -594,6 +570,16 @@ if (escalationCurvePathData === undefined) {
 }
 const escalationCurveY = [...escalationCurvePathData.matchAll(/[ML] \d+ (\d+)/g)].map(match => Number(match[1]))
 assert.ok(escalationCurveY.length >= 5, 'whitepaper escalation chart should contain enough samples to show curvature')
+for (let index = 0; index < escalationCurveY.length; index += 1) {
+	const actualY = escalationCurveY[index]
+	if (actualY === undefined) {
+		throw new Error('whitepaper escalation chart sample should be defined')
+	}
+	const normalizedTime = index / (escalationCurveY.length - 1)
+	const normalizedCost = (Math.exp(2.4 * normalizedTime) - 1) / (Math.exp(2.4) - 1)
+	const expectedY = Math.round(212 - 162 * normalizedCost)
+	assert.equal(actualY, expectedY, 'whitepaper escalation chart samples should match the declared normalized formula')
+}
 const escalationCurveRises: number[] = []
 for (let index = 1; index < escalationCurveY.length; index += 1) {
 	const previous = escalationCurveY[index - 1]
@@ -642,11 +628,9 @@ assert.doesNotMatch(statoblastHtml, /carried remainder across paged withdrawals/
 assert.doesNotMatch(statoblastHtml, /paged withdrawals carr(?:y|ies) division dust/i, 'whitepaper should describe fixed cumulative-position allocation rather than mutable division carry')
 assert.doesNotMatch(statoblastHtml, /(?:collateralDecay|decayCandidate)[^\"]*totalSecurityBondAllowance/i, 'whitepaper fee-index formula should not use total capacity as the accrual denominator')
 assert.match(statoblastHtml, /feeEligibleSecurityBondAllowance/i, 'whitepaper fee-index formula should use assigned fee-eligible allowance')
-assert.match(statoblastHtml, /data-source="decayCandidate = collateralIn - floor\(collateralIn \\cdot rpow\(retentionRate, elapsedTime, pricePrecision\) \/ pricePrecision\)"/i, 'whitepaper should distinguish the fixed-point decay candidate from credited whole-wei fees')
-assert.match(statoblastHtml, /collateralOut = collateralIn - reserveCredit/i, 'whitepaper should define stored collateral as input collateral minus whole-wei reserve credit')
 assert.match(statoblastHtml, /feeEligibleSecurityBondAllowance == 0[\s\S]*feeIndexDelta[\s\S]*reserveCredit[\s\S]*advances the accumulator[\s\S]*prevents unclaimed auction allowance from earning retroactive fees/i, 'whitepaper fee-index section should document the zero-eligible-allowance no-accrual branch')
-assert.match(statoblastHtml, /Unallocated Reserve[\s\S]*Assigned Vault Debt[\s\S]*Vault Payout/i, 'whitepaper fee-flow diagram should show reserve, checkpointed debt, and redemption stages')
-assert.match(statoblastHtml, /vaultFeeRemainderOut/i, 'whitepaper fee-index formula should document per-vault fractional carry')
+assert.match(statoblastHtml, /Fee accrual is lazy[\s\S]*global fee index[\s\S]*vault operations checkpoint each vault[\s\S]*explicit remainders/i, 'whitepaper should explain lazy global and per-vault fee checkpointing')
+assert.match(statoblastHtml, /Per-vault fractional remainders survive public\s+checkpoints/i, 'whitepaper should document per-vault fractional carry')
 assert.match(statoblastHtml, /actualCollateralDelta = min\(requestedCollateralDelta, parentCompleteSetCollateral\)/i, 'whitepaper own-fork collateral formula should reserve accrued parent fees')
 assert.match(statoblastHtml, /activateForkMode[\s\S]*universe fork[\s\S]*fork-time checkpoint[\s\S]*collateralAtFork/i, 'whitepaper should document the ordered own-fork collateral checkpoint lifecycle')
 assert.match(statoblastHtml, /Both external and[\s\S]*one fixed, fee-exclusive fork[\s\S]*cumulative\s+ceiling accounting[\s\S]*Truth-auction repair subtracts the child's actual cumulative routed\s+collateral/i, 'whitepaper should document exact fixed-snapshot collateral repair')
@@ -666,7 +650,7 @@ assert.doesNotMatch(statoblastHtml, /data-source="cumulativeCollateralTargetAfte
 assert.match(statoblastHtml, /fork-neutral snapshot shared by both paths[\s\S]*ETH raise target[\s\S]*depends on auction demand/i, 'whitepaper should explain shared snapshot accounting and demand-dependent auction repair')
 assert.match(statoblastHtml, /After every eligible vault syncs[\s\S]*individually sub-wei vault remainders[\s\S]*returns to complete-set collateral/i, 'whitepaper should document final aggregate-only fee reserve release')
 assert.match(statoblastHtml, /Each delayed claim adds only its newly assigned amount[\s\S]*does not reconstruct that total from[\s\S]*allowance changes and[\s\S]*liquidations remain intact/i, 'whitepaper should document incremental live fee eligibility for delayed auction claims')
-assert.match(statoblastHtml, /auction-design\.html#clearing/i, 'whitepaper should route clearing mechanics to the canonical auction design')
+assert.match(statoblastHtml, /truth-auction\.html#clearing/i, 'whitepaper should route clearing mechanics to the canonical auction design')
 assert.doesNotMatch(statoblastHtml, /id="auction-clearing-example"|id="underfunded-auction-example"/i, 'whitepaper should not duplicate canonical auction examples')
 assert.doesNotMatch(statoblastHtml, /data-source="[^\"]*underfundedThreshold/i, 'whitepaper should not duplicate the canonical underfunded clearing formula')
 assert.doesNotMatch(statoblastHtml, /totalRepPurchased = underfundedWinningEth/i, 'whitepaper should not duplicate canonical underfunded allocation math')
