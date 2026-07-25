@@ -26,6 +26,7 @@ import {
 	decimalSignedEth,
 	decimalWeth,
 	ensureExecutionHistoryWritable,
+	gameCapitalSnapshot,
 	loadExecutionHistory,
 	operatorSnapshot,
 	recordOperation,
@@ -805,8 +806,10 @@ async function main() {
 		activeReportCount: 0,
 		balances: undefined,
 		blockNumber: undefined,
+		blockTimestamp: undefined,
 		executionHistory: await loadExecutionHistory(config.historyFile),
 		endpointChecks: [...(await checkConnectivity(config.connectivity, config.network.chain.id)), ...(await checkSubmissionEndpoints(config.submission, config.network.chain.id))],
+		gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
 		lastError: undefined,
 		lastPollAt: undefined,
 		opportunities: [],
@@ -1054,6 +1057,11 @@ async function main() {
 				state.activeReportCount = [...reports.values()].filter(report => !report.settled).length
 				state.balances = balances?.snapshot
 				state.blockNumber = blockNumber.toString()
+				state.blockTimestamp = block.timestamp.toString()
+				state.gameCapital = gameCapitalSnapshot(
+					[...reports.values()].filter(report => !report.settled).map(report => report.latest.game),
+					config.network.weth,
+				)
 				state.lastPollAt = new Date().toISOString()
 				state.opportunities = opportunities
 				const selected = selectBestExecution(candidates, candidate => candidate.quote.netProfitWeth)

@@ -23,6 +23,25 @@ export function exactAmount(value: string | undefined, symbol: string) {
 	return value === undefined ? 'Unavailable' : `${value} ${symbol}`
 }
 
+function compactDuration(seconds: number) {
+	if (seconds < 60) return `${seconds.toString()}s`
+	const minutes = Math.floor(seconds / 60)
+	const remainder = seconds % 60
+	if (minutes < 60) return remainder === 0 ? `${minutes.toString()}m` : `${minutes.toString()}m ${remainder.toString()}s`
+	const hours = Math.floor(minutes / 60)
+	const remainingMinutes = minutes % 60
+	return remainingMinutes === 0 ? `${hours.toString()}h` : `${hours.toString()}h ${remainingMinutes.toString()}m`
+}
+
+export function blockAgeLabel(blockTimestamp: string | undefined, nowMilliseconds = Date.now()) {
+	if (blockTimestamp === undefined || !/^(?:0|[1-9]\d*)$/.test(blockTimestamp)) return 'timestamp unavailable'
+	const timestampMilliseconds = Number(blockTimestamp) * 1_000
+	if (!Number.isSafeInteger(timestampMilliseconds) || !Number.isFinite(nowMilliseconds)) return 'timestamp unavailable'
+	const differenceSeconds = Math.floor(Math.abs(nowMilliseconds - timestampMilliseconds) / 1_000)
+	const label = compactDuration(differenceSeconds)
+	return nowMilliseconds >= timestampMilliseconds ? `${label} behind` : `${label} ahead of local clock`
+}
+
 export function requiredSignerPrivateKey(value: string) {
 	const privateKey = value.trim()
 	if (privateKey === '') throw new Error('Enter a private key before setting the signer.')

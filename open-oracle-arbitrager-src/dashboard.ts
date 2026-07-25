@@ -1,6 +1,6 @@
 import type { ConnectivitySettings } from './connectivity.js'
 import type { ExecutionRecord, OperationEntry, OperatorSnapshot, OpportunitySnapshot, StrategySettings, TransactionActivity } from './operator-state.js'
-import { exactAmount, requiredSignerPrivateKey, signerControlState, sumSignedDecimals } from './dashboard-format.js'
+import { blockAgeLabel, exactAmount, requiredSignerPrivateKey, signerControlState, sumSignedDecimals } from './dashboard-format.js'
 import type { SubmissionSettings } from './transaction-submission.js'
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
@@ -47,10 +47,6 @@ function amount(value: string | undefined, symbol: string) {
 	const numeric = Number(value)
 	if (!Number.isFinite(numeric)) return `${value} ${symbol}`
 	return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 6 }).format(numeric)} ${symbol}`
-}
-
-function statusLabel(value: OperatorSnapshot['status']) {
-	return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
 function isSnapshot(value: unknown): value is OperatorSnapshot {
@@ -282,17 +278,18 @@ function renderEndpointChecks(snapshot: OperatorSnapshot) {
 }
 
 function renderOperations(operations: readonly OperationEntry[]) {
+	const visibleOperations = operations.filter(operation => operation.category !== 'scan')
 	const body = element<HTMLTableSectionElement>('operations-body')
 	body.replaceChildren()
-	for (const operation of operations) {
+	for (const operation of visibleOperations) {
 		const level = document.createElement('span')
 		level.className = 'log-level'
 		level.dataset['level'] = operation.level
 		level.textContent = operation.level
 		body.append(row([new Date(operation.timestamp).toLocaleTimeString(), level, operation.category, operation.reportId ?? '—', operation.message, operation.reason ?? '—', operation.details ?? '—']))
 	}
-	element('operations-empty').hidden = operations.length !== 0
-	setText('operation-count', `${operations.length.toString()} entries`)
+	element('operations-empty').hidden = visibleOperations.length !== 0
+	setText('operation-count', `${visibleOperations.length.toString()} entries`)
 }
 
 function renderSignerStatus(snapshot: OperatorSnapshot) {
@@ -372,12 +369,15 @@ function render(snapshot: OperatorSnapshot) {
 	const modeBadge = element('mode-badge')
 	modeBadge.dataset['mode'] = snapshot.mode
 	modeBadge.textContent = snapshot.mode
-	setText('status-value', snapshot.paused ? 'Paused' : statusLabel(snapshot.status))
+	setText('status-value', snapshot.paused ? 'Paused' : 'Running')
 	setText('last-poll-value', snapshot.lastPollAt === undefined ? 'No poll completed' : `Updated ${new Date(snapshot.lastPollAt).toLocaleTimeString()}`)
 	setText('active-report-value', snapshot.activeReportCount.toString())
-	setText('block-value', snapshot.blockNumber === undefined ? 'Block —' : `Block ${snapshot.blockNumber}`)
+	setText('block-value', snapshot.blockNumber === undefined ? 'Block —' : `Block ${snapshot.blockNumber} · ${blockAgeLabel(snapshot.blockTimestamp)}`)
 	setText('profit-value', exactAmount(snapshot.totalTrackedNetProfitEth, 'ETH'))
+	setText('revenue-value', exactAmount(snapshot.totalRevenueBeforeGasEth, 'ETH'))
 	setText('gas-value', exactAmount(snapshot.totalActualGasCostEth, 'ETH'))
+	setText('game-capital-value', exactAmount(snapshot.gameCapital.totalEthWeth, 'ETH'))
+	setText('game-capital-detail', `${exactAmount(snapshot.gameCapital.eth, 'ETH')} · ${exactAmount(snapshot.gameCapital.weth, 'WETH')} in observed active games`)
 	setText('oracle-address', `Oracle ${snapshot.openOracle}`)
 	setText('network-value', `${snapshot.network} · chain ${snapshot.expectedChainId.toString()}`)
 	setText('chain-safety', `Expected and continuously verifies ${snapshot.network} chain ${snapshot.expectedChainId.toString()}.`)

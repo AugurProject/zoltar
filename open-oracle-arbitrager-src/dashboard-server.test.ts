@@ -25,8 +25,10 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 		activeReportCount: 0,
 		balances: undefined,
 		blockNumber: '100',
+		blockTimestamp: '1000',
 		executionHistory: [],
 		endpointChecks: [],
+		gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
 		lastError: undefined,
 		lastPollAt: undefined,
 		opportunities: [],
@@ -73,6 +75,8 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	const pageSource = await page.text()
 	expect(pageSource).toContain('OpenOracle Arbitrager')
 	expect(pageSource).toContain('id="pause-button" class="button" type="button" disabled')
+	expect(pageSource).toContain('id="revenue-value"')
+	expect(pageSource).toContain('id="game-capital-value"')
 	expect(pageSource).toContain('id="strategy-fieldset" disabled')
 	expect(pageSource).toContain('id="submission-fieldset" disabled')
 	expect(pageSource).toContain('id="connectivity-fieldset" disabled')

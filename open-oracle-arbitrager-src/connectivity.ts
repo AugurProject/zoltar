@@ -25,6 +25,16 @@ type JsonRpcResponse = {
 	result?: unknown
 }
 
+class EndpointCheckFailure extends Error {
+	readonly checks: readonly EndpointCheck[]
+
+	constructor(message: string, checks: readonly EndpointCheck[]) {
+		super(message)
+		this.name = 'EndpointCheckFailure'
+		this.checks = checks
+	}
+}
+
 function endpointUrl(value: string) {
 	if (value.length > 2_048) throw new Error('RPC URLs must not exceed 2048 characters')
 	let parsed: URL
@@ -112,18 +122,61 @@ export async function checkRpcEndpoint(url: string, expectedChainId: number, kin
 	}
 }
 
+async function assertPrivateRelayCapability(url: string, timeoutMilliseconds = 5_000) {
+	const response = await fetch(url, {
+		body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'eth_sendPrivateTransaction', params: [] }),
+		headers: { 'content-type': 'application/json' },
+		method: 'POST',
+		redirect: 'error',
+		signal: AbortSignal.timeout(timeoutMilliseconds),
+	})
+	let value: JsonRpcResponse
+	try {
+		value = (await response.json()) as JsonRpcResponse
+	} catch (error) {
+		if (error instanceof SyntaxError) throw new Error(`Private relay capability check returned non-JSON HTTP ${response.status.toString()}`)
+		throw error
+	}
+	if (typeof value !== 'object' || value === null) throw new Error('Private relay capability check returned invalid JSON-RPC')
+	const message = value.error?.message?.toLowerCase() ?? ''
+	if (value.error?.code === -32_601 || message.includes('method not found') || message.includes('method is not supported')) {
+		throw new Error('Endpoint does not support eth_sendPrivateTransaction and is not a compatible private relay')
+	}
+	if (value.error === undefined && value.result === undefined) throw new Error('Private relay capability check returned neither a result nor a JSON-RPC error')
+}
+
+async function checkPrivateRelayEndpoint(url: string, expectedChainId: number): Promise<EndpointCheck> {
+	const checkedAt = new Date().toISOString()
+	let chainId: number | undefined
+	try {
+		chainId = await readRpcChainId(url)
+		if (chainId !== expectedChainId) throw new Error(`Expected chain ${expectedChainId.toString()}, received ${chainId.toString()}`)
+		await assertPrivateRelayCapability(url)
+		return { chainId, checkedAt, error: undefined, kind: 'private-relay', status: 'healthy', target: endpointLabel(url) }
+	} catch (error) {
+		return {
+			chainId,
+			checkedAt,
+			error: error instanceof Error ? error.message : String(error),
+			kind: 'private-relay',
+			status: 'failed',
+			target: endpointLabel(url),
+		}
+	}
+}
+
 export async function checkConnectivity(settings: ConnectivitySettings, expectedChainId: number) {
 	const checks = await Promise.all([checkRpcEndpoint(settings.readRpcUrl, expectedChainId, 'read-rpc'), ...settings.publicRpcUrls.map(url => checkRpcEndpoint(url, expectedChainId, 'public-rpc'))])
 	const failed = checks.filter(check => check.status === 'failed')
-	if (failed.length !== 0) throw new Error(failed.map(check => `${check.target}: ${check.error ?? 'endpoint check failed'}`).join('; '))
+	if (failed.length !== 0) throw new EndpointCheckFailure(failed.map(check => `${check.target}: ${check.error ?? 'endpoint check failed'}`).join('; '), checks)
 	return checks
 }
 
 export async function checkSubmissionEndpoints(settings: SubmissionSettings, expectedChainId: number) {
 	if (settings.mode === 'public') return []
-	const checks = await Promise.all(settings.relayUrls.map(url => checkRpcEndpoint(url, expectedChainId, 'private-relay')))
+	const checks = await Promise.all(settings.relayUrls.map(url => checkPrivateRelayEndpoint(url, expectedChainId)))
 	const failed = checks.filter(check => check.status === 'failed')
-	if (failed.length !== 0) throw new Error(failed.map(check => `${check.target}: ${check.error ?? 'relay check failed'}`).join('; '))
+	if (failed.length !== 0) throw new EndpointCheckFailure(failed.map(check => `${check.target}: ${check.error ?? 'relay check failed'}`).join('; '), checks)
 	return checks
 }
 
@@ -136,11 +189,21 @@ export function withSubmissionChecks(existing: readonly EndpointCheck[], submiss
 }
 
 export async function updateConnectivityEndpointChecks(state: { endpointChecks: EndpointCheck[] }, check: () => Promise<readonly EndpointCheck[]>) {
-	const connectivityChecks = await check()
-	state.endpointChecks = withConnectivityChecks(state.endpointChecks, connectivityChecks)
+	try {
+		const connectivityChecks = await check()
+		state.endpointChecks = withConnectivityChecks(state.endpointChecks, connectivityChecks)
+	} catch (error) {
+		if (error instanceof EndpointCheckFailure) state.endpointChecks = withConnectivityChecks(state.endpointChecks, error.checks)
+		throw error
+	}
 }
 
 export async function updateSubmissionEndpointChecks(state: { endpointChecks: EndpointCheck[] }, check: () => Promise<readonly EndpointCheck[]>) {
-	const submissionChecks = await check()
-	state.endpointChecks = withSubmissionChecks(state.endpointChecks, submissionChecks)
+	try {
+		const submissionChecks = await check()
+		state.endpointChecks = withSubmissionChecks(state.endpointChecks, submissionChecks)
+	} catch (error) {
+		if (error instanceof EndpointCheckFailure) state.endpointChecks = withSubmissionChecks(state.endpointChecks, error.checks)
+		throw error
+	}
 }

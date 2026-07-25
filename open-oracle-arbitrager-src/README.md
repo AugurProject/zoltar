@@ -136,8 +136,12 @@ ETH_RPC_URL=https://your-mainnet-rpc.example \
 
 Choose **Public mempool** or **Private relays** in the dashboard to change delivery
 for the next scan. Private mode requires at least one relay and supports up to eight.
-Startup and dashboard updates probe every private relay with `eth_chainId` and reject
-the configuration when a relay is unreachable or reports the wrong selected network.
+Startup and dashboard updates probe every private relay with `eth_chainId`, then send
+an intentionally invalid, empty `eth_sendPrivateTransaction` request. A compatible
+relay returns a method-specific authentication or parameter error; a same-chain
+ordinary RPC returning `method not found` is rejected and shown as a failed relay.
+No transaction is signed or submitted by this capability check. The configuration
+is also rejected when a relay is unreachable or reports the wrong selected network.
 Relay URLs changed in the dashboard are saved in the network-specific operator
 settings file. Startup `--relay-url` values remain process overrides until a
 dashboard save. Relay URLs are never written to the transaction-history file. URLs
@@ -209,20 +213,26 @@ Start with `--ui` and optionally choose another local port:
 
 The dashboard shows:
 
-- Bot mode, scan status, latest block, errors, and active-report count.
+- Bot mode, a simplified **Running** or **Paused** operator status, latest block,
+  block age relative to the operator computer, errors, and active-report count.
 - Selected network, expected chain ID, read/public RPC controls, and endpoint checks.
 - A local signer control, connected address, and its ETH/WETH/REP balances.
 - ETH, WETH, REP, executable REP value, and estimated portfolio value.
+- Native ETH stakes, WETH stakes, and ETH settler rewards locked in active games
+  observed within the configured event lookback. The combined figure treats 1 WETH
+  as 1 ETH and can undercount games created before that lookback.
 - Current opportunities, exact inventory requirements, deadline window, direction,
   pool, and decision.
-- Confirmed dispute transactions, estimated net profit, actual gas, and an
-  all-history cumulative summary. The table and trend are bounded to the latest 500
-  records; the summary still includes every valid unique record in the history file.
+- Confirmed dispute transactions, modeled revenue before gas, estimated net profit,
+  actual gas, and an all-history cumulative summary. The table and trend are bounded
+  to the latest 500 records; the summary still includes every valid unique record in
+  the history file.
 - Signed transaction status, public/private delivery, accepted and failed relay
   targets, mined replacement hash, actual gas, and ETH profit estimates.
 - Persistent strategy, RPC fanout, relay submission controls, and pause/resume.
-- A 500-entry in-memory operations journal showing scans, decisions, configuration
-  changes, transaction states, and the reason for each action.
+- A 500-entry in-memory operations journal. The dashboard hides routine scan entries
+  and shows decisions, configuration changes, transaction states, and the reason for
+  each action.
 
 The UI is intentionally local-only. A private key entered there is sent only to the
 loopback bot process over HTTP, immediately cleared from the input, and never echoed
@@ -315,15 +325,17 @@ execution is blocked, and the bot retries the queued write on later polls.
 Profit is tracked in ETH using the exact 1 WETH = 1 ETH unwrap relationship:
 
 ```text
+revenue before gas = quoted proceeds − hedge cost
 modeled net ETH = quoted proceeds − hedge cost − modeled gas allowance
 tracked net ETH = quoted proceeds − hedge cost − actual approval/dispute gas
 ```
 
-**Tracked net profit is still not realized profit.** It combines the submission-time
-executable Uniswap quote with mined gas cost. Final P&L also depends on later
-disputes, settlement, withdrawals, whether and where the external hedge executes,
-inventory price changes, relay refunds, and transactions not sent by this process.
-Negative tracked net profit is retained and included in cumulative totals.
+The dashboard's revenue figure is modeled pre-gas arbitrage P&L, not gross token
+turnover. **Tracked net profit is still not realized profit.** It combines the
+submission-time executable Uniswap quote with mined gas cost. Final P&L also depends
+on later disputes, settlement, withdrawals, whether and where the external hedge
+executes, inventory price changes, relay refunds, and transactions not sent by this
+process. Negative tracked net profit is retained and included in cumulative totals.
 
 ## Transaction delivery and tracking
 

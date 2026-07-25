@@ -15,7 +15,8 @@ function rpc(handler: (method: string, params: readonly unknown[]) => unknown | 
 			const value = await request.json()
 			if (typeof value !== 'object' || value === null || !('id' in value) || !('jsonrpc' in value) || !('method' in value) || !('params' in value) || typeof value['id'] !== 'number' || typeof value['jsonrpc'] !== 'string' || typeof value['method'] !== 'string' || !Array.isArray(value['params']))
 				throw new Error('Invalid test RPC request')
-			return Response.json({ id: value['id'], jsonrpc: value['jsonrpc'], result: await handler(value['method'], value['params']) })
+			const response = await handler(value['method'], value['params'])
+			return response instanceof Response ? response : Response.json({ id: value['id'], jsonrpc: value['jsonrpc'], result: response })
 		},
 		hostname: '127.0.0.1',
 		port: 0,
@@ -56,8 +57,14 @@ describe('operator connectivity', () => {
 	})
 
 	test('fails closed on wrong-chain private relays and clears checks for public mode', async () => {
-		const mainnetRelay = rpc(() => '0x1')
-		const sepoliaRelay = rpc(() => '0xaa36a7')
+		const relay = (chainId: string) =>
+			rpc(method => {
+				if (method === 'eth_chainId') return chainId
+				if (method === 'eth_sendPrivateTransaction') return Response.json({ error: { code: -32_600, message: 'signature is required' }, id: null, jsonrpc: '2.0' })
+				throw new Error(`Unexpected method: ${method}`)
+			})
+		const mainnetRelay = relay('0x1')
+		const sepoliaRelay = relay('0xaa36a7')
 		const healthy = await checkSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [mainnetRelay] }), 1)
 		expect(healthy).toMatchObject([{ chainId: 1, kind: 'private-relay', status: 'healthy' }])
 		const connectivity = await checkConnectivity(validateConnectivitySettings({ publicRpcUrls: [mainnetRelay], readRpcUrl: mainnetRelay }), 1)
@@ -67,6 +74,18 @@ describe('operator connectivity', () => {
 		const publicChecks = await checkSubmissionEndpoints(validateSubmissionSettings({ mode: 'public', relayUrls: [mainnetRelay] }), 1)
 		expect(publicChecks).toEqual([])
 		expect(withSubmissionChecks([...connectivity, ...healthy], publicChecks).map(check => check.kind)).toEqual(['read-rpc', 'public-rpc'])
+	})
+
+	test('rejects a same-chain JSON-RPC endpoint that is not a private transaction relay', async () => {
+		const regularRpc = rpc(method => {
+			if (method === 'eth_chainId') return '0x1'
+			if (method === 'eth_sendPrivateTransaction') return Response.json({ error: { code: -32_601, message: 'method not found' }, id: 1, jsonrpc: '2.0' })
+			throw new Error(`Unexpected method: ${method}`)
+		})
+		const settings = validateSubmissionSettings({ mode: 'private', relayUrls: [regularRpc] })
+		const state: { endpointChecks: EndpointCheck[] } = { endpointChecks: [] }
+		await expect(updateSubmissionEndpointChecks(state, () => checkSubmissionEndpoints(settings, 1))).rejects.toThrow('does not support eth_sendPrivateTransaction')
+		expect(state.endpointChecks).toMatchObject([{ chainId: 1, kind: 'private-relay', status: 'failed' }])
 	})
 
 	test('preserves every endpoint role regardless of concurrent update completion order', async () => {

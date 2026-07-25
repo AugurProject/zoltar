@@ -1,6 +1,7 @@
 import { appendFile, mkdir, open, readFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { Address, Hex } from '@zoltar/shared/ethereum'
+import type { OpenOracleGame } from '@zoltar/shared/openOracle'
 import type { ConnectivitySettings, EndpointCheck, NetworkName } from './connectivity.js'
 import type { SubmissionSettings, SubmissionTargetResult } from './transaction-submission.js'
 
@@ -30,6 +31,12 @@ export type BalanceSnapshot = {
 	availableWeth: string
 	repValueWeth: string | undefined
 	totalValueWeth: string | undefined
+}
+
+export type GameCapitalSnapshot = {
+	eth: string
+	totalEthWeth: string
+	weth: string
 }
 
 export type OpportunitySnapshot = {
@@ -93,12 +100,14 @@ export type OperatorSnapshot = {
 	activeReportCount: number
 	balances: BalanceSnapshot | undefined
 	blockNumber: string | undefined
+	blockTimestamp: string | undefined
 	execute: boolean
 	executionHistory: readonly ExecutionRecord[]
 	executionHistoryRecordCount: number
 	expectedChainId: number
 	explorerUrl: string
 	endpointChecks: readonly EndpointCheck[]
+	gameCapital: GameCapitalSnapshot
 	lastError: string | undefined
 	lastPollAt: string | undefined
 	mode: 'dry-run' | 'execute'
@@ -116,6 +125,7 @@ export type OperatorSnapshot = {
 	totalActualGasCostEth: string
 	totalEstimatedNetProfitEth: string
 	totalEstimatedNetProfitWeth: string
+	totalRevenueBeforeGasEth: string
 	totalTrackedNetProfitEth: string
 	transactionActivity: readonly TransactionActivity[]
 	updatedAt: string
@@ -126,8 +136,10 @@ export type OperatorState = {
 	activeReportCount: number
 	balances: BalanceSnapshot | undefined
 	blockNumber: string | undefined
+	blockTimestamp: string | undefined
 	executionHistory: ExecutionRecord[]
 	endpointChecks: EndpointCheck[]
+	gameCapital: GameCapitalSnapshot
 	lastError: string | undefined
 	lastPollAt: string | undefined
 	opportunities: OpportunitySnapshot[]
@@ -244,6 +256,23 @@ export function decimalSignedEth(value: bigint) {
 	return value < 0n ? `-${decimalWeth(-value)}` : decimalWeth(value)
 }
 
+export function gameCapitalSnapshot(games: readonly Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'settlerReward' | 'token1' | 'token2'>[], weth: Address): GameCapitalSnapshot {
+	let eth = 0n
+	let wethAmount = 0n
+	for (const game of games) {
+		eth += game.settlerReward
+		if (game.token1.toLowerCase() === '0x0000000000000000000000000000000000000000') eth += game.currentAmount1
+		if (game.token2.toLowerCase() === '0x0000000000000000000000000000000000000000') eth += game.currentAmount2
+		if (game.token1.toLowerCase() === weth.toLowerCase()) wethAmount += game.currentAmount1
+		if (game.token2.toLowerCase() === weth.toLowerCase()) wethAmount += game.currentAmount2
+	}
+	return {
+		eth: decimalWeth(eth),
+		totalEthWeth: decimalWeth(eth + wethAmount),
+		weth: decimalWeth(wethAmount),
+	}
+}
+
 function executionRecord(value: unknown): ExecutionRecord | undefined {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
 	const record = value as Record<string, unknown>
@@ -333,7 +362,7 @@ export async function ensureExecutionHistoryWritable(path: string) {
 	}
 }
 
-function sumDecimalWeth(records: readonly ExecutionRecord[], field: 'actualGasCostEth' | 'estimatedNetProfitWeth') {
+function sumDecimalWeth(records: readonly ExecutionRecord[], field: 'actualGasCostEth' | 'estimatedNetProfitWeth' | 'estimatedProfitBeforeGasEth') {
 	return decimalWeth(records.reduce((total, record) => total + parseDecimalWeth(record[field]), 0n))
 }
 
@@ -352,12 +381,14 @@ export function operatorSnapshot(
 		activeReportCount: state.activeReportCount,
 		balances: state.balances,
 		blockNumber: state.blockNumber,
+		blockTimestamp: state.blockTimestamp,
 		execute: fixed.execute,
 		executionHistory: state.executionHistory.slice(0, 500),
 		executionHistoryRecordCount: state.executionHistory.length,
 		expectedChainId: fixed.expectedChainId,
 		explorerUrl: fixed.explorerUrl,
 		endpointChecks: state.endpointChecks,
+		gameCapital: state.gameCapital,
 		lastError: state.lastError,
 		lastPollAt: state.lastPollAt,
 		mode: fixed.execute ? 'execute' : 'dry-run',
@@ -375,6 +406,7 @@ export function operatorSnapshot(
 		totalActualGasCostEth: sumDecimalWeth(state.executionHistory, 'actualGasCostEth'),
 		totalEstimatedNetProfitEth: sumDecimalWeth(state.executionHistory, 'estimatedNetProfitWeth'),
 		totalEstimatedNetProfitWeth: sumDecimalWeth(state.executionHistory, 'estimatedNetProfitWeth'),
+		totalRevenueBeforeGasEth: sumDecimalWeth(state.executionHistory, 'estimatedProfitBeforeGasEth'),
 		totalTrackedNetProfitEth: sumSignedEth(state.executionHistory, 'trackedNetProfitEth'),
 		transactionActivity: state.transactionActivity.slice(0, 100),
 		updatedAt: new Date().toISOString(),

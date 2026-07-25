@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Address, Hex } from '@zoltar/shared/ethereum'
-import { appendExecutionHistory, clearWalletDerivedState, decimalSignedEth, ensureExecutionHistoryWritable, loadExecutionHistory, operatorSnapshot, parseSignedDecimalEth, updateStrategyFromRequest, type ExecutionRecord, type MutableStrategy, type OperatorState } from './operator-state.js'
+import { appendExecutionHistory, clearWalletDerivedState, decimalSignedEth, ensureExecutionHistoryWritable, gameCapitalSnapshot, loadExecutionHistory, operatorSnapshot, parseSignedDecimalEth, updateStrategyFromRequest, type ExecutionRecord, type MutableStrategy, type OperatorState } from './operator-state.js'
 
 const temporaryDirectories: string[] = []
 const address = '0x0000000000000000000000000000000000000001' as Address
@@ -60,13 +60,29 @@ describe('operator strategy settings', () => {
 		expect(decimalSignedEth(-15n * 10n ** 14n)).toBe('-0.0015')
 	})
 
+	test('totals native ETH, WETH, and settler rewards locked in active games', () => {
+		const weth = '0x0000000000000000000000000000000000000002' as Address
+		const nativeEth = '0x0000000000000000000000000000000000000000' as Address
+		expect(
+			gameCapitalSnapshot(
+				[
+					{ currentAmount1: 2n * 10n ** 18n, currentAmount2: 3n, settlerReward: 10n ** 17n, token1: weth, token2: address },
+					{ currentAmount1: 4n * 10n ** 18n, currentAmount2: 5n, settlerReward: 2n * 10n ** 17n, token1: nativeEth, token2: address },
+				],
+				weth,
+			),
+		).toEqual({ eth: '4.3', totalEthWeth: '6.3', weth: '2' })
+	})
+
 	test('clears wallet-derived balances and decisions when the signer identity changes', () => {
 		const state: OperatorState = {
 			activeReportCount: 1,
 			balances: { availableEth: '1', availableRep: '2', availableWeth: '3', repValueWeth: '4', totalValueWeth: '8' },
 			blockNumber: '100',
+			blockTimestamp: '1000',
 			endpointChecks: [],
 			executionHistory: [],
+			gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
 			lastError: undefined,
 			lastPollAt: undefined,
 			operationLog: [],
@@ -125,8 +141,10 @@ describe('operator execution history', () => {
 			activeReportCount: 0,
 			balances: undefined,
 			blockNumber: undefined,
+			blockTimestamp: undefined,
 			executionHistory: history,
 			endpointChecks: [],
+			gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
 			lastError: undefined,
 			lastPollAt: undefined,
 			opportunities: [],
@@ -138,6 +156,7 @@ describe('operator execution history', () => {
 		const snapshot = operatorSnapshot(state, strategy(), submission, connectivity, fixed)
 		expect(snapshot.totalEstimatedNetProfitWeth).toBe('0.05')
 		expect(snapshot.totalActualGasCostEth).toBe('0.002')
+		expect(snapshot.totalRevenueBeforeGasEth).toBe('0.052')
 	})
 
 	test('preflights and locks down the execution history destination', async () => {
@@ -176,8 +195,10 @@ describe('operator execution history', () => {
 			activeReportCount: 0,
 			balances: undefined,
 			blockNumber: undefined,
+			blockTimestamp: undefined,
 			executionHistory: history,
 			endpointChecks: [],
+			gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
 			lastError: undefined,
 			lastPollAt: undefined,
 			opportunities: [],
