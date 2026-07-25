@@ -53,12 +53,11 @@ function getAllowanceBackedRepFloor(securityBondAllowance: bigint | undefined, r
 	return divideBigintRoundUp(securityBondAllowance * repPerEthPrice, PRICE_PRECISION)
 }
 
-function getBackedAllowanceCeiling(repAmount: bigint | undefined, repPerEthPrice: bigint | undefined) {
+function getBackedAllowanceCeiling(repAmount: bigint | undefined, repPerEthPrice: bigint | undefined, securityMultiplier: bigint | undefined) {
 	if (repAmount === undefined || repAmount <= 0n) return 0n
 	if (repPerEthPrice === undefined || repPerEthPrice <= 0n) return 0n
-	const repCapacity = repAmount * PRICE_PRECISION
-	if (repCapacity <= 0n) return 0n
-	return (repCapacity - 1n) / repPerEthPrice
+	if (securityMultiplier === undefined || securityMultiplier <= 0n) return 0n
+	return (repAmount * PRICE_PRECISION) / (repPerEthPrice * securityMultiplier)
 }
 
 export function getSecurityVaultWithdrawableRepAmount({
@@ -90,21 +89,23 @@ export function getSecurityVaultMaxBondAllowanceAmount({
 	currentSecurityBondAllowance,
 	repDepositShare,
 	repPerEthPrice,
+	securityMultiplier,
 	totalRepDeposit,
 	totalSecurityBondAllowance,
 }: {
 	currentSecurityBondAllowance?: bigint | undefined
 	repDepositShare: bigint | undefined
 	repPerEthPrice: bigint | undefined
+	securityMultiplier: bigint | undefined
 	totalRepDeposit?: bigint | undefined
 	totalSecurityBondAllowance?: bigint | undefined
 }) {
-	const localAllowanceCeiling = getBackedAllowanceCeiling(repDepositShare, repPerEthPrice)
+	const localAllowanceCeiling = getBackedAllowanceCeiling(repDepositShare, repPerEthPrice, securityMultiplier)
 	let maxBondAllowanceAmount = localAllowanceCeiling
 	if (totalRepDeposit !== undefined && totalSecurityBondAllowance !== undefined) {
 		const currentAllowance = currentSecurityBondAllowance ?? 0n
 		const otherVaultAllowance = totalSecurityBondAllowance > currentAllowance ? totalSecurityBondAllowance - currentAllowance : 0n
-		const globalAllowanceCeiling = getBackedAllowanceCeiling(totalRepDeposit, repPerEthPrice)
+		const globalAllowanceCeiling = getBackedAllowanceCeiling(totalRepDeposit, repPerEthPrice, securityMultiplier)
 		const remainingPoolAllowance = globalAllowanceCeiling > otherVaultAllowance ? globalAllowanceCeiling - otherVaultAllowance : 0n
 		maxBondAllowanceAmount = maxBondAllowanceAmount < remainingPoolAllowance ? maxBondAllowanceAmount : remainingPoolAllowance
 	}

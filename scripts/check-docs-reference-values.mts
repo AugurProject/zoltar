@@ -518,7 +518,19 @@ function assertContractInteractionDistinctions(): void {
 		assert.match(whitepaperStatoblast, new RegExp(`data-flow="${flow}"`), `Statoblast asset flow must include ${flow}`)
 	}
 	assert.doesNotMatch(whitepaperStatoblast, /data-flow="share-token-to-trader-redemption"/)
-	assert.match(whitepaperStatoblast, /Before REP withdrawals and allowance changes[\s\S]{0,180}vault and whole-pool level[\s\S]{0,180}Liquidation follows a different path[\s\S]{0,220}caller\s+remains safe while aggregate allowance is preserved/)
+	assert.match(whitepaperStatoblast, /data-source="repBacking \* pricePrecision >= securityBondAllowance \* securityMultiplier \* repPerEthPrice"/)
+	assert.match(whitepaperStatoblast, /A new allowance must leave the affected vault\s+non-liquidatable, while aggregate pool REP must independently\s+satisfy the same multiplier-adjusted inequality[\s\S]{0,80}Only vaults are\s+liquidation targets/)
+	for (const [label, representation] of [
+		['Statoblast whitepaper', whitepaperStatoblast],
+		['invariants', invariantsHtml],
+		['liquidation design', liquidationHtml],
+		['generated interaction reference', contractInteractionReference],
+		['interaction reference generator', contractReferenceGenerator],
+	] as const) {
+		assert.match(representation, /affected vault[\s\S]{0,240}(?:aggregate )?pool backing/, `${label} must distinguish the affected vault from aggregate pool backing`)
+		assert.doesNotMatch(representation, /pool (?:is|becomes?|remain(?:s)?) (?:immediately )?liquidatable/, `${label} must not describe the pool as liquidatable`)
+	}
+	assert.match(whitepaperStatoblast, /Later REP withdrawals and escalation\s+deposits enforce face-value bond solvency[\s\S]{0,520}caller\s+remains safe while aggregate allowance is preserved/)
 	assert.match(initiateSecurityPoolForkRow, /Pool operational with no inherited fixed outcome;[\s\S]*if an escalation game exists, it reports the supplied pool from `securityPool\(\)` when validated and the universe fork occurred before that game settled/)
 	assert.match(ownEscalationForkRow, /Pool operational with no inherited fixed outcome;[\s\S]*`canTriggerOwnFork\(\)` is true because it recorded a local non-decision or inherited a threshold tie without a game-level fixed outcome[\s\S]*game-local predicate does not bypass the pool guard/)
 	assert.match(escalationDepositRow, /pool operational in an unforked universe, without an inherited fixed outcome, and not awaiting continuation/)

@@ -53,7 +53,10 @@
 				<h2>Liquidatable Condition</h2>
 				<p>
 					A vault is liquidatable when its unlocked REP backing is below the
-					required threshold:
+					required threshold. Allowance admission keeps the affected vault on the
+					non-liquidatable side of this boundary and independently applies the same
+					multiplier-adjusted inequality to aggregate pool backing. Only vaults are
+					liquidation targets:
 				</p>
 				<figure class="diagram diagram-wide" id="fig-liquidation-punitive-flow">
 					<svg viewBox="0 0 900 200" role="img" aria-label="Unsafe vault debt and unlocked REP move from the target vault to a non-liquidatable liquidator vault.">
