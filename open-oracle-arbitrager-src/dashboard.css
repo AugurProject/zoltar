@@ -371,7 +371,7 @@ textarea {
 
 .endpoint-check {
 	display: grid;
-	grid-template-columns: 70px minmax(0, 1fr) minmax(140px, auto);
+	grid-template-columns: 70px minmax(170px, 0.8fr) minmax(0, 1.2fr);
 	gap: 12px;
 	align-items: center;
 	padding: 10px 12px;
