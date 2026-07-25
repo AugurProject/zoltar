@@ -444,6 +444,42 @@ describe('OpenOracleSection route create view', () => {
 		expectTransactionButtonEnabled(document.body, 'Create Standalone Oracle Report')
 	})
 
+	test('uses valid timing defaults and reviews every lifecycle parameter', async () => {
+		const defaultForm = getDefaultOpenOracleCreateFormState()
+		const renderedComponent = await renderIntoDocument(
+			h(
+				OpenOracleSection,
+				createOpenOracleSectionProps({
+					accountState: createAccountState({ ethBalance: 2_000n * ETH }),
+					openOracleCreateForm: {
+						...defaultForm,
+						escalationHalt: '25',
+						exactToken1Report: '100',
+						initialToken2Amount: '300',
+						ethValue: '1',
+						feePercentage: '2',
+						protocolFee: '0.5',
+						settlerReward: '1',
+						token1Address: '0x2000000000000000000000000000000000000000',
+						token2Address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonEnabled(document.body, 'Create Standalone Oracle Report')
+		const reviewHeading = within(document.body).getByRole('heading', { name: 'Transaction Review' })
+		const review = reviewHeading.closest('section')
+		if (!(review instanceof HTMLElement)) throw new Error('Expected transaction review section')
+		const reviewQueries = within(review)
+		for (const label of ['Settlement Delay (seconds)', 'Dispute Delay (seconds)', 'Dispute Fee (%)', 'Multiplier', 'Escalation Halt', 'Protocol Fee (%)']) {
+			expect(reviewQueries.getByText(label)).not.toBeNull()
+		}
+		expect(review.textContent).toContain(defaultForm.settlementTime)
+		expect(review.textContent).toContain(defaultForm.disputeDelay)
+	})
+
 	test('describes advanced create fields with user-facing units and input modes', async () => {
 		const renderedComponent = await renderIntoDocument(h(OpenOracleSection, createOpenOracleSectionProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup

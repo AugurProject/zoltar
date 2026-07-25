@@ -469,7 +469,7 @@ export function ReportingSection({
 							{onOpenPriceOracle === undefined ? undefined : (
 								<div className='actions'>
 									<button className='secondary' type='button' onClick={onOpenPriceOracle}>
-										{reportingCopy.openOracle}
+										{reportingCopy.managePoolPrice}
 									</button>
 								</div>
 							)}

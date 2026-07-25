@@ -32,6 +32,8 @@ describe('market form defaults and conversion helpers', () => {
 		expect(getDefaultTradingFormState().selectedShareOutcome).toBe('yes')
 		expect(getDefaultOpenOracleFormState().stateHash).toBe('0x0000000000000000000000000000000000000000000000000000000000000000')
 		expect(getDefaultOpenOracleCreateFormState().multiplier).toBe('100')
+		expect(getDefaultOpenOracleCreateFormState().disputeDelay).toBe('3600')
+		expect(getDefaultOpenOracleCreateFormState().settlementTime).toBe('86400')
 		expect(getDefaultForkAuctionFormState().repMigrationOutcomes).toBe('yes')
 		expect(getDefaultZoltarMigrationFormState().amount).toBe('0.0')
 		expect(getDefaultZoltarMigrationFormState().outcomeIndexes).toBe('')

@@ -50,6 +50,7 @@ import { getOpenOracleStagePresentation } from '../lib/openOracleStage.js'
 import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount } from '../../../lib/pagination.js'
 import { loadOpenOracleReportSummaries } from '../../../protocol/index.js'
 import { isMainnetChain } from '../../../lib/network.js'
+import { tryParseBigIntInput } from '../../../lib/integerInput.js'
 import { getReportPresentation } from '../../../lib/userCopy.js'
 import { formatCurrencyInputBalance } from '../../../lib/formatters.js'
 import type { OpenOracleFormState } from '../../../types/app.js'
@@ -1066,6 +1067,11 @@ export function OpenOracleSection({
 								details={[
 									{ label: openOracleCopy.settlerReward, value: `${openOracleCreateForm.settlerReward || commonCopy.metricUnavailablePlaceholder} ${commonCopy.eth}` },
 									{ label: openOracleCopy.settlementDelaySeconds, value: openOracleCreateForm.settlementTime || commonCopy.metricUnavailablePlaceholder },
+									{ label: openOracleCopy.disputeDelaySeconds, value: openOracleCreateForm.disputeDelay || commonCopy.metricUnavailablePlaceholder },
+									{ label: openOracleCopy.disputeFeePercentage, value: `${openOracleCreateForm.feePercentage || commonCopy.metricUnavailablePlaceholder}%` },
+									{ label: commonCopy.multiplier, value: formatOpenOracleMultiplier(tryParseBigIntInput(openOracleCreateForm.multiplier)) },
+									{ label: openOracleCopy.escalationHalt, value: openOracleCreateForm.escalationHalt || commonCopy.metricUnavailablePlaceholder },
+									{ label: openOracleCopy.protocolFeePercentage, value: `${openOracleCreateForm.protocolFee || commonCopy.metricUnavailablePlaceholder}%` },
 								]}
 								risks={[openOracleCopy.standaloneFundingRisk, openOracleCopy.standaloneDisputeSettingsRisk]}
 							/>
