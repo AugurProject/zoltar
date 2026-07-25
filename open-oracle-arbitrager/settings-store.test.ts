@@ -33,6 +33,7 @@ function settings(privateKeyValue: Hex | undefined) {
 			mode: 'private' as const,
 			relayUrls: ['https://relay.flashbots.net/', 'https://relay.example/'],
 		},
+		tokenAddresses: ['0x0000000000000000000000000000000000000001' as const],
 	}
 }
 

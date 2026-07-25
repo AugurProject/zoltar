@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { privateKeyToAccount, type Hex } from '@zoltar/shared/ethereum'
 import { loadOperatorSettings, saveOperatorSettings } from './settings-store.js'
 
-const executable = join(import.meta.dir, '..', 'open-oracle-arbitrager')
+const executable = join(import.meta.dir, 'run')
 const oracle = '--open-oracle=0x0000000000000000000000000000000000000000'
 const temporaryDirectories: string[] = []
 const children: Bun.Subprocess[] = []

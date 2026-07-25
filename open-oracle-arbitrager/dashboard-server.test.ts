@@ -34,7 +34,11 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 		opportunities: [],
 		operationLog: [],
 		paused: false,
-		status: 'sleeping',
+		status: 'running',
+		tokenAddresses: [],
+		tokenMarkets: [],
+		priceHistory: [],
+		reportPaths: [],
 		transactionActivity: [],
 	}
 	let submission = validateSubmissionSettings({ mode: 'public', relayUrls: ['https://relay.flashbots.net'] })
@@ -66,6 +70,10 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 			return submission
 		},
 		updateStrategy: value => updateStrategyFromRequest(strategy, value),
+		updateTokens: value => {
+			if (!Array.isArray(value)) throw new Error('Invalid token list')
+			return value.map(String)
+		},
 	})
 	servers.push(server)
 	const origin = `http://${server.hostname}:${server.port}`
@@ -90,9 +98,15 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(pageSource).toContain('id="forget-signer-button"')
 	expect(pageSource).toContain('Save this new key in plaintext')
 	expect(pageSource).toContain('Clear signer &amp; saved key')
+	expect(pageSource).toContain('Observed dispute paths')
+	expect(pageSource).toContain('Spot (WETH/token)')
 	const browserScript = await fetch(`${origin}/dashboard.js`)
 	expect(browserScript.headers.get('content-type')).toContain('text/javascript')
-	expect(await browserScript.text()).toContain('setInterval')
+	const browserSource = await browserScript.text()
+	expect(browserSource).toContain('setInterval')
+	expect(browserSource).toContain('aria-labelledby')
+	expect(browserSource).toContain('Recent exact price samples')
+	expect(browserSource).toContain('stroke-dasharray')
 	const browserFormatScript = await fetch(`${origin}/dashboard-format.js`)
 	expect(browserFormatScript.headers.get('content-type')).toContain('text/javascript')
 	expect(await browserFormatScript.text()).toContain('sumSignedDecimals')
@@ -149,6 +163,13 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	})
 	expect(connectivityUpdate.status).toBe(200)
 	expect(connectivity.readRpcUrl).toBe('https://read.example')
+	const tokenUpdate = await fetch(`${origin}/api/tokens`, {
+		body: JSON.stringify([address]),
+		headers: { 'content-type': 'application/json', origin },
+		method: 'PUT',
+	})
+	expect(tokenUpdate.status).toBe(200)
+	expect(await tokenUpdate.json()).toEqual({ tokenAddresses: [address] })
 	const signerUpdate = await fetch(`${origin}/api/signer`, {
 		body: JSON.stringify({ privateKey: 'not returned by test controller', rememberSigner: true }),
 		headers: { 'content-type': 'application/json', origin },

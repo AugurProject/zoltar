@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/shared/ethereum'
 import type { OpenOracleGame } from '@zoltar/shared/openOracle'
+import { decimalSignedEth } from './operator-state.js'
 import { calculateContribution, calculateNextAmount1, calculateTrackedNetProfitEth, deriveTokenToSwap, evaluateBuyRep, evaluateSellRep, hasFreshSubmissionWindow, isSelfReport, meetsProfitThreshold } from './strategy.js'
 
 const weth = '0x0000000000000000000000000000000000000001' as Address
@@ -17,17 +18,28 @@ const game = {
 } satisfies Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'escalationHalt' | 'feePercentage' | 'multiplier' | 'protocolFee' | 'token1' | 'token2'>
 
 describe('OpenOracle arbitrage strategy', () => {
-	test('matches OpenOracle integer escalation and contribution formulas', () => {
+	test('serializes negative modeled opportunity profit with the sign before the whole number', () => {
+		expect(decimalSignedEth(-255_235_735_754_674_523n)).toBe('-0.255235735754674523')
+	})
+
+	test('matches full submission, immediate credit, and locked replacement economics in both OpenOracle branches', () => {
 		const newAmount1 = calculateNextAmount1(game)
 		expect(newAmount1).toBe(1_150_000n)
-		expect(calculateContribution(game, weth, weth, newAmount1, 2_300_000n)).toEqual({
+		const cheapRepReplacement = { amount1: newAmount1, amount2: 1_800_000n }
+		expect(calculateContribution(game, weth, weth, cheapRepReplacement.amount1, cheapRepReplacement.amount2)).toEqual({
 			token1: 2_161_000n,
-			token2: 300_000n,
+			token2: 0n,
 		})
-		expect(calculateContribution(game, rep, weth, newAmount1, 2_300_000n)).toEqual({
+		expect(game.currentAmount2 - cheapRepReplacement.amount2).toBe(200_000n)
+		expect(cheapRepReplacement).toEqual({ amount1: 1_150_000n, amount2: 1_800_000n })
+
+		const expensiveRepReplacement = { amount1: newAmount1, amount2: 2_300_000n }
+		expect(calculateContribution(game, rep, weth, expensiveRepReplacement.amount1, expensiveRepReplacement.amount2)).toEqual({
 			token1: 150_000n,
 			token2: 4_322_000n,
 		})
+		expect(expensiveRepReplacement.amount1 - game.currentAmount1).toBe(150_000n)
+		expect(expensiveRepReplacement).toEqual({ amount1: 1_150_000n, amount2: 2_300_000n })
 	})
 
 	test('uses executable hedge quotes, all fees, and gas for profitability', () => {

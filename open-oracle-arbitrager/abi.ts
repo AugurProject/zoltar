@@ -12,6 +12,34 @@ export const factoryAbi = [
 	},
 ] as const
 
+export const constantProductFactoryAbi = [
+	{
+		type: 'function',
+		name: 'getPair',
+		stateMutability: 'view',
+		inputs: [
+			{ name: 'tokenA', type: 'address' },
+			{ name: 'tokenB', type: 'address' },
+		],
+		outputs: [{ name: 'pair', type: 'address' }],
+	},
+] as const
+
+export const constantProductPairAbi = [
+	{ type: 'function', name: 'token0', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address' }] },
+	{
+		type: 'function',
+		name: 'getReserves',
+		stateMutability: 'view',
+		inputs: [],
+		outputs: [
+			{ name: 'reserve0', type: 'uint112' },
+			{ name: 'reserve1', type: 'uint112' },
+			{ name: 'blockTimestampLast', type: 'uint32' },
+		],
+	},
+] as const
+
 export const poolAbi = [
 	{ type: 'function', name: 'liquidity', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint128' }] },
 	{
@@ -89,6 +117,9 @@ export const quoterAbi = [
 ] as const
 
 export const erc20Abi = [
+	{ type: 'function', name: 'decimals', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint8' }] },
+	{ type: 'function', name: 'name', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'string' }] },
+	{ type: 'function', name: 'symbol', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'string' }] },
 	{
 		type: 'function',
 		name: 'balanceOf',
@@ -106,6 +137,17 @@ export const erc20Abi = [
 		],
 		outputs: [{ name: '', type: 'bool' }],
 	},
+] as const
+
+export const augurUniverseAbi = [
+	{ type: 'function', name: 'getForkingMarket', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address' }] },
+	{ type: 'function', name: 'getReputationToken', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address' }] },
+	{ type: 'function', name: 'getChildUniverse', stateMutability: 'view', inputs: [{ name: 'payoutDistributionHash', type: 'bytes32' }], outputs: [{ name: '', type: 'address' }] },
+] as const
+
+export const augurMarketAbi = [
+	{ type: 'function', name: 'getNumTicks', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256' }] },
+	{ type: 'function', name: 'getNumberOfOutcomes', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256' }] },
 ] as const
 
 const gameComponents = [

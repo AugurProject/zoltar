@@ -173,7 +173,7 @@ economic assumption is defined by
 [`ORACLE-A1`](./security-model.html#oracle-a1). Current executable-liquidity
 evidence and the fail-closed launch criteria are in the
 [ORACLE-A1 launch analysis](./oracle-a1-launch-analysis.html). Operators can
-run the root [OpenOracle arbitrager](../open-oracle-arbitrager-src/README.md) in
+run the [OpenOracle arbitrager](../open-oracle-arbitrager/README.md) in
 dry-run mode to monitor pending reports and executable Uniswap V3 quotes.
 
 | Area | Implementation behavior | Source |

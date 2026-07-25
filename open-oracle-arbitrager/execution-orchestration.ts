@@ -20,7 +20,7 @@ export function opportunityDecision(parameters: { account: Address | undefined; 
 	if (!parameters.profitable) return 'unprofitable'
 	if (parameters.execute && parameters.account === undefined) return 'signer-unavailable'
 	if (isSelfReport(parameters.account, parameters.currentReporter)) return 'self-report'
-	if (parameters.hasRequiredInventory === false) return 'insufficient-inventory'
+	if (parameters.execute && parameters.hasRequiredInventory !== true) return 'insufficient-inventory'
 	if (parameters.execute && !parameters.executionReady) return 'history-unavailable'
 	return parameters.execute ? 'eligible' : 'dry-run-opportunity'
 }

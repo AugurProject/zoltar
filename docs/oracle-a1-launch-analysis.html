@@ -144,40 +144,58 @@
 						<thead>
 							<tr>
 								<th>Wrong report</th>
-								<th>OpenOracle action</th>
-								<th>Profit before capital cost</th>
+								<th>Submission cash flow and locked position</th>
+								<th>Lifetime net economics if the replacement remains final</th>
 							</tr>
 						</thead>
 						<tbody>
 							<tr>
 								<td>REP is cheap: report offers too much REP per WETH</td>
 								<td>
-									Swap token1; fund <code>W + floor(Wf/P) + floor(Wp/P)</code>,
-									receive <code>R</code>, then sell REP
+									Swap token1. Fund
+									<code>W′ + W + floor(Wf/P) + floor(Wp/P)</code> WETH
+									plus <code>max(R′ − R, 0)</code> REP. The immediate
+									REP credit is <code>max(R − R′, 0)</code>; the
+									replacement <code>(W′, R′)</code> remains locked.
 								</td>
 								<td>
-									<code>V3ExactInput(R REP) - WETH contribution - gas</code>
+									If no later dispute removes this reporter, settlement credits the
+									locked replacement to the reporter's internal balance, which a
+									later withdrawal transfers to the wallet. Net:
+									<code>V3ExactInput(R REP) − W − fees − gas</code>.
 								</td>
 							</tr>
 							<tr>
 								<td>REP is expensive: report offers too little REP per WETH</td>
 								<td>
-									Swap token2; buy and fund
-									<code>R + floor(Rf/P) + floor(Rp/P)</code>, receive
-									<code>W</code>
+									Swap token2. Fund
+									<code>R′ + R + floor(Rf/P) + floor(Rp/P)</code> REP
+									plus <code>max(W′ − W, 0)</code> WETH. No old-position
+									WETH is immediately paid out; the replacement
+									<code>(W′, R′)</code> remains locked.
 								</td>
-								<td><code>W - V3ExactOutput(REP contribution) - gas</code></td>
+								<td>
+									If no later dispute removes this reporter, settlement credits the
+									locked replacement to the reporter's internal balance, which a
+									later withdrawal transfers to the wallet. Net:
+									<code>W − V3ExactOutput(R + fees REP) − gas</code>.
+								</td>
 							</tr>
 						</tbody>
 					</table>
 				</div>
 				<p>
+					Here <code>(W, R)</code> is the old report and
+					<code>(W′, R′)</code> is the replacement.
 					The replacement WETH amount is
 					<code>min(floor(W × multiplier / 100), escalationHalt)</code> before
 					the halt, or <code>W + 1</code> at the halt. Replacement capital is
 					locked, but is not treated as a purchase expense because it is
-					returned to the final reporter. A production decision must separately
-					price that lock duration and the possibility of another dispute.
+					made withdrawable to the final reporter. The displayed
+					<code>gas</code> covers the dispute and external hedge, not later
+					settlement or withdrawal gas. A production decision must separately
+					price those later operations, the lock duration, and the possibility
+					of another dispute.
 				</p>
 			</section>
 
@@ -534,7 +552,7 @@
 				</ul>
 				<p>
 					The root
-					<a href="../open-oracle-arbitrager-src/README.md"
+					<a href="../open-oracle-arbitrager/README.md"
 						>OpenOracle arbitrager</a
 					>
 					automates event monitoring, TWAP filtering, executable quotes,

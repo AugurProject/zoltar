@@ -1,3 +1,6 @@
+import type { OperatorSnapshot, OpportunitySnapshot, TransactionActivity } from './operator-state.js'
+import type { MarketPricePoint } from './market-monitor.js'
+
 const DECIMAL_SCALE = 18
 
 function parseSignedDecimal(value: string) {
@@ -42,9 +45,42 @@ export function blockAgeLabel(blockTimestamp: string | undefined, nowMillisecond
 	return nowMilliseconds >= timestampMilliseconds ? `${label} behind` : `${label} ahead of local clock`
 }
 
-export function botStatusLabels(state: { mode: 'dry-run' | 'execute'; paused: boolean } | undefined) {
+export function botStatusLabels(state: Pick<OperatorSnapshot, 'mode' | 'paused' | 'status'> | undefined) {
 	if (state === undefined) return { mode: 'Mode —', status: '—' }
-	return { mode: state.mode, status: state.paused ? 'Paused' : 'Running' }
+	if (state.paused) return { mode: state.mode, status: 'Paused' }
+	const statuses: Record<OperatorSnapshot['status'], string> = {
+		error: 'Error',
+		paused: 'Paused',
+		running: 'Running',
+		stopped: 'Stopped',
+		syncing: 'Syncing',
+	}
+	return { mode: state.mode, status: statuses[state.status] }
+}
+
+export function opportunityDecisionReason(opportunity: Pick<OpportunitySnapshot, 'decision' | 'tokenSymbol'>) {
+	const reasons: Record<OpportunitySnapshot['decision'], string> = {
+		'dry-run-opportunity': 'All economic guards pass; execution mode is disabled',
+		eligible: 'Profit, timing, state, and inventory guards pass',
+		'execution-failed': 'Execution raised an error after selection',
+		'history-unavailable': 'Confirmed-history durability is unavailable',
+		'insufficient-inventory': `Wallet lacks the required WETH or ${opportunity.tokenSymbol}`,
+		paused: 'Operator paused execution',
+		selected: 'Highest modeled net profit in this scan',
+		'self-report': 'Current wallet is already the reporter',
+		'signer-unavailable': 'Execution mode is locked until a local signer is set',
+		submitted: 'Signed dispute was accepted for delivery',
+		unprofitable: 'Modeled profit is below configured thresholds',
+	}
+	return reasons[opportunity.decision]
+}
+
+export function transactionKindLabel(transaction: Pick<TransactionActivity, 'kind' | 'tokenSymbol'>) {
+	return transaction.kind === 'approval-token' ? `approve ${transaction.tokenSymbol ?? 'token'}` : transaction.kind.replaceAll('-', ' ')
+}
+
+export function marketPriceChartDescription(points: readonly Pick<MarketPricePoint, 'blockNumber'>[]) {
+	return `${points.length.toString()} current-head pool samples spanning observed heads at blocks ${points[0]?.blockNumber ?? 'unknown'} through ${points.at(-1)?.blockNumber ?? 'unknown'}. Exact recent values follow the chart in a table.`
 }
 
 export function requiredSignerPrivateKey(value: string) {

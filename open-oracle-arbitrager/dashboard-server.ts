@@ -10,6 +10,7 @@ type DashboardController = {
 	updateSigner: (value: unknown) => { wallet: string | undefined } | Promise<{ wallet: string | undefined }>
 	updateStrategy: (value: unknown) => StrategySettings | Promise<StrategySettings>
 	updateSubmission: (value: unknown) => SubmissionSettings | Promise<SubmissionSettings>
+	updateTokens?: (value: unknown) => readonly string[] | Promise<readonly string[]>
 }
 
 function json(value: unknown, status = 200) {
@@ -96,6 +97,15 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
 				try {
 					return json({ connectivity: await controller.updateConnectivity(await requireJson(request)) })
+				} catch (error) {
+					return json({ error: errorMessage(error) }, 400)
+				}
+			}
+			if (request.method === 'PUT' && url.pathname === '/api/tokens') {
+				if (!sameOrigin(request, authority)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
+				try {
+					if (controller.updateTokens === undefined) throw new Error('Token configuration is unavailable')
+					return json({ tokenAddresses: await controller.updateTokens(await requireJson(request)) })
 				} catch (error) {
 					return json({ error: errorMessage(error) }, 400)
 				}

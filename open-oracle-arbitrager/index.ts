@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import { createPublicClient, createWalletClient, encodeFunctionData, formatEther, getAddress, http, privateKeyToAccount, type Account, type Address, type Chain, type Hex, type PublicClient, type TransactionLog, type Transport, type WalletClient, zeroAddress } from '@zoltar/shared/ethereum'
 import { decodeOpenOracleStatePreimage, getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, type OpenOracleStatePreimage } from '@zoltar/shared/openOracle'
 import { erc20Abi, factoryAbi, openOracleAbi, poolAbi, quoterAbi } from './abi.js'
+import { advanceCursorAfterSuccessfulHead, cursorForHeadScan, initialCursor, operatorStatusAfterPause, scanRanges, type SyncCursor } from './block-sync.js'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, sendRawTransactionToRpc, updateConnectivityEndpointChecks, updateSubmissionEndpointChecks, validateConnectivitySettings, type ConnectivitySettings } from './connectivity.js'
 import { startDashboardServer } from './dashboard-server.js'
 import {
@@ -38,7 +39,9 @@ import {
 	type OperatorState,
 	type OpportunitySnapshot,
 	type TransactionActivity,
+	type DisputeStepSnapshot,
 } from './operator-state.js'
+import { appendPriceHistory, availableTokenBalances, discoverAugurRepTokens, formatTokenAmount, loadPriceHistory, loadTokenMarkets, missingPricePoints, pricePoints } from './market-monitor.js'
 import { defaultRpcUrl, networkConfiguration, parseNetworkName, type NetworkConfiguration } from './network.js'
 import { bestSuccessful, pollUntilStopped, replaceOverlap } from './resilience.js'
 import { loadOperatorSettings, saveOperatorSettings, type PersistedOperatorSettings } from './settings-store.js'
@@ -52,6 +55,7 @@ const REORG_OVERLAP_BLOCKS = 12n
 type Configuration = MutableStrategy & {
 	execute: boolean
 	historyFile: string
+	priceHistoryFile: string
 	lookbackBlocks: bigint
 	network: NetworkConfiguration
 	once: boolean
@@ -60,6 +64,7 @@ type Configuration = MutableStrategy & {
 	persistedPrivateKey: Hex | undefined
 	privateKey: Hex | undefined
 	settingsFile: string
+	tokenAddresses: Address[]
 	connectivity: ConnectivitySettings
 	submission: SubmissionSettings
 	ui: boolean
@@ -69,6 +74,7 @@ type Configuration = MutableStrategy & {
 type ActiveReport = {
 	latest: OpenOracleStatePreimage
 	settled: boolean
+	steps: DisputeStepSnapshot[]
 }
 
 type Pool = {
@@ -76,12 +82,14 @@ type Pool = {
 	fee: (typeof FEES)[number]
 	liquidity: bigint
 	spotTick: bigint
+	token: Address
 	twapTick: bigint
 }
 
 type RawBalances = {
 	eth: bigint
 	rep: bigint
+	tokens: Map<string, bigint>
 	weth: bigint
 }
 
@@ -104,7 +112,7 @@ function printHelp() {
 	console.log(`OpenOracle arbitrager
 
 Usage:
-  ./open-oracle-arbitrager --open-oracle=0x... [options]
+  ./open-oracle-arbitrager/run --open-oracle=0x... [options]
 
 Modes:
   --once                         Scan once and exit
@@ -120,22 +128,24 @@ Strategy:
   --twap-seconds=1800            Uniswap TWAP window
   --minimum-remaining-blocks=3   Inclusion buffer for block-based games
   --minimum-remaining-seconds=36 Inclusion buffer for timestamp-based games
-  --poll-ms=12000                Continuous scan interval
+  --poll-ms=1000                 Latest-head polling interval
 
 Data and connectivity:
   --network=mainnet|sepolia      Expected network; defaults to mainnet
   --rpc-url=https://...          Read RPC (or ETH_RPC_URL)
   --public-rpc-url=https://...   Public submission RPC; repeat to fan out
   --rep-address=0x...            REP address; required on Sepolia
+  --token-address=0x...          Additional token to monitor; repeat as needed
   --weth-address=0x...           Override the network WETH address
   --uniswap-factory=0x...        Override the Uniswap V3 factory
   --uniswap-quoter=0x...         Override the Uniswap V3 quoter
   --lookback-blocks=50000        Initial event search range
   --ui-port=4173                 Local dashboard port
   --history-file=PATH            Confirmed-submission JSONL path
+  --price-history-file=PATH      Current-head pool-price JSONL path
   --settings-file=PATH           Persistent dashboard settings JSON path
 
-Execution is off by default. See open-oracle-arbitrager-src/README.md.`)
+Execution is off by default. See open-oracle-arbitrager/README.md.`)
 }
 
 function option(name: string) {
@@ -168,7 +178,7 @@ async function loadConfiguration(): Promise<Configuration> {
 			minimumProfitWeth: 10n ** 16n,
 			minimumRemainingBlocks: 3n,
 			minimumRemainingSeconds: 36n,
-			pollMilliseconds: 12_000,
+			pollMilliseconds: 1_000,
 			twapSeconds: 1_800,
 		},
 	)
@@ -195,6 +205,7 @@ async function loadConfiguration(): Promise<Configuration> {
 		...strategy,
 		execute: process.argv.includes('--execute'),
 		historyFile: resolve(option('history-file') ?? `.open-oracle-arbitrager/history-${networkName}.jsonl`),
+		priceHistoryFile: resolve(option('price-history-file') ?? `.open-oracle-arbitrager/prices-${networkName}.jsonl`),
 		lookbackBlocks: BigInt(option('lookback-blocks') ?? '50000'),
 		network,
 		once: process.argv.includes('--once'),
@@ -203,6 +214,7 @@ async function loadConfiguration(): Promise<Configuration> {
 		persistedPrivateKey: saved?.privateKey,
 		privateKey,
 		settingsFile,
+		tokenAddresses: [...new Set([network.rep, ...(saved?.tokenAddresses ?? []), ...options('token-address').map(getAddress)])],
 		connectivity: validateConnectivitySettings({
 			publicRpcUrls: publicRpcUrls.length === 0 ? (saved?.connectivity.publicRpcUrls ?? [readRpcUrl]) : publicRpcUrls,
 			readRpcUrl,
@@ -251,13 +263,36 @@ function applyLogs(reports: Map<bigint, ActiveReport>, logs: readonly Transactio
 		const signature = log.topics[0]?.toLowerCase()
 		if (signature === OPEN_ORACLE_REPORT_SETTLED_TOPIC.toLowerCase()) {
 			const current = reports.get(id)
-			if (current !== undefined) current.settled = true
+			if (current !== undefined) {
+				current.settled = true
+				current.steps.push({
+					amount1: undefined,
+					amount2: undefined,
+					blockNumber: logBlockNumber(log).toString(),
+					event: 'settled',
+					reporter: undefined,
+					transactionHash: log.transactionHash ?? undefined,
+				})
+			}
 			continue
 		}
 		if (signature !== OPEN_ORACLE_REPORT_SUBMITTED_TOPIC.toLowerCase() && signature !== OPEN_ORACLE_REPORT_DISPUTED_TOPIC.toLowerCase()) continue
+		const latest = decodeOpenOracleStatePreimage(log.data, id)
+		const previous = reports.get(id)
 		reports.set(id, {
-			latest: decodeOpenOracleStatePreimage(log.data, id),
+			latest,
 			settled: false,
+			steps: [
+				...(previous?.steps ?? []),
+				{
+					amount1: latest.game.currentAmount1.toString(),
+					amount2: latest.game.currentAmount2.toString(),
+					blockNumber: logBlockNumber(log).toString(),
+					event: signature === OPEN_ORACLE_REPORT_SUBMITTED_TOPIC.toLowerCase() ? 'submitted' : 'disputed',
+					reporter: latest.game.currentReporter,
+					transactionHash: log.transactionHash ?? undefined,
+				},
+			],
 		})
 	}
 }
@@ -299,7 +334,7 @@ function meanTick(tickCumulatives: readonly bigint[], seconds: bigint) {
 	return quotient
 }
 
-async function loadPool(client: ReadClient, address: Address, fee: Pool['fee'], twapSeconds: number): Promise<Pool | undefined> {
+async function loadPool(client: ReadClient, address: Address, token: Address, fee: Pool['fee'], twapSeconds: number): Promise<Pool | undefined> {
 	const liquidity = await client.readContract({
 		address,
 		abi: poolAbi,
@@ -322,11 +357,12 @@ async function loadPool(client: ReadClient, address: Address, fee: Pool['fee'], 
 		fee,
 		liquidity,
 		spotTick: slot0[1],
+		token,
 		twapTick: meanTick(observation[0], BigInt(twapSeconds)),
 	}
 }
 
-async function poolsFor(client: ReadClient, config: Configuration) {
+async function poolsForToken(client: ReadClient, config: Configuration, token: Address) {
 	const pools: Pool[] = []
 	for (const fee of FEES) {
 		try {
@@ -334,10 +370,10 @@ async function poolsFor(client: ReadClient, config: Configuration) {
 				address: config.network.factory,
 				abi: factoryAbi,
 				functionName: 'getPool',
-				args: [config.network.weth, config.network.rep, fee],
+				args: [config.network.weth, token, fee],
 			})
 			if (address === zeroAddress) continue
-			const pool = await loadPool(client, address, fee, config.twapSeconds)
+			const pool = await loadPool(client, address, token, fee, config.twapSeconds)
 			if (pool !== undefined) pools.push(pool)
 		} catch (error) {
 			console.error(`poolFee=${fee.toString()} skipped=${errorMessage(error)}`)
@@ -371,16 +407,13 @@ async function evaluate(client: ReadClient, config: Configuration, report: OpenO
 	const gasCost = gasPrice * 600_000n
 	const repWithFees = game.currentAmount2 + calculateFee(game.currentAmount2, game.feePercentage) + calculateFee(game.currentAmount2, game.protocolFee)
 	return bestSuccessful(
-		[
-			async () => evaluateSellRep(game, await quoteInput(client, config.network.quoter, config.network.rep, config.network.weth, game.currentAmount2, pool.fee), gasCost),
-			async () => evaluateBuyRep(game, await quoteOutput(client, config.network.quoter, config.network.weth, config.network.rep, repWithFees, pool.fee), gasCost),
-		],
+		[async () => evaluateSellRep(game, await quoteInput(client, config.network.quoter, pool.token, config.network.weth, game.currentAmount2, pool.fee), gasCost), async () => evaluateBuyRep(game, await quoteOutput(client, config.network.quoter, config.network.weth, pool.token, repWithFees, pool.fee), gasCost)],
 		candidate => candidate.netProfitWeth,
 		error => console.error(`pool=${pool.address} quoteSkipped=${errorMessage(error)}`),
 	)
 }
 
-async function loadBalances(client: ReadClient, wallet: WriteClient | undefined, config: Configuration, pools: readonly Pool[]) {
+async function loadBalances(client: ReadClient, wallet: WriteClient | undefined, config: Configuration, pools: readonly Pool[], tokens: readonly Address[]) {
 	if (wallet === undefined) return undefined
 	const address = wallet.account.address
 	const [eth, weth, rep] = await Promise.all([
@@ -398,12 +431,20 @@ async function loadBalances(client: ReadClient, wallet: WriteClient | undefined,
 			args: [address],
 		}),
 	])
-	const raw = { eth, rep, weth }
+	const tokenBalances = await availableTokenBalances(tokens, token =>
+		client.readContract({
+			address: token,
+			abi: erc20Abi,
+			functionName: 'balanceOf',
+			args: [address],
+		}),
+	)
+	const raw = { eth, rep, tokens: tokenBalances, weth }
 	let repValueWeth: bigint | undefined
 	if (rep === 0n) repValueWeth = 0n
 	else {
 		const best = await bestSuccessful(
-			pools.map(pool => () => quoteInput(client, config.network.quoter, config.network.rep, config.network.weth, rep, pool.fee)),
+			pools.filter(pool => pool.token.toLowerCase() === config.network.rep.toLowerCase()).map(pool => () => quoteInput(client, config.network.quoter, config.network.rep, config.network.weth, rep, pool.fee)),
 			value => value,
 			() => undefined,
 		)
@@ -427,6 +468,8 @@ type TrackedSubmission = SignedTransaction &
 		kind: TransactionActivity['kind']
 		reportId: string
 		submittedAt: string
+		token: Address | undefined
+		tokenSymbol: string | undefined
 	}
 
 async function signContractTransaction(client: ReadClient, wallet: WriteClient, chainId: number, to: Address, data: Hex, estimateGas: () => Promise<bigint>, lastValidBlockNumber: bigint | undefined = undefined): Promise<SignedTransaction> {
@@ -461,12 +504,22 @@ function trackedActivity(submission: TrackedSubmission, status: TransactionActiv
 		reportId: submission.reportId,
 		status,
 		submittedAt: submission.submittedAt,
+		token: submission.token,
+		tokenSymbol: submission.tokenSymbol,
 		trackedNetProfitEth,
 		updatedAt: new Date().toISOString(),
 	}
 }
 
-async function submitContractTransaction(client: ReadClient, wallet: WriteClient, config: Configuration, signed: SignedTransaction, details: { estimatedNetProfitEth: string | undefined; kind: TransactionActivity['kind']; reportId: string }, isPaused: () => boolean, track: TrackTransaction): Promise<TrackedSubmission> {
+async function submitContractTransaction(
+	client: ReadClient,
+	wallet: WriteClient,
+	config: Configuration,
+	signed: SignedTransaction,
+	details: { estimatedNetProfitEth: string | undefined; kind: TransactionActivity['kind']; reportId: string; token?: Address | undefined; tokenSymbol?: string | undefined },
+	isPaused: () => boolean,
+	track: TrackTransaction,
+): Promise<TrackedSubmission> {
 	const account = wallet.account
 	const signMessage = account?.signMessage
 	if (account === undefined || signMessage === undefined) throw new Error('Execution requires a local relay authentication signer')
@@ -480,6 +533,8 @@ async function submitContractTransaction(client: ReadClient, wallet: WriteClient
 		mode: config.submission.mode,
 		reportId: details.reportId,
 		submittedAt,
+		token: details.token,
+		tokenSymbol: details.tokenSymbol,
 	}
 	try {
 		const result = await guardedTransactionSubmission(
@@ -579,7 +634,7 @@ async function waitForTrackedTransaction(client: ReadClient, wallet: WriteClient
 	return { receipt, tracked }
 }
 
-async function approveAndWait(client: ReadClient, wallet: WriteClient, config: Configuration, token: Address, spender: Address, amount: bigint, reportId: string, isPaused: () => boolean, track: TrackTransaction) {
+async function approveAndWait(client: ReadClient, wallet: WriteClient, config: Configuration, token: Address, tokenSymbol: string, spender: Address, amount: bigint, reportId: string, isPaused: () => boolean, track: TrackTransaction) {
 	if (amount === 0n) return 0n
 	const request = {
 		address: token,
@@ -589,31 +644,31 @@ async function approveAndWait(client: ReadClient, wallet: WriteClient, config: C
 	} as const
 	const data = encodeFunctionData(request)
 	const signed = await signContractTransaction(client, wallet, config.network.chain.id, token, data, () => client.estimateContractGas({ ...request, account: wallet.account }))
-	const kind = token.toLowerCase() === config.network.weth.toLowerCase() ? 'approval-weth' : 'approval-rep'
-	const submission = await submitContractTransaction(client, wallet, config, signed, { estimatedNetProfitEth: undefined, kind, reportId }, isPaused, track)
+	const kind = token.toLowerCase() === config.network.weth.toLowerCase() ? 'approval-weth' : 'approval-token'
+	const submission = await submitContractTransaction(client, wallet, config, signed, { estimatedNetProfitEth: undefined, kind, reportId, token, tokenSymbol }, isPaused, track)
 	const { receipt } = await waitForTrackedTransaction(client, wallet, config, submission, track)
 	if (receipt.status !== 'success') throw new Error(`Approval transaction reverted: ${receipt.transactionHash}`)
 	return receipt.gasUsed * (receipt.effectiveGasPrice ?? 0n)
 }
 
-async function executeDispute(client: ReadClient, wallet: WriteClient, config: Configuration, report: OpenOracleStatePreimage, quote: ArbitrageQuote, pool: Pool, isPaused: () => boolean, track: TrackTransaction): Promise<ExecutionRecord> {
+async function executeDispute(client: ReadClient, wallet: WriteClient, config: Configuration, report: OpenOracleStatePreimage, quote: ArbitrageQuote, pool: Pool, tokenMetadata: { decimals: number; symbol: string }, isPaused: () => boolean, track: TrackTransaction): Promise<ExecutionRecord> {
 	const account = wallet.account
 	if (account === undefined) throw new Error('Execution requires a local account')
 	const game = report.game
 	if (isSelfReport(account.address, game.currentReporter)) throw new Error('Self-disputes use different OpenOracle accounting and are not supported')
 	const newAmount1 = calculateNextAmount1(game)
-	const preparedAmount2 = await quoteInput(client, config.network.quoter, config.network.weth, config.network.rep, newAmount1, pool.fee)
+	const preparedAmount2 = await quoteInput(client, config.network.quoter, config.network.weth, pool.token, newAmount1, pool.fee)
 	const preparedTokenToSwap = deriveTokenToSwap(game, newAmount1, preparedAmount2)
 	if (preparedTokenToSwap.toLowerCase() !== quote.tokenToSwap.toLowerCase()) throw new Error('Replacement ratio does not derive the selected arbitrage direction')
 	const preparedContribution = calculateContribution(game, preparedTokenToSwap, game.token1, newAmount1, preparedAmount2)
 	const reportId = report.helper.reportId.toString()
 	return runFundedExecution(isPaused, {
-		approveToken1: () => approveAndWait(client, wallet, config, game.token1, config.openOracle, preparedContribution.token1, reportId, isPaused, track),
-		approveToken2: () => approveAndWait(client, wallet, config, game.token2, config.openOracle, preparedContribution.token2, reportId, isPaused, track),
+		approveToken1: () => approveAndWait(client, wallet, config, game.token1, 'WETH', config.openOracle, preparedContribution.token1, reportId, isPaused, track),
+		approveToken2: () => approveAndWait(client, wallet, config, game.token2, tokenMetadata.symbol, config.openOracle, preparedContribution.token2, reportId, isPaused, track),
 		prepare: async () => {
 			const quoteBlock = await client.getBlock()
 			if (quoteBlock.number === undefined) throw new Error('Quote block is missing its number')
-			const refreshedPool = await loadPool(client, pool.address, pool.fee, config.twapSeconds)
+			const refreshedPool = await loadPool(client, pool.address, pool.token, pool.fee, config.twapSeconds)
 			if (refreshedPool === undefined) throw new Error('Selected pool lost all active liquidity while approvals were mined')
 			const deviation = refreshedPool.spotTick > refreshedPool.twapTick ? refreshedPool.spotTick - refreshedPool.twapTick : refreshedPool.twapTick - refreshedPool.spotTick
 			if (deviation > config.maxSpotTwapTicks) throw new Error('Selected pool failed the spot/TWAP check after approvals')
@@ -622,7 +677,7 @@ async function executeDispute(client: ReadClient, wallet: WriteClient, config: C
 			if (refreshedQuote === undefined) throw new Error('Selected pool no longer serves either arbitrage direction')
 			if (refreshedQuote.direction !== quote.direction) throw new Error('Best arbitrage direction changed while approvals were mined')
 			if (!meetsProfitThreshold(refreshedQuote, config.minimumProfitWeth, config.minimumProfitBps)) throw new Error('Arbitrage no longer meets the profit threshold after approvals')
-			const newAmount2 = await quoteInput(client, config.network.quoter, config.network.weth, config.network.rep, newAmount1, refreshedPool.fee)
+			const newAmount2 = await quoteInput(client, config.network.quoter, config.network.weth, refreshedPool.token, newAmount1, refreshedPool.fee)
 			const tokenToSwap = deriveTokenToSwap(game, newAmount1, newAmount2)
 			if (tokenToSwap.toLowerCase() !== refreshedQuote.tokenToSwap.toLowerCase()) throw new Error('Refreshed replacement ratio does not derive the selected arbitrage direction')
 			const contribution = calculateContribution(game, tokenToSwap, game.token1, newAmount1, newAmount2)
@@ -685,8 +740,10 @@ async function executeDispute(client: ReadClient, wallet: WriteClient, config: C
 				pool: prepared.refreshedPool.address,
 				poolFee: prepared.refreshedPool.fee,
 				reportId: report.helper.reportId.toString(),
-				requiredRep: decimalWeth(prepared.contribution.token2),
+				requiredToken: formatTokenAmount(prepared.contribution.token2, tokenMetadata.decimals),
 				requiredWeth: decimalWeth(prepared.contribution.token1),
+				token: game.token2,
+				tokenSymbol: tokenMetadata.symbol,
 				trackedNetProfitEth,
 				transactionHash: receipt.transactionHash,
 			}
@@ -704,12 +761,13 @@ async function inspectReport(
 	blockTimestamp: bigint,
 	gasPrice: bigint,
 	balances: RawBalances | undefined,
+	tokenMetadata: { decimals: number; symbol: string },
 	executionReady: boolean,
 	recordDecision: (message: string, reason: string) => void,
 ): Promise<EvaluatedOpportunity | undefined> {
 	const game = report.game
-	if (game.token1.toLowerCase() !== config.network.weth.toLowerCase() || game.token2.toLowerCase() !== config.network.rep.toLowerCase()) {
-		recordDecision('Skipped report', 'Token pair is not the configured WETH/REP identity')
+	if (game.token1.toLowerCase() !== config.network.weth.toLowerCase() || !pools.some(pool => pool.token.toLowerCase() === game.token2.toLowerCase())) {
+		recordDecision('Skipped report', 'Token pair is not WETH plus a configured token with a usable pool')
 		return
 	}
 	const timeType = (game.flags & OPEN_ORACLE_FLAG_TIME_TYPE) !== 0n
@@ -727,6 +785,7 @@ async function inspectReport(
 	}
 	let best: { pool: Pool; quote: ArbitrageQuote } | undefined
 	for (const pool of pools) {
+		if (pool.token.toLowerCase() !== game.token2.toLowerCase()) continue
 		const deviation = pool.spotTick > pool.twapTick ? pool.spotTick - pool.twapTick : pool.twapTick - pool.spotTick
 		if (deviation > config.maxSpotTwapTicks) continue
 		const quote = await evaluate(client, config, report, pool, gasPrice)
@@ -739,7 +798,7 @@ async function inspectReport(
 		return
 	}
 	const newAmount1 = calculateNextAmount1(game)
-	const replacementAmount2 = await quoteInput(client, config.network.quoter, config.network.weth, config.network.rep, newAmount1, best.pool.fee)
+	const replacementAmount2 = await quoteInput(client, config.network.quoter, config.network.weth, best.pool.token, newAmount1, best.pool.fee)
 	const replacementTokenToSwap = deriveTokenToSwap(game, newAmount1, replacementAmount2)
 	if (replacementTokenToSwap.toLowerCase() !== best.quote.tokenToSwap.toLowerCase()) {
 		console.log(`report=${report.helper.reportId.toString()} skipped=replacement-ratio-direction-mismatch`)
@@ -747,7 +806,8 @@ async function inspectReport(
 		return
 	}
 	const contribution = calculateContribution(game, replacementTokenToSwap, game.token1, newAmount1, replacementAmount2)
-	const hasRequiredInventory = balances === undefined ? undefined : balances.weth >= contribution.token1 && balances.rep >= contribution.token2
+	const tokenBalance = balances?.tokens.get(game.token2.toLowerCase())
+	const hasRequiredInventory = balances === undefined || tokenBalance === undefined ? undefined : balances.weth >= contribution.token1 && tokenBalance >= contribution.token2
 	const profitable = meetsProfitThreshold(best.quote, config.minimumProfitWeth, config.minimumProfitBps)
 	const decision = opportunityDecision({
 		account: wallet?.account.address,
@@ -761,14 +821,16 @@ async function inspectReport(
 	const opportunity = {
 		decision,
 		direction: best.quote.direction,
-		estimatedNetProfitEth: decimalWeth(best.quote.netProfitWeth),
-		estimatedNetProfitWeth: decimalWeth(best.quote.netProfitWeth),
+		estimatedNetProfitEth: decimalSignedEth(best.quote.netProfitWeth),
+		estimatedNetProfitWeth: decimalSignedEth(best.quote.netProfitWeth),
 		hasRequiredInventory,
 		pool: best.pool.address,
 		poolFee: best.pool.fee,
 		reportId: report.helper.reportId.toString(),
-		requiredRep: decimalWeth(contribution.token2),
+		requiredToken: formatTokenAmount(contribution.token2, tokenMetadata.decimals),
 		requiredWeth: decimalWeth(contribution.token1),
+		token: game.token2,
+		tokenSymbol: tokenMetadata.symbol,
 		timeRemaining: timeRemaining.toString(),
 		windowUnit: timeType ? 'seconds' : 'blocks',
 	} satisfies OpportunitySnapshot
@@ -815,7 +877,11 @@ async function main() {
 		opportunities: [],
 		operationLog: [],
 		paused: config.paused,
-		status: 'starting',
+		status: 'syncing',
+		tokenAddresses: config.tokenAddresses,
+		tokenMarkets: [],
+		priceHistory: await loadPriceHistory(config.priceHistoryFile),
+		reportPaths: [],
 		transactionActivity: [],
 	}
 	const fixedState: {
@@ -841,13 +907,16 @@ async function main() {
 	let pendingSubmission: SubmissionSettings | undefined
 	let pendingConnectivity: ConnectivitySettings | undefined
 	let pendingPrivateKey: Hex | undefined
+	let pendingTokenAddresses: Address[] | undefined
 	let signerUpdatePending = false
+	let cursor: SyncCursor | undefined
 	const currentPersistedSettings = (): PersistedOperatorSettings => ({
 		connectivity: pendingConnectivity ?? config.connectivity,
 		paused: state.paused,
 		privateKey: config.persistedPrivateKey,
 		strategy: pendingStrategy ?? config,
 		submission: pendingSubmission ?? config.submission,
+		tokenAddresses: pendingTokenAddresses ?? config.tokenAddresses,
 	})
 	const persistSettings = (settings: PersistedOperatorSettings) => saveOperatorSettings(config.settingsFile, config.network.name, settings)
 	let settingsUpdateQueue = Promise.resolve()
@@ -877,7 +946,7 @@ async function main() {
 					queueSettingsUpdate(async () => {
 						await persistSettings({ ...currentPersistedSettings(), paused })
 						state.paused = paused
-						state.status = paused ? 'paused' : 'sleeping'
+						state.status = operatorStatusAfterPause(paused, cursor?.initial === false, state.lastError !== undefined)
 						recordOperation(state, { category: 'configuration', details: undefined, level: 'info', message: paused ? 'Operator paused' : 'Operator resumed', reason: 'Dashboard command saved for restart', reportId: undefined })
 					}),
 				updateConnectivity: async value => {
@@ -945,6 +1014,28 @@ async function main() {
 						return pendingSubmission
 					})
 				},
+				updateTokens: value => {
+					if (!Array.isArray(value) || value.some(address => typeof address !== 'string')) throw new Error('Token configuration must be an array of addresses')
+					const parsedAddresses: Address[] = [config.network.rep]
+					for (const address of value) {
+						if (typeof address !== 'string') throw new Error('Token configuration must be an array of addresses')
+						parsedAddresses.push(getAddress(address))
+					}
+					const next = [...new Map(parsedAddresses.map(address => [address.toLowerCase(), address])).values()]
+					return queueSettingsUpdate(async () => {
+						await persistSettings({ ...currentPersistedSettings(), tokenAddresses: next })
+						pendingTokenAddresses = next
+						recordOperation(state, {
+							category: 'configuration',
+							details: next.join(', '),
+							level: 'info',
+							message: 'Token catalog saved and queued',
+							reason: 'Applied at the next block scan',
+							reportId: undefined,
+						})
+						return next
+					})
+				},
 				updateStrategy: async value => {
 					const next = mutableStrategy(pendingStrategy ?? config)
 					updateStrategyFromRequest(next, value)
@@ -960,7 +1051,7 @@ async function main() {
 	const reports = new Map<bigint, ActiveReport>()
 	const pendingHistory: ExecutionRecord[] = []
 	let cachedLogs: TransactionLog[] = []
-	let nextBlock: bigint | undefined
+	let discoveredAugurTokens: Address[] | undefined
 	recordOperation(state, { category: 'scan', details: undefined, level: 'info', message: 'Operator started', reason: `${config.network.name} chain ${config.network.chain.id.toString()}`, reportId: undefined })
 	console.log(`network=${config.network.name} chain=${config.network.chain.id.toString()} mode=${config.execute ? 'execute' : 'dry-run'} submission=${config.submission.mode} oracle=${config.openOracle} rpc=${endpointLabel(config.connectivity.readRpcUrl)}`)
 	try {
@@ -978,6 +1069,11 @@ async function main() {
 					config.submission = pendingSubmission
 					pendingSubmission = undefined
 				}
+				if (pendingTokenAddresses !== undefined) {
+					config.tokenAddresses = pendingTokenAddresses
+					state.tokenAddresses = pendingTokenAddresses
+					pendingTokenAddresses = undefined
+				}
 				if (pendingConnectivity !== undefined) {
 					config.connectivity = pendingConnectivity
 					pendingConnectivity = undefined
@@ -992,15 +1088,13 @@ async function main() {
 					clearWalletDerivedState(state)
 					signerUpdatePending = false
 				}
-				state.status = 'scanning'
-				state.lastError = undefined
-				recordOperation(state, { category: 'scan', details: undefined, level: 'info', message: 'Scan started', reason: `Using ${config.network.name} RPC`, reportId: undefined })
+				let nextError: string | undefined
 				if (pendingHistory.length !== 0) {
 					try {
 						await flushExecutionHistory(pendingHistory, record => appendExecutionHistory(config.historyFile, record))
 					} catch (error) {
 						const message = `Confirmed dispute history is not durable: ${errorMessage(error)}`
-						state.lastError = message
+						nextError = message
 						console.error(`historyPersistenceFailed=${message}`)
 					}
 				}
@@ -1010,87 +1104,121 @@ async function main() {
 				const block = await client.getBlock()
 				const blockNumber = block.number
 				if (blockNumber === undefined) throw new Error('Latest block is missing its number')
-				const initialFromBlock = blockNumber > config.lookbackBlocks ? blockNumber - config.lookbackBlocks : 0n
-				const overlapFromBlock = nextBlock === undefined || nextBlock <= REORG_OVERLAP_BLOCKS ? 0n : nextBlock - REORG_OVERLAP_BLOCKS
-				const fromBlockCandidate = nextBlock === undefined ? initialFromBlock : overlapFromBlock
-				const fromBlock = fromBlockCandidate > blockNumber ? blockNumber : fromBlockCandidate
-				const logs = await client.getLogs({
-					address: config.openOracle,
-					fromBlock,
-					toBlock: blockNumber,
-					topics: [[OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC]],
-				})
-				cachedLogs = replaceOverlap(cachedLogs, logs, fromBlock, logBlockNumber, compareLogs)
+				const blockHash = block.hash
+				if (blockHash === undefined) throw new Error('Latest block is missing its hash')
+				cursor ??= initialCursor(blockNumber, config.lookbackBlocks)
+				const scanCursor = cursorForHeadScan(cursor, blockNumber, blockHash, REORG_OVERLAP_BLOCKS)
+				if (scanCursor === undefined) {
+					state.lastError = nextError
+					state.status = operatorStatusAfterPause(state.paused, true, nextError !== undefined)
+					state.blockNumber = blockNumber.toString()
+					state.blockTimestamp = block.timestamp.toString()
+					return config.once
+				}
+				const ranges = scanRanges(scanCursor, blockNumber)
+				for (const range of ranges) {
+					const logs = await client.getLogs({
+						address: config.openOracle,
+						fromBlock: range.fromBlock,
+						toBlock: range.toBlock,
+						topics: [[OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC]],
+					})
+					cachedLogs = replaceOverlap(cachedLogs, logs, range.fromBlock, logBlockNumber, compareLogs)
+				}
 				reports.clear()
 				applyLogs(reports, cachedLogs)
-				nextBlock = blockNumber + 1n
-				const pools = await poolsFor(client, config)
-				if (pools.length === 0) console.log('status=no-liquid-rep-weth-v3-pool')
-				const balances = await loadBalances(client, wallet, config, pools)
-				const gasPrice = (block.baseFeePerGas ?? 0n) * 2n + 2n * 10n ** 9n
-				const opportunities: OpportunitySnapshot[] = []
-				const candidates: ExecutionCandidate[] = []
-				for (const report of reports.values()) {
-					if (report.settled) continue
-					try {
-						const reportId = report.latest.helper.reportId.toString()
-						const evaluated = await inspectReport(client, wallet, config, report.latest, pools, blockNumber, block.timestamp, gasPrice, balances?.raw, executionReady, (message, reason) => recordOperation(state, { category: 'decision', details: undefined, level: 'info', message, reason, reportId }))
-						if (evaluated !== undefined) {
-							opportunities.push(evaluated.opportunity)
-							recordOperation(state, {
-								category: 'decision',
-								details: `direction=${evaluated.opportunity.direction} estimatedProfitEth=${evaluated.opportunity.estimatedNetProfitEth}`,
-								level: evaluated.opportunity.decision === 'execution-failed' ? 'error' : 'info',
-								message: `Decision: ${evaluated.opportunity.decision}`,
-								reason: `Profit and inventory gates evaluated for report ${evaluated.opportunity.reportId}`,
-								reportId: evaluated.opportunity.reportId,
-							})
-							if (evaluated.candidate !== undefined) candidates.push(evaluated.candidate)
-						}
-					} catch (error) {
-						const reportId = report.latest.helper.reportId.toString()
-						const message = errorMessage(error)
-						console.error(`report=${reportId} skipped=${message}`)
-						recordOperation(state, { category: 'decision', details: undefined, level: 'warning', message: 'Report evaluation failed', reason: message, reportId })
-					}
-				}
-				state.activeReportCount = [...reports.values()].filter(report => !report.settled).length
-				state.balances = balances?.snapshot
-				state.blockNumber = blockNumber.toString()
-				state.blockTimestamp = block.timestamp.toString()
-				state.gameCapital = gameCapitalSnapshot(
-					[...reports.values()].filter(report => !report.settled).map(report => report.latest.game),
-					config.network.weth,
-				)
-				state.lastPollAt = new Date().toISOString()
-				state.opportunities = opportunities
-				const selected = selectBestExecution(candidates, candidate => candidate.quote.netProfitWeth)
-				if (selected !== undefined && wallet !== undefined) {
-					selected.opportunity.decision = 'selected'
-					try {
-						const record = await executeDispute(client, wallet, config, selected.report, selected.quote, selected.pool, () => state.paused, trackTransaction)
-						selected.opportunity.decision = 'submitted'
-						recordConfirmedExecution(state.executionHistory, pendingHistory, record)
+				let completedOpportunityCount = 0
+				cursor = await advanceCursorAfterSuccessfulHead(blockNumber, blockHash, async () => {
+					const observedTokens = [...reports.values()].flatMap(report => [report.latest.game.token1, report.latest.game.token2]).filter(address => address !== zeroAddress && address.toLowerCase() !== config.network.weth.toLowerCase())
+					discoveredAugurTokens ??= await discoverAugurRepTokens(client, config.network.chain.id, config.tokenAddresses, [])
+					const discoveredTokens = [...new Map([...discoveredAugurTokens, ...config.tokenAddresses, ...observedTokens].map(address => [address.toLowerCase(), address])).values()]
+					state.tokenAddresses = discoveredTokens
+					state.tokenMarkets = await loadTokenMarkets(client, {
+						chainId: config.network.chain.id,
+						explorerUrl: config.network.explorerUrl,
+						factory: config.network.factory,
+						tokens: discoveredTokens,
+						weth: config.network.weth,
+						wallet: wallet?.account.address,
+					})
+					const sampledAt = new Date(Number(block.timestamp) * 1_000).toISOString()
+					const samples = missingPricePoints(state.priceHistory, pricePoints(state.tokenMarkets, blockNumber, sampledAt))
+					await appendPriceHistory(config.priceHistoryFile, samples)
+					state.priceHistory = [...state.priceHistory, ...samples]
+					const pools = (await Promise.all(discoveredTokens.map(token => poolsForToken(client, config, token)))).flat()
+					if (pools.length === 0) console.log('status=no-liquid-rep-weth-v3-pool')
+					const balances = await loadBalances(client, wallet, config, pools, discoveredTokens)
+					const gasPrice = (block.baseFeePerGas ?? 0n) * 2n + 2n * 10n ** 9n
+					const opportunities: OpportunitySnapshot[] = []
+					const candidates: ExecutionCandidate[] = []
+					for (const report of reports.values()) {
+						if (report.settled) continue
 						try {
-							await flushExecutionHistory(pendingHistory, pending => appendExecutionHistory(config.historyFile, pending))
+							const reportId = report.latest.helper.reportId.toString()
+							const metadata = state.tokenMarkets.find(market => market.address.toLowerCase() === report.latest.game.token2.toLowerCase())
+							if (metadata === undefined) throw new Error('Token metadata is unavailable')
+							const evaluated = await inspectReport(client, wallet, config, report.latest, pools, blockNumber, block.timestamp, gasPrice, balances?.raw, metadata, executionReady, (message, reason) => recordOperation(state, { category: 'decision', details: undefined, level: 'info', message, reason, reportId }))
+							if (evaluated !== undefined) {
+								opportunities.push(evaluated.opportunity)
+								recordOperation(state, {
+									category: 'decision',
+									details: `direction=${evaluated.opportunity.direction} estimatedProfitEth=${evaluated.opportunity.estimatedNetProfitEth}`,
+									level: evaluated.opportunity.decision === 'execution-failed' ? 'error' : 'info',
+									message: `Decision: ${evaluated.opportunity.decision}`,
+									reason: `Profit and inventory gates evaluated for report ${evaluated.opportunity.reportId}`,
+									reportId: evaluated.opportunity.reportId,
+								})
+								if (evaluated.candidate !== undefined) candidates.push(evaluated.candidate)
+							}
 						} catch (error) {
-							const message = `Confirmed dispute ${record.transactionHash} is visible but history persistence failed: ${errorMessage(error)}`
-							state.lastError = message
-							console.error(`historyPersistenceFailed=${message}`)
+							const reportId = report.latest.helper.reportId.toString()
+							const message = errorMessage(error)
+							console.error(`report=${reportId} skipped=${message}`)
+							recordOperation(state, { category: 'decision', details: undefined, level: 'warning', message: 'Report evaluation failed', reason: message, reportId })
 						}
-					} catch (error) {
-						const message = errorMessage(error)
-						selected.opportunity.decision = executionFailureDecision(error)
-						if (selected.opportunity.decision === 'execution-failed') {
-							state.lastError = `Report ${selected.report.helper.reportId.toString()} execution failed: ${message}`
-						}
-						console.error(`report=${selected.report.helper.reportId.toString()} executionFailed=${message}`)
 					}
-				}
-				state.status = 'sleeping'
-				if (state.lastError !== undefined) state.status = 'error'
-				if (state.paused) state.status = 'paused'
-				recordOperation(state, { category: 'scan', details: `${state.activeReportCount.toString()} active reports; ${opportunities.length.toString()} opportunities`, level: state.lastError === undefined ? 'info' : 'warning', message: 'Scan completed', reason: `Block ${blockNumber.toString()}`, reportId: undefined })
+					state.activeReportCount = [...reports.values()].filter(report => !report.settled).length
+					state.reportPaths = [...reports.entries()].map(([id, report]) => ({ reportId: id.toString(), settled: report.settled, steps: report.steps }))
+					state.balances = balances?.snapshot
+					state.blockNumber = blockNumber.toString()
+					state.blockTimestamp = block.timestamp.toString()
+					state.gameCapital = gameCapitalSnapshot(
+						[...reports.values()].filter(report => !report.settled).map(report => report.latest.game),
+						config.network.weth,
+					)
+					state.lastPollAt = new Date().toISOString()
+					state.opportunities = opportunities
+					const selected = selectBestExecution(candidates, candidate => candidate.quote.netProfitWeth)
+					if (selected !== undefined && wallet !== undefined) {
+						selected.opportunity.decision = 'selected'
+						try {
+							const metadata = state.tokenMarkets.find(market => market.address.toLowerCase() === selected.report.game.token2.toLowerCase())
+							if (metadata === undefined) throw new Error('Token metadata is unavailable')
+							const record = await executeDispute(client, wallet, config, selected.report, selected.quote, selected.pool, metadata, () => state.paused, trackTransaction)
+							selected.opportunity.decision = 'submitted'
+							recordConfirmedExecution(state.executionHistory, pendingHistory, record)
+							try {
+								await flushExecutionHistory(pendingHistory, pending => appendExecutionHistory(config.historyFile, pending))
+							} catch (error) {
+								const message = `Confirmed dispute ${record.transactionHash} is visible but history persistence failed: ${errorMessage(error)}`
+								nextError = message
+								console.error(`historyPersistenceFailed=${message}`)
+							}
+						} catch (error) {
+							const message = errorMessage(error)
+							selected.opportunity.decision = executionFailureDecision(error)
+							if (selected.opportunity.decision === 'execution-failed') {
+								nextError = `Report ${selected.report.helper.reportId.toString()} execution failed: ${message}`
+							}
+							console.error(`report=${selected.report.helper.reportId.toString()} executionFailed=${message}`)
+						}
+					}
+					state.priceHistory = state.priceHistory.slice(-2_000)
+					completedOpportunityCount = opportunities.length
+				})
+				state.lastError = nextError
+				state.status = operatorStatusAfterPause(state.paused, true, nextError !== undefined)
+				recordOperation(state, { category: 'scan', details: `${state.activeReportCount.toString()} active reports; ${completedOpportunityCount.toString()} opportunities`, level: nextError === undefined ? 'info' : 'warning', message: 'Scan completed', reason: `Block ${blockNumber.toString()}`, reportId: undefined })
 				return config.once
 			},
 			() => Bun.sleep(config.pollMilliseconds),

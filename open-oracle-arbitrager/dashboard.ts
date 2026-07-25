@@ -1,6 +1,6 @@
 import type { ConnectivitySettings } from './connectivity.js'
 import type { ExecutionRecord, OperationEntry, OperatorSnapshot, OpportunitySnapshot, StrategySettings, TransactionActivity } from './operator-state.js'
-import { blockAgeLabel, botStatusLabels, exactAmount, requiredSignerPrivateKey, signerControlState, sumSignedDecimals } from './dashboard-format.js'
+import { blockAgeLabel, botStatusLabels, exactAmount, marketPriceChartDescription, opportunityDecisionReason, requiredSignerPrivateKey, signerControlState, sumSignedDecimals, transactionKindLabel } from './dashboard-format.js'
 import type { SubmissionSettings } from './transaction-submission.js'
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
@@ -8,6 +8,7 @@ let latestSnapshot: OperatorSnapshot | undefined
 let settingsLoaded = false
 let submissionLoaded = false
 let connectivityLoaded = false
+let tokensLoaded = false
 let connected = false
 let signerFeedback: { error: boolean; message: string } | undefined
 let signerRequestPending = false
@@ -31,7 +32,7 @@ function setControlsEnabled(enabled: boolean) {
 	const submissionFieldset = element('submission-fieldset')
 	if (!(submissionFieldset instanceof HTMLFieldSetElement)) throw new Error('Missing submission fieldset')
 	submissionFieldset.disabled = !enabled
-	for (const id of ['connectivity-fieldset', 'signer-fieldset']) {
+	for (const id of ['connectivity-fieldset', 'signer-fieldset', 'tokens-fieldset']) {
 		const fieldset = element(id)
 		if (!(fieldset instanceof HTMLFieldSetElement)) throw new Error(`Missing ${id}`)
 		fieldset.disabled = !enabled
@@ -74,6 +75,17 @@ function row(cells: readonly (HTMLElement | string)[]) {
 	return tableRow
 }
 
+function headingRow(labels: readonly string[]) {
+	const tableRow = document.createElement('tr')
+	for (const label of labels) {
+		const cell = document.createElement('th')
+		cell.scope = 'col'
+		cell.textContent = label
+		tableRow.append(cell)
+	}
+	return tableRow
+}
+
 function link(value: string, kind: 'address' | 'tx') {
 	const anchor = document.createElement('a')
 	anchor.href = `${latestSnapshot?.explorerUrl ?? 'https://etherscan.io'}/${kind}/${value}`
@@ -82,23 +94,6 @@ function link(value: string, kind: 'address' | 'tx') {
 	anchor.textContent = shorten(value)
 	anchor.title = value
 	return anchor
-}
-
-function decisionReason(decision: OpportunitySnapshot['decision']) {
-	const reasons: Record<OpportunitySnapshot['decision'], string> = {
-		'dry-run-opportunity': 'All economic guards pass; execution mode is disabled',
-		eligible: 'Profit, timing, state, and inventory guards pass',
-		'execution-failed': 'Execution raised an error after selection',
-		'history-unavailable': 'Confirmed-history durability is unavailable',
-		'insufficient-inventory': 'Wallet lacks the required WETH or REP',
-		paused: 'Operator paused execution',
-		selected: 'Highest modeled net profit in this scan',
-		'self-report': 'Current wallet is already the reporter',
-		'signer-unavailable': 'Execution mode is locked until a local signer is set',
-		submitted: 'Signed dispute was accepted for delivery',
-		unprofitable: 'Modeled profit is below configured thresholds',
-	}
-	return reasons[decision]
 }
 
 function decisionBadge(opportunity: OpportunitySnapshot) {
@@ -147,11 +142,11 @@ function renderOpportunities(opportunities: readonly OpportunitySnapshot[]) {
 			row([
 				opportunity.reportId,
 				decisionBadge(opportunity),
-				decisionReason(opportunity.decision),
-				opportunity.direction,
+				opportunityDecisionReason(opportunity),
+				opportunity.direction === 'buy-rep' ? `buy ${opportunity.tokenSymbol}` : `sell ${opportunity.tokenSymbol}`,
 				amount(opportunity.estimatedNetProfitEth, 'ETH'),
 				amount(opportunity.requiredWeth, 'WETH'),
-				amount(opportunity.requiredRep, 'REP'),
+				amount(opportunity.requiredToken, opportunity.tokenSymbol),
 				`${opportunity.timeRemaining} ${opportunity.windowUnit}`,
 				link(opportunity.pool, 'address'),
 			]),
@@ -169,11 +164,11 @@ function renderHistory(history: readonly ExecutionRecord[], recordCount: number)
 			row([
 				new Date(record.executedAt).toLocaleString(),
 				record.reportId,
-				record.direction,
+				record.direction === 'buy-rep' ? `buy ${record.tokenSymbol}` : `sell ${record.tokenSymbol}`,
 				exactAmount(record.estimatedNetProfitWeth, 'ETH'),
 				exactAmount(record.trackedNetProfitEth, 'ETH'),
 				exactAmount(record.actualGasCostEth, 'ETH'),
-				`${amount(record.requiredWeth, 'WETH')} · ${amount(record.requiredRep, 'REP')}`,
+				`${amount(record.requiredWeth, 'WETH')} · ${amount(record.requiredToken, record.tokenSymbol)}`,
 				link(record.transactionHash, 'tx'),
 			]),
 		)
@@ -292,6 +287,192 @@ function renderOperations(operations: readonly OperationEntry[]) {
 	setText('operation-count', `${visibleOperations.length.toString()} entries`)
 }
 
+function renderTokenMarkets(snapshot: OperatorSnapshot) {
+	const body = element<HTMLTableSectionElement>('token-markets-body')
+	body.replaceChildren()
+	for (const token of snapshot.tokenMarkets) {
+		if (token.pools.length === 0) {
+			body.append(row([token.symbol, link(token.address, 'address'), amount(token.balance, token.symbol), '—', 'No supported WETH pools found', '—', 'Unavailable', '0']))
+			continue
+		}
+		for (const pool of token.pools) {
+			const poolLink = document.createElement('a')
+			poolLink.href = pool.url
+			poolLink.target = '_blank'
+			poolLink.rel = 'noreferrer'
+			poolLink.textContent = shorten(pool.address)
+			body.append(row([token.symbol, link(token.address, 'address'), amount(token.balance, token.symbol), pool.venue, poolLink, `${(pool.fee / 10_000).toString()}%`, amount(pool.priceWeth, 'WETH'), pool.liquidity]))
+		}
+	}
+	element('token-markets-empty').hidden = snapshot.tokenMarkets.length !== 0
+	setText('token-count', `${snapshot.tokenMarkets.length.toString()} tokens · ${snapshot.tokenMarkets.reduce((total, token) => total + token.pools.length, 0).toString()} pools`)
+}
+
+function renderDisputePaths(snapshot: OperatorSnapshot) {
+	const container = element('dispute-paths')
+	container.replaceChildren()
+	for (const path of snapshot.reportPaths) {
+		const details = document.createElement('details')
+		details.className = 'dispute-path'
+		const summary = document.createElement('summary')
+		summary.textContent = `Report ${path.reportId} · ${path.steps.length.toString()} steps · ${path.settled ? 'settled' : 'active'}`
+		details.append(summary)
+		for (const step of path.steps) {
+			const item = document.createElement('div')
+			item.className = 'dispute-step'
+			const event = document.createElement('strong')
+			event.textContent = step.event
+			const block = document.createElement('span')
+			block.textContent = `Block ${step.blockNumber}`
+			const description = document.createElement('span')
+			const amounts = step.amount1 === undefined ? '' : ` · amounts ${step.amount1} / ${step.amount2 ?? '—'}`
+			description.textContent = `${step.reporter === undefined ? 'No reporter' : shorten(step.reporter)}${amounts}`
+			if (step.transactionHash !== undefined) description.append(' · ', link(step.transactionHash, 'tx'))
+			item.append(event, block, description)
+			details.append(item)
+		}
+		container.append(details)
+	}
+	element('dispute-paths-empty').hidden = snapshot.reportPaths.length !== 0
+	setText('dispute-path-count', `${snapshot.reportPaths.length.toString()} games`)
+}
+
+const SERIES_COLORS = ['#77e0ad', '#88b8ff', '#f0c36b', '#ff8b8b', '#c69cff', '#63d6e5']
+const SERIES_DASHES = ['', '10 6', '3 5', '14 5 3 5', '2 3', '18 6']
+
+function svgText(value: string, x: number, y: number, anchor: 'start' | 'middle' | 'end' = 'start') {
+	const label = document.createElementNS(SVG_NAMESPACE, 'text')
+	label.textContent = value
+	label.setAttribute('x', x.toString())
+	label.setAttribute('y', y.toString())
+	label.setAttribute('text-anchor', anchor)
+	return label
+}
+
+function chartPrice(value: number) {
+	return new Intl.NumberFormat('en-US', { maximumSignificantDigits: 5, notation: 'scientific' }).format(value)
+}
+
+function renderMarketPriceChart(snapshot: OperatorSnapshot) {
+	const selector = element<HTMLSelectElement>('price-token')
+	const selected = selector.value
+	const tokens = [...new Map(snapshot.priceHistory.map(point => [point.token.toLowerCase(), { address: point.token, symbol: point.symbol }])).values()]
+	selector.replaceChildren(...tokens.map(token => new Option(`${token.symbol} · ${shorten(token.address)}`, token.address)))
+	if (tokens.some(token => token.address === selected)) selector.value = selected
+	const token = selector.value
+	const points = snapshot.priceHistory.filter(point => point.token.toLowerCase() === token.toLowerCase())
+	const container = element('market-price-chart')
+	container.replaceChildren()
+	setText('price-point-count', `${snapshot.priceHistory.length.toString()} persisted samples`)
+	if (points.length === 0) {
+		container.textContent = 'No quoted price samples are available for this token.'
+		return
+	}
+	const values = points.map(point => Number(point.priceWeth)).filter(Number.isFinite)
+	const minimum = Math.min(...values)
+	const maximum = Math.max(...values)
+	const range = maximum - minimum || Math.max(maximum, 1)
+	const width = Math.max(container.clientWidth, 320)
+	const height = 300
+	const compact = width < 600
+	const plot = { bottom: 250, left: 105, right: width - 70, top: 24 }
+	const plotWidth = plot.right - plot.left
+	const plotHeight = plot.bottom - plot.top
+	const times = points.map(point => Date.parse(point.sampledAt))
+	const first = Math.min(...times)
+	const last = Math.max(...times)
+	const timeRange = last - first || 1
+	const series = [...new Map(points.map(point => [point.pool.toLowerCase(), point.venue])).entries()]
+	const svg = document.createElementNS(SVG_NAMESPACE, 'svg')
+	svg.setAttribute('viewBox', `0 0 ${width.toString()} ${height.toString()}`)
+	svg.setAttribute('role', 'img')
+	const titleId = 'market-price-chart-title'
+	const descriptionId = 'market-price-chart-description'
+	svg.setAttribute('aria-labelledby', `${titleId} ${descriptionId}`)
+	const title = document.createElementNS(SVG_NAMESPACE, 'title')
+	title.id = titleId
+	title.textContent = `${points[0]?.symbol ?? 'Token'} spot price in WETH by exchange pool`
+	const description = document.createElementNS(SVG_NAMESPACE, 'desc')
+	description.id = descriptionId
+	description.textContent = marketPriceChartDescription(points)
+	svg.append(title, description)
+	for (const fraction of [0, 0.5, 1]) {
+		const y = plot.bottom - fraction * plotHeight
+		const value = minimum + fraction * range
+		const grid = document.createElementNS(SVG_NAMESPACE, 'line')
+		grid.setAttribute('x1', plot.left.toString())
+		grid.setAttribute('x2', plot.right.toString())
+		grid.setAttribute('y1', y.toString())
+		grid.setAttribute('y2', y.toString())
+		grid.setAttribute('class', 'chart-grid')
+		svg.append(grid, svgText(`${chartPrice(value)} WETH`, plot.left - 10, y + 4, 'end'))
+	}
+	const orderedPoints = [...points].sort((left, right) => Date.parse(left.sampledAt) - Date.parse(right.sampledAt))
+	const candidateTicks = compact ? [orderedPoints[0], orderedPoints.at(-1)] : [orderedPoints[0], orderedPoints[Math.floor((orderedPoints.length - 1) / 2)], orderedPoints.at(-1)]
+	const xTicks = [...new Map(candidateTicks.filter(point => point !== undefined).map(point => [`${point.blockNumber}:${point.sampledAt}`, point])).values()]
+	for (const point of xTicks) {
+		const x = plot.left + ((Date.parse(point.sampledAt) - first) / timeRange) * plotWidth
+		const blockLabel = svgText(`Block ${point.blockNumber}`, x, 274, 'middle')
+		const timeLabel = svgText(new Date(point.sampledAt).toLocaleTimeString(), x, 292, 'middle')
+		blockLabel.setAttribute('class', 'chart-axis-label')
+		timeLabel.setAttribute('class', 'chart-axis-label')
+		svg.append(blockLabel, timeLabel)
+	}
+	for (const [index, [pool]] of series.entries()) {
+		const poolPoints = orderedPoints.filter(point => point.pool.toLowerCase() === pool)
+		const coordinates = poolPoints.map(point => {
+			const x = plot.left + ((Date.parse(point.sampledAt) - first) / timeRange) * plotWidth
+			const y = plot.bottom - ((Number(point.priceWeth) - minimum) / range) * plotHeight
+			return { point, x, y }
+		})
+		const polyline = document.createElementNS(SVG_NAMESPACE, 'polyline')
+		polyline.setAttribute('points', coordinates.map(({ x, y }) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' '))
+		polyline.setAttribute('fill', 'none')
+		polyline.setAttribute('stroke', SERIES_COLORS[index % SERIES_COLORS.length] ?? '#77e0ad')
+		polyline.setAttribute('stroke-dasharray', SERIES_DASHES[index % SERIES_DASHES.length] ?? '')
+		polyline.setAttribute('stroke-width', '3')
+		polyline.setAttribute('vector-effect', 'non-scaling-stroke')
+		svg.append(polyline)
+		for (const { point, x, y } of coordinates) {
+			const marker = document.createElementNS(SVG_NAMESPACE, 'circle')
+			marker.setAttribute('cx', x.toFixed(2))
+			marker.setAttribute('cy', y.toFixed(2))
+			marker.setAttribute('r', '4')
+			marker.setAttribute('fill', SERIES_COLORS[index % SERIES_COLORS.length] ?? '#77e0ad')
+			const tooltip = document.createElementNS(SVG_NAMESPACE, 'title')
+			tooltip.textContent = `${point.venue}: ${point.priceWeth} WETH at block ${point.blockNumber}, ${new Date(point.sampledAt).toLocaleString()}`
+			marker.append(tooltip)
+			svg.append(marker)
+		}
+	}
+	const legend = document.createElement('div')
+	legend.className = 'chart-legend'
+	for (const [index, [pool, venue]] of series.entries()) {
+		const item = document.createElement('span')
+		item.style.setProperty('--series-color', SERIES_COLORS[index % SERIES_COLORS.length] ?? '#77e0ad')
+		item.textContent = `${venue} · ${shorten(pool)}`
+		legend.append(item)
+	}
+	const samples = document.createElement('details')
+	samples.className = 'chart-data'
+	const summary = document.createElement('summary')
+	const recentPoints = orderedPoints.slice(-100).reverse()
+	summary.textContent = `Recent exact price samples (${recentPoints.length.toString()} of ${points.length.toString()})`
+	const tableScroll = document.createElement('div')
+	tableScroll.className = 'table-scroll'
+	tableScroll.tabIndex = 0
+	tableScroll.setAttribute('aria-label', 'Recent exact token price samples')
+	const table = document.createElement('table')
+	const head = document.createElement('thead')
+	head.append(headingRow(['Block', 'Observed', 'Exchange pool', 'Price']))
+	const body = document.createElement('tbody')
+	for (const point of recentPoints) body.append(row([point.blockNumber, new Date(point.sampledAt).toLocaleString(), point.venue, `${point.priceWeth} WETH`]))
+	table.append(head, body)
+	tableScroll.append(table)
+	samples.append(summary, tableScroll)
+	container.append(svg, legend, samples)
+}
+
 function renderSignerStatus(snapshot: OperatorSnapshot) {
 	const privateKeyInput = element<HTMLInputElement>('private-key')
 	const rememberSignerInput = element<HTMLInputElement>('remember-signer')
@@ -337,7 +518,7 @@ function renderTransactions(transactions: readonly TransactionActivity[]) {
 				new Date(transaction.updatedAt).toLocaleString(),
 				transaction.reportId,
 				link(transaction.hash, 'tx'),
-				transaction.kind.replaceAll('-', ' '),
+				transactionKindLabel(transaction),
 				transaction.mode,
 				transaction.status.replaceAll('-', ' '),
 				targets,
@@ -365,6 +546,10 @@ function render(snapshot: OperatorSnapshot) {
 	if (!connectivityLoaded) {
 		loadConnectivity(snapshot.connectivity)
 		connectivityLoaded = true
+	}
+	if (!tokensLoaded) {
+		element<HTMLTextAreaElement>('token-addresses').value = snapshot.tokenAddresses.join('\n')
+		tokensLoaded = true
 	}
 	const modeBadge = element('mode-badge')
 	const statusLabels = botStatusLabels(snapshot)
@@ -413,6 +598,9 @@ function render(snapshot: OperatorSnapshot) {
 	renderEndpointChecks(snapshot)
 	renderOperations(snapshot.operationLog)
 	renderHistory(snapshot.executionHistory, snapshot.executionHistoryRecordCount)
+	renderTokenMarkets(snapshot)
+	renderDisputePaths(snapshot)
+	renderMarketPriceChart(snapshot)
 }
 
 async function refresh() {
@@ -434,6 +622,26 @@ async function refresh() {
 }
 
 element('refresh-button').addEventListener('click', () => void refresh())
+element<HTMLSelectElement>('price-token').addEventListener('change', () => {
+	if (latestSnapshot !== undefined) renderMarketPriceChart(latestSnapshot)
+})
+element('tokens-form').addEventListener('submit', async event => {
+	event.preventDefault()
+	const addresses = element<HTMLTextAreaElement>('token-addresses')
+		.value.split('\n')
+		.map(value => value.trim())
+		.filter(Boolean)
+	try {
+		await api('/api/tokens', {
+			body: JSON.stringify(addresses),
+			headers: { 'content-type': 'application/json' },
+			method: 'PUT',
+		})
+		setText('tokens-status', 'Token list checked and saved. Discovery refreshes on the next block.')
+	} catch (error) {
+		setText('tokens-status', error instanceof Error ? error.message : String(error))
+	}
+})
 element('pause-button').addEventListener('click', async event => {
 	const button = event.currentTarget
 	if (!(button instanceof HTMLButtonElement) || latestSnapshot === undefined) return

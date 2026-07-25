@@ -30,8 +30,10 @@ const record: ExecutionRecord = {
 	pool: address,
 	poolFee: 10_000,
 	reportId: '7',
-	requiredRep: '1',
+	requiredToken: '1',
 	requiredWeth: '2',
+	token: address,
+	tokenSymbol: 'REP',
 	trackedNetProfitEth: '0.05',
 	transactionHash: `0x${'12'.repeat(32)}` as Hex,
 }
@@ -375,5 +377,15 @@ describe('funded execution orchestration', () => {
 				profitable: true,
 			}),
 		).toBe('signer-unavailable')
+		expect(
+			opportunityDecision({
+				account: address,
+				currentReporter: reporter,
+				execute: true,
+				executionReady: true,
+				hasRequiredInventory: undefined,
+				profitable: true,
+			}),
+		).toBe('insufficient-inventory')
 	})
 })

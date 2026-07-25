@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import type { Hex } from '@zoltar/shared/ethereum'
+import { getAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { validateConnectivitySettings, type ConnectivitySettings, type NetworkName } from './connectivity.js'
 import { decimalWeth, updateStrategyFromRequest, type MutableStrategy, type StrategySettings } from './operator-state.js'
 import { signerCandidate } from './signer.js'
@@ -13,6 +13,7 @@ export type PersistedOperatorSettings = {
 	privateKey: Hex | undefined
 	strategy: MutableStrategy
 	submission: SubmissionSettings
+	tokenAddresses?: readonly Address[]
 }
 
 type StoredOperatorSettings = {
@@ -22,7 +23,8 @@ type StoredOperatorSettings = {
 	privateKey?: Hex | undefined
 	strategy: StrategySettings
 	submission: SubmissionSettings
-	version: 1
+	tokenAddresses: readonly Address[]
+	version: 2
 }
 
 function requiredRecord(value: unknown) {
@@ -31,7 +33,7 @@ function requiredRecord(value: unknown) {
 }
 
 function validatedKeys(record: Record<string, unknown>) {
-	const allowed = new Set(['connectivity', 'network', 'paused', 'privateKey', 'strategy', 'submission', 'version'])
+	const allowed = new Set(['connectivity', 'network', 'paused', 'privateKey', 'strategy', 'submission', 'tokenAddresses', 'version'])
 	for (const key of Object.keys(record)) {
 		if (!allowed.has(key)) throw new Error(`Unknown saved operator setting: ${key}`)
 	}
@@ -57,7 +59,7 @@ export async function loadOperatorSettings(path: string, expectedNetwork: Networ
 	}
 	const record = requiredRecord(value)
 	validatedKeys(record)
-	if (record['version'] !== 1) throw new Error('Saved operator settings use an unsupported version')
+	if (record['version'] !== 1 && record['version'] !== 2) throw new Error('Saved operator settings use an unsupported version')
 	if (record['network'] !== expectedNetwork) throw new Error(`Saved operator settings are for ${String(record['network'])}, not ${expectedNetwork}`)
 	if (typeof record['paused'] !== 'boolean') throw new Error('Saved pause setting must be a boolean')
 	const strategy: MutableStrategy = {
@@ -77,6 +79,13 @@ export async function loadOperatorSettings(path: string, expectedNetwork: Networ
 		privateKey: candidate.privateKey,
 		strategy,
 		submission: validateSubmissionSettings(record['submission']),
+		tokenAddresses:
+			record['tokenAddresses'] === undefined
+				? []
+				: (() => {
+						if (!Array.isArray(record['tokenAddresses']) || record['tokenAddresses'].some(value => typeof value !== 'string')) throw new Error('Saved token addresses must be an array of addresses')
+						return record['tokenAddresses'].map(value => getAddress(String(value)))
+					})(),
 	}
 }
 
@@ -96,7 +105,8 @@ export async function saveOperatorSettings(path: string, network: NetworkName, s
 			twapSeconds: settings.strategy.twapSeconds,
 		},
 		submission: settings.submission,
-		version: 1,
+		tokenAddresses: settings.tokenAddresses ?? [],
+		version: 2,
 	}
 	await mkdir(dirname(path), { mode: 0o700, recursive: true })
 	const temporaryPath = `${path}.${process.pid.toString()}.${randomUUID()}.tmp`

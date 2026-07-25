@@ -1,6 +1,6 @@
 # OpenOracle arbitrager
 
-The OpenOracle arbitrager monitors active Ethereum WETH/REP games, compares their
+The OpenOracle arbitrager monitors active Ethereum WETH/token games, compares their
 locked exchange against executable Uniswap V3 quotes, and identifies disputes whose
 modeled hedge remains profitable after OpenOracle fees and gas. It includes a local
 operator dashboard for live state, strategy controls, wallet inventory, submitted
@@ -19,7 +19,8 @@ restart settings, or the local dashboard when `--ui` is enabled.
 - For execution, a dedicated key on the selected network with:
   - ETH for approvals and dispute gas.
   - WETH for the token-1 contribution shown in the dashboard.
-  - REP for the token-2 contribution shown in the dashboard.
+  - The configured token (REPv2, fork REP, or another ERC-20) for the token-2
+    contribution shown in the dashboard.
 - A choice of public-mempool or private-relay delivery. Private delivery is
   recommended to reduce exposure of the quote and dispute to front-running and
   adverse inclusion.
@@ -39,10 +40,10 @@ From the monorepo root:
 bun install --frozen-lockfile
 ```
 
-The repository-level executable runs the TypeScript source directly:
+Run the executable directly from the monorepo:
 
 ```bash
-./open-oracle-arbitrager --help
+./open-oracle-arbitrager/run --help
 ```
 
 ## Monitor without trading
@@ -51,7 +52,7 @@ Run one scan:
 
 ```bash
 ETH_RPC_URL=https://your-mainnet-rpc.example \
-  ./open-oracle-arbitrager \
+  ./open-oracle-arbitrager/run \
   --open-oracle=0xYourOpenOracle \
   --lookback-blocks=50000 \
   --once
@@ -61,7 +62,7 @@ Run continuously with the local dashboard:
 
 ```bash
 ETH_RPC_URL=https://your-mainnet-rpc.example \
-  ./open-oracle-arbitrager \
+  ./open-oracle-arbitrager/run \
   --open-oracle=0xYourOpenOracle \
   --ui
 ```
@@ -73,6 +74,27 @@ Every startup and dashboard RPC change calls `eth_chainId`. The bot refuses to s
 or apply a change unless the read RPC and every public-submission RPC report the
 selected network. It also checks the chain before every scan.
 
+Startup enters **Syncing** while the bot scans the configured historical lookback in
+10,000-block chunks. Once caught up, it polls the latest head and covers every unseen
+height in the OpenOracle event-log query; if several blocks arrive between polls, no
+event-log height is skipped. Opportunity evaluation and pool sampling run once at
+the newest observed head, not once at every intermediate historical height. A
+12-block overlap is re-read and reconciled for shallow reorgs in event-derived
+report state. With no new head the bot remains **Running** without re-evaluating or
+writing duplicate price samples.
+
+### Data freshness and retention
+
+Startup lookback backfills OpenOracle events, but it does not backfill historical
+pool prices. The append-only price file can retain a sample from a block displaced
+by a reorg; the 12-block reconciliation applies only to report events. The dashboard
+loads and charts the latest 2,000 valid price records. Report paths are reconstructed
+in memory from the startup lookback plus events observed by the current process.
+Consequently a path can begin at a dispute when its submission predates the
+lookback, and a settlement-only report is not shown when no earlier event for that
+report was observed. Increase `--lookback-blocks` when complete historical context
+is operationally important.
+
 ## Run on Sepolia
 
 Sepolia uses the canonical Sepolia WETH9, Uniswap V3 factory, and QuoterV2 defaults.
@@ -80,7 +102,7 @@ There is no canonical REP deployment, so the REP and OpenOracle addresses must b
 supplied explicitly:
 
 ```bash
-./open-oracle-arbitrager \
+./open-oracle-arbitrager/run \
   --network=sepolia \
   --rpc-url=https://your-sepolia-rpc.example \
   --public-rpc-url=https://your-sepolia-rpc.example \
@@ -105,7 +127,7 @@ Start an inventory-funded execution process:
 ```bash
 PRIVATE_KEY=0xYourDedicatedPrivateKey \
 ETH_RPC_URL=https://your-private-mainnet-rpc.example \
-  ./open-oracle-arbitrager \
+  ./open-oracle-arbitrager/run \
   --open-oracle=0xYourOpenOracle \
   --execute \
   --ui
@@ -125,7 +147,7 @@ multiple private relays instead:
 ```bash
 PRIVATE_KEY=0xYourDedicatedPrivateKey \
 ETH_RPC_URL=https://your-mainnet-rpc.example \
-  ./open-oracle-arbitrager \
+  ./open-oracle-arbitrager/run \
   --open-oracle=0xYourOpenOracle \
   --execute \
   --submission-mode=private \
@@ -155,11 +177,12 @@ credentials, query parameters, fragments, and redirects are rejected.
 
 Before each dispute, the bot:
 
-1. Checks that the game is WETH/REP and inside its dispute window.
+1. Checks that the game is WETH plus a discovered/configured token and inside its
+   dispute window.
 2. Finds an active Uniswap V3 pool and rejects excessive spot/TWAP deviation.
 3. Uses exact-input and exact-output QuoterV2 calls to model both directions.
 4. Derives the same replacement swap side as the OpenOracle contract.
-5. Calculates the exact WETH and REP contributions and checks wallet inventory.
+5. Calculates the exact WETH and token contributions and checks wallet inventory.
 6. Applies the absolute-profit and basis-point thresholds.
 7. Approves only the prepared contribution amounts.
 8. Refreshes pool state, quotes, gas, deadline, inventory requirements, and the
@@ -175,18 +198,18 @@ Reports already owned by the execution account are skipped because OpenOracle
 self-disputes use different accounting. At most one dispute is executed per poll so
 a second transaction cannot rely on the pre-transaction balance snapshot.
 
-## Required ETH, WETH, and REP
+## Required ETH, WETH, and tokens
 
 There is no single fixed funding amount. Contributions increase with the current
 OpenOracle round and depend on which side of the locked ratio the replacement uses.
 The dashboard's **Open opportunities** table shows the current exact `Required WETH`
-and `Required REP` for each evaluated report.
+and `Required token` for each evaluated report.
 
 The execution account needs:
 
 - `ETH balance >= approval gas + dispute gas + a replacement/repricing buffer`.
 - `WETH balance >= required WETH` for the selected report.
-- `REP balance >= required REP` for the selected report.
+- `Token balance >= required token` for the selected report.
 
 The modeled gas allowance used during opportunity selection is 600,000 gas. This is
 not a wallet reserve limit; keep additional ETH for two ERC-20 approvals, transaction
@@ -210,7 +233,7 @@ can move sharply when REP/WETH liquidity is shallow.
 Start with `--ui` and optionally choose another local port:
 
 ```bash
-./open-oracle-arbitrager \
+./open-oracle-arbitrager/run \
   --open-oracle=0xYourOpenOracle \
   --ui \
   --ui-port=4180
@@ -218,7 +241,7 @@ Start with `--ui` and optionally choose another local port:
 
 The dashboard shows:
 
-- Bot mode, a simplified **Running** or **Paused** operator status, latest block,
+- Bot mode, **Syncing**, **Running**, **Paused**, **Error**, or **Stopped** status, latest block,
   block age relative to the operator computer, errors, and active-report count.
 - Selected network, expected chain ID, read/public RPC controls, and endpoint checks.
 - A local signer control, connected address, and its ETH/WETH/REP balances.
@@ -226,8 +249,8 @@ The dashboard shows:
 - Native ETH stakes, WETH stakes, and ETH settler rewards locked in active games
   observed within the configured event lookback. The combined figure treats 1 WETH
   as 1 ETH and can undercount games created before that lookback.
-- Current opportunities, exact inventory requirements, deadline window, direction,
-  pool, and decision.
+- Current opportunities, token-metadata-normalized inventory requirements, deadline
+  window, token-specific direction, pool, and decision.
 - Confirmed dispute transactions, modeled revenue before gas, estimated net profit,
   actual gas, and an all-history cumulative summary. The table and trend are bounded
   to the latest 500 records; the summary still includes every valid unique record in
@@ -235,6 +258,16 @@ The dashboard shows:
 - Signed transaction status, public/private delivery, accepted and failed relay
   targets, mined replacement hash, actual gas, and ETH profit estimates.
 - Persistent strategy, RPC fanout, relay submission controls, and pause/resume.
+- A token catalog with wallet balances and supported WETH/token pools. Each pool
+  address links to the selected-network explorer. The [market discovery section](#token-and-pool-discovery)
+  owns the venue, price, and liquidity semantics. A token with no supported pool is
+  explicitly labeled instead of disappearing.
+- The submitted/disputed/settled events observed for each OpenOracle report,
+  including blocks, reporters, raw locked amounts, and transaction links. See
+  [data freshness and retention](#data-freshness-and-retention) for lookback limits.
+- A per-asset current-head price-history chart with one series per supported pool,
+  axes, point tooltips, and a recent exact-value table. Samples persist across
+  restarts, subject to the retention and reorg limits above.
 - A 500-entry in-memory operations journal. The dashboard hides routine scan entries
   and shows decisions, configuration changes, transaction states, and the reason for
   each action.
@@ -256,8 +289,8 @@ security.
 
 ## Persistent operator settings
 
-Dashboard changes to strategy, read/public RPCs, delivery mode, relay URLs, and the
-pause state are atomically saved after validation and restored on restart. Mainnet
+Dashboard changes to strategy, read/public RPCs, delivery mode, relay URLs, the
+token list, and the pause state are atomically saved after validation and restored on restart. Mainnet
 and Sepolia use separate files by default:
 
 ```text
@@ -283,6 +316,7 @@ Startup resolves values in this order:
 | Active signer | `PRIVATE_KEY`; saved restart signer; no signer |
 | Submission mode | `--submission-mode`; saved mode; `public` |
 | Relay URLs | Repeated `--relay-url`; saved list; Flashbots relay |
+| Token list | Repeated `--token-address`; saved list; canonical network REP |
 | Pause state | Saved value; `false` |
 
 An environment `PRIVATE_KEY` is never automatically remembered and does not replace
@@ -307,7 +341,7 @@ Successful dispute submissions are appended to
 `.open-oracle-arbitrager/history-sepolia.jsonl` by default. Override the location with:
 
 ```bash
-./open-oracle-arbitrager \
+./open-oracle-arbitrager/run \
   --open-oracle=0xYourOpenOracle \
   --ui \
   --history-file=/secure/operator/open-oracle-history.jsonl
@@ -341,6 +375,43 @@ submission-time executable Uniswap quote with mined gas cost. Final P&L also dep
 on later disputes, settlement, withdrawals, whether and where the external hedge
 executes, inventory price changes, relay refunds, and transactions not sent by this
 process. Negative tracked net profit is retained and included in cumulative totals.
+
+## Token and pool discovery
+
+On Ethereum mainnet startup discovery reads Augur’s genesis universe, its forking
+market, and the instantiated child universes for every complete single-winner payout
+vector derived from that market's outcome count. Discovery must succeed before the
+bot scans or executes; an RPC or contract-read failure is surfaced as an operator
+error rather than silently omitting fork tokens. The resulting reputation tokens
+currently include:
+
+| Token | Address |
+| --- | --- |
+| REPv2 | `0x221657776846890989a759BA2973e427DfF5C9bB` |
+| REPv2_Yes_1 | `0xCf6A0A7826fa124B7705d6f3c675eAD76f1e540D` |
+| REPv2_No_1 | `0x2F4005456c2F098358213f01DbE34abDAa2989A4` |
+
+These are discovered from contract state rather than trusted as a hardcoded trading
+list. Tokens present in observed OpenOracle games and addresses entered in the
+dashboard or repeated `--token-address=0x...` flags are also monitored. The primary
+`--rep-address` remains the token used in the top-level REP portfolio summary, while
+each configured token can be evaluated and funded independently for an eligible
+WETH/token game.
+
+Market discovery checks all Uniswap V3 fee tiers (`0.01%`, `0.05%`, `0.3%`, and
+`1%`) plus mainnet Uniswap V2 and SushiSwap V2 WETH pairs. For V3, “Liquidity” is
+the pool contract’s raw in-range `liquidity()` value; for constant-product venues it
+shows both token reserves. Neither is a token-denominated TVL or a promise that the
+full game size can execute without price impact. “Price” is the decimal-normalized
+WETH-per-token spot price derived from V3 `sqrtPriceX96` or V2 reserves; it is not
+an executable size-aware quote. Strategy execution remains limited to Uniswap V3
+pools that also pass the executable QuoterV2 and spot/TWAP guards.
+
+Price samples are stored in
+`.open-oracle-arbitrager/prices-mainnet.jsonl` or
+`.open-oracle-arbitrager/prices-sepolia.jsonl`. Use
+`--price-history-file=/secure/operator/open-oracle-prices.jsonl` to override the
+path. Keep files network-specific.
 
 ## Transaction delivery and tracking
 
@@ -380,7 +451,7 @@ saved value nor a higher-precedence override exists:
 | TWAP window | `1800 seconds` | `--twap-seconds` | Controls the Uniswap manipulation-resistance window. Minimum: 60 seconds. |
 | Remaining time | `36 seconds` | `--minimum-remaining-seconds` | Inclusion buffer for timestamp-based games. |
 | Remaining blocks | `3 blocks` | `--minimum-remaining-blocks` | Inclusion buffer for block-based games. |
-| Poll interval | `12000 ms` | `--poll-ms` | Delay between completed scans. Minimum: 1000 ms. |
+| Head poll interval | `1000 ms` | `--poll-ms` | Delay between latest-head checks. Every unseen event-log height is queried; evaluation and pool sampling run once at the newest head. Minimum: 1000 ms. |
 
 Increasing profit thresholds reduces execution frequency. Increasing the TWAP window,
 spot/TWAP restriction, or remaining-time buffers is more conservative but may reject
@@ -394,7 +465,7 @@ Other startup-only options:
 | `--network` | `mainnet` | Select `mainnet` or `sepolia`; fixes the expected chain ID and address defaults. |
 | `--rpc-url` | Network public endpoint | Read RPC. Adjustable in the dashboard only after its chain check passes. |
 | `--public-rpc-url` | Read RPC | Public transaction endpoint. Repeat for up to eight; all receive the identical payload. |
-| `--rep-address` | Mainnet REP / required on Sepolia | REP used for game and Uniswap identity checks. |
+| `--rep-address` | Mainnet REP / required on Sepolia | Primary REP token for the portfolio summary and default monitored-token catalog; it does not restrict observed or configured game tokens. |
 | `--weth-address` | Network WETH | Override WETH for a custom test deployment. |
 | `--uniswap-factory` | Network Uniswap V3 factory | Override the factory for a custom test deployment. |
 | `--uniswap-quoter` | Network QuoterV2 | Override the quoter for a custom test deployment. |
@@ -409,7 +480,7 @@ Other startup-only options:
 
 ## Operational limitations
 
-- Ethereum mainnet and Sepolia WETH/REP games using standard Uniswap V3 fee tiers are
+- Ethereum mainnet and Sepolia WETH/token games using standard Uniswap V3 fee tiers are
   supported. Sepolia REP and OpenOracle identities are operator-supplied and are not
   authenticated against a deployment registry.
 - Quoter calls and TWAP checks are filters, not guarantees of inclusion or realized
@@ -423,7 +494,7 @@ Other startup-only options:
   that remains pending after its embedded one-block quote window can still be mined,
   revert the contract timing check, and spend gas. Private relay mode caps the relay
   inclusion request to that same on-chain window.
-- A 12-block event overlap is replayed on every poll to tolerate short
+- A 12-block event overlap is replayed whenever a new head is processed to tolerate short
   reorganizations. Operators still need independent alerting for deeper reorgs and
   RPC disagreement.
 - Continuous mode retries transient poll failures. The dashboard exposes the latest

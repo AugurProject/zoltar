@@ -19,6 +19,11 @@
 				<button id="pause-button" class="button" type="button" disabled>Pause bot</button>
 			</div>
 		</header>
+		<nav class="app-nav" aria-label="Dashboard pages">
+			<a href="#operations">Operations</a>
+			<a href="#games">Games &amp; dispute paths</a>
+			<a href="#markets">Tokens &amp; market history</a>
+		</nav>
 
 		<main>
 			<section id="notice" class="notice" aria-live="polite">
@@ -216,7 +221,75 @@
 				</form>
 			</section>
 
-			<section class="panel">
+			<section id="markets" class="panel">
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Market discovery</p>
+						<h2>REP and configured tokens</h2>
+					</div>
+					<span id="token-count" class="muted">Discovering tokens</span>
+				</div>
+				<form id="tokens-form">
+					<fieldset id="tokens-fieldset" disabled>
+						<label>
+							<span>Token addresses · one per line</span>
+							<textarea id="token-addresses" rows="3" spellcheck="false"></textarea>
+						</label>
+						<div class="form-actions">
+							<span id="tokens-status" class="muted" aria-live="polite">REPv2 and existing Augur fork REP tokens are discovered automatically on mainnet.</span>
+							<button class="button" type="submit">Save token list</button>
+						</div>
+					</fieldset>
+				</form>
+				<div class="table-scroll" tabindex="0" aria-label="Token pools table">
+					<table>
+						<thead>
+							<tr>
+								<th>Token</th>
+								<th>Address</th>
+								<th>Wallet balance</th>
+								<th>Exchange</th>
+								<th>Pool</th>
+								<th>Fee</th>
+								<th>Spot (WETH/token)</th>
+								<th>Raw liquidity / reserves</th>
+							</tr>
+						</thead>
+						<tbody id="token-markets-body"></tbody>
+					</table>
+				</div>
+				<p id="token-markets-empty" class="empty-state">Token discovery has not completed.</p>
+			</section>
+
+			<section id="market-history" class="panel">
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Current-head valuation</p>
+						<h2>Asset value across markets</h2>
+					</div>
+					<span id="price-point-count" class="muted">0 samples</span>
+				</div>
+				<label class="chart-selector">
+					<span>Asset</span>
+					<select id="price-token"></select>
+				</label>
+				<div id="market-price-chart" class="market-price-chart" aria-label="Token price in WETH over time by exchange pool"></div>
+				<p class="section-note">Each series is a supported WETH/token pool spot price sampled once at each newly observed head.</p>
+			</section>
+
+			<section id="games" class="panel">
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Oracle lifecycle</p>
+						<h2>Observed dispute paths</h2>
+					</div>
+					<span id="dispute-path-count" class="muted">0 games</span>
+				</div>
+				<div id="dispute-paths" class="dispute-paths"></div>
+				<p id="dispute-paths-empty" class="empty-state">No OpenOracle game was found in the configured historical lookback. Paths include only events observed inside that lookback and during this process.</p>
+			</section>
+
+			<section id="operations" class="panel">
 				<div class="section-heading">
 					<div>
 						<p class="eyebrow">Current scan</p>
@@ -234,7 +307,7 @@
 								<th>Direction</th>
 								<th>Estimated net (ETH)</th>
 								<th>Required WETH</th>
-								<th>Required REP</th>
+								<th>Required token</th>
 								<th>Window</th>
 								<th>Pool</th>
 							</tr>
@@ -242,7 +315,7 @@
 						<tbody id="opportunities-body"></tbody>
 					</table>
 				</div>
-				<p id="opportunities-empty" class="empty-state">No eligible WETH/REP report was found in the latest scan.</p>
+				<p id="opportunities-empty" class="empty-state">No eligible WETH/token report was found in the latest scan.</p>
 			</section>
 
 			<section class="panel">

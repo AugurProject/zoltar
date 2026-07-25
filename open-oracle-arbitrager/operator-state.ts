@@ -4,6 +4,7 @@ import type { Address, Hex } from '@zoltar/shared/ethereum'
 import type { OpenOracleGame } from '@zoltar/shared/openOracle'
 import type { ConnectivitySettings, EndpointCheck, NetworkName } from './connectivity.js'
 import type { SubmissionSettings, SubmissionTargetResult } from './transaction-submission.js'
+import type { MarketPricePoint, TokenMarketSnapshot } from './market-monitor.js'
 
 export type StrategySettings = {
 	maxSpotTwapTicks: string
@@ -39,6 +40,21 @@ export type GameCapitalSnapshot = {
 	weth: string
 }
 
+export type DisputeStepSnapshot = {
+	amount1: string | undefined
+	amount2: string | undefined
+	blockNumber: string
+	event: 'disputed' | 'settled' | 'submitted'
+	reporter: Address | undefined
+	transactionHash: Hex | undefined
+}
+
+export type ReportPathSnapshot = {
+	reportId: string
+	settled: boolean
+	steps: readonly DisputeStepSnapshot[]
+}
+
 export type OpportunitySnapshot = {
 	decision: 'dry-run-opportunity' | 'eligible' | 'execution-failed' | 'history-unavailable' | 'insufficient-inventory' | 'paused' | 'selected' | 'self-report' | 'signer-unavailable' | 'submitted' | 'unprofitable'
 	direction: 'buy-rep' | 'sell-rep'
@@ -48,8 +64,10 @@ export type OpportunitySnapshot = {
 	pool: Address
 	poolFee: number
 	reportId: string
-	requiredRep: string
+	requiredToken: string
 	requiredWeth: string
+	token: Address
+	tokenSymbol: string
 	timeRemaining: string
 	windowUnit: 'blocks' | 'seconds'
 }
@@ -64,8 +82,10 @@ export type ExecutionRecord = {
 	pool: Address
 	poolFee: number
 	reportId: string
-	requiredRep: string
+	requiredToken: string
 	requiredWeth: string
+	token: Address
+	tokenSymbol: string
 	trackedNetProfitEth: string
 	transactionHash: Hex
 }
@@ -76,13 +96,15 @@ export type TransactionActivity = {
 	estimatedNetProfitEth: string | undefined
 	failedTargets: readonly SubmissionTargetResult[]
 	hash: Hex
-	kind: 'approval-rep' | 'approval-weth' | 'dispute'
+	kind: 'approval-token' | 'approval-weth' | 'dispute'
 	mode: SubmissionSettings['mode']
 	originalHash: Hex
 	reportId: string
 	status: 'confirmation-unknown' | 'confirmed' | 'pending' | 'reverted' | 'submission-failed' | 'submitting'
 	submittedAt: string
 	trackedNetProfitEth: string | undefined
+	token: Address | undefined
+	tokenSymbol: string | undefined
 	updatedAt: string
 }
 
@@ -119,8 +141,12 @@ export type OperatorSnapshot = {
 	queuedWallet: Address | null | undefined
 	savedWallet: Address | undefined
 	settings: StrategySettings
-	status: 'error' | 'paused' | 'scanning' | 'sleeping' | 'starting' | 'stopped'
+	status: 'error' | 'paused' | 'running' | 'stopped' | 'syncing'
 	submission: SubmissionSettings
+	tokenAddresses: readonly Address[]
+	tokenMarkets: readonly TokenMarketSnapshot[]
+	priceHistory: readonly MarketPricePoint[]
+	reportPaths: readonly ReportPathSnapshot[]
 	connectivity: ConnectivitySettings
 	totalActualGasCostEth: string
 	totalEstimatedNetProfitEth: string
@@ -146,6 +172,10 @@ export type OperatorState = {
 	operationLog: OperationEntry[]
 	paused: boolean
 	status: OperatorSnapshot['status']
+	tokenAddresses: Address[]
+	tokenMarkets: TokenMarketSnapshot[]
+	priceHistory: MarketPricePoint[]
+	reportPaths: ReportPathSnapshot[]
 	transactionActivity: TransactionActivity[]
 }
 
@@ -296,10 +326,14 @@ function executionRecord(value: unknown): ExecutionRecord | undefined {
 		record['poolFee'] < 0 ||
 		typeof record['reportId'] !== 'string' ||
 		!/^(?:0|[1-9]\d*)$/.test(record['reportId']) ||
-		typeof record['requiredRep'] !== 'string' ||
-		!decimal.test(record['requiredRep']) ||
+		typeof record['requiredToken'] !== 'string' ||
+		!decimal.test(record['requiredToken']) ||
 		typeof record['requiredWeth'] !== 'string' ||
 		!decimal.test(record['requiredWeth']) ||
+		typeof record['token'] !== 'string' ||
+		!/^0x[0-9a-fA-F]{40}$/.test(record['token']) ||
+		typeof record['tokenSymbol'] !== 'string' ||
+		record['tokenSymbol'].length === 0 ||
 		typeof record['trackedNetProfitEth'] !== 'string' ||
 		!decimal.test(record['trackedNetProfitEth'].replace(/^-/, '')) ||
 		typeof record['transactionHash'] !== 'string' ||
@@ -316,8 +350,10 @@ function executionRecord(value: unknown): ExecutionRecord | undefined {
 		pool: record['pool'] as Address,
 		poolFee: record['poolFee'],
 		reportId: record['reportId'],
-		requiredRep: record['requiredRep'],
+		requiredToken: record['requiredToken'],
 		requiredWeth: record['requiredWeth'],
+		token: record['token'] as Address,
+		tokenSymbol: record['tokenSymbol'],
 		trackedNetProfitEth: record['trackedNetProfitEth'],
 		transactionHash: record['transactionHash'] as Hex,
 	}
@@ -402,6 +438,10 @@ export function operatorSnapshot(
 		settings: strategySettings(strategy),
 		status: state.status,
 		submission,
+		tokenAddresses: state.tokenAddresses,
+		tokenMarkets: state.tokenMarkets,
+		priceHistory: state.priceHistory,
+		reportPaths: state.reportPaths,
 		connectivity,
 		totalActualGasCostEth: sumDecimalWeth(state.executionHistory, 'actualGasCostEth'),
 		totalEstimatedNetProfitEth: sumDecimalWeth(state.executionHistory, 'estimatedNetProfitWeth'),

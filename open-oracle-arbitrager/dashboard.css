@@ -27,6 +27,109 @@ body {
 	font-family: var(--sans);
 }
 
+.app-nav {
+	display: flex;
+	gap: 0.75rem;
+	overflow-x: auto;
+	padding: 0 2rem 1rem;
+}
+
+.app-nav a {
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	color: var(--muted);
+	flex: 0 0 auto;
+	padding: 0.45rem 0.8rem;
+	text-decoration: none;
+}
+
+.app-nav a:hover,
+.app-nav a:focus-visible {
+	border-color: var(--accent);
+	color: var(--text);
+}
+
+.dispute-paths {
+	display: grid;
+	gap: 0.75rem;
+}
+
+.dispute-path {
+	background: var(--surface-raised);
+	border: 1px solid var(--border);
+	border-radius: 0.65rem;
+	padding: 0.8rem 1rem;
+}
+
+.dispute-path summary {
+	cursor: pointer;
+	font-weight: 700;
+}
+
+.dispute-step {
+	align-items: center;
+	border-left: 2px solid var(--accent);
+	display: grid;
+	gap: 0.35rem;
+	grid-template-columns: 7rem 7rem 1fr;
+	margin: 0.8rem 0 0 0.4rem;
+	padding-left: 0.8rem;
+}
+
+.market-price-chart svg {
+	height: 300px;
+	overflow: visible;
+	width: 100%;
+}
+
+.market-price-chart svg text {
+	fill: var(--muted);
+	font-family: var(--mono);
+	font-size: 13px;
+}
+
+.chart-grid {
+	stroke: var(--border);
+	stroke-dasharray: 3 6;
+	stroke-width: 1;
+}
+
+.chart-legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+	margin-top: 0.75rem;
+}
+
+.chart-legend span::before {
+	background: var(--series-color);
+	border-radius: 50%;
+	content: "";
+	display: inline-block;
+	height: 0.55rem;
+	margin-right: 0.4rem;
+	width: 0.55rem;
+}
+
+.chart-data {
+	margin-top: 1rem;
+}
+
+.chart-data summary {
+	cursor: pointer;
+	font-weight: 700;
+}
+
+.chart-data .table-scroll {
+	margin-top: 0.75rem;
+	max-height: 22rem;
+}
+
+.chart-selector {
+	margin-bottom: 1rem;
+	max-width: 24rem;
+}
+
 button,
 input,
 select,
