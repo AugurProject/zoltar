@@ -397,6 +397,13 @@ textarea {
 	overflow-wrap: anywhere;
 }
 
+.endpoint-check .mono {
+	overflow: visible;
+	text-overflow: clip;
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+
 .operation-scroll {
 	max-height: 360px;
 	overflow: auto;
