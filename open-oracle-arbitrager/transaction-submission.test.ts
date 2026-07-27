@@ -285,6 +285,31 @@ describe('signed transaction delivery', () => {
 		})
 	})
 
+	test.each([
+		{ response: { id: 2, jsonrpc: '2.0', result: hash } },
+		{ response: { id: 1, jsonrpc: '1.0', result: hash } },
+		{ response: { id: 1, jsonrpc: '2.0' } },
+		{ response: { error: { code: -32_000, message: 'rejected' }, id: 1, jsonrpc: '2.0', result: hash } },
+		{ response: [] },
+		{ response: 'not an envelope' },
+		{ response: { error: { message: 'missing code' }, id: 1, jsonrpc: '2.0' } },
+		{ response: { id: 1, jsonrpc: '2.0', result: hash }, status: 503 },
+	])('rejects malformed JSON-RPC private transaction envelope %#', async ({ response, status }) => {
+		const endpoint = relay(() => Response.json(response, status === undefined ? undefined : { status }))
+		await expect(
+			submitSignedTransaction({
+				address,
+				hash,
+				maxBlockNumber: 125n,
+				publicSubmit: () => Promise.reject(new Error('must not use public RPC')),
+				publicRpcUrls: ['https://rpc.example'],
+				serializedTransaction,
+				settings: validateSubmissionSettings({ mode: 'private', relayUrls: [endpoint] }),
+				signMessage: () => Promise.resolve(signature),
+			}),
+		).rejects.toThrow('Every private relay rejected the transaction')
+	})
+
 	test('submits directly to the public mempool without contacting relays', async () => {
 		const submitted: { transaction: Hex; url: string }[] = []
 		const result = await submitSignedTransaction({

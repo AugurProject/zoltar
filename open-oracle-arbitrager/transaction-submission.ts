@@ -313,26 +313,15 @@ async function sendPrivateTransaction(parameters: { address: Address; hash: Hex;
 			},
 		],
 	})
-	const signature = await parameters.signMessage(keccak256(body))
-	const response = await fetch(parameters.relayUrl, {
+	const result = await authenticatedRelayRequest({
+		address: parameters.address,
 		body,
-		headers: {
-			'content-type': 'application/json',
-			'x-flashbots-signature': `${getAddress(parameters.address)}:${signature}`,
-		},
-		method: 'POST',
-		redirect: 'error',
-		signal: AbortSignal.timeout(parameters.timeoutMilliseconds),
+		relayUrl: parameters.relayUrl,
+		signMessage: parameters.signMessage,
+		timeoutMilliseconds: parameters.timeoutMilliseconds,
 	})
-	let value: JsonRpcResponse
-	try {
-		value = (await response.json()) as JsonRpcResponse
-	} catch (error) {
-		if (error instanceof SyntaxError) throw new Error(`Relay returned non-JSON HTTP ${response.status.toString()}`)
-		throw error
-	}
-	if (!response.ok || typeof value.result !== 'string') throw new Error(responseError(value, response.status))
-	if (value.result.toLowerCase() !== parameters.hash.toLowerCase()) throw new Error(`Relay returned unexpected transaction hash ${value.result}`)
+	if (typeof result !== 'string') throw new Error('Relay returned an invalid transaction hash')
+	if (result.toLowerCase() !== parameters.hash.toLowerCase()) throw new Error(`Relay returned unexpected transaction hash ${result}`)
 }
 
 export async function submitSignedTransaction(parameters: {
