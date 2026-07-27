@@ -217,6 +217,12 @@ function assertAuditFindingRemediations(): void {
 		/id="zero-migration-full-cap-ownership"[\s\S]*no vault REP migrated[\s\S]*auctionPoolOwnershipPerRep[\s\S]*PRICE_PRECISION[\s\S]*poolOwnershipToRep[\s\S]*later direct REP deposits/,
 		'Truth Auction must canonically explain the zero-migration full-cap ownership conversion and fresh-deposit behavior',
 	)
+	assert.doesNotMatch(normalizedAuctionDesign, /(?:all the REP in the vaults have been auctioned off|old REP vault holders have been wiped)/i, 'Truth Auction must not claim that every underfunded auction sells all REP or wipes prior vault holders')
+	assert.match(
+		normalizedAuctionDesign,
+		/When bidding ends[\s\S]*qualifying bidders collectively receive <code>maxRepBeingSold<\/code>[\s\S]*no bid qualifies, no REP is sold[\s\S]*Any unsold REP remains behind inherited ownership[\s\S]*zero-migration full-cap sale[\s\S]*href="#zero-migration-full-cap-ownership"/,
+		'Truth Auction lifecycle summary must distinguish qualifying underfunding, no qualifying demand, residual ownership, and the zero-migration full-cap case',
+	)
 	assert.match(normalizedStatoblast, /href="\.\/truth-auction\.html#zero-migration-full-cap-ownership"[\s\S]*Truth Auction settlement specification/, 'Statoblast must link to the canonical zero-migration full-cap ownership rule')
 	assert.doesNotMatch(normalizedStatoblast, /zero-migration full-cap sale initializes auction ownership[\s\S]*30,000[\s\S]*withdrawPendingEthRefund/, 'Statoblast must not duplicate the exact truth-auction ownership and refund mechanics')
 	for (const documentedClaim of [

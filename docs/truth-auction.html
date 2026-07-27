@@ -62,9 +62,18 @@
 				Finalization clears the batch auction, sends the raised ETH into the
 				repair path, and computes the accounting rates used to settle bidders.
 				The child activates with legitimate migration collateral plus retained bid
-				ETH, even when that total is below the original fork snapshot. Full repair is not guaranteed, and the remaining impairment is borne by the affected
-				child's open-interest holders. Finalization
-				rejects caller contribution ETH, and forced ETH remains unaccounted surplus. In the case auction does't recover all the required ETH, all the REP in the vaults have been auctioned off, the old REP vault holders have been wiped off.
+				ETH, even when that total is below the original fork snapshot. Full repair
+				is not guaranteed, and the remaining impairment is borne by the affected
+				child's open-interest holders. Finalization rejects caller contribution ETH,
+				and forced ETH remains unaccounted surplus. On the underfunded path,
+				qualifying bidders collectively receive <code>maxRepBeingSold</code>; when
+				no bid qualifies, no REP is sold. Any unsold REP remains behind inherited
+				ownership. A zero-migration full-cap sale is the special case where every
+				auctionable REP is sold and the inherited denominator has no live child
+				owner; see
+				<a href="#zero-migration-full-cap-ownership"
+					>Zero-migration full-cap ownership</a
+				>.
 			</p>
 
 			<p>
