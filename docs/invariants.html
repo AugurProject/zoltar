@@ -30,9 +30,13 @@
 				</p>
 				<p>
 					The <a href="./security-model.html">Protocol Security Model</a>
-					is normative for the accepted oracle assumption and truth-auction policy,
-					the guarantees they exclude, and the residual loss allocation when
-					the oracle assumption fails or auction demand is weak.
+					is normative for assumptions A01–A17. The
+					<a href="./truth-auction.html#auction-a1"><code>AUCTION-A1</code></a>
+					section owns weak-demand auction loss allocation, while
+					<a href="./open-oracle-integration.html#intentional-economic-tradeoffs"
+						>OpenOracle Integration</a
+					>
+					owns the oracle notional and residual-loss analysis.
 				</p>
 				<figure
 					class="diagram diagram-wide"
@@ -1820,10 +1824,14 @@
 						collateralization. Report liquidity is intentionally not required to
 						equal or bound the value of withdrawals, liquidations, allowance
 						changes, pool assets, or cumulative operations that use an accepted
-						price. The deployment assumption is <code>ORACLE-A1</code>, cataloged
-						here as <code>ORA-10</code>: at least one
+						price. The profitable-correction deployment assumption is
+						<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a>,
+						cataloged here as <code>ORA-10</code>: at least one
 						adequately capitalized participant takes every profitable correction
-						and obtains inclusion before settlement.
+						and obtains inclusion before settlement. The separate
+						<a href="./security-model.html#assumption-a17">A17</a> assumption
+						requires economic independence between the coordinator path and a
+						correcting participant.
 					</p>
 					<p>
 						The protocol also makes no bounded-liveness claim for a pending
@@ -1844,7 +1852,7 @@
 						capital reuse, invalid deadline transition, or cache-conformance
 						failure remains a finding. The mere absence of a report-notional
 						bound or absolute pending-report duration does not. See the
-						<a href="./security-model.html#accepted-design-properties">normative review classification</a>.
+						<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code> assumption boundary</a>.
 					</p>
 				</div>
 				<div class="invariant-list">
@@ -2168,7 +2176,7 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								Qualifying ETH is retained bid ETH
+								Under <code>AUCTION-A1</code>, qualifying ETH is retained bid ETH
 								offered at or above the cap-implied qualification threshold. The
 								threshold is not an execution-price floor. Qualifying bidders collectively receive
 								<code>maxRepBeingSold</code> in proportion to that ETH at the aggregate
@@ -2181,6 +2189,11 @@
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
+								<div><dt>Primary evidence</dt><dd>
+									<a href="./truth-auction.html#auction-a1"
+										><code>AUCTION-A1</code> punitive underfunded clearing</a
+										>
+								</dd></div>
 							</dl>
 						</div>
 					</details>

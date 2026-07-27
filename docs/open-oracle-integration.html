@@ -37,10 +37,12 @@
 					</p>
 					<div class="callout" id="active-arbitrager-assumption">
 						<p>
-							<strong><code>ORACLE-A1</code> is a deployment assumption.</strong> The
-							<a href="./security-model.html#oracle-a1">Protocol Security Model</a>
-							owns its definition, excluded guarantees, residual loss allocation,
-							and review classification. This page owns integration mechanics.
+							<strong><code>ORACLE-A1</code> and A17 are deployment assumptions.</strong>
+							See the <a href="./security-model.html#oracle-a1">profitable-arbitrager assumption</a>
+							and the
+							<a href="./security-model.html#assumption-a17">independent-corrector assumption</a>.
+							This page owns the integration mechanics, excluded guarantees,
+							residual-loss analysis, and review classification.
 						</p>
 					</div>
 					<p>
@@ -178,9 +180,10 @@
 					<span class="term" tabindex="0">report liquidity</span>. The
 					coordinator computes the initial WETH side from request-time inputs,
 					and the sponsor may request more. The
-					<a href="#security-guarantee">sizing section</a> owns the derivation;
-					<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a> owns
-					the security boundary.
+					<a href="#security-guarantee">sizing section</a> owns the derivation.
+					The security boundary comprises
+					<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a>
+					and <a href="./security-model.html#assumption-a17">A17</a>.
 				</p>
 			</section>
 
@@ -492,7 +495,7 @@
 						position and demonstrate a free or underfunded reset despite profitable
 						correction, fee recovery, simultaneous reuse of required capital, an
 						invalid deadline transition, or unauthorized sponsor-queue use. See the
-						<a href="./security-model.html#accepted-design-properties">normative review boundary</a>.
+						<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code> assumption boundary</a>.
 					</p>
 				</div>
 				<p>
@@ -664,12 +667,12 @@
 				<h2>Security Model and Guardrails</h2>
 				<p>
 					Statoblast uses the oracle to preserve solvency accounting around ETH
-					obligations backed by REP. The
+					obligations backed by REP. The required economic assumptions are
 					<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a>
-					section owns the required economic assumption. Locally, operations that can change REP backing or
-					security-bond exposure must use a fresh, economically contestable
-					REP/ETH price and pass local coordinator checks before they can affect
-					the pool.
+					and <a href="./security-model.html#assumption-a17">A17</a>. Locally,
+					operations that can change REP backing or security-bond exposure must
+					use a fresh, economically contestable REP/ETH price and pass local
+					coordinator checks before they can affect the pool.
 				</p>
 				<ul>
 					<li>
@@ -997,8 +1000,9 @@
 			<section id="intentional-economic-tradeoffs">
 				<h2>Intentional Economic Tradeoffs</h2>
 				<p>
-					The <a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a>
-					section owns the normative notional boundary and loss allocation.
+					The required arbitrager assumption is
+					<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a>.
+					The canonical notional and residual-loss analysis follows here.
 					Operationally, the coordinator maintains no notional exposure budget:
 					one fresh price may authorize multiple otherwise-valid operations.
 				</p>
@@ -1624,8 +1628,9 @@
 						the configured priority-fee, gas-unit, fee, and transaction-inclusion
 						assumptions hold; the check does not prove that an accepted price is
 						externally correct.
+						The remaining assumptions are
 						<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a>
-						owns the remaining assumption.
+						and <a href="./security-model.html#assumption-a17">A17</a>.
 					</li>
 					<li>
 						<strong>Callback scope:</strong> only up to four operations are

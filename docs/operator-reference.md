@@ -18,16 +18,16 @@ security properties, including launch-critical properties that the current
 contracts do not preserve.
 
 The [Protocol Security Model](./security-model.html) is normative for the
-accepted oracle assumption, the truth-auction loss-allocation policy,
-deliberately excluded guarantees, and residual risks.
+protocol's external assumptions. Truth-auction loss allocation and residual
+weak-demand risk are defined by
+[`AUCTION-A1`](./truth-auction.html#auction-a1).
 
 ## Security Review Orientation
 
 Before classifying an economic or liveness concern, use the security model's
-[accepted design properties](./security-model.html#accepted-design-properties)
-as the canonical review boundary. It distinguishes intentional properties from
-implementation defects and deployment-blocking economic risks. The invariant
-catalog owns the current requirement, status, and evidence for
+[core assumptions](./security-model.html#core-assumptions) to identify external
+dependencies, then follow its canonical mechanics links. The invariant catalog
+owns the current requirement, status, and evidence for
 [`EXT-05` recursive-fork gas behavior](./invariants.html#ext-05).
 
 ## Immutable Protocol Release Posture
@@ -152,7 +152,9 @@ ownership, a one-week bidding window, and paged settlement into vault
 accounting. Bids close at <code>auctionStarted + AUCTION_TIME</code>; direct
 auction finalization is allowed at <code>&gt;=</code> that boundary, but the
 public forker wrapper requires the boundary to have passed. The canonical
-clearing rules and examples are in [Truth Auction](./truth-auction.html#clearing).
+clearing rules and examples are in [Truth Auction](./truth-auction.html#clearing),
+while [`AUCTION-A1`](./truth-auction.html#auction-a1) defines the intentional
+weak-demand loss allocation.
 
 | Area | Implementation behavior | Source |
 | --- | --- | --- |
@@ -166,8 +168,9 @@ The coordinator quick reference below covers staging, callback recovery,
 stale-operation handling, and liquidation boundaries. Report sizing, request
 cost, and current OpenOracle parameters are canonical in
 [OpenOracle Integration](./open-oracle-integration.html#parameters); the
-economic assumption is defined by
-[`ORACLE-A1`](./security-model.html#oracle-a1).
+economic assumptions are
+[`ORACLE-A1`](./security-model.html#oracle-a1) and
+[A17](./security-model.html#assumption-a17).
 
 | Area | Implementation behavior | Source |
 | --- | --- | --- |
