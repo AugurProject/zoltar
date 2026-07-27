@@ -18,17 +18,14 @@ security properties, including launch-critical properties that the current
 contracts do not preserve.
 
 The [Protocol Security Model](./security-model.html) is normative for the
-accepted oracle assumption, the truth-auction loss-allocation policy,
-deliberately excluded guarantees, and residual risks. In particular, it defines
-`ORACLE-A1` and `AUCTION-A1`.
+protocol's external assumptions.
 
 ## Security Review Orientation
 
 Before classifying an economic or liveness concern, use the security model's
-[accepted design properties](./security-model.html#accepted-design-properties)
-as the canonical review boundary. It distinguishes intentional properties from
-implementation defects and deployment-blocking economic risks. The invariant
-catalog owns the current requirement, status, and evidence for
+[core assumptions](./security-model.html#core-assumptions) to identify external
+dependencies, then follow its canonical mechanics links. The invariant catalog
+owns the current requirement, status, and evidence for
 [`EXT-05` recursive-fork gas behavior](./invariants.html#ext-05).
 
 ## Immutable Protocol Release Posture
@@ -153,9 +150,7 @@ ownership, a one-week bidding window, and paged settlement into vault
 accounting. Bids close at <code>auctionStarted + AUCTION_TIME</code>; direct
 auction finalization is allowed at <code>&gt;=</code> that boundary, but the
 public forker wrapper requires the boundary to have passed. The canonical
-clearing rules and examples are in [Truth Auction](./truth-auction.html#clearing), while
-the loss-allocation policy is defined by
-[`AUCTION-A1`](./security-model.html#auction-a1).
+clearing rules and examples are in [Truth Auction](./truth-auction.html#clearing).
 
 | Area | Implementation behavior | Source |
 | --- | --- | --- |

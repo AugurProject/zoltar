@@ -19,15 +19,17 @@ Inside `ui/ts`, route-specific code belongs under `features/<domain>`, cross-fea
 
 Protocol documentation lives in `docs/`:
 
-- [Security model](https://augurproject.github.io/zoltar/docs/security-model.html) — normative guarantees, accepted economic assumptions, loss-allocation policies, and residual risks
-- [Security-review classification](https://augurproject.github.io/zoltar/docs/security-model.html#accepted-design-properties) — audit orientation for intentionally unbounded oracle notional, permissionless paid forks, and paid rolling disputes
+- [Security model](https://augurproject.github.io/zoltar/docs/security-model.html) — external economic and liveness assumptions A01–A17
+- [OpenOracle tradeoffs](https://augurproject.github.io/zoltar/docs/open-oracle-integration.html#intentional-economic-tradeoffs) — audit orientation for intentionally unbounded oracle notional and paid rolling disputes
+- [Truth-auction clearing](https://augurproject.github.io/zoltar/docs/truth-auction.html#clearing) — funded and underfunded clearing mechanics
 - [Start here guide](https://augurproject.github.io/zoltar/docs/documentation.html)
 
-The security-review classification distinguishes excluded guarantees from
-vulnerabilities. It also identifies the
-conditions that would turn each accepted design property into an implementation
-defect or a deployment-blocking economic risk. The invariant catalog owns the
-current requirement, status, and evidence for
+For oracle audit classification, use the
+[OpenOracle tradeoffs](https://augurproject.github.io/zoltar/docs/open-oracle-integration.html#intentional-economic-tradeoffs)
+and [attack model](https://augurproject.github.io/zoltar/docs/open-oracle-integration.html#attack-model).
+For weak-demand auction behavior, use
+[Truth-auction clearing](https://augurproject.github.io/zoltar/docs/truth-auction.html#clearing).
+The invariant catalog owns the current requirement, status, and evidence for
 [`EXT-05` recursive-fork gas behavior](https://augurproject.github.io/zoltar/docs/invariants.html#ext-05).
 
 Deterministic deployment outputs live in
