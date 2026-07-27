@@ -177,6 +177,7 @@ describe('useTradingOperations', () => {
 			getWalletEthBalance: mock(async () => 2n * 10n ** 18n),
 			loadSecurityPoolMintCapacity: mock(async () => ({
 				completeSetCollateralAmount: 0n,
+				feeEligibleSecurityBondAllowance: 2n * 10n ** 18n,
 				shareTokenSupply: 10n * 10n ** 18n,
 				totalRepDeposit: 20n * 10n ** 18n,
 				totalSecurityBondAllowance: 2n * 10n ** 18n,
@@ -212,6 +213,52 @@ describe('useTradingOperations', () => {
 		expect(createCompleteSetInSecurityPool).not.toHaveBeenCalled()
 	})
 
+	test('blocks complete-set mint writes when total allowance exists but none is fee eligible', async () => {
+		const createCompleteSetInSecurityPool = mock(async () => {
+			throw new Error('createCompleteSetInSecurityPool should not be called against unclaimed auction allowance')
+		})
+		const onTransactionFailed = mock(() => undefined)
+		const dependencies = createTradingOperationsDependencies({
+			createCompleteSetInSecurityPool,
+			getWalletEthBalance: mock(async () => 2n * 10n ** 18n),
+			loadSecurityPoolMintCapacity: mock(async () => ({
+				completeSetCollateralAmount: 0n,
+				feeEligibleSecurityBondAllowance: 0n,
+				shareTokenSupply: 0n,
+				totalRepDeposit: 20n * 10n ** 18n,
+				totalSecurityBondAllowance: 2n * 10n ** 18n,
+			})),
+			loadTradingDetails: mock(async () => createTradingDetails()),
+			loadZoltarUniverseSummary: mock(async () => createUniverseSummary()),
+		})
+
+		let hookState: UseTradingOperationsState | undefined
+		const Harness = createHarness(
+			useTradingOperations,
+			state => {
+				hookState = state
+			},
+			onTransactionFailed,
+			dependencies,
+		)
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			requireHookState(hookState).setTradingForm(current => ({
+				...current,
+				completeSetAmount: '1',
+			}))
+		})
+
+		await act(async () => {
+			await requireHookState(hookState).createCompleteSet()
+		})
+
+		expect(onTransactionFailed).toHaveBeenCalledWith('Transaction failed while attempting to mint complete sets. Reason: No mint capacity. No active security bond allowance')
+		expect(createCompleteSetInSecurityPool).not.toHaveBeenCalled()
+	})
+
 	test('converts redeem complete-set input to share units before submitting', async () => {
 		const firstMintShareAmount = 10n ** 36n
 		let submittedRedeemAmount: bigint | undefined
@@ -229,6 +276,7 @@ describe('useTradingOperations', () => {
 			getWalletEthBalance: mock(async () => 2n * 10n ** 18n),
 			loadSecurityPoolMintCapacity: mock(async () => ({
 				completeSetCollateralAmount: 1n * 10n ** 18n,
+				feeEligibleSecurityBondAllowance: 2n * 10n ** 18n,
 				shareTokenSupply: firstMintShareAmount,
 				totalRepDeposit: 20n * 10n ** 18n,
 				totalSecurityBondAllowance: 2n * 10n ** 18n,
@@ -320,6 +368,7 @@ describe('useTradingOperations', () => {
 			getWalletEthBalance: mock(async () => 2n * 10n ** 18n),
 			loadSecurityPoolMintCapacity: mock(async () => ({
 				completeSetCollateralAmount: 1n * 10n ** 18n,
+				feeEligibleSecurityBondAllowance: 2n * 10n ** 18n,
 				shareTokenSupply: 1n * 10n ** 18n,
 				totalRepDeposit: 20n * 10n ** 18n,
 				totalSecurityBondAllowance: 2n * 10n ** 18n,
@@ -401,6 +450,7 @@ describe('useTradingOperations', () => {
 		const poolB = getAddress('0x00000000000000000000000000000000000000e2')
 		const deferredMintCapacity = createDeferred<{
 			completeSetCollateralAmount: bigint
+			feeEligibleSecurityBondAllowance: bigint
 			shareTokenSupply: bigint
 			totalRepDeposit: bigint
 			totalSecurityBondAllowance: bigint
@@ -496,6 +546,7 @@ describe('useTradingOperations', () => {
 		await act(async () => {
 			deferredMintCapacity.resolve({
 				completeSetCollateralAmount: 1n * 10n ** 18n,
+				feeEligibleSecurityBondAllowance: 2n * 10n ** 18n,
 				shareTokenSupply: 1n * 10n ** 18n,
 				totalRepDeposit: 20n * 10n ** 18n,
 				totalSecurityBondAllowance: 2n * 10n ** 18n,
@@ -524,6 +575,7 @@ describe('useTradingOperations', () => {
 		const onTransactionRequested = mock(() => undefined)
 		const loadSecurityPoolMintCapacity = mock(async () => ({
 			completeSetCollateralAmount: 1n * 10n ** 18n,
+			feeEligibleSecurityBondAllowance: 2n * 10n ** 18n,
 			shareTokenSupply: 1n * 10n ** 18n,
 			totalRepDeposit: 20n * 10n ** 18n,
 			totalSecurityBondAllowance: 2n * 10n ** 18n,

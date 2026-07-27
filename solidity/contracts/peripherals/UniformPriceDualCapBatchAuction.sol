@@ -41,6 +41,9 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 	uint256 constant AUCTION_TIME = 1 weeks;
 	uint256 constant PRICE_PRECISION = 1e18;
 	uint256 constant MIN_BID_SIZE_DIVISOR = 100_000;
+	// Push refunds are best effort. Bounding the callback prevents a recipient from
+	// consuming settlement gas; contracts that need more gas can use the pull path.
+	uint256 constant REFUND_PUSH_GAS_LIMIT = 30_000;
 
 	mapping(uint256 => Node) private nodes;
 	mapping(int256 => Bid[]) private bidsAtTick;
@@ -70,6 +73,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 	int256[] private seenTicks;
 	mapping(int256 => bool) private hasSeenTick;
 	mapping(address => BidRef[]) private bidderBidRefs;
+	mapping(address => uint256) public pendingEthRefunds;
 
 	constructor(address _owner) {
 		// Child-pool truth auctions are intentionally owned by the SecurityPoolForker
@@ -284,10 +288,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 			emit BidSettled(withdrawFor, tick, index, bid.ethAmount, ethUsed, repFilled, ethRefund, status);
 		}
 
-		if (totalEthRefund > 0) {
-			(bool sent, ) = payable(withdrawFor).call{ value: totalEthRefund }('');
-			require(sent, 'Auction failed to refund ETH while withdrawing bids');
-		}
+		_payOrDeferRefund(withdrawFor, totalEthRefund);
 	}
 
 	function refundLosingBids(IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices) external {
@@ -346,9 +347,25 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEven
 			);
 		}
 
-		// Send ETH back to user
-		(bool sent, ) = payable(bidder).call{ value: totalEthToRefund }('');
-		require(sent, 'Auction failed to refund ETH for losing bids');
+		_payOrDeferRefund(bidder, totalEthToRefund);
+	}
+
+	function withdrawPendingEthRefund() external {
+		uint256 amount = pendingEthRefunds[msg.sender];
+		require(amount > 0, 'Auction has no deferred ETH refund');
+		pendingEthRefunds[msg.sender] = 0;
+		emit PendingEthRefundWithdrawn(msg.sender, amount);
+		(bool sent, ) = payable(msg.sender).call{ value: amount }('');
+		require(sent, 'Auction failed to withdraw deferred ETH refund');
+	}
+
+	function _payOrDeferRefund(address bidder, uint256 amount) private {
+		if (amount == 0) return;
+		(bool sent, ) = payable(bidder).call{ value: amount, gas: REFUND_PUSH_GAS_LIMIT }('');
+		if (sent) return;
+		uint256 pendingAmount = pendingEthRefunds[bidder] + amount;
+		pendingEthRefunds[bidder] = pendingAmount;
+		emit EthRefundDeferred(bidder, amount, pendingAmount);
 	}
 
 	function tickToPrice(int256 tick) public pure returns (uint256 price) {

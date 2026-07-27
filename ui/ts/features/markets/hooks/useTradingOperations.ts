@@ -208,12 +208,12 @@ export function useTradingOperations(
 							accountAddress: walletAddress,
 							completeSetCollateralAmount: latestMintCapacity.completeSetCollateralAmount,
 							ethBalance: walletEthBalance,
+							feeEligibleSecurityBondAllowance: latestMintCapacity.feeEligibleSecurityBondAllowance,
 							hasSelectedPool: true,
 							isMainnet,
 							mintAmountInput: currentForm.completeSetAmount,
 							shareTokenSupply: latestMintCapacity.shareTokenSupply,
 							totalRepDeposit: latestMintCapacity.totalRepDeposit,
-							totalSecurityBondAllowance: latestMintCapacity.totalSecurityBondAllowance,
 						})
 						if (guardMessage !== undefined) throw new Error(guardMessage)
 					}

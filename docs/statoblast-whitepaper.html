@@ -806,8 +806,11 @@
 						</li>
 						<li>
 							The pool rejects a mint when the resulting collateral would exceed
-							available security bond allowance. A positive deposit must also
-							convert to at least one complete-set unit.
+							vault-assigned, fee-eligible security bond allowance. Allowance
+							reserved for an unclaimed truth-auction winner cannot secure new
+							open interest until settlement attaches it to that winner's vault.
+							A positive deposit must also convert to at least one complete-set
+							unit.
 						</li>
 					</ul>
 					<h3>Fee Extraction and Retention Rate</h3>
@@ -876,9 +879,12 @@
 						Fee accrual is time-clamped. The pool extracts collateral into fees
 						only until the question end time while the universe remains
 						unforked; after the universe forks, the fee accumulator is instead
-						clamped to the fork time. Retention-rate updates also no-op when total bond allowance is zero or when the pool is outside
-						<code>Operational</code> mode, so fork handling does not silently
-						change the live fee curve.
+						clamped to the fork time. Retention-rate updates no-op outside
+						<code>Operational</code> mode or when the recalculated rate is
+						unchanged. While operational, utilization uses vault-assigned,
+						fee-eligible allowance; zero eligible allowance selects the maximum
+						retention rate. Unclaimed auction allowance therefore cannot change
+						the live fee curve.
 					</p>
 					<p>
 						A child pool begins a new fee epoch when migration and any truth
@@ -2295,8 +2301,8 @@
 					<div class="equation" id="eq-statoblast-escalation-winning-payout">
 						<math
 							display="block"
-							aria-label="reward eligible cap equals binding capital plus floor of binding capital divided by excess reward window divisor, reward bonus pool equals floor of binding capital times three divided by five, burn amount equals floor of reward eligible deposit times floor of binding capital times two divided by five divided by reward eligible principal, amount to withdraw equals deposit amount plus floor of reward eligible deposit times reward bonus pool divided by reward eligible principal, and scaled withdrawal equals floor of amount to withdraw times actual fork threshold divided by non decision threshold when actual fork threshold is lower"
-							data-source="rewardEligibleCap = bindingCapital + floor(bindingCapital / excessRewardWindowDivisor); rewardBonusPool = floor(bindingCapital \cdot 3 / 5); burnAmount = floor(rewardEligibleDeposit \cdot floor(bindingCapital \cdot 2 / 5) / rewardEligiblePrincipal); amountToWithdraw = depositAmount + floor(rewardEligibleDeposit \cdot rewardBonusPool / rewardEligiblePrincipal); scaledWithdrawal = floor(amountToWithdraw \cdot actualForkThreshold / nonDecisionThreshold) when actualForkThreshold &lt; nonDecisionThreshold"
+								aria-label="reward eligible cap equals binding capital plus floor of binding capital divided by excess reward window divisor, reward bonus pool equals floor of binding capital times three divided by five, burn amount equals floor of reward eligible deposit times floor of binding capital times two divided by five divided by reward eligible principal, amount to withdraw equals deposit amount plus floor of reward eligible deposit times reward bonus pool divided by reward eligible principal, and scaled withdrawal equals floor of amount to withdraw times actual fork threshold divided by non decision threshold when fork time is at or before the scheduled escalation game end date and the actual fork threshold is lower"
+							data-source="rewardEligibleCap = bindingCapital + floor(bindingCapital / excessRewardWindowDivisor); rewardBonusPool = floor(bindingCapital \cdot 3 / 5); burnAmount = floor(rewardEligibleDeposit \cdot floor(bindingCapital \cdot 2 / 5) / rewardEligiblePrincipal); amountToWithdraw = depositAmount + floor(rewardEligibleDeposit \cdot rewardBonusPool / rewardEligiblePrincipal); scaledWithdrawal = floor(amountToWithdraw \cdot actualForkThreshold / nonDecisionThreshold) when forkTime &lt;= escalationGameEndDate and actualForkThreshold &lt; nonDecisionThreshold"
 						>
 							<mtable>
 								<mtr>
@@ -2419,7 +2425,8 @@
 											<mo>)</mo>
 										</mrow>
 										<mtext>
-											if actualForkThreshold &lt; nonDecisionThreshold</mtext
+											if forkTime &lt;= escalationGameEndDate and
+											actualForkThreshold &lt; nonDecisionThreshold</mtext
 										>
 									</mtd>
 								</mtr>
@@ -2431,8 +2438,16 @@
 							haircut is charged exactly once. If the escalation itself triggers
 							the universe fork, Zoltar collects that haircut from the aggregate
 							escalation backing; otherwise settlement burns it directly. Low fork
-							thresholds scale the payout down. All amounts are atomic REP, and
-							every Solidity division floors before the next step.
+							thresholds scale the payout down when no fork is recorded or the
+							recorded universe <code>forkTime</code> is at or before the scheduled
+							<code>escalationGameEndDate</code>. When <code>forkTime</code> is
+							strictly later than the scheduled
+							<code>escalationGameEndDate</code>, the withdrawal calculation
+								substitutes the configured <code>nonDecisionThreshold</code> for the
+								actual fork threshold, restoring the unscaled payout schedule for
+								unclaimed winning deposits. Amounts withdrawn earlier are not
+								revisited. All amounts are atomic REP, and every Solidity division
+								floors before the next step.
 						</p>
 					</div>
 					<ul>
@@ -2467,10 +2482,7 @@
 						depth above <code>15 REP</code>
 						receives principal back with no share of the reward pool.
 					</div>
-					<p>
-						If the actual Zoltar fork threshold for the universe is lower than the escalation game’s configured <code>nonDecisionThreshold</code>, the payout is scaled down by <code>actualForkThreshold / nonDecisionThreshold</code>.
-					</p>
-					<p>
+						<p>
 						Settlement uses different calls for local withdrawal, own-fork direct
 						claims, optional parent-lock cleanup, and child proof claims. The
 						distinction matters because local withdrawal settles deposit indexes,
@@ -4736,11 +4748,26 @@
 						plus accepted auction ETH and releases every bid to settlement. Nonzero
 						finalizer ETH is rejected.
 					</p>
+					<p>
+						Auction winners become the responsible child-pool owners only when
+						their claims attach ownership and allowance to bidder vaults. Recipient
+						behavior cannot roll back that accounting transition. The
+						<a href="./truth-auction.html#zero-migration-full-cap-ownership"
+							>Truth Auction settlement specification</a
+						>
+						owns the exact zero-migration ownership conversion, allowance
+						activation, and failed-refund recovery rules.
+					</p>
 					<h3>Clearing and Settlement</h3>
 					<p>
 						The <a href="./truth-auction.html#clearing">Truth Auction design</a>
-						owns tick pricing, cap selection, underfunded qualification,
-						allocation rounding, settlement modes, and the interactive examples.
+						owns tick pricing, cap selection, underfunded qualification, and the
+						interactive examples; its
+						<a href="./truth-auction.html#settlement">settlement section</a> owns
+						allocation rounding and recovery behavior.
+						The <a href="./security-model.html#core-assumptions">security model</a>
+						separately states efficient REP-to-ETH auction conversion as an
+						explicit assumption.
 					</p>
 				</section>
 

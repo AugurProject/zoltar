@@ -61,7 +61,7 @@ The emitting address identifies the current pool, game, auction, token, or coord
 | `totalFeesOwedRemainder` | Sub-wei numerator with denominator `1e18` | Carries truncated global fee accrual into the next checkpoint and is always below `1e18`. |
 | `currentRetentionRate` | `1e18` fixed-point per-second multiplier | Applied with integer exponentiation and division; lower values retain less collateral over time. |
 | Coordinator REP/ETH `price` | `(REP base units * 1e18) / ETH wei` | Truncates toward zero. A larger value means more REP is required per ETH. |
-| Auction ETH fields | Wei | `grossEthAccepted` is the accepted ETH transferred to the auction owner. Per bid, `ethUsed + ethRefund = originalEthAmount`; REP fills use token base units. |
+| Auction ETH fields | Wei | `grossEthAccepted` is the accepted ETH transferred to the auction owner. Per bid, `ethUsed + ethRefund = originalEthAmount`; REP fills use token base units. For deferred refunds, `amount` is the newly deferred delta and `pendingAmount` is the authoritative resulting bidder balance. |
 | Timestamps and BPS parameters | Unix seconds; basis points use denominator `10_000` | Timestamps are resulting lifecycle times. BPS multiplication uses Solidity integer division and therefore truncates unless a field explicitly documents ceiling behavior. |
 
 ## Discovery and relationships
@@ -82,14 +82,14 @@ Fork snapshot events require two-part provenance. First require the configured `
 | Remaining share economic-claim supply | `ShareTokenSupplySet`; then the `resultingShareTokenSupply` field on complete-set and winning-share action events |
 | Escalation continuation | `ForkCarryCheckpoint`, `InheritedThresholdTie`, `CarryDepositConsumed` |
 | Pool and vault accounting | `PoolAccountingCheckpoint`, `VaultAccountingCheckpoint` |
-| Auction demand and settlement | `AuctionStarted`, `BidSubmitted`, `AuctionFinalized`, `BidSettled` |
+| Auction demand, settlement, and refund liabilities | `AuctionStarted`, `BidSubmitted`, `AuctionFinalized`, `BidSettled`, `EthRefundDeferred`, `PendingEthRefundWithdrawn` |
 | Coordinator operations | `StagedOperationQueued`, `ExecutedStagedOperation`, terminal report events, `CoordinatorStateCheckpoint` |
 
 Protocol-global identifiers are universe and question IDs, contract addresses, and escalation snapshot IDs. Contract-local counters are stable only as composite keys: use `(game or snapshot lineage, outcome, parentDepositIndex)`, `(sourceGame, outcome, sourceNodeId)`, `(auction emitter, tick, bidIndex)`, and `(coordinator emitter, operationId)`. Mutable labels are not identifiers.
 
-### Discovery and migration event schemas
+### Canonical event schemas
 
-The events below close the discovery and fork-migration boundaries that an indexer must not infer from token transfers. Field names are listed in declaration order; indexed fields are marked `indexed`.
+The events below close discovery, fork-migration, and economically relevant auction-liability boundaries that an indexer must not infer from token transfers. Field names are listed in declaration order; indexed fields are marked `indexed`.
 
 | Emitter and event | Fields | Reducer meaning |
 | --- | --- | --- |
@@ -104,6 +104,8 @@ The events below close the discovery and fork-migration boundaries that an index
 | `SecurityPoolForker.ChildPoolRepSwept` | `parentPool indexed`, `childPool indexed`, `outcomeIndex indexed`, `repAmount`, `resultingChildPoolRepBalance` | Records pending child REP delivered to the pool and its resulting balance. |
 | `SecurityPoolForker.EscalationMigrationEntitlementInitialized` | `parent indexed`, `vault indexed`, `sourcePrincipalByOutcome`, `currentRepByOutcome`, `totalCurrentRep` | Freezes the vault's exported unresolved-escalation entitlement once. |
 | `SecurityPoolForker.EscalationMigrationEntitlementMaterialized` | `parent indexed`, `vault indexed`, `childOutcomeIndex indexed`, `child`, `childRep` | Marks that entitlement as materialized for one child branch. |
+| `UniformPriceDualCapBatchAuction.EthRefundDeferred` | `bidder indexed`, `amount`, `pendingAmount` | Adds `amount` to the bidder's refund liability and replaces its authoritative balance with `pendingAmount` after a positive refund push fails. |
+| `UniformPriceDualCapBatchAuction.PendingEthRefundWithdrawn` | `bidder indexed`, `amount` | Clears the bidder's complete deferred-refund liability immediately before the pull callback. A failed pull reverts this event and the clear. |
 
 These child and entitlement event families are declared in migration base, interface, or delegate modules but are emitted from the recognized `SecurityPoolForker` address because the implementation executes them through `delegatecall`. Accepting the same signature from a helper, delegate, or event-emitter address would allow false protocol history.
 
@@ -129,6 +131,8 @@ For escalation, append each `LocalDepositAppended` leaf under its stable deposit
 
 For auctions, create a bid on every `BidSubmitted`. The stable identity is `(auction emitter, tick, bidIndex)`, including same-tick FIFO bids. Replace that bid's settlement fields on `BidSettled`. Batch calls emit one settlement event per affected bid.
 
+Track deferred-refund liabilities separately by `(auction emitter, bidder)`. On `EthRefundDeferred`, require the event's `pendingAmount` to equal the prior reconstructed balance plus the `amount` delta, then replace the balance with `pendingAmount`. On `PendingEthRefundWithdrawn`, require `amount` to equal that bidder's complete prior balance, then clear it to zero. The auction emits that clear before its external pull callback, so any reentrant settlement that creates a new deferred refund appears later in the same receipt and adds to zero; a failed callback reverts the complete log sequence. A `BidSettled` refund can therefore leave an auction liability even though the bid itself is final; do not infer refund delivery from `BidSettled` alone.
+
 ## Standard token events
 
 Use ERC-20 `Transfer` and ERC-1155 `TransferSingle`/`TransferBatch` to reconstruct token balances and supply. For `TransferBatch`, require `ids.length == values.length` and apply each `(ids[i], values[i])` pair in array order, updating the balance and per-token-ID supply independently. A zero `from` mints that item and a zero `to` burns it.
@@ -143,7 +147,7 @@ Token events do not establish protocol cause. Attribute minting, migration, escr
 4. On a universe or own-game fork, first verify both the forker emitter and the indexed parent's factory registration, then freeze the parent from `SecurityPoolForkSnapshot` and apply the cause-specific REP locking and draining events.
 5. Discover two parallel child universes and pools independently. Initialize each continuation from its `ForkCarryCheckpoint`; never treat one child's consumption as the other's.
 6. Apply every `VaultMigrationCheckpoint`, including zero-collateral migrations, using its deltas and resulting parent/child totals.
-7. On every `startTruthAuction`, initialize the child's remaining economic claim supply from `ShareTokenSupplySet`. If `AuctionStarted` follows, replay every indexed bid and per-bid settlement and apply auction-claim pool checkpoints to fee eligibility. On the immediate no-auction path, apply `TruthAuctionFinalized` and its pool checkpoints without expecting bids.
+7. On every `startTruthAuction`, initialize the child's remaining economic claim supply from `ShareTokenSupplySet`. If `AuctionStarted` follows, replay every indexed bid, per-bid settlement, deferred-refund liability, successful refund pull, and auction-claim pool checkpoint. On the immediate no-auction path, apply `TruthAuctionFinalized` and its pool checkpoints without expecting bids.
 8. Consume winning, losing, exported, direct-parent, and forked-escrow continuation deposits by their explicit reasons and resulting commitments.
 9. Finish with complete-set, winning-share, REP, and pool-fee withdrawals. The final replayed checkpoints should match the corresponding storage getters when audited.
 

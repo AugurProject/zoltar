@@ -128,7 +128,7 @@ void describe('trading helpers', () => {
 		universeId: 0n,
 	} satisfies ZoltarUniverseSummary
 
-	void test('computes remaining mint capacity from total bond allowance and minted open interest', () => {
+	void test('computes remaining mint capacity from fee-eligible bond allowance and minted open interest', () => {
 		expect(getRemainingMintCapacity(10n, 4n)).toBe(6n)
 		expect(getRemainingMintCapacity(10n, 10n)).toBe(0n)
 		expect(getRemainingMintCapacity(10n, 12n)).toBe(0n)
@@ -206,7 +206,7 @@ void describe('trading helpers', () => {
 				mintAmountInput: '1',
 				shareTokenSupply: 0n,
 				totalRepDeposit: 0n,
-				totalSecurityBondAllowance: 10n,
+				feeEligibleSecurityBondAllowance: 10n,
 			}),
 		).toBe('Connect a wallet before minting complete sets.')
 
@@ -220,7 +220,7 @@ void describe('trading helpers', () => {
 				mintAmountInput: '1',
 				shareTokenSupply: 0n,
 				totalRepDeposit: 0n,
-				totalSecurityBondAllowance: 10n,
+				feeEligibleSecurityBondAllowance: 10n,
 			}),
 		).toBe('Select a pool before minting.')
 
@@ -234,7 +234,7 @@ void describe('trading helpers', () => {
 				mintAmountInput: '1',
 				shareTokenSupply: 0n,
 				totalRepDeposit: 0n,
-				totalSecurityBondAllowance: 10n,
+				feeEligibleSecurityBondAllowance: 10n,
 			}),
 		).toBe('Switch to Ethereum mainnet.')
 	})
@@ -250,7 +250,7 @@ void describe('trading helpers', () => {
 				mintAmountInput: '100',
 				shareTokenSupply: undefined,
 				totalRepDeposit: 0n,
-				totalSecurityBondAllowance: 10n,
+				feeEligibleSecurityBondAllowance: 10n,
 			}),
 		).toBe('Loading mint capacity.')
 
@@ -264,7 +264,7 @@ void describe('trading helpers', () => {
 				mintAmountInput: '100',
 				shareTokenSupply: 10n,
 				totalRepDeposit: 0n,
-				totalSecurityBondAllowance: 10n,
+				feeEligibleSecurityBondAllowance: 10n,
 			}),
 		).toBe('No mint capacity remaining.')
 
@@ -278,7 +278,7 @@ void describe('trading helpers', () => {
 				mintAmountInput: '100',
 				shareTokenSupply: 0n,
 				totalRepDeposit: 20n * 10n ** 18n,
-				totalSecurityBondAllowance: 0n,
+				feeEligibleSecurityBondAllowance: 0n,
 			}),
 		).toBe('No mint capacity. No active security bond allowance.')
 
@@ -292,7 +292,7 @@ void describe('trading helpers', () => {
 				mintAmountInput: 'abc',
 				shareTokenSupply: 0n,
 				totalRepDeposit: 0n,
-				totalSecurityBondAllowance: 10n ** 18n,
+				feeEligibleSecurityBondAllowance: 10n ** 18n,
 			}),
 		).toBe('Enter a valid mint amount.')
 
@@ -306,7 +306,7 @@ void describe('trading helpers', () => {
 				mintAmountInput: '0',
 				shareTokenSupply: 0n,
 				totalRepDeposit: 0n,
-				totalSecurityBondAllowance: 10n ** 18n,
+				feeEligibleSecurityBondAllowance: 10n ** 18n,
 			}),
 		).toBe('Enter a mint amount greater than zero.')
 
@@ -320,7 +320,7 @@ void describe('trading helpers', () => {
 				mintAmountInput: '0.3',
 				shareTokenSupply: 10n ** 18n,
 				totalRepDeposit: 0n,
-				totalSecurityBondAllowance: 10n ** 18n,
+				feeEligibleSecurityBondAllowance: 10n ** 18n,
 			}),
 		).toBe('Max mint capacity is 0.2 ETH.')
 
@@ -334,7 +334,7 @@ void describe('trading helpers', () => {
 				mintAmountInput: '1',
 				shareTokenSupply: 0n,
 				totalRepDeposit: 0n,
-				totalSecurityBondAllowance: 2n * 10n ** 18n,
+				feeEligibleSecurityBondAllowance: 2n * 10n ** 18n,
 			}),
 		).toBe('Need 0.5 more ETH in this wallet to mint the selected amount.')
 	})
@@ -350,7 +350,7 @@ void describe('trading helpers', () => {
 				mintAmountInput: '1',
 				shareTokenSupply: 10n * 10n ** 18n,
 				totalRepDeposit: 20n * 10n ** 18n,
-				totalSecurityBondAllowance: 2n * 10n ** 18n,
+				feeEligibleSecurityBondAllowance: 2n * 10n ** 18n,
 			}),
 		).toBe('Minting is unavailable because this pool has complete-set shares but no collateral.')
 	})
@@ -366,7 +366,7 @@ void describe('trading helpers', () => {
 				mintAmountInput: '0.5',
 				shareTokenSupply: 10n ** 18n,
 				totalRepDeposit: 0n,
-				totalSecurityBondAllowance: 2n * 10n ** 18n,
+				feeEligibleSecurityBondAllowance: 2n * 10n ** 18n,
 			}),
 		).toBeUndefined()
 	})

@@ -10,6 +10,19 @@ const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
 const alternateSecurityPoolAddress = getAddress('0x00000000000000000000000000000000000000a2')
 const shareTokenAddress = getAddress('0x00000000000000000000000000000000000000b2')
 const defaultForkData = [0n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, false, false, 0n] as const
+const createPoolAccountingSnapshot = (completeSetCollateralAmount = 0n, totalSecurityBondAllowance = 0n, feeEligibleSecurityBondAllowance = totalSecurityBondAllowance) => ({
+	completeSetCollateralAmount,
+	currentRetentionRate: 0n,
+	feeEligibleSecurityBondAllowance,
+	feeIndex: 0n,
+	feeIndexRemainder: 0n,
+	lastUpdatedFeeAccumulator: 0n,
+	totalFeesOwedRemainder: 0n,
+	totalFeesOwedToVaults: 0n,
+	totalSecurityBondAllowance,
+	unallocatedFeeReserve: 0n,
+	uncheckpointedFeeEligibleAllowance: 0n,
+})
 
 describe('securityPools protocol client', () => {
 	test('loadSecurityPoolPage preserves exact offsets above the safe multiplication range', async () => {
@@ -44,7 +57,7 @@ describe('securityPools protocol client', () => {
 				const contracts = request.contracts
 				const firstContract = contracts[0]
 				if (getContractFunctionName(firstContract) === 'completeSetCollateralAmount') {
-					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, 0n, 0n]
+					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 0n]
 				}
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
@@ -91,7 +104,7 @@ describe('securityPools protocol client', () => {
 			multicall: async request => {
 				const firstContract = request.contracts[0]
 				if (getContractFunctionName(firstContract) === 'completeSetCollateralAmount') {
-					return [0n, 10n, [0n, zeroAddress, 0n, 'bad-migrated-rep', 0n, 0n, 0n, 0n, false, false, 0n], 0n, 0n, 3n, 0n, 0n, 0n, 0n, 0n]
+					return [0n, 10n, [0n, zeroAddress, 0n, 'bad-migrated-rep', 0n, 0n, 0n, 0n, false, false, 0n], 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 0n]
 				}
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
@@ -137,8 +150,8 @@ describe('securityPools protocol client', () => {
 				if (getContractFunctionName(firstContract) === 'completeSetCollateralAmount') {
 					const contractAddress = Reflect.get(firstContract, 'address')
 					if (typeof contractAddress !== 'string') throw new Error('Expected security pool address')
-					if (getAddress(contractAddress) === parentSecurityPoolAddress) return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, 0n, 1n]
-					if (getAddress(contractAddress) === childSecurityPoolAddress) return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, 0n, 1n]
+					if (getAddress(contractAddress) === parentSecurityPoolAddress) return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 1n]
+					if (getAddress(contractAddress) === childSecurityPoolAddress) return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 1n]
 				}
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
@@ -202,8 +215,8 @@ describe('securityPools protocol client', () => {
 				if (getContractFunctionName(firstContract) === 'completeSetCollateralAmount') {
 					const contractAddress = Reflect.get(firstContract, 'address')
 					if (typeof contractAddress !== 'string') throw new Error('Expected security pool address')
-					if (getAddress(contractAddress) === parentSecurityPoolAddress) return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, 0n, 1n]
-					if (getAddress(contractAddress) === childSecurityPoolAddress) return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, 0n, 1n]
+					if (getAddress(contractAddress) === parentSecurityPoolAddress) return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 1n]
+					if (getAddress(contractAddress) === childSecurityPoolAddress) return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 0n, createPoolAccountingSnapshot(), 1n]
 				}
 				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
@@ -267,7 +280,7 @@ describe('securityPools protocol client', () => {
 				const firstContract = contracts[0]
 				const functionName = getContractFunctionName(firstContract)
 				if (functionName === 'completeSetCollateralAmount') {
-					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, 0n, 0n]
+					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, createPoolAccountingSnapshot(), 0n]
 				}
 				if (functionName === 'questions') return [questionTuple, 1n]
 				if (functionName === 'securityVaults') {
@@ -332,7 +345,7 @@ describe('securityPools protocol client', () => {
 				const firstContract = contracts[0]
 				const functionName = getContractFunctionName(firstContract)
 				if (functionName === 'completeSetCollateralAmount') {
-					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, 0n, 0n]
+					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, createPoolAccountingSnapshot(), 0n]
 				}
 				if (functionName === 'questions') return [questionTuple, 1n]
 				if (functionName === 'securityVaults') {
@@ -397,7 +410,7 @@ describe('securityPools protocol client', () => {
 				const firstContract = contracts[0]
 				const functionName = getContractFunctionName(firstContract)
 				if (functionName === 'completeSetCollateralAmount') {
-					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, 0n, 0n]
+					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 100n, createPoolAccountingSnapshot(), 0n]
 				}
 				if (functionName === 'questions') return [questionTuple, 1n]
 				if (functionName === 'securityVaults') {
@@ -459,7 +472,7 @@ describe('securityPools protocol client', () => {
 				const firstContract = contracts[0]
 				const functionName = getContractFunctionName(firstContract)
 				if (functionName === 'completeSetCollateralAmount') {
-					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 5n, 0n, 0n]
+					return [0n, 10n, defaultForkData, 0n, 0n, 3n, 0n, 0n, 5n, createPoolAccountingSnapshot(0n, 9n, 3n), 0n]
 				}
 				if (functionName === 'questions') return [questionTuple, 1n]
 				if (functionName === 'poolOwnershipToRep') return [5n]
@@ -538,7 +551,9 @@ describe('securityPools protocol client', () => {
 		expect(vaultSummaryCalls).toEqual([securityPoolAddress])
 		expect(selectedPool.hasLoadedVaults).toBe(true)
 		expect(selectedPool.vaults).toHaveLength(1)
+		expect(selectedPool.feeEligibleSecurityBondAllowance).toBe(3n)
 		expect(selectedPool.totalRepDeposit).toBe(5n)
+		expect(selectedPool.totalSecurityBondAllowance).toBe(9n)
 		expect(deferredPool.hasLoadedVaults).toBe(false)
 		expect(deferredPool.vaults).toEqual([])
 		expect(deferredPool.vaultCount).toBe(2n)
@@ -555,7 +570,7 @@ describe('securityPools protocol client', () => {
 					if (typeof address !== 'string') throw new Error('Expected security pool address')
 					requestedAddresses.push(getAddress(address))
 				}
-				return [11n, 22n, 33n, 44n]
+				return [createPoolAccountingSnapshot(11n, 44n, 17n), 22n, 33n]
 			}),
 		}
 
@@ -563,11 +578,12 @@ describe('securityPools protocol client', () => {
 
 		expect(capacity).toEqual({
 			completeSetCollateralAmount: 11n,
+			feeEligibleSecurityBondAllowance: 17n,
 			shareTokenSupply: 22n,
 			totalRepDeposit: 33n,
 			totalSecurityBondAllowance: 44n,
 		})
-		expect(requestedFunctionNames).toEqual(['completeSetCollateralAmount', 'shareTokenSupply', 'getTotalRepBalance', 'totalSecurityBondAllowance'])
-		expect(requestedAddresses).toEqual([securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress])
+		expect(requestedFunctionNames).toEqual(['getPoolAccountingSnapshot', 'shareTokenSupply', 'getTotalRepBalance'])
+		expect(requestedAddresses).toEqual([securityPoolAddress, securityPoolAddress, securityPoolAddress])
 	})
 })
