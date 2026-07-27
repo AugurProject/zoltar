@@ -1824,14 +1824,7 @@
 						collateralization. Report liquidity is intentionally not required to
 						equal or bound the value of withdrawals, liquidations, allowance
 						changes, pool assets, or cumulative operations that use an accepted
-						price. The profitable-correction deployment assumption is
-						<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a>,
-						cataloged here as <code>ORA-10</code>: at least one
-						adequately capitalized participant takes every profitable correction
-						and obtains inclusion before settlement. The separate
-						<a href="./security-model.html#assumption-a17">A17</a> assumption
-						requires economic independence between the coordinator path and a
-						correcting participant.
+						price.
 					</p>
 					<p>
 						The protocol also makes no bounded-liveness claim for a pending
@@ -1851,8 +1844,7 @@
 						assumption. A concrete bypass of the required position or fee,
 						capital reuse, invalid deadline transition, or cache-conformance
 						failure remains a finding. The mere absence of a report-notional
-						bound or absolute pending-report duration does not. See the
-						<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code> assumption boundary</a>.
+						bound or absolute pending-report duration does not.
 					</p>
 				</div>
 				<div class="invariant-list">
@@ -2007,28 +1999,6 @@
 										<a
 										href="../solidity/contracts/peripherals/openOracle/OpenOracle.sol"
 										><code>settle</code> and dispute validation</a
-										>
-								</dd></div>
-							</dl>
-						</div>
-					</details>
-					<details class="invariant-entry">
-						<summary><code>ORA-10</code><span class="invariant-title">Active arbitrager assumption</span></summary>
-						<div class="invariant-details">
-							<p class="invariant-label">Required deployment assumption</p>
-							<div class="invariant-property">
-								At least one independent, rational, adequately capitalized
-								participant continuously monitors pending reports, acts
-								whenever correction is profitable under the configured
-								economics, and can obtain dispute inclusion before settlement.
-							</div>
-							<p class="invariant-example"><strong>Example:</strong> When a false report can profitably be corrected, at least one funded watcher notices it and gets a correcting dispute included before the deadline.</p>
-							<dl class="invariant-metadata">
-								<div><dt>Type</dt><dd>External assumption</dd></div>
-								<div><dt>Enforcement status</dt><dd>Economic or external assumption</dd></div>
-								<div><dt>Primary evidence</dt><dd>
-									<a href="./security-model.html#oracle-a1"
-										><code>ORACLE-A1</code> security model</a
 										>
 								</dd></div>
 							</dl>

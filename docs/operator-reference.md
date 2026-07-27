@@ -167,10 +167,7 @@ weak-demand loss allocation.
 The coordinator quick reference below covers staging, callback recovery,
 stale-operation handling, and liquidation boundaries. Report sizing, request
 cost, and current OpenOracle parameters are canonical in
-[OpenOracle Integration](./open-oracle-integration.html#parameters); the
-economic assumptions are
-[`ORACLE-A1`](./security-model.html#oracle-a1) and
-[A17](./security-model.html#assumption-a17).
+[OpenOracle Integration](./open-oracle-integration.html#parameters).
 
 | Area | Implementation behavior | Source |
 | --- | --- | --- |

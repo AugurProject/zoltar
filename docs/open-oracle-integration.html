@@ -35,16 +35,6 @@
 						coordinator size the report directly from ETH-denominated gas cost,
 						without assuming a REP/ETH conversion price.
 					</p>
-					<div class="callout" id="active-arbitrager-assumption">
-						<p>
-							<strong><code>ORACLE-A1</code> and A17 are deployment assumptions.</strong>
-							See the <a href="./security-model.html#oracle-a1">profitable-arbitrager assumption</a>
-							and the
-							<a href="./security-model.html#assumption-a17">independent-corrector assumption</a>.
-							This page owns the integration mechanics, excluded guarantees,
-							residual-loss analysis, and review classification.
-						</p>
-					</div>
 					<p>
 						The contract and research context lives in:
 						<a href="https://docs.openoracle.org">OpenOracle documentation</a>,
@@ -181,9 +171,6 @@
 					coordinator computes the initial WETH side from request-time inputs,
 					and the sponsor may request more. The
 					<a href="#security-guarantee">sizing section</a> owns the derivation.
-					The security boundary comprises
-					<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a>
-					and <a href="./security-model.html#assumption-a17">A17</a>.
 				</p>
 			</section>
 
@@ -474,10 +461,9 @@
 						not changing its one-wei marginal step.
 					</p>
 					<p>
-						That sequence is not a cheap permissionless lock under
-						<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a>.
-						An OpenOracle dispute executes one of the current reporter's limit
-						orders as it installs the replacement. Against a report holding
+						That sequence still exposes a profitable correction. An OpenOracle
+						dispute executes one of the current reporter's limit orders as it
+						installs the replacement. Against a report holding
 						<code>H WETH</code> and one atomic REP unit, an independent token2-side
 						disputer can install a sensible REP amount, become current reporter,
 						and inherit the posted <code>H WETH</code> position while the dust reporter
@@ -494,8 +480,7 @@
 						guarantee. A valid finding must account for the executable replacement
 						position and demonstrate a free or underfunded reset despite profitable
 						correction, fee recovery, simultaneous reuse of required capital, an
-						invalid deadline transition, or unauthorized sponsor-queue use. See the
-						<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code> assumption boundary</a>.
+						invalid deadline transition, or unauthorized sponsor-queue use.
 					</p>
 				</div>
 				<p>
@@ -667,12 +652,10 @@
 				<h2>Security Model and Guardrails</h2>
 				<p>
 					Statoblast uses the oracle to preserve solvency accounting around ETH
-					obligations backed by REP. The required economic assumptions are
-					<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a>
-					and <a href="./security-model.html#assumption-a17">A17</a>. Locally,
-					operations that can change REP backing or security-bond exposure must
-					use a fresh, economically contestable REP/ETH price and pass local
-					coordinator checks before they can affect the pool.
+					obligations backed by REP. Operations that can change REP backing or
+					security-bond exposure must use a fresh, economically contestable
+					REP/ETH price and pass local coordinator checks before they can affect
+					the pool.
 				</p>
 				<ul>
 					<li>
@@ -1000,8 +983,6 @@
 			<section id="intentional-economic-tradeoffs">
 				<h2>Intentional Economic Tradeoffs</h2>
 				<p>
-					The required arbitrager assumption is
-					<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a>.
 					The canonical notional and residual-loss analysis follows here.
 					Operationally, the coordinator maintains no notional exposure budget:
 					one fresh price may authorize multiple otherwise-valid operations.
@@ -1025,11 +1006,9 @@
 			<section id="attack-model">
 				<h2>Assumption Boundary and Attack Model</h2>
 				<p>
-					The equations below stress-test failure of
-					<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a>:
-					an attacker excludes correcting transactions until a bad REP/ETH report
-					can settle and enable an outside payoff. They are not a contract-enforced
-					exposure cap.
+					The equations below model an attacker who excludes correcting
+					transactions until a bad REP/ETH report can settle and enable an outside
+					payoff. They are not a contract-enforced exposure cap.
 				</p>
 				<p>
 					OpenOracle's inclusion analysis models an attacker who posts a wrong
@@ -1564,8 +1543,8 @@
 					</ul>
 				</details>
 				<p>
-					The controls below parameterize this stress test; they do not replace
-					<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a>.
+					The controls below parameterize this stress test; they do not establish
+					that a correcting transaction will be included.
 				</p>
 				<ul>
 					<li>
@@ -1627,10 +1606,8 @@
 						when the price is wrong by at least the configured target error and
 						the configured priority-fee, gas-unit, fee, and transaction-inclusion
 						assumptions hold; the check does not prove that an accepted price is
-						externally correct.
-						The remaining assumptions are
-						<a href="./security-model.html#oracle-a1"><code>ORACLE-A1</code></a>
-						and <a href="./security-model.html#assumption-a17">A17</a>.
+						externally correct. It also does not prove that an economically
+						independent correcting participant will obtain inclusion.
 					</li>
 					<li>
 						<strong>Callback scope:</strong> only up to four operations are
