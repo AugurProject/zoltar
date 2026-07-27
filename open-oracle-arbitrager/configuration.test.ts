@@ -71,6 +71,13 @@ function dashboardPut(origin: string, path: string, value: unknown) {
 }
 
 describe('startup configuration', () => {
+	test('describes the UTC-day gas cap without claiming projected reserves are losses', async () => {
+		const child = Bun.spawn([executable, '--help'], { stderr: 'pipe', stdout: 'pipe' })
+		const [exitCode, stderr, stdout] = await Promise.all([child.exited, new Response(child.stderr).text(), new Response(child.stdout).text()])
+		expect(exitCode).toBe(0)
+		expect(`${stdout}${stderr}`).toContain('UTC-day recorded gas + projected entry/lifecycle reserve cap')
+	})
+
 	test.each([
 		['--minimum-remaining-blocks=0', 'Minimum remaining blocks must be from 1 to 1000'],
 		['--minimum-remaining-seconds=86401', 'Minimum remaining seconds must be from 1 to 86400'],

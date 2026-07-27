@@ -247,7 +247,7 @@ Strategy:
   --minimum-remaining-seconds=36 Inclusion buffer for timestamp-based games
   --max-hedge-slippage-bps=50    Maximum atomic hedge slippage
   --lifecycle-gas-reserve-weth=.01 Minimum settlement/withdrawal gas reserve
-  --max-daily-gas-weth=.05       Daily entry and lifecycle gas-loss limit
+  --max-daily-gas-weth=.05       UTC-day recorded gas + projected entry/lifecycle reserve cap
   --max-position-weth=5          Maximum WETH-equivalent position notional
   --max-total-locked-weth=10     Maximum WETH-equivalent locked capital
   --poll-ms=1000                 Latest-head polling interval

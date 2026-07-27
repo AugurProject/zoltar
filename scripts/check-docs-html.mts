@@ -216,6 +216,10 @@ function validateDiagrams(parsedDocument: ParsedHtmlDocument, failures: Validati
 }
 
 function validateDirectedConnectors(parsedDocument: ParsedHtmlDocument, figure: Element, svg: Element, failures: ValidationFailure[]): void {
+	const label = figure.getAttribute('aria-label')?.trim()
+	if (figure.getAttribute('role') !== 'region' || figure.getAttribute('tabindex') !== '0' || label === undefined || label === '') {
+		addFailure(parsedDocument, `${describeElement(figure)} must be a named, keyboard-focusable region`, failures)
+	}
 	const connectors = Array.from(svg.querySelectorAll('path.svg-line'))
 	if (connectors.length === 0) {
 		addFailure(parsedDocument, `${describeElement(figure)} has no directed connectors`, failures)
