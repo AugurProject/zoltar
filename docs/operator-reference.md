@@ -19,8 +19,7 @@ contracts do not preserve.
 
 The [Protocol Security Model](./security-model.html) is normative for the
 accepted oracle assumption, the truth-auction loss-allocation policy,
-deliberately excluded guarantees, and residual risks. In particular, it defines
-`ORACLE-A1` and `AUCTION-A1`.
+deliberately excluded guarantees, and residual risks.
 
 ## Security Review Orientation
 
@@ -153,9 +152,7 @@ ownership, a one-week bidding window, and paged settlement into vault
 accounting. Bids close at <code>auctionStarted + AUCTION_TIME</code>; direct
 auction finalization is allowed at <code>&gt;=</code> that boundary, but the
 public forker wrapper requires the boundary to have passed. The canonical
-clearing rules and examples are in [Truth Auction](./truth-auction.html#clearing), while
-the loss-allocation policy is defined by
-[`AUCTION-A1`](./security-model.html#auction-a1).
+clearing rules and examples are in [Truth Auction](./truth-auction.html#clearing).
 
 | Area | Implementation behavior | Source |
 | --- | --- | --- |
