@@ -103,6 +103,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(pageSource).toContain('Observed dispute paths')
 	expect(pageSource).toContain('Spot (WETH/token)')
 	expect(pageSource).toContain('id="launch-gate-link"')
+	expect(pageSource).toContain('href="https://augurproject.github.io/zoltar/docs/oracle-a1-launch-analysis.html"')
 	expect(pageSource).toContain('id="launch-notice"')
 	const favicon = await fetch(`${origin}/favicon.ico`)
 	expect(favicon.status).toBe(204)

@@ -45,8 +45,8 @@
 							then executable hedge proceeds are reduced by oracle fees, gas,
 							and a safety margin. The launch gate passes only when the
 							fully reserved net profit meets both the 0.01 WETH absolute
-							minimum and 100 basis points of hedge cost in both error
-							directions.
+							minimum and 100 basis points of the direction-specific return
+							basis in both error directions.
 						</desc>
 						<rect
 							class="svg-blue"
@@ -100,8 +100,9 @@
 						<span class="figure-label">Launch Gate</span>Mid-price agreement is
 						insufficient; at executable size, fully reserved net profit must
 						be at least
-						<code>max(0.01 WETH, 100 bps of hedge cost)</code> in both error
-						directions.
+						<code>max(0.01 WETH, 100 bps of H)</code> in both error directions,
+						where <code>H</code> is the direction-specific return basis defined
+						below.
 					</p>
 				</figure>
 				<p>
@@ -132,6 +133,17 @@
 					>
 					remains the canonical owner of configured fee, multiplier,
 					target-error, and sizing values.
+				</p>
+				<p>
+					Let <code>H</code> be the WETH return basis used by the
+					<code>minimumProfitBps</code> gate. When the arbitrager sells token 2,
+					<code>H = W + floor(Wf/P) + floor(Wp/P)</code>: the current report's
+					WETH plus its reporter and protocol fees. When the arbitrager buys
+					token 2, <code>H</code> is the exact-output quoted WETH input required
+					to buy <code>R + floor(Rf/P) + floor(Rp/P)</code> token 2. A candidate
+					passes the return gate exactly when its fully reserved net profit
+					<code>N</code> satisfies
+					<code>N × 10,000 ≥ H × minimumProfitBps</code>; equality passes.
 				</p>
 				<p>
 					OpenOracle derives the swap side from the proposed replacement ratio;
@@ -511,7 +523,9 @@
 									bot's direction-specific rounding.
 								</td>
 								<td>
-									At least the greater of 0.01 WETH or 100 bps of hedge cost
+									At least the greater of 0.01 WETH or 100 bps of
+									<code>H</code>, the direction-specific return basis defined
+									above
 								</td>
 							</tr>
 							<tr>

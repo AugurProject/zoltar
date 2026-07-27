@@ -228,7 +228,7 @@ Modes:
 
 Strategy:
   --minimum-profit-weth=0.01     Absolute modeled net-profit floor
-  --minimum-profit-bps=100       Modeled return floor relative to hedge cost
+  --minimum-profit-bps=100       Return floor relative to direction-specific cost basis
   --max-spot-twap-ticks=100      Maximum accepted Uniswap tick deviation
   --twap-seconds=1800            Uniswap TWAP window
   --minimum-remaining-blocks=3   Inclusion buffer for block-based games

@@ -336,9 +336,11 @@ locked through later dispute rounds.
   `(callbackGasLimit + 1,050,000) × gas price`.
 
 The resulting fully reserved value must satisfy both the absolute minimum-profit
-floor and the basis-point floor relative to quoted hedge cost. The
+floor and a direction-specific basis-point floor. The return basis is the current
+report's WETH plus WETH fees when selling token 2, and the exact-output quoted WETH
+input when buying token 2. The
 [ORACLE-A1 launch analysis](../docs/oracle-a1-launch-analysis.html#gate)
-owns the deployment policy for those gates.
+owns the canonical definition and deployment policy for those gates.
 
 The dashboard balance calculation reports:
 
@@ -600,7 +602,7 @@ saved value nor a higher-precedence override exists:
 | Setting | Default | Flag | Effect |
 | --- | ---: | --- | --- |
 | Minimum profit | `0.01 WETH` | `--minimum-profit-weth` | Rejects opportunities below an absolute modeled net profit. |
-| Minimum return | `100 bps` | `--minimum-profit-bps` | Requires modeled net profit relative to quoted hedge cost. |
+| Minimum return | `100 bps` | `--minimum-profit-bps` | Requires modeled net profit relative to the direction-specific return basis: report WETH plus fees when selling token 2, or exact-output quoted WETH input when buying token 2. |
 | Spot/TWAP distance | `100 ticks` | `--max-spot-twap-ticks` | Rejects pools whose current tick is too far from the TWAP. |
 | TWAP window | `1800 seconds` | `--twap-seconds` | Controls the Uniswap manipulation-resistance window. Minimum: 60 seconds. |
 | Remaining time | `36 seconds` | `--minimum-remaining-seconds` | Inclusion buffer for timestamp-based games. |

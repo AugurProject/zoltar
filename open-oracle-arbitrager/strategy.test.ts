@@ -54,6 +54,20 @@ describe('OpenOracle arbitrage strategy', () => {
 		expect(calculateTrackedNetProfitEth(buy.profitBeforeGasWeth, 110_000n)).toBe(-10_000n)
 	})
 
+	test('applies the return floor to each direction-specific cost basis at its exact boundary', () => {
+		const sellAtThreshold = evaluateSellRep(game, 1_028_110n, 7_000n)
+		expect(sellAtThreshold.hedgeCostWeth).toBe(1_011_000n)
+		expect(sellAtThreshold.netProfitWeth).toBe(10_110n)
+		expect(meetsProfitThreshold(sellAtThreshold, 0n, 100n)).toBe(true)
+		expect(meetsProfitThreshold(evaluateSellRep(game, 1_028_109n, 7_000n), 0n, 100n)).toBe(false)
+
+		const buyAtThreshold = evaluateBuyRep(game, 900_000n, 91_000n)
+		expect(buyAtThreshold.hedgeCostWeth).toBe(900_000n)
+		expect(buyAtThreshold.netProfitWeth).toBe(9_000n)
+		expect(meetsProfitThreshold(buyAtThreshold, 0n, 100n)).toBe(true)
+		expect(meetsProfitThreshold(evaluateBuyRep(game, 900_000n, 91_001n), 0n, 100n)).toBe(false)
+	})
+
 	test('increments by one after the escalation halt', () => {
 		expect(
 			calculateNextAmount1({
