@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { privateKeyToAccount, type Hex } from '@zoltar/shared/ethereum'
-import { loadPositionJournal, manuallyReconcilePosition, savePositionJournal } from './position-store.js'
+import { acquirePositionJournalLock, loadPositionJournal, manuallyReconcilePosition, savePositionJournal } from './position-store.js'
 
 const usage = `Close one fully investigated recovery-required position without submitting a transaction.
 
@@ -50,23 +50,28 @@ const account = privateKeyToAccount(privateKeyValue as Hex)
 const positionFile = values.get('position-file')
 const reportId = values.get('report-id')
 if (positionFile === undefined || reportId === undefined) throw new Error('Position file and report id are required')
-const positions = await loadPositionJournal(positionFile)
-const index = positions.findIndex(position => position.reportId === reportId)
-if (index === -1) throw new Error(`Position ${reportId} was not found`)
-const position = positions[index]
-if (position === undefined) throw new Error(`Position ${reportId} was not found`)
-const reconciled = manuallyReconcilePosition(position, {
-	confirmedReportId: values.get('confirm-report-id') ?? '',
-	evidence: values.get('evidence') ?? '',
-	externalCostEth: values.get('external-cost-eth') ?? '',
-	finalWalletToken: values.get('final-wallet-token') ?? '',
-	finalWalletWeth: values.get('final-wallet-weth') ?? '',
-	note: values.get('note') ?? '',
-	pnlUnavailable,
-	realizedNetProfitEth: values.get('realized-net-profit-eth'),
-	recordedBy: account.address,
-})
-const updated = [...positions]
-updated[index] = reconciled
-await savePositionJournal(positionFile, updated)
-console.log(`report=${reportId} status=closed signer=${account.address} pnl=${reconciled.manualReconciliation?.pnlStatus ?? 'unavailable'} journal=${positionFile}`)
+const journalLock = await acquirePositionJournalLock(positionFile)
+try {
+	const positions = await loadPositionJournal(positionFile)
+	const index = positions.findIndex(position => position.reportId === reportId)
+	if (index === -1) throw new Error(`Position ${reportId} was not found`)
+	const position = positions[index]
+	if (position === undefined) throw new Error(`Position ${reportId} was not found`)
+	const reconciled = manuallyReconcilePosition(position, {
+		confirmedReportId: values.get('confirm-report-id') ?? '',
+		evidence: values.get('evidence') ?? '',
+		externalCostEth: values.get('external-cost-eth') ?? '',
+		finalWalletToken: values.get('final-wallet-token') ?? '',
+		finalWalletWeth: values.get('final-wallet-weth') ?? '',
+		note: values.get('note') ?? '',
+		pnlUnavailable,
+		realizedNetProfitEth: values.get('realized-net-profit-eth'),
+		recordedBy: account.address,
+	})
+	const updated = [...positions]
+	updated[index] = reconciled
+	await savePositionJournal(positionFile, updated)
+	console.log(`report=${reportId} status=closed signer=${account.address} pnl=${reconciled.manualReconciliation?.pnlStatus ?? 'unavailable'} journal=${positionFile}`)
+} finally {
+	await journalLock.release()
+}

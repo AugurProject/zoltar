@@ -86,7 +86,7 @@ import {
 import { appendPriceHistory, availableTokenBalances, createTokenCatalogTracker, discoverAugurRepTokens, formatTokenAmount, loadPriceHistory, loadTokenMarkets, missingPricePoints, pricePoints } from './market-monitor.js'
 import { defaultRpcUrl, networkConfiguration, parseNetworkName, type NetworkConfiguration } from './network.js'
 import { exactWithdrawalMatches, expectedWithdrawalToken2, hedgedProfitBeforeGasWeth, realizedNetProfitWeth, recoveredHedgedProfitBeforeGasWeth } from './position-accounting.js'
-import { loadPositionJournal, savePositionJournal, type PositionRecord } from './position-store.js'
+import { acquireExecutionSignerLock, acquirePositionJournalLock, loadPositionJournal, savePositionJournal, type ExclusiveProcessLock, type PositionRecord } from './position-store.js'
 import { quorumValue } from './read-quorum.js'
 import { bestSuccessful, compactFinalityWindow, pollUntilStopped, replaceOverlap } from './resilience.js'
 import { adjustedNetProfitWeth, DEFAULT_RISK_LIMITS, riskLimitMismatch, type RiskLimits } from './safety-controls.js'
@@ -1766,16 +1766,17 @@ async function inspectReport(
 	return { candidate, opportunity }
 }
 
-async function main() {
-	if (process.argv.includes('--help') || process.argv.includes('-h')) {
-		printHelp()
-		return
-	}
-	const config = await loadConfiguration()
+type ExecutionLockManager = {
+	acquireSigner: (account: Address) => Promise<ExclusiveProcessLock>
+	release: (lock: ExclusiveProcessLock) => Promise<void>
+}
+
+async function runOperator(config: Configuration, lockManager: ExecutionLockManager | undefined, initialSignerLock: ExclusiveProcessLock | undefined) {
 	if (config.lookbackBlocks < 0n) throw new Error('lookback-blocks must be a non-negative integer')
 	if (!Number.isSafeInteger(config.uiPort) || config.uiPort < 1 || config.uiPort > 65_535) throw new Error('ui-port must be an integer from 1 to 65535')
 	if (config.ui && config.once) throw new Error('--ui cannot be combined with --once')
 	if (config.execute && config.privateKey === undefined && !config.ui) throw new Error('--execute requires PRIVATE_KEY unless --ui is used to unlock the signer')
+	if (config.execute && lockManager === undefined) throw new Error('Execution requires exclusive journal and signer lock management')
 	if (config.execute) await ensureExecutionHistoryWritable(config.historyFile)
 	let positions = await loadPositionJournal(config.positionFile)
 	if (config.execute) await savePositionJournal(config.positionFile, positions)
@@ -1855,6 +1856,8 @@ async function main() {
 	let pendingSubmission: SubmissionSettings | undefined
 	let pendingConnectivity: ConnectivitySettings | undefined
 	let pendingPrivateKey: Hex | undefined
+	let activeSignerLock = initialSignerLock
+	let pendingSignerLock: ExclusiveProcessLock | undefined
 	let pendingTokenAddresses: Address[] | undefined
 	let signerUpdatePending = false
 	let cursor: SyncCursor | undefined
@@ -1931,10 +1934,27 @@ async function main() {
 					const candidate = signerCandidate(value['privateKey'])
 					const rememberSigner = candidate.privateKey !== undefined && value['rememberSigner']
 					return queueSettingsUpdate(async () => {
+						const keepsActiveSigner = candidate.address !== undefined && fixedState.wallet !== undefined && candidate.address.toLowerCase() === fixedState.wallet.toLowerCase()
+						const keepsPendingSigner = candidate.address !== undefined && fixedState.queuedWallet !== undefined && fixedState.queuedWallet !== null && candidate.address.toLowerCase() === fixedState.queuedWallet.toLowerCase() && pendingSignerLock !== undefined
+						let acquiredSignerLock: ExclusiveProcessLock | undefined
+						if (config.execute && candidate.address !== undefined && !keepsActiveSigner && !keepsPendingSigner) {
+							if (lockManager === undefined) throw new Error('Execution signer lock management is unavailable')
+							acquiredSignerLock = await lockManager.acquireSigner(candidate.address)
+						}
 						let persistedPrivateKey = config.persistedPrivateKey
 						if (candidate.privateKey === undefined) persistedPrivateKey = undefined
 						else if (rememberSigner) persistedPrivateKey = candidate.privateKey
-						await persistSettings({ ...currentPersistedSettings(), privateKey: persistedPrivateKey })
+						try {
+							await persistSettings({ ...currentPersistedSettings(), privateKey: persistedPrivateKey })
+						} catch (error) {
+							if (acquiredSignerLock !== undefined && lockManager !== undefined) await lockManager.release(acquiredSignerLock)
+							throw error
+						}
+						let nextPendingSignerLock = acquiredSignerLock
+						if (keepsActiveSigner) nextPendingSignerLock = undefined
+						else if (keepsPendingSigner) nextPendingSignerLock = pendingSignerLock
+						if (pendingSignerLock !== undefined && pendingSignerLock !== nextPendingSignerLock && lockManager !== undefined) await lockManager.release(pendingSignerLock)
+						pendingSignerLock = nextPendingSignerLock
 						config.persistedPrivateKey = persistedPrivateKey
 						pendingPrivateKey = candidate.privateKey
 						signerUpdatePending = true
@@ -2043,12 +2063,18 @@ async function main() {
 					await authenticateConfiguredDeployments(readClients, config)
 				}
 				if (signerUpdatePending) {
+					const nextSignerLock = pendingPrivateKey === undefined ? undefined : (pendingSignerLock ?? activeSignerLock)
+					if (config.execute && pendingPrivateKey !== undefined && nextSignerLock === undefined) throw new Error('Queued execution signer does not hold an exclusive process lock')
+					const previousSignerLock = activeSignerLock
+					activeSignerLock = nextSignerLock
+					pendingSignerLock = undefined
 					config.privateKey = pendingPrivateKey
 					wallet = createWallet()
 					fixedState.wallet = wallet?.account.address
 					fixedState.queuedWallet = undefined
 					clearWalletDerivedState(state)
 					signerUpdatePending = false
+					if (previousSignerLock !== undefined && previousSignerLock !== activeSignerLock && lockManager !== undefined) await lockManager.release(previousSignerLock)
 				}
 				let nextError: string | undefined
 				if (pendingHistory.length !== 0) {
@@ -2259,6 +2285,42 @@ async function main() {
 	} finally {
 		state.status = 'stopped'
 		dashboard?.stop()
+	}
+}
+
+async function main() {
+	if (process.argv.includes('--help') || process.argv.includes('-h')) {
+		printHelp()
+		return
+	}
+	const config = await loadConfiguration()
+	if (!config.execute) {
+		await runOperator(config, undefined, undefined)
+		return
+	}
+	const heldLocks = new Set<ExclusiveProcessLock>()
+	const hold = async (lockPromise: Promise<ExclusiveProcessLock>) => {
+		const lock = await lockPromise
+		heldLocks.add(lock)
+		return lock
+	}
+	const release = async (lock: ExclusiveProcessLock) => {
+		if (!heldLocks.delete(lock)) return
+		await lock.release()
+	}
+	try {
+		await hold(acquirePositionJournalLock(config.positionFile))
+		const initialSignerLock = config.privateKey === undefined ? undefined : await hold(acquireExecutionSignerLock(config.network.chain.id, privateKeyToAccount(config.privateKey).address))
+		await runOperator(
+			config,
+			{
+				acquireSigner: account => hold(acquireExecutionSignerLock(config.network.chain.id, account)),
+				release,
+			},
+			initialSignerLock,
+		)
+	} finally {
+		for (const lock of [...heldLocks].reverse()) await release(lock)
 	}
 }
 

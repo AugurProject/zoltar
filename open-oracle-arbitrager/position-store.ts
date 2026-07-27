@@ -1,7 +1,36 @@
 import { randomUUID } from 'node:crypto'
-import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
 import { getAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
+
+type PositionJournalFileHandle = {
+	chmod: (mode: number) => Promise<unknown>
+	close: () => Promise<unknown>
+	sync: () => Promise<unknown>
+	writeFile: (data: string, options: { encoding: 'utf8' }) => Promise<unknown>
+}
+
+export type PositionJournalFilesystem = {
+	mkdir: (path: string, options: { mode: number; recursive: true }) => Promise<unknown>
+	open: (path: string, flags: 'r' | 'wx', mode?: number) => Promise<PositionJournalFileHandle>
+	readFile: (path: string, encoding: 'utf8') => Promise<string>
+	rename: (oldPath: string, newPath: string) => Promise<unknown>
+	rm: (path: string, options: { force: true }) => Promise<unknown>
+}
+
+export type ExclusiveProcessLock = {
+	path: string
+	release: () => Promise<void>
+}
+
+const positionJournalFilesystem: PositionJournalFilesystem = {
+	mkdir,
+	open,
+	readFile,
+	rename,
+	rm,
+}
 
 export type ManualReconciliation = {
 	evidence: string
@@ -228,21 +257,91 @@ export async function loadPositionJournal(path: string) {
 	return positions
 }
 
-export async function savePositionJournal(path: string, positions: readonly PositionRecord[]) {
+async function acquireExclusiveProcessLock(lockPath: string, subject: string, metadata: Record<string, string | number>, filesystem: PositionJournalFilesystem): Promise<ExclusiveProcessLock> {
+	await filesystem.mkdir(dirname(lockPath), { mode: 0o700, recursive: true })
+	let handle: PositionJournalFileHandle
+	try {
+		handle = await filesystem.open(lockPath, 'wx', 0o600)
+	} catch (error) {
+		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'EEXIST') {
+			let owner = 'owner metadata unavailable'
+			try {
+				owner = (await filesystem.readFile(lockPath, 'utf8')).trim()
+			} catch (readError) {
+				void readError
+			}
+			throw new Error(`${subject} is already locked (${owner}). Stop the other process before removing ${lockPath}.`)
+		}
+		throw error
+	}
+	const payload = `${JSON.stringify({ acquiredAt: new Date().toISOString(), ...metadata, pid: process.pid })}\n`
+	try {
+		await handle.writeFile(payload, { encoding: 'utf8' })
+		await handle.chmod(0o600)
+		await handle.sync()
+	} catch (error) {
+		await handle.close()
+		await filesystem.rm(lockPath, { force: true })
+		throw error
+	}
+	let released = false
+	return {
+		path: lockPath,
+		release: async () => {
+			if (released) return
+			released = true
+			await handle.close()
+			let current: string
+			try {
+				current = await filesystem.readFile(lockPath, 'utf8')
+			} catch (error) {
+				throw new Error(`Position journal lock ${lockPath} disappeared before release: ${error instanceof Error ? error.message : String(error)}`)
+			}
+			if (current !== payload) throw new Error(`Position journal lock ${lockPath} changed ownership before release`)
+			await filesystem.rm(lockPath, { force: true })
+		},
+	}
+}
+
+export function acquirePositionJournalLock(path: string, filesystem: PositionJournalFilesystem = positionJournalFilesystem) {
+	const resolvedPath = resolve(path)
+	return acquireExclusiveProcessLock(`${resolvedPath}.lock`, `Position journal ${resolvedPath}`, { journal: resolvedPath }, filesystem)
+}
+
+export function acquireExecutionSignerLock(chainId: number, account: Address, filesystem: PositionJournalFilesystem = positionJournalFilesystem) {
+	if (!Number.isSafeInteger(chainId) || chainId <= 0) throw new Error('Execution signer lock chain id is invalid')
+	const signer = getAddress(account)
+	const lockPath = join(tmpdir(), 'zoltar-open-oracle-arbitrager-locks', `${chainId.toString()}-${signer.toLowerCase()}.lock`)
+	return acquireExclusiveProcessLock(lockPath, `Execution signer ${signer} on chain ${chainId.toString()}`, { chainId, signer }, filesystem)
+}
+
+export async function savePositionJournal(path: string, positions: readonly PositionRecord[], filesystem: PositionJournalFilesystem = positionJournalFilesystem) {
 	const ids = new Set<string>()
 	for (const position of positions) {
 		parsePosition(position)
 		if (ids.has(position.reportId)) throw new Error(`Duplicate position journal report id ${position.reportId}`)
 		ids.add(position.reportId)
 	}
-	await mkdir(dirname(path), { mode: 0o700, recursive: true })
+	await filesystem.mkdir(dirname(path), { mode: 0o700, recursive: true })
 	const temporaryPath = `${path}.${process.pid.toString()}.${randomUUID()}.tmp`
 	try {
-		await writeFile(temporaryPath, `${JSON.stringify({ positions, version: 1 }, undefined, 2)}\n`, { encoding: 'utf8', flag: 'wx', mode: 0o600 })
-		await chmod(temporaryPath, 0o600)
-		await rename(temporaryPath, path)
+		const fileHandle = await filesystem.open(temporaryPath, 'wx', 0o600)
+		try {
+			await fileHandle.writeFile(`${JSON.stringify({ positions, version: 1 }, undefined, 2)}\n`, { encoding: 'utf8' })
+			await fileHandle.chmod(0o600)
+			await fileHandle.sync()
+		} finally {
+			await fileHandle.close()
+		}
+		await filesystem.rename(temporaryPath, path)
+		const directoryHandle = await filesystem.open(dirname(path), 'r')
+		try {
+			await directoryHandle.sync()
+		} finally {
+			await directoryHandle.close()
+		}
 	} catch (error) {
-		await rm(temporaryPath, { force: true })
+		await filesystem.rm(temporaryPath, { force: true })
 		throw error
 	}
 }

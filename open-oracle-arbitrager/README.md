@@ -644,11 +644,23 @@ Other startup-only options:
 ### Durable position journal
 
 The default journal is `.open-oracle-arbitrager/positions-mainnet.json` or
-`.open-oracle-arbitrager/positions-sepolia.json`. Writes use an owner-only temporary
-file and atomic rename. A malformed journal stops startup rather than discarding
+`.open-oracle-arbitrager/positions-sepolia.json`. Before relay delivery, writes use
+an owner-only temporary file, sync its complete contents, atomically rename it, and
+sync the parent directory. A malformed journal stops startup rather than discarding
 recovery state. Back it up with the settings and history files, never share one
 override across networks or execution signers, and preserve it until every position
 is closed and reconciled.
+
+Execute mode holds two exclusive lifetime locks: `<position-file>.lock` prevents
+concurrent writers, while an operating-system temporary-directory lock prevents a
+second local process from using the same signer on the same chain with a different
+journal. The reconciliation command also holds the journal lock. A competing
+process fails before journal load, signing, or submission. Lock files include the
+owner PID and acquisition time and are removed on an orderly exit. After a hard
+kill, verify that no bot or reconciliation process is still running before removing
+an orphan lock; never delete a live lock to force startup. Local locks cannot
+coordinate separate hosts, so never run the same execution signer on more than one
+machine.
 
 The state sequence is:
 

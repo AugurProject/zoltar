@@ -21,6 +21,7 @@ import {
 	waitForResolvedTransaction,
 } from './execution-orchestration.js'
 import type { ExecutionRecord } from './operator-state.js'
+import { savePositionJournal, type PositionJournalFilesystem } from './position-store.js'
 import { assertSubmissionWindowOpen } from './transaction-submission.js'
 
 const address = '0x0000000000000000000000000000000000000001' as Address
@@ -203,6 +204,51 @@ describe('funded execution orchestration', () => {
 		)
 		expect(result).toBe('submitted')
 		expect(calls).toEqual(['persist', 'submit'])
+	})
+
+	test('does not submit until journal contents and directory entry are synced', async () => {
+		const calls: string[] = []
+		let opened = 0
+		const handle = (name: 'directory' | 'file') => ({
+			chmod: async () => {
+				calls.push(`${name}:chmod`)
+			},
+			close: async () => {
+				calls.push(`${name}:close`)
+			},
+			sync: async () => {
+				calls.push(`${name}:sync`)
+			},
+			writeFile: async () => {
+				calls.push(`${name}:write`)
+			},
+		})
+		const filesystem: PositionJournalFilesystem = {
+			mkdir: async () => {
+				calls.push('mkdir')
+			},
+			open: async (_path, flags) => {
+				calls.push(`open:${flags}`)
+				opened += 1
+				return handle(opened === 1 ? 'file' : 'directory')
+			},
+			readFile: async () => {
+				throw new Error('read is unexpected')
+			},
+			rename: async () => {
+				calls.push('rename')
+			},
+			rm: async () => {
+				calls.push('rm')
+			},
+		}
+		await journaledSubmission(
+			() => savePositionJournal('/positions.json', [], filesystem),
+			async () => {
+				calls.push('submit')
+			},
+		)
+		expect(calls).toEqual(['mkdir', 'open:wx', 'file:write', 'file:chmod', 'file:sync', 'file:close', 'rename', 'open:r', 'directory:sync', 'directory:close', 'submit'])
 	})
 
 	test('does not write the pending-position journal when the pre-submission guard fails', async () => {

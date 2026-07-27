@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getAddress } from '@zoltar/shared/ethereum'
-import { loadPositionJournal, manuallyReconcilePosition, savePositionJournal, type PositionRecord } from './position-store.js'
+import { acquireExecutionSignerLock, acquirePositionJournalLock, loadPositionJournal, manuallyReconcilePosition, savePositionJournal, type PositionJournalFilesystem, type PositionRecord } from './position-store.js'
 
 const directories: string[] = []
 
@@ -12,6 +12,80 @@ afterEach(async () => {
 })
 
 describe('durable OpenOracle position journal', () => {
+	test('allows only one lifetime owner of a journal', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-position-'))
+		directories.push(directory)
+		const path = join(directory, 'positions.json')
+		const first = await acquirePositionJournalLock(path)
+		await expect(acquirePositionJournalLock(path)).rejects.toThrow('already locked')
+		await first.release()
+		const second = await acquirePositionJournalLock(path)
+		await second.release()
+	})
+
+	test('allows only one process to execute with a signer on a network', async () => {
+		const signer = getAddress('0x0000000000000000000000000000000000000002')
+		const first = await acquireExecutionSignerLock(31_337, signer)
+		await expect(acquireExecutionSignerLock(31_337, signer)).rejects.toThrow('already locked')
+		await first.release()
+		const second = await acquireExecutionSignerLock(31_337, signer)
+		await second.release()
+	})
+
+	test('syncs journal contents and the parent directory before returning', async () => {
+		const events: string[] = []
+		let opened = 0
+		const fileHandle = {
+			chmod: async () => {
+				events.push('file:chmod')
+			},
+			close: async () => {
+				events.push('file:close')
+			},
+			sync: async () => {
+				events.push('file:sync')
+			},
+			writeFile: async () => {
+				events.push('file:write')
+			},
+		}
+		const directoryHandle = {
+			chmod: async () => {
+				throw new Error('directory chmod is unexpected')
+			},
+			close: async () => {
+				events.push('directory:close')
+			},
+			sync: async () => {
+				events.push('directory:sync')
+			},
+			writeFile: async () => {
+				throw new Error('directory write is unexpected')
+			},
+		}
+		const filesystem: PositionJournalFilesystem = {
+			mkdir: async () => {
+				events.push('mkdir')
+			},
+			open: async (_path, flags) => {
+				events.push(`open:${flags}`)
+				opened += 1
+				return opened === 1 ? fileHandle : directoryHandle
+			},
+			readFile: async () => {
+				throw new Error('read is unexpected')
+			},
+			rename: async () => {
+				events.push('rename')
+			},
+			rm: async () => {
+				events.push('rm')
+			},
+		}
+		await savePositionJournal('/positions.json', [], filesystem)
+		expect(events).toEqual(['mkdir', 'open:wx', 'file:write', 'file:chmod', 'file:sync', 'file:close', 'rename', 'open:r', 'directory:sync', 'directory:close'])
+	})
+
 	test('round-trips a recoverable position with owner-only storage', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-position-'))
 		directories.push(directory)
