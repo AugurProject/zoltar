@@ -230,6 +230,8 @@ export async function simulateBundle(parameters: { address: Address; relayUrl: s
 	})
 	if (typeof result !== 'object' || result === null || Array.isArray(result)) throw new Error('Relay returned an invalid bundle simulation')
 	const record = result as Record<string, unknown>
+	const returnedStateBlockNumber = rpcQuantity(record['stateBlockNumber'], 'simulation state block number')
+	if (returnedStateBlockNumber !== parameters.stateBlockNumber) throw new Error('Relay simulated the bundle against an unexpected state block')
 	const expectedIdentity = bundleIdentity(parameters.transactions)
 	const returnedBundleHash = record['bundleHash']
 	if (typeof returnedBundleHash !== 'string' || returnedBundleHash.toLowerCase() !== expectedIdentity.bundleHash.toLowerCase()) throw new Error('Relay returned a simulation for a different bundle')
