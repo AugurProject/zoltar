@@ -24,6 +24,11 @@ function relay(handler: (request: Request) => Response | Promise<Response>) {
 	return `http://127.0.0.1:${server.port.toString()}`
 }
 
+function expectedBundleHash(transactions: readonly Hex[]) {
+	const transactionHashes = transactions.map(transaction => keccak256(transaction).slice(2)).join('')
+	return keccak256(`0x${transactionHashes}` as Hex)
+}
+
 describe('transaction submission settings', () => {
 	test('validates modes, normalizes relay URLs, and rejects unsafe endpoints', () => {
 		expect(validateSubmissionSettings({ mode: 'private', relayUrls: ['https://relay.flashbots.net', 'https://relay.flashbots.net/'] })).toEqual({
@@ -44,6 +49,7 @@ describe('transaction submission settings', () => {
 describe('signed transaction delivery', () => {
 	test('simulates an ordered all-or-nothing bundle at the target block', async () => {
 		const requests: unknown[] = []
+		const transactions = [serializedTransaction, '0x1234'] as const
 		const endpoint = relay(async request => {
 			requests.push(await request.json())
 			return Response.json({
@@ -51,7 +57,11 @@ describe('signed transaction delivery', () => {
 				jsonrpc: '2.0',
 				result: {
 					bundleGasPrice: '0x1',
-					results: [{ gasUsed: 21_000 }, { gasUsed: 30_000 }],
+					bundleHash: expectedBundleHash(transactions),
+					results: [
+						{ gasUsed: 21_000, txHash: keccak256(serializedTransaction) },
+						{ gasUsed: 30_000, txHash: keccak256('0x1234') },
+					],
 					totalGasUsed: 51_000,
 				},
 			})
@@ -62,7 +72,7 @@ describe('signed transaction delivery', () => {
 			signMessage: () => Promise.resolve(signature),
 			stateBlockNumber: 99n,
 			targetBlockNumber: 100n,
-			transactions: [serializedTransaction, '0x1234'],
+			transactions,
 		})
 		expect(result.totalGasUsed).toBe(51_000n)
 		expect(requests).toEqual([
@@ -76,12 +86,17 @@ describe('signed transaction delivery', () => {
 	})
 
 	test('rejects a bundle when any simulated transaction reverts', async () => {
+		const transactions = [serializedTransaction, '0x1234'] as const
 		const endpoint = relay(() =>
 			Response.json({
 				id: 1,
 				jsonrpc: '2.0',
 				result: {
-					results: [{ gasUsed: 21_000 }, { error: 'execution reverted' }],
+					bundleHash: expectedBundleHash(transactions),
+					results: [
+						{ gasUsed: 21_000, txHash: keccak256(serializedTransaction) },
+						{ error: 'execution reverted', txHash: keccak256('0x1234') },
+					],
 					totalGasUsed: 51_000,
 				},
 			}),
@@ -93,9 +108,64 @@ describe('signed transaction delivery', () => {
 				signMessage: () => Promise.resolve(signature),
 				stateBlockNumber: 99n,
 				targetBlockNumber: 100n,
-				transactions: [serializedTransaction, '0x1234'],
+				transactions,
 			}),
 		).rejects.toThrow('Bundle simulation reverted')
+	})
+
+	test.each([
+		[{ gasUsed: 21_000 }, { gasUsed: 30_000 }],
+		[
+			{ gasUsed: 21_000, txHash: hash },
+			{ gasUsed: 30_000, txHash: keccak256('0x1234') },
+		],
+		[
+			{ gasUsed: 21_000, txHash: keccak256('0x1234') },
+			{ gasUsed: 30_000, txHash: keccak256(serializedTransaction) },
+		],
+	])('rejects missing, wrong, or reordered simulation transaction hashes %#', async results => {
+		const transactions = [serializedTransaction, '0x1234'] as const
+		const endpoint = relay(() =>
+			Response.json({
+				id: 1,
+				jsonrpc: '2.0',
+				result: { bundleHash: expectedBundleHash(transactions), results, totalGasUsed: 51_000 },
+			}),
+		)
+		await expect(
+			simulateBundle({
+				address,
+				relayUrl: endpoint,
+				signMessage: () => Promise.resolve(signature),
+				stateBlockNumber: 99n,
+				targetBlockNumber: 100n,
+				transactions,
+			}),
+		).rejects.toThrow()
+	})
+
+	test('rejects a valid-looking simulation hash for another bundle', async () => {
+		const endpoint = relay(() =>
+			Response.json({
+				id: 1,
+				jsonrpc: '2.0',
+				result: {
+					bundleHash: hash,
+					results: [{ gasUsed: 21_000, txHash: keccak256(serializedTransaction) }],
+					totalGasUsed: 21_000,
+				},
+			}),
+		)
+		await expect(
+			simulateBundle({
+				address,
+				relayUrl: endpoint,
+				signMessage: () => Promise.resolve(signature),
+				stateBlockNumber: 99n,
+				targetBlockNumber: 100n,
+				transactions: [serializedTransaction],
+			}),
+		).rejects.toThrow()
 	})
 
 	test.each([
@@ -118,11 +188,11 @@ describe('signed transaction delivery', () => {
 	})
 
 	test.each([
-		{ results: [{}], totalGasUsed: 0 },
-		{ results: [{ gasUsed: 'invalid' }], totalGasUsed: 21_000 },
-		{ results: [{ gasUsed: 21_000 }], totalGasUsed: 20_999 },
+		{ results: [{ txHash: keccak256(serializedTransaction) }], totalGasUsed: 0 },
+		{ results: [{ gasUsed: 'invalid', txHash: keccak256(serializedTransaction) }], totalGasUsed: 21_000 },
+		{ results: [{ gasUsed: 21_000, txHash: keccak256(serializedTransaction) }], totalGasUsed: 20_999 },
 	])('rejects incomplete or inconsistent simulation gas %#', async result => {
-		const endpoint = relay(() => Response.json({ id: 1, jsonrpc: '2.0', result }))
+		const endpoint = relay(() => Response.json({ id: 1, jsonrpc: '2.0', result: { bundleHash: expectedBundleHash([serializedTransaction]), ...result } }))
 		await expect(
 			simulateBundle({
 				address,
@@ -140,7 +210,7 @@ describe('signed transaction delivery', () => {
 			Response.json({
 				id: 1,
 				jsonrpc: '2.0',
-				result: { results: [{ gasUsed: 21_000 }], totalGasUsed: 21_000 },
+				result: { bundleHash: expectedBundleHash([serializedTransaction]), results: [{ gasUsed: 21_000, txHash: keccak256(serializedTransaction) }], totalGasUsed: 21_000 },
 			}),
 		)
 		const rejected = relay(() => Response.json({ error: { code: -32_000, message: 'bundle reverted' }, id: 1, jsonrpc: '2.0' }))
@@ -160,16 +230,17 @@ describe('signed transaction delivery', () => {
 
 	test('fans one ordered bundle out to every configured relay without allowed reverts', async () => {
 		const requests: unknown[] = []
+		const transactions = [serializedTransaction, '0x1234'] as const
 		const accepted = relay(async request => {
 			requests.push(await request.json())
-			return Response.json({ id: 1, jsonrpc: '2.0', result: { bundleHash: hash } })
+			return Response.json({ id: 1, jsonrpc: '2.0', result: { bundleHash: expectedBundleHash(transactions) } })
 		})
 		const result = await submitSignedBundle({
 			address,
 			relayUrls: [accepted],
 			signMessage: () => Promise.resolve(signature),
 			targetBlockNumber: 100n,
-			transactions: [serializedTransaction, '0x1234'],
+			transactions,
 		})
 		expect(result.acceptedTargets).toEqual([`${accepted}/`])
 		expect(requests).toEqual([
@@ -184,6 +255,19 @@ describe('signed transaction delivery', () => {
 
 	test.each(['', 'bundle', '0x1234'])('rejects malformed relay bundle hash %p', async bundleHash => {
 		const endpoint = relay(() => Response.json({ id: 1, jsonrpc: '2.0', result: { bundleHash } }))
+		await expect(
+			submitSignedBundle({
+				address,
+				relayUrls: [endpoint],
+				signMessage: () => Promise.resolve(signature),
+				targetBlockNumber: 100n,
+				transactions: [serializedTransaction],
+			}),
+		).rejects.toThrow('Every private relay rejected the bundle')
+	})
+
+	test('rejects a valid-looking relay hash for another submitted bundle', async () => {
+		const endpoint = relay(() => Response.json({ id: 1, jsonrpc: '2.0', result: { bundleHash: hash } }))
 		await expect(
 			submitSignedBundle({
 				address,

@@ -166,6 +166,15 @@ function rpcQuantity(value: unknown, label: string) {
 	throw new Error(`Relay returned invalid ${label}`)
 }
 
+function bundleIdentity(transactions: readonly Hex[]) {
+	const transactionHashes = transactions.map(transaction => keccak256(transaction))
+	const concatenatedHashes = transactionHashes.map(hash => hash.slice(2)).join('')
+	return {
+		bundleHash: keccak256(`0x${concatenatedHashes}` as Hex),
+		transactionHashes,
+	}
+}
+
 async function authenticatedRelayRequest(parameters: { address: Address; body: string; relayUrl: string; signMessage: (message: string | Uint8Array) => Promise<Hex>; timeoutMilliseconds: number }) {
 	const signature = await parameters.signMessage(keccak256(parameters.body))
 	const response = await fetch(parameters.relayUrl, {
@@ -221,9 +230,12 @@ export async function simulateBundle(parameters: { address: Address; relayUrl: s
 	})
 	if (typeof result !== 'object' || result === null || Array.isArray(result)) throw new Error('Relay returned an invalid bundle simulation')
 	const record = result as Record<string, unknown>
+	const expectedIdentity = bundleIdentity(parameters.transactions)
+	const returnedBundleHash = record['bundleHash']
+	if (typeof returnedBundleHash !== 'string' || returnedBundleHash.toLowerCase() !== expectedIdentity.bundleHash.toLowerCase()) throw new Error('Relay returned a simulation for a different bundle')
 	if (!Array.isArray(record['results']) || record['results'].length !== parameters.transactions.length) throw new Error('Relay returned incomplete bundle simulation results')
 	let transactionGasUsed = 0n
-	for (const transactionResult of record['results']) {
+	for (const [index, transactionResult] of record['results'].entries()) {
 		if (typeof transactionResult !== 'object' || transactionResult === null || Array.isArray(transactionResult)) throw new Error('Relay returned an invalid transaction simulation result')
 		const transactionRecord = transactionResult as Record<string, unknown>
 		const error = transactionRecord['error']
@@ -231,6 +243,9 @@ export async function simulateBundle(parameters: { address: Address; relayUrl: s
 		const hasError = error !== undefined && error !== null && error !== ''
 		const hasRevert = revert !== undefined && revert !== null && revert !== '' && revert !== '0x'
 		if (hasError || hasRevert) throw new Error(`Bundle simulation reverted: ${String(hasError ? error : revert)}`)
+		const expectedTransactionHash = expectedIdentity.transactionHashes[index]
+		const returnedTransactionHash = transactionRecord['txHash']
+		if (expectedTransactionHash === undefined || typeof returnedTransactionHash !== 'string' || returnedTransactionHash.toLowerCase() !== expectedTransactionHash.toLowerCase()) throw new Error('Relay returned simulation results for a different transaction order')
 		const gasUsed = rpcQuantity(transactionRecord['gasUsed'], 'transaction gas usage')
 		if (gasUsed === 0n) throw new Error('Relay returned zero transaction gas usage')
 		transactionGasUsed += gasUsed
@@ -263,6 +278,7 @@ export async function simulateSignedBundleEveryRelay(parameters: { address: Addr
 
 export async function submitSignedBundle(parameters: { address: Address; relayUrls: readonly string[]; signMessage: (message: string | Uint8Array) => Promise<Hex>; targetBlockNumber: bigint; timeoutMilliseconds?: number | undefined; transactions: readonly Hex[] }): Promise<SubmittedBundle> {
 	if (parameters.transactions.length === 0) throw new Error('Bundle must contain at least one transaction')
+	const expectedBundleHash = bundleIdentity(parameters.transactions).bundleHash
 	const body = JSON.stringify({
 		id: 1,
 		jsonrpc: '2.0',
@@ -285,7 +301,7 @@ export async function submitSignedBundle(parameters: { address: Address; relayUr
 			})
 			if (typeof result !== 'object' || result === null || Array.isArray(result)) throw new Error('Relay returned an invalid bundle hash')
 			const bundleHash = (result as Record<string, unknown>)['bundleHash']
-			if (typeof bundleHash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(bundleHash)) throw new Error('Relay returned an invalid bundle hash')
+			if (typeof bundleHash !== 'string' || bundleHash.toLowerCase() !== expectedBundleHash.toLowerCase()) throw new Error('Relay returned an unexpected bundle hash')
 		}),
 	)
 	const acceptedTargets: string[] = []
