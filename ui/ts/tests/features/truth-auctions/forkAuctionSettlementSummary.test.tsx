@@ -161,6 +161,7 @@ function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSec
 	return {
 		completeSetCollateralAmount: 0n,
 		currentRetentionRate: 10n,
+		feeEligibleSecurityBondAllowance: 0n,
 		hasForkActivity: true,
 		forkOutcome: 'yes',
 		forkOwnSecurityPool: false,

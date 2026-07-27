@@ -113,12 +113,12 @@ export function TradingSection({
 		accountAddress: accountState.address,
 		completeSetCollateralAmount: selectedPool?.completeSetCollateralAmount,
 		ethBalance: accountState.ethBalance,
+		feeEligibleSecurityBondAllowance: selectedPool?.feeEligibleSecurityBondAllowance,
 		hasSelectedPool,
 		isMainnet,
 		mintAmountInput: tradingForm.completeSetAmount,
 		shareTokenSupply: selectedPool?.shareTokenSupply,
 		totalRepDeposit: selectedPool?.totalRepDeposit,
-		totalSecurityBondAllowance: selectedPool?.totalSecurityBondAllowance,
 	})
 	const redeemCompleteSetGuardMessage = getTradingRedeemCompleteSetGuardMessage({
 		accountAddress: accountState.address,
@@ -146,7 +146,7 @@ export function TradingSection({
 		hasSelectedPool,
 		isMainnet,
 	})
-	const remainingMintCapacity = getRemainingMintCapacity(selectedPool?.totalSecurityBondAllowance, selectedPool?.completeSetCollateralAmount, selectedPool?.shareTokenSupply)
+	const remainingMintCapacity = getRemainingMintCapacity(selectedPool?.feeEligibleSecurityBondAllowance, selectedPool?.completeSetCollateralAmount, selectedPool?.shareTokenSupply)
 	const selectedOutcomeBalance = getSelectedOutcomeShareBalance(shareBalances, tradingForm.selectedShareOutcome)
 	const mintLauncherBlocker = (() => {
 		if (!hasSelectedPool) return tradingCopy.completeSetMintPoolRequiredReason
@@ -160,7 +160,7 @@ export function TradingSection({
 
 			return (() => {
 				if (remainingMintCapacity === 0n) {
-					if (hasRepBackedPoolWithNoActiveAllowance(selectedPool?.totalRepDeposit, selectedPool?.totalSecurityBondAllowance)) return NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE
+					if (hasRepBackedPoolWithNoActiveAllowance(selectedPool?.totalRepDeposit, selectedPool?.feeEligibleSecurityBondAllowance)) return NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE
 
 					return tradingCopy.mintCapacityEmpty
 				}
@@ -378,7 +378,7 @@ export function TradingSection({
 				{selectedPool === undefined ? undefined : (
 					<MetricGrid>
 						<MetricField label={tradingCopy.bondAllowanceInUse}>
-							<CurrencyValue value={selectedPool.totalSecurityBondAllowance} suffix={commonCopy.eth} />
+							<CurrencyValue value={selectedPool.feeEligibleSecurityBondAllowance} suffix={commonCopy.eth} />
 						</MetricField>
 						<MetricField label={tradingCopy.repBacking}>
 							<CurrencyValue value={selectedPool.totalRepDeposit} suffix={commonCopy.rep} />

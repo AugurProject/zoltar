@@ -320,32 +320,34 @@
 					small execution changes without collapsing the public game contract
 					into an unreviewable blob.
 				</p>
-				<table>
-					<thead>
-						<tr>
-							<th>Measurement</th>
-							<th>Current value</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr>
-							<td>Creation bytecode</td>
-							<td><code>31,840</code> bytes</td>
-						</tr>
-						<tr>
-							<td>Deployed bytecode</td>
-							<td><code>23,868</code> bytes</td>
-						</tr>
-						<tr>
-							<td>Project deployed-bytecode budget headroom</td>
-							<td><code>708</code> bytes below <code>24,576</code></td>
-						</tr>
-						<tr>
-							<td>EIP-170 headroom</td>
-							<td><code>708</code> bytes below <code>24,576</code></td>
-						</tr>
-					</tbody>
-				</table>
+				<div class="table-scroll" role="region" aria-label="Escalation game bytecode measurements" tabindex="0">
+					<table>
+						<thead>
+							<tr>
+								<th>Measurement</th>
+								<th>Current value</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>Creation bytecode</td>
+								<td><code>32,091</code> bytes</td>
+							</tr>
+							<tr>
+								<td>Deployed bytecode</td>
+								<td><code>24,119</code> bytes</td>
+							</tr>
+							<tr>
+								<td>Project deployed-bytecode budget headroom</td>
+								<td><code>457</code> bytes below <code>24,576</code></td>
+							</tr>
+							<tr>
+								<td>EIP-170 headroom</td>
+								<td><code>457</code> bytes below <code>24,576</code></td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
 				<p>
 					Any Solidity change can also move deterministic deployment addresses,
 					because address derivation uses init code. After contract changes,

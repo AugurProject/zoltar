@@ -297,6 +297,7 @@ export type OpenOracleReportDetails = {
 export type ListedSecurityPool = {
 	completeSetCollateralAmount: bigint
 	currentRetentionRate: bigint
+	feeEligibleSecurityBondAllowance: bigint
 	hasForkActivity: boolean
 	initialReportPriorityFeeWeiPerGas: bigint
 	forkOutcome: ForkOutcomeKey
