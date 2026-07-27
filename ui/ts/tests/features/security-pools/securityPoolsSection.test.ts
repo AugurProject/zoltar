@@ -632,7 +632,7 @@ void describe('SecurityPoolsSection', () => {
 		expect(documentQueries.queryByText('Selected pool')).toBeNull()
 		expect(documentQueries.queryByText('Pool status')).toBeNull()
 		expect(documentQueries.queryByText('Next step')).toBeNull()
-		const selectedPoolContext = document.body.querySelector('.sticky-object-context.static')
+		const selectedPoolContext = document.body.querySelector('.sticky-object-context:not(.static)')
 		if (!(selectedPoolContext instanceof HTMLElement)) throw new Error('Expected operate mode to render the selected pool context card')
 		const contextQueries = within(selectedPoolContext)
 		expect(contextQueries.queryByRole('tab', { name: 'Browse' })).toBeNull()
@@ -640,13 +640,11 @@ void describe('SecurityPoolsSection', () => {
 		expect(contextQueries.queryByRole('tab', { name: 'Manage Pool' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Security pools' })).toBeNull()
 		expect(contextQueries.queryByText('Total Security Bond Allowance')).toBeNull()
-		const lookupLabel = contextQueries.getByText('Security Pool Address')
-		const summaryMetric = contextQueries.getByText('Total REP Backing')
-		const lookupPosition = selectedPoolContext.textContent?.indexOf(lookupLabel.textContent ?? '') ?? -1
-		const summaryPosition = selectedPoolContext.textContent?.indexOf(summaryMetric.textContent ?? '') ?? -1
-		expect(lookupPosition).toBeGreaterThanOrEqual(0)
-		expect(summaryPosition).toBeGreaterThanOrEqual(0)
-		expect(lookupPosition < summaryPosition).toBe(true)
+		expect(contextQueries.getByText('Security Pool Address')).not.toBeNull()
+		const contextDetails = document.body.querySelector('.selected-pool-context-details')
+		if (!(contextDetails instanceof HTMLElement)) throw new Error('Expected selected pool context details')
+		expect(within(contextDetails).getByText('Total REP Backing')).not.toBeNull()
+		expect(selectedPoolContext.compareDocumentPosition(contextDetails) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
 	})
 
 	void test('keeps the route summary hidden in operate mode until the selected pool resolves', async () => {

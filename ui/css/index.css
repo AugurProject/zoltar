@@ -3552,15 +3552,36 @@ strong.metric-value-danger {
 }
 
 .sticky-object-context.context-strip {
-	position: static;
-	top: auto;
-	z-index: auto;
-	padding: 0 0 var(--space-3);
-	border: 0;
-	border-bottom: 1px solid var(--divider-subtle);
-	border-radius: 0;
-	background: transparent;
-	box-shadow: none;
+	position: sticky;
+	top: 0.8rem;
+	z-index: 3;
+	padding: var(--space-2) var(--space-3);
+	border-radius: var(--radius-control);
+	background: rgba(9, 18, 31, 0.97);
+}
+
+.sticky-object-context.context-strip .sticky-object-context-summary {
+	display: grid;
+	grid-template-columns: minmax(12rem, 0.8fr) minmax(20rem, 1.2fr);
+	align-items: center;
+	gap: var(--space-2);
+}
+
+.sticky-object-context.context-strip .sticky-object-context-items {
+	grid-template-columns: minmax(7rem, 0.45fr) minmax(12rem, 1fr);
+	gap: var(--space-2);
+}
+
+.sticky-object-context.context-strip .sticky-object-context-item {
+	padding: var(--space-2) 0 0;
+}
+
+.sticky-object-context.context-strip .sticky-object-context-item .address-value,
+.sticky-object-context.context-strip .sticky-object-context-item .universe-link {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .sticky-object-context.static {
@@ -3574,6 +3595,11 @@ strong.metric-value-danger {
 	align-items: start;
 	justify-content: space-between;
 	gap: 0.75rem;
+}
+
+.sticky-object-context-summary {
+	display: grid;
+	gap: 0.9rem;
 }
 
 .sticky-object-context-copy,
@@ -4162,6 +4188,35 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 @media (max-width: 800px) {
 	.sticky-object-context {
 		top: 0;
+	}
+
+	.sticky-object-context.context-strip {
+		padding: var(--space-2);
+	}
+
+	.sticky-object-context.context-strip h3 {
+		overflow: hidden;
+		font-size: var(--font-body);
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.sticky-object-context.context-strip .sticky-object-context-summary {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.sticky-object-context.context-strip .sticky-object-context-items {
+		grid-template-columns: minmax(6rem, 0.42fr) minmax(0, 1fr);
+	}
+
+	.sticky-object-context.context-strip .sticky-object-context-item {
+		padding-top: var(--space-1);
+	}
+
+	.sticky-object-context.context-strip .sticky-object-context-item .address-value {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.open-oracle-report-stack > .sticky-object-context {
@@ -7002,6 +7057,11 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	gap: 0.85rem;
 }
 
+.selected-pool-context-nonsticky {
+	display: grid;
+	gap: 0.85rem;
+}
+
 .selected-pool-context-details {
 	min-width: 0;
 }
@@ -7638,12 +7698,11 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	}
 
 	.overview-wallet-panel.is-simulation .route-description {
-		font-size: var(--font-caption);
-		line-height: 1.35;
+		display: none;
 	}
 
 	.overview-wallet-panel.is-simulation .overview-inline-metrics.data-grid {
-		grid-template-columns: minmax(0, 1fr) auto;
+		grid-template-columns: minmax(0, 1fr) minmax(7rem, auto);
 		gap: var(--space-2);
 	}
 
@@ -7653,6 +7712,21 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 
 	.overview-wallet-panel.is-simulation .overview-inline-metrics.data-grid > .overview-address-metric {
 		grid-column: auto;
+	}
+
+	.overview-wallet-panel.is-simulation {
+		padding: var(--space-2) var(--space-3);
+	}
+
+	.overview-wallet-panel.is-simulation .overview-address-metric .address-value {
+		max-width: 12rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.overview-wallet-panel.is-simulation .overview-universe-metric {
+		text-align: right;
 	}
 
 	.route-header,

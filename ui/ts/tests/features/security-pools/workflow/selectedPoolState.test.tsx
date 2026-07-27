@@ -54,7 +54,8 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(within(persistentContext).getAllByText('Security Pool Address')).toHaveLength(1)
 		const readOnlyContextItems = persistentContext.querySelector('.sticky-object-context-items')
 		if (!(readOnlyContextItems instanceof HTMLElement)) throw new Error('Expected read-only selected-pool context items')
-		expect(within(readOnlyContextItems).queryByText('Security Pool Address')).toBeNull()
+		expect(within(readOnlyContextItems).getByText('Security Pool Address')).not.toBeNull()
+		expect(persistentContext.classList.contains('static')).toBe(false)
 		expect(within(persistentContext).getByText('Universe')).not.toBeNull()
 		const contextDetails = document.body.querySelector('.selected-pool-context-details')
 		if (!(contextDetails instanceof HTMLElement) || contextDetails.tagName !== 'DETAILS') throw new Error('Expected collapsible selected-pool context')
@@ -79,10 +80,10 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(document.body.querySelector('.section-block.embedded')).not.toBeNull()
 	})
 
-	test('renders open oracle as an unframed selected-pool workflow section', async () => {
+	test('renders price oracle as an unframed selected-pool workflow section', async () => {
 		await renderLoadedPool({ selectedPoolView: 'price-oracle' })
 
-		expectSectionVariant('Open Oracle', 'plain')
+		expectSectionVariant('Price Oracle', 'plain')
 	})
 
 	test('keeps oracle actions disabled off mainnet and explains recovery', async () => {
@@ -133,9 +134,9 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.getByRole('group', { name: 'Selected pool views' })).not.toBeNull()
 		const secondaryGroup = documentQueries.getByRole('group', { name: 'Additional pool actions' })
 		expect(within(secondaryGroup).getByRole('button', { name: 'Staged Operations' })).not.toBeNull()
-		expect(within(secondaryGroup).getByRole('button', { name: 'Open Oracle' })).not.toBeNull()
+		expect(within(secondaryGroup).getByRole('button', { name: 'Price Oracle' })).not.toBeNull()
 
-		for (const label of ['Vaults', 'Shares', 'Reporting', 'Fork & Migration', 'Staged Operations', 'Open Oracle']) {
+		for (const label of ['Vaults', 'Shares', 'Reporting', 'Fork & Migration', 'Staged Operations', 'Price Oracle']) {
 			const button = documentQueries.getByRole('button', { name: label }) as HTMLButtonElement
 			expect(button.disabled).toBe(true)
 			expect(button.title).toBe('Select a pool before using pool actions.')
@@ -216,7 +217,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(document.body.textContent?.includes('0x2')).toBe(true)
 		expect(documentQueries.getByRole('button', { name: 'Switch to Pool Universe' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Return to Current Universe' })).not.toBeNull()
-		for (const tabLabel of ['Vaults', 'Shares', 'Reporting', 'Fork & Migration', 'Staged Operations', 'Open Oracle']) {
+		for (const tabLabel of ['Vaults', 'Shares', 'Reporting', 'Fork & Migration', 'Staged Operations', 'Price Oracle']) {
 			const tab = documentQueries.getByRole('button', { name: tabLabel })
 			expect(tab.getAttribute('title')).toBeNull()
 		}
@@ -251,7 +252,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Security pools' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Pool Summary' })).toBeNull()
 		expect(documentQueries.queryByText('Action Readiness')).toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Open Oracle' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Price Oracle' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Selected Pool Summary' })).toBeNull()
 		expect(documentQueries.queryByText('Workflow')).toBeNull()
 		expect(documentQueries.getByText('Question description')).not.toBeNull()
@@ -261,15 +262,12 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByText('Total Security Bond Allowance')).toBeNull()
 		expect(documentQueries.getByText('Current Oracle Price')).not.toBeNull()
 		expect(documentQueries.queryByText('Oracle Expires In')).toBeNull()
-		const selectedPoolContext = document.body.querySelector('.sticky-object-context.static')
-		if (!(selectedPoolContext instanceof HTMLElement)) throw new Error('Expected a non-sticky selected pool context card')
-		const lookupLabel = within(selectedPoolContext).getByText('Security Pool Address')
-		const firstSummaryMetric = within(selectedPoolContext).getByText('Total REP Backing')
-		const lookupPosition = selectedPoolContext.textContent?.indexOf(lookupLabel.textContent ?? '') ?? -1
-		const summaryPosition = selectedPoolContext.textContent?.indexOf(firstSummaryMetric.textContent ?? '') ?? -1
-		expect(lookupPosition).toBeGreaterThanOrEqual(0)
-		expect(summaryPosition).toBeGreaterThanOrEqual(0)
-		expect(lookupPosition < summaryPosition).toBe(true)
+		const selectedPoolContext = document.body.querySelector('.sticky-object-context:not(.static)')
+		if (!(selectedPoolContext instanceof HTMLElement)) throw new Error('Expected a sticky selected pool context card')
+		expect(within(selectedPoolContext).getByText('Security Pool Address')).not.toBeNull()
+		const contextDetails = document.body.querySelector('.selected-pool-context-details')
+		if (!(contextDetails instanceof HTMLElement)) throw new Error('Expected selected pool context details')
+		expect(selectedPoolContext.compareDocumentPosition(contextDetails) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
 		expect(documentQueries.getByRole('heading', { name: 'Vault Operations' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Vault Lookup' })).toBeNull()
 		const vaultSummaryHeading = documentQueries.getByRole('heading', { name: /Vault Summary/ })
@@ -278,7 +276,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.getByText('Selected Vault Address')).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Vault Actions' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Staged Operations' })).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Open Oracle' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Price Oracle' })).not.toBeNull()
 		expect(documentQueries.getAllByRole('button', { name: 'Claim Fees' }).length).toBeGreaterThan(0)
 		const vaultSummarySection = vaultSummaryHeading.closest('section')
 		if (!(vaultSummarySection instanceof HTMLElement)) throw new Error('Expected a vault summary section')

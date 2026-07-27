@@ -8,6 +8,7 @@ import { MarketCreateQuestionSection } from './MarketCreateQuestionSection.js'
 import { MarketOverviewSection } from './MarketOverviewSection.js'
 import { MarketQuestionsSection } from './MarketQuestionsSection.js'
 import { LoadingText } from '../../../components/LoadingText.js'
+import { ActionLauncherButton } from '../../../components/ActionLauncherButton.js'
 import { OperationModal } from '../../../components/OperationModal.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
 import { TransactionUniverseValue } from '../../universes/components/TransactionUniverseValue.js'
@@ -74,6 +75,13 @@ export function MarketSection({
 	const [forkModalOpen, setForkModalOpen] = useState(false)
 	const selectedForkQuestion = zoltarQuestions.find(question => question.questionId.toLowerCase() === zoltarForkQuestionId.trim().toLowerCase()) ?? zoltarUniverse?.forkQuestionDetails
 	const forkModalTitle = hasForked ? zoltarCopy.viewForkDetails : zoltarCopy.forkZoltar
+	const forkQuestionAvailable = selectedForkQuestion !== undefined || (zoltarQuestionCount !== undefined && zoltarQuestionCount > 0n)
+	const forkLauncherDisabledReason = (() => {
+		if (hasForked) return undefined
+		if (loadingZoltarQuestions || loadingZoltarQuestionCount || zoltarQuestionCount === undefined) return marketCopy.loadingQuestions
+		if (!forkQuestionAvailable) return marketCopy.forkQuestionUnavailableReason
+		return undefined
+	})()
 	const forkContext = [
 		{ label: commonCopy.question, value: selectedForkQuestion?.title ?? (zoltarForkQuestionId.trim() === '' ? commonCopy.noneSelected : zoltarForkQuestionId) },
 		{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={zoltarUniverse?.universeId} /> },
@@ -179,9 +187,12 @@ export function MarketSection({
 								<li>{marketCopy.forkConsequence}</li>
 							</ul>
 							<div className='actions'>
-								<button className='primary' type='button' onClick={() => setForkModalOpen(true)}>
-									{forkModalTitle}
-								</button>
+								<ActionLauncherButton availability={{ disabled: forkLauncherDisabledReason !== undefined, reason: forkLauncherDisabledReason }} idleLabel={forkModalTitle} onClick={() => setForkModalOpen(true)} pending={false} pendingLabel={forkModalTitle} showDisabledReason />
+								{forkLauncherDisabledReason === marketCopy.forkQuestionUnavailableReason ? (
+									<button className='secondary' type='button' onClick={() => onActiveViewChange('create')}>
+										{commonCopy.createQuestion}
+									</button>
+								) : undefined}
 							</div>
 							{zoltarForkQuestionId.trim() === '' ? undefined : <p className='detail'>{marketCopy.formatSelectedForkQuestionDetail(zoltarForkQuestionId)}</p>}
 						</SectionBlock>
