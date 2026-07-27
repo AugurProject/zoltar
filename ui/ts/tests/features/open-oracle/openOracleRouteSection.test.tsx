@@ -236,6 +236,47 @@ describe('OpenOracleSection route create view', () => {
 		expect(document.body.textContent?.match(/pool-managed/gi) ?? []).toHaveLength(1)
 	})
 
+	test('explains the first invalid field before the default create form is touched', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				OpenOracleSection,
+				createOpenOracleSectionProps({
+					accountState: createAccountState({ ethBalance: 2_000n * ETH }),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const baseTokenAddressInput = within(document.body).getByLabelText('Base Token Address')
+		expect(baseTokenAddressInput.hasAttribute('aria-invalid')).toBe(false)
+		expect(baseTokenAddressInput.hasAttribute('aria-describedby')).toBe(false)
+		expectTransactionButtonDisabled(document.body, 'Create Standalone Oracle Report', 'Enter a valid base token address.')
+		expect(document.body.textContent?.includes('Review the highlighted report fields.')).toBe(false)
+	})
+
+	test('explains untouched zero amounts after valid token addresses are entered', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				OpenOracleSection,
+				createOpenOracleSectionProps({
+					accountState: createAccountState({ ethBalance: 2_000n * ETH }),
+					openOracleCreateForm: {
+						...getDefaultOpenOracleCreateFormState(),
+						token1Address: '0x2000000000000000000000000000000000000000',
+						token2Address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const baseTokenAmountInput = within(document.body).getByLabelText('Base Token Amount')
+		expect(baseTokenAmountInput.hasAttribute('aria-invalid')).toBe(false)
+		expect(baseTokenAmountInput.getAttribute('aria-describedby')).toBe('open-oracle-exact-token1-report-help')
+		expectTransactionButtonDisabled(document.body, 'Create Standalone Oracle Report', 'Base token amount must be greater than zero.')
+		expect(document.body.textContent?.includes('Review the highlighted report fields.')).toBe(false)
+	})
+
 	test('renders selected report actions without readiness cards or visible blocker copy', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -585,8 +626,8 @@ describe('OpenOracleSection route create view', () => {
 		expect(escalationHaltInput.getAttribute('inputmode')).toBe('decimal')
 		expect(disputeDelayInput.getAttribute('inputmode')).toBe('numeric')
 		expect(protocolFeeInput.getAttribute('inputmode')).toBe('decimal')
-		expect(document.body.textContent?.includes('Enter a valid base token address.')).toBe(false)
-		expect(document.body.textContent?.includes('Enter a valid quote token address.')).toBe(false)
+		expect(document.getElementById('open-oracle-token1-address-error')).toBeNull()
+		expect(document.getElementById('open-oracle-token2-address-error')).toBeNull()
 		await act(() => {
 			baseTokenAddressInput.dispatchEvent(new Event('blur'))
 			quoteTokenAddressInput.dispatchEvent(new Event('blur'))
@@ -639,7 +680,8 @@ describe('OpenOracleSection route create view', () => {
 			fireEvent.input(baseTokenAmountInput, { target: { value: '.' } })
 		})
 		expect(baseTokenAmountInput.hasAttribute('aria-invalid')).toBe(false)
-		expect(documentQueries.queryByText('Enter a valid base token amount.')).toBeNull()
+		expect(document.getElementById('open-oracle-exact-token1-report-error')).toBeNull()
+		expectTransactionButtonDisabled(document.body, 'Create Standalone Oracle Report', 'Enter a valid base token amount.')
 		await act(() => {
 			baseTokenAmountInput.dispatchEvent(new Event('blur'))
 		})

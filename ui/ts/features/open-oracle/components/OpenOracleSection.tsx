@@ -905,7 +905,7 @@ export function OpenOracleSection({
 	const getVisibleCreateFieldError = (field: OpenOracleCreateField) => (touchedCreateFields.has(field) ? createValidation.fieldErrors[field] : undefined)
 	const firstVisibleInvalidCreateField = OPEN_ORACLE_CREATE_FIELD_ORDER.find(field => getVisibleCreateFieldError(field) !== undefined)
 	const createDisabledReasonElementId = createGuardMessage === undefined && firstVisibleInvalidCreateField !== undefined ? getOpenOracleCreateFieldErrorId(firstVisibleInvalidCreateField) : undefined
-	const createAvailabilityMessage = createGuardMessage ?? (createValidation.isValid ? undefined : openOracleCopy.reviewInvalidCreateFields)
+	const createAvailabilityMessage = createGuardMessage ?? createValidation.message
 	const disputeDelayError = getVisibleCreateFieldError('disputeDelay')
 	const escalationHaltError = getVisibleCreateFieldError('escalationHalt')
 	const ethValueError = getVisibleCreateFieldError('ethValue')
