@@ -238,15 +238,6 @@ body.doc-openoracle .callout strong {
 	display: block;
 	margin-bottom: 0.25rem;
 }
-body.security-model .assumption-heading {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.75fr);
-	gap: 1.5rem;
-	align-items: end;
-}
-body.security-model .assumption-heading h2 {
-	margin-bottom: 0;
-}
 body.security-model .assumption-group {
 	scroll-margin-top: 1rem;
 }
@@ -609,10 +600,6 @@ body.doc-openoracle td math {
 	}
 	body.doc-openoracle .invariant-metadata {
 		grid-template-columns: 1fr;
-	}
-	body.security-model .assumption-heading {
-		grid-template-columns: 1fr;
-		gap: 0.45rem;
 	}
 	body.security-model .assumption-grid {
 		grid-template-columns: 1fr;

@@ -20,7 +20,7 @@ type ValidationFailure = {
 const repositoryRootPath = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
 const docsDirectoryPath = path.join(repositoryRootPath, 'docs')
 const conflictMarkerPattern = /^(<<<<<<<|=======|>>>>>>>)($| )/m
-const diagramOptionalDocumentPaths = new Set(['docs/documentation.html'])
+const diagramOptionalDocumentPaths = new Set(['docs/documentation.html', 'docs/security-model.html'])
 const markdownLinkPattern = /\[[^\]]+\]\(([^)\s]+)(?:\s+['"][^)]*['"])?\)/g
 
 export async function assertDocsHtmlValid(): Promise<void> {

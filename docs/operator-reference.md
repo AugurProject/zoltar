@@ -18,9 +18,7 @@ security properties, including launch-critical properties that the current
 contracts do not preserve.
 
 The [Protocol Security Model](./security-model.html) is normative for the
-protocol's external assumptions. Truth-auction loss allocation and residual
-weak-demand risk are defined by
-[`AUCTION-A1`](./truth-auction.html#auction-a1).
+protocol's external assumptions.
 
 ## Security Review Orientation
 
@@ -152,9 +150,7 @@ ownership, a one-week bidding window, and paged settlement into vault
 accounting. Bids close at <code>auctionStarted + AUCTION_TIME</code>; direct
 auction finalization is allowed at <code>&gt;=</code> that boundary, but the
 public forker wrapper requires the boundary to have passed. The canonical
-clearing rules and examples are in [Truth Auction](./truth-auction.html#clearing),
-while [`AUCTION-A1`](./truth-auction.html#auction-a1) defines the intentional
-weak-demand loss allocation.
+clearing rules and examples are in [Truth Auction](./truth-auction.html#clearing).
 
 | Area | Implementation behavior | Source |
 | --- | --- | --- |

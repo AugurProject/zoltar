@@ -19,14 +19,14 @@ Protocol documentation lives in `docs/`:
 
 - [Security model](https://augurproject.github.io/zoltar/docs/security-model.html) — external economic and liveness assumptions A01–A17
 - [OpenOracle tradeoffs](https://augurproject.github.io/zoltar/docs/open-oracle-integration.html#intentional-economic-tradeoffs) — audit orientation for intentionally unbounded oracle notional and paid rolling disputes
-- [Truth-auction loss allocation](https://augurproject.github.io/zoltar/docs/truth-auction.html#auction-a1) — weak-demand qualification and loss policy
+- [Truth-auction clearing](https://augurproject.github.io/zoltar/docs/truth-auction.html#clearing) — funded and underfunded clearing mechanics
 - [Start here guide](https://augurproject.github.io/zoltar/docs/documentation.html)
 
 For oracle audit classification, use the
 [OpenOracle tradeoffs](https://augurproject.github.io/zoltar/docs/open-oracle-integration.html#intentional-economic-tradeoffs)
 and [attack model](https://augurproject.github.io/zoltar/docs/open-oracle-integration.html#attack-model).
 For weak-demand auction behavior, use
-[`AUCTION-A1`](https://augurproject.github.io/zoltar/docs/truth-auction.html#auction-a1).
+[Truth-auction clearing](https://augurproject.github.io/zoltar/docs/truth-auction.html#clearing).
 The invariant catalog owns the current requirement, status, and evidence for
 [`EXT-05` recursive-fork gas behavior](https://augurproject.github.io/zoltar/docs/invariants.html#ext-05).
 

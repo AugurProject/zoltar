@@ -31,8 +31,8 @@
 				<p>
 					The <a href="./security-model.html">Protocol Security Model</a>
 					is normative for assumptions A01–A17. The
-					<a href="./truth-auction.html#auction-a1"><code>AUCTION-A1</code></a>
-					section owns weak-demand auction loss allocation, while
+					<a href="./truth-auction.html#clearing">Truth Auction clearing guide</a>
+					owns funded and underfunded clearing mechanics, while
 					<a href="./open-oracle-integration.html#intentional-economic-tradeoffs"
 						>OpenOracle Integration</a
 					>
@@ -2146,7 +2146,7 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								Under <code>AUCTION-A1</code>, qualifying ETH is retained bid ETH
+								In underfunded clearing, qualifying ETH is retained bid ETH
 								offered at or above the cap-implied qualification threshold. The
 								threshold is not an execution-price floor. Qualifying bidders collectively receive
 								<code>maxRepBeingSold</code> in proportion to that ETH at the aggregate
@@ -2160,9 +2160,9 @@
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-									<a href="./truth-auction.html#auction-a1"
-										><code>AUCTION-A1</code> punitive underfunded clearing</a
-										>
+									<a href="./truth-auction.html#clearing"
+										>Truth Auction clearing design</a
+									>
 								</dd></div>
 							</dl>
 						</div>

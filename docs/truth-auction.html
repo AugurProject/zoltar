@@ -213,52 +213,6 @@
 			</p>
 		</section>
 
-			<section id="auction-a1">
-				<h2>AUCTION-A1 — Punitive Underfunded Clearing</h2>
-				<div class="callout">
-					<p>
-						<strong>Intentional loss-allocation rule.</strong> A truth auction is
-						both a collateral-repair mechanism and a penalty for security capital
-						that does not migrate into the child. The cap-implied
-						<code>underfundedThreshold</code> is a bid-qualification threshold. It
-						is not an execution-price floor.
-					</p>
-				</div>
-				<p>
-					When ordinary clearing reaches neither auction cap, bids at or above the
-					qualifying tick are retained. If any ETH qualifies, those bidders
-					collectively receive <code>maxRepBeingSold</code> for their actual
-					retained ETH and share the complete unmigrated security-bond allowance.
-					The common effective price is therefore
-					<code>underfundedWinningEth / maxRepBeingSold</code>, which can be below
-					the qualification threshold. Bids below the threshold refund. If no bid
-					qualifies, all bids refund and no REP is sold.
-				</p>
-				<p>
-					The <a href="#clearing">auction clearing section</a> owns the
-					qualification formula, tick rounding, worked examples, and per-bid
-					allocation rules.
-				</p>
-				<p>
-					The child activates with the ETH actually routed during migration plus
-					the ETH actually retained by the auction. It may remain
-					undercollateralized, and open-interest holders are not guaranteed to be
-					made whole. That shortfall is the intended consequence of insufficient
-					demand: non-migrating security positions lose the auctioned economic
-					value, while users of the affected child bear any remaining collateral
-					impairment.
-				</p>
-				<p>
-					Implementation and test evidence:
-					<a href="../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"><code>UniformPriceDualCapBatchAuction.sol</code></a>,
-					<a href="../solidity/contracts/peripherals/SecurityPoolForker.sol"><code>SecurityPoolForker.sol</code></a>,
-					<a href="../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationDelegate.sol"><code>SecurityPoolForkerVaultMigrationDelegate.sol</code></a>,
-					<a href="../solidity/ts/tests/peripherals/truthAuction.test.ts"><code>truthAuction.test.ts</code></a>
-					(the minimum-bid underfunded-winner test), and the
-					<a href="#clearing">full clearing design</a>.
-				</p>
-			</section>
-
 			<section id="clearing">
 				<h2>How Clearing Works</h2>
 				<p>
@@ -292,6 +246,16 @@
 					result by descending aggregate subtree totals, not by looping over
 					every bid one by one.
 				</p>
+				<h3>Underfunded Clearing</h3>
+				<div class="callout">
+					<p>
+						<strong>Intentional loss allocation.</strong> A truth auction is both
+						a collateral-repair mechanism and a penalty for security capital that
+						does not migrate into the child. The cap-implied
+						<code>underfundedThreshold</code> qualifies bids; it is not an
+						execution-price floor.
+					</p>
+				</div>
 				<p>
 					When demand never reaches a full clearing price, the auction switches
 					into the underfunded branch. Finalization computes
@@ -305,6 +269,15 @@
 					That effective price can be lower than the qualification threshold;
 					the threshold is not an execution-price floor. If no ETH qualifies,
 					every bid refunds.
+				</p>
+				<p>
+					The child activates with the ETH actually routed during migration plus
+					the ETH retained by the auction. It may remain undercollateralized, and
+					open-interest holders are not guaranteed to be made whole. That
+					shortfall is the intended consequence of insufficient demand:
+					non-migrating security positions lose the auctioned economic value,
+					while users of the affected child bear any remaining collateral
+					impairment.
 				</p>
 				<div class="equation" id="eq-auction-underfunded-threshold">
 						<math
