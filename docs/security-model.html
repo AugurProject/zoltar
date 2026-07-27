@@ -6,7 +6,7 @@
 		<title>Zoltar Protocol Security Model</title>
 		<link rel="stylesheet" href="./shared-docs.css" />
 	</head>
-	<body class="doc-openoracle">
+	<body class="doc-openoracle security-model">
 		<main>
 			<header>
 				<h1>Zoltar Protocol Security Model</h1>
@@ -110,6 +110,410 @@
 					</p>
 				</figure>
 			</header>
+
+			<section id="core-assumptions">
+				<div class="assumption-heading">
+					<div>
+						<p class="section-kicker">System-wide dependency map</p>
+						<h2>Core Security Assumptions</h2>
+					</div>
+					<p class="assumption-heading-summary">
+						These assumptions describe the people, markets, and infrastructure
+						that the contracts cannot create on their own.
+					</p>
+				</div>
+				<div class="callout">
+					<p>
+						<strong>Interpretation boundary.</strong> The protocol includes
+						mechanisms intended to reinforce each assumption, but those mechanisms
+						do not turn an external condition into a contract guarantee. The system
+						may continue operating after an assumption fails, but the associated
+						security claim no longer holds. Launch reviews must substantiate the
+						assumptions against concrete parameters and operating conditions.
+					</p>
+				</div>
+
+				<nav class="assumption-nav" aria-label="Security assumption groups">
+					<a href="#assumptions-value">
+						<span>01–05</span>
+						Value and incentives
+					</a>
+					<a href="#assumptions-coordination">
+						<span>06–07, 13</span>
+						Coordination
+					</a>
+					<a href="#assumptions-liquidity">
+						<span>08–12</span>
+						Liquidity and backing
+					</a>
+					<a href="#assumptions-execution">
+						<span>14–16</span>
+						Execution and reporting
+					</a>
+				</nav>
+
+				<div class="assumption-notation" aria-labelledby="assumption-notation-title">
+					<p class="assumption-notation-title" id="assumption-notation-title">
+						Notation and provenance
+					</p>
+					<dl>
+						<div>
+							<dt><code>V<sub>x</sub></code></dt>
+							<dd>
+								Value of scope <code>x</code>, measured in one stated numeraire
+								at the same review timestamp. <code>U</code> is the set of child
+								universes created by the evaluated fork.
+							</dd>
+						</div>
+						<div>
+							<dt><code>m<sub>fork</sub></code> and <code>m<sub>access</sub></code></dt>
+							<dd>
+								Offchain model factors for assumptions 2 and 12. They have no
+								current contract value and are distinct from both a security
+								pool's <code>securityMultiplier</code> and the coordinator's
+								<code>openOracleSecurityMultiplierBps</code>.
+							</dd>
+						</div>
+						<div>
+							<dt><code>OpenInterest</code> and <code>DCF<sub>REP</sub></code></dt>
+							<dd>
+								Values for the same system scope and review timestamp, expressed
+								in a common numeraire. A launch assessment must state the DCF
+								horizon and discount assumptions.
+							</dd>
+						</div>
+					</dl>
+				</div>
+
+				<div class="assumption-group" id="assumptions-value">
+					<div class="assumption-group-heading">
+						<p class="assumption-group-number">01</p>
+						<div>
+							<h3>Value and incentives</h3>
+							<p>Why rational participants prefer the economically useful path.</p>
+						</div>
+					</div>
+					<ol class="assumption-grid">
+						<li value="1" data-assumption="01">
+							<h4>Users prefer more value</h4>
+							<p>
+								Users are economically motivated and prefer outcomes that leave
+								them with more value over otherwise-equivalent outcomes that
+								leave them with less.
+							</p>
+						</li>
+						<li value="2" class="assumption-wide" data-assumption="02">
+							<h4>A fork preserves enough system value</h4>
+							<p>
+								The aggregate market value of assets in the resulting child
+								universes remains large enough, relative to the pre-fork system,
+								to support the offchain fork-value factor
+								<code>m<sub>fork</sub></code>.
+							</p>
+							<div
+								class="equation assumption-equation"
+								id="eq-fork-value-preservation"
+								role="region"
+								aria-label="Fork value assumption"
+								tabindex="0"
+							>
+								<math
+									display="block"
+									aria-label="value of assets before the fork is less than or equal to the sum of value in future universes divided by the offchain fork-value factor m fork"
+									data-source="valueBeforeFork <= sum(futureUniverseValues) / forkValueFactor"
+								>
+									<mrow>
+										<msub>
+											<mi>V</mi>
+											<mtext>before fork</mtext>
+										</msub>
+										<mo>≤</mo>
+										<mfrac>
+											<mrow>
+												<munder>
+													<mo>∑</mo>
+													<mrow><mi>u</mi><mo>∈</mo><mi>U</mi></mrow>
+												</munder>
+												<msub>
+													<mi>V</mi>
+													<mi>u</mi>
+												</msub>
+											</mrow>
+											<msub>
+												<mi>m</mi>
+												<mtext>fork</mtext>
+											</msub>
+										</mfrac>
+									</mrow>
+								</math>
+								<p class="equation-caption">
+									<span class="equation-label">Fork value boundary.</span>
+									Aggregate future-universe value must support the stated
+									offchain factor relative to pre-fork value.
+								</p>
+							</div>
+						</li>
+						<li value="3" data-assumption="03">
+							<h4>Market capitalization approximates economic value</h4>
+							<p>
+								REP market capitalization is a sufficiently accurate proxy for
+								the discounted cash flow participants expect from the asset.
+							</p>
+						</li>
+						<li value="4" class="assumption-wide" data-assumption="04">
+							<h4>Users value truthful universes</h4>
+							<p>
+								Users prefer the universe or universes they judge truthful, so
+								economic activity and durable asset value concentrate there.
+							</p>
+							<div
+								class="equation assumption-equation"
+								id="eq-truthful-universe-value"
+								role="region"
+								aria-label="Truthful universe value assumption"
+								tabindex="0"
+							>
+								<math
+									display="block"
+									aria-label="value of assets before the fork is approximately equal to value of assets in the truthful universe"
+									data-source="valueBeforeFork ~= truthfulUniverseValue"
+								>
+									<mrow>
+										<msub>
+											<mi>V</mi>
+											<mtext>before fork</mtext>
+										</msub>
+										<mo>≈</mo>
+										<msub>
+											<mi>V</mi>
+											<mtext>truthful universe</mtext>
+										</msub>
+									</mrow>
+								</math>
+								<p class="equation-caption">
+									<span class="equation-label">Value concentration.</span>
+									The universe users regard as truthful retains approximately
+									the pre-fork system value.
+								</p>
+							</div>
+						</li>
+						<li value="5" data-assumption="05">
+							<h4>Operating costs are small</h4>
+							<p>
+								Transaction fees and other operating costs are negligible
+								relative to the financial value of the actions they protect.
+							</p>
+						</li>
+					</ol>
+				</div>
+
+				<div class="assumption-group" id="assumptions-coordination">
+					<div class="assumption-group-heading">
+						<p class="assumption-group-number">02</p>
+						<div>
+							<h3>Information and coordination</h3>
+							<p>What participants must know and be willing to do.</p>
+						</div>
+					</div>
+					<ol class="assumption-grid">
+						<li value="6" data-assumption="06">
+							<h4>Participants can access timely information</h4>
+							<p>
+								Users can reliably obtain enough information, soon enough, to
+								decide which market outcome and child universe they consider
+								truthful.
+							</p>
+						</li>
+						<li value="7" data-assumption="07">
+							<h4>Migration is practical</h4>
+							<p>
+								Users, exchanges, interfaces, and other integrations are willing
+								and able to migrate into the child universe they support.
+							</p>
+						</li>
+						<li value="13" data-assumption="13">
+							<h4>The system has enough independent users</h4>
+							<p>
+								Enough non-colluding participants exist for the relevant
+								activity. Prediction-market trading, for example, requires
+								participants willing to take opposing views.
+							</p>
+						</li>
+					</ol>
+				</div>
+
+				<div class="assumption-group" id="assumptions-liquidity">
+					<div class="assumption-group-heading">
+						<p class="assumption-group-number">03</p>
+						<div>
+							<h3>Liquidity and economic backing</h3>
+							<p>Where repair capital, dispute capital, and secured value come from.</p>
+						</div>
+					</div>
+					<ol class="assumption-grid">
+						<li value="8" data-assumption="08">
+							<h4>Auctions convert assets efficiently</h4>
+							<p>
+								A truth auction can sell some truthful-universe REP for ETH
+								lost during a fork at an acceptably small cost. Actual recovery
+								still depends on buyer demand; see <a href="#auction-a1"><code>AUCTION-A1</code></a>.
+							</p>
+						</li>
+						<li value="9" data-assumption="09">
+							<h4>Participants can mobilize REP to raise an alarm</h4>
+							<p>
+								Market participants can mobilize enough vault-backed REP through
+								security-vault operators to fund an early competing
+								<code>Invalid</code>, <code>Yes</code>, or <code>No</code> outcome
+								deposit. That keeps the local outcome contest active long enough
+								for better-capitalized participants to react and continue
+								escalation. See
+								<a href="./statoblast-whitepaper.html#escalation">Escalation Resolution</a>.
+							</p>
+						</li>
+						<li value="10" data-assumption="10">
+							<h4>REP is sufficiently liquid</h4>
+							<p>
+								Participants can acquire reasonable amounts of REP from the open
+								market when reporting, disputing, or migration requires it.
+							</p>
+						</li>
+						<li value="11" class="assumption-wide" data-assumption="11">
+							<h4>REP economic value exceeds open interest</h4>
+							<p>
+								The system can maintain the strict backing relationship below;
+								market capitalization is used as the observable proxy described
+								in assumption 3. This is an ongoing assumption: the inequality
+								must hold at every relevant time, comparing values for the same
+								system scope and timestamp.
+							</p>
+							<div
+								class="equation assumption-equation"
+								id="eq-rep-economic-backing"
+								role="region"
+								aria-label="Open interest backing assumption"
+								tabindex="0"
+							>
+								<math
+									display="block"
+									aria-label="open interest is less than REP discounted cash flow"
+									data-source="openInterest < repDiscountedCashFlow"
+								>
+									<mrow>
+										<mi>OpenInterest</mi>
+										<mo>&lt;</mo>
+										<msub>
+											<mi>DCF</mi>
+											<mi>REP</mi>
+										</msub>
+									</mrow>
+								</math>
+								<p class="equation-caption">
+									<span class="equation-label">Economic backing.</span>
+									REP discounted cash flow must remain strictly greater than
+									open interest.
+								</p>
+							</div>
+						</li>
+						<li value="12" class="assumption-wide" data-assumption="12">
+							<h4>Access to Statoblast is valuable</h4>
+							<p>
+								Users value continued access to prediction markets through
+								Statoblast at least as highly as the offchain access-value factor
+								<code>m<sub>access</sub></code> times the value secured by the
+								system.
+							</p>
+							<div
+								class="equation assumption-equation"
+								id="eq-statoblast-access-value"
+								role="region"
+								aria-label="Protocol access value assumption"
+								tabindex="0"
+							>
+								<math
+									display="block"
+									aria-label="value of Statoblast access is greater than or equal to the offchain access-value factor m access times secured value"
+									data-source="statoblastAccessValue >= accessValueFactor * securedValue"
+								>
+									<mrow>
+										<msub>
+											<mi>V</mi>
+											<mtext>Statoblast access</mtext>
+										</msub>
+										<mo>≥</mo>
+										<msub>
+											<mi>m</mi>
+											<mtext>access</mtext>
+										</msub>
+										<mo>×</mo>
+										<msub>
+											<mi>V</mi>
+											<mtext>secured</mtext>
+										</msub>
+									</mrow>
+								</math>
+								<p class="equation-caption">
+									<span class="equation-label">Access-value boundary.</span>
+									Continued Statoblast access must justify the stated offchain
+									factor.
+								</p>
+							</div>
+						</li>
+					</ol>
+				</div>
+
+				<div class="assumption-group" id="assumptions-execution">
+					<div class="assumption-group-heading">
+						<p class="assumption-group-number">04</p>
+						<div>
+							<h3>Execution and independent reporting</h3>
+							<p>What must remain available outside the protocol contracts.</p>
+						</div>
+					</div>
+					<ol class="assumption-grid">
+						<li value="14" data-assumption="14">
+							<h4>Ethereum remains censorship resistant</h4>
+							<p>
+								Users can submit Ethereum transactions and obtain inclusion
+								within the time required by the relevant protocol deadline.
+							</p>
+						</li>
+						<li value="15" data-assumption="15">
+							<h4>Honest reporters can access sufficient capital</h4>
+							<p>
+								Honest reporters hold or can acquire enough REP for local
+								escalation under the configured game rules. Price-oracle
+								correction additionally requires scenario-dependent WETH and REP
+								positions.
+							</p>
+							<p class="assumption-status">
+								<span>Parameterization required</span>
+								A launch review must quantify local-escalation REP and
+								scenario-bounded oracle capital using current base fee, pool open
+								interest, quoted REP/ETH price, concurrent reports, and a stated
+								dispute horizon. Continuous all-history availability has no finite
+								reserve because paid disputes can continue indefinitely; it remains
+								an <a href="#oracle-a1"><code>ORACLE-A1</code></a> assumption.
+								See the
+								<a href="./open-oracle-integration.html#parameters">oracle parameter model</a>.
+							</p>
+						</li>
+						<li value="16" data-assumption="16">
+							<h4>The reporting path has an independent corrector</h4>
+							<p>
+								A sponsor funds the request, and the coordinator posts the initial
+								WETH/REP position as the onchain reporter. At least one economically
+								independent arbitrager must be willing and able to fund the
+								replacement position for a false report before settlement. The
+								source assumption therefore requires two non-colluding reporting
+								principals, not two external submissions for every request. The
+								stronger availability, profitability, and inclusion requirement is
+								defined by <a href="#oracle-a1"><code>ORACLE-A1</code></a>.
+							</p>
+						</li>
+					</ol>
+				</div>
+			</section>
 
 			<section id="accepted-design-properties">
 				<h2>Accepted Design Properties for Security Review</h2>

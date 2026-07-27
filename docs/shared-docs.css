@@ -238,6 +238,203 @@ body.doc-openoracle .callout strong {
 	display: block;
 	margin-bottom: 0.25rem;
 }
+body.security-model .section-kicker {
+	margin-bottom: 0.3rem;
+	color: var(--blue);
+	font-size: 0.78rem;
+	font-weight: 800;
+	letter-spacing: 0.09em;
+	text-transform: uppercase;
+}
+body.security-model .assumption-heading {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.75fr);
+	gap: 1.5rem;
+	align-items: end;
+}
+body.security-model .assumption-heading h2 {
+	margin-bottom: 0;
+}
+body.security-model .assumption-heading-summary {
+	margin-bottom: 0;
+	color: var(--muted);
+}
+body.security-model .assumption-nav {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 0.65rem;
+	margin: 1.25rem 0 1.75rem;
+}
+body.security-model .assumption-nav a {
+	display: flex;
+	flex-direction: column;
+	gap: 0.12rem;
+	padding: 0.7rem 0.8rem;
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: var(--soft);
+	color: var(--ink);
+	font-size: 0.9rem;
+	font-weight: 700;
+	line-height: 1.35;
+	text-decoration: none;
+}
+body.security-model .assumption-nav a:hover {
+	border-color: var(--blue);
+}
+body.security-model .assumption-nav a:focus-visible {
+	outline: 2px solid var(--blue);
+	outline-offset: 0.15rem;
+}
+body.security-model .assumption-nav span {
+	color: var(--blue);
+	font-family: var(--docs-font-mono);
+	font-size: 0.74rem;
+	letter-spacing: 0.04em;
+}
+body.security-model .assumption-notation {
+	margin-bottom: 1.75rem;
+	padding: 0.85rem;
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: var(--soft);
+}
+body.security-model .assumption-notation-title {
+	margin-bottom: 0.65rem;
+	font-size: 0.86rem;
+	font-weight: 800;
+}
+body.security-model .assumption-notation dl {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 0.65rem;
+	margin: 0;
+}
+body.security-model .assumption-notation dl > div {
+	padding-left: 0.7rem;
+	border-left: 2px solid color-mix(in srgb, var(--blue) 38%, var(--line));
+}
+body.security-model .assumption-notation dt {
+	margin-bottom: 0.25rem;
+	color: var(--ink);
+	font-size: 0.83rem;
+	font-weight: 750;
+}
+body.security-model .assumption-notation dd {
+	margin: 0;
+	color: var(--muted);
+	font-size: 0.84rem;
+	line-height: 1.5;
+}
+body.security-model .assumption-group {
+	scroll-margin-top: 1rem;
+}
+body.security-model .assumption-group + .assumption-group {
+	margin-top: 1.75rem;
+	padding-top: 1.75rem;
+	border-top: 1px solid var(--line);
+}
+body.security-model .assumption-group-heading {
+	display: flex;
+	gap: 0.8rem;
+	align-items: flex-start;
+	margin-bottom: 0.85rem;
+}
+body.security-model .assumption-group-number {
+	flex: 0 0 auto;
+	min-width: 2.25rem;
+	margin: 0;
+	padding: 0.22rem 0.35rem;
+	border: 1px solid color-mix(in srgb, var(--blue) 38%, var(--line));
+	border-radius: 999px;
+	background: var(--blue-soft);
+	color: var(--blue);
+	font-family: var(--docs-font-mono);
+	font-size: 0.78rem;
+	font-weight: 800;
+	line-height: 1.4;
+	text-align: center;
+}
+body.security-model .assumption-group h3 {
+	margin: 0;
+	font-size: 1.08rem;
+	line-height: 1.35;
+}
+body.security-model .assumption-group-heading div > p {
+	margin: 0.12rem 0 0;
+	color: var(--muted);
+	font-size: 0.92rem;
+}
+body.security-model .assumption-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0.75rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+body.security-model .assumption-grid > li {
+	position: relative;
+	min-width: 0;
+	padding: 1rem 1rem 1rem 3.45rem;
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: color-mix(in srgb, var(--soft) 48%, var(--paper));
+}
+body.security-model .assumption-grid > li::before {
+	content: attr(data-assumption);
+	position: absolute;
+	top: 1.02rem;
+	left: 1rem;
+	color: var(--blue);
+	font-family: var(--docs-font-mono);
+	font-size: 0.82rem;
+	font-weight: 800;
+	letter-spacing: 0.03em;
+}
+body.security-model .assumption-grid > li::after {
+	content: "";
+	position: absolute;
+	top: 2.55rem;
+	bottom: 1rem;
+	left: 1.78rem;
+	width: 1px;
+	background: var(--line);
+}
+body.security-model .assumption-grid .assumption-wide {
+	grid-column: 1 / -1;
+}
+body.security-model .assumption-grid h4 {
+	margin: 0 0 0.35rem;
+	font-size: 1rem;
+	line-height: 1.35;
+}
+body.security-model .assumption-grid p {
+	color: var(--muted);
+	font-size: 0.94rem;
+	line-height: 1.55;
+}
+body.security-model .assumption-grid p:last-child {
+	margin-bottom: 0;
+}
+body.security-model .assumption-equation {
+	margin: 0.8rem 0 0;
+	padding: 0.45rem;
+	background: var(--paper);
+}
+body.security-model .assumption-status {
+	padding-top: 0.65rem;
+	border-top: 1px solid var(--line);
+}
+body.security-model .assumption-status span {
+	display: block;
+	margin-bottom: 0.2rem;
+	color: var(--gold);
+	font-size: 0.72rem;
+	font-weight: 800;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
 body.doc-openoracle table {
 	width: 100%;
 	margin-top: 0.75rem;
@@ -540,6 +737,21 @@ body.doc-openoracle td math {
 	}
 	body.doc-openoracle .invariant-metadata {
 		grid-template-columns: 1fr;
+	}
+	body.security-model .assumption-heading {
+		grid-template-columns: 1fr;
+		gap: 0.45rem;
+	}
+	body.security-model .assumption-nav,
+	body.security-model .assumption-grid,
+	body.security-model .assumption-notation dl {
+		grid-template-columns: 1fr;
+	}
+	body.security-model .assumption-grid .assumption-wide {
+		grid-column: auto;
+	}
+	body.security-model .assumption-grid > li {
+		padding-left: 3.15rem;
 	}
 }
 
