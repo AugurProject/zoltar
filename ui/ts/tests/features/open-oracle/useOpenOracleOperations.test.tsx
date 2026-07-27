@@ -23,6 +23,51 @@ const TOKEN1_ADDRESS = getAddress('0x00000000000000000000000000000000000000c1')
 const TOKEN2_ADDRESS = getAddress('0x00000000000000000000000000000000000000c2')
 const STATE_HASH = '0x1111111111111111111111111111111111111111111111111111111111111111'
 
+type OpenOracleApprovalTestCase = {
+	action: 'approveToken1' | 'approveToken2'
+	allowanceKey: 'token1Approval' | 'token2Approval'
+	changedContributionMessage: string
+	currentAllowance: bigint
+	disputeNewAmount1: string
+	disputeNewAmount2: string
+	disputeTokenToSwap: 'token1' | 'token2'
+	requiredAmount: bigint
+	token: 'token1' | 'token2'
+	tokenLabel: 'base token' | 'quote token'
+	underRequiredAmount: bigint
+}
+
+const OPEN_ORACLE_APPROVAL_TEST_CASES = [
+	{
+		action: 'approveToken1',
+		allowanceKey: 'token1Approval',
+		changedContributionMessage: 'The required base token approval changed',
+		currentAllowance: 100n,
+		disputeNewAmount1: '101',
+		disputeNewAmount2: '25',
+		disputeTokenToSwap: 'token1',
+		requiredAmount: 201n,
+		token: 'token1',
+		tokenLabel: 'base token',
+		underRequiredAmount: 150n,
+	},
+	{
+		action: 'approveToken2',
+		allowanceKey: 'token2Approval',
+		changedContributionMessage: 'The required quote token approval changed',
+		currentAllowance: 25n,
+		disputeNewAmount1: '101',
+		disputeNewAmount2: '26',
+		disputeTokenToSwap: 'token2',
+		requiredAmount: 51n,
+		token: 'token2',
+		tokenLabel: 'quote token',
+		underRequiredAmount: 30n,
+	},
+] satisfies ReadonlyArray<OpenOracleApprovalTestCase>
+
+type TestTokenAccessReadResult = { error: Error; status: 'failure' } | { result: bigint; status: 'success' }
+
 function createDeferred<T>() {
 	let resolve: (value: T) => void = () => undefined
 	let reject: (reason?: unknown) => void = () => undefined
@@ -138,6 +183,28 @@ function requireHookState(state: UseOpenOracleOperationsState | undefined) {
 	if (state === undefined) throw new Error('Hook state unavailable')
 
 	return state
+}
+
+function createTokenAccessReadResults({ token1Allowance = 100n, token2Allowance = 25n, unavailableToken }: { token1Allowance?: bigint; token2Allowance?: bigint; unavailableToken?: 'token1' | 'token2' | undefined } = {}): TestTokenAccessReadResult[] {
+	const createAllowanceResult = (token: 'token1' | 'token2', allowance: bigint): TestTokenAccessReadResult => (token === unavailableToken ? { error: new Error(`${token} allowance RPC unavailable`), status: 'failure' } : { result: allowance, status: 'success' })
+	return [createAllowanceResult('token1', token1Allowance), createAllowanceResult('token2', token2Allowance), { result: 1_000n, status: 'success' }, { result: 1_000n, status: 'success' }]
+}
+
+function setOpenOracleApprovalForm(state: UseOpenOracleOperationsState, testCase: OpenOracleApprovalTestCase) {
+	state.setOpenOracleForm(current => ({
+		...current,
+		disputeNewAmount1: testCase.disputeNewAmount1,
+		disputeNewAmount2: testCase.disputeNewAmount2,
+		disputeTokenToSwap: testCase.disputeTokenToSwap,
+	}))
+}
+
+async function invokeOpenOracleApproval(state: UseOpenOracleOperationsState, action: OpenOracleApprovalTestCase['action'], amount?: bigint) {
+	if (action === 'approveToken1') {
+		await state.approveToken1(amount)
+		return
+	}
+	await state.approveToken2(amount)
 }
 
 describe('useOpenOracleOperations', () => {
@@ -545,29 +612,214 @@ describe('useOpenOracleOperations', () => {
 		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toContain('would swap out WETH, not REP')
 	})
 
-	test('approval preflight blocks an approval that became sufficient during refresh', async () => {
-		const reportDetails = createOpenOracleReportDetails({
+	for (const approvalCase of OPEN_ORACLE_APPROVAL_TEST_CASES) {
+		test(`approval preflight blocks unavailable refreshed ${approvalCase.tokenLabel} allowance`, async () => {
+			const reportDetails = createOpenOracleReportDetails({
+				currentReporter: getAddress('0x00000000000000000000000000000000000000dd'),
+				reportTimestamp: 1n,
+				settlementTime: 100n,
+			})
+			let tokenAccessLoadCount = 0
+			const approveErc20 = mock(async () => ({
+				action: approvalCase.action,
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000db' as const,
+			}))
+			const dependencies = createOpenOracleOperationsDependencies({
+				approveErc20,
+				loadOpenOracleReportDetails: mock(async () => reportDetails),
+				readOptionalMulticall: mock(async () => {
+					tokenAccessLoadCount += 1
+					return createTokenAccessReadResults({
+						unavailableToken: tokenAccessLoadCount === 1 ? undefined : approvalCase.token,
+					})
+				}),
+			})
+			let hookState: UseOpenOracleOperationsState | undefined
+			const Harness = createHarness(dependencies, state => {
+				hookState = state
+			})
+			const renderedComponent = await renderIntoDocument(h(Harness, {}))
+			cleanupRenderedComponent = renderedComponent.cleanup
+
+			await act(async () => {
+				await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+			})
+			await waitFor(() => expect(requireHookState(hookState).openOracleTokenAccessState[approvalCase.allowanceKey].value).toBe(approvalCase.currentAllowance))
+			await act(() => {
+				setOpenOracleApprovalForm(requireHookState(hookState), approvalCase)
+			})
+			await act(async () => {
+				await invokeOpenOracleApproval(requireHookState(hookState), approvalCase.action)
+			})
+
+			expect(approveErc20).not.toHaveBeenCalled()
+			expect(tokenAccessLoadCount).toBe(2)
+			expect(requireHookState(hookState).openOracleFeedback?.status.detail).toContain(`Unable to verify ${approvalCase.tokenLabel} approval before submitting this approval`)
+			expect(requireHookState(hookState).openOracleFeedback?.status.detail).toContain('allowance RPC unavailable')
+		})
+
+		test(`approval preflight blocks a changed explicit ${approvalCase.tokenLabel} contribution`, async () => {
+			const loadedReport = createOpenOracleReportDetails({
+				currentReporter: getAddress('0x00000000000000000000000000000000000000dd'),
+				reportTimestamp: 1n,
+				settlementTime: 100n,
+			})
+			const refreshedReport = createOpenOracleReportDetails({
+				...loadedReport,
+				feePercentage: 1_000_000n,
+			})
+			let reportLoadCount = 0
+			const approveErc20 = mock(async () => ({
+				action: approvalCase.action,
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000dc' as const,
+			}))
+			const dependencies = createOpenOracleOperationsDependencies({
+				approveErc20,
+				loadOpenOracleReportDetails: mock(async () => {
+					reportLoadCount += 1
+					return reportLoadCount === 1 ? loadedReport : refreshedReport
+				}),
+			})
+			let hookState: UseOpenOracleOperationsState | undefined
+			const Harness = createHarness(dependencies, state => {
+				hookState = state
+			})
+			const renderedComponent = await renderIntoDocument(h(Harness, {}))
+			cleanupRenderedComponent = renderedComponent.cleanup
+
+			await act(async () => {
+				await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+			})
+			await act(() => {
+				setOpenOracleApprovalForm(requireHookState(hookState), approvalCase)
+			})
+			await act(async () => {
+				await invokeOpenOracleApproval(requireHookState(hookState), approvalCase.action, approvalCase.requiredAmount)
+			})
+
+			expect(approveErc20).not.toHaveBeenCalled()
+			expect(reportLoadCount).toBe(2)
+			expect(requireHookState(hookState).openOracleFeedback?.status.detail).toContain(approvalCase.changedContributionMessage)
+		})
+
+		test(`approval preflight blocks a refreshed ${approvalCase.tokenLabel} allowance that became sufficient`, async () => {
+			const reportDetails = createOpenOracleReportDetails({
+				currentReporter: getAddress('0x00000000000000000000000000000000000000dd'),
+				reportTimestamp: 1n,
+				settlementTime: 100n,
+			})
+			let tokenAccessLoadCount = 0
+			const approveErc20 = mock(async () => ({
+				action: approvalCase.action,
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000dd' as const,
+			}))
+			const dependencies = createOpenOracleOperationsDependencies({
+				approveErc20,
+				loadOpenOracleReportDetails: mock(async () => reportDetails),
+				readOptionalMulticall: mock(async () => {
+					tokenAccessLoadCount += 1
+					return createTokenAccessReadResults({
+						token1Allowance: approvalCase.token === 'token1' && tokenAccessLoadCount > 1 ? approvalCase.requiredAmount : 100n,
+						token2Allowance: approvalCase.token === 'token2' && tokenAccessLoadCount > 1 ? approvalCase.requiredAmount : 25n,
+					})
+				}),
+			})
+			let hookState: UseOpenOracleOperationsState | undefined
+			const Harness = createHarness(dependencies, state => {
+				hookState = state
+			})
+			const renderedComponent = await renderIntoDocument(h(Harness, {}))
+			cleanupRenderedComponent = renderedComponent.cleanup
+
+			await act(async () => {
+				await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+			})
+			await waitFor(() => expect(requireHookState(hookState).openOracleTokenAccessState[approvalCase.allowanceKey].value).toBe(approvalCase.currentAllowance))
+			await act(() => {
+				setOpenOracleApprovalForm(requireHookState(hookState), approvalCase)
+			})
+			await act(async () => {
+				await invokeOpenOracleApproval(requireHookState(hookState), approvalCase.action, approvalCase.requiredAmount)
+			})
+
+			expect(approveErc20).not.toHaveBeenCalled()
+			expect(tokenAccessLoadCount).toBe(2)
+			expect(requireHookState(hookState).openOracleFeedback?.status.detail).toContain('already sufficient')
+		})
+
+		for (const rejectionCase of [
+			{
+				amount: approvalCase.currentAllowance,
+				expectedMessage: `The ${approvalCase.tokenLabel} approval must increase the current allowance`,
+				name: 'non-increasing explicit approval',
+			},
+			{
+				amount: approvalCase.underRequiredAmount,
+				expectedMessage: `The ${approvalCase.tokenLabel} approval must cover the refreshed dispute requirement`,
+				name: 'under-required explicit approval',
+			},
+		]) {
+			test(`approval preflight blocks ${rejectionCase.name} for the ${approvalCase.tokenLabel}`, async () => {
+				const reportDetails = createOpenOracleReportDetails({
+					currentReporter: getAddress('0x00000000000000000000000000000000000000dd'),
+					reportTimestamp: 1n,
+					settlementTime: 100n,
+				})
+				const approveErc20 = mock(async () => ({
+					action: approvalCase.action,
+					hash: '0x00000000000000000000000000000000000000000000000000000000000000de' as const,
+				}))
+				const dependencies = createOpenOracleOperationsDependencies({
+					approveErc20,
+					loadOpenOracleReportDetails: mock(async () => reportDetails),
+				})
+				let hookState: UseOpenOracleOperationsState | undefined
+				const Harness = createHarness(dependencies, state => {
+					hookState = state
+				})
+				const renderedComponent = await renderIntoDocument(h(Harness, {}))
+				cleanupRenderedComponent = renderedComponent.cleanup
+
+				await act(async () => {
+					await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+				})
+				await waitFor(() => expect(requireHookState(hookState).openOracleTokenAccessState[approvalCase.allowanceKey].value).toBe(approvalCase.currentAllowance))
+				await act(() => {
+					setOpenOracleApprovalForm(requireHookState(hookState), approvalCase)
+				})
+				await act(async () => {
+					await invokeOpenOracleApproval(requireHookState(hookState), approvalCase.action, rejectionCase.amount)
+				})
+
+				expect(approveErc20).not.toHaveBeenCalled()
+				expect(requireHookState(hookState).openOracleFeedback?.status.detail).toContain(rejectionCase.expectedMessage)
+			})
+		}
+	}
+
+	test('approval preflight blocks a quote token approval that is no longer required after refresh', async () => {
+		const loadedReport = createOpenOracleReportDetails({
+			currentAmount2: 25n,
 			currentReporter: getAddress('0x00000000000000000000000000000000000000dd'),
+			escalationHalt: 200n,
+			multiplier: 200n,
 			reportTimestamp: 1n,
 			settlementTime: 100n,
 		})
-		let tokenAccessLoadCount = 0
+		const refreshedReport = createOpenOracleReportDetails({
+			...loadedReport,
+			currentAmount2: 30n,
+		})
+		let reportLoadCount = 0
 		const approveErc20 = mock(async () => ({
-			action: 'approveToken1' as const,
-			hash: '0x00000000000000000000000000000000000000000000000000000000000000db' as const,
+			action: 'approveToken2' as const,
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000df' as const,
 		}))
 		const dependencies = createOpenOracleOperationsDependencies({
 			approveErc20,
-			loadOpenOracleReportDetails: mock(async () => reportDetails),
-			readOptionalMulticall: mock(async () => {
-				tokenAccessLoadCount += 1
-				const token1Allowance = tokenAccessLoadCount === 1 ? 100n : 201n
-				return [
-					{ result: token1Allowance, status: 'success' as const },
-					{ result: 25n, status: 'success' as const },
-					{ result: 1_000n, status: 'success' as const },
-					{ result: 1_000n, status: 'success' as const },
-				]
+			loadOpenOracleReportDetails: mock(async () => {
+				reportLoadCount += 1
+				return reportLoadCount === 1 ? loadedReport : refreshedReport
 			}),
 		})
 		let hookState: UseOpenOracleOperationsState | undefined
@@ -580,22 +832,21 @@ describe('useOpenOracleOperations', () => {
 		await act(async () => {
 			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
 		})
-		await waitFor(() => expect(requireHookState(hookState).openOracleTokenAccessState.token1Approval.value).toBe(100n))
 		await act(() => {
 			requireHookState(hookState).setOpenOracleForm(current => ({
 				...current,
-				disputeNewAmount1: '101',
-				disputeNewAmount2: '25',
+				disputeNewAmount1: '200',
+				disputeNewAmount2: '30',
 				disputeTokenToSwap: 'token1',
 			}))
 		})
 		await act(async () => {
-			await requireHookState(hookState).approveToken1(201n)
+			await requireHookState(hookState).approveToken2()
 		})
 
 		expect(approveErc20).not.toHaveBeenCalled()
-		expect(tokenAccessLoadCount).toBe(2)
-		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toContain('already sufficient')
+		expect(reportLoadCount).toBe(2)
+		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toContain('No quote token approval is required for the refreshed report')
 	})
 
 	test('approval failures use base and quote token terminology', async () => {
