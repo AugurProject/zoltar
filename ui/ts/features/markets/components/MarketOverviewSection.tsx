@@ -2,7 +2,6 @@ import * as commonCopy from '../../../copy/common.js'
 import * as marketCopy from '../../../copy/market.js'
 import { useState } from 'preact/hooks'
 import type { Address } from '@zoltar/shared/ethereum'
-import { AddressValue } from '../../../components/AddressValue.js'
 import { ChildUniverseDeploymentModal } from '../../universes/components/ChildUniverseDeploymentModal.js'
 import { CurrencyValue } from '../../../components/CurrencyValue.js'
 import { ChildUniverseDetails } from '../../universes/components/ChildUniverseDetails.js'
@@ -15,6 +14,7 @@ import { ScalarDeploymentSection } from './ScalarDeploymentSection.js'
 import { StateHint } from '../../../components/StateHint.js'
 import { TimestampValue } from '../../../components/TimestampValue.js'
 import { WorkflowSubsection } from '../../../components/WorkflowSubsection.js'
+import { WalletAssetControl } from '../../../components/WalletAssetControl.js'
 import type { LoadableValueState } from '../../../lib/loadState.js'
 import { getUniversePresentation } from '../../../lib/userCopy.js'
 import { formatUniverseCollectionLabel } from '../../universes/lib/universe.js'
@@ -66,7 +66,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 							</>
 						) : undefined}
 						<MetricField label={commonCopy.reputationToken}>
-							<AddressValue address={rootUniverse.reputationToken} />
+							<WalletAssetControl address={rootUniverse.reputationToken} isSupportedChain={isMainnet} tokenLabel={`${currentUniverseName ?? commonCopy.universe} ${commonCopy.rep}`} />
 						</MetricField>
 						<MetricField label={marketCopy.totalTheoreticalSupply}>
 							<CurrencyValue value={rootUniverse.totalTheoreticalSupply} suffix={commonCopy.rep} />
@@ -117,7 +117,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 								pendingLabel: commonCopy.opening,
 							})}
 							renderBadge={child => <ChildUniverseStatusBadge child={child} />}
-							renderBody={child => <ChildUniverseDetails child={child} />}
+							renderBody={child => <ChildUniverseDetails child={child} isSupportedChain={isMainnet} />}
 							surface='flat'
 						/>
 					)}
@@ -153,7 +153,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 					>
 						{selectedChildUniverse === undefined ? undefined : (
 							<EntityCard className='compact' surface='flat' title={marketCopy.selectedChildUniverse} variant='compact'>
-								<ChildUniverseDetails child={selectedChildUniverse} />
+								<ChildUniverseDetails child={selectedChildUniverse} isSupportedChain={isMainnet} />
 							</EntityCard>
 						)}
 					</ChildUniverseDeploymentModal>

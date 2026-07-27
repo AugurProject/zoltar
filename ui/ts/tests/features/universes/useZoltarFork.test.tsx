@@ -1,7 +1,7 @@
 /// <reference types='bun-types' />
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
-import { h } from 'preact'
+import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { getAddress, type Hash, zeroAddress } from '@zoltar/shared/ethereum'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../../../lib/activeEnvironment.js'
@@ -340,5 +340,70 @@ describe('useZoltarFork', () => {
 		expect(loadZoltarForkAccess).toHaveBeenCalledTimes(1)
 		expect(requireHookState(hookState).zoltarForkFeedback?.status.tone).toBe('success')
 		expect(requireHookState(hookState).zoltarForkResult?.questionId).toBe('0xf')
+	})
+
+	test('reloads child REP access when a split deploys an existing child universe id', async () => {
+		const childUniverse = {
+			exists: false,
+			forkTime: 1n,
+			outcomeIndex: 1n,
+			outcomeLabel: 'Yes',
+			parentUniverseId: 1n,
+			reputationToken: zeroAddress,
+			universeId: 2n,
+		}
+		const deployedChildUniverse = {
+			...childUniverse,
+			exists: true,
+			reputationToken: getAddress('0x00000000000000000000000000000000000000d4'),
+		}
+		const loadZoltarForkAccess = mock(async (_accountAddress: string, _reputationToken: string, _universeId: bigint, childUniverses: ZoltarUniverseSummary['childUniverses']) => [...createForkAccessResults(), ...childUniverses.map(() => ({ result: 10n, status: 'success' as const }))])
+		const dependencies = createZoltarForkDependencies({ loadZoltarForkAccess })
+		const createForkedUniverse = (child: ZoltarUniverseSummary['childUniverses'][number]) =>
+			createUniverse({
+				childUniverses: [child],
+				hasForked: true,
+				reputationToken: REPUTATION_TOKEN_ADDRESS,
+			})
+
+		let hookState: UseZoltarForkState | undefined
+		const Harness = function ZoltarForkHarness({ universe }: { universe: ZoltarUniverseSummary }) {
+			hookState = useZoltarFork(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					ensureZoltarUniverse: async () => universe,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+					refreshZoltarUniverse: async () => undefined,
+					shouldAutoLoadForkAccess: true,
+					zoltarUniverse: universe,
+				},
+				dependencies,
+			)
+
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(h(Harness, { universe: createForkedUniverse(childUniverse) }))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await Promise.resolve()
+		})
+		expect(loadZoltarForkAccess).toHaveBeenCalledTimes(1)
+
+		await act(async () => {
+			render(h(Harness, { universe: createForkedUniverse(deployedChildUniverse) }), renderedComponent.container)
+		})
+		await act(async () => {
+			await Promise.resolve()
+		})
+
+		expect(loadZoltarForkAccess).toHaveBeenCalledTimes(2)
+		expect(loadZoltarForkAccess.mock.calls[1]?.[3]).toEqual([deployedChildUniverse])
+		expect(requireHookState(hookState).zoltarMigrationChildRepBalances).toEqual({ '2': 10n })
 	})
 })

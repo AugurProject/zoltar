@@ -881,6 +881,45 @@ button.currency-value.copyable:hover:not(:disabled) {
 	outline-offset: 2px;
 }
 
+.wallet-asset-control {
+	display: inline-flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--space-1) var(--space-2);
+	max-width: 100%;
+	min-width: 0;
+}
+
+.wallet-asset-control > .address-value {
+	flex: 1 1 18rem;
+}
+
+button.wallet-asset-action {
+	flex: 0 0 auto;
+	min-height: 2rem;
+	padding-block: 0.3rem;
+	font-family: var(--font-family-sans);
+	font-size: var(--font-caption);
+	font-weight: 600;
+}
+
+.wallet-asset-feedback {
+	flex: 1 0 100%;
+	color: var(--danger);
+	font-family: var(--font-family-sans);
+	font-size: var(--font-caption);
+	font-weight: 400;
+	line-height: 1.4;
+}
+
+.wallet-asset-prerequisite {
+	flex: 1 0 100%;
+	color: var(--text-secondary);
+	font-family: var(--font-family-sans);
+	font-size: var(--font-caption);
+	line-height: 1.4;
+}
+
 .route-shell {
 	min-width: 0;
 	margin: 0;
@@ -7534,6 +7573,7 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	.identifier-value.copyable,
 	.metric-label-refresh,
 	.security-pool-link,
+	button.wallet-asset-action,
 	.universe-link {
 		min-height: var(--touch-target-min);
 	}

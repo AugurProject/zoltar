@@ -31,7 +31,7 @@ type UseZoltarForkParameters = {
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
 	refreshState: WriteOperationsParameters['refreshState']
-	refreshZoltarUniverse: () => Promise<void>
+	refreshZoltarUniverse: () => Promise<ZoltarUniverseSummary | undefined>
 	shouldAutoLoadForkAccess: boolean
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 }
@@ -152,8 +152,8 @@ export function useZoltarFork(
 	const getSuccessTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'REP approved for fork' : 'Zoltar fork submitted')
 	const getFailureTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'Fork REP approval failed' : 'Zoltar fork failed')
 
-	const loadZoltarForkAccess = async () => {
-		const reputationToken = zoltarUniverse?.reputationToken ?? (activeUniverseId === 0n ? getGenesisReputationTokenAddress() : undefined)
+	const loadZoltarForkAccess = async (universe: ZoltarUniverseSummary | undefined = zoltarUniverse) => {
+		const reputationToken = universe?.reputationToken ?? (activeUniverseId === 0n ? getGenesisReputationTokenAddress() : undefined)
 		if (accountAddress === undefined || reputationToken === undefined || reputationToken === zeroAddress) {
 			zoltarForkApproval.value = {
 				error: undefined,
@@ -167,8 +167,8 @@ export function useZoltarFork(
 		}
 
 		const isCurrent = nextForkAccessLoad()
-		const universeId = zoltarUniverse?.universeId ?? activeUniverseId
-		const childUniverses = (zoltarUniverse?.childUniverses ?? []).filter(child => child.reputationToken !== zeroAddress)
+		const universeId = universe?.universeId ?? activeUniverseId
+		const childUniverses = (universe?.childUniverses ?? []).filter(child => child.reputationToken !== zeroAddress)
 		if (isCurrent())
 			zoltarForkApproval.value = {
 				...zoltarForkApproval.value,
@@ -258,11 +258,12 @@ export function useZoltarFork(
 			}
 
 			try {
+				let refreshedUniverse: ZoltarUniverseSummary | undefined
 				if (refreshAfter) {
 					await refreshWalletStateOnly(refreshState)
-					await refreshZoltarUniverse()
+					refreshedUniverse = await refreshZoltarUniverse()
 				}
-				await loadZoltarForkAccess()
+				await loadZoltarForkAccess(refreshedUniverse)
 			} catch (error) {
 				const message = formatRefreshErrorMessage(error, 'Zoltar fork transaction succeeded, but refreshing the UI failed')
 				zoltarForkFeedback.value = createWarningActionFeedback(result.action, getSuccessTitle(actionName), message, result.hash)
@@ -306,7 +307,7 @@ export function useZoltarFork(
 			zoltarForkError.value = getErrorMessage(error, 'Failed to load Zoltar fork access')
 			console.error('[zoltar-fork] failed to auto-load fork access', error)
 		})
-	}, [accountAddress, activeUniverseId, shouldAutoLoadForkAccess, zoltarUniverse?.reputationToken, zoltarUniverse?.childUniverses.map(child => child.universeId.toString()).join(',')])
+	}, [accountAddress, activeUniverseId, shouldAutoLoadForkAccess, zoltarUniverse?.reputationToken, zoltarUniverse?.childUniverses.map(child => `${child.universeId.toString()}:${child.exists ? 'deployed' : 'undeployed'}:${child.reputationToken}`).join(',')])
 
 	return {
 		approveZoltarForkRep,
