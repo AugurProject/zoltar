@@ -545,7 +545,7 @@ describe('ReportingSection', () => {
 
 	test('blocks stale-price submission and links to the pool oracle recovery view', async () => {
 		let openOracleCalls = 0
-		const reason = "The pool's oracle price expired. Request a new price in Open Oracle, then retry."
+		const reason = "The pool's oracle price expired. Request a new price in Price Oracle, then retry."
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -566,7 +566,7 @@ describe('ReportingSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Report No', 'A current pool oracle price is required before reporting.')
 		expect(within(document.body).getByRole('status').textContent).toContain(reason)
 		expect(document.body.textContent?.match(new RegExp(reason.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) ?? []).toHaveLength(1)
-		fireEvent.click(within(document.body).getByRole('button', { name: 'Open Oracle' }))
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Manage Pool Price' }))
 		expect(openOracleCalls).toBe(1)
 	})
 

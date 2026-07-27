@@ -1202,6 +1202,7 @@ describe('useOpenOracleOperations', () => {
 		await act(async () => {
 			requireHookState(hookState).setOpenOracleCreateForm(current => ({
 				...current,
+				disputeDelay: '0',
 				exactToken1Report: '10',
 				initialToken2Amount: '5',
 				settlementTime: '1',
@@ -1251,6 +1252,7 @@ describe('useOpenOracleOperations', () => {
 		await act(async () => {
 			requireHookState(hookState).setOpenOracleCreateForm(current => ({
 				...current,
+				disputeDelay: '0',
 				exactToken1Report: '10',
 				initialToken2Amount: '5',
 				settlementTime: '1',

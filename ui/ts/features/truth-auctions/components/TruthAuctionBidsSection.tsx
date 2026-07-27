@@ -42,23 +42,31 @@ type ViewerTruthAuctionBidsSectionProps = {
 
 function AuctionBidsHeader() {
 	return (
-		<div className='truth-auction-bid-row is-wide is-no-actions is-header'>
-			<span className='truth-auction-bid-row-label'>{forkAuctionCopy.priceEthPerRep}</span>
-			<span>{forkAuctionCopy.bidder}</span>
-			<span>{forkAuctionCopy.bidAmountEth}</span>
-			<span>{forkAuctionCopy.loadedDepthEth}</span>
-			<span className='truth-auction-bid-row-status'>{commonCopy.status}</span>
+		<div className='truth-auction-bid-row is-wide is-no-actions is-header' role='row'>
+			<span className='truth-auction-bid-row-label' role='columnheader'>
+				{forkAuctionCopy.priceEthPerRep}
+			</span>
+			<span role='columnheader'>{forkAuctionCopy.bidder}</span>
+			<span role='columnheader'>{forkAuctionCopy.bidAmountEth}</span>
+			<span role='columnheader'>{forkAuctionCopy.loadedDepthEth}</span>
+			<span className='truth-auction-bid-row-status' role='columnheader'>
+				{commonCopy.status}
+			</span>
 		</div>
 	)
 }
 
 function ViewerBidsHeader({ showActions }: { showActions: boolean }) {
 	return (
-		<div className={`truth-auction-bid-row is-wallet ${showActions ? '' : 'is-no-actions'} is-header`}>
-			{showActions ? <span>{commonCopy.selected}</span> : undefined}
-			<span className='truth-auction-bid-row-label'>{forkAuctionCopy.priceEthPerRep}</span>
-			<span>{forkAuctionCopy.bidAmountEth}</span>
-			<span className='truth-auction-bid-row-status'>{commonCopy.status}</span>
+		<div className={`truth-auction-bid-row is-wallet ${showActions ? '' : 'is-no-actions'} is-header`} role='row'>
+			{showActions ? <span role='columnheader'>{commonCopy.selected}</span> : undefined}
+			<span className='truth-auction-bid-row-label' role='columnheader'>
+				{forkAuctionCopy.priceEthPerRep}
+			</span>
+			<span role='columnheader'>{forkAuctionCopy.bidAmountEth}</span>
+			<span className='truth-auction-bid-row-status' role='columnheader'>
+				{commonCopy.status}
+			</span>
 		</div>
 	)
 }
@@ -89,23 +97,23 @@ export function TruthAuctionBidsSection({ aggregatedAuctionBidCountForLoadedTick
 			{hasLoadedData && error === undefined && !loadingAggregatedAuctionBids && loadedTickCount === 0 ? <p className='detail'>{forkAuctionCopy.auctionPriceLevelsEmpty}</p> : undefined}
 			{hasLoadedData && error === undefined && !loadingAggregatedAuctionBids && loadedTickCount > 0 && rows.length === 0 ? <p className='detail'>{forkAuctionCopy.loadedPriceBidsEmpty}</p> : undefined}
 			{rows.length === 0 ? undefined : (
-				<div className='truth-auction-bid-table' role='region' aria-label={forkAuctionCopy.auctionBidHistory}>
+				<div className='truth-auction-bid-table' role='table' aria-label={forkAuctionCopy.auctionBidHistory}>
 					<AuctionBidsHeader />
 					{rows.map(row => (
-						<div className='truth-auction-bid-row is-wide is-no-actions' key={row.key}>
-							<span className='truth-auction-bid-row-label' data-label={forkAuctionCopy.priceEthPerRep}>
+						<div className='truth-auction-bid-row is-wide is-no-actions' key={row.key} role='row'>
+							<span className='truth-auction-bid-row-label' data-label={forkAuctionCopy.priceEthPerRep} role='cell'>
 								{renderPriceValue(row.price)}
 							</span>
-							<div className='truth-auction-bid-row-address' data-label={forkAuctionCopy.bidder}>
-								<AddressValue address={row.bidder} />
+							<div className='truth-auction-bid-row-address' data-label={forkAuctionCopy.bidder} role='cell'>
+								<AddressValue address={row.bidder} copyable={false} />
 							</div>
-							<span data-label={forkAuctionCopy.bidAmountEth}>
-								<CurrencyValue value={row.ethAmount} suffix={commonCopy.eth} />
+							<span data-label={forkAuctionCopy.bidAmountEth} role='cell'>
+								<CurrencyValue value={row.ethAmount} suffix={commonCopy.eth} copyable={false} />
 							</span>
-							<span data-label={forkAuctionCopy.loadedDepthEth}>
-								<CurrencyValue value={row.cumulativeEth} suffix={commonCopy.eth} />
+							<span data-label={forkAuctionCopy.loadedDepthEth} role='cell'>
+								<CurrencyValue value={row.cumulativeEth} suffix={commonCopy.eth} copyable={false} />
 							</span>
-							<span className='truth-auction-bid-row-status' data-label={commonCopy.status}>
+							<span className='truth-auction-bid-row-status' data-label={commonCopy.status} role='cell'>
 								<span className={`truth-auction-status-pill ${row.statusToneClassName}`}>{row.statusLabel}</span>
 							</span>
 						</div>
@@ -136,12 +144,12 @@ export function ViewerTruthAuctionBidsSection({ accountAddress, error, hasLoaded
 			)}
 			{accountAddress !== undefined && hasLoadedData && error === undefined && !loadingTruthAuctionBook && rows.length === 0 ? <p className='detail'>{forkAuctionCopy.walletBidsEmpty}</p> : undefined}
 			{rows.length === 0 ? undefined : (
-				<div className='truth-auction-bid-table'>
+				<div className='truth-auction-bid-table' role='table' aria-label={forkAuctionCopy.myBids}>
 					<ViewerBidsHeader showActions={showSettlementActionColumn} />
 					{rows.map(row => (
-						<div className={`truth-auction-bid-row is-wallet ${showSettlementActionColumn ? '' : 'is-no-actions'}`} key={row.key}>
+						<div className={`truth-auction-bid-row is-wallet ${showSettlementActionColumn ? '' : 'is-no-actions'}`} key={row.key} role='row'>
 							{showSettlementActionColumn ? (
-								<div className='truth-auction-bid-row-actions' data-label={commonCopy.selected}>
+								<div className='truth-auction-bid-row-actions' data-label={commonCopy.selected} role='cell'>
 									{(() => {
 										const settlementControl = row.settlementControl
 										if (settlementControl === undefined) return undefined
@@ -149,13 +157,13 @@ export function ViewerTruthAuctionBidsSection({ accountAddress, error, hasLoaded
 									})()}
 								</div>
 							) : undefined}
-							<span className='truth-auction-bid-row-label' data-label={forkAuctionCopy.priceEthPerRep}>
+							<span className='truth-auction-bid-row-label' data-label={forkAuctionCopy.priceEthPerRep} role='cell'>
 								{renderPriceValue(row.price)}
 							</span>
-							<span data-label={forkAuctionCopy.bidAmountEth}>
-								<CurrencyValue value={row.ethAmount} suffix={commonCopy.eth} />
+							<span data-label={forkAuctionCopy.bidAmountEth} role='cell'>
+								<CurrencyValue value={row.ethAmount} suffix={commonCopy.eth} copyable={false} />
 							</span>
-							<span className='truth-auction-bid-row-status' data-label={commonCopy.status}>
+							<span className='truth-auction-bid-row-status' data-label={commonCopy.status} role='cell'>
 								<span className={`truth-auction-status-pill ${row.statusToneClassName}`}>{row.statusLabel}</span>
 							</span>
 						</div>

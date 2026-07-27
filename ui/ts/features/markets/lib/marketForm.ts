@@ -6,6 +6,9 @@ import { formatCurrencyInputBalance } from '../../../lib/formatters.js'
 
 export { parseBigIntInput, tryParseBigIntInput }
 
+const DEFAULT_OPEN_ORACLE_DISPUTE_DELAY_SECONDS = '3600'
+const DEFAULT_OPEN_ORACLE_SETTLEMENT_DELAY_SECONDS = '86400'
+
 export function getDefaultMarketFormState(): MarketFormState {
 	return {
 		answerUnit: '',
@@ -54,7 +57,7 @@ export function getDefaultOpenOracleFormState(): OpenOracleFormState {
 
 export function getDefaultOpenOracleCreateFormState(): OpenOracleCreateFormState {
 	return {
-		disputeDelay: '0',
+		disputeDelay: DEFAULT_OPEN_ORACLE_DISPUTE_DELAY_SECONDS,
 		escalationHalt: '0',
 		exactToken1Report: '0',
 		initialToken2Amount: '0',
@@ -62,7 +65,7 @@ export function getDefaultOpenOracleCreateFormState(): OpenOracleCreateFormState
 		feePercentage: '0',
 		multiplier: '100',
 		protocolFee: '0',
-		settlementTime: '0',
+		settlementTime: DEFAULT_OPEN_ORACLE_SETTLEMENT_DELAY_SECONDS,
 		settlerReward: '0',
 		token1Address: '',
 		token2Address: '',

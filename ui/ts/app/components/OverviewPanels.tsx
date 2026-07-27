@@ -199,7 +199,9 @@ export function OverviewPanels({
 					>
 						<CurrencyValue value={repUsdcPrice} loading={isLoadingRepPrices} suffix={appCopy.usdc} units={6} />
 					</MetricField>
-					<MetricField label={commonCopy.universe}>{universeLabel}</MetricField>
+					<MetricField className='overview-universe-metric' label={commonCopy.universe}>
+						{universeLabel}
+					</MetricField>
 					{shouldShowParentUniverse ? (
 						<MetricField className='overview-metric-secondary' label={appCopy.parentUniverse}>
 							<UniverseLink universeId={parentUniverseId} />
