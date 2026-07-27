@@ -1,6 +1,7 @@
 import type { ConnectivitySettings } from './connectivity.js'
 import type { ExecutionRecord, OperationEntry, OperatorSnapshot, OpportunitySnapshot, StrategySettings, TransactionActivity } from './operator-state.js'
-import { blockAgeLabel, botStatusLabels, exactAmount, marketPriceChartDescription, opportunityDecisionReason, requiredSignerPrivateKey, signerControlState, sumSignedDecimals, transactionKindLabel } from './dashboard-format.js'
+import type { PositionRecord } from './position-store.js'
+import { blockAgeLabel, botStatusLabels, chartPointX, countLabel, exactAmount, marketPriceChartDescription, opportunityDecisionReason, requiredSignerPrivateKey, signerControlState, sumSignedDecimals, transactionKindLabel } from './dashboard-format.js'
 import type { SubmissionSettings } from './transaction-submission.js'
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
@@ -51,7 +52,7 @@ function amount(value: string | undefined, symbol: string) {
 }
 
 function isSnapshot(value: unknown): value is OperatorSnapshot {
-	return typeof value === 'object' && value !== null && 'status' in value && 'settings' in value && 'submission' in value && 'opportunities' in value && 'executionHistory' in value && 'transactionActivity' in value
+	return typeof value === 'object' && value !== null && 'status' in value && 'settings' in value && 'submission' in value && 'opportunities' in value && 'executionHistory' in value && 'positions' in value && 'transactionActivity' in value
 }
 
 async function api<T>(path: string, init?: RequestInit) {
@@ -86,9 +87,10 @@ function headingRow(labels: readonly string[]) {
 	return tableRow
 }
 
-function link(value: string, kind: 'address' | 'tx') {
+function link(value: string, kind: 'address' | 'tx', focusKey: string) {
 	const anchor = document.createElement('a')
 	anchor.href = `${latestSnapshot?.explorerUrl ?? 'https://etherscan.io'}/${kind}/${value}`
+	anchor.dataset['focusKey'] = focusKey
 	anchor.target = '_blank'
 	anchor.rel = 'noreferrer'
 	anchor.textContent = shorten(value)
@@ -148,7 +150,7 @@ function renderOpportunities(opportunities: readonly OpportunitySnapshot[]) {
 				amount(opportunity.requiredWeth, 'WETH'),
 				amount(opportunity.requiredToken, opportunity.tokenSymbol),
 				`${opportunity.timeRemaining} ${opportunity.windowUnit}`,
-				link(opportunity.pool, 'address'),
+				link(opportunity.pool, 'address', `opportunity:${opportunity.reportId}:pool`),
 			]),
 		)
 	}
@@ -169,12 +171,45 @@ function renderHistory(history: readonly ExecutionRecord[], recordCount: number)
 				exactAmount(record.trackedNetProfitEth, 'ETH'),
 				exactAmount(record.actualGasCostEth, 'ETH'),
 				`${amount(record.requiredWeth, 'WETH')} · ${amount(record.requiredToken, record.tokenSymbol)}`,
-				link(record.transactionHash, 'tx'),
+				link(record.transactionHash, 'tx', `history:${record.reportId}:transaction`),
 			]),
 		)
 	}
 	element('history-empty').hidden = history.length !== 0
 	renderProfitChart(history, recordCount)
+}
+
+function renderPositions(positions: readonly PositionRecord[], recordCount: number) {
+	const body = element<HTMLTableSectionElement>('positions-body')
+	body.replaceChildren()
+	for (const position of positions) {
+		const manuallyReconciled = position.manualReconciliation !== undefined
+		const awaitingEntryEvidence = position.actualEntryGasCostEth === '0'
+		const awaitingLifecycleEvidence = position.lifecycleTransactionHashes.length !== 0 && !position.lifecycleReceiptRecovered
+		const accountingPending = !manuallyReconciled && (awaitingEntryEvidence || awaitingLifecycleEvidence)
+		let hedgedProfit = exactAmount(position.hedgedProfitBeforeGasEth, 'ETH')
+		if (manuallyReconciled) hedgedProfit = 'Manual reconciliation recorded'
+		else if (accountingPending) hedgedProfit = `Awaiting ${awaitingEntryEvidence ? 'entry' : 'lifecycle'} evidence`
+		let lifecycleGas = exactAmount(position.lifecycleGasCostEth, 'ETH')
+		if (manuallyReconciled && awaitingLifecycleEvidence) lifecycleGas = 'Manual evidence; RPC quorum unavailable'
+		else if (awaitingLifecycleEvidence) lifecycleGas = 'Awaiting lifecycle evidence'
+		body.append(
+			row([
+				new Date(position.openedAt).toLocaleString(),
+				position.reportId,
+				position.direction === 'buy-rep' ? `buy ${position.tokenSymbol}` : `sell ${position.tokenSymbol}`,
+				manuallyReconciled ? `${position.status} · manual` : position.status,
+				hedgedProfit,
+				awaitingEntryEvidence ? 'Awaiting entry evidence' : exactAmount(position.actualEntryGasCostEth, 'ETH'),
+				lifecycleGas,
+				exactAmount(position.realizedNetProfitEth, 'ETH'),
+				`${amount(position.withdrawnWeth, 'WETH')} · ${amount(position.withdrawnToken, position.tokenSymbol)}`,
+				link(position.entryTransactionHash, 'tx', `position:${position.reportId}:transaction`),
+			]),
+		)
+	}
+	element('positions-empty').hidden = positions.length !== 0
+	setText('position-count', recordCount > positions.length ? `Latest ${positions.length.toString()} of ${recordCount.toString()}` : countLabel(recordCount, 'durable position'))
 }
 
 function renderProfitChart(history: readonly ExecutionRecord[], recordCount: number) {
@@ -190,10 +225,10 @@ function renderProfitChart(history: readonly ExecutionRecord[], recordCount: num
 	const minimum = Math.min(0, ...values)
 	const maximum = Math.max(0, ...values)
 	const range = maximum - minimum || 1
-	const width = 1000
+	const width = Math.max(container.clientWidth, 320)
 	const height = 90
 	const points = values.map((value, index) => {
-		const x = values.length === 1 ? width : (index / (values.length - 1)) * width
+		const x = chartPointX(index, values.length, width)
 		const y = height - ((value - minimum) / range) * (height - 16) - 8
 		return `${x.toFixed(2)},${y.toFixed(2)}`
 	})
@@ -216,10 +251,19 @@ function renderProfitChart(history: readonly ExecutionRecord[], recordCount: num
 	polyline.setAttribute('stroke-width', '3')
 	polyline.setAttribute('vector-effect', 'non-scaling-stroke')
 	svg.append(title, baseline, polyline)
+	if (values.length === 1) {
+		const [x = '0', y = '0'] = points[0]?.split(',') ?? []
+		const marker = document.createElementNS(SVG_NAMESPACE, 'circle')
+		marker.setAttribute('cx', x)
+		marker.setAttribute('cy', y)
+		marker.setAttribute('fill', '#77e0ad')
+		marker.setAttribute('r', '6')
+		svg.append(marker)
+	}
 	const summary = document.createElement('div')
 	summary.className = 'profit-chart-summary'
 	const label = document.createElement('span')
-	label.textContent = recordCount > history.length ? `Tracked net profit · latest ${history.length.toString()} of ${recordCount.toString()} records` : `Tracked net profit · ${recordCount.toString()} records`
+	label.textContent = recordCount > history.length ? `Tracked net profit · latest ${history.length.toString()} of ${recordCount.toString()} records` : `Tracked net profit · ${countLabel(recordCount, 'record')}`
 	const value = document.createElement('strong')
 	value.textContent = exactAmount(sumSignedDecimals(chronological.map(record => record.trackedNetProfitEth)), 'ETH')
 	summary.append(label, value)
@@ -284,7 +328,7 @@ function renderOperations(operations: readonly OperationEntry[]) {
 		body.append(row([new Date(operation.timestamp).toLocaleTimeString(), level, operation.category, operation.reportId ?? '—', operation.message, operation.reason ?? '—', operation.details ?? '—']))
 	}
 	element('operations-empty').hidden = visibleOperations.length !== 0
-	setText('operation-count', `${visibleOperations.length.toString()} entries`)
+	setText('operation-count', countLabel(visibleOperations.length, 'entry', 'entries'))
 }
 
 function renderTokenMarkets(snapshot: OperatorSnapshot) {
@@ -292,30 +336,35 @@ function renderTokenMarkets(snapshot: OperatorSnapshot) {
 	body.replaceChildren()
 	for (const token of snapshot.tokenMarkets) {
 		if (token.pools.length === 0) {
-			body.append(row([token.symbol, link(token.address, 'address'), amount(token.balance, token.symbol), '—', 'No supported WETH pools found', '—', 'Unavailable', '0']))
+			body.append(row([token.symbol, link(token.address, 'address', `token:${token.address}:address`), amount(token.balance, token.symbol), '—', 'No supported WETH pools found', '—', 'Unavailable', '0']))
 			continue
 		}
 		for (const pool of token.pools) {
 			const poolLink = document.createElement('a')
 			poolLink.href = pool.url
+			poolLink.dataset['focusKey'] = `token:${token.address}:pool:${pool.address}`
 			poolLink.target = '_blank'
 			poolLink.rel = 'noreferrer'
 			poolLink.textContent = shorten(pool.address)
-			body.append(row([token.symbol, link(token.address, 'address'), amount(token.balance, token.symbol), pool.venue, poolLink, `${(pool.fee / 10_000).toString()}%`, amount(pool.priceWeth, 'WETH'), pool.liquidity]))
+			body.append(row([token.symbol, link(token.address, 'address', `token:${token.address}:address:${pool.address}`), amount(token.balance, token.symbol), pool.venue, poolLink, `${(pool.fee / 10_000).toString()}%`, amount(pool.priceWeth, 'WETH'), pool.liquidity]))
 		}
 	}
 	element('token-markets-empty').hidden = snapshot.tokenMarkets.length !== 0
-	setText('token-count', `${snapshot.tokenMarkets.length.toString()} tokens · ${snapshot.tokenMarkets.reduce((total, token) => total + token.pools.length, 0).toString()} pools`)
+	const poolCount = snapshot.tokenMarkets.reduce((total, token) => total + token.pools.length, 0)
+	setText('token-count', `${countLabel(snapshot.tokenMarkets.length, 'token')} · ${countLabel(poolCount, 'pool')}`)
 }
 
 function renderDisputePaths(snapshot: OperatorSnapshot) {
 	const container = element('dispute-paths')
+	const disclosureState = new Map(Array.from(container.querySelectorAll<HTMLDetailsElement>('details[data-report-id]')).map(details => [details.dataset['reportId'] ?? '', { focused: details.querySelector('summary') === document.activeElement, open: details.open }]))
 	container.replaceChildren()
 	for (const path of snapshot.reportPaths) {
 		const details = document.createElement('details')
 		details.className = 'dispute-path'
+		details.dataset['reportId'] = path.reportId
 		const summary = document.createElement('summary')
-		summary.textContent = `Report ${path.reportId} · ${path.steps.length.toString()} steps · ${path.settled ? 'settled' : 'active'}`
+		summary.dataset['focusKey'] = `dispute:${path.reportId}:summary`
+		summary.textContent = `Report ${path.reportId} · ${countLabel(path.steps.length, 'step')} · ${path.settled ? 'settled' : 'active'}`
 		details.append(summary)
 		for (const step of path.steps) {
 			const item = document.createElement('div')
@@ -327,14 +376,17 @@ function renderDisputePaths(snapshot: OperatorSnapshot) {
 			const description = document.createElement('span')
 			const amounts = step.amount1 === undefined ? '' : ` · amounts ${step.amount1} / ${step.amount2 ?? '—'}`
 			description.textContent = `${step.reporter === undefined ? 'No reporter' : shorten(step.reporter)}${amounts}`
-			if (step.transactionHash !== undefined) description.append(' · ', link(step.transactionHash, 'tx'))
+			if (step.transactionHash !== undefined) description.append(' · ', link(step.transactionHash, 'tx', `dispute:${path.reportId}:${step.blockNumber}:transaction`))
 			item.append(event, block, description)
 			details.append(item)
 		}
 		container.append(details)
+		const previous = disclosureState.get(path.reportId)
+		if (previous?.open === true) details.open = true
+		if (previous?.focused === true) summary.focus({ preventScroll: true })
 	}
 	element('dispute-paths-empty').hidden = snapshot.reportPaths.length !== 0
-	setText('dispute-path-count', `${snapshot.reportPaths.length.toString()} games`)
+	setText('dispute-path-count', countLabel(snapshot.reportPaths.length, 'report path'))
 }
 
 const SERIES_COLORS = ['#77e0ad', '#88b8ff', '#f0c36b', '#ff8b8b', '#c69cff', '#63d6e5']
@@ -362,8 +414,11 @@ function renderMarketPriceChart(snapshot: OperatorSnapshot) {
 	const token = selector.value
 	const points = snapshot.priceHistory.filter(point => point.token.toLowerCase() === token.toLowerCase())
 	const container = element('market-price-chart')
+	const previousSamples = container.querySelector<HTMLDetailsElement>('details.chart-data')
+	const samplesWereOpen = previousSamples?.open === true
+	const samplesWereFocused = previousSamples?.querySelector('summary') === document.activeElement
 	container.replaceChildren()
-	setText('price-point-count', `${snapshot.priceHistory.length.toString()} persisted samples`)
+	setText('price-point-count', `${countLabel(snapshot.priceHistory.length, 'persisted sample')}`)
 	if (points.length === 0) {
 		container.textContent = 'No quoted price samples are available for this token.'
 		return
@@ -456,8 +511,9 @@ function renderMarketPriceChart(snapshot: OperatorSnapshot) {
 	const samples = document.createElement('details')
 	samples.className = 'chart-data'
 	const summary = document.createElement('summary')
+	summary.dataset['focusKey'] = `price-samples:${token}:summary`
 	const recentPoints = orderedPoints.slice(-100).reverse()
-	summary.textContent = `Recent exact price samples (${recentPoints.length.toString()} of ${points.length.toString()})`
+	summary.textContent = `Recent exact price samples (${recentPoints.length.toString()} of ${countLabel(points.length, 'sample')})`
 	const tableScroll = document.createElement('div')
 	tableScroll.className = 'table-scroll'
 	tableScroll.tabIndex = 0
@@ -471,6 +527,8 @@ function renderMarketPriceChart(snapshot: OperatorSnapshot) {
 	tableScroll.append(table)
 	samples.append(summary, tableScroll)
 	container.append(svg, legend, samples)
+	samples.open = samplesWereOpen
+	if (samplesWereFocused) summary.focus({ preventScroll: true })
 }
 
 function renderSignerStatus(snapshot: OperatorSnapshot) {
@@ -517,7 +575,7 @@ function renderTransactions(transactions: readonly TransactionActivity[]) {
 			row([
 				new Date(transaction.updatedAt).toLocaleString(),
 				transaction.reportId,
-				link(transaction.hash, 'tx'),
+				link(transaction.hash, 'tx', `transaction:${transaction.reportId}:${transaction.hash}`),
 				transactionKindLabel(transaction),
 				transaction.mode,
 				transaction.status.replaceAll('-', ' '),
@@ -533,6 +591,9 @@ function renderTransactions(transactions: readonly TransactionActivity[]) {
 }
 
 function render(snapshot: OperatorSnapshot) {
+	const activeElement = document.activeElement
+	const focusKey = activeElement instanceof HTMLElement ? activeElement.dataset['focusKey'] : undefined
+	const scrollPosition = { left: window.scrollX, top: window.scrollY }
 	latestSnapshot = snapshot
 	setControlsEnabled(true)
 	if (!settingsLoaded) {
@@ -552,6 +613,9 @@ function render(snapshot: OperatorSnapshot) {
 		tokensLoaded = true
 	}
 	const modeBadge = element('mode-badge')
+	const publicSubmissionOption = element<HTMLSelectElement>('submission-mode').querySelector<HTMLOptionElement>('option[value="public"]')
+	if (publicSubmissionOption === null) throw new Error('Missing public submission option')
+	publicSubmissionOption.disabled = snapshot.execute
 	const statusLabels = botStatusLabels(snapshot)
 	modeBadge.dataset['mode'] = snapshot.mode
 	modeBadge.textContent = statusLabels.mode
@@ -559,8 +623,9 @@ function render(snapshot: OperatorSnapshot) {
 	setText('last-poll-value', snapshot.lastPollAt === undefined ? 'No poll completed' : `Updated ${new Date(snapshot.lastPollAt).toLocaleTimeString()}`)
 	setText('active-report-value', snapshot.activeReportCount.toString())
 	setText('block-value', snapshot.blockNumber === undefined ? 'Block —' : `Block ${snapshot.blockNumber} · ${blockAgeLabel(snapshot.blockTimestamp)}`)
-	setText('profit-value', exactAmount(snapshot.totalTrackedNetProfitEth, 'ETH'))
-	setText('revenue-value', exactAmount(snapshot.totalRevenueBeforeGasEth, 'ETH'))
+	setText('profit-value', exactAmount(snapshot.totalRealizedNetProfitEth, 'ETH'))
+	setText('open-profit-value', exactAmount(snapshot.totalOpenHedgedNetProfitEth, 'ETH'))
+	setText('hedged-profit-value', exactAmount(snapshot.totalHedgedProfitBeforeGasEth, 'ETH'))
 	setText('gas-value', exactAmount(snapshot.totalActualGasCostEth, 'ETH'))
 	setText('game-capital-value', exactAmount(snapshot.gameCapital.totalEthWeth, 'ETH'))
 	setText('game-capital-detail', `${exactAmount(snapshot.gameCapital.eth, 'ETH')} · ${exactAmount(snapshot.gameCapital.weth, 'WETH')} in observed active games`)
@@ -571,18 +636,28 @@ function render(snapshot: OperatorSnapshot) {
 	renderSignerStatus(snapshot)
 	const pauseButton = element<HTMLButtonElement>('pause-button')
 	pauseButton.textContent = snapshot.paused ? 'Resume bot' : 'Pause bot'
+	const launchNotice = element('launch-notice')
+	if (snapshot.network === 'mainnet') {
+		setText('launch-notice-title', 'Mainnet protocol launch gate failed')
+		setText('launch-notice-copy', 'ORACLE-A1 currently blocks protocol deployment even when every local bot guard passes. This is not production approval.')
+		launchNotice.dataset['tone'] = 'danger'
+	} else {
+		setText('launch-notice-title', 'Sepolia rehearsal network')
+		setText('launch-notice-copy', 'Use this network to rehearse execution and recovery. Testnet success is not production approval.')
+		launchNotice.dataset['tone'] = 'warning'
+	}
 	const notice = element('notice')
 	let noticeTitle = 'Dry-run mode'
 	let noticeCopy = 'Opportunities are monitored, but this process cannot submit transactions. Restart with --execute to change modes.'
 	let noticeTone = 'info'
 	if (snapshot.execute) {
-		noticeTitle = 'Execution mode is active'
-		noticeCopy = 'The local wallet can submit disputes when every strategy, timing, inventory, and state guard passes.'
+		noticeTitle = 'Execution mode is locally armed'
+		noticeCopy = 'The local wallet can submit disputes when every strategy, timing, inventory, state, and delivery guard passes.'
 		noticeTone = 'warning'
 	}
 	if (snapshot.paused) {
 		noticeTitle = 'Bot paused'
-		noticeCopy = 'Pause is checked immediately before each submission. A submission already started may still finish, and broadcast transactions continue to confirmation.'
+		noticeCopy = 'New entries are paused. Settlement and withdrawal continue for already-funded positions so capital is not stranded.'
 		noticeTone = 'warning'
 	}
 	if (snapshot.lastError !== undefined) {
@@ -599,9 +674,15 @@ function render(snapshot: OperatorSnapshot) {
 	renderEndpointChecks(snapshot)
 	renderOperations(snapshot.operationLog)
 	renderHistory(snapshot.executionHistory, snapshot.executionHistoryRecordCount)
+	renderPositions(snapshot.positions, snapshot.positionRecordCount)
 	renderTokenMarkets(snapshot)
 	renderDisputePaths(snapshot)
 	renderMarketPriceChart(snapshot)
+	if (focusKey !== undefined) {
+		const target = Array.from(document.querySelectorAll<HTMLElement>('[data-focus-key]')).find(candidate => candidate.dataset['focusKey'] === focusKey)
+		target?.focus({ preventScroll: true })
+	}
+	window.scrollTo(scrollPosition)
 }
 
 async function refresh() {

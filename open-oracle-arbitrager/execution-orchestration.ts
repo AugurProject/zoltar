@@ -73,11 +73,12 @@ export function executionFailureDecision(error: unknown): OpportunitySnapshot['d
 	return isExecutionPausedError(error) ? 'paused' : 'execution-failed'
 }
 
-export function opportunityDecision(parameters: { account: Address | undefined; currentReporter: Address; execute: boolean; executionReady: boolean; hasRequiredInventory: boolean | undefined; profitable: boolean }): OpportunitySnapshot['decision'] {
+export function opportunityDecision(parameters: { account: Address | undefined; currentReporter: Address; execute: boolean; executionReady: boolean; hasRequiredInventory: boolean | undefined; paused?: boolean | undefined; profitable: boolean }): OpportunitySnapshot['decision'] {
 	if (!parameters.profitable) return 'unprofitable'
 	if (parameters.execute && parameters.account === undefined) return 'signer-unavailable'
 	if (isSelfReport(parameters.account, parameters.currentReporter)) return 'self-report'
 	if (parameters.execute && parameters.hasRequiredInventory !== true) return 'insufficient-inventory'
+	if (parameters.execute && parameters.paused === true) return 'paused'
 	if (parameters.execute && !parameters.executionReady) return 'history-unavailable'
 	return parameters.execute ? 'eligible' : 'dry-run-opportunity'
 }
@@ -120,6 +121,11 @@ export async function guardedExecutionStep<T>(isPaused: () => boolean, action: (
 export async function guardedTransactionSubmission<T>(isPaused: () => boolean, prepare: () => Promise<unknown>, submit: () => Promise<T>) {
 	await prepare()
 	if (isPaused()) throw executionPausedError()
+	return submit()
+}
+
+export async function journaledSubmission<T>(persistPending: () => Promise<unknown>, submit: () => Promise<T>) {
+	await persistPending()
 	return submit()
 }
 

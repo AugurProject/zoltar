@@ -34,6 +34,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 		opportunities: [],
 		operationLog: [],
 		paused: false,
+		positions: [],
 		status: 'running',
 		tokenAddresses: [],
 		tokenMarkets: [],
@@ -86,11 +87,11 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(pageSource).toContain('id="mode-badge" class="badge">Mode —</span>')
 	expect(pageSource).toContain('id="status-value">—</strong>')
 	expect(pageSource).toContain('id="pause-button" class="button" type="button" disabled')
-	expect(pageSource).toContain('id="revenue-value"')
+	expect(pageSource).toContain('id="hedged-profit-value"')
 	expect(pageSource).toContain('id="game-capital-value"')
 	expect(pageSource).toContain('id="strategy-fieldset" disabled')
 	expect(pageSource).toContain('id="submission-fieldset" disabled')
-	expect(pageSource).toContain('Public mode requires existing token approvals and submits one executor transaction.')
+	expect(pageSource).toContain('Live execution requires private relays so approvals, hedge, and dispute remain atomic.')
 	expect(pageSource).toContain('id="connectivity-fieldset" disabled')
 	expect(pageSource).toContain('id="signer-fieldset" disabled')
 	expect(pageSource).toContain('id="signer-status" class="muted" role="status" aria-live="polite"')
@@ -101,12 +102,21 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(pageSource).toContain('Clear signer &amp; saved key')
 	expect(pageSource).toContain('Observed dispute paths')
 	expect(pageSource).toContain('Spot (WETH/token)')
+	expect(pageSource).toContain('id="launch-gate-link"')
+	expect(pageSource).toContain('id="launch-notice"')
+	const favicon = await fetch(`${origin}/favicon.ico`)
+	expect(favicon.status).toBe(204)
+	expect(favicon.headers.get('content-type')).toBe('image/x-icon')
 	const browserScript = await fetch(`${origin}/dashboard.js`)
 	expect(browserScript.headers.get('content-type')).toContain('text/javascript')
 	const browserSource = await browserScript.text()
 	expect(browserSource).toContain('setInterval')
 	expect(browserSource).toContain('aria-labelledby')
 	expect(browserSource).toContain('Recent exact price samples')
+	expect(browserSource).toContain('Mainnet protocol launch gate failed')
+	expect(browserSource).toContain('Sepolia rehearsal network')
+	expect(browserSource).toContain('details.dataset["reportId"]')
+	expect(browserSource).toContain('focus({ preventScroll: true })')
 	expect(browserSource).toContain('stroke-dasharray')
 	const browserFormatScript = await fetch(`${origin}/dashboard-format.js`)
 	expect(browserFormatScript.headers.get('content-type')).toContain('text/javascript')

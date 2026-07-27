@@ -44,7 +44,9 @@
 							A pending report is checked against a time-weighted Uniswap pool,
 							then executable hedge proceeds are reduced by oracle fees, gas,
 							and a safety margin. The launch gate passes only when the
-							remainder is positive in both error directions.
+							fully reserved net profit meets both the 0.01 WETH absolute
+							minimum and 100 basis points of hedge cost in both error
+							directions.
 						</desc>
 						<rect
 							class="svg-blue"
@@ -96,8 +98,10 @@
 					</svg>
 					<p class="diagram-caption">
 						<span class="figure-label">Launch Gate</span>Mid-price agreement is
-						insufficient; the complete hedge must remain profitable at
-						executable size.
+						insufficient; at executable size, fully reserved net profit must
+						be at least
+						<code>max(0.01 WETH, 100 bps of hedge cost)</code> in both error
+						directions.
 					</p>
 				</figure>
 				<p>
@@ -144,7 +148,7 @@
 						<thead>
 							<tr>
 								<th>Wrong report</th>
-								<th>Submission cash flow and locked position</th>
+								<th>OpenOracle contribution, hedge inventory, and total wallet pull</th>
 								<th>Lifetime net economics if the replacement remains final</th>
 							</tr>
 						</thead>
@@ -152,11 +156,13 @@
 							<tr>
 								<td>REP is cheap: report offers too much REP per WETH</td>
 								<td>
-									Swap token1. Fund
-									<code>W′ + W + floor(Wf/P) + floor(Wp/P)</code> WETH
-									plus <code>max(R′ − R, 0)</code> REP. The immediate
-									REP credit is <code>max(R − R′, 0)</code>; the
-									replacement <code>(W′, R′)</code> remains locked.
+									Sell token 2. OpenOracle receives
+									<code>c1 = W′ + W + floor(Wf/P) + floor(Wp/P)</code>
+									WETH and <code>c2 = max(R′ − R, 0)</code> REP. The
+									executor also pulls the old <code>R</code> REP to sell.
+									Total wallet pull: <code>c1</code> WETH and
+									<code>c2 + R</code> REP. The replacement
+									<code>(W′, R′)</code> remains locked.
 								</td>
 								<td>
 									If no later dispute removes this reporter, settlement credits the
@@ -168,10 +174,15 @@
 							<tr>
 								<td>REP is expensive: report offers too little REP per WETH</td>
 								<td>
-									Swap token2. Fund
-									<code>R′ + R + floor(Rf/P) + floor(Rp/P)</code> REP
-									plus <code>max(W′ − W, 0)</code> WETH. No old-position
-									WETH is immediately paid out; the replacement
+									Buy token 2. OpenOracle receives
+									<code>c1 = max(W′ − W, 0)</code> WETH and
+									<code>c2 = R′ + R + floor(Rf/P) + floor(Rp/P)</code>
+									REP. The executor buys
+									<code>R + floor(Rf/P) + floor(Rp/P)</code> REP using
+									at most the signed WETH hedge limit <code>L</code>.
+									Total wallet pull: <code>c1 + L</code> WETH and
+									<code>c2 − (R + floor(Rf/P) + floor(Rp/P))</code>
+									REP. Unused WETH is refunded; the replacement
 									<code>(W′, R′)</code> remains locked.
 								</td>
 								<td>
@@ -187,6 +198,8 @@
 				<p>
 					Here <code>(W, R)</code> is the old report and
 					<code>(W′, R′)</code> is the replacement.
+					These total-pull formulas match the executor formulas in the
+					<a href="operator-reference.md#support-module-inventory">Operator Reference</a>.
 					The replacement WETH amount is
 					<code>min(floor(W × multiplier / 100), escalationHalt)</code> before
 					the halt, or <code>W + 1</code> at the halt. Replacement capital is
@@ -487,9 +500,15 @@
 							<tr>
 								<td>Profit buffer</td>
 								<td>
-									After OpenOracle fees, executable V3 price impact, and
-									<code>gasCost = 600,000 × (2 × baseFee + 2 gwei)</code>,
-									multiplied in wei without intermediate rounding
+									After OpenOracle fees and executable V3 price impact, subtract
+									the 1,200,000-gas entry reserve, hedge-slippage reserve, and the
+									larger of 0.01 WETH or
+									<code
+										>(callbackGasLimit + 1,050,000) × (2 × baseFee + 2
+										gwei)</code
+									>
+									for settlement and withdrawals. Perform wei arithmetic with the
+									bot's direction-specific rounding.
 								</td>
 								<td>
 									At least the greater of 0.01 WETH or 100 bps of hedge cost

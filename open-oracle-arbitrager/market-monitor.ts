@@ -12,6 +12,8 @@ export type TokenConfiguration = {
 	addresses: readonly Address[]
 }
 
+export const MAX_OBSERVED_MONITORING_TOKENS = 64
+
 export type MarketPoolSnapshot = {
 	address: Address
 	fee: number
@@ -66,9 +68,14 @@ function uniqueAddresses(addresses: readonly Address[]) {
 }
 
 export function tokenCatalogForScan(discoveredAugurTokens: readonly Address[], configuredTokens: readonly Address[], observedTokens: readonly Address[]) {
+	const executionTokens = uniqueAddresses([...discoveredAugurTokens, ...configuredTokens])
+	const executionKeys = new Set(executionTokens.map(address => address.toLowerCase()))
+	const boundedObservedTokens = uniqueAddresses(observedTokens)
+		.filter(address => !executionKeys.has(address.toLowerCase()))
+		.slice(0, MAX_OBSERVED_MONITORING_TOKENS)
 	return {
-		executionTokens: uniqueAddresses([...discoveredAugurTokens, ...configuredTokens]),
-		monitoringTokens: uniqueAddresses([...discoveredAugurTokens, ...configuredTokens, ...observedTokens]),
+		executionTokens,
+		monitoringTokens: [...executionTokens, ...boundedObservedTokens],
 	}
 }
 

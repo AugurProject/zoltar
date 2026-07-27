@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { blockAgeLabel, botStatusLabels, exactAmount, marketPriceChartDescription, opportunityDecisionReason, requiredSignerPrivateKey, signerControlState, sumSignedDecimals, transactionKindLabel } from './dashboard-format.js'
+import { blockAgeLabel, botStatusLabels, chartPointX, countLabel, exactAmount, marketPriceChartDescription, opportunityDecisionReason, requiredSignerPrivateKey, signerControlState, sumSignedDecimals, transactionKindLabel } from './dashboard-format.js'
 
 describe('dashboard exact ETH formatting', () => {
 	test('preserves signed sub-micro, 18-decimal, and beyond-safe-integer totals', () => {
@@ -52,5 +52,15 @@ describe('dashboard exact ETH formatting', () => {
 
 	test('describes current-head pool samples without claiming one sample per unseen block', () => {
 		expect(marketPriceChartDescription([{ blockNumber: '100' }, { blockNumber: '100' }, { blockNumber: '103' }])).toBe('3 current-head pool samples spanning observed heads at blocks 100 through 103. Exact recent values follow the chart in a table.')
+		expect(marketPriceChartDescription([{ blockNumber: '100' }])).toBe('1 current-head pool sample spanning observed heads at blocks 100 through 100. Exact recent values follow the chart in a table.')
+	})
+
+	test('renders singular counts and centers a one-record chart point', () => {
+		expect(countLabel(1, 'pool')).toBe('1 pool')
+		expect(countLabel(2, 'pool')).toBe('2 pools')
+		expect(countLabel(1, 'report path')).toBe('1 report path')
+		expect(countLabel(1, 'entry', 'entries')).toBe('1 entry')
+		expect(chartPointX(0, 1, 1_000)).toBe(500)
+		expect(chartPointX(1, 3, 1_000)).toBe(500)
 	})
 })

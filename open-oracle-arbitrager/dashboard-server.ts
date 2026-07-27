@@ -57,6 +57,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			if (request.headers.get('host') !== authority) return json({ error: 'Request authority is not accepted' }, 403)
 			const url = new URL(request.url)
 			if (request.method === 'GET' && url.pathname === '/') return new Response(Bun.file(join(directory, 'dashboard.html')), { headers: securityHeaders('text/html; charset=utf-8') })
+			if (request.method === 'GET' && url.pathname === '/favicon.ico') return new Response(undefined, { headers: securityHeaders('image/x-icon'), status: 204 })
 			if (request.method === 'GET' && url.pathname === '/dashboard.css') return new Response(Bun.file(join(directory, 'dashboard.css')), { headers: securityHeaders('text/css; charset=utf-8') })
 			if (request.method === 'GET' && url.pathname === '/dashboard.js') {
 				const source = await browserSource.text()

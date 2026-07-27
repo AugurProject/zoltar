@@ -1203,7 +1203,7 @@ function normalizeAccountAddress(account: Account | Address | undefined) {
 	return typeof account === 'string' ? getAddress(account) : account.address
 }
 
-async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(transport: Transport, parameters: ContractReadParameters<TAbi, TFunctionName>) {
+async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(transport: Transport, parameters: ContractReadParameters<TAbi, TFunctionName>, blockNumber?: bigint | undefined) {
 	const abiItem = getNamedFunctionAbi(parameters.abi, parameters.functionName, parameters.args)
 	const method = getContractMethod(abiItem)
 	const data = ensure0x(nobleBytesToHex(method.encodeInput(normalizeCodecArguments(abiItem.inputs, parameters.args))))
@@ -1221,7 +1221,7 @@ async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(t
 					to: parameters.address,
 					value: parameters.value,
 				}),
-				parameters.blockTag ?? 'latest',
+				blockNumber === undefined ? (parameters.blockTag ?? 'latest') : normalizeBlockTag(blockNumber),
 			],
 		}),
 	)
@@ -1234,6 +1234,29 @@ async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(t
 		abiItem,
 		data: rawResult,
 	}
+}
+
+export async function readContractAtBlock(transport: Transport, parameters: { abi: Abi; address: Address; args?: readonly unknown[] | undefined; functionName: string }, blockNumber: bigint): Promise<unknown> {
+	const { abiItem, data } = await readContractRaw(transport, parameters, blockNumber)
+	return decodeFunctionOutput(abiItem, data)
+}
+
+export async function getBalanceAtBlock(transport: Transport, parameters: { address: Address; blockNumber: bigint }) {
+	return normalizeRpcBigInt(
+		await requestTransport<string>(transport, {
+			method: 'eth_getBalance',
+			params: [parameters.address, normalizeBlockTag(parameters.blockNumber)],
+		}),
+	)
+}
+
+export async function getTransactionCountAtBlock(transport: Transport, parameters: { address: Address; blockNumber: bigint }) {
+	return normalizeRpcBigInt(
+		await requestTransport<string>(transport, {
+			method: 'eth_getTransactionCount',
+			params: [parameters.address, normalizeBlockTag(parameters.blockNumber)],
+		}),
+	)
 }
 
 function buildPublicClientActions<TTransport extends Transport, TChain extends Chain | undefined>({ chain, transport }: { chain: TChain; transport: TTransport }): Omit<PublicClientShape<TTransport, TChain>, 'chain' | 'extend' | 'transport'> {

@@ -7,6 +7,7 @@ import {
 	fundingTransactionPlan,
 	flushExecutionHistory,
 	guardedTransactionSubmission,
+	journaledSubmission,
 	openOracleDisputeTiming,
 	opportunityDecision,
 	privateBundleReceiptStatus,
@@ -187,6 +188,39 @@ describe('funded execution orchestration', () => {
 		}
 		expect(executionFailureDecision(failure)).toBe('paused')
 		expect(submitted).toBe(false)
+	})
+
+	test('writes the pending-position journal immediately before submission', async () => {
+		const calls: string[] = []
+		const result = await journaledSubmission(
+			async () => {
+				calls.push('persist')
+			},
+			async () => {
+				calls.push('submit')
+				return 'submitted'
+			},
+		)
+		expect(result).toBe('submitted')
+		expect(calls).toEqual(['persist', 'submit'])
+	})
+
+	test('does not write the pending-position journal when the pre-submission guard fails', async () => {
+		let persisted = false
+		await expect(
+			guardedTransactionSubmission(
+				() => false,
+				() => Promise.reject(new Error('quote expired')),
+				() =>
+					journaledSubmission(
+						async () => {
+							persisted = true
+						},
+						() => Promise.resolve('submitted'),
+					),
+			),
+		).rejects.toThrow('quote expired')
+		expect(persisted).toBe(false)
 	})
 
 	test('preserves an in-flight transaction failure even if pause arrives while it runs', async () => {

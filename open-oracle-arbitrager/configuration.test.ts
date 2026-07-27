@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { privateKeyToAccount, type Hex } from '@zoltar/shared/ethereum'
@@ -26,11 +26,11 @@ async function temporaryDirectory() {
 	return directory
 }
 
-async function invalidStartup(argument: string) {
+async function invalidStartup(argument: string | readonly string[]) {
 	const directory = await temporaryDirectory()
 	const environment = { ...process.env }
 	delete environment['PRIVATE_KEY']
-	const child = Bun.spawn([executable, oracle, '--once', `--settings-file=${join(directory, 'settings.json')}`, argument], {
+	const child = Bun.spawn([executable, oracle, '--once', `--settings-file=${join(directory, 'settings.json')}`, ...(typeof argument === 'string' ? [argument] : argument)], {
 		env: environment,
 		stderr: 'pipe',
 		stdout: 'pipe',
@@ -86,6 +86,45 @@ describe('startup configuration', () => {
 		expect(result.exitCode).toBe(1)
 		expect(result.output).toContain(message)
 		expect(result.output).not.toContain('mode=')
+	})
+
+	test('requires an approved coordinator before execution can start', async () => {
+		const result = await invalidStartup(['--execute', '--executor-address=0x0000000000000000000000000000000000000001', '--uniswap-router=0x0000000000000000000000000000000000000002', '--quorum-rpc-url=https://quorum.example'])
+		expect(result.exitCode).toBe(1)
+		expect(result.output).toContain('--execute requires at least one --coordinator-address')
+		expect(result.output).not.toContain('mode=')
+	})
+
+	test('rejects public mempool execution before RPC activity', async () => {
+		const directory = await temporaryDirectory()
+		const manifestPath = join(directory, 'manifest.json')
+		await writeFile(
+			manifestPath,
+			JSON.stringify({
+				chainId: 1,
+				contracts: [{ address: '0x0000000000000000000000000000000000000001', role: 'executor', runtimeCodeHash: `0x${'11'.repeat(32)}` }],
+				network: 'mainnet',
+				version: 1,
+			}),
+		)
+		const result = await invalidStartup([
+			'--execute',
+			'--executor-address=0x0000000000000000000000000000000000000001',
+			'--uniswap-router=0x0000000000000000000000000000000000000002',
+			'--quorum-rpc-url=https://quorum.example',
+			'--coordinator-address=0x0000000000000000000000000000000000000003',
+			`--deployment-manifest=${manifestPath}`,
+			'--submission-mode=public',
+		])
+		expect(result.exitCode).toBe(1)
+		expect(result.output).toContain('public mempool execution is disabled for fund safety')
+		expect(result.output).not.toContain('mode=')
+	})
+
+	test('rejects a per-position limit larger than the total lock limit', async () => {
+		const result = await invalidStartup(['--max-position-weth=2', '--max-total-locked-weth=1'])
+		expect(result.exitCode).toBe(1)
+		expect(result.output).toContain('max-position-weth cannot exceed max-total-locked-weth')
 	})
 
 	test('defaults to private bundle submission', async () => {

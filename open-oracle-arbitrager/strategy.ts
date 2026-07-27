@@ -48,6 +48,31 @@ export function calculateContribution(game: Pick<OpenOracleGame, 'currentAmount1
 	}
 }
 
+export function hedgeWethLimit(direction: ArbitrageDirection, quotedWeth: bigint, maximumSlippageBps: bigint) {
+	if (maximumSlippageBps < 0n || maximumSlippageBps > 10_000n) throw new Error('Hedge slippage must be from 0 to 10000 bps')
+	if (direction === 'sell-rep') return (quotedWeth * (10_000n - maximumSlippageBps)) / 10_000n
+	return (quotedWeth * (10_000n + maximumSlippageBps) + 9_999n) / 10_000n
+}
+
+export function hedgeSlippageReserveWeth(direction: ArbitrageDirection, quotedWeth: bigint, maximumSlippageBps: bigint) {
+	const limit = hedgeWethLimit(direction, quotedWeth, maximumSlippageBps)
+	return direction === 'sell-rep' ? quotedWeth - limit : limit - quotedWeth
+}
+
+export function executorFunding(game: Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'feePercentage' | 'protocolFee' | 'token1' | 'token2'>, newAmount1: bigint, newAmount2: bigint, buyHedgeWethLimit: bigint) {
+	const tokenToSwap = deriveTokenToSwap(game, newAmount1, newAmount2)
+	const contribution = calculateContribution(game, tokenToSwap, game.token1, newAmount1, newAmount2)
+	if (tokenToSwap.toLowerCase() === game.token1.toLowerCase()) {
+		return { token1: contribution.token1, token2: contribution.token2 + game.currentAmount2 }
+	}
+	const hedgeToken2 = game.currentAmount2 + calculateFee(game.currentAmount2, game.feePercentage) + calculateFee(game.currentAmount2, game.protocolFee)
+	if (contribution.token2 < hedgeToken2) throw new Error('Buy hedge exceeds the token contribution')
+	return {
+		token1: contribution.token1 + buyHedgeWethLimit,
+		token2: contribution.token2 - hedgeToken2,
+	}
+}
+
 export function evaluateSellRep(game: Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'feePercentage' | 'protocolFee' | 'token1'>, quotedWethOut: bigint, gasCostWeth: bigint): ArbitrageQuote {
 	const wethSpend = game.currentAmount1 + calculateFee(game.currentAmount1, game.feePercentage) + calculateFee(game.currentAmount1, game.protocolFee)
 	return {

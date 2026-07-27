@@ -72,6 +72,7 @@
 		"ui:vendor": "cd ui && bun ./build/vendor.mts",
 		"cleanup:foundry-anvil-state": "bun ./scripts/cleanup-foundry-anvil-state.mts",
 		"gas-costs": "cd solidity && bun run gas-costs",
+		"open-oracle-arbitrager:reconcile": "./open-oracle-arbitrager/reconcile-position",
 		"test": "bun run ensure-contract-artifacts && bun run check:shared-dependencies && bun run tsc && bun run test:run",
 		"test:run": "bun ./scripts/run-tests.mts",
 		"test:run:shard": "bun test --preload ./bun-test-setup-ui.ts --reporter=dots --timeout 300000",

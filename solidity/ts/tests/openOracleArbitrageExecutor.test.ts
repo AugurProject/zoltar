@@ -9,6 +9,7 @@ import {
 	peripherals_OpenOracleArbitrageExecutor_OpenOracleArbitrageExecutor as executorArtifact,
 	test_peripherals_OpenOracleAdversarialHarnesses_OpenOracleArbitrageExecutorTarget as targetArtifact,
 	test_peripherals_OpenOracleAdversarialHarnesses_OpenOracleFeeToken as feeTokenArtifact,
+	test_peripherals_OpenOracleAdversarialHarnesses_OpenOracleSwapRouterTarget as routerArtifact,
 	test_peripherals_OpenOracleAdversarialHarnesses_OpenOracleTestToken as tokenArtifact,
 } from '../types/contractArtifact'
 
@@ -18,9 +19,10 @@ describe('OpenOracle arbitrage executor', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
 	let client: WriteClient
 	let executor: Address
+	let router: Address
 	let target: Address
 
-	const deploy = async (artifact: typeof executorArtifact | typeof targetArtifact | typeof tokenArtifact | typeof feeTokenArtifact, args: readonly unknown[] = []) => {
+	const deploy = async (artifact: typeof executorArtifact | typeof targetArtifact | typeof tokenArtifact | typeof feeTokenArtifact | typeof routerArtifact, args: readonly unknown[] = []) => {
 		const hash = await client.sendTransaction({
 			data: encodeDeployData({
 				abi: artifact.abi,
@@ -76,6 +78,7 @@ describe('OpenOracle arbitrage executor', () => {
 		client = createWriteClient(window, ensureDefined(TEST_ADDRESSES[0], 'test account missing'), 0)
 		executor = await deploy(executorArtifact)
 		target = await deploy(targetArtifact)
+		router = await deploy(routerArtifact)
 		await setBaselineSnapshot()
 	})
 
@@ -137,5 +140,54 @@ describe('OpenOracle arbitrage executor', () => {
 		).rejects.toThrow('Token transfer to executor was not exact')
 		expect(await client.readContract({ abi: feeTokenArtifact.abi, address: token1, functionName: 'balanceOf', args: [executor] })).toBe(0n)
 		expect(await client.readContract({ abi: feeTokenArtifact.abi, address: token1, functionName: 'balanceOf', args: [target] })).toBe(0n)
+	})
+
+	test('atomically sells the report token, funds the dispute, and refunds hedge WETH', async () => {
+		const token1 = await deploy(tokenArtifact, ['Token 1', 'TK1'])
+		const token2 = await deploy(tokenArtifact, ['Token 2', 'TK2'])
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token1, functionName: 'mint', args: [client.account.address, 10_000n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token2, functionName: 'mint', args: [client.account.address, 10_000n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token1, functionName: 'mint', args: [router, 10_000n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token1, functionName: 'approve', args: [executor, 2_200n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token2, functionName: 'approve', args: [executor, 1_000n] }))
+		const block = await client.getBlock()
+		await writeContractAndWait(client, () =>
+			client.writeContract({
+				abi: executorArtifact.abi,
+				address: executor,
+				functionName: 'hedgeAndDispute',
+				args: [{ hedgeWethLimit: 900n, newAmount1: 1_200n, newAmount2: 900n, openOracle: target, poolFee: 3_000, router, swapDeadline: block.timestamp + 1_000n }, game(token1, token2), helper(), timing],
+			}),
+		)
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: token1, functionName: 'balanceOf', args: [client.account.address] })).toBe(8_800n)
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: token1, functionName: 'balanceOf', args: [target] })).toBe(2_200n)
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: token2, functionName: 'balanceOf', args: [router] })).toBe(1_000n)
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: token1, functionName: 'allowance', args: [executor, router] })).toBe(0n)
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: token2, functionName: 'allowance', args: [executor, router] })).toBe(0n)
+	})
+
+	test('atomically buys the report token with a capped WETH input and funds the dispute', async () => {
+		const token1 = await deploy(tokenArtifact, ['Token 1', 'TK1'])
+		const token2 = await deploy(tokenArtifact, ['Token 2', 'TK2'])
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token1, functionName: 'mint', args: [client.account.address, 10_000n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token2, functionName: 'mint', args: [client.account.address, 10_000n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token2, functionName: 'mint', args: [router, 10_000n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token1, functionName: 'approve', args: [executor, 1_300n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token2, functionName: 'approve', args: [executor, 1_300n] }))
+		const block = await client.getBlock()
+		await writeContractAndWait(client, () =>
+			client.writeContract({
+				abi: executorArtifact.abi,
+				address: executor,
+				functionName: 'hedgeAndDispute',
+				args: [{ hedgeWethLimit: 1_100n, newAmount1: 1_200n, newAmount2: 1_300n, openOracle: target, poolFee: 3_000, router, swapDeadline: block.timestamp + 1_000n }, game(token1, token2), helper(), timing],
+			}),
+		)
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: token1, functionName: 'balanceOf', args: [client.account.address] })).toBe(8_800n)
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: token2, functionName: 'balanceOf', args: [client.account.address] })).toBe(8_700n)
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: token1, functionName: 'balanceOf', args: [target] })).toBe(200n)
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: token2, functionName: 'balanceOf', args: [target] })).toBe(2_300n)
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: token1, functionName: 'allowance', args: [executor, router] })).toBe(0n)
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: token2, functionName: 'allowance', args: [executor, router] })).toBe(0n)
 	})
 })

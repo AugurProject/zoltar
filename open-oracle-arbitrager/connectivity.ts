@@ -56,6 +56,11 @@ export function endpointLabel(value: string) {
 	return `${parsed.origin}${parsed.pathname}`
 }
 
+export function validateReadRpcUrls(values: readonly string[]) {
+	if (values.length > 8) throw new Error('At most 8 read quorum RPC URLs are supported')
+	return [...new Set(values.map(value => endpointUrl(value.trim())))]
+}
+
 export function validateConnectivitySettings(value: unknown): ConnectivitySettings {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Connectivity settings must be a JSON object')
 	const record = value as Record<string, unknown>

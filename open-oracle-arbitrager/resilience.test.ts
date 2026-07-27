@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { bestSuccessful, pollUntilStopped, replaceOverlap } from './resilience.js'
+import { bestSuccessful, compactFinalityWindow, pollUntilStopped, replaceOverlap } from './resilience.js'
 
 describe('OpenOracle monitor resilience', () => {
 	test('keeps a healthy quote when another direction fails', async () => {
@@ -54,6 +54,33 @@ describe('OpenOracle monitor resilience', () => {
 		expect(result).toEqual([
 			{ block: 9n, index: 0, state: 'canonical-before-overlap' },
 			{ block: 10n, index: 1, state: 'canonical-dispute' },
+		])
+	})
+
+	test('compacts each report to one finalized anchor plus its complete reorg window', () => {
+		const values = [
+			{ block: 1n, report: 1n, terminal: false },
+			{ block: 50n, report: 1n, terminal: false },
+			{ block: 88n, report: 1n, terminal: false, version: 'first-in-block' },
+			{ block: 88n, report: 1n, terminal: false, version: 'last-in-block' },
+			{ block: 89n, report: 1n, terminal: false },
+			{ block: 100n, report: 1n, terminal: false },
+			{ block: 80n, report: 2n, terminal: false },
+			{ block: 88n, report: 2n, terminal: true },
+		]
+		expect(
+			compactFinalityWindow(
+				values,
+				100n,
+				12n,
+				value => value.report,
+				value => value.block,
+				value => value.terminal,
+			),
+		).toEqual([
+			{ block: 88n, report: 1n, terminal: false, version: 'last-in-block' },
+			{ block: 89n, report: 1n, terminal: false },
+			{ block: 100n, report: 1n, terminal: false },
 		])
 	})
 })

@@ -55,6 +55,34 @@ interface IOpenOracleDispute {
 	) external payable;
 }
 
+interface IUniswapV3SwapRouter {
+	struct ExactInputSingleParams {
+		address tokenIn;
+		address tokenOut;
+		uint24 fee;
+		address recipient;
+		uint256 deadline;
+		uint256 amountIn;
+		uint256 amountOutMinimum;
+		uint160 sqrtPriceLimitX96;
+	}
+
+	struct ExactOutputSingleParams {
+		address tokenIn;
+		address tokenOut;
+		uint24 fee;
+		address recipient;
+		uint256 deadline;
+		uint256 amountOut;
+		uint256 amountInMaximum;
+		uint160 sqrtPriceLimitX96;
+	}
+
+	function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut);
+
+	function exactOutputSingle(ExactOutputSingleParams calldata params) external payable returns (uint256 amountIn);
+}
+
 /// @notice Funds one OpenOracle dispute atomically and rejects non-exact ERC-20 transfers.
 /// @dev The caller remains the OpenOracle disputer. A successful dispute retains no operation-pulled token balance or OpenOracle allowance.
 contract OpenOracleArbitrageExecutor {
@@ -62,6 +90,41 @@ contract OpenOracleArbitrageExecutor {
 
 	uint256 private constant PERCENTAGE_PRECISION = 1e7;
 	bool private entered;
+
+	struct HedgeRequest {
+		address openOracle;
+		address router;
+		uint24 poolFee;
+		uint128 newAmount1;
+		uint128 newAmount2;
+		uint256 hedgeWethLimit;
+		uint256 swapDeadline;
+	}
+
+	struct ExecutionBalances {
+		uint256 executorToken1;
+		uint256 executorToken2;
+		uint256 oracleToken1;
+		uint256 oracleToken2;
+	}
+
+	struct HedgeResult {
+		bool boughtToken2;
+		uint256 contribution1;
+		uint256 contribution2;
+		uint256 hedgeAmountToken2;
+		uint256 hedgeAmountWeth;
+	}
+
+	event HedgeAndDisputeExecuted(
+		address indexed account,
+		uint256 indexed reportId,
+		bool boughtToken2,
+		uint256 hedgeAmountToken2,
+		uint256 hedgeAmountWeth,
+		uint256 contribution1,
+		uint256 contribution2
+	);
 
 	function dispute(
 		address openOracle,
@@ -124,6 +187,157 @@ contract OpenOracleArbitrageExecutor {
 		);
 
 		entered = false;
+	}
+
+	/// @notice Atomically hedges the OpenOracle replacement exposure and funds the dispute.
+	/// @dev `hedgeWethLimit` is the minimum WETH output when selling token2 and the maximum WETH
+	///      input when buying token2. The caller remains the OpenOracle reporter and owns all
+	///      immediate and eventual OpenOracle balances.
+	function hedgeAndDispute(
+		HedgeRequest calldata request,
+		IOpenOracleDispute.OracleGame calldata game,
+		IOpenOracleDispute.PreimageHelper calldata helper,
+		IOpenOracleDispute.TimingBoundaries calldata timing
+	) external {
+		require(!entered, 'OpenOracle arbitrage executor reentrancy');
+		require(request.openOracle.code.length > 0, 'OpenOracle address must contain contract code');
+		require(request.router.code.length > 0, 'Uniswap router address must contain contract code');
+		require(
+			game.token1 != address(0) && game.token2 != address(0),
+			'OpenOracle arbitrage executor requires ERC20 tokens'
+		);
+		require(game.token1 != game.token2, 'OpenOracle arbitrage executor tokens must differ');
+		require(msg.sender != game.currentReporter, 'OpenOracle arbitrage executor does not support self-disputes');
+		require(block.timestamp <= request.swapDeadline, 'OpenOracle arbitrage hedge deadline expired');
+		entered = true;
+
+		IERC20 token1 = IERC20(game.token1);
+		IERC20 token2 = IERC20(game.token2);
+		ExecutionBalances memory balances = ExecutionBalances({
+			executorToken1: token1.balanceOf(address(this)),
+			executorToken2: token2.balanceOf(address(this)),
+			oracleToken1: token1.balanceOf(request.openOracle),
+			oracleToken2: token2.balanceOf(request.openOracle)
+		});
+		HedgeResult memory result = _executeHedge(request, game, balances);
+
+		_approveExact(token1, request.openOracle, result.contribution1);
+		_approveExact(token2, request.openOracle, result.contribution2);
+		IOpenOracleDispute(request.openOracle).dispute(
+			helper.reportId,
+			request.newAmount1,
+			request.newAmount2,
+			msg.sender,
+			false,
+			false,
+			game,
+			helper,
+			timing
+		);
+		_approveExact(token1, request.openOracle, 0);
+		_approveExact(token2, request.openOracle, 0);
+
+		uint256 wethRefund =
+			result.boughtToken2 ? request.hedgeWethLimit - result.hedgeAmountWeth : result.hedgeAmountWeth;
+		if (wethRefund != 0) token1.safeTransfer(msg.sender, wethRefund);
+		require(token1.balanceOf(address(this)) == balances.executorToken1, 'Token1 transfer amount was not exact');
+		require(token2.balanceOf(address(this)) == balances.executorToken2, 'Token2 transfer amount was not exact');
+		require(
+			token1.balanceOf(request.openOracle) == balances.oracleToken1 + result.contribution1,
+			'OpenOracle token1 receipt was not exact'
+		);
+		require(
+			token2.balanceOf(request.openOracle) == balances.oracleToken2 + result.contribution2,
+			'OpenOracle token2 receipt was not exact'
+		);
+
+		emit HedgeAndDisputeExecuted(
+			msg.sender,
+			helper.reportId,
+			result.boughtToken2,
+			result.hedgeAmountToken2,
+			result.hedgeAmountWeth,
+			result.contribution1,
+			result.contribution2
+		);
+		entered = false;
+	}
+
+	function _executeHedge(
+		HedgeRequest calldata request,
+		IOpenOracleDispute.OracleGame calldata game,
+		ExecutionBalances memory balances
+	) private returns (HedgeResult memory result) {
+		(result.contribution1, result.contribution2) = _contributions(game, request.newAmount1, request.newAmount2);
+		result.boughtToken2 =
+			uint256(request.newAmount2) * game.currentAmount1 >
+			uint256(game.currentAmount2) * request.newAmount1;
+		if (result.boughtToken2) {
+			return _executeBuyHedge(request, game, balances, result);
+		}
+		return _executeSellHedge(request, game, balances, result);
+	}
+
+	function _executeBuyHedge(
+		HedgeRequest calldata request,
+		IOpenOracleDispute.OracleGame calldata game,
+		ExecutionBalances memory balances,
+		HedgeResult memory result
+	) private returns (HedgeResult memory) {
+		IERC20 token1 = IERC20(game.token1);
+		IERC20 token2 = IERC20(game.token2);
+		result.hedgeAmountToken2 =
+			uint256(game.currentAmount2) +
+			_fee(game.currentAmount2, game.feePercentage) +
+			_fee(game.currentAmount2, game.protocolFee);
+		require(result.contribution2 >= result.hedgeAmountToken2, 'OpenOracle buy hedge exceeds token2 contribution');
+		_pullExact(token1, result.contribution1 + request.hedgeWethLimit, balances.executorToken1);
+		_pullExact(token2, result.contribution2 - result.hedgeAmountToken2, balances.executorToken2);
+		_approveExact(token1, request.router, request.hedgeWethLimit);
+		result.hedgeAmountWeth = IUniswapV3SwapRouter(request.router).exactOutputSingle(
+			IUniswapV3SwapRouter.ExactOutputSingleParams({
+				tokenIn: game.token1,
+				tokenOut: game.token2,
+				fee: request.poolFee,
+				recipient: address(this),
+				deadline: request.swapDeadline,
+				amountOut: result.hedgeAmountToken2,
+				amountInMaximum: request.hedgeWethLimit,
+				sqrtPriceLimitX96: 0
+			})
+		);
+		require(result.hedgeAmountWeth <= request.hedgeWethLimit, 'Uniswap buy hedge exceeded maximum WETH');
+		_approveExact(token1, request.router, 0);
+		return result;
+	}
+
+	function _executeSellHedge(
+		HedgeRequest calldata request,
+		IOpenOracleDispute.OracleGame calldata game,
+		ExecutionBalances memory balances,
+		HedgeResult memory result
+	) private returns (HedgeResult memory) {
+		IERC20 token1 = IERC20(game.token1);
+		IERC20 token2 = IERC20(game.token2);
+		result.hedgeAmountToken2 = game.currentAmount2;
+		_pullExact(token1, result.contribution1, balances.executorToken1);
+		_pullExact(token2, result.contribution2 + result.hedgeAmountToken2, balances.executorToken2);
+		_approveExact(token2, request.router, result.hedgeAmountToken2);
+		result.hedgeAmountWeth = IUniswapV3SwapRouter(request.router).exactInputSingle(
+			IUniswapV3SwapRouter.ExactInputSingleParams({
+				tokenIn: game.token2,
+				tokenOut: game.token1,
+				fee: request.poolFee,
+				recipient: address(this),
+				deadline: request.swapDeadline,
+				amountIn: result.hedgeAmountToken2,
+				amountOutMinimum: request.hedgeWethLimit,
+				sqrtPriceLimitX96: 0
+			})
+		);
+		require(result.hedgeAmountWeth >= request.hedgeWethLimit, 'Uniswap sell hedge received too little WETH');
+		_approveExact(token2, request.router, 0);
+		return result;
 	}
 
 	function contributions(

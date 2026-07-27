@@ -26,6 +26,12 @@
 		</nav>
 
 		<main>
+			<section id="launch-notice" class="notice" aria-live="polite">
+				<strong id="launch-notice-title">Checking launch readiness</strong>
+				<span id="launch-notice-copy">Waiting for the selected network.</span>
+				<a id="launch-gate-link" href="https://github.com/AugurProject/zoltar/blob/main/docs/oracle-a1-launch-analysis.html" target="_blank" rel="noreferrer">Review the ORACLE-A1 launch analysis</a>
+			</section>
+
 			<section id="notice" class="notice" aria-live="polite">
 				<strong id="notice-title">Connecting to bot</strong>
 				<span id="notice-copy">Waiting for the first local state snapshot.</span>
@@ -43,14 +49,19 @@
 					<small id="block-value">Block —</small>
 				</div>
 				<div class="metric">
-					<span class="metric-label">Tracked net profit</span>
+					<span class="metric-label">Realized net P&amp;L</span>
 					<strong id="profit-value">0 ETH</strong>
-					<small>Submission-time quote minus recorded gas; not realized P&amp;L</small>
+					<small>Closed, reconciled positions after actual entry and lifecycle gas</small>
 				</div>
 				<div class="metric">
-					<span class="metric-label">Revenue before gas</span>
-					<strong id="revenue-value">0 ETH</strong>
-					<small>Modeled pre-gas arbitrage P&amp;L across confirmed executions</small>
+					<span class="metric-label">Open hedged P&amp;L</span>
+					<strong id="open-profit-value">0 ETH</strong>
+					<small>Actual hedge result less gas so far; unrealized until exact withdrawal</small>
+				</div>
+				<div class="metric">
+					<span class="metric-label">Hedged P&amp;L before gas</span>
+					<strong id="hedged-profit-value">0 ETH</strong>
+					<small>Actual swap execution economics across durable positions</small>
 				</div>
 				<div class="metric">
 					<span class="metric-label">Recorded execution gas</span>
@@ -214,7 +225,7 @@
 							</label>
 						</div>
 						<div class="form-actions">
-							<span id="submission-status" class="muted" aria-live="polite">Public mode requires existing token approvals and submits one executor transaction. Private mode simulates and submits one ordered bundle with no allowed reverting hashes to every configured relay.</span>
+							<span id="submission-status" class="muted" aria-live="polite">Live execution requires private relays so approvals, hedge, and dispute remain atomic. Public mode is available only while dry-running.</span>
 							<button class="button" type="submit">Apply submission</button>
 						</div>
 					</fieldset>
@@ -316,6 +327,36 @@
 					</table>
 				</div>
 				<p id="opportunities-empty" class="empty-state">No eligible WETH/token report was found in the latest scan.</p>
+			</section>
+
+			<section class="panel">
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Durable accounting</p>
+						<h2>Position lifecycle</h2>
+					</div>
+					<span id="position-count" class="muted">0 durable positions</span>
+				</div>
+				<div class="table-scroll" tabindex="0" aria-label="Position lifecycle table">
+					<table>
+						<thead>
+							<tr>
+								<th>Opened</th>
+								<th>Report</th>
+								<th>Direction</th>
+								<th>Status</th>
+								<th>Hedged pre-gas</th>
+								<th>Entry gas</th>
+								<th>Lifecycle gas</th>
+								<th>Realized net</th>
+								<th>Withdrawn</th>
+								<th>Entry transaction</th>
+							</tr>
+						</thead>
+						<tbody id="positions-body"></tbody>
+					</table>
+				</div>
+				<p id="positions-empty" class="empty-state">No durable OpenOracle positions have been recorded.</p>
 			</section>
 
 			<section class="panel">

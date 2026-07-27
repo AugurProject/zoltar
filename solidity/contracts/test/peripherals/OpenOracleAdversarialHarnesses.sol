@@ -3,7 +3,7 @@ pragma solidity 0.8.35;
 
 import { IERC20 } from '../../IERC20.sol';
 import { IERC1155Receiver } from '../../peripherals/interfaces/IERC1155Receiver.sol';
-import { IOpenOracleDispute } from '../../peripherals/OpenOracleArbitrageExecutor.sol';
+import { IOpenOracleDispute, IUniswapV3SwapRouter } from '../../peripherals/OpenOracleArbitrageExecutor.sol';
 import { SafeERC20Ops } from '../../SafeERC20Ops.sol';
 
 interface IOpenOracleAdversarialTarget {
@@ -113,6 +113,26 @@ contract OpenOracleArbitrageExecutorTarget {
 		uint256 allowance2 = token2.allowance(msg.sender, address(this));
 		if (allowance1 != 0) token1.safeTransferFrom(msg.sender, address(this), allowance1);
 		if (allowance2 != 0) token2.safeTransferFrom(msg.sender, address(this), allowance2);
+	}
+}
+
+contract OpenOracleSwapRouterTarget is IUniswapV3SwapRouter {
+	using SafeERC20Ops for IERC20;
+
+	function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut) {
+		require(block.timestamp <= params.deadline, 'OpenOracle test swap deadline expired');
+		amountOut = params.amountIn;
+		require(amountOut >= params.amountOutMinimum, 'OpenOracle test swap output too low');
+		IERC20(params.tokenIn).safeTransferFrom(msg.sender, address(this), params.amountIn);
+		IERC20(params.tokenOut).safeTransfer(params.recipient, amountOut);
+	}
+
+	function exactOutputSingle(ExactOutputSingleParams calldata params) external payable returns (uint256 amountIn) {
+		require(block.timestamp <= params.deadline, 'OpenOracle test swap deadline expired');
+		amountIn = params.amountOut;
+		require(amountIn <= params.amountInMaximum, 'OpenOracle test swap input too high');
+		IERC20(params.tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
+		IERC20(params.tokenOut).safeTransfer(params.recipient, params.amountOut);
 	}
 }
 

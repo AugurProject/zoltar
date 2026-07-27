@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Address, Hex } from '@zoltar/shared/ethereum'
 import { appendExecutionHistory, clearWalletDerivedState, decimalSignedEth, ensureExecutionHistoryWritable, gameCapitalSnapshot, loadExecutionHistory, operatorSnapshot, parseSignedDecimalEth, updateStrategyFromRequest, type ExecutionRecord, type MutableStrategy, type OperatorState } from './operator-state.js'
+import type { PositionRecord } from './position-store.js'
 
 const temporaryDirectories: string[] = []
 const address = '0x0000000000000000000000000000000000000001' as Address
@@ -105,6 +106,7 @@ describe('operator strategy settings', () => {
 				},
 			],
 			paused: false,
+			positions: [],
 			status: 'running',
 			tokenAddresses: [],
 			tokenMarkets: [],
@@ -119,6 +121,200 @@ describe('operator strategy settings', () => {
 })
 
 describe('operator execution history', () => {
+	test('separates actual open hedged P&L from reconciled realized P&L', () => {
+		const base = {
+			account: address,
+			actualEntryGasCostEth: '0.01',
+			capitalAtRiskWeth: '1',
+			closedAt: undefined,
+			direction: 'sell-rep',
+			entryTransactionHash: `0x${'ab'.repeat(32)}` as Hex,
+			entryTransactionHashes: [`0x${'ab'.repeat(32)}` as Hex],
+			hedgeAmountToken: '1',
+			hedgeWeth: '1',
+			hedgedProfitBeforeGasEth: '0.1',
+			lifecycleGasCostEth: '0.02',
+			lifecycleReceiptRecovered: false,
+			lifecycleTargetBlockNumber: undefined,
+			lifecycleTokenDecimals: undefined,
+			lifecycleTransactionHashes: [],
+			lifecycleUpdatedAt: new Date(0).toISOString(),
+			lifecycleWalletTokenBefore: undefined,
+			lifecycleWalletWethBefore: undefined,
+			lockedToken: '1',
+			lockedWeth: '1',
+			manualReconciliation: undefined,
+			openedAt: new Date(0).toISOString(),
+			realizedNetProfitEth: undefined,
+			reportId: '1',
+			status: 'open',
+			token: address,
+			tokenSymbol: 'REP',
+			withdrawnToken: '0',
+			withdrawnWeth: '0',
+		} satisfies PositionRecord
+		const state: OperatorState = {
+			activeReportCount: 0,
+			balances: undefined,
+			blockNumber: undefined,
+			blockTimestamp: undefined,
+			endpointChecks: [],
+			executionHistory: [],
+			gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
+			lastError: undefined,
+			lastPollAt: undefined,
+			operationLog: [],
+			opportunities: [],
+			paused: false,
+			positions: [base, { ...base, closedAt: new Date(1).toISOString(), realizedNetProfitEth: '-0.04', reportId: '2', status: 'closed' }],
+			priceHistory: [],
+			reportPaths: [],
+			status: 'running',
+			tokenAddresses: [],
+			tokenMarkets: [],
+			transactionActivity: [],
+		}
+		const snapshot = operatorSnapshot(state, strategy(), submission, connectivity, fixed)
+		expect(snapshot.totalHedgedProfitBeforeGasEth).toBe('0.2')
+		expect(snapshot.totalOpenHedgedNetProfitEth).toBe('0.07')
+		expect(snapshot.totalRealizedNetProfitEth).toBe('-0.04')
+	})
+
+	test('excludes staged entry quotes from actual position P&L totals', () => {
+		const base = {
+			account: address,
+			actualEntryGasCostEth: '0',
+			capitalAtRiskWeth: '1',
+			closedAt: undefined,
+			direction: 'sell-rep',
+			entryTransactionHash: `0x${'ab'.repeat(32)}` as Hex,
+			entryTransactionHashes: [`0x${'ab'.repeat(32)}` as Hex],
+			hedgeAmountToken: '1',
+			hedgeWeth: '1',
+			hedgedProfitBeforeGasEth: '9',
+			lifecycleGasCostEth: '0',
+			lifecycleReceiptRecovered: false,
+			lifecycleTargetBlockNumber: undefined,
+			lifecycleTokenDecimals: undefined,
+			lifecycleTransactionHashes: [],
+			lifecycleUpdatedAt: undefined,
+			lifecycleWalletTokenBefore: undefined,
+			lifecycleWalletWethBefore: undefined,
+			lockedToken: '1',
+			lockedWeth: '1',
+			manualReconciliation: undefined,
+			openedAt: new Date(0).toISOString(),
+			realizedNetProfitEth: undefined,
+			reportId: '1',
+			status: 'pending-entry',
+			token: address,
+			tokenSymbol: 'REP',
+			withdrawnToken: '0',
+			withdrawnWeth: '0',
+		} satisfies PositionRecord
+		const state: OperatorState = {
+			activeReportCount: 0,
+			balances: undefined,
+			blockNumber: undefined,
+			blockTimestamp: undefined,
+			endpointChecks: [],
+			executionHistory: [],
+			gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
+			lastError: undefined,
+			lastPollAt: undefined,
+			operationLog: [],
+			opportunities: [],
+			paused: false,
+			positions: [base, { ...base, reportId: '2', status: 'recovery-required' }],
+			priceHistory: [],
+			reportPaths: [],
+			status: 'running',
+			tokenAddresses: [],
+			tokenMarkets: [],
+			transactionActivity: [],
+		}
+		const snapshot = operatorSnapshot(state, strategy(), submission, connectivity, fixed)
+		expect(snapshot.totalHedgedProfitBeforeGasEth).toBe('0')
+		expect(snapshot.totalOpenHedgedNetProfitEth).toBe('0')
+		expect(snapshot.totalRealizedNetProfitEth).toBe('0')
+	})
+
+	test('excludes ambiguous lifecycle receipts from actual P&L while retaining manually recorded realized P&L', () => {
+		const pending = {
+			account: address,
+			actualEntryGasCostEth: '0.01',
+			capitalAtRiskWeth: '1',
+			closedAt: undefined,
+			direction: 'sell-rep',
+			entryTransactionHash: `0x${'ab'.repeat(32)}` as Hex,
+			entryTransactionHashes: [`0x${'ab'.repeat(32)}` as Hex],
+			hedgeAmountToken: '1',
+			hedgeWeth: '1',
+			hedgedProfitBeforeGasEth: '9',
+			lifecycleGasCostEth: '0',
+			lifecycleReceiptRecovered: false,
+			lifecycleTargetBlockNumber: '123',
+			lifecycleTokenDecimals: '18',
+			lifecycleTransactionHashes: [`0x${'cd'.repeat(32)}` as Hex],
+			lifecycleUpdatedAt: new Date(1).toISOString(),
+			lifecycleWalletTokenBefore: '1',
+			lifecycleWalletWethBefore: '1',
+			lockedToken: '1',
+			lockedWeth: '1',
+			manualReconciliation: undefined,
+			openedAt: new Date(0).toISOString(),
+			realizedNetProfitEth: undefined,
+			reportId: '3',
+			status: 'recovery-required',
+			token: address,
+			tokenSymbol: 'REP',
+			withdrawnToken: '0',
+			withdrawnWeth: '0',
+		} satisfies PositionRecord
+		const manuallyClosed = {
+			...pending,
+			closedAt: new Date(2).toISOString(),
+			manualReconciliation: {
+				evidence: 'Archived receipts and balances',
+				externalCostEth: '0.01',
+				finalWalletToken: '1',
+				finalWalletWeth: '1',
+				note: 'Manually reconciled',
+				pnlStatus: 'recorded',
+				recordedAt: new Date(2).toISOString(),
+				recordedBy: address,
+			},
+			realizedNetProfitEth: '-0.2',
+			reportId: '4',
+			status: 'closed',
+		} satisfies PositionRecord
+		const state: OperatorState = {
+			activeReportCount: 0,
+			balances: undefined,
+			blockNumber: undefined,
+			blockTimestamp: undefined,
+			endpointChecks: [],
+			executionHistory: [],
+			gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
+			lastError: undefined,
+			lastPollAt: undefined,
+			operationLog: [],
+			opportunities: [],
+			paused: false,
+			positions: [pending, manuallyClosed],
+			priceHistory: [],
+			reportPaths: [],
+			status: 'running',
+			tokenAddresses: [],
+			tokenMarkets: [],
+			transactionActivity: [],
+		}
+		const snapshot = operatorSnapshot(state, strategy(), submission, connectivity, fixed)
+		expect(snapshot.totalHedgedProfitBeforeGasEth).toBe('0')
+		expect(snapshot.totalOpenHedgedNetProfitEth).toBe('0')
+		expect(snapshot.totalRealizedNetProfitEth).toBe('-0.2')
+	})
+
 	test('persists valid records, ignores malformed lines, and calculates totals', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-test-'))
 		temporaryDirectories.push(directory)
@@ -158,6 +354,7 @@ describe('operator execution history', () => {
 			opportunities: [],
 			operationLog: [],
 			paused: false,
+			positions: [],
 			status: 'running',
 			tokenAddresses: [],
 			tokenMarkets: [],
@@ -218,6 +415,7 @@ describe('operator execution history', () => {
 			opportunities: [],
 			operationLog: [],
 			paused: false,
+			positions: [],
 			status: 'running',
 			tokenAddresses: [],
 			tokenMarkets: [],

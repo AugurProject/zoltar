@@ -44,7 +44,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/contract-interaction-reference.md'
-const expectedProductionSoliditySourceFingerprint = '179280d1778cb8bb6e63e81564c9c89e4be3be3c57738eb391c28396bb25848a'
+const expectedProductionSoliditySourceFingerprint = 'c9ba99676b321e0cf7337d8d42de0555098a67d1dbead0dc03b380b58de4dbca'
 
 const eventSourceByName: Record<string, string> = {
 	Approval: 'solidity/contracts/IERC20.sol',

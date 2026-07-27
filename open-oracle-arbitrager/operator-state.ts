@@ -5,6 +5,7 @@ import type { OpenOracleGame } from '@zoltar/shared/openOracle'
 import type { ConnectivitySettings, EndpointCheck, NetworkName } from './connectivity.js'
 import type { SubmissionSettings, SubmissionTargetResult } from './transaction-submission.js'
 import type { MarketPricePoint, TokenMarketSnapshot } from './market-monitor.js'
+import type { PositionRecord } from './position-store.js'
 
 export type StrategySettings = {
 	maxSpotTwapTicks: string
@@ -56,7 +57,7 @@ export type ReportPathSnapshot = {
 }
 
 export type OpportunitySnapshot = {
-	decision: 'dry-run-opportunity' | 'eligible' | 'execution-failed' | 'history-unavailable' | 'insufficient-inventory' | 'paused' | 'selected' | 'self-report' | 'signer-unavailable' | 'submitted' | 'unprofitable'
+	decision: 'dry-run-opportunity' | 'eligible' | 'execution-failed' | 'history-unavailable' | 'insufficient-inventory' | 'paused' | 'risk-limit' | 'selected' | 'self-report' | 'signer-unavailable' | 'submitted' | 'unprofitable'
 	direction: 'buy-rep' | 'sell-rep'
 	estimatedNetProfitWeth: string
 	estimatedNetProfitEth: string
@@ -127,6 +128,7 @@ export type OperatorSnapshot = {
 	executor: Address | undefined
 	executionHistory: readonly ExecutionRecord[]
 	executionHistoryRecordCount: number
+	positionRecordCount: number
 	expectedChainId: number
 	explorerUrl: string
 	endpointChecks: readonly EndpointCheck[]
@@ -138,6 +140,7 @@ export type OperatorSnapshot = {
 	openOracle: Address
 	operationLog: readonly OperationEntry[]
 	opportunities: readonly OpportunitySnapshot[]
+	positions: readonly PositionRecord[]
 	paused: boolean
 	queuedWallet: Address | null | undefined
 	savedWallet: Address | undefined
@@ -153,6 +156,9 @@ export type OperatorSnapshot = {
 	totalEstimatedNetProfitEth: string
 	totalEstimatedNetProfitWeth: string
 	totalRevenueBeforeGasEth: string
+	totalHedgedProfitBeforeGasEth: string
+	totalOpenHedgedNetProfitEth: string
+	totalRealizedNetProfitEth: string
 	totalTrackedNetProfitEth: string
 	transactionActivity: readonly TransactionActivity[]
 	updatedAt: string
@@ -170,6 +176,7 @@ export type OperatorState = {
 	lastError: string | undefined
 	lastPollAt: string | undefined
 	opportunities: OpportunitySnapshot[]
+	positions: PositionRecord[]
 	operationLog: OperationEntry[]
 	paused: boolean
 	status: OperatorSnapshot['status']
@@ -407,6 +414,29 @@ function sumSignedEth(records: readonly ExecutionRecord[], field: 'trackedNetPro
 	return decimalSignedEth(records.reduce((total, record) => total + parseSignedDecimalEth(record[field]), 0n))
 }
 
+function positionTotals(positions: readonly PositionRecord[]) {
+	let hedgedProfit = 0n
+	let openHedgedNet = 0n
+	let realized = 0n
+	for (const position of positions) {
+		if (position.status === 'closed' && position.realizedNetProfitEth !== undefined) {
+			realized += parseSignedDecimalEth(position.realizedNetProfitEth)
+		}
+		// A zero entry-gas value is the durable marker for a staged entry whose
+		// receipts and executor event have not yet reached RPC quorum.
+		const awaitingLifecycleEvidence = position.lifecycleTransactionHashes.length !== 0 && !position.lifecycleReceiptRecovered
+		if (position.actualEntryGasCostEth === '0' || awaitingLifecycleEvidence) continue
+		const hedged = parseSignedDecimalEth(position.hedgedProfitBeforeGasEth)
+		hedgedProfit += hedged
+		if (position.status !== 'closed') openHedgedNet += hedged - parseDecimalWeth(position.actualEntryGasCostEth) - parseDecimalWeth(position.lifecycleGasCostEth)
+	}
+	return {
+		hedgedProfit: decimalSignedEth(hedgedProfit),
+		openHedgedNet: decimalSignedEth(openHedgedNet),
+		realized: decimalSignedEth(realized),
+	}
+}
+
 export function operatorSnapshot(
 	state: OperatorState,
 	strategy: MutableStrategy,
@@ -414,6 +444,7 @@ export function operatorSnapshot(
 	connectivity: ConnectivitySettings,
 	fixed: { execute: boolean; executor: Address | undefined; expectedChainId: number; explorerUrl: string; network: NetworkName; openOracle: Address; queuedWallet: Address | null | undefined; savedWallet: Address | undefined; wallet: Address | undefined },
 ): OperatorSnapshot {
+	const totals = positionTotals(state.positions)
 	return {
 		activeReportCount: state.activeReportCount,
 		balances: state.balances,
@@ -423,6 +454,7 @@ export function operatorSnapshot(
 		executor: fixed.executor,
 		executionHistory: state.executionHistory.slice(0, 500),
 		executionHistoryRecordCount: state.executionHistory.length,
+		positionRecordCount: state.positions.length,
 		expectedChainId: fixed.expectedChainId,
 		explorerUrl: fixed.explorerUrl,
 		endpointChecks: state.endpointChecks,
@@ -433,6 +465,7 @@ export function operatorSnapshot(
 		network: fixed.network,
 		openOracle: fixed.openOracle,
 		opportunities: state.opportunities,
+		positions: state.positions.slice(0, 500),
 		operationLog: state.operationLog,
 		paused: state.paused,
 		queuedWallet: fixed.queuedWallet,
@@ -449,6 +482,9 @@ export function operatorSnapshot(
 		totalEstimatedNetProfitEth: sumDecimalWeth(state.executionHistory, 'estimatedNetProfitWeth'),
 		totalEstimatedNetProfitWeth: sumDecimalWeth(state.executionHistory, 'estimatedNetProfitWeth'),
 		totalRevenueBeforeGasEth: sumDecimalWeth(state.executionHistory, 'estimatedProfitBeforeGasEth'),
+		totalHedgedProfitBeforeGasEth: totals.hedgedProfit,
+		totalOpenHedgedNetProfitEth: totals.openHedgedNet,
+		totalRealizedNetProfitEth: totals.realized,
 		totalTrackedNetProfitEth: sumSignedEth(state.executionHistory, 'trackedNetProfitEth'),
 		transactionActivity: state.transactionActivity.slice(0, 100),
 		updatedAt: new Date().toISOString(),

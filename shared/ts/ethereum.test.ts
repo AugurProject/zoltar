@@ -12,6 +12,7 @@ import {
 	encodeFunctionData,
 	formatEther,
 	formatUnits,
+	getBalanceAtBlock,
 	getAddress,
 	getCreate2Address,
 	hexToBytes,
@@ -26,6 +27,7 @@ import {
 	parseUnits,
 	privateKeyToAccount,
 	publicActions,
+	readContractAtBlock,
 	recoverTransactionAddress,
 	toHex,
 	type BlockTransaction,
@@ -1228,6 +1230,21 @@ describe('shared ethereum compatibility layer', () => {
 			).result,
 		).toBe(1n)
 		expect(calls).toHaveLength(1)
+	})
+
+	test('public client contract and balance reads accept an exact historical block tag', async () => {
+		const calls: { method: string; params: unknown }[] = []
+		const provider = createProvider(({ method, params }) => {
+			const blockTag = getArrayEntry(params, 1, `${method} params`)
+			expect(blockTag).toBe('0x63')
+			if (method === 'eth_call') return encodeAbiParameters([{ type: 'uint256' }], [7n])
+			if (method === 'eth_getBalance') return '0x8'
+			throw new Error(`Unexpected rpc method: ${method}`)
+		}, calls)
+		const client = createPublicClient({ chain: mainnet, transport: custom(provider) })
+		expect(await readContractAtBlock(client.transport, { abi: BALANCE_OF_ABI, address: TOKEN_ADDRESS, args: [OWNER_ADDRESS], functionName: 'balanceOf' }, 99n)).toBe(7n)
+		expect(await getBalanceAtBlock(client.transport, { address: OWNER_ADDRESS, blockNumber: 99n })).toBe(8n)
+		expect(calls.map(call => call.method)).toEqual(['eth_call', 'eth_getBalance'])
 	})
 
 	test('public client reads pending transaction counts', async () => {

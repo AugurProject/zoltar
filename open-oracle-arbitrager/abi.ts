@@ -149,6 +149,21 @@ export const erc20Abi = [
 	},
 ] as const
 
+export const openOraclePriceCoordinatorAbi = [
+	{ type: 'function', name: 'openOracle', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address' }] },
+	{ type: 'function', name: 'reputationToken', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address' }] },
+	{ type: 'function', name: 'weth', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address' }] },
+	{ type: 'function', name: 'settlementTime', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint48' }] },
+	{ type: 'function', name: 'disputeDelay', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint24' }] },
+	{ type: 'function', name: 'protocolFee', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint24' }] },
+	{ type: 'function', name: 'feePercentage', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint24' }] },
+	{ type: 'function', name: 'multiplier', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint16' }] },
+	{ type: 'function', name: 'timeType', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bool' }] },
+	{ type: 'function', name: 'trackDisputes', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bool' }] },
+	{ type: 'function', name: 'protocolFeeRecipient', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address' }] },
+	{ type: 'function', name: 'getSettlementCallbackGasLimit', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint32' }] },
+] as const
+
 export const augurUniverseAbi = [
 	{ type: 'function', name: 'getForkingMarket', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address' }] },
 	{ type: 'function', name: 'getReputationToken', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address' }] },
@@ -190,7 +205,28 @@ const helperComponents = [
 	{ name: 'blockNumber', type: 'uint256' },
 ] as const
 
+const timingComponents = [
+	{ name: 'blockNumber', type: 'uint256' },
+	{ name: 'blockNumberBound', type: 'uint256' },
+	{ name: 'blockTimestamp', type: 'uint256' },
+	{ name: 'blockTimestampBound', type: 'uint256' },
+] as const
+
 export const openOracleArbitrageExecutorAbi = [
+	{
+		type: 'event',
+		name: 'HedgeAndDisputeExecuted',
+		anonymous: false,
+		inputs: [
+			{ name: 'account', type: 'address', indexed: true },
+			{ name: 'reportId', type: 'uint256', indexed: true },
+			{ name: 'boughtToken2', type: 'bool', indexed: false },
+			{ name: 'hedgeAmountToken2', type: 'uint256', indexed: false },
+			{ name: 'hedgeAmountWeth', type: 'uint256', indexed: false },
+			{ name: 'contribution1', type: 'uint256', indexed: false },
+			{ name: 'contribution2', type: 'uint256', indexed: false },
+		],
+	},
 	{
 		type: 'function',
 		name: 'dispute',
@@ -201,16 +237,31 @@ export const openOracleArbitrageExecutorAbi = [
 			{ name: 'newAmount2', type: 'uint128' },
 			{ name: 'game', type: 'tuple', components: gameComponents },
 			{ name: 'helper', type: 'tuple', components: helperComponents },
+			{ name: 'timing', type: 'tuple', components: timingComponents },
+		],
+		outputs: [],
+	},
+	{
+		type: 'function',
+		name: 'hedgeAndDispute',
+		stateMutability: 'nonpayable',
+		inputs: [
 			{
-				name: 'timing',
+				name: 'request',
 				type: 'tuple',
 				components: [
-					{ name: 'blockNumber', type: 'uint256' },
-					{ name: 'blockNumberBound', type: 'uint256' },
-					{ name: 'blockTimestamp', type: 'uint256' },
-					{ name: 'blockTimestampBound', type: 'uint256' },
+					{ name: 'openOracle', type: 'address' },
+					{ name: 'router', type: 'address' },
+					{ name: 'poolFee', type: 'uint24' },
+					{ name: 'newAmount1', type: 'uint128' },
+					{ name: 'newAmount2', type: 'uint128' },
+					{ name: 'hedgeWethLimit', type: 'uint256' },
+					{ name: 'swapDeadline', type: 'uint256' },
 				],
 			},
+			{ name: 'game', type: 'tuple', components: gameComponents },
+			{ name: 'helper', type: 'tuple', components: helperComponents },
+			{ name: 'timing', type: 'tuple', components: timingComponents },
 		],
 		outputs: [],
 	},
@@ -218,6 +269,49 @@ export const openOracleArbitrageExecutorAbi = [
 
 export const openOracleAbi = [
 	{ type: 'function', name: 'oracleGame', stateMutability: 'view', inputs: [{ name: '', type: 'uint256' }], outputs: [{ name: '', type: 'bytes32' }] },
+	{ type: 'function', name: 'storedGame', stateMutability: 'view', inputs: [{ name: '', type: 'uint256' }], outputs: gameComponents },
+	{
+		type: 'function',
+		name: 'storedHelper',
+		stateMutability: 'view',
+		inputs: [{ name: '', type: 'uint256' }],
+		outputs: [
+			{ name: 'creator', type: 'address' },
+			{ name: 'blockTimestamp', type: 'uint48' },
+			{ name: 'blockNumber', type: 'uint48' },
+		],
+	},
+	{
+		type: 'function',
+		name: 'tokenHolder',
+		stateMutability: 'view',
+		inputs: [
+			{ name: '', type: 'address' },
+			{ name: '', type: 'address' },
+		],
+		outputs: [{ name: '', type: 'uint256' }],
+	},
+	{
+		type: 'function',
+		name: 'settle',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{ name: 'reportId', type: 'uint256' },
+			{ name: 'params', type: 'tuple', components: gameComponents },
+			{ name: 'helper', type: 'tuple', components: helperComponents },
+		],
+		outputs: [],
+	},
+	{
+		type: 'function',
+		name: 'withdraw',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{ name: 'tokenToGet', type: 'address' },
+			{ name: 'amount', type: 'uint256' },
+		],
+		outputs: [{ name: 'sent', type: 'uint256' }],
+	},
 	{
 		type: 'function',
 		name: 'dispute',
@@ -231,16 +325,7 @@ export const openOracleAbi = [
 			{ name: 'tryInternalBalance2', type: 'bool' },
 			{ name: 'params', type: 'tuple', components: gameComponents },
 			{ name: 'helper', type: 'tuple', components: helperComponents },
-			{
-				name: 'timing',
-				type: 'tuple',
-				components: [
-					{ name: 'blockNumber', type: 'uint256' },
-					{ name: 'blockNumberBound', type: 'uint256' },
-					{ name: 'blockTimestamp', type: 'uint256' },
-					{ name: 'blockTimestampBound', type: 'uint256' },
-				],
-			},
+			{ name: 'timing', type: 'tuple', components: timingComponents },
 		],
 		outputs: [],
 	},

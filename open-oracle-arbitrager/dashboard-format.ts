@@ -26,6 +26,14 @@ export function exactAmount(value: string | undefined, symbol: string) {
 	return value === undefined ? 'Unavailable' : `${value} ${symbol}`
 }
 
+export function countLabel(count: number, singular: string, plural = `${singular}s`) {
+	return `${count.toString()} ${count === 1 ? singular : plural}`
+}
+
+export function chartPointX(index: number, count: number, width: number) {
+	return count === 1 ? width / 2 : (index / (count - 1)) * width
+}
+
 function compactDuration(seconds: number) {
 	if (seconds < 60) return `${seconds.toString()}s`
 	const minutes = Math.floor(seconds / 60)
@@ -66,6 +74,7 @@ export function opportunityDecisionReason(opportunity: Pick<OpportunitySnapshot,
 		'history-unavailable': 'Confirmed-history durability is unavailable',
 		'insufficient-inventory': `Wallet lacks the required WETH or ${opportunity.tokenSymbol}`,
 		paused: 'Operator paused execution',
+		'risk-limit': 'A restart-time portfolio or daily-loss limit blocks execution',
 		selected: 'Highest modeled net profit in this scan',
 		'self-report': 'Current wallet is already the reporter',
 		'signer-unavailable': 'Execution mode is locked until a local signer is set',
@@ -80,7 +89,7 @@ export function transactionKindLabel(transaction: Pick<TransactionActivity, 'kin
 }
 
 export function marketPriceChartDescription(points: readonly Pick<MarketPricePoint, 'blockNumber'>[]) {
-	return `${points.length.toString()} current-head pool samples spanning observed heads at blocks ${points[0]?.blockNumber ?? 'unknown'} through ${points.at(-1)?.blockNumber ?? 'unknown'}. Exact recent values follow the chart in a table.`
+	return `${countLabel(points.length, 'current-head pool sample')} spanning observed heads at blocks ${points[0]?.blockNumber ?? 'unknown'} through ${points.at(-1)?.blockNumber ?? 'unknown'}. Exact recent values follow the chart in a table.`
 }
 
 export function requiredSignerPrivateKey(value: string) {

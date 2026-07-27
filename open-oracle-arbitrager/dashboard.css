@@ -625,6 +625,13 @@ footer {
 	font-size: 0.75rem;
 }
 
+footer .mono {
+	overflow: visible;
+	overflow-wrap: anywhere;
+	text-overflow: clip;
+	white-space: normal;
+}
+
 @media (max-width: 980px) {
 	.metric-grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -712,6 +719,13 @@ footer {
 
 	.endpoint-check {
 		grid-template-columns: 1fr;
+	}
+
+	.dispute-step {
+		align-items: start;
+		grid-template-columns: 1fr;
+		margin-left: 0;
+		overflow-wrap: anywhere;
 	}
 
 	.button-group {

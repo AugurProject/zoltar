@@ -3,7 +3,22 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Address } from '@zoltar/shared/ethereum'
-import { appendPriceHistory, availableTokenBalances, childPayouts, constantProductSpotPriceWeth, createTokenCatalogTracker, formatTokenAmount, loadPriceHistory, missingPricePoints, payoutDistributionHash, poolSpotPriceWeth, pricePoints, type TokenMarketSnapshot } from './market-monitor.js'
+import {
+	appendPriceHistory,
+	availableTokenBalances,
+	childPayouts,
+	constantProductSpotPriceWeth,
+	createTokenCatalogTracker,
+	formatTokenAmount,
+	loadPriceHistory,
+	MAX_OBSERVED_MONITORING_TOKENS,
+	missingPricePoints,
+	payoutDistributionHash,
+	poolSpotPriceWeth,
+	pricePoints,
+	tokenCatalogForScan,
+	type TokenMarketSnapshot,
+} from './market-monitor.js'
 
 const temporaryDirectories: string[] = []
 
@@ -48,6 +63,15 @@ describe('Augur REP discovery helpers', () => {
 			{ configured: [], observed: [] },
 			{ configured: [], observed: [] },
 		])
+	})
+
+	test('prioritizes every execution token and caps permissionless observed monitoring work', () => {
+		const execution = Array.from({ length: 3 }, (_, index) => `0x${(index + 1).toString(16).padStart(40, '0')}` as Address)
+		const observed = Array.from({ length: MAX_OBSERVED_MONITORING_TOKENS + 500 }, (_, index) => `0x${(index + 100).toString(16).padStart(40, '0')}` as Address)
+		const catalog = tokenCatalogForScan(execution.slice(0, 1), execution.slice(1), observed)
+		expect(catalog.executionTokens).toEqual(execution)
+		expect(catalog.monitoringTokens.slice(0, execution.length)).toEqual(execution)
+		expect(catalog.monitoringTokens).toHaveLength(execution.length + MAX_OBSERVED_MONITORING_TOKENS)
 	})
 })
 

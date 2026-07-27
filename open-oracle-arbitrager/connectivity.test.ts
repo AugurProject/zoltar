@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { Hex } from '@zoltar/shared/ethereum'
-import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, readRpcChainId, sendRawTransactionToRpc, updateConnectivityEndpointChecks, updateSubmissionEndpointChecks, validateConnectivitySettings, withConnectivityChecks, withSubmissionChecks, type EndpointCheck } from './connectivity.js'
+import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, readRpcChainId, sendRawTransactionToRpc, updateConnectivityEndpointChecks, updateSubmissionEndpointChecks, validateConnectivitySettings, validateReadRpcUrls, withConnectivityChecks, withSubmissionChecks, type EndpointCheck } from './connectivity.js'
 import { validateSubmissionSettings } from './transaction-submission.js'
 
 const servers: Bun.Server<unknown>[] = []
@@ -37,6 +37,8 @@ describe('operator connectivity', () => {
 		expect(() => validateConnectivitySettings({ publicRpcUrls: [], readRpcUrl: 'https://read.example' })).toThrow('At least one')
 		expect(() => validateConnectivitySettings({ publicRpcUrls: ['http://rpc.example'], readRpcUrl: 'https://read.example' })).toThrow('HTTPS')
 		expect(() => validateConnectivitySettings({ publicRpcUrls: ['https://rpc.example'], readRpcUrl: 'https://user:secret@read.example' })).toThrow('credentials')
+		expect(validateReadRpcUrls(['https://one.example', 'https://one.example/'])).toEqual(['https://one.example/'])
+		expect(() => validateReadRpcUrls(['http://unsafe.example'])).toThrow('HTTPS')
 	})
 
 	test('checks the configured chain and sends raw transactions', async () => {

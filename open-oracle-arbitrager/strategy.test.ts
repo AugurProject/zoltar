@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/shared/ethereum'
 import type { OpenOracleGame } from '@zoltar/shared/openOracle'
 import { decimalSignedEth } from './operator-state.js'
-import { calculateContribution, calculateNextAmount1, calculateTrackedNetProfitEth, deriveTokenToSwap, evaluateBuyRep, evaluateSellRep, hasFreshSubmissionWindow, isSelfReport, meetsProfitThreshold } from './strategy.js'
+import { calculateContribution, calculateNextAmount1, calculateTrackedNetProfitEth, deriveTokenToSwap, evaluateBuyRep, evaluateSellRep, executorFunding, hasFreshSubmissionWindow, hedgeSlippageReserveWeth, hedgeWethLimit, isSelfReport, meetsProfitThreshold } from './strategy.js'
 
 const weth = '0x0000000000000000000000000000000000000001' as Address
 const rep = '0x0000000000000000000000000000000000000002' as Address
@@ -68,6 +68,22 @@ describe('OpenOracle arbitrage strategy', () => {
 		expect(deriveTokenToSwap(game, 1_150_000n, 2_300_001n)).toBe(rep)
 		expect(deriveTokenToSwap(game, 1_150_000n, 2_300_000n)).toBe(weth)
 		expect(deriveTokenToSwap(game, 1_150_000n, 2_299_999n)).toBe(weth)
+	})
+
+	test('funds the atomic hedge and applies conservative slippage limits in both directions', () => {
+		const newAmount1 = calculateNextAmount1(game)
+		expect(executorFunding(game, newAmount1, 1_800_000n, 0n)).toEqual({
+			token1: 2_161_000n,
+			token2: 2_000_000n,
+		})
+		expect(hedgeWethLimit('sell-rep', 1_000_000n, 50n)).toBe(995_000n)
+		expect(executorFunding(game, newAmount1, 2_300_001n, 1_010_000n)).toEqual({
+			token1: 1_160_000n,
+			token2: 2_300_001n,
+		})
+		expect(hedgeWethLimit('buy-rep', 1_000_000n, 50n)).toBe(1_005_000n)
+		expect(hedgeSlippageReserveWeth('sell-rep', 101n, 100n)).toBe(2n)
+		expect(hedgeSlippageReserveWeth('buy-rep', 101n, 100n)).toBe(2n)
 	})
 
 	test('rejects self-disputes because they use different contract accounting', () => {

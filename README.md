@@ -93,7 +93,7 @@ ETH_RPC_URL=https://your-mainnet-rpc.example \
 
 See the [OpenOracle arbitrager guide](./open-oracle-arbitrager/README.md) for
 execution-key isolation, required ETH/WETH/token inventory, strategy controls,
-public or multi-relay private transaction delivery, transaction tracking,
+dry-run endpoint testing and multi-relay private bundle delivery, transaction tracking,
 ETH-denominated profit semantics, and operational limitations.
 
 ## RPC Configuration
