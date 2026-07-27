@@ -916,8 +916,11 @@
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
 								Tracked complete-set collateral never exceeds total
-								security-bond allowance. Fee checkpointing and redemption
-								cannot reclassify unsolicited ETH as collateral.
+								security-bond allowance. New complete sets additionally use
+								only vault-assigned, fee-eligible allowance as capacity, so
+								an unclaimed truth-auction allocation cannot secure new open
+								interest. Fee checkpointing and redemption cannot reclassify
+								unsolicited ETH as collateral.
 							</div>
 							<p class="invariant-example"><strong>Example:</strong> With 10 ETH of bond allowance, a mint that would raise tracked collateral from 9 ETH to 11 ETH reverts even if the raw balance contains surplus ETH.</p>
 							<dl class="invariant-metadata">
@@ -2057,11 +2060,14 @@
 						<summary><code>AUC-03</code><span class="invariant-title">Single-use bid settlement</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">
-								Each bid is settled or refunded at most once; claimed state is
-								set before an external ETH refund.
-							</div>
-							<p class="invariant-example"><strong>Example:</strong> A bidder whose refund callback reenters cannot withdraw the same bid a second time because it is already marked claimed.</p>
+								<div class="invariant-property">
+									Each bid is settled or refunded at most once; claimed state is
+									set before an external ETH refund. The best-effort push is
+									gas-bounded, and any rejected, reverted, or gas-exhausted positive
+									refund is moved to bidder-specific pull
+									escrow without reverting the bid's REP or allowance settlement.
+								</div>
+								<p class="invariant-example"><strong>Example:</strong> A bidder whose refund callback reenters, rejects ETH, or consumes its complete callback budget cannot withdraw the same bid a second time or starve the remaining settlement because the bid is already marked claimed and the push is gas-bounded; deferred ETH remains available through <code>withdrawPendingEthRefund</code>.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>

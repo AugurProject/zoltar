@@ -38,6 +38,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 	const selectedPool: ListedSecurityPool = {
 		completeSetCollateralAmount: 0n,
 		currentRetentionRate: 10n,
+		feeEligibleSecurityBondAllowance: 5n * 10n ** 18n,
 		hasForkActivity: false,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
@@ -436,14 +437,15 @@ void describe('TradingSection', () => {
 		expect(document.body.textContent?.includes('1 000 000 000 000 000 000')).toBe(false)
 	})
 
-	void test('shows the minting disabled reason on the launcher when the pool has no active allowance', async () => {
+	void test('shows the minting disabled reason when total allowance remains unclaimed and none is fee eligible', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
 				{...createTradingSectionProps({
 					selectedPool: createSelectedPool({
 						completeSetCollateralAmount: 0n,
+						feeEligibleSecurityBondAllowance: 0n,
 						totalRepDeposit: 20n * 10n ** 18n,
-						totalSecurityBondAllowance: 0n,
+						totalSecurityBondAllowance: 5n * 10n ** 18n,
 						universeHasForked: false,
 					}),
 					tradingForm: createTradingForm({ completeSetAmount: '100' }),
@@ -456,6 +458,33 @@ void describe('TradingSection', () => {
 		const mintButton = documentQueries.getByRole('button', { name: 'Mint complete sets' }) as HTMLButtonElement
 		expect(mintButton.disabled).toBe(true)
 		expect(mintButton.title).toBe(NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE)
+	})
+
+	void test('shows only assigned fee-eligible allowance in the mint transaction modal', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					selectedPool: createSelectedPool({
+						feeEligibleSecurityBondAllowance: 2n * 10n ** 18n,
+						totalSecurityBondAllowance: 9n * 10n ** 18n,
+					}),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' }))
+		})
+
+		const modalQueries = within(documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' }))
+		const activeAllowanceLabel = modalQueries.getByText('Active Bond Allowance')
+		const activeAllowanceMetric = activeAllowanceLabel.parentElement
+		if (activeAllowanceMetric === null) throw new Error('Expected active bond allowance metric')
+		const activeAllowanceQueries = within(activeAllowanceMetric)
+		expect(activeAllowanceQueries.getByRole('button', { name: 'Copy exact value 2' })).not.toBeNull()
+		expect(activeAllowanceQueries.queryByRole('button', { name: 'Copy exact value 9' })).toBeNull()
 	})
 
 	void test('keeps minting disabled off mainnet and explains how to recover after the modal is already open', async () => {

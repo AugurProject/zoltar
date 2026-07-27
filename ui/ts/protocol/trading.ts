@@ -10,15 +10,16 @@ import { readSecurityPoolUniverseId } from './securityPoolActions.js'
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
 type SecurityPoolMintCapacity = {
 	completeSetCollateralAmount: bigint
+	feeEligibleSecurityBondAllowance: bigint
 	shareTokenSupply: bigint
 	totalRepDeposit: bigint
 	totalSecurityBondAllowance: bigint
 }
 export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'multicall'>, securityPoolAddress: Address): Promise<SecurityPoolMintCapacity> {
-	const [completeSetCollateralAmount, shareTokenSupply, totalRepDeposit, totalSecurityBondAllowance] = await readRequiredMulticall(client, [
+	const [poolAccountingSnapshot, shareTokenSupply, totalRepDeposit] = await readRequiredMulticall(client, [
 		{
 			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'completeSetCollateralAmount',
+			functionName: 'getPoolAccountingSnapshot',
 			address: securityPoolAddress,
 			args: [],
 		},
@@ -34,18 +35,13 @@ export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'mul
 			address: securityPoolAddress,
 			args: [],
 		},
-		{
-			abi: peripherals_SecurityPool_SecurityPool.abi,
-			functionName: 'totalSecurityBondAllowance',
-			address: securityPoolAddress,
-			args: [],
-		},
 	])
 	return {
-		completeSetCollateralAmount,
+		completeSetCollateralAmount: poolAccountingSnapshot.completeSetCollateralAmount,
+		feeEligibleSecurityBondAllowance: poolAccountingSnapshot.feeEligibleSecurityBondAllowance,
 		shareTokenSupply,
 		totalRepDeposit,
-		totalSecurityBondAllowance,
+		totalSecurityBondAllowance: poolAccountingSnapshot.totalSecurityBondAllowance,
 	}
 }
 export async function loadTradingDetails(client: ReadClient, securityPoolAddress: Address, accountAddress: Address | undefined): Promise<TradingDetails> {

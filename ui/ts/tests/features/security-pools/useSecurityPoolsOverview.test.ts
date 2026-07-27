@@ -48,6 +48,7 @@ function createListedSecurityPool(questionId: string, securityPoolAddress: Addre
 	return {
 		completeSetCollateralAmount: 0n,
 		currentRetentionRate: 0n,
+		feeEligibleSecurityBondAllowance: 0n,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
 		hasForkActivity: false,

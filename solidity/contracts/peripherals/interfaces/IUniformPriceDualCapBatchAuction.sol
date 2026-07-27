@@ -47,6 +47,10 @@ interface IUniformPriceDualCapBatchAuctionEvents {
 		uint256 ethRefund,
 		BidSettlementStatus status
 	);
+	/// @notice A bounded-gas push refund that fails remains escrowed for later pull withdrawal.
+	event EthRefundDeferred(address indexed bidder, uint256 amount, uint256 pendingAmount);
+	/// @notice A bidder's complete deferred ETH refund balance was cleared before its successful pull callback.
+	event PendingEthRefundWithdrawn(address indexed bidder, uint256 amount);
 }
 
 interface IUniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEvents {
@@ -84,6 +88,7 @@ interface IUniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEv
 
 	function maxRepBeingSold() external view returns (uint256);
 	function ethRaiseCap() external view returns (uint256);
+	function pendingEthRefunds(address bidder) external view returns (uint256);
 
 	function finalized() external view returns (bool);
 	function clearingTick() external view returns (int256);
@@ -115,6 +120,7 @@ interface IUniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuctionEv
 	function refundLosingBids(TickIndex[] calldata tickIndices) external;
 
 	function refundLosingBidsFor(address bidder, TickIndex[] calldata tickIndices) external;
+	function withdrawPendingEthRefund() external;
 
 	function tickToPrice(int256 tick) external pure returns (uint256 price);
 	function activeTickCount() external view returns (uint256);
