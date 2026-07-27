@@ -325,6 +325,21 @@ settlement and withdrawals. This is not a wallet balance guarantee; keep additio
 ETH for approvals, adverse base-fee movement, and recovery work. Capital can remain
 locked through later dispute rounds.
 
+“Modeled net profit” is the direction-specific hedge P&amp;L before gas minus:
+
+- The entry reserve: initially `1,200,000 × (2 × base fee + 2 gwei)`, then the
+  largest bundle gas usage returned by the required relay simulations at that same
+  gas price.
+- The full adverse movement permitted by the signed hedge limit
+  (`--max-hedge-slippage-bps`).
+- The larger of `--lifecycle-gas-reserve-weth` and
+  `(callbackGasLimit + 1,050,000) × gas price`.
+
+The resulting fully reserved value must satisfy both the absolute minimum-profit
+floor and the basis-point floor relative to quoted hedge cost. The
+[ORACLE-A1 launch analysis](../docs/oracle-a1-launch-analysis.html#gate)
+owns the deployment policy for those gates.
+
 The dashboard balance calculation reports:
 
 - Native ETH.
@@ -501,9 +516,10 @@ the expected hedge-neutral inventory. A mismatch is marked `recovery-required`
 because the residual token exposure must be valued or unwound manually. Relay
 refunds and transactions sent outside this process are not included automatically.
 For a manual reconciliation, `--realized-net-profit-eth` is an operator-calculated,
-all-in result after `--external-cost-eth` and every outside-process proceed, fee, gas
-cost, and slippage amount. The command records this value and its evidence; it does
-not calculate or validate the economic result.
+all-in result. Add every OpenOracle or manual-withdrawal receipt and every external
+unwind or sale proceed; subtract all entry, lifecycle, and external gas, fees,
+slippage, and `--external-cost-eth`. The command records this value and its evidence;
+it does not calculate or validate the economic result.
 
 ## Token and pool discovery
 
@@ -638,9 +654,10 @@ The state sequence is:
 
 ```text
 pending-entry → open → withdrawing → closed
-                         ↘ recovery-required
-                              ↓ signer-key-authorized local reconciliation
-                            closed (P&L recorded or unavailable)
+     │           │          │
+     └───────────┴──────────┴──→ recovery-required
+                                      ↓ signer-key-authorized local reconciliation
+                                    closed (P&L recorded or unavailable)
 ```
 
 The bot records all entry-bundle transaction hashes before submission. After a
@@ -707,10 +724,11 @@ PRIVATE_KEY=0x... ./open-oracle-arbitrager/reconcile-position \
 
 Use `--realized-net-profit-eth=-0.04 --acknowledge-pnl-is-all-in=true` instead of
 `--pnl-unavailable=true` only when entry evidence was recovered and the all-in value
-can be independently reproduced
-after subtracting `--external-cost-eth` and every external unwind fee, gas cost, and
-slippage amount. The command records rather than computes that result. It writes
-the evidence, costs, final balances, signer, time, and P&amp;L status
+can be independently reproduced. Add every OpenOracle or manual-withdrawal receipt
+and every external unwind or sale proceed; subtract all entry, lifecycle, and
+external gas, fees, slippage, and `--external-cost-eth`. The command records rather
+than computes that result. It writes the evidence, costs, final balances, signer,
+time, and P&amp;L status
 into the owner-only journal before moving the record to `closed`. It never submits
 an on-chain transaction and stores no cryptographic signature or independently
 verifiable attestation; “signer-key-authorized” means only that the supplied key
