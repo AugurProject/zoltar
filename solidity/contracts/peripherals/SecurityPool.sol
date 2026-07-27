@@ -491,26 +491,13 @@ contract SecurityPool is ISecurityPool {
 		);
 	}
 
-	function _requireVaultAllowanceBackedByRep(
-		uint256 vaultRepAmount,
+	function _isAllowanceBackedByRep(
+		uint256 repAmount,
 		uint256 securityBondAllowance,
 		uint256 repEthPrice
-	) private pure {
-		require(
-			vaultRepAmount * SecurityPoolUtils.PRICE_PRECISION > securityBondAllowance * repEthPrice,
-			'Vault allow'
-		);
-	}
-
-	function _requirePoolAllowanceBackedByRep(
-		uint256 totalRepBalanceValue,
-		uint256 totalSecurityBondAllowanceValue,
-		uint256 repEthPrice
-	) private pure {
-		require(
-			totalRepBalanceValue * SecurityPoolUtils.PRICE_PRECISION > totalSecurityBondAllowanceValue * repEthPrice,
-			'Pool allow'
-		);
+	) private view returns (bool) {
+		return
+			repAmount * SecurityPoolUtils.PRICE_PRECISION >= securityBondAllowance * securityMultiplier * repEthPrice;
 	}
 
 	function _requireMinimumVaultRep(
@@ -678,12 +665,11 @@ contract SecurityPool is ISecurityPool {
 		securityVaults[callerVault].securityBondAllowance = amount;
 
 		uint256 repEthPrice = priceOracleManagerAndOperatorQueuer.lastPrice();
-		_requireVaultAllowanceBackedByRep(
-			poolOwnershipToRep(securityVaults[callerVault].poolOwnership),
-			amount,
-			repEthPrice
+		require(
+			_isAllowanceBackedByRep(poolOwnershipToRep(securityVaults[callerVault].poolOwnership), amount, repEthPrice),
+			'Vault allow'
 		);
-		_requirePoolAllowanceBackedByRep(getTotalRepBalance(), totalSecurityBondAllowance, repEthPrice);
+		require(_isAllowanceBackedByRep(getTotalRepBalance(), totalSecurityBondAllowance, repEthPrice), 'Pool allow');
 		_requireCapacityNotExceeded(totalSecurityBondAllowance, completeSetCollateralAmount);
 		_requireMinimumSecurityBondAllowance(amount, amount == 0, 'Bond min');
 		_syncActiveVault(callerVault);

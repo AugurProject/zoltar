@@ -1504,7 +1504,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		await assert.rejects(async () => await executeStagedOperation(client, priceOracle, 1n), /Staged operation does not exist or was already consumed/)
 	})
 
-	test('vault allowance and withdrawal bond guards expose exact dynamic reasons and roll back', async () => {
+	test('vault allowance admission matches the liquidation threshold and withdrawal bond guards roll back', async () => {
 		const repToken = addressString(GENESIS_REPUTATION_TOKEN)
 		const readFinancialState = async () => ({
 			poolRep: await getERC20Balance(client, repToken, securityPool),
@@ -1530,8 +1530,20 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(allowanceExecutionLog.args.errorMessage, 'Vault allow', 'over-backed allowance must expose its exact dynamic reason')
 		assert.deepStrictEqual(await readFinancialState(), allowanceStateBefore, 'vault allowance failure must roll back aggregate and per-vault accounting')
 
-		const validAllowance = repDeposit / 2n
+		const liquidationBoundaryAllowance = repDeposit / securityMultiplier
+		const unsafeAllowance = liquidationBoundaryAllowance + 1n
+		const unsafeAllowanceHash = await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, unsafeAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+		const unsafeAllowanceReceipt = await client.waitForTransactionReceipt({ hash: unsafeAllowanceHash })
+		const unsafeAllowanceExecutionLog = findExecutedStagedOperationLog(unsafeAllowanceReceipt.logs)
+		if (unsafeAllowanceExecutionLog === undefined) throw new Error('missing ExecutedStagedOperation log for multiplier-adjusted vault allowance failure')
+
+		assert.strictEqual(unsafeAllowanceExecutionLog.args.success, false, 'an allowance above the liquidation-safe boundary must fail')
+		assert.strictEqual(unsafeAllowanceExecutionLog.args.errorMessage, 'Vault allow', 'multiplier-adjusted allowance failure must expose its exact dynamic reason')
+		assert.deepStrictEqual(await readFinancialState(), allowanceStateBefore, 'multiplier-adjusted allowance failure must roll back aggregate and per-vault accounting')
+
+		const validAllowance = liquidationBoundaryAllowance
 		await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, validAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
+		assert.strictEqual((await getSecurityVault(client, securityPool, client.account.address)).securityBondAllowance, validAllowance, 'an allowance exactly at the non-liquidatable boundary must succeed')
 		const withdrawalStateBefore = await readFinancialState()
 		const withdrawalHash = await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.WithdrawRep, client.account.address, repDeposit - validAllowance + 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
 		const withdrawalReceipt = await client.waitForTransactionReceipt({ hash: withdrawalHash })
@@ -1546,7 +1558,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	test('aggregate allowance guard rejects a locally valid update after another vault becomes under-backed', async () => {
 		const repToken = addressString(GENESIS_REPUTATION_TOKEN)
 		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const counterpartyAllowance = (repDeposit * 9n) / 10n
+		const counterpartyAllowance = repDeposit / securityMultiplier
 		const increasedPrice = 2n * 10n ** 18n
 
 		await approveToken(counterpartyClient, repToken, securityPool)
@@ -1571,8 +1583,8 @@ describe('Price Oracle Refund Security Tests', () => {
 	test('aggregate withdrawal bond guard rejects an unencumbered vault after another vault becomes under-backed', async () => {
 		const repToken = addressString(GENESIS_REPUTATION_TOKEN)
 		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const counterpartyAllowance = (repDeposit * 9n) / 10n
-		const increasedPrice = 2n * 10n ** 18n
+		const counterpartyAllowance = repDeposit / securityMultiplier
+		const increasedPrice = 4n * 10n ** 18n
 
 		await approveToken(counterpartyClient, repToken, securityPool)
 		await depositRep(counterpartyClient, securityPool, repDeposit)
@@ -1596,8 +1608,8 @@ describe('Price Oracle Refund Security Tests', () => {
 	test('escalation deposit local bond failure rolls back game deployment and escrow accounting', async () => {
 		const repToken = addressString(GENESIS_REPUTATION_TOKEN)
 		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const callerAllowance = (repDeposit * 9n) / 10n
-		const escrowAmount = repDeposit / 5n
+		const callerAllowance = repDeposit / securityMultiplier
+		const escrowAmount = (repDeposit * 3n) / 5n
 
 		await approveToken(counterpartyClient, repToken, securityPool)
 		await depositRep(counterpartyClient, securityPool, repDeposit)
@@ -1616,8 +1628,8 @@ describe('Price Oracle Refund Security Tests', () => {
 	test('escalation deposit aggregate bond failure rolls back game deployment and escrow accounting', async () => {
 		const repToken = addressString(GENESIS_REPUTATION_TOKEN)
 		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const counterpartyAllowance = (repDeposit * 9n) / 10n
-		const increasedPrice = 2n * 10n ** 18n
+		const counterpartyAllowance = repDeposit / securityMultiplier
+		const increasedPrice = 4n * 10n ** 18n
 		const escrowAmount = repDeposit / 4n
 
 		await approveToken(counterpartyClient, repToken, securityPool)

@@ -676,56 +676,62 @@
 							units.
 						</p>
 					</div>
-					<p>
-						Statoblast uses the REP/ETH price to compare REP backing with
-						ETH-denominated obligations. Vault operators choose their security
-						bond allowance, but both the vault and the pool must remain backed.
-						The security multiplier belongs to the liquidation threshold; it is
-						not part of the ordinary allowance-setting inequality.
-					</p>
-					<div class="equation" id="eq-statoblast-bond-solvency">
-						<math
-							display="block"
-							aria-label="remaining REP backing times price precision is greater than or equal to security bond allowance times REP per ETH price"
-							data-source="remainingRepBacking * pricePrecision >= securityBondAllowance * repPerEthPrice"
-						>
-							<mrow>
-								<mi>remainingRepBacking</mi>
-								<mo>&#x22C5;</mo>
-								<mi>pricePrecision</mi>
-								<mo>&ge;</mo>
-								<mi>securityBondAllowance</mi>
-								<mo>&#x22C5;</mo>
-								<mi>repPerEthPrice</mi>
-							</mrow>
-						</math>
-						<p class="equation-caption">
-							<span class="equation-label">Bond Solvency</span>
-							Remaining REP value must cover the ETH-denominated allowance.
+						<p>
+							Statoblast uses the REP/ETH price to compare REP backing with
+							ETH-denominated obligations. Vault operators choose their security
+							bond allowance. A new allowance must leave the affected vault
+							non-liquidatable, while aggregate pool REP must independently
+							satisfy the same multiplier-adjusted inequality. Only vaults are
+							liquidation targets.
 						</p>
-					</div>
-					<div class="equation" id="eq-statoblast-allowance-backing">
-						<math
-							display="block"
-							aria-label="REP backing times price precision must be strictly greater than security bond allowance times REP per ETH price"
-							data-source="repBacking * pricePrecision > securityBondAllowance * repPerEthPrice"
-						>
-							<mrow>
-								<mi>repBacking</mi>
-								<mo>&#x22C5;</mo>
-								<mi>pricePrecision</mi>
-								<mo>&gt;</mo>
-								<mi>securityBondAllowance</mi>
-								<mo>&#x22C5;</mo>
-								<mi>repPerEthPrice</mi>
-							</mrow>
-						</math>
-						<p class="equation-caption">
-							<span class="equation-label">Allowance Backing</span>
-							Setting or increasing allowance requires strict overcollateralization.
-						</p>
-					</div>
-					<div class="equation" id="eq-statoblast-liquidation-condition">
+						<div class="equation" id="eq-statoblast-bond-solvency">
+							<math
+								display="block"
+								aria-label="remaining REP backing times price precision is greater than or equal to security bond allowance times REP per ETH price"
+								data-source="remainingRepBacking * pricePrecision >= securityBondAllowance * repPerEthPrice"
+							>
+								<mrow>
+									<mi>remainingRepBacking</mi>
+									<mo>&#x22C5;</mo>
+									<mi>pricePrecision</mi>
+									<mo>&ge;</mo>
+									<mi>securityBondAllowance</mi>
+									<mo>&#x22C5;</mo>
+									<mi>repPerEthPrice</mi>
+								</mrow>
+							</math>
+							<p class="equation-caption">
+								<span class="equation-label">Bond Solvency</span>
+								REP withdrawals and escalation deposits must preserve face-value
+								coverage of the existing allowance.
+							</p>
+						</div>
+						<div class="equation" id="eq-statoblast-allowance-backing">
+							<math
+								display="block"
+								aria-label="REP backing times price precision must be greater than or equal to security bond allowance times security multiplier times REP per ETH price"
+								data-source="repBacking * pricePrecision >= securityBondAllowance * securityMultiplier * repPerEthPrice"
+							>
+								<mrow>
+									<mi>repBacking</mi>
+									<mo>&#x22C5;</mo>
+									<mi>pricePrecision</mi>
+									<mo>&ge;</mo>
+									<mi>securityBondAllowance</mi>
+									<mo>&#x22C5;</mo>
+									<mi>securityMultiplier</mi>
+									<mo>&#x22C5;</mo>
+									<mi>repPerEthPrice</mi>
+								</mrow>
+							</math>
+							<p class="equation-caption">
+								<span class="equation-label">Allowance Admission</span>
+								Setting an allowance cannot make the affected vault immediately
+								liquidatable, and aggregate pool backing must independently clear
+								the same inequality.
+							</p>
+						</div>
+						<div class="equation" id="eq-statoblast-liquidation-condition">
 						<math
 							display="block"
 							aria-label="a vault is liquidable when security bond allowance times security multiplier times REP per ETH price is greater than REP backing times price precision"
@@ -747,14 +753,20 @@
 							<span class="equation-label">Liquidation Condition</span>
 							The multiplier determines when unsafe allowance becomes liquidable.
 						</p>
-					</div>
-					<p>
-						Before REP withdrawals and allowance changes, the contract applies
-						related solvency checks at both the vault and whole-pool level.
-						Liquidation follows a different path: it requires the target to be
-						liquidatable, bounds the transfer, and verifies that the caller
-						remains safe while aggregate allowance is preserved.
-					</p>
+						</div>
+						<p>
+							Equality at allowance admission is permitted because liquidation uses
+							the strict inverse inequality. Later REP withdrawals and escalation
+							deposits enforce face-value bond solvency, so they can move a vault
+							below the multiplier-adjusted threshold and expose it to liquidation.
+							All operands are atomic integers: the contract compares the products
+							exactly, while a derived maximum allowance rounds the quotient down.
+							The pool-wide maximum uses that floored aggregate ceiling minus the
+							allowances already assigned to other vaults.
+							Liquidation requires the target to be
+							liquidatable, bounds the transfer, and verifies that the caller
+							remains safe while aggregate allowance is preserved.
+						</p>
 					<h3>Complete Sets</h3>
 					<p>
 						Traders and liquidity providers can mint complete sets by calling

@@ -352,6 +352,7 @@ export function SecurityVaultSection({
 		currentSecurityBondAllowance: currentSelectedVaultDetails?.securityBondAllowance,
 		repDepositShare: currentSelectedVaultDetails?.repDepositShare,
 		repPerEthPrice: hasValidOraclePrice ? oracleManagerDetails?.lastPrice : undefined,
+		securityMultiplier: selectedPoolSecurityMultiplier,
 		totalRepDeposit: selectedPoolTotalRepDeposit,
 		totalSecurityBondAllowance: selectedPoolTotalSecurityBondAllowance,
 	})
@@ -772,7 +773,13 @@ export function SecurityVaultSection({
 							<span>{securityPoolCopy.securityBondAllowanceAmount}</span>
 							<div className='field-inline'>
 								<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.securityBondAllowanceAmount} onInput={event => onSecurityVaultFormChange({ securityBondAllowanceAmount: event.currentTarget.value })} disabled={!poolCollateralActionsEnabled} />
-								<button className='quiet field-inline-action' type='button' onClick={() => onSecurityVaultFormChange({ securityBondAllowanceAmount: formatCurrencyInputBalance(maxSecurityBondAllowanceAmount) })} disabled={maxSecurityBondAllowanceAmount <= 0n || !poolCollateralActionsEnabled}>
+								<button
+									aria-label={securityPoolCopy.securityBondAllowanceAmountMax}
+									className='quiet field-inline-action'
+									type='button'
+									onClick={() => onSecurityVaultFormChange({ securityBondAllowanceAmount: formatCurrencyInputBalance(maxSecurityBondAllowanceAmount) })}
+									disabled={maxSecurityBondAllowanceAmount <= 0n || !poolCollateralActionsEnabled}
+								>
 									{commonCopy.max}
 								</button>
 							</div>
@@ -905,7 +912,13 @@ export function SecurityVaultSection({
 							<span>{securityPoolCopy.securityBondAllowanceAmount}</span>
 							<div className='field-inline'>
 								<FormInput className='field-inline-input' value={normalizedSecurityVaultForm.securityBondAllowanceAmount} onInput={event => onSecurityVaultFormChange({ securityBondAllowanceAmount: event.currentTarget.value })} disabled={!poolCollateralActionsEnabled} />
-								<button className='quiet field-inline-action' type='button' onClick={() => onSecurityVaultFormChange({ securityBondAllowanceAmount: formatCurrencyInputBalance(maxSecurityBondAllowanceAmount) })} disabled={maxSecurityBondAllowanceAmount <= 0n || !poolCollateralActionsEnabled}>
+								<button
+									aria-label={securityPoolCopy.securityBondAllowanceAmountMax}
+									className='quiet field-inline-action'
+									type='button'
+									onClick={() => onSecurityVaultFormChange({ securityBondAllowanceAmount: formatCurrencyInputBalance(maxSecurityBondAllowanceAmount) })}
+									disabled={maxSecurityBondAllowanceAmount <= 0n || !poolCollateralActionsEnabled}
+								>
 									{commonCopy.max}
 								</button>
 							</div>
