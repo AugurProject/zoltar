@@ -644,11 +644,11 @@ Other startup-only options:
 | `--max-total-locked-weth` | `10` | Maximum stored funded notional across non-closed positions plus the candidate. |
 
 The position notional uses the refreshed required WETH plus required token funding
-valued through the signed hedge limit. Immediately before journal write and relay
-submission, the bot rechecks that notional, the total of every non-closed durable
-position, and the UTC-day gas total using the largest configured-relay simulation
-plus the lifecycle reserve. A value equal to a configured cap is allowed; one wei
-above it is rejected.
+valued at the higher of the executable hedge quote and signed hedge limit.
+Immediately before journal write and relay submission, the bot rechecks that
+notional, the total of every non-closed durable position, and the UTC-day gas total
+using the largest configured-relay simulation plus the lifecycle reserve. A value
+equal to a configured cap is allowed; one wei above it is rejected.
 
 ### Durable position journal
 

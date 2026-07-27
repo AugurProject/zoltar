@@ -73,6 +73,12 @@ export function executorFunding(game: Pick<OpenOracleGame, 'currentAmount1' | 'c
 	}
 }
 
+export function fundedCapitalAtRiskWeth(funding: { token1: bigint; token2: bigint }, hedgeAmountToken: bigint, quotedHedgeWeth: bigint, signedHedgeWethLimit: bigint) {
+	if (hedgeAmountToken === 0n) return funding.token1
+	const conservativeHedgeWeth = quotedHedgeWeth > signedHedgeWethLimit ? quotedHedgeWeth : signedHedgeWethLimit
+	return funding.token1 + (funding.token2 * conservativeHedgeWeth + hedgeAmountToken - 1n) / hedgeAmountToken
+}
+
 export function evaluateSellRep(game: Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'feePercentage' | 'protocolFee' | 'token1'>, quotedWethOut: bigint, gasCostWeth: bigint): ArbitrageQuote {
 	const wethSpend = game.currentAmount1 + calculateFee(game.currentAmount1, game.feePercentage) + calculateFee(game.currentAmount1, game.protocolFee)
 	return {

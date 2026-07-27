@@ -97,7 +97,7 @@ import { bestSuccessful, compactFinalityWindow, pollUntilStopped, replaceOverlap
 import { adjustedNetProfitWeth, DEFAULT_RISK_LIMITS, positionRiskLimitMismatch, type RiskLimits } from './safety-controls.js'
 import { loadOperatorSettings, saveOperatorSettings, type PersistedOperatorSettings } from './settings-store.js'
 import { signerCandidate } from './signer.js'
-import { calculateFee, calculateNextAmount1, calculateTrackedNetProfitEth, deriveTokenToSwap, evaluateBuyRep, evaluateSellRep, executorFunding, hasFreshSubmissionWindow, hedgeSlippageReserveWeth, hedgeWethLimit, isSelfReport, meetsProfitThreshold, type ArbitrageQuote } from './strategy.js'
+import { calculateFee, calculateNextAmount1, calculateTrackedNetProfitEth, deriveTokenToSwap, evaluateBuyRep, evaluateSellRep, executorFunding, fundedCapitalAtRiskWeth, hasFreshSubmissionWindow, hedgeSlippageReserveWeth, hedgeWethLimit, isSelfReport, meetsProfitThreshold, type ArbitrageQuote } from './strategy.js'
 import {
 	assertSubmissionWindowOpen,
 	mergeSubmissionFailures,
@@ -1184,7 +1184,7 @@ async function executeDispute(
 	}
 	const executionSigned = signedTransactions.at(-1)?.signed
 	if (executionSigned === undefined) throw new Error('Execution transaction plan is empty')
-	const capitalAtRiskWeth = funding.token1 + (funding.token2 * hedgeLimitQuote + refreshedQuote.hedgeAmountRep - 1n) / refreshedQuote.hedgeAmountRep
+	const capitalAtRiskWeth = fundedCapitalAtRiskWeth(funding, refreshedQuote.hedgeAmountRep, hedgeLimitQuote, hedgeLimit)
 	const stagedPosition = {
 		account: account.address,
 		actualEntryGasCostEth: '0',
@@ -1679,8 +1679,7 @@ async function inspectReport(
 	const funding = executorFunding(game, newAmount1, replacementAmount2, best.quote.direction === 'buy-rep' ? hedgeLimit : 0n)
 	const tokenBalance = balances?.tokens.get(game.token2.toLowerCase())
 	const hasRequiredInventory = balances === undefined || tokenBalance === undefined ? undefined : balances.weth >= funding.token1 && tokenBalance >= funding.token2
-	const tokenFundingValueWeth = best.quote.hedgeAmountRep === 0n ? 0n : (funding.token2 * hedgeLimitQuote + best.quote.hedgeAmountRep - 1n) / best.quote.hedgeAmountRep
-	const capitalAtRiskWeth = funding.token1 + tokenFundingValueWeth
+	const capitalAtRiskWeth = fundedCapitalAtRiskWeth(funding, best.quote.hedgeAmountRep, hedgeLimitQuote, hedgeLimit)
 	const profitable = meetsProfitThreshold(best.quote, config.minimumProfitWeth, config.minimumProfitBps)
 	const decision = opportunityDecision({
 		account: wallet?.account.address,
