@@ -582,12 +582,14 @@ The transaction tracker records each approval and executor call as `submitting`,
 `pending`, `confirmation unknown`, `confirmed`, `reverted`, or `submission failed`.
 It shows which targets accepted or rejected the payload. A private bundle targets
 only the next block and is not resubmitted from a stale quote. After that target
-block, every signed transaction must have a successful receipt in that block or the
-attempt fails and a later scan must build a new quote and bundle. Public RPC URLs
-remain configurable for endpoint checks and dry-run tooling, but live execution
-never broadcasts through them. Active transaction-tracker rows are kept in process
-memory and reset on restart; confirmed dispute history and its ETH profit totals are
-persisted in the configured history file.
+block, absent, unsuccessful, or disagreeing receipt evidence leaves the journaled
+attempt pending or `recovery-required`. Later scans attempt only independent receipt
+recovery, and the one-nonclosed-position guard prevents a new position until normal
+or manual reconciliation closes the attempt. Public RPC URLs remain configurable
+for endpoint checks and dry-run tooling, but live execution never broadcasts through
+them. Active transaction-tracker rows are kept in process memory and reset on
+restart; confirmed dispute history and its ETH profit totals are persisted in the
+configured history file.
 
 ## Adjust the strategy
 
@@ -637,9 +639,16 @@ Other startup-only options:
 | `--relay-url` | `https://relay.flashbots.net` | Flashbots-compatible bundle relay. Repeat the flag for up to eight relays; adjustable in the dashboard. |
 | `--max-hedge-slippage-bps` | `50` | Maximum atomic Uniswap hedge slippage, capped at 1,000 bps. |
 | `--lifecycle-gas-reserve-weth` | `0.01` | Minimum modeled reserve for settlement and withdrawal gas. |
-| `--max-daily-gas-weth` | `0.05` | Stops new positions after the daily recorded gas budget is exhausted. |
-| `--max-position-weth` | `5` | Maximum WETH-equivalent capital at risk for one position. |
-| `--max-total-locked-weth` | `10` | Maximum WETH-equivalent capital locked across durable positions. |
+| `--max-daily-gas-weth` | `0.05` | Maximum UTC-day recorded gas plus the candidate's largest relay-simulated entry gas and lifecycle reserve. |
+| `--max-position-weth` | `5` | Maximum conservative WETH-equivalent funded notional for one position. |
+| `--max-total-locked-weth` | `10` | Maximum stored funded notional across non-closed positions plus the candidate. |
+
+The position notional uses the refreshed required WETH plus required token funding
+valued through the signed hedge limit. Immediately before journal write and relay
+submission, the bot rechecks that notional, the total of every non-closed durable
+position, and the UTC-day gas total using the largest configured-relay simulation
+plus the lifecycle reserve. A value equal to a configured cap is allowed; one wei
+above it is rejected.
 
 ### Durable position journal
 
