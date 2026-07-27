@@ -3,11 +3,40 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Zoltar Protocol Security Model</title>
+		<title>Statoblast Security Model</title>
 		<link rel="stylesheet" href="./shared-docs.css" />
 	</head>
 	<body class="doc-openoracle">
 		<main>
+## PLACEHOLDER Security Assumption
+
+PLACEHOLDER's design is based on a set of core assumptions. While the system includes mechanisms to help uphold these assumptions, if they are broken the protocol may no longer function as intended. In some cases, the system might continue operating even if one or more assumptions fail, but its security can no longer be guaranteed.
+
+1. **Users are greedy**: Users value more money over less money.
+2. **A fork doesn't significantly lower the total value of the system**: Market cap of a previous universe equals ATLEAST market cap of the formed universes withing a security multiplier:
+```math
+\text{Value of assets prior fork} \leq \frac{\sum_{\text{Future universes}}{\text{Value of assets}_{universe}}}{\text{Security Multiplier}}
+```
+3. **Market Cap ≈ Discounted Cash Flow**: Market Capitalization is a reasonable accurate proxy for Discounted Cast Flow of an asset.
+4. **Users value honest universe(s)**: User prefers to use an universe that is honest in their opinion:
+```math
+\text{Value of assets prior fork } ≈ \text{Value of assets}_{\text{truthful universe}}
+```
+5. **Neglible operation costs**: Transaction fees (eg, gas fee) are neglible compared to financial value of the transactions.
+6. **Access to information**: Users should have reliable and timely access to information in order to determine the most truthful outcome of a market.
+7. **Migrating is not too hard**: Users, exchanges and other tools using the systems are okay to migrate into fork they believe is truthful.
+8. **An auction is an efficient way to convert an asset into another**: Some amount of truthfull REP tokens can be sold for ETH lost in a fork for a small enough fee.
+9. **Traders Hold Reputation tokens**: Traders hold enough REP to delay wrongly reported markets enough so that participants with more REP are alerted to continue disputing the market.
+10. **Reputation is liquid**: REP token is liquid enough that reasonable amounts of it can be accessed from open market.
+11. **The inequality is maintained**: The system is able to maintain inequality at all times: $$\text{Open Interest} < \text{REP's Discounted Cash Flow}$$
+12. **Access to PLACEHOLDER is valuable**: Users find it valuable to be able to use PLACEHOLDER to access prediction markets and this value is atleast $\text{Security Parameter}$ times higher than the value it secures.
+13. **The system has enough users**: The system requires enough non-colluding users to function, E. g, the prediction market trading requires atleast two participants with disagreeing views.
+14. **Ethereum is censorship resistant**: The users should be able to send transactions on Ethereum that will be included on the chain in a reasonble timeframe.
+15. **Some amount of REP tokens are held by honest reporters**: (todo, the number comes from escalation game / price oracle and its params)
+16. **Non-colluding Price Oracle reporters**: The Price Oracle has atleast two non-colluding price reporters that are willing to risk certain amount of REP and ETH per each Price Oracle report.
+
+
+
 			<header>
 				<h1>Zoltar Protocol Security Model</h1>
 				<p>
