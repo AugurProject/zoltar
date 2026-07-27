@@ -520,9 +520,13 @@ describe('SecurityVaultSection', () => {
 
 		const documentQueries = within(document.body)
 
-		fireEvent.click(documentQueries.getAllByRole('button', { name: 'Security Bond Allowance Amount' })[0] as HTMLElement)
+		const maxButton = documentQueries.getAllByRole('button', { name: 'Security Bond Allowance Amount Max' })[0]
+		if (!(maxButton instanceof HTMLButtonElement)) throw new Error('Expected allowance Max button')
+		maxButton.focus()
+		expect(document.activeElement).toBe(maxButton)
+		fireEvent.click(maxButton)
 
-		expect(formChanges.at(-1)).toEqual({ securityBondAllowanceAmount: '1.999999999999999999' })
+		expect(formChanges.at(-1)).toEqual({ securityBondAllowanceAmount: '1' })
 	})
 
 	test('allows setting the security bond allowance to zero', async () => {

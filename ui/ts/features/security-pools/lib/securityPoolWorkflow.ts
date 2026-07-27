@@ -32,7 +32,7 @@ export function getSelectedPoolViewLabel(view: SelectedPoolView) {
 		case 'staged-operations':
 			return 'Staged Operations'
 		case 'price-oracle':
-			return 'Open Oracle'
+			return 'Price Oracle'
 		default:
 			return assertNever(view)
 	}

@@ -865,6 +865,35 @@ describe('MarketSection', () => {
 		expectTransactionButtonDisabled(modal as HTMLElement, 'Fork Zoltar', 'Select a valid fork question to continue.')
 	})
 
+	test('guides users to create a question instead of opening an empty fork dialog', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				MarketSection,
+				createMarketSectionProps({
+					activeView: 'fork',
+					hasLoadedZoltarQuestions: true,
+					loadingZoltarQuestionCount: false,
+					loadingZoltarQuestions: false,
+					zoltarQuestionCount: 0n,
+					zoltarQuestions: [],
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const forkButton = documentQueries.getByRole('button', { name: 'Fork Zoltar' }) as HTMLButtonElement
+		expect(forkButton.disabled).toBe(true)
+		expect(forkButton.title).toBe('Create a question before starting a fork.')
+		expect(documentQueries.getByText('Create a question before starting a fork.')).not.toBeNull()
+		expect(documentQueries.queryByRole('dialog')).toBeNull()
+
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Create Question' }))
+		})
+		expect(documentQueries.queryByRole('dialog')).toBeNull()
+	})
+
 	test('opens root-universe child-universe deployment in a modal', async () => {
 		let createChildUniverseCallCount = 0
 		const renderedComponent = await renderIntoDocument(

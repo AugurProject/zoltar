@@ -44,7 +44,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/contract-interaction-reference.md'
-const expectedProductionSoliditySourceFingerprint = 'f94232a2515ad7c929d44aab3d8311e40900be1790eac60a13616676463fa726'
+const expectedProductionSoliditySourceFingerprint = '179280d1778cb8bb6e63e81564c9c89e4be3be3c57738eb391c28396bb25848a'
 
 const eventSourceByName: Record<string, string> = {
 	Approval: 'solidity/contracts/IERC20.sol',
@@ -863,7 +863,8 @@ const contractReferences: ContractReference[] = [
 				caller: "This pool's `OpenOraclePriceCoordinator` only",
 				effect: 'Accrues the vault, replaces its total and fee-eligible allowance contribution, clears allowance-denominator rounding carry, updates active membership, and recalculates retention.',
 				declarations: [{ name: 'performSetSecurityBondsAllowance' }],
-				preconditions: 'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false; vault and pool remain strictly allowance-backed; collateral stays within capacity; new allowance is zero or meets the minimum debt.',
+				preconditions:
+					'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false; the affected vault remains non-liquidatable and aggregate pool backing independently satisfies the same multiplier-adjusted inequality; collateral stays within capacity; new allowance is zero or meets the minimum debt.',
 				signals: 'Accrual checkpoints as needed; retention `PoolAccountingCheckpoint` if its rate changes; always final `VaultAccountingCheckpoint` and `PoolAccountingCheckpoint`, including when replacing an allowance with the same value',
 			},
 			{

@@ -745,11 +745,18 @@ export function SecurityPoolWorkflowSection({
 								</Badge>
 							),
 						})}
-				sticky={false}
 				title={getSelectedPoolCardTitle(marketDetails === undefined ? undefined : getQuestionTitle(marketDetails))}
-				items={selectedPoolSummaryPool === undefined ? [] : [{ label: commonCopy.universe, value: <UniverseLink universeId={selectedPoolSummaryPool.universeId} /> }]}
+				items={
+					selectedPoolSummaryPool === undefined
+						? []
+						: [
+								{ label: commonCopy.universe, value: <UniverseLink universeId={selectedPoolSummaryPool.universeId} /> },
+								{ label: commonCopy.securityPoolAddress, value: <AddressValue address={selectedPoolSummaryPool.securityPoolAddress} /> },
+							]
+				}
 				variant='context-strip'
-			>
+			/>
+			<div className='selected-pool-context-nonsticky'>
 				<div className='selected-pool-context-controls'>
 					<div className='selected-pool-context-lookup'>
 						<LookupFieldRow
@@ -773,7 +780,7 @@ export function SecurityPoolWorkflowSection({
 						<div className='selected-pool-context-details-content'>{selectedPoolSummaryContent}</div>
 					</details>
 				)}
-			</StickyObjectContext>
+			</div>
 			<ErrorNotice message={securityPoolOverviewError} />
 
 			{selectedPool === undefined || !selectedPoolUniverseMismatch ? undefined : (
@@ -1073,7 +1080,7 @@ export function SecurityPoolWorkflowSection({
 								) : undefined}
 
 								{view === 'price-oracle' && loadedSelectedPool !== undefined ? (
-									<SectionBlock density='compact' title={securityPoolCopy.openOracle} variant='plain'>
+									<SectionBlock density='compact' title={securityPoolCopy.poolPriceOracle} variant='plain'>
 										<MetricGrid>
 											<MetricField label={commonCopy.openOraclePrice} valueTagName='span'>
 												<OpenOraclePriceValue

@@ -138,7 +138,7 @@ function isGenericErrorDetail(value: string) {
 
 function getKnownTransactionErrorDetail(details: string[]) {
 	for (const detail of details) {
-		if (detail.toLowerCase().includes('stale price')) return "The pool's oracle price expired. Request a new price in Open Oracle, then retry."
+		if (detail.toLowerCase().includes('stale price')) return "The pool's oracle price expired. Request a new price in Price Oracle, then retry."
 	}
 	return undefined
 }

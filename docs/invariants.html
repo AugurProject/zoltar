@@ -935,16 +935,18 @@
 					<details class="invariant-entry">
 						<summary><code>BAL-04</code><span class="invariant-title">REP coverage boundaries</span></summary>
 						<div class="invariant-details">
-							<p class="invariant-label">Required property</p>
-							<div class="invariant-property">
-								At the latest valid REP-per-ETH price, increasing an allowance
-								requires REP coverage strictly above the requested obligation;
-								withdrawing REP may leave coverage exactly equal to the existing
-								obligation. The security multiplier is applied only by the named
-								liquidation and transfer checks, not a second time in these coverage
-								comparisons.
-							</div>
-							<p class="invariant-example"><strong>Example:</strong> At 100 REP per ETH, withdrawing to 100 REP against an existing 1 ETH allowance is permitted, but setting a new 1 ETH allowance with only 100 REP fails the strict check.</p>
+								<p class="invariant-label">Required property</p>
+								<div class="invariant-property">
+									At the latest valid REP-per-ETH price, setting an allowance
+									requires the affected vault to remain non-liquidatable and
+									aggregate pool backing to independently satisfy the same
+									multiplier-adjusted inequality. Equality is permitted because
+									vault liquidation requires a strict shortfall; the pool itself
+									is not a liquidation target. Later REP
+									withdrawals and escalation deposits separately preserve at least
+									face-value coverage of the existing allowance.
+								</div>
+								<p class="invariant-example"><strong>Example:</strong> At 100 REP per ETH with a 2x security multiplier, setting a 1 ETH allowance requires at least 200 REP. Setting it with exactly 200 REP is permitted; setting it with 199 REP is rejected.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
