@@ -3558,7 +3558,7 @@ strong.metric-value-danger {
 	z-index: 3;
 	padding: var(--space-2) var(--space-3);
 	border-radius: var(--radius-control);
-	background: rgba(9, 18, 31, 0.97);
+	background: var(--surface-section-opaque);
 }
 
 .sticky-object-context.context-strip .sticky-object-context-summary {

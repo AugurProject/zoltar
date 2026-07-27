@@ -29,24 +29,28 @@ export function OperationModal({ children, closeOnSuccessKey, context = [], desc
 	const titleId = useId()
 	const descriptionElementId = useId()
 	const descriptionId = description === undefined ? undefined : descriptionElementId
-	const completionKeyAtOpenRef = useRef<string | undefined>()
+	const modalOperationKeysRef = useRef<Set<string>>(new Set())
 	const transactionOperationKeyAtOpenRef = useRef<string | undefined>()
 	const wasOpenRef = useRef(false)
 
 	useEffect(() => {
 		if (!isOpen) {
 			wasOpenRef.current = false
+			modalOperationKeysRef.current = new Set()
 			return
 		}
 		if (!wasOpenRef.current) {
 			wasOpenRef.current = true
-			completionKeyAtOpenRef.current = closeOnSuccessKey
+			modalOperationKeysRef.current = new Set()
 			transactionOperationKeyAtOpenRef.current = activeTransactionOperationKey
 			return
 		}
-		const submittedActionSucceeded = closeOnSuccessKey !== undefined && closeOnSuccessKey !== completionKeyAtOpenRef.current
+		if (activeTransactionOperationKey !== undefined && activeTransactionOperationKey !== transactionOperationKeyAtOpenRef.current) {
+			modalOperationKeysRef.current.add(activeTransactionOperationKey)
+		}
+		const submittedActionSucceeded = activeTransaction?.tone === 'success' && activeTransaction.hash !== undefined && activeTransaction.hash === closeOnSuccessKey && activeTransactionOperationKey !== undefined && modalOperationKeysRef.current.has(activeTransactionOperationKey)
 		if (submittedActionSucceeded) onClose()
-	}, [activeTransactionOperationKey, closeOnSuccessKey, isOpen, onClose])
+	}, [activeTransaction?.hash, activeTransaction?.tone, activeTransactionOperationKey, closeOnSuccessKey, isOpen, onClose])
 
 	useModalFocusIsolation({
 		dialogRef,

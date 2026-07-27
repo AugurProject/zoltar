@@ -30,32 +30,56 @@ function OperationModalHarness() {
 function CompletingOperationModalHarness() {
 	const [isOpen, setIsOpen] = useState(true)
 	const [completionKey, setCompletionKey] = useState<string | undefined>()
+	const [transaction, setTransaction] = useState<GlobalTransactionPresentation | undefined>()
+	const transactionHash = '0x1234000000000000000000000000000000000000000000000000000000000000' as const
 
 	return (
-		<OperationModal closeOnSuccessKey={completionKey} isOpen={isOpen} onClose={() => setIsOpen(false)} title='Deposit REP'>
-			<button type='button' onClick={() => setCompletionKey('0x1234')}>
-				Complete transaction
-			</button>
-		</OperationModal>
+		<GlobalTransactionPresentationProvider transaction={transaction}>
+			<OperationModal closeOnSuccessKey={completionKey} isOpen={isOpen} onClose={() => setIsOpen(false)} title='Deposit REP'>
+				<button
+					type='button'
+					onClick={() => {
+						setCompletionKey(transactionHash)
+						setTransaction({
+							dismissKey: transactionHash,
+							hash: transactionHash,
+							operationKey: 'deposit-request',
+							title: 'Deposit confirmed',
+							tone: 'success',
+						})
+					}}
+				>
+					Complete transaction
+				</button>
+			</OperationModal>
+		</GlobalTransactionPresentationProvider>
 	)
 }
 
 function StaleCompletionOperationModalHarness() {
 	const [isOpen, setIsOpen] = useState(true)
 	const [completionState, setCompletionState] = useState<'matching' | 'stale' | 'unrelated'>('stale')
+	const staleHash = '0x1111000000000000000000000000000000000000000000000000000000000000' as const
+	const unrelatedHash = '0x2222000000000000000000000000000000000000000000000000000000000000' as const
+	const matchingHash = '0x3333000000000000000000000000000000000000000000000000000000000000' as const
 	let closeOnSuccessKey: string | undefined
-	if (completionState === 'stale') closeOnSuccessKey = '0xstale'
-	if (completionState === 'matching') closeOnSuccessKey = '0xmatching'
+	if (completionState === 'stale') closeOnSuccessKey = staleHash
+	if (completionState === 'matching') closeOnSuccessKey = matchingHash
+	let transaction: GlobalTransactionPresentation = { dismissKey: staleHash, hash: staleHash, operationKey: 'stale-request', title: 'Stale success', tone: 'success' }
+	if (completionState === 'unrelated') transaction = { dismissKey: unrelatedHash, hash: unrelatedHash, operationKey: 'unrelated-request', title: 'Unrelated success', tone: 'success' }
+	if (completionState === 'matching') transaction = { dismissKey: matchingHash, hash: matchingHash, operationKey: 'matching-request', title: 'Matching success', tone: 'success' }
 
 	return (
-		<OperationModal closeOnSuccessKey={closeOnSuccessKey} isOpen={isOpen} onClose={() => setIsOpen(false)} title='Settle Report'>
-			<button type='button' onClick={() => setCompletionState('unrelated')}>
-				Observe unrelated success
-			</button>
-			<button type='button' onClick={() => setCompletionState('matching')}>
-				Complete matching transaction
-			</button>
-		</OperationModal>
+		<GlobalTransactionPresentationProvider transaction={transaction}>
+			<OperationModal closeOnSuccessKey={closeOnSuccessKey} isOpen={isOpen} onClose={() => setIsOpen(false)} title='Settle Report'>
+				<button type='button' onClick={() => setCompletionState('unrelated')}>
+					Observe unrelated success
+				</button>
+				<button type='button' onClick={() => setCompletionState('matching')}>
+					Complete matching transaction
+				</button>
+			</OperationModal>
+		</GlobalTransactionPresentationProvider>
 	)
 }
 
@@ -198,6 +222,50 @@ function ExistingTransactionLifecycleOperationModalHarness() {
 				>
 					Complete new transaction
 				</button>
+			</OperationModal>
+		</GlobalTransactionPresentationProvider>
+	)
+}
+
+function ReopenedTransactionLifecycleOperationModalHarness() {
+	const [completionKey, setCompletionKey] = useState<string | undefined>()
+	const [isOpen, setIsOpen] = useState(true)
+	const [transactionState, setTransactionState] = useState(createInitialTransactionTrayState)
+
+	const startTransaction = (intent: TransactionIntent, hash: typeof existingTransactionHash | typeof newTransactionHash) => {
+		setTransactionState(state => markTransactionSubmitted(markTransactionRequested(state, intent), hash))
+	}
+	const completeTransaction = (hash: typeof existingTransactionHash | typeof newTransactionHash, title: string) => {
+		setCompletionKey(hash)
+		setTransactionState(state =>
+			markTransactionPresented(markTransactionFinished(state), {
+				dismissKey: hash,
+				hash,
+				title,
+				tone: 'success',
+			}),
+		)
+	}
+
+	return (
+		<GlobalTransactionPresentationProvider transaction={transactionState.active}>
+			<button type='button' onClick={() => setIsOpen(true)}>
+				Reopen operation
+			</button>
+			<button type='button' onClick={() => startTransaction(existingTransactionIntent, existingTransactionHash)}>
+				Start first transaction
+			</button>
+			<button type='button' onClick={() => completeTransaction(existingTransactionHash, 'First transaction confirmed')}>
+				Complete first transaction
+			</button>
+			<button type='button' onClick={() => startTransaction(newTransactionIntent, newTransactionHash)}>
+				Start second transaction
+			</button>
+			<button type='button' onClick={() => completeTransaction(newTransactionHash, 'Second transaction confirmed')}>
+				Complete second transaction
+			</button>
+			<OperationModal closeOnSuccessKey={completionKey} isOpen={isOpen} onClose={() => setIsOpen(false)} title='Submit operation'>
+				<p>Review this operation.</p>
 			</OperationModal>
 		</GlobalTransactionPresentationProvider>
 	)
@@ -435,6 +503,36 @@ describe('OperationModal', () => {
 			fireEvent.click(within(dialog).getByRole('button', { name: 'Complete new transaction' }))
 		})
 		expect(within(dialog).getByRole('status').textContent).toContain('New transaction confirmed')
+	})
+
+	test('does not close a reopened modal when a transaction from its previous instance succeeds', async () => {
+		const renderedComponent = await renderIntoDocument(<ReopenedTransactionLifecycleOperationModalHarness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Start first transaction' }))
+		})
+		await act(() => {
+			fireEvent.click(within(documentQueries.getByRole('dialog', { name: 'Submit operation' })).getByRole('button', { name: 'Close' }))
+		})
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Reopen operation' }))
+		})
+		expect(documentQueries.getByRole('dialog', { name: 'Submit operation' })).not.toBeNull()
+
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Complete first transaction' }))
+		})
+		expect(documentQueries.getByRole('dialog', { name: 'Submit operation' })).not.toBeNull()
+
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Start second transaction' }))
+		})
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Complete second transaction' }))
+		})
+		expect(documentQueries.queryByRole('dialog', { name: 'Submit operation' })).toBeNull()
 	})
 
 	test('associates the optional description with the dialog', async () => {

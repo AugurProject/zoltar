@@ -627,10 +627,20 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			return runOracleAction(
 				'approveToken1',
 				async walletAddress => {
-					const reportDetails = requireLoadedCurrentSelectedReport()
+					const cachedReportDetails = requireLoadedCurrentSelectedReport()
+					const cachedDisputeSubmission = getDisputeSubmission(cachedReportDetails, submittedOpenOracleForm)
+					const { details: reportDetails } = await ensureLoadedSelectedReport({
+						forceReload: true,
+						reportIdInput: submittedOpenOracleForm.reportId,
+						requireCurrentSelection: true,
+					})
+					if (getOpenOracleSelectedReportActionMode(reportDetails) !== 'dispute') throw new Error('Token approvals are only available while disputing a report')
+					const refreshedDisputeSubmission = getDisputeSubmission(reportDetails, submittedOpenOracleForm)
+					if (amount !== undefined && refreshedDisputeSubmission.token1ContributionAmount !== cachedDisputeSubmission.token1ContributionAmount) {
+						throw new Error('The required base token approval changed. Review the refreshed report and try again.')
+					}
 					await refreshOpenOracleTokenAccess(reportDetails, { preserveExisting: true })
 					assertSelectedReportCurrent(reportDetails.reportId.toString())
-					if (getOpenOracleSelectedReportActionMode(reportDetails) !== 'dispute') throw new Error('Token approvals are only available while disputing a report')
 					const disputeSubmission = getDisputeSubmission(reportDetails, submittedOpenOracleForm)
 					const approvalAmount = amount ?? disputeSubmission.token1Approval.targetAmount ?? disputeSubmission.token1ContributionAmount
 					if (approvalAmount === undefined) throw new Error('No base token approval amount is required for the selected report')
@@ -647,10 +657,20 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			return runOracleAction(
 				'approveToken2',
 				async walletAddress => {
-					const reportDetails = requireLoadedCurrentSelectedReport()
+					const cachedReportDetails = requireLoadedCurrentSelectedReport()
+					const cachedDisputeSubmission = getDisputeSubmission(cachedReportDetails, submittedOpenOracleForm)
+					const { details: reportDetails } = await ensureLoadedSelectedReport({
+						forceReload: true,
+						reportIdInput: submittedOpenOracleForm.reportId,
+						requireCurrentSelection: true,
+					})
+					if (getOpenOracleSelectedReportActionMode(reportDetails) !== 'dispute') throw new Error('Token approvals are only available while disputing a report')
+					const refreshedDisputeSubmission = getDisputeSubmission(reportDetails, submittedOpenOracleForm)
+					if (amount !== undefined && refreshedDisputeSubmission.token2ContributionAmount !== cachedDisputeSubmission.token2ContributionAmount) {
+						throw new Error('The required quote token approval changed. Review the refreshed report and try again.')
+					}
 					await refreshOpenOracleTokenAccess(reportDetails, { preserveExisting: true })
 					assertSelectedReportCurrent(reportDetails.reportId.toString())
-					if (getOpenOracleSelectedReportActionMode(reportDetails) !== 'dispute') throw new Error('Token approvals are only available while disputing a report')
 					const disputeSubmission = getDisputeSubmission(reportDetails, submittedOpenOracleForm)
 					const approvalAmount = amount ?? disputeSubmission.token2Approval.targetAmount ?? disputeSubmission.token2ContributionAmount
 					if (approvalAmount === undefined) throw new Error('No quote token approval amount is required for the selected report')
