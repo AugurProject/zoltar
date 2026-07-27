@@ -72,7 +72,7 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 				emptyMessage={marketCopy.deployedChildUniversesEmpty}
 				headerTitle={marketCopy.existingChildUniverses}
 				renderBadge={child => <ChildUniverseStatusBadge child={child} />}
-				renderBody={child => <ChildUniverseDetails child={child} isSupportedChain={isMainnet} />}
+				renderBody={child => <ChildUniverseDetails accountAddress={accountAddress} child={child} isSupportedChain={isMainnet} />}
 				surface='flat'
 			/>
 			<ScalarOutcomePicker
@@ -135,7 +135,7 @@ export function ScalarDeploymentSection({ accountAddress, childUniverses, hasFor
 						emptyMessage={marketCopy.childUniverseSelectionEmpty}
 						headerTitle={marketCopy.selectedChildUniverse}
 						renderBadge={child => <ChildUniverseStatusBadge child={child} />}
-						renderBody={child => <ChildUniverseDetails child={child} isSupportedChain={isMainnet} />}
+						renderBody={child => <ChildUniverseDetails accountAddress={accountAddress} child={child} isSupportedChain={isMainnet} />}
 						surface='flat'
 					/>
 				)}

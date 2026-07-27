@@ -1,19 +1,22 @@
 import type { Address } from '@zoltar/shared/ethereum'
-import { useEffect, useId, useState } from 'preact/hooks'
+import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import * as commonCopy from '../copy/common.js'
 import { getActiveBackend } from '../lib/activeEnvironment.js'
-import { watchActiveWalletAsset, type WalletAssetWatchResult } from '../lib/walletAsset.js'
+import { useRequestGuard } from '../lib/requestGuard.js'
+import { normalizeWalletAssetFailure, watchActiveWalletAsset, type WalletAssetWatchResult } from '../lib/walletAsset.js'
 import { AddressValue } from './AddressValue.js'
 import { LoadingText } from './LoadingText.js'
 
 type WalletAssetControlProps = {
+	accountAddress: Address | undefined
 	address: Address
 	isSupportedChain: boolean
-	onWatchAsset?: ((address: Address) => Promise<WalletAssetWatchResult>) | undefined
+	onWatchAsset?: ((address: Address, accountAddress: Address, isCurrent: () => boolean) => Promise<WalletAssetWatchResult>) | undefined
 	tokenLabel: string
 }
 
-type WalletAssetControlState = { status: 'accepted' } | { message: string; status: 'error' } | { status: 'idle' } | { status: 'pending' }
+type WalletAssetControlStatus = { status: 'accepted' } | { message: string; status: 'error' } | { status: 'idle' } | { status: 'pending' }
+type WalletAssetControlState = WalletAssetControlStatus & { scopeGeneration: number }
 
 function getErrorMessage(result: WalletAssetWatchResult) {
 	if (result.status === 'wrong-network') return commonCopy.mainnetRequiredReason
@@ -23,34 +26,44 @@ function getErrorMessage(result: WalletAssetWatchResult) {
 	return undefined
 }
 
-export function WalletAssetControl({ address, isSupportedChain, onWatchAsset = watchActiveWalletAsset, tokenLabel }: WalletAssetControlProps) {
-	const [state, setState] = useState<WalletAssetControlState>({ status: 'idle' })
+export function WalletAssetControl({ accountAddress, address, isSupportedChain, onWatchAsset = watchActiveWalletAsset, tokenLabel }: WalletAssetControlProps) {
+	const currentScope = useRef({ accountAddress, address, generation: 0, isSupportedChain })
+	if (currentScope.current.accountAddress !== accountAddress || currentScope.current.address !== address || currentScope.current.isSupportedChain !== isSupportedChain) currentScope.current = { accountAddress, address, generation: currentScope.current.generation + 1, isSupportedChain }
+	const scopeGeneration = currentScope.current.generation
+	const [storedState, setState] = useState<WalletAssetControlState>({ scopeGeneration, status: 'idle' })
+	const state: WalletAssetControlStatus = storedState.scopeGeneration === scopeGeneration ? storedState : { status: 'idle' }
 	const networkRequirementId = useId()
 	const backend = getActiveBackend()
-	const walletImportAvailable = backend.id === 'injected' && backend.hasWallet() && backend.getProvider() !== undefined
+	const walletImportAvailable = accountAddress !== undefined && backend.id === 'injected' && backend.hasWallet() && backend.getProvider() !== undefined
+	const nextWatchAssetRequest = useRequestGuard()
 
-	useEffect(() => {
-		setState({ status: 'idle' })
-	}, [address])
+	useEffect(
+		() => () => {
+			nextWatchAssetRequest()
+		},
+		[nextWatchAssetRequest],
+	)
 
 	if (!walletImportAvailable) return <AddressValue address={address} />
 
 	const handleWatchAsset = async () => {
 		if (state.status === 'pending' || state.status === 'accepted' || !isSupportedChain) return
-		setState({ status: 'pending' })
+		const isCurrent = nextWatchAssetRequest()
+		const isCurrentScope = () => isCurrent() && currentScope.current.generation === scopeGeneration
+		setState({ scopeGeneration, status: 'pending' })
 		let result: WalletAssetWatchResult
 		try {
-			result = await onWatchAsset(address)
+			result = await onWatchAsset(address, accountAddress, isCurrentScope)
 		} catch (error) {
-			if (error instanceof Error) result = { status: 'failed' }
-			else throw error
+			result = normalizeWalletAssetFailure(error)
 		}
+		if (!isCurrentScope()) return
 		if (result.status === 'accepted') {
-			setState({ status: 'accepted' })
+			setState({ scopeGeneration, status: 'accepted' })
 			return
 		}
 		const errorMessage = getErrorMessage(result)
-		setState(errorMessage === undefined ? { status: 'idle' } : { message: errorMessage, status: 'error' })
+		setState(errorMessage === undefined ? { scopeGeneration, status: 'idle' } : { message: errorMessage, scopeGeneration, status: 'error' })
 	}
 
 	const actionLabel = (() => {
@@ -64,12 +77,33 @@ export function WalletAssetControl({ address, isSupportedChain, onWatchAsset = w
 		if (state.status === 'error') return commonCopy.formatRetryWalletAssetRequest(tokenLabel)
 		return commonCopy.formatAddTokenToWallet(tokenLabel)
 	})()
+	const actionIcon = (() => {
+		if (state.status === 'accepted') return '✓'
+		if (state.status === 'error') return '↻'
+		return '+'
+	})()
 
 	return (
 		<span className='wallet-asset-control'>
 			<AddressValue address={address} />
-			<button aria-describedby={isSupportedChain ? undefined : networkRequirementId} aria-label={accessibleActionLabel} className='quiet wallet-asset-action' disabled={!isSupportedChain || state.status === 'pending' || state.status === 'accepted'} onClick={() => void handleWatchAsset()} type='button'>
-				{state.status === 'pending' ? <LoadingText>{commonCopy.openingWallet}</LoadingText> : actionLabel}
+			<button
+				aria-describedby={isSupportedChain ? undefined : networkRequirementId}
+				aria-label={accessibleActionLabel}
+				className={`wallet-asset-action wallet-asset-action-${state.status}`}
+				disabled={!isSupportedChain || state.status === 'pending' || state.status === 'accepted'}
+				onClick={() => void handleWatchAsset()}
+				type='button'
+			>
+				{state.status === 'pending' ? (
+					<LoadingText>{commonCopy.openingWallet}</LoadingText>
+				) : (
+					<>
+						<span aria-hidden='true' className='wallet-asset-action-icon'>
+							{actionIcon}
+						</span>
+						<span>{actionLabel}</span>
+					</>
+				)}
 			</button>
 			{isSupportedChain ? undefined : (
 				<span className='wallet-asset-prerequisite' id={networkRequirementId}>

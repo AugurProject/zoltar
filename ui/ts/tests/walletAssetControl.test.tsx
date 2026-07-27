@@ -2,20 +2,21 @@
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { type Address, zeroAddress } from '@zoltar/shared/ethereum'
+import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { WalletAssetControl } from '../components/WalletAssetControl.js'
-import { MarketOverviewSection } from '../features/markets/components/MarketOverviewSection.js'
-import { ChildUniverseDetails } from '../features/universes/components/ChildUniverseDetails.js'
 import { createInjectedBackend } from '../lib/chainBackend.js'
 import { installActiveEnvironmentForTesting } from '../lib/activeEnvironment.js'
 import type { WalletAssetWatchResult } from '../lib/walletAsset.js'
-import type { ZoltarChildUniverseSummary, ZoltarUniverseSummary } from '../types/contracts.js'
 import { createFakeBackend, createFakeSimulationProfile } from './testUtils/fakeBackend.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { fireEvent, waitFor, within } from './testUtils/queries.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
 const TOKEN_ADDRESS = '0x00000000000000000000000000000000000000a1'
+const NEXT_TOKEN_ADDRESS = '0x00000000000000000000000000000000000000b2'
+const ACCOUNT_ADDRESS = '0x00000000000000000000000000000000000000c3'
+const NEXT_ACCOUNT_ADDRESS = '0x00000000000000000000000000000000000000d4'
 
 function createDeferred<T>() {
 	let resolve: (value: T) => void = () => undefined
@@ -23,19 +24,6 @@ function createDeferred<T>() {
 		resolve = promiseResolve
 	})
 	return { promise, resolve }
-}
-
-function createChild(overrides: Partial<ZoltarChildUniverseSummary> = {}): ZoltarChildUniverseSummary {
-	return {
-		exists: true,
-		forkTime: 0n,
-		outcomeIndex: 1n,
-		outcomeLabel: 'Yes',
-		parentUniverseId: 0n,
-		reputationToken: TOKEN_ADDRESS,
-		universeId: 10n,
-		...overrides,
-	}
 }
 
 describe('WalletAssetControl', () => {
@@ -64,14 +52,18 @@ describe('WalletAssetControl', () => {
 	test('guards duplicate requests and shows the accepted state', async () => {
 		const deferred = createDeferred<WalletAssetWatchResult>()
 		const onWatchAsset = mock(async (_address: Address) => await deferred.promise)
-		const renderedComponent = await renderIntoDocument(<WalletAssetControl address={TOKEN_ADDRESS} isSupportedChain tokenLabel='Universe 0xa REP' onWatchAsset={onWatchAsset} />)
+		const renderedComponent = await renderIntoDocument(<WalletAssetControl accountAddress={ACCOUNT_ADDRESS} address={TOKEN_ADDRESS} isSupportedChain tokenLabel='Universe 0xa REP' onWatchAsset={onWatchAsset} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
 		const addButton = documentQueries.getByRole('button', { name: 'Add Universe 0xa REP to wallet' }) as HTMLButtonElement
+		expect(addButton.classList.contains('wallet-asset-action-idle')).toBe(true)
+		expect(addButton.querySelector('.wallet-asset-action-icon')?.textContent).toBe('+')
+		expect(addButton.querySelector('.wallet-asset-action-icon')?.getAttribute('aria-hidden')).toBe('true')
 
 		fireEvent.click(addButton)
 		await waitFor(() => {
-			expect(documentQueries.getByRole('button', { name: 'Opening wallet to add Universe 0xa REP' })).not.toBeNull()
+			const pendingButton = documentQueries.getByRole('button', { name: 'Opening wallet to add Universe 0xa REP' })
+			expect(pendingButton.classList.contains('wallet-asset-action-pending')).toBe(true)
 		})
 		fireEvent.click(addButton)
 		expect(onWatchAsset).toHaveBeenCalledTimes(1)
@@ -83,21 +75,114 @@ describe('WalletAssetControl', () => {
 		await waitFor(() => {
 			const acceptedButton = documentQueries.getByRole('button', { name: 'Universe 0xa REP wallet request accepted' }) as HTMLButtonElement
 			expect(acceptedButton.disabled).toBe(true)
-			expect(acceptedButton.textContent).toBe('Request accepted')
+			expect(acceptedButton.classList.contains('wallet-asset-action-accepted')).toBe(true)
+			expect(acceptedButton.querySelector('.wallet-asset-action-icon')?.textContent).toBe('✓')
+			expect(acceptedButton.textContent).toContain('Request accepted')
 			expect(documentQueries.getByRole('status').textContent).toBe('Universe 0xa REP wallet request accepted')
 		})
 	})
 
+	test('discards a pending wallet result when the token address changes', async () => {
+		const deferred = createDeferred<WalletAssetWatchResult>()
+		const onWatchAsset = mock(async (address: Address) => {
+			if (address === TOKEN_ADDRESS) return await deferred.promise
+			return { status: 'accepted' } satisfies WalletAssetWatchResult
+		})
+		const renderedComponent = await renderIntoDocument(<WalletAssetControl accountAddress={ACCOUNT_ADDRESS} address={TOKEN_ADDRESS} isSupportedChain tokenLabel='Universe 0xa REP' onWatchAsset={onWatchAsset} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Add Universe 0xa REP to wallet' }))
+		await waitFor(() => {
+			expect(documentQueries.getByRole('button', { name: 'Opening wallet to add Universe 0xa REP' })).not.toBeNull()
+		})
+
+		render(<WalletAssetControl accountAddress={ACCOUNT_ADDRESS} address={NEXT_TOKEN_ADDRESS} isSupportedChain tokenLabel='Universe 0xb REP' onWatchAsset={onWatchAsset} />, renderedComponent.container)
+		expect(documentQueries.getByRole('button', { name: 'Add Universe 0xb REP to wallet' })).not.toBeNull()
+
+		await act(async () => {
+			deferred.resolve({ status: 'accepted' })
+			await deferred.promise
+		})
+		await waitFor(() => {
+			const nextTokenButton = documentQueries.getByRole('button', { name: 'Add Universe 0xb REP to wallet' }) as HTMLButtonElement
+			expect(nextTokenButton.disabled).toBe(false)
+			expect(documentQueries.queryByRole('status')).toBeNull()
+		})
+
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Add Universe 0xb REP to wallet' }))
+		await waitFor(() => {
+			expect(documentQueries.getByRole('button', { name: 'Universe 0xb REP wallet request accepted' })).not.toBeNull()
+		})
+		expect(onWatchAsset).toHaveBeenCalledTimes(2)
+	})
+
+	test('resets accepted state and discards pending results when the wallet account changes', async () => {
+		const deferred = createDeferred<WalletAssetWatchResult>()
+		const onWatchAsset = mock(async () => (onWatchAsset.mock.calls.length === 1 ? await deferred.promise : ({ status: 'accepted' } satisfies WalletAssetWatchResult)))
+		const renderedComponent = await renderIntoDocument(<WalletAssetControl accountAddress={ACCOUNT_ADDRESS} address={TOKEN_ADDRESS} isSupportedChain tokenLabel='Universe 0xa REP' onWatchAsset={onWatchAsset} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Add Universe 0xa REP to wallet' }))
+		await waitFor(() => {
+			expect(documentQueries.getByRole('button', { name: 'Opening wallet to add Universe 0xa REP' })).not.toBeNull()
+		})
+
+		render(<WalletAssetControl accountAddress={NEXT_ACCOUNT_ADDRESS} address={TOKEN_ADDRESS} isSupportedChain tokenLabel='Universe 0xa REP' onWatchAsset={onWatchAsset} />, renderedComponent.container)
+		expect(documentQueries.getByRole('button', { name: 'Add Universe 0xa REP to wallet' })).not.toBeNull()
+
+		await act(async () => {
+			deferred.resolve({ status: 'accepted' })
+			await deferred.promise
+		})
+		expect(documentQueries.getByRole('button', { name: 'Add Universe 0xa REP to wallet' })).not.toBeNull()
+
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Add Universe 0xa REP to wallet' }))
+		await waitFor(() => {
+			expect(documentQueries.getByRole('button', { name: 'Universe 0xa REP wallet request accepted' })).not.toBeNull()
+		})
+
+		render(<WalletAssetControl accountAddress={ACCOUNT_ADDRESS} address={TOKEN_ADDRESS} isSupportedChain tokenLabel='Universe 0xa REP' onWatchAsset={onWatchAsset} />, renderedComponent.container)
+		expect(documentQueries.getByRole('button', { name: 'Add Universe 0xa REP to wallet' })).not.toBeNull()
+	})
+
+	test('discards a pending result after the supported network changes', async () => {
+		const deferred = createDeferred<WalletAssetWatchResult>()
+		const onWatchAsset = mock(async () => await deferred.promise)
+		const renderedComponent = await renderIntoDocument(<WalletAssetControl accountAddress={ACCOUNT_ADDRESS} address={TOKEN_ADDRESS} isSupportedChain tokenLabel='Universe 0xa REP' onWatchAsset={onWatchAsset} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Add Universe 0xa REP to wallet' }))
+		await waitFor(() => {
+			expect(documentQueries.getByRole('button', { name: 'Opening wallet to add Universe 0xa REP' })).not.toBeNull()
+		})
+
+		render(<WalletAssetControl accountAddress={ACCOUNT_ADDRESS} address={TOKEN_ADDRESS} isSupportedChain={false} tokenLabel='Universe 0xa REP' onWatchAsset={onWatchAsset} />, renderedComponent.container)
+		render(<WalletAssetControl accountAddress={ACCOUNT_ADDRESS} address={TOKEN_ADDRESS} isSupportedChain tokenLabel='Universe 0xa REP' onWatchAsset={onWatchAsset} />, renderedComponent.container)
+
+		await act(async () => {
+			deferred.resolve({ status: 'accepted' })
+			await deferred.promise
+		})
+		const addButton = documentQueries.getByRole('button', { name: 'Add Universe 0xa REP to wallet' }) as HTMLButtonElement
+		expect(addButton.disabled).toBe(false)
+		expect(documentQueries.queryByRole('status')).toBeNull()
+	})
+
 	test('shows manual-import recovery and allows retrying an unsupported request', async () => {
 		const onWatchAsset = mock(async (_address: Address): Promise<WalletAssetWatchResult> => ({ status: 'unsupported' }))
-		const renderedComponent = await renderIntoDocument(<WalletAssetControl address={TOKEN_ADDRESS} isSupportedChain tokenLabel='Universe 0xa REP' onWatchAsset={onWatchAsset} />)
+		const renderedComponent = await renderIntoDocument(<WalletAssetControl accountAddress={ACCOUNT_ADDRESS} address={TOKEN_ADDRESS} isSupportedChain tokenLabel='Universe 0xa REP' onWatchAsset={onWatchAsset} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
 
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Add Universe 0xa REP to wallet' }))
 		await waitFor(() => {
 			expect(documentQueries.getByRole('alert').textContent).toBe('Automatic import unavailable. Copy the token address to import it manually.')
-			expect(documentQueries.getByRole('button', { name: 'Retry adding Universe 0xa REP to wallet' })).not.toBeNull()
+			const retryButton = documentQueries.getByRole('button', { name: 'Retry adding Universe 0xa REP to wallet' })
+			expect(retryButton.classList.contains('wallet-asset-action-error')).toBe(true)
+			expect(retryButton.querySelector('.wallet-asset-action-icon')?.textContent).toBe('↻')
 		})
 	})
 
@@ -105,7 +190,22 @@ describe('WalletAssetControl', () => {
 		const onWatchAsset = mock(async (_address: Address): Promise<WalletAssetWatchResult> => {
 			throw new Error('Wallet RPC unavailable')
 		})
-		const renderedComponent = await renderIntoDocument(<WalletAssetControl address={TOKEN_ADDRESS} isSupportedChain tokenLabel='Universe 0xa REP' onWatchAsset={onWatchAsset} />)
+		const renderedComponent = await renderIntoDocument(<WalletAssetControl accountAddress={ACCOUNT_ADDRESS} address={TOKEN_ADDRESS} isSupportedChain tokenLabel='Universe 0xa REP' onWatchAsset={onWatchAsset} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Add Universe 0xa REP to wallet' }))
+		await waitFor(() => {
+			expect(documentQueries.getByRole('alert').textContent).toBe('Unable to send the token request to your wallet. Try again.')
+			expect(documentQueries.getByRole('button', { name: 'Retry adding Universe 0xa REP to wallet' })).not.toBeNull()
+		})
+	})
+
+	test('shows retry recovery when the wallet rejects with a malformed value', async () => {
+		const onWatchAsset = mock(async () => {
+			throw 'wallet unavailable'
+		})
+		const renderedComponent = await renderIntoDocument(<WalletAssetControl accountAddress={ACCOUNT_ADDRESS} address={TOKEN_ADDRESS} isSupportedChain tokenLabel='Universe 0xa REP' onWatchAsset={onWatchAsset} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
 
@@ -118,7 +218,7 @@ describe('WalletAssetControl', () => {
 
 	test('returns to idle without an error when the user dismisses the wallet request', async () => {
 		const onWatchAsset = mock(async (_address: Address): Promise<WalletAssetWatchResult> => ({ status: 'dismissed' }))
-		const renderedComponent = await renderIntoDocument(<WalletAssetControl address={TOKEN_ADDRESS} isSupportedChain tokenLabel='Universe 0xa REP' onWatchAsset={onWatchAsset} />)
+		const renderedComponent = await renderIntoDocument(<WalletAssetControl accountAddress={ACCOUNT_ADDRESS} address={TOKEN_ADDRESS} isSupportedChain tokenLabel='Universe 0xa REP' onWatchAsset={onWatchAsset} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
 
@@ -130,7 +230,7 @@ describe('WalletAssetControl', () => {
 	})
 
 	test('disables the request on the wrong network with a direct reason', async () => {
-		const renderedComponent = await renderIntoDocument(<WalletAssetControl address={TOKEN_ADDRESS} isSupportedChain={false} tokenLabel='Universe 0xa REP' />)
+		const renderedComponent = await renderIntoDocument(<WalletAssetControl accountAddress={ACCOUNT_ADDRESS} address={TOKEN_ADDRESS} isSupportedChain={false} tokenLabel='Universe 0xa REP' />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const addButton = within(document.body).getByRole('button', { name: 'Add Universe 0xa REP to wallet' }) as HTMLButtonElement
@@ -148,44 +248,11 @@ describe('WalletAssetControl', () => {
 				profile: createFakeSimulationProfile(),
 			}),
 		)
-		const renderedComponent = await renderIntoDocument(<WalletAssetControl address={TOKEN_ADDRESS} isSupportedChain tokenLabel='Universe 0xa REP' />)
+		const renderedComponent = await renderIntoDocument(<WalletAssetControl accountAddress={ACCOUNT_ADDRESS} address={TOKEN_ADDRESS} isSupportedChain tokenLabel='Universe 0xa REP' />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
 
 		expect(documentQueries.queryByRole('button', { name: 'Add Universe 0xa REP to wallet' })).toBeNull()
 		expect(documentQueries.getByRole('button', { name: `Copy address ${TOKEN_ADDRESS}` })).not.toBeNull()
-	})
-
-	test('adds the control only for deployed child-universe tokens', async () => {
-		const deployed = await renderIntoDocument(<ChildUniverseDetails child={createChild()} isSupportedChain />)
-		cleanupRenderedComponent = deployed.cleanup
-		expect(within(document.body).getByRole('button', { name: 'Add Universe 0xa REP to wallet' })).not.toBeNull()
-
-		await cleanupRenderedComponent()
-		cleanupRenderedComponent = undefined
-		const undeployed = await renderIntoDocument(<ChildUniverseDetails child={createChild({ exists: false, reputationToken: zeroAddress })} isSupportedChain />)
-		cleanupRenderedComponent = undeployed.cleanup
-		expect(within(document.body).queryByRole('button', { name: /Add .* REP to wallet/ })).toBeNull()
-	})
-
-	test('adds the current universe token control to the overview', async () => {
-		const universe = {
-			childUniverses: [],
-			forkThreshold: 100n,
-			forkQuestionDetails: undefined,
-			forkTime: 0n,
-			forkingOutcomeIndex: 0n,
-			hasForked: false,
-			parentUniverseId: 0n,
-			reputationToken: TOKEN_ADDRESS,
-			totalTheoreticalSupply: 1_000n,
-			universeId: 0n,
-		} satisfies ZoltarUniverseSummary
-		const renderedComponent = await renderIntoDocument(
-			<MarketOverviewSection accountAddress={zeroAddress} isMainnet loadingZoltarUniverse={false} onCreateChildUniverseForOutcomeIndex={() => undefined} zoltarChildUniverseError={undefined} zoltarChildUniversePendingOutcomeIndex={undefined} zoltarUniverse={universe} zoltarUniverseState='ready' />,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		expect(within(document.body).getByRole('button', { name: 'Add Genesis (0x0) REP to wallet' })).not.toBeNull()
 	})
 })

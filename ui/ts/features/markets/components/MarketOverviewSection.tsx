@@ -66,7 +66,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 							</>
 						) : undefined}
 						<MetricField label={commonCopy.reputationToken}>
-							<WalletAssetControl address={rootUniverse.reputationToken} isSupportedChain={isMainnet} tokenLabel={`${currentUniverseName ?? commonCopy.universe} ${commonCopy.rep}`} />
+							<WalletAssetControl accountAddress={accountAddress} address={rootUniverse.reputationToken} isSupportedChain={isMainnet} tokenLabel={`${currentUniverseName ?? commonCopy.universe} ${commonCopy.rep}`} />
 						</MetricField>
 						<MetricField label={marketCopy.totalTheoreticalSupply}>
 							<CurrencyValue value={rootUniverse.totalTheoreticalSupply} suffix={commonCopy.rep} />
@@ -117,7 +117,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 								pendingLabel: commonCopy.opening,
 							})}
 							renderBadge={child => <ChildUniverseStatusBadge child={child} />}
-							renderBody={child => <ChildUniverseDetails child={child} isSupportedChain={isMainnet} />}
+							renderBody={child => <ChildUniverseDetails accountAddress={accountAddress} child={child} isSupportedChain={isMainnet} />}
 							surface='flat'
 						/>
 					)}
@@ -153,7 +153,7 @@ export function MarketOverviewSection({ accountAddress, isMainnet, loadingZoltar
 					>
 						{selectedChildUniverse === undefined ? undefined : (
 							<EntityCard className='compact' surface='flat' title={marketCopy.selectedChildUniverse} variant='compact'>
-								<ChildUniverseDetails child={selectedChildUniverse} isSupportedChain={isMainnet} />
+								<ChildUniverseDetails accountAddress={accountAddress} child={selectedChildUniverse} isSupportedChain={isMainnet} />
 							</EntityCard>
 						)}
 					</ChildUniverseDeploymentModal>

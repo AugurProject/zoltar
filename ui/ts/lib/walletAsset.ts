@@ -2,9 +2,9 @@ import { getAddress, type Address } from '@zoltar/shared/ethereum'
 import { ABIS } from '../abis.js'
 import { getActiveBackend } from './activeEnvironment.js'
 import type { ChainBackend } from './chainBackend.js'
-import { hasErrorCode, hasErrorMessage } from './errors.js'
+import { hasErrorCode } from './errors.js'
 
-export type WalletAssetWatchResult = { status: 'accepted' } | { status: 'declined' } | { status: 'dismissed' } | { status: 'failed' } | { status: 'unavailable' } | { status: 'unsupported' } | { status: 'wrong-network' }
+export type WalletAssetWatchResult = { status: 'accepted' } | { status: 'declined' } | { status: 'dismissed' } | { status: 'failed' } | { status: 'stale' } | { status: 'unavailable' } | { status: 'unsupported' } | { status: 'wrong-network' }
 
 export type WalletAssetMetadata = {
 	decimals: number
@@ -25,7 +25,10 @@ export type WalletAssetRequest = {
 
 type WalletAssetRequestDependencies = {
 	expectedChainId: string
+	expectedAccount: Address
+	getActiveAccount: () => Promise<Address | undefined>
 	getActiveChainId: () => Promise<string>
+	isCurrent: () => boolean
 	readTokenMetadata: (address: Address) => Promise<WalletAssetMetadata>
 	request: (request: WalletAssetRequest) => Promise<unknown>
 }
@@ -59,13 +62,16 @@ function isUnsupportedMethod(error: unknown) {
 	return code === '-32601' || code === '4200'
 }
 
+export function normalizeWalletAssetFailure(_reason: unknown): WalletAssetWatchResult {
+	return { status: 'failed' }
+}
+
 export async function requestWalletWatchAsset(address: Address, dependencies: WalletAssetRequestDependencies): Promise<WalletAssetWatchResult> {
 	let activeChainId: string
 	try {
 		activeChainId = await dependencies.getActiveChainId()
 	} catch (error) {
-		if (error instanceof Error || hasErrorCode(error) || hasErrorMessage(error)) return { status: 'failed' }
-		throw error
+		return normalizeWalletAssetFailure(error)
 	}
 	if (!isMatchingChainId(activeChainId, dependencies.expectedChainId)) return { status: 'wrong-network' }
 
@@ -73,16 +79,14 @@ export async function requestWalletWatchAsset(address: Address, dependencies: Wa
 	try {
 		normalizedAddress = getAddress(address)
 	} catch (error) {
-		if (error instanceof Error) return { status: 'failed' }
-		throw error
+		return normalizeWalletAssetFailure(error)
 	}
 
 	let metadata: WalletAssetMetadata
 	try {
 		metadata = await dependencies.readTokenMetadata(normalizedAddress)
 	} catch (error) {
-		if (error instanceof Error || hasErrorCode(error) || hasErrorMessage(error)) return { status: 'failed' }
-		throw error
+		return normalizeWalletAssetFailure(error)
 	}
 	const normalizedMetadata = normalizeTokenMetadata(metadata)
 	if (normalizedMetadata === undefined) return { status: 'failed' }
@@ -99,14 +103,35 @@ export async function requestWalletWatchAsset(address: Address, dependencies: Wa
 		},
 	} satisfies WalletAssetRequest
 
+	try {
+		activeChainId = await dependencies.getActiveChainId()
+	} catch (error) {
+		return normalizeWalletAssetFailure(error)
+	}
+	if (!isMatchingChainId(activeChainId, dependencies.expectedChainId)) return { status: 'wrong-network' }
+	if (!dependencies.isCurrent()) return { status: 'stale' }
+	let activeAccount: Address | undefined
+	try {
+		activeAccount = await dependencies.getActiveAccount()
+	} catch (error) {
+		return normalizeWalletAssetFailure(error)
+	}
+	if (activeAccount !== dependencies.expectedAccount || !dependencies.isCurrent()) return { status: 'stale' }
+	try {
+		activeChainId = await dependencies.getActiveChainId()
+	} catch (error) {
+		return normalizeWalletAssetFailure(error)
+	}
+	if (!isMatchingChainId(activeChainId, dependencies.expectedChainId)) return { status: 'wrong-network' }
+	if (!dependencies.isCurrent()) return { status: 'stale' }
+
 	let result: unknown
 	try {
 		result = await dependencies.request(request)
 	} catch (error) {
 		if (isUserDismissal(error)) return { status: 'dismissed' }
 		if (isUnsupportedMethod(error)) return { status: 'unsupported' }
-		if (error instanceof Error || hasErrorCode(error) || hasErrorMessage(error)) return { status: 'failed' }
-		throw error
+		return normalizeWalletAssetFailure(error)
 	}
 	if (result === true) return { status: 'accepted' }
 	if (result === false) return { status: 'declined' }
@@ -133,7 +158,7 @@ async function readTokenMetadata(backend: ChainBackend, address: Address): Promi
 	}
 }
 
-export async function watchActiveWalletAsset(address: Address): Promise<WalletAssetWatchResult> {
+export async function watchActiveWalletAsset(address: Address, expectedAccount: Address, isCurrent: () => boolean): Promise<WalletAssetWatchResult> {
 	const backend = getActiveBackend()
 	if (backend.id !== 'injected' || !backend.hasWallet()) return { status: 'unavailable' }
 	const provider = backend.getProvider()
@@ -141,7 +166,10 @@ export async function watchActiveWalletAsset(address: Address): Promise<WalletAs
 
 	return await requestWalletWatchAsset(address, {
 		expectedChainId: backend.profile.chainIdHex,
+		expectedAccount,
+		getActiveAccount: async () => (await backend.getAccounts())[0],
 		getActiveChainId: async () => await backend.getChainId(),
+		isCurrent,
 		readTokenMetadata: async tokenAddress => await readTokenMetadata(backend, tokenAddress),
 		request: async request => await provider.request(request),
 	})

@@ -99,7 +99,7 @@ export function ZoltarMigrationSection({
 	const selectedOutcomeIndexes = useMemo(() => getMigrationOutcomeIndexes(zoltarMigrationForm.outcomeIndexes), [zoltarMigrationForm.outcomeIndexes])
 	const selectedOutcomeIndexSet = useMemo(() => new Set(selectedOutcomeIndexes.map(index => index.toString())), [selectedOutcomeIndexes])
 	const selectedChildUniverses = useMemo(() => rootUniverse?.childUniverses.filter(child => selectedOutcomeIndexSet.has(child.outcomeIndex.toString())) ?? [], [rootUniverse?.childUniverses, selectedOutcomeIndexSet])
-	const heldChildUniverses = useMemo(() => rootUniverse?.childUniverses.filter(child => child.exists && (zoltarMigrationChildRepBalances[child.universeId.toString()] ?? 0n) > 0n) ?? [], [rootUniverse?.childUniverses, zoltarMigrationChildRepBalances])
+	const heldChildUniverses = useMemo(() => (loadingZoltarForkAccess ? [] : (rootUniverse?.childUniverses.filter(child => child.exists && (zoltarMigrationChildRepBalances[child.universeId.toString()] ?? 0n) > 0n) ?? [])), [loadingZoltarForkAccess, rootUniverse?.childUniverses, zoltarMigrationChildRepBalances])
 	const migrationAmount = getMigrationAmount(zoltarMigrationForm.amount)
 	const hasValidAmount = migrationAmount !== undefined && migrationAmount > 0n
 	const isMigrationAmountInvalid = zoltarMigrationForm.amount.trim() !== '' && migrationAmount === undefined
@@ -291,7 +291,7 @@ export function ZoltarMigrationSection({
 							<DataGrid dense>
 								{heldChildUniverses.map(child => (
 									<MetricField key={child.universeId.toString()} label={child.outcomeLabel}>
-										<WalletAssetControl address={child.reputationToken} isSupportedChain={isMainnet} tokenLabel={`${formatUniverseLabel(child.universeId)} ${commonCopy.rep}`} />
+										<WalletAssetControl accountAddress={accountAddress} address={child.reputationToken} isSupportedChain={isMainnet} tokenLabel={`${formatUniverseLabel(child.universeId)} ${commonCopy.rep}`} />
 									</MetricField>
 								))}
 							</DataGrid>

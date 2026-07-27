@@ -895,12 +895,52 @@ button.currency-value.copyable:hover:not(:disabled) {
 }
 
 button.wallet-asset-action {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 	flex: 0 0 auto;
-	min-height: 2rem;
-	padding-block: 0.3rem;
+	gap: var(--space-2);
+	min-height: 2.25rem;
+	border-color: var(--interactive-border);
+	padding: 0.4rem 0.75rem 0.4rem 0.55rem;
+	background: var(--interactive-bg);
+	box-shadow: var(--glow-inset-subtle);
+	color: var(--text);
 	font-family: var(--font-family-sans);
 	font-size: var(--font-caption);
 	font-weight: 600;
+	white-space: nowrap;
+}
+
+button.wallet-asset-action:hover:not(:disabled) {
+	border-color: var(--interactive-border-hover);
+	background: var(--interactive-bg-hover);
+}
+
+.wallet-asset-action-icon {
+	display: inline-grid;
+	place-items: center;
+	width: 1.1rem;
+	height: 1.1rem;
+	border: 1px solid currentColor;
+	border-radius: 50%;
+	font-size: 0.8rem;
+	font-weight: 700;
+	line-height: 1;
+}
+
+button.wallet-asset-action-accepted:disabled {
+	border-color: var(--success-border);
+	background: var(--success-soft);
+	color: var(--success);
+	cursor: default;
+	opacity: 1;
+}
+
+button.wallet-asset-action-pending:disabled {
+	border-color: var(--interactive-border);
+	background: var(--interactive-bg);
+	color: var(--text-secondary);
 }
 
 .wallet-asset-feedback {
