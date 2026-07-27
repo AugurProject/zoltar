@@ -1,11 +1,11 @@
 import { test, beforeEach, describe, setDefaultTimeout } from 'bun:test'
-import { encodeAbiParameters, keccak256, type Address } from '@zoltar/shared/ethereum'
+import { encodeAbiParameters, encodeDeployData, keccak256, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
-import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
+import { approveToken, getERC20Balance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import assert from '../testSupport/simulator/utils/assert'
 import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/deployPeripherals'
@@ -13,12 +13,19 @@ import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/z
 import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { deployOriginSecurityPool, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployPeripherals'
 import { approveAndDepositRep } from '../testSupport/simulator/utils/contracts/peripheralsTestUtils'
-import { depositToEscalationGame, getSecurityVault, poolOwnershipToRep } from '../testSupport/simulator/utils/contracts/securityPool'
+import { depositToEscalationGame, getSecurityVault, poolOwnershipToRep, redeemRep, withdrawFromEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
 import { getNonDecisionThreshold } from '../testSupport/simulator/utils/contracts/escalationGame'
-import { getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
+import { addRepToMigrationBalance, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { addressString } from '../testSupport/simulator/utils/bigint'
-import { peripherals_SecurityPool_SecurityPool, Zoltar_Zoltar } from '../types/contractArtifact'
-import { getERC20Balance } from '../testSupport/simulator/utils/utilities'
+import {
+	peripherals_EscalationGame_EscalationGame,
+	peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier,
+	peripherals_SecurityPool_SecurityPool,
+	test_peripherals_EscalationGameForkThresholdHarness_EscalationGameForkBoundarySecurityPool,
+	test_peripherals_EscalationGameForkThresholdHarness_EscalationGameForkBoundaryZoltar,
+	test_peripherals_EscalationGameForkThresholdHarness_EscalationGameForkThresholdHarness,
+	Zoltar_Zoltar,
+} from '../types/contractArtifact'
 import { GENESIS_REPUTATION_TOKEN } from '../testSupport/simulator/utils/constants'
 
 const DAY = 86400n
@@ -44,6 +51,14 @@ describe('Escalation Game Fork Threshold Test', () => {
 		escalationGame: Address
 	}
 	let questionId: bigint
+
+	const deployContract = async (deploymentData: Hex): Promise<Address> => {
+		const hash = await client.sendTransaction({ data: deploymentData })
+		const receipt = await client.waitForTransactionReceipt({ hash })
+		const contractAddress = receipt.contractAddress
+		if (contractAddress === undefined || contractAddress === null) throw new Error('deployment address missing')
+		return contractAddress
+	}
 
 	beforeEach(async () => {
 		mockWindow = getAnvilWindowEthereum()
@@ -128,6 +143,146 @@ describe('Escalation Game Fork Threshold Test', () => {
 
 		assert.strictEqual(repAfter, repBefore, 'settlement should not re-mint vault claim under escrow custody')
 		assert.strictEqual(walletRepAfter - walletRepBefore, depositAmount / 5n, 'winning payout should be scaled by the lowered fork threshold after applying the single-sided winner payout schedule')
+	})
+
+	test('reduced-threshold scaling remains active immediately before and exactly at game end, but not one second after', async () => {
+		const proofVerifier = await deployContract(
+			encodeDeployData({
+				abi: peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier.abi,
+				bytecode: `0x${peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}`,
+			}),
+		)
+		const actualForkThreshold = 25n * 10n ** 18n
+		const nonDecisionThreshold = 100n * 10n ** 18n
+		const winningDeposit = 40n * 10n ** 18n
+		const gameEndDate = 10_000_000n
+		const zoltar = await deployContract(
+			encodeDeployData({
+				abi: test_peripherals_EscalationGameForkThresholdHarness_EscalationGameForkBoundaryZoltar.abi,
+				bytecode: `0x${test_peripherals_EscalationGameForkThresholdHarness_EscalationGameForkBoundaryZoltar.evm.bytecode.object}`,
+				args: [actualForkThreshold],
+			}),
+		)
+		const securityPool = await deployContract(
+			encodeDeployData({
+				abi: test_peripherals_EscalationGameForkThresholdHarness_EscalationGameForkBoundarySecurityPool.abi,
+				bytecode: `0x${test_peripherals_EscalationGameForkThresholdHarness_EscalationGameForkBoundarySecurityPool.evm.bytecode.object}`,
+				args: [zoltar],
+			}),
+		)
+		const harness = await deployContract(
+			encodeDeployData({
+				abi: test_peripherals_EscalationGameForkThresholdHarness_EscalationGameForkThresholdHarness.abi,
+				bytecode: `0x${test_peripherals_EscalationGameForkThresholdHarness_EscalationGameForkThresholdHarness.evm.bytecode.object}`,
+				args: [securityPool, proofVerifier],
+			}),
+		)
+		await writeContractAndWait(client, () =>
+			client.writeContract({
+				abi: test_peripherals_EscalationGameForkThresholdHarness_EscalationGameForkThresholdHarness.abi,
+				address: harness,
+				functionName: 'configureBoundary',
+				args: [gameEndDate, nonDecisionThreshold, winningDeposit],
+			}),
+		)
+
+		const expectedScaledPayout = (winningDeposit * actualForkThreshold) / nonDecisionThreshold
+		for (const boundaryCase of [
+			{ expectedPayout: expectedScaledPayout, forkTime: gameEndDate - 1n, name: 'one second before' },
+			{ expectedPayout: expectedScaledPayout, forkTime: gameEndDate, name: 'exactly at' },
+			{ expectedPayout: winningDeposit, forkTime: gameEndDate + 1n, name: 'one second after' },
+		]) {
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					abi: test_peripherals_EscalationGameForkThresholdHarness_EscalationGameForkBoundaryZoltar.abi,
+					address: zoltar,
+					functionName: 'setForkTime',
+					args: [boundaryCase.forkTime],
+				}),
+			)
+			const [amountToWithdraw, burnAmount] = await client.readContract({
+				abi: test_peripherals_EscalationGameForkThresholdHarness_EscalationGameForkThresholdHarness.abi,
+				address: harness,
+				functionName: 'computeWinningWithdrawal',
+				args: [winningDeposit, winningDeposit],
+			})
+			assert.strictEqual(amountToWithdraw, boundaryCase.expectedPayout, `${boundaryCase.name} game end should preserve the documented fork-threshold payout boundary`)
+			assert.strictEqual(burnAmount, 0n, 'the single-sided boundary harness should not create a reward haircut')
+		}
+	})
+
+	test('late unrelated fork migration cannot reprice a finalized winning deposit or create sweepable residual', async () => {
+		const depositAmount = 1000n * 10n ** 18n
+		const firstDeposit = depositAmount / 2n
+		const secondDeposit = depositAmount - firstDeposit
+		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		await approveAndDepositRep(attacker, depositAmount, questionId)
+
+		await mockWindow.setTime(questionEndDate + 1n)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, firstDeposit)
+		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, secondDeposit)
+		const configuredThreshold = await getNonDecisionThreshold(client, securityPoolAddresses.escalationGame)
+		await mockWindow.advanceTime(10n * DAY)
+		const victimWalletBeforeFirstSettlement = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
+		await withdrawFromEscalationGame(attacker, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
+		const victimWalletAfterFirstSettlement = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
+		assert.strictEqual(victimWalletAfterFirstSettlement - victimWalletBeforeFirstSettlement, firstDeposit, 'a finalized winner settled before the unrelated fork must receive its frozen principal')
+
+		const forkInitiator = createWriteClient(mockWindow, TEST_ADDRESSES[5], 0)
+		const forkQuestionEnd = (await mockWindow.getTime()) + DAY
+		const forkQuestionData = {
+			title: 'Late unrelated finalized-game fork',
+			description: '',
+			startTime: 0n,
+			endTime: forkQuestionEnd,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const forkQuestionId = getQuestionId(forkQuestionData, ['Yes', 'No'])
+		await createQuestion(forkInitiator, forkQuestionData, ['Yes', 'No'])
+		await mockWindow.setTime(forkQuestionEnd + 1n)
+		await approveToken(forkInitiator, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+		await forkUniverse(forkInitiator, genesisUniverse, forkQuestionId)
+
+		for (let accountIndex = 1; accountIndex < TEST_ADDRESSES.length; accountIndex++) {
+			const migratorAddress = TEST_ADDRESSES[accountIndex]
+			if (migratorAddress === undefined) throw new Error(`Missing migration test account ${accountIndex}`)
+			const migrator = createWriteClient(mockWindow, migratorAddress, 0)
+			const migratorBalance = await getERC20Balance(migrator, addressString(GENESIS_REPUTATION_TOKEN), migrator.account.address)
+			if (migratorBalance === 0n) continue
+			await approveToken(migrator, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+			await addRepToMigrationBalance(migrator, genesisUniverse, migratorBalance)
+		}
+
+		const reducedForkThreshold = await client.readContract({
+			abi: Zoltar_Zoltar.abi,
+			address: getZoltarAddress(),
+			functionName: 'getForkThreshold',
+			args: [genesisUniverse],
+		})
+		assert.ok(reducedForkThreshold < configuredThreshold, 'real post-fork migration should reduce the live threshold below the finalized game threshold')
+
+		const victimWalletBeforeSecondSettlement = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
+		await withdrawFromEscalationGame(attacker, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [1n])
+		const victimWalletAfterSecondSettlement = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
+		assert.strictEqual(victimWalletAfterSecondSettlement - victimWalletBeforeSecondSettlement, secondDeposit, 'a remaining finalized winner settled after unrelated migration must receive the same frozen principal')
+		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.escalationGame), 0n, 'late migration must not leave confiscated winner principal in the escalation game')
+		await assert.rejects(
+			client.writeContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: securityPoolAddresses.escalationGame,
+				functionName: 'sweepResidualRepToSecurityPool',
+				args: [],
+			}),
+			/No sweepable REP/,
+		)
+
+		const attackerWalletBefore = await getERC20Balance(attacker, addressString(GENESIS_REPUTATION_TOKEN), attacker.account.address)
+		await redeemRep(attacker, securityPoolAddresses.securityPool, attacker.account.address)
+		const attackerWalletAfter = await getERC20Balance(attacker, addressString(GENESIS_REPUTATION_TOKEN), attacker.account.address)
+		assert.strictEqual(attackerWalletAfter - attackerWalletBefore, depositAmount, 'remaining pool ownership must redeem only its original REP, not a winner haircut')
 	})
 
 	test('deploys the escalation game with the tracked Zoltar fork threshold instead of the token supply', async () => {

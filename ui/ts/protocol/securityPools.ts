@@ -257,7 +257,7 @@ async function loadSecurityPoolDetails(
 ): Promise<ListedSecurityPool> {
 	const { initialReportPriorityFeeWeiPerGas, parent, priceOracleManagerAndOperatorQueuer: managerAddress, questionId, securityMultiplier, securityPool: securityPoolAddress, truthAuction: truthAuctionAddress, universeId } = deployment
 	const shouldLoadVaults = shouldLoadSecurityPoolVaults(deployment, options)
-	const [[completeSetCollateralAmount, currentRetentionRate, forkData, lastOraclePrice, lastSettlementTimestamp, questionOutcome, systemStateValue, shareTokenSupply, totalRepDeposit, totalSecurityBondAllowance, universeForkTime], marketDetails, vaultSummaries] = await Promise.all([
+	const [[completeSetCollateralAmount, currentRetentionRate, forkData, lastOraclePrice, lastSettlementTimestamp, questionOutcome, systemStateValue, shareTokenSupply, totalRepDeposit, poolAccountingSnapshot, universeForkTime], marketDetails, vaultSummaries] = await Promise.all([
 		readRequiredMulticall(client, [
 			{
 				abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -315,7 +315,7 @@ async function loadSecurityPoolDetails(
 			},
 			{
 				abi: peripherals_SecurityPool_SecurityPool.abi,
-				functionName: 'totalSecurityBondAllowance',
+				functionName: 'getPoolAccountingSnapshot',
 				address: securityPoolAddress,
 				args: [],
 			},
@@ -340,6 +340,7 @@ async function loadSecurityPoolDetails(
 	return {
 		completeSetCollateralAmount,
 		currentRetentionRate,
+		feeEligibleSecurityBondAllowance: poolAccountingSnapshot.feeEligibleSecurityBondAllowance,
 		forkOutcome,
 		forkOwnSecurityPool,
 		hasForkActivity: deriveHasForkActivity({
@@ -362,7 +363,7 @@ async function loadSecurityPoolDetails(
 		shareTokenSupply,
 		systemState,
 		totalRepDeposit,
-		totalSecurityBondAllowance,
+		totalSecurityBondAllowance: poolAccountingSnapshot.totalSecurityBondAllowance,
 		truthAuctionAddress,
 		truthAuctionStartedAt,
 		universeHasForked: universeForkTime > 0n,

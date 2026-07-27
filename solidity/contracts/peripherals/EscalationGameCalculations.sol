@@ -123,6 +123,10 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 		uint256 bindingCapitalAmount = getBindingCapital();
 		uint256 winningOutcomeBalance = outcomeState[outcomeIndex].balance;
 		uint256 actualForkThreshold = securityPool.zoltar().getForkThreshold(securityPool.universeId());
+		uint256 forkTime = securityPool.zoltar().getForkTime(securityPool.universeId());
+		if (forkTime > getEscalationGameEndDate()) {
+			actualForkThreshold = nonDecisionThreshold;
+		}
 		return
 			proofVerifier.computeWinningWithdrawal(
 				depositAmount,

@@ -49,9 +49,11 @@ const erc1155Interface = await readFile('solidity/contracts/peripherals/interfac
 const reputationToken = await readFile('solidity/contracts/ReputationToken.sol', 'utf8')
 const shareToken = await readFile('solidity/contracts/peripherals/tokens/ShareToken.sol', 'utf8')
 const truthAuction = await readFile('solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol', 'utf8')
+const truthAuctionInterface = await readFile('solidity/contracts/peripherals/interfaces/IUniformPriceDualCapBatchAuction.sol', 'utf8')
 const zoltar = await readFile('solidity/contracts/Zoltar.sol', 'utf8')
 const bytecodeSnapshot = readBytecodeSnapshot(await readFile('solidity/ts/tests/fixtures/escalationGameBytecode.snapshot.json', 'utf8'))
 const interfaceRegressionTest = await readFile('solidity/ts/tests/escalationGameInterfaceRegression.test.ts', 'utf8')
+const escalationGameForkThresholdTest = await readFile('solidity/ts/tests/escalationGameForkThreshold.test.ts', 'utf8')
 
 const expectedProjectBudget = readNumericConstant(interfaceRegressionTest, 'escalationGameDeployedBytecodeBudgetBytes')
 const expectedEip170Budget = readNumericConstant(interfaceRegressionTest, 'eip170DeployedBytecodeLimitBytes')
@@ -64,6 +66,7 @@ assertContinuationIdentifierExplanation()
 assertEscalationReplayIdentityDocs()
 assertAggregateEscalationContinuationDocs()
 assertNonDecisionLifecycleDocs()
+assertAuditFindingRemediations()
 assertEventStreamSemantics()
 assertZoltarForkDepths()
 assertRecursiveForkGasStatusDocs()
@@ -173,6 +176,64 @@ function assertNonDecisionLifecycleDocs(): void {
 	for (const forbiddenClaim of ['a later fork on the same question replaces the inherited outcome', 'the fixed result applies after continuation and is inherited through later unrelated descendants', 'a later unrelated fork keeps Yes as the payout outcome']) {
 		assert.ok(!`${normalizedStatoblast} ${normalizedInvariants} ${normalizedOperatorReference}`.toLowerCase().includes(forbiddenClaim.toLowerCase()), `Fixed-outcome documentation retains obsolete replacement or descendant-inheritance semantics: ${forbiddenClaim}`)
 	}
+}
+
+function assertAuditFindingRemediations(): void {
+	const normalizedStatoblast = whitepaperStatoblast.replaceAll(/\s+/g, ' ')
+	const normalizedAuctionDesign = auctionDesign.replaceAll(/\s+/g, ' ')
+	const normalizedEventStream = eventStream.replaceAll(/\s+/g, ' ')
+	assert.doesNotMatch(normalizedStatoblast, /Retention-rate updates also no-op when total bond allowance is zero/, 'Statoblast whitepaper must not retain the obsolete total-allowance zero-retention rule')
+	assert.match(normalizedStatoblast, /Retention-rate updates no-op outside <code>Operational<\/code> mode or when the recalculated rate is unchanged\.[\s\S]*zero eligible allowance selects the maximum retention rate/, 'Statoblast whitepaper must describe the fee-eligible retention denominator and its zero case')
+	assert.match(securityPool, /function updateRetentionRate\(\) public \{[\s\S]*SecurityPoolUtils\.calculateRetentionRate\([\s\S]*feeEligibleSecurityBondAllowance/, 'SecurityPool retention updates must use fee-eligible allowance')
+	assert.match(securityPoolUtils, /if \(securityBondAllowance == 0\) return MAX_RETENTION_RATE;/, 'SecurityPoolUtils must select maximum retention for zero eligible allowance')
+	assert.match(escalationGameCalculations, /if \(forkTime > getEscalationGameEndDate\(\)\) \{[\s\S]*actualForkThreshold = nonDecisionThreshold;/, 'Escalation payout must restore the configured threshold only for forks strictly after the scheduled game end')
+	assert.match(normalizedStatoblast, /thresholds scale the payout down when no fork is recorded or the recorded universe <code>forkTime<\/code> is at or before the scheduled <code>escalationGameEndDate<\/code>/, 'Statoblast payout caption must cover both the no-fork case and the inclusive scheduled game-end boundary')
+	assert.match(
+		normalizedStatoblast,
+		/When <code>forkTime<\/code> is strictly later than the scheduled <code>escalationGameEndDate<\/code>, the withdrawal calculation substitutes the configured <code>nonDecisionThreshold<\/code> for the actual fork threshold, restoring the unscaled payout schedule for unclaimed winning deposits/,
+		'Statoblast payout caption must document the implementation-linked strict-after threshold restoration for unclaimed withdrawals',
+	)
+	assert.doesNotMatch(normalizedStatoblast, /later unrelated fork (?:cannot reprice|leaves (?:the )?finalized payout unchanged)/i, 'Statoblast must not claim that a strictly later fork leaves unclaimed winning payouts unchanged')
+	for (const boundaryName of ['one second before', 'exactly at', 'one second after']) {
+		assert.ok(escalationGameForkThresholdTest.includes(boundaryName), `Escalation fork-threshold regression must cover ${boundaryName} game end`)
+	}
+	assert.match(truthAuctionInterface, /event EthRefundDeferred\(address indexed bidder, uint256 amount, uint256 pendingAmount\);/, 'Truth-auction interface must declare the deferred-refund delta and resulting balance')
+	assert.match(truthAuctionInterface, /event PendingEthRefundWithdrawn\(address indexed bidder, uint256 amount\);/, 'Truth-auction interface must declare successful deferred-refund withdrawals')
+	assert.match(truthAuction, /REFUND_PUSH_GAS_LIMIT = 30_000;/, 'Truth-auction push refunds must retain the documented explicit CALL gas argument')
+	assert.match(
+		normalizedAuctionDesign,
+		/explicit <code>gas: 30,000<\/code> call argument[\s\S]*EVM adds its <code>2,300<\/code>-gas value-transfer stipend[\s\S]*effective maximum of <code>32,300<\/code> gas/,
+		'Truth Auction must canonically distinguish the explicit CALL gas argument from the EVM value-transfer stipend and effective callback maximum',
+	)
+	const normalizedRefundGasDocs = `${normalizedAuctionDesign} ${invariantsHtml} ${contractInteractionReference} ${contractReferenceGenerator}`.replaceAll(/<[^>]+>/g, '')
+	assert.doesNotMatch(normalizedRefundGasDocs, /(?:at most|forwards at most|limited to) 30,000 gas/i, 'Refund documentation must not confuse the explicit CALL gas argument with the larger stipend-inclusive callback maximum')
+	assert.match(
+		securityPoolForker,
+		/function _calculateAuctionPoolOwnershipPerRep\([\s\S]*uint256 unsoldRep = repAvailable - repPurchased;[\s\S]*if \(unsoldRep == 0\) \{[\s\S]*return SecurityPoolUtils\.PRICE_PRECISION;/,
+		'Full-cap truth-auction ownership must use the standard REP precision instead of a phantom inherited denominator',
+	)
+	assert.match(
+		normalizedAuctionDesign,
+		/id="zero-migration-full-cap-ownership"[\s\S]*no vault REP migrated[\s\S]*auctionPoolOwnershipPerRep[\s\S]*PRICE_PRECISION[\s\S]*poolOwnershipToRep[\s\S]*later direct REP deposits/,
+		'Truth Auction must canonically explain the zero-migration full-cap ownership conversion and fresh-deposit behavior',
+	)
+	assert.doesNotMatch(normalizedAuctionDesign, /(?:all the REP in the vaults have been auctioned off|old REP vault holders have been wiped)/i, 'Truth Auction must not claim that every underfunded auction sells all REP or wipes prior vault holders')
+	assert.match(
+		normalizedAuctionDesign,
+		/When bidding ends[\s\S]*qualifying bidders collectively receive <code>maxRepBeingSold<\/code>[\s\S]*no bid qualifies, no REP is sold[\s\S]*Any unsold REP remains behind inherited ownership[\s\S]*zero-migration full-cap sale[\s\S]*href="#zero-migration-full-cap-ownership"/,
+		'Truth Auction lifecycle summary must distinguish qualifying underfunding, no qualifying demand, residual ownership, and the zero-migration full-cap case',
+	)
+	assert.match(normalizedStatoblast, /href="\.\/truth-auction\.html#zero-migration-full-cap-ownership"[\s\S]*Truth Auction settlement specification/, 'Statoblast must link to the canonical zero-migration full-cap ownership rule')
+	assert.doesNotMatch(normalizedStatoblast, /zero-migration full-cap sale initializes auction ownership[\s\S]*30,000[\s\S]*withdrawPendingEthRefund/, 'Statoblast must not duplicate the exact truth-auction ownership and refund mechanics')
+	for (const documentedClaim of [
+		'`amount` is the newly deferred delta and `pendingAmount` is the authoritative resulting bidder balance',
+		"require the event's `pendingAmount` to equal the prior reconstructed balance plus the `amount` delta",
+		"require `amount` to equal that bidder's complete prior balance, then clear it to zero",
+		'any reentrant settlement that creates a new deferred refund appears later in the same receipt and adds to zero',
+	]) {
+		assert.ok(normalizedEventStream.includes(documentedClaim), `Event-stream guide must define deferred-refund reducer semantics: ${documentedClaim}`)
+	}
+	assert.match(contractReferenceGenerator, /settleAuctionBids[\s\S]*EthRefundDeferred[\s\S]*claimAuctionProceeds[\s\S]*EthRefundDeferred/, 'Generated public wrapper rows must expose possible deferred-refund signals')
 }
 
 function assertEventStreamSemantics(): void {
@@ -499,6 +560,16 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /requestPriceIfNeededAndStageOperation\(\.\.\.\)[\s\S]*`securityPool\.isEscalationResolved\(\)` is false/)
 	assert.doesNotMatch(contractInteractionReference, /Operational, unforked, unresolved|unresolved local escalation|Unresolved pool;/)
 	assert.match(contractInteractionReference, /positive ETH converts to at least one complete-set unit/)
+	assert.match(
+		securityPool,
+		/function createCompleteSet\(\) external payable isOperational \{[\s\S]*uint256 nextCompleteSetCollateralAmount = completeSetCollateralAmount \+ msg\.value;[\s\S]*_requireCapacityNotExceeded\(feeEligibleSecurityBondAllowance, nextCompleteSetCollateralAmount\);/,
+		'Complete-set issuance must compare resulting total collateral against fee-eligible allowance',
+	)
+	assert.match(
+		contractInteractionReference,
+		/createCompleteSet\(\)[\s\S]*vault-assigned, fee-eligible bond capacity covers the new collateral \(the pool's resulting total collateral, not merely this deposit\)/,
+		'Generated complete-set prerequisites must identify the fee-eligible allowance and resulting-total-collateral guard',
+	)
 	assert.match(contractInteractionReference, /redeemCompleteSet\(completeSetAmount\)[\s\S]*caller accepts the resulting ETH call, including zero value[\s\S]*rejection of that ETH call reverts the transaction/)
 	assert.match(securityPool, /function sharesToCash\(uint256 completeSetAmount\)[\s\S]*return \(completeSetAmount \* completeSetCollateralAmount\) \/ shareTokenSupply/)
 	assert.match(securityPool, /function redeemCompleteSet\(uint256 completeSetAmount\)[\s\S]*uint256 ethValue = sharesToCash\(completeSetAmount\)/)
@@ -555,11 +626,17 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /Fixes the clearing mode, clearing tick, ETH totals, and aggregate REP allocation/)
 	assert.match(contractInteractionReference, /Withdrawal-time allocation assigns division dust from deterministic cumulative ETH positions, making each payout independent of claim order/)
 	assert.match(truthAuction, /function finalize\(\) external \{[\s\S]*payable\(owner\)\.call\{ value: ethToSend \}\(''\)[\s\S]*require\(sent, 'Auction failed to send raised ETH to the owner'\)/)
-	assert.match(truthAuction, /function withdrawBids\([\s\S]*for \(uint256 i = 0; i < tickIndices\.length; i\+\+\)[\s\S]*if \(totalEthRefund > 0\) \{/)
-	assert.match(truthAuction, /function _refundLosingBids\([\s\S]*for \(uint256 i = 0; i < tickIndices\.length; i\+\+\)[\s\S]*payable\(bidder\)\.call\{ value: totalEthToRefund \}\(''\)/)
-	assert.match(contractInteractionReference, /refundLosingBids\(tickIndices\)[\s\S]*still calls the bidder with zero ETH[\s\S]*no event for an empty list/)
+	assert.match(truthAuction, /function withdrawBids\([\s\S]*for \(uint256 i = 0; i < tickIndices\.length; i\+\+\)[\s\S]*_payOrDeferRefund\(withdrawFor, totalEthRefund\)/)
+	assert.match(truthAuction, /function _refundLosingBids\([\s\S]*for \(uint256 i = 0; i < tickIndices\.length; i\+\+\)[\s\S]*_payOrDeferRefund\(bidder, totalEthToRefund\)/)
+	assert.match(truthAuction, /function _payOrDeferRefund\([\s\S]*if \(amount == 0\) return;[\s\S]*payable\(bidder\)\.call\{ value: amount, gas: REFUND_PUSH_GAS_LIMIT \}\(''\)[\s\S]*pendingEthRefunds\[bidder\] = pendingAmount;[\s\S]*emit EthRefundDeferred\(/)
+	assert.match(truthAuction, /function withdrawPendingEthRefund\(\) external \{[\s\S]*pendingEthRefunds\[msg\.sender\] = 0;[\s\S]*emit PendingEthRefundWithdrawn\(msg\.sender, amount\);[\s\S]*payable\(msg\.sender\)\.call\{ value: amount \}\(''\)[\s\S]*require\(sent, 'Auction failed to withdraw deferred ETH refund'\)/)
+	assert.match(contractInteractionReference, /refundLosingBids\(tickIndices\)[\s\S]*attempts an immediate gas-bounded ETH refund[\s\S]*gas-exhausted pushes are recorded in `pendingEthRefunds` without restoring the bid[\s\S]*An empty list changes no bids and makes no external call/)
 	assert.match(contractInteractionReference, /finalize\(\)[\s\S]*owner accepts the proceeds ETH call, including zero value[\s\S]*A rejected call reverts finalization and its event/)
-	assert.match(contractInteractionReference, /withdrawBids\(withdrawFor, tickIndices, proRataTotal\)[\s\S]*An empty list returns three zeros without changing bids, emitting events, or calling the beneficiary[\s\S]*no event for an empty list/)
+	assert.match(
+		contractInteractionReference,
+		/withdrawBids\(withdrawFor, tickIndices, proRataTotal\)[\s\S]*gas-exhausted positive refund push is gas-bounded and deferred rather than reverting or starving the REP and allowance settlement[\s\S]*An empty list returns three zeros without changing bids, emitting events, or calling the beneficiary/,
+	)
+	assert.match(contractInteractionReference, /withdrawPendingEthRefund\(\)[\s\S]*emits its withdrawal before transferring without the push-refund gas cap[\s\S]*callback-created deferrals follow the clear in log order[\s\S]*A rejected pull reverts the transfer, clear, and event[\s\S]*`PendingEthRefundWithdrawn`/)
 	assert.match(zoltar, /function splitMigrationRep\([\s\S]*require\(universe\.forkTime != 0[\s\S]*splitRepInternal\(universeId, amount, msg\.sender, outcomeIndexes\)/)
 	assert.match(zoltar, /function splitRepInternal\([\s\S]*for \(uint256 i = 0; i < outcomeIndexes\.length; i\+\+\)[\s\S]*reputationToken\.mint\(recipient, amount\)[\s\S]*emit MigrationRepSplit\(/)
 	assert.match(reputationToken, /function mint\(address account, uint256 value\)[\s\S]*_mint\(account, value\);[\s\S]*emit Mint\(account, value\)/)
@@ -633,7 +710,10 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(priceCoordinator, /function recoverSettledPendingReport\(\)[\s\S]*storedGame\(reportId\)[\s\S]*require\(settlementTimestamp != 0, 'Pending oracle report has not settled'\)/)
 	assert.match(contractInteractionReference, /recoverSettledPendingReport\(\)[\s\S]*stored OpenOracle `storedGame\(reportId\)\.settlementTimestamp` is nonzero/)
 	assert.match(operatorReference, /Recovery path[\s\S]*requires both a pending report and a nonzero `storedGame\(reportId\)\.settlementTimestamp`/)
-	assert.match(contractInteractionReference, /addFeeEligibleSecurityBondAllowance\(vault, amount\)[\s\S]*no lifecycle, vault, positive-amount, or value-change guard[\s\S]*newly auction-claimed security-bond allowance to the live fee denominator[\s\S]*including at zero amount/)
+	assert.match(
+		contractInteractionReference,
+		/addFeeEligibleSecurityBondAllowance\(vault, amount\)[\s\S]*no lifecycle, vault, positive-amount, or value-change guard[\s\S]*newly auction-claimed security-bond allowance to the live fee denominator[\s\S]*immediately recalculates retention against the assigned denominator[\s\S]*including the latter two at zero amount/,
+	)
 	assert.match(securityPool, /function setAwaitingForkContinuation\(bool shouldAwait\) external onlyForker \{\s*awaitingForkContinuation = shouldAwait;\s*emit AwaitingForkContinuationSet\(awaitingForkContinuation\)/)
 	assert.match(contractInteractionReference, /setAwaitingForkContinuation\(shouldAwait\)[\s\S]*No lifecycle or value-change guard[\s\S]*`AwaitingForkContinuationSet`, including for a repeated value/)
 	assert.match(securityPool, /function setSystemState\(SystemState newState\) external onlyForker \{\s*systemState = newState;\s*emit SystemStateSet\(systemState\)/)
