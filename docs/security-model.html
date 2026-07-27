@@ -3,108 +3,16 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Statoblast Protocol Security Model</title>
+		<title>Statoblast Core Security Assumptions</title>
 		<link rel="stylesheet" href="./shared-docs.css" />
 	</head>
 	<body class="doc-openoracle security-model">
 		<main>
 			<header>
-				<h1>Statoblast Protocol Security Model</h1>
-				<p>
-					Contract-level invariants remain cataloged in
-					<a href="./invariants.html">Protocol Invariants</a>. For the pool and
-					fork model, see the
-					<a href="./statoblast-whitepaper.html#overview">Statoblast overview</a>
-					and <a href="./zoltar-whitepaper.html">Zoltar whitepaper</a>. For
-					specialized mechanics corresponding to individual assumptions, see the
-					<a href="./open-oracle-integration.html">OpenOracle integration</a>
-					and <a href="./truth-auction.html">truth-auction design</a>.
-				</p>
-				<p>
-					The recursive-fork gas requirement, current enforcement status, and
-					depth-independence evidence are maintained in
-					<a href="./invariants.html#ext-05"><code>EXT-05</code></a>.
-				</p>
+				<h1>Statoblast Core Security Assumptions</h1>
 			</header>
 
 			<section id="core-assumptions">
-				<div class="assumption-heading">
-					<div>
-						<h2>Core Security Assumptions</h2>
-					</div>
-				</div>
-				<p>
-					Unless an assumption says otherwise, a pool lineage means one origin
-					<code>SecurityPool</code> and the child pools created for its question
-					after a universe fork. A02 compares the total economic value of the
-					relevant parent universe with all resulting child universes; A13
-					compares the obligations and assets within the pool lineage. Both use a
-					common reference time and ETH-denominated numeraire. For a given pool
-					lineage, they reuse its configured
-					<a href="../solidity/contracts/peripherals/SecurityPool.sol"><code>securityMultiplier</code></a>,
-					which child pools inherit, as an offchain model parameter; the contracts
-					do not calculate either value equation. A larger configured multiplier
-					therefore imposes a stricter A02 universe-value threshold and A13
-					lineage-value threshold.
-				</p>
-				<figure
-					class="diagram diagram-wide"
-					id="fig-security-assumption-boundary"
-					aria-labelledby="security-assumption-boundary-title"
-				>
-					<svg
-						viewBox="0 0 900 260"
-						role="img"
-						aria-labelledby="security-assumption-boundary-title security-assumption-boundary-desc"
-					>
-						<title id="security-assumption-boundary-title">
-							Contract mechanics and external assumptions jointly support the
-							Statoblast security model
-						</title>
-						<desc id="security-assumption-boundary-desc">
-							Contract-enforced mechanics and the A01 through A17 external
-							assumptions both lead into the claimed Statoblast security model.
-						</desc>
-						<defs>
-							<marker
-								id="security-assumption-arrow"
-								viewBox="0 0 10 10"
-								refX="8"
-								refY="5"
-								markerWidth="7"
-								markerHeight="7"
-								orient="auto-start-reverse"
-							>
-								<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-							</marker>
-						</defs>
-						<rect class="svg-blue" x="35" y="35" width="300" height="75" rx="10"></rect>
-						<text class="svg-label" x="185" y="67" text-anchor="middle">Contract mechanics</text>
-						<text class="svg-small" x="185" y="91" text-anchor="middle">enforced onchain</text>
-						<rect class="svg-gold" x="35" y="150" width="300" height="75" rx="10"></rect>
-						<text class="svg-label" x="185" y="182" text-anchor="middle">Assumptions A01–A17</text>
-						<text class="svg-small" x="185" y="206" text-anchor="middle">economic and external conditions</text>
-						<path
-							class="svg-line"
-							marker-end="url(#security-assumption-arrow)"
-							d="M 335 72 H 420 Q 440 72 440 92 V 96 Q 440 116 460 116 H 500"
-						></path>
-						<path
-							class="svg-line"
-							marker-end="url(#security-assumption-arrow)"
-							d="M 335 188 H 420 Q 440 188 440 168 V 164 Q 440 144 460 144 H 500"
-						></path>
-						<rect class="svg-green" x="500" y="92" width="355" height="75" rx="10"></rect>
-						<text class="svg-label" x="678" y="124" text-anchor="middle">Claimed security model</text>
-						<text class="svg-small" x="678" y="148" text-anchor="middle">depends on both inputs</text>
-					</svg>
-					<p class="diagram-caption">
-						<span class="figure-label">Security model inputs</span>
-						Contract conformance is necessary, while A01–A17 identify the
-						economic and external conditions the contracts cannot enforce.
-					</p>
-				</figure>
-
 				<div class="assumption-group" id="assumptions-value">
 					<ol class="assumption-grid">
 						<li value="1" data-assumption="A01">
