@@ -30,9 +30,13 @@
 				</p>
 				<p>
 					The <a href="./security-model.html">Protocol Security Model</a>
-					is normative for the accepted oracle assumption and truth-auction policy,
-					the guarantees they exclude, and the residual loss allocation when
-					the oracle assumption fails or auction demand is weak.
+					is normative for assumptions A01–A17. The
+					<a href="./truth-auction.html#clearing">Truth Auction clearing guide</a>
+					owns funded and underfunded clearing mechanics, while
+					<a href="./open-oracle-integration.html#intentional-economic-tradeoffs"
+						>OpenOracle Integration</a
+					>
+					owns the oracle notional and residual-loss analysis.
 				</p>
 				<figure
 					class="diagram diagram-wide"
@@ -1823,10 +1827,7 @@
 						collateralization. Report liquidity is intentionally not required to
 						equal or bound the value of withdrawals, liquidations, allowance
 						changes, pool assets, or cumulative operations that use an accepted
-						price. The deployment assumption is <code>ORACLE-A1</code>, cataloged
-						here as <code>ORA-10</code>: at least one
-						adequately capitalized participant takes every profitable correction
-						and obtains inclusion before settlement.
+						price.
 					</p>
 					<p>
 						The protocol also makes no bounded-liveness claim for a pending
@@ -1846,8 +1847,7 @@
 						assumption. A concrete bypass of the required position or fee,
 						capital reuse, invalid deadline transition, or cache-conformance
 						failure remains a finding. The mere absence of a report-notional
-						bound or absolute pending-report duration does not. See the
-						<a href="./security-model.html#accepted-design-properties">normative review classification</a>.
+						bound or absolute pending-report duration does not.
 					</p>
 				</div>
 				<div class="invariant-list">
@@ -2007,28 +2007,6 @@
 							</dl>
 						</div>
 					</details>
-					<details class="invariant-entry">
-						<summary><code>ORA-10</code><span class="invariant-title">Active arbitrager assumption</span></summary>
-						<div class="invariant-details">
-							<p class="invariant-label">Required deployment assumption</p>
-							<div class="invariant-property">
-								At least one independent, rational, adequately capitalized
-								participant continuously monitors pending reports, acts
-								whenever correction is profitable under the configured
-								economics, and can obtain dispute inclusion before settlement.
-							</div>
-							<p class="invariant-example"><strong>Example:</strong> When a false report can profitably be corrected, at least one funded watcher notices it and gets a correcting dispute included before the deadline.</p>
-							<dl class="invariant-metadata">
-								<div><dt>Type</dt><dd>External assumption</dd></div>
-								<div><dt>Enforcement status</dt><dd>Economic or external assumption</dd></div>
-								<div><dt>Primary evidence</dt><dd>
-									<a href="./security-model.html#oracle-a1"
-										><code>ORACLE-A1</code> security model</a
-										>
-								</dd></div>
-							</dl>
-						</div>
-					</details>
 				</div>
 			</section>
 
@@ -2174,7 +2152,7 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								Under <code>AUCTION-A1</code>, qualifying ETH is retained bid ETH
+								In underfunded clearing, qualifying ETH is retained bid ETH
 								offered at or above the cap-implied qualification threshold. The
 								threshold is not an execution-price floor. Qualifying bidders collectively receive
 								<code>maxRepBeingSold</code> in proportion to that ETH at the aggregate
@@ -2188,9 +2166,9 @@
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-									<a href="./security-model.html#auction-a1"
-										><code>AUCTION-A1</code> punitive underfunded clearing</a
-										>
+									<a href="./truth-auction.html#clearing"
+										>Truth Auction clearing design</a
+									>
 								</dd></div>
 							</dl>
 						</div>

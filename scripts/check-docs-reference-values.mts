@@ -9,7 +9,6 @@ const html = await readFile('docs/escalation-game-architecture.html', 'utf8')
 const invariantsHtml = await readFile('docs/invariants.html', 'utf8')
 const liquidationHtml = await readFile('docs/liquidation.html', 'utf8')
 const openOracleIntegration = await readFile('docs/open-oracle-integration.html', 'utf8')
-const securityModel = await readFile('docs/security-model.html', 'utf8')
 const zoltarWhitepaper = await readFile('docs/zoltar-whitepaper.html', 'utf8')
 const whitepaperStatoblast = await readFile('docs/statoblast-whitepaper.html', 'utf8')
 const startHere = await readFile('docs/documentation.html', 'utf8')
@@ -314,7 +313,6 @@ function assertRecursiveForkGasStatusDocs(): void {
 	for (const [documentName, contents] of [
 		['README', readme],
 		['Operator reference', operatorReference],
-		['Security model', securityModel],
 		['Zoltar whitepaper', zoltarWhitepaper],
 		['Statoblast whitepaper', whitepaperStatoblast],
 	] as const) {

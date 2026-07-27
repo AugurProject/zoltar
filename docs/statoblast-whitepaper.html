@@ -4710,8 +4710,9 @@
 						interactive examples; its
 						<a href="./truth-auction.html#settlement">settlement section</a> owns
 						allocation rounding and recovery behavior.
-						The <a href="./security-model.html#auction-a1">security model</a>
-						separately defines the intentional weak-demand loss allocation.
+						The <a href="./security-model.html#core-assumptions">security model</a>
+						separately states efficient REP-to-ETH auction conversion as an
+						explicit assumption.
 					</p>
 				</section>
 
@@ -4730,13 +4731,6 @@
 						outstanding, but they revert instead of entering the staged callback
 						queue. This price path is only for security backing against ETH
 						collateral.
-					</p>
-					<p id="oracle-economic-security-assumption">
-						<strong><code>ORACLE-A1</code> — always-available profitable arbitrager.</strong>
-						Security depends on profitable corrections receiving timely inclusion;
-						the mechanism does not guarantee that every accepted price is correct.
-						The <a href="./security-model.html#oracle-a1">normative security model</a>
-						owns the full assumption, excluded guarantee, and residual loss boundary.
 					</p>
 					<figure class="diagram" id="fig-statoblast-oracle-flow">
 						<svg
@@ -4909,9 +4903,8 @@
 						>
 					</div>
 					<p>
-						The <a href="./security-model.html">Protocol Security Model</a> is
-						normative for <code>ORACLE-A1</code>, <code>AUCTION-A1</code>, their
-						excluded guarantees, and the resulting loss allocation.
+						The <a href="./security-model.html">Protocol Security Model</a>
+						defines the protocol's external assumptions.
 					</p>
 					<ul>
 						<li>REP backing must remain economically meaningful relative to the obligations it secures.</li>
