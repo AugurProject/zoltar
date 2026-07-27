@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Address } from '@zoltar/shared/ethereum'
-import { appendPriceHistory, availableTokenBalances, childPayouts, constantProductSpotPriceWeth, formatTokenAmount, loadPriceHistory, missingPricePoints, payoutDistributionHash, poolSpotPriceWeth, pricePoints, type TokenMarketSnapshot } from './market-monitor.js'
+import { appendPriceHistory, availableTokenBalances, childPayouts, constantProductSpotPriceWeth, formatTokenAmount, loadPriceHistory, missingPricePoints, payoutDistributionHash, poolSpotPriceWeth, pricePoints, tokenCatalogForScan, type TokenMarketSnapshot } from './market-monitor.js'
 
 const temporaryDirectories: string[] = []
 
@@ -23,6 +23,21 @@ describe('Augur REP discovery helpers', () => {
 	test('matches the deployed REPv2 fork payout hashes', () => {
 		expect(payoutDistributionHash([0n, 1_000n, 0n])).toBe('0x544cbfd6b85821f7bbff5de4b999b0b4b701354a3f2d0c4707fd0358295b0173')
 		expect(payoutDistributionHash([0n, 0n, 1_000n])).toBe('0x99c9250f58203a3183137eae3a39da9d9d956cd08d1707a58cff5cddf957afe5')
+	})
+
+	test('revokes a removed configured non-REP token without restarting', () => {
+		const rep = '0x0000000000000000000000000000000000000001' as Address
+		const configured = '0x0000000000000000000000000000000000000002' as Address
+		const observed = '0x0000000000000000000000000000000000000003' as Address
+
+		expect(tokenCatalogForScan([rep], [configured], [observed])).toEqual({
+			executionTokens: [rep, configured],
+			monitoringTokens: [rep, configured, observed],
+		})
+		expect(tokenCatalogForScan([rep], [], [configured, observed])).toEqual({
+			executionTokens: [rep],
+			monitoringTokens: [rep, configured, observed],
+		})
 	})
 })
 

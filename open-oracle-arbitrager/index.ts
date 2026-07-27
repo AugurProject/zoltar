@@ -43,7 +43,7 @@ import {
 	type TransactionActivity,
 	type DisputeStepSnapshot,
 } from './operator-state.js'
-import { appendPriceHistory, availableTokenBalances, discoverAugurRepTokens, formatTokenAmount, loadPriceHistory, loadTokenMarkets, missingPricePoints, pricePoints } from './market-monitor.js'
+import { appendPriceHistory, availableTokenBalances, discoverAugurRepTokens, formatTokenAmount, loadPriceHistory, loadTokenMarkets, missingPricePoints, pricePoints, tokenCatalogForScan } from './market-monitor.js'
 import { defaultRpcUrl, networkConfiguration, parseNetworkName, type NetworkConfiguration } from './network.js'
 import { bestSuccessful, pollUntilStopped, replaceOverlap } from './resilience.js'
 import { loadOperatorSettings, saveOperatorSettings, type PersistedOperatorSettings } from './settings-store.js'
@@ -1271,9 +1271,8 @@ async function main() {
 				let completedOpportunityCount = 0
 				cursor = await advanceCursorAfterSuccessfulHead(blockNumber, blockHash, async () => {
 					const observedTokens = [...reports.values()].flatMap(report => [report.latest.game.token1, report.latest.game.token2]).filter(address => address !== zeroAddress && address.toLowerCase() !== config.network.weth.toLowerCase())
-					discoveredAugurTokens ??= await discoverAugurRepTokens(client, config.network.chain.id, config.tokenAddresses, [])
-					const discoveredTokens = [...new Map([...discoveredAugurTokens, ...config.tokenAddresses, ...observedTokens].map(address => [address.toLowerCase(), address])).values()]
-					const executionTokens = [...new Map([...discoveredAugurTokens, ...config.tokenAddresses].map(address => [address.toLowerCase(), address])).values()]
+					discoveredAugurTokens ??= await discoverAugurRepTokens(client, config.network.chain.id, [], [])
+					const { executionTokens, monitoringTokens: discoveredTokens } = tokenCatalogForScan(discoveredAugurTokens, config.tokenAddresses, observedTokens)
 					state.tokenMarkets = await loadTokenMarkets(client, {
 						chainId: config.network.chain.id,
 						explorerUrl: config.network.explorerUrl,

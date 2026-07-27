@@ -65,6 +65,13 @@ function uniqueAddresses(addresses: readonly Address[]) {
 	return [...unique.values()]
 }
 
+export function tokenCatalogForScan(discoveredAugurTokens: readonly Address[], configuredTokens: readonly Address[], observedTokens: readonly Address[]) {
+	return {
+		executionTokens: uniqueAddresses([...discoveredAugurTokens, ...configuredTokens]),
+		monitoringTokens: uniqueAddresses([...discoveredAugurTokens, ...configuredTokens, ...observedTokens]),
+	}
+}
+
 export function childPayouts(numTicks: bigint, numberOfOutcomes: bigint) {
 	if (numberOfOutcomes < 2n || numberOfOutcomes > 32n) throw new Error(`Unsupported Augur outcome count: ${numberOfOutcomes.toString()}`)
 	const count = Number(numberOfOutcomes)
