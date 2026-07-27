@@ -550,6 +550,39 @@ void describe('OpenOracleSection', () => {
 		expect(getButtonDisabled(disputeButton)).toBe(true)
 	})
 
+	void test('shows a price-direction blocker before rendering dispute approval controls', () => {
+		const tokenUnits = 10n ** 18n
+		const openOracleReportDetails = createOpenOracleReportDetails({
+			currentAmount1: 10n * tokenUnits,
+			currentAmount2: 5n * tokenUnits,
+			currentReporter: getAddress('0x3000000000000000000000000000000000000000'),
+			currentTime: 200n,
+			disputeDelay: 10n,
+			escalationHalt: 20n * tokenUnits,
+			multiplier: 20_000n,
+			reportTimestamp: 100n,
+			settlementTime: 200n,
+		})
+		const section = renderDisputeActionSection({
+			openOracleForm: createOpenOracleForm({
+				disputeNewAmount1: '20',
+				disputeNewAmount2: '7',
+				disputeTokenToSwap: 'token2',
+			}),
+			openOracleReportDetails,
+		})
+
+		const directionMessage = 'These amounts would swap out REPv2, not WETH. Select REPv2 or change the proposed price.'
+		expect(getTextContent(section).split(directionMessage)).toHaveLength(2)
+		expect(getSectionTitles(section)).not.toContain('REPv2 Approval')
+		expect(getSectionTitles(section)).not.toContain('WETH Approval')
+		const disputeButton = findButton(section, 'Dispute & Swap')
+		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
+		expect(getButtonDisabledReason(disputeButton)).toBe(directionMessage)
+		expect(disputeButton.props['disabledReasonElementId']).toBe('open-oracle-dispute-input-blocker-7')
+		expect(disputeButton.props['showDisabledReason']).toBe(false)
+	})
+
 	void test('accepts human-readable token decimals for dispute amounts', () => {
 		const tokenUnits = 10n ** 18n
 		const openOracleReportDetails = createOpenOracleReportDetails({

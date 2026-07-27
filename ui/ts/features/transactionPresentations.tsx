@@ -295,8 +295,8 @@ type PoolUniverseTransactionContext = {
 function getPoolUniverseTransactionRows(context: PoolUniverseTransactionContext | undefined) {
 	if (context === undefined) return undefined
 	return [
-		...(context.securityPoolAddress === undefined || context.securityPoolAddress.trim() === '' ? [] : [{ label: transactionCopy.pool, value: <AddressValue address={context.securityPoolAddress} /> }]),
-		...(context.universeId === undefined ? [] : [{ label: commonCopy.universe, value: <UniverseLink universeId={context.universeId} /> }]),
+		...(context.securityPoolAddress === undefined || context.securityPoolAddress.trim() === '' ? [] : [{ identityKey: 'security-pool', label: transactionCopy.pool, value: <AddressValue address={context.securityPoolAddress} /> }]),
+		...(context.universeId === undefined ? [] : [{ identityKey: 'universe', label: commonCopy.universe, value: <UniverseLink universeId={context.universeId} /> }]),
 	]
 }
 
@@ -305,7 +305,7 @@ type TradingTransactionContext = PoolUniverseTransactionContext & {
 }
 
 function getTradingTransactionRows(context: TradingTransactionContext | undefined) {
-	return [...(getPoolUniverseTransactionRows(context) ?? []), ...(context?.shareOutcome === undefined ? [] : [{ label: transactionCopy.shareOutcome, value: getReportingOutcomeLabel(context.shareOutcome) }])]
+	return [...(getPoolUniverseTransactionRows(context) ?? []), ...(context?.shareOutcome === undefined ? [] : [{ identityKey: 'outcome', label: transactionCopy.shareOutcome, value: getReportingOutcomeLabel(context.shareOutcome) }])]
 }
 
 export function createTradingTransactionIntent(actionName: TradingActionResult['action'], context?: TradingTransactionContext) {
@@ -328,9 +328,9 @@ export function createTradingSuccessPresentation(result: TradingActionResult) {
 		...(detail === undefined ? {} : { detail }),
 		hash: result.hash,
 		rows: [
-			{ label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> },
-			{ label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
-			...(result.shareOutcome === undefined ? [] : [{ label: transactionCopy.shareOutcome, value: getReportingOutcomeLabel(result.shareOutcome) }]),
+			{ identityKey: 'security-pool', label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> },
+			{ identityKey: 'universe', label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
+			...(result.shareOutcome === undefined ? [] : [{ identityKey: 'outcome', label: transactionCopy.shareOutcome, value: getReportingOutcomeLabel(result.shareOutcome) }]),
 			...(result.targetOutcomeIndexes === undefined ? [] : [{ label: transactionCopy.targetOutcomeIndexes, value: result.targetOutcomeIndexes.join(', ') }]),
 		],
 		title: humanizeAction(result.action),

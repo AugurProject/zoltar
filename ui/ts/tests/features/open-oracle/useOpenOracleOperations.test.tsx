@@ -1092,7 +1092,7 @@ describe('useOpenOracleOperations', () => {
 			requireHookState(hookState).setOpenOracleForm(current => ({
 				...current,
 				disputeNewAmount1: '150',
-				disputeNewAmount2: '35',
+				disputeNewAmount2: '20',
 				reportId: REPORT_ID.toString(),
 				stateHash: STATE_HASH,
 			}))
@@ -1106,6 +1106,134 @@ describe('useOpenOracleOperations', () => {
 
 		expect(disputeOracleReport).toHaveBeenCalledTimes(1)
 		expect(readOptionalMulticall.mock.calls.length).toBe(tokenAccessLoadsBeforeDispute + 2)
+	})
+
+	test('disputeReport rejects a direction changed by the forced report reload before refreshing token access', async () => {
+		const initialReportDetails = createOpenOracleReportDetails({
+			currentAmount1: 149n,
+			currentAmount2: 25n,
+			currentReporter: WALLET_ADDRESS,
+			initialReporter: WALLET_ADDRESS,
+			reportTimestamp: 5n,
+		})
+		const refreshedReportDetails = createOpenOracleReportDetails({
+			...initialReportDetails,
+			currentAmount2: 10n,
+		})
+		let reportLoadCount = 0
+		const readOptionalMulticall = mock(async () => [
+			{ result: 500n, status: 'success' as const },
+			{ result: 500n, status: 'success' as const },
+			{ result: 500n, status: 'success' as const },
+			{ result: 500n, status: 'success' as const },
+		])
+		const disputeOracleReport = mock(async () => ({
+			action: 'dispute' as const,
+			hash: '0x00000000000000000000000000000000000000000000000000000000000000d7' as const,
+		}))
+		const dependencies = createOpenOracleOperationsDependencies({
+			disputeOracleReport,
+			loadOpenOracleReportDetails: mock(async () => {
+				reportLoadCount += 1
+				return reportLoadCount === 1 ? initialReportDetails : refreshedReportDetails
+			}),
+			readOptionalMulticall,
+		})
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+		})
+		await waitFor(() => expect(requireHookState(hookState).openOracleReportDetails?.currentAmount2).toBe(initialReportDetails.currentAmount2))
+		await waitFor(() => expect(readOptionalMulticall).toHaveBeenCalledTimes(1))
+
+		await act(async () => {
+			requireHookState(hookState).setOpenOracleForm(current => ({
+				...current,
+				disputeNewAmount1: '150',
+				disputeNewAmount2: '20',
+				disputeTokenToSwap: 'token1',
+				reportId: REPORT_ID.toString(),
+				stateHash: STATE_HASH,
+			}))
+		})
+
+		const tokenAccessLoadsBeforeDispute = readOptionalMulticall.mock.calls.length
+
+		await act(async () => {
+			await requireHookState(hookState).disputeReport()
+		})
+
+		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('These amounts would swap out WETH, not REP. Select WETH or change the proposed price')
+		expect(readOptionalMulticall).toHaveBeenCalledTimes(tokenAccessLoadsBeforeDispute)
+		expect(disputeOracleReport).not.toHaveBeenCalled()
+	})
+
+	test('disputeReport submits the state hash from the forced report reload', async () => {
+		const refreshedStateHash = '0x2222222222222222222222222222222222222222222222222222222222222222'
+		const initialReportDetails = createOpenOracleReportDetails({
+			currentAmount1: 149n,
+			currentAmount2: 25n,
+			currentReporter: WALLET_ADDRESS,
+			initialReporter: WALLET_ADDRESS,
+			reportTimestamp: 5n,
+			stateHash: STATE_HASH,
+		})
+		const refreshedReportDetails = createOpenOracleReportDetails({
+			...initialReportDetails,
+			currentAmount2: 24n,
+			stateHash: refreshedStateHash,
+		})
+		let reportLoadCount = 0
+		let submittedStateHash: string | undefined
+		const disputeOracleReport = mock(async (_client: unknown, _openOracleAddress: Address, _reportId: bigint, _tokenToSwap: Address, _newAmount1: bigint, _newAmount2: bigint, _currentAmount2: bigint, stateHash: string) => {
+			submittedStateHash = stateHash
+			return {
+				action: 'dispute' as const,
+				hash: '0x00000000000000000000000000000000000000000000000000000000000000d8' as const,
+			}
+		})
+		const dependencies = createOpenOracleOperationsDependencies({
+			disputeOracleReport,
+			loadOpenOracleReportDetails: mock(async () => {
+				reportLoadCount += 1
+				return reportLoadCount === 1 ? initialReportDetails : refreshedReportDetails
+			}),
+		})
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+		})
+		await waitFor(() => expect(requireHookState(hookState).openOracleReportDetails?.stateHash).toBe(STATE_HASH))
+
+		await act(async () => {
+			requireHookState(hookState).setOpenOracleForm(current => ({
+				...current,
+				disputeNewAmount1: '150',
+				disputeNewAmount2: '20',
+				disputeTokenToSwap: 'token1',
+				reportId: REPORT_ID.toString(),
+				stateHash: STATE_HASH,
+			}))
+		})
+
+		await act(async () => {
+			await requireHookState(hookState).disputeReport()
+		})
+
+		expect(disputeOracleReport).toHaveBeenCalledTimes(1)
+		expect(submittedStateHash).toBe(refreshedStateHash)
 	})
 
 	test('scales decimal dispute inputs before calling the protocol boundary', async () => {
@@ -1274,7 +1402,7 @@ describe('useOpenOracleOperations', () => {
 			expect(reportId).toBe(REPORT_ID)
 			expect(tokenToSwap).toBe(TOKEN1_ADDRESS)
 			expect(amount1).toBe(150n)
-			expect(amount2).toBe(35n)
+			expect(amount2).toBe(20n)
 			expect(currentAmount2).toBe(25n)
 			expect(stateHash).toBe(STATE_HASH)
 			return {
@@ -1324,7 +1452,7 @@ describe('useOpenOracleOperations', () => {
 			requireHookState(hookState).setOpenOracleForm(current => ({
 				...current,
 				disputeNewAmount1: '150',
-				disputeNewAmount2: '35',
+				disputeNewAmount2: '20',
 				disputeTokenToSwap: 'token1',
 				reportId: REPORT_ID.toString(),
 				stateHash: STATE_HASH,

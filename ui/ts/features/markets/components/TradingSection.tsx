@@ -236,9 +236,9 @@ export function TradingSection({
 			? []
 			: [
 					{ label: commonCopy.question, value: selectedPool.marketDetails.title },
-					{ label: commonCopy.securityPoolAddress, value: <AddressValue address={selectedPool.securityPoolAddress} /> },
-					{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={selectedPool.universeId} /> },
-					{ label: commonCopy.outcome, value: outcome },
+					{ identityKey: 'security-pool', label: commonCopy.securityPoolAddress, value: <AddressValue address={selectedPool.securityPoolAddress} /> },
+					{ identityKey: 'universe', label: commonCopy.universe, value: <TransactionUniverseValue universeId={selectedPool.universeId} /> },
+					{ identityKey: 'outcome', label: commonCopy.outcome, value: outcome },
 				]
 	const retentionFeeDisclosure = [
 		{

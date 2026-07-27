@@ -7,8 +7,11 @@ import { render } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { OperationModal } from '../components/OperationModal.js'
 import { AddressValue } from '../components/AddressValue.js'
+import { GlobalTransactionPresentationProvider } from '../components/GlobalTransactionPresentationContext.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
+import { createInitialTransactionTrayState, markTransactionFailed, markTransactionFinished, markTransactionPresented, markTransactionRequested, markTransactionSubmitted } from '../lib/transactionTray.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import type { GlobalTransactionPresentation, TransactionIntent } from '../types/components.js'
 
 function OperationModalHarness() {
 	const [value, setValue] = useState('')
@@ -53,6 +56,150 @@ function StaleCompletionOperationModalHarness() {
 				Complete matching transaction
 			</button>
 		</OperationModal>
+	)
+}
+
+function TransactionFeedbackOperationModalHarness() {
+	const [isOpen, setIsOpen] = useState(true)
+	const [transaction, setTransaction] = useState<GlobalTransactionPresentation>({
+		dismissKey: 'transaction-request-1',
+		title: 'Disputing report',
+		tone: 'pending',
+	})
+
+	return (
+		<GlobalTransactionPresentationProvider transaction={transaction}>
+			<OperationModal
+				context={[
+					{ identityKey: 'security-pool', label: 'Security Pool Address', value: '0xpool' },
+					{ identityKey: 'outcome', label: 'Outcome', value: 'Yes' },
+				]}
+				isOpen={isOpen}
+				onClose={() => setIsOpen(false)}
+				title='Migrate Shares'
+			>
+				<button
+					type='button'
+					onClick={() =>
+						setTransaction({
+							detail: 'Submitting the prerequisite approval.',
+							dismissKey: 'transaction-request-2',
+							rows: [
+								{ identityKey: 'security-pool', label: 'Pool', value: '0xpool' },
+								{ identityKey: 'outcome', label: 'Share Outcome', value: 'Yes' },
+								{ label: 'Approval Amount', value: '2 REP' },
+							],
+							title: 'Approve REP',
+							tone: 'preparing',
+						})
+					}
+				>
+					Start prerequisite
+				</button>
+				<button
+					type='button'
+					onClick={() =>
+						setTransaction({
+							detail: 'Approval confirmed. Continue with the dispute.',
+							dismissKey: 'transaction-request-2',
+							rows: [
+								{ identityKey: 'security-pool', label: 'Pool', value: '0xpool' },
+								{ identityKey: 'outcome', label: 'Share Outcome', value: 'Yes' },
+								{ label: 'Approval Amount', value: '2 REP' },
+							],
+							title: 'Approval confirmed',
+							tone: 'success',
+						})
+					}
+				>
+					Complete prerequisite
+				</button>
+				<button
+					type='button'
+					onClick={() =>
+						setTransaction({
+							detail: 'The share migration transaction failed.',
+							dismissKey: 'transaction-request-2',
+							title: 'Share migration failed',
+							tone: 'error',
+						})
+					}
+				>
+					Fail transaction
+				</button>
+			</OperationModal>
+		</GlobalTransactionPresentationProvider>
+	)
+}
+
+const existingTransactionHash = '0x1111000000000000000000000000000000000000000000000000000000000000'
+const newTransactionHash = '0x2222000000000000000000000000000000000000000000000000000000000000'
+const existingTransactionIntent: TransactionIntent = {
+	action: 'existingAction',
+	requiresWalletConfirmation: false,
+	source: 'test',
+	submittedTitle: 'Existing transaction',
+}
+const newTransactionIntent: TransactionIntent = {
+	action: 'newAction',
+	requiresWalletConfirmation: false,
+	source: 'test',
+	submittedTitle: 'New transaction',
+}
+
+function ExistingTransactionLifecycleOperationModalHarness() {
+	const [transactionState, setTransactionState] = useState(() => markTransactionRequested(createInitialTransactionTrayState(), existingTransactionIntent))
+
+	return (
+		<GlobalTransactionPresentationProvider transaction={transactionState.active}>
+			<OperationModal isOpen onClose={() => undefined} title='Start another operation'>
+				<button type='button' onClick={() => setTransactionState(state => markTransactionSubmitted(state, existingTransactionHash))}>
+					Submit existing transaction
+				</button>
+				<button type='button' onClick={() => setTransactionState(state => markTransactionFailed(state, 'The existing transaction failed.'))}>
+					Fail existing transaction
+				</button>
+				<button
+					type='button'
+					onClick={() =>
+						setTransactionState(state =>
+							markTransactionPresented(state, {
+								dismissKey: existingTransactionHash,
+								hash: existingTransactionHash,
+								title: 'Existing transaction confirmed',
+								tone: 'success',
+							}),
+						)
+					}
+				>
+					Complete existing transaction
+				</button>
+				<button type='button' onClick={() => setTransactionState(state => markTransactionRequested(markTransactionFinished(state), newTransactionIntent))}>
+					Start new transaction
+				</button>
+				<button type='button' onClick={() => setTransactionState(state => markTransactionSubmitted(state, newTransactionHash))}>
+					Submit new transaction
+				</button>
+				<button type='button' onClick={() => setTransactionState(state => markTransactionFailed(state, 'The new transaction failed.'))}>
+					Fail new transaction
+				</button>
+				<button
+					type='button'
+					onClick={() =>
+						setTransactionState(state =>
+							markTransactionPresented(state, {
+								dismissKey: newTransactionHash,
+								hash: newTransactionHash,
+								title: 'New transaction confirmed',
+								tone: 'success',
+							}),
+						)
+					}
+				>
+					Complete new transaction
+				</button>
+			</OperationModal>
+		</GlobalTransactionPresentationProvider>
 	)
 }
 
@@ -204,6 +351,90 @@ describe('OperationModal', () => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Complete matching transaction' }))
 		})
 		expect(documentQueries.queryByRole('dialog', { name: 'Settle Report' })).toBeNull()
+	})
+
+	test('surfaces transaction feedback, filters semantic trading context aliases, and preserves multi-step context', async () => {
+		const renderedComponent = await renderIntoDocument(<TransactionFeedbackOperationModalHarness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const dialog = documentQueries.getByRole('dialog', { name: 'Migrate Shares' })
+		expect(within(dialog).queryByRole('status')).toBeNull()
+		expect(within(dialog).queryByText('Approval confirmed')).toBeNull()
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Start prerequisite' }))
+		})
+
+		expect(documentQueries.getByRole('dialog', { name: 'Migrate Shares' })).not.toBeNull()
+		expect(within(dialog).getByRole('status').textContent).toContain('Approve REP')
+		expect(within(dialog).getByRole('status').textContent).not.toContain('Pool')
+		expect(within(dialog).getByRole('status').textContent).not.toContain('Share Outcome')
+		expect(within(dialog).getByRole('status').textContent).toContain('Approval Amount')
+		expect(dialog.textContent?.match(/Security Pool Address/g)).toHaveLength(1)
+		expect(dialog.textContent?.match(/Outcome/g)).toHaveLength(1)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Complete prerequisite' }))
+		})
+
+		expect(documentQueries.getByRole('dialog', { name: 'Migrate Shares' })).not.toBeNull()
+		expect(within(dialog).getByRole('status').textContent).toContain('Approval confirmed')
+		expect(within(dialog).getByRole('status').textContent).not.toContain('Pool')
+		expect(within(dialog).getByRole('status').textContent).not.toContain('Share Outcome')
+		expect(within(dialog).getByRole('status').textContent).toContain('Approval Amount')
+		expect(dialog.textContent?.match(/Security Pool Address/g)).toHaveLength(1)
+		expect(dialog.textContent?.match(/Outcome/g)).toHaveLength(1)
+		expect(within(dialog).getByText('Fail transaction')).not.toBeNull()
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Fail transaction' }))
+		})
+
+		expect(documentQueries.getByRole('dialog', { name: 'Migrate Shares' })).not.toBeNull()
+		expect(within(dialog).getByRole('status').textContent).toContain('The share migration transaction failed.')
+	})
+
+	test('keeps a transaction that predates the modal hidden across its lifecycle and surfaces a later operation', async () => {
+		const renderedComponent = await renderIntoDocument(<ExistingTransactionLifecycleOperationModalHarness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const dialog = documentQueries.getByRole('dialog', { name: 'Start another operation' })
+		expect(within(dialog).queryByRole('status')).toBeNull()
+
+		await act(() => {
+			fireEvent.click(within(dialog).getByRole('button', { name: 'Submit existing transaction' }))
+		})
+		expect(within(dialog).queryByRole('status')).toBeNull()
+
+		await act(() => {
+			fireEvent.click(within(dialog).getByRole('button', { name: 'Fail existing transaction' }))
+		})
+		expect(within(dialog).queryByRole('status')).toBeNull()
+
+		await act(() => {
+			fireEvent.click(within(dialog).getByRole('button', { name: 'Complete existing transaction' }))
+		})
+		expect(within(dialog).queryByRole('status')).toBeNull()
+
+		await act(() => {
+			fireEvent.click(within(dialog).getByRole('button', { name: 'Start new transaction' }))
+		})
+		expect(within(dialog).getByRole('status').textContent).toContain('New transaction')
+
+		await act(() => {
+			fireEvent.click(within(dialog).getByRole('button', { name: 'Submit new transaction' }))
+		})
+		expect(within(dialog).getByRole('status').textContent).toContain('New transaction')
+		expect(within(dialog).getByRole('status').textContent).toContain('Pending')
+
+		await act(() => {
+			fireEvent.click(within(dialog).getByRole('button', { name: 'Fail new transaction' }))
+		})
+		expect(within(dialog).getByRole('status').textContent).toContain('The new transaction failed.')
+
+		await act(() => {
+			fireEvent.click(within(dialog).getByRole('button', { name: 'Complete new transaction' }))
+		})
+		expect(within(dialog).getByRole('status').textContent).toContain('New transaction confirmed')
 	})
 
 	test('associates the optional description with the dialog', async () => {

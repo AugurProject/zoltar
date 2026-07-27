@@ -14,12 +14,11 @@ import {
 	formatOpenOracleSettleWriteErrorMessage,
 	getOpenOracleCreateGuardMessage,
 	getOpenOracleCreateValidationMessage,
-	getOpenOracleDisputeAvailability,
 	getOpenOracleSelectedReportActionMode,
 	getOpenOracleSettleAvailability,
 	parseOpenOracleCreateFormSubmission,
 } from '../lib/openOracle.js'
-import { parseAddressInput, parseBytes32Input, parseReportIdInput } from '../../../lib/inputs.js'
+import { parseAddressInput, parseReportIdInput } from '../../../lib/inputs.js'
 import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '../../markets/lib/marketForm.js'
 import { requireDefined } from '../../../lib/required.js'
 import type { TokenApprovalState } from '../../../lib/tokenApproval.js'
@@ -800,23 +799,14 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 				async walletAddress => {
 					const submittedReportIdInput = submittedOpenOracleForm.reportId.trim()
 					const { details } = await ensureLoadedSelectedReport({ forceReload: true, reportIdInput: submittedReportIdInput, requireCurrentSelection: true })
-					const disputeAvailability = getOpenOracleDisputeAvailability(details)
-					if (!disputeAvailability.canAct) throw new Error(disputeAvailability.message ?? 'This report is not ready to dispute.')
+					const disputeInputPreflight = getDisputeSubmission(details, submittedOpenOracleForm)
+					if (disputeInputPreflight.inputBlockMessage !== undefined) throw new Error(disputeInputPreflight.inputBlockMessage.message)
 					await refreshOpenOracleTokenAccess(details, { preserveExisting: true })
 					assertSelectedReportCurrent(details.reportId.toString())
 					const disputeSubmission = getDisputeSubmission(details, submittedOpenOracleForm)
 					if (!disputeSubmission.canSubmit || disputeSubmission.newAmount1 === undefined || disputeSubmission.newAmount2 === undefined) throw new Error(disputeSubmission.blockMessage?.message ?? 'Invalid dispute submission details.')
 					const tokenToSwap = submittedOpenOracleForm.disputeTokenToSwap === 'token1' ? details.token1 : details.token2
-					return await dependencies.disputeOracleReport(
-						dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }),
-						getOpenOracleAddress(),
-						details.reportId,
-						tokenToSwap,
-						disputeSubmission.newAmount1,
-						disputeSubmission.newAmount2,
-						details.currentAmount2,
-						parseBytes32Input(submittedOpenOracleForm.stateHash, 'State hash'),
-					)
+					return await dependencies.disputeOracleReport(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), getOpenOracleAddress(), details.reportId, tokenToSwap, disputeSubmission.newAmount1, disputeSubmission.newAmount2, details.currentAmount2, details.stateHash)
 				},
 				'Failed to dispute report',
 				{

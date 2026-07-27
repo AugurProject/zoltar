@@ -34,6 +34,7 @@ import { createConnectedReadClient } from '../../../lib/clients.js'
 import { useChainBlockNumber, useChainTimestamp } from '../../../lib/chainTimestamp.js'
 import {
 	getOpenOracleCreateGuardMessage,
+	getOpenOracleCreateAddressValidationMessage,
 	getOpenOracleCreateValidationMessage,
 	formatOpenOracleFeePercentage,
 	formatOpenOracleMultiplier,
@@ -253,6 +254,8 @@ export function renderSelectedReportActionSection({
 				if (!isMainnet) return commonCopy.mainnetRequiredReason
 				return disputeDisabledMessage ?? (disputeSubmission?.blockMessage?.kind === 'visible' ? disputeSubmission.blockMessage.message : undefined)
 			})()
+			const disputeInputBlockMessageId = `open-oracle-dispute-input-blocker-${openOracleForm.reportId.trim() || 'unselected'}`
+			const disputeActionReasonUsesInputBlockMessage = disputeSubmission?.inputBlockMessage?.kind === 'visible' && disputeActionDisabledReason === disputeSubmission.inputBlockMessage.message
 			return (
 				<SectionBlock variant='embedded'>
 					<div className='form-grid'>
@@ -278,41 +281,49 @@ export function renderSelectedReportActionSection({
 							</label>
 						</div>
 						{disputeSubmission?.expectedNewAmount1 === undefined || disputeSubmission.token1Decimals === undefined ? undefined : <p className='detail'>{openOracleCopy.formatNewAmountMustBeExactDetail(token1Symbol, formatCurrencyInputBalance(disputeSubmission.expectedNewAmount1, disputeSubmission.token1Decimals))}</p>}
-						<SectionBlock headingLevel={4} title={openOracleCopy.formatTokenApprovalTitle(token1Symbol)} variant='embedded'>
-							<TokenApprovalControl
-								actionLabel={openOracleCopy.disputingTheReport}
-								allowanceError={openOracleTokenAccessState.token1Approval.error}
-								allowanceLoading={openOracleTokenAccessState.token1Approval.loading}
-								approvedAmount={openOracleTokenAccessState.token1Approval.value}
-								disabled={!isConnected || !isMainnet}
-								guardMessage={disputeToken1ApprovalGuardMessage}
-								onApprove={amount => onApproveToken1(amount)}
-								pending={openOracleActiveAction === 'approveToken1'}
-								pendingLabel={openOracleCopy.formatApprovingTokenPendingLabel(token1Symbol)}
-								requiredAmount={disputeSubmission?.token1ContributionAmount}
-								resetKey={`dispute:token1:${token1Symbol}:${disputeSubmission?.token1ContributionAmount?.toString() ?? ''}:${openOracleForm.reportId}`}
-								tokenSymbol={token1Symbol}
-								tokenUnits={disputeSubmission?.token1Decimals ?? 18}
-							/>
-						</SectionBlock>
-						<SectionBlock headingLevel={4} title={openOracleCopy.formatTokenApprovalTitle(token2Symbol)} variant='embedded'>
-							<TokenApprovalControl
-								actionLabel={openOracleCopy.disputingTheReport}
-								allowanceError={openOracleTokenAccessState.token2Approval.error}
-								allowanceLoading={openOracleTokenAccessState.token2Approval.loading}
-								approvedAmount={openOracleTokenAccessState.token2Approval.value}
-								disabled={!isConnected || !isMainnet}
-								guardMessage={disputeToken2ApprovalGuardMessage}
-								onApprove={amount => onApproveToken2(amount)}
-								pending={openOracleActiveAction === 'approveToken2'}
-								pendingLabel={openOracleCopy.formatApprovingTokenPendingLabel(token2Symbol)}
-								requiredAmount={disputeSubmission?.token2ContributionAmount}
-								resetKey={`dispute:token2:${token2Symbol}:${disputeSubmission?.token2ContributionAmount?.toString() ?? ''}:${openOracleForm.reportId}`}
-								tokenSymbol={token2Symbol}
-								tokenUnits={disputeSubmission?.token2Decimals ?? 18}
-							/>
-						</SectionBlock>
-						{!isMainnet || disputeSubmission?.blockMessage?.kind !== 'visible' ? undefined : <p className='detail'>{disputeSubmission.blockMessage.message}</p>}
+						{disputeSubmission?.inputBlockMessage === undefined ? (
+							<>
+								<SectionBlock headingLevel={4} title={openOracleCopy.formatTokenApprovalTitle(token1Symbol)} variant='embedded'>
+									<TokenApprovalControl
+										actionLabel={openOracleCopy.disputingTheReport}
+										allowanceError={openOracleTokenAccessState.token1Approval.error}
+										allowanceLoading={openOracleTokenAccessState.token1Approval.loading}
+										approvedAmount={openOracleTokenAccessState.token1Approval.value}
+										disabled={!isConnected || !isMainnet}
+										guardMessage={disputeToken1ApprovalGuardMessage}
+										onApprove={amount => onApproveToken1(amount)}
+										pending={openOracleActiveAction === 'approveToken1'}
+										pendingLabel={openOracleCopy.formatApprovingTokenPendingLabel(token1Symbol)}
+										requiredAmount={disputeSubmission?.token1ContributionAmount}
+										resetKey={`dispute:token1:${token1Symbol}:${disputeSubmission?.token1ContributionAmount?.toString() ?? ''}:${openOracleForm.reportId}`}
+										tokenSymbol={token1Symbol}
+										tokenUnits={disputeSubmission?.token1Decimals ?? 18}
+									/>
+								</SectionBlock>
+								<SectionBlock headingLevel={4} title={openOracleCopy.formatTokenApprovalTitle(token2Symbol)} variant='embedded'>
+									<TokenApprovalControl
+										actionLabel={openOracleCopy.disputingTheReport}
+										allowanceError={openOracleTokenAccessState.token2Approval.error}
+										allowanceLoading={openOracleTokenAccessState.token2Approval.loading}
+										approvedAmount={openOracleTokenAccessState.token2Approval.value}
+										disabled={!isConnected || !isMainnet}
+										guardMessage={disputeToken2ApprovalGuardMessage}
+										onApprove={amount => onApproveToken2(amount)}
+										pending={openOracleActiveAction === 'approveToken2'}
+										pendingLabel={openOracleCopy.formatApprovingTokenPendingLabel(token2Symbol)}
+										requiredAmount={disputeSubmission?.token2ContributionAmount}
+										resetKey={`dispute:token2:${token2Symbol}:${disputeSubmission?.token2ContributionAmount?.toString() ?? ''}:${openOracleForm.reportId}`}
+										tokenSymbol={token2Symbol}
+										tokenUnits={disputeSubmission?.token2Decimals ?? 18}
+									/>
+								</SectionBlock>
+							</>
+						) : (
+							<p className='detail' id={disputeInputBlockMessageId}>
+								{disputeSubmission.inputBlockMessage.kind === 'hidden-loading' ? <LoadingText>{disputeSubmission.inputBlockMessage.message}</LoadingText> : disputeSubmission.inputBlockMessage.message}
+							</p>
+						)}
+						{!isMainnet || disputeSubmission?.blockMessage?.kind !== 'visible' || disputeSubmission.blockMessage === disputeSubmission.inputBlockMessage ? undefined : <p className='detail'>{disputeSubmission.blockMessage.message}</p>}
 						<div className='actions'>
 							<TransactionActionButton
 								idleLabel={openOracleCopy.disputeAndSwap}
@@ -324,6 +335,8 @@ export function renderSelectedReportActionSection({
 									disabled: !isConnected || !isMainnet || openOracleForm.reportId.trim() === '' || !disputeAvailability.canAct || disputeSubmission?.canSubmit === false,
 									reason: disputeActionDisabledReason,
 								}}
+								disabledReasonElementId={disputeActionReasonUsesInputBlockMessage ? disputeInputBlockMessageId : undefined}
+								showDisabledReason={!disputeActionReasonUsesInputBlockMessage}
 							/>
 						</div>
 					</div>
@@ -794,6 +807,7 @@ export function OpenOracleSection({
 	const [browseSearchText, setBrowseSearchText] = useState('')
 	const [browseStatusFilter, setBrowseStatusFilter] = useState<BrowseStatusFilter>('all')
 	const [selectedReportModal, setSelectedReportModal] = useState<SelectedReportModal>(undefined)
+	const [touchedCreateAddressFields, setTouchedCreateAddressFields] = useState<ReadonlySet<'token1' | 'token2'>>(new Set())
 	const changeSelectedReportModal = (modal: SelectedReportModal) => {
 		if (getSelectedWithdrawalBalance(selectedReportModal) !== undefined && modal !== selectedReportModal) onCancelOpenOracleWithdrawalBalanceCheck()
 		setSelectedReportModal(modal)
@@ -809,9 +823,29 @@ export function OpenOracleSection({
 		walletEthBalance: accountState.ethBalance,
 	})
 	const createValidationMessage = getOpenOracleCreateValidationMessage({ form: openOracleCreateForm })
-	const createAvailabilityMessage = createGuardMessage ?? createValidationMessage
+	const token1AddressValidationMessage = getOpenOracleCreateAddressValidationMessage(openOracleCreateForm.token1Address, 'base')
+	const token2AddressValidationMessage = getOpenOracleCreateAddressValidationMessage(openOracleCreateForm.token2Address, 'quote')
+	const token1AddressError = touchedCreateAddressFields.has('token1') ? token1AddressValidationMessage : undefined
+	const token2AddressError = touchedCreateAddressFields.has('token2') ? token2AddressValidationMessage : undefined
+	const markCreateAddressFieldTouched = (field: 'token1' | 'token2') => setTouchedCreateAddressFields(current => new Set([...current, field]))
+	let createVisibleValidationMessage = createValidationMessage
+	let createDisabledReasonElementId: string | undefined
+	if (createValidationMessage === token1AddressValidationMessage) {
+		createVisibleValidationMessage = token1AddressError
+		if (token1AddressError !== undefined) createDisabledReasonElementId = 'open-oracle-token1-address-error'
+	} else if (createValidationMessage === token2AddressValidationMessage) {
+		createVisibleValidationMessage = token2AddressError
+		if (token2AddressError !== undefined) createDisabledReasonElementId = 'open-oracle-token2-address-error'
+	}
+	const createAvailabilityMessage = createGuardMessage ?? createVisibleValidationMessage
+	if (createGuardMessage !== undefined) createDisabledReasonElementId = undefined
 	const effectiveOpenOracleReportDetails = getEffectiveOpenOracleReportDetails(openOracleReportDetails, chainCurrentTimestamp, chainCurrentBlockNumber)
 	const browseRequestKey = `${environmentRefreshKey}:${browsePageIndex}:${browseReloadKey}:${openOracleResult?.action ?? ''}:${openOracleResult?.hash ?? ''}`
+	const successfulCreateKey = openOracleResult?.action === 'createReportInstance' ? openOracleResult.hash : undefined
+	useEffect(() => {
+		if (successfulCreateKey === undefined) return
+		setTouchedCreateAddressFields(new Set())
+	}, [successfulCreateKey])
 	useEffect(() => {
 		let cancelled = false
 		const shouldLoadBrowse = view === 'browse' || openOracleResult?.action === 'createReportInstance'
@@ -966,14 +1000,44 @@ export function OpenOracleSection({
 						<div className='form-grid'>
 							<SectionBlock headingLevel={4} title={openOracleCopy.tokenPair} variant='embedded'>
 								<div className='field-row'>
-									<label className='field'>
-										<span>{openOracleCopy.token1Address}</span>
-										<FormInput value={openOracleCreateForm.token1Address} onInput={event => onOpenOracleCreateFormChange({ token1Address: event.currentTarget.value })} placeholder={commonCopy.hexValuePlaceholder} aria-label={openOracleCopy.token1Address} />
-									</label>
-									<label className='field'>
-										<span>{openOracleCopy.token2Address}</span>
-										<FormInput value={openOracleCreateForm.token2Address} onInput={event => onOpenOracleCreateFormChange({ token2Address: event.currentTarget.value })} placeholder={commonCopy.hexValuePlaceholder} aria-label={openOracleCopy.token2Address} />
-									</label>
+									<div className='field'>
+										<label>
+											<span>{openOracleCopy.token1Address}</span>
+											<FormInput
+												aria-describedby={token1AddressError === undefined ? undefined : 'open-oracle-token1-address-error'}
+												aria-label={openOracleCopy.token1Address}
+												invalid={token1AddressError !== undefined}
+												onBlur={() => markCreateAddressFieldTouched('token1')}
+												onInput={event => onOpenOracleCreateFormChange({ token1Address: event.currentTarget.value })}
+												placeholder={commonCopy.hexValuePlaceholder}
+												value={openOracleCreateForm.token1Address}
+											/>
+										</label>
+										{token1AddressError === undefined ? undefined : (
+											<p className='field-error' id='open-oracle-token1-address-error' role='alert'>
+												{token1AddressError}
+											</p>
+										)}
+									</div>
+									<div className='field'>
+										<label>
+											<span>{openOracleCopy.token2Address}</span>
+											<FormInput
+												aria-describedby={token2AddressError === undefined ? undefined : 'open-oracle-token2-address-error'}
+												aria-label={openOracleCopy.token2Address}
+												invalid={token2AddressError !== undefined}
+												onBlur={() => markCreateAddressFieldTouched('token2')}
+												onInput={event => onOpenOracleCreateFormChange({ token2Address: event.currentTarget.value })}
+												placeholder={commonCopy.hexValuePlaceholder}
+												value={openOracleCreateForm.token2Address}
+											/>
+										</label>
+										{token2AddressError === undefined ? undefined : (
+											<p className='field-error' id='open-oracle-token2-address-error' role='alert'>
+												{token2AddressError}
+											</p>
+										)}
+									</div>
 								</div>
 							</SectionBlock>
 
@@ -1082,7 +1146,9 @@ export function OpenOracleSection({
 									pendingLabel={openOracleCopy.creating}
 									onClick={onCreateOpenOracleGame}
 									pending={loadingOpenOracleCreate}
-									availability={{ disabled: !isMainnet || createAvailabilityMessage !== undefined, reason: createAvailabilityMessage }}
+									availability={{ disabled: !isMainnet || createGuardMessage !== undefined || createValidationMessage !== undefined, reason: createAvailabilityMessage }}
+									disabledReasonElementId={createDisabledReasonElementId}
+									showDisabledReason={createDisabledReasonElementId === undefined}
 								/>
 							</div>
 						</div>

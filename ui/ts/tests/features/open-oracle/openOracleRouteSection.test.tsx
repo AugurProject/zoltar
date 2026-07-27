@@ -2,7 +2,8 @@
 
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { fireEvent, within } from '../../testUtils/queries'
-import { h } from 'preact'
+import { h, render } from 'preact'
+import { act } from 'preact/test-utils'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { OpenOracleSection } from '../../../features/open-oracle/components/OpenOracleSection.js'
 import * as openOracleCopy from '../../../copy/openOracle.js'
@@ -481,7 +482,14 @@ describe('OpenOracleSection route create view', () => {
 	})
 
 	test('describes advanced create fields with user-facing units and input modes', async () => {
-		const renderedComponent = await renderIntoDocument(h(OpenOracleSection, createOpenOracleSectionProps()))
+		const renderedComponent = await renderIntoDocument(
+			h(
+				OpenOracleSection,
+				createOpenOracleSectionProps({
+					accountState: createAccountState({ ethBalance: 2_000n * ETH }),
+				}),
+			),
+		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
@@ -517,6 +525,23 @@ describe('OpenOracleSection route create view', () => {
 		expect(escalationHaltInput.getAttribute('inputmode')).toBe('decimal')
 		expect(disputeDelayInput.getAttribute('inputmode')).toBe('numeric')
 		expect(protocolFeeInput.getAttribute('inputmode')).toBe('decimal')
+		expect(document.body.textContent?.includes('Enter a valid base token address.')).toBe(false)
+		expect(document.body.textContent?.includes('Enter a valid quote token address.')).toBe(false)
+		await act(() => {
+			baseTokenAddressInput.dispatchEvent(new Event('blur'))
+			quoteTokenAddressInput.dispatchEvent(new Event('blur'))
+		})
+		expect(baseTokenAddressInput.getAttribute('aria-invalid')).toBe('true')
+		expect(quoteTokenAddressInput.getAttribute('aria-invalid')).toBe('true')
+		expect(baseTokenAddressInput.getAttribute('aria-describedby')).toBe('open-oracle-token1-address-error')
+		expect(quoteTokenAddressInput.getAttribute('aria-describedby')).toBe('open-oracle-token2-address-error')
+		const baseTokenAddressError = documentQueries.getByText('Enter a valid base token address.')
+		const quoteTokenAddressError = documentQueries.getByText('Enter a valid quote token address.')
+		expect(baseTokenAddressError.getAttribute('role')).toBe('alert')
+		expect(quoteTokenAddressError.getAttribute('role')).toBe('alert')
+		expect(document.body.textContent?.split('Enter a valid base token address.')).toHaveLength(2)
+		expect(document.body.textContent?.split('Enter a valid quote token address.')).toHaveLength(2)
+		expect(documentQueries.getByRole('button', { name: 'Create Standalone Oracle Report' }).getAttribute('aria-describedby')).toBe('open-oracle-token1-address-error')
 		expect(documentQueries.getByText('Base-token amount to report.')).not.toBeNull()
 		expect(documentQueries.getByText('Quote-token amount to report.')).not.toBeNull()
 		expect(documentQueries.getByText('ETH paid to the settler.')).not.toBeNull()
@@ -527,6 +552,47 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.getByText('Parameter Details')).not.toBeNull()
 		expect(documentQueries.queryByText('Delay in seconds after the initial report before disputes can begin.')).toBeNull()
 		expect(documentQueries.queryByText('Protocol fee charged during disputes, entered as a percentage.')).toBeNull()
+	})
+
+	test('clears address touch state when successful creation resets the form', async () => {
+		const renderedComponent = await renderIntoDocument(h(OpenOracleSection, createOpenOracleSectionProps()))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		const baseTokenAddressInput = documentQueries.getByLabelText('Base Token Address')
+		const quoteTokenAddressInput = documentQueries.getByLabelText('Quote Token Address')
+
+		await act(() => {
+			baseTokenAddressInput.dispatchEvent(new Event('blur'))
+			quoteTokenAddressInput.dispatchEvent(new Event('blur'))
+		})
+		expect(documentQueries.getByText('Enter a valid base token address.')).not.toBeNull()
+		expect(documentQueries.getByText('Enter a valid quote token address.')).not.toBeNull()
+
+		await act(() => {
+			render(
+				h(
+					OpenOracleSection,
+					createOpenOracleSectionProps({
+						loadBrowseReports: async () => ({ nextReportId: 0n, pageIndex: 0, pageSize: 25, reportCount: 0n, reports: [] }),
+						openOracleResult: {
+							action: 'createReportInstance',
+							hash: '0x1234000000000000000000000000000000000000000000000000000000000000',
+						},
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+
+		const resetBaseTokenAddressInput = documentQueries.getByLabelText('Base Token Address')
+		const resetQuoteTokenAddressInput = documentQueries.getByLabelText('Quote Token Address')
+		expect(resetBaseTokenAddressInput.hasAttribute('aria-invalid')).toBe(false)
+		expect(resetQuoteTokenAddressInput.hasAttribute('aria-invalid')).toBe(false)
+		expect(resetBaseTokenAddressInput.hasAttribute('aria-describedby')).toBe(false)
+		expect(resetQuoteTokenAddressInput.hasAttribute('aria-describedby')).toBe(false)
+		expect(document.getElementById('open-oracle-token1-address-error')).toBeNull()
+		expect(document.getElementById('open-oracle-token2-address-error')).toBeNull()
+		expect(document.body.querySelectorAll('.field-error')).toHaveLength(0)
 	})
 
 	test('uses the exact shared live settlement timestamp to switch a selected report into settle mode', async () => {

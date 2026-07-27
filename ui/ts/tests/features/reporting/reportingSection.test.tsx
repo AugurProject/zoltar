@@ -704,7 +704,48 @@ describe('ReportingSection', () => {
 
 		expectTransactionButtonDisabled(document.body, 'Settle Selected Yes Deposits')
 		expectTransactionButtonDisabled(document.body, 'Settle All Yes Deposits')
-		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
+		const reason = 'Switch to Ethereum mainnet.'
+		expect(document.body.textContent?.split(reason)).toHaveLength(2)
+		const settleSelectedButton = within(document.body).getByRole('button', { name: 'Settle Selected Yes Deposits' })
+		const settleAllButton = within(document.body).getByRole('button', { name: 'Settle All Yes Deposits' })
+		const reasonId = settleSelectedButton.getAttribute('aria-describedby')
+		expect(reasonId).not.toBeNull()
+		expect(settleAllButton.getAttribute('aria-describedby')).toBe(reasonId)
+		expect(document.getElementById(reasonId ?? '')?.textContent).toContain(reason)
+	})
+
+	test('shares one wallet recovery reason across escalation settlement actions', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					accountState: createAccountState({ address: undefined }),
+					mode: 'withdraw-only',
+					reportingDetails: createReportingDetails({
+						questionOutcome: 'yes',
+						settlementState: 'resolved',
+						parentWithdrawalEnabled: true,
+					}),
+					reportingForm: createReportingForm({
+						selectedWithdrawDepositIndexesByOutcome: createSelectedWithdrawDepositIndexesByOutcome({
+							yes: [0n],
+						}),
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const reason = 'Connect a wallet before settling escalation deposits.'
+		expectTransactionButtonDisabled(document.body, 'Settle Selected Yes Deposits', reason)
+		expectTransactionButtonDisabled(document.body, 'Settle All Yes Deposits', reason)
+		expect(document.body.textContent?.split(reason)).toHaveLength(2)
+		const settleSelectedButton = within(document.body).getByRole('button', { name: 'Settle Selected Yes Deposits' })
+		const settleAllButton = within(document.body).getByRole('button', { name: 'Settle All Yes Deposits' })
+		const reasonId = settleSelectedButton.getAttribute('aria-describedby')
+		expect(reasonId).not.toBeNull()
+		expect(settleAllButton.getAttribute('aria-describedby')).toBe(reasonId)
+		expect(document.getElementById(reasonId ?? '')?.textContent).toContain(reason)
 	})
 
 	test('shows a locked-settlement reason before withdrawals unlock in active reporting', async () => {
@@ -770,6 +811,50 @@ describe('ReportingSection', () => {
 		expect(withdrawCheckbox.disabled).toBe(true)
 		expectTransactionButtonDisabled(document.body, 'Settle Selected Yes Deposits', 'Loading escalation deposits.')
 		expectTransactionButtonDisabled(document.body, 'Settle All Yes Deposits', 'Loading escalation deposits.')
+	})
+
+	test('shares one loading reason across report and settlement controls while retained details refresh', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					loadingReportingDetails: true,
+					reportingDetails: createReportingDetails({
+						sides: [
+							{ balance: rep(1n), deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: rep(5n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [createDeposit()] },
+							{ balance: rep(8n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [createDeposit({ depositIndex: 1n })] },
+						],
+					}),
+					reportingForm: createReportingForm({
+						selectedOutcome: 'yes',
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const reportButton = documentQueries.getByRole('button', { name: 'Report Yes' })
+		const affectedButtons = [
+			reportButton,
+			documentQueries.getByRole('button', { name: 'Settle Selected Yes Deposits' }),
+			documentQueries.getByRole('button', { name: 'Settle All Yes Deposits' }),
+			documentQueries.getByRole('button', { name: 'Settle Selected No Deposits' }),
+			documentQueries.getByRole('button', { name: 'Settle All No Deposits' }),
+		]
+		const sharedReason = 'Loading reporting details.'
+		const sharedReasonId = reportButton.getAttribute('aria-describedby')
+
+		expect((documentQueries.getByRole('radio', { name: /^Yes/ }) as HTMLButtonElement).disabled).toBe(true)
+		expect((documentQueries.getByRole('textbox', { name: /^Contribution Amount \(REP\)/ }) as HTMLInputElement).disabled).toBe(true)
+		for (const button of affectedButtons) {
+			expect((button as HTMLButtonElement).disabled).toBe(true)
+			expect(button.getAttribute('aria-describedby')).toBe(sharedReasonId)
+		}
+		expect(sharedReasonId).not.toBeNull()
+		expect(document.body.textContent?.split(sharedReason)).toHaveLength(2)
+		expect(document.getElementById(sharedReasonId ?? '')?.textContent).toContain(sharedReason)
 	})
 
 	test('shows the time-left metric inside Escalation Metrics', async () => {
@@ -843,6 +928,40 @@ describe('ReportingSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getAllByText('Timed Out').length).toBeGreaterThan(0)
 		expect(document.body.textContent?.includes(formatDuration(0n))).toBe(true)
+	})
+
+	test('shares one refresh reason across settlement actions after escalation times out', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					currentTimestamp: 301n,
+					mode: 'withdraw-only',
+					reportingDetails: {
+						...createReportingDetails(),
+						currentTime: 150n,
+						escalationEndTime: 300n,
+					},
+					reportingForm: createReportingForm({
+						selectedWithdrawDepositIndexesByOutcome: createSelectedWithdrawDepositIndexesByOutcome({
+							yes: [0n],
+						}),
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const reason = 'Escalation has ended. Refresh reporting to view the finalized outcome before settling deposits.'
+		expectTransactionButtonDisabled(document.body, 'Settle Selected Yes Deposits', reason)
+		expectTransactionButtonDisabled(document.body, 'Settle All Yes Deposits', reason)
+		expect(document.body.textContent?.split(reason)).toHaveLength(2)
+		const settleSelectedButton = within(document.body).getByRole('button', { name: 'Settle Selected Yes Deposits' })
+		const settleAllButton = within(document.body).getByRole('button', { name: 'Settle All Yes Deposits' })
+		const reasonId = settleSelectedButton.getAttribute('aria-describedby')
+		expect(reasonId).not.toBeNull()
+		expect(settleAllButton.getAttribute('aria-describedby')).toBe(reasonId)
+		expect(document.getElementById(reasonId ?? '')?.textContent).toContain(reason)
 	})
 
 	test('shows the finalized outcome in the resolved banner', async () => {
@@ -934,10 +1053,15 @@ describe('ReportingSection', () => {
 		const lifecycleBanner = getClosestSection(documentQueries.getByRole('heading', { name: 'Fork Triggered' }))
 		const lifecycleBannerQueries = within(lifecycleBanner)
 		expect(documentQueries.getByRole('heading', { name: 'Fork Triggered' })).not.toBeNull()
-		expect(document.body.textContent?.includes('Escalation reached non-decision. Trigger Zoltar Fork here if this pool should fork the universe.')).toBe(true)
+		const forkTriggeredReason = 'Escalation reached non-decision. Trigger Zoltar Fork here if this pool should fork the universe.'
+		expect(document.body.textContent?.includes(forkTriggeredReason)).toBe(true)
+		expect(document.body.textContent?.split(forkTriggeredReason)).toHaveLength(2)
 		expect(lifecycleBannerQueries.queryByText('Trigger Zoltar Fork')).toBeNull()
 		expect(lifecycleBannerQueries.queryByText('Continue in Fork & Migration')).toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Report Yes', 'Escalation reached non-decision. Trigger Zoltar Fork here if this pool should fork the universe.')
+		expectTransactionButtonDisabled(document.body, 'Report Yes', forkTriggeredReason)
+		const reportButton = documentQueries.getByRole('button', { name: 'Report Yes' })
+		const reportDescription = document.getElementById(reportButton.getAttribute('aria-describedby') ?? '')
+		expect(reportDescription?.textContent).toContain(forkTriggeredReason)
 	})
 
 	test('shows Continue in Fork & Migration in the lifecycle banner after the fork has already been triggered', async () => {
@@ -1456,8 +1580,46 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes('Escalation deposits remain locked after non-decision. Trigger Zoltar Fork here if this pool should fork the universe.')).toBe(true)
-		expectTransactionButtonDisabled(document.body, 'Settle All Yes Deposits', 'Escalation deposits remain locked after non-decision. Trigger Zoltar Fork here if this pool should fork the universe.')
+		const settlementReason = 'Escalation deposits remain locked after non-decision. Trigger Zoltar Fork here if this pool should fork the universe.'
+		expect(document.body.textContent?.includes(settlementReason)).toBe(true)
+		expect(document.body.textContent?.split(settlementReason)).toHaveLength(2)
+		expectTransactionButtonDisabled(document.body, 'Settle All Yes Deposits', settlementReason)
+		const settleSelectedButton = within(document.body).getByRole('button', { name: 'Settle Selected Yes Deposits' })
+		const settleAllButton = within(document.body).getByRole('button', { name: 'Settle All Yes Deposits' })
+		expect(settleSelectedButton.getAttribute('aria-describedby')).toBe(settleAllButton.getAttribute('aria-describedby'))
+		expect(document.getElementById(settleAllButton.getAttribute('aria-describedby') ?? '')?.textContent).toContain(settlementReason)
+	})
+
+	test('shares one workflow lock reason across reporting and settlement actions', async () => {
+		const sharedLockReason = 'This parent pool is forked. Continue in Fork & Migration for migration and settlement.'
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					lockedReason: sharedLockReason,
+					reportingForm: createReportingForm({
+						selectedOutcome: 'yes',
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const reportButton = documentQueries.getByRole('button', { name: 'Report Yes' })
+		const settleSelectedButton = documentQueries.getByRole('button', { name: 'Settle Selected Yes Deposits' })
+		const settleAllButton = documentQueries.getByRole('button', { name: 'Settle All Yes Deposits' })
+		const sharedReasonId = reportButton.getAttribute('aria-describedby')
+		const sharedReason = document.getElementById(sharedReasonId ?? '')
+		const sharedActionRegion = reportButton.closest('.reporting-shared-action-region')
+
+		expect(document.body.textContent?.split(sharedLockReason)).toHaveLength(2)
+		expect(sharedReasonId).not.toBeNull()
+		expect(sharedReason).not.toBeNull()
+		expect(sharedActionRegion?.contains(sharedReason)).toBe(true)
+		expect(settleSelectedButton.getAttribute('aria-describedby')).toBe(sharedReasonId)
+		expect(settleAllButton.getAttribute('aria-describedby')).toBe(sharedReasonId)
+		expect(sharedReason?.textContent).toContain(sharedLockReason)
 	})
 
 	test('shows when the unresolved escalation migration window has closed', async () => {
