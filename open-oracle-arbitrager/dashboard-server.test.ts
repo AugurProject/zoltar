@@ -46,7 +46,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	let queuedWallet: Address | null | undefined
 	let savedWallet: Address | undefined
 	const server = startDashboardServer(0, {
-		getSnapshot: () => operatorSnapshot(state, strategy, submission, connectivity, { execute: false, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedWallet, savedWallet, wallet: undefined }),
+		getSnapshot: () => operatorSnapshot(state, strategy, submission, connectivity, { execute: false, executor: undefined, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedWallet, savedWallet, wallet: undefined }),
 		setPaused: paused => {
 			state.paused = paused
 		},
@@ -90,6 +90,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(pageSource).toContain('id="game-capital-value"')
 	expect(pageSource).toContain('id="strategy-fieldset" disabled')
 	expect(pageSource).toContain('id="submission-fieldset" disabled')
+	expect(pageSource).toContain('Public mode requires existing token approvals and submits one executor transaction.')
 	expect(pageSource).toContain('id="connectivity-fieldset" disabled')
 	expect(pageSource).toContain('id="signer-fieldset" disabled')
 	expect(pageSource).toContain('id="signer-status" class="muted" role="status" aria-live="polite"')

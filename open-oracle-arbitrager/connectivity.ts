@@ -122,28 +122,28 @@ export async function checkRpcEndpoint(url: string, expectedChainId: number, kin
 	}
 }
 
-async function assertPrivateRelayCapability(url: string, timeoutMilliseconds = 5_000) {
+async function assertRelayMethodCapability(url: string, method: 'eth_callBundle' | 'eth_sendBundle', timeoutMilliseconds = 5_000) {
 	const response = await fetch(url, {
-		body: JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'eth_sendPrivateTransaction', params: [] }),
+		body: JSON.stringify({ id: 1, jsonrpc: '2.0', method, params: [] }),
 		headers: { 'content-type': 'application/json' },
 		method: 'POST',
 		redirect: 'error',
 		signal: AbortSignal.timeout(timeoutMilliseconds),
 	})
-	if (!response.ok) throw new Error(`Endpoint did not prove eth_sendPrivateTransaction support: RPC returned HTTP ${response.status.toString()}`)
+	if (!response.ok) throw new Error(`Endpoint did not prove ${method} support: RPC returned HTTP ${response.status.toString()}`)
 	let value: unknown
 	try {
 		value = await response.json()
 	} catch (error) {
-		if (error instanceof SyntaxError) throw new Error(`Private relay capability check returned non-JSON HTTP ${response.status.toString()}`)
+		if (error instanceof SyntaxError) throw new Error(`Bundle relay capability check returned non-JSON HTTP ${response.status.toString()}`)
 		throw error
 	}
 	if (typeof value !== 'object' || value === null || Array.isArray(value) || !('jsonrpc' in value) || value.jsonrpc !== '2.0' || !('id' in value) || (value.id !== 1 && value.id !== null) || !('error' in value) || 'result' in value) {
-		throw new Error('Endpoint did not prove eth_sendPrivateTransaction support: expected one matching JSON-RPC 2.0 error from the intentionally invalid request')
+		throw new Error(`Endpoint did not prove ${method} support: expected one matching JSON-RPC 2.0 error from the intentionally invalid request`)
 	}
 	const error = value.error
 	if (typeof error !== 'object' || error === null || Array.isArray(error) || !('code' in error) || typeof error.code !== 'number' || !Number.isSafeInteger(error.code) || !('message' in error) || typeof error.message !== 'string' || error.message.trim() === '') {
-		throw new Error('Endpoint did not prove eth_sendPrivateTransaction support: malformed JSON-RPC error')
+		throw new Error(`Endpoint did not prove ${method} support: malformed JSON-RPC error`)
 	}
 	const code = error.code
 	const message = error.message.trim()
@@ -153,7 +153,7 @@ async function assertPrivateRelayCapability(url: string, timeoutMilliseconds = 5
 		normalizedMessage.includes('invalid params') || normalizedMessage.includes('invalid parameters') || normalizedMessage.includes('invalid argument') || normalizedMessage.includes('missing transaction') || normalizedMessage.includes('missing tx') || normalizedMessage.includes('invalid transaction')
 	const recognizedCapabilityEvidence = (code === -32_600 && authenticationEvidence) || (code === -32_602 && parameterEvidence)
 	if (!recognizedCapabilityEvidence) {
-		throw new Error(`Endpoint did not prove eth_sendPrivateTransaction support: RPC ${code.toString()}: ${message}`)
+		throw new Error(`Endpoint did not prove ${method} support: RPC ${code.toString()}: ${message}`)
 	}
 }
 
@@ -163,7 +163,8 @@ async function checkPrivateRelayEndpoint(url: string, expectedChainId: number): 
 	try {
 		chainId = await readRpcChainId(url)
 		if (chainId !== expectedChainId) throw new Error(`Expected chain ${expectedChainId.toString()}, received ${chainId.toString()}`)
-		await assertPrivateRelayCapability(url)
+		await assertRelayMethodCapability(url, 'eth_callBundle')
+		await assertRelayMethodCapability(url, 'eth_sendBundle')
 		return { chainId, checkedAt, error: undefined, kind: 'private-relay', status: 'healthy', target: endpointLabel(url) }
 	} catch (error) {
 		return {

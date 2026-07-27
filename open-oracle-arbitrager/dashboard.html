@@ -214,7 +214,7 @@
 							</label>
 						</div>
 						<div class="form-actions">
-							<span id="submission-status" class="muted" aria-live="polite">Public mode exposes transactions to the mempool. Private mode sends the same signed transaction to every configured relay.</span>
+							<span id="submission-status" class="muted" aria-live="polite">Public mode requires existing token approvals and submits one executor transaction. Private mode simulates and submits one ordered bundle with no allowed reverting hashes to every configured relay.</span>
 							<button class="button" type="submit">Apply submission</button>
 						</div>
 					</fieldset>
@@ -225,18 +225,18 @@
 				<div class="section-heading">
 					<div>
 						<p class="eyebrow">Market discovery</p>
-						<h2>REP and configured tokens</h2>
+						<h2>REP and observed tokens</h2>
 					</div>
 					<span id="token-count" class="muted">Discovering tokens</span>
 				</div>
 				<form id="tokens-form">
 					<fieldset id="tokens-fieldset" disabled>
 						<label>
-							<span>Token addresses · one per line</span>
+							<span>Execution token allowlist · one address per line</span>
 							<textarea id="token-addresses" rows="3" spellcheck="false"></textarea>
 						</label>
 						<div class="form-actions">
-							<span id="tokens-status" class="muted" aria-live="polite">REPv2 and existing Augur fork REP tokens are discovered automatically on mainnet.</span>
+							<span id="tokens-status" class="muted" aria-live="polite">The configured primary REP is allowlisted automatically; on mainnet, discovered Augur fork REP is too. Observed-only tokens stay monitor-only until explicitly added here.</span>
 							<button class="button" type="submit">Save token list</button>
 						</div>
 					</fieldset>
@@ -407,6 +407,7 @@
 
 		<footer>
 			<span id="oracle-address" class="mono">Oracle —</span>
+			<span id="executor-address" class="mono">Executor —</span>
 			<span id="chain-safety">Waiting for chain verification.</span>
 		</footer>
 		<script type="module" src="/dashboard.js"></script>

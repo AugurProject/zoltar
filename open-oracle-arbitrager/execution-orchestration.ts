@@ -1,6 +1,59 @@
 import type { Address, Hex, TransactionReceipt, TransactionReplacement } from '@zoltar/shared/ethereum'
 import type { ExecutionRecord, OpportunitySnapshot } from './operator-state.js'
 import { isSelfReport } from './strategy.js'
+import type { SubmissionMode } from './transaction-submission.js'
+
+export function executionTokenAllowed(allowedTokens: readonly Address[], token: Address) {
+	return allowedTokens.some(allowed => allowed.toLowerCase() === token.toLowerCase())
+}
+
+export function fundingTransactionPlan(mode: SubmissionMode, allowances: { token1: bigint; token2: bigint }, contributions: { token1: bigint; token2: bigint }) {
+	const transactions: ('approval-token1' | 'approval-token2' | 'execution' | 'reset-token1' | 'reset-token2')[] = []
+	if (allowances.token1 < contributions.token1) {
+		if (allowances.token1 !== 0n) transactions.push('reset-token1')
+		transactions.push('approval-token1')
+	}
+	if (allowances.token2 < contributions.token2) {
+		if (allowances.token2 !== 0n) transactions.push('reset-token2')
+		transactions.push('approval-token2')
+	}
+	if (mode === 'public' && transactions.length !== 0) throw new Error('Missing executor allowances require private bundle submission')
+	transactions.push('execution')
+	return transactions
+}
+
+export function privateBundleReceiptStatus(receipt: Pick<TransactionReceipt, 'blockNumber' | 'status'> | undefined, targetBlockNumber: bigint) {
+	if (receipt === undefined || receipt.blockNumber !== targetBlockNumber) return 'confirmation-unknown' as const
+	return receipt.status === 'success' ? ('confirmed' as const) : ('reverted' as const)
+}
+
+export async function simulateTrackedPrivateBundle<TTransaction, TResult>(transactions: readonly TTransaction[], simulate: () => Promise<TResult>, track: (transaction: TTransaction, status: 'submission-failed' | 'submitting', error: unknown | undefined) => void) {
+	for (const transaction of transactions) track(transaction, 'submitting', undefined)
+	try {
+		return await simulate()
+	} catch (error) {
+		for (const transaction of transactions) track(transaction, 'submission-failed', error)
+		throw error
+	}
+}
+
+export function trackPrivateBundleReceiptStatuses<TTransaction, TReceipt extends Pick<TransactionReceipt, 'blockNumber' | 'status'>>(
+	transactions: readonly TTransaction[],
+	receipts: readonly (TReceipt | undefined)[],
+	targetBlockNumber: bigint,
+	track: (transaction: TTransaction, status: 'confirmation-unknown' | 'confirmed' | 'reverted', receipt: TReceipt | undefined) => void,
+) {
+	if (transactions.length !== receipts.length) throw new Error('Private bundle transaction and receipt counts differ')
+	const statuses = receipts.map(receipt => privateBundleReceiptStatus(receipt, targetBlockNumber))
+	const complete = statuses.every(status => status === 'confirmed')
+	if (complete) return true
+	for (const [index, transaction] of transactions.entries()) {
+		const status = statuses[index]
+		if (status === undefined) throw new Error('Bundle receipt status order is incomplete')
+		track(transaction, status, receipts[index])
+	}
+	return false
+}
 
 export function executionPausedError() {
 	const error = new Error('Bot paused before the next transaction was broadcast')

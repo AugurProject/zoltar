@@ -124,6 +124,7 @@ export type OperatorSnapshot = {
 	blockNumber: string | undefined
 	blockTimestamp: string | undefined
 	execute: boolean
+	executor: Address | undefined
 	executionHistory: readonly ExecutionRecord[]
 	executionHistoryRecordCount: number
 	expectedChainId: number
@@ -411,7 +412,7 @@ export function operatorSnapshot(
 	strategy: MutableStrategy,
 	submission: SubmissionSettings,
 	connectivity: ConnectivitySettings,
-	fixed: { execute: boolean; expectedChainId: number; explorerUrl: string; network: NetworkName; openOracle: Address; queuedWallet: Address | null | undefined; savedWallet: Address | undefined; wallet: Address | undefined },
+	fixed: { execute: boolean; executor: Address | undefined; expectedChainId: number; explorerUrl: string; network: NetworkName; openOracle: Address; queuedWallet: Address | null | undefined; savedWallet: Address | undefined; wallet: Address | undefined },
 ): OperatorSnapshot {
 	return {
 		activeReportCount: state.activeReportCount,
@@ -419,6 +420,7 @@ export function operatorSnapshot(
 		blockNumber: state.blockNumber,
 		blockTimestamp: state.blockTimestamp,
 		execute: fixed.execute,
+		executor: fixed.executor,
 		executionHistory: state.executionHistory.slice(0, 500),
 		executionHistoryRecordCount: state.executionHistory.length,
 		expectedChainId: fixed.expectedChainId,

@@ -129,6 +129,16 @@ export const erc20Abi = [
 	},
 	{
 		type: 'function',
+		name: 'allowance',
+		stateMutability: 'view',
+		inputs: [
+			{ name: 'owner', type: 'address' },
+			{ name: 'spender', type: 'address' },
+		],
+		outputs: [{ name: '', type: 'uint256' }],
+	},
+	{
+		type: 'function',
 		name: 'approve',
 		stateMutability: 'nonpayable',
 		inputs: [
@@ -178,6 +188,32 @@ const helperComponents = [
 	{ name: 'creator', type: 'address' },
 	{ name: 'blockTimestamp', type: 'uint256' },
 	{ name: 'blockNumber', type: 'uint256' },
+] as const
+
+export const openOracleArbitrageExecutorAbi = [
+	{
+		type: 'function',
+		name: 'dispute',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{ name: 'openOracle', type: 'address' },
+			{ name: 'newAmount1', type: 'uint128' },
+			{ name: 'newAmount2', type: 'uint128' },
+			{ name: 'game', type: 'tuple', components: gameComponents },
+			{ name: 'helper', type: 'tuple', components: helperComponents },
+			{
+				name: 'timing',
+				type: 'tuple',
+				components: [
+					{ name: 'blockNumber', type: 'uint256' },
+					{ name: 'blockNumberBound', type: 'uint256' },
+					{ name: 'blockTimestamp', type: 'uint256' },
+					{ name: 'blockTimestampBound', type: 'uint256' },
+				],
+			},
+		],
+		outputs: [],
+	},
 ] as const
 
 export const openOracleAbi = [

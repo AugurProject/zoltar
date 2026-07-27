@@ -565,6 +565,7 @@ function render(snapshot: OperatorSnapshot) {
 	setText('game-capital-value', exactAmount(snapshot.gameCapital.totalEthWeth, 'ETH'))
 	setText('game-capital-detail', `${exactAmount(snapshot.gameCapital.eth, 'ETH')} · ${exactAmount(snapshot.gameCapital.weth, 'WETH')} in observed active games`)
 	setText('oracle-address', `Oracle ${snapshot.openOracle}`)
+	setText('executor-address', snapshot.executor === undefined ? 'Executor not configured' : `Executor ${snapshot.executor}`)
 	setText('network-value', `${snapshot.network} · chain ${snapshot.expectedChainId.toString()}`)
 	setText('chain-safety', `Expected and continuously verifies ${snapshot.network} chain ${snapshot.expectedChainId.toString()}.`)
 	renderSignerStatus(snapshot)

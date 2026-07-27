@@ -16,14 +16,17 @@ restart settings, or the local dashboard when `--ui` is enabled.
 - An RPC endpoint for Ethereum mainnet or Sepolia. An archive-capable endpoint is recommended when
   `--lookback-blocks` reaches beyond the provider's retained log history.
 - The deployed OpenOracle contract address.
+- A deployed `OpenOracleArbitrageExecutor`. Deploy the stateless executor once per
+  network with `./open-oracle-arbitrager/deploy-executor`, then pass the printed
+  address through `--executor-address` whenever execution mode is enabled.
 - For execution, a dedicated key on the selected network with:
-  - ETH for approvals and dispute gas.
+  - ETH for the atomic approval/dispute bundle.
   - WETH for the token-1 contribution shown in the dashboard.
   - The configured token (REPv2, fork REP, or another ERC-20) for the token-2
     contribution shown in the dashboard.
-- A choice of public-mempool or private-relay delivery. Private delivery is
-  recommended to reduce exposure of the quote and dispute to front-running and
-  adverse inclusion.
+- A Flashbots-compatible bundle relay is recommended. Public-mempool delivery is
+  available only when the executor already has sufficient token allowances, so the
+  bot can send one transaction without exposing standalone approvals.
 - Operational procedures for settlement, OpenOracle withdrawals, and inventory
   rebalancing. This process submits disputes; it does not settle games or perform a
   separate Uniswap hedge.
@@ -122,13 +125,23 @@ combine rows and profit totals.
 
 ## Execute disputes
 
-Start an inventory-funded execution process:
+Deploy the stateless executor from the same selected network:
+
+```bash
+PRIVATE_KEY=0xYourDeploymentPrivateKey \
+ETH_RPC_URL=https://your-private-mainnet-rpc.example \
+  ./open-oracle-arbitrager/deploy-executor --network=mainnet
+```
+
+Verify the deployment address independently, then start an inventory-funded
+execution process:
 
 ```bash
 PRIVATE_KEY=0xYourDedicatedPrivateKey \
 ETH_RPC_URL=https://your-private-mainnet-rpc.example \
   ./open-oracle-arbitrager/run \
   --open-oracle=0xYourOpenOracle \
+  --executor-address=0xYourExecutor \
   --execute \
   --ui
 ```
@@ -141,14 +154,15 @@ scan or confirmation wait, and clearing a signer cannot cancel a transaction alr
 broadcast. Restarting the command is required to change between dry-run and
 execution.
 
-Public mempool delivery is the default. To send the same signed transaction to
-multiple private relays instead:
+Private bundle delivery is the default. To simulate and send the ordered approvals
+and dispute to multiple bundle relays:
 
 ```bash
 PRIVATE_KEY=0xYourDedicatedPrivateKey \
 ETH_RPC_URL=https://your-mainnet-rpc.example \
   ./open-oracle-arbitrager/run \
   --open-oracle=0xYourOpenOracle \
+  --executor-address=0xYourExecutor \
   --execute \
   --submission-mode=private \
   --relay-url=https://relay.flashbots.net \
@@ -158,15 +172,12 @@ ETH_RPC_URL=https://your-mainnet-rpc.example \
 
 Choose **Public mempool** or **Private relays** in the dashboard to change delivery
 for the next scan. Private mode requires at least one relay and supports up to eight.
-Startup and dashboard updates probe every private relay with `eth_chainId`, then send
-an intentionally invalid, empty `eth_sendPrivateTransaction` request. A compatible
-relay returns a method-specific authentication or parameter error; a same-chain
-ordinary RPC returning an unsupported-method error is rejected and shown as a
-failed relay. Ambiguous, successful, or malformed probe responses are rejected too:
-the relay must provide positive evidence that it handles the private-transaction
-method through a matching JSON-RPC 2.0 error with a recognized authentication or
-parameter-error code. Non-successful HTTP responses are rejected regardless of
-their body.
+Startup and dashboard updates probe every private relay with `eth_chainId`, then
+send intentionally invalid `eth_callBundle` and `eth_sendBundle` requests. A
+compatible relay returns method-specific authentication or parameter errors; a
+same-chain ordinary RPC returning unsupported-method errors is rejected and shown
+as a failed relay. Ambiguous, successful, or malformed probe responses are rejected
+too. Non-successful HTTP responses are rejected regardless of their body.
 No transaction is signed or submitted by this capability check. The configuration
 is also rejected when a relay is unreachable or reports the wrong selected network.
 Relay URLs changed in the dashboard are saved in the network-specific operator
@@ -177,22 +188,35 @@ credentials, query parameters, fragments, and redirects are rejected.
 
 Before each dispute, the bot:
 
-1. Checks that the game is WETH plus a discovered/configured token and inside its
-   dispute window.
+1. Checks that the game is WETH plus a usable token and inside its dispute window.
+   In execute mode, token 2 must be an Augur-discovered REP or an address explicitly
+   configured by the operator; a permissionlessly observed token is monitor-only.
 2. Finds an active Uniswap V3 pool and rejects excessive spot/TWAP deviation.
 3. Uses exact-input and exact-output QuoterV2 calls to model both directions.
 4. Derives the same replacement swap side as the OpenOracle contract.
 5. Calculates the exact WETH and token contributions and checks wallet inventory.
 6. Applies the absolute-profit and basis-point thresholds.
-7. Approves only the prepared contribution amounts.
-8. Refreshes pool state, quotes, gas, deadline, inventory requirements, and the
-   OpenOracle state hash.
-9. Estimates gas, fetches the pending nonce, constructs and signs one canonical
-   EIP-1559 transaction.
-10. Sends that identical signed payload either to every configured public RPC or
-    every configured private relay.
-11. Tracks submission targets and confirmation, waits for a successful receipt, and
-    records the mined transaction and ETH profitability calculation locally.
+7. Refreshes pool state, quotes, gas, deadline, inventory requirements, and the
+   OpenOracle state hash before signing any transaction.
+8. Reads the executor allowances and creates the minimum ordered transaction list:
+   optional zero-reset/approval transactions followed by one executor dispute.
+9. In private mode, signs consecutive nonces, simulates the entire ordered list with
+   `eth_callBundle` on every configured relay, and re-applies the profit threshold to
+   the largest simulated gas usage.
+10. Sends the all-or-nothing target-block bundle to every configured relay with
+    `eth_sendBundle`. No reverting transaction hashes are allowed.
+11. In public mode, refuses execution if any approval is missing; otherwise it
+    simulates and broadcasts the single executor transaction.
+12. Verifies every bundle receipt was successful in the target block and records
+    total mined gas and ETH profitability.
+
+The executor pulls the calculated contribution, verifies exact balance deltas into
+itself and OpenOracle, calls `dispute` with the wallet as the recorded disputer,
+clears its OpenOracle allowances, and requires its ending token balances to equal
+their starting balances. Fee-on-transfer and other non-exact balance changes during
+the call therefore revert the whole execution. A later rebase is not detectable by
+the executor and can invalidate OpenOracle's nominal collateral accounting; only
+reviewed, non-rebasing exact-transfer tokens should be explicitly allowlisted.
 
 Reports already owned by the execution account are skipped because OpenOracle
 self-disputes use different accounting. At most one dispute is executed per poll so
@@ -207,14 +231,15 @@ and `Required token` for each evaluated report.
 
 The execution account needs:
 
-- `ETH balance >= approval gas + dispute gas + a replacement/repricing buffer`.
+- `ETH balance >=` the sum of every signed transaction's gas limit multiplied by its
+  fee cap, plus an operational buffer.
 - `WETH balance >= required WETH` for the selected report.
 - `Token balance >= required token` for the selected report.
 
 The modeled gas allowance used during opportunity selection is 600,000 gas. This is
-not a wallet reserve limit; keep additional ETH for two ERC-20 approvals, transaction
-replacement, settlement, and withdrawals. Capital contributed to a report can remain
-locked through later dispute rounds.
+not a wallet reserve limit; keep additional ETH for ERC-20 approvals, later
+settlement, and withdrawals. Capital contributed to a report can remain locked
+through later dispute rounds.
 
 The dashboard balance calculation reports:
 
@@ -314,7 +339,7 @@ Startup resolves values in this order:
 | Read RPC | `--rpc-url`; `ETH_RPC_URL`; saved read RPC; network default |
 | Public submission RPCs | Repeated `--public-rpc-url`; saved list; selected read RPC |
 | Active signer | `PRIVATE_KEY`; saved restart signer; no signer |
-| Submission mode | `--submission-mode`; saved mode; `public` |
+| Submission mode | `--submission-mode`; saved mode; `private` |
 | Relay URLs | Repeated `--relay-url`; saved list; Flashbots relay |
 | Token list | Repeated `--token-address`; saved list; canonical network REP |
 | Pause state | Saved value; `false` |
@@ -329,10 +354,10 @@ environment override for a non-secret setting becomes the saved restart value af
 any dashboard save. `PRIVATE_KEY` is the exception: it is saved only through the
 explicit plaintext opt-in.
 
-Pause is checked between execution stages and again immediately before each approval
-or dispute submission. A submission already started may still finish. Pause cannot
-interrupt confirmation or cancel a transaction already sent to Ethereum; the
-dashboard explicitly keeps those distinctions visible.
+Pause is checked immediately before bundle or public submission. A submission
+already started may still finish. Pause cannot interrupt confirmation or cancel a
+transaction already sent to Ethereum; the dashboard explicitly keeps those
+distinctions visible.
 
 ## Profit and history semantics
 
@@ -349,13 +374,15 @@ Successful dispute submissions are appended to
 
 The history file is created with owner-only permissions when possible and is ignored
 by Git at its default path. Each record contains the report, pool, direction,
-contributed inventory, mined transaction hash, block, actual transaction gas,
+contributed inventory, mined executor transaction hash, block, actual transaction gas,
 modeled net profit, profit before gas, and tracked net profit in ETH. Actual gas
-includes the approval transactions and confirmed dispute for that successful
-recorded execution. Gas from an attempt that aborts after an approval but before a
-successful dispute is shown in the in-memory transaction tracker but is not included
-in confirmed-history totals; reconcile all attempt costs against the wallet's
-on-chain transactions.
+includes every approval and executor transaction in a confirmed private bundle.
+Private submissions request atomic inclusion and provide no allowed reverting
+hashes, so a compliant relay/builder omits the entire bundle when a step would
+revert. An unincluded bundle consumes no on-chain gas. An anomalous partial,
+independent, or reverted inclusion can consume gas; the bot records those receipts
+in its in-memory transaction lifecycle but does not create confirmed execution
+history. Public mode broadcasts only one executor transaction.
 
 Execution startup verifies that the history destination is writable. If persistence
 later fails after a confirmed dispute, the record remains visible in memory, further
@@ -392,11 +419,13 @@ currently include:
 | REPv2_No_1 | `0x2F4005456c2F098358213f01DbE34abDAa2989A4` |
 
 These are discovered from contract state rather than trusted as a hardcoded trading
-list. Tokens present in observed OpenOracle games and addresses entered in the
-dashboard or repeated `--token-address=0x...` flags are also monitored. The primary
-`--rep-address` remains the token used in the top-level REP portfolio summary, while
-each configured token can be evaluated and funded independently for an eligible
-WETH/token game.
+list. Tokens present only in observed OpenOracle games are monitored and shown with
+their pools, but cannot trigger execution. Augur-discovered REP tokens and addresses
+explicitly entered in the dashboard or repeated with `--token-address=0x...` form
+the execution allowlist. Explicitly adding a token is a security decision: the
+atomic executor still enforces exact transfers, but it cannot establish the token's
+issuer, economic value, or pool legitimacy. The primary `--rep-address` remains the
+token used in the top-level REP portfolio summary.
 
 Market discovery checks all Uniswap V3 fee tiers (`0.01%`, `0.05%`, `0.3%`, and
 `1%`) plus mainnet Uniswap V2 and SushiSwap V2 WETH pairs. For V3, “Liquidity” is
@@ -416,26 +445,28 @@ path. Keep files network-specific.
 ## Transaction delivery and tracking
 
 Public mode calls `eth_sendRawTransaction` concurrently on every configured public
-RPC, exposing the identical signed transaction to the public mempool. At least one
-RPC must return the locally computed transaction hash. Private mode calls
-`eth_sendPrivateTransaction` on every configured relay, authenticating each JSON-RPC
-body with `X-Flashbots-Signature` using the execution key. At least one private relay
-must accept the exact expected transaction hash or submission fails closed.
-Configured endpoints must implement the
-[Flashbots private-transaction RPC](https://docs.flashbots.net/flashbots-auction/advanced/rpc-endpoint#eth_sendprivatetransaction)
+RPC, exposing the single signed executor transaction to the public mempool. It is
+disabled for a candidate whenever any allowance reset or approval is required. At
+least one RPC must return the locally computed transaction hash.
+
+Private mode signs approvals and the executor call at consecutive nonces, calls
+`eth_callBundle` on every configured relay, and then fans the same ordered
+target-block transaction list out through `eth_sendBundle`. The payload omits
+`revertingTxHashes`, so any reverted transaction invalidates the complete bundle.
+At least one relay must accept the bundle or submission fails closed. Configured
+endpoints must implement the
+[Flashbots bundle RPC](https://docs.flashbots.net/flashbots-auction/advanced/rpc-endpoint)
 and authentication format.
 
-The transaction tracker records approvals and disputes as `submitting`, `pending`,
-`confirmation unknown`, `confirmed`, `reverted`, or `submission failed`. It shows
-which targets accepted or rejected the payload. Receipt timeouts keep execution
-blocked. Private approval payloads can refresh their 25-block inclusion window.
-Dispute payloads are capped at the final block accepted by their embedded OpenOracle
-quote and are never resubmitted after that block. Repriced replacements are followed
-from the locally signed sender and nonce even while the private transaction is not
-visible to the public RPC; the mined replacement hash becomes the tracked and
-historical hash. Active transaction lifecycle rows are kept in process memory and
-reset on restart; confirmed dispute history and its ETH profit totals are persisted
-in the configured history file.
+The transaction tracker records each approval and executor call as `submitting`,
+`pending`, `confirmation unknown`, `confirmed`, `reverted`, or `submission failed`.
+It shows which targets accepted or rejected the payload. A private bundle targets
+only the next block and is not resubmitted from a stale quote. After that target
+block, every signed transaction must have a successful receipt in that block or the
+attempt fails and a later scan must build a new quote and bundle. Public
+single-transaction confirmation retains replacement tracking. Active lifecycle rows
+are kept in process memory and reset on restart; confirmed dispute history and its
+ETH profit totals are persisted in the configured history file.
 
 ## Adjust the strategy
 
@@ -469,41 +500,51 @@ Other startup-only options:
 | `--weth-address` | Network WETH | Override WETH for a custom test deployment. |
 | `--uniswap-factory` | Network Uniswap V3 factory | Override the factory for a custom test deployment. |
 | `--uniswap-quoter` | Network QuoterV2 | Override the quoter for a custom test deployment. |
+| `--executor-address` | none | Deployed atomic executor. Required in execution mode; startup verifies contract code exists on the selected chain. |
 | `--lookback-blocks` | `50000` | Initial event-log search range. Choose a start range that covers every potentially active report. |
 | `--ui-port` | `4173` | Local dashboard port. |
 | `--history-file` | Network-specific JSONL | Persistent confirmed-submission history. |
 | `--settings-file` | Network-specific JSON | Persistent dashboard strategy, endpoint, delivery, pause, and opt-in signer settings. |
 | `--once` | off | Run one scan and exit. Cannot be combined with `--ui`. |
-| `--execute` | off | Enable guarded approval and dispute submission. Requires `PRIVATE_KEY`, a saved restart signer, or `--ui` so a signer can be supplied locally. |
-| `--submission-mode` | `public` | `public` submits to the RPC mempool; `private` fans out to configured relays. Adjustable in the dashboard. |
-| `--relay-url` | `https://relay.flashbots.net` | Private relay endpoint. Repeat the flag for up to eight relays; adjustable in the dashboard. |
+| `--execute` | off | Enable guarded bundle/executor submission. Requires an executor address and `PRIVATE_KEY`, a saved restart signer, or `--ui` so a signer can be supplied locally. |
+| `--submission-mode` | `private` | `private` simulates/fans out atomic bundles; `public` submits one already-authorized executor call. Adjustable in the dashboard. |
+| `--relay-url` | `https://relay.flashbots.net` | Flashbots-compatible bundle relay. Repeat the flag for up to eight relays; adjustable in the dashboard. |
 
 ## Operational limitations
 
-- Ethereum mainnet and Sepolia WETH/token games using standard Uniswap V3 fee tiers are
-  supported. Sepolia REP and OpenOracle identities are operator-supplied and are not
-  authenticated against a deployment registry.
+- Ethereum mainnet and Sepolia WETH/token games using standard Uniswap V3 fee tiers
+  and exact-transfer ERC-20s are supported. Sepolia REP, OpenOracle, and executor
+  identities are operator-supplied and are not authenticated against a deployment
+  registry beyond selected-chain code checks.
 - Quoter calls and TWAP checks are filters, not guarantees of inclusion or realized
   execution.
+- The configured read RPC remains a trusted input for report state, pool state,
+  quotes, balances, nonces, and confirmation. Public-submission RPC fanout and relay
+  chain checks do not provide read quorum. A compromised or faulty read RPC can
+  therefore corrupt the bot's economic decision; operate a trusted endpoint and
+  monitor it independently.
 - The bot does not use a flash swap, settle reports, withdraw OpenOracle balances, or
   rebalance inventory.
 - Private delivery reduces public-mempool exposure but does not guarantee
   confidentiality, inclusion, fair ordering, or relay/builder behavior. Configuring
   multiple relays shares the signed payload with every listed operator.
-- Public RPCs offer no standard per-transaction inclusion deadline. A public dispute
-  that remains pending after its embedded one-block quote window can still be mined,
-  revert the contract timing check, and spend gas. Private relay mode caps the relay
-  inclusion request to that same on-chain window.
+- Public RPCs offer no standard per-transaction inclusion deadline. A public
+  executor call that remains pending after its embedded one-block quote window can
+  still be mined, revert the contract timing check, and spend gas. Private bundles
+  target exactly the next block.
 - A 12-block event overlap is replayed whenever a new head is processed to tolerate short
   reorganizations. Operators still need independent alerting for deeper reorgs and
   RPC disagreement.
 - Continuous mode retries transient poll failures. The dashboard exposes the latest
   error, but production operation still requires external process supervision and
   alerts.
-- After any transaction broadcast, receipt timeouts and transient RPC failures keep
-  the execution loop blocked while confirmation is retried. Repriced replacements
-  are followed and recorded under the mined hash; cancellations and unrelated
-  replacements fail definitively.
+- After a public transaction broadcast, receipt timeouts and transient RPC failures
+  keep the execution loop blocked while confirmation is retried. Repriced public
+  replacements are followed and recorded under the mined hash; cancellations and
+  unrelated replacements fail definitively. A private bundle instead targets one
+  block and receives one complete-inclusion check after that block: missing or
+  unsuccessful receipts mark the attempt as confirmation unknown or failed, and a
+  later scan must build a new quote and bundle.
 - A process restart does not recover or resume a broadcast but unconfirmed
   transaction. Reconcile the execution account nonce and transaction status before
   restarting execution mode.

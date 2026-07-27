@@ -80,11 +80,38 @@ describe('startup configuration', () => {
 		['--lookback-blocks=-1', 'lookback-blocks must be a non-negative integer'],
 		['--submission-mode=unknown', 'Submission mode must be public or private'],
 		['--relay-url=http://relay.example', 'Relay URL must use HTTPS'],
+		['--execute', '--execute requires --executor-address'],
 	])('rejects %s before starting RPC activity', async (argument, message) => {
 		const result = await invalidStartup(argument)
 		expect(result.exitCode).toBe(1)
 		expect(result.output).toContain(message)
 		expect(result.output).not.toContain('mode=')
+	})
+
+	test('defaults to private bundle submission', async () => {
+		const directory = await temporaryDirectory()
+		const dashboardPort = unusedPort()
+		const rpc = Bun.serve({
+			hostname: '127.0.0.1',
+			port: 0,
+			async fetch(request) {
+				const value = (await request.json()) as { id: unknown; method: string }
+				const result = value.method === 'eth_chainId' || value.method === 'eth_blockNumber' ? '0x1' : '0x'
+				return Response.json({ id: value.id, jsonrpc: '2.0', result })
+			},
+		})
+		servers.push(rpc)
+		if (rpc.port === undefined) throw new Error('Mock RPC did not expose a port')
+		const environment = { ...process.env }
+		delete environment['PRIVATE_KEY']
+		const child = Bun.spawn([executable, oracle, '--ui', `--ui-port=${dashboardPort.toString()}`, '--lookback-blocks=0', `--rpc-url=http://127.0.0.1:${rpc.port.toString()}`, `--settings-file=${join(directory, 'settings.json')}`], {
+			env: environment,
+			stderr: 'pipe',
+			stdout: 'pipe',
+		})
+		children.push(child)
+		const snapshot = await waitForSnapshot(`http://127.0.0.1:${dashboardPort.toString()}`)
+		expect(snapshot).toMatchObject({ submission: { mode: 'private', relayUrls: ['https://relay.flashbots.net/'] } })
 	})
 
 	test('restores saved settings, preserves an overridden restart key, serializes mutations, and rejects failed writes', async () => {

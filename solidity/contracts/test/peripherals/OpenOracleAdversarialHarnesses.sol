@@ -3,6 +3,8 @@ pragma solidity 0.8.35;
 
 import { IERC20 } from '../../IERC20.sol';
 import { IERC1155Receiver } from '../../peripherals/interfaces/IERC1155Receiver.sol';
+import { IOpenOracleDispute } from '../../peripherals/OpenOracleArbitrageExecutor.sol';
+import { SafeERC20Ops } from '../../SafeERC20Ops.sol';
 
 interface IOpenOracleAdversarialTarget {
 	function getETHProtocolFees() external returns (uint256);
@@ -59,13 +61,58 @@ contract OpenOracleTestToken is IERC20 {
 		return true;
 	}
 
-	function _transfer(address sender, address recipient, uint256 amount) internal {
+	function _transfer(address sender, address recipient, uint256 amount) internal virtual {
 		require(recipient != address(0), 'OpenOracle test token recipient is zero');
 		uint256 senderBalance = balanceOf[sender];
 		require(senderBalance >= amount, 'OpenOracle test token balance too low');
 		balanceOf[sender] = senderBalance - amount;
 		balanceOf[recipient] += amount;
 		emit Transfer(sender, recipient, amount);
+	}
+}
+
+contract OpenOracleFeeToken is OpenOracleTestToken {
+	uint256 private constant BPS = 10_000;
+	uint256 public immutable feeBps;
+
+	constructor(uint256 transferFeeBps) OpenOracleTestToken('Fee Token', 'FEE') {
+		require(transferFeeBps < BPS, 'OpenOracle fee token fee too high');
+		feeBps = transferFeeBps;
+	}
+
+	function _transfer(address sender, address recipient, uint256 amount) internal override {
+		require(recipient != address(0), 'OpenOracle fee token recipient is zero');
+		uint256 senderBalance = balanceOf[sender];
+		require(senderBalance >= amount, 'OpenOracle fee token balance too low');
+		uint256 fee = (amount * feeBps) / BPS;
+		balanceOf[sender] = senderBalance - amount;
+		balanceOf[recipient] += amount - fee;
+		totalSupply -= fee;
+		emit Transfer(sender, recipient, amount - fee);
+		emit Transfer(sender, address(0), fee);
+	}
+}
+
+contract OpenOracleArbitrageExecutorTarget {
+	using SafeERC20Ops for IERC20;
+
+	function dispute(
+		uint256,
+		uint128,
+		uint128,
+		address,
+		bool,
+		bool,
+		IOpenOracleDispute.OracleGame calldata params,
+		IOpenOracleDispute.PreimageHelper calldata,
+		IOpenOracleDispute.TimingBoundaries calldata
+	) external payable {
+		IERC20 token1 = IERC20(params.token1);
+		IERC20 token2 = IERC20(params.token2);
+		uint256 allowance1 = token1.allowance(msg.sender, address(this));
+		uint256 allowance2 = token2.allowance(msg.sender, address(this));
+		if (allowance1 != 0) token1.safeTransferFrom(msg.sender, address(this), allowance1);
+		if (allowance2 != 0) token2.safeTransferFrom(msg.sender, address(this), allowance2);
 	}
 }
 

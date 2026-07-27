@@ -3,14 +3,19 @@ import type { Address, Hex, TransactionReceipt, TransactionReplacement } from '@
 import {
 	attemptConfirmationRecovery,
 	executionFailureDecision,
+	executionTokenAllowed,
+	fundingTransactionPlan,
 	flushExecutionHistory,
 	guardedTransactionSubmission,
 	opportunityDecision,
+	privateBundleReceiptStatus,
 	recordConfirmedExecution,
 	retryPrivateSubmissionWithinWindow,
 	runFundedExecution,
 	selectBestExecution,
 	signAndSubmitOpenOracleDispute,
+	simulateTrackedPrivateBundle,
+	trackPrivateBundleReceiptStatuses,
 	waitForResolvedTransaction,
 } from './execution-orchestration.js'
 import type { ExecutionRecord } from './operator-state.js'
@@ -64,6 +69,49 @@ function replacement(reason: TransactionReplacement['reason']): TransactionRepla
 }
 
 describe('funded execution orchestration', () => {
+	test('does not promote permissionlessly observed report tokens into the execution allowlist', () => {
+		const configured = ['0x0000000000000000000000000000000000000010' as Address]
+		const observed = '0x0000000000000000000000000000000000000020' as Address
+		expect(executionTokenAllowed(configured, configured[0] as Address)).toBe(true)
+		expect(executionTokenAllowed(configured, observed)).toBe(false)
+	})
+
+	test('requires a private bundle when either exact executor allowance is missing', () => {
+		expect(fundingTransactionPlan('private', { token1: 0n, token2: 4n }, { token1: 3n, token2: 4n })).toEqual(['approval-token1', 'execution'])
+		expect(fundingTransactionPlan('private', { token1: 1n, token2: 4n }, { token1: 3n, token2: 4n })).toEqual(['reset-token1', 'approval-token1', 'execution'])
+		expect(fundingTransactionPlan('private', { token1: 3n, token2: 4n }, { token1: 3n, token2: 4n })).toEqual(['execution'])
+		expect(() => fundingTransactionPlan('public', { token1: 0n, token2: 4n }, { token1: 3n, token2: 4n })).toThrow('private bundle')
+	})
+
+	test('classifies every private bundle receipt before aborting anomalous inclusion', () => {
+		expect(privateBundleReceiptStatus(undefined, 101n)).toBe('confirmation-unknown')
+		expect(privateBundleReceiptStatus(transactionReceipt('reverted'), 101n)).toBe('reverted')
+		expect(privateBundleReceiptStatus({ ...transactionReceipt(), blockNumber: 102n }, 101n)).toBe('confirmation-unknown')
+		expect(privateBundleReceiptStatus(transactionReceipt(), 101n)).toBe('confirmed')
+	})
+
+	test('records every signed bundle step before simulation and terminally fails every step on rejection', async () => {
+		const transactions = ['approval', 'dispute']
+		const transitions: string[] = []
+		await expect(
+			simulateTrackedPrivateBundle(
+				transactions,
+				() => Promise.reject(new Error('relay simulation rejected')),
+				(transaction, status) => transitions.push(`${transaction}:${status}`),
+			),
+		).rejects.toThrow('relay simulation rejected')
+		expect(transitions).toEqual(['approval:submitting', 'dispute:submitting', 'approval:submission-failed', 'dispute:submission-failed'])
+	})
+
+	test('terminally records every anomalous private receipt before returning incomplete', () => {
+		const transactions = ['approval', 'dispute', 'cleanup']
+		const receipts = [undefined, transactionReceipt('reverted'), { ...transactionReceipt(), blockNumber: 102n }]
+		const transitions: string[] = []
+		const complete = trackPrivateBundleReceiptStatuses(transactions, receipts, 101n, (transaction, status) => transitions.push(`${transaction}:${status}`))
+		expect(complete).toBe(false)
+		expect(transitions).toEqual(['approval:confirmation-unknown', 'dispute:reverted', 'cleanup:confirmation-unknown'])
+	})
+
 	test('guards every production transaction boundary against pause', async () => {
 		const expectedCalls = [[], ['approve-1'], ['approve-1', 'approve-2', 'prepare'], ['approve-1', 'approve-2', 'prepare', 'simulate']]
 		for (let pauseBoundary = 1; pauseBoundary <= expectedCalls.length; pauseBoundary += 1) {

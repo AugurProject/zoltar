@@ -60,7 +60,7 @@ describe('operator connectivity', () => {
 		const relay = (chainId: string) =>
 			rpc(method => {
 				if (method === 'eth_chainId') return chainId
-				if (method === 'eth_sendPrivateTransaction') return Response.json({ error: { code: -32_600, message: 'signature is required' }, id: null, jsonrpc: '2.0' })
+				if (method === 'eth_callBundle' || method === 'eth_sendBundle') return Response.json({ error: { code: -32_600, message: 'signature is required' }, id: null, jsonrpc: '2.0' })
 				throw new Error(`Unexpected method: ${method}`)
 			})
 		const mainnetRelay = relay('0x1')
@@ -86,12 +86,12 @@ describe('operator connectivity', () => {
 		]) {
 			const regularRpc = rpc(method => {
 				if (method === 'eth_chainId') return '0x1'
-				if (method === 'eth_sendPrivateTransaction') return Response.json({ error, id: 1, jsonrpc: '2.0' })
+				if (method === 'eth_callBundle' || method === 'eth_sendBundle') return Response.json({ error, id: 1, jsonrpc: '2.0' })
 				throw new Error(`Unexpected method: ${method}`)
 			})
 			const settings = validateSubmissionSettings({ mode: 'private', relayUrls: [regularRpc] })
 			const state: { endpointChecks: EndpointCheck[] } = { endpointChecks: [] }
-			await expect(updateSubmissionEndpointChecks(state, () => checkSubmissionEndpoints(settings, 1))).rejects.toThrow('did not prove eth_sendPrivateTransaction support')
+			await expect(updateSubmissionEndpointChecks(state, () => checkSubmissionEndpoints(settings, 1))).rejects.toThrow('did not prove eth_callBundle support')
 			expect(state.endpointChecks).toMatchObject([{ chainId: 1, kind: 'private-relay', status: 'failed' }])
 			expect(state.endpointChecks[0]?.error).toContain(error.message)
 		}
@@ -104,7 +104,7 @@ describe('operator connectivity', () => {
 		]) {
 			const privateRelay = rpc(method => {
 				if (method === 'eth_chainId') return '0x1'
-				if (method === 'eth_sendPrivateTransaction') return Response.json({ error, id: 1, jsonrpc: '2.0' })
+				if (method === 'eth_callBundle' || method === 'eth_sendBundle') return Response.json({ error, id: 1, jsonrpc: '2.0' })
 				throw new Error(`Unexpected method: ${method}`)
 			})
 			await expect(checkSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [privateRelay] }), 1)).resolves.toMatchObject([{ chainId: 1, status: 'healthy' }])
@@ -122,17 +122,17 @@ describe('operator connectivity', () => {
 		]) {
 			const endpoint = rpc(method => {
 				if (method === 'eth_chainId') return '0x1'
-				if (method === 'eth_sendPrivateTransaction') return Response.json(responseBody)
+				if (method === 'eth_callBundle' || method === 'eth_sendBundle') return Response.json(responseBody)
 				throw new Error(`Unexpected method: ${method}`)
 			})
-			await expect(checkSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [endpoint] }), 1)).rejects.toThrow('did not prove eth_sendPrivateTransaction support')
+			await expect(checkSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [endpoint] }), 1)).rejects.toThrow('did not prove eth_callBundle support')
 		}
 	})
 
 	test('rejects unavailable private relays even when their body resembles capability evidence', async () => {
 		const endpoint = rpc(method => {
 			if (method === 'eth_chainId') return '0x1'
-			if (method === 'eth_sendPrivateTransaction') return Response.json({ error: { code: -32_600, message: 'signature is required' }, id: 1, jsonrpc: '2.0' }, { status: 503 })
+			if (method === 'eth_callBundle' || method === 'eth_sendBundle') return Response.json({ error: { code: -32_600, message: 'signature is required' }, id: 1, jsonrpc: '2.0' }, { status: 503 })
 			throw new Error(`Unexpected method: ${method}`)
 		})
 		await expect(checkSubmissionEndpoints(validateSubmissionSettings({ mode: 'private', relayUrls: [endpoint] }), 1)).rejects.toThrow('HTTP 503')

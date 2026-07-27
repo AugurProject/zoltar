@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { keccak256, parseTransaction, privateKeyToAccount, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { assertSubmissionWindowOpen, mergeSubmissionFailures, prepareSignedTransaction, SubmissionFailure, submitSignedTransaction, validateSubmissionSettings } from './transaction-submission.js'
+import { assertSubmissionWindowOpen, mergeSubmissionFailures, prepareSignedTransaction, simulateBundle, simulateSignedBundleEveryRelay, SubmissionFailure, submitSignedBundle, submitSignedTransaction, validateSubmissionSettings } from './transaction-submission.js'
 
 const servers: Bun.Server<unknown>[] = []
 const address = '0x0000000000000000000000000000000000000001' as Address
@@ -42,6 +42,109 @@ describe('transaction submission settings', () => {
 })
 
 describe('signed transaction delivery', () => {
+	test('simulates an ordered all-or-nothing bundle at the target block', async () => {
+		const requests: unknown[] = []
+		const endpoint = relay(async request => {
+			requests.push(await request.json())
+			return Response.json({
+				id: 1,
+				jsonrpc: '2.0',
+				result: {
+					bundleGasPrice: '0x1',
+					results: [{ gasUsed: 21_000 }, { gasUsed: 30_000 }],
+					totalGasUsed: 51_000,
+				},
+			})
+		})
+		const result = await simulateBundle({
+			address,
+			relayUrl: endpoint,
+			signMessage: () => Promise.resolve(signature),
+			stateBlockNumber: 99n,
+			targetBlockNumber: 100n,
+			transactions: [serializedTransaction, '0x1234'],
+		})
+		expect(result.totalGasUsed).toBe(51_000n)
+		expect(requests).toEqual([
+			{
+				id: 1,
+				jsonrpc: '2.0',
+				method: 'eth_callBundle',
+				params: [{ blockNumber: '0x64', stateBlockNumber: '0x63', txs: [serializedTransaction, '0x1234'] }],
+			},
+		])
+	})
+
+	test('rejects a bundle when any simulated transaction reverts', async () => {
+		const endpoint = relay(() =>
+			Response.json({
+				id: 1,
+				jsonrpc: '2.0',
+				result: {
+					results: [{ gasUsed: 21_000 }, { error: 'execution reverted' }],
+					totalGasUsed: 51_000,
+				},
+			}),
+		)
+		await expect(
+			simulateBundle({
+				address,
+				relayUrl: endpoint,
+				signMessage: () => Promise.resolve(signature),
+				stateBlockNumber: 99n,
+				targetBlockNumber: 100n,
+				transactions: [serializedTransaction, '0x1234'],
+			}),
+		).rejects.toThrow('Bundle simulation reverted')
+	})
+
+	test('attributes every relay that cannot simulate the complete bundle', async () => {
+		const accepted = relay(() =>
+			Response.json({
+				id: 1,
+				jsonrpc: '2.0',
+				result: { results: [{ gasUsed: 21_000 }], totalGasUsed: 21_000 },
+			}),
+		)
+		const rejected = relay(() => Response.json({ error: { code: -32_000, message: 'bundle reverted' }, id: 1, jsonrpc: '2.0' }))
+		await expect(
+			simulateSignedBundleEveryRelay({
+				address,
+				relayUrls: [accepted, rejected],
+				signMessage: () => Promise.resolve(signature),
+				stateBlockNumber: 99n,
+				targetBlockNumber: 100n,
+				transactions: [serializedTransaction],
+			}),
+		).rejects.toMatchObject({
+			failedTargets: [{ error: expect.stringContaining('bundle reverted'), target: `${rejected}/` }],
+		})
+	})
+
+	test('fans one ordered bundle out to every configured relay without allowed reverts', async () => {
+		const requests: unknown[] = []
+		const accepted = relay(async request => {
+			requests.push(await request.json())
+			return Response.json({ id: 1, jsonrpc: '2.0', result: { bundleHash: hash } })
+		})
+		const result = await submitSignedBundle({
+			address,
+			relayUrls: [accepted],
+			signMessage: () => Promise.resolve(signature),
+			targetBlockNumber: 100n,
+			transactions: [serializedTransaction, '0x1234'],
+		})
+		expect(result.acceptedTargets).toEqual([`${accepted}/`])
+		expect(requests).toEqual([
+			{
+				id: 1,
+				jsonrpc: '2.0',
+				method: 'eth_sendBundle',
+				params: [{ blockNumber: '0x64', txs: [serializedTransaction, '0x1234'] }],
+			},
+		])
+	})
+
 	test('prepares one canonical EIP-1559 transaction with pending nonce and gas margin', async () => {
 		const account = privateKeyToAccount(privateKey)
 		if (account.signTransaction === undefined) throw new Error('Local signer missing')
