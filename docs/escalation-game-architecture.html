@@ -178,6 +178,15 @@
 
 			<section id="accounting-invariants">
 				<h2>Accounting Invariants</h2>
+				<p class="security-assumption-ref">
+					<strong>Security assumptions:</strong>
+					<a href="./security-model.html#assumption-a10">A10 early alarm capital</a>,
+					<a href="./security-model.html#assumption-a15">A15 honest reporter capital</a>,
+					<a href="./security-model.html#assumption-a18">A18 REP behavior</a>,
+					<a href="./security-model.html#assumption-a22">A22 proof-data availability</a>,
+					and
+					<a href="./security-model.html#assumption-a24">A24 cryptographic security</a>.
+				</p>
 				<p>
 					Safe refactors keep the local REP and unresolved-deposit counters in
 					sync. Before aggregate export, every active vault lock appears in both
@@ -312,6 +321,12 @@
 
 			<section id="deployment-bytecode">
 				<h2>Deployment and Bytecode</h2>
+				<p class="security-assumption-ref">
+					<strong>Security assumptions:</strong>
+					<a href="./security-model.html#assumption-a05">A05 viable operating costs</a>,
+					<a href="./security-model.html#assumption-a19">A19 verified deployment</a>, and
+					<a href="./security-model.html#assumption-a23">A23 executable Ethereum gas bounds</a>.
+				</p>
 				<p>
 					The proof verifier and deposit delegate splits also exist because
 					bytecode headroom is tight. Keeping proof math and the cohesive deposit

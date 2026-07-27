@@ -3,289 +3,857 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Statoblast Core Security Assumptions</title>
+		<title>Statoblast Protocol Security Model</title>
 		<link rel="stylesheet" href="./shared-docs.css" />
 	</head>
 	<body class="doc-openoracle security-model">
 		<main>
 			<header>
-				<h1>Statoblast Core Security Assumptions</h1>
+				<p class="security-model-kicker">Normative external trust boundary</p>
+				<h1>Statoblast Protocol Security Model</h1>
+				<p class="security-model-lede">
+					Statoblast and Zoltar enforce accounting, authorization, and lifecycle rules
+					onchain. Their economic safety and practical liveness still depend on the
+					participant, market, asset, deployment, data, Ethereum, and cryptographic
+					assumptions below.
+				</p>
+				<p>
+					An assumption is not a contract guarantee. Each entry names the boundary
+					that must remain true, the failure that follows when it does not, and the
+					documentation whose mechanics rely on it. The
+					<a href="./invariants.html">Protocol Invariants</a> catalog owns
+					contract-enforced properties and their implementation evidence.
+				</p>
+				<nav class="assumption-nav" aria-label="Security assumption groups">
+					<a href="#assumptions-participation">Participation</a>
+					<a href="#assumptions-forks">Forks and markets</a>
+					<a href="#assumptions-oracle">Oracle and liveness</a>
+					<a href="#assumptions-technical">Technical foundation</a>
+					<a href="#excluded-guarantees">Excluded guarantees</a>
+				</nav>
 			</header>
 
 			<section id="core-assumptions">
-				<div class="assumption-group" id="assumptions-value">
-					<ol class="assumption-grid">
-						<li value="1" data-assumption="A01">
-							<h3>Users are greedy</h3>
-							<p>
-								Users are economically motivated and prefer outcomes that leave
-								them with more value over otherwise-equivalent outcomes that
-								leave them with less.
-							</p>
-						</li>
-						<li value="2" class="assumption-wide" data-assumption="A02">
-							<h3>A fork preserves enough system value</h3>
-							<p>
-								The aggregate market value of assets in the resulting child
-								universes remains large enough compared with the parent universe
-								under the configured Statoblast
-								<a href="../solidity/contracts/peripherals/SecurityPool.sol"><code>securityMultiplier</code></a>.
-							</p>
-							<div
-								class="equation assumption-equation"
-								id="eq-fork-value-preservation"
-								role="region"
-								aria-label="Fork value assumption"
-								tabindex="0"
-							>
-								<math
-									display="block"
-									aria-label="value of the prior universe is less than or equal to the sum of value in future universes divided by the configured Statoblast security multiplier"
-									data-source="priorUniverseValue <= sum(futureUniverseValues) / securityMultiplier"
-								>
-									<mrow>
-										<msub>
-											<mi>Value</mi>
-											<mtext>prior universe</mtext>
-										</msub>
-										<mo>≤</mo>
-										<mfrac>
-											<mrow>
-												<munder>
-													<mo>∑</mo>
-													<mrow><mi>universe</mi><mo>∈</mo><mi>Future universes</mi></mrow>
-												</munder>
-												<msub>
-													<mi>Value</mi>
-													<mi>universe</mi>
-												</msub>
-											</mrow>
-											<mi>securityMultiplier</mi>
-										</mfrac>
-									</mrow>
-								</math>
-								<p class="equation-caption">
-									<span class="equation-label">Fork value boundary.</span>
-									The configured Statoblast <code>securityMultiplier</code> sets
-									the required relationship between parent and aggregate child
-									value.
-								</p>
-							</div>
-						</li>
-						<li value="3" data-assumption="A03">
-							<h3>Market capitalization approximates economic value</h3>
-							<p>
-								REP market capitalization is a sufficiently accurate proxy for
-								the discounted cash flow participants expect from the asset.
-							</p>
-						</li>
-						<li value="4" class="assumption-wide" data-assumption="A04">
-							<h3>Users value truthful universes</h3>
-							<p>
-								Users prefer the universe or universes they judge truthful, so
-								economic activity and durable asset value concentrate there.
-							</p>
-							<div
-								class="equation assumption-equation"
-								id="eq-truthful-universe-value"
-								role="region"
-								aria-label="Truthful universe value assumption"
-								tabindex="0"
-							>
-								<math
-									display="block"
-									aria-label="value of assets before the fork is approximately equal to value of assets in the truthful universe"
-									data-source="valueBeforeFork ~= truthfulUniverseValue"
-								>
-									<mrow>
-										<msub>
-											<mi>Value</mi>
-											<mtext>before fork</mtext>
-										</msub>
-										<mo>≈</mo>
-										<msub>
-											<mi>Value</mi>
-											<mtext>truthful universe</mtext>
-										</msub>
-									</mrow>
-								</math>
-								<p class="equation-caption">
-									<span class="equation-label">Value concentration.</span>
-									The universe users regard as truthful retains approximately
-									the pre-fork system value.
-								</p>
-							</div>
-						</li>
-						<li value="5" data-assumption="A05">
-							<h3>Operating costs are small</h3>
-							<p>
-								Transaction fees and other operating costs are negligible
-								relative to the financial value of the actions they protect.
-							</p>
-						</li>
-						<li value="6" data-assumption="A06">
-							<h3>Participants can access timely information</h3>
-							<p>
-								Users can reliably obtain enough information, soon enough, to
-								decide which market outcome and child universe they consider
-								truthful.
-							</p>
-						</li>
-						<li value="7" data-assumption="A07">
-							<h3>Migration is practical</h3>
-							<p>
-								Users, exchanges, interfaces, and other integrations are willing
-								and able to migrate into the child universe they support.
-							</p>
-						</li>
-						<li value="8" data-assumption="A08">
-							<h3>The system has enough independent users</h3>
-							<p>
-								Enough non-colluding participants exist for the relevant
-								activity. Prediction-market trading, for example, requires
-								participants willing to take opposing views.
-							</p>
-						</li>
-						<li value="9" data-assumption="A09">
-							<h3>Auctions convert assets efficiently</h3>
-							<p>
-								A truth auction can sell some truthful-universe REP for ETH
-								lost during a fork at an acceptably small cost.
-							</p>
-						</li>
-						<li value="10" data-assumption="A10">
-							<h3>Participants can mobilize REP to raise an alarm</h3>
-							<p>
-								Market participants can mobilize enough vault-backed REP through
-								security-vault operators to fund an early competing
-								<code>Invalid</code>, <code>Yes</code>, or <code>No</code> outcome
-								deposit. That keeps the local outcome contest active long enough
-								for better-capitalized participants to react and continue
-								escalation. See
-								<a href="./statoblast-whitepaper.html#escalation">Escalation Resolution</a>.
-							</p>
-						</li>
-						<li value="11" data-assumption="A11">
-							<h3>REP is sufficiently liquid</h3>
-							<p>
-								Participants can acquire reasonable amounts of REP from the open
-								market when reporting, disputing, or migration requires it.
-							</p>
-						</li>
-						<li value="12" class="assumption-wide" data-assumption="A12">
-							<h3>REP economic value exceeds open interest</h3>
-							<p>
-								The system can maintain the strict backing relationship below;
-								market capitalization is used as the observable proxy described
-								in assumption A03. This is an ongoing assumption: the inequality
-								must hold at every relevant time, comparing values for the same
-								system scope and timestamp.
-							</p>
-							<div
-								class="equation assumption-equation"
-								id="eq-rep-economic-backing"
-								role="region"
-								aria-label="Open interest backing assumption"
-								tabindex="0"
-							>
-								<math
-									display="block"
-									aria-label="open interest is less than REP discounted cash flow"
-									data-source="openInterest < repDiscountedCashFlow"
-								>
-									<mrow>
-										<mi>OpenInterest</mi>
-										<mo>&lt;</mo>
-										<msub>
-											<mi>DCF</mi>
-											<mi>REP</mi>
-										</msub>
-									</mrow>
-								</math>
-								<p class="equation-caption">
-									<span class="equation-label">Economic backing.</span>
-									REP discounted cash flow must remain strictly greater than
-									open interest.
-								</p>
-							</div>
-						</li>
-						<li value="13" class="assumption-wide" data-assumption="A13">
-							<h3>Access to Statoblast is valuable</h3>
-							<p>
-								Users value continued access to prediction markets through
-								Statoblast at least as highly as the configured Statoblast
-								<a href="../solidity/contracts/peripherals/SecurityPool.sol"><code>securityMultiplier</code></a>
-								times the value secured by the system.
-							</p>
-							<div
-								class="equation assumption-equation"
-								id="eq-statoblast-access-value"
-								role="region"
-								aria-label="Protocol access value assumption"
-								tabindex="0"
-							>
-								<math
-									display="block"
-									aria-label="value of Statoblast access is greater than or equal to the configured Statoblast security multiplier times secured value"
-									data-source="statoblastAccessValue >= securityMultiplier * securedValue"
-								>
-									<mrow>
-										<msub>
-											<mi>Value</mi>
-											<mtext>Statoblast access</mtext>
-										</msub>
-										<mo>≥</mo>
-										<mi>securityMultiplier</mi>
-										<mo>×</mo>
-										<msub>
-											<mi>Value</mi>
-											<mtext>secured</mtext>
-										</msub>
-									</mrow>
-								</math>
-								<p class="equation-caption">
-									<span class="equation-label">Access-value boundary.</span>
-									Continued Statoblast access must justify the configured
-									<code>securityMultiplier</code> applied to secured value.
-								</p>
-							</div>
-						</li>
-						<li value="14" data-assumption="A14">
-							<h3>Ethereum remains censorship resistant</h3>
-							<p>
-								Users can submit Ethereum transactions and obtain inclusion
-								within the time required by the relevant protocol deadline.
-							</p>
-						</li>
-						<li value="15" data-assumption="A15">
-							<h3>Honest reporters can access sufficient capital</h3>
-							<p>
-								Honest reporters hold or can acquire enough REP for local
-								escalation under the configured game rules. Price-oracle
-								correction additionally requires scenario-dependent WETH and REP
-								positions.
-							</p>
-						</li>
-						<li id="assumption-a16" value="16" data-assumption="A16">
-							<h3>OpenOracle has an always-available profitable arbitrager</h3>
-							<p> At least one independent, rational, adequately capitalized OpenOracle participant continuously monitors pending REP/ETH reports, corrects every report for which correction is profitable under the configured economics, and can obtain transaction inclusion before settlement.
-							</p>
-						</li>
-						<li id="assumption-a17" value="17" data-assumption="A17">
-							<h3>Price-oracle reporting has an independent corrector</h3>
-							<p>
-								The sponsor-funded coordinator reporting path and at least one
-								correcting OpenOracle participant are economically independent
-								and do not collude. The independent participant is willing and
-								able to risk the WETH and REP required to replace an incorrect
-								report before settlement; this does not require two external
-								submissions for every request.
-							</p>
-						</li>
-					</ol>
-				</div>
+				<h2>How to apply these assumptions</h2>
+				<p>
+					Review assumptions at the same system scope and time as the protected
+					action. For an economic claim, identify the attacker objective, the honest
+					participant expected to respond, required capital, transaction-inclusion
+					window, and maximum exposure if the response does not occur. Operators and
+					integrators should monitor the measurable boundaries—liquidity, gas,
+					participation, canonical addresses, and data availability—rather than treat
+					the list as a one-time launch checklist.
+				</p>
 			</section>
 
+			<section class="assumption-group" id="assumptions-participation">
+				<h2>Participation and coordination</h2>
+				<p class="assumption-group-intro">
+					These assumptions explain why someone performs the economically useful
+					action instead of merely being permitted to perform it.
+				</p>
+				<ol class="assumption-grid">
+					<li id="assumption-a01" value="1" data-assumption="A01">
+						<h3>Participants act on risk-adjusted economic incentives</h3>
+						<p>
+							Enough participants prefer actions with greater expected value after
+							gas, fees, delay, capital lockup, and risk. The model does not rely on
+							altruistic defense.
+						</p>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> A nominally profitable liquidation,
+							dispute, bid, migration, or fork defense may not happen when its
+							risk-adjusted return is unattractive.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./statoblast-whitepaper.html#roles">economic roles</a>,
+							<a href="./liquidation.html#incentives">liquidation incentives</a>,
+							<a href="./truth-auction.html#clearing">auction clearing</a>, and
+							<a href="./open-oracle-integration.html#security-guarantee"
+								>oracle incentives</a
+							>.
+						</p>
+					</li>
+					<li id="assumption-a05" value="5" data-assumption="A05">
+						<h3>Required actions remain worth their operating costs</h3>
+						<p>
+							For each time-sensitive action, transaction fees, opportunity cost,
+							coordination cost, and capital lockup remain small enough relative to
+							the value protected or earned.
+						</p>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> An action can be technically
+							executable but economically abandoned before its deadline.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./truth-auction.html#gas-and-spam">auction gas bounds</a>,
+							<a href="./open-oracle-integration.html#parameters"
+								>oracle gas parameters</a
+							>, and
+							<a href="./escalation-game-architecture.html#deployment-bytecode"
+								>escalation deployment costs</a
+							>.
+						</p>
+					</li>
+					<li id="assumption-a08" value="8" data-assumption="A08">
+						<h3>Each economic role has enough independent participants</h3>
+						<p>
+							Trading, liquidation, escalation, migration, auction bidding, price
+							correction, and settlement have enough non-colluding participants for
+							the relevant action. Secondary-market trading is external to
+							Statoblast.
+						</p>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> Thin or controlled participation can
+							remove price discovery, competitive bidding, or an opposing outcome
+							deposit.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./statoblast-whitepaper.html#roles">economic roles</a>,
+							<a href="./zoltar-whitepaper.html#security">fork coordination</a>, and
+							<a href="./truth-auction.html#lifecycle">auction participation</a>.
+						</p>
+					</li>
+					<li id="assumption-a10" value="10" data-assumption="A10">
+						<h3>Participants can mobilize REP to raise an alarm</h3>
+						<p>
+							Market participants can mobilize enough vault-backed REP through
+							security-vault operators to fund an early competing
+							<code>Invalid</code>, <code>Yes</code>, or <code>No</code> deposit and
+							keep the local contest active while additional capital reacts.
+						</p>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> A wrong local outcome can become
+							final before better-capitalized participants enter.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./statoblast-whitepaper.html#escalation"
+								>escalation resolution</a
+							>,
+							<a href="./escalation-game-architecture.html#accounting-invariants"
+								>escalation accounting</a
+							>, and
+							<a href="./operator-reference.md#escalation-resolution-and-deposits"
+								>operator guardrails</a
+							>.
+						</p>
+					</li>
+					<li id="assumption-a13" value="13" class="assumption-wide" data-assumption="A13">
+						<h3>Participants value continued access to the supported Statoblast lineage</h3>
+						<p>
+							The participants whose coordination determines durable use value
+							continued access to the supported Statoblast lineage at least as
+							highly as its configured
+							<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+								><code>securityMultiplier</code></a
+							>
+							times the value secured by that lineage.
+						</p>
+						<div
+							class="equation assumption-equation"
+							id="eq-statoblast-access-value"
+							role="region"
+							aria-label="Protocol access value assumption"
+							tabindex="0"
+						>
+							<math
+								display="block"
+								aria-label="value of Statoblast access is greater than or equal to the configured Statoblast security multiplier times secured value"
+								data-source="statoblastAccessValue >= securityMultiplier * securedValue"
+							>
+								<mrow>
+									<msub><mi>Value</mi><mtext>Statoblast access</mtext></msub>
+									<mo>≥</mo>
+									<mi>securityMultiplier</mi>
+									<mo>×</mo>
+									<msub><mi>Value</mi><mtext>secured</mtext></msub>
+								</mrow>
+							</math>
+							<p class="equation-caption">
+								<span class="equation-label">Access-value boundary.</span>
+								Compare one lineage’s continued-use value and secured value at the
+								same pre-attack time.
+							</p>
+						</div>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> Participants may rationally abandon,
+							grief, or coordinate away from a lineage whose continued-use value is
+							too small.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./zoltar-whitepaper.html#security">fork security</a>,
+							<a href="./statoblast-whitepaper.html#migration">fork migration</a>,
+							and
+							<a href="./statoblast-whitepaper.html#security"
+								>Statoblast security boundary</a
+							>.
+						</p>
+					</li>
+					<li id="assumption-a21" value="21" data-assumption="A21">
+						<h3>At least one executor advances every required public transition</h3>
+						<p>
+							An adequately funded participant or service monitors and calls each
+							needed permissionless transition, including fork activation, child
+							creation, auction start and finalization, bid settlement, report
+							recovery, overflow operation execution, and proof-based claims.
+						</p>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> Permissionless state can remain
+							stalled even though no contract authorization prevents progress.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./invariants.html#lifecycle">lifecycle liveness</a>,
+							<a href="./operator-reference.md#fork-migration"
+								>fork operations</a
+							>, and
+							<a href="./operator-reference.md#repeth-oracle-operations"
+								>oracle operations</a
+							>.
+						</p>
+					</li>
+				</ol>
+			</section>
+
+			<section class="assumption-group" id="assumptions-forks">
+				<h2>Forks, truth, value, and liquidity</h2>
+				<p class="assumption-group-intro">
+					These assumptions connect onchain branching and accounting to offchain
+					truth judgments, asset value, liquidity, and migration.
+				</p>
+				<ol class="assumption-grid">
+					<li id="assumption-a02" value="2" class="assumption-wide" data-assumption="A02">
+						<h3>A supported lineage preserves enough aggregate child value</h3>
+						<p>
+							For each protected Statoblast origin lineage, evaluate the parent and
+							its child-pool continuations in one numeraire at the fork-security
+							decision horizon, before long-run value has fully concentrated on one
+							branch. The sum of traded child-lineage values remains large enough
+							compared with that parent lineage’s pre-fork value under the origin’s
+							immutable <code>securityMultiplier</code>. Each child asset is valued
+							in its own branch; unrelated external collateral is not counted again.
+						</p>
+						<div
+							class="equation assumption-equation"
+							id="eq-fork-value-preservation"
+							role="region"
+							aria-label="Fork value assumption"
+							tabindex="0"
+						>
+							<math
+								display="block"
+								aria-label="value of the parent Statoblast lineage is less than or equal to the sum of value in its child-lineage continuations divided by that origin lineage's Statoblast security multiplier"
+								data-source="parentLineageValue <= sum(childLineageValues) / lineageSecurityMultiplier"
+							>
+								<mrow>
+									<msub><mi>Value</mi><mtext>parent lineage</mtext></msub>
+									<mo>≤</mo>
+									<mfrac>
+										<mrow>
+											<munder>
+												<mo>∑</mo>
+												<mrow><mi>child</mi><mo>∈</mo><mi>Lineage continuations</mi></mrow>
+											</munder>
+											<msub><mi>Value</mi><mi>child</mi></msub>
+										</mrow>
+										<msub><mi>securityMultiplier</mi><mi>lineage</mi></msub>
+									</mfrac>
+								</mrow>
+							</math>
+							<p class="equation-caption">
+								<span class="equation-label">Fork value boundary.</span>
+								Parent and child values use the same origin lineage, valuation
+								source, numeraire, and decision horizon. For multiplier
+								<code>2</code>, aggregate child-lineage value must be at least
+								twice parent-lineage value; multiplier <code>3</code> requires
+								three times that value.
+							</p>
+						</div>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> Value destruction or fragmentation
+							can make a malicious or unnecessary fork cheaper than the harm it
+							causes.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./zoltar-whitepaper.html#economics">fork economics</a>,
+							<a href="./zoltar-whitepaper.html#security">fork coordination</a>, and
+							<a href="./statoblast-whitepaper.html#migration">pool migration</a>.
+						</p>
+					</li>
+					<li id="assumption-a03" value="3" data-assumption="A03">
+						<h3>REP market capitalization approximates economic value</h3>
+						<p>
+							At the stated valuation time and system scope, REP market
+							capitalization is a sufficiently accurate observable proxy for the
+							discounted cash flow participants expect from REP.
+						</p>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> Thin, manipulated, or speculative
+							pricing can overstate the economic value securing open interest.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./zoltar-whitepaper.html#economics">REP economics</a> and
+							<a href="./statoblast-whitepaper.html#security"
+								>economic backing claims</a
+							>.
+						</p>
+					</li>
+					<li id="assumption-a04" value="4" class="assumption-wide" data-assumption="A04">
+						<h3>Users value the universes they judge truthful</h3>
+						<p>
+							Users prefer the universe or universes they judge truthful, so
+							economic activity and durable asset value concentrate there. Unlike
+							A02’s fork-security decision horizon, this assumption describes the
+							later, durable allocation of value after users coordinate.
+						</p>
+						<div
+							class="equation assumption-equation"
+							id="eq-truthful-universe-value"
+							role="region"
+							aria-label="Truthful universe value assumption"
+							tabindex="0"
+						>
+							<math
+								display="block"
+								aria-label="value of assets before the fork is approximately equal to value of assets in the truthful universe"
+								data-source="valueBeforeFork ~= truthfulUniverseValue"
+							>
+								<mrow>
+									<msub><mi>Value</mi><mtext>before fork</mtext></msub>
+									<mo>≈</mo>
+									<msub><mi>Value</mi><mtext>truthful universe</mtext></msub>
+								</mrow>
+							</math>
+							<p class="equation-caption">
+								<span class="equation-label">Value concentration.</span>
+								When several branches remain plausibly truthful, document the
+								value split instead of assuming one winner.
+							</p>
+						</div>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> Coordination on a false branch, or
+							durable fragmentation across branches, defeats the value-concentration
+							security argument.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./zoltar-whitepaper.html#security">Zoltar security</a> and
+							<a href="./statoblast-whitepaper.html#child-outcome-resolution"
+								>child outcome resolution</a
+							>.
+						</p>
+					</li>
+					<li id="assumption-a06" value="6" data-assumption="A06">
+						<h3>Participants can access timely outcome evidence</h3>
+						<p>
+							Users can obtain enough reliable real-world evidence before the
+							relevant protocol deadline to judge <code>Invalid</code>,
+							<code>Yes</code>, <code>No</code>, or another Zoltar branch.
+						</p>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> Missing, delayed, or conflicting
+							evidence can split honest capital or let a false local outcome become
+							final.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./zoltar-whitepaper.html#questions">question encoding</a>,
+							<a href="./zoltar-whitepaper.html#invalid">invalid outcomes</a>, and
+							<a href="./statoblast-whitepaper.html#child-outcome-resolution"
+								>child resolution</a
+							>.
+						</p>
+					</li>
+					<li id="assumption-a07" value="7" data-assumption="A07">
+						<h3>Migration is operationally practical</h3>
+						<p>
+							Users, exchanges, interfaces, custodians, and other integrations are
+							willing and able to migrate assets and state into the child universe
+							or universes they support during the applicable windows.
+						</p>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> Supported branches can remain
+							illiquid or undercollateralized because economic claims and backing do
+							not move there.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./zoltar-whitepaper.html#splitting">REP splitting</a>,
+							<a href="./statoblast-whitepaper.html#migration">pool migration</a>,
+							and
+							<a href="./operator-reference.md#share-migration"
+								>operator migration guidance</a
+							>.
+						</p>
+					</li>
+					<li id="assumption-a09" value="9" data-assumption="A09">
+						<h3>Truth auctions can convert supported child REP efficiently</h3>
+						<p>
+							When repair is needed, enough demand can buy some supported-child REP
+							for ETH at an acceptably small discount and operating cost. This does
+							not assume that the full repair target is raised.
+						</p>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> Weak or strategically withheld
+							demand leaves the child operational with impaired collateral.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./truth-auction.html#lifecycle">auction lifecycle</a>,
+							<a href="./truth-auction.html#clearing">clearing</a>, and
+							<a href="./statoblast-whitepaper.html#auction">repair accounting</a>.
+						</p>
+					</li>
+					<li id="assumption-a11" value="11" data-assumption="A11">
+						<h3>REP is sufficiently liquid</h3>
+						<p>
+							Participants can acquire or sell the required REP quantities without
+							price impact or delay large enough to invalidate reporting, disputing,
+							liquidation, auction, or migration economics.
+						</p>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> Capital may exist in principle but
+							cannot be assembled at a usable price before the deadline.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./statoblast-whitepaper.html#roles">economic roles</a>,
+							<a href="./statoblast-whitepaper.html#escalation">escalation</a>, and
+							<a href="./open-oracle-integration.html#security-guarantee"
+								>oracle positions</a
+							>.
+						</p>
+					</li>
+					<li id="assumption-a12" value="12" class="assumption-wide" data-assumption="A12">
+						<h3>REP economic value exceeds the open interest it secures</h3>
+						<p>
+							For a stated pool, lineage, or system scope at one timestamp, open
+							interest and REP discounted cash flow are valued in the same
+							numeraire, and REP discounted cash flow remains strictly greater.
+							For a pool-level evaluation, open interest means the pool’s
+							protocol-accounted ETH collateral unless the analysis explicitly
+							names a broader exposure measure. The REP supply and price basis must
+							also be stated; market capitalization is the observable proxy in
+							<a href="#assumption-a03">A03</a>. This external relationship is
+							separate from each pool’s onchain multiplier-adjusted REP backing
+							check.
+						</p>
+						<div
+							class="equation assumption-equation"
+							id="eq-rep-economic-backing"
+							role="region"
+							aria-label="Open interest backing assumption"
+							tabindex="0"
+						>
+							<math
+								display="block"
+								aria-label="open interest is less than REP discounted cash flow when both are valued in the same numeraire"
+								data-source="commonNumeraire(openInterest) < commonNumeraire(repDiscountedCashFlow)"
+							>
+								<mrow>
+									<mi>OpenInterest</mi>
+									<mo>&lt;</mo>
+									<msub><mi>DCF</mi><mi>REP</mi></msub>
+								</mrow>
+							</math>
+							<p class="equation-caption">
+								<span class="equation-label">Economic backing.</span>
+								Record scope, timestamp, common numeraire, price source, REP
+								supply basis, and open-interest definition when evaluating this
+								strict inequality.
+							</p>
+						</div>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> REP holders may rationally accept
+							or cause losses larger than the durable REP value placed at risk.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./statoblast-whitepaper.html#pools">security pools</a>,
+							<a href="./liquidation.html#rule">liquidation backing</a>, and
+							<a href="./open-oracle-integration.html#attack-model"
+								>oracle exposure analysis</a
+							>.
+						</p>
+					</li>
+					<li id="assumption-a25" value="25" class="assumption-wide" data-assumption="A25">
+						<h3>Question selection remains aligned with user intent</h3>
+						<p>
+							Interfaces and users verify the immutable question ID and metadata
+							when selecting a market or pool, and the question has evidence and
+							wording from which participants can reach an outcome or intentionally
+							choose <code>Invalid</code>.
+						</p>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> Unverified selection can route users
+							and capital to an unintended market or pool, while ambiguous wording or
+							unavailable evidence can split local outcome coordination.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./invariants.html#uni-02"><code>UNI-02</code></a>,
+							<a href="./zoltar-whitepaper.html#questions">question identity</a>, and
+							<a href="./statoblast-whitepaper.html#pools">pool selection</a>.
+						</p>
+					</li>
+					<li id="assumption-a27" value="27" class="assumption-wide" data-assumption="A27">
+						<h3>Permissionless fork selection remains aligned with user coordination</h3>
+						<p>
+							Any caller that funds the fork threshold may select any registered,
+							ended global question to fork an initialized, supply-bearing, unforked
+							universe; Zoltar does not enforce relevance or user consent. The model
+							assumes such callers do not expect a risk-adjusted payoff from an
+							irrelevant or ambiguous fork and that users and integrations can
+							recognize it and coordinate on one supported child branch if it occurs.
+						</p>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> A threshold-funded caller can force
+							an unrelated or ambiguous fork that fragments liquidity, migration, or
+							user coordination even though every Zoltar admission guard passes.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./zoltar-whitepaper.html#global-question-scope"
+								>global question scope</a
+							>,
+							<a href="./statoblast-whitepaper.html#migration">fork migration</a>,
+							and
+							<a href="./operator-reference.md#security-review-orientation"
+								>operator orientation</a
+							>.
+						</p>
+					</li>
+				</ol>
+			</section>
+
+			<section class="assumption-group" id="assumptions-oracle">
+				<h2>Oracle correction, inclusion, and operational data</h2>
+				<p class="assumption-group-intro">
+					These assumptions cover truthful REP/ETH price discovery, deadline access,
+					capital, independent correction, and the offchain information required to
+					act.
+				</p>
+				<ol class="assumption-grid">
+					<li id="assumption-a14" value="14" data-assumption="A14">
+						<h3>Deadline transactions can obtain Ethereum inclusion</h3>
+						<p>
+							Honest users can submit competitively priced Ethereum transactions
+							and obtain canonical inclusion within every relevant dispute,
+							escalation, migration, auction, staging, and settlement window.
+						</p>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> Censorship or congestion lasting
+							through a deadline can finalize a wrong report or prevent a supported
+							action.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./invariants.html#lifecycle">deadline invariants</a>,
+							<a href="./truth-auction.html#lifecycle">auction windows</a>, and
+							<a href="./open-oracle-integration.html#attack-model"
+								>oracle censorship model</a
+							>.
+						</p>
+					</li>
+					<li id="assumption-a15" value="15" data-assumption="A15">
+						<h3>Honest reporters can access sufficient capital</h3>
+						<p>
+							Honest reporters hold or can acquire enough REP for local escalation.
+							Price-oracle correction additionally requires the scenario-dependent
+							WETH and REP replacement position plus transaction costs.
+						</p>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> A participant can identify a wrong
+							outcome or price but remain unable to fund the correcting action.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./statoblast-whitepaper.html#escalation">escalation capital</a>,
+							<a href="./liquidation.html#rule">liquidation execution</a>, and
+							<a href="./open-oracle-integration.html#security-guarantee"
+								>oracle position sizing</a
+							>.
+						</p>
+					</li>
+					<li id="assumption-a16" value="16" data-assumption="A16">
+						<h3>OpenOracle has an always-available profitable arbitrager</h3>
+						<p>
+							At least one rational, adequately capitalized OpenOracle participant
+							continuously monitors pending REP/ETH reports, corrects every
+							security-relevant report covered by the profitability boundary in
+							<a href="#assumption-a20">A20</a>, and can obtain inclusion before
+							settlement.
+						</p>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> An incorrect report can settle and
+							authorize price-sensitive pool actions when no arbitrager detects,
+							funds, and includes the correction.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./statoblast-whitepaper.html#oracle">REP/ETH oracle</a>,
+							<a href="./open-oracle-integration.html#security-guarantee"
+								>correction incentives</a
+							>, and
+							<a href="./open-oracle-integration.html#attack-model">attack model</a>.
+						</p>
+					</li>
+					<li id="assumption-a17" value="17" data-assumption="A17">
+						<h3>The sponsor and at least one corrector are economically independent</h3>
+						<p>
+							The sponsor-funded coordinator reporting path and at least one
+							correcting OpenOracle participant are not under common control, do
+							not share the manipulation payoff, and do not collude. Two external
+							submissions are not required for every request.
+						</p>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> A sponsor-controlled or bribed
+							corrector can make the contestable report path behave like a single
+							trusted reporter.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a
+								href="./open-oracle-integration.html#settlement-validation-scope"
+								>settlement validation scope</a
+							>,
+							<a href="./open-oracle-integration.html#intentional-economic-tradeoffs"
+								>economic tradeoffs</a
+							>, and
+							<a href="./invariants.html#oracle">oracle invariants</a>.
+						</p>
+					</li>
+					<li id="assumption-a20" value="20" class="assumption-wide" data-assumption="A20">
+						<h3>A robust reference market makes harmful REP/ETH errors correctable</h3>
+						<p>
+							Independent participants can observe a manipulation-resistant
+							reference REP/ETH price. Every price error large enough to unlock a
+							security-relevant pool action also leaves a correction opportunity
+							that remains profitable after actual gas, prevailing priority fees,
+							OpenOracle fees, price impact, and required capital lockup.
+						</p>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> A harmful deviation below the
+							profitable correction threshold, or a manipulated/illiquid reference
+							market, can settle without an economically rational challenge.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./open-oracle-integration.html#security-guarantee"
+								>report sizing</a
+							>,
+							<a href="./open-oracle-integration.html#attack-model"
+								>external-payoff model</a
+							>, and
+							<a
+								href="./open-oracle-integration.html#settlement-validation-scope"
+								>settlement limits</a
+							>.
+						</p>
+					</li>
+					<li id="assumption-a22" value="22" data-assumption="A22">
+						<h3>Canonical chain data and proof construction remain available</h3>
+						<p>
+							Participants can access reorg-aware Ethereum history, recognized
+							contract addresses, OpenOracle report state, and the event data needed
+							to construct carry and nullifier proofs before use.
+						</p>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> A valid dispute, settlement,
+							migration, or inherited claim can become practically unavailable even
+							while its contract entrypoint remains live.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./event-stream.md">event replay</a>,
+							<a href="./merkle-mountain-range.html#proofs">carry proofs</a>, and
+							<a href="./operator-reference.md#security-review-orientation"
+								>operator orientation</a
+							>.
+						</p>
+					</li>
+				</ol>
+			</section>
+
+			<section class="assumption-group" id="assumptions-technical">
+				<h2>Assets, deployment, Ethereum, and cryptography</h2>
+				<p class="assumption-group-intro">
+					These assumptions define the technical foundation below the protocol’s
+					onchain guards.
+				</p>
+				<ol class="assumption-grid">
+					<li id="assumption-a18" value="18" class="assumption-wide" data-assumption="A18">
+						<h3>Canonical REP and WETH obey the accounting model</h3>
+						<p>
+							Genesis REP, child REP, and configured WETH move exactly the requested
+							base units, use 18 decimals, return supported ERC-20 values, and do not
+							rebase, charge transfer fees, invoke unexpected callbacks, blacklist
+							protocol contracts, pause required transfers, or permit unauthorized
+							minting. WETH remains redeemable 1:1 for ETH, the genesis theoretical
+							supply is accurate, and the configured genesis REP burn sink remains
+							inaccessible.
+						</p>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> Pool, fork, auction, or oracle
+							accounting can overstate balances, backing, burned supply, or WETH
+							value.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./invariants.html#ext-01"><code>EXT-01</code></a>,
+							<a href="./zoltar-whitepaper.html#economics">genesis REP handling</a>,
+							and
+							<a href="./open-oracle-integration.html#openoracle-role"
+								>oracle token pair</a
+							>.
+						</p>
+					</li>
+					<li id="assumption-a19" value="19" class="assumption-wide" data-assumption="A19">
+						<h3>Users select verified canonical deployments</h3>
+						<p>
+							Users and integrations verify runtime bytecode, constructor-installed
+							dependencies, factory and forker provenance, pool lineage, question
+							ID, and the reviewed release manifest. Constructor admission is not a
+							safety proof.
+						</p>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> Permissionless lookalike instances,
+							wrong dependencies, or unintended lineage and question wiring can
+							bypass the reviewed protocol even when the selected bytecode functions
+							as configured.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./operator-reference.md#immutable-protocol-release-posture"
+								>release posture</a
+							>,
+							<a href="./deployment-status.html">deployment status</a>,
+							<a href="./invariants.html#authority">authority invariants</a>, and
+							<a href="./escalation-game-architecture.html#deployment-bytecode"
+								>deployment bytecode</a
+							>.
+						</p>
+					</li>
+					<li id="assumption-a26" value="26" class="assumption-wide" data-assumption="A26">
+						<h3>Immutable parameters preserve economic and executable security margins</h3>
+						<p>
+							The selected parameter relationships keep the fork threshold and
+							haircut economically meaningful, the initial escalation deposit
+							affordable, the liquidation multiplier above one plus the bonus, the
+							oracle target error profitable to correct after fees and gas, dispute
+							and settlement windows usable, and callback and transition gas
+							executable. The Statoblast pool <code>securityMultiplier</code> is
+							distinct from <code>openOracleSecurityMultiplierBps</code>.
+						</p>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> Weak or internally inconsistent
+							immutable parameters can defeat the economic or liveness argument even
+							when the canonical contracts function exactly as configured.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./statoblast-whitepaper.html#parameters"
+								>Statoblast parameters</a
+							>,
+							<a href="./zoltar-whitepaper.html#economics">fork economics</a>,
+							<a href="./liquidation.html#incentives">liquidation economics</a>,
+							<a href="./open-oracle-integration.html#parameters"
+								>oracle parameters</a
+							>, and
+							<a href="./open-oracle-integration.html#attack-model"
+								>oracle attack model</a
+							>.
+						</p>
+					</li>
+					<li id="assumption-a23" value="23" class="assumption-wide" data-assumption="A23">
+						<h3>Ethereum preserves the execution environment the protocol relies on</h3>
+						<p>
+							Ethereum continues to provide correct EVM execution and atomic
+							rollback, sufficient canonical finality, usable timestamp and
+							<code>block.basefee</code> semantics, and block gas limits and gas
+							schedules under which every mandatory immutable transition remains
+							executable.
+						</p>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> Deep reorganizations, invalid state
+							execution, adversarial time behavior, or gas repricing can reverse
+							accepted state or strand required transitions.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./event-stream.md#ordering-identity-and-rollback"
+								>reorg handling</a
+							>,
+							<a href="./invariants.html#lifecycle">atomicity and deadlines</a>, and
+							<a href="./escalation-game-architecture.html#deployment-bytecode"
+								>bytecode and gas bounds</a
+							>.
+						</p>
+					</li>
+					<li id="assumption-a24" value="24" data-assumption="A24">
+						<h3>Ethereum cryptographic primitives remain secure</h3>
+						<p>
+							Keccak-256 remains collision- and preimage-resistant at the truncated
+							widths used by the protocol, CREATE2 identity remains sound, and users
+							retain control of the private keys authorizing their accounts.
+						</p>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> Forged identities, colliding
+							questions or universes, false carry proofs, or stolen account
+							authority can violate otherwise-correct guards.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./zoltar-whitepaper.html#universe-model"
+								>universe identity</a
+							>,
+							<a href="./merkle-mountain-range.html#leaf-shape">proof hashing</a>, and
+							<a href="./operator-reference.md#security-pool-guardrails"
+								>deterministic deployments</a
+							>.
+						</p>
+					</li>
+				</ol>
+			</section>
+
+			<section id="excluded-guarantees">
+				<h2>Guarantees deliberately not made</h2>
+				<p>
+					These outcomes remain possible without contradicting the security model.
+					They should be included in user, operator, and integration risk disclosures.
+				</p>
+				<ul class="excluded-guarantee-list">
+					<li>
+						Zoltar creates valid branches but does not identify the objectively
+						truthful branch or force users to coordinate there.
+					</li>
+					<li>
+						A truth auction may raise less than its repair target; the child then
+						activates with migrated collateral plus accepted auction ETH.
+					</li>
+					<li>
+						OpenOracle report liquidity does not cap the notional value of operations
+						using an accepted price, and settlement does not prove external price
+						correctness.
+					</li>
+					<li>
+						A participant with unbounded capital can keep funding valid disputes and
+						delay the sponsor lane indefinitely; no bounded coordinator-availability
+						claim is made.
+					</li>
+					<li>
+						The immutable protocol has no administrator who can pause, upgrade, roll
+						back, or rescue an unsafe deployment after launch.
+					</li>
+				</ul>
+			</section>
 		</main>
 	</body>
 </html>

@@ -9,6 +9,20 @@
 	--docs-page-inline-gutter-mobile: 0.5rem;
 }
 
+.security-assumption-ref {
+	margin: 0.85rem 0;
+	padding: 0.65rem 0.8rem;
+	border-left: 0.25rem solid var(--blue, #245f9f);
+	background: color-mix(in srgb, var(--blue-soft, #dceaf8) 55%, var(--paper, #fff));
+	color: var(--muted, #5f6d75);
+	font-size: 0.9rem;
+	line-height: 1.5;
+}
+
+.security-assumption-ref strong {
+	color: var(--ink, #1f2529);
+}
+
 .term-tooltip {
 	position: fixed;
 	z-index: 1000;
@@ -238,8 +252,41 @@ body.doc-openoracle .callout strong {
 	display: block;
 	margin-bottom: 0.25rem;
 }
+body.security-model .security-model-kicker {
+	margin: 0 0 0.35rem;
+	color: var(--blue);
+	font-size: 0.78rem;
+	font-weight: 800;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+body.security-model .security-model-lede {
+	max-width: 68rem;
+	color: var(--ink);
+	font-size: 1.08rem;
+}
+body.security-model .assumption-nav {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	margin-top: 1.1rem;
+}
+body.security-model .assumption-nav a {
+	padding: 0.35rem 0.65rem;
+	border: 1px solid color-mix(in srgb, var(--blue) 35%, var(--line));
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--blue-soft) 55%, var(--paper));
+	font-size: 0.88rem;
+	font-weight: 700;
+	text-decoration: none;
+}
 body.security-model .assumption-group {
 	scroll-margin-top: 1rem;
+}
+body.security-model .assumption-group-intro {
+	max-width: 68rem;
+	margin-bottom: 1rem;
+	color: var(--muted);
 }
 body.security-model .assumption-grid {
 	display: grid;
@@ -256,6 +303,14 @@ body.security-model .assumption-grid > li {
 	border: 1px solid var(--line);
 	border-radius: var(--radius);
 	background: color-mix(in srgb, var(--soft) 48%, var(--paper));
+	scroll-margin-top: 1rem;
+	transition:
+		border-color 120ms ease,
+		box-shadow 120ms ease;
+}
+body.security-model .assumption-grid > li:target {
+	border-color: var(--blue);
+	box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--blue) 20%, transparent);
 }
 body.security-model .assumption-grid > li::before {
 	content: attr(data-assumption);
@@ -293,10 +348,33 @@ body.security-model .assumption-grid p {
 body.security-model .assumption-grid p:last-child {
 	margin-bottom: 0;
 }
+body.security-model .assumption-grid .assumption-failure {
+	padding-top: 0.6rem;
+	border-top: 1px solid var(--line);
+	color: var(--ink);
+}
+body.security-model .assumption-grid .assumption-links {
+	font-size: 0.86rem;
+}
+body.security-model .assumption-grid .assumption-links a {
+	white-space: nowrap;
+}
 body.security-model .assumption-equation {
 	margin: 0.8rem 0 0;
 	padding: 0.45rem;
 	background: var(--paper);
+}
+body.security-model .excluded-guarantee-list {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0.65rem;
+	padding: 0;
+	list-style: none;
+}
+body.security-model .excluded-guarantee-list li {
+	padding: 0.8rem 0.9rem;
+	border-left: 0.3rem solid var(--gold);
+	background: color-mix(in srgb, var(--gold-soft) 45%, var(--paper));
 }
 body.doc-openoracle table {
 	width: 100%;
@@ -604,11 +682,24 @@ body.doc-openoracle td math {
 	body.security-model .assumption-grid {
 		grid-template-columns: 1fr;
 	}
+	body.security-model .assumption-nav {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+	body.security-model .assumption-nav a {
+		text-align: center;
+	}
 	body.security-model .assumption-grid .assumption-wide {
 		grid-column: auto;
 	}
 	body.security-model .assumption-grid > li {
 		padding-left: 3.15rem;
+	}
+	body.security-model .assumption-grid .assumption-links a {
+		white-space: normal;
+	}
+	body.security-model .excluded-guarantee-list {
+		grid-template-columns: 1fr;
 	}
 }
 

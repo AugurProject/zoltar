@@ -66,8 +66,16 @@
 				</p>
 			</header>
 
-				<section id="openoracle-role">
-					<h2>OpenOracle Role</h2>
+			<section id="openoracle-role">
+				<h2>OpenOracle Role</h2>
+				<p class="security-assumption-ref">
+					<strong>Security assumptions:</strong>
+					<a href="./security-model.html#assumption-a18">A18 REP and WETH behavior</a>,
+					<a href="./security-model.html#assumption-a19">A19 verified configuration</a>,
+					<a href="./security-model.html#assumption-a22">A22 report-state availability</a>,
+					and
+					<a href="./security-model.html#assumption-a23">A23 Ethereum execution</a>.
+				</p>
 					<p>
 						The generic oracle lifecycle comes first. Statoblast's coordinator
 						calls OpenOracle and becomes the initial reporter, then consumes the
@@ -650,6 +658,17 @@
 
 			<section id="security-guarantee">
 				<h2>Security Model and Guardrails</h2>
+				<p class="security-assumption-ref">
+					<strong>Security assumptions:</strong>
+					<a href="./security-model.html#assumption-a01">A01 arbitrage incentives</a>,
+					<a href="./security-model.html#assumption-a05">A05 viable operating costs</a>,
+					<a href="./security-model.html#assumption-a11">A11 REP liquidity</a>,
+					<a href="./security-model.html#assumption-a14">A14 timely inclusion</a>,
+					<a href="./security-model.html#assumption-a15">A15 correction capital</a>,
+					<a href="./security-model.html#assumption-a16">A16 available arbitrager</a>,
+					<a href="./security-model.html#assumption-a17">A17 independent corrector</a>, and
+					<a href="./security-model.html#assumption-a20">A20 observable correctable price</a>.
+				</p>
 				<p>
 					Statoblast uses the oracle to preserve solvency accounting around ETH
 					obligations backed by REP. Operations that can change REP backing or
@@ -982,6 +1001,16 @@
 
 			<section id="intentional-economic-tradeoffs">
 				<h2>Intentional Economic Tradeoffs</h2>
+				<p class="security-assumption-ref">
+					<strong>Security assumptions and limits:</strong>
+					<a href="./security-model.html#assumption-a12">A12 REP economic backing</a>,
+					<a href="./security-model.html#assumption-a14">A14 timely inclusion</a>,
+					<a href="./security-model.html#assumption-a16">A16 available arbitrager</a>,
+					<a href="./security-model.html#assumption-a17">A17 independent corrector</a>,
+					<a href="./security-model.html#assumption-a20">A20 profitable correction coverage</a>,
+					<a href="./security-model.html#assumption-a21">A21 lifecycle executors</a>, and
+					<a href="./security-model.html#excluded-guarantees">excluded guarantees</a>.
+				</p>
 				<p>
 					The canonical notional and residual-loss analysis follows here.
 					Operationally, the coordinator maintains no notional exposure budget:
@@ -1005,6 +1034,16 @@
 
 			<section id="attack-model">
 				<h2>Assumption Boundary and Attack Model</h2>
+				<p class="security-assumption-ref">
+					<strong>Security assumptions:</strong>
+					<a href="./security-model.html#assumption-a12">A12 REP economic backing</a>,
+					<a href="./security-model.html#assumption-a14">A14 timely inclusion</a>,
+					<a href="./security-model.html#assumption-a15">A15 correction capital</a>,
+					<a href="./security-model.html#assumption-a16">A16 available arbitrager</a>,
+					<a href="./security-model.html#assumption-a17">A17 independent corrector</a>,
+					and
+					<a href="./security-model.html#assumption-a20">A20 observable correctable price</a>.
+				</p>
 				<p>
 					The equations below model an attacker who excludes correcting
 					transactions until a bad REP/ETH report can settle and enable an outside
@@ -1650,6 +1689,12 @@
 
 			<section id="parameters">
 				<h2>OpenOracle Parameters Used</h2>
+				<p class="security-assumption-ref">
+					<strong>Security assumption:</strong>
+					<a href="./security-model.html#assumption-a26"
+						>A26 safe immutable parameters</a
+					>.
+				</p>
 				<p>
 					The integration depends on the OpenOracle fields below. This is the
 					canonical current-value table for coordinator and OpenOracle

@@ -35,6 +35,15 @@
 
 			<section id="lifecycle">
 			<h2>Operational Lifecycle</h2>
+			<p class="security-assumption-ref">
+				<strong>Security assumptions:</strong>
+				<a href="./security-model.html#assumption-a05">A05 viable operating costs</a>,
+				<a href="./security-model.html#assumption-a07">A07 practical migration</a>,
+				<a href="./security-model.html#assumption-a08">A08 independent bidders</a>,
+				<a href="./security-model.html#assumption-a09">A09 efficient REP conversion</a>,
+				<a href="./security-model.html#assumption-a14">A14 timely inclusion</a>, and
+				<a href="./security-model.html#assumption-a21">A21 lifecycle executors</a>.
+			</p>
 
 			<p>
 				For any child pool with a collateral shortfall, the truth auction can
@@ -215,6 +224,13 @@
 
 			<section id="clearing">
 				<h2>How Clearing Works</h2>
+				<p class="security-assumption-ref">
+					<strong>Security assumptions:</strong>
+					<a href="./security-model.html#assumption-a01">A01 bidder incentives</a>,
+					<a href="./security-model.html#assumption-a09">A09 efficient REP conversion</a>,
+					and
+					<a href="./security-model.html#assumption-a11">A11 REP liquidity</a>.
+				</p>
 				<p>
 					Bidders submit ETH at discrete price ticks, where each tick encodes an
 					ETH-per-REP limit price. The auction then walks demand from the highest

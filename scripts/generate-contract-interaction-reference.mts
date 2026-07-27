@@ -525,6 +525,7 @@ const contractReferences: ContractReference[] = [
 		readAbiFingerprint: '84e9d44350c2a27cc521f9525e34f385e810e0093aa0626ad64bcb490a925fe9',
 		readSurface:
 			'Use `universes`, `deployedChildOutcomeIndexes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThreshold`, `getNonDecisionThreshold`, `getUniverseTheoreticalSupply`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalance` to reconstruct universe and migration state.',
+		securityBoundary: 'Security boundaries for these calls are [A25 intended question selection](./security-model.html#assumption-a25), [A26 safe immutable parameters](./security-model.html#assumption-a26), and [A27 permissionless-fork alignment](./security-model.html#assumption-a27).',
 		readDeclarations: [
 			{ name: 'getForkTime' },
 			{ name: 'forkQuestionMatches' },
@@ -1768,6 +1769,8 @@ async function generateMarkdown(): Promise<string> {
 The main state-changing protocol calls map to caller authority, lifecycle prerequisites, effects, and observable events below. The conceptual flow begins in [Start Here](./documentation.html), while the [Operator Reference](./operator-reference.md) covers edge cases and the application build consumes the complete generated ABI.
 
 The tables focus on transaction entrypoints in the ten primary state-changing contracts that users and protocol components interact with directly. Each read surface names every read-only function and public storage getter in the deployed contract ABI; its hidden fingerprint pins the exact source declarations, including parameters, returns, visibility, and mutability. Protocol-only rows identify calls that applications should observe but ordinary users should reach through the owning pool, forker, factory, or coordinator. Stateless helpers, deployment workers, factories used only for component construction, migration proxies, and event emitters are inventoried with their caller boundaries in the Operator Reference.
+
+The external boundaries most directly affecting these interactions are [A07 practical migration](./security-model.html#assumption-a07), [A18 token behavior](./security-model.html#assumption-a18), [A19 verified deployments](./security-model.html#assumption-a19), [A21 lifecycle executors](./security-model.html#assumption-a21), [A22 chain data and proof availability](./security-model.html#assumption-a22), [A23 Ethereum execution](./security-model.html#assumption-a23), and [A24 account and cryptographic security](./security-model.html#assumption-a24).
 
 Failure behavior follows Solidity transaction semantics: an uncaught revert rolls back the transaction. The coordinator is the important exception at the workflow level because it deliberately consumes several failed staged operations and records the result in \`ExecutedStagedOperation\`.
 
