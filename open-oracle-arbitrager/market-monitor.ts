@@ -73,9 +73,8 @@ export function tokenCatalogForScan(discoveredAugurTokens: readonly Address[], c
 }
 
 export function createTokenCatalogTracker(discoverAugurTokens: (configured: readonly Address[], observed: readonly Address[]) => Promise<readonly Address[]>) {
-	let discoveredAugurTokens: readonly Address[] | undefined
 	return async (configuredTokens: readonly Address[], observedTokens: readonly Address[]) => {
-		discoveredAugurTokens ??= await discoverAugurTokens([], [])
+		const discoveredAugurTokens = await discoverAugurTokens([], [])
 		return tokenCatalogForScan(discoveredAugurTokens, configuredTokens, observedTokens)
 	}
 }

@@ -29,10 +29,11 @@ describe('Augur REP discovery helpers', () => {
 		const rep = '0x0000000000000000000000000000000000000001' as Address
 		const configured = '0x0000000000000000000000000000000000000002' as Address
 		const observed = '0x0000000000000000000000000000000000000003' as Address
+		const forkRep = '0x0000000000000000000000000000000000000004' as Address
 		const discoveryCalls: { configured: readonly Address[]; observed: readonly Address[] }[] = []
 		const catalogForScan = createTokenCatalogTracker((discoveryConfigured, discoveryObserved) => {
 			discoveryCalls.push({ configured: discoveryConfigured, observed: discoveryObserved })
-			return Promise.resolve([rep, ...discoveryConfigured, ...discoveryObserved])
+			return Promise.resolve(discoveryCalls.length === 1 ? [rep, ...discoveryConfigured, ...discoveryObserved] : [rep, forkRep, ...discoveryConfigured, ...discoveryObserved])
 		})
 
 		expect(await catalogForScan([configured], [observed])).toEqual({
@@ -40,10 +41,13 @@ describe('Augur REP discovery helpers', () => {
 			monitoringTokens: [rep, configured, observed],
 		})
 		expect(await catalogForScan([], [configured, observed])).toEqual({
-			executionTokens: [rep],
-			monitoringTokens: [rep, configured, observed],
+			executionTokens: [rep, forkRep],
+			monitoringTokens: [rep, forkRep, configured, observed],
 		})
-		expect(discoveryCalls).toEqual([{ configured: [], observed: [] }])
+		expect(discoveryCalls).toEqual([
+			{ configured: [], observed: [] },
+			{ configured: [], observed: [] },
+		])
 	})
 })
 
