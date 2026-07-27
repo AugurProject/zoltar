@@ -73,6 +73,7 @@ function createLinkedSecurityPool(questionId: string): ListedSecurityPool {
 	return {
 		completeSetCollateralAmount: 4n,
 		currentRetentionRate: 0n,
+		feeEligibleSecurityBondAllowance: 4n,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
 		hasForkActivity: false,

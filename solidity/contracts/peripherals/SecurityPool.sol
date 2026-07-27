@@ -303,11 +303,10 @@ contract SecurityPool is ISecurityPool {
 	}
 
 	function updateRetentionRate() public {
-		if (totalSecurityBondAllowance == 0) return;
 		if (systemState != SystemState.Operational) return; // if system state is not operational do not change fees
 		uint256 nextRetentionRate = SecurityPoolUtils.calculateRetentionRate(
 			completeSetCollateralAmount,
-			totalSecurityBondAllowance
+			feeEligibleSecurityBondAllowance
 		);
 		if (nextRetentionRate == currentRetentionRate) return;
 		currentRetentionRate = nextRetentionRate;
@@ -670,7 +669,7 @@ contract SecurityPool is ISecurityPool {
 			'Vault allow'
 		);
 		require(_isAllowanceBackedByRep(getTotalRepBalance(), totalSecurityBondAllowance, repEthPrice), 'Pool allow');
-		_requireCapacityNotExceeded(totalSecurityBondAllowance, completeSetCollateralAmount);
+		_requireCapacityNotExceeded(feeEligibleSecurityBondAllowance, completeSetCollateralAmount);
 		_requireMinimumSecurityBondAllowance(amount, amount == 0, 'Bond min');
 		_syncActiveVault(callerVault);
 		updateRetentionRate();
@@ -690,7 +689,9 @@ contract SecurityPool is ISecurityPool {
 		uint256 completeSetsToMint = cashToShares(msg.value);
 		require(completeSetsToMint > 0, 'Exchange rate undefined');
 		uint256 nextCompleteSetCollateralAmount = completeSetCollateralAmount + msg.value;
-		_requireCapacityNotExceeded(totalSecurityBondAllowance, nextCompleteSetCollateralAmount);
+		// Allowance reserved for unclaimed truth-auction bids has no accountable vault
+		// and cannot secure new open interest until the winner claims it.
+		_requireCapacityNotExceeded(feeEligibleSecurityBondAllowance, nextCompleteSetCollateralAmount);
 		shareTokenSupply += completeSetsToMint;
 		completeSetCollateralAmount = nextCompleteSetCollateralAmount;
 		emit CompleteSetCreated(
@@ -969,6 +970,7 @@ contract SecurityPool is ISecurityPool {
 		feeEligibleSecurityBondAllowance += amount;
 		require(feeEligibleSecurityBondAllowance <= totalSecurityBondAllowance, 'Fee high');
 		_clearFeeIndexRemainder();
+		updateRetentionRate();
 		_emitVaultAccountingCheckpoint(vault);
 		_emitPoolAccountingCheckpoint(AccountingReason.AuctionClaim, vault);
 	}

@@ -44,7 +44,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/contract-interaction-reference.md'
-const expectedProductionSoliditySourceFingerprint = '2c1e29f5c7dcbbef2078f09a5264b90be6f08536e590ade1e2f5b136b93da41a'
+const expectedProductionSoliditySourceFingerprint = '947aec09655a24a9c34db68706f83755eb46c57138cf264b4a14b841ccc8a3c9'
 
 const eventSourceByName: Record<string, string> = {
 	Approval: 'solidity/contracts/IERC20.sol',
@@ -76,6 +76,7 @@ const eventSourceByName: Record<string, string> = {
 	EscalationMigrationEntitlementInitialized: 'solidity/contracts/peripherals/EscalationGameForker.sol',
 	EscalationMigrationEntitlementMaterialized: 'solidity/contracts/peripherals/EscalationGameForker.sol',
 	EscalationRepDrainedAtFork: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
+	EthRefundDeferred: 'solidity/contracts/peripherals/interfaces/IUniformPriceDualCapBatchAuction.sol',
 	ExecutedStagedOperation: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	ForkContinuationResumed: 'solidity/contracts/peripherals/EscalationGameState.sol',
 	ForkCarryCheckpoint: 'solidity/contracts/peripherals/interfaces/IEscalationGame.sol',
@@ -92,6 +93,7 @@ const eventSourceByName: Record<string, string> = {
 	Mint: 'solidity/contracts/ReputationToken.sol',
 	NonDecisionReached: 'solidity/contracts/peripherals/interfaces/IEscalationGame.sol',
 	OwnershipDenominatorSet: 'solidity/contracts/peripherals/SecurityPool.sol',
+	PendingEthRefundWithdrawn: 'solidity/contracts/peripherals/interfaces/IUniformPriceDualCapBatchAuction.sol',
 	PendingOperationRecoveryConsumed: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	PendingReportRecovered: 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol',
 	ParentRepLocked: 'solidity/contracts/peripherals/interfaces/ISecurityPoolForker.sol',
@@ -322,7 +324,7 @@ const assemblyDelegateCalls: AssemblyDelegateCall[] = [
 	},
 ]
 
-const referencedEventAbiFingerprint = '7ac5f4c99a3df29c647b19b127f747ff3d74d1f5d3e351e306374cad567d6c34'
+const referencedEventAbiFingerprint = '09d7fcd361563992e87ae80aad41f3338bcdb8edf9ba71b8f01ba2e8dbae2ab8'
 
 const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	'solidity/contracts/ERC20.sol': {
@@ -437,6 +439,7 @@ const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 		startAuction: ['public(uint256,uint256)'],
 		submitBid: ['external(int256)'],
 		withdrawBids: ['external(address,IUniformPriceDualCapBatchAuction.TickIndex[],uint256)'],
+		withdrawPendingEthRefund: ['external()'],
 	},
 	'solidity/contracts/peripherals/tokens/ShareToken.sol': {
 		authorize: ['external(ISecurityPool)'],
@@ -470,7 +473,7 @@ const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/peripherals/SecurityPoolForker.sol': '282c464a68623405a6241816a1c5fcef4b80e9db39e42e89d77177d8a4f10eae',
 	'solidity/contracts/peripherals/SecurityPoolForkerBase.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/peripherals/SecurityPoolForkerStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-	'solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol': '2c1768ca6df9cc73f7cd8743eb1955f628d8452135ad20a6afa84266f87da6ff',
+	'solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol': 'c6fbecf8a9b808a1111fadb9cbb1a5b53edc30dff9cdac2f116fa58133536c2f',
 	'solidity/contracts/peripherals/factories/SecurityPoolFactory.sol': '64ce90671df93d7d85580ab404806c41d1eabaf7283ba979a0ff7bb6e7b40bd3',
 	'solidity/contracts/peripherals/tokens/ERC1155.sol': '7bb87695bc3df8fa177c545209ed58d2e4571c19c869b5598bb0a829e764b218',
 	'solidity/contracts/peripherals/tokens/ShareToken.sol': '45fffaf3a3150648f3f43a9129d2a5af0ddc4e261de52a6ad379fa804e44672d',
@@ -764,7 +767,8 @@ const contractReferences: ContractReference[] = [
 				caller: 'Trader',
 				effect: 'Adds collateral and mints one `Invalid`, `Yes`, and `No` share per complete-set unit, then invokes the ERC-1155 batch-receiver callback for a contract trader. Callback rejection rolls back the ETH, pool accounting, events, and share mint.',
 				declarations: [{ name: 'createCompleteSet' }],
-				preconditions: 'Operational and unforked; `isEscalationResolved()` is false; not awaiting continuation; positive ETH converts to at least one complete-set unit; bond capacity covers the new collateral; a contract trader accepts `onERC1155BatchReceived`.',
+				preconditions:
+					"Operational and unforked; `isEscalationResolved()` is false; not awaiting continuation; positive ETH converts to at least one complete-set unit; vault-assigned, fee-eligible bond capacity covers the new collateral (the pool's resulting total collateral, not merely this deposit); a contract trader accepts `onERC1155BatchReceived`.",
 				signals: '`CompleteSetCreated`, `PoolAccountingCheckpoint`, then ERC-1155 `TransferBatch` on a successful callback',
 			},
 			{
@@ -829,9 +833,9 @@ const contractReferences: ContractReference[] = [
 			{
 				call: '`updateRetentionRate()`',
 				caller: 'Anyone',
-				effect: 'Recalculates the retention rate from current collateral and total bond allowance.',
+				effect: 'Recalculates the retention rate from current collateral and vault-assigned, fee-eligible bond allowance.',
 				declarations: [{ name: 'updateRetentionRate' }],
-				preconditions: 'No caller restriction. It returns unchanged when allowance is zero, the pool is not `Operational`, or the calculated rate equals the stored rate.',
+				preconditions: 'No caller restriction. It returns unchanged when the pool is not `Operational` or the calculated rate equals the stored rate. Zero fee-eligible allowance selects the maximum retention rate.',
 				signals: '`PoolAccountingCheckpoint` only when the stored retention rate changes; no event for a no-op',
 			},
 			{
@@ -864,7 +868,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Accrues the vault, replaces its total and fee-eligible allowance contribution, clears allowance-denominator rounding carry, updates active membership, and recalculates retention.',
 				declarations: [{ name: 'performSetSecurityBondsAllowance' }],
 				preconditions:
-					'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false; the affected vault remains non-liquidatable and aggregate pool backing independently satisfies the same multiplier-adjusted inequality; collateral stays within capacity; new allowance is zero or meets the minimum debt.',
+					'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false; the affected vault remains non-liquidatable and aggregate pool backing independently satisfies the same multiplier-adjusted inequality; collateral stays within vault-assigned, fee-eligible capacity; new allowance is zero or meets the minimum debt.',
 				signals: 'Accrual checkpoints as needed; retention `PoolAccountingCheckpoint` if its rate changes; always final `VaultAccountingCheckpoint` and `PoolAccountingCheckpoint`, including when replacing an allowance with the same value',
 			},
 			{
@@ -976,9 +980,9 @@ const contractReferences: ContractReference[] = [
 				call: '`addFeeEligibleSecurityBondAllowance(vault, amount)`',
 				caller: '`SecurityPoolForker` only',
 				declarations: [{ name: 'addFeeEligibleSecurityBondAllowance' }],
-				effect: 'Adds newly auction-claimed security-bond allowance to the live fee denominator and clears the pooled fee-index rounding remainder.',
+				effect: 'Adds newly auction-claimed security-bond allowance to the live fee denominator, clears the pooled fee-index rounding remainder, and immediately recalculates retention against the assigned denominator.',
 				preconditions: 'The resulting fee-eligible allowance cannot exceed total security-bond allowance; no lifecycle, vault, positive-amount, or value-change guard.',
-				signals: '`VaultAccountingCheckpoint` and `PoolAccountingCheckpoint`, including at zero amount; the calling forker emits `ClaimAuctionProceeds` only after the broader credit workflow completes',
+				signals: 'Retention-rate `PoolAccountingCheckpoint` first when the rate changes, then `VaultAccountingCheckpoint` and auction-claim `PoolAccountingCheckpoint`, including the latter two at zero amount; the calling forker emits `ClaimAuctionProceeds` only after the broader credit workflow completes',
 			},
 			{
 				call: 'Direct ETH transfer to `receive()`',
@@ -1103,18 +1107,19 @@ const contractReferences: ContractReference[] = [
 				call: '`settleAuctionBids(securityPool, vault, claimTickIndices, refundTickIndices)`',
 				caller: 'Anyone on behalf of the named bidder vault',
 				declarations: [{ name: 'settleAuctionBids' }],
-				effect: 'Before finalization, refunds only provably losing bids. After finalization, combines claim and refund indexes into one settlement withdrawal and credits each fixed-position REP and allowance result; a winning dust bid may receive allowance even when its REP share rounds to zero.',
+				effect:
+					'Before finalization, refunds only provably losing bids. After finalization, combines claim and refund indexes into one settlement withdrawal and credits each fixed-position REP and allowance result; a winning dust bid may receive allowance even when its REP share rounds to zero. A positive ETH push is gas-bounded and defers on rejection, revert, or gas exhaustion.',
 				preconditions: 'At least one index; before finalization the claim list must be empty and refund indexes must be eligible; after finalization all indexes must belong to the named vault and remain unsettled.',
-				signals: 'Underlying auction `BidSettled`; `ClaimAuctionProceeds` when REP or allowance is credited',
+				signals: 'Underlying auction `BidSettled`; `EthRefundDeferred` when the named bidder rejects a positive refund; `ClaimAuctionProceeds` when REP or allowance is credited',
 			},
 			{
 				call: '`claimAuctionProceeds(securityPool, vault, tickIndices)`',
 				caller: 'Anyone on behalf of the named bidder vault',
 				declarations: [{ name: 'claimAuctionProceeds' }],
 				effect:
-					'For a nonempty list, withdraws finalized bid settlements, converts purchased REP into child-pool ownership, and independently credits the bid positional allowance share. A winning dust bid can receive positive allowance when its REP share rounds to zero. For an empty list, the underlying auction withdrawal returns three zeros and the wrapper exits after the finalization guard without validating bids or the named beneficiary, calling it, changing state, or emitting events.',
+					'For a nonempty list, withdraws finalized bid settlements, converts purchased REP into child-pool ownership, and independently credits the bid positional allowance share. A winning dust bid can receive positive allowance when its REP share rounds to zero. A positive ETH push is gas-bounded and defers on rejection, revert, or gas exhaustion, so recipient code cannot block the subsequent credit. For an empty list, the underlying auction withdrawal returns three zeros and the wrapper exits after the finalization guard without validating bids or the named beneficiary, calling it, changing state, or emitting events.',
 				preconditions: 'Auction finalized. A nonempty list additionally requires every index to belong to the named vault and remain unsettled.',
-				signals: 'For processed bids, underlying auction `BidSettled`; `ClaimAuctionProceeds` when REP or allowance is credited; no event for an empty list',
+				signals: 'For processed bids, underlying auction `BidSettled`; `EthRefundDeferred` when the named bidder rejects a positive refund; `ClaimAuctionProceeds` when REP or allowance is credited; no event for an empty list',
 			},
 			{
 				call: '`initializeChildForkedEscalationGameIfNeeded(parent, child, childEscalationGame)`',
@@ -1543,12 +1548,12 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '665c49ae04480dac83863ace573f093aa6bc0815ee64a65c8deb37f388bfa2da',
+		compiledAbiFingerprint: '5df909f507764d5f4db42faa005199caa7cb7afb8752230d80e2779b5f3f1585',
 		name: 'UniformPriceDualCapBatchAuction',
 		purpose: 'Collects ETH bids under ETH-raise and REP-sale caps, computes one clearing result, and supports paged settlement.',
-		readAbiFingerprint: '186753be736e928a7f869de0ce48c0e0d02d4000940ab96c8f656d7bdbae28ca',
+		readAbiFingerprint: 'fa081bb7fcac006e561c1da8dc707503698fe77ed72f2a3aed455e8f601fdd74',
 		readSurface:
-			'Auction summary getters are `maxRepBeingSold`, `ethRaiseCap`, `finalized`, `clearingTick`, `ethFilledAtClearing`, `ethRaised`, `totalRepPurchased`, `auctionStarted`, `minBidSize`, `owner`, `underfunded`, `underfundedThreshold`, `underfundedWinningEth`, and `activeTickCount`. Use `computeClearing`, `previewFinalization`, `tickToPrice`, `getTickSummary`, `getTickCount`, `getTickPage`, `getActiveTickPage`, `getBidCountAtTick`, `getBidPageAtTick`, `getBidderBidCount`, and `getBidderBidPage` before finalizing or submitting settlement indexes.',
+			'Auction summary getters are `maxRepBeingSold`, `ethRaiseCap`, `finalized`, `clearingTick`, `ethFilledAtClearing`, `ethRaised`, `totalRepPurchased`, `auctionStarted`, `minBidSize`, `owner`, `underfunded`, `underfundedThreshold`, `underfundedWinningEth`, and `activeTickCount`. `pendingEthRefunds` reports ETH whose gas-bounded push failed during settlement and can still be pulled. Use `computeClearing`, `previewFinalization`, `tickToPrice`, `getTickSummary`, `getTickCount`, `getTickPage`, `getActiveTickPage`, `getBidCountAtTick`, `getBidPageAtTick`, `getBidderBidCount`, and `getBidderBidPage` before finalizing or submitting settlement indexes.',
 		readDeclarations: [
 			{ name: 'computeClearing' },
 			{ name: 'previewFinalization' },
@@ -1577,6 +1582,7 @@ const contractReferences: ContractReference[] = [
 			{ name: 'underfundedThreshold' },
 			{ name: 'underfundedWinningEth' },
 			{ name: 'activeTickCount' },
+			{ name: 'pendingEthRefunds' },
 		],
 		sourcePath: 'solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol',
 		interactions: [
@@ -1600,17 +1606,18 @@ const contractReferences: ContractReference[] = [
 				call: '`refundLosingBids(tickIndices)`',
 				caller: 'Bidder for its own bids',
 				declarations: [{ name: 'refundLosingBids' }],
-				effect: "A nonempty list marks and refunds the caller's bids already provably below the current clearing tick. An empty list changes no bids but still calls the bidder with zero ETH.",
-				preconditions: 'Auction started and unfinalized; auction has reached a clearing price; bidder accepts the refund ETH call, including zero value. Nonempty indexes additionally belong to the caller and are strictly losing and unrefunded.',
-				signals: '`BidSettled` per refunded bid; no event for an empty list',
+				effect:
+					"A nonempty list marks the caller's bids already provably below the current clearing tick and attempts an immediate gas-bounded ETH refund. Rejected, reverted, or gas-exhausted pushes are recorded in `pendingEthRefunds` without restoring the bid. An empty list changes no bids and makes no external call.",
+				preconditions: 'Auction started and unfinalized; auction has reached a clearing price. Nonempty indexes additionally belong to the caller and are strictly losing and unrefunded.',
+				signals: '`BidSettled` per refunded bid; `EthRefundDeferred` when a positive push fails',
 			},
 			{
 				call: '`refundLosingBidsFor(bidder, tickIndices)`',
 				caller: 'Auction owner (`SecurityPoolForker`) only; public callers use `settleAuctionBids`',
 				declarations: [{ name: 'refundLosingBidsFor' }],
-				effect: "A nonempty list marks and refunds a named bidder's bids already provably below the current clearing tick. An empty list changes no bids but still calls the bidder with zero ETH.",
-				preconditions: 'Named bidder is nonzero; auction started and unfinalized; auction has reached a clearing price; bidder accepts the refund ETH call, including zero value. Nonempty indexes additionally belong to that bidder and are strictly losing and unrefunded.',
-				signals: '`BidSettled` per refunded bid; no event for an empty list',
+				effect: "A nonempty list marks and attempts a gas-bounded refund of a named bidder's bids already provably below the current clearing tick. Rejected, reverted, or gas-exhausted pushes are recorded in `pendingEthRefunds` without restoring the bid. An empty list changes no bids and makes no external call.",
+				preconditions: 'Named bidder is nonzero; auction started and unfinalized; auction has reached a clearing price. Nonempty indexes additionally belong to that bidder and are strictly losing and unrefunded.',
+				signals: '`BidSettled` per refunded bid; `EthRefundDeferred` when a positive push fails',
 			},
 			{
 				call: '`finalize()`',
@@ -1624,10 +1631,18 @@ const contractReferences: ContractReference[] = [
 				call: '`withdrawBids(withdrawFor, tickIndices, proRataTotal)`',
 				caller: 'Auction owner only',
 				effect:
-					'For a nonempty list, returns refunds, purchased REP, and a companion pro-rata allocation for the selected beneficiary bids so the forker can credit pool ownership and allowance. Withdrawal-time allocation assigns division dust from deterministic cumulative ETH positions, making each payout independent of claim order. An empty list returns three zeros without changing bids, emitting events, or calling the beneficiary.',
+					'For a nonempty list, returns refunds, purchased REP, and a companion pro-rata allocation for the selected beneficiary bids so the forker can credit pool ownership and allowance. Withdrawal-time allocation assigns division dust from deterministic cumulative ETH positions, making each payout independent of claim order. A rejected, reverted, or gas-exhausted positive refund push is gas-bounded and deferred rather than reverting or starving the REP and allowance settlement. An empty list returns three zeros without changing bids, emitting events, or calling the beneficiary.',
 				declarations: [{ name: 'withdrawBids' }],
-				preconditions: 'Auction finalized; caller is owner. Nonempty indexes belong to `withdrawFor` and remain unsettled; if their aggregate refund is positive, `withdrawFor` accepts that ETH call.',
-				signals: '`BidSettled` per processed bid; no event for an empty list',
+				preconditions: 'Auction finalized; caller is owner. Nonempty indexes belong to `withdrawFor` and remain unsettled.',
+				signals: '`BidSettled` per processed bid; `EthRefundDeferred` when a positive push fails',
+			},
+			{
+				call: '`withdrawPendingEthRefund()`',
+				caller: 'Bidder with deferred ETH',
+				effect: "Clears the caller's complete deferred refund and emits its withdrawal before transferring without the push-refund gas cap, so callback-created deferrals follow the clear in log order. A rejected pull reverts the transfer, clear, and event.",
+				declarations: [{ name: 'withdrawPendingEthRefund' }],
+				preconditions: 'Caller has a positive `pendingEthRefunds` balance and currently accepts ETH.',
+				signals: '`PendingEthRefundWithdrawn`',
 			},
 		],
 	},

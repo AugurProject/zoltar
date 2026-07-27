@@ -3289,9 +3289,12 @@ describe('Peripherals: fork migration', () => {
 			if ((await getSystemState(client, firstChildPool.securityPool)) === SystemState.ForkTruthAuction) {
 				const repairTarget = await getEthRaiseCap(client, firstChildPool.truthAuction)
 				const parentForkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
-				await participateAuction(client, firstChildPool.truthAuction, parentForkData.auctionableRepAtFork / 4n, repairTarget)
+				const winningTick = await participateAuction(client, firstChildPool.truthAuction, parentForkData.auctionableRepAtFork / 4n, repairTarget)
 				await mockWindow.advanceTime(7n * DAY + DAY)
 				await finalizeTruthAuction(client, firstChildPool.securityPool)
+				// The recursive-share scenario needs real assigned capacity. An unclaimed
+				// auction allocation has no responsible vault and cannot back this mint.
+				await claimAuctionProceeds(client, firstChildPool.securityPool, client.account.address, [{ tick: winningTick, bidIndex: 0n }])
 			}
 
 			strictEqualTypeSafe(await getQuestionOutcome(client, firstChildPool.securityPool), QuestionOutcome.Yes, 'first matching fork should resolve the first child as yes')
@@ -3309,6 +3312,7 @@ describe('Peripherals: fork migration', () => {
 			assert.ok(attackerFirstRedemption * 100n > attackerMintAmount * 99n, 'the attacker should recover more than 99% of the temporary complete-set deposit before recycling its losing share')
 			strictEqualTypeSafe(await getShareTokenSupply(client, firstChildPool.securityPool), victimEconomicClaim, 'the first redemption should leave only the victim economic claim')
 			const victimCollateral = await getCompleteSetCollateralAmount(client, firstChildPool.securityPool)
+			const accruedFeesBeforeRecursiveFork = await getTotalAccruedFees(client, firstChildPool.securityPool)
 			assert.ok(victimCollateral > 0n, 'the first child should retain collateral for the victim')
 
 			const firstChildRepToken = await getRepToken(client, firstChildPool.securityPool)
@@ -3335,7 +3339,8 @@ describe('Peripherals: fork migration', () => {
 			const victimBalanceBeforeRedemption = await getETHBalance(client, victim.account.address)
 			await redeemShares(victim, firstChildPool.securityPool)
 			const victimRedemption = (await getETHBalance(client, victim.account.address)) - victimBalanceBeforeRedemption
-			strictEqualTypeSafe(victimRedemption, victimCollateral, 'the victim should retain the full collateral reserve after the recursive fork is rejected')
+			const feesAccruedBeforeVictimRedemption = (await getTotalAccruedFees(client, firstChildPool.securityPool)) - accruedFeesBeforeRecursiveFork
+			approximatelyEqual(victimRedemption + feesAccruedBeforeVictimRedemption, victimCollateral, 10n, 'the rejected recursive fork must preserve the victim reserve apart from ordinary retention fees')
 			strictEqualTypeSafe(await getShareTokenSupply(client, firstChildPool.securityPool), 0n, 'the victim redemption should consume the remaining economic claims')
 			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, firstChildPool.securityPool), 0n, 'the victim redemption should consume the remaining collateral')
 		})

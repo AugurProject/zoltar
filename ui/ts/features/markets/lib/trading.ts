@@ -28,10 +28,10 @@ export function hasUndefinedCompleteSetExchangeRate(completeSetCollateralAmount:
 	return completeSetCollateralAmount === 0n && shareTokenSupply !== 0n
 }
 
-export function getRemainingMintCapacity(totalSecurityBondAllowance: bigint | undefined, completeSetCollateralAmount: bigint | undefined, shareTokenSupply?: bigint | undefined) {
-	if (totalSecurityBondAllowance === undefined || completeSetCollateralAmount === undefined) return undefined
+export function getRemainingMintCapacity(feeEligibleSecurityBondAllowance: bigint | undefined, completeSetCollateralAmount: bigint | undefined, shareTokenSupply?: bigint | undefined) {
+	if (feeEligibleSecurityBondAllowance === undefined || completeSetCollateralAmount === undefined) return undefined
 	if (hasUndefinedCompleteSetExchangeRate(completeSetCollateralAmount, shareTokenSupply) === true) return 0n
-	return totalSecurityBondAllowance > completeSetCollateralAmount ? totalSecurityBondAllowance - completeSetCollateralAmount : 0n
+	return feeEligibleSecurityBondAllowance > completeSetCollateralAmount ? feeEligibleSecurityBondAllowance - completeSetCollateralAmount : 0n
 }
 
 function getCollateralizationPercent(repDeposit: bigint | undefined, securityBondAllowance: bigint | undefined, repPerEthPrice: bigint | undefined) {
@@ -57,8 +57,8 @@ export function getCollateralizationDisplayState(securityBondAllowance: bigint |
 	return collateralizationPercent === undefined ? 'unavailable' : 'value'
 }
 
-export function hasRepBackedPoolWithNoActiveAllowance(totalRepDeposit: bigint | undefined, totalSecurityBondAllowance: bigint | undefined) {
-	return (totalRepDeposit ?? 0n) > 0n && (totalSecurityBondAllowance ?? 0n) === 0n
+export function hasRepBackedPoolWithNoActiveAllowance(totalRepDeposit: bigint | undefined, feeEligibleSecurityBondAllowance: bigint | undefined) {
+	return (totalRepDeposit ?? 0n) > 0n && (feeEligibleSecurityBondAllowance ?? 0n) === 0n
 }
 
 export function getMaxRedeemableCompleteSets(shareBalances: TradingShareBalances | undefined) {
@@ -148,22 +148,22 @@ export function getTradingMintGuardMessage({
 	accountAddress,
 	completeSetCollateralAmount,
 	ethBalance,
+	feeEligibleSecurityBondAllowance,
 	hasSelectedPool,
 	isMainnet,
 	mintAmountInput,
 	shareTokenSupply,
 	totalRepDeposit,
-	totalSecurityBondAllowance,
 }: {
 	accountAddress: Address | undefined
 	completeSetCollateralAmount: bigint | undefined
 	ethBalance: bigint | undefined
+	feeEligibleSecurityBondAllowance: bigint | undefined
 	hasSelectedPool: boolean
 	isMainnet: boolean
 	mintAmountInput: string
 	shareTokenSupply: bigint | undefined
 	totalRepDeposit: bigint | undefined
-	totalSecurityBondAllowance: bigint | undefined
 }) {
 	if (!hasSelectedPool) return 'Select a pool before minting.'
 	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before minting complete sets.' })
@@ -173,10 +173,10 @@ export function getTradingMintGuardMessage({
 	if (undefinedExchangeRate === undefined) return 'Loading mint capacity.'
 	if (undefinedExchangeRate) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
 
-	const remainingCapacity = getRemainingMintCapacity(totalSecurityBondAllowance, completeSetCollateralAmount, shareTokenSupply)
+	const remainingCapacity = getRemainingMintCapacity(feeEligibleSecurityBondAllowance, completeSetCollateralAmount, shareTokenSupply)
 	if (remainingCapacity === undefined) return 'Loading mint capacity.'
 	if (remainingCapacity === 0n) {
-		if (hasRepBackedPoolWithNoActiveAllowance(totalRepDeposit, totalSecurityBondAllowance)) return NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE
+		if (hasRepBackedPoolWithNoActiveAllowance(totalRepDeposit, feeEligibleSecurityBondAllowance)) return NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE
 
 		return 'No mint capacity remaining.'
 	}
