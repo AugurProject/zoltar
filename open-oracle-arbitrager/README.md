@@ -651,16 +651,21 @@ recovery state. Back it up with the settings and history files, never share one
 override across networks or execution signers, and preserve it until every position
 is closed and reconciled.
 
-Execute mode holds two exclusive lifetime locks: `<position-file>.lock` prevents
-concurrent writers, while an operating-system temporary-directory lock prevents a
-second local process from using the same signer on the same chain with a different
-journal. The reconciliation command also holds the journal lock. A competing
-process fails before journal load, signing, or submission. Lock files include the
-owner PID and acquisition time and are removed on an orderly exit. After a hard
-kill, verify that no bot or reconciliation process is still running before removing
-an orphan lock; never delete a live lock to force startup. Local locks cannot
-coordinate separate hosts, so never run the same execution signer on more than one
-machine.
+Execute mode holds `<position-file>.lock` for the process lifetime to prevent
+concurrent writers. While a signer is active or queued, it also holds an
+operating-system temporary-directory lock that prevents a second local process from
+using the same signer on the same chain with a different journal, provided both
+processes share the same OS temporary-directory namespace. A signer change acquires
+the new lock before persistence and keeps the old and new locks until the next scan
+boundary completes the transfer. The reconciliation command also holds the journal
+lock. Journal contention fails before journal load, while signer contention fails
+before signer activation, signing, or submission. Lock files include the owner PID
+and acquisition time and are removed after normal completion or caught-error
+unwinding. After any interrupted, terminated, or crashed process, verify that no bot
+or reconciliation process is still running before removing an orphan lock; never
+delete a live lock to force startup. Signer locks cannot coordinate different
+temporary-directory roots, private temp namespaces, containers, or hosts. Never run
+the same execution signer across any of those boundaries.
 
 The state sequence is:
 
