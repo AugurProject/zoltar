@@ -787,9 +787,10 @@ entry from depending on wallet inventory already committed to recovery.
   error, but production operation still requires external process supervision and
   alerts.
 - A private entry bundle targets one block and receives one complete-inclusion check
-  after that block. Missing or unsuccessful receipts mark the attempt as
-  confirmation unknown or failed, and a later scan must build a new quote and
-  bundle.
+  after that block. Missing, disagreeing, or unsuccessful receipts leave the
+  already-journaled attempt pending or `recovery-required`. Later scans only retry
+  independent receipt recovery; they do not submit the recorded entry or lifecycle
+  bundle a second time.
 - The owner-only position journal is written immediately before entry and lifecycle
   submission and recovered on restart. A pending entry advances only after every
   recorded bundle receipt and the executor event agree; a lifecycle attempt closes

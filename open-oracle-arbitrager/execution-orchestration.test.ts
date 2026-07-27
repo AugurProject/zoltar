@@ -1,13 +1,17 @@
 import { describe, expect, test } from 'bun:test'
 import type { Address, Hex, TransactionReceipt, TransactionReplacement } from '@zoltar/shared/ethereum'
 import {
+	assertReceiptSnapshotBlockHash,
 	attemptConfirmationRecovery,
 	executionFailureDecision,
 	executionTokenAllowed,
+	finalizeSubmittedLifecycleAttempt,
 	fundingTransactionPlan,
 	flushExecutionHistory,
 	guardedTransactionSubmission,
+	guardedRiskSubmission,
 	journaledSubmission,
+	lifecycleAttemptNeedsRecovery,
 	openOracleDisputeTiming,
 	opportunityDecision,
 	privateBundleReceiptStatus,
@@ -18,10 +22,11 @@ import {
 	signAndSubmitOpenOracleDispute,
 	simulateTrackedPrivateBundle,
 	trackPrivateBundleReceiptStatuses,
+	transactionReceiptsWithQuorum,
 	waitForResolvedTransaction,
 } from './execution-orchestration.js'
 import type { ExecutionRecord } from './operator-state.js'
-import { savePositionJournal, type PositionJournalFilesystem } from './position-store.js'
+import { savePositionJournal, type PositionJournalFilesystem, type PositionRecord } from './position-store.js'
 import { assertSubmissionWindowOpen } from './transaction-submission.js'
 
 const address = '0x0000000000000000000000000000000000000001' as Address
@@ -44,6 +49,40 @@ const record: ExecutionRecord = {
 	tokenSymbol: 'REP',
 	trackedNetProfitEth: '0.05',
 	transactionHash: `0x${'12'.repeat(32)}` as Hex,
+}
+
+function lifecyclePosition(): PositionRecord {
+	return {
+		account: address,
+		actualEntryGasCostEth: '0.001',
+		capitalAtRiskWeth: '2',
+		closedAt: undefined,
+		direction: 'sell-rep',
+		entryTransactionHash: originalHash,
+		entryTransactionHashes: [originalHash],
+		hedgeAmountToken: '1',
+		hedgeWeth: '2',
+		hedgedProfitBeforeGasEth: '0.1',
+		lifecycleGasCostEth: '0',
+		lifecycleReceiptRecovered: false,
+		lifecycleTargetBlockNumber: '101',
+		lifecycleTokenDecimals: '18',
+		lifecycleTransactionHashes: [replacementHash],
+		lifecycleUpdatedAt: '2026-07-24T00:01:00.000Z',
+		lifecycleWalletTokenBefore: '10',
+		lifecycleWalletWethBefore: '20',
+		lockedToken: '1',
+		lockedWeth: '2',
+		manualReconciliation: undefined,
+		openedAt: '2026-07-24T00:00:00.000Z',
+		realizedNetProfitEth: undefined,
+		reportId: '7',
+		status: 'withdrawing',
+		token: reporter,
+		tokenSymbol: 'REP',
+		withdrawnToken: '0',
+		withdrawnWeth: '0',
+	}
 }
 
 function transactionReceipt(status: TransactionReceipt['status'] = 'success'): TransactionReceipt {
@@ -267,6 +306,61 @@ describe('funded execution orchestration', () => {
 			),
 		).rejects.toThrow('quote expired')
 		expect(persisted).toBe(false)
+	})
+
+	test('preserves the durable lifecycle attempt when canonical post-state recovery fails', async () => {
+		const submitted = lifecyclePosition()
+		let persisted: PositionRecord | undefined
+		await expect(
+			finalizeSubmittedLifecycleAttempt(
+				submitted,
+				() => Promise.reject(new Error('Recovered lifecycle reduced a tracked wallet balance')),
+				position => {
+					persisted = position
+					return Promise.resolve()
+				},
+			),
+		).rejects.toThrow('reduced a tracked wallet balance')
+		expect(persisted?.status).toBe('recovery-required')
+		expect(persisted?.lifecycleTransactionHashes).toEqual([replacementHash])
+		expect(persisted?.lifecycleTargetBlockNumber).toBe('101')
+		expect(persisted?.lifecycleWalletTokenBefore).toBe('10')
+		expect(persisted?.lifecycleWalletWethBefore).toBe('20')
+		expect(persisted === undefined ? false : lifecycleAttemptNeedsRecovery(persisted)).toBe(true)
+	})
+
+	test('requires exact independent receipt agreement before entry accounting', async () => {
+		const primary = transactionReceipt()
+		const secondary = { ...transactionReceipt(), gasUsed: primary.gasUsed + 1n }
+		const readers = [{ getTransactionReceipt: () => Promise.resolve(primary) }, { getTransactionReceipt: () => Promise.resolve(secondary) }]
+		await expect(transactionReceiptsWithQuorum(readers, ['https://primary.example', 'https://secondary.example'], 'pending entry 7', [replacementHash])).rejects.toThrow('RPC disagreement')
+		secondary.gasUsed = primary.gasUsed
+		expect(await transactionReceiptsWithQuorum(readers, ['https://primary.example', 'https://secondary.example'], 'pending entry 7', [replacementHash])).toEqual([
+			{
+				blockHash: primary.blockHash,
+				blockNumber: primary.blockNumber,
+				effectiveGasPrice: primary.effectiveGasPrice,
+				gasUsed: primary.gasUsed,
+				logs: primary.logs,
+				status: primary.status,
+				transactionHash: primary.transactionHash,
+			},
+		])
+	})
+
+	test('rejects lifecycle accounting from a different canonical block than its receipts', () => {
+		expect(() => assertReceiptSnapshotBlockHash(`0x${'11'.repeat(32)}`, `0x${'22'.repeat(32)}`, 'Lifecycle')).toThrow('different canonical blocks')
+		expect(() => assertReceiptSnapshotBlockHash(`0x${'11'.repeat(32)}`, `0x${'11'.repeat(32)}`, 'Lifecycle')).not.toThrow()
+	})
+
+	test('does not submit when the final refreshed risk check fails', async () => {
+		let submitted = false
+		await expect(
+			guardedRiskSubmission('Maximum daily gas loss budget exceeded', async () => {
+				submitted = true
+			}),
+		).rejects.toThrow('Maximum daily gas loss budget exceeded')
+		expect(submitted).toBe(false)
 	})
 
 	test('preserves an in-flight transaction failure even if pause arrives while it runs', async () => {

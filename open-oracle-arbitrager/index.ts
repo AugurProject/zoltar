@@ -43,14 +43,18 @@ import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, sendRawTran
 import { startDashboardServer } from './dashboard-server.js'
 import { authenticateDeploymentManifest, parseDeploymentManifest, type DeploymentManifest } from './deployment-auth.js'
 import {
+	assertReceiptSnapshotBlockHash,
 	attemptConfirmationRecovery,
 	executionFailureDecision,
 	executionTokenAllowed,
+	finalizeSubmittedLifecycleAttempt,
 	flushExecutionHistory,
 	fundingTransactionPlan,
 	guardedTransactionSubmission,
+	guardedRiskSubmission,
 	isExecutionPausedError,
 	journaledSubmission,
+	lifecycleAttemptNeedsRecovery,
 	openOracleDisputeTiming,
 	opportunityDecision,
 	recordConfirmedExecution,
@@ -58,6 +62,7 @@ import {
 	selectBestExecution,
 	simulateTrackedPrivateBundle,
 	trackPrivateBundleReceiptStatuses,
+	transactionReceiptsWithQuorum,
 	waitForResolvedTransaction,
 } from './execution-orchestration.js'
 import { coordinatorPolicySafetyMismatch, gamePolicyMismatch, retainedReportIds, type CoordinatorGamePolicy } from './game-policy.js'
@@ -89,7 +94,7 @@ import { exactWithdrawalMatches, expectedWithdrawalToken2, hedgedProfitBeforeGas
 import { acquireExecutionSignerLock, acquirePositionJournalLock, loadPositionJournal, savePositionJournal, type ExclusiveProcessLock, type PositionRecord } from './position-store.js'
 import { quorumValue } from './read-quorum.js'
 import { bestSuccessful, compactFinalityWindow, pollUntilStopped, replaceOverlap } from './resilience.js'
-import { adjustedNetProfitWeth, DEFAULT_RISK_LIMITS, riskLimitMismatch, type RiskLimits } from './safety-controls.js'
+import { adjustedNetProfitWeth, DEFAULT_RISK_LIMITS, positionRiskLimitMismatch, type RiskLimits } from './safety-controls.js'
 import { loadOperatorSettings, saveOperatorSettings, type PersistedOperatorSettings } from './settings-store.js'
 import { signerCandidate } from './signer.js'
 import { calculateFee, calculateNextAmount1, calculateTrackedNetProfitEth, deriveTokenToSwap, evaluateBuyRep, evaluateSellRep, executorFunding, hasFreshSubmissionWindow, hedgeSlippageReserveWeth, hedgeWethLimit, isSelfReport, meetsProfitThreshold, type ArbitrageQuote } from './strategy.js'
@@ -598,19 +603,7 @@ function retainReportsAndLogs(reports: Map<bigint, ActiveReport>, logs: readonly
 }
 
 function candidateRiskMismatch(candidate: ExecutionCandidate, positions: readonly PositionRecord[], limits: RiskLimits, now = new Date()) {
-	const openPositions = positions.filter(position => position.status !== 'closed')
-	const lockedWeth = openPositions.reduce((total, position) => total + parseDecimalWeth(position.capitalAtRiskWeth), 0n)
-	const day = now.toISOString().slice(0, 10)
-	const dailyGasSpentWeth = positions.reduce((total, position) => total + (position.openedAt.slice(0, 10) === day ? parseDecimalWeth(position.actualEntryGasCostEth) : 0n) + (position.lifecycleUpdatedAt?.slice(0, 10) === day ? parseDecimalWeth(position.lifecycleGasCostEth) : 0n), 0n)
-	return riskLimitMismatch(
-		{
-			capitalAtRiskWeth: candidate.capitalAtRiskWeth,
-			concurrentPositions: openPositions.length,
-			dailyGasSpentWeth: dailyGasSpentWeth + candidate.projectedGasCostWeth,
-			projectedLockedWeth: lockedWeth + candidate.capitalAtRiskWeth,
-		},
-		limits,
-	)
+	return positionRiskLimitMismatch({ capitalAtRiskWeth: candidate.capitalAtRiskWeth, positions, projectedGasCostWeth: candidate.projectedGasCostWeth }, limits, now)
 }
 
 function meanTick(tickCumulatives: readonly bigint[], seconds: bigint) {
@@ -1076,6 +1069,7 @@ async function executeDispute(
 	quote: ArbitrageQuote,
 	pool: Pool,
 	tokenMetadata: { decimals: number; symbol: string },
+	positions: readonly PositionRecord[],
 	isPaused: () => boolean,
 	track: TrackTransaction,
 	persistPosition: (position: PositionRecord) => Promise<void>,
@@ -1190,10 +1184,11 @@ async function executeDispute(
 	}
 	const executionSigned = signedTransactions.at(-1)?.signed
 	if (executionSigned === undefined) throw new Error('Execution transaction plan is empty')
+	const capitalAtRiskWeth = funding.token1 + (funding.token2 * hedgeLimitQuote + refreshedQuote.hedgeAmountRep - 1n) / refreshedQuote.hedgeAmountRep
 	const stagedPosition = {
 		account: account.address,
 		actualEntryGasCostEth: '0',
-		capitalAtRiskWeth: decimalWeth(funding.token1 + (funding.token2 * hedgeLimitQuote + refreshedQuote.hedgeAmountRep - 1n) / refreshedQuote.hedgeAmountRep),
+		capitalAtRiskWeth: decimalWeth(capitalAtRiskWeth),
 		closedAt: undefined,
 		direction: refreshedQuote.direction,
 		entryTransactionHash: executionSigned.hash,
@@ -1226,10 +1221,12 @@ async function executeDispute(
 	let receiptBlockNumber: bigint
 	let executionHash = executionSigned.hash
 	let executionLogs: readonly { address: Address; data: Hex; topics: readonly Hex[] }[] = []
+	let quorumConfirmedPosition: PositionRecord | undefined
+	const lifecycleGasReserveWeth = [config.riskLimits.lifecycleGasReserveWeth, gasPrice * (BigInt(game.callbackGasLimit) + 1_050_000n)].reduce((maximum, value) => (value > maximum ? value : maximum), 0n)
 	if (config.submission.mode === 'public') {
 		await wallet.simulateContract(request)
 		if (!meetsProfitThreshold(refreshedQuote, config.minimumProfitWeth, config.minimumProfitBps)) throw new Error('Arbitrage no longer meets the profit threshold at submission')
-		await persistPosition(stagedPosition)
+		await guardedRiskSubmission(positionRiskLimitMismatch({ capitalAtRiskWeth, positions, projectedGasCostWeth: gasPrice * 1_200_000n + lifecycleGasReserveWeth }, config.riskLimits), () => persistPosition(stagedPosition))
 		const submission = await submitContractTransaction(client, wallet, config, executionSigned, { estimatedNetProfitEth: decimalWeth(refreshedQuote.netProfitWeth), kind: 'dispute', reportId }, isPaused, track)
 		const { receipt, tracked } = await waitForTrackedTransaction(client, wallet, config, submission, track)
 		if (receipt.status !== 'success') throw new Error(`Dispute transaction reverted: ${receipt.transactionHash}`)
@@ -1280,7 +1277,6 @@ async function executeDispute(
 			},
 		)
 		const totalGasUsed = simulations.reduce((maximum, simulation) => (simulation.totalGasUsed > maximum ? simulation.totalGasUsed : maximum), 0n)
-		const lifecycleGasReserveWeth = [config.riskLimits.lifecycleGasReserveWeth, gasPrice * (BigInt(game.callbackGasLimit) + 1_050_000n)].reduce((maximum, value) => (value > maximum ? value : maximum), 0n)
 		const simulatedQuote = safetyAdjustedQuote(refreshedQuote, totalGasUsed * gasPrice, lifecycleGasReserveWeth, config)
 		const simulatedNetProfit = simulatedQuote.netProfitWeth
 		estimatedNetProfit = simulatedNetProfit
@@ -1301,16 +1297,18 @@ async function executeDispute(
 					if ((await client.getBlockNumber()) !== quoteBlockNumber) throw new Error('Bundle quote expired before submission')
 				},
 				() =>
-					journaledSubmission(
-						() => persistPosition(stagedPosition),
-						() =>
-							submitSignedBundle({
-								address: account.address,
-								relayUrls: config.submission.relayUrls,
-								signMessage,
-								targetBlockNumber,
-								transactions: serializedTransactions,
-							}),
+					guardedRiskSubmission(positionRiskLimitMismatch({ capitalAtRiskWeth, positions, projectedGasCostWeth: totalGasUsed * gasPrice + lifecycleGasReserveWeth }, config.riskLimits), () =>
+						journaledSubmission(
+							() => persistPosition(stagedPosition),
+							() =>
+								submitSignedBundle({
+									address: account.address,
+									relayUrls: config.submission.relayUrls,
+									signMessage,
+									targetBlockNumber,
+									transactions: serializedTransactions,
+								}),
+						),
 					),
 			)
 		} catch (error) {
@@ -1331,23 +1329,19 @@ async function executeDispute(
 		while ((await client.getBlockNumber()) < targetBlockNumber) {
 			await Bun.sleep(Math.min(config.pollMilliseconds, 1_000))
 		}
-		const receipts = await Promise.all(
-			pending.map(async transaction => {
-				try {
-					return await client.getTransactionReceipt({ hash: transaction.hash })
-				} catch (error) {
-					void error
-					return undefined
-				}
-			}),
-		)
-		const complete = trackPrivateBundleReceiptStatuses(pending, receipts, targetBlockNumber, (transaction, status, receipt) => {
-			track(trackedActivity(transaction, status, receipt === undefined ? undefined : decimalWeth(receipt.gasUsed * (receipt.effectiveGasPrice ?? 0n)), receipt?.transactionHash))
-		})
-		if (!complete) {
-			throw new Error(`Atomic bundle was not completely successful in target block ${targetBlockNumber.toString()}`)
+		let recoveredEntry: Awaited<ReturnType<typeof recoverPendingEntryWithQuorum>>
+		try {
+			recoveredEntry = await recoverPendingEntryWithQuorum(readClients, config, stagedPosition, tokenMetadata.decimals, targetBlockNumber)
+		} catch (error) {
+			for (const transaction of pending) track(trackedActivity(transaction, 'confirmation-unknown'))
+			throw new Error(`Atomic bundle receipt quorum failed: ${errorMessage(error)}`)
 		}
-		const confirmedReceipts = receipts.filter(receipt => receipt !== undefined)
+		const confirmedReceipts = recoveredEntry.receipts
+		trackPrivateBundleReceiptStatuses(pending, confirmedReceipts, targetBlockNumber, (transaction, status, receipt) => {
+			if (receipt === undefined) throw new Error('Quorum-confirmed receipt is missing')
+			track(trackedActivity(transaction, status, decimalWeth(receipt.gasUsed * (receipt.effectiveGasPrice ?? 0n)), receipt.transactionHash))
+		})
+		quorumConfirmedPosition = recoveredEntry.position
 		actualGasCost = confirmedReceipts.reduce((total, receipt) => total + receipt.gasUsed * (receipt.effectiveGasPrice ?? 0n), 0n)
 		const executorReceipt = confirmedReceipts.at(-1)
 		if (executorReceipt === undefined) throw new Error('Executor receipt is missing from the bundle')
@@ -1361,20 +1355,24 @@ async function executeDispute(
 			track(trackedActivity(transaction, 'confirmed', decimalWeth(receipt.gasUsed * (receipt.effectiveGasPrice ?? 0n)), receipt.transactionHash, transaction.kind === 'dispute' ? trackedNetProfitEth : undefined))
 		}
 	}
-	const hedgeExecution = hedgeExecutionFromLogs(executionLogs, executor)
-	if (hedgeExecution.reportId !== report.helper.reportId) throw new Error('Executor hedge event report id does not match the submitted report')
-	const hedgedProfitBeforeGas = hedgedProfitBeforeGasWeth(refreshedQuote.direction, hedgeExecution.hedgeAmountWeth, game.currentAmount1, calculateFee(game.currentAmount1, game.feePercentage), calculateFee(game.currentAmount1, game.protocolFee))
-	await persistPosition({
-		...stagedPosition,
-		actualEntryGasCostEth: decimalWeth(actualGasCost),
-		entryTransactionHash: executionHash,
-		hedgeAmountToken: formatTokenAmount(hedgeExecution.hedgeAmountToken2, tokenMetadata.decimals),
-		hedgeWeth: decimalWeth(hedgeExecution.hedgeAmountWeth),
-		hedgedProfitBeforeGasEth: decimalSignedEth(hedgedProfitBeforeGas),
-		status: 'open',
-	})
+	let confirmedPosition = quorumConfirmedPosition
+	if (confirmedPosition === undefined) {
+		const hedgeExecution = hedgeExecutionFromLogs(executionLogs, executor)
+		if (hedgeExecution.reportId !== report.helper.reportId) throw new Error('Executor hedge event report id does not match the submitted report')
+		const hedgedProfitBeforeGas = hedgedProfitBeforeGasWeth(refreshedQuote.direction, hedgeExecution.hedgeAmountWeth, game.currentAmount1, calculateFee(game.currentAmount1, game.feePercentage), calculateFee(game.currentAmount1, game.protocolFee))
+		confirmedPosition = {
+			...stagedPosition,
+			actualEntryGasCostEth: decimalWeth(actualGasCost),
+			entryTransactionHash: executionHash,
+			hedgeAmountToken: formatTokenAmount(hedgeExecution.hedgeAmountToken2, tokenMetadata.decimals),
+			hedgeWeth: decimalWeth(hedgeExecution.hedgeAmountWeth),
+			hedgedProfitBeforeGasEth: decimalSignedEth(hedgedProfitBeforeGas),
+			status: 'open',
+		}
+	}
+	await persistPosition(confirmedPosition)
 	console.log(`report=${report.helper.reportId.toString()} dispute=${executionHash}`)
-	const trackedNetProfitEth = decimalSignedEth(calculateTrackedNetProfitEth(refreshedQuote.profitBeforeGasWeth, actualGasCost))
+	const trackedNetProfitEth = decimalSignedEth(calculateTrackedNetProfitEth(parseSignedDecimalEth(confirmedPosition.hedgedProfitBeforeGasEth), actualGasCost))
 	return {
 		actualGasCostEth: decimalWeth(actualGasCost),
 		blockNumber: receiptBlockNumber.toString(),
@@ -1400,13 +1398,17 @@ function tokenDecimalsFromSnapshot(snapshot: { tokenDecimals: bigint }, reportId
 	return tokenDecimals
 }
 
-async function recoverPendingEntryWithQuorum(readClients: readonly ReadClient[], config: Configuration, position: PositionRecord, tokenDecimals: number): Promise<PositionRecord> {
+async function recoverPendingEntryWithQuorum(readClients: readonly ReadClient[], config: Configuration, position: PositionRecord, tokenDecimals: number, expectedBlockNumber?: bigint | undefined) {
 	const executor = config.executor
 	if (executor === undefined) throw new Error('Pending entry recovery requires the authenticated executor')
-	const receipts = await transactionReceiptsWithQuorum(readClients, config, `pending entry ${position.reportId}`, position.entryTransactionHashes)
+	const receipts = await transactionReceiptsWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `pending entry ${position.reportId}`, position.entryTransactionHashes)
 	const firstReceipt = receipts[0]
 	const executorReceipt = receipts.at(-1)
-	if (firstReceipt === undefined || executorReceipt === undefined || receipts.some(receipt => receipt.status !== 'success' || receipt.blockNumber !== firstReceipt.blockNumber)) {
+	if (
+		firstReceipt === undefined ||
+		executorReceipt === undefined ||
+		receipts.some(receipt => receipt.status !== 'success' || receipt.blockNumber !== firstReceipt.blockNumber || receipt.blockHash.toLowerCase() !== firstReceipt.blockHash.toLowerCase() || (expectedBlockNumber !== undefined && receipt.blockNumber !== expectedBlockNumber))
+	) {
 		throw new Error('Entry bundle receipts are missing, reverted, or split across blocks')
 	}
 	for (const [index, receipt] of receipts.entries()) {
@@ -1420,46 +1422,27 @@ async function recoverPendingEntryWithQuorum(readClients: readonly ReadClient[],
 	const actualEntryGasCost = receipts.reduce((total, receipt) => total + receipt.gasUsed * (receipt.effectiveGasPrice ?? 0n), 0n)
 	const actualProfitBeforeGas = recoveredHedgedProfitBeforeGasWeth(position.direction, parseSignedDecimalEth(position.hedgedProfitBeforeGasEth), parseDecimalWeth(position.hedgeWeth), hedgeExecution.hedgeAmountWeth)
 	return {
-		...position,
-		actualEntryGasCostEth: decimalWeth(actualEntryGasCost),
-		entryTransactionHash: executorReceipt.transactionHash,
-		hedgeAmountToken: formatTokenAmount(hedgeExecution.hedgeAmountToken2, tokenDecimals),
-		hedgeWeth: decimalWeth(hedgeExecution.hedgeAmountWeth),
-		hedgedProfitBeforeGasEth: decimalSignedEth(actualProfitBeforeGas),
-		status: 'open',
+		position: {
+			...position,
+			actualEntryGasCostEth: decimalWeth(actualEntryGasCost),
+			entryTransactionHash: executorReceipt.transactionHash,
+			hedgeAmountToken: formatTokenAmount(hedgeExecution.hedgeAmountToken2, tokenDecimals),
+			hedgeWeth: decimalWeth(hedgeExecution.hedgeAmountWeth),
+			hedgedProfitBeforeGasEth: decimalSignedEth(actualProfitBeforeGas),
+			status: 'open' as const,
+		},
+		receipts,
 	}
-}
-
-async function transactionReceiptsWithQuorum(readClients: readonly ReadClient[], config: Configuration, label: string, transactionHashes: readonly Hex[]) {
-	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
-	const observations = await Promise.all(
-		readClients.map(async (client, index) => {
-			const receipts = await Promise.all(transactionHashes.map(hash => client.getTransactionReceipt({ hash })))
-			return {
-				endpoint: endpointLabel(endpoints[index] ?? ''),
-				value: receipts.map(receipt => ({
-					blockHash: receipt.blockHash,
-					blockNumber: receipt.blockNumber,
-					effectiveGasPrice: receipt.effectiveGasPrice,
-					gasUsed: receipt.gasUsed,
-					logs: receipt.logs.map(log => ({ address: log.address, data: log.data, topics: log.topics })),
-					status: receipt.status,
-					transactionHash: receipt.transactionHash,
-				})),
-			}
-		}),
-	)
-	return quorumValue(`${label} receipts`, observations)
 }
 
 async function recoverPendingLifecycleWithQuorum(readClients: readonly ReadClient[], config: Configuration, position: PositionRecord): Promise<PositionRecord> {
 	if (position.lifecycleTransactionHashes.length === 0 || position.lifecycleTargetBlockNumber === undefined || position.lifecycleTokenDecimals === undefined || position.lifecycleWalletTokenBefore === undefined || position.lifecycleWalletWethBefore === undefined) {
 		throw new Error('Lifecycle recovery journal is incomplete')
 	}
-	const receipts = await transactionReceiptsWithQuorum(readClients, config, `pending lifecycle ${position.reportId}`, position.lifecycleTransactionHashes)
+	const receipts = await transactionReceiptsWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `pending lifecycle ${position.reportId}`, position.lifecycleTransactionHashes)
 	const firstReceipt = receipts[0]
 	const targetBlockNumber = BigInt(position.lifecycleTargetBlockNumber)
-	if (firstReceipt === undefined || receipts.some(receipt => receipt.status !== 'success' || receipt.blockNumber !== firstReceipt.blockNumber || receipt.blockNumber !== targetBlockNumber)) {
+	if (firstReceipt === undefined || receipts.some(receipt => receipt.status !== 'success' || receipt.blockNumber !== firstReceipt.blockNumber || receipt.blockHash.toLowerCase() !== firstReceipt.blockHash.toLowerCase() || receipt.blockNumber !== targetBlockNumber)) {
 		throw new Error('Lifecycle bundle receipts are missing, reverted, outside the target block, or split across blocks')
 	}
 	for (const [index, receipt] of receipts.entries()) {
@@ -1467,7 +1450,7 @@ async function recoverPendingLifecycleWithQuorum(readClients: readonly ReadClien
 		if (expectedHash === undefined || receipt.transactionHash.toLowerCase() !== expectedHash.toLowerCase()) throw new Error('Lifecycle bundle receipt hash does not match the durable journal')
 	}
 	const balancesAfter = await lifecycleBalancesWithQuorum(readClients, config, position.account, position.token, targetBlockNumber)
-	if (balancesAfter.blockHash.toLowerCase() !== firstReceipt.blockHash.toLowerCase()) throw new Error('Lifecycle receipt and recovered balance snapshot use different canonical blocks')
+	assertReceiptSnapshotBlockHash(firstReceipt.blockHash, balancesAfter.blockHash, 'Lifecycle')
 	const walletWethBefore = BigInt(position.lifecycleWalletWethBefore)
 	const walletTokenBefore = BigInt(position.lifecycleWalletTokenBefore)
 	if (balancesAfter.walletWeth < walletWethBefore || balancesAfter.walletToken < walletTokenBefore) {
@@ -1515,14 +1498,14 @@ async function processPositionLifecycle(client: ReadClient, readClients: readonl
 	const entryAccountingNeedsRecovery = activePosition.status === 'pending-entry' || (activePosition.status === 'recovery-required' && activePosition.actualEntryGasCostEth === '0')
 	if (entryAccountingNeedsRecovery) {
 		try {
-			activePosition = await recoverPendingEntryWithQuorum(readClients, config, activePosition, tokenDecimalsFromSnapshot(balancesBefore, activePosition.reportId))
+			activePosition = (await recoverPendingEntryWithQuorum(readClients, config, activePosition, tokenDecimalsFromSnapshot(balancesBefore, activePosition.reportId))).position
 			await persistPosition(activePosition)
 		} catch (error) {
 			await persistPosition({ ...activePosition, status: 'recovery-required' })
 			throw new Error(`Pending position ${activePosition.reportId} entry receipt could not be recovered: ${errorMessage(error)}`)
 		}
 	}
-	if ((activePosition.status === 'withdrawing' || activePosition.status === 'recovery-required') && activePosition.lifecycleTransactionHashes.length !== 0 && !activePosition.lifecycleReceiptRecovered) {
+	if (lifecycleAttemptNeedsRecovery(activePosition)) {
 		let recovered: PositionRecord
 		try {
 			recovered = await recoverPendingLifecycleWithQuorum(readClients, config, activePosition)
@@ -1617,47 +1600,11 @@ async function processPositionLifecycle(client: ReadClient, readClients: readonl
 			),
 	)
 	while ((await client.getBlockNumber()) < targetBlockNumber) await Bun.sleep(Math.min(config.pollMilliseconds, 1_000))
-	const receipts = await Promise.all(
-		signed.map(async transaction => {
-			try {
-				return await client.getTransactionReceipt({ hash: transaction.hash })
-			} catch (error) {
-				void error
-				return undefined
-			}
-		}),
-	)
-	const complete = receipts.every(receipt => receipt !== undefined && receipt.status === 'success' && receipt.blockNumber === targetBlockNumber)
-	if (!complete) {
-		await persistPosition({ ...lifecyclePosition, status: 'recovery-required' })
-		throw new Error(`Position lifecycle bundle for report ${activePosition.reportId} was not completely successful`)
+	try {
+		await finalizeSubmittedLifecycleAttempt(lifecyclePosition, pending => recoverPendingLifecycleWithQuorum(readClients, config, pending), persistPosition)
+	} catch (error) {
+		throw new Error(`Pending position ${activePosition.reportId} lifecycle receipt could not be recovered: ${errorMessage(error)}`)
 	}
-	const balancesAfter = await lifecycleBalancesWithQuorum(readClients, config, account.address, position.token, targetBlockNumber)
-	if (balancesAfter.walletWeth < balancesBefore.walletWeth || balancesAfter.walletToken < balancesBefore.walletToken) {
-		await persistPosition({ ...activePosition, status: 'recovery-required' })
-		throw new Error(`Position lifecycle for report ${activePosition.reportId} reduced a tracked wallet balance`)
-	}
-	const withdrawnWeth = balancesAfter.walletWeth - balancesBefore.walletWeth
-	const withdrawnToken = balancesAfter.walletToken - balancesBefore.walletToken
-	const actualLifecycleGas = receipts.reduce((total, receipt) => total + (receipt?.gasUsed ?? 0n) * (receipt?.effectiveGasPrice ?? 0n), 0n)
-	const lifecycleGas = parseDecimalWeth(activePosition.lifecycleGasCostEth) + actualLifecycleGas
-	const realized = realizedNetProfitWeth(parseSignedDecimalEth(activePosition.hedgedProfitBeforeGasEth), parseDecimalWeth(activePosition.actualEntryGasCostEth), lifecycleGas)
-	const reconciledPosition = {
-		...lifecyclePosition,
-		closedAt: undefined,
-		lifecycleGasCostEth: decimalWeth(lifecycleGas),
-		lifecycleReceiptRecovered: true,
-		lifecycleUpdatedAt: new Date().toISOString(),
-		realizedNetProfitEth: undefined,
-		status: 'recovery-required',
-		withdrawnToken: formatTokenAmount(withdrawnToken, tokenDecimals),
-		withdrawnWeth: decimalWeth(withdrawnWeth),
-	} satisfies PositionRecord
-	if (!exactWithdrawalMatches({ token2: reconciledPosition.withdrawnToken, weth: reconciledPosition.withdrawnWeth }, { token2: activePosition.lockedToken, weth: activePosition.lockedWeth })) {
-		await persistPosition(reconciledPosition)
-		throw new Error(`Position ${activePosition.reportId} withdrew unexpected assets; manual exposure reconciliation is required`)
-	}
-	await persistPosition({ ...reconciledPosition, closedAt: new Date().toISOString(), realizedNetProfitEth: decimalSignedEth(realized), status: 'closed' })
 	return 'processed' as const
 }
 
@@ -2233,7 +2180,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 						try {
 							const metadata = state.tokenMarkets.find(market => market.address.toLowerCase() === selected.report.game.token2.toLowerCase())
 							if (metadata === undefined) throw new Error('Token metadata is unavailable')
-							const record = await executeDispute(client, readClients, wallet, config, selected.report, selected.quote, selected.pool, metadata, () => state.paused, trackTransaction, persistPosition)
+							const record = await executeDispute(client, readClients, wallet, config, selected.report, selected.quote, selected.pool, metadata, positions, () => state.paused, trackTransaction, persistPosition)
 							selected.opportunity.decision = 'submitted'
 							recordConfirmedExecution(state.executionHistory, pendingHistory, record)
 							try {

@@ -1,5 +1,8 @@
 import type { Address, Hex, TransactionReceipt, TransactionReplacement } from '@zoltar/shared/ethereum'
+import { endpointLabel } from './connectivity.js'
 import type { ExecutionRecord, OpportunitySnapshot } from './operator-state.js'
+import type { PositionRecord } from './position-store.js'
+import { quorumValue } from './read-quorum.js'
 import { isSelfReport } from './strategy.js'
 import type { SubmissionMode } from './transaction-submission.js'
 
@@ -127,6 +130,58 @@ export async function guardedTransactionSubmission<T>(isPaused: () => boolean, p
 export async function journaledSubmission<T>(persistPending: () => Promise<unknown>, submit: () => Promise<T>) {
 	await persistPending()
 	return submit()
+}
+
+export async function guardedRiskSubmission<T>(riskMismatch: string | undefined, submit: () => Promise<T>) {
+	if (riskMismatch !== undefined) throw new Error(`Final execution risk check failed: ${riskMismatch}`)
+	return submit()
+}
+
+export function assertReceiptSnapshotBlockHash(receiptBlockHash: Hex, snapshotBlockHash: Hex, label: string) {
+	if (receiptBlockHash.toLowerCase() !== snapshotBlockHash.toLowerCase()) throw new Error(`${label} receipt and balance snapshot use different canonical blocks`)
+}
+
+export function lifecycleAttemptNeedsRecovery(position: PositionRecord) {
+	return (position.status === 'withdrawing' || position.status === 'recovery-required') && position.lifecycleTransactionHashes.length !== 0 && !position.lifecycleReceiptRecovered
+}
+
+export async function finalizeSubmittedLifecycleAttempt(lifecyclePosition: PositionRecord, recover: (position: PositionRecord) => Promise<PositionRecord>, persist: (position: PositionRecord) => Promise<unknown>) {
+	let recovered: PositionRecord
+	try {
+		recovered = await recover(lifecyclePosition)
+	} catch (error) {
+		await persist({ ...lifecyclePosition, status: 'recovery-required' })
+		throw error
+	}
+	await persist(recovered)
+	if (recovered.status !== 'closed') throw new Error(`Position ${lifecyclePosition.reportId} lifecycle assets do not match the expected hedge-neutral withdrawal`)
+	return recovered
+}
+
+type TransactionReceiptReader = {
+	getTransactionReceipt: (parameters: { hash: Hex }) => Promise<TransactionReceipt>
+}
+
+export async function transactionReceiptsWithQuorum(readers: readonly TransactionReceiptReader[], endpoints: readonly string[], label: string, transactionHashes: readonly Hex[]) {
+	if (readers.length !== endpoints.length) throw new Error(`${label} receipt readers and endpoints differ`)
+	const observations = await Promise.all(
+		readers.map(async (reader, index) => {
+			const receipts = await Promise.all(transactionHashes.map(hash => reader.getTransactionReceipt({ hash })))
+			return {
+				endpoint: endpointLabel(endpoints[index] ?? ''),
+				value: receipts.map(receipt => ({
+					blockHash: receipt.blockHash,
+					blockNumber: receipt.blockNumber,
+					effectiveGasPrice: receipt.effectiveGasPrice,
+					gasUsed: receipt.gasUsed,
+					logs: receipt.logs.map(log => ({ address: log.address, data: log.data, topics: log.topics })),
+					status: receipt.status,
+					transactionHash: receipt.transactionHash,
+				})),
+			}
+		}),
+	)
+	return quorumValue(`${label} receipts`, observations)
 }
 
 export async function signAndSubmitOpenOracleDispute<TSigned, TSubmitted>(quoteBlockNumber: bigint, sign: (lastValidBlockNumber: bigint) => Promise<TSigned>, submit: (signed: TSigned) => Promise<TSubmitted>) {
