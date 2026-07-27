@@ -7,6 +7,7 @@ import {
 	fundingTransactionPlan,
 	flushExecutionHistory,
 	guardedTransactionSubmission,
+	openOracleDisputeTiming,
 	opportunityDecision,
 	privateBundleReceiptStatus,
 	recordConfirmedExecution,
@@ -81,6 +82,10 @@ describe('funded execution orchestration', () => {
 		expect(fundingTransactionPlan('private', { token1: 1n, token2: 4n }, { token1: 3n, token2: 4n })).toEqual(['reset-token1', 'approval-token1', 'execution'])
 		expect(fundingTransactionPlan('private', { token1: 3n, token2: 4n }, { token1: 3n, token2: 4n })).toEqual(['execution'])
 		expect(() => fundingTransactionPlan('public', { token1: 0n, token2: 4n }, { token1: 3n, token2: 4n })).toThrow('private bundle')
+	})
+
+	test('keeps next-block quote age independent from the minimum settlement window', () => {
+		expect(openOracleDisputeTiming(100n, 1_000n)).toEqual([100n, 1n, 1_000n, 300n])
 	})
 
 	test('classifies every private bundle receipt before aborting anomalous inclusion', () => {

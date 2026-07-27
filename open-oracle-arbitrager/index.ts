@@ -15,6 +15,7 @@ import {
 	fundingTransactionPlan,
 	guardedTransactionSubmission,
 	isExecutionPausedError,
+	openOracleDisputeTiming,
 	opportunityDecision,
 	recordConfirmedExecution,
 	retryPrivateSubmissionWithinWindow,
@@ -688,7 +689,7 @@ async function executeDispute(client: ReadClient, wallet: WriteClient, config: C
 		address: executor,
 		abi: openOracleArbitrageExecutorAbi,
 		functionName: 'dispute',
-		args: [config.openOracle, newAmount1, newAmount2, getOpenOracleGameTuple(game), getOpenOracleHelperTuple(report.helper), [quoteBlockNumber, 1n, quoteBlock.timestamp, config.minimumRemainingSeconds]],
+		args: [config.openOracle, newAmount1, newAmount2, getOpenOracleGameTuple(game), getOpenOracleHelperTuple(report.helper), openOracleDisputeTiming(quoteBlockNumber, quoteBlock.timestamp)],
 	} as const
 	const targetBlockNumber = quoteBlockNumber + 1n
 	const startingNonce = await client.getTransactionCount({ address: account.address, blockTag: 'pending' })

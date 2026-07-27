@@ -51,6 +51,8 @@ type JsonRpcResponse = {
 		code?: number
 		message?: string
 	}
+	id?: unknown
+	jsonrpc?: unknown
 	result?: unknown
 }
 
@@ -176,14 +178,23 @@ async function authenticatedRelayRequest(parameters: { address: Address; body: s
 		redirect: 'error',
 		signal: AbortSignal.timeout(parameters.timeoutMilliseconds),
 	})
-	let value: JsonRpcResponse
+	let decoded: unknown
 	try {
-		value = (await response.json()) as JsonRpcResponse
+		decoded = await response.json()
 	} catch (error) {
 		if (error instanceof SyntaxError) throw new Error(`Relay returned non-JSON HTTP ${response.status.toString()}`)
 		throw error
 	}
-	if (!response.ok || value.error !== undefined) throw new Error(responseError(value, response.status))
+	if (typeof decoded !== 'object' || decoded === null || Array.isArray(decoded)) throw new Error('Relay returned an invalid JSON-RPC envelope')
+	const value = decoded as JsonRpcResponse
+	const hasResult = Object.prototype.hasOwnProperty.call(value, 'result')
+	const hasError = Object.prototype.hasOwnProperty.call(value, 'error')
+	if (value.jsonrpc !== '2.0' || value.id !== 1 || hasResult === hasError) throw new Error('Relay returned an invalid JSON-RPC envelope')
+	if (hasError) {
+		if (typeof value.error !== 'object' || value.error === null || typeof value.error.code !== 'number' || !Number.isInteger(value.error.code) || typeof value.error.message !== 'string') throw new Error('Relay returned an invalid JSON-RPC error')
+		throw new Error(responseError(value, response.status))
+	}
+	if (!response.ok) throw new Error(`Relay returned HTTP ${response.status.toString()} with a JSON-RPC result`)
 	return value.result
 }
 
@@ -211,6 +222,7 @@ export async function simulateBundle(parameters: { address: Address; relayUrl: s
 	if (typeof result !== 'object' || result === null || Array.isArray(result)) throw new Error('Relay returned an invalid bundle simulation')
 	const record = result as Record<string, unknown>
 	if (!Array.isArray(record['results']) || record['results'].length !== parameters.transactions.length) throw new Error('Relay returned incomplete bundle simulation results')
+	let transactionGasUsed = 0n
 	for (const transactionResult of record['results']) {
 		if (typeof transactionResult !== 'object' || transactionResult === null || Array.isArray(transactionResult)) throw new Error('Relay returned an invalid transaction simulation result')
 		const transactionRecord = transactionResult as Record<string, unknown>
@@ -219,8 +231,13 @@ export async function simulateBundle(parameters: { address: Address; relayUrl: s
 		const hasError = error !== undefined && error !== null && error !== ''
 		const hasRevert = revert !== undefined && revert !== null && revert !== '' && revert !== '0x'
 		if (hasError || hasRevert) throw new Error(`Bundle simulation reverted: ${String(hasError ? error : revert)}`)
+		const gasUsed = rpcQuantity(transactionRecord['gasUsed'], 'transaction gas usage')
+		if (gasUsed === 0n) throw new Error('Relay returned zero transaction gas usage')
+		transactionGasUsed += gasUsed
 	}
-	return { totalGasUsed: rpcQuantity(record['totalGasUsed'], 'bundle gas usage') }
+	const totalGasUsed = rpcQuantity(record['totalGasUsed'], 'bundle gas usage')
+	if (totalGasUsed !== transactionGasUsed) throw new Error('Relay returned inconsistent bundle gas usage')
+	return { totalGasUsed }
 }
 
 export async function simulateSignedBundleEveryRelay(parameters: { address: Address; relayUrls: readonly string[]; signMessage: (message: string | Uint8Array) => Promise<Hex>; stateBlockNumber: bigint; targetBlockNumber: bigint; timeoutMilliseconds?: number | undefined; transactions: readonly Hex[] }) {

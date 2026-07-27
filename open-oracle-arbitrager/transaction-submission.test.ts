@@ -98,6 +98,43 @@ describe('signed transaction delivery', () => {
 		).rejects.toThrow('Bundle simulation reverted')
 	})
 
+	test.each([
+		{ id: 2, jsonrpc: '2.0', result: { results: [{ gasUsed: 21_000 }], totalGasUsed: 21_000 } },
+		{ id: 1, jsonrpc: '1.0', result: { results: [{ gasUsed: 21_000 }], totalGasUsed: 21_000 } },
+		{ id: 1, jsonrpc: '2.0' },
+		{ error: { code: -32_000, message: 'rejected' }, id: 1, jsonrpc: '2.0', result: { results: [{ gasUsed: 21_000 }], totalGasUsed: 21_000 } },
+	])('rejects malformed JSON-RPC simulation envelope %#', async response => {
+		const endpoint = relay(() => Response.json(response))
+		await expect(
+			simulateBundle({
+				address,
+				relayUrl: endpoint,
+				signMessage: () => Promise.resolve(signature),
+				stateBlockNumber: 99n,
+				targetBlockNumber: 100n,
+				transactions: [serializedTransaction],
+			}),
+		).rejects.toThrow()
+	})
+
+	test.each([
+		{ results: [{}], totalGasUsed: 0 },
+		{ results: [{ gasUsed: 'invalid' }], totalGasUsed: 21_000 },
+		{ results: [{ gasUsed: 21_000 }], totalGasUsed: 20_999 },
+	])('rejects incomplete or inconsistent simulation gas %#', async result => {
+		const endpoint = relay(() => Response.json({ id: 1, jsonrpc: '2.0', result }))
+		await expect(
+			simulateBundle({
+				address,
+				relayUrl: endpoint,
+				signMessage: () => Promise.resolve(signature),
+				stateBlockNumber: 99n,
+				targetBlockNumber: 100n,
+				transactions: [serializedTransaction],
+			}),
+		).rejects.toThrow()
+	})
+
 	test('attributes every relay that cannot simulate the complete bundle', async () => {
 		const accepted = relay(() =>
 			Response.json({

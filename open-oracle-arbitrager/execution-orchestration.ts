@@ -22,6 +22,10 @@ export function fundingTransactionPlan(mode: SubmissionMode, allowances: { token
 	return transactions
 }
 
+export function openOracleDisputeTiming(quoteBlockNumber: bigint, quoteBlockTimestamp: bigint) {
+	return [quoteBlockNumber, 1n, quoteBlockTimestamp, 300n] as const
+}
+
 export function privateBundleReceiptStatus(receipt: Pick<TransactionReceipt, 'blockNumber' | 'status'> | undefined, targetBlockNumber: bigint) {
 	if (receipt === undefined || receipt.blockNumber !== targetBlockNumber) return 'confirmation-unknown' as const
 	return receipt.status === 'success' ? ('confirmed' as const) : ('reverted' as const)
