@@ -238,6 +238,66 @@ body.doc-openoracle .callout strong {
 	display: block;
 	margin-bottom: 0.25rem;
 }
+body.security-model .assumption-group {
+	scroll-margin-top: 1rem;
+}
+body.security-model .assumption-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0.75rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+body.security-model .assumption-grid > li {
+	position: relative;
+	min-width: 0;
+	padding: 1rem 1rem 1rem 3.45rem;
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: color-mix(in srgb, var(--soft) 48%, var(--paper));
+}
+body.security-model .assumption-grid > li::before {
+	content: attr(data-assumption);
+	position: absolute;
+	top: 1.02rem;
+	left: 1rem;
+	color: var(--blue);
+	font-family: var(--docs-font-mono);
+	font-size: 0.82rem;
+	font-weight: 800;
+	letter-spacing: 0.03em;
+}
+body.security-model .assumption-grid > li::after {
+	content: "";
+	position: absolute;
+	top: 2.55rem;
+	bottom: 1rem;
+	left: 1.78rem;
+	width: 1px;
+	background: var(--line);
+}
+body.security-model .assumption-grid .assumption-wide {
+	grid-column: 1 / -1;
+}
+body.security-model .assumption-grid h3 {
+	margin: 0 0 0.35rem;
+	font-size: 1rem;
+	line-height: 1.35;
+}
+body.security-model .assumption-grid p {
+	color: var(--muted);
+	font-size: 0.94rem;
+	line-height: 1.55;
+}
+body.security-model .assumption-grid p:last-child {
+	margin-bottom: 0;
+}
+body.security-model .assumption-equation {
+	margin: 0.8rem 0 0;
+	padding: 0.45rem;
+	background: var(--paper);
+}
 body.doc-openoracle table {
 	width: 100%;
 	margin-top: 0.75rem;
@@ -540,6 +600,15 @@ body.doc-openoracle td math {
 	}
 	body.doc-openoracle .invariant-metadata {
 		grid-template-columns: 1fr;
+	}
+	body.security-model .assumption-grid {
+		grid-template-columns: 1fr;
+	}
+	body.security-model .assumption-grid .assumption-wide {
+		grid-column: auto;
+	}
+	body.security-model .assumption-grid > li {
+		padding-left: 3.15rem;
 	}
 }
 

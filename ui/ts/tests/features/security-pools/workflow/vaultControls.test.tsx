@@ -202,6 +202,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 						onSecurityVaultFormChange: update => {
 							formChanges.push(update)
 						},
+						selectedPoolSecurityMultiplier: 2n,
 						securityVaultDetails: createSecurityVaultDetails({
 							repDepositShare: 12n * 10n ** 18n,
 							securityBondAllowance: 1n * 10n ** 18n,
@@ -230,10 +231,10 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 
 		const allowanceDialog = documentQueries.getByRole('dialog', { name: 'Set Bond Allowance' })
 		await act(() => {
-			fireEvent.click(within(allowanceDialog).getByRole('button', { name: 'Security Bond Allowance Amount' }))
+			fireEvent.click(within(allowanceDialog).getByRole('button', { name: 'Security Bond Allowance Amount Max' }))
 		})
 
-		expect(formChanges.at(-1)).toEqual({ securityBondAllowanceAmount: '1.999999999999999999' })
+		expect(formChanges.at(-1)).toEqual({ securityBondAllowanceAmount: '0.5' })
 	})
 
 	test('allows clearing the bond allowance back to zero in the workflow modal', async () => {

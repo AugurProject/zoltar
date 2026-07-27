@@ -168,17 +168,19 @@ void describe('security vault helpers', () => {
 				currentSecurityBondAllowance: 1n * 10n ** 18n,
 				repDepositShare: 12n * 10n ** 18n,
 				repPerEthPrice: 3n * 10n ** 18n,
+				securityMultiplier: 2n,
 				totalRepDeposit: 9n * 10n ** 18n,
 				totalSecurityBondAllowance: 2n * 10n ** 18n,
 			}),
-		).toBe(1_999_999_999_999_999_999n)
+		).toBe(500_000_000_000_000_000n)
 		expect(
 			getSecurityVaultMaxBondAllowanceAmount({
 				currentSecurityBondAllowance: 0n,
 				repDepositShare: 6n * 10n ** 18n,
 				repPerEthPrice: 3n * 10n ** 18n,
+				securityMultiplier: 2n,
 			}),
-		).toBe(1_999_999_999_999_999_999n)
+		).toBe(1n * 10n ** 18n)
 	})
 
 	void test('returns undefined for a missing security pool without reading contract state', async () => {
@@ -223,8 +225,26 @@ void describe('security vault helpers', () => {
 				repDepositShare: 20n * 10n ** 18n,
 				repPerEthPrice: 2n * 10n ** 18n,
 				currentSecurityBondAllowance: 10n * 10n ** 18n,
+				securityMultiplier: 2n,
 			}),
-		).toBe(9_999_999_999_999_999_999n)
+		).toBe(5n * 10n ** 18n)
+	})
+
+	void test('floors a non-divisible max allowance to the exact admissible atomic boundary', () => {
+		const repDepositShare = 10n * 10n ** 18n
+		const repPerEthPrice = 3n * 10n ** 18n
+		const securityMultiplier = 2n
+		const maxAllowance = getSecurityVaultMaxBondAllowanceAmount({
+			currentSecurityBondAllowance: 0n,
+			repDepositShare,
+			repPerEthPrice,
+			securityMultiplier,
+		})
+
+		expect(maxAllowance).toBe(1_666_666_666_666_666_666n)
+		if (maxAllowance === undefined) throw new Error('Expected max allowance')
+		expect(maxAllowance * repPerEthPrice * securityMultiplier <= repDepositShare * 10n ** 18n).toBe(true)
+		expect((maxAllowance + 1n) * repPerEthPrice * securityMultiplier > repDepositShare * 10n ** 18n).toBe(true)
 	})
 
 	void test('uses global allowance ceilings only when pool totals are available', () => {
@@ -233,19 +253,21 @@ void describe('security vault helpers', () => {
 				currentSecurityBondAllowance: 15n * 10n ** 18n,
 				repDepositShare: 20n * 10n ** 18n,
 				repPerEthPrice: 10n ** 18n,
+				securityMultiplier: 2n,
 				totalRepDeposit: 50n * 10n ** 18n,
 				totalSecurityBondAllowance: 30n * 10n ** 18n,
 			}),
-		).toBe(19_999_999_999_999_999_999n)
+		).toBe(10n * 10n ** 18n)
 		expect(
 			getSecurityVaultMaxBondAllowanceAmount({
 				currentSecurityBondAllowance: 40n * 10n ** 18n,
 				repDepositShare: 50n * 10n ** 18n,
 				repPerEthPrice: 10n ** 18n,
+				securityMultiplier: 2n,
 				totalRepDeposit: 10n * 10n ** 18n,
 				totalSecurityBondAllowance: 40n * 10n ** 18n,
 			}),
-		).toBe(9_999_999_999_999_999_999n)
+		).toBe(5n * 10n ** 18n)
 	})
 
 	void test('withdrawable amount is bounded by unlocked vault rep and pool caps', () => {

@@ -796,7 +796,7 @@ describe('Peripherals: fork migration', () => {
 			const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 			const minimumRepDeposit = 10n * 10n ** 18n
 			const targetAllowance = 2n * 10n ** 18n
-			const allowancePrice = 4n * PRICE_PRECISION
+			const allowancePrice = 2n * PRICE_PRECISION
 			const liquidationPrice = 6n * PRICE_PRECISION
 
 			await approveToken(targetClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
@@ -1037,7 +1037,7 @@ describe('Peripherals: fork migration', () => {
 			const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 			const minimumRepDeposit = 10n * 10n ** 18n
 			const minimumAllowance = 1n * 10n ** 18n
-			const allowanceCreationPrice = 6n * 10n ** 18n
+			const allowanceCreationPrice = 5n * 10n ** 18n
 			const liquidationPrice = 61n * 10n ** 17n
 
 			await approveToken(targetClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
@@ -1075,7 +1075,7 @@ describe('Peripherals: fork migration', () => {
 			const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 			const minimumRepDeposit = 10n * 10n ** 18n
 			const minimumAllowance = 1n * 10n ** 18n
-			const allowanceCreationPrice = 6n * 10n ** 18n
+			const allowanceCreationPrice = 5n * 10n ** 18n
 			const liquidationPrice = 10n * 10n ** 18n
 
 			await approveToken(targetClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
@@ -1109,7 +1109,7 @@ describe('Peripherals: fork migration', () => {
 			const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 			const minimumRepDeposit = 10n * 10n ** 18n
 			const minimumAllowance = 1n * 10n ** 18n
-			const allowanceCreationPrice = 6n * 10n ** 18n
+			const allowanceCreationPrice = 5n * 10n ** 18n
 			const liquidationPrice = 61n * 10n ** 17n
 			const extraRepAmount = 1n
 
@@ -1145,7 +1145,7 @@ describe('Peripherals: fork migration', () => {
 			const liquidatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 			const minimumRepDeposit = 10n * 10n ** 18n
 			const minimumAllowance = 1n * 10n ** 18n
-			const allowanceCreationPrice = 6n * 10n ** 18n
+			const allowanceCreationPrice = 5n * 10n ** 18n
 			const liquidationPrice = 61n * 10n ** 17n
 			// A zero-basefee request has a one-wei minimum WETH side, so ceiling the
 			// proposed 6.1 REP/ETH price produces a settled price of 7 REP/ETH.
@@ -1219,7 +1219,7 @@ describe('Peripherals: fork migration', () => {
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, roundingSensitivePrice)
 			const setupPrice = await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 			const setupTargetRep = await getVaultRepClaim(client.account.address)
-			const targetAllowance = (setupTargetRep * PRICE_PRECISION * 3n) / (setupPrice * 4n)
+			const targetAllowance = (setupTargetRep * PRICE_PRECISION) / (setupPrice * securityMultiplier)
 			const allowanceExecutionHash = await requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, targetAllowance)
 			const allowanceExecutionLog = await getExecutedStagedOperation(allowanceExecutionHash)
 			assert.strictEqual(allowanceExecutionLog.args.success, true, `rounding setup allowance failed with ${allowanceExecutionLog.args.errorMessage}`)
@@ -1228,6 +1228,7 @@ describe('Peripherals: fork migration', () => {
 			await approveToken(liquidatorClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
 			await depositRep(liquidatorClient, securityPoolAddresses.securityPool, repDeposit * 10n)
 			await manipulatePriceOracleAndPerformOperation(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, liquidatorClient.account.address, 1n * 10n ** 18n)
+			await manipulatePriceOracle(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, PRICE_PRECISION)
 
 			const targetVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const liquidatorVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
