@@ -141,6 +141,30 @@ export function assertReceiptSnapshotBlockHash(receiptBlockHash: Hex, snapshotBl
 	if (receiptBlockHash.toLowerCase() !== snapshotBlockHash.toLowerCase()) throw new Error(`${label} receipt and balance snapshot use different canonical blocks`)
 }
 
+export function assertCanonicalExecutionSnapshot(parameters: { expectedReportStateHash: Hex; localBlockHash: Hex; quorumBlockHash: Hex; quorumReportStateHash: Hex }) {
+	if (parameters.localBlockHash.toLowerCase() !== parameters.quorumBlockHash.toLowerCase()) throw new Error('Execution quote and quorum snapshot use different canonical blocks')
+	if (parameters.expectedReportStateHash.toLowerCase() !== parameters.quorumReportStateHash.toLowerCase()) throw new Error('Execution report changed in the canonical quorum snapshot')
+}
+
+type BlockHashReader = {
+	getBlock: (parameters: { blockNumber: bigint }) => Promise<{ hash?: Hex | null | undefined }>
+}
+
+export async function canonicalBlockHashWithQuorum(readers: readonly BlockHashReader[], endpoints: readonly string[], label: string, blockNumber: bigint) {
+	if (readers.length !== endpoints.length) throw new Error(`${label} block readers and endpoints differ`)
+	const observations = await Promise.all(
+		readers.map(async (reader, index) => {
+			const block = await reader.getBlock({ blockNumber })
+			if (block.hash == null) throw new Error(`${label} canonical block is missing its hash`)
+			return {
+				endpoint: endpointLabel(endpoints[index] ?? ''),
+				value: block.hash,
+			}
+		}),
+	)
+	return quorumValue(`${label} canonical block ${blockNumber.toString()}`, observations)
+}
+
 export function lifecycleAttemptNeedsRecovery(position: PositionRecord) {
 	return (position.status === 'withdrawing' || position.status === 'recovery-required') && position.lifecycleTransactionHashes.length !== 0 && !position.lifecycleReceiptRecovered
 }
@@ -169,15 +193,19 @@ export async function transactionReceiptsWithQuorum(readers: readonly Transactio
 			const receipts = await Promise.all(transactionHashes.map(hash => reader.getTransactionReceipt({ hash })))
 			return {
 				endpoint: endpointLabel(endpoints[index] ?? ''),
-				value: receipts.map(receipt => ({
-					blockHash: receipt.blockHash,
-					blockNumber: receipt.blockNumber,
-					effectiveGasPrice: receipt.effectiveGasPrice,
-					gasUsed: receipt.gasUsed,
-					logs: receipt.logs.map(log => ({ address: log.address, data: log.data, topics: log.topics })),
-					status: receipt.status,
-					transactionHash: receipt.transactionHash,
-				})),
+				value: receipts.map(receipt => {
+					const effectiveGasPrice = receipt.effectiveGasPrice
+					if (typeof effectiveGasPrice !== 'bigint') throw new Error(`${label} receipt ${receipt.transactionHash} is missing its effective gas price`)
+					return {
+						blockHash: receipt.blockHash,
+						blockNumber: receipt.blockNumber,
+						effectiveGasPrice,
+						gasUsed: receipt.gasUsed,
+						logs: receipt.logs.map(log => ({ address: log.address, data: log.data, topics: log.topics })),
+						status: receipt.status,
+						transactionHash: receipt.transactionHash,
+					}
+				}),
 			}
 		}),
 	)

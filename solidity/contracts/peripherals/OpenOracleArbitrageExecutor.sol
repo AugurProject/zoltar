@@ -99,6 +99,7 @@ contract OpenOracleArbitrageExecutor {
 		uint128 newAmount2;
 		uint256 hedgeWethLimit;
 		uint256 swapDeadline;
+		bytes32 expectedParentBlockHash;
 	}
 
 	struct ExecutionBalances {
@@ -200,6 +201,7 @@ contract OpenOracleArbitrageExecutor {
 		IOpenOracleDispute.TimingBoundaries calldata timing
 	) external {
 		require(!entered, 'OpenOracle arbitrage executor reentrancy');
+		assertParentBlock(timing.blockNumber, request.expectedParentBlockHash);
 		require(request.openOracle.code.length > 0, 'OpenOracle address must contain contract code');
 		require(request.router.code.length > 0, 'Uniswap router address must contain contract code');
 		require(
@@ -261,6 +263,16 @@ contract OpenOracleArbitrageExecutor {
 			result.contribution2
 		);
 		entered = false;
+	}
+
+	/// @notice Reverts unless execution occurs in the direct child of the signed canonical parent.
+	/// @dev This guard can be included as the first transaction in any atomic private bundle.
+	function assertParentBlock(uint256 parentBlockNumber, bytes32 expectedParentBlockHash) public view {
+		require(block.number != 0 && parentBlockNumber == block.number - 1, 'Execution must target the next block');
+		require(
+			expectedParentBlockHash != bytes32(0) && blockhash(parentBlockNumber) == expectedParentBlockHash,
+			'Execution canonical parent block changed'
+		);
 	}
 
 	function _executeHedge(

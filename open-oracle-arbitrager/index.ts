@@ -43,8 +43,10 @@ import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, sendRawTran
 import { startDashboardServer } from './dashboard-server.js'
 import { authenticateDeploymentManifest, parseDeploymentManifest, type DeploymentManifest } from './deployment-auth.js'
 import {
+	assertCanonicalExecutionSnapshot,
 	assertReceiptSnapshotBlockHash,
 	attemptConfirmationRecovery,
+	canonicalBlockHashWithQuorum,
 	executionFailureDecision,
 	executionTokenAllowed,
 	finalizeSubmittedLifecycleAttempt,
@@ -207,6 +209,16 @@ function requiredRpcAddress(value: unknown, description: string) {
 		void error
 		throw new Error(`${description} is not a valid RPC address`)
 	}
+}
+
+function requiredHash(value: unknown, description: string): Hex {
+	if (typeof value !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(value)) throw new Error(`${description} is not a 32-byte RPC hash`)
+	return value as Hex
+}
+
+function receiptGasCost(receipt: { effectiveGasPrice?: bigint | undefined; gasUsed: bigint; transactionHash: Hex }) {
+	if (typeof receipt.effectiveGasPrice !== 'bigint') throw new Error(`Receipt ${receipt.transactionHash} is missing its effective gas price`)
+	return receipt.gasUsed * receipt.effectiveGasPrice
 }
 
 function printHelp() {
@@ -718,45 +730,54 @@ async function evaluate(client: ReadClient, config: Configuration, report: OpenO
 	)
 }
 
-async function assertExecutionReadQuorum(clients: readonly ReadClient[], config: Configuration, report: OpenOracleStatePreimage, pool: Pool, quote: ArbitrageQuote, blockNumber: bigint, account: Address) {
+async function executionReadQuorum(clients: readonly ReadClient[], config: Configuration, report: OpenOracleStatePreimage, pool: Pool, blockNumber: bigint, account: Address) {
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
+	const executor = config.executor
+	if (executor === undefined) throw new Error('Execution quorum requires the authenticated executor')
 	const game = report.game
 	const newAmount1 = calculateNextAmount1(game)
 	const repWithFees = game.currentAmount2 + calculateFee(game.currentAmount2, game.feePercentage) + calculateFee(game.currentAmount2, game.protocolFee)
 	const observations = await Promise.all(
 		clients.map(async (readClient, index) => {
-			const [block, stateHash, refreshedPool, replacementAmount2, hedgeQuote, nonce, eth, weth, token] = await Promise.all([
+			const [block, stateHash, refreshedPool, replacementAmount2, sellHedgeQuote, buyHedgeQuote, nonce, eth, weth, token, allowance1, allowance2] = await Promise.all([
 				readClient.getBlock({ blockNumber }),
 				readContractAtBlock(readClient.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'oracleGame', args: [report.helper.reportId] }, blockNumber),
 				loadPool(readClient, pool.address, pool.token, pool.fee, config.twapSeconds, blockNumber),
 				quoteInput(readClient, config.network.quoter, config.network.weth, pool.token, newAmount1, pool.fee, blockNumber),
-				quote.direction === 'sell-rep' ? quoteInput(readClient, config.network.quoter, pool.token, config.network.weth, game.currentAmount2, pool.fee, blockNumber) : quoteOutput(readClient, config.network.quoter, config.network.weth, pool.token, repWithFees, pool.fee, blockNumber),
+				quoteInput(readClient, config.network.quoter, pool.token, config.network.weth, game.currentAmount2, pool.fee, blockNumber),
+				quoteOutput(readClient, config.network.quoter, config.network.weth, pool.token, repWithFees, pool.fee, blockNumber),
 				getTransactionCountAtBlock(readClient.transport, { address: account, blockNumber }),
 				getBalanceAtBlock(readClient.transport, { address: account, blockNumber }),
 				readContractAtBlock(readClient.transport, { address: config.network.weth, abi: erc20Abi, functionName: 'balanceOf', args: [account] }, blockNumber),
 				readContractAtBlock(readClient.transport, { address: game.token2, abi: erc20Abi, functionName: 'balanceOf', args: [account] }, blockNumber),
+				readContractAtBlock(readClient.transport, { address: game.token1, abi: erc20Abi, functionName: 'allowance', args: [account, executor] }, blockNumber),
+				readContractAtBlock(readClient.transport, { address: game.token2, abi: erc20Abi, functionName: 'allowance', args: [account, executor] }, blockNumber),
 			])
-			if (block.hash === null || refreshedPool === undefined) throw new Error('RPC quorum snapshot is missing a canonical block or active pool')
+			if (block.hash == null || refreshedPool === undefined) throw new Error('RPC quorum snapshot is missing a canonical block or active pool')
 			return {
 				endpoint: endpointLabel(endpoints[index] ?? ''),
 				value: {
+					allowance1: requiredBigint(allowance1, 'Executor token1 allowance'),
+					allowance2: requiredBigint(allowance2, 'Executor token2 allowance'),
+					baseFeePerGas: block.baseFeePerGas ?? 0n,
 					blockHash: block.hash,
 					blockTimestamp: block.timestamp,
-					eth,
-					hedgeQuote,
+					buyHedgeQuote,
+					eth: requiredBigint(eth, 'Execution account ETH balance'),
 					nonce,
 					poolLiquidity: refreshedPool.liquidity,
 					poolSpotTick: refreshedPool.spotTick,
 					poolTwapTick: refreshedPool.twapTick,
 					replacementAmount2,
-					stateHash,
-					token,
-					weth,
+					sellHedgeQuote,
+					stateHash: requiredHash(stateHash, 'OpenOracle report state'),
+					token: requiredBigint(token, 'Execution account report-token balance'),
+					weth: requiredBigint(weth, 'Execution account WETH balance'),
 				},
 			}
 		}),
 	)
-	quorumValue(`execution snapshot at block ${blockNumber.toString()}`, observations)
+	return quorumValue(`execution snapshot at block ${blockNumber.toString()}`, observations)
 }
 
 async function pendingNonceWithQuorum(clients: readonly ReadClient[], config: Configuration, account: Address) {
@@ -768,6 +789,17 @@ async function pendingNonceWithQuorum(clients: readonly ReadClient[], config: Co
 		})),
 	)
 	return quorumValue('pending account nonce used for signing', observations)
+}
+
+async function currentBlockNumberWithQuorum(clients: readonly ReadClient[], config: Configuration, label: string) {
+	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
+	const observations = await Promise.all(
+		clients.map(async (client, index) => ({
+			endpoint: endpointLabel(endpoints[index] ?? ''),
+			value: await client.getBlockNumber(),
+		})),
+	)
+	return quorumValue(label, observations)
 }
 
 async function storedReport(client: ReadClient, openOracle: Address, id: bigint, blockNumber?: bigint | undefined): Promise<OpenOracleStatePreimage> {
@@ -1055,7 +1087,7 @@ async function waitForTrackedTransaction(client: ReadClient, wallet: WriteClient
 			)
 		},
 	)
-	const actualGasCostEth = decimalWeth(receipt.gasUsed * (receipt.effectiveGasPrice ?? 0n))
+	const actualGasCostEth = decimalWeth(receiptGasCost(receipt))
 	track(trackedActivity(tracked, receipt.status === 'success' ? 'confirmed' : 'reverted', actualGasCostEth, receipt.transactionHash))
 	return { receipt, tracked }
 }
@@ -1085,26 +1117,43 @@ async function executeDispute(
 	const newAmount1 = calculateNextAmount1(game)
 	const reportId = report.helper.reportId.toString()
 	const quoteBlock = await client.getBlock()
-	if (quoteBlock.number === undefined) throw new Error('Quote block is missing its number')
+	if (quoteBlock.number === undefined || quoteBlock.hash == null) throw new Error('Quote block is missing its canonical identity')
 	const quoteBlockNumber = quoteBlock.number
 	const signMessage = account.signMessage
 	const signTransaction = account.signTransaction
-	const refreshedPool = await loadPool(client, pool.address, pool.token, pool.fee, config.twapSeconds, quoteBlockNumber)
-	if (refreshedPool === undefined) throw new Error('Selected pool lost all active liquidity')
+	const executionSnapshot = await executionReadQuorum(readClients, config, report, pool, quoteBlockNumber, account.address)
+	assertCanonicalExecutionSnapshot({
+		expectedReportStateHash: hashOpenOracleStatePreimage(report),
+		localBlockHash: quoteBlock.hash,
+		quorumBlockHash: executionSnapshot.blockHash,
+		quorumReportStateHash: executionSnapshot.stateHash,
+	})
+	const refreshedPool = {
+		...pool,
+		liquidity: executionSnapshot.poolLiquidity,
+		spotTick: executionSnapshot.poolSpotTick,
+		twapTick: executionSnapshot.poolTwapTick,
+	}
 	const deviation = refreshedPool.spotTick > refreshedPool.twapTick ? refreshedPool.spotTick - refreshedPool.twapTick : refreshedPool.twapTick - refreshedPool.spotTick
 	if (deviation > config.maxSpotTwapTicks) throw new Error('Selected pool failed the final spot/TWAP check')
-	const gasPrice = (quoteBlock.baseFeePerGas ?? 0n) * 2n + 2n * 10n ** 9n
-	const refreshedQuote = await evaluate(client, config, report, refreshedPool, gasPrice, quoteBlockNumber)
-	if (refreshedQuote === undefined) throw new Error('Selected pool no longer serves either arbitrage direction')
+	const gasPrice = executionSnapshot.baseFeePerGas * 2n + 2n * 10n ** 9n
+	const lifecycleGasReserveWeth = [config.riskLimits.lifecycleGasReserveWeth, gasPrice * (BigInt(game.callbackGasLimit) + 1_050_000n)].reduce((maximum, value) => (value > maximum ? value : maximum), 0n)
+	const entryGasCostWeth = gasPrice * 1_200_000n
+	const refreshedQuote = selectBestExecution(
+		[safetyAdjustedQuote(evaluateSellRep(game, executionSnapshot.sellHedgeQuote, 0n), entryGasCostWeth, lifecycleGasReserveWeth, config), safetyAdjustedQuote(evaluateBuyRep(game, executionSnapshot.buyHedgeQuote, 0n), entryGasCostWeth, lifecycleGasReserveWeth, config)],
+		candidate => candidate.netProfitWeth,
+	)
+	if (refreshedQuote === undefined) throw new Error('Canonical execution snapshot did not produce an arbitrage quote')
 	if (refreshedQuote.direction !== quote.direction) throw new Error('Best arbitrage direction changed before submission')
-	const newAmount2 = await quoteInput(client, config.network.quoter, config.network.weth, refreshedPool.token, newAmount1, refreshedPool.fee, quoteBlockNumber)
+	const newAmount2 = executionSnapshot.replacementAmount2
 	const tokenToSwap = deriveTokenToSwap(game, newAmount1, newAmount2)
 	if (tokenToSwap.toLowerCase() !== refreshedQuote.tokenToSwap.toLowerCase()) throw new Error('Final replacement ratio does not derive the selected arbitrage direction')
 	const hedgeLimitQuote = refreshedQuote.direction === 'sell-rep' ? refreshedQuote.grossProceedsWeth : refreshedQuote.hedgeCostWeth
 	const hedgeLimit = hedgeWethLimit(refreshedQuote.direction, hedgeLimitQuote, config.maxHedgeSlippageBps)
 	const funding = executorFunding(game, newAmount1, newAmount2, refreshedQuote.direction === 'buy-rep' ? hedgeLimit : 0n)
+	if (executionSnapshot.weth < funding.token1 || executionSnapshot.token < funding.token2) throw new Error('Canonical execution snapshot no longer has the inventory required by the signed bundle')
 	const timeType = (game.flags & OPEN_ORACLE_FLAG_TIME_TYPE) !== 0n
-	const currentTime = timeType ? quoteBlock.timestamp : quoteBlock.number
+	const currentTime = timeType ? executionSnapshot.blockTimestamp : quoteBlockNumber
 	const minimumRemaining = timeType ? config.minimumRemainingSeconds : config.minimumRemainingBlocks
 	if (
 		!hasFreshSubmissionWindow({
@@ -1116,33 +1165,25 @@ async function executeDispute(
 		})
 	)
 		throw new Error('The final quote does not have a fresh inclusion window')
-	await assertExecutionReadQuorum(readClients, config, report, refreshedPool, refreshedQuote, quoteBlockNumber, account.address)
-	const storedHash = await client.readContract({
-		address: config.openOracle,
-		abi: openOracleAbi,
-		functionName: 'oracleGame',
-		args: [report.helper.reportId],
-	})
-	if (storedHash.toLowerCase() !== hashOpenOracleStatePreimage(report).toLowerCase()) throw new Error('Report changed before submission')
-	const [allowance1, allowance2] = await Promise.all([client.readContract({ address: game.token1, abi: erc20Abi, functionName: 'allowance', args: [account.address, executor] }), client.readContract({ address: game.token2, abi: erc20Abi, functionName: 'allowance', args: [account.address, executor] })])
-	const plan = fundingTransactionPlan(config.submission.mode, { token1: allowance1, token2: allowance2 }, funding)
+	const plan = fundingTransactionPlan(config.submission.mode, { token1: executionSnapshot.allowance1, token2: executionSnapshot.allowance2 }, funding)
 	const request = {
 		address: executor,
 		abi: openOracleArbitrageExecutorAbi,
 		functionName: 'hedgeAndDispute',
 		args: [
 			{
+				expectedParentBlockHash: executionSnapshot.blockHash,
 				hedgeWethLimit: hedgeLimit,
 				newAmount1,
 				newAmount2,
 				openOracle: config.openOracle,
 				poolFee: refreshedPool.fee,
 				router,
-				swapDeadline: quoteBlock.timestamp + 300n,
+				swapDeadline: executionSnapshot.blockTimestamp + 300n,
 			},
 			getOpenOracleGameTuple(game),
 			getOpenOracleHelperTuple(report.helper),
-			openOracleDisputeTiming(quoteBlockNumber, quoteBlock.timestamp),
+			openOracleDisputeTiming(quoteBlockNumber, executionSnapshot.blockTimestamp),
 		],
 	} as const
 	const targetBlockNumber = quoteBlockNumber + 1n
@@ -1151,7 +1192,7 @@ async function executeDispute(
 	const signedTransactions: { kind: TransactionActivity['kind']; signed: SignedTransaction; token: Address | undefined; tokenSymbol: string | undefined }[] = []
 	const sign = async (to: Address, data: Hex, gasEstimate: bigint) => {
 		const signed = await prepareSignedTransaction({
-			baseFeePerGas: quoteBlock.baseFeePerGas ?? 0n,
+			baseFeePerGas: executionSnapshot.baseFeePerGas,
 			blockNumber: quoteBlockNumber,
 			chainId: config.network.chain.id,
 			data,
@@ -1222,7 +1263,6 @@ async function executeDispute(
 	let executionHash = executionSigned.hash
 	let executionLogs: readonly { address: Address; data: Hex; topics: readonly Hex[] }[] = []
 	let quorumConfirmedPosition: PositionRecord | undefined
-	const lifecycleGasReserveWeth = [config.riskLimits.lifecycleGasReserveWeth, gasPrice * (BigInt(game.callbackGasLimit) + 1_050_000n)].reduce((maximum, value) => (value > maximum ? value : maximum), 0n)
 	if (config.submission.mode === 'public') {
 		await wallet.simulateContract(request)
 		if (!meetsProfitThreshold(refreshedQuote, config.minimumProfitWeth, config.minimumProfitBps)) throw new Error('Arbitrage no longer meets the profit threshold at submission')
@@ -1230,7 +1270,7 @@ async function executeDispute(
 		const submission = await submitContractTransaction(client, wallet, config, executionSigned, { estimatedNetProfitEth: decimalWeth(refreshedQuote.netProfitWeth), kind: 'dispute', reportId }, isPaused, track)
 		const { receipt, tracked } = await waitForTrackedTransaction(client, wallet, config, submission, track)
 		if (receipt.status !== 'success') throw new Error(`Dispute transaction reverted: ${receipt.transactionHash}`)
-		actualGasCost = receipt.gasUsed * (receipt.effectiveGasPrice ?? 0n)
+		actualGasCost = receiptGasCost(receipt)
 		receiptBlockNumber = receipt.blockNumber
 		executionHash = receipt.transactionHash
 		executionLogs = receipt.logs
@@ -1294,7 +1334,9 @@ async function executeDispute(
 			submission = await guardedTransactionSubmission(
 				isPaused,
 				async () => {
-					if ((await client.getBlockNumber()) !== quoteBlockNumber) throw new Error('Bundle quote expired before submission')
+					if ((await currentBlockNumberWithQuorum(readClients, config, 'execution submission head')) !== quoteBlockNumber) throw new Error('Bundle quote expired before submission')
+					const canonicalHash = await canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'execution submission', quoteBlockNumber)
+					if (canonicalHash.toLowerCase() !== executionSnapshot.blockHash.toLowerCase()) throw new Error('Bundle canonical parent changed before submission')
 				},
 				() =>
 					guardedRiskSubmission(positionRiskLimitMismatch({ capitalAtRiskWeth, positions, projectedGasCostWeth: totalGasUsed * gasPrice + lifecycleGasReserveWeth }, config.riskLimits), () =>
@@ -1339,10 +1381,10 @@ async function executeDispute(
 		const confirmedReceipts = recoveredEntry.receipts
 		trackPrivateBundleReceiptStatuses(pending, confirmedReceipts, targetBlockNumber, (transaction, status, receipt) => {
 			if (receipt === undefined) throw new Error('Quorum-confirmed receipt is missing')
-			track(trackedActivity(transaction, status, decimalWeth(receipt.gasUsed * (receipt.effectiveGasPrice ?? 0n)), receipt.transactionHash))
+			track(trackedActivity(transaction, status, decimalWeth(receiptGasCost(receipt)), receipt.transactionHash))
 		})
 		quorumConfirmedPosition = recoveredEntry.position
-		actualGasCost = confirmedReceipts.reduce((total, receipt) => total + receipt.gasUsed * (receipt.effectiveGasPrice ?? 0n), 0n)
+		actualGasCost = confirmedReceipts.reduce((total, receipt) => total + receiptGasCost(receipt), 0n)
 		const executorReceipt = confirmedReceipts.at(-1)
 		if (executorReceipt === undefined) throw new Error('Executor receipt is missing from the bundle')
 		receiptBlockNumber = executorReceipt.blockNumber
@@ -1352,7 +1394,7 @@ async function executeDispute(
 		for (const [index, transaction] of pending.entries()) {
 			const receipt = confirmedReceipts[index]
 			if (receipt === undefined) throw new Error('Bundle receipt order is incomplete')
-			track(trackedActivity(transaction, 'confirmed', decimalWeth(receipt.gasUsed * (receipt.effectiveGasPrice ?? 0n)), receipt.transactionHash, transaction.kind === 'dispute' ? trackedNetProfitEth : undefined))
+			track(trackedActivity(transaction, 'confirmed', decimalWeth(receiptGasCost(receipt)), receipt.transactionHash, transaction.kind === 'dispute' ? trackedNetProfitEth : undefined))
 		}
 	}
 	let confirmedPosition = quorumConfirmedPosition
@@ -1411,6 +1453,8 @@ async function recoverPendingEntryWithQuorum(readClients: readonly ReadClient[],
 	) {
 		throw new Error('Entry bundle receipts are missing, reverted, or split across blocks')
 	}
+	const canonicalReceiptBlockHash = await canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `pending entry ${position.reportId}`, firstReceipt.blockNumber)
+	assertReceiptSnapshotBlockHash(firstReceipt.blockHash, canonicalReceiptBlockHash, 'Entry')
 	for (const [index, receipt] of receipts.entries()) {
 		const expectedHash = position.entryTransactionHashes[index]
 		if (expectedHash === undefined || receipt.transactionHash.toLowerCase() !== expectedHash.toLowerCase()) throw new Error('Entry bundle receipt hash does not match the durable journal')
@@ -1419,7 +1463,7 @@ async function recoverPendingEntryWithQuorum(readClients: readonly ReadClient[],
 	if (hedgeExecution.account.toLowerCase() !== position.account.toLowerCase() || hedgeExecution.reportId.toString() !== position.reportId) {
 		throw new Error('Executor hedge event does not match the durable position')
 	}
-	const actualEntryGasCost = receipts.reduce((total, receipt) => total + receipt.gasUsed * (receipt.effectiveGasPrice ?? 0n), 0n)
+	const actualEntryGasCost = receipts.reduce((total, receipt) => total + receiptGasCost(receipt), 0n)
 	const actualProfitBeforeGas = recoveredHedgedProfitBeforeGasWeth(position.direction, parseSignedDecimalEth(position.hedgedProfitBeforeGasEth), parseDecimalWeth(position.hedgeWeth), hedgeExecution.hedgeAmountWeth)
 	return {
 		position: {
@@ -1458,7 +1502,7 @@ async function recoverPendingLifecycleWithQuorum(readClients: readonly ReadClien
 	}
 	const withdrawnWeth = balancesAfter.walletWeth - walletWethBefore
 	const withdrawnToken = balancesAfter.walletToken - walletTokenBefore
-	const lifecycleGas = parseDecimalWeth(position.lifecycleGasCostEth) + receipts.reduce((total, receipt) => total + receipt.gasUsed * (receipt.effectiveGasPrice ?? 0n), 0n)
+	const lifecycleGas = parseDecimalWeth(position.lifecycleGasCostEth) + receipts.reduce((total, receipt) => total + receiptGasCost(receipt), 0n)
 	const tokenDecimals = Number(position.lifecycleTokenDecimals)
 	if (!Number.isSafeInteger(tokenDecimals) || tokenDecimals < 0 || tokenDecimals > 255) throw new Error('Lifecycle recovery token decimals are invalid')
 	const recovered = {
@@ -1479,7 +1523,9 @@ async function recoverPendingLifecycleWithQuorum(readClients: readonly ReadClien
 
 async function processPositionLifecycle(client: ReadClient, readClients: readonly ReadClient[], wallet: WriteClient, config: Configuration, position: PositionRecord, blockNumber: bigint, persistPosition: (position: PositionRecord) => Promise<void>) {
 	const account = wallet.account
+	const executor = config.executor
 	if (account.signTransaction === undefined || account.signMessage === undefined) throw new Error('Position recovery requires a local transaction and relay signer')
+	if (executor === undefined) throw new Error('Position recovery requires the authenticated executor parent-block guard')
 	const signMessage = account.signMessage
 	if (position.account.toLowerCase() !== account.address.toLowerCase()) throw new Error(`Open position ${position.reportId} belongs to ${position.account}, not the active signer`)
 	const id = BigInt(position.reportId)
@@ -1494,6 +1540,7 @@ async function processPositionLifecycle(client: ReadClient, readClients: readonl
 	const currentTime = (game.flags & OPEN_ORACLE_FLAG_TIME_TYPE) === 0n ? blockNumber : storedSnapshot.blockTimestamp
 	const settlementEligible = currentReporter && game.settlementTimestamp === 0n && currentTime >= game.reportTimestamp + game.settlementTime
 	const balancesBefore = await lifecycleBalancesWithQuorum(readClients, config, account.address, position.token, blockNumber)
+	if (balancesBefore.blockHash.toLowerCase() !== storedSnapshot.blockHash.toLowerCase()) throw new Error('Lifecycle state reads use different canonical blocks')
 	let activePosition = position
 	const entryAccountingNeedsRecovery = activePosition.status === 'pending-entry' || (activePosition.status === 'recovery-required' && activePosition.actualEntryGasCostEth === '0')
 	if (entryAccountingNeedsRecovery) {
@@ -1531,10 +1578,21 @@ async function processPositionLifecycle(client: ReadClient, readClients: readonl
 	const tokenDecimals = tokenDecimalsFromSnapshot(balancesBefore, activePosition.reportId)
 
 	const block = await client.getBlock({ blockNumber })
+	if (block.hash == null || block.hash.toLowerCase() !== storedSnapshot.blockHash.toLowerCase()) throw new Error('Lifecycle quote and quorum snapshot use different canonical blocks')
 	const signTransaction = account.signTransaction
 	const startingNonce = await pendingNonceWithQuorum(readClients, config, account.address)
 	const targetBlockNumber = blockNumber + 1n
-	const calls: { data: Hex; gas: bigint }[] = []
+	const calls: { data: Hex; gas: bigint; to: Address }[] = [
+		{
+			data: encodeFunctionData({
+				abi: openOracleArbitrageExecutorAbi,
+				functionName: 'assertParentBlock',
+				args: [blockNumber, storedSnapshot.blockHash],
+			}),
+			gas: 50_000n,
+			to: executor,
+		},
+	]
 	if (settlementEligible) {
 		calls.push({
 			data: encodeFunctionData({
@@ -1543,9 +1601,13 @@ async function processPositionLifecycle(client: ReadClient, readClients: readonl
 				args: [id, getOpenOracleGameTuple(game), getOpenOracleHelperTuple(report.helper)],
 			}),
 			gas: BigInt(game.callbackGasLimit) + 750_000n,
+			to: config.openOracle,
 		})
 	}
-	calls.push({ data: encodeFunctionData({ abi: openOracleAbi, functionName: 'withdraw', args: [config.network.weth, 2n ** 256n - 1n] }), gas: 150_000n }, { data: encodeFunctionData({ abi: openOracleAbi, functionName: 'withdraw', args: [position.token, 2n ** 256n - 1n] }), gas: 150_000n })
+	calls.push(
+		{ data: encodeFunctionData({ abi: openOracleAbi, functionName: 'withdraw', args: [config.network.weth, 2n ** 256n - 1n] }), gas: 150_000n, to: config.openOracle },
+		{ data: encodeFunctionData({ abi: openOracleAbi, functionName: 'withdraw', args: [position.token, 2n ** 256n - 1n] }), gas: 150_000n, to: config.openOracle },
+	)
 	const signed = await Promise.all(
 		calls.map((call, index) =>
 			prepareSignedTransaction({
@@ -1558,7 +1620,7 @@ async function processPositionLifecycle(client: ReadClient, readClients: readonl
 				lastValidBlockNumber: targetBlockNumber,
 				nonce: startingNonce + BigInt(index),
 				signTransaction,
-				to: config.openOracle,
+				to: call.to,
 			}),
 		),
 	)
@@ -1584,7 +1646,9 @@ async function processPositionLifecycle(client: ReadClient, readClients: readonl
 	await guardedTransactionSubmission(
 		() => false,
 		async () => {
-			if ((await client.getBlockNumber()) !== blockNumber) throw new Error('Position lifecycle bundle quote expired before submission')
+			if ((await currentBlockNumberWithQuorum(readClients, config, 'lifecycle submission head')) !== blockNumber) throw new Error('Position lifecycle bundle quote expired before submission')
+			const canonicalHash = await canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'lifecycle submission', blockNumber)
+			if (canonicalHash.toLowerCase() !== storedSnapshot.blockHash.toLowerCase()) throw new Error('Position lifecycle canonical parent changed before submission')
 		},
 		() =>
 			journaledSubmission(

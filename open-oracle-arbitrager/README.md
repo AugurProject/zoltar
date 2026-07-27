@@ -272,19 +272,21 @@ Before each dispute, the bot:
 5. Derives the same replacement swap side as the OpenOracle contract.
 6. Calculates the exact WETH and token contributions and checks wallet inventory.
 7. Applies the absolute-profit and basis-point thresholds.
-8. Refreshes pool state, quotes, gas, deadline, inventory requirements, and the
-   OpenOracle state hash before signing any transaction.
-9. Reads the executor allowances and creates the minimum ordered transaction list:
+8. Requires independent RPCs to return one exact block hash and the same pool state,
+   two hedge quotes, replacement quote, gas basis, balances, allowances, nonce, and
+   OpenOracle state hash before deriving or signing any transaction.
+9. Uses the quorum-confirmed executor allowances to create the minimum ordered transaction list:
    optional zero-reset/approval transactions followed by one atomic executor call.
 10. In private mode, signs consecutive nonces, simulates the entire ordered list with
-   `eth_callBundle` on every configured relay, and re-applies the profit threshold to
-   the largest simulated gas usage.
+   `eth_callBundle` on every configured relay, includes an on-chain exact-parent-hash
+   guard, and re-applies the profit threshold to the largest simulated gas usage.
 11. Sends the all-or-nothing target-block bundle to every configured relay with
     `eth_sendBundle`. No reverting transaction hashes are allowed.
 12. Writes a durable pending-entry record before submission. After inclusion, it
-    verifies every bundle receipt in the target block, decodes the executor’s actual
-    hedge event, records every entry transaction hash and actual bundle gas, and only
-    then allows the position to progress as confirmed.
+    verifies every bundle receipt and its required effective gas price against the
+    independently confirmed canonical target-block hash, decodes the executor’s
+    actual hedge event, records every entry transaction hash and actual bundle gas,
+    and only then allows the position to progress as confirmed.
 13. On later blocks, automatically settles when eligible or detects replacement,
     then privately withdraws WETH and token balances. It records realized P&amp;L
     only when actual withdrawals exactly match the hedge-neutral expected inventory.
@@ -575,6 +577,11 @@ Private mode signs approvals and the executor call at consecutive nonces, calls
 `eth_callBundle` on every configured relay, and then fans the same ordered
 target-block transaction list out through `eth_sendBundle`. The payload omits
 `revertingTxHashes`, so any reverted transaction invalidates the complete bundle.
+The executor call, and the first transaction in every lifecycle bundle, require
+`blockhash(parent)` to equal the independently agreed quote-block hash. A relay or
+builder using a different same-height parent therefore simulates or executes a
+revert, invalidating the atomic bundle. Immediately before journaling and delivery,
+all read RPCs must still agree on both the parent height and hash.
 At least one relay must accept the bundle or submission fails closed. Configured
 endpoints must implement the
 [Flashbots bundle RPC](https://docs.flashbots.net/flashbots-auction/advanced/rpc-endpoint)
@@ -690,8 +697,10 @@ pending-entry → open → withdrawing → closed
 
 The bot records all entry-bundle transaction hashes before submission. After a
 restart it requires independent RPC agreement on every successful same-block
-receipt, decodes the executor event, and reconstructs actual entry gas and hedge
-economics before leaving `pending-entry`. Missing or ambiguous evidence remains
+receipt and on that receipt block's current canonical hash. Every receipt must
+include its mined effective gas price. The bot then decodes the executor event and
+reconstructs actual entry gas and hedge economics before leaving `pending-entry`.
+Missing or ambiguous evidence remains
 `recovery-required` and never produces realized P&amp;L.
 
 Before lifecycle submission, the bot atomically records the target block, every
@@ -781,7 +790,9 @@ entry from depending on wallet inventory already committed to recovery.
 - Quoter calls and TWAP checks are filters, not guarantees of inclusion or realized
   execution.
 - Live execution requires exact agreement from at least two configured read RPCs at
-  one canonical block. This catches disagreement; it does not help when all
+  one canonical block. Signed entry values come from that agreed snapshot, and an
+  on-chain guard binds entry and lifecycle bundles to its exact parent hash. This
+  catches disagreement; it does not help when all
   endpoints share the same compromised upstream, implementation bug, or correlated
   failure. Use independently operated providers.
 - The entry bundle atomically applies required approvals, hedges, and disputes. A
@@ -804,8 +815,9 @@ entry from depending on wallet inventory already committed to recovery.
   bundle a second time.
 - The owner-only position journal is written immediately before entry and lifecycle
   submission and recovered on restart. A pending entry advances only after every
-  recorded bundle receipt and the executor event agree; a lifecycle attempt closes
-  only after its receipts and balance deltas agree. Unavailable evidence fails
+  recorded bundle receipt, mined gas price, canonical receipt-block hash, and
+  executor event agree; a lifecycle attempt closes only after its receipts,
+  canonical post-state, and balance deltas agree. Unavailable evidence fails
   closed under the recovery runbook above.
 - No automated trading system can guarantee that users never lose money. Reorgs,
   correlated RPC lies, relay/builder faults, base-fee spikes, malicious or rebasing

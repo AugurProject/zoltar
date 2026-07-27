@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import type { Address, Hex, TransactionReceipt, TransactionReplacement } from '@zoltar/shared/ethereum'
 import {
+	assertCanonicalExecutionSnapshot,
 	assertReceiptSnapshotBlockHash,
 	attemptConfirmationRecovery,
+	canonicalBlockHashWithQuorum,
 	executionFailureDecision,
 	executionTokenAllowed,
 	finalizeSubmittedLifecycleAttempt,
@@ -335,6 +337,7 @@ describe('funded execution orchestration', () => {
 		const readers = [{ getTransactionReceipt: () => Promise.resolve(primary) }, { getTransactionReceipt: () => Promise.resolve(secondary) }]
 		await expect(transactionReceiptsWithQuorum(readers, ['https://primary.example', 'https://secondary.example'], 'pending entry 7', [replacementHash])).rejects.toThrow('RPC disagreement')
 		secondary.gasUsed = primary.gasUsed
+		if (primary.effectiveGasPrice === undefined) throw new Error('test receipt gas price missing')
 		expect(await transactionReceiptsWithQuorum(readers, ['https://primary.example', 'https://secondary.example'], 'pending entry 7', [replacementHash])).toEqual([
 			{
 				blockHash: primary.blockHash,
@@ -346,6 +349,38 @@ describe('funded execution orchestration', () => {
 				transactionHash: primary.transactionHash,
 			},
 		])
+	})
+
+	test('rejects a same-height execution snapshot from a different parent hash or report state', () => {
+		expect(() =>
+			assertCanonicalExecutionSnapshot({
+				expectedReportStateHash: `0x${'33'.repeat(32)}`,
+				localBlockHash: `0x${'11'.repeat(32)}`,
+				quorumBlockHash: `0x${'22'.repeat(32)}`,
+				quorumReportStateHash: `0x${'33'.repeat(32)}`,
+			}),
+		).toThrow('different canonical blocks')
+		expect(() =>
+			assertCanonicalExecutionSnapshot({
+				expectedReportStateHash: `0x${'33'.repeat(32)}`,
+				localBlockHash: `0x${'11'.repeat(32)}`,
+				quorumBlockHash: `0x${'11'.repeat(32)}`,
+				quorumReportStateHash: `0x${'44'.repeat(32)}`,
+			}),
+		).toThrow('report changed')
+	})
+
+	test('rejects an agreeing entry receipt whose block is no longer canonical', async () => {
+		const receipt = transactionReceipt()
+		const readers = [{ getBlock: () => Promise.resolve({ hash: `0x${'90'.repeat(32)}` as Hex }) }, { getBlock: () => Promise.resolve({ hash: `0x${'90'.repeat(32)}` as Hex }) }]
+		const canonicalHash = await canonicalBlockHashWithQuorum(readers, ['https://primary.example', 'https://secondary.example'], 'pending entry 7', receipt.blockNumber)
+		expect(() => assertReceiptSnapshotBlockHash(receipt.blockHash, canonicalHash, 'Entry')).toThrow('different canonical blocks')
+	})
+
+	test('rejects receipt recovery when mined gas price is missing', async () => {
+		const receipt = { ...transactionReceipt(), effectiveGasPrice: undefined }
+		const readers = [{ getTransactionReceipt: () => Promise.resolve(receipt) }, { getTransactionReceipt: () => Promise.resolve(receipt) }]
+		await expect(transactionReceiptsWithQuorum(readers, ['https://primary.example', 'https://secondary.example'], 'pending entry 7', [replacementHash])).rejects.toThrow('effective gas price')
 	})
 
 	test('rejects lifecycle accounting from a different canonical block than its receipts', () => {

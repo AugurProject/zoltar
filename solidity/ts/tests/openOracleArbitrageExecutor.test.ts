@@ -142,6 +142,29 @@ describe('OpenOracle arbitrage executor', () => {
 		expect(await client.readContract({ abi: feeTokenArtifact.abi, address: token1, functionName: 'balanceOf', args: [target] })).toBe(0n)
 	})
 
+	test('binds bundled execution to the exact canonical parent block', async () => {
+		const parent = await client.getBlock()
+		if (parent.number === undefined || parent.hash == null) throw new Error('parent block identity missing')
+		const parentBlockHash = parent.hash
+		const parentBlockNumber = parent.number
+		await writeContractAndWait(client, () =>
+			client.writeContract({
+				abi: executorArtifact.abi,
+				address: executor,
+				functionName: 'assertParentBlock',
+				args: [parentBlockNumber, parentBlockHash],
+			}),
+		)
+		await expect(
+			client.simulateContract({
+				abi: executorArtifact.abi,
+				address: executor,
+				functionName: 'assertParentBlock',
+				args: [parent.number, `0x${'ff'.repeat(32)}`],
+			}),
+		).rejects.toThrow('canonical parent block changed')
+	})
+
 	test('atomically sells the report token, funds the dispute, and refunds hedge WETH', async () => {
 		const token1 = await deploy(tokenArtifact, ['Token 1', 'TK1'])
 		const token2 = await deploy(tokenArtifact, ['Token 2', 'TK2'])
@@ -151,12 +174,29 @@ describe('OpenOracle arbitrage executor', () => {
 		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token1, functionName: 'approve', args: [executor, 2_200n] }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token2, functionName: 'approve', args: [executor, 1_000n] }))
 		const block = await client.getBlock()
+		if (block.number === undefined || block.hash == null) throw new Error('parent block identity missing')
+		const parentBlockHash = block.hash
+		const parentBlockNumber = block.number
 		await writeContractAndWait(client, () =>
 			client.writeContract({
 				abi: executorArtifact.abi,
 				address: executor,
 				functionName: 'hedgeAndDispute',
-				args: [{ hedgeWethLimit: 900n, newAmount1: 1_200n, newAmount2: 900n, openOracle: target, poolFee: 3_000, router, swapDeadline: block.timestamp + 1_000n }, game(token1, token2), helper(), timing],
+				args: [
+					{
+						expectedParentBlockHash: parentBlockHash,
+						hedgeWethLimit: 900n,
+						newAmount1: 1_200n,
+						newAmount2: 900n,
+						openOracle: target,
+						poolFee: 3_000,
+						router,
+						swapDeadline: block.timestamp + 1_000n,
+					},
+					game(token1, token2),
+					helper(),
+					{ ...timing, blockNumber: parentBlockNumber },
+				],
 			}),
 		)
 		expect(await client.readContract({ abi: tokenArtifact.abi, address: token1, functionName: 'balanceOf', args: [client.account.address] })).toBe(8_800n)
@@ -175,12 +215,29 @@ describe('OpenOracle arbitrage executor', () => {
 		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token1, functionName: 'approve', args: [executor, 1_300n] }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token2, functionName: 'approve', args: [executor, 1_300n] }))
 		const block = await client.getBlock()
+		if (block.number === undefined || block.hash == null) throw new Error('parent block identity missing')
+		const parentBlockHash = block.hash
+		const parentBlockNumber = block.number
 		await writeContractAndWait(client, () =>
 			client.writeContract({
 				abi: executorArtifact.abi,
 				address: executor,
 				functionName: 'hedgeAndDispute',
-				args: [{ hedgeWethLimit: 1_100n, newAmount1: 1_200n, newAmount2: 1_300n, openOracle: target, poolFee: 3_000, router, swapDeadline: block.timestamp + 1_000n }, game(token1, token2), helper(), timing],
+				args: [
+					{
+						expectedParentBlockHash: parentBlockHash,
+						hedgeWethLimit: 1_100n,
+						newAmount1: 1_200n,
+						newAmount2: 1_300n,
+						openOracle: target,
+						poolFee: 3_000,
+						router,
+						swapDeadline: block.timestamp + 1_000n,
+					},
+					game(token1, token2),
+					helper(),
+					{ ...timing, blockNumber: parentBlockNumber },
+				],
 			}),
 		)
 		expect(await client.readContract({ abi: tokenArtifact.abi, address: token1, functionName: 'balanceOf', args: [client.account.address] })).toBe(8_800n)
