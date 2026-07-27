@@ -34,14 +34,27 @@
 							with the child open-interest holders, while non-migrating security
 							positions separately lose the value assigned to auction buyers.
 						</desc>
+						<defs>
+							<marker
+								id="auction-a1-arrow"
+								markerWidth="8"
+								markerHeight="8"
+								refX="7"
+								refY="4"
+								orient="auto"
+								markerUnits="strokeWidth"
+							>
+								<path class="svg-arrowhead" d="M 0 0 L 8 4 L 0 8 Z"></path>
+							</marker>
+						</defs>
 						<rect class="svg-blue" x="30" y="65" width="200" height="90" rx="10"></rect>
 						<text class="svg-label" x="130" y="100" text-anchor="middle">Child deficit</text>
 						<text class="svg-small" x="130" y="127" text-anchor="middle">migration has closed</text>
-						<path class="svg-line" d="M 230 110 H 300"></path>
+						<path class="svg-line" d="M 230 110 H 300" marker-end="url(#auction-a1-arrow)"></path>
 						<rect class="svg-gold" x="300" y="65" width="220" height="90" rx="10"></rect>
 						<text class="svg-label" x="410" y="100" text-anchor="middle">Truth auction</text>
 						<text class="svg-small" x="410" y="127" text-anchor="middle">demand sets repair</text>
-						<path class="svg-line" d="M 520 110 H 590"></path>
+						<path class="svg-line" d="M 520 110 H 590" marker-end="url(#auction-a1-arrow)"></path>
 						<rect class="svg-red" x="590" y="45" width="280" height="130" rx="10"></rect>
 						<text class="svg-label" x="730" y="82" text-anchor="middle">Two losses to approve</text>
 						<text class="svg-small" x="730" y="110" text-anchor="middle">child OI: collateral impairment</text>

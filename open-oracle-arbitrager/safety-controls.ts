@@ -32,7 +32,7 @@ export function riskLimitMismatch(
 	if (exposure.concurrentPositions >= limits.maxConcurrentPositions) return 'Maximum concurrent position limit reached'
 	if (exposure.capitalAtRiskWeth > limits.maxPositionNotionalWeth) return 'Maximum position notional exceeded'
 	if (exposure.projectedLockedWeth > limits.maxTotalLockedWeth) return 'Maximum total locked capital exceeded'
-	if (exposure.dailyGasSpentWeth > limits.maxDailyGasSpendWeth) return 'Maximum daily gas loss budget exceeded'
+	if (exposure.dailyGasSpentWeth > limits.maxDailyGasSpendWeth) return 'Maximum UTC-day gas spend budget exceeded'
 	return undefined
 }
 

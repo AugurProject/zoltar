@@ -401,6 +401,9 @@ body.doc-openoracle .svg-line {
 	stroke: var(--muted);
 	stroke-width: 2.5;
 }
+body.doc-openoracle .svg-arrowhead {
+	fill: var(--muted);
+}
 body.doc-openoracle .svg-label {
 	fill: var(--ink);
 	font-size: 18px;

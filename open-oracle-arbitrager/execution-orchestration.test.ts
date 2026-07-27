@@ -391,10 +391,10 @@ describe('funded execution orchestration', () => {
 	test('does not submit when the final refreshed risk check fails', async () => {
 		let submitted = false
 		await expect(
-			guardedRiskSubmission('Maximum daily gas loss budget exceeded', async () => {
+			guardedRiskSubmission('Maximum UTC-day gas spend budget exceeded', async () => {
 				submitted = true
 			}),
-		).rejects.toThrow('Maximum daily gas loss budget exceeded')
+		).rejects.toThrow('Maximum UTC-day gas spend budget exceeded')
 		expect(submitted).toBe(false)
 	})
 

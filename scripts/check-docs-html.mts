@@ -21,6 +21,7 @@ const repositoryRootPath = path.resolve(fileURLToPath(new URL('..', import.meta.
 const docsDirectoryPath = path.join(repositoryRootPath, 'docs')
 const conflictMarkerPattern = /^(<<<<<<<|=======|>>>>>>>)($| )/m
 const diagramOptionalDocumentPaths = new Set(['docs/documentation.html', 'docs/security-model.html'])
+const directedDiagramIds = new Set(['fig-auction-a1-decision', 'fig-oracle-a1-gate'])
 const markdownLinkPattern = /\[[^\]]+\]\(([^)\s]+)(?:\s+['"][^)]*['"])?\)/g
 
 export async function assertDocsHtmlValid(): Promise<void> {
@@ -206,6 +207,26 @@ function validateDiagrams(parsedDocument: ParsedHtmlDocument, failures: Validati
 		const shapeCount = svg.querySelectorAll('circle, ellipse, line, path, polygon, polyline, rect, text').length
 		if (shapeCount === 0) {
 			addFailure(parsedDocument, `${describeElement(svg)} in ${describeElement(figure)} has no visible SVG primitives`, failures)
+		}
+
+		if (directedDiagramIds.has(figure.getAttribute('id') ?? '')) {
+			validateDirectedConnectors(parsedDocument, figure, svg, failures)
+		}
+	}
+}
+
+function validateDirectedConnectors(parsedDocument: ParsedHtmlDocument, figure: Element, svg: Element, failures: ValidationFailure[]): void {
+	const connectors = Array.from(svg.querySelectorAll('path.svg-line'))
+	if (connectors.length === 0) {
+		addFailure(parsedDocument, `${describeElement(figure)} has no directed connectors`, failures)
+		return
+	}
+	for (const connector of connectors) {
+		const markerReference = connector.getAttribute('marker-end')?.trim()
+		const match = markerReference?.match(/^url\(#([^)]+)\)$/)
+		const markerId = match?.[1]
+		if (markerId === undefined || svg.querySelector(`marker[id="${markerId}"]`) === null) {
+			addFailure(parsedDocument, `${describeElement(connector)} in ${describeElement(figure)} must reference an in-SVG marker-end`, failures)
 		}
 	}
 }

@@ -35,7 +35,7 @@ describe('execution risk controls', () => {
 		expect(riskLimitMismatch({ ...safe, concurrentPositions: 1 }, DEFAULT_RISK_LIMITS)).toContain('concurrent')
 		expect(riskLimitMismatch({ ...safe, capitalAtRiskWeth: safe.capitalAtRiskWeth + 1n }, DEFAULT_RISK_LIMITS)).toContain('position notional')
 		expect(riskLimitMismatch({ ...safe, projectedLockedWeth: safe.projectedLockedWeth + 1n }, DEFAULT_RISK_LIMITS)).toContain('locked capital')
-		expect(riskLimitMismatch({ ...safe, dailyGasSpentWeth: DEFAULT_RISK_LIMITS.maxDailyGasSpendWeth + 1n }, DEFAULT_RISK_LIMITS)).toContain('daily gas')
+		expect(riskLimitMismatch({ ...safe, dailyGasSpentWeth: DEFAULT_RISK_LIMITS.maxDailyGasSpendWeth + 1n }, DEFAULT_RISK_LIMITS)).toContain('UTC-day gas spend')
 	})
 
 	test('rechecks refreshed capital and relay-simulated gas against every portfolio cap', () => {
@@ -60,6 +60,6 @@ describe('execution risk controls', () => {
 		expect(positionRiskLimitMismatch({ capitalAtRiskWeth: 3n * 10n ** 18n, positions, projectedGasCostWeth: 5n * 10n ** 15n }, limits, now)).toBeUndefined()
 		expect(positionRiskLimitMismatch({ capitalAtRiskWeth: 3n * 10n ** 18n + 1n, positions, projectedGasCostWeth: 5n * 10n ** 15n }, limits, now)).toContain('position notional')
 		expect(positionRiskLimitMismatch({ capitalAtRiskWeth: 3n * 10n ** 18n + 1n, positions: [], projectedGasCostWeth: 0n }, { ...limits, maxPositionNotionalWeth: 10n * 10n ** 18n, maxTotalLockedWeth: 3n * 10n ** 18n }, now)).toContain('locked capital')
-		expect(positionRiskLimitMismatch({ capitalAtRiskWeth: 1n, positions, projectedGasCostWeth: 5n * 10n ** 15n + 1n }, limits, now)).toContain('daily gas')
+		expect(positionRiskLimitMismatch({ capitalAtRiskWeth: 1n, positions, projectedGasCostWeth: 5n * 10n ** 15n + 1n }, limits, now)).toContain('UTC-day gas spend')
 	})
 })

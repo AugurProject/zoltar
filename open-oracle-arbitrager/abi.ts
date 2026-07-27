@@ -276,6 +276,20 @@ export const openOracleArbitrageExecutorAbi = [
 		],
 		outputs: [],
 	},
+	{
+		type: 'function',
+		name: 'contributions',
+		stateMutability: 'pure',
+		inputs: [
+			{ name: 'game', type: 'tuple', components: gameComponents },
+			{ name: 'newAmount1', type: 'uint128' },
+			{ name: 'newAmount2', type: 'uint128' },
+		],
+		outputs: [
+			{ name: 'contribution1', type: 'uint256' },
+			{ name: 'contribution2', type: 'uint256' },
+		],
+	},
 ] as const
 
 export const openOracleAbi = [

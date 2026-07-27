@@ -44,6 +44,18 @@ test('custom executor ABI matches the compiled arbitrage executor contract', () 
 	expect(customInputs).toEqual(compiledInputs)
 })
 
+test('custom executor ABI covers every public executor function', () => {
+	const functionNames = openOracleArbitrageExecutorAbi.filter(entry => entry.type === 'function').map(entry => entry.name)
+	expect(functionNames).toEqual(['dispute', 'hedgeAndDispute', 'assertParentBlock', 'contributions'])
+	for (const functionName of functionNames) {
+		const custom = openOracleArbitrageExecutorAbi.find(entry => entry.type === 'function' && entry.name === functionName)
+		const compiled = peripherals_OpenOracleArbitrageExecutor_OpenOracleArbitrageExecutor.abi.find(entry => entry.type === 'function' && entry.name === functionName)
+		if (custom === undefined || custom.type !== 'function' || compiled === undefined || compiled.type !== 'function') throw new Error(`Executor ABI is missing ${functionName}`)
+		expect(custom.inputs.map(inputShape)).toEqual(compiled.inputs.map(inputShape))
+		expect(custom.outputs.map(inputShape)).toEqual(compiled.outputs.map(inputShape))
+	}
+})
+
 test('executor exposes one atomic hedge-and-dispute entry point', () => {
 	const custom = openOracleArbitrageExecutorAbi.find(entry => entry.type === 'function' && entry.name === 'hedgeAndDispute')
 	const compiled = peripherals_OpenOracleArbitrageExecutor_OpenOracleArbitrageExecutor.abi.find(entry => entry.type === 'function' && entry.name === 'hedgeAndDispute')

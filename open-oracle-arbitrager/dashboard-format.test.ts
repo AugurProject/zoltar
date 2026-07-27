@@ -50,6 +50,10 @@ describe('dashboard exact ETH formatting', () => {
 		expect(transactionKindLabel({ kind: 'approval-weth', tokenSymbol: 'WETH' })).toBe('approval weth')
 	})
 
+	test('describes risk limits as capital and UTC-day gas-spend controls', () => {
+		expect(opportunityDecisionReason({ decision: 'risk-limit', tokenSymbol: 'REP' })).toBe('A concurrent-position, position-notional, total-locked-capital, or UTC-day gas-spend limit blocks execution')
+	})
+
 	test('describes current-head pool samples without claiming one sample per unseen block', () => {
 		expect(marketPriceChartDescription([{ blockNumber: '100' }, { blockNumber: '100' }, { blockNumber: '103' }])).toBe('3 current-head pool samples spanning observed heads at blocks 100 through 103. Exact recent values follow the chart in a table.')
 		expect(marketPriceChartDescription([{ blockNumber: '100' }])).toBe('1 current-head pool sample spanning observed heads at blocks 100 through 100. Exact recent values follow the chart in a table.')
