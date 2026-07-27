@@ -62,9 +62,18 @@
 				Finalization clears the batch auction, sends the raised ETH into the
 				repair path, and computes the accounting rates used to settle bidders.
 				The child activates with legitimate migration collateral plus retained bid
-				ETH, even when that total is below the original fork snapshot. Full repair is not guaranteed, and the remaining impairment is borne by the affected
-				child's open-interest holders. Finalization
-				rejects caller contribution ETH, and forced ETH remains unaccounted surplus. In the case auction does't recover all the required ETH, all the REP in the vaults have been auctioned off, the old REP vault holders have been wiped off.
+				ETH, even when that total is below the original fork snapshot. Full repair
+				is not guaranteed, and the remaining impairment is borne by the affected
+				child's open-interest holders. Finalization rejects caller contribution ETH,
+				and forced ETH remains unaccounted surplus. On the underfunded path,
+				qualifying bidders collectively receive <code>maxRepBeingSold</code>; when
+				no bid qualifies, no REP is sold. Any unsold REP remains behind inherited
+				ownership. A zero-migration full-cap sale is the special case where every
+				auctionable REP is sold and the inherited denominator has no live child
+				owner; see
+				<a href="#zero-migration-full-cap-ownership"
+					>Zero-migration full-cap ownership</a
+				>.
 			</p>
 
 			<p>
@@ -199,6 +208,19 @@
 						<td>
 							Writes winning claims into child-pool vault accounting as pool
 							ownership plus proportional security-bond allowance.
+						</td>
+					</tr>
+					<tr>
+						<td>Pull a deferred refund</td>
+						<td>None</td>
+						<td><code>withdrawPendingEthRefund</code></td>
+						<td>
+							The bidder calls the auction after a prior positive refund push
+							was rejected and once its address can accept ETH.
+						</td>
+						<td>
+							Transfers the bidder's complete <code>pendingEthRefunds</code>
+							balance without replaying or changing the settled bid.
 						</td>
 					</tr>
 				</tbody>
@@ -543,6 +565,22 @@
 					clearing tick can be withdrawn through the pre-finalization refund
 					path; binding or potentially winning bids stay in the auction.
 				</p>
+					<p>
+						Refund delivery is independent from bid settlement. The auction first
+						marks each selected bid and fixes its REP and allowance result, then
+						attempts to push any positive ETH refund with an explicit
+						<code>gas: 30,000</code> call argument. Because the call transfers
+						nonzero value, the EVM adds its <code>2,300</code>-gas value-transfer
+						stipend, giving recipient code an effective maximum of
+						<code>32,300</code> gas. If the bidder rejects, reverts, or exhausts
+						that bounded callback budget, settlement remains complete and the ETH
+						is added to <code>pendingEthRefunds</code>. The bidder can later pull the
+						complete balance with <code>withdrawPendingEthRefund</code>; that
+						caller-initiated transfer is not subject to the push cap, and a
+						rejected pull leaves the balance unchanged. The auction emits the
+						balance clear before that callback, so a reentrant settlement's new
+						deferred refund follows the clear in receipt order.
+					</p>
 				<table>
 					<thead>
 						<tr>
@@ -592,9 +630,30 @@
 					repaired child-pool vault state, including the debt-bearing allowance
 					that still has to be backed.
 				</p>
-				<p>
-					Zero-effective-price ticks are rejected when bids are submitted, so
-					underfunded settlement cannot assign REP to bids whose rounded ETH/REP
+					<p>
+						Before a winner claims, its reserved auction allowance remains part of
+						the child's fork balance sheet but is not assigned to a responsible
+					vault. It therefore does not accrue fees, affect retention utilization,
+					or secure newly minted complete sets. Claim settlement adds that
+						allowance to the bidder vault and to
+						<code>feeEligibleSecurityBondAllowance</code> atomically.
+					</p>
+					<p id="zero-migration-full-cap-ownership">
+						<strong>Zero-migration full-cap ownership.</strong> When no vault REP
+						migrated into the child and the auction sells every auctionable REP,
+						there is no live child owner behind the parent's inherited denominator.
+						The forker therefore sets
+						<code>auctionPoolOwnershipPerRep</code> to
+						<code>PRICE_PRECISION</code> and sets the final denominator to
+						<code>repAvailable * PRICE_PRECISION</code>. Each winner's ownership
+						then round-trips through <code>poolOwnershipToRep</code> to its full
+						purchased REP, and later direct REP deposits join the same live scale.
+						When REP remains unsold behind an inherited denominator, the forker
+						instead derives the ownership rate from that residual REP.
+					</p>
+					<p>
+						Zero-effective-price ticks are rejected when bids are submitted, so
+						underfunded settlement cannot assign REP to bids whose rounded ETH/REP
 					price is zero.
 				</p>
 				<p>

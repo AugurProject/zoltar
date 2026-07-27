@@ -95,15 +95,17 @@ describe('Auction', () => {
 		return contractAddress
 	}
 
-	const executeThroughReceiver = async (receiver: Address, target: Address, data: Hex, value = 0n) => {
+	const executeThroughReceiver = async (receiver: Address, target: Address, data: Hex, value = 0n, gas?: bigint) => {
 		const hash = await client.writeContract({
 			abi: rejectingEthReceiverArtifact.abi,
 			address: receiver,
 			functionName: 'execute',
 			args: [target, data],
 			value,
+			gas,
 		})
 		await client.waitForTransactionReceipt({ hash })
+		return hash
 	}
 
 	async function decodeAuctionEvents(hash: Hash) {
@@ -2001,7 +2003,7 @@ describe('Auction', () => {
 			await assert.rejects(refundLosingBids(client, auctionAddress, []), /Auction has already been finalized/)
 		})
 
-		test('rejecting ETH recipients roll back finalization, withdrawal, and pre-finalization refunds', async () => {
+		test('rejecting ETH bidders defer refunds without rolling back settlement while owner rejection still rolls back finalization', async () => {
 			const auctionAbi = peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi
 			const rejectingReceiver = await deployRejectingEthReceiver()
 			await deployUniformPriceDualCapBatchAuction(client, rejectingReceiver)
@@ -2040,47 +2042,272 @@ describe('Auction', () => {
 				args: [true],
 			})
 
-			const losingBidBeforeWithdrawal = ensureDefined((await getBidPageAtTick(client, rejectingOwnerAuction, losingTick, 0n, 1n))[0], 'missing rejecting receiver bid before withdrawal')
-			const auctionBalanceBeforeFailedWithdrawal = await getETHBalance(client, rejectingOwnerAuction)
-			await assert.rejects(
-				executeThroughReceiver(
-					rejectingReceiver,
-					rejectingOwnerAuction,
-					encodeFunctionData({
-						abi: auctionAbi,
-						functionName: 'withdrawBids',
-						args: [rejectingReceiver, [{ tick: losingTick, bidIndex: 0n }], 0n],
-					}),
-				),
-				/Auction failed to refund ETH while withdrawing bids/,
+			const auctionBalanceBeforeDeferredWithdrawal = await getETHBalance(client, rejectingOwnerAuction)
+			await executeThroughReceiver(
+				rejectingReceiver,
+				rejectingOwnerAuction,
+				encodeFunctionData({
+					abi: auctionAbi,
+					functionName: 'withdrawBids',
+					args: [rejectingReceiver, [{ tick: losingTick, bidIndex: 0n }], 0n],
+				}),
 			)
 			const losingBidAfterWithdrawal = ensureDefined((await getBidPageAtTick(client, rejectingOwnerAuction, losingTick, 0n, 1n))[0], 'missing rejecting receiver bid after withdrawal')
-			assert.strictEqual(losingBidBeforeWithdrawal.claimed, false, 'losing bid should begin unclaimed')
-			assert.strictEqual(losingBidAfterWithdrawal.claimed, false, 'failed withdrawal refund must roll back the claimed flag')
-			assert.strictEqual(await getETHBalance(client, rejectingOwnerAuction), auctionBalanceBeforeFailedWithdrawal, 'failed withdrawal refund must preserve auction ETH')
+			assert.strictEqual(losingBidAfterWithdrawal.claimed, true, 'refund rejection must not roll back finalized bid settlement')
+			assert.strictEqual(
+				await client.readContract({
+					abi: auctionAbi,
+					address: rejectingOwnerAuction,
+					functionName: 'pendingEthRefunds',
+					args: [rejectingReceiver],
+				}),
+				losingBid,
+				'rejected finalized refund should remain withdrawable from auction escrow',
+			)
+			assert.strictEqual(await getETHBalance(client, rejectingOwnerAuction), auctionBalanceBeforeDeferredWithdrawal, 'deferred finalized refund must remain held by the auction')
+			await assert.rejects(executeThroughReceiver(rejectingReceiver, rejectingOwnerAuction, encodeFunctionData({ abi: auctionAbi, functionName: 'withdrawPendingEthRefund', args: [] })), /Auction failed to withdraw deferred ETH refund/)
+			await client.writeContract({
+				abi: rejectingEthReceiverArtifact.abi,
+				address: rejectingReceiver,
+				functionName: 'setRejectETH',
+				args: [false],
+			})
+			const receiverBalanceBeforeDeferredWithdrawal = await getETHBalance(client, rejectingReceiver)
+			await executeThroughReceiver(rejectingReceiver, rejectingOwnerAuction, encodeFunctionData({ abi: auctionAbi, functionName: 'withdrawPendingEthRefund', args: [] }))
+			assert.strictEqual((await getETHBalance(client, rejectingReceiver)) - receiverBalanceBeforeDeferredWithdrawal, losingBid, 'the bidder should be able to pull the deferred finalized refund after accepting ETH')
+			assert.strictEqual(
+				await client.readContract({
+					abi: auctionAbi,
+					address: rejectingOwnerAuction,
+					functionName: 'pendingEthRefunds',
+					args: [rejectingReceiver],
+				}),
+				0n,
+				'successful deferred withdrawal should clear the bidder escrow',
+			)
 
 			await startAuction(client, auctionAddress, winningBid, 10n * ATTOETH_PER_ETH)
 			await submitBid(client, auctionAddress, 0n, winningBid)
 			await executeThroughReceiver(rejectingReceiver, auctionAddress, encodeFunctionData({ abi: auctionAbi, functionName: 'submitBid', args: [losingTick] }), losingBid)
+			await client.writeContract({
+				abi: rejectingEthReceiverArtifact.abi,
+				address: rejectingReceiver,
+				functionName: 'setRejectETH',
+				args: [true],
+			})
 			const clearingBeforeRefund = await computeClearing(client, auctionAddress)
-			const balanceBeforeFailedRefund = await getETHBalance(client, auctionAddress)
-			await assert.rejects(
-				executeThroughReceiver(
-					rejectingReceiver,
+			assert.strictEqual(clearingBeforeRefund.hitCap, true, 'the higher bid should establish a funded clearing before the losing refund')
+			const balanceBeforeDeferredRefund = await getETHBalance(client, auctionAddress)
+			await executeThroughReceiver(
+				rejectingReceiver,
+				auctionAddress,
+				encodeFunctionData({
+					abi: auctionAbi,
+					functionName: 'refundLosingBids',
+					args: [[{ tick: losingTick, bidIndex: 0n }]],
+				}),
+			)
+			const losingBidAfterRefund = ensureDefined((await getBidPageAtTick(client, auctionAddress, losingTick, 0n, 1n))[0], 'missing rejecting receiver bid after refund')
+			const clearingAfterRefund = await computeClearing(client, auctionAddress)
+			assert.strictEqual(losingBidAfterRefund.claimed, true, 'refund rejection must not roll back a pre-finalization losing-bid refund')
+			assert.strictEqual(clearingAfterRefund.hitCap, true, 'deferred losing refunds must preserve the funded clearing')
+			assert.strictEqual((await getTickSummary(client, auctionAddress, losingTick)).active, false, 'settled losing bids should remain removed from active clearing state')
+			assert.strictEqual(await getETHBalance(client, auctionAddress), balanceBeforeDeferredRefund, 'deferred pre-finalization refund must remain held by the auction')
+			assert.strictEqual(
+				await client.readContract({
+					abi: auctionAbi,
+					address: auctionAddress,
+					functionName: 'pendingEthRefunds',
+					args: [rejectingReceiver],
+				}),
+				losingBid,
+				'rejected pre-finalization refund should remain withdrawable from auction escrow',
+			)
+		})
+
+		test('gas-exhausting losing bidders cannot block pre-finalization refund accounting', async () => {
+			const auctionAbi = peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi
+			const gasExhaustingReceiver = await deployRejectingEthReceiver()
+			const winningBid = 2n * ATTOETH_PER_ETH
+			const losingBid = ATTOETH_PER_ETH
+			const losingTick = -10_000n
+
+			await startAuction(client, auctionAddress, winningBid, 10n * ATTOETH_PER_ETH)
+			await submitBid(client, auctionAddress, 0n, winningBid)
+			await executeThroughReceiver(gasExhaustingReceiver, auctionAddress, encodeFunctionData({ abi: auctionAbi, functionName: 'submitBid', args: [losingTick] }), losingBid)
+			await client.writeContract({
+				abi: rejectingEthReceiverArtifact.abi,
+				address: gasExhaustingReceiver,
+				functionName: 'setConsumeAllGas',
+				args: [true],
+			})
+
+			await executeThroughReceiver(
+				gasExhaustingReceiver,
+				auctionAddress,
+				encodeFunctionData({
+					abi: auctionAbi,
+					functionName: 'refundLosingBids',
+					args: [[{ tick: losingTick, bidIndex: 0n }]],
+				}),
+				0n,
+				500_000n,
+			)
+
+			const settledBid = ensureDefined((await getBidPageAtTick(client, auctionAddress, losingTick, 0n, 1n))[0], 'missing gas-exhausting receiver bid after refund')
+			assert.strictEqual(settledBid.claimed, true, 'gas exhaustion must not roll back the losing bid settlement')
+			assert.strictEqual((await getTickSummary(client, auctionAddress, losingTick)).active, false, 'gas exhaustion must not restore the settled bid to active clearing state')
+			assert.strictEqual(
+				await client.readContract({
+					abi: auctionAbi,
+					address: auctionAddress,
+					functionName: 'pendingEthRefunds',
+					args: [gasExhaustingReceiver],
+				}),
+				losingBid,
+				'the gas-exhausting bidder refund should remain in pull escrow',
+			)
+		})
+
+		test('separate rejected refunds accumulate until the bidder pulls the complete balance', async () => {
+			const auctionAbi = peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi
+			const rejectingReceiver = await deployRejectingEthReceiver()
+			const winningBid = 3n * ATTOETH_PER_ETH
+			const firstLosingBid = ATTOETH_PER_ETH
+			const secondLosingBid = 2n * ATTOETH_PER_ETH
+			const firstLosingTick = -10_000n
+			const secondLosingTick = -11_000n
+			const totalDeferredRefund = firstLosingBid + secondLosingBid
+
+			await startAuction(client, auctionAddress, winningBid, 10n * ATTOETH_PER_ETH)
+			await submitBid(client, auctionAddress, 0n, winningBid)
+			await executeThroughReceiver(rejectingReceiver, auctionAddress, encodeFunctionData({ abi: auctionAbi, functionName: 'submitBid', args: [firstLosingTick] }), firstLosingBid)
+			await executeThroughReceiver(rejectingReceiver, auctionAddress, encodeFunctionData({ abi: auctionAbi, functionName: 'submitBid', args: [secondLosingTick] }), secondLosingBid)
+
+			await executeThroughReceiver(
+				rejectingReceiver,
+				auctionAddress,
+				encodeFunctionData({
+					abi: auctionAbi,
+					functionName: 'refundLosingBids',
+					args: [[{ tick: firstLosingTick, bidIndex: 0n }]],
+				}),
+			)
+			const secondRefundHash = await executeThroughReceiver(
+				rejectingReceiver,
+				auctionAddress,
+				encodeFunctionData({
+					abi: auctionAbi,
+					functionName: 'refundLosingBids',
+					args: [[{ tick: secondLosingTick, bidIndex: 0n }]],
+				}),
+			)
+
+			const secondDeferredEvent = (await decodeAuctionEvents(secondRefundHash)).find(log => log.eventName === 'EthRefundDeferred')
+			if (secondDeferredEvent?.eventName !== 'EthRefundDeferred') throw new Error('missing second deferred-refund event')
+			assert.strictEqual(secondDeferredEvent.args.amount, secondLosingBid, 'the second event should report only the newly deferred refund')
+			assert.strictEqual(secondDeferredEvent.args.pendingAmount, totalDeferredRefund, 'the second event should report the complete cumulative refund liability')
+			assert.strictEqual(
+				await client.readContract({
+					abi: auctionAbi,
+					address: auctionAddress,
+					functionName: 'pendingEthRefunds',
+					args: [rejectingReceiver],
+				}),
+				totalDeferredRefund,
+				'separate rejected pushes must add to the existing bidder liability',
+			)
+
+			await client.writeContract({
+				abi: rejectingEthReceiverArtifact.abi,
+				address: rejectingReceiver,
+				functionName: 'setRejectETH',
+				args: [false],
+			})
+			const receiverBalanceBeforePull = await getETHBalance(client, rejectingReceiver)
+			await executeThroughReceiver(rejectingReceiver, auctionAddress, encodeFunctionData({ abi: auctionAbi, functionName: 'withdrawPendingEthRefund', args: [] }))
+			assert.strictEqual((await getETHBalance(client, rejectingReceiver)) - receiverBalanceBeforePull, totalDeferredRefund, 'the pull path should pay every separately accumulated refund')
+			assert.strictEqual(
+				await client.readContract({
+					abi: auctionAbi,
+					address: auctionAddress,
+					functionName: 'pendingEthRefunds',
+					args: [rejectingReceiver],
+				}),
+				0n,
+				'the complete accumulated liability should clear after a successful pull',
+			)
+		})
+
+		test('deferred-refund events remain reducer-safe when a pull callback defers another bid', async () => {
+			const auctionAbi = peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi
+			const reentrantReceiver = await deployRejectingEthReceiver()
+			const winningBid = 2n * ATTOETH_PER_ETH
+			const firstLosingBid = ATTOETH_PER_ETH
+			const secondLosingBid = 2n * ATTOETH_PER_ETH
+			const firstLosingTick = -10_000n
+			const secondLosingTick = -11_000n
+
+			await startAuction(client, auctionAddress, winningBid, 10n * ATTOETH_PER_ETH)
+			await submitBid(client, auctionAddress, 0n, winningBid)
+			await executeThroughReceiver(reentrantReceiver, auctionAddress, encodeFunctionData({ abi: auctionAbi, functionName: 'submitBid', args: [firstLosingTick] }), firstLosingBid)
+			await executeThroughReceiver(reentrantReceiver, auctionAddress, encodeFunctionData({ abi: auctionAbi, functionName: 'submitBid', args: [secondLosingTick] }), secondLosingBid)
+
+			await executeThroughReceiver(
+				reentrantReceiver,
+				auctionAddress,
+				encodeFunctionData({
+					abi: auctionAbi,
+					functionName: 'refundLosingBids',
+					args: [[{ tick: firstLosingTick, bidIndex: 0n }]],
+				}),
+			)
+			assert.strictEqual(
+				await client.readContract({
+					abi: auctionAbi,
+					address: auctionAddress,
+					functionName: 'pendingEthRefunds',
+					args: [reentrantReceiver],
+				}),
+				firstLosingBid,
+				'the first rejected push should establish the replay starting balance',
+			)
+
+			await client.writeContract({
+				abi: rejectingEthReceiverArtifact.abi,
+				address: reentrantReceiver,
+				functionName: 'setReceiveReentry',
+				args: [
 					auctionAddress,
 					encodeFunctionData({
 						abi: auctionAbi,
 						functionName: 'refundLosingBids',
-						args: [[{ tick: losingTick, bidIndex: 0n }]],
+						args: [[{ tick: secondLosingTick, bidIndex: 0n }]],
 					}),
-				),
-				/Auction failed to refund ETH for losing bids/,
-			)
-			const losingBidAfterRefund = ensureDefined((await getBidPageAtTick(client, auctionAddress, losingTick, 0n, 1n))[0], 'missing rejecting receiver bid after refund')
-			const clearingAfterRefund = await computeClearing(client, auctionAddress)
-			assert.strictEqual(losingBidAfterRefund.claimed, false, 'failed pre-finalization refund must roll back the claimed flag')
-			assert.deepStrictEqual(clearingAfterRefund, clearingBeforeRefund, 'failed pre-finalization refund must restore clearing state')
-			assert.strictEqual(await getETHBalance(client, auctionAddress), balanceBeforeFailedRefund, 'failed pre-finalization refund must preserve auction ETH')
+				],
+			})
+			const pullHash = await executeThroughReceiver(reentrantReceiver, auctionAddress, encodeFunctionData({ abi: auctionAbi, functionName: 'withdrawPendingEthRefund', args: [] }))
+
+			let reconstructedPendingRefund = firstLosingBid
+			for (const log of await decodeAuctionEvents(pullHash)) {
+				if (log.eventName === 'PendingEthRefundWithdrawn') {
+					assert.strictEqual(log.args.amount, reconstructedPendingRefund, 'a withdrawal event must clear the complete prior liability')
+					reconstructedPendingRefund = 0n
+				}
+				if (log.eventName === 'EthRefundDeferred') {
+					assert.strictEqual(log.args.pendingAmount, reconstructedPendingRefund + log.args.amount, 'a deferred-refund event must add its delta to the prior liability')
+					reconstructedPendingRefund = log.args.pendingAmount
+				}
+			}
+
+			const onchainPendingRefund = await client.readContract({
+				abi: auctionAbi,
+				address: auctionAddress,
+				functionName: 'pendingEthRefunds',
+				args: [reentrantReceiver],
+			})
+			assert.strictEqual(onchainPendingRefund, secondLosingBid, 'the reentrant rejected push should remain withdrawable')
+			assert.strictEqual(reconstructedPendingRefund, onchainPendingRefund, 'ordered auction events must reconstruct the final deferred-refund liability')
 		})
 	})
 

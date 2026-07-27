@@ -1,10 +1,12 @@
 import { beforeEach, describe, test } from 'bun:test'
-import { encodeDeployData, encodeFunctionData } from '@zoltar/shared/ethereum'
+import { encodeDeployData, encodeFunctionData, type Address, type Hex } from '@zoltar/shared/ethereum'
 import {
 	peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
+	peripherals_SecurityPool_SecurityPool,
 	peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction,
 	test_peripherals_SecurityPoolForkerAuctionSettlementHarness_AuctionSettlementPoolHarness,
 	test_peripherals_SecurityPoolForkerAuctionSettlementHarness_SecurityPoolForkerAuctionSettlementHarness,
+	test_peripherals_OpenOracleAdversarialHarnesses_OpenOracleRejectingETHReceiver as rejectingEthReceiverArtifact,
 } from '../../types/contractArtifact'
 import { usePeripheralsTruthAuctionFixture, type PeripheralsTruthAuctionFixture } from './fixture'
 import { getExpectedLiquidationRepMove } from './liquidationTestHelpers'
@@ -12,6 +14,7 @@ import { getMaxRepBeingSold, getMinBidSize, isFinalized, submitBid } from '../..
 import { getLastPrice, queueLiquidationAtForcedPrice } from '../../testSupport/simulator/utils/contracts/peripherals'
 import { applyLibraries } from '../../testSupport/simulator/utils/contracts/deployPeripherals'
 import { getForkActivationTime } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
+import { priceToClosestTick } from '../../testSupport/simulator/utils/tickMath'
 
 describe('Peripherals: truth auction', () => {
 	const fixture = usePeripheralsTruthAuctionFixture()
@@ -139,6 +142,29 @@ describe('Peripherals: truth auction', () => {
 		if (status === '0x1') return 'success'
 		if (status === '0x0') return 'reverted'
 		throw new Error(`Invalid direct Anvil receipt status for ${hash}`)
+	}
+
+	const deployRejectingEthReceiver = async (): Promise<Address> => {
+		const hash = await client.sendTransaction({
+			data: encodeDeployData({
+				abi: rejectingEthReceiverArtifact.abi,
+				bytecode: `0x${rejectingEthReceiverArtifact.evm.bytecode.object}`,
+			}),
+		})
+		const receipt = await client.waitForTransactionReceipt({ hash })
+		if (typeof receipt.contractAddress !== 'string') throw new Error('rejecting ETH receiver deployment address is unavailable')
+		return receipt.contractAddress
+	}
+
+	const executeThroughReceiver = async (receiver: Address, target: Address, data: Hex, value = 0n) => {
+		const hash = await client.writeContract({
+			abi: rejectingEthReceiverArtifact.abi,
+			address: receiver,
+			functionName: 'execute',
+			args: [target, data],
+			value,
+		})
+		await client.waitForTransactionReceipt({ hash })
 	}
 
 	const finalizeChildQuestionAsYes = async (childSecurityPool: typeof securityPoolAddresses) => {
@@ -1500,6 +1526,209 @@ describe('Peripherals: truth auction', () => {
 			strictEqualTypeSafe(attackerVault.securityBondAllowance, expectedAuctionedAllowance, 'settling the only qualifying bid should credit the complete auction allowance')
 		})
 
+		test('zero-migration full-cap settlement keeps ownership conversion and fresh deposits usable', async () => {
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime + 10000n)
+			const securityPoolAllowance = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+			await createCompleteSet(createWriteClient(mockWindow, TEST_ADDRESSES[1], 0), securityPoolAddresses.securityPool, 10n * 10n ** 18n)
+
+			await triggerExternalForkForSecurityPool(undefined, 'zero-migration ownership normalization source')
+			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+			await startTruthAuction(client, yesSecurityPool.securityPool)
+
+			strictEqualTypeSafe(await getMigratedRep(client, yesSecurityPool.securityPool), 0n, 'test requires a child with no migrated vault REP')
+			const auctionCap = await getMaxRepBeingSold(client, yesSecurityPool.truthAuction)
+			const minBidSize = await getMinBidSize(client, yesSecurityPool.truthAuction)
+			const auctionWinner = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
+			const winningTick = await participateAuction(auctionWinner, yesSecurityPool.truthAuction, 1n, minBidSize)
+
+			await mockWindow.advanceTime(7n * DAY + DAY)
+			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+			strictEqualTypeSafe(await getTotalRepPurchased(client, yesSecurityPool.truthAuction), auctionCap, 'the qualifying minimum bid should receive the complete zero-migration cap')
+
+			await claimAuctionProceeds(client, yesSecurityPool.securityPool, auctionWinner.account.address, [{ tick: winningTick, bidIndex: 0n }])
+			const winnerVault = await getSecurityVault(client, yesSecurityPool.securityPool, auctionWinner.account.address)
+			strictEqualTypeSafe(await getPoolOwnershipDenominator(client, yesSecurityPool.securityPool), auctionCap * PRICE_PRECISION, 'a zero-migration full sale should normalize ownership to the standard REP scale')
+			strictEqualTypeSafe(await poolOwnershipToRep(client, yesSecurityPool.securityPool, winnerVault.repDepositShare), auctionCap, 'the complete-cap winner should be able to convert every ownership unit back to REP')
+
+			const freshVault = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
+			const freshDeposit = 10n * 10n ** 18n
+			const childRepToken = await getRepToken(client, yesSecurityPool.securityPool)
+			const freshVaultBalanceSlot = formatStorageSlot(getMappingStorageSlot(freshVault.account.address, 0n))
+			await mockWindow.addStateOverrides({
+				[childRepToken]: {
+					stateDiff: {
+						[freshVaultBalanceSlot]: freshDeposit,
+					},
+				},
+			})
+			await approveToken(freshVault, childRepToken, yesSecurityPool.securityPool)
+			await depositRep(freshVault, yesSecurityPool.securityPool, freshDeposit)
+
+			const freshVaultState = await getSecurityVault(client, yesSecurityPool.securityPool, freshVault.account.address)
+			strictEqualTypeSafe(await poolOwnershipToRep(client, yesSecurityPool.securityPool, freshVaultState.repDepositShare), freshDeposit, 'a minimum fresh deposit should remain exactly convertible after zero-migration auction settlement')
+		})
+
+		test('unclaimed auction allowance cannot secure new open interest and a gas-exhausting winner cannot block assignment', async () => {
+			const endTime = await getQuestionEndDate(client, questionId)
+			await mockWindow.setTime(endTime + 10000n)
+			const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+			await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
+
+			const unmigratedVault = createWriteClient(mockWindow, TEST_ADDRESSES[4], 0)
+			await approveAndDepositRep(unmigratedVault, 2n * forkThreshold, questionId)
+			const securityPoolAllowance = repDeposit / 4n
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+			await mockWindow.advanceTime(10n * 60n)
+			await manipulatePriceOracleAndPerformOperation(unmigratedVault, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, unmigratedVault.account.address, securityPoolAllowance)
+			await createCompleteSet(createWriteClient(mockWindow, TEST_ADDRESSES[2], 0), securityPoolAddresses.securityPool, 10n * 10n ** 18n)
+
+			await triggerExternalForkForSecurityPool(undefined, 'rejecting auction winner capacity source')
+			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
+
+			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+			await startTruthAuction(client, yesSecurityPool.securityPool)
+
+			const rejectingWinner = await deployRejectingEthReceiver()
+			const auctionAbi = peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi
+			const reservePrice = await client.readContract({
+				abi: auctionAbi,
+				address: yesSecurityPool.truthAuction,
+				functionName: 'underfundedThreshold',
+				args: [],
+			})
+			const closestTick = priceToClosestTick(reservePrice)
+			const winningTick = tickToPrice(closestTick) < reservePrice ? closestTick + 1n : closestTick
+			const expectedEthToBuy = await getEthRaiseCap(client, yesSecurityPool.truthAuction)
+			const bidAmount = expectedEthToBuy * 2n
+			await executeThroughReceiver(rejectingWinner, yesSecurityPool.truthAuction, encodeFunctionData({ abi: auctionAbi, functionName: 'submitBid', args: [winningTick] }), bidAmount)
+
+			await mockWindow.advanceTime(7n * DAY + DAY)
+			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
+			const forkDataBeforeClaim = await getSecurityPoolForkerForkData(client, yesSecurityPool.securityPool)
+			assert.ok(forkDataBeforeClaim.auctionedSecurityBondAllowance > 0n, 'test setup requires an unclaimed allowance allocation')
+			await client.writeContract({
+				abi: rejectingEthReceiverArtifact.abi,
+				address: rejectingWinner,
+				functionName: 'setConsumeAllGas',
+				args: [true],
+			})
+
+			const snapshotBeforeClaim = await client.readContract({
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				address: yesSecurityPool.securityPool,
+				functionName: 'getPoolAccountingSnapshot',
+				args: [],
+			})
+			strictEqualTypeSafe(snapshotBeforeClaim.totalSecurityBondAllowance - snapshotBeforeClaim.feeEligibleSecurityBondAllowance, forkDataBeforeClaim.auctionedSecurityBondAllowance, 'the unclaimed auction allocation should remain outside assigned allowance')
+			const assignedHeadroom = snapshotBeforeClaim.feeEligibleSecurityBondAllowance > snapshotBeforeClaim.completeSetCollateralAmount ? snapshotBeforeClaim.feeEligibleSecurityBondAllowance - snapshotBeforeClaim.completeSetCollateralAmount : 0n
+			const capacityProbe = assignedHeadroom + 1n
+			const retentionRateBeforeClaim = await client.readContract({
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				address: yesSecurityPool.securityPool,
+				functionName: 'currentRetentionRate',
+				args: [],
+			})
+			const childRepToken = await getRepToken(client, yesSecurityPool.securityPool)
+			const reporterBalanceSlot = formatStorageSlot(getMappingStorageSlot(client.account.address, 0n))
+			await mockWindow.addStateOverrides({
+				[childRepToken]: {
+					stateDiff: {
+						[reporterBalanceSlot]: repDeposit,
+					},
+				},
+			})
+			await manipulatePriceOracle(client, mockWindow, yesSecurityPool.priceOracleManagerAndOperatorQueuer)
+			const assignedVaultBeforeClaim = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
+			assert.ok(snapshotBeforeClaim.totalSecurityBondAllowance - assignedVaultBeforeClaim.securityBondAllowance >= snapshotBeforeClaim.completeSetCollateralAmount, 'test setup requires unclaimed allowance alone to satisfy the obsolete total-capacity check')
+			await assert.rejects(
+				client.call({
+					account: yesSecurityPool.priceOracleManagerAndOperatorQueuer,
+					data: encodeFunctionData({
+						abi: peripherals_SecurityPool_SecurityPool.abi,
+						functionName: 'performSetSecurityBondsAllowance',
+						args: [client.account.address, 0n],
+					}),
+					to: yesSecurityPool.securityPool,
+				}),
+				/Over capacity/,
+			)
+			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[3], 0)
+			await assert.rejects(createCompleteSet(openInterestHolder, yesSecurityPool.securityPool, capacityProbe), /Over capacity/)
+
+			const claimHash = await client.writeContract({
+				abi: peripherals_SecurityPoolForker_SecurityPoolForker.abi,
+				address: getInfraContractAddresses().securityPoolForker,
+				functionName: 'claimAuctionProceeds',
+				args: [yesSecurityPool.securityPool, rejectingWinner, [{ tick: winningTick, bidIndex: 0n }]],
+				gas: 2_000_000n,
+			})
+			await client.waitForTransactionReceipt({ hash: claimHash })
+			const winnerVault = await getSecurityVault(client, yesSecurityPool.securityPool, rejectingWinner)
+			assert.ok(winnerVault.repDepositShare > 0n, 'permissionless settlement should assign the winner REP ownership')
+			strictEqualTypeSafe(winnerVault.securityBondAllowance, forkDataBeforeClaim.auctionedSecurityBondAllowance, 'permissionless settlement should attach the auction allowance to the rejecting bidder vault')
+			const pendingRefund = await client.readContract({
+				abi: auctionAbi,
+				address: yesSecurityPool.truthAuction,
+				functionName: 'pendingEthRefunds',
+				args: [rejectingWinner],
+			})
+			assert.ok(pendingRefund > 0n, 'the rejected partial-fill refund should remain in pull escrow')
+
+			const snapshotAfterClaim = await client.readContract({
+				abi: peripherals_SecurityPool_SecurityPool.abi,
+				address: yesSecurityPool.securityPool,
+				functionName: 'getPoolAccountingSnapshot',
+				args: [],
+			})
+			strictEqualTypeSafe(snapshotAfterClaim.feeEligibleSecurityBondAllowance - snapshotBeforeClaim.feeEligibleSecurityBondAllowance, forkDataBeforeClaim.auctionedSecurityBondAllowance, 'only the completed claim should make the auction allowance available for new open interest')
+			assert.ok(
+				(await client.readContract({
+					abi: peripherals_SecurityPool_SecurityPool.abi,
+					address: yesSecurityPool.securityPool,
+					functionName: 'currentRetentionRate',
+					args: [],
+				})) > retentionRateBeforeClaim,
+				'assigning the auction allowance should immediately recalculate utilization from the larger responsible-vault base',
+			)
+			await createCompleteSet(openInterestHolder, yesSecurityPool.securityPool, capacityProbe)
+
+			await client.writeContract({
+				abi: rejectingEthReceiverArtifact.abi,
+				address: rejectingWinner,
+				functionName: 'setConsumeAllGas',
+				args: [false],
+			})
+			await client.writeContract({
+				abi: rejectingEthReceiverArtifact.abi,
+				address: rejectingWinner,
+				functionName: 'setRejectETH',
+				args: [false],
+			})
+			const winnerEthBeforePull = await getETHBalance(client, rejectingWinner)
+			await executeThroughReceiver(rejectingWinner, yesSecurityPool.truthAuction, encodeFunctionData({ abi: auctionAbi, functionName: 'withdrawPendingEthRefund', args: [] }))
+			strictEqualTypeSafe((await getETHBalance(client, rejectingWinner)) - winnerEthBeforePull, pendingRefund, 'the winner should receive the complete deferred refund after accepting ETH')
+			strictEqualTypeSafe(
+				await client.readContract({
+					abi: auctionAbi,
+					address: yesSecurityPool.truthAuction,
+					functionName: 'pendingEthRefunds',
+					args: [rejectingWinner],
+				}),
+				0n,
+				'the successful pull should clear the auction refund escrow',
+			)
+		})
+
 		test('settleAuctionBids can refund a losing bid before truth auction finalization', async () => {
 			const { yesSecurityPool, losingBidder, losingEth, losingTick } = await setupTruthAuctionWithMixedBids(false)
 			const thirdParty = createWriteClient(mockWindow, TEST_ADDRESSES[5], 0)
@@ -1816,16 +2045,17 @@ describe('Peripherals: truth auction', () => {
 		})
 
 		test('delayed auction claims add eligibility to the live total after migrated allowance decreases', async () => {
-			const { auctionParticipant, auctionTick, auctionedAllowance, yesSecurityPool } = await setupFinalizedAuctionWithUnclaimedAllowance('delayed claim after allowance decrease fork source')
+			const { auctionParticipant, auctionTick, auctionedAllowance, migratedAllowance, yesSecurityPool } = await setupFinalizedAuctionWithUnclaimedAllowance('delayed claim after allowance decrease fork source')
+			const decreasedMigratedAllowance = migratedAllowance / 2n
 
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, yesSecurityPool.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, 0n)
-			strictEqualTypeSafe(await getTotalSecurityBondAllowance(client, yesSecurityPool.securityPool), auctionedAllowance, 'decreasing the migrated allowance should leave only unclaimed auction allowance in the pool total')
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, yesSecurityPool.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, decreasedMigratedAllowance)
+			strictEqualTypeSafe(await getTotalSecurityBondAllowance(client, yesSecurityPool.securityPool), auctionedAllowance + decreasedMigratedAllowance, 'decreasing assigned allowance above existing collateral should preserve the unclaimed auction allocation in the pool total')
 
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, auctionParticipant.account.address, [{ tick: auctionTick, bidIndex: 0n }])
 
 			const participantVault = await getSecurityVault(client, yesSecurityPool.securityPool, auctionParticipant.account.address)
 			strictEqualTypeSafe(participantVault.securityBondAllowance, auctionedAllowance, 'the delayed claim should assign only its auction allowance')
-			strictEqualTypeSafe(await getTotalSecurityBondAllowance(client, yesSecurityPool.securityPool), auctionedAllowance, 'claiming should not resurrect the historical migrated allowance')
+			strictEqualTypeSafe(await getTotalSecurityBondAllowance(client, yesSecurityPool.securityPool), auctionedAllowance + decreasedMigratedAllowance, 'claiming should preserve the decreased migrated allowance without restoring its historical value')
 		})
 
 		test('delayed auction claims preserve live eligibility after migrated allowance increases', async () => {

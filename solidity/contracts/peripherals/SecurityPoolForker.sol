@@ -600,11 +600,10 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			_finalizeTruthAuction(securityPool);
 			return;
 		}
-		// Sell effectively all REP for ETH while leaving only a tiny migrated-rep residue unsold.
-		// This intentionally parses as `repAtFork - (migratedRep / divisor)`: the parent
-		// pool keeps its full REP-at-fork anchor, and only the tiny unsold residue is scaled
-		// down by the haircut divisor. We cannot sell literally all REP because
-		// `poolOwnershipDenominator` still needs a finite anchor.
+		// With migrated REP, sell effectively all REP while leaving a tiny residue as
+		// the existing vaults' ownership anchor. With no migrated REP the full cap may
+		// sell; finalization then installs the standard PRICE_PRECISION ownership rate
+		// because the inherited denominator has no live child-vault owners.
 		data.truthAuction.startAuction(ethToBuy, _getTruthAuctionCap(data, parentData));
 	}
 
@@ -718,8 +717,9 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		if (repPurchased == 0 || repAvailable == 0) return 0;
 		uint256 unsoldRep = repAvailable - repPurchased;
 		if (unsoldRep == 0) {
-			return
-				currentOwnershipDenominator == 0 ? SecurityPoolUtils.PRICE_PRECISION : currentOwnershipDenominator + 1;
+			// A full-cap sale is reachable only without a live migrated-REP residue.
+			// Do not derive its rate from the parent's phantom inherited denominator.
+			return SecurityPoolUtils.PRICE_PRECISION;
 		}
 		if (currentOwnershipDenominator == 0) return SecurityPoolUtils.PRICE_PRECISION;
 		return (currentOwnershipDenominator - 1) / unsoldRep + 1;

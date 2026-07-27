@@ -186,6 +186,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 	const selectedPool: ListedSecurityPool = {
 		completeSetCollateralAmount: 0n,
 		currentRetentionRate: 10n,
+		feeEligibleSecurityBondAllowance: 5n * 10n ** 18n,
 		hasForkActivity: false,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
