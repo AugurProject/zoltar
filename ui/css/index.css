@@ -4506,6 +4506,7 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 .field select[aria-invalid="true"],
 .field textarea.is-invalid,
 .field textarea[aria-invalid="true"],
+.field .enum-dropdown-trigger[aria-invalid="true"],
 .form-input.is-invalid,
 .form-input[aria-invalid="true"] {
 	border-bottom-color: var(--danger);
@@ -4560,6 +4561,7 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 .field select[aria-invalid="true"]:focus,
 .field textarea.is-invalid:focus,
 .field textarea[aria-invalid="true"]:focus,
+.field .enum-dropdown-trigger[aria-invalid="true"]:focus,
 .form-input.is-invalid:focus,
 .form-input[aria-invalid="true"]:focus {
 	border-color: var(--danger);

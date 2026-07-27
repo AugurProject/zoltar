@@ -4,13 +4,14 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { fireEvent, within } from '../../testUtils/queries'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
+import { useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { OpenOracleSection } from '../../../features/open-oracle/components/OpenOracleSection.js'
 import * as openOracleCopy from '../../../copy/openOracle.js'
 import { ChainBlockNumberContext, ChainTimestampContext } from '../../../lib/chainTimestamp.js'
 import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '../../../features/markets/lib/marketForm.js'
 import { deriveOpenOracleDisputeSubmissionDetails } from '../../../features/open-oracle/lib/openOracle.js'
-import type { AccountState } from '../../../types/app.js'
+import type { AccountState, OpenOracleCreateFormState } from '../../../types/app.js'
 import type { OpenOracleSectionProps } from '../../../features/types.js'
 import type { OpenOracleReportDetails } from '../../../types/contracts.js'
 import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
@@ -144,6 +145,19 @@ function createOpenOracleReportDetails(overrides: Partial<OpenOracleReportDetail
 	}
 }
 
+function InteractiveOpenOracleCreateSection({ initialForm }: { initialForm: OpenOracleCreateFormState }) {
+	const [form, setForm] = useState(initialForm)
+	return (
+		<OpenOracleSection
+			{...createOpenOracleSectionProps({
+				accountState: createAccountState({ ethBalance: 2_000n * ETH }),
+				onOpenOracleCreateFormChange: update => setForm(current => ({ ...current, ...update })),
+				openOracleCreateForm: form,
+			})}
+		/>
+	)
+}
+
 describe('OpenOracleSection route create view', () => {
 	let restoreDomEnvironment: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
@@ -248,6 +262,48 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.queryByText(/^Blocked:/)).toBeNull()
 		expect(document.body.querySelector('.open-oracle-report-stack')).not.toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Dispute & Swap', 'This report is not ready to dispute.')
+	})
+
+	test('associates an invalid dispute amount with the affected field', async () => {
+		const tokenUnits = 10n ** 18n
+		const openOracleReportDetails = createOpenOracleReportDetails({
+			currentAmount1: 10n * tokenUnits,
+			currentAmount2: 5n * tokenUnits,
+			currentReporter: '0x3000000000000000000000000000000000000000',
+			currentTime: 200n,
+			disputeDelay: 10n,
+			escalationHalt: 20n * tokenUnits,
+			multiplier: 20_000n,
+			reportTimestamp: 100n,
+			settlementTime: 200n,
+		})
+		const renderedComponent = await renderIntoDocument(
+			<OpenOracleSection
+				{...createOpenOracleSectionProps({
+					activeView: 'selected-report',
+					openOracleForm: {
+						...getDefaultOpenOracleFormState(),
+						disputeNewAmount1: 'not-a-number',
+						disputeNewAmount2: '7',
+						reportId: openOracleReportDetails.reportId.toString(),
+					},
+					openOracleReportDetails,
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Dispute & Swap' }))
+		const dialog = documentQueries.getByRole('dialog', { name: 'Dispute & Swap' })
+		const dialogQueries = within(dialog)
+		const baseTokenAmountInput = dialogQueries.getByLabelText('New REPv2 Amount')
+		expect(baseTokenAmountInput.getAttribute('aria-invalid')).toBe('true')
+		expect(baseTokenAmountInput.getAttribute('aria-describedby')).toBe('open-oracle-dispute-new-amount-1-error-7')
+		const amountError = dialogQueries.getByText('Enter a valid new base token amount.')
+		expect(amountError.getAttribute('role')).toBe('alert')
+		expect(dialog.textContent?.split('Enter a valid new base token amount.')).toHaveLength(2)
+		expect(dialogQueries.getByRole('button', { name: 'Dispute & Swap' }).getAttribute('aria-describedby')).toBe('open-oracle-dispute-new-amount-1-error-7')
 	})
 
 	test('keeps blank and unsubmitted report lookups quiet', async () => {
@@ -378,7 +434,11 @@ describe('OpenOracleSection route create view', () => {
 					openOracleCreateForm: {
 						...getDefaultOpenOracleCreateFormState(),
 						ethValue: '1100',
-						settlerReward: '1000',
+						exactToken1Report: '1',
+						initialToken2Amount: '1',
+						settlerReward: '1100',
+						token1Address: '0x2000000000000000000000000000000000000000',
+						token2Address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
 					},
 				}),
 			),
@@ -552,6 +612,64 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.getByText('Parameter Details')).not.toBeNull()
 		expect(documentQueries.queryByText('Delay in seconds after the initial report before disputes can begin.')).toBeNull()
 		expect(documentQueries.queryByText('Protocol fee charged during disputes, entered as a percentage.')).toBeNull()
+	})
+
+	test('associates progressive amount, timing, and cross-field create errors with their inputs', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<InteractiveOpenOracleCreateSection
+				initialForm={{
+					...getDefaultOpenOracleCreateFormState(),
+					exactToken1Report: '1',
+					initialToken2Amount: '1',
+					settlementTime: '20',
+					disputeDelay: '10',
+					token1Address: '0x2000000000000000000000000000000000000000',
+					token2Address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+				}}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		const baseTokenAmountInput = documentQueries.getByLabelText('Base Token Amount')
+		const settlementTimeInput = documentQueries.getByLabelText('Settlement Delay (seconds)')
+		const feePercentageInput = documentQueries.getByLabelText('Dispute Fee (%)')
+		const protocolFeeInput = documentQueries.getByLabelText('Protocol Fee (%)')
+
+		await act(() => {
+			fireEvent.input(baseTokenAmountInput, { target: { value: '.' } })
+		})
+		expect(baseTokenAmountInput.hasAttribute('aria-invalid')).toBe(false)
+		expect(documentQueries.queryByText('Enter a valid base token amount.')).toBeNull()
+		await act(() => {
+			baseTokenAmountInput.dispatchEvent(new Event('blur'))
+		})
+		expect(baseTokenAmountInput.getAttribute('aria-invalid')).toBe('true')
+		expect(baseTokenAmountInput.getAttribute('aria-describedby')).toBe('open-oracle-exact-token1-report-help open-oracle-exact-token1-report-error')
+		expect(documentQueries.getByText('Enter a valid base token amount.').getAttribute('role')).toBe('alert')
+
+		await act(() => {
+			fireEvent.input(baseTokenAmountInput, { target: { value: '1' } })
+			fireEvent.input(settlementTimeInput, { target: { value: '9' } })
+			settlementTimeInput.dispatchEvent(new Event('blur'))
+		})
+		expect(baseTokenAmountInput.hasAttribute('aria-invalid')).toBe(false)
+		expect(baseTokenAmountInput.getAttribute('aria-describedby')).toBe('open-oracle-exact-token1-report-help')
+		expect(settlementTimeInput.getAttribute('aria-invalid')).toBe('true')
+		expect(settlementTimeInput.getAttribute('aria-describedby')).toBe('open-oracle-settlement-time-error')
+		expect(documentQueries.getByText('Settlement time must be greater than dispute delay.').getAttribute('role')).toBe('alert')
+
+		await act(() => {
+			fireEvent.input(settlementTimeInput, { target: { value: '20' } })
+			fireEvent.input(feePercentageInput, { target: { value: '60' } })
+			fireEvent.input(protocolFeeInput, { target: { value: '50.00001' } })
+			protocolFeeInput.dispatchEvent(new Event('blur'))
+		})
+		expect(settlementTimeInput.hasAttribute('aria-invalid')).toBe(false)
+		expect(protocolFeeInput.getAttribute('aria-invalid')).toBe('true')
+		expect(protocolFeeInput.getAttribute('aria-describedby')).toBe('open-oracle-protocol-fee-error')
+		const feeError = documentQueries.getByText('Fee percentage plus protocol fee must not exceed 100%.')
+		expect(feeError.getAttribute('role')).toBe('alert')
+		expect(documentQueries.getByRole('button', { name: 'Create Standalone Oracle Report' }).getAttribute('aria-describedby')).toBe('open-oracle-protocol-fee-error')
 	})
 
 	test('clears address touch state when successful creation resets the form', async () => {

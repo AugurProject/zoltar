@@ -34,8 +34,7 @@ import { createConnectedReadClient } from '../../../lib/clients.js'
 import { useChainBlockNumber, useChainTimestamp } from '../../../lib/chainTimestamp.js'
 import {
 	getOpenOracleCreateGuardMessage,
-	getOpenOracleCreateAddressValidationMessage,
-	getOpenOracleCreateValidationMessage,
+	getOpenOracleCreateValidation,
 	formatOpenOracleFeePercentage,
 	formatOpenOracleMultiplier,
 	getOpenOracleDisputeAvailability,
@@ -43,6 +42,9 @@ import {
 	getOpenOracleReportStatusTone,
 	getOpenOracleSelectedReportActionMode,
 	getOpenOracleSettleAvailability,
+	OPEN_ORACLE_CREATE_FIELD_ORDER,
+	type OpenOracleCreateField,
+	type OpenOracleDisputeInputField,
 	type OpenOracleDisputeSubmissionDetails,
 	type OpenOracleSelectedReportActionMode,
 } from '../lib/openOracle.js'
@@ -77,6 +79,47 @@ type BrowseLoadState =
 	  }
 const DISPUTE_REPORT_MODAL: SelectedReportModal = 'dispute'
 const SETTLE_REPORT_MODAL: SelectedReportModal = 'settle'
+const OPEN_ORACLE_CREATE_FIELD_ERROR_IDS: Record<OpenOracleCreateField, string> = {
+	disputeDelay: 'open-oracle-dispute-delay-error',
+	escalationHalt: 'open-oracle-escalation-halt-error',
+	ethValue: 'open-oracle-eth-value-error',
+	exactToken1Report: 'open-oracle-exact-token1-report-error',
+	feePercentage: 'open-oracle-fee-percentage-error',
+	initialToken2Amount: 'open-oracle-initial-token2-amount-error',
+	multiplier: 'open-oracle-multiplier-error',
+	protocolFee: 'open-oracle-protocol-fee-error',
+	settlementTime: 'open-oracle-settlement-time-error',
+	settlerReward: 'open-oracle-settler-reward-error',
+	token1Address: 'open-oracle-token1-address-error',
+	token2Address: 'open-oracle-token2-address-error',
+}
+const OPEN_ORACLE_DISPUTE_INPUT_FIELD_ORDER: readonly OpenOracleDisputeInputField[] = ['disputeNewAmount1', 'disputeNewAmount2', 'disputeTokenToSwap']
+function getOpenOracleCreateFieldErrorId(field: OpenOracleCreateField) {
+	return OPEN_ORACLE_CREATE_FIELD_ERROR_IDS[field]
+}
+function getOpenOracleFieldDescribedBy(errorId: string, error: string | undefined, helpId?: string) {
+	return [helpId, error === undefined ? undefined : errorId].filter(value => value !== undefined).join(' ') || undefined
+}
+function renderOpenOracleFieldError(id: string, message: string | undefined) {
+	if (message === undefined) return undefined
+	return (
+		<p className='field-error' id={id} role='alert'>
+			{message}
+		</p>
+	)
+}
+function getOpenOracleDisputeFieldErrorId(field: OpenOracleDisputeInputField, reportId: string) {
+	switch (field) {
+		case 'disputeNewAmount1':
+			return `open-oracle-dispute-new-amount-1-error-${reportId}`
+		case 'disputeNewAmount2':
+			return `open-oracle-dispute-new-amount-2-error-${reportId}`
+		case 'disputeTokenToSwap':
+			return `open-oracle-dispute-token-to-swap-error-${reportId}`
+		default:
+			return assertNever(field)
+	}
+}
 function getWithdrawalReportModal(balance: WithdrawalBalanceKey): SelectedReportModal {
 	return `withdraw-${balance}`
 }
@@ -254,8 +297,20 @@ export function renderSelectedReportActionSection({
 				if (!isMainnet) return commonCopy.mainnetRequiredReason
 				return disputeDisabledMessage ?? (disputeSubmission?.blockMessage?.kind === 'visible' ? disputeSubmission.blockMessage.message : undefined)
 			})()
-			const disputeInputBlockMessageId = `open-oracle-dispute-input-blocker-${openOracleForm.reportId.trim() || 'unselected'}`
+			const disputeReportId = openOracleForm.reportId.trim() || 'unselected'
+			const disputeInputFieldErrors = disputeSubmission?.inputFieldErrors ?? {}
+			const firstDisputeInputErrorField = OPEN_ORACLE_DISPUTE_INPUT_FIELD_ORDER.find(field => disputeInputFieldErrors[field] !== undefined)
+			const disputeInputBlockMessageId = firstDisputeInputErrorField === undefined ? `open-oracle-dispute-input-blocker-${disputeReportId}` : getOpenOracleDisputeFieldErrorId(firstDisputeInputErrorField, disputeReportId)
+			const disputeNewAmount1Error = disputeInputFieldErrors.disputeNewAmount1
+			const disputeNewAmount2Error = disputeInputFieldErrors.disputeNewAmount2
+			const disputeTokenToSwapError = disputeInputFieldErrors.disputeTokenToSwap
 			const disputeActionReasonUsesInputBlockMessage = disputeSubmission?.inputBlockMessage?.kind === 'visible' && disputeActionDisabledReason === disputeSubmission.inputBlockMessage.message
+			const disputeInputBlockDetail =
+				disputeSubmission?.inputBlockMessage !== undefined && firstDisputeInputErrorField === undefined ? (
+					<p className='detail' id={disputeInputBlockMessageId}>
+						{disputeSubmission.inputBlockMessage.kind === 'hidden-loading' ? <LoadingText>{disputeSubmission.inputBlockMessage.message}</LoadingText> : disputeSubmission.inputBlockMessage.message}
+					</p>
+				) : undefined
 			return (
 				<SectionBlock variant='embedded'>
 					<div className='form-grid'>
@@ -268,16 +323,40 @@ export function renderSelectedReportActionSection({
 								])}
 						<label className='field'>
 							<span>{openOracleCopy.tokenToSwapOut}</span>
-							<EnumDropdown options={disputeTokenOptions} value={openOracleForm.disputeTokenToSwap} onChange={disputeTokenToSwap => onOpenOracleFormChange({ disputeTokenToSwap })} />
+							<EnumDropdown
+								ariaDescribedBy={disputeTokenToSwapError === undefined ? undefined : getOpenOracleDisputeFieldErrorId('disputeTokenToSwap', disputeReportId)}
+								ariaLabel={openOracleCopy.tokenToSwapOut}
+								invalid={disputeTokenToSwapError !== undefined}
+								options={disputeTokenOptions}
+								value={openOracleForm.disputeTokenToSwap}
+								onChange={disputeTokenToSwap => onOpenOracleFormChange({ disputeTokenToSwap })}
+							/>
+							{renderOpenOracleFieldError(getOpenOracleDisputeFieldErrorId('disputeTokenToSwap', disputeReportId), disputeTokenToSwapError)}
 						</label>
 						<div className='field-row'>
 							<label className='field'>
 								<span>{openOracleCopy.formatNewTokenAmountFieldLabel(token1Symbol)}</span>
-								<FormInput value={openOracleForm.disputeNewAmount1} inputMode='decimal' onInput={event => onOpenOracleFormChange({ disputeNewAmount1: event.currentTarget.value })} />
+								<FormInput
+									aria-describedby={disputeNewAmount1Error === undefined ? undefined : getOpenOracleDisputeFieldErrorId('disputeNewAmount1', disputeReportId)}
+									aria-label={openOracleCopy.formatNewTokenAmountFieldLabel(token1Symbol)}
+									inputMode='decimal'
+									invalid={disputeNewAmount1Error !== undefined}
+									onInput={event => onOpenOracleFormChange({ disputeNewAmount1: event.currentTarget.value })}
+									value={openOracleForm.disputeNewAmount1}
+								/>
+								{renderOpenOracleFieldError(getOpenOracleDisputeFieldErrorId('disputeNewAmount1', disputeReportId), disputeNewAmount1Error)}
 							</label>
 							<label className='field'>
 								<span>{openOracleCopy.formatNewTokenAmountFieldLabel(token2Symbol)}</span>
-								<FormInput value={openOracleForm.disputeNewAmount2} inputMode='decimal' onInput={event => onOpenOracleFormChange({ disputeNewAmount2: event.currentTarget.value })} />
+								<FormInput
+									aria-describedby={disputeNewAmount2Error === undefined ? undefined : getOpenOracleDisputeFieldErrorId('disputeNewAmount2', disputeReportId)}
+									aria-label={openOracleCopy.formatNewTokenAmountFieldLabel(token2Symbol)}
+									inputMode='decimal'
+									invalid={disputeNewAmount2Error !== undefined}
+									onInput={event => onOpenOracleFormChange({ disputeNewAmount2: event.currentTarget.value })}
+									value={openOracleForm.disputeNewAmount2}
+								/>
+								{renderOpenOracleFieldError(getOpenOracleDisputeFieldErrorId('disputeNewAmount2', disputeReportId), disputeNewAmount2Error)}
 							</label>
 						</div>
 						{disputeSubmission?.expectedNewAmount1 === undefined || disputeSubmission.token1Decimals === undefined ? undefined : <p className='detail'>{openOracleCopy.formatNewAmountMustBeExactDetail(token1Symbol, formatCurrencyInputBalance(disputeSubmission.expectedNewAmount1, disputeSubmission.token1Decimals))}</p>}
@@ -319,9 +398,7 @@ export function renderSelectedReportActionSection({
 								</SectionBlock>
 							</>
 						) : (
-							<p className='detail' id={disputeInputBlockMessageId}>
-								{disputeSubmission.inputBlockMessage.kind === 'hidden-loading' ? <LoadingText>{disputeSubmission.inputBlockMessage.message}</LoadingText> : disputeSubmission.inputBlockMessage.message}
-							</p>
+							disputeInputBlockDetail
 						)}
 						{!isMainnet || disputeSubmission?.blockMessage?.kind !== 'visible' || disputeSubmission.blockMessage === disputeSubmission.inputBlockMessage ? undefined : <p className='detail'>{disputeSubmission.blockMessage.message}</p>}
 						<div className='actions'>
@@ -807,7 +884,7 @@ export function OpenOracleSection({
 	const [browseSearchText, setBrowseSearchText] = useState('')
 	const [browseStatusFilter, setBrowseStatusFilter] = useState<BrowseStatusFilter>('all')
 	const [selectedReportModal, setSelectedReportModal] = useState<SelectedReportModal>(undefined)
-	const [touchedCreateAddressFields, setTouchedCreateAddressFields] = useState<ReadonlySet<'token1' | 'token2'>>(new Set())
+	const [touchedCreateFields, setTouchedCreateFields] = useState<ReadonlySet<OpenOracleCreateField>>(new Set())
 	const changeSelectedReportModal = (modal: SelectedReportModal) => {
 		if (getSelectedWithdrawalBalance(selectedReportModal) !== undefined && modal !== selectedReportModal) onCancelOpenOracleWithdrawalBalanceCheck()
 		setSelectedReportModal(modal)
@@ -815,36 +892,38 @@ export function OpenOracleSection({
 	const browseLoad = useLoadController()
 	const isConnected = accountState.address !== undefined
 	const isMainnet = isMainnetChain(accountState.chainId)
-	const createGuardMessage = getOpenOracleCreateGuardMessage({
+	const createValidation = getOpenOracleCreateValidation({ form: openOracleCreateForm })
+	const rawCreateGuardMessage = getOpenOracleCreateGuardMessage({
 		ethValueInput: openOracleCreateForm.ethValue,
 		isMainnet,
 		settlerRewardInput: openOracleCreateForm.settlerReward,
 		walletConnected: isConnected,
 		walletEthBalance: accountState.ethBalance,
 	})
-	const createValidationMessage = getOpenOracleCreateValidationMessage({ form: openOracleCreateForm })
-	const token1AddressValidationMessage = getOpenOracleCreateAddressValidationMessage(openOracleCreateForm.token1Address, 'base')
-	const token2AddressValidationMessage = getOpenOracleCreateAddressValidationMessage(openOracleCreateForm.token2Address, 'quote')
-	const token1AddressError = touchedCreateAddressFields.has('token1') ? token1AddressValidationMessage : undefined
-	const token2AddressError = touchedCreateAddressFields.has('token2') ? token2AddressValidationMessage : undefined
-	const markCreateAddressFieldTouched = (field: 'token1' | 'token2') => setTouchedCreateAddressFields(current => new Set([...current, field]))
-	let createVisibleValidationMessage = createValidationMessage
-	let createDisabledReasonElementId: string | undefined
-	if (createValidationMessage === token1AddressValidationMessage) {
-		createVisibleValidationMessage = token1AddressError
-		if (token1AddressError !== undefined) createDisabledReasonElementId = 'open-oracle-token1-address-error'
-	} else if (createValidationMessage === token2AddressValidationMessage) {
-		createVisibleValidationMessage = token2AddressError
-		if (token2AddressError !== undefined) createDisabledReasonElementId = 'open-oracle-token2-address-error'
-	}
-	const createAvailabilityMessage = createGuardMessage ?? createVisibleValidationMessage
-	if (createGuardMessage !== undefined) createDisabledReasonElementId = undefined
+	const createGuardMessage = !isConnected || !isMainnet || createValidation.isValid ? rawCreateGuardMessage : undefined
+	const markCreateFieldTouched = (field: OpenOracleCreateField) => setTouchedCreateFields(current => new Set([...current, field]))
+	const getVisibleCreateFieldError = (field: OpenOracleCreateField) => (touchedCreateFields.has(field) ? createValidation.fieldErrors[field] : undefined)
+	const firstVisibleInvalidCreateField = OPEN_ORACLE_CREATE_FIELD_ORDER.find(field => getVisibleCreateFieldError(field) !== undefined)
+	const createDisabledReasonElementId = createGuardMessage === undefined && firstVisibleInvalidCreateField !== undefined ? getOpenOracleCreateFieldErrorId(firstVisibleInvalidCreateField) : undefined
+	const createAvailabilityMessage = createGuardMessage ?? (createValidation.isValid ? undefined : openOracleCopy.reviewInvalidCreateFields)
+	const disputeDelayError = getVisibleCreateFieldError('disputeDelay')
+	const escalationHaltError = getVisibleCreateFieldError('escalationHalt')
+	const ethValueError = getVisibleCreateFieldError('ethValue')
+	const exactToken1ReportError = getVisibleCreateFieldError('exactToken1Report')
+	const feePercentageError = getVisibleCreateFieldError('feePercentage')
+	const initialToken2AmountError = getVisibleCreateFieldError('initialToken2Amount')
+	const multiplierError = getVisibleCreateFieldError('multiplier')
+	const protocolFeeError = getVisibleCreateFieldError('protocolFee')
+	const settlementTimeError = getVisibleCreateFieldError('settlementTime')
+	const settlerRewardError = getVisibleCreateFieldError('settlerReward')
+	const token1AddressError = getVisibleCreateFieldError('token1Address')
+	const token2AddressError = getVisibleCreateFieldError('token2Address')
 	const effectiveOpenOracleReportDetails = getEffectiveOpenOracleReportDetails(openOracleReportDetails, chainCurrentTimestamp, chainCurrentBlockNumber)
 	const browseRequestKey = `${environmentRefreshKey}:${browsePageIndex}:${browseReloadKey}:${openOracleResult?.action ?? ''}:${openOracleResult?.hash ?? ''}`
 	const successfulCreateKey = openOracleResult?.action === 'createReportInstance' ? openOracleResult.hash : undefined
 	useEffect(() => {
 		if (successfulCreateKey === undefined) return
-		setTouchedCreateAddressFields(new Set())
+		setTouchedCreateFields(new Set())
 	}, [successfulCreateKey])
 	useEffect(() => {
 		let cancelled = false
@@ -1007,7 +1086,7 @@ export function OpenOracleSection({
 												aria-describedby={token1AddressError === undefined ? undefined : 'open-oracle-token1-address-error'}
 												aria-label={openOracleCopy.token1Address}
 												invalid={token1AddressError !== undefined}
-												onBlur={() => markCreateAddressFieldTouched('token1')}
+												onBlur={() => markCreateFieldTouched('token1Address')}
 												onInput={event => onOpenOracleCreateFormChange({ token1Address: event.currentTarget.value })}
 												placeholder={commonCopy.hexValuePlaceholder}
 												value={openOracleCreateForm.token1Address}
@@ -1026,7 +1105,7 @@ export function OpenOracleSection({
 												aria-describedby={token2AddressError === undefined ? undefined : 'open-oracle-token2-address-error'}
 												aria-label={openOracleCopy.token2Address}
 												invalid={token2AddressError !== undefined}
-												onBlur={() => markCreateAddressFieldTouched('token2')}
+												onBlur={() => markCreateFieldTouched('token2Address')}
 												onInput={event => onOpenOracleCreateFormChange({ token2Address: event.currentTarget.value })}
 												placeholder={commonCopy.hexValuePlaceholder}
 												value={openOracleCreateForm.token2Address}
@@ -1045,32 +1124,68 @@ export function OpenOracleSection({
 								<div className='field-row'>
 									<label className='field'>
 										<span>{openOracleCopy.exactToken1Report}</span>
-										<FormInput value={openOracleCreateForm.exactToken1Report} inputMode='decimal' onInput={event => onOpenOracleCreateFormChange({ exactToken1Report: event.currentTarget.value })} aria-label={openOracleCopy.exactToken1Report} aria-describedby='open-oracle-exact-token1-report-help' />
+										<FormInput
+											aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('exactToken1Report'), exactToken1ReportError, 'open-oracle-exact-token1-report-help')}
+											aria-label={openOracleCopy.exactToken1Report}
+											inputMode='decimal'
+											invalid={exactToken1ReportError !== undefined}
+											onBlur={() => markCreateFieldTouched('exactToken1Report')}
+											onInput={event => onOpenOracleCreateFormChange({ exactToken1Report: event.currentTarget.value })}
+											value={openOracleCreateForm.exactToken1Report}
+										/>
 										<p id='open-oracle-exact-token1-report-help' className='field-help'>
 											{openOracleCopy.initialToken1AmountHelpText}
 										</p>
+										{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('exactToken1Report'), exactToken1ReportError)}
 									</label>
 									<label className='field'>
 										<span>{openOracleCopy.initialToken2Amount}</span>
-										<FormInput value={openOracleCreateForm.initialToken2Amount} inputMode='decimal' onInput={event => onOpenOracleCreateFormChange({ initialToken2Amount: event.currentTarget.value })} aria-label={openOracleCopy.initialToken2Amount} aria-describedby='open-oracle-initial-token2-amount-help' />
+										<FormInput
+											aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('initialToken2Amount'), initialToken2AmountError, 'open-oracle-initial-token2-amount-help')}
+											aria-label={openOracleCopy.initialToken2Amount}
+											inputMode='decimal'
+											invalid={initialToken2AmountError !== undefined}
+											onBlur={() => markCreateFieldTouched('initialToken2Amount')}
+											onInput={event => onOpenOracleCreateFormChange({ initialToken2Amount: event.currentTarget.value })}
+											value={openOracleCreateForm.initialToken2Amount}
+										/>
 										<p id='open-oracle-initial-token2-amount-help' className='field-help'>
 											{openOracleCopy.initialToken2AmountHelpText}
 										</p>
+										{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('initialToken2Amount'), initialToken2AmountError)}
 									</label>
 								</div>
 								<label className='field'>
 									<span>{openOracleCopy.settlerReward}</span>
-									<FormInput value={openOracleCreateForm.settlerReward} inputMode='decimal' onInput={event => onOpenOracleCreateFormChange({ settlerReward: event.currentTarget.value })} aria-label={openOracleCopy.settlerReward} aria-describedby='open-oracle-settler-reward-help' />
+									<FormInput
+										aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('settlerReward'), settlerRewardError, 'open-oracle-settler-reward-help')}
+										aria-label={openOracleCopy.settlerReward}
+										inputMode='decimal'
+										invalid={settlerRewardError !== undefined}
+										onBlur={() => markCreateFieldTouched('settlerReward')}
+										onInput={event => onOpenOracleCreateFormChange({ settlerReward: event.currentTarget.value })}
+										value={openOracleCreateForm.settlerReward}
+									/>
 									<p id='open-oracle-settler-reward-help' className='field-help'>
 										{openOracleCopy.settlerRewardHelpText}
 									</p>
+									{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('settlerReward'), settlerRewardError)}
 								</label>
 								<label className='field'>
 									<span>{openOracleCopy.ethValueToSend}</span>
-									<FormInput value={openOracleCreateForm.ethValue} inputMode='decimal' onInput={event => onOpenOracleCreateFormChange({ ethValue: event.currentTarget.value })} aria-label={openOracleCopy.ethValueToSend} aria-describedby='open-oracle-eth-value-help' />
+									<FormInput
+										aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('ethValue'), ethValueError, 'open-oracle-eth-value-help')}
+										aria-label={openOracleCopy.ethValueToSend}
+										inputMode='decimal'
+										invalid={ethValueError !== undefined}
+										onBlur={() => markCreateFieldTouched('ethValue')}
+										onInput={event => onOpenOracleCreateFormChange({ ethValue: event.currentTarget.value })}
+										value={openOracleCreateForm.ethValue}
+									/>
 									<p id='open-oracle-eth-value-help' className='field-help'>
 										{openOracleCopy.creationFundingRequirementHelpText}
 									</p>
+									{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('ethValue'), ethValueError)}
 								</label>
 							</SectionBlock>
 
@@ -1079,38 +1194,92 @@ export function OpenOracleSection({
 								<div className='field-row'>
 									<label className='field'>
 										<span>{openOracleCopy.disputeFeePercentage}</span>
-										<FormInput value={openOracleCreateForm.feePercentage} inputMode='decimal' onInput={event => onOpenOracleCreateFormChange({ feePercentage: event.currentTarget.value })} aria-label={openOracleCopy.disputeFeePercentage} />
+										<FormInput
+											aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('feePercentage'), feePercentageError)}
+											aria-label={openOracleCopy.disputeFeePercentage}
+											inputMode='decimal'
+											invalid={feePercentageError !== undefined}
+											onBlur={() => markCreateFieldTouched('feePercentage')}
+											onInput={event => onOpenOracleCreateFormChange({ feePercentage: event.currentTarget.value })}
+											value={openOracleCreateForm.feePercentage}
+										/>
+										{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('feePercentage'), feePercentageError)}
 									</label>
 									<label className='field'>
 										<span>{commonCopy.multiplier}</span>
-										<FormInput value={openOracleCreateForm.multiplier} inputMode='numeric' onInput={event => onOpenOracleCreateFormChange({ multiplier: event.currentTarget.value })} aria-label={commonCopy.multiplier} aria-describedby='open-oracle-multiplier-help' />
+										<FormInput
+											aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('multiplier'), multiplierError, 'open-oracle-multiplier-help')}
+											aria-label={commonCopy.multiplier}
+											inputMode='numeric'
+											invalid={multiplierError !== undefined}
+											onBlur={() => markCreateFieldTouched('multiplier')}
+											onInput={event => onOpenOracleCreateFormChange({ multiplier: event.currentTarget.value })}
+											value={openOracleCreateForm.multiplier}
+										/>
 										<p id='open-oracle-multiplier-help' className='field-help'>
 											{openOracleCopy.escalationMultiplierHelpText}
 										</p>
+										{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('multiplier'), multiplierError)}
 									</label>
 								</div>
 								<SectionBlock headingLevel={4} title={openOracleCopy.timing} variant='embedded'>
 									<div className='field-row'>
 										<label className='field'>
 											<span>{openOracleCopy.settlementDelaySeconds}</span>
-											<FormInput value={openOracleCreateForm.settlementTime} inputMode='numeric' onInput={event => onOpenOracleCreateFormChange({ settlementTime: event.currentTarget.value })} aria-label={openOracleCopy.settlementDelaySeconds} />
+											<FormInput
+												aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('settlementTime'), settlementTimeError)}
+												aria-label={openOracleCopy.settlementDelaySeconds}
+												inputMode='numeric'
+												invalid={settlementTimeError !== undefined}
+												onBlur={() => markCreateFieldTouched('settlementTime')}
+												onInput={event => onOpenOracleCreateFormChange({ settlementTime: event.currentTarget.value })}
+												value={openOracleCreateForm.settlementTime}
+											/>
+											{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('settlementTime'), settlementTimeError)}
 										</label>
 										<label className='field'>
 											<span>{openOracleCopy.escalationHalt}</span>
-											<FormInput value={openOracleCreateForm.escalationHalt} inputMode='decimal' onInput={event => onOpenOracleCreateFormChange({ escalationHalt: event.currentTarget.value })} aria-label={openOracleCopy.escalationHalt} aria-describedby='open-oracle-escalation-halt-help' />
+											<FormInput
+												aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('escalationHalt'), escalationHaltError, 'open-oracle-escalation-halt-help')}
+												aria-label={openOracleCopy.escalationHalt}
+												inputMode='decimal'
+												invalid={escalationHaltError !== undefined}
+												onBlur={() => markCreateFieldTouched('escalationHalt')}
+												onInput={event => onOpenOracleCreateFormChange({ escalationHalt: event.currentTarget.value })}
+												value={openOracleCreateForm.escalationHalt}
+											/>
 											<p id='open-oracle-escalation-halt-help' className='field-help'>
 												{openOracleCopy.disputeEscalationStopAmountHelpText}
 											</p>
+											{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('escalationHalt'), escalationHaltError)}
 										</label>
 									</div>
 									<div className='field-row'>
 										<label className='field'>
 											<span>{openOracleCopy.disputeDelaySeconds}</span>
-											<FormInput value={openOracleCreateForm.disputeDelay} inputMode='numeric' onInput={event => onOpenOracleCreateFormChange({ disputeDelay: event.currentTarget.value })} aria-label={openOracleCopy.disputeDelaySeconds} />
+											<FormInput
+												aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('disputeDelay'), disputeDelayError)}
+												aria-label={openOracleCopy.disputeDelaySeconds}
+												inputMode='numeric'
+												invalid={disputeDelayError !== undefined}
+												onBlur={() => markCreateFieldTouched('disputeDelay')}
+												onInput={event => onOpenOracleCreateFormChange({ disputeDelay: event.currentTarget.value })}
+												value={openOracleCreateForm.disputeDelay}
+											/>
+											{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('disputeDelay'), disputeDelayError)}
 										</label>
 										<label className='field'>
 											<span>{openOracleCopy.protocolFeePercentage}</span>
-											<FormInput value={openOracleCreateForm.protocolFee} inputMode='decimal' onInput={event => onOpenOracleCreateFormChange({ protocolFee: event.currentTarget.value })} aria-label={openOracleCopy.protocolFeePercentage} />
+											<FormInput
+												aria-describedby={getOpenOracleFieldDescribedBy(getOpenOracleCreateFieldErrorId('protocolFee'), protocolFeeError)}
+												aria-label={openOracleCopy.protocolFeePercentage}
+												inputMode='decimal'
+												invalid={protocolFeeError !== undefined}
+												onBlur={() => markCreateFieldTouched('protocolFee')}
+												onInput={event => onOpenOracleCreateFormChange({ protocolFee: event.currentTarget.value })}
+												value={openOracleCreateForm.protocolFee}
+											/>
+											{renderOpenOracleFieldError(getOpenOracleCreateFieldErrorId('protocolFee'), protocolFeeError)}
 										</label>
 									</div>
 								</SectionBlock>
@@ -1146,7 +1315,7 @@ export function OpenOracleSection({
 									pendingLabel={openOracleCopy.creating}
 									onClick={onCreateOpenOracleGame}
 									pending={loadingOpenOracleCreate}
-									availability={{ disabled: !isMainnet || createGuardMessage !== undefined || createValidationMessage !== undefined, reason: createAvailabilityMessage }}
+									availability={{ disabled: !isMainnet || createGuardMessage !== undefined || !createValidation.isValid, reason: createAvailabilityMessage }}
 									disabledReasonElementId={createDisabledReasonElementId}
 									showDisabledReason={createDisabledReasonElementId === undefined}
 								/>

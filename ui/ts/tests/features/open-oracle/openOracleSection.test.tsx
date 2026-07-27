@@ -579,7 +579,7 @@ void describe('OpenOracleSection', () => {
 		const disputeButton = findButton(section, 'Dispute & Swap')
 		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
 		expect(getButtonDisabledReason(disputeButton)).toBe(directionMessage)
-		expect(disputeButton.props['disabledReasonElementId']).toBe('open-oracle-dispute-input-blocker-7')
+		expect(disputeButton.props['disabledReasonElementId']).toBe('open-oracle-dispute-token-to-swap-error-7')
 		expect(disputeButton.props['showDisabledReason']).toBe(false)
 	})
 

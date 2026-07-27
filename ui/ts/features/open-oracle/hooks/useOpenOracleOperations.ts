@@ -21,7 +21,7 @@ import {
 import { parseAddressInput, parseReportIdInput } from '../../../lib/inputs.js'
 import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '../../markets/lib/marketForm.js'
 import { requireDefined } from '../../../lib/required.js'
-import type { TokenApprovalState } from '../../../lib/tokenApproval.js'
+import { formatTokenApprovalUnavailableMessage, type TokenApprovalRequirement, type TokenApprovalState } from '../../../lib/tokenApproval.js'
 import { useRequestGuard } from '../../../lib/requestGuard.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../../../lib/actionFeedback.js'
 import type { ActionFeedback } from '../../../lib/actionFeedback.js'
@@ -103,6 +103,25 @@ type LoadedOracleReportResult = {
 
 type RefreshOpenOracleTokenAccessOptions = {
 	preserveExisting?: boolean
+}
+
+function getRefreshedOpenOracleApprovalAmount({ approvalError, explicitAmount, requirement, tokenLabel }: { approvalError: string | undefined; explicitAmount: bigint | undefined; requirement: TokenApprovalRequirement; tokenLabel: 'base token' | 'quote token' }) {
+	if (requirement.requiredAmount === undefined || requirement.requiredAmount <= 0n) throw new Error(`No ${tokenLabel} approval is required for the refreshed report`)
+	if (requirement.approvedAmount === undefined) {
+		throw new Error(
+			formatTokenApprovalUnavailableMessage({
+				actionLabel: 'submitting this approval',
+				reason: approvalError,
+				tokenLabel,
+			}),
+		)
+	}
+	if (requirement.hasSufficientApproval) throw new Error(`The ${tokenLabel} approval is already sufficient for the refreshed report`)
+	const approvalAmount = explicitAmount ?? requirement.targetAmount
+	if (approvalAmount === undefined) throw new Error(`No ${tokenLabel} approval amount is required for the refreshed report`)
+	if (approvalAmount <= requirement.approvedAmount) throw new Error(`The ${tokenLabel} approval must increase the current allowance`)
+	if (approvalAmount < requirement.requiredAmount) throw new Error(`The ${tokenLabel} approval must cover the refreshed dispute requirement`)
+	return approvalAmount
 }
 
 type OptionalReadResult<TResult> = { result: TResult; status: 'success' } | { error: Error; result?: undefined; status: 'failure' }
@@ -636,14 +655,20 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 					})
 					if (getOpenOracleSelectedReportActionMode(reportDetails) !== 'dispute') throw new Error('Token approvals are only available while disputing a report')
 					const refreshedDisputeSubmission = getDisputeSubmission(reportDetails, submittedOpenOracleForm)
+					if (refreshedDisputeSubmission.inputBlockMessage !== undefined) throw new Error(refreshedDisputeSubmission.inputBlockMessage.message)
 					if (amount !== undefined && refreshedDisputeSubmission.token1ContributionAmount !== cachedDisputeSubmission.token1ContributionAmount) {
 						throw new Error('The required base token approval changed. Review the refreshed report and try again.')
 					}
 					await refreshOpenOracleTokenAccess(reportDetails, { preserveExisting: true })
 					assertSelectedReportCurrent(reportDetails.reportId.toString())
 					const disputeSubmission = getDisputeSubmission(reportDetails, submittedOpenOracleForm)
-					const approvalAmount = amount ?? disputeSubmission.token1Approval.targetAmount ?? disputeSubmission.token1ContributionAmount
-					if (approvalAmount === undefined) throw new Error('No base token approval amount is required for the selected report')
+					if (disputeSubmission.inputBlockMessage !== undefined) throw new Error(disputeSubmission.inputBlockMessage.message)
+					const approvalAmount = getRefreshedOpenOracleApprovalAmount({
+						approvalError: openOracleToken1Approval.value.error,
+						explicitAmount: amount,
+						requirement: disputeSubmission.token1Approval,
+						tokenLabel: 'base token',
+					})
 					return await dependencies.approveErc20(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), reportDetails.token1, getOpenOracleAddress(), approvalAmount, 'approveToken1')
 				},
 				'Failed to approve base token',
@@ -666,14 +691,20 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 					})
 					if (getOpenOracleSelectedReportActionMode(reportDetails) !== 'dispute') throw new Error('Token approvals are only available while disputing a report')
 					const refreshedDisputeSubmission = getDisputeSubmission(reportDetails, submittedOpenOracleForm)
+					if (refreshedDisputeSubmission.inputBlockMessage !== undefined) throw new Error(refreshedDisputeSubmission.inputBlockMessage.message)
 					if (amount !== undefined && refreshedDisputeSubmission.token2ContributionAmount !== cachedDisputeSubmission.token2ContributionAmount) {
 						throw new Error('The required quote token approval changed. Review the refreshed report and try again.')
 					}
 					await refreshOpenOracleTokenAccess(reportDetails, { preserveExisting: true })
 					assertSelectedReportCurrent(reportDetails.reportId.toString())
 					const disputeSubmission = getDisputeSubmission(reportDetails, submittedOpenOracleForm)
-					const approvalAmount = amount ?? disputeSubmission.token2Approval.targetAmount ?? disputeSubmission.token2ContributionAmount
-					if (approvalAmount === undefined) throw new Error('No quote token approval amount is required for the selected report')
+					if (disputeSubmission.inputBlockMessage !== undefined) throw new Error(disputeSubmission.inputBlockMessage.message)
+					const approvalAmount = getRefreshedOpenOracleApprovalAmount({
+						approvalError: openOracleToken2Approval.value.error,
+						explicitAmount: amount,
+						requirement: disputeSubmission.token2Approval,
+						tokenLabel: 'quote token',
+					})
 					return await dependencies.approveErc20(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), reportDetails.token2, getOpenOracleAddress(), approvalAmount, 'approveToken2')
 				},
 				'Failed to approve quote token',
