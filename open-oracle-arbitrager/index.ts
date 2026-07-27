@@ -43,7 +43,7 @@ import {
 	type TransactionActivity,
 	type DisputeStepSnapshot,
 } from './operator-state.js'
-import { appendPriceHistory, availableTokenBalances, discoverAugurRepTokens, formatTokenAmount, loadPriceHistory, loadTokenMarkets, missingPricePoints, pricePoints, tokenCatalogForScan } from './market-monitor.js'
+import { appendPriceHistory, availableTokenBalances, createTokenCatalogTracker, discoverAugurRepTokens, formatTokenAmount, loadPriceHistory, loadTokenMarkets, missingPricePoints, pricePoints } from './market-monitor.js'
 import { defaultRpcUrl, networkConfiguration, parseNetworkName, type NetworkConfiguration } from './network.js'
 import { bestSuccessful, pollUntilStopped, replaceOverlap } from './resilience.js'
 import { loadOperatorSettings, saveOperatorSettings, type PersistedOperatorSettings } from './settings-store.js'
@@ -1192,7 +1192,7 @@ async function main() {
 	const reports = new Map<bigint, ActiveReport>()
 	const pendingHistory: ExecutionRecord[] = []
 	let cachedLogs: TransactionLog[] = []
-	let discoveredAugurTokens: Address[] | undefined
+	const catalogForScan = createTokenCatalogTracker((configured, observed) => discoverAugurRepTokens(client, config.network.chain.id, configured, observed))
 	recordOperation(state, { category: 'scan', details: undefined, level: 'info', message: 'Operator started', reason: `${config.network.name} chain ${config.network.chain.id.toString()}`, reportId: undefined })
 	console.log(`network=${config.network.name} chain=${config.network.chain.id.toString()} mode=${config.execute ? 'execute' : 'dry-run'} submission=${config.submission.mode} oracle=${config.openOracle} rpc=${endpointLabel(config.connectivity.readRpcUrl)}`)
 	try {
@@ -1271,8 +1271,7 @@ async function main() {
 				let completedOpportunityCount = 0
 				cursor = await advanceCursorAfterSuccessfulHead(blockNumber, blockHash, async () => {
 					const observedTokens = [...reports.values()].flatMap(report => [report.latest.game.token1, report.latest.game.token2]).filter(address => address !== zeroAddress && address.toLowerCase() !== config.network.weth.toLowerCase())
-					discoveredAugurTokens ??= await discoverAugurRepTokens(client, config.network.chain.id, [], [])
-					const { executionTokens, monitoringTokens: discoveredTokens } = tokenCatalogForScan(discoveredAugurTokens, config.tokenAddresses, observedTokens)
+					const { executionTokens, monitoringTokens: discoveredTokens } = await catalogForScan(config.tokenAddresses, observedTokens)
 					state.tokenMarkets = await loadTokenMarkets(client, {
 						chainId: config.network.chain.id,
 						explorerUrl: config.network.explorerUrl,

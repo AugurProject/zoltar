@@ -266,7 +266,9 @@ export async function submitSignedBundle(parameters: { address: Address; relayUr
 				signMessage: parameters.signMessage,
 				timeoutMilliseconds: parameters.timeoutMilliseconds ?? 10_000,
 			})
-			if (typeof result !== 'object' || result === null || Array.isArray(result) || typeof (result as Record<string, unknown>)['bundleHash'] !== 'string') throw new Error('Relay returned an invalid bundle hash')
+			if (typeof result !== 'object' || result === null || Array.isArray(result)) throw new Error('Relay returned an invalid bundle hash')
+			const bundleHash = (result as Record<string, unknown>)['bundleHash']
+			if (typeof bundleHash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(bundleHash)) throw new Error('Relay returned an invalid bundle hash')
 		}),
 	)
 	const acceptedTargets: string[] = []

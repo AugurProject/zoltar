@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Address } from '@zoltar/shared/ethereum'
-import { appendPriceHistory, availableTokenBalances, childPayouts, constantProductSpotPriceWeth, formatTokenAmount, loadPriceHistory, missingPricePoints, payoutDistributionHash, poolSpotPriceWeth, pricePoints, tokenCatalogForScan, type TokenMarketSnapshot } from './market-monitor.js'
+import { appendPriceHistory, availableTokenBalances, childPayouts, constantProductSpotPriceWeth, createTokenCatalogTracker, formatTokenAmount, loadPriceHistory, missingPricePoints, payoutDistributionHash, poolSpotPriceWeth, pricePoints, type TokenMarketSnapshot } from './market-monitor.js'
 
 const temporaryDirectories: string[] = []
 
@@ -25,19 +25,25 @@ describe('Augur REP discovery helpers', () => {
 		expect(payoutDistributionHash([0n, 0n, 1_000n])).toBe('0x99c9250f58203a3183137eae3a39da9d9d956cd08d1707a58cff5cddf957afe5')
 	})
 
-	test('revokes a removed configured non-REP token without restarting', () => {
+	test('keeps discovery inputs separate and revokes a configured non-REP token without restarting', async () => {
 		const rep = '0x0000000000000000000000000000000000000001' as Address
 		const configured = '0x0000000000000000000000000000000000000002' as Address
 		const observed = '0x0000000000000000000000000000000000000003' as Address
+		const discoveryCalls: { configured: readonly Address[]; observed: readonly Address[] }[] = []
+		const catalogForScan = createTokenCatalogTracker((discoveryConfigured, discoveryObserved) => {
+			discoveryCalls.push({ configured: discoveryConfigured, observed: discoveryObserved })
+			return Promise.resolve([rep, ...discoveryConfigured, ...discoveryObserved])
+		})
 
-		expect(tokenCatalogForScan([rep], [configured], [observed])).toEqual({
+		expect(await catalogForScan([configured], [observed])).toEqual({
 			executionTokens: [rep, configured],
 			monitoringTokens: [rep, configured, observed],
 		})
-		expect(tokenCatalogForScan([rep], [], [configured, observed])).toEqual({
+		expect(await catalogForScan([], [configured, observed])).toEqual({
 			executionTokens: [rep],
 			monitoringTokens: [rep, configured, observed],
 		})
+		expect(discoveryCalls).toEqual([{ configured: [], observed: [] }])
 	})
 })
 

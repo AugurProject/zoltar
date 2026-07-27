@@ -145,6 +145,19 @@ describe('signed transaction delivery', () => {
 		])
 	})
 
+	test.each(['', 'bundle', '0x1234'])('rejects malformed relay bundle hash %p', async bundleHash => {
+		const endpoint = relay(() => Response.json({ id: 1, jsonrpc: '2.0', result: { bundleHash } }))
+		await expect(
+			submitSignedBundle({
+				address,
+				relayUrls: [endpoint],
+				signMessage: () => Promise.resolve(signature),
+				targetBlockNumber: 100n,
+				transactions: [serializedTransaction],
+			}),
+		).rejects.toThrow('Every private relay rejected the bundle')
+	})
+
 	test('prepares one canonical EIP-1559 transaction with pending nonce and gas margin', async () => {
 		const account = privateKeyToAccount(privateKey)
 		if (account.signTransaction === undefined) throw new Error('Local signer missing')
