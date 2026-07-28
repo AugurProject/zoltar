@@ -41,6 +41,7 @@
 	--surface-inset: rgba(9, 18, 31, 0.58);
 	--surface-page: rgba(8, 16, 28, 0.72);
 	--surface-section: rgba(10, 20, 34, 0.82);
+	--surface-section-opaque: rgba(10, 20, 34, 1);
 	--surface-record: rgba(12, 23, 38, 0.88);
 	--surface-row: rgba(8, 16, 28, 0.42);
 	--surface-critical: rgba(61, 14, 25, 0.72);

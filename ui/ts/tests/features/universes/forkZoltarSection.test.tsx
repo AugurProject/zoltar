@@ -5,6 +5,8 @@ import { h, render } from 'preact'
 import { fireEvent, within } from '../../testUtils/queries'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { ForkZoltarSection } from '../../../features/universes/components/ForkZoltarSection.js'
+import { ChainTimestampContext } from '../../../lib/chainTimestamp.js'
+import { formatRelativeTimestamp, formatTimestamp } from '../../../lib/formatters.js'
 import type { MarketDetails, ZoltarUniverseSummary } from '../../../types/contracts.js'
 import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
@@ -65,6 +67,7 @@ describe('ForkZoltarSection', () => {
 		const renderedComponent = await renderIntoDocument(
 			h(ForkZoltarSection, {
 				accountAddress: zeroAddress,
+				currentTimestamp: 2n,
 				hasLoadedZoltarQuestions: true,
 				isMainnet: false,
 				loadingZoltarForkAccess: false,
@@ -130,6 +133,7 @@ describe('ForkZoltarSection', () => {
 	test('requires a valid fork question before REP approval', async () => {
 		const createProps = (questionId: string) => ({
 			accountAddress: zeroAddress,
+			currentTimestamp: 2n,
 			hasLoadedZoltarQuestions: true,
 			isMainnet: true,
 			loadingZoltarForkAccess: false,
@@ -176,6 +180,7 @@ describe('ForkZoltarSection', () => {
 		const renderedComponent = await renderIntoDocument(
 			h(ForkZoltarSection, {
 				accountAddress: zeroAddress,
+				currentTimestamp: 2n,
 				hasLoadedZoltarQuestions: true,
 				isMainnet: true,
 				loadingZoltarForkAccess: false,
@@ -210,6 +215,7 @@ describe('ForkZoltarSection', () => {
 		const renderedComponent = await renderIntoDocument(
 			h(ForkZoltarSection, {
 				accountAddress: zeroAddress,
+				currentTimestamp: 2n,
 				hasLoadedZoltarQuestions: true,
 				isMainnet: true,
 				loadingZoltarForkAccess: false,
@@ -244,6 +250,7 @@ describe('ForkZoltarSection', () => {
 	test('requires fresh confirmation when the selected fork question changes', async () => {
 		const createProps = (questionId: string) => ({
 			accountAddress: zeroAddress,
+			currentTimestamp: 2n,
 			hasLoadedZoltarQuestions: true,
 			isMainnet: true,
 			loadingZoltarForkAccess: false,
@@ -310,5 +317,106 @@ describe('ForkZoltarSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('No question matches this ID. Try another question ID.')).not.toBeNull()
 		expect(document.body.textContent?.includes('Refresh questions')).toBe(false)
+	})
+
+	test('blocks the irreversible fork until the selected question has ended', async () => {
+		const onForkZoltar = mock(() => undefined)
+		const renderedComponent = await renderIntoDocument(
+			h(ForkZoltarSection, {
+				accountAddress: zeroAddress,
+				currentTimestamp: 1n,
+				hasLoadedZoltarQuestions: true,
+				isMainnet: true,
+				loadingZoltarForkAccess: false,
+				loadingZoltarQuestions: false,
+				onApproveZoltarForkRep: () => undefined,
+				onForkZoltar,
+				onZoltarForkQuestionIdChange: () => undefined,
+				zoltarForkActiveAction: undefined,
+				zoltarForkApproval: { error: undefined, loading: false, value: 100n * REP },
+				zoltarForkError: undefined,
+				zoltarForkPending: false,
+				zoltarForkQuestionId: '0x01',
+				zoltarForkRepBalance: 1000n * REP,
+				zoltarQuestions: [createQuestion()],
+				zoltarUniverse: createUniverse({ forkBurnDivisor: 5n, forkThreshold: 100n * REP, zoltarAddress: ZOLTAR_ADDRESS }),
+				zoltarUniverseState: 'ready',
+			}),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		fireEvent.input(documentQueries.getByRole('textbox', { name: 'Type FORK to confirm' }), { target: { value: 'FORK' } })
+		const forkButton = documentQueries.getByRole('button', { name: 'Fork Zoltar' })
+		expect(forkButton.hasAttribute('disabled')).toBe(true)
+		expect(forkButton.getAttribute('title')).toContain('The selected question must end before Zoltar can fork.')
+		fireEvent.click(forkButton)
+		expect(onForkZoltar).not.toHaveBeenCalled()
+	})
+
+	test('uses live chain-time updates through the exact fork-question end boundary', async () => {
+		const onForkZoltar = mock(() => undefined)
+		const props = {
+			accountAddress: zeroAddress,
+			hasLoadedZoltarQuestions: true,
+			isMainnet: true,
+			loadingZoltarForkAccess: false,
+			loadingZoltarQuestions: false,
+			onApproveZoltarForkRep: () => undefined,
+			onForkZoltar,
+			onZoltarForkQuestionIdChange: () => undefined,
+			zoltarForkActiveAction: undefined,
+			zoltarForkApproval: { error: undefined, loading: false, value: 100n * REP },
+			zoltarForkError: undefined,
+			zoltarForkPending: false,
+			zoltarForkQuestionId: '0x01',
+			zoltarForkRepBalance: 1000n * REP,
+			zoltarQuestions: [createQuestion()],
+			zoltarUniverse: createUniverse({ forkBurnDivisor: 5n, forkThreshold: 100n * REP, zoltarAddress: ZOLTAR_ADDRESS }),
+			zoltarUniverseState: 'ready' as const,
+		}
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={undefined}>
+				<ForkZoltarSection {...props} />
+			</ChainTimestampContext.Provider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		fireEvent.input(documentQueries.getByRole('textbox', { name: 'Type FORK to confirm' }), { target: { value: 'FORK' } })
+		let forkButton = documentQueries.getByRole('button', { name: 'Fork Zoltar' })
+		expect((forkButton as HTMLButtonElement).disabled).toBe(true)
+		expect(forkButton.getAttribute('title')).toBe('Loading current chain time before checking whether the selected question has ended.')
+
+		render(
+			<ChainTimestampContext.Provider value={1n}>
+				<ForkZoltarSection {...props} />
+			</ChainTimestampContext.Provider>,
+			renderedComponent.container,
+		)
+		forkButton = documentQueries.getByRole('button', { name: 'Fork Zoltar' })
+		const expectedActiveReason = `The selected question must end before Zoltar can fork. It ends ${formatTimestamp(2n)} (${formatRelativeTimestamp(2n, 1n)}).`
+		expect((forkButton as HTMLButtonElement).disabled).toBe(true)
+		expect(forkButton.getAttribute('title')).toBe(expectedActiveReason)
+
+		render(
+			<ChainTimestampContext.Provider value={2n}>
+				<ForkZoltarSection {...props} />
+			</ChainTimestampContext.Provider>,
+			renderedComponent.container,
+		)
+		forkButton = documentQueries.getByRole('button', { name: 'Fork Zoltar' })
+		expect((forkButton as HTMLButtonElement).disabled).toBe(false)
+
+		render(
+			<ChainTimestampContext.Provider value={3n}>
+				<ForkZoltarSection {...props} />
+			</ChainTimestampContext.Provider>,
+			renderedComponent.container,
+		)
+		forkButton = documentQueries.getByRole('button', { name: 'Fork Zoltar' })
+		expect((forkButton as HTMLButtonElement).disabled).toBe(false)
+		fireEvent.click(forkButton)
+		expect(onForkZoltar).toHaveBeenCalledTimes(1)
 	})
 })

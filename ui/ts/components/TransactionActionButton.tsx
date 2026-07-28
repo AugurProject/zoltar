@@ -10,20 +10,23 @@ export function TransactionActionButtonLockProvider({ children, disabledReason }
 	return <TransactionActionButtonLockContext.Provider value={disabledReason}>{children}</TransactionActionButtonLockContext.Provider>
 }
 
-export function TransactionActionButton({ availability, className = '', disabled = false, idleLabel, onClick, pending = false, pendingLabel, showDisabledReason = true, tone = 'primary', type = 'button' }: TransactionActionButtonProps) {
+export function TransactionActionButton({ availability, className = '', disabled = false, disabledReasonElementId, idleLabel, onClick, pending = false, pendingLabel, showDisabledReason = true, tone = 'primary', type = 'button' }: TransactionActionButtonProps) {
 	const disabledReasonId = useId()
 	const globalDisabledReason = useContext(TransactionActionButtonLockContext)
 	const blockedByPendingRequest = globalDisabledReason !== undefined && !pending
 	const isDisabled = disabled || pending || availability?.disabled === true || blockedByPendingRequest
 	const disabledReason = isDisabled ? (availability?.reason ?? (blockedByPendingRequest ? globalDisabledReason : undefined)) : undefined
 	const shouldShowDisabledReason = showDisabledReason && isDisabled && disabledReason !== undefined
+	let describedBy: string | undefined
+	if (shouldShowDisabledReason) describedBy = disabledReasonId
+	else if (isDisabled && disabledReason !== undefined) describedBy = disabledReasonElementId
 	const handleClick = () => {
 		if (isDisabled) return
 		onClick()
 	}
 	return (
 		<div className={`tx-action ${className}`.trim()}>
-			<button className={`tx-action-button ${tone}`} type={type} onClick={handleClick} disabled={isDisabled} title={disabledReason} aria-describedby={shouldShowDisabledReason ? disabledReasonId : undefined}>
+			<button className={`tx-action-button ${tone}`} type={type} onClick={handleClick} disabled={isDisabled} title={disabledReason} aria-describedby={describedBy}>
 				{pending ? <LoadingText>{pendingLabel}</LoadingText> : idleLabel}
 			</button>
 			{shouldShowDisabledReason ? (

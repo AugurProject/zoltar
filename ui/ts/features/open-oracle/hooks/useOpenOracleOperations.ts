@@ -14,15 +14,14 @@ import {
 	formatOpenOracleSettleWriteErrorMessage,
 	getOpenOracleCreateGuardMessage,
 	getOpenOracleCreateValidationMessage,
-	getOpenOracleDisputeAvailability,
 	getOpenOracleSelectedReportActionMode,
 	getOpenOracleSettleAvailability,
 	parseOpenOracleCreateFormSubmission,
 } from '../lib/openOracle.js'
-import { parseAddressInput, parseBytes32Input, parseReportIdInput } from '../../../lib/inputs.js'
+import { parseAddressInput, parseReportIdInput } from '../../../lib/inputs.js'
 import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '../../markets/lib/marketForm.js'
 import { requireDefined } from '../../../lib/required.js'
-import type { TokenApprovalState } from '../../../lib/tokenApproval.js'
+import { formatTokenApprovalUnavailableMessage, type TokenApprovalRequirement, type TokenApprovalState } from '../../../lib/tokenApproval.js'
 import { useRequestGuard } from '../../../lib/requestGuard.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '../../../lib/actionFeedback.js'
 import type { ActionFeedback } from '../../../lib/actionFeedback.js'
@@ -104,6 +103,25 @@ type LoadedOracleReportResult = {
 
 type RefreshOpenOracleTokenAccessOptions = {
 	preserveExisting?: boolean
+}
+
+function getRefreshedOpenOracleApprovalAmount({ approvalError, explicitAmount, requirement, tokenLabel }: { approvalError: string | undefined; explicitAmount: bigint | undefined; requirement: TokenApprovalRequirement; tokenLabel: 'base token' | 'quote token' }) {
+	if (requirement.requiredAmount === undefined || requirement.requiredAmount <= 0n) throw new Error(`No ${tokenLabel} approval is required for the refreshed report`)
+	if (requirement.approvedAmount === undefined) {
+		throw new Error(
+			formatTokenApprovalUnavailableMessage({
+				actionLabel: 'submitting this approval',
+				reason: approvalError,
+				tokenLabel,
+			}),
+		)
+	}
+	if (requirement.hasSufficientApproval) throw new Error(`The ${tokenLabel} approval is already sufficient for the refreshed report`)
+	const approvalAmount = explicitAmount ?? requirement.targetAmount
+	if (approvalAmount === undefined) throw new Error(`No ${tokenLabel} approval amount is required for the refreshed report`)
+	if (approvalAmount <= requirement.approvedAmount) throw new Error(`The ${tokenLabel} approval must increase the current allowance`)
+	if (approvalAmount < requirement.requiredAmount) throw new Error(`The ${tokenLabel} approval must cover the refreshed dispute requirement`)
+	return approvalAmount
 }
 
 type OptionalReadResult<TResult> = { result: TResult; status: 'success' } | { error: Error; result?: undefined; status: 'failure' }
@@ -628,13 +646,29 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			return runOracleAction(
 				'approveToken1',
 				async walletAddress => {
-					const reportDetails = requireLoadedCurrentSelectedReport()
+					const cachedReportDetails = requireLoadedCurrentSelectedReport()
+					const cachedDisputeSubmission = getDisputeSubmission(cachedReportDetails, submittedOpenOracleForm)
+					const { details: reportDetails } = await ensureLoadedSelectedReport({
+						forceReload: true,
+						reportIdInput: submittedOpenOracleForm.reportId,
+						requireCurrentSelection: true,
+					})
+					if (getOpenOracleSelectedReportActionMode(reportDetails) !== 'dispute') throw new Error('Token approvals are only available while disputing a report')
+					const refreshedDisputeSubmission = getDisputeSubmission(reportDetails, submittedOpenOracleForm)
+					if (refreshedDisputeSubmission.inputBlockMessage !== undefined) throw new Error(refreshedDisputeSubmission.inputBlockMessage.message)
+					if (amount !== undefined && refreshedDisputeSubmission.token1ContributionAmount !== cachedDisputeSubmission.token1ContributionAmount) {
+						throw new Error('The required base token approval changed. Review the refreshed report and try again.')
+					}
 					await refreshOpenOracleTokenAccess(reportDetails, { preserveExisting: true })
 					assertSelectedReportCurrent(reportDetails.reportId.toString())
-					if (getOpenOracleSelectedReportActionMode(reportDetails) !== 'dispute') throw new Error('Token approvals are only available while disputing a report')
 					const disputeSubmission = getDisputeSubmission(reportDetails, submittedOpenOracleForm)
-					const approvalAmount = amount ?? disputeSubmission.token1Approval.targetAmount ?? disputeSubmission.token1ContributionAmount
-					if (approvalAmount === undefined) throw new Error('No base token approval amount is required for the selected report')
+					if (disputeSubmission.inputBlockMessage !== undefined) throw new Error(disputeSubmission.inputBlockMessage.message)
+					const approvalAmount = getRefreshedOpenOracleApprovalAmount({
+						approvalError: openOracleToken1Approval.value.error,
+						explicitAmount: amount,
+						requirement: disputeSubmission.token1Approval,
+						tokenLabel: 'base token',
+					})
 					return await dependencies.approveErc20(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), reportDetails.token1, getOpenOracleAddress(), approvalAmount, 'approveToken1')
 				},
 				'Failed to approve base token',
@@ -648,13 +682,29 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 			return runOracleAction(
 				'approveToken2',
 				async walletAddress => {
-					const reportDetails = requireLoadedCurrentSelectedReport()
+					const cachedReportDetails = requireLoadedCurrentSelectedReport()
+					const cachedDisputeSubmission = getDisputeSubmission(cachedReportDetails, submittedOpenOracleForm)
+					const { details: reportDetails } = await ensureLoadedSelectedReport({
+						forceReload: true,
+						reportIdInput: submittedOpenOracleForm.reportId,
+						requireCurrentSelection: true,
+					})
+					if (getOpenOracleSelectedReportActionMode(reportDetails) !== 'dispute') throw new Error('Token approvals are only available while disputing a report')
+					const refreshedDisputeSubmission = getDisputeSubmission(reportDetails, submittedOpenOracleForm)
+					if (refreshedDisputeSubmission.inputBlockMessage !== undefined) throw new Error(refreshedDisputeSubmission.inputBlockMessage.message)
+					if (amount !== undefined && refreshedDisputeSubmission.token2ContributionAmount !== cachedDisputeSubmission.token2ContributionAmount) {
+						throw new Error('The required quote token approval changed. Review the refreshed report and try again.')
+					}
 					await refreshOpenOracleTokenAccess(reportDetails, { preserveExisting: true })
 					assertSelectedReportCurrent(reportDetails.reportId.toString())
-					if (getOpenOracleSelectedReportActionMode(reportDetails) !== 'dispute') throw new Error('Token approvals are only available while disputing a report')
 					const disputeSubmission = getDisputeSubmission(reportDetails, submittedOpenOracleForm)
-					const approvalAmount = amount ?? disputeSubmission.token2Approval.targetAmount ?? disputeSubmission.token2ContributionAmount
-					if (approvalAmount === undefined) throw new Error('No quote token approval amount is required for the selected report')
+					if (disputeSubmission.inputBlockMessage !== undefined) throw new Error(disputeSubmission.inputBlockMessage.message)
+					const approvalAmount = getRefreshedOpenOracleApprovalAmount({
+						approvalError: openOracleToken2Approval.value.error,
+						explicitAmount: amount,
+						requirement: disputeSubmission.token2Approval,
+						tokenLabel: 'quote token',
+					})
 					return await dependencies.approveErc20(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), reportDetails.token2, getOpenOracleAddress(), approvalAmount, 'approveToken2')
 				},
 				'Failed to approve quote token',
@@ -800,23 +850,14 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 				async walletAddress => {
 					const submittedReportIdInput = submittedOpenOracleForm.reportId.trim()
 					const { details } = await ensureLoadedSelectedReport({ forceReload: true, reportIdInput: submittedReportIdInput, requireCurrentSelection: true })
-					const disputeAvailability = getOpenOracleDisputeAvailability(details)
-					if (!disputeAvailability.canAct) throw new Error(disputeAvailability.message ?? 'This report is not ready to dispute.')
+					const disputeInputPreflight = getDisputeSubmission(details, submittedOpenOracleForm)
+					if (disputeInputPreflight.inputBlockMessage !== undefined) throw new Error(disputeInputPreflight.inputBlockMessage.message)
 					await refreshOpenOracleTokenAccess(details, { preserveExisting: true })
 					assertSelectedReportCurrent(details.reportId.toString())
 					const disputeSubmission = getDisputeSubmission(details, submittedOpenOracleForm)
 					if (!disputeSubmission.canSubmit || disputeSubmission.newAmount1 === undefined || disputeSubmission.newAmount2 === undefined) throw new Error(disputeSubmission.blockMessage?.message ?? 'Invalid dispute submission details.')
 					const tokenToSwap = submittedOpenOracleForm.disputeTokenToSwap === 'token1' ? details.token1 : details.token2
-					return await dependencies.disputeOracleReport(
-						dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }),
-						getOpenOracleAddress(),
-						details.reportId,
-						tokenToSwap,
-						disputeSubmission.newAmount1,
-						disputeSubmission.newAmount2,
-						details.currentAmount2,
-						parseBytes32Input(submittedOpenOracleForm.stateHash, 'State hash'),
-					)
+					return await dependencies.disputeOracleReport(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), getOpenOracleAddress(), details.reportId, tokenToSwap, disputeSubmission.newAmount1, disputeSubmission.newAmount2, details.currentAmount2, details.stateHash)
 				},
 				'Failed to dispute report',
 				{

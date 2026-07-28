@@ -11,6 +11,7 @@ import { AppPageHeading } from './components/AppPageHeading.js'
 import { AppRouteContent } from './components/AppRouteContent.js'
 import { AppStatusNotices } from './components/AppStatusNotices.js'
 import { GlobalTransactionTray } from './components/GlobalTransactionTray.js'
+import { GlobalTransactionPresentationProvider } from '../components/GlobalTransactionPresentationContext.js'
 import { TransactionActionButtonLockProvider } from '../components/TransactionActionButton.js'
 import { RouteSubNavigation } from './components/RouteSubNavigation.js'
 import { useAppRouteEffects } from './hooks/useAppRouteEffects.js'
@@ -811,15 +812,17 @@ export function App() {
 					<AppPageHeading pageTitle={pageTitle} />
 					<AppStatusNotices errorMessage={errorMessage} readBackendMessage={readBackendMessage} readBackendStatus={readBackendStatus} simulationBootstrapError={environmentBootstrapError} showAugurStatoblastDeploymentWarning={showAugurStatoblastDeploymentWarning} />
 					<AppHeaderShell overview={overviewProps} simulationController={simulationController} subNavigation={routeSubNavigation} tabNavigation={tabNavigationProps} onEnvironmentChanged={refreshActiveEnvironment} onRefresh={refreshSimulationView} />
-					<GlobalTransactionTray transaction={transactionState.value.active} />
+					<GlobalTransactionPresentationProvider transaction={transactionState.value.active}>
+						<GlobalTransactionTray transaction={transactionState.value.active} />
 
-					<div id='app-content' tabIndex={-1}>
-						<TransactionActionButtonLockProvider disabledReason={getTransactionActionLockReason(transactionState.value)}>
-							<fieldset className='route-shell' disabled={isRouteContentDisabled}>
-								<AppRouteContent deploy={deployRouteContentProps} market={marketRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={route} securityPools={securityPoolsRouteContentProps} />
-							</fieldset>
-						</TransactionActionButtonLockProvider>
-					</div>
+						<div id='app-content' tabIndex={-1}>
+							<TransactionActionButtonLockProvider disabledReason={getTransactionActionLockReason(transactionState.value)}>
+								<fieldset className='route-shell' disabled={isRouteContentDisabled}>
+									<AppRouteContent deploy={deployRouteContentProps} market={marketRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={route} securityPools={securityPoolsRouteContentProps} />
+								</fieldset>
+							</TransactionActionButtonLockProvider>
+						</div>
+					</GlobalTransactionPresentationProvider>
 				</main>
 			</ChainTimestampContext.Provider>
 		</ChainBlockNumberContext.Provider>

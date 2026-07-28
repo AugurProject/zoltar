@@ -1066,10 +1066,12 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		const currentBidsHeading = documentQueries.getByRole('heading', { name: 'Current Bids' })
+		const myBidsHeading = documentQueries.getByRole('heading', { name: 'My Bids' })
 		const submitBidHeading = documentQueries.getByRole('heading', { name: 'Submit Bid' })
 		expect(documentQueries.getByText('Market Depth')).not.toBeNull()
 		expect(documentQueries.queryByText('Market Depth & Bid History')).toBeNull()
 		expect(submitBidHeading.compareDocumentPosition(currentBidsHeading) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+		expect(myBidsHeading.compareDocumentPosition(currentBidsHeading) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
 		expect(currentBidsHeading.closest('details')).toBeNull()
 	})
 

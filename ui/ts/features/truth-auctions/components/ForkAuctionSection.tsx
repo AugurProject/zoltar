@@ -1698,8 +1698,8 @@ export function ForkAuctionSection({
 							{truthAuctionHero}
 							<ReadOnlyDetailAccordion title={forkAuctionCopy.marketDepth}>{truthAuctionMarketViewSection}</ReadOnlyDetailAccordion>
 							{renderSubmitBidSection()}
-							{auctionWideBidsSection}
 							{viewerTruthAuctionBidsSection}
+							{auctionWideBidsSection}
 						</fieldset>
 					)
 				return (
