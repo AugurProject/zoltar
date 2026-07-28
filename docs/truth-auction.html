@@ -37,17 +37,16 @@
 			<h2>Operational Lifecycle</h2>
 			<p class="security-assumption-ref">
 				<strong>Security assumptions:</strong>
-				<a href="./security-model.html#assumption-a05">A05 viable operating costs</a>,
-				<a href="./security-model.html#assumption-a07">A07 practical migration</a>,
-				<a href="./security-model.html#assumption-a08">A08 independent bidders</a>,
-				<a href="./security-model.html#assumption-a09">A09 efficient REP conversion</a>,
-				<a href="./security-model.html#assumption-a14">A14 timely inclusion</a>,
-				<a href="./security-model.html#assumption-a18">A18 REP behavior</a>,
-				<a href="./security-model.html#assumption-a21">A21 lifecycle executors</a>,
-				<a href="./security-model.html#assumption-a22">A22 bid-data availability</a>,
-				<a href="./security-model.html#assumption-a26">A26 safe immutable parameters</a>,
+				<a href="./security-model.html#assumption-a02">A02 viable operating costs</a>,
+				<a href="./security-model.html#assumption-a11">A11 practical migration</a>,
+				<a href="./security-model.html#assumption-a03">A03 independent bidders</a>,
+				<a href="./security-model.html#assumption-a12">A12 efficient REP conversion</a>,
+				<a href="./security-model.html#assumption-a16">A16 timely inclusion</a>,
+				<a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>,
+				<a href="./security-model.html#assumption-a20">A20 bid-data availability</a>,
+				<a href="./security-model.html#assumption-a25">A25 safe immutable parameters</a>,
 				and
-				<a href="./security-model.html#assumption-a28">A28 native-ETH recipient compatibility</a>.
+				<a href="./security-model.html#assumption-a22">A22 native-ETH recipient compatibility</a>.
 			</p>
 
 			<p>
@@ -78,7 +77,10 @@
 				The child activates with legitimate migration collateral plus retained bid
 				ETH, even when that total is below the original fork snapshot. Full repair
 				is not guaranteed, and the remaining impairment is borne by the affected
-				child's open-interest holders. Finalization rejects caller contribution ETH,
+				child's open-interest holders. This is the security model's
+				<a href="./security-model.html#excluded-guarantee-eg02"
+					>EG02 full-repair exclusion</a
+				>. Finalization rejects caller contribution ETH,
 				and forced ETH remains unaccounted surplus. On the underfunded path,
 				qualifying bidders collectively receive <code>maxRepBeingSold</code>; when
 				no bid qualifies, no REP is sold. Any unsold REP remains behind inherited
@@ -254,9 +256,9 @@
 				<p class="security-assumption-ref">
 					<strong>Security assumptions:</strong>
 					<a href="./security-model.html#assumption-a01">A01 bidder incentives</a>,
-					<a href="./security-model.html#assumption-a09">A09 efficient REP conversion</a>,
+					<a href="./security-model.html#assumption-a12">A12 efficient REP conversion</a>,
 					and
-					<a href="./security-model.html#assumption-a11">A11 REP liquidity</a>.
+					<a href="./security-model.html#assumption-a13">A13 REP liquidity</a>.
 				</p>
 				<p>
 					Bidders submit ETH at discrete price ticks, where each tick encodes an
@@ -544,6 +546,12 @@
 
 			<section id="gas-and-spam">
 				<h2>Gas and Spam Bounds</h2>
+				<p class="security-assumption-ref">
+					<strong>Security assumption:</strong>
+					<a href="./security-model.html#assumption-a02"
+						>A02 viable operating costs</a
+					>.
+				</p>
 				<p>
 					The main spam risk is a bidder trying to fill bid slots or tick levels
 					cheaply enough to block later demand. The auction avoids that failure
@@ -582,8 +590,8 @@
 				<h2>Settlement Modes</h2>
 				<p class="security-assumption-ref">
 					<strong>Security assumption:</strong>
-					<a href="./security-model.html#assumption-a28"
-						>A28 native-ETH recipient compatibility</a
+					<a href="./security-model.html#assumption-a22"
+						>A22 native-ETH recipient compatibility</a
 					>.
 				</p>
 				<p>

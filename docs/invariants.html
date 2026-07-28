@@ -3,13 +3,13 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Zoltar Protocol Invariants</title>
+		<title>Statoblast And Zoltar Invariants</title>
 		<link rel="stylesheet" href="./shared-docs.css" />
 	</head>
 	<body class="doc-openoracle invariants-catalog">
 		<main>
 			<header>
-				<h1>Zoltar Protocol Invariants</h1>
+				<h1>Statoblast And Zoltar Invariants</h1>
 				<p>
 					An invariant is a statement that must remain true at every successful
 					external-call boundary, across every legal lifecycle transition, or
@@ -24,13 +24,8 @@
 					implementation choice is not automatically a safe invariant.
 				</p>
 				<p>
-					New to Zoltar's actors and fork lifecycle? Read
-					<a href="./documentation.html">Start Here</a> before using this catalog
-					as a contract or test reference.
-				</p>
-				<p>
 					The <a href="./security-model.html">Protocol Security Model</a>
-					is normative for assumptions A01–A29. The
+					is normative for assumptions A01–A28. The
 					<a href="./truth-auction.html#clearing">Truth Auction clearing guide</a>
 					owns funded and underfunded clearing mechanics, while
 					<a href="./open-oracle-integration.html#intentional-economic-tradeoffs"
@@ -484,7 +479,7 @@
 							</dl>
 						</div>
 					</details>
-					<details class="invariant-entry" id="uni-02">
+						<details class="invariant-entry" id="uni-02">
 						<summary><code>UNI-02</code><span class="invariant-title">Valid fork questions</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -497,18 +492,23 @@
 								registration, or pool-relevance condition.
 							</div>
 							<p class="invariant-example"><strong>Example:</strong> At exactly a known question's end time, a caller may fork a universe even when that question came from another universe or was created with an already-past end time; an unknown or still-open question is rejected. Requiring a universe-relevant or sufficiently aged question is not a Zoltar invariant.</p>
-							<dl class="invariant-metadata">
+								<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
-								<div><dt>Primary evidence</dt><dd>
+									<div><dt>Primary evidence</dt><dd>
 										<a href="../solidity/contracts/Zoltar.sol"
 										><code>forkUniverse</code></a
 										>,
 									<a href="./zoltar-whitepaper.html#global-question-scope"
 										>question model</a
 										>
-								</dd></div>
-							</dl>
+									</dd></div>
+									<div><dt>Related external boundaries</dt><dd>
+										<a href="./security-model.html#assumption-a15"
+											><code>A15</code> intended question selection</a
+										>
+									</dd></div>
+								</dl>
 						</div>
 					</details>
 					<details class="invariant-entry">
@@ -663,9 +663,9 @@
 				<h2>Authority and Deployment Identity</h2>
 				<p class="security-assumption-ref">
 					<strong>Security assumptions:</strong>
-					<a href="./security-model.html#assumption-a19">A19 verified deployments</a>
+					<a href="./security-model.html#assumption-a23">A23 verified deployments</a>
 					and
-					<a href="./security-model.html#assumption-a24">A24 cryptographic identity</a>.
+					<a href="./security-model.html#assumption-a27">A27 cryptographic identity</a>.
 				</p>
 				<div class="invariant-list">
 					<details class="invariant-entry">
@@ -1873,6 +1873,15 @@
 
 			<section id="oracle">
 				<h2>REP/ETH Oracle Operations</h2>
+				<p class="security-assumption-ref">
+					<strong>Security assumptions:</strong>
+					<a href="./security-model.html#assumption-a18">A18 independent correction incentive</a>,
+					<a href="./security-model.html#assumption-a19"
+						>A19 observable correctable price</a
+					>,
+					and
+					<a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>.
+				</p>
 				<div class="callout" id="oracle-accepted-non-invariants">
 					<p>
 						<strong>Accepted oracle design properties—not security findings.</strong>
@@ -2304,11 +2313,11 @@
 				<h2>Lifecycle, Liveness, and External Calls</h2>
 				<p class="security-assumption-ref">
 					<strong>Security assumptions:</strong>
-					<a href="./security-model.html#assumption-a05">A05 viable operating costs</a>,
-					<a href="./security-model.html#assumption-a14">A14 timely inclusion</a>,
-					<a href="./security-model.html#assumption-a21">A21 lifecycle executors</a>,
+					<a href="./security-model.html#assumption-a02">A02 viable operating costs</a>,
+					<a href="./security-model.html#assumption-a16">A16 timely inclusion</a>,
+					<a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>,
 					and
-					<a href="./security-model.html#assumption-a23">A23 Ethereum execution</a>.
+					<a href="./security-model.html#assumption-a26">A26 Ethereum execution</a>.
 				</p>
 				<div class="invariant-list">
 					<details class="invariant-entry">
@@ -2421,23 +2430,31 @@
 						</div>
 					</details>
 					<details class="invariant-entry" id="ext-01">
-						<summary><code>EXT-01</code><span class="invariant-title">Token behavior assumptions</span></summary>
+						<summary><code>EXT-01</code><span class="invariant-title">External token behavior assumptions</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								REP, child REP, and WETH obey the exact transfer,
-								return-value, decimal, and callback behavior assumed by pool
-								and oracle accounting.
+								Genesis REP and configured WETH obey the exact transfer,
+								return-value, decimal, and callback behavior assumed by pool and
+								oracle accounting.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> REP transfer returns and moves exactly the requested atomic units rather than charging a fee that leaves pool accounting overstated.</p>
+							<p class="invariant-example"><strong>Example:</strong> Genesis REP transfer returns and moves exactly the requested atomic units rather than charging a fee that leaves pool accounting overstated; child REP supply remains bounded by its contract-enforced theoretical ceiling.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>External assumption</dd></div>
 								<div><dt>Enforcement status</dt><dd>Economic or external assumption</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a href="../solidity/contracts/SafeERC20Ops.sol"
 										><code>SafeERC20Ops</code></a
-										>, fixed token addresses, and security assumption
-										<a href="./security-model.html#assumption-a18"><code>A18</code></a>
+										>,
+										fixed external token addresses, and security assumption
+										<a href="./security-model.html#assumption-a21"><code>A21</code></a>
+								</dd></div>
+								<div><dt>Related enforced property</dt><dd>
+										Canonical child REP behavior is enforced by
+										<a href="../solidity/contracts/ReputationToken.sol"
+											><code>ReputationToken</code></a
+										>
+										and its Zoltar-only mint and burn authority.
 								</dd></div>
 							</dl>
 						</div>
@@ -2462,8 +2479,8 @@
 										oracle refund paths
 								</dd></div>
 								<div><dt>Related external liveness boundary</dt><dd>
-										<a href="./security-model.html#assumption-a28"
-											><code>A28</code> participant-controlled recipient
+										<a href="./security-model.html#assumption-a22"
+											><code>A22</code> participant-controlled recipient
 											compatibility</a
 										>
 								</dd></div>
@@ -2489,8 +2506,8 @@
 										>, ERC-1155 receiver checks, and receiver callback tests
 								</dd></div>
 								<div><dt>Related external liveness boundary</dt><dd>
-										<a href="./security-model.html#assumption-a28"
-											><code>A28</code> participant-controlled recipient
+										<a href="./security-model.html#assumption-a22"
+											><code>A22</code> participant-controlled recipient
 											compatibility</a
 										>
 								</dd></div>
@@ -2545,10 +2562,10 @@
 				<h2>Verification Obligations</h2>
 				<p class="security-assumption-ref">
 					<strong>Security assumptions:</strong>
-					<a href="./security-model.html#assumption-a19">A19 verified deployments</a>,
-					<a href="./security-model.html#assumption-a22">A22 chain-data availability</a>,
+					<a href="./security-model.html#assumption-a23">A23 verified deployments</a>,
+					<a href="./security-model.html#assumption-a20">A20 chain-data availability</a>,
 					and
-					<a href="./security-model.html#assumption-a24">A24 cryptographic security</a>.
+					<a href="./security-model.html#assumption-a27">A27 cryptographic security</a>.
 				</p>
 				<p>
 					A change should name the invariant identifiers it can affect. Tests
