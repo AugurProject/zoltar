@@ -726,6 +726,21 @@
 						<strong>Why not fork immediately?</strong> A fork asks the whole universe to branch, so Statoblast first gives vault-backed REP a local path to settle the question. The rising cost curve makes late disagreement increasingly expensive, while the non-decision threshold keeps the fork path available when competing outcomes remain strongly funded.
 						The Escalation Game system is an optimization, and in theory the system would work without it as well.
 					</div>
+					<p>
+						<code>SecurityPoolFactory</code> requires its configured
+						<code>initialEscalationGameDeposit</code> to be at least
+						<code>1 REP</code>, copies that value into every deployed
+						<code>SecurityPool</code>, and admits a new origin pool only while
+						its live non-decision threshold exceeds the configured bond. An
+						existing pool can outlive that relationship because REP burns reduce
+						the tracked theoretical supply. On the first post-end deposit, the
+						<code>SecurityPool</code> passes its stored bond and the current
+						threshold to <code>EscalationGameFactory</code>. That game factory
+						preserves the bond when possible and otherwise substitutes
+						<code>nonDecisionThreshold - 1</code>. Positive atomic-unit bonds below
+						one whole REP remain valid; a threshold of one atomic unit or less has
+						no positive smaller bond and cannot initialize a game.
+					</p>
 					<div class="equation" id="eq-statoblast-escalation-cost">
 						<math
 							display="block"
@@ -872,8 +887,31 @@
 							non-decision threshold. If a below-threshold deposit would tie the
 							current leading outcome, the game reduces the accepted amount by
 							one atomic REP unit (<code>1 wei</code> of REP precision).
+							In first-deposit mode, outcome balances are fixed at zero and the
+							start-bond slider is the pool's configured bond, copied from
+							<code>SecurityPoolFactory</code> when the pool was deployed. The
+							<code>SecurityPool</code> passes that bond and the current threshold
+							to <code>EscalationGameFactory</code>; when the bond is at or above
+							the live threshold, the game factory uses an effective bond of
+							<code>nonDecisionThreshold - 1</code> atomic unit. In repeat-deposit
+							mode, the sliders instead represent an existing game's balances and
+							stored parameters; no factory normalization is reapplied.
 						</p>
 						<div class="example-grid">
+							<label>
+								Deposit lifecycle
+								<input
+									type="range"
+									min="0"
+									max="1"
+									step="1"
+									value="0"
+									data-example-input="depositLifecycle"
+								/>
+								<span class="example-value" data-example-value="depositLifecycle"
+									>First deposit (factory creates game)</span
+								>
+							</label>
 							<label>
 								Invalid balance
 								<input
@@ -881,11 +919,11 @@
 									min="0"
 									max="20"
 									step="1"
-									value="1"
+									value="0"
 									data-example-input="invalidBalance"
 								/>
 								<span class="example-value" data-example-value="invalidBalance"
-									>1 REP</span
+									>0 REP</span
 								>
 							</label>
 							<label>
@@ -895,11 +933,11 @@
 									min="0"
 									max="20"
 									step="1"
-									value="9"
+									value="0"
 									data-example-input="yesBalance"
 								/>
 								<span class="example-value" data-example-value="yesBalance"
-									>9 REP</span
+									>0 REP</span
 								>
 							</label>
 							<label>
@@ -909,11 +947,11 @@
 									min="0"
 									max="20"
 									step="1"
-									value="7"
+									value="0"
 									data-example-input="noBalance"
 								/>
 								<span class="example-value" data-example-value="noBalance"
-									>7 REP</span
+									>0 REP</span
 								>
 							</label>
 							<label>
@@ -931,7 +969,9 @@
 								>
 							</label>
 							<label>
-								Start bond
+								<span data-example-text="startBondLabel"
+									>Configured start bond</span
+								>
 								<input
 									type="range"
 									min="1"
@@ -945,7 +985,9 @@
 								>
 							</label>
 							<label>
-								Non-decision threshold
+								<span data-example-text="thresholdInputLabel"
+									>Live non-decision threshold</span
+								>
 								<input
 									type="range"
 									min="5"
@@ -967,22 +1009,27 @@
 						<div class="example-output-grid">
 							<div>
 								<span>Room on No</span
-								><output data-example-output="remainingRoom">3 REP</output>
+								><output data-example-output="remainingRoom">10 REP</output>
+							</div>
+							<div>
+								<span data-example-text="effectiveStartBondLabel"
+									>Effective start bond</span
+								><output data-example-output="effectiveStartBond">2 REP</output>
 							</div>
 							<div>
 								<span>Accepted amount</span
-								><output data-example-output="acceptedAmount">3 REP</output>
+								><output data-example-output="acceptedAmount">5 REP</output>
 							</div>
 							<div>
 								<span>Adjustment</span
 								><output data-example-output="depositAdjustment"
-									>clipped to threshold</output
+									>accepted as proposed</output
 								>
 							</div>
 							<div>
 								<span>Post-deposit condition</span
 								><output data-example-output="depositCondition"
-									>No reaches threshold</output
+									>No ends at 5 REP</output
 								>
 							</div>
 						</div>
@@ -1673,7 +1720,8 @@
 						for its own fork. A
 						winning carry proof authorizes its own claim and pays the authenticated
 						depositor. The child resumes when its pool becomes operational; it does not
-						wait for vault migration or cleanup calls.
+						wait for vault migration or cleanup calls, but its aggregate funding gate
+						must pass.
 					</div>
 					<p>
 						During vault migration, the forker also ensures the child pool is
@@ -1945,8 +1993,26 @@
 						child deposits through the
 						<code>awaitingForkContinuation</code> guard.
 						Operational activation clears that guard without waiting for parent-vault
-						transactions. An inactive vault therefore cannot make other users pay to
-						process its position or delay the child continuation.
+						transactions. Before the remaining clock can start,
+						<code>resumeFromFork</code> verifies aggregate REP funding. An unrelated
+						fork must cover effective unresolved principal one-to-one. When the
+						escalation's own fork already paid the winner haircut through Zoltar, its
+						recorded initial backing must cover at least
+						<code>sourcePrincipalAtFork - floor(sourcePrincipalAtFork / 5)</code>.
+						The game's live balance must cover that initial backing minus child REP
+						already exported by valid direct claims before resume. An underfunded child
+						therefore remains paused instead of reaching a resolution it cannot pay.
+						An inactive vault cannot make other users pay to process its position or
+						delay a fully funded child continuation.
+					</p>
+					<p id="source-principal-at-fork">
+						In that formula, <code>sourcePrincipalAtFork</code> is the
+						aggregate raw unresolved principal installed in the continuation's
+						fork snapshot: the sum across outcomes of stored
+						<code>inheritedUnresolvedTotal</code> and
+						<code>localUnresolvedTotal</code> before effective direct-claim
+						deductions. It is not the post-claim effective carry total or the
+						child game's current REP balance.
 					</p>
 					<ol>
 						<li>
@@ -1964,7 +2030,8 @@
 						<li>
 							After the migration window and any required truth auction, the
 							child pool becomes operational, clears the wait marker, and
-							resumes the paused continuation game.
+							resumes the paused continuation game only after its aggregate REP
+							funding check passes.
 						</li>
 					</ol>
 					<p>
@@ -2720,13 +2787,42 @@
 				update(context);
 			};
 			bindExample("escalation-deposit-example", (context) => {
+				const repeatDeposit = context.read("depositLifecycle") === 1;
+				for (const balanceName of [
+					"invalidBalance",
+					"yesBalance",
+					"noBalance",
+				]) {
+					const balanceInput = context.inputs[balanceName];
+					if (balanceInput !== undefined) {
+						balanceInput.disabled = !repeatDeposit;
+						if (!repeatDeposit) {
+							balanceInput.value = "0";
+						}
+					}
+				}
 				const invalidBalance = context.read("invalidBalance");
 				const yesBalance = context.read("yesBalance");
 				const noBalance = context.read("noBalance");
 				const proposedDeposit = context.read("proposedDeposit");
-				const startBond = context.read("startBond");
+				const enteredStartBond = context.read("startBond");
 				const threshold = Math.max(context.read("nonDecisionThreshold"), 1);
-				const invalidStartParameters = startBond >= threshold;
+				const enteredStartBondAtomic = toAtomic(enteredStartBond);
+				const thresholdAtomic = toAtomic(threshold);
+				const startBondNormalized =
+					!repeatDeposit && enteredStartBondAtomic >= thresholdAtomic;
+				const effectiveStartBondAtomic = startBondNormalized
+					? thresholdAtomic - 1n
+					: enteredStartBondAtomic;
+				const invalidStoredParameters =
+					repeatDeposit &&
+					(enteredStartBondAtomic <= 0n ||
+						enteredStartBondAtomic >= thresholdAtomic);
+				const nonDecisionReached =
+					[invalidBalance, yesBalance, noBalance].filter(
+						(balance) => toAtomic(balance) >= thresholdAtomic,
+					).length >= 2;
+				const proposedDepositAtomic = toAtomic(proposedDeposit);
 				const room = Math.max(0, threshold - noBalance);
 				const clipped = Math.min(proposedDeposit, room);
 				const maxBefore = Math.max(invalidBalance, yesBalance, noBalance);
@@ -2741,21 +2837,42 @@
 				const noAfterAtomicPreview =
 					toAtomic(noBalance) + acceptedAtomicPreview;
 				const previewReverts =
-					invalidStartParameters ||
+					invalidStoredParameters ||
+					nonDecisionReached ||
 					outcomeFull ||
-					proposedDeposit < startBond ||
-					(acceptedAtomicPreview < toAtomic(startBond) &&
-						noAfterAtomicPreview !== toAtomic(threshold));
+					proposedDepositAtomic < effectiveStartBondAtomic ||
+					(acceptedAtomicPreview < effectiveStartBondAtomic &&
+						noAfterAtomicPreview !== thresholdAtomic);
 				const acceptedAtomic = previewReverts ? 0n : acceptedAtomicPreview;
 				const accepted = fromAtomic(acceptedAtomic);
 				const noAfterAtomic = toAtomic(noBalance) + acceptedAtomic;
 				const noAfter = fromAtomic(noAfterAtomic);
 				const scale = 220 / threshold;
+				context.writeValue(
+					"depositLifecycle",
+					repeatDeposit
+						? "Repeat deposit (existing game)"
+						: "First deposit (factory creates game)",
+				);
+				context.writeText(
+					"startBondLabel",
+					repeatDeposit ? "Stored game start bond" : "Configured start bond",
+				);
+				context.writeText(
+					"thresholdInputLabel",
+					repeatDeposit
+						? "Stored game non-decision threshold"
+						: "Live non-decision threshold",
+				);
+				context.writeText(
+					"effectiveStartBondLabel",
+					repeatDeposit ? "Stored start bond used" : "Effective start bond",
+				);
 				context.writeValue("invalidBalance", formatRep(invalidBalance));
 				context.writeValue("yesBalance", formatRep(yesBalance));
 				context.writeValue("noBalance", formatRep(noBalance));
 				context.writeValue("proposedDeposit", formatRep(proposedDeposit));
-				context.writeValue("startBond", formatRep(startBond));
+				context.writeValue("startBond", formatRep(enteredStartBond));
 				context.writeValue("nonDecisionThreshold", formatRep(threshold));
 				context.setRectWidth(
 					"invalidBefore",
@@ -2771,6 +2888,12 @@
 				context.setRectWidth("noAfter", Math.min(noAfter * scale, 220));
 				context.writeText("thresholdText", `threshold ${formatRep(threshold)}`);
 				context.write("remainingRoom", formatRep(room));
+				context.write(
+					"effectiveStartBond",
+					startBondNormalized
+						? formatAtomicRep(effectiveStartBondAtomic, 18)
+						: formatRep(enteredStartBond),
+				);
 				const acceptedAmountText =
 					tieAdjusted && !previewReverts
 						? formatAtomicRep(acceptedAtomic, 18)
@@ -2780,29 +2903,33 @@
 					previewReverts ? "preview reverts" : acceptedAmountText,
 				);
 				let adjustment = "accepted as proposed";
-				if (invalidStartParameters) {
-					adjustment = "invalid game parameters";
-				} else if (outcomeFull) {
-					adjustment = "Outcome full";
-				} else if (proposedDeposit > room) {
+				if (proposedDeposit > room) {
 					adjustment = "clipped to threshold";
 				} else if (tieAdjusted) {
 					adjustment =
 						"reduced by 0.000000000000000001 REP (1 wei) to avoid tie";
 				}
-				if (previewReverts && !invalidStartParameters && !outcomeFull) {
-					adjustment = "Below start bond";
+				if (previewReverts) {
+					adjustment = "Not evaluated";
 				}
 				context.write("depositAdjustment", adjustment);
 				let depositCondition = tieAdjusted
 					? `No ends at ${formatAtomicRep(noAfterAtomic, 18)}`
 					: `No ends at ${formatRep(noAfter)}`;
-				if (invalidStartParameters) {
-					depositCondition = "game setup reverts: Threshold too low";
+				if (invalidStoredParameters) {
+					depositCondition =
+						"operation reverts: existing game parameters are invalid";
+				} else if (nonDecisionReached) {
+					depositCondition =
+						"operation reverts: non-decision already reached";
 				} else if (outcomeFull) {
 					depositCondition = "operation reverts because No is full";
+				} else if (proposedDepositAtomic < effectiveStartBondAtomic) {
+					depositCondition =
+						"operation reverts: proposed deposit is below start bond";
 				} else if (previewReverts) {
-					depositCondition = "operation reverts before recording";
+					depositCondition =
+						"operation reverts: accepted deposit is below start bond";
 				} else if (noAfter >= threshold) {
 					depositCondition = "No reaches threshold";
 				}

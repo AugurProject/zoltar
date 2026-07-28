@@ -257,6 +257,15 @@
 							migration credit: equivalently <code>⌈4 × forkThreshold / 5⌉</code>,
 							approximately 80%.
 						</p>
+							<p>
+								The constructor rejects <code>forkBurnDivisor &lt; 5</code>. This
+								caps the uncredited haircut at 20%: a larger haircut can leave an
+								<a href="./statoblast-whitepaper.html#migration"
+									>own-fork escalation continuation</a
+								>—the child game carrying unresolved deposits after its pool's
+								escalation game triggers the universe fork—with less REP than its
+								maximum winning payout.
+							</p>
 						<div class="equation" id="eq-zoltar-fork-burn">
 							<math display="block" aria-label="uncredited fork haircut equals floor fork threshold divided by fork burn divisor" data-source="uncreditedForkHaircut = ⌊forkThreshold / forkBurnDivisor⌋">
 							<mrow>
@@ -352,7 +361,7 @@
 								<tr>
 									<td><code>forkBurnDivisor</code></td>
 									<td><code>5</code></td>
-									<td>Constructor immutable. The initiator receives the threshold minus <code>⌊forkThreshold / forkBurnDivisor⌋</code> as migration credit.</td>
+									<td>Constructor immutable with a minimum value of <code>5</code>. The initiator receives the threshold minus <code>⌊forkThreshold / forkBurnDivisor⌋</code> as migration credit.</td>
 								</tr>
 								<tr>
 									<td><code>forkThresholdDivisor</code></td>

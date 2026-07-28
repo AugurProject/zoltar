@@ -28,6 +28,7 @@ const escalationGameForker = await readFile('solidity/contracts/peripherals/Esca
 const escalationGameCalculations = await readFile('solidity/contracts/peripherals/EscalationGameCalculations.sol', 'utf8')
 const escalationGameSettlement = await readFile('solidity/contracts/peripherals/EscalationGameSettlement.sol', 'utf8')
 const escalationGameEscrow = await readFile('solidity/contracts/peripherals/EscalationGameEscrow.sol', 'utf8')
+const escalationGameFactory = await readFile('solidity/contracts/peripherals/factories/EscalationGameFactory.sol', 'utf8')
 const priceCoordinator = await readFile('solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol', 'utf8')
 const openOracleSource = await readFile('solidity/contracts/peripherals/openOracle/OpenOracle.sol', 'utf8')
 const openOracleProvenance = await readFile('solidity/contracts/peripherals/openOracle/UPSTREAM.md', 'utf8')
@@ -103,6 +104,7 @@ function assertEscalationReplayIdentityDocs(): void {
 
 function assertAggregateEscalationContinuationDocs(): void {
 	const normalizedStatoblast = whitepaperStatoblast.replaceAll(/\s+/g, ' ')
+	const normalizedArchitecture = html.replaceAll(/\s+/g, ' ')
 	const normalizedOperatorReference = operatorReference.replaceAll(/\s+/g, ' ')
 	const normalizedContractReference = contractInteractionReference.replaceAll(/\s+/g, ' ')
 	const normalizedZoltarWhitepaper = zoltarWhitepaper.replaceAll(/\s+/g, ' ')
@@ -119,11 +121,27 @@ function assertAggregateEscalationContinuationDocs(): void {
 		assert.ok(normalizedZoltarWhitepaper.includes(documentedClaim), `Zoltar whitepaper must document fork admission economics: ${documentedClaim}`)
 		assert.ok(normalizedContractReference.includes(documentedClaim), `Contract interaction reference must document fork admission economics: ${documentedClaim}`)
 	}
+	assert.match(normalizedZoltarWhitepaper, /href="\.\/statoblast-whitepaper\.html#migration"[\s\S]*own-fork escalation continuation/, 'Zoltar fork admission rationale must link its Statoblast-specific continuation term to the canonical migration explanation')
 	for (const forbiddenClaim of ['vaultEscrowChildRep', 'forked-escrow-scaling', 'forked-escrow-example', 'only selected vault escrow authorizes inherited proofs', 'vault migration grants only logical authorization', 'only materialized vault escrow authorizes proofs']) {
 		assert.ok(!normalizedStatoblast.includes(forbiddenClaim), `Statoblast whitepaper retains obsolete per-vault continuation claim: ${forbiddenClaim}`)
 	}
 	assert.match(normalizedContractReference, /cleanup neither funds escalation backing nor authorizes carried proofs/)
 	assert.match(normalizedOperatorReference, /Child creation initializes the canonical carry and aggregate backing without waiting for vault transactions/)
+	assert.match(normalizedStatoblast, /resumeFromFork<\/code> verifies aggregate REP funding/)
+	assert.match(normalizedOperatorReference, /resumeFromFork` remains paused until that backing is present after accounting for child REP already exported by valid direct pre-resume claims/)
+	assert.match(normalizedInvariants, /continuation cannot resume until its game balance covers/)
+	assert.match(normalizedInvariants, /id="fork-08"/)
+	assert.match(normalizedInvariants, /sourcePrincipalAtFork - floor\(sourcePrincipalAtFork \/ 5\)/)
+	assert.match(normalizedContractReference, /resumeFromFork\(\)[\s\S]*sourcePrincipalAtFork - floor\(sourcePrincipalAtFork \/ 5\)/)
+	assert.match(normalizedStatoblast, /id="source-principal-at-fork"[\s\S]*aggregate raw unresolved principal[\s\S]*before effective direct-claim deductions/)
+	assert.match(normalizedInvariants, /href="statoblast-whitepaper\.html#source-principal-at-fork"/)
+	assert.match(normalizedContractReference, /sourcePrincipalAtFork` is the aggregate raw unresolved principal installed by the snapshot before effective direct-claim deductions/)
+	assert.match(normalizedContractReference, /live balance must cover that initial backing minus child REP already exported by valid direct pre-resume claims/)
+	assert.match(normalizedArchitecture, /resumeFromFork<\/code> keeps the continuation paused until the applicable aggregate backing is present and accounts for child REP already exported by valid direct pre-resume claims/)
+	for (const summaryDocument of [normalizedArchitecture, normalizedOperatorReference]) {
+		assert.match(summaryDocument, /statoblast-whitepaper\.html#migration/)
+		assert.match(summaryDocument, /invariants\.html#fork-08/)
+	}
 	for (const documentedClaim of [
 		'complete aggregate continuation backing at most once',
 		'Optional vault cleanup only clears parent locks',
@@ -136,6 +154,8 @@ function assertAggregateEscalationContinuationDocs(): void {
 	for (const forbiddenClaim of ['credited to child escrow', 'forked child REP backing', 'Forked escrow claims never exceed']) {
 		assert.ok(!normalizedInvariants.includes(forbiddenClaim), `Invariant catalog retains obsolete per-vault continuation claim: ${forbiddenClaim}`)
 	}
+	const nonDivisibleSourcePrincipal = 6n
+	assert.equal(nonDivisibleSourcePrincipal - nonDivisibleSourcePrincipal / 5n, 5n, 'own-fork documentation boundary must round the 80% backing minimum up for non-divisible principal')
 }
 
 function assertNonDecisionLifecycleDocs(): void {
@@ -302,6 +322,7 @@ function assertZoltarForkDepths(): void {
 	const protocolConfig = getMainnetProtocolConfig()
 	assert.equal(protocolConfig.forkThresholdDivisor, 20n, 'Zoltar fork threshold divisor changed')
 	assert.equal(protocolConfig.forkBurnDivisor, 5n, 'Zoltar fork burn divisor changed')
+	assert.match(zoltar, /_forkBurnDivisor >= Constants\.MINIMUM_FORK_BURN_DIVISOR/)
 	assert.match(zoltar, /uint256 migrationRepBalance = forkThreshold - forkThreshold \/ forkBurnDivisor;/)
 
 	const nonDivisibleThreshold = 6n
@@ -311,7 +332,7 @@ function assertZoltarForkDepths(): void {
 	assert.equal(migrationCredit, 5n, 'non-divisible fork threshold remainder must round the 80% migration credit up')
 
 	const normalizedWhitepaper = zoltarWhitepaper.replaceAll(/<[^>]*>/g, '').replaceAll(/\s+/g, ' ')
-	for (const documentedClaim of ['⌊forkThreshold / 5⌋, approximately 20% of the threshold', '⌈4 × forkThreshold / 5⌉', 'rounded up when the threshold is not divisible by five', 'Later REP added to a migration balance converts 1:1', 'intended admission cost']) {
+	for (const documentedClaim of ['⌊forkThreshold / 5⌋, approximately 20% of the threshold', '⌈4 × forkThreshold / 5⌉', 'constructor rejects forkBurnDivisor &lt; 5', 'rounded up when the threshold is not divisible by five', 'Later REP added to a migration balance converts 1:1', 'intended admission cost']) {
 		assert.ok(normalizedWhitepaper.includes(documentedClaim), `Missing Zoltar fork haircut claim: ${documentedClaim}`)
 	}
 }
@@ -515,6 +536,18 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /getMigratedRep`, `getForkActivationTime`/)
 	assert.match(contractInteractionReference, /previewDepositOnOutcome`, `computeIterativeAttritionCost`/)
 	assert.match(contractInteractionReference, /factory contract exposes no relay/)
+	assert.match(securityPoolFactory, /_initialEscalationGameDeposit >= 1e18[\s\S]*zoltar\.getNonDecisionThreshold\(universeId\) > initialEscalationGameDeposit/)
+	assert.match(securityPoolFactory, /initialEscalationGameDeposit = _initialEscalationGameDeposit/)
+	assert.match(securityPool, /initialEscalationGameDeposit = _initialEscalationGameDeposit/)
+	assert.match(securityPool, /deployEscalationGame\(\s*initialEscalationGameDeposit,\s*zoltar\.getNonDecisionThreshold\(universeId\)\s*\)/)
+	assert.match(escalationGameFactory, /_nonDecisionThreshold > 1[\s\S]*startBond >= _nonDecisionThreshold[\s\S]*startBond = _nonDecisionThreshold - 1/)
+	assert.match(
+		whitepaperStatoblast.replaceAll(/\s+/g, ' '),
+		/<code>SecurityPoolFactory<\/code> requires its configured <code>initialEscalationGameDeposit<\/code> to be at least <code>1 REP<\/code>, copies that value into every deployed <code>SecurityPool<\/code>[\s\S]*<code>SecurityPool<\/code> passes its stored bond and the current threshold to <code>EscalationGameFactory<\/code>/,
+	)
+	assert.match(contractInteractionReference, /On the first deposit, the live non-decision threshold must exceed one atomic REP unit/)
+	assert.match(contractInteractionReference, /Repeat deposits use the existing game's stored `startBond` and `nonDecisionThreshold`/)
+	assert.match(contractInteractionReference, /tracked REP supply later makes it too large[\s\S]*nonDecisionThreshold - 1/)
 	assert.doesNotMatch(contractInteractionReference, /Factory owner|EscalationGameFactory` owner/)
 	assert.match(contractInteractionReference, /withdrawDeposit\(uint256 depositIndex, outcome\)[\s\S]*Owning `SecurityPool` only/)
 	assert.match(contractInteractionReference, /withdrawDeposit\(CarriedDepositProof proof, outcome\)[\s\S]*Owning `SecurityPool` or its `SecurityPoolForker`/)
@@ -530,6 +563,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(escalationGame, /function startFromFork\([\s\S]*?forkContinuation = true;[\s\S]*?forkElapsedAtStart = elapsedAtFork;[\s\S]*?emit GameContinuedFromFork/)
 	assert.match(contractInteractionReference, /startFromFork\(startBond, nonDecisionThreshold, elapsedAtFork, fixedQuestionOutcome, winnerHaircutPaidByFork, forkCarryInitialBacking\)[\s\S]*does not start the remaining clock until `resumeFromFork`/)
 	assert.match(escalationGame, /function resumeFromFork\(\) external \{[\s\S]*?require\(forkResumedAt == 0, 'Fork resumed'\);[\s\S]*?forkResumedAt = block\.timestamp;[\s\S]*?emit ForkContinuationResumed/)
+	assert.match(escalationGame, /require\(isForkCarryFundingComplete\(\), 'Fork carry underfunded'\)/)
 	assert.match(contractInteractionReference, /resumeFromFork\(\)[\s\S]*After the deadline, `getFinalQuestionResolution` returns the fixed outcome/)
 	assert.match(escalationGameCarry, /function initializeForkCarrySnapshotWithResolutionBalances\([\s\S]*?\) external \{\s*_initializeForkCarrySnapshot\(/)
 	assert.match(escalationGameCarry, /function _initializeForkCarrySnapshot\([\s\S]*?require\(msg\.sender == address\(securityPool\), 'Only pool'\);\s*require\(forkContinuation, 'No fork mode'\);\s*require\(!forkCarrySnapshotInitialized\(\), 'Snapshot initialized'\)/)

@@ -684,6 +684,15 @@ describe('Peripherals: deployment and own-fork escalation', () => {
 		)
 		const walletChildRepBeforeClaim = await getERC20Balance(client, getRepTokenAddress(yesUniverse), client.account.address)
 		await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
+		strictEqualTypeSafe(
+			await client.readContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: yesChildEscalationGame,
+				functionName: 'isForkCarryFundingComplete',
+			}),
+			true,
+			'a valid pre-resume direct claim should reduce the live own-fork funding requirement by the REP it exported',
+		)
 
 		const yesChildBalanceAfterClaim = await getERC20Balance(client, getRepTokenAddress(yesUniverse), yesSecurityPool.securityPool)
 		const walletChildRepAfterClaim = await getERC20Balance(client, getRepTokenAddress(yesUniverse), client.account.address)
