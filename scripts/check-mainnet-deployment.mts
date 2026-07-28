@@ -21,6 +21,7 @@ type MainnetDeploymentManifest = {
 	derivedContracts: ManifestDeploymentStep[]
 }
 
+const staleManifestMessage = 'Mainnet deployment manifest is stale. Run bun ./scripts/check-mainnet-deployment.mts --write after confirming the new mainnet values.'
 const directoryOfThisFile = path.dirname(url.fileURLToPath(import.meta.url))
 const repositoryRootPath = path.join(directoryOfThisFile, '..')
 const manifestPath = path.join(repositoryRootPath, 'docs', 'mainnet-deployment-addresses.json')
@@ -129,24 +130,30 @@ export async function writeMainnetDeploymentManifest(): Promise<void> {
 	await writeManifest(await loadComputedManifest())
 }
 
-export async function warnIfMainnetDeploymentManifestStale(): Promise<void> {
+export function checkManifestFreshness(expected: string, computed: string, strict: boolean): void {
+	if (expected === computed) return
+	if (strict) throw new Error(staleManifestMessage)
+	console.warn(`Warning: ${staleManifestMessage}`)
+}
+
+export async function checkMainnetDeploymentManifestFreshness(strict = false): Promise<void> {
 	const expectedManifest = await readManifest()
 	const computedManifest = await loadComputedManifest()
 	const expected = normalizeManifest(expectedManifest)
 	const computed = normalizeManifest(computedManifest)
-	if (expected !== computed) {
-		console.warn('Warning: mainnet deployment manifest is stale. Run bun ./scripts/check-mainnet-deployment.mts --write after confirming the new mainnet values.')
-	}
+	checkManifestFreshness(expected, computed, strict)
 }
 
 async function main() {
 	const write = process.argv.includes('--write')
+	const strict = process.argv.includes('--strict')
+	if (write && strict) throw new Error('Use either --write or --strict, not both')
 	if (write) {
 		await writeMainnetDeploymentManifest()
 		return
 	}
 
-	await warnIfMainnetDeploymentManifestStale()
+	await checkMainnetDeploymentManifestFreshness(strict)
 }
 
 const currentScriptPath = url.fileURLToPath(import.meta.url)
