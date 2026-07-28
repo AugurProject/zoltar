@@ -11,10 +11,10 @@
 			<header>
 				<h1>Statoblast Protocol Security Model</h1>
 				<p class="security-model-lede">
-					Statoblast enforce accounting, authorization, and lifecycle rules
-					onchain. Their economic safety and practical liveness still depend on the
-					participant, market, asset, deployment, client, data, Ethereum, and cryptographic
-					assumptions below.
+					Statoblast and Zoltar enforce accounting, authorization, and lifecycle
+					rules onchain. Their economic safety and practical liveness still depend
+					on the participant, market, asset, deployment, client, data, Ethereum, and
+					cryptographic assumptions below.
 				</p>
 				<p>
 					An assumption is not a contract guarantee. Each entry names the boundary
@@ -524,33 +524,14 @@
 						</p>
 					</li>
 					<li id="assumption-a17" value="17" data-assumption="A17">
-						<h3>Honest reporters can access sufficient capital</h3>
-						<p>
-							Honest reporters hold or can acquire enough REP for local escalation.
-							Price-oracle correction additionally requires the scenario-dependent
-							WETH and REP replacement position plus transaction costs.
-						</p>
-						<p class="assumption-failure">
-							<strong>Failure boundary:</strong> A participant can identify a wrong
-							outcome or price but remain unable to fund the correcting action.
-						</p>
-						<p class="assumption-links">
-							Mechanics:
-							<a href="./statoblast-whitepaper.html#escalation">escalation capital</a>,
-							<a href="./liquidation.html#rule">liquidation execution</a>, and
-							<a href="./open-oracle-integration.html#security-guarantee"
-								>oracle position sizing</a
-							>.
-						</p>
-					</li>
-					<li id="assumption-a18" value="18" data-assumption="A18">
 						<h3>OpenOracle has an always-available profitable arbitrager</h3>
 						<p>
 							At least one rational, adequately capitalized OpenOracle participant
 							continuously monitors pending REP/ETH reports, corrects every
 							security-relevant report covered by the profitability boundary in
-							<a href="#assumption-a20">A20</a>, and can obtain inclusion before
-							settlement.
+							<a href="#assumption-a19">A19</a>, and can obtain inclusion before
+							settlement. The participant can fund the scenario-dependent WETH and
+							REP replacement position plus transaction costs.
 						</p>
 						<p class="assumption-failure">
 							<strong>Failure boundary:</strong> An incorrect report can settle and
@@ -566,7 +547,7 @@
 							<a href="./open-oracle-integration.html#attack-model">attack model</a>.
 						</p>
 					</li>
-					<li id="assumption-a19" value="19" data-assumption="A19">
+					<li id="assumption-a18" value="18" data-assumption="A18">
 						<h3>The sponsor and at least one corrector are economically independent</h3>
 						<p>
 							The sponsor-funded coordinator reporting path and at least one
@@ -591,7 +572,7 @@
 							<a href="./invariants.html#oracle">oracle invariants</a>.
 						</p>
 					</li>
-					<li id="assumption-a20" value="20" data-assumption="A20">
+					<li id="assumption-a19" value="19" data-assumption="A19">
 						<h3>A robust reference market makes harmful REP/ETH errors correctable</h3>
 						<p>
 							Independent participants can observe a manipulation-resistant
@@ -619,7 +600,7 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a21" value="21" data-assumption="A21">
+					<li id="assumption-a20" value="20" data-assumption="A20">
 						<h3>Client reference quotes remain available and representative</h3>
 						<p>
 							When the official client requests or displays an offchain REP/ETH
@@ -629,9 +610,9 @@
 							and a Uniswap-derived liquidation preview. A proposal copied from a
 							nonzero cached coordinator price—even when stale—does not depend on
 							this quote path; its correction instead relies on
-							<a href="#assumption-a18">A18</a>,
-							<a href="#assumption-a19">A19</a>, and
-							<a href="#assumption-a20">A20</a>.
+							<a href="#assumption-a17">A17</a>,
+							<a href="#assumption-a18">A18</a>, and
+							<a href="#assumption-a19">A19</a>.
 							Users independently verify unusually security-sensitive values; a
 							client quote is a transaction input or preview, not an onchain truth
 							guarantee.
@@ -656,7 +637,7 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a22" value="22" data-assumption="A22">
+					<li id="assumption-a21" value="21" data-assumption="A21">
 						<h3>Canonical chain data and proof construction remain available</h3>
 						<p>
 							Participants can access reorg-aware Ethereum history, recognized
@@ -687,7 +668,7 @@
 					onchain guards.
 				</p>
 				<ol class="assumption-grid">
-					<li id="assumption-a23" value="23" data-assumption="A23">
+					<li id="assumption-a22" value="22" data-assumption="A22">
 						<h3>Genesis REP and configured WETH obey the external accounting model</h3>
 						<p>
 							Genesis REP and configured WETH move exactly the requested base units,
@@ -698,7 +679,7 @@
 							accurate, and the configured genesis REP burn sink remains
 							inaccessible. Canonical child REP is implemented by the reviewed
 							<code>ReputationToken</code> contract and is a protocol-enforced
-							property under A25 and A28, not an additional external-token
+							property under A24 and A27, not an additional external-token
 							assumption.
 						</p>
 						<p class="assumption-failure">
@@ -716,7 +697,7 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a24" value="24" data-assumption="A24">
+					<li id="assumption-a23" value="23" data-assumption="A23">
 						<h3>Participant-controlled recipients can accept required asset deliveries</h3>
 						<p>
 							Vaults, bidders, oracle sponsors, traders, share holders, and other
@@ -752,19 +733,23 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a25" value="25" data-assumption="A25">
+					<li id="assumption-a24" value="24" data-assumption="A24">
 						<h3>Users select verified canonical deployments</h3>
 						<p>
-							Users and integrations verify runtime bytecode, constructor-installed
-							dependencies, factory and forker provenance, pool lineage, question
-							ID, and the reviewed release manifest. Constructor admission is not a
-							safety proof.
+							The reviewed release is built reproducibly with its pinned compiler
+							and toolchain configuration. Release artifacts identify the manifest
+							addresses and reviewed bytecode hashes. Users and integrations compare
+							locally rebuilt and deployed runtime bytecode with those reviewed
+							hashes, then verify constructor-installed dependencies, factory and
+							forker provenance, pool lineage, question ID, and manifest.
+							Constructor admission is not a safety proof.
 						</p>
 						<p class="assumption-failure">
-							<strong>Failure boundary:</strong> Permissionless lookalike instances,
-							wrong dependencies, or unintended lineage and question wiring can
-							bypass the reviewed protocol even when the selected bytecode functions
-							as configured.
+							<strong>Failure boundary:</strong> Toolchain drift, unavailable or
+							mismatched reviewed hashes, permissionless lookalike instances, wrong
+							dependencies, or unintended lineage and question wiring can bypass the
+							reviewed protocol even when the selected bytecode functions as
+							configured.
 						</p>
 						<p class="assumption-links">
 							Mechanics:
@@ -772,13 +757,17 @@
 								>release posture</a
 							>,
 							<a href="./deployment-status.html">deployment status</a>,
+							<a href="../solidity/ts/compile.ts">compiler configuration</a>,
+							<a href="../solidity/contracts/peripherals/openOracle/UPSTREAM.md"
+								>OpenOracle build provenance</a
+							>,
 							<a href="./invariants.html#authority">authority invariants</a>, and
 							<a href="./escalation-game-architecture.html#deployment-bytecode"
 								>deployment bytecode</a
 							>.
 						</p>
 					</li>
-					<li id="assumption-a26" value="26" data-assumption="A26">
+					<li id="assumption-a25" value="25" data-assumption="A25">
 						<h3>Clients, RPCs, and wallets preserve user intent and canonical state</h3>
 						<p>
 							Interfaces, indexers, RPC providers, and wallet software return
@@ -803,7 +792,7 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a27" value="27" data-assumption="A27">
+					<li id="assumption-a26" value="26" data-assumption="A26">
 						<h3>Immutable parameters preserve economic and executable security margins</h3>
 						<p>
 							The selected parameter relationships keep the fork threshold and
@@ -834,7 +823,7 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a28" value="28" data-assumption="A28">
+					<li id="assumption-a27" value="27" data-assumption="A27">
 						<h3>Ethereum preserves the execution environment the protocol relies on</h3>
 						<p>
 							Ethereum continues to provide correct EVM execution and atomic
@@ -859,16 +848,31 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a29" value="29" data-assumption="A29">
+					<li id="assumption-a28" value="28" data-assumption="A28">
 						<h3>Ethereum cryptographic primitives remain secure</h3>
 						<p>
 							Keccak-256 remains collision- and preimage-resistant at the truncated
 							widths used by the protocol, and CREATE2 identity remains sound.
+							secp256k1 ECDSA signatures remain unforgeable with correct EOA signer
+							recovery for Ethereum transactions and EIP-712 authorizations.
+							OpenOracle's fixed Permit2 singleton additionally validates either an
+							EOA signature or an ERC-1271 contract-account signature correctly.
+						</p>
+						<p>
+							OpenOracle fixes the Permit2 address, requires the exact permitted
+							amount, sends the requested tokens to itself, and constructs the
+							witness from the beneficiary, relayer, token owner, and intent.
+							Canonical Permit2 owns the EIP-712 domain, deadline, permitted-amount
+							ceiling, unordered-nonce replay protection, and EOA/ERC-1271 signature
+							validation. Verification under <a href="#assumption-a24">A24</a> must
+							cover the pinned Permit2 implementation at that fixed address.
 						</p>
 						<p class="assumption-failure">
 							<strong>Failure boundary:</strong> Forged identities, colliding
-							questions or universes, or false carry proofs can violate
-							otherwise-correct guards.
+							questions or universes, false carry proofs, forged EOA transactions,
+							incorrect EOA recovery or ERC-1271 acceptance, or broken domain and
+							nonce enforcement can violate otherwise-correct guards or authorize
+							an unintended token transfer.
 						</p>
 						<p class="assumption-links">
 							Mechanics:
@@ -876,13 +880,25 @@
 								>universe identity</a
 							>,
 							<a href="./merkle-mountain-range.html#leaf-shape">proof hashing</a>,
+							<a
+								href="../solidity/contracts/peripherals/openOracle/OpenOracle.sol"
+								>Permit2 deposit authorization</a
+							>,
+							<a
+								href="../solidity/contracts/peripherals/openOracle/interfaces/ISignatureTransfer.sol"
+								>Permit2 signature interface</a
+							>,
+							<a
+								href="../solidity/contracts/peripherals/openOracle/UPSTREAM.md#permit2-dependency"
+								>pinned Permit2 implementation provenance</a
+							>,
 							and
 							<a href="./operator-reference.md#security-pool-guardrails"
 								>deterministic deployments</a
 							>.
 						</p>
 					</li>
-					<li id="assumption-a30" value="30" data-assumption="A30">
+					<li id="assumption-a29" value="29" data-assumption="A29">
 						<h3>Participants retain control of account authority</h3>
 						<p>
 							Participants protect the private keys, signing devices, session
@@ -920,8 +936,9 @@
 				<ul class="excluded-guarantee-list">
 					<li id="excluded-guarantee-eg01">
 						<strong>EG01.</strong>
-						Zoltar creates valid branches but does not identify the objectively
-						truthful branch or force users to coordinate there.
+						Zoltar creates valid branches but does not enforce that the fork question
+						is relevant to a user, establish the objectively truthful branch, obtain
+						user consent to a fork, or force users to coordinate on one branch.
 					</li>
 					<li id="excluded-guarantee-eg02">
 						<strong>EG02.</strong>

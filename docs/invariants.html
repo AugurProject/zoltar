@@ -30,7 +30,7 @@
 				</p>
 				<p>
 					The <a href="./security-model.html">Protocol Security Model</a>
-					is normative for assumptions A01–A30. The
+					is normative for assumptions A01–A29. The
 					<a href="./truth-auction.html#clearing">Truth Auction clearing guide</a>
 					owns funded and underfunded clearing mechanics, while
 					<a href="./open-oracle-integration.html#intentional-economic-tradeoffs"
@@ -663,9 +663,9 @@
 				<h2>Authority and Deployment Identity</h2>
 				<p class="security-assumption-ref">
 					<strong>Security assumptions:</strong>
-					<a href="./security-model.html#assumption-a25">A25 verified deployments</a>
+					<a href="./security-model.html#assumption-a24">A24 verified deployments</a>
 					and
-					<a href="./security-model.html#assumption-a29">A29 cryptographic identity</a>.
+					<a href="./security-model.html#assumption-a28">A28 cryptographic identity</a>.
 				</p>
 				<div class="invariant-list">
 					<details class="invariant-entry">
@@ -1833,9 +1833,9 @@
 				<h2>REP/ETH Oracle Operations</h2>
 				<p class="security-assumption-ref">
 					<strong>Security assumptions:</strong>
-					<a href="./security-model.html#assumption-a19">A19 independent corrector</a>,
-					<a href="./security-model.html#assumption-a20"
-						>A20 observable correctable price</a
+					<a href="./security-model.html#assumption-a18">A18 independent corrector</a>,
+					<a href="./security-model.html#assumption-a19"
+						>A19 observable correctable price</a
 					>,
 					and
 					<a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>.
@@ -2275,7 +2275,7 @@
 					<a href="./security-model.html#assumption-a16">A16 timely inclusion</a>,
 					<a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>,
 					and
-					<a href="./security-model.html#assumption-a28">A28 Ethereum execution</a>.
+					<a href="./security-model.html#assumption-a27">A27 Ethereum execution</a>.
 				</p>
 				<div class="invariant-list">
 					<details class="invariant-entry">
@@ -2405,7 +2405,7 @@
 										><code>SafeERC20Ops</code></a
 										>,
 										fixed external token addresses, and security assumption
-										<a href="./security-model.html#assumption-a23"><code>A23</code></a>
+										<a href="./security-model.html#assumption-a22"><code>A22</code></a>
 								</dd></div>
 								<div><dt>Related enforced property</dt><dd>
 										Canonical child REP behavior is enforced by
@@ -2437,8 +2437,8 @@
 										oracle refund paths
 								</dd></div>
 								<div><dt>Related external liveness boundary</dt><dd>
-										<a href="./security-model.html#assumption-a24"
-											><code>A24</code> participant-controlled recipient
+										<a href="./security-model.html#assumption-a23"
+											><code>A23</code> participant-controlled recipient
 											compatibility</a
 										>
 								</dd></div>
@@ -2464,8 +2464,8 @@
 										>, ERC-1155 receiver checks, and receiver callback tests
 								</dd></div>
 								<div><dt>Related external liveness boundary</dt><dd>
-										<a href="./security-model.html#assumption-a24"
-											><code>A24</code> participant-controlled recipient
+										<a href="./security-model.html#assumption-a23"
+											><code>A23</code> participant-controlled recipient
 											compatibility</a
 										>
 								</dd></div>
@@ -2520,10 +2520,10 @@
 				<h2>Verification Obligations</h2>
 				<p class="security-assumption-ref">
 					<strong>Security assumptions:</strong>
-					<a href="./security-model.html#assumption-a25">A25 verified deployments</a>,
-					<a href="./security-model.html#assumption-a22">A22 chain-data availability</a>,
+					<a href="./security-model.html#assumption-a24">A24 verified deployments</a>,
+					<a href="./security-model.html#assumption-a21">A21 chain-data availability</a>,
 					and
-					<a href="./security-model.html#assumption-a29">A29 cryptographic security</a>.
+					<a href="./security-model.html#assumption-a28">A28 cryptographic security</a>.
 				</p>
 				<p>
 					A change should name the invariant identifiers it can affect. Tests

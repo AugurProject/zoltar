@@ -29,17 +29,17 @@ owns the current requirement, status, and evidence for
 [`EXT-05` recursive-fork gas behavior](./invariants.html#ext-05).
 
 Operator work relies particularly on
-[A25 verified deployments](./security-model.html#assumption-a25),
+[A24 verified deployments](./security-model.html#assumption-a24),
 [A06 lifecycle executors](./security-model.html#assumption-a06),
-[A22 chain-data and proof availability](./security-model.html#assumption-a22),
-[A28 Ethereum execution and finality](./security-model.html#assumption-a28),
-[A29 cryptographic security](./security-model.html#assumption-a29),
+[A21 chain-data and proof availability](./security-model.html#assumption-a21),
+[A27 Ethereum execution and finality](./security-model.html#assumption-a27),
+[A28 cryptographic security](./security-model.html#assumption-a28),
 [A15 intended question selection](./security-model.html#assumption-a15),
-[A27 safe immutable parameters](./security-model.html#assumption-a27),
-[A24 asset-recipient compatibility](./security-model.html#assumption-a24),
-[A26 client, RPC, and wallet integrity](./security-model.html#assumption-a26),
-[A21 representative client quotes](./security-model.html#assumption-a21), and
-[A30 account authority](./security-model.html#assumption-a30).
+[A26 safe immutable parameters](./security-model.html#assumption-a26),
+[A23 asset-recipient compatibility](./security-model.html#assumption-a23),
+[A25 client, RPC, and wallet integrity](./security-model.html#assumption-a25),
+[A20 representative client quotes](./security-model.html#assumption-a20), and
+[A29 account authority](./security-model.html#assumption-a29).
 
 ## Assumption Monitoring
 
@@ -53,15 +53,15 @@ pool, timestamp, numeraire, and decision horizon as the protected action.
 | A01, A02, A03, A06 | Expected reward after gas, fees, delay, and capital lockup; number and independence of active liquidators, escalation participants, bidders, correctors, and transition executors; settle-ready OpenOracle reports, callback-recovery candidates, and overflow operations | Continuously for deadline-bearing flows; before launch and after parameter or gas-regime changes | Fund or arrange independent executors, reduce exposed value, or disclose that the affected transition may stall |
 | A05, A07, A09, A11 | Parent and supported-child lineage value in one numeraire; observed user, custodian, exchange, interface, and proof-tool readiness to migrate assets and state within the applicable windows; documented continued-use value and secured value | Before a fork-security claim and throughout migration and coordination windows | Do not claim fork deterrence, practical migration, or value concentration; narrow supported lineage and exposure |
 | A08, A13, A14 | REP supply basis, price source, depth and price impact; REP discounted-cash-flow methodology; protocol-accounted ETH collateral or explicitly broader open interest | At launch, continuously while open interest exists, and after material price, supply, liquidity, or exposure changes | Cap or stop new exposure in clients and disclosures; do not describe REP backing as economically sufficient |
-| A04, A10, A17 | Outcome evidence sources and availability; immediately mobilizable REP, WETH, ETH, and transaction budget before each deadline | From question creation through local resolution and any fork window | Mark the market or action impaired, surface the deadline, and avoid asserting that honest correction remains fundable |
+| A04, A10 | Outcome evidence sources and availability; immediately mobilizable REP and transaction budget before each local-escalation deadline | From question creation through local resolution and any fork window | Mark the market or action impaired, surface the deadline, and avoid asserting that honest local correction remains fundable |
 | A12 | Auction demand, indicative REP/ETH depth, expected discount, and bidder operating cost | Before and during every repair auction | Disclose likely under-repair and plan operation of the child at only migrated collateral plus accepted auction ETH |
-| A16, A28 | Inclusion delay, base fee, priority fee, reorg depth, block gas limit, and gas schedule against each immutable window and mandatory transition | Continuously while a deadline or mandatory transition is live | Raise transaction fees where rational, use independent submission paths, and disclose missed-deadline or stranded-transition risk |
-| A18, A19, A20 | Independent corrector availability, ownership and payoff independence, reference-market depth, manipulation cost, correction profit after fees/gas/impact, and settlement inclusion | Continuously while a report is pending or a cached price can authorize operations | Block or discourage new price-sensitive operations and disclose that an incorrect report may settle |
-| A23, A24 | Canonical external-token code and behavior; WETH redeemability; burn-sink status; recipient ETH/ERC-1155 compatibility | At deployment verification and before first use of a new recipient or integration | Reject the deployment or incompatible recipient; do not rely on redirected recovery |
-| A22, A25, A26, A29, A30 | Release manifest, runtime code and wiring; independent reorg-aware RPC/event replay; hash and CREATE2 verification; signer, session, and approval inventory | At release, on every environment or account change, and continuously for indexers | Stop signing or operating, revoke compromised authority where possible, and re-establish canonical state from independent sources |
+| A16, A27 | Inclusion delay, base fee, priority fee, reorg depth, block gas limit, and gas schedule against each immutable window and mandatory transition | Continuously while a deadline or mandatory transition is live | Raise transaction fees where rational, use independent submission paths, and disclose missed-deadline or stranded-transition risk |
+| A17, A18, A19 | Independent corrector availability, ownership and payoff independence, scenario-dependent WETH and REP replacement capital, reference-market depth, manipulation cost, correction profit after fees/gas/impact, transaction budget, and settlement inclusion | Continuously while a report is pending or a cached price can authorize operations | Block or discourage new price-sensitive operations and disclose that an incorrect report may settle |
+| A22, A23 | Canonical external-token code and behavior; WETH redeemability; burn-sink status; recipient ETH/ERC-1155 compatibility | At deployment verification and before first use of a new recipient or integration | Reject the deployment or incompatible recipient; do not rely on redirected recovery |
+| A21, A24, A25, A28, A29 | Pinned compiler and toolchain identity; reproducible-build output, reviewed bytecode hashes, release manifest, deployed runtime code and wiring; independent reorg-aware RPC/event replay; hash and CREATE2 verification; signer, typed-data domain, nonce, witness, session, and approval inventory | At release, on every environment or account change, and continuously for indexers | Stop signing or operating, reject an unverifiable deployment, revoke compromised authority where possible, and re-establish canonical state from independent sources |
 | A15 | Immutable question ID and metadata, evidence plan, and pool relevance | Before pool selection | Reject or warn on the selection; do not represent an admitted question as relevant or resolvable |
-| A27 | Deployed immutable values and every documented economic, timing, integer-width, and gas relationship | Before deployment and after any change in external gas or market conditions used by the model | Treat the immutable deployment as unsupported; there is no administrative parameter repair |
-| A21 | For client actions that request or display an offchain market quote: Uniswap V4/V3 quote success, age, source pool, depth, price impact, and agreement with independent REP/ETH references | On every offchain-quote-dependent client action and during production availability monitoring | Block or degrade the affected client action; never substitute simulation data. For cached coordinator-price proposals, monitor A18, A19, and A20 instead |
+| A26 | Deployed immutable values and every documented economic, timing, integer-width, and gas relationship | Before deployment and after any change in external gas or market conditions used by the model | Treat the immutable deployment as unsupported; there is no administrative parameter repair |
+| A20 | For client actions that request or display an offchain market quote: Uniswap V4/V3 quote success, age, source pool, depth, price impact, and agreement with independent REP/ETH references | On every offchain-quote-dependent client action and during production availability monitoring | Block or degrade the affected client action; never substitute simulation data. For cached coordinator-price proposals, monitor A17, A18, and A19 instead |
 
 ## Immutable Protocol Release Posture
 
@@ -83,6 +83,14 @@ dependency install and run `bun run check:mainnet-deployment`. This command
 warns instead of failing when the generated deployment manifest is stale.
 Treat any stale-manifest warning as a release blocker until the manifest is
 intentionally refreshed with `bun ./scripts/check-mainnet-deployment.mts --write`.
+Use the pinned compiler configuration in
+[`solidity/ts/compile.ts`](../solidity/ts/compile.ts), the exact tool versions in
+[`solidity/package.json`](../solidity/package.json), and the imported OpenOracle
+profile in
+[`UPSTREAM.md`](../solidity/contracts/peripherals/openOracle/UPSTREAM.md).
+Publish the reproducible-build runtime hashes with the release, keyed to the
+manifest addresses, and compare both a clean local rebuild and deployed runtime
+code with those reviewed hashes before marking the release canonical.
 Push the final `v*` tag only after the CI Gate succeeds on the same commit. The `Build and Push to IPFS` workflow must
 succeed for that tag, and the resulting GitHub release must record the IPFS hash
 emitted from the published artifact.
@@ -90,8 +98,8 @@ emitted from the published artifact.
 Production UI release notes should state that `?simulate=1` is a browser-local
 sandbox and that quote-dependent actions depend on live RPC data plus available
 Uniswap liquidity under
-[A26](./security-model.html#assumption-a26) and
-[A21](./security-model.html#assumption-a21). Stale, unavailable, or unsupported
+[A25](./security-model.html#assumption-a25) and
+[A20](./security-model.html#assumption-a20). Stale, unavailable, or unsupported
 quotes are production blockers for the affected action, not inputs that should
 be replaced with simulation prices.
 
@@ -100,11 +108,11 @@ be replaced with simulation prices.
 Pool creation, minting, withdrawal, and direct-ETH rules are collected here in
 contract-first form. Participant-controlled payout and share-receiving addresses
 must satisfy
-[A24 asset-recipient compatibility](./security-model.html#assumption-a24).
+[A23 asset-recipient compatibility](./security-model.html#assumption-a23).
 Deterministic identity depends on
-[A29 cryptographic security](./security-model.html#assumption-a29), while vault
+[A28 cryptographic security](./security-model.html#assumption-a28), while vault
 and token authority depends on
-[A30 account authority](./security-model.html#assumption-a30).
+[A29 account authority](./security-model.html#assumption-a29).
 
 | Area | Implementation behavior | Source |
 | --- | --- | --- |
@@ -130,7 +138,7 @@ Security assumptions:
 [A11 practical migration](./security-model.html#assumption-a11),
 [A16 timely inclusion](./security-model.html#assumption-a16),
 [A06 lifecycle executors](./security-model.html#assumption-a06), and
-[A24 asset-recipient compatibility](./security-model.html#assumption-a24).
+[A23 asset-recipient compatibility](./security-model.html#assumption-a23).
 
 Share migration after a fork is user-facing asset migration, not vault REP
 migration. Canonical rules live in [`FORK-10`](invariants.html#fork-10) for
@@ -157,8 +165,7 @@ Security assumptions:
 [A03 independent participants](./security-model.html#assumption-a03),
 [A04 early alarm capital](./security-model.html#assumption-a04),
 [A13 REP liquidity](./security-model.html#assumption-a13),
-[A16 timely inclusion](./security-model.html#assumption-a16), and
-[A17 honest reporter capital](./security-model.html#assumption-a17).
+[A16 timely inclusion](./security-model.html#assumption-a16).
 
 Accepted deposits, edge-case resolution results, and carry-proof or residual-REP
 consumption all live in this section.
@@ -189,9 +196,9 @@ Security assumptions:
 [A09 truthful-branch preference](./security-model.html#assumption-a09),
 [A11 practical migration](./security-model.html#assumption-a11),
 [A05 lineage access value](./security-model.html#assumption-a05),
-[A23 external token behavior](./security-model.html#assumption-a23),
+[A22 external token behavior](./security-model.html#assumption-a22),
 [A06 lifecycle executors](./security-model.html#assumption-a06),
-[A22 chain-data availability](./security-model.html#assumption-a22).
+[A21 chain-data availability](./security-model.html#assumption-a21).
 
 Pool-level migration mechanics after a universe fork live here: proxies,
 child-pool creation, REP splitting, and child outcome selection.
@@ -221,9 +228,9 @@ Security assumptions:
 [A03 independent bidders](./security-model.html#assumption-a03),
 [A12 efficient REP conversion](./security-model.html#assumption-a12),
 [A06 lifecycle executors](./security-model.html#assumption-a06),
-[A22 bid-data availability](./security-model.html#assumption-a22),
-[A27 safe immutable parameters](./security-model.html#assumption-a27), and
-[A24 native-ETH recipient compatibility](./security-model.html#assumption-a24).
+[A21 bid-data availability](./security-model.html#assumption-a21),
+[A26 safe immutable parameters](./security-model.html#assumption-a26), and
+[A23 native-ETH recipient compatibility](./security-model.html#assumption-a23).
 
 Collateral-repair auctions have three operator-critical boundaries: forker
 ownership, a one-week bidding window, and paged settlement into vault
@@ -244,14 +251,13 @@ Security assumptions:
 [A01 arbitrage incentives](./security-model.html#assumption-a01),
 [A13 REP liquidity](./security-model.html#assumption-a13),
 [A16 timely inclusion](./security-model.html#assumption-a16),
-[A17 correction capital](./security-model.html#assumption-a17),
-[A18 available arbitrager](./security-model.html#assumption-a18),
-[A19 independent corrector](./security-model.html#assumption-a19),
-[A20 observable correctable price](./security-model.html#assumption-a20),
+[A17 available arbitrager](./security-model.html#assumption-a17),
+[A18 independent corrector](./security-model.html#assumption-a18),
+[A19 observable correctable price](./security-model.html#assumption-a19),
 [A06 lifecycle executors](./security-model.html#assumption-a06),
-[A24 native-ETH recipient compatibility](./security-model.html#assumption-a24),
+[A23 native-ETH recipient compatibility](./security-model.html#assumption-a23),
 and
-[A21 representative client quotes](./security-model.html#assumption-a21).
+[A20 representative client quotes](./security-model.html#assumption-a20).
 
 The coordinator quick reference below covers staging, callback recovery,
 stale-operation handling, and liquidation boundaries. Report sizing, request
