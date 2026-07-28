@@ -533,10 +533,15 @@ export function App() {
 		onActiveUniverseChange: setActiveUniverseId,
 		createPool: {
 			accountState,
+			availableQuestionsContextKey: `${activeEnvironmentNonce}:${activeUniverseId.toString()}`,
+			availableQuestions: zoltarQuestions,
 			checkingDuplicateOriginPool,
 			duplicateOriginPoolExists,
+			hasLoadedAvailableQuestions: hasLoadedZoltarQuestions,
+			loadingAvailableQuestions: loadingZoltarQuestions,
 			poolCreationMarketDetails,
 			onCreateSecurityPool: () => void createPool(),
+			onLoadAvailableQuestions: loadZoltarQuestions,
 			loadingMarketDetails,
 			marketDetails,
 			onResetSecurityPoolCreation: resetSecurityPoolCreation,
@@ -765,11 +770,11 @@ export function App() {
 				value={activeZoltarView}
 				onChange={view => setZoltarView(view)}
 				options={[
-					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'questions')), label: marketCopy.questions, value: 'questions' },
+					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'questions')), label: marketCopy.browseQuestions, value: 'questions' },
 					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'create')), label: commonCopy.createQuestion, value: 'create' },
-					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'fork')), label: zoltarCopy.forkZoltar, value: 'fork' },
+					{ href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'fork')), label: marketCopy.forkUniverse, value: 'fork' },
 					{
-						label: zoltarCopy.migrateRep,
+						label: marketCopy.repMigration,
 						value: 'migrate',
 						disabled: zoltarUniverse?.hasForked !== true,
 						...(zoltarUniverse?.hasForked === true ? { href: buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getRouteHashSearch(), 'migrate')) } : { reason: zoltarCopy.migrationNotForkedReason }),
@@ -797,9 +802,9 @@ export function App() {
 				value={activeOpenOracleView}
 				onChange={view => setOpenOracleView(view)}
 				options={[
-					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'browse')), label: appCopy.browse, value: 'browse' },
+					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'browse')), label: appCopy.browseReports, value: 'browse' },
 					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'create')), label: appCopy.createReport, value: 'create' },
-					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'selected-report')), label: commonCopy.reportDetails, value: 'selected-report' },
+					{ href: buildRouteHref(OPEN_ORACLE_ROUTE, writeOpenOracleViewQueryParam(getRouteHashSearch(), 'selected-report')), label: appCopy.viewReport, value: 'selected-report' },
 				]}
 			/>
 		)

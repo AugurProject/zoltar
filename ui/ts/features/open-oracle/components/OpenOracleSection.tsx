@@ -434,12 +434,37 @@ export function renderSelectedReportActionSection({
 			return (
 				<SectionBlock variant='embedded'>
 					<div className='form-grid'>
+						<TransactionReview
+							primary={[{ label: openOracleCopy.reportLifecycle, value: openOracleCopy.settled }]}
+							details={
+								openOracleReportDetails === undefined
+									? []
+									: [
+											{
+												label: openOracleCopy.reporterToken1Credit,
+												value: <CurrencyValue value={openOracleReportDetails.currentAmount1} suffix={openOracleReportDetails.token1Symbol} units={openOracleReportDetails.token1Decimals} copyable={false} />,
+											},
+											{
+												label: openOracleCopy.reporterToken2Credit,
+												value: <CurrencyValue value={openOracleReportDetails.currentAmount2} suffix={openOracleReportDetails.token2Symbol} units={openOracleReportDetails.token2Decimals} copyable={false} />,
+											},
+											{
+												label: openOracleCopy.settlerCredit,
+												value: <CurrencyValue value={openOracleReportDetails.settlerReward} suffix={commonCopy.eth} copyable={false} />,
+											},
+										]
+							}
+							risks={[openOracleCopy.settlementFinalityRisk, openOracleCopy.settlementWithdrawalRisk]}
+						/>
 						{openOracleReportDetails === undefined
 							? undefined
 							: renderReportSection(openOracleCopy.settlementSummary, [
 									{ label: openOracleCopy.report, value: `#${openOracleReportDetails.reportId.toString()}` },
 									{ label: openOracleCopy.currentReporter, value: openOracleReportDetails.currentReporter === zeroAddress ? commonCopy.none : <AddressValue address={openOracleReportDetails.currentReporter} /> },
-									{ label: openOracleCopy.settlementTimestamp, value: <TimestampValue currentTimestamp={openOracleReportDetails.currentTime} timestamp={openOracleReportDetails.settlementTimestamp} zeroText={openOracleCopy.notSettled} /> },
+									{
+										label: openOracleCopy.settlementTimestamp,
+										value: openOracleReportDetails.settlementTimestamp === 0n ? openOracleCopy.settlementTimestampOnConfirmation : <TimestampValue currentTimestamp={openOracleReportDetails.currentTime} timestamp={openOracleReportDetails.settlementTimestamp} zeroText={openOracleCopy.notSettled} />,
+									},
 								])}
 						<div className='actions'>
 							<TransactionActionButton

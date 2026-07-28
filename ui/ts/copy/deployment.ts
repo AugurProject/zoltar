@@ -8,6 +8,7 @@ export const allDeployed = 'All deployed'
 export const formatCompletedSectionTitle = (sectionTitle: string) => `${sectionTitle} (Completed)`
 export const contractsDeployed = 'Contracts deployed'
 export const deployNextMissing = 'Deploy Next Missing'
+export const browseQuestions = 'Browse Questions'
 export const deploymentGroups = 'Deployment Groups'
 export const deploymentRunningStatusLabel = 'Deployment In Progress'
 export const deploymentOverviewDetail = 'Deploy and verify the shared deterministic contracts that back the application.'
