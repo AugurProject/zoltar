@@ -13,18 +13,7 @@ const generatedPath = path.join(repositoryRoot, 'docs/chartRuntime.js')
 const specsPath = path.join(repositoryRoot, 'docs/charts/diagramSpecs.json')
 const expectedChartCount = 40
 const supportedDiagramTags = new Set(['circle', 'defs', 'line', 'marker', 'path', 'polyline', 'rect', 'text', 'tspan'])
-const nativeChartIds = new Set([
-	'fig-auction-clearing-ladder',
-	'fig-contract-interaction-map',
-	'fig-liquidation-health-curve',
-	'fig-statoblast-escalation-cost-curve',
-	'fig-statoblast-retention-utilization',
-	'fig-zoltar-fork-threshold-decay',
-	'plot-open-oracle-integration-2',
-	'plot-statoblast-whitepaper-7',
-	'plot-statoblast-whitepaper-8',
-	'plot-statoblast-whitepaper-19',
-])
+const axisFreeNativeChartIds = new Set(['fig-contract-interaction-map'])
 const quantitativeChartIdSet = new Set<string>(quantitativeChartIds)
 const chartAxes: ('x' | 'y')[] = ['x', 'y']
 
@@ -38,7 +27,7 @@ function readObjectProperty(object: ts.ObjectLiteralExpression, propertyName: st
 			return property.initializer
 		}
 	}
-	throw new Error(`Contract interaction layout object is missing ${propertyName}`)
+	throw new Error(`Object literal is missing required ${propertyName} property`)
 }
 
 function readStringProperty(object: ts.ObjectLiteralExpression, propertyName: string, sourceFile: ts.SourceFile): string {
@@ -73,6 +62,104 @@ function findContractInteractionArray(sourceFile: ts.SourceFile, variableName: s
 	throw new Error(`Could not find contractInteractionChart ${variableName} array`)
 }
 
+function findFunctionDeclaration(sourceFile: ts.SourceFile, functionName: string): ts.FunctionDeclaration {
+	const declaration = sourceFile.statements.find(statement => ts.isFunctionDeclaration(statement) && statement.name?.text === functionName)
+	if (declaration === undefined || !ts.isFunctionDeclaration(declaration) || declaration.body === undefined) {
+		throw new Error(`Could not find chart renderer function ${functionName}`)
+	}
+	return declaration
+}
+
+function returnedFunctionName(statement: ts.Statement): string | undefined {
+	let functionName: string | undefined
+	function visit(node: ts.Node): void {
+		if (ts.isReturnStatement(node) && node.expression !== undefined && ts.isCallExpression(node.expression) && ts.isIdentifier(node.expression.expression)) {
+			functionName = node.expression.expression.text
+			return
+		}
+		ts.forEachChild(node, visit)
+	}
+	visit(statement)
+	return functionName
+}
+
+function nativeChartDispatches(sourceFile: ts.SourceFile): Map<string, string> {
+	const createChart = findFunctionDeclaration(sourceFile, 'createChart')
+	const dispatches = new Map<string, string>()
+	for (const statement of createChart.body?.statements ?? []) {
+		if (!ts.isIfStatement(statement) || !ts.isBinaryExpression(statement.expression) || statement.expression.operatorToken.kind !== ts.SyntaxKind.EqualsEqualsEqualsToken) continue
+		const { left, right } = statement.expression
+		if (!ts.isIdentifier(left) || left.text !== 'chartId' || !ts.isStringLiteral(right)) continue
+		const functionName = returnedFunctionName(statement.thenStatement)
+		if (functionName === undefined) {
+			throw new Error(`Native chart dispatch ${right.text} must return a named renderer`)
+		}
+		dispatches.set(right.text, functionName)
+	}
+	return dispatches
+}
+
+function findPlotOptions(renderer: ts.FunctionDeclaration, sourceFile: ts.SourceFile): ts.ObjectLiteralExpression {
+	let options: ts.ObjectLiteralExpression | undefined
+	function visit(node: ts.Node): void {
+		if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'plot') {
+			const candidate = node.arguments[0]
+			if (candidate === undefined || !ts.isObjectLiteralExpression(candidate) || options !== undefined) {
+				throw new Error(`Quantitative renderer ${renderer.name?.text ?? 'unknown'} must contain exactly one literal Plot configuration`)
+			}
+			options = candidate
+		}
+		ts.forEachChild(node, visit)
+	}
+	visit(renderer)
+	if (options === undefined) {
+		throw new Error(`Quantitative renderer ${renderer.name?.text ?? 'unknown'} has no Plot configuration in ${sourceFile.fileName}`)
+	}
+	return options
+}
+
+function axisUsesRegisteredLabel(options: ts.ObjectLiteralExpression, axis: 'x' | 'y', sourceFile: ts.SourceFile): boolean {
+	const axisOptions = readObjectProperty(options, axis, sourceFile)
+	if (!ts.isObjectLiteralExpression(axisOptions)) return false
+	const label = readObjectProperty(axisOptions, 'label', sourceFile)
+	return ts.isPropertyAccessExpression(label) && ts.isIdentifier(label.expression) && label.expression.text === 'axes' && label.name.text === axis
+}
+
+function assertRendererAxisBindings(sourceFile: ts.SourceFile, chartId: string, rendererName: string): void {
+	const renderer = findFunctionDeclaration(sourceFile, rendererName)
+	const axesDeclaration = renderer.body?.statements.flatMap(statement => (ts.isVariableStatement(statement) ? [...statement.declarationList.declarations] : [])).find(declaration => ts.isIdentifier(declaration.name) && declaration.name.text === 'axes')
+	const initializer = axesDeclaration?.initializer
+	if (
+		initializer === undefined ||
+		!ts.isElementAccessExpression(initializer) ||
+		!ts.isIdentifier(initializer.expression) ||
+		initializer.expression.text !== 'quantitativeChartAxisLabels' ||
+		initializer.argumentExpression === undefined ||
+		!ts.isStringLiteral(initializer.argumentExpression) ||
+		initializer.argumentExpression.text !== chartId
+	) {
+		throw new Error(`Quantitative renderer ${rendererName} must select the ${chartId} axis registry entry`)
+	}
+	const options = findPlotOptions(renderer, sourceFile)
+	for (const axis of chartAxes) {
+		if (!axisUsesRegisteredLabel(options, axis, sourceFile)) {
+			throw new Error(`Quantitative renderer ${rendererName} must attach axes.${axis} to its ${axis}-axis label`)
+		}
+	}
+}
+
+function nativeRegistryCoverageIssue(nativeChartIds: Set<string>): string | undefined {
+	if (quantitativeChartIdSet.size + axisFreeNativeChartIds.size !== nativeChartIds.size || [...nativeChartIds].some(chartId => !quantitativeChartIdSet.has(chartId) && !axisFreeNativeChartIds.has(chartId)) || [...quantitativeChartIdSet].some(chartId => !nativeChartIds.has(chartId))) {
+		return 'Native chart dispatches must be registered as quantitative charts or explicitly axis-free diagrams'
+	}
+	return undefined
+}
+
+function assertNativeRegistryCoverage(nativeChartIds: Set<string>): void {
+	const issue = nativeRegistryCoverageIssue(nativeChartIds)
+	if (issue !== undefined) throw new Error(issue)
+}
+
 function assertChartNode(value: unknown, chartId: string): void {
 	if (!isRecord(value)) {
 		throw new Error(`Chart ${chartId} contains a non-object node`)
@@ -102,6 +189,9 @@ function assertChartNode(value: unknown, chartId: string): void {
 }
 
 const [htmlEntries, specsSource, runtimeSource] = await Promise.all([readdir(docsDirectory), readFile(specsPath, 'utf8'), readFile(entrypoint, 'utf8')])
+const runtimeSourceFile = ts.createSourceFile(entrypoint, runtimeSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+const nativeDispatches = nativeChartDispatches(runtimeSourceFile)
+const nativeChartIds = new Set(nativeDispatches.keys())
 const mountIds: string[] = []
 const mergedDescriptionBoundaryPattern = /(?:FlowThe|treeA|SplitThe|ReproductionSelecting|AnswerA)/
 for (const entry of htmlEntries.filter(item => item.endsWith('.html'))) {
@@ -166,9 +256,7 @@ for (const chartId of nativeChartIds) {
 		throw new Error(`Native quantitative Plot chart ${chartId} is not mounted and explicitly dispatched`)
 	}
 }
-if (quantitativeChartIdSet.size !== nativeChartIds.size - 1 || [...nativeChartIds].some(chartId => chartId !== 'fig-contract-interaction-map' && !quantitativeChartIdSet.has(chartId))) {
-	throw new Error('Every native quantitative chart must have registered axis labels')
-}
+assertNativeRegistryCoverage(nativeChartIds)
 for (const chartId of quantitativeChartIds) {
 	const axes = quantitativeChartAxisLabels[chartId]
 	for (const axis of chartAxes) {
@@ -177,9 +265,21 @@ for (const chartId of quantitativeChartIds) {
 			throw new Error(`Quantitative chart ${chartId} ${axis}-axis label must end with explicit units or scale type`)
 		}
 	}
-	if (!runtimeSource.includes(`quantitativeChartAxisLabels['${chartId}']`)) {
-		throw new Error(`Quantitative chart ${chartId} does not consume its registered x- and y-axis labels`)
+	const rendererName = nativeDispatches.get(chartId)
+	if (rendererName === undefined) {
+		throw new Error(`Quantitative chart ${chartId} is missing a native renderer dispatch`)
 	}
+	assertRendererAxisBindings(runtimeSourceFile, chartId, rendererName)
+}
+const nativeIdsWithUnknownDispatch = new Set(nativeChartIds)
+nativeIdsWithUnknownDispatch.add('plot-unregistered-negative-probe')
+if (nativeRegistryCoverageIssue(nativeIdsWithUnknownDispatch) === undefined) {
+	throw new Error('Documentation chart validator negative probe unexpectedly accepted an unregistered native chart dispatch')
+}
+const detachedLabelSource = ts.createSourceFile('axis-negative-probe.ts', "function negativeProbeRenderer() { const axes = quantitativeChartAxisLabels['fig-auction-clearing-ladder']; return plot({ x: { label: axes.x }, y: { label: null } }) }", ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+const detachedLabelOptions = findPlotOptions(findFunctionDeclaration(detachedLabelSource, 'negativeProbeRenderer'), detachedLabelSource)
+if (axisUsesRegisteredLabel(detachedLabelOptions, 'y', detachedLabelSource)) {
+	throw new Error('Documentation chart validator negative probe unexpectedly accepted a detached y-axis registry label')
 }
 if (!runtimeSource.includes('return markDrivenDiagramChart(spec)') || /createElementNS|RenderFunction|narrativeMark/.test(runtimeSource)) {
 	throw new Error('Documentation flowcharts must use native Observable Plot marks without raw SVG DOM reconstruction')
@@ -196,7 +296,6 @@ if (
 ) {
 	throw new Error('Contract interaction map must validate every route ID, direction, phase bounds, and endpoint against the shared interaction registry')
 }
-const runtimeSourceFile = ts.createSourceFile(entrypoint, runtimeSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
 const layoutPanels = new Map<string, { id: string; x1: number; x2: number; y1: number; y2: number }>()
 for (const element of findContractInteractionArray(runtimeSourceFile, 'panels').elements) {
 	if (!ts.isObjectLiteralExpression(element)) throw new Error('Contract interaction panel must be an object literal')
