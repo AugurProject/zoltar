@@ -35,6 +35,16 @@ export function RouteSubNavigation<TValue extends string>({ ariaLabel, onChange,
 	return (
 		<div className='route-subnav-region'>
 			<nav ref={navigationRef} className={`route-subnav-shell ${overflowEdges.start ? 'has-overflow-start' : ''} ${overflowEdges.end ? 'has-overflow-end' : ''}`.trim()} aria-label={ariaLabel} role='navigation'>
+				<label className='route-subnav-mobile-select'>
+					<span>{ariaLabel}</span>
+					<select aria-label={ariaLabel} value={value} onChange={event => onChange(event.currentTarget.value as TValue)}>
+						{options.map(option => (
+							<option key={option.value} value={option.value} disabled={option.disabled}>
+								{option.label}
+							</option>
+						))}
+					</select>
+				</label>
 				{overflowEdges.start ? (
 					<button className='quiet route-subnav-overflow-control route-subnav-overflow-start' type='button' aria-label={appCopy.formatShowEarlierNavigationItems(ariaLabel)} onClick={() => scrollOptions(-1)}>
 						<span aria-hidden='true'>‹</span>

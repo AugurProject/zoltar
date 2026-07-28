@@ -762,7 +762,7 @@ productionBrowserTest('production bundle executes deployment, reporting, fork mi
 			await driver.clickButton('Settle Report')
 			await driver.waitForButtonEnabled('Settle Report', 1)
 			await driver.clickButton('Settle Report', 1)
-			await driver.waitForTransactionStatus('Confirmed', 'Settle')
+			await driver.waitForTransactionStatus('Confirmed', 'Report Settled')
 			const reportingPoolsOpened = await driver.evaluate(`(() => { const target = [...document.querySelectorAll('a, button')].find(candidate => candidate.textContent?.trim() === 'Security Pools'); if (!(target instanceof HTMLElement)) return false; target.click(); return true })()`)
 			expect(reportingPoolsOpened).toBe(true)
 			await driver.waitForButtonEnabled('Price Oracle')

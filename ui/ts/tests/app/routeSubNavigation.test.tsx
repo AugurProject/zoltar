@@ -49,6 +49,10 @@ describe('RouteSubNavigation', () => {
 		expect(documentQueries.getByRole('navigation', { name: 'Zoltar views' })).not.toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Show earlier Zoltar views' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Show later Zoltar views' })).toBeNull()
+		const mobileNavigation = documentQueries.getByRole('combobox', { name: 'Zoltar views' }) as HTMLSelectElement
+		expect(mobileNavigation.value).toBe('questions')
+		fireEvent.change(mobileNavigation, { target: { value: 'create' } })
+		expect(routeChanges).toEqual(['create'])
 
 		const questionsTab = documentQueries.getByRole('link', { name: 'Questions' }) as HTMLAnchorElement
 		expect(questionsTab.tagName).toBe('A')
@@ -66,7 +70,7 @@ describe('RouteSubNavigation', () => {
 		document.body.addEventListener('click', preventNativeNavigation)
 		for (const clickInit of [{ altKey: true }, { button: 1 }, { ctrlKey: true }, { metaKey: true }, { shiftKey: true }]) fireEvent.click(createQuestionTab, clickInit)
 
-		expect(routeChanges).toEqual([])
+		expect(routeChanges).toEqual(['create'])
 		expect(window.location.href).toBe(locationBeforeClicks)
 		document.body.removeEventListener('click', preventNativeNavigation)
 	})

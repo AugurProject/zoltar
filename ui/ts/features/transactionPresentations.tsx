@@ -490,6 +490,7 @@ function getOpenOracleSubmittedTitle(actionName: OpenOracleActionResult['action'
 	if (actionName === 'approveToken1') return openOracleCopy.formatApproveToken(context?.token1Symbol ?? openOracleCopy.baseToken)
 	if (actionName === 'approveToken2') return openOracleCopy.formatApproveToken(context?.token2Symbol ?? openOracleCopy.quoteToken)
 	if (actionName === 'createReportInstance') return openOracleCopy.createReport
+	if (actionName === 'settle') return openOracleCopy.settlingReportTitle
 	if (actionName === 'withdrawBalance') return openOracleCopy.withdrawBalance(context?.withdrawalTokenSymbol ?? openOracleCopy.oracleBalance)
 	return humanizeAction(actionName)
 }
@@ -498,6 +499,7 @@ function getOpenOracleSuccessTitle(actionName: OpenOracleActionResult['action'],
 	if (actionName === 'approveToken1') return openOracleCopy.formatTokenApproved(context?.token1Symbol ?? openOracleCopy.baseToken)
 	if (actionName === 'approveToken2') return openOracleCopy.formatTokenApproved(context?.token2Symbol ?? openOracleCopy.quoteToken)
 	if (actionName === 'createReportInstance') return openOracleCopy.reportCreated
+	if (actionName === 'settle') return openOracleCopy.reportSettled
 	if (actionName === 'withdrawBalance') return openOracleCopy.formatTokenWithdrawn(context?.withdrawalTokenSymbol ?? openOracleCopy.oracleBalance)
 	return humanizeAction(actionName)
 }

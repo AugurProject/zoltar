@@ -69,6 +69,11 @@ describe('transaction presentations', () => {
 		expect(createOpenOracleSuccessPresentation({ action: 'createReportInstance', hash: '0x1234' }).title).toBe('Report Created')
 	})
 
+	test('describes Open Oracle settlement as a report lifecycle action', () => {
+		expect(createOpenOracleTransactionIntent('settle').submittedTitle).toBe('Settling Report')
+		expect(createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234' }).title).toBe('Report Settled')
+	})
+
 	test('keeps pool, universe, and action context in trading and reporting intents', () => {
 		const context = {
 			securityPoolAddress: '0x0000000000000000000000000000000000000001' as const,
