@@ -73,8 +73,8 @@ function validateProtocolConfig(config: ProtocolConfigInput): ProtocolConfig {
 	if (forkBurnDivisor === undefined) throw new Error('Protocol config forkBurnDivisor is required')
 	if (initialEscalationGameDeposit === undefined) throw new Error('Protocol config initialEscalationGameDeposit is required')
 	if (forkThresholdDivisor <= 1n) throw new Error('Protocol config forkThresholdDivisor must be greater than 1')
-	if (forkBurnDivisor <= 1n) throw new Error('Protocol config forkBurnDivisor must be greater than 1')
-	if (initialEscalationGameDeposit <= 0n) throw new Error('Protocol config initialEscalationGameDeposit must be greater than 0')
+	if (forkBurnDivisor < 5n) throw new Error('Protocol config forkBurnDivisor must be at least 5')
+	if (initialEscalationGameDeposit < 10n ** 18n) throw new Error('Protocol config initialEscalationGameDeposit must be at least 1 REP')
 	return {
 		forkBurnDivisor,
 		forkThresholdDivisor,

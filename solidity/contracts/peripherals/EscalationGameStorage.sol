@@ -28,4 +28,5 @@ abstract contract EscalationGameStorage {
 	uint256 internal forkCarryInitialBacking;
 	BinaryOutcomes.BinaryOutcome public fixedQuestionOutcome;
 	NonDecisionState public nonDecisionState;
+	uint256 internal forkCarryBackingExportedBeforeResume;
 }

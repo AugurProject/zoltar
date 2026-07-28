@@ -425,12 +425,15 @@
 								<td><a href="#escalation"><code>ESC-13</code></a></td>
 								<td>
 									Two outcomes cannot both reach non-decision with less REP than
-									the universe fork threshold.
+									the universe fork threshold, and a live game keeps a positive
+									start bond below the live non-decision threshold after tracked
+									supply falls.
 								</td>
 								<td>
 									The non-decision threshold is
 									<code>ceil(forkThreshold / 2)</code>, including odd fork
-									thresholds.
+									thresholds. If necessary, ordinary game deployment reduces the
+									configured bond to <code>nonDecisionThreshold - 1</code>.
 								</td>
 							</tr>
 							<tr>
@@ -524,6 +527,8 @@
 								reduces the parent theoretical supply by the same amount, and
 								credits the threshold minus
 								<code>floor(threshold / forkBurnDivisor)</code> for migration.
+								The configured <code>forkBurnDivisor</code> is at least
+								<code>5</code>, so the uncredited haircut cannot exceed 20%.
 							</div>
 							<p class="invariant-example"><strong>Example:</strong> With a 1,000 REP theoretical supply, threshold divisor 20, and burn divisor 5, the initiator commits 50 parent REP, pays a 10 REP haircut, and receives 40 REP of migration credit.</p>
 							<dl class="invariant-metadata">
@@ -1376,7 +1381,7 @@
 							</dl>
 						</div>
 					</details>
-					<details class="invariant-entry">
+					<details class="invariant-entry" id="fork-08">
 						<summary><code>FORK-08</code><span class="invariant-title">One-time aggregate continuation backing</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1384,16 +1389,45 @@
 								Each selected child initializes the canonical carry snapshot and
 								receives the complete aggregate continuation backing at most once.
 								Optional vault cleanup only clears parent locks; it creates no child
-								escrow and cannot change carried-proof eligibility.
+								escrow and cannot change carried-proof eligibility. The continuation
+								cannot resume until its game balance covers all effective
+								unrelated-fork principal. For an own fork, initial backing must cover
+								<code
+									>sourcePrincipalAtFork -
+									floor(sourcePrincipalAtFork / 5)</code
+								>, the rounded-up 80% minimum, and the live balance must cover the
+								unexported remainder after valid direct pre-resume claims.
+								<a href="statoblast-whitepaper.html#source-principal-at-fork"
+									><code>sourcePrincipalAtFork</code></a
+								>
+								is the raw aggregate stored by the fork snapshot before effective
+								direct-claim deductions.
 							</div>
 							<p class="invariant-example"><strong>Example:</strong> Creating the Yes child installs its snapshot and aggregate backing before Alice acts. Alice may later clear her parent lock, but that cleanup neither funds the child nor enables or disables her winning proof.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Conservation</dd></div>
-								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
+								<div><dt>Enforcement status</dt><dd>Contract guard</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a
 										href="../solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol"
 										><code>_ensureChildEscalationBacking</code></a
+										>
+										,
+										<a
+										href="../solidity/contracts/peripherals/EscalationGame.sol"
+										><code>resumeFromFork</code></a
+										>,
+										<a
+										href="../solidity/contracts/peripherals/EscalationGameCarry.sol"
+										><code>isForkCarryFundingComplete</code></a
+										>,
+										<a
+										href="../solidity/contracts/peripherals/EscalationGameEscrow.sol"
+										><code>_exportForkedEscrowByOutcome</code></a
+										>, and
+										<a
+										href="../solidity/ts/tests/auditEscalationForkBurnDivisor.test.ts"
+										>fork-backing regression tests</a
 										>
 								</dd></div>
 							</dl>
@@ -1800,7 +1834,7 @@
 						</div>
 					</details>
 					<details class="invariant-entry">
-						<summary><code>ESC-13</code><span class="invariant-title">Non-decision threshold arithmetic</span></summary>
+						<summary><code>ESC-13</code><span class="invariant-title">Non-decision threshold and live start-bond arithmetic</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
@@ -1808,6 +1842,11 @@
 								<code>ceil(F / 2)</code> REP on two outcomes. Therefore the two
 								threshold balances total at least <code>F</code>, while one wei
 								less on both outcomes totals strictly less than <code>F</code>.
+								The configured start bond is at least 1 REP and a new origin requires
+								the live non-decision threshold to exceed it. If an existing pool's
+								live threshold later falls to or below that configured bond, ordinary
+								game deployment uses <code>nonDecisionThreshold - 1</code>, provided
+								the threshold exceeds one atomic REP unit.
 							</div>
 							<p class="invariant-example"><strong>Example:</strong> If <code>F = 5</code>, non-decision requires 3 REP on two outcomes, so the two balances hold 6 REP; balances of 2 and 2 remain below the 5 REP fork threshold.</p>
 							<dl class="invariant-metadata">
@@ -1817,10 +1856,18 @@
 										<a href="../solidity/contracts/Zoltar.sol"
 										><code>getNonDecisionThreshold</code></a
 										>
-										and
+										,
 										<a
-										href="../solidity/ts/tests/escalationGameForkThreshold.test.ts"
-										>even/odd boundary tests</a
+										href="../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol"
+										>origin threshold admission</a
+										>,
+										<a
+										href="../solidity/contracts/peripherals/factories/EscalationGameFactory.sol"
+										><code>deployEscalationGame</code></a
+										>, and
+										<a
+										href="../solidity/ts/tests/auditEscalationStartConfigLiveness.test.ts"
+										>start-liveness regression tests</a
 										>
 								</dd></div>
 							</dl>

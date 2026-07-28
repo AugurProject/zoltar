@@ -204,7 +204,9 @@
 				</p>
 				<p>
 					Child initialization copies the authenticated carry totals and funds the
-					child game once at one child REP per source REP. It does not allocate
+					child game once at the applicable aggregate rate: one child REP per
+					effective source REP for an unrelated fork, or the already-haircut
+					aggregate backing for the escalation's own fork. It does not allocate
 					that backing among vaults. After the child resolves, only proofs for
 					winning deposits may settle. Any caller may relay a proof through the
 					pool, while the authenticated depositor always receives the normal
@@ -264,7 +266,7 @@
 						</tr>
 						<tr>
 							<td>Continuation funding</td>
-							<td>An unrelated fork converts escalation source REP to child REP one-to-one. The escalation's own fork transfers post-haircut aggregate backing instead, while ordinary pool REP remains one-to-one. Funding completeness checks the applicable aggregate backing without scaling or releasing per-vault child escrow.</td>
+							<td>An unrelated fork converts escalation source REP to child REP one-to-one; the escalation's own fork transfers post-haircut aggregate backing, while ordinary pool REP remains one-to-one. <code>resumeFromFork</code> keeps the continuation paused until the applicable aggregate backing is present and accounts for child REP already exported by valid direct pre-resume claims. See the canonical <a href="statoblast-whitepaper.html#migration">fork-migration derivation</a> and <a href="invariants.html#fork-08"><code>FORK-08</code></a> for the raw and effective principal definitions and exact funding bound. Neither path scales or releases per-vault child escrow.</td>
 						</tr>
 						<tr>
 							<td>Inherited losing outcome</td>
@@ -352,19 +354,19 @@
 						<tbody>
 							<tr>
 								<td>Creation bytecode</td>
-								<td><code>32,091</code> bytes</td>
+								<td><code>32,114</code> bytes</td>
 							</tr>
 							<tr>
 								<td>Deployed bytecode</td>
-								<td><code>24,119</code> bytes</td>
+								<td><code>24,142</code> bytes</td>
 							</tr>
 							<tr>
 								<td>Project deployed-bytecode budget headroom</td>
-								<td><code>457</code> bytes below <code>24,576</code></td>
+								<td><code>434</code> bytes below <code>24,576</code></td>
 							</tr>
 							<tr>
 								<td>EIP-170 headroom</td>
-								<td><code>457</code> bytes below <code>24,576</code></td>
+								<td><code>434</code> bytes below <code>24,576</code></td>
 							</tr>
 						</tbody>
 					</table>

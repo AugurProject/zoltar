@@ -44,7 +44,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/contract-interaction-reference.md'
-const expectedProductionSoliditySourceFingerprint = '947aec09655a24a9c34db68706f83755eb46c57138cf264b4a14b841ccc8a3c9'
+const expectedProductionSoliditySourceFingerprint = '186e1e4b1a97e58c24de2cf4d5a262a95b804c111943c8a50668e9f1b08de4cf'
 
 const eventSourceByName: Record<string, string> = {
 	Approval: 'solidity/contracts/IERC20.sol',
@@ -527,7 +527,7 @@ const contractReferences: ContractReference[] = [
 		purpose: 'Registers universe forks, charges the fork admission haircut, and mints branch-specific child REP.',
 		readAbiFingerprint: '84e9d44350c2a27cc521f9525e34f385e810e0093aa0626ad64bcb490a925fe9',
 		readSurface:
-			'Use `universes`, `deployedChildOutcomeIndexes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThreshold`, `getNonDecisionThreshold`, `getUniverseTheoreticalSupply`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalance` to reconstruct universe and migration state.',
+			'Use `universes`, `deployedChildOutcomeIndexes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThreshold`, `getNonDecisionThreshold`, `getUniverseTheoreticalSupply`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalance` to reconstruct universe and migration state. Construction requires `forkBurnDivisor >= 5`, which caps the uncredited fork haircut at 20% of the threshold.',
 		securityBoundary: 'Security boundaries for these calls are [A15 intended question selection](./security-model.html#assumption-a15) and [A26 safe immutable parameters](./security-model.html#assumption-a26).',
 		readDeclarations: [
 			{ name: 'getForkTime' },
@@ -660,7 +660,7 @@ const contractReferences: ContractReference[] = [
 		purpose: 'Creates and canonically registers origin and child security pools with their share token, oracle coordinator, and optional truth auction.',
 		readAbiFingerprint: '02ef47b74eec96814be4fc8a8a933b33fccd4f5bb5b84c30e0876d09234294df',
 		readSurface:
-			'Use `initialEscalationGameDeposit` for the immutable deployment parameter and `securityPoolDeploymentCount` with the strict `securityPoolDeploymentsRange(startIndex, count)` pager, which reverts rather than truncating when the requested range exceeds the array. Use `getOriginId`, `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId`, and `getSecurityPoolHasInheritedForkOutcome` for canonical lookup.',
+			'Use `initialEscalationGameDeposit` for the immutable deployment parameter, which must be at least 1 REP, and `securityPoolDeploymentCount` with the strict `securityPoolDeploymentsRange(startIndex, count)` pager, which reverts rather than truncating when the requested range exceeds the array. Use `getOriginId`, `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId`, and `getSecurityPoolHasInheritedForkOutcome` for canonical lookup.',
 		readDeclarations: [{ name: 'securityPoolDeploymentCount' }, { name: 'securityPoolDeploymentsRange' }, { name: 'getOriginId' }, { name: 'getPoolId' }, { name: 'getSecurityPool' }, { name: 'getSecurityPoolOriginId' }, { name: 'getSecurityPoolHasInheritedForkOutcome' }],
 		readStorageDeclarations: [{ name: 'initialEscalationGameDeposit' }],
 		sourcePath: 'solidity/contracts/peripherals/factories/SecurityPoolFactory.sol',
@@ -671,7 +671,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Creates the canonical origin pool, its lineage-wide share token, and its price coordinator with the configured initial-report priority fee, then wires and registers them atomically.',
 				declarations: [{ name: 'deployOriginSecurityPool' }],
 				preconditions:
-					'`securityMultiplier > 1`; `initialReportPriorityFeeWeiPerGas > 0` and remains within the coordinator-computed OpenOracle `uint128` report/escalation-halt capacity bound; question exists and has exactly the categorical labels `Yes`, then `No`; universe is unforked and has a REP token; the origin/universe/priority-fee slot has not already been claimed.',
+					'`securityMultiplier > 1`; `initialReportPriorityFeeWeiPerGas > 0` and remains within the coordinator-computed OpenOracle `uint128` report/escalation-halt capacity bound; question exists and has exactly the categorical labels `Yes`, then `No`; universe is unforked and has a REP token; the live non-decision threshold exceeds `initialEscalationGameDeposit`; the origin/universe/priority-fee slot has not already been claimed.',
 				signals: '`SecurityPoolRegistered`, then `DeploySecurityPool`',
 			},
 			{
@@ -802,9 +802,11 @@ const contractReferences: ContractReference[] = [
 			{
 				call: '`depositToEscalationGame(outcome, maxAmount)`',
 				caller: 'Vault owner',
-				effect: 'Deploys the local game on the first deposit, removes enough vault ownership, and escrows accepted REP on the selected outcome.',
+				effect:
+					"Deploys the local game on the first deposit. The game factory uses the configured start bond while it is below the live non-decision threshold; if tracked REP supply later makes it too large, the factory uses `nonDecisionThreshold - 1` instead. Repeat deposits use the existing game's stored `startBond` and `nonDecisionThreshold`. Every accepted deposit removes enough vault ownership and escrows REP on the selected outcome.",
 				declarations: [{ name: 'depositToEscalationGame' }],
-				preconditions: 'Question end has passed; pool operational in an unforked universe, without an inherited fixed outcome, and not awaiting continuation; outcome and amount accepted; remaining vault and pool backing stay solvent; fresh price when allowance is nonzero.',
+				preconditions:
+					'Question end has passed; pool operational in an unforked universe, without an inherited fixed outcome, and not awaiting continuation. On the first deposit, the live non-decision threshold must exceed one atomic REP unit; outcome and amount accepted; remaining vault and pool backing stay solvent; fresh price when allowance is nonzero.',
 				signals: '`EscalationGameSet` on first deposit; `DepositToEscalationGame`',
 			},
 			{
@@ -1147,7 +1149,7 @@ const contractReferences: ContractReference[] = [
 		compiledAbiFingerprint: '944f05572e55db85409418510e1ef477a80943359d153df5641fb15ce0508d68',
 		name: 'EscalationGame',
 		purpose: 'Escrows outcome REP, raises the running resolution cost, detects non-decision, and settles local or carried deposits.',
-		readAbiFingerprint: 'ed805db82536ad060437fa3f82ceb85839349441a6fede83e2fd40ee761e13d5',
+		readAbiFingerprint: 'd9ff5a59960b3ede85401b09f341cd2561ed6b41ec3f308de4a4e205f5a40240',
 		readSurface:
 			'Base getters are `securityPool`, `repToken`, `activationTime`, `nonDecisionThreshold`, `startBond`, `nonDecisionTimestamp`, `nonDecisionState`, `forkContinuation`, `forkElapsedAtStart`, `forkResumedAt`, `fixedQuestionOutcome`, `nodes`, `escrowedRepByVault`, and `totalEscrowedRep`. Use `previewDepositOnOutcome`, `computeIterativeAttritionCost`, `computeTimeSinceStartFromAttritionCost`, `totalCost`, `getEscalationGameEndDate`, `getQuestionResolution`, `getFinalQuestionResolution`, `hasReachedNonDecision`, `canTriggerOwnFork`, `getBindingCapital`, `getOutcomeBalances`, `getDepositsByOutcome`, `getDepositsByOutcomeLength`, `forkCarrySnapshotInitialized`, `getOutcomeState`, `getForkCarrySnapshot`, `getForkCarryRoots`, `isForkCarryFundingComplete`, `getCarryLeafPageByOutcome`, `getProofConsumedCarriedDepositIndexesByOutcome`, `getLocalUnresolvedPrincipalByVaultAndOutcome`, and `getForkedEscrowByVaultAndOutcome` for calculations, lifecycle authorization, pages, carry state, and escrow. Ordinary users route deposits and withdrawals through `SecurityPool`.',
 		readDeclarations: [
@@ -1195,9 +1197,9 @@ const contractReferences: ContractReference[] = [
 			{
 				call: '`start(startBond, nonDecisionThreshold)`',
 				caller: '`EscalationGameFactory` contract during atomic deployment',
-				effect: 'Initializes a local game and sets activation three days after deployment.',
+				effect: 'Initializes a local game and sets activation three days after deployment. For ordinary pool games, the factory lowers an oversized configured bond to `nonDecisionThreshold - 1` before this call.',
 				declarations: [{ name: 'start' }],
-				preconditions: 'Game not already started; threshold exceeds the positive start bond; both are at least 1 REP.',
+				preconditions: 'Game not already started; threshold exceeds the positive start bond. Positive sub-REP atomic values are valid.',
 				signals: '`GameStarted`',
 			},
 			{
@@ -1205,7 +1207,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'Immutable owner (`EscalationGameFactory`) during atomic continuation deployment',
 				effect: 'Initializes a paused continuation with inherited elapsed time, an optional fixed matching child outcome, and immutable fork-time haircut/backing accounting. It does not start the remaining clock until `resumeFromFork`.',
 				declarations: [{ name: 'startFromFork' }],
-				preconditions: 'Game not started; threshold exceeds the positive start bond; both are at least 1 REP; inherited elapsed time is no greater than seven weeks.',
+				preconditions: 'Game not started; threshold exceeds the positive start bond; inherited elapsed time is no greater than seven weeks. Positive sub-REP atomic values are valid.',
 				signals: '`GameContinuedFromFork`',
 			},
 			{
@@ -1213,7 +1215,8 @@ const contractReferences: ContractReference[] = [
 				caller: 'Owning `SecurityPool` in the supported workflow; the immutable owner is also admitted, but its factory contract exposes no relay',
 				effect: 'Records the resume timestamp and starts the remaining continuation clock. After the deadline, `getFinalQuestionResolution` returns the fixed outcome when one is present.',
 				declarations: [{ name: 'resumeFromFork' }],
-				preconditions: 'Fork-continuation mode and not previously resumed.',
+				preconditions:
+					'Fork-continuation mode; not previously resumed; aggregate REP funding is complete. An unrelated fork requires one-to-one backing of effective unresolved principal. For an own-fork continuation, recorded initial backing must be at least `sourcePrincipalAtFork - floor(sourcePrincipalAtFork / 5)`, where `sourcePrincipalAtFork` is the aggregate raw unresolved principal installed by the snapshot before effective direct-claim deductions. The live balance must cover that initial backing minus child REP already exported by valid direct pre-resume claims.',
 				signals: '`ForkContinuationResumed`',
 			},
 			{
