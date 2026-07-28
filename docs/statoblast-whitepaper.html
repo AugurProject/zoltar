@@ -434,13 +434,16 @@
 								<strong>Security assumptions:</strong>
 								<a href="./security-model.html#assumption-a03">A03 REP valuation</a>,
 								<a href="./security-model.html#assumption-a12">A12 REP economic backing</a>,
-								<a href="./security-model.html#assumption-a18">A18 REP and WETH behavior</a>,
+								<a href="./security-model.html#assumption-a18"
+									>A18 genesis REP and WETH behavior</a
+								>,
 								<a href="./security-model.html#assumption-a19">A19 canonical deployment</a>,
 								<a href="./security-model.html#assumption-a25">A25 intended question selection</a>,
 								<a href="./security-model.html#assumption-a26">A26 safe immutable parameters</a>,
 								<a href="./security-model.html#assumption-a28">A28 asset-recipient compatibility</a>,
+								<a href="./security-model.html#assumption-a29">A29 client and wallet integrity</a>,
 								and
-								<a href="./security-model.html#assumption-a29">A29 client and wallet integrity</a>.
+								<a href="./security-model.html#assumption-a31">A31 account authority</a>.
 						</p>
 						<p class="lede">
 						A <code>SecurityPool</code> is a lineage-specific Statoblast contract for a question in a universe. Vault operators deposit REP, choose bond allowance, and underwrite ETH-backed complete sets in that pool's
@@ -4533,7 +4536,6 @@
 							<a href="./security-model.html#assumption-a09">A09 efficient REP conversion</a>,
 							<a href="./security-model.html#assumption-a11">A11 REP liquidity</a>,
 							<a href="./security-model.html#assumption-a14">A14 timely inclusion</a>,
-							<a href="./security-model.html#assumption-a18">A18 REP behavior</a>,
 							<a href="./security-model.html#assumption-a21">A21 lifecycle executors</a>,
 							<a href="./security-model.html#assumption-a22">A22 bid-data availability</a>,
 							<a href="./security-model.html#assumption-a26">A26 safe immutable parameters</a>,
@@ -4980,7 +4982,7 @@
 					</div>
 						<p>
 							The <a href="./security-model.html">Protocol Security Model</a>
-					defines assumptions A01–A29 and the guarantees deliberately excluded
+					defines assumptions A01–A31 and the guarantees deliberately excluded
 							from the protocol model.
 						</p>
 						<p class="security-assumption-ref">

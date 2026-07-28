@@ -198,8 +198,10 @@
 						<h3>At least one executor advances every required public transition</h3>
 						<p>
 							An adequately funded participant or service monitors and calls each
-							needed permissionless transition, including fork activation, child
-							creation, auction start and finalization, bid settlement, report
+							needed permissionless transition, including liquidation initiation,
+							local escalation deposits and settlement, fork activation, child
+							creation, vault and share migration, auction start and finalization,
+							bid settlement, OpenOracle report settlement, settled-report callback
 							recovery, overflow operation execution, and proof-based claims.
 						</p>
 						<p class="assumption-failure">
@@ -658,6 +660,43 @@
 							>.
 						</p>
 					</li>
+					<li id="assumption-a30" value="30" class="assumption-wide" data-assumption="A30">
+						<h3>Client reference quotes remain available and representative</h3>
+						<p>
+							When the official client requests or displays an offchain REP/ETH
+							market quote, its configured Uniswap V4 or V3 path has enough usable
+							liquidity to return a timely, representative value. This includes a
+							new-report proposal when the coordinator has no nonzero cached price
+							and a Uniswap-derived liquidation preview. A proposal copied from a
+							nonzero cached coordinator price—even when stale—does not depend on
+							this quote path; its correction instead relies on
+							<a href="#assumption-a16">A16</a>,
+							<a href="#assumption-a17">A17</a>, and
+							<a href="#assumption-a20">A20</a>.
+							Users independently verify unusually security-sensitive values; a
+							client quote is a transaction input or preview, not an onchain truth
+							guarantee.
+						</p>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> Missing, stale, thin, or manipulated
+							quote liquidity can block an offchain-quote-dependent client action or
+							cause the client to propose or display a misleading market value even
+							when the contracts and RPC execute correctly.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="../README.md#browser-simulation">production quote availability</a>,
+							<a href="./open-oracle-integration.html#statoblast-integration"
+								>cached and live-quote proposals</a
+							>,
+							<a href="./liquidation.html#client-liquidation-preview"
+								>liquidation previews</a
+							>, and
+							<a href="./operator-reference.md#assumption-monitoring"
+								>operator monitoring</a
+							>.
+						</p>
+					</li>
 					<li id="assumption-a22" value="22" data-assumption="A22">
 						<h3>Canonical chain data and proof construction remain available</h3>
 						<p>
@@ -690,20 +729,23 @@
 				</p>
 				<ol class="assumption-grid">
 					<li id="assumption-a18" value="18" class="assumption-wide" data-assumption="A18">
-						<h3>Canonical REP and WETH obey the accounting model</h3>
+						<h3>Genesis REP and configured WETH obey the external accounting model</h3>
 						<p>
-							Genesis REP, child REP, and configured WETH move exactly the requested
-							base units, use 18 decimals, return supported ERC-20 values, and do not
-							rebase, charge transfer fees, invoke unexpected callbacks, blacklist
-							protocol contracts, pause required transfers, or permit unauthorized
-							minting. WETH remains redeemable 1:1 for ETH, the genesis theoretical
-							supply is accurate, and the configured genesis REP burn sink remains
-							inaccessible.
+							Genesis REP and configured WETH move exactly the requested base units,
+							use 18 decimals, return supported ERC-20 values, and do not rebase,
+							charge transfer fees, invoke unexpected callbacks, blacklist protocol
+							contracts, pause required transfers, or permit unauthorized minting.
+							WETH remains redeemable 1:1 for ETH, the genesis theoretical supply is
+							accurate, and the configured genesis REP burn sink remains
+							inaccessible. Canonical child REP is implemented by the reviewed
+							<code>ReputationToken</code> contract and is a protocol-enforced
+							property under A19 and A23, not an additional external-token
+							assumption.
 						</p>
 						<p class="assumption-failure">
-							<strong>Failure boundary:</strong> Pool, fork, auction, or oracle
-							accounting can overstate balances, backing, burned supply, or WETH
-							value.
+							<strong>Failure boundary:</strong> Origin-pool, genesis-fork, or
+							oracle accounting can overstate balances, backing, burned supply, or
+							WETH value.
 						</p>
 						<p class="assumption-links">
 							Mechanics:
@@ -862,22 +904,48 @@
 						<h3>Ethereum cryptographic primitives remain secure</h3>
 						<p>
 							Keccak-256 remains collision- and preimage-resistant at the truncated
-							widths used by the protocol, CREATE2 identity remains sound, and users
-							retain control of the private keys authorizing their accounts.
+							widths used by the protocol, and CREATE2 identity remains sound.
 						</p>
 						<p class="assumption-failure">
 							<strong>Failure boundary:</strong> Forged identities, colliding
-							questions or universes, false carry proofs, or stolen account
-							authority can violate otherwise-correct guards.
+							questions or universes, or false carry proofs can violate
+							otherwise-correct guards.
 						</p>
 						<p class="assumption-links">
 							Mechanics:
 							<a href="./zoltar-whitepaper.html#universe-model"
 								>universe identity</a
 							>,
-							<a href="./merkle-mountain-range.html#leaf-shape">proof hashing</a>, and
+							<a href="./merkle-mountain-range.html#leaf-shape">proof hashing</a>,
+							and
 							<a href="./operator-reference.md#security-pool-guardrails"
 								>deterministic deployments</a
+							>.
+						</p>
+					</li>
+					<li id="assumption-a31" value="31" data-assumption="A31">
+						<h3>Participants retain control of account authority</h3>
+						<p>
+							Participants protect the private keys, signing devices, session
+							permissions, and delegated ERC-20 or ERC-1155 approvals that authorize
+							their accounts. Account recovery and custody arrangements do not give
+							an unintended party effective control during a security-sensitive
+							window.
+						</p>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> A stolen key, compromised signer, or
+							overbroad approval can authorize valid but unwanted transfers,
+							deposits, bids, migrations, or configuration changes without
+							violating a contract guard.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./contract-interaction-reference.md">transaction authority</a>,
+							<a href="./operator-reference.md#security-pool-guardrails"
+								>vault and pool operations</a
+							>, and
+							<a href="./operator-reference.md#assumption-monitoring"
+								>account-authority monitoring</a
 							>.
 						</p>
 					</li>
@@ -891,25 +959,30 @@
 					They should be included in user, operator, and integration risk disclosures.
 				</p>
 				<ul class="excluded-guarantee-list">
-					<li>
+					<li id="excluded-guarantee-eg01">
+						<strong>EG01.</strong>
 						Zoltar creates valid branches but does not identify the objectively
 						truthful branch or force users to coordinate there.
 					</li>
-					<li>
+					<li id="excluded-guarantee-eg02">
+						<strong>EG02.</strong>
 						A truth auction may raise less than its repair target; the child then
 						activates with migrated collateral plus accepted auction ETH.
 					</li>
-					<li>
+					<li id="excluded-guarantee-eg03">
+						<strong>EG03.</strong>
 						OpenOracle report liquidity does not cap the notional value of operations
 						using an accepted price, and settlement does not prove external price
 						correctness.
 					</li>
-					<li>
+					<li id="excluded-guarantee-eg04">
+						<strong>EG04.</strong>
 						A participant with unbounded capital can keep funding valid disputes and
 						delay the sponsor lane indefinitely; no bounded coordinator-availability
 						claim is made.
 					</li>
-					<li>
+					<li id="excluded-guarantee-eg05">
+						<strong>EG05.</strong>
 						The immutable protocol has no administrator who can pause, upgrade, roll
 						back, or rescue an unsafe deployment after launch.
 					</li>

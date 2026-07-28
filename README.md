@@ -17,7 +17,7 @@ Inside `ui/ts`, route-specific code belongs under `features/<domain>`, cross-fea
 
 Protocol documentation lives in `docs/`:
 
-- [Security model](https://augurproject.github.io/zoltar/docs/security-model.html) — normative participant, market, asset, deployment, client, data, Ethereum, and cryptographic assumptions A01–A29
+- [Security model](https://augurproject.github.io/zoltar/docs/security-model.html) — normative participant, market, asset, deployment, client, data, Ethereum, account-authority, and cryptographic assumptions A01–A31
 - [OpenOracle tradeoffs](https://augurproject.github.io/zoltar/docs/open-oracle-integration.html#intentional-economic-tradeoffs) — audit orientation for intentionally unbounded oracle notional and paid rolling disputes
 - [Truth-auction clearing](https://augurproject.github.io/zoltar/docs/truth-auction.html#clearing) — funded and underfunded clearing mechanics
 - [Start here guide](https://augurproject.github.io/zoltar/docs/documentation.html)
@@ -107,7 +107,7 @@ Simulation mode details:
 - Supported seeded scenarios are `simScenario=baseline`, `simScenario=deployed`, `simScenario=security-pool`, `simScenario=securitypoolx2`, and `simScenario=securitypoolx2-auction`
 - The yellow simulation banner exposes developer-only controls for account switching, reset, block mining, time travel, blockchain time, block count, transaction count, and artificial transaction receipt delay
 - Uniswap-backed REP pricing is intentionally disabled in simulation mode, so quote-dependent UI paths degrade instead of using mainnet liquidity
-- Production quote-dependent flows rely on live RPC data and available Uniswap liquidity. If a quote is stale, unavailable, or unsupported, affected actions should remain blocked or degraded rather than falling back to simulated prices.
+- Production quote-dependent flows rely on live RPC data and available Uniswap liquidity under [A29 client and RPC integrity](https://augurproject.github.io/zoltar/docs/security-model.html#assumption-a29) and [A30 representative client quotes](https://augurproject.github.io/zoltar/docs/security-model.html#assumption-a30). If a quote is stale, unavailable, or unsupported, affected actions should remain blocked or degraded rather than falling back to simulated prices.
 - The simulation chain is ephemeral and exists only in the current browser tab session
 
 ## Common Commands
