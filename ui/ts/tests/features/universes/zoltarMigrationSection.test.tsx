@@ -14,6 +14,7 @@ import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from 
 type ZoltarMigrationSectionProps = Parameters<typeof ZoltarMigrationSection>[0]
 const REP = 10n ** 18n
 const ZOLTAR_ADDRESS = '0x00000000000000000000000000000000000000a1' as const
+const CHILD_REP_ADDRESS = '0x00000000000000000000000000000000000000b2' as const
 
 function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarUniverseSummary {
 	return {
@@ -225,5 +226,47 @@ describe('ZoltarMigrationSection', () => {
 		expect(migrationActions.classList.contains('actions')).toBe(true)
 		expect(within(migrationActions).getByRole('button', { name: 'Prepare REP' })).not.toBeNull()
 		expect(within(migrationActions).getByRole('button', { name: 'Split REP' })).not.toBeNull()
+	})
+
+	test('shows wallet import access only for deployed child tokens the account holds', async () => {
+		const heldChild = {
+			exists: true,
+			forkTime: 1n,
+			outcomeIndex: 1n,
+			outcomeLabel: 'Yes',
+			parentUniverseId: 1n,
+			reputationToken: CHILD_REP_ADDRESS,
+			universeId: 2n,
+		}
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ZoltarMigrationSection,
+				createProps({
+					zoltarMigrationChildRepBalances: { '2': 5n * REP },
+					zoltarUniverse: createUniverse({ childUniverses: [heldChild] }),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const walletTokensHeading = within(document.body).getByRole('heading', { name: 'Wallet REP Tokens' })
+		const walletTokensSection = walletTokensHeading.closest('section')
+		if (walletTokensSection === null) throw new Error('Expected wallet REP tokens section')
+		expect(walletTokensSection.textContent).toContain('Yes')
+		expect(walletTokensSection.textContent).toContain(CHILD_REP_ADDRESS)
+
+		await cleanupRenderedComponent()
+		cleanupRenderedComponent = undefined
+		const withoutHeldTokens = await renderIntoDocument(
+			h(
+				ZoltarMigrationSection,
+				createProps({
+					zoltarMigrationChildRepBalances: { '2': 0n },
+					zoltarUniverse: createUniverse({ childUniverses: [heldChild] }),
+				}),
+			),
+		)
+		cleanupRenderedComponent = withoutHeldTokens.cleanup
+		expect(within(document.body).queryByRole('heading', { name: 'Wallet REP Tokens' })).toBeNull()
 	})
 })
