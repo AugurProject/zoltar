@@ -434,16 +434,16 @@
 								<strong>Security assumptions:</strong>
 								<a href="./security-model.html#assumption-a08">A08 REP valuation</a>,
 								<a href="./security-model.html#assumption-a14">A14 REP economic backing</a>,
-								<a href="./security-model.html#assumption-a24"
-									>A24 genesis REP and WETH behavior</a
+								<a href="./security-model.html#assumption-a23"
+									>A23 genesis REP and WETH behavior</a
 								>,
-								<a href="./security-model.html#assumption-a26">A26 canonical deployment</a>,
+								<a href="./security-model.html#assumption-a25">A25 canonical deployment</a>,
 								<a href="./security-model.html#assumption-a15">A15 intended question selection</a>,
-								<a href="./security-model.html#assumption-a28">A28 safe immutable parameters</a>,
-								<a href="./security-model.html#assumption-a25">A25 asset-recipient compatibility</a>,
-								<a href="./security-model.html#assumption-a27">A27 client and wallet integrity</a>,
+								<a href="./security-model.html#assumption-a27">A27 safe immutable parameters</a>,
+								<a href="./security-model.html#assumption-a24">A24 asset-recipient compatibility</a>,
+								<a href="./security-model.html#assumption-a26">A26 client and wallet integrity</a>,
 								and
-								<a href="./security-model.html#assumption-a31">A31 account authority</a>.
+								<a href="./security-model.html#assumption-a30">A30 account authority</a>.
 						</p>
 						<p class="lede">
 						A <code>SecurityPool</code> is a lineage-specific Statoblast contract for a question in a universe. Vault operators deposit REP, choose bond allowance, and underwrite ETH-backed complete sets in that pool's
@@ -1440,8 +1440,8 @@
 							<a href="./security-model.html#assumption-a03">A03 independent participants</a>,
 							<a href="./security-model.html#assumption-a04">A04 early alarm capital</a>,
 						<a href="./security-model.html#assumption-a13">A13 REP liquidity</a>,
-						<a href="./security-model.html#assumption-a17">A17 timely inclusion</a>,
-						<a href="./security-model.html#assumption-a18">A18 honest reporter capital</a>,
+						<a href="./security-model.html#assumption-a16">A16 timely inclusion</a>,
+						<a href="./security-model.html#assumption-a17">A17 honest reporter capital</a>,
 						and
 						<a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>.
 					</p>
@@ -2613,13 +2613,10 @@
 						<a href="./security-model.html#assumption-a10">A10 timely outcome evidence</a>,
 						<a href="./security-model.html#assumption-a11">A11 practical migration</a>,
 						<a href="./security-model.html#assumption-a05">A05 lineage access value</a>,
-						<a href="./security-model.html#assumption-a17">A17 timely inclusion</a>,
+						<a href="./security-model.html#assumption-a16">A16 timely inclusion</a>,
 						<a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>,
-						<a href="./security-model.html#assumption-a23">A23 chain-data availability</a>,
 						and
-						<a href="./security-model.html#assumption-a16"
-							>A16 permissionless-fork alignment</a
-						>.
+						<a href="./security-model.html#assumption-a22">A22 chain-data availability</a>.
 					</p>
 
 					<table>
@@ -4535,12 +4532,12 @@
 							<a href="./security-model.html#assumption-a03">A03 independent demand</a>,
 							<a href="./security-model.html#assumption-a12">A12 efficient REP conversion</a>,
 							<a href="./security-model.html#assumption-a13">A13 REP liquidity</a>,
-							<a href="./security-model.html#assumption-a17">A17 timely inclusion</a>,
+							<a href="./security-model.html#assumption-a16">A16 timely inclusion</a>,
 							<a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>,
-							<a href="./security-model.html#assumption-a23">A23 bid-data availability</a>,
-							<a href="./security-model.html#assumption-a28">A28 safe immutable parameters</a>,
+							<a href="./security-model.html#assumption-a22">A22 bid-data availability</a>,
+							<a href="./security-model.html#assumption-a27">A27 safe immutable parameters</a>,
 							and
-							<a href="./security-model.html#assumption-a25">A25 native-ETH recipient compatibility</a>.
+							<a href="./security-model.html#assumption-a24">A24 native-ETH recipient compatibility</a>.
 						</p>
 					<p class="lede"> After the parent migration window ends, a child pool may still hold less ETH than users need for clean redemption. The truth auction sells child-universe REP for ETH to repair that gap, subject to both an ETH raise cap and a maximum REP sale cap. </p>
 
@@ -4774,7 +4771,7 @@
 						interactive examples; its
 						<a href="./truth-auction.html#settlement">settlement section</a> owns
 						allocation rounding and recovery behavior.
-						The <a href="./security-model.html#core-assumptions">security model</a>
+						The <a href="./security-model.html#assumption-a12">security model</a>
 						separately states efficient REP-to-ETH auction conversion as an
 						explicit assumption.
 					</p>
@@ -4790,14 +4787,14 @@
 							<a href="./security-model.html#assumption-a01">A01 arbitrage incentives</a>,
 							<a href="./security-model.html#assumption-a02">A02 viable operating costs</a>,
 							<a href="./security-model.html#assumption-a13">A13 REP liquidity</a>,
-							<a href="./security-model.html#assumption-a17">A17 timely inclusion</a>,
-							<a href="./security-model.html#assumption-a18">A18 correction capital</a>,
-							<a href="./security-model.html#assumption-a19">A19 available arbitrager</a>,
-							<a href="./security-model.html#assumption-a20">A20 independent corrector</a>,
-							<a href="./security-model.html#assumption-a21">A21 observable correctable price</a>,
+							<a href="./security-model.html#assumption-a16">A16 timely inclusion</a>,
+							<a href="./security-model.html#assumption-a17">A17 correction capital</a>,
+							<a href="./security-model.html#assumption-a18">A18 available arbitrager</a>,
+							<a href="./security-model.html#assumption-a19">A19 independent corrector</a>,
+							<a href="./security-model.html#assumption-a20">A20 observable correctable price</a>,
 							<a href="./security-model.html#assumption-a06">A06 settlement executors</a>,
 							and
-							<a href="./security-model.html#assumption-a23">A23 report-state availability</a>.
+							<a href="./security-model.html#assumption-a22">A22 report-state availability</a>.
 						</p>
 					<p> The REP/ETH oracle is narrow in purpose. <code>OpenOraclePriceCoordinator</code> uses <code>OpenOracle</code> to obtain a fresh REP/ETH price for liquidation, REP withdrawal, and bond-allowance updates. A stale price also blocks <code>depositToEscalationGame</code> whenever the pool still has active security-bond allowance. It is not the oracle for question truth; escalation and, if necessary, Zoltar forks handle that path. </p>
 					<p> The OpenOracle path is contestable before the coordinator can use it: the sponsor funds the request, the coordinator atomically posts the initial token amounts and becomes the onchain reporter, disputers can replace a bad report with the contract-required replacement amounts strictly before the settlement deadline, and a settler can finalize the report at or after that deadline. OpenOracle credits the final position to the final reporter. Its callback supplies the accepted amounts to the coordinator, which withdraws only its own internal WETH/REP balances back to the sponsor. Request, dispute, settlement, callback safety, and recovery details are maintained in the dedicated <a href="./open-oracle-integration.html#statoblast-integration">OpenOracle integration</a> guide. </p>
@@ -4982,7 +4979,7 @@
 					</div>
 						<p>
 							The <a href="./security-model.html">Protocol Security Model</a>
-					defines assumptions A01–A31 and the guarantees deliberately excluded
+					defines assumptions A01–A30 and the guarantees deliberately excluded
 							from the protocol model.
 						</p>
 						<p class="security-assumption-ref">
@@ -5018,8 +5015,8 @@
 					</div>
 					<p class="security-assumption-ref">
 						<strong>Security assumption:</strong>
-						<a href="./security-model.html#assumption-a28"
-							>A28 safe immutable parameters</a
+						<a href="./security-model.html#assumption-a27"
+							>A27 safe immutable parameters</a
 						>.
 					</p>
 					<table>

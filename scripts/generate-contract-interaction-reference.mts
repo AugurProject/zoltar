@@ -528,7 +528,7 @@ const contractReferences: ContractReference[] = [
 		readAbiFingerprint: '84e9d44350c2a27cc521f9525e34f385e810e0093aa0626ad64bcb490a925fe9',
 		readSurface:
 			'Use `universes`, `deployedChildOutcomeIndexes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThreshold`, `getNonDecisionThreshold`, `getUniverseTheoreticalSupply`, `getChildUniverseId`, `getDeployedChildUniverses`, and `getMigrationRepBalance` to reconstruct universe and migration state.',
-		securityBoundary: 'Security boundaries for these calls are [A15 intended question selection](./security-model.html#assumption-a15), [A28 safe immutable parameters](./security-model.html#assumption-a28), and [A16 permissionless-fork alignment](./security-model.html#assumption-a16).',
+		securityBoundary: 'Security boundaries for these calls are [A15 intended question selection](./security-model.html#assumption-a15) and [A27 safe immutable parameters](./security-model.html#assumption-a27).',
 		readDeclarations: [
 			{ name: 'getForkTime' },
 			{ name: 'forkQuestionMatches' },
@@ -692,7 +692,7 @@ const contractReferences: ContractReference[] = [
 		readSurface:
 			'Immutable relationship and configuration getters are `questionId`, `universeId`, `initialEscalationGameDeposit`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceOracleManagerAndOperatorQueuer`, `openOracle`, `escalationGameFactory`, `questionData`, `securityPoolForker`, `truthAuction`, `securityPoolFactory`, and `securityMultiplier`; the current game is `escalationGame`. Accounting and lifecycle getters are `totalSecurityBondAllowance`, `completeSetCollateralAmount`, `poolOwnershipDenominator`, `shareTokenSupply`, `totalFeesOwedToVaults`, `lastUpdatedFeeAccumulator`, `feeIndex`, `currentRetentionRate`, `awaitingForkContinuation`, `securityVaults`, and `systemState`. Use `securityPoolEventEmitter`, `getVaultCount`, `getActiveVaultCount`, `getVaults`, `getActiveVaults`, `sharesToCash`, `cashToShares`, `repToPoolOwnership`, `repToPoolOwnershipRoundUp`, `poolOwnershipToRep`, `getTotalRepBalance`, `totalAccruedFees`, `getPoolAccountingSnapshot`, `getVaultFeeRemainder`, and `isEscalationResolved` for derived or paged state. `isEscalationResolved()` is true only when a local escalation game is configured and the forker routes a non-`None` outcome; an operational fixed-outcome child without a local game returns false. `SystemState` determines which transaction paths remain open.',
 		securityBoundary:
-			'Price-sensitive withdrawal, allowance, and liquidation calls depend on [A17 timely inclusion](./security-model.html#assumption-a17), [A24 external token behavior](./security-model.html#assumption-a24), [A21 observable correctable price](./security-model.html#assumption-a21), and [A06 lifecycle executors](./security-model.html#assumption-a06). User-initiated pool calls additionally depend on [A31 account authority](./security-model.html#assumption-a31).',
+			'Price-sensitive withdrawal, allowance, and liquidation calls depend on [A16 timely inclusion](./security-model.html#assumption-a16), [A23 external token behavior](./security-model.html#assumption-a23), [A20 observable correctable price](./security-model.html#assumption-a20), and [A06 lifecycle executors](./security-model.html#assumption-a06). User-initiated pool calls additionally depend on [A30 account authority](./security-model.html#assumption-a30).',
 		readDeclarations: [
 			{ name: 'securityPoolEventEmitter' },
 			{ name: 'getVaultCount' },
@@ -771,7 +771,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Adds collateral and mints one `Invalid`, `Yes`, and `No` share per complete-set unit, then invokes the ERC-1155 batch-receiver callback for a contract trader. Callback rejection rolls back the ETH, pool accounting, events, and share mint.',
 				declarations: [{ name: 'createCompleteSet' }],
 				preconditions:
-					"Operational and unforked; `isEscalationResolved()` is false; not awaiting continuation; positive ETH converts to at least one complete-set unit; vault-assigned, fee-eligible bond capacity covers the new collateral (the pool's resulting total collateral, not merely this deposit); under [A25 asset-recipient compatibility](./security-model.html#assumption-a25), a contract trader accepts `onERC1155BatchReceived`.",
+					"Operational and unforked; `isEscalationResolved()` is false; not awaiting continuation; positive ETH converts to at least one complete-set unit; vault-assigned, fee-eligible bond capacity covers the new collateral (the pool's resulting total collateral, not merely this deposit); under [A24 asset-recipient compatibility](./security-model.html#assumption-a24), a contract trader accepts `onERC1155BatchReceived`.",
 				signals: '`CompleteSetCreated`, `PoolAccountingCheckpoint`, then ERC-1155 `TransferBatch` on a successful callback',
 			},
 			{
@@ -1338,7 +1338,7 @@ const contractReferences: ContractReference[] = [
 		readSurface:
 			'Configuration getters are `MAX_PENDING_SETTLEMENT_OPERATIONS`, `OPEN_INTEREST_DIVIDER`, `reputationToken`, `securityPool`, `openOracle`, `weth`, `gasConsumedOpenOracleReportPrice`, `gasConsumedSettlement`, `gasUnitsForOneDispute`, `initialReportPriorityFeeWeiPerGas`, `targetPriceErrorForDispute`, `openOracleSecurityMultiplierBps`, `settlementTime`, `disputeDelay`, `protocolFee`, `feePercentage`, `multiplier`, `timeType`, `trackDisputes`, `protocolFeeRecipient`, `escalationHaltMultiplierBps`, `maxSettlementBaseFeeMultiplierBps`, and `minLiquidationPriceDistanceBps`. Current report and operation getters are `pendingReportId`, `pendingReportSponsor`, `pendingOperationSlotId`, `lastSettlementTimestamp`, `lastPrice`, `pendingReportMaxSettlementBaseFee`, `stagedOperationCounter`, and `stagedOperations`. Use `isPriceValid`, `minimumToken1Report`, `getRequestPriceEthCost`, `getQueuedOperationEthCost`, `getSettlementCallbackGasLimit`, `getPendingOperationSlot`, `getActiveStagedOperationCount`, `getActiveStagedOperations`, `getPendingSettlementOperationCount`, and `getPendingSettlementOperationIds` for derived or paged state.',
 		securityBoundary:
-			'Report and staged-operation liveness depends on [A17 timely inclusion](./security-model.html#assumption-a17), [A19 available arbitrager](./security-model.html#assumption-a19), [A20 independent corrector](./security-model.html#assumption-a20), [A21 observable correctable price](./security-model.html#assumption-a21), and [A06 lifecycle executors](./security-model.html#assumption-a06). An official-client proposal made when `lastPrice` is zero and the client must request an offchain market quote additionally depends on [A22 representative client quotes](./security-model.html#assumption-a22); proposals copied from a nonzero cached price do not.',
+			'Report and staged-operation liveness depends on [A16 timely inclusion](./security-model.html#assumption-a16), [A18 available arbitrager](./security-model.html#assumption-a18), [A19 independent corrector](./security-model.html#assumption-a19), [A20 observable correctable price](./security-model.html#assumption-a20), and [A06 lifecycle executors](./security-model.html#assumption-a06). An official-client proposal made when `lastPrice` is zero and the client must request an offchain market quote additionally depends on [A21 representative client quotes](./security-model.html#assumption-a21); proposals copied from a nonzero cached price do not.',
 		readDeclarations: [
 			{ name: 'isPriceValid' },
 			{ name: 'minimumToken1Report' },
@@ -1496,7 +1496,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'Transfers one outcome-token balance without changing supply.',
 				declarations: [{ name: 'safeTransferFrom', sourcePath: 'solidity/contracts/peripherals/tokens/ERC1155.sol' }],
 				preconditions:
-					'Caller owns the source balance or has operator approval; the source account has not materialized that token into any child branch; destination is nonzero; the source balance is sufficient; under [A25 asset-recipient compatibility](./security-model.html#assumption-a25), a contract recipient accepts the ERC-1155 callback.',
+					'Caller owns the source balance or has operator approval; the source account has not materialized that token into any child branch; destination is nonzero; the source balance is sufficient; under [A24 asset-recipient compatibility](./security-model.html#assumption-a24), a contract recipient accepts the ERC-1155 callback.',
 				signals: '`TransferSingle`',
 			},
 			{
@@ -1505,7 +1505,7 @@ const contractReferences: ContractReference[] = [
 				effect: 'A nonempty batch transfers each listed outcome-token balance without changing supply. Equal empty ID and value arrays return as a no-op without an event.',
 				declarations: [{ name: 'safeBatchTransferFrom', sourcePath: 'solidity/contracts/peripherals/tokens/ERC1155.sol' }],
 				preconditions:
-					'ID and value array lengths match. A nonempty batch also requires holder or operator authority, no listed source token that the source account has already materialized into a child branch, a nonzero destination, sufficient source balances, and, under [A25 asset-recipient compatibility](./security-model.html#assumption-a25), an accepting ERC-1155 callback from a contract recipient; the empty-batch no-op performs none of those checks.',
+					'ID and value array lengths match. A nonempty batch also requires holder or operator authority, no listed source token that the source account has already materialized into a child branch, a nonzero destination, sufficient source balances, and, under [A24 asset-recipient compatibility](./security-model.html#assumption-a24), an accepting ERC-1155 callback from a contract recipient; the empty-batch no-op performs none of those checks.',
 				signals: '`TransferBatch` for a nonempty batch; no event for an empty batch',
 			},
 			{
@@ -1515,7 +1515,7 @@ const contractReferences: ContractReference[] = [
 					"If needed, first freezes the operational source pool and records its fork snapshot. A single-target call may lazily create that child while the branch-creation window is open. It keeps and locks the holder's source entitlement, then mints each selected child-universe token ID up to the current source balance. Later source additions materialize only the unminted delta. A contract holder receives the ERC-1155 single-receiver callback for each mint; rejection rolls back the mint and preceding fork or child setup.",
 				declarations: [{ name: 'migrate' }],
 				preconditions:
-					'Source universe forked; canonical source pool is `Operational` or `PoolForked`, and an `Operational` source has no inherited fixed outcome because auto-fork activation rejects one; positive source balance; nonempty, strictly increasing, well-formed outcomes; every target in a multi-target call already has a canonical child pool; after the branch-creation window, a single target must also already exist; at least one selected child has an unmaterialized balance; under [A25 asset-recipient compatibility](./security-model.html#assumption-a25), a contract holder accepts `onERC1155Received` for every target mint.',
+					'Source universe forked; canonical source pool is `Operational` or `PoolForked`, and an `Operational` source has no inherited fixed outcome because auto-fork activation rejects one; positive source balance; nonempty, strictly increasing, well-formed outcomes; every target in a multi-target call already has a canonical child pool; after the branch-creation window, a single target must also already exist; at least one selected child has an unmaterialized balance; under [A24 asset-recipient compatibility](./security-model.html#assumption-a24), a contract holder accepts `onERC1155Received` for every target mint.',
 				signals:
 					'`PoolForkModeActivated`, `PoolAccountingCheckpoint`, `SecurityPoolForkSnapshot`, `ParentRepLocked`, and optionally `EscalationRepDrainedAtFork` when auto-forking; `SecurityPoolRegistered`, `DeploySecurityPool`, `AuthorizationUpdated`, and `ChildPoolLinked` when lazily deploying, plus `DeployChild`, `ChildRepSplit`, `ChildPoolRepSwept`, `EscalationGameSet`, `GameContinuedFromFork`, `ForkCarryCheckpoint`, and `ChildEscalationRepMaterialized` as applicable; then one ERC-1155 mint `TransferSingle` and `Migrate` per materialized target on successful callbacks',
 			},
@@ -1532,7 +1532,7 @@ const contractReferences: ContractReference[] = [
 				caller: 'An authorized `SecurityPool`',
 				effect: "Mints `amount` each of Invalid, Yes, and No to `account`, then invokes its ERC-1155 batch-receiver callback when it is a contract. Rejection rolls back the mint and the authorized pool's surrounding transaction.",
 				declarations: [{ name: 'mintCompleteSets' }],
-				preconditions: 'Caller is authorized; `account` is nonzero; `amount` is positive; under [A25 asset-recipient compatibility](./security-model.html#assumption-a25), a contract account accepts `onERC1155BatchReceived`.',
+				preconditions: 'Caller is authorized; `account` is nonzero; `amount` is positive; under [A24 asset-recipient compatibility](./security-model.html#assumption-a24), a contract account accepts `onERC1155BatchReceived`.',
 				signals: '`TransferBatch` on a successful callback',
 			},
 			{
@@ -1790,7 +1790,7 @@ The main state-changing protocol calls map to caller authority, lifecycle prereq
 
 The tables focus on transaction entrypoints in the ten primary state-changing contracts that users and protocol components interact with directly. Each read surface names every read-only function and public storage getter in the deployed contract ABI; its hidden fingerprint pins the exact source declarations, including parameters, returns, visibility, and mutability. Protocol-only rows identify calls that applications should observe but ordinary users should reach through the owning pool, forker, factory, or coordinator. Stateless helpers, deployment workers, factories used only for component construction, migration proxies, and event emitters are inventoried with their caller boundaries in the Operator Reference.
 
-The external boundaries most directly affecting these interactions are [A11 practical migration](./security-model.html#assumption-a11), [A17 timely inclusion](./security-model.html#assumption-a17), [A24 external token behavior](./security-model.html#assumption-a24), [A26 verified deployments](./security-model.html#assumption-a26), [A06 lifecycle executors](./security-model.html#assumption-a06), [A23 chain data and proof availability](./security-model.html#assumption-a23), [A29 Ethereum execution](./security-model.html#assumption-a29), [A30 cryptographic security](./security-model.html#assumption-a30), [A25 asset-recipient compatibility](./security-model.html#assumption-a25), [A27 client, RPC, and wallet integrity](./security-model.html#assumption-a27), and [A31 account authority](./security-model.html#assumption-a31).
+The external boundaries most directly affecting these interactions are [A11 practical migration](./security-model.html#assumption-a11), [A16 timely inclusion](./security-model.html#assumption-a16), [A23 external token behavior](./security-model.html#assumption-a23), [A25 verified deployments](./security-model.html#assumption-a25), [A06 lifecycle executors](./security-model.html#assumption-a06), [A22 chain data and proof availability](./security-model.html#assumption-a22), [A28 Ethereum execution](./security-model.html#assumption-a28), [A29 cryptographic security](./security-model.html#assumption-a29), [A24 asset-recipient compatibility](./security-model.html#assumption-a24), [A26 client, RPC, and wallet integrity](./security-model.html#assumption-a26), and [A30 account authority](./security-model.html#assumption-a30).
 
 Failure behavior follows Solidity transaction semantics: an uncaught revert rolls back the transaction. The coordinator is the important exception at the workflow level because it deliberately consumes several failed staged operations and records the result in \`ExecutedStagedOperation\`.
 

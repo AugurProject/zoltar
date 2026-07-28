@@ -502,7 +502,7 @@
 					act.
 				</p>
 				<ol class="assumption-grid">
-					<li id="assumption-a17" value="17" data-assumption="A17">
+					<li id="assumption-a16" value="16" data-assumption="A16">
 						<h3>Deadline transactions can obtain Ethereum inclusion</h3>
 						<p>
 							Honest users can submit competitively priced Ethereum transactions
@@ -523,7 +523,7 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a18" value="18" data-assumption="A18">
+					<li id="assumption-a17" value="17" data-assumption="A17">
 						<h3>Honest reporters can access sufficient capital</h3>
 						<p>
 							Honest reporters hold or can acquire enough REP for local escalation.
@@ -543,13 +543,13 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a19" value="19" data-assumption="A19">
+					<li id="assumption-a18" value="18" data-assumption="A18">
 						<h3>OpenOracle has an always-available profitable arbitrager</h3>
 						<p>
 							At least one rational, adequately capitalized OpenOracle participant
 							continuously monitors pending REP/ETH reports, corrects every
 							security-relevant report covered by the profitability boundary in
-							<a href="#assumption-a21">A21</a>, and can obtain inclusion before
+							<a href="#assumption-a20">A20</a>, and can obtain inclusion before
 							settlement.
 						</p>
 						<p class="assumption-failure">
@@ -566,7 +566,7 @@
 							<a href="./open-oracle-integration.html#attack-model">attack model</a>.
 						</p>
 					</li>
-					<li id="assumption-a20" value="20" data-assumption="A20">
+					<li id="assumption-a19" value="19" data-assumption="A19">
 						<h3>The sponsor and at least one corrector are economically independent</h3>
 						<p>
 							The sponsor-funded coordinator reporting path and at least one
@@ -591,7 +591,7 @@
 							<a href="./invariants.html#oracle">oracle invariants</a>.
 						</p>
 					</li>
-					<li id="assumption-a21" value="21" data-assumption="A21">
+					<li id="assumption-a20" value="20" data-assumption="A20">
 						<h3>A robust reference market makes harmful REP/ETH errors correctable</h3>
 						<p>
 							Independent participants can observe a manipulation-resistant
@@ -619,7 +619,7 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a22" value="22" data-assumption="A22">
+					<li id="assumption-a21" value="21" data-assumption="A21">
 						<h3>Client reference quotes remain available and representative</h3>
 						<p>
 							When the official client requests or displays an offchain REP/ETH
@@ -629,9 +629,9 @@
 							and a Uniswap-derived liquidation preview. A proposal copied from a
 							nonzero cached coordinator price—even when stale—does not depend on
 							this quote path; its correction instead relies on
-							<a href="#assumption-a19">A19</a>,
-							<a href="#assumption-a20">A20</a>, and
-							<a href="#assumption-a21">A21</a>.
+							<a href="#assumption-a18">A18</a>,
+							<a href="#assumption-a19">A19</a>, and
+							<a href="#assumption-a20">A20</a>.
 							Users independently verify unusually security-sensitive values; a
 							client quote is a transaction input or preview, not an onchain truth
 							guarantee.
@@ -656,7 +656,7 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a23" value="23" data-assumption="A23">
+					<li id="assumption-a22" value="22" data-assumption="A22">
 						<h3>Canonical chain data and proof construction remain available</h3>
 						<p>
 							Participants can access reorg-aware Ethereum history, recognized
@@ -687,7 +687,7 @@
 					onchain guards.
 				</p>
 				<ol class="assumption-grid">
-					<li id="assumption-a24" value="24" data-assumption="A24">
+					<li id="assumption-a23" value="23" data-assumption="A23">
 						<h3>Genesis REP and configured WETH obey the external accounting model</h3>
 						<p>
 							Genesis REP and configured WETH move exactly the requested base units,
@@ -698,7 +698,7 @@
 							accurate, and the configured genesis REP burn sink remains
 							inaccessible. Canonical child REP is implemented by the reviewed
 							<code>ReputationToken</code> contract and is a protocol-enforced
-							property under A26 and A29, not an additional external-token
+							property under A25 and A28, not an additional external-token
 							assumption.
 						</p>
 						<p class="assumption-failure">
@@ -716,7 +716,7 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a25" value="25" data-assumption="A25">
+					<li id="assumption-a24" value="24" data-assumption="A24">
 						<h3>Participant-controlled recipients can accept required asset deliveries</h3>
 						<p>
 							Vaults, bidders, oracle sponsors, traders, share holders, and other
@@ -752,7 +752,7 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a26" value="26" data-assumption="A26">
+					<li id="assumption-a25" value="25" data-assumption="A25">
 						<h3>Users select verified canonical deployments</h3>
 						<p>
 							Users and integrations verify runtime bytecode, constructor-installed
@@ -778,7 +778,7 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a27" value="27" data-assumption="A27">
+					<li id="assumption-a26" value="26" data-assumption="A26">
 						<h3>Clients, RPCs, and wallets preserve user intent and canonical state</h3>
 						<p>
 							Interfaces, indexers, RPC providers, and wallet software return
@@ -803,7 +803,7 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a28" value="28" data-assumption="A28">
+					<li id="assumption-a27" value="27" data-assumption="A27">
 						<h3>Immutable parameters preserve economic and executable security margins</h3>
 						<p>
 							The selected parameter relationships keep the fork threshold and
@@ -834,7 +834,7 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a29" value="29" data-assumption="A29">
+					<li id="assumption-a28" value="28" data-assumption="A28">
 						<h3>Ethereum preserves the execution environment the protocol relies on</h3>
 						<p>
 							Ethereum continues to provide correct EVM execution and atomic
@@ -859,7 +859,7 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a30" value="30" data-assumption="A30">
+					<li id="assumption-a29" value="29" data-assumption="A29">
 						<h3>Ethereum cryptographic primitives remain secure</h3>
 						<p>
 							Keccak-256 remains collision- and preimage-resistant at the truncated
@@ -882,7 +882,7 @@
 							>.
 						</p>
 					</li>
-					<li id="assumption-a31" value="31" data-assumption="A31">
+					<li id="assumption-a30" value="30" data-assumption="A30">
 						<h3>Participants retain control of account authority</h3>
 						<p>
 							Participants protect the private keys, signing devices, session
