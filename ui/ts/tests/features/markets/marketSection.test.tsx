@@ -725,7 +725,7 @@ describe('MarketSection', () => {
 		const renderedComponent = await renderIntoDocument(h(MarketSection, createMarketSectionProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(within(document.body).getByText('Zoltar questions can define a universe fork or seed an Augur Statoblast security pool.')).not.toBeNull()
+		expect(within(document.body).getByText('A Question is a reusable resolution definition stored in Zoltar. Creating one produces a Question ID. Augur Statoblast reuses that Question ID to create a tradeable Market (a Security Pool), while Zoltar can reuse the Question to define a universe fork.')).not.toBeNull()
 	})
 
 	test('selects a paginated question for the fork workflow', async () => {
