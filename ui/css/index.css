@@ -7537,9 +7537,21 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 
 	.route-subnav-shell {
 		display: grid;
-		grid-template-columns: var(--touch-target-min) minmax(0, 1fr) var(--touch-target-min);
+		grid-template-columns: minmax(0, 1fr);
 		align-items: center;
 		padding: 0;
+	}
+
+	.route-subnav-shell.has-overflow-start {
+		grid-template-columns: var(--touch-target-min) minmax(0, 1fr);
+	}
+
+	.route-subnav-shell.has-overflow-end {
+		grid-template-columns: minmax(0, 1fr) var(--touch-target-min);
+	}
+
+	.route-subnav-shell.has-overflow-start.has-overflow-end {
+		grid-template-columns: var(--touch-target-min) minmax(0, 1fr) var(--touch-target-min);
 	}
 
 	.route-subnav-overflow-control {
@@ -7570,6 +7582,7 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	.route-subtab-nav {
 		justify-content: flex-start;
 		flex-wrap: nowrap;
+		gap: 0.45rem;
 		width: 100%;
 		min-width: 0;
 		overflow-x: auto;
@@ -7580,6 +7593,7 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 		flex: 0 0 auto;
 		padding-right: 0;
 		padding-left: 0;
+		font-size: var(--font-label);
 	}
 
 	.overview-inline-metrics {

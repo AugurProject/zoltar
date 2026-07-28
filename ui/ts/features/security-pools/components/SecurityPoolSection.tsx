@@ -169,7 +169,7 @@ export function SecurityPoolSection({
 				</>
 			) : (
 				<>
-					<SectionBlock title={showHeader ? undefined : commonCopy.createPool} variant='plain'>
+					<SectionBlock description={securityPoolCopy.marketHierarchyDetail} title={showHeader ? undefined : commonCopy.createPool} variant='plain'>
 						<div className='form-grid'>
 							<div className='field'>
 								<label htmlFor='security-pool-question-picker'>
