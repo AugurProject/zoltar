@@ -1262,6 +1262,21 @@ describe('shared ethereum compatibility layer', () => {
 		expect(calls).toHaveLength(1)
 	})
 
+	test('public client reads transaction counts at an exact historical block', async () => {
+		const calls: { method: string; params: unknown }[] = []
+		const provider = createProvider(({ method, params }) => {
+			expect(method).toBe('eth_getTransactionCount')
+			expect(params).toEqual([getAddress(OWNER_ADDRESS), '0x63'])
+			return '0x7'
+		}, calls)
+		const client = createPublicClient({
+			chain: mainnet,
+			transport: custom(provider),
+		})
+		expect(await client.getTransactionCount({ address: getAddress(OWNER_ADDRESS), blockNumber: 99n })).toBe(7n)
+		expect(calls).toHaveLength(1)
+	})
+
 	test('public client multicall decodes success and failure entries', async () => {
 		const calls: { method: string; params: unknown }[] = []
 		const firstBalanceCall = encodeFunctionData({

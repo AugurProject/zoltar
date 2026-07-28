@@ -395,7 +395,7 @@ type PublicClientShape<TTransport extends Transport, TChain extends Chain | unde
 	getCode: (parameters: { address: Address; blockTag?: BlockTag | undefined }) => Promise<Hex | undefined>
 	getLogs: <TEvent extends AbiParameter | undefined>(parameters: { address?: Address | undefined; event?: TEvent; fromBlock?: bigint | undefined; toBlock?: bigint | undefined; topics?: readonly LogTopicFilter[] | undefined }) => Promise<readonly RpcLogForEvent<TEvent>[]>
 	getTransaction: (parameters: { hash: Hash }) => Promise<BlockTransaction>
-	getTransactionCount: (parameters: { address: Address; blockTag?: BlockTag | undefined }) => Promise<bigint>
+	getTransactionCount: (parameters: { address: Address; blockNumber?: bigint | undefined; blockTag?: BlockTag | undefined }) => Promise<bigint>
 	getTransactionReceipt: (parameters: { hash: Hash }) => Promise<TransactionReceipt>
 	multicall: <TContracts extends readonly ContractFunctionParameters[], TAllowFailure extends boolean>(parameters: { allowFailure: TAllowFailure; contracts: TContracts; multicallAddress: Address }) => Promise<MulticallReturnType<TContracts, TAllowFailure>>
 	readContract: <TAbi extends Abi, TFunctionName extends string>(parameters: ContractFunctionParameters<TAbi, TFunctionName>) => Promise<ContractFunctionResult<TAbi, TFunctionName>>
@@ -556,6 +556,11 @@ function normalizeTransactionType(value: unknown) {
 
 function normalizeBlockTag(value: bigint | undefined) {
 	return value === undefined ? 'latest' : hexQuantity(value)
+}
+
+function transactionCountBlockTag(parameters: { blockNumber?: bigint | undefined; blockTag?: BlockTag | undefined }) {
+	if (parameters.blockNumber !== undefined && parameters.blockTag !== undefined) throw new Error('Transaction count cannot specify both blockNumber and blockTag')
+	return parameters.blockNumber === undefined ? (parameters.blockTag ?? 'latest') : normalizeBlockTag(parameters.blockNumber)
 }
 
 function normalizeNullableAddress(value: unknown) {
@@ -1293,7 +1298,7 @@ function buildPublicClientActions<TTransport extends Transport, TChain extends C
 			normalizeRpcBigInt(
 				await requestTransport<string>(transport, {
 					method: 'eth_getTransactionCount',
-					params: [parameters.address, parameters.blockTag ?? 'latest'],
+					params: [parameters.address, transactionCountBlockTag(parameters)],
 				}),
 			),
 		getBlock: async parameters => {

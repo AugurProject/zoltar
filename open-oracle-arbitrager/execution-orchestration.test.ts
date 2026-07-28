@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { Address, Hex, TransactionReceipt, TransactionReplacement } from '@zoltar/shared/ethereum'
+import { createPublicClient, custom, mainnet, type Address, type EIP1193Provider, type Hex, type TransactionReceipt, type TransactionReplacement } from '@zoltar/shared/ethereum'
 import {
 	assertCanonicalExecutionSnapshot,
 	assertReceiptSnapshotBlockHash,
@@ -613,21 +613,61 @@ describe('funded execution orchestration', () => {
 	})
 
 	test('discovers a canonical replacement by durable sender and nonce across RPCs', async () => {
-		const replacementTransaction = { from: address, hash: replacementHash, nonce: 9n }
-		const reader = {
-			getBlock: ({ blockNumber }: { blockNumber: bigint; includeTransactions: true }) =>
-				Promise.resolve({
-					transactions: blockNumber === 102n ? [replacementTransaction] : [],
-				}),
-			getTransactionCount: ({ blockNumber }: { address: Address; blockNumber: bigint }) => Promise.resolve(blockNumber >= 102n ? 10n : 9n),
+		const requestedNonceTags: string[][] = []
+		const reader = () => {
+			const nonceTags: string[] = []
+			requestedNonceTags.push(nonceTags)
+			const provider = {
+				request: async ({ method, params }) => {
+					if (!Array.isArray(params)) throw new Error(`${method} params are invalid`)
+					if (method === 'eth_getTransactionCount') {
+						const blockTag = params[1]
+						if (typeof blockTag !== 'string') throw new Error('Transaction count block tag is invalid')
+						nonceTags.push(blockTag)
+						return BigInt(blockTag) >= 102n ? '0xa' : '0x9'
+					}
+					if (method === 'eth_getBlockByNumber') {
+						const blockTag = params[0]
+						if (typeof blockTag !== 'string') throw new Error('Block tag is invalid')
+						return {
+							hash: `0x${'78'.repeat(32)}`,
+							number: blockTag,
+							parentHash: `0x${'79'.repeat(32)}`,
+							timestamp: '0x5',
+							transactions:
+								BigInt(blockTag) === 102n
+									? [
+											{
+												from: address,
+												gas: '0x5208',
+												hash: replacementHash,
+												input: '0x',
+												nonce: '0x9',
+												to: reporter,
+												transactionIndex: '0x0',
+												type: '0x2',
+												value: '0x0',
+											},
+										]
+									: [],
+						}
+					}
+					throw new Error(`Unexpected RPC method: ${method}`)
+				},
+			} satisfies EIP1193Provider
+			return createPublicClient({ chain: mainnet, transport: custom(provider) })
 		}
-		const hash = await transactionHashBySenderNonceWithQuorum([reader, reader], ['https://rpc-a.example', 'https://rpc-b.example'], 'public lifecycle', {
+		const hash = await transactionHashBySenderNonceWithQuorum([reader(), reader()], ['https://rpc-a.example', 'https://rpc-b.example'], 'public lifecycle', {
 			account: address,
 			fromBlockNumber: 100n,
 			nonce: 9n,
 			toBlockNumber: 103n,
 		})
 		expect(hash).toBe(replacementHash)
+		expect(requestedNonceTags).toEqual([
+			['0x67', '0x65', '0x66'],
+			['0x67', '0x65', '0x66'],
+		])
 	})
 
 	test('fails closed when RPCs disagree on a sender-and-nonce replacement', async () => {
