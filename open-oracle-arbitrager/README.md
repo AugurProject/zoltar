@@ -10,11 +10,10 @@ Dry-run is the default. The bot cannot submit a transaction unless it is explici
 started with `--execute` and has a signer supplied through `PRIVATE_KEY`, saved
 restart settings, or the local dashboard when `--ui` is enabled.
 
-> **Deployment is currently blocked.** The [ORACLE-A1 launch analysis](../docs/oracle-a1-launch-analysis.html)
-> concludes that observed REP/WETH executable liquidity is insufficient. Mainnet
-> commands below are operator references, not production approval. Rehearse on
-> Sepolia with a dedicated low-balance key; no automated strategy can guarantee a
-> profit or prevent every loss.
+> **Live execution is experimental.** Mainnet commands below are operator
+> references, not production approval. Rehearse on Sepolia with a dedicated
+> low-balance key, validate current executable liquidity, and supervise every
+> position; no automated strategy can guarantee a profit or prevent every loss.
 
 ## Requirements
 
@@ -55,6 +54,40 @@ restart settings, or the local dashboard when `--ui` is enabled.
 Do not use a key that controls unrelated protocol or treasury funds. The dashboard
 binds to `127.0.0.1`, but the execution key still lives in the bot process and must be
 protected like any hot wallet.
+
+## End-user readiness backlog
+
+The repository implementation is a guarded operator tool, not yet a supported
+retail release. Complete these items before distributing live-execution
+instructions:
+
+1. Publish separate, reviewed mainnet and Sepolia **execution manifests** containing
+   the deployed executor, OpenOracle, approved coordinators, router, factory,
+   quoter, WETH, and executable tokens with runtime bytecode hashes. The protocol
+   address manifest in `docs/mainnet-deployment-addresses.json` is not a substitute
+   for this bot trust root.
+2. Deploy and source-verify the stateless executor on each supported network, then
+   reproduce every manifest hash through at least two independently operated RPCs.
+3. Run a funded, low-limit Sepolia rehearsal covering entry, replacement, normal
+   settlement, withdrawal, restart after each journal stage, relay rejection,
+   RPC disagreement, and signer-authorized manual reconciliation. Retain transaction
+   hashes and recovery evidence as release artifacts.
+4. Add an external signer or encrypted-keystore interface so routine operators do
+   not need to paste a raw private key into the dashboard or save it in plaintext.
+   Until then, use a dedicated low-balance key and leave **Remember signer** off.
+5. Add fault-injection coverage for disk-full and interrupted settings writes,
+   delayed or partial relay responses, correlated RPC failure, clock skew, and
+   reorganization deeper than the normal overlap window.
+6. Publish a supported relay/RPC compatibility matrix and continuously exercise
+   exact bundle simulation, submission, receipt, and archive-read behavior against
+   those providers.
+7. Package a versioned release with pinned Bun support, checksums or signatures,
+   reproducible installation, default service supervision, log rotation, health
+   checks, and alerts for paused, syncing, error, stale-head, recovery-required,
+   low-inventory, and unconfirmed-bundle states.
+8. Commission an independent review of the final deployed addresses, manifests,
+   signer integration, release package, and funded rehearsal evidence. Repeat the
+   review whenever execution dependencies or token allowlists change.
 
 ## Install
 
@@ -340,9 +373,8 @@ locked through later dispute rounds.
 The resulting fully reserved value must satisfy both the absolute minimum-profit
 floor and a direction-specific basis-point floor. The return basis is the current
 report's WETH plus WETH fees when selling token 2, and the exact-output quoted WETH
-input when buying token 2. The
-[ORACLE-A1 launch analysis](../docs/oracle-a1-launch-analysis.html#gate)
-owns the canonical definition and deployment policy for those gates.
+input when buying token 2. The bot recomputes both thresholds from the canonical
+quote-block snapshot immediately before it signs.
 
 The dashboard balance calculation reports:
 
@@ -824,6 +856,7 @@ entry from depending on wallet inventory already committed to recovery.
   tokens, OpenOracle/Uniswap defects, compromised keys, and market movement can
   still cause loss. Start on Sepolia, use a dedicated low-balance wallet, set small
   risk limits, and supervise every live position.
-- The current [ORACLE-A1 launch analysis](../docs/oracle-a1-launch-analysis.html)
-  concludes that observed REP/WETH executable liquidity is insufficient for
-  deployment. Running this tool does not override that launch gate.
+- A profitable dry-run observation is not production approval. Before enabling
+  execution, verify the current pools, relay simulations, inventory, risk limits,
+  deployment manifest, settlement path, and recovery procedure with a low-value
+  rehearsal.

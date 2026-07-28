@@ -164,12 +164,11 @@ The coordinator quick reference below covers staging, callback recovery,
 stale-operation handling, and liquidation boundaries. Report sizing, request
 cost, and current OpenOracle parameters are canonical in
 [OpenOracle Integration](./open-oracle-integration.html#parameters); the
-economic assumption is defined by
-[`ORACLE-A1`](./security-model.html#oracle-a1). Current executable-liquidity
-evidence and the fail-closed launch criteria are in the
-[ORACLE-A1 launch analysis](./oracle-a1-launch-analysis.html). Operators can
-run the [OpenOracle arbitrager](../open-oracle-arbitrager/README.md) in
-dry-run mode to monitor pending reports and executable Uniswap V3 quotes.
+external correction assumption and its limits are defined in the
+[security model](./security-model.html#open-oracle-economic-boundary).
+Operators can run the
+[OpenOracle arbitrager](../open-oracle-arbitrager/README.md) in dry-run mode
+to monitor pending reports and executable Uniswap V3 quotes.
 
 | Area | Implementation behavior | Source |
 | --- | --- | --- |

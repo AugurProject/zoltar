@@ -638,9 +638,9 @@ function render(snapshot: OperatorSnapshot) {
 	pauseButton.textContent = snapshot.paused ? 'Resume bot' : 'Pause bot'
 	const launchNotice = element('launch-notice')
 	if (snapshot.network === 'mainnet') {
-		setText('launch-notice-title', 'Mainnet protocol launch gate failed')
-		setText('launch-notice-copy', 'ORACLE-A1 currently blocks protocol deployment even when every local bot guard passes. This is not production approval.')
-		launchNotice.dataset['tone'] = 'danger'
+		setText('launch-notice-title', 'Mainnet execution network')
+		setText('launch-notice-copy', 'Use only reviewed deployments, current market evidence, low risk limits, and supervised recovery procedures.')
+		launchNotice.dataset['tone'] = 'warning'
 	} else {
 		setText('launch-notice-title', 'Sepolia rehearsal network')
 		setText('launch-notice-copy', 'Use this network to rehearse execution and recovery. Testnet success is not production approval.')

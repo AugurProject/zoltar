@@ -267,19 +267,15 @@
 							</p>
 						</li>
 						<li id="assumption-a16" value="16" data-assumption="A16">
-							<h3>OpenOracle has an always-available profitable arbitrager</h3>
-							<p> At least one independent, rational, adequately capitalized OpenOracle participant continuously monitors pending REP/ETH reports, corrects every report for which correction is profitable under the configured economics, and can obtain transaction inclusion before settlement.
-							</p>
-						</li>
-						<li id="assumption-a17" value="17" data-assumption="A17">
 							<h3>Price-oracle reporting has an independent corrector</h3>
 							<p>
 								The sponsor-funded coordinator reporting path and at least one
 								correcting OpenOracle participant are economically independent
 								and do not collude. The independent participant is willing and
 								able to risk the WETH and REP required to replace an incorrect
-								report before settlement; this does not require two external
-								submissions for every request.
+								report when correction is profitable and can obtain transaction
+								inclusion before settlement. The contracts do not guarantee that
+								a profitable correction always exists.
 							</p>
 						</li>
 					</ol>
@@ -300,13 +296,13 @@
 						</thead>
 						<tbody>
 							<tr>
-								<td><code>ORACLE-A1</code></td>
+								<td>OpenOracle correction incentives</td>
 								<td>Reports are sized from configured gas, fee, and target-error parameters to target profitable correction; accepted prices expire after the cache window.</td>
 								<td>An independent funded arbitrager monitors, acts, and obtains inclusion before settlement.</td>
 								<td>Report liquidity does not collateralize or cap downstream or cumulative operation value.</td>
 							</tr>
 							<tr>
-								<td><code>AUCTION-A1</code></td>
+								<td>Underfunded truth-auction repair</td>
 								<td>Qualifying underfunded bids receive the full REP sale cap for retained ETH, and the child activates with collateral actually migrated and raised.</td>
 								<td>No minimum demand is assumed; actual buyer demand determines how much ETH repair is available.</td>
 								<td>The auction does not guarantee a minimum execution price, full repair, or that open-interest holders are made whole.</td>
@@ -316,24 +312,15 @@
 				</div>
 			</section>
 
-			<section id="oracle-a1">
-				<h2>ORACLE-A1 — Always-Available Profitable Arbitrager</h2>
+			<section id="open-oracle-economic-boundary">
+				<h2>OpenOracle Economic Boundary</h2>
 				<div class="callout">
 					<p>
-						<strong>Current launch evidence: failed.</strong> The
-						<a href="./oracle-a1-launch-analysis.html">ORACLE-A1 launch
-						analysis</a> finds that current mainnet REP/WETH liquidity cannot
-						profitably correct a minimum-sized 5% error in either direction.
-						Deployment remains outside this security model until the gate is
-						rerun and passes.
-					</p>
-				</div>
-				<div class="callout">
-					<p>
-						<strong>Required deployment assumption.</strong> This gate
-						operationalizes <a href="#assumption-a16">A16</a>. Deployment
-						remains blocked unless launch analysis shows that the required
-						correction is profitable under measured liquidity, gas, and timing.
+						<strong>External correction remains an assumption.</strong>
+						<a href="#assumption-a16">A16</a> requires an independent participant
+						to correct an incorrect report when doing so is profitable. Report
+						sizing does not prove that executable venue liquidity, gas, timing,
+						and inclusion make a correction profitable for every market state.
 					</p>
 				</div>
 				<p>
@@ -361,16 +348,8 @@
 				</p>
 			</section>
 
-			<section id="auction-a1">
-				<h2>AUCTION-A1 — Punitive Underfunded Clearing</h2>
-				<div class="callout">
-					<p>
-						<strong>Launch approval required.</strong> The
-						<a href="./auction-a1-launch-decision.html">AUCTION-A1 launch
-						decision</a> records the proposed loss policy, alerts, and required
-						signatures. An unsigned record is not approval.
-					</p>
-				</div>
+			<section id="truth-auction-loss-boundary">
+				<h2>Truth-Auction Loss Boundary</h2>
 				<div class="callout">
 					<p>
 						<strong>Intentional loss-allocation rule.</strong> A truth auction is
@@ -442,16 +421,16 @@
 							<tr>
 								<td>Code conforms, but the review demonstrates that profitable correction or timely inclusion is not credible under launch parameters.</td>
 								<td>Deployment-blocking economic risk.</td>
-								<td>Change parameters, design, or liquidity; rerun <code>ORACLE-A1</code>; and require the gate to pass before deployment.</td>
+								<td>Change parameters, design, or liquidity and repeat executable market and inclusion testing before deployment.</td>
 							</tr>
 							<tr>
 								<td>Code conforms and the concern is only that report liquidity does not bound downstream notional.</td>
 								<td>Documented residual risk, normally informational rather than a new vulnerability.</td>
-								<td>Confirm the assumption remains an explicit launch decision; this does not waive the separate <code>ORACLE-A1</code> pass requirement.</td>
+								<td>Confirm the external-correction assumption and downstream exposure remain acceptable for the intended deployment.</td>
 							</tr>
 							<tr>
 								<td>Code conforms, but weak truth-auction demand may leave the child under-repaired.</td>
-								<td>Quantified <code>AUCTION-A1</code> loss-allocation policy.</td>
+								<td>Documented truth-auction loss-allocation risk.</td>
 								<td>Change the auction design or explicitly approve the quantified residual loss policy before deployment.</td>
 							</tr>
 						</tbody>

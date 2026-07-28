@@ -116,10 +116,10 @@ async function verifyArchiveReplay(url: string) {
 }
 
 verifyRecordedEconomics()
-const archiveRpcUrl = process.env['ORACLE_A1_ARCHIVE_RPC_URL']
+const archiveRpcUrl = process.env['OPEN_ORACLE_ARCHIVE_RPC_URL']
 if (archiveRpcUrl !== undefined && archiveRpcUrl.trim() !== '') {
 	await verifyArchiveReplay(archiveRpcUrl)
-	console.log('ORACLE-A1 deterministic calculations and archive replay passed')
+	console.log('OpenOracle pinned market fixture calculations and archive replay passed')
 } else {
-	console.log('ORACLE-A1 deterministic calculations passed; set ORACLE_A1_ARCHIVE_RPC_URL for the pinned archive replay')
+	console.log('OpenOracle pinned market fixture calculations passed; set OPEN_ORACLE_ARCHIVE_RPC_URL for the archive replay')
 }
