@@ -439,7 +439,11 @@ async function checkEscalationDepositExample(): Promise<void> {
 		assert.ok(staticExample, 'escalation deposit static fallback must exist')
 		const staticInputValue = (name: string) => staticExample.querySelector(`[data-example-input="${name}"]`)?.getAttribute('value')
 		const staticOutput = (name: string) => staticExample.querySelector(`[data-example-output="${name}"]`)?.textContent.trim()
-		const staticRectWidth = (name: string) => staticExample.querySelector(`[data-example-rect="${name}"]`)?.getAttribute('width')
+		const staticPlotMount = staticExample.querySelector('[data-plot-chart="plot-statoblast-whitepaper-7"]')
+		assert.ok(staticPlotMount, 'escalation static fallback should retain its Plot mount')
+		assert.equal(staticPlotMount.getAttribute('role'), 'img', 'escalation static fallback Plot mount should identify itself as an image')
+		assert.equal(staticPlotMount.getAttribute('aria-label'), 'Escalation deposit accepted amount', 'escalation static fallback Plot mount should retain its accessible label')
+		assert.equal(staticPlotMount.querySelector('.plot-chart-fallback')?.textContent.trim(), 'Escalation deposit accepted amount', 'escalation static fallback Plot mount should retain readable no-JavaScript content')
 		assert.equal(staticInputValue('depositLifecycle'), '0', 'escalation static fallback should begin in first-deposit mode')
 		for (const balanceName of ['invalidBalance', 'yesBalance', 'noBalance']) {
 			assert.equal(staticInputValue(balanceName), '0', `escalation static fallback ${balanceName} should begin at zero`)
@@ -449,10 +453,6 @@ async function checkEscalationDepositExample(): Promise<void> {
 		assert.equal(staticOutput('acceptedAmount'), '5 REP', 'escalation static fallback accepted amount')
 		assert.equal(staticOutput('depositAdjustment'), 'accepted as proposed', 'escalation static fallback adjustment')
 		assert.equal(staticOutput('depositCondition'), 'No ends at 5 REP', 'escalation static fallback condition')
-		for (const rectName of ['invalidBefore', 'yesBefore', 'noBefore', 'invalidAfter', 'yesAfter']) {
-			assert.equal(staticRectWidth(rectName), '0', `escalation static fallback ${rectName} should be empty`)
-		}
-		assert.equal(staticRectWidth('noAfter'), '110', 'escalation static fallback No-after bar should represent 5 of 10 REP')
 	} finally {
 		staticWindow.close()
 	}
