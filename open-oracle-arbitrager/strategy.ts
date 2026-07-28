@@ -59,6 +59,11 @@ export function hedgeSlippageReserveWeth(direction: ArbitrageDirection, quotedWe
 	return direction === 'sell-rep' ? quotedWeth - limit : limit - quotedWeth
 }
 
+export function spotTwapDeviationWithinLimit(spotTick: bigint, twapTick: bigint, maximumDeviation: bigint) {
+	const deviation = spotTick > twapTick ? spotTick - twapTick : twapTick - spotTick
+	return deviation <= maximumDeviation
+}
+
 export function executorFunding(game: Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'feePercentage' | 'protocolFee' | 'token1' | 'token2'>, newAmount1: bigint, newAmount2: bigint, buyHedgeWethLimit: bigint) {
 	const tokenToSwap = deriveTokenToSwap(game, newAmount1, newAmount2)
 	const contribution = calculateContribution(game, tokenToSwap, game.token1, newAmount1, newAmount2)

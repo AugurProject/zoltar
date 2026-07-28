@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { DEFAULT_RISK_LIMITS, adjustedNetProfitWeth, positionRiskLimitMismatch, riskLimitMismatch } from './safety-controls.js'
+import { DEFAULT_RISK_LIMITS, adjustedNetProfitWeth, positionRiskLimitMismatch, projectedLifecycleGasReserveWeth, riskLimitMismatch } from './safety-controls.js'
 
 describe('execution risk controls', () => {
 	test('reserves lifecycle and slippage costs before calling an opportunity profitable', () => {
@@ -22,6 +22,26 @@ describe('execution risk controls', () => {
 				profitBeforeGasWeth,
 			}),
 		).toBeLessThan(10n)
+	})
+
+	test('projects the complete public and private lifecycle transaction plans', () => {
+		const parameters = {
+			callbackGasLimit: 4_000_000n,
+			configuredReserveWeth: 1n,
+			gasPrice: 2n,
+		}
+		const publicReserve = projectedLifecycleGasReserveWeth({ ...parameters, submissionMode: 'public' })
+		const privateReserve = projectedLifecycleGasReserveWeth({ ...parameters, submissionMode: 'private' })
+		expect(publicReserve).toBe(10_100_000n)
+		expect(privateReserve).toBe(10_200_000n)
+		expect(projectedLifecycleGasReserveWeth({ ...parameters, configuredReserveWeth: 10_200_001n, submissionMode: 'private' })).toBe(10_200_001n)
+		expect(adjustedNetProfitWeth({ entryGasCostWeth: 0n, hedgeSlippageReserveWeth: 0n, lifecycleGasReserveWeth: privateReserve, profitBeforeGasWeth: privateReserve })).toBe(0n)
+		expect(adjustedNetProfitWeth({ entryGasCostWeth: 0n, hedgeSlippageReserveWeth: 0n, lifecycleGasReserveWeth: privateReserve, profitBeforeGasWeth: privateReserve - 1n })).toBe(-1n)
+
+		const noPositions: never[] = []
+		const dailyLimit = { ...DEFAULT_RISK_LIMITS, maxConcurrentPositions: 2, maxDailyGasSpendWeth: privateReserve }
+		expect(positionRiskLimitMismatch({ capitalAtRiskWeth: 0n, positions: noPositions, projectedGasCostWeth: privateReserve }, dailyLimit)).toBeUndefined()
+		expect(positionRiskLimitMismatch({ capitalAtRiskWeth: 0n, positions: noPositions, projectedGasCostWeth: privateReserve + 1n }, dailyLimit)).toContain('UTC-day gas spend')
 	})
 
 	test('fails closed on every portfolio loss limit', () => {

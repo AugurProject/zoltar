@@ -18,6 +18,26 @@ restart settings, or the local dashboard when `--ui` is enabled.
 > [latest pinned market fixture](../docs/security-model.html#open-oracle-market-fixture)
 > as dated historical evidence.
 
+## How the flow works
+
+A Zoltar `OpenOraclePriceCoordinator` creates an OpenOracle report, also called a
+game, that locks WETH and another ERC-20 at the current reporter's proposed exchange
+rate. The arbitrager wallet compares that rate with executable Uniswap liquidity.
+When the replacement report can be hedged profitably, the wallet calls the stateless
+executor, which swaps the required inventory atomically and submits the OpenOracle
+dispute while preserving the wallet as the replacement reporter. After the dispute
+window, the bot either settles the final report or detects that a later reporter
+replaced it, withdraws the wallet's OpenOracle balances, and closes its durable
+position record only after canonical receipts and exact asset recovery agree.
+
+The wallet must approve the executor before it can pull WETH and the report token.
+Private delivery can include those wallet-to-executor approvals in the entry bundle;
+public delivery requires them before the opportunity appears. During
+`hedgeAndDispute`, the executor grants separate, exact temporary allowances to the
+authenticated Uniswap router and OpenOracle, then clears them before returning. See
+[OpenOracle integration](../docs/open-oracle-integration.html) for the protocol
+report lifecycle and economics.
+
 ## Requirements
 
 - Bun and this monorepo's frozen dependencies.
@@ -411,7 +431,9 @@ locked through later dispute rounds.
 - The full adverse movement permitted by the signed hedge limit
   (`--max-hedge-slippage-bps`).
 - The larger of `--lifecycle-gas-reserve-weth` and
-  `(callbackGasLimit + 1,050,000) × gas price`.
+  `(callbackGasLimit + 1,050,000) × gas price` in public mode or
+  `(callbackGasLimit + 1,100,000) × gas price` in private mode. The private
+  projection includes its separate 50,000-gas canonical-parent guard.
 
 The resulting fully reserved value must satisfy both the absolute minimum-profit
 floor and a direction-specific basis-point floor. The return basis is the current
@@ -704,10 +726,12 @@ saved value nor a higher-precedence override exists:
 | Remaining blocks | `3 blocks` | `--minimum-remaining-blocks` | Inclusion buffer for block-based games. |
 | Head poll interval | `1000 ms` | `--poll-ms` | Delay between latest-head checks. Every unseen event-log height is queried; evaluation and pool sampling run once at the newest head. Minimum: 1000 ms. |
 
-Increasing profit thresholds reduces execution frequency. Increasing the TWAP window,
-spot/TWAP restriction, or remaining-time buffers is more conservative but may reject
-legitimate late opportunities. Parameter changes do not disable contract-side
-deadline, ratio, state-hash, quote-refresh, simulation, or inventory guards.
+Increasing profit thresholds reduces execution frequency. Increasing the TWAP
+window or remaining-time buffers is generally more conservative, while decreasing
+the maximum Spot/TWAP distance rejects more divergent pools and is more
+conservative. Increasing that maximum permits larger Spot/TWAP deviations.
+Parameter changes do not disable contract-side deadline, ratio, state-hash,
+quote-refresh, simulation, or inventory guards.
 
 Other startup-only options:
 

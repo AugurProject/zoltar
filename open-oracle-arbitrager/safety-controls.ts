@@ -20,6 +20,12 @@ export function adjustedNetProfitWeth(parameters: { entryGasCostWeth: bigint; he
 	return parameters.profitBeforeGasWeth - parameters.entryGasCostWeth - parameters.hedgeSlippageReserveWeth - parameters.lifecycleGasReserveWeth
 }
 
+export function projectedLifecycleGasReserveWeth(parameters: { callbackGasLimit: bigint; configuredReserveWeth: bigint; gasPrice: bigint; submissionMode: 'private' | 'public' }) {
+	const transactionPlanGas = parameters.callbackGasLimit + (parameters.submissionMode === 'private' ? 1_100_000n : 1_050_000n)
+	const projectedGasWeth = parameters.gasPrice * transactionPlanGas
+	return projectedGasWeth > parameters.configuredReserveWeth ? projectedGasWeth : parameters.configuredReserveWeth
+}
+
 export function riskLimitMismatch(
 	exposure: {
 		capitalAtRiskWeth: bigint

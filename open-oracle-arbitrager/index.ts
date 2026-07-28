@@ -92,11 +92,27 @@ import { exactWithdrawalMatches, expectedWithdrawalToken2, hedgedProfitBeforeGas
 import { acquireExecutionSignerLock, acquirePositionJournalLock, loadPositionJournal, savePositionJournal, type ExclusiveProcessLock, type PositionRecord } from './position-store.js'
 import { quorumValue } from './read-quorum.js'
 import { bestSuccessful, compactFinalityWindow, pollUntilStopped, replaceOverlap } from './resilience.js'
-import { adjustedNetProfitWeth, positionRiskLimitMismatch, type RiskLimits } from './safety-controls.js'
+import { adjustedNetProfitWeth, positionRiskLimitMismatch, projectedLifecycleGasReserveWeth, type RiskLimits } from './safety-controls.js'
 import type { NetworkConfiguration } from './network.js'
 import { saveOperatorSettings, type PersistedOperatorSettings } from './settings-store.js'
 import { signerCandidate } from './signer.js'
-import { calculateFee, calculateNextAmount1, calculateTrackedNetProfitEth, deriveTokenToSwap, evaluateBuyRep, evaluateSellRep, executorFunding, fundedCapitalAtRiskWeth, hasFreshSubmissionWindow, hedgeSlippageReserveWeth, hedgeWethLimit, isSelfReport, meetsProfitThreshold, type ArbitrageQuote } from './strategy.js'
+import {
+	calculateFee,
+	calculateNextAmount1,
+	calculateTrackedNetProfitEth,
+	deriveTokenToSwap,
+	evaluateBuyRep,
+	evaluateSellRep,
+	executorFunding,
+	fundedCapitalAtRiskWeth,
+	hasFreshSubmissionWindow,
+	hedgeSlippageReserveWeth,
+	hedgeWethLimit,
+	isSelfReport,
+	meetsProfitThreshold,
+	spotTwapDeviationWithinLimit,
+	type ArbitrageQuote,
+} from './strategy.js'
 import { prepareSignedTransaction, simulateSignedBundleEveryRelay, SubmissionFailure, submitSignedBundle, validateSubmissionSettings, type SignedTransaction, type SubmissionSettings, type SubmissionTargetResult } from './transaction-submission.js'
 import { receiptGasCost, submitContractTransaction, trackedActivity, transactionLogLevel, waitForTrackedTransaction, type TrackTransaction } from './transaction-tracker.js'
 
@@ -390,7 +406,12 @@ function safetyAdjustedQuote(quote: ArbitrageQuote, gasCost: bigint, lifecycleGa
 async function evaluate(client: ReadClient, config: Configuration, report: OpenOracleStatePreimage, pool: Pool, gasPrice: bigint, blockNumber?: bigint | undefined) {
 	const game = report.game
 	const gasCost = gasPrice * 1_200_000n
-	const lifecycleGasReserveWeth = [config.riskLimits.lifecycleGasReserveWeth, gasPrice * (BigInt(game.callbackGasLimit) + 1_050_000n)].reduce((maximum, value) => (value > maximum ? value : maximum), 0n)
+	const lifecycleGasReserveWeth = projectedLifecycleGasReserveWeth({
+		callbackGasLimit: BigInt(game.callbackGasLimit),
+		configuredReserveWeth: config.riskLimits.lifecycleGasReserveWeth,
+		gasPrice,
+		submissionMode: config.submission.mode,
+	})
 	const repWithFees = game.currentAmount2 + calculateFee(game.currentAmount2, game.feePercentage) + calculateFee(game.currentAmount2, game.protocolFee)
 	return bestSuccessful(
 		[
@@ -651,10 +672,14 @@ async function executeDispute(
 		spotTick: executionSnapshot.poolSpotTick,
 		twapTick: executionSnapshot.poolTwapTick,
 	}
-	const deviation = refreshedPool.spotTick > refreshedPool.twapTick ? refreshedPool.spotTick - refreshedPool.twapTick : refreshedPool.twapTick - refreshedPool.spotTick
-	if (deviation > config.maxSpotTwapTicks) throw new Error('Selected pool failed the final spot/TWAP check')
+	if (!spotTwapDeviationWithinLimit(refreshedPool.spotTick, refreshedPool.twapTick, config.maxSpotTwapTicks)) throw new Error('Selected pool failed the final spot/TWAP check')
 	const gasPrice = executionSnapshot.baseFeePerGas * 2n + 2n * 10n ** 9n
-	const lifecycleGasReserveWeth = [config.riskLimits.lifecycleGasReserveWeth, gasPrice * (BigInt(game.callbackGasLimit) + 1_050_000n)].reduce((maximum, value) => (value > maximum ? value : maximum), 0n)
+	const lifecycleGasReserveWeth = projectedLifecycleGasReserveWeth({
+		callbackGasLimit: BigInt(game.callbackGasLimit),
+		configuredReserveWeth: config.riskLimits.lifecycleGasReserveWeth,
+		gasPrice,
+		submissionMode: config.submission.mode,
+	})
 	const entryGasCostWeth = gasPrice * 1_200_000n
 	const refreshedQuote = selectBestExecution(
 		[safetyAdjustedQuote(evaluateSellRep(game, executionSnapshot.sellHedgeQuote, 0n), entryGasCostWeth, lifecycleGasReserveWeth, config), safetyAdjustedQuote(evaluateBuyRep(game, executionSnapshot.buyHedgeQuote, 0n), entryGasCostWeth, lifecycleGasReserveWeth, config)],
@@ -1256,8 +1281,7 @@ async function inspectReport(
 	let best: { pool: Pool; quote: ArbitrageQuote } | undefined
 	for (const pool of pools) {
 		if (pool.token.toLowerCase() !== game.token2.toLowerCase()) continue
-		const deviation = pool.spotTick > pool.twapTick ? pool.spotTick - pool.twapTick : pool.twapTick - pool.spotTick
-		if (deviation > config.maxSpotTwapTicks) continue
+		if (!spotTwapDeviationWithinLimit(pool.spotTick, pool.twapTick, config.maxSpotTwapTicks)) continue
 		const quote = await evaluate(client, config, report, pool, gasPrice)
 		if (quote === undefined) continue
 		if (best === undefined || quote.netProfitWeth > best.quote.netProfitWeth) best = { pool, quote }
@@ -1308,7 +1332,12 @@ async function inspectReport(
 		timeRemaining: timeRemaining.toString(),
 		windowUnit: timeType ? 'seconds' : 'blocks',
 	} satisfies OpportunitySnapshot
-	const projectedLifecycleGas = [config.riskLimits.lifecycleGasReserveWeth, gasPrice * (BigInt(game.callbackGasLimit) + 1_050_000n)].reduce((maximum, value) => (value > maximum ? value : maximum), 0n)
+	const projectedLifecycleGas = projectedLifecycleGasReserveWeth({
+		callbackGasLimit: BigInt(game.callbackGasLimit),
+		configuredReserveWeth: config.riskLimits.lifecycleGasReserveWeth,
+		gasPrice,
+		submissionMode: config.submission.mode,
+	})
 	const candidate = decision === 'eligible' ? { capitalAtRiskWeth, opportunity, pool: best.pool, projectedGasCostWeth: gasPrice * 1_200_000n + projectedLifecycleGas, quote: best.quote, report } : undefined
 	return { candidate, opportunity }
 }
