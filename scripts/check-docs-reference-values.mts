@@ -11,6 +11,8 @@ const liquidationHtml = await readFile('docs/liquidation.html', 'utf8')
 const openOracleIntegration = await readFile('docs/open-oracle-integration.html', 'utf8')
 const zoltarWhitepaper = await readFile('docs/zoltar-whitepaper.html', 'utf8')
 const whitepaperStatoblast = await readFile('docs/statoblast-whitepaper.html', 'utf8')
+const diagramSpecs = await readFile('docs/charts/diagramSpecs.json', 'utf8')
+const normalizedDiagramSpecs = diagramSpecs.replaceAll(/\\n|\\t|\s+/g, ' ')
 const startHere = await readFile('docs/documentation.html', 'utf8')
 const operatorReference = await readFile('docs/operator-reference.md', 'utf8')
 const contractInteractionReference = await readFile('docs/contract-interaction-reference.md', 'utf8')
@@ -151,8 +153,8 @@ function assertNonDecisionLifecycleDocs(): void {
 	}
 	assert.match(normalizedOperatorReference, /nonDecisionState = Local[\s\S]*closes further deposits[\s\S]*nonDecisionState = InheritedThresholdTie[\s\S]*closes further deposits/)
 	assert.ok(normalizedStatoblast.includes('Both explicit states close further deposits.'), 'Statoblast whitepaper must explain the shared deposit-closure rule')
-	assert.match(normalizedStatoblast, /<desc id="escalation-desc">[\s\S]*local game's fork eligibility[\s\S]*pool with an inherited fixed outcome rejects both new local deposits and fork activation/)
-	assert.match(normalizedStatoblast, /Game-Local[\s\S]*Eligibility[\s\S]*pool guard still applies/)
+	assert.match(normalizedDiagramSpecs, /local\s+game's fork eligibility[\s\S]*pool with an inherited fixed outcome[\s\S]*rejects both new local deposits and fork activation/)
+	assert.match(normalizedDiagramSpecs, /Game-Local[\s\S]*Eligibility[\s\S]*pool guard still applies/)
 	assert.match(normalizedStatoblast, /This diagram shows a local threshold crossing, which makes <code>canTriggerOwnFork\(\)<\/code> true[\s\S]*pool with an inherited fixed outcome rejects the deposits that could create this state[\s\S]*still rejects <code>activateForkMode\(\)<\/code>/)
 	assert.match(normalizedStatoblast, /A continuation pool can fork again only when it has no inherited fixed outcome/)
 	assert.match(normalizedStatoblast, /The game-local <code>canTriggerOwnFork\(\)<\/code> predicate returns true for a local non-decision, but it does not bypass the pool's fixed-outcome guard/)
@@ -394,7 +396,7 @@ function assertOpenOracleVendorAndEventDocs(): void {
 	assert.match(openOracleState, /new Uint8Array\(235\)/, 'shared OpenOracle encoder must retain the documented 235-byte packed layout')
 	assert.match(openOracleState, /if \(bytes\.length !== 235\)/, 'shared OpenOracle decoder must reject non-canonical packed lengths')
 	assert.doesNotMatch(whitepaperStatoblast, /sponsor posts initial report/, 'whitepaper diagrams must not identify the funding sponsor as the on-chain reporter')
-	assert.match(whitepaperStatoblast, /coordinator reports\s*<\/text>\s*<text[^>]+>\s*sponsor funds/, 'whitepaper oracle flow must distinguish the coordinator reporter from the funding sponsor')
+	assert.match(normalizedDiagramSpecs, /coordinator reports[\s\S]*sponsor funds/, 'whitepaper oracle flow must distinguish the coordinator reporter from the funding sponsor')
 	assert.doesNotMatch(openOracleIntegration, /\b(?:sponsor|caller)s?\s+(?:may\s+)?(?:voluntarily\s+)?post(?:s|ed|ing)?\b/i, 'OpenOracle integration must not describe the funding sponsor as posting the report')
 	const normalizedIntegration = openOracleIntegration.replaceAll(/\s+/g, ' ')
 	for (const storageClaim of ['Its state hash remains authoritative', 'materializes <code>storedGame</code> and <code>storedHelper</code> when the report is created', 'updates the live game fields after each dispute']) {
@@ -428,10 +430,10 @@ function assertLiquidationFullCloseDocs(): void {
 	assert.match(whitepaperStatoblast, /href="\.\/liquidation\.html"/, 'whitepaper should route liquidation math and examples to the canonical design')
 	assert.doesNotMatch(whitepaperStatoblast, /id="eq-statoblast-liquidation-transfer"/, 'whitepaper must not duplicate the canonical liquidation equation')
 	assert.ok(liquidationHtml.includes('data-liquidation-summary="normal-plus-full-close"'), 'canonical liquidation diagram caption must be tagged for the normal-path plus full-close summary')
-	const computeCandidateIndex = liquidationHtml.indexOf('Compute debt and REP candidate')
-	const fullCloseDecisionIndex = liquidationHtml.indexOf('Full-close sweep required?')
-	const poolValidationIndex = liquidationHtml.indexOf('Pool validates and applies?')
-	const completedTransferIndex = liquidationHtml.indexOf('Transfer completed')
+	const computeCandidateIndex = diagramSpecs.indexOf('Compute debt and REP candidate')
+	const fullCloseDecisionIndex = diagramSpecs.indexOf('Full-close sweep required?')
+	const poolValidationIndex = diagramSpecs.indexOf('Pool validates and applies?')
+	const completedTransferIndex = diagramSpecs.indexOf('Transfer completed')
 	assert.ok(computeCandidateIndex !== -1 && computeCandidateIndex < fullCloseDecisionIndex, 'liquidation diagram must compute the ordinary candidate before deciding whether to replace it with a full-close sweep')
 	assert.ok(fullCloseDecisionIndex < poolValidationIndex, 'liquidation diagram must select the ordinary or full-close candidate before pool validation')
 	assert.ok(poolValidationIndex < completedTransferIndex, 'liquidation diagram must show pool validation before a completed transfer')
@@ -451,7 +453,7 @@ function assertLifecycleReferences(): void {
 	assert.match(startHere, /merkle-mountain-range\.html/)
 	assert.match(whitepaperStatoblast, /<td><code>ForkTruthAuction<\/code><\/td>[\s\S]{0,220}decision and finalization phase[\s\S]{0,180}sells REP when repair is needed or finalizes immediately without a sale/)
 	for (const transition of ['Operational->PoolForked', 'PoolForked->ForkMigration', 'ForkMigration->ForkTruthAuction', 'ForkTruthAuction->Operational']) {
-		assert.match(whitepaperStatoblast, new RegExp(`data-transition="${transition}"`), `Statoblast lifecycle must include ${transition}`)
+		assert.match(diagramSpecs, new RegExp(`"data-transition": "${transition}"`), `Statoblast lifecycle must include ${transition}`)
 	}
 	for (const [state, role] of [
 		['Operational', 'parent'],
@@ -460,10 +462,10 @@ function assertLifecycleReferences(): void {
 		['ForkTruthAuction', 'child'],
 		['Operational', 'child'],
 	]) {
-		assert.match(whitepaperStatoblast, new RegExp(`data-state="${state}"\\s+data-pool-role="${role}"`), `Statoblast lifecycle must label ${role} ${state}`)
+		assert.match(diagramSpecs, new RegExp(`"data-state": "${state}",\\s+"data-pool-role": "${role}"`), `Statoblast lifecycle must label ${role} ${state}`)
 	}
-	assert.match(whitepaperStatoblast, /data-transition="PoolForked->ForkMigration"\s+data-boundary="parent-to-child"/)
-	assert.doesNotMatch(whitepaperStatoblast, /data-transition="ForkMigration->Operational"/)
+	assert.match(diagramSpecs, /"data-transition": "PoolForked->ForkMigration",\s+"data-boundary": "parent-to-child"/)
+	assert.doesNotMatch(diagramSpecs, /"data-transition": "ForkMigration->Operational"/)
 }
 
 function assertContractInteractionDistinctions(): void {
@@ -584,9 +586,9 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /performWithdrawRep\(vault, repAmount\)[\s\S]*operational pool in an unforked universe[\s\S]*`isEscalationResolved\(\)` is false/)
 	assert.match(whitepaperStatoblast, /cashToShares[\s\S]*Exchange rate undefined/)
 	for (const flow of ['pool-to-share-token-mint', 'pool-to-share-token-burn', 'trader-to-pool-redemption', 'pool-to-trader-eth-payout']) {
-		assert.match(whitepaperStatoblast, new RegExp(`data-flow="${flow}"`), `Statoblast asset flow must include ${flow}`)
+		assert.match(diagramSpecs, new RegExp(`"data-flow": "${flow}"`), `Statoblast asset flow must include ${flow}`)
 	}
-	assert.doesNotMatch(whitepaperStatoblast, /data-flow="share-token-to-trader-redemption"/)
+	assert.doesNotMatch(diagramSpecs, /"data-flow": "share-token-to-trader-redemption"/)
 	assert.match(whitepaperStatoblast, /data-source="repBacking \* pricePrecision >= securityBondAllowance \* securityMultiplier \* repPerEthPrice"/)
 	assert.match(whitepaperStatoblast, /A new allowance must leave the affected vault\s+non-liquidatable, while aggregate pool REP must independently\s+satisfy the same multiplier-adjusted inequality[\s\S]{0,80}Only vaults are\s+liquidation targets/)
 	for (const [label, representation] of [

@@ -45,6 +45,7 @@ export async function validateDocsHtml(): Promise<ValidationFailure[]> {
 		validateTextEnvelope(parsedDocument, failures)
 		validateIds(parsedDocument, failures)
 		validateAriaReferences(parsedDocument, failures)
+		validatePlotMounts(parsedDocument, failures)
 		if (isLegacyRedirectDocument(parsedDocument)) {
 			validateLegacyRedirect(parsedDocument, failures)
 		} else {
@@ -177,35 +178,60 @@ function validateDiagrams(parsedDocument: ParsedHtmlDocument, failures: Validati
 	for (const figure of figures) {
 		validateFigureEnvelope(parsedDocument, figure, failures)
 
-		const svg = figure.querySelector('svg')
-		if (svg === null) {
-			addFailure(parsedDocument, `${describeElement(figure)} is missing an svg`, failures)
+		const chartMount = figure.querySelector('[data-plot-chart]')
+		if (chartMount === null) {
+			addFailure(parsedDocument, `${describeElement(figure)} is missing an Observable Plot mount`, failures)
 			continue
 		}
 
-		const role = svg.getAttribute('role')?.trim()
+		const figureId = figure.getAttribute('id')?.trim()
+		const chartId = chartMount.getAttribute('data-plot-chart')?.trim()
+		if (chartId !== figureId) {
+			addFailure(parsedDocument, `${describeElement(chartMount)} must use its figure id as data-plot-chart`, failures)
+		}
+	}
+}
+
+function validatePlotMounts(parsedDocument: ParsedHtmlDocument, failures: ValidationFailure[]): void {
+	const inlineSvgCount = parsedDocument.document.querySelectorAll('svg').length
+	if (inlineSvgCount > 0) {
+		addFailure(parsedDocument, `contains ${inlineSvgCount} hand-authored inline SVG element(s); documentation visuals must use Observable Plot mounts`, failures)
+	}
+
+	const chartMounts = Array.from(parsedDocument.document.querySelectorAll('[data-plot-chart]'))
+	if (chartMounts.length === 0) {
+		return
+	}
+	const runtimeScripts = Array.from(parsedDocument.document.querySelectorAll('script[src="./chartRuntime.js"]'))
+	if (runtimeScripts.length !== 1) {
+		addFailure(parsedDocument, `must load ./chartRuntime.js exactly once when Plot mounts are present`, failures)
+	}
+
+	for (const chartMount of chartMounts) {
+		const chartId = chartMount.getAttribute('data-plot-chart')?.trim()
+		if (chartId === undefined || chartId.length === 0) {
+			addFailure(parsedDocument, `${describeElement(chartMount)} is missing a stable data-plot-chart id`, failures)
+		}
+
+		const role = chartMount.getAttribute('role')?.trim()
 		if (role !== 'img') {
-			addFailure(parsedDocument, `${describeElement(svg)} in ${describeElement(figure)} must use role="img"`, failures)
+			addFailure(parsedDocument, `${describeElement(chartMount)} must use role="img" before Plot loads`, failures)
 		}
 
-		const ariaLabel = svg.getAttribute('aria-label')?.trim()
-		const labelledBy = splitIdList(svg.getAttribute('aria-labelledby'))
-		const title = svg.querySelector('title')?.textContent?.trim()
-		const desc = svg.querySelector('desc')?.textContent?.trim()
-		const hasInlineLabel = ariaLabel !== undefined && ariaLabel.length > 0
-		const hasTitleAndDesc = title !== undefined && title.length > 0 && desc !== undefined && desc.length > 0
-		if (!hasInlineLabel && labelledBy.length === 0) {
-			addFailure(parsedDocument, `${describeElement(svg)} in ${describeElement(figure)} needs aria-label or aria-labelledby`, failures)
-		}
-		if (!hasInlineLabel && !hasTitleAndDesc) {
-			addFailure(parsedDocument, `${describeElement(svg)} in ${describeElement(figure)} needs non-empty title and desc elements`, failures)
+		const ariaLabel = chartMount.getAttribute('aria-label')?.trim()
+		if (ariaLabel === undefined || ariaLabel.length === 0) {
+			addFailure(parsedDocument, `${describeElement(chartMount)} needs a non-empty aria-label`, failures)
 		}
 
-		validateViewBox(parsedDocument, svg, figure, failures)
+		const width = Number(chartMount.getAttribute('data-plot-width'))
+		const height = Number(chartMount.getAttribute('data-plot-height'))
+		if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+			addFailure(parsedDocument, `${describeElement(chartMount)} needs positive Plot width and height metadata`, failures)
+		}
 
-		const shapeCount = svg.querySelectorAll('circle, ellipse, line, path, polygon, polyline, rect, text').length
-		if (shapeCount === 0) {
-			addFailure(parsedDocument, `${describeElement(svg)} in ${describeElement(figure)} has no visible SVG primitives`, failures)
+		const fallback = chartMount.querySelector('.plot-chart-fallback')?.textContent?.trim()
+		if (fallback === undefined || fallback.length === 0) {
+			addFailure(parsedDocument, `${describeElement(chartMount)} needs explanatory fallback text`, failures)
 		}
 	}
 }
@@ -250,26 +276,6 @@ function validateFigureEnvelope(parsedDocument: ParsedHtmlDocument, figure: Elem
 	const captionText = caption.textContent?.trim() ?? ''
 	if (captionText.length <= labelText.length) {
 		addFailure(parsedDocument, `${describeElement(figure)} caption needs explanatory text after the label`, failures)
-	}
-}
-
-function validateViewBox(parsedDocument: ParsedHtmlDocument, svg: Element, figure: Element, failures: ValidationFailure[]): void {
-	const viewBox = svg.getAttribute('viewBox')?.trim()
-	if (viewBox === undefined || viewBox.length === 0) {
-		addFailure(parsedDocument, `${describeElement(svg)} in ${describeElement(figure)} is missing a viewBox`, failures)
-		return
-	}
-
-	const values = viewBox.split(/\s+/).map(Number)
-	if (values.length !== 4 || values.some(value => !Number.isFinite(value))) {
-		addFailure(parsedDocument, `${describeElement(svg)} in ${describeElement(figure)} has malformed viewBox "${viewBox}"`, failures)
-		return
-	}
-
-	const width = values[2]
-	const height = values[3]
-	if (width === undefined || height === undefined || width <= 0 || height <= 0) {
-		addFailure(parsedDocument, `${describeElement(svg)} in ${describeElement(figure)} must have positive viewBox width and height`, failures)
 	}
 }
 

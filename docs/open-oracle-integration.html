@@ -219,141 +219,9 @@
 					instances.
 				</p>
 				<figure class="diagram diagram-wide" id="fig-openoracle-integration-flow">
-					<svg
-						viewBox="0 0 980 320"
-						role="img"
-						aria-labelledby="integration-flow-title integration-flow-desc"
-					>
-						<title id="integration-flow-title">
-							OpenOracle integration flow
-						</title>
-						<desc id="integration-flow-desc">
-							Statoblast queues solvency-sensitive operations behind a bounded
+					<div class="plot-chart" data-plot-chart="fig-openoracle-integration-flow" data-plot-width="980" data-plot-height="320" role="img" aria-label="OpenOracle integration flow"><span class="plot-chart-fallback">Statoblast queues solvency-sensitive operations behind a bounded
 							OpenOracle REP/ETH report and executes them only with a fresh
-							accepted price.
-						</desc>
-						<defs>
-							<marker
-								id="arrow-integration-flow"
-								viewBox="0 0 10 10"
-								refX="8"
-								refY="5"
-								markerWidth="7"
-								markerHeight="7"
-								orient="auto-start-reverse"
-							>
-								<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-							</marker>
-						</defs>
-						<rect
-							class="svg-blue"
-							x="40"
-							y="72"
-							width="205"
-							height="86"
-							rx="8"
-						></rect>
-						<text class="svg-label" x="142" y="105" text-anchor="middle">
-							User Operation
-						</text>
-						<text class="svg-small" x="142" y="128" text-anchor="middle">
-							liquidate, withdraw REP,
-						</text>
-						<text class="svg-small" x="142" y="145" text-anchor="middle">
-							allowance
-						</text>
-						<path
-							class="svg-line"
-							marker-end="url(#arrow-integration-flow)"
-							d="M 245 115 H 315"
-						></path>
-						<rect
-							class="svg-gold"
-							x="315"
-							y="72"
-							width="205"
-							height="86"
-							rx="8"
-						></rect>
-						<text class="svg-label" x="418" y="105" text-anchor="middle">
-							Coordinator
-						</text>
-						<text class="svg-small" x="418" y="132" text-anchor="middle">
-							price cache, staging guards
-						</text>
-						<path
-							class="svg-line"
-							marker-end="url(#arrow-integration-flow)"
-							d="M 520 115 H 590"
-						></path>
-						<rect
-							class="svg-green"
-							x="590"
-							y="72"
-							width="175"
-							height="86"
-							rx="8"
-						></rect>
-						<text class="svg-label" x="678" y="90" text-anchor="middle">
-							OpenOracle
-						</text>
-						<text class="svg-small" x="678" y="108" text-anchor="middle">
-							coordinator reports
-						</text>
-						<text class="svg-small" x="678" y="123" text-anchor="middle">
-							sponsor funds
-						</text>
-						<text class="svg-small" x="678" y="138" text-anchor="middle">
-							disputer may replace
-						</text>
-						<text class="svg-small" x="678" y="153" text-anchor="middle">
-							settler finalizes
-						</text>
-						<path
-							class="svg-line"
-							marker-end="url(#arrow-integration-flow)"
-							d="M 765 115 H 835"
-						></path>
-						<rect
-							class="svg-box"
-							x="835"
-							y="72"
-							width="110"
-							height="86"
-							rx="8"
-						></rect>
-						<text class="svg-label" x="890" y="105" text-anchor="middle">
-							Settle
-						</text>
-						<text class="svg-small" x="890" y="132" text-anchor="middle">
-							callback
-						</text>
-						<path
-							class="svg-line"
-							marker-end="url(#arrow-integration-flow)"
-							d="M 890 158 C 820 250 540 260 440 158"
-						></path>
-						<rect
-							class="svg-red"
-							x="284"
-							y="204"
-							width="410"
-							height="108"
-							rx="8"
-						></rect>
-						<text class="svg-label" x="489" y="230" text-anchor="middle">
-							Execution Guardrails
-						</text>
-						<text class="svg-small" x="489" y="252" text-anchor="middle">
-							fresh price, pending report, and local safety checks
-						</text>
-						<text class="svg-small" x="489" y="279" text-anchor="middle">
-							Expired operations, stale liquidations, zero-effect withdrawals,
-						</text>
-						<text class="svg-small" x="489" y="296" text-anchor="middle">
-							and too-close liquidations are consumed.
-						</text>
-					</svg>
+							accepted price.</span></div>
 					<p class="diagram-caption">
 						<span class="figure-label">Integration Flow</span>The coordinator is
 						the trust boundary between Statoblast operations and OpenOracle
@@ -1476,86 +1344,7 @@
 						</label>
 					</div>
 					<div class="example-visual">
-						<svg
-							viewBox="0 0 760 210"
-							role="img"
-							aria-label="Binary censorship threshold and cost comparison"
-						>
-							<rect
-								class="example-bar-base"
-								x="120"
-								y="42"
-								width="520"
-								height="28"
-								rx="6"
-							></rect>
-							<rect
-								class="example-bar-blue"
-								x="120"
-								y="42"
-								width="120"
-								height="28"
-								rx="6"
-								data-example-rect="executionErrorThreshold"
-							></rect>
-							<rect
-								class="example-bar-red"
-								x="120"
-								y="86"
-								width="130"
-								height="28"
-								rx="6"
-								data-example-rect="manipulatedPriceError"
-							></rect>
-							<text class="svg-label" x="120" y="30">
-								Price error needed vs. supplied
-							</text>
-							<text
-								class="svg-small"
-								x="650"
-								y="63"
-								text-anchor="end"
-								data-example-text="thresholdText"
-							>
-								threshold 12.22%
-							</text>
-							<text
-								class="svg-small"
-								x="650"
-								y="107"
-								text-anchor="end"
-								data-example-text="errorText"
-							>
-								error 13.00%
-							</text>
-							<rect
-								class="example-bar-base"
-								x="120"
-								y="150"
-								width="520"
-								height="24"
-								rx="6"
-							></rect>
-							<rect
-								class="example-bar-gold"
-								x="120"
-								y="150"
-								width="180"
-								height="24"
-								rx="6"
-								data-example-rect="censorshipCost"
-							></rect>
-							<line class="svg-line" x1="640" y1="136" x2="640" y2="188"></line>
-							<text
-								class="svg-small"
-								x="650"
-								y="190"
-								text-anchor="end"
-								data-example-text="payoffText"
-							>
-								payoff 1000.00 ETH
-							</text>
-						</svg>
+						<div class="plot-chart" data-plot-chart="plot-open-oracle-integration-2" data-plot-width="760" data-plot-height="210" role="img" aria-label="Binary censorship threshold and cost comparison"><span class="plot-chart-fallback">Binary censorship threshold and cost comparison</span></div>
 					</div>
 					<ul class="example-output" aria-live="polite">
 						<li>
@@ -1867,6 +1656,8 @@
 				</table>
 			</section>
 		</main>
+
+		<script src="./chartRuntime.js"></script>
 		<script>
 			const collectExample = (exampleId) => {
 				const root = document.querySelector(exampleId);

@@ -108,7 +108,9 @@ Run `bun run knip` when imports, exports, tests, package scripts or dependencies
 
 Run `bun run check:generated-clean` only for CI/release freshness work or when contracts, generation scripts, shared build output, UI contract artifacts, or artifact policy change.
 
-Generated outputs are intentionally untracked:
+Generated outputs are intentionally untracked, except for `docs/chartRuntime.js`.
+The documentation bundle is tracked because the static HTML loads it directly;
+`bun run docs:check-charts` enforces freshness.
 
 | Output | Source or command |
 | --- | --- |
@@ -118,6 +120,7 @@ Generated outputs are intentionally untracked:
 | `ui/ts/contractArtifact.ts` | `bun run generate` or `bun run ui:build` |
 | `ui/js/**` | UI TypeScript build |
 | `ui/vendor/**` | `bun run ui:vendor` |
+| `docs/chartRuntime.js` | `bun run docs:build-charts` |
 
 Do not regenerate or commit these outputs unless the task requires them or a required check reports a missing expected artifact. If a deployment workflow ever needs tracked generated artifacts, update this policy and add a dirty-diff freshness check in the same change.
 

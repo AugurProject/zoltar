@@ -3,6 +3,7 @@ import { pathToFileURL } from 'node:url'
 import assert from 'node:assert/strict'
 
 import { Window } from 'happy-dom'
+import { calculateAuctionModel, calculateCollateralRepairModel, calculateEscalationDepositModel, calculateOracleSecurityModel, calculateResolutionModel, normalizedEscalationCost } from '../docs/charts/chartModels'
 
 type InteractiveExampleHarness = {
 	close: () => void
@@ -330,16 +331,10 @@ async function checkCollateralRepairExample(): Promise<void> {
 			return element.value
 		}
 
-		const targetText = example.querySelector('[data-example-text="repairTarget"]')
-		if (!(targetText instanceof window.SVGTextElement)) {
-			throw new Error('Missing collateral repair target text')
-		}
-
 		assertEqual(output('routedCollateral'), '47.50 ETH', 'collateral repair default routed collateral')
 		assertEqual(output('initialShortfall'), '2.50 ETH', 'collateral repair default initial shortfall')
 		assertEqual(output('remainingShortfall'), '0 ETH', 'collateral repair default remaining shortfall')
 		assertEqual(output('repairStatus'), 'full target raised; activates', 'collateral repair default activation behavior')
-		assertEqual(targetText.textContent?.trim() ?? '', 'target 50 ETH', 'collateral repair default target text')
 
 		const auctionRaisedInput = example.querySelector('[data-example-input="auctionRaised"]')
 		if (!(auctionRaisedInput instanceof window.HTMLInputElement)) {
@@ -359,6 +354,8 @@ async function checkCollateralRepairExample(): Promise<void> {
 	assert.match(html, />47\.5 ETH<\/span/, 'collateral repair routed-collateral default should remain 47.5 ETH')
 	assert.match(html, />2\.5 ETH<\/span/, 'collateral repair auction-raised default should remain 2.5 ETH')
 	assert.match(html, /activates with the collateral actually migrated and raised[\s\S]*finalizer contribution ETH is rejected/i, 'collateral repair prose should explain value-free activation')
+	const plotSpecs = await readFile('docs/charts/diagramSpecs.json', 'utf8')
+	assert.match(plotSpecs, /"data-example-text": "repairTarget"[\s\S]{0,500}target 50 ETH/, 'collateral repair Plot mark should retain its live target label')
 }
 
 async function checkResolutionEdgeExample(): Promise<void> {
@@ -563,40 +560,146 @@ for (const bindMatch of statoblastHtml.matchAll(/bindExample\("([^"]+)"/g)) {
 	}
 	assert.ok(statoblastHtml.includes(`id="${exampleId}"`), `whitepaper bindExample target should exist: ${exampleId}`)
 }
-const escalationCurvePath = statoblastHtml.match(/data-source="normalizedCost\(t\) = \(exp\(2\.4 \* t\) - 1\) \/ \(exp\(2\.4\) - 1\)"\s+d="([^"]+)"/)
-const escalationCurvePathData = escalationCurvePath?.[1]
-if (escalationCurvePathData === undefined) {
-	throw new Error('whitepaper escalation chart should expose its normalized exponential sample')
-}
-const escalationCurveY = [...escalationCurvePathData.matchAll(/[ML] \d+ (\d+)/g)].map(match => Number(match[1]))
-assert.ok(escalationCurveY.length >= 5, 'whitepaper escalation chart should contain enough samples to show curvature')
-for (let index = 0; index < escalationCurveY.length; index += 1) {
-	const actualY = escalationCurveY[index]
-	if (actualY === undefined) {
-		throw new Error('whitepaper escalation chart sample should be defined')
-	}
-	const normalizedTime = index / (escalationCurveY.length - 1)
-	const normalizedCost = (Math.exp(2.4 * normalizedTime) - 1) / (Math.exp(2.4) - 1)
-	const expectedY = Math.round(212 - 162 * normalizedCost)
-	assert.equal(actualY, expectedY, 'whitepaper escalation chart samples should match the declared normalized formula')
-}
-const escalationCurveRises: number[] = []
-for (let index = 1; index < escalationCurveY.length; index += 1) {
-	const previous = escalationCurveY[index - 1]
-	const current = escalationCurveY[index]
+const chartRuntimeSource = await readFile('docs/charts/chartRuntime.ts', 'utf8')
+assert.match(chartRuntimeSource, /Array\.from\(\{ length: 61 \}/, 'whitepaper escalation Plot should sample the normalized curve densely')
+const escalationCurve = Array.from({ length: 61 }, (_, index) => {
+	const elapsed = index / 60
+	return normalizedEscalationCost(elapsed)
+})
+assert.equal(escalationCurve[0], Math.exp(-2.4), 'whitepaper escalation Plot should start at the normalized starting bond')
+assert.equal(escalationCurve[escalationCurve.length - 1], 1, 'whitepaper escalation Plot should end at the normalized non-decision threshold')
+for (let index = 1; index < escalationCurve.length; index += 1) {
+	const previous = escalationCurve[index - 1]
+	const current = escalationCurve[index]
 	if (previous === undefined || current === undefined) {
-		throw new Error('whitepaper escalation chart samples should be defined')
+		throw new Error('whitepaper escalation Plot samples should be defined')
 	}
-	escalationCurveRises.push(previous - current)
+	assert.ok(current > previous, 'whitepaper escalation Plot should rise monotonically')
 }
-for (let index = 1; index < escalationCurveRises.length; index += 1) {
-	const previous = escalationCurveRises[index - 1]
-	const current = escalationCurveRises[index]
-	if (previous === undefined || current === undefined) {
-		throw new Error('whitepaper escalation chart rises should be defined')
-	}
-	assert.ok(current >= previous, 'whitepaper escalation chart should steepen monotonically toward the non-decision threshold')
-}
+assert.match(chartRuntimeSource, /barX\(balances/, 'quantitative escalation examples should use native Plot bars')
+assert.match(chartRuntimeSource, /plot-statoblast-whitepaper-7[\s\S]*escalationDepositChart/, 'escalation deposit chart should use its native Plot renderer')
+assert.match(chartRuntimeSource, /plot-statoblast-whitepaper-8[\s\S]*resolutionChart/, 'resolution chart should use its native Plot renderer')
+assert.match(chartRuntimeSource, /plot-statoblast-whitepaper-19[\s\S]*collateralRepairChart/, 'collateral repair chart should use its native Plot renderer')
+assert.match(chartRuntimeSource, /x1: model\.received, x2: model\.received \+ model\.repairEth/, 'collateral repair Plot should append auction repair after migration-routed collateral')
+assert.match(chartRuntimeSource, /■ Migration-routed[\s\S]*■ Auction repair/, 'collateral repair Plot should visibly map both segment colors')
+
+const defaultAuction = calculateAuctionModel(12, 4, [
+	{ eth: 3, key: 'alice', name: 'Alice', price: 5 },
+	{ eth: 4, key: 'bob', name: 'Bob', price: 4 },
+	{ eth: 6, key: 'carol', name: 'Carol', price: 3 },
+])
+assert.deepEqual(
+	defaultAuction.demandPoints,
+	[
+		{ cumulativeRep: 0.6, price: 5 },
+		{ cumulativeRep: 1.75, price: 4 },
+		{ cumulativeRep: 4, price: 3 },
+	],
+	'auction Plot demand points should reprice cumulative accepted ETH at every candidate tick and clip at the ETH cap',
+)
+
+const belowQualificationAuction = calculateAuctionModel(20, 5, [
+	{ eth: 0, key: 'alice', name: 'Alice', price: 5 },
+	{ eth: 0, key: 'bob', name: 'Bob', price: 4 },
+	{ eth: 20, key: 'carol', name: 'Carol', price: 3 },
+])
+assert.equal(belowQualificationAuction.mode, 'underfunded', 'below-qualification demand must not establish uniform clearing')
+assert.equal(belowQualificationAuction.ethRaised, 0, 'below-qualification demand should be fully refunded')
+assert.equal(belowQualificationAuction.clearingPrice, 4, 'no-winner underfunded chart should retain the cap-implied qualification boundary')
+assert.equal(belowQualificationAuction.effectivePrice, 0, 'no-winner underfunded chart should not claim an allocation price')
+assert.ok(
+	belowQualificationAuction.bids.every(bid => bid.status === 'Rejected'),
+	'below-qualification bids should be rejected',
+)
+
+const qualifyingWeakDemandAuction = calculateAuctionModel(20, 5, [
+	{ eth: 5, key: 'alice', name: 'Alice', price: 5 },
+	{ eth: 0, key: 'bob', name: 'Bob', price: 4 },
+	{ eth: 0, key: 'carol', name: 'Carol', price: 3 },
+])
+assert.equal(qualifyingWeakDemandAuction.clearingPrice, 4, 'qualifying weak demand should still plot the cap-implied qualification boundary')
+assert.equal(qualifyingWeakDemandAuction.effectivePrice, 1, 'qualifying weak demand should expose its separate proportional-allocation price')
+
+const maximumQualificationAuction = calculateAuctionModel(30, 1, [
+	{ eth: 5, key: 'alice', name: 'Alice', price: 5 },
+	{ eth: 4, key: 'bob', name: 'Bob', price: 4 },
+	{ eth: 5, key: 'carol', name: 'Carol', price: 3 },
+])
+assert.equal(maximumQualificationAuction.clearingPrice, 30, 'maximum controls should retain the visible qualification boundary')
+assert.match(chartRuntimeSource, /const yMax = Math\.max\(5\.8, clearingPrice \* 1\.16/, 'auction Plot y domain should expand to include reachable qualification boundaries')
+
+const sameTickAuction = calculateAuctionModel(8, 2, [
+	{ eth: 6, key: 'alice', name: 'Alice', price: 4 },
+	{ eth: 6, key: 'bob', name: 'Bob', price: 4 },
+	{ eth: 0, key: 'carol', name: 'Carol', price: 3 },
+])
+assert.equal(sameTickAuction.bids[0]?.rep, 1.5, 'the first bid at a partially filled clearing tick should settle FIFO')
+assert.equal(sameTickAuction.bids[1]?.rep, 0.5, 'the second bid at a partially filled clearing tick should receive the FIFO remainder')
+
+assert.deepEqual(calculateCollateralRepairModel(50, 47.5, 1), {
+	initialShortfall: 2.5,
+	received: 47.5,
+	remainingShortfall: 1.5,
+	repairEth: 1,
+})
+assert.deepEqual(calculateCollateralRepairModel(50, 47.5, 10), {
+	initialShortfall: 2.5,
+	received: 47.5,
+	remainingShortfall: 0,
+	repairEth: 2.5,
+})
+
+const executableOracle = calculateOracleSecurityModel({
+	censorshipDuration: 24,
+	externalPayoff: 1000,
+	honestDisputeBarrierFraction: 0.01,
+	honestPrice: 100,
+	liquidationThresholdPrice: 101,
+	manipulatedPrice: 113,
+	minLiquidationPriceDistanceBps: 1000,
+	oracleReportLiquidity: 4000,
+	targetGriefRatio: 1,
+})
+assert.equal(executableOracle.liquidationExecutable, true, 'default oracle chart scenario should be executable')
+assert.equal(executableOracle.attackerProfit, 1000, 'executable oracle attack should retain the external payoff')
+assert.equal(executableOracle.griefTarget, 2000, 'oracle chart should include payoff plus target grief cost')
+const nonExecutableOracle = calculateOracleSecurityModel({
+	censorshipDuration: 0,
+	externalPayoff: 1000,
+	honestDisputeBarrierFraction: 0.01,
+	honestPrice: 100,
+	liquidationThresholdPrice: 120,
+	manipulatedPrice: 100,
+	minLiquidationPriceDistanceBps: 1000,
+	oracleReportLiquidity: 4000,
+	targetGriefRatio: 1,
+})
+assert.equal(nonExecutableOracle.liquidationExecutable, false, 'equal honest and manipulated prices should not execute liquidation')
+assert.equal(nonExecutableOracle.attackerProfit, 0, 'non-executable liquidation should expose zero attacker payoff')
+assert.equal(nonExecutableOracle.censorshipCost, 0, 'zero-duration censorship should cost zero')
+assert.doesNotMatch(chartRuntimeSource, /value: model\.(?:attackerProfit|griefTarget) \+ maxCost/, 'oracle rule labels should use the exact rule value')
+
+const clippedDeposit = calculateEscalationDepositModel({
+	invalidBalance: 1,
+	noBalance: 7,
+	nonDecisionThreshold: 10,
+	proposedDeposit: 5,
+	startBond: 2,
+	yesBalance: 9,
+})
+assert.equal(clippedDeposit.accepted, 3, 'deposit chart should clip accepted REP to remaining threshold room')
+const tieAdjustedDeposit = calculateEscalationDepositModel({
+	invalidBalance: 1,
+	noBalance: 7,
+	nonDecisionThreshold: 20,
+	proposedDeposit: 2,
+	startBond: 1,
+	yesBalance: 9,
+})
+assert.equal(tieAdjustedDeposit.acceptedAtomic, 1_999_999_999_999_999_999n, 'deposit chart should preserve the one-wei tie adjustment')
+assert.equal(tieAdjustedDeposit.noAfterAtomic, 8_999_999_999_999_999_999n, 'deposit chart should preserve the tie-adjusted post-deposit balance')
+assert.deepEqual(calculateResolutionModel({ invalidBalance: 4, noBalance: 7, runningCost: 5, yesBalance: 6 }), { atCost: 2, result: 'None' }, 'resolution chart should keep two outcomes at cost unresolved')
+assert.deepEqual(calculateResolutionModel({ invalidBalance: 0, noBalance: 0, runningCost: 5, yesBalance: 0 }), { atCost: 0, result: 'Invalid' }, 'resolution chart should resolve an empty timed-out game to Invalid')
 assert.match(statoblastHtml, /activateForkMode[\s\S]*fork-time checkpoint[\s\S]*collateralAtFork/i, 'whitepaper should own the ordered own-fork collateral checkpoint lifecycle')
 assert.match(statoblastHtml, /Truth-auction repair subtracts the child's actual cumulative routed[\s\S]*collateral from that snapshot/i, 'whitepaper should own snapshot-based collateral repair')
 const invariantsHtml = await readFile('docs/invariants.html', 'utf8')

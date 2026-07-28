@@ -44,50 +44,8 @@
 					address. A clear bit means the address currently has no code. The oracle does not
 					verify constructor args, ownership wiring, or post-deployment setup.
 				</p>
-				<figure class="diagram diagram-wide" id="fig-deployment-mask" aria-labelledby="deployment-mask-title">
-					<svg
-						viewBox="0 0 920 220"
-						role="img"
-						aria-labelledby="deployment-mask-title deployment-mask-desc"
-					>
-						<title id="deployment-mask-title">Deployment mask maps ordered deployment steps to bits</title>
-						<desc id="deployment-mask-desc">A row of deployment steps on the left maps by index into bit positions in a uint256 mask on the right. Each step sets its bit only when code exists at that configured address.</desc>
-						<defs>
-							<marker
-								id="arrow-deployment-mask"
-								viewBox="0 0 10 10"
-								refX="8"
-								refY="5"
-								markerWidth="7"
-								markerHeight="7"
-								orient="auto-start-reverse"
-							>
-								<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-							</marker>
-						</defs>
-						<rect class="svg-blue" x="40" y="42" width="220" height="42" rx="8"></rect>
-						<rect class="svg-blue" x="40" y="94" width="220" height="42" rx="8"></rect>
-						<rect class="svg-blue" x="40" y="146" width="220" height="42" rx="8"></rect>
-						<text class="svg-label" x="150" y="69" text-anchor="middle">step 0</text>
-						<text class="svg-label" x="150" y="121" text-anchor="middle">step 1</text>
-						<text class="svg-label" x="150" y="173" text-anchor="middle">step 2</text>
-						<path class="svg-line" marker-end="url(#arrow-deployment-mask)" d="M 260 63 H 390"></path>
-						<path class="svg-line" marker-end="url(#arrow-deployment-mask)" d="M 260 115 H 390"></path>
-						<path class="svg-line" marker-end="url(#arrow-deployment-mask)" d="M 260 167 H 390"></path>
-						<rect class="svg-box" x="390" y="42" width="470" height="146" rx="10"></rect>
-						<rect class="svg-gold" x="420" y="84" width="90" height="62" rx="8"></rect>
-						<rect class="svg-gold" x="530" y="84" width="90" height="62" rx="8"></rect>
-						<rect class="svg-gold" x="640" y="84" width="90" height="62" rx="8"></rect>
-						<rect class="svg-box" x="750" y="84" width="80" height="62" rx="8"></rect>
-						<text class="svg-label" x="465" y="110" text-anchor="middle">bit 0</text>
-						<text class="svg-label" x="575" y="110" text-anchor="middle">bit 1</text>
-						<text class="svg-label" x="685" y="110" text-anchor="middle">bit 2</text>
-						<text class="svg-label" x="790" y="110" text-anchor="middle">...</text>
-						<text class="svg-small" x="465" y="132" text-anchor="middle">code?</text>
-						<text class="svg-small" x="575" y="132" text-anchor="middle">code?</text>
-						<text class="svg-small" x="685" y="132" text-anchor="middle">code?</text>
-						<text class="svg-small" x="625" y="62" text-anchor="middle">returned uint256</text>
-					</svg>
+				<figure class="diagram diagram-wide" id="fig-deployment-mask">
+					<div class="plot-chart" data-plot-chart="fig-deployment-mask" data-plot-width="920" data-plot-height="220" role="img" aria-label="Deployment mask maps ordered deployment steps to bits"><span class="plot-chart-fallback">A row of deployment steps on the left maps by index into bit positions in a uint256 mask on the right. Each step sets its bit only when code exists at that configured address.</span></div>
 					<p class="diagram-caption">
 						<span class="figure-label">Deployment Status Mask</span>Each configured deployment
 						step owns one bit position in the returned word. The oracle sets that bit only if
@@ -202,6 +160,8 @@
 				</ul>
 			</section>
 		</main>
+
+		<script src="./chartRuntime.js"></script>
 		<script type="module">
 			const mappingBody = document.querySelector('#deployment-status-bit-mapping')
 			if (!(mappingBody instanceof HTMLTableSectionElement)) {
