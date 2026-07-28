@@ -183,9 +183,10 @@ export function calculateOracleSecurityModel(input: {
 
 const atomicScale = 1_000_000_000_000_000_000n
 
-export function calculateEscalationDepositModel(input: { invalidBalance: number; noBalance: number; nonDecisionThreshold: number; proposedDeposit: number; startBond: number; yesBalance: number }): {
+export function calculateEscalationDepositModel(input: { invalidBalance: number; noBalance: number; nonDecisionThreshold: number; proposedDeposit: number; repeatDeposit: boolean; startBond: number; yesBalance: number }): {
 	accepted: number
 	acceptedAtomic: bigint
+	effectiveStartBondAtomic: bigint
 	noAfter: number
 	noAfterAtomic: bigint
 	previewReverts: boolean
@@ -193,7 +194,11 @@ export function calculateEscalationDepositModel(input: { invalidBalance: number;
 	tieAdjusted: boolean
 } {
 	const threshold = Math.max(input.nonDecisionThreshold, 1)
-	const invalidStartParameters = input.startBond >= threshold
+	const thresholdAtomic = BigInt(Math.round(threshold * Number(atomicScale)))
+	const enteredStartBondAtomic = BigInt(Math.round(input.startBond * Number(atomicScale)))
+	const effectiveStartBondAtomic = !input.repeatDeposit && enteredStartBondAtomic >= thresholdAtomic ? thresholdAtomic - 1n : enteredStartBondAtomic
+	const invalidStoredParameters = input.repeatDeposit && (enteredStartBondAtomic <= 0n || enteredStartBondAtomic >= thresholdAtomic)
+	const nonDecisionReached = [input.invalidBalance, input.yesBalance, input.noBalance].filter(balance => BigInt(Math.round(balance * Number(atomicScale))) >= thresholdAtomic).length >= 2
 	const room = Math.max(0, threshold - input.noBalance)
 	const clipped = Math.min(input.proposedDeposit, room)
 	const maxBefore = Math.max(input.invalidBalance, input.yesBalance, input.noBalance)
@@ -201,11 +206,11 @@ export function calculateEscalationDepositModel(input: { invalidBalance: number;
 	const clippedAtomic = BigInt(Math.round(clipped * Number(atomicScale)))
 	const acceptedAtomicPreview = tieAdjusted && clippedAtomic > 0n ? clippedAtomic - 1n : clippedAtomic
 	const noAfterAtomicPreview = BigInt(Math.round(input.noBalance * Number(atomicScale))) + acceptedAtomicPreview
-	const previewReverts = invalidStartParameters || input.noBalance >= threshold || input.proposedDeposit < input.startBond || (acceptedAtomicPreview < BigInt(Math.round(input.startBond * Number(atomicScale))) && noAfterAtomicPreview !== BigInt(Math.round(threshold * Number(atomicScale))))
+	const previewReverts = invalidStoredParameters || nonDecisionReached || input.noBalance >= threshold || BigInt(Math.round(input.proposedDeposit * Number(atomicScale))) < effectiveStartBondAtomic || (acceptedAtomicPreview < effectiveStartBondAtomic && noAfterAtomicPreview !== thresholdAtomic)
 	const acceptedAtomic = previewReverts ? 0n : acceptedAtomicPreview
 	const accepted = Number(acceptedAtomic) / Number(atomicScale)
 	const noAfterAtomic = BigInt(Math.round(input.noBalance * Number(atomicScale))) + acceptedAtomic
-	return { accepted, acceptedAtomic, noAfter: input.noBalance + accepted, noAfterAtomic, previewReverts, threshold, tieAdjusted }
+	return { accepted, acceptedAtomic, effectiveStartBondAtomic, noAfter: input.noBalance + accepted, noAfterAtomic, previewReverts, threshold, tieAdjusted }
 }
 
 export function calculateResolutionModel(input: { invalidBalance: number; noBalance: number; runningCost: number; yesBalance: number }): { atCost: number; result: 'Invalid' | 'No' | 'None' | 'Yes' } {

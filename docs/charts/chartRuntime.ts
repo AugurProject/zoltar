@@ -982,14 +982,16 @@ function oracleSecurityChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement
 
 function escalationDepositChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
 	const example = mount.closest('#escalation-deposit-example')
-	const invalidBalance = readInput(example, 'invalidBalance', 1)
-	const yesBalance = readInput(example, 'yesBalance', 9)
-	const noBalance = readInput(example, 'noBalance', 7)
+	const repeatDeposit = readInput(example, 'depositLifecycle', 0) === 1
+	const invalidBalance = repeatDeposit ? readInput(example, 'invalidBalance', 1) : 0
+	const yesBalance = repeatDeposit ? readInput(example, 'yesBalance', 9) : 0
+	const noBalance = repeatDeposit ? readInput(example, 'noBalance', 7) : 0
 	const model = calculateEscalationDepositModel({
 		invalidBalance,
 		noBalance,
 		nonDecisionThreshold: readInput(example, 'nonDecisionThreshold', 10),
 		proposedDeposit: readInput(example, 'proposedDeposit', 5),
+		repeatDeposit,
 		startBond: readInput(example, 'startBond', 2),
 		yesBalance,
 	})
@@ -1004,7 +1006,7 @@ function escalationDepositChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElem
 	const acceptedLabel = model.tieAdjusted ? formatAtomicRep(model.acceptedAtomic) : model.accepted.toFixed(6)
 	const noAfterLabel = model.tieAdjusted ? formatAtomicRep(model.noAfterAtomic) : model.noAfter.toFixed(6)
 	const chart = plot({
-		ariaDescription: `${spec.ariaDescription}. The proposed No deposit ${model.previewReverts ? 'reverts' : `accepts ${acceptedLabel} REP`}; No ends at ${noAfterLabel} REP against a ${model.threshold.toFixed(2)} REP threshold.`,
+		ariaDescription: `${spec.ariaDescription}. This is a ${repeatDeposit ? 'repeat deposit into an existing game' : 'first deposit that creates the game'} with an effective start bond of ${formatAtomicRep(model.effectiveStartBondAtomic)} REP. The proposed No deposit ${model.previewReverts ? 'reverts' : `accepts ${acceptedLabel} REP`}; No ends at ${noAfterLabel} REP against a ${model.threshold.toFixed(2)} REP threshold.`,
 		ariaLabel: spec.ariaLabel,
 		color: {
 			domain: ['Invalid', 'Yes', 'No'],

@@ -825,6 +825,7 @@ const clippedDeposit = calculateEscalationDepositModel({
 	noBalance: 7,
 	nonDecisionThreshold: 10,
 	proposedDeposit: 5,
+	repeatDeposit: true,
 	startBond: 2,
 	yesBalance: 9,
 })
@@ -834,11 +835,38 @@ const tieAdjustedDeposit = calculateEscalationDepositModel({
 	noBalance: 7,
 	nonDecisionThreshold: 20,
 	proposedDeposit: 2,
+	repeatDeposit: true,
 	startBond: 1,
 	yesBalance: 9,
 })
 assert.equal(tieAdjustedDeposit.acceptedAtomic, 1_999_999_999_999_999_999n, 'deposit chart should preserve the one-wei tie adjustment')
 assert.equal(tieAdjustedDeposit.noAfterAtomic, 8_999_999_999_999_999_999n, 'deposit chart should preserve the tie-adjusted post-deposit balance')
+const normalizedFirstDeposit = calculateEscalationDepositModel({
+	invalidBalance: 0,
+	noBalance: 0,
+	nonDecisionThreshold: 5,
+	proposedDeposit: 5,
+	repeatDeposit: false,
+	startBond: 10,
+	yesBalance: 0,
+})
+assert.equal(normalizedFirstDeposit.effectiveStartBondAtomic, 4_999_999_999_999_999_999n, 'first-deposit Plot should normalize an over-threshold configured bond down by one atomic REP')
+assert.equal(normalizedFirstDeposit.acceptedAtomic, 5_000_000_000_000_000_000n, 'first-deposit Plot should accept a threshold-reaching deposit after bond normalization')
+assert.equal(normalizedFirstDeposit.previewReverts, false, 'first-deposit Plot should not apply invalid stored-game parameter rules')
+assert.equal(
+	calculateEscalationDepositModel({
+		invalidBalance: 10,
+		noBalance: 0,
+		nonDecisionThreshold: 10,
+		proposedDeposit: 2,
+		repeatDeposit: true,
+		startBond: 2,
+		yesBalance: 10,
+	}).previewReverts,
+	true,
+	'repeat-deposit Plot should reject a game whose non-decision state was already reached',
+)
+assert.match(chartRuntimeSource, /const repeatDeposit = readInput\(example, 'depositLifecycle'[\s\S]*const invalidBalance = repeatDeposit/, 'escalation Plot should reset displayed balances in first-deposit mode')
 assert.deepEqual(calculateResolutionModel({ invalidBalance: 4, noBalance: 7, runningCost: 5, yesBalance: 6 }), { atCost: 2, result: 'None' }, 'resolution chart should keep two outcomes at cost unresolved')
 assert.deepEqual(calculateResolutionModel({ invalidBalance: 0, noBalance: 0, runningCost: 5, yesBalance: 0 }), { atCost: 0, result: 'Invalid' }, 'resolution chart should resolve an empty timed-out game to Invalid')
 assert.match(statoblastHtml, /activateForkMode[\s\S]*fork-time checkpoint[\s\S]*collateralAtFork/i, 'whitepaper should own the ordered own-fork collateral checkpoint lifecycle')
