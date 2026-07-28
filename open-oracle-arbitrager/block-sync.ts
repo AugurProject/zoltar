@@ -1,4 +1,6 @@
 export type SyncCursor = {
+	finalityAnchorHash: string | undefined
+	finalityAnchorNumber: bigint | undefined
 	initial: boolean
 	lastHeadHash: string | undefined
 	lastHeadNumber: bigint | undefined
@@ -13,6 +15,8 @@ export function operatorStatusAfterPause(paused: boolean, initialSyncComplete: b
 
 export function initialCursor(head: bigint, lookbackBlocks: bigint): SyncCursor {
 	return {
+		finalityAnchorHash: undefined,
+		finalityAnchorNumber: undefined,
 		initial: true,
 		lastHeadHash: undefined,
 		lastHeadNumber: undefined,
@@ -46,10 +50,20 @@ export function scanRanges(cursor: Pick<SyncCursor, 'nextBlock'>, head: bigint, 
 }
 
 export function advanceCursor(head: bigint, headHash: string): SyncCursor {
-	return { initial: false, lastHeadHash: headHash, lastHeadNumber: head, nextBlock: head + 1n }
+	return { finalityAnchorHash: undefined, finalityAnchorNumber: undefined, initial: false, lastHeadHash: headHash, lastHeadNumber: head, nextBlock: head + 1n }
 }
 
 export async function advanceCursorAfterSuccessfulHead(head: bigint, headHash: string, processHead: () => Promise<void>) {
 	await processHead()
 	return advanceCursor(head, headHash)
+}
+
+export function withFinalityAnchor(cursor: SyncCursor, blockNumber: bigint, blockHash: string): SyncCursor {
+	return { ...cursor, finalityAnchorHash: blockHash, finalityAnchorNumber: blockNumber }
+}
+
+export function assertFinalityAnchor(cursor: SyncCursor, blockNumber: bigint, blockHash: string) {
+	if (cursor.finalityAnchorNumber !== blockNumber || cursor.finalityAnchorHash !== blockHash) {
+		throw new Error(`Canonical chain reorganized deeper than the configured overlap at block ${blockNumber.toString()}; restart to rebuild the complete lookback before execution`)
+	}
 }

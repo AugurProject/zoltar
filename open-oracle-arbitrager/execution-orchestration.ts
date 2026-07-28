@@ -34,6 +34,23 @@ export function privateBundleReceiptStatus(receipt: Pick<TransactionReceipt, 'bl
 	return receipt.status === 'success' ? ('confirmed' as const) : ('reverted' as const)
 }
 
+export function lifecycleLastValidBlockNumber(mode: SubmissionMode, targetBlockNumber: bigint) {
+	return mode === 'private' ? targetBlockNumber : undefined
+}
+
+export function lifecycleReceiptSnapshotBlock(receipts: readonly Pick<TransactionReceipt, 'blockHash' | 'blockNumber' | 'status'>[], targetBlockNumber: bigint) {
+	const first = receipts[0]
+	if (first === undefined || receipts.some(receipt => receipt.status !== 'success')) throw new Error('Lifecycle receipts are missing or reverted')
+	if (targetBlockNumber !== 0n) {
+		if (receipts.some(receipt => receipt.blockNumber !== targetBlockNumber || receipt.blockHash.toLowerCase() !== first.blockHash.toLowerCase())) {
+			throw new Error('Lifecycle bundle receipts are outside the target block or split across blocks')
+		}
+		return { blockHash: first.blockHash, blockNumber: targetBlockNumber }
+	}
+	const latest = receipts.reduce((candidate, receipt) => (receipt.blockNumber > candidate.blockNumber ? receipt : candidate), first)
+	return { blockHash: latest.blockHash, blockNumber: latest.blockNumber }
+}
+
 export async function simulateTrackedPrivateBundle<TTransaction, TResult>(transactions: readonly TTransaction[], simulate: () => Promise<TResult>, track: (transaction: TTransaction, status: 'submission-failed' | 'submitting', error: unknown | undefined) => void) {
 	for (const transaction of transactions) track(transaction, 'submitting', undefined)
 	try {

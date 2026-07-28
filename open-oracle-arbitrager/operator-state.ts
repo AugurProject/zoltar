@@ -6,6 +6,7 @@ import type { ConnectivitySettings, EndpointCheck, NetworkName } from './connect
 import type { SubmissionSettings, SubmissionTargetResult } from './transaction-submission.js'
 import type { MarketPricePoint, TokenMarketSnapshot } from './market-monitor.js'
 import type { PositionRecord } from './position-store.js'
+import type { RiskLimits } from './safety-controls.js'
 
 export type StrategySettings = {
 	maxSpotTwapTicks: string
@@ -97,7 +98,7 @@ export type TransactionActivity = {
 	estimatedNetProfitEth: string | undefined
 	failedTargets: readonly SubmissionTargetResult[]
 	hash: Hex
-	kind: 'approval-token' | 'approval-weth' | 'dispute'
+	kind: 'approval-token' | 'approval-weth' | 'canonical-head' | 'dispute' | 'settle' | 'withdraw-token' | 'withdraw-weth'
 	mode: SubmissionSettings['mode']
 	originalHash: Hex
 	reportId: string
@@ -151,6 +152,22 @@ export type OperatorSnapshot = {
 	tokenMarkets: readonly TokenMarketSnapshot[]
 	priceHistory: readonly MarketPricePoint[]
 	reportPaths: readonly ReportPathSnapshot[]
+	risk: {
+		limits: {
+			lifecycleGasReserveWeth: string
+			maxConcurrentPositions: number
+			maxDailyGasSpendWeth: string
+			maxPositionNotionalWeth: string
+			maxTotalLockedWeth: string
+		}
+		usage: {
+			dailyGasSpentWeth: string
+			lockedWeth: string
+			openPositions: number
+			remainingDailyGasWeth: string
+			remainingLockedWeth: string
+		}
+	}
 	connectivity: ConnectivitySettings
 	totalActualGasCostEth: string
 	totalEstimatedNetProfitEth: string
@@ -443,8 +460,19 @@ export function operatorSnapshot(
 	submission: SubmissionSettings,
 	connectivity: ConnectivitySettings,
 	fixed: { execute: boolean; executor: Address | undefined; expectedChainId: number; explorerUrl: string; network: NetworkName; openOracle: Address; queuedWallet: Address | null | undefined; savedWallet: Address | undefined; wallet: Address | undefined },
+	riskLimits: RiskLimits = {
+		lifecycleGasReserveWeth: 10n ** 16n,
+		maxConcurrentPositions: 1,
+		maxDailyGasSpendWeth: 5n * 10n ** 16n,
+		maxPositionNotionalWeth: 5n * 10n ** 18n,
+		maxTotalLockedWeth: 10n * 10n ** 18n,
+	},
 ): OperatorSnapshot {
 	const totals = positionTotals(state.positions)
+	const openPositions = state.positions.filter(position => position.status !== 'closed')
+	const lockedWeth = openPositions.reduce((total, position) => total + parseDecimalWeth(position.capitalAtRiskWeth), 0n)
+	const day = new Date().toISOString().slice(0, 10)
+	const dailyGasSpentWeth = state.positions.reduce((total, position) => total + (position.openedAt.slice(0, 10) === day ? parseDecimalWeth(position.actualEntryGasCostEth) : 0n) + (position.lifecycleUpdatedAt?.slice(0, 10) === day ? parseDecimalWeth(position.lifecycleGasCostEth) : 0n), 0n)
 	return {
 		activeReportCount: state.activeReportCount,
 		balances: state.balances,
@@ -477,6 +505,22 @@ export function operatorSnapshot(
 		tokenMarkets: state.tokenMarkets,
 		priceHistory: state.priceHistory,
 		reportPaths: state.reportPaths,
+		risk: {
+			limits: {
+				lifecycleGasReserveWeth: decimalWeth(riskLimits.lifecycleGasReserveWeth),
+				maxConcurrentPositions: riskLimits.maxConcurrentPositions,
+				maxDailyGasSpendWeth: decimalWeth(riskLimits.maxDailyGasSpendWeth),
+				maxPositionNotionalWeth: decimalWeth(riskLimits.maxPositionNotionalWeth),
+				maxTotalLockedWeth: decimalWeth(riskLimits.maxTotalLockedWeth),
+			},
+			usage: {
+				dailyGasSpentWeth: decimalWeth(dailyGasSpentWeth),
+				lockedWeth: decimalWeth(lockedWeth),
+				openPositions: openPositions.length,
+				remainingDailyGasWeth: decimalWeth(dailyGasSpentWeth >= riskLimits.maxDailyGasSpendWeth ? 0n : riskLimits.maxDailyGasSpendWeth - dailyGasSpentWeth),
+				remainingLockedWeth: decimalWeth(lockedWeth >= riskLimits.maxTotalLockedWeth ? 0n : riskLimits.maxTotalLockedWeth - lockedWeth),
+			},
+		},
 		connectivity,
 		totalActualGasCostEth: sumDecimalWeth(state.executionHistory, 'actualGasCostEth'),
 		totalEstimatedNetProfitEth: sumDecimalWeth(state.executionHistory, 'estimatedNetProfitWeth'),

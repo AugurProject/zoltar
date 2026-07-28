@@ -61,6 +61,14 @@ export function validateReadRpcUrls(values: readonly string[]) {
 	return [...new Set(values.map(value => endpointUrl(value.trim())))]
 }
 
+export function validateIndependentReadRpcUrls(primary: string, values: readonly string[]) {
+	const normalizedPrimary = endpointUrl(primary.trim())
+	const normalized = validateReadRpcUrls(values).filter(value => value !== normalizedPrimary)
+	const origins = [new URL(normalizedPrimary).origin, ...normalized.map(value => new URL(value).origin)]
+	if (new Set(origins).size !== origins.length) throw new Error('Read RPC quorum must use independent origins; changing only the URL path does not create an independent provider')
+	return normalized
+}
+
 export function validateConnectivitySettings(value: unknown): ConnectivitySettings {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Connectivity settings must be a JSON object')
 	const record = value as Record<string, unknown>

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress, keccak256, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { authenticateDeploymentManifest, parseDeploymentManifest } from './deployment-auth.js'
+import { authenticateDeploymentManifest, createDeploymentManifest, parseDeploymentManifest, verifyDeploymentManifest, type DeploymentManifest } from './deployment-auth.js'
 
 const openOracle = getAddress('0x0000000000000000000000000000000000000001')
 const executor = getAddress('0x0000000000000000000000000000000000000002')
@@ -16,7 +16,7 @@ describe('deployment authentication', () => {
 		],
 		network: 'mainnet',
 		version: 1,
-	}
+	} satisfies DeploymentManifest
 
 	test('requires exact role, address, and runtime bytecode hash matches', async () => {
 		const parsed = parseDeploymentManifest(manifest)
@@ -49,5 +49,32 @@ describe('deployment authentication', () => {
 	test('rejects manifests for another chain and duplicate identities', () => {
 		expect(() => parseDeploymentManifest({ ...manifest, chainId: 11_155_111 })).not.toThrow()
 		expect(() => parseDeploymentManifest({ ...manifest, contracts: [...manifest.contracts, manifest.contracts[0]] })).toThrow('Duplicate deployment identity')
+		expect(() => parseDeploymentManifest({ ...manifest, unexpected: true })).toThrow('unsupported fields')
+		expect(() =>
+			parseDeploymentManifest({
+				...manifest,
+				contracts: [...manifest.contracts, { ...manifest.contracts[1], address: '0x0000000000000000000000000000000000000003' }],
+			}),
+		).toThrow('multiple executor')
+	})
+
+	test('generates and independently verifies every runtime bytecode hash', async () => {
+		const code = new Map<string, Hex>([
+			[openOracle.toLowerCase(), openOracleCode],
+			[executor.toLowerCase(), executorCode],
+		])
+		const generated = await createDeploymentManifest(
+			'mainnet',
+			1,
+			[
+				{ address: openOracle, role: 'open-oracle' },
+				{ address: executor, role: 'executor' },
+			],
+			async address => code.get(address.toLowerCase()),
+		)
+		expect(generated.contracts).toEqual(manifest.contracts)
+		await expect(verifyDeploymentManifest(generated, async address => code.get(address.toLowerCase()))).resolves.toBeUndefined()
+		code.set(openOracle.toLowerCase(), '0x6004')
+		await expect(verifyDeploymentManifest(generated, async address => code.get(address.toLowerCase()))).rejects.toThrow('runtime bytecode hash')
 	})
 })

@@ -290,6 +290,7 @@ function loadSubmission(submission: SubmissionSettings) {
 	const mode = element<HTMLSelectElement>('submission-mode')
 	mode.value = submission.mode
 	element<HTMLTextAreaElement>('relay-urls').value = submission.relayUrls.join('\n')
+	element<HTMLInputElement>('minimum-relay-successes').value = submission.minimumRelaySuccesses.toString()
 }
 
 function loadConnectivity(connectivity: ConnectivitySettings) {
@@ -334,9 +335,10 @@ function renderOperations(operations: readonly OperationEntry[]) {
 function renderTokenMarkets(snapshot: OperatorSnapshot) {
 	const body = element<HTMLTableSectionElement>('token-markets-body')
 	body.replaceChildren()
+	const executableTokens = new Set(snapshot.tokenAddresses.map(address => address.toLowerCase()))
 	for (const token of snapshot.tokenMarkets) {
 		if (token.pools.length === 0) {
-			body.append(row([token.symbol, link(token.address, 'address', `token:${token.address}:address`), amount(token.balance, token.symbol), '—', 'No supported WETH pools found', '—', 'Unavailable', '0']))
+			body.append(row([token.symbol, link(token.address, 'address', `token:${token.address}:address`), amount(token.balance, token.symbol), '—', 'Monitoring only', 'No supported WETH pools found', '—', 'Unavailable', '0']))
 			continue
 		}
 		for (const pool of token.pools) {
@@ -346,7 +348,8 @@ function renderTokenMarkets(snapshot: OperatorSnapshot) {
 			poolLink.target = '_blank'
 			poolLink.rel = 'noreferrer'
 			poolLink.textContent = shorten(pool.address)
-			body.append(row([token.symbol, link(token.address, 'address', `token:${token.address}:address:${pool.address}`), amount(token.balance, token.symbol), pool.venue, poolLink, `${(pool.fee / 10_000).toString()}%`, amount(pool.priceWeth, 'WETH'), pool.liquidity]))
+			const strategyUse = executableTokens.has(token.address.toLowerCase()) && pool.venue === 'Uniswap V3' ? 'Execution route' : 'Monitoring only'
+			body.append(row([token.symbol, link(token.address, 'address', `token:${token.address}:address:${pool.address}`), amount(token.balance, token.symbol), pool.venue, strategyUse, poolLink, `${(pool.fee / 10_000).toString()}%`, amount(pool.priceWeth, 'WETH'), pool.liquidity]))
 		}
 	}
 	element('token-markets-empty').hidden = snapshot.tokenMarkets.length !== 0
@@ -613,9 +616,6 @@ function render(snapshot: OperatorSnapshot) {
 		tokensLoaded = true
 	}
 	const modeBadge = element('mode-badge')
-	const publicSubmissionOption = element<HTMLSelectElement>('submission-mode').querySelector<HTMLOptionElement>('option[value="public"]')
-	if (publicSubmissionOption === null) throw new Error('Missing public submission option')
-	publicSubmissionOption.disabled = snapshot.execute
 	const statusLabels = botStatusLabels(snapshot)
 	modeBadge.dataset['mode'] = snapshot.mode
 	modeBadge.textContent = statusLabels.mode
@@ -629,6 +629,11 @@ function render(snapshot: OperatorSnapshot) {
 	setText('gas-value', exactAmount(snapshot.totalActualGasCostEth, 'ETH'))
 	setText('game-capital-value', exactAmount(snapshot.gameCapital.totalEthWeth, 'ETH'))
 	setText('game-capital-detail', `${exactAmount(snapshot.gameCapital.eth, 'ETH')} · ${exactAmount(snapshot.gameCapital.weth, 'WETH')} in observed active games`)
+	setText('risk-open-positions', `${snapshot.risk.usage.openPositions.toString()} / ${snapshot.risk.limits.maxConcurrentPositions.toString()}`)
+	setText('risk-locked', `${exactAmount(snapshot.risk.usage.lockedWeth, 'WETH')} / ${exactAmount(snapshot.risk.limits.maxTotalLockedWeth, 'WETH')}`)
+	setText('risk-daily-gas', `${exactAmount(snapshot.risk.usage.dailyGasSpentWeth, 'ETH')} / ${exactAmount(snapshot.risk.limits.maxDailyGasSpendWeth, 'ETH')}`)
+	setText('risk-position-limit', exactAmount(snapshot.risk.limits.maxPositionNotionalWeth, 'WETH'))
+	setText('risk-lifecycle-reserve', exactAmount(snapshot.risk.limits.lifecycleGasReserveWeth, 'ETH'))
 	setText('oracle-address', `Oracle ${snapshot.openOracle}`)
 	setText('executor-address', snapshot.executor === undefined ? 'Executor not configured' : `Executor ${snapshot.executor}`)
 	setText('network-value', `${snapshot.network} · chain ${snapshot.expectedChainId.toString()}`)
@@ -783,6 +788,7 @@ element<HTMLFormElement>('submission-form').addEventListener('submit', async eve
 	setText('submission-status', 'Applying submission settings…')
 	try {
 		const submission = {
+			minimumRelaySuccesses: Number(element<HTMLInputElement>('minimum-relay-successes').value),
 			mode: element<HTMLSelectElement>('submission-mode').value,
 			relayUrls: element<HTMLTextAreaElement>('relay-urls')
 				.value.split('\n')

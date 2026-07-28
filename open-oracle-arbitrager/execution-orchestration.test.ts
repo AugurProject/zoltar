@@ -13,6 +13,8 @@ import {
 	guardedTransactionSubmission,
 	guardedRiskSubmission,
 	journaledSubmission,
+	lifecycleLastValidBlockNumber,
+	lifecycleReceiptSnapshotBlock,
 	lifecycleAttemptNeedsRecovery,
 	openOracleDisputeTiming,
 	opportunityDecision,
@@ -118,6 +120,16 @@ describe('funded execution orchestration', () => {
 		const observed = '0x0000000000000000000000000000000000000020' as Address
 		expect(executionTokenAllowed(configured, configured[0] as Address)).toBe(true)
 		expect(executionTokenAllowed(configured, observed)).toBe(false)
+	})
+
+	test('accepts sequential public lifecycle receipts but keeps private lifecycle bundles atomic', () => {
+		const first = transactionReceipt()
+		const second = { ...transactionReceipt(), blockHash: `0x${'79'.repeat(32)}` as Hex, blockNumber: 102n }
+		expect(lifecycleLastValidBlockNumber('public', 101n)).toBeUndefined()
+		expect(lifecycleLastValidBlockNumber('private', 101n)).toBe(101n)
+		expect(lifecycleReceiptSnapshotBlock([first, second], 0n)).toEqual({ blockHash: second.blockHash, blockNumber: 102n })
+		expect(() => lifecycleReceiptSnapshotBlock([first, second], 101n)).toThrow('split across blocks')
+		expect(lifecycleReceiptSnapshotBlock([first, transactionReceipt()], 101n)).toEqual({ blockHash: first.blockHash, blockNumber: 101n })
 	})
 
 	test('requires a private bundle when either exact executor allowance is missing', () => {

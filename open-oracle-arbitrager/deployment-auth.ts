@@ -15,6 +15,11 @@ export type DeploymentManifest = {
 
 const roles = new Set<DeploymentRole>(['coordinator', 'executor', 'open-oracle', 'token', 'uniswap-factory', 'uniswap-quoter', 'uniswap-router', 'weth'])
 
+export function parseDeploymentRole(value: string): DeploymentRole {
+	if (!roles.has(value as DeploymentRole)) throw new Error(`Unsupported deployment role: ${value}`)
+	return value as DeploymentRole
+}
+
 function record(value: unknown, description: string) {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${description} must be an object`)
 	return value as Record<string, unknown>
@@ -22,13 +27,17 @@ function record(value: unknown, description: string) {
 
 export function parseDeploymentManifest(value: unknown): DeploymentManifest {
 	const manifest = record(value, 'Deployment manifest')
+	if (Object.keys(manifest).some(key => key !== 'chainId' && key !== 'contracts' && key !== 'network' && key !== 'version')) throw new Error('Deployment manifest contains unsupported fields')
 	if (manifest['version'] !== 1) throw new Error('Deployment manifest version must be 1')
 	if (manifest['network'] !== 'mainnet' && manifest['network'] !== 'sepolia') throw new Error('Deployment manifest network must be mainnet or sepolia')
 	if (typeof manifest['chainId'] !== 'number' || !Number.isSafeInteger(manifest['chainId']) || manifest['chainId'] <= 0) throw new Error('Deployment manifest chainId must be a positive integer')
 	if (!Array.isArray(manifest['contracts']) || manifest['contracts'].length === 0) throw new Error('Deployment manifest must contain contracts')
 	const identities = new Set<string>()
+	const singletonRoles = new Set<DeploymentRole>(['executor', 'open-oracle', 'uniswap-factory', 'uniswap-quoter', 'uniswap-router', 'weth'])
+	const seenSingletonRoles = new Set<DeploymentRole>()
 	const contracts = manifest['contracts'].map(value => {
 		const contract = record(value, 'Deployment contract')
+		if (Object.keys(contract).some(key => key !== 'address' && key !== 'role' && key !== 'runtimeCodeHash')) throw new Error('Deployment contract contains unsupported fields')
 		if (typeof contract['role'] !== 'string' || !roles.has(contract['role'] as DeploymentRole)) throw new Error('Deployment contract role is unsupported')
 		if (typeof contract['address'] !== 'string' || !isAddress(contract['address'])) throw new Error('Deployment contract address is invalid')
 		if (typeof contract['runtimeCodeHash'] !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(contract['runtimeCodeHash'])) throw new Error('Deployment runtime code hash must be bytes32')
@@ -37,6 +46,8 @@ export function parseDeploymentManifest(value: unknown): DeploymentManifest {
 		const identity = `${role}:${address.toLowerCase()}`
 		if (identities.has(identity)) throw new Error(`Duplicate deployment identity: ${identity}`)
 		identities.add(identity)
+		if (singletonRoles.has(role) && seenSingletonRoles.has(role)) throw new Error(`Deployment manifest contains multiple ${role} contracts`)
+		seenSingletonRoles.add(role)
 		return { address, role, runtimeCodeHash: contract['runtimeCodeHash'].toLowerCase() as Hex }
 	})
 	return {
@@ -64,4 +75,26 @@ export async function authenticateDeploymentManifest(
 		if (code === undefined || code === '0x') throw new Error(`Authenticated ${requirement.role} ${requirement.address} has no runtime bytecode`)
 		if (keccak256(code).toLowerCase() !== entry.runtimeCodeHash.toLowerCase()) throw new Error(`Authenticated ${requirement.role} ${requirement.address} runtime bytecode hash does not match the manifest`)
 	}
+}
+
+export async function createDeploymentManifest(network: DeploymentManifest['network'], chainId: number, contracts: readonly { address: Address; role: DeploymentRole }[], readCode: (address: Address) => Promise<Hex | undefined>): Promise<DeploymentManifest> {
+	if (!Number.isSafeInteger(chainId) || chainId <= 0) throw new Error('Deployment manifest chainId must be a positive integer')
+	if (contracts.length === 0) throw new Error('Deployment manifest must contain contracts')
+	const entries = await Promise.all(
+		contracts.map(async contract => {
+			const code = await readCode(contract.address)
+			if (code === undefined || code === '0x') throw new Error(`Cannot generate manifest: ${contract.role} ${contract.address} has no runtime bytecode`)
+			return { ...contract, runtimeCodeHash: keccak256(code) }
+		}),
+	)
+	return parseDeploymentManifest({ chainId, contracts: entries, network, version: 1 })
+}
+
+export function verifyDeploymentManifest(manifest: DeploymentManifest, readCode: (address: Address) => Promise<Hex | undefined>) {
+	return authenticateDeploymentManifest(manifest, {
+		chainId: manifest.chainId,
+		network: manifest.network,
+		readCode,
+		required: manifest.contracts.map(contract => ({ address: contract.address, role: contract.role })),
+	})
 }

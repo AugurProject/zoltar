@@ -32,10 +32,13 @@ function expectedBundleHash(transactions: readonly Hex[]) {
 describe('transaction submission settings', () => {
 	test('validates modes, normalizes relay URLs, and rejects unsafe endpoints', () => {
 		expect(validateSubmissionSettings({ mode: 'private', relayUrls: ['https://relay.flashbots.net', 'https://relay.flashbots.net/'] })).toEqual({
+			minimumRelaySuccesses: 1,
 			mode: 'private',
 			relayUrls: ['https://relay.flashbots.net/'],
 		})
-		expect(validateSubmissionSettings({ mode: 'public', relayUrls: [] })).toEqual({ mode: 'public', relayUrls: [] })
+		expect(validateSubmissionSettings({ mode: 'public', relayUrls: [] })).toEqual({ minimumRelaySuccesses: 1, mode: 'public', relayUrls: [] })
+		expect(validateSubmissionSettings({ minimumRelaySuccesses: 2, mode: 'private', relayUrls: ['https://one.example', 'https://two.example'] }).minimumRelaySuccesses).toBe(2)
+		expect(() => validateSubmissionSettings({ minimumRelaySuccesses: 2, mode: 'private', relayUrls: ['https://one.example'] })).toThrow('successful relays')
 		expect(() => validateSubmissionSettings({ mode: 'private', relayUrls: [] })).toThrow('at least one relay')
 		expect(() => validateSubmissionSettings({ mode: 'private', relayUrls: ['http://relay.example'] })).toThrow('HTTPS')
 		expect(() => validateSubmissionSettings({ mode: 'private', relayUrls: ['https://user:secret@relay.example'] })).toThrow('credentials')
@@ -233,7 +236,30 @@ describe('signed transaction delivery', () => {
 		).rejects.toThrow()
 	})
 
-	test('attributes every relay that cannot simulate the complete bundle', async () => {
+	test('uses successfully simulated relays when another configured relay rejects the bundle', async () => {
+		const accepted = relay(() =>
+			Response.json({
+				id: 1,
+				jsonrpc: '2.0',
+				result: { bundleHash: expectedBundleHash([serializedTransaction]), results: [{ gasUsed: 21_000, txHash: keccak256(serializedTransaction) }], stateBlockNumber: 99, totalGasUsed: 21_000 },
+			}),
+		)
+		const rejected = relay(() => Response.json({ error: { code: -32_000, message: 'bundle reverted' }, id: 1, jsonrpc: '2.0' }))
+		const result = await simulateSignedBundleEveryRelay({
+			address,
+			relayUrls: [accepted, rejected],
+			signMessage: () => Promise.resolve(signature),
+			stateBlockNumber: 99n,
+			targetBlockNumber: 100n,
+			transactions: [serializedTransaction],
+		})
+		expect(result).toMatchObject({
+			failedTargets: [{ error: expect.stringContaining('bundle reverted'), target: `${rejected}/` }],
+			successful: [{ relayUrl: accepted, simulation: { totalGasUsed: 21_000n } }],
+		})
+	})
+
+	test('enforces the configured successful relay simulation threshold', async () => {
 		const accepted = relay(() =>
 			Response.json({
 				id: 1,
@@ -245,15 +271,14 @@ describe('signed transaction delivery', () => {
 		await expect(
 			simulateSignedBundleEveryRelay({
 				address,
+				minimumSuccessfulRelays: 2,
 				relayUrls: [accepted, rejected],
 				signMessage: () => Promise.resolve(signature),
 				stateBlockNumber: 99n,
 				targetBlockNumber: 100n,
 				transactions: [serializedTransaction],
 			}),
-		).rejects.toMatchObject({
-			failedTargets: [{ error: expect.stringContaining('bundle reverted'), target: `${rejected}/` }],
-		})
+		).rejects.toThrow('required 2 successful relays')
 	})
 
 	test('fans one ordered bundle out to every configured relay without allowed reverts', async () => {

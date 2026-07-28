@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { getAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
 import { validateConnectivitySettings, type ConnectivitySettings, type NetworkName } from './connectivity.js'
@@ -14,6 +14,29 @@ export type PersistedOperatorSettings = {
 	strategy: MutableStrategy
 	submission: SubmissionSettings
 	tokenAddresses?: readonly Address[]
+}
+
+type OperatorSettingsFileHandle = {
+	chmod: (mode: number) => Promise<unknown>
+	close: () => Promise<unknown>
+	sync: () => Promise<unknown>
+	writeFile: (data: string, options: { encoding: 'utf8' }) => Promise<unknown>
+}
+
+export type OperatorSettingsFilesystem = {
+	mkdir: (path: string, options: { mode: number; recursive: true }) => Promise<unknown>
+	open: (path: string, flags: 'r' | 'wx', mode?: number) => Promise<OperatorSettingsFileHandle>
+	readFile: (path: string, encoding: 'utf8') => Promise<string>
+	rename: (oldPath: string, newPath: string) => Promise<unknown>
+	rm: (path: string, options: { force: true }) => Promise<unknown>
+}
+
+const operatorSettingsFilesystem: OperatorSettingsFilesystem = {
+	mkdir,
+	open,
+	readFile,
+	rename,
+	rm,
 }
 
 type StoredOperatorSettings = {
@@ -42,10 +65,10 @@ function validatedKeys(record: Record<string, unknown>) {
 	}
 }
 
-export async function loadOperatorSettings(path: string, expectedNetwork: NetworkName): Promise<PersistedOperatorSettings | undefined> {
+export async function loadOperatorSettings(path: string, expectedNetwork: NetworkName, filesystem: OperatorSettingsFilesystem = operatorSettingsFilesystem): Promise<PersistedOperatorSettings | undefined> {
 	let contents: string
 	try {
-		contents = await readFile(path, 'utf8')
+		contents = await filesystem.readFile(path, 'utf8')
 	} catch (error) {
 		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return undefined
 		throw error
@@ -89,7 +112,7 @@ export async function loadOperatorSettings(path: string, expectedNetwork: Networ
 	}
 }
 
-export async function saveOperatorSettings(path: string, network: NetworkName, settings: PersistedOperatorSettings) {
+export async function saveOperatorSettings(path: string, network: NetworkName, settings: PersistedOperatorSettings, filesystem: OperatorSettingsFilesystem = operatorSettingsFilesystem) {
 	const stored: StoredOperatorSettings = {
 		connectivity: settings.connectivity,
 		network,
@@ -108,14 +131,26 @@ export async function saveOperatorSettings(path: string, network: NetworkName, s
 		tokenAddresses: settings.tokenAddresses ?? [],
 		version: 2,
 	}
-	await mkdir(dirname(path), { mode: 0o700, recursive: true })
+	await filesystem.mkdir(dirname(path), { mode: 0o700, recursive: true })
 	const temporaryPath = `${path}.${process.pid.toString()}.${randomUUID()}.tmp`
 	try {
-		await writeFile(temporaryPath, `${JSON.stringify(stored, undefined, 2)}\n`, { encoding: 'utf8', flag: 'wx', mode: 0o600 })
-		await chmod(temporaryPath, 0o600)
-		await rename(temporaryPath, path)
+		const fileHandle = await filesystem.open(temporaryPath, 'wx', 0o600)
+		try {
+			await fileHandle.writeFile(`${JSON.stringify(stored, undefined, 2)}\n`, { encoding: 'utf8' })
+			await fileHandle.chmod(0o600)
+			await fileHandle.sync()
+		} finally {
+			await fileHandle.close()
+		}
+		await filesystem.rename(temporaryPath, path)
+		const directoryHandle = await filesystem.open(dirname(path), 'r')
+		try {
+			await directoryHandle.sync()
+		} finally {
+			await directoryHandle.close()
+		}
 	} catch (error) {
-		await rm(temporaryPath, { force: true })
+		await filesystem.rm(temporaryPath, { force: true })
 		throw error
 	}
 }

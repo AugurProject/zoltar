@@ -222,13 +222,35 @@
 								<span>Private relay URLs · one per line, up to 8</span>
 								<textarea id="relay-urls" name="relayUrls" rows="3" spellcheck="false"></textarea>
 							</label>
+							<label>
+								<span>Required successful relay simulations</span>
+								<input id="minimum-relay-successes" type="number" min="1" max="8" step="1" required />
+							</label>
 						</div>
 						<div class="form-actions">
-							<span id="submission-status" class="muted" aria-live="polite">Live execution requires private relays so approvals, hedge, and dispute remain atomic. Public mode is available only while dry-running.</span>
+							<span id="submission-status" class="muted" aria-live="polite">Private mode can bundle prerequisite approvals. Public mode submits one atomic entry transaction and requires sufficient executor allowances before an opportunity is eligible.</span>
 							<button class="button" type="submit">Apply submission</button>
 						</div>
 					</fieldset>
 				</form>
+			</section>
+
+			<section class="panel">
+				<div class="section-heading">
+					<div>
+						<p class="eyebrow">Loss controls</p>
+						<h2>Active risk envelope</h2>
+					</div>
+					<span class="muted">Configured at startup</span>
+				</div>
+				<div class="metric-grid">
+					<div><span>Open positions</span><strong id="risk-open-positions">—</strong></div>
+					<div><span>Locked / limit</span><strong id="risk-locked">—</strong></div>
+					<div><span>Daily gas / limit</span><strong id="risk-daily-gas">—</strong></div>
+					<div><span>Per-position limit</span><strong id="risk-position-limit">—</strong></div>
+					<div><span>Lifecycle reserve</span><strong id="risk-lifecycle-reserve">—</strong></div>
+				</div>
+				<p class="section-note">Risk limits are intentionally command-line controls. Restart with the documented <span class="mono">--max-*-weth</span> flags to change them.</p>
 			</section>
 
 			<section id="markets" class="panel">
@@ -259,6 +281,7 @@
 								<th>Address</th>
 								<th>Wallet balance</th>
 								<th>Exchange</th>
+								<th>Strategy use</th>
 								<th>Pool</th>
 								<th>Fee</th>
 								<th>Spot (WETH/token)</th>

@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Hex } from '@zoltar/shared/ethereum'
-import { loadOperatorSettings, saveOperatorSettings } from './settings-store.js'
+import { loadOperatorSettings, saveOperatorSettings, type OperatorSettingsFilesystem } from './settings-store.js'
 
 const temporaryDirectories: string[] = []
 const privateKey = `0x${'11'.repeat(32)}` as Hex
@@ -30,6 +30,7 @@ function settings(privateKeyValue: Hex | undefined) {
 			twapSeconds: 2_400,
 		},
 		submission: {
+			minimumRelaySuccesses: 2,
 			mode: 'private' as const,
 			relayUrls: ['https://relay.flashbots.net/', 'https://relay.example/'],
 		},
@@ -38,6 +39,43 @@ function settings(privateKeyValue: Hex | undefined) {
 }
 
 describe('operator settings persistence', () => {
+	test('syncs settings contents and the parent directory before returning success', async () => {
+		const events: string[] = []
+		let opened = 0
+		const filesystem: OperatorSettingsFilesystem = {
+			mkdir: async () => events.push('mkdir'),
+			open: async (_path, flags) => {
+				opened++
+				if (flags === 'wx') {
+					return {
+						chmod: async () => events.push('file:chmod'),
+						close: async () => events.push('file:close'),
+						sync: async () => events.push('file:sync'),
+						writeFile: async () => events.push('file:write'),
+					}
+				}
+				return {
+					chmod: async () => {
+						throw new Error('directory chmod is unexpected')
+					},
+					close: async () => events.push('directory:close'),
+					sync: async () => events.push('directory:sync'),
+					writeFile: async () => {
+						throw new Error('directory write is unexpected')
+					},
+				}
+			},
+			readFile: async () => {
+				throw new Error('read is unexpected')
+			},
+			rename: async () => events.push('rename'),
+			rm: async () => events.push('rm'),
+		}
+		await saveOperatorSettings('/operator/settings.json', 'mainnet', settings(undefined), filesystem)
+		expect(opened).toBe(2)
+		expect(events).toEqual(['mkdir', 'file:write', 'file:chmod', 'file:sync', 'file:close', 'rename', 'directory:sync', 'directory:close'])
+	})
+
 	test('atomically round-trips restart settings with owner-only permissions', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-settings-'))
 		temporaryDirectories.push(directory)

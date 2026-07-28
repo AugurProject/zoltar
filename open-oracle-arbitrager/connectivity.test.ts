@@ -1,6 +1,20 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { Hex } from '@zoltar/shared/ethereum'
-import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, readRpcChainId, sendRawTransactionToRpc, updateConnectivityEndpointChecks, updateSubmissionEndpointChecks, validateConnectivitySettings, validateReadRpcUrls, withConnectivityChecks, withSubmissionChecks, type EndpointCheck } from './connectivity.js'
+import {
+	checkConnectivity,
+	checkSubmissionEndpoints,
+	endpointLabel,
+	readRpcChainId,
+	sendRawTransactionToRpc,
+	updateConnectivityEndpointChecks,
+	updateSubmissionEndpointChecks,
+	validateConnectivitySettings,
+	validateIndependentReadRpcUrls,
+	validateReadRpcUrls,
+	withConnectivityChecks,
+	withSubmissionChecks,
+	type EndpointCheck,
+} from './connectivity.js'
 import { validateSubmissionSettings } from './transaction-submission.js'
 
 const servers: Bun.Server<unknown>[] = []
@@ -27,6 +41,11 @@ function rpc(handler: (method: string, params: readonly unknown[]) => unknown | 
 }
 
 describe('operator connectivity', () => {
+	test('rejects a quorum that only varies paths on the same RPC origin', () => {
+		expect(() => validateIndependentReadRpcUrls('https://rpc.example/read', ['https://rpc.example/quorum'])).toThrow('independent origins')
+		expect(validateIndependentReadRpcUrls('https://one.example', ['https://two.example'])).toEqual(['https://two.example/'])
+	})
+
 	test('validates read and public RPC endpoints without exposing URL query values in labels', () => {
 		const settings = validateConnectivitySettings({
 			publicRpcUrls: ['https://rpc.example/v1?api-key=secret', 'https://rpc.example/v1?api-key=secret'],

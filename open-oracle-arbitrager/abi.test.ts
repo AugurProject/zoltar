@@ -46,7 +46,7 @@ test('custom executor ABI matches the compiled arbitrage executor contract', () 
 
 test('custom executor ABI covers every public executor function', () => {
 	const functionNames = openOracleArbitrageExecutorAbi.filter(entry => entry.type === 'function').map(entry => entry.name)
-	expect(functionNames).toEqual(['dispute', 'hedgeAndDispute', 'assertParentBlock', 'contributions'])
+	expect(functionNames).toEqual(['assertParentBlock', 'contributions', 'dispute', 'hedgeAndDispute'])
 	for (const functionName of functionNames) {
 		const custom = openOracleArbitrageExecutorAbi.find(entry => entry.type === 'function' && entry.name === functionName)
 		const compiled = peripherals_OpenOracleArbitrageExecutor_OpenOracleArbitrageExecutor.abi.find(entry => entry.type === 'function' && entry.name === functionName)

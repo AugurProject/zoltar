@@ -86,6 +86,7 @@ describe('startup configuration', () => {
 		['--poll-ms=999', 'Poll interval must be an integer from 1000 to 3600000'],
 		['--lookback-blocks=-1', 'lookback-blocks must be a non-negative integer'],
 		['--submission-mode=unknown', 'Submission mode must be public or private'],
+		['--minimum-relay-successes=2', 'Minimum successful relays'],
 		['--relay-url=http://relay.example', 'Relay URL must use HTTPS'],
 		['--execute', '--execute requires --executor-address'],
 	])('rejects %s before starting RPC activity', async (argument, message) => {
@@ -102,7 +103,7 @@ describe('startup configuration', () => {
 		expect(result.output).not.toContain('mode=')
 	})
 
-	test('rejects public mempool execution before RPC activity', async () => {
+	test('allows public mempool execution to proceed to deployment and RPC checks', async () => {
 		const directory = await temporaryDirectory()
 		const manifestPath = join(directory, 'manifest.json')
 		await writeFile(
@@ -118,14 +119,15 @@ describe('startup configuration', () => {
 			'--execute',
 			'--executor-address=0x0000000000000000000000000000000000000001',
 			'--uniswap-router=0x0000000000000000000000000000000000000002',
-			'--quorum-rpc-url=https://quorum.example',
+			'--rpc-url=http://127.0.0.1:1',
+			'--quorum-rpc-url=http://127.0.0.1:2',
 			'--coordinator-address=0x0000000000000000000000000000000000000003',
 			`--deployment-manifest=${manifestPath}`,
 			'--submission-mode=public',
 		])
 		expect(result.exitCode).toBe(1)
-		expect(result.output).toContain('public mempool execution is disabled for fund safety')
-		expect(result.output).not.toContain('mode=')
+		expect(result.output).not.toContain('public mempool execution is disabled')
+		expect(result.output).not.toContain('--execute requires private bundle submission')
 	})
 
 	test('rejects a per-position limit larger than the total lock limit', async () => {
@@ -189,7 +191,7 @@ describe('startup configuration', () => {
 				pollMilliseconds: 15_000,
 				twapSeconds: 2_400,
 			},
-			submission: { mode: 'public', relayUrls: ['https://relay.flashbots.net/'] },
+			submission: { minimumRelaySuccesses: 1, mode: 'public', relayUrls: ['https://relay.flashbots.net/'] },
 		})
 		const dashboardPort = unusedPort()
 		const environment = { ...process.env, PRIVATE_KEY: environmentPrivateKey }
@@ -219,8 +221,8 @@ describe('startup configuration', () => {
 			}),
 			dashboardPut(origin, '/api/submission', { mode: 'public', relayUrls: ['https://relay.example'] }),
 		])
-		expect(strategyResponse.status).toBe(200)
-		expect(submissionResponse.status).toBe(200)
+		expect(strategyResponse.status, await strategyResponse.clone().text()).toBe(200)
+		expect(submissionResponse.status, await submissionResponse.clone().text()).toBe(200)
 		const concurrentSave = await loadOperatorSettings(settingsPath, 'mainnet')
 		expect(concurrentSave?.strategy.minimumProfitBps).toBe(333n)
 		expect(concurrentSave?.submission.relayUrls).toEqual(['https://relay.example/'])

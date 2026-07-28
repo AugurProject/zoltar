@@ -212,86 +212,6 @@ const timingComponents = [
 	{ name: 'blockTimestampBound', type: 'uint256' },
 ] as const
 
-export const openOracleArbitrageExecutorAbi = [
-	{
-		type: 'event',
-		name: 'HedgeAndDisputeExecuted',
-		anonymous: false,
-		inputs: [
-			{ name: 'account', type: 'address', indexed: true },
-			{ name: 'reportId', type: 'uint256', indexed: true },
-			{ name: 'boughtToken2', type: 'bool', indexed: false },
-			{ name: 'hedgeAmountToken2', type: 'uint256', indexed: false },
-			{ name: 'hedgeAmountWeth', type: 'uint256', indexed: false },
-			{ name: 'contribution1', type: 'uint256', indexed: false },
-			{ name: 'contribution2', type: 'uint256', indexed: false },
-		],
-	},
-	{
-		type: 'function',
-		name: 'dispute',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'openOracle', type: 'address' },
-			{ name: 'newAmount1', type: 'uint128' },
-			{ name: 'newAmount2', type: 'uint128' },
-			{ name: 'game', type: 'tuple', components: gameComponents },
-			{ name: 'helper', type: 'tuple', components: helperComponents },
-			{ name: 'timing', type: 'tuple', components: timingComponents },
-		],
-		outputs: [],
-	},
-	{
-		type: 'function',
-		name: 'hedgeAndDispute',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{
-				name: 'request',
-				type: 'tuple',
-				components: [
-					{ name: 'openOracle', type: 'address' },
-					{ name: 'router', type: 'address' },
-					{ name: 'poolFee', type: 'uint24' },
-					{ name: 'newAmount1', type: 'uint128' },
-					{ name: 'newAmount2', type: 'uint128' },
-					{ name: 'hedgeWethLimit', type: 'uint256' },
-					{ name: 'swapDeadline', type: 'uint256' },
-					{ name: 'expectedParentBlockHash', type: 'bytes32' },
-				],
-			},
-			{ name: 'game', type: 'tuple', components: gameComponents },
-			{ name: 'helper', type: 'tuple', components: helperComponents },
-			{ name: 'timing', type: 'tuple', components: timingComponents },
-		],
-		outputs: [],
-	},
-	{
-		type: 'function',
-		name: 'assertParentBlock',
-		stateMutability: 'view',
-		inputs: [
-			{ name: 'parentBlockNumber', type: 'uint256' },
-			{ name: 'expectedParentBlockHash', type: 'bytes32' },
-		],
-		outputs: [],
-	},
-	{
-		type: 'function',
-		name: 'contributions',
-		stateMutability: 'pure',
-		inputs: [
-			{ name: 'game', type: 'tuple', components: gameComponents },
-			{ name: 'newAmount1', type: 'uint128' },
-			{ name: 'newAmount2', type: 'uint128' },
-		],
-		outputs: [
-			{ name: 'contribution1', type: 'uint256' },
-			{ name: 'contribution2', type: 'uint256' },
-		],
-	},
-] as const
-
 export const openOracleAbi = [
 	{ type: 'function', name: 'oracleGame', stateMutability: 'view', inputs: [{ name: '', type: 'uint256' }], outputs: [{ name: '', type: 'bytes32' }] },
 	{ type: 'function', name: 'storedGame', stateMutability: 'view', inputs: [{ name: '', type: 'uint256' }], outputs: gameComponents },
@@ -355,3 +275,4 @@ export const openOracleAbi = [
 		outputs: [],
 	},
 ] as const
+export { openOracleArbitrageExecutorAbi } from './executor-abi.generated.js'

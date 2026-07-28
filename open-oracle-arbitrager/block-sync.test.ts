@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { advanceCursor, advanceCursorAfterSuccessfulHead, cursorForHeadScan, initialCursor, operatorStatusAfterPause, scanRanges } from './block-sync.js'
+import { advanceCursor, advanceCursorAfterSuccessfulHead, assertFinalityAnchor, cursorForHeadScan, initialCursor, operatorStatusAfterPause, scanRanges, withFinalityAnchor } from './block-sync.js'
 
 describe('block-driven synchronization', () => {
 	test('chunks the startup lookback and catches every block', () => {
@@ -45,5 +45,11 @@ describe('block-driven synchronization', () => {
 		expect(cursor).toEqual(advanceCursor(99n, '0x99'))
 		cursor = await advanceCursorAfterSuccessfulHead(100n, '0x100', async () => {})
 		expect(cursor).toEqual(advanceCursor(100n, '0x100'))
+	})
+
+	test('fails closed when a reorganization changes the retained finality anchor', () => {
+		const cursor = withFinalityAnchor(advanceCursor(100n, '0x100'), 88n, '0x88a')
+		expect(() => assertFinalityAnchor(cursor, 88n, '0x88a')).not.toThrow()
+		expect(() => assertFinalityAnchor(cursor, 88n, '0x88b')).toThrow('deeper than the configured overlap')
 	})
 })

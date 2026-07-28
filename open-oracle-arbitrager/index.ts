@@ -1,7 +1,5 @@
 #!/usr/bin/env bun
 
-import { readFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
 import {
 	createPublicClient,
 	createWalletClient,
@@ -25,7 +23,6 @@ import {
 	zeroAddress,
 } from '@zoltar/shared/ethereum'
 import {
-	decodeOpenOracleStatePreimage,
 	getOpenOracleGameTuple,
 	getOpenOracleHelperTuple,
 	hashOpenOracleStatePreimage,
@@ -38,14 +35,14 @@ import {
 	type OpenOracleStatePreimage,
 } from '@zoltar/shared/openOracle'
 import { erc20Abi, factoryAbi, openOracleAbi, openOracleArbitrageExecutorAbi, openOraclePriceCoordinatorAbi, poolAbi, quoterAbi } from './abi.js'
-import { advanceCursorAfterSuccessfulHead, cursorForHeadScan, initialCursor, operatorStatusAfterPause, scanRanges, type SyncCursor } from './block-sync.js'
-import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, sendRawTransactionToRpc, updateConnectivityEndpointChecks, updateSubmissionEndpointChecks, validateConnectivitySettings, validateReadRpcUrls, type ConnectivitySettings } from './connectivity.js'
+import { advanceCursorAfterSuccessfulHead, assertFinalityAnchor, cursorForHeadScan, initialCursor, operatorStatusAfterPause, scanRanges, withFinalityAnchor, type SyncCursor } from './block-sync.js'
+import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, updateConnectivityEndpointChecks, updateSubmissionEndpointChecks, validateConnectivitySettings, type ConnectivitySettings } from './connectivity.js'
+import { applyStrategy, loadConfiguration, mutableStrategy, printHelp, type Configuration } from './configuration.js'
 import { startDashboardServer } from './dashboard-server.js'
-import { authenticateDeploymentManifest, parseDeploymentManifest, type DeploymentManifest } from './deployment-auth.js'
+import { authenticateDeploymentManifest } from './deployment-auth.js'
 import {
 	assertCanonicalExecutionSnapshot,
 	assertReceiptSnapshotBlockHash,
-	attemptConfirmationRecovery,
 	canonicalBlockHashWithQuorum,
 	executionFailureDecision,
 	executionTokenAllowed,
@@ -56,16 +53,16 @@ import {
 	guardedRiskSubmission,
 	isExecutionPausedError,
 	journaledSubmission,
+	lifecycleLastValidBlockNumber,
+	lifecycleReceiptSnapshotBlock,
 	lifecycleAttemptNeedsRecovery,
 	openOracleDisputeTiming,
 	opportunityDecision,
 	recordConfirmedExecution,
-	retryPrivateSubmissionWithinWindow,
 	selectBestExecution,
 	simulateTrackedPrivateBundle,
 	trackPrivateBundleReceiptStatuses,
 	transactionReceiptsWithQuorum,
-	waitForResolvedTransaction,
 } from './execution-orchestration.js'
 import { coordinatorPolicySafetyMismatch, gamePolicyMismatch, retainedReportIds, type CoordinatorGamePolicy } from './game-policy.js'
 import {
@@ -88,70 +85,25 @@ import {
 	type OperatorState,
 	type OpportunitySnapshot,
 	type TransactionActivity,
-	type DisputeStepSnapshot,
 } from './operator-state.js'
+import { applyLogs, compareLogs, logBlockNumber, reportId, type ActiveReport } from './oracle-log-state.js'
 import { appendPriceHistory, availableTokenBalances, createTokenCatalogTracker, discoverAugurRepTokens, formatTokenAmount, loadPriceHistory, loadTokenMarkets, missingPricePoints, pricePoints } from './market-monitor.js'
-import { defaultRpcUrl, networkConfiguration, parseNetworkName, type NetworkConfiguration } from './network.js'
 import { exactWithdrawalMatches, expectedWithdrawalToken2, hedgedProfitBeforeGasWeth, realizedNetProfitWeth, recoveredHedgedProfitBeforeGasWeth } from './position-accounting.js'
 import { acquireExecutionSignerLock, acquirePositionJournalLock, loadPositionJournal, savePositionJournal, type ExclusiveProcessLock, type PositionRecord } from './position-store.js'
 import { quorumValue } from './read-quorum.js'
 import { bestSuccessful, compactFinalityWindow, pollUntilStopped, replaceOverlap } from './resilience.js'
-import { adjustedNetProfitWeth, DEFAULT_RISK_LIMITS, positionRiskLimitMismatch, type RiskLimits } from './safety-controls.js'
-import { loadOperatorSettings, saveOperatorSettings, type PersistedOperatorSettings } from './settings-store.js'
+import { adjustedNetProfitWeth, positionRiskLimitMismatch, type RiskLimits } from './safety-controls.js'
+import type { NetworkConfiguration } from './network.js'
+import { saveOperatorSettings, type PersistedOperatorSettings } from './settings-store.js'
 import { signerCandidate } from './signer.js'
 import { calculateFee, calculateNextAmount1, calculateTrackedNetProfitEth, deriveTokenToSwap, evaluateBuyRep, evaluateSellRep, executorFunding, fundedCapitalAtRiskWeth, hasFreshSubmissionWindow, hedgeSlippageReserveWeth, hedgeWethLimit, isSelfReport, meetsProfitThreshold, type ArbitrageQuote } from './strategy.js'
-import {
-	assertSubmissionWindowOpen,
-	mergeSubmissionFailures,
-	prepareSignedTransaction,
-	simulateSignedBundleEveryRelay,
-	SubmissionFailure,
-	submitSignedBundle,
-	submitSignedTransaction,
-	validateSubmissionSettings,
-	type SignedTransaction,
-	type SubmissionSettings,
-	type SubmittedTransaction,
-	type SubmissionTargetResult,
-} from './transaction-submission.js'
+import { prepareSignedTransaction, simulateSignedBundleEveryRelay, SubmissionFailure, submitSignedBundle, validateSubmissionSettings, type SignedTransaction, type SubmissionSettings, type SubmissionTargetResult } from './transaction-submission.js'
+import { receiptGasCost, submitContractTransaction, trackedActivity, transactionLogLevel, waitForTrackedTransaction, type TrackTransaction } from './transaction-tracker.js'
 
 const FEES = [100, 500, 3000, 10000] as const
 const REORG_OVERLAP_BLOCKS = 12n
 const MAX_LOG_SCAN_RANGE = 100n
 const MAX_UNTRUSTED_DRY_RUN_REPORTS = 256
-
-type Configuration = MutableStrategy & {
-	coordinatorAddresses: Address[]
-	deploymentManifest: DeploymentManifest | undefined
-	execute: boolean
-	executor: Address | undefined
-	historyFile: string
-	maxHedgeSlippageBps: bigint
-	priceHistoryFile: string
-	positionFile: string
-	quorumRpcUrls: string[]
-	lookbackBlocks: bigint
-	network: NetworkConfiguration
-	once: boolean
-	openOracle: Address
-	paused: boolean
-	persistedPrivateKey: Hex | undefined
-	privateKey: Hex | undefined
-	settingsFile: string
-	tokenAddresses: Address[]
-	router: Address | undefined
-	riskLimits: RiskLimits
-	connectivity: ConnectivitySettings
-	submission: SubmissionSettings
-	ui: boolean
-	uiPort: number
-}
-
-type ActiveReport = {
-	latest: OpenOracleStatePreimage
-	settled: boolean
-	steps: DisputeStepSnapshot[]
-}
 
 type Pool = {
 	address: Address
@@ -216,271 +168,8 @@ function requiredHash(value: unknown, description: string): Hex {
 	return value as Hex
 }
 
-function receiptGasCost(receipt: { effectiveGasPrice?: bigint | undefined; gasUsed: bigint; transactionHash: Hex }) {
-	if (typeof receipt.effectiveGasPrice !== 'bigint') throw new Error(`Receipt ${receipt.transactionHash} is missing its effective gas price`)
-	return receipt.gasUsed * receipt.effectiveGasPrice
-}
-
-function printHelp() {
-	console.log(`OpenOracle arbitrager
-
-Usage:
-  ./open-oracle-arbitrager/run --open-oracle=0x... [options]
-
-Modes:
-  --once                         Scan once and exit
-  --ui                           Serve the local dashboard on 127.0.0.1
-  --execute                      Submit guarded disputes (key from env or local UI)
-  --executor-address=0x...       Deployed atomic arbitrage executor; required with --execute
-  --coordinator-address=0x...    Approved Zoltar price coordinator; repeat as needed
-  --deployment-manifest=PATH     Reviewed address and runtime-code-hash manifest
-  --uniswap-router=0x...         Authenticated Uniswap V3 SwapRouter; required with --execute
-  --submission-mode=private      Atomic bundle delivery; the only live-execution mode
-  --relay-url=https://...        Bundle relay URL; repeat for multiple relays
-
-Strategy:
-  --minimum-profit-weth=0.01     Absolute modeled net-profit floor
-  --minimum-profit-bps=100       Return floor relative to direction-specific cost basis
-  --max-spot-twap-ticks=100      Maximum accepted Uniswap tick deviation
-  --twap-seconds=1800            Uniswap TWAP window
-  --minimum-remaining-blocks=3   Inclusion buffer for block-based games
-  --minimum-remaining-seconds=36 Inclusion buffer for timestamp-based games
-  --max-hedge-slippage-bps=50    Maximum atomic hedge slippage
-  --lifecycle-gas-reserve-weth=.01 Minimum settlement/withdrawal gas reserve
-  --max-daily-gas-weth=.05       UTC-day recorded gas + projected entry/lifecycle reserve cap
-  --max-position-weth=5          Maximum WETH-equivalent position notional
-  --max-total-locked-weth=10     Maximum WETH-equivalent locked capital
-  --poll-ms=1000                 Latest-head polling interval
-
-Data and connectivity:
-  --network=mainnet|sepolia      Expected network; defaults to mainnet
-  --rpc-url=https://...          Read RPC (or ETH_RPC_URL)
-  --quorum-rpc-url=https://...   Independent read RPC; repeat, at least one required for execution
-  --public-rpc-url=https://...   Public submission RPC; repeat to fan out
-  --rep-address=0x...            REP address; required on Sepolia
-  --token-address=0x...          Explicit execution-token allowlist; repeat as needed
-  --weth-address=0x...           Override the network WETH address
-  --uniswap-factory=0x...        Override the Uniswap V3 factory
-  --uniswap-quoter=0x...         Override the Uniswap V3 quoter
-  --lookback-blocks=50000        Initial event search range
-  --ui-port=4173                 Local dashboard port
-  --history-file=PATH            Confirmed-submission JSONL path
-  --price-history-file=PATH      Current-head pool-price JSONL path
-  --position-file=PATH           Durable open-position recovery journal
-  --settings-file=PATH           Persistent dashboard settings JSON path
-
-Execution is off by default. See open-oracle-arbitrager/README.md.`)
-}
-
-function option(name: string) {
-	const prefix = `--${name}=`
-	const found = process.argv.find(argument => argument.startsWith(prefix))
-	return found?.slice(prefix.length)
-}
-
-function options(name: string) {
-	const prefix = `--${name}=`
-	return process.argv.filter(argument => argument.startsWith(prefix)).map(argument => argument.slice(prefix.length))
-}
-
-function requiredAddress(name: string) {
-	const value = option(name) ?? process.env['OPEN_ORACLE_ADDRESS']
-	if (value === undefined) throw new Error(`Missing --${name}=0x... (or OPEN_ORACLE_ADDRESS)`)
-	return getAddress(value)
-}
-
-async function loadConfiguration(): Promise<Configuration> {
-	const privateKeyValue = process.env['PRIVATE_KEY']
-	if (privateKeyValue !== undefined && !/^0x[0-9a-fA-F]{64}$/.test(privateKeyValue)) throw new Error('PRIVATE_KEY must be a 32-byte 0x-prefixed hex value')
-	const networkName = parseNetworkName(option('network'))
-	const settingsFile = resolve(option('settings-file') ?? `.open-oracle-arbitrager/settings-${networkName}.json`)
-	const saved = await loadOperatorSettings(settingsFile, networkName)
-	const strategy = mutableStrategy(
-		saved?.strategy ?? {
-			maxSpotTwapTicks: 100n,
-			minimumProfitBps: 100n,
-			minimumProfitWeth: 10n ** 16n,
-			minimumRemainingBlocks: 3n,
-			minimumRemainingSeconds: 36n,
-			pollMilliseconds: 1_000,
-			twapSeconds: 1_800,
-		},
-	)
-	updateStrategyFromRequest(strategy, {
-		maxSpotTwapTicks: option('max-spot-twap-ticks') ?? strategy.maxSpotTwapTicks.toString(),
-		minimumProfitBps: option('minimum-profit-bps') ?? strategy.minimumProfitBps.toString(),
-		minimumProfitWeth: option('minimum-profit-weth') ?? decimalWeth(strategy.minimumProfitWeth),
-		minimumRemainingBlocks: option('minimum-remaining-blocks') ?? strategy.minimumRemainingBlocks.toString(),
-		minimumRemainingSeconds: option('minimum-remaining-seconds') ?? strategy.minimumRemainingSeconds.toString(),
-		pollMilliseconds: Number(option('poll-ms') ?? strategy.pollMilliseconds),
-		twapSeconds: Number(option('twap-seconds') ?? strategy.twapSeconds),
-	})
-	const network = networkConfiguration(networkName, {
-		factory: option('uniswap-factory') ?? process.env['UNISWAP_FACTORY_ADDRESS'],
-		quoter: option('uniswap-quoter') ?? process.env['UNISWAP_QUOTER_ADDRESS'],
-		rep: option('rep-address') ?? process.env['REP_ADDRESS'],
-		weth: option('weth-address') ?? process.env['WETH_ADDRESS'],
-	})
-	const readRpcUrl = option('rpc-url') ?? process.env['ETH_RPC_URL'] ?? saved?.connectivity.readRpcUrl ?? defaultRpcUrl(networkName)
-	const quorumEnvironment =
-		process.env['OPEN_ORACLE_QUORUM_RPC_URLS']
-			?.split(',')
-			.map(value => value.trim())
-			.filter(Boolean) ?? []
-	const quorumRpcUrls = validateReadRpcUrls([...quorumEnvironment, ...options('quorum-rpc-url')]).filter(url => url !== readRpcUrl)
-	const publicRpcUrls = options('public-rpc-url')
-	const relayUrls = options('relay-url')
-	const privateKey = (privateKeyValue as Hex | undefined) ?? saved?.privateKey
-	const execute = process.argv.includes('--execute')
-	const executorValue = option('executor-address') ?? process.env['OPEN_ORACLE_EXECUTOR_ADDRESS']
-	if (execute && executorValue === undefined) throw new Error('--execute requires --executor-address=0x... (or OPEN_ORACLE_EXECUTOR_ADDRESS)')
-	const routerValue = option('uniswap-router') ?? process.env['UNISWAP_ROUTER_ADDRESS']
-	if (execute && routerValue === undefined) throw new Error('--execute requires --uniswap-router=0x... (or UNISWAP_ROUTER_ADDRESS)')
-	if (execute && quorumRpcUrls.length === 0) throw new Error('--execute requires at least one independent --quorum-rpc-url=https://... (or OPEN_ORACLE_QUORUM_RPC_URLS)')
-	const coordinatorEnvironment =
-		process.env['OPEN_ORACLE_COORDINATOR_ADDRESSES']
-			?.split(',')
-			.map(value => value.trim())
-			.filter(Boolean) ?? []
-	const coordinatorAddresses = [...new Map([...coordinatorEnvironment, ...options('coordinator-address')].map(value => getAddress(value)).map(address => [address.toLowerCase(), address])).values()]
-	if (execute && coordinatorAddresses.length === 0) throw new Error('--execute requires at least one --coordinator-address=0x... (or OPEN_ORACLE_COORDINATOR_ADDRESSES)')
-	const deploymentManifestPath = option('deployment-manifest') ?? process.env['OPEN_ORACLE_DEPLOYMENT_MANIFEST']
-	if (execute && deploymentManifestPath === undefined) throw new Error('--execute requires --deployment-manifest=PATH (or OPEN_ORACLE_DEPLOYMENT_MANIFEST)')
-	let deploymentManifest: DeploymentManifest | undefined
-	if (deploymentManifestPath !== undefined) {
-		let value: unknown
-		try {
-			value = JSON.parse(await readFile(resolve(deploymentManifestPath), 'utf8'))
-		} catch (error) {
-			if (error instanceof SyntaxError) throw new Error(`Deployment manifest is not valid JSON: ${error.message}`)
-			throw error
-		}
-		deploymentManifest = parseDeploymentManifest(value)
-	}
-	const maxHedgeSlippageBps = BigInt(option('max-hedge-slippage-bps') ?? '50')
-	if (maxHedgeSlippageBps < 0n || maxHedgeSlippageBps > 1_000n) throw new Error('max-hedge-slippage-bps must be from 0 to 1000')
-	const riskLimits = {
-		lifecycleGasReserveWeth: parseDecimalWeth(option('lifecycle-gas-reserve-weth') ?? decimalWeth(DEFAULT_RISK_LIMITS.lifecycleGasReserveWeth)),
-		maxConcurrentPositions: 1,
-		maxDailyGasSpendWeth: parseDecimalWeth(option('max-daily-gas-weth') ?? decimalWeth(DEFAULT_RISK_LIMITS.maxDailyGasSpendWeth)),
-		maxPositionNotionalWeth: parseDecimalWeth(option('max-position-weth') ?? decimalWeth(DEFAULT_RISK_LIMITS.maxPositionNotionalWeth)),
-		maxTotalLockedWeth: parseDecimalWeth(option('max-total-locked-weth') ?? decimalWeth(DEFAULT_RISK_LIMITS.maxTotalLockedWeth)),
-	} satisfies RiskLimits
-	if (riskLimits.maxPositionNotionalWeth > riskLimits.maxTotalLockedWeth) throw new Error('max-position-weth cannot exceed max-total-locked-weth')
-	const submission = validateSubmissionSettings({
-		mode: option('submission-mode') ?? saved?.submission.mode ?? 'private',
-		relayUrls: relayUrls.length === 0 ? (saved?.submission.relayUrls ?? ['https://relay.flashbots.net']) : relayUrls,
-	})
-	if (execute && submission.mode !== 'private') throw new Error('--execute requires private bundle submission; public mempool execution is disabled for fund safety')
-	return {
-		...strategy,
-		coordinatorAddresses,
-		deploymentManifest,
-		execute,
-		executor: executorValue === undefined ? undefined : getAddress(executorValue),
-		historyFile: resolve(option('history-file') ?? `.open-oracle-arbitrager/history-${networkName}.jsonl`),
-		maxHedgeSlippageBps,
-		priceHistoryFile: resolve(option('price-history-file') ?? `.open-oracle-arbitrager/prices-${networkName}.jsonl`),
-		positionFile: resolve(option('position-file') ?? `.open-oracle-arbitrager/positions-${networkName}.json`),
-		quorumRpcUrls,
-		lookbackBlocks: BigInt(option('lookback-blocks') ?? '50000'),
-		network,
-		once: process.argv.includes('--once'),
-		openOracle: requiredAddress('open-oracle'),
-		paused: saved?.paused ?? false,
-		persistedPrivateKey: saved?.privateKey,
-		privateKey,
-		settingsFile,
-		tokenAddresses: [...new Set([network.rep, ...(saved?.tokenAddresses ?? []), ...options('token-address').map(getAddress)])],
-		router: routerValue === undefined ? undefined : getAddress(routerValue),
-		riskLimits,
-		connectivity: validateConnectivitySettings({
-			publicRpcUrls: publicRpcUrls.length === 0 ? (saved?.connectivity.publicRpcUrls ?? [readRpcUrl]) : publicRpcUrls,
-			readRpcUrl,
-		}),
-		submission,
-		ui: process.argv.includes('--ui'),
-		uiPort: Number(option('ui-port') ?? '4173'),
-	}
-}
-
-function mutableStrategy(config: MutableStrategy): MutableStrategy {
-	return {
-		maxSpotTwapTicks: config.maxSpotTwapTicks,
-		minimumProfitBps: config.minimumProfitBps,
-		minimumProfitWeth: config.minimumProfitWeth,
-		minimumRemainingBlocks: config.minimumRemainingBlocks,
-		minimumRemainingSeconds: config.minimumRemainingSeconds,
-		pollMilliseconds: config.pollMilliseconds,
-		twapSeconds: config.twapSeconds,
-	}
-}
-
-function applyStrategy(target: MutableStrategy, source: MutableStrategy) {
-	target.maxSpotTwapTicks = source.maxSpotTwapTicks
-	target.minimumProfitBps = source.minimumProfitBps
-	target.minimumProfitWeth = source.minimumProfitWeth
-	target.minimumRemainingBlocks = source.minimumRemainingBlocks
-	target.minimumRemainingSeconds = source.minimumRemainingSeconds
-	target.pollMilliseconds = source.pollMilliseconds
-	target.twapSeconds = source.twapSeconds
-}
-
-function reportId(log: TransactionLog) {
-	const topic = log.topics[1]
-	if (topic === undefined) throw new Error('OpenOracle event missing report id')
-	return BigInt(topic)
-}
-
-function applyLogs(reports: Map<bigint, ActiveReport>, logs: readonly TransactionLog[]) {
-	for (const log of logs) {
-		if (log.removed === true) continue
-		const id = reportId(log)
-		const signature = log.topics[0]?.toLowerCase()
-		if (signature === OPEN_ORACLE_REPORT_SETTLED_TOPIC.toLowerCase()) {
-			const current = reports.get(id)
-			if (current !== undefined) {
-				current.settled = true
-				current.steps.push({
-					amount1: undefined,
-					amount2: undefined,
-					blockNumber: logBlockNumber(log).toString(),
-					event: 'settled',
-					reporter: undefined,
-					transactionHash: log.transactionHash ?? undefined,
-				})
-			}
-			continue
-		}
-		if (signature !== OPEN_ORACLE_REPORT_SUBMITTED_TOPIC.toLowerCase() && signature !== OPEN_ORACLE_REPORT_DISPUTED_TOPIC.toLowerCase()) continue
-		const latest = decodeOpenOracleStatePreimage(log.data, id)
-		const previous = reports.get(id)
-		reports.set(id, {
-			latest,
-			settled: false,
-			steps: [
-				...(previous?.steps ?? []),
-				{
-					amount1: latest.game.currentAmount1.toString(),
-					amount2: latest.game.currentAmount2.toString(),
-					blockNumber: logBlockNumber(log).toString(),
-					event: signature === OPEN_ORACLE_REPORT_SUBMITTED_TOPIC.toLowerCase() ? 'submitted' : 'disputed',
-					reporter: latest.game.currentReporter,
-					transactionHash: log.transactionHash ?? undefined,
-				},
-			],
-		})
-	}
-}
-
 function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : String(error)
-}
-
-function transactionLogLevel(status: TransactionActivity['status']) {
-	if (status === 'reverted' || status === 'submission-failed') return 'error'
-	if (status === 'confirmation-unknown') return 'warning'
-	return 'info'
 }
 
 function hedgeExecutionFromLogs(logs: readonly { address: Address; data: Hex; topics: readonly Hex[] }[], executor: Address) {
@@ -503,23 +192,6 @@ function hedgeExecutionFromLogs(logs: readonly { address: Address; data: Hex; to
 		}
 	}
 	throw new Error('Confirmed executor transaction did not emit HedgeAndDisputeExecuted')
-}
-
-function logBlockNumber(log: TransactionLog): bigint {
-	if (log.blockNumber === null || log.blockNumber === undefined) throw new Error('OpenOracle log is missing its block number')
-	return log.blockNumber
-}
-
-function compareLogs(left: TransactionLog, right: TransactionLog) {
-	const leftBlock = logBlockNumber(left)
-	const rightBlock = logBlockNumber(right)
-	if (leftBlock < rightBlock) return -1
-	if (leftBlock > rightBlock) return 1
-	const leftIndex = BigInt(left.logIndex ?? 0)
-	const rightIndex = BigInt(right.logIndex ?? 0)
-	if (leftIndex < rightIndex) return -1
-	if (leftIndex > rightIndex) return 1
-	return 0
 }
 
 async function loadCoordinatorPolicies(client: ReadClient, config: Pick<Configuration, 'coordinatorAddresses' | 'network' | 'openOracle'>) {
@@ -937,161 +609,6 @@ async function loadBalances(client: ReadClient, wallet: WriteClient | undefined,
 	return { raw, snapshot }
 }
 
-type TrackTransaction = (activity: TransactionActivity) => void
-
-type TrackedSubmission = SignedTransaction &
-	SubmittedTransaction & {
-		estimatedNetProfitEth: string | undefined
-		kind: TransactionActivity['kind']
-		reportId: string
-		submittedAt: string
-		token: Address | undefined
-		tokenSymbol: string | undefined
-	}
-
-function trackedActivity(submission: TrackedSubmission, status: TransactionActivity['status'], actualGasCostEth: string | undefined = undefined, hash: Hex = submission.hash, trackedNetProfitEth: string | undefined = undefined): TransactionActivity {
-	return {
-		acceptedTargets: submission.acceptedTargets,
-		actualGasCostEth,
-		estimatedNetProfitEth: submission.estimatedNetProfitEth,
-		failedTargets: submission.failedTargets,
-		hash,
-		kind: submission.kind,
-		mode: submission.mode,
-		originalHash: submission.hash,
-		reportId: submission.reportId,
-		status,
-		submittedAt: submission.submittedAt,
-		token: submission.token,
-		tokenSymbol: submission.tokenSymbol,
-		trackedNetProfitEth,
-		updatedAt: new Date().toISOString(),
-	}
-}
-
-async function submitContractTransaction(
-	client: ReadClient,
-	wallet: WriteClient,
-	config: Configuration,
-	signed: SignedTransaction,
-	details: { estimatedNetProfitEth: string | undefined; kind: TransactionActivity['kind']; reportId: string; token?: Address | undefined; tokenSymbol?: string | undefined },
-	isPaused: () => boolean,
-	track: TrackTransaction,
-): Promise<TrackedSubmission> {
-	const account = wallet.account
-	const signMessage = account?.signMessage
-	if (account === undefined || signMessage === undefined) throw new Error('Execution requires a local relay authentication signer')
-	const submittedAt = new Date().toISOString()
-	const initial: TrackedSubmission = {
-		...signed,
-		acceptedTargets: [],
-		estimatedNetProfitEth: details.estimatedNetProfitEth,
-		failedTargets: [],
-		kind: details.kind,
-		mode: config.submission.mode,
-		reportId: details.reportId,
-		submittedAt,
-		token: details.token,
-		tokenSymbol: details.tokenSymbol,
-	}
-	try {
-		const result = await guardedTransactionSubmission(
-			isPaused,
-			async () => {
-				if (signed.lastValidBlockNumber !== undefined) assertSubmissionWindowOpen(signed.lastValidBlockNumber, await client.getBlockNumber())
-			},
-			() => {
-				track(trackedActivity(initial, 'submitting'))
-				return submitSignedTransaction({
-					address: account.address,
-					hash: signed.hash,
-					maxBlockNumber: signed.maxBlockNumber,
-					publicRpcUrls: config.connectivity.publicRpcUrls,
-					publicSubmit: sendRawTransactionToRpc,
-					serializedTransaction: signed.serializedTransaction,
-					settings: config.submission,
-					signMessage,
-				})
-			},
-		)
-		const submission = { ...initial, ...result }
-		track(trackedActivity(submission, 'pending'))
-		return submission
-	} catch (error) {
-		if (isExecutionPausedError(error)) throw error
-		const failedTargets: readonly SubmissionTargetResult[] =
-			error instanceof SubmissionFailure
-				? error.failedTargets
-				: [
-						{
-							error: errorMessage(error),
-							target: config.submission.mode === 'public' ? 'public mempool' : 'private relay submission',
-						},
-					]
-		track(trackedActivity({ ...initial, failedTargets }, 'submission-failed'))
-		throw error
-	}
-}
-
-async function waitForTrackedTransaction(client: ReadClient, wallet: WriteClient, config: Configuration, submission: TrackedSubmission, track: TrackTransaction) {
-	const account = wallet.account
-	const signMessage = account?.signMessage
-	if (account === undefined || signMessage === undefined) throw new Error('Execution requires a local relay authentication signer')
-	let tracked = submission
-	const receipt = await waitForResolvedTransaction(
-		submission.hash,
-		parameters => wallet.waitForTransactionReceipt({ ...parameters, transaction: submission.transaction }),
-		undefined,
-		async error => {
-			console.error(`transaction=${submission.hash} confirmationRetry=${errorMessage(error)}`)
-			track(trackedActivity(tracked, 'confirmation-unknown'))
-			if (config.submission.mode !== 'private') return
-			await attemptConfirmationRecovery(
-				async () => {
-					const currentBlockNumber = await client.getBlockNumber()
-					const retry = await retryPrivateSubmissionWithinWindow({
-						currentBlockNumber,
-						lastValidBlockNumber: tracked.lastValidBlockNumber,
-						submit: maxBlockNumber =>
-							submitSignedTransaction({
-								address: account.address,
-								hash: submission.hash,
-								maxBlockNumber,
-								publicRpcUrls: config.connectivity.publicRpcUrls,
-								publicSubmit: sendRawTransactionToRpc,
-								serializedTransaction: submission.serializedTransaction,
-								settings: config.submission,
-								signMessage,
-							}),
-					})
-					if (!retry.attempted) {
-						console.error(`transaction=${submission.hash} relayResubmissionSkipped=calldata-expired`)
-						return
-					}
-					tracked = {
-						...tracked,
-						acceptedTargets: [...new Set([...tracked.acceptedTargets, ...retry.result.acceptedTargets])],
-						failedTargets: retry.result.failedTargets,
-						maxBlockNumber: retry.maxBlockNumber,
-					}
-					track(trackedActivity(tracked, 'pending'))
-				},
-				retryError => {
-					console.error(`transaction=${submission.hash} relayResubmissionFailed=${errorMessage(retryError)}`)
-					tracked = {
-						...tracked,
-						failedTargets: mergeSubmissionFailures(tracked.failedTargets, retryError),
-					}
-					track(trackedActivity(tracked, 'confirmation-unknown'))
-				},
-			)
-		},
-	)
-	const actualGasCostEth = decimalWeth(receiptGasCost(receipt))
-	track(trackedActivity(tracked, receipt.status === 'success' ? 'confirmed' : 'reverted', actualGasCostEth, receipt.transactionHash))
-	return { receipt, tracked }
-}
-
 async function executeDispute(
 	client: ReadClient,
 	readClients: readonly ReadClient[],
@@ -1291,11 +808,12 @@ async function executeDispute(
 			token: transaction.token,
 			tokenSymbol: transaction.tokenSymbol,
 		}))
-		const simulations = await simulateTrackedPrivateBundle(
+		const relaySimulations = await simulateTrackedPrivateBundle(
 			tracked,
 			() =>
 				simulateSignedBundleEveryRelay({
 					address: account.address,
+					minimumSuccessfulRelays: config.submission.minimumRelaySuccesses,
 					relayUrls: config.submission.relayUrls,
 					signMessage,
 					stateBlockNumber: quoteBlockNumber,
@@ -1316,7 +834,7 @@ async function executeDispute(
 				track(trackedActivity({ ...transaction, failedTargets }, status))
 			},
 		)
-		const totalGasUsed = simulations.reduce((maximum, simulation) => (simulation.totalGasUsed > maximum ? simulation.totalGasUsed : maximum), 0n)
+		const totalGasUsed = relaySimulations.successful.reduce((maximum, result) => (result.simulation.totalGasUsed > maximum ? result.simulation.totalGasUsed : maximum), 0n)
 		const simulatedQuote = safetyAdjustedQuote(refreshedQuote, totalGasUsed * gasPrice, lifecycleGasReserveWeth, config)
 		const simulatedNetProfit = simulatedQuote.netProfitWeth
 		estimatedNetProfit = simulatedNetProfit
@@ -1345,7 +863,7 @@ async function executeDispute(
 							() =>
 								submitSignedBundle({
 									address: account.address,
-									relayUrls: config.submission.relayUrls,
+									relayUrls: relaySimulations.successful.map(result => result.relayUrl),
 									signMessage,
 									targetBlockNumber,
 									transactions: serializedTransactions,
@@ -1484,17 +1002,14 @@ async function recoverPendingLifecycleWithQuorum(readClients: readonly ReadClien
 		throw new Error('Lifecycle recovery journal is incomplete')
 	}
 	const receipts = await transactionReceiptsWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `pending lifecycle ${position.reportId}`, position.lifecycleTransactionHashes)
-	const firstReceipt = receipts[0]
 	const targetBlockNumber = BigInt(position.lifecycleTargetBlockNumber)
-	if (firstReceipt === undefined || receipts.some(receipt => receipt.status !== 'success' || receipt.blockNumber !== firstReceipt.blockNumber || receipt.blockHash.toLowerCase() !== firstReceipt.blockHash.toLowerCase() || receipt.blockNumber !== targetBlockNumber)) {
-		throw new Error('Lifecycle bundle receipts are missing, reverted, outside the target block, or split across blocks')
-	}
+	const snapshotBlock = lifecycleReceiptSnapshotBlock(receipts, targetBlockNumber)
 	for (const [index, receipt] of receipts.entries()) {
 		const expectedHash = position.lifecycleTransactionHashes[index]
 		if (expectedHash === undefined || receipt.transactionHash.toLowerCase() !== expectedHash.toLowerCase()) throw new Error('Lifecycle bundle receipt hash does not match the durable journal')
 	}
-	const balancesAfter = await lifecycleBalancesWithQuorum(readClients, config, position.account, position.token, targetBlockNumber)
-	assertReceiptSnapshotBlockHash(firstReceipt.blockHash, balancesAfter.blockHash, 'Lifecycle')
+	const balancesAfter = await lifecycleBalancesWithQuorum(readClients, config, position.account, position.token, snapshotBlock.blockNumber)
+	assertReceiptSnapshotBlockHash(snapshotBlock.blockHash, balancesAfter.blockHash, 'Lifecycle')
 	const walletWethBefore = BigInt(position.lifecycleWalletWethBefore)
 	const walletTokenBefore = BigInt(position.lifecycleWalletTokenBefore)
 	if (balancesAfter.walletWeth < walletWethBefore || balancesAfter.walletToken < walletTokenBefore) {
@@ -1521,7 +1036,7 @@ async function recoverPendingLifecycleWithQuorum(readClients: readonly ReadClien
 	return { ...recovered, closedAt: new Date().toISOString(), realizedNetProfitEth: decimalSignedEth(realized), status: 'closed' }
 }
 
-async function processPositionLifecycle(client: ReadClient, readClients: readonly ReadClient[], wallet: WriteClient, config: Configuration, position: PositionRecord, blockNumber: bigint, persistPosition: (position: PositionRecord) => Promise<void>) {
+async function processPositionLifecycle(client: ReadClient, readClients: readonly ReadClient[], wallet: WriteClient, config: Configuration, position: PositionRecord, blockNumber: bigint, persistPosition: (position: PositionRecord) => Promise<void>, track: TrackTransaction) {
 	const account = wallet.account
 	const executor = config.executor
 	if (account.signTransaction === undefined || account.signMessage === undefined) throw new Error('Position recovery requires a local transaction and relay signer')
@@ -1574,7 +1089,6 @@ async function processPositionLifecycle(client: ReadClient, readClients: readonl
 		await persistPosition({ ...activePosition, status: 'recovery-required' })
 		throw new Error(`Position ${activePosition.reportId} is no longer current and has no withdrawable OpenOracle balance`)
 	}
-	if (config.submission.mode !== 'private') throw new Error('Automatic position lifecycle requires private bundle submission')
 	const tokenDecimals = tokenDecimalsFromSnapshot(balancesBefore, activePosition.reportId)
 
 	const block = await client.getBlock({ blockNumber })
@@ -1582,17 +1096,19 @@ async function processPositionLifecycle(client: ReadClient, readClients: readonl
 	const signTransaction = account.signTransaction
 	const startingNonce = await pendingNonceWithQuorum(readClients, config, account.address)
 	const targetBlockNumber = blockNumber + 1n
-	const calls: { data: Hex; gas: bigint; to: Address }[] = [
-		{
+	const calls: { data: Hex; gas: bigint; kind: TransactionActivity['kind']; to: Address; token?: Address | undefined; tokenSymbol?: string | undefined }[] = []
+	if (config.submission.mode === 'private') {
+		calls.push({
 			data: encodeFunctionData({
 				abi: openOracleArbitrageExecutorAbi,
 				functionName: 'assertParentBlock',
 				args: [blockNumber, storedSnapshot.blockHash],
 			}),
 			gas: 50_000n,
+			kind: 'canonical-head',
 			to: executor,
-		},
-	]
+		})
+	}
 	if (settlementEligible) {
 		calls.push({
 			data: encodeFunctionData({
@@ -1601,12 +1117,13 @@ async function processPositionLifecycle(client: ReadClient, readClients: readonl
 				args: [id, getOpenOracleGameTuple(game), getOpenOracleHelperTuple(report.helper)],
 			}),
 			gas: BigInt(game.callbackGasLimit) + 750_000n,
+			kind: 'settle',
 			to: config.openOracle,
 		})
 	}
 	calls.push(
-		{ data: encodeFunctionData({ abi: openOracleAbi, functionName: 'withdraw', args: [config.network.weth, 2n ** 256n - 1n] }), gas: 150_000n, to: config.openOracle },
-		{ data: encodeFunctionData({ abi: openOracleAbi, functionName: 'withdraw', args: [position.token, 2n ** 256n - 1n] }), gas: 150_000n, to: config.openOracle },
+		{ data: encodeFunctionData({ abi: openOracleAbi, functionName: 'withdraw', args: [config.network.weth, 2n ** 256n - 1n] }), gas: 150_000n, kind: 'withdraw-weth', to: config.openOracle, token: config.network.weth, tokenSymbol: 'WETH' },
+		{ data: encodeFunctionData({ abi: openOracleAbi, functionName: 'withdraw', args: [position.token, 2n ** 256n - 1n] }), gas: 150_000n, kind: 'withdraw-token', to: config.openOracle, token: position.token, tokenSymbol: position.tokenSymbol },
 	)
 	const signed = await Promise.all(
 		calls.map((call, index) =>
@@ -1617,7 +1134,7 @@ async function processPositionLifecycle(client: ReadClient, readClients: readonl
 				data: call.data,
 				from: account.address,
 				gasEstimate: call.gas,
-				lastValidBlockNumber: targetBlockNumber,
+				lastValidBlockNumber: lifecycleLastValidBlockNumber(config.submission.mode, targetBlockNumber),
 				nonce: startingNonce + BigInt(index),
 				signTransaction,
 				to: call.to,
@@ -1627,7 +1144,7 @@ async function processPositionLifecycle(client: ReadClient, readClients: readonl
 	const serializedTransactions = signed.map(transaction => transaction.serializedTransaction)
 	const lifecyclePosition = {
 		...activePosition,
-		lifecycleTargetBlockNumber: targetBlockNumber.toString(),
+		lifecycleTargetBlockNumber: config.submission.mode === 'private' ? targetBlockNumber.toString() : '0',
 		lifecycleTokenDecimals: tokenDecimals.toString(),
 		lifecycleTransactionHashes: signed.map(transaction => transaction.hash),
 		lifecycleUpdatedAt: new Date().toISOString(),
@@ -1635,8 +1152,28 @@ async function processPositionLifecycle(client: ReadClient, readClients: readonl
 		lifecycleWalletWethBefore: balancesBefore.walletWeth.toString(),
 		status: 'withdrawing' as const,
 	} satisfies PositionRecord
-	await simulateSignedBundleEveryRelay({
+	if (config.submission.mode === 'public') {
+		await persistPosition(lifecyclePosition)
+		for (const [index, transaction] of signed.entries()) {
+			const call = calls[index]
+			if (call === undefined) throw new Error('Public lifecycle call metadata is incomplete')
+			const submission = await submitContractTransaction(client, wallet, config, transaction, { estimatedNetProfitEth: undefined, kind: call.kind, reportId: activePosition.reportId, token: call.token, tokenSymbol: call.tokenSymbol }, () => false, track)
+			const { receipt } = await waitForTrackedTransaction(client, wallet, config, submission, track)
+			if (receipt.status !== 'success') {
+				await persistPosition({ ...lifecyclePosition, status: 'recovery-required' })
+				throw new Error(`Public lifecycle transaction reverted: ${receipt.transactionHash}`)
+			}
+		}
+		try {
+			await finalizeSubmittedLifecycleAttempt(lifecyclePosition, pending => recoverPendingLifecycleWithQuorum(readClients, config, pending), persistPosition)
+		} catch (error) {
+			throw new Error(`Pending position ${activePosition.reportId} public lifecycle receipt could not be recovered: ${errorMessage(error)}`)
+		}
+		return 'processed' as const
+	}
+	const relaySimulations = await simulateSignedBundleEveryRelay({
 		address: account.address,
+		minimumSuccessfulRelays: config.submission.minimumRelaySuccesses,
 		relayUrls: config.submission.relayUrls,
 		signMessage,
 		stateBlockNumber: blockNumber,
@@ -1656,7 +1193,7 @@ async function processPositionLifecycle(client: ReadClient, readClients: readonl
 				() =>
 					submitSignedBundle({
 						address: account.address,
-						relayUrls: config.submission.relayUrls,
+						relayUrls: relaySimulations.successful.map(result => result.relayUrl),
 						signMessage,
 						targetBlockNumber,
 						transactions: serializedTransactions,
@@ -1902,7 +1439,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 	}
 	const dashboard = config.ui
 		? startDashboardServer(config.uiPort, {
-				getSnapshot: () => operatorSnapshot(state, pendingStrategy ?? config, pendingSubmission ?? config.submission, pendingConnectivity ?? config.connectivity, fixedState),
+				getSnapshot: () => operatorSnapshot(state, pendingStrategy ?? config, pendingSubmission ?? config.submission, pendingConnectivity ?? config.connectivity, fixedState, config.riskLimits),
 				setPaused: paused =>
 					queueSettingsUpdate(async () => {
 						await persistSettings({ ...currentPersistedSettings(), paused })
@@ -1984,7 +1521,6 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 				},
 				updateSubmission: async value => {
 					const next = validateSubmissionSettings(value)
-					if (config.execute && next.mode !== 'private') throw new Error('Execution mode requires private bundle submission; public mempool submission is disabled for fund safety')
 					await updateSubmissionEndpointChecks(state, () => checkSubmissionEndpoints(next, config.network.chain.id))
 					return queueSettingsUpdate(async () => {
 						await persistSettings({ ...currentPersistedSettings(), submission: next })
@@ -2103,11 +1639,16 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 				if (blockNumber === undefined) throw new Error('Latest block is missing its number')
 				const blockHash = block.hash
 				if (blockHash === undefined) throw new Error('Latest block is missing its hash')
+				if (cursor?.finalityAnchorNumber !== undefined && cursor.finalityAnchorHash !== undefined) {
+					const anchor = await client.getBlock({ blockNumber: cursor.finalityAnchorNumber })
+					if (anchor.hash == null) throw new Error('Finality anchor block is missing its canonical hash')
+					assertFinalityAnchor(cursor, cursor.finalityAnchorNumber, anchor.hash)
+				}
 				let lifecycleProcessed = false
 				if (config.execute && wallet !== undefined) {
 					for (const position of positions.filter(candidate => candidate.status !== 'closed' && candidate.withdrawnWeth === '0' && candidate.withdrawnToken === '0')) {
 						try {
-							const result = await processPositionLifecycle(client, readClients, wallet, config, position, blockNumber, persistPosition)
+							const result = await processPositionLifecycle(client, readClients, wallet, config, position, blockNumber, persistPosition, trackTransaction)
 							if (result === 'processed') {
 								lifecycleProcessed = true
 								recordOperation(state, {
@@ -2265,6 +1806,10 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 					state.priceHistory = state.priceHistory.slice(-2_000)
 					completedOpportunityCount = opportunities.length
 				})
+				const finalityAnchorNumber = blockNumber > REORG_OVERLAP_BLOCKS ? blockNumber - REORG_OVERLAP_BLOCKS : 0n
+				const finalityAnchor = await client.getBlock({ blockNumber: finalityAnchorNumber })
+				if (finalityAnchor.hash == null) throw new Error('Finality anchor block is missing its canonical hash')
+				cursor = withFinalityAnchor(cursor, finalityAnchorNumber, finalityAnchor.hash)
 				const settledReportIds = new Set(
 					[...reports.entries()]
 						.filter(([, report]) => {

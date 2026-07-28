@@ -46,9 +46,10 @@ restart settings, or the local dashboard when `--ui` is enabled.
   - WETH for the total executor funding shown in the dashboard.
   - The configured token (REPv2, fork REP, or another ERC-20) for the total
     executor funding shown in the dashboard.
-- At least one Flashbots-compatible bundle relay. Live execution refuses public
-  mempool delivery: approvals, the Uniswap hedge, and the OpenOracle dispute are
-  simulated and submitted as one all-or-nothing next-block bundle.
+- For private delivery, at least one Flashbots-compatible bundle relay. Private
+  mode can bundle missing approvals with the atomic executor call. Public delivery
+  sends the single atomic executor transaction directly to every configured public
+  RPC and is eligible only when the required executor allowances already exist.
 - External process supervision, endpoint health alerts, and a procedure for any
   position shown as **recovery-required**. The bot automatically settles or detects
   replacement, withdraws balances privately, and verifies exact asset recovery
@@ -79,9 +80,9 @@ end-user release. The commands below remain experimental operator references:
    not need to paste a raw private key into the dashboard or save it in plaintext.
    Until then, use a dedicated low-balance key and leave **Save this new key in
    plaintext for future restarts** off.
-5. Add fault-injection coverage for disk-full and interrupted settings writes,
-   delayed or partial relay responses, correlated RPC failure, clock skew, and
-   reorganization deeper than the normal overlap window.
+5. Extend the deterministic interrupted-write, partial-relay, same-origin RPC,
+   clock-skew, and deep-reorganization tests with host-level disk-full and
+   provider-specific chaos rehearsals.
 6. Publish a supported relay/RPC compatibility matrix and continuously exercise
    exact bundle simulation, submission, receipt, and archive-read behavior against
    those providers.
@@ -248,6 +249,25 @@ Include every address in use. Do not construct this trust root from the same RPC
 that the bot will authenticate; independently review the deployment, compiler
 settings, and runtime code.
 
+The schema is `execution-manifest.schema.json`. Generate hashes from one endpoint
+and verify the resulting file through a separately operated endpoint:
+
+```bash
+./open-oracle-arbitrager/execution-manifest generate \
+  --network=sepolia \
+  --rpc-url=https://first-provider.example \
+  --contract=executor:0x... \
+  --contract=open-oracle:0x... \
+  --output=/secure/operator/sepolia-deployments.json
+
+./open-oracle-arbitrager/execution-manifest verify \
+  --rpc-url=https://independent-provider.example \
+  --manifest=/secure/operator/sepolia-deployments.json
+```
+
+`execution-manifest.example.json` is deliberately placeholder-only and must never
+be used as an execution trust root.
+
 Execution remains fixed for the lifetime of the process. It cannot be enabled from
 the dashboard. When `--execute --ui` starts without `PRIVATE_KEY` or a remembered
 signer, it remains locked until a key is set in the local dashboard. Signer set/clear
@@ -276,9 +296,11 @@ ETH_RPC_URL=https://your-mainnet-rpc.example \
   --ui
 ```
 
-Execution mode is fixed to **Private relays**. The dashboard may use public delivery
-for dry-run endpoint testing, but it rejects switching a live process away from
-private bundles. Private mode requires at least one relay and supports up to eight.
+Execution supports **Private relays** and **Public mempool** delivery. Private mode
+requires at least one relay and supports up to eight. The configurable successful
+simulation threshold determines how many relays must validate the exact complete
+bundle; submission is sent only to those successful relays. A broken optional relay
+therefore cannot disable trading unless the configured threshold requires it.
 Startup and dashboard updates probe every private relay with `eth_chainId`, then
 send intentionally invalid `eth_callBundle` and `eth_sendBundle` requests. A
 compatible relay returns method-specific authentication or parameter errors; a
@@ -315,19 +337,25 @@ Before each dispute, the bot:
 9. Uses the quorum-confirmed executor allowances to create the minimum ordered transaction list:
    optional zero-reset/approval transactions followed by one atomic executor call.
 10. In private mode, signs consecutive nonces, simulates the entire ordered list with
-   `eth_callBundle` on every configured relay, includes an on-chain exact-parent-hash
-   guard, and re-applies the profit threshold to the largest simulated gas usage.
-11. Sends the all-or-nothing target-block bundle to every configured relay with
-    `eth_sendBundle`. No reverting transaction hashes are allowed.
+    `eth_callBundle`, requires the configured number of successful simulations,
+    includes an on-chain exact-parent-hash guard, and re-applies the profit threshold
+    to the largest successful simulation gas usage. In public mode, refuses the
+    opportunity unless allowances are already sufficient and simulates one atomic
+    executor call.
+11. Sends the all-or-nothing target-block bundle only to relays that successfully
+    simulated it, or fans the identical single public transaction to every configured
+    public RPC. No reverting transaction hashes are allowed.
 12. Writes a durable pending-entry record before submission. After inclusion, it
     verifies every bundle receipt and its required effective gas price against the
     independently confirmed canonical target-block hash, decodes the executor’s
     actual hedge event, records every entry transaction hash and actual bundle gas,
     and only then allows the position to progress as confirmed.
 13. On later blocks, automatically settles when eligible or detects replacement,
-    then privately withdraws WETH and token balances. It records realized P&amp;L
-    only when actual withdrawals exactly match the hedge-neutral expected inventory.
-    Any mismatch stops new execution and remains `recovery-required`.
+    then withdraws WETH and token balances. Private mode bundles the lifecycle;
+    public mode journals all signed hashes before sequential settlement/withdrawal
+    and verifies every receipt independently. It records realized P&amp;L only when
+    actual withdrawals exactly match the hedge-neutral expected inventory. Any
+    mismatch stops new execution and remains `recovery-required`.
 
 The executor atomically swaps the old report inventory through the authenticated
 router, pulls the calculated contribution, verifies exact balance deltas into itself
@@ -426,6 +454,9 @@ The dashboard shows:
   complete position journal.
 - Signed transaction status, public/private delivery, accepted and failed relay
   targets, mined replacement hash, actual gas, and ETH profit estimates.
+- A read-only active risk envelope showing configured position, locked-capital,
+  daily-gas, and lifecycle-reserve limits alongside current usage and remaining
+  capacity.
 - Persistent strategy, RPC fanout, relay submission controls, and pause/resume.
 - A token catalog with wallet balances and supported WETH/token pools. Each pool
   address links to the selected-network explorer. The [market discovery section](#token-and-pool-discovery)
@@ -458,7 +489,8 @@ security.
 
 ## Persistent operator settings
 
-Dashboard changes to strategy, read/public RPCs, delivery mode, relay URLs, the
+Dashboard changes to strategy, read/public RPCs, delivery mode, relay URLs and
+relay-success threshold, the
 token list, and the pause state are atomically saved after validation and restored on restart. Mainnet
 and Sepolia use separate files by default:
 
@@ -469,7 +501,8 @@ and Sepolia use separate files by default:
 
 Override the destination with `--settings-file=/secure/operator/settings.json`.
 The containing directory is created with owner-only permissions when possible, and
-every replacement settings file is mode `0600`. The default directory is ignored by
+every replacement settings file is mode `0600`. File contents and the containing
+directory are synced before a successful save is reported. The default directory is ignored by
 Git. A malformed, unsupported, or wrong-network file stops startup instead of
 silently reverting to defaults. A runtime write failure rejects the dashboard
 mutation and keeps the prior runtime settings active; fix the settings path or
@@ -485,6 +518,7 @@ Startup resolves values in this order:
 | Active signer | `PRIVATE_KEY`; saved restart signer; no signer |
 | Submission mode | `--submission-mode`; saved mode; `private` |
 | Relay URLs | Repeated `--relay-url`; saved list; Flashbots relay |
+| Relay simulation threshold | Saved dashboard value; `1` |
 | Token list | Repeated `--token-address`; saved list; canonical network REP |
 | Pause state | Saved value; `false` |
 
@@ -531,7 +565,8 @@ hashes, so a compliant relay/builder omits the entire bundle when a step would
 revert. An unincluded bundle consumes no on-chain gas. An anomalous partial,
 independent, or reverted inclusion can consume gas; the bot records those receipts
 in its in-memory transaction lifecycle but does not create confirmed execution
-history. Live public execution is unsupported.
+history. Public execution records the single executor transaction and its actual
+gas through the same durable position and history accounting.
 
 Execution startup verifies that the history destination is writable. If persistence
 later fails after a confirmed dispute, the record remains visible in memory, further
@@ -604,21 +639,23 @@ path. Keep files network-specific.
 
 ## Transaction delivery and tracking
 
-The submission library retains public-RPC support for dry-run endpoint testing, but
-`--execute` rejects public mode at startup and the live dashboard rejects switching
-to it. A public transaction cannot make prerequisite approvals, hedge execution,
-and dispute replacement atomic and can leak a profitable strategy to builders.
+Public mode broadcasts one signed atomic executor call to every configured public
+RPC. It cannot safely broadcast prerequisite approvals alongside the opportunity,
+so any entry with insufficient executor allowances is rejected before signing.
+Public delivery exposes the opportunity to the mempool and does not provide bundle
+confidentiality or next-block atomic inclusion.
 
-Private mode signs approvals and the executor call at consecutive nonces, calls
-`eth_callBundle` on every configured relay, and then fans the same ordered
-target-block transaction list out through `eth_sendBundle`. The payload omits
+Private mode signs approvals and the executor call at consecutive nonces, requests
+`eth_callBundle` from every configured relay, and then fans the same ordered
+target-block transaction list only to relays whose simulation passed. The payload omits
 `revertingTxHashes`, so any reverted transaction invalidates the complete bundle.
 The executor call, and the first transaction in every lifecycle bundle, require
 `blockhash(parent)` to equal the independently agreed quote-block hash. A relay or
 builder using a different same-height parent therefore simulates or executes a
 revert, invalidating the atomic bundle. Immediately before journaling and delivery,
 all read RPCs must still agree on both the parent height and hash.
-At least one relay must accept the bundle or submission fails closed. Configured
+The configured number of relays must successfully simulate the bundle, and at least
+one of those relays must accept submission, or delivery fails closed. Configured
 endpoints must implement the
 [Flashbots bundle RPC](https://docs.flashbots.net/flashbots-auction/advanced/rpc-endpoint)
 and authentication format.
@@ -630,9 +667,9 @@ only the next block and is not resubmitted from a stale quote. After that target
 block, absent, unsuccessful, or disagreeing receipt evidence leaves the journaled
 attempt pending or `recovery-required`. Later scans attempt only independent receipt
 recovery, and the one-nonclosed-position guard prevents a new position until normal
-or manual reconciliation closes the attempt. Public RPC URLs remain configurable
-for endpoint checks and dry-run tooling, but live execution never broadcasts through
-them. Active transaction-tracker rows are kept in process memory and reset on
+or manual reconciliation closes the attempt. Public lifecycle transactions are
+journaled as one recovery attempt but may land in consecutive blocks. Active
+transaction-tracker rows are kept in process memory and reset on
 restart; confirmed dispute history and its ETH profit totals are persisted in the
 configured history file.
 
@@ -680,8 +717,9 @@ Other startup-only options:
 | `--settings-file` | Network-specific JSON | Persistent dashboard strategy, endpoint, delivery, pause, and opt-in signer settings. |
 | `--once` | off | Run one scan and exit. Cannot be combined with `--ui`. |
 | `--execute` | off | Enable guarded bundle/executor submission. Requires an executor address, at least one approved coordinator, and `PRIVATE_KEY`, a saved restart signer, or `--ui` so a signer can be supplied locally. |
-| `--submission-mode` | `private` | `private` simulates/fans out atomic bundles. Live execution rejects `public`. |
+| `--submission-mode` | `private` | `private` simulates/fans out atomic bundles; `public` submits one atomic entry transaction and requires pre-existing allowances. |
 | `--relay-url` | `https://relay.flashbots.net` | Flashbots-compatible bundle relay. Repeat the flag for up to eight relays; adjustable in the dashboard. |
+| `--minimum-relay-successes` | `1` | Number of configured private relays that must successfully simulate the exact bundle before submission; adjustable in the dashboard. |
 | `--max-hedge-slippage-bps` | `50` | Maximum atomic Uniswap hedge slippage, capped at 1,000 bps. |
 | `--lifecycle-gas-reserve-weth` | `0.01` | Minimum modeled reserve for settlement and withdrawal gas. |
 | `--max-daily-gas-weth` | `0.05` | Maximum UTC-day recorded gas plus the candidate's largest relay-simulated entry gas and lifecycle reserve. |
@@ -831,16 +869,19 @@ entry from depending on wallet inventory already committed to recovery.
   catches disagreement; it does not help when all
   endpoints share the same compromised upstream, implementation bug, or correlated
   failure. Use independently operated providers.
-- The entry bundle atomically applies required approvals, hedges, and disputes. A
-  later private lifecycle bundle settles when eligible and withdraws expected
-  inventory after settlement or replacement. The bot does not automatically trade
-  unexpected residual assets; it fails closed as `recovery-required`.
+- Private entry bundles atomically apply required approvals, hedge, and dispute.
+  Public entry sends only the atomic hedge-and-dispute executor call and therefore
+  requires existing allowances. A later private lifecycle bundle or journaled
+  sequential public lifecycle settles and withdraws expected inventory. The bot
+  does not automatically trade unexpected residual assets; it fails closed as
+  `recovery-required`.
 - Private delivery reduces public-mempool exposure but does not guarantee
   confidentiality, inclusion, fair ordering, or relay/builder behavior. Configuring
   multiple relays shares the signed payload with every listed operator.
-- A 12-block event overlap is replayed whenever a new head is processed to tolerate short
-  reorganizations. Operators still need independent alerting for deeper reorgs and
-  RPC disagreement.
+- A 12-block event overlap is replayed whenever a new head is processed to tolerate
+  short reorganizations. The retained pre-overlap block hash is checked on every
+  poll; a deeper reorganization stops execution and requires restart so the complete
+  lookback is rebuilt. Operators still need independent alerting.
 - Continuous mode retries transient poll failures. The dashboard exposes the latest
   error, but production operation still requires external process supervision and
   alerts.
