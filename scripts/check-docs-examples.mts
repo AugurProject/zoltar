@@ -686,6 +686,7 @@ for (const bindMatch of statoblastHtml.matchAll(/bindExample\("([^"]+)"/g)) {
 	assert.ok(statoblastHtml.includes(`id="${exampleId}"`), `whitepaper bindExample target should exist: ${exampleId}`)
 }
 const chartRuntimeSource = await readFile('docs/charts/chartRuntime.ts', 'utf8')
+const diagramSpecsSource = await readFile('docs/charts/diagramSpecs.json', 'utf8')
 assert.match(chartRuntimeSource, /Array\.from\(\{ length: 61 \}/, 'whitepaper escalation Plot should sample the normalized curve densely')
 const escalationCurve = Array.from({ length: 61 }, (_, index) => {
 	const elapsed = index / 60
@@ -693,6 +694,9 @@ const escalationCurve = Array.from({ length: 61 }, (_, index) => {
 })
 assert.equal(escalationCurve[0], Math.exp(-2.4), 'whitepaper escalation Plot should start at the normalized starting bond')
 assert.equal(escalationCurve[escalationCurve.length - 1], 1, 'whitepaper escalation Plot should end at the normalized non-decision threshold')
+assert.match(diagramSpecsSource, /normalizedCost\(t\) = exp\(2\.4 \* \(t - 1\)\)/, 'whitepaper escalation chart specification should declare the same normalized exponential formula as the runtime model')
+assert.doesNotMatch(chartRuntimeSource, /percent:\s*true/, 'normalized escalation coordinates should use percent tick labels without rescaling the curve data')
+assert.match(chartRuntimeSource, /tickFormat: \(value: number\) => `\$\{Math\.round\(value \* 100\)\}%`/, 'whitepaper escalation Plot should format normalized coordinates as percentages')
 for (let index = 1; index < escalationCurve.length; index += 1) {
 	const previous = escalationCurve[index - 1]
 	const current = escalationCurve[index]

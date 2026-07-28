@@ -263,6 +263,7 @@ export type LiquidationHealthModel = {
 }
 
 export type ContractInteractionEdge = {
+	action: string
 	id: string
 	phase: string
 	receiver: string
@@ -270,25 +271,25 @@ export type ContractInteractionEdge = {
 }
 
 export const contractInteractionEdges: ContractInteractionEdge[] = [
-	{ id: 'factory-question-validation', phase: 'Deployment', receiver: 'Question Data', source: 'Pool Factory' },
-	{ id: 'factory-universe-lookup', phase: 'Deployment', receiver: 'Zoltar', source: 'Pool Factory' },
-	{ id: 'factory-pool-deployment', phase: 'Deployment', receiver: 'Security Pool', source: 'Pool Factory' },
-	{ id: 'factory-share-token-deployment', phase: 'Deployment', receiver: 'Share Token', source: 'Pool Factory' },
-	{ id: 'factory-price-coordinator-deployment', phase: 'Deployment', receiver: 'Price Coordinator', source: 'Pool Factory' },
-	{ id: 'zoltar-reputation-token-lifecycle', phase: 'Universe lifecycle', receiver: 'Reputation Token', source: 'Zoltar' },
-	{ id: 'pool-share-token-claims', phase: 'Market runtime', receiver: 'Share Token', source: 'Security Pool' },
-	{ id: 'pool-escalation-game-resolution', phase: 'Resolution', receiver: 'Escalation Game', source: 'Security Pool' },
-	{ id: 'pool-price-read', phase: 'Risk operations', receiver: 'Price Coordinator', source: 'Security Pool' },
-	{ id: 'coordinator-oracle-report', phase: 'Price discovery', receiver: 'OpenOracle', source: 'Price Coordinator' },
-	{ id: 'oracle-coordinator-callback', phase: 'Price settlement', receiver: 'Price Coordinator', source: 'OpenOracle' },
-	{ id: 'coordinator-pool-execute', phase: 'Risk execution', receiver: 'Security Pool', source: 'Price Coordinator' },
-	{ id: 'share-token-forker-migration', phase: 'Share migration', receiver: 'Pool Forker', source: 'Share Token' },
-	{ id: 'forker-escalation-snapshot', phase: 'Fork snapshot', receiver: 'Escalation Game', source: 'Pool Forker' },
-	{ id: 'forker-migration-proxy', phase: 'Fork migration', receiver: 'Migration Proxy', source: 'Pool Forker' },
-	{ id: 'migration-proxy-zoltar', phase: 'Fork migration', receiver: 'Zoltar', source: 'Migration Proxy' },
-	{ id: 'forker-child-deployment', phase: 'Fork migration', receiver: 'Pool Factory', source: 'Pool Forker' },
-	{ id: 'forker-pool-migration', phase: 'Fork migration', receiver: 'Security Pool', source: 'Pool Forker' },
-	{ id: 'forker-truth-auction', phase: 'Backing repair', receiver: 'Truth Auction', source: 'Pool Forker' },
+	{ action: 'validate question', id: 'factory-question-validation', phase: 'Deployment', receiver: 'Question Data', source: 'Pool Factory' },
+	{ action: 'look up universe', id: 'factory-universe-lookup', phase: 'Deployment', receiver: 'Zoltar', source: 'Pool Factory' },
+	{ action: 'deploy pool', id: 'factory-pool-deployment', phase: 'Deployment', receiver: 'Security Pool', source: 'Pool Factory' },
+	{ action: 'deploy shares', id: 'factory-share-token-deployment', phase: 'Deployment', receiver: 'Share Token', source: 'Pool Factory' },
+	{ action: 'deploy & wire', id: 'factory-price-coordinator-deployment', phase: 'Deployment', receiver: 'Price Coordinator', source: 'Pool Factory' },
+	{ action: 'manage REP lifecycle', id: 'zoltar-reputation-token-lifecycle', phase: 'Universe lifecycle', receiver: 'Reputation Token', source: 'Zoltar' },
+	{ action: 'mint / burn claims', id: 'pool-share-token-claims', phase: 'Market runtime', receiver: 'Share Token', source: 'Security Pool' },
+	{ action: 'escrow REP', id: 'pool-escalation-game-resolution', phase: 'Resolution', receiver: 'Escalation Game', source: 'Security Pool' },
+	{ action: 'read cached price', id: 'pool-price-read', phase: 'Risk operations', receiver: 'Price Coordinator', source: 'Security Pool' },
+	{ action: 'fund report', id: 'coordinator-oracle-report', phase: 'Price discovery', receiver: 'OpenOracle', source: 'Price Coordinator' },
+	{ action: 'settled callback', id: 'oracle-coordinator-callback', phase: 'Price settlement', receiver: 'Price Coordinator', source: 'OpenOracle' },
+	{ action: 'execute guarded op', id: 'coordinator-pool-execute', phase: 'Risk execution', receiver: 'Security Pool', source: 'Price Coordinator' },
+	{ action: 'request child', id: 'share-token-forker-migration', phase: 'Share migration', receiver: 'Pool Forker', source: 'Share Token' },
+	{ action: 'snapshot game', id: 'forker-escalation-snapshot', phase: 'Fork snapshot', receiver: 'Escalation Game', source: 'Pool Forker' },
+	{ action: 'migrate REP', id: 'forker-migration-proxy', phase: 'Fork migration', receiver: 'Migration Proxy', source: 'Pool Forker' },
+	{ action: 'lock & split REP', id: 'migration-proxy-zoltar', phase: 'Fork migration', receiver: 'Zoltar', source: 'Migration Proxy' },
+	{ action: 'deploy child', id: 'forker-child-deployment', phase: 'Fork migration', receiver: 'Pool Factory', source: 'Pool Forker' },
+	{ action: 'migrate state', id: 'forker-pool-migration', phase: 'Fork migration', receiver: 'Security Pool', source: 'Pool Forker' },
+	{ action: 'repair backing', id: 'forker-truth-auction', phase: 'Backing repair', receiver: 'Truth Auction', source: 'Pool Forker' },
 ]
 
 export function calculateLiquidationHealth(unlockedRep: number, allowance: number, multiplier: number, currentPrice: number): LiquidationHealthModel {

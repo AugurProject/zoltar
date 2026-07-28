@@ -2,6 +2,7 @@ import { readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
 
 import { Window } from 'happy-dom'
+import ts from 'typescript'
 
 import { contractInteractionEdges } from '../docs/charts/chartModels'
 
@@ -27,6 +28,47 @@ const nativeChartIds = new Set([
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function readObjectProperty(object: ts.ObjectLiteralExpression, propertyName: string, sourceFile: ts.SourceFile): ts.Expression {
+	for (const property of object.properties) {
+		if (ts.isPropertyAssignment(property) && property.name.getText(sourceFile) === propertyName) {
+			return property.initializer
+		}
+	}
+	throw new Error(`Contract interaction layout object is missing ${propertyName}`)
+}
+
+function readStringProperty(object: ts.ObjectLiteralExpression, propertyName: string, sourceFile: ts.SourceFile): string {
+	const expression = readObjectProperty(object, propertyName, sourceFile)
+	if (!ts.isStringLiteral(expression)) {
+		throw new Error(`Contract interaction layout ${propertyName} must be a string literal`)
+	}
+	return expression.text
+}
+
+function readNumberProperty(object: ts.ObjectLiteralExpression, propertyName: string, sourceFile: ts.SourceFile): number {
+	const expression = readObjectProperty(object, propertyName, sourceFile)
+	if (!ts.isNumericLiteral(expression)) {
+		throw new Error(`Contract interaction layout ${propertyName} must be a number literal`)
+	}
+	return Number(expression.text)
+}
+
+function findContractInteractionArray(sourceFile: ts.SourceFile, variableName: string): ts.ArrayLiteralExpression {
+	const chartFunction = sourceFile.statements.find(statement => ts.isFunctionDeclaration(statement) && statement.name?.text === 'contractInteractionChart')
+	if (chartFunction === undefined || !ts.isFunctionDeclaration(chartFunction) || chartFunction.body === undefined) {
+		throw new Error('Could not find contractInteractionChart for structured layout validation')
+	}
+	for (const statement of chartFunction.body.statements) {
+		if (!ts.isVariableStatement(statement)) continue
+		for (const declaration of statement.declarationList.declarations) {
+			if (ts.isIdentifier(declaration.name) && declaration.name.text === variableName && declaration.initializer !== undefined && ts.isArrayLiteralExpression(declaration.initializer)) {
+				return declaration.initializer
+			}
+		}
+	}
+	throw new Error(`Could not find contractInteractionChart ${variableName} array`)
 }
 
 function assertChartNode(value: unknown, chartId: string): void {
@@ -128,8 +170,134 @@ if (!runtimeSource.includes('return markDrivenDiagramChart(spec)') || /createEle
 if (!runtimeSource.includes("mount.closest<HTMLElement>('figure.diagram, .example-visual')") || !runtimeSource.includes('overflowEnvelope.tabIndex = 0') || !runtimeSource.includes('Scrollable figure: ${spec.ariaLabel}')) {
 	throw new Error('Documentation figure overflow wrappers must be keyboard-focusable and accessibly named')
 }
-if (!/contractInteractionEdges\s*\.filter/.test(runtimeSource)) {
-	throw new Error('Contract interaction map must render from the shared interaction registry')
+if (
+	!/new Set\(contractInteractionEdges\.map/.test(runtimeSource) ||
+	!/does not match registry direction/.test(runtimeSource) ||
+	!/is not in its \$\{panel\} phase panel/.test(runtimeSource) ||
+	!/leaves its \$\{panel\} phase panel bounds/.test(runtimeSource) ||
+	!/does not touch its source and receiver boundaries/.test(runtimeSource)
+) {
+	throw new Error('Contract interaction map must validate every route ID, direction, phase bounds, and endpoint against the shared interaction registry')
+}
+const runtimeSourceFile = ts.createSourceFile(entrypoint, runtimeSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+const layoutPanels = new Map<string, { id: string; x1: number; x2: number; y1: number; y2: number }>()
+for (const element of findContractInteractionArray(runtimeSourceFile, 'panels').elements) {
+	if (!ts.isObjectLiteralExpression(element)) throw new Error('Contract interaction panel must be an object literal')
+	const panel = {
+		id: readStringProperty(element, 'id', runtimeSourceFile),
+		x1: readNumberProperty(element, 'x1', runtimeSourceFile),
+		x2: readNumberProperty(element, 'x2', runtimeSourceFile),
+		y1: readNumberProperty(element, 'y1', runtimeSourceFile),
+		y2: readNumberProperty(element, 'y2', runtimeSourceFile),
+	}
+	layoutPanels.set(panel.id, panel)
+}
+const layoutNodes = new Map<string, { id: string; label: string; x1: number; x2: number; y1: number; y2: number }>()
+for (const element of findContractInteractionArray(runtimeSourceFile, 'nodes').elements) {
+	if (!ts.isObjectLiteralExpression(element)) throw new Error('Contract interaction node must be an object literal')
+	const node = {
+		id: readStringProperty(element, 'id', runtimeSourceFile),
+		label: readStringProperty(element, 'label', runtimeSourceFile),
+		x1: readNumberProperty(element, 'x1', runtimeSourceFile),
+		x2: readNumberProperty(element, 'x2', runtimeSourceFile),
+		y1: readNumberProperty(element, 'y1', runtimeSourceFile),
+		y2: readNumberProperty(element, 'y2', runtimeSourceFile),
+	}
+	layoutNodes.set(node.id, node)
+}
+const layoutRoutes = findContractInteractionArray(runtimeSourceFile, 'routedEdges').elements.map(element => {
+	if (!ts.isObjectLiteralExpression(element)) throw new Error('Contract interaction route must be an object literal')
+	const pointsExpression = readObjectProperty(element, 'points', runtimeSourceFile)
+	if (!ts.isArrayLiteralExpression(pointsExpression)) throw new Error('Contract interaction route points must be an array literal')
+	const points = pointsExpression.elements.map(point => {
+		if (!ts.isObjectLiteralExpression(point)) throw new Error('Contract interaction route point must be an object literal')
+		return { x: readNumberProperty(point, 'x', runtimeSourceFile), y: readNumberProperty(point, 'y', runtimeSourceFile) }
+	})
+	return {
+		id: readStringProperty(element, 'id', runtimeSourceFile),
+		points,
+		receiverNodeId: readStringProperty(element, 'receiverNodeId', runtimeSourceFile),
+		sourceNodeId: readStringProperty(element, 'sourceNodeId', runtimeSourceFile),
+	}
+})
+function expectedPanelForPhase(phase: string): string {
+	if (phase === 'Deployment' || phase === 'Universe lifecycle') return 'deploy'
+	if (['Market runtime', 'Price discovery', 'Price settlement', 'Resolution', 'Risk execution', 'Risk operations'].includes(phase)) return 'runtime'
+	if (['Backing repair', 'Fork migration', 'Fork snapshot', 'Share migration'].includes(phase)) return 'fork'
+	throw new Error(`Contract interaction registry has an unsupported phase ${phase}`)
+}
+function touchesBoundary(point: { x: number; y: number }, node: { x1: number; x2: number; y1: number; y2: number }): boolean {
+	const tolerance = 0.000_001
+	const withinX = point.x >= node.x1 - tolerance && point.x <= node.x2 + tolerance
+	const withinY = point.y >= node.y1 - tolerance && point.y <= node.y2 + tolerance
+	const touchesHorizontal = Math.abs(point.y - node.y1) <= tolerance || Math.abs(point.y - node.y2) <= tolerance
+	const touchesVertical = Math.abs(point.x - node.x1) <= tolerance || Math.abs(point.x - node.x2) <= tolerance
+	return (withinX && touchesHorizontal) || (withinY && touchesVertical)
+}
+function segmentsIntersect(firstStart: { x: number; y: number }, firstEnd: { x: number; y: number }, secondStart: { x: number; y: number }, secondEnd: { x: number; y: number }): boolean {
+	const tolerance = 0.000_001
+	const cross = (origin: { x: number; y: number }, first: { x: number; y: number }, second: { x: number; y: number }) => (first.x - origin.x) * (second.y - origin.y) - (first.y - origin.y) * (second.x - origin.x)
+	const firstSideStart = cross(firstStart, firstEnd, secondStart)
+	const firstSideEnd = cross(firstStart, firstEnd, secondEnd)
+	const secondSideStart = cross(secondStart, secondEnd, firstStart)
+	const secondSideEnd = cross(secondStart, secondEnd, firstEnd)
+	const properIntersection = firstSideStart * firstSideEnd < -tolerance && secondSideStart * secondSideEnd < -tolerance
+	const liesOnSegment = (point: { x: number; y: number }, start: { x: number; y: number }, end: { x: number; y: number }) =>
+		Math.abs(cross(start, end, point)) <= tolerance && point.x >= Math.min(start.x, end.x) - tolerance && point.x <= Math.max(start.x, end.x) + tolerance && point.y >= Math.min(start.y, end.y) - tolerance && point.y <= Math.max(start.y, end.y) + tolerance
+	return properIntersection || liesOnSegment(secondStart, firstStart, firstEnd) || liesOnSegment(secondEnd, firstStart, firstEnd) || liesOnSegment(firstStart, secondStart, secondEnd) || liesOnSegment(firstEnd, secondStart, secondEnd)
+}
+const routeById = new Map(layoutRoutes.map(route => [route.id, route]))
+if (routeById.size !== contractInteractionEdges.length || layoutRoutes.length !== contractInteractionEdges.length) {
+	throw new Error(`Contract interaction layout has ${layoutRoutes.length} routes for ${contractInteractionEdges.length} registry edges`)
+}
+for (const edge of contractInteractionEdges) {
+	const route = routeById.get(edge.id)
+	if (route === undefined) throw new Error(`Contract interaction layout is missing ${edge.id}`)
+	const sourceNode = layoutNodes.get(route.sourceNodeId)
+	const receiverNode = layoutNodes.get(route.receiverNodeId)
+	const firstPoint = route.points[0]
+	const lastPoint = route.points[route.points.length - 1]
+	if (sourceNode === undefined || receiverNode === undefined || firstPoint === undefined || lastPoint === undefined) {
+		throw new Error(`Contract interaction layout route ${edge.id} is incomplete`)
+	}
+	if (sourceNode.label !== edge.source || receiverNode.label !== edge.receiver) {
+		throw new Error(`Contract interaction layout route ${edge.id} reverses or changes ${edge.source} to ${edge.receiver}`)
+	}
+	const panel = expectedPanelForPhase(edge.phase)
+	const panelBounds = layoutPanels.get(panel)
+	if (panelBounds === undefined || !sourceNode.id.startsWith(`${panel}-`) || !receiverNode.id.startsWith(`${panel}-`)) {
+		throw new Error(`Contract interaction layout route ${edge.id} is outside its ${panel} phase panel`)
+	}
+	const sourceInsidePanel = sourceNode.x1 >= panelBounds.x1 && sourceNode.x2 <= panelBounds.x2 && sourceNode.y1 >= panelBounds.y1 && sourceNode.y2 <= panelBounds.y2
+	const receiverInsidePanel = receiverNode.x1 >= panelBounds.x1 && receiverNode.x2 <= panelBounds.x2 && receiverNode.y1 >= panelBounds.y1 && receiverNode.y2 <= panelBounds.y2
+	const routeInsidePanel = route.points.every(point => point.x >= panelBounds.x1 && point.x <= panelBounds.x2 && point.y >= panelBounds.y1 && point.y <= panelBounds.y2)
+	if (!sourceInsidePanel || !receiverInsidePanel || !routeInsidePanel) {
+		throw new Error(`Contract interaction layout route ${edge.id} leaves its ${panel} phase panel bounds`)
+	}
+	if (!touchesBoundary(firstPoint, sourceNode) || !touchesBoundary(lastPoint, receiverNode)) {
+		throw new Error(`Contract interaction layout route ${edge.id} misses its source or receiver boundary`)
+	}
+	if (edge.action.trim().length === 0) throw new Error(`Contract interaction registry edge ${edge.id} is missing its short action label`)
+}
+for (let firstRouteIndex = 0; firstRouteIndex < layoutRoutes.length; firstRouteIndex += 1) {
+	const firstRoute = layoutRoutes[firstRouteIndex]
+	if (firstRoute === undefined) continue
+	for (let secondRouteIndex = firstRouteIndex + 1; secondRouteIndex < layoutRoutes.length; secondRouteIndex += 1) {
+		const secondRoute = layoutRoutes[secondRouteIndex]
+		if (secondRoute === undefined) continue
+		for (let firstSegmentIndex = 1; firstSegmentIndex < firstRoute.points.length; firstSegmentIndex += 1) {
+			const firstStart = firstRoute.points[firstSegmentIndex - 1]
+			const firstEnd = firstRoute.points[firstSegmentIndex]
+			if (firstStart === undefined || firstEnd === undefined) continue
+			for (let secondSegmentIndex = 1; secondSegmentIndex < secondRoute.points.length; secondSegmentIndex += 1) {
+				const secondStart = secondRoute.points[secondSegmentIndex - 1]
+				const secondEnd = secondRoute.points[secondSegmentIndex]
+				if (secondStart !== undefined && secondEnd !== undefined && segmentsIntersect(firstStart, firstEnd, secondStart, secondEnd)) {
+					throw new Error(`Contract interaction layout routes ${firstRoute.id} and ${secondRoute.id} cross or overlap`)
+				}
+			}
+		}
+	}
 }
 const contractInteractionHtml = await readFile(path.join(docsDirectory, 'contract-interactions.html'), 'utf8')
 const documentedEdges = [...contractInteractionHtml.matchAll(/<tr data-edge-id="([^"]+)" data-source="([^"]+)" data-receiver="([^"]+)" data-phase="([^"]+)">/g)].map(match => ({

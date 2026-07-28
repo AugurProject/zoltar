@@ -33,19 +33,22 @@
 				<h2>Primary Interaction Flow</h2>
 				<p>
 					Arrows point from the contract initiating an interaction to the contract
-					receiving it. They combine construction-time wiring and recurring
-					runtime calls; the table immediately below distinguishes those phases.
-					Users and keepers enter through several of these contracts, but are
-					omitted from the plot so it can focus on the protocol graph.
+					receiving it. The map repeats a contract when it participates in more
+					than one phase, separating construction-time wiring, recurring runtime
+					calls, and fork repair into three readable panels. Users and keepers
+					enter through several of these contracts, but are omitted so the plot
+					can focus on contract-to-contract boundaries.
 				</p>
 				<figure class="diagram diagram-wide" id="fig-contract-interaction-map">
-					<div class="plot-chart" data-plot-chart="fig-contract-interaction-map" data-plot-width="1120" data-plot-height="660" role="img" aria-label="Primary Zoltar and Statoblast contract interaction flowchart"><span class="plot-chart-fallback">Contract flow. The pool factory reads Zoltar and question data before deploying a pool, share token, and price coordinator. The pool mints and burns shares and escrows REP into an escalation game. Vault users stage guarded actions directly on the coordinator, which reports through OpenOracle and invokes restricted pool execution after validation. During a fork, the share token calls the pool forker, which reads escalation snapshots, deploys child pools through the factory, migrates REP through a pool-specific proxy, migrates pool state, and operates the truth auction.</span></div>
+					<div class="plot-chart" data-plot-chart="fig-contract-interaction-map" data-plot-width="1120" data-plot-height="880" role="img" aria-label="Zoltar and Statoblast contract interactions grouped into deployment, runtime, and fork phases"><span class="plot-chart-fallback">Contract interactions are separated into three phases. During deployment, the pool factory validates question and universe data before deploying the pool, share token, and price coordinator. During runtime, the pool manages claims and escalation escrow while guarded actions travel through the price coordinator and OpenOracle. During a fork, the share token enters the pool forker, which snapshots escalation, migrates REP through a proxy, creates and migrates child pools, and repairs backing through the truth auction.</span></div>
 					<p class="diagram-caption">
-						<span class="figure-label">Contract Interaction Map</span>Blue nodes
-						are shared registries or oracle infrastructure, green nodes hold
+						<span class="figure-label">Contract Interaction Map</span>Each panel
+						is a distinct protocol phase; repeated contracts preserve local
+						reading order and prevent unrelated lifecycle edges from crossing.
+						Blue nodes are registries or oracle infrastructure, green nodes hold
 						market state and claims, red marks local resolution, and gold marks
-						deployment or fork coordination. The arrows show direction; the
-						table below supplies the exact purpose and phase.
+						deployment or fork coordination. Short edge labels state the action;
+						the table below supplies its exact contract-level meaning.
 					</p>
 				</figure>
 			</section>
