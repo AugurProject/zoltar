@@ -191,11 +191,11 @@ describe('startup configuration', () => {
 				pollMilliseconds: 15_000,
 				twapSeconds: 2_400,
 			},
-			submission: { minimumRelaySuccesses: 1, mode: 'public', relayUrls: ['https://relay.flashbots.net/'] },
+			submission: { minimumRelaySuccesses: 2, mode: 'public', relayUrls: ['https://relay.flashbots.net/'] },
 		})
 		const dashboardPort = unusedPort()
 		const environment = { ...process.env, PRIVATE_KEY: environmentPrivateKey }
-		const child = Bun.spawn([executable, oracle, '--ui', `--ui-port=${dashboardPort.toString()}`, '--lookback-blocks=0', `--settings-file=${settingsPath}`], {
+		const child = Bun.spawn([executable, oracle, '--ui', `--ui-port=${dashboardPort.toString()}`, '--lookback-blocks=0', '--minimum-relay-successes=1', `--settings-file=${settingsPath}`], {
 			env: environment,
 			stderr: 'pipe',
 			stdout: 'pipe',
@@ -207,6 +207,7 @@ describe('startup configuration', () => {
 			paused: true,
 			savedWallet: privateKeyToAccount(savedPrivateKey).address,
 			settings: { maxSpotTwapTicks: '77', minimumProfitBps: '222', pollMilliseconds: 15_000 },
+			submission: { minimumRelaySuccesses: 1 },
 			wallet: privateKeyToAccount(environmentPrivateKey).address,
 		})
 		const [strategyResponse, submissionResponse] = await Promise.all([

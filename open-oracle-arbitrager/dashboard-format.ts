@@ -34,6 +34,10 @@ export function chartPointX(index: number, count: number, width: number) {
 	return count === 1 ? width / 2 : (index / (count - 1)) * width
 }
 
+export function selectedTokenPriceHistory(points: readonly MarketPricePoint[], token: string) {
+	return points.filter(point => point.token.toLowerCase() === token.toLowerCase())
+}
+
 function compactDuration(seconds: number) {
 	if (seconds < 60) return `${seconds.toString()}s`
 	const minutes = Math.floor(seconds / 60)

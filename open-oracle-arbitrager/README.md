@@ -52,8 +52,8 @@ restart settings, or the local dashboard when `--ui` is enabled.
   RPC and is eligible only when the required executor allowances already exist.
 - External process supervision, endpoint health alerts, and a procedure for any
   position shown as **recovery-required**. The bot automatically settles or detects
-  replacement, withdraws balances privately, and verifies exact asset recovery
-  before classifying P&amp;L as realized.
+  replacement, withdraws balances through the configured private or public delivery
+  mode, and verifies exact asset recovery before classifying P&amp;L as realized.
 
 Do not use a key that controls unrelated protocol or treasury funds. The dashboard
 binds to `127.0.0.1`, but the execution key still lives in the bot process and must be
@@ -205,6 +205,16 @@ PRIVATE_KEY=0xYourDeploymentPrivateKey \
 ETH_RPC_URL=https://your-private-mainnet-rpc.example \
   ./open-oracle-arbitrager/deploy-executor --network=mainnet
 ```
+
+### Executor ABI source
+
+The bot's executor ABI is generated from
+`solidity/artifacts/Contracts.json`. Never edit
+`executor-abi.generated.ts` directly. After compiling an executor contract change,
+run `bun run generate:open-oracle-arbitrager-abi`, review the generated diff, and
+verify freshness with `bun run check:open-oracle-arbitrager-abi`. The remaining
+minimal ABIs in `abi.ts` are maintained separately and checked against compiled
+artifacts by `abi.test.ts`.
 
 Verify the deployment address independently, then start an inventory-funded
 execution process:
@@ -394,9 +404,10 @@ locked through later dispute rounds.
 
 “Modeled net profit” is the direction-specific hedge P&amp;L before gas minus:
 
-- The entry reserve: initially `1,200,000 × (2 × base fee + 2 gwei)`, then the
-  largest bundle gas usage returned by the required relay simulations at that same
-  gas price.
+- The entry reserve: initially `1,200,000 × (2 × base fee + 2 gwei)`. Public
+  delivery retains that fixed reserve. Private delivery replaces it with the
+  largest gas usage returned by the successful relay simulations at the same gas
+  price.
 - The full adverse movement permitted by the signed hedge limit
   (`--max-hedge-slippage-bps`).
 - The larger of `--lifecycle-gas-reserve-weth` and
@@ -518,7 +529,7 @@ Startup resolves values in this order:
 | Active signer | `PRIVATE_KEY`; saved restart signer; no signer |
 | Submission mode | `--submission-mode`; saved mode; `private` |
 | Relay URLs | Repeated `--relay-url`; saved list; Flashbots relay |
-| Relay simulation threshold | Saved dashboard value; `1` |
+| Relay simulation threshold | `--minimum-relay-successes`; saved dashboard value; `1` |
 | Token list | Repeated `--token-address`; saved list; canonical network REP |
 | Pause state | Saved value; `false` |
 
@@ -642,8 +653,12 @@ path. Keep files network-specific.
 Public mode broadcasts one signed atomic executor call to every configured public
 RPC. It cannot safely broadcast prerequisite approvals alongside the opportunity,
 so any entry with insufficient executor allowances is rejected before signing.
-Public delivery exposes the opportunity to the mempool and does not provide bundle
-confidentiality or next-block atomic inclusion.
+The call uses the same exact-parent guard as private entry and can succeed only in
+the direct child of its quoted block. Inclusion in a later block reverts and can
+still consume gas. Public delivery exposes the opportunity to copying, reordering,
+front-running, and other MEV, and does not provide bundle confidentiality or
+next-block inclusion. Public lifecycle transactions are journaled together but
+broadcast and confirmed sequentially, potentially across multiple blocks.
 
 Private mode signs approvals and the executor call at consecutive nonces, requests
 `eth_callBundle` from every configured relay, and then fans the same ordered
@@ -722,16 +737,17 @@ Other startup-only options:
 | `--minimum-relay-successes` | `1` | Number of configured private relays that must successfully simulate the exact bundle before submission; adjustable in the dashboard. |
 | `--max-hedge-slippage-bps` | `50` | Maximum atomic Uniswap hedge slippage, capped at 1,000 bps. |
 | `--lifecycle-gas-reserve-weth` | `0.01` | Minimum modeled reserve for settlement and withdrawal gas. |
-| `--max-daily-gas-weth` | `0.05` | Maximum UTC-day recorded gas plus the candidate's largest relay-simulated entry gas and lifecycle reserve. |
+| `--max-daily-gas-weth` | `0.05` | Maximum UTC-day recorded gas plus the candidate's mode-specific entry reserve and lifecycle reserve. |
 | `--max-position-weth` | `5` | Maximum conservative WETH-equivalent funded notional for one position. |
 | `--max-total-locked-weth` | `10` | Maximum stored funded notional across non-closed positions plus the candidate. |
 
 The position notional uses the refreshed required WETH plus required token funding
 valued at the higher of the executable hedge quote and signed hedge limit.
-Immediately before journal write and relay submission, the bot rechecks that
-notional, the total of every non-closed durable position, and the UTC-day gas total
-using the largest configured-relay simulation plus the lifecycle reserve. A value
-equal to a configured cap is allowed; one wei above it is rejected.
+Immediately before journal write and delivery, the bot rechecks that notional, the
+total of every non-closed durable position, and the UTC-day gas total. Public mode
+uses `1,200,000 × gas price` for the candidate entry; private mode uses the largest
+gas usage from the successful relay simulations. Both add the lifecycle reserve. A
+value equal to a configured cap is allowed; one wei above it is rejected.
 
 ### Durable position journal
 
@@ -769,20 +785,24 @@ pending-entry → open → withdrawing → closed
                                     closed (P&L recorded or unavailable)
 ```
 
-The bot records all entry-bundle transaction hashes before submission. After a
-restart it requires independent RPC agreement on every successful same-block
-receipt and on that receipt block's current canonical hash. Every receipt must
-include its mined effective gas price. The bot then decodes the executor event and
-reconstructs actual entry gas and hedge economics before leaving `pending-entry`.
-Missing or ambiguous evidence remains
+The bot records every entry transaction hash before submission. Private approvals
+and entry must all succeed in one target block and in journal order; public entry
+has one guarded executor transaction. After a restart the bot requires independent
+RPC agreement on every required receipt and on that receipt block's current
+canonical hash. Every receipt must include its mined effective gas price. The bot
+then decodes the executor event and reconstructs actual entry gas and hedge
+economics before leaving `pending-entry`. Missing or ambiguous evidence remains
 `recovery-required` and never produces realized P&amp;L.
 
-Before lifecycle submission, the bot atomically records the target block, every
+Before lifecycle delivery, the bot atomically records every
 settlement/withdrawal transaction hash, token decimals, and the wallet's raw WETH
-and token balances at the quoted block. After a restart it requires independent RPC
-agreement on the successful target-block receipts and post-state, reconstructs
-lifecycle gas and exact withdrawal deltas, and closes the position only when those
-deltas match the hedge-neutral expected inventory.
+and token balances at the quoted block. Private mode also records its next-block
+target; every private lifecycle receipt must succeed in that one canonical block.
+Public mode records `lifecycleTargetBlockNumber` as `0`, meaning there is no single
+target block, and accepts sequential successful receipts across blocks. Its
+canonical post-state snapshot is the latest successful receipt block. After a
+restart the bot reconstructs lifecycle gas and exact withdrawal deltas and closes
+the position only when those deltas match the hedge-neutral expected inventory.
 
 ### `recovery-required` runbook
 
@@ -801,9 +821,16 @@ delete or hand-edit a record to bypass the one-position guard.
    and reconcile allowances, wallet balances, OpenOracle holder balances, and the
    current reporter manually.
 3. For **lifecycle receipt could not be recovered**, inspect every
-   `lifecycleTransactionHashes` value and `lifecycleTargetBlockNumber`. Restart only
-   after independent RPCs can return the same receipts and canonical target block.
-   Never send a second settlement/withdrawal bundle while inclusion is ambiguous.
+   `lifecycleTransactionHashes` value and `lifecycleTargetBlockNumber`. For a
+   private attempt, restart only after independent RPCs can return the same
+   successful receipts in its recorded canonical target block; never send a second
+   settlement/withdrawal bundle while inclusion is ambiguous. For a public attempt,
+   the target value is `0`: the bot requires every recorded transaction to have a
+   successful canonical receipt and uses the latest receipt block for post-state.
+   A crash after only part of the sequential public lifecycle does not rebroadcast
+   the remaining signed transactions. Keep the bot paused and manually reconcile
+   settlement state, holder balances, wallet balances, missing transactions, and
+   gas before authorizing any recovery transaction.
 4. For **stored-state/current-reporter mismatch**, compare the current reporter,
    settlement state, and the wallet's OpenOracle WETH/token holder balances through
    independent RPCs. A later dispute can legitimately replace the bot; withdraw

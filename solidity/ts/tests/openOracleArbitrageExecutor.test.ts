@@ -155,12 +155,21 @@ describe('OpenOracle arbitrage executor', () => {
 				args: [parentBlockNumber, parentBlockHash],
 			}),
 		)
+		await getAnvilWindowEthereum().request({ method: 'evm_mine', params: [] })
 		await expect(
 			client.simulateContract({
 				abi: executorArtifact.abi,
 				address: executor,
 				functionName: 'assertParentBlock',
-				args: [parent.number, `0x${'ff'.repeat(32)}`],
+				args: [parentBlockNumber, parentBlockHash],
+			}),
+		).rejects.toThrow('Execution must target the next block')
+		await expect(
+			client.simulateContract({
+				abi: executorArtifact.abi,
+				address: executor,
+				functionName: 'assertParentBlock',
+				args: [parentBlockNumber + 1n, `0x${'ff'.repeat(32)}`],
 			}),
 		).rejects.toThrow('canonical parent block changed')
 	})

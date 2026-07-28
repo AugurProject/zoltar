@@ -363,6 +363,19 @@ describe('funded execution orchestration', () => {
 		])
 	})
 
+	test('keeps a partially included public lifecycle in recovery when a later receipt is absent', async () => {
+		const missingHash = `0x${'90'.repeat(32)}` as Hex
+		const readers = [
+			{
+				getTransactionReceipt: ({ hash }: { hash: Hex }) => (hash === replacementHash ? Promise.resolve(transactionReceipt()) : Promise.reject(new Error('receipt not found'))),
+			},
+			{
+				getTransactionReceipt: ({ hash }: { hash: Hex }) => (hash === replacementHash ? Promise.resolve(transactionReceipt()) : Promise.reject(new Error('receipt not found'))),
+			},
+		]
+		await expect(transactionReceiptsWithQuorum(readers, ['https://primary.example', 'https://secondary.example'], 'pending public lifecycle 7', [replacementHash, missingHash])).rejects.toThrow('receipt not found')
+	})
+
 	test('rejects a same-height execution snapshot from a different parent hash or report state', () => {
 		expect(() =>
 			assertCanonicalExecutionSnapshot({

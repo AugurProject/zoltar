@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { blockAgeLabel, botStatusLabels, chartPointX, countLabel, exactAmount, marketPriceChartDescription, opportunityDecisionReason, requiredSignerPrivateKey, signerControlState, sumSignedDecimals, transactionKindLabel } from './dashboard-format.js'
+import type { Address } from '@zoltar/shared/ethereum'
+import { blockAgeLabel, botStatusLabels, chartPointX, countLabel, exactAmount, marketPriceChartDescription, opportunityDecisionReason, requiredSignerPrivateKey, selectedTokenPriceHistory, signerControlState, sumSignedDecimals, transactionKindLabel } from './dashboard-format.js'
 
 describe('dashboard exact ETH formatting', () => {
 	test('preserves signed sub-micro, 18-decimal, and beyond-safe-integer totals', () => {
@@ -66,5 +67,14 @@ describe('dashboard exact ETH formatting', () => {
 		expect(countLabel(1, 'entry', 'entries')).toBe('1 entry')
 		expect(chartPointX(0, 1, 1_000)).toBe(500)
 		expect(chartPointX(1, 3, 1_000)).toBe(500)
+	})
+
+	test('counts only the selected token price history shown in the chart', () => {
+		const first = '0x0000000000000000000000000000000000000001' as Address
+		const second = '0x0000000000000000000000000000000000000002' as Address
+		const shared = { blockNumber: '1', pool: first, priceWeth: '1', sampledAt: '2026-07-28T00:00:00.000Z', symbol: 'REP', token: first, venue: 'Uniswap V3 0.3%' }
+		const points = [shared, { ...shared, blockNumber: '2', token: first }, { ...shared, symbol: 'OTHER', token: second }]
+		expect(selectedTokenPriceHistory(points, first)).toHaveLength(2)
+		expect(selectedTokenPriceHistory(points, second)).toHaveLength(1)
 	})
 })
