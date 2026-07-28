@@ -9,6 +9,8 @@ import { RouteHeader } from '../../../components/RouteHeader.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
 import { DataGrid } from '../../../components/DataGrid.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
+import { buildRouteHref, getTopLevelRouteSearch, ZOLTAR_ROUTE } from '../../../lib/routing.js'
+import { writeZoltarViewQueryParam } from '../../../lib/urlParams.js'
 import { findNextDeployableStep, getDeployNextMissingAvailability } from '../lib/deployment.js'
 import type { DeploymentRouteContentProps } from '../../types.js'
 
@@ -16,6 +18,8 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextM
 	const nextMissingStep = findNextDeployableStep(deploymentStatuses)
 	const deployedContractCount = deploymentStatuses.filter(step => step.deployed).length
 	const totalContractCount = deploymentStatuses.length
+	const deploymentComplete = !isLoadingDeploymentStatuses && totalContractCount > 0 && deployedContractCount === totalContractCount
+	const questionsHref = buildRouteHref(ZOLTAR_ROUTE, writeZoltarViewQueryParam(getTopLevelRouteSearch('zoltar'), 'questions'))
 	const deployNextAvailability = getDeployNextMissingAvailability({
 		accountAddress,
 		busyStepId,
@@ -34,7 +38,15 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextM
 				eyebrow={commonCopy.deploy}
 				title={deploymentCopy.deterministicContractDeployment}
 				description={deploymentCopy.deploymentOverviewDetail}
-				actions={<TransactionActionButton idleLabel={buttonContent} pendingLabel={deploymentCopy.deploying} onClick={onDeployNextMissing} pending={deployNextMissingPending} availability={deployNextAvailability} />}
+				actions={
+					deploymentComplete ? (
+						<a className='button-link' href={questionsHref}>
+							{deploymentCopy.browseQuestions}
+						</a>
+					) : (
+						<TransactionActionButton idleLabel={buttonContent} pendingLabel={deploymentCopy.deploying} onClick={onDeployNextMissing} pending={deployNextMissingPending} availability={deployNextAvailability} />
+					)
+				}
 				summary={
 					<DataGrid columns='auto'>
 						<div>
