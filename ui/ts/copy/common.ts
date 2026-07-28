@@ -1,6 +1,7 @@
 import type { CopyTemplateValue } from './types.js'
 
 export const active = 'Active'
+export const addToWallet = 'Add to wallet'
 export const amount = 'Amount'
 export const approvingRep = 'Approving REP…'
 export const cancel = 'Cancel'
@@ -35,6 +36,7 @@ export const no = 'No'
 export const noMatches = 'No matches'
 export const notFound = 'Not found'
 export const opening = 'Opening…'
+export const openingWallet = 'Opening wallet…'
 export const openOraclePrice = 'Open Oracle Price'
 export const operational = 'Operational'
 export const outcome = 'Outcome'
@@ -78,6 +80,7 @@ export const zoltar = 'Zoltar'
 export const none = 'None'
 export const refresh = 'Refresh'
 export const refreshingWithoutEllipsis = 'Refreshing'
+export const retry = 'Retry'
 export const reportDetails = 'Report Details'
 export const returnToBrowse = 'Return to Browse'
 export const viewInStagedOperations = 'View In Staged Operations'
@@ -118,3 +121,11 @@ export const notDeployed = 'Not deployed'
 export const working = 'Working…'
 export const formatSelectedTickLabel = (selectedTick: string, totalTicks: string) => `${selectedTick} / ${totalTicks}`
 export const mainnetRequiredReason = 'Switch to Ethereum mainnet.'
+export const walletAssetAutomaticImportUnavailable = 'Automatic import unavailable. Copy the token address to import it manually.'
+export const walletAssetRequestAccepted = 'Request accepted'
+export const walletAssetRequestFailed = 'Unable to send the token request to your wallet. Try again.'
+export const walletAssetUnavailable = 'Wallet import is unavailable. Copy the token address to import it manually.'
+export const formatAddTokenToWallet = (tokenLabel: CopyTemplateValue) => `Add ${tokenLabel} to wallet`
+export const formatOpeningWalletForToken = (tokenLabel: CopyTemplateValue) => `Opening wallet to add ${tokenLabel}`
+export const formatRetryWalletAssetRequest = (tokenLabel: CopyTemplateValue) => `Retry adding ${tokenLabel} to wallet`
+export const formatWalletAssetRequestAccepted = (tokenLabel: CopyTemplateValue) => `${tokenLabel} wallet request accepted`
