@@ -881,6 +881,85 @@ button.currency-value.copyable:hover:not(:disabled) {
 	outline-offset: 2px;
 }
 
+.wallet-asset-control {
+	display: inline-flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--space-1) var(--space-2);
+	max-width: 100%;
+	min-width: 0;
+}
+
+.wallet-asset-control > .address-value {
+	flex: 1 1 18rem;
+}
+
+button.wallet-asset-action {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	gap: var(--space-2);
+	min-height: 2.25rem;
+	border-color: var(--interactive-border);
+	padding: 0.4rem 0.75rem 0.4rem 0.55rem;
+	background: var(--interactive-bg);
+	box-shadow: var(--glow-inset-subtle);
+	color: var(--text);
+	font-family: var(--font-family-sans);
+	font-size: var(--font-caption);
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+button.wallet-asset-action:hover:not(:disabled) {
+	border-color: var(--interactive-border-hover);
+	background: var(--interactive-bg-hover);
+}
+
+.wallet-asset-action-icon {
+	display: inline-grid;
+	place-items: center;
+	width: 1.1rem;
+	height: 1.1rem;
+	border: 1px solid currentColor;
+	border-radius: 50%;
+	font-size: 0.8rem;
+	font-weight: 700;
+	line-height: 1;
+}
+
+button.wallet-asset-action-accepted:disabled {
+	border-color: var(--success-border);
+	background: var(--success-soft);
+	color: var(--success);
+	cursor: default;
+	opacity: 1;
+}
+
+button.wallet-asset-action-pending:disabled {
+	border-color: var(--interactive-border);
+	background: var(--interactive-bg);
+	color: var(--text-secondary);
+}
+
+.wallet-asset-feedback {
+	flex: 1 0 100%;
+	color: var(--danger);
+	font-family: var(--font-family-sans);
+	font-size: var(--font-caption);
+	font-weight: 400;
+	line-height: 1.4;
+}
+
+.wallet-asset-prerequisite {
+	flex: 1 0 100%;
+	color: var(--text-secondary);
+	font-family: var(--font-family-sans);
+	font-size: var(--font-caption);
+	line-height: 1.4;
+}
+
 .route-shell {
 	min-width: 0;
 	margin: 0;
@@ -7534,6 +7613,7 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	.identifier-value.copyable,
 	.metric-label-refresh,
 	.security-pool-link,
+	button.wallet-asset-action,
 	.universe-link {
 		min-height: var(--touch-target-min);
 	}

@@ -17,8 +17,10 @@ import { TransactionReview } from '../../../components/TransactionReview.js'
 import { ReadOnlyDetailAccordion } from '../../../components/ReadOnlyDetailAccordion.js'
 import { MetricGrid } from '../../../components/MetricGrid.js'
 import { TransactionNetworkValue } from '../../../components/TransactionNetworkValue.js'
+import { WorkflowSubsection } from '../../../components/WorkflowSubsection.js'
 import { TransactionUniverseValue } from './TransactionUniverseValue.js'
 import { UniverseLink } from './UniverseLink.js'
+import { WalletAssetControl } from '../../../components/WalletAssetControl.js'
 import { getMigrationOutcomeSplitLimit, MigrationOutcomeUniversesSection } from './MigrationOutcomeUniversesSection.js'
 import type { LoadableValueState } from '../../../lib/loadState.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '../../../lib/formatters.js'
@@ -26,6 +28,7 @@ import { tryParseBigIntListInput } from '../../../lib/inputs.js'
 import { tryParseRepAmountInput as parseMigrationAmountInput } from '../../markets/lib/marketForm.js'
 import { deriveTokenApprovalRequirement, type TokenApprovalState } from '../../../lib/tokenApproval.js'
 import { getUniversePresentation } from '../../../lib/userCopy.js'
+import { formatUniverseLabel } from '../lib/universe.js'
 import { getMigrationGuardMessage } from '../lib/zoltarMigrationGuards.js'
 import type { ZoltarMigrationFormState } from '../../../types/app.js'
 import type { ZoltarUniverseSummary } from '../../../types/contracts.js'
@@ -96,6 +99,7 @@ export function ZoltarMigrationSection({
 	const selectedOutcomeIndexes = useMemo(() => getMigrationOutcomeIndexes(zoltarMigrationForm.outcomeIndexes), [zoltarMigrationForm.outcomeIndexes])
 	const selectedOutcomeIndexSet = useMemo(() => new Set(selectedOutcomeIndexes.map(index => index.toString())), [selectedOutcomeIndexes])
 	const selectedChildUniverses = useMemo(() => rootUniverse?.childUniverses.filter(child => selectedOutcomeIndexSet.has(child.outcomeIndex.toString())) ?? [], [rootUniverse?.childUniverses, selectedOutcomeIndexSet])
+	const heldChildUniverses = useMemo(() => (loadingZoltarForkAccess ? [] : (rootUniverse?.childUniverses.filter(child => child.exists && (zoltarMigrationChildRepBalances[child.universeId.toString()] ?? 0n) > 0n) ?? [])), [loadingZoltarForkAccess, rootUniverse?.childUniverses, zoltarMigrationChildRepBalances])
 	const migrationAmount = getMigrationAmount(zoltarMigrationForm.amount)
 	const hasValidAmount = migrationAmount !== undefined && migrationAmount > 0n
 	const isMigrationAmountInvalid = zoltarMigrationForm.amount.trim() !== '' && migrationAmount === undefined
@@ -280,6 +284,18 @@ export function ZoltarMigrationSection({
 							onToggleOutcomeIndex={toggleOutcomeIndex}
 							selectedOutcomeIndexSet={selectedOutcomeIndexSet}
 						/>
+					)}
+
+					{heldChildUniverses.length === 0 ? undefined : (
+						<WorkflowSubsection title={zoltarCopy.walletRepTokens}>
+							<DataGrid dense>
+								{heldChildUniverses.map(child => (
+									<MetricField key={child.universeId.toString()} label={child.outcomeLabel}>
+										<WalletAssetControl accountAddress={accountAddress} address={child.reputationToken} isSupportedChain={isMainnet} tokenLabel={`${formatUniverseLabel(child.universeId)} ${commonCopy.rep}`} />
+									</MetricField>
+								))}
+							</DataGrid>
+						</WorkflowSubsection>
 					)}
 
 					<TransactionReview

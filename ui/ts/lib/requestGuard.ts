@@ -1,4 +1,4 @@
-import { useSignal } from '@preact/signals'
+import { useCallback, useRef } from 'preact/hooks'
 
 /**
  * Returns a function that, when called, marks a new request as current
@@ -13,10 +13,10 @@ import { useSignal } from '@preact/signals'
  * }
  */
 export function useRequestGuard() {
-	const requestId = useSignal(0)
-	return () => {
-		const id = requestId.value + 1
-		requestId.value = id
-		return () => requestId.value === id
-	}
+	const requestId = useRef(0)
+	return useCallback(() => {
+		const id = requestId.current + 1
+		requestId.current = id
+		return () => requestId.current === id
+	}, [])
 }
