@@ -70,33 +70,33 @@ function findFunctionDeclaration(sourceFile: ts.SourceFile, functionName: string
 	return declaration
 }
 
-function returnedFunctionName(statement: ts.Statement): string | undefined {
-	let functionName: string | undefined
-	function visit(node: ts.Node): void {
-		if (ts.isReturnStatement(node) && node.expression !== undefined && ts.isCallExpression(node.expression) && ts.isIdentifier(node.expression.expression)) {
-			functionName = node.expression.expression.text
-			return
-		}
-		ts.forEachChild(node, visit)
-	}
-	visit(statement)
-	return functionName
-}
-
-function nativeChartDispatches(sourceFile: ts.SourceFile): Map<string, string> {
+function readNativeChartDispatches(sourceFile: ts.SourceFile): { dispatches: Map<string, string>; issue?: string } {
 	const createChart = findFunctionDeclaration(sourceFile, 'createChart')
 	const dispatches = new Map<string, string>()
-	for (const statement of createChart.body?.statements ?? []) {
-		if (!ts.isIfStatement(statement) || !ts.isBinaryExpression(statement.expression) || statement.expression.operatorToken.kind !== ts.SyntaxKind.EqualsEqualsEqualsToken) continue
-		const { left, right } = statement.expression
-		if (!ts.isIdentifier(left) || left.text !== 'chartId' || !ts.isStringLiteral(right)) continue
-		const functionName = returnedFunctionName(statement.thenStatement)
-		if (functionName === undefined) {
-			throw new Error(`Native chart dispatch ${right.text} must return a named renderer`)
-		}
-		dispatches.set(right.text, functionName)
+	const statements = createChart.body?.statements ?? []
+	const fallback = statements[statements.length - 1]
+	if (fallback === undefined || !ts.isReturnStatement(fallback) || fallback.expression === undefined || !ts.isCallExpression(fallback.expression) || !ts.isIdentifier(fallback.expression.expression) || fallback.expression.expression.text !== 'markDrivenDiagramChart') {
+		return { dispatches, issue: 'createChart must end with one direct markDrivenDiagramChart fallback return' }
 	}
-	return dispatches
+	for (const statement of statements.slice(0, -1)) {
+		if (!ts.isIfStatement(statement) || statement.elseStatement !== undefined || !ts.isBinaryExpression(statement.expression) || statement.expression.operatorToken.kind !== ts.SyntaxKind.EqualsEqualsEqualsToken) {
+			return { dispatches, issue: 'createChart native dispatches must be top-level chartId === literal if statements without else branches' }
+		}
+		const { left, right } = statement.expression
+		if (!ts.isIdentifier(left) || left.text !== 'chartId' || !ts.isStringLiteral(right)) {
+			return { dispatches, issue: 'createChart native dispatch conditions must use chartId === literal in that order' }
+		}
+		const branchStatements = ts.isBlock(statement.thenStatement) ? statement.thenStatement.statements : []
+		const branchReturn = branchStatements[0]
+		if (branchStatements.length !== 1 || branchReturn === undefined || !ts.isReturnStatement(branchReturn) || branchReturn.expression === undefined || !ts.isCallExpression(branchReturn.expression) || !ts.isIdentifier(branchReturn.expression.expression)) {
+			return { dispatches, issue: `Native chart dispatch ${right.text} must contain one direct named renderer return` }
+		}
+		if (dispatches.has(right.text)) {
+			return { dispatches, issue: `createChart contains duplicate native dispatch ${right.text}` }
+		}
+		dispatches.set(right.text, branchReturn.expression.expression.text)
+	}
+	return { dispatches }
 }
 
 function findPlotOptions(renderer: ts.FunctionDeclaration, sourceFile: ts.SourceFile): ts.ObjectLiteralExpression {
@@ -190,7 +190,11 @@ function assertChartNode(value: unknown, chartId: string): void {
 
 const [htmlEntries, specsSource, runtimeSource] = await Promise.all([readdir(docsDirectory), readFile(specsPath, 'utf8'), readFile(entrypoint, 'utf8')])
 const runtimeSourceFile = ts.createSourceFile(entrypoint, runtimeSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
-const nativeDispatches = nativeChartDispatches(runtimeSourceFile)
+const nativeDispatchResult = readNativeChartDispatches(runtimeSourceFile)
+if (nativeDispatchResult.issue !== undefined) {
+	throw new Error(nativeDispatchResult.issue)
+}
+const nativeDispatches = nativeDispatchResult.dispatches
 const nativeChartIds = new Set(nativeDispatches.keys())
 const mountIds: string[] = []
 const mergedDescriptionBoundaryPattern = /(?:FlowThe|treeA|SplitThe|ReproductionSelecting|AnswerA)/
@@ -271,10 +275,24 @@ for (const chartId of quantitativeChartIds) {
 	}
 	assertRendererAxisBindings(runtimeSourceFile, chartId, rendererName)
 }
-const nativeIdsWithUnknownDispatch = new Set(nativeChartIds)
-nativeIdsWithUnknownDispatch.add('plot-unregistered-negative-probe')
-if (nativeRegistryCoverageIssue(nativeIdsWithUnknownDispatch) === undefined) {
+const unknownDispatchProbe = ts.createSourceFile('unknown-dispatch-negative-probe.ts', "function createChart(chartId: string, spec: unknown) { if (chartId === 'plot-unregistered-negative-probe') { return probeRenderer(spec) } return markDrivenDiagramChart(spec) }", ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+const unknownDispatchResult = readNativeChartDispatches(unknownDispatchProbe)
+if (unknownDispatchResult.issue !== undefined || nativeRegistryCoverageIssue(new Set(unknownDispatchResult.dispatches.keys())) === undefined) {
 	throw new Error('Documentation chart validator negative probe unexpectedly accepted an unregistered native chart dispatch')
+}
+const duplicateDispatchProbe = ts.createSourceFile(
+	'duplicate-dispatch-negative-probe.ts',
+	"function createChart(chartId: string, spec: unknown) { if (chartId === 'duplicate') { return firstRenderer(spec) } if (chartId === 'duplicate') { return secondRenderer(spec) } return markDrivenDiagramChart(spec) }",
+	ts.ScriptTarget.Latest,
+	true,
+	ts.ScriptKind.TS,
+)
+if (readNativeChartDispatches(duplicateDispatchProbe).issue === undefined) {
+	throw new Error('Documentation chart validator negative probe unexpectedly accepted a duplicate native chart dispatch')
+}
+const unsupportedDispatchProbe = ts.createSourceFile('unsupported-dispatch-negative-probe.ts', "function createChart(chartId: string, spec: unknown) { switch (chartId) { case 'unsupported': return probeRenderer(spec) } return markDrivenDiagramChart(spec) }", ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+if (readNativeChartDispatches(unsupportedDispatchProbe).issue === undefined) {
+	throw new Error('Documentation chart validator negative probe unexpectedly accepted an unsupported native chart dispatch shape')
 }
 const detachedLabelSource = ts.createSourceFile('axis-negative-probe.ts', "function negativeProbeRenderer() { const axes = quantitativeChartAxisLabels['fig-auction-clearing-ladder']; return plot({ x: { label: axes.x }, y: { label: null } }) }", ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
 const detachedLabelOptions = findPlotOptions(findFunctionDeclaration(detachedLabelSource, 'negativeProbeRenderer'), detachedLabelSource)
