@@ -29,7 +29,7 @@ function buildGroupedOptions<TValue extends string>(groups: ViewTabsProps<TValue
 	})
 }
 
-export function ViewTabs<TValue extends string>({ ariaLabel, className = '', groups, onChange, options, orientation = 'horizontal', semantics, size = 'default', value, variant = 'subroute' }: ViewTabsProps<TValue>) {
+export function ViewTabs<TValue extends string>({ ariaLabel, className = '', groups, onChange, onOverflowEdgesChange, options, orientation = 'horizontal', semantics, size = 'default', value, variant = 'subroute' }: ViewTabsProps<TValue>) {
 	const containerRef = useRef<HTMLDivElement>(null)
 	const [overflowEdges, setOverflowEdges] = useState({ end: false, start: false })
 	const indexedOptions = options.map((option, index) => ({ index, option }))
@@ -119,10 +119,12 @@ export function ViewTabs<TValue extends string>({ ariaLabel, className = '', gro
 		const scrollBehavior = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
 		const updateOverflowEdges = () => {
 			const maxScrollLeft = Math.max(0, container.scrollWidth - container.clientWidth)
-			setOverflowEdges({
+			const nextOverflowEdges = {
 				end: container.scrollLeft < maxScrollLeft - 1,
 				start: container.scrollLeft > 1,
-			})
+			}
+			setOverflowEdges(nextOverflowEdges)
+			onOverflowEdgesChange?.(nextOverflowEdges)
 		}
 		const scrollActiveOptionIntoView = () => {
 			const activeOption = container.querySelector('.view-tab.active')
@@ -156,7 +158,7 @@ export function ViewTabs<TValue extends string>({ ariaLabel, className = '', gro
 			container.removeEventListener('scroll', updateOverflowEdges)
 			resizeObserver?.disconnect()
 		}
-	}, [options.length, orientation, value])
+	}, [onOverflowEdgesChange, options.length, orientation, value])
 	return (
 		<div ref={containerRef} className={`view-tabs ${variant} ${overflowEdges.start ? 'has-overflow-start' : ''} ${overflowEdges.end ? 'has-overflow-end' : ''} ${className}`.trim()} data-orientation={orientation} data-size={size} role={containerRole} aria-label={containerRole === undefined ? undefined : ariaLabel}>
 			{renderOptions()}
