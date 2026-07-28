@@ -50,6 +50,7 @@ contract EscalationGame is EscalationGameSettlement {
 		require(owner == msg.sender || address(securityPool) == msg.sender, 'Only owner or security pool');
 		require(forkContinuation, 'No fork mode');
 		require(forkResumedAt == 0, 'Fork resumed');
+		require(isForkCarryFundingComplete(), 'Fork carry underfunded');
 		forkResumedAt = block.timestamp;
 		emit ForkContinuationResumed(block.timestamp);
 	}
@@ -100,8 +101,6 @@ contract EscalationGame is EscalationGameSettlement {
 		require(activationTime == 0, 'Game started');
 		require(_nonDecisionThreshold > _startBond, 'Threshold too low');
 		require(_startBond > 0, 'Start bond zero');
-		require(_startBond >= 1e18, 'Start bond below 1 REP');
-		require(_nonDecisionThreshold >= 1e18, 'Threshold below 1 REP');
 		startBond = _startBond;
 		nonDecisionThreshold = _nonDecisionThreshold;
 		lnRatioScaled = proofVerifier.computeLnRatioScaled(_startBond, _nonDecisionThreshold);

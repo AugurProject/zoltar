@@ -475,14 +475,14 @@ export function ReportingSection({
 				<SectionBlock className='reporting-metrics-section' title={reportingCopy.escalationMetrics} variant='embedded'>
 					<div className='escalation-metrics'>
 						<MetricField label={reportingCopy.nonDecisionThreshold}>
-							<CurrencyValue value={effectiveReportingDetails?.nonDecisionThreshold} suffix={commonCopy.rep} />
+							<CurrencyValue precision='exact' value={effectiveReportingDetails?.nonDecisionThreshold} suffix={commonCopy.rep} />
 						</MetricField>
 						<MetricField label={reportingCopy.timeLeft}>{activeReportingDetails === undefined ? commonCopy.metricUnavailablePlaceholder : formatDuration(getEscalationTimeRemaining(activeReportingDetails))}</MetricField>
 						<MetricField label={reportingCopy.escalationStarted}>
 							<TimestampValue {...(effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: effectiveCurrentTimestamp })} timestamp={escalationGameStartTimestamp} />
 						</MetricField>
 						<MetricField label={reportingCopy.startBond}>
-							<CurrencyValue value={effectiveReportingDetails?.startBond} suffix={commonCopy.rep} />
+							<CurrencyValue precision='exact' value={effectiveReportingDetails?.startBond} suffix={commonCopy.rep} />
 						</MetricField>
 					</div>
 				</SectionBlock>

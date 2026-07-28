@@ -7,6 +7,7 @@ const PROTOCOL_CONFIG_GLOBAL_KEY = '__ZOLTAR_PROTOCOL_CONFIG__'
 const FORK_BURN_ENV = 'ZOLTAR_FORK_BURN_DIVISOR'
 const FORK_THRESHOLD_ENV = 'ZOLTAR_FORK_THRESHOLD_DIVISOR'
 const INITIAL_ESCALATION_DEPOSIT_ENV = 'ZOLTAR_INITIAL_ESCALATION_GAME_DEPOSIT'
+const ONE_REP = 10n ** 18n
 
 function getProcessEnv(name: string) {
 	const processValue = Reflect.get(globalThis, 'process')
@@ -49,10 +50,10 @@ describe('protocolConfig', () => {
 	test('getProtocolConfig resolves defaults, environment values, global overrides, and explicit overrides in precedence order', () => {
 		setProcessEnv(FORK_BURN_ENV, '7')
 		setProcessEnv(FORK_THRESHOLD_ENV, '23')
-		setProcessEnv(INITIAL_ESCALATION_DEPOSIT_ENV, '4')
+		setProcessEnv(INITIAL_ESCALATION_DEPOSIT_ENV, (4n * ONE_REP).toString())
 		Reflect.set(globalThis, PROTOCOL_CONFIG_GLOBAL_KEY, {
 			forkBurnDivisor: '9',
-			initialEscalationGameDeposit: '5',
+			initialEscalationGameDeposit: (5n * ONE_REP).toString(),
 		})
 
 		expect(
@@ -62,14 +63,14 @@ describe('protocolConfig', () => {
 		).toEqual({
 			forkBurnDivisor: 9n,
 			forkThresholdDivisor: 11n,
-			initialEscalationGameDeposit: 5n,
+			initialEscalationGameDeposit: 5n * ONE_REP,
 		})
 	})
 
 	test('validateProtocolConfig rejects invalid economic bounds', () => {
 		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, forkThresholdDivisor: 1n })).toThrow('forkThresholdDivisor must be greater than 1')
-		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, forkBurnDivisor: 1n })).toThrow('forkBurnDivisor must be greater than 1')
-		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, initialEscalationGameDeposit: 0n })).toThrow('initialEscalationGameDeposit must be greater than 0')
+		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, forkBurnDivisor: 4n })).toThrow('forkBurnDivisor must be at least 5')
+		expect(() => validateProtocolConfig({ ...DEFAULT_PROTOCOL_CONFIG, initialEscalationGameDeposit: ONE_REP - 1n })).toThrow('initialEscalationGameDeposit must be at least 1 REP')
 	})
 
 	test('getMainnetProtocolConfig returns the frozen mainnet config', () => {

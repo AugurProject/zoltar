@@ -17,6 +17,8 @@ contract EscalationGameFactory {
 	}
 
 	function deployEscalationGame(uint256 startBond, uint256 _nonDecisionThreshold) external returns (EscalationGame) {
+		require(_nonDecisionThreshold > 1, 'Escalation threshold too low');
+		if (startBond >= _nonDecisionThreshold) startBond = _nonDecisionThreshold - 1;
 		EscalationGame gameImplementation = _deployEscalationGame();
 		gameImplementation.start(startBond, _nonDecisionThreshold);
 		return gameImplementation;

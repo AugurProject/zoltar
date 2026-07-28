@@ -163,6 +163,9 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		if (totalChildRepToTransfer == 0) return (sourcePrincipalByOutcome, childRepByOutcome);
 		_consumeEscrowedRepForVault(vault, totalChildRepToTransfer);
 		if (transferRep) {
+			if (winnerHaircutPaidByFork && forkResumedAt == 0) {
+				forkCarryBackingExportedBeforeResume += totalChildRepToTransfer;
+			}
 			_safeTransferRep(repReceiver, totalChildRepToTransfer);
 		}
 	}
