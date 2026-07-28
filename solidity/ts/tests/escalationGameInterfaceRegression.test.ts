@@ -190,6 +190,7 @@ test('EscalationGame storage layout keeps inherited state slots stable', () => {
 			{ label: 'forkCarryInitialBacking', slot: '438', offset: 0, type: 'uint256' },
 			{ label: 'fixedQuestionOutcome', slot: '439', offset: 0, type: 'enum BinaryOutcomes.BinaryOutcome' },
 			{ label: 'nonDecisionState', slot: '439', offset: 1, type: 'enum NonDecisionState' },
+			{ label: 'forkCarryBackingExportedBeforeResume', slot: '440', offset: 0, type: 'uint256' },
 		],
 	)
 

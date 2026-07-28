@@ -6,10 +6,13 @@ import { Window } from 'happy-dom'
 
 type InteractiveExampleHarness = {
 	close: () => void
+	inputState: (name: string) => { disabled: boolean; value: string }
 	labelFor: (name: string) => string
 	output: (name: string) => string
 	setInput: (name: string, value: number) => void
+	textFor: (name: string) => string
 	textPosition: (name: string) => { x: number; y: number }
+	valueFor: (name: string) => string
 }
 
 type AuctionExampleScenario = {
@@ -69,6 +72,17 @@ async function loadInteractiveExample(filePath: string, exampleId: string): Prom
 		return element.value
 	}
 
+	const inputState = (name: string) => {
+		const element = example.querySelector(`[data-example-input="${name}"]`)
+		if (!(element instanceof window.HTMLInputElement)) {
+			throw new Error(`Missing interactive example input: ${name}`)
+		}
+		return {
+			disabled: element.disabled,
+			value: element.value,
+		}
+	}
+
 	const labelFor = (name: string) => {
 		const element = example.querySelector(`[data-example-output="${name}"]`)
 		if (!(element instanceof window.HTMLOutputElement)) {
@@ -79,6 +93,14 @@ async function loadInteractiveExample(filePath: string, exampleId: string): Prom
 			throw new Error(`Missing auction example label: ${name}`)
 		}
 		return label.textContent.trim()
+	}
+
+	const textFor = (name: string) => {
+		const element = example.querySelector(`[data-example-text="${name}"]`)
+		if (element === null) {
+			throw new Error(`Missing interactive example text: ${name}`)
+		}
+		return element.textContent.trim()
 	}
 
 	const textPosition = (name: string) => {
@@ -92,12 +114,23 @@ async function loadInteractiveExample(filePath: string, exampleId: string): Prom
 		}
 	}
 
+	const valueFor = (name: string) => {
+		const element = example.querySelector(`[data-example-value="${name}"]`)
+		if (element === null) {
+			throw new Error(`Missing interactive example value: ${name}`)
+		}
+		return element.textContent.trim()
+	}
+
 	return {
 		close: () => window.close(),
+		inputState,
 		labelFor,
 		output,
 		setInput,
+		textFor,
 		textPosition,
+		valueFor,
 	}
 }
 
@@ -396,6 +429,97 @@ async function checkResolutionEdgeExample(): Promise<void> {
 	}
 }
 
+async function checkEscalationDepositExample(): Promise<void> {
+	const filePath = 'docs/statoblast-whitepaper.html'
+	const html = await readFile(filePath, 'utf8')
+	const staticWindow = new Window({
+		url: pathToFileURL(filePath).href,
+	})
+	try {
+		staticWindow.document.write(html)
+		staticWindow.document.close()
+		const staticExample = staticWindow.document.getElementById('escalation-deposit-example')
+		assert.ok(staticExample, 'escalation deposit static fallback must exist')
+		const staticInputValue = (name: string) => staticExample.querySelector(`[data-example-input="${name}"]`)?.getAttribute('value')
+		const staticOutput = (name: string) => staticExample.querySelector(`[data-example-output="${name}"]`)?.textContent.trim()
+		const staticRectWidth = (name: string) => staticExample.querySelector(`[data-example-rect="${name}"]`)?.getAttribute('width')
+		assert.equal(staticInputValue('depositLifecycle'), '0', 'escalation static fallback should begin in first-deposit mode')
+		for (const balanceName of ['invalidBalance', 'yesBalance', 'noBalance']) {
+			assert.equal(staticInputValue(balanceName), '0', `escalation static fallback ${balanceName} should begin at zero`)
+		}
+		assert.equal(staticOutput('remainingRoom'), '10 REP', 'escalation static fallback remaining room')
+		assert.equal(staticOutput('effectiveStartBond'), '2 REP', 'escalation static fallback effective bond')
+		assert.equal(staticOutput('acceptedAmount'), '5 REP', 'escalation static fallback accepted amount')
+		assert.equal(staticOutput('depositAdjustment'), 'accepted as proposed', 'escalation static fallback adjustment')
+		assert.equal(staticOutput('depositCondition'), 'No ends at 5 REP', 'escalation static fallback condition')
+		for (const rectName of ['invalidBefore', 'yesBefore', 'noBefore', 'invalidAfter', 'yesAfter']) {
+			assert.equal(staticRectWidth(rectName), '0', `escalation static fallback ${rectName} should be empty`)
+		}
+		assert.equal(staticRectWidth('noAfter'), '110', 'escalation static fallback No-after bar should represent 5 of 10 REP')
+	} finally {
+		staticWindow.close()
+	}
+
+	const example = await loadInteractiveExample(filePath, 'escalation-deposit-example')
+
+	try {
+		example.setInput('depositLifecycle', 1)
+		example.setInput('invalidBalance', 4)
+		example.setInput('depositLifecycle', 0)
+		assert.equal(example.valueFor('depositLifecycle'), 'First deposit (factory creates game)', 'first-deposit lifecycle value')
+		assert.equal(example.textFor('startBondLabel'), 'Configured start bond', 'first-deposit bond label')
+		assert.equal(example.textFor('thresholdInputLabel'), 'Live non-decision threshold', 'first-deposit threshold label')
+		assert.equal(example.labelFor('effectiveStartBond'), 'Effective start bond', 'first-deposit output label')
+		for (const balanceName of ['invalidBalance', 'yesBalance', 'noBalance']) {
+			assert.deepEqual(example.inputState(balanceName), { disabled: true, value: '0' }, `first-deposit ${balanceName} should be disabled and reset`)
+		}
+		example.setInput('proposedDeposit', 10)
+		example.setInput('startBond', 10)
+		example.setInput('nonDecisionThreshold', 10)
+
+		assertEqual(example.output('effectiveStartBond'), '9.999999999999999999 REP', 'equal configured bond should normalize by one atomic REP unit')
+		assertEqual(example.output('acceptedAmount'), '10 REP', 'equal configured bond should leave a threshold-reaching deposit valid')
+		assertEqual(example.output('depositCondition'), 'No reaches threshold', 'equal configured bond should not make setup revert')
+
+		example.setInput('proposedDeposit', 5)
+		example.setInput('nonDecisionThreshold', 5)
+
+		assertEqual(example.output('effectiveStartBond'), '4.999999999999999999 REP', 'above-threshold configured bond should normalize by one atomic REP unit')
+		assertEqual(example.output('acceptedAmount'), '5 REP', 'above-threshold configured bond should use the normalized live bond')
+		assertEqual(example.output('depositCondition'), 'No reaches threshold', 'above-threshold configured bond should not make setup revert')
+
+		example.setInput('depositLifecycle', 1)
+		assert.equal(example.valueFor('depositLifecycle'), 'Repeat deposit (existing game)', 'repeat-deposit lifecycle value')
+		assert.equal(example.textFor('startBondLabel'), 'Stored game start bond', 'repeat-deposit bond label')
+		assert.equal(example.textFor('thresholdInputLabel'), 'Stored game non-decision threshold', 'repeat-deposit threshold label')
+		assert.equal(example.labelFor('effectiveStartBond'), 'Stored start bond used', 'repeat-deposit output label')
+		example.setInput('startBond', 2)
+		example.setInput('nonDecisionThreshold', 10)
+		example.setInput('proposedDeposit', 2)
+
+		assertEqual(example.output('effectiveStartBond'), '2 REP', 'repeat deposit should preserve the stored game bond')
+		assertEqual(example.output('acceptedAmount'), '2 REP', 'repeat deposit should preview against stored game parameters')
+		assertEqual(example.output('depositCondition'), 'No ends at 2 REP', 'repeat deposit should retain an unresolved stored game')
+
+		example.setInput('startBond', 10)
+		assertEqual(example.output('acceptedAmount'), 'preview reverts', 'invalid stored game parameters should reject preview')
+		assertEqual(example.output('depositAdjustment'), 'Not evaluated', 'invalid stored game parameters should not be described as a deposit adjustment')
+		assertEqual(example.output('depositCondition'), 'operation reverts: existing game parameters are invalid', 'invalid stored parameters should not display an accepted deposit')
+
+		example.setInput('startBond', 2)
+		example.setInput('invalidBalance', 10)
+		example.setInput('yesBalance', 10)
+
+		assertEqual(example.output('acceptedAmount'), 'preview reverts', 'an already reached non-decision state should reject preview')
+		assertEqual(example.output('depositAdjustment'), 'Not evaluated', 'a non-decision lock should not be described as a deposit adjustment')
+		assertEqual(example.output('depositCondition'), 'operation reverts: non-decision already reached', 'non-decision state should not display an accepted deposit')
+	} finally {
+		example.close()
+	}
+
+	assert.doesNotMatch(html, /game setup reverts: Threshold too low/, 'escalation example should not retain the pre-normalization setup failure')
+}
+
 async function checkDynamicWethReportExample(): Promise<void> {
 	const example = await loadInteractiveExample('docs/open-oracle-integration.html', 'initial-report-estimator-example')
 
@@ -499,6 +623,7 @@ await checkSourceLabelsAndThresholdText('docs/truth-auction.html', [
 ])
 
 await checkCollateralRepairExample()
+await checkEscalationDepositExample()
 await checkResolutionEdgeExample()
 await checkDynamicWethReportExample()
 await checkDeploymentMappingStates()

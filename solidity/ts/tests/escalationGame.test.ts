@@ -321,6 +321,16 @@ describe('Escalation Game Test Suite', () => {
 				}),
 		)
 
+	const fundEscalationGame = async (escalationGameAddress: Address, amount: bigint) =>
+		await writeContractAndWait(client, async () =>
+			client.writeContract({
+				abi: ReputationToken_ReputationToken.abi,
+				address: getRepTokenAddress(0n),
+				functionName: 'transfer',
+				args: [escalationGameAddress, amount],
+			}),
+		)
+
 	const advanceForkContinuationPastStart = async (escalationGameAddress: Address, targetAttritionCost = reportBond + 1n) => {
 		await resumeEscalationFromFork(escalationGameAddress)
 		const forkResumedAt = await client.readContract({
@@ -845,7 +855,17 @@ describe('Escalation Game Test Suite', () => {
 		const zeroBond = await deployEscalationGameWithProofPool()
 		await assert.rejects(startEscalation(zeroBond.escalationGameAddress, 0n, reportBond), /Start bond zero/)
 		const subRepBond = await deployEscalationGameWithProofPool()
-		await assert.rejects(startEscalation(subRepBond.escalationGameAddress, 1n, reportBond), /Start bond below 1 REP/)
+		await startEscalation(subRepBond.escalationGameAddress, 1n, 2n)
+		assert.strictEqual(
+			await client.readContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: subRepBond.escalationGameAddress,
+				functionName: 'startBond',
+				args: [],
+			}),
+			1n,
+			'a positive atomic-unit bond must remain available when live REP supply falls below one whole REP',
+		)
 
 		const alreadyStarted = await deployEscalationGameWithProofPool()
 		await startEscalation(alreadyStarted.escalationGameAddress, reportBond, nonDecisionThreshold)
@@ -1378,6 +1398,7 @@ describe('Escalation Game Test Suite', () => {
 		await initializeSnapshotWithResolutionBalancesViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), parentYesPeaks, zeroPeakArray()], [0n, 2n, 0n], [0n, 2n * reportBond, 0n], [0n, 0n, 0n], [zeroHash(), zeroHash(), zeroHash()])
 		await recordForkedEscrowForOutcomeViaTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, 2n * reportBond, 2n * reportBond)
 		await depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
+		await fundEscalationGame(child.escalationGameAddress, 2n * reportBond)
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 
 		const shortProof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 1n, [], new SparseNullifierTree().getProof(0n))
@@ -2096,19 +2117,12 @@ describe('Escalation Game Test Suite', () => {
 		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
 		await initializeSnapshotWithResolutionBalancesViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), parentYesPeaks, zeroPeakArray()], [0n, parentLeafCount, 0n], [0n, parentCarryTotal, 0n], [0n, 0n, 0n], [zeroHash(), parentNullifierRoot, zeroHash()])
 		assert.strictEqual(await readIsForkCarryFundingComplete(child.escalationGameAddress), false, 'an unfunded inherited carry should be incomplete')
+		await assert.rejects(resumeEscalationFromFork(child.escalationGameAddress), /Fork carry underfunded/)
 
 		await depositOnOutcomeViaProofTestSecurityPool(child.testSecurityPoolAddress, client.account.address, QuestionOutcome.Yes, reportBond)
-		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
-
-		await writeContractAndWait(client, async () =>
-			client.writeContract({
-				abi: ReputationToken_ReputationToken.abi,
-				address: getRepTokenAddress(0n),
-				functionName: 'transfer',
-				args: [child.escalationGameAddress, parentCarryTotal],
-			}),
-		)
+		await fundEscalationGame(child.escalationGameAddress, parentCarryTotal)
 		assert.strictEqual(await readIsForkCarryFundingComplete(child.escalationGameAddress), true, 'one-to-one aggregate REP should complete funding without a vault record')
+		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 	})
 
 	test('preserved continuation balances do not rebase when forked escrow arrives after the live balance already shrank', async () => {
@@ -2292,6 +2306,7 @@ describe('Escalation Game Test Suite', () => {
 		const child = await deployEscalationGameWithProofPool()
 		await startEscalationFromFork(child.escalationGameAddress, reportBond, nonDecisionThreshold, 0n)
 		await initializeSnapshotWithResolutionBalancesViaTestSecurityPool(child.testSecurityPoolAddress, [zeroPeakArray(), parentYesPeaks, parentNoPeaks], [0n, parentYesLeafCount, parentNoLeafCount], [0n, parentYesCarryTotal, parentNoCarryTotal], [0n, 0n, 1n], [zeroHash(), parentYesNullifierRoot, parentNoNullifierRoot])
+		await fundEscalationGame(child.escalationGameAddress, parentYesCarryTotal + parentNoCarryTotal - 1n)
 		await advanceForkContinuationPastStart(child.escalationGameAddress, recursiveResolutionTargetCost)
 		const proof = await createCarryProof(parent.escalationGameAddress, 0n, 0n, 0n, [], new SparseNullifierTree().getProof(0n))
 		const walletBalanceBefore = await getERC20Balance(client, getRepTokenAddress(0n), client.account.address)

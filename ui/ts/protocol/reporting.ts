@@ -767,24 +767,27 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		}),
 	])
 	if (!hasTimestamp(block)) throw new Error('Unexpected block response')
-	if (escalationGameAddress === zeroAddress || escalationGameCode === undefined || escalationGameCode === '0x')
+	if (escalationGameAddress === zeroAddress || escalationGameCode === undefined || escalationGameCode === '0x') {
+		const nonDecisionThreshold = forkThreshold / 2n + (forkThreshold % 2n)
+		const startBond = nonDecisionThreshold > 1n && initialEscalationGameDeposit >= nonDecisionThreshold ? nonDecisionThreshold - 1n : initialEscalationGameDeposit
 		return {
 			completeSetCollateralAmount,
 			currentTime: block.timestamp,
 			forkThreshold,
 			marketDetails,
-			nonDecisionThreshold: forkThreshold / 2n,
+			nonDecisionThreshold,
 			parentSecurityPoolAddress,
 			questionOutcome: normalizedQuestionOutcome,
 			securityPoolAddress,
 			settlementState: normalizedQuestionOutcome !== 'none' && systemState === 'operational' ? 'resolved' : 'locked',
-			startBond: initialEscalationGameDeposit,
+			startBond,
 			status: 'not-started',
 			systemState,
 			universeId,
 			parentWithdrawalEnabled: false,
 			...viewerVaultState,
 		}
+	}
 	const forkContinuationSnapshot = await readForkContinuation(client, escalationGameAddress)
 	const [startBond, nonDecisionThreshold, activationTime, totalCost, bindingCapital, invalidOutcomeState, yesOutcomeState, noOutcomeState, escalationEndTime, _questionOutcome, universeForkTime, hasReachedNonDecision] = await Promise.all([
 		client.readContract({
