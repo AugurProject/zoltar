@@ -9,10 +9,9 @@
 	<body class="doc-openoracle security-model">
 		<main>
 			<header>
-				<p class="security-model-kicker">Normative external trust boundary</p>
 				<h1>Statoblast Protocol Security Model</h1>
 				<p class="security-model-lede">
-					Statoblast and Zoltar enforce accounting, authorization, and lifecycle rules
+					Statoblast enforce accounting, authorization, and lifecycle rules
 					onchain. Their economic safety and practical liveness still depend on the
 					participant, market, asset, deployment, client, data, Ethereum, and cryptographic
 					assumptions below.
@@ -32,19 +31,6 @@
 					<a href="#excluded-guarantees">Excluded guarantees</a>
 				</nav>
 			</header>
-
-			<section id="core-assumptions">
-				<h2>How to apply these assumptions</h2>
-				<p>
-					Review assumptions at the same system scope and time as the protected
-					action. For an economic claim, identify the attacker objective, the honest
-					participant expected to respond, required capital, transaction-inclusion
-					window, and maximum exposure if the response does not occur. Operators and
-					integrators should monitor the measurable boundaries—liquidity, gas,
-					participation, canonical addresses, and data availability—rather than treat
-					the list as a one-time launch checklist.
-				</p>
-			</section>
 
 			<section class="assumption-group" id="assumptions-participation">
 				<h2 id="assumptions-value">Participation and coordination</h2>
@@ -503,33 +489,6 @@
 							<a href="./invariants.html#uni-02"><code>UNI-02</code></a>,
 							<a href="./zoltar-whitepaper.html#questions">question identity</a>, and
 							<a href="./statoblast-whitepaper.html#pools">pool selection</a>.
-						</p>
-					</li>
-					<li id="assumption-a16" value="16" data-assumption="A16">
-						<h3>Permissionless fork selection remains aligned with user coordination</h3>
-						<p>
-							Any caller that funds the fork threshold may select any registered,
-							ended global question to fork an initialized, supply-bearing, unforked
-							universe; Zoltar does not enforce relevance or user consent. The model
-							assumes such callers do not expect a risk-adjusted payoff from an
-							irrelevant or ambiguous fork and that users and integrations can
-							recognize it and coordinate on one supported child branch if it occurs.
-						</p>
-						<p class="assumption-failure">
-							<strong>Failure boundary:</strong> A threshold-funded caller can force
-							an unrelated or ambiguous fork that fragments liquidity, migration, or
-							user coordination even though every Zoltar admission guard passes.
-						</p>
-						<p class="assumption-links">
-							Mechanics:
-							<a href="./zoltar-whitepaper.html#global-question-scope"
-								>global question scope</a
-							>,
-							<a href="./statoblast-whitepaper.html#migration">fork migration</a>,
-							and
-							<a href="./operator-reference.md#security-review-orientation"
-								>operator orientation</a
-							>.
 						</p>
 					</li>
 				</ol>
