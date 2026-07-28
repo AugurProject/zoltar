@@ -204,7 +204,20 @@ describe('useZoltarMigration', () => {
 		}))
 
 		const refreshState = mock(async () => undefined)
-		const refreshZoltarUniverse = mock(async () => undefined)
+		const refreshedUniverse = createUniverse({
+			childUniverses: [
+				{
+					exists: true,
+					forkTime: 1n,
+					outcomeIndex: 1n,
+					outcomeLabel: 'Yes',
+					parentUniverseId: 1n,
+					reputationToken: getAddress('0x00000000000000000000000000000000000000b2'),
+					universeId: 2n,
+				},
+			],
+		})
+		const refreshZoltarUniverse = mock(async () => refreshedUniverse)
 		const refreshZoltarForkAccess = mock(async () => undefined)
 		const { useZoltarMigration } = await import(`../../../features/universes/hooks/useZoltarMigration.js?case=${crypto.randomUUID()}`)
 		let hookState: UseZoltarMigrationState | undefined
@@ -259,7 +272,7 @@ describe('useZoltarMigration', () => {
 		expect(migrateInternalRepInZoltar).toHaveBeenCalledTimes(1)
 		expect(refreshState).toHaveBeenCalledTimes(1)
 		expect(refreshZoltarUniverse).toHaveBeenCalledTimes(1)
-		expect(refreshZoltarForkAccess).toHaveBeenCalledTimes(1)
+		expect(refreshZoltarForkAccess).toHaveBeenCalledWith(refreshedUniverse)
 		expect(requireHookState(hookState).zoltarMigrationFeedback?.status.tone).toBe('success')
 	})
 })
