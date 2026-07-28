@@ -148,6 +148,7 @@ describe('SecurityPoolSection', () => {
 		expect(headings).not.toContain('Question Context')
 		expect(headings).not.toContain('Requirements')
 		expect(headings).not.toContain('Existing Pools')
+		expect(documentQueries.getByText('A Security Pool is the tradeable Market for one existing binary Zoltar Question. Select its Question ID here; the Question remains the reusable resolution definition.')).not.toBeNull()
 		expect(documentQueries.getByText('Starting Annual Fee')).not.toBeNull()
 		expect(documentQueries.getByText(formatOpenInterestFeePerYearPercent(ORIGIN_POOL_INITIAL_RETENTION_RATE))).not.toBeNull()
 		expect(documentQueries.queryByRole('textbox', { name: 'Open Interest Fee / Year (%)' })).toBeNull()

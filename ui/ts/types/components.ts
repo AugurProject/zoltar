@@ -188,6 +188,7 @@ export type ViewTabsProps<TValue extends string> = {
 		values: readonly TValue[]
 	}>
 	onChange: (value: TValue) => void
+	onOverflowEdgesChange?: (edges: { end: boolean; start: boolean }) => void
 	orientation?: 'horizontal' | 'vertical'
 	options: ViewTabOption<TValue>[]
 	semantics?: 'navigation' | 'switcher' | 'tabs'
