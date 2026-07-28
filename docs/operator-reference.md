@@ -226,7 +226,7 @@ stale-operation handling, and liquidation boundaries. Report sizing, request
 cost, and current OpenOracle parameters are canonical in
 [OpenOracle Integration](./open-oracle-integration.html#parameters); the
 external correction assumption and its limits are defined in the
-[security model](./security-model.html#open-oracle-economic-boundary).
+[security model](./security-model.html#open-oracle-market-fixture).
 Operators can run the
 [OpenOracle arbitrager](../open-oracle-arbitrager/README.md) in dry-run mode
 to monitor pending reports and executable Uniswap V3 quotes.
