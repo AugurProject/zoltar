@@ -124,10 +124,10 @@
 						</div>
 						<p class="security-assumption-ref">
 							<strong>Security assumptions:</strong>
-							<a href="./security-model.html#assumption-a19">A19 verified deployment</a>,
-							<a href="./security-model.html#assumption-a23">A23 Ethereum execution</a>,
+							<a href="./security-model.html#assumption-a23">A23 verified deployment</a>,
+							<a href="./security-model.html#assumption-a26">A26 Ethereum execution</a>,
 							and
-							<a href="./security-model.html#assumption-a24">A24 cryptographic identity</a>.
+							<a href="./security-model.html#assumption-a27">A27 cryptographic identity</a>.
 						</p>
 						<p>
 						A universe is one branch of protocol state. The
@@ -213,12 +213,6 @@
 						or delete the others.
 					</div>
 					<h3 id="global-question-scope">Global Question Scope</h3>
-					<p class="security-assumption-ref">
-							<strong>Security assumption:</strong>
-							<a href="./security-model.html#assumption-a27"
-								>A27 permissionless-fork alignment</a
-							>.
-					</p>
 					<p>
 						Questions are global protocol objects in Zoltar. <code>forkUniverse</code> checks that the target universe exists, still has supply, has not already forked, and that the supplied question exists and has ended. It does not require the question to have been created for that universe. Applications that need a stricter universe/question relationship enforce it above Zoltar.
 					</p>
@@ -248,12 +242,14 @@
 						</p>
 						<p class="security-assumption-ref">
 							<strong>Security assumptions:</strong>
-							<a href="./security-model.html#assumption-a02">A02 fork value preservation</a>,
-							<a href="./security-model.html#assumption-a03">A03 REP valuation</a>,
-							<a href="./security-model.html#assumption-a13">A13 lineage access value</a>,
-							<a href="./security-model.html#assumption-a18">A18 REP token behavior</a>,
+							<a href="./security-model.html#assumption-a07">A07 fork value preservation</a>,
+							<a href="./security-model.html#assumption-a08">A08 REP valuation</a>,
+							<a href="./security-model.html#assumption-a05">A05 lineage access value</a>,
+							<a href="./security-model.html#assumption-a21"
+								>A21 genesis REP behavior</a
+							>,
 							and
-							<a href="./security-model.html#assumption-a26">A26 safe immutable parameters</a>.
+							<a href="./security-model.html#assumption-a25">A25 safe immutable parameters</a>.
 						</p>
 					<div class="equation" id="eq-zoltar-fork-threshold">
 						<math display="block" aria-label="fork threshold equals floor total theoretical REP supply divided by fork threshold divisor" data-source="forkThreshold = floor(totalTheoreticalRepSupply / forkThresholdDivisor)">
@@ -427,10 +423,10 @@
 						</p>
 						<p class="security-assumption-ref">
 							<strong>Security assumptions:</strong>
-							<a href="./security-model.html#assumption-a04">A04 truthful-branch value</a>,
-							<a href="./security-model.html#assumption-a07">A07 practical migration</a>,
-							<a href="./security-model.html#assumption-a11">A11 REP liquidity</a>, and
-							<a href="./security-model.html#assumption-a21">A21 lifecycle executors</a>.
+							<a href="./security-model.html#assumption-a09">A09 truthful-branch value</a>,
+							<a href="./security-model.html#assumption-a11">A11 practical migration</a>,
+							<a href="./security-model.html#assumption-a13">A13 REP liquidity</a>, and
+							<a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>.
 						</p>
 					<p>
 						For categorical questions, <code>Invalid</code> and any in-range categorical
@@ -513,16 +509,19 @@
 					</div>
 						<p>
 							Zoltar is a <a href="https://github.com/AugurProject/oracle-research/blob/main/Colored%20Coins.md">Colored Coins</a>-style system, so its security argument depends on user behavior and value concentration rather than on the contract being able to identify one objectively correct branch onchain.
+							This is the security model's
+							<a href="./security-model.html#excluded-guarantee-eg01"
+								>EG01 truth-selection exclusion</a
+							>.
 						</p>
 						<p class="security-assumption-ref">
 							<strong>Security assumptions:</strong>
-							<a href="./security-model.html#assumption-a02">A02 fork value preservation</a>,
-							<a href="./security-model.html#assumption-a04">A04 truthful-branch preference</a>,
-							<a href="./security-model.html#assumption-a08">A08 independent participants</a>,
-							<a href="./security-model.html#assumption-a13">A13 lineage access value</a>,
-							<a href="./security-model.html#assumption-a25">A25 intended resolvable questions</a>,
+							<a href="./security-model.html#assumption-a07">A07 fork value preservation</a>,
+							<a href="./security-model.html#assumption-a09">A09 truthful-branch preference</a>,
+							<a href="./security-model.html#assumption-a03">A03 independent participants</a>,
+							<a href="./security-model.html#assumption-a05">A05 lineage access value</a>,
 							and
-							<a href="./security-model.html#assumption-a27">A27 permissionless-fork alignment</a>.
+							<a href="./security-model.html#assumption-a15">A15 intended resolvable questions</a>.
 						</p>
 					<ul class="clean-list">
 						<li>users can choose which child universe (or child universes) to continue using after a fork</li>
@@ -557,11 +556,11 @@
 						</p>
 						<p class="security-assumption-ref">
 							<strong>Security assumptions:</strong>
-							<a href="./security-model.html#assumption-a06">A06 timely outcome evidence</a>,
-							<a href="./security-model.html#assumption-a22">A22 chain-data availability</a>,
-							<a href="./security-model.html#assumption-a24">A24 collision resistance</a>,
+							<a href="./security-model.html#assumption-a10">A10 timely outcome evidence</a>,
+							<a href="./security-model.html#assumption-a20">A20 chain-data availability</a>,
+							<a href="./security-model.html#assumption-a27">A27 collision resistance</a>,
 							and
-							<a href="./security-model.html#assumption-a25">A25 question identity and resolvability</a>.
+							<a href="./security-model.html#assumption-a15">A15 question identity and resolvability</a>.
 						</p>
 					<p>
 						Question ids are deterministic hashes of the question data. For categorical questions, that hash path also includes the sorted categorical outcome options.

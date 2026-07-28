@@ -290,7 +290,7 @@ body.security-model .assumption-group-intro {
 }
 body.security-model .assumption-grid {
 	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
+	grid-template-columns: minmax(0, 1fr);
 	gap: 0.75rem;
 	margin: 0;
 	padding: 0;
@@ -331,9 +331,6 @@ body.security-model .assumption-grid > li::after {
 	left: 1.78rem;
 	width: 1px;
 	background: var(--line);
-}
-body.security-model .assumption-grid .assumption-wide {
-	grid-column: 1 / -1;
 }
 body.security-model .assumption-grid h3 {
 	margin: 0 0 0.35rem;
@@ -679,18 +676,12 @@ body.doc-openoracle td math {
 	body.doc-openoracle .invariant-metadata {
 		grid-template-columns: 1fr;
 	}
-	body.security-model .assumption-grid {
-		grid-template-columns: 1fr;
-	}
 	body.security-model .assumption-nav {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 	body.security-model .assumption-nav a {
 		text-align: center;
-	}
-	body.security-model .assumption-grid .assumption-wide {
-		grid-column: auto;
 	}
 	body.security-model .assumption-grid > li {
 		padding-left: 3.15rem;
