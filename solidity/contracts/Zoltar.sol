@@ -84,7 +84,10 @@ contract Zoltar {
 
 	constructor(ZoltarQuestionData _zoltarQuestionData, uint256 _forkThresholdDivisor, uint256 _forkBurnDivisor) {
 		require(_forkThresholdDivisor > 1, 'Zoltar fork threshold divisor must be greater than one');
-		require(_forkBurnDivisor > 1, 'Zoltar fork burn divisor must be greater than one');
+		require(
+			_forkBurnDivisor >= Constants.MINIMUM_FORK_BURN_DIVISOR,
+			'Zoltar fork burn divisor must be at least five'
+		);
 		zoltarQuestionData = _zoltarQuestionData;
 		forkThresholdDivisor = _forkThresholdDivisor;
 		forkBurnDivisor = _forkBurnDivisor;

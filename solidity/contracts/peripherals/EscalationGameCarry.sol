@@ -2,6 +2,7 @@
 pragma solidity 0.8.35;
 
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
+import { Constants } from '../Constants.sol';
 import { EscalationGameCalculations } from './EscalationGameCalculations.sol';
 import { MerkleMountainRange } from './MerkleMountainRange.sol';
 import {
@@ -106,18 +107,25 @@ abstract contract EscalationGameCarry is EscalationGameCalculations {
 		}
 	}
 
-	function isForkCarryFundingComplete() external view returns (bool) {
+	function isForkCarryFundingComplete() public view returns (bool) {
 		if (!forkCarrySnapshotRequiresForkedEscrow) return true;
 		uint256 requiredRep;
+		uint256 requiredRepAtFork;
 		for (uint8 outcomeIndex = 0; outcomeIndex < 3; outcomeIndex++) {
 			requiredRep +=
 				_getEffectiveInheritedUnresolvedTotal(outcomeIndex) + outcomeState[outcomeIndex].localUnresolvedTotal;
+			requiredRepAtFork +=
+				outcomeState[outcomeIndex].inheritedUnresolvedTotal + outcomeState[outcomeIndex].localUnresolvedTotal;
 		}
 		if (winnerHaircutPaidByFork) {
-			// forkBurnDivisor is always greater than one, so a valid fork haircut
-			// can never remove more than half of the carried source principal.
-			if (forkCarryInitialBacking < requiredRep - requiredRep / 2) return false;
-			requiredRep = forkCarryInitialBacking;
+			// An own-fork continuation starts with the post-burn REP bucket. At a
+			// divisor of five, 80% of the source principal exactly covers the
+			// maximum winning payout. Direct pre-resume claims consume that same
+			// bucket, so compare the live balance with the unexported remainder.
+			uint256 minimumBacking = requiredRepAtFork - requiredRepAtFork / Constants.MINIMUM_FORK_BURN_DIVISOR;
+			if (forkCarryInitialBacking < minimumBacking) return false;
+			if (forkCarryBackingExportedBeforeResume > forkCarryInitialBacking) return false;
+			requiredRep = forkCarryInitialBacking - forkCarryBackingExportedBeforeResume;
 		}
 		return repToken.balanceOf(address(this)) >= requiredRep;
 	}

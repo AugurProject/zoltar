@@ -129,16 +129,18 @@ describe('Contract Test Suite', () => {
 			address: getZoltarAddress(),
 			args: [],
 		})
-		const invalidBurnDeployment = encodeDeployData({
-			abi: Zoltar_Zoltar.abi,
-			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-			args: [zoltarQuestionDataAddress, DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, 1n],
-		})
+		for (const invalidBurnDivisor of [1n, 2n, 3n, 4n]) {
+			const invalidBurnDeployment = encodeDeployData({
+				abi: Zoltar_Zoltar.abi,
+				bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
+				args: [zoltarQuestionDataAddress, DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, invalidBurnDivisor],
+			})
 
-		await assert.rejects(
-			writeContractAndWait(client, () => client.sendTransaction({ data: invalidBurnDeployment })),
-			/Zoltar fork burn divisor must be greater than one/,
-		)
+			await assert.rejects(
+				writeContractAndWait(client, () => client.sendTransaction({ data: invalidBurnDeployment })),
+				/Zoltar fork burn divisor must be at least five/,
+			)
+		}
 	})
 
 	test('forkUniverse rejects false-returning genesis REP transfers', async () => {

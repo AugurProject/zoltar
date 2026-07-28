@@ -485,6 +485,27 @@ describe('ReportingSection', () => {
 		expect(metricsQueries.getByText('Start Bond')).not.toBeNull()
 	})
 
+	test('shows the exact one-atomic-unit difference between a not-started threshold and normalized bond', async () => {
+		const threshold = rep(5n)
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingDetails: createNotStartedReportingDetails({
+						nonDecisionThreshold: threshold,
+						startBond: threshold - 1n,
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const metricsText = getEscalationMetricsSection().textContent ?? ''
+		expect(metricsText).toContain('5 REP')
+		expect(metricsText).toContain('4.999999999999999999 REP')
+		expect(metricsText).not.toContain('≈')
+	})
+
 	test('shows escalation started time as activation time minus the initial delay', async () => {
 		const gameStartTimestamp = 120n
 		const activationTime = ESCALATION_GAME_ACTIVATION_DELAY + gameStartTimestamp

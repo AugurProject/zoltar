@@ -65,7 +65,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		PriceOracleManagerAndOperatorQueuerFactory _priceOracleManagerAndOperatorQueuerFactory,
 		uint256 _initialEscalationGameDeposit
 	) {
-		require(_initialEscalationGameDeposit > 0, 'Initial escalation game deposit must be greater than zero');
+		require(_initialEscalationGameDeposit >= 1e18, 'Initial escalation game deposit must be at least 1 REP');
 		securityPoolForker = _securityPoolForker;
 		shareTokenFactory = _shareTokenFactory;
 		uniformPriceDualCapBatchAuctionFactory = _uniformPriceDualCapBatchAuctionFactory;
@@ -220,6 +220,10 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
 		require(address(reputationToken) != address(0x0), 'Security pool universe is missing a REP token');
+		require(
+			zoltar.getNonDecisionThreshold(universeId) > initialEscalationGameDeposit,
+			'Escalation threshold too low'
+		);
 		bytes32 originId = getOriginId(universeId, questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas);
 		_reserveSecurityPool(originId, universeId);
 		bytes32 securityPoolSalt = keccak256(

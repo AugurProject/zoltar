@@ -251,7 +251,7 @@ describe('reporting protocol client', () => {
 		expect(details.parentWithdrawalEnabled).toBe(false)
 	})
 
-	test('loadReportingDetails keeps pool-level finality when no escalation game exists', async () => {
+	test('loadReportingDetails keeps pool-level finality and previews the live reduced bond when no game exists', async () => {
 		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
 		const client = {
 			getBlock: async () => createBlockWithTimestamp(88n),
@@ -264,7 +264,7 @@ describe('reporting protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			}),
 			readContract: createReadContractStub(async request => {
-				if (request.functionName === 'getForkThreshold') return 100n
+				if (request.functionName === 'getForkThreshold') return 9n
 				if (request.functionName === 'securityVaults') return [0n, 0n, 0n, 0n, 0n]
 				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
@@ -277,6 +277,8 @@ describe('reporting protocol client', () => {
 		expect(details.questionOutcome).toBe('yes')
 		expect(details.settlementState).toBe('resolved')
 		expect(details.parentWithdrawalEnabled).toBe(false)
+		expect(details.nonDecisionThreshold).toBe(5n)
+		expect(details.startBond).toBe(4n)
 	})
 
 	test('loadReportingDetails skips forkContinuation when escalation game code is missing', async () => {
