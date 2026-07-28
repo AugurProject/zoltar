@@ -223,9 +223,14 @@ export type MarketRouteContentProps = {
 
 export type SecurityPoolRouteContentProps = {
 	accountState: AccountState
+	availableQuestionsContextKey: string
+	availableQuestions: MarketDetails[]
 	checkingDuplicateOriginPool: boolean
 	duplicateOriginPoolExists: boolean
+	hasLoadedAvailableQuestions: boolean
+	loadingAvailableQuestions: boolean
 	onCreateSecurityPool: () => void
+	onLoadAvailableQuestions: () => Promise<void>
 	onOpenCreatedPool?: (securityPoolAddress: Address, universeId: bigint) => void
 	loadingMarketDetails: boolean
 	marketDetails: MarketDetails | undefined
