@@ -50,6 +50,55 @@ export const openOracleArbitrageExecutorAbi = [
 		],
 	},
 	{
+		type: 'event',
+		name: 'LifecycleExecuted',
+		anonymous: false,
+		inputs: [
+			{
+				name: 'account',
+				type: 'address',
+				internalType: 'address',
+				indexed: true,
+			},
+			{
+				name: 'reportId',
+				type: 'uint256',
+				internalType: 'uint256',
+				indexed: true,
+			},
+			{
+				name: 'token1',
+				type: 'address',
+				internalType: 'address',
+				indexed: true,
+			},
+			{
+				name: 'amount1',
+				type: 'uint256',
+				internalType: 'uint256',
+				indexed: false,
+			},
+			{
+				name: 'token2',
+				type: 'address',
+				internalType: 'address',
+				indexed: false,
+			},
+			{
+				name: 'amount2',
+				type: 'uint256',
+				internalType: 'uint256',
+				indexed: false,
+			},
+			{
+				name: 'settlerReward',
+				type: 'uint256',
+				internalType: 'uint256',
+				indexed: false,
+			},
+		],
+	},
+	{
 		type: 'function',
 		name: 'assertParentBlock',
 		stateMutability: 'view',
@@ -595,6 +644,180 @@ export const openOracleArbitrageExecutorAbi = [
 					},
 					{
 						name: 'blockTimestampBound',
+						type: 'uint256',
+						internalType: 'uint256',
+					},
+				],
+			},
+		],
+		outputs: [],
+	},
+	{
+		type: 'function',
+		name: 'settleAndWithdraw',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{
+				name: 'request',
+				type: 'tuple',
+				internalType: 'struct OpenOracleArbitrageExecutor.LifecycleRequest',
+				components: [
+					{
+						name: 'openOracle',
+						type: 'address',
+						internalType: 'address',
+					},
+					{
+						name: 'parentBlockNumber',
+						type: 'uint256',
+						internalType: 'uint256',
+					},
+					{
+						name: 'expectedParentBlockHash',
+						type: 'bytes32',
+						internalType: 'bytes32',
+					},
+					{
+						name: 'amount1',
+						type: 'uint128',
+						internalType: 'uint128',
+					},
+					{
+						name: 'amount2',
+						type: 'uint128',
+						internalType: 'uint128',
+					},
+				],
+			},
+			{
+				name: 'game',
+				type: 'tuple',
+				internalType: 'struct IOpenOracleDispute.OracleGame',
+				components: [
+					{
+						name: 'currentAmount1',
+						type: 'uint128',
+						internalType: 'uint128',
+					},
+					{
+						name: 'currentAmount2',
+						type: 'uint128',
+						internalType: 'uint128',
+					},
+					{
+						name: 'currentReporter',
+						type: 'address',
+						internalType: 'address',
+					},
+					{
+						name: 'reportTimestamp',
+						type: 'uint48',
+						internalType: 'uint48',
+					},
+					{
+						name: 'settlementTimestamp',
+						type: 'uint48',
+						internalType: 'uint48',
+					},
+					{
+						name: 'token1',
+						type: 'address',
+						internalType: 'address',
+					},
+					{
+						name: 'lastReportOppoTime',
+						type: 'uint48',
+						internalType: 'uint48',
+					},
+					{
+						name: 'settlementTime',
+						type: 'uint48',
+						internalType: 'uint48',
+					},
+					{
+						name: 'escalationHalt',
+						type: 'uint128',
+						internalType: 'uint128',
+					},
+					{
+						name: 'protocolFeeRecipient',
+						type: 'address',
+						internalType: 'address',
+					},
+					{
+						name: 'settlerReward',
+						type: 'uint96',
+						internalType: 'uint96',
+					},
+					{
+						name: 'token2',
+						type: 'address',
+						internalType: 'address',
+					},
+					{
+						name: 'numReports',
+						type: 'uint24',
+						internalType: 'uint24',
+					},
+					{
+						name: 'disputeDelay',
+						type: 'uint24',
+						internalType: 'uint24',
+					},
+					{
+						name: 'feePercentage',
+						type: 'uint24',
+						internalType: 'uint24',
+					},
+					{
+						name: 'multiplier',
+						type: 'uint16',
+						internalType: 'uint16',
+					},
+					{
+						name: 'callbackContract',
+						type: 'address',
+						internalType: 'address',
+					},
+					{
+						name: 'callbackGasLimit',
+						type: 'uint32',
+						internalType: 'uint32',
+					},
+					{
+						name: 'protocolFee',
+						type: 'uint24',
+						internalType: 'uint24',
+					},
+					{
+						name: 'flags',
+						type: 'uint8',
+						internalType: 'uint8',
+					},
+				],
+			},
+			{
+				name: 'helper',
+				type: 'tuple',
+				internalType: 'struct IOpenOracleDispute.PreimageHelper',
+				components: [
+					{
+						name: 'reportId',
+						type: 'uint256',
+						internalType: 'uint256',
+					},
+					{
+						name: 'creator',
+						type: 'address',
+						internalType: 'address',
+					},
+					{
+						name: 'blockTimestamp',
+						type: 'uint256',
+						internalType: 'uint256',
+					},
+					{
+						name: 'blockNumber',
 						type: 'uint256',
 						internalType: 'uint256',
 					},

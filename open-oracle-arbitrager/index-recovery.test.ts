@@ -1,10 +1,33 @@
 import { describe, expect, test } from 'bun:test'
-import { getAddress, type Hex } from '@zoltar/shared/ethereum'
-import { executionRecordForConfirmedPosition, reconcilePublicLifecycleSnapshot } from './index.js'
+import { createPublicClient, custom, encodeAbiParameters, encodeEventTopics, getAddress, mainnet, type EIP1193Provider, type Hex } from '@zoltar/shared/ethereum'
+import { openOracleArbitrageExecutorAbi } from './abi.js'
+import { executionRecordForConfirmedPosition, expirePrivateEntryWithQuorum, lifecycleExecutionFromLogs, recoverPendingLifecycleWithQuorum } from './index.js'
 import type { PositionRecord } from './position-store.js'
 
 const transactionHash = `0x${'11'.repeat(32)}` as Hex
 const token = getAddress('0x0000000000000000000000000000000000000001')
+const executor = getAddress('0x0000000000000000000000000000000000000004')
+const weth = getAddress('0x0000000000000000000000000000000000000005')
+const recoveryConfiguration = {
+	connectivity: { publicRpcUrls: ['https://primary.example'], readRpcUrl: 'https://primary.example' },
+	executor,
+	network: { weth },
+	openOracle: getAddress('0x0000000000000000000000000000000000000006'),
+	quorumRpcUrls: ['https://secondary.example'],
+	submission: { mode: 'private' as const },
+}
+
+function missingReceiptClients() {
+	return ['primary', 'secondary'].map(() => {
+		const provider: EIP1193Provider = {
+			request: parameters => {
+				if (parameters.method === 'eth_getTransactionReceipt') return Promise.resolve(null)
+				throw new Error(`Unexpected RPC method ${parameters.method}`)
+			},
+		}
+		return createPublicClient({ chain: mainnet, transport: custom(provider) })
+	})
+}
 
 function confirmedPosition(): PositionRecord {
 	return {
@@ -78,39 +101,84 @@ describe('entry crash recovery', () => {
 			transactionHash,
 		})
 	})
-})
 
-describe('public lifecycle crash recovery', () => {
-	test('retains the original balance baseline across partial steps and closes only after exact withdrawal', () => {
-		const blockHash = `0x${'22'.repeat(32)}` as Hex
+	test('releases the risk slot after a private entry is canonically absent for twelve blocks', async () => {
 		const position = {
 			...confirmedPosition(),
-			lifecycleTargetBlockNumber: '0',
-			lifecycleTokenDecimals: '18',
-			lifecycleWalletTokenBefore: '20',
-			lifecycleWalletWethBefore: '10',
-			lockedToken: '0.000000000000000001',
-			lockedWeth: '0.000000000000000001',
+			actualEntryGasCostEth: '0',
+			entrySubmissionBlockNumber: '99',
+			entrySubmissionMode: 'private' as const,
+			gasExpenditures: [],
+			status: 'pending-entry' as const,
 		}
-		const partial = reconcilePublicLifecycleSnapshot(position, { blockHash, blockTimestamp: 1_753_315_200n, tokenDecimals: 18n, walletToken: 20n, walletWeth: 11n }, blockHash)
-		expect(partial.status).toBe('open')
-		expect(partial.withdrawnWeth).toBe('0.000000000000000001')
-		expect(partial.withdrawnToken).toBe('0')
-		expect(partial.lifecycleWalletWethBefore).toBe('10')
-
-		const closed = reconcilePublicLifecycleSnapshot(partial, { blockHash, blockTimestamp: 1_753_315_212n, tokenDecimals: 18n, walletToken: 21n, walletWeth: 11n }, blockHash)
-		expect(closed.status).toBe('closed')
-		expect(closed.withdrawnToken).toBe('0.000000000000000001')
+		const recovered = await expirePrivateEntryWithQuorum(missingReceiptClients(), recoveryConfiguration, position, 112n, '2026-07-24T00:02:00.000Z')
+		expect(recovered.status).toBe('expired-not-included')
+		expect(recovered.capitalAtRiskWeth).toBe('0')
+		expect(recovered.lockedWeth).toBe('0')
+		expect(recovered.realizedNetProfitEth).toBe('0')
 	})
 
-	test('rejects a same-height post-state snapshot from another canonical block', () => {
+	test('does not auto-expire a legacy multi-transaction entry with independently live signatures', async () => {
 		const position = {
 			...confirmedPosition(),
-			lifecycleTargetBlockNumber: '0',
-			lifecycleTokenDecimals: '18',
-			lifecycleWalletTokenBefore: '20',
-			lifecycleWalletWethBefore: '10',
+			actualEntryGasCostEth: '0',
+			entrySubmissionBlockNumber: '99',
+			entrySubmissionMode: 'private' as const,
+			entryTransactionHashes: [`0x${'22'.repeat(32)}` as Hex, transactionHash],
+			gasExpenditures: [],
+			status: 'pending-entry' as const,
 		}
-		expect(() => reconcilePublicLifecycleSnapshot(position, { blockHash: `0x${'33'.repeat(32)}`, blockTimestamp: 1_753_315_200n, tokenDecimals: 18n, walletToken: 20n, walletWeth: 10n }, `0x${'22'.repeat(32)}`)).toThrow('different canonical block')
+		await expect(expirePrivateEntryWithQuorum(missingReceiptClients(), recoveryConfiguration, position, 112n, '2026-07-24T00:02:00.000Z')).rejects.toThrow('Only an atomic private entry')
+	})
+})
+
+describe('atomic lifecycle crash recovery', () => {
+	test('derives exact position withdrawals from executor evidence instead of whole-wallet deltas', () => {
+		const account = getAddress('0x0000000000000000000000000000000000000002')
+		const token1 = weth
+		const token2 = getAddress('0x0000000000000000000000000000000000000006')
+		const topics = encodeEventTopics({
+			abi: openOracleArbitrageExecutorAbi,
+			eventName: 'LifecycleExecuted',
+			args: { account, reportId: 7n, token1 },
+		})
+		if (topics.some(topic => topic === null)) throw new Error('Lifecycle event topics are incomplete')
+		const encodedTopics = topics.filter((topic): topic is Hex => topic !== null)
+		const data = encodeAbiParameters(
+			[
+				{ name: 'amount1', type: 'uint256' },
+				{ name: 'token2', type: 'address' },
+				{ name: 'amount2', type: 'uint256' },
+				{ name: 'settlerReward', type: 'uint256' },
+			],
+			[11n, token2, 22n, 3n],
+		)
+		expect(lifecycleExecutionFromLogs([{ address: executor, data, topics: encodedTopics }], executor)).toEqual({
+			account,
+			amount1: 11n,
+			amount2: 22n,
+			reportId: 7n,
+			settlerReward: 3n,
+			token1,
+			token2,
+		})
+	})
+
+	test('clears an atomically guarded private lifecycle attempt that was not included', async () => {
+		const position = {
+			...confirmedPosition(),
+			lifecycleSubmissionBlockNumber: '99',
+			lifecycleSubmissionMode: 'private' as const,
+			lifecycleTargetBlockNumber: '100',
+			lifecycleTokenDecimals: '18',
+			lifecycleTransactionNonce: '9',
+			lifecycleTransactionHashes: [transactionHash],
+			status: 'withdrawing' as const,
+		}
+		const recovered = await recoverPendingLifecycleWithQuorum(missingReceiptClients(), recoveryConfiguration, position, 112n)
+		expect(recovered.status).toBe('open')
+		expect(recovered.lifecycleTransactionHashes).toEqual([])
+		expect(recovered.lifecycleSubmissionBlockNumber).toBeUndefined()
+		expect(recovered.lifecycleTargetBlockNumber).toBeUndefined()
 	})
 })

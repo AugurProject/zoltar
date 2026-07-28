@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { exactWithdrawalMatches, expectedWithdrawalToken2, hedgedProfitBeforeGasWeth, realizedNetProfitWeth, recoveredHedgedProfitBeforeGasWeth } from './position-accounting.js'
+import { expectedWithdrawalToken2, hedgedProfitBeforeGasWeth, realizedNetProfitWeth, recoveredHedgedProfitBeforeGasWeth } from './position-accounting.js'
 
 describe('position accounting', () => {
 	test('uses actual swap execution rather than the pre-submission quote', () => {
@@ -20,7 +20,5 @@ describe('position accounting', () => {
 		expect(expectedWithdrawalToken2('sell-rep', 1_000n, 900n)).toBe(1_000n)
 		expect(expectedWithdrawalToken2('sell-rep', 1_000n, 1_300n)).toBe(1_300n)
 		expect(expectedWithdrawalToken2('buy-rep', 1_000n, 1_300n)).toBe(1_300n)
-		expect(exactWithdrawalMatches({ token2: '1', weth: '2' }, { token2: '1', weth: '2' })).toBe(true)
-		expect(exactWithdrawalMatches({ token2: '1.1', weth: '2' }, { token2: '1', weth: '2' })).toBe(false)
 	})
 })

@@ -20,12 +20,16 @@ export const DEFAULT_RISK_LIMITS = {
 	maxTotalLockedWeth: 10n * 10n ** 18n,
 } satisfies RiskLimits
 
+export function positionConsumesRisk(status: string) {
+	return status !== 'closed' && status !== 'expired-not-included'
+}
+
 export function adjustedNetProfitWeth(parameters: { entryGasCostWeth: bigint; hedgeSlippageReserveWeth: bigint; lifecycleGasReserveWeth: bigint; profitBeforeGasWeth: bigint }) {
 	return parameters.profitBeforeGasWeth - parameters.entryGasCostWeth - parameters.hedgeSlippageReserveWeth - parameters.lifecycleGasReserveWeth
 }
 
 export function projectedLifecycleGasReserveWeth(parameters: { callbackGasLimit: bigint; configuredReserveWeth: bigint; gasPrice: bigint; submissionMode: 'private' | 'public' }) {
-	const transactionPlanGas = parameters.callbackGasLimit + (parameters.submissionMode === 'private' ? 1_100_000n : 1_050_000n)
+	const transactionPlanGas = parameters.callbackGasLimit + 900_000n
 	const projectedGasWeth = parameters.gasPrice * transactionPlanGas
 	return projectedGasWeth > parameters.configuredReserveWeth ? projectedGasWeth : parameters.configuredReserveWeth
 }
@@ -73,7 +77,7 @@ export function positionRiskLimitMismatch(
 	limits: RiskLimits,
 	now = new Date(),
 ) {
-	const openPositions = parameters.positions.filter(position => position.status !== 'closed')
+	const openPositions = parameters.positions.filter(position => positionConsumesRisk(position.status))
 	const lockedWeth = openPositions.reduce((total, position) => total + parseDecimalWeth(position.capitalAtRiskWeth), 0n)
 	const dailyGasSpentWeth = utcDayGasSpentWeth(parameters.positions, now)
 	return riskLimitMismatch(

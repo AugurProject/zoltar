@@ -30,9 +30,12 @@ window, the bot either settles the final report or detects that a later reporter
 replaced it, withdraws the wallet's OpenOracle balances, and closes its durable
 position record only after canonical receipts and exact asset recovery agree.
 
-The wallet must approve the executor before it can pull WETH and the report token.
-Private delivery can include those wallet-to-executor approvals in the entry bundle;
-public delivery requires them before the opportunity appears. During
+The wallet must grant two distinct kinds of approval: ERC-20 allowances let the
+executor pull entry funding, and OpenOracle internal allowances let it move the
+position's exact lifecycle proceeds into the executor for immediate withdrawal.
+Both private and public delivery require ERC-20 allowances before the opportunity
+appears, so every signed entry is one parent-bound executor transaction. OpenOracle
+internal allowances must also exist before either mode can enter a position. During
 `hedgeAndDispute`, the executor grants separate, exact temporary allowances to the
 authenticated Uniswap router and OpenOracle, then clears them before returning. See
 [OpenOracle integration](../docs/open-oracle-integration.html) for the protocol
@@ -62,14 +65,17 @@ report lifecycle and economics.
   legitimate pending transaction visible to only one provider blocks signing until
   the providers converge or the operator resolves it.
 - For execution, a dedicated key on the selected network with:
-  - ETH for the atomic approval/dispute bundle.
+  - ETH for the atomic dispute transaction.
   - WETH for the total executor funding shown in the dashboard.
   - The configured token (REPv2, fork REP, or another ERC-20) for the total
     executor funding shown in the dashboard.
-- For private delivery, at least one Flashbots-compatible bundle relay. Private
-  mode can bundle missing approvals with the atomic executor call. Public delivery
-  sends the single atomic executor transaction directly to every configured public
-  RPC and is eligible only when the required executor allowances already exist.
+  - OpenOracle internal allowances from that key to the executor for WETH and each
+    executable report token. A maximum allowance is recommended because OpenOracle
+    decrements finite allowances as positions close.
+- For private delivery, at least one Flashbots-compatible bundle relay. Both modes
+  are eligible only when the required executor and OpenOracle internal allowances
+  already exist. Public delivery sends the single atomic executor transaction
+  directly to every configured public RPC.
 - External process supervision, endpoint health alerts, and a procedure for any
   position shown as **recovery-required**. The bot automatically settles or detects
   replacement, withdraws balances through the configured private or public delivery
@@ -310,8 +316,8 @@ scan or confirmation wait, and clearing a signer cannot cancel a transaction alr
 broadcast. Restarting the command is required to change between dry-run and
 execution.
 
-Private bundle delivery is the default. To simulate and send the ordered approvals
-and dispute to multiple bundle relays:
+Private bundle delivery is the default. To simulate and send the single guarded
+dispute transaction to multiple bundle relays:
 
 ```bash
 PRIVATE_KEY=0xYourDedicatedPrivateKey \
@@ -368,14 +374,13 @@ Before each dispute, the bot:
 8. Requires independent RPCs to return one exact block hash and the same pool state,
    two hedge quotes, replacement quote, gas basis, balances, allowances, nonce, and
    OpenOracle state hash before deriving or signing any transaction.
-9. Uses the quorum-confirmed executor allowances to create the minimum ordered transaction list:
-   optional zero-reset/approval transactions followed by one atomic executor call.
-10. In private mode, signs consecutive nonces, simulates the entire ordered list with
+9. Requires sufficient quorum-confirmed ERC-20 and OpenOracle internal allowances,
+   then creates one atomic executor call.
+10. In private mode, signs that transaction, simulates it with
     `eth_callBundle`, requires the configured number of successful simulations,
     includes an on-chain exact-parent-hash guard, and re-applies the profit threshold
-    to the largest successful simulation gas usage. In public mode, refuses the
-    opportunity unless allowances are already sufficient and simulates one atomic
-    executor call.
+    to the largest successful simulation gas usage. Public mode simulates the same
+    atomic executor call.
 11. Sends the all-or-nothing target-block bundle only to relays that successfully
     simulated it, or fans the identical single public transaction to every configured
     public RPC. No reverting transaction hashes are allowed.
@@ -385,11 +390,11 @@ Before each dispute, the bot:
     actual hedge event, records every entry transaction hash and actual bundle gas,
     and only then allows the position to progress as confirmed.
 13. On later blocks, automatically settles when eligible or detects replacement,
-    then withdraws WETH and token balances. Private mode bundles the lifecycle;
-    public mode journals all signed hashes before sequential settlement/withdrawal
-    and verifies every receipt independently. It records realized P&amp;L only when
-    actual withdrawals exactly match the hedge-neutral expected inventory. Any
-    mismatch stops new execution and remains `recovery-required`.
+    then submits one atomic, exact-amount lifecycle executor call in either delivery
+    mode. Settlement, internal transfers, WETH/token withdrawals, and the canonical
+    parent check share one revert boundary. It records realized P&amp;L only when the
+    canonical receipt contains the executor event matching the position's account,
+    report, tokens, and amounts.
 
 The executor atomically swaps the old report inventory through the authenticated
 router, pulls the calculated contribution, verifies exact balance deltas into itself
@@ -419,6 +424,30 @@ The execution account needs:
   fee cap, plus an operational buffer.
 - `WETH balance >= required WETH` for the selected report.
 - `Token balance >= required token` for the selected report.
+- `OpenOracle.internalAllowance(account, executor, WETH) >= locked WETH` and
+  `OpenOracle.internalAllowance(account, executor, token) >= locked token`.
+
+Grant maximum internal allowances once per executor/token pair from the dedicated
+bot account (replace the addresses and use the selected network RPC):
+
+```bash
+cast send 0xOpenOracle \
+  "approveInternal(address,address,uint256)" \
+  0xExecutor 0xWETH \
+  0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff \
+  --private-key "$PRIVATE_KEY" --rpc-url "$ETH_RPC_URL"
+
+cast send 0xOpenOracle \
+  "approveInternal(address,address,uint256)" \
+  0xExecutor 0xReportToken \
+  0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff \
+  --private-key "$PRIVATE_KEY" --rpc-url "$ETH_RPC_URL"
+```
+
+OpenOracle rejects changing one nonzero internal allowance directly to another
+nonzero value. Set it to zero first when rotating or reducing an existing allowance.
+The bot checks both internal allowances through its independent read quorum before
+signing an entry and again before lifecycle submission.
 
 Opportunity selection reserves 1,200,000 gas for entry plus the larger of the
 configured lifecycle reserve and the current fee estimate for callback gas plus
@@ -435,9 +464,8 @@ locked through later dispute rounds.
 - The full adverse movement permitted by the signed hedge limit
   (`--max-hedge-slippage-bps`).
 - The larger of `--lifecycle-gas-reserve-weth` and
-  `(callbackGasLimit + 1,050,000) × gas price` in public mode or
-  `(callbackGasLimit + 1,100,000) × gas price` in private mode. The private
-  projection includes its separate 50,000-gas canonical-parent guard.
+  `(callbackGasLimit + 900,000) × gas price`. Public and private delivery use the
+  same single atomic lifecycle call.
 
 The resulting fully reserved value must satisfy both the absolute minimum-profit
 floor and a direction-specific basis-point floor. The return basis is the current
@@ -595,15 +623,12 @@ Successful dispute submissions are appended to
 The history file is created with owner-only permissions when possible and is ignored
 by Git at its default path. Each record contains the report, pool, direction,
 total executor-funded inventory, mined executor transaction hash, block, actual transaction gas,
-modeled net profit, profit before gas, and tracked net profit in ETH. Actual gas
-includes every approval and executor transaction in a confirmed private bundle.
-Private submissions request atomic inclusion and provide no allowed reverting
-hashes, so a compliant relay/builder omits the entire bundle when a step would
-revert. An unincluded bundle consumes no on-chain gas. An anomalous partial,
-independent, or reverted inclusion can consume gas; the bot records those receipts
-in its in-memory transaction lifecycle but does not create confirmed execution
-history. Public execution records the single executor transaction and its actual
-gas through the same durable position and history accounting.
+modeled net profit, profit before gas, and tracked net profit in ETH. Both modes
+submit one parent-bound executor transaction per entry. Private submissions provide
+no allowed reverting hashes, so a compliant relay/builder omits a reverting call.
+An unincluded transaction consumes no on-chain gas. Public execution records the
+same single executor transaction and its actual gas through the durable position
+and history accounting.
 
 Execution startup verifies that the history destination is writable. If persistence
 later fails after a confirmed dispute, the record remains visible in memory, further
@@ -696,25 +721,24 @@ The call uses the same exact-parent guard as private entry and can succeed only 
 the direct child of its quoted block. Inclusion in a later block reverts and can
 still consume gas. Public delivery exposes the opportunity to copying, reordering,
 front-running, and other MEV, and does not provide bundle confidentiality or
-next-block inclusion. Public lifecycle transactions are broadcast and confirmed
-sequentially, potentially across multiple blocks. Before each public step is sent,
-its hash, signer nonce, submission block, and the original wallet-balance baseline
-are synced. Every observed repricing, cancellation, or unrelated same-nonce
-replacement is synced before its outcome is accepted. After a crash, independent
-RPCs scan canonical blocks for that sender and nonce if the replacement hash was
-not yet durable. Its quorum-confirmed mined hash, status, gas, canonical UTC
-timestamp, and receipt-block post-state are then synced before the bot derives and
-sends the next step.
+next-block inclusion. Public lifecycle delivery broadcasts one executor transaction
+whose parent-hash guard, optional settlement, exact OpenOracle internal transfers,
+and exact withdrawals share one revert boundary. Its hash, signer nonce, submission
+block, target block, and expected amounts are synced before broadcast. Every
+observed repricing, cancellation, or unrelated same-nonce replacement is synced
+before its outcome is accepted. After a crash, independent RPCs scan canonical
+blocks for that sender and nonce if the replacement hash was not yet durable.
 
-Private mode signs approvals and the executor call at consecutive nonces, requests
-`eth_callBundle` from every configured relay, and then fans the same ordered
-target-block transaction list only to relays whose simulation passed. The payload omits
-`revertingTxHashes`, so any reverted transaction invalidates the complete bundle.
-The executor call, and the first transaction in every lifecycle bundle, require
+Private mode signs the executor call, requests `eth_callBundle` from every configured
+relay, and then fans the same target-block transaction only to relays whose
+simulation passed. The payload omits `revertingTxHashes`, so a revert invalidates
+the bundle.
+The entry executor call and the single lifecycle executor call require
 `blockhash(parent)` to equal the independently agreed quote-block hash. A relay or
-builder using a different same-height parent therefore simulates or executes a
-revert, invalidating the atomic bundle. Immediately before journaling and delivery,
-all read RPCs must still agree on both the parent height and hash.
+builder using a different same-height parent, retaining a transaction beyond its
+target, or splitting prerequisite entry approvals from the guarded call cannot
+execute the value-moving call. Immediately before journaling and delivery, all read
+RPCs must still agree on both the parent height and hash.
 The configured number of relays must successfully simulate the bundle, and at least
 one of those relays must accept submission, or delivery fails closed. Configured
 endpoints must implement the
@@ -724,13 +748,13 @@ and authentication format.
 The transaction tracker records each approval and executor call as `submitting`,
 `pending`, `confirmation unknown`, `confirmed`, `reverted`, or `submission failed`.
 It shows which targets accepted or rejected the payload. A private bundle targets
-only the next block and is not resubmitted from a stale quote. After that target
-block, absent, unsuccessful, or disagreeing receipt evidence leaves the journaled
-attempt pending or `recovery-required`. Later scans attempt only independent receipt
-recovery, and the one-nonclosed-position guard prevents a new position until normal
-or manual reconciliation closes the attempt. Public lifecycle transactions are
-journaled and reconciled one step at a time and may land in consecutive blocks. Active
-transaction-tracker rows are kept in process memory and reset on
+only the next block and is not resubmitted from a stale quote. Missing receipt
+evidence remains pending through a 12-block canonical-finality window. If every read
+RPC then agrees that the parent-bound entry executor call was absent, the attempt
+becomes `expired-not-included` and releases its risk slot. If the atomic lifecycle call was absent, that attempt is cleared
+and the open position can safely retry from a fresh parent. Partial entry inclusion,
+an executor receipt, RPC disagreement, or ambiguous evidence remains
+`recovery-required`. Active transaction-tracker rows are kept in process memory and reset on
 restart; confirmed dispute history and its ETH profit totals are persisted in the
 configured history file.
 
@@ -776,7 +800,7 @@ Other startup-only options:
 | `--lookback-blocks` | `50000` | Initial event-log search range. Choose a start range that covers every potentially active report. |
 | `--ui-port` | `4173` | Local dashboard port. |
 | `--history-file` | Network-specific JSONL | Persistent confirmed-submission history. |
-| `--position-file` | Network-specific JSON | Recovery-critical durable positions, entry/lifecycle bundle hashes, and lifecycle pre-state. Keep overrides separate by chain and signer. |
+| `--position-file` | Network-specific JSON | Recovery-critical durable positions, entry/lifecycle transaction hashes, and lifecycle intent. Keep overrides separate by chain and signer. |
 | `--settings-file` | Network-specific JSON | Persistent dashboard strategy, endpoint, delivery, pause, and opt-in signer settings. |
 | `--once` | off | Run one scan and exit. Cannot be combined with `--ui`. |
 | `--execute` | off | Enable guarded bundle/executor submission. Requires an executor address, at least one approved coordinator, and `PRIVATE_KEY`, a saved restart signer, or `--ui` so a signer can be supplied locally. |
@@ -833,30 +857,31 @@ The state sequence is:
 ```text
 pending-entry → open → withdrawing → closed
      │           │          │
-     └───────────┴──────────┴──→ recovery-required
-                                      ↓ signer-key-authorized local reconciliation
-                                    closed (P&L recorded or unavailable)
+     │           └──────────┴──→ recovery-required
+     │                                ↓ signer-key-authorized local reconciliation
+     │                              closed (P&L recorded or unavailable)
+     └── after 12 canonical descendants and unanimous absence
+          → expired-not-included
 ```
 
-The bot records every entry transaction hash before submission. Private approvals
-and entry must all succeed in one target block and in journal order; public entry
-has one guarded executor transaction. After a restart the bot requires independent
+The bot records every entry transaction hash before submission. Private and public
+entry each have one guarded executor transaction. After a restart the bot requires independent
 RPC agreement on every required receipt and on that receipt block's current
 canonical hash. Every receipt must include its mined effective gas price. The bot
 then decodes the executor event and reconstructs actual entry gas and hedge
-economics before leaving `pending-entry`. Missing or ambiguous evidence remains
-`recovery-required` and never produces realized P&amp;L.
+economics before leaving `pending-entry`. A private attempt proven absent after the
+12-block window becomes `expired-not-included`; missing or ambiguous evidence
+remains `recovery-required` and never produces trading profit.
 
-Before lifecycle delivery, the bot atomically records every
-settlement/withdrawal transaction hash, token decimals, and the wallet's raw WETH
-and token balances at the quoted block. Private mode also records its next-block
-target; every private lifecycle receipt must succeed in that one canonical block.
-Public mode records `lifecycleTargetBlockNumber` as `0`, meaning there is no single
-target block, and durably advances one canonical receipt at a time across blocks.
-After a crash it reconciles the currently journaled step, rereads report and holder
-state, and derives the next still-required action. The bot reconstructs lifecycle
-gas and exact withdrawal deltas and closes the position only when those deltas
-match the hedge-neutral expected inventory.
+Before lifecycle delivery, the bot atomically records the one executor transaction
+hash, nonce, token decimals, target block, and delivery mode. Both modes call
+`settleAndWithdraw`, which optionally settles, moves only the recorded position
+amounts using OpenOracle internal allowances, and withdraws those exact amounts in
+the same parent-bound transaction. After a crash the bot reconstructs lifecycle gas
+and withdrawals from the canonical receipt and `LifecycleExecuted` event. Wallet
+balance deltas and `withdraw(max)` are not accounting evidence, so permissionless
+OpenOracle dust, unrelated transfers, and other positions sharing a token remain
+separate.
 
 ### `recovery-required` runbook
 
@@ -874,25 +899,21 @@ delete or hand-edit a record to bypass the one-position guard.
    reverted, reorged, or the executor event identity differs, keep the bot paused
    and reconcile allowances, wallet balances, OpenOracle holder balances, and the
    current reporter manually.
-3. For **lifecycle receipt could not be recovered**, inspect every
-   `lifecycleTransactionHashes` value and `lifecycleTargetBlockNumber`. For a
-   private attempt, restart only after independent RPCs can return the same
-   successful receipts in its recorded canonical target block; never send a second
-   settlement/withdrawal bundle while inclusion is ambiguous. For a public attempt,
-   the target value is `0`: the bot first recovers the exact recorded receipt
-   through the read quorum. Once its outcome and gas are durable, it rereads
-   settlement and holder state and derives only the next still-required action.
-   Keep the bot paused for missing or disagreeing receipt evidence; do not authorize
-   a second transaction while the recorded step remains ambiguous.
+3. For **lifecycle receipt could not be recovered**, inspect the single
+   `lifecycleTransactionHashes` value and `lifecycleTargetBlockNumber`. A successful
+   call must be in that target block and emit the exact matching lifecycle event.
+   A private attempt that all RPCs still report absent after 12 canonical
+   descendants is automatically cleared for a fresh retry. Keep the bot paused for
+   disagreement or ambiguous evidence; do not authorize a second transaction while
+   the recorded attempt remains live.
 4. For **stored-state/current-reporter mismatch**, compare the current reporter,
    settlement state, and the wallet's OpenOracle WETH/token holder balances through
    independent RPCs. A later dispute can legitimately replace the bot; withdraw
    only balances demonstrably owned by the configured signer.
-5. For **unexpected withdrawal assets**, compare the journal's raw
-   `lifecycleWalletWethBefore` and `lifecycleWalletTokenBefore` values with the
-   canonical post-lifecycle block. Value or unwind any residual token exposure
-   outside this bot, including its gas and slippage, before treating the position
-   as economically reconciled.
+5. For **unexpected residual assets**, use the lifecycle event and OpenOracle
+   internal balances to distinguish the position's exact withdrawal from unrelated
+   dust or other deposits. Value or unwind any external token exposure, including
+   its gas and slippage, before treating manual reconciliation as complete.
 
 After resolving all residual assets, close the recovery record with the dedicated
 command. The command requires the same private key as the position, exact typed
@@ -945,16 +966,14 @@ entry from depending on wallet inventory already committed to recovery.
   execution.
 - Live execution requires exact agreement from at least two configured read RPCs at
   one canonical block. Signed entry values come from that agreed snapshot, and an
-  on-chain guard binds entry and lifecycle bundles to its exact parent hash. This
+  on-chain guard binds entry and lifecycle executor calls to its exact parent hash. This
   catches disagreement; it does not help when all
   endpoints share the same compromised upstream, implementation bug, or correlated
   failure. Use independently operated providers.
-- Private entry bundles atomically apply required approvals, hedge, and dispute.
-  Public entry sends only the atomic hedge-and-dispute executor call and therefore
-  requires existing allowances. A later private lifecycle bundle or journaled
-  sequential public lifecycle settles and withdraws expected inventory. The bot
-  does not automatically trade unexpected residual assets; it fails closed as
-  `recovery-required`.
+- Private and public entry each send only the atomic hedge-and-dispute executor call
+  and therefore require existing ERC-20 allowances. Both lifecycle delivery modes
+  use one parent-bound executor call and require existing OpenOracle internal
+  allowances.
 - Private delivery reduces public-mempool exposure but does not guarantee
   confidentiality, inclusion, fair ordering, or relay/builder behavior. Configuring
   multiple relays shares the signed payload with every listed operator.
@@ -965,17 +984,17 @@ entry from depending on wallet inventory already committed to recovery.
 - Continuous mode retries transient poll failures. The dashboard exposes the latest
   error, but production operation still requires external process supervision and
   alerts.
-- A private entry bundle targets one block and receives one complete-inclusion check
-  after that block. Missing, disagreeing, or unsuccessful receipts leave the
-  already-journaled attempt pending or `recovery-required`. Later scans only retry
-  independent receipt recovery; they do not submit the recorded entry or lifecycle
-  bundle a second time.
+- A private entry bundle targets one block. The bot waits 12 canonical descendants
+  before unanimous receipt absence can finalize it as `expired-not-included`.
+  Disagreement, partial inclusion, or an executor receipt remains fail-closed. A
+  private lifecycle attempt proven absent after the same window is cleared and
+  rebuilt against a fresh parent rather than replaying its signed transaction.
 - The owner-only position journal is written immediately before entry and lifecycle
   submission and recovered on restart. A pending entry advances only after every
   recorded bundle receipt, mined gas price, canonical receipt-block hash, and
-  executor event agree; a lifecycle attempt closes only after its receipts,
-  canonical post-state, and balance deltas agree. Unavailable evidence fails
-  closed under the recovery runbook above.
+  executor event agree; a lifecycle attempt closes only after its canonical receipt
+  and exact executor event agree. Unavailable or inconsistent evidence fails closed
+  under the recovery runbook above.
 - No automated trading system can guarantee that users never lose money. Reorgs,
   correlated RPC lies, relay/builder faults, base-fee spikes, malicious or rebasing
   tokens, OpenOracle/Uniswap defects, compromised keys, and market movement can

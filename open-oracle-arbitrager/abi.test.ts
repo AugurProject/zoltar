@@ -23,7 +23,7 @@ test('custom dispute ABI matches the compiled OpenOracle contract', () => {
 })
 
 test('custom lifecycle ABI matches the compiled OpenOracle contract', () => {
-	for (const functionName of ['storedGame', 'storedHelper', 'tokenHolder', 'settle', 'withdraw']) {
+	for (const functionName of ['storedGame', 'storedHelper', 'tokenHolder', 'internalAllowance', 'settle', 'withdraw']) {
 		const custom = openOracleAbi.find(entry => entry.type === 'function' && entry.name === functionName)
 		const compiled = peripherals_openOracle_OpenOracle_OpenOracle.abi.find(entry => entry.type === 'function' && entry.name === functionName)
 		if (custom === undefined || custom.type !== 'function' || compiled === undefined || compiled.type !== 'function') throw new Error(`Lifecycle ABI is missing ${functionName}`)
@@ -56,12 +56,14 @@ test('custom executor ABI covers every public executor function', () => {
 	}
 })
 
-test('executor exposes one atomic hedge-and-dispute entry point', () => {
-	const custom = openOracleArbitrageExecutorAbi.find(entry => entry.type === 'function' && entry.name === 'hedgeAndDispute')
-	const compiled = peripherals_OpenOracleArbitrageExecutor_OpenOracleArbitrageExecutor.abi.find(entry => entry.type === 'function' && entry.name === 'hedgeAndDispute')
-	const customInputs: readonly AbiInput[] | undefined = custom?.inputs.map(inputShape)
-	const compiledInputs: readonly AbiInput[] | undefined = compiled?.type === 'function' ? compiled.inputs.map(inputShape) : undefined
-	expect(customInputs).toEqual(compiledInputs)
+test('executor exposes atomic entry and lifecycle functions', () => {
+	for (const functionName of ['hedgeAndDispute', 'settleAndWithdraw']) {
+		const custom = openOracleArbitrageExecutorAbi.find(entry => entry.type === 'function' && entry.name === functionName)
+		const compiled = peripherals_OpenOracleArbitrageExecutor_OpenOracleArbitrageExecutor.abi.find(entry => entry.type === 'function' && entry.name === functionName)
+		const customInputs: readonly AbiInput[] | undefined = custom?.inputs.map(inputShape)
+		const compiledInputs: readonly AbiInput[] | undefined = compiled?.type === 'function' ? compiled.inputs.map(inputShape) : undefined
+		expect(customInputs).toEqual(compiledInputs)
+	}
 })
 
 test('custom coordinator getter ABI matches the compiled coordinator contract', () => {

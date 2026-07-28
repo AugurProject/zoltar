@@ -96,6 +96,10 @@ contract OpenOracleFeeToken is OpenOracleTestToken {
 contract OpenOracleArbitrageExecutorTarget {
 	using SafeERC20Ops for IERC20;
 
+	mapping(address => mapping(address => uint256)) public tokenHolder;
+	mapping(address => mapping(address => mapping(address => uint256))) public internalAllowance;
+	uint256 public settleCalls;
+
 	function dispute(
 		uint256,
 		uint128,
@@ -113,6 +117,41 @@ contract OpenOracleArbitrageExecutorTarget {
 		uint256 allowance2 = token2.allowance(msg.sender, address(this));
 		if (allowance1 != 0) token1.safeTransferFrom(msg.sender, address(this), allowance1);
 		if (allowance2 != 0) token2.safeTransferFrom(msg.sender, address(this), allowance2);
+	}
+
+	function credit(address token, uint256 amount, address beneficiary) external {
+		IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
+		tokenHolder[beneficiary][token] += amount;
+	}
+
+	function approveInternal(address spender, address token, uint256 amount) external {
+		internalAllowance[msg.sender][spender][token] = amount;
+	}
+
+	function internalTransferFrom(address from, address to, address token, uint128 amount) external {
+		uint256 allowance = internalAllowance[from][msg.sender][token];
+		require(allowance >= amount, 'OpenOracle target internal allowance too low');
+		if (allowance != type(uint256).max) internalAllowance[from][msg.sender][token] = allowance - amount;
+		require(tokenHolder[from][token] >= amount, 'OpenOracle target internal balance too low');
+		tokenHolder[from][token] -= amount;
+		tokenHolder[to][token] += amount;
+	}
+
+	function withdrawTo(address token, uint256 amount, address to) external returns (uint256 sent) {
+		uint256 balance = tokenHolder[msg.sender][token];
+		sent = amount > balance ? balance : amount;
+		tokenHolder[msg.sender][token] = balance - sent;
+		IERC20(token).safeTransfer(to, sent);
+	}
+
+	function settle(
+		uint256,
+		IOpenOracleDispute.OracleGame calldata params,
+		IOpenOracleDispute.PreimageHelper calldata
+	) external {
+		settleCalls += 1;
+		tokenHolder[params.currentReporter][params.token1] += params.currentAmount1;
+		tokenHolder[params.currentReporter][params.token2] += params.currentAmount2;
 	}
 }
 

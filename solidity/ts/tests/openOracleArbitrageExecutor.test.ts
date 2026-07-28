@@ -6,6 +6,7 @@ import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { ensureDefined } from '../testSupport/simulator/utils/testUtils'
 import {
+	peripherals_openOracle_OpenOracle_OpenOracle as openOracleArtifact,
 	peripherals_OpenOracleArbitrageExecutor_OpenOracleArbitrageExecutor as executorArtifact,
 	test_peripherals_OpenOracleAdversarialHarnesses_OpenOracleArbitrageExecutorTarget as targetArtifact,
 	test_peripherals_OpenOracleAdversarialHarnesses_OpenOracleFeeToken as feeTokenArtifact,
@@ -19,10 +20,11 @@ describe('OpenOracle arbitrage executor', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
 	let client: WriteClient
 	let executor: Address
+	let openOracle: Address
 	let router: Address
 	let target: Address
 
-	const deploy = async (artifact: typeof executorArtifact | typeof targetArtifact | typeof tokenArtifact | typeof feeTokenArtifact | typeof routerArtifact, args: readonly unknown[] = []) => {
+	const deploy = async (artifact: typeof executorArtifact | typeof openOracleArtifact | typeof targetArtifact | typeof tokenArtifact | typeof feeTokenArtifact | typeof routerArtifact, args: readonly unknown[] = []) => {
 		const hash = await client.sendTransaction({
 			data: encodeDeployData({
 				abi: artifact.abi,
@@ -77,6 +79,7 @@ describe('OpenOracle arbitrage executor', () => {
 		await setupTestAccounts(window)
 		client = createWriteClient(window, ensureDefined(TEST_ADDRESSES[0], 'test account missing'), 0)
 		executor = await deploy(executorArtifact)
+		openOracle = await deploy(openOracleArtifact)
 		target = await deploy(targetArtifact)
 		router = await deploy(routerArtifact)
 		await setBaselineSnapshot()
@@ -172,6 +175,93 @@ describe('OpenOracle arbitrage executor', () => {
 				args: [parentBlockNumber + 1n, `0x${'ff'.repeat(32)}`],
 			}),
 		).rejects.toThrow('canonical parent block changed')
+	})
+
+	test('atomically isolates exact lifecycle proceeds from permissionless dust and another same-token position', async () => {
+		const token1 = await deploy(tokenArtifact, ['Token 1', 'TK1'])
+		const token2 = await deploy(tokenArtifact, ['Token 2', 'TK2'])
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token1, functionName: 'mint', args: [client.account.address, 3_001n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token2, functionName: 'mint', args: [client.account.address, 5_001n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token1, functionName: 'approve', args: [openOracle, 3_001n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token2, functionName: 'approve', args: [openOracle, 5_001n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: openOracleArtifact.abi, address: openOracle, functionName: 'deposit', args: [token1, 3_000n, client.account.address] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: openOracleArtifact.abi, address: openOracle, functionName: 'deposit', args: [token2, 5_000n, client.account.address] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: openOracleArtifact.abi, address: openOracle, functionName: 'deposit', args: [token1, 1n, client.account.address] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: openOracleArtifact.abi, address: openOracle, functionName: 'deposit', args: [token2, 1n, client.account.address] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: openOracleArtifact.abi, address: openOracle, functionName: 'approveInternal', args: [executor, token1, 2n ** 256n - 1n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: openOracleArtifact.abi, address: openOracle, functionName: 'approveInternal', args: [executor, token2, 2n ** 256n - 1n] }))
+		const parent = await client.getBlock()
+		if (parent.number === undefined || parent.hash == null) throw new Error('parent block identity missing')
+		const parentBlockHash = parent.hash
+		const parentBlockNumber = parent.number
+		await writeContractAndWait(client, () =>
+			client.writeContract({
+				abi: executorArtifact.abi,
+				address: executor,
+				functionName: 'settleAndWithdraw',
+				args: [
+					{
+						amount1: 1_000n,
+						amount2: 2_000n,
+						expectedParentBlockHash: parentBlockHash,
+						openOracle,
+						parentBlockNumber,
+					},
+					game(token1, token2),
+					helper(),
+				],
+			}),
+		)
+		expect(await client.readContract({ abi: openOracleArtifact.abi, address: openOracle, functionName: 'tokenHolder', args: [client.account.address, token1] })).toBe(2_002n)
+		expect(await client.readContract({ abi: openOracleArtifact.abi, address: openOracle, functionName: 'tokenHolder', args: [client.account.address, token2] })).toBe(3_002n)
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: token1, functionName: 'balanceOf', args: [client.account.address] })).toBe(1_000n)
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: token2, functionName: 'balanceOf', args: [client.account.address] })).toBe(2_000n)
+		await getAnvilWindowEthereum().request({ method: 'evm_mine', params: [] })
+		await expect(
+			client.simulateContract({
+				abi: executorArtifact.abi,
+				address: executor,
+				functionName: 'settleAndWithdraw',
+				args: [
+					{
+						amount1: 1n,
+						amount2: 1n,
+						expectedParentBlockHash: parentBlockHash,
+						openOracle,
+						parentBlockNumber,
+					},
+					game(token1, token2),
+					helper(),
+				],
+			}),
+		).rejects.toThrow('Execution must target the next block')
+		expect(await client.readContract({ abi: openOracleArtifact.abi, address: openOracle, functionName: 'tokenHolder', args: [client.account.address, token1] })).toBe(2_002n)
+		const secondParent = await client.getBlock()
+		if (secondParent.number === undefined || secondParent.hash == null) throw new Error('second parent block identity missing')
+		const secondParentBlockHash = secondParent.hash
+		const secondParentBlockNumber = secondParent.number
+		await writeContractAndWait(client, () =>
+			client.writeContract({
+				abi: executorArtifact.abi,
+				address: executor,
+				functionName: 'settleAndWithdraw',
+				args: [
+					{
+						amount1: 2_000n,
+						amount2: 3_000n,
+						expectedParentBlockHash: secondParentBlockHash,
+						openOracle,
+						parentBlockNumber: secondParentBlockNumber,
+					},
+					game(token1, token2),
+					{ ...helper(), reportId: 2n },
+				],
+			}),
+		)
+		expect(await client.readContract({ abi: openOracleArtifact.abi, address: openOracle, functionName: 'tokenHolder', args: [client.account.address, token1] })).toBe(2n)
+		expect(await client.readContract({ abi: openOracleArtifact.abi, address: openOracle, functionName: 'tokenHolder', args: [client.account.address, token2] })).toBe(2n)
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: token1, functionName: 'balanceOf', args: [client.account.address] })).toBe(3_000n)
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: token2, functionName: 'balanceOf', args: [client.account.address] })).toBe(5_000n)
 	})
 
 	test('atomically sells the report token, funds the dispute, and refunds hedge WETH', async () => {

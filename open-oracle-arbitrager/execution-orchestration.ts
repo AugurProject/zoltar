@@ -10,19 +10,17 @@ export function executionTokenAllowed(allowedTokens: readonly Address[], token: 
 	return allowedTokens.some(allowed => allowed.toLowerCase() === token.toLowerCase())
 }
 
-export function fundingTransactionPlan(mode: SubmissionMode, allowances: { token1: bigint; token2: bigint }, contributions: { token1: bigint; token2: bigint }) {
-	const transactions: ('approval-token1' | 'approval-token2' | 'execution' | 'reset-token1' | 'reset-token2')[] = []
-	if (allowances.token1 < contributions.token1) {
-		if (allowances.token1 !== 0n) transactions.push('reset-token1')
-		transactions.push('approval-token1')
+export function fundingTransactionPlan(allowances: { token1: bigint; token2: bigint }, contributions: { token1: bigint; token2: bigint }) {
+	if (allowances.token1 < contributions.token1 || allowances.token2 < contributions.token2) {
+		throw new Error('Missing executor allowances must be approved before entry submission')
 	}
-	if (allowances.token2 < contributions.token2) {
-		if (allowances.token2 !== 0n) transactions.push('reset-token2')
-		transactions.push('approval-token2')
-	}
-	if (mode === 'public' && transactions.length !== 0) throw new Error('Missing executor allowances require private bundle submission')
-	transactions.push('execution')
-	return transactions
+	return ['execution'] as const
+}
+
+export function lifecycleAllowanceMismatch(allowances: { token1: bigint; token2: bigint }, withdrawals: { token1: bigint; token2: bigint }) {
+	if (allowances.token1 < withdrawals.token1) return 'OpenOracle internal WETH allowance to the executor is too low'
+	if (allowances.token2 < withdrawals.token2) return 'OpenOracle internal report-token allowance to the executor is too low'
+	return undefined
 }
 
 export function openOracleDisputeTiming(quoteBlockNumber: bigint, quoteBlockTimestamp: bigint) {
@@ -34,28 +32,12 @@ export function privateBundleReceiptStatus(receipt: Pick<TransactionReceipt, 'bl
 	return receipt.status === 'success' ? ('confirmed' as const) : ('reverted' as const)
 }
 
+export function privateAttemptCanExpire(currentBlockNumber: bigint, targetBlockNumber: bigint) {
+	return currentBlockNumber >= targetBlockNumber + 12n
+}
+
 export function lifecycleLastValidBlockNumber(mode: SubmissionMode, targetBlockNumber: bigint) {
 	return mode === 'private' ? targetBlockNumber : undefined
-}
-
-export function nextPublicLifecycleAction(parameters: { holderToken: bigint; holderWeth: bigint; settlementEligible: boolean }) {
-	if (parameters.settlementEligible) return 'settle' as const
-	if (parameters.holderWeth > 1n) return 'withdraw-weth' as const
-	if (parameters.holderToken > 1n) return 'withdraw-token' as const
-	return 'reconcile' as const
-}
-
-export function lifecycleReceiptSnapshotBlock(receipts: readonly Pick<TransactionReceipt, 'blockHash' | 'blockNumber' | 'status'>[], targetBlockNumber: bigint) {
-	const first = receipts[0]
-	if (first === undefined || receipts.some(receipt => receipt.status !== 'success')) throw new Error('Lifecycle receipts are missing or reverted')
-	if (targetBlockNumber !== 0n) {
-		if (receipts.some(receipt => receipt.blockNumber !== targetBlockNumber || receipt.blockHash.toLowerCase() !== first.blockHash.toLowerCase())) {
-			throw new Error('Lifecycle bundle receipts are outside the target block or split across blocks')
-		}
-		return { blockHash: first.blockHash, blockNumber: targetBlockNumber }
-	}
-	const latest = receipts.reduce((candidate, receipt) => (receipt.blockNumber > candidate.blockNumber ? receipt : candidate), first)
-	return { blockHash: latest.blockHash, blockNumber: latest.blockNumber }
 }
 
 export async function simulateTrackedPrivateBundle<TTransaction, TResult>(transactions: readonly TTransaction[], simulate: () => Promise<TResult>, track: (transaction: TTransaction, status: 'submission-failed' | 'submitting', error: unknown | undefined) => void) {
@@ -266,6 +248,24 @@ type ReceiptBlockReader = {
 	getBlock: (parameters: { blockNumber: bigint }) => Promise<{ hash?: Hex | null | undefined; timestamp: bigint }>
 }
 
+function normalizedReceipt(label: string, receipt: TransactionReceipt) {
+	const effectiveGasPrice = receipt.effectiveGasPrice
+	if (typeof effectiveGasPrice !== 'bigint') throw new Error(`${label} receipt ${receipt.transactionHash} is missing its effective gas price`)
+	return {
+		blockHash: receipt.blockHash,
+		blockNumber: receipt.blockNumber,
+		effectiveGasPrice,
+		gasUsed: receipt.gasUsed,
+		logs: receipt.logs.map(log => ({ address: log.address, data: log.data, topics: log.topics })),
+		status: receipt.status,
+		transactionHash: receipt.transactionHash,
+	}
+}
+
+function isMissingReceipt(error: unknown) {
+	return error instanceof Error && error.message.includes('Transaction receipt with hash') && error.message.includes('could not be found')
+}
+
 export async function receiptGasExpendituresWithQuorum(readers: readonly ReceiptBlockReader[], endpoints: readonly string[], label: string, receipts: readonly Pick<TransactionReceipt, 'blockHash' | 'blockNumber' | 'effectiveGasPrice' | 'gasUsed' | 'transactionHash'>[]) {
 	if (readers.length !== endpoints.length) throw new Error(`${label} block readers and endpoints differ`)
 	const observations = await Promise.all(
@@ -298,23 +298,31 @@ export async function transactionReceiptsWithQuorum(readers: readonly Transactio
 			const receipts = await Promise.all(transactionHashes.map(hash => reader.getTransactionReceipt({ hash })))
 			return {
 				endpoint: endpointLabel(endpoints[index] ?? ''),
-				value: receipts.map(receipt => {
-					const effectiveGasPrice = receipt.effectiveGasPrice
-					if (typeof effectiveGasPrice !== 'bigint') throw new Error(`${label} receipt ${receipt.transactionHash} is missing its effective gas price`)
-					return {
-						blockHash: receipt.blockHash,
-						blockNumber: receipt.blockNumber,
-						effectiveGasPrice,
-						gasUsed: receipt.gasUsed,
-						logs: receipt.logs.map(log => ({ address: log.address, data: log.data, topics: log.topics })),
-						status: receipt.status,
-						transactionHash: receipt.transactionHash,
-					}
-				}),
+				value: receipts.map(receipt => normalizedReceipt(label, receipt)),
 			}
 		}),
 	)
 	return quorumValue(`${label} receipts`, observations)
+}
+
+export async function transactionReceiptsOrMissingWithQuorum(readers: readonly TransactionReceiptReader[], endpoints: readonly string[], label: string, transactionHashes: readonly Hex[]) {
+	if (readers.length !== endpoints.length) throw new Error(`${label} receipt readers and endpoints differ`)
+	const observations = await Promise.all(
+		readers.map(async (reader, index) => ({
+			endpoint: endpointLabel(endpoints[index] ?? ''),
+			value: await Promise.all(
+				transactionHashes.map(async hash => {
+					try {
+						return normalizedReceipt(label, await reader.getTransactionReceipt({ hash }))
+					} catch (error) {
+						if (isMissingReceipt(error)) return undefined
+						throw error
+					}
+				}),
+			),
+		})),
+	)
+	return quorumValue(`${label} optional receipts`, observations)
 }
 
 export async function signAndSubmitOpenOracleDispute<TSigned, TSubmitted>(quoteBlockNumber: bigint, sign: (lastValidBlockNumber: bigint) => Promise<TSigned>, submit: (signed: TSigned) => Promise<TSubmitted>) {

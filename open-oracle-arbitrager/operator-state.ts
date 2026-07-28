@@ -6,7 +6,7 @@ import type { ConnectivitySettings, EndpointCheck, NetworkName } from './connect
 import type { SubmissionSettings, SubmissionTargetResult } from './transaction-submission.js'
 import type { MarketPricePoint, TokenMarketSnapshot } from './market-monitor.js'
 import type { PositionRecord } from './position-store.js'
-import { utcDayGasSpentWeth, type RiskLimits } from './safety-controls.js'
+import { positionConsumesRisk, utcDayGasSpentWeth, type RiskLimits } from './safety-controls.js'
 
 type ExecutionHistoryFileHandle = {
 	appendFile: (data: string, options: { encoding: 'utf8' }) => Promise<unknown>
@@ -492,7 +492,7 @@ function positionTotals(positions: readonly PositionRecord[]) {
 		if (position.actualEntryGasCostEth === '0' || awaitingLifecycleEvidence) continue
 		const hedged = parseSignedDecimalEth(position.hedgedProfitBeforeGasEth)
 		hedgedProfit += hedged
-		if (position.status !== 'closed') openHedgedNet += hedged - parseDecimalWeth(position.actualEntryGasCostEth) - parseDecimalWeth(position.lifecycleGasCostEth)
+		if (positionConsumesRisk(position.status)) openHedgedNet += hedged - parseDecimalWeth(position.actualEntryGasCostEth) - parseDecimalWeth(position.lifecycleGasCostEth)
 	}
 	return {
 		hedgedProfit: decimalSignedEth(hedgedProfit),
@@ -516,7 +516,7 @@ export function operatorSnapshot(
 	},
 ): OperatorSnapshot {
 	const totals = positionTotals(state.positions)
-	const openPositions = state.positions.filter(position => position.status !== 'closed')
+	const openPositions = state.positions.filter(position => positionConsumesRisk(position.status))
 	const lockedWeth = openPositions.reduce((total, position) => total + parseDecimalWeth(position.capitalAtRiskWeth), 0n)
 	const riskNow = state.blockTimestamp === undefined ? new Date() : new Date(Number(BigInt(state.blockTimestamp) * 1_000n))
 	const dailyGasSpentWeth = utcDayGasSpentWeth(state.positions, riskNow)

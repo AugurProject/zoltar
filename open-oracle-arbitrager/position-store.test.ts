@@ -178,6 +178,7 @@ describe('durable OpenOracle position journal', () => {
 			lifecycleGasCostEth: '0',
 			lifecycleReceiptRecovered: false,
 			lifecycleSubmissionBlockNumber: '122',
+			lifecycleSubmissionMode: 'private',
 			lifecycleTargetBlockNumber: '123',
 			lifecycleTokenDecimals: '18',
 			lifecycleTransactionNonce: '9',

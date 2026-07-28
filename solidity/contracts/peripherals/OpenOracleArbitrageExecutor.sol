@@ -55,6 +55,18 @@ interface IOpenOracleDispute {
 	) external payable;
 }
 
+interface IOpenOracleLifecycle {
+	function settle(
+		uint256 reportId,
+		IOpenOracleDispute.OracleGame calldata params,
+		IOpenOracleDispute.PreimageHelper calldata helper
+	) external;
+
+	function internalTransferFrom(address from, address to, address token, uint128 amount) external;
+
+	function withdrawTo(address tokenToGet, uint256 amount, address to) external returns (uint256 sent);
+}
+
 interface IUniswapV3SwapRouter {
 	struct ExactInputSingleParams {
 		address tokenIn;
@@ -102,6 +114,14 @@ contract OpenOracleArbitrageExecutor {
 		bytes32 expectedParentBlockHash;
 	}
 
+	struct LifecycleRequest {
+		address openOracle;
+		uint256 parentBlockNumber;
+		bytes32 expectedParentBlockHash;
+		uint128 amount1;
+		uint128 amount2;
+	}
+
 	struct ExecutionBalances {
 		uint256 executorToken1;
 		uint256 executorToken2;
@@ -125,6 +145,16 @@ contract OpenOracleArbitrageExecutor {
 		uint256 hedgeAmountWeth,
 		uint256 contribution1,
 		uint256 contribution2
+	);
+
+	event LifecycleExecuted(
+		address indexed account,
+		uint256 indexed reportId,
+		address indexed token1,
+		uint256 amount1,
+		address token2,
+		uint256 amount2,
+		uint256 settlerReward
 	);
 
 	function dispute(
@@ -261,6 +291,76 @@ contract OpenOracleArbitrageExecutor {
 			result.hedgeAmountWeth,
 			result.contribution1,
 			result.contribution2
+		);
+		entered = false;
+	}
+
+	/// @notice Atomically settles when needed and withdraws only one position's exact proceeds.
+	/// @dev The caller must approve this executor through OpenOracle's internal allowance for both tokens.
+	///      Permissionless credits and proceeds belonging to other positions remain in the caller's OpenOracle balance.
+	function settleAndWithdraw(
+		LifecycleRequest calldata request,
+		IOpenOracleDispute.OracleGame calldata game,
+		IOpenOracleDispute.PreimageHelper calldata helper
+	) external {
+		require(!entered, 'OpenOracle arbitrage executor reentrancy');
+		assertParentBlock(request.parentBlockNumber, request.expectedParentBlockHash);
+		require(request.openOracle.code.length > 0, 'OpenOracle address must contain contract code');
+		require(
+			game.token1 != address(0) && game.token2 != address(0),
+			'OpenOracle arbitrage executor requires ERC20 tokens'
+		);
+		require(game.token1 != game.token2, 'OpenOracle arbitrage executor tokens must differ');
+		require(request.amount1 != 0 && request.amount2 != 0, 'OpenOracle lifecycle amounts must be positive');
+		entered = true;
+
+		IOpenOracleLifecycle openOracle = IOpenOracleLifecycle(request.openOracle);
+		uint256 settlerReward;
+		if (game.currentReporter == msg.sender && game.settlementTimestamp == 0) {
+			openOracle.settle(helper.reportId, game, helper);
+			settlerReward = game.settlerReward;
+		}
+
+		uint256 walletBalance1 = IERC20(game.token1).balanceOf(msg.sender);
+		uint256 walletBalance2 = IERC20(game.token2).balanceOf(msg.sender);
+		openOracle.internalTransferFrom(msg.sender, address(this), game.token1, request.amount1);
+		openOracle.internalTransferFrom(msg.sender, address(this), game.token2, request.amount2);
+		require(
+			openOracle.withdrawTo(game.token1, request.amount1, msg.sender) == request.amount1,
+			'OpenOracle lifecycle token1 withdrawal was not exact'
+		);
+		require(
+			openOracle.withdrawTo(game.token2, request.amount2, msg.sender) == request.amount2,
+			'OpenOracle lifecycle token2 withdrawal was not exact'
+		);
+		require(
+			IERC20(game.token1).balanceOf(msg.sender) == walletBalance1 + request.amount1,
+			'OpenOracle lifecycle token1 receipt was not exact'
+		);
+		require(
+			IERC20(game.token2).balanceOf(msg.sender) == walletBalance2 + request.amount2,
+			'OpenOracle lifecycle token2 receipt was not exact'
+		);
+		if (settlerReward != 0) {
+			uint256 walletEthBalance = msg.sender.balance;
+			require(
+				openOracle.withdrawTo(address(0), settlerReward, msg.sender) == settlerReward,
+				'OpenOracle lifecycle settler reward withdrawal was not exact'
+			);
+			require(
+				msg.sender.balance == walletEthBalance + settlerReward,
+				'OpenOracle lifecycle settler reward receipt was not exact'
+			);
+		}
+
+		emit LifecycleExecuted(
+			msg.sender,
+			helper.reportId,
+			game.token1,
+			request.amount1,
+			game.token2,
+			request.amount2,
+			settlerReward
 		);
 		entered = false;
 	}

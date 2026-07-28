@@ -16,7 +16,3 @@ export function recoveredHedgedProfitBeforeGasWeth(direction: ArbitrageDirection
 export function expectedWithdrawalToken2(direction: ArbitrageDirection, currentAmount2: bigint, newAmount2: bigint) {
 	return direction === 'sell-rep' && currentAmount2 > newAmount2 ? currentAmount2 : newAmount2
 }
-
-export function exactWithdrawalMatches(actual: { token2: string; weth: string }, expected: { token2: string; weth: string }) {
-	return actual.token2 === expected.token2 && actual.weth === expected.weth
-}

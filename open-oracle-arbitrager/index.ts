@@ -10,6 +10,7 @@ import {
 	getBalanceAtBlock,
 	getTransactionCountAtBlock,
 	http,
+	parseUnits,
 	privateKeyToAccount,
 	readContractAtBlock,
 	type Account,
@@ -52,17 +53,18 @@ import {
 	guardedRiskSubmission,
 	isExecutionPausedError,
 	journaledSubmission,
+	lifecycleAllowanceMismatch,
 	lifecycleLastValidBlockNumber,
-	lifecycleReceiptSnapshotBlock,
 	lifecycleAttemptNeedsRecovery,
-	nextPublicLifecycleAction,
 	openOracleDisputeTiming,
 	opportunityDecision,
+	privateAttemptCanExpire,
 	receiptGasExpendituresWithQuorum,
 	selectBestExecution,
 	simulateTrackedPrivateBundle,
 	trackPrivateBundleReceiptStatuses,
 	transactionHashBySenderNonceWithQuorum,
+	transactionReceiptsOrMissingWithQuorum,
 	transactionReceiptsWithQuorum,
 } from './execution-orchestration.js'
 import { coordinatorPolicySafetyMismatch, gamePolicyMismatch, retainedReportIds, type CoordinatorGamePolicy } from './game-policy.js'
@@ -85,15 +87,14 @@ import {
 	type MutableStrategy,
 	type OperatorState,
 	type OpportunitySnapshot,
-	type TransactionActivity,
 } from './operator-state.js'
 import { applyLogs, compareLogs, logBlockNumber, reportId, type ActiveReport } from './oracle-log-state.js'
 import { appendPriceHistory, availableTokenBalances, createTokenCatalogTracker, discoverAugurRepTokens, formatTokenAmount, loadPriceHistory, loadTokenMarkets, missingPricePoints, pricePoints } from './market-monitor.js'
-import { exactWithdrawalMatches, expectedWithdrawalToken2, hedgedProfitBeforeGasWeth, realizedNetProfitWeth, recoveredHedgedProfitBeforeGasWeth } from './position-accounting.js'
+import { expectedWithdrawalToken2, hedgedProfitBeforeGasWeth, realizedNetProfitWeth, recoveredHedgedProfitBeforeGasWeth } from './position-accounting.js'
 import { acquireExecutionSignerLock, acquirePositionJournalLock, loadPositionJournal, savePositionJournal, type ExclusiveProcessLock, type PositionRecord } from './position-store.js'
 import { quorumValue } from './read-quorum.js'
 import { bestSuccessful, compactFinalityWindow, pollUntilStopped, replaceOverlap } from './resilience.js'
-import { adjustedNetProfitWeth, positionRiskLimitMismatch, projectedLifecycleGasReserveWeth, type RiskLimits } from './safety-controls.js'
+import { adjustedNetProfitWeth, positionConsumesRisk, positionRiskLimitMismatch, projectedLifecycleGasReserveWeth, type RiskLimits } from './safety-controls.js'
 import type { NetworkConfiguration } from './network.js'
 import { saveOperatorSettings, type PersistedOperatorSettings } from './settings-store.js'
 import { signerCandidate } from './signer.js'
@@ -114,7 +115,7 @@ import {
 	spotTwapDeviationWithinLimit,
 	type ArbitrageQuote,
 } from './strategy.js'
-import { prepareSignedTransaction, simulateSignedBundleEveryRelay, SubmissionFailure, submitSignedBundle, validateSubmissionSettings, type SignedTransaction, type SubmissionSettings, type SubmissionTargetResult } from './transaction-submission.js'
+import { prepareSignedTransaction, simulateSignedBundleEveryRelay, SubmissionFailure, submitSignedBundle, validateSubmissionSettings, type SubmissionSettings, type SubmissionTargetResult } from './transaction-submission.js'
 import { receiptGasCost, submitContractTransaction, trackedActivity, transactionLogLevel, waitForTrackedTransaction, type TrackTransaction } from './transaction-tracker.js'
 
 const FEES = [100, 500, 3000, 10000] as const
@@ -228,6 +229,28 @@ function hedgeExecutionFromLogs(logs: readonly { address: Address; data: Hex; to
 		}
 	}
 	throw new Error('Confirmed executor transaction did not emit HedgeAndDisputeExecuted')
+}
+
+export function lifecycleExecutionFromLogs(logs: readonly { address: Address; data: Hex; topics: readonly Hex[] }[], executor: Address) {
+	for (const log of logs) {
+		if (log.address.toLowerCase() !== executor.toLowerCase()) continue
+		try {
+			const decoded = decodeEventLog({ abi: openOracleArbitrageExecutorAbi, data: log.data, topics: log.topics })
+			if (decoded.eventName !== 'LifecycleExecuted') continue
+			return {
+				account: decoded.args.account,
+				amount1: decoded.args.amount1,
+				amount2: decoded.args.amount2,
+				reportId: decoded.args.reportId,
+				settlerReward: decoded.args.settlerReward,
+				token1: decoded.args.token1,
+				token2: decoded.args.token2,
+			}
+		} catch (error) {
+			void error
+		}
+	}
+	throw new Error('Confirmed executor transaction did not emit LifecycleExecuted')
 }
 
 async function loadCoordinatorPolicies(client: ReadClient, config: Pick<Configuration, 'coordinatorAddresses' | 'network' | 'openOracle'>) {
@@ -452,7 +475,7 @@ async function executionReadQuorum(clients: readonly ReadClient[], config: Confi
 	const repWithFees = game.currentAmount2 + calculateFee(game.currentAmount2, game.feePercentage) + calculateFee(game.currentAmount2, game.protocolFee)
 	const observations = await Promise.all(
 		clients.map(async (readClient, index) => {
-			const [block, stateHash, refreshedPool, replacementAmount2, sellHedgeQuote, buyHedgeQuote, nonce, eth, weth, token, allowance1, allowance2] = await Promise.all([
+			const [block, stateHash, refreshedPool, replacementAmount2, sellHedgeQuote, buyHedgeQuote, nonce, eth, weth, token, allowance1, allowance2, internalAllowance1, internalAllowance2] = await Promise.all([
 				readClient.getBlock({ blockNumber }),
 				readContractAtBlock(readClient.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'oracleGame', args: [report.helper.reportId] }, blockNumber),
 				loadPool(readClient, pool.address, pool.token, pool.fee, config.twapSeconds, blockNumber),
@@ -465,6 +488,8 @@ async function executionReadQuorum(clients: readonly ReadClient[], config: Confi
 				readContractAtBlock(readClient.transport, { address: game.token2, abi: erc20Abi, functionName: 'balanceOf', args: [account] }, blockNumber),
 				readContractAtBlock(readClient.transport, { address: game.token1, abi: erc20Abi, functionName: 'allowance', args: [account, executor] }, blockNumber),
 				readContractAtBlock(readClient.transport, { address: game.token2, abi: erc20Abi, functionName: 'allowance', args: [account, executor] }, blockNumber),
+				readContractAtBlock(readClient.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'internalAllowance', args: [account, executor, game.token1] }, blockNumber),
+				readContractAtBlock(readClient.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'internalAllowance', args: [account, executor, game.token2] }, blockNumber),
 			])
 			if (block.hash == null || refreshedPool === undefined) throw new Error('RPC quorum snapshot is missing a canonical block or active pool')
 			return {
@@ -472,6 +497,8 @@ async function executionReadQuorum(clients: readonly ReadClient[], config: Confi
 				value: {
 					allowance1: requiredBigint(allowance1, 'Executor token1 allowance'),
 					allowance2: requiredBigint(allowance2, 'Executor token2 allowance'),
+					internalAllowance1: requiredBigint(internalAllowance1, 'Executor internal token1 allowance'),
+					internalAllowance2: requiredBigint(internalAllowance2, 'Executor internal token2 allowance'),
 					baseFeePerGas: block.baseFeePerGas ?? 0n,
 					blockHash: block.hash,
 					blockTimestamp: block.timestamp,
@@ -574,15 +601,17 @@ async function storedReportWithQuorum(clients: readonly ReadClient[], config: Co
 }
 
 async function lifecycleBalancesWithQuorum(clients: readonly ReadClient[], config: RecoveryConfiguration, account: Address, token: Address, blockNumber: bigint) {
+	const executor = config.executor
+	if (executor === undefined) throw new Error('Lifecycle balance reads require the authenticated executor')
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
 	const observations = await Promise.all(
 		clients.map(async (client, index) => {
-			const [block, rawHolderWeth, rawHolderToken, rawWalletWeth, rawWalletToken, rawTokenDecimals] = await Promise.all([
+			const [block, rawHolderWeth, rawHolderToken, rawAllowanceWeth, rawAllowanceToken, rawTokenDecimals] = await Promise.all([
 				client.getBlock({ blockNumber }),
 				readContractAtBlock(client.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'tokenHolder', args: [account, config.network.weth] }, blockNumber),
 				readContractAtBlock(client.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'tokenHolder', args: [account, token] }, blockNumber),
-				readContractAtBlock(client.transport, { address: config.network.weth, abi: erc20Abi, functionName: 'balanceOf', args: [account] }, blockNumber),
-				readContractAtBlock(client.transport, { address: token, abi: erc20Abi, functionName: 'balanceOf', args: [account] }, blockNumber),
+				readContractAtBlock(client.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'internalAllowance', args: [account, executor, config.network.weth] }, blockNumber),
+				readContractAtBlock(client.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'internalAllowance', args: [account, executor, token] }, blockNumber),
 				readContractAtBlock(client.transport, { address: token, abi: erc20Abi, functionName: 'decimals' }, blockNumber),
 			])
 			if (block.hash === null || block.hash === undefined) throw new Error(`Position lifecycle block ${blockNumber.toString()} is missing its canonical hash`)
@@ -591,11 +620,11 @@ async function lifecycleBalancesWithQuorum(clients: readonly ReadClient[], confi
 				value: {
 					blockHash: block.hash,
 					blockTimestamp: block.timestamp,
+					internalAllowanceToken: requiredBigint(rawAllowanceToken, 'OpenOracle token internal allowance'),
+					internalAllowanceWeth: requiredBigint(rawAllowanceWeth, 'OpenOracle WETH internal allowance'),
 					holderToken: requiredBigint(rawHolderToken, 'OpenOracle token holder balance'),
 					holderWeth: requiredBigint(rawHolderWeth, 'OpenOracle WETH holder balance'),
 					tokenDecimals: requiredBigint(rawTokenDecimals, 'Position token decimals'),
-					walletToken: requiredBigint(rawWalletToken, 'Wallet token balance'),
-					walletWeth: requiredBigint(rawWalletWeth, 'Wallet WETH balance'),
 				},
 			}
 		}),
@@ -714,6 +743,9 @@ async function executeDispute(
 	const hedgeLimit = hedgeWethLimit(refreshedQuote.direction, hedgeLimitQuote, config.maxHedgeSlippageBps)
 	const funding = executorFunding(game, newAmount1, newAmount2, refreshedQuote.direction === 'buy-rep' ? hedgeLimit : 0n)
 	if (executionSnapshot.weth < funding.token1 || executionSnapshot.token < funding.token2) throw new Error('Canonical execution snapshot no longer has the inventory required by the signed bundle')
+	const lockedToken = expectedWithdrawalToken2(refreshedQuote.direction, game.currentAmount2, newAmount2)
+	const internalAllowanceError = lifecycleAllowanceMismatch({ token1: executionSnapshot.internalAllowance1, token2: executionSnapshot.internalAllowance2 }, { token1: newAmount1, token2: lockedToken })
+	if (internalAllowanceError !== undefined) throw new Error(internalAllowanceError)
 	const timeType = (game.flags & OPEN_ORACLE_FLAG_TIME_TYPE) !== 0n
 	const currentTime = timeType ? executionSnapshot.blockTimestamp : quoteBlockNumber
 	const minimumRemaining = timeType ? config.minimumRemainingSeconds : config.minimumRemainingBlocks
@@ -727,7 +759,7 @@ async function executeDispute(
 		})
 	)
 		throw new Error('The final quote does not have a fresh inclusion window')
-	const plan = fundingTransactionPlan(config.submission.mode, { token1: executionSnapshot.allowance1, token2: executionSnapshot.allowance2 }, funding)
+	fundingTransactionPlan({ token1: executionSnapshot.allowance1, token2: executionSnapshot.allowance2 }, funding)
 	const request = {
 		address: executor,
 		abi: openOracleArbitrageExecutorAbi,
@@ -750,43 +782,19 @@ async function executeDispute(
 	} as const
 	const targetBlockNumber = quoteBlockNumber + 1n
 	const startingNonce = await pendingNonceWithQuorum(readClients, config, account.address)
-	let nonce = startingNonce
-	const signedTransactions: { kind: TransactionActivity['kind']; signed: SignedTransaction; token: Address | undefined; tokenSymbol: string | undefined }[] = []
-	const sign = async (to: Address, data: Hex, gasEstimate: bigint) => {
-		const signed = await prepareSignedTransaction({
-			baseFeePerGas: executionSnapshot.baseFeePerGas,
-			blockNumber: quoteBlockNumber,
-			chainId: config.network.chain.id,
-			data,
-			from: account.address,
-			gasEstimate,
-			lastValidBlockNumber: targetBlockNumber,
-			nonce,
-			signTransaction,
-			to,
-		})
-		nonce += 1n
-		return signed
-	}
-	for (const step of plan) {
-		if (step === 'execution') {
-			signedTransactions.push({ kind: 'dispute', signed: await sign(executor, encodeFunctionData(request), 1_200_000n), token: undefined, tokenSymbol: undefined })
-			continue
-		}
-		const token1 = step.endsWith('token1')
-		const token = token1 ? game.token1 : game.token2
-		let amount = token1 ? funding.token1 : funding.token2
-		if (step.startsWith('reset')) amount = 0n
-		const tokenSymbol = token1 ? 'WETH' : tokenMetadata.symbol
-		signedTransactions.push({
-			kind: token1 ? 'approval-weth' : 'approval-token',
-			signed: await sign(token, encodeFunctionData({ abi: erc20Abi, functionName: 'approve', args: [executor, amount] }), 100_000n),
-			token,
-			tokenSymbol,
-		})
-	}
-	const executionSigned = signedTransactions.at(-1)?.signed
-	if (executionSigned === undefined) throw new Error('Execution transaction plan is empty')
+	const executionSigned = await prepareSignedTransaction({
+		baseFeePerGas: executionSnapshot.baseFeePerGas,
+		blockNumber: quoteBlockNumber,
+		chainId: config.network.chain.id,
+		data: encodeFunctionData(request),
+		from: account.address,
+		gasEstimate: 1_200_000n,
+		lastValidBlockNumber: targetBlockNumber,
+		nonce: startingNonce,
+		signTransaction,
+		to: executor,
+	})
+	const signedTransactions = [{ kind: 'dispute' as const, signed: executionSigned, token: undefined, tokenSymbol: undefined }]
 	const capitalAtRiskWeth = fundedCapitalAtRiskWeth(funding, refreshedQuote.hedgeAmountRep, hedgeLimitQuote, hedgeLimit)
 	let stagedPosition = {
 		account: account.address,
@@ -824,7 +832,7 @@ async function executeDispute(
 		lifecycleUpdatedAt: undefined,
 		lifecycleWalletTokenBefore: undefined,
 		lifecycleWalletWethBefore: undefined,
-		lockedToken: formatTokenAmount(expectedWithdrawalToken2(refreshedQuote.direction, game.currentAmount2, newAmount2), tokenMetadata.decimals),
+		lockedToken: formatTokenAmount(lockedToken, tokenMetadata.decimals),
 		lockedWeth: decimalWeth(newAmount1),
 		manualReconciliation: undefined,
 		openedAt: new Date().toISOString(),
@@ -1158,105 +1166,121 @@ export async function recoverPendingEntryWithQuorum(readClients: readonly ReadCl
 	}
 }
 
-export async function reconcilePublicLifecycleBalances(readClients: readonly ReadClient[], config: RecoveryConfiguration, position: PositionRecord, snapshotBlockNumber: bigint, expectedBlockHash: Hex) {
-	if (position.lifecycleTokenDecimals === undefined || position.lifecycleWalletTokenBefore === undefined || position.lifecycleWalletWethBefore === undefined) throw new Error('Public lifecycle balance journal is incomplete')
-	const balancesAfter = await lifecycleBalancesWithQuorum(readClients, config, position.account, position.token, snapshotBlockNumber)
-	return reconcilePublicLifecycleSnapshot(position, balancesAfter, expectedBlockHash)
-}
-
-export function reconcilePublicLifecycleSnapshot(position: PositionRecord, balancesAfter: { blockHash: Hex; blockTimestamp: bigint; tokenDecimals: bigint; walletToken: bigint; walletWeth: bigint }, expectedBlockHash: Hex) {
-	if (position.lifecycleTokenDecimals === undefined || position.lifecycleWalletTokenBefore === undefined || position.lifecycleWalletWethBefore === undefined) throw new Error('Public lifecycle balance journal is incomplete')
-	assertReceiptSnapshotBlockHash(expectedBlockHash, balancesAfter.blockHash, 'Public lifecycle')
-	const walletWethBefore = BigInt(position.lifecycleWalletWethBefore)
-	const walletTokenBefore = BigInt(position.lifecycleWalletTokenBefore)
-	if (balancesAfter.walletWeth < walletWethBefore || balancesAfter.walletToken < walletTokenBefore) throw new Error('Recovered public lifecycle reduced a tracked wallet balance')
-	const withdrawnWeth = balancesAfter.walletWeth - walletWethBefore
-	const withdrawnToken = balancesAfter.walletToken - walletTokenBefore
-	const tokenDecimals = Number(position.lifecycleTokenDecimals)
-	if (!Number.isSafeInteger(tokenDecimals) || tokenDecimals < 0 || tokenDecimals > 255) throw new Error('Public lifecycle recovery token decimals are invalid')
-	const recovered = {
-		...position,
-		closedAt: undefined,
-		lifecycleReceiptRecovered: false,
-		lifecycleTransactionHashes: [],
-		lifecycleUpdatedAt: dateFromBlockTimestamp(balancesAfter.blockTimestamp).toISOString(),
-		realizedNetProfitEth: undefined,
-		status: 'open' as const,
-		withdrawnToken: formatTokenAmount(withdrawnToken, tokenDecimals),
-		withdrawnWeth: decimalWeth(withdrawnWeth),
-	} satisfies PositionRecord
-	if (!exactWithdrawalMatches({ token2: recovered.withdrawnToken, weth: recovered.withdrawnWeth }, { token2: position.lockedToken, weth: position.lockedWeth })) return recovered
-	const realized = realizedNetProfitWeth(parseSignedDecimalEth(position.hedgedProfitBeforeGasEth), parseDecimalWeth(position.actualEntryGasCostEth), parseDecimalWeth(position.lifecycleGasCostEth))
+export async function expirePrivateEntryWithQuorum(readClients: readonly ReadClient[], config: RecoveryConfiguration, position: PositionRecord, currentBlockNumber: bigint, expiredAt: string) {
+	if (position.entrySubmissionMode !== 'private' || position.entrySubmissionBlockNumber === undefined) throw new Error('Only a journaled private entry can expire without inclusion')
+	if (position.entryTransactionHashes.length !== 1) throw new Error('Only an atomic private entry can expire automatically')
+	const targetBlockNumber = BigInt(position.entrySubmissionBlockNumber) + 1n
+	if (!privateAttemptCanExpire(currentBlockNumber, targetBlockNumber)) throw new Error('Private entry target block is not sufficiently confirmed')
+	const optionalReceipts = await transactionReceiptsOrMissingWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `expired entry ${position.reportId}`, position.entryTransactionHashes)
+	const executorReceipt = optionalReceipts.at(-1)
+	if (executorReceipt !== undefined) throw new Error('Private entry executor receipt exists and requires normal recovery')
 	return {
-		...recovered,
-		closedAt: recovered.lifecycleUpdatedAt,
-		lifecycleReceiptRecovered: true,
-		realizedNetProfitEth: decimalSignedEth(realized),
-		status: 'closed' as const,
+		...position,
+		actualEntryGasCostEth: '0',
+		capitalAtRiskWeth: '0',
+		closedAt: expiredAt,
+		gasExpenditures: [],
+		hedgedProfitBeforeGasEth: '0',
+		lockedToken: '0',
+		lockedWeth: '0',
+		realizedNetProfitEth: '0',
+		status: 'expired-not-included' as const,
+	} satisfies PositionRecord
+}
+
+function withoutLifecycleAttempt(position: PositionRecord) {
+	return {
+		...position,
+		lifecycleSubmissionBlockNumber: undefined,
+		lifecycleSubmissionMode: undefined,
+		lifecycleTargetBlockNumber: undefined,
+		lifecycleTokenDecimals: undefined,
+		lifecycleTransactionNonce: undefined,
+		lifecycleTransactionHashes: [],
+		lifecycleWalletTokenBefore: undefined,
+		lifecycleWalletWethBefore: undefined,
 	}
 }
 
-export async function recoverPendingLifecycleWithQuorum(readClients: readonly ReadClient[], config: RecoveryConfiguration, position: PositionRecord): Promise<PositionRecord> {
-	if (position.lifecycleTransactionHashes.length === 0 || position.lifecycleTargetBlockNumber === undefined || position.lifecycleTokenDecimals === undefined || position.lifecycleWalletTokenBefore === undefined || position.lifecycleWalletWethBefore === undefined) {
-		throw new Error('Lifecycle recovery journal is incomplete')
+export async function recoverPendingLifecycleWithQuorum(readClients: readonly ReadClient[], config: RecoveryConfiguration, position: PositionRecord, currentBlockNumber?: bigint | undefined): Promise<PositionRecord> {
+	if (position.lifecycleTransactionHashes.length !== 1 || position.lifecycleTargetBlockNumber === undefined || position.lifecycleTokenDecimals === undefined || position.lifecycleSubmissionMode === undefined) {
+		throw new Error('Atomic lifecycle recovery journal is incomplete')
 	}
-	const receipts = await transactionReceiptsWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `pending lifecycle ${position.reportId}`, position.lifecycleTransactionHashes)
+	const executor = config.executor
+	if (executor === undefined) throw new Error('Atomic lifecycle recovery requires the authenticated executor')
+	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
 	const targetBlockNumber = BigInt(position.lifecycleTargetBlockNumber)
-	for (const [index, receipt] of receipts.entries()) {
-		const expectedHash = position.lifecycleTransactionHashes[index]
-		if (expectedHash === undefined || receipt.transactionHash.toLowerCase() !== expectedHash.toLowerCase()) throw new Error('Lifecycle bundle receipt hash does not match the durable journal')
-	}
-	if (targetBlockNumber === 0n) {
-		const gasExpenditures = await confirmedGasExpenditures(readClients, config, `pending public lifecycle ${position.reportId}`, receipts)
-		const knownGasHashes = new Set(position.gasExpenditures.map(expenditure => expenditure.transactionHash.toLowerCase()))
-		const newGasExpenditures = gasExpenditures.filter(expenditure => !knownGasHashes.has(expenditure.transactionHash.toLowerCase()))
-		const lifecycleGas = parseDecimalWeth(position.lifecycleGasCostEth) + newGasExpenditures.reduce((total, expenditure) => total + parseDecimalWeth(expenditure.costEth), 0n)
-		const accountedPosition = {
-			...position,
-			gasExpenditures: [...position.gasExpenditures, ...newGasExpenditures],
-			lifecycleGasCostEth: decimalWeth(lifecycleGas),
-		} satisfies PositionRecord
-		if (receipts.some(receipt => receipt.status !== 'success')) {
-			return {
-				...accountedPosition,
-				lifecycleReceiptRecovered: false,
-				lifecycleTransactionHashes: [],
-				lifecycleUpdatedAt: gasExpenditures.at(-1)?.minedAt ?? position.lifecycleUpdatedAt,
-				status: 'open',
-			}
+	let receipts
+	try {
+		receipts = await transactionReceiptsWithQuorum(readClients, endpoints, `pending lifecycle ${position.reportId}`, position.lifecycleTransactionHashes)
+	} catch (error) {
+		if (position.lifecycleSubmissionMode !== 'private' || currentBlockNumber === undefined || !privateAttemptCanExpire(currentBlockNumber, targetBlockNumber)) throw error
+		const optionalReceipts = await transactionReceiptsOrMissingWithQuorum(readClients, endpoints, `expired lifecycle ${position.reportId}`, position.lifecycleTransactionHashes)
+		if (optionalReceipts.some(receipt => receipt !== undefined)) throw error
+		return {
+			...withoutLifecycleAttempt(position),
+			lifecycleReceiptRecovered: false,
+			lifecycleUpdatedAt: new Date().toISOString(),
+			status: 'open',
 		}
-		const snapshotBlock = lifecycleReceiptSnapshotBlock(receipts, 0n)
-		return reconcilePublicLifecycleBalances(readClients, config, accountedPosition, snapshotBlock.blockNumber, snapshotBlock.blockHash)
 	}
-	const snapshotBlock = lifecycleReceiptSnapshotBlock(receipts, targetBlockNumber)
-	const balancesAfter = await lifecycleBalancesWithQuorum(readClients, config, position.account, position.token, snapshotBlock.blockNumber)
-	assertReceiptSnapshotBlockHash(snapshotBlock.blockHash, balancesAfter.blockHash, 'Lifecycle')
-	const walletWethBefore = BigInt(position.lifecycleWalletWethBefore)
-	const walletTokenBefore = BigInt(position.lifecycleWalletTokenBefore)
-	if (balancesAfter.walletWeth < walletWethBefore || balancesAfter.walletToken < walletTokenBefore) {
-		throw new Error('Recovered lifecycle reduced a tracked wallet balance')
+	const receipt = receipts[0]
+	const expectedHash = position.lifecycleTransactionHashes[0]
+	if (receipt === undefined || expectedHash === undefined || receipt.transactionHash.toLowerCase() !== expectedHash.toLowerCase()) throw new Error('Lifecycle receipt hash does not match the durable journal')
+	const lifecycleGasExpenditures = await confirmedGasExpenditures(readClients, config, `pending lifecycle ${position.reportId}`, [receipt])
+	const knownGasHashes = new Set(position.gasExpenditures.map(expenditure => expenditure.transactionHash.toLowerCase()))
+	const newGasExpenditures = lifecycleGasExpenditures.filter(expenditure => !knownGasHashes.has(expenditure.transactionHash.toLowerCase()))
+	const lifecycleGas = parseDecimalWeth(position.lifecycleGasCostEth) + newGasExpenditures.reduce((total, expenditure) => total + parseDecimalWeth(expenditure.costEth), 0n)
+	const accountedPosition = {
+		...position,
+		gasExpenditures: [...position.gasExpenditures, ...newGasExpenditures],
+		lifecycleGasCostEth: decimalWeth(lifecycleGas),
+		lifecycleUpdatedAt: lifecycleGasExpenditures[0]?.minedAt ?? position.lifecycleUpdatedAt,
+	} satisfies PositionRecord
+	let execution: ReturnType<typeof lifecycleExecutionFromLogs> | undefined
+	if (receipt.status === 'success') {
+		try {
+			execution = lifecycleExecutionFromLogs(receipt.logs, executor)
+		} catch (error) {
+			if (!(error instanceof Error) || error.message !== 'Confirmed executor transaction did not emit LifecycleExecuted') throw error
+			execution = undefined
+		}
 	}
-	const withdrawnWeth = balancesAfter.walletWeth - walletWethBefore
-	const withdrawnToken = balancesAfter.walletToken - walletTokenBefore
-	const lifecycleGas = parseDecimalWeth(position.lifecycleGasCostEth) + receipts.reduce((total, receipt) => total + receiptGasCost(receipt), 0n)
-	const lifecycleGasExpenditures = await confirmedGasExpenditures(readClients, config, `pending lifecycle ${position.reportId}`, receipts)
+	if (execution === undefined) {
+		return {
+			...withoutLifecycleAttempt(accountedPosition),
+			lifecycleReceiptRecovered: false,
+			status: 'open',
+		}
+	}
+	if (receipt.blockNumber !== targetBlockNumber) throw new Error('Lifecycle executor transaction was included outside its signed parent-block target')
 	const tokenDecimals = Number(position.lifecycleTokenDecimals)
 	if (!Number.isSafeInteger(tokenDecimals) || tokenDecimals < 0 || tokenDecimals > 255) throw new Error('Lifecycle recovery token decimals are invalid')
-	const recovered = {
-		...position,
-		closedAt: undefined,
-		gasExpenditures: [...position.gasExpenditures, ...lifecycleGasExpenditures],
-		lifecycleGasCostEth: decimalWeth(lifecycleGas),
-		lifecycleReceiptRecovered: true,
-		lifecycleUpdatedAt: new Date().toISOString(),
-		realizedNetProfitEth: undefined,
-		status: 'recovery-required' as const,
-		withdrawnToken: formatTokenAmount(withdrawnToken, tokenDecimals),
-		withdrawnWeth: decimalWeth(withdrawnWeth),
-	} satisfies PositionRecord
-	if (!exactWithdrawalMatches({ token2: recovered.withdrawnToken, weth: recovered.withdrawnWeth }, { token2: position.lockedToken, weth: position.lockedWeth })) return recovered
+	const expectedWeth = parseDecimalWeth(position.lockedWeth)
+	const expectedToken = parseUnits(position.lockedToken, tokenDecimals)
+	if (
+		execution.account.toLowerCase() !== position.account.toLowerCase() ||
+		execution.reportId.toString() !== position.reportId ||
+		execution.token1.toLowerCase() !== config.network.weth.toLowerCase() ||
+		execution.token2.toLowerCase() !== position.token.toLowerCase() ||
+		execution.amount1 !== expectedWeth ||
+		execution.amount2 !== expectedToken
+	) {
+		throw new Error('Lifecycle executor event does not match the durable position')
+	}
 	const realized = realizedNetProfitWeth(parseSignedDecimalEth(position.hedgedProfitBeforeGasEth), parseDecimalWeth(position.actualEntryGasCostEth), lifecycleGas)
-	return { ...recovered, closedAt: new Date().toISOString(), realizedNetProfitEth: decimalSignedEth(realized), status: 'closed' }
+	const closedAt = lifecycleGasExpenditures[0]?.minedAt
+	if (closedAt === undefined) throw new Error('Lifecycle executor receipt timestamp is unavailable')
+	return {
+		...accountedPosition,
+		closedAt,
+		lifecycleReceiptRecovered: true,
+		lifecycleTransactionHashes: [],
+		realizedNetProfitEth: decimalSignedEth(realized),
+		status: 'closed',
+		withdrawnToken: position.lockedToken,
+		withdrawnWeth: position.lockedWeth,
+	}
 }
 
 export async function discoverPublicReplacementWithQuorum(readClients: readonly ReadClient[], config: RecoveryConfiguration, position: PositionRecord, blockNumber: bigint, kind: 'entry' | 'lifecycle', persistPosition: (position: PositionRecord) => Promise<void>) {
@@ -1310,10 +1334,10 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 	const balancesBefore = await lifecycleBalancesWithQuorum(readClients, config, account.address, position.token, blockNumber)
 	if (balancesBefore.blockHash.toLowerCase() !== storedSnapshot.blockHash.toLowerCase()) throw new Error('Lifecycle state reads use different canonical blocks')
 	let activePosition = position
-	if (activePosition.entrySubmissionMode === 'public' || activePosition.lifecycleTargetBlockNumber === '0') {
+	if (activePosition.entrySubmissionMode === 'public' || activePosition.lifecycleSubmissionMode === 'public') {
 		let pendingKind: 'entry' | 'lifecycle' | undefined
 		if (activePosition.actualEntryGasCostEth === '0' && activePosition.entrySubmissionMode === 'public') pendingKind = 'entry'
-		else if (lifecycleAttemptNeedsRecovery(activePosition) && activePosition.lifecycleTargetBlockNumber === '0') pendingKind = 'lifecycle'
+		else if (lifecycleAttemptNeedsRecovery(activePosition) && activePosition.lifecycleSubmissionMode === 'public') pendingKind = 'lifecycle'
 		if (pendingKind !== undefined) activePosition = await discoverPublicReplacementWithQuorum(readClients, config, activePosition, blockNumber, pendingKind, persistPosition)
 	}
 	const entryAccountingNeedsRecovery = activePosition.status === 'pending-entry' || (activePosition.status === 'recovery-required' && activePosition.actualEntryGasCostEth === '0')
@@ -1322,132 +1346,102 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 			activePosition = (await recoverPendingEntryWithQuorum(readClients, config, activePosition, tokenDecimalsFromSnapshot(balancesBefore, activePosition.reportId))).position
 			await persistPosition(activePosition)
 		} catch (error) {
+			const targetBlockNumber = activePosition.entrySubmissionBlockNumber === undefined ? undefined : BigInt(activePosition.entrySubmissionBlockNumber) + 1n
+			if (activePosition.entrySubmissionMode === 'private' && targetBlockNumber !== undefined && privateAttemptCanExpire(blockNumber, targetBlockNumber)) {
+				try {
+					activePosition = await expirePrivateEntryWithQuorum(readClients, config, activePosition, blockNumber, dateFromBlockTimestamp(storedSnapshot.blockTimestamp).toISOString())
+					await persistPosition(activePosition)
+					return 'processed' as const
+				} catch (expirationError) {
+					throw new Error(`Pending position ${activePosition.reportId} could not prove non-inclusion after finality: ${errorMessage(expirationError)}`)
+				}
+			}
 			await persistPosition({ ...activePosition, status: 'recovery-required' })
 			throw new Error(`Pending position ${activePosition.reportId} entry receipt could not be recovered: ${errorMessage(error)}`)
 		}
 	}
-	if (activePosition.status === 'closed') return 'processed' as const
+	if (activePosition.status === 'closed' || activePosition.status === 'expired-not-included') return 'processed' as const
 	if (lifecycleAttemptNeedsRecovery(activePosition)) {
 		let recovered: PositionRecord
 		try {
-			recovered = await recoverPendingLifecycleWithQuorum(readClients, config, activePosition)
+			recovered = await recoverPendingLifecycleWithQuorum(readClients, config, activePosition, blockNumber)
 		} catch (error) {
 			await persistPosition({ ...activePosition, status: 'recovery-required' })
 			throw new Error(`Pending position ${activePosition.reportId} lifecycle receipt could not be recovered: ${errorMessage(error)}`)
 		}
 		await persistPosition(recovered)
-		if (recovered.status !== 'closed' && config.submission.mode === 'private') throw new Error(`Position ${activePosition.reportId} lifecycle assets do not match the expected hedge-neutral withdrawal`)
 		return recovered.status === 'closed' ? ('processed' as const) : ('progressed' as const)
 	}
 	if (activePosition.status === 'recovery-required' && activePosition.lifecycleReceiptRecovered) {
 		throw new Error(`Position ${activePosition.reportId} has recovered lifecycle receipts but requires manual residual-asset reconciliation`)
 	}
-	if (activePosition.lifecycleTargetBlockNumber === '0' && config.submission.mode !== 'public') {
-		throw new Error(`Position ${activePosition.reportId} must finish its journaled public lifecycle before changing submission mode`)
-	}
 	if (currentReporter && game.settlementTimestamp === 0n && !settlementEligible) {
 		return 'waiting' as const
 	}
-	if (!currentReporter && balancesBefore.holderWeth <= 1n && balancesBefore.holderToken <= 1n) {
-		await persistPosition({ ...activePosition, status: 'recovery-required' })
-		throw new Error(`Position ${activePosition.reportId} is no longer current and has no withdrawable OpenOracle balance`)
-	}
 	const tokenDecimals = tokenDecimalsFromSnapshot(balancesBefore, activePosition.reportId)
+	const expectedWeth = parseDecimalWeth(activePosition.lockedWeth)
+	const expectedToken = parseUnits(activePosition.lockedToken, tokenDecimals)
+	const willSettle = currentReporter && game.settlementTimestamp === 0n
+	if (!willSettle && (balancesBefore.holderWeth <= expectedWeth || balancesBefore.holderToken <= expectedToken)) {
+		await persistPosition({ ...activePosition, status: 'recovery-required' })
+		throw new Error(`Position ${activePosition.reportId} does not have its exact withdrawable OpenOracle balances`)
+	}
+	const allowanceMismatch = lifecycleAllowanceMismatch({ token1: balancesBefore.internalAllowanceWeth, token2: balancesBefore.internalAllowanceToken }, { token1: expectedWeth, token2: expectedToken })
+	if (allowanceMismatch !== undefined) throw new Error(`Position ${activePosition.reportId} cannot execute atomically: ${allowanceMismatch}`)
 
 	const block = await client.getBlock({ blockNumber })
 	if (block.hash == null || block.hash.toLowerCase() !== storedSnapshot.blockHash.toLowerCase()) throw new Error('Lifecycle quote and quorum snapshot use different canonical blocks')
 	const signTransaction = account.signTransaction
 	const startingNonce = await pendingNonceWithQuorum(readClients, config, account.address)
 	const targetBlockNumber = blockNumber + 1n
-	const calls: { data: Hex; gas: bigint; kind: TransactionActivity['kind']; to: Address; token?: Address | undefined; tokenSymbol?: string | undefined }[] = []
-	const publicLifecycleAction = nextPublicLifecycleAction({ holderToken: balancesBefore.holderToken, holderWeth: balancesBefore.holderWeth, settlementEligible })
-	if (config.submission.mode === 'private') {
-		calls.push({
-			data: encodeFunctionData({
-				abi: openOracleArbitrageExecutorAbi,
-				functionName: 'assertParentBlock',
-				args: [blockNumber, storedSnapshot.blockHash],
-			}),
-			gas: 50_000n,
-			kind: 'canonical-head',
-			to: executor,
-		})
+	const lifecycleCall = {
+		data: encodeFunctionData({
+			abi: openOracleArbitrageExecutorAbi,
+			functionName: 'settleAndWithdraw',
+			args: [
+				{
+					amount1: expectedWeth,
+					amount2: expectedToken,
+					expectedParentBlockHash: storedSnapshot.blockHash,
+					openOracle: config.openOracle,
+					parentBlockNumber: blockNumber,
+				},
+				getOpenOracleGameTuple(game),
+				getOpenOracleHelperTuple(report.helper),
+			],
+		}),
+		gas: BigInt(game.callbackGasLimit) + 900_000n,
+		kind: 'settle' as const,
+		to: executor,
 	}
-	if (config.submission.mode === 'private' ? settlementEligible : publicLifecycleAction === 'settle') {
-		calls.push({
-			data: encodeFunctionData({
-				abi: openOracleAbi,
-				functionName: 'settle',
-				args: [id, getOpenOracleGameTuple(game), getOpenOracleHelperTuple(report.helper)],
-			}),
-			gas: BigInt(game.callbackGasLimit) + 750_000n,
-			kind: 'settle',
-			to: config.openOracle,
-		})
-	}
-	const withdrawWeth = { data: encodeFunctionData({ abi: openOracleAbi, functionName: 'withdraw', args: [config.network.weth, 2n ** 256n - 1n] }), gas: 150_000n, kind: 'withdraw-weth' as const, to: config.openOracle, token: config.network.weth, tokenSymbol: 'WETH' }
-	const withdrawToken = { data: encodeFunctionData({ abi: openOracleAbi, functionName: 'withdraw', args: [position.token, 2n ** 256n - 1n] }), gas: 150_000n, kind: 'withdraw-token' as const, to: config.openOracle, token: position.token, tokenSymbol: position.tokenSymbol }
-	if (config.submission.mode === 'private') calls.push(withdrawWeth, withdrawToken)
-	else if (publicLifecycleAction === 'withdraw-weth') calls.push(withdrawWeth)
-	else if (publicLifecycleAction === 'withdraw-token') calls.push(withdrawToken)
-	const continuingPublicLifecycle = config.submission.mode === 'public' && activePosition.lifecycleTargetBlockNumber === '0' && activePosition.lifecycleTokenDecimals !== undefined && activePosition.lifecycleWalletTokenBefore !== undefined && activePosition.lifecycleWalletWethBefore !== undefined
-	const lifecycleTokenDecimals = continuingPublicLifecycle ? activePosition.lifecycleTokenDecimals : tokenDecimals.toString()
-	const lifecycleWalletTokenBefore = continuingPublicLifecycle ? activePosition.lifecycleWalletTokenBefore : balancesBefore.walletToken.toString()
-	const lifecycleWalletWethBefore = continuingPublicLifecycle ? activePosition.lifecycleWalletWethBefore : balancesBefore.walletWeth.toString()
-	if (calls.length === 0 && config.submission.mode === 'public') {
-		const reconciled = await reconcilePublicLifecycleBalances(
-			readClients,
-			config,
-			{
-				...activePosition,
-				lifecycleTargetBlockNumber: '0',
-				lifecycleTokenDecimals,
-				lifecycleTransactionHashes: [],
-				lifecycleWalletTokenBefore,
-				lifecycleWalletWethBefore,
-			},
-			blockNumber,
-			storedSnapshot.blockHash,
-		)
-		await persistPosition(reconciled)
-		if (reconciled.status !== 'closed') throw new Error(`Position ${activePosition.reportId} has no remaining on-chain withdrawal but does not match its expected hedge-neutral assets`)
-		return 'processed' as const
-	}
-	const signed = await Promise.all(
-		calls.map((call, index) =>
-			prepareSignedTransaction({
-				baseFeePerGas: block.baseFeePerGas ?? 0n,
-				blockNumber,
-				chainId: config.network.chain.id,
-				data: call.data,
-				from: account.address,
-				gasEstimate: call.gas,
-				lastValidBlockNumber: lifecycleLastValidBlockNumber(config.submission.mode, targetBlockNumber),
-				nonce: startingNonce + BigInt(index),
-				signTransaction,
-				to: call.to,
-			}),
-		),
-	)
-	const serializedTransactions = signed.map(transaction => transaction.serializedTransaction)
+	const signed = await prepareSignedTransaction({
+		baseFeePerGas: block.baseFeePerGas ?? 0n,
+		blockNumber,
+		chainId: config.network.chain.id,
+		data: lifecycleCall.data,
+		from: account.address,
+		gasEstimate: lifecycleCall.gas,
+		lastValidBlockNumber: lifecycleLastValidBlockNumber(config.submission.mode, targetBlockNumber),
+		nonce: startingNonce,
+		signTransaction,
+		to: lifecycleCall.to,
+	})
 	const lifecyclePosition = {
 		...activePosition,
 		lifecycleSubmissionBlockNumber: blockNumber.toString(),
-		lifecycleTargetBlockNumber: config.submission.mode === 'private' ? targetBlockNumber.toString() : '0',
-		lifecycleTokenDecimals,
+		lifecycleSubmissionMode: config.submission.mode,
+		lifecycleTargetBlockNumber: targetBlockNumber.toString(),
+		lifecycleTokenDecimals: tokenDecimals.toString(),
 		lifecycleTransactionNonce: startingNonce.toString(),
-		lifecycleTransactionHashes: signed.map(transaction => transaction.hash),
+		lifecycleTransactionHashes: [signed.hash],
 		lifecycleUpdatedAt: new Date().toISOString(),
-		lifecycleWalletTokenBefore,
-		lifecycleWalletWethBefore,
+		lifecycleWalletTokenBefore: undefined,
+		lifecycleWalletWethBefore: undefined,
 		status: 'withdrawing' as const,
 	} satisfies PositionRecord
 	if (config.submission.mode === 'public') {
 		await persistPosition(lifecyclePosition)
-		const transaction = signed[0]
-		const call = calls[0]
-		if (transaction === undefined || call === undefined) throw new Error('Public lifecycle call metadata is incomplete')
-		const submission = await submitContractTransaction(client, wallet, config, transaction, { estimatedNetProfitEth: undefined, kind: call.kind, reportId: activePosition.reportId, token: call.token, tokenSymbol: call.tokenSymbol }, () => false, track)
+		const submission = await submitContractTransaction(client, wallet, config, signed, { estimatedNetProfitEth: undefined, kind: lifecycleCall.kind, reportId: activePosition.reportId }, () => false, track)
 		const { receipt } = await waitForTrackedTransaction(client, wallet, config, submission, track, replacement =>
 			persistPosition({
 				...lifecyclePosition,
@@ -1462,7 +1456,7 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 		}
 		await persistPosition(observedPosition)
 		try {
-			const recovered = await recoverPendingLifecycleWithQuorum(readClients, config, observedPosition)
+			const recovered = await recoverPendingLifecycleWithQuorum(readClients, config, observedPosition, receipt.blockNumber)
 			await persistPosition(recovered)
 			return recovered.status === 'closed' ? ('processed' as const) : ('progressed' as const)
 		} catch (error) {
@@ -1476,7 +1470,7 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 		signMessage,
 		stateBlockNumber: blockNumber,
 		targetBlockNumber,
-		transactions: serializedTransactions,
+		transactions: [signed.serializedTransaction],
 	})
 	await guardedTransactionSubmission(
 		() => false,
@@ -1494,13 +1488,13 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 						relayUrls: relaySimulations.successful.map(result => result.relayUrl),
 						signMessage,
 						targetBlockNumber,
-						transactions: serializedTransactions,
+						transactions: [signed.serializedTransaction],
 					}),
 			),
 	)
 	while ((await client.getBlockNumber()) < targetBlockNumber) await Bun.sleep(Math.min(config.pollMilliseconds, 1_000))
 	try {
-		await finalizeSubmittedLifecycleAttempt(lifecyclePosition, pending => recoverPendingLifecycleWithQuorum(readClients, config, pending), persistPosition)
+		await finalizeSubmittedLifecycleAttempt(lifecyclePosition, pending => recoverPendingLifecycleWithQuorum(readClients, config, pending, targetBlockNumber), persistPosition)
 	} catch (error) {
 		throw new Error(`Pending position ${activePosition.reportId} lifecycle receipt could not be recovered: ${errorMessage(error)}`)
 	}
@@ -1962,7 +1956,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 				}
 				let lifecycleProcessed = false
 				if (config.execute && wallet !== undefined) {
-					for (const position of positions.filter(candidate => candidate.status !== 'closed')) {
+					for (const position of positions.filter(candidate => positionConsumesRisk(candidate.status))) {
 						try {
 							const result = await processPositionLifecycle(client, readClients, wallet, config, position, blockNumber, persistPosition, trackTransaction)
 							if (result === 'processed' || result === 'progressed') {

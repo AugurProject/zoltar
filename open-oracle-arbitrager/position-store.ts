@@ -70,6 +70,7 @@ export type PositionRecord = {
 	lifecycleGasCostEth: string
 	lifecycleReceiptRecovered: boolean
 	lifecycleSubmissionBlockNumber?: string | undefined
+	lifecycleSubmissionMode?: 'private' | 'public' | undefined
 	lifecycleTargetBlockNumber: string | undefined
 	lifecycleTokenDecimals: string | undefined
 	lifecycleTransactionNonce?: string | undefined
@@ -83,7 +84,7 @@ export type PositionRecord = {
 	openedAt: string
 	realizedNetProfitEth: string | undefined
 	reportId: string
-	status: 'closed' | 'open' | 'pending-entry' | 'recovery-required' | 'replaced' | 'settled' | 'withdrawing'
+	status: 'closed' | 'expired-not-included' | 'open' | 'pending-entry' | 'recovery-required' | 'replaced' | 'settled' | 'withdrawing'
 	token: Address
 	tokenSymbol: string
 	withdrawnToken: string
@@ -160,7 +161,7 @@ function parsePosition(value: unknown): PositionRecord {
 	const account = getAddress(record['account'])
 	if (typeof record['reportId'] !== 'string' || !/^(?:0|[1-9]\d*)$/.test(record['reportId'])) throw new Error('Position journal report id is invalid')
 	if (record['direction'] !== 'buy-rep' && record['direction'] !== 'sell-rep') throw new Error('Position journal direction is invalid')
-	if (!['closed', 'open', 'pending-entry', 'recovery-required', 'replaced', 'settled', 'withdrawing'].includes(String(record['status']))) throw new Error('Position journal status is invalid')
+	if (!['closed', 'expired-not-included', 'open', 'pending-entry', 'recovery-required', 'replaced', 'settled', 'withdrawing'].includes(String(record['status']))) throw new Error('Position journal status is invalid')
 	if (typeof record['entryTransactionHash'] !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(record['entryTransactionHash'])) throw new Error('Position journal transaction hash is invalid')
 	const entryTransactionHashes = record['entryTransactionHashes']
 	if (!Array.isArray(entryTransactionHashes) || entryTransactionHashes.length === 0 || entryTransactionHashes.some(hash => typeof hash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(hash))) {
@@ -227,13 +228,18 @@ function parsePosition(value: unknown): PositionRecord {
 	if (!Array.isArray(lifecycleTransactionHashes) || lifecycleTransactionHashes.some(hash => typeof hash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(hash))) {
 		throw new Error('Position journal lifecycle transaction hashes are invalid')
 	}
-	const lifecycleFields = ['lifecycleTargetBlockNumber', 'lifecycleTokenDecimals', 'lifecycleWalletTokenBefore', 'lifecycleWalletWethBefore'] as const
-	for (const key of lifecycleFields) optionalIntegerField(record, key)
+	const lifecycleFields = ['lifecycleTargetBlockNumber', 'lifecycleTokenDecimals'] as const
+	for (const key of [...lifecycleFields, 'lifecycleWalletTokenBefore', 'lifecycleWalletWethBefore'] as const) optionalIntegerField(record, key)
 	const hasLifecycleState = lifecycleTransactionHashes.length !== 0 || record['lifecycleTargetBlockNumber'] === '0'
 	if (lifecycleFields.some(key => (record[key] !== undefined) !== hasLifecycleState)) throw new Error('Position journal lifecycle recovery fields are incomplete')
+	if ((record['lifecycleWalletTokenBefore'] === undefined) !== (record['lifecycleWalletWethBefore'] === undefined)) {
+		throw new Error('Position journal legacy lifecycle wallet snapshots are incomplete')
+	}
 	const lifecycleSubmissionBlockNumber = optionalIntegerField(record, 'lifecycleSubmissionBlockNumber')
 	const lifecycleTransactionNonce = optionalIntegerField(record, 'lifecycleTransactionNonce')
 	if ((lifecycleSubmissionBlockNumber === undefined) !== (lifecycleTransactionNonce === undefined)) throw new Error('Position journal lifecycle replacement recovery fields are incomplete')
+	if (record['lifecycleSubmissionMode'] !== undefined && record['lifecycleSubmissionMode'] !== 'private' && record['lifecycleSubmissionMode'] !== 'public') throw new Error('Position journal lifecycle submission mode is invalid')
+	if ((record['lifecycleSubmissionMode'] === undefined) !== (lifecycleSubmissionBlockNumber === undefined)) throw new Error('Position journal lifecycle replacement recovery mode is incomplete')
 	if (record['closedAt'] !== undefined && (typeof record['closedAt'] !== 'string' || !Number.isFinite(Date.parse(record['closedAt'])))) throw new Error('Position journal closedAt is invalid')
 	if (typeof record['tokenSymbol'] !== 'string' || record['tokenSymbol'].trim() === '') throw new Error('Position journal token symbol is invalid')
 	const manualReconciliation = parseManualReconciliation(record['manualReconciliation'])
@@ -262,6 +268,7 @@ function parsePosition(value: unknown): PositionRecord {
 		lifecycleGasCostEth: decimalField(record, 'lifecycleGasCostEth'),
 		lifecycleReceiptRecovered: record['lifecycleReceiptRecovered'],
 		lifecycleSubmissionBlockNumber,
+		lifecycleSubmissionMode: record['lifecycleSubmissionMode'],
 		lifecycleTargetBlockNumber: optionalIntegerField(record, 'lifecycleTargetBlockNumber'),
 		lifecycleTokenDecimals: optionalIntegerField(record, 'lifecycleTokenDecimals'),
 		lifecycleTransactionNonce,

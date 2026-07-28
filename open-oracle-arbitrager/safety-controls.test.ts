@@ -1,7 +1,13 @@
 import { describe, expect, test } from 'bun:test'
-import { DEFAULT_RISK_LIMITS, adjustedNetProfitWeth, positionRiskLimitMismatch, projectedLifecycleGasReserveWeth, riskLimitMismatch } from './safety-controls.js'
+import { DEFAULT_RISK_LIMITS, adjustedNetProfitWeth, positionConsumesRisk, positionRiskLimitMismatch, projectedLifecycleGasReserveWeth, riskLimitMismatch } from './safety-controls.js'
 
 describe('execution risk controls', () => {
+	test('does not reserve capital for a finalized non-included attempt', () => {
+		expect(positionConsumesRisk('pending-entry')).toBe(true)
+		expect(positionConsumesRisk('expired-not-included')).toBe(false)
+		expect(positionConsumesRisk('closed')).toBe(false)
+	})
+
 	test('reserves lifecycle and slippage costs before calling an opportunity profitable', () => {
 		expect(
 			adjustedNetProfitWeth({
@@ -24,7 +30,7 @@ describe('execution risk controls', () => {
 		).toBeLessThan(10n)
 	})
 
-	test('projects the complete public and private lifecycle transaction plans', () => {
+	test('projects the atomic public and private lifecycle transaction', () => {
 		const parameters = {
 			callbackGasLimit: 4_000_000n,
 			configuredReserveWeth: 1n,
@@ -32,9 +38,9 @@ describe('execution risk controls', () => {
 		}
 		const publicReserve = projectedLifecycleGasReserveWeth({ ...parameters, submissionMode: 'public' })
 		const privateReserve = projectedLifecycleGasReserveWeth({ ...parameters, submissionMode: 'private' })
-		expect(publicReserve).toBe(10_100_000n)
-		expect(privateReserve).toBe(10_200_000n)
-		expect(projectedLifecycleGasReserveWeth({ ...parameters, configuredReserveWeth: 10_200_001n, submissionMode: 'private' })).toBe(10_200_001n)
+		expect(publicReserve).toBe(9_800_000n)
+		expect(privateReserve).toBe(9_800_000n)
+		expect(projectedLifecycleGasReserveWeth({ ...parameters, configuredReserveWeth: 9_800_001n, submissionMode: 'private' })).toBe(9_800_001n)
 		expect(adjustedNetProfitWeth({ entryGasCostWeth: 0n, hedgeSlippageReserveWeth: 0n, lifecycleGasReserveWeth: privateReserve, profitBeforeGasWeth: privateReserve })).toBe(0n)
 		expect(adjustedNetProfitWeth({ entryGasCostWeth: 0n, hedgeSlippageReserveWeth: 0n, lifecycleGasReserveWeth: privateReserve, profitBeforeGasWeth: privateReserve - 1n })).toBe(-1n)
 

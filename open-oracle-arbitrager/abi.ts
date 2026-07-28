@@ -238,6 +238,17 @@ export const openOracleAbi = [
 	},
 	{
 		type: 'function',
+		name: 'internalAllowance',
+		stateMutability: 'view',
+		inputs: [
+			{ name: '', type: 'address' },
+			{ name: '', type: 'address' },
+			{ name: '', type: 'address' },
+		],
+		outputs: [{ name: '', type: 'uint256' }],
+	},
+	{
+		type: 'function',
 		name: 'settle',
 		stateMutability: 'nonpayable',
 		inputs: [

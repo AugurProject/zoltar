@@ -13,12 +13,11 @@ import {
 	guardedRiskSubmission,
 	journaledSubmission,
 	lifecycleLastValidBlockNumber,
-	lifecycleReceiptSnapshotBlock,
 	lifecycleAttemptNeedsRecovery,
-	nextPublicLifecycleAction,
 	openOracleDisputeTiming,
 	opportunityDecision,
 	privateBundleReceiptStatus,
+	privateAttemptCanExpire,
 	receiptGasExpendituresWithQuorum,
 	retryPrivateSubmissionWithinWindow,
 	runFundedExecution,
@@ -107,14 +106,9 @@ describe('funded execution orchestration', () => {
 		expect(executionTokenAllowed(configured, observed)).toBe(false)
 	})
 
-	test('accepts sequential public lifecycle receipts but keeps private lifecycle bundles atomic', () => {
-		const first = transactionReceipt()
-		const second = { ...transactionReceipt(), blockHash: `0x${'79'.repeat(32)}` as Hex, blockNumber: 102n }
+	test('uses on-chain parent binding for public lifecycle and relay target binding for private lifecycle', () => {
 		expect(lifecycleLastValidBlockNumber('public', 101n)).toBeUndefined()
 		expect(lifecycleLastValidBlockNumber('private', 101n)).toBe(101n)
-		expect(lifecycleReceiptSnapshotBlock([first, second], 0n)).toEqual({ blockHash: second.blockHash, blockNumber: 102n })
-		expect(() => lifecycleReceiptSnapshotBlock([first, second], 101n)).toThrow('split across blocks')
-		expect(lifecycleReceiptSnapshotBlock([first, transactionReceipt()], 101n)).toEqual({ blockHash: first.blockHash, blockNumber: 101n })
 	})
 
 	test('derives gas dates from quorum-confirmed canonical receipt blocks', async () => {
@@ -143,11 +137,10 @@ describe('funded execution orchestration', () => {
 		])
 	})
 
-	test('requires a private bundle when either exact executor allowance is missing', () => {
-		expect(fundingTransactionPlan('private', { token1: 0n, token2: 4n }, { token1: 3n, token2: 4n })).toEqual(['approval-token1', 'execution'])
-		expect(fundingTransactionPlan('private', { token1: 1n, token2: 4n }, { token1: 3n, token2: 4n })).toEqual(['reset-token1', 'approval-token1', 'execution'])
-		expect(fundingTransactionPlan('private', { token1: 3n, token2: 4n }, { token1: 3n, token2: 4n })).toEqual(['execution'])
-		expect(() => fundingTransactionPlan('public', { token1: 0n, token2: 4n }, { token1: 3n, token2: 4n })).toThrow('private bundle')
+	test('requires pre-existing executor allowances so every entry is one parent-bound transaction', () => {
+		expect(() => fundingTransactionPlan({ token1: 0n, token2: 4n }, { token1: 3n, token2: 4n })).toThrow('approved before entry')
+		expect(() => fundingTransactionPlan({ token1: 1n, token2: 4n }, { token1: 3n, token2: 4n })).toThrow('approved before entry')
+		expect(fundingTransactionPlan({ token1: 3n, token2: 4n }, { token1: 3n, token2: 4n })).toEqual(['execution'])
 	})
 
 	test('keeps next-block quote age independent from the minimum settlement window', () => {
@@ -159,6 +152,11 @@ describe('funded execution orchestration', () => {
 		expect(privateBundleReceiptStatus(transactionReceipt('reverted'), 101n)).toBe('reverted')
 		expect(privateBundleReceiptStatus({ ...transactionReceipt(), blockNumber: 102n }, 101n)).toBe('confirmation-unknown')
 		expect(privateBundleReceiptStatus(transactionReceipt(), 101n)).toBe('confirmed')
+	})
+
+	test('releases a private attempt only after its target block has twelve canonical descendants', () => {
+		expect(privateAttemptCanExpire(112n, 101n)).toBe(false)
+		expect(privateAttemptCanExpire(113n, 101n)).toBe(true)
 	})
 
 	test('records every signed bundle step before simulation and terminally fails every step on rejection', async () => {
@@ -683,13 +681,6 @@ describe('funded execution orchestration', () => {
 				toBlockNumber: 100n,
 			}),
 		).rejects.toThrow('RPC disagreement')
-	})
-
-	test('advances the public lifecycle through settle, WETH, token, and final reconciliation', () => {
-		expect(nextPublicLifecycleAction({ holderToken: 0n, holderWeth: 0n, settlementEligible: true })).toBe('settle')
-		expect(nextPublicLifecycleAction({ holderToken: 8n, holderWeth: 7n, settlementEligible: false })).toBe('withdraw-weth')
-		expect(nextPublicLifecycleAction({ holderToken: 8n, holderWeth: 1n, settlementEligible: false })).toBe('withdraw-token')
-		expect(nextPublicLifecycleAction({ holderToken: 1n, holderWeth: 1n, settlementEligible: false })).toBe('reconcile')
 	})
 
 	test('returns a definitive reverted receipt without retrying', async () => {
