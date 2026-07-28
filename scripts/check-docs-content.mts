@@ -402,7 +402,7 @@ assert.match(operatorReference, /\| Optional vault cleanup \| See \[Optional par
 assert.doesNotMatch(operatorReference, /\| Optional vault cleanup \| The public `migrateVaultWithUnresolvedEscalation` wrapper first runs ordinary migration/)
 assert.match(operatorReference, /External fork withdrawal lock[\s\S]*?winning inherited deposits settle there by proof[\s\S]*?inherited losers require no transaction[\s\S]*?parent lock accounting is optional/)
 assert.match(operatorReference, /winning proofs can be relayed permissionlessly, inherited losers retire without proofs/)
-assert.match(invariantsHtml, /<code>ESC-13<\/code>[\s\S]{0,500}start bond below the live non-decision threshold after tracked[\s\S]{0,80}supply falls/)
+assert.match(invariantsHtml, /<code>ESC-13<\/code>[\s\S]{0,900}live threshold later falls to or below that configured bond[\s\S]{0,180}<code>nonDecisionThreshold - 1<\/code>/)
 assert.match(whitepaper, /escalation's own fork has already removed the winner haircut[\s\S]{0,120}does not burn it again/)
 assert.match(whitepaper, /zoltar-whitepaper\.html#global-question-scope[\s\S]{0,220}consequence is universe-wide[\s\S]{0,180}parent flows for every pool/)
 assert.doesNotMatch(whitepaper, /Zoltar imposes no separate creation-age[\s\S]{0,500}unnecessary fork delays every\s+pool/)
