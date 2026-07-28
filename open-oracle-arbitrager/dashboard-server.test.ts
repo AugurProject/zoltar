@@ -93,6 +93,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(pageSource).toContain('id="submission-fieldset" disabled')
 	expect(pageSource).toContain('Public mode submits one atomic entry transaction')
 	expect(pageSource).toContain('Active risk envelope')
+	expect(pageSource).toContain('<div class="metric"><span>Lifecycle reserve floor</span><strong id="risk-lifecycle-reserve">—</strong></div>')
 	expect(pageSource).toContain('Strategy use')
 	expect(pageSource).toContain('id="connectivity-fieldset" disabled')
 	expect(pageSource).toContain('id="signer-fieldset" disabled')
