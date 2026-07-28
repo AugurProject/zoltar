@@ -10843,5 +10843,33 @@
 			}
 		],
 		"width": 920
+	},
+	"fig-contract-interaction-map": {
+		"ariaDescription": "Arrows show the primary runtime and deployment relationships among Zoltar registries, the pool factory, security pools, outcome shares, escalation, REP price reporting, forks, and truth auctions. The detailed table below names each direction and boundary.",
+		"ariaLabel": "Primary Zoltar and Statoblast contract interaction flowchart",
+		"height": 660,
+		"nodes": [],
+		"width": 1120
+	},
+	"fig-liquidation-health-curve": {
+		"ariaDescription": "Required REP backing rises linearly with the REP per ETH price, while unlocked REP stays fixed. Crossing the available-REP line makes the selected vault liquidatable.",
+		"ariaLabel": "Vault backing requirement and liquidation threshold across REP per ETH prices",
+		"height": 430,
+		"nodes": [],
+		"width": 900
+	},
+	"fig-statoblast-retention-utilization": {
+		"ariaDescription": "The annualized open-interest fee rises from about ten percent at zero utilization to about fifty percent at the eighty-percent utilization dip, then remains at that level as the per-second retention rate stays at its minimum.",
+		"ariaLabel": "Annualized open-interest fee across fee-eligible allowance utilization",
+		"height": 420,
+		"nodes": [],
+		"width": 900
+	},
+	"fig-zoltar-fork-threshold-decay": {
+		"ariaDescription": "With the default threshold and burn divisors, each fork haircut leaves approximately ninety-nine percent of the previous generation's theoretical REP supply. The next fork threshold remains five percent of that declining supply.",
+		"ariaLabel": "Theoretical REP supply and fork threshold across repeated forks",
+		"height": 420,
+		"nodes": [],
+		"width": 900
 	}
 }

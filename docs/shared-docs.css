@@ -409,6 +409,7 @@ body.doc-openoracle .table-scroll {
 }
 body.doc-openoracle .table-scroll:focus-visible,
 body.doc-openoracle .diagram:focus-visible,
+body.doc-openoracle .example-visual:focus-visible,
 body.doc-openoracle .equation:focus-visible {
 	outline: 2px solid var(--blue);
 	outline-offset: 0.2rem;

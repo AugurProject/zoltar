@@ -225,3 +225,73 @@ export function calculateResolutionModel(input: { invalidBalance: number; noBala
 export function normalizedEscalationCost(elapsed: number): number {
 	return Math.exp(2.4 * (elapsed - 1))
 }
+
+export function calculateAnnualizedRetentionFeePercent(utilizationPercent: number): number {
+	const maxRetentionRate = 0.999_999_996_848
+	const minRetentionRate = 0.999_999_977_88
+	const utilizationRatio = Math.min(Math.max(utilizationPercent, 0) / 80, 1)
+	const retentionRate = maxRetentionRate - (maxRetentionRate - minRetentionRate) * utilizationRatio
+	return (1 - retentionRate ** (365 * 24 * 60 * 60)) * 100
+}
+
+export type ForkThresholdPoint = {
+	forkThreshold: number
+	generation: number
+	theoreticalSupply: number
+}
+
+export function calculateForkThresholdSeries(generationCount: number, genesisTheoreticalSupply = 100): ForkThresholdPoint[] {
+	return Array.from({ length: Math.max(0, generationCount) }, (_, generation) => {
+		const theoreticalSupply = genesisTheoreticalSupply * 0.99 ** generation
+		return {
+			forkThreshold: theoreticalSupply / 20,
+			generation,
+			theoreticalSupply,
+		}
+	})
+}
+
+export type LiquidationHealthModel = {
+	currentRequiredRep: number
+	state: 'liquidatable' | 'safe'
+	thresholdPrice: number
+}
+
+export type ContractInteractionEdge = {
+	id: string
+	phase: string
+	receiver: string
+	source: string
+}
+
+export const contractInteractionEdges: ContractInteractionEdge[] = [
+	{ id: 'factory-question-validation', phase: 'Deployment', receiver: 'Question Data', source: 'Pool Factory' },
+	{ id: 'factory-universe-lookup', phase: 'Deployment', receiver: 'Zoltar', source: 'Pool Factory' },
+	{ id: 'factory-pool-deployment', phase: 'Deployment', receiver: 'Security Pool', source: 'Pool Factory' },
+	{ id: 'factory-share-token-deployment', phase: 'Deployment', receiver: 'Share Token', source: 'Pool Factory' },
+	{ id: 'factory-price-coordinator-deployment', phase: 'Deployment', receiver: 'Price Coordinator', source: 'Pool Factory' },
+	{ id: 'zoltar-reputation-token-lifecycle', phase: 'Universe lifecycle', receiver: 'Reputation Token', source: 'Zoltar' },
+	{ id: 'pool-share-token-claims', phase: 'Market runtime', receiver: 'Share Token', source: 'Security Pool' },
+	{ id: 'pool-escalation-game-resolution', phase: 'Resolution', receiver: 'Escalation Game', source: 'Security Pool' },
+	{ id: 'pool-price-read', phase: 'Risk operations', receiver: 'Price Coordinator', source: 'Security Pool' },
+	{ id: 'coordinator-oracle-report', phase: 'Price discovery', receiver: 'OpenOracle', source: 'Price Coordinator' },
+	{ id: 'oracle-coordinator-callback', phase: 'Price settlement', receiver: 'Price Coordinator', source: 'OpenOracle' },
+	{ id: 'coordinator-pool-execute', phase: 'Risk execution', receiver: 'Security Pool', source: 'Price Coordinator' },
+	{ id: 'share-token-forker-migration', phase: 'Share migration', receiver: 'Pool Forker', source: 'Share Token' },
+	{ id: 'forker-escalation-snapshot', phase: 'Fork snapshot', receiver: 'Escalation Game', source: 'Pool Forker' },
+	{ id: 'forker-migration-proxy', phase: 'Fork migration', receiver: 'Migration Proxy', source: 'Pool Forker' },
+	{ id: 'migration-proxy-zoltar', phase: 'Fork migration', receiver: 'Zoltar', source: 'Migration Proxy' },
+	{ id: 'forker-child-deployment', phase: 'Fork migration', receiver: 'Pool Factory', source: 'Pool Forker' },
+	{ id: 'forker-pool-migration', phase: 'Fork migration', receiver: 'Security Pool', source: 'Pool Forker' },
+	{ id: 'forker-truth-auction', phase: 'Backing repair', receiver: 'Truth Auction', source: 'Pool Forker' },
+]
+
+export function calculateLiquidationHealth(unlockedRep: number, allowance: number, multiplier: number, currentPrice: number): LiquidationHealthModel {
+	const currentRequiredRep = allowance * multiplier * currentPrice
+	const thresholdPrice = allowance > 0 && multiplier > 0 ? unlockedRep / (allowance * multiplier) : Number.POSITIVE_INFINITY
+	return {
+		currentRequiredRep,
+		state: currentRequiredRep > unlockedRep ? 'liquidatable' : 'safe',
+		thresholdPrice,
+	}
+}

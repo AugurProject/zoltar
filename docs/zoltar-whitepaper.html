@@ -319,6 +319,15 @@
 						<code>5</code>, supply is close to 99% of the previous generation, subject to
 						Solidity integer flooring.
 					</p>
+					<figure class="diagram" id="fig-zoltar-fork-threshold-decay">
+						<div class="plot-chart" data-plot-chart="fig-zoltar-fork-threshold-decay" data-plot-width="900" data-plot-height="420" role="img" aria-label="Theoretical REP supply and fork threshold across repeated forks"><span class="plot-chart-fallback">Repeated-fork economics. Each default fork leaves approximately 99% of the previous generation's theoretical REP supply, and the next fork threshold remains 5% of that declining supply.</span></div>
+						<p class="diagram-caption">
+							<span class="figure-label">Repeated-Fork Decay</span>The filled
+							curve normalizes genesis theoretical supply to 100%. The dashed
+							curve is the next fork threshold. Integer flooring can shift
+							exact onchain values slightly from this continuous approximation.
+						</p>
+					</figure>
 
 					<div class="table-wrap">
 						<table>

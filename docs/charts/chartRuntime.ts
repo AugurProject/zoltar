@@ -1,5 +1,16 @@
-import { areaY, barX, dot, lineY, plot, ruleX, ruleY, text, type RenderFunction } from '@observablehq/plot'
-import { calculateAuctionModel, calculateCollateralRepairModel, calculateEscalationDepositModel, calculateOracleSecurityModel, calculateResolutionModel, normalizedEscalationCost } from './chartModels'
+import { areaY, barX, dot, line, lineY, link, plot, rect, ruleX, ruleY, text } from '@observablehq/plot'
+import {
+	calculateAnnualizedRetentionFeePercent,
+	calculateAuctionModel,
+	calculateCollateralRepairModel,
+	calculateEscalationDepositModel,
+	calculateForkThresholdSeries,
+	calculateLiquidationHealth,
+	calculateOracleSecurityModel,
+	calculateResolutionModel,
+	contractInteractionEdges,
+	normalizedEscalationCost,
+} from './chartModels'
 
 declare function require(path: './diagramSpecs.json'): unknown
 
@@ -20,7 +31,6 @@ type ChartSpec = {
 	width: number
 }
 
-const svgNamespace = 'http://www.w3.org/2000/svg'
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -87,49 +97,308 @@ if (!isRecord(diagramSpecsSource)) {
 }
 const specs = Object.fromEntries(Object.entries(diagramSpecsSource).map(([chartId, value]) => [chartId, parseChartSpec(value, chartId)]))
 
-function createSvgNode(node: ChartNode): Node {
-	if (node.text !== undefined) {
-		return document.createTextNode(node.text)
-	}
-	if (node.tag === undefined) {
-		throw new Error('Plot diagram node is missing a tag')
-	}
-
-	const element = document.createElementNS(svgNamespace, node.tag)
-	for (const [name, value] of Object.entries(node.attributes ?? {})) {
-		element.setAttribute(name, value)
-	}
-	for (const child of node.children ?? []) {
-		element.append(createSvgNode(child))
-	}
-	return element
+type DiagramRect = {
+	attributes: Record<string, string>
+	className: string | undefined
+	height: number
+	rx: number
+	width: number
+	x: number
+	y: number
 }
 
-function narrativeMark(spec: ChartSpec): RenderFunction {
-	return () => {
-		const group = document.createElementNS(svgNamespace, 'g')
-		group.classList.add('plot-narrative-mark')
-		for (const node of spec.nodes) {
-			group.append(createSvgNode(node))
+type DiagramText = {
+	attributes: Record<string, string>
+	className: string | undefined
+	fontSize: number
+	fontWeight: number
+	text: string
+	textAnchor: 'end' | 'middle' | 'start'
+	x: number
+	y: number
+}
+
+type DiagramLine = {
+	attributes: Record<string, string>
+	className: string | undefined
+	hasArrow: boolean
+	points: { x: number; y: number }[]
+	stroke: string
+	strokeDasharray: string | undefined
+	strokeWidth: number
+}
+
+type DiagramDot = {
+	className: string | undefined
+	fill: string
+	r: number
+	x: number
+	y: number
+}
+
+function numericAttribute(attributes: Record<string, string>, name: string, fallback = 0): number {
+	const value = Number(attributes[name])
+	return Number.isFinite(value) ? value : fallback
+}
+
+function textContent(node: ChartNode): string {
+	if (node.text !== undefined) return node.text
+	return (node.children ?? []).map(textContent).join('')
+}
+
+function textStyle(className: string | undefined): { fontSize: number; fontWeight: number } {
+	if (className === 'svg-label') return { fontSize: 17, fontWeight: 800 }
+	if (className === 'svg-micro') return { fontSize: 11, fontWeight: 650 }
+	return { fontSize: 13, fontWeight: className === 'svg-small' ? 650 : 500 }
+}
+
+function textAnchor(attributes: Record<string, string>): DiagramText['textAnchor'] {
+	if (attributes['text-anchor'] === 'end') return 'end'
+	if (attributes['text-anchor'] === 'middle') return 'middle'
+	return 'start'
+}
+
+function parsePathPoints(source: string): { x: number; y: number }[] {
+	const tokens = source.match(/[MLHVCZz]|-?(?:\d+\.?\d*|\.\d+)/g) ?? []
+	const points: { x: number; y: number }[] = []
+	let command = ''
+	let index = 0
+	let x = 0
+	let y = 0
+	while (index < tokens.length) {
+		const token = tokens[index]
+		if (token === undefined) break
+		if (/^[MLHVCZz]$/.test(token)) {
+			command = token
+			index += 1
+			if (command === 'Z' || command === 'z') continue
 		}
-		return group
+		if (command === 'M' || command === 'L') {
+			x = Number(tokens[index])
+			y = Number(tokens[index + 1])
+			index += 2
+			points.push({ x, y })
+			command = command === 'M' ? 'L' : command
+			continue
+		}
+		if (command === 'H') {
+			x = Number(tokens[index])
+			index += 1
+			points.push({ x, y })
+			continue
+		}
+		if (command === 'V') {
+			y = Number(tokens[index])
+			index += 1
+			points.push({ x, y })
+			continue
+		}
+		if (command === 'C') {
+			const control1X = Number(tokens[index])
+			const control1Y = Number(tokens[index + 1])
+			const control2X = Number(tokens[index + 2])
+			const control2Y = Number(tokens[index + 3])
+			const endX = Number(tokens[index + 4])
+			const endY = Number(tokens[index + 5])
+			index += 6
+			const startX = x
+			const startY = y
+			for (let step = 1; step <= 16; step++) {
+				const progress = step / 16
+				const remaining = 1 - progress
+				points.push({
+					x: remaining ** 3 * startX + 3 * remaining ** 2 * progress * control1X + 3 * remaining * progress ** 2 * control2X + progress ** 3 * endX,
+					y: remaining ** 3 * startY + 3 * remaining ** 2 * progress * control1Y + 3 * remaining * progress ** 2 * control2Y + progress ** 3 * endY,
+				})
+			}
+			x = endX
+			y = endY
+			continue
+		}
+		throw new Error(`Unsupported Plot diagram path command in ${source}`)
+	}
+	return points
+}
+
+function parsePolylinePoints(source: string): { x: number; y: number }[] {
+	const values = source
+		.trim()
+		.split(/[\s,]+/)
+		.map(Number)
+	const points: { x: number; y: number }[] = []
+	for (let index = 0; index + 1 < values.length; index += 2) {
+		const x = values[index]
+		const y = values[index + 1]
+		if (x !== undefined && y !== undefined && Number.isFinite(x) && Number.isFinite(y)) points.push({ x, y })
+	}
+	return points
+}
+
+function diagramData(spec: ChartSpec): { dots: DiagramDot[]; lines: DiagramLine[]; rectangles: DiagramRect[]; texts: DiagramText[] } {
+	const rectangles: DiagramRect[] = []
+	const texts: DiagramText[] = []
+	const lines: DiagramLine[] = []
+	const dots: DiagramDot[] = []
+	function visit(node: ChartNode, insideDefinitions = false): void {
+		if (node.text !== undefined) return
+		const attributes = node.attributes ?? {}
+		const className = attributes['class']
+		if (node.tag === 'defs') {
+			for (const child of node.children ?? []) visit(child, true)
+			return
+		}
+		if (insideDefinitions) return
+		if (node.tag === 'rect') {
+			rectangles.push({
+				attributes,
+				className,
+				height: numericAttribute(attributes, 'height'),
+				rx: numericAttribute(attributes, 'rx'),
+				width: numericAttribute(attributes, 'width'),
+				x: numericAttribute(attributes, 'x'),
+				y: numericAttribute(attributes, 'y'),
+			})
+		} else if (node.tag === 'text') {
+			const parentX = numericAttribute(attributes, 'x')
+			let lineY = numericAttribute(attributes, 'y')
+			const tspanChildren = (node.children ?? []).filter(child => child.tag === 'tspan')
+			const textNodes = tspanChildren.length > 0 ? tspanChildren : [node]
+			for (const textNode of textNodes) {
+				const textAttributes = textNode === node ? attributes : { ...attributes, ...(textNode.attributes ?? {}) }
+				lineY += numericAttribute(textNode.attributes ?? {}, 'dy')
+				const style = textStyle(textAttributes['class'])
+				texts.push({
+					attributes: textAttributes,
+					className: textAttributes['class'],
+					fontSize: style.fontSize,
+					fontWeight: style.fontWeight,
+					text: textContent(textNode).trim(),
+					textAnchor: textAnchor(textAttributes),
+					x: numericAttribute(textAttributes, 'x', parentX),
+					y: lineY - style.fontSize * 0.34,
+				})
+			}
+		} else if (node.tag === 'path') {
+			lines.push({
+				attributes,
+				className,
+				hasArrow: attributes['marker-end'] !== undefined,
+				points: parsePathPoints(attributes['d'] ?? ''),
+				stroke: attributes['stroke'] ?? 'currentColor',
+				strokeDasharray: attributes['stroke-dasharray'],
+				strokeWidth: numericAttribute(attributes, 'stroke-width', 2.35),
+			})
+		} else if (node.tag === 'line') {
+			lines.push({
+				attributes,
+				className,
+				hasArrow: attributes['marker-end'] !== undefined,
+				points: [
+					{ x: numericAttribute(attributes, 'x1'), y: numericAttribute(attributes, 'y1') },
+					{ x: numericAttribute(attributes, 'x2'), y: numericAttribute(attributes, 'y2') },
+				],
+				stroke: attributes['stroke'] ?? 'currentColor',
+				strokeDasharray: attributes['stroke-dasharray'],
+				strokeWidth: numericAttribute(attributes, 'stroke-width', 2.35),
+			})
+		} else if (node.tag === 'polyline') {
+			lines.push({
+				attributes,
+				className,
+				hasArrow: attributes['marker-end'] !== undefined,
+				points: parsePolylinePoints(attributes['points'] ?? ''),
+				stroke: attributes['stroke'] ?? 'currentColor',
+				strokeDasharray: attributes['stroke-dasharray'],
+				strokeWidth: numericAttribute(attributes, 'stroke-width', 2.35),
+			})
+		} else if (node.tag === 'circle') {
+			dots.push({
+				className,
+				fill: attributes['fill'] ?? 'currentColor',
+				r: numericAttribute(attributes, 'r', 4),
+				x: numericAttribute(attributes, 'cx'),
+				y: numericAttribute(attributes, 'cy'),
+			})
+		}
+		for (const child of node.children ?? []) visit(child, insideDefinitions)
+	}
+	for (const node of spec.nodes) visit(node)
+	return { dots, lines, rectangles, texts }
+}
+
+function copyDataAttributes(element: Element | undefined, attributes: Record<string, string>): void {
+	if (element === undefined) return
+	for (const [name, value] of Object.entries(attributes)) {
+		if (name.startsWith('data-')) element.setAttribute(name, value)
 	}
 }
 
-function narrativeChart(spec: ChartSpec): SVGSVGElement {
-	return plot({
+function markDrivenDiagramChart(spec: ChartSpec): SVGSVGElement {
+	const data = diagramData(spec)
+	const lineMarks = data.lines.map(item =>
+		line(item.points, {
+			...(item.className === undefined ? {} : { className: item.className }),
+			curve: 'linear',
+			...(item.hasArrow ? { markerEnd: 'arrow' } : {}),
+			stroke: item.stroke,
+			...(item.strokeDasharray === undefined ? {} : { strokeDasharray: item.strokeDasharray }),
+			strokeWidth: item.strokeWidth,
+			x: 'x',
+			y: 'y',
+		}),
+	)
+	const rectangleMarks = data.rectangles.map(item =>
+		rect([item], {
+			...(item.className === undefined ? {} : { className: item.className }),
+			rx: item.rx,
+			x1: 'x',
+			x2: datum => datum.x + datum.width,
+			y1: 'y',
+			y2: datum => datum.y + datum.height,
+		}),
+	)
+	const dotMarks = data.dots.map(item =>
+		dot([item], {
+			...(item.className === undefined ? {} : { className: item.className }),
+			fill: item.fill,
+			r: item.r,
+			x: 'x',
+			y: 'y',
+		}),
+	)
+	const textMarks = data.texts.map(item =>
+		text([item], {
+			...(item.className === undefined ? {} : { className: item.className }),
+			fontSize: item.fontSize,
+			fontWeight: item.fontWeight,
+			text: 'text',
+			textAnchor: item.textAnchor,
+			x: 'x',
+			y: 'y',
+		}),
+	)
+	const chart = plot({
 		ariaDescription: spec.ariaDescription,
 		ariaLabel: spec.ariaLabel,
 		height: spec.height,
 		margin: 0,
-		marks: [narrativeMark(spec)],
+		marks: [...lineMarks, ...rectangleMarks, ...dotMarks, ...textMarks],
 		style: {
 			background: 'transparent',
 			color: 'currentColor',
 			overflow: 'visible',
 		},
 		width: spec.width,
+		x: { axis: null, domain: [0, spec.width] },
+		y: { axis: null, domain: [spec.height, 0] },
 	}) as SVGSVGElement
+	const rectangleElements = Array.from(chart.querySelectorAll<SVGRectElement>('g[aria-label="rect"] > rect'))
+	const lineElements = Array.from(chart.querySelectorAll<SVGPathElement>('g[aria-label="line"] > path'))
+	const textElements = Array.from(chart.querySelectorAll<SVGTextElement>('g[aria-label="text"] > text'))
+	data.rectangles.forEach((item, index) => copyDataAttributes(rectangleElements[index], item.attributes))
+	data.lines.forEach((item, index) => copyDataAttributes(lineElements[index], item.attributes))
+	data.texts.forEach((item, index) => copyDataAttributes(textElements[index], item.attributes))
+	return chart
 }
 
 function readInput(container: Element | null, name: string, fallback = 0): number {
@@ -185,6 +454,256 @@ function escalationCostChart(spec: ChartSpec): SVGSVGElement {
 		width: spec.width,
 		x: { domain: [0, 1], grid: true, label: 'Elapsed escalation interval', percent: true },
 		y: { domain: [0, 1], grid: true, label: 'Required REP (normalized)', percent: true },
+	}) as SVGSVGElement
+}
+
+function forkThresholdDecayChart(spec: ChartSpec): SVGSVGElement {
+	const generations = calculateForkThresholdSeries(21)
+	return plot({
+		ariaDescription: spec.ariaDescription,
+		ariaLabel: spec.ariaLabel,
+		height: spec.height,
+		marginBottom: 46,
+		marginLeft: 62,
+		marginRight: 24,
+		marginTop: 22,
+		marks: [
+			areaY(generations, { fill: 'var(--blue-soft, #dceaf8)', x: 'generation', y: 'theoreticalSupply' }),
+			lineY(generations, { stroke: 'var(--blue, #245f9f)', strokeWidth: 3, x: 'generation', y: 'theoreticalSupply' }),
+			lineY(generations, { stroke: 'var(--gold, #8a5d18)', strokeDasharray: '6,4', strokeWidth: 2, x: 'generation', y: 'forkThreshold' }),
+			text(
+				[
+					{ generation: 15, label: 'theoretical supply', value: generations[15]?.theoreticalSupply ?? 0 },
+					{ generation: 15, label: 'next fork threshold', value: generations[15]?.forkThreshold ?? 0 },
+				],
+				{ dy: -8, fill: datum => (datum.label === 'theoretical supply' ? 'var(--blue, #245f9f)' : 'var(--gold, #8a5d18)'), fontWeight: 650, text: 'label', x: 'generation', y: 'value' },
+			),
+		],
+		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
+		width: spec.width,
+		x: { grid: true, label: 'Fork generation along one lineage', ticks: 10 },
+		y: { domain: [0, 100], grid: true, label: 'Percent of genesis theoretical supply' },
+	}) as SVGSVGElement
+}
+
+function retentionUtilizationChart(spec: ChartSpec): SVGSVGElement {
+	const curve = Array.from({ length: 101 }, (_, utilizationPercent) => {
+		return {
+			annualFeePercent: calculateAnnualizedRetentionFeePercent(utilizationPercent),
+			utilizationPercent,
+		}
+	})
+	return plot({
+		ariaDescription: spec.ariaDescription,
+		ariaLabel: spec.ariaLabel,
+		height: spec.height,
+		marginBottom: 46,
+		marginLeft: 60,
+		marginRight: 28,
+		marginTop: 22,
+		marks: [
+			areaY(curve, { fill: 'var(--gold-soft, #f3e4c6)', x: 'utilizationPercent', y: 'annualFeePercent' }),
+			lineY(curve, { stroke: 'var(--gold, #8a5d18)', strokeWidth: 3, x: 'utilizationPercent', y: 'annualFeePercent' }),
+			ruleX([80], { stroke: 'var(--red, #99453f)', strokeDasharray: '5,4', strokeWidth: 2 }),
+			text([{ annualFeePercent: curve[80]?.annualFeePercent ?? 50, label: '80% utilization dip', utilizationPercent: 80 }], {
+				dx: -8,
+				dy: -10,
+				fill: 'var(--red, #99453f)',
+				fontWeight: 700,
+				text: 'label',
+				textAnchor: 'end',
+				x: 'utilizationPercent',
+				y: 'annualFeePercent',
+			}),
+		],
+		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
+		width: spec.width,
+		x: { domain: [0, 100], grid: true, label: 'Fee-eligible allowance utilization (%)' },
+		y: { domain: [0, 55], grid: true, label: 'Annualized open-interest fee (%)' },
+	}) as SVGSVGElement
+}
+
+function liquidationHealthChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
+	const container = mount.closest('.interactive-example')
+	const unlockedRep = Number(container?.querySelector<HTMLInputElement>('[data-liquidation-input="rep"]')?.value ?? 1000)
+	const allowance = Number(container?.querySelector<HTMLInputElement>('[data-liquidation-input="debt"]')?.value ?? 75)
+	const multiplier = Number(container?.querySelector<HTMLInputElement>('[data-liquidation-input="multiplier"]')?.value ?? 2)
+	const currentPrice = Number(container?.querySelector<HTMLInputElement>('[data-liquidation-input="price"]')?.value ?? 10)
+	const maximumPrice = Math.max(20, currentPrice)
+	const curve = Array.from({ length: 81 }, (_, index) => {
+		const price = (maximumPrice * index) / 80
+		return { price, requiredRep: allowance * multiplier * price }
+	})
+	const { currentRequiredRep, state, thresholdPrice } = calculateLiquidationHealth(unlockedRep, allowance, multiplier, currentPrice)
+	const chart = plot({
+		ariaDescription: `${spec.ariaDescription} At the selected values, required backing is ${currentRequiredRep.toFixed(0)} REP against ${unlockedRep.toFixed(0)} unlocked REP, so the vault is ${state}.`,
+		ariaLabel: spec.ariaLabel,
+		height: spec.height,
+		marginBottom: 48,
+		marginLeft: 68,
+		marginRight: 28,
+		marginTop: 24,
+		marks: [
+			areaY(curve, { fill: 'var(--red-soft, #f2d9d6)', x: 'price', y: 'requiredRep' }),
+			lineY(curve, { stroke: 'var(--red, #99453f)', strokeWidth: 3, x: 'price', y: 'requiredRep' }),
+			ruleY([unlockedRep], { stroke: 'var(--green, #1d735d)', strokeDasharray: '7,4', strokeWidth: 3 }),
+			...(Number.isFinite(thresholdPrice) && thresholdPrice <= maximumPrice ? [ruleX([thresholdPrice], { stroke: 'var(--gold, #8a5d18)', strokeDasharray: '4,4', strokeWidth: 2 })] : []),
+			dot([{ price: currentPrice, requiredRep: currentRequiredRep }], { fill: state === 'safe' ? 'var(--green, #1d735d)' : 'var(--red, #99453f)', r: 7, stroke: 'var(--paper, #fff)', strokeWidth: 2, x: 'price', y: 'requiredRep' }),
+			text([{ label: `${unlockedRep.toFixed(0)} REP available`, price: maximumPrice * 0.72, requiredRep: unlockedRep }], { dy: -9, fill: 'var(--green, #1d735d)', fontWeight: 650, text: 'label', x: 'price', y: 'requiredRep' }),
+		],
+		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
+		width: spec.width,
+		x: { domain: [0, maximumPrice], grid: true, label: 'REP per ETH price' },
+		y: { domain: [0, Math.max(unlockedRep, allowance * multiplier * maximumPrice) * 1.06], grid: true, label: 'REP backing' },
+	}) as SVGSVGElement
+	chart.dataset['chartState'] = state
+	return chart
+}
+
+function contractInteractionChart(spec: ChartSpec): SVGSVGElement {
+	const nodes = [
+		{ fill: 'registry', id: 'Question Data', x1: 0.2, x2: 2.4, y1: 0.4, y2: 1.4 },
+		{ fill: 'registry', id: 'Zoltar', x1: 0.2, x2: 2.4, y1: 2.2, y2: 3.2 },
+		{ fill: 'registry', id: 'Reputation Token', x1: 0.2, x2: 2.4, y1: 4, y2: 5 },
+		{ fill: 'factory', id: 'Pool Factory', x1: 4, x2: 6.4, y1: 0.4, y2: 1.4 },
+		{ fill: 'market', id: 'Security Pool', x1: 4, x2: 6.4, y1: 2.2, y2: 3.2 },
+		{ fill: 'market', id: 'Share Token', x1: 8, x2: 10.4, y1: 0.4, y2: 1.4 },
+		{ fill: 'resolution', id: 'Escalation Game', x1: 8, x2: 10.4, y1: 2.2, y2: 3.2 },
+		{ fill: 'oracle', id: 'Price Coordinator', x1: 4, x2: 6.4, y1: 4, y2: 5 },
+		{ fill: 'oracle', id: 'OpenOracle', x1: 8, x2: 10.4, y1: 4, y2: 5 },
+		{ fill: 'fork', id: 'Migration Proxy', x1: 0.2, x2: 2.4, y1: 5.8, y2: 6.8 },
+		{ fill: 'fork', id: 'Pool Forker', x1: 4, x2: 6.4, y1: 5.8, y2: 6.8 },
+		{ fill: 'fork', id: 'Truth Auction', x1: 8, x2: 10.4, y1: 5.8, y2: 6.8 },
+	]
+	const nodeById = new Map(nodes.map(node => [node.id, node]))
+	function boundaryPoint(source: (typeof nodes)[number], target: (typeof nodes)[number]): { x: number; y: number } {
+		const sourceX = (source.x1 + source.x2) / 2
+		const sourceY = (source.y1 + source.y2) / 2
+		const deltaX = (target.x1 + target.x2) / 2 - sourceX
+		const deltaY = (target.y1 + target.y2) / 2 - sourceY
+		const halfWidth = (source.x2 - source.x1) / 2
+		const halfHeight = (source.y2 - source.y1) / 2
+		const scale = 1 / Math.max(Math.abs(deltaX) / halfWidth, Math.abs(deltaY) / halfHeight)
+		return { x: sourceX + deltaX * scale, y: sourceY + deltaY * scale }
+	}
+	const routedEdgeIds = new Set(['factory-price-coordinator-deployment', 'pool-price-read', 'coordinator-pool-execute', 'coordinator-oracle-report', 'oracle-coordinator-callback', 'share-token-forker-migration', 'forker-escalation-snapshot', 'migration-proxy-zoltar', 'forker-child-deployment', 'forker-pool-migration'])
+	const edges = contractInteractionEdges
+		.filter(edge => !routedEdgeIds.has(edge.id))
+		.map(edge => {
+			const sourceNode = nodeById.get(edge.source)
+			const targetNode = nodeById.get(edge.receiver)
+			if (sourceNode === undefined || targetNode === undefined) throw new Error(`Contract interaction chart node is missing for ${edge.source} or ${edge.receiver}`)
+			const from = boundaryPoint(sourceNode, targetNode)
+			const to = boundaryPoint(targetNode, sourceNode)
+			return { id: edge.id, x1: from.x, x2: to.x, y1: from.y, y2: to.y }
+		})
+	const routedEdges = [
+		{
+			id: 'factory-price-coordinator-deployment',
+			points: [
+				{ x: 6.4, y: 1.1 },
+				{ x: 6.8, y: 1.6 },
+				{ x: 6.8, y: 4.5 },
+				{ x: 6.4, y: 4.5 },
+			],
+		},
+		{
+			id: 'pool-price-read',
+			points: [
+				{ x: 4.95, y: 3.2 },
+				{ x: 4.95, y: 4 },
+			],
+		},
+		{
+			id: 'coordinator-pool-execute',
+			points: [
+				{ x: 5.45, y: 4 },
+				{ x: 5.45, y: 3.2 },
+			],
+		},
+		{
+			id: 'coordinator-oracle-report',
+			points: [
+				{ x: 6.4, y: 4.3 },
+				{ x: 8, y: 4.3 },
+			],
+		},
+		{
+			id: 'oracle-coordinator-callback',
+			points: [
+				{ x: 8, y: 4.7 },
+				{ x: 6.4, y: 4.7 },
+			],
+		},
+		{
+			id: 'share-token-forker-migration',
+			points: [
+				{ x: 8, y: 1.1 },
+				{ x: 7.05, y: 1.6 },
+				{ x: 7.05, y: 5.25 },
+				{ x: 6.1, y: 5.8 },
+			],
+		},
+		{
+			id: 'forker-escalation-snapshot',
+			points: [
+				{ x: 6.4, y: 6.15 },
+				{ x: 7.3, y: 5.45 },
+				{ x: 7.3, y: 2.7 },
+				{ x: 8, y: 2.7 },
+			],
+		},
+		{
+			id: 'migration-proxy-zoltar',
+			points: [
+				{ x: 1.3, y: 5.8 },
+				{ x: 2.75, y: 5.3 },
+				{ x: 2.75, y: 2.7 },
+				{ x: 2.4, y: 2.7 },
+			],
+		},
+		{
+			id: 'forker-child-deployment',
+			points: [
+				{ x: 4.5, y: 5.8 },
+				{ x: 3.2, y: 5.35 },
+				{ x: 3.2, y: 0.9 },
+				{ x: 4, y: 0.9 },
+			],
+		},
+		{
+			id: 'forker-pool-migration',
+			points: [
+				{ x: 4.75, y: 5.8 },
+				{ x: 3.5, y: 5.35 },
+				{ x: 3.5, y: 2.7 },
+				{ x: 4, y: 2.7 },
+			],
+		},
+	]
+	const routedEdgeIdSet = new Set(routedEdges.map(edge => edge.id))
+	if (routedEdgeIdSet.size !== routedEdgeIds.size || [...routedEdgeIds].some(edgeId => !routedEdgeIdSet.has(edgeId))) {
+		throw new Error('Contract interaction chart routed edges do not match the shared interaction registry')
+	}
+	return plot({
+		ariaDescription: spec.ariaDescription,
+		ariaLabel: spec.ariaLabel,
+		color: {
+			domain: ['registry', 'factory', 'market', 'resolution', 'oracle', 'fork'],
+			range: ['var(--blue-soft, #dceaf8)', 'var(--gold-soft, #f3e4c6)', 'var(--green-soft, #dcefe8)', 'var(--red-soft, #f2d9d6)', 'var(--blue-soft, #dceaf8)', 'var(--gold-soft, #f3e4c6)'],
+		},
+		height: spec.height,
+		margin: 28,
+		marks: [
+			link(edges, { curve: 'bump-x', markerEnd: 'arrow', stroke: 'var(--muted, #465760)', strokeWidth: 2.2, x1: 'x1', x2: 'x2', y1: 'y1', y2: 'y2' }),
+			...routedEdges.map(edge => line(edge.points, { markerEnd: 'arrow', stroke: 'var(--muted, #465760)', strokeWidth: 2.2, x: 'x', y: 'y' })),
+			rect(nodes, { fill: 'fill', rx: 12, stroke: 'var(--ink, #1f2529)', strokeWidth: 1.6, x1: 'x1', x2: 'x2', y1: 'y1', y2: 'y2' }),
+			text(nodes, { fill: 'var(--ink, #1f2529)', fontSize: 14, fontWeight: 700, text: 'id', x: node => (node.x1 + node.x2) / 2, y: node => (node.y1 + node.y2) / 2 }),
+		],
+		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
+		width: spec.width,
+		x: { axis: null, domain: [-0.1, 10.7] },
+		y: { axis: null, domain: [7.2, 0] },
 	}) as SVGSVGElement
 }
 
@@ -545,6 +1064,18 @@ function createChart(chartId: string, spec: ChartSpec, mount: HTMLElement): SVGS
 	if (chartId === 'fig-statoblast-escalation-cost-curve') {
 		return escalationCostChart(spec)
 	}
+	if (chartId === 'fig-zoltar-fork-threshold-decay') {
+		return forkThresholdDecayChart(spec)
+	}
+	if (chartId === 'fig-statoblast-retention-utilization') {
+		return retentionUtilizationChart(spec)
+	}
+	if (chartId === 'fig-liquidation-health-curve') {
+		return liquidationHealthChart(spec, mount)
+	}
+	if (chartId === 'fig-contract-interaction-map') {
+		return contractInteractionChart(spec)
+	}
 	if (chartId === 'fig-auction-clearing-ladder') {
 		return auctionDemandChart(spec, mount)
 	}
@@ -560,7 +1091,7 @@ function createChart(chartId: string, spec: ChartSpec, mount: HTMLElement): SVGS
 	if (chartId === 'plot-statoblast-whitepaper-19') {
 		return collateralRepairChart(spec, mount)
 	}
-	return narrativeChart(spec)
+	return markDrivenDiagramChart(spec)
 }
 
 function renderMount(mount: HTMLElement): void {
@@ -581,6 +1112,12 @@ function renderMount(mount: HTMLElement): void {
 	if (!chart.hasAttribute('viewBox')) {
 		chart.setAttribute('viewBox', `0 0 ${spec.width} ${spec.height}`)
 	}
+	const overflowEnvelope = mount.closest<HTMLElement>('figure.diagram, .example-visual')
+	if (overflowEnvelope === null) {
+		throw new Error(`Plot chart ${chartId} is missing a scrollable figure or example envelope`)
+	}
+	overflowEnvelope.tabIndex = 0
+	overflowEnvelope.setAttribute('aria-label', `Scrollable figure: ${spec.ariaLabel}`)
 	mount.removeAttribute('aria-label')
 	mount.removeAttribute('role')
 	mount.replaceChildren(chart)
@@ -592,10 +1129,11 @@ for (const mount of mounts) {
 	renderMount(mount)
 }
 
-for (const chartId of ['fig-auction-clearing-ladder', 'plot-open-oracle-integration-2', 'plot-statoblast-whitepaper-7', 'plot-statoblast-whitepaper-8', 'plot-statoblast-whitepaper-19']) {
+for (const chartId of ['fig-auction-clearing-ladder', 'fig-liquidation-health-curve', 'plot-open-oracle-integration-2', 'plot-statoblast-whitepaper-7', 'plot-statoblast-whitepaper-8', 'plot-statoblast-whitepaper-19']) {
 	const mount = document.querySelector<HTMLElement>(`[data-plot-chart="${chartId}"]`)
 	const inputRoot = chartId === 'fig-auction-clearing-ladder' ? document.querySelector('#simple-auction-example') : mount?.closest('.interactive-example')
-	for (const input of Array.from(inputRoot?.querySelectorAll<HTMLInputElement>('[data-example-input]') ?? [])) {
+	const inputSelector = chartId === 'fig-liquidation-health-curve' ? '[data-liquidation-input]' : '[data-example-input]'
+	for (const input of Array.from(inputRoot?.querySelectorAll<HTMLInputElement>(inputSelector) ?? [])) {
 		input.addEventListener('input', () => {
 			if (mount !== null && mount !== undefined) {
 				renderMount(mount)

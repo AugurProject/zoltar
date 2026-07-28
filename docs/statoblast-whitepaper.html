@@ -471,6 +471,16 @@
 						the rate as
 						<code>annualFee = 1 - (retentionRate / PRICE_PRECISION)^SECONDS_PER_YEAR</code>.
 					</p>
+					<figure class="diagram" id="fig-statoblast-retention-utilization">
+						<div class="plot-chart" data-plot-chart="fig-statoblast-retention-utilization" data-plot-width="900" data-plot-height="420" role="img" aria-label="Annualized open-interest fee across fee-eligible allowance utilization"><span class="plot-chart-fallback">Retention and utilization curve. The annualized fee rises from roughly 10% at zero utilization to roughly 50% at 80% utilization, then remains flat because the retention rate has reached its minimum.</span></div>
+						<p class="diagram-caption">
+							<span class="figure-label">Retention and Utilization</span>The
+							chart applies the onchain piecewise retention formula and the
+							UI's annualization formula to the exact current constants. The
+							80% rule marks the point where the minimum per-second retention
+							rate begins to apply.
+						</p>
+					</figure>
 
 					<p>
 						When <code>feeEligibleSecurityBondAllowance == 0</code>, the pool

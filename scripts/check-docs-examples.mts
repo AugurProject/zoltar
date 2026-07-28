@@ -3,7 +3,7 @@ import { pathToFileURL } from 'node:url'
 import assert from 'node:assert/strict'
 
 import { Window } from 'happy-dom'
-import { calculateAuctionModel, calculateCollateralRepairModel, calculateEscalationDepositModel, calculateOracleSecurityModel, calculateResolutionModel, normalizedEscalationCost } from '../docs/charts/chartModels'
+import { calculateAnnualizedRetentionFeePercent, calculateAuctionModel, calculateCollateralRepairModel, calculateEscalationDepositModel, calculateForkThresholdSeries, calculateLiquidationHealth, calculateOracleSecurityModel, calculateResolutionModel, normalizedEscalationCost } from '../docs/charts/chartModels'
 
 type InteractiveExampleHarness = {
 	close: () => void
@@ -582,6 +582,22 @@ assert.match(chartRuntimeSource, /plot-statoblast-whitepaper-8[\s\S]*resolutionC
 assert.match(chartRuntimeSource, /plot-statoblast-whitepaper-19[\s\S]*collateralRepairChart/, 'collateral repair chart should use its native Plot renderer')
 assert.match(chartRuntimeSource, /x1: model\.received, x2: model\.received \+ model\.repairEth/, 'collateral repair Plot should append auction repair after migration-routed collateral')
 assert.match(chartRuntimeSource, /■ Migration-routed[\s\S]*■ Auction repair/, 'collateral repair Plot should visibly map both segment colors')
+const zeroUtilizationFee = calculateAnnualizedRetentionFeePercent(0)
+const dipUtilizationFee = calculateAnnualizedRetentionFeePercent(80)
+assert.ok(zeroUtilizationFee > 9 && zeroUtilizationFee < 11, 'retention Plot should annualize the maximum retention rate to roughly ten percent fees')
+assert.ok(dipUtilizationFee > 49 && dipUtilizationFee < 51, 'retention Plot should annualize the minimum retention rate to roughly fifty percent fees')
+assert.equal(calculateAnnualizedRetentionFeePercent(100), dipUtilizationFee, 'retention Plot should stay at its minimum retention rate above the eighty-percent dip')
+assert.match(chartRuntimeSource, /fig-statoblast-retention-utilization[\s\S]*retentionUtilizationChart/, 'retention chart should use its native Plot renderer')
+const forkThresholdSeries = calculateForkThresholdSeries(21)
+assert.equal(forkThresholdSeries.length, 21, 'fork-threshold Plot should include genesis plus twenty descendants')
+assert.deepEqual(forkThresholdSeries[0], { forkThreshold: 5, generation: 0, theoreticalSupply: 100 }, 'fork-threshold Plot should begin from the genesis theoretical supply and five-percent threshold')
+assert.ok((forkThresholdSeries[20]?.theoreticalSupply ?? 0) < (forkThresholdSeries[19]?.theoreticalSupply ?? 0), 'fork-threshold Plot should decay monotonically by generation')
+assert.equal(forkThresholdSeries[20]?.forkThreshold, (forkThresholdSeries[20]?.theoreticalSupply ?? 0) / 20, 'fork-threshold Plot should keep the threshold at five percent of theoretical supply')
+assert.deepEqual(calculateLiquidationHealth(1000, 75, 2, 4), { currentRequiredRep: 600, state: 'safe', thresholdPrice: 1000 / 150 }, 'liquidation Plot should identify a safely backed vault')
+assert.deepEqual(calculateLiquidationHealth(1000, 50, 2, 10), { currentRequiredRep: 1000, state: 'safe', thresholdPrice: 10 }, 'liquidation Plot should keep exact threshold equality safe')
+assert.equal(calculateLiquidationHealth(1000, 50, 2, 10.01).state, 'liquidatable', 'liquidation Plot should become liquidatable immediately above the threshold')
+assert.deepEqual(calculateLiquidationHealth(1000, 75, 2, 10), { currentRequiredRep: 1500, state: 'liquidatable', thresholdPrice: 1000 / 150 }, 'liquidation Plot should identify a vault above its price threshold')
+assert.equal(calculateLiquidationHealth(1000, 0, 2, 10).thresholdPrice, Number.POSITIVE_INFINITY, 'liquidation Plot should have no finite threshold without allowance')
 
 const defaultAuction = calculateAuctionModel(12, 4, [
 	{ eth: 3, key: 'alice', name: 'Alice', price: 5 },
