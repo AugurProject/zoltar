@@ -265,7 +265,7 @@
 						</tr>
 						<tr>
 							<td>Continuation funding</td>
-							<td>An unrelated fork converts escalation source REP to child REP one-to-one. The escalation's own fork transfers post-haircut aggregate backing instead, while ordinary pool REP remains one-to-one. <code>resumeFromFork</code> keeps the continuation paused until the actual game balance covers the applicable aggregate backing. The unrelated-fork path requires effective unresolved principal one-to-one. On the own-fork path, recorded initial backing must be at least <code>sourcePrincipalAtFork - floor(sourcePrincipalAtFork / 5)</code>; <a href="statoblast-whitepaper.html#source-principal-at-fork"><code>sourcePrincipalAtFork</code></a> is the raw aggregate stored by the snapshot before effective direct-claim deductions. The live game balance must cover that initial backing minus child REP already exported by valid direct pre-resume claims. Neither path scales or releases per-vault child escrow.</td>
+							<td>An unrelated fork converts escalation source REP to child REP one-to-one; the escalation's own fork transfers post-haircut aggregate backing, while ordinary pool REP remains one-to-one. <code>resumeFromFork</code> keeps the continuation paused until the applicable aggregate backing is present and accounts for child REP already exported by valid direct pre-resume claims. See the canonical <a href="statoblast-whitepaper.html#migration">fork-migration derivation</a> and <a href="invariants.html#fork-08"><code>FORK-08</code></a> for the raw and effective principal definitions and exact funding bound. Neither path scales or releases per-vault child escrow.</td>
 						</tr>
 						<tr>
 							<td>Inherited losing outcome</td>

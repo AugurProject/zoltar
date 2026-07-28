@@ -126,20 +126,20 @@ function assertAggregateEscalationContinuationDocs(): void {
 	assert.match(normalizedContractReference, /cleanup neither funds escalation backing nor authorizes carried proofs/)
 	assert.match(normalizedOperatorReference, /Child creation initializes the canonical carry and aggregate backing without waiting for vault transactions/)
 	assert.match(normalizedStatoblast, /resumeFromFork<\/code> verifies aggregate REP funding/)
-	assert.match(normalizedOperatorReference, /continuation cannot resume until its game balance covers effective unresolved principal one-to-one/)
-	assert.match(normalizedOperatorReference, /live balance must cover the unexported remainder after valid direct pre-resume claims/)
+	assert.match(normalizedOperatorReference, /resumeFromFork` remains paused until that backing is present after accounting for child REP already exported by valid direct pre-resume claims/)
 	assert.match(normalizedInvariants, /continuation cannot resume until its game balance covers/)
-	assert.match(normalizedOperatorReference, /sourcePrincipalAtFork - floor\(sourcePrincipalAtFork \/ 5\)/)
+	assert.match(normalizedInvariants, /id="fork-08"/)
 	assert.match(normalizedInvariants, /sourcePrincipalAtFork - floor\(sourcePrincipalAtFork \/ 5\)/)
 	assert.match(normalizedContractReference, /resumeFromFork\(\)[\s\S]*sourcePrincipalAtFork - floor\(sourcePrincipalAtFork \/ 5\)/)
 	assert.match(normalizedStatoblast, /id="source-principal-at-fork"[\s\S]*aggregate raw unresolved principal[\s\S]*before effective direct-claim deductions/)
 	assert.match(normalizedInvariants, /href="statoblast-whitepaper\.html#source-principal-at-fork"/)
-	assert.match(normalizedArchitecture, /href="statoblast-whitepaper\.html#source-principal-at-fork"/)
-	assert.match(normalizedOperatorReference, /statoblast-whitepaper\.html#source-principal-at-fork/)
 	assert.match(normalizedContractReference, /sourcePrincipalAtFork` is the aggregate raw unresolved principal installed by the snapshot before effective direct-claim deductions/)
 	assert.match(normalizedContractReference, /live balance must cover that initial backing minus child REP already exported by valid direct pre-resume claims/)
-	assert.match(normalizedArchitecture, /resumeFromFork<\/code> keeps the continuation paused[\s\S]*sourcePrincipalAtFork - floor\(sourcePrincipalAtFork \/ 5\)/)
-	assert.match(normalizedArchitecture, /live game balance must cover that initial backing minus child REP already exported by valid direct pre-resume claims/)
+	assert.match(normalizedArchitecture, /resumeFromFork<\/code> keeps the continuation paused until the applicable aggregate backing is present and accounts for child REP already exported by valid direct pre-resume claims/)
+	for (const summaryDocument of [normalizedArchitecture, normalizedOperatorReference]) {
+		assert.match(summaryDocument, /statoblast-whitepaper\.html#migration/)
+		assert.match(summaryDocument, /invariants\.html#fork-08/)
+	}
 	for (const documentedClaim of [
 		'complete aggregate continuation backing at most once',
 		'Optional vault cleanup only clears parent locks',
@@ -535,7 +535,14 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /previewDepositOnOutcome`, `computeIterativeAttritionCost`/)
 	assert.match(contractInteractionReference, /factory contract exposes no relay/)
 	assert.match(securityPoolFactory, /_initialEscalationGameDeposit >= 1e18[\s\S]*zoltar\.getNonDecisionThreshold\(universeId\) > initialEscalationGameDeposit/)
+	assert.match(securityPoolFactory, /initialEscalationGameDeposit = _initialEscalationGameDeposit/)
+	assert.match(securityPool, /initialEscalationGameDeposit = _initialEscalationGameDeposit/)
+	assert.match(securityPool, /deployEscalationGame\(\s*initialEscalationGameDeposit,\s*zoltar\.getNonDecisionThreshold\(universeId\)\s*\)/)
 	assert.match(escalationGameFactory, /_nonDecisionThreshold > 1[\s\S]*startBond >= _nonDecisionThreshold[\s\S]*startBond = _nonDecisionThreshold - 1/)
+	assert.match(
+		whitepaperStatoblast.replaceAll(/\s+/g, ' '),
+		/<code>SecurityPoolFactory<\/code> requires its configured <code>initialEscalationGameDeposit<\/code> to be at least <code>1 REP<\/code>, copies that value into every deployed <code>SecurityPool<\/code>[\s\S]*<code>SecurityPool<\/code> passes its stored bond and the current threshold to <code>EscalationGameFactory<\/code>/,
+	)
 	assert.match(contractInteractionReference, /On the first deposit, the live non-decision threshold must exceed one atomic REP unit/)
 	assert.match(contractInteractionReference, /Repeat deposits use the existing game's stored `startBond` and `nonDecisionThreshold`/)
 	assert.match(contractInteractionReference, /tracked REP supply later makes it too large[\s\S]*nonDecisionThreshold - 1/)

@@ -61,6 +61,128 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		await ensureZoltarDeployed(client)
 	})
 
+	test('rounds the own-fork minimum backing up for non-divisible source principal', async () => {
+		const proofVerifier = await deployContract(
+			encodeDeployData({
+				abi: peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier.abi,
+				bytecode: `0x${peripherals_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}`,
+			}),
+		)
+		const sourcePrincipalAtFork = 6n
+		const exactMinimumBacking = sourcePrincipalAtFork - sourcePrincipalAtFork / 5n
+
+		const deployContinuation = async (initialBacking: bigint) => {
+			const securityPool = await deployContract(
+				encodeDeployData({
+					abi: proofTestPoolArtifact.abi,
+					bytecode: `0x${proofTestPoolArtifact.evm.bytecode.object}`,
+					args: [getZoltarAddress(), 0n, zeroAddress],
+				}),
+			)
+			const escalationGame = await deployContract(
+				encodeDeployData({
+					abi: peripherals_EscalationGame_EscalationGame.abi,
+					bytecode: `0x${peripherals_EscalationGame_EscalationGame.evm.bytecode.object}`,
+					args: [securityPool, repTokenAddress, proofVerifier],
+				}),
+			)
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					abi: proofTestPoolArtifact.abi,
+					address: securityPool,
+					functionName: 'setEscalationGame',
+					args: [escalationGame],
+				}),
+			)
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					abi: ReputationToken_ReputationToken.abi,
+					address: repTokenAddress,
+					functionName: 'approve',
+					args: [securityPool, MAX_UINT256],
+				}),
+			)
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					abi: peripherals_EscalationGame_EscalationGame.abi,
+					address: escalationGame,
+					functionName: 'startFromFork',
+					args: [1n, 10n, 0n, QuestionOutcome.Yes, true, initialBacking],
+				}),
+			)
+
+			const invalidPeaks = zeroPeaks()
+			const yesPeaks = zeroPeaks()
+			const noPeaks = zeroPeaks()
+			yesPeaks[0] = hashCarryLeaf(client.account.address, QuestionOutcome.Yes, sourcePrincipalAtFork, 1n, sourcePrincipalAtFork, 1n)
+			await writeContractAndWait(client, () =>
+				client.writeContract({
+					abi: initializeForkCarrySnapshotWithResolutionBalancesAbi,
+					address: securityPool,
+					functionName: 'initializeForkCarrySnapshotWithResolutionBalances',
+					args: [
+						[invalidPeaks, yesPeaks, noPeaks],
+						[0n, 1n, 0n],
+						[0n, sourcePrincipalAtFork, 0n],
+						[0n, sourcePrincipalAtFork, 0n],
+						[zeroHash, zeroHash, zeroHash],
+					],
+				}),
+			)
+			return escalationGame
+		}
+
+		const underfundedGame = await deployContinuation(exactMinimumBacking - 1n)
+		assert.strictEqual(
+			await client.readContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: underfundedGame,
+				functionName: 'isForkCarryFundingComplete',
+				args: [],
+			}),
+			false,
+			'four units must not fund a six-unit own-fork source principal',
+		)
+		await assert.rejects(
+			client.writeContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: underfundedGame,
+				functionName: 'resumeFromFork',
+				args: [],
+			}),
+			/Fork carry underfunded/,
+		)
+
+		const exactlyFundedGame = await deployContinuation(exactMinimumBacking)
+		assert.strictEqual(
+			await client.readContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: exactlyFundedGame,
+				functionName: 'isForkCarryFundingComplete',
+				args: [],
+			}),
+			true,
+			'five units must exactly fund a six-unit own-fork source principal',
+		)
+		await writeContractAndWait(client, () =>
+			client.writeContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: exactlyFundedGame,
+				functionName: 'resumeFromFork',
+				args: [],
+			}),
+		)
+		assert.ok(
+			(await client.readContract({
+				abi: peripherals_EscalationGame_EscalationGame.abi,
+				address: exactlyFundedGame,
+				functionName: 'forkResumedAt',
+				args: [],
+			})) > 0n,
+			'exactly funded continuation must resume',
+		)
+	})
+
 	test('rejects unsafe divisors and blocks fork resume until the maximum-bonus winner is fully backed', async () => {
 		const canonicalQuestionData = await client.readContract({
 			abi: Zoltar_Zoltar.abi,

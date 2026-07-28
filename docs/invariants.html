@@ -426,7 +426,8 @@
 								<td>
 									Two outcomes cannot both reach non-decision with less REP than
 									the universe fork threshold, and a live game keeps a positive
-									start bond below that threshold after tracked supply falls.
+									start bond below the live non-decision threshold after tracked
+									supply falls.
 								</td>
 								<td>
 									The non-decision threshold is
@@ -1375,7 +1376,7 @@
 							</dl>
 						</div>
 					</details>
-					<details class="invariant-entry">
+					<details class="invariant-entry" id="fork-08">
 						<summary><code>FORK-08</code><span class="invariant-title">One-time aggregate continuation backing</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>

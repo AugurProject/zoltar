@@ -1448,15 +1448,19 @@
 						The Escalation Game system is an optimization, and in theory the system would work without it as well.
 					</div>
 					<p>
-						The factory's configured starting bond must be at least
-						<code>1 REP</code>, and a new origin pool is admitted only while its
-						live non-decision threshold exceeds that bond. An existing pool can
-						outlive that relationship because REP burns reduce the tracked
-						theoretical supply. On the first post-end deposit, the game factory
-						therefore preserves the configured bond when possible and otherwise
-						uses <code>nonDecisionThreshold - 1</code>. Positive atomic-unit bonds
-						below one whole REP remain valid; a threshold of one atomic unit or
-						less has no positive smaller bond and cannot initialize a game.
+						<code>SecurityPoolFactory</code> requires its configured
+						<code>initialEscalationGameDeposit</code> to be at least
+						<code>1 REP</code>, copies that value into every deployed
+						<code>SecurityPool</code>, and admits a new origin pool only while
+						its live non-decision threshold exceeds the configured bond. An
+						existing pool can outlive that relationship because REP burns reduce
+						the tracked theoretical supply. On the first post-end deposit, the
+						<code>SecurityPool</code> passes its stored bond and the current
+						threshold to <code>EscalationGameFactory</code>. That game factory
+						preserves the bond when possible and otherwise substitutes
+						<code>nonDecisionThreshold - 1</code>. Positive atomic-unit bonds below
+						one whole REP remain valid; a threshold of one atomic unit or less has
+						no positive smaller bond and cannot initialize a game.
 					</p>
 					<div class="equation" id="eq-statoblast-escalation-cost">
 						<math
@@ -1644,12 +1648,14 @@
 							current leading outcome, the game reduces the accepted amount by
 							one atomic REP unit (<code>1 wei</code> of REP precision).
 							In first-deposit mode, outcome balances are fixed at zero and the
-							start-bond slider is the factory's configured bond. When that bond
-							is at or above the live threshold, the factory uses an effective
-							bond of <code>nonDecisionThreshold - 1</code> atomic unit. In
-							repeat-deposit mode, the sliders instead represent an existing
-							game's balances and stored parameters; no factory normalization is
-							reapplied.
+							start-bond slider is the pool's configured bond, copied from
+							<code>SecurityPoolFactory</code> when the pool was deployed. The
+							<code>SecurityPool</code> passes that bond and the current threshold
+							to <code>EscalationGameFactory</code>; when the bond is at or above
+							the live threshold, the game factory uses an effective bond of
+							<code>nonDecisionThreshold - 1</code> atomic unit. In repeat-deposit
+							mode, the sliders instead represent an existing game's balances and
+							stored parameters; no factory normalization is reapplied.
 						</p>
 						<div class="example-grid">
 							<label>
