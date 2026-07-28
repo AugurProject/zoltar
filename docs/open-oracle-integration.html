@@ -436,6 +436,12 @@
 					final position to the final reporter; the callback supplies the accepted
 					amounts to the coordinator but does not transfer them.
 				</p>
+				<p class="security-assumption-ref">
+					<strong>Security assumption:</strong>
+					<a href="./security-model.html#assumption-a28"
+						>A28 native-ETH recipient compatibility</a
+					>.
+				</p>
 				<p>
 					Both public request paths refund only a positive unused or excess ETH
 					amount, using a low-level call to the caller. A contract caller must

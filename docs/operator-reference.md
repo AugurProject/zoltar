@@ -34,8 +34,10 @@ Operator work relies particularly on
 [A22 chain-data and proof availability](./security-model.html#assumption-a22),
 [A23 Ethereum execution and finality](./security-model.html#assumption-a23),
 [A25 intended question selection](./security-model.html#assumption-a25),
-[A26 safe immutable parameters](./security-model.html#assumption-a26), and
-[A27 permissionless-fork alignment](./security-model.html#assumption-a27).
+[A26 safe immutable parameters](./security-model.html#assumption-a26),
+[A27 permissionless-fork alignment](./security-model.html#assumption-a27),
+[A28 native-ETH recipient compatibility](./security-model.html#assumption-a28), and
+[A29 client, RPC, and wallet integrity](./security-model.html#assumption-a29).
 
 ## Immutable Protocol Release Posture
 
@@ -68,7 +70,8 @@ simulation prices.
 ## Security Pool Guardrails
 
 Pool creation, minting, withdrawal, and direct-ETH rules are collected here in
-contract-first form.
+contract-first form. Participant-controlled payout addresses must satisfy
+[A28 native-ETH recipient compatibility](./security-model.html#assumption-a28).
 
 | Area | Implementation behavior | Source |
 | --- | --- | --- |
@@ -182,8 +185,12 @@ Security assumptions:
 [A01 bidder incentives](./security-model.html#assumption-a01),
 [A05 viable operating costs](./security-model.html#assumption-a05),
 [A08 independent bidders](./security-model.html#assumption-a08),
-[A09 efficient REP conversion](./security-model.html#assumption-a09), and
-[A21 lifecycle executors](./security-model.html#assumption-a21).
+[A09 efficient REP conversion](./security-model.html#assumption-a09),
+[A18 REP behavior](./security-model.html#assumption-a18),
+[A21 lifecycle executors](./security-model.html#assumption-a21),
+[A22 bid-data availability](./security-model.html#assumption-a22),
+[A26 safe immutable parameters](./security-model.html#assumption-a26), and
+[A28 native-ETH recipient compatibility](./security-model.html#assumption-a28).
 
 Collateral-repair auctions have three operator-critical boundaries: forker
 ownership, a one-week bidding window, and paged settlement into vault
@@ -206,8 +213,9 @@ Security assumptions:
 [A14 timely inclusion](./security-model.html#assumption-a14),
 [A15 correction capital](./security-model.html#assumption-a15),
 [A16 available arbitrager](./security-model.html#assumption-a16),
-[A17 independent corrector](./security-model.html#assumption-a17), and
-[A20 observable correctable price](./security-model.html#assumption-a20).
+[A17 independent corrector](./security-model.html#assumption-a17),
+[A20 observable correctable price](./security-model.html#assumption-a20), and
+[A28 native-ETH recipient compatibility](./security-model.html#assumption-a28).
 
 The coordinator quick reference below covers staging, callback recovery,
 stale-operation handling, and liquidation boundaries. Report sizing, request

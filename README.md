@@ -17,7 +17,7 @@ Inside `ui/ts`, route-specific code belongs under `features/<domain>`, cross-fea
 
 Protocol documentation lives in `docs/`:
 
-- [Security model](https://augurproject.github.io/zoltar/docs/security-model.html) — normative participant, market, asset, deployment, data, Ethereum, and cryptographic assumptions A01–A27
+- [Security model](https://augurproject.github.io/zoltar/docs/security-model.html) — normative participant, market, asset, deployment, client, data, Ethereum, and cryptographic assumptions A01–A29
 - [OpenOracle tradeoffs](https://augurproject.github.io/zoltar/docs/open-oracle-integration.html#intentional-economic-tradeoffs) — audit orientation for intentionally unbounded oracle notional and paid rolling disputes
 - [Truth-auction clearing](https://augurproject.github.io/zoltar/docs/truth-auction.html#clearing) — funded and underfunded clearing mechanics
 - [Start here guide](https://augurproject.github.io/zoltar/docs/documentation.html)

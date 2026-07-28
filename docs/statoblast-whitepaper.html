@@ -437,8 +437,10 @@
 								<a href="./security-model.html#assumption-a18">A18 REP and WETH behavior</a>,
 								<a href="./security-model.html#assumption-a19">A19 canonical deployment</a>,
 								<a href="./security-model.html#assumption-a25">A25 intended question selection</a>,
+								<a href="./security-model.html#assumption-a26">A26 safe immutable parameters</a>,
+								<a href="./security-model.html#assumption-a28">A28 native-ETH recipient compatibility</a>,
 								and
-								<a href="./security-model.html#assumption-a26">A26 safe immutable parameters</a>.
+								<a href="./security-model.html#assumption-a29">A29 client and wallet integrity</a>.
 						</p>
 						<p class="lede">
 						A <code>SecurityPool</code> is a lineage-specific Statoblast contract for a question in a universe. Vault operators deposit REP, choose bond allowance, and underwrite ETH-backed complete sets in that pool's
@@ -1429,6 +1431,7 @@
 					</p>
 						<p class="security-assumption-ref">
 							<strong>Security assumptions:</strong>
+							<a href="./security-model.html#assumption-a01">A01 risk-adjusted incentives</a>,
 							<a href="./security-model.html#assumption-a05">A05 viable operating costs</a>,
 							<a href="./security-model.html#assumption-a06">A06 timely outcome evidence</a>,
 							<a href="./security-model.html#assumption-a08">A08 independent participants</a>,
@@ -4530,8 +4533,12 @@
 							<a href="./security-model.html#assumption-a09">A09 efficient REP conversion</a>,
 							<a href="./security-model.html#assumption-a11">A11 REP liquidity</a>,
 							<a href="./security-model.html#assumption-a14">A14 timely inclusion</a>,
+							<a href="./security-model.html#assumption-a18">A18 REP behavior</a>,
+							<a href="./security-model.html#assumption-a21">A21 lifecycle executors</a>,
+							<a href="./security-model.html#assumption-a22">A22 bid-data availability</a>,
+							<a href="./security-model.html#assumption-a26">A26 safe immutable parameters</a>,
 							and
-							<a href="./security-model.html#assumption-a21">A21 lifecycle executors</a>.
+							<a href="./security-model.html#assumption-a28">A28 native-ETH recipient compatibility</a>.
 						</p>
 					<p class="lede"> After the parent migration window ends, a child pool may still hold less ETH than users need for clean redemption. The truth auction sells child-universe REP for ETH to repair that gap, subject to both an ETH raise cap and a maximum REP sale cap. </p>
 
@@ -4973,7 +4980,7 @@
 					</div>
 						<p>
 							The <a href="./security-model.html">Protocol Security Model</a>
-							defines assumptions A01–A27 and the guarantees deliberately excluded
+					defines assumptions A01–A29 and the guarantees deliberately excluded
 							from the protocol model.
 						</p>
 						<p class="security-assumption-ref">

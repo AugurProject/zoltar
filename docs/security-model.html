@@ -14,7 +14,7 @@
 				<p class="security-model-lede">
 					Statoblast and Zoltar enforce accounting, authorization, and lifecycle rules
 					onchain. Their economic safety and practical liveness still depend on the
-					participant, market, asset, deployment, data, Ethereum, and cryptographic
+					participant, market, asset, deployment, client, data, Ethereum, and cryptographic
 					assumptions below.
 				</p>
 				<p>
@@ -47,7 +47,7 @@
 			</section>
 
 			<section class="assumption-group" id="assumptions-participation">
-				<h2>Participation and coordination</h2>
+				<h2 id="assumptions-value">Participation and coordination</h2>
 				<p class="assumption-group-intro">
 					These assumptions explain why someone performs the economically useful
 					action instead of merely being permitted to perform it.
@@ -683,7 +683,7 @@
 			</section>
 
 			<section class="assumption-group" id="assumptions-technical">
-				<h2>Assets, deployment, Ethereum, and cryptography</h2>
+				<h2>Assets, clients, deployment, Ethereum, and cryptography</h2>
 				<p class="assumption-group-intro">
 					These assumptions define the technical foundation below the protocol’s
 					onchain guards.
@@ -715,6 +715,32 @@
 							>.
 						</p>
 					</li>
+					<li id="assumption-a28" value="28" class="assumption-wide" data-assumption="A28">
+						<h3>Participant-controlled recipients can accept required native-ETH payouts</h3>
+						<p>
+							Vaults, bidders, oracle sponsors, and other caller-controlled
+							recipients use addresses whose receive paths can accept native ETH
+							when claiming fees, collateral, proceeds, or refunds. A rejected
+							push may revert or become bidder-specific deferred credit, but no
+							protocol path can force a rejecting address to accept a later pull or
+							redirect every payout.
+						</p>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> A contract account that permanently
+							rejects ETH can strand its own payout or make the associated user
+							action unavailable even while protocol-wide accounting remains safe.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./truth-auction.html#settlement">auction refunds</a>,
+							<a href="./open-oracle-integration.html#refund-callback"
+								>oracle request refunds</a
+							>, and
+							<a href="./operator-reference.md#security-pool-guardrails"
+								>pool payout guardrails</a
+							>.
+						</p>
+					</li>
 					<li id="assumption-a19" value="19" class="assumption-wide" data-assumption="A19">
 						<h3>Users select verified canonical deployments</h3>
 						<p>
@@ -738,6 +764,31 @@
 							<a href="./invariants.html#authority">authority invariants</a>, and
 							<a href="./escalation-game-architecture.html#deployment-bytecode"
 								>deployment bytecode</a
+							>.
+						</p>
+					</li>
+					<li id="assumption-a29" value="29" class="assumption-wide" data-assumption="A29">
+						<h3>Clients, RPCs, and wallets preserve user intent and canonical state</h3>
+						<p>
+							Interfaces, indexers, RPC providers, and wallet software return
+							canonical, reorg-aware state; construct and display the intended
+							chain, target, calldata, parameters, and ETH value; and submit only
+							transactions the user authorizes. Users verify transaction previews
+							rather than treating an application label as an onchain guarantee.
+						</p>
+						<p class="assumption-failure">
+							<strong>Failure boundary:</strong> Compromised or stale offchain
+							software can misroute signatures or capital, hide deadlines or
+							events, or cause users to authorize valid but unintended calls
+							without violating contract guards.
+						</p>
+						<p class="assumption-links">
+							Mechanics:
+							<a href="./deployment-status.html">deployment discovery</a>,
+							<a href="./event-stream.md#canonical-reducers">canonical replay</a>,
+							and
+							<a href="./operator-reference.md#security-review-orientation"
+								>operator verification</a
 							>.
 						</p>
 					</li>
