@@ -15,7 +15,7 @@ restart settings, or the local dashboard when `--ui` is enabled.
 > low-balance key, validate current executable liquidity, and supervise every
 > position; no automated strategy can guarantee a profit or prevent every loss.
 > The protocol security model records the
-> [latest pinned market fixture](../docs/security-model.html#open-oracle-economic-boundary)
+> [latest pinned market fixture](../docs/security-model.html#open-oracle-market-fixture)
 > as dated historical evidence.
 
 ## Requirements
