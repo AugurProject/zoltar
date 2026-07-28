@@ -37,121 +37,12 @@
 					class="diagram diagram-wide"
 					id="fig-invariant-layers"
 					role="region"
-					aria-labelledby="invariant-layers-title"
 					tabindex="0"
 				>
-					<svg
-						viewBox="0 0 920 260"
-						role="img"
-						aria-labelledby="invariant-layers-title invariant-layers-desc"
-					>
-						<title id="invariant-layers-title">Protocol invariant layers</title>
-						<desc id="invariant-layers-desc">
-							Four connected layers run from local authority guards through
+					<div class="plot-chart" data-plot-chart="fig-invariant-layers" data-plot-width="920" data-plot-height="260" role="img" aria-label="Protocol invariant layers"><span class="plot-chart-fallback">Four connected layers run from local authority guards through
 							cross-contract conservation and lifecycle liveness to economic
 							security. A failure in an earlier layer invalidates the safety
-							claims built above it.
-						</desc>
-						<defs>
-							<marker
-								id="arrow-invariant-layers"
-								viewBox="0 0 10 10"
-								refX="8"
-								refY="5"
-								markerWidth="7"
-								markerHeight="7"
-								orient="auto-start-reverse"
-							>
-								<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-							</marker>
-						</defs>
-						<rect
-							class="svg-blue"
-							x="25"
-							y="72"
-							width="190"
-							height="112"
-							rx="10"
-						></rect>
-						<text class="svg-label" x="120" y="108" text-anchor="middle">
-							Authority
-						</text>
-						<text class="svg-small" x="120" y="134" text-anchor="middle">
-							canonical callers
-						</text>
-						<text class="svg-small" x="120" y="157" text-anchor="middle">
-							one-time wiring
-						</text>
-						<path
-							class="svg-line"
-							marker-end="url(#arrow-invariant-layers)"
-							d="M 215 128 H 250"
-						></path>
-						<rect
-							class="svg-green"
-							x="250"
-							y="72"
-							width="190"
-							height="112"
-							rx="10"
-						></rect>
-						<text class="svg-label" x="345" y="108" text-anchor="middle">
-							Conservation
-						</text>
-						<text class="svg-small" x="345" y="134" text-anchor="middle">
-							ETH, REP, shares
-						</text>
-						<text class="svg-small" x="345" y="157" text-anchor="middle">
-							claims and reserves
-						</text>
-						<path
-							class="svg-line"
-							marker-end="url(#arrow-invariant-layers)"
-							d="M 440 128 H 475"
-						></path>
-						<rect
-							class="svg-gold"
-							x="475"
-							y="72"
-							width="190"
-							height="112"
-							rx="10"
-						></rect>
-						<text class="svg-label" x="570" y="108" text-anchor="middle">
-							Lifecycle
-						</text>
-						<text class="svg-small" x="570" y="134" text-anchor="middle">
-							legal transitions
-						</text>
-						<text class="svg-small" x="570" y="157" text-anchor="middle">
-							permissionless liveness
-						</text>
-						<path
-							class="svg-line"
-							marker-end="url(#arrow-invariant-layers)"
-							d="M 665 128 H 700"
-						></path>
-						<rect
-							class="svg-red"
-							x="700"
-							y="72"
-							width="195"
-							height="112"
-							rx="10"
-						></rect>
-						<text class="svg-label" x="798" y="108" text-anchor="middle">
-							Economics
-						</text>
-						<text class="svg-small" x="798" y="134" text-anchor="middle">
-							arbitrage incentives
-						</text>
-						<text class="svg-small" x="798" y="157" text-anchor="middle">
-							inclusion assumptions
-						</text>
-						<text class="svg-note" x="460" y="225" text-anchor="middle">
-							Each layer depends on every invariant to its left.
-						</text>
-					</svg>
+							claims built above it.</span></div>
 					<p class="diagram-caption">
 						<span class="figure-label">Invariant Dependency</span>Correct
 						callers are necessary but insufficient. Their actions must conserve
@@ -2407,5 +2298,7 @@
 		</main>
 		<script src="./protocolTerms.js"></script>
 		<script src="./termTooltips.js"></script>
+
+		<script src="./chartRuntime.js"></script>
 	</body>
 </html>
