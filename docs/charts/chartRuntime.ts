@@ -571,7 +571,7 @@ function liquidationHealthChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElem
 		ariaLabel: spec.ariaLabel,
 		height: spec.height,
 		marginBottom: 48,
-		marginLeft: 68,
+		marginLeft: 92,
 		marginRight: 28,
 		marginTop: 24,
 		marks: [
@@ -585,7 +585,7 @@ function liquidationHealthChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElem
 		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
 		width: spec.width,
 		x: { domain: [0, maximumPrice], grid: true, label: axes.x },
-		y: { domain: [0, Math.max(unlockedRep, allowance * multiplier * maximumPrice) * 1.06], grid: true, label: axes.y },
+		y: { domain: [0, Math.max(unlockedRep, allowance * multiplier * maximumPrice) * 1.06], grid: true, label: axes.y, labelAnchor: 'center' },
 	}) as SVGSVGElement
 	chart.dataset['chartState'] = state
 	return chart
