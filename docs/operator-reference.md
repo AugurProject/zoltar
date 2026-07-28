@@ -33,10 +33,11 @@ Operator work relies particularly on
 [A21 lifecycle executors](./security-model.html#assumption-a21),
 [A22 chain-data and proof availability](./security-model.html#assumption-a22),
 [A23 Ethereum execution and finality](./security-model.html#assumption-a23),
+[A24 account and cryptographic security](./security-model.html#assumption-a24),
 [A25 intended question selection](./security-model.html#assumption-a25),
 [A26 safe immutable parameters](./security-model.html#assumption-a26),
 [A27 permissionless-fork alignment](./security-model.html#assumption-a27),
-[A28 native-ETH recipient compatibility](./security-model.html#assumption-a28), and
+[A28 asset-recipient compatibility](./security-model.html#assumption-a28), and
 [A29 client, RPC, and wallet integrity](./security-model.html#assumption-a29).
 
 ## Immutable Protocol Release Posture
@@ -70,8 +71,9 @@ simulation prices.
 ## Security Pool Guardrails
 
 Pool creation, minting, withdrawal, and direct-ETH rules are collected here in
-contract-first form. Participant-controlled payout addresses must satisfy
-[A28 native-ETH recipient compatibility](./security-model.html#assumption-a28).
+contract-first form. Participant-controlled payout and share-receiving addresses
+must satisfy
+[A28 asset-recipient compatibility](./security-model.html#assumption-a28).
 
 | Area | Implementation behavior | Source |
 | --- | --- | --- |
@@ -95,8 +97,9 @@ contract-first form. Participant-controlled payout addresses must satisfy
 Security assumptions:
 [A04 truthful-branch preference](./security-model.html#assumption-a04),
 [A07 practical migration](./security-model.html#assumption-a07),
-[A14 timely inclusion](./security-model.html#assumption-a14), and
-[A21 lifecycle executors](./security-model.html#assumption-a21).
+[A14 timely inclusion](./security-model.html#assumption-a14),
+[A21 lifecycle executors](./security-model.html#assumption-a21), and
+[A28 asset-recipient compatibility](./security-model.html#assumption-a28).
 
 Share migration after a fork is user-facing asset migration, not vault REP
 migration. Canonical rules live in [`FORK-10`](invariants.html#fork-10) for
@@ -155,6 +158,7 @@ Security assumptions:
 [A04 truthful-branch preference](./security-model.html#assumption-a04),
 [A07 practical migration](./security-model.html#assumption-a07),
 [A13 lineage access value](./security-model.html#assumption-a13),
+[A18 REP behavior](./security-model.html#assumption-a18),
 [A21 lifecycle executors](./security-model.html#assumption-a21),
 [A22 chain-data availability](./security-model.html#assumption-a22), and
 [A27 permissionless-fork alignment](./security-model.html#assumption-a27).

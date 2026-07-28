@@ -716,22 +716,32 @@
 						</p>
 					</li>
 					<li id="assumption-a28" value="28" class="assumption-wide" data-assumption="A28">
-						<h3>Participant-controlled recipients can accept required native-ETH payouts</h3>
+						<h3>Participant-controlled recipients can accept required asset deliveries</h3>
 						<p>
-							Vaults, bidders, oracle sponsors, and other caller-controlled
-							recipients use addresses whose receive paths can accept native ETH
-							when claiming fees, collateral, proceeds, or refunds. A rejected
-							push may revert or become bidder-specific deferred credit, but no
-							protocol path can force a rejecting address to accept a later pull or
-							redirect every payout.
+							Vaults, bidders, oracle sponsors, traders, share holders, and other
+							caller-controlled recipients use addresses that accept native ETH
+							when claiming fees, collateral, proceeds, or refunds. Contract
+							recipients also return the required ERC-1155 receiver selector when
+							complete-set creation, share migration, or an outcome-share transfer
+							delivers tokens to them. A rejected ETH push may revert or become
+							bidder-specific deferred credit; a rejected ERC-1155 callback reverts
+							the mint or transfer and its surrounding protocol action. No protocol
+							path can force a rejecting address to accept a later delivery or
+							redirect every payout or mint.
 						</p>
 						<p class="assumption-failure">
-							<strong>Failure boundary:</strong> A contract account that permanently
-							rejects ETH can strand its own payout or make the associated user
-							action unavailable even while protocol-wide accounting remains safe.
+							<strong>Failure boundary:</strong> A contract account that rejects ETH
+							or the required ERC-1155 callback can strand its own payout or make
+							its complete-set, migration, transfer, or claim action unavailable
+							even while protocol-wide accounting remains safe.
 						</p>
 						<p class="assumption-links">
 							Mechanics:
+							<a href="./invariants.html#ext-02">ETH callback safety</a>,
+							<a href="./invariants.html#ext-03">ERC-1155 callback safety</a>,
+							<a href="./contract-interaction-reference.md#sharetoken"
+								>share-token receipt</a
+							>,
 							<a href="./truth-auction.html#settlement">auction refunds</a>,
 							<a href="./open-oracle-integration.html#refund-callback"
 								>oracle request refunds</a

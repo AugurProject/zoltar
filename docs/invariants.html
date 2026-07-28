@@ -2257,8 +2257,9 @@
 				<h2>Lifecycle, Liveness, and External Calls</h2>
 				<p class="security-assumption-ref">
 					<strong>Security assumptions:</strong>
+					<a href="./security-model.html#assumption-a05">A05 viable operating costs</a>,
 					<a href="./security-model.html#assumption-a14">A14 timely inclusion</a>,
-					<a href="./security-model.html#assumption-a21">A21 lifecycle executors</a>
+					<a href="./security-model.html#assumption-a21">A21 lifecycle executors</a>,
 					and
 					<a href="./security-model.html#assumption-a23">A23 Ethereum execution</a>.
 				</p>
@@ -2394,26 +2395,35 @@
 							</dl>
 						</div>
 					</details>
-					<details class="invariant-entry">
+					<details class="invariant-entry" id="ext-02">
 						<summary><code>EXT-02</code><span class="invariant-title">Callback-safe accounting</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
 								External ETH or token callbacks observe effects already
-								committed for that action, and a failed transfer reverts
-								without leaving partial accounting.
+								committed for that action. A required delivery that fails
+								reverts without leaving partial accounting; an explicitly
+								deferrable delivery instead commits the action together with
+								an exactly accounted recipient liability.
 							</div>
 							<p class="invariant-example"><strong>Example:</strong> A fee recipient's fallback observes its fee debt already cleared, so reentry cannot redeem the same debt twice.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
-										Pool redemption, auction refund, and oracle refund paths
+										Pool redemption, auction refund and deferred-credit, and
+										oracle refund paths
+								</dd></div>
+								<div><dt>Related external liveness boundary</dt><dd>
+										<a href="./security-model.html#assumption-a28"
+											><code>A28</code> participant-controlled recipient
+											compatibility</a
+										>
 								</dd></div>
 							</dl>
 						</div>
 					</details>
-					<details class="invariant-entry">
+					<details class="invariant-entry" id="ext-03">
 						<summary><code>EXT-03</code><span class="invariant-title">ERC-1155 callback safety</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2429,7 +2439,13 @@
 								<div><dt>Primary evidence</dt><dd>
 										<a href="../solidity/contracts/peripherals/SecurityPool.sol"
 										><code>createCompleteSet</code></a
-										>, receiver callback tests
+										>, ERC-1155 receiver checks, and receiver callback tests
+								</dd></div>
+								<div><dt>Related external liveness boundary</dt><dd>
+										<a href="./security-model.html#assumption-a28"
+											><code>A28</code> participant-controlled recipient
+											compatibility</a
+										>
 								</dd></div>
 							</dl>
 						</div>
