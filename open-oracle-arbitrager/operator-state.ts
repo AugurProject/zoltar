@@ -347,7 +347,7 @@ export function gameCapitalSnapshot(games: readonly Pick<OpenOracleGame, 'curren
 	}
 }
 
-function executionRecord(value: unknown): ExecutionRecord | undefined {
+export function parseExecutionRecord(value: unknown): ExecutionRecord | undefined {
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
 	const record = value as Record<string, unknown>
 	const decimal = /^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/
@@ -416,7 +416,7 @@ export async function loadExecutionHistory(path: string, filesystem: ExecutionHi
 				if (error instanceof SyntaxError) throw new Error(`Invalid execution history line ${(index + 1).toString()}: ${error.message}`)
 				throw error
 			}
-			const record = executionRecord(parsed)
+			const record = parseExecutionRecord(parsed)
 			if (record === undefined) throw new Error(`Invalid execution history record at line ${(index + 1).toString()}`)
 			records.push(record)
 		}
@@ -449,6 +449,13 @@ export async function appendExecutionHistory(path: string, record: ExecutionReco
 		await handle.close()
 	}
 	await syncExecutionHistoryDirectory(path, filesystem)
+}
+
+export async function appendExecutionHistoryIfMissing(path: string, record: ExecutionRecord, filesystem: ExecutionHistoryFilesystem = executionHistoryFilesystem) {
+	const history = await loadExecutionHistory(path, filesystem)
+	if (history.some(existing => existing.transactionHash.toLowerCase() === record.transactionHash.toLowerCase())) return false
+	await appendExecutionHistory(path, record, filesystem)
+	return true
 }
 
 export async function ensureExecutionHistoryWritable(path: string, filesystem: ExecutionHistoryFilesystem = executionHistoryFilesystem) {

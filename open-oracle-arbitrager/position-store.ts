@@ -3,6 +3,7 @@ import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { getAddress, type Address, type Hex } from '@zoltar/shared/ethereum'
+import { parseExecutionRecord, type ExecutionRecord } from './operator-state.js'
 
 type PositionJournalFileHandle = {
 	chmod: (mode: number) => Promise<unknown>
@@ -56,6 +57,7 @@ export type PositionRecord = {
 		minedAt: string
 		transactionHash: Hex
 	}[]
+	historyOutbox: ExecutionRecord | undefined
 	hedgeAmountToken: string
 	hedgeWeth: string
 	hedgedProfitBeforeGasEth: string
@@ -149,7 +151,9 @@ function parsePosition(value: unknown): PositionRecord {
 		const expenditure = value as Record<string, unknown>
 		if (Object.keys(expenditure).length !== 3 || !('costEth' in expenditure) || !('minedAt' in expenditure) || !('transactionHash' in expenditure)) throw new Error('Position journal gas expenditure fields are invalid')
 		const costEth = decimalField(expenditure, 'costEth')
-		if (typeof expenditure['minedAt'] !== 'string' || !Number.isFinite(Date.parse(expenditure['minedAt']))) throw new Error('Position journal gas expenditure minedAt is invalid')
+		if (typeof expenditure['minedAt'] !== 'string' || !Number.isFinite(Date.parse(expenditure['minedAt'])) || new Date(expenditure['minedAt']).toISOString() !== expenditure['minedAt']) {
+			throw new Error('Position journal gas expenditure minedAt must be canonical UTC ISO')
+		}
 		if (typeof expenditure['transactionHash'] !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(expenditure['transactionHash'])) throw new Error('Position journal gas expenditure transaction hash is invalid')
 		const transactionHash = expenditure['transactionHash'].toLowerCase()
 		if (gasTransactionHashes.has(transactionHash)) throw new Error(`Duplicate position journal gas expenditure transaction hash ${transactionHash}`)
@@ -166,6 +170,8 @@ function parsePosition(value: unknown): PositionRecord {
 	const expectedGasCost = decimalAmountWei(decimalField(record, 'actualEntryGasCostEth')) + decimalAmountWei(decimalField(record, 'lifecycleGasCostEth'))
 	const recordedGasCost = parsedGasExpenditures.reduce((total, expenditure) => total + decimalAmountWei(expenditure.costEth), 0n)
 	if (recordedGasCost !== expectedGasCost) throw new Error('Position journal gas expenditure total does not match entry and lifecycle gas')
+	const historyOutbox = record['historyOutbox'] === undefined ? undefined : parseExecutionRecord(record['historyOutbox'])
+	if (record['historyOutbox'] !== undefined && historyOutbox === undefined) throw new Error('Position journal history outbox is invalid')
 	if (typeof record['hedgedProfitBeforeGasEth'] !== 'string' || !signedDecimal.test(record['hedgedProfitBeforeGasEth'])) throw new Error('Position journal hedged profit is invalid')
 	if (record['realizedNetProfitEth'] !== undefined && (typeof record['realizedNetProfitEth'] !== 'string' || !signedDecimal.test(record['realizedNetProfitEth']))) throw new Error('Position journal realized profit is invalid')
 	if (typeof record['openedAt'] !== 'string' || !Number.isFinite(Date.parse(record['openedAt']))) throw new Error('Position journal openedAt is invalid')
@@ -177,8 +183,8 @@ function parsePosition(value: unknown): PositionRecord {
 	}
 	const lifecycleFields = ['lifecycleTargetBlockNumber', 'lifecycleTokenDecimals', 'lifecycleWalletTokenBefore', 'lifecycleWalletWethBefore'] as const
 	for (const key of lifecycleFields) optionalIntegerField(record, key)
-	const hasLifecycleAttempt = lifecycleTransactionHashes.length !== 0
-	if (lifecycleFields.some(key => (record[key] !== undefined) !== hasLifecycleAttempt)) throw new Error('Position journal lifecycle recovery fields are incomplete')
+	const hasLifecycleState = lifecycleTransactionHashes.length !== 0 || record['lifecycleTargetBlockNumber'] === '0'
+	if (lifecycleFields.some(key => (record[key] !== undefined) !== hasLifecycleState)) throw new Error('Position journal lifecycle recovery fields are incomplete')
 	if (record['closedAt'] !== undefined && (typeof record['closedAt'] !== 'string' || !Number.isFinite(Date.parse(record['closedAt'])))) throw new Error('Position journal closedAt is invalid')
 	if (typeof record['tokenSymbol'] !== 'string' || record['tokenSymbol'].trim() === '') throw new Error('Position journal token symbol is invalid')
 	const manualReconciliation = parseManualReconciliation(record['manualReconciliation'])
@@ -196,6 +202,7 @@ function parsePosition(value: unknown): PositionRecord {
 		entryTransactionHash: record['entryTransactionHash'] as Hex,
 		entryTransactionHashes: entryTransactionHashes as Hex[],
 		gasExpenditures: parsedGasExpenditures,
+		historyOutbox,
 		hedgeAmountToken: decimalField(record, 'hedgeAmountToken'),
 		hedgeWeth: decimalField(record, 'hedgeWeth'),
 		hedgedProfitBeforeGasEth: record['hedgedProfitBeforeGasEth'],

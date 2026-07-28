@@ -612,6 +612,13 @@ is acknowledged only after the file and parent directory have been synchronized.
 A malformed or torn non-empty JSONL record stops startup with its line number
 instead of being silently omitted from revenue or gas totals.
 
+The confirmed position and its complete history record are first committed
+together through a durable outbox in the position journal. The bot then appends the
+record to JSONL idempotently and clears the outbox with another synchronized
+position write. A crash before, during, or immediately after the append therefore
+replays the missing history operation on restart without losing the confirmed
+revenue record.
+
 Position profit is tracked in ETH using the exact 1 WETH = 1 ETH unwrap relationship:
 
 ```text
@@ -686,8 +693,11 @@ The call uses the same exact-parent guard as private entry and can succeed only 
 the direct child of its quoted block. Inclusion in a later block reverts and can
 still consume gas. Public delivery exposes the opportunity to copying, reordering,
 front-running, and other MEV, and does not provide bundle confidentiality or
-next-block inclusion. Public lifecycle transactions are journaled together but
-broadcast and confirmed sequentially, potentially across multiple blocks.
+next-block inclusion. Public lifecycle transactions are broadcast and confirmed
+sequentially, potentially across multiple blocks. Before each public step is sent,
+its hash and the original wallet-balance baseline are synced. Its quorum-confirmed
+mined hash, status, gas, and canonical UTC timestamp are then synced before the bot
+derives and sends the next step.
 
 Private mode signs approvals and the executor call at consecutive nonces, requests
 `eth_callBundle` from every configured relay, and then fans the same ordered
@@ -712,7 +722,7 @@ block, absent, unsuccessful, or disagreeing receipt evidence leaves the journale
 attempt pending or `recovery-required`. Later scans attempt only independent receipt
 recovery, and the one-nonclosed-position guard prevents a new position until normal
 or manual reconciliation closes the attempt. Public lifecycle transactions are
-journaled as one recovery attempt but may land in consecutive blocks. Active
+journaled and reconciled one step at a time and may land in consecutive blocks. Active
 transaction-tracker rows are kept in process memory and reset on
 restart; confirmed dispute history and its ETH profit totals are persisted in the
 configured history file.
@@ -835,10 +845,11 @@ settlement/withdrawal transaction hash, token decimals, and the wallet's raw WET
 and token balances at the quoted block. Private mode also records its next-block
 target; every private lifecycle receipt must succeed in that one canonical block.
 Public mode records `lifecycleTargetBlockNumber` as `0`, meaning there is no single
-target block, and accepts sequential successful receipts across blocks. Its
-canonical post-state snapshot is the latest successful receipt block. After a
-restart the bot reconstructs lifecycle gas and exact withdrawal deltas and closes
-the position only when those deltas match the hedge-neutral expected inventory.
+target block, and durably advances one canonical receipt at a time across blocks.
+After a crash it reconciles the currently journaled step, rereads report and holder
+state, and derives the next still-required action. The bot reconstructs lifecycle
+gas and exact withdrawal deltas and closes the position only when those deltas
+match the hedge-neutral expected inventory.
 
 ### `recovery-required` runbook
 
@@ -861,12 +872,11 @@ delete or hand-edit a record to bypass the one-position guard.
    private attempt, restart only after independent RPCs can return the same
    successful receipts in its recorded canonical target block; never send a second
    settlement/withdrawal bundle while inclusion is ambiguous. For a public attempt,
-   the target value is `0`: the bot requires every recorded transaction to have a
-   successful canonical receipt and uses the latest receipt block for post-state.
-   A crash after only part of the sequential public lifecycle does not rebroadcast
-   the remaining signed transactions. Keep the bot paused and manually reconcile
-   settlement state, holder balances, wallet balances, missing transactions, and
-   gas before authorizing any recovery transaction.
+   the target value is `0`: the bot first recovers the exact recorded receipt
+   through the read quorum. Once its outcome and gas are durable, it rereads
+   settlement and holder state and derives only the next still-required action.
+   Keep the bot paused for missing or disagreeing receipt evidence; do not authorize
+   a second transaction while the recorded step remains ambiguous.
 4. For **stored-state/current-reporter mismatch**, compare the current reporter,
    settlement state, and the wallet's OpenOracle WETH/token holder balances through
    independent RPCs. A later dispute can legitimately replace the bot; withdraw
