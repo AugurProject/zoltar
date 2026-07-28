@@ -1,13 +1,14 @@
 import * as commonCopy from '../../../copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import type { ComponentChildren } from 'preact'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { AddressValue } from '../../../components/AddressValue.js'
 import { EntityCard } from '../../../components/EntityCard.js'
 import { ErrorNotice } from '../../../components/ErrorNotice.js'
 import { FormInput } from '../../../components/FormInput.js'
 import { LookupFieldRow } from '../../../components/LookupFieldRow.js'
 import { LoadingText } from '../../../components/LoadingText.js'
-import { Question } from '../../markets/components/Question.js'
+import { Question, getQuestionTitle } from '../../markets/components/Question.js'
 import { RouteWorkflowPanel } from '../../../components/RouteWorkflowPanel.js'
 import { SectionBlock } from '../../../components/SectionBlock.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
@@ -21,11 +22,16 @@ import type { SecurityPoolSectionProps } from '../../types.js'
 
 export function SecurityPoolSection({
 	accountState,
+	availableQuestionsContextKey,
+	availableQuestions,
 	checkingDuplicateOriginPool,
 	duplicateOriginPoolExists,
+	hasLoadedAvailableQuestions,
 	loadingMarketDetails,
+	loadingAvailableQuestions,
 	marketDetails,
 	onCreateSecurityPool,
+	onLoadAvailableQuestions,
 	onOpenCreatedPool,
 	onReturnToBrowse,
 	onSecurityPoolFormChange,
@@ -39,9 +45,37 @@ export function SecurityPoolSection({
 	zoltarUniverseHasForked,
 }: SecurityPoolSectionProps) {
 	const isMainnet = isMainnetChain(accountState.chainId)
+	const eligibleQuestions = availableQuestions.filter(question => question.marketType === 'binary')
+	const [availableQuestionsLoadError, setAvailableQuestionsLoadError] = useState<string | undefined>(undefined)
+	const requestedAvailableQuestionsContextRef = useRef<string | undefined>(undefined)
+	let availableQuestionsHelp: ComponentChildren = undefined
+	if (loadingAvailableQuestions) {
+		availableQuestionsHelp = <LoadingText>{securityPoolCopy.loadingAvailableQuestions}</LoadingText>
+	} else if (availableQuestionsLoadError === undefined && eligibleQuestions.length === 0) {
+		availableQuestionsHelp = securityPoolCopy.noAvailableQuestions
+	}
+	useEffect(() => {
+		if (requestedAvailableQuestionsContextRef.current !== availableQuestionsContextKey) {
+			requestedAvailableQuestionsContextRef.current = undefined
+			setAvailableQuestionsLoadError(undefined)
+		}
+		if (hasLoadedAvailableQuestions) {
+			requestedAvailableQuestionsContextRef.current = undefined
+			setAvailableQuestionsLoadError(undefined)
+			return
+		}
+		if (loadingAvailableQuestions || requestedAvailableQuestionsContextRef.current === availableQuestionsContextKey) return
+		requestedAvailableQuestionsContextRef.current = availableQuestionsContextKey
+		void onLoadAvailableQuestions().catch(() => setAvailableQuestionsLoadError(securityPoolCopy.availableQuestionsLoadError))
+	}, [availableQuestionsContextKey, hasLoadedAvailableQuestions, loadingAvailableQuestions, onLoadAvailableQuestions])
+	const retryAvailableQuestions = () => {
+		setAvailableQuestionsLoadError(undefined)
+		requestedAvailableQuestionsContextRef.current = availableQuestionsContextKey
+		void onLoadAvailableQuestions().catch(() => setAvailableQuestionsLoadError(securityPoolCopy.availableQuestionsLoadError))
+	}
 	const hasSecurityPoolResult = securityPoolResult !== undefined
 	const initialReportPriorityFeeValidationMessage = getInitialReportPriorityFeeValidationMessage(securityPoolForm.initialReportPriorityFeeGwei)
-	const createDisabledReason = getSecurityPoolCreateDisabledReason({
+	const guardedCreateDisabledReason = getSecurityPoolCreateDisabledReason({
 		accountAddress: accountState.address,
 		checkingDuplicateOriginPool,
 		duplicateOriginPoolExists,
@@ -51,6 +85,7 @@ export function SecurityPoolSection({
 		securityPoolCreating,
 		zoltarUniverseHasForked,
 	})
+	const createDisabledReason = loadingAvailableQuestions && securityPoolForm.marketId.trim() === '' ? securityPoolCopy.loadingAvailableQuestionsReason : guardedCreateDisabledReason
 	const isCreateDisabled = !isMainnet || createDisabledReason !== undefined
 	let createdQuestionDetails = undefined
 	if (securityPoolResult !== undefined)
@@ -134,11 +169,33 @@ export function SecurityPoolSection({
 				</>
 			) : (
 				<>
-					<SectionBlock title={showHeader ? undefined : commonCopy.createPool} variant='plain'>
+					<SectionBlock description={securityPoolCopy.marketHierarchyDetail} title={showHeader ? undefined : commonCopy.createPool} variant='plain'>
 						<div className='form-grid'>
 							<div className='field'>
+								<label htmlFor='security-pool-question-picker'>
+									<span>{securityPoolCopy.chooseAvailableQuestion}</span>
+								</label>
+								<select id='security-pool-question-picker' disabled={loadingAvailableQuestions} value={eligibleQuestions.some(question => question.questionId === securityPoolForm.marketId) ? securityPoolForm.marketId : ''} onChange={event => onSecurityPoolFormChange({ marketId: event.currentTarget.value })}>
+									<option value=''>{securityPoolCopy.chooseQuestionPlaceholder}</option>
+									{eligibleQuestions.map(question => (
+										<option key={question.questionId} value={question.questionId}>
+											{getQuestionTitle(question)}
+										</option>
+									))}
+								</select>
+								{availableQuestionsHelp === undefined ? undefined : <p className='field-help'>{availableQuestionsHelp}</p>}
+								<ErrorNotice message={availableQuestionsLoadError} />
+								{availableQuestionsLoadError === undefined ? undefined : (
+									<div className='actions'>
+										<button className='secondary' type='button' onClick={retryAvailableQuestions}>
+											{securityPoolCopy.retryAvailableQuestions}
+										</button>
+									</div>
+								)}
+							</div>
+							<div className='field'>
 								<LookupFieldRow label={commonCopy.questionId} value={securityPoolForm.marketId} onInput={marketId => onSecurityPoolFormChange({ marketId })} placeholder={commonCopy.hexValuePlaceholder} />
-								<p className='field-help'>{securityPoolCopy.questionIdInputHint}</p>
+								<p className='field-help'>{securityPoolCopy.questionIdFallbackHint}</p>
 							</div>
 							{loadingMarketDetails ? (
 								<p className='detail'>

@@ -22,6 +22,7 @@ export type NoticeItem = {
 type GlobalTransactionTone = 'preparing' | 'awaiting-wallet' | 'pending' | 'success' | 'warning' | 'error'
 
 export type GlobalTransactionRow = {
+	identityKey?: string
 	label: string
 	value: ComponentChildren
 }
@@ -40,6 +41,7 @@ export type GlobalTransactionPresentation = {
 	detail?: ComponentChildren
 	dismissKey?: string
 	hash?: Hash
+	operationKey?: string
 	rows?: GlobalTransactionRow[]
 	technicalRows?: GlobalTransactionRow[]
 	title: ComponentChildren
@@ -52,6 +54,7 @@ export type StickyContextItem = {
 }
 
 export type TransactionContextItem = {
+	identityKey?: string
 	label: ComponentChildren
 	value: ComponentChildren
 }
@@ -185,6 +188,7 @@ export type ViewTabsProps<TValue extends string> = {
 		values: readonly TValue[]
 	}>
 	onChange: (value: TValue) => void
+	onOverflowEdgesChange?: (edges: { end: boolean; start: boolean }) => void
 	orientation?: 'horizontal' | 'vertical'
 	options: ViewTabOption<TValue>[]
 	semantics?: 'navigation' | 'switcher' | 'tabs'
@@ -197,6 +201,7 @@ export type TransactionActionButtonProps = {
 	availability?: ActionAvailability
 	className?: string
 	disabled?: boolean
+	disabledReasonElementId?: string | undefined
 	idleLabel: ComponentChildren
 	onClick: () => void
 	pending?: boolean

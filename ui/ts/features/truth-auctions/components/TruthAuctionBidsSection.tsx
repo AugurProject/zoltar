@@ -97,27 +97,29 @@ export function TruthAuctionBidsSection({ aggregatedAuctionBidCountForLoadedTick
 			{hasLoadedData && error === undefined && !loadingAggregatedAuctionBids && loadedTickCount === 0 ? <p className='detail'>{forkAuctionCopy.auctionPriceLevelsEmpty}</p> : undefined}
 			{hasLoadedData && error === undefined && !loadingAggregatedAuctionBids && loadedTickCount > 0 && rows.length === 0 ? <p className='detail'>{forkAuctionCopy.loadedPriceBidsEmpty}</p> : undefined}
 			{rows.length === 0 ? undefined : (
-				<div className='truth-auction-bid-table' role='table' aria-label={forkAuctionCopy.auctionBidHistory}>
-					<AuctionBidsHeader />
-					{rows.map(row => (
-						<div className='truth-auction-bid-row is-wide is-no-actions' key={row.key} role='row'>
-							<span className='truth-auction-bid-row-label' data-label={forkAuctionCopy.priceEthPerRep} role='cell'>
-								{renderPriceValue(row.price)}
-							</span>
-							<div className='truth-auction-bid-row-address' data-label={forkAuctionCopy.bidder} role='cell'>
-								<AddressValue address={row.bidder} copyable={false} />
+				<div className='truth-auction-bid-table-scroll' role='region' aria-label={forkAuctionCopy.scrollableAuctionBidHistory} tabIndex={0}>
+					<div className='truth-auction-bid-table' role='table' aria-label={forkAuctionCopy.auctionBidHistory}>
+						<AuctionBidsHeader />
+						{rows.map(row => (
+							<div className='truth-auction-bid-row is-wide is-no-actions' key={row.key} role='row'>
+								<span className='truth-auction-bid-row-label' data-label={forkAuctionCopy.priceEthPerRep} role='cell'>
+									{renderPriceValue(row.price)}
+								</span>
+								<div className='truth-auction-bid-row-address' data-label={forkAuctionCopy.bidder} role='cell'>
+									<AddressValue address={row.bidder} copyable={false} />
+								</div>
+								<span data-label={forkAuctionCopy.bidAmountEth} role='cell'>
+									<CurrencyValue value={row.ethAmount} suffix={commonCopy.eth} copyable={false} />
+								</span>
+								<span data-label={forkAuctionCopy.loadedDepthEth} role='cell'>
+									<CurrencyValue value={row.cumulativeEth} suffix={commonCopy.eth} copyable={false} />
+								</span>
+								<span className='truth-auction-bid-row-status' data-label={commonCopy.status} role='cell'>
+									<span className={`truth-auction-status-pill ${row.statusToneClassName}`}>{row.statusLabel}</span>
+								</span>
 							</div>
-							<span data-label={forkAuctionCopy.bidAmountEth} role='cell'>
-								<CurrencyValue value={row.ethAmount} suffix={commonCopy.eth} copyable={false} />
-							</span>
-							<span data-label={forkAuctionCopy.loadedDepthEth} role='cell'>
-								<CurrencyValue value={row.cumulativeEth} suffix={commonCopy.eth} copyable={false} />
-							</span>
-							<span className='truth-auction-bid-row-status' data-label={commonCopy.status} role='cell'>
-								<span className={`truth-auction-status-pill ${row.statusToneClassName}`}>{row.statusLabel}</span>
-							</span>
-						</div>
-					))}
+						))}
+					</div>
 				</div>
 			)}
 			{error === undefined && hasMoreAggregatedAuctionBids ? <PaginationControls hasNextPage={hasMoreAggregatedAuctionBids} onLoadMore={onLoadNextAuctionBidPage} loadMoreLabel={forkAuctionCopy.loadMoreTruthAuctionBids} /> : undefined}
@@ -144,30 +146,32 @@ export function ViewerTruthAuctionBidsSection({ accountAddress, error, hasLoaded
 			)}
 			{accountAddress !== undefined && hasLoadedData && error === undefined && !loadingTruthAuctionBook && rows.length === 0 ? <p className='detail'>{forkAuctionCopy.walletBidsEmpty}</p> : undefined}
 			{rows.length === 0 ? undefined : (
-				<div className='truth-auction-bid-table' role='table' aria-label={forkAuctionCopy.myBids}>
-					<ViewerBidsHeader showActions={showSettlementActionColumn} />
-					{rows.map(row => (
-						<div className={`truth-auction-bid-row is-wallet ${showSettlementActionColumn ? '' : 'is-no-actions'}`} key={row.key} role='row'>
-							{showSettlementActionColumn ? (
-								<div className='truth-auction-bid-row-actions' data-label={commonCopy.selected} role='cell'>
-									{(() => {
-										const settlementControl = row.settlementControl
-										if (settlementControl === undefined) return undefined
-										return <input disabled={settlementControl.disabled} type='checkbox' checked={settlementControl.checked} title={settlementControl.title} aria-label={settlementControl.ariaLabel} onChange={event => onSettlementBidSelectionChange(settlementControl.bidKey, event.currentTarget.checked)} />
-									})()}
-								</div>
-							) : undefined}
-							<span className='truth-auction-bid-row-label' data-label={forkAuctionCopy.priceEthPerRep} role='cell'>
-								{renderPriceValue(row.price)}
-							</span>
-							<span data-label={forkAuctionCopy.bidAmountEth} role='cell'>
-								<CurrencyValue value={row.ethAmount} suffix={commonCopy.eth} copyable={false} />
-							</span>
-							<span className='truth-auction-bid-row-status' data-label={commonCopy.status} role='cell'>
-								<span className={`truth-auction-status-pill ${row.statusToneClassName}`}>{row.statusLabel}</span>
-							</span>
-						</div>
-					))}
+				<div className='truth-auction-bid-table-scroll is-wallet' role='region' aria-label={forkAuctionCopy.scrollableMyBids} tabIndex={0}>
+					<div className='truth-auction-bid-table' role='table' aria-label={forkAuctionCopy.myBids}>
+						<ViewerBidsHeader showActions={showSettlementActionColumn} />
+						{rows.map(row => (
+							<div className={`truth-auction-bid-row is-wallet ${showSettlementActionColumn ? '' : 'is-no-actions'}`} key={row.key} role='row'>
+								{showSettlementActionColumn ? (
+									<div className='truth-auction-bid-row-actions' data-label={commonCopy.selected} role='cell'>
+										{(() => {
+											const settlementControl = row.settlementControl
+											if (settlementControl === undefined) return undefined
+											return <input disabled={settlementControl.disabled} type='checkbox' checked={settlementControl.checked} title={settlementControl.title} aria-label={settlementControl.ariaLabel} onChange={event => onSettlementBidSelectionChange(settlementControl.bidKey, event.currentTarget.checked)} />
+										})()}
+									</div>
+								) : undefined}
+								<span className='truth-auction-bid-row-label' data-label={forkAuctionCopy.priceEthPerRep} role='cell'>
+									{renderPriceValue(row.price)}
+								</span>
+								<span data-label={forkAuctionCopy.bidAmountEth} role='cell'>
+									<CurrencyValue value={row.ethAmount} suffix={commonCopy.eth} copyable={false} />
+								</span>
+								<span className='truth-auction-bid-row-status' data-label={commonCopy.status} role='cell'>
+									<span className={`truth-auction-status-pill ${row.statusToneClassName}`}>{row.statusLabel}</span>
+								</span>
+							</div>
+						))}
+					</div>
 				</div>
 			)}
 			{accountAddress !== undefined && error === undefined && hasMoreViewerBids ? <PaginationControls hasNextPage={hasMoreViewerBids} onLoadMore={onLoadNextViewerBidPage} loadMoreLabel={forkAuctionCopy.loadMoreOfMyBids} /> : undefined}

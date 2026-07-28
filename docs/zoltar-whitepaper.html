@@ -118,11 +118,18 @@
 				</section>
 
 				<section class="paper-section" id="universe-model">
-					<div class="section-heading">
-						<h2>2. Universe Model</h2>
-						<a class="anchor-link" href="#universe-model" aria-label="Link to Universe Model">#</a>
-					</div>
-					<p>
+						<div class="section-heading">
+							<h2>2. Universe Model</h2>
+							<a class="anchor-link" href="#universe-model" aria-label="Link to Universe Model">#</a>
+						</div>
+						<p class="security-assumption-ref">
+							<strong>Security assumptions:</strong>
+							<a href="./security-model.html#assumption-a19">A19 verified deployment</a>,
+							<a href="./security-model.html#assumption-a23">A23 Ethereum execution</a>,
+							and
+							<a href="./security-model.html#assumption-a24">A24 cryptographic identity</a>.
+						</p>
+						<p>
 						A universe is one branch of protocol state. The
 						<a href="../solidity/contracts/Zoltar.sol"><code>Zoltar.Universe</code></a> struct stores the minimum data needed to identify that branch and connect it to its parent:
 					</p>
@@ -206,6 +213,12 @@
 						or delete the others.
 					</div>
 					<h3 id="global-question-scope">Global Question Scope</h3>
+					<p class="security-assumption-ref">
+							<strong>Security assumption:</strong>
+							<a href="./security-model.html#assumption-a27"
+								>A27 permissionless-fork alignment</a
+							>.
+					</p>
 					<p>
 						Questions are global protocol objects in Zoltar. <code>forkUniverse</code> checks that the target universe exists, still has supply, has not already forked, and that the supplied question exists and has ended. It does not require the question to have been created for that universe. Applications that need a stricter universe/question relationship enforce it above Zoltar.
 					</p>
@@ -230,9 +243,18 @@
 						fork, including unnecessary forks that impose migration work on
 						applications using that universe.
 					</p>
-					<p>
-						Both the threshold and the haircut are intended to make unnecessary forks economically costly. Forking affects applications and users relying on that parent universe; each application chooses which child branch, if any, to continue using.
-					</p>
+						<p>
+							Both the threshold and the haircut are intended to make unnecessary forks economically costly. Forking affects applications and users relying on that parent universe; each application chooses which child branch, if any, to continue using.
+						</p>
+						<p class="security-assumption-ref">
+							<strong>Security assumptions:</strong>
+							<a href="./security-model.html#assumption-a02">A02 fork value preservation</a>,
+							<a href="./security-model.html#assumption-a03">A03 REP valuation</a>,
+							<a href="./security-model.html#assumption-a13">A13 lineage access value</a>,
+							<a href="./security-model.html#assumption-a18">A18 REP token behavior</a>,
+							and
+							<a href="./security-model.html#assumption-a26">A26 safe immutable parameters</a>.
+						</p>
 					<div class="equation" id="eq-zoltar-fork-threshold">
 						<math display="block" aria-label="fork threshold equals floor total theoretical REP supply divided by fork threshold divisor" data-source="forkThreshold = floor(totalTheoreticalRepSupply / forkThresholdDivisor)">
 						<mrow>
@@ -399,10 +421,17 @@
 						<h2>4. Child Universes and REP Splitting</h2>
 						<a class="anchor-link" href="#splitting" aria-label="Link to Child Universes and REP Splitting">#</a>
 					</div>
-					<p>
-						Once a universe forks, child universes can be deployed lazily through <code>deployChild</code>. A user can also add more REP into the migration balance
-						with <code>addRepToMigrationBalance</code>. The core post-fork action is <code>splitMigrationRep</code>, which lets a holder mint child-universe REP for valid outcome indices. Supplying no outcome indices is accepted as a no-op at the Zoltar layer.
-					</p>
+						<p>
+							Once a universe forks, child universes can be deployed lazily through <code>deployChild</code>. A user can also add more REP into the migration balance
+							with <code>addRepToMigrationBalance</code>. The core post-fork action is <code>splitMigrationRep</code>, which lets a holder mint child-universe REP for valid outcome indices. Supplying no outcome indices is accepted as a no-op at the Zoltar layer.
+						</p>
+						<p class="security-assumption-ref">
+							<strong>Security assumptions:</strong>
+							<a href="./security-model.html#assumption-a04">A04 truthful-branch value</a>,
+							<a href="./security-model.html#assumption-a07">A07 practical migration</a>,
+							<a href="./security-model.html#assumption-a11">A11 REP liquidity</a>, and
+							<a href="./security-model.html#assumption-a21">A21 lifecycle executors</a>.
+						</p>
 					<p>
 						For categorical questions, <code>Invalid</code> and any in-range categorical
 						outcome are allowed, while out-of-range values are rejected. For scalar
@@ -482,9 +511,19 @@
 						<h2>5. Assumptions and Security Model</h2>
 						<a class="anchor-link" href="#security" aria-label="Link to Assumptions and Security Model">#</a>
 					</div>
-					<p>
-						Zoltar is a <a href="https://github.com/AugurProject/oracle-research/blob/main/Colored%20Coins.md">Colored Coins</a>-style system, so its security argument depends on user behavior and value concentration rather than on the contract being able to identify one objectively correct branch onchain.
-					</p>
+						<p>
+							Zoltar is a <a href="https://github.com/AugurProject/oracle-research/blob/main/Colored%20Coins.md">Colored Coins</a>-style system, so its security argument depends on user behavior and value concentration rather than on the contract being able to identify one objectively correct branch onchain.
+						</p>
+						<p class="security-assumption-ref">
+							<strong>Security assumptions:</strong>
+							<a href="./security-model.html#assumption-a02">A02 fork value preservation</a>,
+							<a href="./security-model.html#assumption-a04">A04 truthful-branch preference</a>,
+							<a href="./security-model.html#assumption-a08">A08 independent participants</a>,
+							<a href="./security-model.html#assumption-a13">A13 lineage access value</a>,
+							<a href="./security-model.html#assumption-a25">A25 intended resolvable questions</a>,
+							and
+							<a href="./security-model.html#assumption-a27">A27 permissionless-fork alignment</a>.
+						</p>
 					<ul class="clean-list">
 						<li>users can choose which child universe (or child universes) to continue using after a fork</li>
 						<li>users prefer to continue in the universes they regard as truthful</li>
@@ -510,12 +549,20 @@
 						<h2>6. Questions and Outcome Encoding</h2>
 						<a class="anchor-link" href="#questions" aria-label="Link to Questions and Outcome Encoding">#</a>
 					</div>
-					<p>
-						<a href="../solidity/contracts/ZoltarQuestionData.sol"><code>ZoltarQuestionData.QuestionData</code></a>
-						stores title, description, start and end time, scalar metadata such as
-						<code>numTicks</code>, <code>displayValueMin</code>,
-						<code>displayValueMax</code>, and <code>answerUnit</code>.
-					</p>
+						<p>
+							<a href="../solidity/contracts/ZoltarQuestionData.sol"><code>ZoltarQuestionData.QuestionData</code></a>
+							stores title, description, start and end time, scalar metadata such as
+							<code>numTicks</code>, <code>displayValueMin</code>,
+							<code>displayValueMax</code>, and <code>answerUnit</code>.
+						</p>
+						<p class="security-assumption-ref">
+							<strong>Security assumptions:</strong>
+							<a href="./security-model.html#assumption-a06">A06 timely outcome evidence</a>,
+							<a href="./security-model.html#assumption-a22">A22 chain-data availability</a>,
+							<a href="./security-model.html#assumption-a24">A24 collision resistance</a>,
+							and
+							<a href="./security-model.html#assumption-a25">A25 question identity and resolvability</a>.
+						</p>
 					<p>
 						Question ids are deterministic hashes of the question data. For categorical questions, that hash path also includes the sorted categorical outcome options.
 						For scalar questions, there are no categorical labels to include, so the id is determined from the scalar question fields alone.

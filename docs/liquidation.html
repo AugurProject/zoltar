@@ -51,6 +51,16 @@
 
 			<section id="rule">
 				<h2>Liquidatable Condition</h2>
+				<p class="security-assumption-ref">
+					<strong>Security assumptions:</strong>
+					<a href="./security-model.html#assumption-a11">A11 REP liquidity</a>,
+					<a href="./security-model.html#assumption-a12">A12 REP economic backing</a>,
+					<a href="./security-model.html#assumption-a14">A14 timely inclusion</a>,
+					<a href="./security-model.html#assumption-a15">A15 correction capital</a>,
+					<a href="./security-model.html#assumption-a16">A16 available arbitrager</a>,
+					<a href="./security-model.html#assumption-a17">A17 independent corrector</a>, and
+					<a href="./security-model.html#assumption-a20">A20 observable correctable price</a>.
+				</p>
 				<p>
 					A vault is liquidatable when its unlocked REP backing is below the
 					required threshold. Allowance admission keeps the affected vault on the
@@ -641,6 +651,14 @@
 
 			<section id="incentives">
 				<h2>Incentive Implications</h2>
+				<p class="security-assumption-ref">
+					<strong>Security assumptions:</strong>
+					<a href="./security-model.html#assumption-a01">A01 risk-adjusted incentives</a>,
+					<a href="./security-model.html#assumption-a05">A05 viable operating costs</a>,
+					<a href="./security-model.html#assumption-a08">A08 independent liquidators</a>,
+					and
+					<a href="./security-model.html#assumption-a26">A26 safe parameter relationships</a>.
+				</p>
 				<p>
 					The protocol uses a target-funded REP penalty. That means the liquidator
 					has a direct immediate reward and the target is explicitly punished when

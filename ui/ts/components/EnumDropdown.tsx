@@ -7,15 +7,17 @@ export type EnumDropdownOption<T extends string> = {
 }
 
 type EnumDropdownProps<T extends string> = {
+	ariaDescribedBy?: string | undefined
 	ariaLabel?: string
 	disabled?: boolean
+	invalid?: boolean
 	onChange: (value: T) => void
 	options: ReadonlyArray<EnumDropdownOption<T>>
 	placeholder?: string
 	value: T | undefined
 }
 
-export function EnumDropdown<T extends string>({ ariaLabel, disabled = false, onChange, options, placeholder, value }: EnumDropdownProps<T>) {
+export function EnumDropdown<T extends string>({ ariaDescribedBy, ariaLabel, disabled = false, invalid = false, onChange, options, placeholder, value }: EnumDropdownProps<T>) {
 	const [open, setOpen] = useState(false)
 	const rootRef = useRef<HTMLDivElement | null>(null)
 	const triggerRef = useRef<HTMLButtonElement | null>(null)
@@ -70,6 +72,8 @@ export function EnumDropdown<T extends string>({ ariaLabel, disabled = false, on
 				className={`enum-dropdown-trigger ${open ? 'open' : ''}`}
 				type='button'
 				disabled={disabled}
+				aria-describedby={ariaDescribedBy}
+				aria-invalid={invalid ? 'true' : undefined}
 				aria-label={accessibleTriggerLabel}
 				aria-haspopup='listbox'
 				aria-expanded={open}

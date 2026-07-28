@@ -10,6 +10,8 @@ export const migrationAmountAlreadySplitDetail = 'This amount is already fully s
 export const alreadyForkedReason = 'Zoltar is already forked.'
 export const formatAddMigrationRepDetail = (repAmount: CopyTemplateValue) => `Add ${repAmount} REP to your migration balance from this universe, then split it across the selected universes.`
 export const forkQuestionRequiredReason = 'Select a valid fork question to continue.'
+export const forkQuestionTimeLoadingReason = 'Loading current chain time before checking whether the selected question has ended.'
+export const formatForkQuestionActiveReason = (endTime: CopyTemplateValue, relativeEndTime: CopyTemplateValue) => `The selected question must end before Zoltar can fork. It ends ${endTime} (${relativeEndTime}).`
 export const forkEconomicsUnavailableReason = 'Fork burn and migration-credit terms are unavailable.'
 export const forkRepInsufficientReason = 'Insufficient REP to meet the fork threshold.'
 export const forkRepApprovalRequiredReason = 'Approve enough REP to continue.'
@@ -44,6 +46,7 @@ export const chooseDestinationStep = '1. Choose destinations'
 export const prepareRepStep = '2. Prepare REP'
 export const splitRepStep = '3. Split REP'
 export const walletRepBalance = 'Wallet REP Balance'
+export const walletRepTokens = 'Wallet REP Tokens'
 export const selectedDestinations = 'Selected Destinations'
 export const balanceChanges = 'Balance Changes'
 export const afterPrepareWalletBalance = 'Wallet REP After Prepare'

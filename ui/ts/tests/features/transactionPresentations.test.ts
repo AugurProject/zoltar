@@ -69,15 +69,29 @@ describe('transaction presentations', () => {
 		expect(createOpenOracleSuccessPresentation({ action: 'createReportInstance', hash: '0x1234' }).title).toBe('Report Created')
 	})
 
+	test('describes Open Oracle settlement as a report lifecycle action', () => {
+		expect(createOpenOracleTransactionIntent('settle').submittedTitle).toBe('Settling Report')
+		expect(createOpenOracleSuccessPresentation({ action: 'settle', hash: '0x1234' }).title).toBe('Report Settled')
+	})
+
 	test('keeps pool, universe, and action context in trading and reporting intents', () => {
 		const context = {
-			securityPoolAddress: '0x0000000000000000000000000000000000000001',
+			securityPoolAddress: '0x0000000000000000000000000000000000000001' as const,
 			universeId: 7n,
 		}
 		const tradingIntent = createTradingTransactionIntent('migrateShares', { ...context, shareOutcome: 'yes' })
+		const tradingPresentation = createTradingSuccessPresentation({
+			action: 'migrateShares',
+			hash: '0x1234',
+			securityPoolAddress: context.securityPoolAddress,
+			shareOutcome: 'yes',
+			universeId: context.universeId,
+		})
 		const reportingIntent = createReportingTransactionIntent('reportOutcome', { ...context, outcome: 'no' })
 
 		expect(tradingIntent.rows?.map(row => row.label)).toEqual(['Pool', 'Universe', 'Share Outcome'])
+		expect(tradingIntent.rows?.map(row => row.identityKey)).toEqual(['security-pool', 'universe', 'outcome'])
+		expect(tradingPresentation.rows?.map(row => row.identityKey)).toEqual(['security-pool', 'universe', 'outcome'])
 		expect(reportingIntent.rows?.map(row => row.label)).toEqual(['Pool', 'Universe', 'Outcome'])
 	})
 

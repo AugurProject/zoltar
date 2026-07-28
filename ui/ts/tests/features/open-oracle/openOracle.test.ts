@@ -476,12 +476,13 @@ describe('Open Oracle helpers', () => {
 
 	test('dispute submission helper computes token contributions across both swap directions', () => {
 		const cases = [
-			{ disputeTokenToSwap: 'token1' as const, expectedToken1Contribution: 315n, expectedToken2Contribution: 30n },
-			{ disputeTokenToSwap: 'token2' as const, expectedToken1Contribution: 100n, expectedToken2Contribution: 137n },
+			{ disputeNewAmount2Input: '80', disputeTokenToSwap: 'token1' as const, expectedToken1Contribution: 315n, expectedToken2Contribution: 30n },
+			{ disputeNewAmount2Input: '120', disputeTokenToSwap: 'token2' as const, expectedToken1Contribution: 100n, expectedToken2Contribution: 177n },
 		]
 
 		for (const testCase of cases) {
 			const preview = createDisputeSubmissionPreview({
+				disputeNewAmount2Input: testCase.disputeNewAmount2Input,
 				disputeTokenToSwap: testCase.disputeTokenToSwap,
 				reportDetails: {
 					currentAmount1: 100n,
@@ -515,8 +516,8 @@ describe('Open Oracle helpers', () => {
 	test('dispute submission helper uses the reduced self-dispute contribution in both swap directions', () => {
 		const currentReporter = getAddress(addressString(TEST_ADDRESSES[1]))
 		const cases = [
-			{ disputeTokenToSwap: 'token1' as const, expectedToken1Contribution: 105n, expectedToken2Contribution: 30n, token1Balance: 105n, token2Balance: 30n },
-			{ disputeTokenToSwap: 'token2' as const, expectedToken1Contribution: 100n, expectedToken2Contribution: 32n, token1Balance: 100n, token2Balance: 32n },
+			{ disputeNewAmount2Input: '80', disputeTokenToSwap: 'token1' as const, expectedToken1Contribution: 105n, expectedToken2Contribution: 30n, token1Balance: 105n, token2Balance: 30n },
+			{ disputeNewAmount2Input: '120', disputeTokenToSwap: 'token2' as const, expectedToken1Contribution: 100n, expectedToken2Contribution: 72n, token1Balance: 100n, token2Balance: 72n },
 		]
 
 		for (const testCase of cases) {
@@ -524,6 +525,7 @@ describe('Open Oracle helpers', () => {
 				accountAddress: currentReporter,
 				approvedToken1Amount: testCase.token1Balance,
 				approvedToken2Amount: testCase.token2Balance,
+				disputeNewAmount2Input: testCase.disputeNewAmount2Input,
 				disputeTokenToSwap: testCase.disputeTokenToSwap,
 				token1Balance: testCase.token1Balance,
 				token2Balance: testCase.token2Balance,
@@ -532,6 +534,7 @@ describe('Open Oracle helpers', () => {
 				accountAddress: getAddress(addressString(TEST_ADDRESSES[2])),
 				approvedToken1Amount: testCase.token1Balance,
 				approvedToken2Amount: testCase.token2Balance,
+				disputeNewAmount2Input: testCase.disputeNewAmount2Input,
 				disputeTokenToSwap: testCase.disputeTokenToSwap,
 				token1Balance: testCase.token1Balance,
 				token2Balance: testCase.token2Balance,
@@ -548,6 +551,16 @@ describe('Open Oracle helpers', () => {
 		expect(createDisputeSubmissionPreview({ disputeNewAmount1Input: '' }).blockMessage?.message).toBe('Enter a valid new base token amount.')
 		expect(createDisputeSubmissionPreview({ disputeNewAmount2Input: '0' }).blockMessage?.message).toBe('Enter a valid new quote token amount greater than zero.')
 		expect(createDisputeSubmissionPreview({ disputeNewAmount1Input: '201' }).blockMessage?.message).toBe('New base token amount must be exactly 200 for this dispute.')
+	})
+
+	test('blocks dispute approvals when the proposed price direction conflicts with the selected swap token', () => {
+		const preview = createDisputeSubmissionPreview({
+			disputeTokenToSwap: 'token2',
+		})
+
+		expect(preview.canSubmit).toBe(false)
+		expect(preview.inputBlockMessage?.message).toBe('These amounts would swap out REP, not WETH. Select REP or change the proposed price.')
+		expect(preview.blockMessage).toEqual(preview.inputBlockMessage)
 	})
 
 	test('open oracle fee and multiplier formatters render human values', () => {

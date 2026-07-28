@@ -60,6 +60,7 @@ function isUniqueWinner(selectedBalance: bigint, largestOtherBalance: bigint) {
 	return selectedBalance > largestOtherBalance
 }
 export function getEscalationTimeRemaining(details: ActiveReportingDetails) {
+	if (details.hasReachedNonDecision) return 0n
 	return requireDefined(getTimeRemaining(details.escalationEndTime, details.currentTime), 'Escalation end time is required')
 }
 function hasEscalationTimedOut(details: ActiveReportingDetails) {

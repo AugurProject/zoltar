@@ -2,6 +2,15 @@
 
 The canonical event stream reconstructs the economically relevant Zoltar-owned protocol state described below without storage reads, transaction input, traces, or undocumented assumptions during replay. Storage getters may be used after replay for auditing and recovery.
 
+Security assumptions [A18 token behavior](./security-model.html#assumption-a18),
+[A19 verified canonical deployment](./security-model.html#assumption-a19),
+[A22 chain-data and proof availability](./security-model.html#assumption-a22),
+[A23 Ethereum execution and finality](./security-model.html#assumption-a23),
+[A24 cryptographic security](./security-model.html#assumption-a24), and
+[A29 client, RPC, and wallet integrity](./security-model.html#assumption-a29) define the
+external boundary for emitter recognition, replay, rollback, and state-hash
+verification.
+
 Open Oracle logging remains outside this Zoltar event-stream contract. The vendored OpenOracle 0.2.0 contract stores the active state hash and emits each report preimage as 235 packed bytes in `ReportSubmitted` and `ReportDisputed`; clients reconstruct that separate oracle state before disputing or settling. Those packed logs do not extend the Zoltar-owned schema or its payout and liability replay guarantees.
 
 ### OpenOracle packed-state reconstruction

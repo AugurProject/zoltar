@@ -4,6 +4,7 @@ import { LoadingAwareText } from '../../../components/LoadingText.js'
 import { WarningSurface } from '../../../components/WarningSurface.js'
 
 type LifecycleStageBannerProps = {
+	detailId?: string | undefined
 	flat?: boolean
 	stage: LifecycleStagePresentation | undefined
 }
@@ -25,7 +26,7 @@ function renderStageActionGroup(label: string, items: string[], tone: 'available
 	)
 }
 
-export function LifecycleStageBanner({ flat = false, stage }: LifecycleStageBannerProps) {
+export function LifecycleStageBanner({ detailId, flat = false, stage }: LifecycleStageBannerProps) {
 	if (stage === undefined) return undefined
 	const hasActions = stage.availableActions.length > 0 || stage.blockedActions.length > 0
 	const actions = !hasActions ? undefined : (
@@ -40,7 +41,7 @@ export function LifecycleStageBanner({ flat = false, stage }: LifecycleStageBann
 				<div className='lifecycle-stage-banner-main'>
 					<h3>{stage.label}</h3>
 					{stage.detail === undefined ? undefined : (
-						<p className='detail'>
+						<p className='detail' id={detailId}>
 							<LoadingAwareText>{stage.detail}</LoadingAwareText>
 						</p>
 					)}
@@ -54,7 +55,7 @@ export function LifecycleStageBanner({ flat = false, stage }: LifecycleStageBann
 			<div className='lifecycle-stage-banner-main'>
 				<h3>{stage.label}</h3>
 				{stage.detail === undefined ? undefined : (
-					<p className='detail'>
+					<p className='detail' id={detailId}>
 						<LoadingAwareText>{stage.detail}</LoadingAwareText>
 					</p>
 				)}

@@ -133,6 +133,10 @@ main {
 	display: none;
 }
 
+.route-subnav-mobile-select {
+	display: none;
+}
+
 h1 {
 	margin: 0;
 	font-family: var(--font-family-serif);
@@ -782,8 +786,10 @@ button .loading-value {
 }
 
 button.currency-value.copyable {
-	display: inline-block;
-	min-height: 2rem;
+	display: inline-flex;
+	align-items: center;
+	min-width: var(--touch-target-min);
+	min-height: var(--touch-target-min);
 	max-width: 100%;
 	box-sizing: border-box;
 	border: 0;
@@ -879,6 +885,85 @@ button.currency-value.copyable:hover:not(:disabled) {
 .address-value.copyable:focus-visible {
 	outline: 2px solid var(--focus);
 	outline-offset: 2px;
+}
+
+.wallet-asset-control {
+	display: inline-flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--space-1) var(--space-2);
+	max-width: 100%;
+	min-width: 0;
+}
+
+.wallet-asset-control > .address-value {
+	flex: 1 1 18rem;
+}
+
+button.wallet-asset-action {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	gap: var(--space-2);
+	min-height: 2.25rem;
+	border-color: var(--interactive-border);
+	padding: 0.4rem 0.75rem 0.4rem 0.55rem;
+	background: var(--interactive-bg);
+	box-shadow: var(--glow-inset-subtle);
+	color: var(--text);
+	font-family: var(--font-family-sans);
+	font-size: var(--font-caption);
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+button.wallet-asset-action:hover:not(:disabled) {
+	border-color: var(--interactive-border-hover);
+	background: var(--interactive-bg-hover);
+}
+
+.wallet-asset-action-icon {
+	display: inline-grid;
+	place-items: center;
+	width: 1.1rem;
+	height: 1.1rem;
+	border: 1px solid currentColor;
+	border-radius: 50%;
+	font-size: 0.8rem;
+	font-weight: 700;
+	line-height: 1;
+}
+
+button.wallet-asset-action-accepted:disabled {
+	border-color: var(--success-border);
+	background: var(--success-soft);
+	color: var(--success);
+	cursor: default;
+	opacity: 1;
+}
+
+button.wallet-asset-action-pending:disabled {
+	border-color: var(--interactive-border);
+	background: var(--interactive-bg);
+	color: var(--text-secondary);
+}
+
+.wallet-asset-feedback {
+	flex: 1 0 100%;
+	color: var(--danger);
+	font-family: var(--font-family-sans);
+	font-size: var(--font-caption);
+	font-weight: 400;
+	line-height: 1.4;
+}
+
+.wallet-asset-prerequisite {
+	flex: 1 0 100%;
+	color: var(--text-secondary);
+	font-family: var(--font-family-sans);
+	font-size: var(--font-caption);
+	line-height: 1.4;
 }
 
 .route-shell {
@@ -3099,6 +3184,16 @@ strong.metric-value-danger {
 	gap: 0.6rem;
 }
 
+.truth-auction-bid-table-scroll {
+	max-width: 100%;
+	border-radius: var(--radius-control);
+}
+
+.truth-auction-bid-table-scroll:focus-visible {
+	outline: 3px solid var(--focus);
+	outline-offset: 2px;
+}
+
 .truth-auction-bid-row {
 	display: grid;
 	grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.2fr) minmax(0, 0.85fr) minmax(0, 0.9fr) auto minmax(0, 1.15fr);
@@ -3408,7 +3503,6 @@ strong.metric-value-danger {
 .transaction-review .currency-value,
 .transaction-review button.currency-value.copyable {
 	max-width: none;
-	min-height: auto;
 	overflow: visible;
 	white-space: nowrap;
 }
@@ -3557,7 +3651,7 @@ strong.metric-value-danger {
 	z-index: 3;
 	padding: var(--space-2) var(--space-3);
 	border-radius: var(--radius-control);
-	background: rgba(9, 18, 31, 0.97);
+	background: var(--surface-section-opaque);
 }
 
 .sticky-object-context.context-strip .sticky-object-context-summary {
@@ -4123,6 +4217,13 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	gap: 1rem;
 }
 
+.operation-modal-transaction-notice {
+	width: 100%;
+	max-height: none;
+	border-radius: var(--radius-control);
+	box-shadow: var(--glow-inset-subtle);
+}
+
 .workflow-summary-strip-steps {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
@@ -4195,10 +4296,8 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	}
 
 	.sticky-object-context.context-strip h3 {
-		overflow: hidden;
 		font-size: var(--font-body);
-		text-overflow: ellipsis;
-		white-space: nowrap;
+		overflow-wrap: anywhere;
 	}
 
 	.sticky-object-context.context-strip .sticky-object-context-summary {
@@ -4213,10 +4312,13 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 		padding-top: var(--space-1);
 	}
 
-	.sticky-object-context.context-strip .sticky-object-context-item .address-value {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+	.sticky-object-context.context-strip .sticky-object-context-item .address-value,
+	.sticky-object-context.context-strip .sticky-object-context-item .universe-link {
+		max-width: 100%;
+		overflow: visible;
+		overflow-wrap: anywhere;
+		text-overflow: clip;
+		white-space: normal;
 	}
 
 	.open-oracle-report-stack > .sticky-object-context {
@@ -4498,6 +4600,7 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 .field select[aria-invalid="true"],
 .field textarea.is-invalid,
 .field textarea[aria-invalid="true"],
+.field .enum-dropdown-trigger[aria-invalid="true"],
 .form-input.is-invalid,
 .form-input[aria-invalid="true"] {
 	border-bottom-color: var(--danger);
@@ -4552,6 +4655,7 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 .field select[aria-invalid="true"]:focus,
 .field textarea.is-invalid:focus,
 .field textarea[aria-invalid="true"]:focus,
+.field .enum-dropdown-trigger[aria-invalid="true"]:focus,
 .form-input.is-invalid:focus,
 .form-input[aria-invalid="true"]:focus {
 	border-color: var(--danger);
@@ -4923,47 +5027,21 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 		justify-content: flex-start;
 	}
 
-	.truth-auction-bid-row,
-	.truth-auction-bid-row.is-wide,
-	.truth-auction-bid-row.is-wide.is-no-actions,
-	.truth-auction-bid-row.is-wallet,
-	.truth-auction-bid-row.is-wallet.is-no-actions {
-		grid-template-columns: 1fr;
+	.truth-auction-bid-table-scroll {
+		overflow-x: auto;
+		overscroll-behavior-inline: contain;
 	}
 
-	.truth-auction-bid-row.is-header {
-		display: none;
+	.truth-auction-bid-table-scroll .truth-auction-bid-table {
+		min-width: 43rem;
 	}
 
-	.truth-auction-bid-row:not(.is-header) > [data-label] {
-		display: grid;
-		grid-column: 1 / -1;
-		grid-template-columns: minmax(6.5rem, 0.85fr) minmax(0, 1fr);
-		align-items: start;
-		gap: 0.75rem;
+	.truth-auction-bid-table-scroll.is-wallet .truth-auction-bid-table {
+		min-width: 31rem;
 	}
 
-	.truth-auction-bid-row:not(.is-header) > [data-label]::before {
-		content: attr(data-label);
-		color: var(--muted);
-		font-size: var(--font-label);
-		font-weight: 600;
-		letter-spacing: 0.08em;
-		line-height: 1.35;
-		text-transform: uppercase;
-	}
-
-	.truth-auction-bid-row:not(.is-header) > .truth-auction-bid-row-address[data-label] {
-		grid-template-columns: minmax(0, 1fr);
-		gap: 0.3rem;
-	}
-
-	.truth-auction-bid-row-actions {
-		align-items: stretch;
-	}
-
-	.truth-auction-bid-row-actions > button {
-		width: 100%;
+	.truth-auction-bid-row {
+		padding: 0.62rem 0.7rem;
 	}
 
 	.lookup-field-controls.has-action {
@@ -7459,9 +7537,21 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 
 	.route-subnav-shell {
 		display: grid;
-		grid-template-columns: var(--touch-target-min) minmax(0, 1fr) var(--touch-target-min);
+		grid-template-columns: minmax(0, 1fr);
 		align-items: center;
 		padding: 0;
+	}
+
+	.route-subnav-shell.has-overflow-start {
+		grid-template-columns: var(--touch-target-min) minmax(0, 1fr);
+	}
+
+	.route-subnav-shell.has-overflow-end {
+		grid-template-columns: minmax(0, 1fr) var(--touch-target-min);
+	}
+
+	.route-subnav-shell.has-overflow-start.has-overflow-end {
+		grid-template-columns: var(--touch-target-min) minmax(0, 1fr) var(--touch-target-min);
 	}
 
 	.route-subnav-overflow-control {
@@ -7492,6 +7582,7 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	.route-subtab-nav {
 		justify-content: flex-start;
 		flex-wrap: nowrap;
+		gap: 0.45rem;
 		width: 100%;
 		min-width: 0;
 		overflow-x: auto;
@@ -7502,6 +7593,7 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 		flex: 0 0 auto;
 		padding-right: 0;
 		padding-left: 0;
+		font-size: var(--font-label);
 	}
 
 	.overview-inline-metrics {
@@ -7534,6 +7626,7 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	.identifier-value.copyable,
 	.metric-label-refresh,
 	.security-pool-link,
+	button.wallet-asset-action,
 	.universe-link {
 		min-height: var(--touch-target-min);
 	}
@@ -7652,6 +7745,29 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	}
 
 	.tab-nav > .view-tabs.route {
+		display: none;
+	}
+
+	.route-subnav-shell {
+		display: block;
+		padding: 0;
+	}
+
+	.route-subnav-mobile-select {
+		display: grid;
+		gap: var(--space-1);
+		width: 100%;
+		color: var(--text-subtle);
+		font-size: var(--font-caption);
+	}
+
+	.route-subnav-mobile-select select {
+		width: 100%;
+		min-height: var(--touch-target-min);
+	}
+
+	.route-subnav-shell > .route-subtab-nav,
+	.route-subnav-shell > .route-subnav-overflow-control {
 		display: none;
 	}
 

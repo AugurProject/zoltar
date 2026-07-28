@@ -1,6 +1,8 @@
 import type { CopyTemplateValue } from './types.js'
 
 export const bidAmountEth = 'Bid Amount (ETH)'
+export const scrollableAuctionBidHistory = 'Scrollable auction bid history'
+export const scrollableMyBids = 'Scrollable wallet bid history'
 export const selectedChildPoolRepReadinessLoading = 'Checking whether pool REP is already ready for the selected child universe.'
 export const clearingPrice = 'Clearing Price'
 export const closed = 'Closed'

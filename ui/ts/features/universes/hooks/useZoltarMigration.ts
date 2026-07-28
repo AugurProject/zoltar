@@ -27,8 +27,8 @@ type UseZoltarMigrationParameters = {
 	onTransactionRequested: WriteOperationsParameters['onTransactionRequested']
 	onTransactionSubmitted: (hash: Hash) => void
 	refreshState: WriteOperationsParameters['refreshState']
-	refreshZoltarForkAccess: () => Promise<void>
-	refreshZoltarUniverse: () => Promise<void>
+	refreshZoltarForkAccess: (universe?: ZoltarUniverseSummary) => Promise<void>
+	refreshZoltarUniverse: () => Promise<ZoltarUniverseSummary | undefined>
 	zoltarForkRepBalance: bigint | undefined
 	zoltarMigrationPreparedRepBalance: bigint | undefined
 }
@@ -131,11 +131,12 @@ export function useZoltarMigration({
 
 			try {
 				if (writeFailed) return
+				let refreshedUniverse: ZoltarUniverseSummary | undefined
 				if (refreshAfter) {
 					await refreshWalletStateOnly(refreshState)
-					await refreshZoltarUniverse()
+					refreshedUniverse = await refreshZoltarUniverse()
 				}
-				await refreshZoltarForkAccess()
+				await refreshZoltarForkAccess(refreshedUniverse)
 			} catch (error) {
 				const message = formatRefreshErrorMessage(error, 'Migration succeeded, but refreshing the UI failed')
 				const latestResult = zoltarMigrationResult.value
