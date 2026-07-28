@@ -4,7 +4,7 @@ import path from 'node:path'
 import { Window } from 'happy-dom'
 import ts from 'typescript'
 
-import { contractInteractionEdges } from '../docs/charts/chartModels'
+import { contractInteractionEdges, quantitativeChartAxisLabels, quantitativeChartIds } from '../docs/charts/chartModels'
 
 const repositoryRoot = path.resolve(import.meta.dir, '..')
 const docsDirectory = path.join(repositoryRoot, 'docs')
@@ -25,6 +25,8 @@ const nativeChartIds = new Set([
 	'plot-statoblast-whitepaper-8',
 	'plot-statoblast-whitepaper-19',
 ])
+const quantitativeChartIdSet = new Set<string>(quantitativeChartIds)
+const chartAxes: ('x' | 'y')[] = ['x', 'y']
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -162,6 +164,21 @@ if (missingSpecs.length > 0 || orphanedSpecs.length > 0) {
 for (const chartId of nativeChartIds) {
 	if (!mountIdSet.has(chartId) || !runtimeSource.includes(`chartId === '${chartId}'`)) {
 		throw new Error(`Native quantitative Plot chart ${chartId} is not mounted and explicitly dispatched`)
+	}
+}
+if (quantitativeChartIdSet.size !== nativeChartIds.size - 1 || [...nativeChartIds].some(chartId => chartId !== 'fig-contract-interaction-map' && !quantitativeChartIdSet.has(chartId))) {
+	throw new Error('Every native quantitative chart must have registered axis labels')
+}
+for (const chartId of quantitativeChartIds) {
+	const axes = quantitativeChartAxisLabels[chartId]
+	for (const axis of chartAxes) {
+		const label = axes[axis]
+		if (!label.includes('(') || !label.endsWith(')')) {
+			throw new Error(`Quantitative chart ${chartId} ${axis}-axis label must end with explicit units or scale type`)
+		}
+	}
+	if (!runtimeSource.includes(`quantitativeChartAxisLabels['${chartId}']`)) {
+		throw new Error(`Quantitative chart ${chartId} does not consume its registered x- and y-axis labels`)
 	}
 }
 if (!runtimeSource.includes('return markDrivenDiagramChart(spec)') || /createElementNS|RenderFunction|narrativeMark/.test(runtimeSource)) {

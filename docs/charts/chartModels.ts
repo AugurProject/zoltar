@@ -5,6 +5,32 @@ export type AuctionBidInput = {
 	price: number
 }
 
+export const quantitativeChartIds = [
+	'fig-auction-clearing-ladder',
+	'fig-liquidation-health-curve',
+	'fig-statoblast-escalation-cost-curve',
+	'fig-statoblast-retention-utilization',
+	'fig-zoltar-fork-threshold-decay',
+	'plot-open-oracle-integration-2',
+	'plot-statoblast-whitepaper-7',
+	'plot-statoblast-whitepaper-8',
+	'plot-statoblast-whitepaper-19',
+] as const
+
+type QuantitativeChartId = (typeof quantitativeChartIds)[number]
+
+export const quantitativeChartAxisLabels: Record<QuantitativeChartId, { x: string; y: string }> = {
+	'fig-auction-clearing-ladder': { x: 'Cumulative REP demand (REP)', y: 'Bid limit (ETH/REP)' },
+	'fig-liquidation-health-curve': { x: 'REP price (REP/ETH)', y: 'Required backing (REP)' },
+	'fig-statoblast-escalation-cost-curve': { x: 'Elapsed escalation interval (% of interval)', y: 'Required bond (% of non-decision threshold)' },
+	'fig-statoblast-retention-utilization': { x: 'Fee-eligible allowance utilization (%)', y: 'Annualized open-interest fee (%)' },
+	'fig-zoltar-fork-threshold-decay': { x: 'Fork generation (count)', y: 'Theoretical genesis supply (%)' },
+	'plot-open-oracle-integration-2': { x: 'Censorship duration (steps)', y: 'Cost or payoff (ETH)' },
+	'plot-statoblast-whitepaper-7': { x: 'Escrowed balance (REP)', y: 'Outcome (category)' },
+	'plot-statoblast-whitepaper-8': { x: 'Escrowed balance (REP)', y: 'Outcome (category)' },
+	'plot-statoblast-whitepaper-19': { x: 'Child-universe collateral (ETH)', y: 'Collateral destination (category)' },
+}
+
 type AuctionBidResult = AuctionBidInput & {
 	chartRep: number
 	rep: number

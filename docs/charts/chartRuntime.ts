@@ -10,6 +10,7 @@ import {
 	calculateResolutionModel,
 	contractInteractionEdges,
 	normalizedEscalationCost,
+	quantitativeChartAxisLabels,
 } from './chartModels'
 
 declare function require(path: './diagramSpecs.json'): unknown
@@ -415,6 +416,7 @@ function formatAtomicRep(value: bigint): string {
 }
 
 function escalationCostChart(spec: ChartSpec): SVGSVGElement {
+	const axes = quantitativeChartAxisLabels['fig-statoblast-escalation-cost-curve']
 	const curve = Array.from({ length: 61 }, (_, index) => {
 		const elapsed = index / 60
 		return {
@@ -478,12 +480,13 @@ function escalationCostChart(spec: ChartSpec): SVGSVGElement {
 		],
 		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
 		width: spec.width,
-		x: { domain: [0, 1], grid: true, label: 'Elapsed escalation interval', tickFormat: (value: number) => `${Math.round(value * 100)}%` },
-		y: { domain: [0, 1.06], grid: true, label: 'Bond as % of non-decision threshold', tickFormat: (value: number) => `${Math.round(value * 100)}%` },
+		x: { domain: [0, 1], grid: true, label: axes.x, tickFormat: (value: number) => `${Math.round(value * 100)}%` },
+		y: { domain: [0, 1.06], grid: true, label: axes.y, tickFormat: (value: number) => `${Math.round(value * 100)}%` },
 	}) as SVGSVGElement
 }
 
 function forkThresholdDecayChart(spec: ChartSpec): SVGSVGElement {
+	const axes = quantitativeChartAxisLabels['fig-zoltar-fork-threshold-decay']
 	const generations = calculateForkThresholdSeries(21)
 	return plot({
 		ariaDescription: spec.ariaDescription,
@@ -507,12 +510,13 @@ function forkThresholdDecayChart(spec: ChartSpec): SVGSVGElement {
 		],
 		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
 		width: spec.width,
-		x: { grid: true, label: 'Fork generation along one lineage', ticks: 10 },
-		y: { domain: [0, 100], grid: true, label: 'Percent of genesis theoretical supply' },
+		x: { grid: true, label: axes.x, ticks: 10 },
+		y: { domain: [0, 100], grid: true, label: axes.y },
 	}) as SVGSVGElement
 }
 
 function retentionUtilizationChart(spec: ChartSpec): SVGSVGElement {
+	const axes = quantitativeChartAxisLabels['fig-statoblast-retention-utilization']
 	const curve = Array.from({ length: 101 }, (_, utilizationPercent) => {
 		return {
 			annualFeePercent: calculateAnnualizedRetentionFeePercent(utilizationPercent),
@@ -544,12 +548,13 @@ function retentionUtilizationChart(spec: ChartSpec): SVGSVGElement {
 		],
 		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
 		width: spec.width,
-		x: { domain: [0, 100], grid: true, label: 'Fee-eligible allowance utilization (%)' },
-		y: { domain: [0, 55], grid: true, label: 'Annualized open-interest fee (%)' },
+		x: { domain: [0, 100], grid: true, label: axes.x },
+		y: { domain: [0, 55], grid: true, label: axes.y },
 	}) as SVGSVGElement
 }
 
 function liquidationHealthChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
+	const axes = quantitativeChartAxisLabels['fig-liquidation-health-curve']
 	const container = mount.closest('.interactive-example')
 	const unlockedRep = Number(container?.querySelector<HTMLInputElement>('[data-liquidation-input="rep"]')?.value ?? 1000)
 	const allowance = Number(container?.querySelector<HTMLInputElement>('[data-liquidation-input="debt"]')?.value ?? 75)
@@ -579,8 +584,8 @@ function liquidationHealthChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElem
 		],
 		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
 		width: spec.width,
-		x: { domain: [0, maximumPrice], grid: true, label: 'REP per ETH price' },
-		y: { domain: [0, Math.max(unlockedRep, allowance * multiplier * maximumPrice) * 1.06], grid: true, label: 'REP backing' },
+		x: { domain: [0, maximumPrice], grid: true, label: axes.x },
+		y: { domain: [0, Math.max(unlockedRep, allowance * multiplier * maximumPrice) * 1.06], grid: true, label: axes.y },
 	}) as SVGSVGElement
 	chart.dataset['chartState'] = state
 	return chart
@@ -941,6 +946,7 @@ function contractInteractionChart(spec: ChartSpec): SVGSVGElement {
 }
 
 function auctionDemandChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
+	const axes = quantitativeChartAxisLabels['fig-auction-clearing-ladder']
 	const example = document.querySelector('#simple-auction-example')
 	const repInventory = Math.max(readInput(example, 'repInventory', 4), 1)
 	const ethRaiseCap = Math.max(readInput(example, 'ethRaiseCap', 10), 0)
@@ -1050,8 +1056,8 @@ function auctionDemandChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement 
 		],
 		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
 		width: spec.width,
-		x: { domain: [0, maxRep * 1.08], grid: true, label: 'Cumulative REP demand' },
-		y: { domain: [0, yMax], grid: true, label: 'Bid limit (ETH per REP)' },
+		x: { domain: [0, maxRep * 1.08], grid: true, label: axes.x },
+		y: { domain: [0, yMax], grid: true, label: axes.y },
 	}) as SVGSVGElement
 	chart.dataset['chartState'] = model.mode
 	mount.dataset['chartState'] = chart.dataset['chartState']
@@ -1059,6 +1065,7 @@ function auctionDemandChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement 
 }
 
 function collateralRepairChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
+	const axes = quantitativeChartAxisLabels['plot-statoblast-whitepaper-19']
 	const example = mount.closest('#collateral-repair-example')
 	const parentCollateral = Math.max(readInput(example, 'parentCollateral', 50), 0)
 	const model = calculateCollateralRepairModel(parentCollateral, readInput(example, 'forkCollateralReceived', 47.5), readInput(example, 'auctionRaised', 2.5))
@@ -1075,7 +1082,7 @@ function collateralRepairChart(spec: ChartSpec, mount: HTMLElement): SVGSVGEleme
 		},
 		height: spec.height,
 		marginBottom: 44,
-		marginLeft: 32,
+		marginLeft: 124,
 		marginRight: 28,
 		marginTop: 52,
 		marks: [
@@ -1107,8 +1114,8 @@ function collateralRepairChart(spec: ChartSpec, mount: HTMLElement): SVGSVGEleme
 		],
 		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
 		width: spec.width,
-		x: { domain: [0, Math.max(parentCollateral, model.received + model.repairEth, 1)], grid: true, label: 'Collateral (ETH)' },
-		y: { axis: null },
+		x: { domain: [0, Math.max(parentCollateral, model.received + model.repairEth, 1)], grid: true, label: axes.x },
+		y: { label: axes.y },
 	}) as SVGSVGElement
 	chart.dataset['chartState'] = model.remainingShortfall === 0 ? 'repaired' : 'partial'
 	mount.dataset['chartState'] = chart.dataset['chartState']
@@ -1116,6 +1123,7 @@ function collateralRepairChart(spec: ChartSpec, mount: HTMLElement): SVGSVGEleme
 }
 
 function oracleSecurityChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
+	const axes = quantitativeChartAxisLabels['plot-open-oracle-integration-2']
 	const example = mount.closest('#binary-censorship-example')
 	const honestPrice = Math.max(readInput(example, 'honestPrice', 900), 0.0001)
 	const manipulatedPrice = Math.max(readInput(example, 'manipulatedPrice', 1017), 0.0001)
@@ -1208,12 +1216,13 @@ function oracleSecurityChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement
 		],
 		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
 		width: spec.width,
-		x: { domain: [0, maxDuration], grid: true, label: 'Censorship duration (steps)' },
-		y: { grid: true, label: 'Cost or payoff (ETH)' },
+		x: { domain: [0, maxDuration], grid: true, label: axes.x },
+		y: { grid: true, label: axes.y },
 	}) as SVGSVGElement
 }
 
 function escalationDepositChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
+	const axes = quantitativeChartAxisLabels['plot-statoblast-whitepaper-7']
 	const example = mount.closest('#escalation-deposit-example')
 	const repeatDeposit = readInput(example, 'depositLifecycle', 0) === 1
 	const invalidBalance = repeatDeposit ? readInput(example, 'invalidBalance', 1) : 0
@@ -1254,14 +1263,15 @@ function escalationDepositChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElem
 		marks: [barX(balances, { fill: 'side', fx: 'phase', inset: 2, x: 'balance', y: 'side' }), ruleX([model.threshold], { stroke: 'var(--gold, #8a5d18)', strokeDasharray: '5,4', strokeWidth: 2 })],
 		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
 		width: spec.width,
-		x: { domain: [0, Math.max(model.threshold, ...balances.map(item => item.balance), 1)], grid: true, label: 'Escrowed REP' },
-		y: { domain: ['Invalid', 'Yes', 'No'], label: null },
+		x: { domain: [0, Math.max(model.threshold, ...balances.map(item => item.balance), 1)], grid: true, label: axes.x },
+		y: { domain: ['Invalid', 'Yes', 'No'], label: axes.y },
 	}) as SVGSVGElement
 	chart.dataset['chartState'] = model.previewReverts ? 'reverts' : 'accepted'
 	return chart
 }
 
 function resolutionChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
+	const axes = quantitativeChartAxisLabels['plot-statoblast-whitepaper-8']
 	const example = mount.closest('#resolution-edge-example')
 	const invalidBalance = readInput(example, 'invalidBalance', 4)
 	const yesBalance = readInput(example, 'yesBalance', 6)
@@ -1288,8 +1298,8 @@ function resolutionChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
 		marks: [barX(balances, { fill: 'side', inset: 3, x: 'balance', y: 'side' }), ruleX([runningCost], { stroke: 'var(--gold, #8a5d18)', strokeDasharray: '5,4', strokeWidth: 2 })],
 		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
 		width: spec.width,
-		x: { domain: [0, Math.max(runningCost, ...balances.map(item => item.balance), 1)], grid: true, label: 'Escrowed REP' },
-		y: { domain: ['Invalid', 'Yes', 'No'], label: null },
+		x: { domain: [0, Math.max(runningCost, ...balances.map(item => item.balance), 1)], grid: true, label: axes.x },
+		y: { domain: ['Invalid', 'Yes', 'No'], label: axes.y },
 	}) as SVGSVGElement
 	chart.dataset['chartState'] = model.result.toLowerCase()
 	return chart
