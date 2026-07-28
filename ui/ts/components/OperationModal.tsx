@@ -2,29 +2,55 @@ import * as commonCopy from '../copy/common.js'
 import { useEffect, useId, useRef } from 'preact/hooks'
 import { useModalFocusIsolation } from '../hooks/useModalFocusIsolation.js'
 import type { OperationModalProps } from '../types/components.js'
+import { useGlobalTransactionPresentation } from './GlobalTransactionPresentationContext.js'
+import { TransactionPresentationNotice } from './TransactionPresentationNotice.js'
 import { TransactionObjectContext } from './TransactionObjectContext.js'
+
+function getTransactionOperationKey(transaction: ReturnType<typeof useGlobalTransactionPresentation>) {
+	return transaction?.operationKey ?? transaction?.dismissKey ?? transaction?.hash
+}
+
+function getModalTransactionPresentation(transaction: ReturnType<typeof useGlobalTransactionPresentation>, context: NonNullable<OperationModalProps['context']>) {
+	if (transaction === undefined || transaction.rows === undefined) return transaction
+	const contextIdentityKeys = new Set(context.flatMap(item => (item.identityKey === undefined ? [] : [item.identityKey])))
+	const contextLabels = new Set(context.flatMap(item => (typeof item.label === 'string' ? [item.label] : [])))
+	return {
+		...transaction,
+		rows: transaction.rows.filter(row => (row.identityKey === undefined || !contextIdentityKeys.has(row.identityKey)) && !contextLabels.has(row.label)),
+	}
+}
 
 export function OperationModal({ children, closeOnSuccessKey, context = [], description, isOpen, onClose, title }: OperationModalProps) {
 	const dialogRef = useRef<HTMLElement | null>(null)
 	const closeButtonRef = useRef<HTMLButtonElement | null>(null)
+	const activeTransaction = useGlobalTransactionPresentation()
+	const activeTransactionOperationKey = getTransactionOperationKey(activeTransaction)
+	const modalTransaction = getModalTransactionPresentation(activeTransaction, context)
 	const titleId = useId()
 	const descriptionElementId = useId()
 	const descriptionId = description === undefined ? undefined : descriptionElementId
-	const completionKeyAtOpenRef = useRef<string | undefined>()
+	const modalOperationKeysRef = useRef<Set<string>>(new Set())
+	const transactionOperationKeyAtOpenRef = useRef<string | undefined>()
 	const wasOpenRef = useRef(false)
 
 	useEffect(() => {
 		if (!isOpen) {
 			wasOpenRef.current = false
+			modalOperationKeysRef.current = new Set()
 			return
 		}
 		if (!wasOpenRef.current) {
 			wasOpenRef.current = true
-			completionKeyAtOpenRef.current = closeOnSuccessKey
+			modalOperationKeysRef.current = new Set()
+			transactionOperationKeyAtOpenRef.current = activeTransactionOperationKey
 			return
 		}
-		if (closeOnSuccessKey !== undefined && closeOnSuccessKey !== completionKeyAtOpenRef.current) onClose()
-	}, [closeOnSuccessKey, isOpen, onClose])
+		if (activeTransactionOperationKey !== undefined && activeTransactionOperationKey !== transactionOperationKeyAtOpenRef.current) {
+			modalOperationKeysRef.current.add(activeTransactionOperationKey)
+		}
+		const submittedActionSucceeded = activeTransaction?.tone === 'success' && activeTransaction.hash !== undefined && activeTransaction.hash === closeOnSuccessKey && activeTransactionOperationKey !== undefined && modalOperationKeysRef.current.has(activeTransactionOperationKey)
+		if (submittedActionSucceeded) onClose()
+	}, [activeTransaction?.hash, activeTransaction?.tone, activeTransactionOperationKey, closeOnSuccessKey, isOpen, onClose])
 
 	useModalFocusIsolation({
 		dialogRef,
@@ -52,6 +78,7 @@ export function OperationModal({ children, closeOnSuccessKey, context = [], desc
 					</p>
 				)}
 				<TransactionObjectContext items={context} />
+				{!wasOpenRef.current || modalTransaction === undefined || activeTransactionOperationKey === undefined || activeTransactionOperationKey === transactionOperationKeyAtOpenRef.current ? undefined : <TransactionPresentationNotice className='operation-modal-transaction-notice' transaction={modalTransaction} />}
 				<div className='operation-modal-body'>{children}</div>
 			</section>
 		</div>

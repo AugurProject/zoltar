@@ -36,7 +36,10 @@ export function markTransactionRequested(state: TransactionTrayState, pendingInt
 	const resolvedIntent = applyActiveBackendTransactionIntentDefaults(pendingIntent)
 	return {
 		...state,
-		active: createAwaitingWalletPresentation(resolvedIntent, requestKey),
+		active: {
+			...createAwaitingWalletPresentation(resolvedIntent, requestKey),
+			operationKey: requestKey,
+		},
 		inFlightCount: state.inFlightCount + 1,
 		pendingIntent: resolvedIntent,
 		pendingRequestKey: requestKey,
@@ -51,7 +54,10 @@ export function markTransactionPrepared(state: TransactionTrayState, preview: Tr
 	const prepared = createPreparedWalletPresentation(pendingIntent, preview, pendingRequestKey)
 	return {
 		...state,
-		active: prepared,
+		active: {
+			...prepared,
+			operationKey: pendingRequestKey,
+		},
 		pendingIntent: {
 			...pendingIntent,
 			...(prepared.rows === undefined ? {} : { rows: prepared.rows }),
@@ -80,6 +86,7 @@ export function markTransactionSubmitted(state: TransactionTrayState, hash: Hash
 		active: {
 			dismissKey: hash,
 			hash,
+			operationKey: state.pendingRequestKey ?? state.active?.operationKey ?? hash,
 			...(pendingIntent.submittedDetail === undefined ? {} : { detail: pendingIntent.submittedDetail }),
 			...(pendingIntent.rows === undefined ? {} : { rows: pendingIntent.rows }),
 			...(pendingIntent.technicalRows === undefined ? {} : { technicalRows: pendingIntent.technicalRows }),
@@ -110,7 +117,10 @@ export function markTransactionFailed(state: TransactionTrayState, message: stri
 	if (pendingIntent !== undefined && pendingRequestKey !== undefined) {
 		return {
 			...state,
-			active: createTransactionFailurePresentation(pendingIntent, message, pendingRequestKey),
+			active: {
+				...createTransactionFailurePresentation(pendingIntent, message, pendingRequestKey),
+				operationKey: pendingRequestKey,
+			},
 			pendingIntent: undefined,
 			pendingRequestKey: undefined,
 		}
@@ -134,11 +144,13 @@ export function markTransactionCanceled(state: TransactionTrayState): Transactio
 export function markTransactionPresented(state: TransactionTrayState, active: GlobalTransactionPresentation): TransactionTrayState {
 	const previousActive = state.active
 	const isSameTransaction = previousActive !== undefined && ((active.hash !== undefined && active.hash === previousActive.hash) || (active.dismissKey !== undefined && active.dismissKey === previousActive.dismissKey))
+	const operationKey = isSameTransaction ? (previousActive.operationKey ?? active.operationKey ?? active.dismissKey ?? active.hash) : (active.operationKey ?? active.dismissKey ?? active.hash)
 	const technicalRows = active.technicalRows ?? (isSameTransaction ? previousActive.technicalRows : undefined)
 	return {
 		...state,
 		active: {
 			...active,
+			...(operationKey === undefined ? {} : { operationKey }),
 			...(technicalRows === undefined ? {} : { technicalRows }),
 		},
 	}

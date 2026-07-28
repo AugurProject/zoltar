@@ -5,7 +5,7 @@ import { sameAddress } from '../lib/address.js'
 import { isIgnorableLogDecodeError } from '../lib/errors.js'
 import { resolveOracleOperationEthFunding } from './oracleRequestFunding.js'
 import { getOracleManagerPriceValidUntilTimestamp } from './oracleTiming.js'
-import { addOpenOracleBountyBuffer, addOpenOracleInitialReportFundingBuffer } from './openOracleMath.js'
+import { addOpenOracleBountyBuffer, addOpenOracleInitialReportFundingBuffer, getOpenOracleDisputeSwapTokenKey } from './openOracleMath.js'
 import { loadOpenOracleInitialReportPrice } from './openOraclePricing.js'
 import { getOpenOracleCreateParameterValidationMessage } from './openOracleValidation.js'
 import { decodeOracleQueueOperation, encodeOracleQueueOperation } from './oracleQueueOperation.js'
@@ -34,7 +34,14 @@ export function isOpenOracleReportMissingError(error: unknown) {
 }
 
 export function getOpenOracleDisputeSwapToken(game: Pick<OpenOracleStatePreimage['game'], 'currentAmount1' | 'currentAmount2' | 'token1' | 'token2'>, newAmount1: bigint, newAmount2: bigint) {
-	return newAmount2 * game.currentAmount1 > game.currentAmount2 * newAmount1 ? game.token2 : game.token1
+	return getOpenOracleDisputeSwapTokenKey({
+		currentAmount1: game.currentAmount1,
+		currentAmount2: game.currentAmount2,
+		newAmount1,
+		newAmount2,
+	}) === 'token2'
+		? game.token2
+		: game.token1
 }
 
 function normalizeOpenOracleTokenMetadata(tokenAddress: Address, decimalsValue: unknown, symbolValue: unknown) {

@@ -174,6 +174,16 @@ describe('reportingDomain', () => {
 		expect(getEscalationPhase(details)).toBe('Fork Triggered')
 	})
 
+	test('reports no remaining escalation time after non-decision is reached', () => {
+		const details = createReportingDetails({
+			currentTime: 300n,
+			escalationEndTime: 2n ** 255n,
+			hasReachedNonDecision: true,
+		})
+
+		expect(getEscalationTimeRemaining(details)).toBe(0n)
+	})
+
 	test('getEscalationPhase keeps the exact timeout boundary active and times out one second later', () => {
 		expect(
 			getEscalationPhase(

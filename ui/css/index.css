@@ -782,8 +782,10 @@ button .loading-value {
 }
 
 button.currency-value.copyable {
-	display: inline-block;
-	min-height: 2rem;
+	display: inline-flex;
+	align-items: center;
+	min-width: var(--touch-target-min);
+	min-height: var(--touch-target-min);
 	max-width: 100%;
 	box-sizing: border-box;
 	border: 0;
@@ -3487,7 +3489,6 @@ strong.metric-value-danger {
 .transaction-review .currency-value,
 .transaction-review button.currency-value.copyable {
 	max-width: none;
-	min-height: auto;
 	overflow: visible;
 	white-space: nowrap;
 }
@@ -3636,7 +3637,7 @@ strong.metric-value-danger {
 	z-index: 3;
 	padding: var(--space-2) var(--space-3);
 	border-radius: var(--radius-control);
-	background: rgba(9, 18, 31, 0.97);
+	background: var(--surface-section-opaque);
 }
 
 .sticky-object-context.context-strip .sticky-object-context-summary {
@@ -4202,6 +4203,13 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	gap: 1rem;
 }
 
+.operation-modal-transaction-notice {
+	width: 100%;
+	max-height: none;
+	border-radius: var(--radius-control);
+	box-shadow: var(--glow-inset-subtle);
+}
+
 .workflow-summary-strip-steps {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
@@ -4577,6 +4585,7 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 .field select[aria-invalid="true"],
 .field textarea.is-invalid,
 .field textarea[aria-invalid="true"],
+.field .enum-dropdown-trigger[aria-invalid="true"],
 .form-input.is-invalid,
 .form-input[aria-invalid="true"] {
 	border-bottom-color: var(--danger);
@@ -4631,6 +4640,7 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 .field select[aria-invalid="true"]:focus,
 .field textarea.is-invalid:focus,
 .field textarea[aria-invalid="true"]:focus,
+.field .enum-dropdown-trigger[aria-invalid="true"]:focus,
 .form-input.is-invalid:focus,
 .form-input[aria-invalid="true"]:focus {
 	border-color: var(--danger);
@@ -5007,7 +5017,9 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	.truth-auction-bid-row.is-wide.is-no-actions,
 	.truth-auction-bid-row.is-wallet,
 	.truth-auction-bid-row.is-wallet.is-no-actions {
-		grid-template-columns: 1fr;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.7rem 0.8rem;
+		padding: 0.65rem 0.7rem;
 	}
 
 	.truth-auction-bid-row.is-header {
@@ -5016,10 +5028,10 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 
 	.truth-auction-bid-row:not(.is-header) > [data-label] {
 		display: grid;
-		grid-column: 1 / -1;
-		grid-template-columns: minmax(6.5rem, 0.85fr) minmax(0, 1fr);
+		grid-column: auto;
+		grid-template-columns: minmax(0, 1fr);
 		align-items: start;
-		gap: 0.75rem;
+		gap: 0.25rem;
 	}
 
 	.truth-auction-bid-row:not(.is-header) > [data-label]::before {
@@ -5033,11 +5045,13 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	}
 
 	.truth-auction-bid-row:not(.is-header) > .truth-auction-bid-row-address[data-label] {
+		grid-column: 1 / -1;
 		grid-template-columns: minmax(0, 1fr);
 		gap: 0.3rem;
 	}
 
 	.truth-auction-bid-row-actions {
+		grid-column: 1 / -1;
 		align-items: stretch;
 	}
 
