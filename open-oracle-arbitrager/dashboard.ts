@@ -1,7 +1,7 @@
 import type { ConnectivitySettings } from './connectivity.js'
 import type { ExecutionRecord, OperationEntry, OperatorSnapshot, OpportunitySnapshot, StrategySettings, TransactionActivity } from './operator-state.js'
 import type { PositionRecord } from './position-store.js'
-import { blockAgeLabel, botStatusLabels, chartPointX, countLabel, exactAmount, marketPriceChartDescription, opportunityDecisionReason, requiredSignerPrivateKey, selectedTokenPriceHistory, signerControlState, sumSignedDecimals, transactionKindLabel } from './dashboard-format.js'
+import { blockAgeLabel, botStatusLabels, chartPointX, chartTimeTickIndexes, countLabel, exactAmount, marketPriceChartDescription, opportunityDecisionReason, requiredSignerPrivateKey, selectedTokenPriceHistory, signerControlState, sumSignedDecimals, transactionKindLabel } from './dashboard-format.js'
 import type { SubmissionSettings } from './transaction-submission.js'
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
@@ -436,7 +436,8 @@ function renderMarketPriceChart(snapshot: OperatorSnapshot) {
 	const plot = { bottom: 250, left: 105, right: width - 70, top: 24 }
 	const plotWidth = plot.right - plot.left
 	const plotHeight = plot.bottom - plot.top
-	const times = points.map(point => Date.parse(point.sampledAt))
+	const orderedPoints = [...points].sort((left, right) => Date.parse(left.sampledAt) - Date.parse(right.sampledAt))
+	const times = orderedPoints.map(point => Date.parse(point.sampledAt))
 	const first = Math.min(...times)
 	const last = Math.max(...times)
 	const timeRange = last - first || 1
@@ -465,9 +466,9 @@ function renderMarketPriceChart(snapshot: OperatorSnapshot) {
 		grid.setAttribute('class', 'chart-grid')
 		svg.append(grid, svgText(`${chartPrice(value)} WETH`, plot.left - 10, y + 4, 'end'))
 	}
-	const orderedPoints = [...points].sort((left, right) => Date.parse(left.sampledAt) - Date.parse(right.sampledAt))
-	const candidateTicks = compact ? [orderedPoints[0], orderedPoints.at(-1)] : [orderedPoints[0], orderedPoints[Math.floor((orderedPoints.length - 1) / 2)], orderedPoints.at(-1)]
-	const xTicks = [...new Map(candidateTicks.filter(point => point !== undefined).map(point => [`${point.blockNumber}:${point.sampledAt}`, point])).values()]
+	const xTicks = chartTimeTickIndexes(times, compact, plotWidth)
+		.map(index => orderedPoints[index])
+		.filter(point => point !== undefined)
 	for (const point of xTicks) {
 		const x = plot.left + ((Date.parse(point.sampledAt) - first) / timeRange) * plotWidth
 		const blockLabel = svgText(`Block ${point.blockNumber}`, x, 274, 'middle')

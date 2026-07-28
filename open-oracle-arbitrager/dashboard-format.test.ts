@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/shared/ethereum'
-import { blockAgeLabel, botStatusLabels, chartPointX, countLabel, exactAmount, marketPriceChartDescription, opportunityDecisionReason, requiredSignerPrivateKey, selectedTokenPriceHistory, signerControlState, sumSignedDecimals, transactionKindLabel } from './dashboard-format.js'
+import { blockAgeLabel, botStatusLabels, chartPointX, chartTimeTickIndexes, countLabel, exactAmount, marketPriceChartDescription, opportunityDecisionReason, requiredSignerPrivateKey, selectedTokenPriceHistory, signerControlState, sumSignedDecimals, transactionKindLabel } from './dashboard-format.js'
 
 describe('dashboard exact ETH formatting', () => {
 	test('preserves signed sub-micro, 18-decimal, and beyond-safe-integer totals', () => {
@@ -76,5 +76,12 @@ describe('dashboard exact ETH formatting', () => {
 		const points = [shared, { ...shared, blockNumber: '2', token: first }, { ...shared, symbol: 'OTHER', token: second }]
 		expect(selectedTokenPriceHistory(points, first)).toHaveLength(2)
 		expect(selectedTokenPriceHistory(points, second)).toHaveLength(1)
+	})
+
+	test('suppresses a middle time tick that would collide with an endpoint', () => {
+		expect(chartTimeTickIndexes([0, 1, 100], false, 1_000, 120)).toEqual([0, 2])
+		expect(chartTimeTickIndexes([0, 50, 100], false, 1_000, 120)).toEqual([0, 1, 2])
+		expect(chartTimeTickIndexes([0, 50, 100], true, 320, 120)).toEqual([0, 2])
+		expect(chartTimeTickIndexes([100, 100], false, 1_000, 120)).toEqual([0])
 	})
 })

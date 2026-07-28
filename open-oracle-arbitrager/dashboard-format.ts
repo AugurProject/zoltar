@@ -34,6 +34,22 @@ export function chartPointX(index: number, count: number, width: number) {
 	return count === 1 ? width / 2 : (index / (count - 1)) * width
 }
 
+export function chartTimeTickIndexes(sampleTimes: readonly number[], compact: boolean, plotWidth: number, minimumSpacing = 120) {
+	if (sampleTimes.length === 0) return []
+	const lastIndex = sampleTimes.length - 1
+	const firstTime = sampleTimes[0]
+	const lastTime = sampleTimes[lastIndex]
+	if (firstTime === undefined || lastTime === undefined || firstTime === lastTime) return [0]
+	if (compact || lastIndex === 1) return [0, lastIndex]
+	const middleIndex = Math.floor(lastIndex / 2)
+	const middleTime = sampleTimes[middleIndex]
+	if (middleTime === undefined) return [0, lastIndex]
+	const timeRange = lastTime - firstTime
+	const middleX = ((middleTime - firstTime) / timeRange) * plotWidth
+	if (middleX < minimumSpacing || plotWidth - middleX < minimumSpacing) return [0, lastIndex]
+	return [0, middleIndex, lastIndex]
+}
+
 export function selectedTokenPriceHistory(points: readonly MarketPricePoint[], token: string) {
 	return points.filter(point => point.token.toLowerCase() === token.toLowerCase())
 }
