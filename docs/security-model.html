@@ -340,6 +340,20 @@
 					reimbursement after a false price is accepted.
 				</p>
 				<p>
+					<strong>Dated market evidence.</strong> At Ethereum block
+					<code>25,600,852</code> on 2026-07-24, the pinned executable
+					REP/WETH fixture produced pre-gas results of
+					<code>-0.255235735754674523 WETH</code> for the sell-REP correction
+					and <code>-0.626254311426940506 WETH</code> for the buy-REP
+					correction. Run
+					<code>bun run check:open-oracle-market-fixture</code> to reproduce
+					the calculations, or set
+					<code>OPEN_ORACLE_ARCHIVE_RPC_URL</code> to also replay the pinned
+					block and quotes. This is historical evidence about that market
+					state, not a timeless launch decision; operators must evaluate
+					current executable liquidity before taking risk.
+				</p>
+				<p>
 					Implementation and test evidence:
 					<a href="../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"><code>OpenOraclePriceCoordinator.sol</code></a>,
 					<a href="../solidity/ts/tests/priceOracleSecurity.test.ts"><code>priceOracleSecurity.test.ts</code></a>

@@ -14,6 +14,9 @@ restart settings, or the local dashboard when `--ui` is enabled.
 > references, not production approval. Rehearse on Sepolia with a dedicated
 > low-balance key, validate current executable liquidity, and supervise every
 > position; no automated strategy can guarantee a profit or prevent every loss.
+> The protocol security model records the
+> [latest pinned market fixture](../docs/security-model.html#open-oracle-economic-boundary)
+> as dated historical evidence.
 
 ## Requirements
 
@@ -58,8 +61,8 @@ protected like any hot wallet.
 ## End-user readiness backlog
 
 The repository implementation is a guarded operator tool, not yet a supported
-retail release. Complete these items before distributing live-execution
-instructions:
+retail release. Complete these items before declaring or packaging a supported
+end-user release. The commands below remain experimental operator references:
 
 1. Publish separate, reviewed mainnet and Sepolia **execution manifests** containing
    the deployed executor, OpenOracle, approved coordinators, router, factory,
@@ -74,7 +77,8 @@ instructions:
    hashes and recovery evidence as release artifacts.
 4. Add an external signer or encrypted-keystore interface so routine operators do
    not need to paste a raw private key into the dashboard or save it in plaintext.
-   Until then, use a dedicated low-balance key and leave **Remember signer** off.
+   Until then, use a dedicated low-balance key and leave **Save this new key in
+   plaintext for future restarts** off.
 5. Add fault-injection coverage for disk-full and interrupted settings writes,
    delayed or partial relay responses, correlated RPC failure, clock skew, and
    reorganization deeper than the normal overlap window.
