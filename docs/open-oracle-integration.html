@@ -70,14 +70,14 @@
 				<h2>OpenOracle Role</h2>
 					<p class="security-assumption-ref">
 						<strong>Security assumptions:</strong>
-					<a href="./security-model.html#assumption-a18"
-						>A18 genesis REP and WETH behavior</a
+					<a href="./security-model.html#assumption-a24"
+						>A24 genesis REP and WETH behavior</a
 					>,
-					<a href="./security-model.html#assumption-a19">A19 verified configuration</a>,
-					<a href="./security-model.html#assumption-a22">A22 report-state availability</a>,
-					<a href="./security-model.html#assumption-a23">A23 Ethereum execution</a>,
+					<a href="./security-model.html#assumption-a26">A26 verified configuration</a>,
+					<a href="./security-model.html#assumption-a23">A23 report-state availability</a>,
+					<a href="./security-model.html#assumption-a29">A29 Ethereum execution</a>,
 					and
-					<a href="./security-model.html#assumption-a29">A29 client and wallet integrity</a>.
+					<a href="./security-model.html#assumption-a27">A27 client and wallet integrity</a>.
 				</p>
 					<p>
 						The generic oracle lifecycle comes first. Statoblast's coordinator
@@ -441,8 +441,8 @@
 				</p>
 				<p class="security-assumption-ref">
 					<strong>Security assumption:</strong>
-					<a href="./security-model.html#assumption-a28"
-						>A28 native-ETH recipient compatibility</a
+					<a href="./security-model.html#assumption-a25"
+						>A25 native-ETH recipient compatibility</a
 					>.
 				</p>
 				<p>
@@ -670,16 +670,16 @@
 				<p class="security-assumption-ref">
 					<strong>Security assumptions:</strong>
 					<a href="./security-model.html#assumption-a01">A01 arbitrage incentives</a>,
-					<a href="./security-model.html#assumption-a05">A05 viable operating costs</a>,
-					<a href="./security-model.html#assumption-a11">A11 REP liquidity</a>,
-					<a href="./security-model.html#assumption-a14">A14 timely inclusion</a>,
-					<a href="./security-model.html#assumption-a15">A15 correction capital</a>,
-					<a href="./security-model.html#assumption-a16">A16 available arbitrager</a>,
-						<a href="./security-model.html#assumption-a17">A17 independent corrector</a>,
-						<a href="./security-model.html#assumption-a20">A20 observable correctable price</a>,
+					<a href="./security-model.html#assumption-a02">A02 viable operating costs</a>,
+					<a href="./security-model.html#assumption-a13">A13 REP liquidity</a>,
+					<a href="./security-model.html#assumption-a17">A17 timely inclusion</a>,
+					<a href="./security-model.html#assumption-a18">A18 correction capital</a>,
+					<a href="./security-model.html#assumption-a19">A19 available arbitrager</a>,
+						<a href="./security-model.html#assumption-a20">A20 independent corrector</a>,
+						<a href="./security-model.html#assumption-a21">A21 observable correctable price</a>,
 						and
-						<a href="./security-model.html#assumption-a30"
-							>A30 representative client quotes</a
+						<a href="./security-model.html#assumption-a22"
+							>A22 representative client quotes</a
 						>.
 				</p>
 				<p>
@@ -1016,12 +1016,12 @@
 				<h2>Intentional Economic Tradeoffs</h2>
 				<p class="security-assumption-ref">
 					<strong>Security assumptions and limits:</strong>
-					<a href="./security-model.html#assumption-a12">A12 REP economic backing</a>,
-					<a href="./security-model.html#assumption-a14">A14 timely inclusion</a>,
-					<a href="./security-model.html#assumption-a16">A16 available arbitrager</a>,
-					<a href="./security-model.html#assumption-a17">A17 independent corrector</a>,
-					<a href="./security-model.html#assumption-a20">A20 profitable correction coverage</a>,
-					<a href="./security-model.html#assumption-a21">A21 lifecycle executors</a>, and
+					<a href="./security-model.html#assumption-a14">A14 REP economic backing</a>,
+					<a href="./security-model.html#assumption-a17">A17 timely inclusion</a>,
+					<a href="./security-model.html#assumption-a19">A19 available arbitrager</a>,
+					<a href="./security-model.html#assumption-a20">A20 independent corrector</a>,
+					<a href="./security-model.html#assumption-a21">A21 profitable correction coverage</a>,
+					<a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>, and
 					<a href="./security-model.html#excluded-guarantee-eg03"
 						>EG03 unbounded accepted-price notional</a
 					>
@@ -1055,13 +1055,13 @@
 				<h2>Assumption Boundary and Attack Model</h2>
 				<p class="security-assumption-ref">
 					<strong>Security assumptions:</strong>
-					<a href="./security-model.html#assumption-a12">A12 REP economic backing</a>,
-					<a href="./security-model.html#assumption-a14">A14 timely inclusion</a>,
-					<a href="./security-model.html#assumption-a15">A15 correction capital</a>,
-					<a href="./security-model.html#assumption-a16">A16 available arbitrager</a>,
-					<a href="./security-model.html#assumption-a17">A17 independent corrector</a>,
+					<a href="./security-model.html#assumption-a14">A14 REP economic backing</a>,
+					<a href="./security-model.html#assumption-a17">A17 timely inclusion</a>,
+					<a href="./security-model.html#assumption-a18">A18 correction capital</a>,
+					<a href="./security-model.html#assumption-a19">A19 available arbitrager</a>,
+					<a href="./security-model.html#assumption-a20">A20 independent corrector</a>,
 					and
-					<a href="./security-model.html#assumption-a20">A20 observable correctable price</a>.
+					<a href="./security-model.html#assumption-a21">A21 observable correctable price</a>.
 				</p>
 				<p>
 					The equations below model an attacker who excludes correcting
@@ -1710,12 +1710,12 @@
 					<h2>OpenOracle Parameters Used</h2>
 					<p class="security-assumption-ref">
 						<strong>Security assumptions:</strong>
-						<a href="./security-model.html#assumption-a05"
-							>A05 viable operating costs</a
+						<a href="./security-model.html#assumption-a02"
+							>A02 viable operating costs</a
 						>
 						and
-						<a href="./security-model.html#assumption-a26"
-							>A26 safe immutable parameters</a
+						<a href="./security-model.html#assumption-a28"
+							>A28 safe immutable parameters</a
 						>.
 				</p>
 				<p>

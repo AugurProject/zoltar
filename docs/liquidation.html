@@ -53,25 +53,25 @@
 				<h2>Liquidatable Condition</h2>
 					<p class="security-assumption-ref">
 						<strong>Security assumptions:</strong>
-						<a href="./security-model.html#assumption-a18"
-							>A18 external token behavior</a
+						<a href="./security-model.html#assumption-a24"
+							>A24 external token behavior</a
 						>,
-						<a href="./security-model.html#assumption-a11">A11 REP liquidity</a>,
-					<a href="./security-model.html#assumption-a12">A12 REP economic backing</a>,
-					<a href="./security-model.html#assumption-a14">A14 timely inclusion</a>,
-					<a href="./security-model.html#assumption-a15">A15 correction capital</a>,
-					<a href="./security-model.html#assumption-a16">A16 available arbitrager</a>,
-						<a href="./security-model.html#assumption-a17">A17 independent corrector</a>,
+						<a href="./security-model.html#assumption-a13">A13 REP liquidity</a>,
+					<a href="./security-model.html#assumption-a14">A14 REP economic backing</a>,
+					<a href="./security-model.html#assumption-a17">A17 timely inclusion</a>,
+					<a href="./security-model.html#assumption-a18">A18 correction capital</a>,
+					<a href="./security-model.html#assumption-a19">A19 available arbitrager</a>,
+						<a href="./security-model.html#assumption-a20">A20 independent corrector</a>,
 						and
-						<a href="./security-model.html#assumption-a20">A20 observable correctable price</a>.
+						<a href="./security-model.html#assumption-a21">A21 observable correctable price</a>.
 				</p>
 				<p id="client-liquidation-preview">
 					The official client may separately show a Uniswap-derived market
 					preview when staging a liquidation. That display depends on
-					<a href="./security-model.html#assumption-a30"
-						>A30 representative client quotes</a
+					<a href="./security-model.html#assumption-a22"
+						>A22 representative client quotes</a
 					>; it is not the contract's liquidatable condition. Contract execution
-					uses the settled coordinator price under A20.
+					uses the settled coordinator price under A21.
 				</p>
 				<p>
 					A vault is liquidatable when its unlocked REP backing is below the
@@ -666,11 +666,11 @@
 				<p class="security-assumption-ref">
 					<strong>Security assumptions:</strong>
 					<a href="./security-model.html#assumption-a01">A01 risk-adjusted incentives</a>,
-					<a href="./security-model.html#assumption-a05">A05 viable operating costs</a>,
-						<a href="./security-model.html#assumption-a08">A08 independent liquidators</a>,
-						<a href="./security-model.html#assumption-a21">A21 liquidation executors</a>,
+					<a href="./security-model.html#assumption-a02">A02 viable operating costs</a>,
+						<a href="./security-model.html#assumption-a03">A03 independent liquidators</a>,
+						<a href="./security-model.html#assumption-a06">A06 liquidation executors</a>,
 						and
-					<a href="./security-model.html#assumption-a26">A26 safe parameter relationships</a>.
+					<a href="./security-model.html#assumption-a28">A28 safe parameter relationships</a>.
 				</p>
 				<p>
 					The protocol uses a target-funded REP penalty. That means the liquidator

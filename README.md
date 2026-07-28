@@ -107,7 +107,7 @@ Simulation mode details:
 - Supported seeded scenarios are `simScenario=baseline`, `simScenario=deployed`, `simScenario=security-pool`, `simScenario=securitypoolx2`, and `simScenario=securitypoolx2-auction`
 - The yellow simulation banner exposes developer-only controls for account switching, reset, block mining, time travel, blockchain time, block count, transaction count, and artificial transaction receipt delay
 - Uniswap-backed REP pricing is intentionally disabled in simulation mode, so quote-dependent UI paths degrade instead of using mainnet liquidity
-- Production quote-dependent flows rely on live RPC data and available Uniswap liquidity under [A29 client and RPC integrity](https://augurproject.github.io/zoltar/docs/security-model.html#assumption-a29) and [A30 representative client quotes](https://augurproject.github.io/zoltar/docs/security-model.html#assumption-a30). If a quote is stale, unavailable, or unsupported, affected actions should remain blocked or degraded rather than falling back to simulated prices.
+- Production quote-dependent flows rely on live RPC data and available Uniswap liquidity under [A27 client and RPC integrity](https://augurproject.github.io/zoltar/docs/security-model.html#assumption-a27) and [A22 representative client quotes](https://augurproject.github.io/zoltar/docs/security-model.html#assumption-a22). If a quote is stale, unavailable, or unsupported, affected actions should remain blocked or degraded rather than falling back to simulated prices.
 - The simulation chain is ephemeral and exists only in the current browser tab session
 
 ## Common Commands
