@@ -23,10 +23,22 @@ protocol's external assumptions.
 ## Security Review Orientation
 
 Before classifying an economic or liveness concern, use the security model's
-[core assumptions](./security-model.html#core-assumptions) to identify external
-dependencies, then follow its canonical mechanics links. The invariant catalog
+[grouped assumptions](./security-model.html) to identify external dependencies,
+then follow its canonical mechanics links. The invariant catalog
 owns the current requirement, status, and evidence for
 [`EXT-05` recursive-fork gas behavior](./invariants.html#ext-05).
+
+Operator work relies particularly on
+[A19 verified deployments](./security-model.html#assumption-a19),
+[A21 lifecycle executors](./security-model.html#assumption-a21),
+[A22 chain-data and proof availability](./security-model.html#assumption-a22),
+[A23 Ethereum execution and finality](./security-model.html#assumption-a23),
+[A24 account and cryptographic security](./security-model.html#assumption-a24),
+[A25 intended question selection](./security-model.html#assumption-a25),
+[A26 safe immutable parameters](./security-model.html#assumption-a26),
+[A27 permissionless-fork alignment](./security-model.html#assumption-a27),
+[A28 asset-recipient compatibility](./security-model.html#assumption-a28), and
+[A29 client, RPC, and wallet integrity](./security-model.html#assumption-a29).
 
 ## Immutable Protocol Release Posture
 
@@ -59,7 +71,9 @@ simulation prices.
 ## Security Pool Guardrails
 
 Pool creation, minting, withdrawal, and direct-ETH rules are collected here in
-contract-first form.
+contract-first form. Participant-controlled payout and share-receiving addresses
+must satisfy
+[A28 asset-recipient compatibility](./security-model.html#assumption-a28).
 
 | Area | Implementation behavior | Source |
 | --- | --- | --- |
@@ -80,6 +94,13 @@ contract-first form.
 
 ## Share Migration
 
+Security assumptions:
+[A04 truthful-branch preference](./security-model.html#assumption-a04),
+[A07 practical migration](./security-model.html#assumption-a07),
+[A14 timely inclusion](./security-model.html#assumption-a14),
+[A21 lifecycle executors](./security-model.html#assumption-a21), and
+[A28 asset-recipient compatibility](./security-model.html#assumption-a28).
+
 Share migration after a fork is user-facing asset migration, not vault REP
 migration. Canonical rules live in [`FORK-10`](invariants.html#fork-10) for
 persistent per-child materialization, [`SHARE-04`](invariants.html#share-04) for
@@ -98,6 +119,15 @@ unequal materialized supplies.
 | Malformed outcomes | Malformed fork outcomes are rejected using Zoltar question-data validation. | [ZoltarQuestionData.sol](../solidity/contracts/ZoltarQuestionData.sol) |
 
 ## Escalation Resolution and Deposits
+
+Security assumptions:
+[A05 viable operating costs](./security-model.html#assumption-a05),
+[A06 timely outcome evidence](./security-model.html#assumption-a06),
+[A08 independent participants](./security-model.html#assumption-a08),
+[A10 early alarm capital](./security-model.html#assumption-a10),
+[A11 REP liquidity](./security-model.html#assumption-a11),
+[A14 timely inclusion](./security-model.html#assumption-a14), and
+[A15 honest reporter capital](./security-model.html#assumption-a15).
 
 Accepted deposits, edge-case resolution results, and carry-proof or residual-REP
 consumption all live in this section.
@@ -123,6 +153,16 @@ consumption all live in this section.
 
 ## Fork Migration
 
+Security assumptions:
+[A02 fork value preservation](./security-model.html#assumption-a02),
+[A04 truthful-branch preference](./security-model.html#assumption-a04),
+[A07 practical migration](./security-model.html#assumption-a07),
+[A13 lineage access value](./security-model.html#assumption-a13),
+[A18 REP behavior](./security-model.html#assumption-a18),
+[A21 lifecycle executors](./security-model.html#assumption-a21),
+[A22 chain-data availability](./security-model.html#assumption-a22), and
+[A27 permissionless-fork alignment](./security-model.html#assumption-a27).
+
 Pool-level migration mechanics after a universe fork live here: proxies,
 child-pool creation, REP splitting, and child outcome selection.
 
@@ -145,6 +185,17 @@ child-pool creation, REP splitting, and child outcome selection.
 
 ## Truth Auction Operations
 
+Security assumptions:
+[A01 bidder incentives](./security-model.html#assumption-a01),
+[A05 viable operating costs](./security-model.html#assumption-a05),
+[A08 independent bidders](./security-model.html#assumption-a08),
+[A09 efficient REP conversion](./security-model.html#assumption-a09),
+[A18 REP behavior](./security-model.html#assumption-a18),
+[A21 lifecycle executors](./security-model.html#assumption-a21),
+[A22 bid-data availability](./security-model.html#assumption-a22),
+[A26 safe immutable parameters](./security-model.html#assumption-a26), and
+[A28 native-ETH recipient compatibility](./security-model.html#assumption-a28).
+
 Collateral-repair auctions have three operator-critical boundaries: forker
 ownership, a one-week bidding window, and paged settlement into vault
 accounting. Bids close at <code>auctionStarted + AUCTION_TIME</code>; direct
@@ -159,6 +210,16 @@ clearing rules and examples are in [Truth Auction](./truth-auction.html#clearing
 | Child fee activation | Completed migration or truth-auction settlement starts a new child fee epoch. Only vault-assigned allowance accrues; each claimed auction allowance joins incrementally at the current fee index. A delayed claim adds to the pool’s live eligible total, so allowance changes or liquidations since activation are preserved rather than replaced by fork-time counters. | [SecurityPool.sol](../solidity/contracts/peripherals/SecurityPool.sol), [SecurityPoolForker.sol](../solidity/contracts/peripherals/SecurityPoolForker.sol) |
 
 ## REP/ETH Oracle Operations
+
+Security assumptions:
+[A01 arbitrage incentives](./security-model.html#assumption-a01),
+[A11 REP liquidity](./security-model.html#assumption-a11),
+[A14 timely inclusion](./security-model.html#assumption-a14),
+[A15 correction capital](./security-model.html#assumption-a15),
+[A16 available arbitrager](./security-model.html#assumption-a16),
+[A17 independent corrector](./security-model.html#assumption-a17),
+[A20 observable correctable price](./security-model.html#assumption-a20), and
+[A28 native-ETH recipient compatibility](./security-model.html#assumption-a28).
 
 The coordinator quick reference below covers staging, callback recovery,
 stale-operation handling, and liquidation boundaries. Report sizing, request
