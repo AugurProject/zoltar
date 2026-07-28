@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createPublicClient, custom, encodeAbiParameters, encodeEventTopics, getAddress, mainnet, type EIP1193Provider, type Hex } from '@zoltar/shared/ethereum'
 import { openOracleArbitrageExecutorAbi } from './abi.js'
-import { executionRecordForConfirmedPosition, expirePrivateEntryWithQuorum, lifecycleExecutionFromLogs, recoverPendingEntryWithQuorum, recoverPendingLifecycleWithQuorum } from './index.js'
+import { executionRecordForConfirmedPosition, expirePrivateEntryWithQuorum, lifecycleExecutionFromLogs, reconcileExpiredAttemptsWithQuorum, recoverPendingEntryWithQuorum, recoverPendingLifecycleWithQuorum } from './index.js'
 import type { PositionRecord } from './position-store.js'
 
 const transactionHash = `0x${'11'.repeat(32)}` as Hex
@@ -17,11 +17,12 @@ const recoveryConfiguration = {
 	submission: { mode: 'private' as const },
 }
 
-function missingReceiptClients() {
+function missingReceiptClients(confirmedNonce?: bigint | undefined) {
 	return ['primary', 'secondary'].map(() => {
 		const provider: EIP1193Provider = {
 			request: parameters => {
 				if (parameters.method === 'eth_getTransactionReceipt') return Promise.resolve(null)
+				if (parameters.method === 'eth_getTransactionCount' && confirmedNonce !== undefined) return Promise.resolve(`0x${confirmedNonce.toString(16)}`)
 				throw new Error(`Unexpected RPC method ${parameters.method}`)
 			},
 		}
@@ -29,15 +30,16 @@ function missingReceiptClients() {
 	})
 }
 
-function revertedReceiptClients() {
+function revertedReceiptClients(blockNumber = 100n) {
 	const blockHash = `0x${'aa'.repeat(32)}`
+	const blockNumberHex = `0x${blockNumber.toString(16)}`
 	return ['primary', 'secondary'].map(() => {
 		const provider: EIP1193Provider = {
 			request: parameters => {
 				if (parameters.method === 'eth_getTransactionReceipt') {
 					return Promise.resolve({
 						blockHash,
-						blockNumber: '0x64',
+						blockNumber: blockNumberHex,
 						contractAddress: null,
 						cumulativeGasUsed: '0x5208',
 						effectiveGasPrice: '0x3b9aca00',
@@ -50,6 +52,80 @@ function revertedReceiptClients() {
 						transactionHash,
 						transactionIndex: '0x0',
 						type: '0x2',
+					})
+				}
+				if (parameters.method === 'eth_getBlockByNumber') {
+					return Promise.resolve({
+						baseFeePerGas: '0x1',
+						difficulty: '0x0',
+						extraData: '0x',
+						gasLimit: '0x1c9c380',
+						gasUsed: '0x5208',
+						hash: blockHash,
+						logsBloom: `0x${'00'.repeat(256)}`,
+						miner: getAddress('0x0000000000000000000000000000000000000000'),
+						mixHash: `0x${'00'.repeat(32)}`,
+						nonce: '0x0000000000000000',
+						number: blockNumberHex,
+						parentHash: `0x${'bb'.repeat(32)}`,
+						receiptsRoot: `0x${'00'.repeat(32)}`,
+						sha3Uncles: `0x${'00'.repeat(32)}`,
+						size: '0x1',
+						stateRoot: `0x${'00'.repeat(32)}`,
+						timestamp: '0x66a1a000',
+						totalDifficulty: '0x0',
+						transactions: [],
+						transactionsRoot: `0x${'00'.repeat(32)}`,
+						uncles: [],
+					})
+				}
+				if (parameters.method === 'eth_getTransactionCount') return Promise.resolve('0x9')
+				throw new Error(`Unexpected RPC method ${parameters.method}`)
+			},
+		}
+		return createPublicClient({ chain: mainnet, transport: custom(provider) })
+	})
+}
+
+function successfulMismatchedIntentClients() {
+	const blockHash = `0x${'aa'.repeat(32)}`
+	const account = getAddress('0x0000000000000000000000000000000000000002')
+	return ['primary', 'secondary'].map(() => {
+		const provider: EIP1193Provider = {
+			request: parameters => {
+				if (parameters.method === 'eth_getTransactionReceipt') {
+					return Promise.resolve({
+						blockHash,
+						blockNumber: '0x64',
+						contractAddress: null,
+						cumulativeGasUsed: '0x5208',
+						effectiveGasPrice: '0x3b9aca00',
+						from: account,
+						gasUsed: '0x5208',
+						logs: [],
+						logsBloom: `0x${'00'.repeat(256)}`,
+						status: '0x1',
+						to: executor,
+						transactionHash,
+						transactionIndex: '0x0',
+						type: '0x2',
+					})
+				}
+				if (parameters.method === 'eth_getTransactionByHash') {
+					return Promise.resolve({
+						blockHash,
+						blockNumber: '0x64',
+						from: account,
+						gas: '0x5208',
+						hash: transactionHash,
+						input: '0xabcd',
+						maxFeePerGas: '0x3b9aca00',
+						maxPriorityFeePerGas: '0x1',
+						nonce: '0x8',
+						to: executor,
+						transactionIndex: '0x0',
+						type: '0x2',
+						value: '0x0',
 					})
 				}
 				if (parameters.method === 'eth_getBlockByNumber') {
@@ -173,6 +249,39 @@ describe('entry crash recovery', () => {
 		expect(recovered.realizedNetProfitEth).toBe('0')
 	})
 
+	test('continues accounting late revert gas after an absent private entry releases its risk slot', async () => {
+		const position = {
+			...confirmedPosition(),
+			actualEntryGasCostEth: '0',
+			capitalAtRiskWeth: '0',
+			expiredTransactionAttempts: [{ kind: 'entry' as const, nonce: '8', targetBlockNumber: '100', transactionHash }],
+			gasExpenditures: [],
+			realizedNetProfitEth: '0',
+			status: 'expired-not-included' as const,
+		}
+		const recovered = await reconcileExpiredAttemptsWithQuorum(revertedReceiptClients(113n), recoveryConfiguration, position, 113n)
+		expect(recovered.expiredTransactionAttempts).toEqual([])
+		expect(recovered.actualEntryGasCostEth).toBe('0.000021')
+		expect(recovered.realizedNetProfitEth).toBe('-0.000021')
+		expect(recovered.gasExpenditures).toHaveLength(1)
+	})
+
+	test('stops monitoring an absent hash after quorum proves its nonce was consumed', async () => {
+		const position = {
+			...confirmedPosition(),
+			actualEntryGasCostEth: '0',
+			capitalAtRiskWeth: '0',
+			expiredTransactionAttempts: [{ kind: 'entry' as const, nonce: '8', targetBlockNumber: '100', transactionHash }],
+			gasExpenditures: [],
+			realizedNetProfitEth: '0',
+			status: 'expired-not-included' as const,
+		}
+		const recovered = await reconcileExpiredAttemptsWithQuorum(missingReceiptClients(9n), recoveryConfiguration, position, 113n)
+		expect(recovered.expiredTransactionAttempts).toEqual([])
+		expect(recovered.actualEntryGasCostEth).toBe('0')
+		expect(recovered.gasExpenditures).toEqual([])
+	})
+
 	test('does not auto-expire a legacy multi-transaction entry with independently live signatures', async () => {
 		const position = {
 			...confirmedPosition(),
@@ -200,6 +309,21 @@ describe('entry crash recovery', () => {
 		expect(recovered.position.capitalAtRiskWeth).toBe('0')
 		expect(recovered.position.lockedWeth).toBe('0')
 		expect(recovered.position.realizedNetProfitEth).toBe('-0.000021')
+	})
+
+	test('keeps a successful public replacement with different calldata in recovery after accounting gas', async () => {
+		const position = {
+			...confirmedPosition(),
+			actualEntryGasCostEth: '0',
+			entryTransactionIntent: { data: '0x1234' as Hex, to: executor, value: '0' },
+			gasExpenditures: [],
+			status: 'recovery-required' as const,
+		}
+		const recovered = await recoverPendingEntryWithQuorum(successfulMismatchedIntentClients(), recoveryConfiguration, position, 18)
+		expect(recovered.position.status).toBe('recovery-required')
+		expect(recovered.position.capitalAtRiskWeth).toBe('2')
+		expect(recovered.position.actualEntryGasCostEth).toBe('0.000021')
+		expect(recovered.position.historyOutbox).toBeUndefined()
 	})
 })
 
@@ -251,5 +375,6 @@ describe('atomic lifecycle crash recovery', () => {
 		expect(recovered.lifecycleTransactionHashes).toEqual([])
 		expect(recovered.lifecycleSubmissionBlockNumber).toBeUndefined()
 		expect(recovered.lifecycleTargetBlockNumber).toBeUndefined()
+		expect(recovered.expiredTransactionAttempts).toEqual([{ kind: 'lifecycle', nonce: '9', targetBlockNumber: '100', transactionHash }])
 	})
 })

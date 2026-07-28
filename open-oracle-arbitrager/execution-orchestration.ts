@@ -1,7 +1,7 @@
-import type { Address, Hex, TransactionReceipt, TransactionReplacement } from '@zoltar/shared/ethereum'
+import type { Address, BlockTransaction, Hex, TransactionReceipt, TransactionReplacement } from '@zoltar/shared/ethereum'
 import { endpointLabel } from './connectivity.js'
 import type { OpportunitySnapshot } from './operator-state.js'
-import type { PositionRecord } from './position-store.js'
+import type { DurableTransactionIntent, PositionRecord } from './position-store.js'
 import { quorumValue } from './read-quorum.js'
 import { isSelfReport } from './strategy.js'
 import type { SubmissionMode } from './transaction-submission.js'
@@ -23,6 +23,14 @@ export function lifecycleAllowanceMismatch(allowances: { token1: bigint; token2:
 	return undefined
 }
 
+export function lifecycleWithdrawalMismatch(parameters: { currentReporter: boolean; expectedToken: bigint; expectedWeth: bigint; holderToken: bigint; holderWeth: bigint; willSettle: boolean }) {
+	if (!parameters.currentReporter) return 'Position was replaced; exact returned assets require manual reconciliation'
+	if (!parameters.willSettle && (parameters.holderWeth <= parameters.expectedWeth || parameters.holderToken <= parameters.expectedToken)) {
+		return 'Position does not have its exact withdrawable OpenOracle balances'
+	}
+	return undefined
+}
+
 export function openOracleDisputeTiming(quoteBlockNumber: bigint, quoteBlockTimestamp: bigint) {
 	return [quoteBlockNumber, 1n, quoteBlockTimestamp, 300n] as const
 }
@@ -34,6 +42,18 @@ export function privateBundleReceiptStatus(receipt: Pick<TransactionReceipt, 'bl
 
 export function privateAttemptCanExpire(currentBlockNumber: bigint, targetBlockNumber: bigint) {
 	return currentBlockNumber >= targetBlockNumber + 12n
+}
+
+export function privateEntryRecoveryIsConfirmed(position: Pick<PositionRecord, 'status'>) {
+	return position.status === 'open'
+}
+
+export function recoveredTransactionIntentMismatch(expected: DurableTransactionIntent | undefined, actual: { data: Hex; from: Address; nonce: bigint; to?: Address | null | undefined; value: bigint }, account: Address, nonce: string | undefined) {
+	if (nonce === undefined || expected === undefined) return 'Durable transaction intent is missing'
+	if (actual.from.toLowerCase() !== account.toLowerCase() || actual.nonce !== BigInt(nonce) || actual.to?.toLowerCase() !== expected.to.toLowerCase() || actual.data.toLowerCase() !== expected.data.toLowerCase() || actual.value !== BigInt(expected.value)) {
+		return 'Transaction does not match the durable destination, calldata, sender, nonce, and value'
+	}
+	return undefined
 }
 
 export function lifecycleLastValidBlockNumber(mode: SubmissionMode, targetBlockNumber: bigint) {
@@ -187,6 +207,30 @@ type SenderNonceBlockReader = {
 		transactions: readonly unknown[]
 	}>
 	getTransactionCount: (parameters: { address: Address; blockNumber: bigint }) => Promise<bigint>
+}
+
+type TransactionIntentReader = {
+	getTransaction: (parameters: { hash: Hex }) => Promise<Pick<BlockTransaction, 'from' | 'input' | 'nonce' | 'to' | 'value'>>
+}
+
+export async function transactionIntentWithQuorum(readers: readonly TransactionIntentReader[], endpoints: readonly string[], label: string, transactionHash: Hex) {
+	if (readers.length !== endpoints.length) throw new Error(`${label} transaction readers and endpoints differ`)
+	const observations = await Promise.all(
+		readers.map(async (reader, index) => {
+			const transaction = await reader.getTransaction({ hash: transactionHash })
+			return {
+				endpoint: endpointLabel(endpoints[index] ?? ''),
+				value: {
+					data: transaction.input,
+					from: transaction.from,
+					nonce: transaction.nonce,
+					to: transaction.to,
+					value: transaction.value,
+				},
+			}
+		}),
+	)
+	return quorumValue(`${label} transaction intent`, observations)
 }
 
 export async function transactionHashBySenderNonceWithQuorum(readers: readonly SenderNonceBlockReader[], endpoints: readonly string[], label: string, parameters: { account: Address; fromBlockNumber: bigint; nonce: bigint; toBlockNumber: bigint }) {

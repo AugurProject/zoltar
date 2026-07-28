@@ -46,6 +46,19 @@ export type ManualReconciliation = {
 
 export type ExecutionIntent = Omit<ExecutionRecord, 'actualGasCostEth' | 'blockNumber' | 'executedAt' | 'trackedNetProfitEth' | 'transactionHash'>
 
+export type DurableTransactionIntent = {
+	data: Hex
+	to: Address
+	value: string
+}
+
+export type ExpiredTransactionAttempt = {
+	kind: 'entry' | 'lifecycle'
+	nonce: string
+	targetBlockNumber: string
+	transactionHash: Hex
+}
+
 export type PositionRecord = {
 	account: Address
 	actualEntryGasCostEth: string
@@ -54,10 +67,12 @@ export type PositionRecord = {
 	direction: 'buy-rep' | 'sell-rep'
 	entrySubmissionBlockNumber?: string | undefined
 	entrySubmissionMode?: 'private' | 'public' | undefined
+	entryTransactionIntent?: DurableTransactionIntent | undefined
 	entryTransactionNonce?: string | undefined
 	entryTransactionHash: Hex
 	entryTransactionHashes: readonly Hex[]
 	executionIntent?: ExecutionIntent | undefined
+	expiredTransactionAttempts?: readonly ExpiredTransactionAttempt[] | undefined
 	gasExpenditures: readonly {
 		costEth: string
 		minedAt: string
@@ -73,6 +88,7 @@ export type PositionRecord = {
 	lifecycleSubmissionMode?: 'private' | 'public' | undefined
 	lifecycleTargetBlockNumber: string | undefined
 	lifecycleTokenDecimals: string | undefined
+	lifecycleTransactionIntent?: DurableTransactionIntent | undefined
 	lifecycleTransactionNonce?: string | undefined
 	lifecycleTransactionHashes: readonly Hex[]
 	lifecycleUpdatedAt: string | undefined
@@ -109,6 +125,47 @@ function optionalIntegerField(record: Record<string, unknown>, key: string) {
 	const value = record[key]
 	if (value !== undefined && (typeof value !== 'string' || !/^(?:0|[1-9]\d*)$/.test(value))) throw new Error(`Position journal ${key} is invalid`)
 	return value
+}
+
+function parseDurableTransactionIntent(value: unknown, label: string): DurableTransactionIntent | undefined {
+	if (value === undefined) return undefined
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`Position journal ${label} transaction intent is invalid`)
+	const record = value as Record<string, unknown>
+	const exactKeys = ['data', 'to', 'value']
+	if (Object.keys(record).length !== exactKeys.length || exactKeys.some(key => !(key in record))) throw new Error(`Position journal ${label} transaction intent fields are invalid`)
+	if (typeof record['data'] !== 'string' || !/^0x(?:[0-9a-fA-F]{2})*$/.test(record['data'])) throw new Error(`Position journal ${label} transaction calldata is invalid`)
+	if (typeof record['to'] !== 'string') throw new Error(`Position journal ${label} transaction destination is invalid`)
+	if (typeof record['value'] !== 'string' || !/^(?:0|[1-9]\d*)$/.test(record['value'])) throw new Error(`Position journal ${label} transaction value is invalid`)
+	return {
+		data: record['data'] as Hex,
+		to: getAddress(record['to']),
+		value: record['value'],
+	}
+}
+
+function parseExpiredTransactionAttempts(value: unknown): readonly ExpiredTransactionAttempt[] | undefined {
+	if (value === undefined) return undefined
+	if (!Array.isArray(value)) throw new Error('Position journal expired transaction attempts are invalid')
+	const hashes = new Set<string>()
+	return value.map(candidate => {
+		if (typeof candidate !== 'object' || candidate === null || Array.isArray(candidate)) throw new Error('Position journal expired transaction attempt is invalid')
+		const record = candidate as Record<string, unknown>
+		const exactKeys = ['kind', 'nonce', 'targetBlockNumber', 'transactionHash']
+		if (Object.keys(record).length !== exactKeys.length || exactKeys.some(key => !(key in record))) throw new Error('Position journal expired transaction attempt fields are invalid')
+		if (record['kind'] !== 'entry' && record['kind'] !== 'lifecycle') throw new Error('Position journal expired transaction attempt kind is invalid')
+		if (typeof record['nonce'] !== 'string' || !/^(?:0|[1-9]\d*)$/.test(record['nonce'])) throw new Error('Position journal expired transaction nonce is invalid')
+		if (typeof record['targetBlockNumber'] !== 'string' || !/^(?:0|[1-9]\d*)$/.test(record['targetBlockNumber'])) throw new Error('Position journal expired transaction target block is invalid')
+		if (typeof record['transactionHash'] !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(record['transactionHash'])) throw new Error('Position journal expired transaction hash is invalid')
+		const normalizedHash = record['transactionHash'].toLowerCase()
+		if (hashes.has(normalizedHash)) throw new Error(`Duplicate position journal expired transaction hash ${normalizedHash}`)
+		hashes.add(normalizedHash)
+		return {
+			kind: record['kind'],
+			nonce: record['nonce'],
+			targetBlockNumber: record['targetBlockNumber'],
+			transactionHash: record['transactionHash'] as Hex,
+		}
+	})
 }
 
 function parseManualReconciliation(value: unknown): ManualReconciliation | undefined {
@@ -197,6 +254,7 @@ function parsePosition(value: unknown): PositionRecord {
 	}
 	const entrySubmissionBlockNumber = optionalIntegerField(record, 'entrySubmissionBlockNumber')
 	const entryTransactionNonce = optionalIntegerField(record, 'entryTransactionNonce')
+	const entryTransactionIntent = parseDurableTransactionIntent(record['entryTransactionIntent'], 'entry')
 	if ((entrySubmissionBlockNumber === undefined) !== (entryTransactionNonce === undefined)) throw new Error('Position journal entry replacement recovery fields are incomplete')
 	if (record['entrySubmissionMode'] !== undefined && record['entrySubmissionMode'] !== 'private' && record['entrySubmissionMode'] !== 'public') throw new Error('Position journal entry submission mode is invalid')
 	if ((record['entrySubmissionMode'] === undefined) !== (entrySubmissionBlockNumber === undefined)) throw new Error('Position journal entry replacement recovery mode is incomplete')
@@ -206,6 +264,7 @@ function parsePosition(value: unknown): PositionRecord {
 	const historyOutbox = record['historyOutbox'] === undefined ? undefined : parseExecutionRecord(record['historyOutbox'])
 	if (record['historyOutbox'] !== undefined && historyOutbox === undefined) throw new Error('Position journal history outbox is invalid')
 	const executionIntent = parseExecutionIntent(record['executionIntent'])
+	const expiredTransactionAttempts = parseExpiredTransactionAttempts(record['expiredTransactionAttempts'])
 	if (executionIntent !== undefined && (executionIntent.reportId !== record['reportId'] || executionIntent.direction !== record['direction'] || executionIntent.token.toLowerCase() !== token.toLowerCase())) {
 		throw new Error('Position journal execution intent does not match its position')
 	}
@@ -237,6 +296,7 @@ function parsePosition(value: unknown): PositionRecord {
 	}
 	const lifecycleSubmissionBlockNumber = optionalIntegerField(record, 'lifecycleSubmissionBlockNumber')
 	const lifecycleTransactionNonce = optionalIntegerField(record, 'lifecycleTransactionNonce')
+	const lifecycleTransactionIntent = parseDurableTransactionIntent(record['lifecycleTransactionIntent'], 'lifecycle')
 	if ((lifecycleSubmissionBlockNumber === undefined) !== (lifecycleTransactionNonce === undefined)) throw new Error('Position journal lifecycle replacement recovery fields are incomplete')
 	if (record['lifecycleSubmissionMode'] !== undefined && record['lifecycleSubmissionMode'] !== 'private' && record['lifecycleSubmissionMode'] !== 'public') throw new Error('Position journal lifecycle submission mode is invalid')
 	if ((record['lifecycleSubmissionMode'] === undefined) !== (lifecycleSubmissionBlockNumber === undefined)) throw new Error('Position journal lifecycle replacement recovery mode is incomplete')
@@ -256,10 +316,12 @@ function parsePosition(value: unknown): PositionRecord {
 		direction: record['direction'],
 		entrySubmissionBlockNumber,
 		entrySubmissionMode: record['entrySubmissionMode'],
+		...(entryTransactionIntent === undefined ? {} : { entryTransactionIntent }),
 		entryTransactionNonce,
 		entryTransactionHash: record['entryTransactionHash'] as Hex,
 		entryTransactionHashes: entryTransactionHashes as Hex[],
 		executionIntent,
+		...(expiredTransactionAttempts === undefined ? {} : { expiredTransactionAttempts }),
 		gasExpenditures: parsedGasExpenditures,
 		historyOutbox,
 		hedgeAmountToken: decimalField(record, 'hedgeAmountToken'),
@@ -271,6 +333,7 @@ function parsePosition(value: unknown): PositionRecord {
 		lifecycleSubmissionMode: record['lifecycleSubmissionMode'],
 		lifecycleTargetBlockNumber: optionalIntegerField(record, 'lifecycleTargetBlockNumber'),
 		lifecycleTokenDecimals: optionalIntegerField(record, 'lifecycleTokenDecimals'),
+		...(lifecycleTransactionIntent === undefined ? {} : { lifecycleTransactionIntent }),
 		lifecycleTransactionNonce,
 		lifecycleTransactionHashes: lifecycleTransactionHashes as Hex[],
 		lifecycleUpdatedAt: record['lifecycleUpdatedAt'],

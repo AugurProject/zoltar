@@ -26,9 +26,12 @@ rate. The arbitrager wallet compares that rate with executable Uniswap liquidity
 When the replacement report can be hedged profitably, the wallet calls the stateless
 executor, which swaps the required inventory atomically and submits the OpenOracle
 dispute while preserving the wallet as the replacement reporter. After the dispute
-window, the bot either settles the final report or detects that a later reporter
-replaced it, withdraws the wallet's OpenOracle balances, and closes its durable
-position record only after canonical receipts and exact asset recovery agree.
+window, the bot settles the final report, withdraws the position's exact OpenOracle
+balances, and closes its durable position record only after canonical receipts and
+exact asset recovery agree. If a later reporter replaced the bot, automatic
+lifecycle execution fails closed because aggregate holder balances cannot prove
+which returned assets belong to that position; the operator must reconcile the
+replacement manually.
 
 The wallet must grant two distinct kinds of approval: ERC-20 allowances let the
 executor pull entry funding, and OpenOracle internal allowances let it move the
@@ -77,9 +80,10 @@ report lifecycle and economics.
   already exist. Public delivery sends the single atomic executor transaction
   directly to every configured public RPC.
 - External process supervision, endpoint health alerts, and a procedure for any
-  position shown as **recovery-required**. The bot automatically settles or detects
-  replacement, withdraws balances through the configured private or public delivery
-  mode, and verifies exact asset recovery before classifying P&amp;L as realized.
+  position shown as **recovery-required**. The bot automatically settles and
+  withdraws only while its signer remains the current reporter. Reporter replacement
+  deliberately requires manual, event-based asset reconciliation before P&amp;L can be
+  classified as realized.
 
 Do not use a key that controls unrelated protocol or treasury funds. The dashboard
 binds to `127.0.0.1`, but the execution key still lives in the bot process and must be
@@ -389,12 +393,13 @@ Before each dispute, the bot:
     independently confirmed canonical target-block hash, decodes the executor’s
     actual hedge event, records every entry transaction hash and actual bundle gas,
     and only then allows the position to progress as confirmed.
-13. On later blocks, automatically settles when eligible or detects replacement,
-    then submits one atomic, exact-amount lifecycle executor call in either delivery
-    mode. Settlement, internal transfers, WETH/token withdrawals, and the canonical
-    parent check share one revert boundary. It records realized P&amp;L only when the
-    canonical receipt contains the executor event matching the position's account,
-    report, tokens, and amounts.
+13. On later blocks, automatically settles when eligible, then submits one atomic,
+    exact-amount lifecycle executor call in either delivery mode. Settlement,
+    internal transfers, WETH/token withdrawals, and the canonical parent check share
+    one revert boundary. It records realized P&amp;L only when the canonical receipt
+    contains the executor event matching the position's account, report, tokens, and
+    amounts. A later reporter replacement fails closed for manual reconciliation;
+    aggregate holder balances are never treated as position attribution evidence.
 
 The executor atomically swaps the old report inventory through the authenticated
 router, pulls the calculated contribution, verifies exact balance deltas into itself
@@ -749,8 +754,11 @@ whose parent-hash guard, optional settlement, exact OpenOracle internal transfer
 and exact withdrawals share one revert boundary. Its hash, signer nonce, submission
 block, target block, and expected amounts are synced before broadcast. Every
 observed repricing, cancellation, or unrelated same-nonce replacement is synced
-before its outcome is accepted. After a crash, independent RPCs scan canonical
-blocks for that sender and nonce if the replacement hash was not yet durable.
+before its outcome is accepted. A successful replacement must also match the durable
+sender, nonce, destination, calldata, and ETH value byte-for-byte; only a proven
+revert may close without that intent match. After a crash, independent RPCs scan
+canonical blocks for that sender and nonce if the replacement hash was not yet
+durable.
 
 Private mode signs the executor call, requests `eth_callBundle` from every configured
 relay, and then fans the same target-block transaction only to relays whose
@@ -777,11 +785,18 @@ RPC then agrees that the parent-bound entry executor call was absent, the attemp
 becomes `expired-not-included` and releases its risk slot. A quorum-confirmed reverted
 atomic entry is terminally closed after recording its gas; it cannot have changed
 OpenOracle state. If the atomic lifecycle call was absent, that attempt is cleared and
-the open position can safely retry from a fresh parent. A successful receipt without
-the expected executor event, RPC disagreement, or ambiguous evidence remains
-`recovery-required`. Active transaction-tracker rows are kept in process memory and
-reset on restart; confirmed dispute history and its ETH profit totals are persisted
-in the configured history file.
+the open position can safely retry from a fresh parent. Expired hashes remain in the
+durable journal and are checked on every poll. If a retained transaction is later
+published, its parent guard makes it revert; the bot records that late gas once,
+updates the UTC-day gas budget and realized P&amp;L where applicable, and then removes
+the archived attempt. An absent hash is also retired once independent RPCs prove a
+later canonical transaction consumed its nonce, because the retained signature can
+no longer be mined. Unexpected successful evidence fails closed. A successful
+receipt without the expected executor event or exact durable transaction intent, RPC
+disagreement, or ambiguous evidence remains `recovery-required`. Active
+transaction-tracker rows are kept in process memory and reset on restart; confirmed
+dispute history and its ETH profit totals are persisted in the configured history
+file.
 
 ## Adjust the strategy
 
@@ -939,9 +954,11 @@ delete or hand-edit a record to bypass the one-position guard.
    disagreement or ambiguous evidence; do not authorize a second transaction while
    the recorded attempt remains live.
 4. For **stored-state/current-reporter mismatch**, compare the current reporter,
-   settlement state, and the wallet's OpenOracle WETH/token holder balances through
-   independent RPCs. A later dispute can legitimately replace the bot; withdraw
-   only balances demonstrably owned by the configured signer.
+   settlement state, dispute events, and the wallet's OpenOracle WETH/token holder
+   balances through independent RPCs. A later dispute can legitimately replace the
+   bot. The bot intentionally refuses automatic withdrawal in this state because
+   aggregate balances can include permissionless deposits or other positions;
+   withdraw only balances demonstrably attributable to this report.
 5. For **unexpected residual assets**, use the lifecycle event and OpenOracle
    internal balances to distinguish the position's exact withdrawal from unrelated
    dust or other deposits. Value or unwind any external token exposure, including

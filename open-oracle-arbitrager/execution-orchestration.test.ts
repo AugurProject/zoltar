@@ -14,10 +14,13 @@ import {
 	journaledSubmission,
 	lifecycleLastValidBlockNumber,
 	lifecycleAttemptNeedsRecovery,
+	lifecycleWithdrawalMismatch,
 	openOracleDisputeTiming,
 	opportunityDecision,
 	privateBundleReceiptStatus,
 	privateAttemptCanExpire,
+	privateEntryRecoveryIsConfirmed,
+	recoveredTransactionIntentMismatch,
 	receiptGasExpendituresWithQuorum,
 	retryPrivateSubmissionWithinWindow,
 	runFundedExecution,
@@ -26,6 +29,7 @@ import {
 	simulateTrackedPrivateBundle,
 	trackPrivateBundleReceiptStatuses,
 	transactionHashBySenderNonceWithQuorum,
+	transactionIntentWithQuorum,
 	transactionReceiptsWithQuorum,
 	waitForResolvedTransaction,
 } from './execution-orchestration.js'
@@ -111,6 +115,19 @@ describe('funded execution orchestration', () => {
 		expect(lifecycleLastValidBlockNumber('private', 101n)).toBe(101n)
 	})
 
+	test('never attributes aggregate holder balances to a position after another reporter replaces it', () => {
+		expect(
+			lifecycleWithdrawalMismatch({
+				currentReporter: false,
+				expectedToken: 10n,
+				expectedWeth: 20n,
+				holderToken: 10_000n,
+				holderWeth: 20_000n,
+				willSettle: false,
+			}),
+		).toBe('Position was replaced; exact returned assets require manual reconciliation')
+	})
+
 	test('derives gas dates from quorum-confirmed canonical receipt blocks', async () => {
 		const firstReceipt = transactionReceipt()
 		const secondReceipt = {
@@ -157,6 +174,33 @@ describe('funded execution orchestration', () => {
 	test('releases a private attempt only after its target block has twelve canonical descendants', () => {
 		expect(privateAttemptCanExpire(112n, 101n)).toBe(false)
 		expect(privateAttemptCanExpire(113n, 101n)).toBe(true)
+	})
+
+	test('does not promote a gas-only private revert into confirmed execution history', () => {
+		expect(privateEntryRecoveryIsConfirmed({ status: 'closed' })).toBe(false)
+		expect(privateEntryRecoveryIsConfirmed({ status: 'open' })).toBe(true)
+	})
+
+	test('quorum-authenticates the calldata and destination of a public replacement', async () => {
+		const expected = {
+			data: '0x1234' as Hex,
+			from: address,
+			nonce: 8n,
+			to: reporter,
+			value: 0n,
+		}
+		const readers = [expected, expected].map(transaction => ({
+			getTransaction: async () => ({ ...transaction, gas: 1n, hash: originalHash, input: transaction.data }),
+		}))
+		expect(await transactionIntentWithQuorum(readers, ['https://rpc-a.example', 'https://rpc-b.example'], 'public replacement', originalHash)).toEqual(expected)
+		const alteredReader = {
+			getTransaction: async () => ({ ...expected, gas: 1n, hash: originalHash, input: '0xabcd' as Hex }),
+		}
+		const firstReader = readers[0]
+		if (firstReader === undefined) throw new Error('Test transaction reader is missing')
+		await expect(transactionIntentWithQuorum([firstReader, alteredReader], ['https://rpc-a.example', 'https://rpc-b.example'], 'public replacement', originalHash)).rejects.toThrow('RPC disagreement')
+		expect(recoveredTransactionIntentMismatch({ data: expected.data, to: expected.to, value: '0' }, expected, address, '8')).toBeUndefined()
+		expect(recoveredTransactionIntentMismatch({ data: expected.data, to: expected.to, value: '0' }, { ...expected, data: '0xabcd' }, address, '8')).toContain('does not match')
 	})
 
 	test('records every signed bundle step before simulation and terminally fails every step on rejection', async () => {
