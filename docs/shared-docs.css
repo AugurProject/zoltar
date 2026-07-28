@@ -9,6 +9,25 @@
 	--docs-page-inline-gutter-mobile: 0.5rem;
 }
 
+.plot-chart {
+	width: 100%;
+}
+
+.plot-chart > svg {
+	display: block;
+	width: 100%;
+	max-width: 100%;
+	height: auto;
+}
+
+.plot-chart-fallback {
+	display: block;
+	padding: 1rem;
+	color: var(--muted, #5f6d75);
+	line-height: 1.5;
+	text-align: center;
+}
+
 .security-assumption-ref {
 	margin: 0.85rem 0;
 	padding: 0.65rem 0.8rem;
@@ -387,6 +406,7 @@ body.doc-openoracle .table-scroll {
 }
 body.doc-openoracle .table-scroll:focus-visible,
 body.doc-openoracle .diagram:focus-visible,
+body.doc-openoracle .example-visual:focus-visible,
 body.doc-openoracle .equation:focus-visible {
 	outline: 2px solid var(--blue);
 	outline-offset: 0.2rem;
@@ -418,7 +438,8 @@ body.doc-openoracle .diagram {
 	overscroll-behavior-x: contain;
 	scrollbar-width: thin;
 }
-body.doc-openoracle .diagram-wide > svg {
+body.doc-openoracle .diagram-wide > svg,
+body.doc-openoracle .diagram-wide > .plot-chart {
 	min-width: 60rem;
 }
 body.doc-openoracle .equation {
