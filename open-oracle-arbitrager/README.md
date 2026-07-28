@@ -282,6 +282,10 @@ settings, and runtime code.
 The schema is `execution-manifest.schema.json`. Generate hashes from one endpoint
 and verify the resulting file through a separately operated endpoint:
 
+The parser and schema bind `mainnet` to chain ID `1` and `sepolia` to chain ID
+`11155111`; a contradictory network/chain pair is rejected before any RPC result
+can verify the file.
+
 ```bash
 ./open-oracle-arbitrager/execution-manifest generate \
   --network=sepolia \
@@ -603,7 +607,10 @@ gas through the same durable position and history accounting.
 
 Execution startup verifies that the history destination is writable. If persistence
 later fails after a confirmed dispute, the record remains visible in memory, further
-execution is blocked, and the bot retries the queued write on later polls.
+execution is blocked, and the bot retries the queued write on later polls. An append
+is acknowledged only after the file and parent directory have been synchronized.
+A malformed or torn non-empty JSONL record stops startup with its line number
+instead of being silently omitted from revenue or gas totals.
 
 Position profit is tracked in ETH using the exact 1 WETH = 1 ETH unwrap relationship:
 
@@ -772,6 +779,11 @@ total of every non-closed durable position, and the UTC-day gas total. Public mo
 uses `1,200,000 × gas price` for the candidate entry; private mode uses the largest
 gas usage from the successful relay simulations. Both add the lifecycle reserve. A
 value equal to a configured cap is allowed; one wei above it is rejected.
+
+Actual gas is assigned to the UTC day of each receipt's quorum-confirmed canonical
+block timestamp, not the local time at which the transaction was staged or later
+recovered. The durable position stores one dated gas expenditure per confirmed
+receipt, and both the execution limit and dashboard use that same ledger.
 
 ### Durable position journal
 

@@ -59,6 +59,7 @@ import {
 	openOracleDisputeTiming,
 	opportunityDecision,
 	recordConfirmedExecution,
+	receiptGasExpendituresWithQuorum,
 	selectBestExecution,
 	simulateTrackedPrivateBundle,
 	trackPrivateBundleReceiptStatuses,
@@ -153,6 +154,21 @@ type EvaluatedOpportunity = {
 
 type ReadClient = PublicClient<Transport, Chain>
 type WriteClient = WalletClient<Transport, Chain, Account>
+
+function dateFromBlockTimestamp(timestamp: bigint) {
+	const milliseconds = timestamp * 1_000n
+	if (milliseconds < 0n || milliseconds > 8_640_000_000_000_000n) throw new Error('Canonical block timestamp is outside the supported date range')
+	return new Date(Number(milliseconds))
+}
+
+async function confirmedGasExpenditures(readClients: readonly ReadClient[], config: Configuration, label: string, receipts: Parameters<typeof receiptGasExpendituresWithQuorum>[3]) {
+	const expenditures = await receiptGasExpendituresWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], label, receipts)
+	return expenditures.map(expenditure => ({
+		costEth: decimalWeth(expenditure.costWei),
+		minedAt: expenditure.minedAt,
+		transactionHash: expenditure.transactionHash,
+	}))
+}
 
 function requiredBigint(value: unknown, description: string) {
 	if (typeof value !== 'bigint') throw new Error(`${description} is not an RPC bigint`)
@@ -776,6 +792,7 @@ async function executeDispute(
 		direction: refreshedQuote.direction,
 		entryTransactionHash: executionSigned.hash,
 		entryTransactionHashes: signedTransactions.map(transaction => transaction.signed.hash),
+		gasExpenditures: [],
 		hedgeAmountToken: formatTokenAmount(refreshedQuote.hedgeAmountRep, tokenMetadata.decimals),
 		hedgeWeth: decimalWeth(hedgeLimitQuote),
 		hedgedProfitBeforeGasEth: decimalSignedEth(refreshedQuote.profitBeforeGasWeth),
@@ -800,6 +817,7 @@ async function executeDispute(
 		withdrawnWeth: '0',
 	} satisfies PositionRecord
 	let actualGasCost: bigint
+	let entryGasExpenditures: PositionRecord['gasExpenditures'] = []
 	let estimatedNetProfit = refreshedQuote.netProfitWeth
 	let receiptBlockNumber: bigint
 	let executionHash = executionSigned.hash
@@ -808,11 +826,12 @@ async function executeDispute(
 	if (config.submission.mode === 'public') {
 		await wallet.simulateContract(request)
 		if (!meetsProfitThreshold(refreshedQuote, config.minimumProfitWeth, config.minimumProfitBps)) throw new Error('Arbitrage no longer meets the profit threshold at submission')
-		await guardedRiskSubmission(positionRiskLimitMismatch({ capitalAtRiskWeth, positions, projectedGasCostWeth: gasPrice * 1_200_000n + lifecycleGasReserveWeth }, config.riskLimits), () => persistPosition(stagedPosition))
+		await guardedRiskSubmission(positionRiskLimitMismatch({ capitalAtRiskWeth, positions, projectedGasCostWeth: gasPrice * 1_200_000n + lifecycleGasReserveWeth }, config.riskLimits, dateFromBlockTimestamp(executionSnapshot.blockTimestamp)), () => persistPosition(stagedPosition))
 		const submission = await submitContractTransaction(client, wallet, config, executionSigned, { estimatedNetProfitEth: decimalWeth(refreshedQuote.netProfitWeth), kind: 'dispute', reportId }, isPaused, track)
 		const { receipt, tracked } = await waitForTrackedTransaction(client, wallet, config, submission, track)
 		if (receipt.status !== 'success') throw new Error(`Dispute transaction reverted: ${receipt.transactionHash}`)
 		actualGasCost = receiptGasCost(receipt)
+		entryGasExpenditures = await confirmedGasExpenditures(readClients, config, `public entry ${reportId}`, [receipt])
 		receiptBlockNumber = receipt.blockNumber
 		executionHash = receipt.transactionHash
 		executionLogs = receipt.logs
@@ -882,7 +901,7 @@ async function executeDispute(
 					if (canonicalHash.toLowerCase() !== executionSnapshot.blockHash.toLowerCase()) throw new Error('Bundle canonical parent changed before submission')
 				},
 				() =>
-					guardedRiskSubmission(positionRiskLimitMismatch({ capitalAtRiskWeth, positions, projectedGasCostWeth: totalGasUsed * gasPrice + lifecycleGasReserveWeth }, config.riskLimits), () =>
+					guardedRiskSubmission(positionRiskLimitMismatch({ capitalAtRiskWeth, positions, projectedGasCostWeth: totalGasUsed * gasPrice + lifecycleGasReserveWeth }, config.riskLimits, dateFromBlockTimestamp(executionSnapshot.blockTimestamp)), () =>
 						journaledSubmission(
 							() => persistPosition(stagedPosition),
 							() =>
@@ -949,6 +968,8 @@ async function executeDispute(
 			...stagedPosition,
 			actualEntryGasCostEth: decimalWeth(actualGasCost),
 			entryTransactionHash: executionHash,
+			entryTransactionHashes: [executionHash],
+			gasExpenditures: entryGasExpenditures,
 			hedgeAmountToken: formatTokenAmount(hedgeExecution.hedgeAmountToken2, tokenMetadata.decimals),
 			hedgeWeth: decimalWeth(hedgeExecution.hedgeAmountWeth),
 			hedgedProfitBeforeGasEth: decimalSignedEth(hedgedProfitBeforeGas),
@@ -1007,12 +1028,14 @@ async function recoverPendingEntryWithQuorum(readClients: readonly ReadClient[],
 		throw new Error('Executor hedge event does not match the durable position')
 	}
 	const actualEntryGasCost = receipts.reduce((total, receipt) => total + receiptGasCost(receipt), 0n)
+	const gasExpenditures = await confirmedGasExpenditures(readClients, config, `pending entry ${position.reportId}`, receipts)
 	const actualProfitBeforeGas = recoveredHedgedProfitBeforeGasWeth(position.direction, parseSignedDecimalEth(position.hedgedProfitBeforeGasEth), parseDecimalWeth(position.hedgeWeth), hedgeExecution.hedgeAmountWeth)
 	return {
 		position: {
 			...position,
 			actualEntryGasCostEth: decimalWeth(actualEntryGasCost),
 			entryTransactionHash: executorReceipt.transactionHash,
+			gasExpenditures,
 			hedgeAmountToken: formatTokenAmount(hedgeExecution.hedgeAmountToken2, tokenDecimals),
 			hedgeWeth: decimalWeth(hedgeExecution.hedgeAmountWeth),
 			hedgedProfitBeforeGasEth: decimalSignedEth(actualProfitBeforeGas),
@@ -1043,11 +1066,13 @@ async function recoverPendingLifecycleWithQuorum(readClients: readonly ReadClien
 	const withdrawnWeth = balancesAfter.walletWeth - walletWethBefore
 	const withdrawnToken = balancesAfter.walletToken - walletTokenBefore
 	const lifecycleGas = parseDecimalWeth(position.lifecycleGasCostEth) + receipts.reduce((total, receipt) => total + receiptGasCost(receipt), 0n)
+	const lifecycleGasExpenditures = await confirmedGasExpenditures(readClients, config, `pending lifecycle ${position.reportId}`, receipts)
 	const tokenDecimals = Number(position.lifecycleTokenDecimals)
 	if (!Number.isSafeInteger(tokenDecimals) || tokenDecimals < 0 || tokenDecimals > 255) throw new Error('Lifecycle recovery token decimals are invalid')
 	const recovered = {
 		...position,
 		closedAt: undefined,
+		gasExpenditures: [...position.gasExpenditures, ...lifecycleGasExpenditures],
 		lifecycleGasCostEth: decimalWeth(lifecycleGas),
 		lifecycleReceiptRecovered: true,
 		lifecycleUpdatedAt: new Date().toISOString(),
@@ -1781,7 +1806,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 									reportId: evaluated.opportunity.reportId,
 								})
 								if (evaluated.candidate !== undefined) {
-									const mismatch = candidateRiskMismatch(evaluated.candidate, positions, config.riskLimits)
+									const mismatch = candidateRiskMismatch(evaluated.candidate, positions, config.riskLimits, dateFromBlockTimestamp(block.timestamp))
 									if (mismatch === undefined) candidates.push(evaluated.candidate)
 									else {
 										evaluated.opportunity.decision = 'risk-limit'

@@ -14,6 +14,10 @@ export type DeploymentManifest = {
 }
 
 const roles = new Set<DeploymentRole>(['coordinator', 'executor', 'open-oracle', 'token', 'uniswap-factory', 'uniswap-quoter', 'uniswap-router', 'weth'])
+const networkChainIds = {
+	mainnet: 1,
+	sepolia: 11_155_111,
+} as const
 
 export function parseDeploymentRole(value: string): DeploymentRole {
 	if (!roles.has(value as DeploymentRole)) throw new Error(`Unsupported deployment role: ${value}`)
@@ -31,6 +35,7 @@ export function parseDeploymentManifest(value: unknown): DeploymentManifest {
 	if (manifest['version'] !== 1) throw new Error('Deployment manifest version must be 1')
 	if (manifest['network'] !== 'mainnet' && manifest['network'] !== 'sepolia') throw new Error('Deployment manifest network must be mainnet or sepolia')
 	if (typeof manifest['chainId'] !== 'number' || !Number.isSafeInteger(manifest['chainId']) || manifest['chainId'] <= 0) throw new Error('Deployment manifest chainId must be a positive integer')
+	if (manifest['chainId'] !== networkChainIds[manifest['network']]) throw new Error(`Deployment manifest ${manifest['network']} requires chainId ${networkChainIds[manifest['network']].toString()}`)
 	if (!Array.isArray(manifest['contracts']) || manifest['contracts'].length === 0) throw new Error('Deployment manifest must contain contracts')
 	const identities = new Set<string>()
 	const singletonRoles = new Set<DeploymentRole>(['executor', 'open-oracle', 'uniswap-factory', 'uniswap-quoter', 'uniswap-router', 'weth'])

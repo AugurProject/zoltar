@@ -20,6 +20,7 @@ import {
 	opportunityDecision,
 	privateBundleReceiptStatus,
 	recordConfirmedExecution,
+	receiptGasExpendituresWithQuorum,
 	retryPrivateSubmissionWithinWindow,
 	runFundedExecution,
 	selectBestExecution,
@@ -64,6 +65,7 @@ function lifecyclePosition(): PositionRecord {
 		direction: 'sell-rep',
 		entryTransactionHash: originalHash,
 		entryTransactionHashes: [originalHash],
+		gasExpenditures: [{ costEth: '0.001', minedAt: '2026-07-24T00:00:00.000Z', transactionHash: originalHash }],
 		hedgeAmountToken: '1',
 		hedgeWeth: '2',
 		hedgedProfitBeforeGasEth: '0.1',
@@ -130,6 +132,32 @@ describe('funded execution orchestration', () => {
 		expect(lifecycleReceiptSnapshotBlock([first, second], 0n)).toEqual({ blockHash: second.blockHash, blockNumber: 102n })
 		expect(() => lifecycleReceiptSnapshotBlock([first, second], 101n)).toThrow('split across blocks')
 		expect(lifecycleReceiptSnapshotBlock([first, transactionReceipt()], 101n)).toEqual({ blockHash: first.blockHash, blockNumber: 101n })
+	})
+
+	test('derives gas dates from quorum-confirmed canonical receipt blocks', async () => {
+		const firstReceipt = transactionReceipt()
+		const secondReceipt = {
+			...transactionReceipt(),
+			blockHash: `0x${'79'.repeat(32)}` as Hex,
+			blockNumber: 102n,
+			effectiveGasPrice: 20n,
+			transactionHash: originalHash,
+		}
+		const blocks = new Map([
+			[101n, { hash: firstReceipt.blockHash, timestamp: 1_774_051_199n }],
+			[102n, { hash: secondReceipt.blockHash, timestamp: 1_774_051_201n }],
+		])
+		const readers = ['primary', 'secondary'].map(() => ({
+			getBlock: async ({ blockNumber }: { blockNumber: bigint }) => {
+				const block = blocks.get(blockNumber)
+				if (block === undefined) throw new Error('missing test block')
+				return block
+			},
+		}))
+		expect(await receiptGasExpendituresWithQuorum(readers, ['https://primary.example', 'https://secondary.example'], 'lifecycle 7', [firstReceipt, secondReceipt])).toEqual([
+			{ costWei: 210_000n, minedAt: '2026-03-20T23:59:59.000Z', transactionHash: replacementHash },
+			{ costWei: 420_000n, minedAt: '2026-03-21T00:00:01.000Z', transactionHash: originalHash },
+		])
 	})
 
 	test('requires a private bundle when either exact executor allowance is missing', () => {

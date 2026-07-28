@@ -3,7 +3,21 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Address, Hex } from '@zoltar/shared/ethereum'
-import { appendExecutionHistory, clearWalletDerivedState, decimalSignedEth, ensureExecutionHistoryWritable, gameCapitalSnapshot, loadExecutionHistory, operatorSnapshot, parseSignedDecimalEth, updateStrategyFromRequest, type ExecutionRecord, type MutableStrategy, type OperatorState } from './operator-state.js'
+import {
+	appendExecutionHistory,
+	clearWalletDerivedState,
+	decimalSignedEth,
+	ensureExecutionHistoryWritable,
+	gameCapitalSnapshot,
+	loadExecutionHistory,
+	operatorSnapshot,
+	parseSignedDecimalEth,
+	updateStrategyFromRequest,
+	type ExecutionHistoryFilesystem,
+	type ExecutionRecord,
+	type MutableStrategy,
+	type OperatorState,
+} from './operator-state.js'
 import type { PositionRecord } from './position-store.js'
 
 const temporaryDirectories: string[] = []
@@ -130,6 +144,10 @@ describe('operator execution history', () => {
 			direction: 'sell-rep',
 			entryTransactionHash: `0x${'ab'.repeat(32)}` as Hex,
 			entryTransactionHashes: [`0x${'ab'.repeat(32)}` as Hex],
+			gasExpenditures: [
+				{ costEth: '0.01', minedAt: new Date(0).toISOString(), transactionHash: `0x${'ab'.repeat(32)}` as Hex },
+				{ costEth: '0.005', minedAt: new Date(1).toISOString(), transactionHash: `0x${'cd'.repeat(32)}` as Hex },
+			],
 			hedgeAmountToken: '1',
 			hedgeWeth: '1',
 			hedgedProfitBeforeGasEth: '0.1',
@@ -189,6 +207,7 @@ describe('operator execution history', () => {
 			direction: 'sell-rep',
 			entryTransactionHash: `0x${'ab'.repeat(32)}` as Hex,
 			entryTransactionHashes: [`0x${'ab'.repeat(32)}` as Hex],
+			gasExpenditures: [],
 			hedgeAmountToken: '1',
 			hedgeWeth: '1',
 			hedgedProfitBeforeGasEth: '9',
@@ -248,6 +267,10 @@ describe('operator execution history', () => {
 			direction: 'sell-rep',
 			entryTransactionHash: `0x${'ab'.repeat(32)}` as Hex,
 			entryTransactionHashes: [`0x${'ab'.repeat(32)}` as Hex],
+			gasExpenditures: [
+				{ costEth: '0.01', minedAt: new Date(0).toISOString(), transactionHash: `0x${'ab'.repeat(32)}` as Hex },
+				{ costEth: '0.005', minedAt: new Date(1).toISOString(), transactionHash: `0x${'cd'.repeat(32)}` as Hex },
+			],
 			hedgeAmountToken: '1',
 			hedgeWeth: '1',
 			hedgedProfitBeforeGasEth: '9',
@@ -315,7 +338,7 @@ describe('operator execution history', () => {
 		expect(snapshot.totalRealizedNetProfitEth).toBe('-0.2')
 	})
 
-	test('persists valid records, ignores malformed lines, and calculates totals', async () => {
+	test('persists valid records and calculates totals', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-test-'))
 		temporaryDirectories.push(directory)
 		const path = join(directory, 'history.jsonl')
@@ -336,7 +359,6 @@ describe('operator execution history', () => {
 			trackedNetProfitEth: '0.05',
 			transactionHash: `0x${'12'.repeat(32)}` as Hex,
 		}
-		await writeFile(path, 'not-json\n', 'utf8')
 		await appendExecutionHistory(path, record)
 		await appendExecutionHistory(path, record)
 		const history = await loadExecutionHistory(path)
@@ -366,6 +388,81 @@ describe('operator execution history', () => {
 		expect(snapshot.totalEstimatedNetProfitWeth).toBe('0.05')
 		expect(snapshot.totalActualGasCostEth).toBe('0.002')
 		expect(snapshot.totalRevenueBeforeGasEth).toBe('0.052')
+	})
+
+	test('rejects malformed execution history instead of silently understating accounting', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-test-'))
+		temporaryDirectories.push(directory)
+		const path = join(directory, 'history.jsonl')
+		await writeFile(path, '{"transactionHash":"torn"', 'utf8')
+		await expect(loadExecutionHistory(path)).rejects.toThrow('line 1')
+	})
+
+	test('syncs appended history and its parent directory before acknowledging the record', async () => {
+		const events: string[] = []
+		let opened = 0
+		const fileHandle = {
+			appendFile: async () => {
+				events.push('file:append')
+			},
+			chmod: async () => {
+				events.push('file:chmod')
+			},
+			close: async () => {
+				events.push('file:close')
+			},
+			sync: async () => {
+				events.push('file:sync')
+			},
+		}
+		const directoryHandle = {
+			appendFile: async () => {
+				throw new Error('directory append is unexpected')
+			},
+			chmod: async () => {
+				throw new Error('directory chmod is unexpected')
+			},
+			close: async () => {
+				events.push('directory:close')
+			},
+			sync: async () => {
+				events.push('directory:sync')
+			},
+		}
+		const filesystem: ExecutionHistoryFilesystem = {
+			mkdir: async () => {
+				events.push('mkdir')
+			},
+			open: async () => {
+				opened += 1
+				return opened === 1 ? fileHandle : directoryHandle
+			},
+			readFile: async () => {
+				throw new Error('read is unexpected')
+			},
+		}
+		await appendExecutionHistory(
+			'/history.jsonl',
+			{
+				actualGasCostEth: '0.002',
+				blockNumber: '100',
+				direction: 'sell-rep',
+				estimatedNetProfitWeth: '0.05',
+				estimatedProfitBeforeGasEth: '0.052',
+				executedAt: '2026-07-24T00:00:00.000Z',
+				pool: address,
+				poolFee: 10_000,
+				reportId: '7',
+				requiredToken: '1',
+				requiredWeth: '2',
+				token: address,
+				tokenSymbol: 'REP',
+				trackedNetProfitEth: '0.05',
+				transactionHash: `0x${'12'.repeat(32)}` as Hex,
+			},
+			filesystem,
+		)
+		expect(events).toEqual(['mkdir', 'file:chmod', 'file:append', 'file:sync', 'file:close', 'directory:sync', 'directory:close'])
 	})
 
 	test('preflights and locks down the execution history destination', async () => {

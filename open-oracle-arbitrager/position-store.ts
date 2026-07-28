@@ -51,6 +51,11 @@ export type PositionRecord = {
 	direction: 'buy-rep' | 'sell-rep'
 	entryTransactionHash: Hex
 	entryTransactionHashes: readonly Hex[]
+	gasExpenditures: readonly {
+		costEth: string
+		minedAt: string
+		transactionHash: Hex
+	}[]
 	hedgeAmountToken: string
 	hedgeWeth: string
 	hedgedProfitBeforeGasEth: string
@@ -82,6 +87,11 @@ function decimalField(record: Record<string, unknown>, key: string) {
 	const value = record[key]
 	if (typeof value !== 'string' || !decimal.test(value)) throw new Error(`Position journal ${key} is invalid`)
 	return value
+}
+
+function decimalAmountWei(value: string) {
+	const [whole = '0', fraction = ''] = value.split('.')
+	return BigInt(whole) * 10n ** 18n + BigInt(fraction.padEnd(18, '0'))
 }
 
 function optionalIntegerField(record: Record<string, unknown>, key: string) {
@@ -131,9 +141,31 @@ function parsePosition(value: unknown): PositionRecord {
 	if (typeof lastEntryHash !== 'string' || lastEntryHash.toLowerCase() !== record['entryTransactionHash'].toLowerCase()) throw new Error('Position journal executor transaction must be last')
 	if (typeof record['token'] !== 'string') throw new Error('Position journal token is invalid')
 	const token = getAddress(record['token'])
+	const gasExpenditures = record['gasExpenditures']
+	if (!Array.isArray(gasExpenditures)) throw new Error('Position journal gas expenditures are invalid')
+	const gasTransactionHashes = new Set<string>()
+	const parsedGasExpenditures = gasExpenditures.map(value => {
+		if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Position journal gas expenditure is invalid')
+		const expenditure = value as Record<string, unknown>
+		if (Object.keys(expenditure).length !== 3 || !('costEth' in expenditure) || !('minedAt' in expenditure) || !('transactionHash' in expenditure)) throw new Error('Position journal gas expenditure fields are invalid')
+		const costEth = decimalField(expenditure, 'costEth')
+		if (typeof expenditure['minedAt'] !== 'string' || !Number.isFinite(Date.parse(expenditure['minedAt']))) throw new Error('Position journal gas expenditure minedAt is invalid')
+		if (typeof expenditure['transactionHash'] !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(expenditure['transactionHash'])) throw new Error('Position journal gas expenditure transaction hash is invalid')
+		const transactionHash = expenditure['transactionHash'].toLowerCase()
+		if (gasTransactionHashes.has(transactionHash)) throw new Error(`Duplicate position journal gas expenditure transaction hash ${transactionHash}`)
+		gasTransactionHashes.add(transactionHash)
+		return {
+			costEth,
+			minedAt: expenditure['minedAt'],
+			transactionHash: expenditure['transactionHash'] as Hex,
+		}
+	})
 	for (const key of ['actualEntryGasCostEth', 'capitalAtRiskWeth', 'hedgeAmountToken', 'hedgeWeth', 'lifecycleGasCostEth', 'lockedToken', 'lockedWeth', 'withdrawnToken', 'withdrawnWeth']) {
 		decimalField(record, key)
 	}
+	const expectedGasCost = decimalAmountWei(decimalField(record, 'actualEntryGasCostEth')) + decimalAmountWei(decimalField(record, 'lifecycleGasCostEth'))
+	const recordedGasCost = parsedGasExpenditures.reduce((total, expenditure) => total + decimalAmountWei(expenditure.costEth), 0n)
+	if (recordedGasCost !== expectedGasCost) throw new Error('Position journal gas expenditure total does not match entry and lifecycle gas')
 	if (typeof record['hedgedProfitBeforeGasEth'] !== 'string' || !signedDecimal.test(record['hedgedProfitBeforeGasEth'])) throw new Error('Position journal hedged profit is invalid')
 	if (record['realizedNetProfitEth'] !== undefined && (typeof record['realizedNetProfitEth'] !== 'string' || !signedDecimal.test(record['realizedNetProfitEth']))) throw new Error('Position journal realized profit is invalid')
 	if (typeof record['openedAt'] !== 'string' || !Number.isFinite(Date.parse(record['openedAt']))) throw new Error('Position journal openedAt is invalid')
@@ -163,6 +195,7 @@ function parsePosition(value: unknown): PositionRecord {
 		direction: record['direction'],
 		entryTransactionHash: record['entryTransactionHash'] as Hex,
 		entryTransactionHashes: entryTransactionHashes as Hex[],
+		gasExpenditures: parsedGasExpenditures,
 		hedgeAmountToken: decimalField(record, 'hedgeAmountToken'),
 		hedgeWeth: decimalField(record, 'hedgeWeth'),
 		hedgedProfitBeforeGasEth: record['hedgedProfitBeforeGasEth'],

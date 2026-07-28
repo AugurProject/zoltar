@@ -1,4 +1,4 @@
-import { appendFile, mkdir, open, readFile } from 'node:fs/promises'
+import { mkdir, open, readFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { Address, Hex } from '@zoltar/shared/ethereum'
 import type { OpenOracleGame } from '@zoltar/shared/openOracle'
@@ -6,7 +6,26 @@ import type { ConnectivitySettings, EndpointCheck, NetworkName } from './connect
 import type { SubmissionSettings, SubmissionTargetResult } from './transaction-submission.js'
 import type { MarketPricePoint, TokenMarketSnapshot } from './market-monitor.js'
 import type { PositionRecord } from './position-store.js'
-import type { RiskLimits } from './safety-controls.js'
+import { utcDayGasSpentWeth, type RiskLimits } from './safety-controls.js'
+
+type ExecutionHistoryFileHandle = {
+	appendFile: (data: string, options: { encoding: 'utf8' }) => Promise<unknown>
+	chmod: (mode: number) => Promise<unknown>
+	close: () => Promise<unknown>
+	sync: () => Promise<unknown>
+}
+
+export type ExecutionHistoryFilesystem = {
+	mkdir: (path: string, options: { mode: number; recursive: true }) => Promise<unknown>
+	open: (path: string, flags: 'a' | 'r', mode?: number) => Promise<ExecutionHistoryFileHandle>
+	readFile: (path: string, encoding: 'utf8') => Promise<string>
+}
+
+const executionHistoryFilesystem: ExecutionHistoryFilesystem = {
+	mkdir,
+	open,
+	readFile,
+}
 
 export type StrategySettings = {
 	maxSpotTwapTicks: string
@@ -384,21 +403,23 @@ function executionRecord(value: unknown): ExecutionRecord | undefined {
 	}
 }
 
-export async function loadExecutionHistory(path: string) {
+export async function loadExecutionHistory(path: string, filesystem: ExecutionHistoryFilesystem = executionHistoryFilesystem) {
 	try {
-		const contents = await readFile(path, 'utf8')
-		const records = contents
-			.split('\n')
-			.filter(line => line.trim() !== '')
-			.map(line => {
-				try {
-					return executionRecord(JSON.parse(line))
-				} catch (error) {
-					if (error instanceof SyntaxError) return undefined
-					throw error
-				}
-			})
-			.filter(record => record !== undefined)
+		const contents = await filesystem.readFile(path, 'utf8')
+		const records: ExecutionRecord[] = []
+		for (const [index, line] of contents.split('\n').entries()) {
+			if (line.trim() === '') continue
+			let parsed: unknown
+			try {
+				parsed = JSON.parse(line)
+			} catch (error) {
+				if (error instanceof SyntaxError) throw new Error(`Invalid execution history line ${(index + 1).toString()}: ${error.message}`)
+				throw error
+			}
+			const record = executionRecord(parsed)
+			if (record === undefined) throw new Error(`Invalid execution history record at line ${(index + 1).toString()}`)
+			records.push(record)
+		}
 		const unique = new Map<string, ExecutionRecord>()
 		for (const record of records) unique.set(record.transactionHash.toLowerCase(), record)
 		return [...unique.values()].reverse()
@@ -408,19 +429,38 @@ export async function loadExecutionHistory(path: string) {
 	}
 }
 
-export async function appendExecutionHistory(path: string, record: ExecutionRecord) {
-	await mkdir(dirname(path), { recursive: true })
-	await appendFile(path, `${JSON.stringify(record)}\n`, { encoding: 'utf8', mode: 0o600 })
+async function syncExecutionHistoryDirectory(path: string, filesystem: ExecutionHistoryFilesystem) {
+	const directoryHandle = await filesystem.open(dirname(path), 'r')
+	try {
+		await directoryHandle.sync()
+	} finally {
+		await directoryHandle.close()
+	}
 }
 
-export async function ensureExecutionHistoryWritable(path: string) {
-	await mkdir(dirname(path), { recursive: true })
-	const handle = await open(path, 'a', 0o600)
+export async function appendExecutionHistory(path: string, record: ExecutionRecord, filesystem: ExecutionHistoryFilesystem = executionHistoryFilesystem) {
+	await filesystem.mkdir(dirname(path), { mode: 0o700, recursive: true })
+	const handle = await filesystem.open(path, 'a', 0o600)
 	try {
 		await handle.chmod(0o600)
+		await handle.appendFile(`${JSON.stringify(record)}\n`, { encoding: 'utf8' })
+		await handle.sync()
 	} finally {
 		await handle.close()
 	}
+	await syncExecutionHistoryDirectory(path, filesystem)
+}
+
+export async function ensureExecutionHistoryWritable(path: string, filesystem: ExecutionHistoryFilesystem = executionHistoryFilesystem) {
+	await filesystem.mkdir(dirname(path), { mode: 0o700, recursive: true })
+	const handle = await filesystem.open(path, 'a', 0o600)
+	try {
+		await handle.chmod(0o600)
+		await handle.sync()
+	} finally {
+		await handle.close()
+	}
+	await syncExecutionHistoryDirectory(path, filesystem)
 }
 
 function sumDecimalWeth(records: readonly ExecutionRecord[], field: 'actualGasCostEth' | 'estimatedNetProfitWeth' | 'estimatedProfitBeforeGasEth') {
@@ -471,8 +511,8 @@ export function operatorSnapshot(
 	const totals = positionTotals(state.positions)
 	const openPositions = state.positions.filter(position => position.status !== 'closed')
 	const lockedWeth = openPositions.reduce((total, position) => total + parseDecimalWeth(position.capitalAtRiskWeth), 0n)
-	const day = new Date().toISOString().slice(0, 10)
-	const dailyGasSpentWeth = state.positions.reduce((total, position) => total + (position.openedAt.slice(0, 10) === day ? parseDecimalWeth(position.actualEntryGasCostEth) : 0n) + (position.lifecycleUpdatedAt?.slice(0, 10) === day ? parseDecimalWeth(position.lifecycleGasCostEth) : 0n), 0n)
+	const riskNow = state.blockTimestamp === undefined ? new Date() : new Date(Number(BigInt(state.blockTimestamp) * 1_000n))
+	const dailyGasSpentWeth = utcDayGasSpentWeth(state.positions, riskNow)
 	return {
 		activeReportCount: state.activeReportCount,
 		balances: state.balances,

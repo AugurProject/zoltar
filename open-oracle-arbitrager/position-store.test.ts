@@ -98,6 +98,7 @@ describe('durable OpenOracle position journal', () => {
 			direction: 'sell-rep',
 			entryTransactionHash: `0x${'11'.repeat(32)}`,
 			entryTransactionHashes: [`0x${'11'.repeat(32)}`],
+			gasExpenditures: [{ costEth: '0.001', minedAt: '2026-01-01T00:00:00.000Z', transactionHash: `0x${'11'.repeat(32)}` }],
 			hedgeAmountToken: '2',
 			hedgeWeth: '1',
 			hedgedProfitBeforeGasEth: '0.1',
@@ -138,6 +139,7 @@ describe('durable OpenOracle position journal', () => {
 			direction: 'sell-rep',
 			entryTransactionHash: `0x${'11'.repeat(32)}`,
 			entryTransactionHashes: [`0x${'11'.repeat(32)}`],
+			gasExpenditures: [{ costEth: '0.001', minedAt: '2026-01-01T00:00:00.000Z', transactionHash: `0x${'11'.repeat(32)}` }],
 			hedgeAmountToken: '2',
 			hedgeWeth: '1',
 			hedgedProfitBeforeGasEth: '0.1',
@@ -173,6 +175,46 @@ describe('durable OpenOracle position journal', () => {
 		await expect(loadPositionJournal(path)).rejects.toThrow('report id')
 	})
 
+	test('rejects a gas ledger that understates aggregate position gas', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-position-'))
+		directories.push(directory)
+		const path = join(directory, 'positions.json')
+		const position = {
+			account: getAddress('0x0000000000000000000000000000000000000002'),
+			actualEntryGasCostEth: '0.001',
+			capitalAtRiskWeth: '2',
+			closedAt: undefined,
+			direction: 'sell-rep',
+			entryTransactionHash: `0x${'11'.repeat(32)}`,
+			entryTransactionHashes: [`0x${'11'.repeat(32)}`],
+			gasExpenditures: [],
+			hedgeAmountToken: '2',
+			hedgeWeth: '1',
+			hedgedProfitBeforeGasEth: '0.1',
+			lifecycleGasCostEth: '0',
+			lifecycleReceiptRecovered: false,
+			lifecycleTargetBlockNumber: undefined,
+			lifecycleTokenDecimals: undefined,
+			lifecycleTransactionHashes: [],
+			lifecycleUpdatedAt: undefined,
+			lifecycleWalletTokenBefore: undefined,
+			lifecycleWalletWethBefore: undefined,
+			lockedToken: '2',
+			lockedWeth: '1',
+			manualReconciliation: undefined,
+			openedAt: '2026-01-01T00:00:00.000Z',
+			realizedNetProfitEth: undefined,
+			reportId: '7',
+			status: 'open',
+			token: getAddress('0x0000000000000000000000000000000000000001'),
+			tokenSymbol: 'REP',
+			withdrawnToken: '0',
+			withdrawnWeth: '0',
+		}
+		await Bun.write(path, JSON.stringify({ positions: [position], version: 1 }))
+		await expect(loadPositionJournal(path)).rejects.toThrow('gas expenditure total')
+	})
+
 	test('requires the position signer and explicit evidence before manually closing recovery', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-position-'))
 		directories.push(directory)
@@ -186,6 +228,10 @@ describe('durable OpenOracle position journal', () => {
 			direction: 'sell-rep',
 			entryTransactionHash: `0x${'11'.repeat(32)}`,
 			entryTransactionHashes: [`0x${'11'.repeat(32)}`],
+			gasExpenditures: [
+				{ costEth: '0.001', minedAt: '2026-01-01T00:00:00.000Z', transactionHash: `0x${'11'.repeat(32)}` },
+				{ costEth: '0.002', minedAt: '2026-01-02T00:00:00.000Z', transactionHash: `0x${'22'.repeat(32)}` },
+			],
 			hedgeAmountToken: '2',
 			hedgeWeth: '1',
 			hedgedProfitBeforeGasEth: '0.1',
@@ -248,6 +294,7 @@ describe('durable OpenOracle position journal', () => {
 			direction: 'sell-rep',
 			entryTransactionHash: `0x${'11'.repeat(32)}`,
 			entryTransactionHashes: [`0x${'11'.repeat(32)}`],
+			gasExpenditures: [],
 			hedgeAmountToken: '2',
 			hedgeWeth: '1',
 			hedgedProfitBeforeGasEth: '0.1',
@@ -300,6 +347,7 @@ describe('durable OpenOracle position journal', () => {
 				direction: 'sell-rep',
 				entryTransactionHash: `0x${'11'.repeat(32)}`,
 				entryTransactionHashes: [`0x${'11'.repeat(32)}`],
+				gasExpenditures: [],
 				hedgeAmountToken: '2',
 				hedgeWeth: '1',
 				hedgedProfitBeforeGasEth: '0.1',

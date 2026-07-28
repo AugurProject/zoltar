@@ -1,4 +1,8 @@
-import { parseDecimalWeth } from './operator-state.js'
+function parseDecimalWeth(value: string) {
+	if (!/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) throw new Error(`Invalid WETH amount: ${value}`)
+	const [whole = '0', fraction = ''] = value.split('.')
+	return BigInt(whole) * 10n ** 18n + BigInt(fraction.padEnd(18, '0'))
+}
 
 export type RiskLimits = {
 	lifecycleGasReserveWeth: bigint
@@ -45,10 +49,19 @@ export function riskLimitMismatch(
 type RecordedRiskPosition = {
 	actualEntryGasCostEth: string
 	capitalAtRiskWeth: string
+	gasExpenditures: readonly {
+		costEth: string
+		minedAt: string
+	}[]
 	lifecycleGasCostEth: string
 	lifecycleUpdatedAt: string | undefined
 	openedAt: string
 	status: string
+}
+
+export function utcDayGasSpentWeth(positions: readonly Pick<RecordedRiskPosition, 'gasExpenditures'>[], now = new Date()) {
+	const day = now.toISOString().slice(0, 10)
+	return positions.reduce((total, position) => total + position.gasExpenditures.reduce((positionTotal, expenditure) => positionTotal + (expenditure.minedAt.slice(0, 10) === day ? parseDecimalWeth(expenditure.costEth) : 0n), 0n), 0n)
 }
 
 export function positionRiskLimitMismatch(
@@ -62,8 +75,7 @@ export function positionRiskLimitMismatch(
 ) {
 	const openPositions = parameters.positions.filter(position => position.status !== 'closed')
 	const lockedWeth = openPositions.reduce((total, position) => total + parseDecimalWeth(position.capitalAtRiskWeth), 0n)
-	const day = now.toISOString().slice(0, 10)
-	const dailyGasSpentWeth = parameters.positions.reduce((total, position) => total + (position.openedAt.slice(0, 10) === day ? parseDecimalWeth(position.actualEntryGasCostEth) : 0n) + (position.lifecycleUpdatedAt?.slice(0, 10) === day ? parseDecimalWeth(position.lifecycleGasCostEth) : 0n), 0n)
+	const dailyGasSpentWeth = utcDayGasSpentWeth(parameters.positions, now)
 	return riskLimitMismatch(
 		{
 			capitalAtRiskWeth: parameters.capitalAtRiskWeth,

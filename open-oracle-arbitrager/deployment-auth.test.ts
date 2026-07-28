@@ -47,7 +47,8 @@ describe('deployment authentication', () => {
 	})
 
 	test('rejects manifests for another chain and duplicate identities', () => {
-		expect(() => parseDeploymentManifest({ ...manifest, chainId: 11_155_111 })).not.toThrow()
+		expect(() => parseDeploymentManifest({ ...manifest, chainId: 11_155_111 })).toThrow('mainnet requires chainId 1')
+		expect(() => parseDeploymentManifest({ ...manifest, chainId: 1, network: 'sepolia' })).toThrow('sepolia requires chainId 11155111')
 		expect(() => parseDeploymentManifest({ ...manifest, contracts: [...manifest.contracts, manifest.contracts[0]] })).toThrow('Duplicate deployment identity')
 		expect(() => parseDeploymentManifest({ ...manifest, unexpected: true })).toThrow('unsupported fields')
 		expect(() =>

@@ -203,6 +203,35 @@ type TransactionReceiptReader = {
 	getTransactionReceipt: (parameters: { hash: Hex }) => Promise<TransactionReceipt>
 }
 
+type ReceiptBlockReader = {
+	getBlock: (parameters: { blockNumber: bigint }) => Promise<{ hash?: Hex | null | undefined; timestamp: bigint }>
+}
+
+export async function receiptGasExpendituresWithQuorum(readers: readonly ReceiptBlockReader[], endpoints: readonly string[], label: string, receipts: readonly Pick<TransactionReceipt, 'blockHash' | 'blockNumber' | 'effectiveGasPrice' | 'gasUsed' | 'transactionHash'>[]) {
+	if (readers.length !== endpoints.length) throw new Error(`${label} block readers and endpoints differ`)
+	const observations = await Promise.all(
+		readers.map(async (reader, index) => ({
+			endpoint: endpointLabel(endpoints[index] ?? ''),
+			value: await Promise.all(
+				receipts.map(async receipt => {
+					const block = await reader.getBlock({ blockNumber: receipt.blockNumber })
+					if (block.hash === null || block.hash === undefined) throw new Error(`${label} receipt block ${receipt.blockNumber.toString()} is missing its canonical hash`)
+					if (block.hash.toLowerCase() !== receipt.blockHash.toLowerCase()) throw new Error(`${label} receipt ${receipt.transactionHash} is not in the canonical block`)
+					if (typeof receipt.effectiveGasPrice !== 'bigint') throw new Error(`${label} receipt ${receipt.transactionHash} is missing its effective gas price`)
+					const milliseconds = block.timestamp * 1_000n
+					if (milliseconds < 0n || milliseconds > 8_640_000_000_000_000n) throw new Error(`${label} receipt block timestamp is outside the supported date range`)
+					return {
+						costWei: receipt.gasUsed * receipt.effectiveGasPrice,
+						minedAt: new Date(Number(milliseconds)).toISOString(),
+						transactionHash: receipt.transactionHash,
+					}
+				}),
+			),
+		})),
+	)
+	return quorumValue(`${label} canonical receipt blocks`, observations)
+}
+
 export async function transactionReceiptsWithQuorum(readers: readonly TransactionReceiptReader[], endpoints: readonly string[], label: string, transactionHashes: readonly Hex[]) {
 	if (readers.length !== endpoints.length) throw new Error(`${label} receipt readers and endpoints differ`)
 	const observations = await Promise.all(

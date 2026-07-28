@@ -5,6 +5,40 @@
 	"type": "object",
 	"additionalProperties": false,
 	"required": ["version", "network", "chainId", "contracts"],
+	"allOf": [
+		{
+			"if": {
+				"properties": {
+					"network": {
+						"const": "mainnet"
+					}
+				}
+			},
+			"then": {
+				"properties": {
+					"chainId": {
+						"const": 1
+					}
+				}
+			}
+		},
+		{
+			"if": {
+				"properties": {
+					"network": {
+						"const": "sepolia"
+					}
+				}
+			},
+			"then": {
+				"properties": {
+					"chainId": {
+						"const": 11155111
+					}
+				}
+			}
+		}
+	],
 	"properties": {
 		"version": {
 			"const": 1
