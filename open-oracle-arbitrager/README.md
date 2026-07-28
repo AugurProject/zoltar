@@ -612,12 +612,15 @@ is acknowledged only after the file and parent directory have been synchronized.
 A malformed or torn non-empty JSONL record stops startup with its line number
 instead of being silently omitted from revenue or gas totals.
 
-The confirmed position and its complete history record are first committed
-together through a durable outbox in the position journal. The bot then appends the
-record to JSONL idempotently and clears the outbox with another synchronized
-position write. A crash before, during, or immediately after the append therefore
-replays the missing history operation on restart without losing the confirmed
-revenue record.
+Before submission, the position journal also records the immutable execution
+intent plus the signer nonce and submission block. Live confirmation and
+confirmation recovered after a restart both use that intent to commit the
+confirmed position and its complete history record together through a durable
+outbox. The bot then appends the record to JSONL idempotently and clears the
+outbox with another synchronized position write. A crash before, during, or
+immediately after confirmation or the append therefore replays the missing
+history operation on restart without losing or duplicating the confirmed revenue
+record.
 
 Position profit is tracked in ETH using the exact 1 WETH = 1 ETH unwrap relationship:
 
@@ -695,9 +698,13 @@ still consume gas. Public delivery exposes the opportunity to copying, reorderin
 front-running, and other MEV, and does not provide bundle confidentiality or
 next-block inclusion. Public lifecycle transactions are broadcast and confirmed
 sequentially, potentially across multiple blocks. Before each public step is sent,
-its hash and the original wallet-balance baseline are synced. Its quorum-confirmed
-mined hash, status, gas, and canonical UTC timestamp are then synced before the bot
-derives and sends the next step.
+its hash, signer nonce, submission block, and the original wallet-balance baseline
+are synced. Every observed repricing, cancellation, or unrelated same-nonce
+replacement is synced before its outcome is accepted. After a crash, independent
+RPCs scan canonical blocks for that sender and nonce if the replacement hash was
+not yet durable. Its quorum-confirmed mined hash, status, gas, canonical UTC
+timestamp, and receipt-block post-state are then synced before the bot derives and
+sends the next step.
 
 Private mode signs approvals and the executor call at consecutive nonces, requests
 `eth_callBundle` from every configured relay, and then fans the same ordered

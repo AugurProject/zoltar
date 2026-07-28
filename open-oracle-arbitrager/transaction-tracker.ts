@@ -1,4 +1,4 @@
-import type { Account, Address, Chain, Hex, PublicClient, Transport, WalletClient } from '@zoltar/shared/ethereum'
+import type { Account, Address, Chain, Hex, PublicClient, TransactionReplacement, Transport, WalletClient } from '@zoltar/shared/ethereum'
 import type { Configuration } from './configuration.js'
 import { sendRawTransactionToRpc } from './connectivity.js'
 import { attemptConfirmationRecovery, guardedTransactionSubmission, isExecutionPausedError, retryPrivateSubmissionWithinWindow, waitForResolvedTransaction } from './execution-orchestration.js'
@@ -120,7 +120,14 @@ export async function submitContractTransaction(
 	}
 }
 
-export async function waitForTrackedTransaction(client: ReadClient, wallet: WriteClient, config: Pick<Configuration, 'connectivity' | 'pollMilliseconds' | 'submission'>, submission: TrackedSubmission, track: TrackTransaction) {
+export async function waitForTrackedTransaction(
+	client: ReadClient,
+	wallet: WriteClient,
+	config: Pick<Configuration, 'connectivity' | 'pollMilliseconds' | 'submission'>,
+	submission: TrackedSubmission,
+	track: TrackTransaction,
+	onReplacement: (replacement: TransactionReplacement) => Promise<unknown> | unknown = () => {},
+) {
 	const account = wallet.account
 	const signMessage = account?.signMessage
 	if (account === undefined || signMessage === undefined) throw new Error('Execution requires a local relay authentication signer')
@@ -173,6 +180,8 @@ export async function waitForTrackedTransaction(client: ReadClient, wallet: Writ
 				},
 			)
 		},
+		onReplacement,
+		replacement => config.submission.mode === 'public' || replacement.reason === 'repriced',
 	)
 	const actualGasCostEth = decimalWeth(receiptGasCost(receipt))
 	track(trackedActivity(tracked, receipt.status === 'success' ? 'confirmed' : 'reverted', actualGasCostEth, receipt.transactionHash))

@@ -55,12 +55,14 @@ import {
 	lifecycleLastValidBlockNumber,
 	lifecycleReceiptSnapshotBlock,
 	lifecycleAttemptNeedsRecovery,
+	nextPublicLifecycleAction,
 	openOracleDisputeTiming,
 	opportunityDecision,
 	receiptGasExpendituresWithQuorum,
 	selectBestExecution,
 	simulateTrackedPrivateBundle,
 	trackPrivateBundleReceiptStatuses,
+	transactionHashBySenderNonceWithQuorum,
 	transactionReceiptsWithQuorum,
 } from './execution-orchestration.js'
 import { coordinatorPolicySafetyMismatch, gamePolicyMismatch, retainedReportIds, type CoordinatorGamePolicy } from './game-policy.js'
@@ -152,6 +154,10 @@ type EvaluatedOpportunity = {
 
 type ReadClient = PublicClient<Transport, Chain>
 type WriteClient = WalletClient<Transport, Chain, Account>
+type RecoveryConfiguration = Pick<Configuration, 'connectivity' | 'executor' | 'openOracle' | 'quorumRpcUrls'> & {
+	network: Pick<Configuration['network'], 'weth'>
+	submission: Pick<Configuration['submission'], 'mode'>
+}
 
 function dateFromBlockTimestamp(timestamp: bigint) {
 	const milliseconds = timestamp * 1_000n
@@ -159,7 +165,7 @@ function dateFromBlockTimestamp(timestamp: bigint) {
 	return new Date(Number(milliseconds))
 }
 
-async function confirmedGasExpenditures(readClients: readonly ReadClient[], config: Configuration, label: string, receipts: Parameters<typeof receiptGasExpendituresWithQuorum>[3]) {
+async function confirmedGasExpenditures(readClients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'quorumRpcUrls'>, label: string, receipts: Parameters<typeof receiptGasExpendituresWithQuorum>[3]) {
 	const expenditures = await receiptGasExpendituresWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], label, receipts)
 	return expenditures.map(expenditure => ({
 		costEth: decimalWeth(expenditure.costWei),
@@ -567,7 +573,7 @@ async function storedReportWithQuorum(clients: readonly ReadClient[], config: Co
 	return quorumValue(`stored report ${id.toString()} at block ${blockNumber.toString()}`, observations)
 }
 
-async function lifecycleBalancesWithQuorum(clients: readonly ReadClient[], config: Configuration, account: Address, token: Address, blockNumber: bigint) {
+async function lifecycleBalancesWithQuorum(clients: readonly ReadClient[], config: RecoveryConfiguration, account: Address, token: Address, blockNumber: bigint) {
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
 	const observations = await Promise.all(
 		clients.map(async (client, index) => {
@@ -782,14 +788,29 @@ async function executeDispute(
 	const executionSigned = signedTransactions.at(-1)?.signed
 	if (executionSigned === undefined) throw new Error('Execution transaction plan is empty')
 	const capitalAtRiskWeth = fundedCapitalAtRiskWeth(funding, refreshedQuote.hedgeAmountRep, hedgeLimitQuote, hedgeLimit)
-	const stagedPosition = {
+	let stagedPosition = {
 		account: account.address,
 		actualEntryGasCostEth: '0',
 		capitalAtRiskWeth: decimalWeth(capitalAtRiskWeth),
 		closedAt: undefined,
 		direction: refreshedQuote.direction,
+		entrySubmissionBlockNumber: quoteBlockNumber.toString(),
+		entrySubmissionMode: config.submission.mode,
+		entryTransactionNonce: executionSigned.transaction.nonce.toString(),
 		entryTransactionHash: executionSigned.hash,
 		entryTransactionHashes: signedTransactions.map(transaction => transaction.signed.hash),
+		executionIntent: {
+			direction: refreshedQuote.direction,
+			estimatedNetProfitWeth: decimalWeth(refreshedQuote.netProfitWeth),
+			estimatedProfitBeforeGasEth: decimalWeth(refreshedQuote.profitBeforeGasWeth),
+			pool: refreshedPool.address,
+			poolFee: refreshedPool.fee,
+			reportId,
+			requiredToken: formatTokenAmount(funding.token2, tokenMetadata.decimals),
+			requiredWeth: decimalWeth(funding.token1),
+			token: game.token2,
+			tokenSymbol: tokenMetadata.symbol,
+		},
 		gasExpenditures: [],
 		historyOutbox: undefined,
 		hedgeAmountToken: formatTokenAmount(refreshedQuote.hedgeAmountRep, tokenMetadata.decimals),
@@ -817,7 +838,6 @@ async function executeDispute(
 	} satisfies PositionRecord
 	let actualGasCost: bigint
 	let entryGasExpenditures: PositionRecord['gasExpenditures'] = []
-	let estimatedNetProfit = refreshedQuote.netProfitWeth
 	let receiptBlockNumber: bigint
 	let executionHash = executionSigned.hash
 	let executionLogs: readonly { address: Address; data: Hex; topics: readonly Hex[] }[] = []
@@ -827,7 +847,14 @@ async function executeDispute(
 		if (!meetsProfitThreshold(refreshedQuote, config.minimumProfitWeth, config.minimumProfitBps)) throw new Error('Arbitrage no longer meets the profit threshold at submission')
 		await guardedRiskSubmission(positionRiskLimitMismatch({ capitalAtRiskWeth, positions, projectedGasCostWeth: gasPrice * 1_200_000n + lifecycleGasReserveWeth }, config.riskLimits, dateFromBlockTimestamp(executionSnapshot.blockTimestamp)), () => persistPosition(stagedPosition))
 		const submission = await submitContractTransaction(client, wallet, config, executionSigned, { estimatedNetProfitEth: decimalWeth(refreshedQuote.netProfitWeth), kind: 'dispute', reportId }, isPaused, track)
-		const { receipt: observedReceipt, tracked } = await waitForTrackedTransaction(client, wallet, config, submission, track)
+		const { receipt: observedReceipt, tracked } = await waitForTrackedTransaction(client, wallet, config, submission, track, replacement =>
+			persistPosition({
+				...stagedPosition,
+				entryTransactionHash: replacement.transaction.hash,
+				entryTransactionHashes: [replacement.transaction.hash],
+				status: 'recovery-required',
+			}),
+		)
 		const receiptPosition = {
 			...stagedPosition,
 			entryTransactionHash: observedReceipt.transactionHash,
@@ -856,6 +883,30 @@ async function executeDispute(
 				status: 'closed',
 			})
 			throw new Error(`Dispute transaction reverted: ${receipt.transactionHash}`)
+		}
+		let publicHedgeExecution: ReturnType<typeof hedgeExecutionFromLogs> | undefined
+		try {
+			publicHedgeExecution = hedgeExecutionFromLogs(receipt.logs, executor)
+		} catch (error) {
+			if (!(error instanceof Error) || error.message !== 'Confirmed executor transaction did not emit HedgeAndDisputeExecuted') throw error
+			publicHedgeExecution = undefined
+		}
+		if (publicHedgeExecution === undefined || publicHedgeExecution.account.toLowerCase() !== account.address.toLowerCase() || publicHedgeExecution.reportId !== report.helper.reportId) {
+			const closedAt = entryGasExpenditures[0]?.minedAt
+			if (closedAt === undefined) throw new Error('Public replacement gas timestamp is unavailable')
+			await persistPosition({
+				...receiptPosition,
+				actualEntryGasCostEth: decimalWeth(actualGasCost),
+				capitalAtRiskWeth: '0',
+				closedAt,
+				gasExpenditures: entryGasExpenditures,
+				hedgedProfitBeforeGasEth: '0',
+				lockedToken: '0',
+				lockedWeth: '0',
+				realizedNetProfitEth: decimalSignedEth(-actualGasCost),
+				status: 'closed',
+			})
+			throw new Error(`Public dispute was replaced by a transaction without the expected executor event: ${receipt.transactionHash}`)
 		}
 		receiptBlockNumber = receipt.blockNumber
 		executionHash = receipt.transactionHash
@@ -906,7 +957,6 @@ async function executeDispute(
 		const totalGasUsed = relaySimulations.successful.reduce((maximum, result) => (result.simulation.totalGasUsed > maximum ? result.simulation.totalGasUsed : maximum), 0n)
 		const simulatedQuote = safetyAdjustedQuote(refreshedQuote, totalGasUsed * gasPrice, lifecycleGasReserveWeth, config)
 		const simulatedNetProfit = simulatedQuote.netProfitWeth
-		estimatedNetProfit = simulatedNetProfit
 		if (!meetsProfitThreshold(simulatedQuote, config.minimumProfitWeth, config.minimumProfitBps)) {
 			const error = new Error('Simulated bundle no longer meets the profit threshold')
 			for (const transaction of tracked) track(trackedActivity({ ...transaction, failedTargets: [{ error: error.message, target: 'local profitability check' }] }, 'submission-failed'))
@@ -916,6 +966,13 @@ async function executeDispute(
 			...transaction,
 			estimatedNetProfitEth: transaction.kind === 'dispute' ? decimalWeth(simulatedNetProfit) : undefined,
 		}))
+		stagedPosition = {
+			...stagedPosition,
+			executionIntent: {
+				...stagedPosition.executionIntent,
+				estimatedNetProfitWeth: decimalWeth(simulatedNetProfit),
+			},
+		}
 		let submission
 		try {
 			submission = await guardedTransactionSubmission(
@@ -1002,24 +1059,7 @@ async function executeDispute(
 		}
 	}
 	if (confirmedPosition === undefined) throw new Error('Confirmed position accounting is unavailable')
-	const trackedNetProfitEth = decimalSignedEth(calculateTrackedNetProfitEth(parseSignedDecimalEth(confirmedPosition.hedgedProfitBeforeGasEth), actualGasCost))
-	const record = {
-		actualGasCostEth: decimalWeth(actualGasCost),
-		blockNumber: receiptBlockNumber.toString(),
-		direction: refreshedQuote.direction,
-		estimatedNetProfitWeth: decimalWeth(estimatedNetProfit),
-		estimatedProfitBeforeGasEth: decimalWeth(refreshedQuote.profitBeforeGasWeth),
-		executedAt: new Date().toISOString(),
-		pool: refreshedPool.address,
-		poolFee: refreshedPool.fee,
-		reportId,
-		requiredToken: formatTokenAmount(funding.token2, tokenMetadata.decimals),
-		requiredWeth: decimalWeth(funding.token1),
-		token: game.token2,
-		tokenSymbol: tokenMetadata.symbol,
-		trackedNetProfitEth,
-		transactionHash: executionHash,
-	} satisfies ExecutionRecord
+	const record = executionRecordForConfirmedPosition(confirmedPosition, receiptBlockNumber, executionHash)
 	await persistPosition({ ...confirmedPosition, historyOutbox: record })
 	console.log(`report=${report.helper.reportId.toString()} dispute=${executionHash}`)
 	return record
@@ -1031,16 +1071,32 @@ function tokenDecimalsFromSnapshot(snapshot: { tokenDecimals: bigint }, reportId
 	return tokenDecimals
 }
 
-async function recoverPendingEntryWithQuorum(readClients: readonly ReadClient[], config: Configuration, position: PositionRecord, tokenDecimals: number, expectedBlockNumber?: bigint | undefined) {
+export function executionRecordForConfirmedPosition(position: PositionRecord, blockNumber: bigint, transactionHash: Hex): ExecutionRecord {
+	const intent = position.executionIntent
+	if (intent === undefined) throw new Error(`Position ${position.reportId} is missing its durable execution intent`)
+	const executedAt = position.gasExpenditures.find(expenditure => expenditure.transactionHash.toLowerCase() === transactionHash.toLowerCase())?.minedAt ?? position.gasExpenditures.at(-1)?.minedAt
+	if (executedAt === undefined) throw new Error(`Position ${position.reportId} is missing its confirmed execution timestamp`)
+	return {
+		...intent,
+		actualGasCostEth: position.actualEntryGasCostEth,
+		blockNumber: blockNumber.toString(),
+		executedAt,
+		trackedNetProfitEth: decimalSignedEth(calculateTrackedNetProfitEth(parseSignedDecimalEth(position.hedgedProfitBeforeGasEth), parseDecimalWeth(position.actualEntryGasCostEth))),
+		transactionHash,
+	}
+}
+
+export async function recoverPendingEntryWithQuorum(readClients: readonly ReadClient[], config: RecoveryConfiguration, position: PositionRecord, tokenDecimals: number, expectedBlockNumber?: bigint | undefined) {
 	const executor = config.executor
 	if (executor === undefined) throw new Error('Pending entry recovery requires the authenticated executor')
 	const receipts = await transactionReceiptsWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `pending entry ${position.reportId}`, position.entryTransactionHashes)
 	const firstReceipt = receipts[0]
 	const executorReceipt = receipts.at(-1)
+	const publicEntry = position.entrySubmissionMode === 'public' && expectedBlockNumber === undefined && receipts.length === 1
 	if (
 		firstReceipt === undefined ||
 		executorReceipt === undefined ||
-		receipts.some(receipt => receipt.status !== 'success' || receipt.blockNumber !== firstReceipt.blockNumber || receipt.blockHash.toLowerCase() !== firstReceipt.blockHash.toLowerCase() || (expectedBlockNumber !== undefined && receipt.blockNumber !== expectedBlockNumber))
+		(!publicEntry && receipts.some(receipt => receipt.status !== 'success' || receipt.blockNumber !== firstReceipt.blockNumber || receipt.blockHash.toLowerCase() !== firstReceipt.blockHash.toLowerCase() || (expectedBlockNumber !== undefined && receipt.blockNumber !== expectedBlockNumber)))
 	) {
 		throw new Error('Entry bundle receipts are missing, reverted, or split across blocks')
 	}
@@ -1050,31 +1106,67 @@ async function recoverPendingEntryWithQuorum(readClients: readonly ReadClient[],
 		const expectedHash = position.entryTransactionHashes[index]
 		if (expectedHash === undefined || receipt.transactionHash.toLowerCase() !== expectedHash.toLowerCase()) throw new Error('Entry bundle receipt hash does not match the durable journal')
 	}
-	const hedgeExecution = hedgeExecutionFromLogs(executorReceipt.logs, executor)
-	if (hedgeExecution.account.toLowerCase() !== position.account.toLowerCase() || hedgeExecution.reportId.toString() !== position.reportId) {
-		throw new Error('Executor hedge event does not match the durable position')
-	}
 	const actualEntryGasCost = receipts.reduce((total, receipt) => total + receiptGasCost(receipt), 0n)
 	const gasExpenditures = await confirmedGasExpenditures(readClients, config, `pending entry ${position.reportId}`, receipts)
+	let hedgeExecution: ReturnType<typeof hedgeExecutionFromLogs> | undefined
+	try {
+		hedgeExecution = hedgeExecutionFromLogs(executorReceipt.logs, executor)
+	} catch (error) {
+		if (!(error instanceof Error) || error.message !== 'Confirmed executor transaction did not emit HedgeAndDisputeExecuted') throw error
+		if (!publicEntry) throw new Error('Executor hedge event is missing from the durable entry receipt')
+	}
+	if (hedgeExecution === undefined || hedgeExecution.account.toLowerCase() !== position.account.toLowerCase() || hedgeExecution.reportId.toString() !== position.reportId) {
+		if (publicEntry) {
+			const closedAt = gasExpenditures.at(-1)?.minedAt
+			if (closedAt === undefined) throw new Error('Recovered public replacement gas timestamp is unavailable')
+			return {
+				position: {
+					...position,
+					actualEntryGasCostEth: decimalWeth(actualEntryGasCost),
+					capitalAtRiskWeth: '0',
+					closedAt,
+					entryTransactionHash: executorReceipt.transactionHash,
+					gasExpenditures,
+					hedgedProfitBeforeGasEth: '0',
+					lockedToken: '0',
+					lockedWeth: '0',
+					realizedNetProfitEth: decimalSignedEth(-actualEntryGasCost),
+					status: 'closed' as const,
+				},
+				receipts,
+			}
+		}
+		throw new Error('Executor hedge event does not match the durable position')
+	}
 	const actualProfitBeforeGas = recoveredHedgedProfitBeforeGasWeth(position.direction, parseSignedDecimalEth(position.hedgedProfitBeforeGasEth), parseDecimalWeth(position.hedgeWeth), hedgeExecution.hedgeAmountWeth)
+	const confirmedPosition = {
+		...position,
+		actualEntryGasCostEth: decimalWeth(actualEntryGasCost),
+		entryTransactionHash: executorReceipt.transactionHash,
+		gasExpenditures,
+		hedgeAmountToken: formatTokenAmount(hedgeExecution.hedgeAmountToken2, tokenDecimals),
+		hedgeWeth: decimalWeth(hedgeExecution.hedgeAmountWeth),
+		hedgedProfitBeforeGasEth: decimalSignedEth(actualProfitBeforeGas),
+		status: 'open' as const,
+	} satisfies PositionRecord
 	return {
 		position: {
-			...position,
-			actualEntryGasCostEth: decimalWeth(actualEntryGasCost),
-			entryTransactionHash: executorReceipt.transactionHash,
-			gasExpenditures,
-			hedgeAmountToken: formatTokenAmount(hedgeExecution.hedgeAmountToken2, tokenDecimals),
-			hedgeWeth: decimalWeth(hedgeExecution.hedgeAmountWeth),
-			hedgedProfitBeforeGasEth: decimalSignedEth(actualProfitBeforeGas),
-			status: 'open' as const,
+			...confirmedPosition,
+			historyOutbox: executionRecordForConfirmedPosition(confirmedPosition, executorReceipt.blockNumber, executorReceipt.transactionHash),
 		},
 		receipts,
 	}
 }
 
-async function reconcilePublicLifecycleBalances(readClients: readonly ReadClient[], config: Configuration, position: PositionRecord, snapshotBlockNumber: bigint) {
+export async function reconcilePublicLifecycleBalances(readClients: readonly ReadClient[], config: RecoveryConfiguration, position: PositionRecord, snapshotBlockNumber: bigint, expectedBlockHash: Hex) {
 	if (position.lifecycleTokenDecimals === undefined || position.lifecycleWalletTokenBefore === undefined || position.lifecycleWalletWethBefore === undefined) throw new Error('Public lifecycle balance journal is incomplete')
 	const balancesAfter = await lifecycleBalancesWithQuorum(readClients, config, position.account, position.token, snapshotBlockNumber)
+	return reconcilePublicLifecycleSnapshot(position, balancesAfter, expectedBlockHash)
+}
+
+export function reconcilePublicLifecycleSnapshot(position: PositionRecord, balancesAfter: { blockHash: Hex; blockTimestamp: bigint; tokenDecimals: bigint; walletToken: bigint; walletWeth: bigint }, expectedBlockHash: Hex) {
+	if (position.lifecycleTokenDecimals === undefined || position.lifecycleWalletTokenBefore === undefined || position.lifecycleWalletWethBefore === undefined) throw new Error('Public lifecycle balance journal is incomplete')
+	assertReceiptSnapshotBlockHash(expectedBlockHash, balancesAfter.blockHash, 'Public lifecycle')
 	const walletWethBefore = BigInt(position.lifecycleWalletWethBefore)
 	const walletTokenBefore = BigInt(position.lifecycleWalletTokenBefore)
 	if (balancesAfter.walletWeth < walletWethBefore || balancesAfter.walletToken < walletTokenBefore) throw new Error('Recovered public lifecycle reduced a tracked wallet balance')
@@ -1104,7 +1196,7 @@ async function reconcilePublicLifecycleBalances(readClients: readonly ReadClient
 	}
 }
 
-async function recoverPendingLifecycleWithQuorum(readClients: readonly ReadClient[], config: Configuration, position: PositionRecord): Promise<PositionRecord> {
+export async function recoverPendingLifecycleWithQuorum(readClients: readonly ReadClient[], config: RecoveryConfiguration, position: PositionRecord): Promise<PositionRecord> {
 	if (position.lifecycleTransactionHashes.length === 0 || position.lifecycleTargetBlockNumber === undefined || position.lifecycleTokenDecimals === undefined || position.lifecycleWalletTokenBefore === undefined || position.lifecycleWalletWethBefore === undefined) {
 		throw new Error('Lifecycle recovery journal is incomplete')
 	}
@@ -1134,7 +1226,7 @@ async function recoverPendingLifecycleWithQuorum(readClients: readonly ReadClien
 			}
 		}
 		const snapshotBlock = lifecycleReceiptSnapshotBlock(receipts, 0n)
-		return reconcilePublicLifecycleBalances(readClients, config, accountedPosition, snapshotBlock.blockNumber)
+		return reconcilePublicLifecycleBalances(readClients, config, accountedPosition, snapshotBlock.blockNumber, snapshotBlock.blockHash)
 	}
 	const snapshotBlock = lifecycleReceiptSnapshotBlock(receipts, targetBlockNumber)
 	const balancesAfter = await lifecycleBalancesWithQuorum(readClients, config, position.account, position.token, snapshotBlock.blockNumber)
@@ -1167,7 +1259,37 @@ async function recoverPendingLifecycleWithQuorum(readClients: readonly ReadClien
 	return { ...recovered, closedAt: new Date().toISOString(), realizedNetProfitEth: decimalSignedEth(realized), status: 'closed' }
 }
 
-async function processPositionLifecycle(client: ReadClient, readClients: readonly ReadClient[], wallet: WriteClient, config: Configuration, position: PositionRecord, blockNumber: bigint, persistPosition: (position: PositionRecord) => Promise<void>, track: TrackTransaction) {
+export async function discoverPublicReplacementWithQuorum(readClients: readonly ReadClient[], config: RecoveryConfiguration, position: PositionRecord, blockNumber: bigint, kind: 'entry' | 'lifecycle', persistPosition: (position: PositionRecord) => Promise<void>) {
+	const submissionBlockNumber = kind === 'entry' ? position.entrySubmissionBlockNumber : position.lifecycleSubmissionBlockNumber
+	const transactionNonce = kind === 'entry' ? position.entryTransactionNonce : position.lifecycleTransactionNonce
+	if (submissionBlockNumber === undefined || transactionNonce === undefined) return position
+	const discoveredHash = await transactionHashBySenderNonceWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `pending public ${kind} ${position.reportId}`, {
+		account: position.account,
+		fromBlockNumber: BigInt(submissionBlockNumber),
+		nonce: BigInt(transactionNonce),
+		toBlockNumber: blockNumber,
+	})
+	if (discoveredHash === undefined) return position
+	const currentHashes = kind === 'entry' ? position.entryTransactionHashes : position.lifecycleTransactionHashes
+	if (currentHashes.length === 1 && currentHashes[0]?.toLowerCase() === discoveredHash.toLowerCase()) return position
+	const updated =
+		kind === 'entry'
+			? {
+					...position,
+					entryTransactionHash: discoveredHash,
+					entryTransactionHashes: [discoveredHash],
+					status: 'recovery-required' as const,
+				}
+			: {
+					...position,
+					lifecycleTransactionHashes: [discoveredHash],
+					status: 'recovery-required' as const,
+				}
+	await persistPosition(updated)
+	return updated
+}
+
+export async function processPositionLifecycle(client: ReadClient, readClients: readonly ReadClient[], wallet: WriteClient, config: Configuration, position: PositionRecord, blockNumber: bigint, persistPosition: (position: PositionRecord) => Promise<void>, track: TrackTransaction) {
 	const account = wallet.account
 	const executor = config.executor
 	if (account.signTransaction === undefined || account.signMessage === undefined) throw new Error('Position recovery requires a local transaction and relay signer')
@@ -1188,6 +1310,12 @@ async function processPositionLifecycle(client: ReadClient, readClients: readonl
 	const balancesBefore = await lifecycleBalancesWithQuorum(readClients, config, account.address, position.token, blockNumber)
 	if (balancesBefore.blockHash.toLowerCase() !== storedSnapshot.blockHash.toLowerCase()) throw new Error('Lifecycle state reads use different canonical blocks')
 	let activePosition = position
+	if (activePosition.entrySubmissionMode === 'public' || activePosition.lifecycleTargetBlockNumber === '0') {
+		let pendingKind: 'entry' | 'lifecycle' | undefined
+		if (activePosition.actualEntryGasCostEth === '0' && activePosition.entrySubmissionMode === 'public') pendingKind = 'entry'
+		else if (lifecycleAttemptNeedsRecovery(activePosition) && activePosition.lifecycleTargetBlockNumber === '0') pendingKind = 'lifecycle'
+		if (pendingKind !== undefined) activePosition = await discoverPublicReplacementWithQuorum(readClients, config, activePosition, blockNumber, pendingKind, persistPosition)
+	}
 	const entryAccountingNeedsRecovery = activePosition.status === 'pending-entry' || (activePosition.status === 'recovery-required' && activePosition.actualEntryGasCostEth === '0')
 	if (entryAccountingNeedsRecovery) {
 		try {
@@ -1198,6 +1326,7 @@ async function processPositionLifecycle(client: ReadClient, readClients: readonl
 			throw new Error(`Pending position ${activePosition.reportId} entry receipt could not be recovered: ${errorMessage(error)}`)
 		}
 	}
+	if (activePosition.status === 'closed') return 'processed' as const
 	if (lifecycleAttemptNeedsRecovery(activePosition)) {
 		let recovered: PositionRecord
 		try {
@@ -1212,6 +1341,9 @@ async function processPositionLifecycle(client: ReadClient, readClients: readonl
 	}
 	if (activePosition.status === 'recovery-required' && activePosition.lifecycleReceiptRecovered) {
 		throw new Error(`Position ${activePosition.reportId} has recovered lifecycle receipts but requires manual residual-asset reconciliation`)
+	}
+	if (activePosition.lifecycleTargetBlockNumber === '0' && config.submission.mode !== 'public') {
+		throw new Error(`Position ${activePosition.reportId} must finish its journaled public lifecycle before changing submission mode`)
 	}
 	if (currentReporter && game.settlementTimestamp === 0n && !settlementEligible) {
 		return 'waiting' as const
@@ -1228,6 +1360,7 @@ async function processPositionLifecycle(client: ReadClient, readClients: readonl
 	const startingNonce = await pendingNonceWithQuorum(readClients, config, account.address)
 	const targetBlockNumber = blockNumber + 1n
 	const calls: { data: Hex; gas: bigint; kind: TransactionActivity['kind']; to: Address; token?: Address | undefined; tokenSymbol?: string | undefined }[] = []
+	const publicLifecycleAction = nextPublicLifecycleAction({ holderToken: balancesBefore.holderToken, holderWeth: balancesBefore.holderWeth, settlementEligible })
 	if (config.submission.mode === 'private') {
 		calls.push({
 			data: encodeFunctionData({
@@ -1240,7 +1373,7 @@ async function processPositionLifecycle(client: ReadClient, readClients: readonl
 			to: executor,
 		})
 	}
-	if (settlementEligible) {
+	if (config.submission.mode === 'private' ? settlementEligible : publicLifecycleAction === 'settle') {
 		calls.push({
 			data: encodeFunctionData({
 				abi: openOracleAbi,
@@ -1255,8 +1388,8 @@ async function processPositionLifecycle(client: ReadClient, readClients: readonl
 	const withdrawWeth = { data: encodeFunctionData({ abi: openOracleAbi, functionName: 'withdraw', args: [config.network.weth, 2n ** 256n - 1n] }), gas: 150_000n, kind: 'withdraw-weth' as const, to: config.openOracle, token: config.network.weth, tokenSymbol: 'WETH' }
 	const withdrawToken = { data: encodeFunctionData({ abi: openOracleAbi, functionName: 'withdraw', args: [position.token, 2n ** 256n - 1n] }), gas: 150_000n, kind: 'withdraw-token' as const, to: config.openOracle, token: position.token, tokenSymbol: position.tokenSymbol }
 	if (config.submission.mode === 'private') calls.push(withdrawWeth, withdrawToken)
-	else if (!settlementEligible && balancesBefore.holderWeth > 1n) calls.push(withdrawWeth)
-	else if (!settlementEligible && balancesBefore.holderToken > 1n) calls.push(withdrawToken)
+	else if (publicLifecycleAction === 'withdraw-weth') calls.push(withdrawWeth)
+	else if (publicLifecycleAction === 'withdraw-token') calls.push(withdrawToken)
 	const continuingPublicLifecycle = config.submission.mode === 'public' && activePosition.lifecycleTargetBlockNumber === '0' && activePosition.lifecycleTokenDecimals !== undefined && activePosition.lifecycleWalletTokenBefore !== undefined && activePosition.lifecycleWalletWethBefore !== undefined
 	const lifecycleTokenDecimals = continuingPublicLifecycle ? activePosition.lifecycleTokenDecimals : tokenDecimals.toString()
 	const lifecycleWalletTokenBefore = continuingPublicLifecycle ? activePosition.lifecycleWalletTokenBefore : balancesBefore.walletToken.toString()
@@ -1274,6 +1407,7 @@ async function processPositionLifecycle(client: ReadClient, readClients: readonl
 				lifecycleWalletWethBefore,
 			},
 			blockNumber,
+			storedSnapshot.blockHash,
 		)
 		await persistPosition(reconciled)
 		if (reconciled.status !== 'closed') throw new Error(`Position ${activePosition.reportId} has no remaining on-chain withdrawal but does not match its expected hedge-neutral assets`)
@@ -1298,8 +1432,10 @@ async function processPositionLifecycle(client: ReadClient, readClients: readonl
 	const serializedTransactions = signed.map(transaction => transaction.serializedTransaction)
 	const lifecyclePosition = {
 		...activePosition,
+		lifecycleSubmissionBlockNumber: blockNumber.toString(),
 		lifecycleTargetBlockNumber: config.submission.mode === 'private' ? targetBlockNumber.toString() : '0',
 		lifecycleTokenDecimals,
+		lifecycleTransactionNonce: startingNonce.toString(),
 		lifecycleTransactionHashes: signed.map(transaction => transaction.hash),
 		lifecycleUpdatedAt: new Date().toISOString(),
 		lifecycleWalletTokenBefore,
@@ -1312,7 +1448,13 @@ async function processPositionLifecycle(client: ReadClient, readClients: readonl
 		const call = calls[0]
 		if (transaction === undefined || call === undefined) throw new Error('Public lifecycle call metadata is incomplete')
 		const submission = await submitContractTransaction(client, wallet, config, transaction, { estimatedNetProfitEth: undefined, kind: call.kind, reportId: activePosition.reportId, token: call.token, tokenSymbol: call.tokenSymbol }, () => false, track)
-		const { receipt } = await waitForTrackedTransaction(client, wallet, config, submission, track)
+		const { receipt } = await waitForTrackedTransaction(client, wallet, config, submission, track, replacement =>
+			persistPosition({
+				...lifecyclePosition,
+				lifecycleTransactionHashes: [replacement.transaction.hash],
+				status: 'recovery-required',
+			}),
+		)
 		const observedPosition = {
 			...lifecyclePosition,
 			lifecycleTransactionHashes: [receipt.transactionHash],
@@ -1741,6 +1883,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 		for (const position of positions.filter(candidate => candidate.historyOutbox !== undefined)) {
 			const record = position.historyOutbox
 			if (record === undefined) continue
+			if (!state.executionHistory.some(existing => existing.transactionHash.toLowerCase() === record.transactionHash.toLowerCase())) state.executionHistory.unshift(record)
 			await appendExecutionHistoryIfMissing(config.historyFile, record)
 			await persistPosition({ ...position, historyOutbox: undefined })
 		}
@@ -2052,7 +2195,9 @@ async function main() {
 	}
 }
 
-main().catch(error => {
-	console.error(errorMessage(error))
-	process.exitCode = 1
-})
+if (import.meta.main) {
+	main().catch(error => {
+		console.error(errorMessage(error))
+		process.exitCode = 1
+	})
+}

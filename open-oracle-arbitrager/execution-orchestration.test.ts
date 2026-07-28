@@ -9,17 +9,16 @@ import {
 	executionTokenAllowed,
 	finalizeSubmittedLifecycleAttempt,
 	fundingTransactionPlan,
-	flushExecutionHistory,
 	guardedTransactionSubmission,
 	guardedRiskSubmission,
 	journaledSubmission,
 	lifecycleLastValidBlockNumber,
 	lifecycleReceiptSnapshotBlock,
 	lifecycleAttemptNeedsRecovery,
+	nextPublicLifecycleAction,
 	openOracleDisputeTiming,
 	opportunityDecision,
 	privateBundleReceiptStatus,
-	recordConfirmedExecution,
 	receiptGasExpendituresWithQuorum,
 	retryPrivateSubmissionWithinWindow,
 	runFundedExecution,
@@ -27,10 +26,10 @@ import {
 	signAndSubmitOpenOracleDispute,
 	simulateTrackedPrivateBundle,
 	trackPrivateBundleReceiptStatuses,
+	transactionHashBySenderNonceWithQuorum,
 	transactionReceiptsWithQuorum,
 	waitForResolvedTransaction,
 } from './execution-orchestration.js'
-import type { ExecutionRecord } from './operator-state.js'
 import { savePositionJournal, type PositionJournalFilesystem, type PositionRecord } from './position-store.js'
 import { assertSubmissionWindowOpen } from './transaction-submission.js'
 
@@ -38,23 +37,6 @@ const address = '0x0000000000000000000000000000000000000001' as Address
 const reporter = '0x0000000000000000000000000000000000000002' as Address
 const originalHash = `0x${'34'.repeat(32)}` as Hex
 const replacementHash = `0x${'56'.repeat(32)}` as Hex
-const record: ExecutionRecord = {
-	actualGasCostEth: '0.002',
-	blockNumber: '100',
-	direction: 'sell-rep',
-	estimatedNetProfitWeth: '0.05',
-	estimatedProfitBeforeGasEth: '0.052',
-	executedAt: '2026-07-24T00:00:00.000Z',
-	pool: address,
-	poolFee: 10_000,
-	reportId: '7',
-	requiredToken: '1',
-	requiredWeth: '2',
-	token: address,
-	tokenSymbol: 'REP',
-	trackedNetProfitEth: '0.05',
-	transactionHash: `0x${'12'.repeat(32)}` as Hex,
-}
 
 function lifecyclePosition(): PositionRecord {
 	return {
@@ -496,21 +478,6 @@ describe('funded execution orchestration', () => {
 		}
 	})
 
-	test('keeps a confirmed record visible and queued when persistence fails', async () => {
-		const visible: ExecutionRecord[] = []
-		const pending: ExecutionRecord[] = []
-		recordConfirmedExecution(visible, pending, record)
-		await expect(flushExecutionHistory(pending, () => Promise.reject(new Error('disk unavailable')))).rejects.toThrow('disk unavailable')
-		expect(visible).toEqual([record])
-		expect(pending).toEqual([record])
-		const persisted: ExecutionRecord[] = []
-		await flushExecutionHistory(pending, async queued => {
-			persisted.push(queued)
-		})
-		expect(persisted).toEqual([record])
-		expect(pending).toEqual([])
-	})
-
 	test('blocks on transient confirmation failures and records a repriced replacement', async () => {
 		let attempts = 0
 		const retries: unknown[] = []
@@ -534,6 +501,70 @@ describe('funded execution orchestration', () => {
 		expect(attempts).toBe(2)
 		expect(retries).toHaveLength(1)
 		expect(receipt.transactionHash).toBe(replacementHash)
+	})
+
+	test('durably records every public replacement reason before returning its receipt', async () => {
+		for (const reason of ['repriced', 'cancelled', 'replaced'] as const) {
+			const persisted: string[] = []
+			let releasePersistence: (() => void) | undefined
+			const persistence = new Promise<void>(resolve => {
+				releasePersistence = resolve
+			})
+			let settled = false
+			const waiting = waitForResolvedTransaction(
+				originalHash,
+				async ({ onReplaced }) => {
+					onReplaced(replacement(reason))
+					return transactionReceipt()
+				},
+				() => Promise.resolve(),
+				() => {},
+				value => {
+					persisted.push(`${value.reason}:${value.transaction.hash}`)
+					return persistence
+				},
+				() => true,
+			).then(receipt => {
+				settled = true
+				return receipt
+			})
+			await Promise.resolve()
+			expect(settled).toBe(false)
+			expect(persisted).toEqual([`${reason}:${replacementHash}`])
+			if (releasePersistence === undefined) throw new Error('Replacement persistence release is unavailable')
+			releasePersistence()
+			expect((await waiting).transactionHash).toBe(replacementHash)
+		}
+	})
+
+	test('serializes multiple replacement journal writes in observation order', async () => {
+		const firstHash = `0x${'55'.repeat(32)}` as Hex
+		const persisted: Hex[] = []
+		let releaseFirst: (() => void) | undefined
+		const firstPersistence = new Promise<void>(resolve => {
+			releaseFirst = resolve
+		})
+		const waiting = waitForResolvedTransaction(
+			originalHash,
+			async ({ onReplaced }) => {
+				onReplaced({ ...replacement('repriced'), transaction: { hash: firstHash } })
+				onReplaced(replacement('repriced'))
+				return transactionReceipt()
+			},
+			() => Promise.resolve(),
+			() => {},
+			async value => {
+				if (value.transaction.hash === firstHash) await firstPersistence
+				persisted.push(value.transaction.hash)
+			},
+			() => true,
+		)
+		await Promise.resolve()
+		expect(persisted).toEqual([])
+		if (releaseFirst === undefined) throw new Error('First replacement persistence release is unavailable')
+		releaseFirst()
+		expect((await waiting).transactionHash).toBe(replacementHash)
+		expect(persisted).toEqual([firstHash, replacementHash])
 	})
 
 	test('continues receipt polling when private confirmation recovery itself fails', async () => {
@@ -562,6 +593,7 @@ describe('funded execution orchestration', () => {
 
 	test('rejects cancellations and unrelated replacements definitively', async () => {
 		for (const reason of ['cancelled', 'replaced'] as const) {
+			const persisted: string[] = []
 			await expect(
 				waitForResolvedTransaction(
 					originalHash,
@@ -570,9 +602,54 @@ describe('funded execution orchestration', () => {
 						return transactionReceipt()
 					},
 					() => Promise.resolve(),
+					() => {},
+					value => {
+						persisted.push(value.transaction.hash)
+					},
 				),
 			).rejects.toThrow(`was ${reason}`)
+			expect(persisted).toEqual([replacementHash])
 		}
+	})
+
+	test('discovers a canonical replacement by durable sender and nonce across RPCs', async () => {
+		const replacementTransaction = { from: address, hash: replacementHash, nonce: 9n }
+		const reader = {
+			getBlock: ({ blockNumber }: { blockNumber: bigint; includeTransactions: true }) =>
+				Promise.resolve({
+					transactions: blockNumber === 102n ? [replacementTransaction] : [],
+				}),
+			getTransactionCount: ({ blockNumber }: { address: Address; blockNumber: bigint }) => Promise.resolve(blockNumber >= 102n ? 10n : 9n),
+		}
+		const hash = await transactionHashBySenderNonceWithQuorum([reader, reader], ['https://rpc-a.example', 'https://rpc-b.example'], 'public lifecycle', {
+			account: address,
+			fromBlockNumber: 100n,
+			nonce: 9n,
+			toBlockNumber: 103n,
+		})
+		expect(hash).toBe(replacementHash)
+	})
+
+	test('fails closed when RPCs disagree on a sender-and-nonce replacement', async () => {
+		const reader = (hash: Hex) => ({
+			getBlock: () => Promise.resolve({ transactions: [{ from: address, hash, nonce: 9n }] }),
+			getTransactionCount: () => Promise.resolve(10n),
+		})
+		await expect(
+			transactionHashBySenderNonceWithQuorum([reader(originalHash), reader(replacementHash)], ['https://rpc-a.example', 'https://rpc-b.example'], 'public entry', {
+				account: address,
+				fromBlockNumber: 100n,
+				nonce: 9n,
+				toBlockNumber: 100n,
+			}),
+		).rejects.toThrow('RPC disagreement')
+	})
+
+	test('advances the public lifecycle through settle, WETH, token, and final reconciliation', () => {
+		expect(nextPublicLifecycleAction({ holderToken: 0n, holderWeth: 0n, settlementEligible: true })).toBe('settle')
+		expect(nextPublicLifecycleAction({ holderToken: 8n, holderWeth: 7n, settlementEligible: false })).toBe('withdraw-weth')
+		expect(nextPublicLifecycleAction({ holderToken: 8n, holderWeth: 1n, settlementEligible: false })).toBe('withdraw-token')
+		expect(nextPublicLifecycleAction({ holderToken: 1n, holderWeth: 1n, settlementEligible: false })).toBe('reconcile')
 	})
 
 	test('returns a definitive reverted receipt without retrying', async () => {

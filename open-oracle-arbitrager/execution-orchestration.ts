@@ -1,6 +1,6 @@
 import type { Address, Hex, TransactionReceipt, TransactionReplacement } from '@zoltar/shared/ethereum'
 import { endpointLabel } from './connectivity.js'
-import type { ExecutionRecord, OpportunitySnapshot } from './operator-state.js'
+import type { OpportunitySnapshot } from './operator-state.js'
 import type { PositionRecord } from './position-store.js'
 import { quorumValue } from './read-quorum.js'
 import { isSelfReport } from './strategy.js'
@@ -36,6 +36,13 @@ export function privateBundleReceiptStatus(receipt: Pick<TransactionReceipt, 'bl
 
 export function lifecycleLastValidBlockNumber(mode: SubmissionMode, targetBlockNumber: bigint) {
 	return mode === 'private' ? targetBlockNumber : undefined
+}
+
+export function nextPublicLifecycleAction(parameters: { holderToken: bigint; holderWeth: bigint; settlementEligible: boolean }) {
+	if (parameters.settlementEligible) return 'settle' as const
+	if (parameters.holderWeth > 1n) return 'withdraw-weth' as const
+	if (parameters.holderToken > 1n) return 'withdraw-token' as const
+	return 'reconcile' as const
 }
 
 export function lifecycleReceiptSnapshotBlock(receipts: readonly Pick<TransactionReceipt, 'blockHash' | 'blockNumber' | 'status'>[], targetBlockNumber: bigint) {
@@ -113,19 +120,30 @@ function isRejectedReplacementError(error: unknown) {
 	return error instanceof Error && error.name === 'RejectedTransactionReplacementError'
 }
 
-export async function waitForResolvedTransaction(hash: Hex, wait: (parameters: { hash: Hex; onReplaced: (replacement: TransactionReplacement) => void }) => Promise<TransactionReceipt>, retryDelay: () => Promise<unknown> = () => Bun.sleep(1_000), onRetry: (error: unknown) => Promise<unknown> | unknown = () => {}) {
+export async function waitForResolvedTransaction(
+	hash: Hex,
+	wait: (parameters: { hash: Hex; onReplaced: (replacement: TransactionReplacement) => void }) => Promise<TransactionReceipt>,
+	retryDelay: () => Promise<unknown> = () => Bun.sleep(1_000),
+	onRetry: (error: unknown) => Promise<unknown> | unknown = () => {},
+	onReplacement: (replacement: TransactionReplacement) => Promise<unknown> | unknown = () => {},
+	acceptReplacement: (replacement: TransactionReplacement) => boolean = replacement => replacement.reason === 'repriced',
+) {
 	while (true) {
 		let replacement: TransactionReplacement | undefined
+		let replacementPersistence: Promise<unknown> | undefined
 		try {
 			const receipt = await wait({
 				hash,
 				onReplaced: value => {
 					replacement = value
+					replacementPersistence = (replacementPersistence ?? Promise.resolve()).then(() => onReplacement(value))
 				},
 			})
-			if (replacement !== undefined && replacement.reason !== 'repriced') throw rejectedReplacementError(replacement)
+			await replacementPersistence
+			if (replacement !== undefined && !acceptReplacement(replacement)) throw rejectedReplacementError(replacement)
 			return receipt
 		} catch (error) {
+			await replacementPersistence
 			if (isRejectedReplacementError(error)) throw error
 			await onRetry(error)
 			await retryDelay()
@@ -180,6 +198,47 @@ export async function canonicalBlockHashWithQuorum(readers: readonly BlockHashRe
 		}),
 	)
 	return quorumValue(`${label} canonical block ${blockNumber.toString()}`, observations)
+}
+
+type SenderNonceBlockReader = {
+	getBlock: (parameters: { blockNumber: bigint; includeTransactions: true }) => Promise<{
+		transactions: readonly unknown[]
+	}>
+	getTransactionCount: (parameters: { address: Address; blockNumber: bigint }) => Promise<bigint>
+}
+
+export async function transactionHashBySenderNonceWithQuorum(readers: readonly SenderNonceBlockReader[], endpoints: readonly string[], label: string, parameters: { account: Address; fromBlockNumber: bigint; nonce: bigint; toBlockNumber: bigint }) {
+	if (readers.length !== endpoints.length) throw new Error(`${label} block readers and endpoints differ`)
+	if (parameters.toBlockNumber < parameters.fromBlockNumber) throw new Error(`${label} replacement scan range is invalid`)
+	const observations = await Promise.all(
+		readers.map(async (reader, index) => {
+			let value: Hex | undefined
+			if ((await reader.getTransactionCount({ address: parameters.account, blockNumber: parameters.toBlockNumber })) > parameters.nonce) {
+				let lower = parameters.fromBlockNumber
+				let upper = parameters.toBlockNumber
+				while (lower < upper) {
+					const middle = lower + (upper - lower) / 2n
+					const transactionCount = await reader.getTransactionCount({ address: parameters.account, blockNumber: middle })
+					if (transactionCount > parameters.nonce) upper = middle
+					else lower = middle + 1n
+				}
+				const block = await reader.getBlock({ blockNumber: lower, includeTransactions: true })
+				const transaction = block.transactions.find(candidate => {
+					if (typeof candidate !== 'object' || candidate === null || Array.isArray(candidate)) return false
+					const record = candidate as Record<string, unknown>
+					return typeof record['from'] === 'string' && record['from'].toLowerCase() === parameters.account.toLowerCase() && record['nonce'] === parameters.nonce && typeof record['hash'] === 'string' && /^0x[0-9a-fA-F]{64}$/.test(record['hash'])
+				})
+				if (typeof transaction === 'object' && transaction !== null && !Array.isArray(transaction)) {
+					value = (transaction as { hash: Hex }).hash
+				}
+			}
+			return {
+				endpoint: endpointLabel(endpoints[index] ?? ''),
+				value,
+			}
+		}),
+	)
+	return quorumValue(`${label} replacement transaction`, observations)
 }
 
 export function lifecycleAttemptNeedsRecovery(position: PositionRecord) {
@@ -299,20 +358,6 @@ export async function runFundedExecution<TPrepared, TSubmitted, TResult>(
 	await guardedExecutionStep(isPaused, () => stages.simulate(prepared))
 	const submitted = await guardedExecutionStep(isPaused, () => stages.submit(prepared))
 	return stages.confirm(submitted, prepared, approvalGasCost)
-}
-
-export function recordConfirmedExecution(visible: ExecutionRecord[], pending: ExecutionRecord[], record: ExecutionRecord) {
-	if (!visible.some(existing => existing.transactionHash.toLowerCase() === record.transactionHash.toLowerCase())) visible.unshift(record)
-	pending.push(record)
-}
-
-export async function flushExecutionHistory(pending: ExecutionRecord[], append: (record: ExecutionRecord) => Promise<void>) {
-	while (pending.length !== 0) {
-		const record = pending[0]
-		if (record === undefined) return
-		await append(record)
-		pending.shift()
-	}
 }
 
 export function selectBestExecution<T>(candidates: readonly T[], score: (candidate: T) => bigint) {
