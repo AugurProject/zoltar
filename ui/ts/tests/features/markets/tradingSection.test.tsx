@@ -6,11 +6,13 @@ import { useEffect, useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { zeroAddress, zeroHash } from '@zoltar/shared/ethereum'
 import { TradingSection } from '../../../features/markets/components/TradingSection.js'
+import { GlobalTransactionPresentationProvider } from '../../../components/GlobalTransactionPresentationContext.js'
 import { deriveHasForkActivity } from '../../../features/truth-auctions/lib/forkAuction.js'
 import { NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_ALLOWANCE_MESSAGE, UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE } from '../../../features/markets/lib/trading.js'
 import type { AccountState, TradingFormState } from '../../../types/app.js'
 import type { ListedSecurityPool, MarketDetails, TradingActionResult, TradingDetails, TradingShareBalances, ZoltarUniverseSummary } from '../../../types/contracts.js'
 import type { TradingSectionProps } from '../../../features/types.js'
+import type { GlobalTransactionPresentation } from '../../../types/components.js'
 import { installDomEnvironment } from '../../testUtils/domEnvironment.js'
 import { renderIntoDocument } from '../../testUtils/renderIntoDocument.js'
 
@@ -327,15 +329,29 @@ void describe('TradingSection', () => {
 	})
 
 	void test('closes a trading modal for a new result without blocking the same modal from reopening', async () => {
-		let updateTradingResult: ((result: TradingActionResult | undefined) => void) | undefined
+		let completeTradingOperation: ((result: TradingActionResult) => void) | undefined
 
 		function TradingResultHarness() {
 			const [tradingResult, setTradingResult] = useState<TradingActionResult | undefined>(undefined)
+			const [transaction, setTransaction] = useState<GlobalTransactionPresentation | undefined>()
 			useEffect(() => {
-				updateTradingResult = setTradingResult
+				completeTradingOperation = result => {
+					setTradingResult(result)
+					setTransaction({
+						dismissKey: result.hash,
+						hash: result.hash,
+						operationKey: 'trading-request-1',
+						title: 'Complete sets minted',
+						tone: 'success',
+					})
+				}
 			}, [])
 
-			return <TradingSection {...createTradingSectionProps({ tradingResult })} />
+			return (
+				<GlobalTransactionPresentationProvider transaction={transaction}>
+					<TradingSection {...createTradingSectionProps({ tradingResult })} />
+				</GlobalTransactionPresentationProvider>
+			)
 		}
 
 		const renderedComponent = await renderIntoDocument(<TradingResultHarness />)
@@ -348,8 +364,8 @@ void describe('TradingSection', () => {
 		expect(documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' })).not.toBeNull()
 
 		await act(() => {
-			if (updateTradingResult === undefined) throw new Error('Expected trading result setter')
-			updateTradingResult({
+			if (completeTradingOperation === undefined) throw new Error('Expected trading operation completion')
+			completeTradingOperation({
 				action: 'createCompleteSet',
 				hash: zeroHash,
 				securityPoolAddress: zeroAddress,

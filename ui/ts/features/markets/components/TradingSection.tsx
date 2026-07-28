@@ -1,7 +1,7 @@
 import * as commonCopy from '../../../copy/common.js'
 import * as tradingCopy from '../../../copy/trading.js'
 import * as transactionReviewCopy from '../../../copy/transactionReview.js'
-import { useEffect, useState } from 'preact/hooks'
+import { useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/shared/ethereum'
 import { ActionLauncherCard } from '../../../components/ActionLauncherCard.js'
 import { AddressValue } from '../../../components/AddressValue.js'
@@ -236,9 +236,9 @@ export function TradingSection({
 			? []
 			: [
 					{ label: commonCopy.question, value: selectedPool.marketDetails.title },
-					{ label: commonCopy.securityPoolAddress, value: <AddressValue address={selectedPool.securityPoolAddress} /> },
-					{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={selectedPool.universeId} /> },
-					{ label: commonCopy.outcome, value: outcome },
+					{ identityKey: 'security-pool', label: commonCopy.securityPoolAddress, value: <AddressValue address={selectedPool.securityPoolAddress} /> },
+					{ identityKey: 'universe', label: commonCopy.universe, value: <TransactionUniverseValue universeId={selectedPool.universeId} /> },
+					{ identityKey: 'outcome', label: commonCopy.outcome, value: outcome },
 				]
 	const retentionFeeDisclosure = [
 		{
@@ -246,16 +246,6 @@ export function TradingSection({
 			title: tradingCopy.estimateDetails,
 		},
 	]
-	useEffect(() => {
-		if (tradingResult === undefined) return
-		setActiveModal(currentModal => {
-			if (tradingResult.action === 'createCompleteSet' && currentModal === 'mint') return undefined
-			if (tradingResult.action === 'redeemCompleteSet' && currentModal === 'redeem-complete-sets') return undefined
-			if (tradingResult.action === 'migrateShares' && currentModal === 'migrate-shares') return undefined
-			if (tradingResult.action === 'redeemShares' && currentModal === 'redeem-shares') return undefined
-			return currentModal
-		})
-	}, [tradingResult])
 	const toggleTargetOutcomeIndex = (outcomeIndex: bigint) => {
 		if (selectedTargetOutcomeIndexSet.has(outcomeIndex.toString())) {
 			onTradingFormChange({
@@ -374,7 +364,7 @@ export function TradingSection({
 
 			<ErrorNotice message={tradingError} />
 
-			<OperationModal context={getTransactionContext('Complete set · Yes + No + Invalid')} isOpen={activeModal === 'mint'} onClose={() => setActiveModal(undefined)} title={tradingCopy.mintCompleteSets}>
+			<OperationModal closeOnSuccessKey={tradingResult?.action === 'createCompleteSet' ? tradingResult.hash : undefined} context={getTransactionContext('Complete set · Yes + No + Invalid')} isOpen={activeModal === 'mint'} onClose={() => setActiveModal(undefined)} title={tradingCopy.mintCompleteSets}>
 				{selectedPool === undefined ? undefined : (
 					<MetricGrid>
 						<MetricField label={tradingCopy.bondAllowanceInUse}>
@@ -436,7 +426,7 @@ export function TradingSection({
 				</div>
 			</OperationModal>
 
-			<OperationModal context={getTransactionContext('Complete set · Yes + No + Invalid')} isOpen={activeModal === 'redeem-complete-sets'} onClose={() => setActiveModal(undefined)} title={tradingCopy.redeemCompleteSets}>
+			<OperationModal closeOnSuccessKey={tradingResult?.action === 'redeemCompleteSet' ? tradingResult.hash : undefined} context={getTransactionContext('Complete set · Yes + No + Invalid')} isOpen={activeModal === 'redeem-complete-sets'} onClose={() => setActiveModal(undefined)} title={tradingCopy.redeemCompleteSets}>
 				<label className='field'>
 					<span>{tradingCopy.redeemCompleteSetsAmount}</span>
 					<div className='field-inline'>
@@ -489,7 +479,13 @@ export function TradingSection({
 				</div>
 			</OperationModal>
 
-			<OperationModal context={getTransactionContext(getReportingOutcomeLabel(tradingForm.selectedShareOutcome))} isOpen={activeModal === 'migrate-shares'} onClose={() => setActiveModal(undefined)} title={tradingCopy.migrateForkedSharesTitle}>
+			<OperationModal
+				closeOnSuccessKey={tradingResult?.action === 'migrateShares' ? tradingResult.hash : undefined}
+				context={getTransactionContext(getReportingOutcomeLabel(tradingForm.selectedShareOutcome))}
+				isOpen={activeModal === 'migrate-shares'}
+				onClose={() => setActiveModal(undefined)}
+				title={tradingCopy.migrateForkedSharesTitle}
+			>
 				<label className='field'>
 					<span>{tradingCopy.shareOutcomeToMigrate}</span>
 					<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={tradingForm.selectedShareOutcome} onChange={selectedShareOutcome => onTradingFormChange({ selectedShareOutcome })} disabled={shareMigrationSelectionDisabled} />
@@ -539,6 +535,7 @@ export function TradingSection({
 			</OperationModal>
 
 			<OperationModal
+				closeOnSuccessKey={tradingResult?.action === 'redeemShares' ? tradingResult.hash : undefined}
 				context={getTransactionContext(selectedPool?.questionOutcome === undefined || selectedPool.questionOutcome === 'none' ? commonCopy.unavailable : getReportingOutcomeLabel(selectedPool.questionOutcome))}
 				isOpen={activeModal === 'redeem-shares'}
 				onClose={() => setActiveModal(undefined)}

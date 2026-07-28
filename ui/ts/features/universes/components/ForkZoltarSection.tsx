@@ -17,6 +17,8 @@ import { TransactionReview } from '../../../components/TransactionReview.js'
 import { TransactionNetworkValue } from '../../../components/TransactionNetworkValue.js'
 import { WorkflowSubsection } from '../../../components/WorkflowSubsection.js'
 import { sameCaseInsensitiveText } from '../../../lib/caseInsensitive.js'
+import { useChainTimestamp } from '../../../lib/chainTimestamp.js'
+import { formatRelativeTimestamp, formatTimestamp } from '../../../lib/formatters.js'
 import { resolveLoadableValueState, type LoadableValueState } from '../../../lib/loadState.js'
 import { deriveTokenApprovalRequirement, type TokenApprovalState } from '../../../lib/tokenApproval.js'
 import { getReportPresentation, getUniversePresentation, getWalletPresentation } from '../../../lib/userCopy.js'
@@ -26,6 +28,7 @@ const FORK_CONFIRMATION = 'FORK'
 
 type ForkZoltarSectionProps = {
 	accountAddress: Address | undefined
+	currentTimestamp?: bigint | undefined
 	hasLoadedZoltarQuestions: boolean
 	isMainnet: boolean
 	loadingZoltarForkAccess: boolean
@@ -45,6 +48,7 @@ type ForkZoltarSectionProps = {
 }
 export function ForkZoltarSection({
 	accountAddress,
+	currentTimestamp,
 	hasLoadedZoltarQuestions,
 	isMainnet,
 	loadingZoltarForkAccess,
@@ -63,6 +67,8 @@ export function ForkZoltarSection({
 	zoltarUniverseState,
 }: ForkZoltarSectionProps) {
 	const [forkConfirmation, setForkConfirmation] = useState({ questionId: '', value: '' })
+	const chainCurrentTimestamp = useChainTimestamp()
+	const effectiveCurrentTimestamp = currentTimestamp ?? chainCurrentTimestamp
 	const rootUniverse = zoltarUniverse
 	const universeMissing = zoltarUniverseState === 'missing'
 	const hasForked = rootUniverse?.hasForked === true
@@ -75,13 +81,14 @@ export function ForkZoltarSection({
 	const confirmationValue = forkConfirmation.questionId === selectedQuestionId ? forkConfirmation.value : ''
 	const hasConfirmedFork = confirmationValue.trim() === FORK_CONFIRMATION
 	const selectedQuestion = selectedQuestionId === '' ? undefined : zoltarQuestions.find(question => sameCaseInsensitiveText(question.questionId, selectedQuestionId))
+	const selectedQuestionHasEnded = selectedQuestion === undefined || effectiveCurrentTimestamp === undefined ? undefined : effectiveCurrentTimestamp >= selectedQuestion.endTime
 	const selectedQuestionLookupState = resolveLoadableValueState({
 		isLoading: loadingZoltarQuestions,
 		isMissing: hasSelectedQuestionId && hasLoadedZoltarQuestions && selectedQuestion === undefined,
 		value: selectedQuestion,
 	})
 	const selectedQuestionPresentation = hasSelectedQuestionId && selectedQuestionLookupState !== 'ready' ? getReportPresentation({ kind: 'question', state: selectedQuestionLookupState }) : undefined
-	const canFork = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && !hasForked && !zoltarForkPending && selectedQuestion !== undefined && hasEnoughRep && hasEnoughApproval && hasForkEconomics && hasConfirmedFork
+	const canFork = accountAddress !== undefined && isMainnet && rootUniverse !== undefined && !hasForked && !zoltarForkPending && selectedQuestion !== undefined && selectedQuestionHasEnded === true && hasEnoughRep && hasEnoughApproval && hasForkEconomics && hasConfirmedFork
 	const resultingRepBalance = rootUniverse === undefined || zoltarForkRepBalance === undefined || zoltarForkRepBalance < rootUniverse.forkThreshold ? undefined : zoltarForkRepBalance - rootUniverse.forkThreshold
 	const permanentRepBurn = rootUniverse?.forkBurnDivisor === undefined || rootUniverse.forkBurnDivisor <= 1n ? undefined : rootUniverse.forkThreshold / rootUniverse.forkBurnDivisor
 	const migrationCustodyCredit = rootUniverse === undefined || permanentRepBurn === undefined ? undefined : rootUniverse.forkThreshold - permanentRepBurn
@@ -100,6 +107,8 @@ export function ForkZoltarSection({
 
 		if (hasForked) return zoltarCopy.alreadyForkedReason
 		if (selectedQuestion === undefined) return zoltarCopy.forkQuestionRequiredReason
+		if (effectiveCurrentTimestamp === undefined) return zoltarCopy.forkQuestionTimeLoadingReason
+		if (!selectedQuestionHasEnded) return zoltarCopy.formatForkQuestionActiveReason(formatTimestamp(selectedQuestion.endTime), formatRelativeTimestamp(selectedQuestion.endTime, effectiveCurrentTimestamp))
 		if (!hasForkEconomics) return zoltarCopy.forkEconomicsUnavailableReason
 
 		if (!hasEnoughRep) return zoltarCopy.forkRepInsufficientReason
