@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createPublicClient, custom, encodeAbiParameters, encodeEventTopics, getAddress, mainnet, type EIP1193Provider, type Hex } from '@zoltar/shared/ethereum'
 import { openOracleArbitrageExecutorAbi } from './abi.js'
-import { executionRecordForConfirmedPosition, expirePrivateEntryWithQuorum, lifecycleExecutionFromLogs, recoverPendingLifecycleWithQuorum } from './index.js'
+import { executionRecordForConfirmedPosition, expirePrivateEntryWithQuorum, lifecycleExecutionFromLogs, recoverPendingEntryWithQuorum, recoverPendingLifecycleWithQuorum } from './index.js'
 import type { PositionRecord } from './position-store.js'
 
 const transactionHash = `0x${'11'.repeat(32)}` as Hex
@@ -22,6 +22,61 @@ function missingReceiptClients() {
 		const provider: EIP1193Provider = {
 			request: parameters => {
 				if (parameters.method === 'eth_getTransactionReceipt') return Promise.resolve(null)
+				throw new Error(`Unexpected RPC method ${parameters.method}`)
+			},
+		}
+		return createPublicClient({ chain: mainnet, transport: custom(provider) })
+	})
+}
+
+function revertedReceiptClients() {
+	const blockHash = `0x${'aa'.repeat(32)}`
+	return ['primary', 'secondary'].map(() => {
+		const provider: EIP1193Provider = {
+			request: parameters => {
+				if (parameters.method === 'eth_getTransactionReceipt') {
+					return Promise.resolve({
+						blockHash,
+						blockNumber: '0x64',
+						contractAddress: null,
+						cumulativeGasUsed: '0x5208',
+						effectiveGasPrice: '0x3b9aca00',
+						from: getAddress('0x0000000000000000000000000000000000000002'),
+						gasUsed: '0x5208',
+						logs: [],
+						logsBloom: `0x${'00'.repeat(256)}`,
+						status: '0x0',
+						to: executor,
+						transactionHash,
+						transactionIndex: '0x0',
+						type: '0x2',
+					})
+				}
+				if (parameters.method === 'eth_getBlockByNumber') {
+					return Promise.resolve({
+						baseFeePerGas: '0x1',
+						difficulty: '0x0',
+						extraData: '0x',
+						gasLimit: '0x1c9c380',
+						gasUsed: '0x5208',
+						hash: blockHash,
+						logsBloom: `0x${'00'.repeat(256)}`,
+						miner: getAddress('0x0000000000000000000000000000000000000000'),
+						mixHash: `0x${'00'.repeat(32)}`,
+						nonce: '0x0000000000000000',
+						number: '0x64',
+						parentHash: `0x${'bb'.repeat(32)}`,
+						receiptsRoot: `0x${'00'.repeat(32)}`,
+						sha3Uncles: `0x${'00'.repeat(32)}`,
+						size: '0x1',
+						stateRoot: `0x${'00'.repeat(32)}`,
+						timestamp: '0x66a1a000',
+						totalDifficulty: '0x0',
+						transactions: [],
+						transactionsRoot: `0x${'00'.repeat(32)}`,
+						uncles: [],
+					})
+				}
 				throw new Error(`Unexpected RPC method ${parameters.method}`)
 			},
 		}
@@ -129,6 +184,22 @@ describe('entry crash recovery', () => {
 			status: 'pending-entry' as const,
 		}
 		await expect(expirePrivateEntryWithQuorum(missingReceiptClients(), recoveryConfiguration, position, 112n, '2026-07-24T00:02:00.000Z')).rejects.toThrow('Only an atomic private entry')
+	})
+
+	test('releases a reverted atomic private entry after accounting for its gas', async () => {
+		const position = {
+			...confirmedPosition(),
+			actualEntryGasCostEth: '0',
+			entrySubmissionBlockNumber: '99',
+			entrySubmissionMode: 'private' as const,
+			gasExpenditures: [],
+			status: 'pending-entry' as const,
+		}
+		const recovered = await recoverPendingEntryWithQuorum(revertedReceiptClients(), recoveryConfiguration, position, 18)
+		expect(recovered.position.status).toBe('closed')
+		expect(recovered.position.capitalAtRiskWeth).toBe('0')
+		expect(recovered.position.lockedWeth).toBe('0')
+		expect(recovered.position.realizedNetProfitEth).toBe('-0.000021')
 	})
 })
 

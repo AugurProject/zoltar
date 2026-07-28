@@ -1097,17 +1097,21 @@ export function executionRecordForConfirmedPosition(position: PositionRecord, bl
 export async function recoverPendingEntryWithQuorum(readClients: readonly ReadClient[], config: RecoveryConfiguration, position: PositionRecord, tokenDecimals: number, expectedBlockNumber?: bigint | undefined) {
 	const executor = config.executor
 	if (executor === undefined) throw new Error('Pending entry recovery requires the authenticated executor')
+	const journaledPrivateTargetBlockNumber = position.entrySubmissionMode === 'private' && position.entrySubmissionBlockNumber !== undefined ? BigInt(position.entrySubmissionBlockNumber) + 1n : undefined
+	if (expectedBlockNumber !== undefined && journaledPrivateTargetBlockNumber !== undefined && expectedBlockNumber !== journaledPrivateTargetBlockNumber) {
+		throw new Error('Private entry target block does not match the durable journal')
+	}
+	const privateTargetBlockNumber = expectedBlockNumber ?? journaledPrivateTargetBlockNumber
 	const receipts = await transactionReceiptsWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `pending entry ${position.reportId}`, position.entryTransactionHashes)
 	const firstReceipt = receipts[0]
 	const executorReceipt = receipts.at(-1)
+	if (firstReceipt === undefined || executorReceipt === undefined) throw new Error('Entry bundle receipts are missing, reverted, or split across blocks')
 	const publicEntry = position.entrySubmissionMode === 'public' && expectedBlockNumber === undefined && receipts.length === 1
-	if (
-		firstReceipt === undefined ||
-		executorReceipt === undefined ||
-		(!publicEntry && receipts.some(receipt => receipt.status !== 'success' || receipt.blockNumber !== firstReceipt.blockNumber || receipt.blockHash.toLowerCase() !== firstReceipt.blockHash.toLowerCase() || (expectedBlockNumber !== undefined && receipt.blockNumber !== expectedBlockNumber)))
-	) {
-		throw new Error('Entry bundle receipts are missing, reverted, or split across blocks')
-	}
+	const atomicPrivateEntry = position.entrySubmissionMode === 'private' && privateTargetBlockNumber !== undefined && receipts.length === 1
+	const invalidPrivateReceipt = atomicPrivateEntry
+		? firstReceipt.status === 'success' && firstReceipt.blockNumber !== privateTargetBlockNumber
+		: !publicEntry && receipts.some(receipt => receipt.status !== 'success' || receipt.blockNumber !== firstReceipt.blockNumber || receipt.blockHash.toLowerCase() !== firstReceipt.blockHash.toLowerCase() || (privateTargetBlockNumber !== undefined && receipt.blockNumber !== privateTargetBlockNumber))
+	if (invalidPrivateReceipt) throw new Error('Entry bundle receipts are missing, reverted, or split across blocks')
 	const canonicalReceiptBlockHash = await canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `pending entry ${position.reportId}`, firstReceipt.blockNumber)
 	assertReceiptSnapshotBlockHash(firstReceipt.blockHash, canonicalReceiptBlockHash, 'Entry')
 	for (const [index, receipt] of receipts.entries()) {
@@ -1121,12 +1125,12 @@ export async function recoverPendingEntryWithQuorum(readClients: readonly ReadCl
 		hedgeExecution = hedgeExecutionFromLogs(executorReceipt.logs, executor)
 	} catch (error) {
 		if (!(error instanceof Error) || error.message !== 'Confirmed executor transaction did not emit HedgeAndDisputeExecuted') throw error
-		if (!publicEntry) throw new Error('Executor hedge event is missing from the durable entry receipt')
+		if (!publicEntry && !(atomicPrivateEntry && executorReceipt.status === 'reverted')) throw new Error('Executor hedge event is missing from the durable entry receipt')
 	}
 	if (hedgeExecution === undefined || hedgeExecution.account.toLowerCase() !== position.account.toLowerCase() || hedgeExecution.reportId.toString() !== position.reportId) {
-		if (publicEntry) {
+		if (publicEntry || (atomicPrivateEntry && executorReceipt.status === 'reverted')) {
 			const closedAt = gasExpenditures.at(-1)?.minedAt
-			if (closedAt === undefined) throw new Error('Recovered public replacement gas timestamp is unavailable')
+			if (closedAt === undefined) throw new Error('Recovered atomic entry gas timestamp is unavailable')
 			return {
 				position: {
 					...position,

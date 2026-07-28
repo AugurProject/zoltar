@@ -424,13 +424,27 @@ The execution account needs:
   fee cap, plus an operational buffer.
 - `WETH balance >= required WETH` for the selected report.
 - `Token balance >= required token` for the selected report.
+- `WETH.allowance(account, executor) >= required WETH` and
+  `token.allowance(account, executor) >= required token` for entry.
 - `OpenOracle.internalAllowance(account, executor, WETH) >= locked WETH` and
   `OpenOracle.internalAllowance(account, executor, token) >= locked token`.
 
-Grant maximum internal allowances once per executor/token pair from the dedicated
-bot account (replace the addresses and use the selected network RPC):
+Grant ERC-20 and OpenOracle internal allowances from the dedicated bot account
+(replace the addresses and use the selected network RPC):
 
 ```bash
+cast send 0xWETH \
+  "approve(address,uint256)" \
+  0xExecutor \
+  0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff \
+  --private-key "$PRIVATE_KEY" --rpc-url "$ETH_RPC_URL"
+
+cast send 0xReportToken \
+  "approve(address,uint256)" \
+  0xExecutor \
+  0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff \
+  --private-key "$PRIVATE_KEY" --rpc-url "$ETH_RPC_URL"
+
 cast send 0xOpenOracle \
   "approveInternal(address,address,uint256)" \
   0xExecutor 0xWETH \
@@ -444,10 +458,19 @@ cast send 0xOpenOracle \
   --private-key "$PRIVATE_KEY" --rpc-url "$ETH_RPC_URL"
 ```
 
+Maximum allowances avoid missing an opportunity after a finite allowance is
+consumed. A finite ERC-20 allowance is also supported when it covers the dashboard's
+displayed requirement, but it must be refreshed before the next larger entry. Review
+each allowlisted token's approval semantics: tokens that require resetting a nonzero
+allowance to zero first need two separate setup transactions, and tokens with
+nonstandard, rebasing, or fee-on-transfer behavior must not be enabled merely because
+`approve` succeeds.
+
 OpenOracle rejects changing one nonzero internal allowance directly to another
 nonzero value. Set it to zero first when rotating or reducing an existing allowance.
-The bot checks both internal allowances through its independent read quorum before
-signing an entry and again before lifecycle submission.
+The bot checks both ERC-20 and both internal allowances through its independent read
+quorum before signing an entry, and checks the internal allowances again before
+lifecycle submission.
 
 Opportunity selection reserves 1,200,000 gas for entry plus the larger of the
 configured lifecycle reserve and the current fee estimate for callback gas plus
@@ -745,18 +768,20 @@ endpoints must implement the
 [Flashbots bundle RPC](https://docs.flashbots.net/flashbots-auction/advanced/rpc-endpoint)
 and authentication format.
 
-The transaction tracker records each approval and executor call as `submitting`,
+The transaction tracker records each submitted executor call as `submitting`,
 `pending`, `confirmation unknown`, `confirmed`, `reverted`, or `submission failed`.
 It shows which targets accepted or rejected the payload. A private bundle targets
 only the next block and is not resubmitted from a stale quote. Missing receipt
 evidence remains pending through a 12-block canonical-finality window. If every read
 RPC then agrees that the parent-bound entry executor call was absent, the attempt
-becomes `expired-not-included` and releases its risk slot. If the atomic lifecycle call was absent, that attempt is cleared
-and the open position can safely retry from a fresh parent. Partial entry inclusion,
-an executor receipt, RPC disagreement, or ambiguous evidence remains
-`recovery-required`. Active transaction-tracker rows are kept in process memory and reset on
-restart; confirmed dispute history and its ETH profit totals are persisted in the
-configured history file.
+becomes `expired-not-included` and releases its risk slot. A quorum-confirmed reverted
+atomic entry is terminally closed after recording its gas; it cannot have changed
+OpenOracle state. If the atomic lifecycle call was absent, that attempt is cleared and
+the open position can safely retry from a fresh parent. A successful receipt without
+the expected executor event, RPC disagreement, or ambiguous evidence remains
+`recovery-required`. Active transaction-tracker rows are kept in process memory and
+reset on restart; confirmed dispute history and its ETH profit totals are persisted
+in the configured history file.
 
 ## Adjust the strategy
 
@@ -860,18 +885,22 @@ pending-entry → open → withdrawing → closed
      │           └──────────┴──→ recovery-required
      │                                ↓ signer-key-authorized local reconciliation
      │                              closed (P&L recorded or unavailable)
-     └── after 12 canonical descendants and unanimous absence
-          → expired-not-included
+     ├── atomic private only: after 12 canonical descendants and unanimous absence
+     │    → expired-not-included
+     └── quorum-confirmed atomic revert → closed (gas recorded)
 ```
 
 The bot records every entry transaction hash before submission. Private and public
-entry each have one guarded executor transaction. After a restart the bot requires independent
-RPC agreement on every required receipt and on that receipt block's current
-canonical hash. Every receipt must include its mined effective gas price. The bot
-then decodes the executor event and reconstructs actual entry gas and hedge
-economics before leaving `pending-entry`. A private attempt proven absent after the
-12-block window becomes `expired-not-included`; missing or ambiguous evidence
-remains `recovery-required` and never produces trading profit.
+entry each have one guarded executor transaction. After a restart the bot requires
+independent RPC agreement on every required receipt and on that receipt block's
+current canonical hash. Every receipt must include its mined effective gas price.
+The bot then decodes the executor event and reconstructs actual entry gas and hedge
+economics before leaving `pending-entry`. A current atomic private attempt proven
+absent after the 12-block window becomes `expired-not-included`; a
+quorum-confirmed atomic revert closes after gas accounting. Missing or ambiguous
+evidence remains `recovery-required` and never produces trading profit. Legacy
+multi-transaction private records are never auto-expired because their prerequisite
+signatures lack the executor's on-chain parent binding.
 
 Before lifecycle delivery, the bot atomically records the one executor transaction
 hash, nonce, token decimals, target block, and delivery mode. Both modes call
@@ -891,14 +920,17 @@ delete or hand-edit a record to bypass the one-position guard.
 1. Confirm the dashboard network, signer address, OpenOracle, executor, and token
    match the journal record. Save a copy of the journal, operation log, relay
    responses, and both configured RPC responses.
-2. For **entry receipt could not be recovered**, look up every
-   `entryTransactionHashes` value on independent explorers/RPCs. All approvals and
-   the executor transaction must either be absent, or succeed in one block in
-   journal order. If evidence is temporarily unavailable, restore independent RPC
-   service and restart; the bot retries quorum recovery. If inclusion is partial,
-   reverted, reorged, or the executor event identity differs, keep the bot paused
-   and reconcile allowances, wallet balances, OpenOracle holder balances, and the
-   current reporter manually.
+2. For **entry receipt could not be recovered**, current records contain one
+   `entryTransactionHashes` value. Look it up on independent explorers/RPCs. It must
+   be absent, revert without an executor event, or succeed in its parent-bound target
+   block with the exact matching event. A quorum-confirmed revert is closed
+   automatically after gas accounting. A legacy record can contain multiple hashes;
+   inspect every hash and never treat the record as expired merely because its target
+   passed. If evidence is temporarily unavailable, restore independent RPC service
+   and restart; the bot retries quorum recovery. For a successful mismatched receipt,
+   reorganization, disagreement, or legacy multi-transaction record, keep the bot
+   paused and reconcile allowances, wallet balances, OpenOracle holder balances, and
+   the current reporter manually.
 3. For **lifecycle receipt could not be recovered**, inspect the single
    `lifecycleTransactionHashes` value and `lifecycleTargetBlockNumber`. A successful
    call must be in that target block and emit the exact matching lifecycle event.
@@ -986,9 +1018,10 @@ entry from depending on wallet inventory already committed to recovery.
   alerts.
 - A private entry bundle targets one block. The bot waits 12 canonical descendants
   before unanimous receipt absence can finalize it as `expired-not-included`.
-  Disagreement, partial inclusion, or an executor receipt remains fail-closed. A
-  private lifecycle attempt proven absent after the same window is cleared and
-  rebuilt against a fresh parent rather than replaying its signed transaction.
+  Disagreement or a successful receipt without the matching executor event remains
+  fail-closed. A quorum-confirmed reverted atomic entry closes after recording its
+  gas. A private lifecycle attempt proven absent after the same window is cleared
+  and rebuilt against a fresh parent rather than replaying its signed transaction.
 - The owner-only position journal is written immediately before entry and lifecycle
   submission and recovered on restart. A pending entry advances only after every
   recorded bundle receipt, mined gas price, canonical receipt-block hash, and
