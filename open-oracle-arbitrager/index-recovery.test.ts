@@ -377,4 +377,21 @@ describe('atomic lifecycle crash recovery', () => {
 		expect(recovered.lifecycleTargetBlockNumber).toBeUndefined()
 		expect(recovered.expiredTransactionAttempts).toEqual([{ kind: 'lifecycle', nonce: '9', targetBlockNumber: '100', transactionHash }])
 	})
+
+	test('keeps a successful lifecycle receipt without executor evidence in recovery', async () => {
+		const position = {
+			...confirmedPosition(),
+			lifecycleSubmissionBlockNumber: '99',
+			lifecycleSubmissionMode: 'private' as const,
+			lifecycleTargetBlockNumber: '100',
+			lifecycleTokenDecimals: '18',
+			lifecycleTransactionNonce: '9',
+			lifecycleTransactionHashes: [transactionHash],
+			status: 'withdrawing' as const,
+		}
+		const recovered = await recoverPendingLifecycleWithQuorum(successfulMismatchedIntentClients(), recoveryConfiguration, position, 100n)
+		expect(recovered.status).toBe('recovery-required')
+		expect(recovered.lifecycleReceiptRecovered).toBe(true)
+		expect(recovered.lifecycleTransactionHashes).toEqual([transactionHash])
+	})
 })

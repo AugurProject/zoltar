@@ -1390,6 +1390,13 @@ export async function recoverPendingLifecycleWithQuorum(readClients: readonly Re
 		}
 	}
 	if (execution === undefined) {
+		if (receipt.status === 'success') {
+			return {
+				...accountedPosition,
+				lifecycleReceiptRecovered: true,
+				status: 'recovery-required',
+			}
+		}
 		return {
 			...withoutLifecycleAttempt(accountedPosition),
 			lifecycleReceiptRecovered: false,

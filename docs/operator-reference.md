@@ -262,8 +262,10 @@ The coordinator quick reference below covers staging, callback recovery,
 stale-operation handling, and liquidation boundaries. Report sizing, request
 cost, and current OpenOracle parameters are canonical in
 [OpenOracle Integration](./open-oracle-integration.html#parameters); the
-external correction assumption and its limits are defined in the
-[security model](./security-model.html#open-oracle-market-fixture).
+external correction capability, incentive, and reference-market assumptions are
+defined by [A17–A19 in the security model](./security-model.html#assumption-a17);
+the [market fixture](./security-model.html#open-oracle-market-fixture) is dated
+historical evidence rather than the definition of those assumptions.
 Operators can run the
 [OpenOracle arbitrager](../open-oracle-arbitrager/README.md) in dry-run mode
 to monitor pending reports and executable Uniswap V3 quotes.
