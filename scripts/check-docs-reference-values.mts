@@ -269,6 +269,7 @@ function assertInvariantCatalogOwnership(): void {
 	const auctionAllocationEntry = normalizedInvariants.match(/<details class="invariant-entry" id="auc-05">[\s\S]*?<\/details>/)?.[0]
 	const auctionLiabilityEntry = normalizedInvariants.match(/<details class="invariant-entry" id="auc-12">[\s\S]*?<\/details>/)?.[0]
 	const eventReplayEntry = normalizedInvariants.match(/<details class="invariant-entry" id="obs-01">[\s\S]*?<\/details>/)?.[0]
+	const shareSupplyEntry = normalizedInvariants.match(/<details class="invariant-entry" id="share-06">[\s\S]*?<\/details>/)?.[0]
 	assert.ok(persistentHistoryEntry, 'Invariant catalog must give AUC-10 a stable anchor for persistent tick history')
 	assert.ok(activeTreeEntry, 'Invariant catalog must retain AUC-11 for active-tree and public-model equivalence')
 	assert.ok(carryAccountingEntry, 'Invariant catalog must give ESC-03 a stable anchor for carry accounting')
@@ -276,6 +277,7 @@ function assertInvariantCatalogOwnership(): void {
 	assert.ok(auctionAllocationEntry, 'Invariant catalog must give AUC-05 a stable anchor for allocation accounting')
 	assert.ok(auctionLiabilityEntry, 'Invariant catalog must retain AUC-12 for raw ETH liability accounting')
 	assert.ok(eventReplayEntry, 'Invariant catalog must retain OBS-01 for event-state replay equivalence')
+	assert.ok(shareSupplyEntry, 'Invariant catalog must retain SHARE-06 for aggregate ERC-1155 supply conservation')
 	assert.match(persistentHistoryEntry, /Bid cumulative ETH remains append-only[\s\S]*Refunded history is subtracted exactly once/)
 	assert.match(activeTreeEntry, /href="#auc-10"><code>AUC-10<\/code><\/a>/, 'AUC-11 must link historical-prefix ownership to AUC-10')
 	assert.doesNotMatch(activeTreeEntry, /Historical tick pages preserve|active bid prefixes subtract every prior refund/, 'AUC-11 must not duplicate AUC-10 historical-prefix requirements')
@@ -284,18 +286,23 @@ function assertInvariantCatalogOwnership(): void {
 	assert.match(auctionLiabilityEntry, /href="#auc-05"><code>AUC-05<\/code><\/a>/, 'AUC-12 must link settlement-allocation ownership to AUC-05')
 	assert.doesNotMatch(auctionLiabilityEntry, /each bid partitions exactly|aggregate filled REP equals/, 'AUC-12 must not duplicate AUC-05 settlement-allocation requirements')
 	assert.match(eventReplayEntry, /href="\.\/event-stream\.md"/, 'OBS-01 must link the canonical event-stream specification')
+	assert.match(shareSupplyEntry, /total supply equals the sum of holder balances[\s\S]*href="#fork-10"><code>FORK-10<\/code><\/a>/, 'SHARE-06 must own aggregate supply conservation and link migration ownership to FORK-10')
+	assert.doesNotMatch(shareSupplyEntry, /persistent source entitlement|materialized child amount equals|cannot be materialized twice/, 'SHARE-06 must not duplicate FORK-10 source-entitlement requirements')
 }
 
 function assertInvariantCatalogLifecycleBoundaries(): void {
 	const normalizedInvariants = invariantsHtml.replaceAll(/\s+/g, ' ')
 	const allowanceEntry = normalizedInvariants.match(/<details class="invariant-entry" id="bal-08">[\s\S]*?<\/details>/)?.[0]
 	const vaultEntry = normalizedInvariants.match(/<details class="invariant-entry" id="vault-03">[\s\S]*?<\/details>/)?.[0]
+	const activeAuctionEntry = normalizedInvariants.match(/<details class="invariant-entry" id="auc-11">[\s\S]*?<\/details>/)?.[0]
 	const auctionLiabilityEntry = normalizedInvariants.match(/<details class="invariant-entry" id="auc-12">[\s\S]*?<\/details>/)?.[0]
 	assert.ok(allowanceEntry, 'Invariant catalog must retain BAL-08 lifecycle-qualified allowance accounting')
 	assert.ok(vaultEntry, 'Invariant catalog must retain VAULT-03 active-index boundary accounting')
+	assert.ok(activeAuctionEntry, 'Invariant catalog must retain AUC-11 lifecycle-qualified clearing-tree accounting')
 	assert.ok(auctionLiabilityEntry, 'Invariant catalog must retain AUC-12 ETH liability accounting')
-	assert.match(allowanceEntry, /In <code>Operational<\/code>[\s\S]*During <code>ForkMigration<\/code>[\s\S]*A <code>PoolForked<\/code> parent retains its fork-time[\s\S]*outstanding unclaimed auction allocation/)
+	assert.match(allowanceEntry, /In <code>Operational<\/code>[\s\S]*During <code>ForkMigration<\/code>[\s\S]*A <code>PoolForked<\/code> parent retains its fork-time[\s\S]*positive-purchase truth-auction[\s\S]*purchases zero REP[\s\S]*href="\.\/truth-auction\.html#settlement"/)
 	assert.match(vaultEntry, /A direct own-fork claim[\s\S]*may remain indexed with zero live state until its next pool-mediated synchronization/)
+	assert.match(activeAuctionEntry, /Before finalization[\s\S]*pre-finalization refunds[\s\S]*Finalization freezes that tree and clearing result[\s\S]*href="#auc-12"><code>AUC-12<\/code><\/a>/)
 	assert.match(auctionLiabilityEntry, /active unrefunded bids[\s\S]*aggregate <code>pendingEthRefunds<\/code>[\s\S]*refunds still attached to unclaimed bids[\s\S]*deferred <code>pendingEthRefunds<\/code>/)
 }
 

@@ -1759,12 +1759,18 @@ describe('Auction', () => {
 			await submitBid(client, auctionAddress, winningTick, winningBid)
 
 			await finalizeAndVerify(client, auctionAddress)
+			const activeTickCountBeforeWithdrawal = await activeTickCount(client, auctionAddress)
+			const activeTicksBeforeWithdrawal = await getActiveTickPage(client, auctionAddress, 0n, 100n)
+			const clearingBeforeWithdrawal = await computeClearing(client, auctionAddress)
 			await withdrawBids(client, auctionAddress, client.account.address, [{ tick: winningTick, bidIndex: 0n }])
 
 			const winningBidPage = await getBidPageAtTick(client, auctionAddress, winningTick, 0n, 100n)
 			const winningBidView = ensureDefined(winningBidPage[0], 'missing winning bid view')
 			strictEqualTypeSafe(winningBidView.claimed, true, 'withdrawn bid should be claimed')
 			strictEqualTypeSafe(winningBidView.refunded, false, 'withdrawn bid should not be marked refunded')
+			strictEqualTypeSafe(await activeTickCount(client, auctionAddress), activeTickCountBeforeWithdrawal, 'post-finalization claims should not change the frozen active tick count')
+			assert.deepStrictEqual(await getActiveTickPage(client, auctionAddress, 0n, 100n), activeTicksBeforeWithdrawal, 'post-finalization claims should not change the frozen clearing tree')
+			assert.deepStrictEqual(await computeClearing(client, auctionAddress), clearingBeforeWithdrawal, 'post-finalization claims should not change the finalized clearing result')
 		})
 
 		test('enumeration views handle empty pages and allow oversized limits', async () => {

@@ -642,7 +642,7 @@
 								forward lookup are mutual inverses, and its recorded share token
 								authorizes that pool.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> Looking up a child pool's origin and then resolving that origin with the child's universe returns the same child, not an independent origin in that universe.</p>
+							<p class="invariant-example"><strong>Example:</strong> Looking up a child pool's origin and then resolving that origin with the child's universe returns the same child, not a pool from an <a href="./statoblast-whitepaper.html#pools">independent origin lineage</a> in that universe.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
@@ -885,11 +885,18 @@
 								<code>ForkMigration</code>, configured migrated allowances remain
 								pending outside those pool aggregates. A <code>PoolForked</code>
 								parent retains its fork-time total and fee-eligible snapshots as
-								individual vaults migrate. After truth-auction activation, total
-								allowance equals fee-eligible allowance plus the outstanding
-								unclaimed auction allocation.
+								individual vaults migrate. After a positive-purchase truth-auction
+								activation, total allowance equals fee-eligible allowance plus the
+								outstanding unclaimed auction allocation. If the auction purchases
+								zero REP, no auction allowance exists: the child still records the
+								parent's fork-time total, while the unmigrated remainder stays
+								outside fee eligibility. The
+								<a href="./truth-auction.html#settlement"
+									>auction settlement specification</a
+								>
+								owns that zero-purchase allocation rule.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> Migrating a 3 ETH vault allowance clears the parent vault but leaves the parent's frozen 3 ETH aggregates unchanged; the child records 3 ETH as pending until activation, after which each auction claim moves allowance from the outstanding allocation into a live fee-eligible vault without changing total allowance.</p>
+							<p class="invariant-example"><strong>Example:</strong> Migrating one of two 3 ETH vault allowances leaves the parent's frozen 6 ETH total unchanged and records 3 ETH as pending in the child. With purchased REP, claims move the remaining 3 ETH from auction allocation into fee eligibility. With zero purchased REP, auction allocation is zero and that remaining 3 ETH stays unassigned and ineligible.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
@@ -1022,29 +1029,25 @@
 						</div>
 					</details>
 					<details class="invariant-entry" id="share-06">
-						<summary><code>SHARE-06</code><span class="invariant-title">Share supply and source-entitlement coherence</span></summary>
+						<summary><code>SHARE-06</code><span class="invariant-title">Share supply conservation</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
 								For every ERC-1155 share ID, total supply equals the sum of
 								holder balances through mint, transfer, and burn operations.
-								For each source share, holder, and selected child universe, the
-								materialized child amount equals the recorded persistent source
-								entitlement and cannot be materialized twice.
+								Per-child materialization and duplicate prevention are owned by
+								<a href="#fork-10"><code>FORK-10</code></a>.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> Moving two Yes shares between wallets leaves Yes supply unchanged, while migrating a five-share source entitlement into a selected scalar child creates exactly five child Yes shares once.</p>
+							<p class="invariant-example"><strong>Example:</strong> Moving two Yes shares between wallets leaves Yes supply unchanged; burning one Yes share reduces both the holder-balance sum and Yes supply by one.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Conservation</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a href="../solidity/contracts/peripherals/tokens/ShareToken.sol"
-										>ERC-1155 supply and <code>migratedShareAmount</code></a
+										>ERC-1155 supply accounting</a
 										>,
 										<a href="../solidity/ts/tests/erc1155.test.ts"
 										>modeled holder-supply invariant test</a
-										>,
-										<a href="../solidity/ts/tests/peripherals/forkMigration.test.ts"
-										>source-entitlement migration test</a
 										>
 								</dd></div>
 							</dl>
@@ -2328,13 +2331,17 @@
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
 							<div class="invariant-property">
-								Active tick pages contain exactly the nonzero active ticks in
-								descending order, and clearing computed from the active AVL tree
-								equals an independent calculation over active bids. Historical
-								insertion and refund-prefix obligations are owned by
+								Before finalization, active tick pages contain exactly the
+								nonzero ticks not removed by pre-finalization refunds, in
+								descending order, and clearing computed from the AVL tree equals
+								an independent calculation over those bids. Finalization freezes
+								that tree and clearing result: later claims change bid flags and
+								ETH liabilities but not active tick pages. Post-finalization
+								liabilities are owned by <a href="#auc-12"><code>AUC-12</code></a>.
+								Historical insertion and refund-prefix obligations are owned by
 								<a href="#auc-10"><code>AUC-10</code></a>.
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> Given the same active bids and auction caps, an independent descending-tick scan returns the same clearing tick, qualifying ETH, and cap-reached result as the contract.</p>
+							<p class="invariant-example"><strong>Example:</strong> Before finalization, an independent descending-tick scan returns the same clearing result as the contract. After a winner claims, its bid is marked claimed and its refund liability leaves, while the final clearing page and result remain unchanged.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Safety</dd></div>
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
@@ -2344,7 +2351,7 @@
 										>AVL tree, enumeration, and clearing</a
 										>,
 										<a href="../solidity/ts/tests/auction.test.ts"
-										>seeded independent-model invariant test</a
+										>seeded independent-model and frozen-snapshot tests</a
 										>
 								</dd></div>
 							</dl>

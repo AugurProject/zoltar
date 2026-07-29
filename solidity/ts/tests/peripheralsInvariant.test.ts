@@ -1159,9 +1159,11 @@ describe('Peripherals invariant harness', () => {
 		assert.ok(forkData.auctionableRepAtFork > 0n, 'own-fork migration balance should include non-burned parent REP')
 	})
 
-	test('allowance reconciliation distinguishes operational, migration, and frozen lifecycle state', async () => {
+	test('allowance reconciliation distinguishes operational, migration, frozen, and zero-demand activation state', async () => {
 		const allowance = repDeposit / 4n
 		const parentAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, securityMultiplier)
+		const unmigratedAllowanceHolder = createClient(1)
+		const openInterestHolder = createClient(2)
 		const readAccounting = async (securityPool: Address) =>
 			await client.readContract({
 				abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -1171,18 +1173,24 @@ describe('Peripherals invariant harness', () => {
 			})
 
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, parentAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, allowance)
+		await approveAndDepositRep(unmigratedAllowanceHolder, repDeposit, context.questionId)
+		await manipulatePriceOracleAndPerformOperation(unmigratedAllowanceHolder, mockWindow, parentAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, unmigratedAllowanceHolder.account.address, allowance)
+		await createCompleteSet(openInterestHolder, context.securityPool, 10n * 10n ** 18n)
 		const operationalAccounting = await readAccounting(context.securityPool)
 		const operationalVault = await getSecurityVault(client, context.securityPool, client.account.address)
+		const unmigratedOperationalVault = await getSecurityVault(client, context.securityPool, unmigratedAllowanceHolder.account.address)
 		strictEqualTypeSafe(await getSystemState(client, context.securityPool), SystemState.Operational, 'the source pool should begin operational')
 		strictEqualTypeSafe(operationalVault.securityBondAllowance, allowance, 'the source vault should hold the complete live allowance')
-		strictEqualTypeSafe(operationalAccounting.totalSecurityBondAllowance, allowance, 'operational total allowance should equal assigned vault allowance')
-		strictEqualTypeSafe(operationalAccounting.feeEligibleSecurityBondAllowance, allowance, 'operational fee eligibility should equal assigned vault allowance')
+		strictEqualTypeSafe(unmigratedOperationalVault.securityBondAllowance, allowance, 'the second source vault should hold the allowance that will remain unmigrated')
+		strictEqualTypeSafe(operationalAccounting.totalSecurityBondAllowance, 2n * allowance, 'operational total allowance should equal assigned vault allowance')
+		strictEqualTypeSafe(operationalAccounting.feeEligibleSecurityBondAllowance, 2n * allowance, 'operational fee eligibility should equal assigned vault allowance')
 
 		await triggerExternalForkForSecurityPool(undefined, 'allowance lifecycle fork source')
 		await createChildUniverse(client, context.securityPool, QuestionOutcome.Yes)
 		await migrateVault(client, context.securityPool, QuestionOutcome.Yes)
 		const yesUniverse = getChildUniverseIdForOutcome(QuestionOutcome.Yes)
-		const childPool = getSecurityPoolAddresses(context.securityPool, yesUniverse, context.questionId, securityMultiplier).securityPool
+		const childAddresses = getSecurityPoolAddresses(context.securityPool, yesUniverse, context.questionId, securityMultiplier)
+		const childPool = childAddresses.securityPool
 		const [frozenParentAccounting, migrationChildAccounting, frozenParentVault, migrationChildVault] = await Promise.all([readAccounting(context.securityPool), readAccounting(childPool), getSecurityVault(client, context.securityPool, client.account.address), getSecurityVault(client, childPool, client.account.address)])
 
 		strictEqualTypeSafe(await getSystemState(client, context.securityPool), SystemState.PoolForked, 'the parent should retain frozen fork accounting')
@@ -1194,6 +1202,19 @@ describe('Peripherals invariant harness', () => {
 		strictEqualTypeSafe(migrationChildVault.securityBondAllowance, allowance, 'the child vault should record the migrated pending allowance')
 		strictEqualTypeSafe(migrationChildAccounting.totalSecurityBondAllowance, 0n, 'pending migrated allowance should not initialize the child total before repair finalization')
 		strictEqualTypeSafe(migrationChildAccounting.feeEligibleSecurityBondAllowance, 0n, 'pending migrated allowance should not accrue fees before child activation')
+
+		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
+		await startTruthAuction(client, childPool)
+		await mockWindow.advanceTime(AUCTION_TIME + DAY)
+		await finalizeTruthAuction(client, childPool)
+
+		const [activatedChildAccounting, activatedChildForkData, totalRepPurchased] = await Promise.all([readAccounting(childPool), getSecurityPoolForkerForkData(client, childPool), getTotalRepPurchased(client, childAddresses.truthAuction)])
+		strictEqualTypeSafe(await getSystemState(client, childPool), SystemState.Operational, 'zero-demand finalization should activate the child')
+		strictEqualTypeSafe(totalRepPurchased, 0n, 'zero-demand finalization should purchase no REP')
+		strictEqualTypeSafe(activatedChildForkData.auctionedSecurityBondAllowance, 0n, 'zero purchased REP should create no claimable auction allowance')
+		strictEqualTypeSafe(activatedChildAccounting.totalSecurityBondAllowance, operationalAccounting.totalSecurityBondAllowance, 'activation should retain the parent fork-time total allowance')
+		strictEqualTypeSafe(activatedChildAccounting.feeEligibleSecurityBondAllowance, allowance, 'only migrated vault allowance should become fee eligible after zero-demand activation')
+		strictEqualTypeSafe(activatedChildAccounting.totalSecurityBondAllowance - activatedChildAccounting.feeEligibleSecurityBondAllowance, allowance, 'unmigrated zero-demand allowance should remain unassigned and outside fee eligibility')
 	})
 
 	test('claimAuctionProceeds keeps REP and ETH reconciliation stable across claim orderings', async () => {
