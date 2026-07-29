@@ -166,9 +166,9 @@
 				<details class="contract-atlas-register contract-atlas-node-register">
 					<summary>Open the complete 114-component inventory</summary>
 					<p>
-						This keyboard-accessible inventory preserves each component’s
-						declaration kind, owning region, and Solidity source path independently
-						of chart hover or relationship coverage.
+						This inventory preserves each component’s declaration kind, owning
+						region, and Solidity source path independently of chart hover or
+						relationship coverage.
 					</p>
 					<div class="table-scroll" tabindex="0" role="region" aria-label="Complete Solidity component inventory">
 						<table>
@@ -188,7 +188,7 @@
 						</table>
 					</div>
 				</details>
-				<details class="contract-atlas-register">
+				<details class="contract-atlas-register" id="atlas-relationships">
 					<summary>Open the complete relationship register</summary>
 					<p>
 						Arrows point from the initiator, child, implementation, or test
@@ -218,7 +218,13 @@
 			</section>
 
 			<section id="edges">
-				<h2>What Each Arrow Means</h2>
+				<h2>What Each Primary-Flow Arrow Means</h2>
+				<p>
+					These 19 rows explain the arrows in the
+					<a href="#overview">Primary Interaction Flow</a>. The exhaustive atlas
+					above has its own
+					<a href="#atlas-relationships">complete relationship register</a>.
+				</p>
 				<div class="table-scroll" tabindex="0" role="region" aria-label="Contract interaction details">
 					<table>
 						<thead>

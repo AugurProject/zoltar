@@ -718,10 +718,23 @@ for (let firstRouteIndex = 0; firstRouteIndex < layoutRoutes.length; firstRouteI
 	}
 }
 const contractInteractionHtml = await readFile(path.join(docsDirectory, 'contract-interactions.html'), 'utf8')
+const contractInteractionWindow = new Window()
+contractInteractionWindow.document.write(contractInteractionHtml)
+contractInteractionWindow.document.close()
+const contractAtlasCaption = contractInteractionWindow.document.querySelector('#fig-complete-contract-atlas .diagram-caption')?.textContent.replace(/\s+/g, ' ').trim()
+contractInteractionWindow.close()
 const productionDeclarationCount = contractAtlasNodes.filter(node => node.declaration !== undefined && node.panel !== 'tests').length
 const testDeclarationCount = contractAtlasNodes.filter(node => node.declaration !== undefined && node.panel === 'tests').length
 const contractAtlasSpec = parsedSpecs['fig-complete-contract-atlas']
 const contractAtlasAriaDescription = isRecord(contractAtlasSpec) ? contractAtlasSpec['ariaDescription'] : undefined
+if (
+	contractAtlasCaption === undefined ||
+	!contractAtlasCaption.includes(`default protocol-flow layer shows ${expectedContractAtlasViewRouteCounts.protocol} routes`) ||
+	!contractAtlasCaption.includes(`layer controls expose every one of the ${expectedContractAtlasPlotRouteCount} routes while keeping all ${expectedContractAtlasNodeCount} components fixed`) ||
+	!contractAtlasCaption.includes(`all ${expectedContractAtlasRelationshipCount} meanings remain`)
+) {
+	throw new Error('Complete contract atlas caption must state its exact default-layer, plot-route, component, and relationship counts')
+}
 if (
 	!contractInteractionHtml.includes(`all ${productionDeclarationCount + testDeclarationCount} Solidity declarations`) ||
 	!contractInteractionHtml.includes(`${productionDeclarationCount} production declarations and ${testDeclarationCount}`) ||
