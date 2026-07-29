@@ -11,6 +11,7 @@ import { formatCurrencyBalance } from '../lib/formatters.js'
 import { AUCTIONED_BOND_ALLOWANCE_LABEL } from './truth-auctions/lib/forkAuction.js'
 import { getReportingOutcomeLabel } from './reporting/lib/reporting.js'
 import { getMarketTypeLabel } from './markets/lib/marketType.js'
+import { formatStatoblastSecurityMultiplier } from './markets/lib/trading.js'
 import { buildIntent, buildPresentation, withWarning } from '../lib/transactionPresentations.js'
 import type { TransactionIntent } from '../types/components.js'
 import type {
@@ -206,7 +207,7 @@ export function createZoltarMigrationWarningPresentation(result: ZoltarMigration
 type SecurityPoolCreationTransactionContext = {
 	initialReportPriorityFeeGwei?: string | undefined
 	questionId?: string | undefined
-	securityMultiplier?: string | undefined
+	statoblastSecurityMultiplierBps?: bigint | undefined
 }
 
 function getSecurityPoolCreationTransactionRows(context: SecurityPoolCreationTransactionContext | undefined) {
@@ -214,7 +215,7 @@ function getSecurityPoolCreationTransactionRows(context: SecurityPoolCreationTra
 	return [
 		...(context.initialReportPriorityFeeGwei === undefined || context.initialReportPriorityFeeGwei.trim() === '' ? [] : [{ label: commonCopy.initialReportPriorityFee, value: `${context.initialReportPriorityFeeGwei.trim()} gwei` }]),
 		...(context.questionId === undefined || context.questionId.trim() === '' ? [] : [{ label: commonCopy.questionId, value: <IdentifierValue value={context.questionId.trim()} /> }]),
-		...(context.securityMultiplier === undefined || context.securityMultiplier.trim() === '' ? [] : [{ label: commonCopy.securityMultiplier, value: context.securityMultiplier.trim() }]),
+		...(context.statoblastSecurityMultiplierBps === undefined ? [] : [{ label: commonCopy.statoblastSecurityMultiplierBps, value: `${formatStatoblastSecurityMultiplier(context.statoblastSecurityMultiplierBps)}x` }]),
 	]
 }
 
@@ -235,7 +236,7 @@ export function createSecurityPoolCreationSuccessPresentation(result: SecurityPo
 			{ label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> },
 			{ label: commonCopy.universe, value: <UniverseLink universeId={result.universeId} /> },
 			{ label: commonCopy.questionId, value: <IdentifierValue value={result.questionId} /> },
-			{ label: commonCopy.securityMultiplier, value: result.securityMultiplier.toString() },
+			{ label: commonCopy.statoblastSecurityMultiplierBps, value: `${formatStatoblastSecurityMultiplier(result.statoblastSecurityMultiplierBps)}x` },
 			{ label: commonCopy.initialReportPriorityFee, value: `${formatCurrencyBalance(result.initialReportPriorityFeeWeiPerGas, 9)} gwei` },
 		],
 		title: transactionCopy.securityPoolCreated,

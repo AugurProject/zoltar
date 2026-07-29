@@ -16,7 +16,7 @@ export type SecurityPoolDeploymentTuple = {
 	parent: Address
 	priceOracleManagerAndOperatorQueuer: Address
 	questionId: bigint
-	securityMultiplier: bigint
+	statoblastSecurityMultiplierBps: bigint
 	securityPool: Address
 	truthAuction: Address
 	universeId: bigint
@@ -101,7 +101,7 @@ function isSecurityPoolDeploymentTuple(value: unknown): value is SecurityPoolDep
 		typeof value['parent'] === 'string' &&
 		typeof value['priceOracleManagerAndOperatorQueuer'] === 'string' &&
 		typeof value['questionId'] === 'bigint' &&
-		typeof value['securityMultiplier'] === 'bigint' &&
+		typeof value['statoblastSecurityMultiplierBps'] === 'bigint' &&
 		typeof value['securityPool'] === 'string' &&
 		typeof value['truthAuction'] === 'string' &&
 		typeof value['universeId'] === 'bigint'

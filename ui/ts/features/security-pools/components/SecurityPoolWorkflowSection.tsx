@@ -38,7 +38,7 @@ import { WarningSurface } from '../../../components/WarningSurface.js'
 import { tryParseBigIntInput } from '../../markets/lib/marketForm.js'
 import { assertNever } from '../../../lib/assert.js'
 import { normalizeAddress, sameAddress } from '../../../lib/address.js'
-import { getPoolCollateralizationPercent } from '../../markets/lib/trading.js'
+import { getPoolCollateralizationPercent, getStatoblastCollateralizationTargetPercent } from '../../markets/lib/trading.js'
 import { useChainTimestamp } from '../../../lib/chainTimestamp.js'
 import {
 	applySelectedPoolWorkflowState,
@@ -457,7 +457,7 @@ export function SecurityPoolWorkflowSection({
 	})()
 	let selectedPoolSummaryContent: ComponentChildren
 	const selectedPoolCollateralizationPercent = selectedPoolSummaryPool === undefined ? undefined : getPoolCollateralizationPercent(selectedPoolSummaryPool.totalRepDeposit, selectedPoolSummaryPool.totalSecurityBondAllowance, repPerEthPrice)
-	const selectedPoolCollateralizationTarget = selectedPoolSummaryPool === undefined ? undefined : selectedPoolSummaryPool.securityMultiplier * 100n * 10n ** 18n
+	const selectedPoolCollateralizationTarget = selectedPoolSummaryPool === undefined ? undefined : getStatoblastCollateralizationTargetPercent(selectedPoolSummaryPool.statoblastSecurityMultiplierBps)
 
 	if (selectedPoolSummaryPool === undefined) {
 		selectedPoolSummaryContent = undefined
@@ -868,7 +868,7 @@ export function SecurityPoolWorkflowSection({
 													repPerEthSourceUrl={repPerEthSourceUrl}
 													securityBondAllowance={selectedVaultDetails.securityBondAllowance}
 													securityVaultDetails={selectedVaultDetails}
-													selectedPoolSecurityMultiplier={securityVault.selectedPoolSecurityMultiplier}
+													selectedPoolStatoblastSecurityMultiplierBps={securityVault.selectedPoolStatoblastSecurityMultiplierBps}
 													selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
 													variant='embedded'
 												/>

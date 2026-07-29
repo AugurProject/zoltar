@@ -254,7 +254,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				questionId,
 			}
 		}),
-		createSecurityPool: mock(async (_client: never, input: { questionId: bigint; securityMultiplier: bigint }) => {
+		createSecurityPool: mock(async (_client: never, input: { questionId: bigint; statoblastSecurityMultiplierBps: bigint }) => {
 			state.callLog.createSecurityPool += 1
 			const poolAddress = getPoolAddressForMarket(securityPoolCount)
 			const managerAddress = getManagerForPool(poolAddress)
@@ -263,7 +263,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				deployPoolHash: `0x${securityPoolCount.toString(16)}`,
 				questionId: input.questionId.toString(16),
 				securityPoolAddress: poolAddress,
-				securityMultiplier: input.securityMultiplier,
+				statoblastSecurityMultiplierBps: input.statoblastSecurityMultiplierBps,
 				universeId: 0n,
 				managerAddress,
 			} as never

@@ -33,7 +33,7 @@ contract SecurityPoolDeployer {
 		Zoltar zoltar,
 		uint248 universeId,
 		uint256 questionId,
-		uint256 securityMultiplier,
+		uint256 statoblastSecurityMultiplierBps,
 		uint256 initialEscalationGameDeposit,
 		address truthAuction
 	) external returns (ISecurityPool securityPool) {
@@ -51,7 +51,7 @@ contract SecurityPoolDeployer {
 				zoltar,
 				universeId,
 				questionId,
-				securityMultiplier,
+				statoblastSecurityMultiplierBps,
 				initialEscalationGameDeposit,
 				truthAuction
 			);
@@ -82,7 +82,7 @@ contract SecurityPoolDeploymentWorker {
 		Zoltar zoltar,
 		uint248 universeId,
 		uint256 questionId,
-		uint256 securityMultiplier,
+		uint256 statoblastSecurityMultiplierBps,
 		uint256 initialEscalationGameDeposit,
 		address truthAuction
 	) external returns (ISecurityPool securityPool) {
@@ -102,7 +102,7 @@ contract SecurityPoolDeploymentWorker {
 				zoltar,
 				universeId,
 				questionId,
-				securityMultiplier,
+				statoblastSecurityMultiplierBps,
 				initialEscalationGameDeposit,
 				truthAuction
 			)

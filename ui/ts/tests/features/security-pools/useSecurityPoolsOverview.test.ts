@@ -62,7 +62,7 @@ function createListedSecurityPool(questionId: string, securityPoolAddress: Addre
 		parent: zeroAddress,
 		questionId,
 		questionOutcome: 'none',
-		securityMultiplier: 2n,
+		statoblastSecurityMultiplierBps: 20_000n,
 		securityPoolAddress,
 		shareTokenSupply: 0n,
 		systemState: 'operational',

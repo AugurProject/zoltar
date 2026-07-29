@@ -51,7 +51,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		parent: zeroAddress,
 		questionOutcome: 'none',
 		questionId: '0x01',
-		securityMultiplier: 2n,
+		statoblastSecurityMultiplierBps: 20_000n,
 		securityPoolAddress: zeroAddress,
 		shareTokenSupply: 0n,
 		systemState: 'operational',
