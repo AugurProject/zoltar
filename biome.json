@@ -43,7 +43,7 @@
 	},
 	"overrides": [
 		{
-			"includes": ["docs/chartRuntime.js"],
+			"includes": ["docs/chartRuntime.js", "docs/docsReaderMarkdown.js"],
 			"formatter": {
 				"enabled": false
 			},

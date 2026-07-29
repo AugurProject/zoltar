@@ -1,0 +1,99 @@
+import assert from 'node:assert/strict'
+import { readdir, readFile, writeFile } from 'node:fs/promises'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { Window } from 'happy-dom'
+import { markdownHeadingIds } from './docs-markdown-anchors.mts'
+
+const repositoryRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
+const outputPath = path.join(repositoryRoot, 'docs/docsReaderMarkdown.js')
+const readerShellPaths = new Set(['documentation.html'])
+
+function normalizedElementText(content: string): string {
+	return content.replace(/\s+/g, ' ').trim()
+}
+
+async function collectReaderDocumentPaths(): Promise<string[]> {
+	const runtime = await readFile(path.join(repositoryRoot, 'docs/docsReader.js'), 'utf8')
+	const documentPaths = Array.from(runtime.matchAll(/\n\s+path: '([^']+\.(?:html|md))',/g), match => match[1]).filter(path => path !== undefined)
+	assert(documentPaths.length > 0, 'docs/docsReader.js must declare at least one reader document')
+	assert.equal(new Set(documentPaths).size, documentPaths.length, 'docs/docsReader.js reader document paths must be unique')
+
+	const docsDirectoryEntries = await readdir(path.join(repositoryRoot, 'docs'), { withFileTypes: true })
+	const sourceDocumentPaths = docsDirectoryEntries
+		.filter(entry => entry.isFile() && /\.(?:html|md)$/.test(entry.name) && !readerShellPaths.has(entry.name))
+		.map(entry => entry.name)
+		.toSorted()
+	assert.deepEqual(documentPaths.toSorted(), sourceDocumentPaths, 'docs/docsReader.js reader documents must exactly match the top-level documentation corpus')
+
+	const page = await readFile(path.join(repositoryRoot, 'docs/documentation.html'), 'utf8')
+	const initialStatusCount = Number(/All (\d+) documents/.exec(page)?.[1])
+	const pageWindow = new Window()
+	pageWindow.document.write(page)
+	pageWindow.document.close()
+	const pageTitles = Array.from(pageWindow.document.querySelectorAll('head > title'), title => normalizedElementText(title.textContent))
+	const pageHeadings = Array.from(pageWindow.document.querySelectorAll('body h1'), heading => normalizedElementText(heading.textContent))
+	const browserTitle = normalizedElementText(pageWindow.document.title)
+	pageWindow.close()
+	assert.deepEqual(pageTitles, ['Statoblast documentation'], 'documentation must have one exact Statoblast browser title')
+	assert.equal(browserTitle, 'Statoblast documentation', 'documentation browser title must render exactly as Statoblast documentation')
+	assert.deepEqual(pageHeadings, ['Statoblast documentation'], 'documentation must have one exact outer Statoblast heading')
+	assert.equal(initialStatusCount, documentPaths.length, 'documentation initial search status must match the reader corpus')
+
+	const noscript = /<noscript>([\s\S]+)<\/noscript>/.exec(page)?.[1]
+	assert(noscript !== undefined, 'docs/documentation.html must provide a no-JavaScript document list')
+	const fallbackPaths = Array.from(noscript.matchAll(/href="\.\/([^"]+\.(?:html|md))"/g), match => match[1]).filter(path => path !== undefined)
+	assert.deepEqual(fallbackPaths.toSorted(), documentPaths.toSorted(), 'documentation no-JavaScript links must match the reader corpus')
+	return documentPaths
+}
+
+async function renderMarkdownDocument(relativePath: string): Promise<readonly [string, string]> {
+	const markdown = await readFile(path.join(repositoryRoot, relativePath), 'utf8')
+	const headingIds = markdownHeadingIds(markdown)
+	let headingIndex = 0
+	let renderedHtml = Bun.markdown.html(markdown)
+	let insertedCharacterCount = 0
+	for (const match of renderedHtml.matchAll(/<h([1-6])([^>]*)>/g)) {
+		const headingId = headingIds[headingIndex]
+		if (headingId === undefined) {
+			throw new Error(`${relativePath} rendered more headings than its Markdown source`)
+		}
+		const openingTag = match[0]
+		const attributes = match[2]
+		const matchIndex = match.index
+		if (attributes === undefined) {
+			throw new Error(`${relativePath} rendered an unreadable heading tag`)
+		}
+		if (/\sid=/.test(attributes)) {
+			throw new Error(`${relativePath} rendered an unexpected heading id before reader generation`)
+		}
+		headingIndex += 1
+		const insertionIndex = matchIndex + openingTag.length + insertedCharacterCount - 1
+		const idAttribute = ` id="${headingId}"`
+		renderedHtml = `${renderedHtml.slice(0, insertionIndex)}${idAttribute}${renderedHtml.slice(insertionIndex)}`
+		insertedCharacterCount += idAttribute.length
+	}
+
+	if (headingIndex !== headingIds.length) {
+		throw new Error(`${relativePath} rendered ${headingIndex} of ${headingIds.length} Markdown headings`)
+	}
+	const renderedHeadingIds = Array.from(renderedHtml.matchAll(/<h[1-6][^>]*\sid="([^"]+)"/g), match => match[1])
+	assert.deepEqual(renderedHeadingIds, headingIds, `${relativePath} reader heading ids must match validated Markdown anchors`)
+	return [path.basename(relativePath), renderedHtml]
+}
+
+const documentPaths = await collectReaderDocumentPaths()
+const markdownPaths = documentPaths.filter(documentPath => documentPath.endsWith('.md')).map(documentPath => `docs/${documentPath}`)
+const renderedDocuments = Object.fromEntries(await Promise.all(markdownPaths.map(renderMarkdownDocument)))
+
+const output = `// Generated by scripts/build-docs-reader.mts. Do not edit directly.\nwindow.docsReaderMarkdown = ${JSON.stringify(renderedDocuments)}\n`
+const checkOnly = process.argv.includes('--check')
+
+if (checkOnly) {
+	const current = await readFile(outputPath, 'utf8').catch(() => '')
+	if (current !== output) {
+		throw new Error('docs/docsReaderMarkdown.js is stale; run bun run docs:build-reader')
+	}
+} else {
+	await writeFile(outputPath, output)
+}
