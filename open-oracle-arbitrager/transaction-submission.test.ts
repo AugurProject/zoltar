@@ -254,7 +254,7 @@ describe('signed transaction delivery', () => {
 			transactions: [serializedTransaction],
 		})
 		expect(result).toMatchObject({
-			failedTargets: [{ error: expect.stringContaining('bundle reverted'), target: `${rejected}/` }],
+			failedTargets: [{ error: expect.stringContaining('bundle reverted'), target: rejected }],
 			successful: [{ relayUrl: accepted, simulation: { totalGasUsed: 21_000n } }],
 		})
 	})
@@ -295,7 +295,7 @@ describe('signed transaction delivery', () => {
 			targetBlockNumber: 100n,
 			transactions,
 		})
-		expect(result.acceptedTargets).toEqual([`${accepted}/`])
+		expect(result.acceptedTargets).toEqual([accepted])
 		expect(requests).toEqual([
 			{
 				id: 1,
@@ -410,7 +410,7 @@ describe('signed transaction delivery', () => {
 			signMessage: () => Promise.resolve(signature),
 		})
 		expect(result.mode).toBe('private')
-		expect(result.acceptedTargets).toEqual([`${accepted}/`])
+		expect(result.acceptedTargets).toEqual([accepted])
 		expect(result.failedTargets).toHaveLength(1)
 		expect(requests).toHaveLength(1)
 		expect(requests[0]?.signature).toBe(`${address}:${signature}`)
@@ -467,8 +467,8 @@ describe('signed transaction delivery', () => {
 			{ transaction: serializedTransaction, url: 'https://rpc-b.example' },
 		])
 		expect(result).toEqual({
-			acceptedTargets: ['https://rpc-a.example/'],
-			failedTargets: [{ error: 'RPC unavailable', target: 'https://rpc-b.example/' }],
+			acceptedTargets: ['https://rpc-a.example'],
+			failedTargets: [{ error: 'RPC unavailable', target: 'https://rpc-b.example' }],
 			hash,
 			mode: 'public',
 		})
@@ -488,9 +488,9 @@ describe('signed transaction delivery', () => {
 			settings: validateSubmissionSettings({ mode: 'private', relayUrls: [accepted, stalled] }),
 			signMessage: () => Promise.resolve(signature),
 		})
-		expect(result.acceptedTargets).toEqual([`${accepted}/`])
+		expect(result.acceptedTargets).toEqual([accepted])
 		expect(result.failedTargets).toHaveLength(1)
-		expect(result.failedTargets[0]?.target).toBe(`${stalled}/`)
+		expect(result.failedTargets[0]?.target).toBe(stalled)
 		expect(result.failedTargets[0]?.error?.toLowerCase()).toContain('timed out')
 	})
 
@@ -534,7 +534,7 @@ describe('signed transaction delivery', () => {
 			expect(error).toBeInstanceOf(SubmissionFailure)
 			if (!(error instanceof SubmissionFailure)) throw error
 			expect(error.message).toContain('Every private relay rejected')
-			expect(error.failedTargets).toEqual([{ error: 'RPC -32000: rejected', target: `${rejected}/` }])
+			expect(error.failedTargets).toEqual([{ error: 'RPC -32000: rejected', target: rejected }])
 		}
 	})
 

@@ -83,6 +83,8 @@ export type PositionRecord = {
 	hedgeWeth: string
 	hedgedProfitBeforeGasEth: string
 	lifecycleGasCostEth: string
+	lifecycleReceiptBlockHash?: Hex | undefined
+	lifecycleReceiptBlockNumber?: string | undefined
 	lifecycleReceiptRecovered: boolean
 	lifecycleSubmissionBlockNumber?: string | undefined
 	lifecycleSubmissionMode?: 'private' | 'public' | undefined
@@ -100,7 +102,7 @@ export type PositionRecord = {
 	openedAt: string
 	realizedNetProfitEth: string | undefined
 	reportId: string
-	status: 'closed' | 'expired-not-included' | 'open' | 'pending-entry' | 'recovery-required' | 'replaced' | 'settled' | 'withdrawing'
+	status: 'closed' | 'closed-pending-finality' | 'expired-not-included' | 'open' | 'pending-entry' | 'recovery-required' | 'replaced' | 'settled' | 'withdrawing'
 	token: Address
 	tokenSymbol: string
 	withdrawnToken: string
@@ -218,7 +220,7 @@ function parsePosition(value: unknown): PositionRecord {
 	const account = getAddress(record['account'])
 	if (typeof record['reportId'] !== 'string' || !/^(?:0|[1-9]\d*)$/.test(record['reportId'])) throw new Error('Position journal report id is invalid')
 	if (record['direction'] !== 'buy-rep' && record['direction'] !== 'sell-rep') throw new Error('Position journal direction is invalid')
-	if (!['closed', 'expired-not-included', 'open', 'pending-entry', 'recovery-required', 'replaced', 'settled', 'withdrawing'].includes(String(record['status']))) throw new Error('Position journal status is invalid')
+	if (!['closed', 'closed-pending-finality', 'expired-not-included', 'open', 'pending-entry', 'recovery-required', 'replaced', 'settled', 'withdrawing'].includes(String(record['status']))) throw new Error('Position journal status is invalid')
 	if (typeof record['entryTransactionHash'] !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(record['entryTransactionHash'])) throw new Error('Position journal transaction hash is invalid')
 	const entryTransactionHashes = record['entryTransactionHashes']
 	if (!Array.isArray(entryTransactionHashes) || entryTransactionHashes.length === 0 || entryTransactionHashes.some(hash => typeof hash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(hash))) {
@@ -283,6 +285,16 @@ function parsePosition(value: unknown): PositionRecord {
 	if (typeof record['openedAt'] !== 'string' || !Number.isFinite(Date.parse(record['openedAt']))) throw new Error('Position journal openedAt is invalid')
 	if (record['lifecycleUpdatedAt'] !== undefined && (typeof record['lifecycleUpdatedAt'] !== 'string' || !Number.isFinite(Date.parse(record['lifecycleUpdatedAt'])))) throw new Error('Position journal lifecycleUpdatedAt is invalid')
 	if (typeof record['lifecycleReceiptRecovered'] !== 'boolean') throw new Error('Position journal lifecycle receipt recovery marker is invalid')
+	const lifecycleReceiptBlockNumber = optionalIntegerField(record, 'lifecycleReceiptBlockNumber')
+	const lifecycleReceiptBlockHash = record['lifecycleReceiptBlockHash']
+	if (lifecycleReceiptBlockHash !== undefined && (typeof lifecycleReceiptBlockHash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(lifecycleReceiptBlockHash))) {
+		throw new Error('Position journal lifecycle receipt block hash is invalid')
+	}
+	if ((lifecycleReceiptBlockNumber === undefined) !== (lifecycleReceiptBlockHash === undefined)) throw new Error('Position journal lifecycle receipt finality fields are incomplete')
+	if (record['status'] === 'closed-pending-finality' && (lifecycleReceiptBlockNumber === undefined || record['lifecycleReceiptRecovered'] !== true)) {
+		throw new Error('Position journal pending lifecycle finality evidence is incomplete')
+	}
+	if (record['status'] !== 'closed-pending-finality' && lifecycleReceiptBlockNumber !== undefined) throw new Error('Position journal lifecycle receipt finality evidence has an invalid status')
 	const lifecycleTransactionHashes = record['lifecycleTransactionHashes']
 	if (!Array.isArray(lifecycleTransactionHashes) || lifecycleTransactionHashes.some(hash => typeof hash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(hash))) {
 		throw new Error('Position journal lifecycle transaction hashes are invalid')
@@ -300,6 +312,21 @@ function parsePosition(value: unknown): PositionRecord {
 	if ((lifecycleSubmissionBlockNumber === undefined) !== (lifecycleTransactionNonce === undefined)) throw new Error('Position journal lifecycle replacement recovery fields are incomplete')
 	if (record['lifecycleSubmissionMode'] !== undefined && record['lifecycleSubmissionMode'] !== 'private' && record['lifecycleSubmissionMode'] !== 'public') throw new Error('Position journal lifecycle submission mode is invalid')
 	if ((record['lifecycleSubmissionMode'] === undefined) !== (lifecycleSubmissionBlockNumber === undefined)) throw new Error('Position journal lifecycle replacement recovery mode is incomplete')
+	if (
+		record['status'] === 'closed-pending-finality' &&
+		(lifecycleTransactionHashes.length !== 1 ||
+			record['lifecycleTargetBlockNumber'] === undefined ||
+			record['lifecycleTokenDecimals'] === undefined ||
+			lifecycleSubmissionBlockNumber === undefined ||
+			record['lifecycleSubmissionMode'] === undefined ||
+			lifecycleTransactionIntent === undefined ||
+			lifecycleTransactionNonce === undefined ||
+			record['lifecycleUpdatedAt'] === undefined ||
+			record['closedAt'] !== undefined ||
+			record['realizedNetProfitEth'] !== undefined)
+	) {
+		throw new Error('Position journal pending lifecycle finality recovery journal is incomplete')
+	}
 	if (record['closedAt'] !== undefined && (typeof record['closedAt'] !== 'string' || !Number.isFinite(Date.parse(record['closedAt'])))) throw new Error('Position journal closedAt is invalid')
 	if (typeof record['tokenSymbol'] !== 'string' || record['tokenSymbol'].trim() === '') throw new Error('Position journal token symbol is invalid')
 	const manualReconciliation = parseManualReconciliation(record['manualReconciliation'])
@@ -328,6 +355,8 @@ function parsePosition(value: unknown): PositionRecord {
 		hedgeWeth: decimalField(record, 'hedgeWeth'),
 		hedgedProfitBeforeGasEth: record['hedgedProfitBeforeGasEth'],
 		lifecycleGasCostEth: decimalField(record, 'lifecycleGasCostEth'),
+		...(lifecycleReceiptBlockHash === undefined ? {} : { lifecycleReceiptBlockHash: lifecycleReceiptBlockHash as Hex }),
+		...(lifecycleReceiptBlockNumber === undefined ? {} : { lifecycleReceiptBlockNumber }),
 		lifecycleReceiptRecovered: record['lifecycleReceiptRecovered'],
 		lifecycleSubmissionBlockNumber,
 		lifecycleSubmissionMode: record['lifecycleSubmissionMode'],

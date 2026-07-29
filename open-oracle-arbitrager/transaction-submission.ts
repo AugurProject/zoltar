@@ -1,4 +1,5 @@
 import { getAddress, keccak256, type Address, type BlockTransaction, type Hex } from '@zoltar/shared/ethereum'
+import { endpointLabel } from './connectivity.js'
 
 export type SubmissionMode = 'private' | 'public'
 
@@ -155,11 +156,6 @@ export async function prepareSignedTransaction(parameters: {
 	}
 }
 
-function targetLabel(value: string) {
-	const url = new URL(value)
-	return `${url.origin}${url.pathname}`
-}
-
 function responseError(response: JsonRpcResponse, status: number) {
 	if (response.error !== undefined) return `RPC ${response.error.code?.toString() ?? 'error'}: ${response.error.message ?? 'Unknown relay error'}`
 	return `Relay returned HTTP ${status.toString()} without a JSON-RPC result`
@@ -294,7 +290,7 @@ export async function simulateSignedBundleEveryRelay(parameters: {
 		const relayUrl = parameters.relayUrls[index]
 		if (relayUrl === undefined) throw new Error('Missing relay URL for bundle simulation result')
 		if (result.status === 'fulfilled') successful.push({ relayUrl, simulation: result.value })
-		else failedTargets.push({ error: rejectionMessage(result.reason), target: targetLabel(relayUrl) })
+		else failedTargets.push({ error: rejectionMessage(result.reason), target: endpointLabel(relayUrl) })
 	}
 	if (successful.length < minimumSuccessfulRelays) {
 		throw new SubmissionFailure(`Bundle simulation required ${minimumSuccessfulRelays.toString()} successful relays but received ${successful.length.toString()}: ${failedTargets.map(result => `${result.target}: ${result.error ?? 'unknown error'}`).join('; ')}`, failedTargets)
@@ -335,7 +331,7 @@ export async function submitSignedBundle(parameters: { address: Address; relayUr
 	for (const [index, result] of settled.entries()) {
 		const relay = parameters.relayUrls[index]
 		if (relay === undefined) throw new Error('Missing relay URL for bundle submission result')
-		const target = targetLabel(relay)
+		const target = endpointLabel(relay)
 		if (result.status === 'fulfilled') acceptedTargets.push(target)
 		else failedTargets.push({ error: rejectionMessage(result.reason), target })
 	}
@@ -384,7 +380,7 @@ export async function submitSignedTransaction(parameters: {
 		for (const [index, result] of settled.entries()) {
 			const rpcUrl = parameters.publicRpcUrls[index]
 			if (rpcUrl === undefined) throw new Error('Missing public RPC URL for submission result')
-			const target = targetLabel(rpcUrl)
+			const target = endpointLabel(rpcUrl)
 			if (result.status === 'fulfilled' && result.value.toLowerCase() === parameters.hash.toLowerCase()) acceptedTargets.push(target)
 			else {
 				const error = result.status === 'rejected' ? rejectionMessage(result.reason) : `Public RPC returned unexpected transaction hash ${result.value}`
@@ -417,7 +413,7 @@ export async function submitSignedTransaction(parameters: {
 	for (const [index, result] of settled.entries()) {
 		const relay = parameters.settings.relayUrls[index]
 		if (relay === undefined) throw new Error('Missing relay URL for submission result')
-		const target = targetLabel(relay)
+		const target = endpointLabel(relay)
 		if (result.status === 'fulfilled') acceptedTargets.push(target)
 		else failedTargets.push({ error: result.reason instanceof Error ? result.reason.message : String(result.reason), target })
 	}

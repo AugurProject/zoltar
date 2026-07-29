@@ -53,7 +53,7 @@ function endpointUrl(value: string) {
 
 export function endpointLabel(value: string) {
 	const parsed = new URL(value)
-	return `${parsed.origin}${parsed.pathname}`
+	return parsed.origin
 }
 
 export function validateReadRpcUrls(values: readonly string[]) {

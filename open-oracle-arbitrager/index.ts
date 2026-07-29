@@ -59,7 +59,7 @@ import {
 	lifecycleWithdrawalMismatch,
 	openOracleDisputeTiming,
 	opportunityDecision,
-	privateAttemptCanExpire,
+	attemptHasFinality,
 	privateEntryRecoveryIsConfirmed,
 	receiptGasExpendituresWithQuorum,
 	recoveredTransactionIntentMismatch,
@@ -1233,17 +1233,17 @@ export async function recoverPendingEntryWithQuorum(readClients: readonly ReadCl
 	}
 }
 
-export async function expirePrivateEntryWithQuorum(readClients: readonly ReadClient[], config: RecoveryConfiguration, position: PositionRecord, currentBlockNumber: bigint, expiredAt: string) {
-	if (position.entrySubmissionMode !== 'private' || position.entrySubmissionBlockNumber === undefined) throw new Error('Only a journaled private entry can expire without inclusion')
-	if (position.entryTransactionHashes.length !== 1) throw new Error('Only an atomic private entry can expire automatically')
+export async function expireEntryWithQuorum(readClients: readonly ReadClient[], config: RecoveryConfiguration, position: PositionRecord, currentBlockNumber: bigint, expiredAt: string) {
+	if (position.entrySubmissionMode === undefined || position.entrySubmissionBlockNumber === undefined) throw new Error('Only a journaled atomic entry can expire without inclusion')
+	if (position.entryTransactionHashes.length !== 1) throw new Error('Only an atomic entry can expire automatically')
 	const targetBlockNumber = BigInt(position.entrySubmissionBlockNumber) + 1n
-	if (!privateAttemptCanExpire(currentBlockNumber, targetBlockNumber)) throw new Error('Private entry target block is not sufficiently confirmed')
+	if (!attemptHasFinality(currentBlockNumber, targetBlockNumber)) throw new Error('Entry target block is not sufficiently confirmed')
 	const optionalReceipts = await transactionReceiptsOrMissingWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `expired entry ${position.reportId}`, position.entryTransactionHashes)
 	const executorReceipt = optionalReceipts.at(-1)
-	if (executorReceipt !== undefined) throw new Error('Private entry executor receipt exists and requires normal recovery')
+	if (executorReceipt !== undefined) throw new Error('Entry executor receipt exists and requires normal recovery')
 	const transactionHash = position.entryTransactionHashes[0]
-	if (transactionHash === undefined) throw new Error('Atomic private entry transaction hash is missing')
-	if (position.entryTransactionNonce === undefined) throw new Error('Atomic private entry transaction nonce is missing')
+	if (transactionHash === undefined) throw new Error('Atomic entry transaction hash is missing')
+	if (position.entryTransactionNonce === undefined) throw new Error('Atomic entry transaction nonce is missing')
 	return {
 		...position,
 		actualEntryGasCostEth: '0',
@@ -1268,6 +1268,7 @@ export async function expirePrivateEntryWithQuorum(readClients: readonly ReadCli
 }
 
 export async function reconcileExpiredAttemptsWithQuorum(readClients: readonly ReadClient[], config: RecoveryConfiguration, position: PositionRecord, currentBlockNumber: bigint) {
+	if (position.manualReconciliation !== undefined) return position
 	const attempts = position.expiredTransactionAttempts ?? []
 	if (attempts.length === 0) return position
 	const receipts = await transactionReceiptsOrMissingWithQuorum(
@@ -1280,26 +1281,28 @@ export async function reconcileExpiredAttemptsWithQuorum(readClients: readonly R
 		const receipt = receipts[index]
 		return receipt === undefined ? [] : [{ attempt, receipt }]
 	})
-	const confirmedNonce = await confirmedNonceWithQuorum(readClients, config, position.account, currentBlockNumber)
+	const finalityBlockNumber = currentBlockNumber > REORG_OVERLAP_BLOCKS ? currentBlockNumber - REORG_OVERLAP_BLOCKS : 0n
+	const finalizedFound = found.filter(({ receipt }) => receipt.blockNumber <= finalityBlockNumber)
+	const confirmedNonce = await confirmedNonceWithQuorum(readClients, config, position.account, finalityBlockNumber)
 	const impossible = attempts.filter((attempt, index) => receipts[index] === undefined && BigInt(attempt.nonce) < confirmedNonce)
-	if (found.length === 0 && impossible.length === 0) return position
-	const successful = found.find(({ receipt }) => receipt.status === 'success')
+	if (finalizedFound.length === 0 && impossible.length === 0) return position
+	const successful = finalizedFound.find(({ receipt }) => receipt.status === 'success')
 	const expenditures =
-		found.length === 0
+		finalizedFound.length === 0
 			? []
 			: await confirmedGasExpenditures(
 					readClients,
 					config,
 					`expired atomic attempts ${position.reportId}`,
-					found.map(({ receipt }) => receipt),
+					finalizedFound.map(({ receipt }) => receipt),
 				)
 	const knownGasHashes = new Set(position.gasExpenditures.map(expenditure => expenditure.transactionHash.toLowerCase()))
 	const newExpenditures = expenditures.filter(expenditure => !knownGasHashes.has(expenditure.transactionHash.toLowerCase()))
-	const entryHashes = new Set(found.filter(({ attempt }) => attempt.kind === 'entry').map(({ attempt }) => attempt.transactionHash.toLowerCase()))
+	const entryHashes = new Set(finalizedFound.filter(({ attempt }) => attempt.kind === 'entry').map(({ attempt }) => attempt.transactionHash.toLowerCase()))
 	const entryGas = newExpenditures.filter(expenditure => entryHashes.has(expenditure.transactionHash.toLowerCase())).reduce((total, expenditure) => total + parseDecimalWeth(expenditure.costEth), 0n)
 	const lifecycleGas = newExpenditures.filter(expenditure => !entryHashes.has(expenditure.transactionHash.toLowerCase())).reduce((total, expenditure) => total + parseDecimalWeth(expenditure.costEth), 0n)
 	const totalGas = entryGas + lifecycleGas
-	const completedHashes = new Set([...found.filter(({ receipt }) => receipt.status === 'reverted').map(({ attempt }) => attempt.transactionHash.toLowerCase()), ...impossible.map(attempt => attempt.transactionHash.toLowerCase())])
+	const completedHashes = new Set([...finalizedFound.filter(({ receipt }) => receipt.status === 'reverted').map(({ attempt }) => attempt.transactionHash.toLowerCase()), ...impossible.map(attempt => attempt.transactionHash.toLowerCase())])
 	return {
 		...position,
 		actualEntryGasCostEth: decimalWeth(parseDecimalWeth(position.actualEntryGasCostEth) + entryGas),
@@ -1322,6 +1325,8 @@ function withoutLifecycleAttempt(position: PositionRecord, preserveExpiredAttemp
 	return {
 		...position,
 		expiredTransactionAttempts: preserveExpiredAttempt && transactionHash !== undefined && targetBlockNumber !== undefined && nonce !== undefined ? [...(position.expiredTransactionAttempts ?? []), { kind: 'lifecycle' as const, nonce, targetBlockNumber, transactionHash }] : position.expiredTransactionAttempts,
+		lifecycleReceiptBlockHash: undefined,
+		lifecycleReceiptBlockNumber: undefined,
 		lifecycleSubmissionBlockNumber: undefined,
 		lifecycleSubmissionMode: undefined,
 		lifecycleTargetBlockNumber: undefined,
@@ -1332,6 +1337,28 @@ function withoutLifecycleAttempt(position: PositionRecord, preserveExpiredAttemp
 		lifecycleWalletTokenBefore: undefined,
 		lifecycleWalletWethBefore: undefined,
 	}
+}
+
+function rollbackProvisionalLifecycleAccounting(position: PositionRecord) {
+	const transactionHash = position.lifecycleTransactionHashes[0]
+	if (transactionHash === undefined) return position
+	const expenditure = position.lifecycleReceiptBlockHash === undefined ? undefined : position.gasExpenditures.find(candidate => candidate.transactionHash.toLowerCase() === transactionHash.toLowerCase())
+	const provisionalGas = expenditure === undefined ? 0n : parseDecimalWeth(expenditure.costEth)
+	const recordedLifecycleGas = parseDecimalWeth(position.lifecycleGasCostEth)
+	if (provisionalGas > recordedLifecycleGas) throw new Error('Provisional lifecycle gas exceeds the recorded lifecycle total')
+	return {
+		...position,
+		closedAt: undefined,
+		gasExpenditures: position.gasExpenditures.filter(candidate => candidate.transactionHash.toLowerCase() !== transactionHash.toLowerCase()),
+		lifecycleGasCostEth: decimalWeth(recordedLifecycleGas - provisionalGas),
+		lifecycleReceiptBlockHash: undefined,
+		lifecycleReceiptBlockNumber: undefined,
+		lifecycleReceiptRecovered: false,
+		lifecycleUpdatedAt: undefined,
+		realizedNetProfitEth: undefined,
+		withdrawnToken: '0',
+		withdrawnWeth: '0',
+	} satisfies PositionRecord
 }
 
 export async function recoverPendingLifecycleWithQuorum(readClients: readonly ReadClient[], config: RecoveryConfiguration, position: PositionRecord, currentBlockNumber?: bigint | undefined): Promise<PositionRecord> {
@@ -1346,11 +1373,11 @@ export async function recoverPendingLifecycleWithQuorum(readClients: readonly Re
 	try {
 		receipts = await transactionReceiptsWithQuorum(readClients, endpoints, `pending lifecycle ${position.reportId}`, position.lifecycleTransactionHashes)
 	} catch (error) {
-		if (position.lifecycleSubmissionMode !== 'private' || currentBlockNumber === undefined || !privateAttemptCanExpire(currentBlockNumber, targetBlockNumber)) throw error
+		if (currentBlockNumber === undefined || !attemptHasFinality(currentBlockNumber, targetBlockNumber)) throw error
 		const optionalReceipts = await transactionReceiptsOrMissingWithQuorum(readClients, endpoints, `expired lifecycle ${position.reportId}`, position.lifecycleTransactionHashes)
 		if (optionalReceipts.some(receipt => receipt !== undefined)) throw error
 		return {
-			...withoutLifecycleAttempt(position, true),
+			...withoutLifecycleAttempt(rollbackProvisionalLifecycleAccounting(position), true),
 			lifecycleReceiptRecovered: false,
 			lifecycleUpdatedAt: new Date().toISOString(),
 			status: 'open',
@@ -1360,12 +1387,15 @@ export async function recoverPendingLifecycleWithQuorum(readClients: readonly Re
 	const expectedHash = position.lifecycleTransactionHashes[0]
 	if (receipt === undefined || expectedHash === undefined || receipt.transactionHash.toLowerCase() !== expectedHash.toLowerCase()) throw new Error('Lifecycle receipt hash does not match the durable journal')
 	const lifecycleGasExpenditures = await confirmedGasExpenditures(readClients, config, `pending lifecycle ${position.reportId}`, [receipt])
-	const knownGasHashes = new Set(position.gasExpenditures.map(expenditure => expenditure.transactionHash.toLowerCase()))
-	const newGasExpenditures = lifecycleGasExpenditures.filter(expenditure => !knownGasHashes.has(expenditure.transactionHash.toLowerCase()))
-	const lifecycleGas = parseDecimalWeth(position.lifecycleGasCostEth) + newGasExpenditures.reduce((total, expenditure) => total + parseDecimalWeth(expenditure.costEth), 0n)
+	const previousExpenditure = position.lifecycleReceiptBlockHash === undefined ? undefined : position.gasExpenditures.find(expenditure => expenditure.transactionHash.toLowerCase() === receipt.transactionHash.toLowerCase())
+	const previousGas = previousExpenditure === undefined ? 0n : parseDecimalWeth(previousExpenditure.costEth)
+	const canonicalGas = lifecycleGasExpenditures.reduce((total, expenditure) => total + parseDecimalWeth(expenditure.costEth), 0n)
+	const recordedLifecycleGas = parseDecimalWeth(position.lifecycleGasCostEth)
+	if (previousGas > recordedLifecycleGas) throw new Error('Previously recorded lifecycle gas exceeds the lifecycle total')
+	const lifecycleGas = recordedLifecycleGas - previousGas + canonicalGas
 	const accountedPosition = {
 		...position,
-		gasExpenditures: [...position.gasExpenditures, ...newGasExpenditures],
+		gasExpenditures: [...(previousExpenditure === undefined ? position.gasExpenditures : position.gasExpenditures.filter(expenditure => expenditure.transactionHash.toLowerCase() !== receipt.transactionHash.toLowerCase())), ...lifecycleGasExpenditures],
 		lifecycleGasCostEth: decimalWeth(lifecycleGas),
 		lifecycleUpdatedAt: lifecycleGasExpenditures[0]?.minedAt ?? position.lifecycleUpdatedAt,
 	} satisfies PositionRecord
@@ -1418,19 +1448,36 @@ export async function recoverPendingLifecycleWithQuorum(readClients: readonly Re
 	) {
 		throw new Error('Lifecycle executor event does not match the durable position')
 	}
-	const realized = realizedNetProfitWeth(parseSignedDecimalEth(position.hedgedProfitBeforeGasEth), parseDecimalWeth(position.actualEntryGasCostEth), lifecycleGas)
-	const closedAt = lifecycleGasExpenditures[0]?.minedAt
-	if (closedAt === undefined) throw new Error('Lifecycle executor receipt timestamp is unavailable')
 	return {
 		...accountedPosition,
-		closedAt,
+		closedAt: undefined,
+		lifecycleReceiptBlockHash: receipt.blockHash,
+		lifecycleReceiptBlockNumber: receipt.blockNumber.toString(),
 		lifecycleReceiptRecovered: true,
-		lifecycleTransactionHashes: [],
-		realizedNetProfitEth: decimalSignedEth(realized),
-		status: 'closed',
+		realizedNetProfitEth: undefined,
+		status: 'closed-pending-finality',
 		withdrawnToken: position.lockedToken,
 		withdrawnWeth: position.lockedWeth,
 	}
+}
+
+export async function finalizeLifecycleAfterFinalityWithQuorum(readClients: readonly ReadClient[], config: RecoveryConfiguration, position: PositionRecord, currentBlockNumber: bigint): Promise<PositionRecord> {
+	if (position.status !== 'closed-pending-finality') return position
+	if (position.lifecycleReceiptBlockNumber === undefined || position.lifecycleReceiptBlockHash === undefined) throw new Error('Pending lifecycle finality evidence is incomplete')
+	const receiptBlockNumber = BigInt(position.lifecycleReceiptBlockNumber)
+	if (!attemptHasFinality(currentBlockNumber, receiptBlockNumber)) return position
+	const refreshed = await recoverPendingLifecycleWithQuorum(readClients, config, position, currentBlockNumber)
+	if (refreshed.status !== 'closed-pending-finality') return refreshed
+	if (refreshed.lifecycleReceiptBlockNumber === undefined || !attemptHasFinality(currentBlockNumber, BigInt(refreshed.lifecycleReceiptBlockNumber))) return refreshed
+	const closedAt = refreshed.lifecycleUpdatedAt
+	if (closedAt === undefined) throw new Error('Finalized lifecycle receipt timestamp is unavailable')
+	const realized = realizedNetProfitWeth(parseSignedDecimalEth(refreshed.hedgedProfitBeforeGasEth), parseDecimalWeth(refreshed.actualEntryGasCostEth), parseDecimalWeth(refreshed.lifecycleGasCostEth))
+	return {
+		...withoutLifecycleAttempt(refreshed),
+		closedAt,
+		realizedNetProfitEth: decimalSignedEth(realized),
+		status: 'closed',
+	} satisfies PositionRecord
 }
 
 export async function discoverPublicReplacementWithQuorum(readClients: readonly ReadClient[], config: RecoveryConfiguration, position: PositionRecord, blockNumber: bigint, kind: 'entry' | 'lifecycle', persistPosition: (position: PositionRecord) => Promise<void>) {
@@ -1470,17 +1517,17 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 	if (executor === undefined) throw new Error('Position recovery requires the authenticated executor parent-block guard')
 	const signMessage = account.signMessage
 	if (position.account.toLowerCase() !== account.address.toLowerCase()) throw new Error(`Open position ${position.reportId} belongs to ${position.account}, not the active signer`)
+	if (position.status === 'closed-pending-finality') {
+		const finalized = await finalizeLifecycleAfterFinalityWithQuorum(readClients, config, position, blockNumber)
+		if (finalized !== position) await persistPosition(finalized)
+		if (finalized.status === 'closed') return 'processed' as const
+		if (finalized.status === 'open') return 'progressed' as const
+		return 'waiting' as const
+	}
 	const id = BigInt(position.reportId)
 	const storedSnapshot = await storedReportWithQuorum(readClients, config, id, blockNumber)
 	const report = storedSnapshot.report
 	const game = report.game
-	if (game.currentReporter === zeroAddress || game.token1.toLowerCase() !== config.network.weth.toLowerCase() || game.token2.toLowerCase() !== position.token.toLowerCase()) {
-		await persistPosition({ ...position, status: 'recovery-required' })
-		throw new Error(`Open position ${position.reportId} cannot be reconciled with stored OpenOracle state`)
-	}
-	const currentReporter = game.currentReporter.toLowerCase() === account.address.toLowerCase()
-	const currentTime = (game.flags & OPEN_ORACLE_FLAG_TIME_TYPE) === 0n ? blockNumber : storedSnapshot.blockTimestamp
-	const settlementEligible = currentReporter && game.settlementTimestamp === 0n && currentTime >= game.reportTimestamp + game.settlementTime
 	const balancesBefore = await lifecycleBalancesWithQuorum(readClients, config, account.address, position.token, blockNumber)
 	if (balancesBefore.blockHash.toLowerCase() !== storedSnapshot.blockHash.toLowerCase()) throw new Error('Lifecycle state reads use different canonical blocks')
 	let activePosition = position
@@ -1498,9 +1545,9 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 			if (activePosition.status === 'recovery-required') throw new Error('Successful public entry receipt does not match the durable execution intent and executor event')
 		} catch (error) {
 			const targetBlockNumber = activePosition.entrySubmissionBlockNumber === undefined ? undefined : BigInt(activePosition.entrySubmissionBlockNumber) + 1n
-			if (activePosition.entrySubmissionMode === 'private' && targetBlockNumber !== undefined && privateAttemptCanExpire(blockNumber, targetBlockNumber)) {
+			if (activePosition.entrySubmissionMode !== undefined && targetBlockNumber !== undefined && attemptHasFinality(blockNumber, targetBlockNumber)) {
 				try {
-					activePosition = await expirePrivateEntryWithQuorum(readClients, config, activePosition, blockNumber, dateFromBlockTimestamp(storedSnapshot.blockTimestamp).toISOString())
+					activePosition = await expireEntryWithQuorum(readClients, config, activePosition, blockNumber, dateFromBlockTimestamp(storedSnapshot.blockTimestamp).toISOString())
 					await persistPosition(activePosition)
 					return 'processed' as const
 				} catch (expirationError) {
@@ -1529,6 +1576,13 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 	if (activePosition.status === 'recovery-required' && activePosition.lifecycleReceiptRecovered) {
 		throw new Error(`Position ${activePosition.reportId} has recovered lifecycle receipts but requires manual residual-asset reconciliation`)
 	}
+	if (game.currentReporter === zeroAddress || game.token1.toLowerCase() !== config.network.weth.toLowerCase() || game.token2.toLowerCase() !== activePosition.token.toLowerCase()) {
+		await persistPosition({ ...activePosition, status: 'recovery-required' })
+		throw new Error(`Open position ${activePosition.reportId} cannot be reconciled with stored OpenOracle state`)
+	}
+	const currentReporter = game.currentReporter.toLowerCase() === account.address.toLowerCase()
+	const currentTime = (game.flags & OPEN_ORACLE_FLAG_TIME_TYPE) === 0n ? blockNumber : storedSnapshot.blockTimestamp
+	const settlementEligible = currentReporter && game.settlementTimestamp === 0n && currentTime >= game.reportTimestamp + game.settlementTime
 	if (currentReporter && game.settlementTimestamp === 0n && !settlementEligible) {
 		return 'waiting' as const
 	}
@@ -1583,7 +1637,7 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 		data: lifecycleCall.data,
 		from: account.address,
 		gasEstimate: lifecycleCall.gas,
-		lastValidBlockNumber: lifecycleLastValidBlockNumber(config.submission.mode, targetBlockNumber),
+		lastValidBlockNumber: lifecycleLastValidBlockNumber(targetBlockNumber),
 		nonce: startingNonce,
 		signTransaction,
 		to: lifecycleCall.to,
@@ -1661,7 +1715,7 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 	} catch (error) {
 		throw new Error(`Pending position ${activePosition.reportId} lifecycle receipt could not be recovered: ${errorMessage(error)}`)
 	}
-	return 'processed' as const
+	return 'progressed' as const
 }
 
 async function inspectReport(
@@ -1989,7 +2043,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 					return queueSettingsUpdate(async () => {
 						await persistSettings({ ...currentPersistedSettings(), submission: next })
 						pendingSubmission = next
-						recordOperation(state, { category: 'configuration', details: next.relayUrls.join(', ') || undefined, level: 'info', message: `Submission mode ${next.mode} verified and saved`, reason: 'Applied at the next scan boundary', reportId: undefined })
+						recordOperation(state, { category: 'configuration', details: next.relayUrls.map(endpointLabel).join(', ') || undefined, level: 'info', message: `Submission mode ${next.mode} verified and saved`, reason: 'Applied at the next scan boundary', reportId: undefined })
 						return pendingSubmission
 					})
 				},
@@ -2119,7 +2173,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 				}
 				let lifecycleProcessed = false
 				if (config.execute && wallet !== undefined) {
-					for (const position of positions.filter(candidate => candidate.status !== 'recovery-required' && (candidate.expiredTransactionAttempts?.length ?? 0) !== 0)) {
+					for (const position of positions.filter(candidate => candidate.status !== 'recovery-required' && candidate.manualReconciliation === undefined && (candidate.expiredTransactionAttempts?.length ?? 0) !== 0)) {
 						try {
 							const reconciled = await reconcileExpiredAttemptsWithQuorum(readClients, config, position, blockNumber)
 							if (reconciled !== position) {

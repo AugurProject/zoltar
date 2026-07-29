@@ -10,6 +10,7 @@ let settingsLoaded = false
 let submissionLoaded = false
 let connectivityLoaded = false
 let tokensLoaded = false
+let initialFragmentApplied = false
 let connected = false
 let signerFeedback: { error: boolean; message: string } | undefined
 let signerRequestPending = false
@@ -689,6 +690,11 @@ function render(snapshot: OperatorSnapshot) {
 		target?.focus({ preventScroll: true })
 	}
 	window.scrollTo(scrollPosition)
+	if (!initialFragmentApplied) {
+		initialFragmentApplied = true
+		const fragment = decodeURIComponent(window.location.hash.slice(1))
+		if (fragment !== '') document.getElementById(fragment)?.scrollIntoView()
+	}
 }
 
 async function refresh() {

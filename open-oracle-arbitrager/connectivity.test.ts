@@ -46,13 +46,14 @@ describe('operator connectivity', () => {
 		expect(validateIndependentReadRpcUrls('https://one.example', ['https://two.example'])).toEqual(['https://two.example/'])
 	})
 
-	test('validates read and public RPC endpoints without exposing URL query values in labels', () => {
+	test('redacts RPC path and query credentials from endpoint labels', () => {
 		const settings = validateConnectivitySettings({
 			publicRpcUrls: ['https://rpc.example/v1?api-key=secret', 'https://rpc.example/v1?api-key=secret'],
 			readRpcUrl: 'https://read.example/key',
 		})
 		expect(settings.publicRpcUrls).toHaveLength(1)
-		expect(endpointLabel(settings.publicRpcUrls[0] ?? '')).toBe('https://rpc.example/v1')
+		expect(endpointLabel(settings.publicRpcUrls[0] ?? '')).toBe('https://rpc.example')
+		expect(endpointLabel('https://eth-mainnet.g.alchemy.com/v2/SUPER_SECRET?token=HIDDEN')).toBe('https://eth-mainnet.g.alchemy.com')
 		expect(() => validateConnectivitySettings({ publicRpcUrls: [], readRpcUrl: 'https://read.example' })).toThrow('At least one')
 		expect(() => validateConnectivitySettings({ publicRpcUrls: ['http://rpc.example'], readRpcUrl: 'https://read.example' })).toThrow('HTTPS')
 		expect(() => validateConnectivitySettings({ publicRpcUrls: ['https://rpc.example'], readRpcUrl: 'https://user:secret@read.example' })).toThrow('credentials')

@@ -4,7 +4,6 @@ import type { OpportunitySnapshot } from './operator-state.js'
 import type { DurableTransactionIntent, PositionRecord } from './position-store.js'
 import { quorumValue } from './read-quorum.js'
 import { isSelfReport } from './strategy.js'
-import type { SubmissionMode } from './transaction-submission.js'
 
 export function executionTokenAllowed(allowedTokens: readonly Address[], token: Address) {
 	return allowedTokens.some(allowed => allowed.toLowerCase() === token.toLowerCase())
@@ -40,7 +39,7 @@ export function privateBundleReceiptStatus(receipt: Pick<TransactionReceipt, 'bl
 	return receipt.status === 'success' ? ('confirmed' as const) : ('reverted' as const)
 }
 
-export function privateAttemptCanExpire(currentBlockNumber: bigint, targetBlockNumber: bigint) {
+export function attemptHasFinality(currentBlockNumber: bigint, targetBlockNumber: bigint) {
 	return currentBlockNumber >= targetBlockNumber + 12n
 }
 
@@ -56,8 +55,8 @@ export function recoveredTransactionIntentMismatch(expected: DurableTransactionI
 	return undefined
 }
 
-export function lifecycleLastValidBlockNumber(mode: SubmissionMode, targetBlockNumber: bigint) {
-	return mode === 'private' ? targetBlockNumber : undefined
+export function lifecycleLastValidBlockNumber(targetBlockNumber: bigint) {
+	return targetBlockNumber
 }
 
 export async function simulateTrackedPrivateBundle<TTransaction, TResult>(transactions: readonly TTransaction[], simulate: () => Promise<TResult>, track: (transaction: TTransaction, status: 'submission-failed' | 'submitting', error: unknown | undefined) => void) {
@@ -280,7 +279,7 @@ export async function finalizeSubmittedLifecycleAttempt(lifecyclePosition: Posit
 		throw error
 	}
 	await persist(recovered)
-	if (recovered.status !== 'closed') throw new Error(`Position ${lifecyclePosition.reportId} lifecycle assets do not match the expected hedge-neutral withdrawal`)
+	if (recovered.status !== 'closed-pending-finality') throw new Error(`Position ${lifecyclePosition.reportId} lifecycle assets do not match the expected hedge-neutral withdrawal`)
 	return recovered
 }
 

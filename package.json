@@ -103,6 +103,7 @@
 		"coverage": "bun run coverage:fast",
 		"docs:check-html": "bun ./scripts/check-docs-html.mts",
 		"docs:build-charts": "bun build ./docs/charts/chartRuntime.ts --outfile ./docs/chartRuntime.js --target browser --minify",
+		"docs:capture-open-oracle-arbitrager": "bun ./scripts/capture-open-oracle-arbitrager-screenshots.mts",
 		"docs:check-charts": "bun ./scripts/check-doc-charts.mts",
 		"docs:check-examples": "bun ./scripts/check-docs-examples.mts",
 		"docs:check-content": "bun ./scripts/check-docs-content.mts",

@@ -46,6 +46,7 @@ async function requireJson(request: Request) {
 
 export function startDashboardServer(port: number, controller: DashboardController) {
 	const directory = import.meta.dir
+	const documentationDirectory = join(directory, '..', 'docs')
 	const browserSource = Bun.file(join(directory, 'dashboard.ts'))
 	const browserFormatSource = Bun.file(join(directory, 'dashboard-format.ts'))
 	const transpiler = new Bun.Transpiler({ loader: 'ts', target: 'browser' })
@@ -57,8 +58,28 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			if (request.headers.get('host') !== authority) return json({ error: 'Request authority is not accepted' }, 403)
 			const url = new URL(request.url)
 			if (request.method === 'GET' && url.pathname === '/') return new Response(Bun.file(join(directory, 'dashboard.html')), { headers: securityHeaders('text/html; charset=utf-8') })
+			if (request.method === 'GET' && (url.pathname === '/documentation' || url.pathname === '/documentation/')) {
+				return new Response(Bun.file(join(directory, 'documentation.html')), { headers: securityHeaders('text/html; charset=utf-8') })
+			}
+			if (request.method === 'GET' && url.pathname === '/README.md') return new Response(Bun.file(join(directory, 'README.md')), { headers: securityHeaders('text/markdown; charset=utf-8') })
+			if (request.method === 'GET' && url.pathname === '/docs/open-oracle-integration.html') {
+				return new Response(Bun.file(join(documentationDirectory, 'open-oracle-integration.html')), { headers: securityHeaders('text/html; charset=utf-8') })
+			}
 			if (request.method === 'GET' && url.pathname === '/favicon.ico') return new Response(undefined, { headers: securityHeaders('image/x-icon'), status: 204 })
 			if (request.method === 'GET' && url.pathname === '/dashboard.css') return new Response(Bun.file(join(directory, 'dashboard.css')), { headers: securityHeaders('text/css; charset=utf-8') })
+			if (request.method === 'GET' && url.pathname === '/documentation.css') return new Response(Bun.file(join(directory, 'documentation.css')), { headers: securityHeaders('text/css; charset=utf-8') })
+			if (request.method === 'GET' && url.pathname === '/docs/shared-docs.css') {
+				return new Response(Bun.file(join(documentationDirectory, 'shared-docs.css')), { headers: securityHeaders('text/css; charset=utf-8') })
+			}
+			if (request.method === 'GET' && url.pathname === '/docs/chartRuntime.js') {
+				return new Response(Bun.file(join(documentationDirectory, 'chartRuntime.js')), { headers: securityHeaders('text/javascript; charset=utf-8') })
+			}
+			if (request.method === 'GET' && url.pathname === '/documentation-assets/dashboard-overview.png') {
+				return new Response(Bun.file(join(directory, 'documentation-assets', 'dashboard-overview.png')), { headers: securityHeaders('image/png') })
+			}
+			if (request.method === 'GET' && url.pathname === '/documentation-assets/dashboard-markets.png') {
+				return new Response(Bun.file(join(directory, 'documentation-assets', 'dashboard-markets.png')), { headers: securityHeaders('image/png') })
+			}
 			if (request.method === 'GET' && url.pathname === '/dashboard.js') {
 				const source = await browserSource.text()
 				return new Response(transpiler.transformSync(source), {

@@ -18,7 +18,7 @@ import {
 	openOracleDisputeTiming,
 	opportunityDecision,
 	privateBundleReceiptStatus,
-	privateAttemptCanExpire,
+	attemptHasFinality,
 	privateEntryRecoveryIsConfirmed,
 	recoveredTransactionIntentMismatch,
 	receiptGasExpendituresWithQuorum,
@@ -110,9 +110,8 @@ describe('funded execution orchestration', () => {
 		expect(executionTokenAllowed(configured, observed)).toBe(false)
 	})
 
-	test('uses on-chain parent binding for public lifecycle and relay target binding for private lifecycle', () => {
-		expect(lifecycleLastValidBlockNumber('public', 101n)).toBeUndefined()
-		expect(lifecycleLastValidBlockNumber('private', 101n)).toBe(101n)
+	test('stops waiting after the parent-bound target in both delivery modes', () => {
+		expect(lifecycleLastValidBlockNumber(101n)).toBe(101n)
 	})
 
 	test('never attributes aggregate holder balances to a position after another reporter replaces it', () => {
@@ -172,8 +171,8 @@ describe('funded execution orchestration', () => {
 	})
 
 	test('releases a private attempt only after its target block has twelve canonical descendants', () => {
-		expect(privateAttemptCanExpire(112n, 101n)).toBe(false)
-		expect(privateAttemptCanExpire(113n, 101n)).toBe(true)
+		expect(attemptHasFinality(112n, 101n)).toBe(false)
+		expect(attemptHasFinality(113n, 101n)).toBe(true)
 	})
 
 	test('does not promote a gas-only private revert into confirmed execution history', () => {

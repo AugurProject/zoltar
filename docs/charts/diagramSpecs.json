@@ -753,7 +753,7 @@
 			{
 				"attributes": {
 					"class": "svg-label",
-					"x": "120",
+					"x": "90",
 					"y": "108",
 					"text-anchor": "middle"
 				},
@@ -767,7 +767,7 @@
 			{
 				"attributes": {
 					"class": "svg-small",
-					"x": "120",
+					"x": "90",
 					"y": "134",
 					"text-anchor": "middle"
 				},
@@ -2559,7 +2559,7 @@
 			{
 				"attributes": {
 					"class": "svg-gold",
-					"x": "315",
+					"x": "250",
 					"y": "72",
 					"width": "205",
 					"height": "86",
@@ -4858,7 +4858,7 @@
 			{
 				"attributes": {
 					"class": "svg-small",
-					"x": "315",
+					"x": "250",
 					"y": "76"
 				},
 				"children": [
@@ -5820,7 +5820,7 @@
 			{
 				"attributes": {
 					"class": "svg-micro",
-					"x": "510",
+					"x": "410",
 					"y": "92",
 					"text-anchor": "middle"
 				},
@@ -10871,5 +10871,569 @@
 		"height": 420,
 		"nodes": [],
 		"width": 900
+	},
+	"fig-open-oracle-arbitrager-lifecycle": {
+		"ariaDescription": "The arbitrager synchronizes approved OpenOracle reports, compares each report with executable Uniswap V3 liquidity, atomically hedges and disputes an eligible report, waits through later dispute rounds, atomically settles and withdraws exact balances, and only realizes profit after twelve canonical descendants. Missing or contradictory evidence moves the durable position to recovery rather than releasing risk.",
+		"ariaLabel": "OpenOracle arbitrager execution and recovery lifecycle",
+		"height": 390,
+		"nodes": [
+			{
+				"attributes": {
+					"class": "svg-blue",
+					"x": "20",
+					"y": "55",
+					"width": "170",
+					"height": "78",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-gold",
+					"x": "210",
+					"y": "55",
+					"width": "170",
+					"height": "78",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-green",
+					"x": "400",
+					"y": "55",
+					"width": "170",
+					"height": "78",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-blue",
+					"x": "590",
+					"y": "55",
+					"width": "170",
+					"height": "78",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-blue",
+					"x": "780",
+					"y": "55",
+					"width": "170",
+					"height": "78",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-green",
+					"x": "970",
+					"y": "55",
+					"width": "170",
+					"height": "78",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "105",
+					"y": "83",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "Sync reports"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "105",
+					"y": "108",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "quorum + allowlist"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "295",
+					"y": "83",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "Price + filter"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "295",
+					"y": "108",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "quote, TWAP, risk"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "485",
+					"y": "83",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "Atomic entry"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "485",
+					"y": "108",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "hedge + dispute"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "675",
+					"y": "83",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "Open"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "675",
+					"y": "108",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "wait + recheck"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "865",
+					"y": "83",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "Atomic exit"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "865",
+					"y": "108",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "settle + withdraw"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "1055",
+					"y": "83",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "Final"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "1055",
+					"y": "108",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "12 descendants"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"d": "M 190 94 H 210",
+					"marker-end": "arrow"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"d": "M 380 94 H 400",
+					"marker-end": "arrow"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"d": "M 570 94 H 590",
+					"marker-end": "arrow"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"d": "M 760 94 H 780",
+					"marker-end": "arrow"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"d": "M 950 94 H 970",
+					"marker-end": "arrow"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-red",
+					"x": "365",
+					"y": "245",
+					"width": "430",
+					"height": "92",
+					"rx": "12"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "580",
+					"y": "276",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "Durable recovery"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "580",
+					"y": "302",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "retain risk · reconcile canonical evidence · retry or require operator"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"d": "M 485 133 V 245",
+					"stroke-dasharray": "7 5",
+					"marker-end": "arrow"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"d": "M 675 133 V 210 H 550 V 245",
+					"stroke-dasharray": "7 5",
+					"marker-end": "arrow"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"d": "M 865 133 V 210 H 625 V 245",
+					"stroke-dasharray": "7 5",
+					"marker-end": "arrow"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"d": "M 1055 133 V 210 H 700 V 245",
+					"stroke-dasharray": "7 5",
+					"marker-end": "arrow"
+				},
+				"tag": "path"
+			}
+		],
+		"width": 1160
+	},
+	"fig-open-oracle-arbitrager-profit": {
+		"ariaDescription": "Executable hedge proceeds or avoided WETH spending produce gross hedge profit. Entry gas, the signed worst-case slippage reserve, and the lifecycle gas reserve are subtracted before the strategy thresholds are tested. After execution, quote-time reserves are replaced by actual hedge and canonical gas evidence; realized profit is withheld until the exact lifecycle withdrawal reaches finality.",
+		"ariaLabel": "OpenOracle arbitrager modeled and realized profit accounting",
+		"height": 300,
+		"nodes": [
+			{
+				"attributes": {
+					"class": "svg-green",
+					"x": "45",
+					"y": "70",
+					"width": "180",
+					"height": "95",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-red",
+					"x": "270",
+					"y": "95",
+					"width": "135",
+					"height": "70",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-amber",
+					"x": "450",
+					"y": "95",
+					"width": "135",
+					"height": "70",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-red",
+					"x": "630",
+					"y": "95",
+					"width": "135",
+					"height": "70",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-blue",
+					"x": "810",
+					"y": "70",
+					"width": "125",
+					"height": "95",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "135",
+					"y": "105",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "Hedge P&L"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "135",
+					"y": "132",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "exchange − report cost"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "337",
+					"y": "126",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "Entry gas"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "517",
+					"y": "126",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "Slippage"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "697",
+					"y": "126",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "Exit gas"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "872",
+					"y": "105",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "Net"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "872",
+					"y": "132",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "thresholded"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"d": "M 225 118 H 270",
+					"marker-end": "arrow"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"d": "M 405 130 H 450",
+					"marker-end": "arrow"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"d": "M 585 130 H 630",
+					"marker-end": "arrow"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"d": "M 765 118 H 810",
+					"marker-end": "arrow"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "490",
+					"y": "226",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "Modeled: conservative reserves · Tracked: actual hedge and entry gas · Realized: finalized exact withdrawal and actual lifecycle gas"
+					}
+				],
+				"tag": "text"
+			}
+		],
+		"width": 980
 	}
 }

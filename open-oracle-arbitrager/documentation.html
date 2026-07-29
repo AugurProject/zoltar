@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>OpenOracle Arbitrager Operator Guide</title>
+		<link rel="stylesheet" href="./documentation.css" />
+	</head>
+	<body class="doc-openoracle open-oracle-arbitrager-guide">
+		<main>
+			<header>
+				<h1>OpenOracle Arbitrager</h1>
+				<p>
+					This operator guide explains how the bot discovers OpenOracle games,
+					compares their exchange rate with onchain liquidity, submits an atomic
+					hedge and dispute, and accounts for the final withdrawal. It covers the
+					command line, local dashboard, strategy math, supported exchanges, durable
+					recovery, and the balances an execution wallet needs.
+				</p>
+				<div class="callout">
+					<strong>Experimental operator software</strong>
+					Dry-run first, rehearse with a dedicated low-balance key on Sepolia, and
+					supervise every funded position. A modeled profit is not a guarantee:
+					fees, failed inclusion, later disputes, token behavior, RPC failure, MEV,
+					and market movement can still cause loss.
+				</div>
+				<nav class="guide-nav" aria-label="Guide sections">
+					<a href="#quick-start">Quick start</a>
+					<a href="#dashboard">Dashboard</a>
+					<a href="#math">Strategy math</a>
+					<a href="#exchanges">Exchanges</a>
+					<a href="#recovery">Recovery</a>
+					<a href="./README.md">Complete option reference</a>
+					<a href="../docs/open-oracle-integration.html">Protocol integration</a>
+				</nav>
+			</header>
+
+			<section id="architecture">
+				<h2>What the bot does</h2>
+				<p>
+					The bot follows approved <code>OpenOraclePriceCoordinator</code>
+					reports. For each active WETH/token game it loads the exact report state,
+					finds supported WETH pools, requests size-aware Uniswap V3 quotes, and
+					applies timing, TWAP, inventory, allowance, profitability, and risk
+					limits. Only the best currently eligible opportunity may be selected.
+				</p>
+				<figure class="diagram diagram-wide" id="fig-open-oracle-arbitrager-lifecycle">
+					<div
+						class="plot-chart"
+						data-plot-chart="fig-open-oracle-arbitrager-lifecycle"
+						data-plot-width="1160"
+						data-plot-height="390"
+						role="img"
+						aria-label="OpenOracle arbitrager execution and recovery lifecycle"
+					>
+						<span class="plot-chart-fallback"
+							>Reports are synchronized and priced before one atomic entry hedges
+							and disputes. An atomic exit settles and withdraws exact balances.
+							Profit becomes realized only after twelve canonical descendants;
+							ambiguous evidence stays in durable recovery.</span
+						>
+					</div>
+					<p class="diagram-caption">
+						<span class="figure-label">Execution lifecycle</span>Both public and
+						private delivery sign a parent-bound executor transaction. A missed
+						target cannot later succeed; after twelve descendants and unanimous
+						missing-receipt evidence, the bot safely expires the entry or retries
+						the lifecycle while continuing to watch the old hash for late revert
+						gas.
+					</p>
+				</figure>
+				<div class="compact-grid">
+					<div>
+						<strong>Entry transaction</strong>
+						The executor pulls pre-approved inventory, performs the exact-input or
+						exact-output Uniswap V3 hedge, submits the replacement report, clears
+						temporary allowances, and emits position-specific evidence in one
+						revert boundary.
+					</div>
+					<div>
+						<strong>Lifecycle transaction</strong>
+						The executor optionally settles, moves only the position's expected
+						OpenOracle balances under internal allowances, withdraws those exact
+						amounts, and emits the evidence used for final accounting.
+					</div>
+				</div>
+			</section>
+
+			<section id="quick-start">
+				<h2>Command-line quick start</h2>
+				<p>
+					Run commands from the monorepo root. The default is monitoring-only:
+					without <code>--execute</code>, no transaction can be signed or sent.
+					Use <code>./open-oracle-arbitrager/run --help</code> for every option.
+				</p>
+				<p><strong>One mainnet dry-run scan</strong></p>
+				<pre><code>ETH_RPC_URL=https://your-mainnet-rpc.example \
+./open-oracle-arbitrager/run \
+  --open-oracle=0xYourOpenOracle \
+  --coordinator-address=0xReviewedCoordinator \
+  --lookback-blocks=50000 \
+  --once</code></pre>
+				<p><strong>Continuous monitoring with the local UI</strong></p>
+				<pre><code>ETH_RPC_URL=https://your-mainnet-rpc.example \
+./open-oracle-arbitrager/run \
+  --open-oracle=0xYourOpenOracle \
+  --coordinator-address=0xReviewedCoordinator \
+  --ui</code></pre>
+				<p>
+					Open <a href="/">http://127.0.0.1:4173</a>. The first startup state is
+					<strong>Syncing</strong>; after the bounded historical scan reaches the
+					head, the state becomes <strong>Running</strong>. The bot then queries
+					every newly observed block and evaluates opportunities at the newest
+					canonical head.
+				</p>
+				<p><strong>Sepolia rehearsal with execution armed</strong></p>
+				<pre><code>PRIVATE_KEY=0xDedicatedTestKey \
+./open-oracle-arbitrager/run \
+  --network=sepolia \
+  --execute \
+  --ui \
+  --rpc-url=https://your-sepolia-read-rpc.example \
+  --quorum-rpc-url=https://independent-sepolia-rpc.example \
+  --public-rpc-url=https://your-sepolia-submit-rpc.example \
+  --submission-mode=public \
+  --open-oracle=0xReviewedSepoliaOpenOracle \
+  --coordinator-address=0xReviewedSepoliaCoordinator \
+  --executor-address=0xVerifiedSepoliaExecutor \
+  --deployment-manifest=/secure/sepolia-execution-manifest.json \
+  --rep-address=0xSepoliaReportToken \
+  --uniswap-router=0xSepoliaSwapRouter</code></pre>
+				<div class="callout">
+					<strong>Execution prerequisites</strong>
+					Execution also requires an authenticated manifest, at least two
+					independently operated read RPC origins, exact contract bytecode matches,
+					a coordinator whose immutable configuration matches the chosen OpenOracle
+					and WETH, and all entry and lifecycle allowances before an opportunity is
+					selected.
+				</div>
+				<div class="table-scroll" tabindex="0" aria-label="Important command-line controls">
+					<table>
+						<thead>
+							<tr>
+								<th>Control</th>
+								<th>Purpose</th>
+								<th>Operational note</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td><code>--network</code></td>
+								<td>Selects <code>mainnet</code> or <code>sepolia</code>.</td>
+								<td>Fixes the expected chain ID and network defaults.</td>
+							</tr>
+							<tr>
+								<td><code>--rpc-url</code> and <code>--quorum-rpc-url</code></td>
+								<td>Primary and independent execution-state reads.</td>
+								<td>Live execution requires exact quorum agreement.</td>
+							</tr>
+							<tr>
+								<td><code>--submission-mode</code></td>
+								<td>Chooses private relay or public mempool delivery.</td>
+								<td>Both modes send one atomic parent-bound call.</td>
+							</tr>
+							<tr>
+								<td><code>--relay-url</code></td>
+								<td>Adds a Flashbots-compatible private bundle relay.</td>
+								<td>Repeat for up to eight; capability and chain checks run first.</td>
+							</tr>
+							<tr>
+								<td><code>--public-rpc-url</code></td>
+								<td>Adds a direct raw-transaction destination.</td>
+								<td>Every configured endpoint receives the identical signed payload.</td>
+							</tr>
+							<tr>
+								<td><code>--token-address</code></td>
+								<td>Adds an explicitly reviewed executable token.</td>
+								<td>Observed but unapproved game tokens remain monitoring-only.</td>
+							</tr>
+							<tr>
+								<td><code>--once</code></td>
+								<td>Runs one bounded scan and exits.</td>
+								<td>Useful for monitoring and scheduled diagnostics; incompatible with the UI.</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</section>
+
+			<section id="wallet">
+				<h2>Wallet balances and approvals</h2>
+				<p>
+					Use a dedicated hot wallet that controls no treasury or unrelated
+					protocol assets. The dashboard shows its address, native ETH, WETH,
+					primary REP, configured-token balances, and an estimated executable
+					portfolio value.
+				</p>
+				<ul>
+					<li>
+						<strong>ETH</strong> pays entry, lifecycle, setup, failed public
+						transaction, and recovery gas. Keep a buffer above the displayed
+						reserves.
+					</li>
+					<li>
+						<strong>WETH</strong> funds the report contribution and, for a
+						buy-token hedge, the maximum signed Uniswap input.
+					</li>
+					<li>
+						<strong>Report token</strong> funds the token side when required.
+						This may be REPv2, fork REP, or an explicitly configured ERC-20.
+					</li>
+					<li>
+						<strong>ERC-20 allowances</strong> permit the executor to pull exact
+						entry funding. Setup approvals are never bundled with an opportunity.
+					</li>
+					<li>
+						<strong>OpenOracle internal allowances</strong> permit the executor
+						to move the exact WETH and token proceeds for atomic withdrawal.
+					</li>
+				</ul>
+				<p>
+					The UI can accept a private key because the bot must sign unattended
+					transactions. The key is submitted only to the loopback process and is
+					not returned by the API. Saving it across restarts is an explicit
+					plaintext opt-in to an owner-only settings file; leaving that option off
+					keeps the key in process memory only.
+				</p>
+			</section>
+
+			<section id="dashboard">
+				<h2>Using the dashboard</h2>
+				<p>
+					Start with <code>--ui</code>. The header shows whether execution is armed
+					and whether the scanner is syncing, running, paused, stopped, or in
+					error. Pausing prevents new entries but deliberately continues recovery,
+					settlement, and withdrawal for capital already at risk.
+				</p>
+				<figure class="screenshot">
+					<img
+						src="./documentation-assets/dashboard-overview.png"
+						alt="Populated OpenOracle arbitrager dashboard showing running state, current block age, wallet balances, realized and open profit, capital in games, and active risk limits"
+						width="1440"
+						height="900"
+					/>
+					<figcaption>
+						Operations view at 1440 × 900. Summary cards separate realized,
+						open, and pre-gas economics; the connected wallet and strategy controls
+						remain visible beside the live status.
+					</figcaption>
+				</figure>
+				<div class="table-scroll" tabindex="0" aria-label="Dashboard control reference">
+					<table>
+						<thead>
+							<tr>
+								<th>Area</th>
+								<th>What it shows</th>
+								<th>How to use it</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>Summary and balances</td>
+								<td>Block age, execution state, ETH/WETH/token inventory, gas, revenue, P&amp;L, and value locked in observed games.</td>
+								<td>Resolve stale-head, low-ETH, or insufficient-inventory warnings before enabling execution.</td>
+							</tr>
+							<tr>
+								<td>Strategy</td>
+								<td>Profit floors, TWAP distance/window, timing buffers, and polling interval.</td>
+								<td>Save changes for the next scan and future restarts. Risk-limit flags remain restart-time controls.</td>
+							</tr>
+							<tr>
+								<td>RPC and delivery</td>
+								<td>Read RPC, public fanout, private relays, minimum successful simulations, chain IDs, and health.</td>
+								<td>Every new endpoint is checked before it is applied. Display labels redact path and query credentials.</td>
+							</tr>
+							<tr>
+								<td>Transactions and operations</td>
+								<td>Submission targets, hashes, replacements, gas, status, decisions, and reasons.</td>
+								<td>Use the reason column to distinguish an unprofitable quote from a safety or infrastructure rejection.</td>
+							</tr>
+							<tr>
+								<td>Positions</td>
+								<td>Durable entry/lifecycle state, exact locked and withdrawn amounts, gas, and final profit.</td>
+								<td><code>closed-pending-finality</code> is intentionally still at risk; <code>recovery-required</code> needs the runbook.</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<figure class="screenshot">
+					<img
+						src="./documentation-assets/dashboard-markets.png"
+						alt="OpenOracle arbitrager market dashboard showing REP tokens, Uniswap pools, price and liquidity columns, a token with no supported pool, and a multi-pool price history chart"
+						width="1440"
+						height="900"
+					/>
+					<figcaption>
+						Markets view at 1440 × 900. Pool and token addresses link to the
+						selected network explorer. Price series are grouped by
+						pool so venue differences and shallow-liquidity outliers remain
+						visible.
+					</figcaption>
+				</figure>
+			</section>
+
+			<section id="math">
+				<h2>How the strategy math works</h2>
+				<p>
+					All contract amounts use integer token units. OpenOracle percentage
+					rates use precision <code>10,000,000</code>, and fee multiplication
+					floors exactly like Solidity:
+				</p>
+				<div class="equation" id="eq-arbitrager-openoracle-fee" tabindex="0">
+					<math display="block" aria-label="fee equals floor of amount times rate divided by ten million" data-source="fee = floor(amount * rate / 10000000)">
+						<mrow>
+							<mi>fee</mi>
+							<mo>=</mo>
+							<mo>⌊</mo>
+							<mfrac>
+								<mrow><mi>amount</mi><mo>×</mo><mi>rate</mi></mrow>
+								<mn>10000000</mn>
+							</mfrac>
+							<mo>⌋</mo>
+						</mrow>
+					</math>
+					<p class="equation-caption">
+						<span class="equation-label">OpenOracle fee</span>The bot does not
+						replace integer rounding with floating-point arithmetic.
+					</p>
+				</div>
+				<p>
+					The next WETH-side report amount is the current amount multiplied by the
+					game multiplier and capped at <code>escalationHalt</code>. Once the halt
+					has been reached, OpenOracle advances by one atomic unit. The token-side
+					amount comes from an executable Uniswap quote at that replacement ratio.
+				</p>
+				<p><strong>Sell-token direction.</strong> The bot receives a size-aware quote for selling the current token amount:</p>
+				<div class="equation" id="eq-arbitrager-sell-profit" tabindex="0">
+					<math display="block" aria-label="sell profit equals WETH output minus report WETH minus reporter fee minus protocol fee" data-source="P_sell = WETH_out - WETH_report - fee_reporter - fee_protocol">
+						<mrow>
+							<msub><mi>P</mi><mi>sell</mi></msub>
+							<mo>=</mo>
+							<msub><mi>WETH</mi><mi>out</mi></msub>
+							<mo>−</mo>
+							<msub><mi>WETH</mi><mi>report</mi></msub>
+							<mo>−</mo>
+							<msub><mi>fee</mi><mi>reporter</mi></msub>
+							<mo>−</mo>
+							<msub><mi>fee</mi><mi>protocol</mi></msub>
+						</mrow>
+					</math>
+					<p class="equation-caption">
+						<span class="equation-label">Sell-token hedge P&amp;L before gas</span>
+						The signed minimum-output limit reserves the full configured adverse
+						slippage.
+					</p>
+				</div>
+				<p><strong>Buy-token direction.</strong> The bot requests an exact-output quote for the report token plus both token fees:</p>
+				<div class="equation" id="eq-arbitrager-buy-profit" tabindex="0">
+					<math display="block" aria-label="buy profit equals report WETH minus WETH input" data-source="P_buy = WETH_report - WETH_in">
+						<mrow>
+							<msub><mi>P</mi><mi>buy</mi></msub>
+							<mo>=</mo>
+							<msub><mi>WETH</mi><mi>report</mi></msub>
+							<mo>−</mo>
+							<msub><mi>WETH</mi><mi>in</mi></msub>
+						</mrow>
+					</math>
+					<p class="equation-caption">
+						<span class="equation-label">Buy-token hedge P&amp;L before gas</span>
+						The signed maximum-input limit rounds upward and is fully funded before
+						entry.
+					</p>
+				</div>
+				<figure class="diagram diagram-wide" id="fig-open-oracle-arbitrager-profit">
+					<div
+						class="plot-chart"
+						data-plot-chart="fig-open-oracle-arbitrager-profit"
+						data-plot-width="980"
+						data-plot-height="300"
+						role="img"
+						aria-label="OpenOracle arbitrager modeled and realized profit accounting"
+					>
+						<span class="plot-chart-fallback"
+							>Gross hedge profit is reduced by entry gas, worst-case signed
+							slippage, and lifecycle gas before thresholds are applied. Actual
+							hedge and gas evidence replace estimates, and realized profit waits
+							for finalized exact withdrawal.</span
+						>
+					</div>
+					<p class="diagram-caption">
+						<span class="figure-label">Profit layers</span>Quote-time modeled
+						profit, tracked open hedge economics, and realized net profit answer
+						different questions and are deliberately shown separately.
+					</p>
+				</figure>
+				<p>The conservative selection value is:</p>
+				<div class="equation" id="eq-arbitrager-modeled-profit" tabindex="0">
+					<math display="block" aria-label="modeled profit equals hedge profit minus entry gas minus slippage reserve minus lifecycle reserve" data-source="P_modeled = P_hedge - G_entry - R_slippage - R_lifecycle">
+						<mrow>
+							<msub><mi>P</mi><mi>modeled</mi></msub>
+							<mo>=</mo>
+							<msub><mi>P</mi><mi>hedge</mi></msub>
+							<mo>−</mo>
+							<msub><mi>G</mi><mi>entry</mi></msub>
+							<mo>−</mo>
+							<msub><mi>R</mi><mi>slippage</mi></msub>
+							<mo>−</mo>
+							<msub><mi>R</mi><mi>lifecycle</mi></msub>
+						</mrow>
+					</math>
+					<p class="equation-caption">
+						<span class="equation-label">Modeled net</span>Every term is measured
+						in WETH. It must meet both the absolute WETH floor and
+						<code>P<sub>modeled</sub> × 10,000 ≥ B<sub>return</sub> × minimumProfitBps</code>.
+					</p>
+				</div>
+				<p>
+					For a sell-token hedge, <code>B<sub>return</sub></code> is the report's
+					WETH contribution plus its WETH fees. For a buy-token hedge it is the
+					exact-output Uniswap quote's required WETH input. Equality passes the
+					threshold; integer comparison occurs in WETH wei before display
+					formatting.
+				</p>
+				<ul>
+					<li>
+						Entry gas reserves <code>1,200,000 × gas price</code>; private mode
+						replaces the gas amount with the largest successful relay simulation.
+					</li>
+					<li>
+						The slippage reserve is the complete distance between the quote and
+						the signed Uniswap limit, not merely expected slippage.
+					</li>
+					<li>
+						The lifecycle reserve is the larger of the configured floor and
+						<code>(callbackGasLimit + 900,000) × gas price</code>.
+					</li>
+					<li>
+						Open hedged net uses actual executor hedge evidence and gas recorded so
+						far. Realized net additionally requires exact withdrawal evidence and
+						twelve canonical descendants.
+					</li>
+				</ul>
+			</section>
+
+			<section id="exchanges">
+				<h2>Supported exchanges and price charts</h2>
+				<div class="table-scroll" tabindex="0" aria-label="Supported exchange matrix">
+					<table>
+						<thead>
+							<tr>
+								<th>Venue</th>
+								<th>Network</th>
+								<th>Monitoring</th>
+								<th>Execution</th>
+								<th>Price and liquidity meaning</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>Uniswap V3</td>
+								<td>Mainnet and Sepolia</td>
+								<td>Yes: 0.01%, 0.05%, 0.3%, and 1% WETH/token pools</td>
+								<td>Yes, through QuoterV2 and the authenticated SwapRouter</td>
+								<td>Spot WETH/token comes from <code>sqrtPriceX96</code>; liquidity is the raw active-range <code>liquidity()</code> value.</td>
+							</tr>
+							<tr>
+								<td>Uniswap V2</td>
+								<td>Mainnet</td>
+								<td>Yes</td>
+								<td>No</td>
+								<td>Spot WETH/token comes from normalized reserves; both reserves are shown.</td>
+							</tr>
+							<tr>
+								<td>SushiSwap V2</td>
+								<td>Mainnet</td>
+								<td>Yes</td>
+								<td>No</td>
+								<td>Spot WETH/token comes from normalized reserves; both reserves are shown.</td>
+							</tr>
+							<tr>
+								<td>Centralized exchanges and other DEXs</td>
+								<td>Any</td>
+								<td>No</td>
+								<td>No</td>
+								<td>No offchain API or unsupported venue participates in opportunity selection.</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<p>
+					The dashboard's historical chart stores one current-head sample per
+					pool and block. Every line therefore represents a concrete exchange
+					pool, not an aggregated token price. The exact-value table lists block,
+					observation time, pool, venue, and WETH-per-token price. These spot
+					samples are for comparison; only Uniswap V3 execution uses a
+					size-aware QuoterV2 result and spot/TWAP guard.
+				</p>
+				<p>
+					On mainnet, startup discovers REPv2 and instantiated fork REP tokens
+					from Augur universe state. Explicitly configured tokens join the
+					execution allowlist. Tokens seen only in approved reports are displayed
+					for monitoring but cannot trigger a trade, and a token with no supported
+					WETH pool is shown explicitly rather than silently omitted.
+				</p>
+			</section>
+
+			<section id="recovery">
+				<h2>Finality and durable recovery</h2>
+				<ul class="status-sequence" aria-label="Normal durable position states">
+					<li>pending-entry</li>
+					<li>open</li>
+					<li>withdrawing</li>
+					<li>closed-pending-finality</li>
+					<li>closed</li>
+				</ul>
+				<p>
+					A successful lifecycle receipt is provisional. The bot retains its
+					transaction hash, receipt block number and hash, exact withdrawals, gas,
+					and risk slot until twelve canonical descendants exist. It then rereads
+					the receipt through the independent RPC quorum before releasing risk and
+					recording realized profit.
+				</p>
+				<p>
+					If a shallow reorganization removes that receipt, provisional gas and
+					withdrawals are rolled back, the old signed hash is archived for late
+					revert monitoring, and the position returns to <code>open</code> for a
+					fresh parent-bound lifecycle attempt. If evidence disagrees, an executor
+					event is missing, another reporter replaced the bot, or exact assets
+					cannot be attributed, the state becomes
+					<code>recovery-required</code> and continues consuming the risk limit.
+				</p>
+				<div class="callout">
+					<strong>Never delete a recovery record to make the bot trade again</strong>
+					Preserve the journal, stop new entries, compare both RPCs and an explorer,
+					verify the signer, chain, OpenOracle, executor, report, nonce, calldata,
+					receipt event, wallet balances, and OpenOracle internal balances, then use
+					the signer-authorized reconciliation command documented in
+					<a href="./README.md#recovery-required-runbook">the complete runbook</a>.
+				</div>
+			</section>
+
+			<section id="files">
+				<h2>Persistent files and operational boundaries</h2>
+				<div class="table-scroll" tabindex="0" aria-label="Persistent bot files">
+					<table>
+						<thead>
+							<tr>
+								<th>File</th>
+								<th>Purpose</th>
+								<th>Protection</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td><code>settings-NETWORK.json</code></td>
+								<td>Strategy, endpoints, submission mode, pause state, token list, and optional saved signer.</td>
+								<td>Owner-only; treat as a wallet secret when signer persistence is enabled.</td>
+							</tr>
+							<tr>
+								<td><code>positions-NETWORK.json</code></td>
+								<td>Crash-critical hashes, intents, accounting, finality evidence, and manual reconciliation.</td>
+								<td>Owner-only, synchronized atomic replacement, single-process lock.</td>
+							</tr>
+							<tr>
+								<td><code>history-NETWORK.jsonl</code></td>
+								<td>Confirmed entry history and quote-time tracking.</td>
+								<td>Owner-only append with file and directory synchronization.</td>
+							</tr>
+							<tr>
+								<td><code>prices-NETWORK.jsonl</code></td>
+								<td>Per-block, per-pool spot history shown by the chart.</td>
+								<td>Keep network-specific; malformed records are skipped with diagnostics.</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<p>
+					The dashboard binds to loopback and rejects unexpected Host authorities
+					and cross-origin mutations. Do not expose it through a reverse proxy
+					without adding authentication and transport security. RPC and relay
+					credentials may remain in the owner-only settings form, but operation
+					logs and endpoint status expose only URL origins.
+				</p>
+			</section>
+		</main>
+		<script src="../docs/chartRuntime.js"></script>
+	</body>
+</html>

@@ -209,16 +209,24 @@ describe('durable OpenOracle position journal', () => {
 			withdrawnToken: '0',
 			withdrawnWeth: '0',
 		} satisfies PositionRecord
-		const publicProgress = {
+		const pendingFinality = {
 			...position,
 			executionIntent: position.executionIntent === undefined ? undefined : { ...position.executionIntent, reportId: '8' },
-			lifecycleTargetBlockNumber: '0',
-			lifecycleTransactionHashes: [],
+			gasExpenditures: [...position.gasExpenditures, { costEth: '0.000021', minedAt: '2026-01-02T00:00:00.000Z', transactionHash: `0x${'22'.repeat(32)}` as const }],
+			lifecycleGasCostEth: '0.000021',
+			lifecycleReceiptBlockHash: `0x${'44'.repeat(32)}` as const,
+			lifecycleReceiptBlockNumber: '123',
+			lifecycleReceiptRecovered: true,
+			lifecycleTransactionHashes: [`0x${'22'.repeat(32)}` as const],
 			reportId: '8',
-			status: 'open' as const,
+			status: 'closed-pending-finality' as const,
+			withdrawnToken: position.lockedToken,
+			withdrawnWeth: position.lockedWeth,
 		}
-		await savePositionJournal(path, [position, publicProgress])
-		expect(await loadPositionJournal(path)).toEqual([position, publicProgress])
+		await savePositionJournal(path, [position, pendingFinality])
+		expect(await loadPositionJournal(path)).toEqual([position, pendingFinality])
+		await Bun.write(path, JSON.stringify({ positions: [{ ...pendingFinality, lifecycleTransactionIntent: undefined }], version: 1 }))
+		await expect(loadPositionJournal(path)).rejects.toThrow('pending lifecycle finality recovery journal is incomplete')
 	})
 
 	test('round-trips the confirmed-history outbox until its synced append is acknowledged', async () => {
@@ -397,6 +405,7 @@ describe('durable OpenOracle position journal', () => {
 			direction: 'sell-rep',
 			entryTransactionHash: `0x${'11'.repeat(32)}`,
 			entryTransactionHashes: [`0x${'11'.repeat(32)}`],
+			expiredTransactionAttempts: [{ kind: 'entry', nonce: '8', targetBlockNumber: '123', transactionHash: `0x${'33'.repeat(32)}` }],
 			gasExpenditures: [
 				{ costEth: '0.001', minedAt: '2026-01-01T00:00:00.000Z', transactionHash: `0x${'11'.repeat(32)}` },
 				{ costEth: '0.002', minedAt: '2026-01-02T00:00:00.000Z', transactionHash: `0x${'22'.repeat(32)}` },

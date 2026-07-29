@@ -11,7 +11,7 @@ const docsDirectory = path.join(repositoryRoot, 'docs')
 const entrypoint = path.join(repositoryRoot, 'docs/charts/chartRuntime.ts')
 const generatedPath = path.join(repositoryRoot, 'docs/chartRuntime.js')
 const specsPath = path.join(repositoryRoot, 'docs/charts/diagramSpecs.json')
-const expectedChartCount = 40
+const expectedChartCount = 42
 const supportedDiagramTags = new Set(['circle', 'defs', 'line', 'marker', 'path', 'polyline', 'rect', 'text', 'tspan'])
 const axisFreeNativeChartIds = new Set(['fig-contract-interaction-map'])
 const quantitativeChartIdSet = new Set<string>(quantitativeChartIds)
@@ -189,6 +189,7 @@ function assertChartNode(value: unknown, chartId: string): void {
 }
 
 const [htmlEntries, specsSource, runtimeSource] = await Promise.all([readdir(docsDirectory), readFile(specsPath, 'utf8'), readFile(entrypoint, 'utf8')])
+htmlEntries.push('../open-oracle-arbitrager/documentation.html')
 const runtimeSourceFile = ts.createSourceFile(entrypoint, runtimeSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
 const nativeDispatchResult = readNativeChartDispatches(runtimeSourceFile)
 if (nativeDispatchResult.issue !== undefined) {

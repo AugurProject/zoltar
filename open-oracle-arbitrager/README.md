@@ -6,6 +6,11 @@ modeled hedge remains profitable after OpenOracle fees and gas. It includes a lo
 operator dashboard for live state, strategy controls, wallet inventory, submitted
 disputes, transaction delivery, and ETH-denominated profit tracking.
 
+The rendered [operator guide](./documentation.html) explains the UI and CLI,
+execution math, exchange support, recovery states, and includes populated dashboard
+screenshots. When the dashboard is running, select **Operator guide** or open
+`http://127.0.0.1:4173/documentation` (using the configured UI port).
+
 Dry-run is the default. The bot cannot submit a transaction unless it is explicitly
 started with `--execute` and has a signer supplied through `PRIVATE_KEY`, saved
 restart settings, or the local dashboard when `--ui` is enabled.
@@ -28,7 +33,8 @@ executor, which swaps the required inventory atomically and submits the OpenOrac
 dispute while preserving the wallet as the replacement reporter. After the dispute
 window, the bot settles the final report, withdraws the position's exact OpenOracle
 balances, and closes its durable position record only after canonical receipts and
-exact asset recovery agree. If a later reporter replaced the bot, automatic
+exact asset recovery agree through 12 canonical descendants. If a later reporter
+replaced the bot, automatic
 lifecycle execution fails closed because aggregate holder balances cannot prove
 which returned assets belong to that position; the operator must reconcile the
 replacement manually.
@@ -398,8 +404,11 @@ Before each dispute, the bot:
     internal transfers, WETH/token withdrawals, and the canonical parent check share
     one revert boundary. It records realized P&amp;L only when the canonical receipt
     contains the executor event matching the position's account, report, tokens, and
-    amounts. A later reporter replacement fails closed for manual reconciliation;
-    aggregate holder balances are never treated as position attribution evidence.
+    amounts and remains canonical through 12 descendants. Before that point the
+    position is `closed-pending-finality`, still consumes its risk slot, and is
+    automatically reopened if the receipt disappears in a reorganization. A later
+    reporter replacement fails closed for manual reconciliation; aggregate holder
+    balances are never treated as position attribution evidence.
 
 The executor atomically swaps the old report inventory through the authenticated
 router, pulls the calculated contribution, verifies exact balance deltas into itself
@@ -540,8 +549,11 @@ The dashboard shows:
   withdrawals, state, and realized net P&amp;L. A staged entry shows **Awaiting entry
   evidence** and is excluded from actual P&amp;L totals until receipt and executor-event
   quorum succeeds. A lifecycle attempt is likewise excluded while any receipt is
-  ambiguous. Realized totals include only closed positions whose expected inventory
-  fully reconciled or whose manual reconciliation explicitly records P&amp;L.
+  ambiguous. `closed-pending-finality` retains its risk slot and does not contribute
+  realized profit until its exact lifecycle evidence survives 12 canonical
+  descendants. Realized totals include only closed positions whose expected
+  inventory fully reconciled or whose manual reconciliation explicitly records
+  P&amp;L.
 - Confirmed dispute transactions and their older quote-time accounting. The table
   and trend are bounded to the latest 500 records; durable position totals use the
   complete position journal.
@@ -778,25 +790,27 @@ and authentication format.
 
 The transaction tracker records each submitted executor call as `submitting`,
 `pending`, `confirmation unknown`, `confirmed`, `reverted`, or `submission failed`.
-It shows which targets accepted or rejected the payload. A private bundle targets
-only the next block and is not resubmitted from a stale quote. Missing receipt
-evidence remains pending through a 12-block canonical-finality window. If every read
+It shows which targets accepted or rejected the payload. Every atomic entry and
+lifecycle transaction is parent-bound to one target block and is not resubmitted
+from a stale quote. In public mode, receipt polling yields once that target passes so
+the durable recovery loop can continue. Missing receipt evidence remains pending
+through a 12-block canonical-finality window in either delivery mode. If every read
 RPC then agrees that the parent-bound entry executor call was absent, the attempt
-becomes `expired-not-included` and releases its risk slot. A quorum-confirmed reverted
-atomic entry is terminally closed after recording its gas; it cannot have changed
-OpenOracle state. If the atomic lifecycle call was absent, that attempt is cleared and
-the open position can safely retry from a fresh parent. Expired hashes remain in the
-durable journal and are checked on every poll. If a retained transaction is later
-published, its parent guard makes it revert; the bot records that late gas once,
-updates the UTC-day gas budget and realized P&amp;L where applicable, and then removes
-the archived attempt. An absent hash is also retired once independent RPCs prove a
-later canonical transaction consumed its nonce, because the retained signature can
-no longer be mined. Unexpected successful evidence fails closed. A successful
-receipt without the expected executor event or exact durable transaction intent, RPC
-disagreement, or ambiguous evidence remains `recovery-required`. Active
-transaction-tracker rows are kept in process memory and reset on restart; confirmed
-dispute history and its ETH profit totals are persisted in the configured history
-file.
+becomes `expired-not-included` and releases its risk slot. A quorum-confirmed
+reverted atomic entry is terminally closed after recording its gas; it cannot have
+changed OpenOracle state. If the atomic lifecycle call was absent, that attempt is
+cleared and the open position can safely retry from a fresh parent. Expired hashes
+remain in the durable journal and are checked on every poll. If a retained
+transaction is later published, its parent guard makes it revert; the bot records
+that late gas once, updates the UTC-day gas budget and realized P&amp;L where
+applicable, and then removes the archived attempt. An absent hash is also retired
+once independent RPCs prove at the finalized height that a later canonical
+transaction consumed its nonce, because the retained signature can no longer be
+mined. Unexpected successful evidence fails closed. A successful receipt without
+the expected executor event or exact durable transaction intent, RPC disagreement,
+or ambiguous evidence remains `recovery-required`. Active transaction-tracker rows
+are kept in process memory and reset on restart; confirmed dispute history and its
+ETH profit totals are persisted in the configured history file.
 
 ## Adjust the strategy
 
@@ -895,14 +909,15 @@ the same execution signer across any of those boundaries.
 The state sequence is:
 
 ```text
-pending-entry → open → withdrawing → closed
-     │           │          │
+pending-entry → open → withdrawing → closed-pending-finality → closed
+     │           │          │                    │
      │           └──────────┴──→ recovery-required
      │                                ↓ signer-key-authorized local reconciliation
      │                              closed (P&L recorded or unavailable)
-     ├── atomic private only: after 12 canonical descendants and unanimous absence
+     ├── atomic public/private: after 12 canonical descendants and unanimous absence
      │    → expired-not-included
-     └── quorum-confirmed atomic revert → closed (gas recorded)
+     ├── quorum-confirmed atomic revert → closed (gas recorded)
+     └── lifecycle receipt removed by reorg → open (provisional accounting removed)
 ```
 
 The bot records every entry transaction hash before submission. Private and public
@@ -910,8 +925,8 @@ entry each have one guarded executor transaction. After a restart the bot requir
 independent RPC agreement on every required receipt and on that receipt block's
 current canonical hash. Every receipt must include its mined effective gas price.
 The bot then decodes the executor event and reconstructs actual entry gas and hedge
-economics before leaving `pending-entry`. A current atomic private attempt proven
-absent after the 12-block window becomes `expired-not-included`; a
+economics before leaving `pending-entry`. A current atomic public or private attempt
+proven absent after the 12-block window becomes `expired-not-included`; a
 quorum-confirmed atomic revert closes after gas accounting. Missing or ambiguous
 evidence remains `recovery-required` and never produces trading profit. Legacy
 multi-transaction private records are never auto-expired because their prerequisite
@@ -925,7 +940,11 @@ the same parent-bound transaction. After a crash the bot reconstructs lifecycle 
 and withdrawals from the canonical receipt and `LifecycleExecuted` event. Wallet
 balance deltas and `withdraw(max)` are not accounting evidence, so permissionless
 OpenOracle dust, unrelated transfers, and other positions sharing a token remain
-separate.
+separate. Exact successful evidence first moves the record to
+`closed-pending-finality`. The bot retains the risk slot and transaction evidence
+until 12 canonical descendants; it then realizes profit, or removes provisional
+withdrawal and gas accounting and reopens the position if the receipt was reorged
+out.
 
 ### `recovery-required` runbook
 
@@ -949,7 +968,7 @@ delete or hand-edit a record to bypass the one-position guard.
 3. For **lifecycle receipt could not be recovered**, inspect the single
    `lifecycleTransactionHashes` value and `lifecycleTargetBlockNumber`. A successful
    call must be in that target block and emit the exact matching lifecycle event.
-   A private attempt that all RPCs still report absent after 12 canonical
+   A public or private attempt that all RPCs still report absent after 12 canonical
    descendants is automatically cleared for a fresh retry. Keep the bot paused for
    disagreement or ambiguous evidence; do not authorize a second transaction while
    the recorded attempt remains live.
@@ -1033,18 +1052,21 @@ entry from depending on wallet inventory already committed to recovery.
 - Continuous mode retries transient poll failures. The dashboard exposes the latest
   error, but production operation still requires external process supervision and
   alerts.
-- A private entry bundle targets one block. The bot waits 12 canonical descendants
-  before unanimous receipt absence can finalize it as `expired-not-included`.
+- Every public transaction and private entry bundle targets one block. The bot waits
+  12 canonical descendants before unanimous receipt absence can finalize it as
+  `expired-not-included`.
   Disagreement or a successful receipt without the matching executor event remains
   fail-closed. A quorum-confirmed reverted atomic entry closes after recording its
-  gas. A private lifecycle attempt proven absent after the same window is cleared
+  gas. A lifecycle attempt in either delivery mode proven absent after the same
+  window is cleared
   and rebuilt against a fresh parent rather than replaying its signed transaction.
 - The owner-only position journal is written immediately before entry and lifecycle
   submission and recovered on restart. A pending entry advances only after every
   recorded bundle receipt, mined gas price, canonical receipt-block hash, and
-  executor event agree; a lifecycle attempt closes only after its canonical receipt
-  and exact executor event agree. Unavailable or inconsistent evidence fails closed
-  under the recovery runbook above.
+  executor event agree; a lifecycle attempt realizes profit and releases risk only
+  after its canonical receipt and exact executor event agree through 12 descendants.
+  Unavailable or inconsistent evidence fails closed under the recovery runbook
+  above.
 - No automated trading system can guarantee that users never lose money. Reorgs,
   correlated RPC lies, relay/builder faults, base-fee spikes, malicious or rebasing
   tokens, OpenOracle/Uniswap defects, compromised keys, and market movement can

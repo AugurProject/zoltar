@@ -134,15 +134,18 @@ export async function waitForTrackedTransaction(
 	let tracked = submission
 	const receipt = await waitForResolvedTransaction(
 		submission.hash,
-		parameters => wallet.waitForTransactionReceipt({ ...parameters, transaction: submission.transaction }),
+		parameters => wallet.waitForTransactionReceipt({ ...parameters, timeout: config.pollMilliseconds, transaction: submission.transaction }),
 		undefined,
 		async error => {
 			console.error(`transaction=${submission.hash} confirmationRetry=${errorMessage(error)}`)
 			track(trackedActivity(tracked, 'confirmation-unknown'))
+			const currentBlockNumber = await client.getBlockNumber()
+			if (tracked.lastValidBlockNumber !== undefined && currentBlockNumber >= tracked.lastValidBlockNumber) {
+				throw new Error(`Transaction ${submission.hash} was not confirmed in its parent-bound target block ${tracked.lastValidBlockNumber.toString()}`)
+			}
 			if (config.submission.mode !== 'private') return
 			await attemptConfirmationRecovery(
 				async () => {
-					const currentBlockNumber = await client.getBlockNumber()
 					const retry = await retryPrivateSubmissionWithinWindow({
 						currentBlockNumber,
 						lastValidBlockNumber: tracked.lastValidBlockNumber,

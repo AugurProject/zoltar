@@ -1,10 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import { createPublicClient, custom, encodeAbiParameters, encodeEventTopics, getAddress, mainnet, type EIP1193Provider, type Hex } from '@zoltar/shared/ethereum'
 import { openOracleArbitrageExecutorAbi } from './abi.js'
-import { executionRecordForConfirmedPosition, expirePrivateEntryWithQuorum, lifecycleExecutionFromLogs, reconcileExpiredAttemptsWithQuorum, recoverPendingEntryWithQuorum, recoverPendingLifecycleWithQuorum } from './index.js'
-import type { PositionRecord } from './position-store.js'
+import { executionRecordForConfirmedPosition, expireEntryWithQuorum, finalizeLifecycleAfterFinalityWithQuorum, lifecycleExecutionFromLogs, reconcileExpiredAttemptsWithQuorum, recoverPendingEntryWithQuorum, recoverPendingLifecycleWithQuorum } from './index.js'
+import { manuallyReconcilePosition, type PositionRecord } from './position-store.js'
 
 const transactionHash = `0x${'11'.repeat(32)}` as Hex
+const lifecycleTransactionHash = `0x${'22'.repeat(32)}` as Hex
 const token = getAddress('0x0000000000000000000000000000000000000001')
 const executor = getAddress('0x0000000000000000000000000000000000000004')
 const weth = getAddress('0x0000000000000000000000000000000000000005')
@@ -30,7 +31,7 @@ function missingReceiptClients(confirmedNonce?: bigint | undefined) {
 	})
 }
 
-function revertedReceiptClients(blockNumber = 100n) {
+function receiptClients(blockNumber = 100n, status: 'reverted' | 'success' = 'reverted', logs: readonly Record<string, unknown>[] = [], receiptTransactionHash = transactionHash) {
 	const blockHash = `0x${'aa'.repeat(32)}`
 	const blockNumberHex = `0x${blockNumber.toString(16)}`
 	return ['primary', 'secondary'].map(() => {
@@ -45,11 +46,11 @@ function revertedReceiptClients(blockNumber = 100n) {
 						effectiveGasPrice: '0x3b9aca00',
 						from: getAddress('0x0000000000000000000000000000000000000002'),
 						gasUsed: '0x5208',
-						logs: [],
+						logs,
 						logsBloom: `0x${'00'.repeat(256)}`,
-						status: '0x0',
+						status: status === 'success' ? '0x1' : '0x0',
 						to: executor,
-						transactionHash,
+						transactionHash: receiptTransactionHash,
 						transactionIndex: '0x0',
 						type: '0x2',
 					})
@@ -87,7 +88,44 @@ function revertedReceiptClients(blockNumber = 100n) {
 	})
 }
 
-function successfulMismatchedIntentClients() {
+function lifecycleReceiptClients(blockNumber = 100n) {
+	const account = getAddress('0x0000000000000000000000000000000000000002')
+	const topics = encodeEventTopics({
+		abi: openOracleArbitrageExecutorAbi,
+		eventName: 'LifecycleExecuted',
+		args: { account, reportId: 7n, token1: weth },
+	})
+	if (topics.some(topic => topic === null)) throw new Error('Lifecycle event topics are incomplete')
+	const data = encodeAbiParameters(
+		[
+			{ name: 'amount1', type: 'uint256' },
+			{ name: 'token2', type: 'address' },
+			{ name: 'amount2', type: 'uint256' },
+			{ name: 'settlerReward', type: 'uint256' },
+		],
+		[10n ** 18n, token, 2n * 10n ** 18n, 0n],
+	)
+	return receiptClients(
+		blockNumber,
+		'success',
+		[
+			{
+				address: executor,
+				blockHash: `0x${'aa'.repeat(32)}`,
+				blockNumber: `0x${blockNumber.toString(16)}`,
+				data,
+				logIndex: '0x0',
+				removed: false,
+				topics,
+				transactionHash: lifecycleTransactionHash,
+				transactionIndex: '0x0',
+			},
+		],
+		lifecycleTransactionHash,
+	)
+}
+
+function successfulMismatchedIntentClients(receiptTransactionHash = transactionHash) {
 	const blockHash = `0x${'aa'.repeat(32)}`
 	const account = getAddress('0x0000000000000000000000000000000000000002')
 	return ['primary', 'secondary'].map(() => {
@@ -106,7 +144,7 @@ function successfulMismatchedIntentClients() {
 						logsBloom: `0x${'00'.repeat(256)}`,
 						status: '0x1',
 						to: executor,
-						transactionHash,
+						transactionHash: receiptTransactionHash,
 						transactionIndex: '0x0',
 						type: '0x2',
 					})
@@ -117,7 +155,7 @@ function successfulMismatchedIntentClients() {
 						blockNumber: '0x64',
 						from: account,
 						gas: '0x5208',
-						hash: transactionHash,
+						hash: receiptTransactionHash,
 						input: '0xabcd',
 						maxFeePerGas: '0x3b9aca00',
 						maxPriorityFeePerGas: '0x1',
@@ -233,16 +271,16 @@ describe('entry crash recovery', () => {
 		})
 	})
 
-	test('releases the risk slot after a private entry is canonically absent for twelve blocks', async () => {
+	test.each(['private', 'public'] as const)('releases the risk slot after an absent %s entry has twelve canonical descendants', async entrySubmissionMode => {
 		const position = {
 			...confirmedPosition(),
 			actualEntryGasCostEth: '0',
 			entrySubmissionBlockNumber: '99',
-			entrySubmissionMode: 'private' as const,
+			entrySubmissionMode,
 			gasExpenditures: [],
 			status: 'pending-entry' as const,
 		}
-		const recovered = await expirePrivateEntryWithQuorum(missingReceiptClients(), recoveryConfiguration, position, 112n, '2026-07-24T00:02:00.000Z')
+		const recovered = await expireEntryWithQuorum(missingReceiptClients(), recoveryConfiguration, position, 112n, '2026-07-24T00:02:00.000Z')
 		expect(recovered.status).toBe('expired-not-included')
 		expect(recovered.capitalAtRiskWeth).toBe('0')
 		expect(recovered.lockedWeth).toBe('0')
@@ -259,11 +297,41 @@ describe('entry crash recovery', () => {
 			realizedNetProfitEth: '0',
 			status: 'expired-not-included' as const,
 		}
-		const recovered = await reconcileExpiredAttemptsWithQuorum(revertedReceiptClients(113n), recoveryConfiguration, position, 113n)
+		const recovered = await reconcileExpiredAttemptsWithQuorum(receiptClients(113n), recoveryConfiguration, position, 125n)
 		expect(recovered.expiredTransactionAttempts).toEqual([])
 		expect(recovered.actualEntryGasCostEth).toBe('0.000021')
 		expect(recovered.realizedNetProfitEth).toBe('-0.000021')
 		expect(recovered.gasExpenditures).toHaveLength(1)
+	})
+
+	test('keeps manual reconciliation terminal after a late successful expired attempt', async () => {
+		const position = {
+			...confirmedPosition(),
+			actualEntryGasCostEth: '0',
+			capitalAtRiskWeth: '0',
+			expiredTransactionAttempts: [{ kind: 'entry' as const, nonce: '8', targetBlockNumber: '100', transactionHash }],
+			gasExpenditures: [],
+			realizedNetProfitEth: '0',
+			status: 'expired-not-included' as const,
+		}
+		const needsManualRecovery = await reconcileExpiredAttemptsWithQuorum(receiptClients(113n, 'success'), recoveryConfiguration, position, 125n)
+		expect(needsManualRecovery.status).toBe('recovery-required')
+		const closed = manuallyReconcilePosition(needsManualRecovery, {
+			confirmedReportId: '7',
+			evidence: 'Late successful archived entry was reconciled against canonical receipts and final balances.',
+			externalCostEth: '0',
+			finalWalletToken: '2',
+			finalWalletWeth: '1',
+			note: 'Residual assets were reconciled and the position was closed.',
+			pnlUnavailable: false,
+			realizedNetProfitEth: '-0.000021',
+			recordedAt: '2026-07-24T00:03:00.000Z',
+			recordedBy: needsManualRecovery.account,
+		})
+		const monitored = await reconcileExpiredAttemptsWithQuorum(receiptClients(113n, 'success'), recoveryConfiguration, closed, 126n)
+		expect(monitored).toBe(closed)
+		expect(monitored.status).toBe('closed')
+		expect(monitored.expiredTransactionAttempts).toEqual(position.expiredTransactionAttempts)
 	})
 
 	test('stops monitoring an absent hash after quorum proves its nonce was consumed', async () => {
@@ -276,7 +344,7 @@ describe('entry crash recovery', () => {
 			realizedNetProfitEth: '0',
 			status: 'expired-not-included' as const,
 		}
-		const recovered = await reconcileExpiredAttemptsWithQuorum(missingReceiptClients(9n), recoveryConfiguration, position, 113n)
+		const recovered = await reconcileExpiredAttemptsWithQuorum(missingReceiptClients(9n), recoveryConfiguration, position, 125n)
 		expect(recovered.expiredTransactionAttempts).toEqual([])
 		expect(recovered.actualEntryGasCostEth).toBe('0')
 		expect(recovered.gasExpenditures).toEqual([])
@@ -292,7 +360,7 @@ describe('entry crash recovery', () => {
 			gasExpenditures: [],
 			status: 'pending-entry' as const,
 		}
-		await expect(expirePrivateEntryWithQuorum(missingReceiptClients(), recoveryConfiguration, position, 112n, '2026-07-24T00:02:00.000Z')).rejects.toThrow('Only an atomic private entry')
+		await expect(expireEntryWithQuorum(missingReceiptClients(), recoveryConfiguration, position, 112n, '2026-07-24T00:02:00.000Z')).rejects.toThrow('Only an atomic entry')
 	})
 
 	test('releases a reverted atomic private entry after accounting for its gas', async () => {
@@ -304,7 +372,7 @@ describe('entry crash recovery', () => {
 			gasExpenditures: [],
 			status: 'pending-entry' as const,
 		}
-		const recovered = await recoverPendingEntryWithQuorum(revertedReceiptClients(), recoveryConfiguration, position, 18)
+		const recovered = await recoverPendingEntryWithQuorum(receiptClients(), recoveryConfiguration, position, 18)
 		expect(recovered.position.status).toBe('closed')
 		expect(recovered.position.capitalAtRiskWeth).toBe('0')
 		expect(recovered.position.lockedWeth).toBe('0')
@@ -359,15 +427,15 @@ describe('atomic lifecycle crash recovery', () => {
 		})
 	})
 
-	test('clears an atomically guarded private lifecycle attempt that was not included', async () => {
+	test.each(['private', 'public'] as const)('clears an atomically guarded %s lifecycle attempt that was not included', async lifecycleSubmissionMode => {
 		const position = {
 			...confirmedPosition(),
 			lifecycleSubmissionBlockNumber: '99',
-			lifecycleSubmissionMode: 'private' as const,
+			lifecycleSubmissionMode,
 			lifecycleTargetBlockNumber: '100',
 			lifecycleTokenDecimals: '18',
 			lifecycleTransactionNonce: '9',
-			lifecycleTransactionHashes: [transactionHash],
+			lifecycleTransactionHashes: [lifecycleTransactionHash],
 			status: 'withdrawing' as const,
 		}
 		const recovered = await recoverPendingLifecycleWithQuorum(missingReceiptClients(), recoveryConfiguration, position, 112n)
@@ -375,7 +443,72 @@ describe('atomic lifecycle crash recovery', () => {
 		expect(recovered.lifecycleTransactionHashes).toEqual([])
 		expect(recovered.lifecycleSubmissionBlockNumber).toBeUndefined()
 		expect(recovered.lifecycleTargetBlockNumber).toBeUndefined()
-		expect(recovered.expiredTransactionAttempts).toEqual([{ kind: 'lifecycle', nonce: '9', targetBlockNumber: '100', transactionHash }])
+		expect(recovered.expiredTransactionAttempts).toEqual([{ kind: 'lifecycle', nonce: '9', targetBlockNumber: '100', transactionHash: lifecycleTransactionHash }])
+	})
+
+	test('keeps a successful lifecycle provisional until twelve canonical descendants', async () => {
+		const position = {
+			...confirmedPosition(),
+			lifecycleReceiptBlockHash: `0x${'aa'.repeat(32)}` as Hex,
+			lifecycleReceiptBlockNumber: '100',
+			lifecycleReceiptRecovered: true,
+			lifecycleSubmissionBlockNumber: '99',
+			lifecycleSubmissionMode: 'public' as const,
+			lifecycleTargetBlockNumber: '100',
+			lifecycleTokenDecimals: '18',
+			lifecycleTransactionNonce: '9',
+			lifecycleTransactionHashes: [lifecycleTransactionHash],
+			lifecycleUpdatedAt: '2026-07-24T00:01:00.000Z',
+			status: 'closed-pending-finality' as const,
+			withdrawnToken: '2',
+			withdrawnWeth: '1',
+		}
+		const provisional = await finalizeLifecycleAfterFinalityWithQuorum(receiptClients(100n), recoveryConfiguration, position, 111n)
+		expect(provisional.status).toBe('closed-pending-finality')
+		expect(provisional.realizedNetProfitEth).toBeUndefined()
+		expect(provisional.lifecycleTransactionHashes).toEqual([lifecycleTransactionHash])
+	})
+
+	test('finalizes exact lifecycle accounting after twelve canonical descendants', async () => {
+		const position = {
+			...confirmedPosition(),
+			lifecycleSubmissionBlockNumber: '99',
+			lifecycleSubmissionMode: 'private' as const,
+			lifecycleTargetBlockNumber: '100',
+			lifecycleTokenDecimals: '18',
+			lifecycleTransactionNonce: '9',
+			lifecycleTransactionHashes: [lifecycleTransactionHash],
+			status: 'withdrawing' as const,
+		}
+		const provisional = await recoverPendingLifecycleWithQuorum(lifecycleReceiptClients(), recoveryConfiguration, position, 100n)
+		expect(provisional.status).toBe('closed-pending-finality')
+		expect(provisional.realizedNetProfitEth).toBeUndefined()
+		expect(provisional.lifecycleReceiptBlockNumber).toBe('100')
+		const finalized = await finalizeLifecycleAfterFinalityWithQuorum(lifecycleReceiptClients(), recoveryConfiguration, provisional, 112n)
+		expect(finalized.status).toBe('closed')
+		expect(finalized.realizedNetProfitEth).toBe('0.098979')
+		expect(finalized.lifecycleTransactionHashes).toEqual([])
+		expect(finalized.lifecycleReceiptBlockNumber).toBeUndefined()
+	})
+
+	test('reopens a lifecycle and removes provisional gas when its successful receipt is reorged out', async () => {
+		const position = {
+			...confirmedPosition(),
+			lifecycleSubmissionBlockNumber: '99',
+			lifecycleSubmissionMode: 'private' as const,
+			lifecycleTargetBlockNumber: '100',
+			lifecycleTokenDecimals: '18',
+			lifecycleTransactionNonce: '9',
+			lifecycleTransactionHashes: [lifecycleTransactionHash],
+			status: 'withdrawing' as const,
+		}
+		const provisional = await recoverPendingLifecycleWithQuorum(lifecycleReceiptClients(), recoveryConfiguration, position, 100n)
+		const reopened = await finalizeLifecycleAfterFinalityWithQuorum(missingReceiptClients(), recoveryConfiguration, provisional, 112n)
+		expect(reopened.status).toBe('open')
+		expect(reopened.lifecycleGasCostEth).toBe('0')
+		expect(reopened.gasExpenditures).toEqual(confirmedPosition().gasExpenditures)
+		expect(reopened.withdrawnWeth).toBe('0')
+		expect(reopened.expiredTransactionAttempts).toEqual([{ kind: 'lifecycle', nonce: '9', targetBlockNumber: '100', transactionHash: lifecycleTransactionHash }])
 	})
 
 	test('keeps a successful lifecycle receipt without executor evidence in recovery', async () => {
@@ -386,12 +519,12 @@ describe('atomic lifecycle crash recovery', () => {
 			lifecycleTargetBlockNumber: '100',
 			lifecycleTokenDecimals: '18',
 			lifecycleTransactionNonce: '9',
-			lifecycleTransactionHashes: [transactionHash],
+			lifecycleTransactionHashes: [lifecycleTransactionHash],
 			status: 'withdrawing' as const,
 		}
-		const recovered = await recoverPendingLifecycleWithQuorum(successfulMismatchedIntentClients(), recoveryConfiguration, position, 100n)
+		const recovered = await recoverPendingLifecycleWithQuorum(successfulMismatchedIntentClients(lifecycleTransactionHash), recoveryConfiguration, position, 100n)
 		expect(recovered.status).toBe('recovery-required')
 		expect(recovered.lifecycleReceiptRecovered).toBe(true)
-		expect(recovered.lifecycleTransactionHashes).toEqual([transactionHash])
+		expect(recovered.lifecycleTransactionHashes).toEqual([lifecycleTransactionHash])
 	})
 })
