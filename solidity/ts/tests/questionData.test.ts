@@ -640,4 +640,90 @@ describe('Question Data', () => {
 		assert.deepStrictEqual(maxCountQuestionPage, [firstQuestionId, secondQuestionId], 'question paging should clamp max count to available ids')
 		assert.deepStrictEqual(maxCountOutcomePage, [firstOutcomes[1], firstOutcomes[2]], 'outcome paging should clamp max count to available labels')
 	})
+
+	test('question registry, stored data, and malformed classifiers stay coherent across appends', async () => {
+		const questionDataAddress = getInfraContractAddresses().zoltarQuestionData
+		const initialCount = await client.readContract({
+			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+			functionName: 'getQuestionCount',
+			address: questionDataAddress,
+			args: [],
+		})
+		const baseQuestion = {
+			title: 'Question registry coherence 1',
+			description: 'persistent registry fixture',
+			startTime: (await mockWindow.getTime()) + 100000n,
+			endTime: (await mockWindow.getTime()) + 200000n,
+			numTicks: 0n,
+			displayValueMin: 0n,
+			displayValueMax: 0n,
+			answerUnit: '',
+		}
+		const categoricalOutcomes = ['Yes', 'No']
+		const secondQuestion = { ...baseQuestion, title: 'Question registry coherence 2' }
+		const scalarQuestion = {
+			...baseQuestion,
+			title: 'Question registry coherence scalar',
+			numTicks: 10n,
+			displayValueMin: -5n,
+			displayValueMax: 5n,
+			answerUnit: 'points',
+		}
+		const firstQuestionId = getQuestionId(baseQuestion, categoricalOutcomes)
+		const secondQuestionId = getQuestionId(secondQuestion, categoricalOutcomes)
+		const scalarQuestionId = getQuestionId(scalarQuestion, [])
+		const expectedQuestionIds = [firstQuestionId, secondQuestionId, scalarQuestionId]
+
+		await createQuestion(client, baseQuestion, categoricalOutcomes)
+		const firstStoredData = await getQuestionData(client, firstQuestionId)
+		const firstStoredOutcomes = await getOutcomeLabels(client, firstQuestionId)
+		await createQuestion(client, secondQuestion, categoricalOutcomes)
+		await createQuestion(client, scalarQuestion, [])
+
+		const finalCount = await client.readContract({
+			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+			functionName: 'getQuestionCount',
+			address: questionDataAddress,
+			args: [],
+		})
+		const appendedQuestionIds = await client.readContract({
+			abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+			functionName: 'getQuestions',
+			address: questionDataAddress,
+			args: [initialCount, finalCount - initialCount],
+		})
+
+		assert.strictEqual(finalCount, initialCount + 3n, 'each successful create should append exactly one question id')
+		assert.deepStrictEqual(appendedQuestionIds, expectedQuestionIds, 'question ids should be unique and preserve creation order')
+		assert.strictEqual(new Set(appendedQuestionIds).size, appendedQuestionIds.length, 'the question registry must not contain duplicate ids')
+		assert.deepStrictEqual(await getQuestionData(client, firstQuestionId), firstStoredData, 'later appends must not mutate stored question data')
+		assert.deepStrictEqual(await getOutcomeLabels(client, firstQuestionId), firstStoredOutcomes, 'later appends must not mutate stored outcome labels')
+
+		await assert.rejects(createQuestion(client, baseQuestion, categoricalOutcomes), /Question already exists and cannot be created twice/)
+		assert.strictEqual(
+			await client.readContract({
+				abi: ZoltarQuestionData_ZoltarQuestionData.abi,
+				functionName: 'getQuestionCount',
+				address: questionDataAddress,
+				args: [],
+			}),
+			finalCount,
+			'a rejected duplicate must not change the registry count',
+		)
+
+		const classifierSamples = [
+			{ questionId: firstQuestionId, answers: [0n, 1n, 2n, 3n] },
+			{
+				questionId: scalarQuestionId,
+				answers: [combineUint256FromTwoWithInvalid(true, 0n, 0n), combineUint256FromTwoWithInvalid(false, 5n, 5n), combineUint256FromTwoWithInvalid(false, 11n, 0n), withScalarReservedBits(combineUint256FromTwoWithInvalid(false, 5n, 5n))],
+			},
+		]
+		for (const sample of classifierSamples) {
+			for (const answer of sample.answers) {
+				const malformed = await isMalformedAnswerOption(client, sample.questionId, answer)
+				const name = await getAnswerOptionName(client, sample.questionId, answer)
+				assert.strictEqual(name === 'Malformed', malformed, 'the malformed classifier and public answer name must agree')
+			}
+		}
+	})
 })

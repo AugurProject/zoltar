@@ -268,8 +268,9 @@
 				</div>
 				<p>
 					Invariant identifiers are stable review labels. They are grouped by
-					authority, universe, asset, share, vault, fork, escalation, oracle,
-					auction, and lifecycle boundaries rather than by Solidity file.
+					authority, universe, question, asset, share, vault, fork, escalation,
+					oracle, auction, lifecycle, and observability boundaries rather than by
+					Solidity file.
 				</p>
 				<h3>Terms used in the catalog</h3>
 				<dl>
@@ -298,6 +299,7 @@
 						<a href="#zoltar-invariants">Zoltar invariants</a>
 						<ul>
 							<li><a href="#universes">Universes, REP supply, and migration</a></li>
+							<li><a href="#questions">Questions and answer classification</a></li>
 						</ul>
 					</li>
 					<li>
@@ -309,7 +311,7 @@
 							<li><a href="#escalation">Escalation games and carried claims</a></li>
 							<li><a href="#oracle">REP/ETH oracle operations</a></li>
 							<li><a href="#auctions">Truth auctions</a></li>
-							<li><a href="#lifecycle">Lifecycle, liveness, and external calls</a></li>
+							<li><a href="#lifecycle">Lifecycle, liveness, observability, and external calls</a></li>
 						</ul>
 					</li>
 					<li><a href="#verification">Verification obligations</a></li>
@@ -647,6 +649,68 @@
 							</dl>
 						</div>
 					</details>
+					<details class="invariant-entry" id="uni-09">
+						<summary><code>UNI-09</code><span class="invariant-title">Child REP supply coherence</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">
+								For each child REP token, total minted supply equals the sum of
+								holder balances, never exceeds the child's theoretical-supply
+								snapshot, and uses the same theoretical maximum recorded by the
+								child universe.
+							</div>
+							<p class="invariant-example"><strong>Example:</strong> If two migrators mint 12 and 7 child REP, the child token supply is 19 REP, both balances sum to 19 REP, and minting does not change the child's theoretical maximum.</p>
+							<dl class="invariant-metadata">
+								<div><dt>Type</dt><dd>Conservation</dd></div>
+								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
+								<div><dt>Primary evidence</dt><dd>
+										<a href="../solidity/contracts/Zoltar.sol"
+										><code>splitMigrationRep</code> and child universe
+										accounting</a
+										>,
+										<a href="../solidity/contracts/ReputationToken.sol"
+										><code>ReputationToken</code> supply</a
+										>,
+										<a href="../solidity/ts/tests/zoltar.test.ts"
+										>aggregate child-supply invariant test</a
+										>
+								</dd></div>
+							</dl>
+						</div>
+					</details>
+				</div>
+			</section>
+
+			<section id="questions">
+				<h2>Questions and Answer Classification</h2>
+				<div class="invariant-list">
+					<details class="invariant-entry" id="qst-01">
+						<summary><code>QST-01</code><span class="invariant-title">Question registry and classifier coherence</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">
+								Every successful question creation appends its deterministic ID
+								exactly once and leaves prior question data and labels immutable.
+								For every stored question and answer, the malformed classifier is
+								true exactly when the public answer name is
+								<code>Malformed</code>.
+							</div>
+							<p class="invariant-example"><strong>Example:</strong> Appending a scalar question after two categorical questions preserves the first two records and their order; a scalar answer with reserved bits is both classified and named malformed.</p>
+							<dl class="invariant-metadata">
+								<div><dt>Type</dt><dd>Safety</dd></div>
+								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
+								<div><dt>Primary evidence</dt><dd>
+										<a href="../solidity/contracts/ZoltarQuestionData.sol"
+										><code>createQuestion</code>, <code>getQuestions</code>,
+										and answer classification</a
+										>,
+										<a href="../solidity/ts/tests/questionData.test.ts"
+										>registry and classifier invariant test</a
+										>
+								</dd></div>
+							</dl>
+						</div>
+					</details>
 				</div>
 			</section>
 
@@ -831,6 +895,36 @@
 							</dl>
 						</div>
 					</details>
+					<details class="invariant-entry" id="auth-08">
+						<summary><code>AUTH-08</code><span class="invariant-title">Factory registry and lineage bijection</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">
+								Every factory deployment record names one unique pool whose
+								runtime parent, share token, universe, and question match the
+								record. Its pool-to-origin reverse lookup and origin/universe
+								forward lookup are mutual inverses, and its recorded share token
+								authorizes that pool.
+							</div>
+							<p class="invariant-example"><strong>Example:</strong> Looking up a child pool's origin and then resolving that origin with the child's universe returns the same child, not an independent origin in that universe.</p>
+							<dl class="invariant-metadata">
+								<div><dt>Type</dt><dd>Safety</dd></div>
+								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
+								<div><dt>Primary evidence</dt><dd>
+										<a href="../solidity/contracts/peripherals/factories/SecurityPoolFactory.sol"
+										>factory registry and canonical lookups</a
+										>,
+										<a href="../solidity/contracts/peripherals/tokens/ShareToken.sol"
+										>share-token authorization</a
+										>,
+										<a
+										href="../solidity/ts/tests/peripherals/deploymentAndOwnForkEscalation.test.ts"
+										>stateful registry-bijection test</a
+										>
+								</dd></div>
+							</dl>
+						</div>
+					</details>
 				</div>
 			</section>
 
@@ -886,10 +980,13 @@
 							<p class="invariant-example"><strong>Example:</strong> If the pool holds 12 ETH, owes 2 ETH in fees, and tracks 9 ETH of collateral, the remaining 1 ETH is surplus rather than additional collateral.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Conservation</dd></div>
-								<div><dt>Enforcement status</dt><dd>Proposed guard</dd></div>
+								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<a href="../solidity/contracts/peripherals/SecurityPool.sol"
 										>Pool ETH accounting</a
+										>,
+										<a href="../solidity/ts/tests/peripheralsInvariant.test.ts"
+										>stateful exact-accounting invariant tests</a
 										>
 								</dd></div>
 							</dl>
@@ -1040,6 +1137,41 @@
 							</dl>
 						</div>
 					</details>
+					<details class="invariant-entry" id="bal-08">
+						<summary><code>BAL-08</code><span class="invariant-title">Aggregate pool-ledger coherence</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">
+								<code>totalFeesOwedToVaults</code> equals summed unpaid vault
+								fees. In <code>Operational</code>, fee-eligible allowance equals
+								summed live vault allowance, and uncheckpointed allowance equals
+								allowance whose vault fee index trails the global index. During
+								<code>ForkMigration</code>, configured migrated allowances remain
+								pending outside those pool aggregates. A <code>PoolForked</code>
+								parent retains its fork-time total and fee-eligible snapshots as
+								individual vaults migrate. After truth-auction activation, total
+								allowance equals fee-eligible allowance plus the outstanding
+								unclaimed auction allocation.
+							</div>
+							<p class="invariant-example"><strong>Example:</strong> Migrating a 3 ETH vault allowance clears the parent vault but leaves the parent's frozen 3 ETH aggregates unchanged; the child records 3 ETH as pending until activation, after which each auction claim moves allowance from the outstanding allocation into a live fee-eligible vault without changing total allowance.</p>
+							<dl class="invariant-metadata">
+								<div><dt>Type</dt><dd>Conservation</dd></div>
+								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
+								<div><dt>Primary evidence</dt><dd>
+										<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										><code>getPoolAccountingSnapshot</code> and vault
+										checkpointing</a
+										>,
+										<a href="../solidity/contracts/peripherals/SecurityPoolForker.sol"
+										>truth-auction claim accounting</a
+										>,
+										<a href="../solidity/ts/tests/peripheralsInvariant.test.ts"
+										>stateful ledger and claim-order invariant tests</a
+										>
+								</dd></div>
+							</dl>
+						</div>
+					</details>
 					<details class="invariant-entry">
 						<summary><code>SHARE-01</code><span class="invariant-title">Complete-set symmetry</span></summary>
 						<div class="invariant-details">
@@ -1153,6 +1285,35 @@
 							</dl>
 						</div>
 					</details>
+					<details class="invariant-entry" id="share-06">
+						<summary><code>SHARE-06</code><span class="invariant-title">Share supply and source-entitlement coherence</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">
+								For every ERC-1155 share ID, total supply equals the sum of
+								holder balances through mint, transfer, and burn operations.
+								For each source share, holder, and selected child universe, the
+								materialized child amount equals the recorded persistent source
+								entitlement and cannot be materialized twice.
+							</div>
+							<p class="invariant-example"><strong>Example:</strong> Moving two Yes shares between wallets leaves Yes supply unchanged, while migrating a five-share source entitlement into a selected scalar child creates exactly five child Yes shares once.</p>
+							<dl class="invariant-metadata">
+								<div><dt>Type</dt><dd>Conservation</dd></div>
+								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
+								<div><dt>Primary evidence</dt><dd>
+										<a href="../solidity/contracts/peripherals/tokens/ShareToken.sol"
+										>ERC-1155 supply and <code>migratedShareAmount</code></a
+										>,
+										<a href="../solidity/ts/tests/erc1155.test.ts"
+										>modeled holder-supply invariant test</a
+										>,
+										<a href="../solidity/ts/tests/peripherals/forkMigration.test.ts"
+										>source-entitlement migration test</a
+										>
+								</dd></div>
+							</dl>
+						</div>
+					</details>
 					<details class="invariant-entry">
 						<summary><code>VAULT-01</code><span class="invariant-title">Escrowed REP isolation</span></summary>
 						<div class="invariant-details">
@@ -1195,6 +1356,36 @@
 										<a href="./liquidation.html">Liquidation design</a>,
 										<a href="../solidity/contracts/peripherals/SecurityPool.sol"
 										><code>performLiquidation</code></a
+										>
+								</dd></div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="vault-03">
+						<summary><code>VAULT-03</code><span class="invariant-title">Active-vault index coherence</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">
+								The historical vault registry is append-only and unique. Its
+								active index is a unique subset of that history. After a
+								pool-mediated transition synchronizes a vault, membership is exact
+								for nonzero ownership, allowance, unpaid fees, or escalation
+								escrow. A direct own-fork claim consumes game escrow through the
+								forker without synchronizing the parent pool, so an escrow-only
+								vault may remain indexed with zero live state until its next
+								pool-mediated synchronization.
+							</div>
+							<p class="invariant-example"><strong>Example:</strong> A normal final REP withdrawal removes the zero-state vault immediately. By contrast, a direct own-fork claim can leave that vault once in both active and historical pagination until optional vault cleanup synchronizes and prunes it.</p>
+							<dl class="invariant-metadata">
+								<div><dt>Type</dt><dd>Safety</dd></div>
+								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
+								<div><dt>Primary evidence</dt><dd>
+										<a href="../solidity/contracts/peripherals/SecurityPool.sol"
+										><code>_trackVault</code> and
+										<code>_syncActiveVault</code></a
+										>,
+										<a href="../solidity/ts/tests/peripheralsInvariant.test.ts"
+										>active/history and direct-claim boundary tests</a
 										>
 								</dd></div>
 							</dl>
@@ -1581,7 +1772,7 @@
 							</dl>
 						</div>
 					</details>
-					<details class="invariant-entry">
+					<details class="invariant-entry" id="esc-03">
 						<summary><code>ESC-03</code><span class="invariant-title">Outcome carry reconciliation</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -1868,6 +2059,37 @@
 							</dl>
 						</div>
 					</details>
+					<details class="invariant-entry" id="esc-14">
+						<summary><code>ESC-14</code><span class="invariant-title">Carry commitment structural integrity</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">
+								For every outcome, exported carry peaks, leaf count, unresolved
+								total, and nullifier root equal the corresponding outcome state.
+								Only leaf-count-selected peak heights are occupied, independently
+								bagging those peaks yields the exported root, and consumed proof
+								indexes are unique. The accounting definition of unresolved total
+								is owned by <a href="#esc-03"><code>ESC-03</code></a>.
+							</div>
+							<p class="invariant-example"><strong>Example:</strong> Three Yes leaves occupy the height-zero and height-one peaks; bagging those two peaks reproduces the exported Yes root before and after one inherited proof is consumed.</p>
+							<dl class="invariant-metadata">
+								<div><dt>Type</dt><dd>Conservation</dd></div>
+								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
+								<div><dt>Primary evidence</dt><dd>
+										<a href="../solidity/contracts/peripherals/EscalationGameCarry.sol"
+										><code>getForkCarrySnapshot</code> and
+										<code>getForkCarryRoots</code></a
+										>,
+										<a href="../solidity/contracts/peripherals/EscalationGameProofVerifier.sol"
+										><code>bagCarryPeaks</code></a
+										>,
+										<a href="../solidity/ts/tests/escalationGame.test.ts"
+										>independent carry-structure invariant tests</a
+										>
+								</dd></div>
+							</dl>
+						</div>
+					</details>
 				</div>
 			</section>
 
@@ -2047,6 +2269,33 @@
 							</dl>
 						</div>
 					</details>
+					<details class="invariant-entry" id="ora-07">
+						<summary><code>ORA-07</code><span class="invariant-title">Staged-operation queue and index bijection</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">
+								Operation IDs are append-only. Active enumeration contains each
+								and only each operation with a live initiator; the bounded pending
+								settlement queue contains unique active IDs; and
+								<code>pendingOperationSlotId</code> is zero for an empty queue or
+								equals its head.
+							</div>
+							<p class="invariant-example"><strong>Example:</strong> Settling four queued operations removes those four IDs from both indexes, leaves an overflow operation active for manual execution, and does not reuse any consumed ID.</p>
+							<dl class="invariant-metadata">
+								<div><dt>Type</dt><dd>Safety</dd></div>
+								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
+								<div><dt>Primary evidence</dt><dd>
+										<a
+										href="../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
+										>active and pending staged-operation indexes</a
+										>,
+										<a href="../solidity/ts/tests/peripheralsInvariant.test.ts"
+										>queue/index invariant test</a
+										>
+								</dd></div>
+							</dl>
+						</div>
+					</details>
 					<details class="invariant-entry">
 						<summary><code>ORA-08</code><span class="invariant-title">Dispute and settlement boundary</span></summary>
 						<div class="invariant-details">
@@ -2064,6 +2313,38 @@
 										<a
 										href="../solidity/contracts/peripherals/openOracle/OpenOracle.sol"
 										><code>settle</code> and dispute validation</a
+										>
+								</dd></div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="ora-09">
+						<summary><code>ORA-09</code><span class="invariant-title">Oracle balance-domain boundary</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">
+								Direct REP or WETH held by the coordinator is outside OpenOracle
+								and remains untouched by settlement or recovery. OpenOracle
+								credits balances by beneficiary rather than by report: the
+								callback sends the coordinator's entire withdrawable internal REP
+								and WETH credit to the recorded pending sponsor, including any
+								third-party deposit that names the coordinator as beneficiary.
+							</div>
+							<p class="invariant-example"><strong>Example:</strong> REP transferred directly to the coordinator remains there, while REP deposited into OpenOracle for the coordinator is swept with the report proceeds to the current sponsor and leaves only OpenOracle's balance sentinel.</p>
+							<dl class="invariant-metadata">
+								<div><dt>Type</dt><dd>Conservation</dd></div>
+								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
+								<div><dt>Primary evidence</dt><dd>
+										<a
+										href="../solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol"
+										><code>pendingReportSponsor</code> and
+										<code>_withdrawOpenOracleReporterBalances</code></a
+										>,
+										<a href="../solidity/contracts/peripherals/openOracle/OpenOracle.sol"
+										><code>deposit</code> and <code>withdrawTo</code></a
+										>,
+										<a href="../solidity/ts/tests/priceOracleSecurity.test.ts"
+										>coordinator/OpenOracle balance-domain test</a
 										>
 								</dd></div>
 							</dl>
@@ -2163,7 +2444,7 @@
 							</dl>
 						</div>
 					</details>
-					<details class="invariant-entry">
+					<details class="invariant-entry" id="auc-05">
 						<summary><code>AUC-05</code><span class="invariant-title">Allocation and refund reconciliation</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2279,7 +2560,7 @@
 							</dl>
 						</div>
 					</details>
-					<details class="invariant-entry">
+					<details class="invariant-entry" id="auc-10">
 						<summary><code>AUC-10</code><span class="invariant-title">Persistent tick bid history</span></summary>
 						<div class="invariant-details">
 							<p class="invariant-label">Required property</p>
@@ -2306,11 +2587,68 @@
 							</dl>
 						</div>
 					</details>
+					<details class="invariant-entry" id="auc-11">
+						<summary><code>AUC-11</code><span class="invariant-title">Auction tree and public-model equivalence</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">
+								Active tick pages contain exactly the nonzero active ticks in
+								descending order, and clearing computed from the active AVL tree
+								equals an independent calculation over active bids. Historical
+								insertion and refund-prefix obligations are owned by
+								<a href="#auc-10"><code>AUC-10</code></a>.
+							</div>
+							<p class="invariant-example"><strong>Example:</strong> Given the same active bids and auction caps, an independent descending-tick scan returns the same clearing tick, qualifying ETH, and cap-reached result as the contract.</p>
+							<dl class="invariant-metadata">
+								<div><dt>Type</dt><dd>Safety</dd></div>
+								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
+								<div><dt>Primary evidence</dt><dd>
+										<a
+										href="../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"
+										>AVL tree, enumeration, and clearing</a
+										>,
+										<a href="../solidity/ts/tests/auction.test.ts"
+										>seeded independent-model invariant test</a
+										>
+								</dd></div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="auc-12">
+						<summary><code>AUC-12</code><span class="invariant-title">Auction ETH liability conservation</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">
+								Before finalization, auction ETH equals active unrefunded bids
+								plus aggregate <code>pendingEthRefunds</code> and explicit
+								surplus. After finalization, the remaining balance equals refunds
+								still attached to unclaimed bids plus deferred
+								<code>pendingEthRefunds</code> and explicit surplus.
+								Per-bid settlement partitions and aggregate REP allocation are
+								owned by <a href="#auc-05"><code>AUC-05</code></a>.
+							</div>
+							<p class="invariant-example"><strong>Example:</strong> If a rejected pre-finalization push removes a 2 ETH losing bid from active clearing, raw ETH still equals the remaining active bids plus the 2 ETH deferred refund. After finalization, the same deferred bucket composes with unclaimed-bid refunds and any forced surplus.</p>
+							<dl class="invariant-metadata">
+								<div><dt>Type</dt><dd>Conservation</dd></div>
+								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
+								<div><dt>Primary evidence</dt><dd>
+										<a
+										href="../solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol"
+										><code>finalize</code>, <code>withdrawBids</code>, and
+										deferred refunds</a
+										>,
+										<a href="../solidity/ts/tests/auction.test.ts"
+										>seeded and deferred-refund ETH-liability tests</a
+										>
+								</dd></div>
+							</dl>
+						</div>
+					</details>
 				</div>
 			</section>
 
 			<section id="lifecycle">
-				<h2>Lifecycle, Liveness, and External Calls</h2>
+				<h2>Lifecycle, Liveness, Observability, and External Calls</h2>
 				<p class="security-assumption-ref">
 					<strong>Security assumptions:</strong>
 					<a href="./security-model.html#assumption-a02">A02 viable operating costs</a>,
@@ -2425,6 +2763,35 @@
 								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										Vault pages, bid pages, MMR proofs, and auction AVL traversal
+								</dd></div>
+							</dl>
+						</div>
+					</details>
+					<details class="invariant-entry" id="obs-01">
+						<summary><code>OBS-01</code><span class="invariant-title">Event-state replay equivalence</span></summary>
+						<div class="invariant-details">
+							<p class="invariant-label">Required property</p>
+							<div class="invariant-property">
+								Ordered canonical events reconstruct the same universe, pool,
+								vault, coordinator, and escalation carry state exposed by storage.
+								Replay isolates contract-local counters and recognized emitters,
+								and every replay-supported state transition emits the checkpoint
+								or delta needed to reach its resulting storage value.
+							</div>
+							<p class="invariant-example"><strong>Example:</strong> Replaying seeded pool and vault operations matches their accounting storage, while replaying a deployed parent deposit, fork snapshot, and child carry checkpoint matches the child's roots, peaks, leaf counts, unresolved totals, and nullifier roots.</p>
+							<dl class="invariant-metadata">
+								<div><dt>Type</dt><dd>Safety</dd></div>
+								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
+								<div><dt>Primary evidence</dt><dd>
+										<a href="./event-stream.md"
+										>Canonical event-stream specification</a
+										>,
+										<a href="../solidity/ts/tests/eventReplay/eventReplayModel.ts"
+										>event replay model</a
+										>,
+										<a href="../solidity/ts/tests/eventReplay/eventReplay.test.ts"
+										>actual-log storage-equivalence tests</a
+										>
 								</dd></div>
 							</dl>
 						</div>
@@ -2545,7 +2912,7 @@
 							<p class="invariant-example"><strong>Example:</strong> At lineage depths 1 and 32, a replay query for the same global deposit id performs the same lineage-registry and claimed-id lookups rather than 1 or 32 parent calls.</p>
 							<dl class="invariant-metadata">
 								<div><dt>Type</dt><dd>Liveness</dd></div>
-								<div><dt>Enforcement status</dt><dd>Enforced</dd></div>
+								<div><dt>Enforcement status</dt><dd>Reviewed preservation</dd></div>
 								<div><dt>Primary evidence</dt><dd>
 										<code>SecurityPoolFactory.getOriginId</code> and
 										<code>getPoolId</code>, cached inherited-fork registry tests,
@@ -2592,7 +2959,8 @@
 								<td>Authority and deployment</td>
 								<td>
 									Factory, CREATE2, fake-parent, interface, and storage-layout
-									regression tests.
+									regression tests, plus deployment-record, runtime-wiring,
+									canonical-lookup, and share-token authorization bijection checks.
 								</td>
 								<td>
 									Manifest-to-runtime bytecode and constructor-wiring
@@ -2605,11 +2973,27 @@
 									<a href="../solidity/ts/tests/zoltar.test.ts"
 										><code>zoltar.test.ts</code></a
 									>
-									and fork/migration invariant scenarios.
+									and fork/migration invariant scenarios, including aggregate
+									holder supply and theoretical-maximum coherence.
 								</td>
 								<td>
 									Stateful supply conservation across several recursive forks
 									and selected child sets.
+								</td>
+							</tr>
+							<tr>
+								<td>Questions and classifiers</td>
+								<td>
+									<a href="../solidity/ts/tests/questionData.test.ts"
+										><code>questionData.test.ts</code></a
+									>
+									covers append-only ID ordering, immutable stored data, duplicate
+									rejection, and classifier/name equivalence for categorical and
+									scalar answers.
+								</td>
+								<td>
+									Retain shared-model parity fixtures whenever answer encodings
+									or display rules change.
 								</td>
 							</tr>
 							<tr>
@@ -2626,9 +3010,15 @@
 									>, plus
 									<a href="../solidity/ts/tests/peripheralsInvariant.test.ts"
 										><code>peripheralsInvariant.test.ts</code></a
-									>. Together, these cover forced balances, prefunded migration
-									proxies, zero-supply bootstrap, unequal child outcome
-									supplies, and positive-output mints.
+									>, and
+									<a href="../solidity/ts/tests/erc1155.test.ts"
+										><code>erc1155.test.ts</code></a
+									>. Together, these cover lifecycle-qualified pool ledgers,
+									active/history vault coherence including the direct-claim
+									synchronization boundary, forced balances, prefunded migration
+									proxies, source entitlements, modeled share supply, zero-supply
+									bootstrap, unequal child outcome supplies, and positive-output
+									mints.
 								</td>
 								<td>
 									Caller-selectable mint slippage protection and broader
@@ -2652,8 +3042,9 @@
 									and even/odd non-decision boundaries in
 									<a href="../solidity/ts/tests/escalationGameForkThreshold.test.ts"
 										><code>escalationGameForkThreshold.test.ts</code></a
-									>. The escalation-game suite also compares direct-claim replay gas
-									at lineage depths 1 and 32.
+									>. The escalation-game suite independently bags exported carry
+									peaks, reconciles carry snapshot components and consumed indexes,
+									and compares direct-claim replay gas at lineage depths 1 and 32.
 								</td>
 								<td>
 									Extend depth-independent gas regressions whenever a new
@@ -2670,9 +3061,9 @@
 									<a href="../solidity/ts/tests/openOracleDispute.test.ts"
 										><code>openOracleDispute.test.ts</code></a
 									>, including exact-deadline settlement exclusivity, dynamic minimum
-									report sizing, sponsor
-									exclusivity, manual overflow execution, and staged-operation
-									invariant tests.
+									report sizing, sponsor exclusivity, the coordinator/OpenOracle
+									balance-domain boundary, manual overflow execution, and
+									staged-operation queue/index invariant tests.
 								</td>
 								<td>
 									Validation that the configured multiplier is economically sufficient
@@ -2690,8 +3081,9 @@
 										><code>truthAuction.test.ts</code></a
 									>, including value-free weak-demand finalization, forced-balance
 									isolation, underfunded-threshold qualification, uniform pricing, claim-order, and
-									tick-math coverage, plus bid-history preservation across
-									repeated tick deletion and recreation.
+									tick-math coverage, plus independent public-model and ETH-liability
+									reconciliation across repeated tick deletion, recreation, and
+									deferred pre-finalization refunds.
 								</td>
 								<td>
 									Stateful bidder/order fuzzing across weak-demand finalization and
@@ -2704,7 +3096,10 @@
 									<a href="../solidity/ts/tests/peripheralsInvariant.test.ts"
 										><code>peripheralsInvariant.test.ts</code></a
 									>
-									and deadline scenario tests.
+									, deadline scenarios, and actual-log storage equivalence in
+									<a href="../solidity/ts/tests/eventReplay/eventReplay.test.ts"
+										><code>eventReplay.test.ts</code></a
+									>.
 								</td>
 								<td>
 									Stateful action-sequence fuzzing with dust and adversarial

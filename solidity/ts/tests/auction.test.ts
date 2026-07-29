@@ -62,6 +62,46 @@ const NODE_STRUCT_SLOT_COUNT = 8n
 const MAX_DISTINCT_TICK_COUNT = MAX_TICK - MIN_TICK + 1n
 const FINALIZE_GAS_LIMIT = 20_000_000n
 
+function computeModeledClearing(bids: readonly { tick: bigint; amount: bigint }[], maxRepBeingSold: bigint, ethRaiseCap: bigint) {
+	const sorted = [...bids].sort((a, b) => {
+		if (b.tick > a.tick) return 1
+		if (b.tick < a.tick) return -1
+		return 0
+	})
+	let accumulatedEth = 0n
+	let lastValidTick = 0n
+	let lastValidEth = 0n
+	const reservePrice = (ethRaiseCap * PRICE_PRECISION + maxRepBeingSold - 1n) / maxRepBeingSold
+	for (const bid of sorted) {
+		const price = tickToPrice(bid.tick)
+		if (price < reservePrice) continue
+		let ethToTake = price === 0n ? 0n : bid.amount
+
+		if (accumulatedEth > 0n) {
+			const repricedRep = (accumulatedEth * PRICE_PRECISION) / price
+			if (repricedRep > maxRepBeingSold) return { hitCap: true, foundTick: lastValidTick, accumulatedEth: lastValidEth }
+		}
+		if (accumulatedEth >= ethRaiseCap) return { hitCap: true, foundTick: lastValidTick, accumulatedEth: lastValidEth }
+
+		const remainingCap = ethRaiseCap - accumulatedEth
+		if (ethToTake > remainingCap) ethToTake = remainingCap
+		const newAccumulatedEth = accumulatedEth + ethToTake
+		const totalRep = price === 0n ? 0n : (newAccumulatedEth * PRICE_PRECISION) / price
+		if (totalRep >= maxRepBeingSold) {
+			const maxEthAtThisPrice = (maxRepBeingSold * price) / PRICE_PRECISION
+			let ethUsedAtClearing = maxEthAtThisPrice > accumulatedEth ? maxEthAtThisPrice - accumulatedEth : 0n
+			if (ethUsedAtClearing > ethToTake) ethUsedAtClearing = ethToTake
+			return { hitCap: true, foundTick: bid.tick, accumulatedEth: accumulatedEth + ethUsedAtClearing }
+		}
+		if (newAccumulatedEth >= ethRaiseCap) return { hitCap: true, foundTick: bid.tick, accumulatedEth: newAccumulatedEth }
+
+		accumulatedEth = newAccumulatedEth
+		lastValidTick = bid.tick
+		lastValidEth = accumulatedEth
+	}
+	return { hitCap: false, foundTick: lastValidTick, accumulatedEth }
+}
+
 const requireTransactionHash = (value: unknown): Hash => {
 	if (typeof value !== 'string' || !isHex(value, { strict: true }) || value.length !== 66) throw new Error('Anvil returned an invalid transaction hash')
 	return `0x${value.slice(2)}`
@@ -1748,6 +1788,149 @@ describe('Auction', () => {
 			assert.strictEqual((await getBidPageAtTick(client, auctionAddress, tick, 0n, 101n)).length, 1, 'tick bid page should allow limits above prior caps')
 			assert.strictEqual((await getBidderBidPage(client, auctionAddress, client.account.address, 0n, 101n)).length, 1, 'bidder bid page should allow limits above prior caps')
 		})
+
+		test('seeded bid churn keeps public enumeration, clearing, and ETH liabilities equivalent to an independent model', async () => {
+			type ModeledBid = {
+				amount: bigint
+				bidder: WriteClient
+				bidIndex: bigint
+				claimed: boolean
+				refunded: boolean
+				tick: bigint
+			}
+
+			const ethRaiseCap = 10n * ATTOETH_PER_ETH
+			const maxRepBeingSold = 10n * ATTOETH_PER_ETH
+			const lowTick = -20_000n
+			const middleTick = 0n
+			const highTick = 20_000n
+			const bidderA = createTestClient(1)
+			const bidderB = createTestClient(2)
+			const bidderC = createTestClient(3)
+			const modeledBids: ModeledBid[] = []
+			const historicalTicks: bigint[] = []
+			let forcedSurplus = 0n
+			await startAuction(client, auctionAddress, ethRaiseCap, maxRepBeingSold)
+
+			const addModeledBid = async (bidder: WriteClient, tick: bigint, amount: bigint) => {
+				const bidIndex = BigInt(modeledBids.filter(bid => bid.tick === tick).length)
+				await submitBid(bidder, auctionAddress, tick, amount)
+				if (!historicalTicks.includes(tick)) historicalTicks.push(tick)
+				modeledBids.push({ amount, bidder, bidIndex, claimed: false, refunded: false, tick })
+			}
+
+			const refundModeledBid = async (bid: ModeledBid) => {
+				await refundLosingBids(bid.bidder, auctionAddress, [{ tick: bid.tick, bidIndex: bid.bidIndex }])
+				bid.claimed = true
+				bid.refunded = true
+			}
+
+			const assertPublicModel = async (label: string) => {
+				const tickPage = await getTickPage(client, auctionAddress, 0n, 100n)
+				assert.deepStrictEqual(
+					tickPage.map(summary => summary.tick),
+					historicalTicks,
+					`${label}: historical ticks should preserve first-insertion order`,
+				)
+				for (const [tickIndex, tick] of historicalTicks.entries()) {
+					const summary = tickPage[tickIndex]
+					if (summary === undefined) throw new Error(`${label}: missing historical tick summary ${tickIndex.toString()}`)
+					const bidsAtTick = modeledBids.filter(bid => bid.tick === tick)
+					const activeEth = bidsAtTick.filter(bid => !bid.claimed).reduce((sum, bid) => sum + bid.amount, 0n)
+					strictEqualTypeSafe(summary.submissionCount, BigInt(bidsAtTick.length), `${label}: tick submission count should match the model`)
+					strictEqualTypeSafe(summary.currentTotalEth, activeEth, `${label}: tick active ETH should match the model`)
+					strictEqualTypeSafe(summary.active, activeEth > 0n, `${label}: tick active flag should match the model`)
+
+					const bidPage = await getBidPageAtTick(client, auctionAddress, tick, 0n, 100n)
+					let cumulativeEth = 0n
+					let activeCumulativeEth = 0n
+					for (const [bidIndex, modeledBid] of bidsAtTick.entries()) {
+						const bidView = bidPage[bidIndex]
+						if (bidView === undefined) throw new Error(`${label}: missing bid view ${bidIndex.toString()} at tick ${tick.toString()}`)
+						cumulativeEth += modeledBid.amount
+						strictEqualTypeSafe(bidView.bidIndex, modeledBid.bidIndex, `${label}: bid index should match the model`)
+						strictEqualTypeSafe(bidView.bidder, modeledBid.bidder.account.address, `${label}: bid owner should match the model`)
+						strictEqualTypeSafe(bidView.ethAmount, modeledBid.amount, `${label}: bid amount should match the model`)
+						strictEqualTypeSafe(bidView.cumulativeEth, cumulativeEth, `${label}: historical cumulative ETH should match the model`)
+						strictEqualTypeSafe(bidView.activeCumulativeEthBeforeBid, activeCumulativeEth, `${label}: active prefix ETH should exclude refunded predecessors`)
+						strictEqualTypeSafe(bidView.claimed, modeledBid.claimed, `${label}: bid claimed flag should match the model`)
+						strictEqualTypeSafe(bidView.refunded, modeledBid.refunded, `${label}: bid refunded flag should match the model`)
+						if (!modeledBid.claimed) activeCumulativeEth += modeledBid.amount
+					}
+				}
+
+				const modeledActiveTicks = historicalTicks
+					.filter(tick => modeledBids.some(bid => bid.tick === tick && !bid.claimed))
+					.sort((a, b) => {
+						if (a > b) return -1
+						if (a < b) return 1
+						return 0
+					})
+				const activeTickPage = await getActiveTickPage(client, auctionAddress, 0n, 100n)
+				strictEqualTypeSafe(await activeTickCount(client, auctionAddress), BigInt(modeledActiveTicks.length), `${label}: active tick count should match the model`)
+				assert.deepStrictEqual(
+					activeTickPage.map(summary => summary.tick),
+					modeledActiveTicks,
+					`${label}: active ticks should be descending and contain no refunded-away history`,
+				)
+
+				const modeledClearing = computeModeledClearing(
+					modeledBids.filter(bid => !bid.claimed).map(bid => ({ amount: bid.amount, tick: bid.tick })),
+					maxRepBeingSold,
+					ethRaiseCap,
+				)
+				const actualClearing = await computeClearing(client, auctionAddress)
+				strictEqualTypeSafe(actualClearing.hitCap, modeledClearing.hitCap, `${label}: clearing cap result should match the model`)
+				strictEqualTypeSafe(actualClearing.foundTick, modeledClearing.foundTick, `${label}: clearing tick should match the model`)
+				strictEqualTypeSafe(actualClearing.accumulatedEth, modeledClearing.accumulatedEth, `${label}: clearing ETH should match the model`)
+				strictEqualTypeSafe(await getETHBalance(client, auctionAddress), forcedSurplus + modeledBids.filter(bid => !bid.claimed).reduce((sum, bid) => sum + bid.amount, 0n), `${label}: auction ETH should equal active bid liabilities plus forced surplus`)
+			}
+
+			await addModeledBid(bidderA, lowTick, 2n * ATTOETH_PER_ETH)
+			await assertPublicModel('after low bid')
+			await addModeledBid(bidderB, middleTick, 4n * ATTOETH_PER_ETH)
+			await assertPublicModel('after middle bid')
+			await addModeledBid(bidderC, highTick, 8n * ATTOETH_PER_ETH)
+			await assertPublicModel('after high bid')
+
+			const firstLowBid = ensureDefined(modeledBids[0], 'first low bid is missing')
+			await refundModeledBid(firstLowBid)
+			await assertPublicModel('after first low refund')
+			await addModeledBid(bidderA, lowTick, 3n * ATTOETH_PER_ETH)
+			await assertPublicModel('after low tick recreation')
+			const recreatedLowBid = ensureDefined(modeledBids[3], 'recreated low bid is missing')
+			await refundModeledBid(recreatedLowBid)
+			await assertPublicModel('after second low refund')
+
+			forcedSurplus = 13n
+			await mockWindow.setBalance(auctionAddress, (await getETHBalance(client, auctionAddress)) + forcedSurplus)
+			await assertPublicModel('after forced surplus')
+
+			await mockWindow.advanceTime(AUCTION_TIME + 1n)
+			await finalize(client, auctionAddress)
+			const unsettledBids = modeledBids.filter(bid => !bid.claimed)
+			const simulatedSettlements = []
+			for (const bid of unsettledBids) {
+				const settlement = await simulateWithdrawBids(client, auctionAddress, bid.bidder.account.address, [{ tick: bid.tick, bidIndex: bid.bidIndex }])
+				simulatedSettlements.push({ bid, settlement })
+				strictEqualTypeSafe(bid.amount - settlement.totalEthRefund + settlement.totalEthRefund, bid.amount, 'each bid should partition into used ETH and refund')
+			}
+			const aggregateRefundLiability = simulatedSettlements.reduce((sum, entry) => sum + entry.settlement.totalEthRefund, 0n)
+			const aggregateUsedEth = simulatedSettlements.reduce((sum, entry) => sum + entry.bid.amount - entry.settlement.totalEthRefund, 0n)
+			const aggregateFilledRep = simulatedSettlements.reduce((sum, entry) => sum + entry.settlement.totalFilledRep, 0n)
+			strictEqualTypeSafe(aggregateUsedEth, await getEthRaised(client, auctionAddress), 'aggregate bid ETH used should equal finalized ETH raised')
+			strictEqualTypeSafe(aggregateFilledRep, await getTotalRepPurchased(client, auctionAddress), 'aggregate filled REP should equal finalized REP purchased')
+			strictEqualTypeSafe(await getETHBalance(client, auctionAddress), forcedSurplus + aggregateRefundLiability, 'post-finalization ETH should equal unsettled refunds plus forced surplus')
+
+			let remainingRefundLiability = aggregateRefundLiability
+			for (const { bid, settlement } of simulatedSettlements.toReversed()) {
+				await withdrawBids(client, auctionAddress, bid.bidder.account.address, [{ tick: bid.tick, bidIndex: bid.bidIndex }])
+				bid.claimed = true
+				remainingRefundLiability -= settlement.totalEthRefund
+				strictEqualTypeSafe(await getETHBalance(client, auctionAddress), forcedSurplus + remainingRefundLiability, 'each withdrawal should reduce the auction balance by exactly its refund liability')
+			}
+			strictEqualTypeSafe(await getETHBalance(client, auctionAddress), forcedSurplus, 'all bid liabilities should clear without consuming forced surplus')
+		})
 	})
 
 	describe('Clearing & Pro-Rata', () => {
@@ -2095,9 +2278,12 @@ describe('Auction', () => {
 				functionName: 'setRejectETH',
 				args: [true],
 			})
+			const activeEthBeforeDeferredRefund = (await getActiveTickPage(client, auctionAddress, 0n, 100n)).reduce((sum, tick) => sum + tick.currentTotalEth, 0n)
 			const clearingBeforeRefund = await computeClearing(client, auctionAddress)
 			assert.strictEqual(clearingBeforeRefund.hitCap, true, 'the higher bid should establish a funded clearing before the losing refund')
 			const balanceBeforeDeferredRefund = await getETHBalance(client, auctionAddress)
+			strictEqualTypeSafe(activeEthBeforeDeferredRefund, winningBid + losingBid, 'all pre-refund ETH should remain in active bid liabilities')
+			strictEqualTypeSafe(balanceBeforeDeferredRefund, activeEthBeforeDeferredRefund, 'pre-finalization raw ETH should initially equal active bid liabilities')
 			await executeThroughReceiver(
 				rejectingReceiver,
 				auctionAddress,
@@ -2113,16 +2299,43 @@ describe('Auction', () => {
 			assert.strictEqual(clearingAfterRefund.hitCap, true, 'deferred losing refunds must preserve the funded clearing')
 			assert.strictEqual((await getTickSummary(client, auctionAddress, losingTick)).active, false, 'settled losing bids should remain removed from active clearing state')
 			assert.strictEqual(await getETHBalance(client, auctionAddress), balanceBeforeDeferredRefund, 'deferred pre-finalization refund must remain held by the auction')
-			assert.strictEqual(
+			const pendingPreFinalizationRefund = await client.readContract({
+				abi: auctionAbi,
+				address: auctionAddress,
+				functionName: 'pendingEthRefunds',
+				args: [rejectingReceiver],
+			})
+			assert.strictEqual(pendingPreFinalizationRefund, losingBid, 'rejected pre-finalization refund should remain withdrawable from auction escrow')
+			const activeEthAfterDeferredRefund = (await getActiveTickPage(client, auctionAddress, 0n, 100n)).reduce((sum, tick) => sum + tick.currentTotalEth, 0n)
+			strictEqualTypeSafe(activeEthAfterDeferredRefund, winningBid, 'deferred refunds should leave only the qualifying bid in active liabilities')
+			strictEqualTypeSafe(await getETHBalance(client, auctionAddress), activeEthAfterDeferredRefund + pendingPreFinalizationRefund, 'pre-finalization raw ETH should equal active bids plus deferred refunds')
+
+			await client.writeContract({
+				abi: rejectingEthReceiverArtifact.abi,
+				address: rejectingReceiver,
+				functionName: 'setRejectETH',
+				args: [false],
+			})
+			await executeThroughReceiver(
+				rejectingReceiver,
+				auctionAddress,
+				encodeFunctionData({
+					abi: auctionAbi,
+					functionName: 'withdrawPendingEthRefund',
+					args: [],
+				}),
+			)
+			strictEqualTypeSafe(
 				await client.readContract({
 					abi: auctionAbi,
 					address: auctionAddress,
 					functionName: 'pendingEthRefunds',
 					args: [rejectingReceiver],
 				}),
-				losingBid,
-				'rejected pre-finalization refund should remain withdrawable from auction escrow',
+				0n,
+				'the successful pull should clear the pre-finalization deferred liability',
 			)
+			strictEqualTypeSafe(await getETHBalance(client, auctionAddress), activeEthAfterDeferredRefund, 'pulling the deferred refund should leave exactly the active bid liability')
 		})
 
 		test('gas-exhausting losing bidders cannot block pre-finalization refund accounting', async () => {
