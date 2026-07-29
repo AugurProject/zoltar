@@ -59,7 +59,7 @@
 				"required": ["role", "address", "runtimeCodeHash"],
 				"properties": {
 					"role": {
-						"enum": ["coordinator", "executor", "open-oracle", "token", "uniswap-factory", "uniswap-quoter", "uniswap-router", "weth"]
+						"enum": ["coordinator", "executor", "open-oracle", "token", "uniswap-factory", "uniswap-quoter", "uniswap-router", "uniswap-v2-router", "weth"]
 					},
 					"address": {
 						"type": "string",

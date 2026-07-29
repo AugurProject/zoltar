@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { expectedWithdrawalToken2, hedgedProfitBeforeGasWeth, realizedNetProfitWeth, recoveredHedgedProfitBeforeGasWeth } from './position-accounting.js'
+import { expectedWithdrawalToken2, hedgedProfitBeforeGasWeth, realizedNetProfitWeth, recoveredHedgedProfitBeforeGasWeth, replacementCredit } from './position-accounting.js'
 
 describe('position accounting', () => {
 	test('uses actual swap execution rather than the pre-submission quote', () => {
@@ -20,5 +20,16 @@ describe('position accounting', () => {
 		expect(expectedWithdrawalToken2('sell-rep', 1_000n, 900n)).toBe(1_000n)
 		expect(expectedWithdrawalToken2('sell-rep', 1_000n, 1_300n)).toBe(1_300n)
 		expect(expectedWithdrawalToken2('buy-rep', 1_000n, 1_300n)).toBe(1_300n)
+	})
+
+	test('derives the displaced reporter credit from the authenticated report transition', () => {
+		expect(replacementCredit({ feePercentage: 100_000n, newAmount1: 1_500n, newAmount2: 900n, oldAmount1: 1_200n, oldAmount2: 1_000n })).toEqual({
+			amount: 2_412n,
+			token: 'token1',
+		})
+		expect(replacementCredit({ feePercentage: 100_000n, newAmount1: 1_300n, newAmount2: 1_200n, oldAmount1: 1_200n, oldAmount2: 1_000n })).toEqual({
+			amount: 2_010n,
+			token: 'token2',
+		})
 	})
 })

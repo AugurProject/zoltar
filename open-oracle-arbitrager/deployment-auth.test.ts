@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress, keccak256, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { authenticateDeploymentManifest, createDeploymentManifest, parseDeploymentManifest, verifyDeploymentManifest, type DeploymentManifest } from './deployment-auth.js'
+import { authenticateDeploymentManifest, createDeploymentManifest, parseDeploymentManifest, parseDeploymentRole, verifyDeploymentManifest, type DeploymentManifest } from './deployment-auth.js'
 
 const openOracle = getAddress('0x0000000000000000000000000000000000000001')
 const executor = getAddress('0x0000000000000000000000000000000000000002')
@@ -44,6 +44,10 @@ describe('deployment authentication', () => {
 				required: [{ address: executor, role: 'executor' }],
 			}),
 		).rejects.toThrow('runtime bytecode hash')
+	})
+
+	test('recognizes the separately authenticated Uniswap V2 router role', () => {
+		expect(parseDeploymentRole('uniswap-v2-router')).toBe('uniswap-v2-router')
 	})
 
 	test('rejects manifests for another chain and duplicate identities', () => {

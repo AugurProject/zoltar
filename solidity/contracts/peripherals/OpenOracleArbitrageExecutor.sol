@@ -95,6 +95,24 @@ interface IUniswapV3SwapRouter {
 	function exactOutputSingle(ExactOutputSingleParams calldata params) external payable returns (uint256 amountIn);
 }
 
+interface IUniswapV2Router {
+	function swapExactTokensForTokens(
+		uint256 amountIn,
+		uint256 amountOutMin,
+		address[] calldata path,
+		address to,
+		uint256 deadline
+	) external returns (uint256[] memory amounts);
+
+	function swapTokensForExactTokens(
+		uint256 amountOut,
+		uint256 amountInMax,
+		address[] calldata path,
+		address to,
+		uint256 deadline
+	) external returns (uint256[] memory amounts);
+}
+
 /// @notice Funds one OpenOracle dispute atomically and rejects non-exact ERC-20 transfers.
 /// @dev The caller remains the OpenOracle disputer. A successful dispute retains no operation-pulled token balance or OpenOracle allowance.
 contract OpenOracleArbitrageExecutor {
@@ -106,6 +124,7 @@ contract OpenOracleArbitrageExecutor {
 	struct HedgeRequest {
 		address openOracle;
 		address router;
+		uint8 venue;
 		uint24 poolFee;
 		uint128 newAmount1;
 		uint128 newAmount2;
@@ -120,6 +139,14 @@ contract OpenOracleArbitrageExecutor {
 		bytes32 expectedParentBlockHash;
 		uint128 amount1;
 		uint128 amount2;
+	}
+
+	struct ReplacementWithdrawalRequest {
+		address openOracle;
+		address token;
+		uint256 parentBlockNumber;
+		bytes32 expectedParentBlockHash;
+		uint256 amount;
 	}
 
 	struct ExecutionBalances {
@@ -155,6 +182,13 @@ contract OpenOracleArbitrageExecutor {
 		address token2,
 		uint256 amount2,
 		uint256 settlerReward
+	);
+
+	event ReplacementCreditWithdrawn(
+		address indexed account,
+		uint256 indexed reportId,
+		address indexed token,
+		uint256 amount
 	);
 
 	function dispute(
@@ -365,6 +399,39 @@ contract OpenOracleArbitrageExecutor {
 		entered = false;
 	}
 
+	/// @notice Withdraws the exact credit created when a later dispute replaces the caller's report.
+	/// @dev The caller must approve this executor through OpenOracle's internal allowance for the credited token.
+	///      Unrelated holder balances remain inside OpenOracle.
+	function withdrawReplacementCredit(ReplacementWithdrawalRequest calldata request, uint256 reportId) external {
+		require(!entered, 'OpenOracle arbitrage executor reentrancy');
+		assertParentBlock(request.parentBlockNumber, request.expectedParentBlockHash);
+		require(request.openOracle.code.length > 0, 'OpenOracle address must contain contract code');
+		require(request.token.code.length > 0, 'Replacement credit token must contain contract code');
+		require(request.amount != 0, 'Replacement credit amount must be positive');
+		require(request.amount <= uint256(type(uint128).max) * 4, 'Replacement credit amount exceeds report bounds');
+		entered = true;
+
+		uint256 walletBalance = IERC20(request.token).balanceOf(msg.sender);
+		IOpenOracleLifecycle openOracle = IOpenOracleLifecycle(request.openOracle);
+		uint256 remaining = request.amount;
+		while (remaining != 0) {
+			uint128 chunk = remaining > type(uint128).max ? type(uint128).max : uint128(remaining);
+			openOracle.internalTransferFrom(msg.sender, address(this), request.token, chunk);
+			remaining -= chunk;
+		}
+		require(
+			openOracle.withdrawTo(request.token, request.amount, msg.sender) == request.amount,
+			'OpenOracle replacement credit withdrawal was not exact'
+		);
+		require(
+			IERC20(request.token).balanceOf(msg.sender) == walletBalance + request.amount,
+			'OpenOracle replacement credit receipt was not exact'
+		);
+
+		emit ReplacementCreditWithdrawn(msg.sender, reportId, request.token, request.amount);
+		entered = false;
+	}
+
 	/// @notice Reverts unless execution occurs in the direct child of the signed canonical parent.
 	/// @dev This guard can be included as the first transaction in any atomic private bundle.
 	function assertParentBlock(uint256 parentBlockNumber, bytes32 expectedParentBlockHash) public view {
@@ -406,18 +473,34 @@ contract OpenOracleArbitrageExecutor {
 		_pullExact(token1, result.contribution1 + request.hedgeWethLimit, balances.executorToken1);
 		_pullExact(token2, result.contribution2 - result.hedgeAmountToken2, balances.executorToken2);
 		_approveExact(token1, request.router, request.hedgeWethLimit);
-		result.hedgeAmountWeth = IUniswapV3SwapRouter(request.router).exactOutputSingle(
-			IUniswapV3SwapRouter.ExactOutputSingleParams({
-				tokenIn: game.token1,
-				tokenOut: game.token2,
-				fee: request.poolFee,
-				recipient: address(this),
-				deadline: request.swapDeadline,
-				amountOut: result.hedgeAmountToken2,
-				amountInMaximum: request.hedgeWethLimit,
-				sqrtPriceLimitX96: 0
-			})
-		);
+		if (request.venue == 0) {
+			result.hedgeAmountWeth = IUniswapV3SwapRouter(request.router).exactOutputSingle(
+				IUniswapV3SwapRouter.ExactOutputSingleParams({
+					tokenIn: game.token1,
+					tokenOut: game.token2,
+					fee: request.poolFee,
+					recipient: address(this),
+					deadline: request.swapDeadline,
+					amountOut: result.hedgeAmountToken2,
+					amountInMaximum: request.hedgeWethLimit,
+					sqrtPriceLimitX96: 0
+				})
+			);
+		} else {
+			require(request.venue == 1, 'Unsupported hedge venue');
+			address[] memory path = new address[](2);
+			path[0] = game.token1;
+			path[1] = game.token2;
+			uint256[] memory amounts = IUniswapV2Router(request.router).swapTokensForExactTokens(
+				result.hedgeAmountToken2,
+				request.hedgeWethLimit,
+				path,
+				address(this),
+				request.swapDeadline
+			);
+			require(amounts.length == 2 && amounts[1] == result.hedgeAmountToken2, 'Uniswap V2 buy amounts invalid');
+			result.hedgeAmountWeth = amounts[0];
+		}
 		require(result.hedgeAmountWeth <= request.hedgeWethLimit, 'Uniswap buy hedge exceeded maximum WETH');
 		_approveExact(token1, request.router, 0);
 		return result;
@@ -435,18 +518,34 @@ contract OpenOracleArbitrageExecutor {
 		_pullExact(token1, result.contribution1, balances.executorToken1);
 		_pullExact(token2, result.contribution2 + result.hedgeAmountToken2, balances.executorToken2);
 		_approveExact(token2, request.router, result.hedgeAmountToken2);
-		result.hedgeAmountWeth = IUniswapV3SwapRouter(request.router).exactInputSingle(
-			IUniswapV3SwapRouter.ExactInputSingleParams({
-				tokenIn: game.token2,
-				tokenOut: game.token1,
-				fee: request.poolFee,
-				recipient: address(this),
-				deadline: request.swapDeadline,
-				amountIn: result.hedgeAmountToken2,
-				amountOutMinimum: request.hedgeWethLimit,
-				sqrtPriceLimitX96: 0
-			})
-		);
+		if (request.venue == 0) {
+			result.hedgeAmountWeth = IUniswapV3SwapRouter(request.router).exactInputSingle(
+				IUniswapV3SwapRouter.ExactInputSingleParams({
+					tokenIn: game.token2,
+					tokenOut: game.token1,
+					fee: request.poolFee,
+					recipient: address(this),
+					deadline: request.swapDeadline,
+					amountIn: result.hedgeAmountToken2,
+					amountOutMinimum: request.hedgeWethLimit,
+					sqrtPriceLimitX96: 0
+				})
+			);
+		} else {
+			require(request.venue == 1, 'Unsupported hedge venue');
+			address[] memory path = new address[](2);
+			path[0] = game.token2;
+			path[1] = game.token1;
+			uint256[] memory amounts = IUniswapV2Router(request.router).swapExactTokensForTokens(
+				result.hedgeAmountToken2,
+				request.hedgeWethLimit,
+				path,
+				address(this),
+				request.swapDeadline
+			);
+			require(amounts.length == 2 && amounts[0] == result.hedgeAmountToken2, 'Uniswap V2 sell amounts invalid');
+			result.hedgeAmountWeth = amounts[1];
+		}
 		require(result.hedgeAmountWeth >= request.hedgeWethLimit, 'Uniswap sell hedge received too little WETH');
 		_approveExact(token2, request.router, 0);
 		return result;

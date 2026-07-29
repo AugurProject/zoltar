@@ -1,7 +1,17 @@
 import { describe, expect, test } from 'bun:test'
 import { createPublicClient, custom, encodeAbiParameters, encodeEventTopics, getAddress, mainnet, type EIP1193Provider, type Hex } from '@zoltar/shared/ethereum'
 import { openOracleArbitrageExecutorAbi } from './abi.js'
-import { executionRecordForConfirmedPosition, expireEntryWithQuorum, finalizeLifecycleAfterFinalityWithQuorum, lifecycleExecutionFromLogs, reconcileExpiredAttemptsWithQuorum, recoverPendingEntryWithQuorum, recoverPendingLifecycleWithQuorum } from './index.js'
+import {
+	executionRecordForConfirmedPosition,
+	expireEntryWithQuorum,
+	finalizeLifecycleAfterFinalityWithQuorum,
+	immediateReplacementAmounts,
+	lifecycleExecutionFromLogs,
+	reconcileExpiredAttemptsWithQuorum,
+	recoverPendingEntryWithQuorum,
+	recoverPendingLifecycleWithQuorum,
+	replacementCreditExecutionFromLogs,
+} from './index.js'
 import { manuallyReconcilePosition, type PositionRecord } from './position-store.js'
 
 const transactionHash = `0x${'11'.repeat(32)}` as Hex
@@ -145,6 +155,36 @@ function lifecycleReceiptClients(blockNumber = 100n, headBlockNumbers?: readonly
 		],
 		[10n ** 18n, token, 2n * 10n ** 18n, settlerReward],
 	)
+	return receiptClients(
+		blockNumber,
+		'success',
+		[
+			{
+				address: executor,
+				blockHash: `0x${'aa'.repeat(32)}`,
+				blockNumber: `0x${blockNumber.toString(16)}`,
+				data,
+				logIndex: '0x0',
+				removed: false,
+				topics,
+				transactionHash: lifecycleTransactionHash,
+				transactionIndex: '0x0',
+			},
+		],
+		lifecycleTransactionHash,
+		headBlockNumbers,
+	)
+}
+
+function replacementCreditReceiptClients(blockNumber = 100n, headBlockNumbers?: readonly bigint[] | undefined) {
+	const account = getAddress('0x0000000000000000000000000000000000000002')
+	const topics = encodeEventTopics({
+		abi: openOracleArbitrageExecutorAbi,
+		eventName: 'ReplacementCreditWithdrawn',
+		args: { account, reportId: 7n, token: weth },
+	})
+	if (topics.some(topic => topic === null)) throw new Error('Replacement-credit event topics are incomplete')
+	const data = encodeAbiParameters([{ name: 'amount', type: 'uint256' }], [2n * 10n ** 18n])
 	return receiptClients(
 		blockNumber,
 		'success',
@@ -450,6 +490,19 @@ describe('entry crash recovery', () => {
 })
 
 describe('atomic lifecycle crash recovery', () => {
+	test('uses the immediate successor to the bot entry rather than a later report for replacement credit', () => {
+		const position = confirmedPosition()
+		expect(
+			immediateReplacementAmounts(position, {
+				steps: [
+					{ amount1: '1200', amount2: '900', blockNumber: '99', event: 'disputed', reporter: position.account, transactionHash: position.entryTransactionHash },
+					{ amount1: '1300', amount2: '800', blockNumber: '100', event: 'disputed', reporter: executor, transactionHash: `0x${'55'.repeat(32)}` },
+					{ amount1: '1400', amount2: '1500', blockNumber: '101', event: 'disputed', reporter: position.account, transactionHash: `0x${'66'.repeat(32)}` },
+				],
+			}),
+		).toEqual({ amount1: 1300n, amount2: 800n })
+	})
+
 	test('derives exact position withdrawals from executor evidence instead of whole-wallet deltas', () => {
 		const account = getAddress('0x0000000000000000000000000000000000000002')
 		const token1 = weth
@@ -478,6 +531,24 @@ describe('atomic lifecycle crash recovery', () => {
 			settlerReward: 3n,
 			token1,
 			token2,
+		})
+	})
+
+	test('derives exact replacement-credit withdrawals from executor evidence', () => {
+		const account = getAddress('0x0000000000000000000000000000000000000002')
+		const topics = encodeEventTopics({
+			abi: openOracleArbitrageExecutorAbi,
+			eventName: 'ReplacementCreditWithdrawn',
+			args: { account, reportId: 7n, token: weth },
+		})
+		if (topics.some(topic => topic === null)) throw new Error('Replacement-credit event topics are incomplete')
+		const encodedTopics = topics.filter((topic): topic is Hex => topic !== null)
+		const data = encodeAbiParameters([{ name: 'amount', type: 'uint256' }], [22n])
+		expect(replacementCreditExecutionFromLogs([{ address: executor, data, topics: encodedTopics }], executor)).toEqual({
+			account,
+			amount: 22n,
+			reportId: 7n,
+			token: weth,
 		})
 	})
 
@@ -561,6 +632,32 @@ describe('atomic lifecycle crash recovery', () => {
 		expect(finalized.lifecycleSettlerRewardEth).toBe('0.01')
 		expect(finalized.lifecycleTransactionHashes).toEqual([])
 		expect(finalized.lifecycleReceiptBlockNumber).toBeUndefined()
+	})
+
+	test('claims an exact replacement credit and retains the position risk for inventory reconciliation', async () => {
+		const position = {
+			...confirmedPosition(),
+			lifecycleKind: 'replacement-credit' as const,
+			lifecycleSubmissionBlockNumber: '99',
+			lifecycleSubmissionMode: 'private' as const,
+			lifecycleTargetBlockNumber: '100',
+			lifecycleTokenDecimals: '18',
+			lifecycleTransactionNonce: '9',
+			lifecycleTransactionHashes: [lifecycleTransactionHash],
+			replacementCreditAmount: (2n * 10n ** 18n).toString(),
+			replacementCreditToken: weth,
+			status: 'withdrawing' as const,
+		}
+		const clients = replacementCreditReceiptClients()
+		const provisional = await recoverPendingLifecycleWithQuorum(clients, recoveryConfiguration, position, 100n)
+		expect(provisional.status).toBe('closed-pending-finality')
+		expect(provisional.withdrawnWeth).toBe('2')
+		expect(provisional.withdrawnToken).toBe('0')
+		const finalized = await finalizeLifecycleAfterFinalityWithQuorum(clients, recoveryConfiguration, provisional, 112n)
+		expect(finalized.status).toBe('replaced')
+		expect(finalized.realizedNetProfitEth).toBeUndefined()
+		expect(finalized.replacementCreditAmount).toBe((2n * 10n ** 18n).toString())
+		expect(finalized.lifecycleTransactionHashes).toEqual([])
 	})
 
 	test('retains successful lifecycle evidence until every RPC serves the same finality descendant', async () => {

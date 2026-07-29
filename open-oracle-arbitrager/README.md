@@ -1,7 +1,7 @@
 # OpenOracle arbitrager
 
 The OpenOracle arbitrager monitors active Ethereum WETH/token games, compares their
-locked exchange against executable Uniswap V3 quotes, and identifies disputes whose
+locked exchange against executable Uniswap V2 or V3 quotes, and identifies disputes whose
 modeled hedge remains profitable after OpenOracle fees and gas. It includes a local
 operator dashboard for live state, strategy controls, wallet inventory, submitted
 disputes, transaction delivery, and ETH-denominated profit tracking.
@@ -34,11 +34,13 @@ dispute while preserving the wallet as the replacement reporter. After the dispu
 window, the bot settles the final report, withdraws the position's exact OpenOracle
 balances, and closes its durable position record only after canonical receipts and
 exact asset recovery agree through 12 canonical descendants and every configured
-read RPC serves the same twelfth-descendant block hash. If a later reporter replaced
-the bot, automatic
-lifecycle execution fails closed because aggregate holder balances cannot prove
-which returned assets belong to that position; the operator must reconcile the
-replacement manually.
+read RPC serves the same twelfth-descendant block hash. If a later reporter replaces
+the bot, it derives the exact one-token credit from the authenticated old and new
+report amounts, withdraws only that amount through a parent-bound executor call,
+and verifies the `ReplacementCreditWithdrawn` event through the same receipt and
+finality quorum. The record then becomes **replaced** and continues consuming its
+risk slot: the bot has recovered the funds, but it does not label the one-sided
+inventory as realized profit or automatically trade it back to the original mix.
 
 The wallet must grant two distinct kinds of approval: ERC-20 allowances let the
 executor pull entry funding, and OpenOracle internal allowances let it move the
@@ -65,6 +67,10 @@ report lifecycle and economics.
   network with `./open-oracle-arbitrager/deploy-executor`, then pass the printed
   address through `--executor-address` whenever execution mode is enabled.
 - The exact Uniswap V3 SwapRouter address supplied with `--uniswap-router`.
+- Optionally, the exact Uniswap V2 Router02 supplied with
+  `--uniswap-v2-router`. When configured and authenticated, mainnet execution
+  compares direct WETH/token V2 and V3 hedges and selects the better modeled
+  result. V3 remains the report-price and TWAP reference.
 - A reviewed `--deployment-manifest` that pins chain, role, address, and runtime
   bytecode hash for every contract and executable token. Every read RPC authenticates
   every manifest entry before the bot can sign.
@@ -80,17 +86,19 @@ report lifecycle and economics.
   - The configured token (REPv2, fork REP, or another ERC-20) for the total
     executor funding shown in the dashboard.
   - OpenOracle internal allowances from that key to the executor for WETH and each
-    executable report token. A maximum allowance is recommended because OpenOracle
-    decrements finite allowances as positions close.
+    executable report token. Before entry the bot requires enough allowance for
+    both normal lifecycle withdrawal and the largest credit that report could
+    receive if replaced (`2 × report amount + report fee`). A maximum allowance is
+    recommended because OpenOracle decrements finite allowances as positions close.
 - For private delivery, at least one Flashbots-compatible bundle relay. Both modes
   are eligible only when the required executor and OpenOracle internal allowances
   already exist. Public delivery sends the single atomic executor transaction
   directly to every configured public RPC.
 - External process supervision, endpoint health alerts, and a procedure for any
-  position shown as **recovery-required**. The bot automatically settles and
-  withdraws only while its signer remains the current reporter. Reporter replacement
-  deliberately requires manual, event-based asset reconciliation before P&amp;L can be
-  classified as realized.
+  position shown as **recovery-required** or **replaced**. A replaced position has
+  automatically recovered its exact OpenOracle credit, but its remaining one-sided
+  inventory still requires an operator-approved unwind before P&amp;L can be classified
+  as realized.
 
 Do not use a key that controls unrelated protocol or treasury funds. The dashboard
 binds to `127.0.0.1`, but the execution key still lives in the bot process and must be
@@ -291,7 +299,8 @@ deployed runtime bytecode:
 ```
 
 Allowed roles are `open-oracle`, `weth`, `uniswap-factory`,
-`uniswap-quoter`, `uniswap-router`, `executor`, `coordinator`, and `token`.
+`uniswap-quoter`, `uniswap-router`, `uniswap-v2-router`, `executor`,
+`coordinator`, and `token`.
 Include every address in use. Do not construct this trust root from the same RPC
 that the bot will authenticate; independently review the deployment, compiler
 settings, and runtime code.
@@ -408,9 +417,12 @@ Before each dispute, the bot:
     amounts, remains canonical through 12 descendants, and every configured read RPC
     serves the same twelfth-descendant block hash. Before that point the position is
     `closed-pending-finality`, still consumes its risk slot, and is automatically
-    reopened if the receipt disappears in a reorganization. A later reporter
-    replacement fails closed for manual reconciliation; aggregate holder balances
-    are never treated as position attribution evidence.
+    reopened if the receipt disappears in a reorganization. If a later reporter
+    replaces the bot, it computes the exact credit from the two authenticated report
+    states and withdraws that credit alone through `withdrawReplacementCredit`.
+    Aggregate holder balances are only an availability check, never position
+    attribution evidence. After finality the record remains **replaced** until its
+    one-sided inventory is explicitly reconciled.
 
 The executor atomically swaps the old report inventory through the authenticated
 router, pulls the calculated contribution, verifies exact balance deltas into itself
@@ -748,8 +760,26 @@ the pool contract’s raw in-range `liquidity()` value; for constant-product ven
 shows both token reserves. Neither is a token-denominated TVL or a promise that the
 full game size can execute without price impact. “Price” is the decimal-normalized
 WETH-per-token spot price derived from V3 `sqrtPriceX96` or V2 reserves; it is not
-an executable size-aware quote. Strategy execution remains limited to Uniswap V3
-pools that also pass the executable QuoterV2 and spot/TWAP guards.
+an executable size-aware quote. V3 execution uses QuoterV2 and the configured
+spot/TWAP guard. When `--uniswap-v2-router` is supplied, mainnet execution also
+reads the canonical Uniswap V2 pair reserves at the exact quorum quote block and
+evaluates the direct WETH/token route with the standard 0.30% fee:
+
+```text
+amount out = amount in × 997 × reserve out
+             ÷ (reserve in × 1000 + amount in × 997)
+
+amount in  = floor(reserve in × amount out × 1000
+             ÷ ((reserve out − amount out) × 997)) + 1
+```
+
+The bot compares complete strategy profit after its conservative gas and slippage
+reserves, not spot price alone. The selected V2 swap still executes inside the same
+parent-bound atomic executor transaction with an exact minimum output or maximum
+input. SushiSwap V2 and Uniswap V4 are monitoring-only: Sushi has no authenticated
+execution router in this release, and the available V4 helper does not provide the
+exact-output, atomic execution path required by `buy-rep`. The bot will not silently
+fall back to either venue.
 
 Price samples are stored in
 `.open-oracle-arbitrager/prices-mainnet.jsonl` or
@@ -853,6 +883,7 @@ Other startup-only options:
 | `--uniswap-quoter` | Network QuoterV2 | Override the quoter for a custom test deployment. |
 | `--executor-address` | none | Deployed atomic executor. Required in execution mode and authenticated against the manifest on every read RPC. |
 | `--uniswap-router` | none | SwapRouter used by the atomic hedge. Required and manifest-authenticated in execution mode. |
+| `--uniswap-v2-router` | none | Optional mainnet Uniswap V2 Router02. When set, it is manifest-authenticated as `uniswap-v2-router` and enables automatic V2/V3 best-route hedge selection. |
 | `--deployment-manifest` | none | Reviewed chain/address/role/runtime-code-hash trust root. Required in execution mode. |
 | `--quorum-rpc-url` | none | Independent read RPC. Repeat as needed; at least one secondary is required in execution mode. |
 | `--coordinator-address` | none | Restart-time approved `OpenOraclePriceCoordinator`. Repeat as needed. Execution requires at least one and verifies each coordinator's immutable template against the configured OpenOracle and WETH. The comma-separated `OPEN_ORACLE_COORDINATOR_ADDRESSES` environment variable is also accepted. |
@@ -953,6 +984,16 @@ realizes profit, or removes provisional withdrawal and gas accounting and reopen
 the position if the receipt was reorged out. A lagging or unavailable quorum RPC
 therefore delays closure rather than releasing the slot from the primary RPC's head.
 
+When another report replaces the bot, the durable entry already contains the exact
+amounts and fee needed to reproduce OpenOracle's replacement-credit formula. The bot
+checks the authenticated current report, records a `replacement-credit` lifecycle,
+and calls `withdrawReplacementCredit` for exactly one credited token. The executor
+uses an exact OpenOracle internal transfer and withdrawal, verifies the wallet
+receipt, and leaves the one-unit sentinel and every unrelated balance untouched.
+Missed or reverted attempts follow the same expiry/retry rules as settlement.
+Canonical success becomes **replaced**, not **closed**, because only one side of the
+hedged inventory has returned and automatic revenue would be misleading.
+
 ### `recovery-required` runbook
 
 Stop new entries and preserve the position journal before investigating. Do not
@@ -981,10 +1022,13 @@ delete or hand-edit a record to bypass the one-position guard.
    the recorded attempt remains live.
 4. For **stored-state/current-reporter mismatch**, compare the current reporter,
    settlement state, dispute events, and the wallet's OpenOracle WETH/token holder
-   balances through independent RPCs. A later dispute can legitimately replace the
-   bot. The bot intentionally refuses automatic withdrawal in this state because
-   aggregate balances can include permissionless deposits or other positions;
-   withdraw only balances demonstrably attributable to this report.
+   balances through independent RPCs. When the bot's authenticated entry transaction
+   is immediately followed by one canonical replacement, the bot computes that
+   report's exact one-token credit and claims only that amount automatically. If the
+   immediate successor cannot be authenticated, its arithmetic does not match the
+   durable entry, or the exact credit is unavailable, the bot refuses an aggregate
+   withdrawal and keeps the record in recovery. Never attribute the wallet's whole
+   OpenOracle balance to this report.
 5. For **unexpected residual assets**, use the lifecycle event and OpenOracle
    internal balances to distinguish the position's exact withdrawal from unrelated
    dust or other deposits. Value or unwind any external token exposure, including
@@ -1033,7 +1077,9 @@ entry from depending on wallet inventory already committed to recovery.
 ## Operational limitations
 
 - Ethereum mainnet and Sepolia WETH/token games using standard Uniswap V3 fee tiers
-  and exact-transfer ERC-20s are supported. Identities remain operator-supplied, but
+  and exact-transfer ERC-20s are supported. Mainnet can additionally execute through
+  authenticated Uniswap V2 Router02 when `--uniswap-v2-router` is configured; V3
+  remains the reference/TWAP safety anchor. Identities remain operator-supplied, but
   live mode authenticates every address and runtime bytecode hash against the
   reviewed deployment manifest through every read RPC. The manifest itself remains
   an operator trust root.

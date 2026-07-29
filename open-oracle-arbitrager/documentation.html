@@ -40,9 +40,11 @@
 				<p>
 					The bot follows approved <code>OpenOraclePriceCoordinator</code>
 					reports. For each active WETH/token game it loads the exact report state,
-					finds supported WETH pools, requests size-aware Uniswap V3 quotes, and
-					applies timing, TWAP, inventory, allowance, profitability, and risk
-					limits. Only the best currently eligible opportunity may be selected.
+					finds supported WETH pools, compares size-aware Uniswap V2 and V3 hedge
+					quotes when both are configured, and applies timing, TWAP, inventory,
+					allowance, profitability, and risk limits. Uniswap V3 remains the
+					reference and TWAP anchor. Only the best currently eligible opportunity
+					may be selected.
 				</p>
 				<figure class="diagram diagram-wide" id="fig-open-oracle-arbitrager-lifecycle">
 					<div
@@ -55,10 +57,11 @@
 					>
 						<span class="plot-chart-fallback"
 							>Reports are synchronized and priced before one atomic entry hedges
-							and disputes. An atomic exit settles and withdraws exact balances.
-							Profit becomes realized only after every configured read RPC serves
-							the same twelfth-descendant block hash; ambiguous evidence stays in
-							durable recovery.</span
+							on the selected authenticated V2 or V3 router and disputes. An
+							atomic exit settles and withdraws exact balances. Profit becomes
+							realized only after every configured read RPC serves the same
+							twelfth-descendant block hash; ambiguous evidence stays in durable
+							recovery.</span
 						>
 					</div>
 					<p class="diagram-caption">
@@ -74,15 +77,23 @@
 					<div>
 						<strong>Entry transaction</strong>
 						The executor pulls pre-approved inventory, performs the exact-input or
-						exact-output Uniswap V3 hedge, submits the replacement report, clears
-						temporary allowances, and emits position-specific evidence in one
-						revert boundary.
+						exact-output hedge through the selected authenticated Uniswap V2 or
+						V3 router, submits the replacement report, clears temporary allowances,
+						and emits position-specific evidence in one revert boundary.
 					</div>
 					<div>
 						<strong>Lifecycle transaction</strong>
 						The executor optionally settles, moves only the position's expected
 						OpenOracle balances under internal allowances, withdraws those exact
 						amounts, and emits the evidence used for final accounting.
+					</div>
+					<div>
+						<strong>Replacement credit</strong>
+						If the bot is immediately replaced, it authenticates the successor
+						report, reproduces OpenOracle's exact credit calculation, and claims
+						only that one-token amount. The position remains
+						<code>replaced</code> and continues consuming risk until its remaining
+						inventory is reconciled.
 					</div>
 				</div>
 			</section>
@@ -426,6 +437,18 @@
 					threshold; integer comparison occurs in WETH wei before display
 					formatting.
 				</p>
+				<p>
+					For a direct Uniswap V2 WETH/token pair with input reserve
+					<code>R<sub>in</sub></code>, output reserve
+					<code>R<sub>out</sub></code>, and input
+					<code>A<sub>in</sub></code>, the bot applies Router02's 0.30% fee and
+					integer rounding exactly:
+					<code>A<sub>out</sub> = floor(997 × A<sub>in</sub> × R<sub>out</sub> / (1000 × R<sub>in</sub> + 997 × A<sub>in</sub>))</code>.
+					For exact output it uses Router02's rounded-up inverse. The strategy then
+					compares that executable result with the V3 quote using the same profit,
+					slippage, and gas policy; it never selects a venue from display spot price
+					alone.
+				</p>
 				<ul>
 					<li>
 						Entry gas reserves <code>1,200,000 × gas price</code>; private mode
@@ -474,8 +497,8 @@
 								<td>Uniswap V2</td>
 								<td>Mainnet</td>
 								<td>Yes</td>
-								<td>No</td>
-								<td>Spot WETH/token comes from normalized reserves; both reserves are shown.</td>
+								<td>Optional, through an authenticated Router02 when <code>--uniswap-v2-router</code> is configured</td>
+								<td>Spot WETH/token comes from normalized reserves; both reserves are shown. Execution uses the exact direct-pair 0.30% constant-product quote at the quorum block.</td>
 							</tr>
 							<tr>
 								<td>SushiSwap V2</td>
@@ -483,6 +506,13 @@
 								<td>Yes</td>
 								<td>No</td>
 								<td>Spot WETH/token comes from normalized reserves; both reserves are shown.</td>
+							</tr>
+							<tr>
+								<td>Uniswap V4</td>
+								<td>Any</td>
+								<td>No</td>
+								<td>No</td>
+								<td>The repository's helper is exact-input quote-only; there is no authenticated exact-output, hook-aware atomic hedge path, so V4 is not used for funded decisions.</td>
 							</tr>
 							<tr>
 								<td>Centralized exchanges and other DEXs</td>
@@ -499,8 +529,9 @@
 					pool and block. Every line therefore represents a concrete exchange
 					pool, not an aggregated token price. The exact-value table lists block,
 					observation time, pool, venue, and WETH-per-token price. These spot
-					samples are for comparison; only Uniswap V3 execution uses a
-					size-aware QuoterV2 result and spot/TWAP guard.
+					samples are for comparison. V2 execution uses exact reserves at the
+					quorum block, while V3 execution uses QuoterV2; every executable
+					opportunity still requires the V3 spot/TWAP reference guard.
 				</p>
 				<p>
 					On mainnet, startup discovers REPv2 and instantiated fork REP tokens
@@ -520,6 +551,11 @@
 					<li>closed-pending-finality</li>
 					<li>closed</li>
 				</ul>
+				<ul class="status-sequence" aria-label="Reporter replacement position states">
+					<li>open</li>
+					<li>withdrawing (replacement credit)</li>
+					<li>replaced</li>
+				</ul>
 				<p>
 					A successful lifecycle receipt is provisional. The bot retains its
 					transaction hash, receipt block number and hash, exact withdrawals, gas,
@@ -533,9 +569,17 @@
 					withdrawals are rolled back, the old signed hash is archived for late
 					revert monitoring, and the position returns to <code>open</code> for a
 					fresh parent-bound lifecycle attempt. If evidence disagrees, an executor
-					event is missing, another reporter replaced the bot, or exact assets
-					cannot be attributed, the state becomes
+					event is missing or exact assets cannot be attributed, the state becomes
 					<code>recovery-required</code> and continues consuming the risk limit.
+				</p>
+				<p>
+					A canonical immediate replacement is handled separately. The bot derives
+					the exact credited token and amount from its durable entry report and the
+					immediate successor, submits one parent-bound exact withdrawal, and waits
+					for the normal twelve-descendant RPC quorum. Success becomes
+					<code>replaced</code>, not <code>closed</code>: the claimed credit is
+					known, but the hedge's remaining one-sided inventory has not been valued
+					or unwound automatically.
 				</p>
 				<div class="callout">
 					<strong>Never delete a recovery record to make the bot trade again</strong>

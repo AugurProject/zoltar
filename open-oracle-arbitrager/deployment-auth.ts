@@ -1,6 +1,6 @@
 import { getAddress, isAddress, keccak256, type Address, type Hex } from '@zoltar/shared/ethereum'
 
-export type DeploymentRole = 'coordinator' | 'executor' | 'open-oracle' | 'token' | 'uniswap-factory' | 'uniswap-quoter' | 'uniswap-router' | 'weth'
+export type DeploymentRole = 'coordinator' | 'executor' | 'open-oracle' | 'token' | 'uniswap-factory' | 'uniswap-quoter' | 'uniswap-router' | 'uniswap-v2-router' | 'weth'
 
 export type DeploymentManifest = {
 	chainId: number
@@ -13,7 +13,7 @@ export type DeploymentManifest = {
 	version: 1
 }
 
-const roles = new Set<DeploymentRole>(['coordinator', 'executor', 'open-oracle', 'token', 'uniswap-factory', 'uniswap-quoter', 'uniswap-router', 'weth'])
+const roles = new Set<DeploymentRole>(['coordinator', 'executor', 'open-oracle', 'token', 'uniswap-factory', 'uniswap-quoter', 'uniswap-router', 'uniswap-v2-router', 'weth'])
 const networkChainIds = {
 	mainnet: 1,
 	sepolia: 11_155_111,
@@ -38,7 +38,7 @@ export function parseDeploymentManifest(value: unknown): DeploymentManifest {
 	if (manifest['chainId'] !== networkChainIds[manifest['network']]) throw new Error(`Deployment manifest ${manifest['network']} requires chainId ${networkChainIds[manifest['network']].toString()}`)
 	if (!Array.isArray(manifest['contracts']) || manifest['contracts'].length === 0) throw new Error('Deployment manifest must contain contracts')
 	const identities = new Set<string>()
-	const singletonRoles = new Set<DeploymentRole>(['executor', 'open-oracle', 'uniswap-factory', 'uniswap-quoter', 'uniswap-router', 'weth'])
+	const singletonRoles = new Set<DeploymentRole>(['executor', 'open-oracle', 'uniswap-factory', 'uniswap-quoter', 'uniswap-router', 'uniswap-v2-router', 'weth'])
 	const seenSingletonRoles = new Set<DeploymentRole>()
 	const contracts = manifest['contracts'].map(value => {
 		const contract = record(value, 'Deployment contract')

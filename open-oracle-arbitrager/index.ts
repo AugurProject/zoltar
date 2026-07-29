@@ -6,6 +6,7 @@ import {
 	decodeEventLog,
 	encodeFunctionData,
 	formatEther,
+	formatUnits,
 	getAddress,
 	getBalanceAtBlock,
 	getTransactionCountAtBlock,
@@ -35,7 +36,7 @@ import {
 	OPEN_ORACLE_REPORT_SUBMITTED_TOPIC,
 	type OpenOracleStatePreimage,
 } from '@zoltar/shared/openOracle'
-import { erc20Abi, factoryAbi, openOracleAbi, openOracleArbitrageExecutorAbi, openOraclePriceCoordinatorAbi, poolAbi, quoterAbi } from './abi.js'
+import { constantProductFactoryAbi, constantProductPairAbi, erc20Abi, factoryAbi, openOracleAbi, openOracleArbitrageExecutorAbi, openOraclePriceCoordinatorAbi, poolAbi, quoterAbi } from './abi.js'
 import { advanceCursorAfterSuccessfulHead, assertFinalityAnchor, cursorForHeadScan, initialCursor, operatorStatusAfterPause, scanRanges, withFinalityAnchor, type SyncCursor } from './block-sync.js'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, updateConnectivityEndpointChecks, updateSubmissionEndpointChecks, validateConnectivitySettings, type ConnectivitySettings } from './connectivity.js'
 import { applyStrategy, loadConfiguration, mutableStrategy, printHelp, type Configuration } from './configuration.js'
@@ -94,7 +95,7 @@ import {
 } from './operator-state.js'
 import { applyLogs, compareLogs, logBlockNumber, reportId, type ActiveReport } from './oracle-log-state.js'
 import { appendPriceHistory, availableTokenBalances, createTokenCatalogTracker, discoverAugurRepTokens, formatTokenAmount, loadPriceHistory, loadTokenMarkets, missingPricePoints, pricePoints } from './market-monitor.js'
-import { expectedWithdrawalToken2, hedgedProfitBeforeGasWeth, realizedNetProfitWeth, recoveredHedgedProfitBeforeGasWeth } from './position-accounting.js'
+import { expectedWithdrawalToken2, hedgedProfitBeforeGasWeth, realizedNetProfitWeth, recoveredHedgedProfitBeforeGasWeth, replacementCredit } from './position-accounting.js'
 import { acquireExecutionSignerLock, acquirePositionJournalLock, loadPositionJournal, savePositionJournal, type DurableTransactionIntent, type ExclusiveProcessLock, type PositionRecord } from './position-store.js'
 import { quorumValue } from './read-quorum.js'
 import { bestSuccessful, compactFinalityWindow, pollUntilStopped, replaceOverlap } from './resilience.js'
@@ -121,8 +122,10 @@ import {
 } from './strategy.js'
 import { prepareSignedTransaction, simulateSignedBundleEveryRelay, SubmissionFailure, submitSignedBundle, validateSubmissionSettings, type SubmissionSettings, type SubmissionTargetResult } from './transaction-submission.js'
 import { receiptGasCost, submitContractTransaction, trackedActivity, transactionLogLevel, waitForTrackedTransaction, type TrackTransaction } from './transaction-tracker.js'
+import { constantProductExactInput, constantProductExactOutput, type Venue } from './venue-strategy.js'
 
 const FEES = [100, 500, 3000, 10000] as const
+const UNISWAP_V2_FACTORY = getAddress('0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f')
 const REORG_OVERLAP_BLOCKS = 12n
 const MAX_LOG_SCAN_RANGE = 100n
 const MAX_UNTRUSTED_DRY_RUN_REPORTS = 256
@@ -134,6 +137,7 @@ type Pool = {
 	spotTick: bigint
 	token: Address
 	twapTick: bigint
+	v2Pair?: Address | undefined
 }
 
 type RawBalances = {
@@ -145,6 +149,8 @@ type RawBalances = {
 
 type ExecutionCandidate = {
 	capitalAtRiskWeth: bigint
+	hedgePool: Address
+	hedgeVenue: Venue
 	opportunity: OpportunitySnapshot
 	pool: Pool
 	projectedGasCostWeth: bigint
@@ -271,6 +277,34 @@ export function lifecycleExecutionFromLogs(logs: readonly { address: Address; da
 	throw new Error('Confirmed executor transaction did not emit LifecycleExecuted')
 }
 
+export function replacementCreditExecutionFromLogs(logs: readonly { address: Address; data: Hex; topics: readonly Hex[] }[], executor: Address) {
+	for (const log of logs) {
+		if (log.address.toLowerCase() !== executor.toLowerCase()) continue
+		try {
+			const decoded = decodeEventLog({ abi: openOracleArbitrageExecutorAbi, data: log.data, topics: log.topics })
+			if (decoded.eventName !== 'ReplacementCreditWithdrawn') continue
+			return {
+				account: decoded.args.account,
+				amount: decoded.args.amount,
+				reportId: decoded.args.reportId,
+				token: decoded.args.token,
+			}
+		} catch (error) {
+			void error
+		}
+	}
+	throw new Error('Confirmed executor transaction did not emit ReplacementCreditWithdrawn')
+}
+
+export function immediateReplacementAmounts(position: Pick<PositionRecord, 'entryTransactionHash'>, report: Pick<ActiveReport, 'steps'> | undefined) {
+	if (report === undefined) return undefined
+	const entryIndex = report.steps.findIndex(step => step.transactionHash?.toLowerCase() === position.entryTransactionHash.toLowerCase())
+	if (entryIndex < 0) return undefined
+	const successor = report.steps[entryIndex + 1]
+	if (successor?.event !== 'disputed' || successor.amount1 === undefined || successor.amount2 === undefined) return undefined
+	return { amount1: BigInt(successor.amount1), amount2: BigInt(successor.amount2) }
+}
+
 async function loadCoordinatorPolicies(client: ReadClient, config: Pick<Configuration, 'coordinatorAddresses' | 'network' | 'openOracle'>) {
 	return Promise.all(
 		config.coordinatorAddresses.map(async coordinator => {
@@ -313,7 +347,7 @@ async function loadCoordinatorPolicies(client: ReadClient, config: Pick<Configur
 }
 
 function requiredDeploymentIdentities(config: Configuration) {
-	const identities: { address: Address; role: 'coordinator' | 'executor' | 'open-oracle' | 'token' | 'uniswap-factory' | 'uniswap-quoter' | 'uniswap-router' | 'weth' }[] = [
+	const identities: { address: Address; role: 'coordinator' | 'executor' | 'open-oracle' | 'token' | 'uniswap-factory' | 'uniswap-quoter' | 'uniswap-router' | 'uniswap-v2-router' | 'weth' }[] = [
 		{ address: config.openOracle, role: 'open-oracle' },
 		{ address: config.network.weth, role: 'weth' },
 		{ address: config.network.factory, role: 'uniswap-factory' },
@@ -323,6 +357,7 @@ function requiredDeploymentIdentities(config: Configuration) {
 	]
 	if (config.executor !== undefined) identities.push({ address: config.executor, role: 'executor' })
 	if (config.router !== undefined) identities.push({ address: config.router, role: 'uniswap-router' })
+	if (config.v2Router !== undefined) identities.push({ address: config.v2Router, role: 'uniswap-v2-router' })
 	return identities
 }
 
@@ -411,6 +446,20 @@ async function loadPool(client: ReadClient, address: Address, token: Address, fe
 
 async function poolsForToken(client: ReadClient, config: Configuration, token: Address) {
 	const pools: Pool[] = []
+	let v2Pair: Address | undefined
+	if (config.v2Router !== undefined && config.network.chain.id === 1) {
+		try {
+			const pair = await client.readContract({
+				address: UNISWAP_V2_FACTORY,
+				abi: constantProductFactoryAbi,
+				functionName: 'getPair',
+				args: [config.network.weth, token],
+			})
+			if (pair !== zeroAddress) v2Pair = pair
+		} catch (error) {
+			console.error(`venue=uniswap-v2 skipped=${errorMessage(error)}`)
+		}
+	}
 	for (const fee of FEES) {
 		try {
 			const address = await client.readContract({
@@ -421,7 +470,7 @@ async function poolsForToken(client: ReadClient, config: Configuration, token: A
 			})
 			if (address === zeroAddress) continue
 			const pool = await loadPool(client, address, token, fee, config.twapSeconds)
-			if (pool !== undefined) pools.push(pool)
+			if (pool !== undefined) pools.push({ ...pool, v2Pair })
 		} catch (error) {
 			console.error(`poolFee=${fee.toString()} skipped=${errorMessage(error)}`)
 		}
@@ -451,6 +500,20 @@ async function quoteOutput(client: ReadClient, quoter: Address, tokenIn: Address
 	return requiredBigint(result[0], 'Uniswap exact-output amount')
 }
 
+async function constantProductReserves(client: ReadClient, pair: Address, token: Address, blockNumber?: bigint | undefined) {
+	const token0Parameters = { address: pair, abi: constantProductPairAbi, functionName: 'token0' } as const
+	const reservesParameters = { address: pair, abi: constantProductPairAbi, functionName: 'getReserves' } as const
+	const [token0, reservesValue] = await Promise.all([
+		blockNumber === undefined ? client.readContract(token0Parameters) : readContractAtBlock(client.transport, token0Parameters, blockNumber),
+		blockNumber === undefined ? client.readContract(reservesParameters) : readContractAtBlock(client.transport, reservesParameters, blockNumber),
+	])
+	const reserves = requiredTuple(reservesValue, 2, 'Uniswap V2 reserves')
+	const reserve0 = requiredBigint(reserves[0], 'Uniswap V2 reserve0')
+	const reserve1 = requiredBigint(reserves[1], 'Uniswap V2 reserve1')
+	if (typeof token0 !== 'string') throw new Error('Uniswap V2 token0 is invalid')
+	return getAddress(token0).toLowerCase() === token.toLowerCase() ? { reserveToken: reserve0, reserveWeth: reserve1 } : { reserveToken: reserve1, reserveWeth: reserve0 }
+}
+
 function safetyAdjustedQuote(quote: ArbitrageQuote, gasCost: bigint, lifecycleGasReserveWeth: bigint, config: Pick<Configuration, 'maxHedgeSlippageBps'>) {
 	const slippageReserveWeth = hedgeSlippageReserveWeth(quote.direction, quote.direction === 'sell-rep' ? quote.grossProceedsWeth : quote.hedgeCostWeth, config.maxHedgeSlippageBps)
 	return {
@@ -474,7 +537,8 @@ async function evaluate(client: ReadClient, config: Configuration, report: OpenO
 		submissionMode: config.submission.mode,
 	})
 	const repWithFees = game.currentAmount2 + calculateFee(game.currentAmount2, game.feePercentage) + calculateFee(game.currentAmount2, game.protocolFee)
-	return bestSuccessful(
+	const candidates: { hedgePool: Address; quote: ArbitrageQuote; venue: Venue }[] = []
+	const v3 = await bestSuccessful(
 		[
 			async () => safetyAdjustedQuote(evaluateSellRep(game, await quoteInput(client, config.network.quoter, pool.token, config.network.weth, game.currentAmount2, pool.fee, blockNumber), 0n), gasCost, lifecycleGasReserveWeth, config),
 			async () => safetyAdjustedQuote(evaluateBuyRep(game, await quoteOutput(client, config.network.quoter, config.network.weth, pool.token, repWithFees, pool.fee, blockNumber), 0n), gasCost, lifecycleGasReserveWeth, config),
@@ -482,9 +546,26 @@ async function evaluate(client: ReadClient, config: Configuration, report: OpenO
 		candidate => candidate.netProfitWeth,
 		error => console.error(`pool=${pool.address} quoteSkipped=${errorMessage(error)}`),
 	)
+	if (v3 !== undefined) candidates.push({ hedgePool: pool.address, quote: v3, venue: 'uniswap-v3' })
+	if (pool.v2Pair !== undefined) {
+		try {
+			const reserves = await constantProductReserves(client, pool.v2Pair, pool.token, blockNumber)
+			const v2 = selectBestExecution(
+				[
+					safetyAdjustedQuote(evaluateSellRep(game, constantProductExactInput(game.currentAmount2, reserves.reserveToken, reserves.reserveWeth), 0n), gasCost, lifecycleGasReserveWeth, config),
+					safetyAdjustedQuote(evaluateBuyRep(game, constantProductExactOutput(repWithFees, reserves.reserveWeth, reserves.reserveToken), 0n), gasCost, lifecycleGasReserveWeth, config),
+				],
+				candidate => candidate.netProfitWeth,
+			)
+			if (v2 !== undefined) candidates.push({ hedgePool: pool.v2Pair, quote: v2, venue: 'uniswap-v2' })
+		} catch (error) {
+			console.error(`pool=${pool.v2Pair} quoteSkipped=${errorMessage(error)}`)
+		}
+	}
+	return selectBestExecution(candidates, candidate => candidate.quote.netProfitWeth)
 }
 
-async function executionReadQuorum(clients: readonly ReadClient[], config: Configuration, report: OpenOracleStatePreimage, pool: Pool, blockNumber: bigint, account: Address) {
+async function executionReadQuorum(clients: readonly ReadClient[], config: Configuration, report: OpenOracleStatePreimage, pool: Pool, hedgeVenue: Venue, blockNumber: bigint, account: Address) {
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
 	const executor = config.executor
 	if (executor === undefined) throw new Error('Execution quorum requires the authenticated executor')
@@ -493,13 +574,26 @@ async function executionReadQuorum(clients: readonly ReadClient[], config: Confi
 	const repWithFees = game.currentAmount2 + calculateFee(game.currentAmount2, game.feePercentage) + calculateFee(game.currentAmount2, game.protocolFee)
 	const observations = await Promise.all(
 		clients.map(async (readClient, index) => {
-			const [block, stateHash, refreshedPool, replacementAmount2, sellHedgeQuote, buyHedgeQuote, nonce, eth, weth, token, allowance1, allowance2, internalAllowance1, internalAllowance2] = await Promise.all([
+			const hedgeQuotes =
+				hedgeVenue === 'uniswap-v2'
+					? (async () => {
+							if (pool.v2Pair === undefined) throw new Error('Uniswap V2 execution is missing its authenticated pair')
+							const reserves = await constantProductReserves(readClient, pool.v2Pair, pool.token, blockNumber)
+							return {
+								buyHedgeQuote: constantProductExactOutput(repWithFees, reserves.reserveWeth, reserves.reserveToken),
+								sellHedgeQuote: constantProductExactInput(game.currentAmount2, reserves.reserveToken, reserves.reserveWeth),
+							}
+						})()
+					: Promise.all([quoteInput(readClient, config.network.quoter, pool.token, config.network.weth, game.currentAmount2, pool.fee, blockNumber), quoteOutput(readClient, config.network.quoter, config.network.weth, pool.token, repWithFees, pool.fee, blockNumber)]).then(([sellHedgeQuote, buyHedgeQuote]) => ({
+							buyHedgeQuote,
+							sellHedgeQuote,
+						}))
+			const [block, stateHash, refreshedPool, replacementAmount2, refreshedHedgeQuotes, nonce, eth, weth, token, allowance1, allowance2, internalAllowance1, internalAllowance2] = await Promise.all([
 				readClient.getBlock({ blockNumber }),
 				readContractAtBlock(readClient.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'oracleGame', args: [report.helper.reportId] }, blockNumber),
 				loadPool(readClient, pool.address, pool.token, pool.fee, config.twapSeconds, blockNumber),
 				quoteInput(readClient, config.network.quoter, config.network.weth, pool.token, newAmount1, pool.fee, blockNumber),
-				quoteInput(readClient, config.network.quoter, pool.token, config.network.weth, game.currentAmount2, pool.fee, blockNumber),
-				quoteOutput(readClient, config.network.quoter, config.network.weth, pool.token, repWithFees, pool.fee, blockNumber),
+				hedgeQuotes,
 				getTransactionCountAtBlock(readClient.transport, { address: account, blockNumber }),
 				getBalanceAtBlock(readClient.transport, { address: account, blockNumber }),
 				readContractAtBlock(readClient.transport, { address: config.network.weth, abi: erc20Abi, functionName: 'balanceOf', args: [account] }, blockNumber),
@@ -520,14 +614,14 @@ async function executionReadQuorum(clients: readonly ReadClient[], config: Confi
 					baseFeePerGas: block.baseFeePerGas ?? 0n,
 					blockHash: block.hash,
 					blockTimestamp: block.timestamp,
-					buyHedgeQuote,
+					buyHedgeQuote: refreshedHedgeQuotes.buyHedgeQuote,
 					eth: requiredBigint(eth, 'Execution account ETH balance'),
 					nonce,
 					poolLiquidity: refreshedPool.liquidity,
 					poolSpotTick: refreshedPool.spotTick,
 					poolTwapTick: refreshedPool.twapTick,
 					replacementAmount2,
-					sellHedgeQuote,
+					sellHedgeQuote: refreshedHedgeQuotes.sellHedgeQuote,
 					stateHash: requiredHash(stateHash, 'OpenOracle report state'),
 					token: requiredBigint(token, 'Execution account report-token balance'),
 					weth: requiredBigint(weth, 'Execution account WETH balance'),
@@ -716,6 +810,7 @@ async function executeDispute(
 	report: OpenOracleStatePreimage,
 	quote: ArbitrageQuote,
 	pool: Pool,
+	hedgeVenue: Venue,
 	tokenMetadata: { decimals: number; symbol: string },
 	positions: readonly PositionRecord[],
 	isPaused: () => boolean,
@@ -726,8 +821,10 @@ async function executeDispute(
 	const executor = config.executor
 	if (account === undefined || account.signTransaction === undefined || account.signMessage === undefined) throw new Error('Execution requires a local transaction and relay signer')
 	if (executor === undefined) throw new Error('Execution requires a deployed OpenOracle arbitrage executor')
-	const router = config.router
+	const router = hedgeVenue === 'uniswap-v2' ? config.v2Router : config.router
 	if (router === undefined) throw new Error('Execution requires an authenticated Uniswap router')
+	const hedgePool = hedgeVenue === 'uniswap-v2' ? pool.v2Pair : pool.address
+	if (hedgePool === undefined) throw new Error('Uniswap V2 execution requires a discovered WETH/token pair')
 	const game = report.game
 	if (isSelfReport(account.address, game.currentReporter)) throw new Error('Self-disputes use different OpenOracle accounting and are not supported')
 	const newAmount1 = calculateNextAmount1(game)
@@ -737,7 +834,7 @@ async function executeDispute(
 	const quoteBlockNumber = quoteBlock.number
 	const signMessage = account.signMessage
 	const signTransaction = account.signTransaction
-	const executionSnapshot = await executionReadQuorum(readClients, config, report, pool, quoteBlockNumber, account.address)
+	const executionSnapshot = await executionReadQuorum(readClients, config, report, pool, hedgeVenue, quoteBlockNumber, account.address)
 	assertCanonicalExecutionSnapshot({
 		expectedReportStateHash: hashOpenOracleStatePreimage(report),
 		localBlockHash: quoteBlock.hash,
@@ -773,7 +870,9 @@ async function executeDispute(
 	const funding = executorFunding(game, newAmount1, newAmount2, refreshedQuote.direction === 'buy-rep' ? hedgeLimit : 0n)
 	if (executionSnapshot.weth < funding.token1 || executionSnapshot.token < funding.token2) throw new Error('Canonical execution snapshot no longer has the inventory required by the signed bundle')
 	const lockedToken = expectedWithdrawalToken2(refreshedQuote.direction, game.currentAmount2, newAmount2)
-	const internalAllowanceError = lifecycleAllowanceMismatch({ token1: executionSnapshot.internalAllowance1, token2: executionSnapshot.internalAllowance2 }, { token1: newAmount1, token2: lockedToken })
+	const replacementCredit1 = 2n * newAmount1 + calculateFee(newAmount1, game.feePercentage)
+	const replacementCredit2 = 2n * newAmount2 + calculateFee(newAmount2, game.feePercentage)
+	const internalAllowanceError = lifecycleAllowanceMismatch({ token1: executionSnapshot.internalAllowance1, token2: executionSnapshot.internalAllowance2 }, { token1: replacementCredit1 > newAmount1 ? replacementCredit1 : newAmount1, token2: replacementCredit2 > lockedToken ? replacementCredit2 : lockedToken })
 	if (internalAllowanceError !== undefined) throw new Error(internalAllowanceError)
 	const timeType = (game.flags & OPEN_ORACLE_FLAG_TIME_TYPE) !== 0n
 	const currentTime = timeType ? executionSnapshot.blockTimestamp : quoteBlockNumber
@@ -803,6 +902,7 @@ async function executeDispute(
 				poolFee: refreshedPool.fee,
 				router,
 				swapDeadline: executionSnapshot.blockTimestamp + 300n,
+				venue: hedgeVenue === 'uniswap-v2' ? 1 : 0,
 			},
 			getOpenOracleGameTuple(game),
 			getOpenOracleHelperTuple(report.helper),
@@ -841,7 +941,7 @@ async function executeDispute(
 			direction: refreshedQuote.direction,
 			estimatedNetProfitWeth: decimalWeth(refreshedQuote.netProfitWeth),
 			estimatedProfitBeforeGasEth: decimalWeth(refreshedQuote.profitBeforeGasWeth),
-			pool: refreshedPool.address,
+			pool: hedgePool,
 			poolFee: refreshedPool.fee,
 			reportId,
 			requiredToken: formatTokenAmount(funding.token2, tokenMetadata.decimals),
@@ -867,6 +967,9 @@ async function executeDispute(
 		lockedWeth: decimalWeth(newAmount1),
 		manualReconciliation: undefined,
 		openedAt: new Date().toISOString(),
+		reportAmount1: newAmount1.toString(),
+		reportAmount2: newAmount2.toString(),
+		reportFeePercentage: game.feePercentage.toString(),
 		realizedNetProfitEth: undefined,
 		reportId,
 		status: 'pending-entry',
@@ -1420,12 +1523,13 @@ export async function recoverPendingLifecycleWithQuorum(readClients: readonly Re
 			status: 'recovery-required',
 		}
 	}
-	let execution: ReturnType<typeof lifecycleExecutionFromLogs> | undefined
+	let execution: ReturnType<typeof lifecycleExecutionFromLogs> | ReturnType<typeof replacementCreditExecutionFromLogs> | undefined
 	if (receipt.status === 'success') {
 		try {
-			execution = lifecycleExecutionFromLogs(receipt.logs, executor)
+			execution = position.lifecycleKind === 'replacement-credit' ? replacementCreditExecutionFromLogs(receipt.logs, executor) : lifecycleExecutionFromLogs(receipt.logs, executor)
 		} catch (error) {
-			if (!(error instanceof Error) || error.message !== 'Confirmed executor transaction did not emit LifecycleExecuted') throw error
+			const expectedMessage = position.lifecycleKind === 'replacement-credit' ? 'Confirmed executor transaction did not emit ReplacementCreditWithdrawn' : 'Confirmed executor transaction did not emit LifecycleExecuted'
+			if (!(error instanceof Error) || error.message !== expectedMessage) throw error
 			execution = undefined
 		}
 	}
@@ -1446,6 +1550,31 @@ export async function recoverPendingLifecycleWithQuorum(readClients: readonly Re
 	if (receipt.blockNumber !== targetBlockNumber) throw new Error('Lifecycle executor transaction was included outside its signed parent-block target')
 	const tokenDecimals = Number(position.lifecycleTokenDecimals)
 	if (!Number.isSafeInteger(tokenDecimals) || tokenDecimals < 0 || tokenDecimals > 255) throw new Error('Lifecycle recovery token decimals are invalid')
+	if (position.lifecycleKind === 'replacement-credit') {
+		if (position.replacementCreditAmount === undefined || position.replacementCreditToken === undefined || !('amount' in execution)) {
+			throw new Error('Replacement-credit recovery journal is incomplete')
+		}
+		const expectedAmount = BigInt(position.replacementCreditAmount)
+		if (execution.account.toLowerCase() !== position.account.toLowerCase() || execution.reportId.toString() !== position.reportId || execution.token.toLowerCase() !== position.replacementCreditToken.toLowerCase() || execution.amount !== expectedAmount) {
+			throw new Error('Replacement-credit executor event does not match the durable position')
+		}
+		const creditIsWeth = execution.token.toLowerCase() === config.network.weth.toLowerCase()
+		const creditIsPositionToken = execution.token.toLowerCase() === position.token.toLowerCase()
+		if (!creditIsWeth && !creditIsPositionToken) throw new Error('Replacement credit uses an unexpected token')
+		return {
+			...accountedPosition,
+			closedAt: undefined,
+			lifecycleReceiptBlockHash: receipt.blockHash,
+			lifecycleReceiptBlockNumber: receipt.blockNumber.toString(),
+			lifecycleReceiptRecovered: true,
+			lifecycleSettlerRewardEth: '0',
+			realizedNetProfitEth: undefined,
+			status: 'closed-pending-finality',
+			withdrawnToken: creditIsPositionToken ? formatUnits(execution.amount, tokenDecimals) : '0',
+			withdrawnWeth: creditIsWeth ? decimalWeth(execution.amount) : '0',
+		}
+	}
+	if (!('amount1' in execution)) throw new Error('Lifecycle executor event does not match the durable position')
 	const expectedWeth = parseDecimalWeth(position.lockedWeth)
 	const expectedToken = parseUnits(position.lockedToken, tokenDecimals)
 	if (
@@ -1500,6 +1629,16 @@ export async function finalizeLifecycleAfterFinalityWithQuorum(readClients: read
 	const closedAt = refreshed.lifecycleUpdatedAt
 	if (closedAt === undefined) throw new Error('Finalized lifecycle receipt timestamp is unavailable')
 	if (refreshed.lifecycleSettlerRewardEth === undefined) throw new Error('Finalized lifecycle settler reward evidence is unavailable')
+	if (refreshed.lifecycleKind === 'replacement-credit') {
+		return {
+			...withoutLifecycleAttempt(refreshed),
+			closedAt: undefined,
+			lifecycleKind: 'replacement-credit',
+			lifecycleSettlerRewardEth: '0',
+			realizedNetProfitEth: undefined,
+			status: 'replaced',
+		} satisfies PositionRecord
+	}
 	const realized = realizedNetProfitWeth(parseSignedDecimalEth(refreshed.hedgedProfitBeforeGasEth), parseDecimalWeth(refreshed.lifecycleSettlerRewardEth), parseDecimalWeth(refreshed.actualEntryGasCostEth), parseDecimalWeth(refreshed.lifecycleGasCostEth))
 	return {
 		...withoutLifecycleAttempt(refreshed),
@@ -1540,7 +1679,7 @@ export async function discoverPublicReplacementWithQuorum(readClients: readonly 
 	return updated
 }
 
-export async function processPositionLifecycle(client: ReadClient, readClients: readonly ReadClient[], wallet: WriteClient, config: Configuration, position: PositionRecord, blockNumber: bigint, persistPosition: (position: PositionRecord) => Promise<void>, track: TrackTransaction) {
+export async function processPositionLifecycle(client: ReadClient, readClients: readonly ReadClient[], wallet: WriteClient, config: Configuration, position: PositionRecord, blockNumber: bigint, reportPath: ActiveReport | undefined, persistPosition: (position: PositionRecord) => Promise<void>, track: TrackTransaction) {
 	const account = wallet.account
 	const executor = config.executor
 	if (account.signTransaction === undefined || account.signMessage === undefined) throw new Error('Position recovery requires a local transaction and relay signer')
@@ -1550,7 +1689,7 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 	if (position.status === 'closed-pending-finality') {
 		const finalized = await finalizeLifecycleAfterFinalityWithQuorum(readClients, config, position, blockNumber)
 		if (finalized !== position) await persistPosition(finalized)
-		if (finalized.status === 'closed') return 'processed' as const
+		if (finalized.status === 'closed' || finalized.status === 'replaced') return 'processed' as const
 		if (finalized.status === 'open') return 'progressed' as const
 		return 'waiting' as const
 	}
@@ -1589,6 +1728,7 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 		}
 	}
 	if (activePosition.status === 'closed' || activePosition.status === 'expired-not-included') return 'processed' as const
+	if (activePosition.status === 'replaced') return 'processed' as const
 	if (activePosition.status === 'recovery-required' && (activePosition.expiredTransactionAttempts?.length ?? 0) !== 0) {
 		throw new Error(`Position ${activePosition.reportId} has a previously expired transaction with unexpected canonical evidence`)
 	}
@@ -1619,46 +1759,94 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 	const tokenDecimals = tokenDecimalsFromSnapshot(balancesBefore, activePosition.reportId)
 	const expectedWeth = parseDecimalWeth(activePosition.lockedWeth)
 	const expectedToken = parseUnits(activePosition.lockedToken, tokenDecimals)
-	const willSettle = currentReporter && game.settlementTimestamp === 0n
-	const withdrawalMismatch = lifecycleWithdrawalMismatch({
-		currentReporter,
-		expectedToken,
-		expectedWeth,
-		holderToken: balancesBefore.holderToken,
-		holderWeth: balancesBefore.holderWeth,
-		willSettle,
-	})
-	if (withdrawalMismatch !== undefined) {
-		await persistPosition({ ...activePosition, status: 'recovery-required' })
-		throw new Error(`Position ${activePosition.reportId} cannot execute atomically: ${withdrawalMismatch}`)
-	}
-	const allowanceMismatch = lifecycleAllowanceMismatch({ token1: balancesBefore.internalAllowanceWeth, token2: balancesBefore.internalAllowanceToken }, { token1: expectedWeth, token2: expectedToken })
-	if (allowanceMismatch !== undefined) throw new Error(`Position ${activePosition.reportId} cannot execute atomically: ${allowanceMismatch}`)
-
 	const block = await client.getBlock({ blockNumber })
 	if (block.hash == null || block.hash.toLowerCase() !== storedSnapshot.blockHash.toLowerCase()) throw new Error('Lifecycle quote and quorum snapshot use different canonical blocks')
 	const signTransaction = account.signTransaction
 	const startingNonce = await pendingNonceWithQuorum(readClients, config, account.address)
 	const targetBlockNumber = blockNumber + 1n
-	const lifecycleCall = {
-		data: encodeFunctionData({
-			abi: openOracleArbitrageExecutorAbi,
-			functionName: 'settleAndWithdraw',
-			args: [
-				{
-					amount1: expectedWeth,
-					amount2: expectedToken,
-					expectedParentBlockHash: storedSnapshot.blockHash,
-					openOracle: config.openOracle,
-					parentBlockNumber: blockNumber,
-				},
-				getOpenOracleGameTuple(game),
-				getOpenOracleHelperTuple(report.helper),
-			],
-		}),
-		gas: BigInt(game.callbackGasLimit) + 900_000n,
-		kind: 'settle' as const,
-		to: executor,
+	let lifecycleKind: NonNullable<PositionRecord['lifecycleKind']>
+	let replacementAmount: bigint | undefined
+	let replacementToken: Address | undefined
+	let lifecycleCall: { data: Hex; gas: bigint; kind: 'settle' | 'withdraw-replacement'; to: Address }
+	if (!currentReporter) {
+		if (activePosition.reportAmount1 === undefined || activePosition.reportAmount2 === undefined || activePosition.reportFeePercentage === undefined) {
+			await persistPosition({ ...activePosition, status: 'recovery-required' })
+			throw new Error(`Position ${activePosition.reportId} predates automatic replacement-credit accounting and requires manual reconciliation`)
+		}
+		const replacementAmounts = immediateReplacementAmounts(activePosition, reportPath)
+		if (replacementAmounts === undefined) throw new Error(`Position ${activePosition.reportId} replacement transition is not yet available in the canonical dispute path`)
+		const credit = replacementCredit({
+			feePercentage: BigInt(activePosition.reportFeePercentage),
+			newAmount1: replacementAmounts.amount1,
+			newAmount2: replacementAmounts.amount2,
+			oldAmount1: BigInt(activePosition.reportAmount1),
+			oldAmount2: BigInt(activePosition.reportAmount2),
+		})
+		replacementAmount = credit.amount
+		replacementToken = credit.token === 'token1' ? config.network.weth : activePosition.token
+		const holderBalance = credit.token === 'token1' ? balancesBefore.holderWeth : balancesBefore.holderToken
+		const allowance = credit.token === 'token1' ? balancesBefore.internalAllowanceWeth : balancesBefore.internalAllowanceToken
+		if (holderBalance < replacementAmount + 1n) throw new Error(`Position ${activePosition.reportId} replacement credit is not yet available`)
+		if (allowance < replacementAmount) {
+			throw new Error(`Position ${activePosition.reportId} replacement credit exceeds its executor internal allowance`)
+		}
+		lifecycleKind = 'replacement-credit'
+		lifecycleCall = {
+			data: encodeFunctionData({
+				abi: openOracleArbitrageExecutorAbi,
+				functionName: 'withdrawReplacementCredit',
+				args: [
+					{
+						amount: replacementAmount,
+						expectedParentBlockHash: storedSnapshot.blockHash,
+						openOracle: config.openOracle,
+						parentBlockNumber: blockNumber,
+						token: replacementToken,
+					},
+					id,
+				],
+			}),
+			gas: 450_000n,
+			kind: 'withdraw-replacement',
+			to: executor,
+		}
+	} else {
+		lifecycleKind = 'settlement'
+		const willSettle = game.settlementTimestamp === 0n
+		const withdrawalMismatch = lifecycleWithdrawalMismatch({
+			currentReporter,
+			expectedToken,
+			expectedWeth,
+			holderToken: balancesBefore.holderToken,
+			holderWeth: balancesBefore.holderWeth,
+			willSettle,
+		})
+		if (withdrawalMismatch !== undefined) {
+			await persistPosition({ ...activePosition, status: 'recovery-required' })
+			throw new Error(`Position ${activePosition.reportId} cannot execute atomically: ${withdrawalMismatch}`)
+		}
+		const allowanceMismatch = lifecycleAllowanceMismatch({ token1: balancesBefore.internalAllowanceWeth, token2: balancesBefore.internalAllowanceToken }, { token1: expectedWeth, token2: expectedToken })
+		if (allowanceMismatch !== undefined) throw new Error(`Position ${activePosition.reportId} cannot execute atomically: ${allowanceMismatch}`)
+		lifecycleCall = {
+			data: encodeFunctionData({
+				abi: openOracleArbitrageExecutorAbi,
+				functionName: 'settleAndWithdraw',
+				args: [
+					{
+						amount1: expectedWeth,
+						amount2: expectedToken,
+						expectedParentBlockHash: storedSnapshot.blockHash,
+						openOracle: config.openOracle,
+						parentBlockNumber: blockNumber,
+					},
+					getOpenOracleGameTuple(game),
+					getOpenOracleHelperTuple(report.helper),
+				],
+			}),
+			gas: BigInt(game.callbackGasLimit) + 900_000n,
+			kind: 'settle',
+			to: executor,
+		}
 	}
 	const signed = await prepareSignedTransaction({
 		baseFeePerGas: block.baseFeePerGas ?? 0n,
@@ -1674,6 +1862,7 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 	})
 	const lifecyclePosition = {
 		...activePosition,
+		lifecycleKind,
 		lifecycleSubmissionBlockNumber: blockNumber.toString(),
 		lifecycleSubmissionMode: config.submission.mode,
 		lifecycleTargetBlockNumber: targetBlockNumber.toString(),
@@ -1684,6 +1873,8 @@ export async function processPositionLifecycle(client: ReadClient, readClients: 
 		lifecycleUpdatedAt: new Date().toISOString(),
 		lifecycleWalletTokenBefore: undefined,
 		lifecycleWalletWethBefore: undefined,
+		replacementCreditAmount: replacementAmount?.toString(),
+		replacementCreditToken: replacementToken,
 		status: 'withdrawing' as const,
 	} satisfies PositionRecord
 	if (config.submission.mode === 'public') {
@@ -1792,13 +1983,13 @@ async function inspectReport(
 		recordDecision('Skipped report', `Only ${timeRemaining.toString()} ${timeType ? 'seconds' : 'blocks'} remain`)
 		return
 	}
-	let best: { pool: Pool; quote: ArbitrageQuote } | undefined
+	let best: { hedgePool: Address; pool: Pool; quote: ArbitrageQuote; venue: Venue } | undefined
 	for (const pool of pools) {
 		if (pool.token.toLowerCase() !== game.token2.toLowerCase()) continue
 		if (!spotTwapDeviationWithinLimit(pool.spotTick, pool.twapTick, config.maxSpotTwapTicks)) continue
-		const quote = await evaluate(client, config, report, pool, gasPrice)
-		if (quote === undefined) continue
-		if (best === undefined || quote.netProfitWeth > best.quote.netProfitWeth) best = { pool, quote }
+		const evaluation = await evaluate(client, config, report, pool, gasPrice)
+		if (evaluation === undefined) continue
+		if (best === undefined || evaluation.quote.netProfitWeth > best.quote.netProfitWeth) best = { ...evaluation, pool }
 	}
 	if (best === undefined) {
 		console.log(`report=${report.helper.reportId.toString()} skipped=no-trusted-liquid-pool`)
@@ -1829,15 +2020,15 @@ async function inspectReport(
 		paused,
 		profitable,
 	})
-	console.log([`report=${report.helper.reportId.toString()}`, `direction=${best.quote.direction}`, `pool=${best.pool.address}`, `fee=${best.pool.fee.toString()}`, `profitWeth=${formatEther(best.quote.netProfitWeth)}`, `decision=${decision}`].join(' '))
+	console.log([`report=${report.helper.reportId.toString()}`, `direction=${best.quote.direction}`, `venue=${best.venue}`, `pool=${best.hedgePool}`, `fee=${best.pool.fee.toString()}`, `profitWeth=${formatEther(best.quote.netProfitWeth)}`, `decision=${decision}`].join(' '))
 	const opportunity = {
 		decision,
 		direction: best.quote.direction,
 		estimatedNetProfitEth: decimalSignedEth(best.quote.netProfitWeth),
 		estimatedNetProfitWeth: decimalSignedEth(best.quote.netProfitWeth),
 		hasRequiredInventory,
-		pool: best.pool.address,
-		poolFee: best.pool.fee,
+		pool: best.hedgePool,
+		poolFee: best.venue === 'uniswap-v2' ? 3_000 : best.pool.fee,
 		reportId: report.helper.reportId.toString(),
 		requiredToken: formatTokenAmount(funding.token2, tokenMetadata.decimals),
 		requiredWeth: decimalWeth(funding.token1),
@@ -1852,7 +2043,7 @@ async function inspectReport(
 		gasPrice,
 		submissionMode: config.submission.mode,
 	})
-	const candidate = decision === 'eligible' ? { capitalAtRiskWeth, opportunity, pool: best.pool, projectedGasCostWeth: gasPrice * 1_200_000n + projectedLifecycleGas, quote: best.quote, report } : undefined
+	const candidate = decision === 'eligible' ? { capitalAtRiskWeth, hedgePool: best.hedgePool, hedgeVenue: best.venue, opportunity, pool: best.pool, projectedGasCostWeth: gasPrice * 1_200_000n + projectedLifecycleGas, quote: best.quote, report } : undefined
 	return { candidate, opportunity }
 }
 
@@ -2223,17 +2414,29 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 							recordOperation(state, { category: 'transaction', details: undefined, level: 'error', message: 'Expired transaction monitoring failed closed', reason: message, reportId: position.reportId })
 						}
 					}
-					for (const position of positions.filter(candidate => positionConsumesRisk(candidate.status))) {
+					for (const position of positions.filter(candidate => candidate.status !== 'replaced' && positionConsumesRisk(candidate.status))) {
 						try {
-							const result = await processPositionLifecycle(client, readClients, wallet, config, position, blockNumber, persistPosition, trackTransaction)
+							const result = await processPositionLifecycle(client, readClients, wallet, config, position, blockNumber, reports.get(BigInt(position.reportId)), persistPosition, trackTransaction)
 							if (result === 'processed' || result === 'progressed') {
 								lifecycleProcessed = true
+								const updatedPosition = state.positions.find(candidate => candidate.reportId === position.reportId)
+								const replacementClaimed = updatedPosition?.status === 'replaced'
+								let lifecycleMessage = 'Position lifecycle advanced'
+								let lifecycleReason = `Report ${position.reportId} completed one durable public lifecycle transaction`
+								if (result === 'processed') {
+									lifecycleMessage = 'Position lifecycle completed'
+									lifecycleReason = `Report ${position.reportId} was settled and withdrawn`
+								}
+								if (replacementClaimed) {
+									lifecycleMessage = 'Replacement credit claimed'
+									lifecycleReason = `Report ${position.reportId} credit is final; the one-sided inventory remains risk-consuming until reconciled`
+								}
 								recordOperation(state, {
 									category: 'transaction',
-									details: `withdrawn=${state.positions.find(candidate => candidate.reportId === position.reportId)?.withdrawnWeth ?? 'unknown'} WETH`,
+									details: `withdrawn=${updatedPosition?.withdrawnWeth ?? 'unknown'} WETH; ${updatedPosition?.withdrawnToken ?? 'unknown'} ${updatedPosition?.tokenSymbol ?? 'token'}`,
 									level: 'info',
-									message: result === 'processed' ? 'Position lifecycle completed' : 'Position lifecycle advanced',
-									reason: result === 'processed' ? `Report ${position.reportId} was settled and withdrawn` : `Report ${position.reportId} completed one durable public lifecycle transaction`,
+									message: lifecycleMessage,
+									reason: lifecycleReason,
 									reportId: position.reportId,
 								})
 							}
@@ -2361,7 +2564,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 						try {
 							const metadata = state.tokenMarkets.find(market => market.address.toLowerCase() === selected.report.game.token2.toLowerCase())
 							if (metadata === undefined) throw new Error('Token metadata is unavailable')
-							const record = await executeDispute(client, readClients, wallet, config, selected.report, selected.quote, selected.pool, metadata, positions, () => state.paused, trackTransaction, persistPosition)
+							const record = await executeDispute(client, readClients, wallet, config, selected.report, selected.quote, selected.pool, selected.hedgeVenue, metadata, positions, () => state.paused, trackTransaction, persistPosition)
 							selected.opportunity.decision = 'submitted'
 							if (!state.executionHistory.some(existing => existing.transactionHash.toLowerCase() === record.transactionHash.toLowerCase())) state.executionHistory.unshift(record)
 							try {

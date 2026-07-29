@@ -99,6 +99,37 @@ export const openOracleArbitrageExecutorAbi = [
 		],
 	},
 	{
+		type: 'event',
+		name: 'ReplacementCreditWithdrawn',
+		anonymous: false,
+		inputs: [
+			{
+				name: 'account',
+				type: 'address',
+				internalType: 'address',
+				indexed: true,
+			},
+			{
+				name: 'reportId',
+				type: 'uint256',
+				internalType: 'uint256',
+				indexed: true,
+			},
+			{
+				name: 'token',
+				type: 'address',
+				internalType: 'address',
+				indexed: true,
+			},
+			{
+				name: 'amount',
+				type: 'uint256',
+				internalType: 'uint256',
+				indexed: false,
+			},
+		],
+	},
+	{
 		type: 'function',
 		name: 'assertParentBlock',
 		stateMutability: 'view',
@@ -455,6 +486,11 @@ export const openOracleArbitrageExecutorAbi = [
 						name: 'router',
 						type: 'address',
 						internalType: 'address',
+					},
+					{
+						name: 'venue',
+						type: 'uint8',
+						internalType: 'uint8',
 					},
 					{
 						name: 'poolFee',
@@ -822,6 +858,51 @@ export const openOracleArbitrageExecutorAbi = [
 						internalType: 'uint256',
 					},
 				],
+			},
+		],
+		outputs: [],
+	},
+	{
+		type: 'function',
+		name: 'withdrawReplacementCredit',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{
+				name: 'request',
+				type: 'tuple',
+				internalType: 'struct OpenOracleArbitrageExecutor.ReplacementWithdrawalRequest',
+				components: [
+					{
+						name: 'openOracle',
+						type: 'address',
+						internalType: 'address',
+					},
+					{
+						name: 'token',
+						type: 'address',
+						internalType: 'address',
+					},
+					{
+						name: 'parentBlockNumber',
+						type: 'uint256',
+						internalType: 'uint256',
+					},
+					{
+						name: 'expectedParentBlockHash',
+						type: 'bytes32',
+						internalType: 'bytes32',
+					},
+					{
+						name: 'amount',
+						type: 'uint256',
+						internalType: 'uint256',
+					},
+				],
+			},
+			{
+				name: 'reportId',
+				type: 'uint256',
+				internalType: 'uint256',
 			},
 		],
 		outputs: [],

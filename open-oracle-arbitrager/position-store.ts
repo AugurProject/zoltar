@@ -83,6 +83,7 @@ export type PositionRecord = {
 	hedgeWeth: string
 	hedgedProfitBeforeGasEth: string
 	lifecycleGasCostEth: string
+	lifecycleKind?: 'replacement-credit' | 'settlement' | undefined
 	lifecycleReceiptBlockHash?: Hex | undefined
 	lifecycleReceiptBlockNumber?: string | undefined
 	lifecycleReceiptRecovered: boolean
@@ -101,7 +102,12 @@ export type PositionRecord = {
 	lockedWeth: string
 	manualReconciliation: ManualReconciliation | undefined
 	openedAt: string
+	reportAmount1?: string | undefined
+	reportAmount2?: string | undefined
+	reportFeePercentage?: string | undefined
 	realizedNetProfitEth: string | undefined
+	replacementCreditAmount?: string | undefined
+	replacementCreditToken?: Address | undefined
 	reportId: string
 	status: 'closed' | 'closed-pending-finality' | 'expired-not-included' | 'open' | 'pending-entry' | 'recovery-required' | 'replaced' | 'settled' | 'withdrawing'
 	token: Address
@@ -316,6 +322,20 @@ function parsePosition(value: unknown): PositionRecord {
 	if ((lifecycleSubmissionBlockNumber === undefined) !== (lifecycleTransactionNonce === undefined)) throw new Error('Position journal lifecycle replacement recovery fields are incomplete')
 	if (record['lifecycleSubmissionMode'] !== undefined && record['lifecycleSubmissionMode'] !== 'private' && record['lifecycleSubmissionMode'] !== 'public') throw new Error('Position journal lifecycle submission mode is invalid')
 	if ((record['lifecycleSubmissionMode'] === undefined) !== (lifecycleSubmissionBlockNumber === undefined)) throw new Error('Position journal lifecycle replacement recovery mode is incomplete')
+	if (record['lifecycleKind'] !== undefined && record['lifecycleKind'] !== 'replacement-credit' && record['lifecycleKind'] !== 'settlement') throw new Error('Position journal lifecycle kind is invalid')
+	const reportAmount1 = optionalIntegerField(record, 'reportAmount1')
+	const reportAmount2 = optionalIntegerField(record, 'reportAmount2')
+	const reportFeePercentage = optionalIntegerField(record, 'reportFeePercentage')
+	const reportAccountingFieldCount = [reportAmount1, reportAmount2, reportFeePercentage].filter(value => value !== undefined).length
+	if (reportAccountingFieldCount !== 0 && reportAccountingFieldCount !== 3) throw new Error('Position journal report accounting fields are incomplete')
+	const replacementCreditAmount = optionalIntegerField(record, 'replacementCreditAmount')
+	let replacementCreditToken: Address | undefined
+	if (record['replacementCreditToken'] !== undefined) {
+		if (typeof record['replacementCreditToken'] !== 'string') throw new Error('Position journal replacement credit token is invalid')
+		replacementCreditToken = getAddress(record['replacementCreditToken'])
+	}
+	if ((replacementCreditAmount === undefined) !== (replacementCreditToken === undefined)) throw new Error('Position journal replacement credit fields are incomplete')
+	if (record['lifecycleKind'] === 'replacement-credit' && (replacementCreditAmount === undefined || replacementCreditToken === undefined)) throw new Error('Position journal replacement lifecycle is incomplete')
 	if (
 		record['status'] === 'closed-pending-finality' &&
 		(lifecycleTransactionHashes.length !== 1 ||
@@ -360,6 +380,7 @@ function parsePosition(value: unknown): PositionRecord {
 		hedgeWeth: decimalField(record, 'hedgeWeth'),
 		hedgedProfitBeforeGasEth: record['hedgedProfitBeforeGasEth'],
 		lifecycleGasCostEth: decimalField(record, 'lifecycleGasCostEth'),
+		lifecycleKind: record['lifecycleKind'],
 		...(lifecycleReceiptBlockHash === undefined ? {} : { lifecycleReceiptBlockHash: lifecycleReceiptBlockHash as Hex }),
 		...(lifecycleReceiptBlockNumber === undefined ? {} : { lifecycleReceiptBlockNumber }),
 		lifecycleReceiptRecovered: record['lifecycleReceiptRecovered'],
@@ -378,7 +399,12 @@ function parsePosition(value: unknown): PositionRecord {
 		lockedWeth: decimalField(record, 'lockedWeth'),
 		manualReconciliation,
 		openedAt: record['openedAt'],
+		reportAmount1,
+		reportAmount2,
+		reportFeePercentage,
 		realizedNetProfitEth: record['realizedNetProfitEth'],
+		replacementCreditAmount,
+		replacementCreditToken,
 		reportId: record['reportId'],
 		status: record['status'] as PositionRecord['status'],
 		token,

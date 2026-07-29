@@ -3,7 +3,11 @@ pragma solidity 0.8.35;
 
 import { IERC20 } from '../../IERC20.sol';
 import { IERC1155Receiver } from '../../peripherals/interfaces/IERC1155Receiver.sol';
-import { IOpenOracleDispute, IUniswapV3SwapRouter } from '../../peripherals/OpenOracleArbitrageExecutor.sol';
+import {
+	IOpenOracleDispute,
+	IUniswapV2Router,
+	IUniswapV3SwapRouter
+} from '../../peripherals/OpenOracleArbitrageExecutor.sol';
 import { SafeERC20Ops } from '../../SafeERC20Ops.sol';
 
 interface IOpenOracleAdversarialTarget {
@@ -155,7 +159,7 @@ contract OpenOracleArbitrageExecutorTarget {
 	}
 }
 
-contract OpenOracleSwapRouterTarget is IUniswapV3SwapRouter {
+contract OpenOracleSwapRouterTarget is IUniswapV3SwapRouter, IUniswapV2Router {
 	using SafeERC20Ops for IERC20;
 
 	function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut) {
@@ -172,6 +176,40 @@ contract OpenOracleSwapRouterTarget is IUniswapV3SwapRouter {
 		require(amountIn <= params.amountInMaximum, 'OpenOracle test swap input too high');
 		IERC20(params.tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
 		IERC20(params.tokenOut).safeTransfer(params.recipient, params.amountOut);
+	}
+
+	function swapExactTokensForTokens(
+		uint256 amountIn,
+		uint256 amountOutMin,
+		address[] calldata path,
+		address to,
+		uint256 deadline
+	) external returns (uint256[] memory amounts) {
+		require(path.length == 2, 'OpenOracle test V2 path invalid');
+		require(block.timestamp <= deadline, 'OpenOracle test swap deadline expired');
+		require(amountIn >= amountOutMin, 'OpenOracle test swap output too low');
+		IERC20(path[0]).safeTransferFrom(msg.sender, address(this), amountIn);
+		IERC20(path[1]).safeTransfer(to, amountIn);
+		amounts = new uint256[](2);
+		amounts[0] = amountIn;
+		amounts[1] = amountIn;
+	}
+
+	function swapTokensForExactTokens(
+		uint256 amountOut,
+		uint256 amountInMax,
+		address[] calldata path,
+		address to,
+		uint256 deadline
+	) external returns (uint256[] memory amounts) {
+		require(path.length == 2, 'OpenOracle test V2 path invalid');
+		require(block.timestamp <= deadline, 'OpenOracle test swap deadline expired');
+		require(amountOut <= amountInMax, 'OpenOracle test swap input too high');
+		IERC20(path[0]).safeTransferFrom(msg.sender, address(this), amountOut);
+		IERC20(path[1]).safeTransfer(to, amountOut);
+		amounts = new uint256[](2);
+		amounts[0] = amountOut;
+		amounts[1] = amountOut;
 	}
 }
 

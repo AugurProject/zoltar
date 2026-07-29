@@ -264,7 +264,7 @@ describe('OpenOracle arbitrage executor', () => {
 		expect(await client.readContract({ abi: tokenArtifact.abi, address: token2, functionName: 'balanceOf', args: [client.account.address] })).toBe(5_000n)
 	})
 
-	test('atomically sells the report token, funds the dispute, and refunds hedge WETH', async () => {
+	test.each([0, 1] as const)('atomically sells the report token through venue %d, funds the dispute, and refunds hedge WETH', async venue => {
 		const token1 = await deploy(tokenArtifact, ['Token 1', 'TK1'])
 		const token2 = await deploy(tokenArtifact, ['Token 2', 'TK2'])
 		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token1, functionName: 'mint', args: [client.account.address, 10_000n] }))
@@ -291,6 +291,7 @@ describe('OpenOracle arbitrage executor', () => {
 						poolFee: 3_000,
 						router,
 						swapDeadline: block.timestamp + 1_000n,
+						venue,
 					},
 					game(token1, token2),
 					helper(),
@@ -305,7 +306,7 @@ describe('OpenOracle arbitrage executor', () => {
 		expect(await client.readContract({ abi: tokenArtifact.abi, address: token2, functionName: 'allowance', args: [executor, router] })).toBe(0n)
 	})
 
-	test('atomically buys the report token with a capped WETH input and funds the dispute', async () => {
+	test.each([0, 1] as const)('atomically buys the report token through venue %d with a capped WETH input and funds the dispute', async venue => {
 		const token1 = await deploy(tokenArtifact, ['Token 1', 'TK1'])
 		const token2 = await deploy(tokenArtifact, ['Token 2', 'TK2'])
 		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token1, functionName: 'mint', args: [client.account.address, 10_000n] }))
@@ -332,6 +333,7 @@ describe('OpenOracle arbitrage executor', () => {
 						poolFee: 3_000,
 						router,
 						swapDeadline: block.timestamp + 1_000n,
+						venue,
 					},
 					game(token1, token2),
 					helper(),
@@ -345,5 +347,38 @@ describe('OpenOracle arbitrage executor', () => {
 		expect(await client.readContract({ abi: tokenArtifact.abi, address: token2, functionName: 'balanceOf', args: [target] })).toBe(2_300n)
 		expect(await client.readContract({ abi: tokenArtifact.abi, address: token1, functionName: 'allowance', args: [executor, router] })).toBe(0n)
 		expect(await client.readContract({ abi: tokenArtifact.abi, address: token2, functionName: 'allowance', args: [executor, router] })).toBe(0n)
+	})
+
+	test('withdraws one exact replacement credit without consuming unrelated holder balances', async () => {
+		const replacementAmount = 2n ** 128n + 1n
+		const creditedAmount = replacementAmount + 1n
+		const token = await deploy(tokenArtifact, ['Replacement Token', 'RPL'])
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'mint', args: [client.account.address, creditedAmount] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'approve', args: [target, creditedAmount] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: targetArtifact.abi, address: target, functionName: 'credit', args: [token, creditedAmount, client.account.address] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: targetArtifact.abi, address: target, functionName: 'approveInternal', args: [executor, token, replacementAmount] }))
+		const parent = await client.getBlock()
+		if (parent.number === undefined || parent.hash == null) throw new Error('parent block identity missing')
+		const parentBlockHash = parent.hash
+		const parentBlockNumber = parent.number
+		await writeContractAndWait(client, () =>
+			client.writeContract({
+				abi: executorArtifact.abi,
+				address: executor,
+				functionName: 'withdrawReplacementCredit',
+				args: [
+					{
+						amount: replacementAmount,
+						expectedParentBlockHash: parentBlockHash,
+						openOracle: target,
+						parentBlockNumber,
+						token,
+					},
+					7n,
+				],
+			}),
+		)
+		expect(await client.readContract({ abi: targetArtifact.abi, address: target, functionName: 'tokenHolder', args: [client.account.address, token] })).toBe(1n)
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [client.account.address] })).toBe(replacementAmount)
 	})
 })

@@ -117,7 +117,7 @@ export type TransactionActivity = {
 	estimatedNetProfitEth: string | undefined
 	failedTargets: readonly SubmissionTargetResult[]
 	hash: Hex
-	kind: 'approval-token' | 'approval-weth' | 'canonical-head' | 'dispute' | 'settle' | 'withdraw-token' | 'withdraw-weth'
+	kind: 'approval-token' | 'approval-weth' | 'canonical-head' | 'dispute' | 'settle' | 'withdraw-replacement' | 'withdraw-token' | 'withdraw-weth'
 	mode: SubmissionSettings['mode']
 	originalHash: Hex
 	reportId: string
