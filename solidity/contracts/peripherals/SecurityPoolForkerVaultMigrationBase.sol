@@ -81,7 +81,7 @@ abstract contract SecurityPoolForkerVaultMigrationBase is SecurityPoolForkerBase
 				parent.shareToken(),
 				childUniverseId,
 				parent.questionId(),
-				parent.securityMultiplier(),
+				parent.statoblastSecurityMultiplierBps(),
 				retentionRate,
 				0
 			);

@@ -134,7 +134,7 @@ interface ISecurityPool {
 	function totalSecurityBondAllowance() external view returns (uint256);
 	function completeSetCollateralAmount() external view returns (uint256);
 	function poolOwnershipDenominator() external view returns (uint256);
-	function securityMultiplier() external view returns (uint256);
+	function statoblastSecurityMultiplierBps() external view returns (uint256);
 	function totalFeesOwedToVaults() external view returns (uint256);
 	function totalAccruedFees() external view returns (uint256);
 	function getPoolAccountingSnapshot() external view returns (PoolAccountingSnapshot memory snapshot);
@@ -252,7 +252,7 @@ interface ISecurityPoolFactory {
 		ISecurityPool parent;
 		uint248 universeId;
 		uint256 questionId;
-		uint256 securityMultiplier;
+		uint256 statoblastSecurityMultiplierBps;
 		uint256 initialReportPriorityFeeWeiPerGas;
 		uint256 currentRetentionRate;
 		uint256 completeSetCollateralAmount;
@@ -263,20 +263,20 @@ interface ISecurityPoolFactory {
 		IShareToken shareToken,
 		uint248 universeId,
 		uint256 questionId,
-		uint256 securityMultiplier,
+		uint256 statoblastSecurityMultiplierBps,
 		uint256 currentRetentionRate,
 		uint256 completeSetCollateralAmount
 	) external returns (ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction);
 	function deployOriginSecurityPool(
 		uint248 universeId,
 		uint256 questionId,
-		uint256 securityMultiplier,
+		uint256 statoblastSecurityMultiplierBps,
 		uint256 initialReportPriorityFeeWeiPerGas
 	) external returns (ISecurityPool securityPool);
 	function getOriginId(
 		uint248 originUniverseId,
 		uint256 questionId,
-		uint256 securityMultiplier,
+		uint256 statoblastSecurityMultiplierBps,
 		uint256 initialReportPriorityFeeWeiPerGas
 	) external pure returns (bytes32 originId);
 	function getPoolId(bytes32 originId, uint248 universeId) external pure returns (bytes32 poolId);

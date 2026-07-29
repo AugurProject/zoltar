@@ -336,7 +336,7 @@ function assertEventStreamSemantics(): void {
 		'`Zoltar.DeployChild`',
 		'`deployer`, `universeId indexed`, `outcomeIndex indexed`, `childUniverseId indexed`, `childReputationToken`, `childUniverseTheoreticalSupply`',
 		'`SecurityPoolFactory.SecurityPoolRegistered`',
-		'`SecurityPoolFactory.DeploySecurityPool` | `securityPool indexed`, `truthAuction`, `priceOracleManagerAndOperatorQueuer`, `shareToken`, `parent indexed`, `universeId indexed`, `questionId`, `securityMultiplier`, `initialReportPriorityFeeWeiPerGas`, `currentRetentionRate`, `completeSetCollateralAmount`',
+		'`SecurityPoolFactory.DeploySecurityPool` | `securityPool indexed`, `truthAuction`, `priceOracleManagerAndOperatorQueuer`, `shareToken`, `parent indexed`, `universeId indexed`, `questionId`, `statoblastSecurityMultiplierBps`, `initialReportPriorityFeeWeiPerGas`, `currentRetentionRate`, `completeSetCollateralAmount`',
 		'`SecurityPoolForker.ChildPoolLinked`',
 		'`SecurityPoolForker.ChildRepSplit`',
 		'`SecurityPoolForker.ChildEscalationRepMaterialized`',
@@ -434,9 +434,9 @@ function assertCoordinatorSettlementEconomics(): void {
 	const configuredPriorityFee = 10n
 	const actualPriorityFeeAtAssumption = configuredPriorityFee
 	const actualPriorityFeeAboveAssumption = 60n
-	const securityMultiplier = 10n
+	const openOracleSecurityMultiplier = 10n
 	const settlementBaseFeeMultiplier = 3n
-	const correctionGasBudget = securityMultiplier * (requestBaseFee + configuredPriorityFee)
+	const correctionGasBudget = openOracleSecurityMultiplier * (requestBaseFee + configuredPriorityFee)
 	const settlementGasCostAtAssumption = settlementBaseFeeMultiplier * requestBaseFee + actualPriorityFeeAtAssumption
 	const settlementGasCostAboveAssumption = settlementBaseFeeMultiplier * requestBaseFee + actualPriorityFeeAboveAssumption
 	assert.ok(correctionGasBudget * 3n >= settlementGasCostAtAssumption * 10n, 'positive configured priority must preserve the base-fee-only 10/3 lower bound when actual priority matches')
@@ -576,7 +576,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /computeIterativeAttritionCost`, `computeTimeSinceStartFromAttritionCost`, `totalCost`/)
 	assert.match(contractInteractionReference, /## ZoltarQuestionData[\s\S]*createQuestion\(questionData, outcomeOptions\)/)
 	assert.match(contractInteractionReference, /## ReputationToken[\s\S]*setMaxTheoreticalSupply[\s\S]*mint\(account, value\)[\s\S]*burn\(account, value\)/)
-	assert.match(contractInteractionReference, /## SecurityPoolFactory[\s\S]*deployOriginSecurityPool[\s\S]*securityMultiplier > 1[\s\S]*initialReportPriorityFeeWeiPerGas > 0[\s\S]*labels `Yes`, then `No`/)
+	assert.match(contractInteractionReference, /## SecurityPoolFactory[\s\S]*deployOriginSecurityPool[\s\S]*statoblastSecurityMultiplierBps > 10_000[\s\S]*initialReportPriorityFeeWeiPerGas > 0[\s\S]*labels `Yes`, then `No`/)
 	assert.match(contractInteractionReference, /securityPoolDeploymentsRange\(startIndex, count\)[\s\S]*reverts rather than truncating/)
 	assert.match(contractInteractionReference, /burnEscalationWinnerHaircut\(amount\)[\s\S]*configured escalation game/)
 	assert.match(contractInteractionReference, /getPoolAccountingSnapshot`, `getVaultFeeRemainder`/)
@@ -634,6 +634,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(contractInteractionReference, /setSecurityPool\(pool\)[\s\S]*Anyone while `securityPool` remains zero[\s\S]*zero value emits and checkpoints zero but leaves the setter callable/)
 	assert.match(contractInteractionReference, /setRepEthPrice\(price\)[\s\S]*Configured nonzero `SecurityPool` only/)
 	assert.match(openOracleIntegration, /setSecurityPool<\/code> once with that nonzero pool/)
+	assert.match(openOracleIntegration, /BPS_DENOMINATOR = 10_000[\s\S]*id="eq-openoracle-binary-threshold"/, 'OpenOracle integration must define BPS_DENOMINATOR before its first named-denominator formula')
 	assert.match(contractInteractionReference, /While a report is pending, only that report sponsor may stage more operations/)
 	assert.match(contractInteractionReference, /required only when this call opens a new report/)
 	assert.match(contractInteractionReference, /Genesis REP requires allowance; child REP is burned directly without allowance/)
@@ -671,7 +672,7 @@ function assertContractInteractionDistinctions(): void {
 		assert.match(diagramSpecs, new RegExp(`"data-flow": "${flow}"`), `Statoblast asset flow must include ${flow}`)
 	}
 	assert.doesNotMatch(diagramSpecs, /"data-flow": "share-token-to-trader-redemption"/)
-	assert.match(whitepaperStatoblast, /data-source="repBacking \* pricePrecision >= securityBondAllowance \* securityMultiplier \* repPerEthPrice"/)
+	assert.match(whitepaperStatoblast, /BPS_DENOMINATOR = 10_000[\s\S]*data-source="repBacking \* pricePrecision \* BPS_DENOMINATOR >= securityBondAllowance \* statoblastSecurityMultiplierBps \* repPerEthPrice"/)
 	assert.match(whitepaperStatoblast, /A new allowance must leave the affected vault\s+non-liquidatable, while aggregate pool REP must independently\s+satisfy the same multiplier-adjusted inequality[\s\S]{0,80}Only vaults are\s+liquidation targets/)
 	for (const [label, representation] of [
 		['Statoblast whitepaper', whitepaperStatoblast],
@@ -867,17 +868,17 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(escalationGameEscrow, /function _exportVaultUnresolvedTotals\([\s\S]*?require\(!localUnresolvedTotalsExportedByVault\[vault\], 'Vault totals exported'\)[\s\S]*?emit VaultUnresolvedTotalsExported\([\s\S]*?if \(principalToTransfer == 0\) return principalByOutcome/)
 	assert.match(contractInteractionReference, /exportVaultUnresolvedTotals\(vault, repReceiver\)[\s\S]*no explicit nonzero-receiver guard[\s\S]*Always `VaultUnresolvedTotalsExported`, including when every amount is zero/)
 	assert.match(contractInteractionReference, /exportVaultUnresolvedTotalsWithoutTransfer\(vault\)[\s\S]*has not exported before[\s\S]*Always `VaultUnresolvedTotalsExported` with `transferredRep = false`, including when every amount is zero[\s\S]*no REP transfer/)
-	assert.match(securityPoolFactory, /bytes32 securityPoolSalt = keccak256\([\s\S]*abi\.encode\(parent, universeId, questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas\)/)
-	assert.match(securityPoolFactory, /bytes32 securityPoolSalt = keccak256\([\s\S]*abi\.encode\(address\(0x0\), universeId, questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas\)/)
+	assert.match(securityPoolFactory, /bytes32 securityPoolSalt = keccak256\([\s\S]*abi\.encode\(\s*parent,\s*universeId,\s*questionId,\s*statoblastSecurityMultiplierBps,\s*initialReportPriorityFeeWeiPerGas\s*\)/)
+	assert.match(securityPoolFactory, /bytes32 securityPoolSalt = keccak256\([\s\S]*abi\.encode\(\s*address\(0x0\),\s*universeId,\s*questionId,\s*statoblastSecurityMultiplierBps,\s*initialReportPriorityFeeWeiPerGas\s*\)/)
 	assert.match(priceCoordinatorFactory, /new OpenOraclePriceCoordinator\{ salt: keccak256\(abi\.encode\(msg\.sender, salt\)\) \}/)
 	assert.match(truthAuctionFactory, /new UniformPriceDualCapBatchAuction\{ salt: keccak256\(abi\.encode\(msg\.sender, salt\)\) \}/)
 	assert.match(securityPoolDeployer, /create2\(0, add\(initCode, 0x20\), mload\(initCode\), 0\)/)
 	assert.match(securityPoolFactory, /shareTokenFactory\.deployShareToken\(originId, questionId\)/)
 	assert.match(shareTokenFactory, /new ShareToken\{ salt: salt \}\(msg\.sender, zoltar, questionId\)/)
-	assert.match(operatorReference, /securityPoolSalt = keccak256\(abi\.encode\(parent, universeId, questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas\)\)[\s\S]*using a zero parent for an origin/)
+	assert.match(operatorReference, /securityPoolSalt = keccak256\(abi\.encode\(parent, universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeWeiPerGas\)\)[\s\S]*using a zero parent for an origin/)
 	assert.match(operatorReference, /coordinator and child truth-auction factories each hash that value again with their caller \(`SecurityPoolFactory`\)/)
 	assert.match(operatorReference, /pool deployment worker instead uses literal CREATE2 salt zero[\s\S]*full constructor init-code hash/)
-	assert.match(operatorReference, /origin share token uses `originId = keccak256\(abi\.encode\(questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas, originUniverseId\)\)` directly as its CREATE2 salt[\s\S]*children reuse that lineage token and inherit its priority fee/)
+	assert.match(operatorReference, /origin share token uses `originId = keccak256\(abi\.encode\(questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeWeiPerGas, originUniverseId\)\)` directly as its CREATE2 salt[\s\S]*children reuse that lineage token and inherit its priority fee/)
 	assert.match(operatorReference, /caller-supplied OpenOracle, REP token, and positive `initialReportPriorityFeeWeiPerGas`[\s\S]*coordinator construction rejects zero/)
 	assert.match(operatorReference, /reserved OpenOracle `uint128` report and escalation-halt capacity/)
 	assert.match(openOracleIntegration, /half[\s\S]*capacity remains available for the dynamic base-fee or open-interest[\s\S]*component/)
@@ -888,7 +889,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(protocolTerms, /'initial report size':[\s\S]*minimumToken1ReportDefinition/)
 	assert.match(whitepaperStatoblast, /lineage identity[\s\S]*commits to the origin's immutable[\s\S]*<code>initialReportPriorityFeeWeiPerGas<\/code>[\s\S]*children\s+inherit their origin's\s+configuration/)
 	assert.match(whitepaperStatoblast, /href="\.\/operator-reference\.md#security-pool-guardrails"/)
-	assert.doesNotMatch(whitepaperStatoblast, /originId = keccak256\(abi\.encode\(questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas, originUniverseId\)\)/)
+	assert.doesNotMatch(whitepaperStatoblast, /originId = keccak256\(abi\.encode\(questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeWeiPerGas, originUniverseId\)\)/)
 	for (const emitterFunction of ['emitPoolAccountingCheckpoint', 'emitVaultAccountingCheckpoint']) {
 		assert.match(securityPoolEventEmitter, new RegExp(`function ${emitterFunction}\\([\\s\\S]*?\\) external payable`), `${emitterFunction} must remain externally payable for delegatecall flows`)
 	}

@@ -23,7 +23,7 @@ describe('market form defaults and conversion helpers', () => {
 	test('returns stable default form snapshots across all supported forms', () => {
 		expect(getDefaultMarketFormState().marketType).toBe('binary')
 		expect(getDefaultMarketFormState().categoricalOutcomes).toEqual(['Yes', 'No'])
-		expect(getDefaultSecurityPoolFormState().securityMultiplier).toBe('2')
+		expect(getDefaultSecurityPoolFormState().statoblastSecurityMultiplierBps).toBe('2')
 		expect(getDefaultSecurityPoolFormState().initialReportPriorityFeeGwei).toBe('10')
 		expect(getDefaultSecurityVaultFormState().depositAmount).toBe('0')
 		expect(getDefaultSecurityVaultFormState().stagedOperationTimeoutMinutes).toBe('5')

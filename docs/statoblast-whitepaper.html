@@ -316,7 +316,8 @@
 							bond allowance. A new allowance must leave the affected vault
 							non-liquidatable, while aggregate pool REP must independently
 							satisfy the same multiplier-adjusted inequality. Only vaults are
-							liquidation targets.
+							liquidation targets. <code>BPS_DENOMINATOR = 10_000</code>
+							converts the stored Statoblast multiplier from basis points.
 						</p>
 						<div class="equation" id="eq-statoblast-bond-solvency">
 							<math
@@ -343,17 +344,19 @@
 						<div class="equation" id="eq-statoblast-allowance-backing">
 							<math
 								display="block"
-								aria-label="REP backing times price precision must be greater than or equal to security bond allowance times security multiplier times REP per ETH price"
-								data-source="repBacking * pricePrecision >= securityBondAllowance * securityMultiplier * repPerEthPrice"
+								aria-label="REP backing times price precision times the basis-point denominator must be greater than or equal to security bond allowance times the Statoblast security multiplier in basis points times REP per ETH price"
+								data-source="repBacking * pricePrecision * BPS_DENOMINATOR >= securityBondAllowance * statoblastSecurityMultiplierBps * repPerEthPrice"
 							>
 								<mrow>
 									<mi>repBacking</mi>
 									<mo>&#x22C5;</mo>
 									<mi>pricePrecision</mi>
+									<mo>&#x22C5;</mo>
+									<mi>BPS_DENOMINATOR</mi>
 									<mo>&ge;</mo>
 									<mi>securityBondAllowance</mi>
 									<mo>&#x22C5;</mo>
-									<mi>securityMultiplier</mi>
+									<mi>statoblastSecurityMultiplierBps</mi>
 									<mo>&#x22C5;</mo>
 									<mi>repPerEthPrice</mi>
 								</mrow>
@@ -368,19 +371,21 @@
 						<div class="equation" id="eq-statoblast-liquidation-condition">
 						<math
 							display="block"
-							aria-label="a vault is liquidable when security bond allowance times security multiplier times REP per ETH price is greater than REP backing times price precision"
-							data-source="securityBondAllowance * securityMultiplier * repPerEthPrice > repBacking * pricePrecision"
+							aria-label="a vault is liquidable when security bond allowance times the Statoblast security multiplier in basis points times REP per ETH price is greater than REP backing times price precision times the basis-point denominator"
+							data-source="securityBondAllowance * statoblastSecurityMultiplierBps * repPerEthPrice > repBacking * pricePrecision * BPS_DENOMINATOR"
 						>
 							<mrow>
 								<mi>securityBondAllowance</mi>
 								<mo>&#x22C5;</mo>
-								<mi>securityMultiplier</mi>
+								<mi>statoblastSecurityMultiplierBps</mi>
 								<mo>&#x22C5;</mo>
 								<mi>repPerEthPrice</mi>
 								<mo>&gt;</mo>
 								<mi>repBacking</mi>
 								<mo>&#x22C5;</mo>
 								<mi>pricePrecision</mi>
+								<mo>&#x22C5;</mo>
+								<mi>BPS_DENOMINATOR</mi>
 							</mrow>
 						</math>
 						<p class="equation-caption">

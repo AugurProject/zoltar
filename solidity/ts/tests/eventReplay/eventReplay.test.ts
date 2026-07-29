@@ -309,7 +309,7 @@ describe('event-only replay', () => {
 					parent: zeroAddress,
 					universeId: 1n,
 					questionId: 2n,
-					securityMultiplier: 3n,
+					statoblastSecurityMultiplierBps: 30_000n,
 					initialReportPriorityFeeWeiPerGas: 10n,
 					currentRetentionRate: 4n,
 					completeSetCollateralAmount: 0n,
@@ -849,7 +849,7 @@ describe('event-only replay', () => {
 					parent,
 					universeId: 1n,
 					questionId: 2n,
-					securityMultiplier: 3n,
+					statoblastSecurityMultiplierBps: 30_000n,
 					initialReportPriorityFeeWeiPerGas: 10n,
 					currentRetentionRate: 4n,
 					completeSetCollateralAmount: 5n,
@@ -863,7 +863,7 @@ describe('event-only replay', () => {
 		]
 
 		const replayed = replayZoltarEvents(logs)
-		if (replayed.poolDeployments.get(pool)?.securityMultiplier !== 3n) throw new Error('child security multiplier mismatch')
+		if (replayed.poolDeployments.get(pool)?.statoblastSecurityMultiplierBps !== 30_000n) throw new Error('child security multiplier mismatch')
 		if (replayed.completeSetSupplies.get(pool) !== 40n) throw new Error('child share-token supply mismatch')
 		const poolState = replayed.poolStates.get(pool)
 		if (poolState?.shareTokenSupply !== 40n) throw new Error('child pool share-token state mismatch')
@@ -1124,7 +1124,7 @@ describe('event-only replay', () => {
 					parent: zeroAddress,
 					universeId: 9n,
 					questionId: 12n,
-					securityMultiplier: 3n,
+					statoblastSecurityMultiplierBps: 30_000n,
 					initialReportPriorityFeeWeiPerGas: 10n,
 					currentRetentionRate: 4n,
 					completeSetCollateralAmount: 0n,
@@ -1303,11 +1303,11 @@ describe('event-only replay', () => {
 			address: factory,
 			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 			functionName: 'deployOriginSecurityPool',
-			args: [fixture.genesisUniverse, questionId, fixture.securityMultiplier, 10n * 10n ** 9n],
+			args: [fixture.genesisUniverse, questionId, fixture.statoblastSecurityMultiplierBps, 10n * 10n ** 9n],
 		})
 		const receipt = await client.waitForTransactionReceipt({ hash: deploymentHash })
 		if (receipt.status === 'reverted') throw new Error('origin pool deployment reverted')
-		const addresses = fixture.getSecurityPoolAddresses(zeroAddress, fixture.genesisUniverse, questionId, fixture.securityMultiplier)
+		const addresses = fixture.getSecurityPoolAddresses(zeroAddress, fixture.genesisUniverse, questionId, fixture.statoblastSecurityMultiplierBps)
 		const blockNumber = receipt.blockNumber
 		const replayLogs = (
 			await Promise.all([
@@ -1423,7 +1423,7 @@ describe('event-only replay', () => {
 		const childDeploymentHash = await fixture.createChildUniverse(client, securityPoolAddresses.securityPool, fixture.QuestionOutcome.Yes)
 		const receipt = await client.getTransactionReceipt({ hash: childDeploymentHash })
 		const childUniverseId = fixture.getChildUniverseId(fixture.genesisUniverse, fixture.QuestionOutcome.Yes)
-		const child = fixture.getSecurityPoolAddresses(securityPoolAddresses.securityPool, childUniverseId, fixture.questionId, fixture.securityMultiplier)
+		const child = fixture.getSecurityPoolAddresses(securityPoolAddresses.securityPool, childUniverseId, fixture.questionId, fixture.statoblastSecurityMultiplierBps)
 		const factory = fixture.getInfraContractAddresses().securityPoolFactory
 		const forker = fixture.getInfraContractAddresses().securityPoolForker
 		const factoryLogs = await getContractReplayLogs(factory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi, 0n, receipt.blockNumber)
@@ -1452,8 +1452,8 @@ describe('event-only replay', () => {
 		const replayed = replayZoltarEvents([...deploymentLogs, ...sourcePoolLogs, ...sourceGameLogs, ...forkerLogs, ...receiptLogs], new Set(), new Set([factory]))
 		const deployment = replayed.poolDeployments.get(child.securityPool)
 		if (deployment === undefined) throw new Error('child pool deployment replay missing')
-		const [storedSecurityMultiplier, storedPriorityFee, storedCurrentRetentionRate, storedCollateral, storedSystemState, storedCarryRoots, storedCarrySnapshot] = await Promise.all([
-			client.readContract({ address: child.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'securityMultiplier', args: [] }),
+		const [storedStatoblastSecurityMultiplierBps, storedPriorityFee, storedCurrentRetentionRate, storedCollateral, storedSystemState, storedCarryRoots, storedCarrySnapshot] = await Promise.all([
+			client.readContract({ address: child.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'statoblastSecurityMultiplierBps', args: [] }),
 			client.readContract({
 				address: child.priceOracleManagerAndOperatorQueuer,
 				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
@@ -1484,7 +1484,7 @@ describe('event-only replay', () => {
 		strictEqualTypeSafe(deployment.truthAuction, child.truthAuction, 'child auction replay mismatch')
 		strictEqualTypeSafe(deployment.coordinator, child.priceOracleManagerAndOperatorQueuer, 'child coordinator replay mismatch')
 		strictEqualTypeSafe(deployment.shareToken, child.shareToken, 'child share token replay mismatch')
-		strictEqualTypeSafe(deployment.securityMultiplier, storedSecurityMultiplier, 'child security multiplier replay mismatch')
+		strictEqualTypeSafe(deployment.statoblastSecurityMultiplierBps, storedStatoblastSecurityMultiplierBps, 'child security multiplier replay mismatch')
 		strictEqualTypeSafe(deployment.initialReportPriorityFeeWeiPerGas, storedPriorityFee, 'child priority fee replay mismatch')
 		strictEqualTypeSafe(deployment.currentRetentionRate, storedCurrentRetentionRate, 'child retention rate replay mismatch')
 		strictEqualTypeSafe(deployment.completeSetCollateralAmount, storedCollateral, 'child collateral replay mismatch')

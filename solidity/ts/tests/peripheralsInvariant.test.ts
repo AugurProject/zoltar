@@ -79,7 +79,7 @@ import { peripherals_EscalationGame_EscalationGame, peripherals_SecurityPool_Sec
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
 const genesisUniverse = 0n
-const securityMultiplier = 2n
+const statoblastSecurityMultiplierBps = 20_000n
 const repDeposit = 1000n * 10n ** 18n
 const AUCTION_TIME = 604800n
 
@@ -169,9 +169,9 @@ describe('Peripherals invariant harness', () => {
 		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
 		await createQuestion(client, questionData, outcomes)
 		const questionId = getQuestionId(questionData, outcomes)
-		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier)
+		await deployOriginSecurityPool(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps)
 		await approveAndDepositRep(client, repDeposit, questionId)
-		const addresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)
+		const addresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps)
 		return {
 			questionId,
 			questionEndDate: questionData.endTime,
@@ -233,7 +233,7 @@ describe('Peripherals invariant harness', () => {
 		const attackerClient = createClient(1)
 		await approveAndDepositRep(attackerClient, repDeposit, context.questionId)
 		const securityPoolAllowance = repDeposit / 4n
-		await manipulatePriceOracleAndPerformOperation(client, mockWindow, getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, securityMultiplier).priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
+		await manipulatePriceOracleAndPerformOperation(client, mockWindow, getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
 		const openInterestAmount = 10n * 10n ** 18n
 		const openInterestHolder = createClient(2)
 		await createCompleteSet(openInterestHolder, context.securityPool, openInterestAmount)
@@ -243,7 +243,7 @@ describe('Peripherals invariant harness', () => {
 		await migrateVault(client, context.securityPool, QuestionOutcome.Yes)
 
 		const yesUniverse = getChildUniverseIdForOutcome(QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(context.securityPool, yesUniverse, context.questionId, securityMultiplier)
+		const yesSecurityPool = getSecurityPoolAddresses(context.securityPool, yesUniverse, context.questionId, statoblastSecurityMultiplierBps)
 
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 		await startTruthAuction(client, yesSecurityPool.securityPool)
@@ -304,7 +304,7 @@ describe('Peripherals invariant harness', () => {
 		const seedBaseline = await mockWindow.anvilSnapshot()
 		let currentSeedBaseline = seedBaseline
 		const parentRepToken = getRepTokenAddress(genesisUniverse)
-		const secondSecurityMultiplier = 3n
+		const secondStatoblastSecurityMultiplierBps = 30_000n
 
 		for (const seed of getStatefulInvariantSeeds()) {
 			const trace: string[] = []
@@ -370,10 +370,10 @@ describe('Peripherals invariant harness', () => {
 			}
 
 			await runAction('deploy second pool', async () => {
-				await deployOriginSecurityPool(client, genesisUniverse, context.questionId, secondSecurityMultiplier)
+				await deployOriginSecurityPool(client, genesisUniverse, context.questionId, secondStatoblastSecurityMultiplierBps)
 			})
-			const firstPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, securityMultiplier)
-			const secondPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, secondSecurityMultiplier)
+			const firstPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps)
+			const secondPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, secondStatoblastSecurityMultiplierBps)
 			const actorA = createClient(1)
 			const actorB = createClient(2)
 			const actorC = createClient(3)
@@ -519,8 +519,8 @@ describe('Peripherals invariant harness', () => {
 			await runAction('create second-pool yes child', async () => await createChildUniverse(client, secondPoolAddresses.securityPool, QuestionOutcome.Yes))
 			const yesUniverse = getChildUniverseIdForOutcome(QuestionOutcome.Yes)
 			const yesRepToken = getRepTokenAddress(yesUniverse)
-			const firstYesPoolAddresses = getSecurityPoolAddresses(firstPoolAddresses.securityPool, yesUniverse, context.questionId, securityMultiplier)
-			const secondYesPoolAddresses = getSecurityPoolAddresses(secondPoolAddresses.securityPool, yesUniverse, context.questionId, secondSecurityMultiplier)
+			const firstYesPoolAddresses = getSecurityPoolAddresses(firstPoolAddresses.securityPool, yesUniverse, context.questionId, statoblastSecurityMultiplierBps)
+			const secondYesPoolAddresses = getSecurityPoolAddresses(secondPoolAddresses.securityPool, yesUniverse, context.questionId, secondStatoblastSecurityMultiplierBps)
 			const firstYesPool = firstYesPoolAddresses.securityPool
 			const secondYesPool = secondYesPoolAddresses.securityPool
 			const parentSupplyAfterLocking = await getUniverseTheoreticalSupply(client, genesisUniverse)
@@ -600,7 +600,7 @@ describe('Peripherals invariant harness', () => {
 		const handlerBaseline = await mockWindow.anvilSnapshot()
 		let currentHandlerBaseline = handlerBaseline
 		const parentRepToken = getRepTokenAddress(genesisUniverse)
-		const secondSecurityMultiplier = 3n
+		const secondStatoblastSecurityMultiplierBps = 30_000n
 		const configuredSeed = process.env['ZOLTAR_INVARIANT_SEED']
 		const seeds = configuredSeed === undefined ? [0xa11ce5n, 0xbadc0den, 0xdecafbadn] : [BigInt(configuredSeed)]
 
@@ -617,12 +617,12 @@ describe('Peripherals invariant harness', () => {
 				throw new Error(`Adversarial invariant seed ${seed.toString()} failed after ${trace.join(' -> ')}: ${message}`, { cause: error })
 			}
 
-			await deployOriginSecurityPool(client, genesisUniverse, context.questionId, secondSecurityMultiplier)
-			const firstPool = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, securityMultiplier)
-			const secondPool = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, secondSecurityMultiplier)
+			await deployOriginSecurityPool(client, genesisUniverse, context.questionId, secondStatoblastSecurityMultiplierBps)
+			const firstPool = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps)
+			const secondPool = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, secondStatoblastSecurityMultiplierBps)
 			const yesUniverse = getChildUniverseIdForOutcome(QuestionOutcome.Yes)
-			const firstYesPoolAddresses = getSecurityPoolAddresses(firstPool.securityPool, yesUniverse, context.questionId, securityMultiplier)
-			const secondYesPoolAddresses = getSecurityPoolAddresses(secondPool.securityPool, yesUniverse, context.questionId, secondSecurityMultiplier)
+			const firstYesPoolAddresses = getSecurityPoolAddresses(firstPool.securityPool, yesUniverse, context.questionId, statoblastSecurityMultiplierBps)
+			const secondYesPoolAddresses = getSecurityPoolAddresses(secondPool.securityPool, yesUniverse, context.questionId, secondStatoblastSecurityMultiplierBps)
 			const secondYesPool = secondYesPoolAddresses.securityPool
 			const secondYesRepToken = getRepTokenAddress(yesUniverse)
 			const actorA = createClient(1)
@@ -969,7 +969,7 @@ describe('Peripherals invariant harness', () => {
 	})
 
 	test('positive-value mint fuzzing always returns shares and preserves unsolicited ETH surplus', async () => {
-		const priceOracle = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, securityMultiplier).priceOracleManagerAndOperatorQueuer
+		const priceOracle = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).priceOracleManagerAndOperatorQueuer
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, repDeposit / 4n)
 		const forcedSurplus = 17n * 10n ** 18n + 3n
 		await mockWindow.setBalance(context.securityPool, (await getETHBalance(client, context.securityPool)) + forcedSurplus)
@@ -997,7 +997,7 @@ describe('Peripherals invariant harness', () => {
 		{ path: 'external', seed: 0xe71e2a1n },
 		{ path: 'own', seed: 0x0a11f04bn },
 	] as const)('stateful $path-fork lifecycle fuzzing reaches a consistent reactivated child', async ({ path, seed }) => {
-		const parentAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, securityMultiplier)
+		const parentAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps)
 		const allowance = repDeposit / 4n
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, parentAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, allowance)
 		const shareHolder = createClient(2)
@@ -1008,7 +1008,7 @@ describe('Peripherals invariant harness', () => {
 		if (path === 'own') {
 			await mockWindow.setTime(context.questionEndDate + 1n)
 			await manipulatePriceOracle(client, mockWindow, parentAddresses.priceOracleManagerAndOperatorQueuer)
-			const forkThreshold = (await getZoltarForkThreshold(client, genesisUniverse)) / securityMultiplier
+			const forkThreshold = ((await getZoltarForkThreshold(client, genesisUniverse)) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRep(client, context.securityPool, 2n * forkThreshold)
 			await triggerOwnGameFork(client, context.securityPool)
 		} else {
@@ -1032,7 +1032,7 @@ describe('Peripherals invariant harness', () => {
 		}
 
 		const yesUniverse = getChildUniverseIdForOutcome(QuestionOutcome.Yes)
-		const yesAddresses = getSecurityPoolAddresses(context.securityPool, yesUniverse, context.questionId, securityMultiplier)
+		const yesAddresses = getSecurityPoolAddresses(context.securityPool, yesUniverse, context.questionId, statoblastSecurityMultiplierBps)
 		strictEqualTypeSafe(await getSystemState(client, yesAddresses.securityPool), SystemState.ForkMigration, 'migrated child should remain isolated until the repair phase')
 		await mockWindow.advanceTime(8n * 7n * DAY + 1n)
 		await startTruthAuction(client, yesAddresses.securityPool)
@@ -1104,7 +1104,7 @@ describe('Peripherals invariant harness', () => {
 		for (const outcome of branchOrder) {
 			const childUniverseId = getChildUniverseIdForOutcome(outcome)
 			const childRepToken = getRepTokenAddress(childUniverseId)
-			const childSecurityPool = getSecurityPoolAddresses(context.securityPool, childUniverseId, context.questionId, securityMultiplier).securityPool
+			const childSecurityPool = getSecurityPoolAddresses(context.securityPool, childUniverseId, context.questionId, statoblastSecurityMultiplierBps).securityPool
 			const childBalanceBefore = await getERC20Balance(client, childRepToken, childSecurityPool)
 			await migrateRepToZoltar(client, context.securityPool, [outcome])
 			const childBalanceAfter = await getERC20Balance(client, childRepToken, childSecurityPool)
@@ -1116,7 +1116,7 @@ describe('Peripherals invariant harness', () => {
 		}
 
 		const repeatedYesChildRepToken = getRepTokenAddress(getChildUniverseIdForOutcome(QuestionOutcome.Yes))
-		const repeatedYesSecurityPool = getSecurityPoolAddresses(context.securityPool, getChildUniverseIdForOutcome(QuestionOutcome.Yes), context.questionId, securityMultiplier).securityPool
+		const repeatedYesSecurityPool = getSecurityPoolAddresses(context.securityPool, getChildUniverseIdForOutcome(QuestionOutcome.Yes), context.questionId, statoblastSecurityMultiplierBps).securityPool
 		const repeatedYesBalanceBefore = await getERC20Balance(client, repeatedYesChildRepToken, repeatedYesSecurityPool)
 		await migrateRepToZoltar(client, context.securityPool, [QuestionOutcome.Yes])
 		const repeatedYesBalanceAfter = await getERC20Balance(client, repeatedYesChildRepToken, repeatedYesSecurityPool)
@@ -1131,7 +1131,7 @@ describe('Peripherals invariant harness', () => {
 		assert.ok(forkData.auctionableRepAtFork > 0n, 'forked pool should retain migration REP for branch settlement')
 		assert.ok(forkData.migratedRep <= forkData.auctionableRepAtFork, 'migrated REP should never exceed the branch migration balance')
 		const yesUniverseId = getChildUniverseIdForOutcome(QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(context.securityPool, yesUniverseId, context.questionId, securityMultiplier).securityPool
+		const yesSecurityPool = getSecurityPoolAddresses(context.securityPool, yesUniverseId, context.questionId, statoblastSecurityMultiplierBps).securityPool
 		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool), SystemState.ForkMigration, 'yes child should be in fork migration')
 		const yesBalanceBeforeRepeat = await getERC20Balance(client, getRepTokenAddress(yesUniverseId), yesSecurityPool)
 		await migrateRepToZoltar(client, context.securityPool, [QuestionOutcome.Yes])
@@ -1143,7 +1143,7 @@ describe('Peripherals invariant harness', () => {
 		const repToken = getRepTokenAddress(genesisUniverse)
 		const parentSupplyBeforeFork = await getUniverseTheoreticalSupply(client, genesisUniverse)
 		const burnAddressBalanceBeforeFork = await getERC20Balance(client, repToken, addressString(BURN_ADDRESS))
-		const forkThreshold = (await getTotalTheoreticalSupply(client, repToken)) / 20n / securityMultiplier
+		const forkThreshold = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await depositRep(client, context.securityPool, 2n * forkThreshold)
 		await triggerOwnGameFork(client, context.securityPool)
 
@@ -1161,7 +1161,7 @@ describe('Peripherals invariant harness', () => {
 
 	test('allowance reconciliation distinguishes operational, migration, frozen, and zero-demand activation state', async () => {
 		const allowance = repDeposit / 4n
-		const parentAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, securityMultiplier)
+		const parentAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps)
 		const unmigratedAllowanceHolder = createClient(1)
 		const openInterestHolder = createClient(2)
 		const readAccounting = async (securityPool: Address) =>
@@ -1189,7 +1189,7 @@ describe('Peripherals invariant harness', () => {
 		await createChildUniverse(client, context.securityPool, QuestionOutcome.Yes)
 		await migrateVault(client, context.securityPool, QuestionOutcome.Yes)
 		const yesUniverse = getChildUniverseIdForOutcome(QuestionOutcome.Yes)
-		const childAddresses = getSecurityPoolAddresses(context.securityPool, yesUniverse, context.questionId, securityMultiplier)
+		const childAddresses = getSecurityPoolAddresses(context.securityPool, yesUniverse, context.questionId, statoblastSecurityMultiplierBps)
 		const childPool = childAddresses.securityPool
 		const [frozenParentAccounting, migrationChildAccounting, frozenParentVault, migrationChildVault] = await Promise.all([readAccounting(context.securityPool), readAccounting(childPool), getSecurityVault(client, context.securityPool, client.account.address), getSecurityVault(client, childPool, client.account.address)])
 
@@ -1367,7 +1367,7 @@ describe('Peripherals invariant harness', () => {
 		await migrateVault(attackerClient, context.securityPool, QuestionOutcome.Yes)
 
 		const yesUniverseId = getChildUniverseIdForOutcome(QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(context.securityPool, yesUniverseId, context.questionId, securityMultiplier).securityPool
+		const yesSecurityPool = getSecurityPoolAddresses(context.securityPool, yesUniverseId, context.questionId, statoblastSecurityMultiplierBps).securityPool
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 		await startTruthAuction(client, yesSecurityPool)
 
@@ -1400,7 +1400,7 @@ describe('Peripherals invariant harness', () => {
 	})
 
 	test('oracle-staged operations cannot be overwritten or executed twice', async () => {
-		const priceOracle = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, securityMultiplier).priceOracleManagerAndOperatorQueuer
+		const priceOracle = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).priceOracleManagerAndOperatorQueuer
 		const ethCost = await getRequestPriceEthCost(client, priceOracle)
 		const queuedOperationEthCost = await getQueuedOperationEthCost(client, priceOracle)
 		const allowances = [repDeposit / 4n, repDeposit / 5n, repDeposit / 6n, repDeposit / 7n, repDeposit / 8n]
@@ -1480,7 +1480,7 @@ describe('Peripherals invariant harness', () => {
 		await approveAndDepositRep(vaultB, repDeposit, context.questionId)
 		await approveAndDepositRep(vaultC, repDeposit, context.questionId)
 
-		const priceOracle = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, securityMultiplier).priceOracleManagerAndOperatorQueuer
+		const priceOracle = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).priceOracleManagerAndOperatorQueuer
 		await manipulatePriceOracleAndPerformOperation(vaultA, mockWindow, priceOracle, OperationType.SetSecurityBondsAllowance, vaultA.account.address, repDeposit / 20n)
 		const vaultBBeforeExit = await getSecurityVault(client, context.securityPool, vaultB.account.address)
 		const vaultBRepClaim = await poolOwnershipToRep(client, context.securityPool, vaultBBeforeExit.repDepositShare)
@@ -1525,7 +1525,7 @@ describe('Peripherals invariant harness', () => {
 		const winningVault = createClient(1)
 		const losingVault = createClient(2)
 		await mockWindow.setTime(context.questionEndDate + 10n * DAY)
-		const forkThreshold = (await getZoltarForkThreshold(client, genesisUniverse)) / securityMultiplier
+		const forkThreshold = ((await getZoltarForkThreshold(client, genesisUniverse)) * 10_000n) / statoblastSecurityMultiplierBps
 		await approveAndDepositRep(winningVault, forkThreshold, context.questionId)
 		await approveAndDepositRep(losingVault, forkThreshold, context.questionId)
 		const winningRep = await poolOwnershipToRep(client, context.securityPool, (await getSecurityVault(client, context.securityPool, winningVault.account.address)).repDepositShare)

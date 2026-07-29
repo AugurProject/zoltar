@@ -12,6 +12,7 @@ export const DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES = 5n
 export const MIN_STAGED_OPERATION_TIMEOUT_MINUTES = 1n
 export const MAX_STAGED_OPERATION_TIMEOUT_MINUTES = 5n
 const PRICE_PRECISION = 10n ** 18n
+const BPS_DENOMINATOR = 10_000n
 
 export function getSelectedVaultAddress(selectedVaultAddress: string | undefined, accountAddress: Address | undefined) {
 	const trimmedSelectedVaultAddress = selectedVaultAddress?.trim() ?? ''
@@ -53,11 +54,11 @@ function getAllowanceBackedRepFloor(securityBondAllowance: bigint | undefined, r
 	return divideBigintRoundUp(securityBondAllowance * repPerEthPrice, PRICE_PRECISION)
 }
 
-function getBackedAllowanceCeiling(repAmount: bigint | undefined, repPerEthPrice: bigint | undefined, securityMultiplier: bigint | undefined) {
+function getBackedAllowanceCeiling(repAmount: bigint | undefined, repPerEthPrice: bigint | undefined, statoblastSecurityMultiplierBps: bigint | undefined) {
 	if (repAmount === undefined || repAmount <= 0n) return 0n
 	if (repPerEthPrice === undefined || repPerEthPrice <= 0n) return 0n
-	if (securityMultiplier === undefined || securityMultiplier <= 0n) return 0n
-	return (repAmount * PRICE_PRECISION) / (repPerEthPrice * securityMultiplier)
+	if (statoblastSecurityMultiplierBps === undefined || statoblastSecurityMultiplierBps <= 0n) return 0n
+	return (repAmount * PRICE_PRECISION * BPS_DENOMINATOR) / (repPerEthPrice * statoblastSecurityMultiplierBps)
 }
 
 export function getSecurityVaultWithdrawableRepAmount({
@@ -89,23 +90,23 @@ export function getSecurityVaultMaxBondAllowanceAmount({
 	currentSecurityBondAllowance,
 	repDepositShare,
 	repPerEthPrice,
-	securityMultiplier,
+	statoblastSecurityMultiplierBps,
 	totalRepDeposit,
 	totalSecurityBondAllowance,
 }: {
 	currentSecurityBondAllowance?: bigint | undefined
 	repDepositShare: bigint | undefined
 	repPerEthPrice: bigint | undefined
-	securityMultiplier: bigint | undefined
+	statoblastSecurityMultiplierBps: bigint | undefined
 	totalRepDeposit?: bigint | undefined
 	totalSecurityBondAllowance?: bigint | undefined
 }) {
-	const localAllowanceCeiling = getBackedAllowanceCeiling(repDepositShare, repPerEthPrice, securityMultiplier)
+	const localAllowanceCeiling = getBackedAllowanceCeiling(repDepositShare, repPerEthPrice, statoblastSecurityMultiplierBps)
 	let maxBondAllowanceAmount = localAllowanceCeiling
 	if (totalRepDeposit !== undefined && totalSecurityBondAllowance !== undefined) {
 		const currentAllowance = currentSecurityBondAllowance ?? 0n
 		const otherVaultAllowance = totalSecurityBondAllowance > currentAllowance ? totalSecurityBondAllowance - currentAllowance : 0n
-		const globalAllowanceCeiling = getBackedAllowanceCeiling(totalRepDeposit, repPerEthPrice, securityMultiplier)
+		const globalAllowanceCeiling = getBackedAllowanceCeiling(totalRepDeposit, repPerEthPrice, statoblastSecurityMultiplierBps)
 		const remainingPoolAllowance = globalAllowanceCeiling > otherVaultAllowance ? globalAllowanceCeiling - otherVaultAllowance : 0n
 		maxBondAllowanceAmount = maxBondAllowanceAmount < remainingPoolAllowance ? maxBondAllowanceAmount : remainingPoolAllowance
 	}

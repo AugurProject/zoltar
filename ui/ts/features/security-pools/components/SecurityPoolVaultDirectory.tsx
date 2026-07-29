@@ -3,7 +3,7 @@ import type { ComponentChildren } from 'preact'
 import { CollateralizationCircle } from './CollateralizationCircle.js'
 import { AddressValue } from '../../../components/AddressValue.js'
 import { VaultMetricGrid } from './VaultMetricGrid.js'
-import { getVaultCollateralizationPercent } from '../../markets/lib/trading.js'
+import { getStatoblastCollateralizationTargetPercent, getVaultCollateralizationPercent } from '../../markets/lib/trading.js'
 import type { ListedSecurityPool, SecurityPoolVaultSummary } from '../../../types/contracts.js'
 
 type SecurityPoolVaultDirectoryProps = {
@@ -27,7 +27,7 @@ export function SecurityPoolVaultDirectory({ emptyState, pool, renderActions, re
 			{showingPartialDirectory ? <p className='detail'>{securityPoolCopy.formatVaultDirectorySummary(loadedVaultCount, pool.vaultCount)}</p> : null}
 			{pool.vaults.map(vault => {
 				const collateralizationPercent = getVaultCollateralizationPercent(vault.repDepositShare, vault.securityBondAllowance, repPerEthPrice)
-				const collateralizationTarget = pool.securityMultiplier * 100n * 10n ** 18n
+				const collateralizationTarget = getStatoblastCollateralizationTargetPercent(pool.statoblastSecurityMultiplierBps)
 				return (
 					<div className='vault-position-strip' key={`${pool.securityPoolAddress}-${vault.vaultAddress}`}>
 						<div className='vault-position-strip-head'>
@@ -45,7 +45,7 @@ export function SecurityPoolVaultDirectory({ emptyState, pool, renderActions, re
 							repPerEthPrice={repPerEthPrice}
 							repPerEthSource={repPerEthSource}
 							repPerEthSourceUrl={repPerEthSourceUrl}
-							selectedPoolSecurityMultiplier={pool.securityMultiplier}
+							selectedPoolStatoblastSecurityMultiplierBps={pool.statoblastSecurityMultiplierBps}
 							securityBondAllowance={vault.securityBondAllowance}
 							unpaidEthFees={vault.unpaidEthFees}
 						/>

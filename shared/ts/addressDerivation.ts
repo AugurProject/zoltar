@@ -31,7 +31,7 @@ type SecurityPoolAddressConfig = {
 		parent: Address
 		priceOracleManagerAndOperatorQueuer: Address
 		questionId: bigint
-		securityMultiplier: bigint
+		statoblastSecurityMultiplierBps: bigint
 		securityPoolFactory: Address
 		securityPoolForker: Address
 		shareToken: Address
@@ -54,12 +54,12 @@ function deriveRepTokenAddress(universeId: bigint, genesisRepTokenAddress: Addre
 	})
 }
 
-function getSecurityPoolSalt(parent: Address, universeId: bigint, questionId: bigint, securityMultiplier: bigint, initialReportPriorityFeeWeiPerGas: bigint) {
-	return keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint248' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [parent, universeId, questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas]))
+function getSecurityPoolSalt(parent: Address, universeId: bigint, questionId: bigint, statoblastSecurityMultiplierBps: bigint, initialReportPriorityFeeWeiPerGas: bigint) {
+	return keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint248' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [parent, universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeWeiPerGas]))
 }
 
-export function getSecurityPoolOriginId(originUniverseId: bigint, questionId: bigint, securityMultiplier: bigint, initialReportPriorityFeeWeiPerGas = DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS) {
-	return keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint248' }], [questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas, originUniverseId]))
+export function getSecurityPoolOriginId(originUniverseId: bigint, questionId: bigint, statoblastSecurityMultiplierBps: bigint, initialReportPriorityFeeWeiPerGas = DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS) {
+	return keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint248' }], [questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeWeiPerGas, originUniverseId]))
 }
 
 export function getCallerScopedSalt(caller: Address, salt: Hex) {
@@ -92,9 +92,9 @@ export function createRepTokenAddressHelper(config: RepTokenAddressConfig) {
 }
 
 export function createSecurityPoolAddressHelper(config: SecurityPoolAddressConfig) {
-	const getSecurityPoolAddresses = (parent: Address, universeId: bigint, questionId: bigint, securityMultiplier: bigint, originUniverseId = 0n, initialReportPriorityFeeWeiPerGas = DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS) => {
+	const getSecurityPoolAddresses = (parent: Address, universeId: bigint, questionId: bigint, statoblastSecurityMultiplierBps: bigint, originUniverseId = 0n, initialReportPriorityFeeWeiPerGas = DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS) => {
 		const infraContracts = config.getInfraContracts()
-		const securityPoolSalt = getSecurityPoolSalt(parent, universeId, questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas)
+		const securityPoolSalt = getSecurityPoolSalt(parent, universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeWeiPerGas)
 		const securityPoolSaltWithMsgSender = getCallerScopedSalt(infraContracts.securityPoolFactory, securityPoolSalt)
 
 		const repToken = config.getRepTokenAddress(universeId)
@@ -106,7 +106,7 @@ export function createSecurityPoolAddressHelper(config: SecurityPoolAddressConfi
 		const shareToken = getCreate2Address({
 			bytecode: config.getShareTokenInitCode(infraContracts.securityPoolFactory, infraContracts.zoltar, questionId),
 			from: infraContracts.shareTokenFactory,
-			salt: getSecurityPoolOriginId(originUniverseId, questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas),
+			salt: getSecurityPoolOriginId(originUniverseId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeWeiPerGas),
 		})
 		const truthAuction =
 			parent === zeroAddress
@@ -123,7 +123,7 @@ export function createSecurityPoolAddressHelper(config: SecurityPoolAddressConfi
 				parent,
 				priceOracleManagerAndOperatorQueuer,
 				questionId,
-				securityMultiplier,
+				statoblastSecurityMultiplierBps,
 				securityPoolFactory: infraContracts.securityPoolFactory,
 				securityPoolForker: infraContracts.securityPoolForker,
 				shareToken,

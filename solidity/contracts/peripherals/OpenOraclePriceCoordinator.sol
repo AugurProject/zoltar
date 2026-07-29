@@ -832,8 +832,10 @@ contract OpenOraclePriceCoordinator {
 		uint256 currentPrice = lastPrice;
 		if (currentPrice == 0) return false;
 		uint256 vaultRep = _getSnapshotVaultRep(stagedOperation);
-		uint256 securityMultiplier = securityPool.securityMultiplier();
-		uint256 thresholdPrice = (vaultRep * PRICE_PRECISION) / (snapshotTargetAllowance * securityMultiplier);
+		uint256 statoblastSecurityMultiplierBps = securityPool.statoblastSecurityMultiplierBps();
+		uint256 thresholdPrice =
+			(vaultRep * PRICE_PRECISION * SecurityPoolUtils.BPS_DENOMINATOR) /
+				(snapshotTargetAllowance * statoblastSecurityMultiplierBps);
 		if (currentPrice <= thresholdPrice) return false;
 		return
 			((currentPrice - thresholdPrice) * SecurityPoolUtils.BPS_DENOMINATOR) / currentPrice >=

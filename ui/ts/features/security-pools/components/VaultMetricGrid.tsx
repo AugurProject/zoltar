@@ -5,7 +5,7 @@ import { MetricField } from '../../../components/MetricField.js'
 import { TimestampValue } from '../../../components/TimestampValue.js'
 import type { VaultMetricGridProps } from '../../types.js'
 import { CollateralizationCircle } from './CollateralizationCircle.js'
-import { getVaultCollateralizationPercent } from '../../markets/lib/trading.js'
+import { getStatoblastCollateralizationTargetPercent, getVaultCollateralizationPercent } from '../../markets/lib/trading.js'
 
 function VaultPrimaryMetric({ className, label, suffix, value }: { className?: string; label: string; suffix: string; value: bigint | undefined }) {
 	return (
@@ -18,9 +18,9 @@ function VaultPrimaryMetric({ className, label, suffix, value }: { className?: s
 	)
 }
 
-export function VaultMetricGrid({ className = '', layout = 'grid', escalationEscrowedRep, priceValidUntilTimestamp, repDepositShare, repPerEthPrice, selectedPoolSecurityMultiplier, securityBondAllowance }: VaultMetricGridProps) {
+export function VaultMetricGrid({ className = '', layout = 'grid', escalationEscrowedRep, priceValidUntilTimestamp, repDepositShare, repPerEthPrice, selectedPoolStatoblastSecurityMultiplierBps, securityBondAllowance }: VaultMetricGridProps) {
 	const collateralizationPercent = getVaultCollateralizationPercent(repDepositShare, securityBondAllowance, repPerEthPrice)
-	const targetCollateralizationPercent = selectedPoolSecurityMultiplier === undefined ? undefined : selectedPoolSecurityMultiplier * 100n * 10n ** 18n
+	const targetCollateralizationPercent = selectedPoolStatoblastSecurityMultiplierBps === undefined ? undefined : getStatoblastCollateralizationTargetPercent(selectedPoolStatoblastSecurityMultiplierBps)
 
 	if (layout === 'preview')
 		return (
