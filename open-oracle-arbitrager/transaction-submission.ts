@@ -64,11 +64,11 @@ function relayUrl(value: string) {
 	try {
 		parsed = new URL(value)
 	} catch (error) {
-		if (error instanceof TypeError) throw new Error(`Invalid relay URL: ${value}`)
+		if (error instanceof TypeError) throw new Error('Invalid relay URL')
 		throw error
 	}
 	const loopback = parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost' || parsed.hostname === '[::1]'
-	if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && loopback)) throw new Error(`Relay URL must use HTTPS or loopback HTTP: ${value}`)
+	if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && loopback)) throw new Error('Relay URL must use HTTPS or loopback HTTP')
 	if (parsed.username !== '' || parsed.password !== '') throw new Error('Relay URLs must not contain embedded credentials')
 	if (value.includes('?')) throw new Error('Relay URLs must not contain query parameters')
 	if (value.includes('#')) throw new Error('Relay URLs must not contain fragments')

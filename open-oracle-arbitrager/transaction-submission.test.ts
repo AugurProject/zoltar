@@ -47,6 +47,11 @@ describe('transaction submission settings', () => {
 		expect(() => validateSubmissionSettings({ mode: 'private', relayUrls: ['https://relay.example#'] })).toThrow('fragments')
 		expect(() => validateSubmissionSettings({ mode: 'private', relayUrls: ['https://relay.example', 'https://relay.example?'] })).toThrow('query parameters')
 	})
+
+	test('does not include rejected relay endpoint secrets in validation errors', () => {
+		expect(() => validateSubmissionSettings({ mode: 'private', relayUrls: ['not-a-url?token=RELAY_SECRET'] })).toThrow(/^Invalid relay URL$/)
+		expect(() => validateSubmissionSettings({ mode: 'private', relayUrls: ['ftp://user:RELAY_SECRET@relay.example/private?key=HIDDEN'] })).toThrow(/^Relay URL must use HTTPS or loopback HTTP$/)
+	})
 })
 
 describe('signed transaction delivery', () => {

@@ -61,6 +61,11 @@ describe('operator connectivity', () => {
 		expect(() => validateReadRpcUrls(['http://unsafe.example'])).toThrow('HTTPS')
 	})
 
+	test('does not include rejected RPC endpoint secrets in validation errors', () => {
+		expect(() => validateReadRpcUrls(['not-a-url?token=RPC_SECRET'])).toThrow(/^Invalid RPC URL$/)
+		expect(() => validateReadRpcUrls(['ftp://user:RPC_SECRET@rpc.example/private?key=HIDDEN'])).toThrow(/^RPC URL must use HTTPS or loopback HTTP$/)
+	})
+
 	test('checks the configured chain and sends raw transactions', async () => {
 		const hash = `0x${'12'.repeat(32)}` as Hex
 		const url = rpc((method, params) => {
