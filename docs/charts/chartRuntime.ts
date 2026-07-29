@@ -24,6 +24,8 @@ import {
 	contractAtlasPlotRoutesForView,
 	contractAtlasRelationLabels,
 	contractAtlasRelationshipRows,
+	contractAtlasTestGatewayByTargetId,
+	contractAtlasTestGatewayDefinitions,
 	contractAtlasViewDefinition,
 	contractAtlasViewDefinitions,
 	type ContractAtlasKind,
@@ -1158,23 +1160,16 @@ function contractAtlasChart(spec: ChartSpec, view: ContractAtlasViewDefinition):
 	})
 	const testPanel = panelById.get('tests')
 	if (testPanel === undefined) throw new Error('Contract atlas is missing its test-only panel')
-	const testGatewayDefinitions = [
-		{ id: 'test-gateway-zoltar', label: 'Production target:\nZoltar & token helpers', order: 0, source: 'Repeated production boundary', kind: 'gateway' },
-		{ id: 'test-gateway-token', label: 'Production target:\nERC-1155 & shares', order: 1, source: 'Repeated production boundary', kind: 'gateway' },
-		{ id: 'test-gateway-escalation', label: 'Production target:\nEscalation stack', order: 2, source: 'Repeated production boundary', kind: 'gateway' },
-		{ id: 'test-gateway-forker', label: 'Production target:\nFork & migration', order: 3, source: 'Repeated production boundary', kind: 'gateway' },
-		{ id: 'test-gateway-pool', label: 'Production target:\nPool & factory', order: 4, source: 'Repeated production boundary', kind: 'gateway' },
-		{ id: 'test-gateway-openoracle', label: 'Production target:\nOpenOracle', order: 5, source: 'Repeated production boundary', kind: 'gateway' },
-		{ id: 'test-gateway-infra', label: 'Production target:\nCoverage & infrastructure', order: 6, source: 'Repeated production boundary', kind: 'gateway' },
-	] satisfies { id: string; kind: 'gateway'; label: string; order: number; source: string }[]
-	const testGatewayNodes: ContractAtlasChartNode[] = testGatewayDefinitions.map(node => {
+	const testGatewayNodes: ContractAtlasChartNode[] = contractAtlasTestGatewayDefinitions.map(node => {
 		const x1 = 0.48 + 5 * columnStep
 		const y1 = testPanel.y1 + panelHeaderHeight + node.order * rowStep
 		return {
 			...node,
 			column: 5,
 			isGateway: true,
+			kind: 'gateway',
 			panel: 'tests',
+			source: 'Repeated production boundary',
 			x1,
 			x2: x1 + nodeWidth,
 			y1,
@@ -1185,13 +1180,9 @@ function contractAtlasChart(spec: ChartSpec, view: ContractAtlasViewDefinition):
 	const positionedNodeById = new Map(positionedNodes.map(node => [node.id, node]))
 
 	function testGatewayForTarget(targetId: string): string {
-		if (targetId.startsWith('zoltar-')) return 'test-gateway-zoltar'
-		if (['statoblast-erc1155', 'statoblast-ierc1155-receiver', 'statoblast-share-token'].includes(targetId)) return 'test-gateway-token'
-		if (targetId.includes('escalation')) return 'test-gateway-escalation'
-		if (targetId.includes('forker') || targetId === 'statoblast-event-emitter') return 'test-gateway-forker'
-		if (targetId === 'openoracle-core') return 'test-gateway-openoracle'
-		if (targetId.includes('security-pool')) return 'test-gateway-pool'
-		return 'test-gateway-infra'
+		const gatewayId = contractAtlasTestGatewayByTargetId.get(targetId)
+		if (gatewayId === undefined) throw new Error(`Contract atlas test target ${targetId} has no explicit gateway classification`)
+		return gatewayId
 	}
 
 	const positionedEdges: ContractAtlasChartEdge[] = contractAtlasPlotRoutesForView(view).map(route => {

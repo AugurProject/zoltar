@@ -41,6 +41,14 @@ export type ContractAtlasViewDefinition = {
 	relations: ContractAtlasRelation[]
 }
 
+export type ContractAtlasTestGatewayId = 'test-gateway-escalation' | 'test-gateway-forker' | 'test-gateway-infra' | 'test-gateway-openoracle' | 'test-gateway-pool' | 'test-gateway-token' | 'test-gateway-zoltar'
+
+export type ContractAtlasTestGatewayDefinition = {
+	id: ContractAtlasTestGatewayId
+	label: string
+	order: number
+}
+
 function node(id: string, label: string, kind: ContractAtlasKind, panel: ContractAtlasPanel, column: number, order: number, source: string, declaration = label): ContractAtlasNode {
 	return {
 		column,
@@ -79,6 +87,48 @@ export const contractAtlasPanelLabels: Record<ContractAtlasPanel, string> = {
 	tests: 'Test-only contracts',
 	zoltar: 'Zoltar',
 }
+
+export const contractAtlasTestGatewayDefinitions: ContractAtlasTestGatewayDefinition[] = [
+	{ id: 'test-gateway-zoltar', label: 'Production target:\nZoltar & token helpers', order: 0 },
+	{ id: 'test-gateway-token', label: 'Production target:\nTokens, shares & outcomes', order: 1 },
+	{ id: 'test-gateway-escalation', label: 'Production target:\nEscalation & proofs', order: 2 },
+	{ id: 'test-gateway-forker', label: 'Production target:\nFork & migration', order: 3 },
+	{ id: 'test-gateway-pool', label: 'Production target:\nPool, factory & auction', order: 4 },
+	{ id: 'test-gateway-openoracle', label: 'Production target:\nOpenOracle', order: 5 },
+	{ id: 'test-gateway-infra', label: 'Production target:\nDeployment infrastructure', order: 6 },
+]
+
+export const contractAtlasTestGatewayByTargetId = new Map<string, ContractAtlasTestGatewayId>([
+	['infra-deployment-status-oracle', 'test-gateway-infra'],
+	['openoracle-core', 'test-gateway-openoracle'],
+	['statoblast-binary-outcomes', 'test-gateway-token'],
+	['statoblast-erc1155', 'test-gateway-token'],
+	['statoblast-escalation-calculations', 'test-gateway-escalation'],
+	['statoblast-escalation-game', 'test-gateway-escalation'],
+	['statoblast-escalation-game-factory', 'test-gateway-escalation'],
+	['statoblast-escalation-game-forker', 'test-gateway-escalation'],
+	['statoblast-escalation-proof-verifier', 'test-gateway-escalation'],
+	['statoblast-escalation-state', 'test-gateway-escalation'],
+	['statoblast-escalation-types', 'test-gateway-escalation'],
+	['statoblast-event-emitter', 'test-gateway-forker'],
+	['statoblast-forker-base', 'test-gateway-forker'],
+	['statoblast-forker-types', 'test-gateway-forker'],
+	['statoblast-ierc1155-receiver', 'test-gateway-token'],
+	['statoblast-merkle-mountain-range', 'test-gateway-escalation'],
+	['statoblast-pool-forker', 'test-gateway-forker'],
+	['statoblast-security-pool', 'test-gateway-pool'],
+	['statoblast-security-pool-factory-interface', 'test-gateway-pool'],
+	['statoblast-security-pool-interface', 'test-gateway-pool'],
+	['statoblast-share-token', 'test-gateway-token'],
+	['statoblast-share-token-interface', 'test-gateway-token'],
+	['statoblast-token-id', 'test-gateway-token'],
+	['statoblast-truth-auction', 'test-gateway-pool'],
+	['zoltar-core', 'test-gateway-zoltar'],
+	['zoltar-ierc20', 'test-gateway-zoltar'],
+	['zoltar-reputation-token', 'test-gateway-zoltar'],
+	['zoltar-safe-erc20-ops', 'test-gateway-zoltar'],
+	['zoltar-scalar-outcomes', 'test-gateway-zoltar'],
+])
 
 export const contractAtlasNodes: ContractAtlasNode[] = [
 	// Zoltar is intentionally its own region: it owns questions, universes, and REP.

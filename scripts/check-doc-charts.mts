@@ -15,6 +15,8 @@ import {
 	contractAtlasPlotRoutesForView,
 	contractAtlasRelationLabels,
 	contractAtlasRelationshipRows,
+	contractAtlasTestGatewayByTargetId,
+	contractAtlasTestGatewayDefinitions,
 	contractAtlasViewDefinitions,
 	type ContractAtlasView,
 } from '../docs/charts/contractAtlas'
@@ -295,6 +297,7 @@ async function assertContractAtlasCoverage(): Promise<void> {
 	}
 	const nodeIds = contractAtlasNodes.map(node => node.id)
 	const nodeIdSet = new Set(nodeIds)
+	const nodeById = new Map(contractAtlasNodes.map(node => [node.id, node]))
 	if (nodeIdSet.size !== nodeIds.length) {
 		throw new Error('Complete contract atlas node IDs must be unique')
 	}
@@ -406,6 +409,32 @@ async function assertContractAtlasCoverage(): Promise<void> {
 			if (!meaning.includes(`${contractAtlasRelationLabels[edge.relation]}: ${edge.description}`)) {
 				throw new Error(`Complete contract atlas plot route ${route.id} omits relationship ${edge.id} from its tooltip meaning`)
 			}
+		}
+	}
+	const testProductionTargetIds = [
+		...new Set(
+			contractAtlasPlotRoutes.flatMap(route => {
+				const source = nodeById.get(route.source)
+				const target = nodeById.get(route.target)
+				if (source === undefined || target === undefined) throw new Error(`Complete contract atlas plot route ${route.id} has an unknown endpoint`)
+				return source.panel === 'tests' && target.panel !== 'tests' ? [target.id] : []
+			}),
+		),
+	]
+	const gatewayTargetIssue = stringSetIssue('Complete contract atlas test-gateway target classification mismatch', testProductionTargetIds, [...contractAtlasTestGatewayByTargetId.keys()])
+	if (gatewayTargetIssue !== undefined) throw new Error(gatewayTargetIssue)
+	const gatewayIds = contractAtlasTestGatewayDefinitions.map(definition => definition.id)
+	if (new Set(gatewayIds).size !== gatewayIds.length) {
+		throw new Error('Complete contract atlas test-gateway definition IDs must be unique')
+	}
+	const usedGatewayIds = [...new Set(contractAtlasTestGatewayByTargetId.values())]
+	const gatewayUsageIssue = stringSetIssue('Complete contract atlas test-gateway definition usage mismatch', gatewayIds, usedGatewayIds)
+	if (gatewayUsageIssue !== undefined) throw new Error(gatewayUsageIssue)
+	const firstGatewayTarget = testProductionTargetIds[0]
+	if (firstGatewayTarget !== undefined) {
+		const removedGatewayTargets = [...contractAtlasTestGatewayByTargetId.keys()].filter(targetId => targetId !== firstGatewayTarget)
+		if (stringSetIssue('Complete contract atlas test-gateway removal probe', testProductionTargetIds, removedGatewayTargets) === undefined) {
+			throw new Error('Complete contract atlas test-gateway coverage did not reject an unclassified production target')
 		}
 	}
 	const routeEdgeIssue = stringSetIssue(
@@ -722,6 +751,7 @@ const contractInteractionWindow = new Window()
 contractInteractionWindow.document.write(contractInteractionHtml)
 contractInteractionWindow.document.close()
 const contractAtlasCaption = contractInteractionWindow.document.querySelector('#fig-complete-contract-atlas .diagram-caption')?.textContent.replace(/\s+/g, ' ').trim()
+const primaryFlowBoundary = contractInteractionWindow.document.querySelector('#edges > p')?.textContent.replace(/\s+/g, ' ').trim()
 contractInteractionWindow.close()
 const productionDeclarationCount = contractAtlasNodes.filter(node => node.declaration !== undefined && node.panel !== 'tests').length
 const testDeclarationCount = contractAtlasNodes.filter(node => node.declaration !== undefined && node.panel === 'tests').length
@@ -734,6 +764,9 @@ if (
 	!contractAtlasCaption.includes(`all ${expectedContractAtlasRelationshipCount} meanings remain`)
 ) {
 	throw new Error('Complete contract atlas caption must state its exact default-layer, plot-route, component, and relationship counts')
+}
+if (primaryFlowBoundary === undefined || !primaryFlowBoundary.includes(`These ${contractInteractionEdges.length} rows explain the arrows in the Primary Interaction Flow`)) {
+	throw new Error('Primary interaction flow boundary must state its exact registered interaction count')
 }
 if (
 	!contractInteractionHtml.includes(`all ${productionDeclarationCount + testDeclarationCount} Solidity declarations`) ||
