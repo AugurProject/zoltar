@@ -11,3 +11,7 @@ export function GlobalTransactionPresentationProvider({ children, transaction }:
 export function useGlobalTransactionPresentation() {
 	return useContext(GlobalTransactionPresentationContext)
 }
+
+export function isPendingGlobalTransactionPresentation(transaction: GlobalTransactionPresentation | undefined) {
+	return transaction?.tone === 'preparing' || transaction?.tone === 'awaiting-wallet' || transaction?.tone === 'pending'
+}

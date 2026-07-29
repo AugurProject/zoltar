@@ -436,7 +436,7 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(forkData.auctionableRepAtFork, forkDataBeforeStrayRep.auctionableRepAtFork, 'repAtFork should ignore unrelated REP transferred to the forker after the own-game fork')
 		})
 
-		test('initiateSecurityPoolFork ignores a pool-supplied delegate target before it can drain canonical collateral', async () => {
+		test('initiateSecurityPoolFork rejects an unauthorized pool before it can supply a delegate target', async () => {
 			const collateral = 5n * 10n ** 18n
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, repDeposit / 4n)
 			await createCompleteSet(client, securityPoolAddresses.securityPool, collateral)
@@ -467,7 +467,7 @@ describe('Peripherals: fork migration', () => {
 			const targetCollateralBeforeAttack = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
 			assert.ok(targetCollateralBeforeAttack > 0n, 'attack target should hold tracked complete-set collateral')
 
-			await initiateSecurityPoolFork(client, fakePool)
+			await assert.rejects(initiateSecurityPoolFork(client, fakePool))
 
 			strictEqualTypeSafe(await getETHBalance(client, securityPoolAddresses.securityPool), targetBalanceBeforeAttack, 'untrusted delegate target must not drain canonical pool ETH')
 			strictEqualTypeSafe(await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool), targetCollateralBeforeAttack, 'untrusted delegate target must not change canonical collateral accounting')
@@ -562,7 +562,7 @@ describe('Peripherals: fork migration', () => {
 			const fakeParentAddress = fakeParentReceipt.contractAddress
 			if (fakeParentAddress === undefined || fakeParentAddress === null) throw new Error('fake parent address missing')
 
-			await assert.rejects(createChildUniverse(client, fakeParentAddress, QuestionOutcome.Yes), /Migration closed|Invalid child deployment/)
+			await assert.rejects(createChildUniverse(client, fakeParentAddress, QuestionOutcome.Yes), /Migration closed|Invalid child/)
 
 			strictEqualTypeSafe(await getPoolOwnershipDenominator(client, targetPool), denominatorBeforeAttack, 'attack should not change the legitimate pool ownership denominator')
 			strictEqualTypeSafe((await getSecurityPoolForkerForkData(client, targetPool)).truthAuction, targetForkDataBeforeAttack.truthAuction, 'attack should not overwrite the legitimate pool fork metadata')
@@ -1267,7 +1267,7 @@ describe('Peripherals: fork migration', () => {
 			await mockWindow.setTime(endTime + 10000n)
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 
-			const lockedDeposit = 700n * 10n ** 18n
+			const lockedDeposit = 600n * 10n ** 18n
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, lockedDeposit)
 
 			const targetVaultAfterLock = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -1275,9 +1275,11 @@ describe('Peripherals: fork migration', () => {
 
 			strictEqualTypeSafe(targetVaultAfterLock.repInEscalationGame, lockedDeposit, 'target vault should have the escalation principal marked as locked')
 			strictEqualTypeSafe(targetClaimAfterLock, repDeposit - lockedDeposit, 'locking REP should move the committed principal out of the vault claim')
-			strictEqualTypeSafe(canLiquidate(PRICE_PRECISION, securityPoolAllowance, targetClaimAfterLock, statoblastSecurityMultiplierBps), true, 'the vault should become liquidatable once its unlocked vault REP falls below the required backing')
+			strictEqualTypeSafe(canLiquidate(PRICE_PRECISION, securityPoolAllowance, targetClaimAfterLock, statoblastSecurityMultiplierBps), false, 'the escalation deposit should stop at multiplier-adjusted backing')
 
-			await manipulatePriceOracle(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+			const liquidationPrice = (PRICE_PRECISION * 5n) / 4n
+			await manipulatePriceOracle(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, liquidationPrice)
+			strictEqualTypeSafe(canLiquidate(liquidationPrice, securityPoolAllowance, targetClaimAfterLock, statoblastSecurityMultiplierBps), true, 'an adverse price move should make the boundary-backed vault liquidatable')
 			await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, securityPoolAllowance)
 
 			const targetVaultAfterLiquidation = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -1285,7 +1287,7 @@ describe('Peripherals: fork migration', () => {
 			const targetClaimAfterLiquidation = await getVaultRepClaim(client.account.address)
 			const liquidatorClaimAfterLiquidation = await getVaultRepClaim(liquidatorClient.account.address)
 
-			const expectedRepMove = getExpectedLiquidationRepMove(securityPoolAllowance, PRICE_PRECISION)
+			const expectedRepMove = getExpectedLiquidationRepMove(securityPoolAllowance, liquidationPrice)
 			strictEqualTypeSafe(targetVaultAfterLiquidation.repInEscalationGame, lockedDeposit, 'liquidation should leave the targets escalation commitment untouched')
 			strictEqualTypeSafe(targetVaultAfterLiquidation.securityBondAllowance, 0n, 'liquidation should clear the unlocked-vault debt when enough unlocked REP is available')
 			approximatelyEqual(targetClaimAfterLiquidation, repDeposit - lockedDeposit - expectedRepMove, 1n, 'liquidation should seize only unlocked vault REP')

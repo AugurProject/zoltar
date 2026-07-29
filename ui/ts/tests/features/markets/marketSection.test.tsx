@@ -880,16 +880,16 @@ describe('MarketSection', () => {
 		expect(documentQueries.queryByRole('dialog')).toBeNull()
 		expect(documentQueries.getByText('Forking selects one existing question to split the active universe into outcome-specific child universes. This protocol action cannot be undone.')).not.toBeNull()
 		expect(documentQueries.getByText('The connected wallet must hold and approve enough REP to meet the fork threshold.')).not.toBeNull()
-		const openForkButton = documentQueries.getByRole('button', { name: 'Fork Zoltar' })
+		const openForkButton = documentQueries.getByRole('button', { name: 'Fork Universe' })
 		await act(() => {
 			openForkButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 		})
 		const modal = documentQueries.getByRole('dialog')
 		expect(modal).not.toBeNull()
-		expect(documentQueries.getAllByText('Fork Zoltar').length > 0).toBe(true)
+		expect(documentQueries.getAllByText('Fork Universe').length > 0).toBe(true)
 		expect(within(modal as HTMLElement).getByText('Confirm transaction context')).not.toBeNull()
 		expect(modal.textContent).toContain('QuestionNone selected')
-		expectTransactionButtonDisabled(modal as HTMLElement, 'Fork Zoltar', 'Select a valid fork question to continue.')
+		expectTransactionButtonDisabled(modal as HTMLElement, 'Fork Universe', 'Select a valid fork question to continue.')
 	})
 
 	test('uses distinct action and dialog title casing for forked-universe details', async () => {
@@ -1082,7 +1082,7 @@ describe('MarketSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const forkButton = documentQueries.getByRole('button', { name: 'Fork Zoltar' }) as HTMLButtonElement
+		const forkButton = documentQueries.getByRole('button', { name: 'Fork Universe' }) as HTMLButtonElement
 		expect(forkButton.disabled).toBe(true)
 		expect(forkButton.title).toBe('Create a question before starting a fork.')
 		expect(documentQueries.getByText('Create a question before starting a fork.')).not.toBeNull()

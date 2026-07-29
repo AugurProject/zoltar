@@ -148,7 +148,7 @@ contract EscalationGameProofVerifier {
 		uint256 diff = highValue - normalizedLow;
 		uint256 sum = highValue + normalizedLow;
 		uint256 z = (diff * SCALE) / sum;
-		if (z == 0) return 0;
+		if (z == 0) return log2Count * LN2_SCALED;
 		return log2Count * LN2_SCALED + 2 * _computeAtanhScaled(z);
 	}
 

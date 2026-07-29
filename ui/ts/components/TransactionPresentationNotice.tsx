@@ -8,6 +8,7 @@ import type { BadgeTone, GlobalTransactionPresentation } from '../types/componen
 
 type TransactionPresentationNoticeProps = {
 	className?: string
+	compact?: boolean
 	dismissible?: boolean
 	noticeRef?: RefObject<HTMLDivElement>
 	onDismiss?: () => void
@@ -23,12 +24,40 @@ function getTransactionBadge(tone: GlobalTransactionPresentation['tone']): { lab
 	return { tone: 'warning', label: transactionCopy.attention }
 }
 
-export function TransactionPresentationNotice({ className = '', dismissible = false, noticeRef, onDismiss, transaction }: TransactionPresentationNoticeProps) {
+export function TransactionPresentationNotice({ className = '', compact = false, dismissible = false, noticeRef, onDismiss, transaction }: TransactionPresentationNoticeProps) {
 	const badge = getTransactionBadge(transaction.tone)
 	const transactionHash = transaction.hash
 	const rows = transaction.rows ?? []
 	const technicalRows = transaction.technicalRows ?? []
-	const noticeClassName = ['global-transaction-notice', className].filter(Boolean).join(' ')
+	const noticeClassName = ['global-transaction-notice', compact ? 'global-transaction-notice-compact' : '', className].filter(Boolean).join(' ')
+	const transactionDetails = (
+		<>
+			{transaction.detail === undefined ? undefined : <div className='global-transaction-notice-detail'>{transaction.detail}</div>}
+			{rows.length === 0 ? undefined : (
+				<dl className='global-transaction-notice-rows'>
+					{rows.map((row, rowIndex) => (
+						<div className='global-transaction-notice-row' key={`${row.label}:${rowIndex.toString()}`}>
+							<dt>{row.label}</dt>
+							<dd>{row.value}</dd>
+						</div>
+					))}
+				</dl>
+			)}
+			{technicalRows.length === 0 ? undefined : (
+				<ReadOnlyDetailAccordion title={commonCopy.technicalDetails}>
+					<dl className='global-transaction-notice-rows'>
+						{technicalRows.map((row, rowIndex) => (
+							<div className='global-transaction-notice-row' key={`${row.label}:${rowIndex.toString()}`}>
+								<dt>{row.label}</dt>
+								<dd>{row.value}</dd>
+							</div>
+						))}
+					</dl>
+				</ReadOnlyDetailAccordion>
+			)}
+			{transactionHash === undefined ? undefined : <TransactionHashLink hash={transactionHash} />}
+		</>
+	)
 
 	return (
 		<div {...(noticeRef === undefined ? {} : { ref: noticeRef })} className={noticeClassName} role='status' aria-live='polite'>
@@ -43,32 +72,16 @@ export function TransactionPresentationNotice({ className = '', dismissible = fa
 					{transaction.tone === 'awaiting-wallet' ? <span className='spinner global-transaction-spinner' aria-hidden='true' /> : undefined}
 					<strong>{transaction.title}</strong>
 				</div>
-				{transaction.detail === undefined ? undefined : <div className='global-transaction-notice-detail'>{transaction.detail}</div>}
-				{rows.length === 0 ? undefined : (
-					<dl className='global-transaction-notice-rows'>
-						{rows.map((row, rowIndex) => (
-							<div className='global-transaction-notice-row' key={`${row.label}:${rowIndex.toString()}`}>
-								<dt>{row.label}</dt>
-								<dd>{row.value}</dd>
-							</div>
-						))}
-					</dl>
+				{compact ? (
+					<details className='global-transaction-compact-details'>
+						<summary>{transactionCopy.viewTransactionDetails}</summary>
+						<div className='global-transaction-compact-details-content'>{transactionDetails}</div>
+					</details>
+				) : (
+					transactionDetails
 				)}
-				{technicalRows.length === 0 ? undefined : (
-					<ReadOnlyDetailAccordion title={commonCopy.technicalDetails}>
-						<dl className='global-transaction-notice-rows'>
-							{technicalRows.map((row, rowIndex) => (
-								<div className='global-transaction-notice-row' key={`${row.label}:${rowIndex.toString()}`}>
-									<dt>{row.label}</dt>
-									<dd>{row.value}</dd>
-								</div>
-							))}
-						</dl>
-					</ReadOnlyDetailAccordion>
-				)}
-				{transactionHash === undefined ? undefined : <TransactionHashLink hash={transactionHash} />}
 			</div>
-			{!dismissible ? undefined : (
+			{!dismissible || compact ? undefined : (
 				<div className='global-transaction-actions'>
 					<button className='secondary global-transaction-dismiss' type='button' onClick={onDismiss}>
 						{transactionCopy.dismiss}
