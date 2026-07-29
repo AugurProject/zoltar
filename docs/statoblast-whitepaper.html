@@ -142,210 +142,9 @@
 						</table>
 					</div>
 					<figure class="diagram" id="fig-statoblast-actor-swimlanes">
-						<svg
-							viewBox="0 0 980 430"
-							role="img"
-							aria-labelledby="swimlane-title swimlane-desc"
-						>
-							<title id="swimlane-title">Actor swimlane lifecycle</title>
-							<desc id="swimlane-desc">
-								Trader, vault operator, and protocol responsibilities across
+						<div class="plot-chart" data-plot-chart="fig-statoblast-actor-swimlanes" data-plot-width="980" data-plot-height="430" role="img" aria-label="Actor swimlane lifecycle"><span class="plot-chart-fallback">Trader, vault operator, and protocol responsibilities across
 								minting, reporting, forking, migration, auction repair, and
-								redemption.
-							</desc>
-							<defs>
-								<marker
-									id="arrow-swimlane"
-									viewBox="0 0 10 10"
-									refX="8"
-									refY="5"
-									markerWidth="7"
-									markerHeight="7"
-									orient="auto-start-reverse"
-								>
-									<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-								</marker>
-							</defs>
-							<rect
-								class="svg-box"
-								x="40"
-								y="48"
-								width="900"
-								height="92"
-								rx="10"
-							></rect>
-							<rect
-								class="svg-box"
-								x="40"
-								y="170"
-								width="900"
-								height="92"
-								rx="10"
-							></rect>
-							<rect
-								class="svg-box"
-								x="40"
-								y="292"
-								width="900"
-								height="92"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="95" y="101" text-anchor="middle">
-								Trader
-							</text>
-							<text class="svg-label" x="95" y="223" text-anchor="middle">
-								Vault
-							</text>
-							<text class="svg-label" x="95" y="345" text-anchor="middle">
-								Protocol
-							</text>
-							<line class="svg-line" x1="150" y1="50" x2="150" y2="382"></line>
-							<rect
-								class="svg-blue"
-								x="190"
-								y="72"
-								width="150"
-								height="46"
-								rx="8"
-							></rect>
-							<text class="svg-small" x="265" y="100" text-anchor="middle">
-								mint shares
-							</text>
-							<rect
-								class="svg-blue"
-								x="190"
-								y="194"
-								width="150"
-								height="46"
-								rx="8"
-							></rect>
-							<text class="svg-small" x="265" y="222" text-anchor="middle">
-								deposit REP
-							</text>
-							<rect
-								class="svg-green"
-								x="190"
-								y="316"
-								width="150"
-								height="46"
-								rx="8"
-							></rect>
-							<text class="svg-small" x="265" y="344" text-anchor="middle">
-								deploy pool
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-swimlane)"
-								d="M 340 95 H 390"
-							></path>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-swimlane)"
-								d="M 340 217 H 390"
-							></path>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-swimlane)"
-								d="M 340 339 H 390"
-							></path>
-							<rect
-								class="svg-gold"
-								x="390"
-								y="72"
-								width="150"
-								height="46"
-								rx="8"
-							></rect>
-							<text class="svg-small" x="465" y="100" text-anchor="middle">
-								hold outcomes
-							</text>
-							<rect
-								class="svg-gold"
-								x="390"
-								y="194"
-								width="150"
-								height="46"
-								rx="8"
-							></rect>
-							<text class="svg-small" x="465" y="222" text-anchor="middle">
-								report outcome
-							</text>
-							<rect
-								class="svg-gold"
-								x="390"
-								y="316"
-								width="150"
-								height="46"
-								rx="8"
-							></rect>
-							<text class="svg-small" x="465" y="344" text-anchor="middle">
-								escalate
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-swimlane)"
-								d="M 540 95 H 590"
-							></path>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-swimlane)"
-								d="M 540 217 H 590"
-							></path>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-swimlane)"
-								d="M 540 339 H 590"
-							></path>
-							<rect
-								class="svg-red"
-								x="590"
-								y="316"
-								width="150"
-								height="46"
-								rx="8"
-							></rect>
-							<text class="svg-small" x="665" y="344" text-anchor="middle">
-								fork/migrate
-							</text>
-							<rect
-								class="svg-green"
-								x="590"
-								y="72"
-								width="150"
-								height="46"
-								rx="8"
-							></rect>
-							<text class="svg-small" x="665" y="100" text-anchor="middle">
-								redeem shares
-							</text>
-							<rect
-								class="svg-green"
-								x="590"
-								y="194"
-								width="150"
-								height="46"
-								rx="8"
-							></rect>
-							<text class="svg-small" x="665" y="222" text-anchor="middle">
-								migrate vault
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-swimlane)"
-								d="M 740 339 H 790"
-							></path>
-							<rect
-								class="svg-blue"
-								x="790"
-								y="316"
-								width="120"
-								height="46"
-								rx="8"
-							></rect>
-							<text class="svg-small" x="850" y="344" text-anchor="middle">
-								repair ETH
-							</text>
-						</svg>
+								redemption.</span></div>
 						<p class="diagram-caption">
 							<span class="figure-label">Actor Swimlanes</span>The same lifecycle looks different by role
 						</p>
@@ -409,9 +208,9 @@
 						<p class="security-assumption-ref">
 							<strong>Security assumptions:</strong>
 							<a href="./security-model.html#assumption-a01">A01 risk-adjusted incentives</a>,
-							<a href="./security-model.html#assumption-a08">A08 independent participants</a>,
-							<a href="./security-model.html#assumption-a11">A11 REP liquidity</a>, and
-							<a href="./security-model.html#assumption-a21">A21 lifecycle executors</a>.
+							<a href="./security-model.html#assumption-a03">A03 independent participants</a>,
+							<a href="./security-model.html#assumption-a13">A13 REP liquidity</a>, and
+							<a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>.
 						</p>
 						<ul>
 						<li> Question creators register questions in Zoltar question data, creating the objects around which Statoblast markets can be built. </li>
@@ -432,15 +231,18 @@
 						</div>
 							<p class="security-assumption-ref">
 								<strong>Security assumptions:</strong>
-								<a href="./security-model.html#assumption-a03">A03 REP valuation</a>,
-								<a href="./security-model.html#assumption-a12">A12 REP economic backing</a>,
-								<a href="./security-model.html#assumption-a18">A18 REP and WETH behavior</a>,
-								<a href="./security-model.html#assumption-a19">A19 canonical deployment</a>,
-								<a href="./security-model.html#assumption-a25">A25 intended question selection</a>,
-								<a href="./security-model.html#assumption-a26">A26 safe immutable parameters</a>,
-								<a href="./security-model.html#assumption-a28">A28 asset-recipient compatibility</a>,
+								<a href="./security-model.html#assumption-a08">A08 REP valuation</a>,
+								<a href="./security-model.html#assumption-a14">A14 REP economic backing</a>,
+								<a href="./security-model.html#assumption-a21"
+									>A21 genesis REP and WETH behavior</a
+								>,
+								<a href="./security-model.html#assumption-a23">A23 canonical deployment</a>,
+								<a href="./security-model.html#assumption-a15">A15 intended question selection</a>,
+								<a href="./security-model.html#assumption-a25">A25 safe immutable parameters</a>,
+								<a href="./security-model.html#assumption-a22">A22 asset-recipient compatibility</a>,
+								<a href="./security-model.html#assumption-a24">A24 client and wallet integrity</a>,
 								and
-								<a href="./security-model.html#assumption-a29">A29 client and wallet integrity</a>.
+								<a href="./security-model.html#assumption-a28">A28 account authority</a>.
 						</p>
 						<p class="lede">
 						A <code>SecurityPool</code> is a lineage-specific Statoblast contract for a question in a universe. Vault operators deposit REP, choose bond allowance, and underwrite ETH-backed complete sets in that pool's
@@ -467,197 +269,10 @@
 						An inherited child and a newly created origin may coexist for the same question, multiplier, initial-report priority fee, and universe. This is intentional: their origin IDs, pool addresses, share tokens, collateral ledgers, and migration paths are distinct. A caller selecting a pool therefore selects an origin lineage, not merely a question and universe. Because a fresh origin cannot occupy an inherited lineage’s registry entry, origin deployment does not scan universe ancestors.
 					</p>
 					<figure class="diagram" id="fig-statoblast-asset-flow">
-						<svg
-							viewBox="0 0 960 430"
-							role="img"
-							aria-labelledby="asset-flow-title asset-flow-desc"
-						>
-							<title id="asset-flow-title">
-								ETH, REP, shares, and fee flow
-							</title>
-							<desc id="asset-flow-desc">
-								Users send ETH to the security pool, which mints shares. A
+						<div class="plot-chart" data-plot-chart="fig-statoblast-asset-flow" data-plot-width="960" data-plot-height="430" role="img" aria-label="ETH, REP, shares, and fee flow"><span class="plot-chart-fallback">Users send ETH to the security pool, which mints shares. A
 								redemption request goes to the pool; the pool burns the relevant
 								shares and pays ETH. Vaults send REP and receive fees; fork
-								repair can sell child REP for ETH.
-							</desc>
-							<defs>
-								<marker
-									id="arrow-assets"
-									viewBox="0 0 10 10"
-									refX="8"
-									refY="5"
-									markerWidth="7"
-									markerHeight="7"
-									orient="auto-start-reverse"
-								>
-									<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-								</marker>
-							</defs>
-							<rect
-								class="svg-blue"
-								x="54"
-								y="58"
-								width="170"
-								height="72"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="139" y="90" text-anchor="middle">
-								Trader
-							</text>
-							<text class="svg-small" x="139" y="113" text-anchor="middle">
-								sends ETH
-							</text>
-							<rect
-								class="svg-green"
-								x="384"
-								y="58"
-								width="200"
-								height="94"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="484" y="92" text-anchor="middle">
-								SecurityPool
-							</text>
-							<text class="svg-small" x="484" y="116" text-anchor="middle">
-								collateral accounting
-							</text>
-							<text class="svg-small" x="484" y="137" text-anchor="middle">
-								fee extraction
-							</text>
-							<rect
-								class="svg-blue"
-								x="734"
-								y="58"
-								width="170"
-								height="72"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="819" y="90" text-anchor="middle">
-								ShareToken
-							</text>
-							<text class="svg-small" x="819" y="113" text-anchor="middle">
-								Invalid + Yes + No
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-assets)"
-								d="M 224 94 H 384"
-							></path>
-							<text class="svg-small" x="299" y="79" text-anchor="middle">
-								ETH collateral
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-assets)"
-								data-flow="pool-to-share-token-mint"
-								d="M 584 94 H 734"
-							></path>
-							<text class="svg-small" x="654" y="79" text-anchor="middle">
-								mint shares
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-assets)"
-								data-flow="pool-to-share-token-burn"
-								d="M 590 152 C 640 190 690 190 728 132"
-							></path>
-							<text class="svg-small" x="659" y="190" text-anchor="middle">
-								authorized burn
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-assets)"
-								data-flow="trader-to-pool-redemption"
-								d="M 224 118 C 280 158 330 158 384 118"
-							></path>
-							<text class="svg-small" x="304" y="170" text-anchor="middle">
-								redeem request
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-assets)"
-								data-flow="pool-to-trader-eth-payout"
-								d="M 384 138 C 330 220 280 220 224 138"
-							></path>
-							<text class="svg-small" x="304" y="228" text-anchor="middle">
-								ETH payout
-							</text>
-							<rect
-								class="svg-gold"
-								x="54"
-								y="272"
-								width="170"
-								height="72"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="139" y="304" text-anchor="middle">
-								Vault
-							</text>
-							<text class="svg-small" x="139" y="327" text-anchor="middle">
-								deposits REP
-							</text>
-							<rect
-								class="svg-green"
-								x="384"
-								y="276"
-								width="200"
-								height="76"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="484" y="308" text-anchor="middle">
-								Pool Accounting
-							</text>
-							<text class="svg-small" x="484" y="333" text-anchor="middle">
-								REP and ETH ledger
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-assets)"
-								d="M 224 306 H 384"
-							></path>
-							<text class="svg-small" x="299" y="293" text-anchor="middle">
-								REP backing
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-assets)"
-								d="M 384 332 H 224"
-							></path>
-							<text class="svg-small" x="309" y="362" text-anchor="middle">
-								fees owed
-							</text>
-							<rect
-								class="svg-red"
-								x="734"
-								y="272"
-								width="170"
-								height="72"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="819" y="304" text-anchor="middle">
-								Truth Auction
-							</text>
-							<text class="svg-small" x="819" y="327" text-anchor="middle">
-								child repair
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-assets)"
-								d="M 734 308 H 584"
-							></path>
-							<text class="svg-small" x="664" y="293" text-anchor="middle">
-								ETH repair
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-assets)"
-								d="M 584 332 H 734"
-							></path>
-							<text class="svg-small" x="654" y="360" text-anchor="middle">
-								child REP sold
-							</text>
-						</svg>
+								repair can sell child REP for ETH.</span></div>
 						<p class="diagram-caption">
 							<span class="figure-label">Asset Flow</span>The pool is the
 							accounting hub: ETH backs complete sets, REP backs underwriting,
@@ -864,6 +479,16 @@
 						the rate as
 						<code>annualFee = 1 - (retentionRate / PRICE_PRECISION)^SECONDS_PER_YEAR</code>.
 					</p>
+					<figure class="diagram" id="fig-statoblast-retention-utilization">
+						<div class="plot-chart" data-plot-chart="fig-statoblast-retention-utilization" data-plot-width="900" data-plot-height="420" role="img" aria-label="Annualized open-interest fee across fee-eligible allowance utilization"><span class="plot-chart-fallback">Retention and utilization curve. The annualized fee rises from roughly 10% at zero utilization to roughly 50% at 80% utilization, then remains flat because the retention rate has reached its minimum.</span></div>
+						<p class="diagram-caption">
+							<span class="figure-label">Retention and Utilization</span>The
+							chart applies the onchain piecewise retention formula and the
+							UI's annualization formula to the exact current constants. The
+							80% rule marks the point where the minimum per-second retention
+							rate begins to apply.
+						</p>
+					</figure>
 
 					<p>
 						When <code>feeEligibleSecurityBondAllowance == 0</code>, the pool
@@ -918,137 +543,9 @@
 						<code>totalAccruedFees()</code>.
 					</p>
 					<figure class="diagram" id="fig-statoblast-pool-accounting">
-						<svg
-							viewBox="0 0 920 310"
-							role="img"
-							aria-labelledby="pool-accounting-title pool-accounting-desc"
-						>
-							<title id="pool-accounting-title">
-								Pool accounting conversions
-							</title>
-							<desc id="pool-accounting-desc">
-								REP deposits mint proportional pool ownership, decayed
+						<div class="plot-chart" data-plot-chart="fig-statoblast-pool-accounting" data-plot-width="920" data-plot-height="310" role="img" aria-label="Pool accounting conversions"><span class="plot-chart-fallback">REP deposits mint proportional pool ownership, decayed
 								collateral increments the fee index, and vault allowances claim
-								fees from that index.
-							</desc>
-							<defs>
-								<marker
-									id="arrow-accounting"
-									viewBox="0 0 10 10"
-									refX="8"
-									refY="5"
-									markerWidth="7"
-									markerHeight="7"
-									orient="auto-start-reverse"
-								>
-									<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-								</marker>
-							</defs>
-							<rect
-								class="svg-blue"
-								x="52"
-								y="58"
-								width="190"
-								height="76"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="147" y="90" text-anchor="middle">
-								REP Amount
-							</text>
-							<text class="svg-small" x="147" y="114" text-anchor="middle">
-								vault collateral
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-accounting)"
-								d="M 242 96 H 332"
-							></path>
-							<rect
-								class="svg-green"
-								x="332"
-								y="58"
-								width="220"
-								height="76"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="442" y="90" text-anchor="middle">
-								Pool Ownership
-							</text>
-							<text class="svg-small" x="442" y="114" text-anchor="middle">
-								proportional claim
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-accounting)"
-								d="M 552 96 H 642"
-							></path>
-							<rect
-								class="svg-gold"
-								x="642"
-								y="58"
-								width="220"
-								height="76"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="752" y="90" text-anchor="middle">
-								Redeemable REP
-							</text>
-							<text class="svg-small" x="752" y="114" text-anchor="middle">
-								inverse conversion
-							</text>
-							<rect
-								class="svg-red"
-								x="112"
-								y="196"
-								width="230"
-								height="76"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="227" y="228" text-anchor="middle">
-								Collateral Decay
-							</text>
-							<text class="svg-small" x="227" y="252" text-anchor="middle">
-								fees produced over time
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-accounting)"
-								d="M 342 234 H 454"
-							></path>
-							<rect
-								class="svg-box"
-								x="454"
-								y="196"
-								width="180"
-								height="76"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="544" y="228" text-anchor="middle">
-								Fee Index
-							</text>
-							<text class="svg-small" x="544" y="252" text-anchor="middle">
-								global accumulator
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-accounting)"
-								d="M 634 234 H 746"
-							></path>
-							<rect
-								class="svg-green"
-								x="746"
-								y="196"
-								width="130"
-								height="76"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="811" y="228" text-anchor="middle">
-								Vault Fees
-							</text>
-							<text class="svg-small" x="811" y="252" text-anchor="middle">
-								by allowance
-							</text>
-						</svg>
+								fees from that index.</span></div>
 						<p class="diagram-caption">
 							<span class="figure-label">Pool Accounting</span>REP ownership and
 							fee accounting use separate proportional ledgers: ownership tracks
@@ -1128,234 +625,19 @@
 						accepting collateral.
 					</p>
 					<figure class="diagram" id="fig-statoblast-share-lifecycle">
-						<svg
-							viewBox="0 0 860 340"
-							role="img"
-							aria-labelledby="shares-title shares-desc"
-						>
-							<title id="shares-title">Complete set lifecycle</title>
-							<desc id="shares-desc">
-								ETH mints Invalid, Yes, and No shares. Operational pools redeem
+						<div class="plot-chart" data-plot-chart="fig-statoblast-share-lifecycle" data-plot-width="860" data-plot-height="340" role="img" aria-label="Complete set lifecycle"><span class="plot-chart-fallback">ETH mints Invalid, Yes, and No shares. Operational pools redeem
 								full sets, and finalized winning shares redeem through outcome
-								settlement.
-							</desc>
-							<defs>
-								<marker
-									id="arrow-shares"
-									viewBox="0 0 10 10"
-									refX="8"
-									refY="5"
-									markerWidth="7"
-									markerHeight="7"
-									orient="auto-start-reverse"
-								>
-									<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-								</marker>
-							</defs>
-							<rect
-								class="svg-blue"
-								x="60"
-								y="44"
-								width="170"
-								height="70"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="145" y="74" text-anchor="middle">
-								User Sends ETH
-							</text>
-							<text class="svg-small" x="145" y="97" text-anchor="middle">
-								createCompleteSet
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-shares)"
-								d="M 230 79 H 310"
-							></path>
-							<rect
-								class="svg-green"
-								x="310"
-								y="44"
-								width="240"
-								height="70"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="430" y="74" text-anchor="middle">
-								Receives Full Set
-							</text>
-							<text class="svg-small" x="430" y="97" text-anchor="middle">
-								Invalid + Yes + No
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-shares)"
-								d="M 390 114 C 350 132 320 144 310 166"
-							></path>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-shares)"
-								d="M 470 114 C 520 132 560 144 580 166"
-							></path>
-							<rect
-								class="svg-gold"
-								x="205"
-								y="166"
-								width="210"
-								height="72"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="310" y="197" text-anchor="middle">
-								Before Finalization
-							</text>
-							<text class="svg-small" x="310" y="214" text-anchor="middle">
-								burn full set
-							</text>
-							<text class="svg-small" x="310" y="230" text-anchor="middle">
-								recover collateral
-							</text>
-							<rect
-								class="svg-blue"
-								x="475"
-								y="166"
-								width="210"
-								height="72"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="580" y="197" text-anchor="middle">
-								After Finalization
-							</text>
-							<text class="svg-small" x="580" y="220" text-anchor="middle">
-								winning leg redeems payout
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-shares)"
-								d="M 310 238 V 252 H 500 V 266"
-							></path>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-shares)"
-								d="M 580 238 V 266"
-							></path>
-							<rect
-								class="svg-green"
-								x="430"
-								y="266"
-								width="220"
-								height="56"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="540" y="300" text-anchor="middle">
-								Collateral Settlement
-							</text>
-						</svg>
+								settlement.</span></div>
 					<p class="diagram-caption">
 						<span class="figure-label">Share Lifecycle</span>Shares are transferable until redemption or the first fork-claim materialization. Materialization preserves the source balance but locks it against later transfer.
 						</p>
 					</figure>
 					<p> Shares can materialize across forks. <code>ShareToken.migrate</code> preserves a parent-universe token id as a persistent entitlement and mints child-universe token ids for selected valid, non-malformed fork outcomes.</p>
 					<figure class="diagram" id="fig-statoblast-share-migration">
-						<svg
-							viewBox="0 0 900 300"
-							role="img"
-							aria-labelledby="share-migration-title share-migration-desc"
-						>
-							<title id="share-migration-title">
-								Share migration materializes persistent branch entitlements
-							</title>
-							<desc id="share-migration-desc">
-								On first materialization into untouched children, the full current
+						<div class="plot-chart" data-plot-chart="fig-statoblast-share-migration" data-plot-width="900" data-plot-height="300" role="img" aria-label="Share migration materializes persistent branch entitlements"><span class="plot-chart-fallback">On first materialization into untouched children, the full current
 								parent balance materializes in each selected child token id while
 								the source remains locked as an entitlement. Later calls mint only
-								the unmaterialized delta for each child.
-							</desc>
-							<defs>
-								<marker
-									id="arrow-share-migrate"
-									viewBox="0 0 10 10"
-									refX="8"
-									refY="5"
-									markerWidth="7"
-									markerHeight="7"
-									orient="auto-start-reverse"
-								>
-									<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-								</marker>
-							</defs>
-							<rect
-								class="svg-red"
-								x="60"
-								y="88"
-								width="210"
-								height="78"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="165" y="119" text-anchor="middle">
-								Parent Token Id
-							</text>
-							<text class="svg-small" x="165" y="143" text-anchor="middle">
-								full holder balance
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-share-migrate)"
-								d="M 270 127 H 365"
-							></path>
-							<rect
-								class="svg-gold"
-								x="365"
-								y="78"
-								width="190"
-								height="98"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="460" y="111" text-anchor="middle">
-								migrate()
-							</text>
-							<text class="svg-small" x="460" y="135" text-anchor="middle">
-								records target delta
-							</text>
-							<text class="svg-small" x="460" y="156" text-anchor="middle">
-								checks sorted targets
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-share-migrate)"
-								d="M 555 112 H 645"
-							></path>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-share-migrate)"
-								d="M 555 145 C 595 198 625 218 675 218"
-							></path>
-							<rect
-								class="svg-green"
-								x="645"
-								y="72"
-								width="200"
-								height="70"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="745" y="103" text-anchor="middle">
-								Child Token A
-							</text>
-							<text class="svg-small" x="745" y="125" text-anchor="middle">
-								first: full balance
-							</text>
-							<rect
-								class="svg-blue"
-								x="675"
-								y="186"
-								width="200"
-								height="70"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="775" y="217" text-anchor="middle">
-								Child Token B
-							</text>
-							<text class="svg-small" x="775" y="239" text-anchor="middle">
-								first: full balance
-							</text>
-						</svg>
+								the unmaterialized delta for each child.</span></div>
 						<p class="diagram-caption">
 							<span class="figure-label">Share Migration</span>Share migration
 							is not a pro-rata split across selected branches. The source
@@ -1437,15 +719,14 @@
 						<p class="security-assumption-ref">
 							<strong>Security assumptions:</strong>
 							<a href="./security-model.html#assumption-a01">A01 risk-adjusted incentives</a>,
-							<a href="./security-model.html#assumption-a05">A05 viable operating costs</a>,
-							<a href="./security-model.html#assumption-a06">A06 timely outcome evidence</a>,
-							<a href="./security-model.html#assumption-a08">A08 independent participants</a>,
-							<a href="./security-model.html#assumption-a10">A10 early alarm capital</a>,
-						<a href="./security-model.html#assumption-a11">A11 REP liquidity</a>,
-						<a href="./security-model.html#assumption-a14">A14 timely inclusion</a>,
-						<a href="./security-model.html#assumption-a15">A15 honest reporter capital</a>,
+							<a href="./security-model.html#assumption-a02">A02 viable operating costs</a>,
+							<a href="./security-model.html#assumption-a10">A10 timely outcome evidence</a>,
+							<a href="./security-model.html#assumption-a03">A03 independent participants</a>,
+							<a href="./security-model.html#assumption-a04">A04 early alarm capital</a>,
+						<a href="./security-model.html#assumption-a13">A13 REP liquidity</a>,
+						<a href="./security-model.html#assumption-a16">A16 timely inclusion</a>,
 						and
-						<a href="./security-model.html#assumption-a21">A21 lifecycle executors</a>.
+						<a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>.
 					</p>
 
 					<div class="callout">
@@ -1531,52 +812,14 @@
 						clamps the endpoints.
 					</p>
 					<figure class="diagram" id="fig-statoblast-escalation-cost-curve">
-						<svg
-							viewBox="0 0 860 300"
-							role="img"
-							aria-labelledby="cost-curve-title cost-curve-desc"
-						>
-							<title id="cost-curve-title">Escalation cost curve</title>
-							<desc id="cost-curve-desc">
-								The required bond rises from the start bond to the non-decision
-								threshold over the full escalation interval.
-							</desc>
-							<line class="svg-line" x1="90" y1="230" x2="780" y2="230"></line>
-							<line class="svg-line" x1="90" y1="230" x2="90" y2="50"></line>
-							<path
-								class="svg-line"
-								data-source="normalizedCost(t) = (exp(2.4 * t) - 1) / (exp(2.4) - 1)"
-								d="M 90 212 L 159 208 L 228 202 L 297 195 L 366 186 L 435 175 L 504 160 L 573 141 L 642 118 L 711 88 L 780 50"
-							></path>
-							<circle class="svg-green" cx="90" cy="212" r="8"></circle>
-							<circle class="svg-red" cx="780" cy="50" r="8"></circle>
-							<text class="svg-label" x="90" y="262" text-anchor="middle">
-								activation
-							</text>
-							<text class="svg-small" x="90" y="282" text-anchor="middle">
-								starting bond
-							</text>
-							<text class="svg-label" x="780" y="262" text-anchor="middle">
-								full interval
-							</text>
-							<text class="svg-small" x="780" y="282" text-anchor="middle">
-								non-decision threshold
-							</text>
-							<text class="svg-label" x="265" y="116" text-anchor="middle">
-								rising attrition cost
-							</text>
-							<text class="svg-small" x="128" y="48" text-anchor="start">
-								required REP
-							</text>
-							<text class="svg-small" x="742" y="222" text-anchor="end">
-								elapsed time
-							</text>
-						</svg>
+						<div class="plot-chart" data-plot-chart="fig-statoblast-escalation-cost-curve" data-plot-width="860" data-plot-height="300" role="img" aria-label="Exponential escalation bond curve from the starting bond to the non-decision threshold"><span class="plot-chart-fallback">The required bond rises exponentially from the start bond to the non-decision
+								threshold over the full escalation interval.</span></div>
 						<p class="diagram-caption">
-							<span class="figure-label">Cost Curve</span>The curve makes delay
-							expensive without jumping immediately to the fork threshold. Early
-							disagreement can settle locally; sustained late disagreement
-							becomes costly enough to justify the non-decision path.
+							<span class="figure-label">Exponential Cost Curve</span>Delay
+							becomes increasingly expensive without jumping immediately to the
+							non-decision threshold: early disagreement can settle locally,
+							while sustained late disagreement becomes costly enough to justify
+							the non-decision path.
 						</p>
 					</figure>
 					<p>
@@ -1769,137 +1012,7 @@
 							</label>
 						</div>
 						<div class="example-visual">
-							<svg
-								viewBox="0 0 760 230"
-								role="img"
-								aria-label="Escalation deposit accepted amount"
-							>
-								<text class="svg-label" x="70" y="34">Before</text>
-								<text class="svg-label" x="405" y="34">
-									After accepted deposit
-								</text>
-								<rect
-									class="example-bar-base"
-									x="80"
-									y="58"
-									width="220"
-									height="24"
-									rx="5"
-								></rect>
-								<rect
-									class="example-bar-blue"
-									x="80"
-									y="58"
-									width="0"
-									height="24"
-									rx="5"
-									data-example-rect="invalidBefore"
-								></rect>
-								<text class="svg-small" x="315" y="76">Invalid</text>
-								<rect
-									class="example-bar-base"
-									x="80"
-									y="102"
-									width="220"
-									height="24"
-									rx="5"
-								></rect>
-								<rect
-									class="example-bar-green"
-									x="80"
-									y="102"
-									width="0"
-									height="24"
-									rx="5"
-									data-example-rect="yesBefore"
-								></rect>
-								<text class="svg-small" x="315" y="120">Yes</text>
-								<rect
-									class="example-bar-base"
-									x="80"
-									y="146"
-									width="220"
-									height="24"
-									rx="5"
-								></rect>
-								<rect
-									class="example-bar-red"
-									x="80"
-									y="146"
-									width="0"
-									height="24"
-									rx="5"
-									data-example-rect="noBefore"
-								></rect>
-								<text class="svg-small" x="315" y="164">No</text>
-								<rect
-									class="example-bar-base"
-									x="420"
-									y="58"
-									width="220"
-									height="24"
-									rx="5"
-								></rect>
-								<rect
-									class="example-bar-blue"
-									x="420"
-									y="58"
-									width="0"
-									height="24"
-									rx="5"
-									data-example-rect="invalidAfter"
-								></rect>
-								<rect
-									class="example-bar-base"
-									x="420"
-									y="102"
-									width="220"
-									height="24"
-									rx="5"
-								></rect>
-								<rect
-									class="example-bar-green"
-									x="420"
-									y="102"
-									width="0"
-									height="24"
-									rx="5"
-									data-example-rect="yesAfter"
-								></rect>
-								<rect
-									class="example-bar-base"
-									x="420"
-									y="146"
-									width="220"
-									height="24"
-									rx="5"
-								></rect>
-								<rect
-									class="example-bar-red"
-									x="420"
-									y="146"
-									width="110"
-									height="24"
-									rx="5"
-									data-example-rect="noAfter"
-								></rect>
-								<line
-									class="svg-line"
-									x1="80"
-									y1="190"
-									x2="640"
-									y2="190"
-								></line>
-								<text
-									class="svg-small"
-									x="640"
-									y="211"
-									text-anchor="end"
-									data-example-text="thresholdText"
-								>
-									threshold 10 REP
-								</text>
-							</svg>
+							<div class="plot-chart" data-plot-chart="plot-statoblast-whitepaper-7" data-plot-width="760" data-plot-height="230" role="img" aria-label="Escalation deposit accepted amount"><span class="plot-chart-fallback">Escalation deposit accepted amount</span></div>
 						</div>
 						<div class="example-output-grid">
 							<div>
@@ -2003,85 +1116,7 @@
 							</label>
 						</div>
 						<div class="example-visual">
-							<svg
-								viewBox="0 0 760 210"
-								role="img"
-								aria-label="Resolution balances against running cost"
-							>
-								<text class="svg-label" x="80" y="30">
-									Balances compared with running cost
-								</text>
-								<rect
-									class="example-bar-base"
-									x="90"
-									y="50"
-									width="520"
-									height="24"
-									rx="5"
-								></rect>
-								<rect
-									class="example-bar-blue"
-									x="90"
-									y="50"
-									width="104"
-									height="24"
-									rx="5"
-									data-example-rect="resolutionInvalid"
-								></rect>
-								<text class="svg-small" x="625" y="68">Invalid</text>
-								<rect
-									class="example-bar-base"
-									x="90"
-									y="92"
-									width="520"
-									height="24"
-									rx="5"
-								></rect>
-								<rect
-									class="example-bar-green"
-									x="90"
-									y="92"
-									width="156"
-									height="24"
-									rx="5"
-									data-example-rect="resolutionYes"
-								></rect>
-								<text class="svg-small" x="625" y="110">Yes</text>
-								<rect
-									class="example-bar-base"
-									x="90"
-									y="134"
-									width="520"
-									height="24"
-									rx="5"
-								></rect>
-								<rect
-									class="example-bar-red"
-									x="90"
-									y="134"
-									width="156"
-									height="24"
-									rx="5"
-									data-example-rect="resolutionNo"
-								></rect>
-								<text class="svg-small" x="625" y="152">No</text>
-								<line
-									class="svg-line"
-									x1="220"
-									y1="40"
-									x2="220"
-									y2="174"
-								></line>
-								<text
-									class="svg-small"
-									x="220"
-									y="194"
-									text-anchor="middle"
-									data-example-text="resolutionCostMarker"
-								>
-									cost 5 REP
-								</text>
-							</svg>
+							<div class="plot-chart" data-plot-chart="plot-statoblast-whitepaper-8" data-plot-width="760" data-plot-height="210" role="img" aria-label="Resolution balances against running cost"><span class="plot-chart-fallback">Resolution balances against running cost</span></div>
 						</div>
 						<div class="example-output-grid">
 							<div>
@@ -2109,137 +1144,10 @@
 						later instead of restarting from zero.
 					</p>
 					<figure class="diagram" id="fig-statoblast-non-decision-flow">
-						<svg
-							viewBox="0 0 860 365"
-							role="img"
-							aria-labelledby="escalation-title escalation-desc"
-						>
-							<title id="escalation-title">Escalation thresholds</title>
-							<desc id="escalation-desc">
-								Outcome balances are compared to running total cost for local
+						<div class="plot-chart" data-plot-chart="fig-statoblast-non-decision-flow" data-plot-width="860" data-plot-height="365" role="img" aria-label="Escalation thresholds"><span class="plot-chart-fallback">Outcome balances are compared to running total cost for local
 								resolution and to the fixed non-decision threshold for a local
 								game's fork eligibility. A pool with an inherited fixed outcome
-								rejects both new local deposits and fork activation.
-							</desc>
-							<defs>
-								<marker
-									id="arrow-esc"
-									viewBox="0 0 10 10"
-									refX="8"
-									refY="5"
-									markerWidth="7"
-									markerHeight="7"
-									orient="auto-start-reverse"
-								>
-									<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-								</marker>
-							</defs>
-							<rect
-								class="svg-box"
-								x="58"
-								y="46"
-								width="210"
-								height="118"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="163" y="82" text-anchor="middle">
-								Tracked Balances
-							</text>
-							<text class="svg-small" x="163" y="110" text-anchor="middle">
-								Invalid
-							</text>
-							<text class="svg-small" x="163" y="132" text-anchor="middle">
-								Yes
-							</text>
-							<text class="svg-small" x="163" y="154" text-anchor="middle">
-								No
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-esc)"
-								d="M 268 105 H 355"
-							></path>
-							<rect
-								class="svg-blue"
-								x="355"
-								y="46"
-								width="230"
-								height="118"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="470" y="82" text-anchor="middle">
-								Running totalCost()
-							</text>
-							<text class="svg-small" x="470" y="108" text-anchor="middle">
-								two sides at or above
-							</text>
-							<text class="svg-small" x="470" y="130" text-anchor="middle">
-								threshold means unresolved
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-esc)"
-								d="M 585 105 H 672"
-							></path>
-							<rect
-								class="svg-green"
-								x="672"
-								y="46"
-								width="150"
-								height="118"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="747" y="96" text-anchor="middle">
-								Local
-							</text>
-							<text class="svg-label" x="747" y="120" text-anchor="middle">
-								Resolution
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-esc)"
-								d="M 470 164 V 226"
-							></path>
-							<rect
-								class="svg-red"
-								x="340"
-								y="226"
-								width="260"
-								height="84"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="470" y="260" text-anchor="middle">
-								Non-Decision Threshold
-							</text>
-							<text class="svg-small" x="470" y="279" text-anchor="middle">
-								two or more outcomes
-							</text>
-							<text class="svg-small" x="470" y="299" text-anchor="middle">
-								reach fixed threshold
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-esc)"
-								d="M 600 268 H 690"
-							></path>
-							<rect
-								class="svg-gold"
-								x="690"
-								y="226"
-								width="132"
-								height="84"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="756" y="260" text-anchor="middle">
-								Game-Local
-							</text>
-							<text class="svg-label" x="756" y="284" text-anchor="middle">
-								Eligibility
-							</text>
-							<text class="svg-micro" x="756" y="302" text-anchor="middle">
-								pool guard still applies
-							</text>
-						</svg>
+								rejects both new local deposits and fork activation.</span></div>
 						<p class="diagram-caption">
 							<span class="figure-label">Non-Decision Flow</span>A live
 							unresolved contest is not the same as the stronger non-decision
@@ -2290,63 +1198,8 @@
 						drives timeout and payout logic.
 					</p>
 					<figure class="diagram" id="fig-statoblast-payout-regions">
-						<svg
-							viewBox="0 0 860 220"
-							role="img"
-							aria-labelledby="payout-title payout-desc"
-						>
-							<title id="payout-title">Escalation payout regions</title>
-							<desc id="payout-desc">
-								Winning deposits below binding capital and in the safety
-								boundary share rewards, while excess receives principal only.
-							</desc>
-							<line class="svg-line" x1="70" y1="105" x2="790" y2="105"></line>
-							<rect
-								class="svg-green"
-								x="90"
-								y="75"
-								width="260"
-								height="60"
-								rx="8"
-							></rect>
-							<rect
-								class="svg-gold"
-								x="350"
-								y="75"
-								width="150"
-								height="60"
-								rx="8"
-							></rect>
-							<rect
-								class="svg-box"
-								x="500"
-								y="75"
-								width="250"
-								height="60"
-								rx="8"
-							></rect>
-							<text class="svg-label" x="220" y="110" text-anchor="middle">
-								Binding capital
-							</text>
-							<text class="svg-label" x="425" y="100" text-anchor="middle">
-								Safety
-							</text>
-							<text class="svg-label" x="425" y="120" text-anchor="middle">
-								boundary
-							</text>
-							<text class="svg-label" x="625" y="110" text-anchor="middle">
-								Excess
-							</text>
-							<text class="svg-small" x="220" y="154" text-anchor="middle">
-								principal plus pro-rata reward
-							</text>
-							<text class="svg-small" x="425" y="154" text-anchor="middle">
-								same reward pool
-							</text>
-							<text class="svg-small" x="625" y="154" text-anchor="middle">
-								principal only
-							</text>
-						</svg>
+						<div class="plot-chart" data-plot-chart="fig-statoblast-payout-regions" data-plot-width="860" data-plot-height="220" role="img" aria-label="Escalation payout regions"><span class="plot-chart-fallback">Winning deposits below binding capital and in the safety
+								boundary share rewards, while excess receives principal only.</span></div>
 						<p class="diagram-caption">
 							<span class="figure-label">Payout Regions</span>Winning deposits
 							below binding capital and in the safety boundary share rewards,
@@ -2657,18 +1510,15 @@
 					</p>
 					<p class="security-assumption-ref">
 						<strong>Security assumptions:</strong>
-						<a href="./security-model.html#assumption-a02">A02 fork value preservation</a>,
-						<a href="./security-model.html#assumption-a04">A04 truthful-branch preference</a>,
-						<a href="./security-model.html#assumption-a06">A06 timely outcome evidence</a>,
-						<a href="./security-model.html#assumption-a07">A07 practical migration</a>,
-						<a href="./security-model.html#assumption-a13">A13 lineage access value</a>,
-						<a href="./security-model.html#assumption-a14">A14 timely inclusion</a>,
-						<a href="./security-model.html#assumption-a21">A21 lifecycle executors</a>,
-						<a href="./security-model.html#assumption-a22">A22 chain-data availability</a>,
+						<a href="./security-model.html#assumption-a07">A07 fork value preservation</a>,
+						<a href="./security-model.html#assumption-a09">A09 truthful-branch preference</a>,
+						<a href="./security-model.html#assumption-a10">A10 timely outcome evidence</a>,
+						<a href="./security-model.html#assumption-a11">A11 practical migration</a>,
+						<a href="./security-model.html#assumption-a05">A05 lineage access value</a>,
+						<a href="./security-model.html#assumption-a16">A16 timely inclusion</a>,
+						<a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>,
 						and
-						<a href="./security-model.html#assumption-a27"
-							>A27 permissionless-fork alignment</a
-						>.
+						<a href="./security-model.html#assumption-a20">A20 chain-data availability</a>.
 					</p>
 
 					<table>
@@ -2707,162 +1557,9 @@
 					</table>
 					<p><code>SystemState</code> is primarily a fork-and-migration state machine, not a generic question-resolution state machine. A pool finalized before a late, unrelated universe fork can retain <code>SystemState.Operational</code>. Its <code>isOperational</code>-guarded activity still freezes because that modifier separately checks the universe fork time, while finalized share, REP, and eligible escalation-deposit redemption paths that check only the stored state remain callable. </p>
 					<figure class="diagram" id="fig-statoblast-fork-state-machine">
-						<svg
-							viewBox="0 0 960 340"
-							role="img"
-							aria-labelledby="state-machine-title state-machine-desc"
-						>
-							<title id="state-machine-title">
-								SecurityPool fork state machine
-							</title>
-							<desc id="state-machine-desc">
-								Contract states and conditional transition functions from an
+						<div class="plot-chart" data-plot-chart="fig-statoblast-fork-state-machine" data-plot-width="960" data-plot-height="340" role="img" aria-label="SecurityPool fork state machine"><span class="plot-chart-fallback">Contract states and conditional transition functions from an
 								operational parent through migration and bounded truth-auction
-								settlement to an operational child.
-							</desc>
-							<defs>
-								<marker
-									id="arrow-state"
-									viewBox="0 0 10 10"
-									refX="8"
-									refY="5"
-									markerWidth="7"
-									markerHeight="7"
-									orient="auto-start-reverse"
-								>
-									<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-								</marker>
-							</defs>
-							<rect
-								class="svg-green"
-								data-state="Operational"
-								data-pool-role="parent"
-								x="50"
-								y="70"
-								width="170"
-								height="78"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="135" y="102" text-anchor="middle">
-								Operational
-							</text>
-							<text class="svg-small" x="135" y="126" text-anchor="middle">
-								parent pool
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-state)"
-								data-transition="Operational->PoolForked"
-								d="M 220 109 H 300"
-							></path>
-							<text class="svg-micro" x="260" y="92" text-anchor="middle">
-								fork mode
-							</text>
-							<rect
-								class="svg-red"
-								data-state="PoolForked"
-								data-pool-role="parent"
-								x="300"
-								y="70"
-								width="170"
-								height="78"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="385" y="102" text-anchor="middle">
-								PoolForked
-							</text>
-							<text class="svg-small" x="385" y="126" text-anchor="middle">
-								parent halted
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-state)"
-								data-transition="PoolForked->ForkMigration"
-								data-boundary="parent-to-child"
-								d="M 470 109 H 550"
-							></path>
-							<text class="svg-micro" x="510" y="92" text-anchor="middle">
-								create child
-							</text>
-							<rect
-								class="svg-blue"
-								data-state="ForkMigration"
-								data-pool-role="child"
-								x="550"
-								y="70"
-								width="170"
-								height="78"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="635" y="102" text-anchor="middle">
-								ForkMigration
-							</text>
-							<text class="svg-small" x="635" y="126" text-anchor="middle">
-								child pool
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-state)"
-								data-transition="ForkMigration->ForkTruthAuction"
-								d="M 635 148 V 218"
-							></path>
-							<text class="svg-micro" x="742" y="187" text-anchor="middle">
-								start auction
-							</text>
-							<rect
-								class="svg-gold"
-								data-state="ForkTruthAuction"
-								data-pool-role="child"
-								x="550"
-								y="218"
-								width="170"
-								height="78"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="635" y="244" text-anchor="middle">
-								Fork Truth
-							</text>
-							<text class="svg-label" x="635" y="264" text-anchor="middle">
-								Auction
-							</text>
-							<text class="svg-small" x="635" y="285" text-anchor="middle">
-								repair phase
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-state)"
-								data-transition="ForkTruthAuction->Operational"
-								d="M 720 257 H 800"
-							></path>
-							<text class="svg-micro" x="760" y="240" text-anchor="middle">
-								finalized
-							</text>
-							<rect
-								class="svg-green"
-								data-state="Operational"
-								data-pool-role="child"
-								x="800"
-								y="218"
-								width="120"
-								height="78"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="860" y="250" text-anchor="middle">
-								Operational
-							</text>
-							<text class="svg-small" x="860" y="274" text-anchor="middle">
-								bids accounted
-							</text>
-							<text class="svg-micro" x="760" y="320" text-anchor="middle">
-								immediate if no auction is needed
-							</text>
-							<text class="svg-small" x="386" y="184" text-anchor="middle">
-								migration calls
-							</text>
-							<text class="svg-micro" x="386" y="204" text-anchor="middle">
-								vaults, REP, unresolved escalation
-							</text>
-						</svg>
+								settlement to an operational child.</span></div>
 						<p class="diagram-caption">
 							<span class="figure-label">Fork State Machine</span>When fork
 							handling is activated, the parent moves to
@@ -2985,123 +1682,9 @@
 						</table>
 					</div>
 					<figure class="diagram" id="fig-statoblast-migration-flow">
-						<svg
-							viewBox="0 0 860 330"
-							role="img"
-							aria-labelledby="migration-title migration-desc"
-						>
-							<title id="migration-title">
-								Fork migration responsibilities
-							</title>
-							<desc id="migration-desc">
-								After a Zoltar fork, Statoblast migrates vaults, collateral, and
+						<div class="plot-chart" data-plot-chart="fig-statoblast-migration-flow" data-plot-width="860" data-plot-height="330" role="img" aria-label="Fork migration responsibilities"><span class="plot-chart-fallback">After a Zoltar fork, Statoblast migrates vaults, collateral, and
 								shares. Child creation separately reproduces unresolved escalation
-								state and aggregate backing once.
-							</desc>
-							<defs>
-								<marker
-									id="arrow-mig"
-									viewBox="0 0 10 10"
-									refX="8"
-									refY="5"
-									markerWidth="7"
-									markerHeight="7"
-									orient="auto-start-reverse"
-								>
-									<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-								</marker>
-							</defs>
-							<rect
-								class="svg-red"
-								x="60"
-								y="112"
-								width="180"
-								height="86"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="150" y="146" text-anchor="middle">
-								Parent Pool
-							</text>
-							<text class="svg-small" x="150" y="170" text-anchor="middle">
-								fork mode
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-mig)"
-								d="M 240 155 H 330"
-							></path>
-							<rect
-								class="svg-blue"
-								x="330"
-								y="54"
-								width="210"
-								height="70"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="435" y="84" text-anchor="middle">
-								migrateVault
-							</text>
-							<text class="svg-small" x="435" y="107" text-anchor="middle">
-								ownership and allowance
-							</text>
-							<rect
-								class="svg-gold"
-								x="330"
-								y="136"
-								width="210"
-								height="70"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="435" y="166" text-anchor="middle">
-								Escalation Carry
-							</text>
-							<text class="svg-small" x="435" y="189" text-anchor="middle">
-								snapshot + backing once
-							</text>
-							<rect
-								class="svg-box"
-								x="330"
-								y="218"
-								width="210"
-								height="70"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="435" y="248" text-anchor="middle">
-								Share Migration
-							</text>
-							<text class="svg-small" x="435" y="271" text-anchor="middle">
-								ERC-1155 token ids
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-mig)"
-								d="M 540 89 C 580 89 595 136 635 136"
-							></path>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-mig)"
-								d="M 540 171 H 635"
-							></path>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-mig)"
-								d="M 540 253 C 580 253 595 174 635 174"
-							></path>
-							<rect
-								class="svg-green"
-								x="635"
-								y="112"
-								width="180"
-								height="86"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="725" y="146" text-anchor="middle">
-								Child Pool
-							</text>
-							<text class="svg-small" x="725" y="170" text-anchor="middle">
-								selected universe
-							</text>
-						</svg>
+								state and aggregate backing once.</span></div>
 						<p class="diagram-caption">
 							<span class="figure-label">Pool Migration Flow</span>The Zoltar
 							fork and Statoblast pool migration are related, but they are not
@@ -3127,90 +1710,8 @@
 						on the pool’s behalf.
 					</p>
 					<figure class="diagram" id="fig-statoblast-migration-proxy">
-						<svg
-							viewBox="0 0 920 300"
-							role="img"
-							aria-labelledby="migration-proxy-title migration-proxy-desc"
-						>
-							<title id="migration-proxy-title">
-								Pool-specific migration proxy
-							</title>
-							<desc id="migration-proxy-desc">
-								The forker controls one deterministic proxy per parent pool, and
-								the proxy is the caller recorded by Zoltar migration accounting.
-							</desc>
-							<defs>
-								<marker
-									id="arrow-proxy"
-									viewBox="0 0 10 10"
-									refX="8"
-									refY="5"
-									markerWidth="7"
-									markerHeight="7"
-									orient="auto-start-reverse"
-								>
-									<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-								</marker>
-							</defs>
-							<rect
-								class="svg-blue"
-								x="50"
-								y="82"
-								width="210"
-								height="82"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="155" y="114" text-anchor="middle">
-								SecurityPoolForker
-							</text>
-							<text class="svg-small" x="155" y="138" text-anchor="middle">
-								owner and coordinator
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-proxy)"
-								d="M 260 123 H 360"
-							></path>
-							<rect
-								class="svg-gold"
-								x="360"
-								y="70"
-								width="220"
-								height="106"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="470" y="101" text-anchor="middle">
-								Migration Proxy
-							</text>
-							<text class="svg-small" x="470" y="126" text-anchor="middle">
-								one CREATE2 address
-							</text>
-							<text class="svg-small" x="470" y="148" text-anchor="middle">
-								per parent pool
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-proxy)"
-								d="M 580 123 H 680"
-							></path>
-							<rect
-								class="svg-green"
-								x="680"
-								y="82"
-								width="190"
-								height="82"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="775" y="114" text-anchor="middle">
-								Zoltar
-							</text>
-							<text class="svg-small" x="775" y="138" text-anchor="middle">
-								migration ledger
-							</text>
-							<text class="svg-micro" x="470" y="225" text-anchor="middle">
-								ledger key = proxy address, not the vault address
-							</text>
-						</svg>
+						<div class="plot-chart" data-plot-chart="fig-statoblast-migration-proxy" data-plot-width="920" data-plot-height="300" role="img" aria-label="Pool-specific migration proxy"><span class="plot-chart-fallback">The forker controls one deterministic proxy per parent pool, and
+								the proxy is the caller recorded by Zoltar migration accounting.</span></div>
 						<p class="diagram-caption">
 							<span class="figure-label">Migration Proxy</span>The proxy is a
 							thin adapter, but it is economically important because Zoltar
@@ -3238,123 +1739,9 @@
 						.
 					</p>
 					<figure class="diagram" id="fig-statoblast-proportional-migration">
-						<svg
-							viewBox="0 0 940 330"
-							role="img"
-							aria-labelledby="proportional-migration-title proportional-migration-desc"
-						>
-							<title id="proportional-migration-title">
-								Proportional migration accounting
-							</title>
-							<desc id="proportional-migration-desc">
-								Parent pool ownership determines migrated REP, and migrated REP
+						<div class="plot-chart" data-plot-chart="fig-statoblast-proportional-migration" data-plot-width="940" data-plot-height="330" role="img" aria-label="Proportional migration accounting"><span class="plot-chart-fallback">Parent pool ownership determines migrated REP, and migrated REP
 								determines the child collateral transferred from the parent
-								collateral baseline.
-							</desc>
-							<defs>
-								<marker
-									id="arrow-proportional-migration"
-									viewBox="0 0 10 10"
-									refX="8"
-									refY="5"
-									markerWidth="7"
-									markerHeight="7"
-									orient="auto-start-reverse"
-								>
-									<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-								</marker>
-							</defs>
-							<rect
-								class="svg-red"
-								x="48"
-								y="72"
-								width="220"
-								height="82"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="158" y="104" text-anchor="middle">
-								Parent Ownership
-							</text>
-							<text class="svg-small" x="158" y="130" text-anchor="middle">
-								vault's denominator share
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-proportional-migration)"
-								d="M 268 113 H 360"
-							></path>
-							<rect
-								class="svg-blue"
-								x="360"
-								y="72"
-								width="220"
-								height="82"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="470" y="104" text-anchor="middle">
-								Migrated REP
-							</text>
-							<text class="svg-small" x="470" y="130" text-anchor="middle">
-								parent REP at fork share
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-proportional-migration)"
-								d="M 580 113 H 672"
-							></path>
-							<rect
-								class="svg-green"
-								x="672"
-								y="72"
-								width="220"
-								height="82"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="782" y="104" text-anchor="middle">
-								Child Collateral
-							</text>
-							<text class="svg-small" x="782" y="130" text-anchor="middle">
-								same REP fraction of ETH
-							</text>
-							<rect
-								class="svg-gold"
-								x="208"
-								y="218"
-								width="220"
-								height="68"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="318" y="246" text-anchor="middle">
-								Parent REP at fork
-							</text>
-							<text class="svg-small" x="318" y="266" text-anchor="middle">
-								normalization anchor
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-proportional-migration)"
-								d="M 318 218 C 340 182 386 160 430 154"
-							></path>
-							<rect
-								class="svg-box"
-								x="512"
-								y="218"
-								width="220"
-								height="68"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="622" y="246" text-anchor="middle">
-								Parent Collateral
-							</text>
-							<text class="svg-small" x="622" y="266" text-anchor="middle">
-								transferred by REP share
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-proportional-migration)"
-								d="M 622 218 C 656 184 700 164 746 154"
-							></path>
-						</svg>
+								collateral baseline.</span></div>
 						<p class="diagram-caption">
 							<span class="figure-label">Proportional Migration</span>Vault
 							migration first converts parent pool ownership into migrated REP,
@@ -3517,123 +1904,9 @@
 						bucket and an escalation bucket before child migration resumes.
 					</p>
 					<figure class="diagram" id="fig-statoblast-own-fork-rep-buckets">
-						<svg
-							viewBox="0 0 940 340"
-							role="img"
-							aria-labelledby="own-fork-buckets-title own-fork-buckets-desc"
-						>
-							<title id="own-fork-buckets-title">
-								Own-fork REP bucket split
-							</title>
-							<desc id="own-fork-buckets-desc">
-								Pool REP and unresolved escalation REP enter one Zoltar fork
+						<div class="plot-chart" data-plot-chart="fig-statoblast-own-fork-rep-buckets" data-plot-width="940" data-plot-height="340" role="img" aria-label="Own-fork REP bucket split"><span class="plot-chart-fallback">Pool REP and unresolved escalation REP enter one Zoltar fork
 								balance. Ordinary pool REP remains in the vault bucket at 1:1,
-								while the fork haircut is deducted from escalation aggregate backing.
-							</desc>
-							<defs>
-								<marker
-									id="arrow-own-fork-buckets"
-									viewBox="0 0 10 10"
-									refX="8"
-									refY="5"
-									markerWidth="7"
-									markerHeight="7"
-									orient="auto-start-reverse"
-								>
-									<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-								</marker>
-							</defs>
-							<rect
-								class="svg-blue"
-								x="56"
-								y="54"
-								width="220"
-								height="76"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="166" y="85" text-anchor="middle">
-								Pool REP
-							</text>
-							<text class="svg-small" x="166" y="108" text-anchor="middle">
-								vault ownership source
-							</text>
-							<rect
-								class="svg-gold"
-								x="56"
-								y="204"
-								width="220"
-								height="76"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="166" y="235" text-anchor="middle">
-								Escalation REP
-							</text>
-							<text class="svg-small" x="166" y="258" text-anchor="middle">
-								unresolved locks
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-own-fork-buckets)"
-								d="M 276 92 C 344 100 378 124 420 158"
-							></path>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-own-fork-buckets)"
-								d="M 276 242 C 344 234 378 210 420 176"
-							></path>
-							<rect
-								class="svg-red"
-								x="420"
-								y="124"
-								width="220"
-								height="86"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="530" y="157" text-anchor="middle">
-								Zoltar Fork Balance
-							</text>
-							<text class="svg-small" x="530" y="182" text-anchor="middle">
-								auctionable child REP
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-own-fork-buckets)"
-									d="M 640 150 C 680 126 692 100 720 92"
-							></path>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-own-fork-buckets)"
-									d="M 640 184 C 680 210 692 234 720 242"
-							></path>
-							<rect
-								class="svg-green"
-								x="720"
-								y="54"
-								width="200"
-								height="76"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="820" y="84" text-anchor="middle">
-								Vault Bucket
-							</text>
-							<text class="svg-small" x="820" y="107" text-anchor="middle">
-								migrate vaults
-							</text>
-							<rect
-								class="svg-box"
-								x="720"
-								y="204"
-								width="200"
-								height="76"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="820" y="234" text-anchor="middle">
-								Escalation Backing
-							</text>
-							<text class="svg-small" x="820" y="257" text-anchor="middle">
-								game REP minus haircut
-							</text>
-						</svg>
+								while the fork haircut is deducted from escalation aggregate backing.</span></div>
 						<p class="diagram-caption">
 							<span class="figure-label">Own-Fork REP Buckets</span>In an own
 							fork, the drained escalation-game REP pays the fork haircut and the
@@ -3816,165 +2089,14 @@
 						possible answers to the pool's original London-temperature question.
 					</p>
 					<figure class="diagram" id="fig-statoblast-recursive-continuation">
-						<svg
-							viewBox="0 0 980 520"
-							role="img"
-							aria-labelledby="recursive-title recursive-desc"
-						>
-							<title id="recursive-title">
-								Recursive fork-continuation flow
-							</title>
-							<desc id="recursive-desc">
-								A caller invokes Zoltar to fork a universe while one of its security pools has
+						<div class="plot-chart" data-plot-chart="fig-statoblast-recursive-continuation" data-plot-width="980" data-plot-height="520" role="img" aria-label="Recursive fork-continuation flow"><span class="plot-chart-fallback">A caller invokes Zoltar to fork a universe while one of its security pools has
 								an unresolved escalation. Later, migration into selected child branches deploys child pools
 								and initializes paused continuation games. Canonical snapshot state supplies each selected
 								child's proof baseline, aggregate REP supplies physical backing once, and
 								authenticated winning proofs pay their recorded depositors. Only a
 								continuation pool without a fixed outcome may fork again; within that
 								boundary, a local non-decision or inherited threshold tie makes its game
-								eligible for the security-pool fork path.
-							</desc>
-							<defs>
-								<marker
-									id="arrow-recursive"
-									viewBox="0 0 10 10"
-									refX="8"
-									refY="5"
-									markerWidth="7"
-									markerHeight="7"
-									orient="auto-start-reverse"
-								>
-									<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-								</marker>
-							</defs>
-							<rect
-								class="svg-gold"
-								x="360"
-								y="36"
-								width="260"
-								height="86"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="490" y="70" text-anchor="middle">
-								Parent Escalation
-							</text>
-							<text class="svg-small" x="490" y="94" text-anchor="middle">
-								unresolved across outcomes
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-recursive)"
-								d="M 490 122 V 176"
-							></path>
-							<rect
-								class="svg-red"
-								x="350"
-								y="176"
-								width="280"
-								height="78"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="490" y="207" text-anchor="middle">
-								Zoltar Fork
-							</text>
-							<text class="svg-small" x="490" y="230" text-anchor="middle">
-								selected branches created lazily
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-recursive)"
-								d="M 350 215 C 265 225 207 252 176 296"
-							></path>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-recursive)"
-								d="M 490 254 V 296"
-							></path>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-recursive)"
-								d="M 630 215 C 715 225 773 252 804 296"
-							></path>
-							<rect
-								class="svg-blue"
-								x="72"
-								y="296"
-								width="220"
-								height="92"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="182" y="328" text-anchor="middle">
-								Invalid Child
-							</text>
-							<text class="svg-small" x="182" y="352" text-anchor="middle">
-								paused continuation game
-							</text>
-							<text class="svg-micro" x="182" y="371" text-anchor="middle">
-								original deposit
-							</text>
-							<text class="svg-micro" x="182" y="386" text-anchor="middle">
-								outcomes preserved
-							</text>
-							<rect
-								class="svg-green"
-								x="380"
-								y="296"
-								width="220"
-								height="92"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="490" y="328" text-anchor="middle">
-								Yes Child
-							</text>
-							<text class="svg-small" x="490" y="352" text-anchor="middle">
-								paused continuation game
-							</text>
-							<text class="svg-micro" x="490" y="373" text-anchor="middle">
-								migration window, then resume
-							</text>
-							<rect
-								class="svg-blue"
-								x="688"
-								y="296"
-								width="220"
-								height="92"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="798" y="328" text-anchor="middle">
-								No Child
-							</text>
-							<text class="svg-small" x="798" y="352" text-anchor="middle">
-								paused continuation game
-							</text>
-							<text class="svg-micro" x="798" y="373" text-anchor="middle">
-								same inherited carry baseline
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-recursive)"
-								d="M 490 388 V 426"
-							></path>
-							<rect
-								class="svg-gold"
-								x="350"
-								y="426"
-								width="280"
-								height="82"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="490" y="450" text-anchor="middle">
-								Continuation
-							</text>
-						<text class="svg-label" x="490" y="470" text-anchor="middle">
-							Can Fork Again
-						</text>
-						<text class="svg-small" x="490" y="489" text-anchor="middle">
-							pool has no fixed outcome
-						</text>
-						<text class="svg-micro" x="490" y="506" text-anchor="middle">
-							local or inherited game trigger
-						</text>
-						</svg>
+								eligible for the security-pool fork path.</span></div>
 						<p class="diagram-caption">
 							<span class="figure-label">Recursive Continuation</span>Each child
 							continuation game receives the same canonical proof snapshot and aggregate
@@ -3985,120 +2107,9 @@
 						</p>
 					</figure>
 					<figure class="diagram" id="fig-statoblast-carry-snapshot">
-						<svg
-							viewBox="0 0 920 470"
-							role="img"
-							aria-labelledby="carry-detail-title carry-detail-desc"
-						>
-							<title id="carry-detail-title">
-								Separate recursive continuation accounting lanes
-							</title>
-							<desc id="carry-detail-desc">
-								Current balances, carry, and nullifiers form the canonical next
+						<div class="plot-chart" data-plot-chart="fig-statoblast-carry-snapshot" data-plot-width="920" data-plot-height="470" role="img" aria-label="Separate recursive continuation accounting lanes"><span class="plot-chart-fallback">Current balances, carry, and nullifiers form the canonical next
 								snapshot. Remaining aggregate REP funds child backing once. Winning proofs
-								authenticate their recorded depositors, while inherited losers retire without proofs.
-							</desc>
-							<defs>
-								<marker
-									id="arrow-carry"
-									viewBox="0 0 10 10"
-									refX="8"
-									refY="5"
-									markerWidth="7"
-									markerHeight="7"
-									orient="auto-start-reverse"
-								>
-									<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-								</marker>
-							</defs>
-							<rect
-								class="svg-blue"
-								x="54"
-								y="40"
-								width="250"
-								height="82"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="179" y="73" text-anchor="middle">
-								Current Game State
-							</text>
-							<text class="svg-small" x="179" y="98" text-anchor="middle">
-								balances + carry + nullifiers
-							</text>
-							<rect
-								class="svg-green"
-								x="644"
-								y="40"
-								width="240"
-								height="82"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="764" y="73" text-anchor="middle">
-								Canonical Snapshot
-							</text>
-							<text class="svg-micro" x="764" y="98" text-anchor="middle">
-								reused by every selected child
-							</text>
-							<path class="svg-line" marker-end="url(#arrow-carry)" d="M 304 81 H 644"></path>
-							<rect
-								class="svg-gold"
-								x="54"
-								y="180"
-								width="250"
-								height="82"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="179" y="205" text-anchor="middle">
-								Remaining Aggregate
-							</text>
-							<text class="svg-label" x="179" y="225" text-anchor="middle">
-								REP
-							</text>
-							<text class="svg-micro" x="179" y="247" text-anchor="middle">
-								locked once at the fork
-							</text>
-							<rect
-								class="svg-green"
-								x="644"
-								y="180"
-								width="240"
-								height="82"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="764" y="205" text-anchor="middle">
-								Physical Child
-							</text>
-							<text class="svg-label" x="764" y="225" text-anchor="middle">
-								Backing
-							</text>
-							<text class="svg-micro" x="764" y="247" text-anchor="middle">
-								complete backing per selected child
-							</text>
-							<path class="svg-line" marker-end="url(#arrow-carry)" d="M 304 221 H 644"></path>
-							<rect class="svg-blue" x="54" y="330" width="250" height="82" rx="10"></rect>
-							<text class="svg-label" x="179" y="363" text-anchor="middle">
-								Final Winning Outcome
-							</text>
-							<text class="svg-small" x="179" y="388" text-anchor="middle">
-								inherited losers retire
-							</text>
-							<rect class="svg-gold" x="354" y="330" width="220" height="82" rx="10"></rect>
-							<text class="svg-label" x="464" y="363" text-anchor="middle">
-								Winning Carry Proof
-							</text>
-							<text class="svg-small" x="464" y="388" text-anchor="middle">
-								relayed permissionlessly
-							</text>
-							<rect class="svg-red" x="644" y="330" width="240" height="82" rx="10"></rect>
-							<text class="svg-label" x="764" y="363" text-anchor="middle">
-								Authenticated Payout
-							</text>
-							<text class="svg-small" x="764" y="388" text-anchor="middle">
-								to recorded depositor
-							</text>
-							<path class="svg-line" marker-end="url(#arrow-carry)" d="M 304 371 H 354"></path>
-							<path class="svg-line" marker-end="url(#arrow-carry)" d="M 574 371 H 644"></path>
-						</svg>
+								authenticate their recorded depositors, while inherited losers retire without proofs.</span></div>
 						<p class="diagram-caption">
 							<span class="figure-label">Recursive Accounting</span>The next canonical
 							snapshot and aggregate backing move once per selected child. At final
@@ -4225,194 +2236,9 @@
 						claimable through their separate withdrawal path.
 					</p>
 					<figure class="diagram" id="fig-statoblast-system-decision-flow">
-						<svg
-							viewBox="0 0 940 500"
-							role="img"
-							aria-labelledby="system-flow-title system-flow-desc"
-						>
-							<title id="system-flow-title">Whole-system decision flow</title>
-							<desc id="system-flow-desc">
-								Question, pool, escalation, fork, child migration, auction
+						<div class="plot-chart" data-plot-chart="fig-statoblast-system-decision-flow" data-plot-width="940" data-plot-height="500" role="img" aria-label="Whole-system decision flow"><span class="plot-chart-fallback">Question, pool, escalation, fork, child migration, auction
 								repair, fixed-outcome settlement, and unresolved recursive
-								continuation flow.
-							</desc>
-							<defs>
-								<marker
-									id="arrow-system"
-									viewBox="0 0 10 10"
-									refX="8"
-									refY="5"
-									markerWidth="7"
-									markerHeight="7"
-									orient="auto-start-reverse"
-								>
-									<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-								</marker>
-							</defs>
-							<rect
-								class="svg-blue"
-								x="50"
-								y="54"
-								width="190"
-								height="74"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="145" y="84" text-anchor="middle">
-								Question
-							</text>
-							<text class="svg-small" x="145" y="107" text-anchor="middle">
-								Zoltar registration
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-system)"
-								d="M 240 91 H 315"
-							></path>
-							<rect
-								class="svg-green"
-								x="315"
-								y="54"
-								width="210"
-								height="74"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="420" y="84" text-anchor="middle">
-								Security Pool
-							</text>
-							<text class="svg-small" x="420" y="107" text-anchor="middle">
-								REP vaults + ETH shares
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-system)"
-								d="M 525 91 H 610"
-							></path>
-							<rect
-								class="svg-gold"
-								x="610"
-								y="54"
-								width="250"
-								height="74"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="735" y="84" text-anchor="middle">
-								Escalation Game
-							</text>
-							<text class="svg-small" x="735" y="107" text-anchor="middle">
-								Invalid, Yes, No balances
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-system)"
-								d="M 735 128 V 178"
-							></path>
-							<rect
-								class="svg-box"
-								x="610"
-								y="178"
-								width="250"
-								height="76"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="735" y="209" text-anchor="middle">
-								Decision Point
-							</text>
-							<text class="svg-small" x="735" y="232" text-anchor="middle">
-								local winner or non-decision
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-system)"
-								d="M 610 216 H 500"
-							></path>
-							<rect
-								class="svg-green"
-								x="285"
-								y="178"
-								width="215"
-								height="76"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="392" y="209" text-anchor="middle">
-								Local Settlement
-							</text>
-							<text class="svg-small" x="392" y="232" text-anchor="middle">
-								redeem winning shares
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-system)"
-								d="M 735 254 V 304"
-							></path>
-							<rect
-								class="svg-red"
-								x="610"
-								y="304"
-								width="250"
-								height="76"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="735" y="335" text-anchor="middle">
-								Fork + Migration
-							</text>
-							<text class="svg-small" x="735" y="358" text-anchor="middle">
-								child pools per outcome
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-system)"
-								d="M 610 342 H 505"
-							></path>
-							<rect
-								class="svg-blue"
-								x="275"
-								y="304"
-								width="230"
-								height="76"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="390" y="335" text-anchor="middle">
-								Truth Auction
-							</text>
-							<text class="svg-small" x="390" y="358" text-anchor="middle">
-								if collateral is short
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-system)"
-								d="M 390 380 V 428 H 610"
-							></path>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-system)"
-								d="M 735 380 V 404"
-							></path>
-							<rect
-								class="svg-green"
-								x="610"
-								y="404"
-								width="250"
-								height="72"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="735" y="433" text-anchor="middle">
-								Operational Child
-							</text>
-							<text class="svg-small" x="735" y="456" text-anchor="middle">
-								settle; unresolved may continue
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-system)"
-								d="M 860 440 C 908 390 908 196 860 91"
-							></path>
-							<text class="svg-micro" x="892" y="276" text-anchor="end">
-								unresolved
-							</text>
-							<text class="svg-micro" x="892" y="292" text-anchor="end">
-								recursive continuation
-							</text>
-						</svg>
+								continuation flow.</span></div>
 						<p class="diagram-caption">
 							<span class="figure-label">System Decision Flow</span>The main
 							path is simple, but the unresolved continuation loop matters: a
@@ -4508,55 +2334,7 @@
 							</label>
 						</div>
 						<div class="example-visual">
-							<svg
-								viewBox="0 0 760 170"
-								role="img"
-								aria-label="Child collateral repair progress"
-							>
-								<rect
-									class="example-bar-base"
-									x="80"
-									y="58"
-									width="600"
-									height="34"
-									rx="7"
-								></rect>
-								<rect
-									class="example-bar-green"
-									x="80"
-									y="58"
-									width="570"
-									height="34"
-									rx="7"
-									data-example-rect="migratedCollateral"
-								></rect>
-								<rect
-									class="example-bar-blue"
-									x="650"
-									y="58"
-									width="30"
-									height="34"
-									rx="0"
-									data-example-rect="auctionRepair"
-								></rect>
-								<line
-									class="svg-line"
-									x1="680"
-									y1="42"
-									x2="680"
-									y2="108"
-								></line>
-								<text class="svg-small" x="80" y="126">0 ETH</text>
-								<text
-									class="svg-small"
-									x="680"
-									y="126"
-									text-anchor="end"
-									data-example-text="repairTarget"
-								>
-									target 50 ETH
-								</text>
-							</svg>
+							<div class="plot-chart" data-plot-chart="plot-statoblast-whitepaper-19" data-plot-width="760" data-plot-height="170" role="img" aria-label="Child collateral repair progress"><span class="plot-chart-fallback">Child collateral repair progress</span></div>
 						</div>
 						<div class="example-output-grid">
 							<div>
@@ -4600,17 +2378,16 @@
 						<p class="security-assumption-ref">
 							<strong>Security assumptions:</strong>
 							<a href="./security-model.html#assumption-a01">A01 bidder incentives</a>,
-							<a href="./security-model.html#assumption-a05">A05 viable operating costs</a>,
-							<a href="./security-model.html#assumption-a08">A08 independent demand</a>,
-							<a href="./security-model.html#assumption-a09">A09 efficient REP conversion</a>,
-							<a href="./security-model.html#assumption-a11">A11 REP liquidity</a>,
-							<a href="./security-model.html#assumption-a14">A14 timely inclusion</a>,
-							<a href="./security-model.html#assumption-a18">A18 REP behavior</a>,
-							<a href="./security-model.html#assumption-a21">A21 lifecycle executors</a>,
-							<a href="./security-model.html#assumption-a22">A22 bid-data availability</a>,
-							<a href="./security-model.html#assumption-a26">A26 safe immutable parameters</a>,
+							<a href="./security-model.html#assumption-a02">A02 viable operating costs</a>,
+							<a href="./security-model.html#assumption-a03">A03 independent demand</a>,
+							<a href="./security-model.html#assumption-a12">A12 efficient REP conversion</a>,
+							<a href="./security-model.html#assumption-a13">A13 REP liquidity</a>,
+							<a href="./security-model.html#assumption-a16">A16 timely inclusion</a>,
+							<a href="./security-model.html#assumption-a06">A06 lifecycle executors</a>,
+							<a href="./security-model.html#assumption-a20">A20 bid-data availability</a>,
+							<a href="./security-model.html#assumption-a25">A25 safe immutable parameters</a>,
 							and
-							<a href="./security-model.html#assumption-a28">A28 native-ETH recipient compatibility</a>.
+							<a href="./security-model.html#assumption-a22">A22 native-ETH recipient compatibility</a>.
 						</p>
 					<p class="lede"> After the parent migration window ends, a child pool may still hold less ETH than users need for clean redemption. The truth auction sells child-universe REP for ETH to repair that gap, subject to both an ETH raise cap and a maximum REP sale cap. </p>
 
@@ -4703,114 +2480,8 @@
 						</p>
 					</div>
 					<figure class="diagram" id="fig-statoblast-auction-balance-sheet">
-						<svg
-							viewBox="0 0 960 360"
-							role="img"
-							aria-labelledby="balance-sheet-title balance-sheet-desc"
-						>
-							<title id="balance-sheet-title">
-								Truth auction repair balance sheet
-							</title>
-							<desc id="balance-sheet-desc">
-								A child pool before auction, after full auction repair, and after
-								weak auction demand settles at the collateral actually raised.
-							</desc>
-							<defs>
-								<marker
-									id="arrow-balance"
-									viewBox="0 0 10 10"
-									refX="8"
-									refY="5"
-									markerWidth="7"
-									markerHeight="7"
-									orient="auto-start-reverse"
-								>
-									<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-								</marker>
-							</defs>
-							<rect
-								class="svg-red"
-								x="46"
-								y="76"
-								width="250"
-								height="180"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="171" y="111" text-anchor="middle">
-								Before Auction
-							</text>
-							<text class="svg-small" x="171" y="143" text-anchor="middle">
-								proportional ETH collateral
-							</text>
-							<text class="svg-small" x="171" y="168" text-anchor="middle">
-								190 REP migrated
-							</text>
-							<text class="svg-small" x="171" y="193" text-anchor="middle">
-								ETH shortfall remains
-							</text>
-							<text class="svg-small" x="171" y="218" text-anchor="middle">
-								redemptions impaired
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-balance)"
-								d="M 296 166 H 382"
-							></path>
-							<text class="svg-small" x="336" y="142" text-anchor="middle">
-								sell REP
-							</text>
-							<rect
-								class="svg-green"
-								x="382"
-								y="48"
-								width="250"
-								height="180"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="507" y="83" text-anchor="middle">
-								Successful Repair
-							</text>
-							<text class="svg-small" x="507" y="115" text-anchor="middle">
-								50 ETH collateral
-							</text>
-							<text class="svg-small" x="507" y="140" text-anchor="middle">
-								less child REP
-							</text>
-							<text class="svg-small" x="507" y="165" text-anchor="middle">
-								full repair target met
-							</text>
-							<text class="svg-small" x="507" y="190" text-anchor="middle">
-								cleaner redemption base
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-balance)"
-								d="M 296 204 C 360 306 622 306 688 204"
-							></path>
-							<rect
-								class="svg-gold"
-								x="688"
-								y="156"
-								width="230"
-								height="148"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="803" y="184" text-anchor="middle">
-								Weak Demand
-							</text>
-							<text class="svg-label" x="803" y="205" text-anchor="middle">
-								Settlement
-							</text>
-							<text class="svg-small" x="803" y="232" text-anchor="middle">
-								auction ETH below cap
-							</text>
-							<text class="svg-small" x="803" y="254" text-anchor="middle">
-								no caller donation
-							</text>
-							<text class="svg-small" x="803" y="276" text-anchor="middle">
-								activates at raised collateral
-							</text>
-						</svg>
+						<div class="plot-chart" data-plot-chart="fig-statoblast-auction-balance-sheet" data-plot-width="960" data-plot-height="360" role="img" aria-label="Truth auction repair balance sheet"><span class="plot-chart-fallback">A child pool before auction, after full auction repair, and after
+								weak auction demand settles at the collateral actually raised.</span></div>
 						<p class="diagram-caption">
 							<span class="figure-label">Truth Auction Balance Sheet</span>The
 							auction repairs a child pool by trading part of that child
@@ -4844,7 +2515,7 @@
 						interactive examples; its
 						<a href="./truth-auction.html#settlement">settlement section</a> owns
 						allocation rounding and recovery behavior.
-						The <a href="./security-model.html#core-assumptions">security model</a>
+						The <a href="./security-model.html#assumption-a12">security model</a>
 						separately states efficient REP-to-ETH auction conversion as an
 						explicit assumption.
 					</p>
@@ -4858,16 +2529,15 @@
 						<p class="security-assumption-ref">
 							<strong>Security assumptions:</strong>
 							<a href="./security-model.html#assumption-a01">A01 arbitrage incentives</a>,
-							<a href="./security-model.html#assumption-a05">A05 viable operating costs</a>,
-							<a href="./security-model.html#assumption-a11">A11 REP liquidity</a>,
-							<a href="./security-model.html#assumption-a14">A14 timely inclusion</a>,
-							<a href="./security-model.html#assumption-a15">A15 correction capital</a>,
-							<a href="./security-model.html#assumption-a16">A16 available arbitrager</a>,
-							<a href="./security-model.html#assumption-a17">A17 independent corrector</a>,
-							<a href="./security-model.html#assumption-a20">A20 observable correctable price</a>,
-							<a href="./security-model.html#assumption-a21">A21 settlement executors</a>,
+							<a href="./security-model.html#assumption-a02">A02 viable operating costs</a>,
+							<a href="./security-model.html#assumption-a13">A13 REP liquidity</a>,
+							<a href="./security-model.html#assumption-a16">A16 timely inclusion</a>,
+							<a href="./security-model.html#assumption-a17">A17 corrector capability</a>,
+							<a href="./security-model.html#assumption-a18">A18 independent correction incentive</a>,
+							<a href="./security-model.html#assumption-a19">A19 observable correctable price</a>,
+							<a href="./security-model.html#assumption-a06">A06 settlement executors</a>,
 							and
-							<a href="./security-model.html#assumption-a22">A22 report-state availability</a>.
+							<a href="./security-model.html#assumption-a20">A20 report-state availability</a>.
 						</p>
 					<p> The REP/ETH oracle is narrow in purpose. <code>OpenOraclePriceCoordinator</code> uses <code>OpenOracle</code> to obtain a fresh REP/ETH price for liquidation, REP withdrawal, and bond-allowance updates. A stale price also blocks <code>depositToEscalationGame</code> whenever the pool still has active security-bond allowance. It is not the oracle for question truth; escalation and, if necessary, Zoltar forks handle that path. </p>
 					<p> The OpenOracle path is contestable before the coordinator can use it: the sponsor funds the request, the coordinator atomically posts the initial token amounts and becomes the onchain reporter, disputers can replace a bad report with the contract-required replacement amounts strictly before the settlement deadline, and a settler can finalize the report at or after that deadline. OpenOracle credits the final position to the final reporter. Its callback supplies the accepted amounts to the coordinator, which withdraws only its own internal WETH/REP balances back to the sponsor. Request, dispute, settlement, callback safety, and recovery details are maintained in the dedicated <a href="./open-oracle-integration.html#statoblast-integration">OpenOracle integration</a> guide. </p>
@@ -4881,154 +2551,9 @@
 						collateral.
 					</p>
 					<figure class="diagram" id="fig-statoblast-oracle-flow">
-						<svg
-							viewBox="0 0 940 380"
-							role="img"
-							aria-labelledby="oracle-flow-title oracle-flow-desc"
-						>
-							<title id="oracle-flow-title">
-								Queued REP/ETH oracle operation flow
-							</title>
-							<desc id="oracle-flow-desc">
-								A solvency-sensitive operation either executes immediately with
+						<div class="plot-chart" data-plot-chart="fig-statoblast-oracle-flow" data-plot-width="940" data-plot-height="380" role="img" aria-label="Queued REP/ETH oracle operation flow"><span class="plot-chart-fallback">A solvency-sensitive operation either executes immediately with
 								a valid cached price or stages behind a pending OpenOracle
-								report.
-							</desc>
-							<defs>
-								<marker
-									id="arrow-oracle-flow"
-									viewBox="0 0 10 10"
-									refX="8"
-									refY="5"
-									markerWidth="7"
-									markerHeight="7"
-									orient="auto-start-reverse"
-								>
-									<path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path>
-								</marker>
-							</defs>
-							<rect
-								class="svg-blue"
-								x="52"
-								y="58"
-								width="220"
-								height="78"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="162" y="88" text-anchor="middle">
-								Operation Request
-							</text>
-							<text class="svg-small" x="162" y="108" text-anchor="middle">
-								withdraw, allowance,
-							</text>
-							<text class="svg-small" x="162" y="124" text-anchor="middle">
-								liquidation
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-oracle-flow)"
-								d="M 272 97 H 360"
-							></path>
-							<rect
-								class="svg-gold"
-								x="360"
-								y="58"
-								width="220"
-								height="78"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="470" y="88" text-anchor="middle">
-								Valid Price?
-							</text>
-							<text class="svg-small" x="470" y="113" text-anchor="middle">
-								configured freshness window
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-oracle-flow)"
-								d="M 580 97 H 672"
-							></path>
-							<rect
-								class="svg-green"
-								x="672"
-								y="58"
-								width="210"
-								height="78"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="777" y="88" text-anchor="middle">
-								Execute Now
-							</text>
-							<text class="svg-small" x="777" y="113" text-anchor="middle">
-								no oracle ETH cost
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-oracle-flow)"
-								d="M 470 136 V 196"
-							></path>
-							<rect
-								class="svg-red"
-								x="342"
-								y="196"
-								width="256"
-								height="82"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="470" y="227" text-anchor="middle">
-								Stage Operation
-							</text>
-							<text class="svg-small" x="470" y="252" text-anchor="middle">
-								one callback replays up to 4
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-oracle-flow)"
-								d="M 598 237 H 688"
-							></path>
-							<rect
-								class="svg-blue"
-								x="688"
-								y="196"
-								width="210"
-								height="82"
-								rx="10"
-							></rect>
-								<text class="svg-label" x="793" y="219" text-anchor="middle">
-									OpenOracle
-								</text>
-								<text class="svg-small" x="793" y="239" text-anchor="middle">
-									coordinator reports
-								</text>
-							<text class="svg-small" x="793" y="255" text-anchor="middle">
-								sponsor funds
-							</text>
-							<text class="svg-small" x="793" y="271" text-anchor="middle">
-								dispute or settle
-							</text>
-							<path
-								class="svg-line"
-								marker-end="url(#arrow-oracle-flow)"
-								d="M 688 278 C 610 336 396 336 320 278"
-							></path>
-							<rect
-								class="svg-box"
-								x="84"
-								y="196"
-								width="236"
-								height="82"
-								rx="10"
-							></rect>
-							<text class="svg-label" x="202" y="227" text-anchor="middle">
-								Consume or Replay
-							</text>
-							<text class="svg-small" x="202" y="247" text-anchor="middle">
-								expired, stale, or failed checks
-							</text>
-							<text class="svg-small" x="202" y="263" text-anchor="middle">
-								or already executed
-							</text>
-						</svg>
+								report.</span></div>
 							<p class="diagram-caption">
 								<span class="figure-label">REP/ETH Oracle Flow</span>The
 								coordinator is a queue plus cache. A fresh price can execute
@@ -5052,18 +2577,18 @@
 					</div>
 						<p>
 							The <a href="./security-model.html">Protocol Security Model</a>
-					defines assumptions A01–A29 and the guarantees deliberately excluded
+					defines assumptions A01–A28 and the guarantees deliberately excluded
 							from the protocol model.
 						</p>
 						<p class="security-assumption-ref">
 							<strong>Primary economic assumptions:</strong>
-							<a href="./security-model.html#assumption-a02">A02 fork value preservation</a>,
-							<a href="./security-model.html#assumption-a03">A03 REP valuation</a>,
-							<a href="./security-model.html#assumption-a04">A04 truthful-branch preference</a>,
-							<a href="./security-model.html#assumption-a09">A09 truth-auction demand</a>,
-							<a href="./security-model.html#assumption-a12">A12 REP economic backing</a>,
+							<a href="./security-model.html#assumption-a07">A07 fork value preservation</a>,
+							<a href="./security-model.html#assumption-a08">A08 REP valuation</a>,
+							<a href="./security-model.html#assumption-a09">A09 truthful-branch preference</a>,
+							<a href="./security-model.html#assumption-a12">A12 truth-auction demand</a>,
+							<a href="./security-model.html#assumption-a14">A14 REP economic backing</a>,
 							and
-							<a href="./security-model.html#assumption-a13">A13 lineage access value</a>.
+							<a href="./security-model.html#assumption-a05">A05 lineage access value</a>.
 						</p>
 					<ul>
 						<li>REP backing must remain economically meaningful relative to the obligations it secures.</li>
@@ -5088,8 +2613,8 @@
 					</div>
 					<p class="security-assumption-ref">
 						<strong>Security assumption:</strong>
-						<a href="./security-model.html#assumption-a26"
-							>A26 safe immutable parameters</a
+						<a href="./security-model.html#assumption-a25"
+							>A25 safe immutable parameters</a
 						>.
 					</p>
 					<table>
@@ -5143,6 +2668,8 @@
 				</section>
 			</main>
 		</div>
+
+		<script src="./chartRuntime.js"></script>
 		<script>
 			const formatFixed = (value, digits = 2) => {
 				if (Number.isInteger(value)) {

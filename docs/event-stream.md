@@ -2,12 +2,12 @@
 
 The canonical event stream reconstructs the economically relevant Zoltar-owned protocol state described below without storage reads, transaction input, traces, or undocumented assumptions during replay. Storage getters may be used after replay for auditing and recovery.
 
-Security assumptions [A18 token behavior](./security-model.html#assumption-a18),
-[A19 verified canonical deployment](./security-model.html#assumption-a19),
-[A22 chain-data and proof availability](./security-model.html#assumption-a22),
-[A23 Ethereum execution and finality](./security-model.html#assumption-a23),
-[A24 cryptographic security](./security-model.html#assumption-a24), and
-[A29 client, RPC, and wallet integrity](./security-model.html#assumption-a29) define the
+Security assumptions [A21 external token behavior](./security-model.html#assumption-a21),
+[A23 verified canonical deployment](./security-model.html#assumption-a23),
+[A20 chain-data and proof availability](./security-model.html#assumption-a20),
+[A26 Ethereum execution and finality](./security-model.html#assumption-a26),
+[A27 cryptographic security](./security-model.html#assumption-a27), and
+[A24 client, RPC, and wallet integrity](./security-model.html#assumption-a24) define the
 external boundary for emitter recognition, replay, rollback, and state-hash
 verification.
 
