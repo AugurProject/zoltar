@@ -12,7 +12,23 @@ import {
 	normalizedEscalationCost,
 	quantitativeChartAxisLabels,
 } from './chartModels'
-import { contractAtlasEdges, contractAtlasNodes, contractAtlasPlotRouteMeaning, contractAtlasPlotRoutes, contractAtlasRelationLabels, contractAtlasRelationshipRows, type ContractAtlasKind, type ContractAtlasPanel, type ContractAtlasRelation } from './contractAtlas'
+import {
+	contractAtlasEdges,
+	contractAtlasInventoryRows,
+	contractAtlasNodes,
+	contractAtlasPanelLabels,
+	contractAtlasPlotRouteMeaning,
+	contractAtlasPlotRoutes,
+	contractAtlasPlotRoutesForView,
+	contractAtlasRelationLabels,
+	contractAtlasRelationshipRows,
+	contractAtlasViewDefinition,
+	contractAtlasViewDefinitions,
+	type ContractAtlasKind,
+	type ContractAtlasPanel,
+	type ContractAtlasRelation,
+	type ContractAtlasViewDefinition,
+} from './contractAtlas'
 
 declare function require(path: './diagramSpecs.json'): unknown
 
@@ -966,7 +982,9 @@ type ContractAtlasChartEdge = {
 	meaning: string
 	orientation: 'horizontal' | 'vertical'
 	relationStyle: ContractAtlasRelation | 'multiple'
+	sourceNodeId: string
 	sourceLabel: string
+	targetNodeId: string
 	targetLabel: string
 	x1: number
 	x2: number
@@ -989,43 +1007,101 @@ function contractAtlasDisplayLabel(label: string): string {
 	return lines.join('\n')
 }
 
-function contractAtlasChart(spec: ChartSpec): SVGSVGElement {
+type ContractAtlasPortAssignment = {
+	axis: 'x1' | 'x2' | 'y1' | 'y2'
+	edge: ContractAtlasChartEdge
+	node: ContractAtlasChartNode
+}
+
+function contractAtlasOtherPortCoordinate(assignment: ContractAtlasPortAssignment): number {
+	if (assignment.axis === 'x1') return assignment.edge.x2
+	if (assignment.axis === 'x2') return assignment.edge.x1
+	if (assignment.axis === 'y1') return assignment.edge.y2
+	return assignment.edge.y1
+}
+
+function spreadContractAtlasPorts(edges: ContractAtlasChartEdge[], nodeById: Map<string, ContractAtlasChartNode>): void {
+	const assignmentsBySide = new Map<string, ContractAtlasPortAssignment[]>()
+	function addAssignment(key: string, assignment: ContractAtlasPortAssignment): void {
+		const assignments = assignmentsBySide.get(key)
+		if (assignments === undefined) {
+			assignmentsBySide.set(key, [assignment])
+		} else {
+			assignments.push(assignment)
+		}
+	}
+	for (const edge of edges) {
+		const sourceNode = nodeById.get(edge.sourceNodeId)
+		const targetNode = nodeById.get(edge.targetNodeId)
+		if (sourceNode === undefined || targetNode === undefined) {
+			throw new Error(`Contract atlas route ${edge.id} cannot spread ports for a missing node`)
+		}
+		if (edge.orientation === 'horizontal') {
+			const sourceSide = edge.x1 === sourceNode.x1 ? 'left' : 'right'
+			const targetSide = edge.x2 === targetNode.x1 ? 'left' : 'right'
+			addAssignment(`${sourceNode.id}:horizontal:${sourceSide}`, { axis: 'y1', edge, node: sourceNode })
+			addAssignment(`${targetNode.id}:horizontal:${targetSide}`, { axis: 'y2', edge, node: targetNode })
+		} else {
+			const sourceSide = edge.y1 === sourceNode.y1 ? 'top' : 'bottom'
+			const targetSide = edge.y2 === targetNode.y1 ? 'top' : 'bottom'
+			addAssignment(`${sourceNode.id}:vertical:${sourceSide}`, { axis: 'x1', edge, node: sourceNode })
+			addAssignment(`${targetNode.id}:vertical:${targetSide}`, { axis: 'x2', edge, node: targetNode })
+		}
+	}
+	for (const assignments of assignmentsBySide.values()) {
+		if (assignments.length < 2) continue
+		assignments.sort((left, right) => contractAtlasOtherPortCoordinate(left) - contractAtlasOtherPortCoordinate(right) || left.edge.id.localeCompare(right.edge.id))
+		const firstAssignment = assignments[0]
+		if (firstAssignment === undefined) continue
+		const horizontalSide = firstAssignment.axis === 'y1' || firstAssignment.axis === 'y2'
+		const sideStart = horizontalSide ? firstAssignment.node.y1 : firstAssignment.node.x1
+		const sideEnd = horizontalSide ? firstAssignment.node.y2 : firstAssignment.node.x2
+		const inset = (sideEnd - sideStart) * 0.16
+		const usableStart = sideStart + inset
+		const step = (sideEnd - sideStart - inset * 2) / (assignments.length - 1)
+		for (const [index, assignment] of assignments.entries()) {
+			assignment.edge[assignment.axis] = usableStart + index * step
+		}
+	}
+}
+
+function contractAtlasChart(spec: ChartSpec, view: ContractAtlasViewDefinition): SVGSVGElement {
 	const panelDefinitions: { fill: string; id: ContractAtlasPanel; subtitle: string; title: string }[] = [
 		{
 			fill: 'var(--blue-soft, #dceaf8)',
 			id: 'zoltar',
 			subtitle: 'Questions, universes, REP, and their token foundations',
-			title: 'Zoltar',
+			title: contractAtlasPanelLabels.zoltar,
 		},
 		{
 			fill: 'var(--gold-soft, #f3e4c6)',
 			id: 'statoblast-deployment',
 			subtitle: 'Factory, CREATE2 deployer, worker, and component factories',
-			title: 'Statoblast — deployment',
+			title: contractAtlasPanelLabels['statoblast-deployment'],
 		},
 		{
 			fill: 'var(--green-soft, #dcefe8)',
 			id: 'statoblast-runtime',
 			subtitle: 'Pools, claims, resolution, oracle pricing, forks, and backing repair',
-			title: 'Statoblast — deployed runtime',
+			title: contractAtlasPanelLabels['statoblast-runtime'],
 		},
 		{
 			fill: 'var(--paper, #fff)',
 			id: 'statoblast-implementation',
 			subtitle: 'Inheritance stacks, delegate-compatible storage, interfaces, and type modules',
-			title: 'Statoblast — implementation boundaries',
+			title: contractAtlasPanelLabels['statoblast-implementation'],
 		},
 		{
 			fill: 'var(--soft, #edf3f5)',
 			id: 'infrastructure',
 			subtitle: 'Deployment helpers, compatibility contracts, imported OpenOracle, and vendored dependencies',
-			title: 'Infrastructure & external boundary',
+			title: contractAtlasPanelLabels.infrastructure,
 		},
 		{
 			fill: 'var(--red-soft, #f2d9d6)',
 			id: 'tests',
 			subtitle: 'Every test-only Solidity declaration; production targets are repeated as gateway groups',
-			title: 'Test-only contracts',
+			title: contractAtlasPanelLabels.tests,
 		},
 	]
 	const panelGap = 0.45
@@ -1107,7 +1183,7 @@ function contractAtlasChart(spec: ChartSpec): SVGSVGElement {
 		return 'test-gateway-infra'
 	}
 
-	const positionedEdges: ContractAtlasChartEdge[] = contractAtlasPlotRoutes.map(route => {
+	const positionedEdges: ContractAtlasChartEdge[] = contractAtlasPlotRoutesForView(view).map(route => {
 		const sourceNode = positionedNodeById.get(route.source)
 		const registryTargetNode = positionedNodeById.get(route.target)
 		if (sourceNode === undefined || registryTargetNode === undefined) {
@@ -1123,7 +1199,9 @@ function contractAtlasChart(spec: ChartSpec): SVGSVGElement {
 			id: route.id,
 			meaning: contractAtlasPlotRouteMeaning(route),
 			relationStyle,
+			sourceNodeId: sourceNode.id,
 			sourceLabel: sourceNode.label.replaceAll('\n', ' '),
+			targetNodeId: targetNode.id,
 			targetLabel: registryTargetNode.label.replaceAll('\n', ' '),
 		}
 		const samePanel = sourceNode.panel === targetNode.panel
@@ -1149,18 +1227,20 @@ function contractAtlasChart(spec: ChartSpec): SVGSVGElement {
 			y2: pointsDown ? targetNode.y1 : targetNode.y2,
 		}
 	})
+	spreadContractAtlasPorts(positionedEdges, positionedNodeById)
+	const denseView = view.id === 'all'
 	const relationStyles: Record<ContractAtlasRelation | 'multiple', { dash?: string; opacity: number; stroke: string; width: number }> = {
-		assets: { opacity: 0.68, stroke: 'var(--green, #1d735d)', width: 2.2 },
-		calls: { opacity: 0.56, stroke: 'var(--blue, #245f9f)', width: 1.8 },
-		compatible: { dash: '3,3', opacity: 0.42, stroke: 'var(--blue, #245f9f)', width: 1.5 },
-		delegatecall: { opacity: 0.72, stroke: 'var(--red, #99453f)', width: 2.2 },
-		deploys: { opacity: 0.68, stroke: 'var(--gold, #8a5d18)', width: 2.1 },
-		implements: { dash: '3,3', opacity: 0.42, stroke: 'var(--blue, #245f9f)', width: 1.5 },
-		inherits: { dash: '7,3', opacity: 0.48, stroke: 'var(--muted, #5f6d75)', width: 1.6 },
+		assets: { opacity: denseView ? 0.48 : 0.76, stroke: 'var(--green, #1d735d)', width: 2.2 },
+		calls: { opacity: denseView ? 0.4 : 0.62, stroke: 'var(--blue, #245f9f)', width: 1.8 },
+		compatible: { dash: '3,3', opacity: denseView ? 0.22 : 0.56, stroke: 'var(--blue, #245f9f)', width: 1.5 },
+		delegatecall: { opacity: denseView ? 0.56 : 0.8, stroke: 'var(--red, #99453f)', width: 2.2 },
+		deploys: { opacity: denseView ? 0.5 : 0.74, stroke: 'var(--gold, #8a5d18)', width: 2.1 },
+		implements: { dash: '3,3', opacity: denseView ? 0.22 : 0.56, stroke: 'var(--blue, #245f9f)', width: 1.5 },
+		inherits: { dash: '7,3', opacity: denseView ? 0.24 : 0.62, stroke: 'var(--muted, #5f6d75)', width: 1.6 },
 		multiple: { dash: '9,3,2,3', opacity: 0.78, stroke: 'var(--ink, #1f2529)', width: 2.5 },
-		references: { dash: '2,5', opacity: 0.24, stroke: 'var(--muted, #5f6d75)', width: 1.1 },
-		tests: { dash: '2,4', opacity: 0.4, stroke: 'var(--red, #99453f)', width: 1.4 },
-		uses: { dash: '5,4', opacity: 0.36, stroke: 'var(--muted, #5f6d75)', width: 1.3 },
+		references: { dash: '2,5', opacity: denseView ? 0.12 : 0.34, stroke: 'var(--muted, #5f6d75)', width: 1.1 },
+		tests: { dash: '2,4', opacity: denseView ? 0.24 : 0.56, stroke: 'var(--red, #99453f)', width: 1.4 },
+		uses: { dash: '5,4', opacity: denseView ? 0.2 : 0.5, stroke: 'var(--muted, #5f6d75)', width: 1.3 },
 	}
 	const relationOrder: (ContractAtlasRelation | 'multiple')[] = ['references', 'uses', 'inherits', 'implements', 'compatible', 'tests', 'calls', 'deploys', 'assets', 'delegatecall', 'multiple']
 	const edgeMarks = relationOrder.flatMap(relation =>
@@ -1213,8 +1293,8 @@ function contractAtlasChart(spec: ChartSpec): SVGSVGElement {
 	const panelTitles = panels.map(panel => ({ label: `${panel.title} · ${panel.countLabel}`, x: panel.x1 + 0.3, y: panel.y1 + 0.34 }))
 	const panelSubtitles = panels.map(panel => ({ label: panel.subtitle, x: panel.x1 + 0.3, y: panel.y1 + 0.7 }))
 	const chart = plot({
-		ariaDescription: spec.ariaDescription,
-		ariaLabel: spec.ariaLabel,
+		ariaDescription: `${spec.ariaDescription} The current ${view.label} layer shows ${positionedEdges.length} of ${contractAtlasPlotRoutes.length} routes. ${view.description}`,
+		ariaLabel: `${spec.ariaLabel}: ${view.label}`,
 		height: spec.height,
 		margin: 18,
 		marks: [
@@ -1239,8 +1319,10 @@ function contractAtlasChart(spec: ChartSpec): SVGSVGElement {
 		x: { axis: null, domain: [0, 18.45] },
 		y: { axis: null, domain: [nextPanelY - panelGap + 0.1, 0] },
 	}) as SVGSVGElement
+	chart.dataset['atlasView'] = view.id
 	chart.dataset['chartState'] = `${contractAtlasNodes.length}-components-${contractAtlasEdges.length}-relationships`
 	chart.dataset['plotRouteCount'] = String(contractAtlasPlotRoutes.length)
+	chart.dataset['visibleRouteCount'] = String(positionedEdges.length)
 	return chart
 }
 
@@ -1254,6 +1336,29 @@ function appendContractAtlasCell(row: HTMLTableRowElement, value: string, code =
 		cell.textContent = value
 	}
 	row.append(cell)
+}
+
+function renderContractAtlasInventoryTable(): void {
+	const tableBody = document.querySelector<HTMLTableSectionElement>('[data-contract-atlas-node-table]')
+	if (tableBody === null) return
+	const kindLabels: Record<ContractAtlasKind, string> = {
+		abstract: 'abstract contract',
+		contract: 'contract',
+		interface: 'interface',
+		library: 'library',
+		module: 'type module',
+	}
+	const rows = contractAtlasInventoryRows.map(({ node, panelLabel }) => {
+		const row = document.createElement('tr')
+		row.dataset['componentId'] = node.id
+		appendContractAtlasCell(row, node.label.replaceAll('\n', ' '), true)
+		appendContractAtlasCell(row, kindLabels[node.kind])
+		appendContractAtlasCell(row, panelLabel)
+		appendContractAtlasCell(row, node.source, true)
+		return row
+	})
+	tableBody.replaceChildren(...rows)
+	tableBody.dataset['componentCount'] = String(rows.length)
 }
 
 function renderContractAtlasTable(): void {
@@ -1649,7 +1754,7 @@ function createChart(chartId: string, spec: ChartSpec, mount: HTMLElement): SVGS
 		return contractInteractionChart(spec)
 	}
 	if (chartId === 'fig-complete-contract-atlas') {
-		return contractAtlasChart(spec)
+		return contractAtlasChart(spec, contractAtlasViewDefinition(mount.dataset['contractAtlasView']))
 	}
 	if (chartId === 'fig-auction-clearing-ladder') {
 		return auctionDemandChart(spec, mount)
@@ -1699,10 +1804,46 @@ function renderMount(mount: HTMLElement): void {
 	mount.classList.add('plot-chart-ready')
 }
 
+function updateContractAtlasControls(controls: HTMLElement, view: ContractAtlasViewDefinition): void {
+	for (const button of Array.from(controls.querySelectorAll<HTMLButtonElement>('[data-contract-atlas-view]'))) {
+		const buttonView = contractAtlasViewDefinition(button.dataset['contractAtlasView'])
+		button.setAttribute('aria-pressed', String(buttonView.id === view.id))
+	}
+	const status = controls.querySelector<HTMLElement>('[data-contract-atlas-status]')
+	if (status === null) throw new Error('Contract atlas controls are missing their live status')
+	const visibleRouteCount = contractAtlasPlotRoutesForView(view).length
+	status.textContent = `${view.label}: ${visibleRouteCount} of ${contractAtlasPlotRoutes.length} routes. ${view.description}`
+}
+
+function setupContractAtlasControls(): void {
+	const controls = document.querySelector<HTMLElement>('[data-contract-atlas-controls]')
+	const mount = document.querySelector<HTMLElement>('[data-plot-chart="fig-complete-contract-atlas"]')
+	if (controls === null || mount === null) return
+	const initialView = contractAtlasViewDefinition(mount.dataset['contractAtlasView'])
+	mount.dataset['contractAtlasView'] = initialView.id
+	for (const definition of contractAtlasViewDefinitions) {
+		const count = controls.querySelector<HTMLElement>(`[data-contract-atlas-view-count="${definition.id}"]`)
+		if (count === null) throw new Error(`Contract atlas controls are missing the ${definition.id} route count`)
+		count.textContent = `${contractAtlasPlotRoutesForView(definition).length} routes`
+	}
+	for (const button of Array.from(controls.querySelectorAll<HTMLButtonElement>('[data-contract-atlas-view]'))) {
+		const buttonView = contractAtlasViewDefinition(button.dataset['contractAtlasView'])
+		button.addEventListener('click', () => {
+			mount.dataset['contractAtlasView'] = buttonView.id
+			renderMount(mount)
+			updateContractAtlasControls(controls, buttonView)
+		})
+	}
+	updateContractAtlasControls(controls, initialView)
+	controls.hidden = false
+}
+
 const mounts = Array.from(document.querySelectorAll<HTMLElement>('[data-plot-chart]'))
 for (const mount of mounts) {
 	renderMount(mount)
 }
+setupContractAtlasControls()
+renderContractAtlasInventoryTable()
 renderContractAtlasTable()
 
 for (const chartId of ['fig-auction-clearing-ladder', 'fig-liquidation-health-curve', 'plot-open-oracle-integration-2', 'plot-statoblast-whitepaper-7', 'plot-statoblast-whitepaper-8', 'plot-statoblast-whitepaper-19']) {

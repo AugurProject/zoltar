@@ -87,9 +87,37 @@
 					six routes carry two relationship types, so their combined style and
 					tooltip list both meanings. Repeated uses of the same type and pair
 					aggregate; distinct types and explicit low-level boundaries remain
-					separate register rows.
+					separate register rows. The chart keeps all 114 components fixed while
+					one relationship layer is selected; choose <strong>All routes</strong>
+					for the complete overlay.
 				</p>
-				<ul class="contract-atlas-legend" aria-label="Complete contract atlas legend">
+				<fieldset class="contract-atlas-controls" data-contract-atlas-controls hidden>
+					<legend>Relationship layer</legend>
+					<div class="contract-atlas-view-options" role="group" aria-label="Contract atlas relationship layer">
+						<button type="button" data-contract-atlas-view="protocol" aria-pressed="true">
+							<strong>Protocol flow</strong>
+							<span data-contract-atlas-view-count="protocol"></span>
+						</button>
+						<button type="button" data-contract-atlas-view="structure" aria-pressed="false">
+							<strong>Type structure</strong>
+							<span data-contract-atlas-view-count="structure"></span>
+						</button>
+						<button type="button" data-contract-atlas-view="references" aria-pressed="false">
+							<strong>Source references</strong>
+							<span data-contract-atlas-view-count="references"></span>
+						</button>
+						<button type="button" data-contract-atlas-view="tests" aria-pressed="false">
+							<strong>Test exercise</strong>
+							<span data-contract-atlas-view-count="tests"></span>
+						</button>
+						<button type="button" data-contract-atlas-view="all" aria-pressed="false">
+							<strong>All routes</strong>
+							<span data-contract-atlas-view-count="all"></span>
+						</button>
+					</div>
+					<p class="contract-atlas-view-status" data-contract-atlas-status aria-live="polite"></p>
+				</fieldset>
+				<ul class="contract-atlas-legend" aria-label="Complete contract atlas line styles">
 					<li><span class="atlas-line atlas-line-call" aria-hidden="true"></span><strong>Runtime call</strong></li>
 					<li><span class="atlas-line atlas-line-assets" aria-hidden="true"></span><strong>Asset-bearing call</strong></li>
 					<li><span class="atlas-line atlas-line-deploy" aria-hidden="true"></span><strong>Deployment</strong></li>
@@ -126,13 +154,40 @@
 						one inventory node. Test edges terminate at repeated production
 						gateway groups inside the test region to avoid crossing the entire
 						plot; the relationship register preserves each exact production
-						target. Mechanical reconciliation against the Solidity tree covers
-						every direct source edge. The 360 plotted routes preserve all 366
-						meanings in their tooltips and in the register. An isolated node is
-						part of that tree but has no active in-repository relationship under
-						the rule above.
+						target. The default protocol-flow layer shows 69 routes; the layer
+						controls expose every one of the 360 routes while keeping all 114
+						components fixed. Mechanical reconciliation against the Solidity
+						tree covers every direct source edge, and all 366 meanings remain in
+						the route tooltips and register. The component inventory provides an
+						exact textual entry for every node, including isolated declarations
+						that have no active in-repository relationship under the rule above.
 					</p>
 				</figure>
+				<details class="contract-atlas-register contract-atlas-node-register">
+					<summary>Open the complete 114-component inventory</summary>
+					<p>
+						This keyboard-accessible inventory preserves each component’s
+						declaration kind, owning region, and Solidity source path independently
+						of chart hover or relationship coverage.
+					</p>
+					<div class="table-scroll" tabindex="0" role="region" aria-label="Complete Solidity component inventory">
+						<table>
+							<thead>
+								<tr>
+									<th>Component</th>
+									<th>Kind</th>
+									<th>Region</th>
+									<th>Source</th>
+								</tr>
+							</thead>
+							<tbody data-contract-atlas-node-table>
+								<tr>
+									<td colspan="4">The generated component inventory requires JavaScript; the figure fallback summarizes its regions and component kinds.</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+				</details>
 				<details class="contract-atlas-register">
 					<summary>Open the complete relationship register</summary>
 					<p>

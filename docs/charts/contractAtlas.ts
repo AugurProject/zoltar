@@ -6,6 +6,8 @@ export type ContractAtlasPanel = 'infrastructure' | 'statoblast-deployment' | 's
 
 export type ContractAtlasRelation = 'assets' | 'calls' | 'compatible' | 'delegatecall' | 'deploys' | 'implements' | 'inherits' | 'references' | 'tests' | 'uses'
 
+export type ContractAtlasView = 'all' | 'protocol' | 'references' | 'structure' | 'tests'
+
 export type ContractAtlasNode = {
 	column: number
 	declaration?: string
@@ -30,6 +32,13 @@ export type ContractAtlasPlotRoute = {
 	id: string
 	source: string
 	target: string
+}
+
+export type ContractAtlasViewDefinition = {
+	description: string
+	id: ContractAtlasView
+	label: string
+	relations: ContractAtlasRelation[]
 }
 
 function node(id: string, label: string, kind: ContractAtlasKind, panel: ContractAtlasPanel, column: number, order: number, source: string, declaration = label): ContractAtlasNode {
@@ -60,6 +69,15 @@ export const contractAtlasRelationLabels: Record<ContractAtlasRelation, string> 
 	references: 'direct source reference',
 	tests: 'test-only exercise',
 	uses: 'library or type use',
+}
+
+export const contractAtlasPanelLabels: Record<ContractAtlasPanel, string> = {
+	infrastructure: 'Infrastructure & external boundary',
+	'statoblast-deployment': 'Statoblast — deployment',
+	'statoblast-implementation': 'Statoblast — implementation boundaries',
+	'statoblast-runtime': 'Statoblast — deployed runtime',
+	tests: 'Test-only contracts',
+	zoltar: 'Zoltar',
 }
 
 export const contractAtlasNodes: ContractAtlasNode[] = [
@@ -189,6 +207,11 @@ export const contractAtlasNodes: ContractAtlasNode[] = [
 	node('test-auction-settlement-pool', 'AuctionSettlementPoolHarness', 'contract', 'tests', 4, 6, 'solidity/contracts/test/peripherals/SecurityPoolForkerAuctionSettlementHarness.sol'),
 	node('test-forker-auction-settlement', 'SecurityPoolForkerAuctionSettlementHarness', 'contract', 'tests', 4, 7, 'solidity/contracts/test/peripherals/SecurityPoolForkerAuctionSettlementHarness.sol'),
 ]
+
+export const contractAtlasInventoryRows = contractAtlasNodes.map(atlasNode => ({
+	node: atlasNode,
+	panelLabel: contractAtlasPanelLabels[atlasNode.panel],
+}))
 
 const contractAtlasSemanticEdges: ContractAtlasEdge[] = [
 	// Zoltar implementation and runtime.
@@ -411,6 +434,53 @@ for (const atlasEdge of contractAtlasEdges) {
 }
 
 export const contractAtlasPlotRoutes = [...contractAtlasPlotRouteByPair.values()]
+
+export const contractAtlasDefaultView: ContractAtlasView = 'protocol'
+
+export const contractAtlasViewDefinitions: ContractAtlasViewDefinition[] = [
+	{
+		description: 'Runtime calls, asset movement, deployments, and delegatecalls.',
+		id: 'protocol',
+		label: 'Protocol flow',
+		relations: ['calls', 'assets', 'deploys', 'delegatecall'],
+	},
+	{
+		description: 'Inheritance, implementations, compatibility, and library or type use.',
+		id: 'structure',
+		label: 'Type structure',
+		relations: ['inherits', 'implements', 'compatible', 'uses'],
+	},
+	{
+		description: 'Direct source references not replaced by a more specific relationship.',
+		id: 'references',
+		label: 'Source references',
+		relations: ['references'],
+	},
+	{
+		description: 'Test-only behavior routed to repeated production gateways.',
+		id: 'tests',
+		label: 'Test exercise',
+		relations: ['tests'],
+	},
+	{
+		description: 'Every relationship layer at once. This completeness view is intentionally dense.',
+		id: 'all',
+		label: 'All routes',
+		relations: ['calls', 'assets', 'deploys', 'delegatecall', 'inherits', 'implements', 'compatible', 'uses', 'references', 'tests'],
+	},
+]
+
+export function contractAtlasViewDefinition(viewId: string | undefined): ContractAtlasViewDefinition {
+	const resolvedViewId = viewId ?? contractAtlasDefaultView
+	const definition = contractAtlasViewDefinitions.find(candidate => candidate.id === resolvedViewId)
+	if (definition === undefined) throw new Error(`Unknown contract atlas view ${resolvedViewId}`)
+	return definition
+}
+
+export function contractAtlasPlotRoutesForView(view: ContractAtlasViewDefinition): ContractAtlasPlotRoute[] {
+	const relations = new Set(view.relations)
+	return contractAtlasPlotRoutes.filter(route => route.edges.some(atlasEdge => relations.has(atlasEdge.relation)))
+}
 
 export function contractAtlasPlotRouteMeaning(route: ContractAtlasPlotRoute): string {
 	return route.edges.map(atlasEdge => `${contractAtlasRelationLabels[atlasEdge.relation]}: ${atlasEdge.description}`).join('\n')

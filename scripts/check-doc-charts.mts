@@ -5,7 +5,19 @@ import { Window } from 'happy-dom'
 import ts from 'typescript'
 
 import { contractInteractionEdges, quantitativeChartAxisLabels, quantitativeChartIds } from '../docs/charts/chartModels'
-import { contractAtlasEdges, contractAtlasNodes, contractAtlasPlotRouteMeaning, contractAtlasPlotRoutes, contractAtlasRelationLabels, contractAtlasRelationshipRows } from '../docs/charts/contractAtlas'
+import {
+	contractAtlasDefaultView,
+	contractAtlasEdges,
+	contractAtlasInventoryRows,
+	contractAtlasNodes,
+	contractAtlasPlotRouteMeaning,
+	contractAtlasPlotRoutes,
+	contractAtlasPlotRoutesForView,
+	contractAtlasRelationLabels,
+	contractAtlasRelationshipRows,
+	contractAtlasViewDefinitions,
+	type ContractAtlasView,
+} from '../docs/charts/contractAtlas'
 import { contractAtlasSourceOwnerOverrides, contractAtlasSourceReferences } from '../docs/charts/contractAtlasSourceReferences'
 import { analyzeContractAtlasSource, contractAtlasSourceReferenceIssue } from './contract-atlas-source-references.mts'
 
@@ -23,6 +35,13 @@ const expectedContractAtlasSourceReferenceCount = 321
 const expectedContractAtlasExplicitDeploymentCount = 17
 const expectedContractAtlasDirectBaseCount = 43
 const expectedContractAtlasDelegatecallCount = 5
+const expectedContractAtlasViewRouteCounts: Record<ContractAtlasView, number> = {
+	all: 360,
+	protocol: 69,
+	references: 189,
+	structure: 76,
+	tests: 26,
+}
 const expectedContractAtlasTypeModuleSources = new Set(['solidity/contracts/peripherals/EscalationGameTypes.sol', 'solidity/contracts/peripherals/SecurityPoolForkerTypes.sol'])
 const supportedDiagramTags = new Set(['circle', 'defs', 'line', 'marker', 'path', 'polyline', 'rect', 'text', 'tspan'])
 const axisFreeNativeChartIds = new Set(['fig-complete-contract-atlas', 'fig-contract-interaction-map'])
@@ -279,6 +298,18 @@ async function assertContractAtlasCoverage(): Promise<void> {
 	if (nodeIdSet.size !== nodeIds.length) {
 		throw new Error('Complete contract atlas node IDs must be unique')
 	}
+	if (contractAtlasInventoryRows.length !== expectedContractAtlasNodeCount) {
+		throw new Error(`Complete contract atlas component inventory expected ${expectedContractAtlasNodeCount} rows, found ${contractAtlasInventoryRows.length}`)
+	}
+	const inventoryNodeIssue = exactRelationshipSetIssue(
+		'Complete contract atlas component inventory mismatch',
+		nodeIds,
+		contractAtlasInventoryRows.map(row => row.node.id),
+	)
+	if (inventoryNodeIssue !== undefined) throw new Error(inventoryNodeIssue)
+	if (contractAtlasInventoryRows.some(row => row.panelLabel.trim().length === 0)) {
+		throw new Error('Complete contract atlas component inventory contains an empty region label')
+	}
 	const sourcePathSet = new Set(sourceEntries.map(entry => path.posix.join('solidity/contracts', entry.split(path.sep).join('/'))))
 	for (const node of contractAtlasNodes) {
 		if (!sourcePathSet.has(node.source)) {
@@ -383,6 +414,33 @@ async function assertContractAtlasCoverage(): Promise<void> {
 		contractAtlasPlotRoutes.flatMap(route => route.edges.map(edge => edge.id)),
 	)
 	if (routeEdgeIssue !== undefined) throw new Error(routeEdgeIssue)
+	const expectedViewIds = Object.keys(expectedContractAtlasViewRouteCounts)
+	const registeredViewIds = contractAtlasViewDefinitions.map(view => view.id)
+	const viewIdIssue = exactRelationshipSetIssue('Complete contract atlas relationship-layer definitions', expectedViewIds, registeredViewIds)
+	if (viewIdIssue !== undefined) throw new Error(viewIdIssue)
+	if (contractAtlasDefaultView !== 'protocol') {
+		throw new Error('Complete contract atlas must default to the reduced-overlap protocol-flow layer')
+	}
+	for (const view of contractAtlasViewDefinitions) {
+		const viewRoutes = contractAtlasPlotRoutesForView(view)
+		if (viewRoutes.length !== expectedContractAtlasViewRouteCounts[view.id]) {
+			throw new Error(`Complete contract atlas ${view.id} layer expected ${expectedContractAtlasViewRouteCounts[view.id]} routes, found ${viewRoutes.length}`)
+		}
+	}
+	const nonAllViews = contractAtlasViewDefinitions.filter(view => view.id !== 'all')
+	const partitionedRelations = nonAllViews.flatMap(view => view.relations)
+	const relationPartitionIssue = exactRelationshipSetIssue('Complete contract atlas relationship layers must partition every relation', Object.keys(contractAtlasRelationLabels), partitionedRelations)
+	if (relationPartitionIssue !== undefined) throw new Error(relationPartitionIssue)
+	const layeredEdgeIds = nonAllViews.flatMap(view => {
+		const viewRelations = new Set(view.relations)
+		return contractAtlasPlotRoutesForView(view).flatMap(route => route.edges.filter(edge => viewRelations.has(edge.relation)).map(edge => edge.id))
+	})
+	const layerCoverageIssue = exactRelationshipSetIssue(
+		'Complete contract atlas reduced-overlap layers must preserve every relationship',
+		contractAtlasEdges.map(edge => edge.id),
+		layeredEdgeIds,
+	)
+	if (layerCoverageIssue !== undefined) throw new Error(layerCoverageIssue)
 }
 
 function assertChartNode(value: unknown, chartId: string): void {
@@ -669,16 +727,32 @@ if (
 	!contractInteractionHtml.includes(`${productionDeclarationCount} production declarations and ${testDeclarationCount}`) ||
 	!contractInteractionHtml.includes(`${expectedContractAtlasNodeCount} nodes and ${expectedContractAtlasRelationshipCount} relationships`) ||
 	!contractInteractionHtml.includes(`${expectedContractAtlasPlotRouteCount} ordered source-target routes`) ||
+	!contractInteractionHtml.includes(`protocol-flow layer shows ${expectedContractAtlasViewRouteCounts.protocol} routes`) ||
+	!contractInteractionHtml.includes('data-contract-atlas-controls') ||
+	!contractInteractionHtml.includes('data-contract-atlas-view="protocol"') ||
+	!contractInteractionHtml.includes('data-contract-atlas-view="all"') ||
+	!contractInteractionHtml.includes(`complete ${expectedContractAtlasNodeCount}-component inventory`) ||
+	!contractInteractionHtml.includes('data-contract-atlas-node-table') ||
 	!contractInteractionHtml.includes('data-contract-atlas-table') ||
+	!runtimeSource.includes('renderContractAtlasInventoryTable()') ||
+	!runtimeSource.includes('contractAtlasInventoryRows.map') ||
 	!runtimeSource.includes('renderContractAtlasTable()') ||
 	!runtimeSource.includes('contractAtlasRelationshipRows.map') ||
-	!runtimeSource.includes('contractAtlasPlotRoutes.map') ||
+	!runtimeSource.includes('contractAtlasPlotRoutesForView(view).map') ||
 	!runtimeSource.includes('contractAtlasPlotRouteMeaning(route)') ||
+	!runtimeSource.includes('spreadContractAtlasPorts(positionedEdges') ||
 	!runtimeSource.includes("chart.dataset['plotRouteCount']") ||
+	!runtimeSource.includes("chart.dataset['visibleRouteCount']") ||
 	typeof contractAtlasAriaDescription !== 'string' ||
-	!contractAtlasAriaDescription.includes(`${expectedContractAtlasRelationshipCount} relationships grouped into ${expectedContractAtlasPlotRouteCount} ordered source-target routes`)
+	!contractAtlasAriaDescription.includes(`${expectedContractAtlasRelationshipCount} relationships grouped into ${expectedContractAtlasPlotRouteCount} ordered source-target routes`) ||
+	!contractAtlasAriaDescription.includes(`${expectedContractAtlasViewRouteCounts.protocol}-route protocol-flow layer`)
 ) {
-	throw new Error('Complete contract atlas page must state its checked inventory and plot-route counts, describe grouped route semantics, and mount the generated relationship register')
+	throw new Error('Complete contract atlas page must state its checked inventory and layered plot-route counts, expose reduced-overlap controls, and mount the generated component and relationship registers')
+}
+for (const view of contractAtlasViewDefinitions) {
+	if (!contractInteractionHtml.includes(`data-contract-atlas-view="${view.id}"`) || !contractInteractionHtml.includes(`data-contract-atlas-view-count="${view.id}"`)) {
+		throw new Error(`Complete contract atlas page is missing its ${view.id} relationship-layer control`)
+	}
 }
 const documentedEdges = [...contractInteractionHtml.matchAll(/<tr data-edge-id="([^"]+)" data-source="([^"]+)" data-receiver="([^"]+)" data-phase="([^"]+)">/g)].map(match => ({
 	id: match[1],
