@@ -5,7 +5,7 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta
 			name="description"
-			content="The complete Statoblast protocol documentation in one searchable, continuous reader."
+			content="The complete Statoblast protocol documentation in a searchable, on-demand reader."
 		/>
 		<title>Statoblast documentation</title>
 		<link rel="stylesheet" href="./docsReader.css" />
@@ -15,6 +15,16 @@
 
 		<header class="reader-header">
 			<h1>Statoblast documentation</h1>
+			<p>Search documents, sections, and tools.</p>
+			<button
+				class="reader-nav-toggle"
+				type="button"
+				aria-controls="reader-sidebar"
+				aria-expanded="false"
+				data-reader-nav-toggle
+			>
+				Browse contents
+			</button>
 		</header>
 
 		<div class="reader-progress" aria-hidden="true">
@@ -22,7 +32,11 @@
 		</div>
 
 		<div class="reader-shell">
-			<aside class="reader-sidebar" aria-label="Documentation navigation">
+			<aside
+				id="reader-sidebar"
+				class="reader-sidebar"
+				aria-label="Documentation navigation"
+			>
 				<div class="reader-sidebar-inner">
 					<label class="reader-search">
 						<span>Search documentation</span>
@@ -35,8 +49,9 @@
 						<kbd aria-hidden="true">/</kbd>
 					</label>
 					<p class="reader-search-status" aria-live="polite" data-search-status>
-						All 14 documents
+						14 documents
 					</p>
+					<div class="reader-search-results" hidden data-search-results></div>
 
 					<nav data-reader-navigation></nav>
 				</div>
@@ -54,7 +69,7 @@
 
 				<noscript>
 					<section class="reader-noscript">
-						<h2>JavaScript is required for the continuous reader.</h2>
+						<h2>JavaScript is required for the searchable reader.</h2>
 						<p>You can still open every source document directly:</p>
 						<ul>
 							<li><a href="./statoblast-whitepaper.html">Statoblast whitepaper</a></li>

@@ -92,21 +92,33 @@ const documentGroups = [
 ]
 
 const documents = documentGroups.flatMap(group => group.documents)
+const documentByPath = new Map(documents.map(documentEntry => [documentEntry.path, documentEntry]))
 const documentsContainer = document.querySelector('[data-reader-documents]')
 const navigation = document.querySelector('[data-reader-navigation]')
+const navigationToggle = document.querySelector('[data-reader-nav-toggle]')
 const searchInput = document.querySelector('[data-doc-search]')
 const searchStatus = document.querySelector('[data-search-status]')
+const searchResults = document.querySelector('[data-search-results]')
 const emptyState = document.querySelector('[data-reader-empty]')
 const clearSearchButton = document.querySelector('[data-clear-search]')
 const progress = document.querySelector('[data-reading-progress]')
 const chapterByPath = new Map()
-const frameByPath = new Map()
+const frameWrapByPath = new Map()
+const frameStatusByPath = new Map()
 const navigationDocumentByPath = new Map()
-const navigationSectionsByPath = new Map()
-const searchableTextByPath = new Map()
 const pendingFragmentByPath = new Map()
-const indexedPaths = new Set()
+const fragmentStabilizationTimeoutByPath = new Map()
+const resizeObserverByPath = new Map()
+const requestVersionByPath = new Map()
+const readerScrollByUrl = new Map()
+const loadedPaths = new Set()
+const loadingPaths = new Set()
 const failedPaths = new Set()
+let activePath
+let navigationVersion = 0
+let pendingReaderScroll
+let readerScrollStabilizationTimeout
+const readerFrame = createDocumentFrame()
 
 window.history.scrollRestoration = 'manual'
 
@@ -129,6 +141,33 @@ function decodeFragment(fragment) {
 		if (error instanceof URIError) return undefined
 		throw error
 	}
+}
+
+function searchEntry(path) {
+	const index = window.docsReaderSearchIndex
+	if (typeof index !== 'object' || index === null) return undefined
+	const entry = index[path]
+	if (typeof entry !== 'object' || entry === null || typeof entry.text !== 'string' || !Array.isArray(entry.sections)) return undefined
+	return entry
+}
+
+function sectionLink(path, section) {
+	const item = document.createElement('li')
+	const link = document.createElement('a')
+	link.href = `#${chapterId(path)}--${encodeURIComponent(section.id)}`
+	link.dataset.documentPath = path
+	link.dataset.documentFragment = section.id
+	link.dataset.searchText = `${section.title} ${section.text}`.toLowerCase()
+	if (section.kind === 'tool') {
+		link.className = 'reader-nav-tool-link'
+		const label = document.createElement('span')
+		label.textContent = 'Tool'
+		link.append(label, document.createTextNode(section.title))
+	} else {
+		link.textContent = section.title
+	}
+	item.append(link)
+	return item
 }
 
 function createNavigation() {
@@ -162,11 +201,13 @@ function createNavigation() {
 
 			const sectionList = document.createElement('ul')
 			sectionList.className = 'reader-nav-sections'
-			sectionList.setAttribute('aria-label', `${documentEntry.title} sections`)
+			sectionList.setAttribute('aria-label', `${documentEntry.title} sections and tools`)
+			for (const section of searchEntry(documentEntry.path)?.sections ?? []) {
+				sectionList.append(sectionLink(documentEntry.path, section))
+			}
 			documentElement.append(link, sectionList)
 			groupDocuments.append(documentElement)
 			navigationDocumentByPath.set(documentEntry.path, documentElement)
-			navigationSectionsByPath.set(documentEntry.path, sectionList)
 		}
 
 		groupElement.append(groupDocuments)
@@ -174,55 +215,9 @@ function createNavigation() {
 	}
 }
 
-function headingSlug(text) {
-	return text
-		.toLowerCase()
-		.normalize('NFKD')
-		.replace(/[\u0300-\u036f]/g, '')
-		.replace(/[^a-z0-9]+/g, '-')
-		.replace(/^-|-$/g, '')
-}
-
-function populateNavigationSections(path, frameDocument) {
-	const sectionList = navigationSectionsByPath.get(path)
-	const frameWindow = frameDocument.defaultView
-	if (sectionList === undefined || frameWindow === null) return
-
-	const headings = Array.from(frameDocument.querySelectorAll('main h2, article h2'))
-	const usedIds = new Set(Array.from(frameDocument.querySelectorAll('[id]'), element => element.id))
-	sectionList.replaceChildren()
-
-	for (const [index, heading] of headings.entries()) {
-		if (!(heading instanceof frameWindow.HTMLElement)) continue
-		let headingId = heading.id
-		if (headingId.length === 0) {
-			const baseId = headingSlug(heading.textContent ?? '') || `section-${index + 1}`
-			headingId = baseId
-			let suffix = 2
-			while (usedIds.has(headingId)) {
-				headingId = `${baseId}-${suffix}`
-				suffix += 1
-			}
-			heading.id = headingId
-			usedIds.add(headingId)
-		}
-
-		const item = document.createElement('li')
-		const link = document.createElement('a')
-		link.href = `#${chapterId(path)}--${encodeURIComponent(headingId)}`
-		link.dataset.documentPath = path
-		link.dataset.documentFragment = headingId
-		link.textContent = heading.textContent?.trim() || `Section ${index + 1}`
-		item.append(link)
-		sectionList.append(item)
-	}
-}
-
 function markdownFrameSource(path, title) {
 	const markdownDocuments = window.docsReaderMarkdown
-	if (typeof markdownDocuments !== 'object' || markdownDocuments === null) {
-		return ''
-	}
+	if (typeof markdownDocuments !== 'object' || markdownDocuments === null) return ''
 	const content = markdownDocuments[path]
 	if (typeof content !== 'string') return ''
 
@@ -235,10 +230,66 @@ function markdownFrameSource(path, title) {
 				<title>${title}</title>
 				<link rel="stylesheet" href="./shared-docs.css">
 			</head>
-			<body class="doc-openoracle markdown-reference">
+			<body class="doc-openoracle markdown-reference reader-embedded">
 				<main><article>${content}</article></main>
 			</body>
-		</html>`
+	</html>`
+}
+
+function htmlFrameSource(path, source) {
+	const base = `<base href="${sourceUrl(path)}">`
+	const head = /<head(?:\s[^>]*)?>/i.exec(source)
+	if (head === null || head.index === undefined) {
+		return `${base}${source}`
+	}
+	const insertionIndex = head.index + head[0].length
+	return `${source.slice(0, insertionIndex)}${base}${source.slice(insertionIndex)}`
+}
+
+function writeFrameSource(path, frame, source) {
+	const frameDocument = frame.contentDocument
+	if (frameDocument === null) return false
+	frame.dataset.readerSourceReady = 'true'
+	frame.dataset.readerSourceUrl = path
+	frameDocument.open()
+	frameDocument.write(source)
+	frameDocument.close()
+	initializeFrame(path)
+	return true
+}
+
+function createDocumentFrame() {
+	const frame = document.createElement('iframe')
+	frame.className = 'reader-document-frame'
+	frame.title = 'Documentation chapter'
+	frame.loading = 'lazy'
+	frame.addEventListener('load', () => {
+		const path = frame.dataset.documentFrame
+		if (path === undefined || frame.dataset.readerSourceReady !== 'true') return
+		initializeFrame(path)
+	})
+	frame.addEventListener('error', () => {
+		const path = frame.dataset.documentFrame
+		const documentEntry = path === undefined ? undefined : documentByPath.get(path)
+		if (documentEntry !== undefined && activePath === path && frame.dataset.readerSourceReady === 'true') {
+			showFrameError(documentEntry)
+		}
+	})
+	return frame
+}
+
+function frameForPath(path) {
+	return readerFrame.dataset.documentFrame === path ? readerFrame : undefined
+}
+
+function attachReaderFrame(path) {
+	const documentEntry = documentByPath.get(path)
+	const frameWrap = frameWrapByPath.get(path)
+	if (documentEntry === undefined || frameWrap === undefined) return false
+	readerFrame.dataset.documentFrame = path
+	readerFrame.title = `${documentEntry.title} document`
+	frameWrap.append(readerFrame)
+	return true
 }
 
 function createChapter(documentEntry, index, groupLabel) {
@@ -246,6 +297,7 @@ function createChapter(documentEntry, index, groupLabel) {
 	chapter.className = 'reader-chapter'
 	chapter.id = chapterId(documentEntry.path)
 	chapter.dataset.documentPath = documentEntry.path
+	chapter.hidden = true
 
 	const header = document.createElement('header')
 	header.className = 'reader-chapter-header'
@@ -276,87 +328,17 @@ function createChapter(documentEntry, index, groupLabel) {
 
 	const frameWrap = document.createElement('div')
 	frameWrap.className = 'reader-frame-wrap'
-	frameWrap.setAttribute('aria-busy', 'true')
 	const frameStatus = document.createElement('span')
 	frameStatus.className = 'reader-frame-status'
 	frameStatus.setAttribute('role', 'status')
 	frameStatus.textContent = 'Loading document…'
-	const frame = document.createElement('iframe')
-	frame.className = 'reader-document-frame'
-	frame.title = `${documentEntry.title} document`
-	frame.dataset.documentFrame = documentEntry.path
-	frame.loading = 'eager'
 
-	frameWrap.append(frameStatus, frame)
+	frameWrap.append(frameStatus)
 	chapter.append(header, frameWrap)
 	chapterByPath.set(documentEntry.path, chapter)
-	frameByPath.set(documentEntry.path, frame)
-	searchableTextByPath.set(documentEntry.path, `${documentEntry.title} ${documentEntry.description} ${groupLabel}`.toLowerCase())
-
-	frame.addEventListener('load', () => {
-		if (frame.dataset.readerSourceReady !== 'true') return
-		initializeFrame(documentEntry.path, frame, frameWrap, frameStatus)
-	})
-	frame.addEventListener('error', () => showFrameError(documentEntry, frame, frameWrap, frameStatus))
-	requestDocumentFrame(documentEntry, frame, frameWrap, frameStatus).catch(error => handleDocumentFrameFailure(error, documentEntry, frame, frameWrap, frameStatus))
+	frameWrapByPath.set(documentEntry.path, frameWrap)
+	frameStatusByPath.set(documentEntry.path, frameStatus)
 	return chapter
-}
-
-async function requestDocumentFrame(documentEntry, frame, frameWrap, frameStatus) {
-	delete frameWrap.dataset.loaded
-	frameWrap.setAttribute('aria-busy', 'true')
-	frameStatus.hidden = false
-	frameStatus.textContent = 'Loading document…'
-	frame.hidden = false
-	frameWrap.querySelector('.reader-frame-error')?.remove()
-	failedPaths.delete(documentEntry.path)
-	applySearch()
-
-	if (documentEntry.path.endsWith('.md')) {
-		const source = markdownFrameSource(documentEntry.path, documentEntry.title)
-		if (source.length === 0) throw new Error('Generated Markdown content is unavailable')
-		frame.dataset.readerSourceReady = 'true'
-		frame.srcdoc = source
-		return
-	}
-
-	const response = await fetch(`./${documentEntry.path}`, { method: 'HEAD' })
-	if (!response.ok) throw new Error(`Document request returned ${response.status}`)
-	frame.dataset.readerSourceReady = 'true'
-	frame.src = `./${documentEntry.path}`
-}
-
-function handleDocumentFrameFailure(error, documentEntry, frame, frameWrap, frameStatus) {
-	if (!(error instanceof Error)) throw error
-	showFrameError(documentEntry, frame, frameWrap, frameStatus)
-}
-
-function showFrameError(documentEntry, frame, frameWrap, frameStatus) {
-	delete frame.dataset.readerSourceReady
-	frameWrap.dataset.loaded = 'true'
-	frameWrap.setAttribute('aria-busy', 'false')
-	frameStatus.hidden = true
-	frame.hidden = true
-	indexedPaths.delete(documentEntry.path)
-	failedPaths.add(documentEntry.path)
-	frameWrap.querySelector('.reader-frame-error')?.remove()
-
-	const error = document.createElement('div')
-	error.className = 'reader-frame-error'
-	error.setAttribute('role', 'alert')
-	const title = document.createElement('strong')
-	title.textContent = `${documentEntry.title} could not be loaded`
-	const guidance = document.createElement('p')
-	guidance.textContent = 'Check your connection and try this document again. The direct source link remains available above.'
-	const retry = document.createElement('button')
-	retry.type = 'button'
-	retry.textContent = 'Retry document'
-	retry.addEventListener('click', () => {
-		requestDocumentFrame(documentEntry, frame, frameWrap, frameStatus).catch(error => handleDocumentFrameFailure(error, documentEntry, frame, frameWrap, frameStatus))
-	})
-	error.append(title, guidance, retry)
-	frameWrap.append(error)
-	applySearch()
 }
 
 function createChapters() {
@@ -371,12 +353,136 @@ function createChapters() {
 	}
 }
 
+function unloadDocumentFrame(path) {
+	const frame = frameForPath(path)
+	const frameWrap = frameWrapByPath.get(path)
+	const frameStatus = frameStatusByPath.get(path)
+	if (frame === undefined || frameWrap === undefined || frameStatus === undefined) return
+
+	requestVersionByPath.set(path, (requestVersionByPath.get(path) ?? 0) + 1)
+	resizeObserverByPath.get(path)?.disconnect()
+	resizeObserverByPath.delete(path)
+	loadingPaths.delete(path)
+	loadedPaths.delete(path)
+	failedPaths.delete(path)
+	delete frame.dataset.readerSourceReady
+	delete frame.dataset.readerSourceUrl
+	delete frame.dataset.readerInitialized
+	frame.style.removeProperty('height')
+	const frameDocument = frame.contentDocument
+	if (frameDocument !== null) {
+		frameDocument.open()
+		frameDocument.write('<!doctype html><title></title>')
+		frameDocument.close()
+	}
+	frame.removeAttribute('src')
+	frame.removeAttribute('srcdoc')
+	delete frameWrap.dataset.loaded
+	frameWrap.setAttribute('aria-busy', 'false')
+	frameStatus.hidden = true
+	frameWrap.querySelector('.reader-frame-error')?.remove()
+}
+
+async function requestDocumentFrame(path) {
+	if (path !== activePath || loadedPaths.has(path) || loadingPaths.has(path)) return
+	const documentEntry = documentByPath.get(path)
+	const frame = frameForPath(path)
+	const frameWrap = frameWrapByPath.get(path)
+	const frameStatus = frameStatusByPath.get(path)
+	if (documentEntry === undefined || frame === undefined || frameWrap === undefined || frameStatus === undefined) return
+
+	const requestVersion = (requestVersionByPath.get(path) ?? 0) + 1
+	requestVersionByPath.set(path, requestVersion)
+	const requestIsCurrent = () => activePath === path && requestVersionByPath.get(path) === requestVersion
+	loadingPaths.add(path)
+	delete frameWrap.dataset.loaded
+	frameWrap.setAttribute('aria-busy', 'true')
+	frameStatus.hidden = false
+	frameStatus.textContent = 'Loading document…'
+	frame.hidden = false
+	frameWrap.querySelector('.reader-frame-error')?.remove()
+	failedPaths.delete(path)
+	updateReaderBusyState()
+
+	if (path.endsWith('.md')) {
+		const source = markdownFrameSource(path, documentEntry.title)
+		if (source.length === 0) {
+			showFrameError(documentEntry)
+			return
+		}
+		if (!writeFrameSource(path, frame, source)) {
+			showFrameError(documentEntry)
+		}
+		return
+	}
+
+	let response
+	try {
+		response = await fetch(`./${path}`)
+	} catch (error) {
+		if (!requestIsCurrent()) return
+		if (!(error instanceof TypeError)) throw error
+		showFrameError(documentEntry)
+		return
+	}
+	if (!requestIsCurrent()) return
+	if (!response.ok) {
+		showFrameError(documentEntry)
+		return
+	}
+	let source
+	try {
+		source = await response.text()
+	} catch (error) {
+		if (!requestIsCurrent()) return
+		if (!(error instanceof TypeError)) throw error
+		showFrameError(documentEntry)
+		return
+	}
+	if (!requestIsCurrent()) return
+	if (!writeFrameSource(path, frame, htmlFrameSource(path, source))) {
+		showFrameError(documentEntry)
+	}
+}
+
+function showFrameError(documentEntry) {
+	if (activePath !== documentEntry.path) return
+	const frame = frameForPath(documentEntry.path)
+	const frameWrap = frameWrapByPath.get(documentEntry.path)
+	const frameStatus = frameStatusByPath.get(documentEntry.path)
+	if (frame === undefined || frameWrap === undefined || frameStatus === undefined) return
+
+	delete frame.dataset.readerSourceReady
+	delete frame.dataset.readerSourceUrl
+	loadingPaths.delete(documentEntry.path)
+	loadedPaths.delete(documentEntry.path)
+	failedPaths.add(documentEntry.path)
+	frameWrap.dataset.loaded = 'true'
+	frameWrap.setAttribute('aria-busy', 'false')
+	frameStatus.hidden = true
+	frame.hidden = true
+	frameWrap.querySelector('.reader-frame-error')?.remove()
+
+	const error = document.createElement('div')
+	error.className = 'reader-frame-error'
+	error.setAttribute('role', 'alert')
+	const title = document.createElement('strong')
+	title.textContent = `${documentEntry.title} could not be loaded`
+	const guidance = document.createElement('p')
+	guidance.textContent = 'Check your connection and try this document again. The direct source link remains available above.'
+	const retry = document.createElement('button')
+	retry.type = 'button'
+	retry.textContent = 'Retry document'
+	retry.addEventListener('click', () => requestDocumentFrame(documentEntry.path))
+	error.append(title, guidance, retry)
+	frameWrap.append(error)
+	updateReaderBusyState()
+}
+
 function frameHeight(frame) {
 	const documentElement = frame.contentDocument?.documentElement
 	const body = frame.contentDocument?.body
-	if (documentElement === undefined || documentElement === null || body === undefined || body === null) {
-		return 0
-	}
+	if (documentElement === undefined || documentElement === null || body === undefined || body === null) return 0
 	return Math.max(documentElement.scrollHeight, documentElement.offsetHeight, body.scrollHeight, body.offsetHeight)
 }
 
@@ -389,7 +495,7 @@ function sourcePathFromHref(href, baseUrl) {
 	const target = new URL(href, baseUrl)
 	if (target.origin !== window.location.origin) return undefined
 	const fileName = target.pathname.split('/').pop()
-	if (fileName === undefined || !documents.some(entry => entry.path === fileName)) return undefined
+	if (fileName === undefined || !documentByPath.has(fileName)) return undefined
 	const fragment = decodeFragment(target.hash.slice(1))
 	if (fragment === undefined) return undefined
 	return { fragment, path: fileName }
@@ -408,7 +514,7 @@ function frameLinkClick(path, frame, event) {
 		const fragment = decodeFragment(href.slice(1))
 		if (fragment === undefined) return
 		event.preventDefault()
-		navigateToDocument(path, fragment)
+		void navigateToDocument(path, fragment)
 		return
 	}
 
@@ -421,157 +527,352 @@ function frameLinkClick(path, frame, event) {
 	}
 	if (requestsSeparateContext) return
 	event.preventDefault()
-	navigateToDocument(target.path, target.fragment)
+	void navigateToDocument(target.path, target.fragment)
+}
+
+function openFragmentDetails(target, frameWindow) {
+	if (target instanceof frameWindow.HTMLDetailsElement) target.open = true
+	const containingDetails = target.closest('details')
+	if (containingDetails instanceof frameWindow.HTMLDetailsElement) containingDetails.open = true
+}
+
+function positionFrameFragment(path, fragment, behavior = 'instant') {
+	const frame = frameForPath(path)
+	if (frame === undefined) return
+	if (fragment.length === 0) {
+		chapterByPath.get(path)?.scrollIntoView({ behavior, block: 'start' })
+		return
+	}
+	const target = frame.contentDocument?.getElementById(fragment)
+	const frameWindow = frame.contentWindow
+	if (frameWindow === null || !(target instanceof frameWindow.HTMLElement)) return
+	openFragmentDetails(target, frameWindow)
+	resizeFrame(frame)
+	const outerTop = frame.getBoundingClientRect().top + window.scrollY
+	const innerTop = target.getBoundingClientRect().top + frameWindow.scrollY
+	const navigationOffset = window.innerWidth <= 980 ? 72 : 24
+	window.scrollTo({ behavior, top: outerTop + innerTop - navigationOffset })
 }
 
 function scrollToFrameFragment(path, fragment) {
-	const frame = frameByPath.get(path)
-	const chapter = chapterByPath.get(path)
-	if (frame === undefined || chapter === undefined) return false
-	if (failedPaths.has(path)) return false
-	if (fragment.length === 0) {
-		chapter.scrollIntoView({ block: 'start' })
-		return true
+	const frame = frameForPath(path)
+	if (frame === undefined || failedPaths.has(path) || !loadedPaths.has(path)) return false
+	if (fragment.length > 0) {
+		const target = frame.contentDocument?.getElementById(fragment)
+		const frameWindow = frame.contentWindow
+		if (frameWindow === null || !(target instanceof frameWindow.HTMLElement)) return false
+		openFragmentDetails(target, frameWindow)
 	}
 
-	const target = frame.contentDocument?.getElementById(fragment)
-	const frameWindow = frame.contentWindow
-	if (frameWindow === null || !(target instanceof frameWindow.HTMLElement)) return false
-	const outerTop = frame.getBoundingClientRect().top + window.scrollY
-	const innerTop = target.getBoundingClientRect().top + (frame.contentWindow?.scrollY ?? 0)
-	const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
-	window.scrollTo({ behavior, top: outerTop + innerTop - 24 })
+	const preferredBehavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+	positionFrameFragment(path, fragment, preferredBehavior)
+	requestAnimationFrame(() => {
+		requestAnimationFrame(() => positionFrameFragment(path, fragment))
+	})
+	window.setTimeout(() => positionFrameFragment(path, fragment), 180)
 	return true
 }
 
-function navigateToDocument(path, fragment = '', updateHistory = true) {
-	const chapter = chapterByPath.get(path)
-	if (chapter === undefined) return
-	if (chapter.hidden) {
-		if (searchInput instanceof HTMLInputElement) searchInput.value = ''
-		applySearch()
-	}
+function stabilizeFrameFragment(path) {
+	const fragment = pendingFragmentByPath.get(path)
+	if (fragment === undefined || !scrollToFrameFragment(path, fragment)) return
+	const existingTimeout = fragmentStabilizationTimeoutByPath.get(path)
+	if (existingTimeout !== undefined) window.clearTimeout(existingTimeout)
+	const timeout = window.setTimeout(() => {
+		positionFrameFragment(path, fragment)
+		pendingFragmentByPath.delete(path)
+		fragmentStabilizationTimeoutByPath.delete(path)
+	}, 650)
+	fragmentStabilizationTimeoutByPath.set(path, timeout)
+}
 
-	const readerHash = `${chapterId(path)}${fragment.length > 0 ? `--${encodeURIComponent(fragment)}` : ''}`
-	if (updateHistory) {
-		const currentState = typeof window.history.state === 'object' && window.history.state !== null ? window.history.state : {}
-		window.history.replaceState({ ...currentState, readerScrollY: window.scrollY }, '', window.location.href)
-		window.history.pushState({}, '', `#${readerHash}`)
-	}
-	pendingFragmentByPath.clear()
-	if (!scrollToFrameFragment(path, fragment)) {
-		const allDocumentsSettled = indexedPaths.size + failedPaths.size === documents.length
-		if (failedPaths.has(path)) {
-			if (fragment.length > 0) pendingFragmentByPath.set(path, fragment)
-			chapter.scrollIntoView({ block: 'start' })
-			return
-		}
-		if (allDocumentsSettled) {
-			chapter.scrollIntoView({ block: 'start' })
-			return
-		}
-		pendingFragmentByPath.set(path, fragment)
-		chapter.scrollIntoView({ block: 'start' })
+function clearPendingReaderScroll() {
+	pendingReaderScroll = undefined
+	if (readerScrollStabilizationTimeout !== undefined) {
+		window.clearTimeout(readerScrollStabilizationTimeout)
+		readerScrollStabilizationTimeout = undefined
 	}
 }
 
-function initializeFrame(path, frame, frameWrap, frameStatus) {
+function positionPendingReaderScroll(path) {
+	const restoration = pendingReaderScroll
+	if (restoration === undefined || restoration.path !== path || restoration.navigationVersion !== navigationVersion || restoration.url !== window.location.href || activePath !== path) {
+		return false
+	}
+	window.scrollTo({ behavior: 'instant', top: restoration.scrollY })
+	return true
+}
+
+function stabilizePendingReaderScroll(path) {
+	const restoration = pendingReaderScroll
+	if (restoration === undefined || !positionPendingReaderScroll(path)) return
+	requestAnimationFrame(() => {
+		requestAnimationFrame(() => positionPendingReaderScroll(path))
+	})
+	if (readerScrollStabilizationTimeout !== undefined) {
+		window.clearTimeout(readerScrollStabilizationTimeout)
+	}
+	readerScrollStabilizationTimeout = window.setTimeout(() => {
+		if (pendingReaderScroll !== restoration) return
+		positionPendingReaderScroll(path)
+		pendingReaderScroll = undefined
+		readerScrollStabilizationTimeout = undefined
+	}, 650)
+}
+
+function stabilizeReaderPosition(path) {
+	stabilizeFrameFragment(path)
+	stabilizePendingReaderScroll(path)
+}
+
+function setCurrentNavigation(path) {
+	for (const link of document.querySelectorAll('.reader-nav-document-link')) {
+		if (!(link instanceof HTMLAnchorElement)) continue
+		if (link.dataset.documentPath === path) {
+			link.setAttribute('aria-current', 'location')
+			const group = link.closest('.reader-nav-group')
+			if (group instanceof HTMLDetailsElement) group.open = true
+		} else {
+			link.removeAttribute('aria-current')
+		}
+	}
+}
+
+async function selectDocument(path, fragment = '', positionFragment = true) {
+	if (!documentByPath.has(path)) return
+	if (positionFragment) clearPendingReaderScroll()
+	const previousPath = activePath
+	if (previousPath !== undefined && previousPath !== path) {
+		unloadDocumentFrame(previousPath)
+	}
+	activePath = path
+	if (!attachReaderFrame(path)) return
+	for (const [chapterPath, chapter] of chapterByPath) {
+		chapter.hidden = chapterPath !== path
+	}
+	setCurrentNavigation(path)
+	pendingFragmentByPath.clear()
+	for (const timeout of fragmentStabilizationTimeoutByPath.values()) window.clearTimeout(timeout)
+	fragmentStabilizationTimeoutByPath.clear()
+	if (positionFragment && !scrollToFrameFragment(path, fragment)) {
+		pendingFragmentByPath.set(path, fragment)
+		chapterByPath.get(path)?.scrollIntoView({ block: 'start' })
+	}
+	await requestDocumentFrame(path)
+	updateReaderBusyState()
+}
+
+async function navigateToDocument(path, fragment = '', updateHistory = true) {
+	const chapter = chapterByPath.get(path)
+	if (chapter === undefined) return
+	const currentUrl = window.location.href
+	const currentScrollY = window.scrollY
+	const currentNavigationVersion = navigationVersion + 1
+	navigationVersion = currentNavigationVersion
+	const readerHash = `${chapterId(path)}${fragment.length > 0 ? `--${encodeURIComponent(fragment)}` : ''}`
+	await selectDocument(path, fragment)
+	if (updateHistory && navigationVersion === currentNavigationVersion && activePath === path) {
+		readerScrollByUrl.set(currentUrl, currentScrollY)
+		window.history.pushState({}, '', `#${readerHash}`)
+	}
+	setNavigationOpen(false)
+}
+
+function initializeFrame(path) {
+	const frame = frameForPath(path)
+	const frameWrap = frameWrapByPath.get(path)
+	const frameStatus = frameStatusByPath.get(path)
+	if (frame === undefined || frameWrap === undefined || frameStatus === undefined) return
 	const frameDocument = frame.contentDocument
-	if (frameDocument === null) {
-		const documentEntry = documents.find(entry => entry.path === path)
-		if (documentEntry !== undefined) showFrameError(documentEntry, frame, frameWrap, frameStatus)
+	const frameWindow = frame.contentWindow
+	if (frameDocument === null || frameWindow === null) {
+		const documentEntry = documentByPath.get(path)
+		if (documentEntry !== undefined) showFrameError(documentEntry)
 		return
 	}
 
-	resizeFrame(frame)
+	loadingPaths.delete(path)
+	loadedPaths.add(path)
+	failedPaths.delete(path)
+	frameDocument.body?.classList.add('reader-embedded')
 	frameWrap.dataset.loaded = 'true'
 	frameWrap.setAttribute('aria-busy', 'false')
 	frameStatus.hidden = true
-	failedPaths.delete(path)
-	indexedPaths.add(path)
-	searchableTextByPath.set(path, `${searchableTextByPath.get(path) ?? ''} ${frameDocument.body?.textContent ?? ''}`.toLowerCase())
-	populateNavigationSections(path, frameDocument)
+	resizeFrame(frame)
 
-	frameDocument.addEventListener('click', event => frameLinkClick(path, frame, event))
-	if (typeof ResizeObserver !== 'undefined' && frameDocument.body !== null) {
-		const observer = new ResizeObserver(() => resizeFrame(frame))
-		observer.observe(frameDocument.body)
+	if (frame.dataset.readerInitialized !== 'true') {
+		frame.dataset.readerInitialized = 'true'
+		frameDocument.addEventListener('click', event => frameLinkClick(path, frame, event))
+		frameDocument.addEventListener(
+			'toggle',
+			() => {
+				resizeFrame(frame)
+				stabilizeReaderPosition(path)
+			},
+			true,
+		)
+		frameWindow.addEventListener('docs:charts-rendered', () => {
+			resizeFrame(frame)
+			stabilizeReaderPosition(path)
+		})
+		frameWindow.addEventListener('docs:tools-ready', () => {
+			resizeFrame(frame)
+			stabilizeReaderPosition(path)
+		})
+		if (typeof ResizeObserver !== 'undefined' && frameDocument.body !== null) {
+			const observer = new ResizeObserver(() => {
+				resizeFrame(frame)
+				stabilizeReaderPosition(path)
+			})
+			observer.observe(frameDocument.body)
+			resizeObserverByPath.set(path, observer)
+		}
 	}
 
-	applySearch()
+	requestAnimationFrame(() => resizeFrame(frame))
+	window.setTimeout(() => resizeFrame(frame), 180)
+	stabilizeReaderPosition(path)
+	updateReaderBusyState()
+}
+
+function tokenizeQuery(query) {
+	return query
+		.toLowerCase()
+		.normalize('NFKD')
+		.replace(/[\u0300-\u036f]/g, '')
+		.split(/[^a-z0-9_/-]+/)
+		.filter(token => token.length > 0)
+}
+
+function includesTokens(text, tokens) {
+	const normalized = text.toLowerCase()
+	return tokens.every(token => normalized.includes(token))
+}
+
+function resultSnippet(text, tokens) {
+	if (text.length <= 170) return text
+	const lowerText = text.toLowerCase()
+	const firstMatch =
+		tokens
+			.map(token => lowerText.indexOf(token))
+			.filter(index => index >= 0)
+			.sort((left, right) => left - right)[0] ?? 0
+	const start = Math.max(0, firstMatch - 55)
+	const end = Math.min(text.length, start + 190)
+	return `${start > 0 ? '…' : ''}${text.slice(start, end).trim()}${end < text.length ? '…' : ''}`
+}
+
+function renderSearchResults(results, tokens) {
+	if (!(searchResults instanceof HTMLElement)) return
+	searchResults.replaceChildren()
+	searchResults.hidden = tokens.length === 0 || results.length === 0
+	if (searchResults.hidden) return
+
+	const heading = document.createElement('p')
+	heading.className = 'reader-search-results-heading'
+	heading.textContent = 'Best matching sections'
+	const list = document.createElement('ol')
+	const queryPhrase = tokens.join(' ')
+	const rankedResults = results.toSorted((left, right) => {
+		const score = result => {
+			const title = result.title.toLowerCase()
+			const titleTokenScore = tokens.filter(token => title.includes(token)).length * 12
+			const phraseScore = queryPhrase.length > 0 && title.includes(queryPhrase) ? 80 : 0
+			const toolScore = result.kind === 'tool' ? 8 : 0
+			return phraseScore + titleTokenScore + toolScore
+		}
+		return score(right) - score(left)
+	})
+	for (const result of rankedResults.slice(0, 8)) {
+		const item = document.createElement('li')
+		const link = document.createElement('a')
+		link.href = `#${chapterId(result.path)}${result.fragment.length > 0 ? `--${encodeURIComponent(result.fragment)}` : ''}`
+		link.dataset.documentPath = result.path
+		if (result.fragment.length > 0) link.dataset.documentFragment = result.fragment
+		const context = document.createElement('span')
+		context.textContent = result.kind === 'tool' ? `${result.documentTitle} · Interactive tool` : result.documentTitle
+		const title = document.createElement('strong')
+		title.textContent = result.title
+		const snippet = document.createElement('small')
+		snippet.textContent = resultSnippet(result.text, tokens)
+		link.append(context, title, snippet)
+		item.append(link)
+		list.append(item)
+	}
+	searchResults.append(heading, list)
 }
 
 function applySearch() {
 	if (!(searchInput instanceof HTMLInputElement)) return
-	const query = searchInput.value.trim().toLowerCase()
-	let matches = 0
-	let readyMatches = 0
-	let unavailableMatches = 0
-	const pendingCount = documents.length - indexedPaths.size - failedPaths.size
+	const query = searchInput.value.trim()
+	const tokens = tokenizeQuery(query)
+	const matchingPaths = new Set()
+	const results = []
+	let matchingSections = 0
 
 	for (const documentEntry of documents) {
-		const chapter = chapterByPath.get(documentEntry.path)
+		const entry = searchEntry(documentEntry.path)
+		const documentText = `${documentEntry.title} ${documentEntry.description} ${entry?.text ?? ''}`
+		const documentMatches = tokens.length === 0 || includesTokens(documentText, tokens)
+		if (documentMatches) matchingPaths.add(documentEntry.path)
 		const navigationDocument = navigationDocumentByPath.get(documentEntry.path)
-		if (chapter === undefined) continue
-		const matchesQuery = query.length === 0 || searchableTextByPath.get(documentEntry.path)?.includes(query)
-		chapter.hidden = !matchesQuery
-		if (navigationDocument !== undefined) navigationDocument.hidden = !matchesQuery
-		if (!matchesQuery) continue
+		if (navigationDocument !== undefined) navigationDocument.hidden = !documentMatches
 
-		matches += 1
-		if (indexedPaths.has(documentEntry.path)) {
-			readyMatches += 1
-		} else if (failedPaths.has(documentEntry.path)) {
-			unavailableMatches += 1
+		for (const link of navigationDocument?.querySelectorAll('a[data-search-text]') ?? []) {
+			if (!(link instanceof HTMLAnchorElement)) continue
+			const sectionMatches = tokens.length === 0 || includesTokens(link.dataset.searchText ?? '', tokens)
+			link.parentElement?.toggleAttribute('hidden', !sectionMatches)
+		}
+
+		if (tokens.length === 0 || entry === undefined) continue
+		const matchingEntrySections = entry.sections.filter(section => includesTokens(`${section.title} ${section.text}`, tokens))
+		matchingSections += matchingEntrySections.length
+		for (const section of matchingEntrySections) {
+			results.push({
+				documentTitle: documentEntry.title,
+				fragment: section.id,
+				kind: section.kind,
+				path: documentEntry.path,
+				text: section.text,
+				title: section.title,
+			})
+		}
+		if (matchingEntrySections.length === 0 && documentMatches) {
+			results.push({
+				documentTitle: documentEntry.title,
+				fragment: '',
+				kind: 'document',
+				path: documentEntry.path,
+				text: entry.text,
+				title: documentEntry.title,
+			})
 		}
 	}
 
-	if (searchStatus instanceof HTMLElement) {
-		let statusText = `All ${documents.length} documents`
-		if (query.length === 0) {
-			if (pendingCount > 0) {
-				statusText = `Indexing ${indexedPaths.size} of ${documents.length} documents…`
-			} else if (failedPaths.size > 0) {
-				statusText = `${indexedPaths.size} documents ready; ${failedPaths.size} unavailable`
-			}
-		} else if (pendingCount > 0) {
-			statusText = `${matches} ${matches === 1 ? 'match' : 'matches'} so far; indexing ${pendingCount} more`
-		} else if (failedPaths.size > 0) {
-			if (readyMatches > 0 && unavailableMatches > 0) {
-				statusText = `${readyMatches} ${readyMatches === 1 ? 'match' : 'matches'} in ready documents; ${unavailableMatches} in unavailable documents`
-			} else if (readyMatches > 0) {
-				statusText = `${readyMatches} ${readyMatches === 1 ? 'match' : 'matches'} in ${indexedPaths.size} ready documents; ${failedPaths.size} unavailable`
-			} else if (unavailableMatches > 0) {
-				statusText = `${unavailableMatches} metadata ${unavailableMatches === 1 ? 'match' : 'matches'} in unavailable documents; no ready-document matches`
-			} else {
-				statusText = `No matches in ${indexedPaths.size} ready documents; ${failedPaths.size} unavailable`
-			}
-		} else {
-			statusText = `${matches} ${matches === 1 ? 'document' : 'documents'} found`
-		}
-		searchStatus.textContent = statusText
-	}
-	if (documentsContainer instanceof HTMLElement) {
-		documentsContainer.setAttribute('aria-busy', pendingCount > 0 ? 'true' : 'false')
-	}
-	if (emptyState instanceof HTMLElement) {
-		emptyState.hidden = matches !== 0 || pendingCount > 0 || failedPaths.size > 0
-	}
 	for (const group of navigation?.querySelectorAll('.reader-nav-group') ?? []) {
 		if (!(group instanceof HTMLDetailsElement)) continue
 		const hasVisibleDocument = Array.from(group.querySelectorAll('.reader-nav-document')).some(documentElement => !documentElement.hasAttribute('hidden'))
 		group.hidden = !hasVisibleDocument
-		if (query.length > 0 && hasVisibleDocument) group.open = true
+		if (tokens.length > 0 && hasVisibleDocument) group.open = true
 	}
-	if (pendingCount === 0) {
-		for (const [path, fragment] of pendingFragmentByPath) {
-			if (failedPaths.has(path)) continue
-			if (!scrollToFrameFragment(path, fragment)) {
-				chapterByPath.get(path)?.scrollIntoView({ block: 'start' })
-			}
-			pendingFragmentByPath.delete(path)
+
+	if (searchStatus instanceof HTMLElement) {
+		if (tokens.length === 0) {
+			searchStatus.textContent = `${documents.length} documents`
+		} else if (matchingPaths.size === 0) {
+			searchStatus.textContent = 'No matching documents'
+		} else {
+			searchStatus.textContent = `${matchingPaths.size} ${matchingPaths.size === 1 ? 'document' : 'documents'} and ${matchingSections} matching ${matchingSections === 1 ? 'section or tool' : 'sections or tools'}`
 		}
 	}
+	renderSearchResults(results, tokens)
+	if (emptyState instanceof HTMLElement) emptyState.hidden = tokens.length === 0 || matchingPaths.size > 0
+	if (documentsContainer instanceof HTMLElement) documentsContainer.hidden = tokens.length > 0 && matchingPaths.size === 0
+}
+
+function updateReaderBusyState() {
+	if (!(documentsContainer instanceof HTMLElement)) return
+	documentsContainer.setAttribute('aria-busy', activePath !== undefined && loadingPaths.has(activePath) ? 'true' : 'false')
 }
 
 function updateProgress() {
@@ -581,55 +882,33 @@ function updateProgress() {
 	progress.style.width = `${percentage}%`
 }
 
-function observeChapters() {
-	const links = Array.from(document.querySelectorAll('.reader-nav-document-link'))
-	const observer = new IntersectionObserver(
-		entries => {
-			const visibleEntry = entries.filter(entry => entry.isIntersecting).sort((left, right) => Math.abs(left.boundingClientRect.top) - Math.abs(right.boundingClientRect.top))[0]
-			if (visibleEntry === undefined) return
-			const path = visibleEntry.target.getAttribute('data-document-path')
-			for (const link of links) {
-				const isCurrent = link.getAttribute('data-document-path') === path ? 'location' : undefined
-				if (isCurrent === undefined) link.removeAttribute('aria-current')
-				else {
-					link.setAttribute('aria-current', isCurrent)
-					const group = link.closest('.reader-nav-group')
-					if (group instanceof HTMLDetailsElement) group.open = true
-				}
-			}
-		},
-		{ rootMargin: '-10% 0px -78% 0px' },
-	)
-
-	for (const chapter of chapterByPath.values()) observer.observe(chapter)
-}
-
-function restoreHash() {
+function restoreHash(positionFragment = true) {
 	const hash = decodeFragment(window.location.hash.slice(1))
-	if (hash === undefined || hash.length === 0) return false
+	if (hash === undefined || hash.length === 0) return undefined
 
 	for (const documentEntry of documents) {
 		const prefix = chapterId(documentEntry.path)
 		if (hash === prefix) {
-			navigateToDocument(documentEntry.path, '', false)
-			return true
+			void selectDocument(documentEntry.path, '', positionFragment)
+			return documentEntry.path
 		}
 		if (hash.startsWith(`${prefix}--`)) {
-			navigateToDocument(documentEntry.path, hash.slice(prefix.length + 2), false)
-			return true
+			void selectDocument(documentEntry.path, hash.slice(prefix.length + 2), positionFragment)
+			return documentEntry.path
 		}
 	}
-	return false
+	return undefined
 }
 
-createNavigation()
-createChapters()
-observeChapters()
-restoreHash()
-applySearch()
-updateProgress()
+function setNavigationOpen(open) {
+	document.body.classList.toggle('reader-navigation-open', open)
+	if (navigationToggle instanceof HTMLButtonElement) {
+		navigationToggle.setAttribute('aria-expanded', String(open))
+		navigationToggle.textContent = open ? 'Close contents' : 'Browse contents'
+	}
+}
 
-navigation?.addEventListener('click', event => {
+function handleReaderNavigationClick(event) {
 	if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
 	if (!(event.target instanceof Element)) return
 	const link = event.target.closest('a[data-document-path]')
@@ -637,7 +916,19 @@ navigation?.addEventListener('click', event => {
 	const path = link.dataset.documentPath
 	if (path === undefined) return
 	event.preventDefault()
-	navigateToDocument(path, link.dataset.documentFragment ?? '')
+	void navigateToDocument(path, link.dataset.documentFragment ?? '')
+}
+
+createNavigation()
+createChapters()
+if (restoreHash() === undefined) void selectDocument(documents[0].path, '', false)
+applySearch()
+updateProgress()
+
+navigation?.addEventListener('click', handleReaderNavigationClick)
+searchResults?.addEventListener('click', handleReaderNavigationClick)
+navigationToggle?.addEventListener('click', () => {
+	setNavigationOpen(!document.body.classList.contains('reader-navigation-open'))
 })
 searchInput?.addEventListener('input', applySearch)
 clearSearchButton?.addEventListener('click', () => {
@@ -647,6 +938,11 @@ clearSearchButton?.addEventListener('click', () => {
 	searchInput.focus()
 })
 document.addEventListener('keydown', event => {
+	if (event.key === 'Escape' && document.body.classList.contains('reader-navigation-open')) {
+		setNavigationOpen(false)
+		navigationToggle?.focus()
+		return
+	}
 	if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return
 	if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return
 	event.preventDefault()
@@ -654,12 +950,35 @@ document.addEventListener('keydown', event => {
 })
 window.addEventListener('scroll', updateProgress, { passive: true })
 window.addEventListener('popstate', event => {
-	if (restoreHash()) return
-	pendingFragmentByPath.clear()
-	const savedScrollY = event.state?.readerScrollY
-	window.scrollTo({ behavior: 'instant', top: typeof savedScrollY === 'number' ? savedScrollY : 0 })
+	navigationVersion += 1
+	clearPendingReaderScroll()
+	const savedScrollY = readerScrollByUrl.get(window.location.href) ?? event.state?.readerScrollY
+	const hasSavedScroll = typeof savedScrollY === 'number'
+	let restoredPath = restoreHash(!hasSavedScroll)
+	if (restoredPath === undefined) {
+		pendingFragmentByPath.clear()
+		if (window.location.hash.length === 0) {
+			restoredPath = documents[0].path
+			void selectDocument(restoredPath, '', false)
+		}
+	}
+	if (hasSavedScroll && restoredPath !== undefined) {
+		pendingReaderScroll = {
+			navigationVersion,
+			path: restoredPath,
+			scrollY: savedScrollY,
+			url: window.location.href,
+		}
+		stabilizePendingReaderScroll(restoredPath)
+	} else if (restoredPath === undefined) {
+		window.scrollTo({ behavior: 'instant', top: 0 })
+	}
 })
 window.addEventListener('resize', () => {
-	for (const frame of frameByPath.values()) resizeFrame(frame)
+	if (activePath !== undefined) {
+		const frame = frameForPath(activePath)
+		if (frame !== undefined) resizeFrame(frame)
+	}
+	if (window.matchMedia('(min-width: 981px)').matches) setNavigationOpen(false)
 	updateProgress()
 })
