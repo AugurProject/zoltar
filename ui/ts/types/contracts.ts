@@ -169,7 +169,7 @@ export type SecurityPoolCreationResult = {
 	initialReportPriorityFeeWeiPerGas: bigint
 	questionId: string
 	securityPoolAddress: Address
-	securityMultiplier: bigint
+	statoblastSecurityMultiplierBps: bigint
 	universeId: bigint
 }
 
@@ -310,7 +310,7 @@ export type ListedSecurityPool = {
 	parent: Address
 	questionOutcome: ReportingOutcomeKey | 'none'
 	questionId: string
-	securityMultiplier: bigint
+	statoblastSecurityMultiplierBps: bigint
 	securityPoolAddress: Address
 	shareTokenSupply: bigint
 	systemState: SecurityPoolSystemState

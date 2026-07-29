@@ -14,13 +14,13 @@ import { getTotalTheoreticalSupply } from './zoltar'
 import { depositRep, depositToEscalationGame, getRepToken, getSecurityVault, poolOwnershipToRep } from './securityPool'
 
 const genesisUniverse = 0n
-const securityMultiplier = 2n
+const statoblastSecurityMultiplierBps = 20_000n
 const PRICE_PRECISION = 10n ** 18n
 const DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS = 5n * 60n
 const ORACLE_PRICE_VALID_FOR_SECONDS = 5n * 60n
 
 export const approveAndDepositRep = async (client: WriteClient, repDeposit: bigint, questionId: bigint) => {
-	const securityPoolAddress = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, securityMultiplier).securityPool
+	const securityPoolAddress = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, statoblastSecurityMultiplierBps).securityPool
 	assert.ok(await contractExists(client, securityPoolAddress), 'security pool not deployed')
 
 	const startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddress)
@@ -33,7 +33,7 @@ export const approveAndDepositRep = async (client: WriteClient, repDeposit: bigi
 
 export const triggerOwnGameFork = async (client: WriteClient, securityPoolAddress: Address) => {
 	const repToken = await getRepToken(client, securityPoolAddress)
-	const forkThreshold = (await getTotalTheoreticalSupply(client, repToken)) / 20n / securityMultiplier
+	const forkThreshold = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 	const vault = await getSecurityVault(client, securityPoolAddress, client.account.address)
 	const repAmount = await poolOwnershipToRep(client, securityPoolAddress, vault.repDepositShare)
 	assert.ok(repAmount >= 2n * forkThreshold, 'not enough rep in vault to fork')
@@ -86,4 +86,4 @@ export const manipulatePriceOracle = async (client: WriteClient, mockWindow: Anv
 	await handleOracleReporting(client, mockWindow, priceOracleManagerAndOperatorQueuer, forceRepEthPriceTo)
 }
 
-export const canLiquidate = (lastPrice: bigint, securityBondAllowance: bigint, repClaim: bigint, securityMultiplier: bigint) => securityBondAllowance * lastPrice * securityMultiplier > repClaim * PRICE_PRECISION
+export const canLiquidate = (lastPrice: bigint, securityBondAllowance: bigint, repClaim: bigint, statoblastSecurityMultiplierBps: bigint) => securityBondAllowance * lastPrice * statoblastSecurityMultiplierBps > repClaim * PRICE_PRECISION * 10_000n

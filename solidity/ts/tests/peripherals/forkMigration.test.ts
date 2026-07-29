@@ -127,7 +127,7 @@ describe('Peripherals: fork migration', () => {
 		PRICE_PRECISION,
 		repDeposit,
 		genesisUniverse,
-		securityMultiplier,
+		statoblastSecurityMultiplierBps,
 		MAX_RETENTION_RATE,
 		outcomes,
 		transferRepToAddress,
@@ -288,7 +288,7 @@ describe('Peripherals: fork migration', () => {
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'delayed initialization should leave the child migration recoverable')
 			strictEqualTypeSafe((await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).repInEscalationGame, 0n, 'unresolved migration should clear the parent escrow lock')
 			strictEqualTypeSafe(await getForkedEscrowChildRepByOutcomeAndVault(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, client.account.address), 0n, 'optional vault cleanup should not create per-vault child escrow')
@@ -354,7 +354,7 @@ describe('Peripherals: fork migration', () => {
 				args: [],
 			})
 			const childUniverseId = getChildUniverseId(genesisUniverse, QuestionOutcome.Invalid)
-			const expectedChildAddresses = getSecurityPoolAddresses(securityPoolAddresses.securityPool, childUniverseId, questionId, securityMultiplier)
+			const expectedChildAddresses = getSecurityPoolAddresses(securityPoolAddresses.securityPool, childUniverseId, questionId, statoblastSecurityMultiplierBps)
 
 			const deployments = await client.readContract({
 				abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
@@ -372,7 +372,7 @@ describe('Peripherals: fork migration', () => {
 				parent: childParent,
 				priceOracleManagerAndOperatorQueuer: childManagerAddress,
 				questionId: childStoredQuestionId,
-				securityMultiplier: childStoredSecurityMultiplier,
+				statoblastSecurityMultiplierBps: childStoredStatoblastSecurityMultiplierBps,
 				securityPool: childSecurityPoolAddress,
 				shareToken: childShareTokenAddress,
 				truthAuction: childTruthAuctionAddress,
@@ -387,7 +387,7 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(childParent, securityPoolAddresses.securityPool, 'child parent should match the origin security pool')
 			strictEqualTypeSafe(childStoredUniverseId, childUniverseId, 'child universe id should match')
 			strictEqualTypeSafe(childStoredQuestionId, questionId, 'child question id should match')
-			strictEqualTypeSafe(childStoredSecurityMultiplier, securityMultiplier, 'child multiplier should match')
+			strictEqualTypeSafe(childStoredStatoblastSecurityMultiplierBps, statoblastSecurityMultiplierBps, 'child multiplier should match')
 			strictEqualTypeSafe(childCurrentRetentionRate, MAX_RETENTION_RATE, 'child retention rate should match')
 			strictEqualTypeSafe(childCompleteSetCollateralAmount, 0n, 'child complete set collateral should default to zero during fork')
 			strictEqualTypeSafe(await getLastPrice(client, childManagerAddress), await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), 'child manager should inherit the parent price')
@@ -418,7 +418,7 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(afterNoChild.escalationChildRepPerSelectedOutcome, perSelectedOutcome, 'each selected outcome should independently retain the fork-time escalation backing amount')
 			for (const outcome of [QuestionOutcome.Yes, QuestionOutcome.No]) {
 				const universe = getChildUniverseId(genesisUniverse, outcome)
-				const childPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, universe, questionId, securityMultiplier)
+				const childPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, universe, questionId, statoblastSecurityMultiplierBps)
 				const childGame = await getSecurityPoolsEscalationGame(client, childPool.securityPool)
 				strictEqualTypeSafe(await getERC20Balance(client, getRepTokenAddress(universe), childGame), perSelectedOutcome, 'each created child should receive the complete per-selected-outcome escalation backing')
 			}
@@ -555,7 +555,7 @@ describe('Peripherals: fork migration', () => {
 				data: encodeDeployData({
 					abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackParentMock.abi,
 					bytecode: `0x${test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackParentMock.evm.bytecode.object}`,
-					args: [genesisUniverse, attackFactoryAddress, securityPoolAddresses.shareToken, questionId, securityMultiplier, 0n, 0n, attackerChosenDenominator],
+					args: [genesisUniverse, attackFactoryAddress, securityPoolAddresses.shareToken, questionId, statoblastSecurityMultiplierBps, 0n, 0n, attackerChosenDenominator],
 				}),
 			})
 			const fakeParentReceipt = await client.waitForTransactionReceipt({ hash: fakeParentDeploymentHash })
@@ -598,7 +598,7 @@ describe('Peripherals: fork migration', () => {
 				data: encodeDeployData({
 					abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackParentMock.abi,
 					bytecode: `0x${test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackParentMock.evm.bytecode.object}`,
-					args: [addressString(GENESIS_REPUTATION_TOKEN), fakeFactory, securityPoolAddresses.shareToken, forker, genesisUniverse, questionId, securityMultiplier],
+					args: [addressString(GENESIS_REPUTATION_TOKEN), fakeFactory, securityPoolAddresses.shareToken, forker, genesisUniverse, questionId, statoblastSecurityMultiplierBps],
 				}),
 			})
 			const fakeParentReceipt = await client.waitForTransactionReceipt({ hash: fakeParentDeploymentHash })
@@ -645,7 +645,7 @@ describe('Peripherals: fork migration', () => {
 				data: encodeDeployData({
 					abi: test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackParentMock.abi,
 					bytecode: `0x${test_peripherals_SecurityPoolForkerAttackMocks_SecurityPoolForkerEscrowAttackParentMock.evm.bytecode.object}`,
-					args: [genesisRep, fakeFactory, securityPoolAddresses.shareToken, forker, genesisUniverse, questionId, securityMultiplier],
+					args: [genesisRep, fakeFactory, securityPoolAddresses.shareToken, forker, genesisUniverse, questionId, statoblastSecurityMultiplierBps],
 				}),
 			})
 			const fakeParentReceipt = await client.waitForTransactionReceipt({ hash: fakeParentDeploymentHash })
@@ -679,8 +679,8 @@ describe('Peripherals: fork migration', () => {
 			await approveToken(victimClient, genesisRep, getZoltarAddress())
 			await addRepToMigrationBalance(victimClient, genesisUniverse, victimDeposit)
 			await splitMigrationRep(victimClient, genesisUniverse, victimDeposit, [QuestionOutcome.Yes])
-			await deployOriginSecurityPool(victimClient, yesUniverse, questionId, securityMultiplier)
-			const targetPool = getSecurityPoolAddresses(addressString(0n), yesUniverse, questionId, securityMultiplier, yesUniverse)
+			await deployOriginSecurityPool(victimClient, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const targetPool = getSecurityPoolAddresses(addressString(0n), yesUniverse, questionId, statoblastSecurityMultiplierBps, yesUniverse)
 			await approveToken(victimClient, childRep, targetPool.securityPool)
 			await depositRep(victimClient, targetPool.securityPool, victimDeposit)
 			await depositToEscalationGame(victimClient, targetPool.securityPool, QuestionOutcome.Yes, victimDeposit)
@@ -842,7 +842,7 @@ describe('Peripherals: fork migration', () => {
 			await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
 			await mockWindow.advanceTime(100000n)
 
-			strictEqualTypeSafe(canLiquidate(initialPrice, securityPoolAllowance, repDeposit, 2n), false, 'Should not be able to liquidate yet')
+			strictEqualTypeSafe(canLiquidate(initialPrice, securityPoolAllowance, repDeposit, statoblastSecurityMultiplierBps), false, 'Should not be able to liquidate yet')
 			// REP/ETH increases to 10x, 10 REP = 1 ETH (rep drops in value)
 			const forcedPrice = PRICE_PRECISION * 10n
 			const liquidationAmount = 20n * 10n ** 18n
@@ -853,7 +853,7 @@ describe('Peripherals: fork migration', () => {
 			const currentPrice = await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 			strictEqualTypeSafe(currentPrice, PRICE_PRECISION * 10n, 'Price did not increase!')
 
-			strictEqualTypeSafe(canLiquidate(currentPrice, securityPoolAllowance, repDeposit, 2n), true, 'Should be able to liquidate now')
+			strictEqualTypeSafe(canLiquidate(currentPrice, securityPoolAllowance, repDeposit, statoblastSecurityMultiplierBps), true, 'Should be able to liquidate now')
 
 			const originalVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const liquidatorVault = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
@@ -1219,7 +1219,7 @@ describe('Peripherals: fork migration', () => {
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, roundingSensitivePrice)
 			const setupPrice = await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 			const setupTargetRep = await getVaultRepClaim(client.account.address)
-			const targetAllowance = (setupTargetRep * PRICE_PRECISION) / (setupPrice * securityMultiplier)
+			const targetAllowance = (setupTargetRep * PRICE_PRECISION * 10_000n) / (setupPrice * statoblastSecurityMultiplierBps)
 			const allowanceExecutionHash = await requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, targetAllowance)
 			const allowanceExecutionLog = await getExecutedStagedOperation(allowanceExecutionHash)
 			assert.strictEqual(allowanceExecutionLog.args.success, true, `rounding setup allowance failed with ${allowanceExecutionLog.args.errorMessage}`)
@@ -1235,7 +1235,7 @@ describe('Peripherals: fork migration', () => {
 			const tinyLiquidationAmount = 1n
 			const actualPrice = await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 			const targetRepClaim = await getVaultRepClaim(client.account.address)
-			const liquidationThresholdPrice = (targetRepClaim * PRICE_PRECISION) / (targetVaultBefore.securityBondAllowance * securityMultiplier)
+			const liquidationThresholdPrice = (targetRepClaim * PRICE_PRECISION * 10_000n) / (targetVaultBefore.securityBondAllowance * statoblastSecurityMultiplierBps)
 			assert.ok(actualPrice > liquidationThresholdPrice, `rounding setup must be liquidatable: price ${actualPrice}, threshold ${liquidationThresholdPrice}`)
 			assert.ok(((actualPrice - liquidationThresholdPrice) * 10000n) / actualPrice >= 1000n, `rounding setup must clear the coordinator distance: price ${actualPrice}, threshold ${liquidationThresholdPrice}`)
 
@@ -1261,7 +1261,7 @@ describe('Peripherals: fork migration', () => {
 			await approveToken(liquidatorClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
 			await depositRep(liquidatorClient, securityPoolAddresses.securityPool, repDeposit * 2n)
 
-			strictEqualTypeSafe(canLiquidate(PRICE_PRECISION, securityPoolAllowance, repDeposit, 2n), false, 'vault should start safe before locking REP')
+			strictEqualTypeSafe(canLiquidate(PRICE_PRECISION, securityPoolAllowance, repDeposit, statoblastSecurityMultiplierBps), false, 'vault should start safe before locking REP')
 
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
@@ -1275,7 +1275,7 @@ describe('Peripherals: fork migration', () => {
 
 			strictEqualTypeSafe(targetVaultAfterLock.repInEscalationGame, lockedDeposit, 'target vault should have the escalation principal marked as locked')
 			strictEqualTypeSafe(targetClaimAfterLock, repDeposit - lockedDeposit, 'locking REP should move the committed principal out of the vault claim')
-			strictEqualTypeSafe(canLiquidate(PRICE_PRECISION, securityPoolAllowance, targetClaimAfterLock, 2n), true, 'the vault should become liquidatable once its unlocked vault REP falls below the required backing')
+			strictEqualTypeSafe(canLiquidate(PRICE_PRECISION, securityPoolAllowance, targetClaimAfterLock, statoblastSecurityMultiplierBps), true, 'the vault should become liquidatable once its unlocked vault REP falls below the required backing')
 
 			await manipulatePriceOracle(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 			await requestPriceIfNeededAndStageOperation(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, securityPoolAllowance)
@@ -1357,7 +1357,7 @@ describe('Peripherals: fork migration', () => {
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 			const forcedParentSurplus = 7n * 10n ** 18n
 			const forcedChildSurplus = 11n * 10n ** 18n
 			const parentRawBalanceBeforeForce = await getETHBalance(client, securityPoolAddresses.securityPool)
@@ -1755,7 +1755,7 @@ describe('Peripherals: fork migration', () => {
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'Fork Migration need to start')
 			const migratedRep = await getMigratedRep(client, yesSecurityPool.securityPool)
@@ -1840,7 +1840,7 @@ describe('Peripherals: fork migration', () => {
 			const secondWinningShares = ensureDefined(secondHolderParentShares[1], 'second holder parent winning shares missing')
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 
-			const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+			const forkThreshold = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
 			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
@@ -1848,7 +1848,7 @@ describe('Peripherals: fork migration', () => {
 			await migrateShares(firstHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [QuestionOutcome.Yes])
 
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
@@ -2028,7 +2028,7 @@ describe('Peripherals: fork migration', () => {
 			const ownForkRepBuckets = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No])
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 
 			// we migrate to yes
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -2045,7 +2045,7 @@ describe('Peripherals: fork migration', () => {
 			assert.ok(await contractExists(client, yesSecurityPool.securityPool), 'yes security pool exist')
 			// attacker migrated to No
 			const noUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.No)
-			const noSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, noUniverse, questionId, securityMultiplier)
+			const noSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, noUniverse, questionId, statoblastSecurityMultiplierBps)
 			await migrateVault(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No)
 			strictEqualTypeSafe(await getQuestionOutcome(client, noSecurityPool.securityPool), QuestionOutcome.No, 'finalized as no')
 			const migratedRepInNo = await getMigratedRep(client, noSecurityPool.securityPool)
@@ -2062,7 +2062,7 @@ describe('Peripherals: fork migration', () => {
 			// invalid, no one migrated here
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Invalid) // no one migrated, we need to create the universe as rep holders did not
 			const invalidUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Invalid)
-			const invalidSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, invalidUniverse, questionId, securityMultiplier)
+			const invalidSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, invalidUniverse, questionId, statoblastSecurityMultiplierBps)
 
 			const parentCollateralAfterVaultMigrations = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
 			assert.deepStrictEqual(
@@ -2373,7 +2373,7 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'Parent is forked')
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'Fork Migration needs to start')
 			const migratedRep = await getMigratedRep(client, yesSecurityPool.securityPool)
@@ -2402,7 +2402,7 @@ describe('Peripherals: fork migration', () => {
 			await migrateVault(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 			const attackerVaultBeforeRedeem = await getSecurityVault(client, yesSecurityPool.securityPool, attackerClient.account.address)
@@ -2441,7 +2441,7 @@ describe('Peripherals: fork migration', () => {
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
@@ -2491,7 +2491,7 @@ describe('Peripherals: fork migration', () => {
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'child pool should wait in migration state before accounting is settled')
 			await assert.rejects(createCompleteSet(client, yesSecurityPool.securityPool, 1n), /Pool not operational|Pool inactive/)
@@ -2568,7 +2568,7 @@ describe('Peripherals: fork migration', () => {
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 			if ((await getSystemState(client, yesSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
@@ -2622,7 +2622,7 @@ describe('Peripherals: fork migration', () => {
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 			if ((await getSystemState(client, yesSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
@@ -2663,7 +2663,7 @@ describe('Peripherals: fork migration', () => {
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
@@ -2713,7 +2713,7 @@ describe('Peripherals: fork migration', () => {
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 			const yesChildRepToken = getRepTokenAddress(yesUniverse)
 			const walletRepBeforeEscalationClaim = await getERC20Balance(client, yesChildRepToken, client.account.address)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 			const migratedRepBeforeEscalation = await getMigratedRep(client, yesSecurityPool.securityPool)
 			await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -2777,7 +2777,7 @@ describe('Peripherals: fork migration', () => {
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 			strictEqualTypeSafe(await getRepToken(client, yesSecurityPool.securityPool), getRepTokenAddress(yesUniverse), 'createChildUniverse should still deploy the requested child branch at the inclusive external-fork deadline')
 
 			await mockWindow.setTime(migrationDeadline + 1n)
@@ -2797,7 +2797,7 @@ describe('Peripherals: fork migration', () => {
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 			strictEqualTypeSafe(await getRepToken(client, yesSecurityPool.securityPool), getRepTokenAddress(yesUniverse), 'createChildUniverse should still deploy the requested own-fork child branch at the inclusive migration deadline')
 
 			// Child creation mines at the inclusive deadline; the next transaction is one second later.
@@ -2836,7 +2836,7 @@ describe('Peripherals: fork migration', () => {
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 			const ownForkRepBuckets = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
 			const unlockedVaultRepAtFork = ownForkRepBuckets.vaultRepAtFork
 
@@ -2862,7 +2862,7 @@ describe('Peripherals: fork migration', () => {
 			await mockWindow.setTime(migrationDeadline + 1n)
 
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier).securityPool
+			const yesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps).securityPool
 			const migrationProxy = await getMigrationProxyAddress()
 			const readClosedMigrationState = async () => ({
 				childExists: await contractExists(client, yesChildPool),
@@ -2890,7 +2890,7 @@ describe('Peripherals: fork migration', () => {
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 			const childRepToken = getRepTokenAddress(yesUniverse)
 			const poolBalance = await getERC20Balance(client, childRepToken, yesSecurityPool.securityPool)
 			assert.ok(poolBalance > 0n, 'migrateRepToZoltar should still split child REP at the inclusive migration deadline')
@@ -2905,7 +2905,7 @@ describe('Peripherals: fork migration', () => {
 			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 			await mockWindow.setTime((await mockWindow.getTime()) + 60n * DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 
@@ -2927,7 +2927,7 @@ describe('Peripherals: fork migration', () => {
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 
 			await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n, 1n])
 			const vaultAfterEscalationClaim = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
@@ -2955,7 +2955,7 @@ describe('Peripherals: fork migration', () => {
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 			const childVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 
 			assert.ok(childVault.repDepositShare > 0n, 'migrateVault should still migrate ownership at the inclusive deadline')
@@ -2971,7 +2971,7 @@ describe('Peripherals: fork migration', () => {
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 			const childVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 			assert.ok(childVault.repDepositShare > 0n, 'migrateVault should still move unlocked vault ownership at the inclusive external-fork deadline')
 
@@ -3007,7 +3007,7 @@ describe('Peripherals: fork migration', () => {
 
 			const parentCollateralAtFork = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 			const migrationSnapshot = await mockWindow.anvilSnapshot()
 			const runMigrationOrder = async (firstVaultClient: typeof client, secondVaultClient: typeof client) => {
 				const parentEthBefore = await getETHBalance(client, securityPoolAddresses.securityPool)
@@ -3074,7 +3074,7 @@ describe('Peripherals: fork migration', () => {
 			const parentCollateralAtFork = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 			const migratedCollateral = await getETHBalance(client, yesSecurityPool.securityPool)
 			const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
 			const expectedAuctionCollateral = parentCollateralAtFork - migratedCollateral
@@ -3107,7 +3107,7 @@ describe('Peripherals: fork migration', () => {
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 
 			strictEqualTypeSafe(await getQuestionOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'matching-question child should resolve to its branch outcome')
 		})
@@ -3133,7 +3133,7 @@ describe('Peripherals: fork migration', () => {
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 			strictEqualTypeSafe(await getSystemState(client, yesChildPool.securityPool), SystemState.ForkMigration, 'nested-fork target child must remain in ForkMigration')
 			const childRepToken = getRepTokenAddress(yesUniverse)
 			const secondForkQuestion = {
@@ -3177,7 +3177,7 @@ describe('Peripherals: fork migration', () => {
 			await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [QuestionOutcome.Yes])
 
 			const fixedChildUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const fixedChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, fixedChildUniverse, questionId, securityMultiplier)
+			const fixedChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, fixedChildUniverse, questionId, statoblastSecurityMultiplierBps)
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, fixedChildPool.securityPool)
 			if ((await getSystemState(client, fixedChildPool.securityPool)) === SystemState.ForkTruthAuction) {
@@ -3283,7 +3283,7 @@ describe('Peripherals: fork migration', () => {
 			await migrateShares(victim, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.No, [QuestionOutcome.Yes])
 
 			const firstChildUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const firstChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, firstChildUniverse, questionId, securityMultiplier)
+			const firstChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, firstChildUniverse, questionId, statoblastSecurityMultiplierBps)
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, firstChildPool.securityPool)
 			if ((await getSystemState(client, firstChildPool.securityPool)) === SystemState.ForkTruthAuction) {
@@ -3367,7 +3367,7 @@ describe('Peripherals: fork migration', () => {
 			await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
 
 			const firstChildUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const firstChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, firstChildUniverse, questionId, securityMultiplier)
+			const firstChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, firstChildUniverse, questionId, statoblastSecurityMultiplierBps)
 			const firstChildGame = await getSecurityPoolsEscalationGame(client, firstChildPool.securityPool)
 			strictEqualTypeSafe(
 				await client.readContract({
@@ -3400,7 +3400,7 @@ describe('Peripherals: fork migration', () => {
 			await migrateVaultWithUnresolvedEscalation(client, firstChildPool.securityPool, client.account.address, QuestionOutcome.No)
 
 			const secondChildUniverse = getChildUniverseId(firstChildUniverse, QuestionOutcome.No)
-			const secondChildPool = getSecurityPoolAddresses(firstChildPool.securityPool, secondChildUniverse, questionId, securityMultiplier)
+			const secondChildPool = getSecurityPoolAddresses(firstChildPool.securityPool, secondChildUniverse, questionId, statoblastSecurityMultiplierBps)
 			const secondChildGame = await getSecurityPoolsEscalationGame(client, secondChildPool.securityPool)
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, secondChildPool.securityPool)
@@ -3430,7 +3430,7 @@ describe('Peripherals: fork migration', () => {
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 			const yesEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
 
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
@@ -3503,7 +3503,7 @@ describe('Peripherals: fork migration', () => {
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 			const parentEthBeforeMigration = await getETHBalance(client, securityPoolAddresses.securityPool)
 			const childEthBeforeMigration = await getETHBalance(client, yesSecurityPool.securityPool)
 			const parentAccruedFeesBeforeMigration = await getTotalAccruedFees(client, securityPoolAddresses.securityPool)
@@ -3521,7 +3521,7 @@ describe('Peripherals: fork migration', () => {
 		test('own-fork unlocked vault migration values child ownership against the vault REP bucket', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 1n)
-			const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+			const forkThreshold = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRep(client, securityPoolAddresses.securityPool, 4n * forkThreshold)
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, forkThreshold)
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThreshold)
@@ -3538,7 +3538,7 @@ describe('Peripherals: fork migration', () => {
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 			const childVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 			const childRepClaim = await poolOwnershipToRep(client, yesSecurityPool.securityPool, childVault.repDepositShare)
 			strictEqualTypeSafe(childRepClaim, expectedChildRepClaim, 'child vault ownership should redeem the full migrated vault REP bucket')
@@ -3551,7 +3551,7 @@ describe('Peripherals: fork migration', () => {
 			await mockWindow.setTime(endTime - 1n)
 			await createCompleteSet(client, securityPoolAddresses.securityPool, collateralAmount)
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
-			const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+			const forkThreshold = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRep(client, securityPoolAddresses.securityPool, 4n * forkThreshold)
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, forkThreshold)
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThreshold)
@@ -3562,7 +3562,7 @@ describe('Peripherals: fork migration', () => {
 
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 			const parentCollateralBeforeMigration = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
 			const childEthBeforeMigration = await getETHBalance(client, yesSecurityPool.securityPool)
 
@@ -3595,7 +3595,7 @@ describe('Peripherals: fork migration', () => {
 			await mockWindow.setTime(endTime + 10000n)
 			const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveAndDepositRep(attackerClient, repDeposit, questionId)
-			const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+			const forkThreshold = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRep(client, securityPoolAddresses.securityPool, 4n * forkThreshold)
 			const originalWinningDeposit = reportBond + 1n
 			const originalLosingDeposit = reportBond
@@ -3652,7 +3652,7 @@ describe('Peripherals: fork migration', () => {
 			const winningDeposit = repDeposit / 2n
 			const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveAndDepositRep(attackerClient, repDeposit, questionId)
-			const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+			const forkThreshold = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
 			const securityPoolAllowance = repDeposit / 4n
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, securityPoolAllowance)
@@ -3664,7 +3664,7 @@ describe('Peripherals: fork migration', () => {
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			const migratedBeforeEscalation = await getMigratedRep(client, yesSecurityPool.securityPool)
 			const parentVaultBeforeMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -3748,7 +3748,7 @@ describe('Peripherals: fork migration', () => {
 			await mockWindow.setTime(endTime + 10000n)
 			const winningDeposit = repDeposit * 5n
 			await approveAndDepositRep(client, repDeposit * 10n, questionId)
-			const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+			const forkThreshold = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, winningDeposit)
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, winningDeposit)
@@ -3783,7 +3783,7 @@ describe('Peripherals: fork migration', () => {
 			const winningDeposit = repDeposit / 8n
 			const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveAndDepositRep(attackerClient, repDeposit, questionId)
-			const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+			const forkThreshold = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, winningDeposit)
 			await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, winningDeposit)
@@ -3805,7 +3805,7 @@ describe('Peripherals: fork migration', () => {
 			const winningDeposit = repDeposit / 8n
 			const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveAndDepositRep(attackerClient, repDeposit, questionId)
-			const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+			const forkThreshold = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, winningDeposit)
 			await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, winningDeposit)
@@ -3830,7 +3830,7 @@ describe('Peripherals: fork migration', () => {
 			const winningDeposit = repDeposit / 8n
 			const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 			await approveAndDepositRep(attackerClient, repDeposit, questionId)
-			const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+			const forkThreshold = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, winningDeposit)
 
@@ -3841,7 +3841,7 @@ describe('Peripherals: fork migration', () => {
 			await migrateVault(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'the child pool should be operational before late claim settlement')

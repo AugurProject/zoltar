@@ -49,7 +49,7 @@ const ETH_BALANCE_AMOUNT = 10n ** 30n
 const GENESIS_UNIVERSE_ID = 0n
 const SEEDED_REP_ETH_PRICE = 3n * 10n ** 18n
 const REP_TOKEN_MINT_AMOUNT = 100_000_000n * 10n ** 18n
-const SECURITY_MULTIPLIER = 2n
+const STATOBLAST_SECURITY_MULTIPLIER_BPS = 20_000n
 const SECURITY_POOL_REP_DEPOSIT = 10_000n * 10n ** 18n
 const SECURITY_BOND_ALLOWANCE = 80n * 10n ** 18n
 const SECURITY_POOL_X2_PRIMARY_REP_DEPOSIT = 12_000n * 10n ** 18n
@@ -474,7 +474,7 @@ async function createSeededSecurityPool({ createWriteClient, currentTimestamp, d
 	const poolResult = await createSecurityPool(deployerWriteClient, {
 		initialReportPriorityFeeWeiPerGas: DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS,
 		questionId,
-		securityMultiplier: SECURITY_MULTIPLIER,
+		statoblastSecurityMultiplierBps: STATOBLAST_SECURITY_MULTIPLIER_BPS,
 	})
 
 	return {
@@ -1070,7 +1070,7 @@ async function seedSecurityPoolX2AuctionScenario({
 		await advanceSimulationTime(memoryClient, reportingDetailsBeforeFork.marketDetails.endTime - reportingDetailsBeforeFork.currentTime + DAY_IN_SECONDS)
 	}
 
-	const ownForkDepositAmount = universeSummary.forkThreshold / SECURITY_MULTIPLIER
+	const ownForkDepositAmount = (universeSummary.forkThreshold * 10_000n) / STATOBLAST_SECURITY_MULTIPLIER_BPS
 	await refreshSeededOraclePrice({
 		accountAddress: primaryAccount,
 		createWriteClient,

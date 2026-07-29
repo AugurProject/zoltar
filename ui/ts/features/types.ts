@@ -106,7 +106,7 @@ export type VaultMetricGridProps = {
 	escalationEscrowedRep?: bigint | undefined
 	priceValidUntilTimestamp?: bigint | undefined
 	repDepositShare: bigint | undefined
-	selectedPoolSecurityMultiplier: bigint | undefined
+	selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined
 	securityBondAllowance: bigint | undefined
 	unpaidEthFees: bigint | undefined
 } & RepPerEthPriceProps
@@ -355,7 +355,7 @@ export type SecurityVaultRouteContentProps = {
 	securityVaultRepApproval: TokenApprovalState
 	securityVaultRepBalance: bigint | undefined
 	securityVaultResult: SecurityVaultActionResult | undefined
-	selectedPoolSecurityMultiplier: bigint | undefined
+	selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined
 	repPerEthPrice: bigint | undefined
 	repPerEthSource: 'v4' | 'v3' | 'mock' | undefined
 	repPerEthSourceUrl: string | undefined

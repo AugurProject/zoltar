@@ -11,6 +11,7 @@ import type { ReportingOutcomeKey, TradingShareBalances, ZoltarUniverseSummary }
 
 const PRICE_PRECISION = 10n ** 18n
 const PERCENT_MULTIPLIER = 100n
+const BPS_DENOMINATOR = 10_000n
 
 type CollateralizationDisplayState = 'value' | 'noActiveAllowance' | 'unavailable'
 type CollateralizationTone = 'success' | 'danger'
@@ -47,9 +48,19 @@ export function getVaultCollateralizationPercent(repDepositShare: bigint | undef
 	return getCollateralizationPercent(repDepositShare, securityBondAllowance, repPerEthPrice)
 }
 
-export function getCollateralizationTone(collateralizationPercent: bigint | undefined, securityMultiplier: bigint | undefined): CollateralizationTone | undefined {
-	if (collateralizationPercent === undefined || securityMultiplier === undefined) return undefined
-	return collateralizationPercent < securityMultiplier * PERCENT_MULTIPLIER * PRICE_PRECISION ? 'danger' : 'success'
+export function getCollateralizationTone(collateralizationPercent: bigint | undefined, statoblastSecurityMultiplierBps: bigint | undefined): CollateralizationTone | undefined {
+	if (collateralizationPercent === undefined || statoblastSecurityMultiplierBps === undefined) return undefined
+	return collateralizationPercent < getStatoblastCollateralizationTargetPercent(statoblastSecurityMultiplierBps) ? 'danger' : 'success'
+}
+
+export function getStatoblastCollateralizationTargetPercent(statoblastSecurityMultiplierBps: bigint) {
+	return (statoblastSecurityMultiplierBps * PERCENT_MULTIPLIER * PRICE_PRECISION) / BPS_DENOMINATOR
+}
+
+export function formatStatoblastSecurityMultiplier(statoblastSecurityMultiplierBps: bigint) {
+	const whole = statoblastSecurityMultiplierBps / BPS_DENOMINATOR
+	const fractional = (statoblastSecurityMultiplierBps % BPS_DENOMINATOR).toString().padStart(4, '0').replace(/0+$/, '')
+	return fractional === '' ? whole.toString() : `${whole}.${fractional}`
 }
 
 export function getCollateralizationDisplayState(securityBondAllowance: bigint | undefined, collateralizationPercent: bigint | undefined): CollateralizationDisplayState {

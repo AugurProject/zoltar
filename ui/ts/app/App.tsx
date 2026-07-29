@@ -695,7 +695,7 @@ export function App() {
 				securityVaultRepApproval,
 				securityVaultRepBalance,
 				securityVaultResult,
-				selectedPoolSecurityMultiplier: selectedPool?.securityMultiplier,
+				selectedPoolStatoblastSecurityMultiplierBps: selectedPool?.statoblastSecurityMultiplierBps,
 				repPerEthPrice,
 				repPerEthSource,
 				repPerEthSourceUrl,

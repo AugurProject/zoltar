@@ -9,6 +9,7 @@ import {
 	SHARE_MIGRATION_AFTER_FORK_MESSAGE,
 	convertCollateralAmountToShareAmount,
 	convertShareAmountToCollateralAmount,
+	formatStatoblastSecurityMultiplier,
 	getCollateralizationDisplayState,
 	getCollateralizationTone,
 	getDefaultShareMigrationTargetOutcomeIndexes,
@@ -154,10 +155,16 @@ void describe('trading helpers', () => {
 	})
 
 	void test('marks collateralization green when it is at or above the security multiplier threshold', () => {
-		expect(getCollateralizationTone(201n * TOKEN_PRECISION, 2n)).toBe('success')
-		expect(getCollateralizationTone(200n * TOKEN_PRECISION, 2n)).toBe('success')
-		expect(getCollateralizationTone(199n * TOKEN_PRECISION, 2n)).toBe('danger')
-		expect(getCollateralizationTone(undefined, 2n)).toBeUndefined()
+		expect(getCollateralizationTone(201n * TOKEN_PRECISION, 20_000n)).toBe('success')
+		expect(getCollateralizationTone(200n * TOKEN_PRECISION, 20_000n)).toBe('success')
+		expect(getCollateralizationTone(199n * TOKEN_PRECISION, 20_000n)).toBe('danger')
+		expect(getCollateralizationTone(undefined, 20_000n)).toBeUndefined()
+	})
+
+	void test('formats Statoblast security multiplier basis points as fractional x values', () => {
+		expect(formatStatoblastSecurityMultiplier(20_000n)).toBe('2')
+		expect(formatStatoblastSecurityMultiplier(25_000n)).toBe('2.5')
+		expect(formatStatoblastSecurityMultiplier(20_001n)).toBe('2.0001')
 	})
 
 	void test('surfaces no active allowance separately from unavailable quotes', () => {

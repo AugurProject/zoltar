@@ -24,7 +24,7 @@ describe('CollateralizationMetricField', () => {
 	})
 
 	test('renders the no-active-allowance selected-vault metric as normal text inside the standard card wrapper', async () => {
-		const renderedComponent = await renderIntoDocument(<CollateralizationMetricField className='entity-metric' collateralizationPercent={undefined} repPerEthSource='v3' repPerEthSourceUrl='https://example.com/uniswap-v3' securityBondAllowance={0n} securityMultiplier={2n} />)
+		const renderedComponent = await renderIntoDocument(<CollateralizationMetricField className='entity-metric' collateralizationPercent={undefined} repPerEthSource='v3' repPerEthSourceUrl='https://example.com/uniswap-v3' securityBondAllowance={0n} statoblastSecurityMultiplierBps={20_000n} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
@@ -37,7 +37,7 @@ describe('CollateralizationMetricField', () => {
 	})
 
 	test('renders a descriptive message when the REP/ETH quote is unavailable', async () => {
-		const renderedComponent = await renderIntoDocument(<CollateralizationMetricField collateralizationPercent={undefined} repPerEthSource={undefined} repPerEthSourceUrl={undefined} securityBondAllowance={1n} securityMultiplier={2n} />)
+		const renderedComponent = await renderIntoDocument(<CollateralizationMetricField collateralizationPercent={undefined} repPerEthSource={undefined} repPerEthSourceUrl={undefined} securityBondAllowance={1n} statoblastSecurityMultiplierBps={20_000n} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
@@ -46,7 +46,7 @@ describe('CollateralizationMetricField', () => {
 	})
 
 	test('colors the metric red when it is below the security multiplier threshold', async () => {
-		const renderedComponent = await renderIntoDocument(<CollateralizationMetricField collateralizationPercent={199n * 10n ** 18n} repPerEthSource='mock' repPerEthSourceUrl={undefined} securityBondAllowance={1n} securityMultiplier={2n} />)
+		const renderedComponent = await renderIntoDocument(<CollateralizationMetricField collateralizationPercent={199n * 10n ** 18n} repPerEthSource='mock' repPerEthSourceUrl={undefined} securityBondAllowance={1n} statoblastSecurityMultiplierBps={20_000n} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const metricValue = within(document.body)
@@ -56,7 +56,7 @@ describe('CollateralizationMetricField', () => {
 	})
 
 	test('colors the metric green when it is equal to the security multiplier threshold', async () => {
-		const renderedComponent = await renderIntoDocument(<CollateralizationMetricField collateralizationPercent={200n * 10n ** 18n} repPerEthSource='mock' repPerEthSourceUrl={undefined} securityBondAllowance={1n} securityMultiplier={2n} />)
+		const renderedComponent = await renderIntoDocument(<CollateralizationMetricField collateralizationPercent={200n * 10n ** 18n} repPerEthSource='mock' repPerEthSourceUrl={undefined} securityBondAllowance={1n} statoblastSecurityMultiplierBps={20_000n} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const metricValue = within(document.body)
@@ -66,7 +66,7 @@ describe('CollateralizationMetricField', () => {
 	})
 
 	test('colors the metric green when it is above the security multiplier threshold', async () => {
-		const renderedComponent = await renderIntoDocument(<CollateralizationMetricField collateralizationPercent={201n * 10n ** 18n} repPerEthSource='mock' repPerEthSourceUrl={undefined} securityBondAllowance={1n} securityMultiplier={2n} />)
+		const renderedComponent = await renderIntoDocument(<CollateralizationMetricField collateralizationPercent={201n * 10n ** 18n} repPerEthSource='mock' repPerEthSourceUrl={undefined} securityBondAllowance={1n} statoblastSecurityMultiplierBps={20_000n} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const metricValue = within(document.body)
@@ -76,7 +76,7 @@ describe('CollateralizationMetricField', () => {
 	})
 
 	test('uses source-aware tooltip copy for simulation mock collateralization', async () => {
-		const renderedComponent = await renderIntoDocument(<CollateralizationMetricField collateralizationPercent={201n * 10n ** 18n} repPerEthSource='mock' repPerEthSourceUrl={undefined} securityBondAllowance={1n} securityMultiplier={2n} />)
+		const renderedComponent = await renderIntoDocument(<CollateralizationMetricField collateralizationPercent={201n * 10n ** 18n} repPerEthSource='mock' repPerEthSourceUrl={undefined} securityBondAllowance={1n} statoblastSecurityMultiplierBps={20_000n} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
@@ -84,7 +84,7 @@ describe('CollateralizationMetricField', () => {
 	})
 
 	test('uses source-aware tooltip copy for live Uniswap collateralization quotes', async () => {
-		const renderedV4Component = await renderIntoDocument(<CollateralizationMetricField collateralizationPercent={201n * 10n ** 18n} repPerEthSource='v4' repPerEthSourceUrl='https://example.com/uniswap-v4' securityBondAllowance={1n} securityMultiplier={2n} />)
+		const renderedV4Component = await renderIntoDocument(<CollateralizationMetricField collateralizationPercent={201n * 10n ** 18n} repPerEthSource='v4' repPerEthSourceUrl='https://example.com/uniswap-v4' securityBondAllowance={1n} statoblastSecurityMultiplierBps={20_000n} />)
 		cleanupRenderedComponent = renderedV4Component.cleanup
 
 		let documentQueries = within(document.body)
@@ -93,7 +93,7 @@ describe('CollateralizationMetricField', () => {
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
 
-		const renderedV3Component = await renderIntoDocument(<CollateralizationMetricField collateralizationPercent={201n * 10n ** 18n} repPerEthSource='v3' repPerEthSourceUrl='https://example.com/uniswap-v3' securityBondAllowance={1n} securityMultiplier={2n} />)
+		const renderedV3Component = await renderIntoDocument(<CollateralizationMetricField collateralizationPercent={201n * 10n ** 18n} repPerEthSource='v3' repPerEthSourceUrl='https://example.com/uniswap-v3' securityBondAllowance={1n} statoblastSecurityMultiplierBps={20_000n} />)
 		cleanupRenderedComponent = renderedV3Component.cleanup
 
 		documentQueries = within(document.body)

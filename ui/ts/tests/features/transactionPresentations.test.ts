@@ -11,6 +11,7 @@ import {
 	createOpenOracleTransactionIntent,
 	createReportingSuccessPresentation,
 	createReportingTransactionIntent,
+	createSecurityPoolCreationTransactionIntent,
 	createSecurityVaultTransactionIntent,
 	createTradingSuccessPresentation,
 	createTradingTransactionIntent,
@@ -49,6 +50,14 @@ describe('transaction presentations', () => {
 			vaultAddress: '0x0000000000000000000000000000000000000002',
 		})
 		expect(intent.rows?.map(row => row.label)).toEqual(['Security Pool Address', 'Vault'])
+	})
+
+	test('normalizes the Statoblast security multiplier in security pool creation intents', () => {
+		const intent = createSecurityPoolCreationTransactionIntent({
+			statoblastSecurityMultiplierBps: 25_000n,
+		})
+
+		expect(intent.rows).toEqual([{ label: 'Statoblast Security Multiplier', value: '2.5x' }])
 	})
 
 	test('uses resolved token symbols in Open Oracle approval and withdrawal titles', () => {

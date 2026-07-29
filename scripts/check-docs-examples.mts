@@ -226,6 +226,80 @@ async function checkDeploymentMappingStates(): Promise<void> {
 	}
 }
 
+async function checkLiquidationMultiplierBoundaries(): Promise<void> {
+	const filePath = 'docs/liquidation.html'
+	const html = await readFile(filePath, 'utf8')
+	const window = new Window({
+		url: pathToFileURL(filePath).href,
+	})
+	try {
+		window.document.write(html)
+		window.document.close()
+
+		const output = (name: string) => {
+			const element = window.document.querySelector(`[data-liquidation-output="${name}"]`)
+			if (!(element instanceof window.HTMLElement)) throw new Error(`Missing liquidation output: ${name}`)
+			return element.textContent.trim()
+		}
+		const defaultFallback = {
+			cap: output('cap'),
+			postDebt: output('postDebt'),
+			repMoved: output('repMoved'),
+			required: output('required'),
+			shortfall: output('shortfall'),
+			status: output('status'),
+		}
+
+		const script = window.document.querySelector('script:not([src])')
+		const scriptText = script?.textContent
+		if (scriptText === undefined || scriptText.trim().length === 0) throw new Error(`${filePath} is missing its inline calculator script`)
+		const runScript = new Function('document', scriptText)
+		runScript(window.document)
+
+		assert.deepEqual(
+			{
+				cap: output('cap'),
+				postDebt: output('postDebt'),
+				repMoved: output('repMoved'),
+				required: output('required'),
+				shortfall: output('shortfall'),
+				status: output('status'),
+			},
+			defaultFallback,
+			'liquidation calculator runtime defaults must match its static fallback',
+		)
+
+		const setInput = (name: string, value: string) => {
+			const input = window.document.querySelector(`[data-liquidation-input="${name}"]`)
+			if (!(input instanceof window.HTMLInputElement)) throw new Error(`Missing liquidation input: ${name}`)
+			input.value = value
+			input.dispatchEvent(new window.Event('input', { bubbles: true }))
+		}
+		setInput('rep', '110')
+		setInput('debt', '25')
+		setInput('price', '4')
+
+		for (const [multiplier, expected] of [
+			['1.0999', { required: '109.99 REP', shortfall: '0 REP', status: 'Safe' }],
+			['1.1', { required: '110 REP', shortfall: '0 REP', status: 'Safe' }],
+			['1.1001', { required: '110.01 REP', shortfall: '0.01 REP', status: 'Liquidatable' }],
+		] as const) {
+			setInput('multiplier', multiplier)
+			assert.deepEqual(
+				{
+					required: output('required'),
+					shortfall: output('shortfall'),
+					status: output('status'),
+				},
+				expected,
+				`liquidation calculator must preserve the exact ${multiplier}x BPS boundary`,
+			)
+		}
+	} finally {
+		window.close()
+	}
+}
+
 async function loadAuctionExample({ filePath, exampleId }: AuctionExampleScenario): Promise<InteractiveExampleHarness> {
 	return loadInteractiveExample(filePath, exampleId)
 }
@@ -627,6 +701,7 @@ await checkEscalationDepositExample()
 await checkResolutionEdgeExample()
 await checkDynamicWethReportExample()
 await checkDeploymentMappingStates()
+await checkLiquidationMultiplierBoundaries()
 checkExactRepCapEquality()
 
 const openOracleHtml = await readFile('docs/open-oracle-integration.html', 'utf8')

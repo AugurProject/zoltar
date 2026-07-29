@@ -33,7 +33,7 @@ describe('Nested fork migration deadline', () => {
 		OperationType,
 		QuestionOutcome,
 		repDeposit,
-		securityMultiplier,
+		statoblastSecurityMultiplierBps,
 		startTruthAuction,
 		SystemState,
 		TEST_ADDRESSES,
@@ -71,7 +71,7 @@ describe('Nested fork migration deadline', () => {
 		const childFork = await getUniverseData(client, childUniverse)
 
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-		const childPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, childUniverse, questionId, securityMultiplier)
+		const childPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, childUniverse, questionId, statoblastSecurityMultiplierBps)
 		assert.strictEqual(await getSystemState(client, childPool.securityPool), SystemState.ForkMigration)
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		await migrateShares(client, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [QuestionOutcome.Yes])

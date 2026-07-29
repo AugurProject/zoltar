@@ -149,9 +149,11 @@
 							continued access to the supported Statoblast lineage at least as
 							highly as its configured
 							<a href="../solidity/contracts/peripherals/SecurityPool.sol"
-								><code>securityMultiplier</code></a
+								><code>statoblastSecurityMultiplierBps</code></a
 							>
-							times the value secured by that lineage.
+							basis points of the value secured by that lineage.
+							<code>BPS_DENOMINATOR = 10_000</code> converts that stored value
+							to its human multiplier.
 						</p>
 						<div
 							class="equation assumption-equation"
@@ -162,13 +164,15 @@
 						>
 							<math
 								display="block"
-								aria-label="value of Statoblast access is greater than or equal to the configured Statoblast security multiplier times secured value"
-								data-source="statoblastAccessValue >= securityMultiplier * securedValue"
+								aria-label="value of Statoblast access times the basis-point denominator is greater than or equal to the configured Statoblast security multiplier in basis points times secured value"
+								data-source="statoblastAccessValue * BPS_DENOMINATOR >= statoblastSecurityMultiplierBps * securedValue"
 							>
 								<mrow>
 									<msub><mi>Value</mi><mtext>Statoblast access</mtext></msub>
+									<mo>×</mo>
+									<mi>BPS_DENOMINATOR</mi>
 									<mo>≥</mo>
-									<mi>securityMultiplier</mi>
+									<mi>statoblastSecurityMultiplierBps</mi>
 									<mo>×</mo>
 									<msub><mi>Value</mi><mtext>secured</mtext></msub>
 								</mrow>
@@ -235,7 +239,7 @@
 							decision horizon, before long-run value has fully concentrated on one
 							branch. The sum of traded child-lineage values remains large enough
 							compared with that parent lineage’s pre-fork value under the origin’s
-							immutable <code>securityMultiplier</code>. Each child asset is valued
+							immutable <code>statoblastSecurityMultiplierBps</code>. Each child asset is valued
 							in its own branch; unrelated external collateral is not counted again.
 						</p>
 						<div
@@ -248,7 +252,7 @@
 							<math
 								display="block"
 								aria-label="value of the parent Statoblast lineage is less than or equal to the sum of value in its child-lineage continuations divided by that origin lineage's Statoblast security multiplier"
-								data-source="parentLineageValue <= sum(childLineageValues) / lineageSecurityMultiplier"
+								data-source="parentLineageValue <= sum(childLineageValues) * BPS_DENOMINATOR / lineageStatoblastSecurityMultiplierBps"
 							>
 								<mrow>
 									<msub><mi>Value</mi><mtext>parent lineage</mtext></msub>
@@ -260,8 +264,10 @@
 												<mrow><mi>child</mi><mo>∈</mo><mi>Lineage continuations</mi></mrow>
 											</munder>
 											<msub><mi>Value</mi><mi>child</mi></msub>
+											<mo>×</mo>
+											<mi>BPS_DENOMINATOR</mi>
 										</mrow>
-										<msub><mi>securityMultiplier</mi><mi>lineage</mi></msub>
+										<msub><mi>statoblastSecurityMultiplierBps</mi><mi>lineage</mi></msub>
 									</mfrac>
 								</mrow>
 							</math>
@@ -269,8 +275,8 @@
 								<span class="equation-label">Fork value boundary.</span>
 								Parent and child values use the same origin lineage, valuation
 								source, numeraire, and decision horizon. For multiplier
-								<code>2</code>, aggregate child-lineage value must be at least
-								twice parent-lineage value; multiplier <code>3</code> requires
+								<code>20_000 BPS</code>, aggregate child-lineage value must be at least
+								twice parent-lineage value; multiplier <code>30_000 BPS</code> requires
 								three times that value.
 							</p>
 						</div>
@@ -810,7 +816,7 @@
 							affordable, the liquidation multiplier above one plus the bonus, the
 							oracle target error profitable to correct after fees and gas, dispute
 							and settlement windows usable, and callback and transition gas
-							executable. The Statoblast pool <code>securityMultiplier</code> is
+							executable. The Statoblast pool <code>statoblastSecurityMultiplierBps</code> is
 							distinct from <code>openOracleSecurityMultiplierBps</code>.
 						</p>
 						<p class="assumption-failure">

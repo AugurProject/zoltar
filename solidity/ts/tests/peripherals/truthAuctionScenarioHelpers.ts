@@ -43,11 +43,23 @@ type PeripheralsTruthAuctionScenarioContext = {
 	getSecurityPoolAddresses: () => SecurityPoolAddresses
 	repDeposit: bigint
 	reportBond: bigint
-	securityMultiplier: bigint
+	statoblastSecurityMultiplierBps: bigint
 	transferRepToAddress: (sender: WriteClient, recipient: Address, amount: bigint) => Promise<void>
 }
 
-export function createPeripheralsTruthAuctionScenarioHelpers({ genesisUniverse, getClient, getMockWindow, getOutcomes, getQuestionData, getQuestionId, getSecurityPoolAddresses: getFixtureSecurityPoolAddresses, repDeposit, reportBond, securityMultiplier, transferRepToAddress }: PeripheralsTruthAuctionScenarioContext) {
+export function createPeripheralsTruthAuctionScenarioHelpers({
+	genesisUniverse,
+	getClient,
+	getMockWindow,
+	getOutcomes,
+	getQuestionData,
+	getQuestionId,
+	getSecurityPoolAddresses: getFixtureSecurityPoolAddresses,
+	repDeposit,
+	reportBond,
+	statoblastSecurityMultiplierBps,
+	transferRepToAddress,
+}: PeripheralsTruthAuctionScenarioContext) {
 	const finalizeQuestionAsYesWithoutFork = async () => {
 		const client = getClient()
 		const mockWindow = getMockWindow()
@@ -108,7 +120,7 @@ export function createPeripheralsTruthAuctionScenarioHelpers({ genesisUniverse, 
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 		await startTruthAuction(client, yesSecurityPool.securityPool)
@@ -202,7 +214,7 @@ export function createPeripheralsTruthAuctionScenarioHelpers({ genesisUniverse, 
 		const securityPoolAddresses = getFixtureSecurityPoolAddresses()
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
-		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+		const forkThreshold = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
 		const repBalance = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool)
 		if (strayRepBeforeFork > 0n) await transferRepToAddress(client, getInfraContractAddresses().securityPoolForker, strayRepBeforeFork)

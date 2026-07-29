@@ -35,7 +35,7 @@
 				<p>
 					Here, healthier means the target shortfall shrinks and the moved debt
 					lands only on a caller vault that remains non-liquidatable under the
-					<code>securityMultiplier</code>-adjusted collateral threshold.
+					<code>statoblastSecurityMultiplierBps</code>-adjusted collateral threshold.
 					Liquidation redistributes REP and allowance; it does not increase
 					aggregate backing.
 				</p>
@@ -43,9 +43,10 @@
 					Terms used below:
 					<code>targetUnlockedRep</code> = target vault unlocked REP claim,
 					<code>targetAllowanceEth</code> = target vault allowance,
-					<code>securityMultiplier</code> = security multiplier,
+					<code>statoblastSecurityMultiplierBps</code> = Statoblast security multiplier in basis points,
 					<code>currentRepPerEthPrice</code> = current REP/ETH price,
-					<code>PRICE_PRECISION</code> = <code>1e18</code>.
+					<code>PRICE_PRECISION</code> = <code>1e18</code>,
+					<code>BPS_DENOMINATOR</code> = <code>10_000</code>.
 				</p>
 			</header>
 
@@ -97,17 +98,19 @@
 					</p>
 				</figure>
 				<div class="equation" id="eq-liquidatable-condition">
-					<math display="block" aria-label="target vault is liquidatable when target allowance times security multiplier times current REP per ETH price is greater than target unlocked REP times PRICE_PRECISION" data-source="targetAllowanceEth * securityMultiplier * currentRepPerEthPrice > targetUnlockedRep * PRICE_PRECISION">
+					<math display="block" aria-label="target vault is liquidatable when target allowance times the Statoblast security multiplier in basis points times current REP per ETH price is greater than target unlocked REP times PRICE_PRECISION times BPS_DENOMINATOR" data-source="targetAllowanceEth * statoblastSecurityMultiplierBps * currentRepPerEthPrice > targetUnlockedRep * PRICE_PRECISION * BPS_DENOMINATOR">
 						<mrow>
 							<mi>targetAllowanceEth</mi>
 							<mo>&#x22C5;</mo>
-							<mi>securityMultiplier</mi>
+							<mi>statoblastSecurityMultiplierBps</mi>
 							<mo>&#x22C5;</mo>
 							<mi>currentRepPerEthPrice</mi>
 							<mo>&gt;</mo>
 							<mi>targetUnlockedRep</mi>
 							<mo>&#x22C5;</mo>
 							<mi>PRICE_PRECISION</mi>
+							<mo>&#x22C5;</mo>
+							<mi>BPS_DENOMINATOR</mi>
 						</mrow>
 					</math>
 					<p class="equation-caption">
@@ -421,17 +424,19 @@
 					</p>
 				</div>
 				<div class="equation" id="eq-liquidation-health-guard">
-					<math display="block" aria-label="debt moved times security multiplier times current REP per ETH price must be strictly greater than REP seized times price precision" data-source="debtToMove * securityMultiplier * currentRepPerEthPrice > repToMove * PRICE_PRECISION">
+					<math display="block" aria-label="debt moved times the Statoblast security multiplier in basis points times current REP per ETH price must be strictly greater than REP seized times price precision times BPS_DENOMINATOR" data-source="debtToMove * statoblastSecurityMultiplierBps * currentRepPerEthPrice > repToMove * PRICE_PRECISION * BPS_DENOMINATOR">
 						<mrow>
 							<mi>debtToMove</mi>
 							<mo>&#x22C5;</mo>
-							<mi>securityMultiplier</mi>
+							<mi>statoblastSecurityMultiplierBps</mi>
 							<mo>&#x22C5;</mo>
 							<mi>currentRepPerEthPrice</mi>
 							<mo>&gt;</mo>
 							<mi>repToMove</mi>
 							<mo>&#x22C5;</mo>
 							<mi>PRICE_PRECISION</mi>
+							<mo>&#x22C5;</mo>
+							<mi>BPS_DENOMINATOR</mi>
 						</mrow>
 					</math>
 					<p class="equation-caption">
@@ -492,7 +497,7 @@
 					<tbody>
 						<tr data-liquidation-case="queued-topup-no-gain">
 							<td>Penalty liquidation</td>
-							<td><code>targetUnlockedRep = 1000 REP</code>, <code>targetAllowanceEth = 75 ETH</code>, <code>securityMultiplier = 2</code>, <code>currentRepPerEthPrice = 10 REP/ETH</code></td>
+							<td><code>targetUnlockedRep = 1000 REP</code>, <code>targetAllowanceEth = 75 ETH</code>, <code>statoblastSecurityMultiplierBps = 20_000</code>, <code>currentRepPerEthPrice = 10 REP/ETH</code></td>
 							<td>
 								Required backing is <code>75 * 2 * 10 = 1500 REP</code>, so the
 								target starts <code>500 REP</code> short. A
@@ -505,7 +510,7 @@
 						</tr>
 						<tr>
 							<td>Locked escalation REP stays untouched</td>
-							<td><code>targetUnlockedRep = 300 REP</code> unlocked, <code>targetAllowanceEth = 200 ETH</code>, <code>securityMultiplier = 2</code>, <code>currentRepPerEthPrice = 1 REP/ETH</code></td>
+							<td><code>targetUnlockedRep = 300 REP</code> unlocked, <code>targetAllowanceEth = 200 ETH</code>, <code>statoblastSecurityMultiplierBps = 20_000</code>, <code>currentRepPerEthPrice = 1 REP/ETH</code></td>
 							<td>
 								A full <code>200 ETH</code> liquidation would seize
 								<code>210 REP</code>, leaving <code>90 REP</code> unlocked and
@@ -516,7 +521,7 @@
 						</tr>
 						<tr>
 							<td>Target-side debt dust clamp</td>
-							<td><code>targetAllowanceEth = 1.4 ETH</code>, <code>targetUnlockedRep = 1000 REP</code>, <code>securityMultiplier = 2</code>, <code>currentRepPerEthPrice = 1000 REP/ETH</code></td>
+							<td><code>targetAllowanceEth = 1.4 ETH</code>, <code>targetUnlockedRep = 1000 REP</code>, <code>statoblastSecurityMultiplierBps = 20_000</code>, <code>currentRepPerEthPrice = 1000 REP/ETH</code></td>
 							<td>
 								The target has enough unlocked REP for about
 								<code>0.94 ETH</code> of punitive liquidation while still keeping
@@ -527,7 +532,7 @@
 						</tr>
 						<tr>
 							<td>Caller-side dust revert</td>
-							<td><code>targetAllowanceEth = 1.4 ETH</code>, <code>targetUnlockedRep = 1000 REP</code>, <code>securityMultiplier = 2</code>, executable target-side cap is <code>0.4 ETH</code>, caller starts with zero debt</td>
+							<td><code>targetAllowanceEth = 1.4 ETH</code>, <code>targetUnlockedRep = 1000 REP</code>, <code>statoblastSecurityMultiplierBps = 20_000</code>, executable target-side cap is <code>0.4 ETH</code>, caller starts with zero debt</td>
 							<td>
 								A <code>0.4 ETH</code> liquidation would leave the caller with a
 								non-zero allowance below <code>MIN_SECURITY_BOND_DEBT</code>, so
@@ -537,7 +542,7 @@
 						</tr>
 						<tr>
 							<td>Minimum-size full close</td>
-							<td><code>targetUnlockedRep = 10 REP</code>, <code>targetAllowanceEth = 1 ETH</code>, <code>securityMultiplier = 2</code>, <code>currentRepPerEthPrice = 6.1 REP/ETH</code></td>
+							<td><code>targetUnlockedRep = 10 REP</code>, <code>targetAllowanceEth = 1 ETH</code>, <code>statoblastSecurityMultiplierBps = 20_000</code>, <code>currentRepPerEthPrice = 6.1 REP/ETH</code></td>
 							<td>
 								The target is unsafe because
 								<code>1 * 2 * 6.1 = 12.2 REP</code> is above its
@@ -553,7 +558,7 @@
 						</tr>
 						<tr>
 							<td>Queued top-up can remove the gain</td>
-							<td><code>snapshotTargetUnlockedRep = 10 REP</code>, <code>snapshotTargetAllowanceEth = 1 ETH</code>, <code>securityMultiplier = 2</code>, <code>currentRepPerEthPrice = 6.1 REP/ETH</code>, target later adds <code>3 REP</code></td>
+							<td><code>snapshotTargetUnlockedRep = 10 REP</code>, <code>snapshotTargetAllowanceEth = 1 ETH</code>, <code>statoblastSecurityMultiplierBps = 20_000</code>, <code>currentRepPerEthPrice = 6.1 REP/ETH</code>, target later adds <code>3 REP</code></td>
 							<td>
 								The staged debt still sizes from the <code>10 REP / 1 ETH</code>
 								snapshot, but the full-close sweep now evaluates the target's
@@ -587,8 +592,8 @@
 							<span class="example-value" data-liquidation-value="debt">75 ETH</span>
 						</label>
 						<label>
-							Multiplier
-							<input data-liquidation-input="multiplier" type="range" min="2" max="4" step="1" value="2" />
+							Statoblast security multiplier
+							<input data-liquidation-input="multiplier" type="range" min="1.0001" max="4" step="0.0001" value="2" />
 							<span class="example-value" data-liquidation-value="multiplier">2x</span>
 						</label>
 						<label>
@@ -601,9 +606,9 @@
 						<p><strong>Status:</strong> <span data-liquidation-output="status">Liquidatable</span></p>
 						<p><strong>Required REP:</strong> <span data-liquidation-output="required">1500 REP</span></p>
 						<p><strong>REP shortfall:</strong> <span data-liquidation-output="shortfall">500 REP</span></p>
-						<p><strong>Target-side cap before caller checks:</strong> <span data-liquidation-output="cap">75 ETH</span></p>
-						<p><strong>Post-max debt:</strong> <span data-liquidation-output="postDebt">0 ETH</span></p>
-						<p><strong>REP seized at Max:</strong> <span data-liquidation-output="repMoved">787.5 REP</span></p>
+						<p><strong>Target-side cap before caller checks:</strong> <span data-liquidation-output="cap">75.00 ETH</span></p>
+						<p><strong>Post-max debt:</strong> <span data-liquidation-output="postDebt">0.00 ETH</span></p>
+						<p><strong>REP seized at Max:</strong> <span data-liquidation-output="repMoved">787.50 REP</span></p>
 					</div>
 					<p class="detail">
 						This calculator only models the target-side cap. A real execution
@@ -633,7 +638,7 @@
 						Base case is fixed at
 						<code>targetUnlockedRep = 1000 REP</code>,
 						<code>targetAllowanceEth = 75 ETH</code>,
-						<code>securityMultiplier = 2</code>, and
+						<code>statoblastSecurityMultiplierBps = 20_000</code>, and
 						<code>currentRepPerEthPrice = 10 REP/ETH</code>.
 					</p>
 						<div class="example-output">
@@ -669,14 +674,14 @@
 					backing than the protocol seizes as a REP bonus. Ignoring integer
 					rounding, the economic condition is:
 				</p>
-				<p><code>securityMultiplier &gt; 1 + liquidation bonus</code></p>
+				<p><code>statoblastSecurityMultiplierBps &gt; BPS_DENOMINATOR + liquidationBonusBps</code></p>
 				<p>
-					With a <code>2x</code> security multiplier and a <code>5%</code> REP
+					With a <code>2x</code> Statoblast security multiplier and a <code>5%</code> REP
 					bonus, ordinary-sized liquidations reduce required backing faster than
 					seized REP, so the target gets healthier even while it loses
 					collateral. The executable rule is still the strict onchain
 					health-improvement guard
-					<code>debtToMove * securityMultiplier * currentRepPerEthPrice &gt; repToMove * PRICE_PRECISION</code>;
+					<code>debtToMove * statoblastSecurityMultiplierBps * currentRepPerEthPrice &gt; repToMove * PRICE_PRECISION * BPS_DENOMINATOR</code>;
 					ceil-rounded tiny chunks can fail with <code>No gain</code>.
 				</p>
 				<p>
@@ -691,12 +696,43 @@
 		</main>
 
 		<script>
-			const LIQUIDATION_REP_BONUS = 0.05
-			const MIN_REP_DEPOSIT = 10
-			const MIN_SECURITY_BOND_DEBT = 1
+			const BPS_DENOMINATOR = 10_000n
+			const DISPLAY_UNIT_SCALE = 100n
+			const LIQUIDATION_REP_BONUS_BPS = 500n
+			const MIN_REP_DEPOSIT = 10n * DISPLAY_UNIT_SCALE
+			const MIN_SECURITY_BOND_DEBT = 1n * DISPLAY_UNIT_SCALE
+
+			function ceilDivide(numerator, denominator) {
+				return (numerator + denominator - 1n) / denominator
+			}
+
+			function parseMultiplierBps(value) {
+				const [whole = '0', fractional = ''] = value.split('.')
+				return BigInt(whole) * BPS_DENOMINATOR + BigInt(fractional.padEnd(4, '0'))
+			}
+
+			function formatRatio(numerator, denominator, maximumDecimals = 6) {
+				const whole = numerator / denominator
+				let remainder = numerator % denominator
+				let fractional = ''
+				for (let index = 0; index < maximumDecimals && remainder > 0n; index += 1) {
+					remainder *= 10n
+					fractional += (remainder / denominator).toString()
+					remainder %= denominator
+				}
+				return fractional === '' ? whole.toString() : `${whole.toString()}.${fractional.replace(/0+$/, '')}`
+			}
+
+			function formatHundredths(value) {
+				return `${(value / DISPLAY_UNIT_SCALE).toString()}.${(value % DISPLAY_UNIT_SCALE).toString().padStart(2, '0')}`
+			}
+
+			function formatHundredthsTrimmed(value) {
+				return formatHundredths(value).replace(/\.?0+$/, '')
+			}
 
 			function getComputedRepToMove(debt, price) {
-				return debt * price * (1 + LIQUIDATION_REP_BONUS)
+				return ceilDivide(debt * price * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS), BPS_DENOMINATOR)
 			}
 
 			function getRepToMove({ debtToMove, price, targetAllowance, targetUnlockedRep }) {
@@ -706,49 +742,59 @@
 					: computedRepToMove
 			}
 
-			function getLiquidationCap({ debt, multiplier, price, rep }) {
-				if (multiplier <= 1) return 0
-				if (debt * multiplier * price <= rep) return 0
-				let cap = 0
-				if (rep > MIN_REP_DEPOSIT) cap = (rep - MIN_REP_DEPOSIT) / (price * (1 + LIQUIDATION_REP_BONUS))
+			function getLiquidationCap({ debt, multiplierBps, price, rep }) {
+				if (multiplierBps <= BPS_DENOMINATOR) return 0n
+				if (debt * multiplierBps * price <= rep * BPS_DENOMINATOR) return 0n
+				let cap = 0n
+				if (rep > MIN_REP_DEPOSIT) {
+					cap = ((rep - MIN_REP_DEPOSIT) * BPS_DENOMINATOR) / (price * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS))
+				}
 				if (cap > debt) cap = debt
 				const remaining = debt - cap
-				if (remaining > 0 && remaining <= MIN_SECURITY_BOND_DEBT) cap = debt > MIN_SECURITY_BOND_DEBT ? debt - MIN_SECURITY_BOND_DEBT : debt
-				if (cap > 0 && cap * multiplier * price <= getRepToMove({ debtToMove: cap, price, targetAllowance: debt, targetUnlockedRep: rep })) return 0
+				if (remaining > 0n && remaining <= MIN_SECURITY_BOND_DEBT) cap = debt > MIN_SECURITY_BOND_DEBT ? debt - MIN_SECURITY_BOND_DEBT : debt
+				if (cap > 0n && cap * multiplierBps * price <= getRepToMove({ debtToMove: cap, price, targetAllowance: debt, targetUnlockedRep: rep }) * BPS_DENOMINATOR) return 0n
 				return cap
 			}
 
 			function updateLiquidationExample() {
-				const rep = Number(document.querySelector('[data-liquidation-input="rep"]').value)
-				const debt = Number(document.querySelector('[data-liquidation-input="debt"]').value)
-				const multiplier = Number(document.querySelector('[data-liquidation-input="multiplier"]').value)
-				const price = Number(document.querySelector('[data-liquidation-input="price"]').value)
-				const required = debt * multiplier * price
-				const shortfall = Math.max(0, required - rep)
-				const cap = getLiquidationCap({ debt, multiplier, price, rep })
+				const repInput = document.querySelector('[data-liquidation-input="rep"]').value
+				const debtInput = document.querySelector('[data-liquidation-input="debt"]').value
+				const multiplierInput = document.querySelector('[data-liquidation-input="multiplier"]').value
+				const priceInput = document.querySelector('[data-liquidation-input="price"]').value
+				const rep = BigInt(repInput) * DISPLAY_UNIT_SCALE
+				const debt = BigInt(debtInput) * DISPLAY_UNIT_SCALE
+				const multiplierBps = parseMultiplierBps(multiplierInput)
+				const price = BigInt(priceInput)
+				const requiredNumerator = debt * multiplierBps * price
+				const repNumerator = rep * BPS_DENOMINATOR
+				const shortfallNumerator = requiredNumerator > repNumerator ? requiredNumerator - repNumerator : 0n
+				const cap = getLiquidationCap({ debt, multiplierBps, price, rep })
 				const postDebt = debt - cap
 				const repMoved = getRepToMove({ debtToMove: cap, price, targetAllowance: debt, targetUnlockedRep: rep })
 
-				document.querySelector('[data-liquidation-value="rep"]').textContent = `${rep} REP`
-				document.querySelector('[data-liquidation-value="debt"]').textContent = `${debt} ETH`
-				document.querySelector('[data-liquidation-value="multiplier"]').textContent = `${multiplier}x`
-				document.querySelector('[data-liquidation-value="price"]').textContent = `${price} REP / ETH`
-				document.querySelector('[data-liquidation-output="status"]').textContent = shortfall > 0 ? 'Liquidatable' : 'Safe'
-				document.querySelector('[data-liquidation-output="required"]').textContent = `${required} REP`
-				document.querySelector('[data-liquidation-output="shortfall"]').textContent = `${shortfall} REP`
-				document.querySelector('[data-liquidation-output="cap"]').textContent = `${cap.toFixed(2)} ETH`
-				document.querySelector('[data-liquidation-output="postDebt"]').textContent = `${postDebt.toFixed(2)} ETH`
-				document.querySelector('[data-liquidation-output="repMoved"]').textContent = `${repMoved.toFixed(2)} REP`
+				document.querySelector('[data-liquidation-value="rep"]').textContent = `${repInput} REP`
+				document.querySelector('[data-liquidation-value="debt"]').textContent = `${debtInput} ETH`
+				document.querySelector('[data-liquidation-value="multiplier"]').textContent = `${formatRatio(multiplierBps, BPS_DENOMINATOR, 4)}x`
+				document.querySelector('[data-liquidation-value="price"]').textContent = `${priceInput} REP / ETH`
+				document.querySelector('[data-liquidation-output="status"]').textContent = shortfallNumerator > 0n ? 'Liquidatable' : 'Safe'
+				document.querySelector('[data-liquidation-output="required"]').textContent = `${formatRatio(requiredNumerator, BPS_DENOMINATOR * DISPLAY_UNIT_SCALE)} REP`
+				document.querySelector('[data-liquidation-output="shortfall"]').textContent = `${formatRatio(shortfallNumerator, BPS_DENOMINATOR * DISPLAY_UNIT_SCALE)} REP`
+				document.querySelector('[data-liquidation-output="cap"]').textContent = `${formatHundredths(cap)} ETH`
+				document.querySelector('[data-liquidation-output="postDebt"]').textContent = `${formatHundredths(postDebt)} ETH`
+				document.querySelector('[data-liquidation-output="repMoved"]').textContent = `${formatHundredths(repMoved)} REP`
 			}
 
 			function applyCap(base, requested) {
-				return Math.min(requested, getLiquidationCap(base))
+				const cap = getLiquidationCap(base)
+				return requested < cap ? requested : cap
 			}
 
 			function updatePathExample() {
-				const base = { rep: 1000, debt: 75, multiplier: 2, price: 10 }
-				const first = Number(document.querySelector('[data-path-input="first"]').value)
-				const second = Number(document.querySelector('[data-path-input="second"]').value)
+				const base = { rep: 1000n * DISPLAY_UNIT_SCALE, debt: 75n * DISPLAY_UNIT_SCALE, multiplierBps: 20_000n, price: 10n }
+				const firstInput = document.querySelector('[data-path-input="first"]').value
+				const secondInput = document.querySelector('[data-path-input="second"]').value
+				const first = BigInt(firstInput) * DISPLAY_UNIT_SCALE
+				const second = BigInt(secondInput) * DISPLAY_UNIT_SCALE
 
 				const firstMoved = applyCap(base, first)
 				const afterFirst = {
@@ -761,10 +807,10 @@
 				const combinedMoved = applyCap(base, first + second)
 				const singleDebt = base.debt - combinedMoved
 
-				document.querySelector('[data-path-value="first"]').textContent = `${first} ETH`
-				document.querySelector('[data-path-value="second"]').textContent = `${second} ETH`
-				document.querySelector('[data-path-output="single"]').textContent = `${singleDebt} ETH debt remaining`
-				document.querySelector('[data-path-output="twoStep"]').textContent = `${twoStepDebt} ETH debt remaining`
+				document.querySelector('[data-path-value="first"]').textContent = `${firstInput} ETH`
+				document.querySelector('[data-path-value="second"]').textContent = `${secondInput} ETH`
+				document.querySelector('[data-path-output="single"]').textContent = `${formatHundredthsTrimmed(singleDebt)} ETH debt remaining`
+				document.querySelector('[data-path-output="twoStep"]').textContent = `${formatHundredthsTrimmed(twoStepDebt)} ETH debt remaining`
 				document.querySelector('[data-path-output="same"]').textContent = singleDebt === twoStepDebt ? 'Yes' : 'No'
 			}
 
