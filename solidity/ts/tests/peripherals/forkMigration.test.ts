@@ -3596,6 +3596,8 @@ describe('Peripherals: fork migration', () => {
 
 		test('own-fork unlocked migration transfers all pool collateral when all vault REP migrates', async () => {
 			const collateralAmount = 2n * 10n ** 18n
+			const secondVaultClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+			await approveAndDepositRep(secondVaultClient, repDeposit, questionId)
 			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetSecurityBondsAllowance, client.account.address, collateralAmount)
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime - 1n)
@@ -3605,6 +3607,7 @@ describe('Peripherals: fork migration', () => {
 			await depositRep(client, securityPoolAddresses.securityPool, 4n * forkThreshold)
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, forkThreshold)
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThreshold)
+			await transferRepToAddress(client, securityPoolAddresses.securityPool, 5n)
 			await forkZoltarWithOwnEscalationGame(client, securityPoolAddresses.securityPool)
 			const ownForkRepBuckets = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
 			assert.ok(ownForkRepBuckets.vaultRepAtFork > 0n, 'test setup should leave unlocked vault REP at fork')
@@ -3616,6 +3619,7 @@ describe('Peripherals: fork migration', () => {
 			const parentCollateralBeforeMigration = await getCompleteSetCollateralAmount(client, securityPoolAddresses.securityPool)
 			const childEthBeforeMigration = await getETHBalance(client, yesSecurityPool.securityPool)
 
+			await migrateVault(secondVaultClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			const migrationHash = await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			const migrationReceipt = await client.getTransactionReceipt({ hash: migrationHash })
 			const migrationCheckpointLog = migrationReceipt.logs
@@ -3636,6 +3640,7 @@ describe('Peripherals: fork migration', () => {
 			strictEqualTypeSafe(parentCollateralAfterMigration, 0n, 'all remaining pool collateral should leave the parent when all vault REP migrates')
 			strictEqualTypeSafe(childEthAfterMigration - childEthBeforeMigration, parentCollateralBeforeMigration, 'the child should receive the full remaining migrated pool collateral')
 			strictEqualTypeSafe(migrationCheckpointLog.args.cumulativeCollateralTransferred, parentCollateralBeforeMigration, 'the migration checkpoint should report the complete own-fork cumulative collateral')
+			strictEqualTypeSafe(await getMigratedRep(client, yesSecurityPool.securityPool), ownForkRepBuckets.vaultRepAtFork, 'complete own-fork ownership migration should reconcile donated REP rounding residue')
 		})
 	})
 
