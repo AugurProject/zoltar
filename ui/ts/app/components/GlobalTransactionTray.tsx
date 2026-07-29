@@ -3,24 +3,30 @@ import { TransactionPresentationNotice } from '../../components/TransactionPrese
 import type { GlobalTransactionPresentation } from '../../types/components.js'
 
 type GlobalTransactionTrayProps = {
+	routeKey?: string
 	transaction: GlobalTransactionPresentation | undefined
 }
 
 const dismissedKeys = new Set<string>()
 
-function getDismissKey(transaction: GlobalTransactionPresentation | undefined) {
-	const baseKey = transaction?.dismissKey ?? transaction?.hash
-	if (baseKey === undefined || transaction === undefined) return undefined
-	return `${transaction.tone}:${baseKey}`
+function getTransactionKey(transaction: GlobalTransactionPresentation | undefined) {
+	return transaction?.operationKey ?? transaction?.dismissKey ?? transaction?.hash
 }
 
-export function GlobalTransactionTray({ transaction }: GlobalTransactionTrayProps) {
+function getDismissKey(transaction: GlobalTransactionPresentation | undefined) {
+	const transactionKey = getTransactionKey(transaction)
+	if (transactionKey === undefined || transaction === undefined) return undefined
+	return `${transaction.tone}:${transactionKey}`
+}
+
+export function GlobalTransactionTray({ routeKey, transaction }: GlobalTransactionTrayProps) {
 	const [dismissedKey, setDismissedKey] = useState<string | undefined>(() => {
 		const transactionDismissKey = getDismissKey(transaction)
 		if (transactionDismissKey === undefined || !dismissedKeys.has(transactionDismissKey)) return undefined
 		return transactionDismissKey
 	})
 	const dismissKeyRef = useRef(getDismissKey(transaction))
+	const transactionOriginRef = useRef({ routeKey, transactionKey: getTransactionKey(transaction) })
 	const noticeRef = useRef<HTMLDivElement>(null)
 
 	useEffect(() => {
@@ -59,8 +65,11 @@ export function GlobalTransactionTray({ transaction }: GlobalTransactionTrayProp
 	if (transaction === undefined) return undefined
 
 	const transactionDismissKey = getDismissKey(transaction)
+	const transactionKey = getTransactionKey(transaction)
+	if (transactionOriginRef.current.transactionKey !== transactionKey) transactionOriginRef.current = { routeKey, transactionKey }
 	if (transactionDismissKey !== undefined && transactionDismissKey === dismissedKey) return undefined
 	const canDismiss = transaction.tone !== 'awaiting-wallet' && transaction.tone !== 'pending' && transaction.tone !== 'preparing' && transactionDismissKey !== undefined
+	const compact = canDismiss && routeKey !== undefined && transactionOriginRef.current.routeKey !== undefined && routeKey !== transactionOriginRef.current.routeKey
 	const dismiss = () => {
 		if (transactionDismissKey === undefined) return
 		dismissedKeys.add(transactionDismissKey)
@@ -69,7 +78,7 @@ export function GlobalTransactionTray({ transaction }: GlobalTransactionTrayProp
 
 	return (
 		<div className='global-transaction-tray'>
-			<TransactionPresentationNotice dismissible={canDismiss} noticeRef={noticeRef} onDismiss={dismiss} transaction={transaction} />
+			<TransactionPresentationNotice compact={compact} dismissible={canDismiss} noticeRef={noticeRef} onDismiss={dismiss} transaction={transaction} />
 		</div>
 	)
 }

@@ -33,7 +33,7 @@ import type {
 import type { ActionAvailability, ReadinessAction } from '../types/components.js'
 import type { SecurityPoolLifecycleState } from './security-pools/lib/securityPoolState.js'
 import type { ForkAuctionStageView } from './truth-auctions/lib/forkAuction.js'
-import type { OpenOracleDisputeSubmissionDetails } from './open-oracle/lib/openOracle.js'
+import type { OpenOracleCreateContractFieldErrors, OpenOracleDisputeSubmissionDetails } from './open-oracle/lib/openOracle.js'
 import type { LoadableValueState } from '../lib/loadState.js'
 import type { SecurityPoolStateModel } from './security-pools/lib/securityPoolState.js'
 import type { ForkWorkflowSelectionStage } from './security-pools/lib/securityPoolWorkflow.js'
@@ -409,6 +409,7 @@ type OpenOracleRouteContentProps = {
 	}
 	openOracleDisputeSubmission: OpenOracleDisputeSubmissionDetails | undefined
 	openOracleCreateForm: OpenOracleCreateFormState
+	openOracleCreateFieldErrors?: OpenOracleCreateContractFieldErrors
 	openOracleForm: OpenOracleFormState
 	openOracleReportLookupState: OpenOracleReportLookupState
 	openOracleReportDetails: OpenOracleReportDetails | undefined

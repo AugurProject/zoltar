@@ -1738,8 +1738,6 @@ describe('useOpenOracleOperations', () => {
 	})
 
 	test('createOpenOracleGame snapshots the submitted create form before decimals resolve', async () => {
-		const editedToken1Address = getAddress('0x00000000000000000000000000000000000000d1')
-		const editedToken2Address = getAddress('0x00000000000000000000000000000000000000d2')
 		const token1Decimals = createDeferred<number>()
 		const createOpenOracleReportInstance = mock(async (_client: unknown, submission: { exactToken1Report: bigint; initialToken2Amount: bigint; token1Address: Address; token2Address: Address }) => {
 			expect(submission.exactToken1Report).toBe(10n * 10n ** 18n)
@@ -1788,8 +1786,6 @@ describe('useOpenOracleOperations', () => {
 			requireHookState(hookState).setOpenOracleCreateForm(current => ({
 				...current,
 				exactToken1Report: '20',
-				token1Address: editedToken1Address,
-				token2Address: editedToken2Address,
 			}))
 		})
 
@@ -1800,6 +1796,69 @@ describe('useOpenOracleOperations', () => {
 
 		expect(createOpenOracleReportInstance).toHaveBeenCalledTimes(1)
 		expect(requireHookState(hookState).openOracleFeedback?.status.tone).toBe('success')
+	})
+
+	test('does not attach a stale token contract error after its address changes', async () => {
+		const editedToken1Address = getAddress('0x00000000000000000000000000000000000000d1')
+		const token1Decimals = createDeferred<number>()
+		const token2Decimals = createDeferred<number>()
+		const onTransactionRequested = mock(() => undefined)
+		const createOpenOracleReportInstance = mock(async () => {
+			throw new Error('createOpenOracleReportInstance should not be called')
+		})
+		const dependencies = createOpenOracleOperationsDependencies({
+			createConnectedReadClient: mock(() => ({
+				getBalance: mock(async () => 5n * 10n ** 18n),
+				getBlockNumber: mock(async () => 123n),
+				readContract: mock(async parameters => await (parameters.address === TOKEN1_ADDRESS ? token1Decimals.promise : token2Decimals.promise)),
+			})),
+			createOpenOracleReportInstance,
+		})
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(
+			dependencies,
+			state => {
+				hookState = state
+			},
+			true,
+			{ onTransactionRequested },
+		)
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			requireHookState(hookState).setOpenOracleCreateForm(current => ({
+				...current,
+				disputeDelay: '0',
+				exactToken1Report: '10',
+				initialToken2Amount: '5',
+				settlementTime: '1',
+				token1Address: TOKEN1_ADDRESS,
+				token2Address: TOKEN2_ADDRESS,
+			}))
+		})
+
+		let createPromise = Promise.resolve()
+		await act(() => {
+			createPromise = requireHookState(hookState).createOpenOracleGame()
+		})
+		await act(async () => {
+			requireHookState(hookState).setOpenOracleCreateForm(current => ({
+				...current,
+				token1Address: editedToken1Address,
+			}))
+		})
+		await act(async () => {
+			token1Decimals.reject(new Error('base token contract unavailable'))
+			token2Decimals.reject(new Error('quote token contract unavailable'))
+			await createPromise
+		})
+
+		expect(requireHookState(hookState).openOracleCreateFieldErrors).toEqual({
+			token2Address: 'Quote token address is not a readable ERC-20 contract.',
+		})
+		expect(onTransactionRequested).not.toHaveBeenCalled()
+		expect(createOpenOracleReportInstance).not.toHaveBeenCalled()
 	})
 
 	test('createOpenOracleGame reports invalid decimals with user-facing token terminology', async () => {
@@ -1830,8 +1889,56 @@ describe('useOpenOracleOperations', () => {
 			await requireHookState(hookState).createOpenOracleGame()
 		})
 
-		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('Unexpected Base token decimals response')
-		expect(requireHookState(hookState).openOracleFeedback?.status.title).toBe('Report creation failed')
+		expect(requireHookState(hookState).openOracleCreateFieldErrors.token1Address).toBe('Base token address is not a readable ERC-20 contract.')
+		expect(requireHookState(hookState).openOracleFeedback).toBeUndefined()
+	})
+
+	test('keeps unreadable token contract preflight out of the transaction workflow', async () => {
+		const onTransactionRequested = mock(() => undefined)
+		const createOpenOracleReportInstance = mock(async () => {
+			throw new Error('createOpenOracleReportInstance should not be called')
+		})
+		const dependencies = createOpenOracleOperationsDependencies({
+			createConnectedReadClient: mock(() => ({
+				getBalance: mock(async () => 5n * 10n ** 18n),
+				getBlockNumber: mock(async () => 123n),
+				readContract: mock(async parameters => {
+					if (parameters.address === TOKEN1_ADDRESS) throw new Error('contract function returned no data')
+					return 18
+				}),
+			})),
+			createOpenOracleReportInstance,
+		})
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(
+			dependencies,
+			state => {
+				hookState = state
+			},
+			true,
+			{ onTransactionRequested },
+		)
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			requireHookState(hookState).setOpenOracleCreateForm(current => ({
+				...current,
+				disputeDelay: '0',
+				exactToken1Report: '10',
+				initialToken2Amount: '5',
+				settlementTime: '1',
+				token1Address: TOKEN1_ADDRESS,
+				token2Address: TOKEN2_ADDRESS,
+			}))
+			await requireHookState(hookState).createOpenOracleGame()
+		})
+
+		expect(requireHookState(hookState).openOracleCreateFieldErrors).toEqual({
+			token1Address: 'Base token address is not a readable ERC-20 contract.',
+		})
+		expect(onTransactionRequested).not.toHaveBeenCalled()
+		expect(createOpenOracleReportInstance).not.toHaveBeenCalled()
 	})
 
 	test('disputeReport snapshots the submitted dispute inputs before token access refresh resolves', async () => {

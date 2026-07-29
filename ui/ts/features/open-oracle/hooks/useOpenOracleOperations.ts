@@ -18,6 +18,7 @@ import {
 	getOpenOracleSettleAvailability,
 	parseOpenOracleCreateFormSubmission,
 } from '../lib/openOracle.js'
+import type { OpenOracleCreateContractFieldErrors } from '../lib/openOracle.js'
 import { parseAddressInput, parseReportIdInput } from '../../../lib/inputs.js'
 import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '../../markets/lib/marketForm.js'
 import { requireDefined } from '../../../lib/required.js'
@@ -82,6 +83,17 @@ function requireTokenDecimals(value: unknown, label: string) {
 	const decimals = Number(value)
 	if (!Number.isInteger(decimals) || decimals < 0 || decimals > 255) throw new Error(`Unexpected ${label} decimals response`)
 	return decimals
+}
+
+type CreateTokenDecimalsReadResult = { decimals: number; status: 'success' } | { message: string; status: 'failure' }
+
+async function readCreateTokenDecimals(readClient: OpenOracleReadClient, address: Address, label: 'Base' | 'Quote'): Promise<CreateTokenDecimalsReadResult> {
+	try {
+		const value = await readClient.readContract({ abi: ABIS.mainnet.erc20, address, args: [], functionName: 'decimals' })
+		return { decimals: requireTokenDecimals(value, `${label} token`), status: 'success' }
+	} catch {
+		return { message: `${label} token address is not a readable ERC-20 contract.`, status: 'failure' }
+	}
 }
 
 type TokenAccessLoadResult = {
@@ -157,7 +169,8 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 	const oracleReportLoad = useLoadController()
 	const openOracleTokenAccessLoad = useLoadController()
 	const openOracleWithdrawableBalanceLoad = useLoadController()
-	const { state: openOracleCreateForm, setState: setOpenOracleCreateForm } = useFormState<OpenOracleCreateFormState>(getDefaultOpenOracleCreateFormState())
+	const { state: openOracleCreateForm, setState: setOpenOracleCreateFormState } = useFormState<OpenOracleCreateFormState>(getDefaultOpenOracleCreateFormState())
+	const openOracleCreateFieldErrors = useSignal<OpenOracleCreateContractFieldErrors>({})
 	const openOracleError = useSignal<string | undefined>(undefined)
 	const openOracleActiveAction = useSignal<OpenOracleActionResult['action'] | undefined>(undefined)
 	const openOracleActiveWithdrawalBalance = useSignal<keyof OpenOracleWithdrawableBalances | undefined>(undefined)
@@ -191,6 +204,17 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 	const nextOpenOracleWithdrawableBalanceLoad = useRequestGuard()
 	const nextOpenOracleWithdrawalAttempt = useRequestGuard()
 	const nextOracleReportLoad = useRequestGuard()
+	const setOpenOracleCreateForm = (updater: (current: OpenOracleCreateFormState) => OpenOracleCreateFormState) => {
+		setOpenOracleCreateFormState(current => {
+			const next = updater(current)
+			const currentErrors = openOracleCreateFieldErrors.value
+			openOracleCreateFieldErrors.value = {
+				...(next.token1Address === current.token1Address && currentErrors.token1Address !== undefined ? { token1Address: currentErrors.token1Address } : {}),
+				...(next.token2Address === current.token2Address && currentErrors.token2Address !== undefined ? { token2Address: currentErrors.token2Address } : {}),
+			}
+			return next
+		})
+	}
 	const currentSelectedReportIdInput = openOracleForm.value.reportId.trim()
 	const accountAddressRef = useRef(accountAddress)
 	accountAddressRef.current = accountAddress
@@ -622,7 +646,10 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 					openOracleResult.value = result
 					openOracleFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName), result.hash)
 					onTransactionPresented(createOpenOracleSuccessPresentation(result, transactionContext))
-					if (result.action === 'createReportInstance') openOracleCreateForm.value = getDefaultOpenOracleCreateFormState()
+					if (result.action === 'createReportInstance') {
+						openOracleCreateForm.value = getDefaultOpenOracleCreateFormState()
+						openOracleCreateFieldErrors.value = {}
+					}
 					if (result.action === 'settle') await onReportSettled?.()
 					if (result.action !== 'createReportInstance' && actionReportIdInput !== '' && isSelectedReportCurrent(actionReportIdInput)) {
 						await ensureLoadedSelectedReport({ forceReload: true, reportIdInput: actionReportIdInput, requireCurrentSelection: true })
@@ -716,10 +743,34 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 		const submittedOpenOracleCreateForm = openOracleCreateForm.value
 		loadingOpenOracleCreate.value = true
 		try {
+			openOracleCreateFieldErrors.value = {}
+			openOracleFeedback.value = undefined
+			openOracleError.value = undefined
+			const initialValidationMessage = getOpenOracleCreateValidationMessage({ form: submittedOpenOracleCreateForm })
+			if (initialValidationMessage !== undefined) {
+				openOracleError.value = initialValidationMessage
+				return
+			}
+			const token1Address = parseAddressInput(submittedOpenOracleCreateForm.token1Address, 'Base token address')
+			const token2Address = parseAddressInput(submittedOpenOracleCreateForm.token2Address, 'Quote token address')
+			const readClient = dependencies.createConnectedReadClient()
+			const [token1DecimalsResult, token2DecimalsResult] = await Promise.all([readCreateTokenDecimals(readClient, token1Address, 'Base'), readCreateTokenDecimals(readClient, token2Address, 'Quote')])
+			const currentOpenOracleCreateForm = openOracleCreateForm.value
+			const token1AddressIsCurrent = currentOpenOracleCreateForm.token1Address === submittedOpenOracleCreateForm.token1Address
+			const token2AddressIsCurrent = currentOpenOracleCreateForm.token2Address === submittedOpenOracleCreateForm.token2Address
+			const contractFieldErrors: OpenOracleCreateContractFieldErrors = {
+				...(token1AddressIsCurrent && token1DecimalsResult.status === 'failure' ? { token1Address: token1DecimalsResult.message } : {}),
+				...(token2AddressIsCurrent && token2DecimalsResult.status === 'failure' ? { token2Address: token2DecimalsResult.message } : {}),
+			}
+			if (!token1AddressIsCurrent || !token2AddressIsCurrent || token1DecimalsResult.status === 'failure' || token2DecimalsResult.status === 'failure') {
+				openOracleCreateFieldErrors.value = contractFieldErrors
+				return
+			}
+			const token1Decimals = token1DecimalsResult.decimals
+			const token2Decimals = token2DecimalsResult.decimals
 			await runOracleAction(
 				'createReportInstance',
 				async walletAddress => {
-					const readClient = dependencies.createConnectedReadClient()
 					const walletEthBalance = await readClient.getBalance({ address: walletAddress })
 					const createGuardMessage = getOpenOracleCreateGuardMessage({
 						ethValueInput: submittedOpenOracleCreateForm.ethValue,
@@ -729,14 +780,6 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 						walletEthBalance,
 					})
 					if (createGuardMessage !== undefined) throw new Error(createGuardMessage)
-					const createValidationMessage = getOpenOracleCreateValidationMessage({ form: submittedOpenOracleCreateForm })
-					if (createValidationMessage !== undefined) throw new Error(createValidationMessage)
-					const token1Address = parseAddressInput(submittedOpenOracleCreateForm.token1Address, 'Base token address')
-					const token2Address = parseAddressInput(submittedOpenOracleCreateForm.token2Address, 'Quote token address')
-					const [token1Decimals, token2Decimals] = await Promise.all([
-						readClient.readContract({ abi: ABIS.mainnet.erc20, address: token1Address, args: [], functionName: 'decimals' }).then(value => requireTokenDecimals(value, 'Base token')),
-						readClient.readContract({ abi: ABIS.mainnet.erc20, address: token2Address, args: [], functionName: 'decimals' }).then(value => requireTokenDecimals(value, 'Quote token')),
-					])
 					const preciseCreateValidationMessage = getOpenOracleCreateValidationMessage({ form: submittedOpenOracleCreateForm, token1Decimals, token2Decimals })
 					if (preciseCreateValidationMessage !== undefined) throw new Error(preciseCreateValidationMessage)
 
@@ -893,6 +936,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 		openOracleActiveWithdrawalBalance: openOracleActiveWithdrawalBalance.value,
 		loadingOpenOracleCreate: loadingOpenOracleCreate.value,
 		openOracleCreateForm: openOracleCreateForm.value,
+		openOracleCreateFieldErrors: openOracleCreateFieldErrors.value,
 		openOracleDisputeSubmission,
 		openOracleError: openOracleError.value,
 		openOracleFeedback: openOracleFeedback.value,
@@ -919,6 +963,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 		openOracleWithdrawableBalancesLoading: openOracleWithdrawableBalanceLoad.isLoading.value,
 		resetOpenOracleCreateForm: () => {
 			openOracleCreateForm.value = getDefaultOpenOracleCreateFormState()
+			openOracleCreateFieldErrors.value = {}
 		},
 		setOpenOracleCreateForm,
 		setOpenOracleForm,

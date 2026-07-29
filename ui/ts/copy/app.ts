@@ -62,7 +62,7 @@ export const refreshingRepPrices = 'Refreshing REP prices…'
 export const simulation = 'Simulation'
 export const simulationNetworkDisclaimer = 'Simulation mode uses browser-local contract state. Transactions do not affect a public network.'
 export const universeForkedDetail = 'This universe has forked.'
-export const zoltarForkedOn = 'Zoltar forked on'
+export const zoltarForkedOn = 'Universe forked on'
 export const formatWrongNetworkBadgeLabel = (networkLabel: string) => `Wrong Network (${networkLabel})`
 export const showEnvironmentDetails = 'Show environment details'
 export const hideEnvironmentDetails = 'Hide environment details'

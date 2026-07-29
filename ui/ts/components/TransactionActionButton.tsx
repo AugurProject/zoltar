@@ -3,6 +3,7 @@ import { useContext, useId } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
 import { LoadingAwareText, LoadingText } from './LoadingText.js'
 import type { TransactionActionButtonProps } from '../types/components.js'
+import { isPendingGlobalTransactionPresentation, useGlobalTransactionPresentation } from './GlobalTransactionPresentationContext.js'
 
 const TransactionActionButtonLockContext = createContext<string | undefined>(undefined)
 
@@ -12,6 +13,7 @@ export function TransactionActionButtonLockProvider({ children, disabledReason }
 
 export function TransactionActionButton({ ariaLabel, availability, className = '', disabled = false, disabledReasonElementId, idleLabel, onClick, pending = false, pendingLabel, showDisabledReason = true, tone = 'primary', type = 'button' }: TransactionActionButtonProps) {
 	const disabledReasonId = useId()
+	const globalTransaction = useGlobalTransactionPresentation()
 	const globalDisabledReason = useContext(TransactionActionButtonLockContext)
 	const blockedByPendingRequest = globalDisabledReason !== undefined && !pending
 	const isDisabled = disabled || pending || availability?.disabled === true || blockedByPendingRequest
@@ -27,7 +29,7 @@ export function TransactionActionButton({ ariaLabel, availability, className = '
 	return (
 		<div className={`tx-action ${className}`.trim()}>
 			<button aria-label={ariaLabel} className={`tx-action-button ${tone}`} type={type} onClick={handleClick} disabled={isDisabled} title={disabledReason} aria-describedby={describedBy}>
-				{pending ? <LoadingText>{pendingLabel}</LoadingText> : idleLabel}
+				{pending ? <LoadingText announce={!isPendingGlobalTransactionPresentation(globalTransaction)}>{pendingLabel}</LoadingText> : idleLabel}
 			</button>
 			{shouldShowDisabledReason ? (
 				<p id={disabledReasonId} className='detail disabled-reason'>

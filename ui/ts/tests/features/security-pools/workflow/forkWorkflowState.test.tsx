@@ -461,7 +461,7 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 	})
 
 	describe('reporting triggers and stale state', () => {
-		test('shows Trigger Zoltar Fork in the reporting workflow after non-decision', async () => {
+		test('shows Trigger universe fork in the reporting workflow after non-decision', async () => {
 			let triggerZoltarForkCalls = 0
 			const selectedPoolAddress = zeroAddress
 			const renderedComponent = await renderIntoDocument(
@@ -516,16 +516,16 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 			setCleanup(renderedComponent.cleanup)
 
 			const documentQueries = within(document.body)
-			expectTransactionButtonEnabled(document.body, 'Trigger Zoltar fork')
+			expectTransactionButtonEnabled(document.body, 'Trigger universe fork')
 
 			await act(() => {
-				fireEvent.click(documentQueries.getByRole('button', { name: 'Trigger Zoltar fork' }))
+				fireEvent.click(documentQueries.getByRole('button', { name: 'Trigger universe fork' }))
 			})
 
 			expect(triggerZoltarForkCalls).toBe(1)
 		})
 
-		test('hides Trigger Zoltar Fork after the pool has already entered its fork workflow and keeps Open fork & migration available', async () => {
+		test('hides Trigger universe fork after the pool has already entered its fork workflow and keeps Open fork & migration available', async () => {
 			const selectedPoolAddress = zeroAddress
 			const renderedComponent = await renderIntoDocument(
 				<SecurityPoolWorkflowSection
@@ -585,7 +585,7 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 			setCleanup(renderedComponent.cleanup)
 
 			const documentQueries = within(document.body)
-			expect(documentQueries.queryByRole('button', { name: 'Trigger Zoltar fork' })).toBeNull()
+			expect(documentQueries.queryByRole('button', { name: 'Trigger universe fork' })).toBeNull()
 			expect(documentQueries.getByRole('button', { name: 'Fork & Migration' })).not.toBeNull()
 			expect(document.body.textContent?.includes('Fork Migration')).toBe(true)
 		})
