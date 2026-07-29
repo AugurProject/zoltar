@@ -1,9 +1,59 @@
 import type { Address, BlockTransaction, Hex, TransactionReceipt, TransactionReplacement } from '@zoltar/shared/ethereum'
 import { endpointLabel } from './connectivity.js'
 import type { OpportunitySnapshot } from './operator-state.js'
-import type { DurableTransactionIntent, PositionRecord } from './position-store.js'
+import type { DurableTransactionIntent, ExecutionIntent, PositionRecord } from './position-store.js'
 import { quorumValue } from './read-quorum.js'
 import { isSelfReport } from './strategy.js'
+import type { StandardUniswapFee } from './uniswap-v4.js'
+import type { Venue } from './venue-strategy.js'
+
+export function hedgeExecutionRoute(venue: Venue, selectedFee: StandardUniswapFee) {
+	let encodedVenue: 0 | 1 | 2 = 0
+	if (venue === 'uniswap-v2') encodedVenue = 1
+	if (venue === 'uniswap-v4') encodedVenue = 2
+	return {
+		poolFee: selectedFee,
+		venue: encodedVenue,
+	} as const
+}
+
+export function buildHedgeExecutionPayload(parameters: {
+	expectedParentBlockHash: Hex
+	executionIntent: Omit<ExecutionIntent, 'pool' | 'poolFee'>
+	hedgePool: Address
+	hedgeWethLimit: bigint
+	newAmount1: bigint
+	newAmount2: bigint
+	openOracle: Address
+	router: Address
+	selectedFee: StandardUniswapFee
+	swapDeadline: bigint
+	venue: Venue
+}) {
+	const route = hedgeExecutionRoute(parameters.venue, parameters.selectedFee)
+	return {
+		executionIntent: {
+			...parameters.executionIntent,
+			pool: parameters.hedgePool,
+			poolFee: route.poolFee,
+		},
+		hedgeRequest: {
+			expectedParentBlockHash: parameters.expectedParentBlockHash,
+			hedgeWethLimit: parameters.hedgeWethLimit,
+			newAmount1: parameters.newAmount1,
+			newAmount2: parameters.newAmount2,
+			openOracle: parameters.openOracle,
+			poolFee: route.poolFee,
+			router: parameters.router,
+			swapDeadline: parameters.swapDeadline,
+			venue: route.venue,
+		},
+	}
+}
+
+export function executionSnapshotWithQuorum<T>(blockNumber: bigint, observations: readonly { endpoint: string; value: T }[]) {
+	return quorumValue(`execution snapshot at block ${blockNumber.toString()}`, observations)
+}
 
 export function executionTokenAllowed(allowedTokens: readonly Address[], token: Address) {
 	return allowedTokens.some(allowed => allowed.toLowerCase() === token.toLowerCase())

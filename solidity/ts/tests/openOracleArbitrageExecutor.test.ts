@@ -1,4 +1,4 @@
-import { encodeDeployData, getAddress, type Address } from '@zoltar/shared/ethereum'
+import { encodeAbiParameters, encodeDeployData, getAddress, type Address } from '@zoltar/shared/ethereum'
 import { beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { TEST_TIMEOUT_MS, useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
@@ -189,6 +189,63 @@ describe('OpenOracle arbitrage executor', () => {
 				args: ['0x'],
 			}),
 		).rejects.toThrow('Unauthorized Uniswap V4 unlock callback')
+	})
+
+	test('binds the Uniswap V4 callback to one exact invocation without exposing unrelated token balances', async () => {
+		const weth = await deploy(wethArtifact)
+		const token = await deploy(tokenArtifact, ['Token 2', 'TK2'])
+		const unrelatedToken = await deploy(tokenArtifact, ['Unrelated Token', 'OTHER'])
+		const poolManager = await deploy(v4PoolManagerArtifact)
+		await writeContractAndWait(client, () => client.sendTransaction({ to: weth, value: 10_000n }))
+		await writeContractAndWait(client, () => client.sendTransaction({ to: poolManager, value: 10_000n }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'mint', args: [client.account.address, 10_000n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: unrelatedToken, functionName: 'mint', args: [executor, 77n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: wethArtifact.abi, address: weth, functionName: 'approve', args: [executor, 2_200n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'approve', args: [executor, 1_000n] }))
+		const alteredCallback = encodeAbiParameters(
+			[
+				{
+					type: 'tuple',
+					components: [
+						{ name: 'token', type: 'address' },
+						{ name: 'poolFee', type: 'uint24' },
+						{ name: 'buyToken', type: 'bool' },
+						{ name: 'amount', type: 'uint256' },
+						{ name: 'limit', type: 'uint256' },
+					],
+				},
+			],
+			[{ amount: 77n, buyToken: false, limit: 0n, poolFee: 3_000, token: unrelatedToken }],
+		)
+		await writeContractAndWait(client, () => client.writeContract({ abi: v4PoolManagerArtifact.abi, address: poolManager, functionName: 'setCallbackAttack', args: [alteredCallback, false] }))
+		const request = async () => {
+			const block = await client.getBlock()
+			if (block.number === undefined || block.hash == null) throw new Error('parent block identity missing')
+			return {
+				args: [
+					{
+						expectedParentBlockHash: block.hash,
+						hedgeWethLimit: 900n,
+						newAmount1: 1_200n,
+						newAmount2: 900n,
+						openOracle: target,
+						poolFee: 3_000,
+						router: poolManager,
+						swapDeadline: block.timestamp + 1_000n,
+						venue: 2,
+					},
+					game(weth, token),
+					helper(),
+					{ ...timing, blockNumber: block.number },
+				] as const,
+			}
+		}
+		await expect(writeContractAndWait(client, async () => client.writeContract({ abi: executorArtifact.abi, address: executor, account: client.account, functionName: 'hedgeAndDispute', ...(await request()) }))).rejects.toThrow('Unauthorized Uniswap V4 callback payload')
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: unrelatedToken, functionName: 'balanceOf', args: [executor] })).toBe(77n)
+
+		await writeContractAndWait(client, () => client.writeContract({ abi: v4PoolManagerArtifact.abi, address: poolManager, functionName: 'setCallbackAttack', args: ['0x', true] }))
+		await expect(writeContractAndWait(client, async () => client.writeContract({ abi: executorArtifact.abi, address: executor, account: client.account, functionName: 'hedgeAndDispute', ...(await request()) }))).rejects.toThrow('Unauthorized Uniswap V4 unlock callback')
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: unrelatedToken, functionName: 'balanceOf', args: [executor] })).toBe(77n)
 	})
 
 	test('atomically isolates exact lifecycle proceeds from permissionless dust and another same-token position', async () => {
@@ -408,10 +465,13 @@ describe('OpenOracle arbitrage executor', () => {
 	test('atomically buys the report token through a hookless Uniswap V4 native-ETH pool', async () => {
 		const weth = await deploy(wethArtifact)
 		const token = await deploy(tokenArtifact, ['Token 2', 'TK2'])
+		const staleSyncedToken = await deploy(tokenArtifact, ['Stale Synced Token', 'STALE'])
 		const poolManager = await deploy(v4PoolManagerArtifact)
 		await writeContractAndWait(client, () => client.sendTransaction({ to: weth, value: 10_000n }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'mint', args: [client.account.address, 10_000n] }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'mint', args: [poolManager, 10_000n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: staleSyncedToken, functionName: 'mint', args: [poolManager, 10_000n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: v4PoolManagerArtifact.abi, address: poolManager, functionName: 'seedSyncedCurrency', args: [staleSyncedToken] }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: wethArtifact.abi, address: weth, functionName: 'approve', args: [executor, 1_300n] }))
 		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'approve', args: [executor, 1_300n] }))
 		const block = await client.getBlock()

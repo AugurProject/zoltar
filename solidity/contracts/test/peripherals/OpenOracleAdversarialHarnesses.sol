@@ -248,13 +248,28 @@ contract OpenOracleV4PoolManagerTarget is IUniswapV4PoolManager {
 	address private unlockCaller;
 	address private syncedCurrency;
 	uint256 private syncedBalance;
+	bytes private callbackOverride;
+	bool private replayCallback;
 
 	receive() external payable {}
+
+	function setCallbackAttack(bytes calldata alteredData, bool shouldReplay) external {
+		callbackOverride = alteredData;
+		replayCallback = shouldReplay;
+	}
+
+	function seedSyncedCurrency(address currency) external {
+		syncedCurrency = currency;
+		syncedBalance = currency == address(0) ? address(this).balance : IERC20(currency).balanceOf(address(this));
+	}
 
 	function unlock(bytes calldata data) external returns (bytes memory result) {
 		require(unlockCaller == address(0), 'OpenOracle V4 manager already unlocked');
 		unlockCaller = msg.sender;
-		result = IOpenOracleV4UnlockCallback(msg.sender).unlockCallback(data);
+		bytes memory callbackData = data;
+		if (callbackOverride.length != 0) callbackData = callbackOverride;
+		result = IOpenOracleV4UnlockCallback(msg.sender).unlockCallback(callbackData);
+		if (replayCallback) IOpenOracleV4UnlockCallback(msg.sender).unlockCallback(callbackData);
 		unlockCaller = address(0);
 	}
 
@@ -275,7 +290,7 @@ contract OpenOracleV4PoolManagerTarget is IUniswapV4PoolManager {
 	function sync(address currency) external {
 		require(msg.sender == unlockCaller, 'OpenOracle V4 manager is locked');
 		syncedCurrency = currency;
-		syncedBalance = IERC20(currency).balanceOf(address(this));
+		syncedBalance = currency == address(0) ? address(this).balance : IERC20(currency).balanceOf(address(this));
 	}
 
 	function take(address currency, address to, uint256 amount) external {
@@ -290,7 +305,13 @@ contract OpenOracleV4PoolManagerTarget is IUniswapV4PoolManager {
 
 	function settle() external payable returns (uint256 paid) {
 		require(msg.sender == unlockCaller, 'OpenOracle V4 manager is locked');
-		if (msg.value != 0) return msg.value;
+		if (syncedCurrency == address(0)) {
+			require(msg.value != 0, 'OpenOracle V4 native settlement is empty');
+			paid = address(this).balance - syncedBalance;
+			syncedBalance = 0;
+			return paid;
+		}
+		require(msg.value == 0, 'OpenOracle V4 token settlement received native value');
 		paid = IERC20(syncedCurrency).balanceOf(address(this)) - syncedBalance;
 		syncedCurrency = address(0);
 		syncedBalance = 0;

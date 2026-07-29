@@ -1,7 +1,23 @@
 import type { ConnectivitySettings } from './connectivity.js'
 import type { ExecutionRecord, OperationEntry, OperatorSnapshot, OpportunitySnapshot, StrategySettings, TransactionActivity } from './operator-state.js'
 import type { PositionRecord } from './position-store.js'
-import { blockAgeLabel, botStatusLabels, chartPointX, chartTimeTickIndexes, countLabel, exactAmount, marketPriceChartDescription, opportunityDecisionReason, requiredSignerPrivateKey, selectedTokenPriceHistory, signerControlState, sumSignedDecimals, transactionKindLabel, venueLabel } from './dashboard-format.js'
+import {
+	blockAgeLabel,
+	botStatusLabels,
+	chartPointX,
+	chartTimeTickIndexes,
+	countLabel,
+	exactAmount,
+	marketPoolStrategyUse,
+	marketPriceChartDescription,
+	opportunityDecisionReason,
+	requiredSignerPrivateKey,
+	selectedTokenPriceHistory,
+	signerControlState,
+	sumSignedDecimals,
+	transactionKindLabel,
+	venueLabel,
+} from './dashboard-format.js'
 import type { SubmissionSettings } from './transaction-submission.js'
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
@@ -352,7 +368,7 @@ function renderTokenMarkets(snapshot: OperatorSnapshot) {
 			poolLink.target = '_blank'
 			poolLink.rel = 'noreferrer'
 			poolLink.textContent = shorten(pool.address)
-			const strategyUse = executableTokens.has(token.address.toLowerCase()) && pool.venue === 'Uniswap V3' ? 'Execution route' : 'Monitoring only'
+			const strategyUse = marketPoolStrategyUse(executableTokens.has(token.address.toLowerCase()), pool.venue)
 			body.append(row([token.symbol, link(token.address, 'address', `token:${token.address}:address:${pool.address}`), amount(token.balance, token.symbol), pool.venue, strategyUse, poolLink, `${(pool.fee / 10_000).toString()}%`, amount(pool.priceWeth, 'WETH'), pool.liquidity]))
 		}
 	}

@@ -45,8 +45,10 @@ import { authenticateDeploymentManifest, type DeploymentRole } from './deploymen
 import {
 	assertCanonicalExecutionSnapshot,
 	assertReceiptSnapshotBlockHash,
+	buildHedgeExecutionPayload,
 	canonicalBlockHashWithQuorum,
 	executionFailureDecision,
+	executionSnapshotWithQuorum,
 	executionTokenAllowed,
 	finalizeSubmittedLifecycleAttempt,
 	fundingTransactionPlan,
@@ -122,7 +124,7 @@ import {
 } from './strategy.js'
 import { prepareSignedTransaction, simulateSignedBundleEveryRelay, SubmissionFailure, submitSignedBundle, validateSubmissionSettings, type SubmissionSettings, type SubmissionTargetResult } from './transaction-submission.js'
 import { receiptGasCost, submitContractTransaction, trackedActivity, transactionLogLevel, waitForTrackedTransaction, type TrackTransaction } from './transaction-tracker.js'
-import { STANDARD_UNISWAP_FEES, v4QuoteParameters } from './uniswap-v4.js'
+import { STANDARD_UNISWAP_FEES, standardV4QuotePlans, v4QuotePlan } from './uniswap-v4.js'
 import { constantProductExactInput, constantProductExactOutput, type Venue } from './venue-strategy.js'
 
 const FEES = STANDARD_UNISWAP_FEES
@@ -518,25 +520,25 @@ async function constantProductReserves(client: ReadClient, pair: Address, token:
 	return getAddress(token0).toLowerCase() === token.toLowerCase() ? { reserveToken: reserve0, reserveWeth: reserve1 } : { reserveToken: reserve1, reserveWeth: reserve0 }
 }
 
-async function quoteV4ExactInput(client: ReadClient, quoter: Address, token: Address, amountIn: bigint, fee: (typeof FEES)[number], blockNumber?: bigint | undefined) {
-	const parameters = {
+async function quoteV4ExactInput(client: ReadClient, quoter: Address, parameters: ReturnType<typeof v4QuotePlan>['sell'], blockNumber?: bigint | undefined) {
+	const contractParameters = {
 		address: quoter,
 		abi: v4QuoterAbi,
 		functionName: 'quoteExactInputSingle',
-		args: [v4QuoteParameters(token, fee, amountIn, false)],
+		args: [parameters],
 	} as const
-	const result = requiredTuple(blockNumber === undefined ? await client.readContract(parameters) : await readContractAtBlock(client.transport, parameters, blockNumber), 1, 'Uniswap V4 exact-input quote')
+	const result = requiredTuple(blockNumber === undefined ? await client.readContract(contractParameters) : await readContractAtBlock(client.transport, contractParameters, blockNumber), 1, 'Uniswap V4 exact-input quote')
 	return requiredBigint(result[0], 'Uniswap V4 exact-input amount')
 }
 
-async function quoteV4ExactOutput(client: ReadClient, quoter: Address, token: Address, amountOut: bigint, fee: (typeof FEES)[number], blockNumber?: bigint | undefined) {
-	const parameters = {
+async function quoteV4ExactOutput(client: ReadClient, quoter: Address, parameters: ReturnType<typeof v4QuotePlan>['buy'], blockNumber?: bigint | undefined) {
+	const contractParameters = {
 		address: quoter,
 		abi: v4QuoterAbi,
 		functionName: 'quoteExactOutputSingle',
-		args: [v4QuoteParameters(token, fee, amountOut, true)],
+		args: [parameters],
 	} as const
-	const result = requiredTuple(blockNumber === undefined ? await client.readContract(parameters) : await readContractAtBlock(client.transport, parameters, blockNumber), 1, 'Uniswap V4 exact-output quote')
+	const result = requiredTuple(blockNumber === undefined ? await client.readContract(contractParameters) : await readContractAtBlock(client.transport, contractParameters, blockNumber), 1, 'Uniswap V4 exact-output quote')
 	return requiredBigint(result[0], 'Uniswap V4 exact-output amount')
 }
 
@@ -590,16 +592,16 @@ async function evaluate(client: ReadClient, config: Configuration, report: OpenO
 	}
 	if (config.v4PoolManager !== undefined && config.v4Quoter !== undefined) {
 		const v4Quoter = config.v4Quoter
-		for (const fee of FEES) {
+		for (const plan of standardV4QuotePlans(pool.token, game.currentAmount2, repWithFees)) {
 			const v4 = await bestSuccessful(
 				[
-					async () => safetyAdjustedQuote(evaluateSellRep(game, await quoteV4ExactInput(client, v4Quoter, pool.token, game.currentAmount2, fee, blockNumber), 0n), gasCost, lifecycleGasReserveWeth, config),
-					async () => safetyAdjustedQuote(evaluateBuyRep(game, await quoteV4ExactOutput(client, v4Quoter, pool.token, repWithFees, fee, blockNumber), 0n), gasCost, lifecycleGasReserveWeth, config),
+					async () => safetyAdjustedQuote(evaluateSellRep(game, await quoteV4ExactInput(client, v4Quoter, plan.sell, blockNumber), 0n), gasCost, lifecycleGasReserveWeth, config),
+					async () => safetyAdjustedQuote(evaluateBuyRep(game, await quoteV4ExactOutput(client, v4Quoter, plan.buy, blockNumber), 0n), gasCost, lifecycleGasReserveWeth, config),
 				],
 				candidate => candidate.netProfitWeth,
-				error => console.error(`poolManager=${config.v4PoolManager} fee=${fee.toString()} quoteSkipped=${errorMessage(error)}`),
+				error => console.error(`poolManager=${config.v4PoolManager} fee=${plan.fee.toString()} quoteSkipped=${errorMessage(error)}`),
 			)
-			if (v4 !== undefined) candidates.push({ hedgeFee: fee, hedgePool: config.v4PoolManager, quote: v4, venue: 'uniswap-v4' })
+			if (v4 !== undefined) candidates.push({ hedgeFee: plan.fee, hedgePool: config.v4PoolManager, quote: v4, venue: 'uniswap-v4' })
 		}
 	}
 	return selectBestExecution(candidates, candidate => candidate.quote.netProfitWeth)
@@ -627,9 +629,10 @@ async function executionReadQuorum(clients: readonly ReadClient[], config: Confi
 			} else if (hedgeVenue === 'uniswap-v4') {
 				hedgeQuotes = (async () => {
 					if (config.v4Quoter === undefined) throw new Error('Uniswap V4 execution is missing its authenticated quoter')
+					const plan = v4QuotePlan(pool.token, hedgeFee, game.currentAmount2, repWithFees)
 					return {
-						buyHedgeQuote: await quoteV4ExactOutput(readClient, config.v4Quoter, pool.token, repWithFees, hedgeFee, blockNumber),
-						sellHedgeQuote: await quoteV4ExactInput(readClient, config.v4Quoter, pool.token, game.currentAmount2, hedgeFee, blockNumber),
+						buyHedgeQuote: await quoteV4ExactOutput(readClient, config.v4Quoter, plan.buy, blockNumber),
+						sellHedgeQuote: await quoteV4ExactInput(readClient, config.v4Quoter, plan.sell, blockNumber),
 					}
 				})()
 			} else {
@@ -681,7 +684,7 @@ async function executionReadQuorum(clients: readonly ReadClient[], config: Confi
 			}
 		}),
 	)
-	return quorumValue(`execution snapshot at block ${blockNumber.toString()}`, observations)
+	return executionSnapshotWithQuorum(blockNumber, observations)
 }
 
 async function pendingNonceWithQuorum(clients: readonly ReadClient[], config: Configuration, account: Address) {
@@ -876,15 +879,12 @@ async function executeDispute(
 	if (executor === undefined) throw new Error('Execution requires a deployed OpenOracle arbitrage executor')
 	let router = config.router
 	let hedgePool = pool.address
-	let encodedVenue = 0
 	if (hedgeVenue === 'uniswap-v2') {
 		router = config.v2Router
 		hedgePool = pool.v2Pair ?? zeroAddress
-		encodedVenue = 1
 	} else if (hedgeVenue === 'uniswap-v4') {
 		router = config.v4PoolManager
 		hedgePool = config.v4PoolManager ?? zeroAddress
-		encodedVenue = 2
 	}
 	if (router === undefined) throw new Error('Execution requires an authenticated Uniswap router')
 	if (hedgePool === zeroAddress) throw new Error('Execution requires a discovered or configured Uniswap pool')
@@ -951,26 +951,33 @@ async function executeDispute(
 	)
 		throw new Error('The final quote does not have a fresh inclusion window')
 	fundingTransactionPlan({ token1: executionSnapshot.allowance1, token2: executionSnapshot.allowance2 }, funding)
+	const executionPayload = buildHedgeExecutionPayload({
+		expectedParentBlockHash: executionSnapshot.blockHash,
+		executionIntent: {
+			direction: refreshedQuote.direction,
+			estimatedNetProfitWeth: decimalWeth(refreshedQuote.netProfitWeth),
+			estimatedProfitBeforeGasEth: decimalWeth(refreshedQuote.profitBeforeGasWeth),
+			reportId,
+			requiredToken: formatTokenAmount(funding.token2, tokenMetadata.decimals),
+			requiredWeth: decimalWeth(funding.token1),
+			token: game.token2,
+			tokenSymbol: tokenMetadata.symbol,
+		},
+		hedgePool,
+		hedgeWethLimit: hedgeLimit,
+		newAmount1,
+		newAmount2,
+		openOracle: config.openOracle,
+		router,
+		selectedFee: hedgeFee,
+		swapDeadline: executionSnapshot.blockTimestamp + 300n,
+		venue: hedgeVenue,
+	})
 	const request = {
 		address: executor,
 		abi: openOracleArbitrageExecutorAbi,
 		functionName: 'hedgeAndDispute',
-		args: [
-			{
-				expectedParentBlockHash: executionSnapshot.blockHash,
-				hedgeWethLimit: hedgeLimit,
-				newAmount1,
-				newAmount2,
-				openOracle: config.openOracle,
-				poolFee: hedgeFee,
-				router,
-				swapDeadline: executionSnapshot.blockTimestamp + 300n,
-				venue: encodedVenue,
-			},
-			getOpenOracleGameTuple(game),
-			getOpenOracleHelperTuple(report.helper),
-			openOracleDisputeTiming(quoteBlockNumber, executionSnapshot.blockTimestamp),
-		],
+		args: [executionPayload.hedgeRequest, getOpenOracleGameTuple(game), getOpenOracleHelperTuple(report.helper), openOracleDisputeTiming(quoteBlockNumber, executionSnapshot.blockTimestamp)],
 	} as const
 	const targetBlockNumber = quoteBlockNumber + 1n
 	const startingNonce = await pendingNonceWithQuorum(readClients, config, account.address)
@@ -1000,18 +1007,7 @@ async function executeDispute(
 		entryTransactionNonce: executionSigned.transaction.nonce.toString(),
 		entryTransactionHash: executionSigned.hash,
 		entryTransactionHashes: signedTransactions.map(transaction => transaction.signed.hash),
-		executionIntent: {
-			direction: refreshedQuote.direction,
-			estimatedNetProfitWeth: decimalWeth(refreshedQuote.netProfitWeth),
-			estimatedProfitBeforeGasEth: decimalWeth(refreshedQuote.profitBeforeGasWeth),
-			pool: hedgePool,
-			poolFee: refreshedPool.fee,
-			reportId,
-			requiredToken: formatTokenAmount(funding.token2, tokenMetadata.decimals),
-			requiredWeth: decimalWeth(funding.token1),
-			token: game.token2,
-			tokenSymbol: tokenMetadata.symbol,
-		},
+		executionIntent: executionPayload.executionIntent,
 		expiredTransactionAttempts: [],
 		gasExpenditures: [],
 		historyOutbox: undefined,

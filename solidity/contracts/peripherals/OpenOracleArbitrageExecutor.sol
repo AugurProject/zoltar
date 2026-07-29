@@ -160,6 +160,7 @@ contract OpenOracleArbitrageExecutor {
 		1_461_446_703_485_210_103_287_273_052_203_988_822_378_723_970_341;
 	bool private entered;
 	address private activeV4PoolManager;
+	bytes32 private activeV4CallbackHash;
 
 	struct HedgeRequest {
 		address openOracle;
@@ -382,9 +383,12 @@ contract OpenOracleArbitrageExecutor {
 	}
 
 	/// @notice Settles one hookless Uniswap V4 pool swap while its authenticated PoolManager is unlocked.
-	/// @dev Only the PoolManager selected by the active parent-bound hedge may invoke this callback.
+	/// @dev Only the PoolManager and exact one-shot payload selected by the active parent-bound hedge are accepted.
 	function unlockCallback(bytes calldata data) external returns (bytes memory result) {
 		require(entered && msg.sender == activeV4PoolManager, 'Unauthorized Uniswap V4 unlock callback');
+		require(keccak256(data) == activeV4CallbackHash, 'Unauthorized Uniswap V4 callback payload');
+		activeV4PoolManager = address(0);
+		activeV4CallbackHash = bytes32(0);
 		V4SwapCallbackData memory callback = abi.decode(data, (V4SwapCallbackData));
 		IUniswapV4PoolManager manager = IUniswapV4PoolManager(msg.sender);
 		IUniswapV4PoolManager.PoolKey memory key = IUniswapV4PoolManager.PoolKey({
@@ -410,6 +414,7 @@ contract OpenOracleArbitrageExecutor {
 			require(nativeDelta < 0, 'Uniswap V4 buy input was invalid');
 			uint256 amountIn = uint256(uint128(-nativeDelta));
 			require(amountIn <= callback.limit, 'Uniswap V4 buy hedge exceeded maximum WETH');
+			manager.sync(address(0));
 			require(manager.settle{ value: amountIn }() == amountIn, 'Uniswap V4 native settlement was not exact');
 			manager.take(callback.token, address(this), callback.amount);
 			return abi.encode(amountIn);
@@ -675,18 +680,21 @@ contract OpenOracleArbitrageExecutor {
 		uint256 ethBalance = address(this).balance;
 		if (buyToken) IWETH(weth).withdraw(request.hedgeWethLimit);
 		activeV4PoolManager = request.router;
-		bytes memory encodedResult = IUniswapV4PoolManager(request.router).unlock(
-			abi.encode(
-				V4SwapCallbackData({
-					token: token,
-					poolFee: request.poolFee,
-					buyToken: buyToken,
-					amount: amount,
-					limit: request.hedgeWethLimit
-				})
-			)
+		bytes memory callbackData = abi.encode(
+			V4SwapCallbackData({
+				token: token,
+				poolFee: request.poolFee,
+				buyToken: buyToken,
+				amount: amount,
+				limit: request.hedgeWethLimit
+			})
 		);
-		activeV4PoolManager = address(0);
+		activeV4CallbackHash = keccak256(callbackData);
+		bytes memory encodedResult = IUniswapV4PoolManager(request.router).unlock(callbackData);
+		require(
+			activeV4PoolManager == address(0) && activeV4CallbackHash == bytes32(0),
+			'Uniswap V4 callback was not consumed'
+		);
 		hedgeAmountWeth = abi.decode(encodedResult, (uint256));
 		uint256 expectedEth = buyToken ? request.hedgeWethLimit - hedgeAmountWeth : hedgeAmountWeth;
 		require(address(this).balance == ethBalance + expectedEth, 'Uniswap V4 native balance delta was not exact');

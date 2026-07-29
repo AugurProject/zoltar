@@ -37,6 +37,12 @@ export function venueLabel(venue: OpportunitySnapshot['venue']) {
 	return 'Unknown'
 }
 
+export function marketPoolStrategyUse(tokenExecutable: boolean, venue: string) {
+	if (!tokenExecutable) return 'Monitoring only'
+	if (venue === 'Uniswap V2') return 'Optional execution route'
+	return venue === 'Uniswap V3' ? 'Execution route' : 'Monitoring only'
+}
+
 export function chartPointX(index: number, count: number, width: number) {
 	return count === 1 ? width / 2 : (index / (count - 1)) * width
 }

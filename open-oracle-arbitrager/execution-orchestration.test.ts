@@ -1,11 +1,17 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
-import { createPublicClient, custom, mainnet, type Address, type EIP1193Provider, type Hex, type TransactionReceipt, type TransactionReplacement } from '@zoltar/shared/ethereum'
+import { createPublicClient, custom, decodeFunctionData, encodeFunctionData, mainnet, type Address, type EIP1193Provider, type Hex, type TransactionReceipt, type TransactionReplacement } from '@zoltar/shared/ethereum'
+import { openOracleArbitrageExecutorAbi } from './abi.js'
 import {
 	assertCanonicalExecutionSnapshot,
 	assertReceiptSnapshotBlockHash,
 	attemptConfirmationRecovery,
+	buildHedgeExecutionPayload,
 	canonicalBlockHashWithQuorum,
 	executionFailureDecision,
+	executionSnapshotWithQuorum,
 	executionTokenAllowed,
 	finalizeSubmittedLifecycleAttempt,
 	fundingTransactionPlan,
@@ -33,8 +39,9 @@ import {
 	transactionReceiptsWithQuorum,
 	waitForResolvedTransaction,
 } from './execution-orchestration.js'
-import { savePositionJournal, type PositionJournalFilesystem, type PositionRecord } from './position-store.js'
+import { loadPositionJournal, savePositionJournal, type PositionJournalFilesystem, type PositionRecord } from './position-store.js'
 import { assertSubmissionWindowOpen } from './transaction-submission.js'
+import { v4QuotePlan } from './uniswap-v4.js'
 
 const address = '0x0000000000000000000000000000000000000001' as Address
 const reporter = '0x0000000000000000000000000000000000000002' as Address
@@ -103,6 +110,104 @@ function replacement(reason: TransactionReplacement['reason']): TransactionRepla
 }
 
 describe('funded execution orchestration', () => {
+	test('propagates the selected V4 fee through encoded calldata and a reloaded durable execution intent', async () => {
+		const v3AnchorFee = 3_000
+		const selectedV4Fee = 500
+		const plan = v4QuotePlan(reporter, selectedV4Fee, 11n, 13n)
+		const payload = buildHedgeExecutionPayload({
+			expectedParentBlockHash: originalHash,
+			executionIntent: {
+				direction: 'sell-rep',
+				estimatedNetProfitWeth: '0.02',
+				estimatedProfitBeforeGasEth: '0.03',
+				reportId: '7',
+				requiredToken: '11',
+				requiredWeth: '13',
+				token: reporter,
+				tokenSymbol: 'REP',
+			},
+			hedgePool: address,
+			hedgeWethLimit: 13n,
+			newAmount1: 17n,
+			newAmount2: 19n,
+			openOracle: reporter,
+			router: address,
+			selectedFee: selectedV4Fee,
+			swapDeadline: 23n,
+			venue: 'uniswap-v4',
+		})
+		const encoded = encodeFunctionData({
+			abi: openOracleArbitrageExecutorAbi,
+			functionName: 'hedgeAndDispute',
+			args: [
+				payload.hedgeRequest,
+				{
+					callbackContract: address,
+					callbackGasLimit: 0,
+					currentAmount1: 1n,
+					currentAmount2: 2n,
+					currentReporter: address,
+					disputeDelay: 0,
+					escalationHalt: 0n,
+					feePercentage: 0,
+					flags: 0,
+					lastReportOppoTime: 0,
+					multiplier: 100,
+					numReports: 0,
+					protocolFee: 0,
+					protocolFeeRecipient: address,
+					reportTimestamp: 0,
+					settlementTime: 0,
+					settlementTimestamp: 0,
+					settlerReward: 0n,
+					token1: address,
+					token2: reporter,
+				},
+				{ blockNumber: 0n, blockTimestamp: 0n, creator: address, reportId: 7n },
+				{ blockNumber: 0n, blockNumberBound: 0n, blockTimestamp: 0n, blockTimestampBound: 0n },
+			],
+		})
+		const decoded = decodeFunctionData({ abi: openOracleArbitrageExecutorAbi, data: encoded })
+		if (decoded.functionName !== 'hedgeAndDispute') throw new Error('Expected encoded hedgeAndDispute request')
+		const decodedRequest = decoded.args[0]
+		expect(plan.sell.poolKey.fee).toBe(selectedV4Fee)
+		expect(plan.buy.poolKey.fee).toBe(selectedV4Fee)
+		expect(decodedRequest.poolFee).toBe(BigInt(selectedV4Fee))
+		expect(decodedRequest.venue).toBe(2n)
+		expect(payload.executionIntent.poolFee).not.toBe(v3AnchorFee)
+
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-v4-intent-'))
+		const path = join(directory, 'positions.json')
+		try {
+			await savePositionJournal(path, [{ ...lifecyclePosition(), executionIntent: payload.executionIntent }])
+			const reloaded = await loadPositionJournal(path)
+			expect(reloaded[0]?.executionIntent).toEqual(payload.executionIntent)
+			expect(reloaded[0]?.executionIntent?.poolFee).toBe(selectedV4Fee)
+		} finally {
+			await rm(directory, { force: true, recursive: true })
+		}
+	})
+
+	test('rejects a per-reader V4 selected-fee quote disagreement', () => {
+		const shared = {
+			blockHash: `0x${'12'.repeat(32)}` as Hex,
+			buyHedgeQuote: 13n,
+			sellHedgeQuote: 11n,
+		}
+		expect(
+			executionSnapshotWithQuorum(100n, [
+				{ endpoint: 'rpc-a', value: shared },
+				{ endpoint: 'rpc-b', value: shared },
+			]),
+		).toEqual(shared)
+		expect(() =>
+			executionSnapshotWithQuorum(100n, [
+				{ endpoint: 'rpc-a', value: shared },
+				{ endpoint: 'rpc-b', value: { ...shared, buyHedgeQuote: 14n } },
+			]),
+		).toThrow('RPC disagreement')
+	})
+
 	test('does not promote permissionlessly observed report tokens into the execution allowlist', () => {
 		const configured = ['0x0000000000000000000000000000000000000010' as Address]
 		const observed = '0x0000000000000000000000000000000000000020' as Address

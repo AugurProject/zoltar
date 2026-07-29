@@ -33,3 +33,15 @@ export function v4QuoteParameters(token: Address, fee: StandardUniswapFee, exact
 		zeroForOne,
 	}
 }
+
+export function v4QuotePlan(token: Address, fee: StandardUniswapFee, sellExactAmount: bigint, buyExactAmount: bigint) {
+	return {
+		buy: v4QuoteParameters(token, fee, buyExactAmount, true),
+		fee,
+		sell: v4QuoteParameters(token, fee, sellExactAmount, false),
+	}
+}
+
+export function standardV4QuotePlans(token: Address, sellExactAmount: bigint, buyExactAmount: bigint) {
+	return STANDARD_UNISWAP_FEES.map(fee => v4QuotePlan(token, fee, sellExactAmount, buyExactAmount))
+}

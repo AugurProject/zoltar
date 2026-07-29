@@ -390,6 +390,8 @@ assert.match(openOracleArbitragerReadme, /For a buy, `zeroForOne = true`[\s\S]*t
 assert.match(openOracleArbitragerReadme, /For a sell, `zeroForOne = false`[\s\S]*token\s+delta are negative[\s\S]*native output delta is\s+positive/)
 assert.match(operatorReference, /public execution surface is `dispute`, `hedgeAndDispute`, `settleAndWithdraw`, `withdrawReplacementCredit`, `assertParentBlock`, and the V4-only `unlockCallback`/)
 assert.match(operatorReference, /payable `receive\(\)` accepts native ETH only while an executor operation is active/)
+assert.match(operatorReference, /executable Uniswap V2, V3, and configured\s+hookless V4 quotes, with V3 as the TWAP anchor/)
+assert.doesNotMatch(operatorReference, /executable Uniswap V3 quotes/)
 assert.equal(arbitragerFinalityDocumentationIssue(openOracleArbitragerDocumentation), undefined)
 assert.match(arbitragerFinalityDocumentationIssue(openOracleArbitragerDocumentation.replace(/every configured read RPC serves\s+the same\s+twelfth-descendant block hash/, 'twelve canonical descendants')) ?? '', /architecture section/)
 const openOracleArbitragerReadmeRecovery = openOracleArbitragerReadme.match(/### `recovery-required` runbook([\s\S]*?)(?=\n## |\n### )/)?.[1]

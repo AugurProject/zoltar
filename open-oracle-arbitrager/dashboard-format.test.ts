@@ -1,6 +1,22 @@
 import { describe, expect, test } from 'bun:test'
 import type { Address } from '@zoltar/shared/ethereum'
-import { blockAgeLabel, botStatusLabels, chartPointX, chartTimeTickIndexes, countLabel, exactAmount, marketPriceChartDescription, opportunityDecisionReason, requiredSignerPrivateKey, selectedTokenPriceHistory, signerControlState, sumSignedDecimals, transactionKindLabel, venueLabel } from './dashboard-format.js'
+import {
+	blockAgeLabel,
+	botStatusLabels,
+	chartPointX,
+	chartTimeTickIndexes,
+	countLabel,
+	exactAmount,
+	marketPoolStrategyUse,
+	marketPriceChartDescription,
+	opportunityDecisionReason,
+	requiredSignerPrivateKey,
+	selectedTokenPriceHistory,
+	signerControlState,
+	sumSignedDecimals,
+	transactionKindLabel,
+	venueLabel,
+} from './dashboard-format.js'
 
 describe('dashboard exact ETH formatting', () => {
 	test('renders execution venue names without exposing snapshot slugs', () => {
@@ -8,6 +24,13 @@ describe('dashboard exact ETH formatting', () => {
 		expect(venueLabel('uniswap-v3')).toBe('Uniswap V3')
 		expect(venueLabel('uniswap-v4')).toBe('Uniswap V4')
 		expect(venueLabel(undefined)).toBe('Unknown')
+	})
+
+	test('distinguishes the optional Uniswap V2 route from the default V3 route', () => {
+		expect(marketPoolStrategyUse(true, 'Uniswap V2')).toBe('Optional execution route')
+		expect(marketPoolStrategyUse(true, 'Uniswap V3')).toBe('Execution route')
+		expect(marketPoolStrategyUse(true, 'SushiSwap V2')).toBe('Monitoring only')
+		expect(marketPoolStrategyUse(false, 'Uniswap V2')).toBe('Monitoring only')
 	})
 
 	test('preserves signed sub-micro, 18-decimal, and beyond-safe-integer totals', () => {
