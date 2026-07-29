@@ -10851,6 +10851,13 @@
 		"nodes": [],
 		"width": 1120
 	},
+	"fig-complete-contract-atlas": {
+		"ariaDescription": "Six separated regions inventory Zoltar, Statoblast deployment, Statoblast runtime, Statoblast implementation boundaries, infrastructure and imported OpenOracle code, and test-only Solidity declarations. Every Solidity contract, abstract contract, interface, and library in the repository appears once in its owning region; two type-only modules also appear. The register contains 394 relationships grouped into 376 ordered source-target routes. The chart defaults to a clearer 96-route protocol-flow layer; controls reveal type structure, source references, test exercise, or all routes without moving or removing components. Eighteen routes combine two relationship types; their tooltips list both types and meanings. Solid, long-dash, dot–dash, and short-dash arrows respectively show runtime calls, asset-bearing calls, deployments, and delegatecalls. Dashed or dotted arrows show inheritance, interface implementation, structural compatibility, library or type use, direct source references, and test-only exercise. A dark patterned arrow marks multiple relationship types. Production target groups are repeated inside the test region to prevent test edges from crossing the full chart.",
+		"ariaLabel": "Complete Zoltar and Statoblast Solidity contract and relationship atlas",
+		"height": 2480,
+		"nodes": [],
+		"width": 1800
+	},
 	"fig-liquidation-health-curve": {
 		"ariaDescription": "Required REP backing rises linearly with the REP per ETH price, while unlocked REP stays fixed. Crossing the available-REP line makes the selected vault liquidatable.",
 		"ariaLabel": "Vault backing requirement and liquidation threshold across REP per ETH prices",

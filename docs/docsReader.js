@@ -70,7 +70,7 @@ const documentGroups = [
 			{
 				path: 'contract-interactions.html',
 				title: 'Contract interaction map',
-				description: 'How deployed contracts call, deploy, and move assets between one another.',
+				description: 'Primary runtime flow and exhaustive Solidity declaration and checked relationship atlas.',
 			},
 			{
 				path: 'escalation-game-architecture.html',
