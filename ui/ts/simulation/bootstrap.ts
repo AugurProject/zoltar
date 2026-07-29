@@ -31,7 +31,8 @@ import { ReputationToken_ReputationToken, Zoltar_Zoltar, peripherals_WETH9_WETH9
 import { assertNever } from '../lib/assert.js'
 import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../protocol/truthAuctionMath.js'
 import type { ReadClient, WriteClient } from '../lib/chainBackend.js'
-import { MAINNET_NETWORK_PROFILE, MAINNET_WETH_ADDRESS, type NetworkProfile } from '../lib/networkProfile.js'
+import { MAINNET_WETH_ADDRESS, type NetworkProfile } from '../lib/networkProfile.js'
+import { MAINNET_PROTOCOL_TOKEN_ADDRESSES } from '../protocol/deploymentHelpers.js'
 import type { ListedSecurityPool, QuestionData } from '../types/contracts.js'
 import { advanceSimulationTime, getSimulationChainTimestamp, initializeSimulationClock } from './clock.js'
 import type { SimulationScenario } from './scenarios.js'
@@ -65,7 +66,7 @@ const WETH_TOKEN_MINT_AMOUNT = 10_000n * 10n ** 18n
 const WETH_NAME_SLOT = 0n
 const WETH_SYMBOL_SLOT = 1n
 const WETH_DECIMALS_SLOT = 2n
-const ZOLTAR_CONSTRUCTOR_GENESIS_REP_TOKEN_ADDRESS = MAINNET_NETWORK_PROFILE.genesisRepTokenAddress
+const ZOLTAR_CONSTRUCTOR_GENESIS_REP_TOKEN_ADDRESS = MAINNET_PROTOCOL_TOKEN_ADDRESSES.genesisRepTokenAddress
 const ZOLTAR_GENESIS_REPUTATION_TOKEN_OFFSET = 3n
 const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
 const ZOLTAR_UNIVERSES_SLOT = 0n
@@ -374,8 +375,8 @@ async function seedWrappedEthBalances(createWriteClient: (accountAddress: Addres
 	}
 }
 
-async function deploySimulationAppContracts(primaryWriteClient: WriteClient, memoryClient: TevmLikeClient, onProgress: BootstrapProgressHandler | undefined, range: { start: number; end: number } = { start: 0.32, end: 0.8 }) {
-	const steps = getDeploymentSteps()
+async function deploySimulationAppContracts(primaryWriteClient: WriteClient, memoryClient: TevmLikeClient, onProgress: BootstrapProgressHandler | undefined, profile: NetworkProfile, range: { start: number; end: number } = { start: 0.32, end: 0.8 }) {
+	const steps = getDeploymentSteps(profile)
 	for (const [index, step] of steps.entries()) {
 		const code = await memoryClient.getCode({ address: step.address })
 		if (code !== undefined && code !== '0x') {
@@ -1153,10 +1154,10 @@ async function applyScenario({
 			await reportBootstrapProgress(onProgress, 'Using baseline simulation scenario', 0.84)
 			return
 		case 'deployed':
-			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, { start: 0.32, end: 0.92 })
+			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.92 })
 			return
 		case 'security-pool':
-			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, { start: 0.32, end: 0.78 })
+			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.78 })
 			await seedSecurityPoolScenario({
 				accounts,
 				createReadClient,
@@ -1167,7 +1168,7 @@ async function applyScenario({
 			})
 			return
 		case 'securitypoolx2':
-			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, { start: 0.32, end: 0.7 })
+			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.7 })
 			await seedSecurityPoolX2Scenario({
 				accounts,
 				createReadClient,
@@ -1178,7 +1179,7 @@ async function applyScenario({
 			})
 			return
 		case 'securitypoolx2-auction':
-			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, { start: 0.32, end: 0.7 })
+			await deploySimulationAppContracts(createWriteClient(primaryAccount), memoryClient, onProgress, profile, { start: 0.32, end: 0.7 })
 			await seedSecurityPoolX2AuctionScenario({
 				accounts,
 				createReadClient,

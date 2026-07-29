@@ -1,4 +1,3 @@
-import * as commonCopy from '../copy/common.js'
 import type { Address } from '@zoltar/shared/ethereum'
 import { getActiveNetworkProfile } from './activeEnvironment.js'
 
@@ -22,6 +21,7 @@ const COMMON_CHAIN_NAMES = new Map<bigint, string>([
 	[43114n, 'Avalanche'],
 	[59144n, 'Linea'],
 	[81457n, 'Blast'],
+	[11155111n, 'Sepolia'],
 	[534352n, 'Scroll'],
 ])
 
@@ -70,5 +70,6 @@ export function getWalletScopedAccountAddress(accountAddress: Address | undefine
 export function getWrongNetworkMessage() {
 	const profile = getActiveNetworkProfile()
 	if (profile.id === 'simulation') return undefined
-	return commonCopy.mainnetRequiredReason
+	if (profile.id === 'mainnet') return 'Switch to Ethereum mainnet.'
+	return `Switch to ${profile.displayName}.`
 }

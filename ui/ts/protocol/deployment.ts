@@ -3,8 +3,11 @@ import { ABIS } from '../abis.js'
 import { createDeploymentStatusOracleAddressHelper } from '@zoltar/shared/deploymentAddresses'
 import { DeploymentStatusOracle_DeploymentStatusOracle, ScalarOutcomes_ScalarOutcomes, peripherals_SecurityPoolUtils_SecurityPoolUtils, peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory, peripherals_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
 import {
+	MAINNET_PROTOCOL_TOKEN_ADDRESSES,
 	MULTICALL3_BYTECODE,
 	PROXY_DEPLOYER_ADDRESS,
+	TESTNET_REPUTATION_TOKEN_BYTECODE,
+	WETH9_BYTECODE,
 	ZERO_SALT,
 	getEscalationGameFactoryByteCode,
 	getInfraContractAddresses,
@@ -18,7 +21,8 @@ import {
 import { waitForSubmittedTransactionReceipt } from './core.js'
 import type { DeploymentStatusSnapshot, DeploymentStep, ReadClient, WriteClient } from '../types/contracts.js'
 import type { TransactionRequestPreview } from '../lib/chainBackend.js'
-import { getGenesisReputationTokenAddress } from './activeProtocolAddresses.js'
+import { getActiveNetworkProfile } from '../lib/activeEnvironment.js'
+import type { NetworkProfile } from '../lib/networkProfile.js'
 
 const PROXY_DEPLOYER_SIGNER = getAddress('0x4c8d290a1b368ac4728d83a9e8321fc3af2b39b1')
 const PROXY_DEPLOYER_RAW_TRANSACTION = '0xf87e8085174876e800830186a08080ad601f80600e600039806000f350fe60003681823780368234f58015156014578182fd5b80825250506014600cf31ba02222222222222222222222222222222222222222222222222222222222222222a02222222222222222222222222222222222222222222222222222222222222222' satisfies Hex
@@ -44,10 +48,24 @@ function markDeploymentTransactionPrepared(
 	})
 }
 
-function getDeploymentStatusOracleStepAddresses() {
-	const addresses = getInfraContractAddresses()
+function getProtocolTokenAddresses(profile: NetworkProfile) {
+	return {
+		genesisRepTokenAddress: profile.genesisRepTokenAddress,
+		wethAddress: profile.wethAddress,
+	}
+}
+
+function getApplicationProtocolTokenAddresses(profile: NetworkProfile) {
+	return profile.id === 'simulation' ? MAINNET_PROTOCOL_TOKEN_ADDRESSES : getProtocolTokenAddresses(profile)
+}
+
+function getDeploymentStatusOracleStepAddresses(profile: NetworkProfile) {
+	const applicationProtocolTokenAddresses = getApplicationProtocolTokenAddresses(profile)
+	const addresses = getInfraContractAddresses(applicationProtocolTokenAddresses)
 	return [
 		PROXY_DEPLOYER_ADDRESS,
+		applicationProtocolTokenAddresses.wethAddress,
+		applicationProtocolTokenAddresses.genesisRepTokenAddress,
 		addresses.multicall3,
 		addresses.uniformPriceDualCapBatchAuctionFactory,
 		addresses.scalarOutcomes,
@@ -63,11 +81,11 @@ function getDeploymentStatusOracleStepAddresses() {
 	] satisfies Address[]
 }
 
-function getDeploymentStatusOracleByteCode() {
+function getDeploymentStatusOracleByteCode(profile: NetworkProfile) {
 	return encodeDeployData({
 		abi: DeploymentStatusOracle_DeploymentStatusOracle.abi,
 		bytecode: `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object}`,
-		args: [getDeploymentStatusOracleStepAddresses()],
+		args: [getDeploymentStatusOracleStepAddresses(profile)],
 	})
 }
 
@@ -94,11 +112,13 @@ function getDeploymentStatusSnapshot(deployedMask: bigint, deploymentStatusOracl
 	}
 }
 
-const { getDeploymentStatusOracleAddress } = createDeploymentStatusOracleAddressHelper({
-	deploymentStatusOracleBytecode: getDeploymentStatusOracleByteCode,
-	proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
-	zeroSalt: ZERO_SALT,
-})
+export function getDeploymentStatusOracleAddress(profile: NetworkProfile = getActiveNetworkProfile()) {
+	return createDeploymentStatusOracleAddressHelper({
+		deploymentStatusOracleBytecode: () => getDeploymentStatusOracleByteCode(profile),
+		proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
+		zeroSalt: ZERO_SALT,
+	}).getDeploymentStatusOracleAddress()
+}
 
 async function deployViaProxy(client: WriteClient, bytecode: Hex) {
 	markDeploymentTransactionPrepared(client, {
@@ -163,8 +183,20 @@ async function loadDeploymentStatusOracleMask(client: Pick<ReadClient, 'readCont
 	)
 }
 
-export function getDeploymentSteps(): DeploymentStep[] {
-	const addresses = getInfraContractAddresses()
+export function getDeploymentSteps(profile: NetworkProfile = getActiveNetworkProfile()): DeploymentStep[] {
+	const protocolTokenAddresses = getApplicationProtocolTokenAddresses(profile)
+	const addresses = getInfraContractAddresses(protocolTokenAddresses)
+	const ensureProtocolTokenContract =
+		(address: Address, bytecode: Hex) =>
+		async (client: WriteClient): Promise<Hash> => {
+			const code = await client.getCode({ address })
+			if (code !== undefined && code !== '0x') return ZERO_HASH
+			if (profile.id === 'mainnet') throw new Error('The canonical mainnet token contract is not deployed at its configured address.')
+			const hash = await deployViaProxy(client, bytecode)
+			const deployedCode = await client.getCode({ address })
+			if (deployedCode === undefined || deployedCode === '0x') throw new Error(`The token deployment did not create code at ${address}.`)
+			return hash
+		}
 
 	return [
 		{
@@ -180,9 +212,23 @@ export function getDeploymentSteps(): DeploymentStep[] {
 		{
 			id: 'deploymentStatusOracle',
 			label: 'Deployment Status Oracle',
-			address: getDeploymentStatusOracleAddress(),
+			address: getDeploymentStatusOracleAddress(profile),
 			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, getDeploymentStatusOracleByteCode()),
+			deploy: async client => await deployViaProxy(client, getDeploymentStatusOracleByteCode(profile)),
+		},
+		{
+			id: 'weth',
+			label: 'WETH9',
+			address: profile.wethAddress,
+			dependencies: ['proxyDeployer'],
+			deploy: ensureProtocolTokenContract(profile.wethAddress, WETH9_BYTECODE),
+		},
+		{
+			id: 'reputationToken',
+			label: profile.id === 'mainnet' ? 'Reputation Token' : 'Testnet Reputation Token',
+			address: profile.genesisRepTokenAddress,
+			dependencies: ['proxyDeployer'],
+			deploy: ensureProtocolTokenContract(profile.genesisRepTokenAddress, TESTNET_REPUTATION_TOKEN_BYTECODE),
 		},
 		{
 			id: 'multicall3',
@@ -230,11 +276,11 @@ export function getDeploymentSteps(): DeploymentStep[] {
 			id: 'zoltar',
 			label: 'Zoltar',
 			address: addresses.zoltar,
-			dependencies: ['proxyDeployer', 'zoltarQuestionData'],
+			dependencies: ['proxyDeployer', 'reputationToken', 'zoltarQuestionData'],
 			deploy: async client => {
-				const hash = await deployViaProxy(client, getZoltarInitCode(addresses.zoltarQuestionData))
+				const hash = await deployViaProxy(client, getZoltarInitCode(addresses.zoltarQuestionData, protocolTokenAddresses))
 				await client.patchSimulationGenesisRepToken?.({
-					repAddress: getGenesisReputationTokenAddress(),
+					repAddress: profile.genesisRepTokenAddress,
 					zoltarAddress: addresses.zoltar,
 				})
 				return hash
@@ -251,8 +297,8 @@ export function getDeploymentSteps(): DeploymentStep[] {
 			id: 'priceOracleManagerAndOperatorQueuerFactory',
 			label: 'OpenOracle Price Coordinator Factory',
 			address: addresses.priceOracleManagerAndOperatorQueuerFactory,
-			dependencies: ['proxyDeployer'],
-			deploy: async client => await deployViaProxy(client, getPriceOracleManagerAndOperatorQueuerFactoryByteCode()),
+			dependencies: ['proxyDeployer', 'weth'],
+			deploy: async client => await deployViaProxy(client, getPriceOracleManagerAndOperatorQueuerFactoryByteCode(protocolTokenAddresses)),
 		},
 		{
 			id: 'securityPoolForker',

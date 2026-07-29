@@ -123,6 +123,8 @@ void describe('deployment helpers', () => {
 		expect(deploymentSteps.map(step => step.id)).toEqual([
 			'proxyDeployer',
 			'deploymentStatusOracle',
+			'weth',
+			'reputationToken',
 			'multicall3',
 			'uniformPriceDualCapBatchAuctionFactory',
 			'scalarOutcomes',
@@ -138,6 +140,8 @@ void describe('deployment helpers', () => {
 		])
 		expect(deploymentStatusOracleStep?.dependencies).toEqual(['proxyDeployer'])
 		expect(deploymentStatusOracleStep?.label).toBe('Deployment Status Oracle')
+		expect(deploymentSteps.find(step => step.id === 'zoltar')?.dependencies).toContain('reputationToken')
+		expect(deploymentSteps.find(step => step.id === 'priceOracleManagerAndOperatorQueuerFactory')?.dependencies).toContain('weth')
 	})
 
 	void test('getDeploymentSections groups the deployment status oracle with proxy deployer', () => {
@@ -148,7 +152,7 @@ void describe('deployment helpers', () => {
 		const sections = getDeploymentSections(deploymentStatuses)
 		const proxyDeployerSection = sections.find(section => section.title === 'Utilities')
 
-		expect(proxyDeployerSection?.steps.map(step => step.id)).toEqual(['proxyDeployer', 'deploymentStatusOracle', 'multicall3'])
+		expect(proxyDeployerSection?.steps.map(step => step.id)).toEqual(['proxyDeployer', 'deploymentStatusOracle', 'weth', 'reputationToken', 'multicall3'])
 	})
 
 	void test('getOpenOracleAddress matches the deterministic OpenOracle deployment step', () => {

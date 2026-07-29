@@ -12,6 +12,7 @@ import { StateHint } from '../../components/StateHint.js'
 import { TimestampValue } from '../../components/TimestampValue.js'
 import { UniverseLink } from '../../features/universes/components/UniverseLink.js'
 import { getChainDisplayLabel, getChainIdDecimalLabel, getKnownChainName, isMainnetChain } from '../../lib/network.js'
+import { getActiveNetworkProfile } from '../../lib/activeEnvironment.js'
 import { renderRepPriceSourceLabel } from '../../features/open-oracle/lib/repPriceSource.js'
 import type { OverviewPanelsProps } from '../../features/types.js'
 
@@ -103,7 +104,7 @@ export function OverviewPanels({
 					</button>
 					{hasWrongWalletNetwork ? (
 						<button className='primary' type='button' onClick={onSwitchNetwork} disabled={isManagingWallet}>
-							{appCopy.switchToEthereumMainnet}
+							{appCopy.formatSwitchToNetwork(getActiveNetworkProfile().displayName)}
 						</button>
 					) : undefined}
 					<button className='quiet' type='button' onClick={onDisconnectWallet} disabled={isManagingWallet}>

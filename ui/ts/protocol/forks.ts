@@ -5,7 +5,7 @@ import { Zoltar_Zoltar, peripherals_SecurityPoolForker_SecurityPoolForker, perip
 import type { DeploymentStepId, ForkAuctionActionResult, ForkAuctionDetails, ReadClient, ReportingOutcomeKey, TruthAuctionMetrics, WriteClient, ZoltarChildUniverseActionResult, ZoltarForkActionResult, ZoltarMigrationActionResult } from '../types/contracts.js'
 import { getForkOutcomeKey, getQuestionIdHex, getReportingOutcomeKey, getReportingOutcomeValue, getSecurityPoolSystemState, hasTimestamp } from './helpers.js'
 import { type ContractRevertReasonParams, readRequiredMulticall, writeContractAndWait } from './core.js'
-import { getInfraContractAddresses, getZoltarAddress } from './deploymentHelpers.js'
+import { getInfraContractAddresses, getZoltarAddress } from './activeDeploymentAddresses.js'
 import { requireForkDataView } from './forkData.js'
 import { executeForkAuctionAction } from './securityPoolActions.js'
 import { getDeploymentSteps } from './deployment.js'

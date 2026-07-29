@@ -81,12 +81,21 @@ bun run app:watch
 
 ## RPC Configuration
 
-The UI read backend defaults to `https://ethereum.dark.florist`, but you can override it without changing code:
+The UI targets Ethereum mainnet by default. Select Sepolia with any of:
+
+- Add `?network=sepolia` to the app URL
+- Set `localStorage['zoltar.network']` to `sepolia`
+- Set `globalThis.__ZOLTAR_NETWORK__` before bootstrapping the app
+- Set the `ZOLTAR_NETWORK` environment variable to `sepolia`
+
+The configured network supplies its own default public RPC. You can override that RPC without changing code:
 
 - Add `?rpcUrl=https://your-rpc.example` to the app URL
 - Set `localStorage['zoltar.rpcUrl']`
 - Set `globalThis.__ZOLTAR_RPC_URL__` before bootstrapping the app
 - Set the `ZOLTAR_RPC_URL` environment variable for environments that inject `process.env`
+
+Sepolia uses deterministically deployed test WETH and genesis REP contracts. Its REP contract exposes a capped faucet; mainnet continues to use canonical WETH and REP deployments.
 
 ## Browser Simulation
 

@@ -2,7 +2,7 @@ import { type Address } from '@zoltar/shared/ethereum'
 import { peripherals_SecurityPoolForker_SecurityPoolForker, peripherals_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../contractArtifact.js'
 import type { WriteClient } from '../types/contracts.js'
 import { writeContractAndWait } from './core.js'
-import { getInfraContractAddresses } from './deploymentHelpers.js'
+import { getInfraContractAddresses } from './activeDeploymentAddresses.js'
 import { executeForkAuctionAction } from './securityPoolActions.js'
 
 export async function startTruthAuctionForSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {

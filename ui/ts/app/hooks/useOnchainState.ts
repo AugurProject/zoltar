@@ -399,7 +399,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		}, 'Wallet disconnect failed')
 	const switchNetwork = async () =>
 		await runWalletManagementAction(async backend => {
-			if (backend.switchNetwork === undefined) throw new Error('This wallet does not support switching networks from the application. Switch to Ethereum mainnet in the wallet.')
+			if (backend.switchNetwork === undefined) throw new Error(`This wallet does not support switching networks from the application. Switch to ${backend.profile.displayName} in the wallet.`)
 			await backend.switchNetwork()
 		}, 'Network switch failed')
 

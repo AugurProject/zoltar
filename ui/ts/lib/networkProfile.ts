@@ -1,14 +1,15 @@
 import { defineChain, type Address, type Hash } from '@zoltar/shared/ethereum'
 import { mainnet, type Chain } from '@zoltar/shared/ethereum'
+import { MAINNET_PROTOCOL_TOKEN_ADDRESSES, SEPOLIA_PROTOCOL_TOKEN_ADDRESSES } from '../protocol/deploymentHelpers.js'
 
 export type NetworkProfile = {
 	chain: Chain
 	chainIdHex: string
 	displayName: string
 	genesisRepTokenAddress: Address
-	id: 'mainnet' | 'simulation'
+	id: 'mainnet' | 'sepolia' | 'simulation'
 	isSupportedAppChain: boolean
-	repPricingMode: 'uniswap' | 'mock'
+	repPricingMode: 'mock' | 'unavailable' | 'uniswap'
 	transactionExplorerBaseUrl?: string
 	wethAddress: Address
 }
@@ -30,16 +31,43 @@ const simulationChain = defineChain({
 	},
 })
 
+const sepoliaChain = defineChain({
+	id: 11155111,
+	name: 'Sepolia',
+	nativeCurrency: {
+		decimals: 18,
+		name: 'Sepolia Ether',
+		symbol: 'ETH',
+	},
+	rpcUrls: {
+		default: {
+			http: ['https://ethereum-sepolia-rpc.publicnode.com'],
+		},
+	},
+})
+
 export const MAINNET_NETWORK_PROFILE: NetworkProfile = {
 	chain: mainnet,
 	chainIdHex: '0x1',
 	displayName: 'Ethereum Mainnet',
-	genesisRepTokenAddress: '0x221657776846890989a759ba2973e427dff5c9bb',
+	genesisRepTokenAddress: MAINNET_PROTOCOL_TOKEN_ADDRESSES.genesisRepTokenAddress,
 	id: 'mainnet',
 	isSupportedAppChain: true,
 	repPricingMode: 'uniswap',
 	transactionExplorerBaseUrl: 'https://etherscan.io/tx/',
-	wethAddress: MAINNET_WETH_ADDRESS,
+	wethAddress: MAINNET_PROTOCOL_TOKEN_ADDRESSES.wethAddress,
+}
+
+export const SEPOLIA_NETWORK_PROFILE: NetworkProfile = {
+	chain: sepoliaChain,
+	chainIdHex: '0xaa36a7',
+	displayName: 'Sepolia',
+	genesisRepTokenAddress: SEPOLIA_PROTOCOL_TOKEN_ADDRESSES.genesisRepTokenAddress,
+	id: 'sepolia',
+	isSupportedAppChain: true,
+	repPricingMode: 'unavailable',
+	transactionExplorerBaseUrl: 'https://sepolia.etherscan.io/tx/',
+	wethAddress: SEPOLIA_PROTOCOL_TOKEN_ADDRESSES.wethAddress,
 }
 
 export function createSimulationProfile({ genesisRepTokenAddress, wethAddress }: { genesisRepTokenAddress: Address; wethAddress: Address }): NetworkProfile {

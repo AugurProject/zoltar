@@ -80,26 +80,33 @@ contract Zoltar {
 
 	uint256 public immutable forkThresholdDivisor;
 	uint256 public immutable forkBurnDivisor;
+	ReputationToken public immutable genesisReputationToken;
 	ZoltarQuestionData public immutable zoltarQuestionData;
 
-	constructor(ZoltarQuestionData _zoltarQuestionData, uint256 _forkThresholdDivisor, uint256 _forkBurnDivisor) {
+	constructor(
+		ZoltarQuestionData _zoltarQuestionData,
+		ReputationToken _genesisReputationToken,
+		uint256 _forkThresholdDivisor,
+		uint256 _forkBurnDivisor
+	) {
 		require(_forkThresholdDivisor > 1, 'Zoltar fork threshold divisor must be greater than one');
 		require(
 			_forkBurnDivisor >= Constants.MINIMUM_FORK_BURN_DIVISOR,
 			'Zoltar fork burn divisor must be at least five'
 		);
 		zoltarQuestionData = _zoltarQuestionData;
+		genesisReputationToken = _genesisReputationToken;
 		forkThresholdDivisor = _forkThresholdDivisor;
 		forkBurnDivisor = _forkBurnDivisor;
-		universes[0] = Universe(0, 0, 0, ReputationToken(Constants.GENESIS_REPUTATION_TOKEN), 0);
-		require(Constants.GENESIS_REPUTATION_TOKEN.code.length != 0, 'Genesis REP token address must contain code');
+		universes[0] = Universe(0, 0, 0, _genesisReputationToken, 0);
+		require(address(_genesisReputationToken).code.length != 0, 'Genesis REP token address must contain code');
 		// The configured genesis token must expose `getTotalTheoreticalSupply()`.
 		// This constructor intentionally relies on that non-ERC20 extension when wiring
 		// the genesis universe to an external REP deployment.
-		uint256 genesisSupply = ReputationToken(Constants.GENESIS_REPUTATION_TOKEN).getTotalTheoreticalSupply();
+		uint256 genesisSupply = _genesisReputationToken.getTotalTheoreticalSupply();
 		require(genesisSupply != 0, 'Genesis REP missing supply: theoretical supply must be non-zero');
 		universeTheoreticalSupplies[0] = genesisSupply;
-		emit UniverseInitialized(0, 0, 0, 0, ReputationToken(Constants.GENESIS_REPUTATION_TOKEN), 0, genesisSupply);
+		emit UniverseInitialized(0, 0, 0, 0, _genesisReputationToken, 0, genesisSupply);
 	}
 
 	function getForkTime(uint248 universeId) external view returns (uint256) {
@@ -182,7 +189,7 @@ contract Zoltar {
 
 	function _burnRep(ReputationToken reputationToken, address migrator, uint256 amount) private {
 		// Genesis is using REPv2 which we cannot actually burn
-		if (address(reputationToken) == Constants.GENESIS_REPUTATION_TOKEN) {
+		if (address(reputationToken) == address(genesisReputationToken)) {
 			if (migrator == address(this)) {
 				IERC20(address(reputationToken)).safeTransfer(Constants.BURN_ADDRESS, amount);
 			} else {

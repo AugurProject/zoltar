@@ -5,6 +5,7 @@ import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
 import { bigintToAddress } from './helpers.js'
 import {
 	ScalarOutcomes_ScalarOutcomes,
+	TestnetReputationToken_TestnetReputationToken,
 	Zoltar_Zoltar,
 	ZoltarQuestionData_ZoltarQuestionData,
 	peripherals_Multicall3_Multicall3,
@@ -16,6 +17,7 @@ import {
 	peripherals_factories_ShareTokenFactory_ShareTokenFactory,
 	peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
 	peripherals_openOracle_OpenOracle_OpenOracle,
+	peripherals_WETH9_WETH9,
 } from '../contractArtifact.js'
 
 export { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/shared/oracleInitialReport'
@@ -23,7 +25,24 @@ export { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, 
 export const PROXY_DEPLOYER_ADDRESS = bigintToAddress(0x7a0d94f55792c434d74a40883c6ed8545e406d12n)
 export const ZERO_SALT = toHex(0, { size: 32 })
 export const MULTICALL3_BYTECODE = `0x${peripherals_Multicall3_Multicall3.evm.bytecode.object}` satisfies Hex
-const MAINNET_WETH_ADDRESS = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' satisfies Address
+export const WETH9_BYTECODE = `0x${peripherals_WETH9_WETH9.evm.bytecode.object}` satisfies Hex
+export const TESTNET_REPUTATION_TOKEN_BYTECODE = `0x${TestnetReputationToken_TestnetReputationToken.evm.bytecode.object}` satisfies Hex
+export const MAINNET_PROTOCOL_TOKEN_ADDRESSES = {
+	genesisRepTokenAddress: '0x221657776846890989a759ba2973e427dff5c9bb',
+	wethAddress: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+} satisfies ProtocolTokenAddresses
+export const SEPOLIA_PROTOCOL_TOKEN_ADDRESSES = {
+	genesisRepTokenAddress: getCreate2Address({
+		bytecode: TESTNET_REPUTATION_TOKEN_BYTECODE,
+		from: PROXY_DEPLOYER_ADDRESS,
+		salt: ZERO_SALT,
+	}),
+	wethAddress: getCreate2Address({
+		bytecode: WETH9_BYTECODE,
+		from: PROXY_DEPLOYER_ADDRESS,
+		salt: ZERO_SALT,
+	}),
+} satisfies ProtocolTokenAddresses
 const ORACLE_FEE_SINK_ADDRESS = '0x000000000000000000000000000000000000dEaD' satisfies Address
 const ORACLE_REPORT_GAS = 100000n
 const ORACLE_SETTLEMENT_GAS = 1000000
@@ -35,6 +54,11 @@ const ORACLE_PROTOCOL_FEE_RECIPIENT = ORACLE_FEE_SINK_ADDRESS
 const ORACLE_ESCALATION_HALT_MULTIPLIER_BPS = 100000n
 const ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS = 30000n
 const ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS = 1000n
+
+export type ProtocolTokenAddresses = {
+	genesisRepTokenAddress: Address
+	wethAddress: Address
+}
 
 const getSecurityPoolUtilsAddress = () =>
 	getCreate2Address({
@@ -74,7 +98,7 @@ export const getEscalationGameFactoryByteCode = () =>
 		bytecode: `0x${peripherals_factories_EscalationGameFactory_EscalationGameFactory.evm.bytecode.object}`,
 	})
 
-export const getPriceOracleManagerAndOperatorQueuerFactoryByteCode = () =>
+export const getPriceOracleManagerAndOperatorQueuerFactoryByteCode = ({ wethAddress }: ProtocolTokenAddresses = MAINNET_PROTOCOL_TOKEN_ADDRESSES) =>
 	concatHex([
 		applyLibraries(peripherals_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object),
 		encodeAbiParameters(
@@ -98,7 +122,7 @@ export const getPriceOracleManagerAndOperatorQueuerFactoryByteCode = () =>
 				{ type: 'uint256' },
 			],
 			[
-				MAINNET_WETH_ADDRESS,
+				wethAddress,
 				ORACLE_REPORT_GAS,
 				ORACLE_SETTLEMENT_GAS,
 				ORACLE_GAS_UNITS_FOR_ONE_DISPUTE,
@@ -132,12 +156,12 @@ export const getSecurityPoolForkerByteCode = (zoltarAddress: Address) =>
 		args: [zoltarAddress],
 	})
 
-export const getZoltarInitCode = (zoltarQuestionDataAddress: Address): Hex =>
+export const getZoltarInitCode = (zoltarQuestionDataAddress: Address, { genesisRepTokenAddress }: ProtocolTokenAddresses = MAINNET_PROTOCOL_TOKEN_ADDRESSES): Hex =>
 	(() => {
 		return encodeDeployData({
 			abi: Zoltar_Zoltar.abi,
 			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-			args: [zoltarQuestionDataAddress, DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
+			args: [zoltarQuestionDataAddress, genesisRepTokenAddress, DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
 		})
 	})()
 
@@ -168,31 +192,43 @@ export const getSecurityPoolFactoryByteCode = ({
 		})
 	})()
 
-const zoltarAddressHelpers = createZoltarAddressHelpers({
-	getZoltarInitCode,
-	proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
-	zeroSalt: ZERO_SALT,
-	zoltarQuestionDataBytecode: getZoltarQuestionDataByteCode,
-})
-export const { getZoltarAddress } = zoltarAddressHelpers
-const { getZoltarQuestionDataAddress } = zoltarAddressHelpers
+function createProtocolAddressHelpers(tokenAddresses: ProtocolTokenAddresses) {
+	const zoltarAddressHelpers = createZoltarAddressHelpers({
+		getZoltarInitCode: zoltarQuestionDataAddress => getZoltarInitCode(zoltarQuestionDataAddress, tokenAddresses),
+		proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
+		zeroSalt: ZERO_SALT,
+		zoltarQuestionDataBytecode: getZoltarQuestionDataByteCode,
+	})
+	const { getZoltarAddress, getZoltarQuestionDataAddress } = zoltarAddressHelpers
+	const { getInfraContractAddresses } = createInfraContractAddressHelper({
+		getEscalationGameFactoryByteCode,
+		getSecurityPoolFactoryByteCode,
+		getSecurityPoolForkerByteCode,
+		getShareTokenFactoryByteCode,
+		getZoltarAddress,
+		getZoltarQuestionDataAddress,
+		multicall3Bytecode: MULTICALL3_BYTECODE,
+		openOracleBytecode: `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`,
+		priceOracleManagerAndOperatorQueuerFactoryBytecode: getPriceOracleManagerAndOperatorQueuerFactoryByteCode(tokenAddresses),
+		proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
+		scalarOutcomesBytecode: `0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`,
+		securityPoolUtilsBytecode: `0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`,
+		uniformPriceDualCapBatchAuctionFactoryBytecode: `0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`,
+		zeroSalt: ZERO_SALT,
+	})
+	return {
+		getInfraContractAddresses,
+		getZoltarAddress,
+	}
+}
 
-export const { getInfraContractAddresses } = createInfraContractAddressHelper({
-	getEscalationGameFactoryByteCode,
-	getSecurityPoolFactoryByteCode,
-	getSecurityPoolForkerByteCode,
-	getShareTokenFactoryByteCode,
-	getZoltarAddress,
-	getZoltarQuestionDataAddress,
-	multicall3Bytecode: MULTICALL3_BYTECODE,
-	openOracleBytecode: `0x${peripherals_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`,
-	priceOracleManagerAndOperatorQueuerFactoryBytecode: getPriceOracleManagerAndOperatorQueuerFactoryByteCode(),
-	proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS,
-	scalarOutcomesBytecode: `0x${ScalarOutcomes_ScalarOutcomes.evm.bytecode.object}`,
-	securityPoolUtilsBytecode: `0x${peripherals_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`,
-	uniformPriceDualCapBatchAuctionFactoryBytecode: `0x${peripherals_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`,
-	zeroSalt: ZERO_SALT,
-})
+export function getInfraContractAddresses(tokenAddresses: ProtocolTokenAddresses = MAINNET_PROTOCOL_TOKEN_ADDRESSES) {
+	return createProtocolAddressHelpers(tokenAddresses).getInfraContractAddresses()
+}
+
+export function getZoltarAddress(tokenAddresses: ProtocolTokenAddresses = MAINNET_PROTOCOL_TOKEN_ADDRESSES) {
+	return createProtocolAddressHelpers(tokenAddresses).getZoltarAddress()
+}
 
 export function getOpenOracleAddress() {
 	return getInfraContractAddresses().openOracle

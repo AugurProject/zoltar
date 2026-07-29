@@ -4,7 +4,7 @@ export { createMarket, loadAllZoltarQuestions, loadMarketDetails, loadZoltarQues
 export { buildForkCarriedEscalationProofs, loadEscalationDeposits, loadReportingDetails, reportOutcomeInSecurityPool, withdrawEscalationFromSecurityPool, withdrawForkedEscalationDeposits } from './reporting.js'
 export { loadTruthAuctionActiveTickPage, loadTruthAuctionBidderBidPage, loadTruthAuctionTickBidPage, loadTruthAuctionTickPage, loadTruthAuctionTickSummary } from './truthAuctions.js'
 export { readOptionalMulticall } from './core.js'
-export { getMulticall3Address, getOpenOracleAddress, getZoltarAddress } from './deploymentHelpers.js'
+export { getMulticall3Address, getOpenOracleAddress, getZoltarAddress } from './activeDeploymentAddresses.js'
 export * from './forks.js'
 export * from './openOracle.js'
 export * from './securityVault.js'

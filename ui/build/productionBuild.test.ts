@@ -731,7 +731,7 @@ productionBrowserTest('production bundle executes deployment, reporting, fork mi
 			await driver.pressTab()
 			expect(await driver.evaluate('document.activeElement?.textContent?.trim()')).toBe('Skip to main content')
 			await driver.clickButton('Deploy next missing')
-			const deployedBody = await driver.waitForBodyText('1 / 14')
+			const deployedBody = await driver.waitForBodyText('1 / 16')
 			expect(deployedBody).toContain('Proxy Deployer')
 			expect(deployedBody).not.toContain('Failed to initialize the app environment')
 

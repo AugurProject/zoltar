@@ -5,6 +5,7 @@ export const disconnectWallet = 'Disconnect'
 export const accountMenu = 'Account Menu'
 export const currentNetwork = 'Current Network'
 export const switchToEthereumMainnet = 'Switch to Ethereum mainnet'
+export const formatSwitchToNetwork = (networkName: string) => `Switch to ${networkName}`
 export const ethereumMainnet = 'Ethereum Mainnet'
 export const managingWallet = 'Updating wallet…'
 export const unknownNetwork = 'Unknown network'

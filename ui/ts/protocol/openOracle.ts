@@ -14,7 +14,7 @@ import { peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peri
 import type { OpenOracleActionResult, OpenOracleWithdrawableBalances, OracleManagerDetails, OracleQueueOperation, ReadClient, OpenOracleReportSummary, OpenOracleReportSummaryPage, StagedOracleExecutionResult, StagedOracleQueuedResult, WriteClient } from '../types/contracts.js'
 import { getProtocolPageOffset, hasTimestampAndNumber, requireStagedOperationTupleArray } from './helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from './core.js'
-import { getInfraContractAddresses, getOpenOracleAddress } from './deploymentHelpers.js'
+import { getInfraContractAddresses, getOpenOracleAddress } from './activeDeploymentAddresses.js'
 import { loadOpenOracleEventState, loadOpenOracleEventStates } from './openOracleState.js'
 
 type CoordinatorInitialReportClient = Parameters<typeof loadOpenOracleInitialReportPrice>[0]

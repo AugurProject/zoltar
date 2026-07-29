@@ -1,5 +1,5 @@
 import { encodeFunctionData, RpcError, type Abi, type Account, type Address, type ContractFunctionParameters, type Hash, type MulticallReturnType, type ReplacementReason, type TransactionReceipt } from '@zoltar/shared/ethereum'
-import { getMulticall3Address } from './deploymentHelpers.js'
+import { getMulticall3Address } from './activeDeploymentAddresses.js'
 import type { ReadClient, WriteClient } from '../types/contracts.js'
 import type { TransactionRequestPreview } from '../lib/chainBackend.js'
 import { getContractLabel } from './contractLabels.js'

@@ -2,7 +2,8 @@ import { createPublicClient, createWalletClient, custom, http, publicActions, ty
 import { getInjectedEthereum, type InjectedEthereum } from '../injectedEthereum.js'
 import { hasErrorCode, hasErrorMessage } from './errors.js'
 import { tryParseAddressInput } from './inputs.js'
-import { MAINNET_NETWORK_PROFILE, type NetworkProfile } from './networkProfile.js'
+import type { NetworkProfile } from './networkProfile.js'
+import { resolveConfiguredNetworkProfile } from './networkConfig.js'
 import { resolveConfiguredRpcConfig, type ConfiguredRpcSource, type RejectedRpcOverride } from './rpcConfig.js'
 
 export type ReadClient = ReturnType<typeof createPublicClient>
@@ -147,25 +148,28 @@ async function readProviderChainId(ethereum: InjectedEthereum | undefined) {
 	return result
 }
 
-export function createInjectedBackend({ rpcUrl }: { rpcUrl?: string } = {}): ChainBackend {
+export function createInjectedBackend({ network, profile = resolveConfiguredNetworkProfile(network === undefined ? {} : { network }), rpcUrl }: { network?: string; profile?: NetworkProfile; rpcUrl?: string } = {}): ChainBackend {
 	const getProvider = () => getInjectedEthereum()
 	let readTransportMode: ReadTransportMode = 'provider'
 	let readBackendBlockNumber: bigint | undefined
 	let readBackendBlockTimestamp: bigint | undefined
-	const configuredRpc = resolveConfiguredRpcConfig(rpcUrl === undefined ? {} : { overrideRpcUrl: rpcUrl })
+	const fallbackRpcUrl = profile.chain.rpcUrls.default.http[0]
+	if (fallbackRpcUrl === undefined) throw new Error(`No default RPC URL is configured for ${profile.displayName}.`)
+	const configuredRpc = resolveConfiguredRpcConfig(rpcUrl === undefined ? { fallbackRpcUrl } : { fallbackRpcUrl, overrideRpcUrl: rpcUrl })
+	const networkInstructionName = profile.id === 'mainnet' ? 'Ethereum mainnet' : profile.displayName
 
 	return {
 		bootstrapError: undefined,
 		bootstrapLabel: undefined,
 		bootstrapProgress: undefined,
-		createReadClient: () => createReadClientForProfile(MAINNET_NETWORK_PROFILE, readTransportMode, configuredRpc.url, getProvider()),
+		createReadClient: () => createReadClientForProfile(profile, readTransportMode, configuredRpc.url, getProvider()),
 		createWriteClient: (accountAddress, callbacks = {}) => {
 			const ethereum = getProvider()
 			if (ethereum === undefined) throw new Error('No injected wallet found')
 
 			const baseClient = createWalletClient({
 				account: accountAddress,
-				chain: MAINNET_NETWORK_PROFILE.chain,
+				chain: profile.chain,
 				transport: custom(ethereum),
 			}).extend(publicActions) as WriteClient
 
@@ -175,7 +179,7 @@ export function createInjectedBackend({ rpcUrl }: { rpcUrl?: string } = {}): Cha
 				if (currentAccount === undefined) throw new Error('Wallet account is no longer connected. Reconnect your wallet and try again.')
 				if (currentAccount.toLowerCase() !== accountAddress.toLowerCase()) throw new Error('Wallet account changed. Review the action with the connected account and try again.')
 				const currentChainId = await readProviderChainId(ethereum)
-				if (currentChainId !== MAINNET_NETWORK_PROFILE.chainIdHex) throw new Error('Wallet network changed. Switch to Ethereum mainnet and try again.')
+				if (currentChainId !== profile.chainIdHex) throw new Error(`Wallet network changed. Switch to ${networkInstructionName} and try again.`)
 			})
 		},
 		disconnectWallet: async () => {
@@ -198,7 +202,7 @@ export function createInjectedBackend({ rpcUrl }: { rpcUrl?: string } = {}): Cha
 		}),
 		hasWallet: () => getProvider() !== undefined,
 		id: 'injected',
-		profile: MAINNET_NETWORK_PROFILE,
+		profile,
 		requestAccounts: async () => {
 			const ethereum = getProvider()
 			if (ethereum === undefined) return []
@@ -237,7 +241,7 @@ export function createInjectedBackend({ rpcUrl }: { rpcUrl?: string } = {}): Cha
 		switchNetwork: async () => {
 			const ethereum = getProvider()
 			if (ethereum === undefined) throw new Error('No injected wallet found')
-			await ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: MAINNET_NETWORK_PROFILE.chainIdHex }] })
+			await ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: profile.chainIdHex }] })
 		},
 	}
 }

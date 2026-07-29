@@ -4,7 +4,7 @@ import { createApplyLinkedLibrariesHelper, createDeploymentStatusOracleAddressHe
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_FEE_PERCENTAGE, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_MULTIPLIER, ORACLE_PROTOCOL_FEE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/shared/oracleInitialReport'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/shared/protocolConfig'
 import { WriteClient, writeContractAndWait } from '../clients'
-import { PROXY_DEPLOYER_ADDRESS } from '../constants'
+import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS } from '../constants'
 import { addressString } from '../bigint'
 import { contractExists } from '../utilities'
 import {
@@ -161,7 +161,7 @@ const getZoltarInitCode = (zoltarQuestionDataAddress: Address): Hex =>
 		return encodeDeployData({
 			abi: Zoltar_Zoltar.abi,
 			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-			args: [zoltarQuestionDataAddress, DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
+			args: [zoltarQuestionDataAddress, addressString(GENESIS_REPUTATION_TOKEN), DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
 		})
 	})()
 
@@ -372,7 +372,7 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 		const initCode = encodeDeployData({
 			abi: Zoltar_Zoltar.abi,
 			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-			args: [contractAddresses.zoltarQuestionData, DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
+			args: [contractAddresses.zoltarQuestionData, addressString(GENESIS_REPUTATION_TOKEN), DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
 		})
 		await deployBytecode('zoltar', initCode)
 	}

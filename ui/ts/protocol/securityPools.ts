@@ -16,7 +16,7 @@ import { readRequiredMulticall, writeContractAndWaitForReceipt } from './core.js
 import { requireForkDataView } from './forkData.js'
 import { getForkOutcomeKey, getProtocolPageOffset, getQuestionIdHex, getReportingOutcomeKey, getSecurityPoolSystemState, requireSecurityPoolDeploymentTupleArray, requireSecurityVaultTupleArray } from './helpers.js'
 import { getDeploymentSteps } from './deployment.js'
-import { getInfraContractAddresses, getZoltarAddress } from './deploymentHelpers.js'
+import { getInfraContractAddresses, getZoltarAddress } from './activeDeploymentAddresses.js'
 import { loadMarketDetails } from './zoltar.js'
 
 const QUESTION_OUTCOME_ABI = [

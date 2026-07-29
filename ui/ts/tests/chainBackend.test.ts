@@ -215,6 +215,14 @@ describe('injected backend read transport', () => {
 		expect(await backend.requestAccounts()).toEqual([])
 	})
 
+	test('creates a Sepolia backend from explicit network configuration', () => {
+		const backend = createInjectedBackend({ network: 'sepolia' })
+
+		expect(backend.profile.id).toBe('sepolia')
+		expect(backend.profile.chainIdHex).toBe('0xaa36a7')
+		expect(backend.getReadBackendStatus?.().rpcUrl).toBe('https://ethereum-sepolia-rpc.publicnode.com')
+	})
+
 	test('throws when creating a write client before wallet injection', () => {
 		const backend = createInjectedBackend()
 		expect(() => backend.createWriteClient(zeroAddress)).toThrow('No injected wallet found')

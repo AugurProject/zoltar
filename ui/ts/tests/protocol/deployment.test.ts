@@ -54,7 +54,7 @@ describe('contract deployment internals', () => {
 			},
 			readContract: async ({ functionName }) => {
 				readContractCalls.push(functionName)
-				if (functionName === 'getDeploymentMask') return 5n as never
+				if (functionName === 'getDeploymentMask') return 17n as never
 				throw new Error(`Unexpected readContract call: ${functionName}`)
 			},
 		})
@@ -65,6 +65,8 @@ describe('contract deployment internals', () => {
 		expect(snapshot.augurStatoblastDeployed).toBe(false)
 		expect(snapshot.deploymentStatuses.find(step => step.id === 'proxyDeployer')?.deployed).toBe(true)
 		expect(snapshot.deploymentStatuses.find(step => step.id === 'deploymentStatusOracle')?.deployed).toBe(true)
+		expect(snapshot.deploymentStatuses.find(step => step.id === 'weth')?.deployed).toBe(false)
+		expect(snapshot.deploymentStatuses.find(step => step.id === 'reputationToken')?.deployed).toBe(false)
 		expect(snapshot.deploymentStatuses.find(step => step.id === 'multicall3')?.deployed).toBe(false)
 		expect(snapshot.deploymentStatuses.find(step => step.id === 'uniformPriceDualCapBatchAuctionFactory')?.deployed).toBe(true)
 	})
@@ -403,7 +405,7 @@ describe('contract deployment internals', () => {
 	test('all deployable steps use the proxy deployer write path when executed', async () => {
 		const steps = createDeploymentSteps()
 		const txHash = `0x${'f'.repeat(64)}` as Hash
-		const orderedStepIds = steps.map(step => step.id).filter(id => id !== 'proxyDeployer')
+		const orderedStepIds = steps.map(step => step.id).filter(id => id !== 'proxyDeployer' && id !== 'reputationToken' && id !== 'weth')
 
 		for (const stepId of orderedStepIds) {
 			const step = steps.find(candidate => candidate.id === stepId)
@@ -427,6 +429,21 @@ describe('contract deployment internals', () => {
 			expect(seenData).toBeDefined()
 			expect(seenAddress).not.toBeUndefined()
 			expect(seenAddress?.length).toBe(42)
+		}
+	})
+
+	test('canonical mainnet token steps succeed without redeploying contracts that contain code', async () => {
+		const tokenSteps = createDeploymentSteps().filter(step => step.id === 'reputationToken' || step.id === 'weth')
+		const client = asWriteClient({
+			getCode: async () => '0x1234',
+			sendTransaction: async () => {
+				throw new Error('Canonical mainnet token steps should not send deployment transactions')
+			},
+			waitForTransactionReceipt: async () => hashReceipt('success'),
+		})
+
+		for (const step of tokenSteps) {
+			expect(await step.deploy(client)).toBe(ZERO_HASH)
 		}
 	})
 
