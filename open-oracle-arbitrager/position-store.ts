@@ -86,6 +86,7 @@ export type PositionRecord = {
 	lifecycleReceiptBlockHash?: Hex | undefined
 	lifecycleReceiptBlockNumber?: string | undefined
 	lifecycleReceiptRecovered: boolean
+	lifecycleSettlerRewardEth?: string | undefined
 	lifecycleSubmissionBlockNumber?: string | undefined
 	lifecycleSubmissionMode?: 'private' | 'public' | undefined
 	lifecycleTargetBlockNumber: string | undefined
@@ -282,6 +283,9 @@ function parsePosition(value: unknown): PositionRecord {
 	}
 	if (typeof record['hedgedProfitBeforeGasEth'] !== 'string' || !signedDecimal.test(record['hedgedProfitBeforeGasEth'])) throw new Error('Position journal hedged profit is invalid')
 	if (record['realizedNetProfitEth'] !== undefined && (typeof record['realizedNetProfitEth'] !== 'string' || !signedDecimal.test(record['realizedNetProfitEth']))) throw new Error('Position journal realized profit is invalid')
+	if (record['lifecycleSettlerRewardEth'] !== undefined && (typeof record['lifecycleSettlerRewardEth'] !== 'string' || !decimal.test(record['lifecycleSettlerRewardEth']))) {
+		throw new Error('Position journal lifecycle settler reward is invalid')
+	}
 	if (typeof record['openedAt'] !== 'string' || !Number.isFinite(Date.parse(record['openedAt']))) throw new Error('Position journal openedAt is invalid')
 	if (record['lifecycleUpdatedAt'] !== undefined && (typeof record['lifecycleUpdatedAt'] !== 'string' || !Number.isFinite(Date.parse(record['lifecycleUpdatedAt'])))) throw new Error('Position journal lifecycleUpdatedAt is invalid')
 	if (typeof record['lifecycleReceiptRecovered'] !== 'boolean') throw new Error('Position journal lifecycle receipt recovery marker is invalid')
@@ -322,6 +326,7 @@ function parsePosition(value: unknown): PositionRecord {
 			lifecycleTransactionIntent === undefined ||
 			lifecycleTransactionNonce === undefined ||
 			record['lifecycleUpdatedAt'] === undefined ||
+			record['lifecycleSettlerRewardEth'] === undefined ||
 			record['closedAt'] !== undefined ||
 			record['realizedNetProfitEth'] !== undefined)
 	) {
@@ -358,6 +363,7 @@ function parsePosition(value: unknown): PositionRecord {
 		...(lifecycleReceiptBlockHash === undefined ? {} : { lifecycleReceiptBlockHash: lifecycleReceiptBlockHash as Hex }),
 		...(lifecycleReceiptBlockNumber === undefined ? {} : { lifecycleReceiptBlockNumber }),
 		lifecycleReceiptRecovered: record['lifecycleReceiptRecovered'],
+		...(record['lifecycleSettlerRewardEth'] === undefined ? {} : { lifecycleSettlerRewardEth: record['lifecycleSettlerRewardEth'] }),
 		lifecycleSubmissionBlockNumber,
 		lifecycleSubmissionMode: record['lifecycleSubmissionMode'],
 		lifecycleTargetBlockNumber: optionalIntegerField(record, 'lifecycleTargetBlockNumber'),

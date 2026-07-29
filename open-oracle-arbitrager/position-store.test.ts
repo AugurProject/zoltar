@@ -217,6 +217,7 @@ describe('durable OpenOracle position journal', () => {
 			lifecycleReceiptBlockHash: `0x${'44'.repeat(32)}` as const,
 			lifecycleReceiptBlockNumber: '123',
 			lifecycleReceiptRecovered: true,
+			lifecycleSettlerRewardEth: '0.01',
 			lifecycleTransactionHashes: [`0x${'22'.repeat(32)}` as const],
 			reportId: '8',
 			status: 'closed-pending-finality' as const,
@@ -225,6 +226,8 @@ describe('durable OpenOracle position journal', () => {
 		}
 		await savePositionJournal(path, [position, pendingFinality])
 		expect(await loadPositionJournal(path)).toEqual([position, pendingFinality])
+		await Bun.write(path, JSON.stringify({ positions: [{ ...pendingFinality, lifecycleSettlerRewardEth: undefined }], version: 1 }))
+		await expect(loadPositionJournal(path)).rejects.toThrow('pending lifecycle finality recovery journal is incomplete')
 		await Bun.write(path, JSON.stringify({ positions: [{ ...pendingFinality, lifecycleTransactionIntent: undefined }], version: 1 }))
 		await expect(loadPositionJournal(path)).rejects.toThrow('pending lifecycle finality recovery journal is incomplete')
 	})

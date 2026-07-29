@@ -548,7 +548,7 @@ The dashboard shows:
 - Current opportunities, token-metadata-normalized inventory requirements, deadline
   window, token-specific direction, pool, and decision.
 - Durable positions with actual hedge execution, entry and lifecycle gas, exact
-  withdrawals, state, and realized net P&amp;L. A staged entry shows **Awaiting entry
+  settler reward, withdrawals, state, and realized net P&amp;L. A staged entry shows **Awaiting entry
   evidence** and is excluded from actual P&amp;L totals until receipt and executor-event
   quorum succeeds. A lifecycle attempt is likewise excluded while any receipt is
   ambiguous. `closed-pending-finality` retains its risk slot and does not contribute
@@ -696,13 +696,15 @@ Position profit is tracked in ETH using the exact 1 WETH = 1 ETH unwrap relation
 sell-token hedged P&L before gas = actual WETH out − old report WETH − WETH fees
 buy-token hedged P&L before gas = old report WETH − actual WETH in
 open hedged net = hedged P&L before gas − actual entry gas − lifecycle gas so far
-realized net = hedged P&L before gas − actual entry gas − actual lifecycle gas
+realized net = hedged P&L before gas + exact settler reward − actual entry gas − actual lifecycle gas
 ```
 
 The old confirmed-submission table keeps quote-time modeled and tracked values for
 diagnostics. They are not realized P&amp;L. After entry receipt quorum, the durable
 position table derives hedge economics from the executor event and includes mined
-entry and lifecycle gas. Before that quorum, staged quote values remain recovery
+entry and lifecycle gas. A finalized lifecycle adds the exact ETH settler reward
+from its executor event; a zero reward is recorded when the executor did not settle.
+Before that quorum, staged quote values remain recovery
 metadata, render as awaiting evidence, and are excluded from actual P&amp;L totals.
 Automatically realized P&amp;L is withheld unless actual WETH and token withdrawals exactly equal
 the expected hedge-neutral inventory. A mismatch is marked `recovery-required`
@@ -940,7 +942,8 @@ hash, nonce, token decimals, target block, and delivery mode. Both modes call
 `settleAndWithdraw`, which optionally settles, moves only the recorded position
 amounts using OpenOracle internal allowances, and withdraws those exact amounts in
 the same parent-bound transaction. After a crash the bot reconstructs lifecycle gas
-and withdrawals from the canonical receipt and `LifecycleExecuted` event. Wallet
+and withdrawals, including the exact optional ETH settler reward, from the canonical
+receipt and `LifecycleExecuted` event. Wallet
 balance deltas and `withdraw(max)` are not accounting evidence, so permissionless
 OpenOracle dust, unrelated transfers, and other positions sharing a token remain
 separate. Exact successful evidence first moves the record to

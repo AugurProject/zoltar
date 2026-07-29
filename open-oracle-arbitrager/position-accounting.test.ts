@@ -7,8 +7,8 @@ describe('position accounting', () => {
 		expect(hedgedProfitBeforeGasWeth('buy-rep', 900n, 1_000n, 10n, 20n)).toBe(100n)
 	})
 
-	test('does not classify P&L as realized until all entry and lifecycle gas is included', () => {
-		expect(realizedNetProfitWeth(170n, 40n, 30n)).toBe(100n)
+	test('includes the exact settler reward and all entry and lifecycle gas in realized P&L', () => {
+		expect(realizedNetProfitWeth(170n, 20n, 40n, 30n)).toBe(120n)
 	})
 
 	test('recovers actual post-crash hedge economics instead of retaining the staged quote', () => {

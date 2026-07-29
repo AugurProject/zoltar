@@ -95,7 +95,7 @@ function receiptClients(blockNumber = 100n, status: 'reverted' | 'success' = 're
 	})
 }
 
-function lifecycleReceiptClients(blockNumber = 100n, headBlockNumbers?: readonly bigint[] | undefined) {
+function lifecycleReceiptClients(blockNumber = 100n, headBlockNumbers?: readonly bigint[] | undefined, settlerReward = 0n) {
 	const account = getAddress('0x0000000000000000000000000000000000000002')
 	const topics = encodeEventTopics({
 		abi: openOracleArbitrageExecutorAbi,
@@ -110,7 +110,7 @@ function lifecycleReceiptClients(blockNumber = 100n, headBlockNumbers?: readonly
 			{ name: 'amount2', type: 'uint256' },
 			{ name: 'settlerReward', type: 'uint256' },
 		],
-		[10n ** 18n, token, 2n * 10n ** 18n, 0n],
+		[10n ** 18n, token, 2n * 10n ** 18n, settlerReward],
 	)
 	return receiptClients(
 		blockNumber,
@@ -488,13 +488,16 @@ describe('atomic lifecycle crash recovery', () => {
 			lifecycleTransactionHashes: [lifecycleTransactionHash],
 			status: 'withdrawing' as const,
 		}
-		const provisional = await recoverPendingLifecycleWithQuorum(lifecycleReceiptClients(), recoveryConfiguration, position, 100n)
+		const clients = lifecycleReceiptClients(100n, undefined, 10n ** 16n)
+		const provisional = await recoverPendingLifecycleWithQuorum(clients, recoveryConfiguration, position, 100n)
 		expect(provisional.status).toBe('closed-pending-finality')
 		expect(provisional.realizedNetProfitEth).toBeUndefined()
+		expect(provisional.lifecycleSettlerRewardEth).toBe('0.01')
 		expect(provisional.lifecycleReceiptBlockNumber).toBe('100')
-		const finalized = await finalizeLifecycleAfterFinalityWithQuorum(lifecycleReceiptClients(), recoveryConfiguration, provisional, 112n)
+		const finalized = await finalizeLifecycleAfterFinalityWithQuorum(clients, recoveryConfiguration, provisional, 112n)
 		expect(finalized.status).toBe('closed')
-		expect(finalized.realizedNetProfitEth).toBe('0.098979')
+		expect(finalized.realizedNetProfitEth).toBe('0.108979')
+		expect(finalized.lifecycleSettlerRewardEth).toBe('0.01')
 		expect(finalized.lifecycleTransactionHashes).toEqual([])
 		expect(finalized.lifecycleReceiptBlockNumber).toBeUndefined()
 	})
@@ -530,10 +533,11 @@ describe('atomic lifecycle crash recovery', () => {
 			lifecycleTransactionHashes: [lifecycleTransactionHash],
 			status: 'withdrawing' as const,
 		}
-		const provisional = await recoverPendingLifecycleWithQuorum(lifecycleReceiptClients(), recoveryConfiguration, position, 100n)
+		const provisional = await recoverPendingLifecycleWithQuorum(lifecycleReceiptClients(100n, undefined, 10n ** 16n), recoveryConfiguration, position, 100n)
 		const reopened = await finalizeLifecycleAfterFinalityWithQuorum(missingReceiptClients(), recoveryConfiguration, provisional, 112n)
 		expect(reopened.status).toBe('open')
 		expect(reopened.lifecycleGasCostEth).toBe('0')
+		expect(reopened.lifecycleSettlerRewardEth).toBeUndefined()
 		expect(reopened.gasExpenditures).toEqual(confirmedPosition().gasExpenditures)
 		expect(reopened.withdrawnWeth).toBe('0')
 		expect(reopened.expiredTransactionAttempts).toEqual([{ kind: 'lifecycle', nonce: '9', targetBlockNumber: '100', transactionHash: lifecycleTransactionHash }])

@@ -10878,7 +10878,7 @@
 		"width": 900
 	},
 	"fig-open-oracle-arbitrager-lifecycle": {
-		"ariaDescription": "The arbitrager synchronizes approved OpenOracle reports, compares each report with executable Uniswap V3 liquidity, atomically hedges and disputes an eligible report, waits through later dispute rounds, atomically settles and withdraws exact balances, and only realizes profit when every configured read RPC serves the same twelfth-descendant block hash. Missing or contradictory evidence moves the durable position to recovery rather than releasing risk.",
+		"ariaDescription": "The arbitrager synchronizes approved OpenOracle reports, compares each report with executable Uniswap V3 liquidity, atomically hedges and disputes an eligible report, waits through later dispute rounds, then atomically settles and withdraws exact balances into a provisional finality state that retains risk and evidence. A receipt reorganization returns the position to open, contradictory evidence moves it to recovery, and closure realizes profit only when every configured read RPC serves the same twelfth-descendant block hash.",
 		"ariaLabel": "OpenOracle arbitrager execution and recovery lifecycle",
 		"height": 390,
 		"nodes": [
@@ -10944,10 +10944,22 @@
 			},
 			{
 				"attributes": {
+					"class": "svg-blue",
+					"data-state": "PendingFinality",
+					"x": "970",
+					"y": "55",
+					"width": "170",
+					"height": "78",
+					"rx": "10"
+				},
+				"tag": "rect"
+			},
+			{
+				"attributes": {
 					"class": "svg-green",
 					"data-state": "Final",
 					"x": "970",
-					"y": "55",
+					"y": "175",
 					"width": "170",
 					"height": "78",
 					"rx": "10"
@@ -11103,7 +11115,7 @@
 				},
 				"children": [
 					{
-						"text": "Final"
+						"text": "Pending finality"
 					}
 				],
 				"tag": "text"
@@ -11113,6 +11125,34 @@
 					"class": "svg-small",
 					"x": "1055",
 					"y": "108",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "retain risk + evidence"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-label",
+					"x": "1055",
+					"y": "203",
+					"text-anchor": "middle"
+				},
+				"children": [
+					{
+						"text": "Closed"
+					}
+				],
+				"tag": "text"
+			},
+			{
+				"attributes": {
+					"class": "svg-small",
+					"x": "1055",
+					"y": "228",
 					"text-anchor": "middle"
 				},
 				"children": [
@@ -11161,8 +11201,27 @@
 			{
 				"attributes": {
 					"class": "svg-line",
-					"data-checked-transition": "AtomicExit->Final",
+					"data-checked-transition": "AtomicExit->PendingFinality",
 					"d": "M 950 94 H 970",
+					"marker-end": "arrow"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"data-checked-transition": "PendingFinality->Final",
+					"d": "M 1055 133 V 175",
+					"marker-end": "arrow"
+				},
+				"tag": "path"
+			},
+			{
+				"attributes": {
+					"class": "svg-line",
+					"data-checked-transition": "PendingFinality->Open",
+					"d": "M 1055 55 V 25 H 675 V 55",
+					"stroke-dasharray": "7 5",
 					"marker-end": "arrow"
 				},
 				"tag": "path"
@@ -11172,7 +11231,7 @@
 					"class": "svg-red",
 					"data-state": "Recovery",
 					"x": "365",
-					"y": "245",
+					"y": "290",
 					"width": "430",
 					"height": "92",
 					"rx": "12"
@@ -11183,7 +11242,7 @@
 				"attributes": {
 					"class": "svg-label",
 					"x": "580",
-					"y": "276",
+					"y": "321",
 					"text-anchor": "middle"
 				},
 				"children": [
@@ -11197,7 +11256,7 @@
 				"attributes": {
 					"class": "svg-small",
 					"x": "580",
-					"y": "302",
+					"y": "347",
 					"text-anchor": "middle"
 				},
 				"children": [
@@ -11211,7 +11270,7 @@
 				"attributes": {
 					"class": "svg-line",
 					"data-checked-transition": "AtomicEntry->Recovery",
-					"d": "M 485 133 V 245",
+					"d": "M 485 133 V 290",
 					"stroke-dasharray": "7 5",
 					"marker-end": "arrow"
 				},
@@ -11221,7 +11280,7 @@
 				"attributes": {
 					"class": "svg-line",
 					"data-checked-transition": "Open->Recovery",
-					"d": "M 675 133 V 210 H 550 V 245",
+					"d": "M 675 133 V 220 H 550 V 290",
 					"stroke-dasharray": "7 5",
 					"marker-end": "arrow"
 				},
@@ -11231,7 +11290,7 @@
 				"attributes": {
 					"class": "svg-line",
 					"data-checked-transition": "AtomicExit->Recovery",
-					"d": "M 865 133 V 210 H 625 V 245",
+					"d": "M 865 133 V 245 H 625 V 290",
 					"stroke-dasharray": "7 5",
 					"marker-end": "arrow"
 				},
@@ -11240,8 +11299,8 @@
 			{
 				"attributes": {
 					"class": "svg-line",
-					"data-checked-transition": "Final->Recovery",
-					"d": "M 1055 133 V 210 H 700 V 245",
+					"data-checked-transition": "PendingFinality->Recovery",
+					"d": "M 1140 94 V 275 H 700 V 290",
 					"stroke-dasharray": "7 5",
 					"marker-end": "arrow"
 				},
@@ -11251,7 +11310,7 @@
 		"width": 1160
 	},
 	"fig-open-oracle-arbitrager-profit": {
-		"ariaDescription": "Executable hedge proceeds or avoided WETH spending produce gross hedge profit. Entry gas, the signed worst-case slippage reserve, and the lifecycle gas reserve are subtracted before the strategy thresholds are tested. After execution, quote-time reserves are replaced by actual hedge and canonical gas evidence; realized profit is withheld until the exact lifecycle withdrawal reaches finality.",
+		"ariaDescription": "Executable hedge proceeds or avoided WETH spending produce gross hedge profit. Entry gas, the signed worst-case slippage reserve, and the lifecycle gas reserve are subtracted before the strategy thresholds are tested. After execution, tracked profit uses the actual hedge and all canonical gas recorded so far. Realized profit adds any exact settler reward and remains withheld until the exact lifecycle withdrawal reaches finality.",
 		"ariaLabel": "OpenOracle arbitrager modeled and realized profit accounting",
 		"height": 300,
 		"nodes": [
@@ -11458,7 +11517,7 @@
 				},
 				"children": [
 					{
-						"text": "Modeled: conservative reserves · Tracked: actual hedge and entry gas · Realized: finalized exact withdrawal and actual lifecycle gas"
+						"text": "Modeled: conservative reserves · Tracked: actual hedge and gas so far · Realized: tracked + exact settler reward after finality"
 					}
 				],
 				"tag": "text"

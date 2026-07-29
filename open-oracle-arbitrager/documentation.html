@@ -56,9 +56,9 @@
 						<span class="plot-chart-fallback"
 							>Reports are synchronized and priced before one atomic entry hedges
 							and disputes. An atomic exit settles and withdraws exact balances.
-							Profit becomes realized only after every read RPC agrees on the
-							twelfth canonical descendant; ambiguous evidence stays in durable
-							recovery.</span
+							Profit becomes realized only after every configured read RPC serves
+							the same twelfth-descendant block hash; ambiguous evidence stays in
+							durable recovery.</span
 						>
 					</div>
 					<p class="diagram-caption">
@@ -386,9 +386,10 @@
 					>
 						<span class="plot-chart-fallback"
 							>Gross hedge profit is reduced by entry gas, worst-case signed
-							slippage, and lifecycle gas before thresholds are applied. Actual
-							hedge and gas evidence replace estimates, and realized profit waits
-							for finalized exact withdrawal.</span
+							slippage, and lifecycle gas before thresholds are applied. Tracked
+							profit uses the actual hedge and gas so far; realized profit adds
+							the exact settler reward and waits for finalized exact
+							withdrawal.</span
 						>
 					</div>
 					<p class="diagram-caption">
@@ -440,8 +441,10 @@
 					</li>
 					<li>
 						Open hedged net uses actual executor hedge evidence and gas recorded so
-						far. Realized net additionally requires exact withdrawal evidence and
-						agreement from every read RPC on the twelfth canonical descendant.
+						far. Realized net adds the exact ETH settler reward emitted by the
+						lifecycle executor and requires exact withdrawal evidence. It closes
+						only when every configured read RPC serves the same
+						twelfth-descendant block hash.
 					</li>
 				</ul>
 			</section>

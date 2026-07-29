@@ -1327,6 +1327,7 @@ function withoutLifecycleAttempt(position: PositionRecord, preserveExpiredAttemp
 		expiredTransactionAttempts: preserveExpiredAttempt && transactionHash !== undefined && targetBlockNumber !== undefined && nonce !== undefined ? [...(position.expiredTransactionAttempts ?? []), { kind: 'lifecycle' as const, nonce, targetBlockNumber, transactionHash }] : position.expiredTransactionAttempts,
 		lifecycleReceiptBlockHash: undefined,
 		lifecycleReceiptBlockNumber: undefined,
+		lifecycleSettlerRewardEth: undefined,
 		lifecycleSubmissionBlockNumber: undefined,
 		lifecycleSubmissionMode: undefined,
 		lifecycleTargetBlockNumber: undefined,
@@ -1354,6 +1355,7 @@ function rollbackProvisionalLifecycleAccounting(position: PositionRecord) {
 		lifecycleReceiptBlockHash: undefined,
 		lifecycleReceiptBlockNumber: undefined,
 		lifecycleReceiptRecovered: false,
+		lifecycleSettlerRewardEth: undefined,
 		lifecycleUpdatedAt: undefined,
 		realizedNetProfitEth: undefined,
 		withdrawnToken: '0',
@@ -1454,6 +1456,7 @@ export async function recoverPendingLifecycleWithQuorum(readClients: readonly Re
 		lifecycleReceiptBlockHash: receipt.blockHash,
 		lifecycleReceiptBlockNumber: receipt.blockNumber.toString(),
 		lifecycleReceiptRecovered: true,
+		lifecycleSettlerRewardEth: decimalWeth(execution.settlerReward),
 		realizedNetProfitEth: undefined,
 		status: 'closed-pending-finality',
 		withdrawnToken: position.lockedToken,
@@ -1488,10 +1491,12 @@ export async function finalizeLifecycleAfterFinalityWithQuorum(readClients: read
 	if ((await finalityDescendantHashWithQuorum(readClients, config, refreshed.reportId, finalityDescendantBlockNumber)) === undefined) return refreshed
 	const closedAt = refreshed.lifecycleUpdatedAt
 	if (closedAt === undefined) throw new Error('Finalized lifecycle receipt timestamp is unavailable')
-	const realized = realizedNetProfitWeth(parseSignedDecimalEth(refreshed.hedgedProfitBeforeGasEth), parseDecimalWeth(refreshed.actualEntryGasCostEth), parseDecimalWeth(refreshed.lifecycleGasCostEth))
+	if (refreshed.lifecycleSettlerRewardEth === undefined) throw new Error('Finalized lifecycle settler reward evidence is unavailable')
+	const realized = realizedNetProfitWeth(parseSignedDecimalEth(refreshed.hedgedProfitBeforeGasEth), parseDecimalWeth(refreshed.lifecycleSettlerRewardEth), parseDecimalWeth(refreshed.actualEntryGasCostEth), parseDecimalWeth(refreshed.lifecycleGasCostEth))
 	return {
 		...withoutLifecycleAttempt(refreshed),
 		closedAt,
+		lifecycleSettlerRewardEth: refreshed.lifecycleSettlerRewardEth,
 		realizedNetProfitEth: decimalSignedEth(realized),
 		status: 'closed',
 	} satisfies PositionRecord

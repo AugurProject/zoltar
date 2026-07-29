@@ -136,7 +136,7 @@ describe('operator strategy settings', () => {
 })
 
 describe('operator execution history', () => {
-	test('separates actual open hedged P&L from reconciled realized P&L', () => {
+	test('subtracts nonzero lifecycle gas from open hedged P&L and separates realized P&L', () => {
 		const base = {
 			account: address,
 			actualEntryGasCostEth: '0.01',

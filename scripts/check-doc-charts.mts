@@ -18,8 +18,8 @@ const fullyCheckedFlowCharts = new Map([
 	[
 		'fig-open-oracle-arbitrager-lifecycle',
 		{
-			states: new Set(['AtomicEntry', 'AtomicExit', 'Final', 'Open', 'PriceFilter', 'Recovery', 'SyncReports']),
-			transitions: new Set(['AtomicEntry->Open', 'AtomicEntry->Recovery', 'AtomicExit->Final', 'AtomicExit->Recovery', 'Final->Recovery', 'Open->AtomicExit', 'Open->Recovery', 'PriceFilter->AtomicEntry', 'SyncReports->PriceFilter']),
+			states: new Set(['AtomicEntry', 'AtomicExit', 'Final', 'Open', 'PendingFinality', 'PriceFilter', 'Recovery', 'SyncReports']),
+			transitions: new Set(['AtomicEntry->Open', 'AtomicEntry->Recovery', 'AtomicExit->PendingFinality', 'AtomicExit->Recovery', 'Open->AtomicExit', 'Open->Recovery', 'PendingFinality->Final', 'PendingFinality->Open', 'PendingFinality->Recovery', 'PriceFilter->AtomicEntry', 'SyncReports->PriceFilter']),
 		},
 	],
 	[
@@ -404,6 +404,9 @@ for (const [chartId, value] of Object.entries(parsedSpecs)) {
 		if (!collectChartText(value['nodes']).includes('all RPCs agree at +12')) {
 			throw new Error('OpenOracle arbitrager lifecycle chart must visibly identify the all-read-RPC finality quorum')
 		}
+	}
+	if (chartId === 'fig-open-oracle-arbitrager-profit' && !collectChartText(value['nodes']).includes('Modeled: conservative reserves · Tracked: actual hedge and gas so far · Realized: tracked + exact settler reward after finality')) {
+		throw new Error('OpenOracle arbitrager profit chart must include lifecycle gas in tracked profit and the exact settler reward in realized profit')
 	}
 	for (const node of value['nodes']) {
 		assertChartNode(node, chartId)

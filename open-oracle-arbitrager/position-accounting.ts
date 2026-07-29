@@ -5,8 +5,8 @@ export function hedgedProfitBeforeGasWeth(direction: ArbitrageDirection, actualH
 	return direction === 'sell-rep' ? actualHedgeWeth - openOracleWeth : currentAmount1 - actualHedgeWeth
 }
 
-export function realizedNetProfitWeth(hedgedProfitBeforeGas: bigint, entryGasCost: bigint, lifecycleGasCost: bigint) {
-	return hedgedProfitBeforeGas - entryGasCost - lifecycleGasCost
+export function realizedNetProfitWeth(hedgedProfitBeforeGas: bigint, settlerReward: bigint, entryGasCost: bigint, lifecycleGasCost: bigint) {
+	return hedgedProfitBeforeGas + settlerReward - entryGasCost - lifecycleGasCost
 }
 
 export function recoveredHedgedProfitBeforeGasWeth(direction: ArbitrageDirection, quotedProfitBeforeGas: bigint, quotedHedgeWeth: bigint, actualHedgeWeth: bigint) {

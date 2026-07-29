@@ -88,6 +88,18 @@ const parsedHtmlFormulaSources = async (text: string) => {
 
 const renderedMarkdownParagraphBodies = (text: string) => parsedHtmlParagraphBodies(Bun.markdown.html(text), 'script, style, template, noscript, pre, table, li')
 
+const arbitragerFinalityPhrase = 'every configured read RPC serves the same twelfth-descendant block hash'
+
+function arbitragerFinalityDocumentationIssue(documentation: string) {
+	for (const sectionId of ['architecture', 'math', 'recovery']) {
+		const section = documentation.match(new RegExp(`<section id="${sectionId}">([\\s\\S]*?)(?=<section id=|</main>)`))?.[1]
+		if (section === undefined || !normalizeWhitespace(htmlToVisibleText(section)).includes(arbitragerFinalityPhrase)) {
+			return `OpenOracle arbitrager ${sectionId} section must state the all-read-RPC fixed-height finality rule`
+		}
+	}
+	return undefined
+}
+
 const discouragedDocsPatterns = [
 	{
 		name: 'meta page framing',
@@ -343,6 +355,7 @@ const zoltarWhitepaper = await Bun.file('docs/zoltar-whitepaper.html').text()
 const openOracleIntegration = await Bun.file('docs/open-oracle-integration.html').text()
 const diagramSpecs = await Bun.file('docs/charts/diagramSpecs.json').text()
 const openOracleArbitragerReadme = await Bun.file('open-oracle-arbitrager/README.md').text()
+const openOracleArbitragerDocumentation = await Bun.file('open-oracle-arbitrager/documentation.html').text()
 const operatorReference = await Bun.file('docs/operator-reference.md').text()
 const escalationGameArchitecture = await Bun.file('docs/escalation-game-architecture.html').text()
 const invariantsHtml = await Bun.file('docs/invariants.html').text()
@@ -362,6 +375,8 @@ assert.match(diagramSpecs, /≈5% of theoretical REP supply/)
 assert.match(diagramSpecs, /approximately 20 percent uncredited haircut/)
 assert.match(diagramSpecs, /approximately 80 percent migration balance/)
 assert.match(openOracleArbitragerReadme, /`closed-pending-finality` retains its risk slot and does not contribute\s+realized profit until every configured read RPC serves the same\s+twelfth-descendant block hash for its exact lifecycle evidence\./)
+assert.equal(arbitragerFinalityDocumentationIssue(openOracleArbitragerDocumentation), undefined)
+assert.match(arbitragerFinalityDocumentationIssue(openOracleArbitragerDocumentation.replace(/every configured read RPC serves\s+the same twelfth-descendant block hash/, 'twelve canonical descendants')) ?? '', /architecture section/)
 assert.doesNotMatch(zoltarWhitepaper, /applies to every product built on the same Zoltar deployment/)
 assert.match(zoltarWhitepaper, /Forking affects applications and users relying on that parent universe/)
 assert.doesNotMatch(zoltarWhitepaper, /affects every application and user operating on the same Zoltar deployment/)
