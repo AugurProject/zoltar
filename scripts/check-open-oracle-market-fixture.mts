@@ -129,6 +129,7 @@ async function verifyDocumentedFixture() {
 	const deviation = formatPercent(fixture.reportDeviationBps, 10_000n)
 	const poolFee = formatPercent(fixture.poolFee, 1_000_000n)
 	const visibleValues: Record<string, string> = {
+		blockDate: new Date(Number(fixture.blockTimestamp) * 1_000).toISOString().slice(0, 10),
 		blockNumber: fixture.blockNumber.toLocaleString('en-US'),
 		buyDeviation: `−${deviation}`,
 		buyExecution: `Exact-output quote through the ${poolFee} REP/WETH pool`,
