@@ -31,15 +31,16 @@ function missingReceiptClients(confirmedNonce?: bigint | undefined) {
 	})
 }
 
-function receiptClients(blockNumber = 100n, status: 'reverted' | 'success' = 'reverted', logs: readonly Record<string, unknown>[] = [], receiptTransactionHash = transactionHash) {
-	const blockHash = `0x${'aa'.repeat(32)}`
+function receiptClients(blockNumber = 100n, status: 'reverted' | 'success' = 'reverted', logs: readonly Record<string, unknown>[] = [], receiptTransactionHash = transactionHash, headBlockNumbers: readonly bigint[] = [blockNumber + 12n, blockNumber + 12n]) {
+	const receiptBlockHash = `0x${'aa'.repeat(32)}`
+	const finalityBlockHash = `0x${'cc'.repeat(32)}`
 	const blockNumberHex = `0x${blockNumber.toString(16)}`
-	return ['primary', 'secondary'].map(() => {
+	return ['primary', 'secondary'].map((_, index) => {
 		const provider: EIP1193Provider = {
 			request: parameters => {
 				if (parameters.method === 'eth_getTransactionReceipt') {
 					return Promise.resolve({
-						blockHash,
+						blockHash: receiptBlockHash,
 						blockNumber: blockNumberHex,
 						contractAddress: null,
 						cumulativeGasUsed: '0x5208',
@@ -56,18 +57,24 @@ function receiptClients(blockNumber = 100n, status: 'reverted' | 'success' = 're
 					})
 				}
 				if (parameters.method === 'eth_getBlockByNumber') {
+					if (!Array.isArray(parameters.params)) throw new Error('Receipt test expected block request parameters')
+					const requested = parameters.params[0]
+					if (typeof requested !== 'string' || !/^0x[0-9a-f]+$/i.test(requested)) throw new Error('Receipt test expected a numeric block tag')
+					const requestedBlockNumber = BigInt(requested)
+					const headBlockNumber = headBlockNumbers[index]
+					if (headBlockNumber === undefined || requestedBlockNumber > headBlockNumber) return Promise.resolve(null)
 					return Promise.resolve({
 						baseFeePerGas: '0x1',
 						difficulty: '0x0',
 						extraData: '0x',
 						gasLimit: '0x1c9c380',
 						gasUsed: '0x5208',
-						hash: blockHash,
+						hash: requestedBlockNumber === blockNumber ? receiptBlockHash : finalityBlockHash,
 						logsBloom: `0x${'00'.repeat(256)}`,
 						miner: getAddress('0x0000000000000000000000000000000000000000'),
 						mixHash: `0x${'00'.repeat(32)}`,
 						nonce: '0x0000000000000000',
-						number: blockNumberHex,
+						number: requested,
 						parentHash: `0x${'bb'.repeat(32)}`,
 						receiptsRoot: `0x${'00'.repeat(32)}`,
 						sha3Uncles: `0x${'00'.repeat(32)}`,
@@ -88,7 +95,7 @@ function receiptClients(blockNumber = 100n, status: 'reverted' | 'success' = 're
 	})
 }
 
-function lifecycleReceiptClients(blockNumber = 100n) {
+function lifecycleReceiptClients(blockNumber = 100n, headBlockNumbers?: readonly bigint[] | undefined) {
 	const account = getAddress('0x0000000000000000000000000000000000000002')
 	const topics = encodeEventTopics({
 		abi: openOracleArbitrageExecutorAbi,
@@ -122,6 +129,7 @@ function lifecycleReceiptClients(blockNumber = 100n) {
 			},
 		],
 		lifecycleTransactionHash,
+		headBlockNumbers,
 	)
 }
 
@@ -489,6 +497,26 @@ describe('atomic lifecycle crash recovery', () => {
 		expect(finalized.realizedNetProfitEth).toBe('0.098979')
 		expect(finalized.lifecycleTransactionHashes).toEqual([])
 		expect(finalized.lifecycleReceiptBlockNumber).toBeUndefined()
+	})
+
+	test('retains successful lifecycle evidence until every RPC serves the same finality descendant', async () => {
+		const position = {
+			...confirmedPosition(),
+			lifecycleSubmissionBlockNumber: '99',
+			lifecycleSubmissionMode: 'private' as const,
+			lifecycleTargetBlockNumber: '100',
+			lifecycleTokenDecimals: '18',
+			lifecycleTransactionNonce: '9',
+			lifecycleTransactionHashes: [lifecycleTransactionHash],
+			status: 'withdrawing' as const,
+		}
+		const provisional = await recoverPendingLifecycleWithQuorum(lifecycleReceiptClients(), recoveryConfiguration, position, 100n)
+		const retained = await finalizeLifecycleAfterFinalityWithQuorum(lifecycleReceiptClients(100n, [112n, 100n]), recoveryConfiguration, provisional, 112n)
+		expect(retained.status).toBe('closed-pending-finality')
+		expect(retained.lifecycleReceiptBlockHash).toBe(provisional.lifecycleReceiptBlockHash)
+		expect(retained.lifecycleReceiptBlockNumber).toBe('100')
+		expect(retained.lifecycleTransactionHashes).toEqual([lifecycleTransactionHash])
+		expect(retained.realizedNetProfitEth).toBeUndefined()
 	})
 
 	test('reopens a lifecycle and removes provisional gas when its successful receipt is reorged out', async () => {

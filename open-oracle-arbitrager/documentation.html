@@ -56,8 +56,9 @@
 						<span class="plot-chart-fallback"
 							>Reports are synchronized and priced before one atomic entry hedges
 							and disputes. An atomic exit settles and withdraws exact balances.
-							Profit becomes realized only after twelve canonical descendants;
-							ambiguous evidence stays in durable recovery.</span
+							Profit becomes realized only after every read RPC agrees on the
+							twelfth canonical descendant; ambiguous evidence stays in durable
+							recovery.</span
 						>
 					</div>
 					<p class="diagram-caption">
@@ -440,7 +441,7 @@
 					<li>
 						Open hedged net uses actual executor hedge evidence and gas recorded so
 						far. Realized net additionally requires exact withdrawal evidence and
-						twelve canonical descendants.
+						agreement from every read RPC on the twelfth canonical descendant.
 					</li>
 				</ul>
 			</section>
@@ -519,9 +520,10 @@
 				<p>
 					A successful lifecycle receipt is provisional. The bot retains its
 					transaction hash, receipt block number and hash, exact withdrawals, gas,
-					and risk slot until twelve canonical descendants exist. It then rereads
-					the receipt through the independent RPC quorum before releasing risk and
-					recording realized profit.
+					and risk slot until it rereads the receipt and every configured read RPC
+					serves the same twelfth-descendant block hash. A lagging RPC delays
+					closure; the primary RPC's head alone cannot release risk or record
+					realized profit.
 				</p>
 				<p>
 					If a shallow reorganization removes that receipt, provisional gas and

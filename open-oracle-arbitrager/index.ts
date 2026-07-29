@@ -1461,6 +1461,21 @@ export async function recoverPendingLifecycleWithQuorum(readClients: readonly Re
 	}
 }
 
+async function finalityDescendantHashWithQuorum(readClients: readonly ReadClient[], config: RecoveryConfiguration, reportId: string, blockNumber: bigint) {
+	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
+	if (readClients.length !== endpoints.length) throw new Error(`Lifecycle finality ${reportId} block readers and endpoints differ`)
+	const blocks = await Promise.allSettled(readClients.map(client => client.getBlock({ blockNumber })))
+	const observations: { endpoint: string; value: Hex }[] = []
+	for (const [index, result] of blocks.entries()) {
+		if (result.status === 'rejected' || result.value.hash == null) return undefined
+		observations.push({
+			endpoint: endpointLabel(endpoints[index] ?? ''),
+			value: result.value.hash,
+		})
+	}
+	return quorumValue(`lifecycle ${reportId} finality descendant ${blockNumber.toString()}`, observations)
+}
+
 export async function finalizeLifecycleAfterFinalityWithQuorum(readClients: readonly ReadClient[], config: RecoveryConfiguration, position: PositionRecord, currentBlockNumber: bigint): Promise<PositionRecord> {
 	if (position.status !== 'closed-pending-finality') return position
 	if (position.lifecycleReceiptBlockNumber === undefined || position.lifecycleReceiptBlockHash === undefined) throw new Error('Pending lifecycle finality evidence is incomplete')
@@ -1469,6 +1484,8 @@ export async function finalizeLifecycleAfterFinalityWithQuorum(readClients: read
 	const refreshed = await recoverPendingLifecycleWithQuorum(readClients, config, position, currentBlockNumber)
 	if (refreshed.status !== 'closed-pending-finality') return refreshed
 	if (refreshed.lifecycleReceiptBlockNumber === undefined || !attemptHasFinality(currentBlockNumber, BigInt(refreshed.lifecycleReceiptBlockNumber))) return refreshed
+	const finalityDescendantBlockNumber = BigInt(refreshed.lifecycleReceiptBlockNumber) + REORG_OVERLAP_BLOCKS
+	if ((await finalityDescendantHashWithQuorum(readClients, config, refreshed.reportId, finalityDescendantBlockNumber)) === undefined) return refreshed
 	const closedAt = refreshed.lifecycleUpdatedAt
 	if (closedAt === undefined) throw new Error('Finalized lifecycle receipt timestamp is unavailable')
 	const realized = realizedNetProfitWeth(parseSignedDecimalEth(refreshed.hedgedProfitBeforeGasEth), parseDecimalWeth(refreshed.actualEntryGasCostEth), parseDecimalWeth(refreshed.lifecycleGasCostEth))

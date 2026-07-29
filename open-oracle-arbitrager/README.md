@@ -33,8 +33,9 @@ executor, which swaps the required inventory atomically and submits the OpenOrac
 dispute while preserving the wallet as the replacement reporter. After the dispute
 window, the bot settles the final report, withdraws the position's exact OpenOracle
 balances, and closes its durable position record only after canonical receipts and
-exact asset recovery agree through 12 canonical descendants. If a later reporter
-replaced the bot, automatic
+exact asset recovery agree through 12 canonical descendants and every configured
+read RPC serves the same twelfth-descendant block hash. If a later reporter replaced
+the bot, automatic
 lifecycle execution fails closed because aggregate holder balances cannot prove
 which returned assets belong to that position; the operator must reconcile the
 replacement manually.
@@ -404,11 +405,12 @@ Before each dispute, the bot:
     internal transfers, WETH/token withdrawals, and the canonical parent check share
     one revert boundary. It records realized P&amp;L only when the canonical receipt
     contains the executor event matching the position's account, report, tokens, and
-    amounts and remains canonical through 12 descendants. Before that point the
-    position is `closed-pending-finality`, still consumes its risk slot, and is
-    automatically reopened if the receipt disappears in a reorganization. A later
-    reporter replacement fails closed for manual reconciliation; aggregate holder
-    balances are never treated as position attribution evidence.
+    amounts, remains canonical through 12 descendants, and every configured read RPC
+    serves the same twelfth-descendant block hash. Before that point the position is
+    `closed-pending-finality`, still consumes its risk slot, and is automatically
+    reopened if the receipt disappears in a reorganization. A later reporter
+    replacement fails closed for manual reconciliation; aggregate holder balances
+    are never treated as position attribution evidence.
 
 The executor atomically swaps the old report inventory through the authenticated
 router, pulls the calculated contribution, verifies exact balance deltas into itself
@@ -942,9 +944,10 @@ balance deltas and `withdraw(max)` are not accounting evidence, so permissionles
 OpenOracle dust, unrelated transfers, and other positions sharing a token remain
 separate. Exact successful evidence first moves the record to
 `closed-pending-finality`. The bot retains the risk slot and transaction evidence
-until 12 canonical descendants; it then realizes profit, or removes provisional
-withdrawal and gas accounting and reopens the position if the receipt was reorged
-out.
+until all configured read RPCs serve the same twelfth-descendant block hash; it then
+realizes profit, or removes provisional withdrawal and gas accounting and reopens
+the position if the receipt was reorged out. A lagging or unavailable quorum RPC
+therefore delays closure rather than releasing the slot from the primary RPC's head.
 
 ### `recovery-required` runbook
 
@@ -1064,9 +1067,9 @@ entry from depending on wallet inventory already committed to recovery.
   submission and recovered on restart. A pending entry advances only after every
   recorded bundle receipt, mined gas price, canonical receipt-block hash, and
   executor event agree; a lifecycle attempt realizes profit and releases risk only
-  after its canonical receipt and exact executor event agree through 12 descendants.
-  Unavailable or inconsistent evidence fails closed under the recovery runbook
-  above.
+  after its canonical receipt and exact executor event agree and every read RPC
+  serves the same twelfth-descendant block hash. Unavailable, lagging, or
+  inconsistent evidence fails closed under the recovery runbook above.
 - No automated trading system can guarantee that users never lose money. Reorgs,
   correlated RPC lies, relay/builder faults, base-fee spikes, malicious or rebasing
   tokens, OpenOracle/Uniswap defects, compromised keys, and market movement can
