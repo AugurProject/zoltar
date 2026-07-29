@@ -7,7 +7,7 @@ import { ABIS } from '../../../abis.js'
 import { approveErc20, createOpenOracleReportInstance, disputeOracleReport, getOpenOracleAddress, isOpenOracleReportMissingError, loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, readOptionalMulticall, settleOracleReport, withdrawOpenOracleBalance } from '../../../protocol/index.js'
 import { assertNever } from '../../../lib/assert.js'
 import { createConnectedReadClient, createWalletWriteClient } from '../../../lib/clients.js'
-import { getErrorMessage } from '../../../lib/errors.js'
+import { getErrorMessage, isRecoverableContractReadError } from '../../../lib/errors.js'
 import {
 	deriveOpenOracleDisputeSubmissionDetails,
 	formatOpenOracleDisputeWriteErrorMessage,
@@ -79,10 +79,9 @@ const defaultUseOpenOracleOperationsDependencies: UseOpenOracleOperationsDepende
 	withdrawOpenOracleBalance: async (client, openOracleAddress, token, amount, recipient) => await withdrawOpenOracleBalance(client, openOracleAddress, token, amount, recipient),
 }
 
-function requireTokenDecimals(value: unknown, label: string) {
+function parseTokenDecimals(value: unknown) {
 	const decimals = Number(value)
-	if (!Number.isInteger(decimals) || decimals < 0 || decimals > 255) throw new Error(`Unexpected ${label} decimals response`)
-	return decimals
+	return Number.isInteger(decimals) && decimals >= 0 && decimals <= 255 ? decimals : undefined
 }
 
 type CreateTokenDecimalsReadResult = { decimals: number; status: 'success' } | { message: string; status: 'failure' }
@@ -90,8 +89,10 @@ type CreateTokenDecimalsReadResult = { decimals: number; status: 'success' } | {
 async function readCreateTokenDecimals(readClient: OpenOracleReadClient, address: Address, label: 'Base' | 'Quote'): Promise<CreateTokenDecimalsReadResult> {
 	try {
 		const value = await readClient.readContract({ abi: ABIS.mainnet.erc20, address, args: [], functionName: 'decimals' })
-		return { decimals: requireTokenDecimals(value, `${label} token`), status: 'success' }
-	} catch {
+		const decimals = parseTokenDecimals(value)
+		return decimals === undefined ? { message: `${label} token address is not a readable ERC-20 contract.`, status: 'failure' } : { decimals, status: 'success' }
+	} catch (error) {
+		if (!isRecoverableContractReadError(error)) throw error
 		return { message: `${label} token address is not a readable ERC-20 contract.`, status: 'failure' }
 	}
 }

@@ -1849,8 +1849,8 @@ describe('useOpenOracleOperations', () => {
 			}))
 		})
 		await act(async () => {
-			token1Decimals.reject(new Error('base token contract unavailable'))
-			token2Decimals.reject(new Error('quote token contract unavailable'))
+			token1Decimals.reject(new Error('base token contract function returned no data'))
+			token2Decimals.reject(new Error('quote token contract function returned no data'))
 			await createPromise
 		})
 
@@ -1939,6 +1939,44 @@ describe('useOpenOracleOperations', () => {
 		})
 		expect(onTransactionRequested).not.toHaveBeenCalled()
 		expect(createOpenOracleReportInstance).not.toHaveBeenCalled()
+	})
+
+	test('rethrows unexpected token contract preflight failures', async () => {
+		const unexpectedError = new TypeError('unexpected token dependency failure')
+		const dependencies = createOpenOracleOperationsDependencies({
+			createConnectedReadClient: mock(() => ({
+				getBalance: mock(async () => 5n * 10n ** 18n),
+				getBlockNumber: mock(async () => 123n),
+				readContract: mock(async () => {
+					throw unexpectedError
+				}),
+			})),
+		})
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			requireHookState(hookState).setOpenOracleCreateForm(current => ({
+				...current,
+				disputeDelay: '0',
+				exactToken1Report: '10',
+				initialToken2Amount: '5',
+				settlementTime: '1',
+				token1Address: TOKEN1_ADDRESS,
+				token2Address: TOKEN2_ADDRESS,
+			}))
+		})
+
+		await expect(
+			act(async () => {
+				await requireHookState(hookState).createOpenOracleGame()
+			}),
+		).rejects.toBe(unexpectedError)
+		expect(requireHookState(hookState).openOracleCreateFieldErrors).toEqual({})
 	})
 
 	test('disputeReport snapshots the submitted dispute inputs before token access refresh resolves', async () => {
