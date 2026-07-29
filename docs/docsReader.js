@@ -100,7 +100,9 @@ const searchInput = document.querySelector('[data-doc-search]')
 const searchStatus = document.querySelector('[data-search-status]')
 const searchResults = document.querySelector('[data-search-results]')
 const emptyState = document.querySelector('[data-reader-empty]')
+const emptyStateGuidance = document.querySelector('[data-reader-empty-guidance]')
 const clearSearchButton = document.querySelector('[data-clear-search]')
+const retrySearchButton = document.querySelector('[data-retry-search]')
 const progress = document.querySelector('[data-reading-progress]')
 const chapterByPath = new Map()
 const frameWrapByPath = new Map()
@@ -118,6 +120,12 @@ let activePath
 let navigationVersion = 0
 let pendingReaderScroll
 let readerScrollStabilizationTimeout
+const initialSearchIndex = window.docsReaderSearchIndex
+let readerSearchIndex = isSearchIndex(initialSearchIndex) ? initialSearchIndex : undefined
+let searchIndexState = readerSearchIndex === undefined ? 'idle' : 'ready'
+let searchIndexRequest
+let searchIndexEngaged = false
+let searchIndexRecoveryNotice = false
 const readerFrame = createDocumentFrame()
 
 window.history.scrollRestoration = 'manual'
@@ -143,12 +151,61 @@ function decodeFragment(fragment) {
 	}
 }
 
+function outlineSections(path) {
+	const outline = window.docsReaderOutline
+	if (typeof outline !== 'object' || outline === null || !Array.isArray(outline[path])) return []
+	return outline[path]
+}
+
+function isSearchIndex(index) {
+	if (typeof index !== 'object' || index === null || Array.isArray(index)) return false
+	return documents.every(documentEntry => {
+		const entry = index[documentEntry.path]
+		if (typeof entry !== 'object' || entry === null || typeof entry.intro !== 'string' || !Array.isArray(entry.sections)) return false
+		return entry.sections.every(section => typeof section === 'object' && section !== null && typeof section.id === 'string' && (section.kind === 'section' || section.kind === 'tool') && typeof section.text === 'string' && typeof section.title === 'string')
+	})
+}
+
 function searchEntry(path) {
-	const index = window.docsReaderSearchIndex
-	if (typeof index !== 'object' || index === null) return undefined
-	const entry = index[path]
-	if (typeof entry !== 'object' || entry === null || typeof entry.text !== 'string' || !Array.isArray(entry.sections)) return undefined
+	if (readerSearchIndex === undefined) return undefined
+	const entry = readerSearchIndex[path]
+	if (typeof entry !== 'object' || entry === null || typeof entry.intro !== 'string' || !Array.isArray(entry.sections)) return undefined
 	return entry
+}
+
+function failSearchIndex() {
+	readerSearchIndex = undefined
+	searchIndexState = 'failed'
+}
+
+async function loadSearchIndex() {
+	const response = await fetch('./docsReaderSearchIndex.json').catch(() => undefined)
+	if (response === undefined || !response.ok) {
+		failSearchIndex()
+		return
+	}
+	const index = await response.json().catch(() => undefined)
+	if (!isSearchIndex(index)) {
+		failSearchIndex()
+		return
+	}
+	readerSearchIndex = index
+	searchIndexState = 'ready'
+}
+
+async function ensureSearchIndex() {
+	searchIndexEngaged = true
+	if (searchIndexState === 'ready' || searchIndexState === 'failed') return
+	if (searchIndexRequest !== undefined) return searchIndexRequest
+	searchIndexState = 'loading'
+	applySearch()
+	searchIndexRequest = loadSearchIndex()
+	try {
+		await searchIndexRequest
+	} finally {
+		searchIndexRequest = undefined
+		applySearch()
+	}
 }
 
 function sectionLink(path, section) {
@@ -157,7 +214,7 @@ function sectionLink(path, section) {
 	link.href = `#${chapterId(path)}--${encodeURIComponent(section.id)}`
 	link.dataset.documentPath = path
 	link.dataset.documentFragment = section.id
-	link.dataset.searchText = `${section.title} ${section.text}`.toLowerCase()
+	link.dataset.searchText = section.title.toLowerCase()
 	if (section.kind === 'tool') {
 		link.className = 'reader-nav-tool-link'
 		const label = document.createElement('span')
@@ -202,7 +259,7 @@ function createNavigation() {
 			const sectionList = document.createElement('ul')
 			sectionList.className = 'reader-nav-sections'
 			sectionList.setAttribute('aria-label', `${documentEntry.title} sections and tools`)
-			for (const section of searchEntry(documentEntry.path)?.sections ?? []) {
+			for (const section of outlineSections(documentEntry.path)) {
 				sectionList.append(sectionLink(documentEntry.path, section))
 			}
 			documentElement.append(link, sectionList)
@@ -770,7 +827,7 @@ function renderSearchResults(results, tokens) {
 
 	const heading = document.createElement('p')
 	heading.className = 'reader-search-results-heading'
-	heading.textContent = 'Best matching sections'
+	heading.textContent = 'Best matches'
 	const list = document.createElement('ol')
 	const queryPhrase = tokens.join(' ')
 	const rankedResults = results.toSorted((left, right) => {
@@ -812,7 +869,8 @@ function applySearch() {
 
 	for (const documentEntry of documents) {
 		const entry = searchEntry(documentEntry.path)
-		const documentText = `${documentEntry.title} ${documentEntry.description} ${entry?.text ?? ''}`
+		const sectionText = entry?.sections.map(section => `${section.title} ${section.text}`).join(' ') ?? ''
+		const documentText = `${documentEntry.title} ${documentEntry.description} ${entry?.intro ?? ''} ${sectionText}`
 		const documentMatches = tokens.length === 0 || includesTokens(documentText, tokens)
 		if (documentMatches) matchingPaths.add(documentEntry.path)
 		const navigationDocument = navigationDocumentByPath.get(documentEntry.path)
@@ -820,12 +878,14 @@ function applySearch() {
 
 		for (const link of navigationDocument?.querySelectorAll('a[data-search-text]') ?? []) {
 			if (!(link instanceof HTMLAnchorElement)) continue
-			const sectionMatches = tokens.length === 0 || includesTokens(link.dataset.searchText ?? '', tokens)
+			const indexedSection = entry?.sections.find(section => section.id === link.dataset.documentFragment)
+			const indexedText = indexedSection === undefined ? (link.dataset.searchText ?? '') : `${indexedSection.title} ${indexedSection.text}`
+			const sectionMatches = tokens.length === 0 || includesTokens(indexedText, tokens)
 			link.parentElement?.toggleAttribute('hidden', !sectionMatches)
 		}
 
-		if (tokens.length === 0 || entry === undefined) continue
-		const matchingEntrySections = entry.sections.filter(section => includesTokens(`${section.title} ${section.text}`, tokens))
+		if (tokens.length === 0) continue
+		const matchingEntrySections = entry?.sections.filter(section => includesTokens(`${section.title} ${section.text}`, tokens)) ?? []
 		matchingSections += matchingEntrySections.length
 		for (const section of matchingEntrySections) {
 			results.push({
@@ -843,7 +903,7 @@ function applySearch() {
 				fragment: '',
 				kind: 'document',
 				path: documentEntry.path,
-				text: entry.text,
+				text: entry?.intro || documentEntry.description,
 				title: documentEntry.title,
 			})
 		}
@@ -857,17 +917,31 @@ function applySearch() {
 	}
 
 	if (searchStatus instanceof HTMLElement) {
-		if (tokens.length === 0) {
-			searchStatus.textContent = `${documents.length} documents`
+		if (searchIndexState === 'loading') {
+			searchStatus.textContent = 'Loading full-text search…'
+		} else if (searchIndexState === 'failed' && tokens.length === 0) {
+			searchStatus.textContent = 'Full-text search unavailable; titles and summaries remain searchable'
+		} else if (searchIndexRecoveryNotice && searchIndexState === 'ready') {
+			searchStatus.textContent =
+				tokens.length === 0 ? `Full-text search restored; ${documents.length} documents` : `Full-text search restored; ${matchingPaths.size} ${matchingPaths.size === 1 ? 'document' : 'documents'} and ${matchingSections} matching ${matchingSections === 1 ? 'section or tool' : 'sections or tools'}`
+			searchIndexRecoveryNotice = false
+		} else if (tokens.length === 0) {
+			searchStatus.textContent = searchIndexEngaged && searchIndexState === 'ready' ? `Full-text search ready; ${documents.length} documents` : `${documents.length} documents`
 		} else if (matchingPaths.size === 0) {
-			searchStatus.textContent = 'No matching documents'
+			searchStatus.textContent = searchIndexState === 'failed' ? 'No title or summary matches; full-text search is unavailable' : 'No matching documents'
 		} else {
-			searchStatus.textContent = `${matchingPaths.size} ${matchingPaths.size === 1 ? 'document' : 'documents'} and ${matchingSections} matching ${matchingSections === 1 ? 'section or tool' : 'sections or tools'}`
+			const availability = searchIndexState === 'failed' ? '; full-text search is unavailable' : ''
+			searchStatus.textContent = `${matchingPaths.size} ${matchingPaths.size === 1 ? 'document' : 'documents'} and ${matchingSections} matching ${matchingSections === 1 ? 'section or tool' : 'sections or tools'}${availability}`
 		}
 	}
 	renderSearchResults(results, tokens)
-	if (emptyState instanceof HTMLElement) emptyState.hidden = tokens.length === 0 || matchingPaths.size > 0
-	if (documentsContainer instanceof HTMLElement) documentsContainer.hidden = tokens.length > 0 && matchingPaths.size === 0
+	const searchIsSettled = searchIndexState !== 'loading'
+	if (emptyState instanceof HTMLElement) emptyState.hidden = tokens.length === 0 || matchingPaths.size > 0 || !searchIsSettled
+	if (emptyStateGuidance instanceof HTMLElement) {
+		emptyStateGuidance.textContent = searchIndexState === 'failed' ? 'Only document titles and summaries are searchable while full-text search is unavailable. Retry full-text search from the contents panel.' : 'Search checks document titles, summaries, and the full rendered text.'
+	}
+	if (retrySearchButton instanceof HTMLButtonElement) retrySearchButton.hidden = searchIndexState !== 'failed'
+	if (documentsContainer instanceof HTMLElement) documentsContainer.hidden = tokens.length > 0 && matchingPaths.size === 0 && searchIsSettled
 }
 
 function updateReaderBusyState() {
@@ -930,7 +1004,16 @@ searchResults?.addEventListener('click', handleReaderNavigationClick)
 navigationToggle?.addEventListener('click', () => {
 	setNavigationOpen(!document.body.classList.contains('reader-navigation-open'))
 })
-searchInput?.addEventListener('input', applySearch)
+searchInput?.addEventListener('focus', () => void ensureSearchIndex())
+searchInput?.addEventListener('input', () => {
+	if (searchInput instanceof HTMLInputElement && searchInput.value.trim().length > 0) void ensureSearchIndex()
+	applySearch()
+})
+retrySearchButton?.addEventListener('click', () => {
+	searchIndexState = 'idle'
+	searchIndexRecoveryNotice = true
+	void ensureSearchIndex()
+})
 clearSearchButton?.addEventListener('click', () => {
 	if (!(searchInput instanceof HTMLInputElement)) return
 	searchInput.value = ''

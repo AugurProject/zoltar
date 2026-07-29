@@ -48,10 +48,18 @@
 						/>
 						<kbd aria-hidden="true">/</kbd>
 					</label>
-					<p class="reader-search-status" aria-live="polite" data-search-status>
-						14 documents
-					</p>
-					<div class="reader-search-results" hidden data-search-results></div>
+						<p class="reader-search-status" aria-live="polite" data-search-status>
+							14 documents
+						</p>
+						<button
+							class="reader-search-retry"
+							type="button"
+							hidden
+							data-retry-search
+						>
+							Retry full-text search
+						</button>
+						<div class="reader-search-results" hidden data-search-results></div>
 
 					<nav data-reader-navigation></nav>
 				</div>
@@ -59,9 +67,11 @@
 
 			<main id="reader-content" class="reader-content" tabindex="-1">
 				<div class="reader-empty" hidden data-reader-empty>
-					<p class="reader-kicker">No matches</p>
-					<h2>Try a broader search.</h2>
-					<p>Search checks document titles, summaries, and the full rendered text.</p>
+						<p class="reader-kicker">No matches</p>
+						<h2>Try a broader search.</h2>
+						<p data-reader-empty-guidance>
+							Search checks document titles, summaries, and the full rendered text.
+						</p>
 					<button type="button" data-clear-search>Clear search</button>
 				</div>
 

@@ -6,8 +6,11 @@ import { Element, Node, Window } from 'happy-dom'
 import { markdownHeadingIds } from './docs-markdown-anchors.mts'
 
 const repositoryRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
-const outputPath = path.join(repositoryRoot, 'docs/docsReaderMarkdown.js')
+const markdownOutputPath = path.join(repositoryRoot, 'docs/docsReaderMarkdown.js')
+const searchIndexOutputPath = path.join(repositoryRoot, 'docs/docsReaderSearchIndex.json')
 const readerShellPaths = new Set(['documentation.html'])
+const maximumEagerReaderBytes = 250_000
+const maximumSearchIndexBytes = 500_000
 
 type ReaderSearchSection = {
 	id: string
@@ -17,8 +20,8 @@ type ReaderSearchSection = {
 }
 
 type ReaderSearchEntry = {
+	intro: string
 	sections: ReaderSearchSection[]
-	text: string
 }
 
 function normalizedElementText(content: string): string {
@@ -51,6 +54,28 @@ function headingSectionText(heading: Element): string {
 	return normalizedElementText(fragments.join(' '))
 }
 
+function leadingDocumentText(searchRoot: Element): string {
+	const fragments: string[] = []
+	let reachedFirstSection = false
+	const visit = (node: Node) => {
+		if (reachedFirstSection) return
+		if (isElementNode(node)) {
+			if (node.tagName.toLowerCase() === 'h2') {
+				reachedFirstSection = true
+				return
+			}
+			if (node.matches('script, style, nav, .sidebar, .skip-link')) return
+		}
+		if (node.nodeType === 3) {
+			fragments.push(node.textContent ?? '')
+			return
+		}
+		for (const child of Array.from(node.childNodes)) visit(child)
+	}
+	visit(searchRoot)
+	return normalizedElementText(fragments.join(' '))
+}
+
 function buildSearchEntry(relativePath: string, html: string): ReaderSearchEntry {
 	const pageWindow = new Window()
 	pageWindow.document.write(html)
@@ -59,65 +84,55 @@ function buildSearchEntry(relativePath: string, html: string): ReaderSearchEntry
 	const sections: ReaderSearchSection[] = []
 	const sectionIds = new Set<string>()
 	const indexedToolIds = new Set<string>()
+	let headingIndex = 0
+	let toolIndex = 0
 
-	for (const [index, heading] of Array.from(searchRoot.querySelectorAll('h2')).entries()) {
-		const title = normalizedElementText(heading.textContent ?? '') || `Section ${index + 1}`
-		const containingSection = heading.closest('section[id], article[id]')
-		const id = heading.id || containingSection?.id
-		assert(id !== undefined && id.length > 0, `${relativePath} h2 "${title}" needs a stable source fragment id`)
-		assert(!sectionIds.has(id), `${relativePath} h2 "${title}" reuses indexed fragment #${id}`)
-		const target = pageWindow.document.getElementById(id)
-		assert(target !== null, `${relativePath} h2 "${title}" indexes missing source fragment #${id}`)
-		sectionIds.add(id)
-		const kind = target.matches('.interactive-example[id]') ? 'tool' : 'section'
-		let text: string
-		if (kind === 'tool') {
-			text = searchText(target)
-		} else if (containingSection === null) {
-			text = headingSectionText(heading)
-		} else {
-			text = searchText(containingSection, true)
+	for (const candidate of Array.from(searchRoot.querySelectorAll('h2, .interactive-example[id]'))) {
+		if (candidate.matches('h2')) {
+			headingIndex += 1
+			const title = normalizedElementText(candidate.textContent ?? '') || `Section ${headingIndex}`
+			const containingSection = candidate.closest('section[id], article[id]')
+			const id = candidate.id || containingSection?.id
+			assert(id !== undefined && id.length > 0, `${relativePath} h2 "${title}" needs a stable source fragment id`)
+			assert(!sectionIds.has(id), `${relativePath} h2 "${title}" reuses indexed fragment #${id}`)
+			const target = pageWindow.document.getElementById(id)
+			assert(target !== null, `${relativePath} h2 "${title}" indexes missing source fragment #${id}`)
+			sectionIds.add(id)
+			const kind = target.matches('.interactive-example[id]') ? 'tool' : 'section'
+			let text: string
+			if (kind === 'tool') {
+				text = searchText(target)
+			} else if (containingSection === null) {
+				text = headingSectionText(candidate)
+			} else {
+				text = searchText(containingSection, true)
+			}
+			if (kind === 'tool') indexedToolIds.add(id)
+			sections.push({ id, kind, text, title })
+			continue
 		}
-		if (kind === 'tool') indexedToolIds.add(id)
-		sections.push({ id, kind, text, title })
-	}
 
-	for (const [index, tool] of Array.from(searchRoot.querySelectorAll('.interactive-example[id]')).entries()) {
-		const id = tool.id
+		if (candidate.querySelector('h2') !== null) continue
+		toolIndex += 1
+		const id = candidate.id
 		if (id.length === 0 || indexedToolIds.has(id)) continue
-		const title = normalizedElementText(tool.querySelector('summary')?.textContent ?? tool.getAttribute('aria-label') ?? '') || `Interactive tool ${index + 1}`
-		assert(pageWindow.document.getElementById(id) === tool, `${relativePath} tool "${title}" indexes missing source fragment #${id}`)
-		sections.push({ id, kind: 'tool', text: searchText(tool), title })
+		const title = normalizedElementText(candidate.querySelector('summary')?.textContent ?? candidate.getAttribute('aria-label') ?? '') || `Interactive tool ${toolIndex}`
+		assert(pageWindow.document.getElementById(id) === candidate, `${relativePath} tool "${title}" indexes missing source fragment #${id}`)
+		sections.push({ id, kind: 'tool', text: searchText(candidate), title })
 	}
 
-	const sourceOrder = new Map<string, number>()
-	for (const [index, target] of [searchRoot, ...Array.from(searchRoot.querySelectorAll('[id]'))].entries()) {
-		if (target.id.length > 0 && !sourceOrder.has(target.id)) sourceOrder.set(target.id, index)
-	}
-	const targetOrder = (section: ReaderSearchSection) => {
-		const order = sourceOrder.get(section.id)
-		assert(order !== undefined, `${relativePath} indexed fragment #${section.id} is missing from source order`)
-		return order
-	}
-	const orderedSections = sections.toSorted((left, right) => targetOrder(left) - targetOrder(right))
-	sections.sort((left, right) => targetOrder(left) - targetOrder(right))
-	assert.deepEqual(
-		sections.map(section => section.id),
-		orderedSections.map(section => section.id),
-		`${relativePath} indexed sections and tools must preserve source order`,
-	)
-
-	const text = searchText(searchRoot)
+	const intro = leadingDocumentText(searchRoot)
 	pageWindow.close()
-	assert(text.length > 0, `${relativePath} must provide searchable reader text`)
-	return { sections, text }
+	assert(intro.length > 0 || sections.length > 0, `${relativePath} must provide searchable reader text`)
+	return { intro, sections }
 }
 
 async function collectReaderDocumentPaths(): Promise<string[]> {
 	const runtime = await readFile(path.join(repositoryRoot, 'docs/docsReader.js'), 'utf8')
 	assert(runtime.includes("frame.loading = 'lazy'"), 'docs reader frames must load on demand')
 	assert(!runtime.includes("frame.loading = 'eager'"), 'docs reader must not eagerly load the full corpus')
-	assert(runtime.includes('window.docsReaderSearchIndex'), 'docs reader must search the generated full-corpus index')
+	assert(runtime.includes("'./docsReaderSearchIndex.json'"), 'docs reader must load the generated full-corpus index on demand')
+	assert(runtime.includes('window.docsReaderOutline'), 'docs reader must use the eager compact document outline')
 	const documentPaths = Array.from(runtime.matchAll(/\n\s+path: '([^']+\.(?:html|md))',/g), match => match[1]).filter(path => path !== undefined)
 	assert(documentPaths.length > 0, 'docs/docsReader.js must declare at least one reader document')
 	assert.equal(new Set(documentPaths).size, documentPaths.length, 'docs/docsReader.js reader document paths must be unique')
@@ -200,14 +215,16 @@ const searchEntries = Object.fromEntries(
 	),
 )
 
-const output = `// Generated by scripts/build-docs-reader.mts. Do not edit directly.\nwindow.docsReaderMarkdown = ${JSON.stringify(renderedDocuments)}\nwindow.docsReaderSearchIndex = ${JSON.stringify(searchEntries)}\n`
+const outlines = Object.fromEntries(Object.entries(searchEntries).map(([documentPath, entry]) => [documentPath, entry.sections.map(({ id, kind, title }) => ({ id, kind, title }))]))
+const markdownOutput = `// Generated by scripts/build-docs-reader.mts. Do not edit directly.\nwindow.docsReaderMarkdown = ${JSON.stringify(renderedDocuments)}\nwindow.docsReaderOutline = ${JSON.stringify(outlines)}\n`
+const searchIndexOutput = `${JSON.stringify(searchEntries)}\n`
+assert(Buffer.byteLength(markdownOutput) <= maximumEagerReaderBytes, `docs/docsReaderMarkdown.js exceeds its ${maximumEagerReaderBytes.toLocaleString()} byte eager-load budget`)
+assert(Buffer.byteLength(searchIndexOutput) <= maximumSearchIndexBytes, `docs/docsReaderSearchIndex.json exceeds its ${maximumSearchIndexBytes.toLocaleString()} byte lazy-load budget`)
 const checkOnly = process.argv.includes('--check')
 
 if (checkOnly) {
-	const current = await readFile(outputPath, 'utf8').catch(() => '')
-	if (current !== output) {
-		throw new Error('docs/docsReaderMarkdown.js is stale; run bun run docs:build-reader')
-	}
+	const [currentMarkdown, currentSearchIndex] = await Promise.all([readFile(markdownOutputPath, 'utf8').catch(() => ''), readFile(searchIndexOutputPath, 'utf8').catch(() => '')])
+	if (currentMarkdown !== markdownOutput || currentSearchIndex !== searchIndexOutput) throw new Error('Documentation reader bundles are stale; run bun run docs:build-reader')
 } else {
-	await writeFile(outputPath, output)
+	await Promise.all([writeFile(markdownOutputPath, markdownOutput), writeFile(searchIndexOutputPath, searchIndexOutput)])
 }

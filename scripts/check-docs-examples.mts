@@ -858,6 +858,7 @@ async function checkInvariantExplorerStates(): Promise<void> {
 async function checkReaderRuntimeStates(): Promise<void> {
 	const html = await readFile('docs/documentation.html', 'utf8')
 	const generated = await readFile('docs/docsReaderMarkdown.js', 'utf8')
+	const searchIndex = JSON.parse(await readFile('docs/docsReaderSearchIndex.json', 'utf8'))
 	const source = await readFile('docs/docsReader.js', 'utf8')
 	const fetchRequests: Array<{
 		input: string
@@ -871,6 +872,7 @@ async function checkReaderRuntimeStates(): Promise<void> {
 		window.document.close()
 		window.HTMLElement.prototype.scrollIntoView = () => undefined
 		new Function('window', generated)(window)
+		Reflect.set(window, 'docsReaderSearchIndex', searchIndex)
 		const controlledFetch = (input: string) =>
 			new Promise<{ ok: boolean; text: () => Promise<string> }>(resolve => {
 				fetchRequests.push({ input, resolve })
@@ -985,6 +987,121 @@ async function checkReaderRuntimeStates(): Promise<void> {
 		assert.equal(window.location.hash, '#doc-open-oracle-integration--callback-rejection-and-recovery', 'callback search navigation must preserve its section fragment in reader history')
 	} finally {
 		window.close()
+	}
+
+	const lazySearchRequests: Array<{
+		input: string
+		resolve: (response: { json?: () => Promise<unknown>; ok: boolean; status: number; text?: () => Promise<string> }) => void
+	}> = []
+	const lazySearchWindow = new Window({
+		url: 'https://docs.example/documentation.html',
+	})
+	try {
+		lazySearchWindow.document.write(html)
+		lazySearchWindow.document.close()
+		lazySearchWindow.HTMLElement.prototype.scrollIntoView = () => undefined
+		new Function('window', generated)(lazySearchWindow)
+		const controlledFetch = (input: string) =>
+			new Promise<{ json?: () => Promise<unknown>; ok: boolean; status: number; text?: () => Promise<string> }>(resolve => {
+				lazySearchRequests.push({ input, resolve })
+			})
+		const runScript = new Function('window', 'document', 'CustomEvent', 'Element', 'fetch', 'HTMLAnchorElement', 'HTMLButtonElement', 'HTMLDetailsElement', 'HTMLElement', 'HTMLInputElement', 'HTMLTextAreaElement', 'ResizeObserver', 'URL', 'requestAnimationFrame', source)
+		runScript(
+			lazySearchWindow,
+			lazySearchWindow.document,
+			lazySearchWindow.CustomEvent,
+			lazySearchWindow.Element,
+			controlledFetch,
+			lazySearchWindow.HTMLAnchorElement,
+			lazySearchWindow.HTMLButtonElement,
+			lazySearchWindow.HTMLDetailsElement,
+			lazySearchWindow.HTMLElement,
+			lazySearchWindow.HTMLInputElement,
+			lazySearchWindow.HTMLTextAreaElement,
+			undefined,
+			lazySearchWindow.URL,
+			(callback: FrameRequestCallback) => {
+				callback(0)
+				return 1
+			},
+		)
+		assert.deepEqual(
+			lazySearchRequests.map(request => request.input),
+			['./statoblast-whitepaper.html'],
+			'reader startup must not request the full-text search index',
+		)
+		const lazySearchInput = lazySearchWindow.document.querySelector('[data-doc-search]')
+		if (!(lazySearchInput instanceof lazySearchWindow.HTMLInputElement)) throw new Error('Lazy reader search input is missing')
+		const lazySearchStatus = lazySearchWindow.document.querySelector('[data-search-status]')
+		const lazyEmptyState = lazySearchWindow.document.querySelector('[data-reader-empty]')
+		const lazyEmptyGuidance = lazySearchWindow.document.querySelector('[data-reader-empty-guidance]')
+		const lazyRetry = lazySearchWindow.document.querySelector('[data-retry-search]')
+		lazySearchInput.focus()
+		assert.deepEqual(
+			lazySearchRequests.map(request => request.input),
+			['./statoblast-whitepaper.html', './docsReaderSearchIndex.json'],
+			'focusing reader search must request the full-text index on demand',
+		)
+		assert.equal(lazySearchStatus?.textContent, 'Loading full-text search…', 'search focus must announce full-text index loading before a query is entered')
+		const indexRequest = lazySearchRequests[1]
+		if (indexRequest === undefined) throw new Error('Lazy reader search-index request is missing')
+		indexRequest.resolve({ ok: false, status: 503 })
+		for (let attempt = 0; attempt < 6; attempt += 1) await Promise.resolve()
+		assert.equal(lazySearchStatus?.textContent, 'Full-text search unavailable; titles and summaries remain searchable', 'a failed index request must announce its metadata-only fallback before a query is entered')
+		lazySearchInput.value = 'MMR sibling hashes required'
+		lazySearchInput.dispatchEvent(new lazySearchWindow.Event('input', { bubbles: true }))
+		assert.equal(lazySearchStatus?.textContent, 'No title or summary matches; full-text search is unavailable', 'a failed index request must announce the remaining metadata-search scope')
+		assert.equal(lazyEmptyState?.hasAttribute('hidden'), false, 'a failed full-text query must reveal the empty state')
+		assert.match(lazyEmptyGuidance?.textContent ?? '', /Only document titles and summaries are searchable/, 'the failed-index empty state must not promise full-text results')
+		assert.equal(lazyRetry?.hasAttribute('hidden'), false, 'a failed index request must expose a retry action')
+
+		lazySearchInput.value = '256-step limit'
+		lazySearchInput.dispatchEvent(new lazySearchWindow.Event('input', { bubbles: true }))
+		const metadataResult = lazySearchWindow.document.querySelector('[data-search-results] a[data-document-path="deployment-status.html"]')
+		assert.equal(metadataResult?.hasAttribute('data-document-fragment'), false, 'title and summary search must remain available without the full-text index')
+		assert.equal(lazySearchWindow.document.querySelector('.reader-search-results-heading')?.textContent, 'Best matches', 'metadata-only fallback results must use a document-or-section-neutral heading')
+
+		if (!(lazyRetry instanceof lazySearchWindow.HTMLButtonElement)) throw new Error('Lazy reader search retry is missing')
+		lazyRetry.click()
+		assert.equal(lazySearchStatus?.textContent, 'Loading full-text search…', 'retrying the index must announce renewed loading even when a query is present')
+		assert.deepEqual(
+			lazySearchRequests.map(request => request.input),
+			['./statoblast-whitepaper.html', './docsReaderSearchIndex.json', './docsReaderSearchIndex.json'],
+			'retrying full-text search must issue a new index request',
+		)
+		const retryIndexRequest = lazySearchRequests[2]
+		if (retryIndexRequest === undefined) throw new Error('Retried reader search-index request is missing')
+		retryIndexRequest.resolve({
+			json: async () => {
+				throw new TypeError('Response body could not be read')
+			},
+			ok: true,
+			status: 200,
+		})
+		for (let attempt = 0; attempt < 6; attempt += 1) await Promise.resolve()
+		assert.equal(lazySearchStatus?.textContent, '1 document and 0 matching sections or tools; full-text search is unavailable', 'a rejected index response body must restore metadata-only search')
+		assert.equal(lazyRetry.hasAttribute('hidden'), false, 'a rejected index response body must expose retry')
+
+		lazyRetry.click()
+		const malformedIndexRequest = lazySearchRequests[3]
+		if (malformedIndexRequest === undefined) throw new Error('Malformed reader search-index request is missing')
+		malformedIndexRequest.resolve({ json: async () => ({}), ok: true, status: 200 })
+		for (let attempt = 0; attempt < 6; attempt += 1) await Promise.resolve()
+		assert.equal(lazySearchStatus?.textContent, '1 document and 0 matching sections or tools; full-text search is unavailable', 'an incomplete index payload must restore metadata-only search')
+		assert.equal(lazyRetry.hasAttribute('hidden'), false, 'an incomplete index payload must expose retry')
+
+		lazyRetry.click()
+		const recoveredIndexRequest = lazySearchRequests[4]
+		if (recoveredIndexRequest === undefined) throw new Error('Recovered reader search-index request is missing')
+		recoveredIndexRequest.resolve({ json: async () => searchIndex, ok: true, status: 200 })
+		for (let attempt = 0; attempt < 6; attempt += 1) await Promise.resolve()
+		assert.match(lazySearchStatus?.textContent ?? '', /^Full-text search restored;/, 'a successful retry must announce restored full-text search before the next query change')
+		lazySearchInput.value = 'MMR sibling hashes required'
+		lazySearchInput.dispatchEvent(new lazySearchWindow.Event('input', { bubbles: true }))
+		const lazyResult = lazySearchWindow.document.querySelector('[data-search-results] a[data-document-path="merkle-mountain-range.html"]')
+		assert.equal(lazyResult?.getAttribute('data-document-fragment'), 'mmr-proof-planner', 'a retried lazy index must restore full-text tool results')
+	} finally {
+		lazySearchWindow.close()
 	}
 
 	const historyFetchRequests: Array<{

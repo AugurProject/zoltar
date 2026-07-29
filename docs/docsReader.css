@@ -165,6 +165,29 @@ body.doc-reader {
 	font-size: 0.78rem;
 }
 
+.reader-search-retry {
+	width: 100%;
+	margin: -0.45rem 0 1rem;
+	padding: 0.6rem 0.75rem;
+	border: 1px solid var(--reader-accent);
+	border-radius: 0.5rem;
+	background: var(--reader-paper);
+	color: var(--reader-accent);
+	font: inherit;
+	font-size: 0.78rem;
+	font-weight: 800;
+	cursor: pointer;
+}
+
+.reader-search-retry:hover {
+	background: var(--reader-accent-soft);
+}
+
+.reader-search-retry:focus-visible {
+	outline: 3px solid var(--reader-accent);
+	outline-offset: 2px;
+}
+
 .reader-search-results {
 	margin: 0 0 1rem;
 	padding: 0.7rem;
@@ -199,10 +222,14 @@ body.doc-reader {
 	text-decoration: none;
 }
 
-.reader-search-results a:hover,
+.reader-search-results a:hover {
+	background: var(--reader-accent-soft);
+}
+
 .reader-search-results a:focus-visible {
 	background: var(--reader-accent-soft);
-	outline: none;
+	outline: 3px solid var(--reader-accent);
+	outline-offset: 2px;
 }
 
 .reader-search-results a > span {
@@ -622,7 +649,7 @@ body.doc-reader {
 	}
 
 	.reader-nav-toggle:focus-visible {
-		outline: 3px solid var(--reader-accent-soft);
+		outline: 3px solid var(--reader-accent);
 		outline-offset: 2px;
 	}
 
