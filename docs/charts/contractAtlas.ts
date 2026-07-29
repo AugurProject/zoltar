@@ -1,3 +1,4 @@
+import { contractAtlasBehavioralReferences, contractAtlasBehavioralRelationIsCovered } from './contractAtlasBehavioralReferences'
 import { contractAtlasSourceReferences } from './contractAtlasSourceReferences'
 
 export type ContractAtlasKind = 'abstract' | 'contract' | 'interface' | 'library' | 'module'
@@ -118,6 +119,7 @@ export const contractAtlasTestGatewayByTargetId = new Map<string, ContractAtlasT
 	['infra-deployment-status-oracle', 'test-gateway-infra'],
 	['openoracle-core', 'test-gateway-openoracle'],
 	['statoblast-binary-outcomes', 'test-gateway-token'],
+	['statoblast-auction-settlement-base', 'test-gateway-forker'],
 	['statoblast-erc1155', 'test-gateway-token'],
 	['statoblast-escalation-calculations', 'test-gateway-escalation'],
 	['statoblast-escalation-game', 'test-gateway-escalation'],
@@ -197,8 +199,9 @@ export const contractAtlasNodes: ContractAtlasNode[] = [
 	node('statoblast-escalation-types', 'EscalationGameTypes', 'module', 'statoblast-implementation', 0, 6, 'solidity/contracts/peripherals/EscalationGameTypes.sol'),
 	node('statoblast-forker-storage', 'SecurityPoolForkerStorage', 'abstract', 'statoblast-implementation', 1, 0, 'solidity/contracts/peripherals/SecurityPoolForkerStorage.sol'),
 	node('statoblast-forker-base', 'SecurityPoolForkerBase', 'abstract', 'statoblast-implementation', 1, 1, 'solidity/contracts/peripherals/SecurityPoolForkerBase.sol'),
-	node('statoblast-vault-migration-base', 'SecurityPoolForkerVaultMigrationBase', 'abstract', 'statoblast-implementation', 1, 2, 'solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol'),
-	node('statoblast-forker-types', 'SecurityPoolForkerTypes', 'module', 'statoblast-implementation', 1, 3, 'solidity/contracts/peripherals/SecurityPoolForkerTypes.sol'),
+	node('statoblast-auction-settlement-base', 'SecurityPoolForkerAuctionSettlementBase', 'abstract', 'statoblast-implementation', 1, 2, 'solidity/contracts/peripherals/SecurityPoolForkerAuctionSettlementBase.sol'),
+	node('statoblast-vault-migration-base', 'SecurityPoolForkerVaultMigrationBase', 'abstract', 'statoblast-implementation', 1, 3, 'solidity/contracts/peripherals/SecurityPoolForkerVaultMigrationBase.sol'),
+	node('statoblast-forker-types', 'SecurityPoolForkerTypes', 'module', 'statoblast-implementation', 1, 4, 'solidity/contracts/peripherals/SecurityPoolForkerTypes.sol'),
 	node('statoblast-escalation-deposit-context', 'IEscalationGameDepositContext', 'interface', 'statoblast-implementation', 2, 0, 'solidity/contracts/peripherals/EscalationGameDepositDelegate.sol'),
 	node('statoblast-stored-open-oracle-game', 'IStoredOpenOracleGame', 'interface', 'statoblast-implementation', 2, 1, 'solidity/contracts/peripherals/OpenOraclePriceCoordinator.sol'),
 	node('statoblast-deployment-worker-config', 'ISecurityPoolDeploymentWorkerConfiguration', 'interface', 'statoblast-implementation', 2, 2, 'solidity/contracts/peripherals/SecurityPool.sol'),
@@ -272,6 +275,10 @@ export const contractAtlasNodes: ContractAtlasNode[] = [
 	node('test-forker-escrow-child', 'SecurityPoolForkerEscrowAttackChildMock', 'contract', 'tests', 4, 5, 'solidity/contracts/test/peripherals/SecurityPoolForkerAttackMocks.sol'),
 	node('test-auction-settlement-pool', 'AuctionSettlementPoolHarness', 'contract', 'tests', 4, 6, 'solidity/contracts/test/peripherals/SecurityPoolForkerAuctionSettlementHarness.sol'),
 	node('test-forker-auction-settlement', 'SecurityPoolForkerAuctionSettlementHarness', 'contract', 'tests', 4, 7, 'solidity/contracts/test/peripherals/SecurityPoolForkerAuctionSettlementHarness.sol'),
+	node('test-truth-auction-alias-share-token', 'TruthAuctionAliasAttackShareTokenMock', 'contract', 'tests', 0, 6, 'solidity/contracts/test/peripherals/TruthAuctionAliasAttackMocks.sol'),
+	node('test-truth-auction-alias-factory', 'TruthAuctionAliasAttackFactoryMock', 'contract', 'tests', 1, 7, 'solidity/contracts/test/peripherals/TruthAuctionAliasAttackMocks.sol'),
+	node('test-truth-auction-alias-parent', 'TruthAuctionAliasAttackParentMock', 'contract', 'tests', 2, 8, 'solidity/contracts/test/peripherals/TruthAuctionAliasAttackMocks.sol'),
+	node('test-truth-auction-alias-child', 'TruthAuctionAliasAttackChildMock', 'contract', 'tests', 3, 8, 'solidity/contracts/test/peripherals/TruthAuctionAliasAttackMocks.sol'),
 ]
 
 export const contractAtlasInventoryRows = contractAtlasNodes.map(atlasNode => ({
@@ -378,7 +385,8 @@ const contractAtlasSemanticEdges: ContractAtlasEdge[] = [
 	edge('escalation-settlement-forker', 'statoblast-escalation-settlement', 'statoblast-forker-interface', 'calls', 'Checks direct own-fork claim lineage and question outcomes.'),
 
 	// Fork, migration, and truth-auction implementation.
-	sourceDerivedEdge('forker-base-inheritance', 'statoblast-pool-forker', 'statoblast-forker-base', 'inherits'),
+	sourceDerivedEdge('forker-auction-settlement-base-inheritance', 'statoblast-pool-forker', 'statoblast-auction-settlement-base', 'inherits'),
+	sourceDerivedEdge('auction-settlement-base-forker-base', 'statoblast-auction-settlement-base', 'statoblast-forker-base', 'inherits'),
 	sourceDerivedEdge('forker-base-storage', 'statoblast-forker-base', 'statoblast-forker-storage', 'inherits'),
 	sourceDerivedEdge('forker-base-events', 'statoblast-forker-base', 'statoblast-forker-events', 'implements'),
 	sourceDerivedEdge('vault-base-forker-base', 'statoblast-vault-migration-base', 'statoblast-forker-base', 'inherits'),
@@ -390,6 +398,8 @@ const contractAtlasSemanticEdges: ContractAtlasEdge[] = [
 	sourceDerivedEdge('auction-interface-events', 'statoblast-auction-interface', 'statoblast-auction-events', 'inherits'),
 	sourceDerivedEdge('auction-events-implementation', 'statoblast-truth-auction', 'statoblast-auction-events', 'implements'),
 	edge('auction-math', 'statoblast-truth-auction', 'openoracle-math', 'uses', 'Uses full-precision arithmetic for clearing and pro-rata settlement.'),
+	edge('auction-settlement-base-pool', 'statoblast-auction-settlement-base', 'statoblast-security-pool', 'calls', 'Credits purchased REP ownership and auctioned allowance into bidder vault accounting.'),
+	edge('auction-settlement-base-types', 'statoblast-auction-settlement-base', 'statoblast-forker-types', 'uses', 'Updates typed auction claim totals in per-pool fork records.'),
 	sourceDerivedEdge('forker-deploy-vault-delegate', 'statoblast-pool-forker', 'statoblast-vault-migration-delegate', 'deploys'),
 	sourceDerivedEdge('forker-deploy-escalation-delegate', 'statoblast-pool-forker', 'statoblast-escalation-game-forker', 'deploys'),
 	sourceDerivedEdge('forker-deploy-event-emitter', 'statoblast-pool-forker', 'statoblast-event-emitter', 'deploys'),
@@ -466,19 +476,36 @@ const contractAtlasSemanticEdges: ContractAtlasEdge[] = [
 	edge('test-alternating-game-edge', 'test-forker-alternating-game', 'statoblast-escalation-game', 'tests', 'Alternates child game answers across validation reads.'),
 	edge('test-escrow-child-edge', 'test-forker-escrow-child', 'statoblast-security-pool', 'tests', 'Models a malicious child pool during escrow migration.'),
 	edge('test-auction-pool-edge', 'test-auction-settlement-pool', 'statoblast-security-pool', 'tests', 'Provides controlled auction settlement accounting.'),
-	sourceDerivedEdge('test-auction-forker-edge', 'test-forker-auction-settlement', 'statoblast-pool-forker', 'inherits'),
+	sourceDerivedEdge('test-auction-settlement-base-edge', 'test-forker-auction-settlement', 'statoblast-auction-settlement-base', 'inherits'),
+	edge('test-truth-auction-alias-share-token-edge', 'test-truth-auction-alias-share-token', 'statoblast-pool-forker', 'tests', 'Supplies an always-authorized share-token surface to fake-lineage rejection tests.'),
+	edge('test-truth-auction-alias-factory-edge', 'test-truth-auction-alias-factory', 'statoblast-pool-forker', 'tests', 'Returns attacker-selected child and truth-auction addresses to fake-lineage rejection tests.'),
+	edge('test-truth-auction-alias-parent-edge', 'test-truth-auction-alias-parent', 'statoblast-pool-forker', 'tests', 'Models a fake parent attempting to attach an undeployed or canonical truth auction.'),
+	edge('test-truth-auction-alias-child-edge', 'test-truth-auction-alias-child', 'statoblast-pool-forker', 'tests', 'Records and forwards any ETH misrouted through a rejected fake child.'),
 ]
 
 const contractAtlasNodeById = new Map(contractAtlasNodes.map(atlasNode => [atlasNode.id, atlasNode]))
 const semanticPairIds = new Set(contractAtlasSemanticEdges.map(atlasEdge => `${atlasEdge.source}->${atlasEdge.target}`))
+const behavioralReferenceVerbs: Record<(typeof contractAtlasBehavioralReferences)[number]['relation'], string> = {
+	calls: 'Calls',
+	tests: 'Test helper invokes',
+	uses: 'Uses',
+}
+const contractAtlasBehavioralEdges = contractAtlasBehavioralReferences.flatMap(reference => {
+	if (contractAtlasSemanticEdges.some(atlasEdge => atlasEdge.source === reference.source && atlasEdge.target === reference.target && contractAtlasBehavioralRelationIsCovered(reference.relation, atlasEdge.relation))) return []
+	const targetNode = contractAtlasNodeById.get(reference.target)
+	if (targetNode === undefined) throw new Error(`Contract atlas behavioral reference targets missing node ${reference.target}`)
+	const memberLabel = reference.members.length === 1 ? 'member' : 'members'
+	return [edge(`source-behavior-${reference.source}--${reference.target}`, reference.source, reference.target, reference.relation, `${behavioralReferenceVerbs[reference.relation]} ${targetNode.label} ${memberLabel} ${reference.members.join(', ')}.`)]
+})
+const specificPairIds = new Set([...semanticPairIds, ...contractAtlasBehavioralEdges.map(atlasEdge => `${atlasEdge.source}->${atlasEdge.target}`)])
 const contractAtlasSourceReferenceEdges = contractAtlasSourceReferences.flatMap(reference => {
-	if (semanticPairIds.has(`${reference.source}->${reference.target}`)) return []
+	if (specificPairIds.has(`${reference.source}->${reference.target}`)) return []
 	const targetNode = contractAtlasNodeById.get(reference.target)
 	if (targetNode === undefined) throw new Error(`Contract atlas source reference targets missing node ${reference.target}`)
 	return [edge(`source-reference-${reference.source}--${reference.target}`, reference.source, reference.target, 'references', `Directly references ${reference.symbols.join(', ')} from the ${targetNode.label} source unit.`)]
 })
 
-export const contractAtlasEdges: ContractAtlasEdge[] = [...contractAtlasSemanticEdges, ...contractAtlasSourceReferenceEdges]
+export const contractAtlasEdges: ContractAtlasEdge[] = [...contractAtlasSemanticEdges, ...contractAtlasBehavioralEdges, ...contractAtlasSourceReferenceEdges]
 
 const contractAtlasPlotRouteByPair = new Map<string, ContractAtlasPlotRoute>()
 for (const atlasEdge of contractAtlasEdges) {

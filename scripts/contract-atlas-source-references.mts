@@ -4,6 +4,7 @@ export type ContractAtlasSourceNode = {
 	declaration?: string
 	id: string
 	kind: string
+	panel?: string
 	source: string
 }
 

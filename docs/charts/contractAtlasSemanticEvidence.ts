@@ -280,6 +280,50 @@ export const contractAtlasTestExecutionEvidence: Record<string, ContractAtlasTes
 		targetLocations: [location('statoblast-security-pool', 'function configureVault(')],
 		targetSelectors: ['peripherals_SecurityPool_SecurityPool.abi'],
 	},
+	'test-truth-auction-alias-share-token-edge': {
+		file: 'solidity/ts/tests/peripherals/truthAuctionAlias.audit.test.ts',
+		scope: {
+			selectors: ['test_peripherals_TruthAuctionAliasAttackMocks_TruthAuctionAliasAttackShareTokenMock.abi', 'createChildUniverse(client, attackParent, QuestionOutcome.Yes)'],
+			testName: 'a fake lineage cannot alias or finalize a canonical truth auction',
+		},
+		sourceSelectors: ['test_peripherals_TruthAuctionAliasAttackMocks_TruthAuctionAliasAttackShareTokenMock.abi'],
+		target: 'statoblast-pool-forker',
+		targetLocations: [location('statoblast-pool-forker', 'function createChildUniverse(')],
+		targetSelectors: ['createChildUniverse(client, attackParent, QuestionOutcome.Yes)'],
+	},
+	'test-truth-auction-alias-factory-edge': {
+		file: 'solidity/ts/tests/peripherals/truthAuctionAlias.audit.test.ts',
+		scope: {
+			selectors: ['test_peripherals_TruthAuctionAliasAttackMocks_TruthAuctionAliasAttackFactoryMock.abi', 'createChildUniverse(client, attackParent, QuestionOutcome.Yes)'],
+			testName: 'a fake lineage cannot alias or finalize a canonical truth auction',
+		},
+		sourceSelectors: ['test_peripherals_TruthAuctionAliasAttackMocks_TruthAuctionAliasAttackFactoryMock.abi'],
+		target: 'statoblast-pool-forker',
+		targetLocations: [location('statoblast-pool-forker', 'function createChildUniverse(')],
+		targetSelectors: ['createChildUniverse(client, attackParent, QuestionOutcome.Yes)'],
+	},
+	'test-truth-auction-alias-parent-edge': {
+		file: 'solidity/ts/tests/peripherals/truthAuctionAlias.audit.test.ts',
+		scope: {
+			selectors: ['test_peripherals_TruthAuctionAliasAttackMocks_TruthAuctionAliasAttackParentMock.abi', 'createChildUniverse(client, attackParent, QuestionOutcome.Yes)'],
+			testName: 'a fake lineage cannot alias or finalize a canonical truth auction',
+		},
+		sourceSelectors: ['test_peripherals_TruthAuctionAliasAttackMocks_TruthAuctionAliasAttackParentMock.abi'],
+		target: 'statoblast-pool-forker',
+		targetLocations: [location('statoblast-pool-forker', 'function createChildUniverse(')],
+		targetSelectors: ['createChildUniverse(client, attackParent, QuestionOutcome.Yes)'],
+	},
+	'test-truth-auction-alias-child-edge': {
+		file: 'solidity/ts/tests/peripherals/truthAuctionAlias.audit.test.ts',
+		scope: {
+			selectors: ['test_peripherals_TruthAuctionAliasAttackMocks_TruthAuctionAliasAttackChildMock.abi', 'createChildUniverse(client, attackParent, QuestionOutcome.Yes)'],
+			testName: 'a fake lineage cannot alias or finalize a canonical truth auction',
+		},
+		sourceSelectors: ['test_peripherals_TruthAuctionAliasAttackMocks_TruthAuctionAliasAttackChildMock.abi'],
+		target: 'statoblast-pool-forker',
+		targetLocations: [location('statoblast-pool-forker', 'function createChildUniverse(')],
+		targetSelectors: ['createChildUniverse(client, attackParent, QuestionOutcome.Yes)'],
+	},
 }
 
 // Every direct-call meaning is decomposed into source-linked claims. A claim's
@@ -344,12 +388,17 @@ export const contractAtlasCallClaimEvidence: Record<string, ContractAtlasSemanti
 		claim('direct own-fork claim lineage', location('statoblast-escalation-settlement', 'ISecurityPoolForker(securityPool.securityPoolForker()).isEscalationDepositClaimedDirectly(')),
 		claim('question outcomes', location('statoblast-escalation-settlement', 'ISecurityPoolForker(securityPool.securityPoolForker()).getQuestionOutcome(')),
 	],
+	'auction-settlement-base-pool': [
+		claim('purchased REP ownership', location('statoblast-auction-settlement-base', 'uint256 poolOwnershipAmount = amount * auctionPoolOwnershipPerRep', 'poolOwnership + poolOwnershipAmount')),
+		claim('auctioned allowance', location('statoblast-auction-settlement-base', 'currentSecurityBondAllowance + newSecurityBondAllowance', 'securityPool.addFeeEligibleSecurityBondAllowance(')),
+		claim('bidder vault accounting', location('statoblast-auction-settlement-base', 'securityPool.updateVaultFees(vault)', 'securityPool.securityVaults(vault)', 'securityPool.configureVault(')),
+	],
 	'proxy-zoltar': [claim('literal Zoltar migration ledger balance', location('statoblast-migration-proxy', 'zoltar.addRepToMigrationBalance(', 'zoltar.forkUniverse(', 'zoltar.splitMigrationRep('))],
 	'forker-zoltar': [claim('fork thresholds', location('statoblast-pool-forker', 'zoltar.getForkThreshold(')), claim('migration balances', location('statoblast-pool-forker', 'zoltar.getMigrationRepBalance('))],
 	'forker-pool': [
 		claim('Freezes parents', location('statoblast-pool-forker', 'securityPool.activateForkMode(')),
 		claim('migrates children', location('statoblast-pool-forker', 'securityPool.setSystemState(SystemState.ForkTruthAuction)', 'securityPool.updateCollateralAmount(')),
-		claim('updates collateral', location('statoblast-pool-forker', 'securityPool.configureVault(')),
+		claim('updates collateral', location('statoblast-pool-forker', 'securityPool.updateCollateralAmount(')),
 		claim('ownership accounting', location('statoblast-pool-forker', 'securityPool.setOwnershipDenominator(')),
 		receiverClaim('forker-only pool entrypoints', location('statoblast-security-pool', 'modifier onlyForker()', 'require(msg.sender == securityPoolForker,')),
 	],
@@ -404,6 +453,10 @@ export const contractAtlasUseClaimEvidence: Record<string, ContractAtlasSemantic
 	'escalation-types-carry': [claim('carry', location('statoblast-escalation-carry', 'CarryLeafView[] memory carryLeaves')), claim('proof structures', location('statoblast-escalation-carry', 'CarriedDepositProof calldata proof'))],
 	'escalation-binary-calculations': [claim('question-resolution results', location('statoblast-escalation-calculations', 'returns (BinaryOutcomes.BinaryOutcome outcome)')), claim('unresolved sentinels', location('statoblast-escalation-calculations', 'BinaryOutcomes.BinaryOutcome.None'))],
 	'auction-math': [claim('clearing', location('statoblast-truth-auction', 'underfundedThreshold = Math.mulDiv(')), claim('pro-rata settlement', location('statoblast-truth-auction', 'uint256 cumulativeAllocationBefore = Math.mulDiv('))],
+	'auction-settlement-base-types': [
+		claim('typed auction claim totals', location('statoblast-auction-settlement-base', 'data.claimedAuctionRepPurchased += amount', 'data.claimedAuctionedSecurityBondAllowance = nextClaimedAuctionedSecurityBondAllowance')),
+		claim('per-pool fork records', location('statoblast-auction-settlement-base', 'SecurityPoolForkerForkData storage data')),
+	],
 	'vault-base-types': [claim('fork', location('statoblast-vault-migration-base', 'SecurityPoolForkerForkData storage childData')), claim('child-REP allocation records', location('statoblast-vault-migration-base', 'OwnForkChildRepAllocation storage allocated'))],
 	'forker-storage-types': [claim('typed per-pool fork and migration mappings', location('statoblast-forker-storage', 'mapping(ISecurityPool => SecurityPoolForkerForkData) internal forkDataByPool'))],
 	'forker-utils': [claim('auction timing', location('statoblast-pool-forker', 'SecurityPoolUtils.MIGRATION_TIME', 'SecurityPoolUtils.AUCTION_TIME')), claim('fixed-point precision', location('statoblast-pool-forker', 'SecurityPoolUtils.PRICE_PRECISION'))],
@@ -474,6 +527,8 @@ export const contractAtlasSemanticMeanings: Record<string, string> = {
 	'escalation-settlement-pool': 'Returns residual REP and asks the pool to burn winner haircuts.',
 	'escalation-settlement-forker': 'Checks direct own-fork claim lineage and question outcomes.',
 	'auction-math': 'Uses full-precision arithmetic for clearing and pro-rata settlement.',
+	'auction-settlement-base-pool': 'Credits purchased REP ownership and auctioned allowance into bidder vault accounting.',
+	'auction-settlement-base-types': 'Updates typed auction claim totals in per-pool fork records.',
 	'forker-proxy-assets': 'Transfers parent REP forker → migration proxy, then instructs the proxy to lock, fork, split, and sweep child REP.',
 	'forker-reputation-token': 'Calls the parent REP token to transfer REP forker → stable migration proxy.',
 	'proxy-zoltar': 'Owns the literal Zoltar migration ledger balance for one parent pool.',
@@ -527,6 +582,10 @@ export const contractAtlasSemanticMeanings: Record<string, string> = {
 	'test-alternating-game-edge': 'Alternates child game answers across validation reads.',
 	'test-escrow-child-edge': 'Models a malicious child pool during escrow migration.',
 	'test-auction-pool-edge': 'Provides controlled auction settlement accounting.',
+	'test-truth-auction-alias-share-token-edge': 'Supplies an always-authorized share-token surface to fake-lineage rejection tests.',
+	'test-truth-auction-alias-factory-edge': 'Returns attacker-selected child and truth-auction addresses to fake-lineage rejection tests.',
+	'test-truth-auction-alias-parent-edge': 'Models a fake parent attempting to attach an undeployed or canonical truth auction.',
+	'test-truth-auction-alias-child-edge': 'Records and forwards any ETH misrouted through a rejected fake child.',
 }
 
 export const contractAtlasSemanticEvidence: ContractAtlasSemanticEvidence[] = [
@@ -563,9 +622,12 @@ export const contractAtlasSemanticEvidence: ContractAtlasSemanticEvidence[] = [
 	evidence('carry-proof-verifier', 'statoblast-escalation-carry', 'statoblast-escalation-proof-verifier', 'calls', [location('statoblast-escalation-carry', 'proofVerifier.computeMerkleMountainRangeRootFromProof(')]),
 	evidence('escalation-settlement-pool', 'statoblast-escalation-settlement', 'statoblast-security-pool', 'calls', [location('statoblast-escalation-settlement', 'securityPool.burnEscalationWinnerHaircut(')]),
 	evidence('escalation-settlement-forker', 'statoblast-escalation-settlement', 'statoblast-forker-interface', 'calls', [location('statoblast-escalation-settlement', 'ISecurityPoolForker(securityPool.securityPoolForker()).isEscalationDepositClaimedDirectly(')]),
+	evidence('auction-settlement-base-pool', 'statoblast-auction-settlement-base', 'statoblast-security-pool', 'calls', [
+		location('statoblast-auction-settlement-base', 'securityPool.updateVaultFees(vault)', 'securityPool.securityVaults(vault)', 'securityPool.configureVault(', 'securityPool.addFeeEligibleSecurityBondAllowance('),
+	]),
 	evidence('proxy-zoltar', 'statoblast-migration-proxy', 'zoltar-core', 'calls', [location('statoblast-migration-proxy', 'zoltar.addRepToMigrationBalance(', 'zoltar.forkUniverse(', 'zoltar.splitMigrationRep(')]),
 	evidence('forker-zoltar', 'statoblast-pool-forker', 'zoltar-core', 'calls', [location('statoblast-pool-forker', 'zoltar.getForkThreshold(', 'zoltar.getMigrationRepBalance(')]),
-	evidence('forker-pool', 'statoblast-pool-forker', 'statoblast-security-pool', 'calls', [location('statoblast-pool-forker', 'securityPool.activateForkMode(', 'securityPool.configureVault(')]),
+	evidence('forker-pool', 'statoblast-pool-forker', 'statoblast-security-pool', 'calls', [location('statoblast-pool-forker', 'securityPool.activateForkMode(', 'securityPool.updateCollateralAmount(')]),
 	evidence('forker-game', 'statoblast-pool-forker', 'statoblast-escalation-game', 'calls', [location('statoblast-pool-forker', 'escalationGame.getForkCarrySnapshot(', 'escalationGame.getOutcomeBalances(')]),
 	evidence('vault-base-zoltar', 'statoblast-vault-migration-base', 'zoltar-core', 'calls', [location('statoblast-vault-migration-base', 'zoltar.getRepToken(', 'zoltar.deployChild(')]),
 	evidence('vault-base-factory', 'statoblast-vault-migration-base', 'statoblast-security-pool-factory', 'calls', [location('statoblast-vault-migration-base', 'parent.securityPoolFactory().deployChildSecurityPool(')]),
@@ -598,6 +660,7 @@ export const contractAtlasSemanticEvidence: ContractAtlasSemanticEvidence[] = [
 	evidence('escalation-types-carry', 'statoblast-escalation-carry', 'statoblast-escalation-types', 'uses', [location('statoblast-escalation-carry', 'CarryLeafView[] memory carryLeaves')]),
 	evidence('escalation-binary-calculations', 'statoblast-escalation-calculations', 'statoblast-binary-outcomes', 'uses', [location('statoblast-escalation-calculations', 'BinaryOutcomes.BinaryOutcome.None')]),
 	evidence('auction-math', 'statoblast-truth-auction', 'openoracle-math', 'uses', [location('statoblast-truth-auction', 'Math.mulDiv(')]),
+	evidence('auction-settlement-base-types', 'statoblast-auction-settlement-base', 'statoblast-forker-types', 'uses', [location('statoblast-auction-settlement-base', 'SecurityPoolForkerForkData storage data')]),
 	evidence('vault-base-types', 'statoblast-vault-migration-base', 'statoblast-forker-types', 'uses', [location('statoblast-vault-migration-base', 'SecurityPoolForkerForkData storage childData')]),
 	evidence('forker-storage-types', 'statoblast-forker-storage', 'statoblast-forker-types', 'uses', [location('statoblast-forker-storage', 'mapping(ISecurityPool => SecurityPoolForkerForkData) internal forkDataByPool')]),
 	evidence('forker-utils', 'statoblast-pool-forker', 'statoblast-security-pool-utils', 'uses', [location('statoblast-pool-forker', 'SecurityPoolUtils.MIGRATION_TIME')]),
@@ -638,6 +701,10 @@ export const contractAtlasSemanticEvidence: ContractAtlasSemanticEvidence[] = [
 	evidence('test-alternating-game-edge', 'test-forker-alternating-game', 'statoblast-escalation-game', 'tests', [location('test-forker-alternating-game', 'return configuredForkResumedAt')]),
 	evidence('test-escrow-child-edge', 'test-forker-escrow-child', 'statoblast-security-pool', 'tests', [location('test-forker-escrow-child', 'if (operationalMode) useSecondOperationalEscalationGame = true')]),
 	evidence('test-auction-pool-edge', 'test-auction-settlement-pool', 'statoblast-security-pool', 'tests', [location('test-auction-settlement-pool', 'feeEligibleSecurityBondAllowance += amount')]),
+	evidence('test-truth-auction-alias-share-token-edge', 'test-truth-auction-alias-share-token', 'statoblast-pool-forker', 'tests', [location('test-truth-auction-alias-share-token', 'function isAuthorized(address)')]),
+	evidence('test-truth-auction-alias-factory-edge', 'test-truth-auction-alias-factory', 'statoblast-pool-forker', 'tests', [location('test-truth-auction-alias-factory', 'return (childPool, childTruthAuction)')]),
+	evidence('test-truth-auction-alias-parent-edge', 'test-truth-auction-alias-parent', 'statoblast-pool-forker', 'tests', [location('test-truth-auction-alias-parent', 'return configuredFactory', 'function activateForkMode() external')]),
+	evidence('test-truth-auction-alias-child-edge', 'test-truth-auction-alias-child', 'statoblast-pool-forker', 'tests', [location('test-truth-auction-alias-child', 'receive() external payable', 'stolenEth += msg.value')]),
 
 	// Asset paths name the same sender and recipient wording rendered in the
 	// relationship register and link each direction to concrete transfer code.

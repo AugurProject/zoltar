@@ -278,9 +278,9 @@
 					protocol components.
 				</p>
 				<p>
-					The checked inventory contains 114 nodes and 363 relationships. Its
-					nodes cover all 112 Solidity declarations currently under
-					<code>solidity/contracts</code>: 75 production declarations and 37
+					The checked inventory contains 119 nodes and 394 relationships. Its
+					nodes cover all 117 Solidity declarations currently under
+					<code>solidity/contracts</code>: 76 production declarations and 41
 					test-only declarations, plus the two type-only modules
 					<code>EscalationGameTypes</code> and
 					<code>SecurityPoolForkerTypes</code>. Files that only re-export an
@@ -291,14 +291,23 @@
 					same-file contract, interface, library, or type module is linked. A
 					specific call, deployment, delegatecall, asset-bearing call,
 					inheritance, implementation, library/type use, or test edge replaces the
-					generic source reference. The register keeps all 363 relationship rows
-					separate. The plot groups them into 357 ordered source-target routes:
-					six routes carry two relationship types, so their combined style and
+					generic source reference. The register keeps all 394 relationship rows
+					separate. The plot groups them into 376 ordered source-target routes:
+					18 routes carry two relationship types, so their combined style and
 					tooltip list both meanings. Repeated uses of the same type and pair
 					aggregate; distinct types and explicit low-level boundaries remain
-					separate register rows. The chart keeps all 114 components fixed while
-					one relationship layer is selected; choose <strong>All routes</strong>
-					for the complete overlay.
+					separate register rows. A compiler-AST check promotes actual contract
+					and interface member invocations, library calls and constants, using
+					directives, and test-helper invocations out of the generic layer. A
+					deployment, inheritance, implementation, or type-use relationship on
+					the same pair does not stand in for a runtime call; the register and
+					tooltip retain both meanings. Invocation analysis follows direct calls
+					and typed members encoded for ordinary low-level calls; it excludes
+					selector-only references and members encoded for separately classified
+					delegatecalls. The generic layer therefore contains only reference-only
+					pairs. The chart keeps all 119 components fixed while one relationship
+					layer is selected; choose <strong>All routes</strong> for the complete
+					overlay.
 				</p>
 				<fieldset class="contract-atlas-controls" data-contract-atlas-controls hidden>
 					<legend>Relationship layer</legend>
@@ -347,7 +356,7 @@
 							class="plot-chart"
 							data-plot-chart="fig-complete-contract-atlas"
 							data-plot-width="1800"
-							data-plot-height="2400"
+							data-plot-height="2480"
 							role="img"
 							aria-label="Complete Zoltar and Statoblast Solidity contract and relationship atlas"
 						>
@@ -371,17 +380,17 @@
 						one inventory node. Test edges terminate at repeated production
 						gateway groups inside the test region to avoid crossing the entire
 						plot; the relationship register preserves each exact production
-						target. The default protocol-flow layer shows 69 routes; the layer
-						controls expose every one of the 357 routes while keeping all 114
+						target. The default protocol-flow layer shows 96 routes; the layer
+						controls expose every one of the 376 routes while keeping all 119
 						components fixed. Mechanical reconciliation against the Solidity
-						tree covers every direct source edge, and all 363 meanings remain in
+						tree covers every direct source edge, and all 394 meanings remain in
 						the route tooltips and register. The component inventory provides an
 						exact textual entry for every node, including isolated declarations
 						that have no active in-repository relationship under the rule above.
 					</p>
 				</figure>
 				<details class="contract-atlas-register contract-atlas-node-register">
-					<summary>Complete 114-component inventory</summary>
+					<summary>Complete 119-component inventory</summary>
 					<p>
 						This inventory preserves each component’s declaration kind, owning
 						region, and Solidity source path independently of chart hover or

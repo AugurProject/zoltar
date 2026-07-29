@@ -5,6 +5,7 @@ import { Window } from 'happy-dom'
 import ts from 'typescript'
 
 import { contractInteractionEdges, quantitativeChartAxisLabels, quantitativeChartIds } from '../docs/charts/chartModels'
+import { contractAtlasBehavioralReferences, contractAtlasBehavioralRelationIsCovered, type ContractAtlasBehavioralReference } from '../docs/charts/contractAtlasBehavioralReferences'
 import {
 	contractAtlasDefaultView,
 	contractAtlasEdges,
@@ -33,6 +34,7 @@ import {
 	type ContractAtlasTestExecutionEvidence,
 } from '../docs/charts/contractAtlasSemanticEvidence'
 import { contractAtlasSourceOwnerOverrides, contractAtlasSourceReferences } from '../docs/charts/contractAtlasSourceReferences'
+import { analyzeContractAtlasBehavioralReferences, contractAtlasBehavioralReferenceIssue } from './contract-atlas-behavioral-references.mts'
 import { analyzeContractAtlasSource, contractAtlasSourceReferenceIssue } from './contract-atlas-source-references.mts'
 
 const repositoryRoot = path.resolve(import.meta.dir, '..')
@@ -41,25 +43,27 @@ const entrypoint = path.join(repositoryRoot, 'docs/charts/chartRuntime.ts')
 const generatedPath = path.join(repositoryRoot, 'docs/chartRuntime.js')
 const specsPath = path.join(repositoryRoot, 'docs/charts/diagramSpecs.json')
 const expectedChartCount = 41
-const expectedContractAtlasNodeCount = 114
-const expectedContractAtlasRelationshipCount = 363
-const expectedContractAtlasPlotRouteCount = 357
-const expectedContractAtlasMultiRelationRouteCount = 6
-const expectedContractAtlasSourceReferenceCount = 321
+const expectedContractAtlasNodeCount = 119
+const expectedContractAtlasRelationshipCount = 394
+const expectedContractAtlasPlotRouteCount = 376
+const expectedContractAtlasMultiRelationRouteCount = 18
+const expectedContractAtlasSourceReferenceCount = 335
 const expectedContractAtlasExplicitDeploymentCount = 17
-const expectedContractAtlasDirectBaseCount = 43
+const expectedContractAtlasDirectBaseCount = 44
 const expectedContractAtlasDelegatecallCount = 5
-const expectedContractAtlasSemanticEvidenceCount = 109
-const expectedContractAtlasCallClaimCount = 42
-const expectedContractAtlasUseClaimCount = 31
+const expectedContractAtlasBehavioralCandidateCount = 124
+const expectedContractAtlasBehavioralReferenceCount = 69
+const expectedContractAtlasSemanticEvidenceCount = 115
+const expectedContractAtlasCallClaimCount = 43
+const expectedContractAtlasUseClaimCount = 32
 const expectedPrimaryContractInteractionCount = 19
 const expectedPrimaryContractComponentCount = 12
 const expectedContractAtlasViewRouteCounts: Record<ContractAtlasView, number> = {
-	all: 357,
-	protocol: 69,
-	references: 189,
-	structure: 76,
-	tests: 23,
+	all: 376,
+	protocol: 96,
+	references: 144,
+	structure: 105,
+	tests: 40,
 }
 const expectedContractAtlasTypeModuleSources = new Set(['solidity/contracts/peripherals/EscalationGameTypes.sol', 'solidity/contracts/peripherals/SecurityPoolForkerTypes.sol'])
 const supportedDiagramTags = new Set(['circle', 'defs', 'line', 'marker', 'path', 'polyline', 'rect', 'text', 'tspan'])
@@ -292,6 +296,48 @@ function contractAtlasSourceDerivedMeaningIssue(edges: readonly (typeof contract
 	return undefined
 }
 
+function contractAtlasBehavioralMeaning(reference: ContractAtlasBehavioralReference, targetLabel: string): string {
+	const verbs: Record<ContractAtlasBehavioralReference['relation'], string> = {
+		calls: 'Calls',
+		tests: 'Test helper invokes',
+		uses: 'Uses',
+	}
+	const memberLabel = reference.members.length === 1 ? 'member' : 'members'
+	return `${verbs[reference.relation]} ${targetLabel} ${memberLabel} ${reference.members.join(', ')}.`
+}
+
+function contractAtlasBehavioralEdgeIssue(edges: readonly (typeof contractAtlasEdges)[number][], references: readonly ContractAtlasBehavioralReference[], nodeById: ReadonlyMap<string, (typeof contractAtlasNodes)[number]>): string | undefined {
+	const behaviorEdges = edges.filter(edge => edge.id.startsWith('source-behavior-'))
+	const expectedKeys = references.map(reference => `source-behavior-${reference.source}--${reference.target}:${reference.source}->${reference.target}:${reference.relation}`)
+	const registeredKeys = behaviorEdges.map(edge => `${edge.id}:${edge.source}->${edge.target}:${edge.relation}`)
+	const classificationIssue = exactRelationshipSetIssue('Complete contract atlas behavioral edge classification mismatch', expectedKeys, registeredKeys)
+	if (classificationIssue !== undefined) return classificationIssue
+	for (const reference of references) {
+		const edge = behaviorEdges.find(candidate => candidate.source === reference.source && candidate.target === reference.target)
+		const target = nodeById.get(reference.target)
+		if (edge === undefined || target === undefined) return `Complete contract atlas behavioral edge ${reference.source}->${reference.target} has a missing endpoint`
+		const expectedDescription = contractAtlasBehavioralMeaning(reference, target.label)
+		if (edge.description !== expectedDescription) {
+			return `Complete contract atlas behavioral edge ${edge.id} meaning must be mechanical: ${expectedDescription}`
+		}
+	}
+	return undefined
+}
+
+function contractAtlasBehavioralCoverageIssue(edges: readonly (typeof contractAtlasEdges)[number][], candidates: readonly ContractAtlasBehavioralReference[], evidenceEntries: readonly ContractAtlasSemanticEvidence[]): string | undefined {
+	const evidencedEdgeIds = new Set(evidenceEntries.map(evidence => evidence.edgeId))
+	for (const candidate of candidates) {
+		const compatibleEdges = edges.filter(edge => edge.source === candidate.source && edge.target === candidate.target && contractAtlasBehavioralRelationIsCovered(candidate.relation, edge.relation))
+		if (compatibleEdges.length === 0) {
+			return `Complete contract atlas behavioral source pair ${candidate.source}->${candidate.target} has no ${candidate.relation} relationship for members ${candidate.members.join(', ')}`
+		}
+		if (!compatibleEdges.some(edge => edge.id.startsWith('source-behavior-') || evidencedEdgeIds.has(edge.id))) {
+			return `Complete contract atlas behavioral source pair ${candidate.source}->${candidate.target} has no generated member meaning or checked semantic evidence`
+		}
+	}
+	return undefined
+}
+
 function compactSolidity(source: string): string {
 	return source.replace(/\s+/g, '')
 }
@@ -308,7 +354,7 @@ function contractAtlasSemanticEvidenceIssue(
 	testSources: ReadonlyMap<string, string>,
 ): string | undefined {
 	const checkedRelations = new Set(['assets', 'calls', 'compatible', 'tests', 'uses'])
-	const checkedEdges = edges.filter(edge => checkedRelations.has(edge.relation))
+	const checkedEdges = edges.filter(edge => checkedRelations.has(edge.relation) && !edge.id.startsWith('source-behavior-'))
 	if (checkedEdges.length !== expectedContractAtlasSemanticEvidenceCount) {
 		return `Complete contract atlas expected ${expectedContractAtlasSemanticEvidenceCount} manually classified relationships, found ${checkedEdges.length}`
 	}
@@ -667,6 +713,124 @@ async function assertContractAtlasCoverage(): Promise<void> {
 	if (sourceReferenceIssue !== undefined) throw new Error(sourceReferenceIssue)
 	if (contractAtlasSourceReferenceIssue(derivedSourceReferences, contractAtlasSourceReferences.slice(1)) === undefined) {
 		throw new Error('Complete contract atlas source-reference coverage did not reject a removed relationship')
+	}
+	const delegatecallPairs = new Set(sourceAnalysis.delegatecalls.map(relationship => `${relationship.source}->${relationship.target}`))
+	const behavioralCandidates = await analyzeContractAtlasBehavioralReferences(contractsDirectory, contractAtlasNodes, contractAtlasSourceOwnerOverrides, contractAtlasSourceReferences, delegatecallPairs)
+	if (behavioralCandidates.length !== expectedContractAtlasBehavioralCandidateCount) {
+		throw new Error(`Complete contract atlas expected ${expectedContractAtlasBehavioralCandidateCount} compiler-derived behavioral candidates, found ${behavioralCandidates.length}`)
+	}
+	if (behavioralCandidates.some(candidate => candidate.source === 'test-openoracle-rejecting-receiver' && candidate.target === 'statoblast-ierc1155-receiver')) {
+		throw new Error('Complete contract atlas behavioral analysis misclassified an interface selector as a test-helper invocation')
+	}
+	if (behavioralCandidates.some(candidate => candidate.source === 'statoblast-escalation-game' && candidate.target === 'statoblast-escalation-deposit-delegate')) {
+		throw new Error('Complete contract atlas behavioral analysis misclassified an encoded delegatecall member as a direct invocation')
+	}
+	for (const [source, target, expectedMembers] of [
+		['openoracle-core', 'openoracle-ierc20', ['transfer']],
+		['openoracle-safe-erc20', 'openoracle-ierc20', ['allowance', 'approve', 'transfer', 'transferFrom']],
+		['zoltar-safe-erc20-ops', 'zoltar-ierc20', ['approve', 'transfer', 'transferFrom']],
+	] as const) {
+		const candidate = behavioralCandidates.find(reference => reference.source === source && reference.target === target)
+		if (candidate === undefined || candidate.relation !== 'calls' || candidate.members.join(',') !== expectedMembers.join(',')) {
+			throw new Error(`Complete contract atlas behavioral analysis did not preserve normal low-level calls for ${source}->${target}`)
+		}
+	}
+	function replaceBehavioralMutation(source: string, search: string, replacement: string, label: string): string {
+		const firstMatch = source.indexOf(search)
+		if (firstMatch < 0 || source.indexOf(search, firstMatch + search.length) >= 0) {
+			throw new Error(`Complete contract atlas behavioral ${label} mutation expected exactly one source match`)
+		}
+		return `${source.slice(0, firstMatch)}${replacement}${source.slice(firstMatch + search.length)}`
+	}
+	const safeErc20OpsPath = 'solidity/contracts/SafeERC20Ops.sol'
+	const safeErc20OpsSource = await readFile(path.join(repositoryRoot, safeErc20OpsPath), 'utf8')
+	const safeErc20OpsMutation = replaceBehavioralMutation(safeErc20OpsSource, '\t\t(bool success, bytes memory returnData) = address(token).call(callData);', '\t\tbool success = true;\n\t\tbytes memory returnData = new bytes(0);', 'SafeERC20Ops low-level call')
+	const safeErc20OpsMutationCandidates = await analyzeContractAtlasBehavioralReferences(contractsDirectory, contractAtlasNodes, contractAtlasSourceOwnerOverrides, contractAtlasSourceReferences, delegatecallPairs, new Map([[safeErc20OpsPath, safeErc20OpsMutation]]))
+	if (safeErc20OpsMutationCandidates.some(candidate => candidate.source === 'zoltar-safe-erc20-ops' && candidate.target === 'zoltar-ierc20' && candidate.relation === 'calls')) {
+		throw new Error('Complete contract atlas behavioral analysis accepted encoded ERC-20 members after the SafeERC20Ops low-level call was removed')
+	}
+	const openOraclePath = 'solidity/contracts/peripherals/openOracle/OpenOracle.sol'
+	const openOracleSource = await readFile(path.join(repositoryRoot, openOraclePath), 'utf8')
+	const openOracleMutation = replaceBehavioralMutation(
+		openOracleSource,
+		'\t\t\t(bool success, bytes memory returndata) = token.call(\n\t\t\t\tabi.encodeWithSelector(IERC20.transfer.selector, to, amount)\n\t\t\t);',
+		'\t\t\t(bool success, bytes memory returndata) = (\n\t\t\t\ttrue,\n\t\t\t\tabi.encodeWithSelector(IERC20.transfer.selector, to, amount)\n\t\t\t);',
+		'OpenOracle low-level call',
+	)
+	const openOracleMutationCandidates = await analyzeContractAtlasBehavioralReferences(contractsDirectory, contractAtlasNodes, contractAtlasSourceOwnerOverrides, contractAtlasSourceReferences, delegatecallPairs, new Map([[openOraclePath, openOracleMutation]]))
+	if (openOracleMutationCandidates.some(candidate => candidate.source === 'openoracle-core' && candidate.target === 'openoracle-ierc20' && candidate.relation === 'calls')) {
+		throw new Error('Complete contract atlas behavioral analysis accepted an encoded IERC20 transfer after the OpenOracle low-level call was removed')
+	}
+	const openZeppelinSafeErc20Path = 'solidity/contracts/peripherals/openOracle/openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol'
+	const openZeppelinSafeErc20Source = await readFile(path.join(repositoryRoot, openZeppelinSafeErc20Path), 'utf8')
+	const openZeppelinSafeErc20Mutation = replaceBehavioralMutation(
+		replaceBehavioralMutation(openZeppelinSafeErc20Source, '            let success := call(gas(), token, 0, add(data, 0x20), mload(data), 0, 0x20)', '            let success := 1', 'OpenZeppelin SafeERC20 reverting assembly call'),
+		'            success := call(gas(), token, 0, add(data, 0x20), mload(data), 0, 0x20)',
+		'            success := 1',
+		'OpenZeppelin SafeERC20 boolean assembly call',
+	)
+	const openZeppelinSafeErc20MutationCandidates = await analyzeContractAtlasBehavioralReferences(contractsDirectory, contractAtlasNodes, contractAtlasSourceOwnerOverrides, contractAtlasSourceReferences, delegatecallPairs, new Map([[openZeppelinSafeErc20Path, openZeppelinSafeErc20Mutation]]))
+	const mutatedOpenZeppelinSafeErc20Candidate = openZeppelinSafeErc20MutationCandidates.find(candidate => candidate.source === 'openoracle-safe-erc20' && candidate.target === 'openoracle-ierc20')
+	if (mutatedOpenZeppelinSafeErc20Candidate === undefined || mutatedOpenZeppelinSafeErc20Candidate.members.join(',') !== 'allowance') {
+		throw new Error('Complete contract atlas behavioral analysis retained encoded OpenZeppelin ERC-20 members after its assembly calls were removed')
+	}
+	const manuallyCoversBehavior = (reference: ContractAtlasBehavioralReference, edge: (typeof contractAtlasEdges)[number]) => !edge.id.startsWith('source-behavior-') && edge.source === reference.source && edge.target === reference.target && contractAtlasBehavioralRelationIsCovered(reference.relation, edge.relation)
+	const behavioralCandidateIssue = contractAtlasBehavioralReferenceIssue(behavioralCandidates, contractAtlasBehavioralReferences)
+	if (behavioralCandidateIssue !== undefined) throw new Error(behavioralCandidateIssue)
+	if (contractAtlasBehavioralReferenceIssue(behavioralCandidates, contractAtlasBehavioralReferences.slice(1)) === undefined) {
+		throw new Error('Complete contract atlas behavioral-candidate coverage did not reject a removed relationship')
+	}
+	const expectedBehavioralReferences = behavioralCandidates.filter(reference => !contractAtlasEdges.some(edge => manuallyCoversBehavior(reference, edge)))
+	if (expectedBehavioralReferences.length !== expectedContractAtlasBehavioralReferenceCount) {
+		throw new Error(`Complete contract atlas expected ${expectedContractAtlasBehavioralReferenceCount} source-derived behavioral references, found ${expectedBehavioralReferences.length}`)
+	}
+	const behavioralCoverageIssueFor = (edges: readonly (typeof contractAtlasEdges)[number][] = contractAtlasEdges, evidenceEntries: readonly ContractAtlasSemanticEvidence[] = contractAtlasSemanticEvidence) => contractAtlasBehavioralCoverageIssue(edges, behavioralCandidates, evidenceEntries)
+	const behavioralCoverageIssue = behavioralCoverageIssueFor()
+	if (behavioralCoverageIssue !== undefined) throw new Error(behavioralCoverageIssue)
+	const behavioralEdgeIssueFor = (edges: readonly (typeof contractAtlasEdges)[number][] = contractAtlasEdges) => contractAtlasBehavioralEdgeIssue(edges, expectedBehavioralReferences, nodeById)
+	const behavioralEdgeIssue = behavioralEdgeIssueFor()
+	if (behavioralEdgeIssue !== undefined) throw new Error(behavioralEdgeIssue)
+	const behavioralCallEdge = contractAtlasEdges.find(edge => edge.id.startsWith('source-behavior-') && edge.relation === 'calls')
+	if (behavioralCallEdge === undefined) throw new Error('Complete contract atlas has no source-derived call for behavioral mutation probes')
+	const reclassifiedBehavioralCallEdges = contractAtlasEdges.map(edge => (edge.id === behavioralCallEdge.id ? { ...edge, relation: 'references' as const } : edge))
+	if (behavioralEdgeIssueFor(reclassifiedBehavioralCallEdges) === undefined) {
+		throw new Error('Complete contract atlas behavioral coverage did not reject a direct call reclassified as a generic reference')
+	}
+	const behavioralUseEdge = contractAtlasEdges.find(edge => edge.id.startsWith('source-behavior-') && edge.relation === 'uses')
+	if (behavioralUseEdge === undefined) throw new Error('Complete contract atlas has no source-derived library use for behavioral mutation probes')
+	const reclassifiedBehavioralUseEdges = contractAtlasEdges.map(edge => (edge.id === behavioralUseEdge.id ? { ...edge, relation: 'references' as const } : edge))
+	if (behavioralEdgeIssueFor(reclassifiedBehavioralUseEdges) === undefined) {
+		throw new Error('Complete contract atlas behavioral coverage did not reject a library use reclassified as a generic reference')
+	}
+	const manualBehaviorCandidate = behavioralCandidates.find(candidate => candidate.source === 'openoracle-core' && candidate.target === 'openoracle-signature-transfer')
+	const manualBehaviorEdge = contractAtlasEdges.find(edge => edge.id === 'openoracle-permit2')
+	if (manualBehaviorCandidate === undefined || manualBehaviorEdge === undefined || !manuallyCoversBehavior(manualBehaviorCandidate, manualBehaviorEdge)) {
+		throw new Error('Complete contract atlas has no manually evidenced behavioral relationship for mutation probes')
+	}
+	const reclassifiedManualBehaviorEdges = contractAtlasEdges.map(edge => (edge.id === manualBehaviorEdge.id ? { ...edge, relation: 'deploys' as const } : edge))
+	if (behavioralCoverageIssueFor(reclassifiedManualBehaviorEdges) === undefined) {
+		throw new Error('Complete contract atlas behavioral coverage accepted an unrelated deployment in place of a direct call')
+	}
+	if (
+		behavioralCoverageIssueFor(
+			contractAtlasEdges,
+			contractAtlasSemanticEvidence.filter(evidence => evidence.edgeId !== manualBehaviorEdge.id),
+		) === undefined
+	) {
+		throw new Error('Complete contract atlas behavioral coverage accepted a manual call without checked semantic evidence')
+	}
+	for (const [edgeId, member] of [
+		['source-behavior-statoblast-escalation-game-factory--statoblast-escalation-game', 'startFromFork'],
+		['source-behavior-zoltar-core--zoltar-reputation-token', 'mint'],
+	] as const) {
+		const memberEdge = contractAtlasEdges.find(edge => edge.id === edgeId)
+		if (memberEdge === undefined || !memberEdge.description.includes(member)) {
+			throw new Error(`Complete contract atlas has no ${member} behavioral meaning for mutation probes`)
+		}
+		const omittedMemberEdges = contractAtlasEdges.map(edge => (edge.id === edgeId ? { ...edge, description: edge.description.replace(`${member}, `, '').replace(`, ${member}`, '').replace(` ${member}.`, '.') } : edge))
+		if (behavioralEdgeIssueFor(omittedMemberEdges) === undefined) {
+			throw new Error(`Complete contract atlas behavioral coverage accepted a generated meaning with ${member} omitted`)
+		}
 	}
 	const testSources = new Map<string, string>()
 	const testDirectory = path.join(repositoryRoot, 'solidity/ts/tests')
