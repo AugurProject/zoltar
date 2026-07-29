@@ -54,6 +54,6 @@ export function getSecurityPoolCreateDisabledReason({
 	if (duplicateOriginPoolExists) return 'A pool for this question, Statoblast security multiplier, and priority fee already exists.'
 	if (marketDetails === undefined) return 'Enter an exact binary Yes / No question before creating a pool.'
 	if (marketDetails.marketType !== 'binary') return 'Security pools can only be created for exact binary Yes / No questions.'
-	if (zoltarUniverseHasForked) return 'Security pools cannot be created after Zoltar has forked.'
+	if (zoltarUniverseHasForked) return 'Security pools cannot be created after this universe has forked.'
 	return getInitialReportPriorityFeeValidationMessage(initialReportPriorityFeeGwei)
 }
