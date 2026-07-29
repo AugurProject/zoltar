@@ -1,4 +1,4 @@
-import { areaY, barX, dot, line, lineY, plot, rect, ruleX, ruleY, text } from '@observablehq/plot'
+import { areaY, barX, dot, line, lineY, link, plot, rect, ruleX, ruleY, text } from '@observablehq/plot'
 import {
 	calculateAnnualizedRetentionFeePercent,
 	calculateAuctionModel,
@@ -12,6 +12,7 @@ import {
 	normalizedEscalationCost,
 	quantitativeChartAxisLabels,
 } from './chartModels'
+import { contractAtlasEdges, contractAtlasNodes, contractAtlasPlotRouteMeaning, contractAtlasPlotRoutes, contractAtlasRelationLabels, contractAtlasRelationshipRows, type ContractAtlasKind, type ContractAtlasPanel, type ContractAtlasRelation } from './contractAtlas'
 
 declare function require(path: './diagramSpecs.json'): unknown
 
@@ -945,6 +946,332 @@ function contractInteractionChart(spec: ChartSpec): SVGSVGElement {
 	}) as SVGSVGElement
 }
 
+type ContractAtlasChartNode = {
+	column: number
+	id: string
+	isGateway: boolean
+	kind: ContractAtlasKind | 'gateway'
+	label: string
+	order: number
+	panel: ContractAtlasPanel
+	source: string
+	x1: number
+	x2: number
+	y1: number
+	y2: number
+}
+
+type ContractAtlasChartEdge = {
+	id: string
+	meaning: string
+	orientation: 'horizontal' | 'vertical'
+	relationStyle: ContractAtlasRelation | 'multiple'
+	sourceLabel: string
+	targetLabel: string
+	x1: number
+	x2: number
+	y1: number
+	y2: number
+}
+
+function contractAtlasDisplayLabel(label: string): string {
+	if (label.includes('\n') || label.length <= 24) return label
+	const words = label.replaceAll(/([a-z0-9])([A-Z])/g, '$1 $2').split(' ')
+	const lines: string[] = []
+	for (const word of words) {
+		const currentLine = lines[lines.length - 1]
+		if (currentLine === undefined || currentLine.length + word.length + 1 > 22) {
+			lines.push(word)
+		} else {
+			lines[lines.length - 1] = `${currentLine} ${word}`
+		}
+	}
+	return lines.join('\n')
+}
+
+function contractAtlasChart(spec: ChartSpec): SVGSVGElement {
+	const panelDefinitions: { fill: string; id: ContractAtlasPanel; subtitle: string; title: string }[] = [
+		{
+			fill: 'var(--blue-soft, #dceaf8)',
+			id: 'zoltar',
+			subtitle: 'Questions, universes, REP, and their token foundations',
+			title: 'Zoltar',
+		},
+		{
+			fill: 'var(--gold-soft, #f3e4c6)',
+			id: 'statoblast-deployment',
+			subtitle: 'Factory, CREATE2 deployer, worker, and component factories',
+			title: 'Statoblast — deployment',
+		},
+		{
+			fill: 'var(--green-soft, #dcefe8)',
+			id: 'statoblast-runtime',
+			subtitle: 'Pools, claims, resolution, oracle pricing, forks, and backing repair',
+			title: 'Statoblast — deployed runtime',
+		},
+		{
+			fill: 'var(--paper, #fff)',
+			id: 'statoblast-implementation',
+			subtitle: 'Inheritance stacks, delegate-compatible storage, interfaces, and type modules',
+			title: 'Statoblast — implementation boundaries',
+		},
+		{
+			fill: 'var(--soft, #edf3f5)',
+			id: 'infrastructure',
+			subtitle: 'Deployment helpers, compatibility contracts, imported OpenOracle, and vendored dependencies',
+			title: 'Infrastructure & external boundary',
+		},
+		{
+			fill: 'var(--red-soft, #f2d9d6)',
+			id: 'tests',
+			subtitle: 'Every test-only Solidity declaration; production targets are repeated as gateway groups',
+			title: 'Test-only contracts',
+		},
+	]
+	const panelGap = 0.45
+	const panelHeaderHeight = 1.12
+	const rowStep = 0.82
+	const nodeHeight = 0.62
+	const nodeWidth = 2.62
+	const columnStep = 3
+	const panelX1 = 0.1
+	const panelX2 = 18.35
+	let nextPanelY = 0.1
+	const panels = panelDefinitions.map(definition => {
+		const panelNodes = contractAtlasNodes.filter(node => node.panel === definition.id)
+		const rowCount = Math.max(...panelNodes.map(node => node.order + 1), 1)
+		const declarationCount = panelNodes.filter(node => node.declaration !== undefined).length
+		const moduleCount = panelNodes.length - declarationCount
+		const y1 = nextPanelY
+		const y2 = y1 + panelHeaderHeight + rowCount * rowStep + 0.48
+		nextPanelY = y2 + panelGap
+		return {
+			...definition,
+			countLabel: `${declarationCount} declaration${declarationCount === 1 ? '' : 's'}${moduleCount === 0 ? '' : ` + ${moduleCount} type module${moduleCount === 1 ? '' : 's'}`}`,
+			x1: panelX1,
+			x2: panelX2,
+			y1,
+			y2,
+		}
+	})
+	const panelById = new Map(panels.map(panel => [panel.id, panel]))
+	const positionedNodes: ContractAtlasChartNode[] = contractAtlasNodes.map(node => {
+		const panel = panelById.get(node.panel)
+		if (panel === undefined) throw new Error(`Contract atlas node ${node.id} has no panel`)
+		const x1 = 0.48 + node.column * columnStep
+		const y1 = panel.y1 + panelHeaderHeight + node.order * rowStep
+		return {
+			...node,
+			isGateway: false,
+			x1,
+			x2: x1 + nodeWidth,
+			y1,
+			y2: y1 + nodeHeight,
+		}
+	})
+	const testPanel = panelById.get('tests')
+	if (testPanel === undefined) throw new Error('Contract atlas is missing its test-only panel')
+	const testGatewayDefinitions = [
+		{ id: 'test-gateway-zoltar', label: 'Production target:\nZoltar & token helpers', order: 0, source: 'Repeated production boundary', kind: 'gateway' },
+		{ id: 'test-gateway-token', label: 'Production target:\nERC-1155 & shares', order: 1, source: 'Repeated production boundary', kind: 'gateway' },
+		{ id: 'test-gateway-escalation', label: 'Production target:\nEscalation stack', order: 2, source: 'Repeated production boundary', kind: 'gateway' },
+		{ id: 'test-gateway-forker', label: 'Production target:\nFork & migration', order: 3, source: 'Repeated production boundary', kind: 'gateway' },
+		{ id: 'test-gateway-pool', label: 'Production target:\nPool & factory', order: 4, source: 'Repeated production boundary', kind: 'gateway' },
+		{ id: 'test-gateway-openoracle', label: 'Production target:\nOpenOracle', order: 5, source: 'Repeated production boundary', kind: 'gateway' },
+		{ id: 'test-gateway-infra', label: 'Production target:\nCoverage & infrastructure', order: 6, source: 'Repeated production boundary', kind: 'gateway' },
+	] satisfies { id: string; kind: 'gateway'; label: string; order: number; source: string }[]
+	const testGatewayNodes: ContractAtlasChartNode[] = testGatewayDefinitions.map(node => {
+		const x1 = 0.48 + 5 * columnStep
+		const y1 = testPanel.y1 + panelHeaderHeight + node.order * rowStep
+		return {
+			...node,
+			column: 5,
+			isGateway: true,
+			panel: 'tests',
+			x1,
+			x2: x1 + nodeWidth,
+			y1,
+			y2: y1 + nodeHeight,
+		}
+	})
+	positionedNodes.push(...testGatewayNodes)
+	const positionedNodeById = new Map(positionedNodes.map(node => [node.id, node]))
+
+	function testGatewayForTarget(targetId: string): string {
+		if (targetId.startsWith('zoltar-')) return 'test-gateway-zoltar'
+		if (['statoblast-erc1155', 'statoblast-ierc1155-receiver', 'statoblast-share-token'].includes(targetId)) return 'test-gateway-token'
+		if (targetId.includes('escalation')) return 'test-gateway-escalation'
+		if (targetId.includes('forker') || targetId === 'statoblast-event-emitter') return 'test-gateway-forker'
+		if (targetId === 'openoracle-core') return 'test-gateway-openoracle'
+		if (targetId.includes('security-pool')) return 'test-gateway-pool'
+		return 'test-gateway-infra'
+	}
+
+	const positionedEdges: ContractAtlasChartEdge[] = contractAtlasPlotRoutes.map(route => {
+		const sourceNode = positionedNodeById.get(route.source)
+		const registryTargetNode = positionedNodeById.get(route.target)
+		if (sourceNode === undefined || registryTargetNode === undefined) {
+			throw new Error(`Contract atlas plot route ${route.id} has a missing source or target`)
+		}
+		const onlyEdge = route.edges.length === 1 ? route.edges[0] : undefined
+		if (route.edges.length === 0) throw new Error(`Contract atlas plot route ${route.id} has no relationships`)
+		const routedTargetId = sourceNode.panel === 'tests' && registryTargetNode.panel !== 'tests' ? testGatewayForTarget(registryTargetNode.id) : registryTargetNode.id
+		const targetNode = positionedNodeById.get(routedTargetId)
+		if (targetNode === undefined) throw new Error(`Contract atlas plot route ${route.id} has no routed target`)
+		const relationStyle: ContractAtlasRelation | 'multiple' = onlyEdge?.relation ?? 'multiple'
+		const routeFields = {
+			id: route.id,
+			meaning: contractAtlasPlotRouteMeaning(route),
+			relationStyle,
+			sourceLabel: sourceNode.label.replaceAll('\n', ' '),
+			targetLabel: registryTargetNode.label.replaceAll('\n', ' '),
+		}
+		const samePanel = sourceNode.panel === targetNode.panel
+		const horizontallySeparated = sourceNode.x2 < targetNode.x1 || targetNode.x2 < sourceNode.x1
+		if (samePanel && horizontallySeparated) {
+			const pointsRight = sourceNode.x1 < targetNode.x1
+			return {
+				...routeFields,
+				orientation: 'horizontal',
+				x1: pointsRight ? sourceNode.x2 : sourceNode.x1,
+				x2: pointsRight ? targetNode.x1 : targetNode.x2,
+				y1: (sourceNode.y1 + sourceNode.y2) / 2,
+				y2: (targetNode.y1 + targetNode.y2) / 2,
+			}
+		}
+		const pointsDown = sourceNode.y1 < targetNode.y1
+		return {
+			...routeFields,
+			orientation: 'vertical',
+			x1: (sourceNode.x1 + sourceNode.x2) / 2,
+			x2: (targetNode.x1 + targetNode.x2) / 2,
+			y1: pointsDown ? sourceNode.y2 : sourceNode.y1,
+			y2: pointsDown ? targetNode.y1 : targetNode.y2,
+		}
+	})
+	const relationStyles: Record<ContractAtlasRelation | 'multiple', { dash?: string; opacity: number; stroke: string; width: number }> = {
+		assets: { opacity: 0.68, stroke: 'var(--green, #1d735d)', width: 2.2 },
+		calls: { opacity: 0.56, stroke: 'var(--blue, #245f9f)', width: 1.8 },
+		compatible: { dash: '3,3', opacity: 0.42, stroke: 'var(--blue, #245f9f)', width: 1.5 },
+		delegatecall: { opacity: 0.72, stroke: 'var(--red, #99453f)', width: 2.2 },
+		deploys: { opacity: 0.68, stroke: 'var(--gold, #8a5d18)', width: 2.1 },
+		implements: { dash: '3,3', opacity: 0.42, stroke: 'var(--blue, #245f9f)', width: 1.5 },
+		inherits: { dash: '7,3', opacity: 0.48, stroke: 'var(--muted, #5f6d75)', width: 1.6 },
+		multiple: { dash: '9,3,2,3', opacity: 0.78, stroke: 'var(--ink, #1f2529)', width: 2.5 },
+		references: { dash: '2,5', opacity: 0.24, stroke: 'var(--muted, #5f6d75)', width: 1.1 },
+		tests: { dash: '2,4', opacity: 0.4, stroke: 'var(--red, #99453f)', width: 1.4 },
+		uses: { dash: '5,4', opacity: 0.36, stroke: 'var(--muted, #5f6d75)', width: 1.3 },
+	}
+	const relationOrder: (ContractAtlasRelation | 'multiple')[] = ['references', 'uses', 'inherits', 'implements', 'compatible', 'tests', 'calls', 'deploys', 'assets', 'delegatecall', 'multiple']
+	const edgeMarks = relationOrder.flatMap(relation =>
+		(['horizontal', 'vertical'] as const).map(orientation => {
+			const style = relationStyles[relation]
+			return link(
+				positionedEdges.filter(edge => edge.relationStyle === relation && edge.orientation === orientation),
+				{
+					curve: orientation === 'horizontal' ? 'bump-x' : 'bump-y',
+					markerEnd: 'arrow',
+					stroke: style.stroke,
+					...(style.dash === undefined ? {} : { strokeDasharray: style.dash }),
+					strokeOpacity: style.opacity,
+					strokeWidth: style.width,
+					title: (edge: ContractAtlasChartEdge) => `${edge.sourceLabel} → ${edge.targetLabel}\n${edge.meaning}`,
+					x1: 'x1',
+					x2: 'x2',
+					y1: 'y1',
+					y2: 'y2',
+				},
+			)
+		}),
+	)
+	const nodeStyles: Record<ContractAtlasChartNode['kind'], { dash?: string; fill: string; stroke: string }> = {
+		abstract: { dash: '6,3', fill: 'var(--soft, #edf3f5)', stroke: 'var(--muted, #5f6d75)' },
+		contract: { fill: 'var(--paper, #fff)', stroke: 'var(--ink, #1f2529)' },
+		gateway: { dash: '3,3', fill: 'var(--paper, #fff)', stroke: 'var(--red, #99453f)' },
+		interface: { dash: '3,3', fill: 'var(--blue-soft, #dceaf8)', stroke: 'var(--blue, #245f9f)' },
+		library: { fill: 'var(--gold-soft, #f3e4c6)', stroke: 'var(--gold, #8a5d18)' },
+		module: { dash: '2,3', fill: 'var(--green-soft, #dcefe8)', stroke: 'var(--green, #1d735d)' },
+	}
+	const nodeMarks = (Object.keys(nodeStyles) as ContractAtlasChartNode['kind'][]).map(kind => {
+		const style = nodeStyles[kind]
+		return rect(
+			positionedNodes.filter(node => node.kind === kind),
+			{
+				fill: style.fill,
+				rx: 7,
+				stroke: style.stroke,
+				...(style.dash === undefined ? {} : { strokeDasharray: style.dash }),
+				strokeWidth: 1.35,
+				title: node => `${node.label.replaceAll('\n', ' ')}\n${node.isGateway ? 'repeated target group' : node.kind}\n${node.source}`,
+				x1: 'x1',
+				x2: 'x2',
+				y1: 'y1',
+				y2: 'y2',
+			},
+		)
+	})
+	const panelTitles = panels.map(panel => ({ label: `${panel.title} · ${panel.countLabel}`, x: panel.x1 + 0.3, y: panel.y1 + 0.34 }))
+	const panelSubtitles = panels.map(panel => ({ label: panel.subtitle, x: panel.x1 + 0.3, y: panel.y1 + 0.7 }))
+	const chart = plot({
+		ariaDescription: spec.ariaDescription,
+		ariaLabel: spec.ariaLabel,
+		height: spec.height,
+		margin: 18,
+		marks: [
+			rect(panels, { fill: 'fill', fillOpacity: 0.28, rx: 14, stroke: 'var(--line, #d8e0e4)', strokeWidth: 1.5, x1: 'x1', x2: 'x2', y1: 'y1', y2: 'y2' }),
+			text(panelTitles, { fill: 'var(--ink, #1f2529)', fontSize: 15, fontWeight: 780, text: 'label', textAnchor: 'start', x: 'x', y: 'y' }),
+			text(panelSubtitles, { fill: 'var(--muted, #5f6d75)', fontSize: 10.5, text: 'label', textAnchor: 'start', x: 'x', y: 'y' }),
+			...edgeMarks,
+			...nodeMarks,
+			text(positionedNodes, {
+				fill: 'var(--ink, #1f2529)',
+				fontSize: 9.6,
+				fontWeight: 700,
+				lineHeight: 1.05,
+				lineWidth: 25,
+				text: node => contractAtlasDisplayLabel(node.label),
+				x: node => (node.x1 + node.x2) / 2,
+				y: node => (node.y1 + node.y2) / 2,
+			}),
+		],
+		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
+		width: spec.width,
+		x: { axis: null, domain: [0, 18.45] },
+		y: { axis: null, domain: [nextPanelY - panelGap + 0.1, 0] },
+	}) as SVGSVGElement
+	chart.dataset['chartState'] = `${contractAtlasNodes.length}-components-${contractAtlasEdges.length}-relationships`
+	chart.dataset['plotRouteCount'] = String(contractAtlasPlotRoutes.length)
+	return chart
+}
+
+function appendContractAtlasCell(row: HTMLTableRowElement, value: string, code = false): void {
+	const cell = document.createElement('td')
+	if (code) {
+		const codeElement = document.createElement('code')
+		codeElement.textContent = value
+		cell.append(codeElement)
+	} else {
+		cell.textContent = value
+	}
+	row.append(cell)
+}
+
+function renderContractAtlasTable(): void {
+	const tableBody = document.querySelector<HTMLTableSectionElement>('[data-contract-atlas-table]')
+	if (tableBody === null) return
+	const rows = contractAtlasRelationshipRows.map(({ edge, source, target }) => {
+		const row = document.createElement('tr')
+		row.dataset['relationshipId'] = edge.id
+		appendContractAtlasCell(row, source.label, true)
+		appendContractAtlasCell(row, target.label, true)
+		appendContractAtlasCell(row, contractAtlasRelationLabels[edge.relation])
+		appendContractAtlasCell(row, edge.description)
+		return row
+	})
+	tableBody.replaceChildren(...rows)
+	tableBody.dataset['relationshipCount'] = String(rows.length)
+}
+
 function auctionDemandChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
 	const axes = quantitativeChartAxisLabels['fig-auction-clearing-ladder']
 	const example = document.querySelector('#simple-auction-example')
@@ -1321,6 +1648,9 @@ function createChart(chartId: string, spec: ChartSpec, mount: HTMLElement): SVGS
 	if (chartId === 'fig-contract-interaction-map') {
 		return contractInteractionChart(spec)
 	}
+	if (chartId === 'fig-complete-contract-atlas') {
+		return contractAtlasChart(spec)
+	}
 	if (chartId === 'fig-auction-clearing-ladder') {
 		return auctionDemandChart(spec, mount)
 	}
@@ -1373,6 +1703,7 @@ const mounts = Array.from(document.querySelectorAll<HTMLElement>('[data-plot-cha
 for (const mount of mounts) {
 	renderMount(mount)
 }
+renderContractAtlasTable()
 
 for (const chartId of ['fig-auction-clearing-ladder', 'fig-liquidation-health-curve', 'plot-open-oracle-integration-2', 'plot-statoblast-whitepaper-7', 'plot-statoblast-whitepaper-8', 'plot-statoblast-whitepaper-19']) {
 	const mount = document.querySelector<HTMLElement>(`[data-plot-chart="${chartId}"]`)

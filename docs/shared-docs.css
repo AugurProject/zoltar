@@ -442,6 +442,99 @@ body.doc-openoracle .diagram-wide > svg,
 body.doc-openoracle .diagram-wide > .plot-chart {
 	min-width: 60rem;
 }
+body.doc-openoracle .diagram-atlas > .plot-chart.plot-chart-ready {
+	min-width: 108rem;
+}
+body.doc-openoracle .contract-atlas-legend {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 0.5rem 0.8rem;
+	margin: 1rem 0;
+	padding: 0;
+	list-style: none;
+}
+body.doc-openoracle .contract-atlas-legend li {
+	display: flex;
+	align-items: center;
+	gap: 0.55rem;
+	min-width: 0;
+	padding: 0.5rem 0.65rem;
+	border: 1px solid var(--line);
+	border-radius: 0.45rem;
+	background: var(--paper);
+	font-size: 0.86rem;
+}
+body.doc-openoracle .atlas-line {
+	flex: 0 0 2.6rem;
+	height: 0;
+	border-top: 0.16rem solid var(--blue);
+}
+body.doc-openoracle .atlas-line-assets {
+	border-color: var(--green);
+	border-top-width: 0.2rem;
+}
+body.doc-openoracle .atlas-line-deploy {
+	border-color: var(--gold);
+	border-top-width: 0.2rem;
+}
+body.doc-openoracle .atlas-line-delegate {
+	border-color: var(--red);
+	border-top-width: 0.2rem;
+}
+body.doc-openoracle .atlas-line-source {
+	border-color: var(--muted);
+	border-top-style: dashed;
+}
+body.doc-openoracle .atlas-line-reference {
+	border-color: var(--muted);
+	border-top-style: dotted;
+	opacity: 0.65;
+}
+body.doc-openoracle .atlas-line-test {
+	border-color: var(--red);
+	border-top-style: dotted;
+}
+body.doc-openoracle .atlas-line-multiple {
+	height: 0.16rem;
+	border: 0;
+	background: repeating-linear-gradient(to right, var(--ink) 0 0.9rem, transparent 0.9rem 1.2rem, var(--ink) 1.2rem 1.4rem, transparent 1.4rem 1.7rem);
+}
+body.doc-openoracle .contract-atlas-register {
+	margin: 1rem 0 1.5rem;
+	padding: 0.75rem 0.85rem;
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: var(--soft);
+}
+body.doc-openoracle .contract-atlas-register summary {
+	cursor: pointer;
+	color: var(--ink);
+	font-weight: 750;
+}
+body.doc-openoracle .contract-atlas-register > p {
+	margin: 0.75rem 0 0;
+}
+body.doc-openoracle .contract-atlas-register table {
+	table-layout: fixed;
+}
+body.doc-openoracle .contract-atlas-register th:nth-child(1),
+body.doc-openoracle .contract-atlas-register th:nth-child(2),
+body.doc-openoracle .contract-atlas-register td:nth-child(1),
+body.doc-openoracle .contract-atlas-register td:nth-child(2) {
+	width: 21%;
+}
+body.doc-openoracle .contract-atlas-register th:nth-child(3),
+body.doc-openoracle .contract-atlas-register td:nth-child(3) {
+	width: 18%;
+}
+body.doc-openoracle .contract-atlas-register th:nth-child(4),
+body.doc-openoracle .contract-atlas-register td:nth-child(4) {
+	width: 40%;
+}
+body.doc-openoracle .contract-atlas-register td > code:only-child {
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
 body.doc-openoracle .equation {
 	overflow-x: auto;
 	overscroll-behavior-x: contain;
@@ -675,10 +768,19 @@ body.doc-openoracle td math {
 	body.doc-openoracle section {
 		padding: 1rem;
 	}
+	body.doc-openoracle .contract-atlas-legend {
+		grid-template-columns: 1fr;
+	}
 	body.doc-openoracle table {
 		display: block;
 		overflow-x: auto;
 		white-space: nowrap;
+	}
+	body.doc-openoracle .contract-atlas-register table {
+		display: table;
+		min-width: 47rem;
+		overflow-x: visible;
+		white-space: normal;
 	}
 	body.doc-openoracle.invariants-catalog table {
 		display: table;
