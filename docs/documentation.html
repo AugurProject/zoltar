@@ -5,34 +5,16 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta
 			name="description"
-			content="A unified, searchable library for the complete Zoltar and Statoblast protocol documentation."
+			content="The complete Statoblast protocol documentation in one searchable, continuous reader."
 		/>
-		<title>Zoltar Documentation</title>
+		<title>Statoblast documentation</title>
 		<link rel="stylesheet" href="./docsReader.css" />
 	</head>
 	<body class="doc-reader">
 		<a class="skip-link" href="#reader-content">Skip to documentation</a>
 
-		<header class="reader-hero">
-			<div class="reader-hero-copy">
-				<p class="reader-eyebrow">Zoltar protocol library</p>
-				<h1>One library. One continuous read.</h1>
-				<p>
-					Move through the complete Zoltar and Statoblast documentation without
-					opening a trail of separate pages. Diagrams, examples, source links,
-					and deep references remain intact.
-				</p>
-			</div>
-			<div class="reader-overview" aria-label="Documentation overview">
-				<div>
-					<strong>14</strong>
-					<span>documents</span>
-				</div>
-				<div>
-					<strong>3</strong>
-					<span>reading paths</span>
-				</div>
-			</div>
+		<header class="reader-header">
+			<h1>Statoblast documentation</h1>
 		</header>
 
 		<div class="reader-progress" aria-hidden="true">
@@ -42,16 +24,8 @@
 		<div class="reader-shell">
 			<aside class="reader-sidebar" aria-label="Documentation navigation">
 				<div class="reader-sidebar-inner">
-					<a class="reader-brand" href="#reader-content" aria-label="Zoltar documentation top">
-						<span class="reader-brand-mark" aria-hidden="true">Z</span>
-						<span>
-							<strong>Zoltar</strong>
-							<small>Documentation</small>
-						</span>
-					</a>
-
 					<label class="reader-search">
-						<span>Search the library</span>
+						<span>Search documentation</span>
 						<input
 							type="search"
 							placeholder="Try “migration” or “oracle”"
@@ -69,30 +43,6 @@
 			</aside>
 
 			<main id="reader-content" class="reader-content" tabindex="-1">
-				<section class="reader-intro" aria-labelledby="reader-intro-title">
-					<div>
-						<p class="reader-kicker">Start here</p>
-						<h2 id="reader-intro-title">Choose a path, or simply keep scrolling.</h2>
-					</div>
-					<div class="reader-paths">
-						<a href="./statoblast-whitepaper.html" data-reader-path="statoblast-whitepaper.html">
-							<span>01</span>
-							<strong>Learn the protocol</strong>
-							<small>Whitepapers → designs → security model</small>
-						</a>
-						<a href="./operator-reference.md" data-reader-path="operator-reference.md">
-							<span>02</span>
-							<strong>Operate the system</strong>
-							<small>Guardrails → transactions → events</small>
-						</a>
-						<a href="./contract-interactions.html" data-reader-path="contract-interactions.html">
-							<span>03</span>
-							<strong>Trace the implementation</strong>
-							<small>Architecture → contracts → deployment</small>
-						</a>
-					</div>
-				</section>
-
 				<div class="reader-empty" hidden data-reader-empty>
 					<p class="reader-kicker">No matches</p>
 					<h2>Try a broader search.</h2>

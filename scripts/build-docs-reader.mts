@@ -2,11 +2,16 @@ import assert from 'node:assert/strict'
 import { readdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { Window } from 'happy-dom'
 import { markdownHeadingIds } from './docs-markdown-anchors.mts'
 
 const repositoryRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)))
 const outputPath = path.join(repositoryRoot, 'docs/docsReaderMarkdown.js')
 const readerShellPaths = new Set(['documentation.html'])
+
+function normalizedElementText(content: string): string {
+	return content.replace(/\s+/g, ' ').trim()
+}
 
 async function collectReaderDocumentPaths(): Promise<string[]> {
 	const runtime = await readFile(path.join(repositoryRoot, 'docs/docsReader.js'), 'utf8')
@@ -22,9 +27,17 @@ async function collectReaderDocumentPaths(): Promise<string[]> {
 	assert.deepEqual(documentPaths.toSorted(), sourceDocumentPaths, 'docs/docsReader.js reader documents must exactly match the top-level documentation corpus')
 
 	const page = await readFile(path.join(repositoryRoot, 'docs/documentation.html'), 'utf8')
-	const overviewCount = Number(/<strong>(\d+)<\/strong>\s*<span>documents<\/span>/.exec(page)?.[1])
 	const initialStatusCount = Number(/All (\d+) documents/.exec(page)?.[1])
-	assert.equal(overviewCount, documentPaths.length, 'documentation overview count must match the reader corpus')
+	const pageWindow = new Window()
+	pageWindow.document.write(page)
+	pageWindow.document.close()
+	const pageTitles = Array.from(pageWindow.document.querySelectorAll('head > title'), title => normalizedElementText(title.textContent))
+	const pageHeadings = Array.from(pageWindow.document.querySelectorAll('body h1'), heading => normalizedElementText(heading.textContent))
+	const browserTitle = normalizedElementText(pageWindow.document.title)
+	pageWindow.close()
+	assert.deepEqual(pageTitles, ['Statoblast documentation'], 'documentation must have one exact Statoblast browser title')
+	assert.equal(browserTitle, 'Statoblast documentation', 'documentation browser title must render exactly as Statoblast documentation')
+	assert.deepEqual(pageHeadings, ['Statoblast documentation'], 'documentation must have one exact outer Statoblast heading')
 	assert.equal(initialStatusCount, documentPaths.length, 'documentation initial search status must match the reader corpus')
 
 	const noscript = /<noscript>([\s\S]+)<\/noscript>/.exec(page)?.[1]

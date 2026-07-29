@@ -1,6 +1,6 @@
 const documentGroups = [
 	{
-		label: 'Protocol foundations',
+		label: 'Whitepapers',
 		documents: [
 			{
 				path: 'statoblast-whitepaper.html',
@@ -12,6 +12,11 @@ const documentGroups = [
 				title: 'Zoltar whitepaper',
 				description: 'Universes, question encoding, global forks, and REP splitting.',
 			},
+		],
+	},
+	{
+		label: 'Protocol design',
+		documents: [
 			{
 				path: 'truth-auction.html',
 				title: 'Truth auction',
@@ -96,6 +101,8 @@ const clearSearchButton = document.querySelector('[data-clear-search]')
 const progress = document.querySelector('[data-reading-progress]')
 const chapterByPath = new Map()
 const frameByPath = new Map()
+const navigationDocumentByPath = new Map()
+const navigationSectionsByPath = new Map()
 const searchableTextByPath = new Map()
 const pendingFragmentByPath = new Map()
 const indexedPaths = new Set()
@@ -127,30 +134,87 @@ function decodeFragment(fragment) {
 function createNavigation() {
 	if (!(navigation instanceof HTMLElement)) return
 
-	let index = 0
-	for (const group of documentGroups) {
-		const groupElement = document.createElement('section')
+	for (const [groupIndex, group] of documentGroups.entries()) {
+		const groupElement = document.createElement('details')
 		groupElement.className = 'reader-nav-group'
+		groupElement.open = groupIndex === 0
 
-		const heading = document.createElement('h2')
-		heading.textContent = group.label
-		groupElement.append(heading)
+		const summary = document.createElement('summary')
+		summary.textContent = group.label
+		groupElement.append(summary)
+
+		const groupDocuments = document.createElement('div')
+		groupDocuments.className = 'reader-nav-documents'
 
 		for (const documentEntry of group.documents) {
-			index += 1
+			const documentElement = document.createElement('section')
+			documentElement.className = 'reader-nav-document'
+			documentElement.dataset.navigationDocumentPath = documentEntry.path
+
 			const link = document.createElement('a')
+			link.className = 'reader-nav-document-link'
 			link.href = `#${chapterId(documentEntry.path)}`
 			link.dataset.documentPath = documentEntry.path
 
-			const number = document.createElement('span')
-			number.textContent = String(index).padStart(2, '0')
 			const title = document.createElement('strong')
 			title.textContent = documentEntry.title
-			link.append(number, title)
-			groupElement.append(link)
+			link.append(title)
+
+			const sectionList = document.createElement('ul')
+			sectionList.className = 'reader-nav-sections'
+			sectionList.setAttribute('aria-label', `${documentEntry.title} sections`)
+			documentElement.append(link, sectionList)
+			groupDocuments.append(documentElement)
+			navigationDocumentByPath.set(documentEntry.path, documentElement)
+			navigationSectionsByPath.set(documentEntry.path, sectionList)
 		}
 
+		groupElement.append(groupDocuments)
 		navigation.append(groupElement)
+	}
+}
+
+function headingSlug(text) {
+	return text
+		.toLowerCase()
+		.normalize('NFKD')
+		.replace(/[\u0300-\u036f]/g, '')
+		.replace(/[^a-z0-9]+/g, '-')
+		.replace(/^-|-$/g, '')
+}
+
+function populateNavigationSections(path, frameDocument) {
+	const sectionList = navigationSectionsByPath.get(path)
+	const frameWindow = frameDocument.defaultView
+	if (sectionList === undefined || frameWindow === null) return
+
+	const headings = Array.from(frameDocument.querySelectorAll('main h2, article h2'))
+	const usedIds = new Set(Array.from(frameDocument.querySelectorAll('[id]'), element => element.id))
+	sectionList.replaceChildren()
+
+	for (const [index, heading] of headings.entries()) {
+		if (!(heading instanceof frameWindow.HTMLElement)) continue
+		let headingId = heading.id
+		if (headingId.length === 0) {
+			const baseId = headingSlug(heading.textContent ?? '') || `section-${index + 1}`
+			headingId = baseId
+			let suffix = 2
+			while (usedIds.has(headingId)) {
+				headingId = `${baseId}-${suffix}`
+				suffix += 1
+			}
+			heading.id = headingId
+			usedIds.add(headingId)
+		}
+
+		const item = document.createElement('li')
+		const link = document.createElement('a')
+		link.href = `#${chapterId(path)}--${encodeURIComponent(headingId)}`
+		link.dataset.documentPath = path
+		link.dataset.documentFragment = headingId
+		link.textContent = heading.textContent?.trim() || `Section ${index + 1}`
+		item.append(link)
+		sectionList.append(item)
 	}
 }
 
@@ -397,7 +461,12 @@ function navigateToDocument(path, fragment = '', updateHistory = true) {
 	pendingFragmentByPath.clear()
 	if (!scrollToFrameFragment(path, fragment)) {
 		const allDocumentsSettled = indexedPaths.size + failedPaths.size === documents.length
-		if (failedPaths.has(path) || allDocumentsSettled) {
+		if (failedPaths.has(path)) {
+			if (fragment.length > 0) pendingFragmentByPath.set(path, fragment)
+			chapter.scrollIntoView({ block: 'start' })
+			return
+		}
+		if (allDocumentsSettled) {
 			chapter.scrollIntoView({ block: 'start' })
 			return
 		}
@@ -421,6 +490,7 @@ function initializeFrame(path, frame, frameWrap, frameStatus) {
 	failedPaths.delete(path)
 	indexedPaths.add(path)
 	searchableTextByPath.set(path, `${searchableTextByPath.get(path) ?? ''} ${frameDocument.body?.textContent ?? ''}`.toLowerCase())
+	populateNavigationSections(path, frameDocument)
 
 	frameDocument.addEventListener('click', event => frameLinkClick(path, frame, event))
 	if (typeof ResizeObserver !== 'undefined' && frameDocument.body !== null) {
@@ -441,9 +511,11 @@ function applySearch() {
 
 	for (const documentEntry of documents) {
 		const chapter = chapterByPath.get(documentEntry.path)
+		const navigationDocument = navigationDocumentByPath.get(documentEntry.path)
 		if (chapter === undefined) continue
 		const matchesQuery = query.length === 0 || searchableTextByPath.get(documentEntry.path)?.includes(query)
 		chapter.hidden = !matchesQuery
+		if (navigationDocument !== undefined) navigationDocument.hidden = !matchesQuery
 		if (!matchesQuery) continue
 
 		matches += 1
@@ -485,8 +557,15 @@ function applySearch() {
 	if (emptyState instanceof HTMLElement) {
 		emptyState.hidden = matches !== 0 || pendingCount > 0 || failedPaths.size > 0
 	}
+	for (const group of navigation?.querySelectorAll('.reader-nav-group') ?? []) {
+		if (!(group instanceof HTMLDetailsElement)) continue
+		const hasVisibleDocument = Array.from(group.querySelectorAll('.reader-nav-document')).some(documentElement => !documentElement.hasAttribute('hidden'))
+		group.hidden = !hasVisibleDocument
+		if (query.length > 0 && hasVisibleDocument) group.open = true
+	}
 	if (pendingCount === 0) {
 		for (const [path, fragment] of pendingFragmentByPath) {
+			if (failedPaths.has(path)) continue
 			if (!scrollToFrameFragment(path, fragment)) {
 				chapterByPath.get(path)?.scrollIntoView({ block: 'start' })
 			}
@@ -503,7 +582,7 @@ function updateProgress() {
 }
 
 function observeChapters() {
-	const links = Array.from(document.querySelectorAll('[data-document-path]'))
+	const links = Array.from(document.querySelectorAll('.reader-nav-document-link'))
 	const observer = new IntersectionObserver(
 		entries => {
 			const visibleEntry = entries.filter(entry => entry.isIntersecting).sort((left, right) => Math.abs(left.boundingClientRect.top) - Math.abs(right.boundingClientRect.top))[0]
@@ -512,7 +591,11 @@ function observeChapters() {
 			for (const link of links) {
 				const isCurrent = link.getAttribute('data-document-path') === path ? 'location' : undefined
 				if (isCurrent === undefined) link.removeAttribute('aria-current')
-				else link.setAttribute('aria-current', isCurrent)
+				else {
+					link.setAttribute('aria-current', isCurrent)
+					const group = link.closest('.reader-nav-group')
+					if (group instanceof HTMLDetailsElement) group.open = true
+				}
 			}
 		},
 		{ rootMargin: '-10% 0px -78% 0px' },
@@ -546,24 +629,16 @@ restoreHash()
 applySearch()
 updateProgress()
 
-for (const link of document.querySelectorAll('[data-reader-path]')) {
-	link.addEventListener('click', event => {
-		if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-		const path = link.getAttribute('data-reader-path')
-		if (path === null) return
-		event.preventDefault()
-		navigateToDocument(path)
-	})
-}
-for (const link of navigation?.querySelectorAll('a[data-document-path]') ?? []) {
-	link.addEventListener('click', event => {
-		if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-		const path = link.getAttribute('data-document-path')
-		if (path === null) return
-		event.preventDefault()
-		navigateToDocument(path)
-	})
-}
+navigation?.addEventListener('click', event => {
+	if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+	if (!(event.target instanceof Element)) return
+	const link = event.target.closest('a[data-document-path]')
+	if (!(link instanceof HTMLAnchorElement)) return
+	const path = link.dataset.documentPath
+	if (path === undefined) return
+	event.preventDefault()
+	navigateToDocument(path, link.dataset.documentFragment ?? '')
+})
 searchInput?.addEventListener('input', applySearch)
 clearSearchButton?.addEventListener('click', () => {
 	if (!(searchInput instanceof HTMLInputElement)) return
