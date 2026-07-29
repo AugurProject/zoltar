@@ -55,5 +55,5 @@ export const importAndLoad = 'Import'
 export const deleteSavedSimulationState = 'Delete Saved Simulation State'
 export const formatDeleteSavedSimulationStateDetail = (stateName: CopyTemplateValue) => `Delete the saved state "${stateName}" from browser storage. Built-in scenarios are not affected.`
 export const builtInScenarioDeletionReason = 'Built-in scenarios cannot be deleted.'
-export const removeCorruptedSavedStates = 'Remove Corrupted Saved States'
+export const removeCorruptedSavedStatesTitle = 'Remove Corrupted Saved States'
 export const invalidSavedStateCleanupHint = 'Remove saved simulation state entries that are no longer readable from browser storage. Valid saved states will be kept.'

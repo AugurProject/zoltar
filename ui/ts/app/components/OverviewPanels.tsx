@@ -158,7 +158,7 @@ export function OverviewPanels({
 								)
 							if (accountState.address === undefined) return appCopy.notConnected
 
-							return <AddressValue address={accountState.address} />
+							return <AddressValue address={accountState.address} responsiveAbbreviation />
 						})()}
 					</MetricField>
 					{showAccountBalances ? (

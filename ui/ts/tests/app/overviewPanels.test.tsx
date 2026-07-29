@@ -172,13 +172,33 @@ describe('OverviewPanels', () => {
 		expect(documentQueries.getByText('Sepolia (11155111)')).not.toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Copy Address' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Address Copied' })).toBeNull()
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Change Wallet' }))
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Switch to Ethereum Mainnet' }))
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Change wallet' }))
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Switch to Ethereum mainnet' }))
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Disconnect' }))
 
 		expect(onChangeWallet).toHaveBeenCalledTimes(1)
 		expect(onSwitchNetwork).toHaveBeenCalledTimes(1)
 		expect(onDisconnectWallet).toHaveBeenCalledTimes(1)
+	})
+
+	test('provides the responsive account-address presentation for a normal provider wallet', async () => {
+		const address = '0x1234567890123456789012345678901234567890'
+		const documentQueries = await renderOverviewPanels({
+			accountState: {
+				address,
+				chainId: '0x1',
+				ethBalance: undefined,
+				wethBalance: undefined,
+			},
+		})
+
+		const walletPanel = document.body.querySelector('.overview-wallet-panel')
+		if (!(walletPanel instanceof HTMLElement)) throw new Error('Expected wallet overview panel')
+		expect(walletPanel.classList.contains('is-simulation')).toBe(false)
+
+		const addressButton = documentQueries.getByRole('button', { name: `Copy address ${address}` })
+		expect(addressButton.querySelector('.address-value-full')?.textContent).toBe(address)
+		expect(addressButton.querySelector('.address-value-abbreviated')?.textContent).toBe('0x123456…567890')
 	})
 
 	test('identifies recognized and unknown wrong networks in the environment badge', async () => {

@@ -30,7 +30,7 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 	} = fixture
 
 	describe('stage navigation', () => {
-		test('does not offer Open Fork & Migration before the pool has entered its fork workflow', async () => {
+		test('does not offer Open fork & migration before the pool has entered its fork workflow', async () => {
 			const selectedPoolAddress = zeroAddress
 			const renderedComponent = await renderIntoDocument(
 				<SecurityPoolWorkflowSection
@@ -93,7 +93,7 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 			setCleanup(renderedComponent.cleanup)
 
 			const documentQueries = within(document.body)
-			expect(documentQueries.queryByRole('button', { name: 'Open Fork & Migration' })).toBeNull()
+			expect(documentQueries.queryByRole('button', { name: 'Open fork & migration' })).toBeNull()
 		})
 
 		test('opens the concrete migration stage when the pool is already inside its fork workflow', async () => {
@@ -516,16 +516,16 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 			setCleanup(renderedComponent.cleanup)
 
 			const documentQueries = within(document.body)
-			expectTransactionButtonEnabled(document.body, 'Trigger Zoltar Fork')
+			expectTransactionButtonEnabled(document.body, 'Trigger Zoltar fork')
 
 			await act(() => {
-				fireEvent.click(documentQueries.getByRole('button', { name: 'Trigger Zoltar Fork' }))
+				fireEvent.click(documentQueries.getByRole('button', { name: 'Trigger Zoltar fork' }))
 			})
 
 			expect(triggerZoltarForkCalls).toBe(1)
 		})
 
-		test('hides Trigger Zoltar Fork after the pool has already entered its fork workflow and keeps Open Fork & Migration available', async () => {
+		test('hides Trigger Zoltar Fork after the pool has already entered its fork workflow and keeps Open fork & migration available', async () => {
 			const selectedPoolAddress = zeroAddress
 			const renderedComponent = await renderIntoDocument(
 				<SecurityPoolWorkflowSection
@@ -585,7 +585,7 @@ describe('SecurityPoolWorkflowSection: fork workflow state', () => {
 			setCleanup(renderedComponent.cleanup)
 
 			const documentQueries = within(document.body)
-			expect(documentQueries.queryByRole('button', { name: 'Trigger Zoltar Fork' })).toBeNull()
+			expect(documentQueries.queryByRole('button', { name: 'Trigger Zoltar fork' })).toBeNull()
 			expect(documentQueries.getByRole('button', { name: 'Fork & Migration' })).not.toBeNull()
 			expect(document.body.textContent?.includes('Fork Migration')).toBe(true)
 		})

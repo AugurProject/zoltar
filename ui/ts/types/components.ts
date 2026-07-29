@@ -100,6 +100,7 @@ export type TransactionStatusCardProps = {
 export type RouteHeaderProps = {
 	actions?: ComponentChildren
 	badge?: ComponentChildren
+	className?: string
 	description?: ComponentChildren
 	eyebrow?: ComponentChildren
 	summary?: ComponentChildren
@@ -198,6 +199,7 @@ export type ViewTabsProps<TValue extends string> = {
 }
 
 export type TransactionActionButtonProps = {
+	ariaLabel?: string
 	availability?: ActionAvailability
 	className?: string
 	disabled?: boolean

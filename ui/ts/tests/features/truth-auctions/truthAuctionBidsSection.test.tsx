@@ -86,7 +86,7 @@ describe('TruthAuctionBidsSection', () => {
 		expect(within(bidHistory).getAllByRole('cell')).toHaveLength(5)
 		expect(within(bidHistory).queryByRole('button', { name: /Copy address/ })).toBeNull()
 		expect(within(bidHistory).queryByRole('button', { name: /Copy exact value/ })).toBeNull()
-		fireEvent.click(within(document.body).getByRole('button', { name: 'Show More Truth Auction Bids' }))
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Show more truth auction bids' }))
 		expect(loadMoreCalls).toBe(1)
 	})
 
@@ -203,7 +203,7 @@ describe('ViewerTruthAuctionBidsSection', () => {
 		expect(checkbox.disabled).toBe(false)
 		fireEvent.change(checkbox, { target: { checked: true } })
 		expect(selectionChanges).toEqual([{ bidKey: '11:1', checked: true }])
-		expect(within(document.body).getByRole('button', { name: 'Show More Of My Bids' })).not.toBeNull()
+		expect(within(document.body).getByRole('button', { name: 'Show more of my bids' })).not.toBeNull()
 	})
 
 	test('shows bid-book recovery instead of a false empty My Bids state', async () => {
@@ -230,7 +230,7 @@ describe('ViewerTruthAuctionBidsSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Failed to load truth auction bidbook')).not.toBeNull()
 		expect(documentQueries.queryByText('No bids from this wallet are indexed for the current auction.')).toBeNull()
-		expect(documentQueries.queryByRole('button', { name: 'Show More Of My Bids' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Show more of my bids' })).toBeNull()
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry my bids' }))
 		expect(retryCalls).toBe(1)
 	})

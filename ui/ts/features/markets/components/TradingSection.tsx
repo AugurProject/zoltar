@@ -294,7 +294,7 @@ export function TradingSection({
 			description: tradingCopy.resolvedShareRedemptionDescription,
 			key: 'redeem-shares',
 			readiness: !walletOnWrongNetwork && redeemSharesEnabled && effectiveRedeemSharesLauncherBlocker === undefined ? 'ready' : 'blocked',
-			title: tradingCopy.redeemResolvedShares,
+			title: tradingCopy.redeemResolvedSharesTitle,
 			...(!walletOnWrongNetwork && redeemSharesEnabled && effectiveRedeemSharesLauncherBlocker === undefined ? { onAction: () => setActiveModal('redeem-shares') } : {}),
 			...(effectiveRedeemSharesLauncherBlocker === undefined ? {} : { blocker: effectiveRedeemSharesLauncherBlocker }),
 		},
@@ -417,7 +417,7 @@ export function TradingSection({
 				/>
 				<div className='actions'>
 					<TransactionActionButton
-						idleLabel={tradingCopy.mintCompleteSets}
+						idleLabel={tradingCopy.mintCompleteSetsActionLabel}
 						pendingLabel={tradingCopy.mintingCompleteSets}
 						onClick={onCreateCompleteSet}
 						pending={tradingActiveAction === 'createCompleteSet'}
@@ -469,7 +469,7 @@ export function TradingSection({
 				/>
 				<div className='actions'>
 					<TransactionActionButton
-						idleLabel={tradingCopy.redeemCompleteSets}
+						idleLabel={tradingCopy.redeemCompleteSetsActionLabel}
 						pendingLabel={tradingCopy.redeemingCompleteSets}
 						onClick={onRedeemCompleteSet}
 						pending={tradingActiveAction === 'redeemCompleteSet'}
@@ -539,7 +539,7 @@ export function TradingSection({
 				context={getTransactionContext(selectedPool?.questionOutcome === undefined || selectedPool.questionOutcome === 'none' ? commonCopy.unavailable : getReportingOutcomeLabel(selectedPool.questionOutcome))}
 				isOpen={activeModal === 'redeem-shares'}
 				onClose={() => setActiveModal(undefined)}
-				title={tradingCopy.redeemResolvedShares}
+				title={tradingCopy.redeemResolvedSharesTitle}
 			>
 				<TransactionReview
 					primary={[

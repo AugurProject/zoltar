@@ -189,8 +189,8 @@ describe('OpenOracleSection route create view', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('button', { name: 'Return to Browse' })).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Create Another' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Return to browse' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Create another' })).not.toBeNull()
 		expect(document.body.querySelector('.workflow-transaction-status')).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Latest Oracle Action' })).toBeNull()
 	})
@@ -220,7 +220,7 @@ describe('OpenOracleSection route create view', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Create Standalone Oracle Report')
+		expectTransactionButtonDisabled(document.body, 'Create standalone Oracle report')
 		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
 	})
 
@@ -250,7 +250,7 @@ describe('OpenOracleSection route create view', () => {
 		const baseTokenAddressInput = within(document.body).getByLabelText('Base Token Address')
 		expect(baseTokenAddressInput.hasAttribute('aria-invalid')).toBe(false)
 		expect(baseTokenAddressInput.hasAttribute('aria-describedby')).toBe(false)
-		expectTransactionButtonDisabled(document.body, 'Create Standalone Oracle Report', 'Enter a valid base token address.')
+		expectTransactionButtonDisabled(document.body, 'Create standalone Oracle report', 'Enter a valid base token address.')
 		expect(document.body.textContent?.includes('Review the highlighted report fields.')).toBe(false)
 	})
 
@@ -273,7 +273,7 @@ describe('OpenOracleSection route create view', () => {
 		const baseTokenAmountInput = within(document.body).getByLabelText('Base Token Amount')
 		expect(baseTokenAmountInput.hasAttribute('aria-invalid')).toBe(false)
 		expect(baseTokenAmountInput.getAttribute('aria-describedby')).toBe('open-oracle-exact-token1-report-help')
-		expectTransactionButtonDisabled(document.body, 'Create Standalone Oracle Report', 'Base token amount must be greater than zero.')
+		expectTransactionButtonDisabled(document.body, 'Create standalone Oracle report', 'Base token amount must be greater than zero.')
 		expect(document.body.textContent?.includes('Review the highlighted report fields.')).toBe(false)
 	})
 
@@ -302,7 +302,7 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Report Actions' })).not.toBeNull()
 		expect(documentQueries.queryByText(/^Blocked:/)).toBeNull()
 		expect(document.body.querySelector('.open-oracle-report-stack')).not.toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Dispute & Swap', 'This report is not ready to dispute.')
+		expectTransactionButtonDisabled(document.body, 'Dispute & swap', 'This report is not ready to dispute.')
 	})
 
 	test('associates an invalid dispute amount with the affected field', async () => {
@@ -335,7 +335,7 @@ describe('OpenOracleSection route create view', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Dispute & Swap' }))
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Dispute & swap' }))
 		const dialog = documentQueries.getByRole('dialog', { name: 'Dispute & Swap' })
 		const dialogQueries = within(dialog)
 		const baseTokenAmountInput = dialogQueries.getByLabelText('New REPv2 Amount')
@@ -344,7 +344,7 @@ describe('OpenOracleSection route create view', () => {
 		const amountError = dialogQueries.getByText('Enter a valid new base token amount.')
 		expect(amountError.getAttribute('role')).toBe('alert')
 		expect(dialog.textContent?.split('Enter a valid new base token amount.')).toHaveLength(2)
-		expect(dialogQueries.getByRole('button', { name: 'Dispute & Swap' }).getAttribute('aria-describedby')).toBe('open-oracle-dispute-new-amount-1-error-7')
+		expect(dialogQueries.getByRole('button', { name: 'Dispute & swap' }).getAttribute('aria-describedby')).toBe('open-oracle-dispute-new-amount-1-error-7')
 	})
 
 	test('keeps blank and unsubmitted report lookups quiet', async () => {
@@ -486,7 +486,7 @@ describe('OpenOracleSection route create view', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Create Standalone Oracle Report', 'Need 100 more ETH in this wallet to create the selected standalone Open Oracle report.')
+		expectTransactionButtonDisabled(document.body, 'Create standalone Oracle report', 'Need 100 more ETH in this wallet to create the selected standalone Open Oracle report.')
 	})
 
 	test('does not disable create before token decimals are loaded for large but valid token1 amounts', async () => {
@@ -514,7 +514,7 @@ describe('OpenOracleSection route create view', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonEnabled(document.body, 'Create Standalone Oracle Report')
+		expectTransactionButtonEnabled(document.body, 'Create standalone Oracle report')
 	})
 
 	test('does not disable create before token decimals are loaded for high-decimal token1 amounts', async () => {
@@ -543,7 +543,7 @@ describe('OpenOracleSection route create view', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonEnabled(document.body, 'Create Standalone Oracle Report')
+		expectTransactionButtonEnabled(document.body, 'Create standalone Oracle report')
 	})
 
 	test('uses valid timing defaults and reviews every lifecycle parameter', async () => {
@@ -570,7 +570,7 @@ describe('OpenOracleSection route create view', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonEnabled(document.body, 'Create Standalone Oracle Report')
+		expectTransactionButtonEnabled(document.body, 'Create standalone Oracle report')
 		const reviewHeading = within(document.body).getByRole('heading', { name: 'Transaction Review' })
 		const review = reviewHeading.closest('section')
 		if (!(review instanceof HTMLElement)) throw new Error('Expected transaction review section')
@@ -642,7 +642,7 @@ describe('OpenOracleSection route create view', () => {
 		expect(quoteTokenAddressError.getAttribute('role')).toBe('alert')
 		expect(document.body.textContent?.split('Enter a valid base token address.')).toHaveLength(2)
 		expect(document.body.textContent?.split('Enter a valid quote token address.')).toHaveLength(2)
-		expect(documentQueries.getByRole('button', { name: 'Create Standalone Oracle Report' }).getAttribute('aria-describedby')).toBe('open-oracle-token1-address-error')
+		expect(documentQueries.getByRole('button', { name: 'Create standalone Oracle report' }).getAttribute('aria-describedby')).toBe('open-oracle-token1-address-error')
 		expect(documentQueries.getByText('Base-token amount to report.')).not.toBeNull()
 		expect(documentQueries.getByText('Quote-token amount to report.')).not.toBeNull()
 		expect(documentQueries.getByText('ETH paid to the settler.')).not.toBeNull()
@@ -681,7 +681,7 @@ describe('OpenOracleSection route create view', () => {
 		})
 		expect(baseTokenAmountInput.hasAttribute('aria-invalid')).toBe(false)
 		expect(document.getElementById('open-oracle-exact-token1-report-error')).toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Create Standalone Oracle Report', 'Enter a valid base token amount.')
+		expectTransactionButtonDisabled(document.body, 'Create standalone Oracle report', 'Enter a valid base token amount.')
 		await act(() => {
 			baseTokenAmountInput.dispatchEvent(new Event('blur'))
 		})
@@ -711,7 +711,7 @@ describe('OpenOracleSection route create view', () => {
 		expect(protocolFeeInput.getAttribute('aria-describedby')).toBe('open-oracle-protocol-fee-error')
 		const feeError = documentQueries.getByText('Fee percentage plus protocol fee must not exceed 100%.')
 		expect(feeError.getAttribute('role')).toBe('alert')
-		expect(documentQueries.getByRole('button', { name: 'Create Standalone Oracle Report' }).getAttribute('aria-describedby')).toBe('open-oracle-protocol-fee-error')
+		expect(documentQueries.getByRole('button', { name: 'Create standalone Oracle report' }).getAttribute('aria-describedby')).toBe('open-oracle-protocol-fee-error')
 	})
 
 	test('clears address touch state when successful creation resets the form', async () => {
@@ -777,8 +777,8 @@ describe('OpenOracleSection route create view', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.queryByRole('button', { name: 'Dispute & Swap' })).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Settle Report' })).not.toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Dispute & swap' })).toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Settle report' })).not.toBeNull()
 	})
 
 	test('uses the exact shared live settlement block to switch a selected report into settle mode', async () => {
@@ -803,8 +803,8 @@ describe('OpenOracleSection route create view', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.queryByRole('button', { name: 'Dispute & Swap' })).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Settle Report' })).not.toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Dispute & swap' })).toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Settle report' })).not.toBeNull()
 	})
 
 	test('shows independent credited-balance withdrawals after settlement', async () => {
@@ -835,7 +835,7 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.getByRole('dialog', { name: 'Withdraw ETH' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Transaction Review' })).not.toBeNull()
 		expect(documentQueries.getByText('7 ETH')).not.toBeNull()
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Confirm Withdrawal' }))
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Confirm withdrawal' }))
 		expect(documentQueries.queryByRole('button', { name: `Withdraw ${reportDetails.token2Symbol}` })).toBeNull()
 		expect(withdrawnBalances).toEqual(['eth'])
 	})
@@ -895,7 +895,7 @@ describe('OpenOracleSection route create view', () => {
 		const dialogQueries = within(dialog)
 		expect(dialogQueries.getByText('125 REPv2')).not.toBeNull()
 		expect(dialogQueries.getByRole('alert').textContent).toContain('Your withdrawable REPv2 balance changed. Review the updated amount and confirm again')
-		expectTransactionButtonEnabled(dialog, 'Confirm Withdrawal')
+		expectTransactionButtonEnabled(dialog, 'Confirm withdrawal')
 	})
 
 	test('cancels an in-progress withdrawal balance check when its review closes', async () => {

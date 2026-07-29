@@ -13,7 +13,7 @@ export const forkDepositSettlementAvailabilityDetail = 'Winning fork-carried esc
 export const initiallyDepositedLead = 'Initially deposited: '
 export const loadedDepthEth = 'Visible Depth (ETH)'
 export const loadingCurrentChainTime = 'Loading current chain time.'
-export const migrateVault = 'Migrate Vault'
+export const migrateVaultTitle = 'Migrate Vault'
 export const migratingVault = 'Migrating vault…'
 export const migrationTimingIsUnavailable = 'Migration timing is unavailable.'
 export const poolMigrationCapacityEmpty = 'No REP collateral or security bond allowance remains to migrate for the connected wallet.'
@@ -23,8 +23,10 @@ export const open = 'Open'
 export const priceEthPerRep = 'Price (ETH / REP)'
 export const repPurchased = 'REP Purchased'
 export const startingTruthAuction = 'Starting truth auction…'
-export const startTruthAuction = 'Start Truth Auction'
-export const submitBid = 'Submit Bid'
+export const startTruthAuction = 'Start truth auction'
+export const startTruthAuctionTitle = 'Start Truth Auction'
+export const submitBid = 'Submit bid'
+export const submitBidTitle = 'Submit Bid'
 export const unresolvedDepositDetailsUnavailable = 'Unresolved escalation deposit details are unavailable for this pool right now.'
 export const worthNowLead = 'Worth now: '
 export const formatCheckingPoolRepMigratedToChildUniverse = (outcomeLabel: CopyTemplateValue) => `Checking whether pool REP has already been migrated for the ${outcomeLabel} child universe.`
@@ -42,8 +44,8 @@ export const importedFromParentUniverse = 'Imported from parent universe'
 export const parentDepositNumber = 'Parent deposit #'
 export const worthNowPendingFinalSettlement = 'Worth now: Pending final settlement'
 export const importedEntryDepthLead = 'Imported entry depth: '
-export const nextParentDeposits = 'Next Parent Deposits'
-export const previousParentDeposits = 'Previous Parent Deposits'
+export const nextParentDeposits = 'Next parent deposits'
+export const previousParentDeposits = 'Previous parent deposits'
 export const settleForkCarriedEscalationDeposits = 'Settle Fork-Carried Escalation Deposits'
 export const importedDepositSettlementDetail = 'Imported from the parent universe. After finalization, only winning positions can be settled; inherited losers require no transaction.'
 export const leading = 'Leading'
@@ -104,7 +106,7 @@ export const walletEscrowedRepEmpty = 'No parent escrowed REP remains available 
 export const startingTruncated = 'Starting…'
 export const formatStartsInValue = (duration: CopyTemplateValue) => `Starts in ${duration}`
 export const pendingConfirmation = 'Pending confirmation'
-export const settleSelectedBids = 'Settle Selected Bids'
+export const settleSelectedBids = 'Settle selected bids'
 export const formatWinningBidBatchSettlementDetail = (allowanceLabel: CopyTemplateValue) => `Select winning bids and settle them together. Winning claims add child-pool REP plus ${allowanceLabel}.`
 export const formatFinalizedRefundBatchSettlementDetail = (allowanceLabel: CopyTemplateValue) => `Select finalized refund rows and settle them together. These rows return locked ETH without adding ${allowanceLabel}.`
 export const formatRefundableBidBatchSettlementDetail = (allowanceLabel: CopyTemplateValue) => `Select refundable bids and settle them together. Refund-only settlement returns locked ETH without adding ${allowanceLabel}.`
@@ -115,7 +117,7 @@ export const auctionEndedStatus = 'Truth auction has ended.'
 export const formatFinalizedSettlementDetail = (allowanceLabel: CopyTemplateValue) => `Bidding is closed and finalized settlement paths are now in effect. Winning claims receive REP plus ${allowanceLabel}, while losing bids are refunded.`
 export const truthAuctionFinalizationRequiredDetail = 'Bidding is closed. Finalize the truth auction to settle against the final clearing result.'
 export const endedAtLead = 'Ended at: '
-export const finalizeTruthAuction = 'Finalize Truth Auction'
+export const finalizeTruthAuction = 'Finalize truth auction'
 export const finalizingTruthAuctionTruncated = 'Finalizing truth auction…'
 export const formatTruthAuctionStartDelay = (duration: CopyTemplateValue) => `Truth auction can be started in ${duration} once migration ends.`
 export const eligibleDepositsLoading = 'Loading eligible escalation deposits.'
@@ -148,7 +150,7 @@ export const advancedDiagnostics = 'Advanced Diagnostics'
 export const poolRepAtFork = 'Pool REP At Fork'
 export const escalationChildRepPerSelectedOutcome = 'Escalation Child REP per Selected Outcome'
 export const escrowSourceRepAtFork = 'Escrow Source REP At Fork'
-export const formatSettleSelectedValueForkCarriedDeposits = (outcomeLabel: CopyTemplateValue) => `Settle Selected ${outcomeLabel} Fork-Carried Deposits`
+export const formatSettleSelectedValueForkCarriedDeposits = (outcomeLabel: CopyTemplateValue) => `Settle selected ${outcomeLabel} fork-carried deposits`
 export const settlingForkCarriedDepositsTruncated = 'Settling fork-carried deposits…'
 export const forkLifecycleStages = 'Fork lifecycle stages'
 export const viewing = 'Viewing'
@@ -164,7 +166,7 @@ export const walletUnresolvedDepositsLoading = 'Loading parent escalation locks 
 export const capturedEntitlementDetail = 'Parent lock accounting was already cleared. Child proof eligibility is unchanged.'
 export const formatEntitlementAlreadyMaterialized = (outcomeLabel: CopyTemplateValue) => `This wallet’s optional parent-lock cleanup is already recorded for the ${outcomeLabel} child universe.`
 export const formatNoUnresolvedDeposits = (outcomeLabel: string) => `No ${outcomeLabel} unresolved deposits remain for this wallet.`
-export const formatMigrateUnresolvedEscalationToValue = (outcomeLabel: CopyTemplateValue) => `Clear Parent Locks for ${outcomeLabel}`
+export const formatMigrateUnresolvedEscalationToValue = (outcomeLabel: CopyTemplateValue) => `Clear parent locks for ${outcomeLabel}`
 export const migratingUnresolvedEscalationTruncated = 'Clearing parent escalation locks…'
 export const claimResolvedParentEscalationDeposits = 'Optional: Claim Parent Escalation Deposits'
 export const resolvedParentDepositClaimDetail = 'This fast path pays selected winning parent deposits directly in child REP and marks their carried proofs spent. Unclaimed winners can instead settle from aggregate child backing with a proof.'
@@ -172,20 +174,20 @@ export const parentEscalationClaimEmptyEscrowDetail = 'No parent escrowed REP is
 export const walletEscalationDepositsLoading = 'Loading escalation deposits for the selected wallet…'
 export const chooseParentDepositsToClaim = 'Choose deposits to claim'
 export const worthNowPendingClaimFinalization = 'Worth now: Pending direct claim'
-export const formatClaimSelectedValueParentDeposits = (outcomeLabel: CopyTemplateValue) => `Claim Selected ${outcomeLabel} Deposits`
+export const formatClaimSelectedValueParentDeposits = (outcomeLabel: CopyTemplateValue) => `Claim selected ${outcomeLabel} deposits`
 export const claimingParentEscalationDepositsTruncated = 'Claiming parent escalation deposits…'
 export const migratePoolToUniverse = 'Migrate Pool To Universe'
 export const poolRepMigrationDetail = 'This moves pool-level REP shared by the selected outcome into the child universe. It affects the outcome pool, not just your vault.'
 export const poolRepAlreadyMigratedDetail = 'Pool REP has already been migrated to the selected child universe.'
 export const poolRepStagedForVaultMigrationDetail = 'Pool REP for this outcome is already staged and will sweep into the child universe during vault migration.'
-export const formatMigratePoolToValueUniverse = (outcomeLabel: CopyTemplateValue) => `Migrate Pool To ${outcomeLabel} Universe`
+export const formatMigratePoolToValueUniverse = (outcomeLabel: CopyTemplateValue) => `Migrate pool to ${outcomeLabel} universe`
 export const migratingPoolToUniverseTruncated = 'Migrating pool to universe…'
 export const vaultMigrationDetail = 'This moves all remaining REP collateral and security-bond allowance from your parent vault into the selected child pool for this outcome.'
-export const formatMigrateVaultToValue = (outcomeLabel: CopyTemplateValue) => `Migrate Vault To ${outcomeLabel}`
+export const formatMigrateVaultToValue = (outcomeLabel: CopyTemplateValue) => `Migrate vault to ${outcomeLabel}`
 export const alreadyMigratedStatus = 'Already migrated'
 export const truthAuctionStatus = 'Truth Auction Status'
 export const formatStartTruthAuctionDetail = (allowanceLabel: CopyTemplateValue) => `Start the ETH-for-REP truth auction only after migration closes. Winning bids later claim REP plus ${allowanceLabel}, while losing bids are refunded during settlement.`
-export const bypassTruthAuction = 'Bypass Truth Auction'
+export const bypassTruthAuction = 'Bypass truth auction'
 export const bypassingAuctionTruncated = 'Bypassing auction…'
 export const settlementStatus = 'Settlement Status'
 export const forkWorkflowDescription = 'Select a pool to inspect fork progress, migration, and the truth auction.'
@@ -213,21 +215,21 @@ export const loadingReportingDetails = 'Loading reporting details…'
 export const auctionPriceLevelsEmpty = 'No active prices are currently visible for this auction.'
 export const loadedPriceBidsEmpty = 'No bids are currently indexed for the visible prices.'
 export const auctionBidHistory = 'Auction bid history'
-export const loadMoreTruthAuctionBids = 'Show More Truth Auction Bids'
+export const loadMoreTruthAuctionBids = 'Show more truth auction bids'
 export const myBids = 'My Bids'
 export const walletBidsConnectionRequired = 'Connect a wallet to inspect your submitted truth auction bids.'
 export const loadingYourBids = 'Loading your bids…'
 export const walletBidsEmpty = 'No bids from this wallet are indexed for the current auction.'
-export const loadMoreOfMyBids = 'Show More Of My Bids'
+export const loadMoreOfMyBids = 'Show more of my bids'
 export const formatEscalationDepositPageSummary = (startIndex: CopyTemplateValue, endIndex: CopyTemplateValue, totalCount: CopyTemplateValue, paginationSummary: CopyTemplateValue) => `Showing deposits ${startIndex}-${endIndex} of ${totalCount}. ${paginationSummary}`
 export const depositNumber = 'Deposit #'
-export const nextDeposits = 'Next Deposits'
-export const previousDeposits = 'Previous Deposits'
+export const nextDeposits = 'Next deposits'
+export const previousDeposits = 'Previous deposits'
 export const currentFormPrice = 'Current form price'
 export const currentSize = 'Current size'
 export const clearingLevel = 'Clearing level'
 export const loadedDepth = 'Visible depth'
-export const loadMorePriceLevels = 'Show More Price Levels'
+export const loadMorePriceLevels = 'Show more price levels'
 export const loadingOrderBook = 'Loading order book…'
 export const loadingPriceLevels = 'Loading price levels…'
 export const marketDepth = 'Market Depth'
