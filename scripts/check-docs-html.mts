@@ -2,6 +2,7 @@ import { access, readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { Document, Element, Window } from 'happy-dom'
+import { markdownHeadingIds } from './docs-markdown-anchors.mts'
 
 type ParsedHtmlDocument = {
 	document: Document
@@ -484,33 +485,7 @@ async function collectMarkdownAnchorsByPath(markdownFilePaths: string[]): Promis
 }
 
 function collectMarkdownAnchors(text: string): Set<string> {
-	const anchors = new Set<string>()
-	const slugCounts = new Map<string, number>()
-	for (const line of text.split('\n')) {
-		const heading = /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line)
-		if (heading === null) {
-			continue
-		}
-		const headingText = heading[2]
-		if (headingText === undefined) {
-			continue
-		}
-		const baseSlug = markdownHeadingToSlug(headingText)
-		const priorCount = slugCounts.get(baseSlug) ?? 0
-		slugCounts.set(baseSlug, priorCount + 1)
-		anchors.add(priorCount === 0 ? baseSlug : `${baseSlug}-${priorCount}`)
-	}
-	return anchors
-}
-
-function markdownHeadingToSlug(headingText: string): string {
-	return headingText
-		.replace(/`([^`]+)`/g, '$1')
-		.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-		.trim()
-		.toLowerCase()
-		.replace(/[^a-z0-9 -]/g, '')
-		.replace(/\s+/g, '-')
+	return new Set(markdownHeadingIds(text))
 }
 
 function splitHref(href: string): [string, string | undefined] {
