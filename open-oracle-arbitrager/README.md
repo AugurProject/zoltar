@@ -552,8 +552,9 @@ The dashboard shows:
   evidence** and is excluded from actual P&amp;L totals until receipt and executor-event
   quorum succeeds. A lifecycle attempt is likewise excluded while any receipt is
   ambiguous. `closed-pending-finality` retains its risk slot and does not contribute
-  realized profit until its exact lifecycle evidence survives 12 canonical
-  descendants. Realized totals include only closed positions whose expected
+  realized profit until every configured read RPC serves the same
+  twelfth-descendant block hash for its exact lifecycle evidence. Realized totals
+  include only closed positions whose expected
   inventory fully reconciled or whose manual reconciliation explicitly records
   P&amp;L.
 - Confirmed dispute transactions and their older quote-time accounting. The table

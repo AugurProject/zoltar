@@ -205,6 +205,16 @@ function assertChartNode(value: unknown, chartId: string): void {
 	}
 }
 
+function collectChartText(nodes: unknown[]): string[] {
+	const text: string[] = []
+	for (const node of nodes) {
+		if (!isRecord(node)) continue
+		if (typeof node['text'] === 'string') text.push(node['text'])
+		if (Array.isArray(node['children'])) text.push(...collectChartText(node['children']))
+	}
+	return text
+}
+
 function numericAttribute(attributes: Record<string, unknown>, name: string, chartId: string): number {
 	const value = attributes[name]
 	if (typeof value !== 'string' || !Number.isFinite(Number(value))) throw new Error(`Chart ${chartId} checked geometry requires numeric ${name}`)
@@ -386,6 +396,14 @@ for (const [chartId, value] of Object.entries(parsedSpecs)) {
 	}
 	if (mergedDescriptionBoundaryPattern.test(value['ariaDescription'])) {
 		throw new Error(`Chart ${chartId} has a merged accessible-description boundary`)
+	}
+	if (chartId === 'fig-open-oracle-arbitrager-lifecycle') {
+		if (!value['ariaDescription'].includes('every configured read RPC serves the same twelfth-descendant block hash')) {
+			throw new Error('OpenOracle arbitrager lifecycle chart must describe the all-read-RPC finality quorum')
+		}
+		if (!collectChartText(value['nodes']).includes('all RPCs agree at +12')) {
+			throw new Error('OpenOracle arbitrager lifecycle chart must visibly identify the all-read-RPC finality quorum')
+		}
 	}
 	for (const node of value['nodes']) {
 		assertChartNode(node, chartId)

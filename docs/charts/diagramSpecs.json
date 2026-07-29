@@ -10878,7 +10878,7 @@
 		"width": 900
 	},
 	"fig-open-oracle-arbitrager-lifecycle": {
-		"ariaDescription": "The arbitrager synchronizes approved OpenOracle reports, compares each report with executable Uniswap V3 liquidity, atomically hedges and disputes an eligible report, waits through later dispute rounds, atomically settles and withdraws exact balances, and only realizes profit after twelve canonical descendants. Missing or contradictory evidence moves the durable position to recovery rather than releasing risk.",
+		"ariaDescription": "The arbitrager synchronizes approved OpenOracle reports, compares each report with executable Uniswap V3 liquidity, atomically hedges and disputes an eligible report, waits through later dispute rounds, atomically settles and withdraws exact balances, and only realizes profit when every configured read RPC serves the same twelfth-descendant block hash. Missing or contradictory evidence moves the durable position to recovery rather than releasing risk.",
 		"ariaLabel": "OpenOracle arbitrager execution and recovery lifecycle",
 		"height": 390,
 		"nodes": [
@@ -11117,7 +11117,7 @@
 				},
 				"children": [
 					{
-						"text": "12 descendants"
+						"text": "all RPCs agree at +12"
 					}
 				],
 				"tag": "text"
