@@ -104,7 +104,7 @@ export function createSecurityVaultProps(overrides: Partial<SecurityVaultRouteCo
 		},
 		securityVaultRepBalance: undefined,
 		securityVaultResult: undefined,
-		selectedPoolSecurityMultiplier: undefined,
+		selectedPoolStatoblastSecurityMultiplierBps: undefined,
 		...overrides,
 	}
 }
@@ -270,7 +270,7 @@ export function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}):
 		parent: zeroAddress,
 		questionId: '0x01',
 		questionOutcome: 'none',
-		securityMultiplier: 2n,
+		statoblastSecurityMultiplierBps: 20_000n,
 		securityPoolAddress: zeroAddress,
 		shareTokenSupply: 0n,
 		systemState: 'operational',

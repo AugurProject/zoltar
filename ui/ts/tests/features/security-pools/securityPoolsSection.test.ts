@@ -114,7 +114,7 @@ function createSecurityVaultProps(overrides: Partial<SecurityVaultRouteContentPr
 		},
 		securityVaultRepBalance: undefined,
 		securityVaultResult: undefined,
-		selectedPoolSecurityMultiplier: undefined,
+		selectedPoolStatoblastSecurityMultiplierBps: undefined,
 		...overrides,
 	}
 }
@@ -199,7 +199,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		parent: zeroAddress,
 		questionOutcome: 'none',
 		questionId: '0x01',
-		securityMultiplier: 2n,
+		statoblastSecurityMultiplierBps: 20_000n,
 		securityPoolAddress: zeroAddress,
 		shareTokenSupply: 0n,
 		systemState: 'operational',
@@ -343,7 +343,7 @@ function createCreatePoolProps(overrides: Partial<SecurityPoolRouteContentProps>
 		securityPoolForm: {
 			initialReportPriorityFeeGwei: '10',
 			marketId: '',
-			securityMultiplier: '',
+			statoblastSecurityMultiplierBps: '',
 		},
 		securityPoolResult: undefined,
 		zoltarUniverseHasForked: false,
@@ -557,7 +557,7 @@ void describe('SecurityPoolsSection', () => {
 							initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 							questionId: '0x01',
 							securityPoolAddress: createdPoolAddress,
-							securityMultiplier: 2n,
+							statoblastSecurityMultiplierBps: 20_000n,
 							universeId: 1n,
 						},
 					}),
@@ -596,7 +596,7 @@ void describe('SecurityPoolsSection', () => {
 							initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 							questionId: '0x01',
 							securityPoolAddress: '0x00000000000000000000000000000000000000a5',
-							securityMultiplier: 2n,
+							statoblastSecurityMultiplierBps: 20_000n,
 							universeId: 1n,
 						},
 						onResetSecurityPoolCreation: () => {

@@ -962,7 +962,8 @@
 					ETH-denominated payoff, and <code>oracleLiquidityRatio</code> compares
 					report liquidity with that payoff. The bound is useful when the
 					denominator is large enough that delaying honest correction costs more
-					than the liquidation can pay.
+					than the liquidation can pay. <code>BPS_DENOMINATOR = 10_000</code>
+					converts basis-point parameters into fractions in the formulas below.
 				</p>
 				<p>
 					The first boundary is how far the manipulated price must move before
@@ -1034,7 +1035,7 @@
 					<math
 						display="block"
 						aria-label="contract liquidation guard uses floored threshold price and floored distance basis points"
-						data-source="thresholdPrice = floor(vaultRep * PRICE_PRECISION / (snapshotTargetAllowance * securityMultiplier)); currentPrice > thresholdPrice; floor((currentPrice - thresholdPrice) * BPS_DENOMINATOR / currentPrice) >= minLiquidationPriceDistanceBps"
+						data-source="thresholdPrice = floor(vaultRep * PRICE_PRECISION * BPS_DENOMINATOR / (snapshotTargetAllowance * statoblastSecurityMultiplierBps)); currentPrice > thresholdPrice; floor((currentPrice - thresholdPrice) * BPS_DENOMINATOR / currentPrice) >= minLiquidationPriceDistanceBps"
 					>
 						<mtable>
 							<mtr>
@@ -1045,10 +1046,11 @@
 									><mfrac
 										><mrow
 											><mi>vaultRep</mi><mo>&#x22C5;</mo
-											><mi>PRICE_PRECISION</mi></mrow
+											><mi>PRICE_PRECISION</mi><mo>&#x22C5;</mo
+											><mi>BPS_DENOMINATOR</mi></mrow
 										><mrow
 											><mi>snapshotTargetAllowance</mi><mo>&#x22C5;</mo
-											><mi>securityMultiplier</mi></mrow
+											><mi>statoblastSecurityMultiplierBps</mi></mrow
 										></mfrac
 									><mo>)</mo></mtd
 								>

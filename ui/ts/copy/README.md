@@ -6,7 +6,7 @@ Use `common.ts` only when the same concept is shared across multiple features. T
 
 ## Naming
 
-- Name exports for their UI role and meaning, not by repeating the English sentence: `securityMultiplierHelpText`, not `securityMultiplierSetsTheRepCollateralTarget...`.
+- Name exports for their UI role and meaning, not by repeating the English sentence: `statoblastSecurityMultiplierBpsHelpText`, not `statoblastSecurityMultiplierBpsSetsTheRepCollateralTarget...`.
 - Keep export names at or below 48 characters. This is a guardrail, not a naming target; prefer the shortest role-based name that stays unambiguous within its feature namespace.
 - Use role suffixes such as `Title`, `Label`, `Detail`, `HelpText`, `Status`, `Error`, `Placeholder`, `ActionHint`, and `AriaLabel` when they clarify where copy appears.
 - Prefix interpolation functions with `format` and give every parameter a domain name. Use `CopyTemplateValue` only for values that are already safe to display.

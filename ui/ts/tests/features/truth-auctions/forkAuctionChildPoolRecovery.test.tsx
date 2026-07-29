@@ -150,7 +150,7 @@ function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSec
 		parent: PARENT_POOL_ADDRESS,
 		questionOutcome: 'yes',
 		questionId: '0x01',
-		securityMultiplier: 2n,
+		statoblastSecurityMultiplierBps: 20_000n,
 		securityPoolAddress: YES_CHILD_POOL_ADDRESS,
 		shareTokenSupply: 0n,
 		systemState: 'forkMigration',

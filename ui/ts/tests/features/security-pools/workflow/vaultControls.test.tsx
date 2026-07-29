@@ -202,7 +202,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 						onSecurityVaultFormChange: update => {
 							formChanges.push(update)
 						},
-						selectedPoolSecurityMultiplier: 2n,
+						selectedPoolStatoblastSecurityMultiplierBps: 20_000n,
 						securityVaultDetails: createSecurityVaultDetails({
 							repDepositShare: 12n * 10n ** 18n,
 							securityBondAllowance: 1n * 10n ** 18n,

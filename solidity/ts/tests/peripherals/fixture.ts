@@ -144,7 +144,7 @@ function usePeripheralsTestFixture() {
 		answerUnit: string
 	}
 	const genesisUniverse = 0n
-	const securityMultiplier = 2n
+	const statoblastSecurityMultiplierBps = 20_000n
 	const reportedRepEthPrice = 10n * 10n ** 18n
 	const testInternalSenderBalance = 10n ** 18n
 	const MAX_RETENTION_RATE = 999_999_996_848_000_000n // ≈90% yearly
@@ -212,7 +212,7 @@ function usePeripheralsTestFixture() {
 		getSecurityPoolAddresses: () => securityPoolAddresses,
 		repDeposit,
 		reportBond,
-		securityMultiplier,
+		statoblastSecurityMultiplierBps,
 		transferRepToAddress,
 	})
 
@@ -236,13 +236,13 @@ function usePeripheralsTestFixture() {
 		}
 		questionId = getQuestionId(questionData, outcomes)
 		await createQuestion(client, questionData, outcomes)
-		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier)
+		await deployOriginSecurityPool(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps)
 		const factory = getInfraContractAddresses().securityPoolFactory
 		const originId = await client.readContract({
 			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 			functionName: 'getOriginId',
 			address: factory,
-			args: [genesisUniverse, questionId, securityMultiplier, 10n * 10n ** 9n],
+			args: [genesisUniverse, questionId, statoblastSecurityMultiplierBps, 10n * 10n ** 9n],
 		})
 		const registeredPool = await client.readContract({
 			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
@@ -250,10 +250,10 @@ function usePeripheralsTestFixture() {
 			address: factory,
 			args: [originId, genesisUniverse],
 		})
-		const expectedPool = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, securityMultiplier).securityPool
+		const expectedPool = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps).securityPool
 		assert.strictEqual(registeredPool, expectedPool, 'origin security pool address derivation should match the lineage registry')
 		await approveAndDepositRep(client, repDeposit, questionId)
-		securityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)
+		securityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps)
 	}
 
 	beforeAll(async () => {
@@ -415,7 +415,7 @@ function usePeripheralsTestFixture() {
 		PRICE_PRECISION,
 		repDeposit,
 		genesisUniverse,
-		securityMultiplier,
+		statoblastSecurityMultiplierBps,
 		reportedRepEthPrice,
 		testInternalSenderBalance,
 		MAX_RETENTION_RATE,
@@ -496,7 +496,7 @@ export function usePeripheralsDeploymentAndOwnForkEscalationFixture() {
 		'reportBond',
 		'repDeposit',
 		'genesisUniverse',
-		'securityMultiplier',
+		'statoblastSecurityMultiplierBps',
 		'MAX_RETENTION_RATE',
 		'outcomes',
 		'deployOwnForkEscalationClaimHarness',
@@ -585,7 +585,7 @@ export function usePeripheralsEscalationMigrationFixture() {
 		'reportBond',
 		'repDeposit',
 		'genesisUniverse',
-		'securityMultiplier',
+		'statoblastSecurityMultiplierBps',
 		'outcomes',
 		'mockWindow',
 		'client',
@@ -698,7 +698,7 @@ export function usePeripheralsForkMigrationFixture() {
 		'PRICE_PRECISION',
 		'repDeposit',
 		'genesisUniverse',
-		'securityMultiplier',
+		'statoblastSecurityMultiplierBps',
 		'MAX_RETENTION_RATE',
 		'outcomes',
 		'transferRepToAddress',
@@ -741,7 +741,7 @@ export function usePeripheralsReceiveGuardsFixture() {
 		'getRepToken',
 		'repDeposit',
 		'genesisUniverse',
-		'securityMultiplier',
+		'statoblastSecurityMultiplierBps',
 		'testInternalSenderBalance',
 		'sendEthAndWait',
 		'mockWindow',
@@ -832,7 +832,7 @@ export function usePeripheralsTruthAuctionFixture() {
 		'reportBond',
 		'repDeposit',
 		'genesisUniverse',
-		'securityMultiplier',
+		'statoblastSecurityMultiplierBps',
 		'MAX_RETENTION_RATE',
 		'outcomes',
 		'triggerExternalForkForSecurityPool',
@@ -919,7 +919,7 @@ export function usePeripheralsVaultAccountingFixture() {
 		'reportBond',
 		'repDeposit',
 		'genesisUniverse',
-		'securityMultiplier',
+		'statoblastSecurityMultiplierBps',
 		'reportedRepEthPrice',
 		'MAX_RETENTION_RATE',
 		'outcomes',

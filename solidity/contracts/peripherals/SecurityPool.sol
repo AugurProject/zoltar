@@ -58,7 +58,7 @@ contract SecurityPool is ISecurityPool {
 	uint256 public totalSecurityBondAllowance;
 	uint256 public completeSetCollateralAmount; // protocol-accounted ETH backing complete sets; raw balance can also contain fees or unsolicited surplus
 	uint256 public poolOwnershipDenominator;
-	uint256 public securityMultiplier;
+	uint256 public statoblastSecurityMultiplierBps;
 	// Remaining per-outcome economic claims. After a fork this includes both
 	// materialized child ERC-1155 balances and source entitlements that can still
 	// materialize in this branch.
@@ -159,7 +159,7 @@ contract SecurityPool is ISecurityPool {
 		Zoltar _zoltar,
 		uint248 _universeId,
 		uint256 _questionId,
-		uint256 _securityMultiplier,
+		uint256 _statoblastSecurityMultiplierBps,
 		uint256 _initialEscalationGameDeposit,
 		address _truthAuction
 	) {
@@ -168,7 +168,7 @@ contract SecurityPool is ISecurityPool {
 		securityPoolFactory = worker.factory();
 		eventEmitter = worker.eventEmitter();
 		questionId = _questionId;
-		securityMultiplier = _securityMultiplier;
+		statoblastSecurityMultiplierBps = _statoblastSecurityMultiplierBps;
 		initialEscalationGameDeposit = _initialEscalationGameDeposit;
 		zoltar = _zoltar;
 		parent = _parent;
@@ -496,7 +496,8 @@ contract SecurityPool is ISecurityPool {
 		uint256 repEthPrice
 	) private view returns (bool) {
 		return
-			repAmount * SecurityPoolUtils.PRICE_PRECISION >= securityBondAllowance * securityMultiplier * repEthPrice;
+			repAmount * SecurityPoolUtils.PRICE_PRECISION * SecurityPoolUtils.BPS_DENOMINATOR >=
+			securityBondAllowance * statoblastSecurityMultiplierBps * repEthPrice;
 	}
 
 	function _requireMinimumVaultRep(
@@ -584,11 +585,7 @@ contract SecurityPool is ISecurityPool {
 		}
 
 		uint256 repEthPrice = priceOracleManagerAndOperatorQueuer.lastPrice();
-		require(
-			snapshotTargetAllowance * securityMultiplier * repEthPrice >
-				vaultsRepDeposit * SecurityPoolUtils.PRICE_PRECISION,
-			'Target safe'
-		);
+		require(!_isAllowanceBackedByRep(vaultsRepDeposit, snapshotTargetAllowance, repEthPrice), 'Target safe');
 
 		(uint256 debtToMove, uint256 repToMove, uint256 ownershipToMove) = SecurityPoolUtils
 			.calculateLiquidationTransfer(
@@ -603,14 +600,13 @@ contract SecurityPool is ISecurityPool {
 				poolOwnershipDenominator
 			);
 		require(debtToMove > 0, 'No liq');
+		require(!_isAllowanceBackedByRep(repToMove, debtToMove, repEthPrice), 'No gain');
 		require(
-			debtToMove * securityMultiplier * repEthPrice > repToMove * SecurityPoolUtils.PRICE_PRECISION,
-			'No gain'
-		);
-		require(
-			(securityVaults[callerVault].securityBondAllowance + debtToMove) * securityMultiplier * repEthPrice <=
-				poolOwnershipToRep(securityVaults[callerVault].poolOwnership + ownershipToMove) *
-					SecurityPoolUtils.PRICE_PRECISION,
+			_isAllowanceBackedByRep(
+				poolOwnershipToRep(securityVaults[callerVault].poolOwnership + ownershipToMove),
+				securityVaults[callerVault].securityBondAllowance + debtToMove,
+				repEthPrice
+			),
 			'Caller bad'
 		);
 

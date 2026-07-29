@@ -27,7 +27,7 @@ describe('Peripherals: receive guards', () => {
 		getRepToken,
 		repDeposit,
 		genesisUniverse,
-		securityMultiplier,
+		statoblastSecurityMultiplierBps,
 		testInternalSenderBalance,
 		sendEthAndWait,
 	} = fixture
@@ -89,7 +89,7 @@ describe('Peripherals: receive guards', () => {
 
 		// Get child addresses
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const childAddresses = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const childAddresses = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 		const childPoolAddress = childAddresses.securityPool
 		const truthAuctionAddress = childAddresses.truthAuction
 
@@ -135,7 +135,7 @@ describe('Peripherals: receive guards', () => {
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const childAddresses = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const childAddresses = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 		const truthAuctionAddress = childAddresses.truthAuction
 
 		// Ensure auction has ETH to send

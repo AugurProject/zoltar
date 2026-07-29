@@ -90,7 +90,7 @@ describe('Peripherals: escalation migration', () => {
 		reportBond,
 		repDeposit,
 		genesisUniverse,
-		securityMultiplier,
+		statoblastSecurityMultiplierBps,
 		outcomes,
 	} = fixture
 
@@ -139,7 +139,7 @@ describe('Peripherals: escalation migration', () => {
 		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier).securityPool
+		const yesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps).securityPool
 		const parentGame = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
 		const parentRepToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const readMigrationGuardState = async () => ({
@@ -159,7 +159,7 @@ describe('Peripherals: escalation migration', () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const forkThreshold = (await getTotalTheoreticalSupply(client, repToken)) / 20n / securityMultiplier
+		const forkThreshold = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await approveAndDepositRep(client, 3n * forkThreshold, questionId)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, forkThreshold)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, forkThreshold)
@@ -195,14 +195,14 @@ describe('Peripherals: escalation migration', () => {
 		await mockWindow.setTime(endTime + 10000n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const forkThreshold = (await getTotalTheoreticalSupply(client, repToken)) / 20n / securityMultiplier
+		const forkThreshold = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await approveAndDepositRep(client, 3n * forkThreshold, questionId)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier).securityPool
+		const yesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps).securityPool
 		await mockWindow.advanceTime(8n * 7n * DAY + 1n)
 		await startTruthAuction(client, yesChildPool)
 		if ((await getSystemState(client, yesChildPool)) === SystemState.ForkTruthAuction) {
@@ -235,12 +235,12 @@ describe('Peripherals: escalation migration', () => {
 		await depositToEscalationGame(otherVault, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 
 		const parentRepToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const forkThreshold = (await getTotalTheoreticalSupply(client, parentRepToken)) / 20n / securityMultiplier
+		const forkThreshold = (((await getTotalTheoreticalSupply(client, parentRepToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await approveAndDepositRep(client, 3n * forkThreshold, questionId)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier).securityPool
+		const yesChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps).securityPool
 		const parentGame = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
 		const readWrongVaultState = async () => ({
 			childExists: await contractExists(client, yesChildPool),
@@ -312,7 +312,7 @@ describe('Peripherals: escalation migration', () => {
 		const parentVaultBeforeMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		const childEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
 		const childRepToken = getRepTokenAddress(yesUniverse)
@@ -391,7 +391,7 @@ describe('Peripherals: escalation migration', () => {
 
 		const parentVaultAfterMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 		strictEqualTypeSafe(parentVaultAfterMigration.repInEscalationGame, 0n, 'aggregate migration should clear all parent unresolved escrow')
 		strictEqualTypeSafe(await getForkedEscrowPrincipalByOutcomeAndVault(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, client.account.address), 0n, 'the child should rely on its aggregate carry snapshot rather than per-vault escrow')
 	})
@@ -404,7 +404,7 @@ describe('Peripherals: escalation migration', () => {
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, unresolvedDeposit)
 
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const forkThreshold = (await getTotalTheoreticalSupply(client, repToken)) / 20n / securityMultiplier
+		const forkThreshold = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vaultBeforeTopUp = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const vaultRepBeforeTopUp = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vaultBeforeTopUp.repDepositShare)
 		const repAmountNeeded = vaultRepBeforeTopUp < 3n * forkThreshold ? 3n * forkThreshold - vaultRepBeforeTopUp : 0n
@@ -416,7 +416,7 @@ describe('Peripherals: escalation migration', () => {
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		const relayerClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
 		await assert.rejects(migrateVaultWithUnresolvedEscalation(relayerClient, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes))
@@ -438,7 +438,7 @@ describe('Peripherals: escalation migration', () => {
 		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const forkThreshold = (await getTotalTheoreticalSupply(client, repToken)) / 20n / securityMultiplier
+		const forkThreshold = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vaultBeforeTopUp = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const vaultRepBeforeTopUp = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vaultBeforeTopUp.repDepositShare)
 		if (vaultRepBeforeTopUp < 3n * forkThreshold) {
@@ -482,7 +482,7 @@ describe('Peripherals: escalation migration', () => {
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 		const forkTime = await mockWindow.getTime()
 		await mockWindow.setTime(forkTime + 8n * 7n * DAY + 1n)
 		const parentVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -525,7 +525,7 @@ describe('Peripherals: escalation migration', () => {
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, unresolvedDeposit + 1n)
 
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const forkThreshold = (await getTotalTheoreticalSupply(client, repToken)) / 20n / securityMultiplier
+		const forkThreshold = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vaultBeforeTopUp = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const vaultRepBeforeTopUp = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vaultBeforeTopUp.repDepositShare)
 		const repAmountNeeded = vaultRepBeforeTopUp < 3n * forkThreshold ? 3n * forkThreshold - vaultRepBeforeTopUp : 0n
@@ -548,7 +548,7 @@ describe('Peripherals: escalation migration', () => {
 		})
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
 
 		const parentVaultAfterMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -586,7 +586,7 @@ describe('Peripherals: escalation migration', () => {
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 
 		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
 
@@ -635,7 +635,7 @@ describe('Peripherals: escalation migration', () => {
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const yesPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 		const yesGame = await getSecurityPoolsEscalationGame(client, yesPool.securityPool)
 
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
@@ -701,7 +701,7 @@ describe('Peripherals: escalation migration', () => {
 
 		for (const childOutcome of [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No]) {
 			const childUniverse = getChildUniverseId(genesisUniverse, childOutcome)
-			const childSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, childUniverse, questionId, securityMultiplier)
+			const childSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, childUniverse, questionId, statoblastSecurityMultiplierBps)
 			const childEscalationGame = await getSecurityPoolsEscalationGame(client, childSecurityPool.securityPool)
 			const invalidOutcomeState = await getEscalationGameOutcomeState(client, childEscalationGame, QuestionOutcome.Invalid)
 			const yesOutcomeState = await getEscalationGameOutcomeState(client, childEscalationGame, QuestionOutcome.Yes)
@@ -721,21 +721,21 @@ describe('Peripherals: escalation migration', () => {
 	test('late children retain the canonical fork snapshot after an own-fork parent claim', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10n * DAY)
-		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+		const forkThreshold = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const vaultRep = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vault.repDepositShare)
 		if (vaultRep < 2n * forkThreshold) await approveAndDepositRep(client, 2n * forkThreshold - vaultRep, questionId)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Invalid)
-		const invalidPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, getChildUniverseId(genesisUniverse, QuestionOutcome.Invalid), questionId, securityMultiplier)
+		const invalidPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, getChildUniverseId(genesisUniverse, QuestionOutcome.Invalid), questionId, statoblastSecurityMultiplierBps)
 		const invalidGame = await getSecurityPoolsEscalationGame(client, invalidPool.securityPool)
 		const forkSnapshotBeforeClaim = await Promise.all([QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No].map(async outcome => await getEscalationGameOutcomeState(client, invalidGame, outcome)))
 
 		await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
 		const effectiveSnapshotAfterClaim = await Promise.all([QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No].map(async outcome => await getEscalationGameOutcomeState(client, invalidGame, outcome)))
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.No)
-		const noPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, getChildUniverseId(genesisUniverse, QuestionOutcome.No), questionId, securityMultiplier)
+		const noPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, getChildUniverseId(genesisUniverse, QuestionOutcome.No), questionId, statoblastSecurityMultiplierBps)
 		const noGame = await getSecurityPoolsEscalationGame(client, noPool.securityPool)
 		const lateForkSnapshot = await Promise.all([QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No].map(async outcome => await getEscalationGameOutcomeState(client, noGame, outcome)))
 
@@ -758,10 +758,10 @@ describe('Peripherals: escalation migration', () => {
 		await forkUniverse(forkClient, genesisUniverse, getQuestionId(forkQuestionData, outcomes))
 		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 
-		const invalidPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, getChildUniverseId(genesisUniverse, QuestionOutcome.Invalid), questionId, securityMultiplier)
+		const invalidPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, getChildUniverseId(genesisUniverse, QuestionOutcome.Invalid), questionId, statoblastSecurityMultiplierBps)
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
-		const noPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, getChildUniverseId(genesisUniverse, QuestionOutcome.No), questionId, securityMultiplier)
+		const yesPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+		const noPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, getChildUniverseId(genesisUniverse, QuestionOutcome.No), questionId, statoblastSecurityMultiplierBps)
 		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
 		const entitlementAfterYes = await client.readContract({
 			address: getInfraContractAddresses().securityPoolForker,
@@ -838,8 +838,8 @@ describe('Peripherals: escalation migration', () => {
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.No)
 
-		const yesPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, getChildUniverseId(genesisUniverse, QuestionOutcome.Yes), questionId, securityMultiplier)
-		const noPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, getChildUniverseId(genesisUniverse, QuestionOutcome.No), questionId, securityMultiplier)
+		const yesPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, getChildUniverseId(genesisUniverse, QuestionOutcome.Yes), questionId, statoblastSecurityMultiplierBps)
+		const noPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, getChildUniverseId(genesisUniverse, QuestionOutcome.No), questionId, statoblastSecurityMultiplierBps)
 		const yesGame = await getSecurityPoolsEscalationGame(client, yesPool.securityPool)
 		const noGame = await getSecurityPoolsEscalationGame(client, noPool.securityPool)
 		const initialYesState = await getEscalationGameOutcomeState(client, yesGame, QuestionOutcome.Yes)
@@ -865,7 +865,7 @@ describe('Peripherals: escalation migration', () => {
 		const winningDeposit = reportBond
 		const relayerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRep(relayerClient, repDeposit, questionId)
-		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+		const forkThreshold = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
 
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, winningDeposit)
@@ -879,7 +879,7 @@ describe('Peripherals: escalation migration', () => {
 	test('claimForkedEscalationDeposits requires an actual universe fork', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
-		const nonDecisionThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+		const nonDecisionThreshold = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await depositRep(client, securityPoolAddresses.securityPool, 4n * nonDecisionThreshold)
 
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, nonDecisionThreshold)
@@ -903,7 +903,7 @@ describe('Peripherals: escalation migration', () => {
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, unresolvedDeposit)
 
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const forkThreshold = (await getTotalTheoreticalSupply(client, repToken)) / 20n / securityMultiplier
+		const forkThreshold = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const vaultBeforeTopUp = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const vaultRepBeforeTopUp = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, vaultBeforeTopUp.repDepositShare)
 		const repAmountNeeded = vaultRepBeforeTopUp < 3n * forkThreshold ? 3n * forkThreshold - vaultRepBeforeTopUp : 0n
@@ -927,7 +927,7 @@ describe('Peripherals: escalation migration', () => {
 		const parentNoOutcomeState = await getEscalationGameOutcomeState(client, securityPoolAddresses.escalationGame, QuestionOutcome.No)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
 
 		const parentVaultAfterMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -987,7 +987,7 @@ describe('Peripherals: escalation migration', () => {
 		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 		const yesEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
 		const childOutcomeState = await getEscalationGameOutcomeState(client, yesEscalationGame, QuestionOutcome.Yes)
 		assert.ok(childOutcomeState.currentCarryRoot !== '0x0000000000000000000000000000000000000000000000000000000000000000', 'the child continuation should materialize a non-empty carry root')
@@ -1031,7 +1031,7 @@ describe('Peripherals: escalation migration', () => {
 		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 		const childEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
 		const childCostDuringMigration = await getEscalationGameTotalCost(client, childEscalationGame)
 		approximatelyEqual(childCostDuringMigration, parentCostAtFork, 100000000000000n, 'the child continuation game should inherit the fork-time cost snapshot')
@@ -1090,7 +1090,7 @@ describe('Peripherals: escalation migration', () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10n * DAY)
 		const losingClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+		const forkThreshold = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const winningVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const winningVaultRep = await poolOwnershipToRep(client, securityPoolAddresses.securityPool, winningVault.repDepositShare)
 		if (winningVaultRep < forkThreshold) await approveAndDepositRep(client, forkThreshold - winningVaultRep, questionId)
@@ -1112,7 +1112,7 @@ describe('Peripherals: escalation migration', () => {
 		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const yesPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 		const yesGame = await getSecurityPoolsEscalationGame(client, yesPool.securityPool)
 		const losingParentVault = await getSecurityVault(client, securityPoolAddresses.securityPool, losingClient.account.address)
 		assert.ok(losingParentVault.repInEscalationGame > 0n, 'the losing vault should remain unmigrated in the parent')
@@ -1176,7 +1176,7 @@ describe('Peripherals: escalation migration', () => {
 		await mockWindow.setTime(endTime + 10n * DAY)
 		const secondWinner = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		const losingClient = createWriteClient(mockWindow, TEST_ADDRESSES[2], 0)
-		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+		const forkThreshold = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const firstWinningPrincipal = forkThreshold / 2n
 		const secondWinningPrincipal = forkThreshold - firstWinningPrincipal
 		const firstWinnerVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -1192,7 +1192,7 @@ describe('Peripherals: escalation migration', () => {
 		await migrateVaultWithUnresolvedEscalation(secondWinner, securityPoolAddresses.securityPool, secondWinner.account.address, QuestionOutcome.Yes)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const yesPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 		const yesGame = await getSecurityPoolsEscalationGame(client, yesPool.securityPool)
 		strictEqualTypeSafe(await getForkedEscrowPrincipalByOutcomeAndVault(client, yesPool.securityPool, QuestionOutcome.No, losingClient.account.address), 0n, 'the aggregate physical backing must not create a logical claim for the losing vault')
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
@@ -1254,7 +1254,7 @@ describe('Peripherals: escalation migration', () => {
 	test('a directly claimed parent deposit is invalid in every current and late child while its same-outcome remainder stays claimable', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10n * DAY)
-		const forkThreshold = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n / securityMultiplier
+		const forkThreshold = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const firstYesDeposit = forkThreshold / 3n
 		const secondYesDeposit = forkThreshold - firstYesDeposit
 		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -1269,8 +1269,8 @@ describe('Peripherals: escalation migration', () => {
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.No)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
-		const noPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, getChildUniverseId(genesisUniverse, QuestionOutcome.No), questionId, securityMultiplier)
+		const yesPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+		const noPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, getChildUniverseId(genesisUniverse, QuestionOutcome.No), questionId, statoblastSecurityMultiplierBps)
 		const yesGame = await getSecurityPoolsEscalationGame(client, yesPool.securityPool)
 		const noGame = await getSecurityPoolsEscalationGame(client, noPool.securityPool)
 		const depositIds = await Promise.all(
@@ -1397,7 +1397,7 @@ describe('Peripherals: escalation migration', () => {
 		await migrateVaultWithUnresolvedEscalation(attackerClient, securityPoolAddresses.securityPool, attackerClient.account.address, QuestionOutcome.Yes)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 		const childEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
 		const childVaultAfterFirstMigration = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 		strictEqualTypeSafe((await getEscalationGameOutcomeState(client, childEscalationGame, QuestionOutcome.Yes)).currentCarryTotal, recursiveDeposit, 'the child continuation snapshot should carry the unresolved yes-side total before the second fork')
@@ -1436,7 +1436,7 @@ describe('Peripherals: escalation migration', () => {
 		assert.ok(recursiveMigrationReceipt.gasUsed < RECURSIVE_CARRY_MIGRATION_GAS_LIMIT, `recursive carry migration used ${recursiveMigrationReceipt.gasUsed.toString()} gas, above the ${RECURSIVE_CARRY_MIGRATION_GAS_LIMIT.toString()} ceiling`)
 
 		const grandchildUniverse = getChildUniverseId(yesUniverse, QuestionOutcome.Yes)
-		const grandchildSecurityPool = getSecurityPoolAddresses(yesSecurityPool.securityPool, grandchildUniverse, questionId, securityMultiplier)
+		const grandchildSecurityPool = getSecurityPoolAddresses(yesSecurityPool.securityPool, grandchildUniverse, questionId, statoblastSecurityMultiplierBps)
 		const childVaultAfterMigration = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 		const grandchildVault = await getSecurityVault(client, grandchildSecurityPool.securityPool, client.account.address)
 		const grandchildEscalationGame = await getSecurityPoolsEscalationGame(client, grandchildSecurityPool.securityPool)
@@ -1482,7 +1482,7 @@ describe('Peripherals: escalation migration', () => {
 		await migrateVaultWithUnresolvedEscalation(attackerClient, securityPoolAddresses.securityPool, attackerClient.account.address, QuestionOutcome.Yes)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 		await startTruthAuction(client, yesSecurityPool.securityPool)
 		if ((await getSystemState(client, yesSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
@@ -1550,7 +1550,7 @@ describe('Peripherals: escalation migration', () => {
 		await migrateVaultWithUnresolvedEscalation(attackerClient, securityPoolAddresses.securityPool, attackerClient.account.address, QuestionOutcome.Yes)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 		await startTruthAuction(client, yesSecurityPool.securityPool)
@@ -1584,7 +1584,7 @@ describe('Peripherals: escalation migration', () => {
 		await client.waitForTransactionReceipt({ hash })
 
 		const grandchildUniverse = getChildUniverseId(yesUniverse, QuestionOutcome.Yes)
-		const grandchildSecurityPool = getSecurityPoolAddresses(yesSecurityPool.securityPool, grandchildUniverse, questionId, securityMultiplier)
+		const grandchildSecurityPool = getSecurityPoolAddresses(yesSecurityPool.securityPool, grandchildUniverse, questionId, statoblastSecurityMultiplierBps)
 		const grandchildVault = await getSecurityVault(client, grandchildSecurityPool.securityPool, client.account.address)
 		const grandchildEscalationGame = await getSecurityPoolsEscalationGame(client, grandchildSecurityPool.securityPool)
 		strictEqualTypeSafe(grandchildVault.repInEscalationGame, 0n, 'recursive inherited carry should not create grandchild vault escrow')
@@ -1620,7 +1620,7 @@ describe('Peripherals: escalation migration', () => {
 		await migrateVaultWithUnresolvedEscalation(attackerClient, securityPoolAddresses.securityPool, attackerClient.account.address, QuestionOutcome.Yes)
 
 		const firstChildUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const firstChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, firstChildUniverse, questionId, securityMultiplier)
+		const firstChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, firstChildUniverse, questionId, statoblastSecurityMultiplierBps)
 		const firstChildEscalationGame = await getSecurityPoolsEscalationGame(client, firstChildPool.securityPool)
 		strictEqualTypeSafe((await getEscalationGameOutcomeState(client, firstChildEscalationGame, QuestionOutcome.Yes)).currentCarryTotal, recursiveDepositCount * reportBond, 'first child should inherit all unresolved yes-side principal by snapshot')
 
@@ -1657,7 +1657,7 @@ describe('Peripherals: escalation migration', () => {
 		await migrateVaultWithUnresolvedEscalation(client, firstChildPool.securityPool, client.account.address, QuestionOutcome.Yes)
 
 		const secondChildUniverse = getChildUniverseId(firstChildUniverse, QuestionOutcome.Yes)
-		const secondChildPool = getSecurityPoolAddresses(firstChildPool.securityPool, secondChildUniverse, questionId, securityMultiplier)
+		const secondChildPool = getSecurityPoolAddresses(firstChildPool.securityPool, secondChildUniverse, questionId, statoblastSecurityMultiplierBps)
 		const secondChildEscalationGame = await getSecurityPoolsEscalationGame(client, secondChildPool.securityPool)
 		strictEqualTypeSafe((await getEscalationGameOutcomeState(client, secondChildEscalationGame, QuestionOutcome.Yes)).currentCarryTotal, recursiveDepositCount * reportBond, 'second child should inherit all unresolved yes-side principal from the first child by snapshot')
 	})
