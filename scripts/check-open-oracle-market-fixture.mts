@@ -50,6 +50,21 @@ function minimumReport(baseFeeWeiPerGas: bigint) {
 	})
 }
 
+function formatWad(value: bigint): string {
+	const sign = value < 0n ? '-' : ''
+	const absolute = value < 0n ? -value : value
+	const whole = absolute / 10n ** 18n
+	const fraction = (absolute % 10n ** 18n).toString().padStart(18, '0')
+	return `${sign}${whole.toLocaleString('en-US')}.${fraction}`
+}
+
+function formatPercent(numerator: bigint, denominator: bigint): string {
+	const hundredthsOfPercent = (numerator * 10_000n) / denominator
+	const whole = hundredthsOfPercent / 100n
+	const fraction = (hundredthsOfPercent % 100n).toString().padStart(2, '0').replace(/0+$/, '')
+	return fraction === '' ? `${whole.toString()}%` : `${whole.toString()}.${fraction}%`
+}
+
 function verifyRecordedEconomics() {
 	const minimumWeth = minimumReport(fixture.baseFeeWeiPerGas)
 	assert.equal(minimumWeth, 817_262_744_792_307_693n)
@@ -110,6 +125,33 @@ async function verifyDocumentedFixture() {
 	for (const [name, value] of Object.entries(expected)) {
 		const attributeName = `data-${name.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`)}`
 		assert.equal(table.getAttribute(attributeName), value.toString(), `Security model OpenOracle fixture ${name} is stale`)
+	}
+	const deviation = formatPercent(fixture.reportDeviationBps, 10_000n)
+	const poolFee = formatPercent(fixture.poolFee, 1_000_000n)
+	const visibleValues: Record<string, string> = {
+		blockNumber: fixture.blockNumber.toLocaleString('en-US'),
+		buyDeviation: `−${deviation}`,
+		buyExecution: `Exact-output quote through the ${poolFee} REP/WETH pool`,
+		buyProfitWeth: `${formatWad(buy.profitBeforeGasWeth)} WETH`,
+		buyReportRep: `${formatWad(fixture.expensiveRepAmount)} REP`,
+		deviationMagnitude: deviation,
+		gasCostWeth: `${fixture.gasCostWeth.toString()} WETH`,
+		midReportRep: `${formatWad(fixture.midReportRep)} REP`,
+		minimumWethReport: `${formatWad(minimumWeth)} WETH`,
+		protocolFee: formatPercent(fixture.protocolFee, 10_000_000n),
+		reporterFee: formatPercent(fixture.feePercentage, 10_000_000n),
+		sellDeviation: `+${deviation}`,
+		sellExecution: `Exact-input quote through the ${poolFee} REP/WETH pool`,
+		sellProfitWeth: `${formatWad(sell.profitBeforeGasWeth)} WETH`,
+		sellReportRep: `${formatWad(fixture.cheapRepAmount)} REP`,
+		uniswapPoolFee: poolFee,
+	}
+	for (const [name, value] of Object.entries(visibleValues)) {
+		const visibleElements = window.document.querySelectorAll(`[data-fixture-field="${name}"]`)
+		assert(visibleElements.length > 0, `Security model OpenOracle fixture is missing visible ${name}`)
+		for (const element of visibleElements) {
+			assert.equal(element.textContent?.trim(), value, `Security model OpenOracle fixture visible ${name} is stale`)
+		}
 	}
 	window.close()
 }

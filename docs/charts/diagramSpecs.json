@@ -10885,6 +10885,7 @@
 			{
 				"attributes": {
 					"class": "svg-blue",
+					"data-state": "SyncReports",
 					"x": "20",
 					"y": "55",
 					"width": "170",
@@ -10896,6 +10897,7 @@
 			{
 				"attributes": {
 					"class": "svg-gold",
+					"data-state": "PriceFilter",
 					"x": "210",
 					"y": "55",
 					"width": "170",
@@ -10907,6 +10909,7 @@
 			{
 				"attributes": {
 					"class": "svg-green",
+					"data-state": "AtomicEntry",
 					"x": "400",
 					"y": "55",
 					"width": "170",
@@ -10918,6 +10921,7 @@
 			{
 				"attributes": {
 					"class": "svg-blue",
+					"data-state": "Open",
 					"x": "590",
 					"y": "55",
 					"width": "170",
@@ -10929,6 +10933,7 @@
 			{
 				"attributes": {
 					"class": "svg-blue",
+					"data-state": "AtomicExit",
 					"x": "780",
 					"y": "55",
 					"width": "170",
@@ -10940,6 +10945,7 @@
 			{
 				"attributes": {
 					"class": "svg-green",
+					"data-state": "Final",
 					"x": "970",
 					"y": "55",
 					"width": "170",
@@ -11119,6 +11125,7 @@
 			{
 				"attributes": {
 					"class": "svg-line",
+					"data-checked-transition": "SyncReports->PriceFilter",
 					"d": "M 190 94 H 210",
 					"marker-end": "arrow"
 				},
@@ -11127,6 +11134,7 @@
 			{
 				"attributes": {
 					"class": "svg-line",
+					"data-checked-transition": "PriceFilter->AtomicEntry",
 					"d": "M 380 94 H 400",
 					"marker-end": "arrow"
 				},
@@ -11135,6 +11143,7 @@
 			{
 				"attributes": {
 					"class": "svg-line",
+					"data-checked-transition": "AtomicEntry->Open",
 					"d": "M 570 94 H 590",
 					"marker-end": "arrow"
 				},
@@ -11143,6 +11152,7 @@
 			{
 				"attributes": {
 					"class": "svg-line",
+					"data-checked-transition": "Open->AtomicExit",
 					"d": "M 760 94 H 780",
 					"marker-end": "arrow"
 				},
@@ -11151,6 +11161,7 @@
 			{
 				"attributes": {
 					"class": "svg-line",
+					"data-checked-transition": "AtomicExit->Final",
 					"d": "M 950 94 H 970",
 					"marker-end": "arrow"
 				},
@@ -11159,6 +11170,7 @@
 			{
 				"attributes": {
 					"class": "svg-red",
+					"data-state": "Recovery",
 					"x": "365",
 					"y": "245",
 					"width": "430",
@@ -11198,6 +11210,7 @@
 			{
 				"attributes": {
 					"class": "svg-line",
+					"data-checked-transition": "AtomicEntry->Recovery",
 					"d": "M 485 133 V 245",
 					"stroke-dasharray": "7 5",
 					"marker-end": "arrow"
@@ -11207,6 +11220,7 @@
 			{
 				"attributes": {
 					"class": "svg-line",
+					"data-checked-transition": "Open->Recovery",
 					"d": "M 675 133 V 210 H 550 V 245",
 					"stroke-dasharray": "7 5",
 					"marker-end": "arrow"
@@ -11216,6 +11230,7 @@
 			{
 				"attributes": {
 					"class": "svg-line",
+					"data-checked-transition": "AtomicExit->Recovery",
 					"d": "M 865 133 V 210 H 625 V 245",
 					"stroke-dasharray": "7 5",
 					"marker-end": "arrow"
@@ -11225,6 +11240,7 @@
 			{
 				"attributes": {
 					"class": "svg-line",
+					"data-checked-transition": "Final->Recovery",
 					"d": "M 1055 133 V 210 H 700 V 245",
 					"stroke-dasharray": "7 5",
 					"marker-end": "arrow"
@@ -11242,6 +11258,7 @@
 			{
 				"attributes": {
 					"class": "svg-green",
+					"data-state": "HedgePnl",
 					"x": "45",
 					"y": "70",
 					"width": "180",
@@ -11253,6 +11270,7 @@
 			{
 				"attributes": {
 					"class": "svg-red",
+					"data-state": "EntryGas",
 					"x": "270",
 					"y": "95",
 					"width": "135",
@@ -11264,6 +11282,7 @@
 			{
 				"attributes": {
 					"class": "svg-amber",
+					"data-state": "Slippage",
 					"x": "450",
 					"y": "95",
 					"width": "135",
@@ -11275,6 +11294,7 @@
 			{
 				"attributes": {
 					"class": "svg-red",
+					"data-state": "ExitGas",
 					"x": "630",
 					"y": "95",
 					"width": "135",
@@ -11286,6 +11306,7 @@
 			{
 				"attributes": {
 					"class": "svg-blue",
+					"data-state": "Net",
 					"x": "810",
 					"y": "70",
 					"width": "125",
@@ -11395,6 +11416,7 @@
 			{
 				"attributes": {
 					"class": "svg-line",
+					"data-checked-transition": "HedgePnl->EntryGas",
 					"d": "M 225 118 H 270",
 					"marker-end": "arrow"
 				},
@@ -11403,6 +11425,7 @@
 			{
 				"attributes": {
 					"class": "svg-line",
+					"data-checked-transition": "EntryGas->Slippage",
 					"d": "M 405 130 H 450",
 					"marker-end": "arrow"
 				},
@@ -11411,6 +11434,7 @@
 			{
 				"attributes": {
 					"class": "svg-line",
+					"data-checked-transition": "Slippage->ExitGas",
 					"d": "M 585 130 H 630",
 					"marker-end": "arrow"
 				},
@@ -11419,6 +11443,7 @@
 			{
 				"attributes": {
 					"class": "svg-line",
+					"data-checked-transition": "ExitGas->Net",
 					"d": "M 765 118 H 810",
 					"marker-end": "arrow"
 				},

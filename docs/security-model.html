@@ -910,18 +910,32 @@
 					</p>
 				</div>
 				<p>
-					At Ethereum block <code>25,600,852</code> on 2026-07-24, the pinned
+					At Ethereum block
+					<code data-fixture-field="blockNumber">25,600,852</code> on 2026-07-24,
+					the pinned
 					executable REP/WETH fixture constructed two hypothetical reports around
-					a <code>2,121.147070719536334508 REP</code> midpoint. Both reports used
+					a
+					<code data-fixture-field="midReportRep"
+						>2,121.147070719536334508 REP</code
+					>
+					midpoint. Both reports used
 					the base-fee-derived minimum WETH side of
-					<code>0.817262744792307693 WETH</code>, a
-					<code>0.1%</code> reporter fee, a <code>1%</code> protocol fee, and the
-					<code>1%</code> Uniswap V3 REP/WETH pool. The sell-REP scenario used
-					<code>2,227.204424255513151233 REP</code>, exactly <code>5%</code>
-					above the midpoint; the buy-REP scenario used
-					<code>2,015.089717183559517782 REP</code>, exactly <code>5%</code>
-					below it. Gas was deliberately set to zero so the result isolates
-					pre-gas market and fee economics.
+					<code data-fixture-field="minimumWethReport"
+						>0.817262744792307693 WETH</code
+					>, a <code data-fixture-field="reporterFee">0.1%</code> reporter fee, a
+					<code data-fixture-field="protocolFee">1%</code> protocol fee, and the
+					<code data-fixture-field="uniswapPoolFee">1%</code> Uniswap V3 REP/WETH
+					pool. The sell-REP scenario used
+					<code data-fixture-field="sellReportRep"
+						>2,227.204424255513151233 REP</code
+					>, exactly <code data-fixture-field="deviationMagnitude">5%</code> above
+					the midpoint; the buy-REP scenario used
+					<code data-fixture-field="buyReportRep"
+						>2,015.089717183559517782 REP</code
+					>, exactly <code data-fixture-field="deviationMagnitude">5%</code> below
+					it. Gas was deliberately set to
+					<code data-fixture-field="gasCostWeth">0 WETH</code> so the result
+					isolates pre-gas market and fee economics.
 				</p>
 				<table id="open-oracle-market-fixture-inputs"
 					data-block-number="25600852"
@@ -948,23 +962,29 @@
 					<tbody>
 						<tr>
 							<td>Sell REP</td>
-							<td>2,227.204424255513151233 REP</td>
-							<td>+5%</td>
-							<td>Exact-input quote through the 1% REP/WETH pool</td>
+							<td data-fixture-field="sellReportRep">2,227.204424255513151233 REP</td>
+							<td data-fixture-field="sellDeviation">+5%</td>
+							<td data-fixture-field="sellExecution">Exact-input quote through the 1% REP/WETH pool</td>
 						</tr>
 						<tr>
 							<td>Buy REP</td>
-							<td>2,015.089717183559517782 REP</td>
-							<td>−5%</td>
-							<td>Exact-output quote through the 1% REP/WETH pool</td>
+							<td data-fixture-field="buyReportRep">2,015.089717183559517782 REP</td>
+							<td data-fixture-field="buyDeviation">−5%</td>
+							<td data-fixture-field="buyExecution">Exact-output quote through the 1% REP/WETH pool</td>
 						</tr>
 					</tbody>
 				</table>
 				<p>
 					Under only those two constructed report scenarios, the fixture produced
 					pre-gas results of
-					<code>-0.255235735754674523 WETH</code> for the sell-REP correction and
-					<code>-0.626254311426940506 WETH</code> for the buy-REP correction.
+					<code data-fixture-field="sellProfitWeth"
+						>-0.255235735754674523 WETH</code
+					>
+					for the sell-REP correction and
+					<code data-fixture-field="buyProfitWeth"
+						>-0.626254311426940506 WETH</code
+					>
+					for the buy-REP correction.
 					Both modeled paths were unprofitable before gas; the result does not
 					generalize to another report size, deviation, fee schedule, pool, block,
 					or gas cost.
