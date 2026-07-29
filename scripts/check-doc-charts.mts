@@ -20,6 +20,18 @@ import {
 	contractAtlasViewDefinitions,
 	type ContractAtlasView,
 } from '../docs/charts/contractAtlas'
+import {
+	contractAtlasCallClaimEvidence,
+	contractAtlasCompatibilityEvidence,
+	contractAtlasSemanticEvidence,
+	contractAtlasSemanticMeanings,
+	contractAtlasTestExecutionEvidence,
+	contractAtlasUseClaimEvidence,
+	type ContractAtlasCompatibilityEvidence,
+	type ContractAtlasSemanticClaimEvidence,
+	type ContractAtlasSemanticEvidence,
+	type ContractAtlasTestExecutionEvidence,
+} from '../docs/charts/contractAtlasSemanticEvidence'
 import { contractAtlasSourceOwnerOverrides, contractAtlasSourceReferences } from '../docs/charts/contractAtlasSourceReferences'
 import { analyzeContractAtlasSource, contractAtlasSourceReferenceIssue } from './contract-atlas-source-references.mts'
 
@@ -30,25 +42,36 @@ const generatedPath = path.join(repositoryRoot, 'docs/chartRuntime.js')
 const specsPath = path.join(repositoryRoot, 'docs/charts/diagramSpecs.json')
 const expectedChartCount = 41
 const expectedContractAtlasNodeCount = 114
-const expectedContractAtlasRelationshipCount = 366
-const expectedContractAtlasPlotRouteCount = 360
+const expectedContractAtlasRelationshipCount = 363
+const expectedContractAtlasPlotRouteCount = 357
 const expectedContractAtlasMultiRelationRouteCount = 6
 const expectedContractAtlasSourceReferenceCount = 321
 const expectedContractAtlasExplicitDeploymentCount = 17
 const expectedContractAtlasDirectBaseCount = 43
 const expectedContractAtlasDelegatecallCount = 5
+const expectedContractAtlasSemanticEvidenceCount = 109
+const expectedContractAtlasCallClaimCount = 42
+const expectedContractAtlasUseClaimCount = 31
+const expectedPrimaryContractInteractionCount = 19
+const expectedPrimaryContractComponentCount = 12
 const expectedContractAtlasViewRouteCounts: Record<ContractAtlasView, number> = {
-	all: 360,
+	all: 357,
 	protocol: 69,
 	references: 189,
 	structure: 76,
-	tests: 26,
+	tests: 23,
 }
 const expectedContractAtlasTypeModuleSources = new Set(['solidity/contracts/peripherals/EscalationGameTypes.sol', 'solidity/contracts/peripherals/SecurityPoolForkerTypes.sol'])
 const supportedDiagramTags = new Set(['circle', 'defs', 'line', 'marker', 'path', 'polyline', 'rect', 'text', 'tspan'])
 const axisFreeNativeChartIds = new Set(['fig-complete-contract-atlas', 'fig-contract-interaction-map'])
 const quantitativeChartIdSet = new Set<string>(quantitativeChartIds)
 const chartAxes: ('x' | 'y')[] = ['x', 'y']
+const contractAtlasSourceDerivedRelationVerbs: Record<'delegatecall' | 'deploys' | 'implements' | 'inherits', string> = {
+	delegatecall: 'Delegatecalls',
+	deploys: 'Deploys',
+	implements: 'Implements',
+	inherits: 'Directly inherits',
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -212,6 +235,17 @@ function exactRelationshipSetIssue(label: string, expectedValues: readonly strin
 	return stringSetIssue(label, expectedValues, registeredValues)
 }
 
+function primaryContractInteractionBoundaryIssue(edges: readonly (typeof contractInteractionEdges)[number][]): string | undefined {
+	if (edges.length !== expectedPrimaryContractInteractionCount) {
+		return `Primary contract interaction map expected ${expectedPrimaryContractInteractionCount} interactions, found ${edges.length}`
+	}
+	const components = new Set(edges.flatMap(edge => [edge.source, edge.receiver]))
+	if (components.size !== expectedPrimaryContractComponentCount) {
+		return `Primary contract interaction map expected ${expectedPrimaryContractComponentCount} components, found ${components.size}`
+	}
+	return undefined
+}
+
 function contractAtlasRelationshipIssue(edges: readonly (typeof contractAtlasEdges)[number][], nodeIds: ReadonlySet<string>): string | undefined {
 	if (edges.length !== expectedContractAtlasRelationshipCount) {
 		return `Complete contract atlas expected ${expectedContractAtlasRelationshipCount} relationships, found ${edges.length}`
@@ -241,6 +275,301 @@ function contractAtlasRelationshipIssue(edges: readonly (typeof contractAtlasEdg
 	const missingSourcePair = contractAtlasSourceReferences.find(reference => !relationshipPairs.has(`${reference.source}->${reference.target}`))
 	if (missingSourcePair !== undefined) {
 		return `Complete contract atlas is missing direct source relationship ${missingSourcePair.source}->${missingSourcePair.target}`
+	}
+	return undefined
+}
+
+function contractAtlasSourceDerivedMeaningIssue(edges: readonly (typeof contractAtlasEdges)[number][], nodeById: ReadonlyMap<string, (typeof contractAtlasNodes)[number]>): string | undefined {
+	for (const edge of edges) {
+		if (edge.relation !== 'delegatecall' && edge.relation !== 'deploys' && edge.relation !== 'implements' && edge.relation !== 'inherits') continue
+		const target = nodeById.get(edge.target)
+		if (target === undefined) return `Complete contract atlas source-derived meaning ${edge.id} has missing target ${edge.target}`
+		const expectedDescription = `${contractAtlasSourceDerivedRelationVerbs[edge.relation]} ${target.label}.`
+		if (edge.description !== expectedDescription) {
+			return `Complete contract atlas source-derived relationship ${edge.id} meaning must be mechanical: ${expectedDescription}`
+		}
+	}
+	return undefined
+}
+
+function compactSolidity(source: string): string {
+	return source.replace(/\s+/g, '')
+}
+
+function contractAtlasSemanticEvidenceIssue(
+	edges: readonly (typeof contractAtlasEdges)[number][],
+	evidenceEntries: readonly ContractAtlasSemanticEvidence[],
+	semanticMeanings: Readonly<Record<string, string>>,
+	callClaimEvidence: Readonly<Record<string, readonly ContractAtlasSemanticClaimEvidence[]>>,
+	useClaimEvidence: Readonly<Record<string, readonly ContractAtlasSemanticClaimEvidence[]>>,
+	compatibilityEvidence: Readonly<Record<string, ContractAtlasCompatibilityEvidence>>,
+	testExecutionEvidence: Readonly<Record<string, ContractAtlasTestExecutionEvidence>>,
+	sourceUnits: readonly { nodeId: string; source: string }[],
+	testSources: ReadonlyMap<string, string>,
+): string | undefined {
+	const checkedRelations = new Set(['assets', 'calls', 'compatible', 'tests', 'uses'])
+	const checkedEdges = edges.filter(edge => checkedRelations.has(edge.relation))
+	if (checkedEdges.length !== expectedContractAtlasSemanticEvidenceCount) {
+		return `Complete contract atlas expected ${expectedContractAtlasSemanticEvidenceCount} manually classified relationships, found ${checkedEdges.length}`
+	}
+	if (evidenceEntries.length !== expectedContractAtlasSemanticEvidenceCount) {
+		return `Complete contract atlas expected ${expectedContractAtlasSemanticEvidenceCount} semantic evidence entries, found ${evidenceEntries.length}`
+	}
+	const expectedKeys = checkedEdges.map(edge => `${edge.id}:${edge.source}->${edge.target}:${edge.relation}`)
+	const evidenceKeys = evidenceEntries.map(evidence => `${evidence.edgeId}:${evidence.source}->${evidence.target}:${evidence.relation}`)
+	const classificationIssue = exactRelationshipSetIssue('Complete contract atlas semantic evidence classification mismatch', expectedKeys, evidenceKeys)
+	if (classificationIssue !== undefined) return classificationIssue
+	const meaningIssue = exactRelationshipSetIssue(
+		'Complete contract atlas semantic meaning mismatch',
+		evidenceEntries.map(evidence => evidence.edgeId),
+		Object.keys(semanticMeanings),
+	)
+	if (meaningIssue !== undefined) return meaningIssue
+
+	const edgeById = new Map(checkedEdges.map(edge => [edge.id, edge]))
+	const sourceByNodeId = new Map(sourceUnits.map(sourceUnit => [sourceUnit.nodeId, compactSolidity(sourceUnit.source)]))
+	function locationIssue(edgeId: string, locations: readonly { nodeId: string; selectors: string[] }[]): string | undefined {
+		if (locations.length === 0) return `Complete contract atlas semantic evidence ${edgeId} has no source location`
+		for (const location of locations) {
+			const source = sourceByNodeId.get(location.nodeId)
+			if (source === undefined) return `Complete contract atlas semantic evidence ${edgeId} references missing source unit ${location.nodeId}`
+			if (location.selectors.length === 0) return `Complete contract atlas semantic evidence ${edgeId} has no selectors for ${location.nodeId}`
+			for (const selector of location.selectors) {
+				const compactSelector = compactSolidity(selector)
+				if (compactSelector.length === 0) return `Complete contract atlas semantic evidence ${edgeId} contains an empty selector`
+				if (!source.includes(compactSelector)) {
+					return `Complete contract atlas semantic evidence ${edgeId} selector is absent from ${location.nodeId}: ${selector}`
+				}
+			}
+		}
+		return undefined
+	}
+
+	const callEvidenceEntries = evidenceEntries.filter(evidence => evidence.relation === 'calls')
+	if (callEvidenceEntries.length !== expectedContractAtlasCallClaimCount) {
+		return `Complete contract atlas expected ${expectedContractAtlasCallClaimCount} direct-call claim sets, found ${callEvidenceEntries.length}`
+	}
+	const callClaimIssue = exactRelationshipSetIssue(
+		'Complete contract atlas direct-call claim evidence mismatch',
+		callEvidenceEntries.map(evidence => evidence.edgeId),
+		Object.keys(callClaimEvidence),
+	)
+	if (callClaimIssue !== undefined) return callClaimIssue
+	for (const evidence of callEvidenceEntries) {
+		const meaning = semanticMeanings[evidence.edgeId]
+		const claims = callClaimEvidence[evidence.edgeId]
+		if (meaning === undefined || claims === undefined || claims.length === 0) {
+			return `Complete contract atlas direct-call evidence ${evidence.edgeId} has no source-linked meaning claims`
+		}
+		const claimPhrases = claims.map(claim => claim.phrase)
+		if (new Set(claimPhrases).size !== claimPhrases.length) {
+			return `Complete contract atlas direct-call evidence ${evidence.edgeId} repeats a meaning claim`
+		}
+		const claimSelectors: { nodeId: string; selector: string }[] = []
+		for (const semanticClaim of claims) {
+			if (semanticClaim.phrase.trim().length === 0 || !meaning.includes(semanticClaim.phrase)) {
+				return `Complete contract atlas direct-call evidence ${evidence.edgeId} claim is absent from its rendered meaning: ${semanticClaim.phrase}`
+			}
+			const callSide = semanticClaim.callSide ?? 'source'
+			for (const location of semanticClaim.locations) {
+				if (callSide === 'source' && location.nodeId !== evidence.source) {
+					return `Complete contract atlas direct-call evidence ${evidence.edgeId} assigns a source-side claim to ${location.nodeId}`
+				}
+				if (callSide === 'receiver' && location.nodeId !== evidence.target) {
+					return `Complete contract atlas direct-call evidence ${evidence.edgeId} assigns a receiver-side claim to ${location.nodeId}`
+				}
+				if (callSide === 'inherited-source' && !edges.some(edge => edge.relation === 'inherits' && edge.source === evidence.source && edge.target === location.nodeId)) {
+					return `Complete contract atlas direct-call evidence ${evidence.edgeId} assigns an inherited source claim to unrelated ${location.nodeId}`
+				}
+			}
+			const claimLocationIssue = locationIssue(evidence.edgeId, semanticClaim.locations)
+			if (claimLocationIssue !== undefined) return claimLocationIssue
+			for (const location of semanticClaim.locations) {
+				for (const selector of location.selectors) claimSelectors.push({ nodeId: location.nodeId, selector: compactSolidity(selector) })
+			}
+		}
+		for (const location of evidence.locations) {
+			for (const selector of location.selectors) {
+				const compactSelector = compactSolidity(selector)
+				if (!claimSelectors.some(claimSelector => claimSelector.nodeId === location.nodeId && (claimSelector.selector.includes(compactSelector) || compactSelector.includes(claimSelector.selector)))) {
+					return `Complete contract atlas direct-call evidence ${evidence.edgeId} selector is not assigned to a rendered meaning claim: ${selector}`
+				}
+			}
+		}
+	}
+	const useEvidenceEntries = evidenceEntries.filter(evidence => evidence.relation === 'uses')
+	if (useEvidenceEntries.length !== expectedContractAtlasUseClaimCount) {
+		return `Complete contract atlas expected ${expectedContractAtlasUseClaimCount} implementation-use claim sets, found ${useEvidenceEntries.length}`
+	}
+	const useClaimIssue = exactRelationshipSetIssue(
+		'Complete contract atlas implementation-use claim evidence mismatch',
+		useEvidenceEntries.map(evidence => evidence.edgeId),
+		Object.keys(useClaimEvidence),
+	)
+	if (useClaimIssue !== undefined) return useClaimIssue
+	for (const evidence of useEvidenceEntries) {
+		const meaning = semanticMeanings[evidence.edgeId]
+		const claims = useClaimEvidence[evidence.edgeId]
+		if (meaning === undefined || claims === undefined || claims.length === 0) {
+			return `Complete contract atlas implementation-use evidence ${evidence.edgeId} has no source-linked meaning claims`
+		}
+		const claimPhrases = claims.map(claim => claim.phrase)
+		if (new Set(claimPhrases).size !== claimPhrases.length) {
+			return `Complete contract atlas implementation-use evidence ${evidence.edgeId} repeats a meaning claim`
+		}
+		const claimSelectors: { nodeId: string; selector: string }[] = []
+		for (const semanticClaim of claims) {
+			if (semanticClaim.phrase.trim().length === 0 || !meaning.includes(semanticClaim.phrase)) {
+				return `Complete contract atlas implementation-use evidence ${evidence.edgeId} claim is absent from its rendered meaning: ${semanticClaim.phrase}`
+			}
+			if (/\bBPS\b/.test(semanticClaim.phrase) && !semanticClaim.locations.some(location => location.selectors.some(selector => /\b(?:BPS_DENOMINATOR|[A-Z][A-Z0-9_]*_BPS)\b/.test(selector)))) {
+				return `Complete contract atlas implementation-use evidence ${evidence.edgeId} BPS claim does not cite a BPS denominator or _BPS symbol`
+			}
+			if (semanticClaim.callSide !== undefined) {
+				return `Complete contract atlas implementation-use evidence ${evidence.edgeId} incorrectly declares call-side evidence`
+			}
+			const claimLocationIssue = locationIssue(evidence.edgeId, semanticClaim.locations)
+			if (claimLocationIssue !== undefined) return claimLocationIssue
+			for (const location of semanticClaim.locations) {
+				for (const selector of location.selectors) claimSelectors.push({ nodeId: location.nodeId, selector: compactSolidity(selector) })
+			}
+		}
+		if (/\bBPS\b/.test(meaning) && !claims.some(claim => /\bBPS\b/.test(claim.phrase))) {
+			return `Complete contract atlas implementation-use evidence ${evidence.edgeId} meaning contains an unclaimed BPS assertion`
+		}
+		for (const location of evidence.locations) {
+			for (const selector of location.selectors) {
+				const compactSelector = compactSolidity(selector)
+				if (!claimSelectors.some(claimSelector => claimSelector.nodeId === location.nodeId && (claimSelector.selector.includes(compactSelector) || compactSelector.includes(claimSelector.selector)))) {
+					return `Complete contract atlas implementation-use evidence ${evidence.edgeId} selector is not assigned to a rendered meaning claim: ${selector}`
+				}
+			}
+		}
+	}
+
+	for (const evidence of evidenceEntries) {
+		const edge = edgeById.get(evidence.edgeId)
+		if (edge === undefined) return `Complete contract atlas semantic evidence ${evidence.edgeId} has no relationship`
+		const checkedMeaning = semanticMeanings[evidence.edgeId]
+		if (checkedMeaning === undefined) return `Complete contract atlas semantic evidence ${evidence.edgeId} has no checked meaning`
+		if (edge.description !== checkedMeaning) {
+			return `Complete contract atlas semantic relationship ${evidence.edgeId} meaning differs from its source-linked evidence`
+		}
+		if (evidence.relation === 'uses' && !contractAtlasSourceReferences.some(reference => reference.source === evidence.source && reference.target === evidence.target)) {
+			return `Complete contract atlas use evidence ${evidence.edgeId} is not an implementation-derived source pair`
+		}
+		if (evidence.relation === 'assets') {
+			if (evidence.locations.length !== 0) return `Complete contract atlas asset evidence ${evidence.edgeId} must attach selectors to its directional flows`
+			if (evidence.assetFlows === undefined || evidence.assetFlows.length === 0) {
+				return `Complete contract atlas asset evidence ${evidence.edgeId} has no sender-recipient flows`
+			}
+			for (const assetFlow of evidence.assetFlows) {
+				if (assetFlow.sender.trim().length === 0 || assetFlow.recipient.trim().length === 0) {
+					return `Complete contract atlas asset evidence ${evidence.edgeId} has an empty sender or recipient`
+				}
+				const direction = `${assetFlow.sender} → ${assetFlow.recipient}`
+				if (!edge.description.includes(direction)) {
+					return `Complete contract atlas asset relationship ${evidence.edgeId} omits checked direction ${direction}`
+				}
+				const issue = locationIssue(evidence.edgeId, assetFlow.locations)
+				if (issue !== undefined) return issue
+			}
+		} else {
+			if (evidence.assetFlows !== undefined) return `Complete contract atlas non-asset evidence ${evidence.edgeId} declares asset flows`
+			const issue = locationIssue(evidence.edgeId, evidence.locations)
+			if (issue !== undefined) return issue
+		}
+	}
+
+	const compatibleEvidenceEntries = evidenceEntries.filter(evidence => evidence.relation === 'compatible')
+	const compatibilityIssue = exactRelationshipSetIssue(
+		'Complete contract atlas compatibility evidence mismatch',
+		compatibleEvidenceEntries.map(evidence => evidence.edgeId),
+		Object.keys(compatibilityEvidence),
+	)
+	if (compatibilityIssue !== undefined) return compatibilityIssue
+	for (const evidence of compatibleEvidenceEntries) {
+		const compatibility = compatibilityEvidence[evidence.edgeId]
+		if (compatibility === undefined) return `Complete contract atlas compatibility evidence ${evidence.edgeId} is missing`
+		if (compatibility.source !== evidence.source || compatibility.target !== evidence.target) {
+			return `Complete contract atlas compatibility evidence ${evidence.edgeId} has stale endpoints`
+		}
+		const source = sourceByNodeId.get(compatibility.source)
+		const target = sourceByNodeId.get(compatibility.target)
+		if (source === undefined || target === undefined) return `Complete contract atlas compatibility evidence ${evidence.edgeId} has a missing source unit`
+		const targetFunctionNames = [...target.matchAll(/\bfunction([A-Za-z_]\w*)\(/g)].map(match => match[1]).filter(name => name !== undefined)
+		const memberNames = compatibility.members.map(member => member.name)
+		const surfaceIssue = exactRelationshipSetIssue(`Complete contract atlas compatibility evidence ${evidence.edgeId} callable surface mismatch`, targetFunctionNames, memberNames)
+		if (surfaceIssue !== undefined) return surfaceIssue
+		for (const member of compatibility.members) {
+			const compactTargetSelector = compactSolidity(member.targetSelector)
+			const compactSourceSelector = compactSolidity(member.sourceSelector)
+			if (!target.includes(compactTargetSelector)) {
+				return `Complete contract atlas compatibility evidence ${evidence.edgeId} target member ${member.name} is absent`
+			}
+			if (!source.includes(compactSourceSelector)) {
+				return `Complete contract atlas compatibility evidence ${evidence.edgeId} source member ${member.name} is absent`
+			}
+		}
+	}
+
+	const testEvidenceEntries = evidenceEntries.filter(evidence => evidence.relation === 'tests')
+	const testExecutionIssue = exactRelationshipSetIssue(
+		'Complete contract atlas TypeScript test evidence mismatch',
+		testEvidenceEntries.map(evidence => evidence.edgeId),
+		Object.keys(testExecutionEvidence),
+	)
+	if (testExecutionIssue !== undefined) return testExecutionIssue
+	for (const evidence of testEvidenceEntries) {
+		const execution = testExecutionEvidence[evidence.edgeId]
+		if (execution === undefined) return `Complete contract atlas test evidence ${evidence.edgeId} is missing TypeScript execution evidence`
+		if (execution.target !== evidence.target) return `Complete contract atlas test evidence ${evidence.edgeId} has a stale production target`
+		const targetIssue = locationIssue(evidence.edgeId, execution.targetLocations)
+		if (targetIssue !== undefined) return targetIssue
+		const testSource = testSources.get(execution.file)
+		if (testSource === undefined) return `Complete contract atlas test evidence ${evidence.edgeId} references missing TypeScript test ${execution.file}`
+		if (execution.sourceSelectors.length === 0 || execution.targetSelectors.length === 0) {
+			return `Complete contract atlas test evidence ${evidence.edgeId} must identify both its test artifact and production artifact or call`
+		}
+		const compactTestSource = compactSolidity(testSource)
+		for (const selector of [...execution.sourceSelectors, ...execution.targetSelectors]) {
+			const compactSelector = compactSolidity(selector)
+			if (compactSelector.length === 0 || !compactTestSource.includes(compactSelector)) {
+				return `Complete contract atlas test evidence ${evidence.edgeId} selector is absent from ${execution.file}: ${selector}`
+			}
+		}
+		if (execution.scope !== undefined) {
+			const scope = execution.scope
+			if (scope.testName.trim().length === 0 || scope.selectors.length === 0) {
+				return `Complete contract atlas test evidence ${evidence.edgeId} has an empty named execution scope`
+			}
+			const testSourceFile = ts.createSourceFile(execution.file, testSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+			const matchingTests: ts.CallExpression[] = []
+			function visitTestScope(node: ts.Node): void {
+				if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'test' && node.arguments[0] !== undefined && ts.isStringLiteralLike(node.arguments[0]) && node.arguments[0].text === scope.testName) {
+					matchingTests.push(node)
+				}
+				ts.forEachChild(node, visitTestScope)
+			}
+			visitTestScope(testSourceFile)
+			const matchingTest = matchingTests[0]
+			if (matchingTests.length !== 1 || matchingTest === undefined) {
+				return `Complete contract atlas test evidence ${evidence.edgeId} expected one test named "${scope.testName}" in ${execution.file}, found ${matchingTests.length}`
+			}
+			const compactTestScope = compactSolidity(matchingTest.getText(testSourceFile))
+			const scopedSelectorKeys = new Set(scope.selectors.map(selector => compactSolidity(selector)))
+			for (const selector of [...execution.sourceSelectors, ...execution.targetSelectors]) {
+				if (!scopedSelectorKeys.has(compactSolidity(selector))) {
+					return `Complete contract atlas test evidence ${evidence.edgeId} does not bind selector to its named execution scope: ${selector}`
+				}
+			}
+			for (const selector of scope.selectors) {
+				const compactSelector = compactSolidity(selector)
+				if (compactSelector.length === 0 || !compactTestScope.includes(compactSelector)) {
+					return `Complete contract atlas test evidence ${evidence.edgeId} scoped selector is absent from "${scope.testName}": ${selector}`
+				}
+			}
+		}
 	}
 	return undefined
 }
@@ -339,6 +668,155 @@ async function assertContractAtlasCoverage(): Promise<void> {
 	if (contractAtlasSourceReferenceIssue(derivedSourceReferences, contractAtlasSourceReferences.slice(1)) === undefined) {
 		throw new Error('Complete contract atlas source-reference coverage did not reject a removed relationship')
 	}
+	const testSources = new Map<string, string>()
+	const testDirectory = path.join(repositoryRoot, 'solidity/ts/tests')
+	for (const execution of Object.values(contractAtlasTestExecutionEvidence)) {
+		const testPath = path.resolve(repositoryRoot, execution.file)
+		if (!execution.file.startsWith('solidity/ts/tests/') || (testPath !== testDirectory && !testPath.startsWith(`${testDirectory}${path.sep}`))) {
+			throw new Error(`Complete contract atlas test evidence references a path outside Solidity TypeScript tests: ${execution.file}`)
+		}
+		if (!testSources.has(execution.file)) testSources.set(execution.file, await readFile(testPath, 'utf8'))
+	}
+	const semanticEvidenceIssueFor = (
+		edges: readonly (typeof contractAtlasEdges)[number][] = contractAtlasEdges,
+		evidenceEntries: readonly ContractAtlasSemanticEvidence[] = contractAtlasSemanticEvidence,
+		semanticMeanings: Readonly<Record<string, string>> = contractAtlasSemanticMeanings,
+		callClaimEvidence: Readonly<Record<string, readonly ContractAtlasSemanticClaimEvidence[]>> = contractAtlasCallClaimEvidence,
+		useClaimEvidence: Readonly<Record<string, readonly ContractAtlasSemanticClaimEvidence[]>> = contractAtlasUseClaimEvidence,
+		compatibilityEvidence: Readonly<Record<string, ContractAtlasCompatibilityEvidence>> = contractAtlasCompatibilityEvidence,
+		testExecutionEvidence: Readonly<Record<string, ContractAtlasTestExecutionEvidence>> = contractAtlasTestExecutionEvidence,
+		sourceUnits: readonly { nodeId: string; source: string }[] = sourceAnalysis.sourceUnits,
+		checkedTestSources: ReadonlyMap<string, string> = testSources,
+	) => contractAtlasSemanticEvidenceIssue(edges, evidenceEntries, semanticMeanings, callClaimEvidence, useClaimEvidence, compatibilityEvidence, testExecutionEvidence, sourceUnits, checkedTestSources)
+	const semanticEvidenceIssue = semanticEvidenceIssueFor()
+	if (semanticEvidenceIssue !== undefined) throw new Error(semanticEvidenceIssue)
+	const firstSemanticEdge = contractAtlasEdges.find(edge => edge.relation === 'calls')
+	if (firstSemanticEdge === undefined) throw new Error('Complete contract atlas has no runtime call for semantic evidence probes')
+	const targetMutation = contractAtlasEdges.map(edge => (edge.id === firstSemanticEdge.id ? { ...edge, target: 'zoltar-core' } : edge))
+	if (semanticEvidenceIssueFor(targetMutation) === undefined) {
+		throw new Error('Complete contract atlas semantic evidence did not reject a changed target')
+	}
+	const relationMutation = contractAtlasEdges.map(edge => (edge.id === firstSemanticEdge.id ? { ...edge, relation: 'uses' as const } : edge))
+	if (semanticEvidenceIssueFor(relationMutation) === undefined) {
+		throw new Error('Complete contract atlas semantic evidence did not reject a reclassified relationship')
+	}
+	const meaningMutation = contractAtlasEdges.map(edge => (edge.id === firstSemanticEdge.id ? { ...edge, description: `${edge.description} On every deposit.` } : edge))
+	if (semanticEvidenceIssueFor(meaningMutation) === undefined) {
+		throw new Error('Complete contract atlas semantic evidence did not reject a changed non-asset meaning')
+	}
+	const firstAssetEvidence = contractAtlasSemanticEvidence.find(evidence => evidence.relation === 'assets')
+	const firstAssetFlow = firstAssetEvidence?.assetFlows?.[0]
+	if (firstAssetEvidence === undefined || firstAssetFlow === undefined) throw new Error('Complete contract atlas has no asset flow for direction evidence probes')
+	const assetDirection = `${firstAssetFlow.sender} → ${firstAssetFlow.recipient}`
+	const reversedAssetDirection = `${firstAssetFlow.recipient} → ${firstAssetFlow.sender}`
+	const reversedAssetEdges = contractAtlasEdges.map(edge => (edge.id === firstAssetEvidence.edgeId ? { ...edge, description: edge.description.replace(assetDirection, reversedAssetDirection) } : edge))
+	if (semanticEvidenceIssueFor(reversedAssetEdges) === undefined) {
+		throw new Error('Complete contract atlas semantic evidence did not reject a reversed asset direction')
+	}
+	const firstSelectorEvidence = contractAtlasSemanticEvidence.find(evidence => evidence.locations[0]?.selectors[0] !== undefined)
+	const firstSelectorLocation = firstSelectorEvidence?.locations[0]
+	const firstSelector = firstSelectorLocation?.selectors[0]
+	if (firstSelectorEvidence === undefined || firstSelectorLocation === undefined || firstSelector === undefined) {
+		throw new Error('Complete contract atlas has no selector for semantic evidence probes')
+	}
+	const changedSelectorEvidence = contractAtlasSemanticEvidence.map(evidence =>
+		evidence.edgeId === firstSelectorEvidence.edgeId
+			? {
+					...evidence,
+					locations: [
+						{
+							...firstSelectorLocation,
+							selectors: [`${firstSelector}semanticEvidenceProbe`, ...firstSelectorLocation.selectors.slice(1)],
+						},
+						...evidence.locations.slice(1),
+					],
+				}
+			: evidence,
+	)
+	if (semanticEvidenceIssueFor(contractAtlasEdges, changedSelectorEvidence) === undefined) {
+		throw new Error('Complete contract atlas semantic evidence did not reject a stale source selector')
+	}
+	const precisionClaims = contractAtlasUseClaimEvidence['pool-utils-runtime']
+	const precisionClaimIndex = precisionClaims?.findIndex(claim => claim.phrase === 'precision') ?? -1
+	const precisionClaim = precisionClaims?.[precisionClaimIndex]
+	const precisionMeaning = contractAtlasSemanticMeanings['pool-utils-runtime']
+	if (precisionClaims === undefined || precisionClaim === undefined || precisionMeaning === undefined) {
+		throw new Error('Complete contract atlas has no fixed-point precision claim for BPS unit probes')
+	}
+	const unsupportedBpsMeaning = precisionMeaning.replace('precision', 'BPS')
+	const unsupportedBpsEdges = contractAtlasEdges.map(edge => (edge.id === 'pool-utils-runtime' ? { ...edge, description: unsupportedBpsMeaning } : edge))
+	const unsupportedBpsMeanings = { ...contractAtlasSemanticMeanings, 'pool-utils-runtime': unsupportedBpsMeaning }
+	const unsupportedBpsClaims = {
+		...contractAtlasUseClaimEvidence,
+		'pool-utils-runtime': precisionClaims.map((claim, index) => (index === precisionClaimIndex ? { ...claim, phrase: 'BPS' } : claim)),
+	}
+	if (semanticEvidenceIssueFor(unsupportedBpsEdges, contractAtlasSemanticEvidence, unsupportedBpsMeanings, contractAtlasCallClaimEvidence, unsupportedBpsClaims) === undefined) {
+		throw new Error('Complete contract atlas semantic claims did not reject a BPS meaning backed only by fixed-point precision')
+	}
+	const factorySourceUnit = sourceAnalysis.sourceUnits.find(sourceUnit => sourceUnit.nodeId === 'statoblast-security-pool-factory')
+	if (factorySourceUnit === undefined) throw new Error('Complete contract atlas has no pool factory source unit for semantic claim probes')
+	const changedFactorySource = factorySourceUnit.source.replace('zoltar.forkQuestionMatches(', 'zoltar.semanticEvidenceForkQuestionMatchesProbe(')
+	if (changedFactorySource === factorySourceUnit.source) throw new Error('Complete contract atlas could not mutate a factory-to-Zoltar call claim')
+	const changedFactorySourceUnits = sourceAnalysis.sourceUnits.map(sourceUnit => (sourceUnit.nodeId === factorySourceUnit.nodeId ? { ...sourceUnit, source: changedFactorySource } : sourceUnit))
+	if (semanticEvidenceIssueFor(contractAtlasEdges, contractAtlasSemanticEvidence, contractAtlasSemanticMeanings, contractAtlasCallClaimEvidence, contractAtlasUseClaimEvidence, contractAtlasCompatibilityEvidence, contractAtlasTestExecutionEvidence, changedFactorySourceUnits) === undefined) {
+		throw new Error('Complete contract atlas semantic claims did not reject a removed factory-to-Zoltar operation')
+	}
+	const securityPoolSourceUnit = sourceAnalysis.sourceUnits.find(sourceUnit => sourceUnit.nodeId === 'statoblast-security-pool')
+	if (securityPoolSourceUnit === undefined) throw new Error('Complete contract atlas has no security pool source unit for semantic claim probes')
+	const changedSecurityPoolSource = securityPoolSourceUnit.source.replace('shareToken.burnTokenIdAndGetRemainingSupply(', 'shareToken.semanticEvidenceBurnWinningSharesProbe(')
+	if (changedSecurityPoolSource === securityPoolSourceUnit.source) throw new Error('Complete contract atlas could not mutate the winning-share redemption claim')
+	const changedSecurityPoolSourceUnits = sourceAnalysis.sourceUnits.map(sourceUnit => (sourceUnit.nodeId === securityPoolSourceUnit.nodeId ? { ...sourceUnit, source: changedSecurityPoolSource } : sourceUnit))
+	if (semanticEvidenceIssueFor(contractAtlasEdges, contractAtlasSemanticEvidence, contractAtlasSemanticMeanings, contractAtlasCallClaimEvidence, contractAtlasUseClaimEvidence, contractAtlasCompatibilityEvidence, contractAtlasTestExecutionEvidence, changedSecurityPoolSourceUnits) === undefined) {
+		throw new Error('Complete contract atlas semantic claims did not reject a removed winning-share redemption operation')
+	}
+	const priceReadClaims = contractAtlasCallClaimEvidence['pool-price-coordinator']
+	const priceReadClaim = priceReadClaims?.[0]
+	if (priceReadClaims === undefined || priceReadClaim === undefined) throw new Error('Complete contract atlas has no pool-to-coordinator direction claim')
+	const reversedPriceReadClaim: ContractAtlasSemanticClaimEvidence = { ...priceReadClaim, callSide: 'receiver' }
+	const reversedPriceReadClaims: Record<string, readonly ContractAtlasSemanticClaimEvidence[]> = {
+		...contractAtlasCallClaimEvidence,
+		'pool-price-coordinator': [reversedPriceReadClaim, ...priceReadClaims.slice(1)],
+	}
+	if (semanticEvidenceIssueFor(contractAtlasEdges, contractAtlasSemanticEvidence, contractAtlasSemanticMeanings, reversedPriceReadClaims) === undefined) {
+		throw new Error('Complete contract atlas semantic claims did not reject a source operation classified as receiver authorization')
+	}
+	const priceCoordinatorSourceUnit = sourceAnalysis.sourceUnits.find(sourceUnit => sourceUnit.nodeId === 'statoblast-price-coordinator')
+	if (priceCoordinatorSourceUnit === undefined) throw new Error('Complete contract atlas has no price coordinator source unit for callback-target probes')
+	const changedPriceCoordinatorSource = priceCoordinatorSourceUnit.source.replace('callbackContract: address(this)', 'callbackContract: address(0)')
+	if (changedPriceCoordinatorSource === priceCoordinatorSourceUnit.source) throw new Error('Complete contract atlas could not disconnect the configured OpenOracle callback target')
+	const changedPriceCoordinatorSourceUnits = sourceAnalysis.sourceUnits.map(sourceUnit => (sourceUnit.nodeId === priceCoordinatorSourceUnit.nodeId ? { ...sourceUnit, source: changedPriceCoordinatorSource } : sourceUnit))
+	if (semanticEvidenceIssueFor(contractAtlasEdges, contractAtlasSemanticEvidence, contractAtlasSemanticMeanings, contractAtlasCallClaimEvidence, contractAtlasUseClaimEvidence, contractAtlasCompatibilityEvidence, contractAtlasTestExecutionEvidence, changedPriceCoordinatorSourceUnits) === undefined) {
+		throw new Error('Complete contract atlas semantic claims did not reject a disconnected OpenOracle callback target')
+	}
+	const wethSourceUnit = sourceAnalysis.sourceUnits.find(sourceUnit => sourceUnit.nodeId === 'infra-weth9')
+	if (wethSourceUnit === undefined) throw new Error('Complete contract atlas has no WETH source unit for compatibility probes')
+	const changedWethSource = wethSourceUnit.source.replace('function approve(address guy, uint wad)', 'function semanticEvidenceApproveProbe(address guy, uint wad)')
+	if (changedWethSource === wethSourceUnit.source) throw new Error('Complete contract atlas could not mutate an IWeth9 compatibility member')
+	const changedWethSourceUnits = sourceAnalysis.sourceUnits.map(sourceUnit => (sourceUnit.nodeId === wethSourceUnit.nodeId ? { ...sourceUnit, source: changedWethSource } : sourceUnit))
+	if (semanticEvidenceIssueFor(contractAtlasEdges, contractAtlasSemanticEvidence, contractAtlasSemanticMeanings, contractAtlasCallClaimEvidence, contractAtlasUseClaimEvidence, contractAtlasCompatibilityEvidence, contractAtlasTestExecutionEvidence, changedWethSourceUnits) === undefined) {
+		throw new Error('Complete contract atlas compatibility evidence did not reject a removed IWeth9 member')
+	}
+	const firstTestEvidence = contractAtlasSemanticEvidence.find(evidence => evidence.relation === 'tests')
+	if (firstTestEvidence === undefined) throw new Error('Complete contract atlas has no test relationship for semantic evidence probes')
+	const changedTestTarget = firstTestEvidence.target === 'zoltar-core' ? 'statoblast-security-pool' : 'zoltar-core'
+	const changedTestEdges = contractAtlasEdges.map(edge => (edge.id === firstTestEvidence.edgeId ? { ...edge, target: changedTestTarget } : edge))
+	const changedTestEvidence = contractAtlasSemanticEvidence.map(evidence => (evidence.edgeId === firstTestEvidence.edgeId ? { ...evidence, target: changedTestTarget } : evidence))
+	if (semanticEvidenceIssueFor(changedTestEdges, changedTestEvidence) === undefined) {
+		throw new Error('Complete contract atlas test evidence did not reject a coordinated relationship and evidence target mutation')
+	}
+	const thresholdExecution = contractAtlasTestExecutionEvidence['test-threshold-pool']
+	if (thresholdExecution === undefined) throw new Error('Complete contract atlas has no fork-threshold execution evidence')
+	const thresholdTestSource = testSources.get(thresholdExecution.file)
+	if (thresholdTestSource === undefined) throw new Error('Complete contract atlas has no fork-threshold TypeScript test source')
+	const changedThresholdTestSource = thresholdTestSource.replace("functionName: 'computeWinningWithdrawal'", "functionName: 'semanticEvidenceWinningWithdrawalProbe'")
+	if (changedThresholdTestSource === thresholdTestSource) throw new Error('Complete contract atlas could not disconnect the fork-threshold helper invocation')
+	const changedThresholdTestSources = new Map(testSources)
+	changedThresholdTestSources.set(thresholdExecution.file, changedThresholdTestSource)
+	if (
+		semanticEvidenceIssueFor(contractAtlasEdges, contractAtlasSemanticEvidence, contractAtlasSemanticMeanings, contractAtlasCallClaimEvidence, contractAtlasUseClaimEvidence, contractAtlasCompatibilityEvidence, contractAtlasTestExecutionEvidence, sourceAnalysis.sourceUnits, changedThresholdTestSources) === undefined
+	) {
+		throw new Error('Complete contract atlas test evidence did not reject a disconnected fork-threshold helper invocation')
+	}
 	if (sourceAnalysis.explicitDeployments.length !== expectedContractAtlasExplicitDeploymentCount) {
 		throw new Error(`Complete contract atlas expected ${expectedContractAtlasExplicitDeploymentCount} source-derived new or CREATE2 deployments, found ${sourceAnalysis.explicitDeployments.length}`)
 	}
@@ -374,6 +852,14 @@ async function assertContractAtlasCoverage(): Promise<void> {
 	if (delegatecallIssue !== undefined) throw new Error(delegatecallIssue)
 	if (exactRelationshipSetIssue('Complete contract atlas delegatecall target probe', derivedDelegatecallPairs, ['probe-source->probe-target', ...derivedDelegatecallPairs.slice(1)]) === undefined) {
 		throw new Error('Complete contract atlas delegatecall coverage did not reject a changed target')
+	}
+	const sourceDerivedMeaningIssue = contractAtlasSourceDerivedMeaningIssue(contractAtlasEdges, nodeById)
+	if (sourceDerivedMeaningIssue !== undefined) throw new Error(sourceDerivedMeaningIssue)
+	const firstSourceDerivedEdge = contractAtlasEdges.find(edge => edge.relation === 'delegatecall' || edge.relation === 'deploys' || edge.relation === 'implements' || edge.relation === 'inherits')
+	if (firstSourceDerivedEdge === undefined) throw new Error('Complete contract atlas has no source-derived relationship meaning for mutation probes')
+	const changedSourceDerivedMeaning = contractAtlasEdges.map(edge => (edge.id === firstSourceDerivedEdge.id ? { ...edge, description: `${edge.description} Unchecked extra claim.` } : edge))
+	if (contractAtlasSourceDerivedMeaningIssue(changedSourceDerivedMeaning, nodeById) === undefined) {
+		throw new Error('Complete contract atlas source-derived meaning validation did not reject an extra unverified clause')
 	}
 	const relationshipIssue = contractAtlasRelationshipIssue(contractAtlasEdges, nodeIdSet)
 	if (relationshipIssue !== undefined) throw new Error(relationshipIssue)
@@ -615,8 +1101,11 @@ if (axisUsesRegisteredLabel(detachedLabelOptions, 'y', detachedLabelSource)) {
 if (!runtimeSource.includes('return markDrivenDiagramChart(spec)') || /createElementNS|RenderFunction|narrativeMark/.test(runtimeSource)) {
 	throw new Error('Documentation flowcharts must use native Observable Plot marks without raw SVG DOM reconstruction')
 }
-if (!runtimeSource.includes("mount.closest<HTMLElement>('figure.diagram, .example-visual')") || !runtimeSource.includes('overflowEnvelope.tabIndex = 0') || !runtimeSource.includes('Scrollable figure: ${spec.ariaLabel}')) {
+if (!runtimeSource.includes("mount.closest<HTMLElement>('.diagram-scroll, figure.diagram, .example-visual')") || !runtimeSource.includes('overflowEnvelope.tabIndex = 0') || !runtimeSource.includes('Scrollable figure: ${spec.ariaLabel}')) {
 	throw new Error('Documentation figure overflow wrappers must be keyboard-focusable and accessibly named')
+}
+if (!runtimeSource.includes("assets: { dash: '14,4'") || !runtimeSource.includes("deploys: { dash: '2,3,10,3'") || !runtimeSource.includes("delegatecall: { dash: '4,3'")) {
+	throw new Error('Complete contract atlas asset, deployment, and delegatecall routes must have distinct non-color stroke patterns')
 }
 if (
 	!/new Set\(contractInteractionEdges\.map/.test(runtimeSource) ||
@@ -693,6 +1182,17 @@ function segmentsIntersect(firstStart: { x: number; y: number }, firstEnd: { x: 
 		Math.abs(cross(start, end, point)) <= tolerance && point.x >= Math.min(start.x, end.x) - tolerance && point.x <= Math.max(start.x, end.x) + tolerance && point.y >= Math.min(start.y, end.y) - tolerance && point.y <= Math.max(start.y, end.y) + tolerance
 	return properIntersection || liesOnSegment(secondStart, firstStart, firstEnd) || liesOnSegment(secondEnd, firstStart, firstEnd) || liesOnSegment(firstStart, secondStart, secondEnd) || liesOnSegment(firstEnd, secondStart, secondEnd)
 }
+const primaryBoundaryIssue = primaryContractInteractionBoundaryIssue(contractInteractionEdges)
+if (primaryBoundaryIssue !== undefined) throw new Error(primaryBoundaryIssue)
+const firstPrimaryInteraction = contractInteractionEdges[0]
+if (firstPrimaryInteraction === undefined) throw new Error('Primary contract interaction map has no interaction for boundary probes')
+if (primaryContractInteractionBoundaryIssue([...contractInteractionEdges, { ...firstPrimaryInteraction, id: `${firstPrimaryInteraction.id}-interaction-probe` }]) === undefined) {
+	throw new Error('Primary contract interaction boundary did not reject a twentieth interaction')
+}
+const thirteenthComponentProbe = contractInteractionEdges.map((edge, index) => (index === 0 ? { ...edge, source: 'Primary boundary probe component' } : edge))
+if (primaryContractInteractionBoundaryIssue(thirteenthComponentProbe) === undefined) {
+	throw new Error('Primary contract interaction boundary did not reject a thirteenth component')
+}
 const routeById = new Map(layoutRoutes.map(route => [route.id, route]))
 if (routeById.size !== contractInteractionEdges.length || layoutRoutes.length !== contractInteractionEdges.length) {
 	throw new Error(`Contract interaction layout has ${layoutRoutes.length} routes for ${contractInteractionEdges.length} registry edges`)
@@ -751,7 +1251,14 @@ const contractInteractionWindow = new Window()
 contractInteractionWindow.document.write(contractInteractionHtml)
 contractInteractionWindow.document.close()
 const contractAtlasCaption = contractInteractionWindow.document.querySelector('#fig-complete-contract-atlas .diagram-caption')?.textContent.replace(/\s+/g, ' ').trim()
-const primaryFlowBoundary = contractInteractionWindow.document.querySelector('#edges > p')?.textContent.replace(/\s+/g, ' ').trim()
+const contractAtlasScrollRegion = contractInteractionWindow.document.querySelector('#fig-complete-contract-atlas > .diagram-scroll')
+const contractAtlasScrollRegionLabel = contractAtlasScrollRegion?.getAttribute('aria-label')
+const contractAtlasCaptionInsideScrollRegion = contractAtlasScrollRegion?.querySelector('.diagram-caption') !== null
+const contractAtlasInventorySummary = contractInteractionWindow.document.querySelector('.contract-atlas-node-register > summary')?.textContent.trim()
+const contractAtlasRelationshipSummary = contractInteractionWindow.document.querySelector('#atlas-relationships > summary')?.textContent.trim()
+const primaryFlowScope = contractInteractionWindow.document.querySelector('#overview > p[data-primary-flow-boundary]')?.textContent.replace(/\s+/g, ' ').trim()
+const primaryFlowTableBoundary = contractInteractionWindow.document.querySelector('#edges > p')?.textContent.replace(/\s+/g, ' ').trim()
+const contractInteractionSectionIds = [...contractInteractionWindow.document.querySelectorAll('main > section')].map(section => section.id)
 contractInteractionWindow.close()
 const productionDeclarationCount = contractAtlasNodes.filter(node => node.declaration !== undefined && node.panel !== 'tests').length
 const testDeclarationCount = contractAtlasNodes.filter(node => node.declaration !== undefined && node.panel === 'tests').length
@@ -765,8 +1272,26 @@ if (
 ) {
 	throw new Error('Complete contract atlas caption must state its exact default-layer, plot-route, component, and relationship counts')
 }
-if (primaryFlowBoundary === undefined || !primaryFlowBoundary.includes(`These ${contractInteractionEdges.length} rows explain the arrows in the Primary Interaction Flow`)) {
+if (
+	contractAtlasScrollRegion === null ||
+	contractAtlasScrollRegion?.getAttribute('tabindex') !== '0' ||
+	contractAtlasScrollRegion?.getAttribute('role') !== 'region' ||
+	contractAtlasScrollRegionLabel !== 'Scrollable figure: Complete Zoltar and Statoblast Solidity contract and relationship atlas' ||
+	contractAtlasCaptionInsideScrollRegion ||
+	contractAtlasInventorySummary !== `Complete ${expectedContractAtlasNodeCount}-component inventory` ||
+	contractAtlasRelationshipSummary !== 'Complete relationship register'
+) {
+	throw new Error('Complete contract atlas must keep its caption outside a named, keyboard-focusable plot scroller and use state-neutral register summaries')
+}
+if (primaryFlowScope === undefined || !primaryFlowScope.includes(`exactly ${expectedPrimaryContractComponentCount} unique components and ${expectedPrimaryContractInteractionCount} interactions`) || !primaryFlowScope.includes('it is not exhaustive')) {
+	throw new Error('Primary interaction flow scope must state its exact unique-component and interaction counts and its non-exhaustive boundary')
+}
+if (primaryFlowTableBoundary === undefined || !primaryFlowTableBoundary.includes(`These ${expectedPrimaryContractInteractionCount} rows explain the arrows in the Primary Interaction Flow`)) {
 	throw new Error('Primary interaction flow boundary must state its exact registered interaction count')
+}
+const expectedContractInteractionSectionIds = ['overview', 'edges', 'paths', 'supporting-contracts', 'complete-atlas', 'sources']
+if (contractInteractionSectionIds.join(',') !== expectedContractInteractionSectionIds.join(',')) {
+	throw new Error(`Contract interaction reader journey must move from the primary flow explanation to the complete atlas; found ${contractInteractionSectionIds.join(', ')}`)
 }
 if (
 	!contractInteractionHtml.includes(`all ${productionDeclarationCount + testDeclarationCount} Solidity declarations`) ||
@@ -777,7 +1302,7 @@ if (
 	!contractInteractionHtml.includes('data-contract-atlas-controls') ||
 	!contractInteractionHtml.includes('data-contract-atlas-view="protocol"') ||
 	!contractInteractionHtml.includes('data-contract-atlas-view="all"') ||
-	!contractInteractionHtml.includes(`complete ${expectedContractAtlasNodeCount}-component inventory`) ||
+	!contractInteractionHtml.includes(`Complete ${expectedContractAtlasNodeCount}-component inventory`) ||
 	!contractInteractionHtml.includes('data-contract-atlas-node-table') ||
 	!contractInteractionHtml.includes('data-contract-atlas-table') ||
 	!runtimeSource.includes('renderContractAtlasInventoryTable()') ||
@@ -806,8 +1331,8 @@ const documentedEdges = [...contractInteractionHtml.matchAll(/<tr data-edge-id="
 	receiver: match[3],
 	source: match[2],
 }))
-if (documentedEdges.length !== contractInteractionEdges.length) {
-	throw new Error(`Contract interaction table has ${documentedEdges.length} checked edges but the shared registry has ${contractInteractionEdges.length}`)
+if (documentedEdges.length !== expectedPrimaryContractInteractionCount) {
+	throw new Error(`Contract interaction table has ${documentedEdges.length} checked edges but the primary boundary requires ${expectedPrimaryContractInteractionCount}`)
 }
 for (const expectedEdge of contractInteractionEdges) {
 	const tableEdge = documentedEdges.find(edge => edge.id === expectedEdge.id)

@@ -1232,11 +1232,11 @@ function contractAtlasChart(spec: ChartSpec, view: ContractAtlasViewDefinition):
 	spreadContractAtlasPorts(positionedEdges, positionedNodeById)
 	const denseView = view.id === 'all'
 	const relationStyles: Record<ContractAtlasRelation | 'multiple', { dash?: string; opacity: number; stroke: string; width: number }> = {
-		assets: { opacity: denseView ? 0.48 : 0.76, stroke: 'var(--green, #1d735d)', width: 2.2 },
+		assets: { dash: '14,4', opacity: denseView ? 0.48 : 0.76, stroke: 'var(--green, #1d735d)', width: 2.2 },
 		calls: { opacity: denseView ? 0.4 : 0.62, stroke: 'var(--blue, #245f9f)', width: 1.8 },
 		compatible: { dash: '3,3', opacity: denseView ? 0.22 : 0.56, stroke: 'var(--blue, #245f9f)', width: 1.5 },
-		delegatecall: { opacity: denseView ? 0.56 : 0.8, stroke: 'var(--red, #99453f)', width: 2.2 },
-		deploys: { opacity: denseView ? 0.5 : 0.74, stroke: 'var(--gold, #8a5d18)', width: 2.1 },
+		delegatecall: { dash: '4,3', opacity: denseView ? 0.56 : 0.8, stroke: 'var(--red, #99453f)', width: 2.2 },
+		deploys: { dash: '2,3,10,3', opacity: denseView ? 0.5 : 0.74, stroke: 'var(--gold, #8a5d18)', width: 2.1 },
 		implements: { dash: '3,3', opacity: denseView ? 0.22 : 0.56, stroke: 'var(--blue, #245f9f)', width: 1.5 },
 		inherits: { dash: '7,3', opacity: denseView ? 0.24 : 0.62, stroke: 'var(--muted, #5f6d75)', width: 1.6 },
 		multiple: { dash: '9,3,2,3', opacity: 0.78, stroke: 'var(--ink, #1f2529)', width: 2.5 },
@@ -1794,7 +1794,7 @@ function renderMount(mount: HTMLElement): void {
 	if (!chart.hasAttribute('viewBox')) {
 		chart.setAttribute('viewBox', `0 0 ${spec.width} ${spec.height}`)
 	}
-	const overflowEnvelope = mount.closest<HTMLElement>('figure.diagram, .example-visual')
+	const overflowEnvelope = mount.closest<HTMLElement>('.diagram-scroll, figure.diagram, .example-visual')
 	if (overflowEnvelope === null) {
 		throw new Error(`Plot chart ${chartId} is missing a scrollable figure or example envelope`)
 	}

@@ -42,6 +42,10 @@
 					enter through several of these contracts, but are omitted so the plot
 					can focus on contract-to-contract boundaries.
 				</p>
+				<p data-primary-flow-boundary>
+					This intentionally compact view contains exactly 12 unique components
+					and 19 interactions; it is not exhaustive.
+				</p>
 				<figure class="diagram diagram-wide" id="fig-contract-interaction-map">
 					<div class="plot-chart" data-plot-chart="fig-contract-interaction-map" data-plot-width="1120" data-plot-height="880" role="img" aria-label="Zoltar and Statoblast contract interactions grouped into deployment, runtime, and fork phases"><span class="plot-chart-fallback">Contract interactions are separated into three phases. During deployment, the pool factory validates question and universe data before deploying the pool, share token, and price coordinator. During runtime, the pool manages claims and escalation escrow while guarded actions travel through the price coordinator and OpenOracle. During a fork, the share token enters the pool forker, which snapshots escalation, migrates REP through a proxy, creates and migrates child pools, and repairs backing through the truth auction.</span></div>
 					<p class="diagram-caption">
@@ -57,172 +61,12 @@
 				</figure>
 			</section>
 
-			<section id="complete-atlas">
-				<h2>Complete Solidity Contract Atlas</h2>
-				<p>
-					This chart exhaustively inventories Solidity declarations and their
-					direct relationships. Zoltar has its own region because it owns
-					questions, universes, and REP; Statoblast deployment, runtime, and
-					implementation components occupy three separate regions. Infrastructure
-					and imported OpenOracle code form another boundary, and test-only
-					contracts stay in a final region so they cannot be mistaken for deployed
-					protocol components.
-				</p>
-				<p>
-					The checked inventory contains 114 nodes and 366 relationships. Its
-					nodes cover all 112 Solidity declarations currently under
-					<code>solidity/contracts</code>: 75 production declarations and 37
-					test-only declarations, plus the two type-only modules
-					<code>EscalationGameTypes</code> and
-					<code>SecurityPoolForkerTypes</code>. Files that only re-export an
-					import do not create another declaration node.
-				</p>
-				<p>
-					Coverage is pair-based: every declaration that names an imported or
-					same-file contract, interface, library, or type module is linked. A
-					specific call, deployment, delegatecall, asset-bearing call,
-					inheritance, implementation, library/type use, or test edge replaces the
-					generic source reference. The register keeps all 366 relationship rows
-					separate. The plot groups them into 360 ordered source-target routes:
-					six routes carry two relationship types, so their combined style and
-					tooltip list both meanings. Repeated uses of the same type and pair
-					aggregate; distinct types and explicit low-level boundaries remain
-					separate register rows. The chart keeps all 114 components fixed while
-					one relationship layer is selected; choose <strong>All routes</strong>
-					for the complete overlay.
-				</p>
-				<fieldset class="contract-atlas-controls" data-contract-atlas-controls hidden>
-					<legend>Relationship layer</legend>
-					<div class="contract-atlas-view-options" role="group" aria-label="Contract atlas relationship layer">
-						<button type="button" data-contract-atlas-view="protocol" aria-pressed="true">
-							<strong>Protocol flow</strong>
-							<span data-contract-atlas-view-count="protocol"></span>
-						</button>
-						<button type="button" data-contract-atlas-view="structure" aria-pressed="false">
-							<strong>Type structure</strong>
-							<span data-contract-atlas-view-count="structure"></span>
-						</button>
-						<button type="button" data-contract-atlas-view="references" aria-pressed="false">
-							<strong>Source references</strong>
-							<span data-contract-atlas-view-count="references"></span>
-						</button>
-						<button type="button" data-contract-atlas-view="tests" aria-pressed="false">
-							<strong>Test exercise</strong>
-							<span data-contract-atlas-view-count="tests"></span>
-						</button>
-						<button type="button" data-contract-atlas-view="all" aria-pressed="false">
-							<strong>All routes</strong>
-							<span data-contract-atlas-view-count="all"></span>
-						</button>
-					</div>
-					<p class="contract-atlas-view-status" data-contract-atlas-status aria-live="polite"></p>
-				</fieldset>
-				<ul class="contract-atlas-legend" aria-label="Complete contract atlas line styles">
-					<li><span class="atlas-line atlas-line-call" aria-hidden="true"></span><strong>Runtime call</strong></li>
-					<li><span class="atlas-line atlas-line-assets" aria-hidden="true"></span><strong>Asset-bearing call</strong></li>
-					<li><span class="atlas-line atlas-line-deploy" aria-hidden="true"></span><strong>Deployment</strong></li>
-					<li><span class="atlas-line atlas-line-delegate" aria-hidden="true"></span><strong>Delegatecall</strong></li>
-					<li><span class="atlas-line atlas-line-source" aria-hidden="true"></span><strong>Inheritance, interface, compatibility, or library/type use</strong></li>
-					<li><span class="atlas-line atlas-line-reference" aria-hidden="true"></span><strong>Direct source reference</strong></li>
-					<li><span class="atlas-line atlas-line-test" aria-hidden="true"></span><strong>Test-only exercise</strong></li>
-					<li><span class="atlas-line atlas-line-multiple" aria-hidden="true"></span><strong>Multiple relationship types</strong></li>
-				</ul>
-				<figure class="diagram diagram-atlas" id="fig-complete-contract-atlas">
-					<div
-						class="plot-chart"
-						data-plot-chart="fig-complete-contract-atlas"
-						data-plot-width="1800"
-						data-plot-height="2400"
-						role="img"
-						aria-label="Complete Zoltar and Statoblast Solidity contract and relationship atlas"
-					>
-						<span class="plot-chart-fallback"
-							>The complete atlas separates Zoltar from Statoblast deployment,
-							runtime, and implementation code. Additional regions contain
-							deployment infrastructure, imported OpenOracle and compatibility
-							code, and every test-only Solidity declaration. Solid arrows
-							represent calls, asset-bearing calls, deployments, or delegate
-							calls; dashed or dotted arrows represent inheritance, interfaces,
-							libraries, type modules, direct source references, or test-only
-							exercise. A dark patterned arrow combines multiple relationship
-							types for the same ordered contract pair.</span
-						>
-					</div>
-					<p class="diagram-caption">
-						<span class="figure-label">Complete Contract Atlas</span>Every
-						contract, abstract contract, interface, and library declaration has
-						one inventory node. Test edges terminate at repeated production
-						gateway groups inside the test region to avoid crossing the entire
-						plot; the relationship register preserves each exact production
-						target. The default protocol-flow layer shows 69 routes; the layer
-						controls expose every one of the 360 routes while keeping all 114
-						components fixed. Mechanical reconciliation against the Solidity
-						tree covers every direct source edge, and all 366 meanings remain in
-						the route tooltips and register. The component inventory provides an
-						exact textual entry for every node, including isolated declarations
-						that have no active in-repository relationship under the rule above.
-					</p>
-				</figure>
-				<details class="contract-atlas-register contract-atlas-node-register">
-					<summary>Open the complete 114-component inventory</summary>
-					<p>
-						This inventory preserves each component’s declaration kind, owning
-						region, and Solidity source path independently of chart hover or
-						relationship coverage.
-					</p>
-					<div class="table-scroll" tabindex="0" role="region" aria-label="Complete Solidity component inventory">
-						<table>
-							<thead>
-								<tr>
-									<th>Component</th>
-									<th>Kind</th>
-									<th>Region</th>
-									<th>Source</th>
-								</tr>
-							</thead>
-							<tbody data-contract-atlas-node-table>
-								<tr>
-									<td colspan="4">The generated component inventory requires JavaScript; the figure fallback summarizes its regions and component kinds.</td>
-								</tr>
-							</tbody>
-						</table>
-					</div>
-				</details>
-				<details class="contract-atlas-register" id="atlas-relationships">
-					<summary>Open the complete relationship register</summary>
-					<p>
-						Arrows point from the initiator, child, implementation, or test
-						double to the receiver, parent, dependency, or production target.
-						For an asset-bearing call, this is code/dependency direction rather
-						than a claim that the edge target receives the asset; its meaning
-						states the actual sender → recipient path.
-					</p>
-					<div class="table-scroll" tabindex="0" role="region" aria-label="Complete Solidity relationship register">
-						<table>
-							<thead>
-								<tr>
-									<th>Source</th>
-									<th>Target</th>
-									<th>Relationship</th>
-									<th>Meaning</th>
-								</tr>
-							</thead>
-							<tbody data-contract-atlas-table>
-								<tr>
-									<td colspan="4">The generated relationship register requires JavaScript; the figure fallback summarizes its edge types.</td>
-								</tr>
-							</tbody>
-						</table>
-					</div>
-				</details>
-			</section>
-
 			<section id="edges">
 				<h2>What Each Primary-Flow Arrow Means</h2>
 				<p>
 					These 19 rows explain the arrows in the
 					<a href="#overview">Primary Interaction Flow</a>. The exhaustive atlas
-					above has its own
+					below has its own
 					<a href="#atlas-relationships">complete relationship register</a>.
 				</p>
 				<div class="table-scroll" tabindex="0" role="region" aria-label="Contract interaction details">
@@ -392,7 +236,7 @@
 				<p>
 					The primary interaction flow groups construction helpers and delegate
 					modules behind the deployed component whose behavior they implement.
-					The complete atlas above expands every item in these groups:
+					The complete atlas below expands every item in these groups:
 				</p>
 				<ul>
 					<li>
@@ -420,6 +264,174 @@
 						boundaries; only OpenOracle's protocol-facing relationship is shown.
 					</li>
 				</ul>
+			</section>
+
+			<section id="complete-atlas">
+				<h2>Complete Solidity Contract Atlas</h2>
+				<p>
+					This chart exhaustively inventories Solidity declarations and their
+					direct relationships. Zoltar has its own region because it owns
+					questions, universes, and REP; Statoblast deployment, runtime, and
+					implementation components occupy three separate regions. Infrastructure
+					and imported OpenOracle code form another boundary, and test-only
+					contracts stay in a final region so they cannot be mistaken for deployed
+					protocol components.
+				</p>
+				<p>
+					The checked inventory contains 114 nodes and 363 relationships. Its
+					nodes cover all 112 Solidity declarations currently under
+					<code>solidity/contracts</code>: 75 production declarations and 37
+					test-only declarations, plus the two type-only modules
+					<code>EscalationGameTypes</code> and
+					<code>SecurityPoolForkerTypes</code>. Files that only re-export an
+					import do not create another declaration node.
+				</p>
+				<p>
+					Coverage is pair-based: every declaration that names an imported or
+					same-file contract, interface, library, or type module is linked. A
+					specific call, deployment, delegatecall, asset-bearing call,
+					inheritance, implementation, library/type use, or test edge replaces the
+					generic source reference. The register keeps all 363 relationship rows
+					separate. The plot groups them into 357 ordered source-target routes:
+					six routes carry two relationship types, so their combined style and
+					tooltip list both meanings. Repeated uses of the same type and pair
+					aggregate; distinct types and explicit low-level boundaries remain
+					separate register rows. The chart keeps all 114 components fixed while
+					one relationship layer is selected; choose <strong>All routes</strong>
+					for the complete overlay.
+				</p>
+				<fieldset class="contract-atlas-controls" data-contract-atlas-controls hidden>
+					<legend>Relationship layer</legend>
+					<div class="contract-atlas-view-options" role="group" aria-label="Contract atlas relationship layer">
+						<button type="button" data-contract-atlas-view="protocol" aria-pressed="true">
+							<strong>Protocol flow</strong>
+							<span data-contract-atlas-view-count="protocol"></span>
+						</button>
+						<button type="button" data-contract-atlas-view="structure" aria-pressed="false">
+							<strong>Type structure</strong>
+							<span data-contract-atlas-view-count="structure"></span>
+						</button>
+						<button type="button" data-contract-atlas-view="references" aria-pressed="false">
+							<strong>Source references</strong>
+							<span data-contract-atlas-view-count="references"></span>
+						</button>
+						<button type="button" data-contract-atlas-view="tests" aria-pressed="false">
+							<strong>Test exercise</strong>
+							<span data-contract-atlas-view-count="tests"></span>
+						</button>
+						<button type="button" data-contract-atlas-view="all" aria-pressed="false">
+							<strong>All routes</strong>
+							<span data-contract-atlas-view-count="all"></span>
+						</button>
+					</div>
+					<p class="contract-atlas-view-status" data-contract-atlas-status aria-live="polite"></p>
+				</fieldset>
+				<ul class="contract-atlas-legend" aria-label="Complete contract atlas line styles">
+					<li><span class="atlas-line atlas-line-call" aria-hidden="true"></span><strong>Runtime call — solid</strong></li>
+					<li><span class="atlas-line atlas-line-assets" aria-hidden="true"></span><strong>Asset-bearing call — long dash</strong></li>
+					<li><span class="atlas-line atlas-line-deploy" aria-hidden="true"></span><strong>Deployment — dot–dash</strong></li>
+					<li><span class="atlas-line atlas-line-delegate" aria-hidden="true"></span><strong>Delegatecall — short dash</strong></li>
+					<li><span class="atlas-line atlas-line-source" aria-hidden="true"></span><strong>Inheritance, interface, compatibility, or library/type use</strong></li>
+					<li><span class="atlas-line atlas-line-reference" aria-hidden="true"></span><strong>Direct source reference</strong></li>
+					<li><span class="atlas-line atlas-line-test" aria-hidden="true"></span><strong>Test-only exercise</strong></li>
+					<li><span class="atlas-line atlas-line-multiple" aria-hidden="true"></span><strong>Multiple relationship types</strong></li>
+				</ul>
+				<figure class="diagram diagram-atlas" id="fig-complete-contract-atlas">
+					<div
+						class="diagram-scroll"
+						tabindex="0"
+						role="region"
+						aria-label="Scrollable figure: Complete Zoltar and Statoblast Solidity contract and relationship atlas"
+					>
+						<div
+							class="plot-chart"
+							data-plot-chart="fig-complete-contract-atlas"
+							data-plot-width="1800"
+							data-plot-height="2400"
+							role="img"
+							aria-label="Complete Zoltar and Statoblast Solidity contract and relationship atlas"
+						>
+							<span class="plot-chart-fallback"
+								>The complete atlas separates Zoltar from Statoblast deployment,
+								runtime, and implementation code. Additional regions contain
+								deployment infrastructure, imported OpenOracle and compatibility
+								code, and every test-only Solidity declaration. Solid, long-dash,
+								dot–dash, and short-dash arrows respectively represent runtime
+								calls, asset-bearing calls, deployments, and delegatecalls;
+								dashed or dotted arrows represent inheritance, interfaces,
+								libraries, type modules, direct source references, or test-only
+								exercise. A dark patterned arrow combines multiple relationship
+								types for the same ordered contract pair.</span
+							>
+						</div>
+					</div>
+					<p class="diagram-caption">
+						<span class="figure-label">Complete Contract Atlas</span>Every
+						contract, abstract contract, interface, and library declaration has
+						one inventory node. Test edges terminate at repeated production
+						gateway groups inside the test region to avoid crossing the entire
+						plot; the relationship register preserves each exact production
+						target. The default protocol-flow layer shows 69 routes; the layer
+						controls expose every one of the 357 routes while keeping all 114
+						components fixed. Mechanical reconciliation against the Solidity
+						tree covers every direct source edge, and all 363 meanings remain in
+						the route tooltips and register. The component inventory provides an
+						exact textual entry for every node, including isolated declarations
+						that have no active in-repository relationship under the rule above.
+					</p>
+				</figure>
+				<details class="contract-atlas-register contract-atlas-node-register">
+					<summary>Complete 114-component inventory</summary>
+					<p>
+						This inventory preserves each component’s declaration kind, owning
+						region, and Solidity source path independently of chart hover or
+						relationship coverage.
+					</p>
+					<div class="table-scroll" tabindex="0" role="region" aria-label="Complete Solidity component inventory">
+						<table>
+							<thead>
+								<tr>
+									<th>Component</th>
+									<th>Kind</th>
+									<th>Region</th>
+									<th>Source</th>
+								</tr>
+							</thead>
+							<tbody data-contract-atlas-node-table>
+								<tr>
+									<td colspan="4">The generated component inventory requires JavaScript; the figure fallback summarizes its regions and component kinds.</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+				</details>
+				<details class="contract-atlas-register" id="atlas-relationships">
+					<summary>Complete relationship register</summary>
+					<p>
+						Arrows point from the initiator, child, implementation, or test
+						double to the receiver, parent, dependency, or production target.
+						For an asset-bearing call, this is code/dependency direction rather
+						than a claim that the edge target receives the asset; its meaning
+						states the actual sender → recipient path.
+					</p>
+					<div class="table-scroll" tabindex="0" role="region" aria-label="Complete Solidity relationship register">
+						<table>
+							<thead>
+								<tr>
+									<th>Source</th>
+									<th>Target</th>
+									<th>Relationship</th>
+									<th>Meaning</th>
+								</tr>
+							</thead>
+							<tbody data-contract-atlas-table>
+								<tr>
+									<td colspan="4">The generated relationship register requires JavaScript; the figure fallback summarizes its edge types.</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+				</details>
 			</section>
 
 			<section id="sources">

@@ -17,11 +17,17 @@ export type ContractAtlasSourceSemanticRelationship = ContractAtlasSourceReferen
 	relation: 'delegatecall' | 'implements' | 'inherits'
 }
 
+export type ContractAtlasSourceUnit = {
+	nodeId: string
+	source: string
+}
+
 export type ContractAtlasSourceAnalysis = {
 	delegatecalls: ContractAtlasSourceSemanticRelationship[]
 	directBases: ContractAtlasSourceSemanticRelationship[]
 	explicitDeployments: ContractAtlasSourceReference[]
 	references: ContractAtlasSourceReference[]
+	sourceUnits: ContractAtlasSourceUnit[]
 }
 
 type ImportName = {
@@ -314,6 +320,7 @@ export async function analyzeContractAtlasSource(contractsDirectory: string, nod
 	const explicitDeploymentsByPair = new Map<string, { source: string; symbols: Set<string>; target: string }>()
 	const directBasesByKey = new Map<string, { relation: 'implements' | 'inherits'; source: string; symbols: Set<string>; target: string }>()
 	const delegatecallsByPair = new Map<string, { relation: 'delegatecall'; source: string; symbols: Set<string>; target: string }>()
+	const sourceUnitsByNodeId = new Map<string, string>()
 	for (const [sourcePath, source] of sources) {
 		const spans = spansBySource.get(sourcePath) ?? []
 		const moduleUnits = spans.length === 0 ? (nodesBySource.get(sourcePath) ?? []).filter(node => node.kind === 'module').map(node => ({ end: source.length, node, start: 0, text: maskCommentsAndStrings(source) })) : []
@@ -337,6 +344,7 @@ export async function analyzeContractAtlasSource(contractsDirectory: string, nod
 			}
 		}
 		for (const sourceUnit of sourceUnits) {
+			sourceUnitsByNodeId.set(sourceUnit.node.id, sourceUnit.text)
 			const openingBraceIndex = sourceUnit.text.indexOf('{')
 			const declarationHeader = openingBraceIndex < 0 ? '' : sourceUnit.text.slice(0, openingBraceIndex)
 			const directBaseClause = declarationHeader.match(/\bis\b([\s\S]+)$/)?.[1] ?? ''
@@ -414,6 +422,7 @@ export async function analyzeContractAtlasSource(contractsDirectory: string, nod
 		directBases: sortedSemanticRelationships(directBasesByKey),
 		explicitDeployments: sortedReferences(explicitDeploymentsByPair),
 		references: sortedReferences(symbolsByPair),
+		sourceUnits: [...sourceUnitsByNodeId].map(([nodeId, source]) => ({ nodeId, source })).sort((first, second) => first.nodeId.localeCompare(second.nodeId)),
 	}
 }
 

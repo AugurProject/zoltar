@@ -405,6 +405,7 @@ body.doc-openoracle .table-scroll {
 	scrollbar-width: thin;
 }
 body.doc-openoracle .table-scroll:focus-visible,
+body.doc-openoracle .diagram-scroll:focus-visible,
 body.doc-openoracle .diagram:focus-visible,
 body.doc-openoracle .example-visual:focus-visible,
 body.doc-openoracle .equation:focus-visible {
@@ -438,11 +439,19 @@ body.doc-openoracle .diagram {
 	overscroll-behavior-x: contain;
 	scrollbar-width: thin;
 }
+body.doc-openoracle .diagram-atlas {
+	overflow-x: visible;
+}
+body.doc-openoracle .diagram-scroll {
+	overflow-x: auto;
+	overscroll-behavior-x: contain;
+	scrollbar-width: thin;
+}
 body.doc-openoracle .diagram-wide > svg,
 body.doc-openoracle .diagram-wide > .plot-chart {
 	min-width: 60rem;
 }
-body.doc-openoracle .diagram-atlas > .plot-chart.plot-chart-ready {
+body.doc-openoracle .diagram-atlas > .diagram-scroll > .plot-chart.plot-chart-ready {
 	min-width: 108rem;
 }
 body.doc-openoracle .contract-atlas-controls[hidden] {
@@ -533,16 +542,19 @@ body.doc-openoracle .atlas-line {
 	border-top: 0.16rem solid var(--blue);
 }
 body.doc-openoracle .atlas-line-assets {
-	border-color: var(--green);
-	border-top-width: 0.2rem;
+	height: 0.2rem;
+	border: 0;
+	background: repeating-linear-gradient(to right, var(--green) 0 0.9rem, transparent 0.9rem 1.16rem);
 }
 body.doc-openoracle .atlas-line-deploy {
-	border-color: var(--gold);
-	border-top-width: 0.2rem;
+	height: 0.2rem;
+	border: 0;
+	background: repeating-linear-gradient(to right, var(--gold) 0 0.13rem, transparent 0.13rem 0.33rem, var(--gold) 0.33rem 0.98rem, transparent 0.98rem 1.18rem);
 }
 body.doc-openoracle .atlas-line-delegate {
-	border-color: var(--red);
-	border-top-width: 0.2rem;
+	height: 0.2rem;
+	border: 0;
+	background: repeating-linear-gradient(to right, var(--red) 0 0.42rem, transparent 0.42rem 0.74rem);
 }
 body.doc-openoracle .atlas-line-source {
 	border-color: var(--muted);
@@ -561,6 +573,26 @@ body.doc-openoracle .atlas-line-multiple {
 	height: 0.16rem;
 	border: 0;
 	background: repeating-linear-gradient(to right, var(--ink) 0 0.9rem, transparent 0.9rem 1.2rem, var(--ink) 1.2rem 1.4rem, transparent 1.4rem 1.7rem);
+}
+@media (forced-colors: active) {
+	body.doc-openoracle .atlas-line-assets,
+	body.doc-openoracle .atlas-line-deploy,
+	body.doc-openoracle .atlas-line-delegate,
+	body.doc-openoracle .atlas-line-multiple {
+		forced-color-adjust: none;
+	}
+	body.doc-openoracle .atlas-line-assets {
+		background: repeating-linear-gradient(to right, CanvasText 0 0.9rem, transparent 0.9rem 1.16rem);
+	}
+	body.doc-openoracle .atlas-line-deploy {
+		background: repeating-linear-gradient(to right, CanvasText 0 0.13rem, transparent 0.13rem 0.33rem, CanvasText 0.33rem 0.98rem, transparent 0.98rem 1.18rem);
+	}
+	body.doc-openoracle .atlas-line-delegate {
+		background: repeating-linear-gradient(to right, CanvasText 0 0.42rem, transparent 0.42rem 0.74rem);
+	}
+	body.doc-openoracle .atlas-line-multiple {
+		background: repeating-linear-gradient(to right, CanvasText 0 0.9rem, transparent 0.9rem 1.2rem, CanvasText 1.2rem 1.4rem, transparent 1.4rem 1.7rem);
+	}
 }
 body.doc-openoracle .contract-atlas-register {
 	margin: 1rem 0 1.5rem;
