@@ -344,6 +344,7 @@ export function SecurityVaultSection({
 		repDepositShare: currentSelectedVaultDetails?.repDepositShare,
 		repPerEthPrice: hasValidOraclePrice ? oracleManagerDetails?.lastPrice : undefined,
 		securityBondAllowance: currentSelectedVaultDetails?.securityBondAllowance,
+		statoblastSecurityMultiplierBps: selectedPoolStatoblastSecurityMultiplierBps,
 		totalRepDeposit: selectedPoolTotalRepDeposit,
 		totalSecurityBondAllowance: selectedPoolTotalSecurityBondAllowance,
 	})

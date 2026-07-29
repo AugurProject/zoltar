@@ -41,7 +41,7 @@ function computeLnRatioScaled(lowValue: bigint, highValue: bigint) {
 	const diff = highValue - normalizedLow
 	const sum = highValue + normalizedLow
 	const z = (diff * SCALE) / sum
-	if (z === 0n) return 0n
+	if (z === 0n) return log2Count * LN2_SCALED
 	return log2Count * LN2_SCALED + 2n * computeAtanhScaled(z)
 }
 
