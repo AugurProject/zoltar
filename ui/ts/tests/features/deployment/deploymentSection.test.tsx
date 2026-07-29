@@ -68,7 +68,7 @@ describe('DeploymentSection', () => {
 		cleanupRendered = rendered.cleanup
 
 		expect(rendered.container.textContent).toContain('Deployment in progress.')
-		expectTransactionButtonDisabled(document.body, 'Deploying…')
+		expectTransactionButtonDisabled(document.body, 'Deploying multicall3…')
 	})
 
 	test('shows the connect-wallet branch when account is missing', async () => {
@@ -77,7 +77,7 @@ describe('DeploymentSection', () => {
 		cleanupRendered = rendered.cleanup
 
 		expect(rendered.container.textContent).toContain('Connect wallet to continue.')
-		expectTransactionButtonDisabled(document.body, 'Deploy', 'Connect wallet to deploy this contract.')
+		expectTransactionButtonDisabled(document.body, 'Deploy multicall3', 'Connect wallet to deploy this contract.')
 	})
 
 	test('shows the network-guard branch when account is present but not on mainnet', async () => {
@@ -86,7 +86,7 @@ describe('DeploymentSection', () => {
 		cleanupRendered = rendered.cleanup
 
 		expect(rendered.container.textContent).toContain('Switch to Ethereum mainnet.')
-		expectTransactionButtonDisabled(document.body, 'Deploy')
+		expectTransactionButtonDisabled(document.body, 'Deploy multicall3')
 	})
 
 	test('shows waiting state while prerequisite step is missing', async () => {
@@ -97,7 +97,7 @@ describe('DeploymentSection', () => {
 
 		expect(rendered.container.textContent).toContain('Requires Proxy Deployer')
 		expect(rendered.container.textContent?.match(/Requires Proxy Deployer/g) ?? []).toHaveLength(1)
-		expectTransactionButtonDisabled(document.body, 'Deploy', 'Requires Proxy Deployer')
+		expectTransactionButtonDisabled(document.body, 'Deploy Deployment Status Oracle', 'Requires Proxy Deployer')
 		expect(rendered.container.textContent).toContain('Waiting')
 		expect(rendered.container.textContent).not.toContain('Blocked')
 		expect(rendered.container.textContent).toContain('Deployment Status Oracle')
@@ -108,7 +108,7 @@ describe('DeploymentSection', () => {
 		const rendered = await renderIntoDocument(<DeploymentSection title='Deployment' steps={[step]} allSteps={[step]} accountAddress={zeroAddress} busyStepId={undefined} isMainnet={true} onDeploy={async () => undefined} />)
 		cleanupRendered = rendered.cleanup
 
-		expectTransactionButtonEnabled(document.body, 'Deploy')
+		expectTransactionButtonEnabled(document.body, 'Deploy multicall3')
 		expect(rendered.container.textContent).toContain('Can deploy now.')
 	})
 })

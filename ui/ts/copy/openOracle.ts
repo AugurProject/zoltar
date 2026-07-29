@@ -1,7 +1,9 @@
 import type { CopyTemplateValue } from './types.js'
 
 export const settleReport = 'Settle Report'
+export const settleReportAction = 'Settle report'
 export const disputeAndSwap = 'Dispute & Swap'
+export const disputeAndSwapAction = 'Dispute & swap'
 export const disputeDelay = 'Dispute Delay'
 export const disputeDelaySeconds = 'Dispute Delay (seconds)'
 export const escalationHalt = 'Escalation Halt'
@@ -32,10 +34,10 @@ export const formatCurrentAmount1Label = (tokenSymbol: string) => `Current Amoun
 export const formatCurrentAmount2Label = (tokenSymbol: string) => `Current Amount 2 (${tokenSymbol})`
 export const formatTokenPairSuffix = (token1Symbol: string, token2Symbol: string) => `${token1Symbol} / ${token2Symbol}`
 export const formatReportBrowseTitle = (token1Symbol: string, token2Symbol: string, reportId: string) => `${token1Symbol} / ${token2Symbol} · Report #${reportId}`
-export const createAnother = 'Create Another'
+export const createAnother = 'Create another'
 export const createReport = 'Create Report'
 export const reportCreated = 'Report Created'
-export const createStandaloneOracleGame = 'Create Standalone Oracle Report'
+export const createStandaloneOracleGame = 'Create standalone Oracle report'
 export const creating = 'Creating…'
 export const createSuccess = 'Report created'
 export const currentPrice = 'Current Price'
@@ -74,13 +76,14 @@ export const loadingOracleBalances = 'Loading Oracle balances…'
 export const withdrawBalance = (tokenSymbol: string) => `Withdraw ${tokenSymbol}`
 export const withdrawingBalance = (tokenSymbol: string) => `Withdrawing ${tokenSymbol}…`
 export const checkingWithdrawalBalance = (tokenSymbol: string) => `Checking ${tokenSymbol} balance…`
-export const confirmWithdrawal = 'Confirm Withdrawal'
+export const confirmWithdrawal = 'Confirm withdrawal'
 export const withdrawalRecipient = 'Recipient'
 export const formatWithdrawalRisk = (tokenSymbol: CopyTemplateValue) => `Withdraws the full credited ${tokenSymbol} balance to the connected account. Wallet gas is separate.`
 export const formatWithdrawalBalanceChanged = (tokenSymbol: CopyTemplateValue) => `Your withdrawable ${tokenSymbol} balance changed. Review the updated amount and confirm again`
 export const withdrawalBalanceRefreshFailed = 'Unable to refresh the withdrawable balance'
 export const numberOfReports = 'Number of Reports'
 export const openReport = 'Open report'
+export const formatOpenReportLabel = (reportTitle: string) => `Open report: ${reportTitle}`
 export const oracleAddress = 'Oracle Address'
 export const protocolFeeRecipient = 'Protocol Fee Recipient'
 export const report = 'Report'

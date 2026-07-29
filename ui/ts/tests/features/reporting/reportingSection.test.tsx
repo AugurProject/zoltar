@@ -482,7 +482,7 @@ describe('ReportingSection', () => {
 		expect(metricsQueries.getByText('Non-decision threshold')).not.toBeNull()
 		expect(metricsQueries.getByText('Time Left')).not.toBeNull()
 		expect(metricsQueries.getByText('Escalation started')).not.toBeNull()
-		expect(metricsQueries.getByText('Start Bond')).not.toBeNull()
+		expect(metricsQueries.getByText('Start bond')).not.toBeNull()
 	})
 
 	test('shows the exact one-atomic-unit difference between a not-started threshold and normalized bond', async () => {
@@ -587,7 +587,7 @@ describe('ReportingSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Report No', 'A current pool oracle price is required before reporting.')
 		expect(within(document.body).getByRole('status').textContent).toContain(reason)
 		expect(document.body.textContent?.match(new RegExp(reason.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) ?? []).toHaveLength(1)
-		fireEvent.click(within(document.body).getByRole('button', { name: 'Manage Pool Price' }))
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Manage pool price' }))
 		expect(openOracleCalls).toBe(1)
 	})
 
@@ -650,8 +650,8 @@ describe('ReportingSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Report Outcome' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Active' })).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Settle Escalation Deposits' })).not.toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Settle Selected Yes Deposits')
-		expectTransactionButtonDisabled(document.body, 'Settle All Yes Deposits')
+		expectTransactionButtonDisabled(document.body, 'Settle selected Yes deposits')
+		expectTransactionButtonDisabled(document.body, 'Settle all Yes deposits')
 	})
 
 	test('keeps finalized withdrawals enabled in withdraw-only mode after escalation closes', async () => {
@@ -678,8 +678,8 @@ describe('ReportingSection', () => {
 		const withdrawCheckbox = document.body.querySelector("input[type='checkbox']") as HTMLInputElement | null
 		if (!(withdrawCheckbox instanceof HTMLInputElement)) throw new Error('Expected withdraw checkbox')
 		expect(withdrawCheckbox.disabled).toBe(false)
-		expectTransactionButtonEnabled(document.body, 'Settle Selected Yes Deposits')
-		expectTransactionButtonEnabled(document.body, 'Settle All Yes Deposits')
+		expectTransactionButtonEnabled(document.body, 'Settle selected Yes deposits')
+		expectTransactionButtonEnabled(document.body, 'Settle all Yes deposits')
 	})
 
 	test('keeps reporting disabled off mainnet and shows the switch-network recovery', async () => {
@@ -723,12 +723,12 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Settle Selected Yes Deposits')
-		expectTransactionButtonDisabled(document.body, 'Settle All Yes Deposits')
+		expectTransactionButtonDisabled(document.body, 'Settle selected Yes deposits')
+		expectTransactionButtonDisabled(document.body, 'Settle all Yes deposits')
 		const reason = 'Switch to Ethereum mainnet.'
 		expect(document.body.textContent?.split(reason)).toHaveLength(2)
-		const settleSelectedButton = within(document.body).getByRole('button', { name: 'Settle Selected Yes Deposits' })
-		const settleAllButton = within(document.body).getByRole('button', { name: 'Settle All Yes Deposits' })
+		const settleSelectedButton = within(document.body).getByRole('button', { name: 'Settle selected Yes deposits' })
+		const settleAllButton = within(document.body).getByRole('button', { name: 'Settle all Yes deposits' })
 		const reasonId = settleSelectedButton.getAttribute('aria-describedby')
 		expect(reasonId).not.toBeNull()
 		expect(settleAllButton.getAttribute('aria-describedby')).toBe(reasonId)
@@ -758,11 +758,11 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const reason = 'Connect a wallet before settling escalation deposits.'
-		expectTransactionButtonDisabled(document.body, 'Settle Selected Yes Deposits', reason)
-		expectTransactionButtonDisabled(document.body, 'Settle All Yes Deposits', reason)
+		expectTransactionButtonDisabled(document.body, 'Settle selected Yes deposits', reason)
+		expectTransactionButtonDisabled(document.body, 'Settle all Yes deposits', reason)
 		expect(document.body.textContent?.split(reason)).toHaveLength(2)
-		const settleSelectedButton = within(document.body).getByRole('button', { name: 'Settle Selected Yes Deposits' })
-		const settleAllButton = within(document.body).getByRole('button', { name: 'Settle All Yes Deposits' })
+		const settleSelectedButton = within(document.body).getByRole('button', { name: 'Settle selected Yes deposits' })
+		const settleAllButton = within(document.body).getByRole('button', { name: 'Settle all Yes deposits' })
 		const reasonId = settleSelectedButton.getAttribute('aria-describedby')
 		expect(reasonId).not.toBeNull()
 		expect(settleAllButton.getAttribute('aria-describedby')).toBe(reasonId)
@@ -786,8 +786,8 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Settle Selected Yes Deposits', 'Escalation deposits cannot be settled until the question is finalized.')
-		expectTransactionButtonDisabled(document.body, 'Settle All Yes Deposits', 'Escalation deposits cannot be settled until the question is finalized.')
+		expectTransactionButtonDisabled(document.body, 'Settle selected Yes deposits', 'Escalation deposits cannot be settled until the question is finalized.')
+		expectTransactionButtonDisabled(document.body, 'Settle all Yes deposits', 'Escalation deposits cannot be settled until the question is finalized.')
 	})
 
 	test('shows the report submission pending label while the report action is in flight', async () => {
@@ -830,8 +830,8 @@ describe('ReportingSection', () => {
 		const withdrawCheckbox = document.body.querySelector("input[type='checkbox']") as HTMLInputElement | null
 		if (!(withdrawCheckbox instanceof HTMLInputElement)) throw new Error('Expected withdraw checkbox')
 		expect(withdrawCheckbox.disabled).toBe(true)
-		expectTransactionButtonDisabled(document.body, 'Settle Selected Yes Deposits', 'Loading escalation deposits.')
-		expectTransactionButtonDisabled(document.body, 'Settle All Yes Deposits', 'Loading escalation deposits.')
+		expectTransactionButtonDisabled(document.body, 'Settle selected Yes deposits', 'Loading escalation deposits.')
+		expectTransactionButtonDisabled(document.body, 'Settle all Yes deposits', 'Loading escalation deposits.')
 	})
 
 	test('shares one loading reason across report and settlement controls while retained details refresh', async () => {
@@ -859,10 +859,10 @@ describe('ReportingSection', () => {
 		const reportButton = documentQueries.getByRole('button', { name: 'Report Yes' })
 		const affectedButtons = [
 			reportButton,
-			documentQueries.getByRole('button', { name: 'Settle Selected Yes Deposits' }),
-			documentQueries.getByRole('button', { name: 'Settle All Yes Deposits' }),
-			documentQueries.getByRole('button', { name: 'Settle Selected No Deposits' }),
-			documentQueries.getByRole('button', { name: 'Settle All No Deposits' }),
+			documentQueries.getByRole('button', { name: 'Settle selected Yes deposits' }),
+			documentQueries.getByRole('button', { name: 'Settle all Yes deposits' }),
+			documentQueries.getByRole('button', { name: 'Settle selected No deposits' }),
+			documentQueries.getByRole('button', { name: 'Settle all No deposits' }),
 		]
 		const sharedReason = 'Loading reporting details.'
 		const sharedReasonId = reportButton.getAttribute('aria-describedby')
@@ -974,11 +974,11 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const reason = 'Escalation has ended. Refresh reporting to view the finalized outcome before settling deposits.'
-		expectTransactionButtonDisabled(document.body, 'Settle Selected Yes Deposits', reason)
-		expectTransactionButtonDisabled(document.body, 'Settle All Yes Deposits', reason)
+		expectTransactionButtonDisabled(document.body, 'Settle selected Yes deposits', reason)
+		expectTransactionButtonDisabled(document.body, 'Settle all Yes deposits', reason)
 		expect(document.body.textContent?.split(reason)).toHaveLength(2)
-		const settleSelectedButton = within(document.body).getByRole('button', { name: 'Settle Selected Yes Deposits' })
-		const settleAllButton = within(document.body).getByRole('button', { name: 'Settle All Yes Deposits' })
+		const settleSelectedButton = within(document.body).getByRole('button', { name: 'Settle selected Yes deposits' })
+		const settleAllButton = within(document.body).getByRole('button', { name: 'Settle all Yes deposits' })
 		const reasonId = settleSelectedButton.getAttribute('aria-describedby')
 		expect(reasonId).not.toBeNull()
 		expect(settleAllButton.getAttribute('aria-describedby')).toBe(reasonId)
@@ -1074,10 +1074,10 @@ describe('ReportingSection', () => {
 		const lifecycleBanner = getClosestSection(documentQueries.getByRole('heading', { name: 'Fork Triggered' }))
 		const lifecycleBannerQueries = within(lifecycleBanner)
 		expect(documentQueries.getByRole('heading', { name: 'Fork Triggered' })).not.toBeNull()
-		const forkTriggeredReason = 'Escalation reached non-decision. Trigger Zoltar Fork here if this pool should fork the universe.'
+		const forkTriggeredReason = 'Escalation reached non-decision. Trigger Zoltar fork here if this pool should fork the universe.'
 		expect(document.body.textContent?.includes(forkTriggeredReason)).toBe(true)
 		expect(document.body.textContent?.split(forkTriggeredReason)).toHaveLength(2)
-		expect(lifecycleBannerQueries.queryByText('Trigger Zoltar Fork')).toBeNull()
+		expect(lifecycleBannerQueries.queryByText('Trigger Zoltar fork')).toBeNull()
 		expect(lifecycleBannerQueries.queryByText('Continue in Fork & Migration')).toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Report Yes', forkTriggeredReason)
 		const reportButton = documentQueries.getByRole('button', { name: 'Report Yes' })
@@ -1105,7 +1105,7 @@ describe('ReportingSection', () => {
 		const lifecycleBannerQueries = within(lifecycleBanner)
 		expect(document.body.textContent?.includes('Escalation reached non-decision and Zoltar fork has already been triggered for this pool. Continue in Fork & Migration.')).toBe(true)
 		expect(lifecycleBannerQueries.queryByText('Continue in Fork & Migration')).toBeNull()
-		expect(lifecycleBannerQueries.queryByText('Trigger Zoltar Fork')).toBeNull()
+		expect(lifecycleBannerQueries.queryByText('Trigger Zoltar fork')).toBeNull()
 	})
 
 	test('auto-refreshes reporting once when the live timestamp passes an unresolved timeout boundary', async () => {
@@ -1247,7 +1247,7 @@ describe('ReportingSection', () => {
 
 		expect(document.body.textContent?.includes('Reporting is open. Select an outcome side below to enable reporting.')).toBe(false)
 		expect(document.body.textContent?.includes('Select an outcome side above to enable reporting.')).toBe(true)
-		expectTransactionButtonDisabled(document.body, 'Report On Selected Side', 'Select an outcome side before reporting on a question.')
+		expectTransactionButtonDisabled(document.body, 'Report on selected side', 'Select an outcome side before reporting on a question.')
 	})
 
 	test('disables report submission for a pre-start amount below the first-report minimum', async () => {
@@ -1601,12 +1601,12 @@ describe('ReportingSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const settlementReason = 'Escalation deposits remain locked after non-decision. Trigger Zoltar Fork here if this pool should fork the universe.'
+		const settlementReason = 'Escalation deposits remain locked after non-decision. Trigger Zoltar fork here if this pool should fork the universe.'
 		expect(document.body.textContent?.includes(settlementReason)).toBe(true)
 		expect(document.body.textContent?.split(settlementReason)).toHaveLength(2)
-		expectTransactionButtonDisabled(document.body, 'Settle All Yes Deposits', settlementReason)
-		const settleSelectedButton = within(document.body).getByRole('button', { name: 'Settle Selected Yes Deposits' })
-		const settleAllButton = within(document.body).getByRole('button', { name: 'Settle All Yes Deposits' })
+		expectTransactionButtonDisabled(document.body, 'Settle all Yes deposits', settlementReason)
+		const settleSelectedButton = within(document.body).getByRole('button', { name: 'Settle selected Yes deposits' })
+		const settleAllButton = within(document.body).getByRole('button', { name: 'Settle all Yes deposits' })
 		expect(settleSelectedButton.getAttribute('aria-describedby')).toBe(settleAllButton.getAttribute('aria-describedby'))
 		expect(document.getElementById(settleAllButton.getAttribute('aria-describedby') ?? '')?.textContent).toContain(settlementReason)
 	})
@@ -1628,8 +1628,8 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		const reportButton = documentQueries.getByRole('button', { name: 'Report Yes' })
-		const settleSelectedButton = documentQueries.getByRole('button', { name: 'Settle Selected Yes Deposits' })
-		const settleAllButton = documentQueries.getByRole('button', { name: 'Settle All Yes Deposits' })
+		const settleSelectedButton = documentQueries.getByRole('button', { name: 'Settle selected Yes deposits' })
+		const settleAllButton = documentQueries.getByRole('button', { name: 'Settle all Yes deposits' })
 		const sharedReasonId = reportButton.getAttribute('aria-describedby')
 		const sharedReason = document.getElementById(sharedReasonId ?? '')
 		const sharedActionRegion = reportButton.closest('.reporting-shared-action-region')
@@ -1683,13 +1683,13 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Trigger Zoltar Fork' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Trigger Zoltar fork' }))
 		})
 
 		expect(triggerZoltarForkCalls).toBe(1)
 	})
 
-	test('keeps only Open Fork & Migration visible after a fork-triggered pool has already entered its fork workflow', async () => {
+	test('keeps only Open fork & migration visible after a fork-triggered pool has already entered its fork workflow', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -1707,8 +1707,8 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.queryByRole('button', { name: 'Trigger Zoltar Fork' })).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Open Fork & Migration' })).not.toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Trigger Zoltar fork' })).toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Open fork & migration' })).not.toBeNull()
 		expect(document.body.textContent?.includes('Escalation deposits remain locked after non-decision. Zoltar fork has already been triggered for this pool, so continue in Fork & Migration.')).toBe(true)
 	})
 
@@ -1734,10 +1734,10 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expectTransactionButtonEnabled(document.body, 'Trigger Zoltar Fork')
+		expectTransactionButtonEnabled(document.body, 'Trigger Zoltar fork')
 
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Trigger Zoltar Fork' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Trigger Zoltar fork' }))
 		})
 
 		expect(triggerZoltarForkCalls).toBe(1)
@@ -1766,7 +1766,7 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Trigger Zoltar Fork' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Trigger Zoltar fork' }))
 		})
 
 		expect(triggerZoltarForkCalls).toBe(1)
@@ -1860,8 +1860,8 @@ describe('ReportingSection', () => {
 			),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
-		expectTransactionButtonDisabled(document.body, 'Settle Selected Yes Deposits', 'Select at least one deposit to settle or use Settle all for this side.')
-		expectTransactionButtonEnabled(document.body, 'Settle All Yes Deposits')
+		expectTransactionButtonDisabled(document.body, 'Settle selected Yes deposits', 'Select at least one deposit to settle or use Settle all for this side.')
+		expectTransactionButtonEnabled(document.body, 'Settle all Yes deposits')
 		expect(within(document.body).getByRole('checkbox', { name: /Deposit #0/i })).toBeDefined()
 		expect(document.body.textContent?.includes('Current claim type: Winning payout')).toBe(true)
 		expect(document.body.textContent?.includes('Initially deposited:')).toBe(true)
@@ -1963,10 +1963,10 @@ describe('ReportingSection', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Invalid' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Yes' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'No' })).toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Settle Selected Invalid Deposits', 'Select at least one deposit to settle or use Settle all for this side.')
-		expectTransactionButtonEnabled(document.body, 'Settle All Invalid Deposits')
-		expectTransactionButtonEnabled(document.body, 'Settle Selected Yes Deposits')
-		expectTransactionButtonEnabled(document.body, 'Settle All Yes Deposits')
+		expectTransactionButtonDisabled(document.body, 'Settle selected Invalid deposits', 'Select at least one deposit to settle or use Settle all for this side.')
+		expectTransactionButtonEnabled(document.body, 'Settle all Invalid deposits')
+		expectTransactionButtonEnabled(document.body, 'Settle selected Yes deposits')
+		expectTransactionButtonEnabled(document.body, 'Settle all Yes deposits')
 
 		const depositLabels = document.body.querySelectorAll('.withdraw-deposit-option')
 		expect(depositLabels).toHaveLength(2)
@@ -2112,7 +2112,7 @@ describe('ReportingSection', () => {
 		expect(invalidButton.tabIndex).toBe(0)
 		expect(yesButton.tabIndex).toBe(-1)
 		expect(noButton.tabIndex).toBe(-1)
-		expect(documentQueries.getByRole('button', { name: 'Report On Selected Side' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Report on selected side' })).not.toBeNull()
 
 		await act(() => {
 			fireEvent.click(noButton)

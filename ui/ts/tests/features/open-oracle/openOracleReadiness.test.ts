@@ -14,14 +14,14 @@ describe('open oracle readiness actions', () => {
 			}),
 		).toEqual([
 			{
-				actionLabel: 'Dispute & Swap',
+				actionLabel: 'Dispute & swap',
 				description: 'Challenge the current report and provide the replacement swap amounts.',
 				key: 'dispute-report',
 				readiness: 'ready',
 				title: 'Dispute & Swap',
 			},
 			{
-				actionLabel: 'Settle Report',
+				actionLabel: 'Settle report',
 				blocker: 'Wait until the dispute window closes.',
 				key: 'settle-report',
 				readiness: 'blocked',
@@ -40,7 +40,7 @@ describe('open oracle readiness actions', () => {
 			}),
 		).toEqual([
 			{
-				actionLabel: 'Dispute & Swap',
+				actionLabel: 'Dispute & swap',
 				blocker: 'Select a report first.',
 				description: 'Challenge the current report and provide the replacement swap amounts.',
 				key: 'dispute-report',
@@ -48,7 +48,7 @@ describe('open oracle readiness actions', () => {
 				title: 'Dispute & Swap',
 			},
 			{
-				actionLabel: 'Settle Report',
+				actionLabel: 'Settle report',
 				blocker: 'Select a report first.',
 				key: 'settle-report',
 				readiness: 'blocked',
@@ -67,7 +67,7 @@ describe('open oracle readiness actions', () => {
 			}),
 		).toEqual([
 			{
-				actionLabel: 'Settle Report',
+				actionLabel: 'Settle report',
 				key: 'settle-report',
 				readiness: 'ready',
 				title: 'Settle Report',

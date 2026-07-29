@@ -762,7 +762,7 @@ describe('Open Oracle helpers', () => {
 		const exactSettlementBoundary = createOpenOracleLifecycleReport({ currentTime: 160n })
 		expect(getOpenOracleDisputeAvailability(exactSettlementBoundary)).toEqual({
 			canAct: false,
-			message: 'Dispute window closed. Settle Report instead.',
+			message: 'Dispute window closed. Settle report instead.',
 		})
 		expect(getOpenOracleSettleAvailability(exactSettlementBoundary)).toEqual({
 			canAct: true,
@@ -773,7 +773,7 @@ describe('Open Oracle helpers', () => {
 		const afterSettlementWindow = createOpenOracleLifecycleReport({ currentTime: 161n })
 		expect(getOpenOracleDisputeAvailability(afterSettlementWindow)).toEqual({
 			canAct: false,
-			message: 'Dispute window closed. Settle Report instead.',
+			message: 'Dispute window closed. Settle report instead.',
 		})
 		expect(getOpenOracleSettleAvailability(afterSettlementWindow)).toEqual({
 			canAct: true,
@@ -832,7 +832,7 @@ describe('Open Oracle helpers', () => {
 		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: settlement'))).toBe('This report is not ready to settle.')
 		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: no initial report'))).toBe('This report is invalid because its atomic initial report is missing.')
 		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: dispute too early'))).toBe('This report is not ready to dispute.')
-		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: dispute period expired'))).toBe('Dispute window closed. Settle Report instead.')
+		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: dispute period expired'))).toBe('Dispute window closed. Settle report instead.')
 		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: report settled'))).toBe('This report is already settled.')
 	})
 

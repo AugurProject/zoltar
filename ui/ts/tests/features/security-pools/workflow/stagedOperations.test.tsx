@@ -132,7 +132,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 			expect(dialogQueries.getByRole('heading', { name: 'REP Withdrawal Queued' }).closest('.actions')).toBeNull()
 
 			await act(() => {
-				fireEvent.click(dialogQueries.getByRole('button', { name: 'View In Staged Operations' }))
+				fireEvent.click(dialogQueries.getByRole('button', { name: 'View in staged operations' }))
 			})
 
 			expect(selectedViews).toEqual(['staged-operations'])
@@ -220,7 +220,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 			)
 			setCleanup(renderedComponent.cleanup)
 
-			const executeButton = within(document.body).getByRole('button', { name: 'Execute Staged Operation' })
+			const executeButton = within(document.body).getByRole('button', { name: 'Execute staged operation' })
 			if (!(executeButton instanceof HTMLButtonElement)) throw new Error('Expected Execute Staged Operation button')
 			expect(executeButton.disabled).toBe(true)
 			expect(document.body.textContent).toContain('Wait for a valid oracle price before executing a staged operation.')
@@ -268,7 +268,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 			const withdrawDialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
 			const dialogQueries = within(withdrawDialog)
 			expect(dialogQueries.getByRole('heading', { name: 'REP Withdrawal Executed' })).not.toBeNull()
-			expect(dialogQueries.queryByRole('button', { name: 'View In Staged Operations' })).toBeNull()
+			expect(dialogQueries.queryByRole('button', { name: 'View in staged operations' })).toBeNull()
 			expect(dialogQueries.getByText('A valid oracle price was already available, so the withdrawal executed immediately and no staged operation was created.')).not.toBeNull()
 		})
 
@@ -321,7 +321,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 			const dialogQueries = within(withdrawDialog)
 			expect(dialogQueries.getByRole('heading', { name: 'REP Withdrawal Failed' })).not.toBeNull()
 			expect(dialogQueries.getByText('Local Security Bond Allowance broken')).not.toBeNull()
-			expect(dialogQueries.queryByRole('button', { name: 'View In Staged Operations' })).toBeNull()
+			expect(dialogQueries.queryByRole('button', { name: 'View in staged operations' })).toBeNull()
 		})
 
 		test('shows liquidation successful in the selected pool workflow after an immediate execution', async () => {

@@ -109,7 +109,7 @@ describe('ScalarDeploymentSection', () => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Create child universe' }))
 		})
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Deploy Universe' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Deploy universe' }))
 		})
 		expect(createOutcome).toBe(getScalarOutcomeIndex(question, 10n))
 	})

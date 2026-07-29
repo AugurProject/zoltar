@@ -82,11 +82,11 @@ function getLiquidationModalTitle(currentPoolOracleManagerDetails: OracleManager
 	const executionMode = getLiquidationExecutionMode(currentPoolOracleManagerDetails, currentTimestamp)
 	switch (executionMode) {
 		case 'execute':
-			return liquidationCopy.executeVaultLiquidation
+			return liquidationCopy.executeVaultLiquidationTitle
 		case 'queue':
 			return liquidationCopy.queueVaultLiquidation
 		case 'refreshing':
-			return liquidationCopy.liquidateVault
+			return liquidationCopy.liquidateVaultTitle
 		default:
 			return assertNever(executionMode)
 	}

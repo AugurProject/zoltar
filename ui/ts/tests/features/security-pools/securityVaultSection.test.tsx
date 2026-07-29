@@ -166,7 +166,7 @@ describe('SecurityVaultSection', () => {
 		expect(documentQueries.getAllByText('Selected vault details are unavailable.').length).toBeGreaterThan(0)
 		expect(documentQueries.queryByText('Refresh the vault to inspect claimable fees.')).toBeNull()
 		expect(documentQueries.queryByText('Refresh the vault before setting a security bond allowance.')).toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Claim Fees')
+		expectTransactionButtonDisabled(document.body, 'Claim fees')
 	})
 
 	test('directs a missing vault lookup to another vault address', async () => {
@@ -203,7 +203,7 @@ describe('SecurityVaultSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByText('This vault does not exist. Deposit REP to create it.')).toBeNull()
-		expectTransactionButtonEnabled(document.body, 'Claim Fees')
+		expectTransactionButtonEnabled(document.body, 'Claim fees')
 	})
 
 	test('blocks the modal-first claim fees launcher when an existing vault has no claimable fees', async () => {
@@ -224,9 +224,9 @@ describe('SecurityVaultSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const claimFeesButton = documentQueries.getByRole('button', { name: 'Claim Fees' })
+		const claimFeesButton = documentQueries.getByRole('button', { name: 'Claim fees' })
 
-		expectTransactionButtonDisabled(document.body, 'Claim Fees', 'No fees are available to claim.')
+		expectTransactionButtonDisabled(document.body, 'Claim fees', 'No fees are available to claim.')
 		expect(claimFeesButton.getAttribute('aria-describedby')).toBeNull()
 		fireEvent.click(claimFeesButton)
 		expect(documentQueries.queryByRole('dialog', { name: 'Claim Fees' })).toBeNull()
@@ -290,7 +290,7 @@ describe('SecurityVaultSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Set Bond Allowance' }))
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Set bond allowance' }))
 		const dialog = documentQueries.getByRole('dialog', { name: 'Set Bond Allowance' })
 		expect(within(dialog).getByText('The transaction succeeded, but the latest manager state is not available.')).not.toBeNull()
 		expect(documentQueries.queryByText('Refresh staged operations to confirm the latest manager state.')).toBeNull()
@@ -341,7 +341,7 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Claim Fees')
+		expectTransactionButtonDisabled(document.body, 'Claim fees')
 	})
 
 	test('explains fork lifecycle gating once for the complete vault action group', async () => {
@@ -369,7 +369,7 @@ describe('SecurityVaultSection', () => {
 
 		const documentQueries = within(document.body)
 		const lifecycleReason = documentQueries.getByText('Vault collateral actions are unavailable while this pool is in fork migration. Continue in Fork & Migration. Fee claiming remains available only when this vault has accrued fees.')
-		for (const actionLabel of ['Deposit REP', 'Withdraw REP', 'Set Bond Allowance']) {
+		for (const actionLabel of ['Deposit REP', 'Withdraw REP', 'Set bond allowance']) {
 			const button = documentQueries.getByRole('button', { name: actionLabel })
 			expect(button.getAttribute('aria-describedby')).toBe(lifecycleReason.id)
 			expectTransactionButtonDisabled(document.body, actionLabel)
@@ -413,7 +413,7 @@ describe('SecurityVaultSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(getTransactionButtonState(document.body, 'Deposit REP')).toEqual({ disabled: true, reason: 'Connect a wallet before depositing REP.' })
-		expect(getTransactionButtonState(document.body, 'Claim Fees')).toEqual({ disabled: true, reason: 'Connect a wallet before claiming fees.' })
+		expect(getTransactionButtonState(document.body, 'Claim fees')).toEqual({ disabled: true, reason: 'Connect a wallet before claiming fees.' })
 	})
 
 	test('shows explicit modal-first vault blockers for a vault owned by another account', async () => {
@@ -439,7 +439,7 @@ describe('SecurityVaultSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(getTransactionButtonState(document.body, 'Deposit REP')).toEqual({ disabled: true, reason: 'Select your own vault to deposit REP.' })
-		expect(getTransactionButtonState(document.body, 'Claim Fees')).toEqual({ disabled: true, reason: 'Select your own vault to claim fees.' })
+		expect(getTransactionButtonState(document.body, 'Claim fees')).toEqual({ disabled: true, reason: 'Select your own vault to claim fees.' })
 	})
 
 	test('explains how to recover when no REP is available to create the selected vault', async () => {
@@ -546,7 +546,7 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonEnabled(document.body, 'Set Security Bond Allowance')
+		expectTransactionButtonEnabled(document.body, 'Set security bond allowance')
 	})
 
 	test('allows a non-zero bond allowance when the oracle price is stale but fresh-report funding is available', async () => {
@@ -573,7 +573,7 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonEnabled(document.body, 'Set Security Bond Allowance')
+		expectTransactionButtonEnabled(document.body, 'Set security bond allowance')
 	})
 
 	test('allows REP withdrawal staging when the oracle price is stale but fresh-report funding is available', async () => {
@@ -626,7 +626,7 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Set Security Bond Allowance', 'Need 1.2 more ETH in this wallet to queue this bond allowance update.')
+		expectTransactionButtonDisabled(document.body, 'Set security bond allowance', 'Need 1.2 more ETH in this wallet to queue this bond allowance update.')
 		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'Need 1.2 more ETH in this wallet to queue this REP withdrawal.')
 	})
 
@@ -653,7 +653,7 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonEnabled(document.body, 'Set Security Bond Allowance')
+		expectTransactionButtonEnabled(document.body, 'Set security bond allowance')
 		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
 	})
 
@@ -713,7 +713,7 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Set Security Bond Allowance', 'Enter at least 1 ETH for a non-zero allowance.')
+		expectTransactionButtonDisabled(document.body, 'Set security bond allowance', 'Enter at least 1 ETH for a non-zero allowance.')
 	})
 
 	test('does not render a local vault transaction status card', async () => {
@@ -758,8 +758,8 @@ describe('SecurityVaultSection', () => {
 
 		expectTransactionButtonDisabled(document.body, 'Deposit REP')
 		expectTransactionButtonEnabled(document.body, 'Redeem REP')
-		expectTransactionButtonDisabled(document.body, 'Set Security Bond Allowance')
-		expectTransactionButtonEnabled(document.body, 'Claim Fees')
+		expectTransactionButtonDisabled(document.body, 'Set security bond allowance')
+		expectTransactionButtonEnabled(document.body, 'Claim fees')
 	})
 
 	test('disables REP approval after the selected pool has ended', async () => {

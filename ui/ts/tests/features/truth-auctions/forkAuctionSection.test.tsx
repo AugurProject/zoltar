@@ -457,7 +457,7 @@ describe('ForkAuctionSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Optional: Claim Parent Escalation Deposits' })).not.toBeNull()
 		expect(documentQueries.getByText('This fast path pays selected winning parent deposits directly in child REP and marks their carried proofs spent. Unclaimed winners can instead settle from aggregate child backing with a proof.')).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Claim Selected Yes Deposits' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Claim selected Yes deposits' })).not.toBeNull()
 		expect(documentQueries.queryByText('Selected deposits leave the parent pool and reappear on the chosen child universe for later settlement.')).toBeNull()
 		expect(documentQueries.queryByText(/migratable escalation deposits/i)).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Migrate All Yes Deposits' })).toBeNull()
@@ -573,7 +573,7 @@ describe('ForkAuctionSection', () => {
 				'First migrates this wallet’s unlocked vault ownership, allowance, fees, and collateral to the selected child, then clears its three parent outcome totals in constant-size work. This is not required to fund escalation backing or claim a winning carried proof; inherited losers require no claim transaction.',
 			),
 		).not.toBeNull()
-		const button = documentQueries.getByRole('button', { name: 'Clear Parent Locks for Yes' })
+		const button = documentQueries.getByRole('button', { name: 'Clear parent locks for Yes' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected unresolved migration action button')
 		expect(button.disabled).toBe(true)
 		expect(button.getAttribute('title')).toBe('Migration window has closed for this parent pool.')
@@ -682,7 +682,7 @@ describe('ForkAuctionSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Parent lock accounting was already cleared. Child proof eligibility is unchanged.')).not.toBeNull()
 		expect(documentQueries.queryByText('Current path: Must migrate into the selected child universe')).toBeNull()
-		const button = documentQueries.getByRole('button', { name: 'Clear Parent Locks for No' })
+		const button = documentQueries.getByRole('button', { name: 'Clear parent locks for No' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected unresolved migration action button')
 		expect(button.disabled).toBe(false)
 		fireEvent.click(button)
@@ -731,8 +731,8 @@ describe('ForkAuctionSection', () => {
 		expect(documentQueries.getByText('The optional parent-lock cleanup window has closed. Child backing and winning-proof eligibility are unchanged.')).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Optional: Clear Parent Escalation Locks' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Optional: Claim Parent Escalation Deposits' })).toBeNull()
-		expect(documentQueries.queryByRole('button', { name: 'Clear Parent Locks for Yes' })).toBeNull()
-		expect(documentQueries.queryByRole('button', { name: 'Claim Selected Yes Deposits' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Clear parent locks for Yes' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Claim selected Yes deposits' })).toBeNull()
 	})
 
 	test('disables vault migration after the migration window closes', async () => {
@@ -769,7 +769,7 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const button = documentQueries.getByRole('button', { name: 'Migrate Vault To Yes' })
+		const button = documentQueries.getByRole('button', { name: 'Migrate vault to Yes' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected vault migration action button')
 		expect(button.disabled).toBe(true)
 		expect(button.getAttribute('title')).toBe('Migration window has closed for this parent pool.')
@@ -813,7 +813,7 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Worth now: Pending final settlement')).not.toBeNull()
-		const button = documentQueries.getByRole('button', { name: 'Settle Selected Yes Fork-Carried Deposits' })
+		const button = documentQueries.getByRole('button', { name: 'Settle selected Yes fork-carried deposits' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected fork-carried settlement action button')
 		expect(button.disabled).toBe(true)
 		expect(button.getAttribute('title')).toBe('Winning fork-carried escalation deposits can be settled after this child pool finalizes.')
@@ -858,7 +858,7 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Worth now: Pending final settlement')).not.toBeNull()
-		const button = documentQueries.getByRole('button', { name: 'Settle Selected Yes Fork-Carried Deposits' })
+		const button = documentQueries.getByRole('button', { name: 'Settle selected Yes fork-carried deposits' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected fork-carried settlement action button')
 		expect(button.disabled).toBe(true)
 		expect(button.getAttribute('title')).toBe('Winning fork-carried escalation deposits can be settled after this child pool finalizes.')
@@ -946,7 +946,7 @@ describe('ForkAuctionSection', () => {
 		expect(documentQueries.getByText('1970-01-01 00:00:10 UTC')).not.toBeNull()
 		expect(documentQueries.queryByText('Inactive')).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Start Truth Auction' })).toBeNull()
-		expect(documentQueries.queryByRole('button', { name: 'Start Truth Auction' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Start truth auction' })).toBeNull()
 		expect(documentQueries.queryByText('Truth auction already started.')).toBeNull()
 	})
 
@@ -1273,8 +1273,8 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit Bid' })
-		if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected Submit Bid button to be a button element')
+		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit bid' })
+		if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected Submit bid button to be a button element')
 		expect(submitBidButton.getAttribute('title')).toBe('Bid price is outside the supported auction range.')
 		expect(submitBidButton.disabled).toBe(true)
 	})
@@ -1334,8 +1334,8 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit Bid' })
-		if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected Submit Bid button to be a button element')
+		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit bid' })
+		if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected Submit bid button to be a button element')
 		expect(submitBidButton.disabled).toBe(true)
 		expect(submitBidButton.title).toBe('Switch to Ethereum mainnet.')
 		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
@@ -1396,8 +1396,8 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit Bid' })
-		if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected Submit Bid button to be a button element')
+		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit bid' })
+		if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected Submit bid button to be a button element')
 		expect(submitBidButton.disabled).toBe(true)
 		expect(submitBidButton.title).toBe('Switch to Ethereum mainnet.')
 	})

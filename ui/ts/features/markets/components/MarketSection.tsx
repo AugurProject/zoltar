@@ -3,10 +3,12 @@ import * as marketCopy from '../../../copy/market.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
 import { useEffect, useState } from 'preact/hooks'
 import { DataGrid } from '../../../components/DataGrid.js'
+import { IdentifierValue } from '../../../components/IdentifierValue.js'
 import { ForkZoltarSection } from '../../universes/components/ForkZoltarSection.js'
 import { MarketCreateQuestionSection } from './MarketCreateQuestionSection.js'
 import { MarketOverviewSection } from './MarketOverviewSection.js'
 import { MarketQuestionsSection } from './MarketQuestionsSection.js'
+import { Question } from './Question.js'
 import { LoadingText } from '../../../components/LoadingText.js'
 import { ActionLauncherButton } from '../../../components/ActionLauncherButton.js'
 import { OperationModal } from '../../../components/OperationModal.js'
@@ -14,6 +16,7 @@ import { SectionBlock } from '../../../components/SectionBlock.js'
 import { TransactionUniverseValue } from '../../universes/components/TransactionUniverseValue.js'
 import { ZoltarMigrationSection } from '../../universes/components/ZoltarMigrationSection.js'
 import { isMainnetChain } from '../../../lib/network.js'
+import { getMarketTypeLabel } from '../lib/marketType.js'
 import type { MarketSectionProps } from '../../types.js'
 
 export function MarketSection({
@@ -74,7 +77,7 @@ export function MarketSection({
 	const showUniverseSummary = view === 'questions' && zoltarUniverse !== undefined
 	const [forkModalOpen, setForkModalOpen] = useState(false)
 	const selectedForkQuestion = zoltarQuestions.find(question => question.questionId.toLowerCase() === zoltarForkQuestionId.trim().toLowerCase()) ?? zoltarUniverse?.forkQuestionDetails
-	const forkModalTitle = hasForked ? zoltarCopy.viewForkDetails : zoltarCopy.forkZoltar
+	const forkModalTitle = hasForked ? zoltarCopy.viewForkDetailsTitle : zoltarCopy.forkZoltar
 	const forkQuestionAvailable = selectedForkQuestion !== undefined || (zoltarQuestionCount !== undefined && zoltarQuestionCount > 0n)
 	const forkLauncherDisabledReason = (() => {
 		if (hasForked) return undefined
@@ -187,14 +190,37 @@ export function MarketSection({
 								<li>{marketCopy.forkConsequence}</li>
 							</ul>
 							<div className='actions'>
-								<ActionLauncherButton availability={{ disabled: forkLauncherDisabledReason !== undefined, reason: forkLauncherDisabledReason }} idleLabel={forkModalTitle} onClick={() => setForkModalOpen(true)} pending={false} pendingLabel={forkModalTitle} showDisabledReason />
+								<ActionLauncherButton availability={{ disabled: forkLauncherDisabledReason !== undefined, reason: forkLauncherDisabledReason }} idleLabel={hasForked ? zoltarCopy.viewForkDetails : forkModalTitle} onClick={() => setForkModalOpen(true)} pending={false} pendingLabel={forkModalTitle} showDisabledReason />
 								{forkLauncherDisabledReason === marketCopy.forkQuestionUnavailableReason ? (
 									<button className='secondary' type='button' onClick={() => onActiveViewChange('create')}>
-										{commonCopy.createQuestion}
+										{commonCopy.createQuestionAction}
 									</button>
 								) : undefined}
 							</div>
-							{zoltarForkQuestionId.trim() === '' ? undefined : <p className='detail'>{marketCopy.formatSelectedForkQuestionDetail(zoltarForkQuestionId)}</p>}
+							{zoltarForkQuestionId.trim() === '' ? undefined : (
+								<section aria-label={marketCopy.selectedForkQuestionSummary} className='selected-fork-question-summary'>
+									<p className='panel-label'>{marketCopy.selectedForkQuestionSummary}</p>
+									{selectedForkQuestion === undefined ? (
+										<IdentifierValue value={zoltarForkQuestionId} />
+									) : (
+										<>
+											<Question question={selectedForkQuestion} variant='preview' />
+											<DataGrid columns='auto'>
+												<div>
+													<p className='detail'>{marketCopy.questionType}</p>
+													<strong>{getMarketTypeLabel(selectedForkQuestion.marketType)}</strong>
+												</div>
+												<div>
+													<p className='detail'>{commonCopy.universe}</p>
+													<strong>
+														<TransactionUniverseValue universeId={zoltarUniverse?.universeId} />
+													</strong>
+												</div>
+											</DataGrid>
+										</>
+									)}
+								</section>
+							)}
 						</SectionBlock>
 						<OperationModal context={forkContext} isOpen={forkModalOpen} onClose={() => setForkModalOpen(false)} title={forkModalTitle}>
 							<ForkZoltarSection

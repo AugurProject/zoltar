@@ -95,7 +95,7 @@ export function SecurityPoolSection({
 			createdQuestionDetails = carriedPoolCreationMarketDetails
 		}
 
-	let createButtonLabel: ComponentChildren = commonCopy.createPool
+	let createButtonLabel: ComponentChildren = commonCopy.createPoolAction
 	if (securityPoolCreating) {
 		createButtonLabel = <LoadingText>{securityPoolCopy.creatingPool}</LoadingText>
 	} else if (checkingDuplicateOriginPool) {
@@ -112,7 +112,11 @@ export function SecurityPoolSection({
 				variant='record'
 				actions={
 					<div className='actions'>
-						<button className='primary' onClick={() => onOpenCreatedPool?.(securityPoolResult.securityPoolAddress, securityPoolResult.universeId)}>
+						<button
+							aria-label={securityPoolCopy.formatOpenPoolLabel(createdQuestionDetails === undefined ? securityPoolResult.securityPoolAddress : getQuestionTitle(createdQuestionDetails), securityPoolResult.securityPoolAddress)}
+							className='primary'
+							onClick={() => onOpenCreatedPool?.(securityPoolResult.securityPoolAddress, securityPoolResult.universeId)}
+						>
 							{securityPoolCopy.openPool}
 						</button>
 						{onReturnToBrowse === undefined ? undefined : (

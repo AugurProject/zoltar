@@ -142,7 +142,7 @@ describe('ImportedForkSettlementSection', () => {
 		const deposit256Checkbox = firstPageCheckboxes.item(6) as HTMLInputElement
 		expect(deposit256Checkbox.checked).toBe(true)
 
-		const nextButton = within(document.body).getByRole('button', { name: 'Next Parent Deposits' })
+		const nextButton = within(document.body).getByRole('button', { name: 'Next parent deposits' })
 		fireEvent.click(nextButton)
 
 		expect(document.body.textContent).toMatch('Parent deposit #276')
@@ -154,7 +154,7 @@ describe('ImportedForkSettlementSection', () => {
 		fireEvent.change(deposit276Checkbox, { target: { checked: true } })
 		expect(deposit276Checkbox.checked).toBe(true)
 
-		const previousButton = within(document.body).getByRole('button', { name: 'Previous Parent Deposits' })
+		const previousButton = within(document.body).getByRole('button', { name: 'Previous parent deposits' })
 		fireEvent.click(previousButton)
 
 		const refreshedFirstPageCheckboxes = document.querySelectorAll('input[type="checkbox"]')

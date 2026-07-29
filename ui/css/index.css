@@ -3654,6 +3654,14 @@ strong.metric-value-danger {
 	background: var(--surface-section-opaque);
 }
 
+.sticky-object-context.embedded-context-strip {
+	border-width: 1px 0;
+	border-color: var(--divider-subtle);
+	border-radius: 0;
+	background: var(--surface-section-opaque);
+	box-shadow: none;
+}
+
 .sticky-object-context.context-strip .sticky-object-context-summary {
 	display: grid;
 	grid-template-columns: minmax(12rem, 0.8fr) minmax(20rem, 1.2fr);
@@ -3682,6 +3690,50 @@ strong.metric-value-danger {
 	position: static;
 	top: auto;
 	z-index: auto;
+}
+
+.selected-fork-question-summary {
+	display: grid;
+	gap: var(--space-3);
+	margin-top: var(--space-3);
+	padding-top: var(--space-3);
+	border-top: 1px solid var(--divider-subtle);
+}
+
+.selected-fork-question-summary > .panel-label {
+	margin: 0;
+}
+
+.selected-fork-question-summary .question-preview-meta {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.selected-fork-question-summary .question-preview-meta-item {
+	display: grid;
+	align-items: start;
+}
+
+.deployment-contract-details {
+	border-block: 1px solid var(--divider-subtle);
+}
+
+.deployment-contract-details > summary {
+	display: list-item;
+	padding: var(--space-3) 0;
+	cursor: pointer;
+	font-weight: 700;
+}
+
+.deployment-contract-details > summary .detail {
+	font-weight: 400;
+}
+
+.deployment-contract-groups {
+	padding-bottom: var(--space-4);
+}
+
+.address-value-abbreviated {
+	display: none;
 }
 
 .sticky-object-context-header {
@@ -7834,11 +7886,16 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 		padding: var(--space-2) var(--space-3);
 	}
 
-	.overview-wallet-panel.is-simulation .overview-address-metric .address-value {
-		max-width: 12rem;
-		overflow: hidden;
-		text-overflow: ellipsis;
+	.overview-address-metric .address-value {
 		white-space: nowrap;
+	}
+
+	.overview-address-metric .address-value-full {
+		display: none;
+	}
+
+	.overview-address-metric .address-value-abbreviated {
+		display: inline;
 	}
 
 	.overview-wallet-panel.is-simulation .overview-universe-metric {
@@ -7849,6 +7906,44 @@ main.global-transaction-tray-open :is(a, button, input, select, summary, textare
 	.section-block,
 	.overview-panel {
 		padding: var(--space-3);
+	}
+
+	.deployment-route-header {
+		grid-template-columns: auto minmax(0, 1fr);
+		align-items: start;
+	}
+
+	.deployment-route-header .route-header-main {
+		display: contents;
+	}
+
+	.deployment-route-header .route-header-copy {
+		grid-column: 1 / -1;
+	}
+
+	.deployment-route-header .route-description {
+		display: none;
+	}
+
+	.deployment-route-header .route-header-actions {
+		grid-column: 1;
+		justify-self: start;
+	}
+
+	.deployment-route-header .route-summary-strip {
+		grid-column: 2;
+		padding: 0 0 0 var(--space-3);
+		border-top: 0;
+		border-left: 1px solid var(--divider-subtle);
+	}
+
+	.deployment-route-header .route-summary-strip .data-grid {
+		grid-template-columns: minmax(0, 1fr);
+		gap: var(--space-2);
+	}
+
+	.deployment-route-header .route-summary-strip .data-grid > div {
+		padding-top: var(--space-1);
 	}
 
 	.security-pool-detail-rail,

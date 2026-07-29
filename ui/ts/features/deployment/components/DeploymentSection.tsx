@@ -86,7 +86,17 @@ export function DeploymentSection({ title, completedGroup = false, steps, allSte
 								<p className='address'>{step.address}</p>
 								{stepStatus.detail === undefined ? undefined : <p className='detail'>{stepStatus.detail}</p>}
 							</div>
-							{step.deployed ? undefined : <TransactionActionButton idleLabel={stepStatus.buttonLabel} pendingLabel={deploymentCopy.deploying} onClick={() => void onDeploy(step.id)} pending={isBusy} availability={availability} showDisabledReason={prerequisiteLabel === undefined} />}
+							{step.deployed ? undefined : (
+								<TransactionActionButton
+									ariaLabel={isBusy ? deploymentCopy.formatDeployingContract(step.label) : deploymentCopy.formatDeployContract(step.label)}
+									idleLabel={stepStatus.buttonLabel}
+									pendingLabel={deploymentCopy.deploying}
+									onClick={() => void onDeploy(step.id)}
+									pending={isBusy}
+									availability={availability}
+									showDisabledReason={prerequisiteLabel === undefined}
+								/>
+							)}
 						</div>
 					)
 				})}
