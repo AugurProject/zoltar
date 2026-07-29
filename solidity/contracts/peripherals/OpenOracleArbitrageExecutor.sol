@@ -113,13 +113,53 @@ interface IUniswapV2Router {
 	) external returns (uint256[] memory amounts);
 }
 
+interface IWETH is IERC20 {
+	function deposit() external payable;
+
+	function withdraw(uint256 amount) external;
+}
+
+interface IUniswapV4PoolManager {
+	struct PoolKey {
+		address currency0;
+		address currency1;
+		uint24 fee;
+		int24 tickSpacing;
+		address hooks;
+	}
+
+	struct SwapParams {
+		bool zeroForOne;
+		int256 amountSpecified;
+		uint160 sqrtPriceLimitX96;
+	}
+
+	function unlock(bytes calldata data) external returns (bytes memory);
+
+	function swap(
+		PoolKey calldata key,
+		SwapParams calldata params,
+		bytes calldata hookData
+	) external returns (int256 delta);
+
+	function sync(address currency) external;
+
+	function take(address currency, address to, uint256 amount) external;
+
+	function settle() external payable returns (uint256 paid);
+}
+
 /// @notice Funds one OpenOracle dispute atomically and rejects non-exact ERC-20 transfers.
 /// @dev The caller remains the OpenOracle disputer. A successful dispute retains no operation-pulled token balance or OpenOracle allowance.
 contract OpenOracleArbitrageExecutor {
 	using SafeERC20Ops for IERC20;
 
 	uint256 private constant PERCENTAGE_PRECISION = 1e7;
+	uint160 private constant MIN_SQRT_PRICE_PLUS_ONE = 4_295_128_740;
+	uint160 private constant MAX_SQRT_PRICE_MINUS_ONE =
+		1_461_446_703_485_210_103_287_273_052_203_988_822_378_723_970_341;
 	bool private entered;
+	address private activeV4PoolManager;
 
 	struct HedgeRequest {
 		address openOracle;
@@ -162,6 +202,14 @@ contract OpenOracleArbitrageExecutor {
 		uint256 contribution2;
 		uint256 hedgeAmountToken2;
 		uint256 hedgeAmountWeth;
+	}
+
+	struct V4SwapCallbackData {
+		address token;
+		uint24 poolFee;
+		bool buyToken;
+		uint256 amount;
+		uint256 limit;
 	}
 
 	event HedgeAndDisputeExecuted(
@@ -329,6 +377,54 @@ contract OpenOracleArbitrageExecutor {
 		entered = false;
 	}
 
+	receive() external payable {
+		require(entered, 'OpenOracle arbitrage executor rejects unsolicited ETH');
+	}
+
+	/// @notice Settles one hookless Uniswap V4 pool swap while its authenticated PoolManager is unlocked.
+	/// @dev Only the PoolManager selected by the active parent-bound hedge may invoke this callback.
+	function unlockCallback(bytes calldata data) external returns (bytes memory result) {
+		require(entered && msg.sender == activeV4PoolManager, 'Unauthorized Uniswap V4 unlock callback');
+		V4SwapCallbackData memory callback = abi.decode(data, (V4SwapCallbackData));
+		IUniswapV4PoolManager manager = IUniswapV4PoolManager(msg.sender);
+		IUniswapV4PoolManager.PoolKey memory key = IUniswapV4PoolManager.PoolKey({
+			currency0: address(0),
+			currency1: callback.token,
+			fee: callback.poolFee,
+			tickSpacing: _v4TickSpacing(callback.poolFee),
+			hooks: address(0)
+		});
+		int256 delta = manager.swap(
+			key,
+			IUniswapV4PoolManager.SwapParams({
+				zeroForOne: callback.buyToken,
+				amountSpecified: callback.buyToken ? int256(callback.amount) : -int256(callback.amount),
+				sqrtPriceLimitX96: callback.buyToken ? MIN_SQRT_PRICE_PLUS_ONE : MAX_SQRT_PRICE_MINUS_ONE
+			}),
+			bytes('')
+		);
+		int128 nativeDelta = int128(delta >> 128);
+		int128 tokenDelta = int128(uint128(uint256(delta)));
+		if (callback.buyToken) {
+			require(tokenDelta == int128(int256(callback.amount)), 'Uniswap V4 buy output was not exact');
+			require(nativeDelta < 0, 'Uniswap V4 buy input was invalid');
+			uint256 amountIn = uint256(uint128(-nativeDelta));
+			require(amountIn <= callback.limit, 'Uniswap V4 buy hedge exceeded maximum WETH');
+			require(manager.settle{ value: amountIn }() == amountIn, 'Uniswap V4 native settlement was not exact');
+			manager.take(callback.token, address(this), callback.amount);
+			return abi.encode(amountIn);
+		}
+		require(tokenDelta == -int128(int256(callback.amount)), 'Uniswap V4 sell input was not exact');
+		require(nativeDelta > 0, 'Uniswap V4 sell output was invalid');
+		uint256 amountOut = uint256(uint128(nativeDelta));
+		require(amountOut >= callback.limit, 'Uniswap V4 sell hedge received too little WETH');
+		manager.sync(callback.token);
+		IERC20(callback.token).safeTransfer(address(manager), callback.amount);
+		require(manager.settle() == callback.amount, 'Uniswap V4 token settlement was not exact');
+		manager.take(address(0), address(this), amountOut);
+		return abi.encode(amountOut);
+	}
+
 	/// @notice Atomically settles when needed and withdraws only one position's exact proceeds.
 	/// @dev The caller must approve this executor through OpenOracle's internal allowance for both tokens.
 	///      Permissionless credits and proceeds belonging to other positions remain in the caller's OpenOracle balance.
@@ -472,7 +568,11 @@ contract OpenOracleArbitrageExecutor {
 		require(result.contribution2 >= result.hedgeAmountToken2, 'OpenOracle buy hedge exceeds token2 contribution');
 		_pullExact(token1, result.contribution1 + request.hedgeWethLimit, balances.executorToken1);
 		_pullExact(token2, result.contribution2 - result.hedgeAmountToken2, balances.executorToken2);
-		_approveExact(token1, request.router, request.hedgeWethLimit);
+		if (request.venue == 2) {
+			result.hedgeAmountWeth = _executeV4Hedge(request, game.token1, game.token2, result.hedgeAmountToken2, true);
+		} else {
+			_approveExact(token1, request.router, request.hedgeWethLimit);
+		}
 		if (request.venue == 0) {
 			result.hedgeAmountWeth = IUniswapV3SwapRouter(request.router).exactOutputSingle(
 				IUniswapV3SwapRouter.ExactOutputSingleParams({
@@ -486,8 +586,7 @@ contract OpenOracleArbitrageExecutor {
 					sqrtPriceLimitX96: 0
 				})
 			);
-		} else {
-			require(request.venue == 1, 'Unsupported hedge venue');
+		} else if (request.venue == 1) {
 			address[] memory path = new address[](2);
 			path[0] = game.token1;
 			path[1] = game.token2;
@@ -500,9 +599,11 @@ contract OpenOracleArbitrageExecutor {
 			);
 			require(amounts.length == 2 && amounts[1] == result.hedgeAmountToken2, 'Uniswap V2 buy amounts invalid');
 			result.hedgeAmountWeth = amounts[0];
+		} else {
+			require(request.venue == 2, 'Unsupported hedge venue');
 		}
 		require(result.hedgeAmountWeth <= request.hedgeWethLimit, 'Uniswap buy hedge exceeded maximum WETH');
-		_approveExact(token1, request.router, 0);
+		if (request.venue != 2) _approveExact(token1, request.router, 0);
 		return result;
 	}
 
@@ -517,7 +618,17 @@ contract OpenOracleArbitrageExecutor {
 		result.hedgeAmountToken2 = game.currentAmount2;
 		_pullExact(token1, result.contribution1, balances.executorToken1);
 		_pullExact(token2, result.contribution2 + result.hedgeAmountToken2, balances.executorToken2);
-		_approveExact(token2, request.router, result.hedgeAmountToken2);
+		if (request.venue == 2) {
+			result.hedgeAmountWeth = _executeV4Hedge(
+				request,
+				game.token1,
+				game.token2,
+				result.hedgeAmountToken2,
+				false
+			);
+		} else {
+			_approveExact(token2, request.router, result.hedgeAmountToken2);
+		}
 		if (request.venue == 0) {
 			result.hedgeAmountWeth = IUniswapV3SwapRouter(request.router).exactInputSingle(
 				IUniswapV3SwapRouter.ExactInputSingleParams({
@@ -531,8 +642,7 @@ contract OpenOracleArbitrageExecutor {
 					sqrtPriceLimitX96: 0
 				})
 			);
-		} else {
-			require(request.venue == 1, 'Unsupported hedge venue');
+		} else if (request.venue == 1) {
 			address[] memory path = new address[](2);
 			path[0] = game.token2;
 			path[1] = game.token1;
@@ -545,10 +655,50 @@ contract OpenOracleArbitrageExecutor {
 			);
 			require(amounts.length == 2 && amounts[0] == result.hedgeAmountToken2, 'Uniswap V2 sell amounts invalid');
 			result.hedgeAmountWeth = amounts[1];
+		} else {
+			require(request.venue == 2, 'Unsupported hedge venue');
 		}
 		require(result.hedgeAmountWeth >= request.hedgeWethLimit, 'Uniswap sell hedge received too little WETH');
-		_approveExact(token2, request.router, 0);
+		if (request.venue != 2) _approveExact(token2, request.router, 0);
 		return result;
+	}
+
+	function _executeV4Hedge(
+		HedgeRequest calldata request,
+		address weth,
+		address token,
+		uint256 amount,
+		bool buyToken
+	) private returns (uint256 hedgeAmountWeth) {
+		_v4TickSpacing(request.poolFee);
+		require(amount <= uint256(uint128(type(int128).max)), 'Uniswap V4 hedge amount exceeds signed delta bounds');
+		uint256 ethBalance = address(this).balance;
+		if (buyToken) IWETH(weth).withdraw(request.hedgeWethLimit);
+		activeV4PoolManager = request.router;
+		bytes memory encodedResult = IUniswapV4PoolManager(request.router).unlock(
+			abi.encode(
+				V4SwapCallbackData({
+					token: token,
+					poolFee: request.poolFee,
+					buyToken: buyToken,
+					amount: amount,
+					limit: request.hedgeWethLimit
+				})
+			)
+		);
+		activeV4PoolManager = address(0);
+		hedgeAmountWeth = abi.decode(encodedResult, (uint256));
+		uint256 expectedEth = buyToken ? request.hedgeWethLimit - hedgeAmountWeth : hedgeAmountWeth;
+		require(address(this).balance == ethBalance + expectedEth, 'Uniswap V4 native balance delta was not exact');
+		if (expectedEth != 0) IWETH(weth).deposit{ value: expectedEth }();
+	}
+
+	function _v4TickSpacing(uint24 poolFee) private pure returns (int24) {
+		if (poolFee == 100) return 1;
+		if (poolFee == 500) return 10;
+		if (poolFee == 3000) return 60;
+		if (poolFee == 10000) return 200;
+		revert('Unsupported Uniswap V4 pool fee');
 	}
 
 	function contributions(

@@ -151,6 +151,7 @@ function renderOpportunities(opportunities: readonly OpportunitySnapshot[]) {
 				amount(opportunity.requiredWeth, 'WETH'),
 				amount(opportunity.requiredToken, opportunity.tokenSymbol),
 				`${opportunity.timeRemaining} ${opportunity.windowUnit}`,
+				opportunity.venue ?? 'unknown',
 				link(opportunity.pool, 'address', `opportunity:${opportunity.reportId}:pool`),
 			]),
 		)

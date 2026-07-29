@@ -12,6 +12,8 @@ import {
 	test_peripherals_OpenOracleAdversarialHarnesses_OpenOracleFeeToken as feeTokenArtifact,
 	test_peripherals_OpenOracleAdversarialHarnesses_OpenOracleSwapRouterTarget as routerArtifact,
 	test_peripherals_OpenOracleAdversarialHarnesses_OpenOracleTestToken as tokenArtifact,
+	test_peripherals_OpenOracleAdversarialHarnesses_OpenOracleV4PoolManagerTarget as v4PoolManagerArtifact,
+	test_peripherals_OpenOracleAdversarialHarnesses_OpenOracleWethTarget as wethArtifact,
 } from '../types/contractArtifact'
 
 setDefaultTimeout(TEST_TIMEOUT_MS)
@@ -24,7 +26,7 @@ describe('OpenOracle arbitrage executor', () => {
 	let router: Address
 	let target: Address
 
-	const deploy = async (artifact: typeof executorArtifact | typeof openOracleArtifact | typeof targetArtifact | typeof tokenArtifact | typeof feeTokenArtifact | typeof routerArtifact, args: readonly unknown[] = []) => {
+	const deploy = async (artifact: typeof executorArtifact | typeof openOracleArtifact | typeof targetArtifact | typeof tokenArtifact | typeof feeTokenArtifact | typeof routerArtifact | typeof v4PoolManagerArtifact | typeof wethArtifact, args: readonly unknown[] = []) => {
 		const hash = await client.sendTransaction({
 			data: encodeDeployData({
 				abi: artifact.abi,
@@ -175,6 +177,18 @@ describe('OpenOracle arbitrage executor', () => {
 				args: [parentBlockNumber + 1n, `0x${'ff'.repeat(32)}`],
 			}),
 		).rejects.toThrow('canonical parent block changed')
+	})
+
+	test('rejects unauthenticated Uniswap V4 unlock callbacks', async () => {
+		await expect(
+			client.simulateContract({
+				abi: executorArtifact.abi,
+				address: executor,
+				account: client.account,
+				functionName: 'unlockCallback',
+				args: ['0x'],
+			}),
+		).rejects.toThrow('Unauthorized Uniswap V4 unlock callback')
 	})
 
 	test('atomically isolates exact lifecycle proceeds from permissionless dust and another same-token position', async () => {
@@ -347,6 +361,91 @@ describe('OpenOracle arbitrage executor', () => {
 		expect(await client.readContract({ abi: tokenArtifact.abi, address: token2, functionName: 'balanceOf', args: [target] })).toBe(2_300n)
 		expect(await client.readContract({ abi: tokenArtifact.abi, address: token1, functionName: 'allowance', args: [executor, router] })).toBe(0n)
 		expect(await client.readContract({ abi: tokenArtifact.abi, address: token2, functionName: 'allowance', args: [executor, router] })).toBe(0n)
+	})
+
+	test('atomically sells the report token through a hookless Uniswap V4 native-ETH pool', async () => {
+		const weth = await deploy(wethArtifact)
+		const token = await deploy(tokenArtifact, ['Token 2', 'TK2'])
+		const poolManager = await deploy(v4PoolManagerArtifact)
+		await writeContractAndWait(client, () => client.sendTransaction({ to: weth, value: 10_000n }))
+		await writeContractAndWait(client, () => client.sendTransaction({ to: poolManager, value: 10_000n }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'mint', args: [client.account.address, 10_000n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: wethArtifact.abi, address: weth, functionName: 'approve', args: [executor, 2_200n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'approve', args: [executor, 1_000n] }))
+		const block = await client.getBlock()
+		if (block.number === undefined || block.hash == null) throw new Error('parent block identity missing')
+		const parentBlockHash = block.hash
+		const parentBlockNumber = block.number
+		await writeContractAndWait(client, () =>
+			client.writeContract({
+				abi: executorArtifact.abi,
+				address: executor,
+				functionName: 'hedgeAndDispute',
+				args: [
+					{
+						expectedParentBlockHash: parentBlockHash,
+						hedgeWethLimit: 900n,
+						newAmount1: 1_200n,
+						newAmount2: 900n,
+						openOracle: target,
+						poolFee: 3_000,
+						router: poolManager,
+						swapDeadline: block.timestamp + 1_000n,
+						venue: 2,
+					},
+					game(weth, token),
+					helper(),
+					{ ...timing, blockNumber: parentBlockNumber },
+				],
+			}),
+		)
+		expect(await client.readContract({ abi: wethArtifact.abi, address: weth, functionName: 'balanceOf', args: [client.account.address] })).toBe(8_800n)
+		expect(await client.readContract({ abi: wethArtifact.abi, address: weth, functionName: 'balanceOf', args: [target] })).toBe(2_200n)
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [poolManager] })).toBe(1_000n)
+		expect(await client.getBalance({ address: executor })).toBe(0n)
+	})
+
+	test('atomically buys the report token through a hookless Uniswap V4 native-ETH pool', async () => {
+		const weth = await deploy(wethArtifact)
+		const token = await deploy(tokenArtifact, ['Token 2', 'TK2'])
+		const poolManager = await deploy(v4PoolManagerArtifact)
+		await writeContractAndWait(client, () => client.sendTransaction({ to: weth, value: 10_000n }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'mint', args: [client.account.address, 10_000n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'mint', args: [poolManager, 10_000n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: wethArtifact.abi, address: weth, functionName: 'approve', args: [executor, 1_300n] }))
+		await writeContractAndWait(client, () => client.writeContract({ abi: tokenArtifact.abi, address: token, functionName: 'approve', args: [executor, 1_300n] }))
+		const block = await client.getBlock()
+		if (block.number === undefined || block.hash == null) throw new Error('parent block identity missing')
+		const parentBlockHash = block.hash
+		const parentBlockNumber = block.number
+		await writeContractAndWait(client, () =>
+			client.writeContract({
+				abi: executorArtifact.abi,
+				address: executor,
+				functionName: 'hedgeAndDispute',
+				args: [
+					{
+						expectedParentBlockHash: parentBlockHash,
+						hedgeWethLimit: 1_100n,
+						newAmount1: 1_200n,
+						newAmount2: 1_300n,
+						openOracle: target,
+						poolFee: 3_000,
+						router: poolManager,
+						swapDeadline: block.timestamp + 1_000n,
+						venue: 2,
+					},
+					game(weth, token),
+					helper(),
+					{ ...timing, blockNumber: parentBlockNumber },
+				],
+			}),
+		)
+		expect(await client.readContract({ abi: wethArtifact.abi, address: weth, functionName: 'balanceOf', args: [client.account.address] })).toBe(8_800n)
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [client.account.address] })).toBe(8_700n)
+		expect(await client.readContract({ abi: wethArtifact.abi, address: weth, functionName: 'balanceOf', args: [target] })).toBe(200n)
+		expect(await client.readContract({ abi: tokenArtifact.abi, address: token, functionName: 'balanceOf', args: [target] })).toBe(2_300n)
+		expect(await client.getBalance({ address: executor })).toBe(0n)
 	})
 
 	test('withdraws one exact replacement credit without consuming unrelated holder balances', async () => {

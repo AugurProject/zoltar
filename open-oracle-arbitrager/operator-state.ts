@@ -4,6 +4,7 @@ import type { Address, Hex } from '@zoltar/shared/ethereum'
 import type { OpenOracleGame } from '@zoltar/shared/openOracle'
 import type { ConnectivitySettings, EndpointCheck, NetworkName } from './connectivity.js'
 import type { SubmissionSettings, SubmissionTargetResult } from './transaction-submission.js'
+import type { Venue } from './venue-strategy.js'
 import type { MarketPricePoint, TokenMarketSnapshot } from './market-monitor.js'
 import type { PositionRecord } from './position-store.js'
 import { positionConsumesRisk, utcDayGasSpentWeth, type RiskLimits } from './safety-controls.js'
@@ -90,6 +91,7 @@ export type OpportunitySnapshot = {
 	token: Address
 	tokenSymbol: string
 	timeRemaining: string
+	venue?: Venue | undefined
 	windowUnit: 'blocks' | 'seconds'
 }
 

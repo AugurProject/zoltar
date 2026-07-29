@@ -1,7 +1,7 @@
 # OpenOracle arbitrager
 
 The OpenOracle arbitrager monitors active Ethereum WETH/token games, compares their
-locked exchange against executable Uniswap V2 or V3 quotes, and identifies disputes whose
+locked exchange against executable Uniswap V2, V3, or hookless V4 quotes, and identifies disputes whose
 modeled hedge remains profitable after OpenOracle fees and gas. It includes a local
 operator dashboard for live state, strategy controls, wallet inventory, submitted
 disputes, transaction delivery, and ETH-denominated profit tracking.
@@ -49,7 +49,10 @@ Both private and public delivery require ERC-20 allowances before the opportunit
 appears, so every signed entry is one parent-bound executor transaction. OpenOracle
 internal allowances must also exist before either mode can enter a position. During
 `hedgeAndDispute`, the executor grants separate, exact temporary allowances to the
-authenticated Uniswap router and OpenOracle, then clears them before returning. See
+authenticated V2 or V3 router and OpenOracle, then clears them before returning.
+V4 instead unlocks the authenticated PoolManager only for one hookless pool swap,
+settles its exact native-ETH/token deltas, and wraps or unwraps WETH inside the same
+transaction. See
 [OpenOracle integration](../docs/open-oracle-integration.html) for the protocol
 report lifecycle and economics.
 
@@ -69,8 +72,11 @@ report lifecycle and economics.
 - The exact Uniswap V3 SwapRouter address supplied with `--uniswap-router`.
 - Optionally, the exact Uniswap V2 Router02 supplied with
   `--uniswap-v2-router`. When configured and authenticated, mainnet execution
-  compares direct WETH/token V2 and V3 hedges and selects the better modeled
-  result. V3 remains the report-price and TWAP reference.
+  adds direct WETH/token V2 hedges to the configured venue comparison.
+- Optionally, an exact Uniswap V4 PoolManager and V4 Quoter supplied together with
+  `--uniswap-v4-pool-manager` and `--uniswap-v4-quoter`. V4 execution is limited to
+  direct native-ETH/token pools at the standard fee/tick-spacing pairs with no hook.
+  The executor converts ETH and WETH one-for-one inside the atomic entry.
 - A reviewed `--deployment-manifest` that pins chain, role, address, and runtime
   bytecode hash for every contract and executable token. Every read RPC authenticates
   every manifest entry before the bot can sign.
@@ -299,8 +305,9 @@ deployed runtime bytecode:
 ```
 
 Allowed roles are `open-oracle`, `weth`, `uniswap-factory`,
-`uniswap-quoter`, `uniswap-router`, `uniswap-v2-router`, `executor`,
-`coordinator`, and `token`.
+`uniswap-quoter`, `uniswap-router`, `uniswap-v2-router`,
+`uniswap-v4-pool-manager`, `uniswap-v4-quoter`, `executor`, `coordinator`,
+and `token`.
 Include every address in use. Do not construct this trust root from the same RPC
 that the bot will authenticate; independently review the deployment, compiler
 settings, and runtime code.
@@ -387,7 +394,10 @@ Before each dispute, the bot:
    In execute mode, token 2 must be an Augur-discovered REP or an address explicitly
    configured by the operator; a permissionlessly observed token is monitor-only.
 3. Finds an active Uniswap V3 pool and rejects excessive spot/TWAP deviation.
-4. Uses exact-input and exact-output QuoterV2 calls to model both directions.
+4. Models both directions across configured venues: QuoterV2 for V3, exact
+   constant-product reserve math for V2, and the authenticated V4 Quoter across
+   every standard fee/tick-spacing pair. The best executable quote competes
+   independently of the V3 pool used as the TWAP anchor.
 5. Derives the same replacement swap side as the OpenOracle contract.
 6. Calculates the exact WETH and token contributions and checks wallet inventory.
 7. Applies the absolute-profit and basis-point thresholds.
@@ -773,13 +783,21 @@ amount in  = floor(reserve in × amount out × 1000
              ÷ ((reserve out − amount out) × 997)) + 1
 ```
 
+When both V4 flags are supplied, the bot also asks the authenticated V4 Quoter for
+exact-input and exact-output quotes against direct hookless native-ETH/token pools
+at the same four standard fee tiers. Every read RPC must return the same quote at
+the exact quorum block. The executor calls the authenticated PoolManager directly,
+requires the returned signed deltas to match the requested input or output, settles
+only those deltas, and converts native ETH to or from WETH before funding the
+OpenOracle dispute. Hooked and dynamically configured pools remain excluded because
+their hooks can alter swap deltas and require a separate reviewed trust policy.
+
 The bot compares complete strategy profit after its conservative gas and slippage
-reserves, not spot price alone. The selected V2 swap still executes inside the same
-parent-bound atomic executor transaction with an exact minimum output or maximum
-input. SushiSwap V2 and Uniswap V4 are monitoring-only: Sushi has no authenticated
-execution router in this release, and the available V4 helper does not provide the
-exact-output, atomic execution path required by `buy-rep`. The bot will not silently
-fall back to either venue.
+reserves, not spot price alone. Every selected V2, V3, or V4 swap executes inside
+the same parent-bound atomic executor transaction with an exact minimum output or
+maximum input. SushiSwap V2 remains monitoring-only because it has no authenticated
+execution router in this release. The bot will not silently fall back to an
+unsupported venue.
 
 Price samples are stored in
 `.open-oracle-arbitrager/prices-mainnet.jsonl` or
@@ -883,7 +901,9 @@ Other startup-only options:
 | `--uniswap-quoter` | Network QuoterV2 | Override the quoter for a custom test deployment. |
 | `--executor-address` | none | Deployed atomic executor. Required in execution mode and authenticated against the manifest on every read RPC. |
 | `--uniswap-router` | none | SwapRouter used by the atomic hedge. Required and manifest-authenticated in execution mode. |
-| `--uniswap-v2-router` | none | Optional mainnet Uniswap V2 Router02. When set, it is manifest-authenticated as `uniswap-v2-router` and enables automatic V2/V3 best-route hedge selection. |
+| `--uniswap-v2-router` | none | Optional mainnet Uniswap V2 Router02. When set, it is manifest-authenticated as `uniswap-v2-router` and joins automatic best-route hedge selection. |
+| `--uniswap-v4-pool-manager` | none | Optional V4 PoolManager for direct hookless native-ETH/token hedges. Requires `--uniswap-v4-quoter` and manifest role `uniswap-v4-pool-manager`. |
+| `--uniswap-v4-quoter` | none | Optional V4 Quoter for exact-input and exact-output quorum quotes. Requires `--uniswap-v4-pool-manager` and manifest role `uniswap-v4-quoter`. |
 | `--deployment-manifest` | none | Reviewed chain/address/role/runtime-code-hash trust root. Required in execution mode. |
 | `--quorum-rpc-url` | none | Independent read RPC. Repeat as needed; at least one secondary is required in execution mode. |
 | `--coordinator-address` | none | Restart-time approved `OpenOraclePriceCoordinator`. Repeat as needed. Execution requires at least one and verifies each coordinator's immutable template against the configured OpenOracle and WETH. The comma-separated `OPEN_ORACLE_COORDINATOR_ADDRESSES` environment variable is also accepted. |
@@ -1078,8 +1098,11 @@ entry from depending on wallet inventory already committed to recovery.
 
 - Ethereum mainnet and Sepolia WETH/token games using standard Uniswap V3 fee tiers
   and exact-transfer ERC-20s are supported. Mainnet can additionally execute through
-  authenticated Uniswap V2 Router02 when `--uniswap-v2-router` is configured; V3
-  remains the reference/TWAP safety anchor. Identities remain operator-supplied, but
+  authenticated Uniswap V2 Router02 when `--uniswap-v2-router` is configured.
+  Both networks can execute through authenticated Uniswap V4 PoolManager and Quoter
+  contracts when both V4 flags are configured, but only against standard-fee,
+  hookless native-ETH/token pools. V3 remains the reference/TWAP safety anchor.
+  Identities remain operator-supplied, but
   live mode authenticates every address and runtime bytecode hash against the
   reviewed deployment manifest through every read RPC. The manifest itself remains
   an operator trust root.

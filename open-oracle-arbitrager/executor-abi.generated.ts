@@ -864,6 +864,25 @@ export const openOracleArbitrageExecutorAbi = [
 	},
 	{
 		type: 'function',
+		name: 'unlockCallback',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{
+				name: 'data',
+				type: 'bytes',
+				internalType: 'bytes',
+			},
+		],
+		outputs: [
+			{
+				name: 'result',
+				type: 'bytes',
+				internalType: 'bytes',
+			},
+		],
+	},
+	{
+		type: 'function',
 		name: 'withdrawReplacementCredit',
 		stateMutability: 'nonpayable',
 		inputs: [
@@ -906,5 +925,9 @@ export const openOracleArbitrageExecutorAbi = [
 			},
 		],
 		outputs: [],
+	},
+	{
+		type: 'receive',
+		stateMutability: 'payable',
 	},
 ] as const

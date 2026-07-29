@@ -40,8 +40,8 @@
 				<p>
 					The bot follows approved <code>OpenOraclePriceCoordinator</code>
 					reports. For each active WETH/token game it loads the exact report state,
-					finds supported WETH pools, compares size-aware Uniswap V2 and V3 hedge
-					quotes when both are configured, and applies timing, TWAP, inventory,
+					finds supported pools, compares size-aware Uniswap V2, V3, and
+					hookless V4 hedge quotes when configured, and applies timing, TWAP, inventory,
 					allowance, profitability, and risk limits. Uniswap V3 remains the
 					reference and TWAP anchor. Only the best currently eligible opportunity
 					may be selected.
@@ -57,7 +57,8 @@
 					>
 						<span class="plot-chart-fallback"
 							>Reports are synchronized and priced before one atomic entry hedges
-							on the selected authenticated V2 or V3 router and disputes. An
+							through the selected authenticated V2/V3 router or V4 PoolManager
+							and disputes. An
 							atomic exit settles and withdraws exact balances. Profit becomes
 							realized only after every configured read RPC serves the same
 							twelfth-descendant block hash; ambiguous evidence stays in durable
@@ -77,8 +78,9 @@
 					<div>
 						<strong>Entry transaction</strong>
 						The executor pulls pre-approved inventory, performs the exact-input or
-						exact-output hedge through the selected authenticated Uniswap V2 or
-						V3 router, submits the replacement report, clears temporary allowances,
+						exact-output hedge through the selected authenticated Uniswap V2/V3
+						router or V4 PoolManager, submits the replacement report, clears
+						temporary allowances,
 						and emits position-specific evidence in one revert boundary.
 					</div>
 					<div>
@@ -509,10 +511,10 @@
 							</tr>
 							<tr>
 								<td>Uniswap V4</td>
-								<td>Any</td>
-								<td>No</td>
-								<td>No</td>
-								<td>The repository's helper is exact-input quote-only; there is no authenticated exact-output, hook-aware atomic hedge path, so V4 is not used for funded decisions.</td>
+								<td>Mainnet and Sepolia</td>
+								<td>Exact size-aware quotes when both V4 flags are configured</td>
+								<td>Optional, through an authenticated PoolManager and Quoter for direct hookless native-ETH/token pools</td>
+								<td>Execution uses exact-input or exact-output V4 Quoter evidence at the quorum block, validates signed PoolManager deltas, and converts native ETH and WETH atomically. Hooked pools are excluded.</td>
 							</tr>
 							<tr>
 								<td>Centralized exchanges and other DEXs</td>
@@ -530,7 +532,8 @@
 					pool, not an aggregated token price. The exact-value table lists block,
 					observation time, pool, venue, and WETH-per-token price. These spot
 					samples are for comparison. V2 execution uses exact reserves at the
-					quorum block, while V3 execution uses QuoterV2; every executable
+					quorum block, V3 execution uses QuoterV2, and V4 execution uses the
+					authenticated V4 Quoter against a hookless pool key; every executable
 					opportunity still requires the V3 spot/TWAP reference guard.
 				</p>
 				<p>

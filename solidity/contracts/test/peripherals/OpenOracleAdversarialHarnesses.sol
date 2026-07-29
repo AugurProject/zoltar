@@ -6,6 +6,7 @@ import { IERC1155Receiver } from '../../peripherals/interfaces/IERC1155Receiver.
 import {
 	IOpenOracleDispute,
 	IUniswapV2Router,
+	IUniswapV4PoolManager,
 	IUniswapV3SwapRouter
 } from '../../peripherals/OpenOracleArbitrageExecutor.sol';
 import { SafeERC20Ops } from '../../SafeERC20Ops.sol';
@@ -210,6 +211,89 @@ contract OpenOracleSwapRouterTarget is IUniswapV3SwapRouter, IUniswapV2Router {
 		amounts = new uint256[](2);
 		amounts[0] = amountOut;
 		amounts[1] = amountOut;
+	}
+}
+
+interface IOpenOracleV4UnlockCallback {
+	function unlockCallback(bytes calldata data) external returns (bytes memory);
+}
+
+contract OpenOracleWethTarget is OpenOracleTestToken {
+	constructor() OpenOracleTestToken('Wrapped Ether', 'WETH') {}
+
+	receive() external payable {
+		deposit();
+	}
+
+	function deposit() public payable {
+		totalSupply += msg.value;
+		balanceOf[msg.sender] += msg.value;
+		emit Transfer(address(0), msg.sender, msg.value);
+	}
+
+	function withdraw(uint256 amount) external {
+		uint256 senderBalance = balanceOf[msg.sender];
+		require(senderBalance >= amount, 'OpenOracle WETH balance too low');
+		balanceOf[msg.sender] = senderBalance - amount;
+		totalSupply -= amount;
+		emit Transfer(msg.sender, address(0), amount);
+		(bool sent, ) = payable(msg.sender).call{ value: amount }('');
+		require(sent, 'OpenOracle WETH native transfer failed');
+	}
+}
+
+contract OpenOracleV4PoolManagerTarget is IUniswapV4PoolManager {
+	using SafeERC20Ops for IERC20;
+
+	address private unlockCaller;
+	address private syncedCurrency;
+	uint256 private syncedBalance;
+
+	receive() external payable {}
+
+	function unlock(bytes calldata data) external returns (bytes memory result) {
+		require(unlockCaller == address(0), 'OpenOracle V4 manager already unlocked');
+		unlockCaller = msg.sender;
+		result = IOpenOracleV4UnlockCallback(msg.sender).unlockCallback(data);
+		unlockCaller = address(0);
+	}
+
+	function swap(
+		PoolKey calldata key,
+		SwapParams calldata params,
+		bytes calldata hookData
+	) external view returns (int256 delta) {
+		require(msg.sender == unlockCaller, 'OpenOracle V4 manager is locked');
+		require(key.currency0 == address(0) && key.currency1 != address(0), 'OpenOracle V4 pool currencies invalid');
+		require(key.hooks == address(0) && hookData.length == 0, 'OpenOracle V4 hooks unsupported');
+		int128 amount = int128(params.amountSpecified > 0 ? params.amountSpecified : -params.amountSpecified);
+		int128 amount0 = params.zeroForOne ? -amount : amount;
+		int128 amount1 = params.zeroForOne ? amount : -amount;
+		delta = (int256(amount0) << 128) | int256(uint256(uint128(amount1)));
+	}
+
+	function sync(address currency) external {
+		require(msg.sender == unlockCaller, 'OpenOracle V4 manager is locked');
+		syncedCurrency = currency;
+		syncedBalance = IERC20(currency).balanceOf(address(this));
+	}
+
+	function take(address currency, address to, uint256 amount) external {
+		require(msg.sender == unlockCaller, 'OpenOracle V4 manager is locked');
+		if (currency == address(0)) {
+			(bool sent, ) = payable(to).call{ value: amount }('');
+			require(sent, 'OpenOracle V4 native take failed');
+		} else {
+			IERC20(currency).safeTransfer(to, amount);
+		}
+	}
+
+	function settle() external payable returns (uint256 paid) {
+		require(msg.sender == unlockCaller, 'OpenOracle V4 manager is locked');
+		if (msg.value != 0) return msg.value;
+		paid = IERC20(syncedCurrency).balanceOf(address(this)) - syncedBalance;
+		syncedCurrency = address(0);
+		syncedBalance = 0;
 	}
 }
 

@@ -3,7 +3,7 @@ import type { ArbitrageDirection } from './strategy.js'
 const FEE_DENOMINATOR = 1_000n
 const UNISWAP_V2_FEE_FACTOR = 997n
 
-export type Venue = 'uniswap-v2' | 'uniswap-v3'
+export type Venue = 'uniswap-v2' | 'uniswap-v3' | 'uniswap-v4'
 
 export type VenueQuote = {
 	gasCostWeth: bigint

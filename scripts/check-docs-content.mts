@@ -381,7 +381,7 @@ assert.match(diagramSpecs, /approximately 20 percent uncredited haircut/)
 assert.match(diagramSpecs, /approximately 80 percent migration balance/)
 assert.match(openOracleArbitragerReadme, /`closed-pending-finality` retains its risk slot and does not contribute\s+realized profit until every configured read RPC serves the same\s+twelfth-descendant block hash for its exact lifecycle evidence\./)
 assert.equal(arbitragerFinalityDocumentationIssue(openOracleArbitragerDocumentation), undefined)
-assert.match(arbitragerFinalityDocumentationIssue(openOracleArbitragerDocumentation.replace(/every configured read RPC serves\s+the same twelfth-descendant block hash/, 'twelve canonical descendants')) ?? '', /architecture section/)
+assert.match(arbitragerFinalityDocumentationIssue(openOracleArbitragerDocumentation.replace(/every configured read RPC serves\s+the same\s+twelfth-descendant block hash/, 'twelve canonical descendants')) ?? '', /architecture section/)
 const openOracleArbitragerReadmeRecovery = openOracleArbitragerReadme.match(/### `recovery-required` runbook([\s\S]*?)(?=\n## |\n### )/)?.[1]
 const openOracleArbitragerRenderedRecovery = sectionBody(openOracleArbitragerDocumentation, 'recovery')
 assert.ok(openOracleArbitragerReadmeRecovery !== undefined, 'OpenOracle arbitrager README recovery runbook is missing')

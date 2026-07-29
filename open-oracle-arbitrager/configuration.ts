@@ -35,6 +35,8 @@ export type Configuration = MutableStrategy & {
 	ui: boolean
 	uiPort: number
 	v2Router: Address | undefined
+	v4PoolManager: Address | undefined
+	v4Quoter: Address | undefined
 }
 
 function option(name: string) {
@@ -68,6 +70,8 @@ Modes:
   --deployment-manifest=PATH     Reviewed address and runtime-code-hash manifest
   --uniswap-router=0x...         Authenticated Uniswap V3 SwapRouter; required with --execute
   --uniswap-v2-router=0x...      Optional authenticated Uniswap V2 Router02 for best-route hedges
+  --uniswap-v4-pool-manager=0x... Optional authenticated V4 PoolManager for hookless native-ETH pools
+  --uniswap-v4-quoter=0x...      Optional authenticated V4 Quoter; required with the V4 PoolManager
   --submission-mode=private|public Private bundles or one atomic public entry transaction
   --relay-url=https://...        Bundle relay URL; repeat for multiple relays
   --minimum-relay-successes=1   Private simulations required before bundle fanout
@@ -153,6 +157,9 @@ export async function loadConfiguration(): Promise<Configuration> {
 	if (execute && executorValue === undefined) throw new Error('--execute requires --executor-address=0x... (or OPEN_ORACLE_EXECUTOR_ADDRESS)')
 	const routerValue = option('uniswap-router') ?? process.env['UNISWAP_ROUTER_ADDRESS']
 	const v2RouterValue = option('uniswap-v2-router') ?? process.env['UNISWAP_V2_ROUTER_ADDRESS']
+	const v4PoolManagerValue = option('uniswap-v4-pool-manager') ?? process.env['UNISWAP_V4_POOL_MANAGER_ADDRESS']
+	const v4QuoterValue = option('uniswap-v4-quoter') ?? process.env['UNISWAP_V4_QUOTER_ADDRESS']
+	if ((v4PoolManagerValue === undefined) !== (v4QuoterValue === undefined)) throw new Error('Uniswap V4 execution requires both --uniswap-v4-pool-manager and --uniswap-v4-quoter')
 	if (execute && routerValue === undefined) throw new Error('--execute requires --uniswap-router=0x... (or UNISWAP_ROUTER_ADDRESS)')
 	if (execute && quorumRpcUrls.length === 0) throw new Error('--execute requires at least one independent --quorum-rpc-url=https://... (or OPEN_ORACLE_QUORUM_RPC_URLS)')
 	const coordinatorEnvironment =
@@ -220,6 +227,8 @@ export async function loadConfiguration(): Promise<Configuration> {
 		ui: process.argv.includes('--ui'),
 		uiPort: Number(option('ui-port') ?? '4173'),
 		v2Router: v2RouterValue === undefined ? undefined : getAddress(v2RouterValue),
+		v4PoolManager: v4PoolManagerValue === undefined ? undefined : getAddress(v4PoolManagerValue),
+		v4Quoter: v4QuoterValue === undefined ? undefined : getAddress(v4QuoterValue),
 	}
 }
 

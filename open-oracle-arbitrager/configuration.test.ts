@@ -88,6 +88,8 @@ describe('startup configuration', () => {
 		['--submission-mode=unknown', 'Submission mode must be public or private'],
 		['--minimum-relay-successes=2', 'Minimum successful relays'],
 		['--relay-url=http://relay.example', 'Relay URL must use HTTPS'],
+		['--uniswap-v4-pool-manager=0x0000000000000000000000000000000000000001', 'Uniswap V4 execution requires both'],
+		['--uniswap-v4-quoter=0x0000000000000000000000000000000000000001', 'Uniswap V4 execution requires both'],
 		['--execute', '--execute requires --executor-address'],
 	])('rejects %s before starting RPC activity', async (argument, message) => {
 		const result = await invalidStartup(argument)

@@ -116,6 +116,44 @@ export const quoterAbi = [
 	},
 ] as const
 
+const v4PoolKeyComponents = [
+	{ name: 'currency0', type: 'address' },
+	{ name: 'currency1', type: 'address' },
+	{ name: 'fee', type: 'uint24' },
+	{ name: 'tickSpacing', type: 'int24' },
+	{ name: 'hooks', type: 'address' },
+] as const
+
+const v4QuoteParameters = [
+	{ name: 'poolKey', type: 'tuple', components: v4PoolKeyComponents },
+	{ name: 'zeroForOne', type: 'bool' },
+	{ name: 'exactAmount', type: 'uint128' },
+	{ name: 'hookData', type: 'bytes' },
+] as const
+
+export const v4QuoterAbi = [
+	{
+		type: 'function',
+		name: 'quoteExactInputSingle',
+		stateMutability: 'nonpayable',
+		inputs: [{ name: 'params', type: 'tuple', components: v4QuoteParameters }],
+		outputs: [
+			{ name: 'amountOut', type: 'uint256' },
+			{ name: 'gasEstimate', type: 'uint256' },
+		],
+	},
+	{
+		type: 'function',
+		name: 'quoteExactOutputSingle',
+		stateMutability: 'nonpayable',
+		inputs: [{ name: 'params', type: 'tuple', components: v4QuoteParameters }],
+		outputs: [
+			{ name: 'amountIn', type: 'uint256' },
+			{ name: 'gasEstimate', type: 'uint256' },
+		],
+	},
+] as const
+
 export const erc20Abi = [
 	{ type: 'function', name: 'decimals', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint8' }] },
 	{ type: 'function', name: 'name', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'string' }] },

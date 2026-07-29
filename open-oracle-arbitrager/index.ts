@@ -36,12 +36,12 @@ import {
 	OPEN_ORACLE_REPORT_SUBMITTED_TOPIC,
 	type OpenOracleStatePreimage,
 } from '@zoltar/shared/openOracle'
-import { constantProductFactoryAbi, constantProductPairAbi, erc20Abi, factoryAbi, openOracleAbi, openOracleArbitrageExecutorAbi, openOraclePriceCoordinatorAbi, poolAbi, quoterAbi } from './abi.js'
+import { constantProductFactoryAbi, constantProductPairAbi, erc20Abi, factoryAbi, openOracleAbi, openOracleArbitrageExecutorAbi, openOraclePriceCoordinatorAbi, poolAbi, quoterAbi, v4QuoterAbi } from './abi.js'
 import { advanceCursorAfterSuccessfulHead, assertFinalityAnchor, cursorForHeadScan, initialCursor, operatorStatusAfterPause, scanRanges, withFinalityAnchor, type SyncCursor } from './block-sync.js'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, updateConnectivityEndpointChecks, updateSubmissionEndpointChecks, validateConnectivitySettings, type ConnectivitySettings } from './connectivity.js'
 import { applyStrategy, loadConfiguration, mutableStrategy, printHelp, type Configuration } from './configuration.js'
 import { startDashboardServer } from './dashboard-server.js'
-import { authenticateDeploymentManifest } from './deployment-auth.js'
+import { authenticateDeploymentManifest, type DeploymentRole } from './deployment-auth.js'
 import {
 	assertCanonicalExecutionSnapshot,
 	assertReceiptSnapshotBlockHash,
@@ -122,9 +122,10 @@ import {
 } from './strategy.js'
 import { prepareSignedTransaction, simulateSignedBundleEveryRelay, SubmissionFailure, submitSignedBundle, validateSubmissionSettings, type SubmissionSettings, type SubmissionTargetResult } from './transaction-submission.js'
 import { receiptGasCost, submitContractTransaction, trackedActivity, transactionLogLevel, waitForTrackedTransaction, type TrackTransaction } from './transaction-tracker.js'
+import { STANDARD_UNISWAP_FEES, v4QuoteParameters } from './uniswap-v4.js'
 import { constantProductExactInput, constantProductExactOutput, type Venue } from './venue-strategy.js'
 
-const FEES = [100, 500, 3000, 10000] as const
+const FEES = STANDARD_UNISWAP_FEES
 const UNISWAP_V2_FACTORY = getAddress('0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f')
 const REORG_OVERLAP_BLOCKS = 12n
 const MAX_LOG_SCAN_RANGE = 100n
@@ -149,6 +150,7 @@ type RawBalances = {
 
 type ExecutionCandidate = {
 	capitalAtRiskWeth: bigint
+	hedgeFee: (typeof FEES)[number]
 	hedgePool: Address
 	hedgeVenue: Venue
 	opportunity: OpportunitySnapshot
@@ -347,7 +349,7 @@ async function loadCoordinatorPolicies(client: ReadClient, config: Pick<Configur
 }
 
 function requiredDeploymentIdentities(config: Configuration) {
-	const identities: { address: Address; role: 'coordinator' | 'executor' | 'open-oracle' | 'token' | 'uniswap-factory' | 'uniswap-quoter' | 'uniswap-router' | 'uniswap-v2-router' | 'weth' }[] = [
+	const identities: { address: Address; role: DeploymentRole }[] = [
 		{ address: config.openOracle, role: 'open-oracle' },
 		{ address: config.network.weth, role: 'weth' },
 		{ address: config.network.factory, role: 'uniswap-factory' },
@@ -358,6 +360,8 @@ function requiredDeploymentIdentities(config: Configuration) {
 	if (config.executor !== undefined) identities.push({ address: config.executor, role: 'executor' })
 	if (config.router !== undefined) identities.push({ address: config.router, role: 'uniswap-router' })
 	if (config.v2Router !== undefined) identities.push({ address: config.v2Router, role: 'uniswap-v2-router' })
+	if (config.v4PoolManager !== undefined) identities.push({ address: config.v4PoolManager, role: 'uniswap-v4-pool-manager' })
+	if (config.v4Quoter !== undefined) identities.push({ address: config.v4Quoter, role: 'uniswap-v4-quoter' })
 	return identities
 }
 
@@ -514,6 +518,28 @@ async function constantProductReserves(client: ReadClient, pair: Address, token:
 	return getAddress(token0).toLowerCase() === token.toLowerCase() ? { reserveToken: reserve0, reserveWeth: reserve1 } : { reserveToken: reserve1, reserveWeth: reserve0 }
 }
 
+async function quoteV4ExactInput(client: ReadClient, quoter: Address, token: Address, amountIn: bigint, fee: (typeof FEES)[number], blockNumber?: bigint | undefined) {
+	const parameters = {
+		address: quoter,
+		abi: v4QuoterAbi,
+		functionName: 'quoteExactInputSingle',
+		args: [v4QuoteParameters(token, fee, amountIn, false)],
+	} as const
+	const result = requiredTuple(blockNumber === undefined ? await client.readContract(parameters) : await readContractAtBlock(client.transport, parameters, blockNumber), 1, 'Uniswap V4 exact-input quote')
+	return requiredBigint(result[0], 'Uniswap V4 exact-input amount')
+}
+
+async function quoteV4ExactOutput(client: ReadClient, quoter: Address, token: Address, amountOut: bigint, fee: (typeof FEES)[number], blockNumber?: bigint | undefined) {
+	const parameters = {
+		address: quoter,
+		abi: v4QuoterAbi,
+		functionName: 'quoteExactOutputSingle',
+		args: [v4QuoteParameters(token, fee, amountOut, true)],
+	} as const
+	const result = requiredTuple(blockNumber === undefined ? await client.readContract(parameters) : await readContractAtBlock(client.transport, parameters, blockNumber), 1, 'Uniswap V4 exact-output quote')
+	return requiredBigint(result[0], 'Uniswap V4 exact-output amount')
+}
+
 function safetyAdjustedQuote(quote: ArbitrageQuote, gasCost: bigint, lifecycleGasReserveWeth: bigint, config: Pick<Configuration, 'maxHedgeSlippageBps'>) {
 	const slippageReserveWeth = hedgeSlippageReserveWeth(quote.direction, quote.direction === 'sell-rep' ? quote.grossProceedsWeth : quote.hedgeCostWeth, config.maxHedgeSlippageBps)
 	return {
@@ -537,7 +563,7 @@ async function evaluate(client: ReadClient, config: Configuration, report: OpenO
 		submissionMode: config.submission.mode,
 	})
 	const repWithFees = game.currentAmount2 + calculateFee(game.currentAmount2, game.feePercentage) + calculateFee(game.currentAmount2, game.protocolFee)
-	const candidates: { hedgePool: Address; quote: ArbitrageQuote; venue: Venue }[] = []
+	const candidates: { hedgeFee: (typeof FEES)[number]; hedgePool: Address; quote: ArbitrageQuote; venue: Venue }[] = []
 	const v3 = await bestSuccessful(
 		[
 			async () => safetyAdjustedQuote(evaluateSellRep(game, await quoteInput(client, config.network.quoter, pool.token, config.network.weth, game.currentAmount2, pool.fee, blockNumber), 0n), gasCost, lifecycleGasReserveWeth, config),
@@ -546,7 +572,7 @@ async function evaluate(client: ReadClient, config: Configuration, report: OpenO
 		candidate => candidate.netProfitWeth,
 		error => console.error(`pool=${pool.address} quoteSkipped=${errorMessage(error)}`),
 	)
-	if (v3 !== undefined) candidates.push({ hedgePool: pool.address, quote: v3, venue: 'uniswap-v3' })
+	if (v3 !== undefined) candidates.push({ hedgeFee: pool.fee, hedgePool: pool.address, quote: v3, venue: 'uniswap-v3' })
 	if (pool.v2Pair !== undefined) {
 		try {
 			const reserves = await constantProductReserves(client, pool.v2Pair, pool.token, blockNumber)
@@ -557,15 +583,29 @@ async function evaluate(client: ReadClient, config: Configuration, report: OpenO
 				],
 				candidate => candidate.netProfitWeth,
 			)
-			if (v2 !== undefined) candidates.push({ hedgePool: pool.v2Pair, quote: v2, venue: 'uniswap-v2' })
+			if (v2 !== undefined) candidates.push({ hedgeFee: 3_000, hedgePool: pool.v2Pair, quote: v2, venue: 'uniswap-v2' })
 		} catch (error) {
 			console.error(`pool=${pool.v2Pair} quoteSkipped=${errorMessage(error)}`)
+		}
+	}
+	if (config.v4PoolManager !== undefined && config.v4Quoter !== undefined) {
+		const v4Quoter = config.v4Quoter
+		for (const fee of FEES) {
+			const v4 = await bestSuccessful(
+				[
+					async () => safetyAdjustedQuote(evaluateSellRep(game, await quoteV4ExactInput(client, v4Quoter, pool.token, game.currentAmount2, fee, blockNumber), 0n), gasCost, lifecycleGasReserveWeth, config),
+					async () => safetyAdjustedQuote(evaluateBuyRep(game, await quoteV4ExactOutput(client, v4Quoter, pool.token, repWithFees, fee, blockNumber), 0n), gasCost, lifecycleGasReserveWeth, config),
+				],
+				candidate => candidate.netProfitWeth,
+				error => console.error(`poolManager=${config.v4PoolManager} fee=${fee.toString()} quoteSkipped=${errorMessage(error)}`),
+			)
+			if (v4 !== undefined) candidates.push({ hedgeFee: fee, hedgePool: config.v4PoolManager, quote: v4, venue: 'uniswap-v4' })
 		}
 	}
 	return selectBestExecution(candidates, candidate => candidate.quote.netProfitWeth)
 }
 
-async function executionReadQuorum(clients: readonly ReadClient[], config: Configuration, report: OpenOracleStatePreimage, pool: Pool, hedgeVenue: Venue, blockNumber: bigint, account: Address) {
+async function executionReadQuorum(clients: readonly ReadClient[], config: Configuration, report: OpenOracleStatePreimage, pool: Pool, hedgeVenue: Venue, hedgeFee: (typeof FEES)[number], blockNumber: bigint, account: Address) {
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
 	const executor = config.executor
 	if (executor === undefined) throw new Error('Execution quorum requires the authenticated executor')
@@ -574,20 +614,32 @@ async function executionReadQuorum(clients: readonly ReadClient[], config: Confi
 	const repWithFees = game.currentAmount2 + calculateFee(game.currentAmount2, game.feePercentage) + calculateFee(game.currentAmount2, game.protocolFee)
 	const observations = await Promise.all(
 		clients.map(async (readClient, index) => {
-			const hedgeQuotes =
-				hedgeVenue === 'uniswap-v2'
-					? (async () => {
-							if (pool.v2Pair === undefined) throw new Error('Uniswap V2 execution is missing its authenticated pair')
-							const reserves = await constantProductReserves(readClient, pool.v2Pair, pool.token, blockNumber)
-							return {
-								buyHedgeQuote: constantProductExactOutput(repWithFees, reserves.reserveWeth, reserves.reserveToken),
-								sellHedgeQuote: constantProductExactInput(game.currentAmount2, reserves.reserveToken, reserves.reserveWeth),
-							}
-						})()
-					: Promise.all([quoteInput(readClient, config.network.quoter, pool.token, config.network.weth, game.currentAmount2, pool.fee, blockNumber), quoteOutput(readClient, config.network.quoter, config.network.weth, pool.token, repWithFees, pool.fee, blockNumber)]).then(([sellHedgeQuote, buyHedgeQuote]) => ({
-							buyHedgeQuote,
-							sellHedgeQuote,
-						}))
+			let hedgeQuotes: Promise<{ buyHedgeQuote: bigint; sellHedgeQuote: bigint }>
+			if (hedgeVenue === 'uniswap-v2') {
+				hedgeQuotes = (async () => {
+					if (pool.v2Pair === undefined) throw new Error('Uniswap V2 execution is missing its authenticated pair')
+					const reserves = await constantProductReserves(readClient, pool.v2Pair, pool.token, blockNumber)
+					return {
+						buyHedgeQuote: constantProductExactOutput(repWithFees, reserves.reserveWeth, reserves.reserveToken),
+						sellHedgeQuote: constantProductExactInput(game.currentAmount2, reserves.reserveToken, reserves.reserveWeth),
+					}
+				})()
+			} else if (hedgeVenue === 'uniswap-v4') {
+				hedgeQuotes = (async () => {
+					if (config.v4Quoter === undefined) throw new Error('Uniswap V4 execution is missing its authenticated quoter')
+					return {
+						buyHedgeQuote: await quoteV4ExactOutput(readClient, config.v4Quoter, pool.token, repWithFees, hedgeFee, blockNumber),
+						sellHedgeQuote: await quoteV4ExactInput(readClient, config.v4Quoter, pool.token, game.currentAmount2, hedgeFee, blockNumber),
+					}
+				})()
+			} else {
+				hedgeQuotes = Promise.all([quoteInput(readClient, config.network.quoter, pool.token, config.network.weth, game.currentAmount2, pool.fee, blockNumber), quoteOutput(readClient, config.network.quoter, config.network.weth, pool.token, repWithFees, pool.fee, blockNumber)]).then(
+					([sellHedgeQuote, buyHedgeQuote]) => ({
+						buyHedgeQuote,
+						sellHedgeQuote,
+					}),
+				)
+			}
 			const [block, stateHash, refreshedPool, replacementAmount2, refreshedHedgeQuotes, nonce, eth, weth, token, allowance1, allowance2, internalAllowance1, internalAllowance2] = await Promise.all([
 				readClient.getBlock({ blockNumber }),
 				readContractAtBlock(readClient.transport, { address: config.openOracle, abi: openOracleAbi, functionName: 'oracleGame', args: [report.helper.reportId] }, blockNumber),
@@ -811,6 +863,7 @@ async function executeDispute(
 	quote: ArbitrageQuote,
 	pool: Pool,
 	hedgeVenue: Venue,
+	hedgeFee: (typeof FEES)[number],
 	tokenMetadata: { decimals: number; symbol: string },
 	positions: readonly PositionRecord[],
 	isPaused: () => boolean,
@@ -821,10 +874,20 @@ async function executeDispute(
 	const executor = config.executor
 	if (account === undefined || account.signTransaction === undefined || account.signMessage === undefined) throw new Error('Execution requires a local transaction and relay signer')
 	if (executor === undefined) throw new Error('Execution requires a deployed OpenOracle arbitrage executor')
-	const router = hedgeVenue === 'uniswap-v2' ? config.v2Router : config.router
+	let router = config.router
+	let hedgePool = pool.address
+	let encodedVenue = 0
+	if (hedgeVenue === 'uniswap-v2') {
+		router = config.v2Router
+		hedgePool = pool.v2Pair ?? zeroAddress
+		encodedVenue = 1
+	} else if (hedgeVenue === 'uniswap-v4') {
+		router = config.v4PoolManager
+		hedgePool = config.v4PoolManager ?? zeroAddress
+		encodedVenue = 2
+	}
 	if (router === undefined) throw new Error('Execution requires an authenticated Uniswap router')
-	const hedgePool = hedgeVenue === 'uniswap-v2' ? pool.v2Pair : pool.address
-	if (hedgePool === undefined) throw new Error('Uniswap V2 execution requires a discovered WETH/token pair')
+	if (hedgePool === zeroAddress) throw new Error('Execution requires a discovered or configured Uniswap pool')
 	const game = report.game
 	if (isSelfReport(account.address, game.currentReporter)) throw new Error('Self-disputes use different OpenOracle accounting and are not supported')
 	const newAmount1 = calculateNextAmount1(game)
@@ -834,7 +897,7 @@ async function executeDispute(
 	const quoteBlockNumber = quoteBlock.number
 	const signMessage = account.signMessage
 	const signTransaction = account.signTransaction
-	const executionSnapshot = await executionReadQuorum(readClients, config, report, pool, hedgeVenue, quoteBlockNumber, account.address)
+	const executionSnapshot = await executionReadQuorum(readClients, config, report, pool, hedgeVenue, hedgeFee, quoteBlockNumber, account.address)
 	assertCanonicalExecutionSnapshot({
 		expectedReportStateHash: hashOpenOracleStatePreimage(report),
 		localBlockHash: quoteBlock.hash,
@@ -899,10 +962,10 @@ async function executeDispute(
 				newAmount1,
 				newAmount2,
 				openOracle: config.openOracle,
-				poolFee: refreshedPool.fee,
+				poolFee: hedgeFee,
 				router,
 				swapDeadline: executionSnapshot.blockTimestamp + 300n,
-				venue: hedgeVenue === 'uniswap-v2' ? 1 : 0,
+				venue: encodedVenue,
 			},
 			getOpenOracleGameTuple(game),
 			getOpenOracleHelperTuple(report.helper),
@@ -1983,7 +2046,7 @@ async function inspectReport(
 		recordDecision('Skipped report', `Only ${timeRemaining.toString()} ${timeType ? 'seconds' : 'blocks'} remain`)
 		return
 	}
-	let best: { hedgePool: Address; pool: Pool; quote: ArbitrageQuote; venue: Venue } | undefined
+	let best: { hedgeFee: (typeof FEES)[number]; hedgePool: Address; pool: Pool; quote: ArbitrageQuote; venue: Venue } | undefined
 	for (const pool of pools) {
 		if (pool.token.toLowerCase() !== game.token2.toLowerCase()) continue
 		if (!spotTwapDeviationWithinLimit(pool.spotTick, pool.twapTick, config.maxSpotTwapTicks)) continue
@@ -2020,7 +2083,7 @@ async function inspectReport(
 		paused,
 		profitable,
 	})
-	console.log([`report=${report.helper.reportId.toString()}`, `direction=${best.quote.direction}`, `venue=${best.venue}`, `pool=${best.hedgePool}`, `fee=${best.pool.fee.toString()}`, `profitWeth=${formatEther(best.quote.netProfitWeth)}`, `decision=${decision}`].join(' '))
+	console.log([`report=${report.helper.reportId.toString()}`, `direction=${best.quote.direction}`, `venue=${best.venue}`, `pool=${best.hedgePool}`, `fee=${best.hedgeFee.toString()}`, `profitWeth=${formatEther(best.quote.netProfitWeth)}`, `decision=${decision}`].join(' '))
 	const opportunity = {
 		decision,
 		direction: best.quote.direction,
@@ -2028,13 +2091,14 @@ async function inspectReport(
 		estimatedNetProfitWeth: decimalSignedEth(best.quote.netProfitWeth),
 		hasRequiredInventory,
 		pool: best.hedgePool,
-		poolFee: best.venue === 'uniswap-v2' ? 3_000 : best.pool.fee,
+		poolFee: best.hedgeFee,
 		reportId: report.helper.reportId.toString(),
 		requiredToken: formatTokenAmount(funding.token2, tokenMetadata.decimals),
 		requiredWeth: decimalWeth(funding.token1),
 		token: game.token2,
 		tokenSymbol: tokenMetadata.symbol,
 		timeRemaining: timeRemaining.toString(),
+		venue: best.venue,
 		windowUnit: timeType ? 'seconds' : 'blocks',
 	} satisfies OpportunitySnapshot
 	const projectedLifecycleGas = projectedLifecycleGasReserveWeth({
@@ -2043,7 +2107,7 @@ async function inspectReport(
 		gasPrice,
 		submissionMode: config.submission.mode,
 	})
-	const candidate = decision === 'eligible' ? { capitalAtRiskWeth, hedgePool: best.hedgePool, hedgeVenue: best.venue, opportunity, pool: best.pool, projectedGasCostWeth: gasPrice * 1_200_000n + projectedLifecycleGas, quote: best.quote, report } : undefined
+	const candidate = decision === 'eligible' ? { capitalAtRiskWeth, hedgeFee: best.hedgeFee, hedgePool: best.hedgePool, hedgeVenue: best.venue, opportunity, pool: best.pool, projectedGasCostWeth: gasPrice * 1_200_000n + projectedLifecycleGas, quote: best.quote, report } : undefined
 	return { candidate, opportunity }
 }
 
@@ -2564,7 +2628,7 @@ async function runOperator(config: Configuration, lockManager: ExecutionLockMana
 						try {
 							const metadata = state.tokenMarkets.find(market => market.address.toLowerCase() === selected.report.game.token2.toLowerCase())
 							if (metadata === undefined) throw new Error('Token metadata is unavailable')
-							const record = await executeDispute(client, readClients, wallet, config, selected.report, selected.quote, selected.pool, selected.hedgeVenue, metadata, positions, () => state.paused, trackTransaction, persistPosition)
+							const record = await executeDispute(client, readClients, wallet, config, selected.report, selected.quote, selected.pool, selected.hedgeVenue, selected.hedgeFee, metadata, positions, () => state.paused, trackTransaction, persistPosition)
 							selected.opportunity.decision = 'submitted'
 							if (!state.executionHistory.some(existing => existing.transactionHash.toLowerCase() === record.transactionHash.toLowerCase())) state.executionHistory.unshift(record)
 							try {

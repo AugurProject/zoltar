@@ -46,8 +46,10 @@ describe('deployment authentication', () => {
 		).rejects.toThrow('runtime bytecode hash')
 	})
 
-	test('recognizes the separately authenticated Uniswap V2 router role', () => {
+	test('recognizes the separately authenticated Uniswap execution roles', () => {
 		expect(parseDeploymentRole('uniswap-v2-router')).toBe('uniswap-v2-router')
+		expect(parseDeploymentRole('uniswap-v4-pool-manager')).toBe('uniswap-v4-pool-manager')
+		expect(parseDeploymentRole('uniswap-v4-quoter')).toBe('uniswap-v4-quoter')
 	})
 
 	test('rejects manifests for another chain and duplicate identities', () => {

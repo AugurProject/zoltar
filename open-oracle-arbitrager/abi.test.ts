@@ -46,7 +46,7 @@ test('custom executor ABI matches the compiled arbitrage executor contract', () 
 
 test('custom executor ABI covers every public executor function', () => {
 	const functionNames = openOracleArbitrageExecutorAbi.filter(entry => entry.type === 'function').map(entry => entry.name)
-	expect(functionNames).toEqual(['assertParentBlock', 'contributions', 'dispute', 'hedgeAndDispute', 'settleAndWithdraw'])
+	expect(functionNames).toEqual(['assertParentBlock', 'contributions', 'dispute', 'hedgeAndDispute', 'settleAndWithdraw', 'unlockCallback', 'withdrawReplacementCredit'])
 	for (const functionName of functionNames) {
 		const custom = openOracleArbitrageExecutorAbi.find(entry => entry.type === 'function' && entry.name === functionName)
 		const compiled = peripherals_OpenOracleArbitrageExecutor_OpenOracleArbitrageExecutor.abi.find(entry => entry.type === 'function' && entry.name === functionName)
@@ -60,7 +60,7 @@ test('executor exposes atomic entry and lifecycle functions', () => {
 	for (const functionName of ['hedgeAndDispute', 'settleAndWithdraw']) {
 		const custom = openOracleArbitrageExecutorAbi.find(entry => entry.type === 'function' && entry.name === functionName)
 		const compiled = peripherals_OpenOracleArbitrageExecutor_OpenOracleArbitrageExecutor.abi.find(entry => entry.type === 'function' && entry.name === functionName)
-		const customInputs: readonly AbiInput[] | undefined = custom?.inputs.map(inputShape)
+		const customInputs: readonly AbiInput[] | undefined = custom?.type === 'function' ? custom.inputs.map(inputShape) : undefined
 		const compiledInputs: readonly AbiInput[] | undefined = compiled?.type === 'function' ? compiled.inputs.map(inputShape) : undefined
 		expect(customInputs).toEqual(compiledInputs)
 	}

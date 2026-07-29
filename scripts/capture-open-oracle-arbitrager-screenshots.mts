@@ -343,6 +343,7 @@ const snapshot = {
 			timeRemaining: '27',
 			token: repNo,
 			tokenSymbol: 'REPv2_NO',
+			venue: 'uniswap-v4' as const,
 			windowUnit: 'blocks' as const,
 		},
 		{
@@ -359,6 +360,7 @@ const snapshot = {
 			timeRemaining: '42',
 			token: repYes,
 			tokenSymbol: 'REPv2_YES',
+			venue: 'uniswap-v3' as const,
 			windowUnit: 'blocks' as const,
 		},
 	],
