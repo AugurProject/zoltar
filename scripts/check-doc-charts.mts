@@ -188,6 +188,56 @@ function assertChartNode(value: unknown, chartId: string): void {
 	}
 }
 
+function numericAttribute(attributes: Record<string, unknown>, name: string, chartId: string): number {
+	const value = attributes[name]
+	if (typeof value !== 'string' || !Number.isFinite(Number(value))) throw new Error(`Chart ${chartId} checked geometry requires numeric ${name}`)
+	return Number(value)
+}
+
+function assertCheckedFlowGeometry(nodes: unknown[], chartId: string): void {
+	const states = new Map<string, { height: number; width: number; x: number; y: number }>()
+	const checkedPaths: Array<{ attributes: Record<string, unknown>; transition: string }> = []
+	const checkedLabels: Array<{ attributes: Record<string, unknown>; transition: string }> = []
+	for (const node of nodes) {
+		if (!isRecord(node) || !isRecord(node['attributes'])) continue
+		const attributes = node['attributes']
+		const state = attributes['data-state']
+		if (node['tag'] === 'rect' && typeof state === 'string') {
+			states.set(state, {
+				height: numericAttribute(attributes, 'height', chartId),
+				width: numericAttribute(attributes, 'width', chartId),
+				x: numericAttribute(attributes, 'x', chartId),
+				y: numericAttribute(attributes, 'y', chartId),
+			})
+		}
+		const transition = attributes['data-checked-transition']
+		if (node['tag'] === 'path' && typeof transition === 'string') checkedPaths.push({ attributes, transition })
+		const labelTransition = attributes['data-checked-transition-label']
+		if (node['tag'] === 'text' && typeof labelTransition === 'string') checkedLabels.push({ attributes, transition: labelTransition })
+	}
+	for (const { attributes, transition } of checkedPaths) {
+		const [sourceId, receiverId, extra] = transition.split('->')
+		if (sourceId === undefined || receiverId === undefined || extra !== undefined) throw new Error(`Chart ${chartId} has invalid checked transition ${transition}`)
+		const source = states.get(sourceId)
+		const receiver = states.get(receiverId)
+		if (source === undefined || receiver === undefined) throw new Error(`Chart ${chartId} checked transition ${transition} is missing a state rectangle`)
+		const path = attributes['d']
+		const match = typeof path === 'string' ? /^M ([\d.]+) ([\d.]+) H ([\d.]+)$/.exec(path) : undefined
+		if (match === undefined || match === null) throw new Error(`Chart ${chartId} checked transition ${transition} must be a straight horizontal path`)
+		const startX = Number(match[1])
+		const y = Number(match[2])
+		const endX = Number(match[3])
+		if (startX !== source.x + source.width || endX !== receiver.x || y < source.y || y > source.y + source.height || y < receiver.y || y > receiver.y + receiver.height) {
+			throw new Error(`Chart ${chartId} checked transition ${transition} does not terminate at visible state boundaries`)
+		}
+		const label = checkedLabels.find(candidate => candidate.transition === transition)
+		if (label !== undefined) {
+			const labelX = numericAttribute(label.attributes, 'x', chartId)
+			if (labelX <= startX || labelX >= endX) throw new Error(`Chart ${chartId} checked transition label ${transition} is not between its states`)
+		}
+	}
+}
+
 const [htmlEntries, specsSource, runtimeSource] = await Promise.all([readdir(docsDirectory), readFile(specsPath, 'utf8'), readFile(entrypoint, 'utf8')])
 htmlEntries.push('../open-oracle-arbitrager/documentation.html')
 const runtimeSourceFile = ts.createSourceFile(entrypoint, runtimeSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
@@ -239,6 +289,7 @@ for (const [chartId, value] of Object.entries(parsedSpecs)) {
 	for (const node of value['nodes']) {
 		assertChartNode(node, chartId)
 	}
+	assertCheckedFlowGeometry(value['nodes'], chartId)
 }
 const markDrivenFlowchartIds = Object.entries(parsedSpecs)
 	.filter(([chartId, value]) => !nativeChartIds.has(chartId) && isRecord(value) && Array.isArray(value['nodes']) && value['nodes'].length > 0)

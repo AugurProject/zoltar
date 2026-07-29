@@ -2498,6 +2498,7 @@
 			{
 				"attributes": {
 					"class": "svg-blue",
+					"data-state": "UserOperation",
 					"x": "40",
 					"y": "72",
 					"width": "205",
@@ -2551,6 +2552,7 @@
 			{
 				"attributes": {
 					"class": "svg-line",
+					"data-checked-transition": "UserOperation->Coordinator",
 					"marker-end": "url(#arrow-integration-flow)",
 					"d": "M 245 115 H 315"
 				},
@@ -2559,7 +2561,8 @@
 			{
 				"attributes": {
 					"class": "svg-gold",
-					"x": "250",
+					"data-state": "Coordinator",
+					"x": "315",
 					"y": "72",
 					"width": "205",
 					"height": "86",
@@ -5810,6 +5813,7 @@
 			{
 				"attributes": {
 					"class": "svg-line",
+					"data-checked-transition": "PoolForked->ForkMigration",
 					"marker-end": "url(#arrow-state)",
 					"data-transition": "PoolForked->ForkMigration",
 					"data-boundary": "parent-to-child",
@@ -5820,7 +5824,8 @@
 			{
 				"attributes": {
 					"class": "svg-micro",
-					"x": "410",
+					"data-checked-transition-label": "PoolForked->ForkMigration",
+					"x": "510",
 					"y": "92",
 					"text-anchor": "middle"
 				},
