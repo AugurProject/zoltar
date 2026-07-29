@@ -3,6 +3,7 @@ import type { Address } from '@zoltar/shared/ethereum'
 import { getSecurityPoolLinkHref, navigateToSecurityPool } from '../lib/securityPoolNavigation.js'
 
 type SecurityPoolLinkProps = {
+	ariaLabel?: string
 	children?: ComponentChildren
 	className?: string
 	securityPoolAddress: Address
@@ -10,12 +11,13 @@ type SecurityPoolLinkProps = {
 	universeId?: bigint | undefined
 }
 
-export function SecurityPoolLink({ children, className = '', securityPoolAddress, selectedPoolView, universeId }: SecurityPoolLinkProps) {
+export function SecurityPoolLink({ ariaLabel, children, className = '', securityPoolAddress, selectedPoolView, universeId }: SecurityPoolLinkProps) {
 	const href = getSecurityPoolLinkHref(securityPoolAddress, selectedPoolView, universeId)
 	const label = children ?? securityPoolAddress
 
 	return (
 		<a
+			aria-label={ariaLabel}
 			className={`security-pool-link ${className}`}
 			href={href}
 			onClick={event => {

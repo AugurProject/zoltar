@@ -23,6 +23,7 @@ import type { ZoltarForkActionResult, ZoltarUniverseSummary } from '../../../typ
 type UseZoltarForkParameters = {
 	accountAddress: Address | undefined
 	activeUniverseId: bigint
+	environmentRefreshKey: number
 	ensureZoltarUniverse: () => Promise<ZoltarUniverseSummary>
 	onTransactionFailed?: WriteOperationsParameters['onTransactionFailed']
 	onTransactionFinished: () => void
@@ -128,13 +129,30 @@ function resolveForkQuestionId(submittedQuestionId: string, universe: ZoltarUniv
 }
 
 export function useZoltarFork(
-	{ accountAddress, activeUniverseId, ensureZoltarUniverse, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState, refreshZoltarUniverse, shouldAutoLoadForkAccess, zoltarUniverse }: UseZoltarForkParameters,
+	{
+		accountAddress,
+		activeUniverseId,
+		environmentRefreshKey,
+		ensureZoltarUniverse,
+		onTransactionFailed,
+		onTransactionFinished,
+		onTransactionPresented,
+		onTransactionPrepared,
+		onTransactionRequested,
+		onTransactionSubmitted,
+		refreshState,
+		refreshZoltarUniverse,
+		shouldAutoLoadForkAccess,
+		zoltarUniverse,
+	}: UseZoltarForkParameters,
 	dependencies: UseZoltarForkDependencies = defaultUseZoltarForkDependencies,
 ) {
 	const forkAccessLoad = useLoadController()
 	const zoltarForkError = useSignal<string | undefined>(undefined)
 	const zoltarForkPending = useSignal(false)
-	const zoltarForkQuestionId = useSignal('')
+	const forkQuestionScopeKey = `${accountAddress ?? 'disconnected'}:${environmentRefreshKey}:${activeUniverseId.toString()}`
+	const forkQuestionSelection = useSignal({ questionId: '', scopeKey: forkQuestionScopeKey })
+	const zoltarForkQuestionId = forkQuestionSelection.value.scopeKey === forkQuestionScopeKey ? forkQuestionSelection.value.questionId : ''
 	const zoltarForkResult = useSignal<ZoltarForkActionResult | undefined>(undefined)
 	const zoltarForkApproval = useSignal<TokenApprovalState>({
 		error: undefined,
@@ -241,7 +259,7 @@ export function useZoltarFork(
 		zoltarForkError.value = undefined
 		zoltarForkFeedback.value = createPendingActionFeedback(resolveActionResultName(actionName), getPendingTitle(actionName))
 		zoltarForkResult.value = undefined
-		const submittedQuestionId = zoltarForkQuestionId.value
+		const submittedQuestionId = zoltarForkQuestionId
 
 		try {
 			let result: ZoltarForkActionResult | undefined
@@ -335,13 +353,13 @@ export function useZoltarFork(
 		zoltarForkError: zoltarForkError.value,
 		zoltarForkFeedback: zoltarForkFeedback.value,
 		zoltarForkPending: zoltarForkPending.value,
-		zoltarForkQuestionId: zoltarForkQuestionId.value,
+		zoltarForkQuestionId,
 		zoltarForkRepBalance: hasCurrentForkAccess ? zoltarForkRepBalance.value : undefined,
 		zoltarForkResult: zoltarForkResult.value,
 		zoltarMigrationChildRepBalances: hasCurrentForkAccess ? zoltarMigrationChildRepBalances.value : {},
 		zoltarMigrationPreparedRepBalance: hasCurrentForkAccess ? zoltarMigrationPreparedRepBalance.value : undefined,
 		setZoltarForkQuestionId: (questionId: string) => {
-			zoltarForkQuestionId.value = questionId
+			forkQuestionSelection.value = { questionId, scopeKey: forkQuestionScopeKey }
 		},
 	}
 }

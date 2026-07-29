@@ -10,7 +10,7 @@ export function TransactionActionButtonLockProvider({ children, disabledReason }
 	return <TransactionActionButtonLockContext.Provider value={disabledReason}>{children}</TransactionActionButtonLockContext.Provider>
 }
 
-export function TransactionActionButton({ availability, className = '', disabled = false, disabledReasonElementId, idleLabel, onClick, pending = false, pendingLabel, showDisabledReason = true, tone = 'primary', type = 'button' }: TransactionActionButtonProps) {
+export function TransactionActionButton({ ariaLabel, availability, className = '', disabled = false, disabledReasonElementId, idleLabel, onClick, pending = false, pendingLabel, showDisabledReason = true, tone = 'primary', type = 'button' }: TransactionActionButtonProps) {
 	const disabledReasonId = useId()
 	const globalDisabledReason = useContext(TransactionActionButtonLockContext)
 	const blockedByPendingRequest = globalDisabledReason !== undefined && !pending
@@ -26,7 +26,7 @@ export function TransactionActionButton({ availability, className = '', disabled
 	}
 	return (
 		<div className={`tx-action ${className}`.trim()}>
-			<button className={`tx-action-button ${tone}`} type={type} onClick={handleClick} disabled={isDisabled} title={disabledReason} aria-describedby={describedBy}>
+			<button aria-label={ariaLabel} className={`tx-action-button ${tone}`} type={type} onClick={handleClick} disabled={isDisabled} title={disabledReason} aria-describedby={describedBy}>
 				{pending ? <LoadingText>{pendingLabel}</LoadingText> : idleLabel}
 			</button>
 			{shouldShowDisabledReason ? (

@@ -150,7 +150,7 @@ function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSec
 		parent: PARENT_POOL_ADDRESS,
 		questionOutcome: 'yes',
 		questionId: '0x01',
-		securityMultiplier: 2n,
+		statoblastSecurityMultiplierBps: 20_000n,
 		securityPoolAddress: YES_CHILD_POOL_ADDRESS,
 		shareTokenSupply: 0n,
 		systemState: 'forkMigration',
@@ -302,7 +302,7 @@ describe('ForkAuctionSection child pool recovery', () => {
 
 		await waitFor(() => {
 			expect(within(document.body).queryByText('Yes universe does not exist.')).toBeNull()
-			expectTransactionButtonEnabled(document.body, 'Start Truth Auction')
+			expectTransactionButtonEnabled(document.body, 'Start truth auction')
 		})
 		expect(loadAllSecurityPoolsCallOptions).toEqual([
 			{
@@ -366,7 +366,7 @@ describe('ForkAuctionSection child pool recovery', () => {
 		await waitFor(() => {
 			expect(recoveryAttempts).toBe(2)
 			expect(documentQueries.queryByText('Unable to check whether the Yes child universe exists. Reason: Registry RPC unavailable')).toBeNull()
-			expectTransactionButtonEnabled(document.body, 'Start Truth Auction')
+			expectTransactionButtonEnabled(document.body, 'Start truth auction')
 		})
 	})
 
@@ -583,7 +583,7 @@ describe('ForkAuctionSection child pool recovery', () => {
 		})
 
 		expect(documentQueries.queryByRole('button', { name: `Copy address ${YES_TRUTH_AUCTION_ADDRESS}` })).toBeNull()
-		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit Bid' })
+		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit bid' })
 		expect(submitBidButton.hasAttribute('disabled')).toBe(true)
 
 		await act(async () => {

@@ -38,7 +38,7 @@ import { WarningSurface } from '../../../components/WarningSurface.js'
 import { tryParseBigIntInput } from '../../markets/lib/marketForm.js'
 import { assertNever } from '../../../lib/assert.js'
 import { normalizeAddress, sameAddress } from '../../../lib/address.js'
-import { getPoolCollateralizationPercent } from '../../markets/lib/trading.js'
+import { getPoolCollateralizationPercent, getStatoblastCollateralizationTargetPercent } from '../../markets/lib/trading.js'
 import { useChainTimestamp } from '../../../lib/chainTimestamp.js'
 import {
 	applySelectedPoolWorkflowState,
@@ -457,7 +457,7 @@ export function SecurityPoolWorkflowSection({
 	})()
 	let selectedPoolSummaryContent: ComponentChildren
 	const selectedPoolCollateralizationPercent = selectedPoolSummaryPool === undefined ? undefined : getPoolCollateralizationPercent(selectedPoolSummaryPool.totalRepDeposit, selectedPoolSummaryPool.totalSecurityBondAllowance, repPerEthPrice)
-	const selectedPoolCollateralizationTarget = selectedPoolSummaryPool === undefined ? undefined : selectedPoolSummaryPool.securityMultiplier * 100n * 10n ** 18n
+	const selectedPoolCollateralizationTarget = selectedPoolSummaryPool === undefined ? undefined : getStatoblastCollateralizationTargetPercent(selectedPoolSummaryPool.statoblastSecurityMultiplierBps)
 
 	if (selectedPoolSummaryPool === undefined) {
 		selectedPoolSummaryContent = undefined
@@ -754,7 +754,7 @@ export function SecurityPoolWorkflowSection({
 								{ label: commonCopy.securityPoolAddress, value: <AddressValue address={selectedPoolSummaryPool.securityPoolAddress} /> },
 							]
 				}
-				variant='context-strip'
+				variant='embedded-context-strip'
 			/>
 			<div className='selected-pool-context-nonsticky'>
 				<div className='selected-pool-context-controls'>
@@ -825,10 +825,10 @@ export function SecurityPoolWorkflowSection({
 								{hasSelectedPoolAddress ? undefined : (
 									<div className='actions'>
 										<button className='primary' type='button' onClick={onBrowsePools}>
-											{commonCopy.browsePools}
+											{commonCopy.browsePoolsAction}
 										</button>
 										<button className='secondary' type='button' onClick={onCreatePool}>
-											{commonCopy.createPool}
+											{commonCopy.createPoolAction}
 										</button>
 									</div>
 								)}
@@ -868,7 +868,7 @@ export function SecurityPoolWorkflowSection({
 													repPerEthSourceUrl={repPerEthSourceUrl}
 													securityBondAllowance={selectedVaultDetails.securityBondAllowance}
 													securityVaultDetails={selectedVaultDetails}
-													selectedPoolSecurityMultiplier={securityVault.selectedPoolSecurityMultiplier}
+													selectedPoolStatoblastSecurityMultiplierBps={securityVault.selectedPoolStatoblastSecurityMultiplierBps}
 													selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
 													variant='embedded'
 												/>
@@ -938,7 +938,7 @@ export function SecurityPoolWorkflowSection({
 															description: securityPoolCopy.liquidationWorkflowDescription,
 															key: 'liquidate-vault',
 															readiness: liquidationBlocker === undefined && liquidationEnabled && canUseSelectedVaultActions ? 'ready' : 'blocked',
-															title: securityPoolCopy.reviewLiquidation,
+															title: securityPoolCopy.reviewLiquidationTitle,
 															...(selectedPool === undefined || selectedVaultDetails === undefined || selectedVaultAddress === '' || !liquidationEnabled || !selectedVaultExistsOnchain || !canUseSelectedVaultActions
 																? {}
 																: {
@@ -1151,7 +1151,7 @@ export function SecurityPoolWorkflowSection({
 				description={securityPoolCopy.requestPriceReviewDescription}
 				isOpen={requestPriceReview !== undefined}
 				onClose={() => setRequestPriceReview(undefined)}
-				title={securityPoolCopy.requestNewPrice}
+				title={securityPoolCopy.requestNewPriceTitle}
 			>
 				<TransactionReview
 					primary={[

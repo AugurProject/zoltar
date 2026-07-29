@@ -25,7 +25,7 @@ import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCou
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { formatSecurityPoolPageSummary, getSecurityPoolStatusBadgeLabel } from '../lib/securityPoolLabels.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
-import { getPoolCollateralizationPercent } from '../../markets/lib/trading.js'
+import { formatStatoblastSecurityMultiplier, getPoolCollateralizationPercent, getStatoblastCollateralizationTargetPercent } from '../../markets/lib/trading.js'
 import { getPoolRegistryPresentation } from '../../../lib/userCopy.js'
 import { getToneRatioThreshold, getVisualRatio } from '../../../lib/visualMetrics.js'
 import type { SecurityPoolsOverviewSectionProps } from '../../types.js'
@@ -192,7 +192,7 @@ export function SecurityPoolsOverviewSection({
 						if (isEmptyRegistry && onCreateSecurityPool !== undefined)
 							return (
 								<button className='primary' type='button' onClick={onCreateSecurityPool}>
-									{commonCopy.createSecurityPool}
+									{commonCopy.createSecurityPoolAction}
 								</button>
 							)
 						return undefined
@@ -207,7 +207,7 @@ export function SecurityPoolsOverviewSection({
 						{filteredSecurityPools.map(({ hasKnownForkActivity, pool, poolState }) => {
 							const displayState = poolState.lifecycleState
 							const collateralizationPercent = getPoolCollateralizationPercent(pool.totalRepDeposit, pool.totalSecurityBondAllowance, repPerEthPrice)
-							const targetCollateralizationPercent = pool.securityMultiplier * 100n * 10n ** 18n
+							const targetCollateralizationPercent = getStatoblastCollateralizationTargetPercent(pool.statoblastSecurityMultiplierBps)
 							const statusBadgeLabel = getSecurityPoolStatusBadgeLabel({
 								hasForkActivity: hasKnownForkActivity,
 								questionOutcome: pool.questionOutcome,
@@ -232,7 +232,7 @@ export function SecurityPoolsOverviewSection({
 									}
 									actions={
 										onSelectSecurityPool === undefined ? undefined : (
-											<button className='primary' onClick={() => onSelectSecurityPool(pool.securityPoolAddress, pool.universeId)}>
+											<button aria-label={securityPoolCopy.formatOpenPoolLabel(getQuestionTitle(pool.marketDetails), pool.securityPoolAddress)} className='primary' onClick={() => onSelectSecurityPool(pool.securityPoolAddress, pool.universeId)}>
 												{securityPoolCopy.openPool}
 											</button>
 										)
@@ -251,8 +251,8 @@ export function SecurityPoolsOverviewSection({
 														<strong>{pool.vaultCount.toString()}</strong>
 													</div>
 													<div>
-														<span>{commonCopy.multiplier}</span>
-														<strong>{pool.securityMultiplier.toString()}x</strong>
+														<span>{commonCopy.statoblastSecurityMultiplierBps}</span>
+														<strong>{formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}x</strong>
 													</div>
 													<div>
 														<span>{securityPoolCopy.annualFee}</span>

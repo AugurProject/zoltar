@@ -28,7 +28,7 @@ import { WarningSurface } from '../../../components/WarningSurface.js'
 import { normalizeAddress, sameAddress } from '../../../lib/address.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } from '../../../lib/formatters.js'
 import { balanceShortage } from '../../../lib/inputs.js'
-import { getVaultCollateralizationPercent } from '../../markets/lib/trading.js'
+import { getStatoblastCollateralizationTargetPercent, getVaultCollateralizationPercent } from '../../markets/lib/trading.js'
 import { tryParseBigIntInput, tryParseRepAmountInput } from '../../markets/lib/marketForm.js'
 import { isMainnetChain } from '../../../lib/network.js'
 import { resolveOracleOperationEthFunding } from '../../open-oracle/lib/oracleRequestEth.js'
@@ -54,7 +54,7 @@ import {
 } from '../lib/securityVault.js'
 import type { StagedOracleOperation } from '../../../types/contracts.js'
 import type { ReadinessAction, SecurityVaultSectionProps } from '../../types.js'
-type SelectedVaultSummarySectionProps = Pick<SecurityVaultSectionProps, 'repPerEthPrice' | 'repPerEthSource' | 'repPerEthSourceUrl' | 'selectedPoolSecurityMultiplier'> & {
+type SelectedVaultSummarySectionProps = Pick<SecurityVaultSectionProps, 'repPerEthPrice' | 'repPerEthSource' | 'repPerEthSourceUrl' | 'selectedPoolStatoblastSecurityMultiplierBps'> & {
 	securityBondAllowance: bigint
 	securityVaultDetails: NonNullable<SecurityVaultSectionProps['securityVaultDetails']>
 	selectedVaultIsOwnedByAccount: boolean
@@ -67,9 +67,9 @@ type QueuedVaultOperationView = {
 	isPendingSlot: boolean
 	operationId: bigint
 }
-export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, repPerEthSourceUrl, securityBondAllowance, securityVaultDetails, selectedPoolSecurityMultiplier, selectedVaultIsOwnedByAccount, variant = 'record' }: SelectedVaultSummarySectionProps) {
+export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, repPerEthSourceUrl, securityBondAllowance, securityVaultDetails, selectedPoolStatoblastSecurityMultiplierBps, selectedVaultIsOwnedByAccount, variant = 'record' }: SelectedVaultSummarySectionProps) {
 	const collateralizationPercent = getVaultCollateralizationPercent(securityVaultDetails.repDepositShare, securityBondAllowance, repPerEthPrice)
-	const collateralizationTarget = selectedPoolSecurityMultiplier === undefined ? undefined : selectedPoolSecurityMultiplier * 100n * 10n ** 18n
+	const collateralizationTarget = selectedPoolStatoblastSecurityMultiplierBps === undefined ? undefined : getStatoblastCollateralizationTargetPercent(selectedPoolStatoblastSecurityMultiplierBps)
 
 	const summaryTitle = <span>{securityPoolCopy.vaultSummary}</span>
 
@@ -109,7 +109,7 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 			repPerEthPrice={repPerEthPrice}
 			repPerEthSource={repPerEthSource}
 			repPerEthSourceUrl={repPerEthSourceUrl}
-			selectedPoolSecurityMultiplier={selectedPoolSecurityMultiplier}
+			selectedPoolStatoblastSecurityMultiplierBps={selectedPoolStatoblastSecurityMultiplierBps}
 			securityBondAllowance={securityBondAllowance}
 			unpaidEthFees={securityVaultDetails.unpaidEthFees}
 		/>
@@ -289,7 +289,7 @@ export function SecurityVaultSection({
 	securityVaultRepApproval,
 	securityVaultRepBalance,
 	securityVaultResult,
-	selectedPoolSecurityMultiplier,
+	selectedPoolStatoblastSecurityMultiplierBps,
 	selectedMarketTitle,
 	selectedPoolTotalRepDeposit,
 	selectedPoolTotalSecurityBondAllowance,
@@ -352,7 +352,7 @@ export function SecurityVaultSection({
 		currentSecurityBondAllowance: currentSelectedVaultDetails?.securityBondAllowance,
 		repDepositShare: currentSelectedVaultDetails?.repDepositShare,
 		repPerEthPrice: hasValidOraclePrice ? oracleManagerDetails?.lastPrice : undefined,
-		securityMultiplier: selectedPoolSecurityMultiplier,
+		statoblastSecurityMultiplierBps: selectedPoolStatoblastSecurityMultiplierBps,
 		totalRepDeposit: selectedPoolTotalRepDeposit,
 		totalSecurityBondAllowance: selectedPoolTotalSecurityBondAllowance,
 	})
@@ -546,7 +546,7 @@ export function SecurityVaultSection({
 			readiness: bondAllowanceEnabled && vaultExistsOnchain && canUseLoadedVaultActions ? 'ready' : 'blocked',
 			...(bondAllowanceDisabledReasonId === undefined ? {} : { disabledReasonId: bondAllowanceDisabledReasonId }),
 			...(visibleBondAllowanceLauncherBlocker === undefined || !bondAllowanceEnabled ? {} : { blocker: visibleBondAllowanceLauncherBlocker }),
-			title: securityPoolCopy.setSecurityBondAllowance,
+			title: securityPoolCopy.setSecurityBondAllowanceTitle,
 		},
 		{
 			actionLabel: securityPoolCopy.claimFees,
@@ -556,7 +556,7 @@ export function SecurityVaultSection({
 			readiness: claimFeesEnabled && hasClaimableFees && claimFeesLauncherBlocker === undefined && vaultExistsOnchain && canUseLoadedVaultActions ? 'ready' : 'blocked',
 			...(claimFeesDisabledReasonId === undefined ? {} : { disabledReasonId: claimFeesDisabledReasonId }),
 			...(claimFeesAvailabilityBlocker === undefined ? {} : { blocker: claimFeesAvailabilityBlocker }),
-			title: securityPoolCopy.claimFees,
+			title: securityPoolCopy.claimFeesTitle,
 		},
 		...extraReadinessActions,
 	] satisfies ReadinessAction[])
@@ -592,7 +592,7 @@ export function SecurityVaultSection({
 								repPerEthSourceUrl={repPerEthSourceUrl}
 								securityBondAllowance={currentSelectedVaultDetails.securityBondAllowance}
 								securityVaultDetails={currentSelectedVaultDetails}
-								selectedPoolSecurityMultiplier={selectedPoolSecurityMultiplier}
+								selectedPoolStatoblastSecurityMultiplierBps={selectedPoolStatoblastSecurityMultiplierBps}
 								selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
 								variant='embedded'
 							/>
@@ -679,7 +679,7 @@ export function SecurityVaultSection({
 							repPerEthSourceUrl={repPerEthSourceUrl}
 							securityBondAllowance={currentSelectedVaultDetails.securityBondAllowance}
 							securityVaultDetails={currentSelectedVaultDetails}
-							selectedPoolSecurityMultiplier={selectedPoolSecurityMultiplier}
+							selectedPoolStatoblastSecurityMultiplierBps={selectedPoolStatoblastSecurityMultiplierBps}
 							selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
 							variant='embedded'
 						/>
@@ -744,7 +744,7 @@ export function SecurityVaultSection({
 				)}
 			</OperationModal>
 
-			<OperationModal context={vaultTransactionContext} isOpen={vaultActionModal === 'set-bond-allowance'} onClose={() => setVaultActionModal(undefined)} title={securityPoolCopy.setBondAllowance}>
+			<OperationModal context={vaultTransactionContext} isOpen={vaultActionModal === 'set-bond-allowance'} onClose={() => setVaultActionModal(undefined)} title={securityPoolCopy.setBondAllowanceTitle}>
 				{currentSelectedVaultDetails === undefined ? <p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
@@ -802,7 +802,7 @@ export function SecurityVaultSection({
 				)}
 			</OperationModal>
 
-			<OperationModal context={vaultTransactionContext} isOpen={vaultActionModal === 'claim-fees'} onClose={() => setVaultActionModal(undefined)} title={securityPoolCopy.claimFees}>
+			<OperationModal context={vaultTransactionContext} isOpen={vaultActionModal === 'claim-fees'} onClose={() => setVaultActionModal(undefined)} title={securityPoolCopy.claimFeesTitle}>
 				<MetricGrid>
 					<MetricField label={securityPoolCopy.claimableFees}>{currentSelectedVaultDetails === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={currentSelectedVaultDetails.unpaidEthFees} suffix={commonCopy.eth} />}</MetricField>
 					<MetricField label={securityPoolCopy.vault}>{selectedVaultAddress === undefined ? commonCopy.noneSelected : <AddressValue address={selectedVaultAddress} />}</MetricField>
@@ -823,7 +823,7 @@ export function SecurityVaultSection({
 		</>
 	) : (
 		<>
-			<SectionBlock title={securityPoolCopy.claimFees} variant='embedded'>
+			<SectionBlock title={securityPoolCopy.claimFeesTitle} variant='embedded'>
 				{currentSelectedVaultDetails === undefined ? (
 					<p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p>
 				) : (
@@ -893,7 +893,7 @@ export function SecurityVaultSection({
 				})()}
 			</SectionBlock>
 
-			<SectionBlock title={securityPoolCopy.setSecurityBondAllowance} variant='embedded'>
+			<SectionBlock title={securityPoolCopy.setSecurityBondAllowanceTitle} variant='embedded'>
 				{currentSelectedVaultDetails === undefined ? (
 					<p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p>
 				) : (
@@ -1034,7 +1034,7 @@ export function SecurityVaultSection({
 					repPerEthSourceUrl={repPerEthSourceUrl}
 					securityBondAllowance={securityBondAllowance}
 					securityVaultDetails={currentSelectedVaultDetails}
-					selectedPoolSecurityMultiplier={selectedPoolSecurityMultiplier}
+					selectedPoolStatoblastSecurityMultiplierBps={selectedPoolStatoblastSecurityMultiplierBps}
 					selectedVaultIsOwnedByAccount={selectedVaultIsOwnedByAccount}
 				/>
 			) : undefined}

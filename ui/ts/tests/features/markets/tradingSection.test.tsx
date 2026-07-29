@@ -51,7 +51,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		parent: zeroAddress,
 		questionOutcome: 'none',
 		questionId: '0x01',
-		securityMultiplier: 2n,
+		statoblastSecurityMultiplierBps: 20_000n,
 		securityPoolAddress: zeroAddress,
 		shareTokenSupply: 0n,
 		systemState: 'operational',
@@ -297,7 +297,7 @@ void describe('TradingSection', () => {
 		expect(documentQueries.getByRole('button', { name: 'Mint complete sets' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Redeem complete sets' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Migrate Forked Shares' })).toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Redeem Resolved Shares' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Redeem resolved shares' })).toBeNull()
 	})
 
 	void test('does not render a local latest trading action card when a result exists', async () => {
@@ -497,8 +497,8 @@ void describe('TradingSection', () => {
 		})
 
 		let modalQueries = within(documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' }))
-		let mintSubmitButton = modalQueries.getByRole('button', { name: 'Mint Complete Sets' })
-		if (!(mintSubmitButton instanceof HTMLButtonElement)) throw new Error('Expected Mint Complete Sets transaction button')
+		let mintSubmitButton = modalQueries.getByRole('button', { name: 'Mint complete sets' })
+		if (!(mintSubmitButton instanceof HTMLButtonElement)) throw new Error('Expected Mint complete sets transaction button')
 		expect(mintSubmitButton.disabled).toBe(false)
 
 		await act(() => {
@@ -506,8 +506,8 @@ void describe('TradingSection', () => {
 		})
 
 		modalQueries = within(documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' }))
-		mintSubmitButton = modalQueries.getByRole('button', { name: 'Mint Complete Sets' })
-		if (!(mintSubmitButton instanceof HTMLButtonElement)) throw new Error('Expected Mint Complete Sets transaction button after network switch')
+		mintSubmitButton = modalQueries.getByRole('button', { name: 'Mint complete sets' })
+		if (!(mintSubmitButton instanceof HTMLButtonElement)) throw new Error('Expected Mint complete sets transaction button after network switch')
 		expect(mintSubmitButton.disabled).toBe(true)
 		expect(mintSubmitButton.title).toBe('Switch to Ethereum mainnet.')
 		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
@@ -641,6 +641,24 @@ void describe('TradingSection', () => {
 		expect(redeemSharesButton.title).toBe('Wait for the selected pool to resolve before redeeming shares.')
 	})
 
+	void test('uses a title-case resolved-share dialog title and a sentence-case action label', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					selectedPool: createSelectedPool({ questionOutcome: 'yes' }),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const launcher = documentQueries.getByRole('button', { name: 'Redeem resolved shares' })
+		fireEvent.click(launcher)
+
+		const dialog = documentQueries.getByRole('dialog', { name: 'Redeem Resolved Shares' })
+		expect(within(dialog).getByRole('button', { name: 'Redeem shares' })).not.toBeNull()
+	})
+
 	void test('blocks minting once the selected market has finalized', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
@@ -706,9 +724,9 @@ void describe('TradingSection', () => {
 		const modalQueries = within(documentQueries.getByRole('dialog'))
 		const slider = modalQueries.getByRole('slider') as HTMLInputElement
 
-		expect(modalQueries.getByText('Select Scalar Target')).not.toBeNull()
+		expect(modalQueries.getByText('Select scalar target')).not.toBeNull()
 		expect(modalQueries.getByText('Select at least one scalar target universe.')).not.toBeNull()
-		expect(modalQueries.getByRole('button', { name: 'Add Target' })).not.toBeNull()
+		expect(modalQueries.getByRole('button', { name: 'Add target' })).not.toBeNull()
 
 		await act(() => {
 			fireEvent.input(slider, {
@@ -719,11 +737,11 @@ void describe('TradingSection', () => {
 		expect(modalQueries.getByText('7 / 10')).not.toBeNull()
 
 		await act(() => {
-			fireEvent.click(modalQueries.getByRole('button', { name: 'Add Target' }))
+			fireEvent.click(modalQueries.getByRole('button', { name: 'Add target' }))
 		})
 
 		expect(modalQueries.queryByText('Select at least one scalar target universe.')).toBeNull()
-		expect(modalQueries.getByRole('button', { name: 'Remove Target' })).not.toBeNull()
+		expect(modalQueries.getByRole('button', { name: 'Remove target' })).not.toBeNull()
 	})
 
 	void test('does not render local trading outcome cards for completed action variants', async () => {

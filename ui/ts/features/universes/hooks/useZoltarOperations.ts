@@ -54,6 +54,7 @@ export function useZoltarOperations({
 	const fork = useZoltarFork({
 		accountAddress,
 		activeUniverseId,
+		environmentRefreshKey,
 		ensureZoltarUniverse: universe.ensureZoltarUniverse,
 		onTransactionFailed,
 		onTransactionFinished,

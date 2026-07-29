@@ -113,10 +113,10 @@ describe('MarketCreateQuestionSection', () => {
 			fireEvent.input(documentQueries.getByLabelText('Start Time') as HTMLInputElement, { target: { value: '1200' } })
 		})
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Create Question' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Create question' }))
 		})
 
-		expectTransactionButtonDisabled(document.body, 'Create Question', 'Connect a wallet before creating a question.')
+		expectTransactionButtonDisabled(document.body, 'Create question', 'Connect a wallet before creating a question.')
 		expect(updates.some(update => update.marketType === 'categorical')).toBe(true)
 		expect(updates.some(update => update.title === 'Updated title')).toBe(true)
 	})
@@ -206,7 +206,7 @@ describe('MarketCreateQuestionSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('This question will be created already ended. Reporting and resolution may be available immediately.')).not.toBeNull()
-		const createButton = documentQueries.getByRole('button', { name: 'Create Question' }) as HTMLButtonElement
+		const createButton = documentQueries.getByRole('button', { name: 'Create question' }) as HTMLButtonElement
 		expect(createButton.disabled).toBe(false)
 
 		await act(() => {
@@ -290,9 +290,9 @@ describe('MarketCreateQuestionSection', () => {
 		expect(documentQueries.getByText(question.description)).not.toBeNull()
 
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Use For Fork' }))
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Create Pool From Question' }))
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Create Another Question' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: `Use for fork: ${question.title} (${question.questionId})` }))
+			fireEvent.click(documentQueries.getByRole('button', { name: `Create pool from question: ${question.title} (${question.questionId})` }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Create another question' }))
 		})
 
 		expect(useForForkCount).toBe(1)
@@ -336,7 +336,7 @@ describe('MarketCreateQuestionSection', () => {
 			fireEvent.input(documentQueries.getByLabelText('Outcome 1') as HTMLInputElement, { target: { value: 'Up' } })
 		})
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Add Outcome' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Add outcome' }))
 		})
 		await act(() => {
 			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Remove' })[0] as HTMLButtonElement)
@@ -556,7 +556,7 @@ describe('MarketCreateQuestionSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Enter scalar min, max, and increment to preview the tick slider.')).not.toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Create Question')
+		expectTransactionButtonDisabled(document.body, 'Create question')
 	})
 
 	test('marks scalar range fields required and associates their contextual errors', async () => {
@@ -631,7 +631,7 @@ describe('MarketCreateQuestionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Create Question' }))
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Create question' }))
 		})
 
 		expect(createCallCount).toBe(1)
@@ -780,8 +780,8 @@ describe('MarketCreateQuestionSection', () => {
 		cleanupRenderedComponent = missingRender.cleanup
 		const missingQueries = within(document.body)
 		expect(missingQueries.getByText('Question details are not available.')).not.toBeNull()
-		expect(missingQueries.getByRole('button', { name: 'Already Forked' })).not.toBeNull()
+		expect(missingQueries.getByRole('button', { name: `Already forked: Question (${result.questionId})` })).not.toBeNull()
 		expect(missingQueries.getByText('Unable to load details')).not.toBeNull()
-		expect(missingQueries.getByRole('button', { name: 'Create Pool From Question' }).getAttribute('disabled')).toBe('')
+		expect(missingQueries.getByRole('button', { name: `Create pool from question: Question (${result.questionId})` }).getAttribute('disabled')).toBe('')
 	})
 })

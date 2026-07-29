@@ -284,6 +284,7 @@ export function calculateForkThresholdSeries(generationCount: number, genesisThe
 
 export type LiquidationHealthModel = {
 	currentRequiredRep: number
+	currentRequiredRepDisplay: string
 	state: 'liquidatable' | 'safe'
 	thresholdPrice: number
 }
@@ -318,12 +319,35 @@ export const contractInteractionEdges: ContractInteractionEdge[] = [
 	{ action: 'repair backing', id: 'forker-truth-auction', phase: 'Backing repair', receiver: 'Truth Auction', source: 'Pool Forker' },
 ]
 
-export function calculateLiquidationHealth(unlockedRep: number, allowance: number, multiplier: number, currentPrice: number): LiquidationHealthModel {
-	const currentRequiredRep = allowance * multiplier * currentPrice
-	const thresholdPrice = allowance > 0 && multiplier > 0 ? unlockedRep / (allowance * multiplier) : Number.POSITIVE_INFINITY
+const BPS_DENOMINATOR = 10_000n
+
+export function parseLiquidationMultiplierBps(value: string): bigint | undefined {
+	const match = /^([0-9]+)(?:\.([0-9]{1,4}))?$/.exec(value.trim())
+	if (match === null) return undefined
+	const whole = match[1]
+	const fractional = match[2] ?? ''
+	if (whole === undefined) return undefined
+	return BigInt(whole) * BPS_DENOMINATOR + BigInt(fractional.padEnd(4, '0'))
+}
+
+function formatBpsScaledRep(value: bigint): string {
+	const whole = value / BPS_DENOMINATOR
+	const fractional = (value % BPS_DENOMINATOR).toString().padStart(4, '0').replace(/0+$/, '')
+	return fractional === '' ? whole.toString() : `${whole}.${fractional}`
+}
+
+export function calculateLiquidationHealth(unlockedRep: bigint, allowance: bigint, multiplierBps: bigint, currentPrice: bigint): LiquidationHealthModel {
+	const currentRequiredRepNumerator = allowance * multiplierBps * currentPrice
+	const currentRequiredRep = Number(currentRequiredRepNumerator) / Number(BPS_DENOMINATOR)
+	const thresholdPrice = allowance > 0n && multiplierBps > 0n ? Number(unlockedRep * BPS_DENOMINATOR) / Number(allowance * multiplierBps) : Number.POSITIVE_INFINITY
 	return {
 		currentRequiredRep,
-		state: currentRequiredRep > unlockedRep ? 'liquidatable' : 'safe',
+		currentRequiredRepDisplay: formatBpsScaledRep(currentRequiredRepNumerator),
+		state: currentRequiredRepNumerator > unlockedRep * BPS_DENOMINATOR ? 'liquidatable' : 'safe',
 		thresholdPrice,
 	}
+}
+
+export function describeLiquidationHealth(baseDescription: string, unlockedRep: bigint, model: LiquidationHealthModel): string {
+	return `${baseDescription} At the selected values, required backing is ${model.currentRequiredRepDisplay} REP against ${unlockedRep.toString()} unlocked REP, so the vault is ${model.state}.`
 }

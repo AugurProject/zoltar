@@ -80,7 +80,9 @@ export function ForkZoltarSection({
 	const hasSelectedQuestionId = selectedQuestionId !== ''
 	const confirmationValue = forkConfirmation.questionId === selectedQuestionId ? forkConfirmation.value : ''
 	const hasConfirmedFork = confirmationValue.trim() === FORK_CONFIRMATION
-	const selectedQuestion = selectedQuestionId === '' ? undefined : zoltarQuestions.find(question => sameCaseInsensitiveText(question.questionId, selectedQuestionId))
+	const canonicalForkQuestion = rootUniverse?.forkQuestionDetails
+	const selectedQuestion =
+		selectedQuestionId === '' ? undefined : (zoltarQuestions.find(question => sameCaseInsensitiveText(question.questionId, selectedQuestionId)) ?? (canonicalForkQuestion !== undefined && sameCaseInsensitiveText(canonicalForkQuestion.questionId, selectedQuestionId) ? canonicalForkQuestion : undefined))
 	const selectedQuestionHasEnded = selectedQuestion === undefined || effectiveCurrentTimestamp === undefined ? undefined : effectiveCurrentTimestamp >= selectedQuestion.endTime
 	const selectedQuestionLookupState = resolveLoadableValueState({
 		isLoading: loadingZoltarQuestions,

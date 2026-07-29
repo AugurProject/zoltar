@@ -174,7 +174,7 @@ function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSec
 		parent: PARENT_POOL_ADDRESS,
 		questionOutcome: 'yes',
 		questionId: '0x01',
-		securityMultiplier: 2n,
+		statoblastSecurityMultiplierBps: 20_000n,
 		securityPoolAddress: CHILD_POOL_ADDRESS,
 		shareTokenSupply: 0n,
 		systemState: 'operational',
@@ -400,7 +400,7 @@ describe('ForkAuctionSection settlement summary', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Settle Selected Bids' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Settle selected bids' }))
 		})
 
 		expect(documentQueries.queryByRole('dialog', { name: 'Review Finalized Refund Settlement' })).toBeNull()

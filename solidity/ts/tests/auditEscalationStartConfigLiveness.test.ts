@@ -13,7 +13,7 @@ describe('Audit regression: escalation start configuration liveness', () => {
 	const { assert, deployOriginSecurityPool, getSecurityPoolsEscalationGame, getSecurityVault, getZoltarAddress, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, poolOwnershipToRep, redeemRep, reportBond, reportedRepEthPrice, withdrawFromEscalationGame } = fixture
 
 	test('an existing funded pool remains resolvable when the tracked threshold falls to the configured start bond', async () => {
-		const { client, genesisUniverse, mockWindow, questionData, securityMultiplier, securityPoolAddresses } = fixture
+		const { client, genesisUniverse, mockWindow, questionData, statoblastSecurityMultiplierBps, securityPoolAddresses } = fixture
 		const openInterestAmount = 1n * 10n ** 18n
 		const securityBondAllowance = 25n * 10n ** 18n
 		const universeSupplySlot = keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [genesisUniverse, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT]))
@@ -25,7 +25,7 @@ describe('Audit regression: escalation start configuration liveness', () => {
 				args: [genesisUniverse],
 			})
 
-		assert.strictEqual(securityMultiplier, 2n, 'the fixture must use the normal origin-pool security multiplier')
+		assert.strictEqual(statoblastSecurityMultiplierBps, 20_000n, 'the fixture must use the normal origin-pool security multiplier')
 		assert.strictEqual(
 			await client.readContract({
 				abi: peripherals_SecurityPool_SecurityPool.abi,
@@ -74,7 +74,7 @@ describe('Audit regression: escalation start configuration liveness', () => {
 			'the liveness PoC must isolate a 40 REP tracked-supply boundary',
 		)
 		assert.strictEqual(await readNonDecisionThreshold(), reportBond, 'the live non-decision threshold must equal the 1 REP start bond')
-		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, fixture.questionId, securityMultiplier + 1n), /Escalation threshold too low/)
+		await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, fixture.questionId, statoblastSecurityMultiplierBps + 1n), /Escalation threshold too low/)
 
 		await mockWindow.setTime(questionData.endTime + 1n)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, reportedRepEthPrice)

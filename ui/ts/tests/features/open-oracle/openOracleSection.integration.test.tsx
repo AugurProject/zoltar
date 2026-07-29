@@ -253,7 +253,7 @@ describe.serial('OpenOracleSection integration', () => {
 
 		await fillOpenOracleCreateForm()
 
-		await clickElement(within(document.body).getByRole('button', { name: 'Create Standalone Oracle Report' }))
+		await clickElement(within(document.body).getByRole('button', { name: 'Create standalone Oracle report' }))
 
 		await waitForLatestAction('createReportInstance')
 		await waitFor(async () => {
@@ -270,7 +270,7 @@ describe.serial('OpenOracleSection integration', () => {
 				}),
 			).not.toBeNull()
 		})
-		await clickElement(within(document.body).getByRole('button', { name: 'Open report' }))
+		await clickElement(within(document.body).getByRole('button', { name: /^Open report:/ }))
 
 		await waitFor(() => {
 			const context = document.body.querySelector('.sticky-object-context')
@@ -315,10 +315,10 @@ describe.serial('OpenOracleSection integration', () => {
 			expect(getOpenOracleSelectedReportActionMode(refreshedReport)).toBe('settle')
 		})
 
-		await clickElement(within(document.body).getByRole('button', { name: 'Settle Report' }))
+		await clickElement(within(document.body).getByRole('button', { name: 'Settle report' }))
 		await waitFor(() => {
 			const dialog = within(document.body).getByRole('dialog')
-			const settleButton = within(dialog).getByRole('button', { name: 'Settle Report' }) as HTMLButtonElement
+			const settleButton = within(dialog).getByRole('button', { name: 'Settle report' }) as HTMLButtonElement
 			expect(within(dialog).getByText('Transaction Review')).not.toBeNull()
 			expect(within(dialog).getByText('Report lifecycle')).not.toBeNull()
 			expect(within(dialog).getByText('Settled')).not.toBeNull()
@@ -326,9 +326,9 @@ describe.serial('OpenOracleSection integration', () => {
 			expect(within(dialog).queryByText('Not settled')).toBeNull()
 			expect(within(dialog).getAllByText('Current reporter receives')).toHaveLength(2)
 			expect(within(dialog).getByText('Settler receives')).not.toBeNull()
-			expect(within(document.body).queryByRole('button', { name: 'Dispute & Swap' })).toBeNull()
+			expect(within(document.body).queryByRole('button', { name: 'Dispute & swap' })).toBeNull()
 			expect(settleButton.disabled).toBe(false)
-			expect(within(document.body).queryByText('Dispute window closed. Settle Report instead.')).toBeNull()
+			expect(within(document.body).queryByText('Dispute window closed. Settle report instead.')).toBeNull()
 		})
 	})
 })

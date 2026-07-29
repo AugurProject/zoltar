@@ -6,9 +6,27 @@ type AddressValueProps = {
 	address: string | undefined
 	className?: string
 	copyable?: boolean
+	responsiveAbbreviation?: boolean
 }
 
-export function AddressValue({ address, className = '', copyable = true }: AddressValueProps) {
+function abbreviateAddress(address: string) {
+	if (address.length <= 13) return address
+	return `${address.slice(0, 8)}…${address.slice(-6)}`
+}
+
+function AddressText({ address, responsiveAbbreviation }: { address: string; responsiveAbbreviation: boolean }) {
+	if (!responsiveAbbreviation) return <>{address}</>
+	return (
+		<>
+			<span className='address-value-full'>{address}</span>
+			<span aria-hidden='true' className='address-value-abbreviated'>
+				{abbreviateAddress(address)}
+			</span>
+		</>
+	)
+}
+
+export function AddressValue({ address, className = '', copyable = true, responsiveAbbreviation = false }: AddressValueProps) {
 	const { copied, copyText } = useCopyToClipboard()
 
 	if (address === undefined) {
@@ -23,13 +41,13 @@ export function AddressValue({ address, className = '', copyable = true }: Addre
 	if (!copyable)
 		return (
 			<span className={`address-value ${className}`} title={address}>
-				{address}
+				<AddressText address={address} responsiveAbbreviation={responsiveAbbreviation} />
 			</span>
 		)
 
 	return (
 		<button type='button' className={`address-value copyable ${className}`} title={address} aria-label={commonCopy.formatCopyAddressValue(address)} onClick={() => copyText(address)}>
-			{copied.value ? commonCopy.copied : address}
+			{copied.value ? commonCopy.copied : <AddressText address={address} responsiveAbbreviation={responsiveAbbreviation} />}
 		</button>
 	)
 }

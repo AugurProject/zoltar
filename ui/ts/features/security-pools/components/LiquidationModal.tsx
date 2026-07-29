@@ -30,7 +30,7 @@ import { tryParseBigIntInput, tryParseRepAmountInput } from '../../markets/lib/m
 import { getOracleRequestEthGuardMessage } from '../../open-oracle/lib/oracleRequestEth.js'
 import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type RepPriceSource } from '../../open-oracle/lib/repPriceSource.js'
 import { getStagedOperationTimeoutSeconds, isOracleManagerPriceUsable } from '../lib/securityVault.js'
-import { getVaultCollateralizationPercent } from '../../markets/lib/trading.js'
+import { formatStatoblastSecurityMultiplier, getVaultCollateralizationPercent } from '../../markets/lib/trading.js'
 import { useModalFocusIsolation } from '../../../hooks/useModalFocusIsolation.js'
 import type { SecurityPoolStateModel } from '../lib/securityPoolState.js'
 import type { LiquidationFundingPreview, ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../../../types/contracts.js'
@@ -82,11 +82,11 @@ function getLiquidationModalTitle(currentPoolOracleManagerDetails: OracleManager
 	const executionMode = getLiquidationExecutionMode(currentPoolOracleManagerDetails, currentTimestamp)
 	switch (executionMode) {
 		case 'execute':
-			return liquidationCopy.executeVaultLiquidation
+			return liquidationCopy.executeVaultLiquidationTitle
 		case 'queue':
 			return liquidationCopy.queueVaultLiquidation
 		case 'refreshing':
-			return liquidationCopy.liquidateVault
+			return liquidationCopy.liquidateVaultTitle
 		default:
 			return assertNever(executionMode)
 	}
@@ -231,18 +231,18 @@ export function LiquidationModal({
 	const liquidationTimeoutHelpText = liquidationTimeoutSeconds === undefined ? liquidationCopy.stagedOperationTimeoutHelpText : liquidationCopy.formatTimeoutHelpTextResolved(formatDuration(liquidationTimeoutSeconds))
 	const sameVaultWarning = accountAddress === undefined || trimmedLiquidationTargetVault === '' || !sameAddress(accountAddress, trimmedLiquidationTargetVault) ? undefined : liquidationCopy.distinctTargetVaultRequired
 	const liquidationSimulation =
-		targetVaultSummary === undefined || poolOraclePrice === undefined || selectedPool?.securityMultiplier === undefined || liquidationAmountValue === undefined
+		targetVaultSummary === undefined || poolOraclePrice === undefined || selectedPool?.statoblastSecurityMultiplierBps === undefined || liquidationAmountValue === undefined
 			? undefined
 			: simulateLiquidation({
 					callerVaultSummary,
 					liquidationAmount: liquidationAmountValue,
 					repPerEthPrice: poolOraclePrice,
-					securityMultiplier: selectedPool.securityMultiplier,
+					statoblastSecurityMultiplierBps: selectedPool.statoblastSecurityMultiplierBps,
 					targetVaultSummary,
 				})
 	const computedLiquidationMaxAmount = getMaxLiquidationAmount({
 		repPerEthPrice: poolOraclePrice,
-		securityMultiplier: selectedPool?.securityMultiplier,
+		statoblastSecurityMultiplierBps: selectedPool?.statoblastSecurityMultiplierBps,
 		targetVaultSummary,
 	})
 	const liquidationMaxActionAmount = hasUsableOraclePrice ? (computedLiquidationMaxAmount ?? liquidationMaxAmount) : liquidationMaxAmount
@@ -251,18 +251,18 @@ export function LiquidationModal({
 		liquidationAmount: liquidationAmountValue,
 		maxDebtToMove: hasUsableOraclePrice ? computedLiquidationMaxAmount : undefined,
 		repPerEthPrice: hasUsableOraclePrice ? poolOraclePrice : undefined,
-		securityMultiplier: selectedPool?.securityMultiplier,
+		statoblastSecurityMultiplierBps: selectedPool?.statoblastSecurityMultiplierBps,
 		targetVaultSummary,
 	})
 	const directLiquidationReason = (() => {
 		if (liquidationExecutionMode !== 'execute') return undefined
-		if (selectedPool?.securityMultiplier === undefined) return liquidationCopy.selectedPoolReloadRequired
+		if (selectedPool?.statoblastSecurityMultiplierBps === undefined) return liquidationCopy.selectedPoolReloadRequired
 
 		return getLiquidationFailureReason({
 			callerVaultSummary,
 			liquidationAmount: liquidationAmountValue,
 			repPerEthPrice: poolOraclePrice,
-			securityMultiplier: selectedPool.securityMultiplier,
+			statoblastSecurityMultiplierBps: selectedPool.statoblastSecurityMultiplierBps,
 			targetVaultSummary,
 		})
 	})()
@@ -360,7 +360,7 @@ export function LiquidationModal({
 				<ErrorNotice message={securityPoolLiquidationError} />
 				<DataGrid className='modal-summary-grid' columns={2}>
 					<AddressInfo address={liquidationSecurityPoolAddress} label={liquidationCopy.securityPool} />
-					<MetricField label={commonCopy.securityMultiplier}>{selectedPool?.securityMultiplier === undefined ? commonCopy.unavailable : `${selectedPool.securityMultiplier.toString()}${liquidationCopy.multiplierSuffix}`}</MetricField>
+					<MetricField label={commonCopy.statoblastSecurityMultiplierBps}>{selectedPool?.statoblastSecurityMultiplierBps === undefined ? commonCopy.unavailable : `${formatStatoblastSecurityMultiplier(selectedPool.statoblastSecurityMultiplierBps)}${liquidationCopy.multiplierSuffix}`}</MetricField>
 					<MetricField label={liquidationCopy.callerVault}>{accountAddress === undefined ? commonCopy.connectWallet : <AddressValue address={accountAddress} />}</MetricField>
 					<MetricField label={commonCopy.targetVault}>{trimmedLiquidationTargetVault === '' ? commonCopy.noneSelected : <AddressValue address={trimmedLiquidationTargetVault} />}</MetricField>
 					<MetricField label={commonCopy.openOraclePrice} valueTagName='span'>
@@ -372,7 +372,7 @@ export function LiquidationModal({
 						repPerEthSource={undefined}
 						repPerEthSourceUrl={undefined}
 						securityBondAllowance={targetVaultSummary?.securityBondAllowance}
-						securityMultiplier={selectedPool?.securityMultiplier}
+						statoblastSecurityMultiplierBps={selectedPool?.statoblastSecurityMultiplierBps}
 						unavailableCopy={commonCopy.unavailable}
 					/>
 					<MetricField
@@ -394,7 +394,7 @@ export function LiquidationModal({
 						repPerEthSource={repPerEthSource}
 						repPerEthSourceUrl={repPerEthSourceUrl}
 						securityBondAllowance={targetVaultSummary?.securityBondAllowance}
-						securityMultiplier={selectedPool?.securityMultiplier}
+						statoblastSecurityMultiplierBps={selectedPool?.statoblastSecurityMultiplierBps}
 						unavailableCopy={commonCopy.unavailable}
 					/>
 					<CollateralizationMetricField
@@ -403,7 +403,7 @@ export function LiquidationModal({
 						repPerEthSource={undefined}
 						repPerEthSourceUrl={undefined}
 						securityBondAllowance={callerVaultSummary?.securityBondAllowance}
-						securityMultiplier={selectedPool?.securityMultiplier}
+						statoblastSecurityMultiplierBps={selectedPool?.statoblastSecurityMultiplierBps}
 						unavailableCopy={commonCopy.unavailable}
 					/>
 					{liquidationSimulation === undefined ? undefined : (
@@ -413,7 +413,7 @@ export function LiquidationModal({
 							repPerEthSource={undefined}
 							repPerEthSourceUrl={undefined}
 							securityBondAllowance={liquidationSimulation.callerAfter.securityBondAllowance}
-							securityMultiplier={selectedPool?.securityMultiplier}
+							statoblastSecurityMultiplierBps={selectedPool?.statoblastSecurityMultiplierBps}
 							unavailableCopy={commonCopy.unavailable}
 						/>
 					)}

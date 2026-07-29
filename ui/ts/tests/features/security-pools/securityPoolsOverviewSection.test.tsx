@@ -70,7 +70,7 @@ function createSecurityPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		parent: zeroAddress,
 		questionOutcome: 'none',
 		questionId: '0x01',
-		securityMultiplier: 2n,
+		statoblastSecurityMultiplierBps: 20_000n,
 		securityPoolAddress: zeroAddress,
 		shareTokenSupply: 0n,
 		systemState: 'operational',
@@ -182,6 +182,22 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(identifier.textContent).toBe(questionId)
 	})
 
+	test('gives same-titled pool actions distinct accessible names', async () => {
+		const firstAddress = '0x0000000000000000000000000000000000000100'
+		const secondAddress = '0x0000000000000000000000000000000000000101'
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolsOverviewSection
+				{...createProps({
+					securityPools: [createSecurityPool({ securityPoolAddress: firstAddress }), createSecurityPool({ securityPoolAddress: secondAddress })],
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(within(document.body).getByRole('button', { name: `Open pool: Will this resolve? (${firstAddress})` })).not.toBeNull()
+		expect(within(document.body).getByRole('button', { name: `Open pool: Will this resolve? (${secondAddress})` })).not.toBeNull()
+	})
+
 	test('preserves the pool universe when opening a child-universe pool', async () => {
 		const pool = createSecurityPool({
 			securityPoolAddress: '0x0000000000000000000000000000000000000101',
@@ -192,7 +208,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Open Pool' }))
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Open pool: Will this resolve? (0x0000000000000000000000000000000000000101)' }))
 		})
 
 		expect(onSelectSecurityPool).toHaveBeenCalledWith(pool.securityPoolAddress, 11n)
@@ -274,7 +290,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByText('Previous environment pool')).toBeNull()
 		expect(documentQueries.queryByText('Page 1 of 2')).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Next Page' }).hasAttribute('disabled')).toBe(true)
+		expect(documentQueries.getByRole('button', { name: 'Next page' }).hasAttribute('disabled')).toBe(true)
 		expect(documentQueries.getByText('Refreshing pools.')).not.toBeNull()
 
 		const staleResolvedPage: SecurityPoolBrowsePage = {
@@ -302,7 +318,7 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		expect(documentQueries.queryByText('Stale resolved environment pool')).toBeNull()
 		expect(documentQueries.queryByText('Page 1 of 2')).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Next Page' }).hasAttribute('disabled')).toBe(true)
+		expect(documentQueries.getByRole('button', { name: 'Next page' }).hasAttribute('disabled')).toBe(true)
 
 		deferredPageLoad.resolve()
 		await act(async () => {
@@ -351,7 +367,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		})
 		expect(documentQueries.queryByText('Account A pool')).toBeNull()
 		expect(documentQueries.queryByText('Page 1 of 2')).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Next Page' }).hasAttribute('disabled')).toBe(true)
+		expect(documentQueries.getByRole('button', { name: 'Next page' }).hasAttribute('disabled')).toBe(true)
 	})
 
 	test('uses a non-wallet request key off-mainnet and reloads with the wallet key after switching back', async () => {
@@ -595,7 +611,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Create Security Pool' }))
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Create security pool' }))
 		})
 
 		expect(createSecurityPoolClicks).toBe(1)
@@ -616,7 +632,7 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'No security pools' })).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Create Security Pool' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Create security pool' })).not.toBeNull()
 		expect(documentQueries.queryByText('Refreshing pools.')).toBeNull()
 	})
 
@@ -655,7 +671,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByText('Refreshing pools.')).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'No security pools' })).toBeNull()
-		expect(documentQueries.queryByRole('button', { name: 'Create Security Pool' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Create security pool' })).toBeNull()
 	})
 
 	test('offers an explicit retry action when the pool list fails to load', async () => {
@@ -785,7 +801,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		await waitFor(() => {
 			expect(loadPageCalls.some(call => call.pageIndex === 0)).toBe(true)
 		})
-		const nextPageButton = documentQueries.getByRole('button', { name: 'Next Page' })
+		const nextPageButton = documentQueries.getByRole('button', { name: 'Next page' })
 		await act(() => {
 			nextPageButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 		})
@@ -844,7 +860,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		await waitFor(() => {
 			expect(loadPageCalls.includes(0)).toBe(true)
 		})
-		const nextPageButton = documentQueries.getByRole('button', { name: 'Next Page' })
+		const nextPageButton = documentQueries.getByRole('button', { name: 'Next page' })
 		await act(() => {
 			nextPageButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 		})
@@ -920,7 +936,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		const poolCardQueries = within(poolCard)
 		expect(poolCardQueries.getByRole('link', { name: '0x1' })).not.toBeNull()
 		expect(poolCardQueries.queryByRole('button', { name: 'Copy address 0x0000000000000000000000000000000000000501' })).toBeNull()
-		expect(poolCardQueries.queryByRole('button', { name: 'Review Liquidation' })).toBeNull()
+		expect(poolCardQueries.queryByRole('button', { name: 'Review liquidation' })).toBeNull()
 		expect(poolCard.querySelector('.security-pool-browse-vault-row')).toBeNull()
 		const browseSection = poolCard.closest('.section-block')
 		if (!(browseSection instanceof HTMLElement)) throw new Error('Expected browse section')

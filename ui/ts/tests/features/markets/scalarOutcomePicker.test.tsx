@@ -20,7 +20,7 @@ function ScalarOutcomePickerHarness() {
 				numTicks: 10n,
 			}}
 			isInvalid={isInvalid}
-			label='Select Scalar Target'
+			label='Select scalar target'
 			onInvalidChange={setIsInvalid}
 			onSelectedTickChange={setSelectedTick}
 			selectedOutcomeLabel={isInvalid ? 'Invalid' : `Tick ${selectedTick}`}

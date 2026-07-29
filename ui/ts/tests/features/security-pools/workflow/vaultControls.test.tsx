@@ -202,7 +202,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 						onSecurityVaultFormChange: update => {
 							formChanges.push(update)
 						},
-						selectedPoolSecurityMultiplier: 2n,
+						selectedPoolStatoblastSecurityMultiplierBps: 20_000n,
 						securityVaultDetails: createSecurityVaultDetails({
 							repDepositShare: 12n * 10n ** 18n,
 							securityBondAllowance: 1n * 10n ** 18n,
@@ -226,7 +226,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Set Bond Allowance' })[0] as HTMLElement)
+			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Set bond allowance' })[0] as HTMLElement)
 		})
 
 		const allowanceDialog = documentQueries.getByRole('dialog', { name: 'Set Bond Allowance' })
@@ -281,12 +281,12 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Set Bond Allowance' })[0] as HTMLElement)
+			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Set bond allowance' })[0] as HTMLElement)
 		})
 
 		const allowanceDialog = documentQueries.getByRole('dialog', { name: 'Set Bond Allowance' })
 		expect(within(allowanceDialog).queryByText(/^Blocked:/)).toBeNull()
-		expectTransactionButtonEnabled(allowanceDialog as HTMLElement, 'Set Security Bond Allowance')
+		expectTransactionButtonEnabled(allowanceDialog as HTMLElement, 'Set security bond allowance')
 	})
 
 	test('blocks the workflow bond-allowance modal when the wallet lacks the buffered oracle bounty ETH', async () => {
@@ -334,11 +334,11 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Set Bond Allowance' })[0] as HTMLElement)
+			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Set bond allowance' })[0] as HTMLElement)
 		})
 
 		const allowanceDialog = documentQueries.getByRole('dialog', { name: 'Set Bond Allowance' })
-		expectTransactionButtonDisabled(allowanceDialog as HTMLElement, 'Set Security Bond Allowance', 'Need 7 more ETH in this wallet to queue this bond allowance update.')
+		expectTransactionButtonDisabled(allowanceDialog as HTMLElement, 'Set security bond allowance', 'Need 7 more ETH in this wallet to queue this bond allowance update.')
 	})
 
 	test('blocks withdraw REP in the workflow modal when the wallet lacks the buffered oracle bounty ETH', async () => {

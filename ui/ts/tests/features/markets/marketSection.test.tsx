@@ -87,7 +87,7 @@ function createLinkedSecurityPool(questionId: string): ListedSecurityPool {
 		parent: zeroAddress,
 		questionId,
 		questionOutcome: 'none',
-		securityMultiplier: 2n,
+		statoblastSecurityMultiplierBps: 20_000n,
 		securityPoolAddress: '0x0000000000000000000000000000000000000011',
 		shareTokenSupply: 4n,
 		systemState: 'operational',
@@ -232,8 +232,8 @@ describe('MarketSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const sharesLink = documentQueries.getByRole('link', { name: 'Open Shares & Position' })
-		const reportingLink = documentQueries.getByRole('link', { name: 'Open Reporting' })
+		const sharesLink = documentQueries.getByRole('link', { name: 'Open shares & position for Fork question title in universe 11 (0x0000000000000000000000000000000000000011)' })
+		const reportingLink = documentQueries.getByRole('link', { name: 'Open reporting for Fork question title in universe 11 (0x0000000000000000000000000000000000000011)' })
 		expect(sharesLink.getAttribute('href')).toContain('universe=11')
 		expect(sharesLink.getAttribute('href')).toContain('selectedPoolView=trading')
 		expect(reportingLink.getAttribute('href')).toContain('selectedPoolView=reporting')
@@ -329,7 +329,7 @@ describe('MarketSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const nextPageButton = documentQueries.getByRole('button', { name: 'Next Page' })
+		const nextPageButton = documentQueries.getByRole('button', { name: 'Next page' })
 		await act(() => {
 			fireEvent.click(nextPageButton)
 		})
@@ -537,7 +537,7 @@ describe('MarketSection', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Next Page' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Next page' }))
 		})
 		await act(async () => {
 			initialLoad.reject(new Error('temporary failure'))
@@ -573,7 +573,7 @@ describe('MarketSection', () => {
 		})
 
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Previous Page' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Previous page' }))
 		})
 		await act(() => {
 			render(
@@ -600,7 +600,7 @@ describe('MarketSection', () => {
 			)
 		})
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Next Page' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Next page' }))
 		})
 		await act(() => {
 			render(
@@ -715,7 +715,7 @@ describe('MarketSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Create Question' }))
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Create question' }))
 		})
 
 		expect(selectedViews).toEqual(['create'])
@@ -755,13 +755,39 @@ describe('MarketSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const useForForkButton = documentQueries.getByRole('button', { name: 'Use For Fork' })
+		const useForForkButton = documentQueries.getByRole('button', { name: 'Use for fork: Fork question title (0x01)' })
 		await act(() => {
 			useForForkButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 		})
 
 		expect(selectedQuestionIds).toEqual([question.questionId])
 		expect(selectedViews).toEqual(['fork'])
+	})
+
+	test('gives same-titled question actions distinct accessible names', async () => {
+		const firstQuestion = createBinaryForkQuestion()
+		const secondQuestion = { ...createBinaryForkQuestion(), questionId: '0x02' }
+		const renderedComponent = await renderIntoDocument(
+			h(
+				MarketSection,
+				createMarketSectionProps({
+					zoltarQuestionCount: 2n,
+					zoltarQuestionPage: {
+						pageIndex: 0,
+						pageSize: 10,
+						questionCount: 2n,
+						questions: [firstQuestion, secondQuestion],
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('button', { name: 'Use for fork: Fork question title (0x01)' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Use for fork: Fork question title (0x02)' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Create pool from question: Fork question title (0x01)' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Create pool from question: Fork question title (0x02)' })).not.toBeNull()
 	})
 
 	test('shows immutable questions without missing-context helper copy', async () => {
@@ -811,7 +837,7 @@ describe('MarketSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const createPoolButton = documentQueries.getByRole('button', { name: 'Create Pool From Question' })
+		const createPoolButton = documentQueries.getByRole('button', { name: 'Create pool from question: Fork question title (0x01)' })
 		if (!(createPoolButton instanceof HTMLButtonElement)) throw new Error('Expected create-pool button')
 		expect(createPoolButton.disabled).toBe(true)
 		expect(createPoolButton.title).toBe('Binary pools only')
@@ -866,6 +892,179 @@ describe('MarketSection', () => {
 		expectTransactionButtonDisabled(modal as HTMLElement, 'Fork Zoltar', 'Select a valid fork question to continue.')
 	})
 
+	test('uses distinct action and dialog title casing for forked-universe details', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				MarketSection,
+				createMarketSectionProps({
+					activeView: 'fork',
+					zoltarUniverse: createZoltarUniverse({
+						forkQuestionDetails: createBinaryForkQuestion(),
+						hasForked: true,
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		const launcher = documentQueries.getByRole('button', { name: 'View fork details' })
+		await act(() => {
+			fireEvent.click(launcher)
+		})
+
+		expect(documentQueries.getByRole('dialog', { name: 'View Fork Details' })).not.toBeNull()
+	})
+
+	test('keeps the selected fork question understandable before transaction review', async () => {
+		const question = createBinaryForkQuestion()
+		const renderedComponent = await renderIntoDocument(
+			h(
+				MarketSection,
+				createMarketSectionProps({
+					activeView: 'fork',
+					hasLoadedZoltarQuestions: true,
+					zoltarForkQuestionId: question.questionId,
+					zoltarQuestionCount: 1n,
+					zoltarQuestions: [question],
+					zoltarUniverse: createZoltarUniverse({ universeId: 7n }),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const summary = document.body.querySelector('.selected-fork-question-summary')
+		if (!(summary instanceof HTMLElement)) throw new Error('Expected selected fork question summary')
+		expect(summary.getAttribute('aria-label')).toBe('Selected fork question')
+		expect(within(summary).getByText('Fork question title')).not.toBeNull()
+		expect(within(summary).getByText('Binary')).not.toBeNull()
+		expect(within(summary).getByText('Yes')).not.toBeNull()
+		expect(within(summary).getByText('No')).not.toBeNull()
+		expect(within(summary).getByText('Universe 0x7')).not.toBeNull()
+		expect(within(summary).getByRole('button', { name: `Copy identifier ${question.questionId}` })).not.toBeNull()
+	})
+
+	test('shows the canonical fork question summary on a fresh visit to a forked universe', async () => {
+		const question = createBinaryForkQuestion()
+		const renderedComponent = await renderIntoDocument(
+			h(
+				MarketSection,
+				createMarketSectionProps({
+					activeView: 'fork',
+					zoltarForkQuestionId: '',
+					zoltarUniverse: createZoltarUniverse({
+						forkQuestionDetails: question,
+						hasForked: true,
+						universeId: 7n,
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const summary = document.body.querySelector('.selected-fork-question-summary')
+		if (!(summary instanceof HTMLElement)) throw new Error('Expected canonical fork question summary')
+		expect(within(summary).getByText('Fork question title')).not.toBeNull()
+		expect(within(summary).getByText('Binary')).not.toBeNull()
+		expect(within(summary).getByText('Yes')).not.toBeNull()
+		expect(within(summary).getByText('No')).not.toBeNull()
+		expect(within(summary).getByText('Universe 0x7')).not.toBeNull()
+		expect(within(summary).getByRole('button', { name: `Copy identifier ${question.questionId}` })).not.toBeNull()
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'View fork details' }))
+		})
+		const modal = documentQueries.getByRole('dialog', { name: 'View Fork Details' })
+		const modalQueries = within(modal)
+		const questionIdInput = modalQueries.getByLabelText('Fork Question ID') as HTMLInputElement
+		expect(questionIdInput.value).toBe(question.questionId)
+		expect(questionIdInput.disabled).toBe(true)
+		expect(modalQueries.getByText('Fork question title')).not.toBeNull()
+		expect(modal.textContent).toContain('Yes')
+		expect(modal.textContent).toContain('No')
+	})
+
+	test('uses the forked universe canonical question across summary and modal after a universe transition', async () => {
+		const localQuestion = createBinaryForkQuestion()
+		const canonicalQuestion = {
+			...createBinaryForkQuestion(),
+			questionId: '0x02',
+			title: 'Canonical fork question',
+		}
+		const initialProps = createMarketSectionProps({
+			activeView: 'fork',
+			zoltarForkQuestionId: localQuestion.questionId,
+			zoltarQuestionCount: 1n,
+			zoltarQuestions: [localQuestion],
+			zoltarUniverse: createZoltarUniverse({ universeId: 1n }),
+		})
+		const renderedComponent = await renderIntoDocument(h(MarketSection, initialProps))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(() => {
+			render(
+				h(
+					MarketSection,
+					createMarketSectionProps({
+						...initialProps,
+						activeUniverseId: 2n,
+						zoltarUniverse: createZoltarUniverse({
+							forkQuestionDetails: canonicalQuestion,
+							hasForked: true,
+							universeId: 2n,
+						}),
+					}),
+				),
+				renderedComponent.container,
+			)
+		})
+
+		const summary = document.body.querySelector('.selected-fork-question-summary')
+		if (!(summary instanceof HTMLElement)) throw new Error('Expected transitioned fork question summary')
+		const summaryQueries = within(summary)
+		expect(summaryQueries.getByText('Canonical fork question')).not.toBeNull()
+		expect(summaryQueries.queryByText('Fork question title')).toBeNull()
+		expect(summaryQueries.getByText('Universe 0x2')).not.toBeNull()
+		expect(summaryQueries.getByRole('button', { name: `Copy identifier ${canonicalQuestion.questionId}` })).not.toBeNull()
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'View fork details' }))
+		})
+		const modalQueries = within(documentQueries.getByRole('dialog', { name: 'View Fork Details' }))
+		expect((modalQueries.getByLabelText('Fork Question ID') as HTMLInputElement).value).toBe(canonicalQuestion.questionId)
+		expect(modalQueries.getByText('Canonical fork question')).not.toBeNull()
+		expect(modalQueries.queryByText('Fork question title')).toBeNull()
+	})
+
+	test('keeps every required fork-question field visible while selected metadata is unavailable', async () => {
+		const questionId = '0x99'
+		const renderedComponent = await renderIntoDocument(
+			h(
+				MarketSection,
+				createMarketSectionProps({
+					activeView: 'fork',
+					zoltarForkQuestionId: questionId,
+					zoltarQuestionCount: 1n,
+					zoltarQuestions: [],
+					zoltarUniverse: createZoltarUniverse({ universeId: 7n }),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const summary = document.body.querySelector('.selected-fork-question-summary')
+		if (!(summary instanceof HTMLElement)) throw new Error('Expected fallback fork question summary')
+		const summaryQueries = within(summary)
+		expect(summaryQueries.getByText('Title')).not.toBeNull()
+		expect(summaryQueries.getByText('Outcomes')).not.toBeNull()
+		expect(summaryQueries.getByText('Question Type')).not.toBeNull()
+		expect(summaryQueries.getAllByText('Unavailable')).toHaveLength(3)
+		expect(summaryQueries.getByText('Universe 0x7')).not.toBeNull()
+		expect(summaryQueries.getByRole('button', { name: `Copy identifier ${questionId}` })).not.toBeNull()
+	})
+
 	test('guides users to create a question instead of opening an empty fork dialog', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -890,7 +1089,7 @@ describe('MarketSection', () => {
 		expect(documentQueries.queryByRole('dialog')).toBeNull()
 
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Create Question' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Create question' }))
 		})
 		expect(documentQueries.queryByRole('dialog')).toBeNull()
 	})
@@ -932,7 +1131,7 @@ describe('MarketSection', () => {
 		expect(modalQueries.getByText('Create Child Universe')).not.toBeNull()
 		expect(modalQueries.getByText('Selected Child Universe')).not.toBeNull()
 
-		fireEvent.click(modalQueries.getByRole('button', { name: 'Deploy Universe' }))
+		fireEvent.click(modalQueries.getByRole('button', { name: 'Deploy universe' }))
 		expect(createChildUniverseCallCount).toBe(1)
 	})
 })

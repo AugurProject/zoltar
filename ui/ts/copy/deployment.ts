@@ -5,12 +5,13 @@ export const notDeployedBadgeLabel = 'Not Deployed'
 export const waiting = 'Waiting'
 export const formatPrerequisiteDetail = (prerequisiteLabel: string) => `Requires ${prerequisiteLabel}`
 export const allDeployed = 'All deployed'
-export const formatCompletedSectionTitle = (sectionTitle: string) => `${sectionTitle} (Completed)`
+export const formatDeployContract = (contractLabel: string) => `Deploy ${contractLabel}`
+export const formatDeployingContract = (contractLabel: string) => `Deploying ${contractLabel}…`
 export const contractsDeployed = 'Contracts deployed'
-export const deployNextMissing = 'Deploy Next Missing'
-export const browseQuestions = 'Browse Questions'
-export const deploymentGroups = 'Deployment Groups'
-export const deploymentRunningStatusLabel = 'Deployment In Progress'
+export const deployNextMissing = 'Deploy next missing'
+export const browseQuestions = 'Browse questions'
+export const allContracts = 'All contracts'
+export const deploymentRunningStatusLabel = 'Deployment in progress'
 export const deploymentOverviewDetail = 'Deploy and verify the shared deterministic contracts that back the application.'
 export const deterministicContractDeployment = 'Deterministic contract deployment'
 export const loadingDeploymentStatus = 'Loading deployment status…'

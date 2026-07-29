@@ -44,7 +44,7 @@ type AssemblyDelegateCall = {
 }
 
 const outputPath = 'docs/contract-interaction-reference.md'
-const expectedProductionSoliditySourceFingerprint = '22ce721537c079369301cdceee48f1f746d4f7baa0fd49825075156e47794919'
+const expectedProductionSoliditySourceFingerprint = '5a6cd3105a6166ece263cf88c71ffc83ec86fc4bc41c39132f41d95a1f1156d9'
 
 const eventSourceByName: Record<string, string> = {
 	Approval: 'solidity/contracts/IERC20.sol',
@@ -177,7 +177,7 @@ const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePa
 	{
 		name: 'DeploySecurityPool',
 		parameters:
-			'ISecurityPool indexed securityPool,UniformPriceDualCapBatchAuction truthAuction,OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer,IShareToken shareToken,ISecurityPool indexed parent,uint248 indexed universeId,uint256 questionId,uint256 securityMultiplier,uint256 initialReportPriorityFeeWeiPerGas,uint256 currentRetentionRate,uint256 completeSetCollateralAmount',
+			'ISecurityPool indexed securityPool,UniformPriceDualCapBatchAuction truthAuction,OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer,IShareToken shareToken,ISecurityPool indexed parent,uint248 indexed universeId,uint256 questionId,uint256 statoblastSecurityMultiplierBps,uint256 initialReportPriorityFeeWeiPerGas,uint256 currentRetentionRate,uint256 completeSetCollateralAmount',
 		sourcePath: 'solidity/contracts/peripherals/factories/SecurityPoolFactory.sol',
 	},
 	{
@@ -324,7 +324,7 @@ const assemblyDelegateCalls: AssemblyDelegateCall[] = [
 	},
 ]
 
-const referencedEventAbiFingerprint = '09d7fcd361563992e87ae80aad41f3338bcdb8edf9ba71b8f01ba2e8dbae2ab8'
+const referencedEventAbiFingerprint = '440290a7a67f39111b62b8e60e9d45c021c08bcabc79ffb21efdf40b7a31ea86'
 
 const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	'solidity/contracts/ERC20.sol': {
@@ -474,7 +474,7 @@ const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/peripherals/SecurityPoolForkerBase.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/peripherals/SecurityPoolForkerStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/peripherals/UniformPriceDualCapBatchAuction.sol': 'c6fbecf8a9b808a1111fadb9cbb1a5b53edc30dff9cdac2f116fa58133536c2f',
-	'solidity/contracts/peripherals/factories/SecurityPoolFactory.sol': '64ce90671df93d7d85580ab404806c41d1eabaf7283ba979a0ff7bb6e7b40bd3',
+	'solidity/contracts/peripherals/factories/SecurityPoolFactory.sol': '22009fa557a407a62acc50e796d78fbfa46cc3a788a557db9c57cec0cb28d0a0',
 	'solidity/contracts/peripherals/tokens/ERC1155.sol': '7bb87695bc3df8fa177c545209ed58d2e4571c19c869b5598bb0a829e764b218',
 	'solidity/contracts/peripherals/tokens/ShareToken.sol': '45fffaf3a3150648f3f43a9129d2a5af0ddc4e261de52a6ad379fa804e44672d',
 }
@@ -655,10 +655,10 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'cc1525492f53d969e461abec0b7a16bdfbcd06333cd8b573b787841f99ab4beb',
+		compiledAbiFingerprint: 'd74fe342c1762ca3d8f202b4ea030d7c91557cc73293f1571a640d5fe513d409',
 		name: 'SecurityPoolFactory',
 		purpose: 'Creates and canonically registers origin and child security pools with their share token, oracle coordinator, and optional truth auction.',
-		readAbiFingerprint: '02ef47b74eec96814be4fc8a8a933b33fccd4f5bb5b84c30e0876d09234294df',
+		readAbiFingerprint: 'c0ba5d92d33347389bb7ec828c057ea30e0ddc9457f87225d517966bde45e498',
 		readSurface:
 			'Use `initialEscalationGameDeposit` for the immutable deployment parameter, which must be at least 1 REP, and `securityPoolDeploymentCount` with the strict `securityPoolDeploymentsRange(startIndex, count)` pager, which reverts rather than truncating when the requested range exceeds the array. Use `getOriginId`, `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId`, and `getSecurityPoolHasInheritedForkOutcome` for canonical lookup.',
 		readDeclarations: [{ name: 'securityPoolDeploymentCount' }, { name: 'securityPoolDeploymentsRange' }, { name: 'getOriginId' }, { name: 'getPoolId' }, { name: 'getSecurityPool' }, { name: 'getSecurityPoolOriginId' }, { name: 'getSecurityPoolHasInheritedForkOutcome' }],
@@ -666,16 +666,16 @@ const contractReferences: ContractReference[] = [
 		sourcePath: 'solidity/contracts/peripherals/factories/SecurityPoolFactory.sol',
 		interactions: [
 			{
-				call: '`deployOriginSecurityPool(universeId, questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas)`',
+				call: '`deployOriginSecurityPool(universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeWeiPerGas)`',
 				caller: 'Anyone',
 				effect: 'Creates the canonical origin pool, its lineage-wide share token, and its price coordinator with the configured initial-report priority fee, then wires and registers them atomically.',
 				declarations: [{ name: 'deployOriginSecurityPool' }],
 				preconditions:
-					'`securityMultiplier > 1`; `initialReportPriorityFeeWeiPerGas > 0` and remains within the coordinator-computed OpenOracle `uint128` report/escalation-halt capacity bound; question exists and has exactly the categorical labels `Yes`, then `No`; universe is unforked and has a REP token; the live non-decision threshold exceeds `initialEscalationGameDeposit`; the origin/universe/priority-fee slot has not already been claimed.',
+					'`statoblastSecurityMultiplierBps > 10_000`; `initialReportPriorityFeeWeiPerGas > 0` and remains within the coordinator-computed OpenOracle `uint128` report/escalation-halt capacity bound; question exists and has exactly the categorical labels `Yes`, then `No`; universe is unforked and has a REP token; the live non-decision threshold exceeds `initialEscalationGameDeposit`; the origin/universe/priority-fee slot has not already been claimed.',
 				signals: '`SecurityPoolRegistered`, then `DeploySecurityPool`',
 			},
 			{
-				call: '`deployChildSecurityPool(parent, shareToken, universeId, questionId, securityMultiplier, currentRetentionRate, completeSetCollateralAmount)`',
+				call: '`deployChildSecurityPool(parent, shareToken, universeId, questionId, statoblastSecurityMultiplierBps, currentRetentionRate, completeSetCollateralAmount)`',
 				caller: '`SecurityPoolForker` only',
 				effect: 'Creates and registers a canonical child pool with a coordinator that inherits `initialReportPriorityFeeWeiPerGas` from the parent coordinator and a forker-owned truth auction, while retaining the parent lineage share token.',
 				declarations: [{ name: 'deployChildSecurityPool' }],
@@ -685,12 +685,12 @@ const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'a89b8774585a67959e34124765e2ad1065eb3d2895a0a2fc38368cd14556d6b1',
+		compiledAbiFingerprint: 'bb73df11c7ac59958621e85029f9d7a7f57163872f70d6078a1f60537635e22b',
 		name: 'SecurityPool',
 		purpose: 'Holds ETH collateral and REP underwriting, accounts for vaults and fees, mints shares, and routes local escalation.',
-		readAbiFingerprint: '06857683318415b32aa066f45f57ec80cd841048bb855f1ca4bd10f6ed723ae3',
+		readAbiFingerprint: '94a12eee9e07a4918d41e0d53983943a12a3dc4ef7d02514427e04044d939bc9',
 		readSurface:
-			'Immutable relationship and configuration getters are `questionId`, `universeId`, `initialEscalationGameDeposit`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceOracleManagerAndOperatorQueuer`, `openOracle`, `escalationGameFactory`, `questionData`, `securityPoolForker`, `truthAuction`, `securityPoolFactory`, and `securityMultiplier`; the current game is `escalationGame`. Accounting and lifecycle getters are `totalSecurityBondAllowance`, `completeSetCollateralAmount`, `poolOwnershipDenominator`, `shareTokenSupply`, `totalFeesOwedToVaults`, `lastUpdatedFeeAccumulator`, `feeIndex`, `currentRetentionRate`, `awaitingForkContinuation`, `securityVaults`, and `systemState`. Use `securityPoolEventEmitter`, `getVaultCount`, `getActiveVaultCount`, `getVaults`, `getActiveVaults`, `sharesToCash`, `cashToShares`, `repToPoolOwnership`, `repToPoolOwnershipRoundUp`, `poolOwnershipToRep`, `getTotalRepBalance`, `totalAccruedFees`, `getPoolAccountingSnapshot`, `getVaultFeeRemainder`, and `isEscalationResolved` for derived or paged state. `isEscalationResolved()` is true only when a local escalation game is configured and the forker routes a non-`None` outcome; an operational fixed-outcome child without a local game returns false. `SystemState` determines which transaction paths remain open.',
+			'Immutable relationship and configuration getters are `questionId`, `universeId`, `initialEscalationGameDeposit`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceOracleManagerAndOperatorQueuer`, `openOracle`, `escalationGameFactory`, `questionData`, `securityPoolForker`, `truthAuction`, `securityPoolFactory`, and `statoblastSecurityMultiplierBps`; the current game is `escalationGame`. Accounting and lifecycle getters are `totalSecurityBondAllowance`, `completeSetCollateralAmount`, `poolOwnershipDenominator`, `shareTokenSupply`, `totalFeesOwedToVaults`, `lastUpdatedFeeAccumulator`, `feeIndex`, `currentRetentionRate`, `awaitingForkContinuation`, `securityVaults`, and `systemState`. Use `securityPoolEventEmitter`, `getVaultCount`, `getActiveVaultCount`, `getVaults`, `getActiveVaults`, `sharesToCash`, `cashToShares`, `repToPoolOwnership`, `repToPoolOwnershipRoundUp`, `poolOwnershipToRep`, `getTotalRepBalance`, `totalAccruedFees`, `getPoolAccountingSnapshot`, `getVaultFeeRemainder`, and `isEscalationResolved` for derived or paged state. `isEscalationResolved()` is true only when a local escalation game is configured and the forker routes a non-`None` outcome; an operational fixed-outcome child without a local game returns false. `SystemState` determines which transaction paths remain open.',
 		securityBoundary:
 			'Price-sensitive withdrawal, allowance, and liquidation calls depend on [A16 timely inclusion](./security-model.html#assumption-a16), [A21 external token behavior](./security-model.html#assumption-a21), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). User-initiated pool calls additionally depend on [A28 account authority](./security-model.html#assumption-a28).',
 		readDeclarations: [
@@ -729,7 +729,7 @@ const contractReferences: ContractReference[] = [
 			{ name: 'totalSecurityBondAllowance' },
 			{ name: 'completeSetCollateralAmount' },
 			{ name: 'poolOwnershipDenominator' },
-			{ name: 'securityMultiplier' },
+			{ name: 'statoblastSecurityMultiplierBps' },
 			{ name: 'shareTokenSupply' },
 			{ name: 'totalFeesOwedToVaults' },
 			{ name: 'lastUpdatedFeeAccumulator' },

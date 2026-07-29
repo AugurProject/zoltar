@@ -1,6 +1,14 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { decodeEventLog, zeroAddress, type Abi, type Address, type Hex } from '@zoltar/shared/ethereum'
-import { peripherals_EscalationGame_EscalationGame, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory, peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, peripherals_SecurityPool_SecurityPool, peripherals_tokens_ShareToken_ShareToken, Zoltar_Zoltar } from '../../types/contractArtifact'
+import {
+	peripherals_EscalationGame_EscalationGame,
+	peripherals_factories_SecurityPoolFactory_SecurityPoolFactory,
+	peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator,
+	peripherals_SecurityPool_SecurityPool,
+	peripherals_SecurityPoolForker_SecurityPoolForker,
+	peripherals_tokens_ShareToken_ShareToken,
+	Zoltar_Zoltar,
+} from '../../types/contractArtifact'
 import { getMigrationRepBalance, getUniverseData, getUniverseTheoreticalSupply } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { hashCarryLeaf, hashParent } from '../carryProofHelpers'
 import { isIgnorableLogDecodeError } from '../logDecodeErrors'
@@ -301,7 +309,7 @@ describe('event-only replay', () => {
 					parent: zeroAddress,
 					universeId: 1n,
 					questionId: 2n,
-					securityMultiplier: 3n,
+					statoblastSecurityMultiplierBps: 30_000n,
 					initialReportPriorityFeeWeiPerGas: 10n,
 					currentRetentionRate: 4n,
 					completeSetCollateralAmount: 0n,
@@ -841,7 +849,7 @@ describe('event-only replay', () => {
 					parent,
 					universeId: 1n,
 					questionId: 2n,
-					securityMultiplier: 3n,
+					statoblastSecurityMultiplierBps: 30_000n,
 					initialReportPriorityFeeWeiPerGas: 10n,
 					currentRetentionRate: 4n,
 					completeSetCollateralAmount: 5n,
@@ -855,7 +863,7 @@ describe('event-only replay', () => {
 		]
 
 		const replayed = replayZoltarEvents(logs)
-		if (replayed.poolDeployments.get(pool)?.securityMultiplier !== 3n) throw new Error('child security multiplier mismatch')
+		if (replayed.poolDeployments.get(pool)?.statoblastSecurityMultiplierBps !== 30_000n) throw new Error('child security multiplier mismatch')
 		if (replayed.completeSetSupplies.get(pool) !== 40n) throw new Error('child share-token supply mismatch')
 		const poolState = replayed.poolStates.get(pool)
 		if (poolState?.shareTokenSupply !== 40n) throw new Error('child pool share-token state mismatch')
@@ -1116,7 +1124,7 @@ describe('event-only replay', () => {
 					parent: zeroAddress,
 					universeId: 9n,
 					questionId: 12n,
-					securityMultiplier: 3n,
+					statoblastSecurityMultiplierBps: 30_000n,
 					initialReportPriorityFeeWeiPerGas: 10n,
 					currentRetentionRate: 4n,
 					completeSetCollateralAmount: 0n,
@@ -1295,11 +1303,11 @@ describe('event-only replay', () => {
 			address: factory,
 			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 			functionName: 'deployOriginSecurityPool',
-			args: [fixture.genesisUniverse, questionId, fixture.securityMultiplier, 10n * 10n ** 9n],
+			args: [fixture.genesisUniverse, questionId, fixture.statoblastSecurityMultiplierBps, 10n * 10n ** 9n],
 		})
 		const receipt = await client.waitForTransactionReceipt({ hash: deploymentHash })
 		if (receipt.status === 'reverted') throw new Error('origin pool deployment reverted')
-		const addresses = fixture.getSecurityPoolAddresses(zeroAddress, fixture.genesisUniverse, questionId, fixture.securityMultiplier)
+		const addresses = fixture.getSecurityPoolAddresses(zeroAddress, fixture.genesisUniverse, questionId, fixture.statoblastSecurityMultiplierBps)
 		const blockNumber = receipt.blockNumber
 		const replayLogs = (
 			await Promise.all([
@@ -1406,7 +1414,8 @@ describe('event-only replay', () => {
 		}
 	})
 
-	test('actual child continuation pre-discovers the game before its continuation event', async () => {
+	test('actual child continuation replays its inherited carry checkpoint and storage', async () => {
+		const fromBlock = (await client.getBlockNumber()) + 1n
 		await mockWindow.setTime(fixture.questionData.endTime + 1n)
 		await fixture.depositToEscalationGame(client, securityPoolAddresses.securityPool, fixture.QuestionOutcome.Yes, fixture.reportBond)
 		await fixture.triggerExternalForkForSecurityPool(undefined, 'event replay child continuation')
@@ -1414,28 +1423,37 @@ describe('event-only replay', () => {
 		const childDeploymentHash = await fixture.createChildUniverse(client, securityPoolAddresses.securityPool, fixture.QuestionOutcome.Yes)
 		const receipt = await client.getTransactionReceipt({ hash: childDeploymentHash })
 		const childUniverseId = fixture.getChildUniverseId(fixture.genesisUniverse, fixture.QuestionOutcome.Yes)
-		const child = fixture.getSecurityPoolAddresses(securityPoolAddresses.securityPool, childUniverseId, fixture.questionId, fixture.securityMultiplier)
+		const child = fixture.getSecurityPoolAddresses(securityPoolAddresses.securityPool, childUniverseId, fixture.questionId, fixture.statoblastSecurityMultiplierBps)
 		const factory = fixture.getInfraContractAddresses().securityPoolFactory
+		const forker = fixture.getInfraContractAddresses().securityPoolForker
 		const factoryLogs = await getContractReplayLogs(factory, peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi, 0n, receipt.blockNumber)
+		const canonicalPools = new Set([securityPoolAddresses.securityPool.toLowerCase(), child.securityPool.toLowerCase()])
 		const deploymentLogs = factoryLogs.filter(log => {
 			const deployedPool = log.args['securityPool']
-			return log.eventName === 'DeploySecurityPool' && typeof deployedPool === 'string' && deployedPool.toLowerCase() === child.securityPool.toLowerCase()
+			return log.eventName === 'DeploySecurityPool' && typeof deployedPool === 'string' && canonicalPools.has(deployedPool.toLowerCase())
 		})
+		const [sourcePoolLogs, sourceGameLogs, forkerLogs] = await Promise.all([
+			getContractReplayLogs(securityPoolAddresses.securityPool, peripherals_SecurityPool_SecurityPool.abi, fromBlock, receipt.blockNumber),
+			getContractReplayLogs(securityPoolAddresses.escalationGame, peripherals_EscalationGame_EscalationGame.abi, fromBlock, receipt.blockNumber),
+			getContractReplayLogs(forker, peripherals_SecurityPoolForker_SecurityPoolForker.abi, fromBlock, receipt.blockNumber),
+		])
 		const receiptLogs = (await Promise.all([getContractReplayLogs(child.securityPool, peripherals_SecurityPool_SecurityPool.abi, receipt.blockNumber, receipt.blockNumber), getContractReplayLogs(child.escalationGame, peripherals_EscalationGame_EscalationGame.abi, receipt.blockNumber, receipt.blockNumber)]))
 			.flat()
 			.filter(log => log.transactionHash === childDeploymentHash)
-			.filter(log => log.emitter.toLowerCase() !== child.escalationGame.toLowerCase() || log.eventName === 'GameContinuedFromFork')
 		const continued = receiptLogs.find(log => log.eventName === 'GameContinuedFromFork')
+		const carryCheckpoint = receiptLogs.find(log => log.eventName === 'ForkCarryCheckpoint')
 		const gameSet = receiptLogs.find(log => log.eventName === 'EscalationGameSet')
-		if (deploymentLogs.length !== 1 || continued === undefined || gameSet === undefined) throw new Error('child continuation is missing discovery events')
+		if (deploymentLogs.length !== 2 || continued === undefined || carryCheckpoint === undefined || gameSet === undefined) {
+			throw new Error('child continuation is missing deployment, carry, or discovery events')
+		}
 		if (continued.logIndex >= gameSet.logIndex) throw new Error('child continuation event did not precede pool relationship event')
 		if (receiptLogs.some(log => log.eventName === 'SystemStateSet')) throw new Error('child constructor state should not depend on a synthetic system-state event')
 
-		const replayed = replayZoltarEvents([...deploymentLogs, ...receiptLogs], new Set(), new Set([factory]))
+		const replayed = replayZoltarEvents([...deploymentLogs, ...sourcePoolLogs, ...sourceGameLogs, ...forkerLogs, ...receiptLogs], new Set(), new Set([factory]))
 		const deployment = replayed.poolDeployments.get(child.securityPool)
 		if (deployment === undefined) throw new Error('child pool deployment replay missing')
-		const [storedSecurityMultiplier, storedPriorityFee, storedCurrentRetentionRate, storedCollateral, storedSystemState] = await Promise.all([
-			client.readContract({ address: child.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'securityMultiplier', args: [] }),
+		const [storedStatoblastSecurityMultiplierBps, storedPriorityFee, storedCurrentRetentionRate, storedCollateral, storedSystemState, storedCarryRoots, storedCarrySnapshot] = await Promise.all([
+			client.readContract({ address: child.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'statoblastSecurityMultiplierBps', args: [] }),
 			client.readContract({
 				address: child.priceOracleManagerAndOperatorQueuer,
 				abi: peripherals_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
@@ -1445,7 +1463,20 @@ describe('event-only replay', () => {
 			client.readContract({ address: child.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'currentRetentionRate', args: [] }),
 			client.readContract({ address: child.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'completeSetCollateralAmount', args: [] }),
 			client.readContract({ address: child.securityPool, abi: peripherals_SecurityPool_SecurityPool.abi, functionName: 'systemState', args: [] }),
+			client.readContract({ address: child.escalationGame, abi: peripherals_EscalationGame_EscalationGame.abi, functionName: 'getForkCarryRoots', args: [] }),
+			client.readContract({ address: child.escalationGame, abi: peripherals_EscalationGame_EscalationGame.abi, functionName: 'getForkCarrySnapshot', args: [] }),
 		])
+		const storedOutcomeStates = await Promise.all(
+			([0, 1, 2] as const).map(
+				async outcome =>
+					await client.readContract({
+						address: child.escalationGame,
+						abi: peripherals_EscalationGame_EscalationGame.abi,
+						functionName: 'getOutcomeState',
+						args: [outcome],
+					}),
+			),
+		)
 		strictEqualTypeSafe(deployment.factory, factory, 'child factory replay mismatch')
 		strictEqualTypeSafe(deployment.parent, securityPoolAddresses.securityPool, 'child parent replay mismatch')
 		strictEqualTypeSafe(deployment.universeId, childUniverseId, 'child universe replay mismatch')
@@ -1453,13 +1484,37 @@ describe('event-only replay', () => {
 		strictEqualTypeSafe(deployment.truthAuction, child.truthAuction, 'child auction replay mismatch')
 		strictEqualTypeSafe(deployment.coordinator, child.priceOracleManagerAndOperatorQueuer, 'child coordinator replay mismatch')
 		strictEqualTypeSafe(deployment.shareToken, child.shareToken, 'child share token replay mismatch')
-		strictEqualTypeSafe(deployment.securityMultiplier, storedSecurityMultiplier, 'child security multiplier replay mismatch')
+		strictEqualTypeSafe(deployment.statoblastSecurityMultiplierBps, storedStatoblastSecurityMultiplierBps, 'child security multiplier replay mismatch')
 		strictEqualTypeSafe(deployment.initialReportPriorityFeeWeiPerGas, storedPriorityFee, 'child priority fee replay mismatch')
 		strictEqualTypeSafe(deployment.currentRetentionRate, storedCurrentRetentionRate, 'child retention rate replay mismatch')
 		strictEqualTypeSafe(deployment.completeSetCollateralAmount, storedCollateral, 'child collateral replay mismatch')
 		strictEqualTypeSafe(replayed.poolStates.get(child.securityPool)?.systemState, storedSystemState, 'child constructor system state replay mismatch')
 		if (replayed.escalationLifecycles.get(child.escalationGame)?.forkContinuation !== true) {
 			throw new Error('child continuation lifecycle was not replayed')
+		}
+
+		const replayedCarryRoots = replayed.escalationCarryRoots.get(child.escalationGame)
+		const replayedCarryPeaks = replayed.escalationCarryPeaks.get(child.escalationGame)
+		const replayedLeafCounts = replayed.escalationLeafCounts.get(child.escalationGame)
+		const replayedCarryTotals = replayed.escalationUnresolvedTotals.get(child.escalationGame)
+		const replayedNullifierRoots = replayed.escalationNullifierRoots.get(child.escalationGame)
+		if (replayedCarryRoots === undefined || replayedCarryPeaks === undefined || replayedLeafCounts === undefined || replayedCarryTotals === undefined || replayedNullifierRoots === undefined) {
+			throw new Error('child carry replay state is incomplete')
+		}
+		const emptyHash = `0x${'0'.repeat(64)}` as Hex
+		for (const outcomeIndex of [0, 1, 2] as const) {
+			strictEqualTypeSafe(replayedCarryRoots[outcomeIndex], storedCarryRoots[outcomeIndex], `child carry root replay mismatch for outcome ${outcomeIndex.toString()}`)
+			strictEqualTypeSafe(replayedLeafCounts[outcomeIndex], storedCarrySnapshot[1][outcomeIndex], `child carry leaf-count replay mismatch for outcome ${outcomeIndex.toString()}`)
+			strictEqualTypeSafe(replayedCarryTotals[outcomeIndex], storedCarrySnapshot[2][outcomeIndex], `child carry total replay mismatch for outcome ${outcomeIndex.toString()}`)
+			strictEqualTypeSafe(replayedNullifierRoots[outcomeIndex], storedCarrySnapshot[3][outcomeIndex], `child carry nullifier replay mismatch for outcome ${outcomeIndex.toString()}`)
+			const storedOutcomeState = storedOutcomeStates[outcomeIndex]
+			if (storedOutcomeState === undefined) throw new Error(`child carry storage outcome ${outcomeIndex.toString()} is missing`)
+			const storedOutcomePeaks = storedOutcomeState.currentPeaks
+			const replayedOutcomePeaks = replayedCarryPeaks[outcomeIndex]
+			if (replayedOutcomePeaks === undefined) throw new Error(`child carry outcome ${outcomeIndex.toString()} is missing`)
+			for (const [peakIndex, storedPeak] of storedOutcomePeaks.entries()) {
+				strictEqualTypeSafe(replayedOutcomePeaks[peakIndex] ?? emptyHash, storedPeak, `child carry peak replay mismatch for outcome ${outcomeIndex.toString()} height ${peakIndex.toString()}`)
+			}
 		}
 	})
 

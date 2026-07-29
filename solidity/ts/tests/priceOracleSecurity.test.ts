@@ -193,7 +193,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	let priceOracle: Address
 	let questionId: bigint
 	const genesisUniverse = 0n
-	const securityMultiplier = 2n
+	const statoblastSecurityMultiplierBps = 20_000n
 	const EXTRA_INFO = 'test question!'
 	let securityPool: Address
 	const ORACLE_REPORT_GAS = 100000n
@@ -297,9 +297,9 @@ describe('Price Oracle Refund Security Tests', () => {
 		const outcomes = ['Yes', 'No']
 		await createQuestion(client, questionData, outcomes)
 		questionId = getQuestionId(questionData, outcomes)
-		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier)
+		await deployOriginSecurityPool(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps)
 		await approveAndDepositRep(client, repDeposit, questionId)
-		const addresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)
+		const addresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps)
 		priceOracle = addresses.priceOracleManagerAndOperatorQueuer
 		securityPool = addresses.securityPool
 	})
@@ -558,6 +558,79 @@ describe('Price Oracle Refund Security Tests', () => {
 		await openOracleSettle(client, reportId)
 		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, client.account.address), wethBalanceBeforeRequest, 'settlement should return the coordinator reporter WETH to the sponsor')
 		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), repBalanceBeforeRequest, 'settlement should return the coordinator reporter REP to the sponsor')
+	})
+
+	test('oracle settlement distinguishes direct coordinator balances from OpenOracle beneficiary credits', async () => {
+		const donor = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
+		const donatedWeth = 3n * 10n ** 15n
+		const donatedRep = 5n * 10n ** 18n
+		const openOracleDonatedWeth = 2n * 10n ** 15n
+		const openOracleDonatedRep = 4n * 10n ** 18n
+		const openOracle = getInfraContractAddresses().openOracle
+		await wrapWeth(donor, donatedWeth)
+		const wethDonationHash = await donor.writeContract({
+			abi: peripherals_WETH9_WETH9.abi,
+			functionName: 'transfer',
+			address: WETH_ADDRESS,
+			args: [priceOracle, donatedWeth],
+		})
+		await donor.waitForTransactionReceipt({ hash: wethDonationHash })
+		const repDonationHash = await donor.writeContract({
+			abi: ReputationToken_ReputationToken.abi,
+			functionName: 'transfer',
+			address: addressString(GENESIS_REPUTATION_TOKEN),
+			args: [priceOracle, donatedRep],
+		})
+		await donor.waitForTransactionReceipt({ hash: repDonationHash })
+
+		const coordinatorWethSurplus = await getERC20Balance(client, WETH_ADDRESS, priceOracle)
+		const coordinatorRepSurplus = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
+		assert.strictEqual(coordinatorWethSurplus, donatedWeth, 'the coordinator should hold the unsolicited WETH outside OpenOracle')
+		assert.strictEqual(coordinatorRepSurplus, donatedRep, 'the coordinator should hold the unsolicited REP outside OpenOracle')
+
+		const proposedRepPerEthPrice = 10n ** 18n
+		const requestedInitialWeth = calculateOracleMinimumWethReport() * 2n
+		await wrapWeth(client, requestedInitialWeth)
+		await approveToken(client, WETH_ADDRESS, priceOracle)
+		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle)
+		const sponsorWethBeforeRequest = await getERC20Balance(client, WETH_ADDRESS, client.account.address)
+		const sponsorRepBeforeRequest = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
+
+		await requestPriceWithValue(client, priceOracle, await getRequestPriceEthCost(client, priceOracle), proposedRepPerEthPrice, requestedInitialWeth)
+		const reportId = await getPendingReportId(client, priceOracle)
+		const openOracleWethBeforeDonation = await getOpenOracleHeldBalance(client, priceOracle, WETH_ADDRESS)
+		const openOracleRepBeforeDonation = await getOpenOracleHeldBalance(client, priceOracle, addressString(GENESIS_REPUTATION_TOKEN))
+		assert.strictEqual(openOracleWethBeforeDonation, 1n, 'a pending report should leave only the coordinator WETH sentinel outside the game')
+		assert.strictEqual(openOracleRepBeforeDonation, 1n, 'a pending report should leave only the coordinator REP sentinel outside the game')
+
+		await wrapWeth(donor, openOracleDonatedWeth)
+		await approveToken(donor, WETH_ADDRESS, openOracle)
+		await approveToken(donor, addressString(GENESIS_REPUTATION_TOKEN), openOracle)
+		for (const [token, amount] of [
+			[WETH_ADDRESS, openOracleDonatedWeth],
+			[addressString(GENESIS_REPUTATION_TOKEN), openOracleDonatedRep],
+		] as const) {
+			const depositHash = await donor.writeContract({
+				abi: peripherals_openOracle_OpenOracle_OpenOracle.abi,
+				functionName: 'deposit',
+				address: openOracle,
+				args: [token, amount, priceOracle],
+			})
+			await donor.waitForTransactionReceipt({ hash: depositHash })
+		}
+		assert.strictEqual(await getOpenOracleHeldBalance(client, priceOracle, WETH_ADDRESS), openOracleWethBeforeDonation + openOracleDonatedWeth, 'permissionless OpenOracle deposits should credit the coordinator beneficiary balance')
+		assert.strictEqual(await getOpenOracleHeldBalance(client, priceOracle, addressString(GENESIS_REPUTATION_TOKEN)), openOracleRepBeforeDonation + openOracleDonatedRep, 'permissionless OpenOracle REP deposits should credit the same coordinator beneficiary balance')
+
+		const reportMeta = await getOpenOracleReportMeta(client, reportId)
+		await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)
+		await openOracleSettle(client, reportId)
+
+		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, client.account.address), sponsorWethBeforeRequest + openOracleDonatedWeth, 'settlement should send the sponsor every withdrawable WETH credit held internally for the coordinator')
+		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), sponsorRepBeforeRequest + openOracleDonatedRep, 'settlement should send the sponsor every withdrawable REP credit held internally for the coordinator')
+		assert.strictEqual(await getOpenOracleHeldBalance(client, priceOracle, WETH_ADDRESS), 1n, 'settlement should drain the coordinator OpenOracle WETH credit to its sentinel')
+		assert.strictEqual(await getOpenOracleHeldBalance(client, priceOracle, addressString(GENESIS_REPUTATION_TOKEN)), 1n, 'settlement should drain the coordinator OpenOracle REP credit to its sentinel')
+		assert.strictEqual(await getERC20Balance(client, WETH_ADDRESS, priceOracle), coordinatorWethSurplus, 'settlement must not sweep unsolicited coordinator WETH into sponsor proceeds')
+		assert.strictEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), priceOracle), coordinatorRepSurplus, 'settlement must not sweep unsolicited coordinator REP into sponsor proceeds')
 	})
 
 	test('request-block WETH sizing preserves the submitted REP per ETH price after basefee moves', async () => {
@@ -1410,7 +1483,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	})
 
 	test('capacity and missing-game guards expose exact reasons without mutating pool or vault state', async () => {
-		const shareToken = getSecurityPoolAddresses(addressString(0n), genesisUniverse, questionId, securityMultiplier).shareToken
+		const shareToken = getSecurityPoolAddresses(addressString(0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps).shareToken
 		const tokenIds = await Promise.all(
 			[0n, 1n, 2n].map(
 				async outcome =>
@@ -1530,7 +1603,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(allowanceExecutionLog.args.errorMessage, 'Vault allow', 'over-backed allowance must expose its exact dynamic reason')
 		assert.deepStrictEqual(await readFinancialState(), allowanceStateBefore, 'vault allowance failure must roll back aggregate and per-vault accounting')
 
-		const liquidationBoundaryAllowance = repDeposit / securityMultiplier
+		const liquidationBoundaryAllowance = (repDeposit * 10_000n) / statoblastSecurityMultiplierBps
 		const unsafeAllowance = liquidationBoundaryAllowance + 1n
 		const unsafeAllowanceHash = await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, unsafeAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
 		const unsafeAllowanceReceipt = await client.waitForTransactionReceipt({ hash: unsafeAllowanceHash })
@@ -1558,7 +1631,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	test('aggregate allowance guard rejects a locally valid update after another vault becomes under-backed', async () => {
 		const repToken = addressString(GENESIS_REPUTATION_TOKEN)
 		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const counterpartyAllowance = repDeposit / securityMultiplier
+		const counterpartyAllowance = (repDeposit * 10_000n) / statoblastSecurityMultiplierBps
 		const increasedPrice = 2n * 10n ** 18n
 
 		await approveToken(counterpartyClient, repToken, securityPool)
@@ -1583,7 +1656,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	test('aggregate withdrawal bond guard rejects an unencumbered vault after another vault becomes under-backed', async () => {
 		const repToken = addressString(GENESIS_REPUTATION_TOKEN)
 		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const counterpartyAllowance = repDeposit / securityMultiplier
+		const counterpartyAllowance = (repDeposit * 10_000n) / statoblastSecurityMultiplierBps
 		const increasedPrice = 4n * 10n ** 18n
 
 		await approveToken(counterpartyClient, repToken, securityPool)
@@ -1608,7 +1681,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	test('escalation deposit local bond failure rolls back game deployment and escrow accounting', async () => {
 		const repToken = addressString(GENESIS_REPUTATION_TOKEN)
 		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const callerAllowance = repDeposit / securityMultiplier
+		const callerAllowance = (repDeposit * 10_000n) / statoblastSecurityMultiplierBps
 		const escrowAmount = (repDeposit * 3n) / 5n
 
 		await approveToken(counterpartyClient, repToken, securityPool)
@@ -1628,7 +1701,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	test('escalation deposit aggregate bond failure rolls back game deployment and escrow accounting', async () => {
 		const repToken = addressString(GENESIS_REPUTATION_TOKEN)
 		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const counterpartyAllowance = repDeposit / securityMultiplier
+		const counterpartyAllowance = (repDeposit * 10_000n) / statoblastSecurityMultiplierBps
 		const increasedPrice = 4n * 10n ** 18n
 		const escrowAmount = repDeposit / 4n
 
@@ -1669,7 +1742,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				bytecode: `0x${rejectingEthReceiverArtifact.evm.bytecode.object}`,
 			}),
 		)
-		const shareToken = getSecurityPoolAddresses(addressString(0n), genesisUniverse, questionId, securityMultiplier).shareToken
+		const shareToken = getSecurityPoolAddresses(addressString(0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps).shareToken
 		await executeThroughRejectingReceiver(
 			receiver,
 			securityPool,

@@ -184,15 +184,16 @@ function renderReportFields(
 function renderReportSummaryCard(report: OpenOracleReportSummary, onSelectReport: (reportId: bigint) => void) {
 	const status = getOpenOracleReportStatus(report)
 	const statusTone = getOpenOracleReportStatusTone(status)
+	const reportTitle = openOracleCopy.formatReportBrowseTitle(report.token1Symbol, report.token2Symbol, report.reportId.toString())
 	return (
 		<EntityCard
 			key={report.reportId.toString()}
 			className='compact'
-			title={openOracleCopy.formatReportBrowseTitle(report.token1Symbol, report.token2Symbol, report.reportId.toString())}
+			title={reportTitle}
 			badge={<Badge tone={statusTone}>{status}</Badge>}
 			actions={
 				<div className='actions'>
-					<button className='secondary' type='button' onClick={() => onSelectReport(report.reportId)}>
+					<button aria-label={openOracleCopy.formatOpenReportLabel(reportTitle)} className='secondary' type='button' onClick={() => onSelectReport(report.reportId)}>
 						{openOracleCopy.openReport}
 					</button>
 				</div>
@@ -403,7 +404,7 @@ export function renderSelectedReportActionSection({
 						{!isMainnet || disputeSubmission?.blockMessage?.kind !== 'visible' || disputeSubmission.blockMessage === disputeSubmission.inputBlockMessage ? undefined : <p className='detail'>{disputeSubmission.blockMessage.message}</p>}
 						<div className='actions'>
 							<TransactionActionButton
-								idleLabel={openOracleCopy.disputeAndSwap}
+								idleLabel={openOracleCopy.disputeAndSwapAction}
 								pendingLabel={openOracleCopy.submittingDispute}
 								onClick={onDisputeReport}
 								pending={openOracleActiveAction === 'dispute'}
@@ -468,7 +469,7 @@ export function renderSelectedReportActionSection({
 								])}
 						<div className='actions'>
 							<TransactionActionButton
-								idleLabel={openOracleCopy.settleReport}
+								idleLabel={openOracleCopy.settleReportAction}
 								pendingLabel={openOracleCopy.settlingReport}
 								onClick={onSettleReport}
 								pending={openOracleActiveAction === 'settle'}

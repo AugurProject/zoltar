@@ -9,7 +9,9 @@ import {
 	calculateOracleSecurityModel,
 	calculateResolutionModel,
 	contractInteractionEdges,
+	describeLiquidationHealth,
 	normalizedEscalationCost,
+	parseLiquidationMultiplierBps,
 	quantitativeChartAxisLabels,
 } from './chartModels'
 
@@ -556,18 +558,27 @@ function retentionUtilizationChart(spec: ChartSpec): SVGSVGElement {
 function liquidationHealthChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
 	const axes = quantitativeChartAxisLabels['fig-liquidation-health-curve']
 	const container = mount.closest('.interactive-example')
-	const unlockedRep = Number(container?.querySelector<HTMLInputElement>('[data-liquidation-input="rep"]')?.value ?? 1000)
-	const allowance = Number(container?.querySelector<HTMLInputElement>('[data-liquidation-input="debt"]')?.value ?? 75)
-	const multiplier = Number(container?.querySelector<HTMLInputElement>('[data-liquidation-input="multiplier"]')?.value ?? 2)
-	const currentPrice = Number(container?.querySelector<HTMLInputElement>('[data-liquidation-input="price"]')?.value ?? 10)
+	const unlockedRepInput = container?.querySelector<HTMLInputElement>('[data-liquidation-input="rep"]')?.value ?? '1000'
+	const allowanceInput = container?.querySelector<HTMLInputElement>('[data-liquidation-input="debt"]')?.value ?? '75'
+	const multiplierInput = container?.querySelector<HTMLInputElement>('[data-liquidation-input="multiplier"]')?.value ?? '2'
+	const currentPriceInput = container?.querySelector<HTMLInputElement>('[data-liquidation-input="price"]')?.value ?? '10'
+	const unlockedRepUnits = BigInt(unlockedRepInput)
+	const allowanceUnits = BigInt(allowanceInput)
+	const multiplierBps = parseLiquidationMultiplierBps(multiplierInput) ?? 20_000n
+	const currentPriceUnits = BigInt(currentPriceInput)
+	const unlockedRep = Number(unlockedRepUnits)
+	const allowance = Number(allowanceUnits)
+	const multiplier = Number(multiplierBps) / 10_000
+	const currentPrice = Number(currentPriceUnits)
 	const maximumPrice = Math.max(20, currentPrice)
 	const curve = Array.from({ length: 81 }, (_, index) => {
 		const price = (maximumPrice * index) / 80
 		return { price, requiredRep: allowance * multiplier * price }
 	})
-	const { currentRequiredRep, state, thresholdPrice } = calculateLiquidationHealth(unlockedRep, allowance, multiplier, currentPrice)
+	const model = calculateLiquidationHealth(unlockedRepUnits, allowanceUnits, multiplierBps, currentPriceUnits)
+	const { currentRequiredRep, state, thresholdPrice } = model
 	const chart = plot({
-		ariaDescription: `${spec.ariaDescription} At the selected values, required backing is ${currentRequiredRep.toFixed(0)} REP against ${unlockedRep.toFixed(0)} unlocked REP, so the vault is ${state}.`,
+		ariaDescription: describeLiquidationHealth(spec.ariaDescription, unlockedRepUnits, model),
 		ariaLabel: spec.ariaLabel,
 		height: spec.height,
 		marginBottom: 48,
