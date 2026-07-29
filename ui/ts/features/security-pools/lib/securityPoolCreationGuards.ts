@@ -3,6 +3,16 @@ import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS } from '@zoltar/shar
 import type { MarketDetails } from '../../../types/contracts.js'
 import { getWalletMainnetGuardState } from '../../../lib/actionGuards.js'
 import { tryParseDecimalInput } from '../../../lib/decimal.js'
+import { tryParseStatoblastSecurityMultiplierBpsInput } from '../../markets/lib/marketForm.js'
+
+export function getStatoblastSecurityMultiplierValidationMessage(statoblastSecurityMultiplier: string) {
+	const input = statoblastSecurityMultiplier.trim()
+	if (input === '') return 'Enter a Statoblast security multiplier greater than 1x.'
+	const statoblastSecurityMultiplierBps = tryParseStatoblastSecurityMultiplierBpsInput(input)
+	if (statoblastSecurityMultiplierBps === undefined) return 'Enter a multiplier in x with at most 4 decimal places.'
+	if (statoblastSecurityMultiplierBps <= 10_000n) return 'Statoblast security multiplier must be greater than 1x.'
+	return undefined
+}
 
 export function getInitialReportPriorityFeeValidationMessage(initialReportPriorityFeeGwei: string) {
 	const input = initialReportPriorityFeeGwei.trim()
@@ -22,6 +32,7 @@ export function getSecurityPoolCreateDisabledReason({
 	isMainnet,
 	marketDetails,
 	securityPoolCreating,
+	statoblastSecurityMultiplier,
 	zoltarUniverseHasForked,
 }: {
 	accountAddress: Address | undefined
@@ -31,13 +42,16 @@ export function getSecurityPoolCreateDisabledReason({
 	isMainnet: boolean
 	marketDetails: MarketDetails | undefined
 	securityPoolCreating: boolean
+	statoblastSecurityMultiplier: string
 	zoltarUniverseHasForked: boolean
 }) {
 	const walletGuardState = getWalletMainnetGuardState({ accountAddress, isMainnet, walletRequiredReason: 'Connect a wallet before creating a security pool.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
-	if (checkingDuplicateOriginPool) return 'Checking whether a pool already exists for this question, security multiplier, and priority fee.'
+	const statoblastSecurityMultiplierValidationMessage = getStatoblastSecurityMultiplierValidationMessage(statoblastSecurityMultiplier)
+	if (statoblastSecurityMultiplierValidationMessage !== undefined) return statoblastSecurityMultiplierValidationMessage
+	if (checkingDuplicateOriginPool) return 'Checking whether a pool already exists for this question, Statoblast security multiplier, and priority fee.'
 	if (securityPoolCreating) return 'Security pool creation is already in progress.'
-	if (duplicateOriginPoolExists) return 'A pool for this question, security multiplier, and priority fee already exists.'
+	if (duplicateOriginPoolExists) return 'A pool for this question, Statoblast security multiplier, and priority fee already exists.'
 	if (marketDetails === undefined) return 'Enter an exact binary Yes / No question before creating a pool.'
 	if (marketDetails.marketType !== 'binary') return 'Security pools can only be created for exact binary Yes / No questions.'
 	if (zoltarUniverseHasForked) return 'Security pools cannot be created after Zoltar has forked.'

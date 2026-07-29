@@ -30,7 +30,7 @@ import { isIgnorableLogDecodeError } from './logDecodeErrors'
 setDefaultTimeout(TEST_TIMEOUT_MS)
 
 const genesisUniverse = 0n
-const securityMultiplier = 2n
+const statoblastSecurityMultiplierBps = 20_000n
 const repDeposit = 1000n * 10n ** 18n
 const initialEscalationGameDeposit = 1n * 10n ** 18n
 const largeEscalationGameDeposit = 100n * 10n ** 18n
@@ -63,9 +63,9 @@ describe('security regression coverage', () => {
 		}
 		questionId = getQuestionId(questionData, outcomes)
 		await createQuestion(client, questionData, outcomes)
-		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier)
+		await deployOriginSecurityPool(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps)
 		await approveAndDepositRep(client, repDeposit, questionId)
-		securityPoolAddresses = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, securityMultiplier)
+		securityPoolAddresses = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, statoblastSecurityMultiplierBps)
 	}
 
 	beforeAll(async () => {
@@ -81,7 +81,7 @@ describe('security regression coverage', () => {
 		const mockWindow = getAnvilWindowEthereum()
 		await mockWindow.setTime(questionEndDate + 10n * DAY)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const forkThreshold = (await getTotalTheoreticalSupply(client, repToken)) / 20n / securityMultiplier
+		const forkThreshold = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
@@ -196,7 +196,7 @@ describe('security regression coverage', () => {
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
 		await approveAndDepositRep(attacker, repDeposit, questionId)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
-		const forkThreshold = (await getTotalTheoreticalSupply(client, repToken)) / 20n / securityMultiplier
+		const forkThreshold = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await depositRep(client, securityPoolAddresses.securityPool, 2n * forkThreshold)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		const { vaultRepAtFork } = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
@@ -204,7 +204,7 @@ describe('security regression coverage', () => {
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesChild = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const yesChild = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 		const migratedRep = await getMigratedRep(client, yesChild.securityPool)
 		const childPoolRepBalance = await getERC20Balance(client, getRepTokenAddress(yesUniverse), yesChild.securityPool)
 		assert.ok(migratedRep > 0n, 'vault migration should credit migrated REP')
@@ -261,18 +261,18 @@ describe('security regression coverage', () => {
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [scalarOutcomeIndex])
 		await createChildUniverse(client, securityPoolAddresses.securityPool, scalarOutcomeIndex)
 		const scalarUniverse = getChildUniverseId(genesisUniverse, scalarOutcomeIndex)
-		const scalarChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, scalarUniverse, questionId, securityMultiplier)
+		const scalarChildPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, scalarUniverse, questionId, statoblastSecurityMultiplierBps)
 		assert.ok(await contractExists(client, scalarChildPool.securityPool), 'scalar child security pool should deploy')
 	})
 
 	test('child truth-auction address cannot be reserved by an untrusted caller', async () => {
 		const yesUniverse = await prepareOwnForkToYes()
-		const securityPoolSalt = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint248' }, { type: 'uint256' }, { type: 'uint256' }], [securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier]))
+		const securityPoolSalt = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint248' }, { type: 'uint256' }, { type: 'uint256' }], [securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps]))
 
 		await deployUniformPriceDualCapBatchAuction(client, getInfraContractAddresses().securityPoolForker, securityPoolSalt)
 
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-		const yesChild = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, securityMultiplier)
+		const yesChild = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
 		assert.ok((await getEthRaiseCap(client, yesChild.truthAuction)) === 0n, 'legitimate child auction should deploy at its reserved address')
 	})
 
@@ -291,8 +291,8 @@ describe('security regression coverage', () => {
 			answerUnit: '',
 		}
 		const squattedQuestionId = getQuestionId(squattedQuestionData, outcomes)
-		const shareTokenSalt = keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint248' }], [squattedQuestionId, securityMultiplier, genesisUniverse]))
-		const expectedAddresses = getSecurityPoolAddresses(zeroAddress, genesisUniverse, squattedQuestionId, securityMultiplier)
+		const shareTokenSalt = keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint248' }], [squattedQuestionId, statoblastSecurityMultiplierBps, genesisUniverse]))
+		const expectedAddresses = getSecurityPoolAddresses(zeroAddress, genesisUniverse, squattedQuestionId, statoblastSecurityMultiplierBps)
 		const squatterShareTokenAddress = getCreate2Address({
 			bytecode: encodeDeployData({
 				abi: peripherals_tokens_ShareToken_ShareToken.abi,
@@ -317,7 +317,7 @@ describe('security regression coverage', () => {
 		assert.ok(await contractExists(client, squatterShareTokenAddress), 'untrusted caller should deploy only its own share token')
 		assert.equal(await contractExists(client, expectedAddresses.shareToken), false, 'canonical share token address should remain available')
 
-		await deployOriginSecurityPool(client, genesisUniverse, squattedQuestionId, securityMultiplier)
+		await deployOriginSecurityPool(client, genesisUniverse, squattedQuestionId, statoblastSecurityMultiplierBps)
 		assert.ok(await contractExists(client, expectedAddresses.securityPool), 'canonical origin security pool should deploy')
 		assert.ok(await contractExists(client, expectedAddresses.shareToken), 'canonical origin share token should deploy')
 	})

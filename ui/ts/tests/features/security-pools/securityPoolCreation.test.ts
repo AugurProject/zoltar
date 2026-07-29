@@ -69,10 +69,10 @@ describe('security pool creation helper', () => {
 		const result = await createSecurityPool(createWalletWriteClient(addressString(TEST_ADDRESSES[0])), {
 			initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 			questionId,
-			securityMultiplier: 2n,
+			statoblastSecurityMultiplierBps: 20_000n,
 		})
 
-		const expectedAddresses = getSecurityPoolAddresses(zeroAddress, 0n, questionId, 2n)
+		const expectedAddresses = getSecurityPoolAddresses(zeroAddress, 0n, questionId, 20_000n)
 
 		expect(result.questionId).toBe(`0x${questionId.toString(16).padStart(64, '0')}`)
 		expect(result.securityPoolAddress).toBe(expectedAddresses.securityPool)
@@ -112,7 +112,7 @@ describe('security pool creation helper', () => {
 		const result = await createSecurityPool(fakeClient, {
 			initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 			questionId: 123n,
-			securityMultiplier: 2n,
+			statoblastSecurityMultiplierBps: 20_000n,
 		})
 
 		expect(result.securityPoolAddress).toBe(expectedSecurityPoolAddress)

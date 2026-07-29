@@ -321,7 +321,7 @@ void describe('market creation helpers', () => {
 		expect(() =>
 			createSecurityPoolParameters({
 				marketId: '   ',
-				securityMultiplier: '3',
+				statoblastSecurityMultiplierBps: '3',
 			} as SecurityPoolFormState),
 		).toThrow('Question ID is required')
 	})
@@ -330,7 +330,7 @@ void describe('market creation helpers', () => {
 		const form: SecurityPoolFormState = {
 			initialReportPriorityFeeGwei: '10',
 			marketId: '0x2a',
-			securityMultiplier: '3',
+			statoblastSecurityMultiplierBps: '3',
 		}
 
 		const parameters = createSecurityPoolParameters(form)
@@ -342,14 +342,14 @@ void describe('market creation helpers', () => {
 			createSecurityPoolParameters({
 				initialReportPriorityFeeGwei: '10',
 				marketId: '  55  ',
-				securityMultiplier: '3',
+				statoblastSecurityMultiplierBps: '3',
 			} as SecurityPoolFormState).questionId,
 		).toBe(55n)
 
 		expect(() =>
 			createSecurityPoolParameters({
 				marketId: 'not-a-number',
-				securityMultiplier: '3',
+				statoblastSecurityMultiplierBps: '3',
 			} as SecurityPoolFormState),
 		).toThrow('Question ID must be a valid decimal or hex bigint')
 	})
@@ -378,15 +378,25 @@ void describe('market creation helpers', () => {
 		const parameters = createSecurityPoolParameters({
 			initialReportPriorityFeeGwei: '10',
 			marketId: '42',
-			securityMultiplier: '2',
+			statoblastSecurityMultiplierBps: '2',
 		} as SecurityPoolFormState)
 
 		expect(parameters).toEqual({
 			initialReportPriorityFeeWeiPerGas: 10_000_000_000n,
 			questionId: 42n,
-			securityMultiplier: 2n,
+			statoblastSecurityMultiplierBps: 20_000n,
 		})
 		expect('currentRetentionRate' in parameters).toBe(false)
+	})
+
+	test('converts fractional security multipliers to basis points', () => {
+		const parameters = createSecurityPoolParameters({
+			initialReportPriorityFeeGwei: '10',
+			marketId: '42',
+			statoblastSecurityMultiplierBps: '2.5',
+		} as SecurityPoolFormState)
+
+		expect(parameters.statoblastSecurityMultiplierBps).toBe(25_000n)
 	})
 
 	test('parses the initial report priority fee from gwei and rejects zero', () => {
@@ -394,31 +404,31 @@ void describe('market creation helpers', () => {
 			createSecurityPoolParameters({
 				initialReportPriorityFeeGwei: '10.5',
 				marketId: '42',
-				securityMultiplier: '2',
+				statoblastSecurityMultiplierBps: '2',
 			}),
 		).toEqual({
 			initialReportPriorityFeeWeiPerGas: 10_500_000_000n,
 			questionId: 42n,
-			securityMultiplier: 2n,
+			statoblastSecurityMultiplierBps: 20_000n,
 		})
 
 		expect(() =>
 			createSecurityPoolParameters({
 				initialReportPriorityFeeGwei: '0',
 				marketId: '42',
-				securityMultiplier: '2',
+				statoblastSecurityMultiplierBps: '2',
 			}),
 		).toThrow('Initial report priority fee must be greater than 0')
 	})
 
 	test('security pool creation rejects multipliers the origin factory cannot accept', () => {
-		for (const securityMultiplier of ['0', '1']) {
+		for (const statoblastSecurityMultiplierBps of ['0', '1']) {
 			expect(() =>
 				createSecurityPoolParameters({
 					marketId: '42',
-					securityMultiplier,
+					statoblastSecurityMultiplierBps,
 				} as SecurityPoolFormState),
-			).toThrow('Security multiplier must be greater than 1')
+			).toThrow('Statoblast security multiplier must be greater than 1')
 		}
 	})
 })

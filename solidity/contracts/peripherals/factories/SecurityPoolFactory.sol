@@ -42,7 +42,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		ISecurityPool indexed parent,
 		uint248 indexed universeId,
 		uint256 questionId,
-		uint256 securityMultiplier,
+		uint256 statoblastSecurityMultiplierBps,
 		uint256 initialReportPriorityFeeWeiPerGas,
 		uint256 currentRetentionRate,
 		uint256 completeSetCollateralAmount
@@ -97,11 +97,18 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	function getOriginId(
 		uint248 originUniverseId,
 		uint256 questionId,
-		uint256 securityMultiplier,
+		uint256 statoblastSecurityMultiplierBps,
 		uint256 initialReportPriorityFeeWeiPerGas
 	) public pure returns (bytes32) {
 		return
-			keccak256(abi.encode(questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas, originUniverseId));
+			keccak256(
+				abi.encode(
+					questionId,
+					statoblastSecurityMultiplierBps,
+					initialReportPriorityFeeWeiPerGas,
+					originUniverseId
+				)
+			);
 	}
 
 	function getPoolId(bytes32 originId, uint248 universeId) public pure returns (bytes32) {
@@ -131,7 +138,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		IShareToken shareToken,
 		uint248 universeId,
 		uint256 questionId,
-		uint256 securityMultiplier,
+		uint256 statoblastSecurityMultiplierBps,
 		uint256 currentRetentionRate,
 		uint256 completeSetCollateralAmount
 	) external returns (ISecurityPool securityPool, UniformPriceDualCapBatchAuction truthAuction) {
@@ -149,7 +156,13 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 			.initialReportPriorityFeeWeiPerGas();
 		_reserveSecurityPool(originId, universeId);
 		bytes32 securityPoolSalt = keccak256(
-			abi.encode(parent, universeId, questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas)
+			abi.encode(
+				parent,
+				universeId,
+				questionId,
+				statoblastSecurityMultiplierBps,
+				initialReportPriorityFeeWeiPerGas
+			)
 		);
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
 		OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory
@@ -170,7 +183,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 			priceOracleManagerAndOperatorQueuer,
 			universeId,
 			questionId,
-			securityMultiplier,
+			statoblastSecurityMultiplierBps,
 			currentRetentionRate,
 			completeSetCollateralAmount,
 			address(truthAuction)
@@ -185,7 +198,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 				parent,
 				universeId,
 				questionId,
-				securityMultiplier,
+				statoblastSecurityMultiplierBps,
 				initialReportPriorityFeeWeiPerGas,
 				currentRetentionRate,
 				completeSetCollateralAmount
@@ -196,14 +209,17 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	function deployOriginSecurityPool(
 		uint248 universeId,
 		uint256 questionId,
-		uint256 securityMultiplier,
+		uint256 statoblastSecurityMultiplierBps,
 		uint256 initialReportPriorityFeeWeiPerGas
 	) external returns (ISecurityPool securityPool) {
 		// Origin pool deployment is intentionally public, so first deployers must not be able to
 		// lock unsafe economic parameters into the canonical pool for a question/multiplier/
 		// priority-fee configuration.
 		// Zero-utilization origin pools always start at the protocol retention curve's maximum rate.
-		require(securityMultiplier > 1, 'Security multiplier must be greater than one');
+		require(
+			statoblastSecurityMultiplierBps > SecurityPoolUtils.BPS_DENOMINATOR,
+			'Multiplier must exceed 10000 BPS'
+		);
 
 		// Validate that the question exists
 		require(
@@ -224,10 +240,21 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 			zoltar.getNonDecisionThreshold(universeId) > initialEscalationGameDeposit,
 			'Escalation threshold too low'
 		);
-		bytes32 originId = getOriginId(universeId, questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas);
+		bytes32 originId = getOriginId(
+			universeId,
+			questionId,
+			statoblastSecurityMultiplierBps,
+			initialReportPriorityFeeWeiPerGas
+		);
 		_reserveSecurityPool(originId, universeId);
 		bytes32 securityPoolSalt = keccak256(
-			abi.encode(address(0x0), universeId, questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas)
+			abi.encode(
+				address(0x0),
+				universeId,
+				questionId,
+				statoblastSecurityMultiplierBps,
+				initialReportPriorityFeeWeiPerGas
+			)
 		);
 		OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory
 			.deployPriceOracleManagerAndOperatorQueuer(
@@ -246,7 +273,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 			priceOracleManagerAndOperatorQueuer,
 			universeId,
 			questionId,
-			securityMultiplier,
+			statoblastSecurityMultiplierBps,
 			initialRetentionRate,
 			0,
 			address(0)
@@ -263,7 +290,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 				ISecurityPool(payable(address(0))),
 				universeId,
 				questionId,
-				securityMultiplier,
+				statoblastSecurityMultiplierBps,
 				initialReportPriorityFeeWeiPerGas,
 				initialRetentionRate,
 				0
@@ -304,7 +331,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 			deployment.parent,
 			deployment.universeId,
 			deployment.questionId,
-			deployment.securityMultiplier,
+			deployment.statoblastSecurityMultiplierBps,
 			deployment.initialReportPriorityFeeWeiPerGas,
 			deployment.currentRetentionRate,
 			deployment.completeSetCollateralAmount
@@ -317,7 +344,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer,
 		uint248 universeId,
 		uint256 questionId,
-		uint256 securityMultiplier,
+		uint256 statoblastSecurityMultiplierBps,
 		uint256 currentRetentionRate,
 		uint256 completeSetCollateralAmount,
 		address truthAuction
@@ -333,7 +360,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 			zoltar,
 			universeId,
 			questionId,
-			securityMultiplier,
+			statoblastSecurityMultiplierBps,
 			initialEscalationGameDeposit,
 			truthAuction
 		);

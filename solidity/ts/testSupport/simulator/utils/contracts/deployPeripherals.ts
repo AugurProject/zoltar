@@ -265,12 +265,12 @@ export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 			),
 		]),
 	getRepTokenAddress,
-	getSecurityPoolInitCode: ({ escalationGameFactory, openOracle, parent, priceOracleManagerAndOperatorQueuer, questionId, securityMultiplier, securityPoolForker, shareToken, truthAuction, universeId, zoltar, zoltarQuestionData }) =>
+	getSecurityPoolInitCode: ({ escalationGameFactory, openOracle, parent, priceOracleManagerAndOperatorQueuer, questionId, statoblastSecurityMultiplierBps, securityPoolForker, shareToken, truthAuction, universeId, zoltar, zoltarQuestionData }) =>
 		(() => {
 			return encodeDeployData({
 				abi: peripherals_SecurityPool_SecurityPool.abi,
 				bytecode: applyLibraries(peripherals_SecurityPool_SecurityPool.evm.bytecode.object),
-				args: [securityPoolForker, zoltarQuestionData, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, questionId, securityMultiplier, DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDeposit, truthAuction],
+				args: [securityPoolForker, zoltarQuestionData, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, questionId, statoblastSecurityMultiplierBps, DEFAULT_PROTOCOL_CONFIG.initialEscalationGameDeposit, truthAuction],
 			})
 		})(),
 	getShareTokenInitCode: (securityPoolFactory, zoltarAddress, questionId) =>
@@ -401,14 +401,14 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	if (!(await contractExists(client, getDeploymentStatusOracleAddress()))) throw new Error('deploymentStatusOracle does not exist even though we deployed it')
 }
 
-export const deployOriginSecurityPool = async (client: WriteClient, universeId: bigint, questionId: bigint, securityMultiplier: bigint, initialReportPriorityFeeWeiPerGas = DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS) => {
+export const deployOriginSecurityPool = async (client: WriteClient, universeId: bigint, questionId: bigint, statoblastSecurityMultiplierBps: bigint, initialReportPriorityFeeWeiPerGas = DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS) => {
 	const infraAddresses = getInfraContractAddresses()
 	return await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: peripherals_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
 			functionName: 'deployOriginSecurityPool',
 			address: infraAddresses.securityPoolFactory,
-			args: [universeId, questionId, securityMultiplier, initialReportPriorityFeeWeiPerGas],
+			args: [universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeWeiPerGas],
 		}),
 	)
 }

@@ -35,7 +35,7 @@ function installInjectedEthereum(mockWindow: AnvilWindowEthereum, accountAddress
 }
 
 const genesisUniverse = 0n
-const securityMultiplier = 2n
+const statoblastSecurityMultiplierBps = 20_000n
 const outcomes = ['Yes', 'No']
 const depositAmount = 10_000n * 10n ** 18n
 const belowMinimumDepositAmount = 9n * 10n ** 18n
@@ -74,8 +74,8 @@ describe('Security vault integration', () => {
 		}
 		const questionId = getQuestionId(questionData, outcomes)
 		await createQuestion(client, questionData, outcomes)
-		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier)
-		securityPoolAddress = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, securityMultiplier).securityPool
+		await deployOriginSecurityPool(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps)
+		securityPoolAddress = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, statoblastSecurityMultiplierBps).securityPool
 	})
 
 	test('approves and deposits REP into the selected vault and reports REP units correctly', async () => {

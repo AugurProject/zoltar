@@ -82,7 +82,7 @@ describe('Peripherals: vault accounting', () => {
 		reportBond,
 		repDeposit,
 		genesisUniverse,
-		securityMultiplier,
+		statoblastSecurityMultiplierBps,
 		reportedRepEthPrice,
 		MAX_RETENTION_RATE,
 		outcomes,
@@ -203,13 +203,13 @@ describe('Peripherals: vault accounting', () => {
 			parent,
 			priceOracleManagerAndOperatorQueuer: managerAddress,
 			questionId: storedQuestionId,
-			securityMultiplier: storedSecurityMultiplier,
+			statoblastSecurityMultiplierBps: storedStatoblastSecurityMultiplierBps,
 			securityPool: securityPoolAddress,
 			shareToken: shareTokenAddress,
 			truthAuction: truthAuctionAddress,
 			universeId,
 		} = deployment
-		const expectedAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)
+		const expectedAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps)
 
 		strictEqualTypeSafe(deploymentCount, 1n, 'factory should know about the origin deployment')
 		strictEqualTypeSafe(securityPoolAddress, expectedAddresses.securityPool, 'stored security pool address should match')
@@ -219,7 +219,7 @@ describe('Peripherals: vault accounting', () => {
 		strictEqualTypeSafe(parent, addressString(0x0n), 'stored parent should be zero for origin deployment')
 		strictEqualTypeSafe(universeId, genesisUniverse, 'stored universe should match')
 		strictEqualTypeSafe(storedQuestionId, questionId, 'stored question id should match')
-		strictEqualTypeSafe(storedSecurityMultiplier, securityMultiplier, 'stored security multiplier should match')
+		strictEqualTypeSafe(storedStatoblastSecurityMultiplierBps, statoblastSecurityMultiplierBps, 'stored security multiplier should match')
 		strictEqualTypeSafe(storedCurrentRetentionRate, MAX_RETENTION_RATE, 'stored retention rate should match')
 		strictEqualTypeSafe(completeSetCollateralAmount, 0n, 'origin deployments should not have complete set collateral')
 		strictEqualTypeSafe(await getLastPrice(client, managerAddress), 0n, 'origin manager should start with a zero price')
@@ -905,12 +905,12 @@ describe('Peripherals: vault accounting', () => {
 		}
 		const secondQuestionId = getQuestionId(secondQuestionData, outcomes)
 		await createQuestion(client, secondQuestionData, outcomes)
-		await deployOriginSecurityPool(client, genesisUniverse, secondQuestionId, securityMultiplier)
+		await deployOriginSecurityPool(client, genesisUniverse, secondQuestionId, statoblastSecurityMultiplierBps)
 		await approveAndDepositRep(client, repDeposit, secondQuestionId)
 		await approveAndDepositRep(attackerClient, repDeposit, questionId)
 		await approveAndDepositRep(attackerClient, repDeposit, secondQuestionId)
 
-		const secondSecurityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, secondQuestionId, securityMultiplier)
+		const secondSecurityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, secondQuestionId, statoblastSecurityMultiplierBps)
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 

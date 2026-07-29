@@ -8,6 +8,7 @@ export { parseBigIntInput, tryParseBigIntInput }
 
 const DEFAULT_OPEN_ORACLE_DISPUTE_DELAY_SECONDS = '3600'
 const DEFAULT_OPEN_ORACLE_SETTLEMENT_DELAY_SECONDS = '86400'
+const STATOBLAST_SECURITY_MULTIPLIER_DECIMALS = 4
 
 export function getDefaultMarketFormState(): MarketFormState {
 	return {
@@ -28,8 +29,16 @@ export function getDefaultSecurityPoolFormState(): SecurityPoolFormState {
 	return {
 		initialReportPriorityFeeGwei: formatCurrencyInputBalance(DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_WEI_PER_GAS, 9),
 		marketId: '',
-		securityMultiplier: '2',
+		statoblastSecurityMultiplierBps: '2',
 	}
+}
+
+export function parseStatoblastSecurityMultiplierBpsInput(value: string) {
+	return parseDecimalInput(value, 'Statoblast security multiplier', STATOBLAST_SECURITY_MULTIPLIER_DECIMALS)
+}
+
+export function tryParseStatoblastSecurityMultiplierBpsInput(value: string) {
+	return tryParseDecimalInput(value, STATOBLAST_SECURITY_MULTIPLIER_DECIMALS)
 }
 
 export function getDefaultSecurityVaultFormState(): SecurityVaultFormState {
