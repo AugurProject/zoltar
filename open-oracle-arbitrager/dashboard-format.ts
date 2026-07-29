@@ -30,6 +30,13 @@ export function countLabel(count: number, singular: string, plural = `${singular
 	return `${count.toString()} ${count === 1 ? singular : plural}`
 }
 
+export function venueLabel(venue: OpportunitySnapshot['venue']) {
+	if (venue === 'uniswap-v2') return 'Uniswap V2'
+	if (venue === 'uniswap-v3') return 'Uniswap V3'
+	if (venue === 'uniswap-v4') return 'Uniswap V4'
+	return 'Unknown'
+}
+
 export function chartPointX(index: number, count: number, width: number) {
 	return count === 1 ? width / 2 : (index / (count - 1)) * width
 }

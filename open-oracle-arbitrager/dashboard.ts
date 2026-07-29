@@ -1,7 +1,7 @@
 import type { ConnectivitySettings } from './connectivity.js'
 import type { ExecutionRecord, OperationEntry, OperatorSnapshot, OpportunitySnapshot, StrategySettings, TransactionActivity } from './operator-state.js'
 import type { PositionRecord } from './position-store.js'
-import { blockAgeLabel, botStatusLabels, chartPointX, chartTimeTickIndexes, countLabel, exactAmount, marketPriceChartDescription, opportunityDecisionReason, requiredSignerPrivateKey, selectedTokenPriceHistory, signerControlState, sumSignedDecimals, transactionKindLabel } from './dashboard-format.js'
+import { blockAgeLabel, botStatusLabels, chartPointX, chartTimeTickIndexes, countLabel, exactAmount, marketPriceChartDescription, opportunityDecisionReason, requiredSignerPrivateKey, selectedTokenPriceHistory, signerControlState, sumSignedDecimals, transactionKindLabel, venueLabel } from './dashboard-format.js'
 import type { SubmissionSettings } from './transaction-submission.js'
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
@@ -151,7 +151,7 @@ function renderOpportunities(opportunities: readonly OpportunitySnapshot[]) {
 				amount(opportunity.requiredWeth, 'WETH'),
 				amount(opportunity.requiredToken, opportunity.tokenSymbol),
 				`${opportunity.timeRemaining} ${opportunity.windowUnit}`,
-				opportunity.venue ?? 'unknown',
+				venueLabel(opportunity.venue),
 				link(opportunity.pool, 'address', `opportunity:${opportunity.reportId}:pool`),
 			]),
 		)
