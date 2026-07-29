@@ -76,7 +76,12 @@ export function MarketSection({
 	const view = activeView
 	const showUniverseSummary = view === 'questions' && zoltarUniverse !== undefined
 	const [forkModalOpen, setForkModalOpen] = useState(false)
-	const selectedForkQuestion = zoltarQuestions.find(question => question.questionId.toLowerCase() === zoltarForkQuestionId.trim().toLowerCase()) ?? zoltarUniverse?.forkQuestionDetails
+	const localForkQuestionId = zoltarForkQuestionId.trim()
+	const canonicalForkQuestion = zoltarUniverse?.forkQuestionDetails
+	const selectedForkQuestionId = localForkQuestionId || canonicalForkQuestion?.questionId
+	const selectedForkQuestion =
+		selectedForkQuestionId === undefined ? undefined : (zoltarQuestions.find(question => question.questionId.toLowerCase() === selectedForkQuestionId.toLowerCase()) ?? (canonicalForkQuestion?.questionId.toLowerCase() === selectedForkQuestionId.toLowerCase() ? canonicalForkQuestion : undefined))
+	const forkQuestionMetadataFallback = loadingZoltarQuestions ? commonCopy.loadingWithEllipsis : commonCopy.unavailable
 	const forkModalTitle = hasForked ? zoltarCopy.viewForkDetailsTitle : zoltarCopy.forkZoltar
 	const forkQuestionAvailable = selectedForkQuestion !== undefined || (zoltarQuestionCount !== undefined && zoltarQuestionCount > 0n)
 	const forkLauncherDisabledReason = (() => {
@@ -86,7 +91,7 @@ export function MarketSection({
 		return undefined
 	})()
 	const forkContext = [
-		{ label: commonCopy.question, value: selectedForkQuestion?.title ?? (zoltarForkQuestionId.trim() === '' ? commonCopy.noneSelected : zoltarForkQuestionId) },
+		{ label: commonCopy.question, value: selectedForkQuestion?.title ?? selectedForkQuestionId ?? commonCopy.noneSelected },
 		{ label: commonCopy.universe, value: <TransactionUniverseValue universeId={zoltarUniverse?.universeId} /> },
 	]
 
@@ -197,11 +202,34 @@ export function MarketSection({
 									</button>
 								) : undefined}
 							</div>
-							{zoltarForkQuestionId.trim() === '' ? undefined : (
+							{selectedForkQuestionId === undefined ? undefined : (
 								<section aria-label={marketCopy.selectedForkQuestionSummary} className='selected-fork-question-summary'>
 									<p className='panel-label'>{marketCopy.selectedForkQuestionSummary}</p>
 									{selectedForkQuestion === undefined ? (
-										<IdentifierValue value={zoltarForkQuestionId} />
+										<DataGrid columns='auto'>
+											<div>
+												<p className='detail'>{marketCopy.title}</p>
+												<strong>{forkQuestionMetadataFallback}</strong>
+											</div>
+											<div>
+												<p className='detail'>{marketCopy.outcomes}</p>
+												<strong>{forkQuestionMetadataFallback}</strong>
+											</div>
+											<div>
+												<p className='detail'>{marketCopy.questionType}</p>
+												<strong>{forkQuestionMetadataFallback}</strong>
+											</div>
+											<div>
+												<p className='detail'>{commonCopy.universe}</p>
+												<strong>
+													<TransactionUniverseValue universeId={zoltarUniverse?.universeId} />
+												</strong>
+											</div>
+											<div>
+												<p className='detail'>{commonCopy.questionId}</p>
+												<IdentifierValue value={selectedForkQuestionId} />
+											</div>
+										</DataGrid>
 									) : (
 										<>
 											<Question question={selectedForkQuestion} variant='preview' />

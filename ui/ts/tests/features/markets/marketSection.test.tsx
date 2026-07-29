@@ -944,6 +944,61 @@ describe('MarketSection', () => {
 		expect(within(summary).getByRole('button', { name: `Copy identifier ${question.questionId}` })).not.toBeNull()
 	})
 
+	test('shows the canonical fork question summary on a fresh visit to a forked universe', async () => {
+		const question = createBinaryForkQuestion()
+		const renderedComponent = await renderIntoDocument(
+			h(
+				MarketSection,
+				createMarketSectionProps({
+					activeView: 'fork',
+					zoltarForkQuestionId: '',
+					zoltarUniverse: createZoltarUniverse({
+						forkQuestionDetails: question,
+						hasForked: true,
+						universeId: 7n,
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const summary = document.body.querySelector('.selected-fork-question-summary')
+		if (!(summary instanceof HTMLElement)) throw new Error('Expected canonical fork question summary')
+		expect(within(summary).getByText('Fork question title')).not.toBeNull()
+		expect(within(summary).getByText('Binary')).not.toBeNull()
+		expect(within(summary).getByText('Yes')).not.toBeNull()
+		expect(within(summary).getByText('No')).not.toBeNull()
+		expect(within(summary).getByText('Universe 0x7')).not.toBeNull()
+		expect(within(summary).getByRole('button', { name: `Copy identifier ${question.questionId}` })).not.toBeNull()
+	})
+
+	test('keeps every required fork-question field visible while selected metadata is unavailable', async () => {
+		const questionId = '0x99'
+		const renderedComponent = await renderIntoDocument(
+			h(
+				MarketSection,
+				createMarketSectionProps({
+					activeView: 'fork',
+					zoltarForkQuestionId: questionId,
+					zoltarQuestionCount: 1n,
+					zoltarQuestions: [],
+					zoltarUniverse: createZoltarUniverse({ universeId: 7n }),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const summary = document.body.querySelector('.selected-fork-question-summary')
+		if (!(summary instanceof HTMLElement)) throw new Error('Expected fallback fork question summary')
+		const summaryQueries = within(summary)
+		expect(summaryQueries.getByText('Title')).not.toBeNull()
+		expect(summaryQueries.getByText('Outcomes')).not.toBeNull()
+		expect(summaryQueries.getByText('Question Type')).not.toBeNull()
+		expect(summaryQueries.getAllByText('Unavailable')).toHaveLength(3)
+		expect(summaryQueries.getByText('Universe 0x7')).not.toBeNull()
+		expect(summaryQueries.getByRole('button', { name: `Copy identifier ${questionId}` })).not.toBeNull()
+	})
+
 	test('guides users to create a question instead of opening an empty fork dialog', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
