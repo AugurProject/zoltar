@@ -111,7 +111,7 @@ contract SecurityPoolForkerAttackParentMock {
 	ISecurityPoolFactory private immutable configuredSecurityPoolFactory;
 	IShareToken private immutable configuredShareToken;
 	uint256 private immutable configuredQuestionId;
-	uint256 private immutable configuredSecurityMultiplier;
+	uint256 private immutable configuredStatoblastSecurityMultiplierBps;
 	uint256 private immutable configuredCompleteSetCollateralAmount;
 	uint256 private immutable configuredTotalSecurityBondAllowance;
 	uint256 private immutable configuredPoolOwnershipDenominator;
@@ -131,7 +131,7 @@ contract SecurityPoolForkerAttackParentMock {
 		configuredSecurityPoolFactory = configuredFactory;
 		configuredShareToken = configuredShareTokenAddress;
 		configuredQuestionId = configuredQuestion;
-		configuredSecurityMultiplier = configuredMultiplier;
+		configuredStatoblastSecurityMultiplierBps = configuredMultiplier;
 		configuredCompleteSetCollateralAmount = configuredCollateralAmount;
 		configuredTotalSecurityBondAllowance = configuredBondAllowance;
 		configuredPoolOwnershipDenominator = configuredDenominator;
@@ -157,8 +157,8 @@ contract SecurityPoolForkerAttackParentMock {
 		return configuredQuestionId;
 	}
 
-	function securityMultiplier() external view returns (uint256) {
-		return configuredSecurityMultiplier;
+	function statoblastSecurityMultiplierBps() external view returns (uint256) {
+		return configuredStatoblastSecurityMultiplierBps;
 	}
 
 	function completeSetCollateralAmount() external view returns (uint256) {
@@ -344,7 +344,7 @@ contract SecurityPoolForkerEscrowAttackParentMock {
 		return configuredQuestion;
 	}
 
-	function securityMultiplier() external view returns (uint256) {
+	function statoblastSecurityMultiplierBps() external view returns (uint256) {
 		return configuredMultiplier;
 	}
 

@@ -237,7 +237,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 				}),
 			],
 			securityVault: createSecurityVaultProps({
-				selectedPoolSecurityMultiplier: 2n,
+				selectedPoolStatoblastSecurityMultiplierBps: 20_000n,
 				securityVaultDetails: createSecurityVaultDetails({ vaultAddress: poolVault.vaultAddress }),
 				securityVaultForm: {
 					depositAmount: '',
@@ -289,7 +289,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByText('After market end')).toBeNull()
 		expect(documentQueries.queryByText('Manager')).toBeNull()
 		expect(documentQueries.getAllByText('Operational').length).toBeGreaterThan(0)
-		expect(documentQueries.getByText('Security Multiplier')).not.toBeNull()
+		expect(documentQueries.getByText('Statoblast Security Multiplier')).not.toBeNull()
 		const directoryButton = documentQueries.getByRole('button', { name: 'Directory' })
 		expect(documentQueries.getByRole('button', { name: 'Selected' })).not.toBeNull()
 
@@ -407,7 +407,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 					securityPoolAddress: zeroAddress,
 					securityPools: [
 						createSelectedPool({
-							securityMultiplier: 2n,
+							statoblastSecurityMultiplierBps: 20_000n,
 							totalRepDeposit: 10_000n * 10n ** 18n,
 							totalSecurityBondAllowance: 2_500n * 10n ** 18n,
 						}),
@@ -439,7 +439,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 					],
 					securityVault: createSecurityVaultProps({
 						accountState: createAccountState({ address: vaultAddress }),
-						selectedPoolSecurityMultiplier: 2n,
+						selectedPoolStatoblastSecurityMultiplierBps: 20_000n,
 						securityVaultDetails: createSecurityVaultDetails({ vaultAddress }),
 						securityVaultForm: {
 							depositAmount: '',

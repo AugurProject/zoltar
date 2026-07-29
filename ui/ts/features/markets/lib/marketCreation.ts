@@ -3,7 +3,7 @@ import type { MarketFormState, SecurityPoolFormState } from '../../../types/app.
 import type { DeploymentStatus, QuestionData } from '../../../types/contracts.js'
 import { assertNever } from '../../../lib/assert.js'
 import { parseDecimalInput } from '../../../lib/decimal.js'
-import { parseBigIntInput, parseTimestampInput, tryParseBigIntInput, tryParseTimestampInput } from './marketForm.js'
+import { parseStatoblastSecurityMultiplierBpsInput, parseTimestampInput, tryParseBigIntInput, tryParseTimestampInput } from './marketForm.js'
 import { parseScalarFormInputs } from './scalarOutcome.js'
 type MarketFormField = keyof Pick<MarketFormState, 'categoricalOutcomes' | 'endTime' | 'scalarIncrement' | 'scalarMax' | 'scalarMin' | 'startTime' | 'title'>
 type MarketFormValidation = {
@@ -206,13 +206,13 @@ function parseQuestionIdInput(value: string) {
 }
 export function createSecurityPoolParameters(form: SecurityPoolFormState) {
 	const questionId = parseQuestionIdInput(form.marketId)
-	const securityMultiplier = parseBigIntInput(form.securityMultiplier, 'Security multiplier')
-	if (securityMultiplier <= 1n) throw new Error('Security multiplier must be greater than 1')
+	const statoblastSecurityMultiplierBps = parseStatoblastSecurityMultiplierBpsInput(form.statoblastSecurityMultiplierBps)
+	if (statoblastSecurityMultiplierBps <= 10_000n) throw new Error('Statoblast security multiplier must be greater than 1')
 	const initialReportPriorityFeeWeiPerGas = parseDecimalInput(form.initialReportPriorityFeeGwei, 'Initial report priority fee', 9)
 	if (initialReportPriorityFeeWeiPerGas <= 0n) throw new Error('Initial report priority fee must be greater than 0')
 	return {
 		initialReportPriorityFeeWeiPerGas,
 		questionId,
-		securityMultiplier,
+		statoblastSecurityMultiplierBps,
 	}
 }

@@ -87,7 +87,7 @@ function createLinkedSecurityPool(questionId: string): ListedSecurityPool {
 		parent: zeroAddress,
 		questionId,
 		questionOutcome: 'none',
-		securityMultiplier: 2n,
+		statoblastSecurityMultiplierBps: 20_000n,
 		securityPoolAddress: '0x0000000000000000000000000000000000000011',
 		shareTokenSupply: 4n,
 		systemState: 'operational',

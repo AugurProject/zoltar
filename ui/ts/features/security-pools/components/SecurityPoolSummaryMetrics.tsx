@@ -10,7 +10,7 @@ import { OpenOraclePriceValue } from '../../open-oracle/components/OpenOraclePri
 import { ProgressMeter } from '../../../components/ProgressMeter.js'
 import { UniverseLink } from '../../universes/components/UniverseLink.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
-import { getPoolCollateralizationPercent } from '../../markets/lib/trading.js'
+import { formatStatoblastSecurityMultiplier, getPoolCollateralizationPercent, getStatoblastCollateralizationTargetPercent } from '../../markets/lib/trading.js'
 import { getToneRatioThreshold, getVisualRatio } from '../../../lib/visualMetrics.js'
 import { formatCurrencyBalance } from '../../../lib/formatters.js'
 import type { MetricGridVariant } from '../../types.js'
@@ -48,7 +48,7 @@ export function SecurityPoolSummaryMetrics({
 	variant = 'embedded',
 }: SecurityPoolSummaryMetricsProps) {
 	const collateralizationPercent = getPoolCollateralizationPercent(pool.totalRepDeposit, pool.totalSecurityBondAllowance, repPerEthPrice)
-	const targetCollateralizationPercent = pool.securityMultiplier * 100n * 10n ** 18n
+	const targetCollateralizationPercent = getStatoblastCollateralizationTargetPercent(pool.statoblastSecurityMultiplierBps)
 
 	if (variant === 'embedded')
 		return (
@@ -64,7 +64,7 @@ export function SecurityPoolSummaryMetrics({
 					</MetricField>
 				) : undefined}
 				<MetricField label={securityPoolCopy.vaults}>{pool.vaultCount.toString()}</MetricField>
-				<MetricField label={commonCopy.securityMultiplier}>{pool.securityMultiplier.toString()}</MetricField>
+				<MetricField label={commonCopy.statoblastSecurityMultiplierBps}>{formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}x</MetricField>
 				<MetricField label={commonCopy.initialReportPriorityFee}>{`${formatCurrencyBalance(pool.initialReportPriorityFeeWeiPerGas, 9)} ${commonCopy.gwei}`}</MetricField>
 				<MetricField label={securityPoolCopy.openInterestFeeYear}>
 					<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix={commonCopy.percent} />
@@ -90,8 +90,8 @@ export function SecurityPoolSummaryMetrics({
 					<strong className='security-pool-ribbon-stat-value'>{pool.vaultCount.toString()}</strong>
 				</div>
 				<div className='security-pool-ribbon-stat'>
-					<span className='security-pool-ribbon-stat-label'>{commonCopy.securityMultiplier}</span>
-					<strong className='security-pool-ribbon-stat-value'>{pool.securityMultiplier.toString()}x</strong>
+					<span className='security-pool-ribbon-stat-label'>{commonCopy.statoblastSecurityMultiplierBps}</span>
+					<strong className='security-pool-ribbon-stat-value'>{formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}x</strong>
 				</div>
 				<div className='security-pool-ribbon-stat'>
 					<span className='security-pool-ribbon-stat-label'>{securityPoolCopy.annualFee}</span>

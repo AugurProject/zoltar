@@ -43,7 +43,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 	const genesisUniverse = 0n
-	const securityMultiplier = 2n
+	const statoblastSecurityMultiplierBps = 20_000n
 	const currentTimestamp = BigInt(Math.floor(Date.now() / 1000))
 	const questionEndDate = currentTimestamp + 365n * DAY
 	let securityPoolAddresses: {
@@ -81,10 +81,10 @@ describe('Escalation Game Fork Threshold Test', () => {
 		questionId = getQuestionId(questionData, outcomes)
 		await createQuestion(client, questionData, outcomes)
 
-		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier)
+		await deployOriginSecurityPool(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps)
 		await approveAndDepositRep(client, 1000n * 10n ** 18n, questionId)
 
-		securityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)
+		securityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps)
 	})
 
 	test('withdrawal amount scaled by actual fork threshold after decrease', async () => {

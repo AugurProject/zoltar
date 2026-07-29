@@ -88,7 +88,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		parent: zeroAddress,
 		questionOutcome: 'none',
 		questionId: '0x01',
-		securityMultiplier: 2n,
+		statoblastSecurityMultiplierBps: 20_000n,
 		securityPoolAddress: zeroAddress,
 		shareTokenSupply: 0n,
 		systemState: 'operational',
@@ -721,7 +721,7 @@ describe('LiquidationModal', () => {
 			},
 			liquidationAmount: '100',
 			selectedPool: createSelectedPool({
-				securityMultiplier: 2n,
+				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({
 				repDepositShare: 2_000n * 10n ** 18n,
@@ -754,7 +754,7 @@ describe('LiquidationModal', () => {
 			},
 			selectedPool: createSelectedPool({
 				lastOraclePrice: 10n * 10n ** 18n,
-				securityMultiplier: 2n,
+				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
 				repDepositShare: 100n * 10n ** 18n,
@@ -905,7 +905,7 @@ describe('LiquidationModal', () => {
 					repPerEthSource='mock'
 					repPerEthSourceUrl={undefined}
 					selectedPool={createSelectedPool({
-						securityMultiplier: 2n,
+						statoblastSecurityMultiplierBps: 20_000n,
 					})}
 					securityPoolOverviewActiveAction={undefined}
 					securityPoolLiquidationError={undefined}
@@ -1068,7 +1068,7 @@ describe('LiquidationModal', () => {
 			},
 			selectedPool: createSelectedPool({
 				lastOraclePrice: 1000n * 10n ** 18n,
-				securityMultiplier: 2n,
+				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
 				repDepositShare: 1000n * 10n ** 18n,
@@ -1099,7 +1099,7 @@ describe('LiquidationModal', () => {
 				lastPrice: 1n * 10n ** 18n,
 			}),
 			selectedPool: createSelectedPool({
-				securityMultiplier: 2n,
+				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
 				repDepositShare: 100n * 10n ** 18n,
@@ -1128,7 +1128,7 @@ describe('LiquidationModal', () => {
 			}),
 			liquidationAmount: '1',
 			selectedPool: createSelectedPool({
-				securityMultiplier: 2n,
+				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
 				repDepositShare: 11n * 10n ** 18n,
@@ -1157,7 +1157,7 @@ describe('LiquidationModal', () => {
 			}),
 			liquidationAmount: '1',
 			selectedPool: createSelectedPool({
-				securityMultiplier: 2n,
+				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
 				repDepositShare: 10n * 10n ** 18n,
@@ -1186,7 +1186,7 @@ describe('LiquidationModal', () => {
 			}),
 			liquidationAmount: '1',
 			selectedPool: createSelectedPool({
-				securityMultiplier: 2n,
+				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
 				repDepositShare: 10n * 10n ** 18n,
@@ -1215,7 +1215,7 @@ describe('LiquidationModal', () => {
 			}),
 			liquidationAmount: '2',
 			selectedPool: createSelectedPool({
-				securityMultiplier: 2n,
+				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
 				repDepositShare: 100n * 10n ** 18n,
@@ -1248,7 +1248,7 @@ describe('LiquidationModal', () => {
 			}),
 			liquidationAmount: '0.000000000000000001',
 			selectedPool: createSelectedPool({
-				securityMultiplier: 2n,
+				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			targetVaultSummary: createTargetVaultSummary({
 				repDepositShare: 100n * 10n ** 18n,
@@ -1333,7 +1333,7 @@ describe('LiquidationModal', () => {
 			}),
 			liquidationAmount: '2',
 			selectedPool: createSelectedPool({
-				securityMultiplier: 2n,
+				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({
 				repDepositShare: 29n * 10n ** 18n,
@@ -1367,7 +1367,7 @@ describe('LiquidationModal', () => {
 			}),
 			liquidationAmount: '1',
 			selectedPool: createSelectedPool({
-				securityMultiplier: 2n,
+				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({
 				repDepositShare: 20n * 10n ** 18n,
@@ -1421,7 +1421,7 @@ describe('LiquidationModal', () => {
 			liquidationAmount: '1',
 			liquidationTargetVault: vaultAddress,
 			selectedPool: createSelectedPool({
-				securityMultiplier: 2n,
+				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({
 				repDepositShare: 100n * 10n ** 18n,
@@ -1455,7 +1455,7 @@ describe('LiquidationModal', () => {
 			}),
 			liquidationAmount: '2',
 			selectedPool: createSelectedPool({
-				securityMultiplier: 2n,
+				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({
 				repDepositShare: 100n * 10n ** 18n,
@@ -1488,7 +1488,7 @@ describe('LiquidationModal', () => {
 			}),
 			liquidationAmount: '2',
 			selectedPool: createSelectedPool({
-				securityMultiplier: 2n,
+				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({
 				repDepositShare: 100n * 10n ** 18n,
@@ -1520,7 +1520,7 @@ describe('LiquidationModal', () => {
 			}),
 			liquidationAmount: '100',
 			selectedPool: createSelectedPool({
-				securityMultiplier: 2n,
+				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({
 				repDepositShare: 2_000n * 10n ** 18n,
@@ -1548,7 +1548,7 @@ describe('LiquidationModal', () => {
 			}),
 			liquidationAmount: '99.6',
 			selectedPool: createSelectedPool({
-				securityMultiplier: 2n,
+				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 			callerVaultSummary: createTargetVaultSummary({
 				repDepositShare: 2_000n * 10n ** 18n,
@@ -1598,7 +1598,7 @@ describe('LiquidationModal', () => {
 					repPerEthSourceUrl={undefined}
 					selectedPool={createSelectedPool({
 						lastOraclePrice: 3n * 10n ** 18n,
-						securityMultiplier: 2n,
+						statoblastSecurityMultiplierBps: 20_000n,
 					})}
 					securityPoolOverviewActiveAction={undefined}
 					securityPoolLiquidationError={undefined}

@@ -101,7 +101,7 @@ export type PoolDeploymentReplay = {
 	truthAuction: Address
 	coordinator: Address
 	shareToken: Address
-	securityMultiplier: bigint
+	statoblastSecurityMultiplierBps: bigint
 	initialReportPriorityFeeWeiPerGas: bigint
 	currentRetentionRate: bigint
 	completeSetCollateralAmount: bigint
@@ -707,7 +707,7 @@ export function reducePoolFactoryEvent(state: ReplayState, log: ReplayLog) {
 		truthAuction: requireAddress(log.args, 'truthAuction'),
 		coordinator: requireAddress(log.args, 'priceOracleManagerAndOperatorQueuer'),
 		shareToken: requireAddress(log.args, 'shareToken'),
-		securityMultiplier: requireBigInt(log.args, 'securityMultiplier'),
+		statoblastSecurityMultiplierBps: requireBigInt(log.args, 'statoblastSecurityMultiplierBps'),
 		initialReportPriorityFeeWeiPerGas: requireBigInt(log.args, 'initialReportPriorityFeeWeiPerGas'),
 		currentRetentionRate,
 		completeSetCollateralAmount: requireBigInt(log.args, 'completeSetCollateralAmount'),

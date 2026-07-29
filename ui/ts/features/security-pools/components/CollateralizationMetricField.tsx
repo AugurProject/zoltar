@@ -12,7 +12,7 @@ type CollateralizationMetricFieldProps = {
 	repPerEthSource: RepPriceSource | undefined
 	repPerEthSourceUrl: string | undefined
 	securityBondAllowance: bigint | undefined
-	securityMultiplier: bigint | undefined
+	statoblastSecurityMultiplierBps: bigint | undefined
 	unavailableCopy?: string | undefined
 }
 function getDefaultLabel(repPerEthSource: RepPriceSource | undefined, repPerEthSourceUrl: string | undefined) {
@@ -24,9 +24,9 @@ function getDefaultLabel(repPerEthSource: RepPriceSource | undefined, repPerEthS
 		</span>
 	)
 }
-export function CollateralizationMetricField({ className, collateralizationPercent, label, repPerEthSource, repPerEthSourceUrl, securityBondAllowance, securityMultiplier, unavailableCopy = pricingCopy.awaitingRepEthPrice }: CollateralizationMetricFieldProps) {
+export function CollateralizationMetricField({ className, collateralizationPercent, label, repPerEthSource, repPerEthSourceUrl, securityBondAllowance, statoblastSecurityMultiplierBps, unavailableCopy = pricingCopy.awaitingRepEthPrice }: CollateralizationMetricFieldProps) {
 	const displayState = getCollateralizationDisplayState(securityBondAllowance, collateralizationPercent)
-	const tone = displayState === 'noActiveAllowance' ? undefined : getCollateralizationTone(collateralizationPercent, securityMultiplier)
+	const tone = displayState === 'noActiveAllowance' ? undefined : getCollateralizationTone(collateralizationPercent, statoblastSecurityMultiplierBps)
 	const valueClassName = (() => {
 		if (tone === 'success') return 'metric-value-success'
 		if (tone === 'danger') return 'metric-value-danger'

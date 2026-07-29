@@ -76,7 +76,7 @@ function createSecurityVaultSectionProps(overrides: Partial<SecurityVaultSection
 		},
 		securityVaultRepBalance: undefined,
 		securityVaultResult: undefined,
-		selectedPoolSecurityMultiplier: 2n,
+		selectedPoolStatoblastSecurityMultiplierBps: 20_000n,
 		showHeader: false,
 		...overrides,
 	}

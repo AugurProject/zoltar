@@ -193,7 +193,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	let priceOracle: Address
 	let questionId: bigint
 	const genesisUniverse = 0n
-	const securityMultiplier = 2n
+	const statoblastSecurityMultiplierBps = 20_000n
 	const EXTRA_INFO = 'test question!'
 	let securityPool: Address
 	const ORACLE_REPORT_GAS = 100000n
@@ -297,9 +297,9 @@ describe('Price Oracle Refund Security Tests', () => {
 		const outcomes = ['Yes', 'No']
 		await createQuestion(client, questionData, outcomes)
 		questionId = getQuestionId(questionData, outcomes)
-		await deployOriginSecurityPool(client, genesisUniverse, questionId, securityMultiplier)
+		await deployOriginSecurityPool(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps)
 		await approveAndDepositRep(client, repDeposit, questionId)
-		const addresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, securityMultiplier)
+		const addresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps)
 		priceOracle = addresses.priceOracleManagerAndOperatorQueuer
 		securityPool = addresses.securityPool
 	})
@@ -1410,7 +1410,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	})
 
 	test('capacity and missing-game guards expose exact reasons without mutating pool or vault state', async () => {
-		const shareToken = getSecurityPoolAddresses(addressString(0n), genesisUniverse, questionId, securityMultiplier).shareToken
+		const shareToken = getSecurityPoolAddresses(addressString(0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps).shareToken
 		const tokenIds = await Promise.all(
 			[0n, 1n, 2n].map(
 				async outcome =>
@@ -1530,7 +1530,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(allowanceExecutionLog.args.errorMessage, 'Vault allow', 'over-backed allowance must expose its exact dynamic reason')
 		assert.deepStrictEqual(await readFinancialState(), allowanceStateBefore, 'vault allowance failure must roll back aggregate and per-vault accounting')
 
-		const liquidationBoundaryAllowance = repDeposit / securityMultiplier
+		const liquidationBoundaryAllowance = (repDeposit * 10_000n) / statoblastSecurityMultiplierBps
 		const unsafeAllowance = liquidationBoundaryAllowance + 1n
 		const unsafeAllowanceHash = await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, OperationType.SetSecurityBondsAllowance, client.account.address, unsafeAllowance, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, 0n)
 		const unsafeAllowanceReceipt = await client.waitForTransactionReceipt({ hash: unsafeAllowanceHash })
@@ -1558,7 +1558,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	test('aggregate allowance guard rejects a locally valid update after another vault becomes under-backed', async () => {
 		const repToken = addressString(GENESIS_REPUTATION_TOKEN)
 		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const counterpartyAllowance = repDeposit / securityMultiplier
+		const counterpartyAllowance = (repDeposit * 10_000n) / statoblastSecurityMultiplierBps
 		const increasedPrice = 2n * 10n ** 18n
 
 		await approveToken(counterpartyClient, repToken, securityPool)
@@ -1583,7 +1583,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	test('aggregate withdrawal bond guard rejects an unencumbered vault after another vault becomes under-backed', async () => {
 		const repToken = addressString(GENESIS_REPUTATION_TOKEN)
 		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const counterpartyAllowance = repDeposit / securityMultiplier
+		const counterpartyAllowance = (repDeposit * 10_000n) / statoblastSecurityMultiplierBps
 		const increasedPrice = 4n * 10n ** 18n
 
 		await approveToken(counterpartyClient, repToken, securityPool)
@@ -1608,7 +1608,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	test('escalation deposit local bond failure rolls back game deployment and escrow accounting', async () => {
 		const repToken = addressString(GENESIS_REPUTATION_TOKEN)
 		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const callerAllowance = repDeposit / securityMultiplier
+		const callerAllowance = (repDeposit * 10_000n) / statoblastSecurityMultiplierBps
 		const escrowAmount = (repDeposit * 3n) / 5n
 
 		await approveToken(counterpartyClient, repToken, securityPool)
@@ -1628,7 +1628,7 @@ describe('Price Oracle Refund Security Tests', () => {
 	test('escalation deposit aggregate bond failure rolls back game deployment and escrow accounting', async () => {
 		const repToken = addressString(GENESIS_REPUTATION_TOKEN)
 		const counterpartyClient = createWriteClient(mockWindow, TEST_ADDRESSES[1], 0)
-		const counterpartyAllowance = repDeposit / securityMultiplier
+		const counterpartyAllowance = (repDeposit * 10_000n) / statoblastSecurityMultiplierBps
 		const increasedPrice = 4n * 10n ** 18n
 		const escrowAmount = repDeposit / 4n
 
@@ -1669,7 +1669,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				bytecode: `0x${rejectingEthReceiverArtifact.evm.bytecode.object}`,
 			}),
 		)
-		const shareToken = getSecurityPoolAddresses(addressString(0n), genesisUniverse, questionId, securityMultiplier).shareToken
+		const shareToken = getSecurityPoolAddresses(addressString(0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps).shareToken
 		await executeThroughRejectingReceiver(
 			receiver,
 			securityPool,

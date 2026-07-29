@@ -17,7 +17,7 @@ import { QuestionOutcome } from './testSupport/simulator/types/types'
 import { createWriteClient, WriteClient, writeContractAndWait } from './testSupport/simulator/utils/clients'
 
 const genesisUniverse = 0n
-const securityMultiplier = 2n
+const statoblastSecurityMultiplierBps = 20_000n
 const repDepositAmount = 1_000n * 10n ** 18n
 const securityBondAllowance = repDepositAmount / 4n
 const openInterestAmount = 100n * 10n ** 18n
@@ -161,8 +161,8 @@ const setupPool = async (title: string): Promise<PoolContext> => {
 	const questionData = await buildQuestionData(title)
 	const questionId = getQuestionId(questionData, questionOutcomes)
 	await confirmTx(alice, createQuestion(alice, questionData, [...questionOutcomes]))
-	await confirmTx(alice, deployOriginSecurityPool(alice, genesisUniverse, questionId, securityMultiplier))
-	const addresses = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, securityMultiplier)
+	await confirmTx(alice, deployOriginSecurityPool(alice, genesisUniverse, questionId, statoblastSecurityMultiplierBps))
+	const addresses = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, statoblastSecurityMultiplierBps)
 	return { questionData, questionId, addresses }
 }
 
@@ -211,7 +211,7 @@ const prepareYesChildForAuction = async (migrateOpenInterestShares = false) => {
 	await confirmTx(alice, migrateVault(alice, context.addresses.securityPool, QuestionOutcome.Yes))
 	await confirmTx(alice, claimForkedEscalationDeposits(alice, context.addresses.securityPool, alice.account.address, QuestionOutcome.Yes, [0n]))
 	const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-	const yesPool = getSecurityPoolAddresses(context.addresses.securityPool, yesUniverse, context.questionId, securityMultiplier)
+	const yesPool = getSecurityPoolAddresses(context.addresses.securityPool, yesUniverse, context.questionId, statoblastSecurityMultiplierBps)
 	const forkData = await getSecurityPoolForkerForkData(alice, context.addresses.securityPool)
 	const ethRaiseCap = openInterestAmount - (openInterestAmount * forkData.migratedRep) / forkData.auctionableRepAtFork
 	if (migrateOpenInterestShares) {
@@ -367,7 +367,7 @@ const scenarios: Scenario[] = [
 			const questionData = await buildQuestionData('Gas deploy pool')
 			const questionId = getQuestionId(questionData, questionOutcomes)
 			await confirmTx(alice, createQuestion(alice, questionData, [...questionOutcomes]))
-			return await waitForGas(alice, deployOriginSecurityPool(alice, genesisUniverse, questionId, securityMultiplier))
+			return await waitForGas(alice, deployOriginSecurityPool(alice, genesisUniverse, questionId, statoblastSecurityMultiplierBps))
 		},
 	},
 	{
