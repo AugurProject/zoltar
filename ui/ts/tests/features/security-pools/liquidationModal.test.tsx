@@ -186,7 +186,7 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Execute Vault Liquidation')
+		expectTransactionButtonDisabled(document.body, 'Execute vault liquidation')
 	})
 
 	test('disables queued liquidation when the selected pool has ended', async () => {
@@ -201,7 +201,7 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Queue Liquidation')
+		expectTransactionButtonDisabled(document.body, 'Queue liquidation')
 	})
 
 	test('defaults queued liquidation timeout copy to 5 minutes', async () => {
@@ -271,7 +271,7 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Queue Liquidation', 'Enter a liquidation timeout of at least 1 minute.')
+		expectTransactionButtonDisabled(document.body, 'Queue liquidation', 'Enter a liquidation timeout of at least 1 minute.')
 	})
 
 	test('keeps liquidation disabled off mainnet and explains recovery', async () => {
@@ -283,7 +283,7 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(getTransactionButtonState(document.body, 'Execute Vault Liquidation')).toEqual({ disabled: true, reason: 'Switch to Ethereum mainnet.' })
+		expect(getTransactionButtonState(document.body, 'Execute vault liquidation')).toEqual({ disabled: true, reason: 'Switch to Ethereum mainnet.' })
 		expect(document.body.textContent?.includes('Switch to Ethereum mainnet.')).toBe(true)
 	})
 
@@ -581,7 +581,7 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getByRole('heading', { name: 'Liquidation Queued' }).closest('.liquidation-modal-actions')).toBeNull()
 
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'View In Staged Operations' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'View in staged operations' }))
 		})
 
 		expect(selectedViews).toEqual(['staged-operations'])
@@ -650,7 +650,7 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getByText('A valid oracle price was already available, so the liquidation executed immediately and no staged operation was created.')).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Execute Vault Liquidation' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Queue Vault Liquidation' })).toBeNull()
-		expect(documentQueries.queryByRole('button', { name: 'View In Staged Operations' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'View in staged operations' })).toBeNull()
 	})
 
 	test('executes liquidation when the current oracle price is valid', async () => {
@@ -667,9 +667,9 @@ describe('LiquidationModal', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Execute Vault Liquidation' })).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Execute Vault Liquidation' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Execute vault liquidation' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Queue Vault Liquidation' })).toBeNull()
-		expect(documentQueries.queryByRole('button', { name: 'Queue Liquidation' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Queue liquidation' })).toBeNull()
 	})
 
 	test('disables queued liquidation when the wallet lacks the buffered oracle bounty ETH', async () => {
@@ -700,7 +700,7 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Queue Liquidation', 'Need 7 more ETH in this wallet to queue liquidation.')
+		expectTransactionButtonDisabled(document.body, 'Queue liquidation', 'Need 7 more ETH in this wallet to queue liquidation.')
 	})
 
 	test('allows queued liquidation when the entered amount exceeds the executable cap because execution will clamp it', async () => {
@@ -736,7 +736,7 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const queueButton = within(document.body).getByRole('button', { name: 'Queue Liquidation' }) as HTMLButtonElement
+		const queueButton = within(document.body).getByRole('button', { name: 'Queue liquidation' }) as HTMLButtonElement
 		expect(queueButton.disabled).toBe(false)
 	})
 
@@ -799,7 +799,7 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Liquidation Failed' })).not.toBeNull()
 		expect(documentQueries.getByText('Local Security Bond Allowance broken')).not.toBeNull()
-		expect(documentQueries.queryByRole('button', { name: 'View In Staged Operations' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'View in staged operations' })).toBeNull()
 	})
 
 	test('maps compact liquidation revert reasons back to explicit operator-facing copy', async () => {
@@ -933,7 +933,7 @@ describe('LiquidationModal', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Execute Vault Liquidation' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Execute vault liquidation' }))
 		})
 
 		expect(documentQueries.getByRole('dialog', { name: 'Execute Vault Liquidation' })).not.toBeNull()
@@ -1015,7 +1015,7 @@ describe('LiquidationModal', () => {
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Execute Vault Liquidation' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Execute vault liquidation' }))
 		})
 
 		expect(documentQueries.getByRole('dialog', { name: 'Execute Vault Liquidation' })).not.toBeNull()
@@ -1109,7 +1109,7 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const button = documentQueries.getByRole('button', { name: 'Execute Vault Liquidation' }) as HTMLButtonElement
+		const button = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(button.disabled).toBe(true)
 		expect(documentQueries.getByText('This vault is not undercollateralized at the current Open Oracle price.')).not.toBeNull()
 		expect(documentQueries.getByText(/^Open Oracle Price$/)).not.toBeNull()
@@ -1138,7 +1138,7 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const button = documentQueries.getByRole('button', { name: 'Execute Vault Liquidation' }) as HTMLButtonElement
+		const button = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(button.disabled).toBe(true)
 		expect(documentQueries.getByText('This vault is not undercollateralized at the current Open Oracle price.')).not.toBeNull()
 		expect(documentQueries.queryByText('The target vault would fall below the minimum REP collateral after liquidation.')).toBeNull()
@@ -1167,7 +1167,7 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const button = documentQueries.getByRole('button', { name: 'Execute Vault Liquidation' }) as HTMLButtonElement
+		const button = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(button.disabled).toBe(false)
 		expect(documentQueries.queryByText('No debt is executable for liquidation at the current target-side bounds.')).toBeNull()
 		expect(documentQueries.queryByText('The target vault would fall below the minimum REP collateral after liquidation.')).toBeNull()
@@ -1196,7 +1196,7 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const button = documentQueries.getByRole('button', { name: 'Execute Vault Liquidation' }) as HTMLButtonElement
+		const button = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(button.disabled).toBe(false)
 		expect(documentQueries.queryByText('No debt is executable for liquidation at the current target-side bounds.')).toBeNull()
 		expect(documentQueries.queryByText('The target vault would fall below the minimum REP collateral after liquidation.')).toBeNull()
@@ -1258,7 +1258,7 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const button = documentQueries.getByRole('button', { name: 'Execute Vault Liquidation' }) as HTMLButtonElement
+		const button = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(button.disabled).toBe(true)
 		expect(documentQueries.getByText('This liquidation amount is too small to improve the target vault health after rounding.')).not.toBeNull()
 	})
@@ -1321,7 +1321,7 @@ describe('LiquidationModal', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Queue Vault Liquidation' })).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Queue Liquidation' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Queue liquidation' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Execute Vault Liquidation' })).toBeNull()
 	})
 
@@ -1348,7 +1348,7 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const executeButton = documentQueries.getByRole('button', { name: 'Execute Vault Liquidation' }) as HTMLButtonElement
+		const executeButton = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		const cancelButton = documentQueries.getByRole('button', { name: 'Cancel' })
 		const actionContainer = cancelButton.closest('.liquidation-modal-actions')
 
@@ -1382,7 +1382,7 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const executeButton = documentQueries.getByRole('button', { name: 'Execute Vault Liquidation' }) as HTMLButtonElement
+		const executeButton = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 
 		expect(executeButton.disabled).toBe(true)
 		expect(documentQueries.getByText('Your vault would remain liquidatable after this liquidation.')).not.toBeNull()
@@ -1437,7 +1437,7 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const executeButton = documentQueries.getByRole('button', { name: 'Execute Vault Liquidation' }) as HTMLButtonElement
+		const executeButton = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(executeButton.disabled).toBe(true)
 		expect(documentQueries.getByRole('heading', { name: 'Invalid Liquidation Pair' })).not.toBeNull()
 		expect(document.body.querySelector('.warning-surface')).not.toBeNull()
@@ -1534,7 +1534,7 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const executeButton = within(document.body).getByRole('button', { name: 'Execute Vault Liquidation' }) as HTMLButtonElement
+		const executeButton = within(document.body).getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(executeButton.disabled).toBe(false)
 	})
 
@@ -1562,7 +1562,7 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const executeButton = within(document.body).getByRole('button', { name: 'Execute Vault Liquidation' }) as HTMLButtonElement
+		const executeButton = within(document.body).getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(executeButton.disabled).toBe(false)
 		expect(document.body.textContent?.includes('The target vault would fall below the minimum security bond allowance after liquidation.')).toBe(false)
 	})
@@ -1628,7 +1628,7 @@ describe('LiquidationModal', () => {
 		const amountInput = container.querySelector("input[placeholder='0.0']")
 		if (!(amountInput instanceof HTMLInputElement)) throw new Error('Expected liquidation amount input')
 
-		const executeButton = documentQueries.getByRole('button', { name: 'Execute Vault Liquidation' }) as HTMLButtonElement
+		const executeButton = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(executeButton.disabled).toBe(false)
 		expect(documentQueries.getByText(/Simulation REP \/ ETH/)).not.toBeNull()
 		expect(documentQueries.getByText(/Target Collateralization @ Simulation Price/)).not.toBeNull()
@@ -1759,8 +1759,9 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('dialog', { name: 'Liquidate Vault' })).not.toBeNull()
 		expect(documentQueries.getByText('Refreshing price validity.')).not.toBeNull()
-		expect((documentQueries.getByRole('button', { name: 'Liquidate Vault' }) as HTMLButtonElement).disabled).toBe(true)
+		expect((documentQueries.getByRole('button', { name: 'Liquidate vault' }) as HTMLButtonElement).disabled).toBe(true)
 		expect(loadRequests).toEqual([])
 	})
 

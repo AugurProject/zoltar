@@ -192,7 +192,7 @@ export function SecurityPoolsOverviewSection({
 						if (isEmptyRegistry && onCreateSecurityPool !== undefined)
 							return (
 								<button className='primary' type='button' onClick={onCreateSecurityPool}>
-									{commonCopy.createSecurityPool}
+									{commonCopy.createSecurityPoolAction}
 								</button>
 							)
 						return undefined
@@ -232,7 +232,7 @@ export function SecurityPoolsOverviewSection({
 									}
 									actions={
 										onSelectSecurityPool === undefined ? undefined : (
-											<button className='primary' onClick={() => onSelectSecurityPool(pool.securityPoolAddress, pool.universeId)}>
+											<button aria-label={securityPoolCopy.formatOpenPoolLabel(getQuestionTitle(pool.marketDetails), pool.securityPoolAddress)} className='primary' onClick={() => onSelectSecurityPool(pool.securityPoolAddress, pool.universeId)}>
 												{securityPoolCopy.openPool}
 											</button>
 										)

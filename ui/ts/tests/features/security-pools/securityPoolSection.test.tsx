@@ -106,7 +106,7 @@ describe('SecurityPoolSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Create Pool', 'Connect a wallet before creating a security pool.')
+		expectTransactionButtonDisabled(document.body, 'Create pool', 'Connect a wallet before creating a security pool.')
 	})
 
 	test('keeps pool creation disabled off mainnet and shows switch-network recovery', async () => {
@@ -120,7 +120,7 @@ describe('SecurityPoolSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Create Pool')
+		expectTransactionButtonDisabled(document.body, 'Create pool')
 		expect(document.body.textContent?.includes('Switch to Ethereum mainnet')).toBe(true)
 	})
 
@@ -134,13 +134,13 @@ describe('SecurityPoolSection', () => {
 			),
 		)
 		cleanupRenderedComponent = blockedRender.cleanup
-		expectTransactionButtonDisabled(document.body, 'Create Pool', 'Security pools can only be created for exact binary Yes / No questions.')
+		expectTransactionButtonDisabled(document.body, 'Create pool', 'Security pools can only be created for exact binary Yes / No questions.')
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
 
 		const enabledRender = await renderIntoDocument(h(SecurityPoolSection, createProps()))
 		cleanupRenderedComponent = enabledRender.cleanup
-		expectTransactionButtonEnabled(document.body, 'Create Pool')
+		expectTransactionButtonEnabled(document.body, 'Create pool')
 	})
 
 	test('renders only the create pool section in create mode', async () => {
@@ -196,7 +196,7 @@ describe('SecurityPoolSection', () => {
 		expect(priorityFeeInput.getAttribute('aria-invalid')).toBe('true')
 		expect(priorityFeeInput.getAttribute('aria-describedby')).toBe('security-pool-initial-report-priority-fee-help security-pool-initial-report-priority-fee-error')
 		expect(within(document.body).getByText('Initial-report priority fee must be greater than 0 gwei.')).not.toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Create Pool', 'Initial-report priority fee must be greater than 0 gwei.')
+		expectTransactionButtonDisabled(document.body, 'Create pool', 'Initial-report priority fee must be greater than 0 gwei.')
 	})
 
 	test('associates invalid multiplier guidance and disables creation', async () => {
@@ -224,8 +224,8 @@ describe('SecurityPoolSection', () => {
 			expect(multiplierInput.getAttribute('aria-invalid')).toBe('true')
 			expect(multiplierInput.getAttribute('aria-describedby')).toBe('security-pool-security-multiplier-help security-pool-security-multiplier-error')
 			expect(within(document.body).getByText(message)).not.toBeNull()
-			expectTransactionButtonDisabled(document.body, 'Create Pool', message)
-			const createButton = within(document.body).getByRole('button', { name: 'Create Pool' })
+			expectTransactionButtonDisabled(document.body, 'Create pool', message)
+			const createButton = within(document.body).getByRole('button', { name: 'Create pool' })
 			expect(createButton.getAttribute('aria-describedby')).toBe('security-pool-security-multiplier-error')
 			expect(document.body.querySelectorAll('.disabled-reason')).toHaveLength(0)
 			expect(document.body.textContent?.split(message).length).toBe(2)
@@ -253,7 +253,7 @@ describe('SecurityPoolSection', () => {
 		const multiplierInput = within(document.body).getByRole('textbox', { name: 'Statoblast Security Multiplier' })
 		expect(multiplierInput.getAttribute('aria-invalid')).toBeNull()
 		expect(multiplierInput.getAttribute('aria-describedby')).toBe('security-pool-security-multiplier-help')
-		expectTransactionButtonEnabled(document.body, 'Create Pool')
+		expectTransactionButtonEnabled(document.body, 'Create pool')
 	})
 
 	test('previews the pasted question before pool creation without a manual load action', async () => {
@@ -337,9 +337,9 @@ describe('SecurityPoolSection', () => {
 		const documentQueries = within(document.body)
 		await waitFor(() => expect(documentQueries.getByText('Available questions could not be loaded. Retry, or enter an exact question ID below.')).not.toBeNull())
 		expect(loadCalls).toBe(1)
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry Questions' }))
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry questions' }))
 		await waitFor(() => expect(loadCalls).toBe(2))
-		expect(documentQueries.queryByRole('button', { name: 'Retry Questions' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Retry questions' })).toBeNull()
 	})
 
 	test('starts one fresh question load when context changes during an in-flight request', async () => {
@@ -392,7 +392,7 @@ describe('SecurityPoolSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Create Pool', 'Wait for available questions to finish loading, or enter an exact question ID.')
+		expectTransactionButtonDisabled(document.body, 'Create pool', 'Wait for available questions to finish loading, or enter an exact question ID.')
 	})
 
 	test('omits missing-context helper copy when a loaded question lacks description details', async () => {
@@ -450,7 +450,7 @@ describe('SecurityPoolSection', () => {
 			),
 		)
 		cleanupRenderedComponent = duplicateCheckRender.cleanup
-		expectTransactionButtonDisabled(document.body, 'Checking Duplicate…', 'Checking whether a pool already exists for this question, Statoblast security multiplier, and priority fee.')
+		expectTransactionButtonDisabled(document.body, 'Checking duplicate…', 'Checking whether a pool already exists for this question, Statoblast security multiplier, and priority fee.')
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
 
@@ -463,7 +463,7 @@ describe('SecurityPoolSection', () => {
 			),
 		)
 		cleanupRenderedComponent = creatingRender.cleanup
-		expectTransactionButtonDisabled(document.body, 'Creating Pool…', 'Security pool creation is already in progress.')
+		expectTransactionButtonDisabled(document.body, 'Creating pool…', 'Security pool creation is already in progress.')
 	})
 
 	test('renders duplicate and forked branch messaging and button labels', async () => {
@@ -528,11 +528,11 @@ describe('SecurityPoolSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Open Pool' }))
+		fireEvent.click(documentQueries.getByRole('button', { name: /^Open pool:/ }))
 		expect(openedAddress).toBe(poolAddress)
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Return to Browse' }))
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Return to browse' }))
 		expect(returnedToBrowse).toBe(true)
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Create Another Pool' }))
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Create another pool' }))
 		expect(resetCount).toBe(1)
 	})
 

@@ -472,13 +472,13 @@ void describe('OpenOracleSection', () => {
 			}),
 		})
 
-		const settleButton = findButton(section, 'Settle Report')
+		const settleButton = findButton(section, 'Settle report')
 		if (settleButton === undefined) throw new Error('Expected settle action button to render')
 
 		expect(getButtonDisabled(settleButton)).toBe(false)
-		expect(findButton(section, 'Dispute & Swap')).toBeUndefined()
+		expect(findButton(section, 'Dispute & swap')).toBeUndefined()
 		expect(getSectionTitles(section)).toContain('Settlement Summary')
-		expect(getSectionTitles(section)).not.toContain('Settle Report')
+		expect(getSectionTitles(section)).not.toContain('Settle report')
 		expect(getSectionTitles(section)).not.toContain('Dispute Report')
 		expect(getButtonDisabledReason(settleButton)).toBeUndefined()
 	})
@@ -494,11 +494,11 @@ void describe('OpenOracleSection', () => {
 			}),
 		})
 
-		const disputeButton = findButton(section, 'Dispute & Swap')
+		const disputeButton = findButton(section, 'Dispute & swap')
 		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
 
 		expect(getButtonDisabled(disputeButton)).toBe(true)
-		expect(findButton(section, 'Settle Report')).toBeUndefined()
+		expect(findButton(section, 'Settle report')).toBeUndefined()
 		expect(getButtonDisabledReason(disputeButton)).toBe('This report is not ready to dispute.')
 		expect(getTextContent(section).includes('Blocked:')).toBe(false)
 		expect(getSectionTitles(section)).toContain('Current Report State')
@@ -545,7 +545,7 @@ void describe('OpenOracleSection', () => {
 		expect(getSectionTitles(section)).toContain('REPv2 Approval')
 		expect(getSectionTitles(section)).toContain('WETH Approval')
 		expect(getTextContent(section)).toContain('REPv2 approval required')
-		const disputeButton = findButton(section, 'Dispute & Swap')
+		const disputeButton = findButton(section, 'Dispute & swap')
 		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
 		expect(getButtonDisabled(disputeButton)).toBe(true)
 	})
@@ -576,7 +576,7 @@ void describe('OpenOracleSection', () => {
 		expect(getTextContent(section).split(directionMessage)).toHaveLength(2)
 		expect(getSectionTitles(section)).not.toContain('REPv2 Approval')
 		expect(getSectionTitles(section)).not.toContain('WETH Approval')
-		const disputeButton = findButton(section, 'Dispute & Swap')
+		const disputeButton = findButton(section, 'Dispute & swap')
 		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
 		expect(getButtonDisabledReason(disputeButton)).toBe(directionMessage)
 		expect(disputeButton.props['disabledReasonElementId']).toBe('open-oracle-dispute-token-to-swap-error-7')
@@ -665,20 +665,20 @@ void describe('OpenOracleSection', () => {
 		})
 
 		expect(getTextContent(section)).toContain('Insufficient WETH balance for this dispute. Need 2, wallet has 1.')
-		const disputeButton = findButton(section, 'Dispute & Swap')
+		const disputeButton = findButton(section, 'Dispute & swap')
 		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
 		expect(getButtonDisabledReason(disputeButton)).toBe('Insufficient WETH balance for this dispute. Need 2, wallet has 1.')
 	})
 
 	void test('keeps create and selected-report actions disabled off mainnet with recovery guidance', () => {
 		const disputeSection = renderDisputeActionSection({ isMainnet: false })
-		const disputeButton = findButton(disputeSection, 'Dispute & Swap')
+		const disputeButton = findButton(disputeSection, 'Dispute & swap')
 		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
 		expect(getButtonDisabled(disputeButton)).toBe(true)
 		expect(getButtonDisabledReason(disputeButton)).toBe('Switch to Ethereum mainnet.')
 
 		const settleSection = renderSettleActionSection({ isMainnet: false })
-		const settleButton = findButton(settleSection, 'Settle Report')
+		const settleButton = findButton(settleSection, 'Settle report')
 		if (settleButton === undefined) throw new Error('Expected settle action button to render')
 		expect(getButtonDisabled(settleButton)).toBe(true)
 		expect(getButtonDisabledReason(settleButton)).toBe('Switch to Ethereum mainnet.')
@@ -689,7 +689,7 @@ void describe('OpenOracleSection', () => {
 			isMainnet: false,
 			openOracleForm: createOpenOracleForm({ reportId: '' }),
 		})
-		const disputeButton = findButton(invalidDisputeSection, 'Dispute & Swap')
+		const disputeButton = findButton(invalidDisputeSection, 'Dispute & swap')
 		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
 		expect(getButtonDisabled(disputeButton)).toBe(true)
 		expect(getButtonDisabledReason(disputeButton)).toBe('Switch to Ethereum mainnet.')
@@ -704,7 +704,7 @@ void describe('OpenOracleSection', () => {
 				settlementTime: 60n,
 			}),
 		})
-		const settleButton = findButton(invalidSettleSection, 'Settle Report')
+		const settleButton = findButton(invalidSettleSection, 'Settle report')
 		if (settleButton === undefined) throw new Error('Expected settle action button to render')
 		expect(getButtonDisabled(settleButton)).toBe(true)
 		expect(getButtonDisabledReason(settleButton)).toBe('Switch to Ethereum mainnet.')
@@ -715,13 +715,13 @@ void describe('OpenOracleSection', () => {
 		const disconnectedAccount = createAccountState({ address: undefined })
 
 		const disputeSection = renderDisputeActionSection({ accountState: disconnectedAccount })
-		const disputeButton = findButton(disputeSection, 'Dispute & Swap')
+		const disputeButton = findButton(disputeSection, 'Dispute & swap')
 		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
 		expect(getButtonDisabled(disputeButton)).toBe(true)
 		expect(getButtonDisabledReason(disputeButton)).toBe('Connect a wallet before disputing the report.')
 
 		const settleSection = renderSettleActionSection({ accountState: disconnectedAccount })
-		const settleButton = findButton(settleSection, 'Settle Report')
+		const settleButton = findButton(settleSection, 'Settle report')
 		if (settleButton === undefined) throw new Error('Expected settle action button to render')
 		expect(getButtonDisabled(settleButton)).toBe(true)
 		expect(getButtonDisabledReason(settleButton)).toBe('Connect a wallet before settling the report.')

@@ -129,7 +129,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(document.body.textContent?.includes('Projected payout for current amount')).toBe(false)
 		expect(document.body.textContent?.includes('Projected profit if this side wins')).toBe(false)
 
-		expect(documentQueries.queryByRole('button', { name: 'Report On Selected Side' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Report on selected side' })).toBeNull()
 	})
 
 	test('locks reporting actions while the selected pool is not operational', async () => {
@@ -186,7 +186,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		setCleanup(renderedComponent.cleanup)
 
 		const documentQueries = within(document.body)
-		const reportButton = documentQueries.getByRole('button', { name: 'Report On Selected Side' })
+		const reportButton = documentQueries.getByRole('button', { name: 'Report on selected side' })
 		if (!(reportButton instanceof HTMLButtonElement)) throw new Error('Expected report button')
 		expect(reportButton.disabled).toBe(true)
 		expect(reportButton.title).toBe('This pool is in truth auction. Reporting actions unlock once the pool becomes operational.')
@@ -296,7 +296,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		setCleanup(renderedComponent.cleanup)
 
 		const documentQueries = within(document.body)
-		const reportButton = documentQueries.getByRole('button', { name: 'Report On Selected Side' }) as HTMLButtonElement
+		const reportButton = documentQueries.getByRole('button', { name: 'Report on selected side' }) as HTMLButtonElement
 		expect(reportButton.disabled).toBe(true)
 		expect(reportButton.title).toBe('Loading reporting details.')
 	})
@@ -319,7 +319,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Reporting Not Enabled' })).not.toBeNull()
-		expect(documentQueries.queryByRole('button', { name: 'Report On Selected Side' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Report on selected side' })).toBeNull()
 		expect(documentQueries.queryByText(getReportingLockedUntilMessage(100n, 100n))).not.toBeNull()
 	})
 
@@ -362,7 +362,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Pool Oracle & Pending Operations' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Staged Operations List' })).toBeNull()
 		expect(documentQueries.getByText('No staged operations are currently queued for this pool.')).not.toBeNull()
-		expect(documentQueries.queryByRole('button', { name: 'Request New Price' })).toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Request new price' })).toBeNull()
 	})
 
 	test('lists staged operations in the staged operations tab', async () => {
@@ -489,7 +489,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		)
 		setCleanup(renderedComponent.cleanup)
 
-		expectTransactionButtonDisabled(document.body, 'Execute Staged Operation')
+		expectTransactionButtonDisabled(document.body, 'Execute staged operation')
 	})
 
 	test('renders price oracle details and request controls in the price oracle tab', async () => {
@@ -534,7 +534,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(sectionQueries.getByText('Open Oracle Price')).not.toBeNull()
 		expect(sectionQueries.queryByText('Price Window')).toBeNull()
 		expect(sectionQueries.queryByText('Last Settlement')).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Request New Price' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Request new price' })).not.toBeNull()
 		expect(sectionQueries.getByText('Pending Request')).not.toBeNull()
 		expect(sectionQueries.getByRole('button', { name: /Report #\s*12/ })).not.toBeNull()
 	})
@@ -555,7 +555,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		setCleanup(renderedComponent.cleanup)
 
 		const documentQueries = within(document.body)
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Request New Price' }))
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Request new price' }))
 		const dialog = documentQueries.getByRole('dialog', { name: 'Request New Price' })
 		expect(within(dialog).getByText('Transaction Review')).not.toBeNull()
 		expect(within(dialog).getByText('You Pay')).not.toBeNull()
@@ -571,7 +571,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(within(dialog).getByText('2.4 ETH')).not.toBeNull()
 		expect(within(dialog).queryByText('3.6 ETH')).toBeNull()
 
-		fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm Price Request' }))
+		fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm price request' }))
 		expect(requests).toEqual([{ managerAddress: pool.managerAddress, reviewedRequestEthValue: 2_400_000_000_000_000_000n, securityPoolAddress: pool.securityPoolAddress }])
 	})
 
@@ -595,7 +595,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		)
 		setCleanup(renderedComponent.cleanup)
 
-		expectTransactionButtonDisabled(document.body, 'Request New Price', 'Need 7 more ETH in this wallet to request a new price.')
+		expectTransactionButtonDisabled(document.body, 'Request new price', 'Need 7 more ETH in this wallet to request a new price.')
 	})
 
 	test('disables Request New Price while the current oracle price remains valid', async () => {
@@ -616,7 +616,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		)
 		setCleanup(renderedComponent.cleanup)
 
-		expectTransactionButtonDisabled(document.body, 'Request New Price', 'The current oracle price is still valid.')
+		expectTransactionButtonDisabled(document.body, 'Request new price', 'The current oracle price is still valid.')
 	})
 
 	test('enables Request New Price when the shared chain time reaches a loaded price expiry', async () => {
@@ -643,7 +643,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		)
 		setCleanup(renderedComponent.cleanup)
 
-		const requestButton = within(document.body).getByRole('button', { name: 'Request New Price' })
+		const requestButton = within(document.body).getByRole('button', { name: 'Request new price' })
 		if (!(requestButton instanceof HTMLButtonElement)) throw new Error('Expected Request New Price button')
 		expect(requestButton.disabled).toBe(false)
 		expect(document.body.textContent).toContain('(expired less than a minute ago)')

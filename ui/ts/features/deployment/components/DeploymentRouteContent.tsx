@@ -4,9 +4,7 @@ import type { ComponentChildren } from 'preact'
 import { LoadableValue } from '../../../components/LoadableValue.js'
 import { LoadingText } from '../../../components/LoadingText.js'
 import { DeploymentSection } from './DeploymentSection.js'
-import { ReadOnlyDetailAccordion } from '../../../components/ReadOnlyDetailAccordion.js'
 import { RouteHeader } from '../../../components/RouteHeader.js'
-import { SectionBlock } from '../../../components/SectionBlock.js'
 import { DataGrid } from '../../../components/DataGrid.js'
 import { TransactionActionButton } from '../../../components/TransactionActionButton.js'
 import { buildRouteHref, getTopLevelRouteSearch, ZOLTAR_ROUTE } from '../../../lib/routing.js'
@@ -35,6 +33,7 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextM
 	return (
 		<>
 			<RouteHeader
+				className='deployment-route-header'
 				eyebrow={commonCopy.deploy}
 				title={deploymentCopy.deterministicContractDeployment}
 				description={deploymentCopy.deploymentOverviewDetail}
@@ -64,22 +63,18 @@ export function DeploymentRouteContent({ accountAddress, busyStepId, deployNextM
 					</DataGrid>
 				}
 			/>
-			<SectionBlock title={deploymentCopy.deploymentGroups}>
-				<div className='workflow-stack'>
+			<details className='deployment-contract-details'>
+				<summary>
+					<span>{deploymentCopy.allContracts}</span>
+				</summary>
+				<div className='workflow-stack deployment-contract-groups'>
 					{deploymentSections.map(section => {
 						const allDeployed = section.steps.length > 0 && section.steps.every(step => step.deployed)
 						const sectionContent = <DeploymentSection title={section.title} completedGroup={allDeployed} steps={section.steps} allSteps={deploymentStatuses} accountAddress={accountAddress} isMainnet={isMainnet} busyStepId={busyStepId} onDeploy={onDeploy} />
-
-						if (!allDeployed) return <div key={section.title}>{sectionContent}</div>
-
-						return (
-							<ReadOnlyDetailAccordion key={section.title} title={deploymentCopy.formatCompletedSectionTitle(section.title)}>
-								{sectionContent}
-							</ReadOnlyDetailAccordion>
-						)
+						return <div key={section.title}>{sectionContent}</div>
 					})}
 				</div>
-			</SectionBlock>
+			</details>
 		</>
 	)
 }

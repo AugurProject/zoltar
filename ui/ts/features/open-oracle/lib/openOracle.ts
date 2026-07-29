@@ -61,7 +61,7 @@ export function formatOpenOracleDisputeWriteErrorMessage(error: unknown, fallbac
 	if (normalizedDetail === undefined) return 'Transaction failed while disputing the report. Try again; the latest report state will be checked automatically.'
 	if (genericMessage === detail) return detail
 	if (normalizedDetail.includes('disputetooearly') || normalizedDetail.includes('dispute too early')) return 'This report is not ready to dispute.'
-	if (normalizedDetail.includes('disputetoolate') || normalizedDetail.includes('dispute period expired')) return 'Dispute window closed. Settle Report instead.'
+	if (normalizedDetail.includes('disputetoolate') || normalizedDetail.includes('dispute period expired')) return 'Dispute window closed. Settle report instead.'
 	if (normalizedDetail.includes('alreadysettled') || normalizedDetail.includes('report settled')) return 'This report is already settled.'
 	if (normalizedDetail.includes('noreporttodispute') || normalizedDetail.includes('no report to dispute')) return 'This report is invalid because its atomic initial report is missing.'
 	return `Transaction failed while disputing the report. Reason: ${detail}`
@@ -320,7 +320,7 @@ export function getOpenOracleDisputeAvailability(report: Pick<OpenOracleReportDe
 	if (currentClock >= settlementStart)
 		return {
 			canAct: false,
-			message: 'Dispute window closed. Settle Report instead.',
+			message: 'Dispute window closed. Settle report instead.',
 		}
 	return {
 		canAct: true,

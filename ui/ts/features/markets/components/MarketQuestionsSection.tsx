@@ -139,7 +139,7 @@ export function MarketQuestionsSection({
 								title={marketCopy.noQuestions}
 								actions={
 									<button className='primary' type='button' onClick={onCreateQuestion}>
-										{commonCopy.createQuestion}
+										{commonCopy.createQuestionAction}
 									</button>
 								}
 							/>
@@ -157,6 +157,7 @@ export function MarketQuestionsSection({
 							actions={
 								<div className='actions'>
 									<button
+										aria-label={hasForked ? marketCopy.formatAlreadyForkedLabel(getQuestionTitle(question), question.questionId) : marketCopy.formatUseForForkLabel(getQuestionTitle(question), question.questionId)}
 										className='secondary'
 										disabled={hasForked}
 										onClick={() => {
@@ -168,7 +169,13 @@ export function MarketQuestionsSection({
 										{hasForked ? marketCopy.alreadyForked : marketCopy.useForFork}
 									</button>
 									{question.marketType === 'binary' ? undefined : <Badge tone='muted'>{marketCopy.binaryPoolsOnly}</Badge>}
-									<button className='secondary' onClick={() => onUseQuestionForPool(question.questionId)} disabled={question.marketType !== 'binary'} title={question.marketType === 'binary' ? undefined : marketCopy.binaryPoolsOnly}>
+									<button
+										aria-label={marketCopy.formatCreatePoolFromQuestionLabel(getQuestionTitle(question), question.questionId)}
+										className='secondary'
+										onClick={() => onUseQuestionForPool(question.questionId)}
+										disabled={question.marketType !== 'binary'}
+										title={question.marketType === 'binary' ? undefined : marketCopy.binaryPoolsOnly}
+									>
 										{marketCopy.createPoolFromQuestion}
 									</button>
 								</div>
@@ -226,10 +233,10 @@ export function MarketQuestionsSection({
 															<strong>{marketCopy.completeSetOperations}</strong>
 														</div>
 														<div className='actions'>
-															<SecurityPoolLink className='button-link secondary' securityPoolAddress={pool.securityPoolAddress} selectedPoolView='trading' universeId={pool.universeId}>
+															<SecurityPoolLink ariaLabel={marketCopy.formatOpenSharesAndPositionLabel(getQuestionTitle(question), pool.universeId, pool.securityPoolAddress)} className='button-link secondary' securityPoolAddress={pool.securityPoolAddress} selectedPoolView='trading' universeId={pool.universeId}>
 																{marketCopy.openSharesAndPosition}
 															</SecurityPoolLink>
-															<SecurityPoolLink className='button-link secondary' securityPoolAddress={pool.securityPoolAddress} selectedPoolView='reporting' universeId={pool.universeId}>
+															<SecurityPoolLink ariaLabel={marketCopy.formatOpenReportingLabel(getQuestionTitle(question), pool.universeId, pool.securityPoolAddress)} className='button-link secondary' securityPoolAddress={pool.securityPoolAddress} selectedPoolView='reporting' universeId={pool.universeId}>
 																{marketCopy.openReporting}
 															</SecurityPoolLink>
 														</div>

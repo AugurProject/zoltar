@@ -546,7 +546,7 @@ export function SecurityVaultSection({
 			readiness: bondAllowanceEnabled && vaultExistsOnchain && canUseLoadedVaultActions ? 'ready' : 'blocked',
 			...(bondAllowanceDisabledReasonId === undefined ? {} : { disabledReasonId: bondAllowanceDisabledReasonId }),
 			...(visibleBondAllowanceLauncherBlocker === undefined || !bondAllowanceEnabled ? {} : { blocker: visibleBondAllowanceLauncherBlocker }),
-			title: securityPoolCopy.setSecurityBondAllowance,
+			title: securityPoolCopy.setSecurityBondAllowanceTitle,
 		},
 		{
 			actionLabel: securityPoolCopy.claimFees,
@@ -556,7 +556,7 @@ export function SecurityVaultSection({
 			readiness: claimFeesEnabled && hasClaimableFees && claimFeesLauncherBlocker === undefined && vaultExistsOnchain && canUseLoadedVaultActions ? 'ready' : 'blocked',
 			...(claimFeesDisabledReasonId === undefined ? {} : { disabledReasonId: claimFeesDisabledReasonId }),
 			...(claimFeesAvailabilityBlocker === undefined ? {} : { blocker: claimFeesAvailabilityBlocker }),
-			title: securityPoolCopy.claimFees,
+			title: securityPoolCopy.claimFeesTitle,
 		},
 		...extraReadinessActions,
 	] satisfies ReadinessAction[])
@@ -744,7 +744,7 @@ export function SecurityVaultSection({
 				)}
 			</OperationModal>
 
-			<OperationModal context={vaultTransactionContext} isOpen={vaultActionModal === 'set-bond-allowance'} onClose={() => setVaultActionModal(undefined)} title={securityPoolCopy.setBondAllowance}>
+			<OperationModal context={vaultTransactionContext} isOpen={vaultActionModal === 'set-bond-allowance'} onClose={() => setVaultActionModal(undefined)} title={securityPoolCopy.setBondAllowanceTitle}>
 				{currentSelectedVaultDetails === undefined ? <p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
@@ -802,7 +802,7 @@ export function SecurityVaultSection({
 				)}
 			</OperationModal>
 
-			<OperationModal context={vaultTransactionContext} isOpen={vaultActionModal === 'claim-fees'} onClose={() => setVaultActionModal(undefined)} title={securityPoolCopy.claimFees}>
+			<OperationModal context={vaultTransactionContext} isOpen={vaultActionModal === 'claim-fees'} onClose={() => setVaultActionModal(undefined)} title={securityPoolCopy.claimFeesTitle}>
 				<MetricGrid>
 					<MetricField label={securityPoolCopy.claimableFees}>{currentSelectedVaultDetails === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={currentSelectedVaultDetails.unpaidEthFees} suffix={commonCopy.eth} />}</MetricField>
 					<MetricField label={securityPoolCopy.vault}>{selectedVaultAddress === undefined ? commonCopy.noneSelected : <AddressValue address={selectedVaultAddress} />}</MetricField>
@@ -823,7 +823,7 @@ export function SecurityVaultSection({
 		</>
 	) : (
 		<>
-			<SectionBlock title={securityPoolCopy.claimFees} variant='embedded'>
+			<SectionBlock title={securityPoolCopy.claimFeesTitle} variant='embedded'>
 				{currentSelectedVaultDetails === undefined ? (
 					<p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p>
 				) : (
@@ -893,7 +893,7 @@ export function SecurityVaultSection({
 				})()}
 			</SectionBlock>
 
-			<SectionBlock title={securityPoolCopy.setSecurityBondAllowance} variant='embedded'>
+			<SectionBlock title={securityPoolCopy.setSecurityBondAllowanceTitle} variant='embedded'>
 				{currentSelectedVaultDetails === undefined ? (
 					<p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p>
 				) : (
