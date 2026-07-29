@@ -960,7 +960,7 @@ delete or hand-edit a record to bypass the one-position guard.
 
 1. Confirm the dashboard network, signer address, OpenOracle, executor, and token
    match the journal record. Save a copy of the journal, operation log, relay
-   responses, and both configured RPC responses.
+   responses, and all configured read RPC responses.
 2. For **entry receipt could not be recovered**, current records contain one
    `entryTransactionHashes` value. Look it up on independent explorers/RPCs. It must
    be absent, revert without an executor event, or succeed in its parent-bound target
@@ -1002,7 +1002,7 @@ PRIVATE_KEY=0x... ./open-oracle-arbitrager/reconcile-position \
   --report-id=42 \
   --confirm-report-id=42 \
   --evidence='receipts and balance snapshots archived under incident-42' \
-  --note='residual REP sold manually; balances checked on two RPCs' \
+  --note='residual REP sold manually; balances checked on all configured read RPCs' \
   --external-cost-eth=0.003 \
   --final-wallet-weth=4.2 \
   --final-wallet-token=85 \
